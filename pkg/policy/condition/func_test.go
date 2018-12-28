@@ -148,7 +148,7 @@ func TestFunctionsMarshalJSON(t *testing.T) {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func6, err := newNullFunc(S3XAmzServerSideEncryptionAwsKMSKeyID, NewValueSet(NewBoolValue(true)))
+	func6, err := newNullFunc(S3XAmzServerSideEncryptionCustomerAlgorithm, NewValueSet(NewBoolValue(true)))
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -159,9 +159,9 @@ func TestFunctionsMarshalJSON(t *testing.T) {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	case1Result := []byte(`{"IpAddress":{"aws:SourceIp":["192.168.1.0/24"]},"NotIpAddress":{"aws:SourceIp":["10.1.10.0/24"]},"Null":{"s3:x-amz-server-side-encryption-aws-kms-key-id":[true]},"StringEquals":{"s3:x-amz-copy-source":["mybucket/myobject"]},"StringLike":{"s3:x-amz-metadata-directive":["REPL*"]},"StringNotEquals":{"s3:x-amz-server-side-encryption":["AES256"]},"StringNotLike":{"s3:x-amz-storage-class":["STANDARD"]}}`)
+	case1Result := []byte(`{"IpAddress":{"aws:SourceIp":["192.168.1.0/24"]},"NotIpAddress":{"aws:SourceIp":["10.1.10.0/24"]},"Null":{"s3:x-amz-server-side-encryption-customer-algorithm":[true]},"StringEquals":{"s3:x-amz-copy-source":["mybucket/myobject"]},"StringLike":{"s3:x-amz-metadata-directive":["REPL*"]},"StringNotEquals":{"s3:x-amz-server-side-encryption":["AES256"]},"StringNotLike":{"s3:x-amz-storage-class":["STANDARD"]}}`)
 
-	case2Result := []byte(`{"Null":{"s3:x-amz-server-side-encryption-aws-kms-key-id":[true]}}`)
+	case2Result := []byte(`{"Null":{"s3:x-amz-server-side-encryption-customer-algorithm":[true]}}`)
 
 	testCases := []struct {
 		functions      Functions
@@ -211,7 +211,7 @@ func TestFunctionsUnmarshalJSON(t *testing.T) {
         "s3:x-amz-storage-class": "STANDARD"
     },
     "Null": {
-        "s3:x-amz-server-side-encryption-aws-kms-key-id": true
+        "s3:x-amz-server-side-encryption-customer-algorithm": true
     },
     "IpAddress": {
         "aws:SourceIp": [
@@ -246,7 +246,7 @@ func TestFunctionsUnmarshalJSON(t *testing.T) {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
-	func6, err := newNullFunc(S3XAmzServerSideEncryptionAwsKMSKeyID, NewValueSet(NewBoolValue(true)))
+	func6, err := newNullFunc(S3XAmzServerSideEncryptionCustomerAlgorithm, NewValueSet(NewBoolValue(true)))
 	if err != nil {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
@@ -259,10 +259,10 @@ func TestFunctionsUnmarshalJSON(t *testing.T) {
 
 	case2Data := []byte(`{
     "Null": {
-        "s3:x-amz-server-side-encryption-aws-kms-key-id": true
+        "s3:x-amz-server-side-encryption-customer-algorithm": true
     },
     "Null": {
-        "s3:x-amz-server-side-encryption-aws-kms-key-id": "true"
+        "s3:x-amz-server-side-encryption-customer-algorithm": "true"
     }
 }`)
 

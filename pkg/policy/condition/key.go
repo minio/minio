@@ -35,10 +35,6 @@ const (
 	// to PutObject API only.
 	S3XAmzServerSideEncryption = "s3:x-amz-server-side-encryption"
 
-	// S3XAmzServerSideEncryptionAwsKMSKeyID - key representing x-amz-server-side-encryption-aws-kms-key-id
-	// HTTP header applicable to PutObject API only.
-	S3XAmzServerSideEncryptionAwsKMSKeyID = "s3:x-amz-server-side-encryption-aws-kms-key-id"
-
 	// S3XAmzServerSideEncryptionCustomerAlgorithm - key representing
 	// x-amz-server-side-encryption-customer-algorithm HTTP header applicable to PutObject API only.
 	S3XAmzServerSideEncryptionCustomerAlgorithm = "s3:x-amz-server-side-encryption-customer-algorithm"
@@ -74,13 +70,19 @@ const (
 
 	// AWSSecureTransport - key representing if the clients request is authenticated or not.
 	AWSSecureTransport = "aws:SecureTransport"
+
+	// AWSCurrentTime - key representing the current time.
+	AWSCurrentTime = "aws:CurrentTime"
+
+	// AWSEpochTime - key representing the current epoch time.
+	AWSEpochTime = "aws:EpochTime"
 )
 
 // AllSupportedKeys - is list of all all supported keys.
 var AllSupportedKeys = []Key{
 	S3XAmzCopySource,
 	S3XAmzServerSideEncryption,
-	S3XAmzServerSideEncryptionAwsKMSKeyID,
+	S3XAmzServerSideEncryptionCustomerAlgorithm,
 	S3XAmzMetadataDirective,
 	S3XAmzStorageClass,
 	S3LocationConstraint,
@@ -91,7 +93,19 @@ var AllSupportedKeys = []Key{
 	AWSSourceIP,
 	AWSUserAgent,
 	AWSSecureTransport,
+	AWSCurrentTime,
+	AWSEpochTime,
 	// Add new supported condition keys.
+}
+
+// CommonKeys - is list of all common condition keys.
+var CommonKeys = []Key{
+	AWSReferer,
+	AWSSourceIP,
+	AWSUserAgent,
+	AWSSecureTransport,
+	AWSCurrentTime,
+	AWSEpochTime,
 }
 
 // IsValid - checks if key is valid or not.

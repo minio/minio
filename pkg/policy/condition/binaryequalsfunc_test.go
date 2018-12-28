@@ -58,7 +58,6 @@ func TestBinaryEqualsFuncEvaluate(t *testing.T) {
 		{case1Function, map[string][]string{"delimiter": {"/"}}, false},
 
 		{case2Function, map[string][]string{"x-amz-server-side-encryption": {"AES256"}}, true},
-		{case2Function, map[string][]string{"x-amz-server-side-encryption": {"aws:kms"}}, false},
 		{case2Function, map[string][]string{}, false},
 		{case2Function, map[string][]string{"delimiter": {"/"}}, false},
 
@@ -167,7 +166,6 @@ func TestBinaryEqualsFuncToMap(t *testing.T) {
 	case4Function, err := newBinaryEqualsFunc(S3XAmzServerSideEncryption,
 		NewValueSet(
 			NewStringValue(base64.StdEncoding.EncodeToString([]byte("AES256"))),
-			NewStringValue(base64.StdEncoding.EncodeToString([]byte("aws:kms"))),
 		),
 	)
 	if err != nil {
@@ -177,7 +175,6 @@ func TestBinaryEqualsFuncToMap(t *testing.T) {
 	case4Result := map[Key]ValueSet{
 		S3XAmzServerSideEncryption: NewValueSet(
 			NewStringValue(base64.StdEncoding.EncodeToString([]byte("AES256"))),
-			NewStringValue(base64.StdEncoding.EncodeToString([]byte("aws:kms"))),
 		),
 	}
 
@@ -285,7 +282,6 @@ func TestNewBinaryEqualsFunc(t *testing.T) {
 	case4Function, err := newBinaryEqualsFunc(S3XAmzServerSideEncryption,
 		NewValueSet(
 			NewStringValue(base64.StdEncoding.EncodeToString([]byte("AES256"))),
-			NewStringValue(base64.StdEncoding.EncodeToString([]byte("aws:kms"))),
 		),
 	)
 	if err != nil {
@@ -341,7 +337,6 @@ func TestNewBinaryEqualsFunc(t *testing.T) {
 		{S3XAmzServerSideEncryption,
 			NewValueSet(
 				NewStringValue(base64.StdEncoding.EncodeToString([]byte("AES256"))),
-				NewStringValue(base64.StdEncoding.EncodeToString([]byte("aws:kms"))),
 			), case4Function, false},
 
 		{S3XAmzMetadataDirective, NewValueSet(NewStringValue(base64.StdEncoding.EncodeToString([]byte("REPLACE")))), case5Function, false},

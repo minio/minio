@@ -29,7 +29,7 @@ func TestKeyIsValid(t *testing.T) {
 	}{
 		{S3XAmzCopySource, true},
 		{S3XAmzServerSideEncryption, true},
-		{S3XAmzServerSideEncryptionAwsKMSKeyID, true},
+		{S3XAmzServerSideEncryptionCustomerAlgorithm, true},
 		{S3XAmzMetadataDirective, true},
 		{S3XAmzStorageClass, true},
 		{S3LocationConstraint, true},
