@@ -35,11 +35,10 @@ import (
 
 const (
 	// ** revisit confFile value and reset it **
-	confFile     = "/home/ersan/work/src/github.com/minio/minio/pkg/configuration/examples/diskData.txt"
-	notSet       = "Configuration parameter has not been set to a valid value yet."
-	notSetPrefix = "Configuration parameter(s) that start with this prefix have not been set to valid value(s) yet."
-	notValid     = "Not a key, nor prefix"
-	commentChar  = "##"
+	confFile    = "/home/ersan/work/src/github.com/minio/minio/pkg/configuration/examples/diskData.txt"
+	notSet      = "Configuration parameter has not been set to a valid value yet."
+	notValid    = "Not a key, nor prefix"
+	commentChar = "##"
 )
 
 type configKey interface {
@@ -6460,7 +6459,7 @@ func init() {
 }
 
 func transformKey(key string) (string, error) {
-	// Tranform key, if it has a random subkey in it, to its
+	// Transform key, if it has a random subkey in it, to its
 	// '*' representation, otherwise, return the same 'key'.
 	// Random subkey are chosen by the user and it is expected
 	// to be consisted of only numbers and/or upper case letters.
@@ -6500,6 +6499,7 @@ func transformKey(key string) (string, error) {
 }
 
 // SetHandler sets key value in server configuration database
+// Only single key/val pair is accepted
 func (s *ServerConfig) SetHandler(key, val string) error {
 	var err error
 	// Load the configuration data from disk into memory
@@ -6603,7 +6603,7 @@ func (s *ServerConfig) GetHandler(keys []string) (map[string]string, error) {
 					}
 					// Maybe the 'validKey' is one of those keys with wildcard
 					// character,  '*'. Let's check if there is any matching
-					// entry or entries in the conifguration settings.
+					// entry or entries in the configuration settings.
 					// 'validKey' becomes the regular expression
 					rPrefix, _ := regexp.Compile(validKey)
 					// Create a boolean to decide if one or more matching
@@ -6723,96 +6723,96 @@ func (s *ServerConfig) load(isSetHandlerCall bool) map[string]error {
 	if _, err := os.Stat(confFile); os.IsNotExist(err) {
 		// Return right away if configuration file doesn't exist
 		return map[string]error{"Config File": err}
-	} else {
-		// Configuration file exists.
-		// Read configuration data from etcd or file
-		s.RWMutex.RLock()
-		defer s.RWMutex.RUnlock()
+	}
+	// Configuration file exists.
+	// Read configuration data from etcd or file
+	s.RWMutex.RLock()
+	defer s.RWMutex.RUnlock()
 
-		s.fileContent = []lineStruct{}
-		lines, err := readLines(confFile)
-		if err != nil {
-			// Return right away if something is wrong
-			// with reading the configuration file
-			return map[string]error{"Config File": err}
+	s.fileContent = []lineStruct{}
+	lines, err := readLines(confFile)
+	if err != nil {
+		// Return right away if something is wrong
+		// with reading the configuration file
+		return map[string]error{"Config File": err}
+	}
+
+	// 'newInd' is the index of the in memory 'fileContent' array,
+	// that will be populated here with configuration information.
+	newInd := -1
+	var key, val string
+	// Go through each line of config file and
+	// classify them as comments or key/value pairs.
+	// Only empty lines, comment lines (// xxxx xx x),
+	// key/value pairs (key = value) and combination of
+	// key/value pairs and comments in the same line
+	// (key = value // xxxx  xxx) are honored. The rest
+	// of other formats are rejected.
+	for ind, line := range lines {
+		newInd++
+		element, isComment, isValidFormat := verifyConfigKeyFormat(line)
+		key = element[0]
+		val = element[1]
+		if !isValidFormat {
+			logger.LogIf(context.Background(), errors.New("Invalid key, '"+key+"'."))
+			errMap["Invalid key: "+key] = errors.New("Invalid key, '" +
+				key + "'. (line:" + strconv.Itoa(ind+1) + ")")
+			newInd--
+			continue
+		}
+		if isComment {
+			// We've decided not to support full comment lines
+			// and empty lines. Skip it and continue. 12/12/2018
+			newInd--
+			continue
+		}
+		// Valid configurations are handled here.
+		// We expect the invalid configuration settings will
+		// be addressed in a SafeMode, which is still under
+		// design and decision phase, if minio server cannot
+		// be started with the invalid configuration setting
+		// Validate key/value pair
+
+		// Set the server configuration map, "s.fileContent",
+		// Validate by first assuming the key is a regular key with no user
+		// specified random subkey in it. If this check fails, try validating
+		// the key assuming it has a user specified random subkey in it.
+		isValidValue := true
+		if _, ok := serverConfHandler[key]; ok {
+			if err := serverConfHandler[key].Set(key, val, isSetHandlerCall, s); err != nil {
+				// Report the error and continue with the next element
+				isValidValue = false
+				logger.LogIf(context.Background(), err)
+				errMap["Invalid value: "+key] = errors.New("Incorrect '" +
+					key + "' value: '" + val + "'. " + err.Error() +
+					" (line:" + strconv.Itoa(ind+1) + ")")
+				newInd--
+				continue
+			}
+		} else if transformedKey, err := transformKey(key); err == nil {
+			if err := serverConfHandler[transformedKey].Set(key, val, isSetHandlerCall, s); err != nil {
+				// Report the error and continue with the next element
+				logger.LogIf(context.Background(), err)
+				errMap["Invalid value: "+key] = errors.New("Incorrect '" +
+					key + "' value: '" + val + "'. " + err.Error() +
+					" (line:" + strconv.Itoa(ind+1) + ")")
+				newInd--
+				continue
+			}
+		} else {
+			logger.LogIf(context.Background(), errors.New("Invalid key, '"+key+"'."))
+			errMap["Invalid key, "+key] = errors.New("Invalid key, '" +
+				key + "'. (line:" + strconv.Itoa(ind+1) + ")")
+			newInd--
+			continue
 		}
 
-		// 'newInd' is the index of the in memory 'fileContent' array,
-		// that will be populated here with configuration information.
-		newInd := -1
-		var key, val string
-		// Go through each line of config file and
-		// classify them as comments or key/value pairs.
-		// Only empty lines, comment lines (// xxxx xx x),
-		// key/value pairs (key = value) and combination of
-		// key/value pairs and comments in the same line
-		// (key = value // xxxx  xxx) are honored. The rest
-		// of other formats are rejected.
-		for ind, line := range lines {
-			newInd++
-			element, isComment, isValidFormat := verifyConfigKeyFormat(line)
-			key = element[0]
-			val = element[1]
-			if !isValidFormat {
-				logger.LogIf(context.Background(), errors.New("Invalid key, '"+key+"'."))
-				errMap["Invalid key: "+key] = errors.New("Invalid key, '" + key + "'. (line:" + strconv.Itoa(ind+1) + ")")
-				newInd--
-				continue
-			}
-			if isComment {
-				// We've decided not to support full comment lines
-				// and empty lines. Skip it and continue. 12/12/2018
-				newInd--
-				continue
-			}
-			// Valid configurations are handled here.
-			// We expect the invalid configuration settings will
-			// be addressed in a SafeMode, which is still under
-			// design and decision phase, if minio server cannot
-			// be started with the invalid configuration setting
-			// Validate key/value pair
-
-			// Set the server configuration map, "s.fileContent",
-			// Validate by first assuming the key is a regular key with no user
-			// specified random subkey in it. If this check fails, try validating
-			// the key assuming it has a user specified random subkey in it.
-			isValidValue := true
-			if _, ok := serverConfHandler[key]; ok {
-				if err := serverConfHandler[key].Set(key, val, isSetHandlerCall, s); err != nil {
-					// Report the error and continue with the next element
-					isValidValue = false
-					logger.LogIf(context.Background(), err)
-					errMap["Invalid value: "+key] = errors.New("Incorrect '" +
-						key + "' value: '" + val + "'. " + err.Error() +
-						" (line:" + strconv.Itoa(ind+1) + ")")
-					newInd--
-					continue
-				}
-			} else if transformedKey, err := transformKey(key); err == nil {
-				if err := serverConfHandler[transformedKey].Set(key, val, isSetHandlerCall, s); err != nil {
-					// Report the error and continue with the next element
-					logger.LogIf(context.Background(), err)
-					errMap["Invalid value: "+key] = errors.New("Incorrect '" +
-						key + "' value: '" + val + "'. " + err.Error() +
-						" (line:" + strconv.Itoa(ind+1) + ")")
-					newInd--
-					continue
-				}
+		if isValidFormat && isValidValue {
+			if len(element) > 2 {
+				s.fileContent[newInd].comment = element[2]
+				s.fileContent[newInd].isValidValue = isValidValue
 			} else {
-				logger.LogIf(context.Background(), errors.New("Invalid key, '"+key+"'."))
-				errMap["Invalid key, "+key] = errors.New("Invalid key, '" +
-					key + "'. (line:" + strconv.Itoa(ind+1) + ")")
-				newInd--
-				continue
-			}
-
-			if isValidFormat && isValidValue {
-				if len(element) > 2 {
-					s.fileContent[newInd].comment = element[2]
-					s.fileContent[newInd].isValidValue = isValidValue
-				} else {
-					s.fileContent[newInd].isValidValue = isValidValue
-				}
+				s.fileContent[newInd].isValidValue = isValidValue
 			}
 		}
 	}
