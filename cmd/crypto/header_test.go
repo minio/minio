@@ -95,7 +95,7 @@ var ssecIsRequestedTests = []struct {
 	Header   http.Header
 	Expected bool
 }{
-	{Header: http.Header{}, Expected: false},                                                                                                     // 0
+	{Header: http.Header{}, Expected: false}, // 0
 	{Header: http.Header{"X-Amz-Server-Side-Encryption-Customer-Algorithm": []string{"AES256"}}, Expected: true},                                 // 1
 	{Header: http.Header{"X-Amz-Server-Side-Encryption-Customer-Key": []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="}}, Expected: true}, // 2
 	{Header: http.Header{"X-Amz-Server-Side-Encryption-Customer-Key-Md5": []string{"7PpPLAK26ONlVUGOWlusfg=="}}, Expected: true},                 // 3
@@ -137,7 +137,7 @@ var ssecCopyIsRequestedTests = []struct {
 	Header   http.Header
 	Expected bool
 }{
-	{Header: http.Header{}, Expected: false},                                                                                                                 // 0
+	{Header: http.Header{}, Expected: false}, // 0
 	{Header: http.Header{"X-Amz-Copy-Source-Server-Side-Encryption-Customer-Algorithm": []string{"AES256"}}, Expected: true},                                 // 1
 	{Header: http.Header{"X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key": []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="}}, Expected: true}, // 2
 	{Header: http.Header{"X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-Md5": []string{"7PpPLAK26ONlVUGOWlusfg=="}}, Expected: true},                 // 3
