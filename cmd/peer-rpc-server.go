@@ -238,6 +238,17 @@ func (receiver *peerRPCReceiver) LoadCredentials(args *AuthArgs, reply *VoidRepl
 	return globalConfigSys.Load(newObjectLayerFn())
 }
 
+// DrivePerfInfo - handles drive performance RPC call
+func (receiver *peerRPCReceiver) DrivePerfInfo(args *AuthArgs, reply *ServerDrivesPerfInfo) error {
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return errServerNotInitialized
+	}
+
+	*reply = localEndpointsPerf(globalEndpoints)
+	return nil
+}
+
 // NewPeerRPCServer - returns new peer RPC server.
 func NewPeerRPCServer() (*xrpc.Server, error) {
 	rpcServer := xrpc.NewServer()

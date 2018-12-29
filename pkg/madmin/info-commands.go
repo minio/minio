@@ -21,7 +21,10 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"time"
+
+	"github.com/minio/minio/pkg/disk"
 )
 
 // BackendType - represents different backend types.
@@ -146,4 +149,47 @@ func (adm *AdminClient) ServerInfo() ([]ServerInfo, error) {
 	}
 
 	return serversInfo, nil
+}
+
+// ServerDrivesPerfInfo holds informantion about address and write speed of
+// all drives in a single server node
+type ServerDrivesPerfInfo struct {
+	Addr  string             `json:"addr"`
+	Error string             `json:"error,omitempty"`
+	Perf  []disk.Performance `json:"perf"`
+}
+
+// ServerDrivesPerfInfo - Returns drive's read and write performance information
+func (adm *AdminClient) ServerDrivesPerfInfo() ([]ServerDrivesPerfInfo, error) {
+	v := url.Values{}
+	v.Set("perfType", string("drive"))
+	resp, err := adm.executeMethod("GET", requestData{
+		relPath:     "/v1/performance",
+		queryValues: v,
+	})
+
+	defer closeResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var info []ServerDrivesPerfInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(respBytes, &info)
+	if err != nil {
+		return nil, err
+	}
+
+	return info, nil
 }

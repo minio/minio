@@ -35,6 +35,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
@@ -282,6 +283,57 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	// Reply with storage information (across nodes in a
 	// distributed setup) as json.
 	writeSuccessResponseJSON(w, jsonBytes)
+}
+
+// ServerDrivesPerfInfo holds informantion about address, performance
+// of all drives on one server. It also reports any errors if encountered
+// while trying to reach this server.
+type ServerDrivesPerfInfo struct {
+	Addr  string             `json:"addr"`
+	Error string             `json:"error,omitempty"`
+	Perf  []disk.Performance `json:"perf"`
+}
+
+// PerfInfoHandler - GET /minio/admin/v1/performance?perfType={perfType}
+// ----------
+// Get all performance information based on input type
+// Supported types = drive
+func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "PerfInfo")
+
+	// Authenticate request
+	// Setting the region as empty so as the mc server info command is irrespective to the region.
+	adminAPIErr := checkAdminRequestAuthType(ctx, r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	perfType := vars["perfType"]
+
+	if perfType == "drive" {
+		// Get drive performance details from local server's drive(s)
+		dp := localEndpointsPerf(globalEndpoints)
+
+		// Notify all other Minio peers to report drive performance numbers
+		dps := globalNotificationSys.DrivePerfInfo()
+		dps = append(dps, dp)
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(dps)
+		if err != nil {
+			writeErrorResponseJSON(w, toAdminAPIErrCode(ctx, err), r.URL)
+			return
+		}
+
+		// Reply with performance information (across nodes in a
+		// distributed setup) as json.
+		writeSuccessResponseJSON(w, jsonBytes)
+	} else {
+		writeErrorResponseJSON(w, ErrNotImplemented, r.URL)
+	}
+	return
 }
 
 // StartProfilingResult contains the status of the starting
