@@ -162,9 +162,6 @@ var (
 	// File to log HTTP request/response headers and body.
 	globalHTTPTraceFile *os.File
 
-	// List of admin peers.
-	globalAdminPeers = adminPeers{}
-
 	// Minio server user agent string.
 	globalServerUserAgent = "Minio/" + ReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
 

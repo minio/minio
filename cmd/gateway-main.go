@@ -176,15 +176,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Add API router.
 	registerAPIRouter(router, encryptionEnabled)
 
-	// Dummy endpoint representing gateway instance.
-	globalEndpoints = []Endpoint{{
-		URL:     &url.URL{Path: "/minio/gateway"},
-		IsLocal: true,
-	}}
-
-	// Initialize Admin Peers.
-	initGlobalAdminPeers(globalEndpoints)
-
 	var getCert certs.GetCertificateFunc
 	if globalTLSCerts != nil {
 		getCert = globalTLSCerts.GetCertificate
