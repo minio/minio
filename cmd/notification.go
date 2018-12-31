@@ -512,6 +512,31 @@ func (sys *NotificationSys) Send(args eventArgs) []event.TargetIDErr {
 	return sys.send(args.BucketName, args.ToEvent(), targetIDs...)
 }
 
+// DrivePerfInfo - Drive speed (read and write) information
+func (sys *NotificationSys) DrivePerfInfo() []ServerDrivesPerfInfo {
+	reply := make([]ServerDrivesPerfInfo, len(sys.peerRPCClientMap))
+	var wg sync.WaitGroup
+	var i int
+	for addr, client := range sys.peerRPCClientMap {
+		wg.Add(1)
+		go func(addr xnet.Host, client *PeerRPCClient, idx int) {
+			defer wg.Done()
+			di, err := client.DrivePerfInfo()
+			if err != nil {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr.String())
+				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				logger.LogIf(ctx, err)
+				di.Addr = addr.String()
+				di.Error = err.Error()
+			}
+			reply[idx] = di
+		}(addr, client, i)
+		i++
+	}
+	wg.Wait()
+	return reply
+}
+
 // NewNotificationSys - creates new notification system object.
 func NewNotificationSys(config *serverConfig, endpoints EndpointList) *NotificationSys {
 	targetList := getNotificationTargets(config)

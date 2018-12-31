@@ -39,7 +39,7 @@ func main() {
 | Service operations         | Info operations  | Healing operations                    | Config operations        | IAM operations | Misc                                |
 |:----------------------------|:----------------------------|:--------------------------------------|:--------------------------|:------------------------------------|:------------------------------------|
 | [`ServiceStatus`](#ServiceStatus) | [`ServerInfo`](#ServerInfo) | [`Heal`](#Heal) | [`GetConfig`](#GetConfig) | [`AddUser`](#AddUser) | [`SetAdminCredentials`](#SetAdminCredentials) |
-| [`ServiceSendAction`](#ServiceSendAction) | | | [`SetConfig`](#SetConfig) | [`SetUserPolicy`](#SetUserPolicy) | [`StartProfiling`](#StartProfiling) |
+| [`ServiceSendAction`](#ServiceSendAction) | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) | [`SetConfig`](#SetConfig) | [`SetUserPolicy`](#SetUserPolicy) | [`StartProfiling`](#StartProfiling) |
 | | |            | [`GetConfigKeys`](#GetConfigKeys) | [`ListUsers`](#ListUsers) | [`DownloadProfilingData`](#DownloadProfilingData) |
 | | |            | [`SetConfigKeys`](#SetConfigKeys) | [`AddCannedPolicy`](#AddCannedPolicy) | |
 
@@ -204,6 +204,23 @@ Fetches information for all cluster nodes, such as server properties, storage in
 
  ```
 
+<a name="ServerDrivesPerfInfo"></a>
+### ServerDrivesPerfInfo() ([]ServerDrivesPerfInfo, error)
+
+Fetches drive performance information for all cluster nodes. Returned value is in Bytes/s.
+
+| Param | Type | Description |
+|---|---|---|
+|`di.Addr` | _string_ | Address of the server the following information is retrieved from. |
+|`di.Error` | _string _ | Errors (if any) encountered while reaching this node |
+|`di.DrivesPerf` | _disk.Performance_ | Path of the drive mount on above server and read, write speed. |
+
+| Param | Type | Description |
+|---|---|---|
+|`disk.Performance.Path` | _string_ | Path of drive mount. |
+|`disk.Performance.Error` | _string_ | Error (if any) encountered while accessing this drive. |
+|`disk.Performance.WriteSpeed` | _float64_ | Write speed on above path in Bytes/s. |
+|`disk.Performance.ReadSpeed` | _float64_ | Read speed on above path in Bytes/s. |
 
 ## 6. Heal operations
 

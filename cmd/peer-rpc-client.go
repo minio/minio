@@ -141,6 +141,15 @@ func (rpcClient *PeerRPCClient) LoadCredentials() error {
 	return rpcClient.Call(peerServiceName+".LoadCredentials", &args, &reply)
 }
 
+// DrivePerfInfo - returns drive performance info for remote server.
+func (rpcClient *PeerRPCClient) DrivePerfInfo() (ServerDrivesPerfInfo, error) {
+	args := AuthArgs{}
+	var reply ServerDrivesPerfInfo
+
+	err := rpcClient.Call(peerServiceName+".DrivePerfInfo", &args, &reply)
+	return reply, err
+}
+
 // NewPeerRPCClient - returns new peer RPC client.
 func NewPeerRPCClient(host *xnet.Host) (*PeerRPCClient, error) {
 	scheme := "http"
