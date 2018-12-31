@@ -237,7 +237,8 @@ var (
 
 	// KMS key id
 	globalKMSKeyID string
-	// Allocated KMS
+
+	// GlobalKMS initialized KMS configuration
 	GlobalKMS crypto.KMS
 
 	// Auto-Encryption, if enabled, turns any non-SSE-C request
@@ -271,10 +272,9 @@ var (
 	globalDeploymentID string
 
 	// GlobalGatewaySSE sse options
-	GlobalGatewaySSE []string
+	GlobalGatewaySSE gatewaySSE
 
 	// Add new variable global values here.
-
 )
 
 // global colors.

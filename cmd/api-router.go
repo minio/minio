@@ -26,14 +26,19 @@ import (
 type objectAPIHandlers struct {
 	ObjectAPI func() ObjectLayer
 	CacheAPI  func() CacheObjectLayer
+	// Returns true of handlers should interpret encryption.
+	EncryptionEnabled func() bool
 }
 
 // registerAPIRouter - registers S3 compatible APIs.
-func registerAPIRouter(router *mux.Router) {
+func registerAPIRouter(router *mux.Router, encryptionEnabled bool) {
 	// Initialize API.
 	api := objectAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
 		CacheAPI:  newCacheObjectsFn,
+		EncryptionEnabled: func() bool {
+			return encryptionEnabled
+		},
 	}
 
 	// API Router

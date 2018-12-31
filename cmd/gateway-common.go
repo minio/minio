@@ -345,28 +345,28 @@ func ErrorRespToObjectError(err error, params ...string) error {
 }
 
 // parse gateway sse env variable
-func parseGatewaySSE(s string) ([]string, error) {
+func parseGatewaySSE(s string) (gatewaySSE, error) {
 	l := strings.Split(s, ";")
 	var gwSlice = make([]string, 0)
 	for _, val := range l {
 		v := strings.ToUpper(val)
-		if v == GatewaySSES3 || v == GatewaySSEC {
+		if v == gatewaySSES3 || v == gatewaySSEC {
 			gwSlice = append(gwSlice, v)
 			continue
 		}
 		return nil, uiErrInvalidGWSSEValue(nil).Msg("gateway SSE cannot be (%s) ", v)
 	}
-	return gwSlice, nil
+	return gatewaySSE(gwSlice), nil
 }
 
 // handle gateway env vars
 func handleGatewayEnvVars() {
-	gwsse, ok := os.LookupEnv("MINIO_GATEWAY_SSE")
+	gwsseVal, ok := os.LookupEnv("MINIO_GATEWAY_SSE")
 	if ok {
-		gwsseSlice, err := parseGatewaySSE(gwsse)
+		var err error
+		GlobalGatewaySSE, err = parseGatewaySSE(gwsseVal)
 		if err != nil {
-			logger.Fatal(err, "Unable to parse MINIO_GATEWAY_SSE value (`%s`)", gwsse)
+			logger.Fatal(err, "Unable to parse MINIO_GATEWAY_SSE value (`%s`)", gwsseVal)
 		}
-		GlobalGatewaySSE = gwsseSlice
 	}
 }

@@ -1213,22 +1213,18 @@ func getEncryptionOpts(ctx context.Context, r *http.Request, bucket, object stri
 		encryption encrypt.ServerSide
 		opts       ObjectOptions
 	)
-	if GlobalGatewaySSE != nil {
-		for _, k := range GlobalGatewaySSE {
-			if k == GatewaySSEC && crypto.SSEC.IsRequested(r.Header) {
-				key, err := crypto.SSEC.ParseHTTP(r.Header)
-				if err != nil {
-					return opts, err
-				}
-				derivedKey, err := deriveClientKey(key, bucket, object)
-				if err != nil {
-					return opts, err
-				}
-				encryption, err = encrypt.NewSSEC(derivedKey[:])
-				logger.CriticalIf(ctx, err)
-				return ObjectOptions{ServerSideEncryption: encryption}, nil
-			}
+	if GlobalGatewaySSE.SSEC() && crypto.SSEC.IsRequested(r.Header) {
+		key, err := crypto.SSEC.ParseHTTP(r.Header)
+		if err != nil {
+			return opts, err
 		}
+		derivedKey, err := deriveClientKey(key, bucket, object)
+		if err != nil {
+			return opts, err
+		}
+		encryption, err = encrypt.NewSSEC(derivedKey[:])
+		logger.CriticalIf(ctx, err)
+		return ObjectOptions{ServerSideEncryption: encryption}, nil
 	}
 	// default case of passing encryption headers to backend
 	return extractEncryptionOption(r.Header, false, nil)
@@ -1236,17 +1232,13 @@ func getEncryptionOpts(ctx context.Context, r *http.Request, bucket, object stri
 
 // get ObjectOptions for PUT calls from encryption headers
 func putEncryptionOpts(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
-	if GlobalGatewaySSE != nil {
-		for _, k := range GlobalGatewaySSE {
-			// In the case of multipart custom format, the metadata needs to be checked in addition to header to see if it
-			// is SSE-S3 encrypted, primarily because S3 protocol does not require SSE-S3 headers in PutObjectPart calls
-			if k == GatewaySSES3 && (crypto.S3.IsRequested(r.Header) || crypto.S3.IsEncrypted(metadata)) {
-				return ObjectOptions{ServerSideEncryption: encrypt.NewSSE()}, nil
-			}
-			if k == GatewaySSEC && crypto.SSEC.IsRequested(r.Header) {
-				return getEncryptionOpts(ctx, r, bucket, object)
-			}
-		}
+	// In the case of multipart custom format, the metadata needs to be checked in addition to header to see if it
+	// is SSE-S3 encrypted, primarily because S3 protocol does not require SSE-S3 headers in PutObjectPart calls
+	if GlobalGatewaySSE.SSES3() && (crypto.S3.IsRequested(r.Header) || crypto.S3.IsEncrypted(metadata)) {
+		return ObjectOptions{ServerSideEncryption: encrypt.NewSSE()}, nil
+	}
+	if GlobalGatewaySSE.SSEC() && crypto.SSEC.IsRequested(r.Header) {
+		return getEncryptionOpts(ctx, r, bucket, object)
 	}
 	// default case of passing encryption headers to backend
 	return extractEncryptionOption(r.Header, false, metadata)
@@ -1254,21 +1246,7 @@ func putEncryptionOpts(ctx context.Context, r *http.Request, bucket, object stri
 
 // get ObjectOptions for Copy calls for encryption headers provided on the target side
 func copyDstEncryptionOpts(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
-	if GlobalGatewaySSE != nil {
-		for _, k := range GlobalGatewaySSE {
-			// In the case of multipart custom format, the metadata needs to be checked in addition to header to see if it
-			// is SSE-S3 encrypted, primarily because S3 protocol does not require SSE-S3 headers in CopyObjectPart calls
-			if k == GatewaySSES3 && (crypto.S3.IsRequested(r.Header) || crypto.S3.IsEncrypted(metadata)) {
-				opts = ObjectOptions{ServerSideEncryption: encrypt.NewSSE()}
-				return opts, nil
-			}
-			if k == GatewaySSEC && crypto.SSEC.IsRequested(r.Header) {
-				return getEncryptionOpts(ctx, r, bucket, object)
-			}
-		}
-	}
-	// default case of passing encryption headers to backend
-	return extractEncryptionOption(r.Header, false, metadata)
+	return putEncryptionOpts(ctx, r, bucket, object, metadata)
 }
 
 // get ObjectOptions for Copy calls for encryption headers provided on the source side
@@ -1277,25 +1255,23 @@ func copySrcEncryptionOpts(ctx context.Context, r *http.Request, bucket, object 
 		ssec encrypt.ServerSide
 		opts ObjectOptions
 	)
-	if GlobalGatewaySSE != nil {
-		for _, k := range GlobalGatewaySSE {
-			if k == GatewaySSEC && crypto.SSECopy.IsRequested(r.Header) {
-				key, err := crypto.SSECopy.ParseHTTP(r.Header)
-				if err != nil {
-					return opts, err
-				}
-				derivedKey, err := deriveClientKey(key, bucket, object)
-				if err != nil {
-					return opts, err
-				}
-				ssec, err = encrypt.NewSSEC(derivedKey[:])
-				if err != nil {
-					return opts, err
-				}
-				return ObjectOptions{ServerSideEncryption: encrypt.SSECopy(ssec)}, nil
-			}
+
+	if GlobalGatewaySSE.SSEC() && crypto.SSECopy.IsRequested(r.Header) {
+		key, err := crypto.SSECopy.ParseHTTP(r.Header)
+		if err != nil {
+			return opts, err
 		}
+		derivedKey, err := deriveClientKey(key, bucket, object)
+		if err != nil {
+			return opts, err
+		}
+		ssec, err = encrypt.NewSSEC(derivedKey[:])
+		if err != nil {
+			return opts, err
+		}
+		return ObjectOptions{ServerSideEncryption: encrypt.SSECopy(ssec)}, nil
 	}
+
 	// default case of passing encryption headers to backend
 	return extractEncryptionOption(r.Header, true, nil)
 }

@@ -137,7 +137,7 @@ func (a GatewayUnsupported) IsListenBucketSupported() bool {
 	return false
 }
 
-// IsEncryptionSupported returns whether server side encryption is applicable for this layer.
+// IsEncryptionSupported returns whether server side encryption is implemented for this layer.
 func (a GatewayUnsupported) IsEncryptionSupported() bool {
 	return false
 }

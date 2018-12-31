@@ -92,7 +92,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && hasServerSideEncryptionHeader(r.Header) {
+	if !api.EncryptionEnabled() && hasServerSideEncryptionHeader(r.Header) {
 		writeErrorResponse(w, ErrBadRequest, r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -330,7 +330,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, ErrBadRequest, r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && hasServerSideEncryptionHeader(r.Header) {
+	if !api.EncryptionEnabled() && hasServerSideEncryptionHeader(r.Header) {
 		writeErrorResponse(w, ErrBadRequest, r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -510,7 +510,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponseHeadersOnly(w, ErrBadRequest)
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && hasServerSideEncryptionHeader(r.Header) {
+	if !api.EncryptionEnabled() && hasServerSideEncryptionHeader(r.Header) {
 		writeErrorResponse(w, ErrBadRequest, r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -727,7 +727,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && (hasServerSideEncryptionHeader(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
+	if !api.EncryptionEnabled() && (hasServerSideEncryptionHeader(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1152,7 +1152,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && hasServerSideEncryptionHeader(r.Header) {
+	if !api.EncryptionEnabled() && hasServerSideEncryptionHeader(r.Header) {
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1429,7 +1429,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && hasServerSideEncryptionHeader(r.Header) {
+	if !api.EncryptionEnabled() && hasServerSideEncryptionHeader(r.Header) {
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1540,7 +1540,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && (hasServerSideEncryptionHeader(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
+	if !api.EncryptionEnabled() && (hasServerSideEncryptionHeader(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1833,7 +1833,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && hasServerSideEncryptionHeader(r.Header) {
+	if !api.EncryptionEnabled() && hasServerSideEncryptionHeader(r.Header) {
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
 		return
 	}

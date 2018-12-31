@@ -203,11 +203,6 @@ func (l *s3EncObjects) isPrefix(ctx context.Context, bucket, prefix string, fetc
 	return false
 }
 
-// shouldSetSSEHeaders returns true if backend encryption is specified
-func shouldSetSSEHeaders() bool {
-	return len(minio.GlobalGatewaySSE) > 0
-}
-
 // GetObject reads an object from S3. Supports additional
 // parameters like offset and length which are synonymous with
 // HTTP Range requests.
@@ -267,7 +262,7 @@ func (l *s3EncObjects) deleteGWMetadata(ctx context.Context, bucket, metaFileNam
 
 func (l *s3EncObjects) getObject(ctx context.Context, bucket string, key string, startOffset int64, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
 	var o minio.ObjectOptions
-	if shouldSetSSEHeaders() {
+	if minio.GlobalGatewaySSE.IsSet() {
 		o = opts
 	}
 	dmeta, err := l.getGWMetadata(ctx, bucket, getDareMetaPath(key))
@@ -310,7 +305,7 @@ func (l *s3EncObjects) getObject(ctx context.Context, bucket string, key string,
 // GetObjectNInfo - returns object info and locked object ReadCloser
 func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, o minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
 	var opts minio.ObjectOptions
-	if shouldSetSSEHeaders() {
+	if minio.GlobalGatewaySSE.IsSet() {
 		opts = o
 	}
 	objInfo, err := l.GetObjectInfo(ctx, bucket, object, opts)
@@ -341,7 +336,7 @@ func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 // For custom gateway encrypted large objects, the ObjectInfo is retrieved from the dare.meta file.
 func (l *s3EncObjects) GetObjectInfo(ctx context.Context, bucket string, object string, o minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	var opts minio.ObjectOptions
-	if shouldSetSSEHeaders() {
+	if minio.GlobalGatewaySSE.IsSet() {
 		opts = o
 	}
 
@@ -413,7 +408,7 @@ func (l *s3EncObjects) ListMultipartUploads(ctx context.Context, bucket string, 
 // NewMultipartUpload uploads object in multiple parts
 func (l *s3EncObjects) NewMultipartUpload(ctx context.Context, bucket string, object string, metadata map[string]string, o minio.ObjectOptions) (uploadID string, err error) {
 	var opts minio.ObjectOptions
-	if shouldSetSSEHeaders() {
+	if minio.GlobalGatewaySSE.IsSet() {
 		opts = o
 	}
 	if o.ServerSideEncryption == nil {
@@ -437,7 +432,7 @@ func (l *s3EncObjects) NewMultipartUpload(ctx context.Context, bucket string, ob
 // PutObject creates a new object with the incoming data,
 func (l *s3EncObjects) PutObject(ctx context.Context, bucket string, object string, data *minio.PutObjReader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	var s3Opts minio.ObjectOptions
-	if shouldSetSSEHeaders() {
+	if minio.GlobalGatewaySSE.IsSet() {
 		s3Opts = opts
 	}
 	if opts.ServerSideEncryption == nil {
@@ -482,7 +477,7 @@ func (l *s3EncObjects) PutObjectPart(ctx context.Context, bucket string, object 
 
 	var s3Opts minio.ObjectOptions
 	// for sse-s3 encryption options should not be passed to backend
-	if opts.ServerSideEncryption != nil && opts.ServerSideEncryption.Type() == encrypt.SSEC && shouldSetSSEHeaders() {
+	if opts.ServerSideEncryption != nil && opts.ServerSideEncryption.Type() == encrypt.SSEC && minio.GlobalGatewaySSE.IsSet() {
 		s3Opts = opts
 	}
 
@@ -531,7 +526,7 @@ func (l *s3EncObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 // ListObjectParts returns all object parts for specified object in specified bucket
 func (l *s3EncObjects) ListObjectParts(ctx context.Context, bucket string, object string, uploadID string, partNumberMarker int, maxParts int, o minio.ObjectOptions) (lpi minio.ListPartsInfo, e error) {
 	var opts minio.ObjectOptions
-	if shouldSetSSEHeaders() {
+	if minio.GlobalGatewaySSE.IsSet() {
 		opts = o
 	}
 	// We do not store parts uploaded so far in the dare.meta. Only CompleteMultipartUpload finalizes the parts under upload prefix.Otherwise,
@@ -591,8 +586,7 @@ func (l *s3EncObjects) AbortMultipartUpload(ctx context.Context, bucket string, 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object
 func (l *s3EncObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []minio.CompletePart, opts minio.ObjectOptions) (oi minio.ObjectInfo, e error) {
 	var s3Opts minio.ObjectOptions
-
-	if shouldSetSSEHeaders() {
+	if minio.GlobalGatewaySSE.IsSet() {
 		s3Opts = opts
 	}
 
@@ -686,8 +680,8 @@ func getGWContentPath(object string) string {
 	return path.Join(object, defaultMinioGWPrefix, defaultGWContentFileName)
 }
 
-// Clean-up the old multipart uploads. Should be run in a Go routine.
-func (l *s3EncObjects) cleanupStaleMultipartUploads(ctx context.Context, cleanupInterval, expiry time.Duration, doneCh chan struct{}) {
+// Clean-up the stale incomplete encrypted multipart uploads. Should be run in a Go routine.
+func (l *s3EncObjects) cleanupStaleEncMultipartUploads(ctx context.Context, cleanupInterval, expiry time.Duration, doneCh chan struct{}) {
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
@@ -696,13 +690,13 @@ func (l *s3EncObjects) cleanupStaleMultipartUploads(ctx context.Context, cleanup
 		case <-doneCh:
 			return
 		case <-ticker.C:
-			l.cleanupStaleMultipartUploadsOnGW(ctx, expiry)
+			l.cleanupStaleEncMultipartUploadsOnGW(ctx, expiry)
 		}
 	}
 }
 
 // cleanupStaleMultipartUploads removes old custom encryption multipart uploads on backend
-func (l *s3EncObjects) cleanupStaleMultipartUploadsOnGW(ctx context.Context, expiry time.Duration) {
+func (l *s3EncObjects) cleanupStaleEncMultipartUploadsOnGW(ctx context.Context, expiry time.Duration) {
 	for {
 		buckets, err := l.s3Objects.ListBuckets(ctx)
 		if err != nil {
@@ -735,6 +729,7 @@ func (l *s3EncObjects) getStalePartsForBucket(ctx context.Context, bucket string
 			if isGWObject(obj.Name) {
 				continue
 			}
+
 			// delete temporary part.meta or dare.meta files for incomplete uploads that are past expiry
 			if (strings.HasSuffix(obj.Name, gwpartMetaJSON) || strings.HasSuffix(obj.Name, gwdareMetaJSON)) &&
 				now.Sub(obj.ModTime) > expiry {

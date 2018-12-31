@@ -486,7 +486,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && hasServerSideEncryptionHeader(r.Header) {
+	if !api.EncryptionEnabled() && hasServerSideEncryptionHeader(r.Header) {
 		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
 		return
 	}

@@ -227,9 +227,14 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 	s := s3Objects{
 		Client: clnt,
 	}
+	// Enables single encyption of KMS is configured.
 	if minio.GlobalKMS != nil {
 		encS := s3EncObjects{s}
-		go encS.cleanupStaleMultipartUploads(context.Background(), minio.GlobalMultipartCleanupInterval, minio.GlobalMultipartExpiry, minio.GlobalServiceDoneCh)
+
+		// Start stale enc multipart uploads cleanup routine.
+		go encS.cleanupStaleEncMultipartUploads(context.Background(),
+			minio.GlobalMultipartCleanupInterval, minio.GlobalMultipartExpiry, minio.GlobalServiceDoneCh)
+
 		return &encS, nil
 	}
 	return &s, nil
@@ -592,7 +597,7 @@ func (l *s3Objects) IsCompressionSupported() bool {
 	return false
 }
 
-// IsEncryptionSupported returns whether server side encryption is applicable for this layer.
+// IsEncryptionSupported returns whether server side encryption is implemented for this layer.
 func (l *s3Objects) IsEncryptionSupported() bool {
 	return minio.GlobalKMS != nil || len(minio.GlobalGatewaySSE) > 0
 }

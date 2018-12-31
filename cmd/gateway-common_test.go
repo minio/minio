@@ -23,9 +23,9 @@ import (
 // Tests cache exclude parsing.
 func TestParseGatewaySSE(t *testing.T) {
 	testCases := []struct {
-		gwSSEStr      string
-		expectedSlice []string
-		success       bool
+		gwSSEStr string
+		expected gatewaySSE
+		success  bool
 	}{
 		// valid input
 		{"c;S3", []string{"C", "S3"}, true},
@@ -36,7 +36,7 @@ func TestParseGatewaySSE(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		gwSSESlice, err := parseGatewaySSE(testCase.gwSSEStr)
+		gwSSE, err := parseGatewaySSE(testCase.gwSSEStr)
 		if err != nil && testCase.success {
 			t.Errorf("Test %d: Expected success but failed instead %s", i+1, err)
 		}
@@ -44,8 +44,8 @@ func TestParseGatewaySSE(t *testing.T) {
 			t.Errorf("Test %d: Expected failure but passed instead", i+1)
 		}
 		if err == nil {
-			if !reflect.DeepEqual(gwSSESlice, testCase.expectedSlice) {
-				t.Errorf("Test %d: Expected %v, got %v", i+1, testCase.expectedSlice, gwSSESlice)
+			if !reflect.DeepEqual(gwSSE, testCase.expected) {
+				t.Errorf("Test %d: Expected %v, got %v", i+1, testCase.expected, gwSSE)
 			}
 		}
 	}

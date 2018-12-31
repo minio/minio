@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -171,8 +170,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(registerWebRouter(router), "Unable to configure web browser")
 	}
 
+	// Currently only NAS and S3 gateway support encryption headers.
+	encryptionEnabled := gatewayName == "s3" || gatewayName == "nas"
+
 	// Add API router.
-	registerAPIRouter(router)
+	registerAPIRouter(router, encryptionEnabled)
 
 	// Dummy endpoint representing gateway instance.
 	globalEndpoints = []Endpoint{{
@@ -266,12 +268,20 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		_ = globalNotificationSys.Init(newObject)
 	}
 
-	if globalAutoEncryption && !newObject.IsEncryptionSupported() {
-		logger.Fatal(errors.New("Invalid KMS configuration"), "auto-encryption is enabled but gateway does not support encryption")
+	// Encryption support checks in gateway mode.
+	{
+
+		if (globalAutoEncryption || GlobalKMS != nil) && !newObject.IsEncryptionSupported() {
+			logger.Fatal(errInvalidArgument,
+				"Encryption support is requested but (%s) gateway does not support encryption", gw.Name())
+		}
+
+		if GlobalGatewaySSE.IsSet() && GlobalKMS == nil {
+			logger.Fatal(uiErrInvalidGWSSEEnvValue(nil).Msg("MINIO_GATEWAY_SSE set but KMS is not configured"),
+				"Unable to start gateway with SSE")
+		}
 	}
-	if len(GlobalGatewaySSE) != 0 && GlobalKMS == nil {
-		logger.Fatal(uiErrInvalidGWSSEEnvValue(nil).Msg("MINIO_GATEWAY_SSE set but KMS not enabled"), "Unable to start gateway with sse")
-	}
+
 	// Once endpoints are finalized, initialize the new object api.
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject

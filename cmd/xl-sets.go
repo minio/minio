@@ -521,7 +521,7 @@ func (s *xlSets) IsListenBucketSupported() bool {
 	return true
 }
 
-// IsEncryptionSupported returns whether server side encryption is applicable for this layer.
+// IsEncryptionSupported returns whether server side encryption is implemented for this layer.
 func (s *xlSets) IsEncryptionSupported() bool {
 	return s.getHashedSet("").IsEncryptionSupported()
 }
