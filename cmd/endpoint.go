@@ -29,6 +29,7 @@ import (
 
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mountinfo"
 )
@@ -198,9 +199,28 @@ func (endpoints EndpointList) GetString(i int) string {
 	return endpoints[i].String()
 }
 
-// localEndpointsPerf - returns ServerDrivesPerfInfo for only the
+// localEndpointsCPUPerf - returns ServerCPUPerfInfo for only the
 // local endpoints from given list of endpoints
-func localEndpointsPerf(endpoints EndpointList) ServerDrivesPerfInfo {
+func localEndpointsCPUPerf(endpoints EndpointList) ServerCPUPerfInfo {
+	var cpuPerfs []cpu.Performance
+	var addr string
+	for _, endpoint := range endpoints {
+		// Only proceed for local endpoints
+		if endpoint.IsLocal {
+			addr = GetLocalPeer(endpoints)
+			cpuPerf := cpu.GetPerformance()
+			cpuPerfs = append(cpuPerfs, cpuPerf)
+		}
+	}
+	return ServerCPUPerfInfo{
+		Addr: addr,
+		Perf: cpuPerfs,
+	}
+}
+
+// localEndpointsDrivePerf - returns ServerDrivesPerfInfo for only the
+// local endpoints from given list of endpoints
+func localEndpointsDrivePerf(endpoints EndpointList) ServerDrivesPerfInfo {
 	var dps []disk.Performance
 	var addr string
 	for _, endpoint := range endpoints {

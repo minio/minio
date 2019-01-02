@@ -39,7 +39,7 @@ func main() {
 | Service operations         | Info operations  | Healing operations                    | Config operations        | IAM operations | Misc                                |
 |:----------------------------|:----------------------------|:--------------------------------------|:--------------------------|:------------------------------------|:------------------------------------|
 | [`ServiceStatus`](#ServiceStatus) | [`ServerInfo`](#ServerInfo) | [`Heal`](#Heal) | [`GetConfig`](#GetConfig) | [`AddUser`](#AddUser) | [`SetAdminCredentials`](#SetAdminCredentials) |
-| [`ServiceSendAction`](#ServiceSendAction) | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) | [`SetConfig`](#SetConfig) | [`SetUserPolicy`](#SetUserPolicy) | [`StartProfiling`](#StartProfiling) |
+| [`ServiceSendAction`](#ServiceSendAction) | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) | [`ServerCPUPerfInfo`](#ServerCPUPerfInfo) | [`SetConfig`](#SetConfig) | [`SetUserPolicy`](#SetUserPolicy) | [`StartProfiling`](#StartProfiling) |
 | | |            | [`GetConfigKeys`](#GetConfigKeys) | [`ListUsers`](#ListUsers) | [`DownloadProfilingData`](#DownloadProfilingData) |
 | | |            | [`SetConfigKeys`](#SetConfigKeys) | [`AddCannedPolicy`](#AddCannedPolicy) | |
 
@@ -221,6 +221,24 @@ Fetches drive performance information for all cluster nodes. Returned value is i
 |`disk.Performance.Error` | _string_ | Error (if any) encountered while accessing this drive. |
 |`disk.Performance.WriteSpeed` | _float64_ | Write speed on above path in Bytes/s. |
 |`disk.Performance.ReadSpeed` | _float64_ | Read speed on above path in Bytes/s. |
+
+<a name="ServerCPUPerfInfo"></a>
+### ServerCPUPerfInfo() ([]ServerCPUPerfInfo, error)
+
+Fetches CPU utilization for all cluster nodes. Returned value is in Bytes.
+
+| Param | Type | Description |
+|-------|------|-------------|
+|`cpui.Addr` | _string_ | Address of the server the following information  is retrieved from. |
+|`cpui.Error` | _string_ | Errors (if any) encountered while reaching this node |
+|`cpui.CPUPerf` | _cpu.Performance_ | The utilitzation of the CPU. |
+
+| Param | Type | Description |
+|-------|------|-------------|
+|`cpu.Performance.Avg` | _string_ | The average utilization % of the CPU measured in a 200ms interval |
+|`cpu.Performance.Min` | _string_ | The minimum utilization % of the CPU measured in a 200ms interval |
+|`cpu.Performance.Max` | _string_ | The maximum utilization % of the CPU measured in a 200ms interval |
+|`cpu.Performance.Error` | _string_ | Error (if any) encountered while accesing the CPU info |
 
 ## 6. Heal operations
 

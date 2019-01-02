@@ -35,6 +35,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/iam/policy"
@@ -294,6 +295,12 @@ type ServerDrivesPerfInfo struct {
 	Perf  []disk.Performance `json:"perf"`
 }
 
+type ServerCPUPerfInfo struct {
+	Addr  string            `json:"addr"`
+	Error string            `json:"error,omitempty"`
+	Perf  []cpu.Performance `json:"perf"`
+}
+
 // PerfInfoHandler - GET /minio/admin/v1/performance?perfType={perfType}
 // ----------
 // Get all performance information based on input type
@@ -314,7 +321,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 
 	if perfType == "drive" {
 		// Get drive performance details from local server's drive(s)
-		dp := localEndpointsPerf(globalEndpoints)
+		dp := localEndpointsDrivePerf(globalEndpoints)
 
 		// Notify all other Minio peers to report drive performance numbers
 		dps := globalNotificationSys.DrivePerfInfo()
@@ -322,6 +329,23 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 
 		// Marshal API response
 		jsonBytes, err := json.Marshal(dps)
+		if err != nil {
+			writeErrorResponseJSON(w, toAdminAPIErrCode(ctx, err), r.URL)
+			return
+		}
+
+		// Reply with performance information (across nodes in a
+		// distributed setup) as json.
+		writeSuccessResponseJSON(w, jsonBytes)
+	} else if perfType == "cpu" {
+		// Get CPU perforamnce details from local server's cpu(s)
+		cpu := localEndpointsCPUPerf(globalEndpoints)
+		// Notify all other Minio peers to report cpu utilization numbers
+		cpus := globalNotificationSys.CPUPerfInfo()
+		cpus = append(cpus, cpu)
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(cpus)
 		if err != nil {
 			writeErrorResponseJSON(w, toAdminAPIErrCode(ctx, err), r.URL)
 			return

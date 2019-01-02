@@ -537,6 +537,31 @@ func (sys *NotificationSys) DrivePerfInfo() []ServerDrivesPerfInfo {
 	return reply
 }
 
+// CPUPerfInfo - CPU utilization information
+func (sys *NotificationSys) CPUPerfInfo() []ServerCPUPerfInfo {
+	reply := make([]ServerCPUPerfInfo, len(sys.peerRPCClientMap))
+	var wg sync.WaitGroup
+	var i int
+	for addr, client := range sys.peerRPCClientMap {
+		wg.Add(1)
+		go func(addr xnet.Host, client *PeerRPCClient, idx int) {
+			defer wg.Done()
+			cpui, err := client.CPUPerfInfo()
+			if err != nil {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr.String())
+				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				logger.LogIf(ctx, err)
+				cpui.Addr = addr.String()
+				cpui.Error = err.Error()
+			}
+			reply[idx] = cpui
+		}(addr, client, i)
+		i++
+	}
+	wg.Wait()
+	return reply
+}
+
 // NewNotificationSys - creates new notification system object.
 func NewNotificationSys(config *serverConfig, endpoints EndpointList) *NotificationSys {
 	targetList := getNotificationTargets(config)

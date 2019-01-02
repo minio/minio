@@ -150,6 +150,15 @@ func (rpcClient *PeerRPCClient) DrivePerfInfo() (ServerDrivesPerfInfo, error) {
 	return reply, err
 }
 
+// CPUPerfInfo - returns cpu performance info for remote server
+func (rpcClient *PeerRPCClient) CPUPerfInfo() (ServerCPUPerfInfo, error) {
+	args := AuthArgs{}
+	var reply ServerCPUPerfInfo
+
+	err := rpcClient.Call(peerServiceName+".CPUPerfInfo", &args, &reply)
+	return reply, err
+}
+
 // NewPeerRPCClient - returns new peer RPC client.
 func NewPeerRPCClient(host *xnet.Host) (*PeerRPCClient, error) {
 	scheme := "http"
