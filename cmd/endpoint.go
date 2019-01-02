@@ -29,7 +29,9 @@ import (
 
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/mem"
 	"github.com/minio/minio/pkg/mountinfo"
 )
 
@@ -198,9 +200,57 @@ func (endpoints EndpointList) GetString(i int) string {
 	return endpoints[i].String()
 }
 
-// localEndpointsPerf - returns ServerDrivesPerfInfo for only the
+// localEndpointsMemUsage - returns ServerMemUsageInfo for only the
 // local endpoints from given list of endpoints
-func localEndpointsPerf(endpoints EndpointList) ServerDrivesPerfInfo {
+func localEndpointsMemUsage(endpoints EndpointList) ServerMemUsageInfo {
+	var memUsages []mem.Usage
+	var addr string
+	scratchSpace := map[string]bool{}
+	for _, endpoint := range endpoints {
+		// Only proceed for local endpoints
+		if endpoint.IsLocal {
+			if _, ok := scratchSpace[endpoint.Host]; ok {
+				continue
+			}
+			addr = GetLocalPeer(endpoints)
+			memUsage := mem.GetUsage()
+			memUsages = append(memUsages, memUsage)
+			scratchSpace[endpoint.Host] = true
+		}
+	}
+	return ServerMemUsageInfo{
+		Addr:  addr,
+		Usage: memUsages,
+	}
+}
+
+// localEndpointsCPULoad - returns ServerCPULoadInfo for only the
+// local endpoints from given list of endpoints
+func localEndpointsCPULoad(endpoints EndpointList) ServerCPULoadInfo {
+	var cpuLoads []cpu.Load
+	var addr string
+	scratchSpace := map[string]bool{}
+	for _, endpoint := range endpoints {
+		// Only proceed for local endpoints
+		if endpoint.IsLocal {
+			if _, ok := scratchSpace[endpoint.Host]; ok {
+				continue
+			}
+			addr = GetLocalPeer(endpoints)
+			cpuLoad := cpu.GetLoad()
+			cpuLoads = append(cpuLoads, cpuLoad)
+			scratchSpace[endpoint.Host] = true
+		}
+	}
+	return ServerCPULoadInfo{
+		Addr: addr,
+		Load: cpuLoads,
+	}
+}
+
+// localEndpointsDrivePerf - returns ServerDrivesPerfInfo for only the
+// local endpoints from given list of endpoints
+func localEndpointsDrivePerf(endpoints EndpointList) ServerDrivesPerfInfo {
 	var dps []disk.Performance
 	var addr string
 	for _, endpoint := range endpoints {

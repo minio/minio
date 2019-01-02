@@ -150,6 +150,24 @@ func (rpcClient *PeerRPCClient) DrivePerfInfo() (ServerDrivesPerfInfo, error) {
 	return reply, err
 }
 
+// MemUsageInfo - returns mem utilization info for remote server
+func (rpcClient *PeerRPCClient) MemUsageInfo() (ServerMemUsageInfo, error) {
+	args := AuthArgs{}
+	var reply ServerMemUsageInfo
+
+	err := rpcClient.Call(peerServiceName+".MemUsageInfo", &args, &reply)
+	return reply, err
+}
+
+// CPULoadInfo - returns cpu performance info for remote server
+func (rpcClient *PeerRPCClient) CPULoadInfo() (ServerCPULoadInfo, error) {
+	args := AuthArgs{}
+	var reply ServerCPULoadInfo
+
+	err := rpcClient.Call(peerServiceName+".CPULoadInfo", &args, &reply)
+	return reply, err
+}
+
 // NewPeerRPCClient - returns new peer RPC client.
 func NewPeerRPCClient(host *xnet.Host) (*PeerRPCClient, error) {
 	scheme := "http"
