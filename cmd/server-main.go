@@ -207,16 +207,13 @@ func serverMain(ctx *cli.Context) {
 	// Handle all server command args.
 	serverHandleCmdArgs(ctx)
 
-	// Create certs path.
-	logger.FatalIf(createConfigDir(), "Unable to initialize configuration files")
-
 	// Check and load TLS certificates.
 	var err error
 	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig()
 	logger.FatalIf(err, "Unable to load the TLS configuration")
 
 	// Check and load Root CAs.
-	globalRootCAs, err = getRootCAs(getCADir())
+	globalRootCAs, err = getRootCAs(globalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
 	// Handle all server environment vars.

@@ -39,7 +39,7 @@ func TestServerConfigMigrateV1(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(rootPath)
-	setConfigDir(rootPath)
+	globalConfigDir = &ConfigDir{path: rootPath}
 
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = objLayer
@@ -77,7 +77,7 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	}
 	defer os.RemoveAll(rootPath)
 
-	setConfigDir(rootPath)
+	globalConfigDir = &ConfigDir{path: rootPath}
 
 	if err := migrateV2ToV3(); err != nil {
 		t.Fatal("migrate v2 to v3 should succeed when no config file is found")
@@ -166,7 +166,8 @@ func TestServerConfigMigrateV2toV33(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(rootPath)
-	setConfigDir(rootPath)
+
+	globalConfigDir = &ConfigDir{path: rootPath}
 
 	objLayer, fsDir, err := prepareFS()
 	if err != nil {
@@ -235,7 +236,8 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(rootPath)
-	setConfigDir(rootPath)
+
+	globalConfigDir = &ConfigDir{path: rootPath}
 	configPath := rootPath + "/" + minioConfigFile
 
 	// Create a corrupted config file
@@ -331,7 +333,8 @@ func TestServerConfigMigrateCorruptedConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(rootPath)
-	setConfigDir(rootPath)
+
+	globalConfigDir = &ConfigDir{path: rootPath}
 	configPath := rootPath + "/" + minioConfigFile
 
 	for i := 3; i <= 17; i++ {

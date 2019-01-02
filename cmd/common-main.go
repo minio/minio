@@ -78,6 +78,42 @@ func loadLoggers() {
 
 }
 
+func newConfigDirFromCtx(ctx *cli.Context, option string, getDefaultDir func() string) *ConfigDir {
+	var dir string
+
+	switch {
+	case ctx.IsSet(option):
+		dir = ctx.String(option)
+	case ctx.GlobalIsSet(option):
+		dir = ctx.GlobalString(option)
+		// cli package does not expose parent's option option.  Below code is workaround.
+		if dir == "" || dir == getDefaultDir() {
+			if ctx.Parent().GlobalIsSet(option) {
+				dir = ctx.Parent().GlobalString(option)
+			}
+		}
+	default:
+		// Neither local nor global option is provided.  In this case, try to use
+		// default directory.
+		dir = getDefaultDir()
+		if dir == "" {
+			logger.FatalIf(errInvalidArgument, "%s option must be provided", option)
+		}
+	}
+
+	if dir == "" {
+		logger.FatalIf(errors.New("empty directory"), "%s directory cannot be empty", option)
+	}
+
+	// Disallow relative paths, figure out absolute paths.
+	dirAbs, err := filepath.Abs(dir)
+	logger.FatalIf(err, "Unable to fetch absolute path for %s=%s", option, dir)
+
+	logger.FatalIf(mkdirAllIgnorePerm(dirAbs), "Unable to create directory specified %s=%s", option, dir)
+
+	return &ConfigDir{path: dirAbs}
+}
+
 func handleCommonCmdArgs(ctx *cli.Context) {
 
 	// Get "json" flag from command line argument and
@@ -105,36 +141,12 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 		globalCLIContext.Addr = ctx.String("address")
 	}
 
-	var configDir string
+	// Set all config, certs and CAs directories.
+	globalConfigDir = newConfigDirFromCtx(ctx, "config-dir", defaultConfigDir.Get)
+	globalCertsDir = newConfigDirFromCtx(ctx, "certs-dir", defaultCertsDir.Get)
+	globalCertsCADir = &ConfigDir{path: filepath.Join(globalCertsDir.Get(), certsCADir)}
 
-	switch {
-	case ctx.IsSet("config-dir"):
-		configDir = ctx.String("config-dir")
-	case ctx.GlobalIsSet("config-dir"):
-		configDir = ctx.GlobalString("config-dir")
-		// cli package does not expose parent's "config-dir" option.  Below code is workaround.
-		if configDir == "" || configDir == getConfigDir() {
-			if ctx.Parent().GlobalIsSet("config-dir") {
-				configDir = ctx.Parent().GlobalString("config-dir")
-			}
-		}
-	default:
-		// Neither local nor global config-dir option is provided.  In this case, try to use
-		// default config directory.
-		configDir = getConfigDir()
-		if configDir == "" {
-			logger.FatalIf(errors.New("missing option"), "config-dir option must be provided")
-		}
-	}
-
-	if configDir == "" {
-		logger.FatalIf(errors.New("empty directory"), "Configuration directory cannot be empty")
-	}
-
-	// Disallow relative paths, figure out absolute paths.
-	configDirAbs, err := filepath.Abs(configDir)
-	logger.FatalIf(err, "Unable to fetch absolute path for config directory %s", configDir)
-	setConfigDir(configDirAbs)
+	logger.FatalIf(mkdirAllIgnorePerm(globalCertsCADir.Get()), "Unable to create certs CA directory at %s", globalCertsCADir.Get())
 }
 
 // Parses the given compression exclude list `extensions` or `content-types`.
