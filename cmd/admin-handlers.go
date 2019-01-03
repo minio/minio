@@ -40,6 +40,7 @@ import (
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/mem"
 	"github.com/minio/minio/pkg/quick"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -301,6 +302,12 @@ type ServerCPUPerfInfo struct {
 	Perf  []cpu.Performance `json:"perf"`
 }
 
+type ServerMemPerfInfo struct {
+	Addr  string            `json:"addr"`
+	Error string            `json:"error,omitempty"`
+	Perf  []mem.Performance `json:"perf"`
+}
+
 // PerfInfoHandler - GET /minio/admin/v1/performance?perfType={perfType}
 // ----------
 // Get all performance information based on input type
@@ -346,6 +353,23 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 
 		// Marshal API response
 		jsonBytes, err := json.Marshal(cpus)
+		if err != nil {
+			writeErrorResponseJSON(w, toAdminAPIErrCode(ctx, err), r.URL)
+			return
+		}
+
+		// Reply with performance information (across nodes in a
+		// distributed setup) as json.
+		writeSuccessResponseJSON(w, jsonBytes)
+	} else if perfType == "mem" {
+		// Get mem usage details from local server(s)
+		m := localEndpointsMemPerf(globalEndpoints)
+		// Notify all other Minio peers to report mem usage numbers
+		mems := globalNotificationSys.MemPerfInfo()
+		mems = append(mems, m)
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(mems)
 		if err != nil {
 			writeErrorResponseJSON(w, toAdminAPIErrCode(ctx, err), r.URL)
 			return

@@ -26,6 +26,7 @@ import (
 
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/mem"
 )
 
 // BackendType - represents different backend types.
@@ -203,7 +204,7 @@ type ServerCPUPerfInfo struct {
 	Perf  []cpu.Performance `json:"perf"`
 }
 
-// ServerDrivesCPUInfo - Returns cpu utilization information
+// ServerCPUPerfInfo - Returns cpu utilization information
 func (adm *AdminClient) ServerCPUPerfInfo() ([]ServerCPUPerfInfo, error) {
 	v := url.Values{}
 	v.Set("perfType", string("cpu"))
@@ -224,6 +225,49 @@ func (adm *AdminClient) ServerCPUPerfInfo() ([]ServerCPUPerfInfo, error) {
 
 	// Unmarshal the server's json response
 	var info []ServerCPUPerfInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(respBytes, &info)
+	if err != nil {
+		return nil, err
+	}
+
+	return info, nil
+}
+
+// ServerMemPerfInfo holds information about address and memory utilization of
+// a single server node
+type ServerMemPerfInfo struct {
+	Addr  string            `json:"addr"`
+	Error string            `json:"error,omitempty"`
+	Perf  []mem.Performance `json:"perf"`
+}
+
+// ServerMemPerfInfo - Returns mem utilization information
+func (adm *AdminClient) ServerMemPerfInfo() ([]ServerMemPerfInfo, error) {
+	v := url.Values{}
+	v.Set("perfType", string("mem"))
+	resp, err := adm.executeMethod("GET", requestData{
+		relPath:     "/v1/performance",
+		queryValues: v,
+	})
+
+	defer closeResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var info []ServerMemPerfInfo
 
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {

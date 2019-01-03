@@ -150,6 +150,15 @@ func (rpcClient *PeerRPCClient) DrivePerfInfo() (ServerDrivesPerfInfo, error) {
 	return reply, err
 }
 
+// MemPerfInfo - returns mem performance info for remote server
+func (rpcClient *PeerRPCClient) MemPerfInfo() (ServerMemPerfInfo, error) {
+	args := AuthArgs{}
+	var reply ServerMemPerfInfo
+
+	err := rpcClient.Call(peerServiceName+".MemPerfInfo", &args, &reply)
+	return reply, err
+}
+
 // CPUPerfInfo - returns cpu performance info for remote server
 func (rpcClient *PeerRPCClient) CPUPerfInfo() (ServerCPUPerfInfo, error) {
 	args := AuthArgs{}

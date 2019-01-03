@@ -39,7 +39,7 @@ func main() {
 | Service operations         | Info operations  | Healing operations                    | Config operations        | IAM operations | Misc                                |
 |:----------------------------|:----------------------------|:--------------------------------------|:--------------------------|:------------------------------------|:------------------------------------|
 | [`ServiceStatus`](#ServiceStatus) | [`ServerInfo`](#ServerInfo) | [`Heal`](#Heal) | [`GetConfig`](#GetConfig) | [`AddUser`](#AddUser) | [`SetAdminCredentials`](#SetAdminCredentials) |
-| [`ServiceSendAction`](#ServiceSendAction) | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) | [`ServerCPUPerfInfo`](#ServerCPUPerfInfo) | [`SetConfig`](#SetConfig) | [`SetUserPolicy`](#SetUserPolicy) | [`StartProfiling`](#StartProfiling) |
+| [`ServiceSendAction`](#ServiceSendAction) | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) | [`ServerCPUPerfInfo`](#ServerCPUPerfInfo) | [`ServerMemPerfInfo`](#ServerMemPerfInfo)  | [`SetConfig`](#SetConfig) | [`SetUserPolicy`](#SetUserPolicy) | [`StartProfiling`](#StartProfiling) |
 | | |            | [`GetConfigKeys`](#GetConfigKeys) | [`ListUsers`](#ListUsers) | [`DownloadProfilingData`](#DownloadProfilingData) |
 | | |            | [`SetConfigKeys`](#SetConfigKeys) | [`AddCannedPolicy`](#AddCannedPolicy) | |
 
@@ -239,6 +239,22 @@ Fetches CPU utilization for all cluster nodes. Returned value is in Bytes.
 |`cpu.Performance.Min` | _string_ | The minimum utilization % of the CPU measured in a 200ms interval |
 |`cpu.Performance.Max` | _string_ | The maximum utilization % of the CPU measured in a 200ms interval |
 |`cpu.Performance.Error` | _string_ | Error (if any) encountered while accesing the CPU info |
+
+<a name="ServerMemPerfInfo"></a>
+### ServerMemPerfInfo() ([]ServerMemPerfInfo, error)
+
+Fetches Mem utilization for all cluster nodes. Returned value is in Bytes.
+
+| Param | Type | Description |
+|-------|------|-------------|
+|`memi.Addr` | _string_ | Address of the server the following information  is retrieved from. |
+|`memi.Error` | _string_ | Errors (if any) encountered while reaching this node |
+|`memi.MemPerf` | _mem.Performance_ | The utilitzation of Memory |
+
+| Param | Type | Description |
+|-------|------|-------------|
+|`mem.Performance.Mem` | _string_ | The total number of bytes obtained from the OS |
+|`mem.Performance.Error` | _string_ | Error (if any) encountered while accesing the CPU info |
 
 ## 6. Heal operations
 

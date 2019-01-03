@@ -31,6 +31,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/mem"
 	"github.com/minio/minio/pkg/mountinfo"
 )
 
@@ -197,6 +198,25 @@ func (endpoints EndpointList) GetString(i int) string {
 		return ""
 	}
 	return endpoints[i].String()
+}
+
+// localEndpointsMemPerf - returns ServerMemPerfInfo for only the
+// local endpoints from given list of endpoints
+func localEndpointsMemPerf(endpoints EndpointList) ServerMemPerfInfo {
+	var memPerfs []mem.Performance
+	var addr string
+	for _, endpoint := range endpoints {
+		// Only proceed for local endpoints
+		if endpoint.IsLocal {
+			addr = GetLocalPeer(endpoints)
+			memPerf := mem.GetPerformance()
+			memPerfs = append(memPerfs, memPerf)
+		}
+	}
+	return ServerMemPerfInfo{
+		Addr: addr,
+		Perf: memPerfs,
+	}
 }
 
 // localEndpointsCPUPerf - returns ServerCPUPerfInfo for only the

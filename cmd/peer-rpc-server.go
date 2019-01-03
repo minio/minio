@@ -259,6 +259,16 @@ func (receiver *peerRPCReceiver) CPUPerfInfo(args *AuthArgs, reply *ServerCPUPer
 	return nil
 }
 
+// MemPerfInfo - handles mem performance RPC call
+func (receiver *peerRPCReceiver) MemPerfInfo(args *AuthArgs, reply *ServerMemPerfInfo) error {
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return errServerNotInitialized
+	}
+	*reply = localEndpointsMemPerf(globalEndpoints)
+	return nil
+}
+
 // NewPeerRPCServer - returns new peer RPC server.
 func NewPeerRPCServer() (*xrpc.Server, error) {
 	rpcServer := xrpc.NewServer()

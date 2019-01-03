@@ -537,6 +537,31 @@ func (sys *NotificationSys) DrivePerfInfo() []ServerDrivesPerfInfo {
 	return reply
 }
 
+// MemPerfInfo - Mem utilization information
+func (sys *NotificationSys) MemPerfInfo() []ServerMemPerfInfo {
+	reply := make([]ServerMemPerfInfo, len(sys.peerRPCClientMap))
+	var wg sync.WaitGroup
+	var i int
+	for addr, client := range sys.peerRPCClientMap {
+		wg.Add(1)
+		go func(addr xnet.Host, client *PeerRPCClient, idx int) {
+			defer wg.Done()
+			memi, err := client.MemPerfInfo()
+			if err != nil {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr.String())
+				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				logger.LogIf(ctx, err)
+				memi.Addr = addr.String()
+				memi.Error = err.Error()
+			}
+			reply[idx] = memi
+		}(addr, client, i)
+		i++
+	}
+	wg.Wait()
+	return reply
+}
+
 // CPUPerfInfo - CPU utilization information
 func (sys *NotificationSys) CPUPerfInfo() []ServerCPUPerfInfo {
 	reply := make([]ServerCPUPerfInfo, len(sys.peerRPCClientMap))
