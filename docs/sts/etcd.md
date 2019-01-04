@@ -43,7 +43,7 @@ NOTE: If `etcd` is configured with `Client-to-server authentication with HTTPS c
 ### 4. Test with Minio STS API
 Assuming that you have configured Minio server to support STS API by following the doc [Minio STS Quickstart Guide](https://docs.minio.io/docs/minio-sts-quickstart-guide) and once you have obtained the JWT from WSO2 as mentioned in [WSO2 Quickstart Guide](https://github.com/minio/minio/blob/master/docs/sts/wso2.md).
 ```
-go run full-example.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
+go run client-grants.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
 
 ##### Credentials
 {

@@ -1,5 +1,5 @@
 ## AssumeRoleWithClientGrants [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
-Returns a set of temporary security credentials for applications/clients who have been authenticated through client grants provided by identity provider. Example providers include WSO2, KeyCloak etc.
+Returns a set of temporary security credentials for applications/clients who have been authenticated through client credential grants provided by identity provider. Example providers include WSO2, KeyCloak etc.
 
 Calling AssumeRoleWithClientGrants does not require the use of Minio default credentials. Therefore, client application can be distributed that requests temporary security credentials without including Minio default credentials. Instead, the identity of the caller is validated by using a JWT access token from the identity provider. The temporary security credentials returned by this API consist of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to Minio API operations.
 
@@ -16,7 +16,7 @@ The duration, in seconds. The value can range from 900 seconds (15 minutes) up t
 | *Required* | *No* |
 
 #### Token
-The OAuth 2.0 access token that is provided by the identity provider. Application must get this token by authenticating the application using client grants before the application makes an AssumeRoleWithClientGrants call.
+The OAuth 2.0 access token that is provided by the identity provider. Application must get this token by authenticating the application using client credential grants before the application makes an AssumeRoleWithClientGrants call.
 
 | Params | Value |
 | :-- | :-- |
@@ -84,7 +84,7 @@ Testing with an example
 > Obtaining client ID and secrets follow [WSO2 configuring documentation](https://github.com/minio/minio/blob/master/docs/sts/wso2.md)
 
 ```
-go run full-example.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
+go run client-grants.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
 
 ##### Credentials
 {
