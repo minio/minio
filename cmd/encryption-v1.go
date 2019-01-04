@@ -21,7 +21,6 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/subtle"
-	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -1163,27 +1162,24 @@ func DecryptObjectInfo(info *ObjectInfo, headers http.Header) (encrypted bool, e
 // The customer key in the header is used by the gateway for encryption in the case of
 // s3 gateway double encryption. A new client key is derived from the customer provided
 // key to be sent to the s3 backend for encryption at the backend.
-func deriveClientKey(clientKey [32]byte, bucket, object string) ([32]byte, error) {
+func deriveClientKey(clientKey [32]byte, bucket, object string) [32]byte {
 	var key [32]byte
 	mac := hmac.New(sha256.New, clientKey[:])
 	mac.Write([]byte(crypto.SSEC.String()))
 	mac.Write([]byte(path.Join(bucket, object)))
 	mac.Sum(key[:0])
-	return key, nil
+	return key
 }
 
 // extract encryption options for pass through to backend in the case of gateway
 func extractEncryptionOption(header http.Header, copySource bool, metadata map[string]string) (opts ObjectOptions, err error) {
-	var clientKey []byte
+	var clientKey [32]byte
 	var sse encrypt.ServerSide
 
 	if copySource {
 		if crypto.SSECopy.IsRequested(header) {
-			clientKey, err = base64.StdEncoding.DecodeString(header.Get(crypto.SSECopyKey))
-			if err != nil || len(clientKey) != 32 { // The client key must be 256 bits long
-				return opts, crypto.ErrInvalidCustomerKey
-			}
-			if sse, err = encrypt.NewSSEC(clientKey); err != nil {
+			clientKey, err = crypto.SSECopy.ParseHTTP(header)
+			if sse, err = encrypt.NewSSEC(clientKey[:]); err != nil {
 				return
 			}
 			return ObjectOptions{ServerSideEncryption: encrypt.SSECopy(sse)}, nil
@@ -1192,11 +1188,8 @@ func extractEncryptionOption(header http.Header, copySource bool, metadata map[s
 	}
 
 	if crypto.SSEC.IsRequested(header) {
-		clientKey, err = base64.StdEncoding.DecodeString(header.Get(crypto.SSECKey))
-		if err != nil || len(clientKey) != 32 { // The client key must be 256 bits long
-			return opts, crypto.ErrInvalidCustomerKey
-		}
-		if sse, err = encrypt.NewSSEC(clientKey); err != nil {
+		clientKey, err = crypto.SSEC.ParseHTTP(header)
+		if sse, err = encrypt.NewSSEC(clientKey[:]); err != nil {
 			return
 		}
 		return ObjectOptions{ServerSideEncryption: sse}, nil
@@ -1218,10 +1211,7 @@ func getEncryptionOpts(ctx context.Context, r *http.Request, bucket, object stri
 		if err != nil {
 			return opts, err
 		}
-		derivedKey, err := deriveClientKey(key, bucket, object)
-		if err != nil {
-			return opts, err
-		}
+		derivedKey := deriveClientKey(key, bucket, object)
 		encryption, err = encrypt.NewSSEC(derivedKey[:])
 		logger.CriticalIf(ctx, err)
 		return ObjectOptions{ServerSideEncryption: encryption}, nil
@@ -1261,10 +1251,7 @@ func copySrcEncryptionOpts(ctx context.Context, r *http.Request, bucket, object 
 		if err != nil {
 			return opts, err
 		}
-		derivedKey, err := deriveClientKey(key, bucket, object)
-		if err != nil {
-			return opts, err
-		}
+		derivedKey := deriveClientKey(key, bucket, object)
 		ssec, err = encrypt.NewSSEC(derivedKey[:])
 		if err != nil {
 			return opts, err
