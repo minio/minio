@@ -152,10 +152,10 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	fs.fsFormatRlk = rlk
 
 	if !fs.diskMount {
-		go fs.diskUsage(globalServiceDoneCh)
+		go fs.diskUsage(GlobalServiceDoneCh)
 	}
 
-	go fs.cleanupStaleMultipartUploads(ctx, globalMultipartCleanupInterval, globalMultipartExpiry, globalServiceDoneCh)
+	go fs.cleanupStaleMultipartUploads(ctx, GlobalMultipartCleanupInterval, GlobalMultipartExpiry, GlobalServiceDoneCh)
 
 	// Return successfully initialized object layer.
 	return fs, nil
@@ -1317,7 +1317,7 @@ func (fs *FSObjects) IsListenBucketSupported() bool {
 	return true
 }
 
-// IsEncryptionSupported returns whether server side encryption is applicable for this layer.
+// IsEncryptionSupported returns whether server side encryption is implemented for this layer.
 func (fs *FSObjects) IsEncryptionSupported() bool {
 	return true
 }

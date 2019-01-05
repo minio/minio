@@ -1,9 +1,9 @@
 ### Backend format `fs.json`
 
 ```go
-// objectPartInfo Info of each part kept in the multipart metadata
+// ObjectPartInfo Info of each part kept in the multipart metadata
 // file after CompleteMultipartUpload() is called.
-type objectPartInfo struct {
+type ObjectPartInfo struct {
 	Number int    `json:"number"`
 	Name   string `json:"name"`
 	ETag   string `json:"etag"`
@@ -19,6 +19,6 @@ type fsMetaV1 struct {
 	} `json:"minio"`
 	// Metadata map for current object `fs.json`.
 	Meta  map[string]string `json:"meta,omitempty"`
-	Parts []objectPartInfo  `json:"parts,omitempty"`
+	Parts []ObjectPartInfo  `json:"parts,omitempty"`
 }
 ```

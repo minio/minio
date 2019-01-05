@@ -18,10 +18,12 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/base64"
 	"net/http"
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio-go/pkg/encrypt"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/sio"
 )
@@ -355,7 +357,7 @@ func TestGetDecryptedRange_Issue50(t *testing.T) {
 			"content-type":                         "application/octet-stream",
 			"etag":                                 "166b1545b4c1535294ee0686678bea8c-2",
 		},
-		Parts: []objectPartInfo{
+		Parts: []ObjectPartInfo{
 			{
 				Number:     1,
 				Name:       "part.1",
@@ -503,7 +505,7 @@ func TestGetDecryptedRange(t *testing.T) {
 	var (
 		// make a multipart object-info given part sizes
 		mkMPObj = func(sizes []int64) ObjectInfo {
-			r := make([]objectPartInfo, len(sizes))
+			r := make([]ObjectPartInfo, len(sizes))
 			sum := int64(0)
 			for i, s := range sizes {
 				r[i].Number = i
@@ -673,5 +675,86 @@ func TestGetDecryptedRange(t *testing.T) {
 			}
 		}
 
+	}
+}
+
+var extractEncryptionOptionTests = []struct {
+	headers        http.Header
+	copySource     bool
+	metadata       map[string]string
+	encryptionType encrypt.Type
+	err            error
+}{
+	{headers: http.Header{crypto.SSECAlgorithm: []string{"AES256"},
+		crypto.SSECKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
+		crypto.SSECKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
+		copySource:     false,
+		metadata:       nil,
+		encryptionType: encrypt.SSEC,
+		err:            nil}, // 0
+	{headers: http.Header{crypto.SSECAlgorithm: []string{"AES256"},
+		crypto.SSECKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
+		crypto.SSECKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
+		copySource:     true,
+		metadata:       nil,
+		encryptionType: "",
+		err:            nil}, // 1
+	{headers: http.Header{crypto.SSECAlgorithm: []string{"AES256"},
+		crypto.SSECKey:    []string{"Mz"},
+		crypto.SSECKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
+		copySource:     false,
+		metadata:       nil,
+		encryptionType: "",
+		err:            crypto.ErrInvalidCustomerKey}, // 2
+	{headers: http.Header{crypto.SSEHeader: []string{"AES256"}},
+		copySource:     false,
+		metadata:       nil,
+		encryptionType: encrypt.S3,
+		err:            nil}, // 3
+	{headers: http.Header{},
+		copySource: false,
+		metadata: map[string]string{crypto.S3SealedKey: base64.StdEncoding.EncodeToString(make([]byte, 64)),
+			crypto.S3KMSKeyID:     "kms-key",
+			crypto.S3KMSSealedKey: "m-key"},
+		encryptionType: encrypt.S3,
+		err:            nil}, // 4
+	{headers: http.Header{},
+		copySource: true,
+		metadata: map[string]string{crypto.S3SealedKey: base64.StdEncoding.EncodeToString(make([]byte, 64)),
+			crypto.S3KMSKeyID:     "kms-key",
+			crypto.S3KMSSealedKey: "m-key"},
+		encryptionType: "",
+		err:            nil}, // 5
+	{headers: http.Header{crypto.SSECopyAlgorithm: []string{"AES256"},
+		crypto.SSECopyKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
+		crypto.SSECopyKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
+		copySource:     true,
+		metadata:       nil,
+		encryptionType: encrypt.SSEC,
+		err:            nil}, // 6
+	{headers: http.Header{crypto.SSECopyAlgorithm: []string{"AES256"},
+		crypto.SSECopyKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
+		crypto.SSECopyKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
+		copySource:     false,
+		metadata:       nil,
+		encryptionType: "",
+		err:            nil}, // 7
+}
+
+func TestExtractEncryptionOptions(t *testing.T) {
+	for i, test := range extractEncryptionOptionTests {
+		opts, err := extractEncryptionOption(test.headers, test.copySource, test.metadata)
+		if test.err != err {
+			t.Errorf("Case %d: expected err: %v , actual err: %v", i, test.err, err)
+		}
+		if err == nil {
+			if opts.ServerSideEncryption == nil && test.encryptionType != "" {
+				t.Errorf("Case %d: expected opts to be of %v encryption type", i, test.encryptionType)
+
+			}
+			if opts.ServerSideEncryption != nil && test.encryptionType != opts.ServerSideEncryption.Type() {
+				t.Errorf("Case %d: expected opts to have encryption type %v but was %v ", i, test.encryptionType, opts.ServerSideEncryption.Type())
+			}
+		}
 	}
 }

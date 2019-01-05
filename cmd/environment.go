@@ -136,13 +136,13 @@ func (env environment) LookupKMSConfig(config crypto.KMSConfig) (err error) {
 		if !config.Vault.IsEmpty() { // Vault and KMS master key provided
 			return errors.New("Ambiguous KMS configuration: vault configuration and a master key are provided at the same time")
 		}
-		globalKMSKeyID, globalKMS, err = parseKMSMasterKey(masterKey)
+		globalKMSKeyID, GlobalKMS, err = parseKMSMasterKey(masterKey)
 		if err != nil {
 			return err
 		}
 	}
 	if !config.Vault.IsEmpty() {
-		globalKMS, err = crypto.NewVault(config.Vault)
+		GlobalKMS, err = crypto.NewVault(config.Vault)
 		if err != nil {
 			return err
 		}
@@ -154,7 +154,7 @@ func (env environment) LookupKMSConfig(config crypto.KMSConfig) (err error) {
 		return err
 	}
 	globalAutoEncryption = bool(autoEncryption)
-	if globalAutoEncryption && globalKMS == nil { // auto-encryption enabled but no KMS
+	if globalAutoEncryption && GlobalKMS == nil { // auto-encryption enabled but no KMS
 		return errors.New("Invalid KMS configuration: auto-encryption is enabled but no valid KMS configuration is present")
 	}
 	return nil

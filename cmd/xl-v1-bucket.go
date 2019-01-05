@@ -299,7 +299,7 @@ func (xl xlObjects) IsListenBucketSupported() bool {
 	return true
 }
 
-// IsEncryptionSupported returns whether server side encryption is applicable for this layer.
+// IsEncryptionSupported returns whether server side encryption is implemented for this layer.
 func (xl xlObjects) IsEncryptionSupported() bool {
 	return true
 }

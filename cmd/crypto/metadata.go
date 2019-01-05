@@ -40,6 +40,14 @@ func RemoveSensitiveEntries(metadata map[string]string) { // The functions is te
 	delete(metadata, SSECopyKey)
 }
 
+// RemoveSSEHeaders removes all crypto-specific SSE
+// header entries from the metadata map.
+func RemoveSSEHeaders(metadata map[string]string) {
+	delete(metadata, SSEHeader)
+	delete(metadata, SSECKeyMD5)
+	delete(metadata, SSECAlgorithm)
+}
+
 // RemoveInternalEntries removes all crypto-specific internal
 // metadata entries from the metadata map.
 func RemoveInternalEntries(metadata map[string]string) {
