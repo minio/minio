@@ -1179,6 +1179,9 @@ func extractEncryptionOption(header http.Header, copySource bool, metadata map[s
 	if copySource {
 		if crypto.SSECopy.IsRequested(header) {
 			clientKey, err = crypto.SSECopy.ParseHTTP(header)
+			if err != nil {
+				return
+			}
 			if sse, err = encrypt.NewSSEC(clientKey[:]); err != nil {
 				return
 			}
@@ -1189,6 +1192,9 @@ func extractEncryptionOption(header http.Header, copySource bool, metadata map[s
 
 	if crypto.SSEC.IsRequested(header) {
 		clientKey, err = crypto.SSEC.ParseHTTP(header)
+		if err != nil {
+			return
+		}
 		if sse, err = encrypt.NewSSEC(clientKey[:]); err != nil {
 			return
 		}

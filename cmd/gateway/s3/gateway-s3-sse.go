@@ -262,7 +262,7 @@ func (l *s3EncObjects) deleteGWMetadata(ctx context.Context, bucket, metaFileNam
 
 func (l *s3EncObjects) getObject(ctx context.Context, bucket string, key string, startOffset int64, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
 	var o minio.ObjectOptions
-	if minio.GlobalGatewaySSE.IsSet() {
+	if minio.GlobalGatewaySSE.SSEC() {
 		o = opts
 	}
 	dmeta, err := l.getGWMetadata(ctx, bucket, getDareMetaPath(key))
@@ -305,7 +305,7 @@ func (l *s3EncObjects) getObject(ctx context.Context, bucket string, key string,
 // GetObjectNInfo - returns object info and locked object ReadCloser
 func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, o minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
 	var opts minio.ObjectOptions
-	if minio.GlobalGatewaySSE.IsSet() {
+	if minio.GlobalGatewaySSE.SSEC() {
 		opts = o
 	}
 	objInfo, err := l.GetObjectInfo(ctx, bucket, object, opts)
@@ -336,7 +336,7 @@ func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 // For custom gateway encrypted large objects, the ObjectInfo is retrieved from the dare.meta file.
 func (l *s3EncObjects) GetObjectInfo(ctx context.Context, bucket string, object string, o minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	var opts minio.ObjectOptions
-	if minio.GlobalGatewaySSE.IsSet() {
+	if minio.GlobalGatewaySSE.SSEC() {
 		opts = o
 	}
 
@@ -408,7 +408,9 @@ func (l *s3EncObjects) ListMultipartUploads(ctx context.Context, bucket string, 
 // NewMultipartUpload uploads object in multiple parts
 func (l *s3EncObjects) NewMultipartUpload(ctx context.Context, bucket string, object string, metadata map[string]string, o minio.ObjectOptions) (uploadID string, err error) {
 	var opts minio.ObjectOptions
-	if minio.GlobalGatewaySSE.IsSet() {
+	if o.ServerSideEncryption != nil &&
+		((minio.GlobalGatewaySSE.SSEC() && o.ServerSideEncryption.Type() == encrypt.SSEC) ||
+			(minio.GlobalGatewaySSE.SSES3() && o.ServerSideEncryption.Type() == encrypt.S3)) {
 		opts = o
 	}
 	if o.ServerSideEncryption == nil {
@@ -432,7 +434,9 @@ func (l *s3EncObjects) NewMultipartUpload(ctx context.Context, bucket string, ob
 // PutObject creates a new object with the incoming data,
 func (l *s3EncObjects) PutObject(ctx context.Context, bucket string, object string, data *minio.PutObjReader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	var s3Opts minio.ObjectOptions
-	if minio.GlobalGatewaySSE.IsSet() {
+	if opts.ServerSideEncryption != nil &&
+		((minio.GlobalGatewaySSE.SSEC() && opts.ServerSideEncryption.Type() == encrypt.SSEC) ||
+			(minio.GlobalGatewaySSE.SSES3() && opts.ServerSideEncryption.Type() == encrypt.S3)) {
 		s3Opts = opts
 	}
 	if opts.ServerSideEncryption == nil {
@@ -477,7 +481,7 @@ func (l *s3EncObjects) PutObjectPart(ctx context.Context, bucket string, object 
 
 	var s3Opts minio.ObjectOptions
 	// for sse-s3 encryption options should not be passed to backend
-	if opts.ServerSideEncryption != nil && opts.ServerSideEncryption.Type() == encrypt.SSEC && minio.GlobalGatewaySSE.IsSet() {
+	if opts.ServerSideEncryption != nil && opts.ServerSideEncryption.Type() == encrypt.SSEC && minio.GlobalGatewaySSE.SSEC() {
 		s3Opts = opts
 	}
 
@@ -524,11 +528,7 @@ func (l *s3EncObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 }
 
 // ListObjectParts returns all object parts for specified object in specified bucket
-func (l *s3EncObjects) ListObjectParts(ctx context.Context, bucket string, object string, uploadID string, partNumberMarker int, maxParts int, o minio.ObjectOptions) (lpi minio.ListPartsInfo, e error) {
-	var opts minio.ObjectOptions
-	if minio.GlobalGatewaySSE.IsSet() {
-		opts = o
-	}
+func (l *s3EncObjects) ListObjectParts(ctx context.Context, bucket string, object string, uploadID string, partNumberMarker int, maxParts int, opts minio.ObjectOptions) (lpi minio.ListPartsInfo, e error) {
 	// We do not store parts uploaded so far in the dare.meta. Only CompleteMultipartUpload finalizes the parts under upload prefix.Otherwise,
 	// there could be situations of dare.meta getting corrupted by competing upload parts.
 	dm, err := l.getGWMetadata(ctx, bucket, getTmpDareMetaPath(object, uploadID))
@@ -585,10 +585,6 @@ func (l *s3EncObjects) AbortMultipartUpload(ctx context.Context, bucket string, 
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object
 func (l *s3EncObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []minio.CompletePart, opts minio.ObjectOptions) (oi minio.ObjectInfo, e error) {
-	var s3Opts minio.ObjectOptions
-	if minio.GlobalGatewaySSE.IsSet() {
-		s3Opts = opts
-	}
 
 	tmpMeta, err := l.getGWMetadata(ctx, bucket, getTmpDareMetaPath(object, uploadID))
 	if err != nil {
@@ -622,7 +618,7 @@ func (l *s3EncObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 		gwMeta.Parts[i] = partMeta.Parts[0]
 		objectSize += partMeta.Parts[0].Size
 	}
-	oi, e = l.s3Objects.CompleteMultipartUpload(ctx, bucket, getGWContentPath(object), uploadID, bkUploadedParts, s3Opts)
+	oi, e = l.s3Objects.CompleteMultipartUpload(ctx, bucket, getGWContentPath(object), uploadID, bkUploadedParts, opts)
 	if e != nil {
 		return oi, e
 	}
