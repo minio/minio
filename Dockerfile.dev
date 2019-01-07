@@ -12,4 +12,3 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
 EXPOSE 9000
 
 ENTRYPOINT ["minio"]
-
