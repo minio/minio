@@ -63,12 +63,16 @@ func TestReadGWMetadata(t *testing.T) {
 	for i, tt := range tests {
 		buf := bytes.NewBufferString(tt.metaStr)
 		m, err := readGWMetadata(context.Background(), *buf)
-		t.Log(m)
 		if err != nil && tt.pass {
 			t.Errorf("Test %d: Expected parse gw metadata to succeed, but failed", i)
 		}
 		if err == nil && !tt.pass {
 			t.Errorf("Test %d: Expected parse gw metadata to succeed, but failed", i)
+		}
+		if err == nil {
+			if m.Version != gwMetaVersion {
+				t.Errorf("Test %d: Expected version %s, but failed with %s", i, gwMetaVersion, m.Version)
+			}
 		}
 	}
 }
