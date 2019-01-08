@@ -210,7 +210,7 @@ func (fs *FSObjects) ListMultipartUploads(ctx context.Context, bucket, object, k
 // subsequent request each UUID is unique.
 //
 // Implements S3 compatible initiate multipart API.
-func (fs *FSObjects) NewMultipartUpload(ctx context.Context, bucket, object string, meta map[string]string, opts ObjectOptions) (string, error) {
+func (fs *FSObjects) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (string, error) {
 	if err := checkNewMultipartArgs(ctx, bucket, object, fs); err != nil {
 		return "", toObjectErr(err, bucket)
 	}
@@ -230,7 +230,7 @@ func (fs *FSObjects) NewMultipartUpload(ctx context.Context, bucket, object stri
 
 	// Initialize fs.json values.
 	fsMeta := newFSMetaV1()
-	fsMeta.Meta = meta
+	fsMeta.Meta = opts.UserDefined
 
 	fsMetaBytes, err := json.Marshal(fsMeta)
 	if err != nil {

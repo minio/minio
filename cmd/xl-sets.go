@@ -602,8 +602,8 @@ func (s *xlSets) GetObject(ctx context.Context, bucket, object string, startOffs
 }
 
 // PutObject - writes an object to hashedSet based on the object name.
-func (s *xlSets) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	return s.getHashedSet(object).PutObject(ctx, bucket, object, data, metadata, opts)
+func (s *xlSets) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	return s.getHashedSet(object).PutObject(ctx, bucket, object, data, opts)
 }
 
 // GetObjectInfo - reads object metadata from the hashedSet based on the object name.
@@ -634,7 +634,8 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 		}
 		defer objectDWLock.Unlock()
 	}
-	return destSet.putObject(ctx, destBucket, destObject, srcInfo.PutObjReader, srcInfo.UserDefined, dstOpts)
+	putOpts := ObjectOptions{ServerSideEncryption: dstOpts.ServerSideEncryption, UserDefined: srcInfo.UserDefined}
+	return destSet.putObject(ctx, destBucket, destObject, srcInfo.PutObjReader, putOpts)
 }
 
 // Returns function "listDir" of the type listDirFunc.
@@ -822,8 +823,8 @@ func (s *xlSets) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMa
 }
 
 // Initiate a new multipart upload on a hashedSet based on object name.
-func (s *xlSets) NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string, opts ObjectOptions) (uploadID string, err error) {
-	return s.getHashedSet(object).NewMultipartUpload(ctx, bucket, object, metadata, opts)
+func (s *xlSets) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (uploadID string, err error) {
+	return s.getHashedSet(object).NewMultipartUpload(ctx, bucket, object, opts)
 }
 
 // Copies a part of an object from source hashedSet to destination hashedSet.

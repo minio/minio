@@ -449,7 +449,7 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		// Return the new object info.
 		return fsMeta.ToObjectInfo(srcBucket, srcObject, fi), nil
 	}
-	objInfo, err := fs.putObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, srcInfo.UserDefined, dstOpts)
+	objInfo, err := fs.putObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, ObjectOptions{ServerSideEncryption: dstOpts.ServerSideEncryption, UserDefined: srcInfo.UserDefined})
 	if err != nil {
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -804,7 +804,7 @@ func (fs *FSObjects) parentDirIsObject(ctx context.Context, bucket, parent strin
 // until EOF, writes data directly to configured filesystem path.
 // Additionally writes `fs.json` which carries the necessary metadata
 // for future object operations.
-func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string, r *PutObjReader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, retErr error) {
+func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, retErr error) {
 	if err := checkPutObjectArgs(ctx, bucket, object, fs, r.Size()); err != nil {
 		return ObjectInfo{}, err
 	}
@@ -815,16 +815,16 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 		return objInfo, err
 	}
 	defer objectLock.Unlock()
-	return fs.putObject(ctx, bucket, object, r, metadata, opts)
+	return fs.putObject(ctx, bucket, object, r, opts)
 }
 
 // putObject - wrapper for PutObject
-func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, retErr error) {
+func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, retErr error) {
 	data := r.Reader
 
 	// No metadata is set, allocate a new one.
 	meta := make(map[string]string)
-	for k, v := range metadata {
+	for k, v := range opts.UserDefined {
 		meta[k] = v
 	}
 	var err error

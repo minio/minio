@@ -257,7 +257,7 @@ func (cfs *cacheFSObjects) IsOnline() bool {
 }
 
 // Caches the object to disk
-func (cfs *cacheFSObjects) Put(ctx context.Context, bucket, object string, data *PutObjReader, metadata map[string]string, opts ObjectOptions) error {
+func (cfs *cacheFSObjects) Put(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) error {
 	if cfs.diskUsageHigh() {
 		select {
 		case cfs.purgeChan <- struct{}{}:
@@ -274,7 +274,7 @@ func (cfs *cacheFSObjects) Put(ctx context.Context, bucket, object string, data 
 			return pErr
 		}
 	}
-	_, err := cfs.PutObject(ctx, bucket, object, data, metadata, opts)
+	_, err := cfs.PutObject(ctx, bucket, object, data, opts)
 	// if err is due to disk being offline , mark cache drive as offline
 	if IsErr(err, baseErrs...) {
 		cfs.setOnline(false)
@@ -300,7 +300,7 @@ func (cfs *cacheFSObjects) Exists(ctx context.Context, bucket, object string) bo
 
 // Identical to fs PutObject operation except that it uses ETag in metadata
 // headers.
-func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object string, r *PutObjReader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, retErr error) {
+func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, retErr error) {
 	data := r.Reader
 	fs := cfs.FSObjects
 	// Lock the object.
@@ -312,7 +312,7 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 
 	// No metadata is set, allocate a new one.
 	meta := make(map[string]string)
-	for k, v := range metadata {
+	for k, v := range opts.UserDefined {
 		meta[k] = v
 	}
 
@@ -438,7 +438,7 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 // Implements S3 compatible initiate multipart API. Operation here is identical
 // to fs backend implementation - with the exception that cache FS uses the uploadID
 // generated on the backend
-func (cfs *cacheFSObjects) NewMultipartUpload(ctx context.Context, bucket, object string, meta map[string]string, uploadID string, opts ObjectOptions) (string, error) {
+func (cfs *cacheFSObjects) NewMultipartUpload(ctx context.Context, bucket, object string, uploadID string, opts ObjectOptions) (string, error) {
 	if cfs.diskUsageHigh() {
 		select {
 		case cfs.purgeChan <- struct{}{}:
@@ -472,7 +472,7 @@ func (cfs *cacheFSObjects) NewMultipartUpload(ctx context.Context, bucket, objec
 
 	// Initialize fs.json values.
 	fsMeta := newFSMetaV1()
-	fsMeta.Meta = meta
+	fsMeta.Meta = opts.UserDefined
 
 	fsMetaBytes, err := json.Marshal(fsMeta)
 	if err != nil {

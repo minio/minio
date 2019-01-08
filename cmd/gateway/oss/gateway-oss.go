@@ -656,10 +656,10 @@ func ossPutObject(ctx context.Context, client *oss.Client, bucket, object string
 }
 
 // PutObject creates a new object with the incoming data.
-func (l *ossObjects) PutObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (l *ossObjects) PutObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	data := r.Reader
 
-	return ossPutObject(ctx, l.Client, bucket, object, data, metadata)
+	return ossPutObject(ctx, l.Client, bucket, object, data, opts.UserDefined)
 }
 
 // CopyObject copies an object from source bucket to a destination bucket.
@@ -753,7 +753,7 @@ func (l *ossObjects) ListMultipartUploads(ctx context.Context, bucket, prefix, k
 }
 
 // NewMultipartUpload upload object in multiple parts.
-func (l *ossObjects) NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string, o minio.ObjectOptions) (uploadID string, err error) {
+func (l *ossObjects) NewMultipartUpload(ctx context.Context, bucket, object string, o minio.ObjectOptions) (uploadID string, err error) {
 	bkt, err := l.Client.Bucket(bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -761,7 +761,7 @@ func (l *ossObjects) NewMultipartUpload(ctx context.Context, bucket, object stri
 	}
 
 	// Build OSS metadata
-	opts, err := appendS3MetaToOSSOptions(ctx, nil, metadata)
+	opts, err := appendS3MetaToOSSOptions(ctx, nil, o.UserDefined)
 	if err != nil {
 		return uploadID, ossToObjectError(err, bucket, object)
 	}

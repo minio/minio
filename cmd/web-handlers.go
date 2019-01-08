@@ -941,7 +941,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	pReader = NewPutObjReader(hashReader, nil, nil)
 	// get gateway encryption options
 	var opts ObjectOptions
-	opts, err = putEncryptionOpts(ctx, r, bucket, object, nil)
+	opts, err = putOpts(ctx, r, bucket, object, metadata)
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(ctx, err))
 		return
@@ -980,7 +980,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	if !hasServerSideEncryptionHeader(r.Header) && web.CacheAPI() != nil {
 		putObject = web.CacheAPI().PutObject
 	}
-	objInfo, err := putObject(context.Background(), bucket, object, pReader, metadata, opts)
+	objInfo, err := putObject(context.Background(), bucket, object, pReader, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return

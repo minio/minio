@@ -84,7 +84,7 @@ func TestHealObjectXL(t *testing.T) {
 
 	// Create an object with multiple parts uploaded in decreasing
 	// part number.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, object, nil, opts)
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, object, opts)
 	if err != nil {
 		t.Fatalf("Failed to create a multipart upload - %v", err)
 	}

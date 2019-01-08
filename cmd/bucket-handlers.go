@@ -633,7 +633,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 	// get gateway encryption options
 	var opts ObjectOptions
-	opts, err = putEncryptionOpts(ctx, r, bucket, object, nil)
+	opts, err = putOpts(ctx, r, bucket, object, metadata)
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(ctx, err))
 		return
@@ -664,7 +664,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		}
 	}
 
-	objInfo, err := objectAPI.PutObject(ctx, bucket, object, pReader, metadata, opts)
+	objInfo, err := objectAPI.PutObject(ctx, bucket, object, pReader, opts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return

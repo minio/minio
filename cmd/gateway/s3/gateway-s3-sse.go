@@ -236,7 +236,7 @@ func (l *s3EncObjects) writeGWMetadata(ctx context.Context, bucket, metaFileName
 		logger.LogIf(ctx, err)
 		return err
 	}
-	_, err = l.s3Objects.PutObject(ctx, bucket, metaFileName, reader, map[string]string{}, o)
+	_, err = l.s3Objects.PutObject(ctx, bucket, metaFileName, reader, o)
 	return err
 }
 
@@ -373,7 +373,8 @@ func (l *s3EncObjects) CopyObject(ctx context.Context, srcBucket string, srcObje
 			return gwMeta.ToObjectInfo(dstBucket, dstObject), nil
 		}
 	}
-	return l.PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, srcInfo.UserDefined, d)
+	dstOpts := minio.ObjectOptions{ServerSideEncryption: d.ServerSideEncryption, UserDefined: srcInfo.UserDefined}
+	return l.PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, dstOpts)
 }
 
 // DeleteObject deletes a blob in bucket
@@ -406,23 +407,24 @@ func (l *s3EncObjects) ListMultipartUploads(ctx context.Context, bucket string, 
 }
 
 // NewMultipartUpload uploads object in multiple parts
-func (l *s3EncObjects) NewMultipartUpload(ctx context.Context, bucket string, object string, metadata map[string]string, o minio.ObjectOptions) (uploadID string, err error) {
-	var opts minio.ObjectOptions
-	if o.ServerSideEncryption != nil &&
-		((minio.GlobalGatewaySSE.SSEC() && o.ServerSideEncryption.Type() == encrypt.SSEC) ||
-			(minio.GlobalGatewaySSE.SSES3() && o.ServerSideEncryption.Type() == encrypt.S3)) {
-		opts = o
-	}
+func (l *s3EncObjects) NewMultipartUpload(ctx context.Context, bucket string, object string, o minio.ObjectOptions) (uploadID string, err error) {
+	var sseOpts encrypt.ServerSide
 	if o.ServerSideEncryption == nil {
-		return l.s3Objects.NewMultipartUpload(ctx, bucket, object, metadata, opts)
+		return l.s3Objects.NewMultipartUpload(ctx, bucket, object, minio.ObjectOptions{UserDefined: o.UserDefined})
 	}
-	uploadID, err = l.s3Objects.NewMultipartUpload(ctx, bucket, getGWContentPath(object), map[string]string{}, opts)
+	// Decide if sse options needed to be passed to backend
+	if (minio.GlobalGatewaySSE.SSEC() && o.ServerSideEncryption.Type() == encrypt.SSEC) ||
+		(minio.GlobalGatewaySSE.SSES3() && o.ServerSideEncryption.Type() == encrypt.S3) {
+		sseOpts = o.ServerSideEncryption
+	}
+
+	uploadID, err = l.s3Objects.NewMultipartUpload(ctx, bucket, getGWContentPath(object), minio.ObjectOptions{ServerSideEncryption: sseOpts})
 	if err != nil {
 		return
 	}
 	// Create uploadID and write a temporary dare.meta object under object/uploadID prefix
 	gwmeta := newGWMetaV1()
-	gwmeta.Meta = metadata
+	gwmeta.Meta = o.UserDefined
 	gwmeta.Stat.ModTime = time.Now().UTC()
 	err = l.writeGWMetadata(ctx, bucket, getTmpDareMetaPath(object, uploadID), gwmeta, minio.ObjectOptions{})
 	if err != nil {
@@ -432,30 +434,28 @@ func (l *s3EncObjects) NewMultipartUpload(ctx context.Context, bucket string, ob
 }
 
 // PutObject creates a new object with the incoming data,
-func (l *s3EncObjects) PutObject(ctx context.Context, bucket string, object string, data *minio.PutObjReader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
-	var s3Opts minio.ObjectOptions
+func (l *s3EncObjects) PutObject(ctx context.Context, bucket string, object string, data *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	var sseOpts encrypt.ServerSide
+	// Decide if sse options needed to be passed to backend
 	if opts.ServerSideEncryption != nil &&
 		((minio.GlobalGatewaySSE.SSEC() && opts.ServerSideEncryption.Type() == encrypt.SSEC) ||
 			(minio.GlobalGatewaySSE.SSES3() && opts.ServerSideEncryption.Type() == encrypt.S3)) {
-		s3Opts = opts
+		sseOpts = opts.ServerSideEncryption
 	}
 	if opts.ServerSideEncryption == nil {
 		defer l.deleteGWMetadata(ctx, bucket, getDareMetaPath(object))
 		defer l.DeleteObject(ctx, bucket, getGWContentPath(object))
-		return l.s3Objects.PutObject(ctx, bucket, object, data, metadata, s3Opts)
+		return l.s3Objects.PutObject(ctx, bucket, object, data, minio.ObjectOptions{UserDefined: opts.UserDefined})
 	}
 
-	oi, err := l.s3Objects.PutObject(ctx, bucket, getGWContentPath(object), data, map[string]string{}, s3Opts)
+	oi, err := l.s3Objects.PutObject(ctx, bucket, getGWContentPath(object), data, minio.ObjectOptions{ServerSideEncryption: sseOpts})
 	if err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err)
 	}
 
 	gwMeta := newGWMetaV1()
 	gwMeta.Meta = make(map[string]string)
-	for k, v := range oi.UserDefined {
-		gwMeta.Meta[k] = v
-	}
-	for k, v := range metadata {
+	for k, v := range opts.UserDefined {
 		gwMeta.Meta[k] = v
 	}
 	encMD5 := data.MD5CurrentHexString()
