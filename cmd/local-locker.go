@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * Minio Cloud Storage, (C) 2018, 2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,17 +26,18 @@ import (
 
 // lockRequesterInfo stores various info from the client for each lock that is requested.
 type lockRequesterInfo struct {
-	writer          bool      // Bool whether write or read lock.
-	node            string    // Network address of client claiming lock.
-	serviceEndpoint string    // RPC path of client claiming lock.
-	uid             string    // UID to uniquely identify request of client.
-	timestamp       time.Time // Timestamp set at the time of initialization.
-	timeLastCheck   time.Time // Timestamp for last check of validity of lock.
+	Writer          bool      // Bool whether write or read lock.
+	Node            string    // Network address of client claiming lock.
+	ServiceEndpoint string    // RPC path of client claiming lock.
+	UID             string    // UID to uniquely identify request of client.
+	Timestamp       time.Time // Timestamp set at the time of initialization.
+	TimeLastCheck   time.Time // Timestamp for last check of validity of lock.
+	Source          string    // Contains line, function and filename reqesting the lock.
 }
 
 // isWriteLock returns whether the lock is a write or read lock.
 func isWriteLock(lri []lockRequesterInfo) bool {
-	return len(lri) == 1 && lri[0].writer
+	return len(lri) == 1 && lri[0].Writer
 }
 
 // localLocker implements Dsync.NetLocker
@@ -62,12 +63,13 @@ func (l *localLocker) Lock(args dsync.LockArgs) (reply bool, err error) {
 	if !isLockTaken { // No locks held on the given name, so claim write lock
 		l.lockMap[args.Resource] = []lockRequesterInfo{
 			{
-				writer:          true,
-				node:            args.ServerAddr,
-				serviceEndpoint: args.ServiceEndpoint,
-				uid:             args.UID,
-				timestamp:       UTCNow(),
-				timeLastCheck:   UTCNow(),
+				Writer:          true,
+				Node:            args.ServerAddr,
+				ServiceEndpoint: args.ServiceEndpoint,
+				Source:          args.Source,
+				UID:             args.UID,
+				Timestamp:       UTCNow(),
+				TimeLastCheck:   UTCNow(),
 			},
 		}
 	}
@@ -98,12 +100,13 @@ func (l *localLocker) RLock(args dsync.LockArgs) (reply bool, err error) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	lrInfo := lockRequesterInfo{
-		writer:          false,
-		node:            args.ServerAddr,
-		serviceEndpoint: args.ServiceEndpoint,
-		uid:             args.UID,
-		timestamp:       UTCNow(),
-		timeLastCheck:   UTCNow(),
+		Writer:          false,
+		Node:            args.ServerAddr,
+		ServiceEndpoint: args.ServiceEndpoint,
+		Source:          args.Source,
+		UID:             args.UID,
+		Timestamp:       UTCNow(),
+		TimeLastCheck:   UTCNow(),
 	}
 	if lri, ok := l.lockMap[args.Resource]; ok {
 		if reply = !isWriteLock(lri); reply {
@@ -148,4 +151,19 @@ func (l *localLocker) ForceUnlock(args dsync.LockArgs) (reply bool, err error) {
 		delete(l.lockMap, args.Resource)
 	}
 	return true, nil
+}
+
+func (l *localLocker) DupLockMap() map[string][]lockRequesterInfo {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	lockCopy := make(map[string][]lockRequesterInfo)
+	for k, v := range l.lockMap {
+		var lockSlice []lockRequesterInfo
+		for _, lockInfo := range v {
+			lockSlice = append(lockSlice, lockInfo)
+		}
+		lockCopy[k] = lockSlice
+	}
+	return lockCopy
 }

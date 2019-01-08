@@ -36,12 +36,12 @@ func main() {
 
 ```
 
-| Service operations         | Info operations  | Healing operations                    | Config operations        | IAM operations | Misc                                |
-|:----------------------------|:----------------------------|:--------------------------------------|:--------------------------|:------------------------------------|:------------------------------------|
-| [`ServiceStatus`](#ServiceStatus) | [`ServerInfo`](#ServerInfo) | [`Heal`](#Heal) | [`GetConfig`](#GetConfig) | [`AddUser`](#AddUser) | [`SetAdminCredentials`](#SetAdminCredentials) |
-| [`ServiceSendAction`](#ServiceSendAction) | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) | [`ServerCPULoadInfo`](#ServerCPULoadInfo) | [`ServerMemUsageInfo`](#ServerMemUsageInfo)  | [`SetConfig`](#SetConfig) | [`SetUserPolicy`](#SetUserPolicy) | [`StartProfiling`](#StartProfiling) |
-| | |            | [`GetConfigKeys`](#GetConfigKeys) | [`ListUsers`](#ListUsers) | [`DownloadProfilingData`](#DownloadProfilingData) |
-| | |            | [`SetConfigKeys`](#SetConfigKeys) | [`AddCannedPolicy`](#AddCannedPolicy) | |
+| Service operations         | Info operations  | Healing operations                    | Config operations        | Top operations        | IAM operations | Misc                                |
+|:----------------------------|:----------------------------|:--------------------------------------|:--------------------------|:--------------------------|:------------------------------------|:------------------------------------|
+| [`ServiceStatus`](#ServiceStatus) | [`ServerInfo`](#ServerInfo) | [`Heal`](#Heal) | [`GetConfig`](#GetConfig) | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser) | [`SetAdminCredentials`](#SetAdminCredentials) |
+| [`ServiceSendAction`](#ServiceSendAction) | [`ServerCPULoadInfo`](#ServerCPULoadInfo) | | [`SetConfig`](#SetConfig) | |  [`SetUserPolicy`](#SetUserPolicy) | [`StartProfiling`](#StartProfiling) |
+| |[`ServerMemUsageInfo`](#ServerMemUsageInfo) |            | [`GetConfigKeys`](#GetConfigKeys) | | [`ListUsers`](#ListUsers) | [`DownloadProfilingData`](#DownloadProfilingData) |
+| | |            | [`SetConfigKeys`](#SetConfigKeys) | | [`AddCannedPolicy`](#AddCannedPolicy) | |
 
 
 ## 1. Constructor
@@ -399,7 +399,29 @@ __Example__
     log.Println("New configuration successfully set")
 ```
 
-## 8. IAM operations
+## 8. Top operations
+
+<a name="TopLocks"></a>
+### TopLocks() (LockEntries, error)
+Get the oldest locks from Minio server.
+
+__Example__
+
+``` go
+    locks, err := madmClnt.TopLocks()
+    if err != nil {
+        log.Fatalf("failed due to: %v", err)
+    }
+
+    out, err := json.Marshal(locks)
+    if err != nil {
+        log.Fatalf("Marshal failed due to: %v", err)
+    }
+
+    log.Println("TopLocks received successfully: ", string(out))
+```
+
+## 9. IAM operations
 
 <a name="AddCannedPolicy"></a>
 ### AddCannedPolicy(policyName string, policy string) error
@@ -455,7 +477,7 @@ __Example__
     }
 ```
 
-## 9. Misc operations
+## 10. Misc operations
 
 <a name="SetAdminCredentials"></a>
 ### SetAdminCredentials() error

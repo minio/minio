@@ -5,20 +5,20 @@ A distributed locking and syncing package for Go.
 
 Introduction
 ------------
- 
-`dsync` is a package for doing distributed locks over a network of `n` nodes. It is designed with simplicity in mind and hence offers limited scalability (`n <= 16`). Each node will be connected to all other nodes and lock requests from any node will be broadcast to all connected nodes. A node will succeed in getting the lock if `n/2 + 1` nodes (whether or not including itself) respond positively. If the lock is acquired it can be held for as long as the client desires and needs to be released afterwards. This will cause the release to be broadcast to all nodes after which the lock becomes available again.
+
+`dsync` is a package for doing distributed locks over a network of `n` nodes. It is designed with simplicity in mind and hence offers limited scalability (`n <= 32`). Each node will be connected to all other nodes and lock requests from any node will be broadcast to all connected nodes. A node will succeed in getting the lock if `n/2 + 1` nodes (whether or not including itself) respond positively. If the lock is acquired it can be held for as long as the client desires and needs to be released afterwards. This will cause the release to be broadcast to all nodes after which the lock becomes available again.
 
 Motivation
 ----------
 
-This package was developed for the distributed server version of [Minio Object Storage](https://minio.io/). For this we needed a distributed locking mechanism for up to 16 servers that each would be running `minio server`. The locking mechanism itself should be a reader/writer mutual exclusion lock meaning that it can be held by a single writer or an arbitrary number of readers.
+This package was developed for the distributed server version of [Minio Object Storage](https://minio.io/). For this we needed a distributed locking mechanism for up to 32 servers that each would be running `minio server`. The locking mechanism itself should be a reader/writer mutual exclusion lock meaning that it can be held by a single writer or an arbitrary number of readers.
 
 For [minio](https://minio.io/) the distributed version is started as follows (for a 6-server system):
 
 ```
-$ minio server http://server1/disk http://server2/disk http://server3/disk http://server4/disk http://server5/disk http://server6/disk 
+$ minio server http://server1/disk http://server2/disk http://server3/disk http://server4/disk http://server5/disk http://server6/disk
 ```
- 
+
 _(note that the same identical command should be run on servers `server1` through to `server6`)_
 
 Design goals
@@ -33,7 +33,7 @@ Design goals
 Restrictions
 ------------
 
-* Limited scalability: up to 16 nodes.
+* Limited scalability: up to 32 nodes.
 * Fixed configuration: changes in the number and/or network names/IP addresses need a restart of all nodes in order to take effect.
 * If a down node comes up, it will not try to (re)acquire any locks that it may have held.
 * Not designed for high performance applications such as key/value stores.
@@ -41,10 +41,10 @@ Restrictions
 Performance
 -----------
 
-* Support up to a total of 7500 locks/second for maximum size of 16 nodes (consuming 10% CPU usage per server) on moderately powerful server hardware.
+* Support up to a total of 7500 locks/second for a size of 16 nodes (consuming 10% CPU usage per server) on moderately powerful server hardware.
 * Lock requests (successful) should not take longer than 1ms (provided decent network connection of 1 Gbit or more between the nodes).
 
-The tables below show detailed performance numbers. 
+The tables below show detailed performance numbers.
 
 ### Performance with varying number of nodes
 
@@ -91,7 +91,7 @@ Usage
 been changed to `dsync.New([]NetLocker, nodeIndex)` which returns a `*Dsync` object to be used in
 every instance of `NewDRWMutex("test", *Dsync)`
 
-### Exclusive lock 
+### Exclusive lock
 
 Here is a simple example showing how to protect a single resource (drop-in replacement for `sync.Mutex`):
 
@@ -105,7 +105,7 @@ func lockSameResource() {
 	// Create distributed mutex to protect resource 'test'
 	dm := dsync.NewDRWMutex("test", ds)
 
-	dm.Lock()
+	dm.Lock("lock-1", "example.go:505:lockSameResource()")
 	log.Println("first lock granted")
 
 	// Release 1st lock after 5 seconds
@@ -117,7 +117,7 @@ func lockSameResource() {
 
 	// Try to acquire lock again, will block until initial lock is released
 	log.Println("about to lock same resource again...")
-	dm.Lock()
+	dm.Lock("lock-1", "example.go:515:lockSameResource()")
 	log.Println("second lock granted")
 
 	time.Sleep(2 * time.Second)
@@ -143,10 +143,10 @@ func twoReadLocksAndSingleWriteLock() {
 
 	drwm := dsync.NewDRWMutex("resource", ds)
 
-	drwm.RLock()
+	drwm.RLock("RLock-1", "example.go:416:twoReadLocksAndSingleWriteLock()")
 	log.Println("1st read lock acquired, waiting...")
 
-	drwm.RLock()
+	drwm.RLock("RLock-2", "example.go:420:twoReadLocksAndSingleWriteLock()")
 	log.Println("2nd read lock acquired, waiting...")
 
 	go func() {
@@ -162,7 +162,7 @@ func twoReadLocksAndSingleWriteLock() {
 	}()
 
 	log.Println("Trying to acquire write lock, waiting...")
-	drwm.Lock()
+	drwm.Lock("Lock-1", "example.go:445:twoReadLocksAndSingleWriteLock()")
 	log.Println("Write lock acquired, waiting...")
 
 	time.Sleep(3 * time.Second)
@@ -190,7 +190,7 @@ Basic architecture
 The basic steps in the lock process are as follows:
 - broadcast lock message to all `n` nodes
 - collect all responses within certain time-out window
-  - if quorum met (minimally `n/2 + 1` responded positively) then grant lock 
+  - if quorum met (minimally `n/2 + 1` responded positively) then grant lock
   - otherwise release all underlying locks and try again after a (semi-)random delay
 - release any locks that (still) came in after time time-out window
 
@@ -236,7 +236,7 @@ This table summarizes the conditions for different configurations during which t
 |    16 |          7 |             2 |           9 |
 
 (for more info see `testMultipleServersOverQuorumDownDuringLockKnownError` in [chaos.go](https://github.com/minio/dsync/blob/master/chaos/chaos.go))
- 
+
 ### Lock not available anymore
 
 This would be due to too many stale locks and/or too many servers down (total over `n/2 - 1`). The following table shows the maximum toterable number for different node sizes:
@@ -284,7 +284,7 @@ func (l *lockServer) Unlock(args *LockArgs, reply *bool) error {
 	defer l.mutex.Unlock()
 	var locksHeld int64
 	if locksHeld, *reply = l.lockMap[args.Name]; !*reply { // No lock is held on the given name
-		return fmt.Errorf("Unlock attempted on an unlocked entity: %s", args.Name) 
+		return fmt.Errorf("Unlock attempted on an unlocked entity: %s", args.Name)
 	}
 	if *reply = locksHeld == WriteLock; !*reply { // Unless it is a write lock
 		return fmt.Errorf("Unlock attempted on a read locked entity: %s (%d read locks active)", args.Name, locksHeld)
@@ -357,11 +357,11 @@ For this case it is possible to reduce the number of nodes to be contacted to fo
 
 You do however want to make sure that you have some sort of 'random' selection of which 12 out of the 16 nodes will participate in every lock. See [here](https://gist.github.com/fwessels/dbbafd537c13ec8f88b360b3a0091ac0) for some sample code that could help with this.
 
-### Scale beyond 16 nodes?
+### Scale beyond 32 nodes?
 
 Building on the previous example and depending on how resilient you want to be for outages of nodes, you can also go the other way, namely to increase the total number of nodes while keeping the number of nodes contacted per lock the same.
 
-For instance you could imagine a system of 32 nodes where only a quorom majority of `9` would be needed out of `12` nodes. Again this requires some sort of pseudo-random 'deterministic' selection of 12 nodes out of the total of 32 servers (same [example](https://gist.github.com/fwessels/dbbafd537c13ec8f88b360b3a0091ac0) as above). 
+For instance you could imagine a system of 64 nodes where only a quorum majority of `17` would be needed out of `28` nodes. Again this requires some sort of pseudo-random 'deterministic' selection of 28 nodes out of the total of 64 servers (same [example](https://gist.github.com/harshavardhana/44614a69650c9111defe3470941cdd16) as above).
 
 Other techniques
 ----------------

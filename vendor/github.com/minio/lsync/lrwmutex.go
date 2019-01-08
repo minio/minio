@@ -22,9 +22,9 @@ import (
 )
 
 const (
-     WRITELOCK = -1 + iota
-     NOLOCKS
-     READLOCKS
+	WRITELOCK = -1 + iota
+	NOLOCKS
+	READLOCKS
 )
 
 // A LRWMutex is a mutual exclusion lock with timeouts.
@@ -49,7 +49,7 @@ func (lm *LRWMutex) Lock() {
 }
 
 // GetLock tries to get a write lock on lm before the timeout occurs.
-func (lm *LRWMutex) GetLock(timeout time.Duration) (locked bool) {
+func (lm *LRWMutex) GetLock(id, source string, timeout time.Duration) (locked bool) {
 
 	isWriteLock := true
 	return lm.lockLoop(timeout, isWriteLock)
@@ -66,7 +66,7 @@ func (lm *LRWMutex) RLock() {
 }
 
 // GetRLock tries to get a read lock on lm before the timeout occurs.
-func (lm *LRWMutex) GetRLock(timeout time.Duration) (locked bool) {
+func (lm *LRWMutex) GetRLock(id, source string, timeout time.Duration) (locked bool) {
 
 	isWriteLock := false
 	return lm.lockLoop(timeout, isWriteLock)

@@ -17,10 +17,12 @@
 package dsync
 
 import (
-	cryptorand "crypto/rand"
 	"fmt"
 	golog "log"
+	"math/rand"
 	"os"
+	"path"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -31,6 +33,7 @@ var dsyncLog bool
 func init() {
 	// Check for DSYNC_LOG env variable, if set logging will be enabled for failed RPC operations.
 	dsyncLog = os.Getenv("DSYNC_LOG") == "1"
+	rand.Seed(time.Now().UnixNano())
 }
 
 func log(msg ...interface{}) {
@@ -79,10 +82,10 @@ func NewDRWMutex(name string, clnt *Dsync) *DRWMutex {
 //
 // If the lock is already in use, the calling go routine
 // blocks until the mutex is available.
-func (dm *DRWMutex) Lock() {
+func (dm *DRWMutex) Lock(id, source string) {
 
 	isReadLock := false
-	dm.lockBlocking(drwMutexInfinite, isReadLock)
+	dm.lockBlocking(drwMutexInfinite, id, source, isReadLock)
 }
 
 // GetLock tries to get a write lock on dm before the timeout elapses.
@@ -90,20 +93,20 @@ func (dm *DRWMutex) Lock() {
 // If the lock is already in use, the calling go routine
 // blocks until either the mutex becomes available and return success or
 // more time has passed than the timeout value and return false.
-func (dm *DRWMutex) GetLock(timeout time.Duration) (locked bool) {
+func (dm *DRWMutex) GetLock(id, source string, timeout time.Duration) (locked bool) {
 
 	isReadLock := false
-	return dm.lockBlocking(timeout, isReadLock)
+	return dm.lockBlocking(timeout, id, source, isReadLock)
 }
 
 // RLock holds a read lock on dm.
 //
 // If one or more read locks are already in use, it will grant another lock.
 // Otherwise the calling go routine blocks until the mutex is available.
-func (dm *DRWMutex) RLock() {
+func (dm *DRWMutex) RLock(id, source string) {
 
 	isReadLock := true
-	dm.lockBlocking(drwMutexInfinite, isReadLock)
+	dm.lockBlocking(drwMutexInfinite, id, source, isReadLock)
 }
 
 // GetRLock tries to get a read lock on dm before the timeout elapses.
@@ -112,10 +115,10 @@ func (dm *DRWMutex) RLock() {
 // Otherwise the calling go routine blocks until either the mutex becomes
 // available and return success or more time has passed than the timeout
 // value and return false.
-func (dm *DRWMutex) GetRLock(timeout time.Duration) (locked bool) {
+func (dm *DRWMutex) GetRLock(id, source string, timeout time.Duration) (locked bool) {
 
 	isReadLock := true
-	return dm.lockBlocking(timeout, isReadLock)
+	return dm.lockBlocking(timeout, id, source, isReadLock)
 }
 
 // lockBlocking will try to acquire either a read or a write lock
@@ -123,7 +126,7 @@ func (dm *DRWMutex) GetRLock(timeout time.Duration) (locked bool) {
 // The function will loop using a built-in timing randomized back-off
 // algorithm until either the lock is acquired successfully or more
 // time has elapsed than the timeout value.
-func (dm *DRWMutex) lockBlocking(timeout time.Duration, isReadLock bool) (locked bool) {
+func (dm *DRWMutex) lockBlocking(timeout time.Duration, id, source string, isReadLock bool) (locked bool) {
 	doneCh, start := make(chan struct{}), time.Now().UTC()
 	defer close(doneCh)
 
@@ -133,7 +136,7 @@ func (dm *DRWMutex) lockBlocking(timeout time.Duration, isReadLock bool) (locked
 		locks := make([]string, dm.clnt.dNodeCount)
 
 		// Try to acquire the lock.
-		success := lock(dm.clnt, &locks, dm.Name, isReadLock)
+		success := lock(dm.clnt, &locks, dm.Name, id, source, isReadLock)
 		if success {
 			dm.m.Lock()
 			defer dm.m.Unlock()
@@ -160,7 +163,7 @@ func (dm *DRWMutex) lockBlocking(timeout time.Duration, isReadLock bool) (locked
 }
 
 // lock tries to acquire the distributed lock, returning true or false.
-func lock(ds *Dsync, locks *[]string, lockName string, isReadLock bool) bool {
+func lock(ds *Dsync, locks *[]string, lockName, id, source string, isReadLock bool) bool {
 
 	// Create buffered channel of size equal to total number of nodes.
 	ch := make(chan Granted, ds.dNodeCount)
@@ -174,17 +177,12 @@ func lock(ds *Dsync, locks *[]string, lockName string, isReadLock bool) bool {
 		go func(index int, isReadLock bool, c NetLocker) {
 			defer wg.Done()
 
-			// All client methods issuing RPCs are thread-safe and goroutine-safe,
-			// i.e. it is safe to call them from multiple concurrently running go routines.
-			bytesUID := [16]byte{}
-			cryptorand.Read(bytesUID[:])
-			uid := fmt.Sprintf("%X", bytesUID[:])
-
 			args := LockArgs{
-				UID:             uid,
+				UID:             id,
 				Resource:        lockName,
 				ServerAddr:      ds.rpcClnts[ds.ownNode].ServerAddr(),
 				ServiceEndpoint: ds.rpcClnts[ds.ownNode].ServiceEndpoint(),
+				Source:          source,
 			}
 
 			var locked bool
@@ -438,5 +436,29 @@ func (dm *DRWMutex) DRLocker() sync.Locker {
 
 type drlocker DRWMutex
 
-func (dr *drlocker) Lock()   { (*DRWMutex)(dr).RLock() }
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func randString(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
+func getSource() string {
+	var funcName string
+	pc, filename, lineNum, ok := runtime.Caller(2)
+	if ok {
+		filename = path.Base(filename)
+		funcName = runtime.FuncForPC(pc).Name()
+	} else {
+		filename = "<unknown>"
+		lineNum = 0
+	}
+
+	return fmt.Sprintf("[%s:%d:%s()]", filename, lineNum, funcName)
+}
+
+func (dr *drlocker) Lock()   { (*DRWMutex)(dr).RLock(randString(16), getSource()) }
 func (dr *drlocker) Unlock() { (*DRWMutex)(dr).RUnlock() }

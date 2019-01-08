@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018, 2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,12 +34,12 @@ type nameLockRequesterInfoPair struct {
 func (l *localLocker) removeEntryIfExists(nlrip nameLockRequesterInfoPair) {
 	// Check if entry is still in map (could have been removed altogether by 'concurrent' (R)Unlock of last entry)
 	if lri, ok := l.lockMap[nlrip.name]; ok {
-		if !l.removeEntry(nlrip.name, nlrip.lri.uid, &lri) {
+		if !l.removeEntry(nlrip.name, nlrip.lri.UID, &lri) {
 			// Remove failed, in case it is a:
-			if nlrip.lri.writer {
+			if nlrip.lri.Writer {
 				// Writer: this should never happen as the whole (mapped) entry should have been deleted
 				reqInfo := (&logger.ReqInfo{}).AppendTags("name", nlrip.name)
-				reqInfo.AppendTags("uid", nlrip.lri.uid)
+				reqInfo.AppendTags("uid", nlrip.lri.UID)
 				ctx := logger.SetReqInfo(context.Background(), reqInfo)
 				logger.LogIf(ctx, errors.New("Lock maintenance failed to remove entry for write lock (should never happen)"))
 			} // Reader: this can happen if multiple read locks were active and
@@ -53,7 +53,7 @@ func (l *localLocker) removeEntryIfExists(nlrip nameLockRequesterInfoPair) {
 func (l *localLocker) removeEntry(name, uid string, lri *[]lockRequesterInfo) bool {
 	// Find correct entry to remove based on uid.
 	for index, entry := range *lri {
-		if entry.uid == uid {
+		if entry.UID == uid {
 			if len(*lri) == 1 {
 				// Remove the (last) lock.
 				delete(l.lockMap, name)
@@ -76,9 +76,9 @@ func getLongLivedLocks(m map[string][]lockRequesterInfo, interval time.Duration)
 	for name, lriArray := range m {
 		for idx := range lriArray {
 			// Check whether enough time has gone by since last check
-			if time.Since(lriArray[idx].timeLastCheck) >= interval {
+			if time.Since(lriArray[idx].TimeLastCheck) >= interval {
 				rslt = append(rslt, nameLockRequesterInfoPair{name: name, lri: lriArray[idx]})
-				lriArray[idx].timeLastCheck = UTCNow()
+				lriArray[idx].TimeLastCheck = UTCNow()
 			}
 		}
 	}

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * Minio Cloud Storage, (C) 2018, 2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -198,6 +198,15 @@ func (rpcClient *PeerRPCClient) ServerInfo() (ServerInfoData, error) {
 
 	err := rpcClient.Call(peerServiceName+".ServerInfo", &args, &reply)
 	return reply, err
+}
+
+// GetLocksResp stores various info from the client for each lock that is requested.
+type GetLocksResp map[string][]lockRequesterInfo
+
+// GetLocks - returns the lock information on the server to which the RPC call is made.
+func (rpcClient *PeerRPCClient) GetLocks() (resp GetLocksResp, err error) {
+	err = rpcClient.Call(peerServiceName+".GetLocks", &AuthArgs{}, &resp)
+	return resp, err
 }
 
 // NewPeerRPCClient - returns new peer RPC client.
