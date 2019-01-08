@@ -20,10 +20,44 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
+	"strconv"
 
 	"github.com/minio/minio/pkg/s3select/sql"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
+
+func toSingleLineJSON(input string, currentKey string, result gjson.Result) (output string, err error) {
+	switch {
+	case result.IsObject():
+		result.ForEach(func(key, value gjson.Result) bool {
+			jsonKey := key.String()
+			if currentKey != "" {
+				jsonKey = currentKey + "." + key.String()
+			}
+			output, err = toSingleLineJSON(input, jsonKey, value)
+			input = output
+			return err == nil
+		})
+	case result.IsArray():
+		i := 0
+		result.ForEach(func(key, value gjson.Result) bool {
+			if currentKey == "" {
+				panic("currentKey is empty")
+			}
+
+			indexKey := currentKey + "." + strconv.Itoa(i)
+			output, err = toSingleLineJSON(input, indexKey, value)
+			input = output
+			i++
+			return err == nil
+		})
+	default:
+		output, err = sjson.Set(input, currentKey, result.Value())
+	}
+
+	return output, err
+}
 
 type objectReader struct {
 	reader io.Reader
@@ -153,6 +187,14 @@ func (r *Reader) Read() (sql.Record, error) {
 
 	if !gjson.ValidBytes(data) {
 		return nil, errJSONParsingError(err)
+	}
+
+	if bytes.Count(data, []byte("\n")) > 0 {
+		var s string
+		if s, err = toSingleLineJSON("", "", gjson.ParseBytes(data)); err != nil {
+			return nil, errJSONParsingError(err)
+		}
+		data = []byte(s)
 	}
 
 	return &Record{

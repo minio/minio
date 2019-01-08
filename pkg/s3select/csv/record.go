@@ -40,7 +40,8 @@ func (r *Record) Get(name string) (*sql.Value, error) {
 	}
 
 	if index >= int64(len(r.csvRecord)) {
-		panic(fmt.Errorf("value not found for column %v. this should not happen", name))
+		// No value found for column 'name', hence return empty string for compatibility.
+		return sql.NewString(""), nil
 	}
 
 	return sql.NewString(r.csvRecord[index]), nil
