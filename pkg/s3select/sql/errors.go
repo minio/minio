@@ -43,42 +43,6 @@ func (err *s3Error) Error() string {
 	return err.message
 }
 
-func errUnsupportedSQLStructure(err error) *s3Error {
-	return &s3Error{
-		code:       "UnsupportedSqlStructure",
-		message:    "Encountered an unsupported SQL structure. Check the SQL Reference.",
-		statusCode: 400,
-		cause:      err,
-	}
-}
-
-func errParseUnsupportedSelect(err error) *s3Error {
-	return &s3Error{
-		code:       "ParseUnsupportedSelect",
-		message:    "The SQL expression contains an unsupported use of SELECT.",
-		statusCode: 400,
-		cause:      err,
-	}
-}
-
-func errParseAsteriskIsNotAloneInSelectList(err error) *s3Error {
-	return &s3Error{
-		code:       "ParseAsteriskIsNotAloneInSelectList",
-		message:    "Other expressions are not allowed in the SELECT list when '*' is used without dot notation in the SQL expression.",
-		statusCode: 400,
-		cause:      err,
-	}
-}
-
-func errParseInvalidContextForWildcardInSelectList(err error) *s3Error {
-	return &s3Error{
-		code:       "ParseInvalidContextForWildcardInSelectList",
-		message:    "Invalid use of * in SELECT list in the SQL expression.",
-		statusCode: 400,
-		cause:      err,
-	}
-}
-
 func errInvalidDataType(err error) *s3Error {
 	return &s3Error{
 		code:       "InvalidDataType",
@@ -88,55 +52,10 @@ func errInvalidDataType(err error) *s3Error {
 	}
 }
 
-func errUnsupportedFunction(err error) *s3Error {
-	return &s3Error{
-		code:       "UnsupportedFunction",
-		message:    "Encountered an unsupported SQL function.",
-		statusCode: 400,
-		cause:      err,
-	}
-}
-
-func errParseNonUnaryAgregateFunctionCall(err error) *s3Error {
-	return &s3Error{
-		code:       "ParseNonUnaryAgregateFunctionCall",
-		message:    "Only one argument is supported for aggregate functions in the SQL expression.",
-		statusCode: 400,
-		cause:      err,
-	}
-}
-
 func errIncorrectSQLFunctionArgumentType(err error) *s3Error {
 	return &s3Error{
 		code:       "IncorrectSqlFunctionArgumentType",
-		message:    "Incorrect type of arguments in function call in the SQL expression.",
-		statusCode: 400,
-		cause:      err,
-	}
-}
-
-func errEvaluatorInvalidArguments(err error) *s3Error {
-	return &s3Error{
-		code:       "EvaluatorInvalidArguments",
-		message:    "Incorrect number of arguments in the function call in the SQL expression.",
-		statusCode: 400,
-		cause:      err,
-	}
-}
-
-func errUnsupportedSQLOperation(err error) *s3Error {
-	return &s3Error{
-		code:       "UnsupportedSqlOperation",
-		message:    "Encountered an unsupported SQL operation.",
-		statusCode: 400,
-		cause:      err,
-	}
-}
-
-func errParseUnknownOperator(err error) *s3Error {
-	return &s3Error{
-		code:       "ParseUnknownOperator",
-		message:    "The SQL expression contains an invalid operator.",
+		message:    "Incorrect type of arguments in function call.",
 		statusCode: 400,
 		cause:      err,
 	}
@@ -151,64 +70,28 @@ func errLikeInvalidInputs(err error) *s3Error {
 	}
 }
 
-func errExternalEvalException(err error) *s3Error {
+func errQueryParseFailure(err error) *s3Error {
 	return &s3Error{
-		code:       "ExternalEvalException",
-		message:    "The query cannot be evaluated. Check the file and try again.",
+		code:       "ParseSelectFailure",
+		message:    err.Error(),
 		statusCode: 400,
 		cause:      err,
 	}
 }
 
-func errValueParseFailure(err error) *s3Error {
+func errQueryAnalysisFailure(err error) *s3Error {
 	return &s3Error{
-		code:       "ValueParseFailure",
-		message:    "Time stamp parse failure in the SQL expression.",
+		code:       "InvalidQuery",
+		message:    err.Error(),
 		statusCode: 400,
 		cause:      err,
 	}
 }
 
-func errEvaluatorBindingDoesNotExist(err error) *s3Error {
+func errBadTableName(err error) *s3Error {
 	return &s3Error{
-		code:       "EvaluatorBindingDoesNotExist",
-		message:    "A column name or a path provided does not exist in the SQL expression.",
-		statusCode: 400,
-		cause:      err,
-	}
-}
-
-func errInternalError(err error) *s3Error {
-	return &s3Error{
-		code:       "InternalError",
-		message:    "Encountered an internal error.",
-		statusCode: 500,
-		cause:      err,
-	}
-}
-
-func errParseInvalidTypeParam(err error) *s3Error {
-	return &s3Error{
-		code:       "ParseInvalidTypeParam",
-		message:    "The SQL expression contains an invalid parameter value.",
-		statusCode: 400,
-		cause:      err,
-	}
-}
-
-func errParseUnsupportedSyntax(err error) *s3Error {
-	return &s3Error{
-		code:       "ParseUnsupportedSyntax",
-		message:    "The SQL expression contains unsupported syntax.",
-		statusCode: 400,
-		cause:      err,
-	}
-}
-
-func errInvalidKeyPath(err error) *s3Error {
-	return &s3Error{
-		code:       "InvalidKeyPath",
-		message:    "Key path in the SQL expression is invalid.",
+		code:       "BadTableName",
+		message:    "The table name is not supported",
 		statusCode: 400,
 		cause:      err,
 	}

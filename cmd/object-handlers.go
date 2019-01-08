@@ -185,6 +185,12 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		return getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, ObjectOptions{})
 	}
 
+	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	if err = s3Select.Open(getObject); err != nil {
 		if serr, ok := err.(s3select.SelectError); ok {
 			w.WriteHeader(serr.HTTPStatusCode())
@@ -197,12 +203,6 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 
 	s3Select.Evaluate(w)
 	s3Select.Close()
-
-	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return
-	}
 
 	// Get host and port from Request.RemoteAddr.
 	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))

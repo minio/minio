@@ -32,7 +32,7 @@ type Reader struct {
 }
 
 // Read - reads single record.
-func (r *Reader) Read() (sql.Record, error) {
+func (r *Reader) Read() (rec sql.Record, rerr error) {
 	parquetRecord, err := r.file.Read()
 	if err != nil {
 		if err != io.EOF {
@@ -43,39 +43,41 @@ func (r *Reader) Read() (sql.Record, error) {
 	}
 
 	record := json.NewRecord()
-	for name, v := range parquetRecord {
+	f := func(name string, v parquetgo.Value) bool {
 		if v.Value == nil {
-			if err = record.Set(name, sql.NewNull()); err != nil {
-				return nil, errParquetParsingError(err)
+			if err := record.Set(name, sql.FromNull()); err != nil {
+				rerr = errParquetParsingError(err)
 			}
-
-			continue
+			return rerr == nil
 		}
 
 		var value *sql.Value
 		switch v.Type {
 		case parquetgen.Type_BOOLEAN:
-			value = sql.NewBool(v.Value.(bool))
+			value = sql.FromBool(v.Value.(bool))
 		case parquetgen.Type_INT32:
-			value = sql.NewInt(int64(v.Value.(int32)))
+			value = sql.FromInt(int64(v.Value.(int32)))
 		case parquetgen.Type_INT64:
-			value = sql.NewInt(v.Value.(int64))
+			value = sql.FromInt(int64(v.Value.(int64)))
 		case parquetgen.Type_FLOAT:
-			value = sql.NewFloat(float64(v.Value.(float32)))
+			value = sql.FromFloat(float64(v.Value.(float32)))
 		case parquetgen.Type_DOUBLE:
-			value = sql.NewFloat(v.Value.(float64))
+			value = sql.FromFloat(v.Value.(float64))
 		case parquetgen.Type_INT96, parquetgen.Type_BYTE_ARRAY, parquetgen.Type_FIXED_LEN_BYTE_ARRAY:
-			value = sql.NewString(string(v.Value.([]byte)))
+			value = sql.FromString(string(v.Value.([]byte)))
 		default:
-			return nil, errParquetParsingError(nil)
+			rerr = errParquetParsingError(nil)
+			return false
 		}
 
 		if err = record.Set(name, value); err != nil {
-			return nil, errParquetParsingError(err)
+			rerr = errParquetParsingError(err)
 		}
+		return rerr == nil
 	}
 
-	return record, nil
+	parquetRecord.Range(f)
+	return record, rerr
 }
 
 // Close - closes underlaying readers.

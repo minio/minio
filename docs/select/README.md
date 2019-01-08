@@ -3,6 +3,15 @@ Traditional retrieval of objects is always as whole entities, i.e GetObject for 
 
 > This implementation is compatible with AWS S3 Select API
 
+### Implemention status:
+
+- Full S3 SQL syntax is supported
+- All aggregation, conditional, type-conversion and strings SQL functions are supported
+- JSONPath expressions are not yet evaluated
+- Large numbers (more than 64-bit) are not yet supported
+- Date related functions are not yet supported (EXTRACT, DATE_DIFF, etc)
+- S3's reserved keywords list is not yet respected
+
 ## 1. Prerequisites
 - Install Minio Server from [here](http://docs.minio.io/docs/minio-quickstart-guide).
 - Familiarity with AWS S3 API

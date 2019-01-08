@@ -32,7 +32,11 @@ type Record struct {
 	nameIndexMap map[string]int64
 }
 
-// Get - gets the value for a column name.
+// Get - gets the value for a column name. CSV fields do not have any
+// defined type (other than the default string). So this function
+// always returns fields using sql.FromBytes so that the type
+// specified/implied by the query can be used, or can be automatically
+// converted based on the query.
 func (r *Record) Get(name string) (*sql.Value, error) {
 	index, found := r.nameIndexMap[name]
 	if !found {
@@ -40,11 +44,12 @@ func (r *Record) Get(name string) (*sql.Value, error) {
 	}
 
 	if index >= int64(len(r.csvRecord)) {
-		// No value found for column 'name', hence return empty string for compatibility.
-		return sql.NewString(""), nil
+		// No value found for column 'name', hence return null
+		// value
+		return sql.FromNull(), nil
 	}
 
-	return sql.NewString(r.csvRecord[index]), nil
+	return sql.FromBytes([]byte(r.csvRecord[index])), nil
 }
 
 // Set - sets the value for a column name.

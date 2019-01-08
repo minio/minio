@@ -37,15 +37,15 @@ func (r *Record) Get(name string) (*sql.Value, error) {
 	result := gjson.GetBytes(r.data, name)
 	switch result.Type {
 	case gjson.Null:
-		return sql.NewNull(), nil
+		return sql.FromNull(), nil
 	case gjson.False:
-		return sql.NewBool(false), nil
+		return sql.FromBool(false), nil
 	case gjson.Number:
-		return sql.NewFloat(result.Float()), nil
+		return sql.FromFloat(result.Float()), nil
 	case gjson.String:
-		return sql.NewString(result.String()), nil
+		return sql.FromString(result.String()), nil
 	case gjson.True:
-		return sql.NewBool(true), nil
+		return sql.FromBool(true), nil
 	}
 
 	return nil, fmt.Errorf("unsupported gjson value %v; %v", result, result.Type)
@@ -54,19 +54,20 @@ func (r *Record) Get(name string) (*sql.Value, error) {
 // Set - sets the value for a column name.
 func (r *Record) Set(name string, value *sql.Value) (err error) {
 	var v interface{}
-	switch value.Type() {
-	case sql.Null:
-		v = value.NullValue()
-	case sql.Bool:
-		v = value.BoolValue()
-	case sql.Int:
-		v = value.IntValue()
-	case sql.Float:
-		v = value.FloatValue()
-	case sql.String:
-		v = value.StringValue()
-	default:
-		return fmt.Errorf("unsupported sql value %v and type %v", value, value.Type())
+	if b, ok := value.ToBool(); ok {
+		v = b
+	} else if f, ok := value.ToFloat(); ok {
+		v = f
+	} else if i, ok := value.ToInt(); ok {
+		v = i
+	} else if s, ok := value.ToString(); ok {
+		v = s
+	} else if value.IsNull() {
+		v = nil
+	} else if b, ok := value.ToBytes(); ok {
+		v = string(b)
+	} else {
+		return fmt.Errorf("unsupported sql value %v and type %v", value, value.GetTypeString())
 	}
 
 	name = strings.Replace(name, "*", "__ALL__", -1)
