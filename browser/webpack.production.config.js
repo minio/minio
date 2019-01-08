@@ -16,11 +16,13 @@
 
 var webpack = require('webpack')
 var path = require('path')
+var glob = require('glob-all')
 var CopyWebpackPlugin = require('copy-webpack-plugin')
-var purify = require("purifycss-webpack-plugin")
+var PurgecssPlugin = require('purgecss-webpack-plugin')
 
 var exports = {
   context: __dirname,
+  mode: 'production',
   entry: [
     path.resolve(__dirname, 'app/index.js')
   ],
@@ -74,16 +76,12 @@ var exports = {
       {from: 'app/img/logo.svg'},
       {from: 'app/index.html'}
     ]),
-    new webpack.DefinePlugin({
-        'process.env.NODE_ENV': '"production"'
-    }),
     new webpack.ContextReplacementPlugin(/moment[\\\/]locale$/, /^\.\/(en)$/),
-    new purify({
-        basePath: __dirname,
-        paths: [
-            "app/index.html",
-            "app/js/*.js"
-        ]
+    new PurgecssPlugin({
+      paths: glob.sync([
+        path.join(__dirname, 'app/index.html'),
+        path.join(__dirname, 'app/js/*.js')
+      ])
     })
   ]
 }
