@@ -33,7 +33,6 @@ import (
 
 	snappy "github.com/golang/snappy"
 	"github.com/gorilla/mux"
-	"github.com/klauspost/readahead"
 	miniogo "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/encrypt"
 	"github.com/minio/minio/cmd/crypto"
@@ -106,6 +105,12 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(ctx, err))
 		return
 	}
+
+	getObjectInfo := objectAPI.GetObjectInfo
+	if api.CacheAPI() != nil {
+		getObjectInfo = api.CacheAPI().GetObjectInfo
+	}
+
 	// Check for auth type to return S3 compatible error.
 	// type to return the correct error (NoSuchKey vs AccessDenied)
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
@@ -129,11 +134,6 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 				ConditionValues: getConditionValues(r, ""),
 				IsOwner:         false,
 			}) {
-				getObjectInfo := objectAPI.GetObjectInfo
-				if api.CacheAPI() != nil {
-					getObjectInfo = api.CacheAPI().GetObjectInfo
-				}
-
 				_, err = getObjectInfo(ctx, bucket, object, opts)
 				if toAPIErrorCode(ctx, err) == ErrNoSuchKey {
 					s3Error = ErrNoSuchKey
@@ -156,18 +156,14 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		return
 	}
 
-	var selectReq s3select.ObjectSelectRequest
-	if err := xmlDecoder(r.Body, &selectReq, r.ContentLength); err != nil {
-		writeErrorResponse(w, ErrMalformedXML, r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	if !strings.EqualFold(string(selectReq.ExpressionType), "SQL") {
-		writeErrorResponse(w, ErrInvalidExpressionType, r.URL, guessIsBrowserReq(r))
-		return
-	}
-	if len(selectReq.Expression) >= s3select.MaxExpressionLength {
-		writeErrorResponse(w, ErrExpressionTooLong, r.URL, guessIsBrowserReq(r))
+	s3Select, err := s3select.NewS3Select(r.Body)
+	if err != nil {
+		if serr, ok := err.(s3select.SelectError); ok {
+			w.WriteHeader(serr.HTTPStatusCode())
+			w.Write(s3select.NewErrorMessage(serr.ErrorCode(), serr.ErrorMessage()))
+		} else {
+			writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
+		}
 		return
 	}
 
@@ -175,123 +171,38 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	if api.CacheAPI() != nil {
 		getObjectNInfo = api.CacheAPI().GetObjectNInfo
 	}
+	getObject := func(offset, length int64) (rc io.ReadCloser, err error) {
+		isSuffixLength := false
+		if offset < 0 {
+			isSuffixLength = true
+		}
+		rs := &HTTPRangeSpec{
+			IsSuffixLength: isSuffixLength,
+			Start:          offset,
+			End:            length,
+		}
 
-	gr, err := getObjectNInfo(ctx, bucket, object, nil, r.Header, readLock, opts)
+		return getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, ObjectOptions{})
+	}
+
+	if err = s3Select.Open(getObject); err != nil {
+		if serr, ok := err.(s3select.SelectError); ok {
+			w.WriteHeader(serr.HTTPStatusCode())
+			w.Write(s3select.NewErrorMessage(serr.ErrorCode(), serr.ErrorMessage()))
+		} else {
+			writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
+		}
+		return
+	}
+
+	s3Select.Evaluate(w)
+	s3Select.Close()
+
+	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
+		logger.LogIf(ctx, err)
 		return
 	}
-	defer gr.Close()
-
-	objInfo := gr.ObjInfo
-
-	if selectReq.InputSerialization.CompressionType == s3select.SelectCompressionGZIP {
-		if !strings.Contains(objInfo.ContentType, "gzip") {
-			writeErrorResponse(w, ErrInvalidDataSource, r.URL, guessIsBrowserReq(r))
-			return
-		}
-	}
-	if selectReq.InputSerialization.CompressionType == s3select.SelectCompressionBZIP {
-		if !strings.Contains(objInfo.ContentType, "bzip") {
-			writeErrorResponse(w, ErrInvalidDataSource, r.URL, guessIsBrowserReq(r))
-			return
-		}
-	}
-	if selectReq.InputSerialization.CompressionType == "" {
-		selectReq.InputSerialization.CompressionType = s3select.SelectCompressionNONE
-		if !strings.Contains(objInfo.ContentType, "text/csv") && !strings.Contains(objInfo.ContentType, "application/json") {
-			writeErrorResponse(w, ErrInvalidDataSource, r.URL, guessIsBrowserReq(r))
-			return
-		}
-	}
-	if !strings.EqualFold(string(selectReq.ExpressionType), "SQL") {
-		writeErrorResponse(w, ErrInvalidExpressionType, r.URL, guessIsBrowserReq(r))
-		return
-	}
-	if len(selectReq.Expression) >= s3select.MaxExpressionLength {
-		writeErrorResponse(w, ErrExpressionTooLong, r.URL, guessIsBrowserReq(r))
-		return
-	}
-	if selectReq.InputSerialization.CSV == nil && selectReq.InputSerialization.JSON == nil {
-		writeErrorResponse(w, ErrInvalidRequestParameter, r.URL, guessIsBrowserReq(r))
-		return
-	}
-	if selectReq.OutputSerialization.CSV == nil && selectReq.OutputSerialization.JSON == nil {
-		writeErrorResponse(w, ErrInvalidRequestParameter, r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	if selectReq.InputSerialization.CSV != nil {
-		if selectReq.InputSerialization.CSV.FileHeaderInfo != s3select.CSVFileHeaderInfoUse &&
-			selectReq.InputSerialization.CSV.FileHeaderInfo != s3select.CSVFileHeaderInfoNone &&
-			selectReq.InputSerialization.CSV.FileHeaderInfo != s3select.CSVFileHeaderInfoIgnore &&
-			selectReq.InputSerialization.CSV.FileHeaderInfo != "" {
-			writeErrorResponse(w, ErrInvalidFileHeaderInfo, r.URL, guessIsBrowserReq(r))
-			return
-		}
-		if selectReq.OutputSerialization.CSV != nil {
-			if selectReq.OutputSerialization.CSV.QuoteFields != s3select.CSVQuoteFieldsAlways &&
-				selectReq.OutputSerialization.CSV.QuoteFields != s3select.CSVQuoteFieldsAsNeeded &&
-				selectReq.OutputSerialization.CSV.QuoteFields != "" {
-				writeErrorResponse(w, ErrInvalidQuoteFields, r.URL, guessIsBrowserReq(r))
-				return
-			}
-		}
-		if len(selectReq.InputSerialization.CSV.RecordDelimiter) > 2 {
-			writeErrorResponse(w, ErrInvalidRequestParameter, r.URL, guessIsBrowserReq(r))
-			return
-		}
-
-	}
-	if selectReq.InputSerialization.JSON != nil {
-		if selectReq.InputSerialization.JSON.Type != s3select.JSONLinesType {
-			writeErrorResponse(w, ErrInvalidJSONType, r.URL, guessIsBrowserReq(r))
-			return
-		}
-
-	}
-
-	// Set encryption response headers
-	if objectAPI.IsEncryptionSupported() {
-		objInfo.UserDefined = CleanMinioInternalMetadataKeys(objInfo.UserDefined)
-		if crypto.IsEncrypted(objInfo.UserDefined) {
-			switch {
-			case crypto.S3.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
-			case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
-				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
-			}
-		}
-	}
-
-	reader := readahead.NewReader(gr)
-	defer reader.Close()
-
-	size := objInfo.Size
-	if objInfo.IsCompressed() {
-		size = objInfo.GetActualSize()
-		if size < 0 {
-			writeErrorResponse(w, toAPIErrorCode(ctx, errInvalidDecompressedSize), r.URL, guessIsBrowserReq(r))
-			return
-		}
-	}
-
-	s3s, err := s3select.New(reader, size, selectReq)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	// Parses the select query and checks for an error
-	_, _, _, _, _, _, err = s3select.ParseSelect(s3s)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	// Executes the query on data-set
-	s3select.Execute(w, s3s)
 
 	// Get host and port from Request.RemoteAddr.
 	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))

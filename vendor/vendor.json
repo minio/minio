@@ -63,6 +63,11 @@
 			"revisionTime": "2018-09-19T22:28:51Z"
 		},
 		{
+			"checksumSHA1": "apHxx2dlnW9TF3IBXFcFZj/Es6E=",
+			"path": "git.apache.org/thrift.git/lib/go/thrift",
+			"revision": ""
+		},
+		{
 			"checksumSHA1": "02D1G/awFY2Jb/w/OLN2tlMuORk=",
 			"path": "github.com/Azure/azure-sdk-for-go/storage",
 			"revision": "21f5db4a3b31b290b68bd706520298d37c87cd29",
@@ -693,6 +698,18 @@
 			"revisionTime": "2018-11-15T04:56:45Z"
 		},
 		{
+			"checksumSHA1": "LQSZ9jpJwWrfqKGiBnw+qjRtwRE=",
+			"path": "github.com/minio/parquet-go",
+			"revision": "84e7daee0cea0bf82d1d15795dcea0f7bcd508c9",
+			"revisionTime": "2018-12-30T03:24:02Z"
+		},
+		{
+			"checksumSHA1": "N4WRPw4p3AN958RH/O53kUsJacQ=",
+			"path": "github.com/minio/parquet-go/gen-go/parquet",
+			"revision": "d50385ed243d7120cf0f78de3f4f4e171936f12f",
+			"revisionTime": "2018-11-07T21:57:30Z"
+		},
+		{
 			"checksumSHA1": "cYuXpiVBMypgkEr0Wqd79jPPyBg=",
 			"path": "github.com/minio/sha256-simd",
 			"revision": "43ed500fe4d485d97534014d9f98521216240002",
@@ -771,6 +788,18 @@
 			"revisionTime": "2018-10-28T19:52:56Z"
 		},
 		{
+			"checksumSHA1": "85AmRAEmy9EqHBUhwkBBVhLkCVU=",
+			"path": "github.com/pierrec/lz4",
+			"revision": "1f6e18d34f6790fc0afea6f13a5fe3d9ab1770af",
+			"revisionTime": "2018-09-11T17:58:58Z"
+		},
+		{
+			"checksumSHA1": "YzBjaYp2pbrwPhT6XHY0CBSh71A=",
+			"path": "github.com/pierrec/lz4/internal/xxh32",
+			"revision": "1f6e18d34f6790fc0afea6f13a5fe3d9ab1770af",
+			"revisionTime": "2018-09-11T17:58:58Z"
+		},
+		{
 			"checksumSHA1": "xCv4GBFyw07vZkVtKF/XrUnkHRk=",
 			"path": "github.com/pkg/errors",
 			"revision": "e881fd58d78e04cf6d0de1217f8707c8cc2249bc",
@@ -841,6 +870,12 @@
 			"path": "github.com/prometheus/procfs/xfs",
 			"revision": "8b1c2da0d56deffdbb9e48d4414b4e674bd8083e",
 			"revisionTime": "2018-04-08T09:29:02Z"
+		},
+		{
+			"checksumSHA1": "lOtA2sG01oAO4Z/VSGqvX45CjfA=",
+			"path": "github.com/rasky/go-lzo",
+			"revision": "affec0788321cffe2c68821be1e07e87127b17f0",
+			"revisionTime": "2015-10-23T00:10:55Z"
 		},
 		{
 			"checksumSHA1": "D8AVDI39CJ+jvw0HOotYU2gz54c=",

@@ -60,7 +60,7 @@ spelling:
 check: test
 test: verifiers build
 	@echo "Running unit tests"
-	@go test -tags kqueue ./...
+	@CGO_ENABLED=0 go test -tags kqueue ./...
 
 verify: build
 	@echo "Verifying build"
