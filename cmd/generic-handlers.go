@@ -496,11 +496,6 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	// A put method on path "/" doesn't make sense, ignore it.
-	if r.Method == http.MethodPut && r.URL.Path == "/" {
-		writeErrorResponse(w, ErrNotImplemented, r.URL, guessIsBrowserReq(r))
-		return
-	}
 
 	// Serve HTTP.
 	h.handler.ServeHTTP(w, r)
