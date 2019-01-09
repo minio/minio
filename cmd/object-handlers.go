@@ -914,7 +914,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			case !isSourceEncrypted && !isTargetEncrypted:
 				targetSize = srcInfo.Size
 			case isSourceEncrypted && isTargetEncrypted:
-				targetSize = srcInfo.Size
+				objInfo := ObjectInfo{Size: actualSize}
+				targetSize = objInfo.EncryptedSize()
 			case !isSourceEncrypted && isTargetEncrypted:
 				targetSize = srcInfo.EncryptedSize()
 			case isSourceEncrypted && !isTargetEncrypted:
