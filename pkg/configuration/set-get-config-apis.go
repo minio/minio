@@ -34,8 +34,6 @@ import (
 )
 
 const (
-	// ** revisit confFile value and reset it **
-	confFile    = "/home/ersan/work/src/github.com/minio/minio/pkg/configuration/examples/diskData.txt"
 	notSet      = "Configuration parameter has not been set to a valid value yet."
 	notValid    = "Not a key, nor prefix"
 	commentChar = "##"
@@ -93,8 +91,8 @@ func (v versionKey) Set(key, val string, isSetHandlerCall bool, cfg *ServerConfi
 	// requirements are going to be tested here.
 	// If value validation tests/checks pass, it'll be set in the memory.
 	if _, err = strconv.Atoi(val); err != nil {
-		// If SetHandler called this Set method, then we'll return
-		// on error
+		// If SetHandler did not call this Set method,
+		// then we'll return on error
 		if !isSetHandlerCall {
 			return errors.New("Could not load '" + key + "'.")
 		}
@@ -6500,10 +6498,10 @@ func transformKey(key string) (string, error) {
 
 // SetHandler sets key value in server configuration database
 // Only single key/val pair is accepted
-func (s *ServerConfig) SetHandler(key, val string) error {
+func (s *ServerConfig) SetHandler(confFile, key, val string) error {
 	var err error
 	// Load the configuration data from disk into memory
-	if errMap := s.load(true); len(errMap) > 0 {
+	if errMap := s.load(confFile, true); len(errMap) > 0 {
 		for errKey, e := range errMap {
 			if e != nil && errKey != "Invalid value: "+key {
 				fmt.Printf("%s\n", e.Error())
@@ -6535,7 +6533,7 @@ func (s *ServerConfig) SetHandler(key, val string) error {
 	}
 
 	// Save the set/modified configuration from memory to disk
-	if e := s.save(); e != nil {
+	if e := s.save(confFile); e != nil {
 		return e
 	}
 	if err != nil {
@@ -6545,9 +6543,9 @@ func (s *ServerConfig) SetHandler(key, val string) error {
 }
 
 // GetHandler gets single or multiple or full configuration info
-func (s *ServerConfig) GetHandler(keys []string) (map[string]string, error) {
+func (s *ServerConfig) GetHandler(confFile string, keys []string) (map[string]string, error) {
 	// Load the configuration data from disk into memory
-	if errArr := s.load(false); len(errArr) > 0 {
+	if errArr := s.load(confFile, false); len(errArr) > 0 {
 		for _, e := range errArr {
 			if e != nil {
 				fmt.Printf("%s\n", e.Error())
@@ -6696,7 +6694,7 @@ func verifyConfigKeyFormat(entry string) (entryArr []string, isComment, validKey
 			if matchedComment[0] == "" {
 				// Empty lines are handled here.
 				// Treat them as if they are comments
-				return []string{matchedComment[0]}, true, true
+				return matchedComment, true, true
 			}
 			if matchedComment[1] == "" {
 				// Combination of key/value and comment in the same line
@@ -6717,13 +6715,14 @@ func verifyConfigKeyFormat(entry string) (entryArr []string, isComment, validKey
 }
 
 // Load loads configuration from disk to memory (serverConfig.kv)
-func (s *ServerConfig) load(isSetHandlerCall bool) map[string]error {
-	errMap := make(map[string]error)
+func (s *ServerConfig) load(confFile string, isSetHandlerCall bool) map[string]error {
 	// Check if configuration file exists
 	if _, err := os.Stat(confFile); os.IsNotExist(err) {
 		// Return right away if configuration file doesn't exist
 		return map[string]error{"Config File": err}
 	}
+
+	errMap := make(map[string]error)
 	// Configuration file exists.
 	// Read configuration data from etcd or file
 	s.RWMutex.RLock()
@@ -6751,18 +6750,20 @@ func (s *ServerConfig) load(isSetHandlerCall bool) map[string]error {
 	for ind, line := range lines {
 		newInd++
 		element, isComment, isValidFormat := verifyConfigKeyFormat(line)
+
+		if isComment {
+			// We've decided not to support full comment lines
+			// and empty lines. Skip it and continue. 12/12/2018
+			newInd--
+			continue
+		}
+
 		key = element[0]
 		val = element[1]
 		if !isValidFormat {
 			logger.LogIf(context.Background(), errors.New("Invalid key, '"+key+"'."))
 			errMap["Invalid key: "+key] = errors.New("Invalid key, '" +
 				key + "'. (line:" + strconv.Itoa(ind+1) + ")")
-			newInd--
-			continue
-		}
-		if isComment {
-			// We've decided not to support full comment lines
-			// and empty lines. Skip it and continue. 12/12/2018
 			newInd--
 			continue
 		}
@@ -6826,7 +6827,7 @@ func (s *ServerConfig) load(isSetHandlerCall bool) map[string]error {
 	return nil
 }
 
-func (s *ServerConfig) save() error {
+func (s *ServerConfig) save(confFile string) error {
 	var lines []string
 
 	// Lock for writing
