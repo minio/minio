@@ -123,7 +123,8 @@ var (
         "username": "",
         "password": "",
         "reconnectInterval": 0,
-        "keepAliveInterval": 0
+	"keepAliveInterval": 0,
+	"queueDir": ""
       }
     },
     "mysql": {

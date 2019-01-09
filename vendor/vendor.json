@@ -257,10 +257,10 @@
 			"revisionTime": "2016-08-05T00:47:13Z"
 		},
 		{
-			"checksumSHA1": "LHwm1G0lFyQ3X0iHZ/MOYnAtjd4=",
+			"checksumSHA1": "VPQEUnKynzSvgugyvL3rxjduidg=",
 			"path": "github.com/eclipse/paho.mqtt.golang",
-			"revision": "d06cc70ac43d625e602946b5ff2346ddebb768e4",
-			"revisionTime": "2017-06-02T16:30:32Z"
+			"revision": "379fd9f99ba5b1f02c9fffb5e5952416ef9301dc",
+			"revisionTime": "2018-11-29T14:54:54Z"
 		},
 		{
 			"checksumSHA1": "g2AaO9VMaxzFQZkrCfxBUV3yAyM=",
@@ -1201,6 +1201,12 @@
 			"revisionTime": "2017-04-23T14:02:46Z"
 		},
 		{
+			"checksumSHA1": "f3Y7JIZH61oMmp8nphqe8Mg+XoU=",
+			"path": "golang.org/x/net/internal/socks",
+			"revision": "1e06a53dbb7e2ed46e91183f219db23c6943c532",
+			"revisionTime": "2018-12-20T03:20:21Z"
+		},
+		{
 			"checksumSHA1": "UxahDzW2v4mf/+aFxruuupaoIwo=",
 			"path": "golang.org/x/net/internal/timeseries",
 			"revision": "da118f7b8e5954f39d0d2130ab35d4bf0e3cb344",
@@ -1211,6 +1217,12 @@
 			"path": "golang.org/x/net/lex/httplex",
 			"revision": "da118f7b8e5954f39d0d2130ab35d4bf0e3cb344",
 			"revisionTime": "2017-04-23T14:02:46Z"
+		},
+		{
+			"checksumSHA1": "mCMW3hvbWFW1k5il9yyO7ELOdws=",
+			"path": "golang.org/x/net/proxy",
+			"revision": "1e06a53dbb7e2ed46e91183f219db23c6943c532",
+			"revisionTime": "2018-12-20T03:20:21Z"
 		},
 		{
 			"checksumSHA1": "9EZG3s2eOREO7WkBvigjk57wK/8=",

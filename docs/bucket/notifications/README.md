@@ -163,6 +163,7 @@ The Minio server configuration file is stored on the backend in json format. The
 | `clientId` | _string_ | Unique ID for the MQTT broker to identify Minio |
 | `username` | _string_ | Username to connect to the MQTT server (if required) |
 | `password` | _string_ | Password to connect to the MQTT server (if required) |
+| `queueDir` | _string_ | Persistent store for events when MQTT broker is offline |
 
 An example configuration for MQTT is shown below:
 
@@ -175,10 +176,14 @@ An example configuration for MQTT is shown below:
         "qos": 1,
         "clientId": "minio",
         "username": "",
-        "password": ""
+        "password": "",
+        "queueDir": ""
     }
 }
 ```
+MQTT supports persistent event store in the client-side. The persistent store will backup events when the MQTT broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field in the mqtt config. For eg, the `queueDir` can be `/home/events`.
+
+
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
 ```sh
 $ mc admin config get myminio/ > /tmp/myconfig
@@ -1031,7 +1036,7 @@ An example configuration for NSQ is shown below:
         "nsqdAddress": "127.0.0.1:4150",
         "topic": "minio",
         "tls": {
-            "enable": false,       
+            "enable": false,
             "skipVerify": true
         }
     }

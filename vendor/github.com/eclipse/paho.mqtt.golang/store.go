@@ -50,6 +50,16 @@ func mIDFromKey(key string) uint16 {
 	return uint16(i)
 }
 
+// Return true if key prefix is outbound
+func isKeyOutbound(key string) bool {
+	return key[:2] == outboundPrefix
+}
+
+// Return true if key prefix is inbound
+func isKeyInbound(key string) bool {
+	return key[:2] == inboundPrefix
+}
+
 // Return a string of the form "i.[id]"
 func inboundKeyFromMID(id uint16) string {
 	return fmt.Sprintf("%s%d", inboundPrefix, id)
