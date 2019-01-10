@@ -653,12 +653,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// TODO: Reject requests where body/payload is present, for now we don't even read it.
 
-	// Copy source path.
-	cpSrcPath, err := url.QueryUnescape(r.Header.Get("X-Amz-Copy-Source"))
-	if err != nil {
-		// Save unescaped string as is.
-		cpSrcPath = r.Header.Get("X-Amz-Copy-Source")
-	}
+	// Read escaped copy source path to check for parameters.
+	cpSrcPath := r.Header.Get("X-Amz-Copy-Source")
 
 	// Check https://docs.aws.amazon.com/AmazonS3/latest/dev/ObjectVersioning.html
 	// Regardless of whether you have enabled versioning, each object in your bucket
@@ -673,7 +669,17 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(w, ErrNoSuchVersion, r.URL, guessIsBrowserReq(r))
 			return
 		}
+		// Note that url.Parse does the unescaping
 		cpSrcPath = u.Path
+	}
+	if vid := r.Header.Get("X-Amz-Copy-Source-Version-Id"); vid != "" {
+		// Check if versionId header was added, if yes then check if
+		// its non "null" value, we should error out since we do not support
+		// any versions other than "null".
+		if vid != "null" {
+			writeErrorResponse(w, ErrNoSuchVersion, r.URL, guessIsBrowserReq(r))
+			return
+		}
 	}
 
 	srcBucket, srcObject := path2BucketAndObject(cpSrcPath)
@@ -699,7 +705,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	var srcOpts, dstOpts ObjectOptions
-	srcOpts, err = copySrcEncryptionOpts(ctx, r, srcBucket, srcObject)
+	srcOpts, err := copySrcEncryptionOpts(ctx, r, srcBucket, srcObject)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -1466,12 +1472,8 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Copy source path.
-	cpSrcPath, err := url.QueryUnescape(r.Header.Get("X-Amz-Copy-Source"))
-	if err != nil {
-		// Save unescaped string as is.
-		cpSrcPath = r.Header.Get("X-Amz-Copy-Source")
-	}
+	// Read escaped copy source path to check for parameters.
+	cpSrcPath := r.Header.Get("X-Amz-Copy-Source")
 
 	// Check https://docs.aws.amazon.com/AmazonS3/latest/dev/ObjectVersioning.html
 	// Regardless of whether you have enabled versioning, each object in your bucket
@@ -1486,7 +1488,17 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			writeErrorResponse(w, ErrNoSuchVersion, r.URL, guessIsBrowserReq(r))
 			return
 		}
+		// Note that url.Parse does the unescaping
 		cpSrcPath = u.Path
+	}
+	if vid := r.Header.Get("X-Amz-Copy-Source-Version-Id"); vid != "" {
+		// Check if X-Amz-Copy-Source-Version-Id header was added, if yes then check if
+		// its non "null" value, we should error out since we do not support
+		// any versions other than "null".
+		if vid != "null" {
+			writeErrorResponse(w, ErrNoSuchVersion, r.URL, guessIsBrowserReq(r))
+			return
+		}
 	}
 
 	srcBucket, srcObject := path2BucketAndObject(cpSrcPath)
