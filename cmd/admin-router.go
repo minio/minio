@@ -63,9 +63,9 @@ func registerAdminRouter(router *mux.Router, enableIAM bool) {
 
 		/// Health operations
 
-		// Performance command - return performance details based on input type
-		adminV1Router.Methods(http.MethodGet).Path("/performance").HandlerFunc(httpTraceAll(adminAPI.PerfInfoHandler)).Queries("perfType", "{perfType:.*}")
 	}
+	// Performance command - return performance details based on input type
+	adminV1Router.Methods(http.MethodGet).Path("/performance").HandlerFunc(httpTraceAll(adminAPI.PerfInfoHandler)).Queries("perfType", "{perfType:.*}")
 
 	// Profiling operations
 	adminV1Router.Methods(http.MethodPost).Path("/profiling/start").HandlerFunc(httpTraceAll(adminAPI.StartProfilingHandler)).

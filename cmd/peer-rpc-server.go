@@ -245,7 +245,27 @@ func (receiver *peerRPCReceiver) DrivePerfInfo(args *AuthArgs, reply *ServerDriv
 		return errServerNotInitialized
 	}
 
-	*reply = localEndpointsPerf(globalEndpoints)
+	*reply = localEndpointsDrivePerf(globalEndpoints)
+	return nil
+}
+
+// CPULoadInfo - handles cpu performance RPC call
+func (receiver *peerRPCReceiver) CPULoadInfo(args *AuthArgs, reply *ServerCPULoadInfo) error {
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return errServerNotInitialized
+	}
+	*reply = localEndpointsCPULoad(globalEndpoints)
+	return nil
+}
+
+// MemUsageInfo - handles mem utilization RPC call
+func (receiver *peerRPCReceiver) MemUsageInfo(args *AuthArgs, reply *ServerMemUsageInfo) error {
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return errServerNotInitialized
+	}
+	*reply = localEndpointsMemUsage(globalEndpoints)
 	return nil
 }
 

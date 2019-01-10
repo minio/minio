@@ -35,10 +35,12 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/mem"
 	"github.com/minio/minio/pkg/quick"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -294,12 +296,37 @@ type ServerDrivesPerfInfo struct {
 	Perf  []disk.Performance `json:"perf"`
 }
 
+// ServerCPULoadInfo holds informantion about cpu utilization
+// of one minio node. It also reports any errors if encountered
+// while trying to reach this server.
+type ServerCPULoadInfo struct {
+	Addr  string     `json:"addr"`
+	Error string     `json:"error,omitempty"`
+	Load  []cpu.Load `json:"load"`
+}
+
+// ServerMemUsageInfo holds informantion about memory utilization
+// of one minio node. It also reports any errors if encountered
+// while trying to reach this server.
+type ServerMemUsageInfo struct {
+	Addr  string      `json:"addr"`
+	Error string      `json:"error,omitempty"`
+	Usage []mem.Usage `json:"usage"`
+}
+
 // PerfInfoHandler - GET /minio/admin/v1/performance?perfType={perfType}
 // ----------
 // Get all performance information based on input type
 // Supported types = drive
 func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PerfInfo")
+
+	// Get object layer instance.
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
+		return
+	}
 
 	// Authenticate request
 	// Setting the region as empty so as the mc server info command is irrespective to the region.
@@ -313,8 +340,14 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 	perfType := vars["perfType"]
 
 	if perfType == "drive" {
+		info := objLayer.StorageInfo(ctx)
+		if !(info.Backend.Type == BackendFS || info.Backend.Type == BackendErasure) {
+
+			writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
+			return
+		}
 		// Get drive performance details from local server's drive(s)
-		dp := localEndpointsPerf(globalEndpoints)
+		dp := localEndpointsDrivePerf(globalEndpoints)
 
 		// Notify all other Minio peers to report drive performance numbers
 		dps := globalNotificationSys.DrivePerfInfo()
@@ -330,8 +363,42 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		// Reply with performance information (across nodes in a
 		// distributed setup) as json.
 		writeSuccessResponseJSON(w, jsonBytes)
+	} else if perfType == "cpu" {
+		// Get CPU load details from local server's cpu(s)
+		cpu := localEndpointsCPULoad(globalEndpoints)
+		// Notify all other Minio peers to report cpu load numbers
+		cpus := globalNotificationSys.CPULoadInfo()
+		cpus = append(cpus, cpu)
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(cpus)
+		if err != nil {
+			writeErrorResponseJSON(w, toAdminAPIErrCode(ctx, err), r.URL)
+			return
+		}
+
+		// Reply with cpu load information (across nodes in a
+		// distributed setup) as json.
+		writeSuccessResponseJSON(w, jsonBytes)
+	} else if perfType == "mem" {
+		// Get mem usage details from local server(s)
+		m := localEndpointsMemUsage(globalEndpoints)
+		// Notify all other Minio peers to report mem usage numbers
+		mems := globalNotificationSys.MemUsageInfo()
+		mems = append(mems, m)
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(mems)
+		if err != nil {
+			writeErrorResponseJSON(w, toAdminAPIErrCode(ctx, err), r.URL)
+			return
+		}
+
+		// Reply with mem usage information (across nodes in a
+		// distributed setup) as json.
+		writeSuccessResponseJSON(w, jsonBytes)
 	} else {
-		writeErrorResponseJSON(w, ErrNotImplemented, r.URL)
+		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
 	}
 	return
 }

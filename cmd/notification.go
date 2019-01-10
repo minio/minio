@@ -537,6 +537,56 @@ func (sys *NotificationSys) DrivePerfInfo() []ServerDrivesPerfInfo {
 	return reply
 }
 
+// MemUsageInfo - Mem utilization information
+func (sys *NotificationSys) MemUsageInfo() []ServerMemUsageInfo {
+	reply := make([]ServerMemUsageInfo, len(sys.peerRPCClientMap))
+	var wg sync.WaitGroup
+	var i int
+	for addr, client := range sys.peerRPCClientMap {
+		wg.Add(1)
+		go func(addr xnet.Host, client *PeerRPCClient, idx int) {
+			defer wg.Done()
+			memi, err := client.MemUsageInfo()
+			if err != nil {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr.String())
+				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				logger.LogIf(ctx, err)
+				memi.Addr = addr.String()
+				memi.Error = err.Error()
+			}
+			reply[idx] = memi
+		}(addr, client, i)
+		i++
+	}
+	wg.Wait()
+	return reply
+}
+
+// CPULoadInfo - CPU utilization information
+func (sys *NotificationSys) CPULoadInfo() []ServerCPULoadInfo {
+	reply := make([]ServerCPULoadInfo, len(sys.peerRPCClientMap))
+	var wg sync.WaitGroup
+	var i int
+	for addr, client := range sys.peerRPCClientMap {
+		wg.Add(1)
+		go func(addr xnet.Host, client *PeerRPCClient, idx int) {
+			defer wg.Done()
+			cpui, err := client.CPULoadInfo()
+			if err != nil {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr.String())
+				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				logger.LogIf(ctx, err)
+				cpui.Addr = addr.String()
+				cpui.Error = err.Error()
+			}
+			reply[idx] = cpui
+		}(addr, client, i)
+		i++
+	}
+	wg.Wait()
+	return reply
+}
+
 // NewNotificationSys - creates new notification system object.
 func NewNotificationSys(config *serverConfig, endpoints EndpointList) *NotificationSys {
 	targetList := getNotificationTargets(config)

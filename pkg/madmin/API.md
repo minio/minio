@@ -39,7 +39,7 @@ func main() {
 | Service operations         | Info operations  | Healing operations                    | Config operations        | IAM operations | Misc                                |
 |:----------------------------|:----------------------------|:--------------------------------------|:--------------------------|:------------------------------------|:------------------------------------|
 | [`ServiceStatus`](#ServiceStatus) | [`ServerInfo`](#ServerInfo) | [`Heal`](#Heal) | [`GetConfig`](#GetConfig) | [`AddUser`](#AddUser) | [`SetAdminCredentials`](#SetAdminCredentials) |
-| [`ServiceSendAction`](#ServiceSendAction) | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) | [`SetConfig`](#SetConfig) | [`SetUserPolicy`](#SetUserPolicy) | [`StartProfiling`](#StartProfiling) |
+| [`ServiceSendAction`](#ServiceSendAction) | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) | [`ServerCPULoadInfo`](#ServerCPULoadInfo) | [`ServerMemUsageInfo`](#ServerMemUsageInfo)  | [`SetConfig`](#SetConfig) | [`SetUserPolicy`](#SetUserPolicy) | [`StartProfiling`](#StartProfiling) |
 | | |            | [`GetConfigKeys`](#GetConfigKeys) | [`ListUsers`](#ListUsers) | [`DownloadProfilingData`](#DownloadProfilingData) |
 | | |            | [`SetConfigKeys`](#SetConfigKeys) | [`AddCannedPolicy`](#AddCannedPolicy) | |
 
@@ -221,6 +221,40 @@ Fetches drive performance information for all cluster nodes. Returned value is i
 |`disk.Performance.Error` | _string_ | Error (if any) encountered while accessing this drive. |
 |`disk.Performance.WriteSpeed` | _float64_ | Write speed on above path in Bytes/s. |
 |`disk.Performance.ReadSpeed` | _float64_ | Read speed on above path in Bytes/s. |
+
+<a name="ServerCPULoadInfo"></a>
+### ServerCPULoadInfo() ([]ServerCPULoadInfo, error)
+
+Fetches CPU utilization for all cluster nodes. Returned value is in Bytes.
+
+| Param | Type | Description |
+|-------|------|-------------|
+|`cpui.Addr` | _string_ | Address of the server the following information  is retrieved from. |
+|`cpui.Error` | _string_ | Errors (if any) encountered while reaching this node |
+|`cpui.CPULoad` | _cpu.Load_ | The load on the CPU. |
+
+| Param | Type | Description |
+|-------|------|-------------|
+|`cpu.Load.Avg` | _string_ | The average utilization % of the CPU measured in a 200ms interval |
+|`cpu.Load.Min` | _string_ | The minimum utilization % of the CPU measured in a 200ms interval |
+|`cpu.Load.Max` | _string_ | The maximum utilization % of the CPU measured in a 200ms interval |
+|`cpu.Load.Error` | _string_ | Error (if any) encountered while accesing the CPU info |
+
+<a name="ServerMemUsageInfo"></a>
+### ServerMemUsageInfo() ([]ServerMemUsageInfo, error)
+
+Fetches Mem utilization for all cluster nodes. Returned value is in Bytes.
+
+| Param | Type | Description |
+|-------|------|-------------|
+|`memi.Addr` | _string_ | Address of the server the following information  is retrieved from. |
+|`memi.Error` | _string_ | Errors (if any) encountered while reaching this node |
+|`memi.MemUsage` | _mem.Usage_ | The utilitzation of Memory |
+
+| Param | Type | Description |
+|-------|------|-------------|
+|`mem.Usage.Mem` | _string_ | The total number of bytes obtained from the OS |
+|`mem.Usage.Error` | _string_ | Error (if any) encountered while accesing the CPU info |
 
 ## 6. Heal operations
 
