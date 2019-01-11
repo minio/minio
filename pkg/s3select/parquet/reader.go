@@ -44,6 +44,14 @@ func (r *Reader) Read() (sql.Record, error) {
 
 	record := json.NewRecord()
 	for name, v := range parquetRecord {
+		if v.Value == nil {
+			if err = record.Set(name, sql.NewNull()); err != nil {
+				return nil, errParquetParsingError(err)
+			}
+
+			continue
+		}
+
 		var value *sql.Value
 		switch v.Type {
 		case parquetgen.Type_BOOLEAN:

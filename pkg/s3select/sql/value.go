@@ -58,12 +58,25 @@ func (value *Value) String() string {
 
 // CSVString - encodes to CSV string.
 func (value *Value) CSVString() string {
+	if value.valueType == Null {
+		return ""
+	}
+
 	return fmt.Sprintf("%v", value.value)
 }
 
 // MarshalJSON - encodes to JSON data.
 func (value *Value) MarshalJSON() ([]byte, error) {
 	return json.Marshal(value.value)
+}
+
+// NullValue - returns underlying null value. It panics if value is not null type.
+func (value *Value) NullValue() *struct{} {
+	if value.valueType == Null {
+		return nil
+	}
+
+	panic(fmt.Sprintf("requested bool value but found %T type", value.value))
 }
 
 // BoolValue - returns underlying bool value. It panics if value is not Bool type.
