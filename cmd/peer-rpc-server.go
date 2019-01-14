@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"sort"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
@@ -30,7 +32,7 @@ import (
 )
 
 const peerServiceName = "Peer"
-const peerServiceSubPath = "/s3/remote"
+const peerServiceSubPath = "/peer/remote"
 
 var peerServicePath = path.Join(minioReservedBucketPath, peerServiceSubPath)
 
@@ -118,7 +120,8 @@ type ListenBucketNotificationArgs struct {
 	Addr       xnet.Host      `json:"addr"`
 }
 
-// ListenBucketNotification - handles listen bucket notification RPC call. It creates PeerRPCClient target which pushes requested events to target in remote peer.
+// ListenBucketNotification - handles listen bucket notification RPC call.
+// It creates PeerRPCClient target which pushes requested events to target in remote peer.
 func (receiver *peerRPCReceiver) ListenBucketNotification(args *ListenBucketNotificationArgs, reply *VoidReply) error {
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
@@ -266,6 +269,117 @@ func (receiver *peerRPCReceiver) MemUsageInfo(args *AuthArgs, reply *ServerMemUs
 		return errServerNotInitialized
 	}
 	*reply = localEndpointsMemUsage(globalEndpoints)
+	return nil
+}
+
+// uptimes - used to sort uptimes in chronological order.
+type uptimes []time.Duration
+
+func (ts uptimes) Len() int {
+	return len(ts)
+}
+
+func (ts uptimes) Less(i, j int) bool {
+	return ts[i] < ts[j]
+}
+
+func (ts uptimes) Swap(i, j int) {
+	ts[i], ts[j] = ts[j], ts[i]
+}
+
+// getPeerUptimes - returns the uptime.
+func getPeerUptimes(serverInfo []ServerInfo) time.Duration {
+	// In a single node Erasure or FS backend setup the uptime of
+	// the setup is the uptime of the single minio server
+	// instance.
+	if !globalIsDistXL {
+		return UTCNow().Sub(globalBootTime)
+	}
+
+	var times []time.Duration
+
+	for _, info := range serverInfo {
+		if info.Error != "" {
+			continue
+		}
+		times = append(times, info.Data.Properties.Uptime)
+	}
+
+	// Sort uptimes in chronological order.
+	sort.Sort(uptimes(times))
+
+	// Return the latest time as the uptime.
+	return times[0]
+}
+
+// StartProfilingArgs - holds the RPC argument for StartingProfiling RPC call
+type StartProfilingArgs struct {
+	AuthArgs
+	Profiler string
+}
+
+// StartProfiling - profiling server receiver.
+func (receiver *peerRPCReceiver) StartProfiling(args *StartProfilingArgs, reply *VoidReply) error {
+	if globalProfiler != nil {
+		globalProfiler.Stop()
+	}
+	var err error
+	globalProfiler, err = startProfiler(args.Profiler, "")
+	return err
+}
+
+// DownloadProfilingData - download profiling data.
+func (receiver *peerRPCReceiver) DownloadProfilingData(args *AuthArgs, reply *[]byte) error {
+	var err error
+	*reply, err = getProfileData()
+	return err
+}
+
+var errUnsupportedSignal = fmt.Errorf("unsupported signal: only restart and stop signals are supported")
+
+// SignalServiceArgs - send event RPC arguments.
+type SignalServiceArgs struct {
+	AuthArgs
+	Sig serviceSignal
+}
+
+// SignalService - signal service receiver.
+func (receiver *peerRPCReceiver) SignalService(args *SignalServiceArgs, reply *VoidReply) error {
+	switch args.Sig {
+	case serviceRestart, serviceStop:
+		globalServiceSignalCh <- args.Sig
+	default:
+		return errUnsupportedSignal
+	}
+	return nil
+}
+
+// ServerInfo - server info receiver.
+func (receiver *peerRPCReceiver) ServerInfo(args *AuthArgs, reply *ServerInfoData) error {
+	if globalBootTime.IsZero() {
+		return errServerNotInitialized
+	}
+
+	// Build storage info
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		return errServerNotInitialized
+	}
+
+	// Server info data.
+	*reply = ServerInfoData{
+		StorageInfo: objLayer.StorageInfo(context.Background()),
+		ConnStats:   globalConnStats.toServerConnStats(),
+		HTTPStats:   globalHTTPStats.toServerHTTPStats(),
+		Properties: ServerProperties{
+			Uptime:   UTCNow().Sub(globalBootTime),
+			Version:  Version,
+			CommitID: CommitID,
+			SQSARN:   globalNotificationSys.GetARNList(),
+			Region:   globalServerConfig.GetRegion(),
+		},
+	}
+
 	return nil
 }
 
