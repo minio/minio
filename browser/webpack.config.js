@@ -16,11 +16,13 @@
 
 var webpack = require('webpack')
 var path = require('path')
+var glob = require('glob-all')
 var CopyWebpackPlugin = require('copy-webpack-plugin')
-var purify = require("purifycss-webpack-plugin")
+var PurgecssPlugin = require('purgecss-webpack-plugin')
 
 var exports = {
   context: __dirname,
+  mode: 'development',
   entry: [
     path.resolve(__dirname, 'app/index.js')
   ],
@@ -99,12 +101,11 @@ var exports = {
       {from: 'app/index.html'}
     ]),
     new webpack.ContextReplacementPlugin(/moment[\\\/]locale$/, /^\.\/(en)$/),
-    new purify({
-        basePath: __dirname,
-        paths: [
-            "app/index.html",
-            "app/js/*.js"
-        ]
+    new PurgecssPlugin({
+      paths: glob.sync([
+        path.join(__dirname, 'app/index.html'),
+        path.join(__dirname, 'app/js/*.js')
+      ])
     })
   ]
 }

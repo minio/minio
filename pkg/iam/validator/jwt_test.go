@@ -44,10 +44,10 @@ func TestJWT(t *testing.T) {
 		t.Fatalf("Expected 1 keys, got %d", len(jk.Keys))
 	}
 
-	keys := make([]crypto.PublicKey, len(jk.Keys))
+	keys := make(map[string]crypto.PublicKey, len(jk.Keys))
 	for ii, jks := range jk.Keys {
 		var err error
-		keys[ii], err = jks.DecodePublicKey()
+		keys[jks.Kid], err = jks.DecodePublicKey()
 		if err != nil {
 			t.Fatalf("Failed to decode key %d: %v", ii, err)
 		}
@@ -59,8 +59,8 @@ func TestJWT(t *testing.T) {
 	}
 
 	jwt := NewJWT(JWKSArgs{
-		URL:       u1,
-		publicKey: keys[0],
+		URL:        u1,
+		publicKeys: keys,
 	})
 	if jwt.ID() != "jwt" {
 		t.Fatalf("Uexpected id %s for the validator", jwt.ID())

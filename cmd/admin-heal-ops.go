@@ -133,7 +133,7 @@ func (ahs *allHealState) periodicHealSeqsClean() {
 				}
 			}
 			ahs.Unlock()
-		case <-globalServiceDoneCh:
+		case <-GlobalServiceDoneCh:
 			// server could be restarting - need
 			// to exit immediately
 			return
@@ -641,10 +641,10 @@ func (h *healSequence) healDiskFormat() error {
 	// Healing succeeded notify the peers to reload format and re-initialize disks.
 	// We will not notify peers only if healing succeeded.
 	if err == nil {
-		for host, rerr := range globalNotificationSys.ReloadFormat(h.settings.DryRun) {
-			if rerr != nil {
-				logger.GetReqInfo(h.ctx).SetTags("peerAddress", host.String())
-				logger.LogIf(h.ctx, rerr)
+		for _, nerr := range globalNotificationSys.ReloadFormat(h.settings.DryRun) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(h.ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(h.ctx, nerr.Err)
 			}
 		}
 	}

@@ -208,6 +208,26 @@ func (p profilerWrapper) Path() string {
 	return p.pathFn()
 }
 
+// Returns current profile data, returns error if there is no active
+// profiling in progress. Stops an active profile.
+func getProfileData() ([]byte, error) {
+	if globalProfiler == nil {
+		return nil, errors.New("profiler not enabled")
+	}
+
+	profilerPath := globalProfiler.Path()
+
+	// Stop the profiler
+	globalProfiler.Stop()
+
+	profilerFile, err := os.Open(profilerPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return ioutil.ReadAll(profilerFile)
+}
+
 // Starts a profiler returns nil if profiler is not enabled, caller needs to handle this.
 func startProfiler(profilerType, dirPath string) (interface {
 	Stop()

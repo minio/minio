@@ -370,9 +370,9 @@ var isETagSealedTests = []struct {
 	ETag     string
 	IsSealed bool
 }{
-	{ETag: "", IsSealed: false},                                                                                                // 0
-	{ETag: "90682b8e8cc7609c4671e1d64c73fc30", IsSealed: false},                                                                // 1
-	{ETag: "f201040c9dc593e39ea004dc1323699bcd", IsSealed: true},                                                               // 2 not valid ciphertext but looks like sealed ETag
+	{ETag: "", IsSealed: false},                                  // 0
+	{ETag: "90682b8e8cc7609c4671e1d64c73fc30", IsSealed: false},  // 1
+	{ETag: "f201040c9dc593e39ea004dc1323699bcd", IsSealed: true}, // 2 not valid ciphertext but looks like sealed ETag
 	{ETag: "20000f00fba2ee2ae4845f725964eeb9e092edfabc7ab9f9239e8344341f769a51ce99b4801b0699b92b16a72fa94972", IsSealed: true}, // 3
 }
 

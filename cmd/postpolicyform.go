@@ -29,14 +29,14 @@ import (
 
 // startWithConds - map which indicates if a given condition supports starts-with policy operator
 var startsWithConds = map[string]bool{
-	"$acl":                 true,
-	"$bucket":              false,
-	"$cache-control":       true,
-	"$content-type":        true,
-	"$content-disposition": true,
-	"$content-encoding":    true,
-	"$expires":             true,
-	"$key":                 true,
+	"$acl":                     true,
+	"$bucket":                  false,
+	"$cache-control":           true,
+	"$content-type":            true,
+	"$content-disposition":     true,
+	"$content-encoding":        true,
+	"$expires":                 true,
+	"$key":                     true,
 	"$success_action_redirect": true,
 	"$redirect":                true,
 	"$success_action_status":   false,

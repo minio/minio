@@ -31,14 +31,13 @@ import (
 var globalFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "config-dir, C",
-		Value: getConfigDir(),
-		Usage: func() string {
-			usage := "Path to configuration directory."
-			if getConfigDir() == "" {
-				usage = usage + "  This option must be set."
-			}
-			return usage
-		}(),
+		Value: defaultConfigDir.Get(),
+		Usage: "[DEPRECATED] Path to legacy configuration directory.",
+	},
+	cli.StringFlag{
+		Name:  "certs-dir, S",
+		Value: defaultCertsDir.Get(),
+		Usage: "Path to certs directory.",
 	},
 	cli.BoolFlag{
 		Name:  "quiet",

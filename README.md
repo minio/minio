@@ -53,6 +53,15 @@ chmod +x minio
 ./minio server /data
 ```
 
+| Platform| Architecture | URL|
+| ----------| -------- | ------|
+|GNU/Linux|ppc64le|https://dl.minio.io/server/minio/release/linux-ppc64le/minio |
+```sh
+wget https://dl.minio.io/server/minio/release/linux-ppc64le/minio
+chmod +x minio
+./minio server /data
+```
+
 ## Microsoft Windows
 ### Binary Download
 | Platform| Architecture | URL|

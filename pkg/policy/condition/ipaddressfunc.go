@@ -19,6 +19,7 @@ package condition
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"sort"
 )
 
@@ -46,7 +47,12 @@ type ipAddressFunc struct {
 // falls in one of network or not.
 func (f ipAddressFunc) evaluate(values map[string][]string) bool {
 	IPs := []net.IP{}
-	for _, s := range values[f.k.Name()] {
+	requestValue, ok := values[http.CanonicalHeaderKey(f.k.Name())]
+	if !ok {
+		requestValue = values[f.k.Name()]
+	}
+
+	for _, s := range requestValue {
 		IP := net.ParseIP(s)
 		if IP == nil {
 			panic(fmt.Errorf("invalid IP address '%v'", s))

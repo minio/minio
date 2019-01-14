@@ -123,7 +123,8 @@ var (
         "username": "",
         "password": "",
         "reconnectInterval": 0,
-        "keepAliveInterval": 0
+	"keepAliveInterval": 0,
+	"queueDir": ""
       }
     },
     "mysql": {
@@ -533,7 +534,6 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	// single node setup, this degenerates to a simple function
 	// call under the hood.
 	globalMinioAddr = "127.0.0.1:9000"
-	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	var wg sync.WaitGroup
 
@@ -607,7 +607,6 @@ func TestServiceSetCreds(t *testing.T) {
 	// single node setup, this degenerates to a simple function
 	// call under the hood.
 	globalMinioAddr = "127.0.0.1:9000"
-	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	credentials := globalServerConfig.GetCredential()
 
@@ -706,7 +705,6 @@ func TestGetConfigHandler(t *testing.T) {
 
 	// Initialize admin peers to make admin RPC calls.
 	globalMinioAddr = "127.0.0.1:9000"
-	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// Prepare query params for get-config mgmt REST API.
 	queryVal := url.Values{}
@@ -735,7 +733,6 @@ func TestSetConfigHandler(t *testing.T) {
 
 	// Initialize admin peers to make admin RPC calls.
 	globalMinioAddr = "127.0.0.1:9000"
-	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// Prepare query params for set-config mgmt REST API.
 	queryVal := url.Values{}
@@ -807,7 +804,6 @@ func TestAdminServerInfo(t *testing.T) {
 
 	// Initialize admin peers to make admin RPC calls.
 	globalMinioAddr = "127.0.0.1:9000"
-	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// Prepare query params for set-config mgmt REST API.
 	queryVal := url.Values{}

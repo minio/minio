@@ -192,12 +192,12 @@ func parseXLErasureInfo(ctx context.Context, xlMetaBuf []byte) (ErasureInfo, err
 	return erasure, nil
 }
 
-func parseXLParts(xlMetaBuf []byte) []objectPartInfo {
+func parseXLParts(xlMetaBuf []byte) []ObjectPartInfo {
 	// Parse the XL Parts.
 	partsResult := gjson.GetBytes(xlMetaBuf, "parts").Array()
-	partInfo := make([]objectPartInfo, len(partsResult))
+	partInfo := make([]ObjectPartInfo, len(partsResult))
 	for i, p := range partsResult {
-		info := objectPartInfo{}
+		info := ObjectPartInfo{}
 		info.Number = int(p.Get("number").Int())
 		info.Name = p.Get("name").String()
 		info.ETag = p.Get("etag").String()
@@ -249,7 +249,7 @@ func xlMetaV1UnmarshalJSON(ctx context.Context, xlMetaBuf []byte) (xlMeta xlMeta
 }
 
 // read xl.json from the given disk, parse and return xlV1MetaV1.Parts.
-func readXLMetaParts(ctx context.Context, disk StorageAPI, bucket string, object string) ([]objectPartInfo, map[string]string, error) {
+func readXLMetaParts(ctx context.Context, disk StorageAPI, bucket string, object string) ([]ObjectPartInfo, map[string]string, error) {
 	// Reads entire `xl.json`.
 	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
 	if err != nil {

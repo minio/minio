@@ -56,6 +56,7 @@ const (
 	ErrSTSNone STSErrorCode = iota
 	ErrSTSMissingParameter
 	ErrSTSInvalidParameterValue
+	ErrSTSWebIdentityExpiredToken
 	ErrSTSClientGrantsExpiredToken
 	ErrSTSInvalidClientGrantsToken
 	ErrSTSMalformedPolicyDocument
@@ -76,9 +77,14 @@ var stsErrCodeResponse = map[STSErrorCode]STSError{
 		Description:    "An invalid or out-of-range value was supplied for the input parameter.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrSTSWebIdentityExpiredToken: {
+		Code:           "ExpiredToken",
+		Description:    "The web identity token that was passed is expired or is not valid. Get a new identity token from the identity provider and then retry the request.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrSTSClientGrantsExpiredToken: {
 		Code:           "ExpiredToken",
-		Description:    "The client grants that was passed is expired or is not valid.",
+		Description:    "The client grants that was passed is expired or is not valid. Get a new client grants token from the identity provider and then retry the request.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrSTSInvalidClientGrantsToken: {

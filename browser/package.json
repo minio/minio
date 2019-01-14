@@ -13,8 +13,7 @@
     "setupTestFrameworkScriptFile": "./app/js/jest/setup.js",
     "testURL": "https://localhost:8080",
     "moduleNameMapper": {
-      "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$":
-        "<rootDir>/app/js/jest/__mocks__/fileMock.js",
+      "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$": "<rootDir>/app/js/jest/__mocks__/fileMock.js",
       "\\.(css|scss)$": "identity-obj-proxy"
     }
   },
@@ -40,29 +39,31 @@
     "babel-preset-es2015": "^6.14.0",
     "babel-preset-react": "^6.11.1",
     "babel-register": "^6.14.0",
-    "copy-webpack-plugin": "^0.3.3",
+    "copy-webpack-plugin": "^4.6.0",
     "css-loader": "^0.23.1",
     "enzyme": "^3.3.0",
     "enzyme-adapter-react-16": "^1.1.1",
     "esformatter": "^0.10.0",
     "esformatter-jsx": "^7.4.1",
     "esformatter-jsx-ignore": "^1.0.6",
-    "html-webpack-plugin": "^2.30.1",
+    "html-webpack-plugin": "^3.2.0",
     "jest": "^22.1.4",
     "jest-enzyme": "^4.0.2",
     "json-loader": "^0.5.4",
-    "less": "^2.7.1",
-    "less-loader": "^2.2.3",
-    "purifycss-webpack-plugin": "^2.0.3",
+    "less": "^3.9.0",
+    "less-loader": "^4.1.0",
+    "purgecss-webpack-plugin": "^1.4.0",
     "style-loader": "^0.13.1",
     "url-loader": "^0.5.7",
-    "webpack-dev-server": "^2.11.1"
+    "webpack-cli": "^3.2.0",
+    "webpack-dev-server": "^3.1.14"
   },
   "dependencies": {
     "bootstrap": "^3.3.6",
     "classnames": "^2.2.3",
     "expect": "^1.20.2",
     "font-awesome": "^4.7.0",
+    "glob-all": "^3.1.0",
     "history": "^4.7.2",
     "humanize": "0.0.9",
     "identity-obj-proxy": "^3.0.0",
@@ -89,6 +90,6 @@
     "reselect": "^3.0.1",
     "superagent": "^3.8.2",
     "superagent-es6-promise": "^1.0.0",
-    "webpack": "^3.10.0"
+    "webpack": "^4.28.3"
   }
 }

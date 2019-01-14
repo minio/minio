@@ -29,6 +29,9 @@ import (
 
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/cpu"
+	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/mem"
 	"github.com/minio/minio/pkg/mountinfo"
 )
 
@@ -195,6 +198,82 @@ func (endpoints EndpointList) GetString(i int) string {
 		return ""
 	}
 	return endpoints[i].String()
+}
+
+// localEndpointsMemUsage - returns ServerMemUsageInfo for only the
+// local endpoints from given list of endpoints
+func localEndpointsMemUsage(endpoints EndpointList) ServerMemUsageInfo {
+	var memUsages []mem.Usage
+	var addr string
+	scratchSpace := map[string]bool{}
+	for _, endpoint := range endpoints {
+		// Only proceed for local endpoints
+		if endpoint.IsLocal {
+			if _, ok := scratchSpace[endpoint.Host]; ok {
+				continue
+			}
+			addr = GetLocalPeer(endpoints)
+			memUsage := mem.GetUsage()
+			memUsages = append(memUsages, memUsage)
+			scratchSpace[endpoint.Host] = true
+		}
+	}
+	return ServerMemUsageInfo{
+		Addr:  addr,
+		Usage: memUsages,
+	}
+}
+
+// localEndpointsCPULoad - returns ServerCPULoadInfo for only the
+// local endpoints from given list of endpoints
+func localEndpointsCPULoad(endpoints EndpointList) ServerCPULoadInfo {
+	var cpuLoads []cpu.Load
+	var addr string
+	scratchSpace := map[string]bool{}
+	for _, endpoint := range endpoints {
+		// Only proceed for local endpoints
+		if endpoint.IsLocal {
+			if _, ok := scratchSpace[endpoint.Host]; ok {
+				continue
+			}
+			addr = GetLocalPeer(endpoints)
+			cpuLoad := cpu.GetLoad()
+			cpuLoads = append(cpuLoads, cpuLoad)
+			scratchSpace[endpoint.Host] = true
+		}
+	}
+	return ServerCPULoadInfo{
+		Addr: addr,
+		Load: cpuLoads,
+	}
+}
+
+// localEndpointsDrivePerf - returns ServerDrivesPerfInfo for only the
+// local endpoints from given list of endpoints
+func localEndpointsDrivePerf(endpoints EndpointList) ServerDrivesPerfInfo {
+	var dps []disk.Performance
+	var addr string
+	for _, endpoint := range endpoints {
+		// Only proceed for local endpoints
+		if endpoint.IsLocal {
+			addr = GetLocalPeer(endpoints)
+			if _, err := os.Stat(endpoint.Path); err != nil {
+				// Since this drive is not available, add relevant details and proceed
+				dps = append(dps, disk.Performance{Path: endpoint.Path, Error: err.Error()})
+				continue
+			}
+			tempObj := mustGetUUID()
+			fsPath := pathJoin(endpoint.Path, minioMetaTmpBucket, tempObj)
+			dp := disk.GetPerformance(fsPath)
+			dp.Path = endpoint.Path
+			dps = append(dps, dp)
+		}
+	}
+
+	return ServerDrivesPerfInfo{
+		Addr: addr,
+		Perf: dps,
+	}
 }
 
 // NewEndpointList - returns new endpoint list based on input args.

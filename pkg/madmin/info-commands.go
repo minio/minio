@@ -21,7 +21,12 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"time"
+
+	"github.com/minio/minio/pkg/cpu"
+	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/mem"
 )
 
 // BackendType - represents different backend types.
@@ -146,4 +151,133 @@ func (adm *AdminClient) ServerInfo() ([]ServerInfo, error) {
 	}
 
 	return serversInfo, nil
+}
+
+// ServerDrivesPerfInfo holds informantion about address and write speed of
+// all drives in a single server node
+type ServerDrivesPerfInfo struct {
+	Addr  string             `json:"addr"`
+	Error string             `json:"error,omitempty"`
+	Perf  []disk.Performance `json:"perf"`
+}
+
+// ServerDrivesPerfInfo - Returns drive's read and write performance information
+func (adm *AdminClient) ServerDrivesPerfInfo() ([]ServerDrivesPerfInfo, error) {
+	v := url.Values{}
+	v.Set("perfType", string("drive"))
+	resp, err := adm.executeMethod("GET", requestData{
+		relPath:     "/v1/performance",
+		queryValues: v,
+	})
+
+	defer closeResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var info []ServerDrivesPerfInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(respBytes, &info)
+	if err != nil {
+		return nil, err
+	}
+
+	return info, nil
+}
+
+// ServerCPULoadInfo holds information about address and cpu load of
+// a single server node
+type ServerCPULoadInfo struct {
+	Addr  string     `json:"addr"`
+	Error string     `json:"error,omitempty"`
+	Load  []cpu.Load `json:"load"`
+}
+
+// ServerCPULoadInfo - Returns cpu utilization information
+func (adm *AdminClient) ServerCPULoadInfo() ([]ServerCPULoadInfo, error) {
+	v := url.Values{}
+	v.Set("perfType", string("cpu"))
+	resp, err := adm.executeMethod("GET", requestData{
+		relPath:     "/v1/performance",
+		queryValues: v,
+	})
+
+	defer closeResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var info []ServerCPULoadInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(respBytes, &info)
+	if err != nil {
+		return nil, err
+	}
+
+	return info, nil
+}
+
+// ServerMemUsageInfo holds information about address and memory utilization of
+// a single server node
+type ServerMemUsageInfo struct {
+	Addr  string      `json:"addr"`
+	Error string      `json:"error,omitempty"`
+	Usage []mem.Usage `json:"usage"`
+}
+
+// ServerMemUsageInfo - Returns mem utilization information
+func (adm *AdminClient) ServerMemUsageInfo() ([]ServerMemUsageInfo, error) {
+	v := url.Values{}
+	v.Set("perfType", string("mem"))
+	resp, err := adm.executeMethod("GET", requestData{
+		relPath:     "/v1/performance",
+		queryValues: v,
+	})
+
+	defer closeResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var info []ServerMemUsageInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(respBytes, &info)
+	if err != nil {
+		return nil, err
+	}
+
+	return info, nil
 }

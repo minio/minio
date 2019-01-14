@@ -22,17 +22,17 @@ const defaultBufSize = 4096
 // The buffer is similar to bufio.Reader / Writer but zero-copy-ish
 // Also highly optimized for this particular use case.
 type buffer struct {
-	buf     []byte
+	buf     []byte // buf is a byte buffer who's length and capacity are equal.
 	nc      net.Conn
 	idx     int
 	length  int
 	timeout time.Duration
 }
 
+// newBuffer allocates and returns a new buffer.
 func newBuffer(nc net.Conn) buffer {
-	var b [defaultBufSize]byte
 	return buffer{
-		buf: b[:],
+		buf: make([]byte, defaultBufSize),
 		nc:  nc,
 	}
 }
@@ -105,43 +105,56 @@ func (b *buffer) readNext(need int) ([]byte, error) {
 	return b.buf[offset:b.idx], nil
 }
 
-// returns a buffer with the requested size.
+// takeBuffer returns a buffer with the requested size.
 // If possible, a slice from the existing buffer is returned.
 // Otherwise a bigger buffer is made.
 // Only one buffer (total) can be used at a time.
-func (b *buffer) takeBuffer(length int) []byte {
+func (b *buffer) takeBuffer(length int) ([]byte, error) {
 	if b.length > 0 {
-		return nil
+		return nil, ErrBusyBuffer
 	}
 
 	// test (cheap) general case first
-	if length <= defaultBufSize || length <= cap(b.buf) {
-		return b.buf[:length]
+	if length <= cap(b.buf) {
+		return b.buf[:length], nil
 	}
 
 	if length < maxPacketSize {
 		b.buf = make([]byte, length)
-		return b.buf
+		return b.buf, nil
 	}
-	return make([]byte, length)
+
+	// buffer is larger than we want to store.
+	return make([]byte, length), nil
 }
 
-// shortcut which can be used if the requested buffer is guaranteed to be
-// smaller than defaultBufSize
+// takeSmallBuffer is shortcut which can be used if length is
+// known to be smaller than defaultBufSize.
 // Only one buffer (total) can be used at a time.
-func (b *buffer) takeSmallBuffer(length int) []byte {
-	if b.length == 0 {
-		return b.buf[:length]
+func (b *buffer) takeSmallBuffer(length int) ([]byte, error) {
+	if b.length > 0 {
+		return nil, ErrBusyBuffer
 	}
-	return nil
+	return b.buf[:length], nil
 }
 
 // takeCompleteBuffer returns the complete existing buffer.
 // This can be used if the necessary buffer size is unknown.
+// cap and len of the returned buffer will be equal.
 // Only one buffer (total) can be used at a time.
-func (b *buffer) takeCompleteBuffer() []byte {
-	if b.length == 0 {
-		return b.buf
+func (b *buffer) takeCompleteBuffer() ([]byte, error) {
+	if b.length > 0 {
+		return nil, ErrBusyBuffer
+	}
+	return b.buf, nil
+}
+
+// store stores buf, an updated buffer, if its suitable to do so.
+func (b *buffer) store(buf []byte) error {
+	if b.length > 0 {
+		return ErrBusyBuffer
+	} else if cap(buf) <= maxPacketSize && cap(buf) > cap(b.buf) {
+		b.buf = buf[:cap(buf)]
 	}
 	return nil
 }

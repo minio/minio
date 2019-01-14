@@ -108,7 +108,22 @@ export MINIO_SSE_VAULT_NAMESPACE=ns1
 
 Note: If [Vault Namespaces](https://learn.hashicorp.com/vault/operations/namespaces) are in use, MINIO_SSE_VAULT_NAMESPACE variable needs to be set before setting approle and transit secrets engine.
 
+Minio gateway to S3 supports encryption. Three encryption modes are possible - encryption can be set to ``pass-through`` to backend, ``single encryption`` (at the gateway) or ``double encryption`` (single encryption at gateway and pass through to backend). This can be specified by setting MINIO_GATEWAY_SSE and KMS environment variables set in Step 2.1.2.
 
+If MINIO_GATEWAY_SSE and KMS are not setup, all encryption headers are passed through to the backend. If KMS environment variables are set up, ``single encryption`` is automatically performed at the gateway and encrypted object is saved at the backend.
+
+To specify ``double encryption``, MINIO_GATEWAY_SSE environment variable needs to be set to "s3" for sse-s3
+and "c" for sse-c encryption. More than one encryption option can be set, delimited by ";". Objects are encrypted at the gateway and the gateway also does a pass-through to backend. Note that in the case of SSE-C encryption, gateway derives a unique SSE-C key for pass through from the SSE-C client key using a KDF.
+
+```sh
+export MINIO_GATEWAY_SSE="s3;c"
+export MINIO_SSE_VAULT_APPROLE_ID=9b56cc08-8258-45d5-24a3-679876769126
+export MINIO_SSE_VAULT_APPROLE_SECRET=4e30c52f-13e4-a6f5-0763-d50e8cb4321f
+export MINIO_SSE_VAULT_ENDPOINT=https://vault-endpoint-ip:8200
+export MINIO_SSE_VAULT_KEY_NAME=my-minio-key
+export MINIO_SSE_VAULT_AUTH_TYPE=approle
+minio gateway s3
+```
 
 #### 2.2 Specify a master key
 
@@ -126,7 +141,6 @@ head -c 32 /dev/urandom | xxd -c 32 -ps
 ```
 
 ### 3. Test your setup
-
 To test this setup, start minio server with environment variables set in Step 3, and server is ready to handle SSE-S3 requests.
 
 ### Auto-Encryption

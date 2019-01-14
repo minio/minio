@@ -109,7 +109,7 @@ func (store *MemoryStore) Del(key string) {
 	if m == nil {
 		WARN.Println(STR, "memorystore del: message", mid, "not found")
 	} else {
-		store.messages[key] = nil
+		delete(store.messages, key)
 		DEBUG.Println(STR, "memorystore del: message", mid, "was deleted")
 	}
 }

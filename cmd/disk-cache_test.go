@@ -134,7 +134,7 @@ func TestCacheExclusion(t *testing.T) {
 		t.Fatal(err)
 	}
 	cobj := cobjects.(*cacheObjects)
-	globalServiceDoneCh <- struct{}{}
+	GlobalServiceDoneCh <- struct{}{}
 	testCases := []struct {
 		bucketName     string
 		objectName     string

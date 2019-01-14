@@ -15,9 +15,11 @@ Install Minio Server using the instructions in the [Minio Quickstart Guide](http
 
 This section describes how to use a private key and public certificate that have been obtained from a certificate authority (CA). If these files have not been obtained, skip to [3. Generate Self-signed Certificates](#generate-use-self-signed-keys-certificates) or generate them with [Let's Encrypt](https://letsencrypt.org) using these instructions: [https://docs.minio.io/docs/generate-let-s-encypt-certificate-using-concert-for-minio](https://docs.minio.io/docs/).
 
-Copy the existing private key and public certificate to the `certs` directory within the Minio configuration directory. The default configuration directory is:
-* **Linux:** `${HOME}/.minio/`
-* **Windows:** `%%USERPROFILE%%\.minio\`
+Copy the existing private key and public certificate to the `certs` directory. The default certs directory is:
+* **Linux:** `${HOME}/.minio/certs`
+* **Windows:** `%%USERPROFILE%%\.minio\certs`
+
+> NOTE: Location of custom certs directory can be specified using `--certs-dir` command line option.
 
 **Note:** 
 * The key and certificate files must be appended with `.key` and `.crt`, respectively.

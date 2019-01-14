@@ -158,99 +158,42 @@ func parseAction(s string) (Action, error) {
 
 // actionConditionKeyMap - holds mapping of supported condition key for an action.
 var actionConditionKeyMap = map[Action]condition.KeySet{
-	AbortMultipartUploadAction: condition.NewKeySet(
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
+	AbortMultipartUploadAction: condition.NewKeySet(condition.CommonKeys...),
 
-	CreateBucketAction: condition.NewKeySet(
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
+	CreateBucketAction: condition.NewKeySet(condition.CommonKeys...),
 
-	DeleteBucketPolicyAction: condition.NewKeySet(
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
+	DeleteObjectAction: condition.NewKeySet(condition.CommonKeys...),
 
-	DeleteObjectAction: condition.NewKeySet(
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
-
-	GetBucketLocationAction: condition.NewKeySet(
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
-
-	GetBucketNotificationAction: condition.NewKeySet(
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
-
-	GetBucketPolicyAction: condition.NewKeySet(
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
+	GetBucketLocationAction: condition.NewKeySet(condition.CommonKeys...),
 
 	GetObjectAction: condition.NewKeySet(
-		condition.S3XAmzServerSideEncryption,
-		condition.S3XAmzServerSideEncryptionAwsKMSKeyID,
-		condition.S3XAmzStorageClass,
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
+		append([]condition.Key{
+			condition.S3XAmzServerSideEncryption,
+			condition.S3XAmzServerSideEncryptionCustomerAlgorithm,
+			condition.S3XAmzStorageClass,
+		}, condition.CommonKeys...)...),
 
-	HeadBucketAction: condition.NewKeySet(
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
+	HeadBucketAction: condition.NewKeySet(condition.CommonKeys...),
 
-	ListAllMyBucketsAction: condition.NewKeySet(
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
+	ListAllMyBucketsAction: condition.NewKeySet(condition.CommonKeys...),
 
 	ListBucketAction: condition.NewKeySet(
-		condition.S3Prefix,
-		condition.S3Delimiter,
-		condition.S3MaxKeys,
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
+		append([]condition.Key{
+			condition.S3Prefix,
+			condition.S3Delimiter,
+			condition.S3MaxKeys,
+		}, condition.CommonKeys...)...),
 
-	ListBucketMultipartUploadsAction: condition.NewKeySet(
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
+	ListBucketMultipartUploadsAction: condition.NewKeySet(condition.CommonKeys...),
 
-	ListenBucketNotificationAction: condition.NewKeySet(
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
-
-	ListMultipartUploadPartsAction: condition.NewKeySet(
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
-
-	PutBucketNotificationAction: condition.NewKeySet(
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
-
-	PutBucketPolicyAction: condition.NewKeySet(
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
+	ListMultipartUploadPartsAction: condition.NewKeySet(condition.CommonKeys...),
 
 	PutObjectAction: condition.NewKeySet(
-		condition.S3XAmzCopySource,
-		condition.S3XAmzServerSideEncryption,
-		condition.S3XAmzServerSideEncryptionAwsKMSKeyID,
-		condition.S3XAmzMetadataDirective,
-		condition.S3XAmzStorageClass,
-		condition.AWSReferer,
-		condition.AWSSourceIP,
-	),
+		append([]condition.Key{
+			condition.S3XAmzCopySource,
+			condition.S3XAmzServerSideEncryption,
+			condition.S3XAmzServerSideEncryptionCustomerAlgorithm,
+			condition.S3XAmzMetadataDirective,
+			condition.S3XAmzStorageClass,
+		}, condition.CommonKeys...)...),
 }

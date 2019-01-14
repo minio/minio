@@ -81,13 +81,11 @@ func TestStringLikeFuncEvaluate(t *testing.T) {
 
 		{case3Function, map[string][]string{"x-amz-server-side-encryption": {"AES256"}}, true},
 		{case3Function, map[string][]string{"x-amz-server-side-encryption": {"AES512"}}, true},
-		{case3Function, map[string][]string{"x-amz-server-side-encryption": {"aws:kms"}}, false},
 		{case3Function, map[string][]string{}, false},
 		{case3Function, map[string][]string{"delimiter": {"/"}}, false},
 
 		{case4Function, map[string][]string{"x-amz-server-side-encryption": {"AES256"}}, true},
 		{case4Function, map[string][]string{"x-amz-server-side-encryption": {"AES512"}}, false},
-		{case4Function, map[string][]string{"x-amz-server-side-encryption": {"aws:kms"}}, false},
 		{case4Function, map[string][]string{}, false},
 		{case4Function, map[string][]string{"delimiter": {"/"}}, false},
 
@@ -204,7 +202,6 @@ func TestStringLikeFuncToMap(t *testing.T) {
 	case4Function, err := newStringLikeFunc(S3XAmzServerSideEncryption,
 		NewValueSet(
 			NewStringValue("AES*"),
-			NewStringValue("aws:*"),
 		),
 	)
 	if err != nil {
@@ -214,7 +211,6 @@ func TestStringLikeFuncToMap(t *testing.T) {
 	case4Result := map[Key]ValueSet{
 		S3XAmzServerSideEncryption: NewValueSet(
 			NewStringValue("AES*"),
-			NewStringValue("aws:*"),
 		),
 	}
 
@@ -354,13 +350,11 @@ func TestStringNotLikeFuncEvaluate(t *testing.T) {
 
 		{case3Function, map[string][]string{"x-amz-server-side-encryption": {"AES256"}}, false},
 		{case3Function, map[string][]string{"x-amz-server-side-encryption": {"AES512"}}, false},
-		{case3Function, map[string][]string{"x-amz-server-side-encryption": {"aws:kms"}}, true},
 		{case3Function, map[string][]string{}, true},
 		{case3Function, map[string][]string{"delimiter": {"/"}}, true},
 
 		{case4Function, map[string][]string{"x-amz-server-side-encryption": {"AES256"}}, false},
 		{case4Function, map[string][]string{"x-amz-server-side-encryption": {"AES512"}}, true},
-		{case4Function, map[string][]string{"x-amz-server-side-encryption": {"aws:kms"}}, true},
 		{case4Function, map[string][]string{}, true},
 		{case4Function, map[string][]string{"delimiter": {"/"}}, true},
 
@@ -477,7 +471,6 @@ func TestStringNotLikeFuncToMap(t *testing.T) {
 	case4Function, err := newStringNotLikeFunc(S3XAmzServerSideEncryption,
 		NewValueSet(
 			NewStringValue("AES*"),
-			NewStringValue("aws:*"),
 		),
 	)
 	if err != nil {
@@ -487,7 +480,6 @@ func TestStringNotLikeFuncToMap(t *testing.T) {
 	case4Result := map[Key]ValueSet{
 		S3XAmzServerSideEncryption: NewValueSet(
 			NewStringValue("AES*"),
-			NewStringValue("aws:*"),
 		),
 	}
 
@@ -591,7 +583,6 @@ func TestNewStringLikeFunc(t *testing.T) {
 	case4Function, err := newStringLikeFunc(S3XAmzServerSideEncryption,
 		NewValueSet(
 			NewStringValue("AES*"),
-			NewStringValue("aws:*"),
 		),
 	)
 	if err != nil {
@@ -645,7 +636,6 @@ func TestNewStringLikeFunc(t *testing.T) {
 		{S3XAmzServerSideEncryption,
 			NewValueSet(
 				NewStringValue("AES*"),
-				NewStringValue("aws:*"),
 			), case4Function, false},
 
 		{S3XAmzMetadataDirective, NewValueSet(NewStringValue("REPL*")), case5Function, false},
@@ -712,7 +702,6 @@ func TestNewStringNotLikeFunc(t *testing.T) {
 	case4Function, err := newStringNotLikeFunc(S3XAmzServerSideEncryption,
 		NewValueSet(
 			NewStringValue("AES*"),
-			NewStringValue("aws:*"),
 		),
 	)
 	if err != nil {
@@ -766,7 +755,6 @@ func TestNewStringNotLikeFunc(t *testing.T) {
 		{S3XAmzServerSideEncryption,
 			NewValueSet(
 				NewStringValue("AES*"),
-				NewStringValue("aws:*"),
 			), case4Function, false},
 
 		{S3XAmzMetadataDirective, NewValueSet(NewStringValue("REPL*")), case5Function, false},

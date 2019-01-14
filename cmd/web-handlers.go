@@ -752,10 +752,10 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 
 	if errs := globalNotificationSys.LoadCredentials(); len(errs) != 0 {
 		reply.PeerErrMsgs = make(map[string]string)
-		for host, err := range errs {
-			err = fmt.Errorf("Unable to update credentials on server %v: %v", host, err)
+		for _, nerr := range errs {
+			err = fmt.Errorf("Unable to update credentials on server %v: %v", nerr.Host, nerr.Err)
 			logger.LogIf(context.Background(), err)
-			reply.PeerErrMsgs[host.String()] = err.Error()
+			reply.PeerErrMsgs[nerr.Host.String()] = err.Error()
 		}
 	} else {
 		reply.Token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
@@ -931,7 +931,13 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	pReader = NewPutObjReader(hashReader, nil, nil)
-
+	// get gateway encryption options
+	var opts ObjectOptions
+	opts, err = putEncryptionOpts(ctx, r, bucket, object, nil)
+	if err != nil {
+		writeErrorResponseHeadersOnly(w, toAPIErrorCode(ctx, err))
+		return
+	}
 	if objectAPI.IsEncryptionSupported() {
 		if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(object, slashSeparator) { // handle SSE requests
 			rawReader := hashReader
@@ -954,7 +960,6 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Ensure that metadata does not contain sensitive information
 	crypto.RemoveSensitiveEntries(metadata)
 
-	var opts ObjectOptions
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
 		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {

@@ -24,6 +24,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
 )
 
@@ -332,29 +333,43 @@ func formatFSFixDeploymentID(fsFormatPath string) error {
 		return nil
 	}
 
+	formatStartTime := time.Now().Round(time.Second)
+	getElapsedTime := func() string {
+		return time.Now().Round(time.Second).Sub(formatStartTime).String()
+	}
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	retryTimerCh := newRetryTimerSimple(doneCh)
 	for {
-		wlk, err := lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR, 0)
-		if err == lock.ErrAlreadyLocked {
-			// Lock already present, sleep and attempt again.
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		defer wlk.Close()
+		select {
+		case <-retryTimerCh:
 
-		err = jsonLoad(wlk, format)
-		if err != nil {
-			return err
-		}
+			wlk, err := lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR, 0)
+			if err == lock.ErrAlreadyLocked {
+				// Lock already present, sleep and attempt again
 
-		// Check if it needs to be updated
-		if format.ID != "" {
-			return nil
+				logger.Info("Another minio process(es) might be holding a lock to the file %s. Please kill that minio process(es) (elapsed %s)\n", fsFormatPath, getElapsedTime())
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			defer wlk.Close()
+
+			err = jsonLoad(wlk, format)
+			if err != nil {
+				return err
+			}
+
+			// Check if it needs to be updated
+			if format.ID != "" {
+				return nil
+			}
+			format.ID = mustGetUUID()
+			return jsonSave(wlk, format)
 		}
-		format.ID = mustGetUUID()
-		return jsonSave(wlk, format)
 	}
 
 }
