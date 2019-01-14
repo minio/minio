@@ -71,7 +71,13 @@ func (functions Functions) MarshalJSON() ([]byte, error) {
 	nm := make(map[name]map[Key]ValueSet)
 
 	for _, f := range functions {
-		nm[f.name()] = f.toMap()
+		if _, ok := nm[f.name()]; ok {
+			for k, v := range f.toMap() {
+				nm[f.name()][k] = v
+			}
+		} else {
+			nm[f.name()] = f.toMap()
+		}
 	}
 
 	return json.Marshal(nm)
