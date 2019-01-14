@@ -132,9 +132,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalRootCAs, err = getRootCAs(globalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
-	// Handle common env vars.
-	handleCommonEnvVars()
-
 	// Handle gateway specific env
 	handleGatewayEnvVars()
 

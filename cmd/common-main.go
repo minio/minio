@@ -182,6 +182,12 @@ func handleCommonEnvVars() {
 		globalActiveCred = cred
 	}
 
+	if region := os.Getenv("MINIO_REGION"); region != "" {
+		// region Envs are set globally.
+		globalIsEnvRegion = true
+		globalServerRegion = region
+	}
+
 	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
 		browserFlag, err := ParseBoolFlag(browser)
 		if err != nil {

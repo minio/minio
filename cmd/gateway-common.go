@@ -34,17 +34,6 @@ var (
 	// MustGetUUID function alias.
 	MustGetUUID = mustGetUUID
 
-	// IsMinAllowedPartSize function alias.
-	IsMinAllowedPartSize = isMinAllowedPartSize
-
-	// GetCompleteMultipartMD5 functon alias.
-	GetCompleteMultipartMD5 = getCompleteMultipartMD5
-
-	// Contains function alias.
-	Contains = contains
-
-	// ExtractETag provides extractETag function alias.
-	ExtractETag = extractETag
 	// CleanMetadataKeys provides cleanMetadataKeys function alias.
 	CleanMetadataKeys = cleanMetadataKeys
 )
@@ -361,6 +350,9 @@ func parseGatewaySSE(s string) (gatewaySSE, error) {
 
 // handle gateway env vars
 func handleGatewayEnvVars() {
+	// Handle common env vars.
+	handleCommonEnvVars()
+
 	gwsseVal, ok := os.LookupEnv("MINIO_GATEWAY_SSE")
 	if ok {
 		var err error

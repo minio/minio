@@ -98,7 +98,7 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	globalObjectAPI = objLayer
 	globalObjLayerMutex.Unlock()
 
-	serverHandleEnvVars()
+	handleCommonEnvVars()
 
 	// Init config
 	initConfig(objLayer)

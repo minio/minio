@@ -22,6 +22,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -198,7 +199,10 @@ func newS3(url string) (*miniogo.Core, error) {
 		&credentials.EnvMinio{},
 	})
 
-	clnt, err := miniogo.NewWithCredentials(endpoint, creds, secure, "")
+	// Fetch region if set from ENV and use for all API operations.
+	region := os.Getenv("MINIO_REGION")
+
+	clnt, err := miniogo.NewWithCredentials(endpoint, creds, secure, region)
 	if err != nil {
 		return nil, err
 	}
