@@ -161,9 +161,6 @@ var (
 	// File to log HTTP request/response headers and body.
 	globalHTTPTraceFile *os.File
 
-	// List of admin peers.
-	globalAdminPeers = adminPeers{}
-
 	globalEndpoints EndpointList
 
 	// Global server's network statistics

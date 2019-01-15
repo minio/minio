@@ -41,7 +41,7 @@ func registerDistXLRouters(router *mux.Router, endpoints EndpointList) {
 	// Register distributed namespace lock.
 	registerDistNSLockRouter(router)
 
-	// Register S3 peer communication router.
+	// Register peer communication router.
 	registerPeerRPCRouter(router)
 }
 
@@ -103,9 +103,6 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 
 	// Add STS router always.
 	registerSTSRouter(router)
-
-	// Add Admin RPC router
-	registerAdminRPCRouter(router)
 
 	// Add Admin router, all APIs are enabled in server mode.
 	registerAdminRouter(router, true)

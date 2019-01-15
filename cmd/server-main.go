@@ -293,9 +293,6 @@ func serverMain(ctx *cli.Context) {
 		logger.Fatal(uiErrUnexpectedError(err), "Unable to configure one of server's RPC services")
 	}
 
-	// Initialize Admin Peers inter-node communication only in distributed setup.
-	initGlobalAdminPeers(globalEndpoints)
-
 	var getCert certs.GetCertificateFunc
 	if globalTLSCerts != nil {
 		getCert = globalTLSCerts.GetCertificate

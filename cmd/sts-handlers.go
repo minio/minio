@@ -123,10 +123,10 @@ func (sts *stsAPIHandlers) AssumeRoleWithWebIdentity(w http.ResponseWriter, r *h
 	}
 
 	// Notify all other Minio peers to reload temp users
-	for host, err := range globalNotificationSys.LoadUsers() {
-		if err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", host.String())
-			logger.LogIf(ctx, err)
+	for _, nerr := range globalNotificationSys.LoadUsers() {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
 		}
 	}
 
@@ -207,10 +207,10 @@ func (sts *stsAPIHandlers) AssumeRoleWithClientGrants(w http.ResponseWriter, r *
 	}
 
 	// Notify all other Minio peers to reload temp users
-	for host, err := range globalNotificationSys.LoadUsers() {
-		if err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", host.String())
-			logger.LogIf(ctx, err)
+	for _, nerr := range globalNotificationSys.LoadUsers() {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
 		}
 	}
 

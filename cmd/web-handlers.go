@@ -752,10 +752,10 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 
 	if errs := globalNotificationSys.LoadCredentials(); len(errs) != 0 {
 		reply.PeerErrMsgs = make(map[string]string)
-		for host, err := range errs {
-			err = fmt.Errorf("Unable to update credentials on server %v: %v", host, err)
+		for _, nerr := range errs {
+			err = fmt.Errorf("Unable to update credentials on server %v: %v", nerr.Host, nerr.Err)
 			logger.LogIf(context.Background(), err)
-			reply.PeerErrMsgs[host.String()] = err.Error()
+			reply.PeerErrMsgs[nerr.Host.String()] = err.Error()
 		}
 	} else {
 		reply.Token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
