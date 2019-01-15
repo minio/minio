@@ -20,7 +20,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
-	"runtime"
 	"time"
 
 	isatty "github.com/mattn/go-isatty"
@@ -161,9 +160,6 @@ var (
 
 	// File to log HTTP request/response headers and body.
 	globalHTTPTraceFile *os.File
-
-	// Minio server user agent string.
-	globalServerUserAgent = "Minio/" + ReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
 
 	globalEndpoints EndpointList
 
@@ -358,7 +354,6 @@ func getGlobalInfo() (globalInfo map[string]interface{}) {
 		"isEnvRegion":      globalIsEnvRegion,
 		"isSSL":            globalIsSSL,
 		"serverRegion":     globalServerRegion,
-		"serverUserAgent":  globalServerUserAgent,
 		// Add more relevant global settings here.
 	}
 

@@ -82,7 +82,6 @@ func (target *WebhookTarget) Send(eventData event.Event) error {
 		return err
 	}
 
-	// req.Header.Set("User-Agent", globalServerUserAgent)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := target.httpClient.Do(req)
