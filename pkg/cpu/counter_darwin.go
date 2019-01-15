@@ -18,6 +18,7 @@ package cpu
 
 import (
 	"errors"
+	"time"
 )
 
 func newCounter() (counter, error) {
