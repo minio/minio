@@ -1355,6 +1355,11 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	bucket := vars["bucket"]
 	object := vars["object"]
 
+	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectAction, bucket, object); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	// This request header needs to be set prior to setting ObjectOptions
 	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
@@ -1367,11 +1372,6 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	opts, err = putEncryptionOpts(ctx, r, bucket, object, nil)
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(ctx, err))
-		return
-	}
-
-	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectAction, bucket, object); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
