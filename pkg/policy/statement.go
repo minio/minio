@@ -54,7 +54,7 @@ func (statement Statement) IsAllowed(args Args) bool {
 			resource += args.ObjectName
 		}
 
-		if !statement.Resources.Match(resource) {
+		if !statement.Resources.Match(resource, args.ConditionValues) {
 			return false
 		}
 

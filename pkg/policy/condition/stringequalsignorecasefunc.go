@@ -50,11 +50,14 @@ func (f stringEqualsIgnoreCaseFunc) evaluate(values map[string][]string) bool {
 		requestValue = values[f.k.Name()]
 	}
 
+	fvalues := f.values.ApplyFunc(substFuncFromValues(values))
+
 	for _, v := range requestValue {
-		if !f.values.FuncMatch(strings.EqualFold, v).IsEmpty() {
+		if !fvalues.FuncMatch(strings.EqualFold, v).IsEmpty() {
 			return true
 		}
 	}
+
 	return false
 }
 

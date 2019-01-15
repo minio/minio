@@ -30,6 +30,7 @@ import (
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/policy"
 )
@@ -183,12 +184,24 @@ func NewPolicySys() *PolicySys {
 	}
 }
 
-func getConditionValues(request *http.Request, locationConstraint string) map[string][]string {
+func getConditionValues(request *http.Request, locationConstraint string, username string) map[string][]string {
+	currTime := UTCNow()
+	principalType := func() string {
+		if username != "" {
+			return "User"
+		}
+		return "Anonymous"
+	}()
 	args := map[string][]string{
-		"SourceIp":        {handlers.GetSourceIP(request)},
+		"CurrenTime":      {currTime.Format(event.AMZTimeFormat)},
+		"EpochTime":       {fmt.Sprintf("%d", currTime.Unix())},
+		"principaltype":   {principalType},
 		"SecureTransport": {fmt.Sprintf("%t", request.TLS != nil)},
+		"SourceIp":        {handlers.GetSourceIP(request)},
 		"UserAgent":       {request.UserAgent()},
 		"Referer":         {request.Referer()},
+		"userid":          {username},
+		"username":        {username},
 	}
 
 	for key, values := range request.Header {

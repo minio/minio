@@ -81,9 +81,9 @@ func (resourceSet ResourceSet) MarshalJSON() ([]byte, error) {
 }
 
 // Match - matches object name with anyone of resource pattern in resource set.
-func (resourceSet ResourceSet) Match(resource string) bool {
+func (resourceSet ResourceSet) Match(resource string, conditionValues map[string][]string) bool {
 	for r := range resourceSet {
-		if r.Match(resource) {
+		if r.Match(resource, conditionValues) {
 			return true
 		}
 	}
