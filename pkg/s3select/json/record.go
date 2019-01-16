@@ -36,6 +36,8 @@ type Record struct {
 func (r *Record) Get(name string) (*sql.Value, error) {
 	result := gjson.GetBytes(r.data, name)
 	switch result.Type {
+	case gjson.Null:
+		return sql.NewNull(), nil
 	case gjson.False:
 		return sql.NewBool(false), nil
 	case gjson.Number:
@@ -53,6 +55,8 @@ func (r *Record) Get(name string) (*sql.Value, error) {
 func (r *Record) Set(name string, value *sql.Value) (err error) {
 	var v interface{}
 	switch value.Type() {
+	case sql.Null:
+		v = value.NullValue()
 	case sql.Bool:
 		v = value.BoolValue()
 	case sql.Int:

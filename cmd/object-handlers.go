@@ -179,7 +179,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		rs := &HTTPRangeSpec{
 			IsSuffixLength: isSuffixLength,
 			Start:          offset,
-			End:            length,
+			End:            offset + length,
 		}
 
 		return getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, ObjectOptions{})

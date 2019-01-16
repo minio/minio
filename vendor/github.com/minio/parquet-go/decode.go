@@ -194,6 +194,8 @@ func readDoubles(reader *bytes.Reader, count uint64) (result []float64, err erro
 
 func readByteArrays(reader *bytes.Reader, count uint64) (result [][]byte, err error) {
 	buf := make([]byte, 4)
+	var length uint32
+	var data []byte
 
 	var i uint64
 	for i = 0; i < count; i++ {
@@ -201,9 +203,12 @@ func readByteArrays(reader *bytes.Reader, count uint64) (result [][]byte, err er
 			return nil, err
 		}
 
-		data := make([]byte, bytesToUint32(buf))
-		if _, err = reader.Read(data); err != nil {
-			return nil, err
+		length = bytesToUint32(buf)
+		data = make([]byte, length)
+		if length > 0 {
+			if _, err = reader.Read(data); err != nil {
+				return nil, err
+			}
 		}
 
 		result = append(result, data)

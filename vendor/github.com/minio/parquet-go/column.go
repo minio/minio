@@ -71,7 +71,9 @@ func getColumns(
 			valueType:      meta.GetType(),
 		}
 
-		nameIndexMap[columnName] = colIndex
+		// First element of []*parquet.SchemaElement from parquet file metadata is 'schema'
+		// which is always skipped, hence colIndex + 1 is valid.
+		nameIndexMap[columnName] = colIndex + 1
 	}
 
 	for name := range nameColumnMap {
