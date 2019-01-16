@@ -2415,6 +2415,14 @@ func migrateV27ToV28() error {
 
 // Migrates ${HOME}/.minio/config.json to '<export_path>/.minio.sys/config/config.json'
 func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
+	// Construct path to config.json for the given bucket.
+	configFile := path.Join(minioConfigPrefix, minioConfigFile)
+
+	// Verify if config was already available in .minio.sys in which case, nothing more to be done.
+	if err = checkConfig(context.Background(), objAPI, configFile); err != errConfigNotFound {
+		return err
+	}
+
 	defer func() {
 		// Rename config.json to config.json.deprecated only upon
 		// success of this function.
@@ -2423,8 +2431,6 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 		}
 	}()
 
-	configFile := path.Join(minioConfigPrefix, minioConfigFile)
-	// Construct path to config.json for the given bucket.
 	transactionConfigFile := configFile + ".transaction"
 
 	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
@@ -2436,7 +2442,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 	}
 	defer objLock.Unlock()
 
-	// Verify if backend already has the file.
+	// Verify if backend already has the file (after holding lock)
 	if err = checkConfig(context.Background(), objAPI, configFile); err != errConfigNotFound {
 		return err
 	} // if errConfigNotFound proceed to migrate..
@@ -2458,6 +2464,15 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 // Migrates '.minio.sys/config.json' to v33.
 func migrateMinioSysConfig(objAPI ObjectLayer) error {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
+
+	// Check if the config version is latest, if not migrate.
+	ok, _, err := checkConfigVersion(objAPI, configFile, serverConfigVersion)
+	if err != nil {
+		return err
+	}
+	if ok {
+		return nil
+	}
 
 	// Construct path to config.json for the given bucket.
 	transactionConfigFile := configFile + ".transaction"
