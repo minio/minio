@@ -269,7 +269,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	serverInfo := globalNotificationSys.ServerInfo(ctx)
-	// Once we have recieved all the ServerInfo from peers
+	// Once we have received all the ServerInfo from peers
 	// add the local peer server info as well.
 	serverInfo = append(serverInfo, ServerInfo{
 		Addr: thisAddr.String(),
