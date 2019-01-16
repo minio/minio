@@ -78,18 +78,23 @@ func loadLoggers() {
 
 }
 
-func newConfigDirFromCtx(ctx *cli.Context, option string, getDefaultDir func() string) *ConfigDir {
+func newConfigDirFromCtx(ctx *cli.Context, option string, getDefaultDir func() string) (*ConfigDir, bool) {
 	var dir string
+	var dirSet bool
 
 	switch {
 	case ctx.IsSet(option):
 		dir = ctx.String(option)
+		dirSet = true
 	case ctx.GlobalIsSet(option):
 		dir = ctx.GlobalString(option)
+		dirSet = true
 		// cli package does not expose parent's option option.  Below code is workaround.
 		if dir == "" || dir == getDefaultDir() {
+			dirSet = false // Unset to false since GlobalIsSet() true is a false positive.
 			if ctx.Parent().GlobalIsSet(option) {
 				dir = ctx.Parent().GlobalString(option)
+				dirSet = true
 			}
 		}
 	default:
@@ -111,7 +116,7 @@ func newConfigDirFromCtx(ctx *cli.Context, option string, getDefaultDir func() s
 
 	logger.FatalIf(mkdirAllIgnorePerm(dirAbs), "Unable to create directory specified %s=%s", option, dir)
 
-	return &ConfigDir{path: dirAbs}
+	return &ConfigDir{path: dirAbs}, dirSet
 }
 
 func handleCommonCmdArgs(ctx *cli.Context) {
@@ -142,8 +147,17 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	}
 
 	// Set all config, certs and CAs directories.
-	globalConfigDir = newConfigDirFromCtx(ctx, "config-dir", defaultConfigDir.Get)
-	globalCertsDir = newConfigDirFromCtx(ctx, "certs-dir", defaultCertsDir.Get)
+	var configSet, certsSet bool
+	globalConfigDir, configSet = newConfigDirFromCtx(ctx, "config-dir", defaultConfigDir.Get)
+	globalCertsDir, certsSet = newConfigDirFromCtx(ctx, "certs-dir", defaultCertsDir.Get)
+
+	// Remove this code when we deprecate and remove config-dir.
+	// This code is to make sure we inherit from the config-dir
+	// option if certs-dir is not provided.
+	if !certsSet && configSet {
+		globalCertsDir = &ConfigDir{path: filepath.Join(globalConfigDir.Get(), certsDir)}
+	}
+
 	globalCertsCADir = &ConfigDir{path: filepath.Join(globalCertsDir.Get(), certsCADir)}
 
 	logger.FatalIf(mkdirAllIgnorePerm(globalCertsCADir.Get()), "Unable to create certs CA directory at %s", globalCertsCADir.Get())
