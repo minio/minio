@@ -303,9 +303,10 @@ func (s *posix) IsOnline() bool {
 // DiskInfo is an extended type which returns current
 // disk usage per path.
 type DiskInfo struct {
-	Total uint64
-	Free  uint64
-	Used  uint64
+	Total    uint64
+	Free     uint64
+	Used     uint64
+	RootDisk bool
 }
 
 // DiskInfo provides current information about disk space usage,
@@ -319,12 +320,17 @@ func (s *posix) DiskInfo() (info DiskInfo, err error) {
 	if !s.diskMount {
 		used = atomic.LoadUint64(&s.totalUsed)
 	}
-	return DiskInfo{
-		Total: di.Total,
-		Free:  di.Free,
-		Used:  used,
-	}, nil
 
+	rootDisk, err := disk.IsRootDisk(s.diskPath)
+	if err != nil {
+		return info, err
+	}
+	return DiskInfo{
+		Total:    di.Total,
+		Free:     di.Free,
+		Used:     used,
+		RootDisk: rootDisk,
+	}, nil
 }
 
 // getVolDir - will convert incoming volume names to
