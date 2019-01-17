@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"hash"
 	"io"
+	"sync"
 
 	"github.com/minio/minio/cmd/logger"
 )
@@ -94,6 +95,7 @@ func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length i
 
 // ReadAt() implementation which verifies the bitrot hash available as part of the stream.
 type streamingBitrotReader struct {
+	sync.Mutex
 	disk       StorageAPI
 	rc         io.ReadCloser
 	volume     string
@@ -106,7 +108,10 @@ type streamingBitrotReader struct {
 }
 
 func (b *streamingBitrotReader) Close() error {
-	if b.rc == nil {
+	b.Lock()
+	ok := b.rc == nil
+	b.Unlock()
+	if ok {
 		return nil
 	}
 	return b.rc.Close()
@@ -119,16 +124,19 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 		logger.LogIf(context.Background(), errUnexpected)
 		return 0, errUnexpected
 	}
+	b.Lock()
 	if b.rc == nil {
 		// For the first ReadAt() call we need to open the stream for reading.
 		b.currOffset = offset
 		streamOffset := (offset/b.shardSize)*int64(b.h.Size()) + offset
 		b.rc, err = b.disk.ReadFileStream(b.volume, b.filePath, streamOffset, b.tillOffset-streamOffset)
 		if err != nil {
+			b.Unlock()
 			logger.LogIf(context.Background(), err)
 			return 0, err
 		}
 	}
+	b.Unlock()
 	if offset != b.currOffset {
 		logger.LogIf(context.Background(), errUnexpected)
 		return 0, errUnexpected
@@ -159,14 +167,14 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 func newStreamingBitrotReader(disk StorageAPI, volume, filePath string, tillOffset int64, algo BitrotAlgorithm, shardSize int64) *streamingBitrotReader {
 	h := algo.New()
 	return &streamingBitrotReader{
-		disk,
-		nil,
-		volume,
-		filePath,
-		ceilFrac(tillOffset, shardSize)*int64(h.Size()) + tillOffset,
-		0,
-		h,
-		shardSize,
-		make([]byte, h.Size()),
+		disk:       disk,
+		rc:         nil,
+		volume:     volume,
+		filePath:   filePath,
+		tillOffset: ceilFrac(tillOffset, shardSize)*int64(h.Size()) + tillOffset,
+		currOffset: 0,
+		h:          h,
+		shardSize:  shardSize,
+		hashBytes:  make([]byte, h.Size()),
 	}
 }
