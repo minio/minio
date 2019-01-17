@@ -1,0 +1,109 @@
+/*
+ * Minio Cloud Storage, (C) 2019 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package cmd
+
+import (
+	"context"
+	"hash"
+	"io"
+
+	"github.com/minio/minio/cmd/logger"
+)
+
+// Implementation to calculate bitrot for the whole file.
+type wholeBitrotWriter struct {
+	disk      StorageAPI
+	volume    string
+	filePath  string
+	shardSize int64 // This is the shard size of the erasure logic
+	hash.Hash       // For bitrot hash
+
+	// Following two fields are used only to make sure that Write(p) is called such that
+	// len(p) is always the block size except the last block and prevent programmer errors.
+	currentBlockIdx int
+	lastBlockIdx    int
+}
+
+func (b *wholeBitrotWriter) Write(p []byte) (int, error) {
+	if b.currentBlockIdx < b.lastBlockIdx && int64(len(p)) != b.shardSize {
+		// All blocks except last should be of the length b.shardSize
+		logger.LogIf(context.Background(), errUnexpected)
+		return 0, errUnexpected
+	}
+	err := b.disk.AppendFile(b.volume, b.filePath, p)
+	if err != nil {
+		logger.LogIf(context.Background(), err)
+		return 0, err
+	}
+	_, err = b.Hash.Write(p)
+	if err != nil {
+		logger.LogIf(context.Background(), err)
+		return 0, err
+	}
+	b.currentBlockIdx++
+	return len(p), nil
+}
+
+func (b *wholeBitrotWriter) Close() error {
+	return nil
+}
+
+// Returns whole-file bitrot writer.
+func newWholeBitrotWriter(disk StorageAPI, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64) io.WriteCloser {
+	return &wholeBitrotWriter{disk, volume, filePath, shardSize, algo.New(), 0, int(length / shardSize)}
+}
+
+// Implementation to verify bitrot for the whole file.
+type wholeBitrotReader struct {
+	disk       StorageAPI
+	volume     string
+	filePath   string
+	verifier   *BitrotVerifier // Holds the bit-rot info
+	tillOffset int64           // Affects the length of data requested in disk.ReadFile depending on Read()'s offset
+	buf        []byte          // Holds bit-rot verified data
+}
+
+func (b *wholeBitrotReader) ReadAt(buf []byte, offset int64) (n int, err error) {
+	if b.buf == nil {
+		b.buf = make([]byte, b.tillOffset-offset)
+		if _, err := b.disk.ReadFile(b.volume, b.filePath, offset, b.buf, b.verifier); err != nil {
+			ctx := context.Background()
+			logger.GetReqInfo(ctx).AppendTags("disk", b.disk.String())
+			logger.LogIf(ctx, err)
+			return 0, err
+		}
+	}
+	if len(b.buf) < len(buf) {
+		logger.LogIf(context.Background(), errLessData)
+		return 0, errLessData
+	}
+	n = copy(buf, b.buf)
+	b.buf = b.buf[n:]
+	return n, nil
+}
+
+// Returns whole-file bitrot reader.
+func newWholeBitrotReader(disk StorageAPI, volume, filePath string, algo BitrotAlgorithm, tillOffset int64, sum []byte) *wholeBitrotReader {
+	return &wholeBitrotReader{
+		disk:       disk,
+		volume:     volume,
+		filePath:   filePath,
+		verifier:   &BitrotVerifier{algo, sum},
+		tillOffset: tillOffset,
+		buf:        nil,
+	}
+}

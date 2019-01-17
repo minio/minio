@@ -23,25 +23,25 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
-// Reads in parallel from bitrotReaders.
+// Reads in parallel from readers.
 type parallelReader struct {
-	readers       []*bitrotReader
+	readers       []io.ReaderAt
 	dataBlocks    int
 	offset        int64
 	shardSize     int64
 	shardFileSize int64
+	buf           [][]byte
 }
 
 // newParallelReader returns parallelReader.
-func newParallelReader(readers []*bitrotReader, dataBlocks int, offset int64, fileSize int64, blocksize int64) *parallelReader {
-	shardSize := ceilFrac(blocksize, int64(dataBlocks))
-	shardFileSize := getErasureShardFileSize(blocksize, fileSize, dataBlocks)
+func newParallelReader(readers []io.ReaderAt, e Erasure, offset, totalLength int64) *parallelReader {
 	return &parallelReader{
 		readers,
-		dataBlocks,
-		(offset / blocksize) * shardSize,
-		shardSize,
-		shardFileSize,
+		e.dataBlocks,
+		(offset / e.blockSize) * e.ShardSize(),
+		e.ShardSize(),
+		e.ShardFileSize(totalLength),
+		make([][]byte, len(readers)),
 	}
 }
 
@@ -56,7 +56,7 @@ func (p *parallelReader) canDecode(buf [][]byte) bool {
 	return bufCount >= p.dataBlocks
 }
 
-// Read reads from bitrotReaders in parallel. Returns p.dataBlocks number of bufs.
+// Read reads from readers in parallel. Returns p.dataBlocks number of bufs.
 func (p *parallelReader) Read() ([][]byte, error) {
 	type errIdx struct {
 		idx int
@@ -73,8 +73,12 @@ func (p *parallelReader) Read() ([][]byte, error) {
 	}
 
 	read := func(currReaderIndex int) {
-		b, err := p.readers[currReaderIndex].ReadChunk(p.offset, p.shardSize)
-		errCh <- errIdx{currReaderIndex, b, err}
+		if p.buf[currReaderIndex] == nil {
+			p.buf[currReaderIndex] = make([]byte, p.shardSize)
+		}
+		p.buf[currReaderIndex] = p.buf[currReaderIndex][:p.shardSize]
+		_, err := p.readers[currReaderIndex].ReadAt(p.buf[currReaderIndex], p.offset)
+		errCh <- errIdx{currReaderIndex, p.buf[currReaderIndex], err}
 	}
 
 	readerCount := 0
@@ -128,7 +132,7 @@ func (p *parallelReader) Read() ([][]byte, error) {
 }
 
 // Decode reads from readers, reconstructs data if needed and writes the data to the writer.
-func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []*bitrotReader, offset, length, totalLength int64) error {
+func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []io.ReaderAt, offset, length, totalLength int64) error {
 	if offset < 0 || length < 0 {
 		logger.LogIf(ctx, errInvalidArgument)
 		return errInvalidArgument
@@ -141,7 +145,7 @@ func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []*bitrot
 		return nil
 	}
 
-	reader := newParallelReader(readers, e.dataBlocks, offset, totalLength, e.blockSize)
+	reader := newParallelReader(readers, e, offset, totalLength)
 
 	startBlock := offset / e.blockSize
 	endBlock := (offset + length) / e.blockSize

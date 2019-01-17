@@ -58,7 +58,7 @@ type ChecksumInfo struct {
 type checksumInfoJSON struct {
 	Name      string `json:"name"`
 	Algorithm string `json:"algorithm"`
-	Hash      string `json:"hash"`
+	Hash      string `json:"hash,omitempty"`
 }
 
 // MarshalJSON marshals the ChecksumInfo struct
@@ -182,6 +182,23 @@ func newXLMetaV1(object string, dataBlocks, parityBlocks int) (xlMeta xlMetaV1) 
 		ParityBlocks: parityBlocks,
 		BlockSize:    blockSizeV1,
 		Distribution: hashOrder(object, dataBlocks+parityBlocks),
+	}
+	return xlMeta
+}
+
+// Return a new xlMetaV1 initialized using the given xlMetaV1. Used in healing to make sure that we do not copy
+// over any part's checksum info which will differ for different disks.
+func newXLMetaFromXLMeta(meta xlMetaV1) xlMetaV1 {
+	xlMeta := xlMetaV1{}
+	xlMeta.Version = xlMetaVersion
+	xlMeta.Format = xlMetaFormat
+	xlMeta.Minio.Release = ReleaseTag
+	xlMeta.Erasure = ErasureInfo{
+		Algorithm:    meta.Erasure.Algorithm,
+		DataBlocks:   meta.Erasure.DataBlocks,
+		ParityBlocks: meta.Erasure.DataBlocks,
+		BlockSize:    meta.Erasure.BlockSize,
+		Distribution: meta.Erasure.Distribution,
 	}
 	return xlMeta
 }

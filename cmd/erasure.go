@@ -32,17 +32,15 @@ type Erasure struct {
 
 // NewErasure creates a new ErasureStorage.
 func NewErasure(ctx context.Context, dataBlocks, parityBlocks int, blockSize int64) (e Erasure, err error) {
-	shardsize := int(ceilFrac(blockSize, int64(dataBlocks)))
-	erasure, err := reedsolomon.New(dataBlocks, parityBlocks, reedsolomon.WithAutoGoroutines(shardsize))
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return e, err
-	}
 	e = Erasure{
-		encoder:      erasure,
 		dataBlocks:   dataBlocks,
 		parityBlocks: parityBlocks,
 		blockSize:    blockSize,
+	}
+	e.encoder, err = reedsolomon.New(dataBlocks, parityBlocks, reedsolomon.WithAutoGoroutines(int(e.ShardSize())))
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return e, err
 	}
 	return
 }
@@ -93,4 +91,29 @@ func (e *Erasure) DecodeDataAndParityBlocks(ctx context.Context, data [][]byte) 
 		return err
 	}
 	return nil
+}
+
+func (e *Erasure) ShardSize() int64 {
+	return ceilFrac(e.blockSize, int64(e.dataBlocks))
+}
+
+func (e *Erasure) ShardFileSize(totalLength int64) int64 {
+	if totalLength == 0 {
+		return 0
+	}
+	numShards := totalLength / e.blockSize
+	lastBlockSize := totalLength % int64(e.blockSize)
+	lastShardSize := ceilFrac(lastBlockSize, int64(e.dataBlocks))
+	return numShards*e.ShardSize() + lastShardSize
+}
+
+func (e *Erasure) ShardFileTillOffset(startOffset, length, totalLength int64) int64 {
+	shardSize := e.ShardSize()
+	shardFileSize := e.ShardFileSize(totalLength)
+	endShard := (startOffset + int64(length)) / e.blockSize
+	tillOffset := endShard*shardSize + shardSize
+	if tillOffset > shardFileSize {
+		tillOffset = shardFileSize
+	}
+	return tillOffset
 }
