@@ -181,21 +181,21 @@ func newS3(url string) (*miniogo.Core, error) {
 	}
 
 	// Chains all credential types, in the following order:
+	//  - Static credentials provided by user (i.e. MINIO_ACCESS_KEY)
 	//  - AWS env vars (i.e. AWS_ACCESS_KEY_ID)
+	//  - AWS creds file (i.e. AWS_SHARED_CREDENTIALS_FILE or ~/.aws/credentials)
 	//  - IAM profile based credentials. (performs an HTTP
 	//    call to a pre-defined endpoint, only valid inside
 	//    configured ec2 instances)
-	//  - AWS creds file (i.e. AWS_SHARED_CREDENTIALS_FILE or ~/.aws/credentials)
-	//  - Static credentials provided by user (i.e. MINIO_ACCESS_KEY)
 	creds := credentials.NewChainCredentials([]credentials.Provider{
+		&credentials.EnvMinio{},
 		&credentials.EnvAWS{},
+		&credentials.FileAWSCredentials{},
 		&credentials.IAM{
 			Client: &http.Client{
 				Transport: minio.NewCustomHTTPTransport(),
 			},
 		},
-		&credentials.FileAWSCredentials{},
-		&credentials.EnvMinio{},
 	})
 
 	clnt, err := miniogo.NewWithCredentials(endpoint, creds, secure, "")
