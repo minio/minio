@@ -37,9 +37,10 @@ brew install minio/stable/minio
 | Platform| Architecture | URL|
 | ----------| -------- | ------|
 |Apple macOS|64-bit Intel|https://dl.minio.io/server/minio/release/darwin-amd64/minio |
+|||https://dl.minio.io/server/minio/release/darwin-amd64/minio.asc |
 ```sh
-chmod 755 minio
-./minio server /data
+gpg2 --recv-keys 4405F3F0DDBA1B9E68A31D2512C74390F9AAC728
+gpg2 --verify minio.asc minio && chmod 755 minio && ./minio server /data
 ```
 
 ## GNU/Linux
@@ -47,19 +48,21 @@ chmod 755 minio
 | Platform| Architecture | URL|
 | ----------| -------- | ------|
 |GNU/Linux|64-bit Intel|https://dl.minio.io/server/minio/release/linux-amd64/minio |
+|||https://dl.minio.io/server/minio/release/linux-amd64/minio.asc |
 ```sh
-wget https://dl.minio.io/server/minio/release/linux-amd64/minio
-chmod +x minio
-./minio server /data
+wget https://dl.minio.io/server/minio/release/linux-amd64/minio{,.asc}
+gpg2 --recv-keys 4405F3F0DDBA1B9E68A31D2512C74390F9AAC728
+gpg2 --verify minio.asc minio && chmod 755 minio && ./minio server /data
 ```
 
 | Platform| Architecture | URL|
 | ----------| -------- | ------|
 |GNU/Linux|ppc64le|https://dl.minio.io/server/minio/release/linux-ppc64le/minio |
+|||https://dl.minio.io/server/minio/release/linux-ppc64le/minio.asc |
 ```sh
-wget https://dl.minio.io/server/minio/release/linux-ppc64le/minio
-chmod +x minio
-./minio server /data
+wget https://dl.minio.io/server/minio/release/linux-ppc64le/minio{,.asc}
+gpg2 --recv-keys 4405F3F0DDBA1B9E68A31D2512C74390F9AAC728
+gpg2 --verify minio.asc minio && chmod 755 minio && ./minio server /data
 ```
 
 ## Microsoft Windows
@@ -67,8 +70,10 @@ chmod +x minio
 | Platform| Architecture | URL|
 | ----------| -------- | ------|
 |Microsoft Windows|64-bit|https://dl.minio.io/server/minio/release/windows-amd64/minio.exe |
+|||https://dl.minio.io/server/minio/release/windows-amd64/minio.exe.asc |
 ```sh
-minio.exe server D:\Photos
+gpg2 --recv-keys 4405F3F0DDBA1B9E68A31D2512C74390F9AAC728
+gpg2 --verify minio.asc minio && minio.exe server D:\Photos
 ```
 
 ## FreeBSD
