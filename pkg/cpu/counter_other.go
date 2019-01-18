@@ -1,3 +1,5 @@
+// +build darwin freebsd openbsd netbsd dragonfly windows
+
 /*
  * Minio Cloud Storage, (C) 2019 Minio, Inc.
  *
@@ -17,12 +19,13 @@
 package cpu
 
 import (
-	"errors"
+	"fmt"
+	"runtime"
 	"time"
 )
 
 func newCounter() (counter, error) {
-	return counter{}, errors.New("cpu metrics not implemented for windows platform")
+	return counter{}, fmt.Errorf("cpu metrics not implemented for %s platform", runtime.GOOS)
 }
 
 func (c counter) now() time.Time {

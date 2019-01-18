@@ -20,12 +20,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
-)
 
-const (
-	// ProcessClock corresponds to the High-resolution per-process
-	// timer from the CPU represented in stdlib as CLOCK_PROCESS_CPUTIME_ID
-	processClock = 2
+	"golang.org/x/sys/unix"
 )
 
 func newCounter() (counter, error) {
@@ -34,7 +30,8 @@ func newCounter() (counter, error) {
 
 func (c counter) now() time.Time {
 	var ts syscall.Timespec
-	syscall.Syscall(syscall.SYS_CLOCK_GETTIME, processClock, uintptr(unsafe.Pointer(&ts)), 0)
+	// Retrieve Per-process CPU-time clock
+	syscall.Syscall(syscall.SYS_CLOCK_GETTIME, unix.CLOCK_PROCESS_CPUTIME_ID, uintptr(unsafe.Pointer(&ts)), 0)
 	sec, nsec := ts.Unix()
 	return time.Unix(sec, nsec)
 }
