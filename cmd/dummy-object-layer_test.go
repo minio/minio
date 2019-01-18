@@ -165,3 +165,15 @@ func (api *DummyObjectLayer) IsEncryptionSupported() (b bool) {
 func (api *DummyObjectLayer) IsCompressionSupported() (b bool) {
 	return
 }
+
+func (api *DummyObjectLayer) SetBucketLifeCycle(ctx context.Context, bucket string, lifecycle *lifecycle.LifeCycle) (err error) {
+	return
+}
+
+func (api *DummyObjectLayer) GetBucketLifeCycle(ctx context.Context, bucket string) (lifecycle *lifecycle.LifeCycle, err error) {
+	return
+}
+
+func (api *DummyObjectLayer) DeleteBucketLifeCycle(ctx context.Context, bucket string) (err error) {
+	return
+}

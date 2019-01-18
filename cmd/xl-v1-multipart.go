@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/mimedb"
 )
 
@@ -867,4 +868,25 @@ func (xl xlObjects) cleanupStaleMultipartUploadsOnDisk(ctx context.Context, disk
 			}
 		}
 	}
+}
+
+// Executes the lifecycle. Should be run in a Go routine.
+func (xl xlObjects) executeService(ctx context.Context, serviceExecutionInterval time.Duration, doneCh chan struct{}) {
+	ticker := time.NewTicker(serviceExecutionInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-doneCh:
+			return
+		case <-ticker.C:
+			now := time.Now()
+			var presentLifeCycle map[string]lifecycle.LifeCycle
+			if globalLifeCycleSys != nil {
+				presentLifeCycle = globalLifeCycleSys.bucketLifeCycleMap
+			}
+			lifeCycleService(ctx, xl, presentLifeCycle, now)
+		}
+	}
+
 }

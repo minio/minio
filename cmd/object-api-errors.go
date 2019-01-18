@@ -223,6 +223,13 @@ func (e BucketPolicyNotFound) Error() string {
 	return "No bucket policy found for bucket: " + e.Bucket
 }
 
+// BucketLifeCycleNotFound - no bucket lifecycle found.
+type BucketLifeCycleNotFound GenericError
+
+func (e BucketLifeCycleNotFound) Error() string {
+	return "No bucket life cycle found for bucket : " + e.Bucket
+}
+
 /// Bucket related errors.
 
 // BucketNameInvalid - bucketname provided is invalid.

@@ -38,6 +38,7 @@ import (
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/policy/condition"
 	sha256 "github.com/minio/sha256-simd"
@@ -1275,4 +1276,20 @@ func (a *azureObjects) DeleteBucketPolicy(ctx context.Context, bucket string) er
 // IsCompressionSupported returns whether compression is applicable for this layer.
 func (a *azureObjects) IsCompressionSupported() bool {
 	return false
+}
+
+// SetBucketLifeCycle sets lifecycle on bucket
+func (a *azureObjects) SetBucketLifeCycle(ctx context.Context, bucket string, lifecycle *lifecycle.LifeCycle) error {
+	logger.LogIf(ctx, minio.NotImplemented{})
+	return minio.NotImplemented{}
+}
+
+// GetBucketLifeCycle will get lifecycle on bucket
+func (a *azureObjects) GetBucketLifeCycle(ctx context.Context, bucket string) (*lifecycle.LifeCycle, error) {
+	return nil, minio.NotImplemented{}
+}
+
+// DeleteBucketLifeCycle deletes all lifecycle on bucket
+func (a *azureObjects) DeleteBucketLifeCycle(ctx context.Context, bucket string) error {
+	return minio.NotImplemented{}
 }

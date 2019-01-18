@@ -30,6 +30,7 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 	mioutil "github.com/minio/minio/pkg/ioutil"
+	"github.com/minio/minio/pkg/lifecycle"
 )
 
 // Returns EXPORT/.minio.sys/multipart/SHA256/UPLOADID
@@ -779,4 +780,25 @@ func (fs *FSObjects) cleanupStaleMultipartUploads(ctx context.Context, cleanupIn
 			}
 		}
 	}
+}
+
+// Executes the lifecycle. Should be run in a Go routine.
+func (fs *FSObjects) executeService(ctx context.Context, serviceExecutionInterval time.Duration, doneCh chan struct{}) {
+	ticker := time.NewTicker(serviceExecutionInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-doneCh:
+			return
+		case <-ticker.C:
+			now := time.Now()
+			var presentLifeCycle map[string]lifecycle.LifeCycle
+			if globalLifeCycleSys != nil {
+				presentLifeCycle = globalLifeCycleSys.bucketLifeCycleMap
+			}
+			lifeCycleService(ctx, fs, presentLifeCycle, now)
+		}
+	}
+
 }

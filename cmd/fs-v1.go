@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mimedb"
@@ -156,6 +157,8 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	}
 
 	go fs.cleanupStaleMultipartUploads(ctx, GlobalMultipartCleanupInterval, GlobalMultipartExpiry, GlobalServiceDoneCh)
+
+	go fs.executeService(ctx, GlobalServiceExecutionInterval, GlobalServiceDoneCh)
 
 	// Return successfully initialized object layer.
 	return fs, nil
@@ -1283,6 +1286,21 @@ func (fs *FSObjects) GetBucketPolicy(ctx context.Context, bucket string) (*polic
 // DeleteBucketPolicy deletes all policies on bucket
 func (fs *FSObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	return removePolicyConfig(ctx, fs, bucket)
+}
+
+// SetBucketLifeCycle sets lifecycle on bucket
+func (fs *FSObjects) SetBucketLifeCycle(ctx context.Context, bucket string, lifecycle *lifecycle.LifeCycle) error {
+	return saveLifeCycleConfig(ctx, fs, bucket, lifecycle)
+}
+
+// GetBucketLifeCycle will get lifecycle on bucket
+func (fs *FSObjects) GetBucketLifeCycle(ctx context.Context, bucket string) (*lifecycle.LifeCycle, error) {
+	return getLifeCycleConfig(fs, bucket)
+}
+
+// DeleteBucketLifeCycle deletes all lifecycle on bucket
+func (fs *FSObjects) DeleteBucketLifeCycle(ctx context.Context, bucket string) error {
+	return removeLifeCycleConfig(ctx, fs, bucket)
 }
 
 // ListObjectsV2 lists all blobs in bucket filtered by prefix

@@ -28,6 +28,7 @@ import (
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/lifecycle"
 )
 
 // APIError structure
@@ -83,6 +84,7 @@ const (
 	ErrMissingRequestBodyError
 	ErrNoSuchBucket
 	ErrNoSuchBucketPolicy
+	ErrNoSuchBucketLifeCycle
 	ErrNoSuchKey
 	ErrNoSuchUpload
 	ErrNoSuchVersion
@@ -301,6 +303,9 @@ const (
 	ErrAdminConfigNotificationTargetsFailed
 	ErrAdminProfilerNotEnabled
 	ErrInvalidDecompressedSize
+	// Bucket lifecycle errors
+	ErrInvalidDays
+	ErrInvalidID
 )
 
 // error code to APIError structure, these fields carry respective
@@ -434,6 +439,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrNoSuchBucketPolicy: {
 		Code:           "NoSuchBucketPolicy",
 		Description:    "The bucket policy does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrNoSuchBucketLifeCycle: {
+		Code:           "NoSuchBucketLifecycle",
+		Description:    "The bucket lifecycle does not exist",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrNoSuchKey: {
@@ -1447,6 +1457,19 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "The data provided is unfit for decompression",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	// Bucket LifeCycle related errors
+	ErrInvalidDays: {
+		Code:           "InvalidArgument",
+		Description:    "'Days' for Expiration action must be a positive integer",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	// FIXME: Should contain the invalid ArgumentValue set as seen in https://github.com/minio/minio/issues/2385.
+	// Need changes to make sure variable messages can be constructed.
+	ErrInvalidID: {
+		Code:           "InvalidArgument",
+		Description:    "ID length should not exceed allowed limit of 255",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	// Add your error structure here.
 }
 
@@ -1593,6 +1616,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrUnsupportedMetadata
 	case BucketPolicyNotFound:
 		apiErr = ErrNoSuchBucketPolicy
+	case BucketLifeCycleNotFound:
+		apiErr = ErrNoSuchBucketLifeCycle
 	case *event.ErrInvalidEventName:
 		apiErr = ErrEventNotification
 	case *event.ErrInvalidARN:
@@ -1615,6 +1640,14 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrOverlappingFilterNotification
 	case *event.ErrUnsupportedConfiguration:
 		apiErr = ErrUnsupportedNotification
+	case *lifecycle.ErrMalformedXML:
+		apiErr = ErrMalformedXML
+	case *lifecycle.ErrNotImplemented:
+		apiErr = ErrNotImplemented
+	case *lifecycle.ErrInvalidID:
+		apiErr = ErrInvalidID
+	case *lifecycle.ErrInvalidDays:
+		apiErr = ErrInvalidDays
 	case BackendDown:
 		apiErr = ErrBackendDown
 	case crypto.Error:

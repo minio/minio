@@ -22,6 +22,7 @@ import (
 	"net/http"
 
 	"github.com/minio/minio-go/pkg/encrypt"
+	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/policy"
 )
@@ -99,4 +100,9 @@ type ObjectLayer interface {
 
 	// Compression support check.
 	IsCompressionSupported() bool
+
+	// LifeCycle operations
+	SetBucketLifeCycle(context.Context, string, *lifecycle.LifeCycle) error
+	GetBucketLifeCycle(context.Context, string) (*lifecycle.LifeCycle, error)
+	DeleteBucketLifeCycle(context.Context, string) error
 }

@@ -83,8 +83,13 @@ const (
 	// GlobalMultipartCleanupInterval - Cleanup interval when the stale multipart cleanup is initiated.
 	GlobalMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
 
+	// GlobalServiceExecutionInterval - Executes the LifeCycle events.
+	GlobalServiceExecutionInterval = time.Hour * 24 // 24 hrs.
+
 	// Refresh interval to update in-memory bucket policy cache.
 	globalRefreshBucketPolicyInterval = 5 * time.Minute
+	// Refresh interval to update in-memory bucket lifecycle cache.
+	globalRefreshBucketLifeCycleInterval = 5 * time.Minute
 	// Refresh interval to update in-memory iam config cache.
 	globalRefreshIAMInterval = 5 * time.Minute
 
@@ -145,6 +150,8 @@ var (
 	globalNotificationSys *NotificationSys
 	globalPolicySys       *PolicySys
 	globalIAMSys          *IAMSys
+
+	globalLifeCycleSys *LifeCycleSys
 
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool

@@ -83,6 +83,8 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled bool) {
 		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketLocationHandler)).Queries("location", "")
 		// GetBucketPolicy
 		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketPolicyHandler)).Queries("policy", "")
+		// GetBucketLifeCycle
+		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketLifeCycleHandler)).Queries("lifecycle", "")
 
 		// GetBucketACL -- this is a dummy call.
 		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketACLHandler)).Queries("acl", "")
@@ -97,8 +99,12 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled bool) {
 		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListObjectsV2Handler)).Queries("list-type", "2")
 		// ListObjectsV1 (Legacy)
 		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListObjectsV1Handler))
+		// PutBucketLifeCycle
+		bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketLifeCycleHandler)).Queries("lifecycle", "")
 		// PutBucketPolicy
 		bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketPolicyHandler)).Queries("policy", "")
+		
+
 		// PutBucketNotification
 		bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketNotificationHandler)).Queries("notification", "")
 		// PutBucket
@@ -111,6 +117,8 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled bool) {
 		bucket.Methods("POST").HandlerFunc(httpTraceAll(api.DeleteMultipleObjectsHandler)).Queries("delete", "")
 		// DeleteBucketPolicy
 		bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketPolicyHandler)).Queries("policy", "")
+		// DeleteBucketLifeCycle
+		bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketLifeCycleHandler)).Queries("lifecycle", "")
 		// DeleteBucket
 		bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketHandler))
 	}

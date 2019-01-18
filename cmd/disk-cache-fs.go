@@ -93,6 +93,8 @@ func newCacheFSObjects(dir string, expiry int, maxDiskUsagePct int) (*cacheFSObj
 
 	go fsObjects.cleanupStaleMultipartUploads(context.Background(), GlobalMultipartCleanupInterval, GlobalMultipartExpiry, GlobalServiceDoneCh)
 
+	go fsObjects.executeService(context.Background(), GlobalServiceExecutionInterval, GlobalServiceDoneCh)
+
 	cacheFS := cacheFSObjects{
 		FSObjects:       fsObjects,
 		dir:             dir,

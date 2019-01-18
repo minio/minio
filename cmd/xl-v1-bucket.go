@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/policy"
 )
 
@@ -287,6 +288,21 @@ func (xl xlObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy
 // DeleteBucketPolicy deletes all policies on bucket
 func (xl xlObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	return removePolicyConfig(ctx, xl, bucket)
+}
+
+// SetBucketLifeCycle sets lifecycle on bucket
+func (xl xlObjects) SetBucketLifeCycle(ctx context.Context, bucket string, lifecycle *lifecycle.LifeCycle) error {
+	return saveLifeCycleConfig(ctx, xl, bucket, lifecycle)
+}
+
+// GetBucketLifeCycle will get lifecycle on bucket
+func (xl xlObjects) GetBucketLifeCycle(ctx context.Context, bucket string) (*lifecycle.LifeCycle, error) {
+	return getLifeCycleConfig(xl, bucket)
+}
+
+// DeleteBucketLifeCycle deletes all lifecycle on bucket
+func (xl xlObjects) DeleteBucketLifeCycle(ctx context.Context, bucket string) error {
+	return removeLifeCycleConfig(ctx, xl, bucket)
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.

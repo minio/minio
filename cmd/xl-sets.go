@@ -29,6 +29,7 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
+	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -289,6 +290,8 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 			bp:       bp,
 		}
 		go s.sets[i].cleanupStaleMultipartUploads(context.Background(), GlobalMultipartCleanupInterval, GlobalMultipartExpiry, GlobalServiceDoneCh)
+		go s.sets[i].executeService(context.Background(), GlobalServiceExecutionInterval, GlobalServiceDoneCh)
+
 	}
 
 	// Connect disks right away, but wait until we have `format.json` quorum.
@@ -509,6 +512,21 @@ func (s *xlSets) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Po
 // DeleteBucketPolicy deletes all policies on bucket
 func (s *xlSets) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	return removePolicyConfig(ctx, s, bucket)
+}
+
+// SetBucketLifeCycle sets lifecycle on bucket
+func (s *xlSets) SetBucketLifeCycle(ctx context.Context, bucket string, lifecycle *lifecycle.LifeCycle) error {
+	return saveLifeCycleConfig(ctx, s, bucket, lifecycle)
+}
+
+// GetBucketLifeCycle will get lifecycle on bucket
+func (s *xlSets) GetBucketLifeCycle(ctx context.Context, bucket string) (*lifecycle.LifeCycle, error) {
+	return getLifeCycleConfig(s, bucket)
+}
+
+// DeleteBucketLifeCycle deletes all lifecycle on bucket
+func (s *xlSets) DeleteBucketLifeCycle(ctx context.Context, bucket string) error {
+	return removeLifeCycleConfig(ctx, s, bucket)
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.

@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio-go/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/policy"
 )
 
@@ -600,4 +601,20 @@ func (l *s3Objects) IsCompressionSupported() bool {
 // IsEncryptionSupported returns whether server side encryption is implemented for this layer.
 func (l *s3Objects) IsEncryptionSupported() bool {
 	return minio.GlobalKMS != nil || len(minio.GlobalGatewaySSE) > 0
+}
+
+// SetBucketLifeCycle sets lifecycle on bucket
+func (l *s3Objects) SetBucketLifeCycle(ctx context.Context, bucket string, lifecycle *lifecycle.LifeCycle) error {
+	logger.LogIf(ctx, minio.NotImplemented{})
+	return minio.NotImplemented{}
+}
+
+// GetBucketLifeCycle will get lifecycle on bucket
+func (l *s3Objects) GetBucketLifeCycle(ctx context.Context, bucket string) (*lifecycle.LifeCycle, error) {
+	return nil, minio.NotImplemented{}
+}
+
+// DeleteBucketLifeCycle deletes all lifecycle on bucket
+func (l *s3Objects) DeleteBucketLifeCycle(ctx context.Context, bucket string) error {
+	return minio.NotImplemented{}
 }
