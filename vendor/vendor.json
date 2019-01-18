@@ -509,36 +509,6 @@
 			"revisionTime": "2016-01-12T19:33:35Z"
 		},
 		{
-			"checksumSHA1": "Lg8OHK87XRGCaipG+5+zFyN8OMw=",
-			"path": "github.com/joyent/triton-go",
-			"revision": "7e6a47b300b10be9449610a6ff4fbae17d6e95b6",
-			"revisionTime": "2018-01-16T16:19:11Z"
-		},
-		{
-			"checksumSHA1": "Y03+L+I0FVZ2bMGWt1MHTDEyWM4=",
-			"path": "github.com/joyent/triton-go/authentication",
-			"revision": "7e6a47b300b10be9449610a6ff4fbae17d6e95b6",
-			"revisionTime": "2018-01-16T16:19:11Z"
-		},
-		{
-			"checksumSHA1": "MuJsGBr6HlXQYxZY9cM5rBk+Lns=",
-			"path": "github.com/joyent/triton-go/client",
-			"revision": "7e6a47b300b10be9449610a6ff4fbae17d6e95b6",
-			"revisionTime": "2018-01-16T16:19:11Z"
-		},
-		{
-			"checksumSHA1": "d/Py6j/uMgOAFNFGpsQrNnSsO+k=",
-			"path": "github.com/joyent/triton-go/errors",
-			"revision": "7e6a47b300b10be9449610a6ff4fbae17d6e95b6",
-			"revisionTime": "2018-01-16T16:19:11Z"
-		},
-		{
-			"checksumSHA1": "5v533ELM047YOiwHsyMaVzITpR0=",
-			"path": "github.com/joyent/triton-go/storage",
-			"revision": "7e6a47b300b10be9449610a6ff4fbae17d6e95b6",
-			"revisionTime": "2018-01-16T16:19:11Z"
-		},
-		{
 			"checksumSHA1": "mA7isU/nIAT5ytwIzK65H0vlVqI=",
 			"path": "github.com/klauspost/compress/flate",
 			"revision": "5fb1f31b0a61e9858f12f39266e059848a5f1cea",
@@ -560,12 +530,6 @@
 			"path": "github.com/klauspost/pgzip",
 			"revision": "90b2c57fba35a1dd05cb40f9200722763808d99b",
 			"revisionTime": "2018-06-06T15:09:39Z"
-		},
-		{
-			"checksumSHA1": "/8VtN8HUS0G235mhqfj2gRMi9Eg=",
-			"path": "github.com/klauspost/readahead",
-			"revision": "7f90b27d81113b71920c55b7a73a071dc81bdfd8",
-			"revisionTime": "2017-10-07T12:43:06Z"
 		},
 		{
 			"checksumSHA1": "KiQa3vguztElzJkoqeIGHlfLFJA=",
@@ -607,24 +571,6 @@
 			"path": "github.com/miekg/dns",
 			"revision": "db96a2b759cdef4f11a34506a42eb8d1290c598e",
 			"revisionTime": "2016-07-26T03:20:27Z"
-		},
-		{
-			"checksumSHA1": "uTShVxdYNwW+3WI6SfJwOc/LQgo=",
-			"path": "github.com/minio/blazer/base",
-			"revision": "2081f5bf046503f576d8712253724fbf2950fffe",
-			"revisionTime": "2017-11-26T20:28:54Z"
-		},
-		{
-			"checksumSHA1": "ucCxupZ1gyxvFsBg5igP13dySLI=",
-			"path": "github.com/minio/blazer/internal/b2types",
-			"revision": "8e81ddf2d8deed54c6ac3f7d264d78659e72fbb8",
-			"revisionTime": "2017-10-06T21:06:28Z"
-		},
-		{
-			"checksumSHA1": "zgBbPwwuUH2sxz8smOzOA9TrD5g=",
-			"path": "github.com/minio/blazer/internal/blog",
-			"revision": "8e81ddf2d8deed54c6ac3f7d264d78659e72fbb8",
-			"revisionTime": "2017-10-06T21:06:28Z"
 		},
 		{
 			"checksumSHA1": "fUWokilZyc1QDKnIgCDJE8n1S9U=",
@@ -798,12 +744,6 @@
 			"path": "github.com/pierrec/lz4/internal/xxh32",
 			"revision": "1f6e18d34f6790fc0afea6f13a5fe3d9ab1770af",
 			"revisionTime": "2018-09-11T17:58:58Z"
-		},
-		{
-			"checksumSHA1": "xCv4GBFyw07vZkVtKF/XrUnkHRk=",
-			"path": "github.com/pkg/errors",
-			"revision": "e881fd58d78e04cf6d0de1217f8707c8cc2249bc",
-			"revisionTime": "2017-12-16T07:03:16Z"
 		},
 		{
 			"checksumSHA1": "C3yiSMdTQxSY3xqKJzMV9T+KnIc=",
@@ -1129,40 +1069,10 @@
 			"revisionTime": "2017-08-25T20:24:07Z"
 		},
 		{
-			"checksumSHA1": "IQkUIOnvlf0tYloFx9mLaXSvXWQ=",
-			"path": "golang.org/x/crypto/curve25519",
-			"revision": "7d9177d70076375b9a59c8fde23d52d9c4a7ecd5",
-			"revisionTime": "2017-09-15T19:08:28Z"
-		},
-		{
-			"checksumSHA1": "X6Q8nYb+KXh+64AKHwWOOcyijHQ=",
-			"path": "golang.org/x/crypto/ed25519",
-			"revision": "7d9177d70076375b9a59c8fde23d52d9c4a7ecd5",
-			"revisionTime": "2017-09-15T19:08:28Z"
-		},
-		{
-			"checksumSHA1": "LXFcVx8I587SnWmKycSDEq9yvK8=",
-			"path": "golang.org/x/crypto/ed25519/internal/edwards25519",
-			"revision": "7d9177d70076375b9a59c8fde23d52d9c4a7ecd5",
-			"revisionTime": "2017-09-15T19:08:28Z"
-		},
-		{
 			"checksumSHA1": "kVKE0OX1Xdw5mG7XKT86DLLKE2I=",
 			"path": "golang.org/x/crypto/poly1305",
 			"revision": "81e90905daefcd6fd217b62423c0908922eadb30",
 			"revisionTime": "2017-08-25T20:24:07Z"
-		},
-		{
-			"checksumSHA1": "yPCMw2UX8Jad4GNWSwo8QgZS6TY=",
-			"path": "golang.org/x/crypto/ssh",
-			"revision": "7d9177d70076375b9a59c8fde23d52d9c4a7ecd5",
-			"revisionTime": "2017-09-15T19:08:28Z"
-		},
-		{
-			"checksumSHA1": "ujKeyWHFOYmXm5IgAxfyFCGefsY=",
-			"path": "golang.org/x/crypto/ssh/agent",
-			"revision": "7d9177d70076375b9a59c8fde23d52d9c4a7ecd5",
-			"revisionTime": "2017-09-15T19:08:28Z"
 		},
 		{
 			"checksumSHA1": "GtamqiJoL7PGHsN454AoffBFMa8=",
@@ -1361,6 +1271,12 @@
 			"path": "google.golang.org/appengine",
 			"revision": "170382fa85b10b94728989dfcf6cc818b335c952",
 			"revisionTime": "2017-04-10T19:43:55Z"
+		},
+		{
+			"checksumSHA1": "LiyXfqOzaeQ8vgYZH3t2hUEdVTw=",
+			"path": "google.golang.org/appengine/cloudsql",
+			"revision": "b9aad5d628b283f265adf8d3557faae187a8d015",
+			"revisionTime": "2018-05-16T22:56:43Z"
 		},
 		{
 			"checksumSHA1": "4o2JkeR2LyUfZ7BQIzHUejyqKno=",
