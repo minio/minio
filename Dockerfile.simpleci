@@ -1,0 +1,49 @@
+#-------------------------------------------------------------
+# Stage 1: Build and Unit tests
+#-------------------------------------------------------------
+FROM golang:1.11.4
+
+COPY . /go/src/github.com/minio/minio
+WORKDIR /go/src/github.com/minio/minio
+
+RUN apt-get update && apt-get install -y jq
+RUN make
+RUN bash -c 'diff -au <(gofmt -s -d cmd) <(printf "")'
+RUN bash -c 'diff -au <(gofmt -s -d pkg) <(printf "")'
+RUN for d in $(go list ./... | grep -v browser); do go test -v -race --timeout 15m "$d"; done
+RUN make verify
+RUN make coverage || true
+
+#-------------------------------------------------------------
+# Stage 2: Test Frontend
+#-------------------------------------------------------------
+FROM node:10.15-stretch-slim
+
+COPY browser /minio/browser
+WORKDIR /minio/browser
+
+RUN yarn
+RUN yarn test
+
+#-------------------------------------------------------------
+# Stage 3: Run Gateway Tests
+#-------------------------------------------------------------
+
+FROM ubuntu:16.04
+
+COPY --from=0 /go/src/github.com/minio/minio/minio ./minio
+COPY buildscripts/gateway-tests.sh ./gateway-tests.sh
+RUN apt-get update && apt-get install -y git wget jq curl dnsmasq
+
+RUN wget https://dl.google.com/go/go1.11.4.linux-amd64.tar.gz && \
+	tar -C /usr/local -xzf go1.11.4.linux-amd64.tar.gz
+
+ENV DEBIAN_FRONTEND noninteractive
+ENV LANG C.UTF-8
+ENV GOROOT /usr/local/go
+
+RUN mkdir -p /go
+ENV GOPATH /go
+ENV PATH $GOPATH/bin:$GOROOT/bin:$PATH
+
+RUN ./gateway-tests.sh
