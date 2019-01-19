@@ -24,7 +24,7 @@ import (
 	"testing"
 )
 
-func TestBitrotReaderWriter(t *testing.T) {
+func testBitrotReaderWriterAlgo(t *testing.T, bitrotAlgo BitrotAlgorithm) {
 	tmpDir, err := ioutil.TempDir("", "")
 	if err != nil {
 		log.Fatal(err)
@@ -41,7 +41,7 @@ func TestBitrotReaderWriter(t *testing.T) {
 
 	disk.MakeVol(volume)
 
-	writer := newBitrotWriter(disk, volume, filePath, 35, HighwayHash256S, 10)
+	writer := newBitrotWriter(disk, volume, filePath, 35, bitrotAlgo, 10)
 
 	_, err = writer.Write([]byte("aaaaaaaaaa"))
 	if err != nil {
@@ -61,7 +61,7 @@ func TestBitrotReaderWriter(t *testing.T) {
 	}
 	writer.(io.Closer).Close()
 
-	reader := newStreamingBitrotReader(disk, volume, filePath, 35, HighwayHash256S, 10)
+	reader := newBitrotReader(disk, volume, filePath, 35, bitrotAlgo, bitrotWriterSum(writer), 10)
 	b := make([]byte, 10)
 	if _, err = reader.ReadAt(b, 0); err != nil {
 		log.Fatal(err)
@@ -74,5 +74,11 @@ func TestBitrotReaderWriter(t *testing.T) {
 	}
 	if _, err = reader.ReadAt(b[:5], 30); err != nil {
 		log.Fatal(err)
+	}
+}
+
+func TestAllBitrotAlgorithms(t *testing.T) {
+	for bitrotAlgo := range bitrotAlgorithms {
+		testBitrotReaderWriterAlgo(t, bitrotAlgo)
 	}
 }

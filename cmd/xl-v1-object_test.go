@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -321,8 +320,6 @@ func TestHealing(t *testing.T) {
 
 	// After heal the meta file should be as expected.
 	if !reflect.DeepEqual(xlMetaPreHeal, xlMetaPostHeal) {
-		fmt.Println(xlMetaPreHeal)
-		fmt.Println(xlMetaPostHeal)
 		t.Fatal("HealObject failed")
 	}
 
