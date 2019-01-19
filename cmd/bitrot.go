@@ -160,7 +160,7 @@ func bitrotWriterSum(w io.Writer) []byte {
 func bitrotCheckFile(disk StorageAPI, volume string, filePath string, tillOffset int64, algo BitrotAlgorithm, sum []byte, shardSize int64) (err error) {
 	if algo != HighwayHash256S {
 		buf := []byte{}
-		// For whole-file bitrot we don't need to read the entire file as the bitrot verify happens on the server side even if we read small buffer
+		// For whole-file bitrot we don't need to read the entire file as the bitrot verify happens on the server side even if we read 0-bytes.
 		_, err = disk.ReadFile(volume, filePath, 0, buf, NewBitrotVerifier(algo, sum))
 		return err
 	}
