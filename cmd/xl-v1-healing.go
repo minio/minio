@@ -251,7 +251,6 @@ func listAllBuckets(storageDisks []StorageAPI) (buckets map[string]VolInfo,
 // Heals an object by re-writing corrupt/missing erasure blocks.
 func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, object string,
 	quorum int, dryRun bool) (result madmin.HealResultItem, err error) {
-
 	partsMetadata, errs := readAllXLMetadata(ctx, storageDisks, bucket, object)
 
 	errCount := 0
@@ -432,20 +431,21 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 		partActualSize := latestMeta.Parts[partIndex].ActualSize
 		partNumber := latestMeta.Parts[partIndex].Number
 		tillOffset := erasure.ShardFileTillOffset(0, partSize, partSize)
-		checksumInfo := erasureInfo.GetChecksumInfo(partName)
 		readers := make([]io.ReaderAt, len(latestDisks))
+		checksumAlgo := erasureInfo.GetChecksumInfo(partName).Algorithm
 		for i, disk := range latestDisks {
 			if disk == OfflineDisk {
 				continue
 			}
-			readers[i] = newBitrotReader(disk, bucket, pathJoin(object, partName), tillOffset, checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
+			checksumInfo := partsMetadata[i].Erasure.GetChecksumInfo(partName)
+			readers[i] = newBitrotReader(disk, bucket, pathJoin(object, partName), tillOffset, checksumAlgo, checksumInfo.Hash, erasure.ShardSize())
 		}
 		writers := make([]io.Writer, len(outDatedDisks))
 		for i, disk := range outDatedDisks {
 			if disk == OfflineDisk {
 				continue
 			}
-			writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, pathJoin(tmpID, partName), tillOffset, checksumInfo.Algorithm, erasure.ShardSize())
+			writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, pathJoin(tmpID, partName), tillOffset, checksumAlgo, erasure.ShardSize())
 		}
 		hErr := erasure.Heal(ctx, readers, writers, partSize)
 		closeBitrotReaders(readers)
@@ -467,21 +467,13 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 				continue
 			}
 			partsMetadata[i].AddObjectPart(partNumber, partName, "", partSize, partActualSize)
-			partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, checksumInfo.Algorithm, bitrotWriterSum(writers[i])})
+			partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, checksumAlgo, bitrotWriterSum(writers[i])})
 		}
 
 		// If all disks are having errors, we give up.
 		if disksToHealCount == 0 {
 			return result, fmt.Errorf("all disks without up-to-date data had write errors")
 		}
-	}
-
-	// xl.json should be written to all the healed disks.
-	for index, disk := range outDatedDisks {
-		if disk == nil {
-			continue
-		}
-		partsMetadata[index] = latestMeta
 	}
 
 	// Generate and write `xl.json` generated from other disks.
