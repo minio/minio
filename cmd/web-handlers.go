@@ -287,6 +287,12 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		return toJSONError(authErr)
 	}
 
+	// Set prefix value for "s3:prefix" policy conditionals.
+	r.Header.Set("prefix", "")
+
+	// Set delimiter value for "s3:delimiter" policy conditionals.
+	r.Header.Set("delimiter", slashSeparator)
+
 	// If etcd, dns federation configured list buckets from etcd.
 	if globalDNSConfig != nil {
 		dnsBuckets, err := globalDNSConfig.List()
@@ -416,10 +422,11 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		if authErr == errNoAuthToken {
-			// Add this for checking ListObjects conditional.
-			if args.Prefix != "" {
-				r.Header.Set("prefix", args.Prefix)
-			}
+			// Set prefix value for "s3:prefix" policy conditionals.
+			r.Header.Set("prefix", args.Prefix)
+
+			// Set delimiter value for "s3:delimiter" policy conditionals.
+			r.Header.Set("delimiter", slashSeparator)
 
 			// Check if anonymous (non-owner) has access to download objects.
 			readable := globalPolicySys.IsAllowed(policy.Args{
@@ -454,10 +461,11 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 
 	// For authenticated users apply IAM policy.
 	if authErr == nil {
-		// Add this for checking ListObjects conditional.
-		if args.Prefix != "" {
-			r.Header.Set("prefix", args.Prefix)
-		}
+		// Set prefix value for "s3:prefix" policy conditionals.
+		r.Header.Set("prefix", args.Prefix)
+
+		// Set delimiter value for "s3:delimiter" policy conditionals.
+		r.Header.Set("delimiter", slashSeparator)
 
 		readable := globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     claims.Subject,
