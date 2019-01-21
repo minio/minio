@@ -51,8 +51,10 @@ func (f stringLikeFunc) evaluate(values map[string][]string) bool {
 		requestValue = values[f.k.Name()]
 	}
 
+	fvalues := f.values.ApplyFunc(substFuncFromValues(values))
+
 	for _, v := range requestValue {
-		if !f.values.FuncMatch(wildcard.Match, v).IsEmpty() {
+		if !fvalues.FuncMatch(wildcard.Match, v).IsEmpty() {
 			return true
 		}
 	}

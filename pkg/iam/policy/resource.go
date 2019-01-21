@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/minio/minio/pkg/policy/condition"
 	"github.com/minio/minio/pkg/wildcard"
 )
 
@@ -47,11 +48,18 @@ func (r Resource) IsValid() bool {
 }
 
 // Match - matches object name with resource pattern.
-func (r Resource) Match(resource string) bool {
-	if strings.HasPrefix(resource, r.Pattern) {
+func (r Resource) Match(resource string, conditionValues map[string][]string) bool {
+	pattern := r.Pattern
+	for _, key := range condition.CommonKeys {
+		// Empty values are not supported for policy variables.
+		if rvalues, ok := conditionValues[key.Name()]; ok && rvalues[0] != "" {
+			pattern = strings.Replace(pattern, key.VarName(), rvalues[0], -1)
+		}
+	}
+	if strings.HasPrefix(resource, pattern) {
 		return true
 	}
-	return wildcard.Match(r.Pattern, resource)
+	return wildcard.Match(pattern, resource)
 }
 
 // MarshalJSON - encodes Resource to JSON data.

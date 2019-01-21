@@ -50,7 +50,8 @@ func (f stringEqualsFunc) evaluate(values map[string][]string) bool {
 		requestValue = values[f.k.Name()]
 	}
 
-	return !f.values.Intersection(set.CreateStringSet(requestValue...)).IsEmpty()
+	fvalues := f.values.ApplyFunc(substFuncFromValues(values))
+	return !fvalues.Intersection(set.CreateStringSet(requestValue...)).IsEmpty()
 }
 
 // key() - returns condition key which is used by this condition function.

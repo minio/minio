@@ -306,7 +306,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 				AccountName:     claims.Subject,
 				Action:          iampolicy.ListBucketAction,
 				BucketName:      bucketName,
-				ConditionValues: getConditionValues(r, ""),
+				ConditionValues: getConditionValues(r, "", claims.Subject),
 				IsOwner:         owner,
 				ObjectName:      "",
 			}) {
@@ -326,7 +326,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 				AccountName:     claims.Subject,
 				Action:          iampolicy.ListBucketAction,
 				BucketName:      bucket.Name,
-				ConditionValues: getConditionValues(r, ""),
+				ConditionValues: getConditionValues(r, "", claims.Subject),
 				IsOwner:         owner,
 				ObjectName:      "",
 			}) {
@@ -432,7 +432,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			readable := globalPolicySys.IsAllowed(policy.Args{
 				Action:          policy.ListBucketAction,
 				BucketName:      args.BucketName,
-				ConditionValues: getConditionValues(r, ""),
+				ConditionValues: getConditionValues(r, "", ""),
 				IsOwner:         false,
 			})
 
@@ -440,7 +440,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			writable := globalPolicySys.IsAllowed(policy.Args{
 				Action:          policy.PutObjectAction,
 				BucketName:      args.BucketName,
-				ConditionValues: getConditionValues(r, ""),
+				ConditionValues: getConditionValues(r, "", ""),
 				IsOwner:         false,
 				ObjectName:      args.Prefix + "/",
 			})
@@ -471,7 +471,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			AccountName:     claims.Subject,
 			Action:          iampolicy.ListBucketAction,
 			BucketName:      args.BucketName,
-			ConditionValues: getConditionValues(r, ""),
+			ConditionValues: getConditionValues(r, "", ""),
 			IsOwner:         owner,
 		})
 
@@ -479,7 +479,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			AccountName:     claims.Subject,
 			Action:          iampolicy.PutObjectAction,
 			BucketName:      args.BucketName,
-			ConditionValues: getConditionValues(r, ""),
+			ConditionValues: getConditionValues(r, "", ""),
 			IsOwner:         owner,
 			ObjectName:      args.Prefix + "/",
 		})
@@ -611,7 +611,7 @@ next:
 				AccountName:     claims.Subject,
 				Action:          iampolicy.DeleteObjectAction,
 				BucketName:      args.BucketName,
-				ConditionValues: getConditionValues(r, ""),
+				ConditionValues: getConditionValues(r, "", claims.Subject),
 				IsOwner:         owner,
 				ObjectName:      objectName,
 			}) {
@@ -628,7 +628,7 @@ next:
 			AccountName:     claims.Subject,
 			Action:          iampolicy.DeleteObjectAction,
 			BucketName:      args.BucketName,
-			ConditionValues: getConditionValues(r, ""),
+			ConditionValues: getConditionValues(r, "", claims.Subject),
 			IsOwner:         owner,
 			ObjectName:      objectName,
 		}) {
@@ -853,7 +853,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			if !globalPolicySys.IsAllowed(policy.Args{
 				Action:          policy.PutObjectAction,
 				BucketName:      bucket,
-				ConditionValues: getConditionValues(r, ""),
+				ConditionValues: getConditionValues(r, "", ""),
 				IsOwner:         false,
 				ObjectName:      object,
 			}) {
@@ -872,7 +872,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			AccountName:     claims.Subject,
 			Action:          iampolicy.PutObjectAction,
 			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, ""),
+			ConditionValues: getConditionValues(r, "", claims.Subject),
 			IsOwner:         owner,
 			ObjectName:      object,
 		}) {
@@ -1040,7 +1040,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 			if !globalPolicySys.IsAllowed(policy.Args{
 				Action:          policy.GetObjectAction,
 				BucketName:      bucket,
-				ConditionValues: getConditionValues(r, ""),
+				ConditionValues: getConditionValues(r, "", ""),
 				IsOwner:         false,
 				ObjectName:      object,
 			}) {
@@ -1059,7 +1059,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 			AccountName:     claims.Subject,
 			Action:          iampolicy.GetObjectAction,
 			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, ""),
+			ConditionValues: getConditionValues(r, "", claims.Subject),
 			IsOwner:         owner,
 			ObjectName:      object,
 		}) {
@@ -1195,7 +1195,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				if !globalPolicySys.IsAllowed(policy.Args{
 					Action:          policy.GetObjectAction,
 					BucketName:      args.BucketName,
-					ConditionValues: getConditionValues(r, ""),
+					ConditionValues: getConditionValues(r, "", ""),
 					IsOwner:         false,
 					ObjectName:      pathJoin(args.Prefix, object),
 				}) {
@@ -1216,7 +1216,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				AccountName:     claims.Subject,
 				Action:          iampolicy.GetObjectAction,
 				BucketName:      args.BucketName,
-				ConditionValues: getConditionValues(r, ""),
+				ConditionValues: getConditionValues(r, "", claims.Subject),
 				IsOwner:         owner,
 				ObjectName:      pathJoin(args.Prefix, object),
 			}) {

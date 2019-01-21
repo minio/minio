@@ -179,7 +179,7 @@ func TestResourceSetMatch(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		result := testCase.resourceSet.Match(testCase.resource)
+		result := testCase.resourceSet.Match(testCase.resource, nil)
 
 		if result != testCase.expectedResult {
 			t.Fatalf("case %v: expected: %v, got: %v", i+1, testCase.expectedResult, result)
