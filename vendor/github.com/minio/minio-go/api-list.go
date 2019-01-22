@@ -192,17 +192,15 @@ func (c Client) listObjectsV2Query(bucketName, objectPrefix, continuationToken s
 	// Always set list-type in ListObjects V2
 	urlValues.Set("list-type", "2")
 
-	// Set object prefix.
-	if objectPrefix != "" {
-		urlValues.Set("prefix", objectPrefix)
-	}
+	// Set object prefix, prefix value to be set to empty is okay.
+	urlValues.Set("prefix", objectPrefix)
+
+	// Set delimiter, delimiter value to be set to empty is okay.
+	urlValues.Set("delimiter", delimiter)
+
 	// Set continuation token
 	if continuationToken != "" {
 		urlValues.Set("continuation-token", continuationToken)
-	}
-	// Set delimiter.
-	if delimiter != "" {
-		urlValues.Set("delimiter", delimiter)
 	}
 
 	// Fetch owner when listing
@@ -380,17 +378,16 @@ func (c Client) listObjectsQuery(bucketName, objectPrefix, objectMarker, delimit
 	// Get resources properly escaped and lined up before
 	// using them in http request.
 	urlValues := make(url.Values)
-	// Set object prefix.
-	if objectPrefix != "" {
-		urlValues.Set("prefix", objectPrefix)
-	}
+
+	// Set object prefix, prefix value to be set to empty is okay.
+	urlValues.Set("prefix", objectPrefix)
+
+	// Set delimiter, delimiter value to be set to empty is okay.
+	urlValues.Set("delimiter", delimiter)
+
 	// Set object marker.
 	if objectMarker != "" {
 		urlValues.Set("marker", objectMarker)
-	}
-	// Set delimiter.
-	if delimiter != "" {
-		urlValues.Set("delimiter", delimiter)
 	}
 
 	// maxkeys should default to 1000 or less.
@@ -563,14 +560,12 @@ func (c Client) listMultipartUploadsQuery(bucketName, keyMarker, uploadIDMarker,
 	if uploadIDMarker != "" {
 		urlValues.Set("upload-id-marker", uploadIDMarker)
 	}
-	// Set prefix marker.
-	if prefix != "" {
-		urlValues.Set("prefix", prefix)
-	}
-	// Set delimiter.
-	if delimiter != "" {
-		urlValues.Set("delimiter", delimiter)
-	}
+
+	// Set object prefix, prefix value to be set to empty is okay.
+	urlValues.Set("prefix", prefix)
+
+	// Set delimiter, delimiter value to be set to empty is okay.
+	urlValues.Set("delimiter", delimiter)
 
 	// maxUploads should be 1000 or less.
 	if maxUploads == 0 || maxUploads > 1000 {

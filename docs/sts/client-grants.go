@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"encoding/xml"
 	"flag"
 	"fmt"
 	"log"
@@ -32,36 +31,7 @@ import (
 
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/credentials"
-	"github.com/minio/minio/pkg/auth"
 )
-
-// AssumedRoleUser - The identifiers for the temporary security credentials that
-// the operation returns. Please also see https://docs.aws.amazon.com/goto/WebAPI/sts-2011-06-15/AssumedRoleUser
-type AssumedRoleUser struct {
-	Arn           string
-	AssumedRoleID string `xml:"AssumeRoleId"`
-	// contains filtered or unexported fields
-}
-
-// AssumeRoleWithClientGrantsResponse contains the result of successful AssumeRoleWithClientGrants request.
-type AssumeRoleWithClientGrantsResponse struct {
-	XMLName          xml.Name           `xml:"https://sts.amazonaws.com/doc/2011-06-15/ AssumeRoleWithClientGrantsResponse" json:"-"`
-	Result           ClientGrantsResult `xml:"AssumeRoleWithClientGrantsResult"`
-	ResponseMetadata struct {
-		RequestID string `xml:"RequestId,omitempty"`
-	} `xml:"ResponseMetadata,omitempty"`
-}
-
-// ClientGrantsResult - Contains the response to a successful AssumeRoleWithClientGrants
-// request, including temporary credentials that can be used to make Minio API requests.
-type ClientGrantsResult struct {
-	AssumedRoleUser              AssumedRoleUser  `xml:",omitempty"`
-	Audience                     string           `xml:",omitempty"`
-	Credentials                  auth.Credentials `xml:",omitempty"`
-	PackedPolicySize             int              `xml:",omitempty"`
-	Provider                     string           `xml:",omitempty"`
-	SubjectFromClientGrantsToken string           `xml:",omitempty"`
-}
 
 // JWTToken - parses the output from IDP access token.
 type JWTToken struct {
@@ -83,18 +53,12 @@ func init() {
 	flag.StringVar(&clientSecret, "csec", "", "Client secret")
 }
 
-func main() {
-	flag.Parse()
-	if clientID == "" || clientSecret == "" {
-		flag.PrintDefaults()
-		return
-	}
-
+func getTokenExpiry() (*credentials.ClientGrantsToken, error) {
 	data := url.Values{}
 	data.Set("grant_type", "client_credentials")
 	req, err := http.NewRequest(http.MethodPost, idpEndpoint, strings.NewReader(data.Encode()))
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.SetBasicAuth(clientID, clientSecret)
@@ -108,64 +72,44 @@ func main() {
 	}
 	resp, err := hclient.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		log.Fatal(resp.Status)
+		return nil, fmt.Errorf("%s", resp.Status)
 	}
 
 	var idpToken JWTToken
 	if err = json.NewDecoder(resp.Body).Decode(&idpToken); err != nil {
+		return nil, err
+	}
+
+	return &credentials.ClientGrantsToken{Token: idpToken.AccessToken, Expiry: idpToken.Expiry}, nil
+}
+
+func main() {
+	flag.Parse()
+	if clientID == "" || clientSecret == "" {
+		flag.PrintDefaults()
+		return
+	}
+
+	sts, err := credentials.NewSTSClientGrants(stsEndpoint, getTokenExpiry)
+	if err != nil {
 		log.Fatal(err)
 	}
 
-	v := url.Values{}
-	v.Set("Action", "AssumeRoleWithClientGrants")
-	v.Set("Token", idpToken.AccessToken)
-	v.Set("DurationSeconds", fmt.Sprintf("%d", idpToken.Expiry))
-	v.Set("Version", "2011-06-15")
+	// Uncommend this to use Minio API operations by initializing minio
+	// client with obtained credentials.
+
+	opts := &minio.Options{
+		Creds:        sts,
+		BucketLookup: minio.BucketLookupAuto,
+	}
 
 	u, err := url.Parse(stsEndpoint)
 	if err != nil {
 		log.Fatal(err)
-	}
-	u.RawQuery = v.Encode()
-
-	req, err = http.NewRequest("POST", u.String(), nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		log.Fatal(resp.Status)
-	}
-
-	a := AssumeRoleWithClientGrantsResponse{}
-	if err = xml.NewDecoder(resp.Body).Decode(&a); err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println("##### Credentials")
-	c, err := json.MarshalIndent(a.Result.Credentials, "", "\t")
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(string(c))
-
-	// Uncommend this to use Minio API operations by initializin minio
-	// client with obtained credentials.
-
-	opts := &minio.Options{
-		Creds: credentials.NewStaticV4(a.Result.Credentials.AccessKey,
-			a.Result.Credentials.SecretKey,
-			a.Result.Credentials.SessionToken,
-		),
-		BucketLookup: minio.BucketLookupAuto,
 	}
 
 	clnt, err := minio.NewWithOptions(u.Host, opts)
