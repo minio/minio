@@ -17,7 +17,6 @@
 package cpu
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
@@ -37,10 +36,10 @@ const (
 
 // Load holds CPU utilization % measured in three intervals of 200ms each
 type Load struct {
-	Avg   string `json:"avg"`
-	Max   string `json:"max"`
-	Min   string `json:"min"`
-	Error string `json:"error,omitempty"`
+	Avg   float64 `json:"avg"`
+	Max   float64 `json:"max"`
+	Min   float64 `json:"min"`
+	Error string  `json:"error,omitempty"`
 }
 
 type counter struct{}
@@ -83,9 +82,9 @@ func GetLoad() Load {
 	close(vals)
 	avg := sum / 3
 	return Load{
-		Avg:   fmt.Sprintf("%.2f%%", toFixed4(float64(avg)/float64(200*time.Millisecond))*100),
-		Max:   fmt.Sprintf("%.2f%%", toFixed4(float64(max)/float64(200*time.Millisecond))*100),
-		Min:   fmt.Sprintf("%.2f%%", toFixed4(float64(min)/float64(200*time.Millisecond))*100),
+		Avg:   toFixed4(float64(avg)/float64(200*time.Millisecond)) * 100,
+		Max:   toFixed4(float64(max)/float64(200*time.Millisecond)) * 100,
+		Min:   toFixed4(float64(min)/float64(200*time.Millisecond)) * 100,
 		Error: "",
 	}
 }

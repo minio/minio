@@ -18,13 +18,11 @@ package mem
 
 import (
 	"runtime"
-
-	humanize "github.com/dustin/go-humanize"
 )
 
 // Usage holds memory utilization information in human readable format
 type Usage struct {
-	Mem   string `json:"mem"`
+	Mem   uint64 `json:"mem"`
 	Error string `json:"error,omitempty"`
 }
 
@@ -34,6 +32,6 @@ func GetUsage() Usage {
 	memStats := new(runtime.MemStats)
 	runtime.ReadMemStats(memStats)
 	return Usage{
-		Mem: humanize.IBytes(memStats.Sys),
+		Mem: memStats.Sys,
 	}
 }
