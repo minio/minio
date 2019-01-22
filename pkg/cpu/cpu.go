@@ -21,6 +21,36 @@ import (
 	"time"
 )
 
+// rollingAvg holds the rolling average of the cpu load on the minio
+// server over its lifetime
+var rollingAvg *Load
+
+// triggers the average load computation at server spawn
+func init() {
+	rollingAvg = &Load{
+		Min: float64(0),
+		Max: float64(0),
+		Avg: float64(0),
+	}
+	var rollingSum float64
+	var cycles float64
+	go func() {
+		for {
+			<-time.After(5 * time.Second)
+			cycles = cycles + 1
+			currLoad := GetLoad()
+			if rollingAvg.Max < currLoad.Max || rollingAvg.Max == 0 {
+				rollingAvg.Max = currLoad.Max
+			}
+			if rollingAvg.Min > currLoad.Min || rollingAvg.Min == 0 {
+				rollingAvg.Min = currLoad.Min
+			}
+			rollingSum = rollingSum + currLoad.Avg
+			rollingAvg.Avg = rollingSum / cycles
+		}
+	}()
+}
+
 const (
 	// cpuLoadWindow is the interval of time for which the
 	// cpu utilization is measured
@@ -43,6 +73,10 @@ type Load struct {
 }
 
 type counter struct{}
+
+func GetHistoricLoad() Load {
+	return *rollingAvg
+}
 
 // GetLoad returns the CPU utilization % of the current process
 func GetLoad() Load {

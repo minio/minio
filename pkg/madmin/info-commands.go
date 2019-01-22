@@ -199,9 +199,10 @@ func (adm *AdminClient) ServerDrivesPerfInfo() ([]ServerDrivesPerfInfo, error) {
 // ServerCPULoadInfo holds information about address and cpu load of
 // a single server node
 type ServerCPULoadInfo struct {
-	Addr  string     `json:"addr"`
-	Error string     `json:"error,omitempty"`
-	Load  []cpu.Load `json:"load"`
+	Addr         string     `json:"addr"`
+	Error        string     `json:"error,omitempty"`
+	Load         []cpu.Load `json:"load"`
+	HistoricLoad []cpu.Load `json:"historic_load"`
 }
 
 // ServerCPULoadInfo - Returns cpu utilization information

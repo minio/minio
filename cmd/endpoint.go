@@ -228,6 +228,7 @@ func localEndpointsMemUsage(endpoints EndpointList) ServerMemUsageInfo {
 // local endpoints from given list of endpoints
 func localEndpointsCPULoad(endpoints EndpointList) ServerCPULoadInfo {
 	var cpuLoads []cpu.Load
+	var historicLoads []cpu.Load
 	var addr string
 	scratchSpace := map[string]bool{}
 	for _, endpoint := range endpoints {
@@ -239,12 +240,15 @@ func localEndpointsCPULoad(endpoints EndpointList) ServerCPULoadInfo {
 			addr = GetLocalPeer(endpoints)
 			cpuLoad := cpu.GetLoad()
 			cpuLoads = append(cpuLoads, cpuLoad)
+			historicLoad := cpu.GetHistoricLoad()
+			historicLoads = append(historicLoads, historicLoad)
 			scratchSpace[endpoint.Host] = true
 		}
 	}
 	return ServerCPULoadInfo{
-		Addr: addr,
-		Load: cpuLoads,
+		Addr:         addr,
+		Load:         cpuLoads,
+		HistoricLoad: historicLoads,
 	}
 }
 
