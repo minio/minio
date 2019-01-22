@@ -202,7 +202,7 @@ type ServerCPULoadInfo struct {
 	Addr         string     `json:"addr"`
 	Error        string     `json:"error,omitempty"`
 	Load         []cpu.Load `json:"load"`
-	HistoricLoad []cpu.Load `json:"historic_load"`
+	HistoricLoad []cpu.Load `json:"historicLoad"`
 }
 
 // ServerCPULoadInfo - Returns cpu utilization information
@@ -243,9 +243,10 @@ func (adm *AdminClient) ServerCPULoadInfo() ([]ServerCPULoadInfo, error) {
 // ServerMemUsageInfo holds information about address and memory utilization of
 // a single server node
 type ServerMemUsageInfo struct {
-	Addr  string      `json:"addr"`
-	Error string      `json:"error,omitempty"`
-	Usage []mem.Usage `json:"usage"`
+	Addr          string      `json:"addr"`
+	Error         string      `json:"error,omitempty"`
+	Usage         []mem.Usage `json:"usage"`
+	HistoricUsage []mem.Usage `json:"historicUsage"`
 }
 
 // ServerMemUsageInfo - Returns mem utilization information

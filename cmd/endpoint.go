@@ -204,6 +204,7 @@ func (endpoints EndpointList) GetString(i int) string {
 // local endpoints from given list of endpoints
 func localEndpointsMemUsage(endpoints EndpointList) ServerMemUsageInfo {
 	var memUsages []mem.Usage
+	var historicUsages []mem.Usage
 	var addr string
 	scratchSpace := map[string]bool{}
 	for _, endpoint := range endpoints {
@@ -215,12 +216,15 @@ func localEndpointsMemUsage(endpoints EndpointList) ServerMemUsageInfo {
 			addr = GetLocalPeer(endpoints)
 			memUsage := mem.GetUsage()
 			memUsages = append(memUsages, memUsage)
+			historicUsage := mem.GetHistoricUsage()
+			historicUsages = append(historicUsages, historicUsage)
 			scratchSpace[endpoint.Host] = true
 		}
 	}
 	return ServerMemUsageInfo{
-		Addr:  addr,
-		Usage: memUsages,
+		Addr:          addr,
+		Usage:         memUsages,
+		HistoricUsage: historicUsages,
 	}
 }
 

@@ -25,6 +25,10 @@ import (
 // server over its lifetime
 var rollingAvg *Load
 
+// cpuMeasureInterval is the interval of time between two
+// measurements of CPU load
+const cpuLoadMeasureInterval = 5 * time.Second
+
 // triggers the average load computation at server spawn
 func init() {
 	rollingAvg = &Load{
@@ -36,7 +40,7 @@ func init() {
 	var cycles float64
 	go func() {
 		for {
-			<-time.After(5 * time.Second)
+			time.Sleep(cpuLoadMeasureInterval)
 			cycles = cycles + 1
 			currLoad := GetLoad()
 			if rollingAvg.Max < currLoad.Max || rollingAvg.Max == 0 {
@@ -74,11 +78,26 @@ type Load struct {
 
 type counter struct{}
 
+// GetHistoricLoad returns the historic CPU utilization of the current process
 func GetHistoricLoad() Load {
 	return *rollingAvg
 }
 
-// GetLoad returns the CPU utilization % of the current process
+// GetLoad returns the CPU utilization of the current process
+// This function works by calcualating the amount of cpu clock
+// cycles the current process used in a given time window
+//
+// This corresponds to the CPU utilization calculation done by
+// tools like top. Here, we use the getclocktime with the
+// CLOCK_PROCESS_CPUTIME_ID parameter to obtain the total number of
+// clock ticks used by the process so far. Then we sleep for
+// 200ms and obtain the the total number of clock ticks again. The
+// difference between the two counts provides us the number of
+// clock ticks used by the process in the 200ms interval.
+//
+// The ratio of clock ticks used (measured in nanoseconds) to number
+// of nanoseconds in 200 milliseconds provides us the CPU usage
+// for the process currently
 func GetLoad() Load {
 	vals := make(chan time.Duration, 3)
 	wg := sync.WaitGroup{}
