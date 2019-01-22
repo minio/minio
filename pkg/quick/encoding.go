@@ -31,7 +31,6 @@ import (
 	"time"
 
 	etcd "github.com/coreos/etcd/clientv3"
-	dns "github.com/minio/minio/pkg/dns"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -160,7 +159,7 @@ func loadFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error
 		return fmt.Errorf("unexpected error %s returned by etcd setup, please check your endpoints %s", err, clnt.Endpoints())
 	}
 	if resp.Count == 0 {
-		return dns.ErrNoEntriesFound
+		return os.ErrNotExist
 	}
 
 	for _, ev := range resp.Kvs {
@@ -173,7 +172,7 @@ func loadFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error
 			return toUnmarshaller(filepath.Ext(filename))(fileData, v)
 		}
 	}
-	return dns.ErrNoEntriesFound
+	return os.ErrNotExist
 }
 
 // loadFileConfig unmarshals the file's content with the right

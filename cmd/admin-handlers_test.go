@@ -278,7 +278,7 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 
 	// Setup admin mgmt REST API handlers.
 	adminRouter := mux.NewRouter()
-	registerAdminRouter(adminRouter, true)
+	registerAdminRouter(adminRouter, true, true)
 
 	return &adminXLTestBed{
 		xlDirs:   xlDirs,
