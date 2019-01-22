@@ -1015,7 +1015,7 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 	if _, err = file.Seek(offset, io.SeekStart); err != nil {
 		return nil, err
 	}
-	return &posixLimitedReader{io.LimitedReader{file, length}}, nil
+	return &posixLimitedReader{io.LimitedReader{R: file, N: length}}, nil
 }
 
 // CreateFile - creates the file.

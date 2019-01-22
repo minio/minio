@@ -39,7 +39,7 @@ const (
 	SHA256 BitrotAlgorithm = 1 + iota
 	// HighwayHash256 represents the HighwayHash-256 hash function
 	HighwayHash256
-	// HighwayHash256 represents the Streaming HighwayHash-256 hash function
+	// HighwayHash256S represents the Streaming HighwayHash-256 hash function
 	HighwayHash256S
 	// BLAKE2b512 represents the BLAKE2b-512 hash function
 	BLAKE2b512
