@@ -68,4 +68,4 @@ To remove a dependency
 - Run `make pkg-remove PKG=foo/bar` from top-level directory
 
 ### What are the coding guidelines for Minio?
-``Minio`` is fully conformant with Golang style. Refer: [Effective Go](https://github.com/golang/go/wiki/CodeReviewComments) article from Golang project. If you observe offending code, please feel free to send a pull request or ping us on [Slack](slack.minio.io).
+``Minio`` is fully conformant with Golang style. Refer: [Effective Go](https://github.com/golang/go/wiki/CodeReviewComments) article from Golang project. If you observe offending code, please feel free to send a pull request or ping us on [Slack](https://slack.minio.io).
