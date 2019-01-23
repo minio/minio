@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"os"
 	"path"
 	"runtime"
 	"strings"
@@ -160,15 +159,18 @@ func initConfig(objAPI ObjectLayer) error {
 
 	if globalEtcdClient != nil {
 		if err := checkConfigEtcd(context.Background(), globalEtcdClient, getConfigFile()); err != nil {
-			return err
-		}
-		// Migrates all configs at old location.
-		if err := migrateConfig(); err != nil {
-			return err
-		}
-		// Migrates etcd ${HOME}/.minio/config.json to '/config/config.json'
-		if err := migrateConfigToMinioSys(objAPI); err != nil {
-			return err
+			if err == errConfigNotFound {
+				// Migrates all configs at old location.
+				if err = migrateConfig(); err != nil {
+					return err
+				}
+				// Migrates etcd ${HOME}/.minio/config.json to '/config/config.json'
+				if err = migrateConfigToMinioSys(objAPI); err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
 		}
 	} else {
 		if isFile(getConfigFile()) {
@@ -179,7 +181,7 @@ func initConfig(objAPI ObjectLayer) error {
 		// Migrates ${HOME}/.minio/config.json or config.json.deprecated
 		// to '<export_path>/.minio.sys/config/config.json'
 		// ignore if the file doesn't exist.
-		if err := migrateConfigToMinioSys(objAPI); err != nil && !os.IsNotExist(err) {
+		if err := migrateConfigToMinioSys(objAPI); err != nil {
 			return err
 		}
 	}
@@ -188,17 +190,6 @@ func initConfig(objAPI ObjectLayer) error {
 
 	// Watch config for changes and reloads them in-memory.
 	go watchConfig(objAPI, configFile, loadConfig)
-
-	if err := checkConfig(context.Background(), objAPI, configFile); err != nil {
-		if err == errConfigNotFound {
-			// Config file does not exist, we create it fresh and return upon success.
-			if err = newSrvConfig(objAPI); err != nil {
-				return err
-			}
-		} else {
-			return err
-		}
-	}
 
 	if err := migrateMinioSysConfig(objAPI); err != nil {
 		return err

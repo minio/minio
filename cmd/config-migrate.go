@@ -27,7 +27,6 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
 	"github.com/minio/minio/pkg/iam/policy"
@@ -235,7 +234,7 @@ func purgeV1() error {
 
 	cv1 := &configV1{}
 	_, err := Load(configFile, cv1)
-	if os.IsNotExist(err) || err == dns.ErrNoEntriesFound {
+	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("Unable to load config version ‘1’. %v", err)
@@ -2454,10 +2453,14 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 		}
 		// Read from deprecate file as well if necessary.
 		if _, err = Load(getConfigFile()+".deprecated", config); err != nil {
-			return err
+			if !os.IsNotExist(err) {
+				return err
+			}
+			// If all else fails simply initialize the server config.
+			return newSrvConfig(objAPI)
 		}
-	}
 
+	}
 	return saveServerConfig(context.Background(), objAPI, config)
 }
 

@@ -105,7 +105,7 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 	registerSTSRouter(router)
 
 	// Add Admin router, all APIs are enabled in server mode.
-	registerAdminRouter(router, true)
+	registerAdminRouter(router, true, true)
 
 	// Add healthcheck router
 	registerHealthCheckRouter(router)
