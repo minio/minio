@@ -22,6 +22,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -168,35 +169,54 @@ func randString(n int, src rand.Source, prefix string) string {
 	return prefix + string(b[0:30-len(prefix)])
 }
 
+func isAmazonS3Endpoint(urlStr string) bool {
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		panic(err)
+	}
+	return s3utils.IsAmazonEndpoint(*u)
+}
+
+// - Static credentials provided by user (i.e. MINIO_ACCESS_KEY)
+var defaultMinioProviders = []credentials.Provider{
+	&credentials.EnvMinio{},
+}
+
+// Chains all credential types, in the following order:
+//  - AWS env vars (i.e. AWS_ACCESS_KEY_ID)
+//  - AWS creds file (i.e. AWS_SHARED_CREDENTIALS_FILE or ~/.aws/credentials)
+//  - IAM profile based credentials. (performs an HTTP
+//    call to a pre-defined endpoint, only valid inside
+//    configured ec2 instances)
+var defaultAWSCredProviders = []credentials.Provider{
+	&credentials.EnvAWS{},
+	&credentials.FileAWSCredentials{},
+	&credentials.IAM{
+		Client: &http.Client{
+			Transport: minio.NewCustomHTTPTransport(),
+		},
+	},
+}
+
 // newS3 - Initializes a new client by auto probing S3 server signature.
-func newS3(url string) (*miniogo.Core, error) {
-	if url == "" {
-		url = "https://s3.amazonaws.com"
+func newS3(urlStr string) (*miniogo.Core, error) {
+	if urlStr == "" {
+		urlStr = "https://s3.amazonaws.com"
 	}
 
 	// Override default params if the host is provided
-	endpoint, secure, err := minio.ParseGatewayEndpoint(url)
+	endpoint, secure, err := minio.ParseGatewayEndpoint(urlStr)
 	if err != nil {
 		return nil, err
 	}
 
-	// Chains all credential types, in the following order:
-	//  - AWS env vars (i.e. AWS_ACCESS_KEY_ID)
-	//  - AWS creds file (i.e. AWS_SHARED_CREDENTIALS_FILE or ~/.aws/credentials)
-	//  - IAM profile based credentials. (performs an HTTP
-	//    call to a pre-defined endpoint, only valid inside
-	//    configured ec2 instances)
-	//  - Static credentials provided by user (i.e. MINIO_ACCESS_KEY)
-	creds := credentials.NewChainCredentials([]credentials.Provider{
-		&credentials.EnvAWS{},
-		&credentials.FileAWSCredentials{},
-		&credentials.IAM{
-			Client: &http.Client{
-				Transport: minio.NewCustomHTTPTransport(),
-			},
-		},
-		&credentials.EnvMinio{},
-	})
+	var creds *credentials.Credentials
+	if isAmazonS3Endpoint(urlStr) {
+		// If we see an Amazon S3 endpoint, then we use more ways to fetch backend credentials.
+		creds = credentials.NewChainCredentials(append(defaultAWSCredProviders, defaultMinioProviders...))
+	} else {
+		creds = credentials.NewChainCredentials(defaultMinioProviders)
+	}
 
 	clnt, err := miniogo.NewWithCredentials(endpoint, creds, secure, "")
 	if err != nil {
