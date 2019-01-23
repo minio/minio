@@ -146,6 +146,12 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 		globalCLIContext.Addr = ctx.String("address")
 	}
 
+	// Get Auto-TLS flag from command line argument.
+	globalCLIContext.AutoTLS = ctx.GlobalString("auto-tls")
+	if globalCLIContext.AutoTLS == "" {
+		globalCLIContext.AutoTLS = ctx.String("auto-tls")
+	}
+
 	// Set all config, certs and CAs directories.
 	var configSet, certsSet bool
 	globalConfigDir, configSet = newConfigDirFromCtx(ctx, "config-dir", defaultConfigDir.Get)

@@ -9,7 +9,7 @@ This guide explains how to configure Minio Server with TLS certificates on Linux
 
 ## <a name="install-minio-server"></a>1. Install Minio Server
 
-Install Minio Server using the instructions in the [Minio Quickstart Guide](http://docs.minio.io/docs/minio-quickstart-guide).
+Install Minio Server using the instructions in the [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide).
 
 ## <a name="use-an-existing-key-and-certificate-with-minio"></a>2. Use an Existing Key and Certificate with Minio 
 
@@ -27,230 +27,37 @@ Copy the existing private key and public certificate to the `certs` directory. T
 
 ## <a name="generate-use-self-signed-keys-certificates"></a>3. Generate and use Self-signed Keys and Certificates with Minio
 
-This section describes how to generate a self-signed certificate using various tools:
-
-3.1 [Use generate_cert.go to Generate a Certificate](#using-go) 
-3.2 [Use OpenSSL to Generate a Certificate](#using-open-ssl) 
-3.3 [Use OpenSSL (with IP address) to Generate a Certificate](#using-open-ssl-with-ip) 
-3.4 [Use GnuTLS (for Windows) to Generate a Certificate](#using-gnu-tls)
-
-**Note:**
-* Minio only supports keys and certificates in PEM format on Linux and Windows.
-* Minio doesn't currently support PFX certificates.
-
-### <a name="using-go"></a>3.1 Use generate_cert.go to Generate a Certificate
-
-Download [`generate_cert.go`](https://golang.org/src/crypto/tls/generate_cert.go?m=text).
-
-`generate_cert.go` is a simple *Go* tool to generate self-signed certificates, and provides SAN certificates with DNS and IP entries:
+The Minio Server can generate self-signed certificates, for example:
 
 ```sh
-go run generate_cert.go -ca --host "10.10.0.3"
+minio server ~/minio --auto-tls localhost
 ```
 
-A response similar to this one should be displayed:
+[![Output](https://raw.githubusercontent.com/minio/minio/master/docs/tls/startup.png)](#generate-use-self-signed-keys-certificates)
 
-```
-2018/11/21 10:16:18 wrote cert.pem
-2018/11/21 10:16:18 wrote key.pem
-```
+The `--auto-tls` flag enables self-signed certificate generation and expects a comma-separated list of 
+subject alternative names (SAN) - usually domain names or IP addresses.
 
-Rename `cert.pem` to `public.crt` and `key.pem` to `private.key`.
+If there is no valid private key within the `certs` directory the Minio Server will generate a new one.
+Additionally, the Minio Server generates a new TLS certificate with the provided SANs from the private key.
 
-### <a name="using-open-ssl"></a>3.2 Use OpenSSL to Generate a Certificate
+The generated certificate has a lifetime of one year. However, self-signed certificates are renewed when they expire.
+In contrast the private key is not re-generated. That means that the certificate changes when it expires while 
+its public key and the corresponding private key stay the same.
 
-Use one of the following methods to generate a certificate using `openssl`:
-
-* 3.2.1 [Generate a private key with ECDSA](#generate-private-key-with-ecdsa) 
-* 3.2.2 [Generate a private key with RSA](#generate-private-key-with-rsa)
-* 3.2.3 [Generate a self-signed certificate](#generate-a-self-signed-certificate)
-
-
-#### 3.2.1 <a name="generate-private-key-with-ecdsa"></a>Generate a private key with ECDSA.
-
-Use the following command to generate a private key with ECDSA:
+The Minio Server can also encrypt the generated private key using a password before storing it in the `certs` directory.
+Therefore the environment variable `MINIO_CERT_PASSWD` must be set **before** starting the Minio Server:
 
 ```sh
-openssl ecparam -genkey -name prime256v1 | openssl ec -out private.key
-```
-
-A response similar to this one should be displayed:
-
-```
-read EC key
-writing EC key
-```
-
-Alternatively, use the following command to generate a private ECDSA key protected by a password:
-
-```sh
-openssl ecparam -genkey -name prime256v1 | openssl ec -aes256 -out private.key -passout pass:PASSWORD
-```
-
-**Note:** NIST curves P-384 and P-521 are not currently supported.
-
-#### 3.2.2 <a name="generate-private-key-with-rsa"></a>Generate a private key with RSA.
-
-Use the following command to generate a private key with RSA:
-
-```sh
-openssl genrsa -out private.key 2048
-```  
-A response similar to this one should be displayed:
-
-```
-Generating RSA private key, 2048 bit long modulus
-............................................+++
-...........+++
-e is 65537 (0x10001)
-```
-
-Alternatively, use the following command to generate a private RSA key protected by a password:
-
-```sh
-openssl genrsa -aes256 -out private.key 2048 -passout pass:PASSWORD
-```
-
-**Note:** When using a password-protected private key, the password must be provided through the environment variable `MINIO_CERT_PASSWD` using the following command:
-
-```sh
-export MINIO_CERT_PASSWD=<PASSWORD>
+export MINIO_CERT_PASSWD=DoNotUseThisPassword!
 ``` 
 
-The default OpenSSL format for private encrypted keys is PKCS-8, but Minio only supports PKCS-1. An RSA key that has been formatted with PKCS-8 can be converted to PKCS-1 using the following command:
-
-```sh
-openssl rsa -in private-pkcs8-key.key -aes256 -passout pass:PASSWORD -out private.key
-```  
-
-#### <a name="generate-a-self-signed-certificate"></a>3.2.3 Generate a self-signed certificate.
-
-Use the following command to generate a self-signed certificate and enter a passphrase when prompted:
-
-```sh
-openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=US/ST=state/L=location/O=organization/CN=<domain.com>"
-```
-
-**Note:** Replace `<domain.com>` with the development domain name.
-
-Alternatively, use the command below to generate a self-signed wildcard certificate that is valid for all subdomains under `<domain.com>`. Wildcard certificates are useful for deploying distributed Minio instances, where each instance runs on a subdomain under a single parent domain.
-
-```sh
-openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=US/ST=state/L=location/O=organization/CN=<*.domain.com>"
-```
-
-### <a name="using-open-ssl-with-ip"></a>3.3 Use OpenSSL (with IP address) to Generate a Certificate
-
-This section describes how to specify an IP address to `openssl` when generating a certificate.
-
-#### 3.3.1 Create a configuration file.
-
-Create a file named `openssl.conf` with the content below. Change `IP.1` to point to the correct IP address:
-
-```sh
-[req]
-distinguished_name = req_distinguished_name
-x509_extensions = v3_req
-prompt = no
-
-[req_distinguished_name]
-C = US
-ST = VA
-L = Somewhere
-O = MyOrg
-OU = MyOU
-CN = MyServerName
-
-[v3_req]
-subjectAltName = @alt_names
-
-[alt_names]
-IP.1 = 127.0.0.1
-```
-
-#### 3.3.2 Run `openssl` and specify the configuration file:
-
-```sh
-openssl req -x509 -nodes -days 730 -newkey rsa:2048 -keyout private.key -out public.crt -config openssl.conf
-```
-
-### <a name="using-gnu-tls"></a>3.4 Use GnuTLS (for Windows) to Generate a Certificate
-
-This section describes how to use GnuTLS on Windows to generate a certificate.
-
-#### 3.4.1 Install and configure GnuTLS.
-Download and decompress the Windows version of GnuTLS from [here](http://www.gnutls.org/download.html).
-
-Use PowerShell to add the path of the extracted GnuTLS binary to the system path:
-
-```
-setx path "%path%;C:\Users\MyUser\Downloads\gnutls-3.4.9-w64\bin"
-```
-
-**Note:** PowerShell may need to be restarted for this change to take effect.
-
-#### 3.4.2 Generate a private key:
-Run the following command to generate a private `.key` file:
-
-```
-certtool.exe --generate-privkey --outfile private.key
-```
-
-A response similar to this one should be displayed:
-
-```
-Generating a 3072 bit RSA private key...
-```
-
-####3.4.3 Generate a public certificate:
-
-Create a file called `cert.cnf` with the content below. This file contains all of the information necessary to generate a certificate using `certtool.exe`:
-
-```
-# X.509 Certificate options
-#
-# DN options
-
-# The organization of the subject.
-organization = "Example Inc."
-
-# The organizational unit of the subject.
-#unit = "sleeping dept."
-
-# The state of the certificate owner.
-state = "Example"
-
-# The country of the subject. Two letter code.
-country = "EX"
-
-# The common name of the certificate owner.
-cn = "Sally Certowner"
-
-# In how many days, counting from today, this certificate will expire.
-expiration_days = 365
-
-# X.509 v3 extensions
-
-# DNS name(s) of the server
-dns_name = "localhost"
-
-# (Optional) Server IP address
-ip_address = "127.0.0.1"
-
-# Whether this certificate will be used for a TLS server
-tls_www_server
-
-# Whether this certificate will be used to encrypt data (needed
-# in TLS RSA cipher suites). Note that it is preferred to use different
-# keys for encryption and signing.
-encryption_key
-```
-
-Run `certtool.exe` and specify the configuration file to generate a certificate:
-
-```
-certtool.exe --generate-self-signed --load-privkey private.key --template cert.cnf --outfile public.crt
-```
+Further the Minio Server will print two hash values on startup. One is the SHA-256 hash value of the certificate.
+This value **should** be equal to the SHA-256 fingerprint which you can view in your browser. However, whenever the
+certificate (**not the public key**) changes - for instance if the certificate expires - then this hash value
+changes, too.   
+The other is the HPKP fingerprint of the public key. This value identifies the server's public key. It is usually 
+not changed when the certificate is renewed. Therefore, this value may stay the same even if your certificate expires.
 
 ## <a name="install-certificates-from-third-party-cas"></a>4. Install Certificates from Third-party CAs
 

@@ -151,22 +151,70 @@ Example 1:
 		"",
 	)
 
-	uiErrSSLUnexpectedError = newUIErrFn(
-		"Invalid TLS certificate",
-		"Please check the content of your certificate data",
-		`Only PEM (x.509) format is accepted as valid public & private certificates.`,
+	uiErrTLSNoPrivateKey = newUIErrFn(
+		"No TLS private key is present",
+		"Refer to https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls for information about how to load a TLS certificate in your server.",
+		"Please put your PEM-encoded private TLS key into the 'private.key' file of the TLS config directory",
 	)
 
-	uiErrSSLUnexpectedData = newUIErrFn(
-		"Invalid TLS certificate",
-		"Please check your certificate",
-		"",
+	uiErrTLSNoCertificate = newUIErrFn(
+		"No TLS certificate is present",
+		"Refer to https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls for information about how to load a TLS certificate in your server.",
+		"Please put your PEM-encoded TLS certificate matching the private key in `private.key` into the `public.crt` file of the TLS config directory",
 	)
 
-	uiErrSSLNoPassword = newUIErrFn(
+	uiErrTLSPaddedPrivateKey = newUIErrFn(
+		"The private key contains additional data",
+		"Refer to https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls for information about how to load a TLS certificate in your server.",
+		"Your private key contains some additional characters",
+	)
+
+	uiErrTLSPaddedCertificate = newUIErrFn(
+		"The certificate contains additional data",
+		"Refer to https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls for information about how to load a TLS certificate in your server.",
+		"Your certificate contains some additional characters",
+	)
+
+	uiErrTLSCertificateCreationFailed = newUIErrFn(
+		"Failed to generate a valid server TLS certiificate / private-key pair",
+		"Refer to https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls for information about how to load a TLS certificate in your server.",
+		"Maybe your private key does not match your the public key of your certificate",
+	)
+
+	uiErrTLSInvalidCertificate = newUIErrFn(
+		"The certificate is not well-formed",
+		"Refer to https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls for information about how to load a TLS certificate in your server.",
+		"Please put your well-formed PEM-encoded TLS certificate matching the private key in `private.key` into the `public.crt` file of the TLS config directory",
+	)
+
+	uiErrTLSNoPassword = newUIErrFn(
 		"Missing TLS password",
 		"Please set the password to environment variable `"+TLSPrivateKeyPassword+"` so that the private key can be decrypted",
 		"",
+	)
+
+	uiErrTLSWrongPassword = newUIErrFn(
+		"Unable to decrypt the private key using the provided password",
+		"Please set the correct password in environment variable "+TLSPrivateKeyPassword,
+		"",
+	)
+
+	uiErrTLSUnsupportedCurve = newUIErrFn(
+		"The elltipic curve specified by your private key is not supported",
+		"Refer to https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls for information about how to load a TLS certificate in your server.",
+		"Please use either the NIST curves P-224 or P-256. See: FIPS 186-3, section D.2.2.",
+	)
+
+	uiErrTLSUnsupportedKeyFormat = newUIErrFn(
+		"The format of the private key is not supported.",
+		"Refer to https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls for information about how to load a TLS certificate in your server.",
+		"Please use a PKCS1, EC or PKCS8 formated private key.",
+	)
+
+	uiErrTLSUnsupportedPKCS8Key = newUIErrFn(
+		"The PKCS8 private key is not supported.",
+		"Refer to https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls for information about how to load a TLS certificate in your server.",
+		"Please use a either a ECDSA or RSA private key.",
 	)
 
 	uiErrNoCertsAndHTTPSEndpoints = newUIErrFn(
@@ -178,12 +226,6 @@ Example 1:
 	uiErrCertsAndHTTPEndpoints = newUIErrFn(
 		"HTTP specified in endpoints, but the server in the local machine is configured with a TLS certificate",
 		"Please remove the certificate in the configuration directory or switch to HTTPS",
-		"",
-	)
-
-	uiErrSSLWrongPassword = newUIErrFn(
-		"Unable to decrypt the private key using the provided password",
-		"Please set the correct password in environment variable "+TLSPrivateKeyPassword,
 		"",
 	)
 

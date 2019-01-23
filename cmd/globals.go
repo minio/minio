@@ -96,6 +96,7 @@ var globalCLIContext = struct {
 	JSON, Quiet bool
 	Anonymous   bool
 	Addr        string
+	AutoTLS     string
 }{}
 
 var (

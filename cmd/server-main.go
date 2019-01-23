@@ -209,8 +209,15 @@ func serverMain(ctx *cli.Context) {
 
 	// Check and load TLS certificates.
 	var err error
-	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig()
-	logger.FatalIf(err, "Unable to load the TLS configuration")
+	globalTLSCerts, err = certs.New(getPublicCertFile(), getPrivateKeyFile(), loadX509KeyPair)
+	logger.FatalIf(err, "Invalid TLS configuration")
+
+	globalPublicCerts = globalTLSCerts.GetCA()
+	if certificate, _ := globalTLSCerts.GetCertificate(nil); certificate != nil {
+		globalIsSSL = true
+	} else {
+		globalIsSSL = false
+	}
 
 	// Check and load Root CAs.
 	globalRootCAs, err = getRootCAs(globalCertsCADir.Get())

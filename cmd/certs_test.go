@@ -17,13 +17,142 @@
 package cmd
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 )
+
+var loadPrivateKeyTests = []struct {
+	FileName   string
+	Password   string
+	PrivateKey string
+}{
+	{
+		FileName: "ec-key-1",
+		Password: "",
+		PrivateKey: `-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIHAWTq9/ShGA3zkepzmow3UX2qqb87Y1YgVPtqfp0OjxoAoGCCqGSM49
+AwEHoUQDQgAE8ZQHj+aBL6ekZSaq+gIsBRkftE5yi69GaqgA+bqOGS9ouSLfgoO8
+7AuoPGPb0SbbhcsZeWdO09vwPmF2Psgi7Q==
+-----END EC PRIVATE KEY-----
+`,
+	},
+	{
+		FileName: "ec-encrypted-key-1",
+		Password: "PASSWORD",
+		PrivateKey: `-----BEGIN EC PRIVATE KEY-----
+Proc-Type: 4,ENCRYPTED
+DEK-Info: AES-256-CBC,35616464EE87B8114FAAB5903EABB2D4
+
+GX6E3CThLoBvVfkLwpz27lsTx70y4ujmQ/oBRDEzYddHkotS1tWeg3aM/9hOMoDp
+u6Maqcj2ERphyClShDNC5VPz3an5cvsfXr3rUV2SQQTyQNozcY4+cmCLWNIzuGJl
+JL20VYkBVVyo+ia4t3ANlybIVGGDd64DsDOCtEZXPc4=
+-----END EC PRIVATE KEY-----
+`,
+	},
+	{
+		FileName: "rsa-key-1",
+		Password: "",
+		PrivateKey: `-----BEGIN RSA PRIVATE KEY-----
+MIIEowIBAAKCAQEAtVlgwUEUeLRX/xSph4gIBz7ffPfGAhFeuycsTeXomY2idNf/
+caWE68x7ZaCOsP27psI0oGJEM8Zl/beDbvtHvq4q8jR2l6k5A6PVohVdpyQqQ5Hn
+xRi5rmjveDkxUBiUpLs+/5u+ZVHNQLvjnS78vFH/faQS2WajbEd8sMEYsYDn0xVU
+SQcpCP5HGsPF+9zAbrIatD9O5pxJ9t/RdDPolitLBBxSmYjLlaVNQkNZMlaHvqfi
+HLrEMruj42Ccr0JZ8d/VKmpvBArKiOzrfXZ52mrPezgIkne84d9SlYE2k1rnwI6z
+hRXa4n+r3AdGgFhLm+kmcMpgEGMpSnIdhfCpTQIDAQABAoIBAHKme/YRx/h7w7o/
+fOJzjOfPxwlBuExsYOCfZnIlLQWPNqr6N8PIqh1NXKImfK/G6lEGLLFNDuNQxgA+
+efi7ImOZxwrzQhql4Ka9eH2NVnUp9xJa9xVziUiLjQIL3nJN6AOxYaXF9/wkWEhZ
+wRAJubzxdj4fcc9CBYWaOGmi2pK05NmHLuAQ4WVTXPJRdKdspgSsWpd1LY/xP3im
+Ygdy2rQqsXE3M7WplsUNA+AxDR/zzg+yxf21ogC8cNVZR2sHwwWXLOCrqGB/6Vx/
+MoF4+6Ju8nUdQ4ApoJe0kTJXMPHYnUba1J1MU3L7fQhYVWyNf9zg3UM3Vc+Npk8Y
+00Rx750CgYEA3DpSYgvQghYapckQFBCYUTQuBdSNsjGcIBiIahl9ejVk8GSEcjQX
+C/SL9b/KADEh2g9xzGh9E+RAam1v7Gqac3JEcdN/g8Pc07OclxLrkWp/ug793pz5
+vfE6Bndo49uZRI28Qo0tiRi0afCWm58MDWsO1E6BGPkTzib1fFlC15cCgYEA0s5f
+mnndV9R0Y1fUI6ZxBFLWx/gk5kHGsxWo5vA2QqOk1lU5GkqCfwcN4YIvHyEYHuLz
+yi+FDDYyToM9/CJIbXTfmoc2fV5d3Khw5CbzivB0kMRLEJyLJUIJOz6GO706K3pl
+FRwPJDmY1vGOAVHw9pJfRBbgc1feK5CIcnTCArsCgYEA0DN7CyJsP2+yRaWuQ6nk
+tnCEShLG2v43wcgvv07V56FvCi2dYXKJj03ku7JTwJaykDsltL/b7+BMXdGUjIfD
++PzAZHQ1C1cyABrAIbtLZbCvjDD8JWd2W/Igj1h4m2JSphLxNmHN+NyYQ8emOv3E
+ITNjU6fcOMXRyYXfc23X2YUCgYAMaArmW3+0WJOU+SlKA9So7Xsof6kkSAC6r26m
+UMLQvzLHTnKy4mm1siOV/wRo75is0KyKXKuW4WWqizzNpvLeRj+Wp5iEXlZl0x/5
+vXUd2zLxBixoyN3DjpRegTqDL4rJ3kUurd0SQ7WECOlTmI/24vxqVHJXN3ei1rnB
+CrAUWwKBgAMLi88PAcHgNOiRVD+VxzUQ+GVXcrdzYOQHL8XlP8A6N9rV9YBbnqzM
+zaEhqXN8KPIyxapSQG5GbpoGieIjHW4yrz/rLy0tXrc78eau4YoJ5JDOa/4vaFRp
+bSqopuI8CRX3V0/dtVlihD79AKSbOJO0dzb3tBY80Ux5uNfUDL9A
+-----END RSA PRIVATE KEY-----
+`,
+	},
+	{
+		FileName: "rsa-encrypted-key-1",
+		Password: "pwd123456",
+		PrivateKey: `-----BEGIN RSA PRIVATE KEY-----
+Proc-Type: 4,ENCRYPTED
+DEK-Info: AES-256-CBC,68CBA7EAA99B222251386E7E7207D982
+
+He1F82dWhW1RAPTVnZ2MStjEYactVWuDLbPjDZa9G02Mvcy/7I733Wjzag7sI6vX
+eKQToiOcZ5iMCnIPIIJ7sIIpk9pZRTxV5DkjQHnyQbTW9x47T1bLK9cUIdBtv22n
+lkvoZMdoUaK7fGHbLRJWyLka6xUlhr1R2ve7uRGd3yGPi2xGC5sPOKj8o2OTQYtx
+4AcRi4xBLAvLrQjNPVcYfaCXKi7HWc1kvra2cTHsdsrP17L1oOQJYw3PjJjIPl0O
+S3/Z6wW2/qfHcU7TBs9fL/K0VAy+wAtzw7d1WFUkUEHQjO3KlDj/dvL2i7EIC2Qy
+rmDELd54bcygo35xr2U5HIZhSfwyzJns4LxyiuMlbJCjA0SHywt8UJb4gJduw3gX
+YIJkhs56VEhXONAvERiUxs2Tkj5h0eQzQ7p7tvlDaqO3VpdewimbKPkqKtIEZmHo
+kGTcBPX+SWdII7JyJUa0TFk/1+GaUwzDNraFTB7H8iQCVbAJ/tf6H1fUrT9n0wCd
+SHtdWe5h5d1Ww1Wq3TYfacSZKR3Zv43ByOGS8kQNF9xd3/F4BoQHSMkLb+7bx5J2
+xqMe5mpT2x2vb5bSUWC/qPIAWgeStdy8r8Sl001Y6z0Ek3qAvjIOMXNpd8q4YlBP
+Kykp0V61oiqsohcarcbhD2+fWWEuzb9BXNXY6S14O1DG8oeLu5jFB+uyYzi/Ov1T
+TUvet8KuhouGw6Cj5n9pihxxEZW9oFQiSXTUGzJnOqFyopDx6YdDT57neaAKDkzt
+X4qij1oqPGO3DC1znnAXFOlLjzcRoZ0dRK7S/amgF4Og53pt7hTeZFbcweTbPWKV
+suDJOloX0g8IXZ5TjIbFJunVxQRjBQ7R0BuSDz+Rx6vuxqCPMtRBDWbq2yRfA5if
+ER7Ib2qVL8Z8VnNgDyni4C8u7ZvdXiCrUssFJxs/GFBU7G6wYUyZGxXzT9i208AS
+SnY2yVsEN3XK3X6RfIPTLR4AkEGJrbaZl4/XJbYOLkiweRKETpqv/vTQnvhd7TgO
+FU6GvqNj/3nkc6dJrERQK8ktegnsuHIuHnDrRN2IChS3PSiO11ceiMGXe2lASGVc
+jFxMLERpp0owCbOWgGQ270c1QGujLg/Wl5NWaXoof7JtjcxYktm6AvoZztj5dkEq
+v6zZ48KckgTolyVqZdvf0FjeqcY0UUZh9VzcJdkv7y2UQMu6ycn+Jq9Uo5RSoJkP
+A1y91yOsQsXilaUVcCgRRat/8I6+wNlB+fOnL094y1PpMRY/J05Mv/i9eGKXjgcH
+pQmO4ctvB6p1/ZEK9X/MwDUZnZpsGkFCrIveq7kPitR9H9bmsenQBDW4UxJgFlX9
+tKFcymiNXHAwKoRCWCL8Q7GPtFRHuoi+y68/OdsoPeLxxtmG7Kw+dBsZVTJzN081
+be+MDtFAdW3msJsx2J0OhzKahg4aL9EbTPT44lkychzKJTLeLXtaLgfY0DnjAXqd
+wg+P21bTfYf4/seUj2mYGr/Zb9u5BqUdS0ni1KuKkIIlNM2EfKcbwz4C59J3OG25
++WAvoL7eJWHpgH8J27xuYfGW0xbbLcLaYdSxxdHHYEGD5EUNf0+3ALQYR9h322ER
+-----END RSA PRIVATE KEY-----
+`,
+	},
+}
+
+func TestLoadPrivateKey(t *testing.T) {
+	defer os.Unsetenv(TLSPrivateKeyPassword)
+	for i, test := range loadPrivateKeyTests {
+		if test.Password != "" {
+			os.Setenv(TLSPrivateKeyPassword, test.Password)
+		} else {
+			os.Unsetenv(TLSPrivateKeyPassword)
+		}
+
+		filename, err := createTempFile(test.FileName, test.PrivateKey)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to generate tmp file '%s'", i, test.FileName)
+		}
+		defer os.Remove(filename)
+		if _, _, _, err = loadPrivateKey(filename); err != nil {
+			t.Fatalf("Test %d: Failed to load private key from '%s': %s", i, test.FileName, err)
+		}
+	}
+}
+
+func TestGeneratePrivateKey(t *testing.T) {
+	defer os.Unsetenv(TLSPrivateKeyPassword)
+	os.Setenv(TLSPrivateKeyPassword, "PASSWORD")
+
+	filename := filepath.Join(os.TempDir(), "generated-key-1")
+	if err := generatePrivateKey(filename); err != nil {
+		t.Fatalf("Failed to generate private key: %s", err)
+	}
+	defer os.Remove(filename)
+	if _, _, _, err := loadPrivateKey(filename); err != nil {
+		t.Fatalf("Failed to load private key from '%s': %s", filename, err)
+	}
+}
 
 func createTempFile(prefix, content string) (tempFile string, err error) {
 	var tmpfile *os.File
@@ -44,156 +173,80 @@ func createTempFile(prefix, content string) (tempFile string, err error) {
 	return tempFile, err
 }
 
-func TestParsePublicCertFile(t *testing.T) {
-	tempFile1, err := createTempFile("public-cert-file", "")
-	if err != nil {
-		t.Fatalf("Unable to create temporary file. %v", err)
-	}
-	defer os.Remove(tempFile1)
+var decodeCertificatesTests = []struct {
+	FileName    string
+	Certificate string
+}{
+	{
+		FileName: "certificate-1",
+		Certificate: `-----BEGIN CERTIFICATE-----
+MIIBozCCAUqgAwIBAgIRAP+TjqXkfhe5taSx89Tch7QwCgYIKoZIzj0EAwIwLTEZ
+MBcGA1UEChMQTWluaW8gZGVwbG95bWVudDEQMA4GA1UECxMHdHV4Ym9vazAeFw0x
+OTAxMTgyMjUxMDdaFw0yMDAxMTgyMjUxMDdaMC0xGTAXBgNVBAoTEE1pbmlvIGRl
+cGxveW1lbnQxEDAOBgNVBAsTB3R1eGJvb2swWTATBgcqhkjOPQIBBggqhkjOPQMB
+BwNCAATNS0Si8DFueftTN4fDeVPICmzi3UyFn3PX6wWKNe3Q7bHQqmkxg8Zlygv9
+4/f0fGcyneyFBChRiThw7IF5rVWuo0swSTAOBgNVHQ8BAf8EBAMCB4AwEwYDVR0l
+BAwwCgYIKwYBBQUHAwEwDAYDVR0TAQH/BAIwADAUBgNVHREEDTALgglsb2NhbGhv
+c3QwCgYIKoZIzj0EAwIDRwAwRAIgD4pSpYUiucHx2yhbvXwiyvY7BamObw+BSE3d
+HPPbnksCIHSvXXVXQBvIS5H457npqIfQ+TsJ8QlFYXeh5vVjj9b7
+-----END CERTIFICATE-----`,
+	},
+	{
+		FileName: "certificate-2",
+		Certificate: `-----BEGIN CERTIFICATE-----
+MIIGFjCCBP6gAwIBAgIQBK9K/Z3oYiR1oVgVIqWkGzANBgkqhkiG9w0BAQsFADBN
+MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMScwJQYDVQQDEx5E
+aWdpQ2VydCBTSEEyIFNlY3VyZSBTZXJ2ZXIgQ0EwHhcNMTgxMTI3MDAwMDAwWhcN
+MTkxMjAyMTIwMDAwWjBfMQswCQYDVQQGEwJVUzETMBEGA1UECBMKQ2FsaWZvcm5p
+YTESMBAGA1UEBxMJUGFsbyBBbHRvMRQwEgYDVQQKEwtNaW5pbywgSW5jLjERMA8G
+A1UEAwwIKi5taW4uaW8wggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDI
+K4IK/BwAb/Pl/xTEMRhmlqyUUvhTawgOQDuLsYyOxZVRc4ZyattdV5315nYok7Ie
+ocSr9jJdPDExK67Kx0NCgkZVkpAczJSRf6Fxx1OxJ38TcIW3s4eNyz3C5/Vtu7v8
+D0NndbYtUns9i0DUxG957NOk2Z8qnhUlLdvhCrxfb0owqOEYSYAUHiRJuouWpcKy
+26pDNc6ORfubcHkITgMWnIXI/hlVjh3EJTx7F3Nhkv5jAcxTpSZypAvVoI7HrErQ
+R50sHsHOx2GTG6hgM/8KmJWv+yrMUj8KM/K5Np1Hw8t/ato26HJMQR1FytrvUU7W
+3Z8fQRDUYcBFvjuDi735AgMBAAGjggLeMIIC2jAfBgNVHSMEGDAWgBQPgGEcgjFh
+1S8o541GOLQs4cbZ4jAdBgNVHQ4EFgQUEorxGfbgpj4CHqf710+aLh2mw0kwGwYD
+VR0RBBQwEoIIKi5taW4uaW+CBm1pbi5pbzAOBgNVHQ8BAf8EBAMCBaAwHQYDVR0l
+BBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMGsGA1UdHwRkMGIwL6AtoCuGKWh0dHA6
+Ly9jcmwzLmRpZ2ljZXJ0LmNvbS9zc2NhLXNoYTItZzYuY3JsMC+gLaArhilodHRw
+Oi8vY3JsNC5kaWdpY2VydC5jb20vc3NjYS1zaGEyLWc2LmNybDBMBgNVHSAERTBD
+MDcGCWCGSAGG/WwBATAqMCgGCCsGAQUFBwIBFhxodHRwczovL3d3dy5kaWdpY2Vy
+dC5jb20vQ1BTMAgGBmeBDAECAjB8BggrBgEFBQcBAQRwMG4wJAYIKwYBBQUHMAGG
+GGh0dHA6Ly9vY3NwLmRpZ2ljZXJ0LmNvbTBGBggrBgEFBQcwAoY6aHR0cDovL2Nh
+Y2VydHMuZGlnaWNlcnQuY29tL0RpZ2lDZXJ0U0hBMlNlY3VyZVNlcnZlckNBLmNy
+dDAMBgNVHRMBAf8EAjAAMIIBAwYKKwYBBAHWeQIEAgSB9ASB8QDvAHYA7ku9t3XO
+YLrhQmkfq+GeZqMPfl+wctiDAMR7iXqo/csAAAFnVnMTfQAABAMARzBFAiBJgrib
+BQubP427vWAfp3FM0/4FL11jj9hiB7iz53dXDgIhAOhRgg/LvdoLucTwv1JTbvIg
+5QfQwVvsQmWWdjEIssBKAHUAh3W/51l8+IxDmV+9827/Vo1HVjb/SrVgwbTq/16g
+gw8AAAFnVnMUVQAABAMARjBEAiB+WVXWhZs8hJQV26PQoIIP2YRlYLXl5xJzVVKg
+kNZytQIgANctiBeHIJ71PkO8q+jRFALfTs17ftOugVf90qY+qu4wDQYJKoZIhvcN
+AQELBQADggEBAJ20jQMNqcw4ZfCJNNVK/wyIZrEelqRvhhUibJDlmWApYU/Yfket
+dwXY9/bmuHTHIuhzzvAaWNDYOnBMnjBENFjGzdpLOkN/u7v3HMRBs8JskHdz3Ghk
+vxmI1aGgLKxM/Y2ZjdMO33ISzZZclTr6edY6E4GNvtiYZDArYRfVkgTXM+dR53Se
+6FfhT1x96OaqYzn9u2PZ01sBZnCQLwmXNlLpa/tsS3YqY6x6YDByqE8xNV/GPPFX
+eZBPwcK/4FJKMoyA01zsSNH+7DtRSwhbS2FQvNw8jVGh8SUPv8MtGPmVDwHgVEm6
+O/YdUH9g3xVN+6IWMfA2Nm5jXhr9cdEK5zY=  
+-----END CERTIFICATE-----  `,
+	},
+}
 
-	tempFile2, err := createTempFile("public-cert-file",
-		`-----BEGIN CERTIFICATE-----
-MIICdTCCAd4CCQCO5G/W1xcE9TANBgkqhkiG9w0BAQUFADB/MQswCQYDVQQGEwJa
-WTEOMAwGA1UECBMFTWluaW8xETAPBgNVBAcTCEludGVybmV0MQ4wDAYDVQQKEwVN
-aW5pbzEOMAwGA1UECxMFTWluaW8xDjAMBgNVBAMTBU1pbmlvMR0wGwYJKoZIhvcN
-AQkBFg50ZXN0c0BtaW5pby5pbzAeFw0xNjEwMTQxMTM0MjJaFw0xNzEwMTQxMTM0
-MjJaMH8xCzAJBgNVBAYTAlpZMQ4wDAYDVQQIEwVNaW5pbzERMA8GA1UEBxMISW50
-ZXJuZXQxDjAMBgNVBA-some-junk-Q4wDAYDVQQLEwVNaW5pbzEOMAwGA1UEAxMF
-TWluaW8xHTAbBgkqhkiG9w0BCQEWDnRlc3RzQG1pbmlvLmlvMIGfMA0GCSqGSIb3
-DQEBAQUAA4GNADCBiQKBgQDwNUYB/Sj79WsUE8qnXzzh2glSzWxUE79sCOpQYK83
-HWkrl5WxlG8ZxDR1IQV9Ex/lzigJu8G+KXahon6a+3n5GhNrYRe5kIXHQHz0qvv4
-aMulqlnYpvSfC83aaO9GVBtwXS/O4Nykd7QBg4nZlazVmsGk7POOjhpjGShRsqpU
-JwIDAQABMA0GCSqGSIb3DQEBBQUAA4GBALqjOA6bD8BEl7hkQ8XwX/owSAL0URDe
-nUfCOsXgIIAqgw4uTCLOfCJVZNKmRT+KguvPAQ6Z80vau2UxPX5Q2Q+OHXDRrEnK
-FjqSBgLP06Qw7a++bshlWGTt5bHWOneW3EQikedckVuIKPkOCib9yGi4VmBBjdFE
-M9ofSEt/bdRD
------END CERTIFICATE-----`)
-	if err != nil {
-		t.Fatalf("Unable to create temporary file. %v", err)
-	}
-	defer os.Remove(tempFile2)
-
-	tempFile3, err := createTempFile("public-cert-file",
-		`-----BEGIN CERTIFICATE-----
-MIICdTCCAd4CCQCO5G/W1xcE9TANBgkqhkiG9w0BAQUFADB/MQswCQYDVQQGEwJa
-WTEOMAwGA1UECBMFTWluaW8xETAPBgNVBAcTCEludGVybmV0MQ4wDAYDVQQKEwVN
-aW5pbzEOMAwGA1UECxMFTWluaW8xDjAMBgNVBAMTBU1pbmlvMR0wGwYJKoZIhvcN
-AQkBFg50ZXN0c0BtaW5pby5pbzAeFw0xNjEwMTQxMTM0MjJaFw0xNzEwMTQxMTM0
-MjJaMH8xCzAJBgNVBAYTAlpZMQ4wDAYDVQQIEwVNaW5pbzERMA8GA1UEBxMISW50
-ZXJuZXQxDjAMBgNVBAabababababaQ4wDAYDVQQLEwVNaW5pbzEOMAwGA1UEAxMF
-TWluaW8xHTAbBgkqhkiG9w0BCQEWDnRlc3RzQG1pbmlvLmlvMIGfMA0GCSqGSIb3
-DQEBAQUAA4GNADCBiQKBgQDwNUYB/Sj79WsUE8qnXzzh2glSzWxUE79sCOpQYK83
-HWkrl5WxlG8ZxDR1IQV9Ex/lzigJu8G+KXahon6a+3n5GhNrYRe5kIXHQHz0qvv4
-aMulqlnYpvSfC83aaO9GVBtwXS/O4Nykd7QBg4nZlazVmsGk7POOjhpjGShRsqpU
-JwIDAQABMA0GCSqGSIb3DQEBBQUAA4GBALqjOA6bD8BEl7hkQ8XwX/owSAL0URDe
-nUfCOsXgIIAqgw4uTCLOfCJVZNKmRT+KguvPAQ6Z80vau2UxPX5Q2Q+OHXDRrEnK
-FjqSBgLP06Qw7a++bshlWGTt5bHWOneW3EQikedckVuIKPkOCib9yGi4VmBBjdFE
-M9ofSEt/bdRD
------END CERTIFICATE-----`)
-	if err != nil {
-		t.Fatalf("Unable to create temporary file. %v", err)
-	}
-	defer os.Remove(tempFile3)
-
-	tempFile4, err := createTempFile("public-cert-file",
-		`-----BEGIN CERTIFICATE-----
-MIICdTCCAd4CCQCO5G/W1xcE9TANBgkqhkiG9w0BAQUFADB/MQswCQYDVQQGEwJa
-WTEOMAwGA1UECBMFTWluaW8xETAPBgNVBAcTCEludGVybmV0MQ4wDAYDVQQKEwVN
-aW5pbzEOMAwGA1UECxMFTWluaW8xDjAMBgNVBAMTBU1pbmlvMR0wGwYJKoZIhvcN
-AQkBFg50ZXN0c0BtaW5pby5pbzAeFw0xNjEwMTQxMTM0MjJaFw0xNzEwMTQxMTM0
-MjJaMH8xCzAJBgNVBAYTAlpZMQ4wDAYDVQQIEwVNaW5pbzERMA8GA1UEBxMISW50
-ZXJuZXQxDjAMBgNVBAoTBU1pbmlvMQ4wDAYDVQQLEwVNaW5pbzEOMAwGA1UEAxMF
-TWluaW8xHTAbBgkqhkiG9w0BCQEWDnRlc3RzQG1pbmlvLmlvMIGfMA0GCSqGSIb3
-DQEBAQUAA4GNADCBiQKBgQDwNUYB/Sj79WsUE8qnXzzh2glSzWxUE79sCOpQYK83
-HWkrl5WxlG8ZxDR1IQV9Ex/lzigJu8G+KXahon6a+3n5GhNrYRe5kIXHQHz0qvv4
-aMulqlnYpvSfC83aaO9GVBtwXS/O4Nykd7QBg4nZlazVmsGk7POOjhpjGShRsqpU
-JwIDAQABMA0GCSqGSIb3DQEBBQUAA4GBALqjOA6bD8BEl7hkQ8XwX/owSAL0URDe
-nUfCOsXgIIAqgw4uTCLOfCJVZNKmRT+KguvPAQ6Z80vau2UxPX5Q2Q+OHXDRrEnK
-FjqSBgLP06Qw7a++bshlWGTt5bHWOneW3EQikedckVuIKPkOCib9yGi4VmBBjdFE
-M9ofSEt/bdRD
------END CERTIFICATE-----`)
-	if err != nil {
-		t.Fatalf("Unable to create temporary file. %v", err)
-	}
-	defer os.Remove(tempFile4)
-
-	tempFile5, err := createTempFile("public-cert-file",
-		`-----BEGIN CERTIFICATE-----
-MIICdTCCAd4CCQCO5G/W1xcE9TANBgkqhkiG9w0BAQUFADB/MQswCQYDVQQGEwJa
-WTEOMAwGA1UECBMFTWluaW8xETAPBgNVBAcTCEludGVybmV0MQ4wDAYDVQQKEwVN
-aW5pbzEOMAwGA1UECxMFTWluaW8xDjAMBgNVBAMTBU1pbmlvMR0wGwYJKoZIhvcN
-AQkBFg50ZXN0c0BtaW5pby5pbzAeFw0xNjEwMTQxMTM0MjJaFw0xNzEwMTQxMTM0
-MjJaMH8xCzAJBgNVBAYTAlpZMQ4wDAYDVQQIEwVNaW5pbzERMA8GA1UEBxMISW50
-ZXJuZXQxDjAMBgNVBAoTBU1pbmlvMQ4wDAYDVQQLEwVNaW5pbzEOMAwGA1UEAxMF
-TWluaW8xHTAbBgkqhkiG9w0BCQEWDnRlc3RzQG1pbmlvLmlvMIGfMA0GCSqGSIb3
-DQEBAQUAA4GNADCBiQKBgQDwNUYB/Sj79WsUE8qnXzzh2glSzWxUE79sCOpQYK83
-HWkrl5WxlG8ZxDR1IQV9Ex/lzigJu8G+KXahon6a+3n5GhNrYRe5kIXHQHz0qvv4
-aMulqlnYpvSfC83aaO9GVBtwXS/O4Nykd7QBg4nZlazVmsGk7POOjhpjGShRsqpU
-JwIDAQABMA0GCSqGSIb3DQEBBQUAA4GBALqjOA6bD8BEl7hkQ8XwX/owSAL0URDe
-nUfCOsXgIIAqgw4uTCLOfCJVZNKmRT+KguvPAQ6Z80vau2UxPX5Q2Q+OHXDRrEnK
-FjqSBgLP06Qw7a++bshlWGTt5bHWOneW3EQikedckVuIKPkOCib9yGi4VmBBjdFE
-M9ofSEt/bdRD
------END CERTIFICATE-----
------BEGIN CERTIFICATE-----
-MIICdTCCAd4CCQCO5G/W1xcE9TANBgkqhkiG9w0BAQUFADB/MQswCQYDVQQGEwJa
-WTEOMAwGA1UECBMFTWluaW8xETAPBgNVBAcTCEludGVybmV0MQ4wDAYDVQQKEwVN
-aW5pbzEOMAwGA1UECxMFTWluaW8xDjAMBgNVBAMTBU1pbmlvMR0wGwYJKoZIhvcN
-AQkBFg50ZXN0c0BtaW5pby5pbzAeFw0xNjEwMTQxMTM0MjJaFw0xNzEwMTQxMTM0
-MjJaMH8xCzAJBgNVBAYTAlpZMQ4wDAYDVQQIEwVNaW5pbzERMA8GA1UEBxMISW50
-ZXJuZXQxDjAMBgNVBAoTBU1pbmlvMQ4wDAYDVQQLEwVNaW5pbzEOMAwGA1UEAxMF
-TWluaW8xHTAbBgkqhkiG9w0BCQEWDnRlc3RzQG1pbmlvLmlvMIGfMA0GCSqGSIb3
-DQEBAQUAA4GNADCBiQKBgQDwNUYB/Sj79WsUE8qnXzzh2glSzWxUE79sCOpQYK83
-HWkrl5WxlG8ZxDR1IQV9Ex/lzigJu8G+KXahon6a+3n5GhNrYRe5kIXHQHz0qvv4
-aMulqlnYpvSfC83aaO9GVBtwXS/O4Nykd7QBg4nZlazVmsGk7POOjhpjGShRsqpU
-JwIDAQABMA0GCSqGSIb3DQEBBQUAA4GBALqjOA6bD8BEl7hkQ8XwX/owSAL0URDe
-nUfCOsXgIIAqgw4uTCLOfCJVZNKmRT+KguvPAQ6Z80vau2UxPX5Q2Q+OHXDRrEnK
-FjqSBgLP06Qw7a++bshlWGTt5bHWOneW3EQikedckVuIKPkOCib9yGi4VmBBjdFE
-M9ofSEt/bdRD
------END CERTIFICATE-----`)
-	if err != nil {
-		t.Fatalf("Unable to create temporary file. %v", err)
-	}
-	defer os.Remove(tempFile5)
-
-	nonexistentErr := fmt.Errorf("open nonexistent-file: no such file or directory")
-	if runtime.GOOS == "windows" {
-		// Below concatenation is done to get rid of goline error
-		// "error strings should not be capitalized or end with punctuation or a newline"
-		nonexistentErr = fmt.Errorf("open nonexistent-file:" + " The system cannot find the file specified.")
-	}
-
-	testCases := []struct {
-		certFile          string
-		expectedResultLen int
-		expectedErr       error
-	}{
-		{"nonexistent-file", 0, nonexistentErr},
-		{tempFile1, 0, fmt.Errorf("Empty public certificate file %s", tempFile1)},
-		{tempFile2, 0, fmt.Errorf("Could not read PEM block from file %s", tempFile2)},
-		{tempFile3, 0, fmt.Errorf("asn1: structure error: sequence tag mismatch")},
-		{tempFile4, 1, nil},
-		{tempFile5, 2, nil},
-	}
-
-	for _, testCase := range testCases {
-		certs, err := parsePublicCertFile(testCase.certFile)
-
-		if testCase.expectedErr == nil {
-			if err != nil {
-				t.Fatalf("error: expected = <nil>, got = %v", err)
-			}
-		} else if err == nil {
-			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
-		} else if testCase.expectedErr.Error() != err.Error() {
-			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
+func TestDecodeCertificate(t *testing.T) {
+	for i, test := range decodeCertificatesTests {
+		filename, err := createTempFile(test.FileName, test.Certificate)
+		if err != nil {
+			t.Fatalf("Test %d: failed to write certificate: %s", i, err)
 		}
-
-		if len(certs) != testCase.expectedResultLen {
-			t.Fatalf("certs: expected = %v, got = %v", testCase.expectedResultLen, len(certs))
+		defer os.Remove(filename)
+		data, err := ioutil.ReadFile(filename)
+		if err != nil {
+			t.Fatalf("Test %d: failed to read certificate: %s", i, err)
+		}
+		if _, err = decodeCertificates(data); err != nil {
+			t.Fatalf("Test %d: failed to decode certificate: %s", i, err)
 		}
 	}
 }
-
 func TestGetRootCAs(t *testing.T) {
 	emptydir, err := ioutil.TempDir("", "test-get-root-cas")
 	if err != nil {
@@ -264,7 +317,7 @@ func TestLoadX509KeyPair(t *testing.T) {
 		if testCase.password != "" {
 			os.Setenv(TLSPrivateKeyPassword, testCase.password)
 		}
-		_, err = loadX509KeyPair(certificate, privateKey)
+		_, _, err = loadX509KeyPair(certificate, privateKey)
 		if err != nil && !testCase.shouldFail {
 			t.Errorf("Test %d: test should succeed but it failed: %v", i, err)
 		}

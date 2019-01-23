@@ -51,6 +51,11 @@ var globalFlags = []cli.Flag{
 		Name:  "json",
 		Usage: "Output server logs and startup information in json format.",
 	},
+	cli.StringFlag{
+		Name:  "auto-tls",
+		Value: "",
+		Usage: "Automatically generate TLS private key and certificate.",
+	},
 }
 
 // Help template for minio.

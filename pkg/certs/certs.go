@@ -18,6 +18,7 @@ package certs
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"os"
 	"path/filepath"
 	"sync"
@@ -36,7 +37,8 @@ type Certs struct {
 	loadCert LoadX509KeyPairFunc
 
 	// points to the latest certificate.
-	cert tls.Certificate
+	cert    *tls.Certificate
+	caCerts []*x509.Certificate
 
 	// internal param to track for events, also
 	// used to close the watcher.
@@ -44,18 +46,11 @@ type Certs struct {
 }
 
 // LoadX509KeyPairFunc - provides a type for custom cert loader function.
-type LoadX509KeyPairFunc func(certFile, keyFile string) (tls.Certificate, error)
+type LoadX509KeyPairFunc func(certFile, keyFile string) (*tls.Certificate, []*x509.Certificate,
+	error)
 
 // New initializes a new certs monitor.
 func New(certFile, keyFile string, loadCert LoadX509KeyPairFunc) (*Certs, error) {
-	certFileIsLink, err := checkSymlink(certFile)
-	if err != nil {
-		return nil, err
-	}
-	keyFileIsLink, err := checkSymlink(keyFile)
-	if err != nil {
-		return nil, err
-	}
 	c := &Certs{
 		certFile: certFile,
 		keyFile:  keyFile,
@@ -65,54 +60,49 @@ func New(certFile, keyFile string, loadCert LoadX509KeyPairFunc) (*Certs, error)
 		e: make(chan notify.EventInfo, 1),
 	}
 
-	if certFileIsLink && keyFileIsLink {
-		if err := c.watchSymlinks(); err != nil {
-			return nil, err
-		}
+	var err error
+	c.cert, c.caCerts, err = c.loadCert(c.certFile, c.keyFile)
+	if err != nil {
+		return nil, err
+	}
+
+	if checkSymlink(certFile) && checkSymlink(keyFile) {
+		go c.watchSymlinks()
 	} else {
-		if err := c.watch(); err != nil {
+		if err = c.watch(); err != nil {
 			return nil, err
 		}
 	}
-
 	return c, nil
 }
 
-func checkSymlink(file string) (bool, error) {
+func checkSymlink(file string) bool {
 	st, err := os.Lstat(file)
 	if err != nil {
-		return false, err
+		return false
 	}
-	return st.Mode()&os.ModeSymlink == os.ModeSymlink, nil
+	return st.Mode()&os.ModeSymlink == os.ModeSymlink
 }
 
 // watchSymlinks reloads symlinked files since fsnotify cannot watch
 // on symbolic links.
-func (c *Certs) watchSymlinks() (err error) {
-	c.Lock()
-	c.cert, err = c.loadCert(c.certFile, c.keyFile)
-	c.Unlock()
-	if err != nil {
-		return err
-	}
-	go func() {
-		for {
-			select {
-			case <-c.e:
-				// Once stopped exits this routine.
-				return
-			case <-time.After(24 * time.Hour):
-				cert, cerr := c.loadCert(c.certFile, c.keyFile)
-				if cerr != nil {
-					continue
-				}
-				c.Lock()
-				c.cert = cert
-				c.Unlock()
+func (c *Certs) watchSymlinks() {
+	for {
+		select {
+		case <-c.e:
+			// Once stopped exits this routine.
+			return
+		case <-time.After(24 * time.Hour):
+			cert, caCerts, err := c.loadCert(c.certFile, c.keyFile)
+			if err != nil {
+				continue
 			}
+			c.Lock()
+			c.cert = cert
+			c.caCerts = caCerts
+			c.Unlock()
 		}
-	}()
-	return nil
+	}
 }
 
 // watch starts watching for changes to the certificate
@@ -127,7 +117,6 @@ func (c *Certs) watch() (err error) {
 			notify.Stop(c.e)
 		}
 	}()
-
 	// Windows doesn't allow for watching file changes but instead allows
 	// for directory changes only, while we can still watch for changes
 	// on files on other platforms. Watch parent directory on all platforms
@@ -136,12 +125,6 @@ func (c *Certs) watch() (err error) {
 		return err
 	}
 	if err = notify.Watch(filepath.Dir(c.keyFile), c.e, eventWrite...); err != nil {
-		return err
-	}
-	c.Lock()
-	c.cert, err = c.loadCert(c.certFile, c.keyFile)
-	c.Unlock()
-	if err != nil {
 		return err
 	}
 	go c.run()
@@ -155,7 +138,7 @@ func (c *Certs) run() {
 			certChanged := base == filepath.Base(c.certFile)
 			keyChanged := base == filepath.Base(c.keyFile)
 			if certChanged || keyChanged {
-				cert, err := c.loadCert(c.certFile, c.keyFile)
+				cert, caCerts, err := c.loadCert(c.certFile, c.keyFile)
 				if err != nil {
 					// ignore the error continue to use
 					// old certificates.
@@ -163,6 +146,7 @@ func (c *Certs) run() {
 				}
 				c.Lock()
 				c.cert = cert
+				c.caCerts = caCerts
 				c.Unlock()
 			}
 		}
@@ -177,7 +161,15 @@ type GetCertificateFunc func(hello *tls.ClientHelloInfo) (*tls.Certificate, erro
 func (c *Certs) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	c.RLock()
 	defer c.RUnlock()
-	return &c.cert, nil
+	return c.cert, nil
+}
+
+// GetCA returns all intermediate and root CA certificates for the currently loaded TLS
+// certificate.
+func (c *Certs) GetCA() []*x509.Certificate {
+	c.RLock()
+	defer c.RUnlock()
+	return c.caCerts
 }
 
 // Stop tells loader to stop watching for changes to the

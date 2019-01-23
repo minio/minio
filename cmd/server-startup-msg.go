@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"crypto/x509"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"runtime"
@@ -66,6 +67,9 @@ func printStartupMessage(apiEndPoints []string) {
 	// Prints `mc` cli configuration message chooses
 	// first endpoint as default.
 	printCLIAccessMsg(strippedAPIEndpoints[0], "myminio")
+
+	// Print TLS fingerprints for self-singed certificates
+	printTLSFingerprints()
 
 	// Prints documentation message.
 	printObjectAPIMsg()
@@ -168,6 +172,21 @@ func printCLIAccessMsg(endPoint string, alias string) {
 		} else {
 			mcMessage := fmt.Sprintf("$ mc config host add %s %s %s %s", alias, endPoint, cred.AccessKey, cred.SecretKey)
 			logger.StartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
+		}
+	}
+}
+
+func printTLSFingerprints() {
+	if globalTLSCerts != nil {
+		cert, _ := globalTLSCerts.GetCertificate(nil)
+		if cert != nil && len(cert.Certificate) == 1 {
+			if fingerprint, ok := fingerprintCert(cert); ok {
+				logger.StartupMessage(colorBlue("\nCertificate: ") + fmt.Sprintf("% X", fingerprint[:len(fingerprint)/2]))
+				logger.StartupMessage("             % X", fingerprint[len(fingerprint)/2:])
+			}
+			if fingerprint, ok := fingerprintKey(cert); ok {
+				logger.StartupMessage(colorBlue("\nPublic Key:  ") + base64.StdEncoding.EncodeToString(fingerprint))
+			}
 		}
 	}
 }

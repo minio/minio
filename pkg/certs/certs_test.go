@@ -18,6 +18,7 @@ package certs_test
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"io"
 	"os"
 	"reflect"
@@ -42,8 +43,13 @@ func updateCerts(crt, key string) {
 	io.Copy(keyDest, keySource)
 }
 
+var tlsLoadX509KeyPair = func(certFile, keyFile string) (*tls.Certificate, []*x509.Certificate, error) {
+	c, err := tls.LoadX509KeyPair(certFile, keyFile)
+	return &c, nil, err
+}
+
 func TestCertNew(t *testing.T) {
-	c, err := certs.New("server.crt", "server.key", tls.LoadX509KeyPair)
+	c, err := certs.New("server.crt", "server.key", tlsLoadX509KeyPair)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +66,7 @@ func TestCertNew(t *testing.T) {
 	if !reflect.DeepEqual(gcert.Certificate, expectedCert.Certificate) {
 		t.Error("certificate doesn't match expected certificate")
 	}
-	_, err = certs.New("server.crt", "server2.key", tls.LoadX509KeyPair)
+	_, err = certs.New("server.crt", "server2.key", tlsLoadX509KeyPair)
 	if err == nil {
 		t.Fatal("Expected to fail but got success")
 	}
@@ -72,7 +78,7 @@ func TestValidPairAfterWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := certs.New("server.crt", "server.key", tls.LoadX509KeyPair)
+	c, err := certs.New("server.crt", "server.key", tlsLoadX509KeyPair)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +107,7 @@ func TestStop(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := certs.New("server.crt", "server.key", tls.LoadX509KeyPair)
+	c, err := certs.New("server.crt", "server.key", tlsLoadX509KeyPair)
 	if err != nil {
 		t.Fatal(err)
 	}

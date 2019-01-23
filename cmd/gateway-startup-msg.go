@@ -39,6 +39,9 @@ func printGatewayStartupMessage(apiEndPoints []string, backendType string) {
 	// first endpoint as default.
 	printCLIAccessMsg(strippedAPIEndpoints[0], fmt.Sprintf("my%s", backendType))
 
+	// Print TLS fingerprints for self-singed certificates
+	printTLSFingerprints()
+
 	// Prints documentation message.
 	printObjectAPIMsg()
 
