@@ -1,3 +1,5 @@
+// +build darwin freebsd openbsd netbsd dragonfly windows
+
 /*
  * Minio Cloud Storage, (C) 2019 Minio, Inc.
  *
@@ -17,21 +19,15 @@
 package cpu
 
 import (
-	"syscall"
+	"fmt"
+	"runtime"
 	"time"
-	"unsafe"
-
-	"golang.org/x/sys/unix"
 )
 
 func newCounter() (counter, error) {
-	return counter{}, nil
+	return counter{}, fmt.Errorf("cpu metrics not implemented for %s platform", runtime.GOOS)
 }
 
 func (c counter) now() time.Time {
-	var ts syscall.Timespec
-	// Retrieve Per-process CPU-time clock
-	syscall.Syscall(syscall.SYS_CLOCK_GETTIME, unix.CLOCK_PROCESS_CPUTIME_ID, uintptr(unsafe.Pointer(&ts)), 0)
-	sec, nsec := ts.Unix()
-	return time.Unix(sec, nsec)
+	return time.Time{}
 }

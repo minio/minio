@@ -19,6 +19,9 @@ getdeps:
 	@echo "Installing misspell" && go get -u github.com/client9/misspell/cmd/misspell
 	@echo "Installing ineffassign" && go get -u github.com/gordonklaus/ineffassign
 
+crosscompile:
+	@(env bash $(PWD)/buildscripts/cross-compile.sh)
+
 verifiers: getdeps vet fmt lint cyclo deadcode spelling
 
 vet:

@@ -189,17 +189,9 @@ func newXLMetaV1(object string, dataBlocks, parityBlocks int) (xlMeta xlMetaV1) 
 // Return a new xlMetaV1 initialized using the given xlMetaV1. Used in healing to make sure that we do not copy
 // over any part's checksum info which will differ for different disks.
 func newXLMetaFromXLMeta(meta xlMetaV1) xlMetaV1 {
-	xlMeta := xlMetaV1{}
-	xlMeta.Version = xlMetaVersion
-	xlMeta.Format = xlMetaFormat
-	xlMeta.Minio.Release = ReleaseTag
-	xlMeta.Erasure = ErasureInfo{
-		Algorithm:    meta.Erasure.Algorithm,
-		DataBlocks:   meta.Erasure.DataBlocks,
-		ParityBlocks: meta.Erasure.DataBlocks,
-		BlockSize:    meta.Erasure.BlockSize,
-		Distribution: meta.Erasure.Distribution,
-	}
+	xlMeta := meta
+	xlMeta.Erasure.Checksums = nil
+	xlMeta.Parts = nil
 	return xlMeta
 }
 

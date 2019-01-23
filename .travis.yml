@@ -23,6 +23,8 @@ matrix:
         - diff -au <(gofmt -s -d cmd) <(printf "")
         - diff -au <(gofmt -s -d pkg) <(printf "")
         - for d in $(go list ./... | grep -v browser); do CGO_ENABLED=1 go test -v -race --timeout 15m "$d"; done
+        - make verifiers
+        - make crosscompile
         - make verify
         - make coverage
         - cd browser && yarn && yarn test && cd ..

@@ -556,4 +556,13 @@ func TestNewFormatSets(t *testing.T) {
 	if newFormats == nil {
 		t.Fatal("Unexpected failure")
 	}
+
+	// Check if deployment IDs are preserved.
+	for i := range newFormats {
+		for j := range newFormats[i] {
+			if newFormats[i][j].ID != quorumFormat.ID {
+				t.Fatal("Deployment id in the new format is lost")
+			}
+		}
+	}
 }

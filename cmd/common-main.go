@@ -242,6 +242,7 @@ func handleCommonEnvVars() {
 					return &cert, terr
 				}
 			}
+
 			globalEtcdClient, err = etcd.New(etcd.Config{
 				Endpoints:         etcdEndpoints,
 				DialTimeout:       defaultDialTimeout,

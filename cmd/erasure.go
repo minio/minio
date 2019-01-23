@@ -93,10 +93,12 @@ func (e *Erasure) DecodeDataAndParityBlocks(ctx context.Context, data [][]byte) 
 	return nil
 }
 
+// ShardSize - returns actual shared size from erasure blockSize.
 func (e *Erasure) ShardSize() int64 {
 	return ceilFrac(e.blockSize, int64(e.dataBlocks))
 }
 
+// ShardFileSize - returns final erasure size from original size.
 func (e *Erasure) ShardFileSize(totalLength int64) int64 {
 	if totalLength == 0 {
 		return 0
@@ -107,6 +109,7 @@ func (e *Erasure) ShardFileSize(totalLength int64) int64 {
 	return numShards*e.ShardSize() + lastShardSize
 }
 
+// ShardFileTillOffset - returns the effectiv eoffset where erasure reading begins.
 func (e *Erasure) ShardFileTillOffset(startOffset, length, totalLength int64) int64 {
 	shardSize := e.ShardSize()
 	shardFileSize := e.ShardFileSize(totalLength)

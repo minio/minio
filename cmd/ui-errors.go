@@ -119,9 +119,10 @@ Refer to the link https://github.com/minio/minio/tree/master/docs/erasure/storag
 	uiErrInvalidAddressFlag = newUIErrFn(
 		"--address input is invalid",
 		"Please check --address parameter",
-		`--address binds to a specific ADDRESS:PORT, ADDRESS can be an  IP or hostname (default port is ':9000')
-    Examples: --address ':443'
-              --address '172.16.34.31:9000'`,
+		`--address binds to a specific ADDRESS:PORT, ADDRESS can be an IPv4/IPv6 address or hostname (default port is ':9000')
+	Examples: --address ':443'
+		  --address '172.16.34.31:9000'
+		  --address '[fe80::da00:a6c8:e3ae:ddd7]:9000'`,
 	)
 
 	uiErrInvalidFSEndpoint = newUIErrFn(

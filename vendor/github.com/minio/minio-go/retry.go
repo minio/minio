@@ -139,7 +139,7 @@ func isS3CodeRetryable(s3Code string) (ok bool) {
 
 // List of HTTP status codes which are retryable.
 var retryableHTTPStatusCodes = map[int]struct{}{
-	429: {}, // http.StatusTooManyRequests is not part of the Go 1.5 library, yet
+	429:                            {}, // http.StatusTooManyRequests is not part of the Go 1.5 library, yet
 	http.StatusInternalServerError: {},
 	http.StatusBadGateway:          {},
 	http.StatusServiceUnavailable:  {},

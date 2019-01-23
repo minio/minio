@@ -52,7 +52,7 @@ func (statement Statement) IsAllowed(args Args) bool {
 			resource += "/"
 		}
 
-		if !statement.Resources.Match(resource) {
+		if !statement.Resources.Match(resource, args.ConditionValues) {
 			return false
 		}
 

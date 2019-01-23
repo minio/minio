@@ -684,6 +684,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.MQTT {
 		if args.Enable {
+			args.RootCAs = globalRootCAs
 			newTarget, err := target.NewMQTTTarget(id, args)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
@@ -768,6 +769,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.Webhook {
 		if args.Enable {
+			args.RootCAs = globalRootCAs
 			newTarget := target.NewWebhookTarget(id, args)
 			if err := targetList.Add(newTarget); err != nil {
 				logger.LogIf(context.Background(), err)
