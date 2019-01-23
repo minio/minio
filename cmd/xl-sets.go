@@ -1029,6 +1029,18 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 		}
 	}(storageDisks)
 
+	for i, disk := range storageDisks {
+		info, err := disk.DiskInfo()
+		if err != nil {
+			storageDisks[i] = nil
+		}
+		if info.RootDisk {
+			// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
+			// defective drive we should not heal a path on the root disk.
+			storageDisks[i] = nil
+		}
+	}
+
 	formats, sErrs := loadFormatXLAll(storageDisks)
 	if err = checkFormatXLValues(formats); err != nil {
 		return madmin.HealResultItem{}, err
