@@ -896,6 +896,7 @@ func newHealFormatSets(refFormat *formatXLV3, setCount, disksPerSet int, formats
 			if errs[i*disksPerSet+j] == errUnformattedDisk || errs[i*disksPerSet+j] == nil {
 				newFormats[i][j] = &formatXLV3{}
 				newFormats[i][j].Version = refFormat.Version
+				newFormats[i][j].ID = refFormat.ID
 				newFormats[i][j].Format = refFormat.Format
 				newFormats[i][j].XL.Version = refFormat.XL.Version
 				newFormats[i][j].XL.DistributionAlgo = refFormat.XL.DistributionAlgo
