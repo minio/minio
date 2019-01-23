@@ -30,6 +30,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httputil"
 	"net/url"
 	"os"
@@ -37,6 +38,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/net/publicsuffix"
 
 	"github.com/minio/minio-go/pkg/credentials"
 	"github.com/minio/minio-go/pkg/s3signer"
@@ -99,7 +102,7 @@ type Options struct {
 // Global constants.
 const (
 	libraryName    = "minio-go"
-	libraryVersion = "v6.0.11"
+	libraryVersion = "v6.0.14"
 )
 
 // User Agent should always following the below style.
@@ -273,6 +276,13 @@ func privateNew(endpoint string, creds *credentials.Credentials, secure bool, re
 		return nil, err
 	}
 
+	// Initialize cookies to preserve server sent cookies if any and replay
+	// them upon each request.
+	jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+	if err != nil {
+		return nil, err
+	}
+
 	// instantiate new Client.
 	clnt := new(Client)
 
@@ -287,6 +297,7 @@ func privateNew(endpoint string, creds *credentials.Credentials, secure bool, re
 
 	// Instantiate http client and bucket location cache.
 	clnt.httpClient = &http.Client{
+		Jar:           jar,
 		Transport:     DefaultTransport,
 		CheckRedirect: clnt.redirectHeaders,
 	}

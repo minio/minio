@@ -19,22 +19,24 @@ package minio
 
 // awsS3EndpointMap Amazon S3 endpoint map.
 var awsS3EndpointMap = map[string]string{
-	"us-east-1":      "s3.amazonaws.com",
-	"us-east-2":      "s3-us-east-2.amazonaws.com",
-	"us-west-2":      "s3-us-west-2.amazonaws.com",
-	"us-west-1":      "s3-us-west-1.amazonaws.com",
-	"ca-central-1":   "s3-ca-central-1.amazonaws.com",
-	"eu-west-1":      "s3-eu-west-1.amazonaws.com",
-	"eu-west-2":      "s3-eu-west-2.amazonaws.com",
-	"eu-west-3":      "s3-eu-west-3.amazonaws.com",
-	"eu-central-1":   "s3-eu-central-1.amazonaws.com",
-	"ap-south-1":     "s3-ap-south-1.amazonaws.com",
-	"ap-southeast-1": "s3-ap-southeast-1.amazonaws.com",
-	"ap-southeast-2": "s3-ap-southeast-2.amazonaws.com",
-	"ap-northeast-1": "s3-ap-northeast-1.amazonaws.com",
-	"ap-northeast-2": "s3-ap-northeast-2.amazonaws.com",
-	"sa-east-1":      "s3-sa-east-1.amazonaws.com",
-	"us-gov-west-1":  "s3-us-gov-west-1.amazonaws.com",
+	"us-east-1":      "s3.dualstack.us-east-1.amazonaws.com",
+	"us-east-2":      "s3.dualstack.us-east-2.amazonaws.com",
+	"us-west-2":      "s3.dualstack.us-west-2.amazonaws.com",
+	"us-west-1":      "s3.dualstack.us-west-1.amazonaws.com",
+	"ca-central-1":   "s3.dualstack.ca-central-1.amazonaws.com",
+	"eu-west-1":      "s3.dualstack.eu-west-1.amazonaws.com",
+	"eu-west-2":      "s3.dualstack.eu-west-2.amazonaws.com",
+	"eu-west-3":      "s3.dualstack.eu-west-3.amazonaws.com",
+	"eu-central-1":   "s3.dualstack.eu-central-1.amazonaws.com",
+	"eu-north-1":     "s3.dualstack.eu-north-1.amazonaws.com",
+	"ap-south-1":     "s3.dualstack.ap-south-1.amazonaws.com",
+	"ap-southeast-1": "s3.dualstack.ap-southeast-1.amazonaws.com",
+	"ap-southeast-2": "s3.dualstack.ap-southeast-2.amazonaws.com",
+	"ap-northeast-1": "s3.dualstack.ap-northeast-1.amazonaws.com",
+	"ap-northeast-2": "s3.dualstack.ap-northeast-2.amazonaws.com",
+	"sa-east-1":      "s3.dualstack.sa-east-1.amazonaws.com",
+	"us-gov-west-1":  "s3.dualstack.us-gov-west-1.amazonaws.com",
+	"us-gov-east-1":  "s3.dualstack.us-gov-east-1.amazonaws.com",
 	"cn-north-1":     "s3.cn-north-1.amazonaws.com.cn",
 	"cn-northwest-1": "s3.cn-northwest-1.amazonaws.com.cn",
 }
@@ -43,8 +45,8 @@ var awsS3EndpointMap = map[string]string{
 func getS3Endpoint(bucketLocation string) (s3Endpoint string) {
 	s3Endpoint, ok := awsS3EndpointMap[bucketLocation]
 	if !ok {
-		// Default to 's3.amazonaws.com' endpoint.
-		s3Endpoint = "s3.amazonaws.com"
+		// Default to 's3.dualstack.us-east-1.amazonaws.com' endpoint.
+		s3Endpoint = "s3.dualstack.us-east-1.amazonaws.com"
 	}
 	return s3Endpoint
 }

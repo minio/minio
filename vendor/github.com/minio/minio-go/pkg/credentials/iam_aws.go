@@ -67,9 +67,7 @@ func getEndpoint(endpoint string) (string, bool) {
 	return defaultIAMRoleEndpoint, false
 }
 
-// NewIAM returns a pointer to a new Credentials object wrapping
-// the IAM. Takes a ConfigProvider to create a EC2Metadata client.
-// The ConfigProvider is satisfied by the session.Session type.
+// NewIAM returns a pointer to a new Credentials object wrapping the IAM.
 func NewIAM(endpoint string) *Credentials {
 	p := &IAM{
 		Client: &http.Client{
