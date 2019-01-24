@@ -29,6 +29,10 @@ type LockArgs struct {
 
 	// ServiceEndpoint contains the network path of above server to do lock/unlock.
 	ServiceEndpoint string
+
+	// Source contains the line number, function and file name of the code
+	// on the client node that requested the lock.
+	Source string
 }
 
 // NetLocker is dsync compatible locker interface.

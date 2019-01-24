@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * Minio Cloud Storage, (C) 2018, 2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -338,6 +338,44 @@ func (sys *NotificationSys) ServerInfo(ctx context.Context) []ServerInfo {
 	}
 	wg.Wait()
 	return serverInfo
+}
+
+// GetLocks - makes GetLocks RPC call on all peers.
+func (sys *NotificationSys) GetLocks(ctx context.Context) []*PeerLocks {
+	var idx = 0
+	locksResp := make([]*PeerLocks, len(sys.peerRPCClientMap))
+	var wg sync.WaitGroup
+	for addr, client := range sys.peerRPCClientMap {
+		wg.Add(1)
+		go func(idx int, addr xnet.Host, client *PeerRPCClient) {
+			defer wg.Done()
+			// Try to fetch serverInfo remotely in three attempts.
+			for i := 0; i < 3; i++ {
+				serverLocksResp, err := client.GetLocks()
+				if err == nil {
+					locksResp[idx] = &PeerLocks{
+						Addr:  addr.String(),
+						Locks: serverLocksResp,
+					}
+					return
+				}
+
+				// Last iteration log the error.
+				if i == 2 {
+					reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", addr.String())
+					ctx := logger.SetReqInfo(ctx, reqInfo)
+					logger.LogOnceIf(ctx, err, addr.String())
+				}
+				// Wait for one second and no need wait after last attempt.
+				if i < 2 {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}(idx, addr, client)
+		idx++
+	}
+	wg.Wait()
+	return locksResp
 }
 
 // SetBucketPolicy - calls SetBucketPolicy RPC call on all peers.

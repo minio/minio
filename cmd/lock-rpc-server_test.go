@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018, 2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,10 +32,10 @@ func testLockEquality(lriLeft, lriRight []lockRequesterInfo) bool {
 	}
 
 	for i := 0; i < len(lriLeft); i++ {
-		if lriLeft[i].writer != lriRight[i].writer ||
-			lriLeft[i].node != lriRight[i].node ||
-			lriLeft[i].serviceEndpoint != lriRight[i].serviceEndpoint ||
-			lriLeft[i].uid != lriRight[i].uid {
+		if lriLeft[i].Writer != lriRight[i].Writer ||
+			lriLeft[i].Node != lriRight[i].Node ||
+			lriLeft[i].ServiceEndpoint != lriRight[i].ServiceEndpoint ||
+			lriLeft[i].UID != lriRight[i].UID {
 			return false
 		}
 	}
@@ -97,10 +97,10 @@ func TestLockRpcServerLock(t *testing.T) {
 			gotLri, _ := locker.ll.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				{
-					writer:          true,
-					node:            "node",
-					serviceEndpoint: "rpc-path",
-					uid:             "0123-4567",
+					Writer:          true,
+					Node:            "node",
+					ServiceEndpoint: "rpc-path",
+					UID:             "0123-4567",
 				},
 			}
 			if !testLockEquality(expectedLri, gotLri) {
@@ -213,10 +213,10 @@ func TestLockRpcServerRLock(t *testing.T) {
 			gotLri, _ := locker.ll.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				{
-					writer:          false,
-					node:            "node",
-					serviceEndpoint: "rpc-path",
-					uid:             "0123-4567",
+					Writer:          false,
+					Node:            "node",
+					ServiceEndpoint: "rpc-path",
+					UID:             "0123-4567",
 				},
 			}
 			if !testLockEquality(expectedLri, gotLri) {
@@ -315,10 +315,10 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 			gotLri, _ := locker.ll.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				{
-					writer:          false,
-					node:            "node",
-					serviceEndpoint: "rpc-path",
-					uid:             "89ab-cdef",
+					Writer:          false,
+					Node:            "node",
+					ServiceEndpoint: "rpc-path",
+					UID:             "89ab-cdef",
 				},
 			}
 			if !testLockEquality(expectedLri, gotLri) {

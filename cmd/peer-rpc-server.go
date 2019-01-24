@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * Minio Cloud Storage, (C) 2018, 2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -379,6 +379,24 @@ func (receiver *peerRPCReceiver) ServerInfo(args *AuthArgs, reply *ServerInfoDat
 			Region:   globalServerConfig.GetRegion(),
 		},
 	}
+
+	return nil
+}
+
+// GetLocks - Get Locks receiver.
+func (receiver *peerRPCReceiver) GetLocks(args *AuthArgs, reply *GetLocksResp) error {
+	if globalBootTime.IsZero() {
+		return errServerNotInitialized
+	}
+
+	// Build storage info
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		return errServerNotInitialized
+	}
+
+	// Locks data.
+	*reply = globalLockServer.ll.DupLockMap()
 
 	return nil
 }

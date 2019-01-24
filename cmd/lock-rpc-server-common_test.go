@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018, 2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,12 +29,12 @@ func TestLockRpcServerRemoveEntryIfExists(t *testing.T) {
 	defer os.RemoveAll(testPath)
 
 	lri := lockRequesterInfo{
-		writer:          false,
-		node:            "host",
-		serviceEndpoint: "rpc-path",
-		uid:             "0123-4567",
-		timestamp:       UTCNow(),
-		timeLastCheck:   UTCNow(),
+		Writer:          false,
+		Node:            "host",
+		ServiceEndpoint: "rpc-path",
+		UID:             "0123-4567",
+		Timestamp:       UTCNow(),
+		TimeLastCheck:   UTCNow(),
 	}
 	nlrip := nameLockRequesterInfoPair{name: "name", lri: lri}
 
@@ -66,20 +66,20 @@ func TestLockRpcServerRemoveEntry(t *testing.T) {
 	defer os.RemoveAll(testPath)
 
 	lockRequesterInfo1 := lockRequesterInfo{
-		writer:          true,
-		node:            "host",
-		serviceEndpoint: "rpc-path",
-		uid:             "0123-4567",
-		timestamp:       UTCNow(),
-		timeLastCheck:   UTCNow(),
+		Writer:          true,
+		Node:            "host",
+		ServiceEndpoint: "rpc-path",
+		UID:             "0123-4567",
+		Timestamp:       UTCNow(),
+		TimeLastCheck:   UTCNow(),
 	}
 	lockRequesterInfo2 := lockRequesterInfo{
-		writer:          true,
-		node:            "host",
-		serviceEndpoint: "rpc-path",
-		uid:             "89ab-cdef",
-		timestamp:       UTCNow(),
-		timeLastCheck:   UTCNow(),
+		Writer:          true,
+		Node:            "host",
+		ServiceEndpoint: "rpc-path",
+		UID:             "89ab-cdef",
+		Timestamp:       UTCNow(),
+		TimeLastCheck:   UTCNow(),
 	}
 
 	locker.ll.lockMap["name"] = []lockRequesterInfo{
@@ -128,12 +128,12 @@ func TestLockRpcServerGetLongLivedLocks(t *testing.T) {
 		{
 			lockMap: map[string][]lockRequesterInfo{
 				"test": {{
-					writer:          true,
-					node:            "10.1.10.21",
-					serviceEndpoint: "/lock/mnt/disk1",
-					uid:             "10000112",
-					timestamp:       ut,
-					timeLastCheck:   ut,
+					Writer:          true,
+					Node:            "10.1.10.21",
+					ServiceEndpoint: "/lock/mnt/disk1",
+					UID:             "10000112",
+					Timestamp:       ut,
+					TimeLastCheck:   ut,
 				}},
 			},
 			lockInterval: 1 * time.Minute,
@@ -143,12 +143,12 @@ func TestLockRpcServerGetLongLivedLocks(t *testing.T) {
 		{
 			lockMap: map[string][]lockRequesterInfo{
 				"test": {{
-					writer:          true,
-					node:            "10.1.10.21",
-					serviceEndpoint: "/lock/mnt/disk1",
-					uid:             "10000112",
-					timestamp:       ut,
-					timeLastCheck:   ut.Add(-2 * time.Minute),
+					Writer:          true,
+					Node:            "10.1.10.21",
+					ServiceEndpoint: "/lock/mnt/disk1",
+					UID:             "10000112",
+					Timestamp:       ut,
+					TimeLastCheck:   ut.Add(-2 * time.Minute),
 				}},
 			},
 			lockInterval: 1 * time.Minute,
@@ -156,12 +156,12 @@ func TestLockRpcServerGetLongLivedLocks(t *testing.T) {
 				{
 					name: "test",
 					lri: lockRequesterInfo{
-						writer:          true,
-						node:            "10.1.10.21",
-						serviceEndpoint: "/lock/mnt/disk1",
-						uid:             "10000112",
-						timestamp:       ut,
-						timeLastCheck:   ut.Add(-2 * time.Minute),
+						Writer:          true,
+						Node:            "10.1.10.21",
+						ServiceEndpoint: "/lock/mnt/disk1",
+						UID:             "10000112",
+						Timestamp:       ut,
+						TimeLastCheck:   ut.Add(-2 * time.Minute),
 					},
 				},
 			},

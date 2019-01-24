@@ -579,10 +579,10 @@
 			"revisionTime": "2017-02-27T07:32:28Z"
 		},
 		{
-			"checksumSHA1": "1AQVDkFvVxn1RMTLyjeDSESBhrc=",
+			"checksumSHA1": "CwWXALTRt30txpLPfuazncqZnJ0=",
 			"path": "github.com/minio/dsync",
-			"revision": "439a0961af700f80db84cc180fe324a89070fa65",
-			"revisionTime": "2018-01-23T12:12:34Z"
+			"revision": "61c41ffdeea2cd0b58edea078ba30c9b6d7411e9",
+			"revisionTime": "2019-01-04T00:30:57Z"
 		},
 		{
 			"checksumSHA1": "CD2MtlgA8h0z6hYJHURS5eOmZ1k=",

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018, 2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -299,7 +300,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
-// ServerDrivesPerfInfo holds informantion about address, performance
+// ServerDrivesPerfInfo holds information about address, performance
 // of all drives on one server. It also reports any errors if encountered
 // while trying to reach this server.
 type ServerDrivesPerfInfo struct {
@@ -413,6 +414,103 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
 	}
 	return
+}
+
+func newLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEntry {
+	entry := &madmin.LockEntry{Timestamp: l.Timestamp, Resource: resource, ServerList: []string{server}, Owner: l.Node, Source: l.Source, ID: l.UID}
+	if l.Writer {
+		entry.Type = "Write"
+	} else {
+		entry.Type = "Read"
+	}
+	return entry
+}
+
+func topLockEntries(peerLocks []*PeerLocks) madmin.LockEntries {
+	const listCount int = 10
+	entryMap := make(map[string]*madmin.LockEntry)
+	for _, peerLock := range peerLocks {
+		if peerLock == nil {
+			continue
+		}
+		for k, v := range peerLock.Locks {
+			for _, lockReqInfo := range v {
+				if val, ok := entryMap[lockReqInfo.UID]; ok {
+					val.ServerList = append(val.ServerList, peerLock.Addr)
+				} else {
+					entryMap[lockReqInfo.UID] = newLockEntry(lockReqInfo, k, peerLock.Addr)
+				}
+			}
+		}
+	}
+	var lockEntries = make(madmin.LockEntries, 0)
+	for _, v := range entryMap {
+		lockEntries = append(lockEntries, *v)
+	}
+	sort.Sort(lockEntries)
+	if len(lockEntries) > listCount {
+		lockEntries = lockEntries[:listCount]
+	}
+	return lockEntries
+}
+
+// PeerLocks holds server information result of one node
+type PeerLocks struct {
+	Addr  string
+	Locks GetLocksResp
+}
+
+// TopLocksHandler Get list of locks in use
+func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "TopLocks")
+
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil || globalNotificationSys == nil {
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Method only allowed in Distributed XL mode.
+	if globalIsDistXL == false {
+		writeErrorResponseJSON(w, ErrMethodNotAllowed, r.URL)
+		return
+	}
+
+	// Authenticate request
+	// Setting the region as empty so as the mc server info command is irrespective to the region.
+	adminAPIErr := checkAdminRequestAuthType(ctx, r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
+	if err != nil {
+		writeErrorResponseJSON(w, toAdminAPIErrCode(ctx, err), r.URL)
+		return
+	}
+
+	peerLocks := globalNotificationSys.GetLocks(ctx)
+	// Once we have received all the locks currently used from peers
+	// add the local peer locks list as well.
+	localLocks := globalLockServer.ll.DupLockMap()
+	peerLocks = append(peerLocks, &PeerLocks{
+		Addr:  thisAddr.String(),
+		Locks: localLocks,
+	})
+
+	topLocks := topLockEntries(peerLocks)
+
+	// Marshal API response
+	jsonBytes, err := json.Marshal(topLocks)
+	if err != nil {
+		writeErrorResponseJSON(w, toAdminAPIErrCode(ctx, err), r.URL)
+		return
+	}
+
+	// Reply with storage information (across nodes in a
+	// distributed setup) as json.
+	writeSuccessResponseJSON(w, jsonBytes)
 }
 
 // StartProfilingResult contains the status of the starting

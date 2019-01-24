@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018, 2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,9 +53,9 @@ type RWLocker interface {
 
 // RWLockerSync - internal locker interface.
 type RWLockerSync interface {
-	GetLock(timeout time.Duration) bool
+	GetLock(id, source string, timeout time.Duration) bool
 	Unlock()
-	GetRLock(timeout time.Duration) bool
+	GetRLock(id, source string, timeout time.Duration) bool
 	RUnlock()
 }
 
@@ -162,9 +162,9 @@ func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock
 
 	// Locking here will block (until timeout).
 	if readLock {
-		locked = nsLk.GetRLock(timeout)
+		locked = nsLk.GetRLock(opsID, lockSource, timeout)
 	} else {
-		locked = nsLk.GetLock(timeout)
+		locked = nsLk.GetLock(opsID, lockSource, timeout)
 	}
 
 	if !locked { // We failed to get the lock

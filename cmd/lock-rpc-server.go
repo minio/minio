@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2018, 2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,7 +94,7 @@ func (l *lockRPCReceiver) Expired(args *LockArgs, reply *bool) error {
 	if lri, ok := l.ll.lockMap[args.LockArgs.Resource]; ok {
 		// Check whether uid is still active
 		for _, entry := range lri {
-			if entry.uid == args.LockArgs.UID {
+			if entry.UID == args.LockArgs.UID {
 				*reply = false // When uid found, lock is still active so return not expired.
 				return nil     // When uid found *reply is set to true.
 			}
@@ -123,7 +123,7 @@ func (l *lockRPCReceiver) lockMaintenance(interval time.Duration) {
 	// Validate if long lived locks are indeed clean.
 	for _, nlrip := range nlripLongLived {
 		// Initialize client based on the long live locks.
-		host, err := xnet.ParseHost(nlrip.lri.node)
+		host, err := xnet.ParseHost(nlrip.lri.Node)
 		if err != nil {
 			logger.LogIf(context.Background(), err)
 			continue
@@ -136,7 +136,7 @@ func (l *lockRPCReceiver) lockMaintenance(interval time.Duration) {
 
 		// Call back to original server verify whether the lock is still active (based on name & uid)
 		expired, _ := c.Expired(dsync.LockArgs{
-			UID:      nlrip.lri.uid,
+			UID:      nlrip.lri.UID,
 			Resource: nlrip.name,
 		})
 
