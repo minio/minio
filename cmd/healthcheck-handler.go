@@ -58,8 +58,10 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 	if !globalIsXL && !globalIsDistXL {
 		s := objLayer.StorageInfo(ctx)
-		// Gateways don't provide disk info.
-		if s.Backend.Type == Unknown {
+		// For Gateway backend, check if listbuckets works.
+		// Gateways don't provide disk info, except NAS gateway (since is based on FSLayer).
+		// For NAS gateway we depend on len(globalEndpoints)
+		if s.Backend.Type == Unknown || len(globalEndpoints) == 0 {
 			// ListBuckets to confirm gateway backend is up
 			if _, err := objLayer.ListBuckets(ctx); err != nil {
 				writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
