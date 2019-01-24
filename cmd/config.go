@@ -157,6 +157,8 @@ func initConfig(objAPI ObjectLayer) error {
 		return errServerNotInitialized
 	}
 
+	configFile := path.Join(minioConfigPrefix, minioConfigFile)
+
 	if globalEtcdClient != nil {
 		if err := checkConfigEtcd(context.Background(), globalEtcdClient, getConfigFile()); err != nil {
 			if err == errConfigNotFound {
@@ -172,6 +174,10 @@ func initConfig(objAPI ObjectLayer) error {
 				return err
 			}
 		}
+
+		// Watch config for changes and reloads them.
+		go watchConfigEtcd(objAPI, configFile, loadConfig)
+
 	} else {
 		if isFile(getConfigFile()) {
 			if err := migrateConfig(); err != nil {
@@ -184,15 +190,11 @@ func initConfig(objAPI ObjectLayer) error {
 		if err := migrateConfigToMinioSys(objAPI); err != nil {
 			return err
 		}
-	}
 
-	configFile := path.Join(minioConfigPrefix, minioConfigFile)
-
-	// Watch config for changes and reloads them in-memory.
-	go watchConfig(objAPI, configFile, loadConfig)
-
-	if err := migrateMinioSysConfig(objAPI); err != nil {
-		return err
+		// Migrates backend '<export_path>/.minio.sys/config/config.json' to latest version.
+		if err := migrateMinioSysConfig(objAPI); err != nil {
+			return err
+		}
 	}
 
 	return loadConfig(objAPI)

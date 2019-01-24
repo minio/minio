@@ -545,19 +545,15 @@ func (s *serverConfig) loadToCachedConfigs() {
 		globalIsCompressionEnabled = compressionConf.Enabled
 	}
 
-	if globalIAMValidators == nil {
-		globalIAMValidators = getAuthValidators(s)
-	}
+	globalIAMValidators = getAuthValidators(s)
 
-	if globalPolicyOPA == nil {
-		if s.Policy.OPA.URL != nil && s.Policy.OPA.URL.String() != "" {
-			globalPolicyOPA = iampolicy.NewOpa(iampolicy.OpaArgs{
-				URL:         s.Policy.OPA.URL,
-				AuthToken:   s.Policy.OPA.AuthToken,
-				Transport:   NewCustomHTTPTransport(),
-				CloseRespFn: CloseResponse,
-			})
-		}
+	if s.Policy.OPA.URL != nil && s.Policy.OPA.URL.String() != "" {
+		globalPolicyOPA = iampolicy.NewOpa(iampolicy.OpaArgs{
+			URL:         s.Policy.OPA.URL,
+			AuthToken:   s.Policy.OPA.AuthToken,
+			Transport:   NewCustomHTTPTransport(),
+			CloseRespFn: CloseResponse,
+		})
 	}
 }
 
