@@ -17,9 +17,10 @@
 package json
 
 import (
+	"bufio"
 	"bytes"
+	"errors"
 	"io"
-	"io/ioutil"
 	"strconv"
 
 	"github.com/minio/minio/pkg/s3select/sql"
@@ -59,124 +60,20 @@ func toSingleLineJSON(input string, currentKey string, result gjson.Result) (out
 	return output, err
 }
 
-type objectReader struct {
-	reader io.Reader
-	err    error
-
-	p     []byte
-	start int
-	end   int
-
-	escaped     bool
-	quoteOpened bool
-	curlyCount  uint64
-	endOfObject bool
-}
-
-func (or *objectReader) objectEndIndex(p []byte, length int) int {
-	for i := 0; i < length; i++ {
-		if p[i] == '\\' {
-			or.escaped = !or.escaped
-			continue
-		}
-
-		if p[i] == '"' && !or.escaped {
-			or.quoteOpened = !or.quoteOpened
-		}
-
-		or.escaped = false
-
-		switch p[i] {
-		case '{':
-			if !or.quoteOpened {
-				or.curlyCount++
-			}
-		case '}':
-			if or.quoteOpened || or.curlyCount == 0 {
-				break
-			}
-
-			if or.curlyCount--; or.curlyCount == 0 {
-				return i + 1
-			}
-		}
-	}
-
-	return -1
-}
-
-func (or *objectReader) Read(p []byte) (n int, err error) {
-	if or.endOfObject {
-		return 0, io.EOF
-	}
-
-	if or.p != nil {
-		n = copy(p, or.p[or.start:or.end])
-		or.start += n
-		if or.start == or.end {
-			// made full copy.
-			or.p = nil
-			or.start = 0
-			or.end = 0
-		}
-	} else {
-		if or.err != nil {
-			return 0, or.err
-		}
-
-		n, err = or.reader.Read(p)
-		or.err = err
-		switch err {
-		case nil:
-		case io.EOF, io.ErrUnexpectedEOF, io.ErrClosedPipe:
-			or.err = io.EOF
-		default:
-			return 0, err
-		}
-	}
-
-	index := or.objectEndIndex(p, n)
-	if index == -1 || index == n {
-		return n, nil
-	}
-
-	or.endOfObject = true
-	if or.p == nil {
-		or.p = p
-		or.start = index
-		or.end = n
-	} else {
-		or.start -= index
-	}
-
-	return index, nil
-}
-
-func (or *objectReader) Reset() error {
-	or.endOfObject = false
-
-	if or.p != nil {
-		return nil
-	}
-
-	return or.err
-}
-
 // Reader - JSON record reader for S3Select.
 type Reader struct {
-	args         *ReaderArgs
-	objectReader *objectReader
-	readCloser   io.ReadCloser
+	args          *ReaderArgs
+	objectScanner *bufio.Scanner
+	readCloser    io.ReadCloser
 }
 
 // Read - reads single record.
 func (r *Reader) Read() (sql.Record, error) {
-	if err := r.objectReader.Reset(); err != nil {
-		return nil, err
+	var data []byte
+	if r.objectScanner.Scan() {
+		data = r.objectScanner.Bytes()
 	}
-
-	data, err := ioutil.ReadAll(r.objectReader)
-	if err != nil {
+	if err := r.objectScanner.Err(); err != nil {
 		return nil, errJSONParsingError(err)
 	}
 
@@ -186,12 +83,12 @@ func (r *Reader) Read() (sql.Record, error) {
 	}
 
 	if !gjson.ValidBytes(data) {
-		return nil, errJSONParsingError(err)
+		return nil, errJSONParsingError(errors.New("invalid json"))
 	}
 
 	if bytes.Count(data, []byte("\n")) > 0 {
-		var s string
-		if s, err = toSingleLineJSON("", "", gjson.ParseBytes(data)); err != nil {
+		s, err := toSingleLineJSON("", "", gjson.ParseBytes(data))
+		if err != nil {
 			return nil, errJSONParsingError(err)
 		}
 		data = []byte(s)
@@ -207,11 +104,59 @@ func (r *Reader) Close() error {
 	return r.readCloser.Close()
 }
 
+// dropCR drops a terminal \r from the data.
+func dropCR(data []byte) []byte {
+	if len(data) > 0 && data[len(data)-1] == '\r' {
+		return data[0 : len(data)-1]
+	}
+	return data
+}
+
+// scanJSON is a split function for a Scanner that returns each JSON object
+// stripped of any trailing end-of-line marker. The end-of-line marker is one
+// optional carriage return followed by one mandatory newline. In regular
+// expression notation, it is `\r?\n`. The last non-empty line of input
+// will be returned even if it has no newline.
+func scanJSON(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+
+	// The following logic navigates the slice
+	// to find if we end with '}' where we expect
+	// to end and follow through that with '\n'
+	// This scanner split function would return
+	// the appropriate portions of self contained
+	// JSON for parsing by other upper callers.
+	foundBracesEnd := false
+	for i := 0; i < len(data); i++ {
+		if data[i] == '\\' {
+			continue
+		}
+		if data[i] == '}' {
+			foundBracesEnd = true
+		}
+		if foundBracesEnd && data[i] == '\n' {
+			return i + 1, dropCR(data[0:i]), nil
+		}
+	}
+
+	// If we're at EOF, we have a final, non-terminated line. Return it.
+	if atEOF {
+		return len(data), dropCR(data), nil
+	}
+
+	// Request more data.
+	return 0, nil, nil
+}
+
 // NewReader - creates new JSON reader using readCloser.
 func NewReader(readCloser io.ReadCloser, args *ReaderArgs) *Reader {
+	scanner := bufio.NewScanner(readCloser)
+	scanner.Split(scanJSON)
 	return &Reader{
-		args:         args,
-		objectReader: &objectReader{reader: readCloser},
-		readCloser:   readCloser,
+		args:          args,
+		objectScanner: scanner,
+		readCloser:    readCloser,
 	}
 }
