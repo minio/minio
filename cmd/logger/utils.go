@@ -39,11 +39,11 @@ var (
 		}
 		return fmt.Sprint
 	}()
-	ColorFgRed = func() func(format string, a ...interface{}) string {
+	ColorFgRed = func() func(a ...interface{}) string {
 		if isTerminal() {
-			return color.New(color.FgRed).SprintfFunc()
+			return color.New(color.FgRed).SprintFunc()
 		}
-		return fmt.Sprintf
+		return fmt.Sprint
 	}()
 	ColorBgRed = func() func(format string, a ...interface{}) string {
 		if isTerminal() {
