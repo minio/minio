@@ -17,6 +17,8 @@
 package nas
 
 import (
+	"context"
+
 	"github.com/minio/cli"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/pkg/auth"
@@ -119,6 +121,12 @@ func (g *NAS) Production() bool {
 // IsListenBucketSupported returns whether listen bucket notification is applicable for this gateway.
 func (n *nasObjects) IsListenBucketSupported() bool {
 	return false
+}
+
+func (n *nasObjects) StorageInfo(ctx context.Context) minio.StorageInfo {
+	sinfo := n.ObjectLayer.StorageInfo(ctx)
+	sinfo.Backend.Type = minio.Unknown
+	return sinfo
 }
 
 // nasObjects implements gateway for Minio and S3 compatible object storage servers.
