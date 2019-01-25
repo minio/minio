@@ -719,7 +719,7 @@ func (h *healSequence) healBucket(bucket string) error {
 		return nil
 	}
 
-	entries := runtime.NumCPU() * globalEndpoints.Nodes()
+	entries := runtime.NumCPU()
 
 	marker := ""
 	isTruncated := true
