@@ -198,7 +198,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			w.WriteHeader(serr.HTTPStatusCode())
 			w.Write(s3select.NewErrorMessage(serr.ErrorCode(), serr.ErrorMessage()))
 		} else {
-			writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
+			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		}
 		return
 	}

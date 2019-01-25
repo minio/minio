@@ -2,34 +2,35 @@ package jstream
 
 import (
 	"io"
+	"sync/atomic"
 )
 
 const (
 	chunk   = 4095 // ~4k
 	maxUint = ^uint(0)
-	maxInt  = int(maxUint >> 1)
+	maxInt  = int64(maxUint >> 1)
 )
 
 type scanner struct {
-	pos       int // position in reader
-	ipos      int // internal buffer position
-	ifill     int // internal buffer fill
-	end       int
+	pos       int64 // position in reader
+	ipos      int64 // internal buffer position
+	ifill     int64 // internal buffer fill
+	end       int64
 	buf       [chunk + 1]byte // internal buffer (with a lookback size of 1)
 	nbuf      [chunk]byte     // next internal buffer
 	fillReq   chan struct{}
-	fillReady chan int
+	fillReady chan int64
 }
 
 func newScanner(r io.Reader) *scanner {
 	sr := &scanner{
 		end:       maxInt,
 		fillReq:   make(chan struct{}),
-		fillReady: make(chan int),
+		fillReady: make(chan int64),
 	}
 
 	go func() {
-		var rpos int // total bytes read into buffer
+		var rpos int64 // total bytes read into buffer
 
 		for _ = range sr.fillReq {
 		scan:
@@ -38,7 +39,7 @@ func newScanner(r io.Reader) *scanner {
 			if n == 0 {
 				switch err {
 				case io.EOF: // reader is exhausted
-					sr.end = rpos
+					atomic.StoreInt64(&sr.end, rpos)
 					close(sr.fillReady)
 					return
 				case nil: // no data and no error, retry fill
@@ -48,8 +49,8 @@ func newScanner(r io.Reader) *scanner {
 				}
 			}
 
-			rpos += n
-			sr.fillReady <- n
+			rpos += int64(n)
+			sr.fillReady <- int64(n)
 		}
 	}()
 
@@ -61,11 +62,11 @@ func newScanner(r io.Reader) *scanner {
 // remaining returns the number of unread bytes
 // if EOF for the underlying reader has not yet been found,
 // maximum possible integer value will be returned
-func (s *scanner) remaining() int {
-	if s.end == maxInt {
+func (s *scanner) remaining() int64 {
+	if atomic.LoadInt64(&s.end) == maxInt {
 		return maxInt
 	}
-	return s.end - s.pos
+	return atomic.LoadInt64(&s.end) - s.pos
 }
 
 // read byte at current position (without advancing)
@@ -73,7 +74,7 @@ func (s *scanner) cur() byte { return s.buf[s.ipos] }
 
 // read next byte
 func (s *scanner) next() byte {
-	if s.pos >= s.end {
+	if s.pos >= atomic.LoadInt64(&s.end) {
 		return byte(0)
 	}
 	s.ipos++
