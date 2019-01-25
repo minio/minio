@@ -119,7 +119,6 @@ var (
         "broker": "",
         "topic": "",
         "qos": 0,
-        "clientId": "",
         "username": "",
         "password": "",
         "reconnectInterval": 0,
