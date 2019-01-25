@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
 var printEndpointError = func() func(Endpoint, error) {
@@ -49,18 +50,26 @@ var printEndpointError = func() func(Endpoint, error) {
 
 // Migrates backend format of local disks.
 func formatXLMigrateLocalEndpoints(endpoints EndpointList) error {
-	for _, endpoint := range endpoints {
+	g := errgroup.WithNErrs(len(endpoints))
+	for index, endpoint := range endpoints {
 		if !endpoint.IsLocal {
 			continue
 		}
-		formatPath := pathJoin(endpoint.Path, minioMetaBucket, formatConfigFile)
-		if _, err := os.Stat(formatPath); err != nil {
-			if os.IsNotExist(err) {
-				continue
+		index := index
+		g.Go(func() error {
+			epPath := endpoints[index].Path
+			formatPath := pathJoin(epPath, minioMetaBucket, formatConfigFile)
+			if _, err := os.Stat(formatPath); err != nil {
+				if os.IsNotExist(err) {
+					return nil
+				}
+				return err
 			}
-			return err
-		}
-		if err := formatXLMigrate(endpoint.Path); err != nil {
+			return formatXLMigrate(epPath)
+		}, index)
+	}
+	for _, err := range g.Wait() {
+		if err != nil {
 			return err
 		}
 	}
@@ -69,21 +78,51 @@ func formatXLMigrateLocalEndpoints(endpoints EndpointList) error {
 
 // Cleans up tmp directory of local disks.
 func formatXLCleanupTmpLocalEndpoints(endpoints EndpointList) error {
-	for _, endpoint := range endpoints {
+	g := errgroup.WithNErrs(len(endpoints))
+	for index, endpoint := range endpoints {
 		if !endpoint.IsLocal {
 			continue
 		}
-		formatPath := pathJoin(endpoint.Path, minioMetaBucket, formatConfigFile)
-		if _, err := os.Stat(formatPath); err != nil {
-			if os.IsNotExist(err) {
-				continue
+		index := index
+		g.Go(func() error {
+			epPath := endpoints[index].Path
+			// If disk is not formatted there is nothing to be cleaned up.
+			formatPath := pathJoin(epPath, minioMetaBucket, formatConfigFile)
+			if _, err := os.Stat(formatPath); err != nil {
+				if os.IsNotExist(err) {
+					return nil
+				}
+				return err
 			}
-			return err
-		}
-		if err := removeAll(pathJoin(endpoint.Path, minioMetaTmpBucket)); err != nil {
-			return err
-		}
-		if err := mkdirAll(pathJoin(endpoint.Path, minioMetaTmpBucket), 0777); err != nil {
+			if _, err := os.Stat(pathJoin(epPath, minioMetaTmpBucket+"-old")); err != nil {
+				if !os.IsNotExist(err) {
+					return err
+				}
+			}
+
+			// Need to move temporary objects left behind from previous run of minio
+			// server to a unique directory under `minioMetaTmpBucket-old` to clean
+			// up `minioMetaTmpBucket` for the current run.
+			//
+			// /disk1/.minio.sys/tmp-old/
+			//  |__ 33a58b40-aecc-4c9f-a22f-ff17bfa33b62
+			//  |__ e870a2c1-d09c-450c-a69c-6eaa54a89b3e
+			//
+			// In this example, `33a58b40-aecc-4c9f-a22f-ff17bfa33b62` directory contains
+			// temporary objects from one of the previous runs of minio server.
+			if err := renameAll(pathJoin(epPath, minioMetaTmpBucket),
+				pathJoin(epPath, minioMetaTmpBucket+"-old", mustGetUUID())); err != nil {
+				return err
+			}
+
+			// Removal of tmp-old folder is backgrounded completely.
+			go removeAll(pathJoin(epPath, minioMetaTmpBucket+"-old"))
+
+			return mkdirAll(pathJoin(epPath, minioMetaTmpBucket), 0777)
+		}, index)
+	}
+	for _, err := range g.Wait() {
+		if err != nil {
 			return err
 		}
 	}
