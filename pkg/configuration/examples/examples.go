@@ -351,14 +351,14 @@ func (kmsVaultAuthTypeHandler) Help() (string, error) {
 	return "", nil
 }
 
-type kmsVaultAuthApproleIdHandler struct{}
+type kmsVaultAuthApproleIDHandler struct{}
 
-func (kmsVaultAuthApproleIdHandler) Check(val string) error {
-	// fmt.Println("kmsVaultAuthApproleId Handler=>Check method registered")
+func (kmsVaultAuthApproleIDHandler) Check(val string) error {
+	// fmt.Println("kmsVaultAuthApproleID Handler=>Check method registered")
 	return nil
 }
-func (kmsVaultAuthApproleIdHandler) Help() (string, error) {
-	// fmt.Println("kmsVaultAuthApproleId Handler=>Help method registered")
+func (kmsVaultAuthApproleIDHandler) Help() (string, error) {
+	// fmt.Println("kmsVaultAuthApproleID Handler=>Help method registered")
 	return "", nil
 }
 
@@ -373,25 +373,25 @@ func (kmsVaultAuthApproleSecretHandler) Help() (string, error) {
 	return "", nil
 }
 
-type kmsVaultKeyIdNameHandler struct{}
+type kmsVaultKeyIDNameHandler struct{}
 
-func (kmsVaultKeyIdNameHandler) Check(val string) error {
-	// fmt.Println("kmsVaultKeyIdName Handler=>Check method registered")
+func (kmsVaultKeyIDNameHandler) Check(val string) error {
+	// fmt.Println("kmsVaultKeyIDName Handler=>Check method registered")
 	return nil
 }
-func (kmsVaultKeyIdNameHandler) Help() (string, error) {
-	// fmt.Println("kmsVaultKeyIdName Handler=>Help method registered")
+func (kmsVaultKeyIDNameHandler) Help() (string, error) {
+	// fmt.Println("kmsVaultKeyIDName Handler=>Help method registered")
 	return "", nil
 }
 
-type kmsVaultKeyIdVersionHandler struct{}
+type kmsVaultKeyIDVersionHandler struct{}
 
-func (kmsVaultKeyIdVersionHandler) Check(val string) error {
-	// fmt.Println("kmsVaultKeyIdVersion Handler=>Check method registered")
+func (kmsVaultKeyIDVersionHandler) Check(val string) error {
+	// fmt.Println("kmsVaultKeyIDVersion Handler=>Check method registered")
 	return nil
 }
-func (kmsVaultKeyIdVersionHandler) Help() (string, error) {
-	// fmt.Println("kmsVaultKeyIdVersion Handler=>Help method registered")
+func (kmsVaultKeyIDVersionHandler) Help() (string, error) {
+	// fmt.Println("kmsVaultKeyIDVersion Handler=>Help method registered")
 	return "", nil
 }
 
@@ -406,14 +406,14 @@ func (notifyAmqpHandler) Help() (string, error) {
 	return "", nil
 }
 
-type notifyAmqpUrlHandler struct{}
+type notifyAmqpURLHandler struct{}
 
-func (notifyAmqpUrlHandler) Check(val string) error {
-	// fmt.Println("notifyAmqpUrl Handler=>Check method registered")
+func (notifyAmqpURLHandler) Check(val string) error {
+	// fmt.Println("notifyAmqpURL Handler=>Check method registered")
 	return nil
 }
-func (notifyAmqpUrlHandler) Help() (string, error) {
-	// fmt.Println("notifyAmqpUrl Handler=>Help method registered")
+func (notifyAmqpURLHandler) Help() (string, error) {
+	// fmt.Println("notifyAmqpURL Handler=>Help method registered")
 	return "", nil
 }
 
@@ -549,14 +549,14 @@ func (notifyElasticsearchFormatHandler) Help() (string, error) {
 	return "", nil
 }
 
-type notifyElasticsearchUrlHandler struct{}
+type notifyElasticsearchURLHandler struct{}
 
-func (notifyElasticsearchUrlHandler) Check(val string) error {
-	// fmt.Println("notifyElasticsearchUrl Handler=>Check method registered")
+func (notifyElasticsearchURLHandler) Check(val string) error {
+	// fmt.Println("notifyElasticsearchURL Handler=>Check method registered")
 	return nil
 }
-func (notifyElasticsearchUrlHandler) Help() (string, error) {
-	// fmt.Println("notifyElasticsearchUrl Handler=>Help method registered")
+func (notifyElasticsearchURLHandler) Help() (string, error) {
+	// fmt.Println("notifyElasticsearchURL Handler=>Help method registered")
 	return "", nil
 }
 
@@ -604,36 +604,36 @@ func (notifyKafkaTopicHandler) Help() (string, error) {
 	return "", nil
 }
 
-type notifyKafkaTlsHandler struct{}
+type notifyKafkaTLSHandler struct{}
 
-func (notifyKafkaTlsHandler) Check(val string) error {
-	// fmt.Println("notifyKafkaTls Handler=>Check method registered")
+func (notifyKafkaTLSHandler) Check(val string) error {
+	// fmt.Println("notifyKafkaTLS Handler=>Check method registered")
 	return nil
 }
-func (notifyKafkaTlsHandler) Help() (string, error) {
-	// fmt.Println("notifyKafkaTls Handler=>Help method registered")
+func (notifyKafkaTLSHandler) Help() (string, error) {
+	// fmt.Println("notifyKafkaTLS Handler=>Help method registered")
 	return "", nil
 }
 
-type notifyKafkaTlsSkipVerifyHandler struct{}
+type notifyKafkaTLSSkipVerifyHandler struct{}
 
-func (notifyKafkaTlsSkipVerifyHandler) Check(val string) error {
-	// fmt.Println("notifyKafkaTlsSkipVerify Handler=>Check method registered")
+func (notifyKafkaTLSSkipVerifyHandler) Check(val string) error {
+	// fmt.Println("notifyKafkaTLSSkipVerify Handler=>Check method registered")
 	return nil
 }
-func (notifyKafkaTlsSkipVerifyHandler) Help() (string, error) {
-	// fmt.Println("notifyKafkaTlsSkipVerify Handler=>Help method registered")
+func (notifyKafkaTLSSkipVerifyHandler) Help() (string, error) {
+	// fmt.Println("notifyKafkaTLSSkipVerify Handler=>Help method registered")
 	return "", nil
 }
 
-type notifyKafkaTlsClientAuthHandler struct{}
+type notifyKafkaTLSClientAuthHandler struct{}
 
-func (notifyKafkaTlsClientAuthHandler) Check(val string) error {
-	// fmt.Println("notifyKafkaTlsClientAuth Handler=>Check method registered")
+func (notifyKafkaTLSClientAuthHandler) Check(val string) error {
+	// fmt.Println("notifyKafkaTLSClientAuth Handler=>Check method registered")
 	return nil
 }
-func (notifyKafkaTlsClientAuthHandler) Help() (string, error) {
-	// fmt.Println("notifyKafkaTlsClientAuth Handler=>Help method registered")
+func (notifyKafkaTLSClientAuthHandler) Help() (string, error) {
+	// fmt.Println("notifyKafkaTLSClientAuth Handler=>Help method registered")
 	return "", nil
 }
 
@@ -714,14 +714,14 @@ func (notifyMqttQosHandler) Help() (string, error) {
 	return "", nil
 }
 
-type notifyMqttClientIdHandler struct{}
+type notifyMqttClientIDHandler struct{}
 
-func (notifyMqttClientIdHandler) Check(val string) error {
-	// fmt.Println("notifyMqttClientId Handler=>Check method registered")
+func (notifyMqttClientIDHandler) Check(val string) error {
+	// fmt.Println("notifyMqttClientID Handler=>Check method registered")
 	return nil
 }
-func (notifyMqttClientIdHandler) Help() (string, error) {
-	// fmt.Println("notifyMqttClientId Handler=>Help method registered")
+func (notifyMqttClientIDHandler) Help() (string, error) {
+	// fmt.Println("notifyMqttClientID Handler=>Help method registered")
 	return "", nil
 }
 
@@ -1187,47 +1187,47 @@ func (notifyWebhookEndpointHandler) Help() (string, error) {
 	return "", nil
 }
 
-type logHttpHandler struct{}
+type logHTTPHandler struct{}
 
-func (logHttpHandler) Check(val string) error {
-	// fmt.Println("logHttp Handler=>Check method registered")
+func (logHTTPHandler) Check(val string) error {
+	// fmt.Println("logHTTP Handler=>Check method registered")
 	return nil
 }
-func (logHttpHandler) Help() (string, error) {
-	// fmt.Println("logHttp Handler=>Help method registered")
+func (logHTTPHandler) Help() (string, error) {
+	// fmt.Println("logHTTP Handler=>Help method registered")
 	return "", nil
 }
 
-type logHttpAnonymousHandler struct{}
+type logHTTPAnonymousHandler struct{}
 
-func (logHttpAnonymousHandler) Check(val string) error {
-	// fmt.Println("logHttpAnonymous Handler=>Check method registered")
+func (logHTTPAnonymousHandler) Check(val string) error {
+	// fmt.Println("logHTTPAnonymous Handler=>Check method registered")
 	return nil
 }
-func (logHttpAnonymousHandler) Help() (string, error) {
-	// fmt.Println("logHttpAnonymous Handler=>Help method registered")
+func (logHTTPAnonymousHandler) Help() (string, error) {
+	// fmt.Println("logHTTPAnonymous Handler=>Help method registered")
 	return "", nil
 }
 
-type logHttpAuditHandler struct{}
+type logHTTPAuditHandler struct{}
 
-func (logHttpAuditHandler) Check(val string) error {
-	// fmt.Println("logHttpAudit Handler=>Check method registered")
+func (logHTTPAuditHandler) Check(val string) error {
+	// fmt.Println("logHTTPAudit Handler=>Check method registered")
 	return nil
 }
-func (logHttpAuditHandler) Help() (string, error) {
-	// fmt.Println("logHttpAudit Handler=>Help method registered")
+func (logHTTPAuditHandler) Help() (string, error) {
+	// fmt.Println("logHTTPAudit Handler=>Help method registered")
 	return "", nil
 }
 
-type logHttpEndpointHandler struct{}
+type logHTTPEndpointHandler struct{}
 
-func (logHttpEndpointHandler) Check(val string) error {
-	// fmt.Println("logHttpEndpoint Handler=>Check method registered")
+func (logHTTPEndpointHandler) Check(val string) error {
+	// fmt.Println("logHTTPEndpoint Handler=>Check method registered")
 	return nil
 }
-func (logHttpEndpointHandler) Help() (string, error) {
-	// fmt.Println("logHttpEndpoint Handler=>Help method registered")
+func (logHTTPEndpointHandler) Help() (string, error) {
+	// fmt.Println("logHTTPEndpoint Handler=>Help method registered")
 	return "", nil
 }
 
@@ -1302,12 +1302,12 @@ func registerAllKeys(s *configuration.ServerConfig) error {
 	s.RegisterKey("cache.exclude", cacheExcludeHandler{})
 	s.RegisterKey("kms.vault.endpoint", kmsVaultEndpointHandler{})
 	s.RegisterKey("kms.vault.auth.type", kmsVaultAuthTypeHandler{})
-	s.RegisterKey("kms.vault.auth.approle.id", kmsVaultAuthApproleIdHandler{})
+	s.RegisterKey("kms.vault.auth.approle.id", kmsVaultAuthApproleIDHandler{})
 	s.RegisterKey("kms.vault.auth.approle.secret", kmsVaultAuthApproleSecretHandler{})
-	s.RegisterKey("kms.vault.key-id.name", kmsVaultKeyIdNameHandler{})
-	s.RegisterKey("kms.vault.key-id.version", kmsVaultKeyIdVersionHandler{})
+	s.RegisterKey("kms.vault.key-id.name", kmsVaultKeyIDNameHandler{})
+	s.RegisterKey("kms.vault.key-id.version", kmsVaultKeyIDVersionHandler{})
 	s.RegisterKey("notify.amqp", notifyAmqpHandler{})
-	s.RegisterKey("notify.amqp.url", notifyAmqpUrlHandler{})
+	s.RegisterKey("notify.amqp.url", notifyAmqpURLHandler{})
 	s.RegisterKey("notify.amqp.exchange", notifyAmqpExchangeHandler{})
 	s.RegisterKey("notify.amqp.routingKey", notifyAmqpRoutingKeyHandler{})
 	s.RegisterKey("notify.amqp.exchangeType", notifyAmqpExchangeTypeHandler{})
@@ -1320,14 +1320,14 @@ func registerAllKeys(s *configuration.ServerConfig) error {
 	s.RegisterKey("notify.amqp.autoDeleted", notifyAmqpAutoDeletedHandler{})
 	s.RegisterKey("notify.elasticsearch", notifyElasticsearchHandler{})
 	s.RegisterKey("notify.elasticsearch.format", notifyElasticsearchFormatHandler{})
-	s.RegisterKey("notify.elasticsearch.url", notifyElasticsearchUrlHandler{})
+	s.RegisterKey("notify.elasticsearch.url", notifyElasticsearchURLHandler{})
 	s.RegisterKey("notify.elasticsearch.index", notifyElasticsearchIndexHandler{})
 	s.RegisterKey("notify.kafka", notifyKafkaHandler{})
 	s.RegisterKey("notify.kafka.brokers", notifyKafkaBrokersHandler{})
 	s.RegisterKey("notify.kafka.topic", notifyKafkaTopicHandler{})
-	s.RegisterKey("notify.kafka.tls", notifyKafkaTlsHandler{})
-	s.RegisterKey("notify.kafka.tls.skipVerify", notifyKafkaTlsSkipVerifyHandler{})
-	s.RegisterKey("notify.kafka.tls.clientAuth", notifyKafkaTlsClientAuthHandler{})
+	s.RegisterKey("notify.kafka.tls", notifyKafkaTLSHandler{})
+	s.RegisterKey("notify.kafka.tls.skipVerify", notifyKafkaTLSSkipVerifyHandler{})
+	s.RegisterKey("notify.kafka.tls.clientAuth", notifyKafkaTLSClientAuthHandler{})
 	s.RegisterKey("notify.kafka.sasl", notifyKafkaSaslHandler{})
 	s.RegisterKey("notify.kafka.sasl.username", notifyKafkaSaslUsernameHandler{})
 	s.RegisterKey("notify.kafka.sasl.password", notifyKafkaSaslPasswordHandler{})
@@ -1335,7 +1335,7 @@ func registerAllKeys(s *configuration.ServerConfig) error {
 	s.RegisterKey("notify.mqtt.broker", notifyMqttBrokerHandler{})
 	s.RegisterKey("notify.mqtt.topic", notifyMqttTopicHandler{})
 	s.RegisterKey("notify.mqtt.qos", notifyMqttQosHandler{})
-	s.RegisterKey("notify.mqtt.clientId", notifyMqttClientIdHandler{})
+	s.RegisterKey("notify.mqtt.clientId", notifyMqttClientIDHandler{})
 	s.RegisterKey("notify.mqtt.username", notifyMqttUsernameHandler{})
 	s.RegisterKey("notify.mqtt.password", notifyMqttPasswordHandler{})
 	s.RegisterKey("notify.mqtt.reconnectInterval", notifyMqttReconnectIntervalHandler{})
@@ -1378,10 +1378,10 @@ func registerAllKeys(s *configuration.ServerConfig) error {
 	s.RegisterKey("notify.redis.key", notifyRedisKeyHandler{})
 	s.RegisterKey("notify.webhook", notifyWebhookHandler{})
 	s.RegisterKey("notify.webhook.endpoint", notifyWebhookEndpointHandler{})
-	s.RegisterKey("log.http", logHttpHandler{})
-	s.RegisterKey("log.http.anonymous", logHttpAnonymousHandler{})
-	s.RegisterKey("log.http.audit", logHttpAuditHandler{})
-	s.RegisterKey("log.http.endpoint", logHttpEndpointHandler{})
+	s.RegisterKey("log.http", logHTTPHandler{})
+	s.RegisterKey("log.http.anonymous", logHTTPAnonymousHandler{})
+	s.RegisterKey("log.http.audit", logHTTPAuditHandler{})
+	s.RegisterKey("log.http.endpoint", logHTTPEndpointHandler{})
 	s.RegisterKey("log.subnet", logSubnetHandler{})
 	s.RegisterKey("log.subnet.token", logSubnetTokenHandler{})
 	s.RegisterKey("log.console", logConsoleHandler{})
