@@ -787,15 +787,9 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	// Commit version id to disk for versioning
 	if globalVersioningSys.IsEnabled(bucket) {
 		timeStamp := time.Now().UTC()
-		xlVersioning, err := xl.getObjectVersioning(ctx, bucket, object)
-		if err != nil {
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		if err = xl.addVersionToHistory(ctx, bucket, object, xlObjectVersion{objectVersionID, objectVersionPostfix,false, timeStamp}, len(xl.getDisks())/2+1); err != nil {
+			return oi, toObjectErr(err, bucket, object)
 		}
-		xlVersioning.ObjectVersions = append(xlVersioning.ObjectVersions, xlObjectVersion{objectVersionID, objectVersionPostfix,false, timeStamp})
-		xlVersioning.Stat.ModTime = timeStamp
-		tempVersioning := mustGetUUID()
-		_, _ = writeSameXLMetadata(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, xlVersioning, len(xl.getDisks())/2+1)
-		_, _ = renameXLMetadata(ctx, xl.getDisks(), minioMetaTmpBucket, tempVersioning, bucket, object, len(xl.getDisks())/2+1)
 	}
 
 	// Pass along object version ID (if any)
