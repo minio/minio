@@ -1396,7 +1396,7 @@ func main() {
 	serverConfig := new(configuration.ServerConfig)
 	serverConfig.Init()
 
-	// Register all server configruation keys
+	// Register all server configuration keys
 	fmt.Printf("\n*******************************************\n")
 	fmt.Printf("Register configuration keys/parameters\n")
 	registerAllKeys(serverConfig)

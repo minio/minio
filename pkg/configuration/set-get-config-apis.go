@@ -42,7 +42,7 @@ type ConfigVC struct {
 // about the content and the order of the configuration parameters/keys.
 // Order array keeps the order of the entries as they appear in the
 // configuration file.
-// Registery map has the value and comment set for each and every key.
+// Registry map has the value and comment set for each and every key.
 // Handlers map has all the Check and Help methods for each and
 // every key.
 type ServerConfig struct {
@@ -87,9 +87,8 @@ func (s *ServerConfig) Get(key string) (string, string, error) {
 	return val, comment, nil
 }
 
-// Set method is used to set a configuration parameter/key.
-// User provides a key and a value for it
-// Comment argument is optional
+// Set method is used to set a value for a
+// configuration parameter/key.
 func (s *ServerConfig) Set(key, value, comment string) error {
 	handler, ok := s.handlers[key]
 	if !ok {
