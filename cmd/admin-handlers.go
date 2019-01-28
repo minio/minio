@@ -795,8 +795,15 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	config, err := readServerConfig(ctx, objectAPI)
+	configBytes, err := readServerConfig(ctx, objectAPI)
 	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// Unmarshal and Marshal to add indentation.
+	var config serverConfig
+	if err := json.Unmarshal(configBytes, &config); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -807,7 +814,7 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	password := config.GetCredential().SecretKey
+	password := globalServerConfig.GetCredential().SecretKey
 	econfigData, err := madmin.EncryptData(password, configData)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -871,13 +878,7 @@ func (a adminAPIHandlers) GetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 		keys = append(keys, k)
 	}
 
-	config, err := readServerConfig(ctx, objectAPI)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	configData, err := json.Marshal(config)
+	configData, err := readServerConfig(ctx, objectAPI)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -898,7 +899,7 @@ func (a adminAPIHandlers) GetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	password := config.GetCredential().SecretKey
+	password := globalServerConfig.GetCredential().SecretKey
 	econfigData, err := madmin.EncryptData(password, []byte(newConfigStr))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -1286,7 +1287,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err = saveServerConfig(ctx, objectAPI, &config); err != nil {
+	if err = saveServerConfigStruct(ctx, objectAPI, &config); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -1407,7 +1408,7 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	if err = saveServerConfig(ctx, objectAPI, &config); err != nil {
+	if err = saveServerConfig(ctx, objectAPI, configBytes); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -1474,7 +1475,7 @@ func (a adminAPIHandlers) UpdateAdminCredentialsHandler(w http.ResponseWriter,
 	// Set active creds.
 	globalActiveCred = creds
 
-	if err = saveServerConfig(ctx, objectAPI, globalServerConfig); err != nil {
+	if err = saveServerConfigStruct(ctx, objectAPI, globalServerConfig); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}

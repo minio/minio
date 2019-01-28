@@ -34,7 +34,7 @@ func TestServerConfig(t *testing.T) {
 	defer os.RemoveAll(fsDir)
 
 	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
-		t.Fatalf("Init Test config failed")
+		t.Fatal("Init Test config failed", err)
 	}
 
 	if globalServerConfig.GetRegion() != globalMinioDefaultRegion {
@@ -52,7 +52,7 @@ func TestServerConfig(t *testing.T) {
 		t.Errorf("Expecting version %s found %s", globalServerConfig.GetVersion(), serverConfigVersion)
 	}
 
-	if err := saveServerConfig(context.Background(), objLayer, globalServerConfig); err != nil {
+	if err := saveServerConfigStruct(context.Background(), objLayer, globalServerConfig); err != nil {
 		t.Fatalf("Unable to save updated config file %s", err)
 	}
 

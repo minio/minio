@@ -507,16 +507,17 @@ func resetTestGlobals() {
 
 // Configure the server for the test run.
 func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
-	// Initialize server config.
-	if err = newSrvConfig(obj); err != nil {
-		return err
-	}
+	// Create config.json of latest version
+	srvCfg := newServerConfig()
 
-	// Set a default region.
-	globalServerConfig.SetRegion(bucketLocation)
+	// Override any values from ENVs.
+	srvCfg.loadFromEnvs()
 
 	// Save config.
-	return saveServerConfig(context.Background(), obj, globalServerConfig)
+	if err := saveServerConfigStruct(context.Background(), obj, srvCfg); err != nil {
+		return err
+	}
+	return loadConfig(obj)
 }
 
 // Deleting the temporary backend and stopping the server.

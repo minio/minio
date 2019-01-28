@@ -31,6 +31,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/minio/pkg/quick"
 )
 
 func init() {
@@ -248,12 +249,12 @@ func serverMain(ctx *cli.Context) {
 		if !globalIsEnvCreds && globalIsDistXL {
 			// Try to load old config file if any, for backward compatibility.
 			var config = &serverConfig{}
-			if _, err = Load(getConfigFile(), config); err == nil {
+			if _, err = quick.LoadConfig(getConfigFile(), globalEtcdClient, config); err == nil {
 				globalActiveCred = config.Credential
 			}
 
 			if os.IsNotExist(err) {
-				if _, err = Load(getConfigFile()+".deprecated", config); err == nil {
+				if _, err = quick.LoadConfig(getConfigFile()+".deprecated", globalEtcdClient, config); err == nil {
 					globalActiveCred = config.Credential
 				}
 			}

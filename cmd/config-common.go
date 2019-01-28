@@ -115,37 +115,3 @@ func watchConfigEtcd(objAPI ObjectLayer, configFile string, loadCfgFn func(Objec
 		}
 	}
 }
-
-func checkConfigEtcd(ctx context.Context, client *etcd.Client, configFile string) error {
-	timeoutCtx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
-	defer cancel()
-	resp, err := client.Get(timeoutCtx, configFile)
-	if err != nil {
-		if err == context.DeadlineExceeded {
-			return fmt.Errorf("etcd setup is unreachable, please check your endpoints %s", client.Endpoints())
-		}
-		return fmt.Errorf("unexpected error %s returned by etcd setup, please check your endpoints %s", err, client.Endpoints())
-	}
-	if resp.Count == 0 {
-		return errConfigNotFound
-	}
-	return nil
-}
-
-func checkConfig(ctx context.Context, objAPI ObjectLayer, configFile string) error {
-	if globalEtcdClient != nil {
-		return checkConfigEtcd(ctx, globalEtcdClient, configFile)
-	}
-
-	if _, err := objAPI.GetObjectInfo(ctx, minioMetaBucket, configFile, ObjectOptions{}); err != nil {
-		// Treat object not found as config not found.
-		if isErrObjectNotFound(err) {
-			return errConfigNotFound
-		}
-
-		logger.GetReqInfo(ctx).AppendTags("configFile", configFile)
-		logger.LogIf(ctx, err)
-		return err
-	}
-	return nil
-}

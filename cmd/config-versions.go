@@ -25,7 +25,13 @@ import (
 	"github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/iam/validator"
 	"github.com/minio/minio/pkg/quick"
+	"github.com/tidwall/gjson"
 )
+
+// Returns config.json' version information.
+func configGetVersion(b []byte) string {
+	return gjson.GetBytes(b, "version").String()
+}
 
 /////////////////// Config V1 ///////////////////
 type configV1 struct {

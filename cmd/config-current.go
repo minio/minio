@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -558,35 +559,20 @@ func (s *serverConfig) loadToCachedConfigs() {
 	}
 }
 
-// newSrvConfig - initialize a new server config, saves env parameters if
-// found, otherwise use default parameters
-func newSrvConfig(objAPI ObjectLayer) error {
-	// Initialize server config.
-	srvCfg := newServerConfig()
-
-	// Override any values from ENVs.
-	srvCfg.loadFromEnvs()
-
-	// Load values to cached global values.
-	srvCfg.loadToCachedConfigs()
-
-	// hold the mutex lock before a new config is assigned.
-	globalServerConfigMu.Lock()
-	globalServerConfig = srvCfg
-	globalServerConfigMu.Unlock()
-
-	// Save config into file.
-	return saveServerConfig(context.Background(), objAPI, globalServerConfig)
-}
-
 // getValidConfig - returns valid server configuration
 func getValidConfig(objAPI ObjectLayer) (*serverConfig, error) {
-	srvCfg, err := readServerConfig(context.Background(), objAPI)
+	configBytes, err := readServerConfig(context.Background(), objAPI)
 	if err != nil {
 		return nil, err
 	}
-
-	return srvCfg, srvCfg.Validate()
+	if configGetVersion(configBytes) != serverConfigVersion {
+		return nil, errIncorrectConfigVersion
+	}
+	config := &serverConfig{}
+	if err = json.Unmarshal(configBytes, config); err != nil {
+		return nil, err
+	}
+	return config, config.Validate()
 }
 
 // loadConfig - loads a new config from disk, overrides params from env
