@@ -223,7 +223,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		globalConfigSys = NewConfigSys()
 
 		// Load globalServerConfig from etcd
-		_ = globalConfigSys.Init(newObject)
+		logger.LogIf(context.Background(), globalConfigSys.Init(newObject))
 	}
 
 	// Load logger subsystem
@@ -247,7 +247,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalIAMSys = NewIAMSys()
 	if enableIAMOps {
 		// Initialize IAM sys.
-		_ = globalIAMSys.Init(newObject)
+		logger.LogIf(context.Background(), globalIAMSys.Init(newObject))
 	}
 
 	// Create new policy system.
@@ -259,7 +259,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Create new notification system.
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
 	if globalEtcdClient != nil && newObject.IsNotificationSupported() {
-		_ = globalNotificationSys.Init(newObject)
+		logger.LogIf(context.Background(), globalNotificationSys.Init(newObject))
 	}
 
 	// Encryption support checks in gateway mode.
