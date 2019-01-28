@@ -20,7 +20,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -37,12 +36,12 @@ const (
 	commentChar = "##"
 )
 
-func np(kv map[string]string) {
-	b, err := json.MarshalIndent(kv, "", "  ")
-	if err != nil {
-		fmt.Println("error:", err)
+func np(key, val, comment string) {
+	if comment != "" {
+		fmt.Printf("%s = \"%s\"    \"%s\"\n", key, val, comment)
+	} else {
+		fmt.Printf("%s = \"%s\"\n", key, val)
 	}
-	fmt.Println(string(b))
 }
 
 // readLines reads a whole file into memory
@@ -78,9 +77,9 @@ func writeLines(lines []string, path string) error {
 }
 
 func verifyConfigKeyFormat(entry string) (entryArr []string, isComment, validConfigFormat bool) {
-	// Regexp to match full line comments, and the comments
-	// which start in the middle of the line after some characters
-	rComment, _ := regexp.Compile("^[\\s]*$|^[\\s]*(" + commentChar + ".*)|^[\\s]*([^\\s]+)([\\s]*=[\\s]*)([^\\s]+)([\\s]+" + commentChar + ".*)")
+	// Regexp to match full line comments, and the
+	// comments which start in the middle of the line
+	rComment, _ := regexp.Compile("^[\\s]*$|^[\\s]*(" + commentChar + ".*)|^[\\s]*([^\\s]+)([\\s]*=[\\s]*)([^\\s]+)[\\s]+(" + commentChar + ".*)")
 	matchedComment := rComment.FindStringSubmatch(entry)
 
 	if len(matchedComment) > 0 {
@@ -90,25 +89,29 @@ func verifyConfigKeyFormat(entry string) (entryArr []string, isComment, validCon
 			// Cleanup leading and trailing white spaces
 			matchedComment[i] = strings.TrimSpace(m)
 			if matchedComment[0] == "" {
-				// Empty lines are handled here.
-				// Treat them as if they are comments
+				// This is an empty line.
+				// Treat them as if they are comments and return
+				// true for both "isComment" and "validConfigFormat"
 				return matchedComment, true, true
 			}
 			if matchedComment[1] == "" {
-				// Combination of key/value and comment in the same line
-				// Return false for "isComment". This is a key/value setting.
+				// Mixed text and comment in the same line
+				// It is also a key/value setting.
+				// Return false for "isComment" and true for "validConfigFormat".
 				return []string{matchedComment[2], matchedComment[4], matchedComment[5]}, false, true
 			}
 			// Pure comments are handled here
 			return strings.Split(matchedComment[1], " "), true, true
 		}
 	}
-	// Handle key=val pairs here
+	// Handle lines with only key=val pairs here
 	r, _ := regexp.Compile("^[\\s]*([^\\s]+)([\\s]*=[\\s]*)([^\\s]*)")
 	matchedKey := r.FindStringSubmatch(entry)
 	if len(matchedKey) == 4 {
+		// So, this is not a comment and a valid key=value format
 		return []string{matchedKey[1], matchedKey[3]}, false, true
 	}
+	// The line is something we do not support
 	return strings.Split(entry, " "), false, false
 }
 
@@ -132,25 +135,20 @@ func load(configFile string, s *configuration.ServerConfig) map[string]error {
 		return map[string]error{"Error reading config file": err}
 	}
 
-	// 'newInd' is the index of the in memory 'db' array,
-	// that will be populated here with configuration information.
-	newInd := -1
 	var key, val string
 	// Go through each line of config file and
 	// classify them as comments or key/value pairs.
-	// Only empty lines, comment lines (// xxxx xx x),
+	// Only empty lines, comment lines (<commentChar> xxxx xx x),
 	// key/value pairs (key = value) and combination of
 	// key/value pairs and comments in the same line
-	// (key = value // xxxx  xxx) are honored. The rest
-	// of other formats are rejected.
+	// (key = value <commentChar> xxxx  xxx) are allowed valid
+	// lines in a configuration file. Any other syntax are ignored.
 	for ind, line := range lines {
-		newInd++
 		element, isComment, isValidConfigFormat := verifyConfigKeyFormat(line)
 
 		if isComment {
 			// We've decided not to support full comment lines
-			// and empty lines. Skip it and continue. 12/12/2018
-			newInd--
+			// and empty lines. Skip it and continue.
 			continue
 		}
 
@@ -160,18 +158,20 @@ func load(configFile string, s *configuration.ServerConfig) map[string]error {
 			logger.LogIf(context.Background(), errors.New("Invalid key, '"+key+"'."))
 			errMap["Invalid key: "+key] = errors.New("Invalid key, '" +
 				key + "'. (line:" + strconv.Itoa(ind+1) + ")")
-			newInd--
 			continue
 		}
-		// Valid configurations are handled here.
-		// Validate key/value pairs
-		isValidValue := true
-		if isValidConfigFormat && isValidValue {
-			if len(element) > 2 {
-				s.Set(key, val, element[2])
-			} else {
-				s.Set(key, val, "")
-			}
+		// Valid configuration key/value format
+		// Set the value for the key.
+		// Set also does input validation for the given key value
+		comment := ""
+		if len(element) > 2 {
+			comment = element[2]
+		}
+		if err := s.Set(key, val, comment); err != nil {
+			logger.LogIf(context.Background(), errors.New("Invalid value, '"+key+" = "+val+"'."))
+			errMap["Invalid value: "] = errors.New("Invalid value, '" +
+				key + " = " + val + "'. (line:" + strconv.Itoa(ind+1) + ")")
+			continue
 		}
 	}
 
@@ -263,25 +263,25 @@ func (domainHandler) Help() (string, error) {
 	return "", nil
 }
 
-type storageclassStandardHandler struct{}
+type storageClassStandardHandler struct{}
 
-func (storageclassStandardHandler) Check(val string) error {
-	// fmt.Println("storageclassStandard Handler=>Check method registered")
+func (storageClassStandardHandler) Check(val string) error {
+	// fmt.Println("storage.class.Standard Handler=>Check method registered")
 	return nil
 }
-func (storageclassStandardHandler) Help() (string, error) {
-	// fmt.Println("storageclassStandard Handler=>Help method registered")
+func (storageClassStandardHandler) Help() (string, error) {
+	// fmt.Println("storage.class.Standard Handler=>Help method registered")
 	return "", nil
 }
 
-type storageclassRrsHandler struct{}
+type storageClassRrsHandler struct{}
 
-func (storageclassRrsHandler) Check(val string) error {
-	// fmt.Println("storageclassRrs Handler=>Check method registered")
+func (storageClassRrsHandler) Check(val string) error {
+	// fmt.Println("storage.class.Rrs Handler=>Check method registered")
 	return nil
 }
-func (storageclassRrsHandler) Help() (string, error) {
-	// fmt.Println("storageclassRrs Handler=>Help method registered")
+func (storageClassRrsHandler) Help() (string, error) {
+	// fmt.Println("storage.class.Rrs Handler=>Help method registered")
 	return "", nil
 }
 
@@ -1294,8 +1294,8 @@ func registerAllKeys(s *configuration.ServerConfig) error {
 	s.RegisterKey("browser", browserHandler{})
 	s.RegisterKey("worm", wormHandler{})
 	s.RegisterKey("domain", domainHandler{})
-	s.RegisterKey("storageclass.standard", storageclassStandardHandler{})
-	s.RegisterKey("storageclass.rrs", storageclassRrsHandler{})
+	s.RegisterKey("storage.class.standard", storageClassStandardHandler{})
+	s.RegisterKey("storage.class.rrs", storageClassRrsHandler{})
 	s.RegisterKey("cache.drives", cacheDrivesHandler{})
 	s.RegisterKey("cache.expiry", cacheExpiryHandler{})
 	s.RegisterKey("cache.maxuse", cacheMaxuseHandler{})
@@ -1411,8 +1411,9 @@ func main() {
 	k = "worm"
 	if val, comment, err = serverConfig.Get(k); err != nil {
 		fmt.Println("ERROR:", err)
+	} else {
+		np(k, val, comment)
 	}
-	fmt.Printf("%s = \"%s\", \"%s\"\n", k, val, comment)
 
 	fmt.Printf("\n*******************************************\n")
 	fmt.Printf("SET wor = 12\n")
@@ -1421,7 +1422,7 @@ func main() {
 		fmt.Println("ERROR:", err)
 	} else {
 		fmt.Println("Success! Yeay!")
-		//save
+		//save memory to disk by writing the whole
 	}
 
 	fmt.Printf("\n*******************************************\n")
@@ -1429,8 +1430,18 @@ func main() {
 	k = "domain"
 	if val, comment, err = serverConfig.Get(k); err != nil {
 		fmt.Println("ERROR:", err)
+	} else {
+		np(k, val, comment)
 	}
-	fmt.Printf("%s = \"%s\", \"%s\"\n", k, val, comment)
+
+	fmt.Printf("\n*******************************************\n")
+	fmt.Printf("Get value of 'version'\n")
+	k = "version"
+	if val, comment, err = serverConfig.Get(k); err != nil {
+		fmt.Println("ERROR:", err)
+	} else {
+		np(k, val, comment)
+	}
 
 	fmt.Printf("\n*******************************************\n")
 	fmt.Printf("List all values\n\n")

@@ -76,11 +76,10 @@ func (s *ServerConfig) RegisterKey(key string, handler ConfigHandler) (err error
 // is found to be invalid and "Configuration parameter not set yet"
 // error if key/configuration parameter has not been set yet.
 func (s *ServerConfig) Get(key string) (string, string, error) {
-	_, ok := s.handlers[key]
-	if !ok {
+	if _, ok := s.handlers[key]; !ok {
 		return "", "", errors.New("Invalid configuration parameter: '" + key + "'")
 	}
-	if _, ok = s.registry[key]; ok {
+	if _, ok := s.registry[key]; !ok {
 		return "", "", errors.New("Configuration parameter, '" + key + "', not set yet")
 	}
 	val := s.registry[key].val
@@ -109,7 +108,11 @@ func (s *ServerConfig) List() ([]string, error) {
 	var listArr []string
 	for _, k := range s.order {
 		if _, ok := s.registry[k]; ok {
-			listArr = append(listArr, k+" = "+s.registry[k].val+"    "+s.registry[k].comment)
+			configEntry := k + " = " + s.registry[k].val
+			if s.registry[k].comment != "" {
+				configEntry = configEntry + "    " + s.registry[k].comment
+			}
+			listArr = append(listArr, configEntry)
 		}
 	}
 	return listArr, nil
