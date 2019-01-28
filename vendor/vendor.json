@@ -644,10 +644,10 @@
 			"revisionTime": "2019-01-20T10:05:29Z"
 		},
 		{
-			"checksumSHA1": "pxgHNx36gpRdhSqtaE5fqp7lrAA=",
+			"checksumSHA1": "ik77jlf0oMQTlSndP85DlIVOnOY=",
 			"path": "github.com/minio/parquet-go",
-			"revision": "1014bfb4d0e323e3fbf6683e3519a98b0721f5cc",
-			"revisionTime": "2019-01-14T09:43:57Z"
+			"revision": "7a17a919eeed02c393f3117a9ed1ac6df0da9aa5",
+			"revisionTime": "2019-01-18T04:40:39Z"
 		},
 		{
 			"checksumSHA1": "N4WRPw4p3AN958RH/O53kUsJacQ=",

@@ -88,6 +88,7 @@ type File struct {
 	rowGroups      []*parquet.RowGroup
 	rowGroupIndex  int
 
+	nameList    []string
 	columnNames set.StringSet
 	columns     map[string]*column
 	rowIndex    int64
@@ -100,16 +101,23 @@ func Open(getReaderFunc GetReaderFunc, columnNames set.StringSet) (*File, error)
 		return nil, err
 	}
 
+	nameList := []string{}
+	schemaElements := fileMeta.GetSchema()
+	for _, element := range schemaElements {
+		nameList = append(nameList, element.Name)
+	}
+
 	return &File{
 		getReaderFunc:  getReaderFunc,
 		rowGroups:      fileMeta.GetRowGroups(),
-		schemaElements: fileMeta.GetSchema(),
+		schemaElements: schemaElements,
+		nameList:       nameList,
 		columnNames:    columnNames,
 	}, nil
 }
 
 // Read - reads single record.
-func (file *File) Read() (record map[string]Value, err error) {
+func (file *File) Read() (record *Record, err error) {
 	if file.rowGroupIndex >= len(file.rowGroups) {
 		return nil, io.EOF
 	}
@@ -134,10 +142,10 @@ func (file *File) Read() (record map[string]Value, err error) {
 		return file.Read()
 	}
 
-	record = make(map[string]Value)
+	record = newRecord(file.nameList)
 	for name := range file.columns {
 		value, valueType := file.columns[name].read()
-		record[name] = Value{value, valueType}
+		record.set(name, Value{value, valueType})
 	}
 
 	file.rowIndex++
