@@ -138,6 +138,13 @@ func TestHostUnmarshalJSON(t *testing.T) {
 		{[]byte(`"play-minio-io"`), &Host{"play-minio-io", 0, false}, false},
 		{[]byte(`"play--min.io"`), &Host{"play--min.io", 0, false}, false},
 		{[]byte(`":9000"`), nil, true},
+		{[]byte(`"[fe80::8097:76eb:b397:e067%wlp2s0]"`), &Host{"fe80::8097:76eb:b397:e067%wlp2s0", 0, false}, false},
+		{[]byte(`"[fe80::8097:76eb:b397:e067]:9000"`), &Host{"fe80::8097:76eb:b397:e067", 9000, true}, false},
+		{[]byte(`"fe80::8097:76eb:b397:e067%wlp2s0"`), nil, true},
+		{[]byte(`"fe80::8097:76eb:b397:e067%wlp2s0]"`), nil, true},
+		{[]byte(`"[fe80::8097:76eb:b397:e067%wlp2s0"`), nil, true},
+		{[]byte(`"[[fe80::8097:76eb:b397:e067%wlp2s0]]"`), nil, true},
+		{[]byte(`"[[fe80::8097:76eb:b397:e067%wlp2s0"`), nil, true},
 		{[]byte(`"play:"`), nil, true},
 		{[]byte(`"play::"`), nil, true},
 		{[]byte(`"play:90000"`), nil, true},
@@ -203,6 +210,34 @@ func TestParseHost(t *testing.T) {
 		if !testCase.expectErr {
 			if !reflect.DeepEqual(host, testCase.expectedHost) {
 				t.Fatalf("test %v: host: expected: %#v, got: %#v", i+1, testCase.expectedHost, host)
+			}
+		}
+	}
+}
+
+func TestTrimIPv6(t *testing.T) {
+	testCases := []struct {
+		IP         string
+		expectedIP string
+		expectErr  bool
+	}{
+		{"[fe80::8097:76eb:b397:e067%wlp2s0]", "fe80::8097:76eb:b397:e067%wlp2s0", false},
+		{"fe80::8097:76eb:b397:e067%wlp2s0]", "fe80::8097:76eb:b397:e067%wlp2s0", true},
+		{"[fe80::8097:76eb:b397:e067%wlp2s0]]", "fe80::8097:76eb:b397:e067%wlp2s0]", false},
+		{"[[fe80::8097:76eb:b397:e067%wlp2s0]]", "[fe80::8097:76eb:b397:e067%wlp2s0]", false},
+	}
+
+	for i, testCase := range testCases {
+		ip, err := trimIPv6(testCase.IP)
+		expectErr := (err != nil)
+
+		if expectErr != testCase.expectErr {
+			t.Fatalf("test %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
+		}
+
+		if !testCase.expectErr {
+			if ip != testCase.expectedIP {
+				t.Fatalf("test %v: IP: expected: %#v, got: %#v", i+1, testCase.expectedIP, ip)
 			}
 		}
 	}
