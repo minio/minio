@@ -71,7 +71,7 @@ vault auth enable approle    # enable approle style auth
 vault secrets enable transit  # enable transit secrets engine
 vault write -f  transit/keys/my-minio-key  #define a encryption key-ring for the transit path
 vault policy write minio-policy ./vaultpolicy.hcl  #define a policy for AppRole to access transit path
-vault write auth/approle/role/my-role token_num_uses=0  secret_id_num_uses=0  period=60s # period indicates it is renewable if token is renewed before the period is over
+vault write auth/approle/role/my-role token_num_uses=0  secret_id_num_uses=0  period=5m # period indicates it is renewable if token is renewed before the period is over
 # define an AppRole
 vault write auth/approle/role/my-role policies=minio-policy # apply policy to role
 vault read auth/approle/role/my-role/role-id  # get Approle ID
