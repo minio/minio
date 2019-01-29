@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017, 2018, 2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -177,8 +177,13 @@ func isAmazonS3Endpoint(urlStr string) bool {
 	return s3utils.IsAmazonEndpoint(*u)
 }
 
-// - Static credentials provided by user (i.e. MINIO_ACCESS_KEY)
-var defaultMinioProviders = []credentials.Provider{
+// Chains all credential types, in the following order:
+//  - AWS env vars (i.e. AWS_ACCESS_KEY_ID)
+//  - AWS creds file (i.e. AWS_SHARED_CREDENTIALS_FILE or ~/.aws/credentials)
+//  - Static credentials provided by user (i.e. MINIO_ACCESS_KEY)
+var defaultProviders = []credentials.Provider{
+	&credentials.EnvAWS{},
+	&credentials.FileAWSCredentials{},
 	&credentials.EnvMinio{},
 }
 
@@ -196,6 +201,7 @@ var defaultAWSCredProviders = []credentials.Provider{
 			Transport: minio.NewCustomHTTPTransport(),
 		},
 	},
+	&credentials.EnvMinio{},
 }
 
 // newS3 - Initializes a new client by auto probing S3 server signature.
@@ -213,9 +219,10 @@ func newS3(urlStr string) (*miniogo.Core, error) {
 	var creds *credentials.Credentials
 	if isAmazonS3Endpoint(urlStr) {
 		// If we see an Amazon S3 endpoint, then we use more ways to fetch backend credentials.
-		creds = credentials.NewChainCredentials(append(defaultAWSCredProviders, defaultMinioProviders...))
+		// Specifically IAM style rotating credentials are only supported with AWS S3 endpoint.
+		creds = credentials.NewChainCredentials(defaultAWSCredProviders)
 	} else {
-		creds = credentials.NewChainCredentials(defaultMinioProviders)
+		creds = credentials.NewChainCredentials(defaultProviders)
 	}
 
 	clnt, err := miniogo.NewWithCredentials(endpoint, creds, secure, "")
