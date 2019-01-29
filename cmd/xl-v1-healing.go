@@ -133,30 +133,19 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 		DiskCount: len(storageDisks),
 	}
 	for i, before := range beforeState {
-		if storageDisks[i] == nil {
+		if storageDisks[i] != nil {
+			drive := storageDisks[i].String()
 			res.Before.Drives = append(res.Before.Drives, madmin.HealDriveInfo{
 				UUID:     "",
-				Endpoint: "",
+				Endpoint: drive,
 				State:    before,
 			})
 			res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
 				UUID:     "",
-				Endpoint: "",
+				Endpoint: drive,
 				State:    afterState[i],
 			})
-			continue
 		}
-		drive := storageDisks[i].String()
-		res.Before.Drives = append(res.Before.Drives, madmin.HealDriveInfo{
-			UUID:     "",
-			Endpoint: drive,
-			State:    before,
-		})
-		res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
-			UUID:     "",
-			Endpoint: drive,
-			State:    afterState[i],
-		})
 	}
 
 	reducedErr := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, writeQuorum)
