@@ -49,6 +49,10 @@ const (
 	bzip2Type CompressionType = "bzip2"
 )
 
+const (
+	maxRecordSize = 1 << 20 // 1 MiB
+)
+
 // UnmarshalXML - decodes XML data.
 func (c *CompressionType) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	var s string
@@ -324,6 +328,11 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 			return false
 		}
 
+		if len(data) > maxRecordSize {
+			writer.SendError("OverMaxRecordSize", "The length of a record in the input or result is greater than maxCharsPerRecord of 1 MB.")
+			return false
+		}
+
 		if err = writer.SendRecords(data); err != nil {
 			// FIXME: log this error.
 			err = nil
@@ -335,6 +344,12 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 
 	for {
 		if s3Select.statement.LimitReached() {
+			if err = writer.FlushRecords(); err != nil {
+				// FIXME: log this error
+				err = nil
+				break
+			}
+
 			if err = writer.SendStats(s3Select.getProgress()); err != nil {
 				// FIXME: log this error.
 				err = nil
@@ -358,6 +373,12 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 				}
 			}
 
+			if err = writer.FlushRecords(); err != nil {
+				// FIXME: log this error
+				err = nil
+				break
+			}
+
 			if err = writer.SendStats(s3Select.getProgress()); err != nil {
 				// FIXME: log this error.
 				err = nil
@@ -379,7 +400,6 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 			if !sendRecord() {
 				break
 			}
-
 		}
 	}
 
