@@ -98,6 +98,18 @@
 			"revisionTime": "2017-09-13T22:19:17Z"
 		},
 		{
+			"checksumSHA1": "Xmp7mYQyG/1fyIahOyTyN9yZamY=",
+			"path": "github.com/alecthomas/participle",
+			"revision": "bf8340a459bd383e5eb7d44a9a1b3af23b6cf8cd",
+			"revisionTime": "2019-01-03T08:53:15Z"
+		},
+		{
+			"checksumSHA1": "0R8Lqt4DtU8+7Eq1mL7Hd+cjDOI=",
+			"path": "github.com/alecthomas/participle/lexer",
+			"revision": "bf8340a459bd383e5eb7d44a9a1b3af23b6cf8cd",
+			"revisionTime": "2019-01-03T08:53:15Z"
+		},
+		{
 			"checksumSHA1": "tX0Bq1gzqskL98nnB1X2rDqxH18=",
 			"path": "github.com/aliyun/aliyun-oss-go-sdk/oss",
 			"revision": "6fe16293d6b7af4f5c2450714c5b4825c8ad040c",
@@ -644,10 +656,10 @@
 			"revisionTime": "2019-01-20T10:05:29Z"
 		},
 		{
-			"checksumSHA1": "pxgHNx36gpRdhSqtaE5fqp7lrAA=",
+			"checksumSHA1": "ik77jlf0oMQTlSndP85DlIVOnOY=",
 			"path": "github.com/minio/parquet-go",
-			"revision": "1014bfb4d0e323e3fbf6683e3519a98b0721f5cc",
-			"revisionTime": "2019-01-14T09:43:57Z"
+			"revision": "7a17a919eeed02c393f3117a9ed1ac6df0da9aa5",
+			"revisionTime": "2019-01-18T04:40:39Z"
 		},
 		{
 			"checksumSHA1": "N4WRPw4p3AN958RH/O53kUsJacQ=",
@@ -887,12 +899,6 @@
 			"path": "github.com/valyala/tcplisten",
 			"revision": "ceec8f93295a060cdb565ec25e4ccf17941dbd55",
 			"revisionTime": "2016-11-14T21:01:44Z"
-		},
-		{
-			"checksumSHA1": "6ksZHYhLc3yOzTbcWKb3bDENhD4=",
-			"path": "github.com/xwb1989/sqlparser",
-			"revision": "120387863bf27d04bc07db8015110a6e96d0146c",
-			"revisionTime": "2018-06-06T15:21:19Z"
 		},
 		{
 			"checksumSHA1": "L/Q8Ylbo+wnj5whDFfMxxwyxmdo=",

@@ -105,7 +105,7 @@ func (input *InputSerialization) UnmarshalXML(d *xml.Decoder, start xml.StartEle
 		found++
 	}
 	if !parsedInput.ParquetArgs.IsEmpty() {
-		if parsedInput.CompressionType != noneType {
+		if parsedInput.CompressionType != "" && parsedInput.CompressionType != noneType {
 			return errInvalidRequestParameter(fmt.Errorf("CompressionType must be NONE for Parquet format"))
 		}
 
@@ -178,7 +178,7 @@ type S3Select struct {
 	Output         OutputSerialization `xml:"OutputSerialization"`
 	Progress       RequestProgress     `xml:"RequestProgress"`
 
-	statement      *sql.Select
+	statement      *sql.SelectStatement
 	progressReader *progressReader
 	recordReader   recordReader
 }
@@ -209,12 +209,12 @@ func (s3Select *S3Select) UnmarshalXML(d *xml.Decoder, start xml.StartElement) e
 		return errMissingRequiredParameter(fmt.Errorf("OutputSerialization must be provided"))
 	}
 
-	statement, err := sql.NewSelect(parsedS3Select.Expression)
+	statement, err := sql.ParseSelectStatement(parsedS3Select.Expression)
 	if err != nil {
 		return err
 	}
 
-	parsedS3Select.statement = statement
+	parsedS3Select.statement = &statement
 
 	*s3Select = S3Select(parsedS3Select)
 	return nil
@@ -334,6 +334,14 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 	}
 
 	for {
+		if s3Select.statement.LimitReached() {
+			if err = writer.SendStats(s3Select.getProgress()); err != nil {
+				// FIXME: log this error.
+				err = nil
+			}
+			break
+		}
+
 		if inputRecord, err = s3Select.recordReader.Read(); err != nil {
 			if err != io.EOF {
 				break
@@ -358,19 +366,25 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 			break
 		}
 
-		outputRecord = s3Select.outputRecord()
-		if outputRecord, err = s3Select.statement.Eval(inputRecord, outputRecord); err != nil {
-			break
-		}
+		if s3Select.statement.IsAggregated() {
+			if err = s3Select.statement.AggregateRow(inputRecord); err != nil {
+				break
+			}
+		} else {
+			outputRecord = s3Select.outputRecord()
+			if outputRecord, err = s3Select.statement.Eval(inputRecord, outputRecord); err != nil {
+				break
+			}
 
-		if !s3Select.statement.IsAggregated() {
 			if !sendRecord() {
 				break
 			}
+
 		}
 	}
 
 	if err != nil {
+		fmt.Printf("SQL Err: %#v\n", err)
 		if serr := writer.SendError("InternalError", err.Error()); serr != nil {
 			// FIXME: log errors.
 		}
