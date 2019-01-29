@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // FuncName - SQL function name.
@@ -52,21 +53,10 @@ const (
 	sqlFnUpper           FuncName = "UPPER"
 )
 
-// Allowed cast types
-const (
-	castBool      = "BOOL"
-	castInt       = "INT"
-	castInteger   = "INTEGER"
-	castString    = "STRING"
-	castFloat     = "FLOAT"
-	castDecimal   = "DECIMAL"
-	castNumeric   = "NUMERIC"
-	castTimestamp = "TIMESTAMP"
-)
-
 var (
 	errUnimplementedCast = errors.New("This cast not yet implemented")
 	errNonStringTrimArg  = errors.New("TRIM() received a non-string argument")
+	errNonTimestampArg   = errors.New("Expected a timestamp argument")
 )
 
 func (e *FuncExpr) getFunctionName() FuncName {
@@ -83,6 +73,10 @@ func (e *FuncExpr) getFunctionName() FuncName {
 		return sqlFnExtract
 	case e.Trim != nil:
 		return sqlFnTrim
+	case e.DateAdd != nil:
+		return sqlFnDateAdd
+	case e.DateDiff != nil:
+		return sqlFnDateDiff
 	default:
 		return ""
 	}
@@ -102,10 +96,17 @@ func (e *FuncExpr) evalSQLFnNode(r Record) (res *Value, err error) {
 		return handleSQLSubstring(r, e.Substring)
 
 	case sqlFnExtract:
-		return nil, errNotImplemented
+		return handleSQLExtract(r, e.Extract)
 
 	case sqlFnTrim:
 		return handleSQLTrim(r, e.Trim)
+
+	case sqlFnDateAdd:
+		return handleDateAdd(r, e.DateAdd)
+
+	case sqlFnDateDiff:
+		return handleDateDiff(r, e.DateDiff)
+
 	}
 
 	// For all simple argument functions, we evaluate the arguments here
@@ -119,30 +120,33 @@ func (e *FuncExpr) evalSQLFnNode(r Record) (res *Value, err error) {
 
 	switch e.getFunctionName() {
 	case sqlFnCoalesce:
-		return coalesce(r, argVals)
+		return coalesce(argVals)
 
 	case sqlFnNullIf:
-		return nullif(r, argVals[0], argVals[1])
+		return nullif(argVals[0], argVals[1])
 
 	case sqlFnCharLength, sqlFnCharacterLength:
-		return charlen(r, argVals[0])
+		return charlen(argVals[0])
 
 	case sqlFnLower:
-		return lowerCase(r, argVals[0])
+		return lowerCase(argVals[0])
 
 	case sqlFnUpper:
-		return upperCase(r, argVals[0])
+		return upperCase(argVals[0])
 
-	case sqlFnDateAdd, sqlFnDateDiff, sqlFnToString, sqlFnToTimestamp, sqlFnUTCNow:
+	case sqlFnUTCNow:
+		return handleUTCNow()
+
+	case sqlFnToString, sqlFnToTimestamp:
 		// TODO: implement
 		fallthrough
 
 	default:
-		return nil, errInvalidASTNode
+		return nil, errNotImplemented
 	}
 }
 
-func coalesce(r Record, args []*Value) (res *Value, err error) {
+func coalesce(args []*Value) (res *Value, err error) {
 	for _, arg := range args {
 		if arg.IsNull() {
 			continue
@@ -152,7 +156,7 @@ func coalesce(r Record, args []*Value) (res *Value, err error) {
 	return FromNull(), nil
 }
 
-func nullif(r Record, v1, v2 *Value) (res *Value, err error) {
+func nullif(v1, v2 *Value) (res *Value, err error) {
 	// Handle Null cases
 	if v1.IsNull() || v2.IsNull() {
 		return v1, nil
@@ -185,7 +189,7 @@ func nullif(r Record, v1, v2 *Value) (res *Value, err error) {
 	return v1, nil
 }
 
-func charlen(r Record, v *Value) (*Value, error) {
+func charlen(v *Value) (*Value, error) {
 	inferTypeAsString(v)
 	s, ok := v.ToString()
 	if !ok {
@@ -195,7 +199,7 @@ func charlen(r Record, v *Value) (*Value, error) {
 	return FromInt(int64(len(s))), nil
 }
 
-func lowerCase(r Record, v *Value) (*Value, error) {
+func lowerCase(v *Value) (*Value, error) {
 	inferTypeAsString(v)
 	s, ok := v.ToString()
 	if !ok {
@@ -205,7 +209,7 @@ func lowerCase(r Record, v *Value) (*Value, error) {
 	return FromString(strings.ToLower(s)), nil
 }
 
-func upperCase(r Record, v *Value) (*Value, error) {
+func upperCase(v *Value) (*Value, error) {
 	inferTypeAsString(v)
 	s, ok := v.ToString()
 	if !ok {
@@ -213,6 +217,58 @@ func upperCase(r Record, v *Value) (*Value, error) {
 		return nil, errIncorrectSQLFunctionArgumentType(err)
 	}
 	return FromString(strings.ToUpper(s)), nil
+}
+
+func handleDateAdd(r Record, d *DateAddFunc) (*Value, error) {
+	q, err := d.Quantity.evalNode(r)
+	if err != nil {
+		return nil, err
+	}
+	inferTypeForArithOp(q)
+	qty, ok := q.ToFloat()
+	if !ok {
+		return nil, fmt.Errorf("QUANTITY must be a numeric argument to %s()", sqlFnDateAdd)
+	}
+
+	ts, err := d.Timestamp.evalNode(r)
+	if err != nil {
+		return nil, err
+	}
+	inferTypeAsTimestamp(ts)
+	t, ok := ts.ToTimestamp()
+	if !ok {
+		return nil, fmt.Errorf("%s() expects a timestamp argument", sqlFnDateAdd)
+	}
+
+	return dateAdd(strings.ToUpper(d.DatePart), qty, t)
+}
+
+func handleDateDiff(r Record, d *DateDiffFunc) (*Value, error) {
+	tval1, err := d.Timestamp1.evalNode(r)
+	if err != nil {
+		return nil, err
+	}
+	inferTypeAsTimestamp(tval1)
+	ts1, ok := tval1.ToTimestamp()
+	if !ok {
+		return nil, fmt.Errorf("%s() expects two timestamp arguments", sqlFnDateDiff)
+	}
+
+	tval2, err := d.Timestamp2.evalNode(r)
+	if err != nil {
+		return nil, err
+	}
+	inferTypeAsTimestamp(tval2)
+	ts2, ok := tval2.ToTimestamp()
+	if !ok {
+		return nil, fmt.Errorf("%s() expects two timestamp arguments", sqlFnDateDiff)
+	}
+
+	return dateDiff(strings.ToUpper(d.DatePart), ts1, ts2)
+}
+
+func handleUTCNow() (*Value, error) {
+	return FromTimestamp(time.Now().UTC()), nil
 }
 
 func handleSQLSubstring(r Record, e *SubstringFunc) (val *Value, err error) {
@@ -301,6 +357,22 @@ func handleSQLTrim(r Record, e *TrimFunc) (res *Value, err error) {
 	return FromString(result), nil
 }
 
+func handleSQLExtract(r Record, e *ExtractFunc) (res *Value, err error) {
+	timeVal, verr := e.From.evalNode(r)
+	if verr != nil {
+		return nil, verr
+	}
+
+	inferTypeAsTimestamp(timeVal)
+
+	t, ok := timeVal.ToTimestamp()
+	if !ok {
+		return nil, errNonTimestampArg
+	}
+
+	return extract(strings.ToUpper(e.Timeword), t)
+}
+
 func errUnsupportedCast(fromType, toType string) error {
 	return fmt.Errorf("Cannot cast from %v to %v", fromType, toType)
 }
@@ -309,12 +381,23 @@ func errCastFailure(msg string) error {
 	return fmt.Errorf("Error casting: %s", msg)
 }
 
+// Allowed cast types
+const (
+	castBool      = "BOOL"
+	castInt       = "INT"
+	castInteger   = "INTEGER"
+	castString    = "STRING"
+	castFloat     = "FLOAT"
+	castDecimal   = "DECIMAL"
+	castNumeric   = "NUMERIC"
+	castTimestamp = "TIMESTAMP"
+)
+
 func (e *Expression) castTo(r Record, castType string) (res *Value, err error) {
 	v, err := e.evalNode(r)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Cast to ", castType)
 
 	switch castType {
 	case castInt, castInteger:
@@ -329,7 +412,15 @@ func (e *Expression) castTo(r Record, castType string) (res *Value, err error) {
 		s, err := stringCast(v)
 		return FromString(s), err
 
-	case castBool, castDecimal, castNumeric, castTimestamp:
+	case castTimestamp:
+		t, err := timestampCast(v)
+		return FromTimestamp(t), err
+
+	case castBool:
+		b, err := boolCast(v)
+		return FromBool(b), err
+
+	case castDecimal, castNumeric:
 		fallthrough
 
 	default:
@@ -430,4 +521,45 @@ func stringCast(v *Value) (string, error) {
 	}
 	// This does not happen
 	return "", nil
+}
+
+func timestampCast(v *Value) (t time.Time, _ error) {
+	switch v.vType {
+	case typeString:
+		s, _ := v.ToString()
+		return parseSQLTimestamp(s)
+	case typeBytes:
+		b, _ := v.ToBytes()
+		return parseSQLTimestamp(string(b))
+	case typeTimestamp:
+		t, _ = v.ToTimestamp()
+		return t, nil
+	default:
+		return t, errCastFailure(fmt.Sprintf("cannot cast %v to Timestamp type", v.GetTypeString()))
+	}
+}
+
+func boolCast(v *Value) (b bool, _ error) {
+	sToB := func(s string) (bool, error) {
+		if s == "true" {
+			return true, nil
+		} else if s == "false" {
+			return false, nil
+		} else {
+			return false, errCastFailure("cannot cast to Bool")
+		}
+	}
+	switch v.vType {
+	case typeBool:
+		b, _ := v.ToBool()
+		return b, nil
+	case typeString:
+		s, _ := v.ToString()
+		return sToB(strings.ToLower(s))
+	case typeBytes:
+		b, _ := v.ToBytes()
+		return sToB(strings.ToLower(string(b)))
+	default:
+		return false, errCastFailure("cannot cast %v to Bool")
+	}
 }
