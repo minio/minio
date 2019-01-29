@@ -36,7 +36,6 @@ type MQTTArgs struct {
 	Broker               xnet.URL       `json:"broker"`
 	Topic                string         `json:"topic"`
 	QoS                  byte           `json:"qos"`
-	ClientID             string         `json:"clientId"`
 	User                 string         `json:"username"`
 	Password             string         `json:"password"`
 	MaxReconnectInterval time.Duration  `json:"reconnectInterval"`
@@ -59,9 +58,15 @@ func (m MQTTArgs) Validate() error {
 	default:
 		return errors.New("unknown protocol in broker address")
 	}
-	if m.QueueDir != "" && !filepath.IsAbs(m.QueueDir) {
-		return errors.New("queueDir path should be absolute")
+	if m.QueueDir != "" {
+		if !filepath.IsAbs(m.QueueDir) {
+			return errors.New("queueDir path should be absolute")
+		}
+		if m.QoS == 0 {
+			return errors.New("qos should be set to 1 or 2 if queueDir is set")
+		}
 	}
+
 	return nil
 }
 
@@ -120,7 +125,7 @@ func (target *MQTTTarget) Close() error {
 // NewMQTTTarget - creates new MQTT target.
 func NewMQTTTarget(id string, args MQTTArgs) (*MQTTTarget, error) {
 	options := mqtt.NewClientOptions().
-		SetClientID(args.ClientID).
+		SetClientID("").
 		SetCleanSession(true).
 		SetUsername(args.User).
 		SetPassword(args.Password).

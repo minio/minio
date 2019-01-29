@@ -160,7 +160,6 @@ The Minio server configuration file is stored on the backend in json format. The
 | `broker` | _string_ | (Required) MQTT server endpoint, e.g. `tcp://localhost:1883` |
 | `topic` | _string_ | (Required) Name of the MQTT topic to publish on, e.g. `minio` |
 | `qos` | _int_ | Set the Quality of Service Level |
-| `clientId` | _string_ | Unique ID for the MQTT broker to identify Minio |
 | `username` | _string_ | Username to connect to the MQTT server (if required) |
 | `password` | _string_ | Password to connect to the MQTT server (if required) |
 | `queueDir` | _string_ | Persistent store for events when MQTT broker is offline |
@@ -174,7 +173,6 @@ An example configuration for MQTT is shown below:
         "broker": "tcp://localhost:1883",
         "topic": "minio",
         "qos": 1,
-        "clientId": "minio",
         "username": "",
         "password": "",
         "queueDir": ""
@@ -222,12 +220,14 @@ import paho.mqtt.client as mqtt
 
 def on_connect(client, userdata, flags, rc):
   print("Connected with result code "+str(rc))
-  client.subscribe("minio")
+  # qos level is set to 1
+  client.subscribe("minio", 1)
 
 def on_message(client, userdata, msg):
     print(msg.payload)
 
-client = mqtt.Client()
+# client_id is a randomly generated unique ID for the mqtt broker to identify the connection.
+client = mqtt.Client(client_id="myclientid",clean_session=False)
 
 client.on_connect = on_connect
 client.on_message = on_message
