@@ -1245,14 +1245,14 @@ func (fs *FSObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealRe
 }
 
 // HealObject - no-op for fs. Valid only for XL.
-func (fs *FSObjects) HealObject(ctx context.Context, bucket, object string, dryRun bool) (
+func (fs *FSObjects) HealObject(ctx context.Context, bucket, object string, dryRun, remove bool) (
 	res madmin.HealResultItem, err error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return res, NotImplemented{}
 }
 
 // HealBucket - no-op for fs, Valid only for XL.
-func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, dryRun bool) ([]madmin.HealResultItem,
+func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) ([]madmin.HealResultItem,
 	error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return nil, NotImplemented{}

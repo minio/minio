@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"path"
+	"sync"
 
 	"github.com/minio/minio/cmd/logger"
 )
@@ -75,26 +76,46 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 
 // isObjectDir returns if the specified path represents an empty directory.
 func (xl xlObjects) isObjectDir(bucket, prefix string) (ok bool) {
-	for _, disk := range xl.getLoadBalancedDisks() {
+	var objectDirs = make([]bool, len(xl.getDisks()))
+	var errs = make([]error, len(xl.getDisks()))
+	var wg sync.WaitGroup
+	for index, disk := range xl.getDisks() {
 		if disk == nil {
 			continue
 		}
-		// Check if 'prefix' is an object on this 'disk', else continue the check the next disk
-		ctnts, err := disk.ListDir(bucket, prefix, 1)
-		if err == nil {
-			if len(ctnts) == 0 {
-				return true
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			// Check if 'prefix' is an object on this 'disk', else continue the check the next disk
+			entries, err := disk.ListDir(bucket, prefix, 1)
+			if err != nil {
+				errs[index] = err
+				return
 			}
-			return false
-		}
-		// Ignore for file not found,  disk not found or faulty disk.
-		if IsErrIgnored(err, xlTreeWalkIgnoredErrs...) {
-			continue
-		}
+			objectDirs[index] = len(entries) == 0
+		}(index, disk)
+	}
+
+	wg.Wait()
+
+	readQuorum := len(xl.getDisks()) / 2
+
+	err := reduceReadQuorumErrs(context.Background(), errs, xlTreeWalkIgnoredErrs, readQuorum)
+	if err != nil {
 		reqInfo := &logger.ReqInfo{BucketName: bucket}
 		reqInfo.AppendTags("prefix", prefix)
 		ctx := logger.SetReqInfo(context.Background(), reqInfo)
 		logger.LogIf(ctx, err)
-	} // Exhausted all disks - return false.
-	return false
+		return false
+	}
+
+	for _, ok := range objectDirs {
+		if !ok {
+			// We perhaps found some entries in a prefix.
+			return false
+		}
+	}
+
+	// Return true if and only if the all directories are empty.
+	return true
 }

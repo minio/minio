@@ -30,6 +30,7 @@ import (
 type HealOpts struct {
 	Recursive bool `json:"recursive"`
 	DryRun    bool `json:"dryRun"`
+	Remove    bool `json:"remove"`
 }
 
 // HealStartSuccess - holds information about a successfully started
