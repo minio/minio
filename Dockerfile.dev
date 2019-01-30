@@ -2,7 +2,7 @@ FROM alpine:3.7
 
 LABEL maintainer="Minio Inc <dev@minio.io>"
 
-COPY dockerscripts/docker-entrypoint.sh dockerscripts/healthcheck.sh /usr/bin/
+COPY dockerscripts/docker-entrypoint.sh dockerscripts/healthcheck /usr/bin/
 COPY minio /usr/bin/
 
 ENV MINIO_UPDATE off
@@ -14,7 +14,7 @@ RUN \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
      chmod +x /usr/bin/minio  && \
      chmod +x /usr/bin/docker-entrypoint.sh && \
-     chmod +x /usr/bin/healthcheck.sh
+     chmod +x /usr/bin/healthcheck
 
 EXPOSE 9000
 
@@ -22,7 +22,6 @@ ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 
 VOLUME ["/data"]
 
-HEALTHCHECK --interval=30s --timeout=5s \
-    CMD /usr/bin/healthcheck.sh
+HEALTHCHECK --interval=1m CMD healthcheck
 
 CMD ["minio"]
