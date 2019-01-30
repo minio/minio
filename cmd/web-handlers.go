@@ -471,7 +471,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			AccountName:     claims.Subject,
 			Action:          iampolicy.ListBucketAction,
 			BucketName:      args.BucketName,
-			ConditionValues: getConditionValues(r, "", ""),
+			ConditionValues: getConditionValues(r, "", claims.Subject),
 			IsOwner:         owner,
 		})
 
@@ -479,7 +479,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			AccountName:     claims.Subject,
 			Action:          iampolicy.PutObjectAction,
 			BucketName:      args.BucketName,
-			ConditionValues: getConditionValues(r, "", ""),
+			ConditionValues: getConditionValues(r, "", claims.Subject),
 			IsOwner:         owner,
 			ObjectName:      args.Prefix + "/",
 		})
