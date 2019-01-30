@@ -235,9 +235,9 @@ Fetches CPU utilization for all cluster nodes. Returned value is in Bytes.
 
 | Param | Type | Description |
 |-------|------|-------------|
-|`cpu.Load.Avg` | _string_ | The average utilization % of the CPU measured in a 200ms interval |
-|`cpu.Load.Min` | _string_ | The minimum utilization % of the CPU measured in a 200ms interval |
-|`cpu.Load.Max` | _string_ | The maximum utilization % of the CPU measured in a 200ms interval |
+|`cpu.Load.Avg` | _float64_ | The average utilization of the CPU measured in a 200ms interval |
+|`cpu.Load.Min` | _float64_ | The minimum utilization of the CPU measured in a 200ms interval |
+|`cpu.Load.Max` | _float64_ | The maximum utilization of the CPU measured in a 200ms interval |
 |`cpu.Load.Error` | _string_ | Error (if any) encountered while accesing the CPU info |
 
 <a name="ServerMemUsageInfo"></a>
@@ -253,7 +253,7 @@ Fetches Mem utilization for all cluster nodes. Returned value is in Bytes.
 
 | Param | Type | Description |
 |-------|------|-------------|
-|`mem.Usage.Mem` | _string_ | The total number of bytes obtained from the OS |
+|`mem.Usage.Mem` | _uint64_ | The total number of bytes obtained from the OS |
 |`mem.Usage.Error` | _string_ | Error (if any) encountered while accesing the CPU info |
 
 ## 6. Heal operations

@@ -313,18 +313,20 @@ type ServerDrivesPerfInfo struct {
 // of one minio node. It also reports any errors if encountered
 // while trying to reach this server.
 type ServerCPULoadInfo struct {
-	Addr  string     `json:"addr"`
-	Error string     `json:"error,omitempty"`
-	Load  []cpu.Load `json:"load"`
+	Addr         string     `json:"addr"`
+	Error        string     `json:"error,omitempty"`
+	Load         []cpu.Load `json:"load"`
+	HistoricLoad []cpu.Load `json:"historicLoad"`
 }
 
 // ServerMemUsageInfo holds informantion about memory utilization
 // of one minio node. It also reports any errors if encountered
 // while trying to reach this server.
 type ServerMemUsageInfo struct {
-	Addr  string      `json:"addr"`
-	Error string      `json:"error,omitempty"`
-	Usage []mem.Usage `json:"usage"`
+	Addr          string      `json:"addr"`
+	Error         string      `json:"error,omitempty"`
+	Usage         []mem.Usage `json:"usage"`
+	HistoricUsage []mem.Usage `json:"historicUsage"`
 }
 
 // PerfInfoHandler - GET /minio/admin/v1/performance?perfType={perfType}

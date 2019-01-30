@@ -18,14 +18,43 @@ package mem
 
 import (
 	"runtime"
-
-	humanize "github.com/dustin/go-humanize"
+	"time"
 )
+
+// historicUsage holds the rolling average of memory used by
+// minio server
+var historicUsage *Usage
+
+// memUsageMeasureInterval is the window of time between
+// two measurements of memory usage
+const memUsageMeasureInterval = 5 * time.Second
+
+// triggers the collection of historic stats about the memory
+// utilized by minio server
+func init() {
+	historicUsage = &Usage{}
+	var cycles uint64
+	go func() {
+		for {
+			time.Sleep(memUsageMeasureInterval)
+			currUsage := GetUsage()
+			currSum := cycles * historicUsage.Mem
+			cycles = cycles + 1
+			historicUsage.Mem = (currSum + currUsage.Mem) / cycles
+		}
+	}()
+}
 
 // Usage holds memory utilization information in human readable format
 type Usage struct {
-	Mem   string `json:"mem"`
+	Mem   uint64 `json:"mem"`
 	Error string `json:"error,omitempty"`
+}
+
+// GetHistoricUsage measures the historic average of memory utilized by
+// current process
+func GetHistoricUsage() Usage {
+	return *historicUsage
 }
 
 // GetUsage measures the total memory provisioned for the current process
@@ -34,6 +63,6 @@ func GetUsage() Usage {
 	memStats := new(runtime.MemStats)
 	runtime.ReadMemStats(memStats)
 	return Usage{
-		Mem: humanize.IBytes(memStats.Sys),
+		Mem: memStats.Sys,
 	}
 }
