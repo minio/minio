@@ -562,7 +562,6 @@ func (xl xlObjects) healObjectDir(ctx context.Context, bucket, object string, dr
 			}
 
 			if dryRun {
-				hr.After.Drives[idx].State = madmin.DriveStateOk
 				return
 			}
 
