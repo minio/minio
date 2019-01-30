@@ -22,6 +22,7 @@ import (
 	"io"
 	"path"
 	"sync"
+	"time"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/madmin"
@@ -237,6 +238,30 @@ func listAllBuckets(storageDisks []StorageAPI) (buckets map[string]VolInfo,
 	return buckets, bucketsOcc, nil
 }
 
+// Only heal on disks where we are sure that healing is needed. We can expand
+// this list as and when we figure out more errors can be added to this list safely.
+func shouldHealObjectOnDisk(xlErr, dataErr error, meta xlMetaV1, quorumModTime time.Time) bool {
+	switch xlErr {
+	case errFileNotFound:
+		return true
+	case errCorruptedFormat:
+		return true
+	}
+	if xlErr == nil {
+		// If xl.json was read fine but there is some problem with the part.N files.
+		if dataErr == errFileNotFound {
+			return true
+		}
+		if _, ok := dataErr.(hashMismatchError); ok {
+			return true
+		}
+		if quorumModTime != meta.Stat.ModTime {
+			return true
+		}
+	}
+	return false
+}
+
 // Heals an object by re-writing corrupt/missing erasure blocks.
 func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, object string,
 	quorum int, dryRun bool) (result madmin.HealResultItem, err error) {
@@ -305,17 +330,13 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 			driveState = madmin.DriveStateCorrupt
 		}
 
-		// an online disk without valid data/metadata is
-		// outdated and can be healed.
-		if errs[i] != errDiskNotFound && v == nil {
+		var drive string
+		if storageDisks[i] != nil {
+			drive = storageDisks[i].String()
+		}
+		if shouldHealObjectOnDisk(errs[i], dataErrs[i], partsMetadata[i], modTime) {
 			outDatedDisks[i] = storageDisks[i]
 			disksToHealCount++
-		}
-		var drive string
-		if v == nil {
-			if errs[i] != errDiskNotFound {
-				drive = outDatedDisks[i].String()
-			}
 			result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
 				UUID:     "",
 				Endpoint: drive,
@@ -328,7 +349,6 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 			})
 			continue
 		}
-		drive = v.String()
 		result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
 			UUID:     "",
 			Endpoint: drive,

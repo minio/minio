@@ -29,6 +29,9 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 
+	"fmt"
+	"strings"
+
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	xnet "github.com/minio/minio/pkg/net"
@@ -100,6 +103,15 @@ func toStorageErr(err error) error {
 		return errRPCAPIVersionUnsupported
 	case errServerTimeMismatch.Error():
 		return errServerTimeMismatch
+	}
+	if strings.Contains(err.Error(), "Bitrot verification mismatch") {
+		var expected string
+		var received string
+		fmt.Sscanf(err.Error(), "Bitrot verification mismatch - expected %s received %s", &expected, &received)
+		// Go's Sscanf %s scans "," that comes after the expected hash, hence remove it. Providing "," in the format string does not help.
+		expected = strings.TrimSuffix(expected, ",")
+		bitrotErr := hashMismatchError{expected, received}
+		return bitrotErr
 	}
 	return err
 }
