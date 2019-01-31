@@ -1738,7 +1738,6 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 
 	for i, testCase := range testCases {
 		var req *http.Request
-		var reqV2 *http.Request
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		if !testCase.invalidPartNumber || !testCase.maximumPartNumber {
@@ -1781,37 +1780,6 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 			if instanceType != FSTestStr && len(results.Parts) != 1 {
 				t.Fatalf("Test %d: %s: Expected only one entry returned %d entries", i+1, instanceType, len(results.Parts))
 			}
-		}
-
-		// Verify response of the V2 signed HTTP request.
-		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
-		recV2 := httptest.NewRecorder()
-
-		reqV2, err = newTestRequest("PUT", getCopyObjectPartURL("", testCase.bucketName, testObject, testCase.uploadID, "1"), 0, nil)
-		if err != nil {
-			t.Fatalf("Test %d: Failed to create HTTP request for copy Object: <ERROR> %v", i+1, err)
-		}
-		// "X-Amz-Copy-Source" header contains the information about the source bucket and the object to copied.
-		if testCase.copySourceHeader != "" {
-			reqV2.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader)
-		}
-		if testCase.copySourceVersionID != "" {
-			reqV2.Header.Set("X-Amz-Copy-Source-Version-Id", testCase.copySourceVersionID)
-		}
-		if testCase.copySourceRange != "" {
-			reqV2.Header.Set("X-Amz-Copy-Source-Range", testCase.copySourceRange)
-		}
-
-		err = signRequestV2(reqV2, testCase.accessKey, testCase.secretKey)
-		if err != nil {
-			t.Fatalf("Failed to V2 Sign the HTTP request: %v.", err)
-		}
-
-		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
-		// Call the ServeHTTP to execute the handler.
-		apiRouter.ServeHTTP(recV2, reqV2)
-		if recV2.Code != testCase.expectedRespStatus {
-			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, recV2.Code)
 		}
 	}
 
@@ -3187,73 +3155,6 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
 	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
-}
-
-// TestAPIPutObjectPartHandlerPreSign - Tests validate the response of PutObjectPart HTTP handler
-// when the request signature type is PreSign.
-func TestAPIPutObjectPartHandlerPreSign(t *testing.T) {
-	defer DetectTestLeak(t)()
-	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandlerPreSign, []string{"NewMultipart", "PutObjectPart"})
-}
-
-func testAPIPutObjectPartHandlerPreSign(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials auth.Credentials, t *testing.T) {
-	testObject := "testobject"
-	rec := httptest.NewRecorder()
-	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, "testobject"),
-		0, nil, credentials.AccessKey, credentials.SecretKey, nil)
-	if err != nil {
-		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
-			instanceType, bucketName, testObject, err)
-	}
-	apiRouter.ServeHTTP(rec, req)
-
-	// Get uploadID of the mulitpart upload initiated.
-	var mpartResp InitiateMultipartUploadResponse
-	mpartRespBytes, err := ioutil.ReadAll(rec.Result().Body)
-	if err != nil {
-		t.Fatalf("[%s] Failed to read NewMultipartUpload response <ERROR> %v", instanceType, err)
-
-	}
-	err = xml.Unmarshal(mpartRespBytes, &mpartResp)
-	if err != nil {
-		t.Fatalf("[%s] Failed to unmarshal NewMultipartUpload response <ERROR> %v", instanceType, err)
-	}
-
-	rec = httptest.NewRecorder()
-	req, err = newTestRequest("PUT", getPutObjectPartURL("", bucketName, testObject, mpartResp.UploadID, "1"),
-		int64(len("hello")), bytes.NewReader([]byte("hello")))
-	if err != nil {
-		t.Fatalf("[%s] - Failed to create an unsigned request to put object part for %s/%s <ERROR> %v",
-			instanceType, bucketName, testObject, err)
-	}
-
-	err = preSignV2(req, credentials.AccessKey, credentials.SecretKey, int64(10*60*60))
-	if err != nil {
-		t.Fatalf("[%s] - Failed to presign an unsigned request to put object part for %s/%s <ERROR> %v",
-			instanceType, bucketName, testObject, err)
-	}
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Errorf("Test %d %s expected to succeed but failed with HTTP status code %d", 1, instanceType, rec.Code)
-	}
-
-	rec = httptest.NewRecorder()
-	req, err = newTestRequest("PUT", getPutObjectPartURL("", bucketName, testObject, mpartResp.UploadID, "1"),
-		int64(len("hello")), bytes.NewReader([]byte("hello")))
-	if err != nil {
-		t.Fatalf("[%s] - Failed to create an unsigned request to put object part for %s/%s <ERROR> %v",
-			instanceType, bucketName, testObject, err)
-	}
-	err = preSignV4(req, credentials.AccessKey, credentials.SecretKey, int64(10*60*60))
-	if err != nil {
-		t.Fatalf("[%s] - Failed to presign an unsigned request to put object part for %s/%s <ERROR> %v",
-			instanceType, bucketName, testObject, err)
-	}
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Errorf("Test %d %s expected to succeed but failed with HTTP status code %d", 1, instanceType, rec.Code)
-	}
 }
 
 // TestAPIPutObjectPartHandlerStreaming - Tests validate the response of PutObjectPart HTTP handler
