@@ -33,6 +33,7 @@ import (
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mem"
 	"github.com/minio/minio/pkg/mountinfo"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // EndpointType - enum for endpoint type.
@@ -206,11 +207,11 @@ func localEndpointsMemUsage(endpoints EndpointList) ServerMemUsageInfo {
 	var memUsages []mem.Usage
 	var historicUsages []mem.Usage
 	var addr string
-	scratchSpace := map[string]bool{}
+	seenEndpoints := set.NewStringSet()
 	for _, endpoint := range endpoints {
 		// Only proceed for local endpoints
 		if endpoint.IsLocal {
-			if _, ok := scratchSpace[endpoint.Host]; ok {
+			if seenEndpoints.Contains(endpoint.Host) {
 				continue
 			}
 			addr = GetLocalPeer(endpoints)
@@ -218,7 +219,7 @@ func localEndpointsMemUsage(endpoints EndpointList) ServerMemUsageInfo {
 			memUsages = append(memUsages, memUsage)
 			historicUsage := mem.GetHistoricUsage()
 			historicUsages = append(historicUsages, historicUsage)
-			scratchSpace[endpoint.Host] = true
+			seenEndpoints.Add(endpoint.Host)
 		}
 	}
 	return ServerMemUsageInfo{
@@ -228,17 +229,53 @@ func localEndpointsMemUsage(endpoints EndpointList) ServerMemUsageInfo {
 	}
 }
 
+// localEndpointsNetStats - returns ServerNetStatsInfo for only the
+// local endpoints from given list of endpoints
+func localEndpointsNetStats(endpoints EndpointList) ServerNetStatsInfo {
+	var tputs []xnet.Stats
+	var oneMinTputs []xnet.Stats
+	var fiveMinTputs []xnet.Stats
+	var fifteenMinTputs []xnet.Stats
+	var addr string
+	seenEndpoints := set.NewStringSet()
+	for _, endpoint := range endpoints {
+		// Only proceed for local endpoints
+		if endpoint.IsLocal {
+			if seenEndpoints.Contains(endpoint.Host) {
+				continue
+			}
+			addr = GetLocalPeer(endpoints)
+			tput := *xnet.GlobalNetStats
+			tputs = append(tputs, tput)
+			oneMinTput := *xnet.OneMinWindow
+			oneMinTputs = append(oneMinTputs, oneMinTput)
+			fiveMinTput := *xnet.FiveMinWindow
+			fiveMinTputs = append(fiveMinTputs, fiveMinTput)
+			fifteenMinTput := *xnet.FifteenMinWindow
+			fifteenMinTputs = append(fifteenMinTputs, fifteenMinTput)
+			seenEndpoints.Add(endpoint.Host)
+		}
+	}
+	return ServerNetStatsInfo{
+		Addr:             addr,
+		CurrentNetStats:  tputs,
+		OneMinWindow:     oneMinTputs,
+		FiveMinWindow:    fiveMinTputs,
+		FifteenMinWindow: fifteenMinTputs,
+	}
+}
+
 // localEndpointsCPULoad - returns ServerCPULoadInfo for only the
 // local endpoints from given list of endpoints
 func localEndpointsCPULoad(endpoints EndpointList) ServerCPULoadInfo {
 	var cpuLoads []cpu.Load
 	var historicLoads []cpu.Load
 	var addr string
-	scratchSpace := map[string]bool{}
+	seenEndpoints := set.NewStringSet()
 	for _, endpoint := range endpoints {
 		// Only proceed for local endpoints
 		if endpoint.IsLocal {
-			if _, ok := scratchSpace[endpoint.Host]; ok {
+			if seenEndpoints.Contains(endpoint.Host) {
 				continue
 			}
 			addr = GetLocalPeer(endpoints)
@@ -246,7 +283,7 @@ func localEndpointsCPULoad(endpoints EndpointList) ServerCPULoadInfo {
 			cpuLoads = append(cpuLoads, cpuLoad)
 			historicLoad := cpu.GetHistoricLoad()
 			historicLoads = append(historicLoads, historicLoad)
-			scratchSpace[endpoint.Host] = true
+			seenEndpoints.Add(endpoint.Host)
 		}
 	}
 	return ServerCPULoadInfo{

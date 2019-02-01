@@ -27,6 +27,7 @@ import (
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mem"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // BackendType - represents different backend types.
@@ -182,6 +183,52 @@ func (adm *AdminClient) ServerDrivesPerfInfo() ([]ServerDrivesPerfInfo, error) {
 
 	// Unmarshal the server's json response
 	var info []ServerDrivesPerfInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(respBytes, &info)
+	if err != nil {
+		return nil, err
+	}
+
+	return info, nil
+}
+
+// ServerNetStatsInfo holds information about address and network statistics of
+// a single server node
+type ServerNetStatsInfo struct {
+	Addr             string       `json:"addr"`
+	Error            string       `json:"error,omitempty"`
+	CurrentStats     []xnet.Stats `json:"currentStats"`
+	OneMinWindow     []xnet.Stats `json:"oneMinWindow"`
+	FiveMinWindow    []xnet.Stats `json:"fiveMinWindow"`
+	FifteenMinWindow []xnet.Stats `json:"fifteenMinWindow"`
+}
+
+// ServerNetStatsInfo - Returns internode network statistics information
+func (adm *AdminClient) ServerNetStatsInfo() ([]ServerNetStatsInfo, error) {
+	v := url.Values{}
+	v.Set("perfType", string("net"))
+	resp, err := adm.executeMethod("GET", requestData{
+		relPath:     "/v1/performance",
+		queryValues: v,
+	})
+
+	defer closeResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var info []ServerNetStatsInfo
 
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {

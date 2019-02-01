@@ -306,6 +306,18 @@ type ServerMemUsageInfo struct {
 	HistoricUsage []mem.Usage `json:"historicUsage"`
 }
 
+// ServerNetStatsInfo holds information about network statistics
+// of one minio node with respect to all other minio nodes. It also
+// reports any errors encountered while reaching this server
+type ServerNetStatsInfo struct {
+	Addr             string       `json:"addr"`
+	Error            string       `json:"error,omitempty"`
+	CurrentNetStats  []xnet.Stats `json:"currentStats"`
+	OneMinWindow     []xnet.Stats `json:"oneMinWindow"`
+	FiveMinWindow    []xnet.Stats `json:"fiveMinWindow"`
+	FifteenMinWindow []xnet.Stats `json:"fifteenMinWindow"`
+}
+
 // PerfInfoHandler - GET /minio/admin/v1/performance?perfType={perfType}
 // ----------
 // Get all performance information based on input type
@@ -376,6 +388,23 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		}
 
 		// Reply with mem usage information (across nodes in a
+		// distributed setup) as json.
+		writeSuccessResponseJSON(w, jsonBytes)
+	} else if perfType == "net" {
+		// Get net statistics of local server to other nodes
+		n := localEndpointsNetStats(globalEndpoints)
+		// Notify all other Minio peers to report net statistics
+		tputs := globalNotificationSys.NetStatsInfo()
+		tputs = append(tputs, n)
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(tputs)
+		if err != nil {
+			writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		// Reply with net statistics info (across nodes in a
 		// distributed setup) as json.
 		writeSuccessResponseJSON(w, jsonBytes)
 	} else {

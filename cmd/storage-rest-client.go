@@ -231,7 +231,11 @@ func (client *storageRESTClient) AppendFile(volume, path string, buffer []byte) 
 	reader := bytes.NewBuffer(buffer)
 	respBody, err := client.call(storageRESTMethodAppendFile, values, reader, -1)
 	defer http.DrainBody(respBody)
-	return err
+	if err != nil {
+		return err
+	}
+	xnet.GlobalNetStats.Transmit(uint64(uint64(len(buffer))))
+	return nil
 }
 
 func (client *storageRESTClient) CreateFile(volume, path string, length int64, r io.Reader) error {
@@ -241,7 +245,11 @@ func (client *storageRESTClient) CreateFile(volume, path string, length int64, r
 	values.Set(storageRESTLength, strconv.Itoa(int(length)))
 	respBody, err := client.call(storageRESTMethodCreateFile, values, r, length)
 	defer http.DrainBody(respBody)
-	return err
+	if err != nil {
+		return err
+	}
+	xnet.GlobalNetStats.Transmit(uint64(length))
+	return nil
 }
 
 // WriteAll - write all data to a file.
@@ -252,7 +260,11 @@ func (client *storageRESTClient) WriteAll(volume, path string, buffer []byte) er
 	reader := bytes.NewBuffer(buffer)
 	respBody, err := client.call(storageRESTMethodWriteAll, values, reader, -1)
 	defer http.DrainBody(respBody)
-	return err
+	if err != nil {
+		return err
+	}
+	xnet.GlobalNetStats.Transmit(uint64(len(buffer)))
+	return nil
 }
 
 // StatFile - stat a file.
@@ -279,7 +291,12 @@ func (client *storageRESTClient) ReadAll(volume, path string) ([]byte, error) {
 		return nil, err
 	}
 	defer http.DrainBody(respBody)
-	return ioutil.ReadAll(respBody)
+	buf, err := ioutil.ReadAll(respBody)
+	if err != nil {
+		return nil, err
+	}
+	xnet.GlobalNetStats.Receive(uint64(len(buf)))
+	return buf, nil
 }
 
 // ReadFileStream - returns a reader for the requested file.
@@ -293,6 +310,7 @@ func (client *storageRESTClient) ReadFileStream(volume, path string, offset, len
 	if err != nil {
 		return nil, err
 	}
+	xnet.GlobalNetStats.Receive(uint64(length))
 	return respBody, nil
 }
 
@@ -310,13 +328,18 @@ func (client *storageRESTClient) ReadFile(volume, path string, offset int64, buf
 		values.Set(storageRESTBitrotAlgo, "")
 		values.Set(storageRESTBitrotHash, "")
 	}
+
 	respBody, err := client.call(storageRESTMethodReadFile, values, nil, -1)
 	if err != nil {
 		return 0, err
 	}
 	defer http.DrainBody(respBody)
 	n, err := io.ReadFull(respBody, buffer)
-	return int64(n), err
+	if err != nil {
+		return int64(0), err
+	}
+	xnet.GlobalNetStats.Receive(uint64(n))
+	return int64(n), nil
 }
 
 // ListDir - lists a directory.

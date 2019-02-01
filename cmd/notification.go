@@ -769,6 +769,31 @@ func (sys *NotificationSys) MemUsageInfo() []ServerMemUsageInfo {
 	return reply
 }
 
+// NetStatsInfo - Network statistics information
+func (sys *NotificationSys) NetStatsInfo() []ServerNetStatsInfo {
+	reply := make([]ServerNetStatsInfo, len(sys.peerRPCClientMap))
+	var wg sync.WaitGroup
+	var i int
+	for addr, client := range sys.peerRPCClientMap {
+		wg.Add(1)
+		go func(addr xnet.Host, client *PeerRPCClient, idx int) {
+			defer wg.Done()
+			neti, err := client.NetStatsInfo()
+			if err != nil {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr.String())
+				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				logger.LogIf(ctx, err)
+				neti.Addr = addr.String()
+				neti.Error = err.Error()
+			}
+			reply[idx] = neti
+		}(addr, client, i)
+		i++
+	}
+	wg.Wait()
+	return reply
+}
+
 // CPULoadInfo - CPU utilization information
 func (sys *NotificationSys) CPULoadInfo() []ServerCPULoadInfo {
 	reply := make([]ServerCPULoadInfo, len(sys.peerRPCClientMap))

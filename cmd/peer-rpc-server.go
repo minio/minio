@@ -252,6 +252,16 @@ func (receiver *peerRPCReceiver) DrivePerfInfo(args *AuthArgs, reply *ServerDriv
 	return nil
 }
 
+// NetStatsInfo - handles network statistics RPC call
+func (receiver *peerRPCReceiver) NetStatsInfo(args *AuthArgs, reply *ServerNetStatsInfo) error {
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return errServerNotInitialized
+	}
+	*reply = localEndpointsNetStats(globalEndpoints)
+	return nil
+}
+
 // CPULoadInfo - handles cpu performance RPC call
 func (receiver *peerRPCReceiver) CPULoadInfo(args *AuthArgs, reply *ServerCPULoadInfo) error {
 	objAPI := newObjectLayerFn()

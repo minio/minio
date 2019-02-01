@@ -39,7 +39,7 @@ func main() {
 | Service operations         | Info operations  | Healing operations                    | Config operations        | Top operations        | IAM operations | Misc                                |
 |:----------------------------|:----------------------------|:--------------------------------------|:--------------------------|:--------------------------|:------------------------------------|:------------------------------------|
 | [`ServiceStatus`](#ServiceStatus) | [`ServerInfo`](#ServerInfo) | [`Heal`](#Heal) | [`GetConfig`](#GetConfig) | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser) | [`SetAdminCredentials`](#SetAdminCredentials) |
-| [`ServiceSendAction`](#ServiceSendAction) | [`ServerCPULoadInfo`](#ServerCPULoadInfo) | | [`SetConfig`](#SetConfig) | |  [`SetUserPolicy`](#SetUserPolicy) | [`StartProfiling`](#StartProfiling) |
+| [`ServiceSendAction`](#ServiceSendAction) | [`ServerCPULoadInfo`](#ServerCPULoadInfo) | [`ServerNetStatsInfo`](#ServerNetStatsInfo) | [`SetConfig`](#SetConfig) | |  [`SetUserPolicy`](#SetUserPolicy) | [`StartProfiling`](#StartProfiling) |
 | |[`ServerMemUsageInfo`](#ServerMemUsageInfo) |            | [`GetConfigKeys`](#GetConfigKeys) | | [`ListUsers`](#ListUsers) | [`DownloadProfilingData`](#DownloadProfilingData) |
 | | |            | [`SetConfigKeys`](#SetConfigKeys) | | [`AddCannedPolicy`](#AddCannedPolicy) | |
 
@@ -222,10 +222,28 @@ Fetches drive performance information for all cluster nodes. Returned value is i
 |`disk.Performance.WriteSpeed` | _float64_ | Write speed on above path in Bytes/s. |
 |`disk.Performance.ReadSpeed` | _float64_ | Read speed on above path in Bytes/s. |
 
+<a name="ServerNetStatsInfo"></a>
+### ServerNetStatsInfo() ([]ServerNetStatsInfo, error)
+
+Fetches Network statistics for all cluster nodes. Returned value is in Bytes.
+
+| Param | Type | Description |
+|-------|------|-------------|
+|`net.Addr` | _string_ | Address of the server the following information  is retrieved from. |
+|`net.Error` | _string_ | Errors (if any) encountered while reaching this node |
+|`net.NetStats` | _net.Stats_ | The network statistics Info. |
+
+| Param | Type | Description |
+|-------|------|-------------|
+|`net.Stats.Received` | _uint64_ | Number of bytes being received currently |
+|`net.Stats.Transmitted` | _uint64_ | Number of bytes in transmission currently |
+|`net.Stats.TotalReceived` | _uint64_ | Total number of bytes received by a minio node in its lifetime |
+|`net.Stats.TotalTransmitted` | _uint64_ | Total number of bytes transmitted by a minio node in its lifetime |
+
 <a name="ServerCPULoadInfo"></a>
 ### ServerCPULoadInfo() ([]ServerCPULoadInfo, error)
 
-Fetches CPU utilization for all cluster nodes. Returned value is in Bytes.
+Fetches CPU utilization for all cluster nodes. Returned value is in a fraction of 200 milliseconds.
 
 | Param | Type | Description |
 |-------|------|-------------|

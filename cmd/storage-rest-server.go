@@ -32,6 +32,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 var errConnectionStale = errors.New("connection stale, REST client/server instance-id mismatch")
@@ -180,6 +181,7 @@ func (s *storageRESTServer) AppendFileHandler(w http.ResponseWriter, r *http.Req
 		s.writeErrorResponse(w, err)
 		return
 	}
+	xnet.GlobalNetStats.Receive(uint64(r.ContentLength))
 	err = s.storage.AppendFile(volume, filePath, buf)
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -201,6 +203,7 @@ func (s *storageRESTServer) CreateFileHandler(w http.ResponseWriter, r *http.Req
 		s.writeErrorResponse(w, err)
 		return
 	}
+	xnet.GlobalNetStats.Receive(uint64(fileSize))
 	err = s.storage.CreateFile(volume, filePath, int64(fileSize), r.Body)
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -221,6 +224,7 @@ func (s *storageRESTServer) WriteAllHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	xnet.GlobalNetStats.Receive(uint64(r.ContentLength))
 	buf := make([]byte, r.ContentLength)
 	_, err := io.ReadFull(r.Body, buf)
 	if err != nil {
@@ -266,6 +270,7 @@ func (s *storageRESTServer) ReadAllHandler(w http.ResponseWriter, r *http.Reques
 		s.writeErrorResponse(w, err)
 		return
 	}
+	xnet.GlobalNetStats.Transmit(uint64(r.ContentLength))
 	w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
 	w.Write(buf)
 }
@@ -309,6 +314,7 @@ func (s *storageRESTServer) ReadFileHandler(w http.ResponseWriter, r *http.Reque
 		s.writeErrorResponse(w, err)
 		return
 	}
+	xnet.GlobalNetStats.Transmit(uint64(len(buf)))
 	w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
 	w.Write(buf)
 }
@@ -337,6 +343,7 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 		return
 	}
 	defer rc.Close()
+	xnet.GlobalNetStats.Transmit(uint64(length))
 	w.Header().Set("Content-Length", strconv.Itoa(length))
 	io.Copy(w, rc)
 }

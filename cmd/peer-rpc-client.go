@@ -150,6 +150,15 @@ func (rpcClient *PeerRPCClient) DrivePerfInfo() (ServerDrivesPerfInfo, error) {
 	return reply, err
 }
 
+// NetStatsInfo - returns network statistics info for remote server
+func (rpcClient *PeerRPCClient) NetStatsInfo() (ServerNetStatsInfo, error) {
+	args := AuthArgs{}
+	var reply ServerNetStatsInfo
+
+	err := rpcClient.Call(peerServiceName+".NetStatsInfo", &args, &reply)
+	return reply, err
+}
+
 // MemUsageInfo - returns mem utilization info for remote server
 func (rpcClient *PeerRPCClient) MemUsageInfo() (ServerMemUsageInfo, error) {
 	args := AuthArgs{}
