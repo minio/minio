@@ -381,37 +381,9 @@ type resourceHandler struct {
 	handler http.Handler
 }
 
-// List of default allowable HTTP methods.
-var defaultAllowableHTTPMethods = []string{
-	http.MethodGet,
-	http.MethodPut,
-	http.MethodHead,
-	http.MethodPost,
-	http.MethodDelete,
-	http.MethodOptions,
-}
-
 // setCorsHandler handler for CORS (Cross Origin Resource Sharing)
 func setCorsHandler(h http.Handler) http.Handler {
-	commonS3Headers := []string{
-		"Date",
-		"ETag",
-		"Server",
-		"Connection",
-		"Accept-Ranges",
-		"Content-Range",
-		"Content-Encoding",
-		"Content-Length",
-		"Content-Type",
-		"x-amz-request-id",
-	}
-	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   defaultAllowableHTTPMethods,
-		AllowedHeaders:   []string{"*"},
-		ExposedHeaders:   commonS3Headers,
-		AllowCredentials: true,
-	})
+	c := cors.AllowAll()
 	return c.Handler(h)
 }
 
