@@ -282,7 +282,7 @@ func (s *serverConfig) loadFromEnvs() {
 	if jwksURL, ok := os.LookupEnv("MINIO_IAM_JWKS_URL"); ok {
 		if u, err := xnet.ParseURL(jwksURL); err == nil {
 			s.OpenID.JWKS.URL = u
-			s.OpenID.JWKS.PopulatePublicKey()
+			logger.FatalIf(s.OpenID.JWKS.PopulatePublicKey(), "Unable to populate public key from JWKS URL")
 		}
 	}
 
