@@ -505,8 +505,10 @@ func (xl xlObjects) ListObjectParts(ctx context.Context, bucket, object, uploadI
 
 	uploadIDPath := xl.getUploadIDDir(bucket, object, uploadID)
 
+	storageDisks := xl.getDisks()
+
 	// Read metadata associated with the object from all disks.
-	partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), minioMetaMultipartBucket, uploadIDPath)
+	partsMetadata, errs := readAllXLMetadata(ctx, storageDisks, minioMetaMultipartBucket, uploadIDPath)
 
 	// get Quorum for this object
 	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
@@ -519,7 +521,7 @@ func (xl xlObjects) ListObjectParts(ctx context.Context, bucket, object, uploadI
 		return result, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
 
-	_, modTime := listOnlineDisks(xl.getDisks(), partsMetadata, errs)
+	_, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
 
 	// Pick one from the first valid metadata.
 	xlValidMeta, err := pickValidXLMeta(ctx, partsMetadata, modTime, writeQuorum)
