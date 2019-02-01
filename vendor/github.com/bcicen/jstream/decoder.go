@@ -1,6 +1,8 @@
 package jstream
 
 import (
+	"bytes"
+	"encoding/json"
 	"io"
 	"strconv"
 	"sync/atomic"
@@ -35,6 +37,29 @@ type MetaValue struct {
 type KV struct {
 	Key   string      `json:"key"`
 	Value interface{} `json:"value"`
+}
+
+// KVS - represents key values in an JSON object
+type KVS []KV
+
+// MarshalJSON - implements converting slice of KVS into a JSON object
+// with multiple keys and values.
+func (kvs KVS) MarshalJSON() ([]byte, error) {
+	b := new(bytes.Buffer)
+	b.Write([]byte("{"))
+	for i, kv := range kvs {
+		b.Write([]byte("\"" + kv.Key + "\"" + ":"))
+		valBuf, err := json.Marshal(kv.Value)
+		if err != nil {
+			return nil, err
+		}
+		b.Write(valBuf)
+		if i < len(kvs)-1 {
+			b.Write([]byte(","))
+		}
+	}
+	b.Write([]byte("}"))
+	return b.Bytes(), nil
 }
 
 // Decoder wraps an io.Reader to provide incremental decoding of
@@ -417,7 +442,7 @@ out:
 }
 
 // object accept valid JSON array value
-func (d *Decoder) object() (map[string]interface{}, error) {
+func (d *Decoder) object() (KVS, error) {
 	d.depth++
 
 	var (
@@ -426,12 +451,12 @@ func (d *Decoder) object() (map[string]interface{}, error) {
 		v   interface{}
 		t   ValueType
 		err error
-		obj map[string]interface{}
+		obj KVS
 	)
 
 	// skip allocating map if it will not be emitted
 	if d.depth > d.emitDepth {
-		obj = make(map[string]interface{})
+		obj = make(KVS, 0)
 	}
 
 	// if the object has no keys
@@ -480,7 +505,7 @@ scan:
 		}
 
 		if obj != nil {
-			obj[k] = v
+			obj = append(obj, KV{k, v})
 		}
 
 		// next token must be ',' or '}'
