@@ -1136,7 +1136,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 
 	// Custom IAM policies not allowed for admin user.
 	if accessKey == globalServerConfig.GetCredential().AccessKey {
-		writeErrorResponseJSON(w, ErrInvalidRequest, r.URL)
+		writeErrorResponseJSON(w, ErrAddUserInvalidArgument, r.URL)
 		return
 	}
 

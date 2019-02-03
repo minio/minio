@@ -301,6 +301,7 @@ const (
 	ErrAdminConfigNotificationTargetsFailed
 	ErrAdminProfilerNotEnabled
 	ErrInvalidDecompressedSize
+	ErrAddUserInvalidArgument
 )
 
 // error code to APIError structure, these fields carry respective
@@ -1446,6 +1447,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "XMinioInvalidDecompressedSize",
 		Description:    "The data provided is unfit for decompression",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAddUserInvalidArgument: {
+		Code:           "XMinioInvalidIAMCredentials",
+		Description:    "User is not allowed to be same as admin access key",
+		HTTPStatusCode: http.StatusConflict,
 	},
 	// Add your error structure here.
 }
