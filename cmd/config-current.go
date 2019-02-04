@@ -24,6 +24,8 @@ import (
 	"reflect"
 	"sync"
 
+	"sort"
+
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -588,6 +590,124 @@ func getValidConfig(objAPI ObjectLayer) (*serverConfig, error) {
 	return srvCfg, srvCfg.Validate()
 }
 
+// Filter notify config such that if any of the notification config has more than one target we show
+// a warning message and retain only one target. This is just to test waters to see if we can
+// do away with supporting multiple targets in the new key/value style config.
+func filterNotify(notify *notifier) {
+	errMsg := "%s has more than one target in the notification configuration. Minio supports only one target for %s. If you need support for more than one target, please raise a github issue https://github.com/minio/minio/issues/new\n"
+
+	if len(notify.AMQP) > 1 {
+		logger.Info(colorYellowBold(errMsg, "AMQP", "AMQP"))
+		var keys []string
+		for k := range notify.AMQP {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys[1:] {
+			delete(notify.AMQP, k)
+		}
+	}
+	if len(notify.Elasticsearch) > 1 {
+		logger.Info(colorYellowBold(errMsg, "Elasticsearch", "Elasticsearch"))
+		var keys []string
+		for k := range notify.Elasticsearch {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys[1:] {
+			delete(notify.Elasticsearch, k)
+		}
+	}
+	if len(notify.Kafka) > 1 {
+		logger.Info(colorYellowBold(errMsg, "Kafka", "Kafka"))
+		var keys []string
+		for k := range notify.Kafka {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys[1:] {
+			delete(notify.Kafka, k)
+		}
+	}
+	if len(notify.MQTT) > 1 {
+		logger.Info(colorYellowBold(errMsg, "MQTT", "MQTT"))
+		var keys []string
+		for k := range notify.MQTT {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys[1:] {
+			delete(notify.MQTT, k)
+		}
+	}
+	if len(notify.MySQL) > 1 {
+		logger.Info(colorYellowBold(errMsg, "MySQL", "MySQL"))
+		var keys []string
+		for k := range notify.MySQL {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys[1:] {
+			delete(notify.MySQL, k)
+		}
+	}
+	if len(notify.NATS) > 1 {
+		logger.Info(colorYellowBold(errMsg, "NATS", "NATS"))
+		var keys []string
+		for k := range notify.NATS {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys[1:] {
+			delete(notify.NATS, k)
+		}
+	}
+	if len(notify.NSQ) > 1 {
+		logger.Info(colorYellowBold(errMsg, "NSQ", "NSQ"))
+		var keys []string
+		for k := range notify.NSQ {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys[1:] {
+			delete(notify.NSQ, k)
+		}
+	}
+	if len(notify.PostgreSQL) > 1 {
+		logger.Info(colorYellowBold(errMsg, "PostgreSQL", "PostgreSQL"))
+		var keys []string
+		for k := range notify.PostgreSQL {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys[1:] {
+			delete(notify.PostgreSQL, k)
+		}
+	}
+	if len(notify.Redis) > 1 {
+		logger.Info(colorYellowBold(errMsg, "Redis", "Redis"))
+		var keys []string
+		for k := range notify.Redis {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys[1:] {
+			delete(notify.Redis, k)
+		}
+	}
+	if len(notify.Webhook) > 1 {
+		logger.Info(colorYellowBold(errMsg, "Webhook", "Webhook"))
+		var keys []string
+		for k := range notify.Webhook {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys[1:] {
+			delete(notify.Webhook, k)
+		}
+	}
+}
+
 // loadConfig - loads a new config from disk, overrides params from env
 // if found and valid
 func loadConfig(objAPI ObjectLayer) error {
@@ -595,6 +715,8 @@ func loadConfig(objAPI ObjectLayer) error {
 	if err != nil {
 		return uiErrInvalidConfig(nil).Msg(err.Error())
 	}
+
+	filterNotify(&srvCfg.Notify)
 
 	// Override any values from ENVs.
 	srvCfg.loadFromEnvs()
