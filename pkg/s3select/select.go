@@ -329,11 +329,11 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 		}
 
 		if len(data) > maxRecordSize {
-			writer.SendError("OverMaxRecordSize", "The length of a record in the input or result is greater than maxCharsPerRecord of 1 MB.")
+			writer.FinishWithError("OverMaxRecordSize", "The length of a record in the input or result is greater than maxCharsPerRecord of 1 MB.")
 			return false
 		}
 
-		if err = writer.SendRecords(data); err != nil {
+		if err = writer.SendRecord(data); err != nil {
 			// FIXME: log this error.
 			err = nil
 			return false
@@ -344,13 +344,7 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 
 	for {
 		if s3Select.statement.LimitReached() {
-			if err = writer.FlushRecords(); err != nil {
-				// FIXME: log this error
-				err = nil
-				break
-			}
-
-			if err = writer.SendStats(s3Select.getProgress()); err != nil {
+			if err = writer.Finish(s3Select.getProgress()); err != nil {
 				// FIXME: log this error.
 				err = nil
 			}
@@ -373,17 +367,10 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 				}
 			}
 
-			if err = writer.FlushRecords(); err != nil {
-				// FIXME: log this error
-				err = nil
-				break
-			}
-
-			if err = writer.SendStats(s3Select.getProgress()); err != nil {
+			if err = writer.Finish(s3Select.getProgress()); err != nil {
 				// FIXME: log this error.
 				err = nil
 			}
-
 			break
 		}
 
@@ -404,8 +391,7 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 	}
 
 	if err != nil {
-		fmt.Printf("SQL Err: %#v\n", err)
-		if serr := writer.SendError("InternalError", err.Error()); serr != nil {
+		if serr := writer.FinishWithError("InternalError", err.Error()); serr != nil {
 			// FIXME: log errors.
 		}
 	}
