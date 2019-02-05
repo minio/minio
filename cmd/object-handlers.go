@@ -1673,7 +1673,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			return
 		}
 		if crypto.IsEncrypted(li.UserDefined) {
-			isEncrypted = true
 			if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(li.UserDefined) {
 				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL, guessIsBrowserReq(r))
 				return
@@ -1682,7 +1681,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 				writeErrorResponse(w, ErrSSEMultipartEncrypted, r.URL, guessIsBrowserReq(r))
 				return
 			}
-			isEncrypted = true // to detect SSE-S3 encryption
+			isEncrypted = true
 			var key []byte
 			if crypto.SSEC.IsRequested(r.Header) {
 				key, err = ParseSSECustomerRequest(r)
@@ -2194,8 +2193,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 			return
 		}
 		if crypto.IsEncrypted(li.UserDefined) {
-			isEncrypted = true
-			ssec = crypto.SSEC.IsEncrypted(li.UserDefined)
 			var key []byte
 			isEncrypted = true
 			ssec = crypto.SSEC.IsEncrypted(li.UserDefined)
