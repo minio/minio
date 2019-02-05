@@ -305,10 +305,9 @@ func (e *UnaryTerm) evalNode(r Record) (*Value, error) {
 	}
 
 	inferTypeForArithOp(v)
-	if ival, ok := v.ToInt(); ok {
-		return FromInt(-ival), nil
-	} else if fval, ok := v.ToFloat(); ok {
-		return FromFloat(-fval), nil
+	v.negate()
+	if v.isNumeric() {
+		return v, nil
 	}
 	return nil, errArithMismatchedTypes
 }
