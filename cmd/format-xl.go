@@ -370,8 +370,7 @@ func saveFormatXL(disk StorageAPI, format interface{}) error {
 	// Purge any existing temporary file, okay to ignore errors here.
 	defer disk.DeleteFile(minioMetaBucket, formatConfigFileTmp)
 
-	// Append file `format.json.tmp`.
-	if err = disk.AppendFile(minioMetaBucket, formatConfigFileTmp, formatBytes); err != nil {
+	if err = disk.WriteAll(minioMetaBucket, formatConfigFileTmp, formatBytes); err != nil {
 		return err
 	}
 

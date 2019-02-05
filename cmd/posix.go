@@ -173,7 +173,7 @@ func isDirEmpty(dirname string) bool {
 }
 
 // Initialize a new storage disk.
-func newPosix(path string) (*posix, error) {
+func newPosix_(path string) (StorageAPI, error) {
 	var err error
 	if path, err = getValidPath(path); err != nil {
 		return nil, err
@@ -211,7 +211,7 @@ func newPosix(path string) (*posix, error) {
 	}
 
 	// Success.
-	return p, nil
+	return &debugStorage{path, p}, nil
 }
 
 // getDiskInfo returns given disk information.

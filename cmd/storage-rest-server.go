@@ -38,7 +38,8 @@ var errConnectionStale = errors.New("connection stale, REST client/server instan
 
 // To abstract a disk over network.
 type storageRESTServer struct {
-	storage *posix
+	// storage *posix
+	storage StorageAPI
 	// Used to detect reboot of servers so that peers revalidate format.json as
 	// different disk might be available on the same mount point after reboot.
 	instanceID string
