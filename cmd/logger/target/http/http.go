@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * Minio Cloud Storage, (C) 2018, 2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
-	"io/ioutil"
 	gohttp "net/http"
+
+	xhttp "github.com/minio/minio/cmd/http"
 )
 
 // Target implements logger.Target and sends the json
@@ -56,11 +56,9 @@ func (h *Target) startHTTPLogger() {
 			if err != nil {
 				continue
 			}
-			if resp.Body != nil {
-				buf := make([]byte, 512)
-				io.CopyBuffer(ioutil.Discard, resp.Body, buf)
-				resp.Body.Close()
-			}
+
+			// Drain any response.
+			xhttp.DrainBody(resp.Body)
 		}
 	}()
 }

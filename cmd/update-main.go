@@ -32,6 +32,7 @@ import (
 
 	"github.com/inconshreveable/go-update"
 	"github.com/minio/cli"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	_ "github.com/minio/sha256-simd" // Needed for sha256 hash verifier.
 	"github.com/segmentio/go-prompt"
@@ -318,7 +319,7 @@ func downloadReleaseURL(releaseChecksumURL string, timeout time.Duration, mode s
 	if resp == nil {
 		return content, fmt.Errorf("No response from server to download URL %s", releaseChecksumURL)
 	}
-	defer CloseResponse(resp.Body)
+	defer xhttp.DrainBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return content, fmt.Errorf("Error downloading URL %s. Response: %v", releaseChecksumURL, resp.Status)
@@ -465,7 +466,7 @@ func doUpdate(sha256Hex string, latestReleaseTime time.Time, ok bool) (updateSta
 	if err != nil {
 		return updateStatusMsg, err
 	}
-	defer CloseResponse(resp.Body)
+	defer xhttp.DrainBody(resp.Body)
 
 	// FIXME: add support for gpg verification as well.
 	if err = update.Apply(resp.Body,
