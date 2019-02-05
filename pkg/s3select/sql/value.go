@@ -22,6 +22,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -47,6 +48,9 @@ const (
 
 	// 64-bit floating point
 	typeFloat
+
+	// timestamp type
+	typeTimestamp
 
 	// This type refers to untyped values, e.g. as read from CSV
 	typeBytes
@@ -77,6 +81,8 @@ func (v *Value) GetTypeString() string {
 		return "INT"
 	case typeFloat:
 		return "FLOAT"
+	case typeTimestamp:
+		return "TIMESTAMP"
 	case typeBytes:
 		return "BYTES"
 	}
@@ -90,6 +96,8 @@ func (v *Value) Repr() string {
 		return ":NULL"
 	case typeBool, typeInt, typeFloat:
 		return fmt.Sprintf("%v:%s", v.value, v.GetTypeString())
+	case typeTimestamp:
+		return fmt.Sprintf("%s:TIMESTAMP", v.value.(*time.Time))
 	case typeString:
 		return fmt.Sprintf("\"%s\":%s", v.value.(string), v.GetTypeString())
 	case typeBytes:
@@ -117,6 +125,11 @@ func FromString(str string) *Value {
 // FromBool creates a Value from a bool
 func FromBool(b bool) *Value {
 	return &Value{value: b, vType: typeBool}
+}
+
+// FromTimestamp creates a Value from a timestamp
+func FromTimestamp(t time.Time) *Value {
+	return &Value{value: t, vType: typeTimestamp}
 }
 
 // FromNull creates a Value with Null value
@@ -173,6 +186,15 @@ func (v *Value) ToBool() (val bool, ok bool) {
 	return false, false
 }
 
+// ToTimestamp returns the timestamp value if present.
+func (v *Value) ToTimestamp() (t time.Time, ok bool) {
+	switch v.vType {
+	case typeTimestamp:
+		return v.value.(time.Time), true
+	}
+	return t, false
+}
+
 // ToBytes converts Value to byte-slice.
 func (v *Value) ToBytes() ([]byte, bool) {
 	switch v.vType {
@@ -213,6 +235,11 @@ func (v *Value) setBool(b bool) {
 	v.value = b
 }
 
+func (v *Value) setTimestamp(t time.Time) {
+	v.vType = typeTimestamp
+	v.value = t
+}
+
 // CSVString - convert to string for CSV serialization
 func (v *Value) CSVString() string {
 	switch v.vType {
@@ -226,6 +253,8 @@ func (v *Value) CSVString() string {
 		return fmt.Sprintf("%v", v.value.(int64))
 	case typeFloat:
 		return fmt.Sprintf("%v", v.value.(float64))
+	case typeTimestamp:
+		return FormatSQLTimestamp(v.value.(time.Time))
 	case typeBytes:
 		return fmt.Sprintf("%v", string(v.value.([]byte)))
 	default:
@@ -240,6 +269,16 @@ func floatToValue(f float64) *Value {
 		return FromInt(int64(intPart))
 	}
 	return FromFloat(f)
+}
+
+// negate negates a numeric value
+func (v *Value) negate() {
+	switch v.vType {
+	case typeFloat:
+		v.value = -(v.value.(float64))
+	case typeInt:
+		v.value = -(v.value.(int64))
+	}
 }
 
 // Value comparison functions: we do not expose them outside the
@@ -569,6 +608,24 @@ func (v *Value) minmax(a *Value, isMax, isFirstRow bool) error {
 	}
 	v.setFloat(result)
 	return nil
+}
+
+func inferTypeAsTimestamp(v *Value) {
+	if s, ok := v.ToString(); ok {
+		t, err := parseSQLTimestamp(s)
+		if err != nil {
+			return
+		}
+		v.setTimestamp(t)
+	} else if b, ok := v.ToBytes(); ok {
+		s := string(b)
+		t, err := parseSQLTimestamp(s)
+		if err != nil {
+			return
+		}
+		v.setTimestamp(t)
+	}
+	return
 }
 
 // inferTypeAsString is used to convert untyped values to string - it

@@ -60,6 +60,8 @@ func (r *Record) Set(name string, value *sql.Value) (err error) {
 		v = f
 	} else if i, ok := value.ToInt(); ok {
 		v = i
+	} else if t, ok := value.ToTimestamp(); ok {
+		v = sql.FormatSQLTimestamp(t)
 	} else if s, ok := value.ToString(); ok {
 		v = s
 	} else if value.IsNull() {
