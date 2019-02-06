@@ -836,9 +836,10 @@
 			"revisionTime": "2018-08-08T20:39:25Z"
 		},
 		{
+			"checksumSHA1": "hev23KrSfQ4KfosxH+gJKziFVtA=",
 			"path": "github.com/rs/cors",
-			"revision": "a62a804a8a009876ca59105f7899938a1349f4b3",
-			"revisionTime": "2016-06-18T04:49:35+05:30"
+			"revision": "76f58f330d76a55c5badc74f6212e8a15e742c77",
+			"revisionTime": "2019-01-16T17:59:10Z"
 		},
 		{
 			"path": "github.com/rs/xhandler",
