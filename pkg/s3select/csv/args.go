@@ -65,6 +65,8 @@ func (args *ReaderArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 
 	parsedArgs.FileHeaderInfo = strings.ToLower(parsedArgs.FileHeaderInfo)
 	switch parsedArgs.FileHeaderInfo {
+	case "":
+		parsedArgs.FileHeaderInfo = none
 	case none, use, ignore:
 	default:
 		return errInvalidFileHeaderInfo(fmt.Errorf("invalid FileHeaderInfo '%v'", parsedArgs.FileHeaderInfo))
