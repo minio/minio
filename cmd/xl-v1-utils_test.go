@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strconv"
 	"testing"
@@ -30,6 +31,7 @@ import (
 
 // Tests caclculating disk count.
 func TestDiskCount(t *testing.T) {
+	fmt.Println("Entered TestDiskCount: calculating disk count test...")
 	testCases := []struct {
 		disks     []StorageAPI
 		diskCount int
