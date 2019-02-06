@@ -1182,7 +1182,7 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 }
 
 // HealBucket - heals inconsistent buckets and bucket metadata on all sets.
-func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun bool) (results []madmin.HealResultItem, err error) {
+func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (results []madmin.HealResultItem, err error) {
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
 	if err := bucketLock.GetLock(globalHealingTimeout); err != nil {
 		return nil, err
@@ -1199,7 +1199,7 @@ func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun bool) (re
 
 	for _, s := range s.sets {
 		var setResults []madmin.HealResultItem
-		setResults, _ = s.HealBucket(ctx, bucket, dryRun)
+		setResults, _ = s.HealBucket(ctx, bucket, dryRun, remove)
 		for _, setResult := range setResults {
 			if setResult.Type == madmin.HealItemBucket {
 				for _, v := range setResult.Before.Drives {
@@ -1267,8 +1267,8 @@ func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun bool) (re
 }
 
 // HealObject - heals inconsistent object on a hashedSet based on object name.
-func (s *xlSets) HealObject(ctx context.Context, bucket, object string, dryRun bool) (madmin.HealResultItem, error) {
-	return s.getHashedSet(object).HealObject(ctx, bucket, object, dryRun)
+func (s *xlSets) HealObject(ctx context.Context, bucket, object string, dryRun, remove bool) (madmin.HealResultItem, error) {
+	return s.getHashedSet(object).HealObject(ctx, bucket, object, dryRun, remove)
 }
 
 // Lists all buckets which need healing.

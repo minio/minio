@@ -596,7 +596,7 @@ func (h *healSequence) healConfig() error {
 				return errHealStopSignalled
 			}
 			o := objectInfos.Objects[index]
-			res, herr := objectAPI.HealObject(h.ctx, o.Bucket, o.Name, h.settings.DryRun)
+			res, herr := objectAPI.HealObject(h.ctx, o.Bucket, o.Name, h.settings.DryRun, h.settings.Remove)
 			// Object might have been deleted, by the time heal
 			// was attempted we ignore this file an move on.
 			if isErrObjectNotFound(herr) {
@@ -692,7 +692,7 @@ func (h *healSequence) healBucket(bucket string) error {
 		return errServerNotInitialized
 	}
 
-	results, err := objectAPI.HealBucket(h.ctx, bucket, h.settings.DryRun)
+	results, err := objectAPI.HealBucket(h.ctx, bucket, h.settings.DryRun, h.settings.Remove)
 	// push any available results before checking for error
 	for _, result := range results {
 		if perr := h.pushHealResultItem(result); perr != nil {
@@ -775,7 +775,7 @@ func (h *healSequence) healObject(bucket, object string) error {
 		return errServerNotInitialized
 	}
 
-	hri, err := objectAPI.HealObject(h.ctx, bucket, object, h.settings.DryRun)
+	hri, err := objectAPI.HealObject(h.ctx, bucket, object, h.settings.DryRun, h.settings.Remove)
 	if isErrObjectNotFound(err) {
 		return nil
 	}
