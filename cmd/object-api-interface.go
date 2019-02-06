@@ -82,8 +82,8 @@ type ObjectLayer interface {
 	// Healing operations.
 	ReloadFormat(ctx context.Context, dryRun bool) error
 	HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error)
-	HealBucket(ctx context.Context, bucket string, dryRun bool) ([]madmin.HealResultItem, error)
-	HealObject(ctx context.Context, bucket, object string, dryRun bool) (madmin.HealResultItem, error)
+	HealBucket(ctx context.Context, bucket string, dryRun, remove bool) ([]madmin.HealResultItem, error)
+	HealObject(ctx context.Context, bucket, object string, dryRun, remove bool) (madmin.HealResultItem, error)
 	ListBucketsHeal(ctx context.Context) (buckets []BucketInfo, err error)
 	ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error)
 

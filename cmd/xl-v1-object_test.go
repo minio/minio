@@ -308,7 +308,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = xl.HealObject(context.Background(), bucket, object, false)
+	_, err = xl.HealObject(context.Background(), bucket, object, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,7 +337,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = xl.HealObject(context.Background(), bucket, object, false)
+	_, err = xl.HealObject(context.Background(), bucket, object, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,7 +359,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 	// This would create the bucket.
-	_, err = xl.HealBucket(context.Background(), bucket, false)
+	_, err = xl.HealBucket(context.Background(), bucket, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}

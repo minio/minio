@@ -41,7 +41,7 @@ func (xl xlObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealRes
 // Heals a bucket if it doesn't exist on one of the disks, additionally
 // also heals the missing entries for bucket metadata files
 // `policy.json, notification.xml, listeners.json`.
-func (xl xlObjects) HealBucket(ctx context.Context, bucket string, dryRun bool) (
+func (xl xlObjects) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (
 	results []madmin.HealResultItem, err error) {
 
 	storageDisks := xl.getDisks()
@@ -58,7 +58,7 @@ func (xl xlObjects) HealBucket(ctx context.Context, bucket string, dryRun bool) 
 	results = append(results, result)
 
 	// Proceed to heal bucket metadata.
-	metaResults, err := healBucketMetadata(xl, bucket, dryRun)
+	metaResults, err := healBucketMetadata(xl, bucket, dryRun, remove)
 	results = append(results, metaResults...)
 	return results, err
 }
@@ -159,13 +159,13 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 
 // Heals all the metadata associated for a given bucket, this function
 // heals `policy.json`, `notification.xml` and `listeners.json`.
-func healBucketMetadata(xl xlObjects, bucket string, dryRun bool) (
+func healBucketMetadata(xl xlObjects, bucket string, dryRun, remove bool) (
 	results []madmin.HealResultItem, err error) {
 
 	healBucketMetaFn := func(metaPath string) error {
 		reqInfo := &logger.ReqInfo{BucketName: bucket}
 		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		result, healErr := xl.HealObject(ctx, minioMetaBucket, metaPath, dryRun)
+		result, healErr := xl.HealObject(ctx, minioMetaBucket, metaPath, dryRun, remove)
 		// If object is not found, skip the file.
 		if isErrObjectNotFound(healErr) {
 			return nil
@@ -639,12 +639,45 @@ func defaultHealResult(storageDisks []StorageAPI, errs []error, bucket, object s
 	return result
 }
 
+// Object is considered dangling/corrupted if any only
+// if total disks - a combination of corrupted and missing
+// files is lesser than number of data blocks.
+func (xl xlObjects) isObjectDangling(metaArr []xlMetaV1, errs []error) (validMeta xlMetaV1, ok bool) {
+	// We can consider an object data not reliable
+	// when xl.json is not found in read quorum disks.
+	// or when xl.json is not readable in read quorum disks.
+	var notFoundXLJSON, corruptedXLJSON int
+	for _, readErr := range errs {
+		if readErr == errFileNotFound {
+			notFoundXLJSON++
+		} else if readErr == errCorruptedFormat {
+			corruptedXLJSON++
+		}
+	}
+
+	for _, m := range metaArr {
+		if !m.IsValid() {
+			continue
+		}
+		validMeta = m
+		break
+	}
+
+	// We couldn't find any valid meta we are indeed corrupted, return true right away.
+	if validMeta.Erasure.DataBlocks == 0 {
+		return validMeta, true
+	}
+
+	// We have valid meta, now verify if we have enough files with data blocks.
+	return validMeta, (len(xl.getDisks()) - corruptedXLJSON - notFoundXLJSON) < validMeta.Erasure.DataBlocks
+}
+
 // HealObject - heal the given object.
 //
 // FIXME: If an object object was deleted and one disk was down,
 // and later the disk comes back up again, heal on the object
 // should delete it.
-func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRun bool) (hr madmin.HealResultItem, err error) {
+func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRun bool, remove bool) (hr madmin.HealResultItem, err error) {
 	// Create context that also contains information about the object and bucket.
 	// The top level handler might not have this information.
 	reqInfo := logger.GetReqInfo(ctx)
@@ -666,6 +699,19 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 	// FIXME: Metadata is read again in the healObject() call below.
 	// Read metadata files from all the disks
 	partsMetadata, errs := readAllXLMetadata(healCtx, storageDisks, bucket, object)
+
+	// Check if the object is dangling, if yes and user requested
+	// remove we simply delete it from namespace.
+	if m, ok := xl.isObjectDangling(partsMetadata, errs); ok {
+		writeQuorum := m.Erasure.DataBlocks + 1
+		if m.Erasure.DataBlocks == 0 {
+			writeQuorum = len(xl.getDisks())/2 + 1
+		}
+		if !dryRun && remove {
+			err = xl.deleteObject(healCtx, bucket, object, writeQuorum, false)
+		}
+		return defaultHealResult(storageDisks, errs, bucket, object), err
+	}
 
 	latestXLMeta, err := getLatestXLMeta(healCtx, partsMetadata, errs)
 	if err != nil {
