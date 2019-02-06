@@ -31,6 +31,8 @@ import (
 	"strconv"
 	"strings"
 
+	"time"
+
 	snappy "github.com/golang/snappy"
 	"github.com/gorilla/mux"
 	miniogo "github.com/minio/minio-go"
@@ -2128,6 +2130,36 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 }
 
+// Send white spaces every 10 seconds to the client till completeMultiPartUpload() is done so that the client does not time out.
+// Downside is we might send 200OK and then send error XML. But accoording to S3 spec
+// the client is supposed to check for error XML even if it received 200OK. But for erasure this is not a
+// problem as completeMultiPartUpload() is quick. Even For FS, it would not be an issue
+// as we do background append as and when the parts arrive and completeMultiPartUpload is quick.
+// Only in a rare case where parts would be out of order will FS' completeMultiPartUpload() take a longer time.
+func sendWhiteSpace(ctx context.Context, w http.ResponseWriter) <-chan struct{} {
+	doneCh := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(time.Second * 10)
+		for {
+			select {
+			case <-ticker.C:
+				// Write a white space char to the client to prevent client timeouts
+				// when the server takes a long time to completeMultiPartUpload()
+				if _, err := w.Write([]byte("\n\r")); err != nil {
+					logger.LogIf(ctx, err)
+					return
+				}
+				w.(http.Flusher).Flush()
+			case doneCh <- struct{}{}:
+				ticker.Stop()
+				return
+			}
+		}
+
+	}()
+	return doneCh
+}
+
 // CompleteMultipartUploadHandler - Complete multipart upload.
 func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "CompleteMultipartUpload")
@@ -2255,7 +2287,11 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	if api.CacheAPI() != nil {
 		completeMultiPartUpload = api.CacheAPI().CompleteMultipartUpload
 	}
+	completeDoneCh := sendWhiteSpace(ctx, w)
 	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, completeParts, opts)
+	// Stop writing white spaces to the client. Note that close(doneCh) style is not used as it
+	// can cause white space to be written after we send XML response in a race condition.
+	<-completeDoneCh
 	if err != nil {
 		switch oErr := err.(type) {
 		case PartTooSmall:
