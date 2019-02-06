@@ -1525,3 +1525,104 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 
 	return nil
 }
+
+func (s *posix) VerifyFile(volume, path string, algo BitrotAlgorithm, sum []byte, shardSize int64) (err error) {
+	defer func() {
+		if err == errFaultyDisk {
+			atomic.AddInt32(&s.ioErrCount, 1)
+		}
+	}()
+
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
+		return errFaultyDisk
+	}
+
+	if err = s.checkDiskFound(); err != nil {
+		return err
+	}
+
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return err
+	}
+	// Stat a volume entry.
+	_, err = os.Stat((volumeDir))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errVolumeNotFound
+		}
+		return err
+	}
+
+	// Validate effective path length before reading.
+	filePath := pathJoin(volumeDir, path)
+	if err = checkPathLength((filePath)); err != nil {
+		return err
+	}
+
+	// Open the file for reading.
+	file, err := os.Open((filePath))
+	if err != nil {
+		switch {
+		case os.IsNotExist(err):
+			return errFileNotFound
+		case os.IsPermission(err):
+			return errFileAccessDenied
+		case isSysErrNotDir(err):
+			return errFileAccessDenied
+		case isSysErrIO(err):
+			return errFaultyDisk
+		default:
+			return err
+		}
+	}
+
+	// Close the file descriptor.
+	defer file.Close()
+
+	if algo != HighwayHash256S {
+		bufp := s.pool.Get().(*[]byte)
+		defer s.pool.Put(bufp)
+
+		h := algo.New()
+		if _, err = io.CopyBuffer(h, file, *bufp); err != nil {
+			return err
+		}
+		if !bytes.Equal(h.Sum(nil), sum) {
+			return hashMismatchError{hex.EncodeToString(sum), hex.EncodeToString(h.Sum(nil))}
+		}
+		return nil
+	}
+
+	buf := make([]byte, shardSize)
+	h := algo.New()
+	hashBuf := make([]byte, h.Size())
+	fi, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	size := fi.Size()
+	for {
+		if size == 0 {
+			return nil
+		}
+		h.Reset()
+		n, err := file.Read(hashBuf)
+		if err != nil {
+			return err
+		}
+		size -= int64(n)
+		if size < int64(len(buf)) {
+			buf = buf[:size]
+		}
+		n, err = file.Read(buf)
+		if err != nil {
+			return err
+		}
+		size -= int64(n)
+		h.Write(buf)
+		if !bytes.Equal(h.Sum(nil), hashBuf) {
+			return hashMismatchError{hex.EncodeToString(hashBuf), hex.EncodeToString(h.Sum(nil))}
+		}
+	}
+}

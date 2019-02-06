@@ -351,7 +351,7 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 	}
 
 	// Reorder so that we have data disks first and parity disks next.
-	latestDisks = shuffleDisks(latestDisks, latestMeta.Erasure.Distribution)
+	latestDisks = shuffleDisks(availableDisks, latestMeta.Erasure.Distribution)
 	outDatedDisks = shuffleDisks(outDatedDisks, latestMeta.Erasure.Distribution)
 	partsMetadata = shufflePartsMetadata(partsMetadata, latestMeta.Erasure.Distribution)
 	for i := range outDatedDisks {

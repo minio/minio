@@ -1763,6 +1763,97 @@ func TestPosixStatFile(t *testing.T) {
 	}
 }
 
+// Test posix.VerifyFile()
+func TestPosixVerifyFile(t *testing.T) {
+	// We test 4 cases:
+	// 1) Whole-file bitrot check on proper file
+	// 2) Whole-file bitrot check on corrupted file
+	// 3) Streaming bitrot check on proper file
+	// 4) Streaming bitrot check on corrupted file
+
+	// create posix test setup
+	posixStorage, path, err := newPosixTestSetup()
+	if err != nil {
+		t.Fatalf("Unable to create posix test setup, %s", err)
+	}
+	defer os.RemoveAll(path)
+
+	volName := "testvol"
+	fileName := "testfile"
+	if err := posixStorage.MakeVol(volName); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1) Whole-file bitrot check on proper file
+	size := int64(4*1024*1024 + 100*1024) // 4.1 MB
+	data := make([]byte, size)
+	if _, err := rand.Read(data); err != nil {
+		t.Fatal(err)
+	}
+	algo := HighwayHash256
+	h := algo.New()
+	h.Write(data)
+	hashBytes := h.Sum(nil)
+	if err := posixStorage.WriteAll(volName, fileName, bytes.NewBuffer(data)); err != nil {
+		t.Fatal(err)
+	}
+	if err := posixStorage.VerifyFile(volName, fileName, algo, hashBytes, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2) Whole-file bitrot check on corrupted file
+	if err := posixStorage.AppendFile(volName, fileName, []byte("a")); err != nil {
+		t.Fatal(err)
+	}
+	if err := posixStorage.VerifyFile(volName, fileName, algo, hashBytes, 0); err == nil {
+		t.Fatal("expected to fail bitrot check")
+	}
+
+	if err := posixStorage.DeleteFile(volName, fileName); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3) Streaming bitrot check on proper file
+	algo = HighwayHash256S
+	shardSize := int64(1024 * 1024)
+	shard := make([]byte, shardSize)
+	w := newStreamingBitrotWriter(posixStorage, volName, fileName, size, algo, shardSize)
+	reader := bytes.NewReader(data)
+	for {
+		// Using io.CopyBuffer instead of this loop will not work for us as io.CopyBuffer
+		// will use bytes.Buffer.ReadFrom() which will not do shardSize'ed writes causing error.
+		n, err := reader.Read(shard)
+		w.Write(shard[:n])
+		if err == nil {
+			continue
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	w.Close()
+	if err := posixStorage.VerifyFile(volName, fileName, algo, nil, shardSize); err != nil {
+		t.Fatal(err)
+	}
+
+	// 4) Streaming bitrot check on corrupted file
+	filePath := pathJoin(posixStorage.String(), volName, fileName)
+	f, err := os.OpenFile(filePath, os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("a"); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	if err := posixStorage.VerifyFile(volName, fileName, algo, nil, shardSize); err == nil {
+		t.Fatal("expected to fail bitrot check")
+	}
+}
+
 // Checks for restrictions for min total disk space and inodes.
 func TestCheckDiskTotalMin(t *testing.T) {
 	testCases := []struct {
