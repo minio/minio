@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -28,6 +29,10 @@ import (
 const (
 	// STS API version.
 	stsAPIVersion = "2011-06-15"
+
+	// STS API action constants
+	clientGrants = "AssumeRoleWithClientGrants"
+	webIdentity  = "AssumeRoleWithWebIdentity"
 )
 
 // stsAPIHandlers implements and provides http handlers for AWS STS API.
@@ -41,18 +46,145 @@ func registerSTSRouter(router *mux.Router) {
 	// STS Router
 	stsRouter := router.NewRoute().PathPrefix("/").Subrouter()
 
+	// Assume roles with JWT handler, handles both ClientGrants and WebIdentity.
+	stsRouter.Methods("POST").HeadersRegexp("Content-Type", "application/x-www-form-urlencoded*").
+		HandlerFunc(httpTraceAll(sts.AssumeRoleWithJWT))
+
 	// AssumeRoleWithClientGrants
 	stsRouter.Methods("POST").HandlerFunc(httpTraceAll(sts.AssumeRoleWithClientGrants)).
-		Queries("Action", "AssumeRoleWithClientGrants").
+		Queries("Action", clientGrants).
 		Queries("Version", stsAPIVersion).
 		Queries("Token", "{Token:.*}")
 
 	// AssumeRoleWithWebIdentity
 	stsRouter.Methods("POST").HandlerFunc(httpTraceAll(sts.AssumeRoleWithWebIdentity)).
-		Queries("Action", "AssumeRoleWithWebIdentity").
+		Queries("Action", webIdentity).
 		Queries("Version", stsAPIVersion).
 		Queries("WebIdentityToken", "{Token:.*}")
 
+}
+
+func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AssumeRoleInternalFunction")
+
+	// Parse the incoming form data.
+	if err := r.ParseForm(); err != nil {
+		logger.LogIf(ctx, err)
+		writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
+		return
+	}
+
+	if r.Form.Get("Version") != stsAPIVersion {
+		logger.LogIf(ctx, fmt.Errorf("Invalid STS API version %s, expecting %s", r.Form.Get("Version"), stsAPIVersion))
+		writeSTSErrorResponse(w, ErrSTSMissingParameter)
+		return
+	}
+
+	action := r.Form.Get("Action")
+	switch action {
+	case clientGrants, webIdentity:
+	default:
+		logger.LogIf(ctx, fmt.Errorf("Unsupported action %s", action))
+		writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
+		return
+	}
+
+	ctx = newContext(r, w, action)
+	defer logger.AuditLog(w, r, action, nil)
+
+	if globalIAMValidators == nil {
+		writeSTSErrorResponse(w, ErrSTSNotInitialized)
+		return
+	}
+
+	v, err := globalIAMValidators.Get("jwt")
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
+		return
+	}
+
+	token := r.Form.Get("Token")
+	if token == "" {
+		token = r.Form.Get("WebIdentityToken")
+	}
+
+	m, err := v.Validate(token, r.Form.Get("DurationSeconds"))
+	if err != nil {
+		switch err {
+		case validator.ErrTokenExpired:
+			switch action {
+			case clientGrants:
+				writeSTSErrorResponse(w, ErrSTSClientGrantsExpiredToken)
+			case webIdentity:
+				writeSTSErrorResponse(w, ErrSTSWebIdentityExpiredToken)
+			}
+			return
+		case validator.ErrInvalidDuration:
+			writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
+			return
+		}
+		logger.LogIf(ctx, err)
+		writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
+		return
+	}
+
+	secret := globalServerConfig.GetCredential().SecretKey
+	cred, err := auth.GetNewCredentialsWithMetadata(m, secret)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeSTSErrorResponse(w, ErrSTSInternalError)
+		return
+	}
+
+	// JWT has requested a custom claim with policy value set.
+	// This is a Minio STS API specific value, this value should
+	// be set and configured on your identity provider as part of
+	// JWT custom claims.
+	var policyName string
+	if v, ok := m["policy"]; ok {
+		policyName, _ = v.(string)
+	}
+
+	var subFromToken string
+	if v, ok := m["sub"]; ok {
+		subFromToken, _ = v.(string)
+	}
+
+	// Set the newly generated credentials.
+	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
+		logger.LogIf(ctx, err)
+		writeSTSErrorResponse(w, ErrSTSInternalError)
+		return
+	}
+
+	// Notify all other Minio peers to reload temp users
+	for _, nerr := range globalNotificationSys.LoadUsers() {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+
+	var encodedSuccessResponse []byte
+	switch action {
+	case clientGrants:
+		encodedSuccessResponse = encodeResponse(&AssumeRoleWithClientGrantsResponse{
+			Result: ClientGrantsResult{
+				Credentials:      cred,
+				SubjectFromToken: subFromToken,
+			},
+		})
+	case webIdentity:
+		encodedSuccessResponse = encodeResponse(&AssumeRoleWithWebIdentityResponse{
+			Result: WebIdentityResult{
+				Credentials:                 cred,
+				SubjectFromWebIdentityToken: subFromToken,
+			},
+		})
+	}
+
+	writeSuccessResponseXML(w, encodedSuccessResponse)
 }
 
 // AssumeRoleWithWebIdentity - implementation of AWS STS API supporting OAuth2.0
@@ -62,82 +194,7 @@ func registerSTSRouter(router *mux.Router) {
 // Eg:-
 //    $ curl https://minio:9000/?Action=AssumeRoleWithWebIdentity&WebIdentityToken=<jwt>
 func (sts *stsAPIHandlers) AssumeRoleWithWebIdentity(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "AssumeRoleWithWebIdentity")
-
-	defer logger.AuditLog(w, r, "AssumeRoleWithWebIdentity", nil)
-
-	if globalIAMValidators == nil {
-		writeSTSErrorResponse(w, ErrSTSNotInitialized)
-		return
-	}
-
-	// NOTE: this API only accepts JWT tokens.
-	v, err := globalIAMValidators.Get("jwt")
-	if err != nil {
-		writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
-		return
-	}
-
-	vars := mux.Vars(r)
-	m, err := v.Validate(vars["Token"], r.URL.Query().Get("DurationSeconds"))
-	if err != nil {
-		switch err {
-		case validator.ErrTokenExpired:
-			writeSTSErrorResponse(w, ErrSTSWebIdentityExpiredToken)
-		case validator.ErrInvalidDuration:
-			writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
-		default:
-			logger.LogIf(ctx, err)
-			writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
-		}
-		return
-	}
-
-	secret := globalServerConfig.GetCredential().SecretKey
-	cred, err := auth.GetNewCredentialsWithMetadata(m, secret)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		writeSTSErrorResponse(w, ErrSTSInternalError)
-		return
-	}
-
-	// JWT has requested a custom claim with policy value set.
-	// This is a Minio STS API specific value, this value should
-	// be set and configured on your identity provider as part of
-	// JWT custom claims.
-	var policyName string
-	if v, ok := m["policy"]; ok {
-		policyName, _ = v.(string)
-	}
-
-	var subFromToken string
-	if v, ok := m["sub"]; ok {
-		subFromToken, _ = v.(string)
-	}
-
-	// Set the newly generated credentials.
-	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
-		logger.LogIf(ctx, err)
-		writeSTSErrorResponse(w, ErrSTSInternalError)
-		return
-	}
-
-	// Notify all other Minio peers to reload temp users
-	for _, nerr := range globalNotificationSys.LoadUsers() {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
-		}
-	}
-
-	encodedSuccessResponse := encodeResponse(&AssumeRoleWithWebIdentityResponse{
-		Result: WebIdentityResult{
-			Credentials:                 cred,
-			SubjectFromWebIdentityToken: subFromToken,
-		},
-	})
-
-	writeSuccessResponseXML(w, encodedSuccessResponse)
+	sts.AssumeRoleWithJWT(w, r)
 }
 
 // AssumeRoleWithClientGrants - implementation of AWS STS extension API supporting
@@ -146,80 +203,5 @@ func (sts *stsAPIHandlers) AssumeRoleWithWebIdentity(w http.ResponseWriter, r *h
 // Eg:-
 //    $ curl https://minio:9000/?Action=AssumeRoleWithClientGrants&Token=<jwt>
 func (sts *stsAPIHandlers) AssumeRoleWithClientGrants(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "AssumeRoleWithClientGrants")
-
-	defer logger.AuditLog(w, r, "AssumeRoleWithClientGrants", nil)
-
-	if globalIAMValidators == nil {
-		writeSTSErrorResponse(w, ErrSTSNotInitialized)
-		return
-	}
-
-	// NOTE: this API only accepts JWT tokens.
-	v, err := globalIAMValidators.Get("jwt")
-	if err != nil {
-		writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
-		return
-	}
-
-	vars := mux.Vars(r)
-	m, err := v.Validate(vars["Token"], r.URL.Query().Get("DurationSeconds"))
-	if err != nil {
-		switch err {
-		case validator.ErrTokenExpired:
-			writeSTSErrorResponse(w, ErrSTSClientGrantsExpiredToken)
-		case validator.ErrInvalidDuration:
-			writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
-		default:
-			logger.LogIf(ctx, err)
-			writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
-		}
-		return
-	}
-
-	secret := globalServerConfig.GetCredential().SecretKey
-	cred, err := auth.GetNewCredentialsWithMetadata(m, secret)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		writeSTSErrorResponse(w, ErrSTSInternalError)
-		return
-	}
-
-	// JWT has requested a custom claim with policy value set.
-	// This is a Minio STS API specific value, this value should
-	// be set and configured on your identity provider as part of
-	// JWT custom claims.
-	var policyName string
-	if v, ok := m["policy"]; ok {
-		policyName, _ = v.(string)
-	}
-
-	var subFromToken string
-	if v, ok := m["sub"]; ok {
-		subFromToken, _ = v.(string)
-	}
-
-	// Set the newly generated credentials.
-	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
-		logger.LogIf(ctx, err)
-		writeSTSErrorResponse(w, ErrSTSInternalError)
-		return
-	}
-
-	// Notify all other Minio peers to reload temp users
-	for _, nerr := range globalNotificationSys.LoadUsers() {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
-		}
-	}
-
-	encodedSuccessResponse := encodeResponse(&AssumeRoleWithClientGrantsResponse{
-		Result: ClientGrantsResult{
-			Credentials:      cred,
-			SubjectFromToken: subFromToken,
-		},
-	})
-
-	writeSuccessResponseXML(w, encodedSuccessResponse)
+	sts.AssumeRoleWithJWT(w, r)
 }

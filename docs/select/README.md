@@ -103,6 +103,6 @@ For a more detailed SELECT SQL reference, please see [here](https://docs.aws.ama
 - All [operators](https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-operators.html) are supported.
 - All aggregation, conditional, type-conversion and string functions are supported.
 - JSON path expressions such as `FROM S3Object[*].path` are not yet evaluated.
-- Large numbers (more than 64-bit) are not yet supported.
-- Date [functions](https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-date.html) are not yet supported (EXTRACT, DATE_DIFF, etc).
+- Large numbers (outside of the signed 64-bit range) are not yet supported.
+- The Date [functions](https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-date.html) `DATE_ADD`, `DATE_DIFF`, `EXTRACT` and `UTCNOW` along with type conversion using `CAST` to the `TIMESTAMP` data type are currently supported.
 - AWS S3's [reserved keywords](https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-keyword-list.html) list is not yet respected.

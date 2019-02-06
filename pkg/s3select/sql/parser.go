@@ -247,6 +247,8 @@ type FuncExpr struct {
 	Substring *SubstringFunc `parser:"| @@"`
 	Extract   *ExtractFunc   `parser:"| @@"`
 	Trim      *TrimFunc      `parser:"| @@"`
+	DateAdd   *DateAddFunc   `parser:"| @@"`
+	DateDiff  *DateDiffFunc  `parser:"| @@"`
 
 	// Used during evaluation for aggregation funcs
 	aggregate *aggVal
@@ -255,7 +257,7 @@ type FuncExpr struct {
 // SimpleArgFunc represents functions with simple expression
 // arguments.
 type SimpleArgFunc struct {
-	FunctionName string `parser:" @(\"AVG\" | \"MAX\" | \"MIN\" | \"SUM\" |  \"COALESCE\" | \"NULLIF\" | \"DATE_ADD\" | \"DATE_DIFF\" | \"TO_STRING\" | \"TO_TIMESTAMP\" | \"UTCNOW\" | \"CHAR_LENGTH\" | \"CHARACTER_LENGTH\" | \"LOWER\" | \"UPPER\") "`
+	FunctionName string `parser:" @(\"AVG\" | \"MAX\" | \"MIN\" | \"SUM\" |  \"COALESCE\" | \"NULLIF\" | \"TO_STRING\" | \"TO_TIMESTAMP\" | \"UTCNOW\" | \"CHAR_LENGTH\" | \"CHARACTER_LENGTH\" | \"LOWER\" | \"UPPER\") "`
 
 	ArgsList []*Expression `parser:"\"(\" (@@ (\",\" @@)*)?\")\""`
 }
@@ -292,6 +294,20 @@ type TrimFunc struct {
 	TrimWhere *string      `parser:" \"TRIM\" \"(\" ( @( \"LEADING\" | \"TRAILING\" | \"BOTH\" ) "`
 	TrimChars *PrimaryTerm `parser:"             @@?  "`
 	TrimFrom  *PrimaryTerm `parser:"             \"FROM\" )? @@ \")\" "`
+}
+
+// DateAddFunc represents the DATE_ADD function
+type DateAddFunc struct {
+	DatePart  string       `parser:" \"DATE_ADD\" \"(\" @( \"YEAR\":Timeword | \"MONTH\":Timeword | \"DAY\":Timeword | \"HOUR\":Timeword | \"MINUTE\":Timeword | \"SECOND\":Timeword ) \",\""`
+	Quantity  *Operand     `parser:" @@ \",\""`
+	Timestamp *PrimaryTerm `parser:" @@ \")\""`
+}
+
+// DateDiffFunc represents the DATE_DIFF function
+type DateDiffFunc struct {
+	DatePart   string       `parser:" \"DATE_DIFF\" \"(\" @( \"YEAR\":Timeword | \"MONTH\":Timeword | \"DAY\":Timeword | \"HOUR\":Timeword | \"MINUTE\":Timeword | \"SECOND\":Timeword ) \",\" "`
+	Timestamp1 *PrimaryTerm `parser:" @@ \",\" "`
+	Timestamp2 *PrimaryTerm `parser:" @@ \")\" "`
 }
 
 // LitValue represents a literal value parsed from the sql

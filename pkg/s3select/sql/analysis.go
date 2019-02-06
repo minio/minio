@@ -201,6 +201,16 @@ func (e *FuncExpr) analyze(s *Select) (result qProp) {
 	case sqlFnExtract:
 		return e.Extract.From.analyze(s)
 
+	case sqlFnDateAdd:
+		result.combine(e.DateAdd.Quantity.analyze(s))
+		result.combine(e.DateAdd.Timestamp.analyze(s))
+		return result
+
+	case sqlFnDateDiff:
+		result.combine(e.DateDiff.Timestamp1.analyze(s))
+		result.combine(e.DateDiff.Timestamp2.analyze(s))
+		return result
+
 	// Handle aggregation function calls
 	case aggFnAvg, aggFnMax, aggFnMin, aggFnSum, aggFnCount:
 		// Initialize accumulator
@@ -283,6 +293,11 @@ func (e *FuncExpr) analyze(s *Select) (result qProp) {
 		}
 		return result
 
+	case sqlFnUTCNow:
+		if len(e.SFunc.ArgsList) != 0 {
+			result.err = fmt.Errorf("%s() takes no arguments", string(funcName))
+		}
+		return result
 	}
 
 	// TODO: implement other functions
