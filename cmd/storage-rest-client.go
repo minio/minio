@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	xnet "github.com/minio/minio/pkg/net"
@@ -164,7 +165,7 @@ func (client *storageRESTClient) DiskInfo() (info DiskInfo, err error) {
 	if err != nil {
 		return
 	}
-	defer CloseResponse(respBody)
+	defer http.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
 	return info, err
 }
@@ -174,7 +175,7 @@ func (client *storageRESTClient) MakeVol(volume string) (err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	respBody, err := client.call(storageRESTMethodMakeVol, values, nil, -1)
-	defer CloseResponse(respBody)
+	defer http.DrainBody(respBody)
 	return err
 }
 
@@ -184,7 +185,7 @@ func (client *storageRESTClient) ListVols() (volinfo []VolInfo, err error) {
 	if err != nil {
 		return
 	}
-	defer CloseResponse(respBody)
+	defer http.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&volinfo)
 	return volinfo, err
 }
@@ -197,7 +198,7 @@ func (client *storageRESTClient) StatVol(volume string) (volInfo VolInfo, err er
 	if err != nil {
 		return
 	}
-	defer CloseResponse(respBody)
+	defer http.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&volInfo)
 	return volInfo, err
 }
@@ -207,7 +208,7 @@ func (client *storageRESTClient) DeleteVol(volume string) (err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	respBody, err := client.call(storageRESTMethodDeleteVol, values, nil, -1)
-	defer CloseResponse(respBody)
+	defer http.DrainBody(respBody)
 	return err
 }
 
@@ -218,7 +219,7 @@ func (client *storageRESTClient) AppendFile(volume, path string, buffer []byte) 
 	values.Set(storageRESTFilePath, path)
 	reader := bytes.NewBuffer(buffer)
 	respBody, err := client.call(storageRESTMethodAppendFile, values, reader, -1)
-	defer CloseResponse(respBody)
+	defer http.DrainBody(respBody)
 	return err
 }
 
@@ -228,7 +229,7 @@ func (client *storageRESTClient) CreateFile(volume, path string, length int64, r
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTLength, strconv.Itoa(int(length)))
 	respBody, err := client.call(storageRESTMethodCreateFile, values, r, length)
-	defer CloseResponse(respBody)
+	defer http.DrainBody(respBody)
 	return err
 }
 
@@ -239,7 +240,7 @@ func (client *storageRESTClient) WriteAll(volume, path string, buffer []byte) er
 	values.Set(storageRESTFilePath, path)
 	reader := bytes.NewBuffer(buffer)
 	respBody, err := client.call(storageRESTMethodWriteAll, values, reader, -1)
-	defer CloseResponse(respBody)
+	defer http.DrainBody(respBody)
 	return err
 }
 
@@ -252,7 +253,7 @@ func (client *storageRESTClient) StatFile(volume, path string) (info FileInfo, e
 	if err != nil {
 		return info, err
 	}
-	defer CloseResponse(respBody)
+	defer http.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
 	return info, err
 }
@@ -266,7 +267,7 @@ func (client *storageRESTClient) ReadAll(volume, path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer CloseResponse(respBody)
+	defer http.DrainBody(respBody)
 	return ioutil.ReadAll(respBody)
 }
 
@@ -302,7 +303,7 @@ func (client *storageRESTClient) ReadFile(volume, path string, offset int64, buf
 	if err != nil {
 		return 0, err
 	}
-	defer CloseResponse(respBody)
+	defer http.DrainBody(respBody)
 	n, err := io.ReadFull(respBody, buffer)
 	return int64(n), err
 }
@@ -317,7 +318,7 @@ func (client *storageRESTClient) ListDir(volume, dirPath string, count int) (ent
 	if err != nil {
 		return nil, err
 	}
-	defer CloseResponse(respBody)
+	defer http.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&entries)
 	return entries, err
 }
@@ -328,7 +329,7 @@ func (client *storageRESTClient) DeleteFile(volume, path string) error {
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	respBody, err := client.call(storageRESTMethodDeleteFile, values, nil, -1)
-	defer CloseResponse(respBody)
+	defer http.DrainBody(respBody)
 	return err
 }
 
@@ -340,7 +341,7 @@ func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPa
 	values.Set(storageRESTDstVolume, dstVolume)
 	values.Set(storageRESTDstPath, dstPath)
 	respBody, err := client.call(storageRESTMethodRenameFile, values, nil, -1)
-	defer CloseResponse(respBody)
+	defer http.DrainBody(respBody)
 	return err
 }
 

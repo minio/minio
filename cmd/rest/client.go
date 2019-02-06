@@ -59,9 +59,9 @@ func (c *Client) Call(method string, values url.Values, body io.Reader, length i
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		defer xhttp.DrainBody(resp.Body)
 		// Limit the ReadAll(), just in case, because of a bug, the server responds with large data.
-		r := io.LimitReader(resp.Body, 1024)
-		b, err := ioutil.ReadAll(r)
+		b, err := ioutil.ReadAll(io.LimitReader(resp.Body, 4096))
 		if err != nil {
 			return nil, err
 		}

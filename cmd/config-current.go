@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
@@ -552,7 +553,7 @@ func (s *serverConfig) loadToCachedConfigs() {
 			URL:         s.Policy.OPA.URL,
 			AuthToken:   s.Policy.OPA.AuthToken,
 			Transport:   NewCustomHTTPTransport(),
-			CloseRespFn: CloseResponse,
+			CloseRespFn: xhttp.DrainBody,
 		})
 	}
 }
