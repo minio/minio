@@ -120,10 +120,7 @@ func (api objectAPIHandlers) GetBucketCorsHandler(w http.ResponseWriter, r *http
 	}
 
 	tags := &tagging{}
-	tags.TagSet.Tag = append(tags.TagSet.Tag, tagElem{
-		Key:   "",
-		Value: "",
-	})
+	tags.TagSet.Tag = append(tags.TagSet.Tag, tagElem{})
 
 	if err := xml.NewEncoder(w).Encode(tags); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -155,10 +152,7 @@ func (api objectAPIHandlers) GetBucketTaggingHandler(w http.ResponseWriter, r *h
 	}
 
 	tags := &tagging{}
-	tags.TagSet.Tag = append(tags.TagSet.Tag, tagElem{
-		Key:   "",
-		Value: "",
-	})
+	tags.TagSet.Tag = append(tags.TagSet.Tag, tagElem{})
 
 	if err := xml.NewEncoder(w).Encode(tags); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -190,10 +184,7 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 	}
 
 	tags := &tagging{}
-	tags.TagSet.Tag = append(tags.TagSet.Tag, tagElem{
-		Key:   "",
-		Value: "",
-	})
+	tags.TagSet.Tag = append(tags.TagSet.Tag, tagElem{})
 
 	if err := xml.NewEncoder(w).Encode(tags); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
