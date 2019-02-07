@@ -218,6 +218,30 @@ func (xl xlObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 	return bucketInfos, nil
 }
 
+// Dangling buckets should be handled appropriately, in this following situation
+// we actually have quorum error to be `nil` but we have some disks where
+// the bucket delete returned `errVolumeNotEmpty` but this is not correct
+// can only happen if there are dangling objects in a bucket. Under such
+// a situation we simply attempt a full delete of the bucket including
+// the dangling objects. All of this happens under a lock and there
+// is no way a user can create buckets and sneak in objects into namespace,
+// so it is safer to do.
+func deleteDanglingBucket(ctx context.Context, storageDisks []StorageAPI, dErrs []error, bucket string) {
+	for index, err := range dErrs {
+		if err == errVolumeNotEmpty {
+			// Attempt to delete bucket again.
+			if derr := storageDisks[index].DeleteVol(bucket); derr == errVolumeNotEmpty {
+				_ = cleanupDir(ctx, storageDisks[index], bucket, "")
+
+				_ = storageDisks[index].DeleteVol(bucket)
+
+				// Cleanup all the previously incomplete multiparts.
+				_ = cleanupDir(ctx, storageDisks[index], minioMetaMultipartBucket, bucket)
+			}
+		}
+	}
+}
+
 // DeleteBucket - deletes a bucket.
 func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 	bucketLock := xl.nsMutex.NewNSLock(bucket, "")
@@ -231,7 +255,8 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 	var dErrs = make([]error, len(xl.getDisks()))
 
 	// Remove a volume entry on all underlying storage disks.
-	for index, disk := range xl.getDisks() {
+	storageDisks := xl.getDisks()
+	for index, disk := range storageDisks {
 		if disk == nil {
 			dErrs[index] = errDiskNotFound
 			continue
@@ -242,18 +267,14 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 			defer wg.Done()
 			// Attempt to delete bucket.
 			err := disk.DeleteVol(bucket)
-
 			if err != nil {
 				dErrs[index] = err
 				return
 			}
+
 			// Cleanup all the previously incomplete multiparts.
 			err = cleanupDir(ctx, disk, minioMetaMultipartBucket, bucket)
-
-			if err != nil {
-				if err == errVolumeNotFound {
-					return
-				}
+			if err != nil && err != errVolumeNotFound {
 				dErrs[index] = err
 			}
 		}(index, disk)
@@ -270,6 +291,11 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 	if err != nil {
 		return toObjectErr(err, bucket)
 	}
+
+	// If we reduce quorum to nil, means we have deleted buckets properly
+	// on some servers in quorum, we should look for volumeNotEmpty errors
+	// and delete those buckets as well.
+	deleteDanglingBucket(ctx, storageDisks, dErrs, bucket)
 
 	return nil
 }

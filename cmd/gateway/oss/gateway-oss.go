@@ -31,6 +31,7 @@ import (
 	"github.com/minio/cli"
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
 	minio "github.com/minio/minio/cmd"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/hash"
@@ -844,7 +845,7 @@ func ossListObjectParts(client *oss.Client, bucket, object, uploadID string, par
 	}
 
 	// always drain output (response body)
-	defer minio.CloseResponse(resp.Body)
+	defer xhttp.DrainBody(resp.Body)
 
 	err = xml.NewDecoder(resp.Body).Decode(&lupr)
 	if err != nil {

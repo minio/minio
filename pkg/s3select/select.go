@@ -99,6 +99,11 @@ func (input *InputSerialization) UnmarshalXML(d *xml.Decoder, start xml.StartEle
 		return errMalformedXML(err)
 	}
 
+	// If no compression is specified, set to noneType
+	if parsedInput.CompressionType == CompressionType("") {
+		parsedInput.CompressionType = noneType
+	}
+
 	found := 0
 	if !parsedInput.CSVArgs.IsEmpty() {
 		parsedInput.format = csvFormat
@@ -172,10 +177,10 @@ type RequestProgress struct {
 }
 
 // S3Select - filters the contents on a simple structured query language (SQL) statement. It
-// represents elements inside <SelectObjectContentRequest/> in request XML specified in detail at
+// represents elements inside <SelectRequest/> in request XML specified in detail at
 // https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectSELECTContent.html.
 type S3Select struct {
-	XMLName        xml.Name            `xml:"SelectObjectContentRequest"`
+	XMLName        xml.Name            `xml:"SelectRequest"`
 	Expression     string              `xml:"Expression"`
 	ExpressionType string              `xml:"ExpressionType"`
 	Input          InputSerialization  `xml:"InputSerialization"`
@@ -187,8 +192,20 @@ type S3Select struct {
 	recordReader   recordReader
 }
 
+var (
+	legacyXMLName = "SelectObjectContentRequest"
+)
+
 // UnmarshalXML - decodes XML data.
 func (s3Select *S3Select) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	// S3 also supports the older SelectObjectContentRequest tag,
+	// though it is no longer found in documentation. This is
+	// checked and renamed below to allow older clients to also
+	// work.
+	if start.Name.Local == legacyXMLName {
+		start.Name = xml.Name{Space: "", Local: "SelectRequest"}
+	}
+
 	// Make subtype to avoid recursive UnmarshalXML().
 	type subS3Select S3Select
 	parsedS3Select := subS3Select{}
@@ -329,11 +346,11 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 		}
 
 		if len(data) > maxRecordSize {
-			writer.SendError("OverMaxRecordSize", "The length of a record in the input or result is greater than maxCharsPerRecord of 1 MB.")
+			writer.FinishWithError("OverMaxRecordSize", "The length of a record in the input or result is greater than maxCharsPerRecord of 1 MB.")
 			return false
 		}
 
-		if err = writer.SendRecords(data); err != nil {
+		if err = writer.SendRecord(data); err != nil {
 			// FIXME: log this error.
 			err = nil
 			return false
@@ -344,13 +361,7 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 
 	for {
 		if s3Select.statement.LimitReached() {
-			if err = writer.FlushRecords(); err != nil {
-				// FIXME: log this error
-				err = nil
-				break
-			}
-
-			if err = writer.SendStats(s3Select.getProgress()); err != nil {
+			if err = writer.Finish(s3Select.getProgress()); err != nil {
 				// FIXME: log this error.
 				err = nil
 			}
@@ -373,17 +384,10 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 				}
 			}
 
-			if err = writer.FlushRecords(); err != nil {
-				// FIXME: log this error
-				err = nil
-				break
-			}
-
-			if err = writer.SendStats(s3Select.getProgress()); err != nil {
+			if err = writer.Finish(s3Select.getProgress()); err != nil {
 				// FIXME: log this error.
 				err = nil
 			}
-
 			break
 		}
 
@@ -404,8 +408,7 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 	}
 
 	if err != nil {
-		fmt.Printf("SQL Err: %#v\n", err)
-		if serr := writer.SendError("InternalError", err.Error()); serr != nil {
+		if serr := writer.FinishWithError("InternalError", err.Error()); serr != nil {
 			// FIXME: log errors.
 		}
 	}

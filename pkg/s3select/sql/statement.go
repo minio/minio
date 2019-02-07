@@ -84,7 +84,6 @@ func ParseSelectStatement(s string) (stmt SelectStatement, err error) {
 	stmt.selectQProp = selectAST.Expression.analyze(&selectAST)
 	err = stmt.selectQProp.err
 	if err != nil {
-		fmt.Println("Got Analysis err:", err)
 		err = errQueryAnalysisFailure(err)
 	}
 	return

@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
@@ -282,7 +283,7 @@ func (s *serverConfig) loadFromEnvs() {
 	if jwksURL, ok := os.LookupEnv("MINIO_IAM_JWKS_URL"); ok {
 		if u, err := xnet.ParseURL(jwksURL); err == nil {
 			s.OpenID.JWKS.URL = u
-			s.OpenID.JWKS.PopulatePublicKey()
+			logger.FatalIf(s.OpenID.JWKS.PopulatePublicKey(), "Unable to populate public key from JWKS URL")
 		}
 	}
 
@@ -552,7 +553,7 @@ func (s *serverConfig) loadToCachedConfigs() {
 			URL:         s.Policy.OPA.URL,
 			AuthToken:   s.Policy.OPA.AuthToken,
 			Transport:   NewCustomHTTPTransport(),
-			CloseRespFn: CloseResponse,
+			CloseRespFn: xhttp.DrainBody,
 		})
 	}
 }

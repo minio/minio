@@ -308,7 +308,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = xl.HealObject(context.Background(), bucket, object, false)
+	_, err = xl.HealObject(context.Background(), bucket, object, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,6 +323,11 @@ func TestHealing(t *testing.T) {
 		t.Fatal("HealObject failed")
 	}
 
+	err = os.RemoveAll(path.Join(fsDirs[0], bucket, object, "xl.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// Write xl.json with different modtime to simulate the case where a disk had
 	// gone down when an object was replaced by a new object.
 	xlMetaOutDated := xlMetaPreHeal
@@ -332,7 +337,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = xl.HealObject(context.Background(), bucket, object, false)
+	_, err = xl.HealObject(context.Background(), bucket, object, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -354,7 +359,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 	// This would create the bucket.
-	_, err = xl.HealBucket(context.Background(), bucket, false)
+	_, err = xl.HealBucket(context.Background(), bucket, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}

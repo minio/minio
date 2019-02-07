@@ -116,6 +116,12 @@
 			"revisionTime": "2017-09-25T03:23:15Z"
 		},
 		{
+			"checksumSHA1": "mSo9Sti7F6+laUs4NLx/p23rHD0=",
+			"path": "github.com/bcicen/jstream",
+			"revision": "f306cd3e1fa602a1b513114521a0d6a5a9d5c919",
+			"revisionTime": "2019-02-06T02:23:53Z"
+		},
+		{
 			"checksumSHA1": "0rido7hYHQtfq3UJzVT5LClLAWc=",
 			"path": "github.com/beorn7/perks/quantile",
 			"revision": "3a771d992973f24aa725d07868b467d1ddfceafb",
@@ -836,9 +842,10 @@
 			"revisionTime": "2018-08-08T20:39:25Z"
 		},
 		{
+			"checksumSHA1": "hev23KrSfQ4KfosxH+gJKziFVtA=",
 			"path": "github.com/rs/cors",
-			"revision": "a62a804a8a009876ca59105f7899938a1349f4b3",
-			"revisionTime": "2016-06-18T04:49:35+05:30"
+			"revision": "76f58f330d76a55c5badc74f6212e8a15e742c77",
+			"revisionTime": "2019-01-16T17:59:10Z"
 		},
 		{
 			"path": "github.com/rs/xhandler",

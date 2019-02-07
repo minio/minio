@@ -1007,6 +1007,65 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 	return nil
 }
 
+// If it is a single node XL and all disks are root disks, it is most likely a test setup, else it is a production setup.
+// On a test setup we allow creation of format.json on root disks to help with dev/testing.
+func isTestSetup(infos []DiskInfo, errs []error) bool {
+	if globalIsDistXL {
+		return false
+	}
+	rootDiskCount := 0
+	for i := range errs {
+		if errs[i] != nil {
+			// On error it is safer to assume that this is not a test setup.
+			return false
+		}
+		if infos[i].RootDisk {
+			rootDiskCount++
+		}
+	}
+	// It is a test setup if all disks are root disks.
+	return rootDiskCount == len(infos)
+}
+
+func getAllDiskInfos(storageDisks []StorageAPI) ([]DiskInfo, []error) {
+	infos := make([]DiskInfo, len(storageDisks))
+	errs := make([]error, len(storageDisks))
+	var wg sync.WaitGroup
+	for i := range storageDisks {
+		if storageDisks[i] == nil {
+			errs[i] = errDiskNotFound
+			continue
+		}
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			infos[i], errs[i] = storageDisks[i].DiskInfo()
+		}(i)
+	}
+	wg.Wait()
+	return infos, errs
+}
+
+// Mark root disks as down so as not to heal them.
+func markRootDisksAsDown(storageDisks []StorageAPI) {
+	infos, errs := getAllDiskInfos(storageDisks)
+	if isTestSetup(infos, errs) {
+		// Allow healing of disks for test setups to help with testing.
+		return
+	}
+	for i := range storageDisks {
+		if errs[i] != nil {
+			storageDisks[i] = nil
+			continue
+		}
+		if infos[i].RootDisk {
+			// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
+			// defective drive we should not heal a path on the root disk.
+			storageDisks[i] = nil
+		}
+	}
+}
+
 // HealFormat - heals missing `format.json` on fresh unformatted disks.
 // TODO: In future support corrupted disks missing format.json but has erasure
 // coded data in it.
@@ -1029,17 +1088,7 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 		}
 	}(storageDisks)
 
-	for i, disk := range storageDisks {
-		info, err := disk.DiskInfo()
-		if err != nil {
-			storageDisks[i] = nil
-		}
-		if info.RootDisk {
-			// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
-			// defective drive we should not heal a path on the root disk.
-			storageDisks[i] = nil
-		}
-	}
+	markRootDisksAsDown(storageDisks)
 
 	formats, sErrs := loadFormatXLAll(storageDisks)
 	if err = checkFormatXLValues(formats); err != nil {
@@ -1182,7 +1231,7 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 }
 
 // HealBucket - heals inconsistent buckets and bucket metadata on all sets.
-func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun bool) (results []madmin.HealResultItem, err error) {
+func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (results []madmin.HealResultItem, err error) {
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
 	if err := bucketLock.GetLock(globalHealingTimeout); err != nil {
 		return nil, err
@@ -1199,7 +1248,7 @@ func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun bool) (re
 
 	for _, s := range s.sets {
 		var setResults []madmin.HealResultItem
-		setResults, _ = s.HealBucket(ctx, bucket, dryRun)
+		setResults, _ = s.HealBucket(ctx, bucket, dryRun, remove)
 		for _, setResult := range setResults {
 			if setResult.Type == madmin.HealItemBucket {
 				for _, v := range setResult.Before.Drives {
@@ -1267,8 +1316,8 @@ func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun bool) (re
 }
 
 // HealObject - heals inconsistent object on a hashedSet based on object name.
-func (s *xlSets) HealObject(ctx context.Context, bucket, object string, dryRun bool) (madmin.HealResultItem, error) {
-	return s.getHashedSet(object).HealObject(ctx, bucket, object, dryRun)
+func (s *xlSets) HealObject(ctx context.Context, bucket, object string, dryRun, remove bool) (madmin.HealResultItem, error) {
+	return s.getHashedSet(object).HealObject(ctx, bucket, object, dryRun, remove)
 }
 
 // Lists all buckets which need healing.

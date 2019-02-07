@@ -119,11 +119,11 @@ func (api *DummyObjectLayer) HealFormat(ctx context.Context, dryRun bool) (item 
 	return
 }
 
-func (api *DummyObjectLayer) HealBucket(ctx context.Context, bucket string, dryRun bool) (items []madmin.HealResultItem, err error) {
+func (api *DummyObjectLayer) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (items []madmin.HealResultItem, err error) {
 	return
 }
 
-func (api *DummyObjectLayer) HealObject(ctx context.Context, bucket, object string, dryRun bool) (item madmin.HealResultItem, err error) {
+func (api *DummyObjectLayer) HealObject(ctx context.Context, bucket, object string, dryRun, remove bool) (item madmin.HealResultItem, err error) {
 	return
 }
 

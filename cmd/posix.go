@@ -1105,8 +1105,9 @@ func (s *posix) WriteAll(volume, path string, buf []byte) (err error) {
 		return errFaultyDisk
 	}
 
-	// Create file if not found
-	w, err := s.openFile(volume, path, os.O_CREATE|os.O_SYNC|os.O_WRONLY)
+	// Create file if not found. Note that it is created with os.O_EXCL flag as the file
+	// always is supposed to be created in the tmp directory with a unique file name.
+	w, err := s.openFile(volume, path, os.O_CREATE|os.O_SYNC|os.O_WRONLY|os.O_EXCL)
 	if err != nil {
 		return err
 	}
