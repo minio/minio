@@ -26,3 +26,6 @@ var errXLWriteQuorum = errors.New("Write failed. Insufficient number of disks on
 
 // errNoHealRequired - returned when healing is attempted on a previously healed disks.
 var errNoHealRequired = errors.New("No healing is required")
+
+// errNodeConnection - Unable to reach the node. Network error or node is offline.
+var errNodeConnection = errors.New("Unable to reach the node. Network error or node is offline")
