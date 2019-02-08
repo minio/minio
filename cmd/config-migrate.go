@@ -19,14 +19,19 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
+
+	"github.com/tidwall/gjson"
 
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/config"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
 	"github.com/minio/minio/pkg/iam/policy"
@@ -221,7 +226,7 @@ func migrateConfig() error {
 			return err
 		}
 		fallthrough
-	case serverConfigVersion:
+	case "33":
 		// No migration needed. this always points to current version.
 		err = nil
 	}
@@ -2461,7 +2466,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 		}
 
 	}
-	return saveServerConfig(context.Background(), objAPI, config)
+	return saveServerLegacyConfig(context.Background(), objAPI, config)
 }
 
 // Migrates '.minio.sys/config.json' to v33.
@@ -2469,7 +2474,7 @@ func migrateMinioSysConfig(objAPI ObjectLayer) error {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 
 	// Check if the config version is latest, if not migrate.
-	ok, _, err := checkConfigVersion(objAPI, configFile, serverConfigVersion)
+	ok, _, err := checkConfigVersion(objAPI, configFile, "33")
 	if err != nil {
 		return err
 	}
@@ -2505,6 +2510,231 @@ func migrateMinioSysConfig(objAPI ObjectLayer) error {
 		return err
 	}
 	return migrateV32ToV33MinioSys(objAPI)
+}
+
+func populateNotification(cfg *config.Server, data []byte, ns string, nsKeys ...string) {
+	notifyNS := gjson.GetBytes(data, ns)
+	var nsCfg map[string][]config.KV
+	notifyNS.ForEach(func(k, v gjson.Result) bool {
+		nsCfg[k.String()] = []config.KV{}
+		return true
+	})
+
+	for k := range nsCfg {
+		for _, kn := range nsKeys {
+			nsCfg[k] = append(nsCfg[k], config.KV{
+				Key: kn,
+				Value: gjson.GetBytes(data,
+					fmt.Sprintf("%s.%s.%s", ns, k, kn)).String(),
+			})
+		}
+	}
+
+	for k, v := range nsCfg {
+		cfg.Set(ns, v, k)
+	}
+}
+
+func migrateMinioSysConfigToFlatConfig(objAPI ObjectLayer) error {
+	configFile := path.Join(minioConfigPrefix, minioConfigFile)
+	// Construct path to config.json for the given bucket.
+	transactionConfigFile := configFile + ".transaction"
+
+	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
+	// and configFile, take a transaction lock to avoid data race between readConfig()
+	// and saveConfig().
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
+	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
+	defer objLock.Unlock()
+
+	var data []byte
+	var err error
+
+	configFile := path.Join(minioConfigPrefix, minioConfigFile)
+	ctx := context.Background()
+
+	if globalEtcdClient != nil {
+		data, err = readConfigEtcd(ctx, globalEtcdClient, configFile)
+	} else {
+		data, err = readConfig(ctx, objAPI, configFile)
+	}
+	if err != nil {
+		return err
+	}
+
+	if !gjson.ValidBytes(data) {
+		return errors.New("invalid json")
+	}
+
+	cfg := config.New()
+
+	cfg.Set("credential", []config.KV{
+		{Key: "accessKey", Value: gjson.GetBytes(data, "credential.accessKey").String()},
+		{Key: "secretKey", Value: gjson.GetBytes(data, "credential.secretKey").String()},
+	}, "")
+
+	cfg.Set("region", []config.KV{
+		{Key: "name", Value: gjson.GetBytes(data, "region").String()},
+	}, "")
+
+	cfg.Set("worm", []config.KV{
+		{Key: "state", Value: gjson.GetBytes(data, "worm").String()},
+	}, "")
+
+	cfg.Set("storageclass", []config.KV{
+		{Key: "standard", Value: gjson.GetBytes(data, "storageclass.standard").String()},
+		{Key: "rrs", Value: gjson.GetBytes(data, "storageclass.rrs").String()},
+	}, "")
+
+	var drives, exclude []string
+	gjson.GetBytes(data, "cache.drives").ForEach(func(key, value gjson.Result) bool {
+		drives = append(drives, value.String())
+		return true
+	})
+	gjson.GetBytes(data, "cache.exclue").ForEach(func(key, value gjson.Result) bool {
+		exclude = append(exclude, value.String())
+		return true
+	})
+
+	cfg.Set("cache", []config.KV{
+		{Key: "drives", Value: strings.Join(drives, ",")},
+		{Key: "expiry", Value: gjson.GetBytes(data, "cache.expiry").String()},
+		{Key: "maxuse", Value: gjson.GetBytes(data, "cache.maxuse").String()},
+		{Key: "exclude", Value: strings.Join(exclude, ",")},
+	}, "")
+
+	vaultKeys := []string{
+		"kms.vault.endpoint",
+		"kms.vault.auth.type",
+		"kms.vault.auth.approle.id",
+		"kms.vault.auth.approle.secret",
+		"kms.vault.key-id.name",
+		"kms.vault.key-id.version",
+	}
+
+	var vaultKVS []config.KV
+	for i, r := range gjson.GetManyBytes(data, vaultKeys...) {
+		vaultKVS = append(vaultKVS, config.KV{
+			Key:   strings.TrimPrefix("kms.vault", vaultKeys[i]),
+			Value: r.String(),
+		})
+	}
+	cfg.Set("kms.vault", vaultKVS, "")
+
+	populateNotification(cfg, data, "notify.amqp", []string{
+		"enable",
+		"url",
+		"exchange",
+		"routingKey",
+		"exchangeType",
+		"deliveryMode",
+		"mandatory",
+		"immediate",
+		"durable",
+		"internal",
+		"noWait",
+		"autoDeleted",
+	}...)
+
+	populateNotification(cfg, data, "notify.elasticsearch", []string{
+		"enable",
+		"format",
+		"url",
+		"index",
+	}...)
+
+	populateNotification(cfg, data, "notify.kafka", []string{
+		"enable",
+		"brokers",
+		"topic",
+		"tls.enable",
+		"tls.skipVerify",
+		"tls.clientAuth",
+		"sasl.enable",
+		"sasl.username",
+		"sasl.password",
+	}...)
+
+	populateNotification(cfg, data, "notify.mqtt", []string{
+		"enable",
+		"broker",
+		"topic",
+		"qos",
+		"username",
+		"password",
+		"reconnectInterval",
+		"keepAliveInterval",
+		"queueDir",
+	}...)
+
+	populateNotification(cfg, data, "notify.mysql", []string{
+		"enable",
+		"format",
+		"dsnString",
+		"table",
+		"host",
+		"port",
+		"user",
+		"password",
+		"database",
+	}...)
+
+	populateNotification(cfg, data, "notify.nats", []string{
+		"enable",
+		"address",
+		"subject",
+		"username",
+		"password",
+		"token",
+		"secure",
+		"pingInterval",
+		"streaming.enable",
+		"streaming.clusterID",
+		"streaming.async",
+		"streaming.maxPubAcksInflight",
+	}...)
+
+	populateNotification(cfg, data, "notify.nsq", []string{
+		"enable",
+		"nsqdAddress",
+		"topic",
+		"tls.enable",
+		"tls.skipVerify",
+	}...)
+
+	populateNotification(cfg, data, "notify.postgresql", []string{
+		"enable",
+		"format",
+		"connectionString",
+		"table",
+		"host",
+		"port",
+		"user",
+		"password",
+		"database",
+	}...)
+
+	populateNotification(cfg, data, "notify.redis", []string{
+		"enable",
+		"format",
+		"address",
+		"password",
+		"key",
+	}...)
+
+	populateNotification(cfg, data, "notify.webhook", []string{
+		"enable",
+		"endpoint",
+	}...)
+
+	data, err = json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+
+	return saveConfig(ctx, objAPI, configFile, data)
 }
 
 func checkConfigVersion(objAPI ObjectLayer, configFile string, version string) (bool, []byte, error) {

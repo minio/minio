@@ -18,24 +18,31 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 )
 
-// KeyHandler is the interface for 2 methods
-type KeyHandler interface {
-	// 'Check' function will return nil (no error), if the 'key' has
+// Key is the interface for each config key to provide a validation
+// function and a help.
+type Key interface {
+	// Validate function will return no error, if the 'key' has
 	// been already registered/valid. If not a registered/valid key, then
 	// an error message will be returned.
-	// Check(key string) error
-	Check(val string) error
-	// Help' function shows explanations and specs about the key
-	Help() (helpText string, err error)
+	Validate(value string) error
+
+	// Name represents key name for this interface.
+	Name() string
+
+	// Help function shows explanations and specs about the key.
+	Help() string
 }
 
-//Value is to hold the value and comment for a configuration key/parameter
-type Value struct {
-	val, comment string
+// KV - holds the key and its corresponding value.
+type KV struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 // Server is where we keep the configuration file information
@@ -46,74 +53,122 @@ type Value struct {
 // Handlers map has all the Check and Help methods for each and
 // every key.
 type Server struct {
-	RWMutex  *sync.RWMutex
-	order    []string
-	handlers map[string]KeyHandler
-	registry map[string]Value
+	sync.RWMutex
+	config     map[string]map[string][]KV
+	validators map[string]Key
 }
 
-// Init initializes Server structure elements
-func (s *Server) Init() {
-	s.RWMutex = &sync.RWMutex{}
-	s.handlers = make(map[string]KeyHandler)
-	s.registry = make(map[string]Value)
+// New - returns an initialized version of Server.
+func New() *Server {
+	return &Server{
+		config:     make(map[string]map[string][]KV),
+		validators: make(map[string]Key),
+	}
 }
 
-// RegisterKey registers/creates an entry for the
-// key/configuration parameter in the order array and
-// in the registry map of Server structure.
-// Handler methods, Check & Help, are implemented outside
-// of this package by the external user.
-func (s *Server) RegisterKey(key string, handler KeyHandler) (err error) {
-	s.order = append(s.order, key)
-	s.handlers[key] = handler
+// RegisterKey - registers a new key into config subsystem.
+func (s *Server) RegisterKey(key Key) error {
+	if key == nil || key.Name() == "" && key.Help() == "" {
+		return errors.New("Key cannot be uninitialized")
+	}
+	s.Lock()
+	defer s.Unlock()
+	s.validators[key.Name()] = key
 	return nil
 }
 
-// Get method returns the value and comment, if one is set, of a
-// key/configuration parameter.
-// It returns "Invalid configuration parameter" error if the key
-// is found to be invalid and "Configuration parameter not set yet"
-// error if key/configuration parameter has not been set yet.
-func (s *Server) Get(key string) (string, string, error) {
-	if _, ok := s.handlers[key]; !ok {
-		return "", "", errors.New("Invalid configuration parameter key: \"" + key + "\"")
-	}
-	if _, ok := s.registry[key]; !ok {
-		return "", "", errors.New("Configuration parameter, \"" + key + "\", not set yet")
-	}
-	val := s.registry[key].val
-	comment := s.registry[key].comment
-	return val, comment, nil
-}
+// Delete deletes the in-memory value that was set for an given subsys.
+// Unlike Set and Get, alias doesn't default to 'default' value. If
+// alias is not explicitly provided then we delete the entire subsystem.
+func (s *Server) Delete(subSys string, alias string) error {
+	s.Lock()
+	defer s.Unlock()
 
-// Set method is used to set a value for a
-// configuration parameter/key.
-func (s *Server) Set(key, value, comment string) error {
-	handler, ok := s.handlers[key]
+	_, ok := s.config[subSys]
 	if !ok {
-		return errors.New("Invalid configuration parameter key: \"" +
-			key + "\"")
+		return fmt.Errorf("Requested sub-system %s is not registered", subSys)
 	}
-	err := handler.Check(value)
-	if err != nil {
-		return errors.New("Invalid value")
-	}
-	s.registry[key] = Value{val: value, comment: comment}
-	return nil
-}
 
-// List lists all configuration parameters with their set values.
-func (s *Server) List() ([]string, error) {
-	var listArr []string
-	for _, k := range s.order {
-		if _, ok := s.registry[k]; ok {
-			configEntry := k + " = " + s.registry[k].val
-			if s.registry[k].comment != "" {
-				configEntry = configEntry + "    " + s.registry[k].comment
-			}
-			listArr = append(listArr, configEntry)
+	if alias != "" {
+		_, ok = s.config[subSys][alias]
+		if !ok {
+			return fmt.Errorf("Requested sub-system alias %s:%s is not registered", subSys, alias)
 		}
 	}
-	return listArr, nil
+
+	if alias != "" {
+		delete(s.config[subSys], alias)
+	} else {
+		delete(s.config, subSys)
+	}
+
+	return nil
+}
+
+// Get returns the value that was set for an given subsys,
+// alias is optional defaults to value 'default'
+func (s *Server) Get(subSys string, alias string) ([]KV, error) {
+	if alias == "" {
+		alias = "default"
+	}
+
+	s.RLock()
+	defer s.RUnlock()
+
+	_, ok := s.config[subSys]
+	if !ok {
+		return nil, fmt.Errorf("Requested sub-system %s is not registered", subSys)
+	}
+
+	_, ok = s.config[subSys][alias]
+	if !ok {
+		return nil, fmt.Errorf("Requested sub-system alias %s:%s is not registered", subSys, alias)
+	}
+
+	return s.config[subSys][alias], nil
+}
+
+// Set saves incoming list of keys values for given subsystem.
+// alias is optional defaults to value 'default'.
+func (s *Server) Set(subSys string, kvs []KV, alias string) error {
+	if alias == "" {
+		alias = "default"
+	}
+
+	s.Lock()
+	defer s.Unlock()
+
+	for _, kv := range kvs {
+		if err := s.validators[kv.Key].Validate(kv.Value); err != nil {
+			return err
+		}
+	}
+
+	s.config[subSys][alias] = kvs
+	return nil
+}
+
+// UnmarshalJSON implements custom unmarshal for Server struct.
+func (s *Server) UnmarshalJSON(b []byte) error {
+	var config = map[string]map[string][]KV{}
+	if err := json.Unmarshal(b, config); err != nil {
+		return err
+	}
+
+	// Validate all key values before unmarshalling.
+	for _, subV := range config {
+		for _, kvs := range subV {
+			for _, kv := range kvs {
+				if err := s.validators[kv.Key].Validate(kv.Value); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return json.Unmarshal(b, &s.config)
+}
+
+// MarshalJSON implements custom marshal for Server struct.
+func (s *Server) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.config)
 }

@@ -535,7 +535,7 @@ func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 	globalServerConfig.SetRegion(bucketLocation)
 
 	// Save config.
-	return saveServerConfig(context.Background(), obj, globalServerConfig)
+	return saveServerLegacyConfig(context.Background(), obj, globalServerConfig)
 }
 
 // Deleting the temporary backend and stopping the server.

@@ -796,7 +796,7 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	config, err := readServerConfig(ctx, objectAPI)
+	config, err := readServerLegacyConfig(ctx, objectAPI)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -872,7 +872,7 @@ func (a adminAPIHandlers) GetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 		keys = append(keys, k)
 	}
 
-	config, err := readServerConfig(ctx, objectAPI)
+	config, err := readServerLegacyConfig(ctx, objectAPI)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1287,7 +1287,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err = saveServerConfig(ctx, objectAPI, &config); err != nil {
+	if err = saveServerLegacyConfig(ctx, objectAPI, &config); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -1328,7 +1328,7 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Load config
-	configStruct, err := readServerConfig(ctx, objectAPI)
+	configStruct, err := readServerLegacyConfig(ctx, objectAPI)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1408,7 +1408,7 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	if err = saveServerConfig(ctx, objectAPI, &config); err != nil {
+	if err = saveServerLegacyConfig(ctx, objectAPI, &config); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -1475,7 +1475,7 @@ func (a adminAPIHandlers) UpdateAdminCredentialsHandler(w http.ResponseWriter,
 	// Set active creds.
 	globalActiveCred = creds
 
-	if err = saveServerConfig(ctx, objectAPI, globalServerConfig); err != nil {
+	if err = saveServerLegacyConfig(ctx, objectAPI, globalServerConfig); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}

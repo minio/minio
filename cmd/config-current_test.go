@@ -48,16 +48,16 @@ func TestServerConfig(t *testing.T) {
 	}
 
 	// Match version.
-	if globalServerConfig.GetVersion() != serverConfigVersion {
-		t.Errorf("Expecting version %s found %s", globalServerConfig.GetVersion(), serverConfigVersion)
+	if globalServerConfig.GetVersion() != "33" {
+		t.Errorf("Expecting version %s found %s", globalServerConfig.GetVersion(), "33")
 	}
 
-	if err := saveServerConfig(context.Background(), objLayer, globalServerConfig); err != nil {
+	if err := saveServerLegacyConfig(context.Background(), objLayer, globalServerConfig); err != nil {
 		t.Fatalf("Unable to save updated config file %s", err)
 	}
 
 	// Initialize server config.
-	if err := loadConfig(objLayer); err != nil {
+	if err := loadLegacyConfig(objLayer); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 }
@@ -148,7 +148,7 @@ func TestValidateConfig(t *testing.T) {
 	}
 
 	configPath := path.Join(minioConfigPrefix, minioConfigFile)
-	v := serverConfigVersion
+	v := "33"
 
 	testCases := []struct {
 		configData string
