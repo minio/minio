@@ -1231,15 +1231,15 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 }
 
 // HealBucket - heals inconsistent buckets and bucket metadata on all sets.
-func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (results []madmin.HealResultItem, err error) {
+func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (result madmin.HealResultItem, err error) {
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
 	if err := bucketLock.GetLock(globalHealingTimeout); err != nil {
-		return nil, err
+		return result, err
 	}
 	defer bucketLock.Unlock()
 
 	// Initialize heal result info
-	res := madmin.HealResultItem{
+	result = madmin.HealResultItem{
 		Type:      madmin.HealItemBucket,
 		Bucket:    bucket,
 		DiskCount: s.setCount * s.drivesPerSet,
@@ -1247,25 +1247,22 @@ func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove b
 	}
 
 	for _, s := range s.sets {
-		var setResults []madmin.HealResultItem
-		setResults, _ = s.HealBucket(ctx, bucket, dryRun, remove)
-		for _, setResult := range setResults {
-			if setResult.Type == madmin.HealItemBucket {
-				for _, v := range setResult.Before.Drives {
-					res.Before.Drives = append(res.Before.Drives, v)
-				}
-				for _, v := range setResult.After.Drives {
-					res.After.Drives = append(res.After.Drives, v)
-				}
-				continue
-			}
-			results = append(results, setResult)
+		var healResult madmin.HealResultItem
+		healResult, err = s.HealBucket(ctx, bucket, dryRun, remove)
+		if err != nil {
+			return result, err
+		}
+		for _, v := range healResult.Before.Drives {
+			result.Before.Drives = append(result.Before.Drives, v)
+		}
+		for _, v := range healResult.After.Drives {
+			result.After.Drives = append(result.After.Drives, v)
 		}
 	}
 
 	for _, endpoint := range s.endpoints {
 		var foundBefore bool
-		for _, v := range res.Before.Drives {
+		for _, v := range result.Before.Drives {
 			if endpoint.IsLocal {
 				if v.Endpoint == endpoint.Path {
 					foundBefore = true
@@ -1277,14 +1274,14 @@ func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove b
 			}
 		}
 		if !foundBefore {
-			res.Before.Drives = append(res.Before.Drives, madmin.HealDriveInfo{
+			result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
 				UUID:     "",
 				Endpoint: endpoint.String(),
 				State:    madmin.DriveStateOffline,
 			})
 		}
 		var foundAfter bool
-		for _, v := range res.After.Drives {
+		for _, v := range result.After.Drives {
 			if endpoint.IsLocal {
 				if v.Endpoint == endpoint.Path {
 					foundAfter = true
@@ -1296,7 +1293,7 @@ func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove b
 			}
 		}
 		if !foundAfter {
-			res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
+			result.After.Drives = append(result.After.Drives, madmin.HealDriveInfo{
 				UUID:     "",
 				Endpoint: endpoint.String(),
 				State:    madmin.DriveStateOffline,
@@ -1305,14 +1302,12 @@ func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove b
 	}
 
 	// Check if we had quorum to write, if not return an appropriate error.
-	_, afterDriveOnline := res.GetOnlineCounts()
+	_, afterDriveOnline := result.GetOnlineCounts()
 	if afterDriveOnline < ((s.setCount*s.drivesPerSet)/2)+1 {
-		return nil, toObjectErr(errXLWriteQuorum, bucket)
+		return result, toObjectErr(errXLWriteQuorum, bucket)
 	}
 
-	results = append(results, res)
-
-	return results, nil
+	return result, nil
 }
 
 // HealObject - heals inconsistent object on a hashedSet based on object name.
