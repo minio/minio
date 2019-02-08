@@ -304,12 +304,6 @@
 			"revisionTime": "2017-02-16T21:49:44Z"
 		},
 		{
-			"checksumSHA1": "81OSg/NapmTaRpSS+oYsPVE0b1Y=",
-			"path": "github.com/garyburd/redigo/redis",
-			"revision": "0d253a66e6e1349f4581d6d2b300ee434ee2da9f",
-			"revisionTime": "2017-02-16T21:49:44Z"
-		},
-		{
 			"checksumSHA1": "+IH9gXMht4fL/fxKRZ4sqGBps1g=",
 			"path": "github.com/go-ini/ini",
 			"revision": "e7fea39b01aea8d5671f6858f0532f56e8bff3a5",
@@ -380,6 +374,12 @@
 			"path": "github.com/golang/snappy",
 			"revision": "2e65f85255dbc3072edf28d6b5b8efc472979f5a",
 			"revisionTime": "2018-05-18T05:39:59Z"
+		},
+		{
+			"checksumSHA1": "umngZiUg6r0nzonwk/rSEpykaVk=",
+			"path": "github.com/gomodule/redigo/redis",
+			"revision": "43fe51054af5fb7acdc89c38a3f8098fbf997a53",
+			"revisionTime": "2019-02-05T13:53:52Z"
 		},
 		{
 			"checksumSHA1": "0x0CoHbgoWngucjKSDPFodeL8ek=",

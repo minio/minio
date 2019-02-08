@@ -55,6 +55,11 @@ func (s *Script) args(spec string, keysAndArgs []interface{}) []interface{} {
 	return args
 }
 
+// Hash returns the script hash.
+func (s *Script) Hash() string {
+	return s.hash
+}
+
 // Do evaluates the script. Under the covers, Do optimistically evaluates the
 // script using the EVALSHA command. If the command fails because the script is
 // not loaded, then Do evaluates the script using the EVAL command (thus

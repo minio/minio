@@ -29,9 +29,12 @@ import (
 	"time"
 )
 
+var (
+	_ ConnWithTimeout = (*conn)(nil)
+)
+
 // conn is the low-level implementation of Conn
 type conn struct {
-
 	// Shared
 	mu      sync.Mutex
 	pending int
@@ -73,10 +76,12 @@ type DialOption struct {
 type dialOptions struct {
 	readTimeout  time.Duration
 	writeTimeout time.Duration
+	dialer       *net.Dialer
 	dial         func(network, addr string) (net.Conn, error)
 	db           int
 	password     string
-	dialTLS      bool
+	clientName   string
+	useTLS       bool
 	skipVerify   bool
 	tlsConfig    *tls.Config
 }
@@ -95,17 +100,27 @@ func DialWriteTimeout(d time.Duration) DialOption {
 	}}
 }
 
-// DialConnectTimeout specifies the timeout for connecting to the Redis server.
+// DialConnectTimeout specifies the timeout for connecting to the Redis server when
+// no DialNetDial option is specified.
 func DialConnectTimeout(d time.Duration) DialOption {
 	return DialOption{func(do *dialOptions) {
-		dialer := net.Dialer{Timeout: d}
-		do.dial = dialer.Dial
+		do.dialer.Timeout = d
+	}}
+}
+
+// DialKeepAlive specifies the keep-alive period for TCP connections to the Redis server
+// when no DialNetDial option is specified.
+// If zero, keep-alives are not enabled. If no DialKeepAlive option is specified then
+// the default of 5 minutes is used to ensure that half-closed TCP sessions are detected.
+func DialKeepAlive(d time.Duration) DialOption {
+	return DialOption{func(do *dialOptions) {
+		do.dialer.KeepAlive = d
 	}}
 }
 
 // DialNetDial specifies a custom dial function for creating TCP
-// connections. If this option is left out, then net.Dial is
-// used. DialNetDial overrides DialConnectTimeout.
+// connections, otherwise a net.Dialer customized via the other options is used.
+// DialNetDial overrides DialConnectTimeout and DialKeepAlive.
 func DialNetDial(dial func(network, addr string) (net.Conn, error)) DialOption {
 	return DialOption{func(do *dialOptions) {
 		do.dial = dial
@@ -127,6 +142,14 @@ func DialPassword(password string) DialOption {
 	}}
 }
 
+// DialClientName specifies a client name to be used
+// by the Redis server connection.
+func DialClientName(name string) DialOption {
+	return DialOption{func(do *dialOptions) {
+		do.clientName = name
+	}}
+}
+
 // DialTLSConfig specifies the config to use when a TLS connection is dialed.
 // Has no effect when not dialing a TLS connection.
 func DialTLSConfig(c *tls.Config) DialOption {
@@ -135,11 +158,19 @@ func DialTLSConfig(c *tls.Config) DialOption {
 	}}
 }
 
-// DialTLSSkipVerify to disable server name verification when connecting
-// over TLS. Has no effect when not dialing a TLS connection.
+// DialTLSSkipVerify disables server name verification when connecting over
+// TLS. Has no effect when not dialing a TLS connection.
 func DialTLSSkipVerify(skip bool) DialOption {
 	return DialOption{func(do *dialOptions) {
 		do.skipVerify = skip
+	}}
+}
+
+// DialUseTLS specifies whether TLS should be used when connecting to the
+// server. This option is ignore by DialURL.
+func DialUseTLS(useTLS bool) DialOption {
+	return DialOption{func(do *dialOptions) {
+		do.useTLS = useTLS
 	}}
 }
 
@@ -147,10 +178,15 @@ func DialTLSSkipVerify(skip bool) DialOption {
 // address using the specified options.
 func Dial(network, address string, options ...DialOption) (Conn, error) {
 	do := dialOptions{
-		dial: net.Dial,
+		dialer: &net.Dialer{
+			KeepAlive: time.Minute * 5,
+		},
 	}
 	for _, option := range options {
 		option.f(&do)
+	}
+	if do.dial == nil {
+		do.dial = do.dialer.Dial
 	}
 
 	netConn, err := do.dial(network, address)
@@ -158,8 +194,13 @@ func Dial(network, address string, options ...DialOption) (Conn, error) {
 		return nil, err
 	}
 
-	if do.dialTLS {
-		tlsConfig := cloneTLSClientConfig(do.tlsConfig, do.skipVerify)
+	if do.useTLS {
+		var tlsConfig *tls.Config
+		if do.tlsConfig == nil {
+			tlsConfig = &tls.Config{InsecureSkipVerify: do.skipVerify}
+		} else {
+			tlsConfig = cloneTLSConfig(do.tlsConfig)
+		}
 		if tlsConfig.ServerName == "" {
 			host, _, err := net.SplitHostPort(address)
 			if err != nil {
@@ -192,6 +233,13 @@ func Dial(network, address string, options ...DialOption) (Conn, error) {
 		}
 	}
 
+	if do.clientName != "" {
+		if _, err := c.Do("CLIENT", "SETNAME", do.clientName); err != nil {
+			netConn.Close()
+			return nil, err
+		}
+	}
+
 	if do.db != 0 {
 		if _, err := c.Do("SELECT", do.db); err != nil {
 			netConn.Close()
@@ -200,10 +248,6 @@ func Dial(network, address string, options ...DialOption) (Conn, error) {
 	}
 
 	return c, nil
-}
-
-func dialTLS(do *dialOptions) {
-	do.dialTLS = true
 }
 
 var pathDBRegexp = regexp.MustCompile(`/(\d*)\z`)
@@ -257,9 +301,7 @@ func DialURL(rawurl string, options ...DialOption) (Conn, error) {
 		return nil, fmt.Errorf("invalid database: %s", u.Path[1:])
 	}
 
-	if u.Scheme == "rediss" {
-		options = append([]DialOption{{dialTLS}}, options...)
-	}
+	options = append(options, DialUseTLS(u.Scheme == "rediss"))
 
 	return Dial("tcp", address, options...)
 }
@@ -344,39 +386,55 @@ func (c *conn) writeFloat64(n float64) error {
 	return c.writeBytes(strconv.AppendFloat(c.numScratch[:0], n, 'g', -1, 64))
 }
 
-func (c *conn) writeCommand(cmd string, args []interface{}) (err error) {
+func (c *conn) writeCommand(cmd string, args []interface{}) error {
 	c.writeLen('*', 1+len(args))
-	err = c.writeString(cmd)
+	if err := c.writeString(cmd); err != nil {
+		return err
+	}
 	for _, arg := range args {
-		if err != nil {
-			break
-		}
-		switch arg := arg.(type) {
-		case string:
-			err = c.writeString(arg)
-		case []byte:
-			err = c.writeBytes(arg)
-		case int:
-			err = c.writeInt64(int64(arg))
-		case int64:
-			err = c.writeInt64(arg)
-		case float64:
-			err = c.writeFloat64(arg)
-		case bool:
-			if arg {
-				err = c.writeString("1")
-			} else {
-				err = c.writeString("0")
-			}
-		case nil:
-			err = c.writeString("")
-		default:
-			var buf bytes.Buffer
-			fmt.Fprint(&buf, arg)
-			err = c.writeBytes(buf.Bytes())
+		if err := c.writeArg(arg, true); err != nil {
+			return err
 		}
 	}
-	return err
+	return nil
+}
+
+func (c *conn) writeArg(arg interface{}, argumentTypeOK bool) (err error) {
+	switch arg := arg.(type) {
+	case string:
+		return c.writeString(arg)
+	case []byte:
+		return c.writeBytes(arg)
+	case int:
+		return c.writeInt64(int64(arg))
+	case int64:
+		return c.writeInt64(arg)
+	case float64:
+		return c.writeFloat64(arg)
+	case bool:
+		if arg {
+			return c.writeString("1")
+		} else {
+			return c.writeString("0")
+		}
+	case nil:
+		return c.writeString("")
+	case Argument:
+		if argumentTypeOK {
+			return c.writeArg(arg.RedisArg(), false)
+		}
+		// See comment in default clause below.
+		var buf bytes.Buffer
+		fmt.Fprint(&buf, arg)
+		return c.writeBytes(buf.Bytes())
+	default:
+		// This default clause is intended to handle builtin numeric types.
+		// The function should return an error for other types, but this is not
+		// done for compatibility with previous versions of the package.
+		var buf bytes.Buffer
+		fmt.Fprint(&buf, arg)
+		return c.writeBytes(buf.Bytes())
+	}
 }
 
 type protocolError string
@@ -385,10 +443,21 @@ func (pe protocolError) Error() string {
 	return fmt.Sprintf("redigo: %s (possible server error or unsupported concurrent read by application)", string(pe))
 }
 
+// readLine reads a line of input from the RESP stream.
 func (c *conn) readLine() ([]byte, error) {
+	// To avoid allocations, attempt to read the line using ReadSlice. This
+	// call typically succeeds. The known case where the call fails is when
+	// reading the output from the MONITOR command.
 	p, err := c.br.ReadSlice('\n')
 	if err == bufio.ErrBufferFull {
-		return nil, protocolError("long response line")
+		// The line does not fit in the bufio.Reader's buffer. Fall back to
+		// allocating a buffer for the line.
+		buf := append([]byte{}, p...)
+		for err == bufio.ErrBufferFull {
+			p, err = c.br.ReadSlice('\n')
+			buf = append(buf, p...)
+		}
+		p = buf
 	}
 	if err != nil {
 		return nil, err
@@ -538,10 +607,17 @@ func (c *conn) Flush() error {
 	return nil
 }
 
-func (c *conn) Receive() (reply interface{}, err error) {
-	if c.readTimeout != 0 {
-		c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
+func (c *conn) Receive() (interface{}, error) {
+	return c.ReceiveWithTimeout(c.readTimeout)
+}
+
+func (c *conn) ReceiveWithTimeout(timeout time.Duration) (reply interface{}, err error) {
+	var deadline time.Time
+	if timeout != 0 {
+		deadline = time.Now().Add(timeout)
 	}
+	c.conn.SetReadDeadline(deadline)
+
 	if reply, err = c.readReply(); err != nil {
 		return nil, c.fatal(err)
 	}
@@ -564,6 +640,10 @@ func (c *conn) Receive() (reply interface{}, err error) {
 }
 
 func (c *conn) Do(cmd string, args ...interface{}) (interface{}, error) {
+	return c.DoWithTimeout(c.readTimeout, cmd, args...)
+}
+
+func (c *conn) DoWithTimeout(readTimeout time.Duration, cmd string, args ...interface{}) (interface{}, error) {
 	c.mu.Lock()
 	pending := c.pending
 	c.pending = 0
@@ -587,9 +667,11 @@ func (c *conn) Do(cmd string, args ...interface{}) (interface{}, error) {
 		return nil, c.fatal(err)
 	}
 
-	if c.readTimeout != 0 {
-		c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
+	var deadline time.Time
+	if readTimeout != 0 {
+		deadline = time.Now().Add(readTimeout)
 	}
+	c.conn.SetReadDeadline(deadline)
 
 	if cmd == "" {
 		reply := make([]interface{}, pending)
