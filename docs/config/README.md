@@ -167,6 +167,17 @@ export MINIO_DRIVE_SYNC=on
 minio server /data
 ```
 
+### HTTP Trace
+
+By default, Minio disables the feature to log HTTP trace. You may enable this feature by setting `MINIO_HTTP_TRACE` environment variable.
+
+Example:
+
+```sh
+export MINIO_HTTP_TRACE=/var/log/minio.log
+minio server /data
+```
+
 ## Explore Further
 
 * [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide)
