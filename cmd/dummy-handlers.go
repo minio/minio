@@ -43,38 +43,56 @@ type tagElem struct {
 
 // GetBucketWebsite  - GET bucket website, a dummy api
 func (api objectAPIHandlers) GetBucketWebsiteHandler(w http.ResponseWriter, r *http.Request) {
+	writeSuccessResponseHeadersOnly(w)
+	w.(http.Flusher).Flush()
 }
 
 // GetBucketVersioning - GET bucket versioning, a dummy api
 func (api objectAPIHandlers) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
+	writeSuccessResponseHeadersOnly(w)
+	w.(http.Flusher).Flush()
 }
 
 // GetBucketAccelerate  - GET bucket accelerate, a dummy api
 func (api objectAPIHandlers) GetBucketAccelerateHandler(w http.ResponseWriter, r *http.Request) {
+	writeSuccessResponseHeadersOnly(w)
+	w.(http.Flusher).Flush()
 }
 
 // GetBucketRequestPaymentHandler - GET bucket requestPayment, a dummy api
 func (api objectAPIHandlers) GetBucketRequestPaymentHandler(w http.ResponseWriter, r *http.Request) {
+	writeSuccessResponseHeadersOnly(w)
+	w.(http.Flusher).Flush()
 }
 
 // GetBucketLoggingHandler - GET bucket logging, a dummy api
 func (api objectAPIHandlers) GetBucketLoggingHandler(w http.ResponseWriter, r *http.Request) {
+	writeSuccessResponseHeadersOnly(w)
+	w.(http.Flusher).Flush()
 }
 
 // GetBucketLifecycleHandler - GET bucket lifecycle, a dummy api
 func (api objectAPIHandlers) GetBucketLifecycleHandler(w http.ResponseWriter, r *http.Request) {
+	writeSuccessResponseHeadersOnly(w)
+	w.(http.Flusher).Flush()
 }
 
 // GetBucketReplicationHandler - GET bucket replication, a dummy api
 func (api objectAPIHandlers) GetBucketReplicationHandler(w http.ResponseWriter, r *http.Request) {
+	writeSuccessResponseHeadersOnly(w)
+	w.(http.Flusher).Flush()
 }
 
 // DeleteBucketTaggingHandler - DELETE bucket tagging, a dummy api
 func (api objectAPIHandlers) DeleteBucketTaggingHandler(w http.ResponseWriter, r *http.Request) {
+	writeSuccessResponseHeadersOnly(w)
+	w.(http.Flusher).Flush()
 }
 
 // DeleteBucketWebsiteHandler - DELETE bucket website, a dummy api
 func (api objectAPIHandlers) DeleteBucketWebsiteHandler(w http.ResponseWriter, r *http.Request) {
+	writeSuccessResponseHeadersOnly(w)
+	w.(http.Flusher).Flush()
 }
 
 // GetBucketCorsHandler - GET bucket cors, a dummy api
