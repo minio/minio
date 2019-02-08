@@ -71,8 +71,6 @@ func (api objectAPIHandlers) GetBucketReplicationHandler(w http.ResponseWriter, 
 
 // DeleteBucketTaggingHandler - DELETE bucket tagging, a dummy api
 func (api objectAPIHandlers) DeleteBucketTaggingHandler(w http.ResponseWriter, r *http.Request) {
-	writeSuccessNoContent(w)
-	w.(http.Flusher).Flush()
 }
 
 // DeleteBucketWebsiteHandler - DELETE bucket website, a dummy api
@@ -81,7 +79,7 @@ func (api objectAPIHandlers) DeleteBucketWebsiteHandler(w http.ResponseWriter, r
 
 // GetBucketCorsHandler - GET bucket cors, a dummy api
 func (api objectAPIHandlers) GetBucketCorsHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetBucketTagging")
+	ctx := newContext(r, w, "GetBucketCorsHandler")
 
 	type allowedMethod int
 	const (
@@ -128,7 +126,6 @@ func (api objectAPIHandlers) GetBucketCorsHandler(w http.ResponseWriter, r *http
 	}
 
 	w.(http.Flusher).Flush()
-
 }
 
 // GetBucketTaggingHandler - GET bucket tagging, a dummy api
