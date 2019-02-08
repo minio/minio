@@ -19,6 +19,22 @@ getdeps:
 	@echo "Installing misspell" && go get -u github.com/client9/misspell/cmd/misspell
 	@echo "Installing ineffassign" && go get -u github.com/gordonklaus/ineffassign
 
+prunevendor:
+	@find vendor/ -name '.editorconfig' | xargs -I{} rm -v {}
+	@find vendor/ -name '*.lock' | xargs -I{} rm -v {}
+	@find vendor/ -name 'Gopkg.toml' | xargs -I{} rm -v {}
+	@find vendor/ -name '*.md' | xargs -I{} rm -v {}
+	@find vendor/ -name '*.yml' | xargs -I{} rm -v {}
+	@find vendor/ -name '*.md' | xargs -I{} rm -v {}
+	@find vendor/ -name 'Gopkg.toml' | xargs -I{} rm -v {}
+	@find vendor/ -name '*.lock' | xargs -I{} rm -v {}
+	@find vendor/ -name '.editorconfig' | xargs -I{} rm -v {}
+	@find vendor/ -name '*_tests.go' | xargs -I{} rm -v {}
+	@find vendor/ -name '.gitignore' | xargs -I{} rm -v {}
+	@find vendor/ -name 'AUTHORS' | xargs -I{} rm -v {}
+	@find vendor/ -name 'CONTRIBUTORS' | xargs -I{} rm -v {}
+	@find vendor/ -name 'Makefile' | xargs -I{} rm -v {};
+
 crosscompile:
 	@(env bash $(PWD)/buildscripts/cross-compile.sh)
 

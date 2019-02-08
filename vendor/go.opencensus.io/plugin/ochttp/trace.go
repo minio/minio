@@ -66,16 +66,6 @@ func (t *traceTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	if t.format != nil {
-		// SpanContextToRequest will modify its Request argument, which is
-		// contrary to the contract for http.RoundTripper, so we need to
-		// pass it a copy of the Request.
-		// However, the Request struct itself was already copied by
-		// the WithContext calls above and so we just need to copy the header.
-		header := make(http.Header)
-		for k, v := range req.Header {
-			header[k] = v
-		}
-		req.Header = header
 		t.format.SpanContextToRequest(span.SpanContext(), req)
 	}
 
@@ -196,23 +186,23 @@ func TraceStatus(httpStatusCode int, statusLine string) trace.Status {
 }
 
 var codeToStr = map[int32]string{
-	trace.StatusCodeOK:                 `OK`,
-	trace.StatusCodeCancelled:          `CANCELLED`,
-	trace.StatusCodeUnknown:            `UNKNOWN`,
-	trace.StatusCodeInvalidArgument:    `INVALID_ARGUMENT`,
-	trace.StatusCodeDeadlineExceeded:   `DEADLINE_EXCEEDED`,
-	trace.StatusCodeNotFound:           `NOT_FOUND`,
-	trace.StatusCodeAlreadyExists:      `ALREADY_EXISTS`,
-	trace.StatusCodePermissionDenied:   `PERMISSION_DENIED`,
-	trace.StatusCodeResourceExhausted:  `RESOURCE_EXHAUSTED`,
-	trace.StatusCodeFailedPrecondition: `FAILED_PRECONDITION`,
-	trace.StatusCodeAborted:            `ABORTED`,
-	trace.StatusCodeOutOfRange:         `OUT_OF_RANGE`,
-	trace.StatusCodeUnimplemented:      `UNIMPLEMENTED`,
-	trace.StatusCodeInternal:           `INTERNAL`,
-	trace.StatusCodeUnavailable:        `UNAVAILABLE`,
-	trace.StatusCodeDataLoss:           `DATA_LOSS`,
-	trace.StatusCodeUnauthenticated:    `UNAUTHENTICATED`,
+	trace.StatusCodeOK:                 `"OK"`,
+	trace.StatusCodeCancelled:          `"CANCELLED"`,
+	trace.StatusCodeUnknown:            `"UNKNOWN"`,
+	trace.StatusCodeInvalidArgument:    `"INVALID_ARGUMENT"`,
+	trace.StatusCodeDeadlineExceeded:   `"DEADLINE_EXCEEDED"`,
+	trace.StatusCodeNotFound:           `"NOT_FOUND"`,
+	trace.StatusCodeAlreadyExists:      `"ALREADY_EXISTS"`,
+	trace.StatusCodePermissionDenied:   `"PERMISSION_DENIED"`,
+	trace.StatusCodeResourceExhausted:  `"RESOURCE_EXHAUSTED"`,
+	trace.StatusCodeFailedPrecondition: `"FAILED_PRECONDITION"`,
+	trace.StatusCodeAborted:            `"ABORTED"`,
+	trace.StatusCodeOutOfRange:         `"OUT_OF_RANGE"`,
+	trace.StatusCodeUnimplemented:      `"UNIMPLEMENTED"`,
+	trace.StatusCodeInternal:           `"INTERNAL"`,
+	trace.StatusCodeUnavailable:        `"UNAVAILABLE"`,
+	trace.StatusCodeDataLoss:           `"DATA_LOSS"`,
+	trace.StatusCodeUnauthenticated:    `"UNAUTHENTICATED"`,
 }
 
 func isHealthEndpoint(path string) bool {

@@ -13,45 +13,15 @@ import (
 )
 
 func DefaultVersionHostname(ctx netcontext.Context) string {
-	c := fromContext(ctx)
-	if c == nil {
-		panic(errNotAppEngineContext)
-	}
-	return appengine.DefaultVersionHostname(c)
+	return appengine.DefaultVersionHostname(fromContext(ctx))
 }
 
-func Datacenter(_ netcontext.Context) string { return appengine.Datacenter() }
-func ServerSoftware() string                 { return appengine.ServerSoftware() }
-func InstanceID() string                     { return appengine.InstanceID() }
-func IsDevAppServer() bool                   { return appengine.IsDevAppServer() }
+func RequestID(ctx netcontext.Context) string  { return appengine.RequestID(fromContext(ctx)) }
+func Datacenter(_ netcontext.Context) string   { return appengine.Datacenter() }
+func ServerSoftware() string                   { return appengine.ServerSoftware() }
+func ModuleName(ctx netcontext.Context) string { return appengine.ModuleName(fromContext(ctx)) }
+func VersionID(ctx netcontext.Context) string  { return appengine.VersionID(fromContext(ctx)) }
+func InstanceID() string                       { return appengine.InstanceID() }
+func IsDevAppServer() bool                     { return appengine.IsDevAppServer() }
 
-func RequestID(ctx netcontext.Context) string {
-	c := fromContext(ctx)
-	if c == nil {
-		panic(errNotAppEngineContext)
-	}
-	return appengine.RequestID(c)
-}
-
-func ModuleName(ctx netcontext.Context) string {
-	c := fromContext(ctx)
-	if c == nil {
-		panic(errNotAppEngineContext)
-	}
-	return appengine.ModuleName(c)
-}
-func VersionID(ctx netcontext.Context) string {
-	c := fromContext(ctx)
-	if c == nil {
-		panic(errNotAppEngineContext)
-	}
-	return appengine.VersionID(c)
-}
-
-func fullyQualifiedAppID(ctx netcontext.Context) string {
-	c := fromContext(ctx)
-	if c == nil {
-		panic(errNotAppEngineContext)
-	}
-	return c.FullyQualifiedAppID()
-}
+func fullyQualifiedAppID(ctx netcontext.Context) string { return fromContext(ctx).FullyQualifiedAppID() }

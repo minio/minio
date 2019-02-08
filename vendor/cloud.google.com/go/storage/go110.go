@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+// Copyright 2017 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,6 @@ func shouldRetry(err error) bool {
 		// Retry on 429 and 5xx, according to
 		// https://cloud.google.com/storage/docs/exponential-backoff.
 		return e.Code == 429 || (e.Code >= 500 && e.Code < 600)
-	case interface{ Temporary() bool }:
-		return e.Temporary()
 	default:
 		return false
 	}

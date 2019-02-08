@@ -1,4 +1,4 @@
-// Copyright 2016 Google LLC
+// Copyright 2016 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -104,15 +104,7 @@ type Handle struct {
 // InternalNewHandle returns a Handle for resource.
 // The conn parameter refers to a server that must support the IAMPolicy service.
 func InternalNewHandle(conn *grpc.ClientConn, resource string) *Handle {
-	return InternalNewHandleGRPCClient(pb.NewIAMPolicyClient(conn), resource)
-}
-
-// InternalNewHandleGRPCClient is for use by the Google Cloud Libraries only.
-//
-// InternalNewHandleClient returns a Handle for resource using the given
-// grpc service that implements IAM as a mixin
-func InternalNewHandleGRPCClient(c pb.IAMPolicyClient, resource string) *Handle {
-	return InternalNewHandleClient(&grpcClient{c: c}, resource)
+	return InternalNewHandleClient(&grpcClient{c: pb.NewIAMPolicyClient(conn)}, resource)
 }
 
 // InternalNewHandleClient is for use by the Google Cloud Libraries only.

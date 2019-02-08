@@ -59,6 +59,16 @@ _* | *_ | _)
 	echo 'undefined $GOOS_$GOARCH:' "$GOOSARCH" 1>&2
 	exit 1
 	;;
+aix_ppc)
+	mkerrors="$mkerrors -maix32"
+	mksyscall="perl mksyscall_aix.pl -aix"
+	mktypes="GOARCH=$GOARCH go tool cgo -godefs"
+	;;
+aix_ppc64)
+	mkerrors="$mkerrors -maix64"
+	mksyscall="perl mksyscall_aix.pl -aix"
+	mktypes="GOARCH=$GOARCH go tool cgo -godefs"
+	;;
 darwin_386)
 	mkerrors="$mkerrors -m32"
 	mksyscall="./mksyscall.pl -l32"
@@ -78,12 +88,6 @@ darwin_arm)
 darwin_arm64)
 	mkerrors="$mkerrors -m64"
 	mksysnum="./mksysnum_darwin.pl $(xcrun --show-sdk-path --sdk iphoneos)/usr/include/sys/syscall.h"
-	mktypes="GOARCH=$GOARCH go tool cgo -godefs"
-	;;
-dragonfly_386)
-	mkerrors="$mkerrors -m32"
-	mksyscall="./mksyscall.pl -l32 -dragonfly"
-	mksysnum="curl -s 'http://gitweb.dragonflybsd.org/dragonfly.git/blob_plain/HEAD:/sys/kern/syscalls.master' | ./mksysnum_dragonfly.pl"
 	mktypes="GOARCH=$GOARCH go tool cgo -godefs"
 	;;
 dragonfly_amd64)

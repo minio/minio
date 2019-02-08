@@ -143,7 +143,11 @@ type Builder interface {
 }
 
 // PickOptions contains addition information for the Pick operation.
-type PickOptions struct{}
+type PickOptions struct {
+	// FullMethodName is the method name that NewClientStream() is called
+	// with. The canonical format is /service/Method.
+	FullMethodName string
+}
 
 // DoneInfo contains additional information for done.
 type DoneInfo struct {

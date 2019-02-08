@@ -22,11 +22,7 @@ func Main() {
 		port = s
 	}
 
-	host := ""
-	if IsDevAppServer() {
-		host = "127.0.0.1"
-	}
-	if err := http.ListenAndServe(host+":"+port, http.HandlerFunc(handleHTTP)); err != nil {
+	if err := http.ListenAndServe(":"+port, http.HandlerFunc(handleHTTP)); err != nil {
 		log.Fatalf("http.ListenAndServe: %v", err)
 	}
 }

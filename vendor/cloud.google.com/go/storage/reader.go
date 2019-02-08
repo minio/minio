@@ -1,4 +1,4 @@
-// Copyright 2016 Google LLC
+// Copyright 2016 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"time"
 
 	"cloud.google.com/go/internal/trace"
 	"golang.org/x/net/context"
@@ -33,39 +32,6 @@ import (
 )
 
 var crc32cTable = crc32.MakeTable(crc32.Castagnoli)
-
-// ReaderObjectAttrs are attributes about the object being read. These are populated
-// during the New call. This struct only holds a subset of object attributes: to
-// get the full set of attributes, use ObjectHandle.Attrs.
-//
-// Each field is read-only.
-type ReaderObjectAttrs struct {
-	// Size is the length of the object's content.
-	Size int64
-
-	// ContentType is the MIME type of the object's content.
-	ContentType string
-
-	// ContentEncoding is the encoding of the object's content.
-	ContentEncoding string
-
-	// CacheControl specifies whether and for how long browser and Internet
-	// caches are allowed to cache your objects.
-	CacheControl string
-
-	// LastModified is the time that the object was last modified.
-	LastModified time.Time
-
-	// Generation is the generation number of the object's content.
-	Generation int64
-
-	// Metageneration is the version of the metadata for this object at
-	// this generation. This field is used for preconditions and for
-	// detecting changes in metadata. A metageneration number is only
-	// meaningful in the context of a particular generation of a
-	// particular object.
-	Metageneration int64
-}
 
 // NewReader creates a new Reader to read the contents of the
 // object.
@@ -95,9 +61,10 @@ func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64)
 		}
 	}
 	u := &url.URL{
-		Scheme: "https",
-		Host:   "storage.googleapis.com",
-		Path:   fmt.Sprintf("/%s/%s", o.bucket, o.object),
+		Scheme:   "https",
+		Host:     "storage.googleapis.com",
+		Path:     fmt.Sprintf("/%s/%s", o.bucket, o.object),
+		RawQuery: conditionsQuery(o.gen, o.conds),
 	}
 	verb := "GET"
 	if length == 0 {
@@ -114,12 +81,9 @@ func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64)
 	if o.readCompressed {
 		req.Header.Set("Accept-Encoding", "gzip")
 	}
-
 	if err := setEncryptionHeaders(req.Header, o.encryptionKey, false); err != nil {
 		return nil, err
 	}
-
-	gen := o.gen
 
 	// Define a function that initiates a Read with offset and length, assuming we
 	// have already read seen bytes.
@@ -131,8 +95,6 @@ func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64)
 			// The end character isn't affected by how many bytes we've seen.
 			req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, offset+length-1))
 		}
-		// We wait to assign conditions here because the generation number can change in between reopen() runs.
-		req.URL.RawQuery = conditionsQuery(gen, o.conds)
 		var res *http.Response
 		err = runWithRetry(ctx, func() error {
 			res, err = o.c.hc.Do(req)
@@ -156,15 +118,6 @@ func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64)
 				res.Body.Close()
 				return errors.New("storage: partial request not satisfied")
 			}
-			// If a generation hasn't been specified, and this is the first response we get, let's record the
-			// generation. In future requests we'll use this generation as a precondition to avoid data races.
-			if gen < 0 && res.Header.Get("X-Goog-Generation") != "" {
-				gen64, err := strconv.ParseInt(res.Header.Get("X-Goog-Generation"), 10, 64)
-				if err != nil {
-					return err
-				}
-				gen = gen64
-			}
 			return nil
 		})
 		if err != nil {
@@ -177,11 +130,7 @@ func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64)
 	if err != nil {
 		return nil, err
 	}
-	var (
-		size     int64 // total size of object, even if a range was requested.
-		checkCRC bool
-		crc      uint32
-	)
+	var size int64 // total size of object, even if a range was requested.
 	if res.StatusCode == http.StatusPartialContent {
 		cr := strings.TrimSpace(res.Header.Get("Content-Range"))
 		if !strings.HasPrefix(cr, "bytes ") || !strings.Contains(cr, "/") {
@@ -194,18 +143,6 @@ func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64)
 		}
 	} else {
 		size = res.ContentLength
-		// Check the CRC iff all of the following hold:
-		// - We asked for content (length != 0).
-		// - We got all the content (status != PartialContent).
-		// - The server sent a CRC header.
-		// - The Go http stack did not uncompress the file.
-		// - We were not served compressed data that was uncompressed on download.
-		// The problem with the last two cases is that the CRC will not match -- GCS
-		// computes it on the compressed contents, but we compute it on the
-		// uncompressed contents.
-		if length != 0 && !goHTTPUncompressed(res) && !uncompressedByServer(res) {
-			crc, checkCRC = parseCRC32c(res)
-		}
 	}
 
 	remain := res.ContentLength
@@ -215,47 +152,25 @@ func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64)
 		body.Close()
 		body = emptyBody
 	}
-	var metaGen int64
-	if res.Header.Get("X-Goog-Generation") != "" {
-		metaGen, err = strconv.ParseInt(res.Header.Get("X-Goog-Metageneration"), 10, 64)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	var lm time.Time
-	if res.Header.Get("Last-Modified") != "" {
-		lm, err = http.ParseTime(res.Header.Get("Last-Modified"))
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	attrs := ReaderObjectAttrs{
-		Size:            size,
-		ContentType:     res.Header.Get("Content-Type"),
-		ContentEncoding: res.Header.Get("Content-Encoding"),
-		CacheControl:    res.Header.Get("Cache-Control"),
-		LastModified:    lm,
-		Generation:      gen,
-		Metageneration:  metaGen,
+	var (
+		checkCRC bool
+		crc      uint32
+	)
+	// Even if there is a CRC header, we can't compute the hash on partial data.
+	if remain == size {
+		crc, checkCRC = parseCRC32c(res)
 	}
 	return &Reader{
-		Attrs:    attrs,
-		body:     body,
-		size:     size,
-		remain:   remain,
-		wantCRC:  crc,
-		checkCRC: checkCRC,
-		reopen:   reopen,
+		body:            body,
+		size:            size,
+		remain:          remain,
+		contentType:     res.Header.Get("Content-Type"),
+		contentEncoding: res.Header.Get("Content-Encoding"),
+		cacheControl:    res.Header.Get("Cache-Control"),
+		wantCRC:         crc,
+		checkCRC:        checkCRC,
+		reopen:          reopen,
 	}, nil
-}
-
-func uncompressedByServer(res *http.Response) bool {
-	// If the data is stored as gzip but is not encoded as gzip, then it
-	// was uncompressed by the server.
-	return res.Header.Get("X-Goog-Stored-Content-Encoding") == "gzip" &&
-		res.Header.Get("Content-Encoding") != "gzip"
 }
 
 func parseCRC32c(res *http.Response) (uint32, bool) {
@@ -280,12 +195,15 @@ var emptyBody = ioutil.NopCloser(strings.NewReader(""))
 // the stored CRC, returning an error from Read if there is a mismatch. This integrity check
 // is skipped if transcoding occurs. See https://cloud.google.com/storage/docs/transcoding.
 type Reader struct {
-	Attrs              ReaderObjectAttrs
 	body               io.ReadCloser
 	seen, remain, size int64
+	contentType        string
+	contentEncoding    string
+	cacheControl       string
 	checkCRC           bool   // should we check the CRC?
 	wantCRC            uint32 // the CRC32c value the server sent in the header
 	gotCRC             uint32 // running crc
+	checkedCRC         bool   // did we check the CRC? (For tests.)
 	reopen             func(seen int64) (*http.Response, error)
 }
 
@@ -304,7 +222,8 @@ func (r *Reader) Read(p []byte) (int, error) {
 		// Check CRC here. It would be natural to check it in Close, but
 		// everybody defers Close on the assumption that it doesn't return
 		// anything worth looking at.
-		if err == io.EOF {
+		if r.remain == 0 { // Only check if we have Content-Length.
+			r.checkedCRC = true
 			if r.gotCRC != r.wantCRC {
 				return n, fmt.Errorf("storage: bad CRC on read: got %d, want %d",
 					r.gotCRC, r.wantCRC)
@@ -346,10 +265,8 @@ func shouldRetryRead(err error) bool {
 // Size returns the size of the object in bytes.
 // The returned value is always the same and is not affected by
 // calls to Read or Close.
-//
-// Deprecated: use Reader.Attrs.Size.
 func (r *Reader) Size() int64 {
-	return r.Attrs.Size
+	return r.size
 }
 
 // Remain returns the number of bytes left to read, or -1 if unknown.
@@ -358,29 +275,16 @@ func (r *Reader) Remain() int64 {
 }
 
 // ContentType returns the content type of the object.
-//
-// Deprecated: use Reader.Attrs.ContentType.
 func (r *Reader) ContentType() string {
-	return r.Attrs.ContentType
+	return r.contentType
 }
 
 // ContentEncoding returns the content encoding of the object.
-//
-// Deprecated: use Reader.Attrs.ContentEncoding.
 func (r *Reader) ContentEncoding() string {
-	return r.Attrs.ContentEncoding
+	return r.contentEncoding
 }
 
 // CacheControl returns the cache control of the object.
-//
-// Deprecated: use Reader.Attrs.CacheControl.
 func (r *Reader) CacheControl() string {
-	return r.Attrs.CacheControl
-}
-
-// LastModified returns the value of the Last-Modified header.
-//
-// Deprecated: use Reader.Attrs.LastModified.
-func (r *Reader) LastModified() (time.Time, error) {
-	return r.Attrs.LastModified, nil
+	return r.cacheControl
 }

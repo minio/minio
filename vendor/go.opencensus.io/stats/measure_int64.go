@@ -17,13 +17,31 @@ package stats
 
 // Int64Measure is a measure for int64 values.
 type Int64Measure struct {
-	*measureDescriptor
+	md *measureDescriptor
+}
+
+// Name returns the name of the measure.
+func (m *Int64Measure) Name() string {
+	return m.md.name
+}
+
+// Description returns the description of the measure.
+func (m *Int64Measure) Description() string {
+	return m.md.description
+}
+
+// Unit returns the unit of the measure.
+func (m *Int64Measure) Unit() string {
+	return m.md.unit
 }
 
 // M creates a new int64 measurement.
 // Use Record to record measurements.
 func (m *Int64Measure) M(v int64) Measurement {
-	return Measurement{m: m.measureDescriptor, v: float64(v)}
+	if !m.md.subscribed() {
+		return Measurement{}
+	}
+	return Measurement{m: m, v: float64(v)}
 }
 
 // Int64 creates a new measure for int64 values.

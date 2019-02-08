@@ -35,6 +35,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // CallOption is an option used by Invoke to control behaviors of RPC calls.
@@ -80,7 +81,11 @@ type boRetryer struct {
 }
 
 func (r *boRetryer) Retry(err error) (time.Duration, bool) {
-	c := grpc.Code(err)
+	st, ok := status.FromError(err)
+	if !ok {
+		return 0, false
+	}
+	c := st.Code()
 	for _, rc := range r.codes {
 		if c == rc {
 			return r.backoff.Pause(), true
@@ -121,6 +126,9 @@ func (bo *Backoff) Pause() time.Duration {
 	if bo.Multiplier < 1 {
 		bo.Multiplier = 2
 	}
+	// Select a duration between zero and the current max. It might seem counterintuitive to
+	// have so much jitter, but https://www.awsarchitectureblog.com/2015/03/backoff.html
+	// argues that that is the best strategy.
 	d := time.Duration(rand.Int63n(int64(bo.cur)))
 	bo.cur = time.Duration(float64(bo.cur) * bo.Multiplier)
 	if bo.cur > bo.Max {

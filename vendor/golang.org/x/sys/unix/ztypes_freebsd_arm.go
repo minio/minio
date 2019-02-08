@@ -58,23 +58,6 @@ type Rlimit struct {
 
 type _Gid_t uint32
 
-const (
-	S_IFMT   = 0xf000
-	S_IFIFO  = 0x1000
-	S_IFCHR  = 0x2000
-	S_IFDIR  = 0x4000
-	S_IFBLK  = 0x6000
-	S_IFREG  = 0x8000
-	S_IFLNK  = 0xa000
-	S_IFSOCK = 0xc000
-	S_ISUID  = 0x800
-	S_ISGID  = 0x400
-	S_ISVTX  = 0x200
-	S_IRUSR  = 0x100
-	S_IWUSR  = 0x80
-	S_IXUSR  = 0x40
-)
-
 type Stat_t struct {
 	Dev           uint32
 	Ino           uint32
@@ -141,6 +124,10 @@ type Dirent struct {
 type Fsid struct {
 	Val [2]int32
 }
+
+const (
+	PathMax = 0x400
+)
 
 const (
 	FADV_NORMAL     = 0x0
@@ -541,4 +528,12 @@ const (
 
 type CapRights struct {
 	Rights [2]uint64
+}
+
+type Utsname struct {
+	Sysname  [256]byte
+	Nodename [256]byte
+	Release  [256]byte
+	Version  [256]byte
+	Machine  [256]byte
 }

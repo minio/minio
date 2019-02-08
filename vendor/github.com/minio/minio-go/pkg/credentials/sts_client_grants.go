@@ -60,11 +60,19 @@ type ClientGrantsResult struct {
 
 // ClientGrantsToken - client grants token with expiry.
 type ClientGrantsToken struct {
-	// access token returned after authenticating client grants
-	Token string
-	// expiry for the access token returned after authenticating
-	// client grants.
-	Expiry int
+	token  string
+	expiry int
+}
+
+// Token - access token returned after authenticating client grants.
+func (c *ClientGrantsToken) Token() string {
+	return c.token
+}
+
+// Expiry - expiry for the access token returned after authenticating
+// client grants.
+func (c *ClientGrantsToken) Expiry() string {
+	return fmt.Sprintf("%d", c.expiry)
 }
 
 // A STSClientGrants retrieves credentials from Minio service, and keeps track if
@@ -115,8 +123,8 @@ func getClientGrantsCredentials(clnt *http.Client, endpoint string,
 
 	v := url.Values{}
 	v.Set("Action", "AssumeRoleWithClientGrants")
-	v.Set("Token", accessToken.Token)
-	v.Set("DurationSeconds", fmt.Sprintf("%d", accessToken.Expiry))
+	v.Set("Token", accessToken.Token())
+	v.Set("DurationSeconds", accessToken.Expiry())
 	v.Set("Version", "2011-06-15")
 
 	u, err := url.Parse(endpoint)

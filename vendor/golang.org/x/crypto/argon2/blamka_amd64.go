@@ -6,12 +6,11 @@
 
 package argon2
 
-func init() {
-	useSSE4 = supportsSSE4()
-}
+import "golang.org/x/sys/cpu"
 
-//go:noescape
-func supportsSSE4() bool
+func init() {
+	useSSE4 = cpu.X86.HasSSE41
+}
 
 //go:noescape
 func mixBlocksSSE2(out, a, b, c *block)
