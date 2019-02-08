@@ -970,7 +970,7 @@ We will enable bucket event notification to trigger whenever a JPEG image is upl
 ```
 mc mb myminio/images
 mc mb myminio/images-thumbnail
-mc event add myminio/images arn:minio:sqs::1:webhook --events put --suffix .jpg
+mc event add myminio/images arn:minio:sqs::1:webhook --event put --suffix .jpg
 ```
 
 Check if event notification is successfully configured by
