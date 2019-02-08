@@ -30,7 +30,7 @@ const (
 	defaultRecordDelimiter      = "\n"
 	defaultFieldDelimiter       = ","
 	defaultQuoteCharacter       = `"`
-	defaultQuoteEscapeCharacter = `"`
+	defaultQuoteEscapeCharacter = `\\`
 	defaultCommentCharacter     = "#"
 
 	always   = "always"
