@@ -1,0 +1,25 @@
+sudo: false
+language: go
+
+os:
+- linux
+
+env:
+- ARCH=x86_64
+
+go:
+- 1.11.4
+
+script:
+- diff -au <(gofmt -d .) <(printf "")
+- go vet ./...
+- go get -u github.com/client9/misspell/cmd/misspell
+- go get -u github.com/gordonklaus/ineffassign
+- misspell -error .
+- ineffassign .
+- go test -v
+- go test -v -race
+- go test -v -coverprofile=coverage.txt -covermode=atomic
+
+after_success:
+- bash <(curl -s https://codecov.io/bash)

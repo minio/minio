@@ -9,6 +9,9 @@ updatedeps:
 testdeps:
 	go get -d -v -t google.golang.org/grpc/...
 
+testgaedeps:
+	goapp get -d -v -t -tags 'appengine appenginevm' google.golang.org/grpc/...
+
 updatetestdeps:
 	go get -d -v -t -u -f google.golang.org/grpc/...
 
@@ -31,6 +34,9 @@ test: testdeps
 testrace: testdeps
 	go test -race -cpu 1,4 -timeout 7m google.golang.org/grpc/...
 
+testappengine: testgaedeps
+	goapp test -cpu 1,4 -timeout 5m google.golang.org/grpc/...
+
 clean:
 	go clean -i google.golang.org/grpc/...
 
@@ -39,6 +45,7 @@ clean:
 	deps \
 	updatedeps \
 	testdeps \
+	testgaedeps \
 	updatetestdeps \
 	build \
 	proto \

@@ -1,0 +1,16 @@
+language: go
+sudo: false
+go:
+- 1.5
+- 1.6
+install:
+- go get -t ./...
+- go get github.com/nats-io/gnatsd
+- go get github.com/mattn/goveralls
+- go get github.com/wadey/gocovmerge
+script:
+- go fmt ./...
+- go vet ./...
+- go test -i -race ./...
+- go test -v -race ./...
+- ./scripts/cov.sh TRAVIS

@@ -1,0 +1,23 @@
+go_import_path: github.com/minio/sio
+sudo: required
+
+dist: trusty
+
+language: go
+
+os:
+- linux
+
+env:
+- ARCH=x86_64
+- ARCH=i686
+
+go:
+- "1.8.7"
+- "1.9.4"
+- "1.10"
+
+script:
+- diff -au <(gofmt -d .) <(printf "")
+- go vet ./...
+- go test -v ./...

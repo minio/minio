@@ -60,11 +60,6 @@ var (
 
 	// Method is the HTTP method of the request, capitalized (GET, POST, etc.).
 	Method, _ = tag.NewKey("http.method")
-
-	// KeyServerRoute is a low cardinality string representing the logical
-	// handler of the request. This is usually the pattern registered on the a
-	// ServeMux (or similar string).
-	KeyServerRoute, _ = tag.NewKey("http_server_route")
 )
 
 // Default distributions used by views in this package.

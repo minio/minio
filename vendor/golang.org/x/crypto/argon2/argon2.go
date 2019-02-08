@@ -54,11 +54,12 @@ const (
 
 // Key derives a key from the password, salt, and cost parameters using Argon2i
 // returning a byte slice of length keyLen that can be used as cryptographic
-// key. The CPU cost and parallism degree must be greater than zero.
+// key. The CPU cost and parallelism degree must be greater than zero.
 //
 // For example, you can get a derived key for e.g. AES-256 (which needs a
-// 32-byte key) by doing: `key := argon2.Key([]byte("some password"), salt, 3,
-// 32*1024, 4, 32)`
+// 32-byte key) by doing:
+//
+//      key := argon2.Key([]byte("some password"), salt, 3, 32*1024, 4, 32)
 //
 // The draft RFC recommends[2] time=3, and memory=32*1024 is a sensible number.
 // If using that amount of memory (32 MB) is not possible in some contexts then
@@ -76,12 +77,13 @@ func Key(password, salt []byte, time, memory uint32, threads uint8, keyLen uint3
 
 // IDKey derives a key from the password, salt, and cost parameters using
 // Argon2id returning a byte slice of length keyLen that can be used as
-// cryptographic key. The CPU cost and parallism degree must be greater than
+// cryptographic key. The CPU cost and parallelism degree must be greater than
 // zero.
 //
 // For example, you can get a derived key for e.g. AES-256 (which needs a
-// 32-byte key) by doing: `key := argon2.IDKey([]byte("some password"), salt, 1,
-// 64*1024, 4, 32)`
+// 32-byte key) by doing:
+//
+//      key := argon2.IDKey([]byte("some password"), salt, 1, 64*1024, 4, 32)
 //
 // The draft RFC recommends[2] time=1, and memory=64*1024 is a sensible number.
 // If using that amount of memory (64 MB) is not possible in some contexts then

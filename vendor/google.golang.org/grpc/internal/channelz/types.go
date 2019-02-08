@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -281,9 +282,9 @@ type SocketInternalMetric struct {
 	RemoteAddr net.Addr
 	// Optional, represents the name of the remote endpoint, if different than
 	// the original target name.
-	RemoteName string
-	//TODO: socket options
-	//TODO: Security
+	RemoteName    string
+	SocketOptions *SocketOptionData
+	Security      credentials.ChannelzSecurityValue
 }
 
 // Socket is the interface that should be satisfied in order to be tracked by

@@ -75,7 +75,9 @@ func (p *TServerSocket) Accept() (TTransport, error) {
 		return nil, errTransportInterrupted
 	}
 
+	p.mu.Lock()
 	listener := p.listener
+	p.mu.Unlock()
 	if listener == nil {
 		return nil, NewTTransportException(NOT_OPEN, "No underlying server socket")
 	}
@@ -115,19 +117,20 @@ func (p *TServerSocket) Addr() net.Addr {
 }
 
 func (p *TServerSocket) Close() error {
-	defer func() {
-		p.listener = nil
-	}()
+	var err error
+	p.mu.Lock()
 	if p.IsListening() {
-		return p.listener.Close()
+		err = p.listener.Close()
+		p.listener = nil
 	}
-	return nil
+	p.mu.Unlock()
+	return err
 }
 
 func (p *TServerSocket) Interrupt() error {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	p.interrupted = true
+	p.mu.Unlock()
 	p.Close()
 
 	return nil

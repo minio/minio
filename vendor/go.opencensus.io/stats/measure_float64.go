@@ -17,13 +17,31 @@ package stats
 
 // Float64Measure is a measure for float64 values.
 type Float64Measure struct {
-	*measureDescriptor
+	md *measureDescriptor
+}
+
+// Name returns the name of the measure.
+func (m *Float64Measure) Name() string {
+	return m.md.name
+}
+
+// Description returns the description of the measure.
+func (m *Float64Measure) Description() string {
+	return m.md.description
+}
+
+// Unit returns the unit of the measure.
+func (m *Float64Measure) Unit() string {
+	return m.md.unit
 }
 
 // M creates a new float64 measurement.
 // Use Record to record measurements.
 func (m *Float64Measure) M(v float64) Measurement {
-	return Measurement{m: m.measureDescriptor, v: v}
+	if !m.md.subscribed() {
+		return Measurement{}
+	}
+	return Measurement{m: m, v: v}
 }
 
 // Float64 creates a new measure for float64 values.

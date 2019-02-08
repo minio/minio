@@ -22,20 +22,14 @@ import (
 
 var contextKey = "holds an appengine.Context"
 
-// fromContext returns the App Engine context or nil if ctx is not
-// derived from an App Engine context.
 func fromContext(ctx netcontext.Context) appengine.Context {
 	c, _ := ctx.Value(&contextKey).(appengine.Context)
 	return c
 }
 
 // This is only for classic App Engine adapters.
-func ClassicContextFromContext(ctx netcontext.Context) (appengine.Context, error) {
-	c := fromContext(ctx)
-	if c == nil {
-		return nil, errNotAppEngineContext
-	}
-	return c, nil
+func ClassicContextFromContext(ctx netcontext.Context) appengine.Context {
+	return fromContext(ctx)
 }
 
 func withContext(parent netcontext.Context, c appengine.Context) netcontext.Context {
@@ -104,7 +98,7 @@ func Call(ctx netcontext.Context, service, method string, in, out proto.Message)
 	c := fromContext(ctx)
 	if c == nil {
 		// Give a good error message rather than a panic lower down.
-		return errNotAppEngineContext
+		return errors.New("not an App Engine context")
 	}
 
 	// Apply transaction modifications if we're in a transaction.

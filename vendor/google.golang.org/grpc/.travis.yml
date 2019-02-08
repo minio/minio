@@ -1,0 +1,34 @@
+language: go
+
+matrix:
+  include:
+  - go: 1.10.x
+    env: VET=1 RACE=1
+  - go: 1.6.x
+  - go: 1.7.x
+  - go: 1.8.x
+  - go: 1.9.x
+  - go: 1.9.x
+    env: GAE=1
+  - go: 1.10.x
+    env: RUN386=1
+  - go: 1.10.x
+    env: GRPC_GO_RETRY=on
+
+go_import_path: google.golang.org/grpc
+
+before_install:
+  - if [[ -n "$RUN386" ]]; then export GOARCH=386; fi
+  - if [[ "$TRAVIS_EVENT_TYPE" = "cron" && -z "$RUN386" ]]; then RACE=1; fi
+  - if [[ "$TRAVIS_EVENT_TYPE" != "cron" ]]; then VET_SKIP_PROTO=1; fi
+
+install:
+  - if [[ "$GAE" = 1 ]]; then source ./install_gae.sh; fi
+  - if [[ "$VET" = 1 ]]; then ./vet.sh -install; fi
+
+script:
+  - set -e
+  - if [[ "$GAE" = 1 ]]; then make testappengine; exit 0; fi
+  - if [[ "$VET" = 1 ]]; then ./vet.sh; fi
+  - make test
+  - if [[ "$RACE" = 1 ]]; then make testrace; fi

@@ -1,4 +1,4 @@
-// Copyright 2014 Google LLC
+// Copyright 2014 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -112,7 +112,8 @@ func NewClient(ctx context.Context, opts ...option.ClientOption) (*Client, error
 //
 // Close need not be called at program exit.
 func (c *Client) Close() error {
-	// Set fields to nil so that subsequent uses will panic.
+	// Set fields to nil so that subsequent uses
+	// will panic.
 	c.hc = nil
 	c.raw = nil
 	return nil
@@ -345,7 +346,7 @@ func (o *ObjectHandle) Generation(gen int64) *ObjectHandle {
 
 // If returns a new ObjectHandle that applies a set of preconditions.
 // Preconditions already set on the ObjectHandle are ignored.
-// Operations on the new handle will return an error if the preconditions are not
+// Operations on the new handle will only occur if the preconditions are
 // satisfied. See https://cloud.google.com/storage/docs/generations-preconditions
 // for more details.
 func (o *ObjectHandle) If(conds Conditions) *ObjectHandle {
@@ -441,14 +442,6 @@ func (o *ObjectHandle) Update(ctx context.Context, uattrs ObjectAttrsToUpdate) (
 		attrs.CacheControl = optional.ToString(uattrs.CacheControl)
 		forceSendFields = append(forceSendFields, "CacheControl")
 	}
-	if uattrs.EventBasedHold != nil {
-		attrs.EventBasedHold = optional.ToBool(uattrs.EventBasedHold)
-		forceSendFields = append(forceSendFields, "EventBasedHold")
-	}
-	if uattrs.TemporaryHold != nil {
-		attrs.TemporaryHold = optional.ToBool(uattrs.TemporaryHold)
-		forceSendFields = append(forceSendFields, "TemporaryHold")
-	}
 	if uattrs.Metadata != nil {
 		attrs.Metadata = uattrs.Metadata
 		if len(attrs.Metadata) == 0 {
@@ -474,9 +467,6 @@ func (o *ObjectHandle) Update(ctx context.Context, uattrs ObjectAttrsToUpdate) (
 	if o.userProject != "" {
 		call.UserProject(o.userProject)
 	}
-	if uattrs.PredefinedACL != "" {
-		call.PredefinedAcl(uattrs.PredefinedACL)
-	}
 	if err := setEncryptionHeaders(call.Header(), o.encryptionKey, false); err != nil {
 		return nil, err
 	}
@@ -492,16 +482,6 @@ func (o *ObjectHandle) Update(ctx context.Context, uattrs ObjectAttrsToUpdate) (
 	return newObject(obj), nil
 }
 
-// BucketName returns the name of the bucket.
-func (o *ObjectHandle) BucketName() string {
-	return o.bucket
-}
-
-// ObjectName returns the name of the object.
-func (o *ObjectHandle) ObjectName() string {
-	return o.object
-}
-
 // ObjectAttrsToUpdate is used to update the attributes of an object.
 // Only fields set to non-nil values will be updated.
 // Set a field to its zero value to delete it.
@@ -514,8 +494,6 @@ func (o *ObjectHandle) ObjectName() string {
 //        Metadata: map[string]string{},
 //    }
 type ObjectAttrsToUpdate struct {
-	EventBasedHold     optional.Bool
-	TemporaryHold      optional.Bool
 	ContentType        optional.String
 	ContentLanguage    optional.String
 	ContentEncoding    optional.String
@@ -523,10 +501,6 @@ type ObjectAttrsToUpdate struct {
 	CacheControl       optional.String
 	Metadata           map[string]string // set to map[string]string{} to delete
 	ACL                []ACLRule
-
-	// If not empty, applies a predefined set of access controls. ACL must be nil.
-	// See https://cloud.google.com/storage/docs/json_api/v1/objects/patch.
-	PredefinedACL string
 }
 
 // Delete deletes the single specified object.
@@ -575,8 +549,7 @@ func (o *ObjectHandle) ReadCompressed(compressed bool) *ObjectHandle {
 // attribute is specified, the content type will be automatically sniffed
 // using net/http.DetectContentType.
 //
-// It is the caller's responsibility to call Close when writing is done. To
-// stop writing without saving the data, cancel the context.
+// It is the caller's responsibility to call Close when writing is done.
 func (o *ObjectHandle) NewWriter(ctx context.Context) *Writer {
 	return &Writer{
 		ctx:         ctx,
@@ -622,26 +595,34 @@ func parseKey(key []byte) (*rsa.PrivateKey, error) {
 	return parsed, nil
 }
 
+func toRawObjectACL(oldACL []ACLRule) []*raw.ObjectAccessControl {
+	var acl []*raw.ObjectAccessControl
+	if len(oldACL) > 0 {
+		acl = make([]*raw.ObjectAccessControl, len(oldACL))
+		for i, rule := range oldACL {
+			acl[i] = &raw.ObjectAccessControl{
+				Entity: string(rule.Entity),
+				Role:   string(rule.Role),
+			}
+		}
+	}
+	return acl
+}
+
 // toRawObject copies the editable attributes from o to the raw library's Object type.
 func (o *ObjectAttrs) toRawObject(bucket string) *raw.Object {
-	var ret string
-	if !o.RetentionExpirationTime.IsZero() {
-		ret = o.RetentionExpirationTime.Format(time.RFC3339)
-	}
+	acl := toRawObjectACL(o.ACL)
 	return &raw.Object{
-		Bucket:                  bucket,
-		Name:                    o.Name,
-		EventBasedHold:          o.EventBasedHold,
-		TemporaryHold:           o.TemporaryHold,
-		RetentionExpirationTime: ret,
-		ContentType:             o.ContentType,
-		ContentEncoding:         o.ContentEncoding,
-		ContentLanguage:         o.ContentLanguage,
-		CacheControl:            o.CacheControl,
-		ContentDisposition:      o.ContentDisposition,
-		StorageClass:            o.StorageClass,
-		Acl:                     toRawObjectACL(o.ACL),
-		Metadata:                o.Metadata,
+		Bucket:             bucket,
+		Name:               o.Name,
+		ContentType:        o.ContentType,
+		ContentEncoding:    o.ContentEncoding,
+		ContentLanguage:    o.ContentLanguage,
+		CacheControl:       o.CacheControl,
+		ContentDisposition: o.ContentDisposition,
+		StorageClass:       o.StorageClass,
+		Acl:                acl,
+		Metadata:           o.Metadata,
 	}
 }
 
@@ -665,31 +646,8 @@ type ObjectAttrs struct {
 	// headers when serving the object data.
 	CacheControl string
 
-	// EventBasedHold specifies whether an object is under event-based hold. New
-	// objects created in a bucket whose DefaultEventBasedHold is set will
-	// default to that value.
-	EventBasedHold bool
-
-	// TemporaryHold specifies whether an object is under temporary hold. While
-	// this flag is set to true, the object is protected against deletion and
-	// overwrites.
-	TemporaryHold bool
-
-	// RetentionExpirationTime is a server-determined value that specifies the
-	// earliest time that the object's retention period expires.
-	// This is a read-only field.
-	RetentionExpirationTime time.Time
-
 	// ACL is the list of access control rules for the object.
 	ACL []ACLRule
-
-	// If not empty, applies a predefined set of access controls. It should be set
-	// only when writing, copying or composing an object. When copying or composing,
-	// it acts as the destinationPredefinedAcl parameter.
-	// PredefinedACL is always empty for ObjectAttrs returned from the service.
-	// See https://cloud.google.com/storage/docs/json_api/v1/objects/insert
-	// for valid values.
-	PredefinedACL string
 
 	// Owner is the owner of the object. This field is read-only.
 	//
@@ -793,6 +751,13 @@ func newObject(o *raw.Object) *ObjectAttrs {
 	if o == nil {
 		return nil
 	}
+	acl := make([]ACLRule, len(o.Acl))
+	for i, rule := range o.Acl {
+		acl[i] = ACLRule{
+			Entity: ACLEntity(rule.Entity),
+			Role:   ACLRole(rule.Role),
+		}
+	}
 	owner := ""
 	if o.Owner != nil {
 		owner = o.Owner.Entity
@@ -804,31 +769,28 @@ func newObject(o *raw.Object) *ObjectAttrs {
 		sha256 = o.CustomerEncryption.KeySha256
 	}
 	return &ObjectAttrs{
-		Bucket:                  o.Bucket,
-		Name:                    o.Name,
-		ContentType:             o.ContentType,
-		ContentLanguage:         o.ContentLanguage,
-		CacheControl:            o.CacheControl,
-		EventBasedHold:          o.EventBasedHold,
-		TemporaryHold:           o.TemporaryHold,
-		RetentionExpirationTime: convertTime(o.RetentionExpirationTime),
-		ACL:                     toObjectACLRules(o.Acl),
-		Owner:                   owner,
-		ContentEncoding:         o.ContentEncoding,
-		ContentDisposition:      o.ContentDisposition,
-		Size:                    int64(o.Size),
-		MD5:                     md5,
-		CRC32C:                  crc32c,
-		MediaLink:               o.MediaLink,
-		Metadata:                o.Metadata,
-		Generation:              o.Generation,
-		Metageneration:          o.Metageneration,
-		StorageClass:            o.StorageClass,
-		CustomerKeySHA256:       sha256,
-		KMSKeyName:              o.KmsKeyName,
-		Created:                 convertTime(o.TimeCreated),
-		Deleted:                 convertTime(o.TimeDeleted),
-		Updated:                 convertTime(o.Updated),
+		Bucket:             o.Bucket,
+		Name:               o.Name,
+		ContentType:        o.ContentType,
+		ContentLanguage:    o.ContentLanguage,
+		CacheControl:       o.CacheControl,
+		ACL:                acl,
+		Owner:              owner,
+		ContentEncoding:    o.ContentEncoding,
+		ContentDisposition: o.ContentDisposition,
+		Size:               int64(o.Size),
+		MD5:                md5,
+		CRC32C:             crc32c,
+		MediaLink:          o.MediaLink,
+		Metadata:           o.Metadata,
+		Generation:         o.Generation,
+		Metageneration:     o.Metageneration,
+		StorageClass:       o.StorageClass,
+		CustomerKeySHA256:  sha256,
+		KMSKeyName:         o.KmsKeyName,
+		Created:            convertTime(o.TimeCreated),
+		Deleted:            convertTime(o.TimeDeleted),
+		Updated:            convertTime(o.Updated),
 	}
 }
 
@@ -1111,12 +1073,4 @@ func setEncryptionHeaders(headers http.Header, key []byte, copySource bool) erro
 	return nil
 }
 
-// ServiceAccount fetches the email address of the given project's Google Cloud Storage service account.
-func (c *Client) ServiceAccount(ctx context.Context, projectID string) (string, error) {
-	r := c.raw.Projects.ServiceAccount.Get(projectID)
-	res, err := r.Context(ctx).Do()
-	if err != nil {
-		return "", err
-	}
-	return res.EmailAddress, nil
-}
+// TODO(jbd): Add storage.objects.watch.

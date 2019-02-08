@@ -15,9 +15,8 @@
 package trace
 
 import (
-	"sync"
-
 	"go.opencensus.io/trace/internal"
+	"sync"
 )
 
 // Config represents the global tracing configuration.

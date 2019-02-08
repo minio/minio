@@ -1,0 +1,22 @@
+language: go
+
+env:
+  - GO111MODULE=off
+  - GO111MODULE=on
+
+go:
+  - 1.9.x
+  - 1.10.x
+  - 1.11.x
+  - master
+
+matrix:
+ fast_finish: true
+ allow_failures:
+   - go: master
+
+sudo: false
+
+script: 
+ - go test -v -cpu=2
+ - go test -v -cpu=2 -race

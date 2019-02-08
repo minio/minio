@@ -1,0 +1,12 @@
+sudo: false
+
+language: go
+
+go:
+  - 1.8.1
+
+branches:
+  only:
+    - master
+
+script: make updatedeps test

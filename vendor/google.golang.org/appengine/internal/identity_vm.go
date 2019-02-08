@@ -23,11 +23,7 @@ const (
 )
 
 func ctxHeaders(ctx netcontext.Context) http.Header {
-	c := fromContext(ctx)
-	if c == nil {
-		return nil
-	}
-	return c.Request().Header
+	return fromContext(ctx).Request().Header
 }
 
 func DefaultVersionHostname(ctx netcontext.Context) string {

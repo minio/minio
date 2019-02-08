@@ -55,7 +55,6 @@ can implement their own exporters by implementing the exporter interfaces
 * [Jaeger][exporter-jaeger] for traces
 * [AWS X-Ray][exporter-xray] for traces
 * [Datadog][exporter-datadog] for stats and traces
-* [Graphite][exporter-graphite] for stats
 
 ## Overview
 
@@ -256,7 +255,5 @@ release in which the functionality was marked *Deprecated*.
 [exporter-stackdriver]: https://godoc.org/contrib.go.opencensus.io/exporter/stackdriver
 [exporter-zipkin]: https://godoc.org/go.opencensus.io/exporter/zipkin
 [exporter-jaeger]: https://godoc.org/go.opencensus.io/exporter/jaeger
-[exporter-xray]: https://github.com/census-ecosystem/opencensus-go-exporter-aws
+[exporter-xray]: https://github.com/census-instrumentation/opencensus-go-exporter-aws
 [exporter-datadog]: https://github.com/DataDog/opencensus-go-exporter-datadog
-[exporter-graphite]: https://github.com/census-ecosystem/opencensus-go-exporter-graphite
-

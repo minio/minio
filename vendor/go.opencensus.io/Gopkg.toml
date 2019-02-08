@@ -3,6 +3,10 @@
 # able to find a satisfying dependency graph.
 
 [[constraint]]
+  name = "cloud.google.com/go"
+  version = ">=0.21.0"
+
+[[constraint]]
   branch = "master"
   name = "git.apache.org/thrift.git"
   source = "github.com/apache/thrift"
@@ -25,7 +29,15 @@
 
 [[constraint]]
   branch = "master"
+  name = "golang.org/x/oauth2"
+
+[[constraint]]
+  branch = "master"
   name = "google.golang.org/api"
+
+[[constraint]]
+  branch = "master"
+  name = "google.golang.org/genproto"
 
 [[constraint]]
   name = "google.golang.org/grpc"

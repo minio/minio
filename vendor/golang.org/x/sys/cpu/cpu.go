@@ -6,6 +6,9 @@
 // various CPU architectures.
 package cpu
 
+// CacheLinePad is used to pad structs to avoid false sharing.
+type CacheLinePad struct{ _ [cacheLineSize]byte }
+
 // X86 contains the supported CPU features of the
 // current X86/AMD64 platform. If the current platform
 // is not X86/AMD64 then all feature flags are false.
@@ -14,7 +17,7 @@ package cpu
 // and HasAVX2 are only set if the OS supports XMM and YMM
 // registers in addition to the CPUID feature bit being set.
 var X86 struct {
-	_            [cacheLineSize]byte
+	_            CacheLinePad
 	HasAES       bool // AES hardware implementation (AES NI)
 	HasADX       bool // Multi-precision add-carry instruction extensions
 	HasAVX       bool // Advanced vector extension
@@ -31,5 +34,5 @@ var X86 struct {
 	HasSSSE3     bool // Supplemental streaming SIMD extension 3
 	HasSSE41     bool // Streaming SIMD extension 4 and 4.1
 	HasSSE42     bool // Streaming SIMD extension 4 and 4.2
-	_            [cacheLineSize]byte
+	_            CacheLinePad
 }

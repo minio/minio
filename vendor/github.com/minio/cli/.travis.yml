@@ -1,0 +1,39 @@
+language: go
+
+sudo: false
+
+cache:
+  directories:
+  - node_modules
+
+go:
+- 1.2.x
+- 1.3.x
+- 1.4.2
+- 1.5.x
+- 1.6.x
+- 1.7.x
+- master
+
+matrix:
+  allow_failures:
+  - go: master
+  include:
+  - go: 1.6.x
+    os: osx
+  - go: 1.7.x
+    os: osx
+
+before_script:
+- go get github.com/urfave/gfmrun/... || true
+- go get golang.org/x/tools/... || true
+- if [ ! -f node_modules/.bin/markdown-toc ] ; then
+    npm install markdown-toc ;
+  fi
+
+script:
+- ./runtests gen
+- ./runtests vet
+- ./runtests test
+- ./runtests gfmrun
+- ./runtests toc

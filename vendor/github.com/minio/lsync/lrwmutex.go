@@ -21,6 +21,7 @@ import (
 	"time"
 )
 
+// Lock states for a given resource
 const (
 	WRITELOCK = -1 + iota
 	NOLOCKS
@@ -29,8 +30,10 @@ const (
 
 // A LRWMutex is a mutual exclusion lock with timeouts.
 type LRWMutex struct {
-	state int64
-	m     sync.Mutex // Mutex to prevent multiple simultaneous locks
+	id     string
+	source string
+	state  int64
+	m      sync.Mutex // Mutex to prevent multiple simultaneous locks
 }
 
 // NewLRWMutex - initializes a new lsync RW mutex.
@@ -45,14 +48,14 @@ func NewLRWMutex() *LRWMutex {
 func (lm *LRWMutex) Lock() {
 
 	isWriteLock := true
-	lm.lockLoop(time.Duration(1<<63-1), isWriteLock)
+	lm.lockLoop(lm.id, lm.source, time.Duration(1<<63-1), isWriteLock)
 }
 
 // GetLock tries to get a write lock on lm before the timeout occurs.
-func (lm *LRWMutex) GetLock(id, source string, timeout time.Duration) (locked bool) {
+func (lm *LRWMutex) GetLock(id string, source string, timeout time.Duration) (locked bool) {
 
 	isWriteLock := true
-	return lm.lockLoop(timeout, isWriteLock)
+	return lm.lockLoop(id, source, timeout, isWriteLock)
 }
 
 // RLock holds a read lock on lm.
@@ -62,21 +65,21 @@ func (lm *LRWMutex) GetLock(id, source string, timeout time.Duration) (locked bo
 func (lm *LRWMutex) RLock() {
 
 	isWriteLock := false
-	lm.lockLoop(time.Duration(1<<63-1), isWriteLock)
+	lm.lockLoop(lm.id, lm.source, time.Duration(1<<63-1), isWriteLock)
 }
 
 // GetRLock tries to get a read lock on lm before the timeout occurs.
-func (lm *LRWMutex) GetRLock(id, source string, timeout time.Duration) (locked bool) {
+func (lm *LRWMutex) GetRLock(id string, source string, timeout time.Duration) (locked bool) {
 
 	isWriteLock := false
-	return lm.lockLoop(timeout, isWriteLock)
+	return lm.lockLoop(id, source, timeout, isWriteLock)
 }
 
 // lockLoop will acquire either a read or a write lock
 //
 // The call will block until the lock is granted using a built-in
 // timing randomized back-off algorithm to try again until successful
-func (lm *LRWMutex) lockLoop(timeout time.Duration, isWriteLock bool) bool {
+func (lm *LRWMutex) lockLoop(id, source string, timeout time.Duration, isWriteLock bool) bool {
 	doneCh, start := make(chan struct{}), time.Now().UTC()
 	defer close(doneCh)
 
@@ -89,6 +92,9 @@ func (lm *LRWMutex) lockLoop(timeout time.Duration, isWriteLock bool) bool {
 		{
 			lm.m.Lock()
 
+			lm.id = id
+			lm.source = source
+
 			if isWriteLock {
 				if lm.state == NOLOCKS {
 					lm.state = WRITELOCK
@@ -96,7 +102,7 @@ func (lm *LRWMutex) lockLoop(timeout time.Duration, isWriteLock bool) bool {
 				}
 			} else {
 				if lm.state != WRITELOCK {
-					lm.state += 1
+					lm.state++
 					success = true
 				}
 			}
@@ -152,7 +158,7 @@ func (lm *LRWMutex) unlock(isWriteLock bool) (unlocked bool) {
 		if lm.state == WRITELOCK || lm.state == NOLOCKS {
 			unlocked = false // unlocked called without any active read locks
 		} else {
-			lm.state -= 1
+			lm.state--
 			unlocked = true
 		}
 	}
@@ -170,8 +176,8 @@ func (lm *LRWMutex) ForceUnlock() {
 
 // DRLocker returns a sync.Locker interface that implements
 // the Lock and Unlock methods by calling drw.RLock and drw.RUnlock.
-func (dm *LRWMutex) DRLocker() sync.Locker {
-	return (*drlocker)(dm)
+func (lm *LRWMutex) DRLocker() sync.Locker {
+	return (*drlocker)(lm)
 }
 
 type drlocker LRWMutex

@@ -1,4 +1,4 @@
-// Copyright 2014 Google LLC
+// Copyright 2014 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,21 +48,10 @@ const (
 	AllAuthenticatedUsers ACLEntity = "allAuthenticatedUsers"
 )
 
-// ACLRule represents a grant for a role to an entity (user, group or team) for a
-// Google Cloud Storage object or bucket.
+// ACLRule represents a grant for a role to an entity (user, group or team) for a Google Cloud Storage object or bucket.
 type ACLRule struct {
-	Entity      ACLEntity
-	EntityID    string
-	Role        ACLRole
-	Domain      string
-	Email       string
-	ProjectTeam *ProjectTeam
-}
-
-// ProjectTeam is the project team associated with the entity, if any.
-type ProjectTeam struct {
-	ProjectNumber string
-	Team          string
+	Entity ACLEntity
+	Role   ACLRole
 }
 
 // ACLHandle provides operations on an access control list for a Google Cloud Storage bucket or object.
@@ -88,7 +77,7 @@ func (a *ACLHandle) Delete(ctx context.Context, entity ACLEntity) (err error) {
 	return a.bucketDelete(ctx, entity)
 }
 
-// Set sets the role for the given entity.
+// Set sets the permission level for the given entity.
 func (a *ACLHandle) Set(ctx context.Context, entity ACLEntity, role ACLRole) (err error) {
 	ctx = trace.StartSpan(ctx, "cloud.google.com/go/storage.ACL.Set")
 	defer func() { trace.EndSpan(ctx, err) }()
@@ -128,7 +117,7 @@ func (a *ACLHandle) bucketDefaultList(ctx context.Context) ([]ACLRule, error) {
 	if err != nil {
 		return nil, err
 	}
-	return toObjectACLRules(acls.Items), nil
+	return toACLRules(acls.Items), nil
 }
 
 func (a *ACLHandle) bucketDefaultDelete(ctx context.Context, entity ACLEntity) error {
@@ -151,7 +140,12 @@ func (a *ACLHandle) bucketList(ctx context.Context) ([]ACLRule, error) {
 	if err != nil {
 		return nil, err
 	}
-	return toBucketACLRules(acls.Items), nil
+	r := make([]ACLRule, len(acls.Items))
+	for i, v := range acls.Items {
+		r[i].Entity = ACLEntity(v.Entity)
+		r[i].Role = ACLRole(v.Role)
+	}
+	return r, nil
 }
 
 func (a *ACLHandle) bucketSet(ctx context.Context, entity ACLEntity, role ACLRole) error {
@@ -173,11 +167,15 @@ func (a *ACLHandle) bucketSet(ctx context.Context, entity ACLEntity, role ACLRol
 }
 
 func (a *ACLHandle) bucketDelete(ctx context.Context, entity ACLEntity) error {
-	return runWithRetry(ctx, func() error {
+	err := runWithRetry(ctx, func() error {
 		req := a.c.raw.BucketAccessControls.Delete(a.bucket, string(entity))
 		a.configureCall(req, ctx)
 		return req.Do()
 	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (a *ACLHandle) objectList(ctx context.Context) ([]ACLRule, error) {
@@ -192,7 +190,7 @@ func (a *ACLHandle) objectList(ctx context.Context) ([]ACLRule, error) {
 	if err != nil {
 		return nil, err
 	}
-	return toObjectACLRules(acls.Items), nil
+	return toACLRules(acls.Items), nil
 }
 
 func (a *ACLHandle) objectSet(ctx context.Context, entity ACLEntity, role ACLRole, isBucketDefault bool) error {
@@ -227,7 +225,9 @@ func (a *ACLHandle) objectDelete(ctx context.Context, entity ACLEntity) error {
 	})
 }
 
-func (a *ACLHandle) configureCall(call interface{ Header() http.Header }, ctx context.Context) {
+func (a *ACLHandle) configureCall(call interface {
+	Header() http.Header
+}, ctx context.Context) {
 	vc := reflect.ValueOf(call)
 	vc.MethodByName("Context").Call([]reflect.Value{reflect.ValueOf(ctx)})
 	if a.userProject != "" {
@@ -236,100 +236,10 @@ func (a *ACLHandle) configureCall(call interface{ Header() http.Header }, ctx co
 	setClientHeader(call.Header())
 }
 
-func toObjectACLRules(items []*raw.ObjectAccessControl) []ACLRule {
-	var rs []ACLRule
+func toACLRules(items []*raw.ObjectAccessControl) []ACLRule {
+	r := make([]ACLRule, 0, len(items))
 	for _, item := range items {
-		rs = append(rs, toObjectACLRule(item))
-	}
-	return rs
-}
-
-func toBucketACLRules(items []*raw.BucketAccessControl) []ACLRule {
-	var rs []ACLRule
-	for _, item := range items {
-		rs = append(rs, toBucketACLRule(item))
-	}
-	return rs
-}
-
-func toObjectACLRule(a *raw.ObjectAccessControl) ACLRule {
-	return ACLRule{
-		Entity:      ACLEntity(a.Entity),
-		EntityID:    a.EntityId,
-		Role:        ACLRole(a.Role),
-		Domain:      a.Domain,
-		Email:       a.Email,
-		ProjectTeam: toObjectProjectTeam(a.ProjectTeam),
-	}
-}
-
-func toBucketACLRule(a *raw.BucketAccessControl) ACLRule {
-	return ACLRule{
-		Entity:      ACLEntity(a.Entity),
-		EntityID:    a.EntityId,
-		Role:        ACLRole(a.Role),
-		Domain:      a.Domain,
-		Email:       a.Email,
-		ProjectTeam: toBucketProjectTeam(a.ProjectTeam),
-	}
-}
-
-func toRawObjectACL(rules []ACLRule) []*raw.ObjectAccessControl {
-	if len(rules) == 0 {
-		return nil
-	}
-	r := make([]*raw.ObjectAccessControl, 0, len(rules))
-	for _, rule := range rules {
-		r = append(r, rule.toRawObjectAccessControl("")) // bucket name unnecessary
+		r = append(r, ACLRule{Entity: ACLEntity(item.Entity), Role: ACLRole(item.Role)})
 	}
 	return r
-}
-
-func toRawBucketACL(rules []ACLRule) []*raw.BucketAccessControl {
-	if len(rules) == 0 {
-		return nil
-	}
-	r := make([]*raw.BucketAccessControl, 0, len(rules))
-	for _, rule := range rules {
-		r = append(r, rule.toRawBucketAccessControl("")) // bucket name unnecessary
-	}
-	return r
-}
-
-func (r ACLRule) toRawBucketAccessControl(bucket string) *raw.BucketAccessControl {
-	return &raw.BucketAccessControl{
-		Bucket: bucket,
-		Entity: string(r.Entity),
-		Role:   string(r.Role),
-		// The other fields are not settable.
-	}
-}
-
-func (r ACLRule) toRawObjectAccessControl(bucket string) *raw.ObjectAccessControl {
-	return &raw.ObjectAccessControl{
-		Bucket: bucket,
-		Entity: string(r.Entity),
-		Role:   string(r.Role),
-		// The other fields are not settable.
-	}
-}
-
-func toBucketProjectTeam(p *raw.BucketAccessControlProjectTeam) *ProjectTeam {
-	if p == nil {
-		return nil
-	}
-	return &ProjectTeam{
-		ProjectNumber: p.ProjectNumber,
-		Team:          p.Team,
-	}
-}
-
-func toObjectProjectTeam(p *raw.ObjectAccessControlProjectTeam) *ProjectTeam {
-	if p == nil {
-		return nil
-	}
-	return &ProjectTeam{
-		ProjectNumber: p.ProjectNumber,
-		Team:          p.Team,
-	}
 }

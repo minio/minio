@@ -68,21 +68,6 @@ func (m *measureDescriptor) subscribed() bool {
 	return atomic.LoadInt32(&m.subs) == 1
 }
 
-// Name returns the name of the measure.
-func (m *measureDescriptor) Name() string {
-	return m.name
-}
-
-// Description returns the description of the measure.
-func (m *measureDescriptor) Description() string {
-	return m.description
-}
-
-// Unit returns the unit of the measure.
-func (m *measureDescriptor) Unit() string {
-	return m.unit
-}
-
 var (
 	mu       sync.RWMutex
 	measures = make(map[string]*measureDescriptor)
@@ -109,7 +94,7 @@ func registerMeasureHandle(name, desc, unit string) *measureDescriptor {
 // provides M to convert an int64 into a measurement.
 type Measurement struct {
 	v float64
-	m *measureDescriptor
+	m Measure
 }
 
 // Value returns the value of the Measurement as a float64.

@@ -1,0 +1,19 @@
+language: go
+sudo: false
+go:
+- 1.6.3
+- 1.7.3
+install:
+- go get -t ./...
+- go get github.com/nats-io/gnatsd
+- go get github.com/mattn/goveralls
+- go get github.com/wadey/gocovmerge
+- go get honnef.co/go/staticcheck/cmd/staticcheck
+script:
+- go fmt ./...
+- go vet ./...
+- go test -i -race ./...
+- go test -v -race ./...
+- staticcheck -ignore="github.com/nats-io/go-nats/*_test.go:SA2002 github.com/nats-io/go-nats/*/*_test.go:SA2002" ./...
+after_script:
+- if [ "$TRAVIS_GO_VERSION" = "1.7.3" ]; then ./scripts/cov.sh; fi

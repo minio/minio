@@ -2,49 +2,46 @@ package colorable
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 )
 
+// NonColorable hold writer but remove escape sequence.
 type NonColorable struct {
-	out     io.Writer
-	lastbuf bytes.Buffer
+	out io.Writer
 }
 
+// NewNonColorable return new instance of Writer which remove escape sequence from Writer.
 func NewNonColorable(w io.Writer) io.Writer {
 	return &NonColorable{out: w}
 }
 
+// Write write data on console
 func (w *NonColorable) Write(data []byte) (n int, err error) {
-	er := bytes.NewBuffer(data)
+	er := bytes.NewReader(data)
+	var bw [1]byte
 loop:
 	for {
-		c1, _, err := er.ReadRune()
+		c1, err := er.ReadByte()
 		if err != nil {
 			break loop
 		}
 		if c1 != 0x1b {
-			fmt.Fprint(w.out, string(c1))
+			bw[0] = c1
+			w.out.Write(bw[:])
 			continue
 		}
-		c2, _, err := er.ReadRune()
+		c2, err := er.ReadByte()
 		if err != nil {
-			w.lastbuf.WriteRune(c1)
 			break loop
 		}
 		if c2 != 0x5b {
-			w.lastbuf.WriteRune(c1)
-			w.lastbuf.WriteRune(c2)
 			continue
 		}
 
 		var buf bytes.Buffer
 		for {
-			c, _, err := er.ReadRune()
+			c, err := er.ReadByte()
 			if err != nil {
-				w.lastbuf.WriteRune(c1)
-				w.lastbuf.WriteRune(c2)
-				w.lastbuf.Write(buf.Bytes())
 				break loop
 			}
 			if ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '@' {
@@ -53,5 +50,6 @@ loop:
 			buf.Write([]byte(string(c)))
 		}
 	}
-	return len(data) - w.lastbuf.Len(), nil
+
+	return len(data), nil
 }

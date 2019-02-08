@@ -32,8 +32,6 @@ to sample a subset of traces, or use AlwaysSample to collect a trace on every ru
 
     trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
 
-Be careful about using trace.AlwaysSample in a production application with
-significant traffic: a new trace will be started and exported for every request.
 
 Adding Spans to a Trace
 

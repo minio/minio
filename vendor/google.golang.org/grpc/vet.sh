@@ -15,11 +15,6 @@ die() {
 
 PATH="$GOPATH/bin:$GOROOT/bin:$PATH"
 
-# Check proto in manual runs or cron runs.
-if [[ "$TRAVIS" != "true" || "$TRAVIS_EVENT_TYPE" = "cron" ]]; then
-  check_proto="true"
-fi
-
 if [ "$1" = "-install" ]; then
   go get -d \
     google.golang.org/grpc/...
@@ -29,7 +24,7 @@ if [ "$1" = "-install" ]; then
     honnef.co/go/tools/cmd/staticcheck \
     github.com/client9/misspell/cmd/misspell \
     github.com/golang/protobuf/protoc-gen-go
-  if [[ "$check_proto" = "true" ]]; then
+  if [[ -z "$VET_SKIP_PROTO" ]]; then
     if [[ "$TRAVIS" = "true" ]]; then
       PROTOBUF_VERSION=3.3.0
       PROTOC_FILENAME=protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
@@ -75,7 +70,7 @@ go tool vet -all . 2>&1 | grep -vE '(clientconn|transport\/transport_test).go:.*
 set -o pipefail
 git reset --hard HEAD
 
-if [[ "$check_proto" = "true" ]]; then
+if [[ -z "$VET_SKIP_PROTO" ]]; then
   PATH="/home/travis/bin:$PATH" make proto && \
     git status --porcelain 2>&1 | (! read) || \
     (git status; git --no-pager diff; exit 1)
@@ -83,7 +78,7 @@ fi
 
 # TODO(menghanl): fix errors in transport_test.
 staticcheck -ignore '
-google.golang.org/grpc/transport/transport_test.go:SA2002
+google.golang.org/grpc/internal/transport/transport_test.go:SA2002
 google.golang.org/grpc/benchmark/benchmain/main.go:SA1019
 google.golang.org/grpc/stats/stats_test.go:SA1019
 google.golang.org/grpc/test/end2end_test.go:SA1019

@@ -59,6 +59,12 @@ staticcheck: $(STATICCHECK)
 	./ttar -C $(dir $*) -x -f $*.ttar
 	touch $@
 
+update_fixtures: fixtures.ttar sysfs/fixtures.ttar
+
+%fixtures.ttar: %/fixtures
+	rm -v $(dir $*)fixtures/.unpacked
+	./ttar -C $(dir $*) -c -f $*fixtures.ttar fixtures/
+
 $(FIRST_GOPATH)/bin/staticcheck:
 	@GOOS= GOARCH= $(GO) get -u honnef.co/go/tools/cmd/staticcheck
 

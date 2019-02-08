@@ -81,8 +81,8 @@ n := s.Names()            // Get a []string
 f := s.Field(name)        // Get a *Field based on the given field name
 f, ok := s.FieldOk(name)  // Get a *Field based on the given field name
 n := s.Name()             // Get the struct name
-h := s.HasZero()          // Check if any field is initialized
-z := s.IsZero()           // Check if all fields are initialized
+h := s.HasZero()          // Check if any field is uninitialized
+z := s.IsZero()           // Check if all fields are uninitialized
 ```
 
 ### Field methods
@@ -141,10 +141,9 @@ We can also get a slice of Fields from the Struct type to iterate over all
 fields. This is handy if you wish to examine all fields:
 
 ```go
-// Convert the fields of a struct to a []*Field
-fields := s.Fields()
+s := structs.New(server)
 
-for _, f := range fields {
+for _, f := range s.Fields() {
 	fmt.Printf("field name: %+v\n", f.Name())
 
 	if f.IsExported() {

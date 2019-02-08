@@ -27,9 +27,6 @@ var (
 // Exporter takes a significant amount of time to
 // process a Data, that work should be done on another goroutine.
 //
-// It is safe to assume that ExportView will not be called concurrently from
-// multiple goroutines.
-//
 // The Data should not be modified.
 type Exporter interface {
 	ExportView(viewData *Data)

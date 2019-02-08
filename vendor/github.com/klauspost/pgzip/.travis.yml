@@ -1,0 +1,22 @@
+language: go
+
+sudo: false
+
+os:
+  - linux
+  - osx
+
+go:
+  - 1.7.x
+  - 1.8.x
+  - 1.9.x
+  - master
+
+script: 
+ - go test -v -cpu=1,2,4 .
+ - go test -v -cpu=2 -race -short .
+
+matrix:
+  allow_failures:
+    - go: 'master'
+  fast_finish: true 

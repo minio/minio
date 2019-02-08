@@ -11,7 +11,7 @@ Additionally it provides `lsync.LFrequentAccess` which uses an atomic load and s
 	lrwm := NewLRWMutex()
 
 	// Try to get lock within timeout 
-	if !lrwm.GetLock(1000 * time.Millisecond) {
+	if !lrwm.GetLock("uid", "main.go:line", 1000 * time.Millisecond) {
 		fmt.Println("Timeout occured")
 		return
 	}
@@ -56,7 +56,7 @@ Note that this algorithm is not 'real-time' in the sense that it will time out e
 
 ```go
 func (lm *LMutex) Lock()
-func (lm *LMutex) GetLock(timeout time.Duration) (locked bool)
+func (lm *LMutex) GetLock(id, source string, timeout time.Duration) (locked bool)
 func (lm *LMutex) Unlock()
 ```
 
@@ -64,9 +64,9 @@ func (lm *LMutex) Unlock()
 
 ```go
 func (lm *LRWMutex) Lock()
-func (lm *LRWMutex) GetLock(timeout time.Duration) (locked bool)
+func (lm *LRWMutex) GetLock(id, source string, timeout time.Duration) (locked bool)
 func (lm *LRWMutex) RLock()
-func (lm *LRWMutex) GetRLock(timeout time.Duration) (locked bool)
+func (lm *LRWMutex) GetRLock(id, source string, timeout time.Duration) (locked bool)
 func (lm *LRWMutex) Unlock()
 func (lm *LRWMutex) RUnlock()
 ```

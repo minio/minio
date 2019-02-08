@@ -1,0 +1,7 @@
+language: go
+go:
+- 1.4.2
+sudo: false
+os:
+- linux
+- osx
