@@ -192,22 +192,15 @@ func (a *App) Run(arguments []string) (err error) {
 	if err != nil {
 		return err
 	}
-
 	set.SetOutput(ioutil.Discard)
-	err = set.Parse(arguments[1:])
-	nerr := normalizeFlags(a.Flags, set)
-	context := NewContext(a, set, nil)
-	if nerr != nil {
-		fmt.Fprintln(a.Writer, nerr)
-		ShowAppHelp(context)
-		return nerr
-	}
-	context.shellComplete = shellComplete
 
+	context := NewContext(a, set, nil)
 	if checkCompletions(context) {
 		return nil
 	}
+	context.shellComplete = shellComplete
 
+	err = set.Parse(arguments[1:])
 	if err != nil {
 		if a.OnUsageError != nil {
 			err := a.OnUsageError(context, err, false)
@@ -217,6 +210,13 @@ func (a *App) Run(arguments []string) (err error) {
 		fmt.Fprintf(a.Writer, "%s %s\n\n", "Incorrect Usage.", err.Error())
 		ShowAppHelp(context)
 		return err
+	}
+
+	nerr := normalizeFlags(a.Flags, set)
+	if nerr != nil {
+		fmt.Fprintln(a.Writer, nerr)
+		ShowAppHelp(context)
+		return nerr
 	}
 
 	if !a.HideHelp && checkHelp(context) {
