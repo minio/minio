@@ -270,10 +270,16 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	// Init global heal state
 	initAllHealState(globalIsXL)
 
-	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
+	globalConfigSys = NewConfigSys()
 
-	// Create new policy system.
+	globalIAMSys = NewIAMSys()
+	globalIAMSys.Init(objLayer)
+
 	globalPolicySys = NewPolicySys()
+	globalPolicySys.Init(objLayer)
+
+	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
+	globalNotificationSys.Init(objLayer)
 
 	// Setup admin mgmt REST API handlers.
 	adminRouter := mux.NewRouter()
@@ -842,8 +848,8 @@ func TestAdminServerInfo(t *testing.T) {
 	}
 }
 
-// TestToAdminAPIErr - test for toAdminAPIErr helper function.
-func TestToAdminAPIErr(t *testing.T) {
+// TestToAdminAPIErrCode - test for toAdminAPIErrCode helper function.
+func TestToAdminAPIErrCode(t *testing.T) {
 	testCases := []struct {
 		err            error
 		expectedAPIErr APIErrorCode

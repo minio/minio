@@ -22,6 +22,11 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+	"google.golang.org/api/googleapi"
+
+	minio "github.com/minio/minio-go"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -212,7 +217,7 @@ const (
 	ErrHealOverlappingPaths
 	ErrIncorrectContinuationToken
 
-	//S3 Select Errors
+	// S3 Select Errors
 	ErrEmptyRequestBody
 	ErrUnsupportedFunction
 	ErrInvalidExpressionType
@@ -304,9 +309,19 @@ const (
 	ErrAddUserInvalidArgument
 )
 
+type errorCodeMap map[APIErrorCode]APIError
+
+func (e errorCodeMap) ToAPIErr(errCode APIErrorCode) APIError {
+	apiErr, ok := e[errCode]
+	if !ok {
+		return e[ErrInternalError]
+	}
+	return apiErr
+}
+
 // error code to APIError structure, these fields carry respective
 // descriptions for all the error responses.
-var errorCodeResponse = map[APIErrorCode]APIError{
+var errorCodes = errorCodeMap{
 	ErrInvalidCopyDest: {
 		Code:           "InvalidRequest",
 		Description:    "This copy request is illegal because it is trying to copy an object to itself without changing the object's metadata, storage class, website redirect location or encryption attributes.",
@@ -1636,12 +1651,66 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	return apiErr
 }
 
+var noError = APIError{}
+
+// toAPIError - Converts embedded errors. Convenience
+// function written to handle all cases where we have known types of
+// errors returned by underlying layers.
+func toAPIError(ctx context.Context, err error) APIError {
+	if err == nil {
+		return noError
+	}
+
+	var apiErr = errorCodes.ToAPIErr(toAPIErrorCode(ctx, err))
+	if apiErr.Code == "InternalError" {
+		// If we see an internal error try to interpret
+		// any underlying errors if possible depending on
+		// their internal error types. This code is only
+		// useful with gateway implementations.
+		switch e := err.(type) {
+		case minio.ErrorResponse:
+			apiErr = APIError{
+				Code:           e.Code,
+				Description:    e.Message,
+				HTTPStatusCode: e.StatusCode,
+			}
+		case *googleapi.Error:
+			apiErr = APIError{
+				Code:           "XGCSInternalError",
+				Description:    e.Message,
+				HTTPStatusCode: e.Code,
+			}
+			// GCS may send multiple errors, just pick the first one
+			// since S3 only sends one Error XML response.
+			if len(e.Errors) >= 1 {
+				apiErr.Code = e.Errors[0].Reason
+
+			}
+		case storage.AzureStorageServiceError:
+			apiErr = APIError{
+				Code:           e.Code,
+				Description:    e.Message,
+				HTTPStatusCode: e.StatusCode,
+			}
+		case oss.ServiceError:
+			apiErr = APIError{
+				Code:           e.Code,
+				Description:    e.Message,
+				HTTPStatusCode: e.StatusCode,
+			}
+			// Add more Gateway SDKs here if any in future.
+		}
+	}
+
+	return apiErr
+}
+
 // getAPIError provides API Error for input API error code.
 func getAPIError(code APIErrorCode) APIError {
-	if apiErr, ok := errorCodeResponse[code]; ok {
+	if apiErr, ok := errorCodes[code]; ok {
 		return apiErr
 	}
-	return errorCodeResponse[ErrInternalError]
+	return errorCodes.ToAPIErr(ErrInternalError)
 }
 
 // getErrorResponse gets in standard error and resource value and

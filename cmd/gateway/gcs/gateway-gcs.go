@@ -324,8 +324,6 @@ func gcsToObjectError(err error, params ...string) error {
 			break
 		}
 		err = minio.BucketNotEmpty{Bucket: bucket}
-	default:
-		err = fmt.Errorf("Unsupported error reason: %s", reason)
 	}
 
 	return err

@@ -66,12 +66,12 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.ListBucketAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -79,18 +79,18 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 
 	// Extract all the listObjectsV2 query params to their native values.
 	prefix, token, startAfter, delimiter, fetchOwner, maxKeys, _, errCode := getListObjectsV2Args(urlValues)
-
 	if errCode != ErrNone {
-		writeErrorResponse(w, errCode, r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, errorCodes.ToAPIErr(errCode), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Validate the query params before beginning to serve the request.
 	// fetch-owner is not validated since it is a boolean
 	if s3Error := validateListObjectsArgs(prefix, token, delimiter, maxKeys); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	listObjectsV2 := objectAPI.ListObjectsV2
 	if api.CacheAPI() != nil {
 		listObjectsV2 = api.CacheAPI().ListObjectsV2
@@ -100,7 +100,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	// marshaled into S3 compatible XML header.
 	listObjectsV2Info, err := listObjectsV2(ctx, bucket, prefix, token, delimiter, maxKeys, fetchOwner, startAfter)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -110,7 +110,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 			// Read the decompressed size from the meta.json.
 			actualSize = listObjectsV2Info.Objects[i].GetActualSize()
 			if actualSize < 0 {
-				writeErrorResponse(w, ErrInvalidDecompressedSize, r.URL, guessIsBrowserReq(r))
+				writeErrorResponse(w, errorCodes.ToAPIErr(ErrInvalidDecompressedSize), r.URL, guessIsBrowserReq(r))
 				return
 			}
 			// Set the info.Size to the actualSize.
@@ -119,7 +119,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 			listObjectsV2Info.Objects[i].ETag = getDecryptedETag(r.Header, listObjectsV2Info.Objects[i], false)
 			listObjectsV2Info.Objects[i].Size, err = listObjectsV2Info.Objects[i].DecryptedSize()
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
+				writeErrorResponse(w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 		}
@@ -148,42 +148,39 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.ListBucketAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Extract all the litsObjectsV1 query params to their native values.
 	prefix, marker, delimiter, maxKeys, _, s3Error := getListObjectsV1Args(r.URL.Query())
 	if s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	// Validate the maxKeys lowerbound. When maxKeys > 1000, S3 returns 1000 but
-	// does not throw an error.
-	if maxKeys < 0 {
-		writeErrorResponse(w, ErrInvalidMaxKeys, r.URL, guessIsBrowserReq(r))
-		return
-	} // Validate all the query params before beginning to serve the request.
+	// Validate all the query params before beginning to serve the request.
 	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	listObjects := objectAPI.ListObjects
 	if api.CacheAPI() != nil {
 		listObjects = api.CacheAPI().ListObjects
 	}
+
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
 	// marshaled into S3 compatible XML header.
 	listObjectsInfo, err := listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -193,7 +190,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 			// Read the decompressed size from the meta.json.
 			actualSize = listObjectsInfo.Objects[i].GetActualSize()
 			if actualSize < 0 {
-				writeErrorResponse(w, ErrInvalidDecompressedSize, r.URL, guessIsBrowserReq(r))
+				writeErrorResponse(w, errorCodes.ToAPIErr(ErrInvalidDecompressedSize), r.URL, guessIsBrowserReq(r))
 				return
 			}
 			// Set the info.Size to the actualSize.
@@ -202,7 +199,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 			listObjectsInfo.Objects[i].ETag = getDecryptedETag(r.Header, listObjectsInfo.Objects[i], false)
 			listObjectsInfo.Objects[i].Size, err = listObjectsInfo.Objects[i].DecryptedSize()
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
+				writeErrorResponse(w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 		}

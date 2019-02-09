@@ -124,14 +124,14 @@ func (api objectAPIHandlers) GetBucketCorsHandler(w http.ResponseWriter, r *http
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Validate if bucket exists, before proceeding further...
 	_, err := objAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -139,7 +139,7 @@ func (api objectAPIHandlers) GetBucketCorsHandler(w http.ResponseWriter, r *http
 	tags.TagSet.Tag = append(tags.TagSet.Tag, tagElem{})
 
 	if err := xml.NewEncoder(w).Encode(tags); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -155,14 +155,14 @@ func (api objectAPIHandlers) GetBucketTaggingHandler(w http.ResponseWriter, r *h
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Validate if bucket exists, before proceeding further...
 	_, err := objAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -170,7 +170,7 @@ func (api objectAPIHandlers) GetBucketTaggingHandler(w http.ResponseWriter, r *h
 	tags.TagSet.Tag = append(tags.TagSet.Tag, tagElem{})
 
 	if err := xml.NewEncoder(w).Encode(tags); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -187,14 +187,14 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Validate if object exists, before proceeding further...
 	_, err := objAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -202,7 +202,7 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 	tags.TagSet.Tag = append(tags.TagSet.Tag, tagElem{})
 
 	if err := xml.NewEncoder(w).Encode(tags); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 

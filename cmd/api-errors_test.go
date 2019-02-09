@@ -25,7 +25,7 @@ import (
 	"github.com/minio/minio/pkg/hash"
 )
 
-var toAPIErrorCodeTests = []struct {
+var toAPIErrorTests = []struct {
 	err     error
 	errCode APIErrorCode
 }{
@@ -66,7 +66,7 @@ var toAPIErrorCodeTests = []struct {
 
 func TestAPIErrCode(t *testing.T) {
 	ctx := context.Background()
-	for i, testCase := range toAPIErrorCodeTests {
+	for i, testCase := range toAPIErrorTests {
 		errCode := toAPIErrorCode(ctx, testCase.err)
 		if errCode != testCase.errCode {
 			t.Errorf("Test %d: Expected error code %d, got %d", i+1, testCase.errCode, errCode)
