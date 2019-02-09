@@ -44,9 +44,7 @@ func DrainBody(respBody io.ReadCloser) {
 		// Without this closing connection would disallow re-using
 		// the same connection for future uses.
 		//  - http://stackoverflow.com/a/17961593/4465767
-		bufp := b512pool.Get().(*[]byte)
-		defer b512pool.Put(bufp)
-		io.CopyBuffer(ioutil.Discard, respBody, *bufp)
-		respBody.Close()
+		defer respBody.Close()
+		io.Copy(ioutil.Discard, respBody)
 	}
 }
