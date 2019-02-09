@@ -18,16 +18,10 @@ package http
 
 import (
 	"io"
-	"io/ioutil"
-	"sync"
 )
 
-var b512pool = sync.Pool{
-	New: func() interface{} {
-		buf := make([]byte, 512)
-		return &buf
-	},
-}
+// ZeroCopyDiscard is a /dev/null equivalent write stream that does not allocate a buffer
+var ZeroCopyDiscard = zeroCopyDiscard(0)
 
 // DrainBody close non nil response with any response Body.
 // convenient wrapper to drain any remaining data on response body.
@@ -43,8 +37,13 @@ func DrainBody(respBody io.ReadCloser) {
 		// Drain any remaining Body and then close the connection.
 		// Without this closing connection would disallow re-using
 		// the same connection for future uses.
-		//  - http://stackoverflow.com/a/17961593/4465767
 		defer respBody.Close()
-		io.Copy(ioutil.Discard, respBody)
+		io.Copy(ZeroCopyDiscard, respBody)
 	}
+}
+
+type zeroCopyDiscard int
+
+func (z zeroCopyDiscard) Write(b []byte) (int, error) {
+	return len(b), nil
 }
