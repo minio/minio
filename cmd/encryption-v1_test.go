@@ -678,7 +678,7 @@ func TestGetDecryptedRange(t *testing.T) {
 	}
 }
 
-var extractEncryptionOptionTests = []struct {
+var getDefaultOptsTests = []struct {
 	headers        http.Header
 	copySource     bool
 	metadata       map[string]string
@@ -741,9 +741,9 @@ var extractEncryptionOptionTests = []struct {
 		err:            nil}, // 7
 }
 
-func TestExtractEncryptionOptions(t *testing.T) {
-	for i, test := range extractEncryptionOptionTests {
-		opts, err := extractEncryptionOption(test.headers, test.copySource, test.metadata)
+func TestGetDefaultOpts(t *testing.T) {
+	for i, test := range getDefaultOptsTests {
+		opts, err := getDefaultOpts(test.headers, test.copySource, test.metadata)
 		if test.err != err {
 			t.Errorf("Case %d: expected err: %v , actual err: %v", i, test.err, err)
 		}

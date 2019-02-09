@@ -42,7 +42,7 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 	objectName := "object"
 
 	obj.MakeBucketWithLocation(context.Background(), bucketName, "")
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, objectName, nil, ObjectOptions{})
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, objectName, ObjectOptions{})
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
@@ -81,7 +81,7 @@ func TestNewMultipartUploadFaultyDisk(t *testing.T) {
 
 	// Test with disk removed.
 	os.RemoveAll(disk)
-	if _, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}, ObjectOptions{}); err != nil {
+	if _, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, ObjectOptions{UserDefined: map[string]string{"X-Amz-Meta-xid": "3f"}}); err != nil {
 		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error ", err)
 		}
@@ -105,7 +105,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
-	uploadID, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}, ObjectOptions{})
+	uploadID, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, ObjectOptions{UserDefined: map[string]string{"X-Amz-Meta-xid": "3f"}})
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
@@ -136,7 +136,7 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
-	uploadID, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}, ObjectOptions{})
+	uploadID, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, ObjectOptions{UserDefined: map[string]string{"X-Amz-Meta-xid": "3f"}})
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
@@ -168,7 +168,7 @@ func TestCompleteMultipartUpload(t *testing.T) {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
-	uploadID, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}, ObjectOptions{})
+	uploadID, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, ObjectOptions{UserDefined: map[string]string{"X-Amz-Meta-xid": "3f"}})
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
@@ -202,7 +202,7 @@ func TestAbortMultipartUpload(t *testing.T) {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
-	uploadID, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}, ObjectOptions{})
+	uploadID, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, ObjectOptions{UserDefined: map[string]string{"X-Amz-Meta-xid": "3f"}})
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
@@ -234,7 +234,7 @@ func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
-	_, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}, ObjectOptions{})
+	_, err := fs.NewMultipartUpload(context.Background(), bucketName, objectName, ObjectOptions{UserDefined: map[string]string{"X-Amz-Meta-xid": "3f"}})
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}

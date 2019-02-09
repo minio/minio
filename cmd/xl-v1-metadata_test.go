@@ -69,7 +69,7 @@ func testXLReadStat(obj ObjectLayer, instanceType string, disks []string, t *tes
 	// iterate through the above set of inputs and upkoad the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetPutObjReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), input.metaData, ObjectOptions{})
+		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetPutObjReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), ObjectOptions{UserDefined: input.metaData})
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -122,7 +122,7 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 	// Initiate Multipart Upload on the above created bucket.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketNames[0], objectNames[0], nil, opts)
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketNames[0], objectNames[0], opts)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())

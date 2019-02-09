@@ -41,14 +41,14 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestEr
 	bucket := "minio-bucket"
 	object := "minio-object"
 	opts := ObjectOptions{}
-	_, err := obj.NewMultipartUpload(context.Background(), "--", object, nil, opts)
+	_, err := obj.NewMultipartUpload(context.Background(), "--", object, opts)
 	if err == nil {
 		t.Fatalf("%s: Expected to fail since bucket name is invalid.", instanceType)
 	}
 
 	errMsg := "Bucket not found: minio-bucket"
 	// opearation expected to fail since the bucket on which NewMultipartUpload is being initiated doesn't exist.
-	_, err = obj.NewMultipartUpload(context.Background(), bucket, object, nil, opts)
+	_, err = obj.NewMultipartUpload(context.Background(), bucket, object, opts)
 	if err == nil {
 		t.Fatalf("%s: Expected to fail since the NewMultipartUpload is intialized on a non-existent bucket.", instanceType)
 	}
@@ -63,12 +63,12 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestEr
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	_, err = obj.NewMultipartUpload(context.Background(), bucket, "\\", nil, opts)
+	_, err = obj.NewMultipartUpload(context.Background(), bucket, "\\", opts)
 	if err == nil {
 		t.Fatalf("%s: Expected to fail since object name is invalid.", instanceType)
 	}
 
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, object, nil, opts)
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, object, opts)
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
@@ -102,7 +102,7 @@ func testObjectAbortMultipartUpload(obj ObjectLayer, instanceType string, t Test
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, object, nil, opts)
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, object, opts)
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
@@ -148,7 +148,7 @@ func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t TestE
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	_, err = obj.NewMultipartUpload(context.Background(), bucket, object, nil, ObjectOptions{})
+	_, err = obj.NewMultipartUpload(context.Background(), bucket, object, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
@@ -184,7 +184,7 @@ func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks [
 	}
 
 	// Initiate Multipart Upload on the above created bucket.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketNames[0], objectNames[0], nil, ObjectOptions{})
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketNames[0], objectNames[0], ObjectOptions{})
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -264,7 +264,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 	// Initiate Multipart Upload on the above created bucket.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, object, nil, opts)
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, object, opts)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -400,7 +400,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 	// Initiate Multipart Upload on the above created bucket.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketNames[0], objectNames[0], nil, opts)
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketNames[0], objectNames[0], opts)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -420,7 +420,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 	for i := 0; i < 3; i++ {
 		// Initiate Multipart Upload on bucketNames[1] for the same object 3 times.
 		//  Used to test the listing for the case of multiple uploadID's for a given object.
-		uploadID, err = obj.NewMultipartUpload(context.Background(), bucketNames[1], objectNames[0], nil, opts)
+		uploadID, err = obj.NewMultipartUpload(context.Background(), bucketNames[1], objectNames[0], opts)
 		if err != nil {
 			// Failed to create NewMultipartUpload, abort.
 			t.Fatalf("%s : %s", instanceType, err.Error())
@@ -442,7 +442,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 	//  Used to test the listing for the case of multiple objects for a given bucket.
 	for i := 0; i < 6; i++ {
 		var uploadID string
-		uploadID, err = obj.NewMultipartUpload(context.Background(), bucketNames[2], objectNames[i], nil, opts)
+		uploadID, err = obj.NewMultipartUpload(context.Background(), bucketNames[2], objectNames[i], opts)
 		if err != nil {
 			// Failed to create NewMultipartUpload, abort.
 			t.Fatalf("%s : %s", instanceType, err.Error())
@@ -1275,7 +1275,7 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 	}
 	opts := ObjectOptions{}
 	// Initiate Multipart Upload on the above created bucket.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketNames[0], objectNames[0], nil, opts)
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketNames[0], objectNames[0], opts)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -1519,7 +1519,7 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 	// Initiate Multipart Upload on the above created bucket.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketNames[0], objectNames[0], nil, opts)
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketNames[0], objectNames[0], opts)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -1764,9 +1764,8 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
 	}
-	opts := ObjectOptions{}
 	// Initiate Multipart Upload on the above created bucket.
-	uploadID, err = obj.NewMultipartUpload(context.Background(), bucketNames[0], objectNames[0], map[string]string{"X-Amz-Meta-Id": "id"}, opts)
+	uploadID, err = obj.NewMultipartUpload(context.Background(), bucketNames[0], objectNames[0], ObjectOptions{UserDefined: map[string]string{"X-Amz-Meta-Id": "id"}})
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -1799,6 +1798,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		{bucketNames[0], objectNames[0], uploadIDs[0], 6, string(validPart), validPartMD5, int64(len(string(validPart)))},
 	}
 	sha256sum := ""
+	var opts ObjectOptions
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, part := range parts {
 		_, err = obj.PutObjectPart(context.Background(), part.bucketName, part.objName, part.uploadID, part.PartID, mustGetPutObjReader(t, bytes.NewBufferString(part.inputReaderData), part.intputDataSize, part.inputMd5, sha256sum), opts)

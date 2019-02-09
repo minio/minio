@@ -43,7 +43,7 @@ func TestXLParentDirIsObject(t *testing.T) {
 	}
 	objectContent := "12345"
 	objInfo, err := obj.PutObject(context.Background(), bucketName, objectName,
-		mustGetPutObjReader(t, bytes.NewReader([]byte(objectContent)), int64(len(objectContent)), "", ""), nil, ObjectOptions{})
+		mustGetPutObjReader(t, bytes.NewReader([]byte(objectContent)), int64(len(objectContent)), "", ""), ObjectOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -735,11 +735,11 @@ func (a *azureObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 
 // PutObject - Create a new blob with the incoming data,
 // uses Azure equivalent CreateBlockBlobFromReader.
-func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	data := r.Reader
 	if data.Size() < azureBlockSize/10 {
 		blob := a.client.GetContainerReference(bucket).GetBlobReference(object)
-		blob.Metadata, blob.Properties, err = s3MetaToAzureProperties(ctx, metadata)
+		blob.Metadata, blob.Properties, err = s3MetaToAzureProperties(ctx, opts.UserDefined)
 		if err = blob.CreateBlockBlobFromReader(data, nil); err != nil {
 			return objInfo, azureToObjectError(err, bucket, object)
 		}
@@ -803,13 +803,13 @@ func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *
 		return objInfo, azureToObjectError(err, bucket, object)
 	}
 
-	if len(metadata) == 0 {
-		metadata = map[string]string{}
+	if len(opts.UserDefined) == 0 {
+		opts.UserDefined = map[string]string{}
 	}
 
 	// Save md5sum for future processing on the object.
-	metadata["x-amz-meta-md5sum"] = r.MD5CurrentHexString()
-	objBlob.Metadata, objBlob.Properties, err = s3MetaToAzureProperties(ctx, metadata)
+	opts.UserDefined["x-amz-meta-md5sum"] = hex.EncodeToString(data.MD5Current())
+	objBlob.Metadata, objBlob.Properties, err = s3MetaToAzureProperties(ctx, opts.UserDefined)
 	if err != nil {
 		return objInfo, azureToObjectError(err, bucket, object)
 	}
@@ -910,7 +910,7 @@ func (a *azureObjects) checkUploadIDExists(ctx context.Context, bucketName, obje
 }
 
 // NewMultipartUpload - Use Azure equivalent CreateBlockBlob.
-func (a *azureObjects) NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string, opts minio.ObjectOptions) (uploadID string, err error) {
+func (a *azureObjects) NewMultipartUpload(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (uploadID string, err error) {
 	uploadID, err = getAzureUploadID()
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -919,7 +919,7 @@ func (a *azureObjects) NewMultipartUpload(ctx context.Context, bucket, object st
 	metadataObject := getAzureMetadataObjectName(object, uploadID)
 
 	var jsonData []byte
-	if jsonData, err = json.Marshal(azureMultipartMetadata{Name: object, Metadata: metadata}); err != nil {
+	if jsonData, err = json.Marshal(azureMultipartMetadata{Name: object, Metadata: opts.UserDefined}); err != nil {
 		logger.LogIf(ctx, err)
 		return "", err
 	}

@@ -71,7 +71,7 @@ func (api *DummyObjectLayer) GetObjectInfo(ctx context.Context, bucket, object s
 	return
 }
 
-func (api *DummyObjectLayer) PutObject(ctx context.Context, bucket, object string, data *PutObjReader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (api *DummyObjectLayer) PutObject(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	return
 }
 
@@ -87,7 +87,7 @@ func (api *DummyObjectLayer) ListMultipartUploads(ctx context.Context, bucket, p
 	return
 }
 
-func (api *DummyObjectLayer) NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string, opts ObjectOptions) (uploadID string, err error) {
+func (api *DummyObjectLayer) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (uploadID string, err error) {
 	return
 }
 

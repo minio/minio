@@ -102,7 +102,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	object := vars["object"]
 
 	// get gateway encryption options
-	opts, err := getEncryptionOpts(ctx, r, bucket, object)
+	opts, err := getOpts(ctx, r, bucket, object)
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(ctx, err))
 		return
@@ -257,7 +257,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// get gateway encryption options
-	opts, err := getEncryptionOpts(ctx, r, bucket, object)
+	opts, err := getOpts(ctx, r, bucket, object)
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(ctx, err))
 		return
@@ -441,7 +441,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
 
-	opts, err := getEncryptionOpts(ctx, r, bucket, object)
+	opts, err := getOpts(ctx, r, bucket, object)
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(ctx, err))
 		return
@@ -707,7 +707,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	var srcOpts, dstOpts ObjectOptions
-	srcOpts, err := copySrcEncryptionOpts(ctx, r, srcBucket, srcObject)
+	srcOpts, err := copySrcOpts(ctx, r, srcBucket, srcObject)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -719,7 +719,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if getSSE != srcOpts.ServerSideEncryption {
 		getOpts.ServerSideEncryption = getSSE
 	}
-	dstOpts, err = copyDstEncryptionOpts(ctx, r, dstBucket, dstObject, nil)
+	dstOpts, err = copyDstOpts(ctx, r, dstBucket, dstObject, nil)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -1239,7 +1239,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 	// get gateway encryption options
 	var opts ObjectOptions
-	opts, err = putEncryptionOpts(ctx, r, bucket, object, nil)
+	opts, err = putOpts(ctx, r, bucket, object, metadata)
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(ctx, err))
 		return
@@ -1279,7 +1279,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Create the object..
-	objInfo, err := putObject(ctx, bucket, object, pReader, metadata, opts)
+	objInfo, err := putObject(ctx, bucket, object, pReader, opts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -1371,7 +1371,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	var opts ObjectOptions
 	var err error
 
-	opts, err = putEncryptionOpts(ctx, r, bucket, object, nil)
+	opts, err = putOpts(ctx, r, bucket, object, nil)
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIErrorCode(ctx, err))
 		return
@@ -1428,11 +1428,16 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
 	}
 
+	opts, err = putOpts(ctx, r, bucket, object, metadata)
+	if err != nil {
+		writeErrorResponseHeadersOnly(w, toAPIErrorCode(ctx, err))
+		return
+	}
 	newMultipartUpload := objectAPI.NewMultipartUpload
 	if api.CacheAPI() != nil && !hasServerSideEncryptionHeader(r.Header) {
 		newMultipartUpload = api.CacheAPI().NewMultipartUpload
 	}
-	uploadID, err := newMultipartUpload(ctx, bucket, object, metadata, opts)
+	uploadID, err := newMultipartUpload(ctx, bucket, object, opts)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -1531,7 +1536,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	var srcOpts, dstOpts ObjectOptions
-	srcOpts, err = copySrcEncryptionOpts(ctx, r, srcBucket, srcObject)
+	srcOpts, err = copySrcOpts(ctx, r, srcBucket, srcObject)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -1541,7 +1546,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	if srcOpts.ServerSideEncryption != nil {
 		getOpts.ServerSideEncryption = encrypt.SSE(srcOpts.ServerSideEncryption)
 	}
-	dstOpts, err = copyDstEncryptionOpts(ctx, r, dstBucket, dstObject, nil)
+	dstOpts, err = copyDstOpts(ctx, r, dstBucket, dstObject, nil)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -1669,7 +1674,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			return
 		}
 		li.UserDefined = CleanMinioInternalMetadataKeys(li.UserDefined)
-		dstOpts, err = copyDstEncryptionOpts(ctx, r, dstBucket, dstObject, li.UserDefined)
+		dstOpts, err = copyDstOpts(ctx, r, dstBucket, dstObject, li.UserDefined)
 		if err != nil {
 			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -1863,7 +1868,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	// get encryption options
 	var opts ObjectOptions
 	if crypto.SSEC.IsRequested(r.Header) {
-		opts, err = putEncryptionOpts(ctx, r, bucket, object, nil)
+		opts, err = putOpts(ctx, r, bucket, object, nil)
 		if err != nil {
 			writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -1938,7 +1943,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			}
 
 			isEncrypted = true // to detect SSE-S3 encryption
-			opts, err = putEncryptionOpts(ctx, r, bucket, object, li.UserDefined)
+			opts, err = putOpts(ctx, r, bucket, object, li.UserDefined)
 			if err != nil {
 				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 				return

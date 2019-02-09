@@ -241,15 +241,15 @@ func (xl xlObjects) newMultipartUpload(ctx context.Context, bucket string, objec
 // subsequent request each UUID is unique.
 //
 // Implements S3 compatible initiate multipart API.
-func (xl xlObjects) NewMultipartUpload(ctx context.Context, bucket, object string, meta map[string]string, opts ObjectOptions) (string, error) {
+func (xl xlObjects) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (string, error) {
 	if err := checkNewMultipartArgs(ctx, bucket, object, xl); err != nil {
 		return "", err
 	}
 	// No metadata is set, allocate a new one.
-	if meta == nil {
-		meta = make(map[string]string)
+	if opts.UserDefined == nil {
+		opts.UserDefined = make(map[string]string)
 	}
-	return xl.newMultipartUpload(ctx, bucket, object, meta)
+	return xl.newMultipartUpload(ctx, bucket, object, opts.UserDefined)
 }
 
 // CopyObjectPart - reads incoming stream and internally erasure codes

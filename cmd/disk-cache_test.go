@@ -192,14 +192,13 @@ func TestDiskCache(t *testing.T) {
 	objInfo.ContentType = contentType
 	objInfo.ETag = etag
 	objInfo.UserDefined = httpMeta
-	opts := ObjectOptions{}
-
+	var opts ObjectOptions
 	byteReader := bytes.NewReader([]byte(content))
 	hashReader, err := hash.NewReader(byteReader, int64(size), "", "", int64(size))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cache.Put(ctx, bucketName, objectName, NewPutObjReader(hashReader, nil, nil), httpMeta, opts)
+	err = cache.Put(ctx, bucketName, objectName, NewPutObjReader(hashReader, nil, nil), ObjectOptions{UserDefined: httpMeta})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,12 +274,12 @@ func TestDiskCacheMaxUse(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !cache.diskAvailable(int64(size)) {
-		err = cache.Put(ctx, bucketName, objectName, NewPutObjReader(hashReader, nil, nil), httpMeta, opts)
+		err = cache.Put(ctx, bucketName, objectName, NewPutObjReader(hashReader, nil, nil), ObjectOptions{UserDefined: httpMeta})
 		if err != errDiskFull {
 			t.Fatal("Cache max-use limit violated.")
 		}
 	} else {
-		err = cache.Put(ctx, bucketName, objectName, NewPutObjReader(hashReader, nil, nil), httpMeta, opts)
+		err = cache.Put(ctx, bucketName, objectName, NewPutObjReader(hashReader, nil, nil), ObjectOptions{UserDefined: httpMeta})
 		if err != nil {
 			t.Fatal(err)
 		}

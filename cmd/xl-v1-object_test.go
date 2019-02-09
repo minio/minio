@@ -49,7 +49,7 @@ func TestRepeatPutObjectPart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	uploadID, err := objLayer.NewMultipartUpload(context.Background(), "bucket1", "mpartObj1", nil, opts)
+	uploadID, err := objLayer.NewMultipartUpload(context.Background(), "bucket1", "mpartObj1", opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 	}
 
 	// Create object "dir/obj" under bucket "bucket" for Test 7 to pass
-	_, err = xl.PutObject(context.Background(), "bucket", "dir/obj", mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, ObjectOptions{})
+	_, err = xl.PutObject(context.Background(), "bucket", "dir/obj", mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{})
 	if err != nil {
 		t.Fatalf("XL Object upload failed: <ERROR> %s", err)
 	}
@@ -131,7 +131,7 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	object := "object"
 	opts := ObjectOptions{}
 	// Create object "obj" under bucket "bucket".
-	_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, opts)
+	_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	}
 
 	// Create "obj" under "bucket".
-	_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, opts)
+	_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 	object := "object"
 	opts := ObjectOptions{}
 	// Create "object" under "bucket".
-	_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, opts)
+	_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +233,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 	object := "object"
 	opts := ObjectOptions{}
 	// Create "object" under "bucket".
-	_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, opts)
+	_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +256,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 			}
 		}
 		// Upload new content to same object "object"
-		_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil, opts)
+		_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
 		if err != toObjectErr(errXLWriteQuorum, bucket, object) {
 			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
 		}
@@ -290,7 +290,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), length, "", ""), nil, ObjectOptions{})
+	_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), length, "", ""), ObjectOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

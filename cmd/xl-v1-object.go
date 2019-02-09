@@ -131,8 +131,8 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 		logger.LogIf(ctx, err)
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
-
-	objInfo, err := xl.putObject(ctx, dstBucket, dstObject, NewPutObjReader(hashReader, nil, nil), srcInfo.UserDefined, dstOpts)
+	putOpts := ObjectOptions{UserDefined: srcInfo.UserDefined, ServerSideEncryption: dstOpts.ServerSideEncryption}
+	objInfo, err := xl.putObject(ctx, dstBucket, dstObject, NewPutObjReader(hashReader, nil, nil), putOpts)
 	if err != nil {
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -531,7 +531,7 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 // until EOF, erasure codes the data across all disk and additionally
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
-func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	// Validate put object input args.
 	if err = checkPutObjectArgs(ctx, bucket, object, xl, data.Size()); err != nil {
 		return ObjectInfo{}, err
@@ -543,22 +543,22 @@ func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string,
 		return objInfo, err
 	}
 	defer objectLock.Unlock()
-	return xl.putObject(ctx, bucket, object, data, metadata, opts)
+	return xl.putObject(ctx, bucket, object, data, opts)
 }
 
 // putObject wrapper for xl PutObject
-func (xl xlObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, metadata map[string]string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	data := r.Reader
 
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
 	// No metadata is set, allocate a new one.
-	if metadata == nil {
-		metadata = make(map[string]string)
+	if opts.UserDefined == nil {
+		opts.UserDefined = make(map[string]string)
 	}
 
 	// Get parity and data drive count based on storage class metadata
-	dataDrives, parityDrives := getRedundancyCount(metadata[amzStorageClass], len(xl.getDisks()))
+	dataDrives, parityDrives := getRedundancyCount(opts.UserDefined[amzStorageClass], len(xl.getDisks()))
 
 	// we now know the number of blocks this object needs for data and parity.
 	// writeQuorum is dataBlocks + 1
@@ -590,7 +590,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 
-		return dirObjectInfo(bucket, object, data.Size(), metadata), nil
+		return dirObjectInfo(bucket, object, data.Size(), opts.UserDefined), nil
 	}
 
 	// Validate put object input args.
@@ -733,11 +733,11 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// Save additional erasureMetadata.
 	modTime := UTCNow()
 
-	metadata["etag"] = r.MD5CurrentHexString()
+	opts.UserDefined["etag"] = r.MD5CurrentHexString()
 
 	// Guess content-type from the extension if possible.
-	if metadata["content-type"] == "" {
-		metadata["content-type"] = mimedb.TypeByExtension(path.Ext(object))
+	if opts.UserDefined["content-type"] == "" {
+		opts.UserDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
 	}
 
 	if xl.isObject(bucket, object) {
@@ -764,7 +764,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// Fill all the necessary metadata.
 	// Update `xl.json` content on each disks.
 	for index := range partsMetadata {
-		partsMetadata[index].Meta = metadata
+		partsMetadata[index].Meta = opts.UserDefined
 		partsMetadata[index].Stat.Size = sizeWritten
 		partsMetadata[index].Stat.ModTime = modTime
 	}

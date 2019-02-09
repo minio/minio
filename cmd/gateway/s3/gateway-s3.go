@@ -448,15 +448,15 @@ func (l *s3Objects) GetObjectInfo(ctx context.Context, bucket string, object str
 }
 
 // PutObject creates a new object with the incoming data,
-func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string, r *minio.PutObjReader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	data := r.Reader
-	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), minio.ToMinioClientMetadata(metadata), opts.ServerSideEncryption)
+	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), minio.ToMinioClientMetadata(opts.UserDefined), opts.ServerSideEncryption)
 	if err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 	// On success, populate the key & metadata so they are present in the notification
 	oi.Key = object
-	oi.Metadata = minio.ToMinioClientObjectInfoMetadata(metadata)
+	oi.Metadata = minio.ToMinioClientObjectInfoMetadata(opts.UserDefined)
 
 	return minio.FromMinioClientObjectInfo(bucket, oi), nil
 }
@@ -508,9 +508,9 @@ func (l *s3Objects) ListMultipartUploads(ctx context.Context, bucket string, pre
 }
 
 // NewMultipartUpload upload object in multiple parts
-func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket string, object string, metadata map[string]string, o minio.ObjectOptions) (uploadID string, err error) {
+func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket string, object string, o minio.ObjectOptions) (uploadID string, err error) {
 	// Create PutObject options
-	opts := miniogo.PutObjectOptions{UserMetadata: metadata, ServerSideEncryption: o.ServerSideEncryption}
+	opts := miniogo.PutObjectOptions{UserMetadata: o.UserDefined, ServerSideEncryption: o.ServerSideEncryption}
 	uploadID, err = l.Client.NewMultipartUpload(bucket, object, opts)
 	if err != nil {
 		return uploadID, minio.ErrorRespToObjectError(err, bucket, object)

@@ -1171,8 +1171,8 @@ func deriveClientKey(clientKey [32]byte, bucket, object string) [32]byte {
 	return key
 }
 
-// extract encryption options for pass through to backend in the case of gateway
-func extractEncryptionOption(header http.Header, copySource bool, metadata map[string]string) (opts ObjectOptions, err error) {
+// set encryption options for pass through to backend in the case of gateway and UserDefined metadata
+func getDefaultOpts(header http.Header, copySource bool, metadata map[string]string) (opts ObjectOptions, err error) {
 	var clientKey [32]byte
 	var sse encrypt.ServerSide
 
@@ -1185,7 +1185,7 @@ func extractEncryptionOption(header http.Header, copySource bool, metadata map[s
 			if sse, err = encrypt.NewSSEC(clientKey[:]); err != nil {
 				return
 			}
-			return ObjectOptions{ServerSideEncryption: encrypt.SSECopy(sse)}, nil
+			return ObjectOptions{ServerSideEncryption: encrypt.SSECopy(sse), UserDefined: metadata}, nil
 		}
 		return
 	}
@@ -1198,16 +1198,16 @@ func extractEncryptionOption(header http.Header, copySource bool, metadata map[s
 		if sse, err = encrypt.NewSSEC(clientKey[:]); err != nil {
 			return
 		}
-		return ObjectOptions{ServerSideEncryption: sse}, nil
+		return ObjectOptions{ServerSideEncryption: sse, UserDefined: metadata}, nil
 	}
 	if crypto.S3.IsRequested(header) || (metadata != nil && crypto.S3.IsEncrypted(metadata)) {
-		return ObjectOptions{ServerSideEncryption: encrypt.NewSSE()}, nil
+		return ObjectOptions{ServerSideEncryption: encrypt.NewSSE(), UserDefined: metadata}, nil
 	}
-	return opts, nil
+	return ObjectOptions{UserDefined: metadata}, nil
 }
 
 // get ObjectOptions for GET calls from encryption headers
-func getEncryptionOpts(ctx context.Context, r *http.Request, bucket, object string) (ObjectOptions, error) {
+func getOpts(ctx context.Context, r *http.Request, bucket, object string) (ObjectOptions, error) {
 	var (
 		encryption encrypt.ServerSide
 		opts       ObjectOptions
@@ -1223,30 +1223,32 @@ func getEncryptionOpts(ctx context.Context, r *http.Request, bucket, object stri
 		return ObjectOptions{ServerSideEncryption: encryption}, nil
 	}
 	// default case of passing encryption headers to backend
-	return extractEncryptionOption(r.Header, false, nil)
+	return getDefaultOpts(r.Header, false, nil)
 }
 
-// get ObjectOptions for PUT calls from encryption headers
-func putEncryptionOpts(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
+// get ObjectOptions for PUT calls from encryption headers and metadata
+func putOpts(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
 	// In the case of multipart custom format, the metadata needs to be checked in addition to header to see if it
 	// is SSE-S3 encrypted, primarily because S3 protocol does not require SSE-S3 headers in PutObjectPart calls
 	if GlobalGatewaySSE.SSES3() && (crypto.S3.IsRequested(r.Header) || crypto.S3.IsEncrypted(metadata)) {
-		return ObjectOptions{ServerSideEncryption: encrypt.NewSSE()}, nil
+		return ObjectOptions{ServerSideEncryption: encrypt.NewSSE(), UserDefined: metadata}, nil
 	}
 	if GlobalGatewaySSE.SSEC() && crypto.SSEC.IsRequested(r.Header) {
-		return getEncryptionOpts(ctx, r, bucket, object)
+		opts, err = getOpts(ctx, r, bucket, object)
+		opts.UserDefined = metadata
+		return
 	}
-	// default case of passing encryption headers to backend
-	return extractEncryptionOption(r.Header, false, metadata)
+	// default case of passing encryption headers and UserDefined metadata to backend
+	return getDefaultOpts(r.Header, false, metadata)
 }
 
-// get ObjectOptions for Copy calls for encryption headers provided on the target side
-func copyDstEncryptionOpts(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
-	return putEncryptionOpts(ctx, r, bucket, object, metadata)
+// get ObjectOptions for Copy calls with encryption headers provided on the target side and source side metadata
+func copyDstOpts(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
+	return putOpts(ctx, r, bucket, object, metadata)
 }
 
-// get ObjectOptions for Copy calls for encryption headers provided on the source side
-func copySrcEncryptionOpts(ctx context.Context, r *http.Request, bucket, object string) (ObjectOptions, error) {
+// get ObjectOptions for Copy calls with encryption headers provided on the source side
+func copySrcOpts(ctx context.Context, r *http.Request, bucket, object string) (ObjectOptions, error) {
 	var (
 		ssec encrypt.ServerSide
 		opts ObjectOptions
@@ -1266,5 +1268,5 @@ func copySrcEncryptionOpts(ctx context.Context, r *http.Request, bucket, object 
 	}
 
 	// default case of passing encryption headers to backend
-	return extractEncryptionOption(r.Header, true, nil)
+	return getDefaultOpts(r.Header, true, nil)
 }

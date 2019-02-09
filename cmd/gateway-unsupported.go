@@ -33,7 +33,7 @@ func (a GatewayUnsupported) ListMultipartUploads(ctx context.Context, bucket str
 }
 
 // NewMultipartUpload upload object in multiple parts
-func (a GatewayUnsupported) NewMultipartUpload(ctx context.Context, bucket string, object string, metadata map[string]string, opts ObjectOptions) (uploadID string, err error) {
+func (a GatewayUnsupported) NewMultipartUpload(ctx context.Context, bucket string, object string, opts ObjectOptions) (uploadID string, err error) {
 	return "", NotImplemented{}
 }
 

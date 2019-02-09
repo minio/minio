@@ -43,7 +43,7 @@ func TestXLCleanupStaleMultipartUploads(t *testing.T) {
 	var opts ObjectOptions
 
 	obj.MakeBucketWithLocation(context.Background(), bucketName, "")
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, objectName, nil, opts)
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, objectName, opts)
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
