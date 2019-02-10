@@ -122,7 +122,7 @@ func newConfigDirFromCtx(ctx *cli.Context, option string, getDefaultDir func() s
 func handleCommonCmdArgs(ctx *cli.Context) {
 
 	// Get "json" flag from command line argument and
-	// enable json and quite modes if jason flag is turned on.
+	// enable json and quite modes if json flag is turned on.
 	globalCLIContext.JSON = ctx.IsSet("json") || ctx.GlobalIsSet("json")
 	if globalCLIContext.JSON {
 		logger.EnableJSON()
