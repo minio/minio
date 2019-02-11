@@ -550,10 +550,10 @@
 			"revisionTime": "2018-06-06T15:09:39Z"
 		},
 		{
-			"checksumSHA1": "KiQa3vguztElzJkoqeIGHlfLFJA=",
+			"checksumSHA1": "JzX1Hslj6KPshEfXSPgG4NpHUgk=",
 			"path": "github.com/klauspost/reedsolomon",
-			"revision": "8885f3a1c73882e6f11b766242c69a1eb8f44b28",
-			"revisionTime": "2018-12-18T19:39:59Z"
+			"revision": "2b210cf0866da6ba2a449223993cf7c971f444e1",
+			"revisionTime": "2019-02-10T21:49:25Z"
 		},
 		{
 			"checksumSHA1": "xxLSo5tKtXc7jGrR70yoEfza8Cw=",
