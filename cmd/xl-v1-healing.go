@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"path"
 	"sync"
 	"time"
 
@@ -42,7 +41,7 @@ func (xl xlObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealRes
 // also heals the missing entries for bucket metadata files
 // `policy.json, notification.xml, listeners.json`.
 func (xl xlObjects) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (
-	results []madmin.HealResultItem, err error) {
+	result madmin.HealResultItem, err error) {
 
 	storageDisks := xl.getDisks()
 
@@ -50,17 +49,7 @@ func (xl xlObjects) HealBucket(ctx context.Context, bucket string, dryRun, remov
 	writeQuorum := len(storageDisks)/2 + 1
 
 	// Heal bucket.
-	var result madmin.HealResultItem
-	result, err = healBucket(ctx, storageDisks, bucket, writeQuorum, dryRun)
-	if err != nil {
-		return nil, err
-	}
-	results = append(results, result)
-
-	// Proceed to heal bucket metadata.
-	metaResults, err := healBucketMetadata(xl, bucket, dryRun, remove)
-	results = append(results, metaResults...)
-	return results, err
+	return healBucket(ctx, storageDisks, bucket, writeQuorum, dryRun)
 }
 
 // Heal bucket - create buckets on disks where it does not exist.
@@ -155,51 +144,6 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 		undoMakeBucket(storageDisks, bucket)
 	}
 	return res, reducedErr
-}
-
-// Heals all the metadata associated for a given bucket, this function
-// heals `policy.json`, `notification.xml` and `listeners.json`.
-func healBucketMetadata(xl xlObjects, bucket string, dryRun, remove bool) (
-	results []madmin.HealResultItem, err error) {
-
-	healBucketMetaFn := func(metaPath string) error {
-		reqInfo := &logger.ReqInfo{BucketName: bucket}
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		result, healErr := xl.HealObject(ctx, minioMetaBucket, metaPath, dryRun, remove)
-		// If object is not found, skip the file.
-		if isErrObjectNotFound(healErr) {
-			return nil
-		}
-		if healErr != nil {
-			return healErr
-		}
-		result.Type = madmin.HealItemBucketMetadata
-		results = append(results, result)
-		return nil
-	}
-
-	// Heal `policy.json` for missing entries, ignores if
-	// `policy.json` is not found.
-	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
-	err = healBucketMetaFn(policyPath)
-	if err != nil {
-		return results, err
-	}
-
-	// Heal `notification.xml` for missing entries, ignores if
-	// `notification.xml` is not found.
-	nConfigPath := path.Join(bucketConfigPrefix, bucket,
-		bucketNotificationConfig)
-	err = healBucketMetaFn(nConfigPath)
-	if err != nil {
-		return results, err
-	}
-
-	// Heal `listeners.json` for missing entries, ignores if
-	// `listeners.json` is not found.
-	lConfigPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
-	err = healBucketMetaFn(lConfigPath)
-	return results, err
 }
 
 // listAllBuckets lists all buckets from all disks. It also

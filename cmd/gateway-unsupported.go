@@ -92,8 +92,8 @@ func (a GatewayUnsupported) HealFormat(ctx context.Context, dryRun bool) (madmin
 }
 
 // HealBucket - Not implemented stub
-func (a GatewayUnsupported) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) ([]madmin.HealResultItem, error) {
-	return nil, NotImplemented{}
+func (a GatewayUnsupported) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem, error) {
+	return madmin.HealResultItem{}, NotImplemented{}
 }
 
 // ListBucketsHeal - Not implemented stub

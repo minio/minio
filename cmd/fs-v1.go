@@ -1252,10 +1252,10 @@ func (fs *FSObjects) HealObject(ctx context.Context, bucket, object string, dryR
 }
 
 // HealBucket - no-op for fs, Valid only for XL.
-func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) ([]madmin.HealResultItem,
+func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem,
 	error) {
 	logger.LogIf(ctx, NotImplemented{})
-	return nil, NotImplemented{}
+	return madmin.HealResultItem{}, NotImplemented{}
 }
 
 // ListObjectsHeal - list all objects to be healed. Valid only for XL

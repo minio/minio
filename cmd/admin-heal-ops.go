@@ -546,8 +546,11 @@ func (h *healSequence) traverseAndHeal() {
 	// Start with format healing
 	checkErr(h.healDiskFormat)
 
-	// Start healing the config.
-	checkErr(h.healConfig)
+	// Start healing the config prefix.
+	checkErr(h.healMinioSysMeta(minioConfigPrefix))
+
+	// Start healing the bucket config prefix.
+	checkErr(h.healMinioSysMeta(bucketConfigPrefix))
 
 	// Heal buckets and objects
 	checkErr(h.healBuckets)
@@ -559,63 +562,65 @@ func (h *healSequence) traverseAndHeal() {
 	close(h.traverseAndHealDoneCh)
 }
 
-// healConfig - heals config.json, retrun value indicates if a failure occurred.
-func (h *healSequence) healConfig() error {
-	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		return errServerNotInitialized
+// healMinioSysMeta - heals all files under a given meta prefix, returns a function
+// which in-turn heals the respective meta directory path and any files in int.
+func (h *healSequence) healMinioSysMeta(metaPrefix string) func() error {
+	return func() error {
+		// Get current object layer instance.
+		objectAPI := newObjectLayerFn()
+		if objectAPI == nil {
+			return errServerNotInitialized
+		}
+
+		// NOTE: Healing on meta is run regardless
+		// of any bucket being selected, this is to ensure that
+		// meta are always upto date and correct.
+		marker := ""
+		isTruncated := true
+		for isTruncated {
+			if globalHTTPServer != nil {
+				// Wait at max 1 minute for an inprogress request
+				// before proceeding to heal
+				waitCount := 60
+				// Any requests in progress, delay the heal.
+				for globalHTTPServer.GetRequestCount() > 2 && waitCount > 0 {
+					waitCount--
+					time.Sleep(1 * time.Second)
+				}
+			}
+
+			// Lists all objects under `config` prefix.
+			objectInfos, err := objectAPI.ListObjectsHeal(h.ctx, minioMetaBucket, metaPrefix,
+				marker, "", 1000)
+			if err != nil {
+				return errFnHealFromAPIErr(h.ctx, err)
+			}
+
+			for index := range objectInfos.Objects {
+				if h.isQuitting() {
+					return errHealStopSignalled
+				}
+				o := objectInfos.Objects[index]
+				res, herr := objectAPI.HealObject(h.ctx, o.Bucket, o.Name, h.settings.DryRun, h.settings.Remove)
+				// Object might have been deleted, by the time heal
+				// was attempted we ignore this file an move on.
+				if isErrObjectNotFound(herr) {
+					continue
+				}
+				if herr != nil {
+					return herr
+				}
+				res.Type = madmin.HealItemBucketMetadata
+				if err = h.pushHealResultItem(res); err != nil {
+					return err
+				}
+			}
+
+			isTruncated = objectInfos.IsTruncated
+			marker = objectInfos.NextMarker
+		}
+		return nil
 	}
-
-	// NOTE: Healing on configs is run regardless
-	// of any bucket being selected, this is to ensure that
-	// configs are always uptodate and correct.
-	marker := ""
-	isTruncated := true
-	for isTruncated {
-		if globalHTTPServer != nil {
-			// Wait at max 1 minute for an inprogress request
-			// before proceeding to heal
-			waitCount := 60
-			// Any requests in progress, delay the heal.
-			for globalHTTPServer.GetRequestCount() > 2 && waitCount > 0 {
-				waitCount--
-				time.Sleep(1 * time.Second)
-			}
-		}
-
-		// Lists all objects under `config` prefix.
-		objectInfos, err := objectAPI.ListObjectsHeal(h.ctx, minioMetaBucket, minioConfigPrefix,
-			marker, "", 1000)
-		if err != nil {
-			return errFnHealFromAPIErr(h.ctx, err)
-		}
-
-		for index := range objectInfos.Objects {
-			if h.isQuitting() {
-				return errHealStopSignalled
-			}
-			o := objectInfos.Objects[index]
-			res, herr := objectAPI.HealObject(h.ctx, o.Bucket, o.Name, h.settings.DryRun, h.settings.Remove)
-			// Object might have been deleted, by the time heal
-			// was attempted we ignore this file an move on.
-			if isErrObjectNotFound(herr) {
-				continue
-			}
-			if herr != nil {
-				return herr
-			}
-			res.Type = madmin.HealItemBucketMetadata
-			if err = h.pushHealResultItem(res); err != nil {
-				return err
-			}
-		}
-
-		isTruncated = objectInfos.IsTruncated
-		marker = objectInfos.NextMarker
-	}
-
-	return nil
 }
 
 // healDiskFormat - heals format.json, return value indicates if a
@@ -692,15 +697,13 @@ func (h *healSequence) healBucket(bucket string) error {
 		return errServerNotInitialized
 	}
 
-	results, err := objectAPI.HealBucket(h.ctx, bucket, h.settings.DryRun, h.settings.Remove)
-	// push any available results before checking for error
-	for _, result := range results {
-		if perr := h.pushHealResultItem(result); perr != nil {
-			return perr
-		}
-	}
+	result, err := objectAPI.HealBucket(h.ctx, bucket, h.settings.DryRun, h.settings.Remove)
 	// handle heal-bucket error
 	if err != nil {
+		return err
+	}
+
+	if err = h.pushHealResultItem(result); err != nil {
 		return err
 	}
 
