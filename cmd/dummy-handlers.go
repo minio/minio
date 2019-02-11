@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * Minio Cloud Storage, (C) 2018, 2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/pkg/policy"
 )
 
 // Data types used for returning dummy tagging XML.
@@ -95,25 +96,29 @@ func (api objectAPIHandlers) DeleteBucketWebsiteHandler(w http.ResponseWriter, r
 	w.(http.Flusher).Flush()
 }
 
+type allowedMethod string
+
+// Define strings
+const (
+	GET    allowedMethod = http.MethodGet
+	PUT    allowedMethod = http.MethodPut
+	HEAD   allowedMethod = http.MethodHead
+	POST   allowedMethod = http.MethodPost
+	DELETE allowedMethod = http.MethodDelete
+)
+
 // GetBucketCorsHandler - GET bucket cors, a dummy api
 func (api objectAPIHandlers) GetBucketCorsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketCorsHandler")
 
-	type allowedMethod int
-	const (
-		GET allowedMethod = iota
-		PUT
-		HEAD
-		POST
-		DELETE
-	)
 	type corsRule struct {
-		AllowedMethod allowedMethod `xml:"AllowedMethod"`
-		AllowedOrigin string        `xml:"AllowedOrigin"`
-		ExposeHeader  string        `xml:"ExposeHeader"`
-		ID            string        `xml:"ID"`
-		MaxAgeSeconds int64         `xml:"MaxAgeSeconds"`
+		AllowedHeaders []string        `xml:"AllowedHeaders"`
+		AllowedMethods []allowedMethod `xml:"AllowedMethod"`
+		AllowedOrigins []string        `xml:"AllowedOrigin"`
+		ExposeHeaders  []string        `xml:"ExposeHeader"`
+		MaxAgeSeconds  int64           `xml:"MaxAgeSeconds"`
 	}
+
 	type corsConfiguration struct {
 		XMLName  xml.Name   `xml:"CORSConfiguration"`
 		CorsRule []corsRule `xml:"CORSRule"`
@@ -128,6 +133,13 @@ func (api objectAPIHandlers) GetBucketCorsHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Allow getBucketCors if policy action is set, since this is a dummy call
+	// we are simply re-purposing the bucketPolicyAction.
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketPolicyAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	// Validate if bucket exists, before proceeding further...
 	_, err := objAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
@@ -135,10 +147,8 @@ func (api objectAPIHandlers) GetBucketCorsHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	tags := &tagging{}
-	tags.TagSet.Tag = append(tags.TagSet.Tag, tagElem{})
-
-	if err := xml.NewEncoder(w).Encode(tags); err != nil {
+	cors := &corsConfiguration{}
+	if err := xml.NewEncoder(w).Encode(cors); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -156,6 +166,13 @@ func (api objectAPIHandlers) GetBucketTaggingHandler(w http.ResponseWriter, r *h
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Allow getBucketTagging if policy action is set, since this is a dummy call
+	// we are simply re-purposing the bucketPolicyAction.
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketPolicyAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -188,6 +205,13 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Allow getObjectTagging if policy action is set, since this is a dummy call
+	// we are simply re-purposing the bucketPolicyAction.
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketPolicyAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
