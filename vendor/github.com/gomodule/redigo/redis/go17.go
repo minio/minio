@@ -1,14 +1,10 @@
-// +build go1.7
+// +build go1.7,!go1.8
 
 package redis
 
 import "crypto/tls"
 
-// similar cloneTLSClientConfig in the stdlib, but also honor skipVerify for the nil case
-func cloneTLSClientConfig(cfg *tls.Config, skipVerify bool) *tls.Config {
-	if cfg == nil {
-		return &tls.Config{InsecureSkipVerify: skipVerify}
-	}
+func cloneTLSConfig(cfg *tls.Config) *tls.Config {
 	return &tls.Config{
 		Rand:                        cfg.Rand,
 		Time:                        cfg.Time,
