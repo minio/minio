@@ -25,7 +25,6 @@ import (
 	"github.com/golang/snappy"
 	"github.com/minio/parquet-go/gen-go/parquet"
 	"github.com/pierrec/lz4"
-	lzo "github.com/rasky/go-lzo"
 )
 
 type compressionCodec parquet.CompressionCodec
@@ -45,9 +44,6 @@ func (c compressionCodec) uncompress(buf []byte) ([]byte, error) {
 		}
 		defer reader.Close()
 		return ioutil.ReadAll(reader)
-
-	case parquet.CompressionCodec_LZO:
-		return lzo.Decompress1X(bytes.NewReader(buf), len(buf), 0)
 
 	case parquet.CompressionCodec_LZ4:
 		return ioutil.ReadAll(lz4.NewReader(bytes.NewReader(buf)))

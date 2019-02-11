@@ -5,7 +5,7 @@ You can use the Select API to query objects with following features:
 
 - CSV, JSON and Parquet - Objects must be in CSV, JSON, or Parquet format.
 - UTF-8 is the only encoding type the Select API supports.
-- GZIP or BZIP2 - CSV and JSON files can be compressed using GZIP or BZIP2. The Select API supports columnar compression for Parquet using GZIP, Snappy, LZO, LZ4. Whole object compression is not supported for Parquet objects.
+- GZIP or BZIP2 - CSV and JSON files can be compressed using GZIP or BZIP2. The Select API supports columnar compression for Parquet using GZIP, Snappy, LZ4. Whole object compression is not supported for Parquet objects.
 - Server-side encryption - The Select API supports querying objects that are protected with server-side encryption.
 
 Type inference and automatic conversion of values is performed based on the context when the value is un-typed (such as when reading CSV data). If present, the CAST function overrides automatic conversion.
