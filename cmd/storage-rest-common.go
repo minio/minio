@@ -16,7 +16,7 @@
 
 package cmd
 
-const storageRESTVersion = "v3"
+const storageRESTVersion = "v4"
 const storageRESTPath = minioReservedBucketPath + "/storage/" + storageRESTVersion + "/"
 
 const (

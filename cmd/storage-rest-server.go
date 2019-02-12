@@ -43,8 +43,18 @@ func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error)
 	w.Write([]byte(err.Error()))
 }
 
+// Authenticates storage client's requests.
+func storageServerRequestAuthenticate(r *http.Request) error {
+	_, _, err := webRequestAuthenticate(r)
+	return err
+}
+
 // IsValid - To authenticate and verify the time difference.
 func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
+	if err := storageServerRequestAuthenticate(r); err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		return false
+	}
 	requestTimeStr := r.Header.Get("X-Minio-Time")
 	requestTime, err := time.Parse(time.RFC3339, requestTimeStr)
 	if err != nil {
