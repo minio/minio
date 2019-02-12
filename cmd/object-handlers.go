@@ -161,8 +161,16 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	s3Select, err := s3select.NewS3Select(r.Body)
 	if err != nil {
 		if serr, ok := err.(s3select.SelectError); ok {
-			w.WriteHeader(serr.HTTPStatusCode())
-			w.Write(s3select.NewErrorMessage(serr.ErrorCode(), serr.ErrorMessage()))
+			encodedErrorResponse := encodeResponse(APIErrorResponse{
+				Code:       serr.ErrorCode(),
+				Message:    serr.ErrorMessage(),
+				BucketName: bucket,
+				Key:        object,
+				Resource:   r.URL.Path,
+				RequestID:  w.Header().Get(responseRequestIDKey),
+				HostID:     w.Header().Get(responseDeploymentIDKey),
+			})
+			writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
 		} else {
 			writeErrorResponse(w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		}
@@ -195,8 +203,16 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 
 	if err = s3Select.Open(getObject); err != nil {
 		if serr, ok := err.(s3select.SelectError); ok {
-			w.WriteHeader(serr.HTTPStatusCode())
-			w.Write(s3select.NewErrorMessage(serr.ErrorCode(), serr.ErrorMessage()))
+			encodedErrorResponse := encodeResponse(APIErrorResponse{
+				Code:       serr.ErrorCode(),
+				Message:    serr.ErrorMessage(),
+				BucketName: bucket,
+				Key:        object,
+				Resource:   r.URL.Path,
+				RequestID:  w.Header().Get(responseRequestIDKey),
+				HostID:     w.Header().Get(responseDeploymentIDKey),
+			})
+			writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
 		} else {
 			writeErrorResponse(w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		}
