@@ -43,11 +43,13 @@ import (
 // data for all internode storage REST requests.
 const storageRESTTimeout = 5 * time.Minute
 
-func isNetworkDisconnectError(err error) bool {
+func isNetworkError(err error) bool {
 	if err == nil {
 		return false
 	}
-
+	if err.Error() == errConnectionStale.Error() {
+		return true
+	}
 	if uerr, isURLError := err.(*url.Error); isURLError {
 		if uerr.Timeout() {
 			return true
@@ -68,7 +70,7 @@ func toStorageErr(err error) error {
 		return nil
 	}
 
-	if isNetworkDisconnectError(err) {
+	if isNetworkError(err) {
 		return errDiskNotFound
 	}
 
@@ -128,6 +130,7 @@ type storageRESTClient struct {
 	restClient *rest.Client
 	connected  bool
 	lastError  error
+	instanceID string // REST server's instanceID which is sent with every request for validation.
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is makred disconnected
@@ -137,12 +140,16 @@ func (client *storageRESTClient) call(method string, values url.Values, body io.
 	if !client.connected {
 		return nil, errDiskNotFound
 	}
+	if values == nil {
+		values = make(url.Values)
+	}
+	values.Set(storageRESTInstanceID, client.instanceID)
 	respBody, err = client.restClient.Call(method, values, body, length)
 	if err == nil {
 		return respBody, nil
 	}
 	client.lastError = err
-	if isNetworkDisconnectError(err) {
+	if isNetworkError(err) {
 		client.connected = false
 	}
 
@@ -350,6 +357,22 @@ func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPa
 	return err
 }
 
+// Gets peer storage server's instanceID - to be used with every REST call for validation.
+func (client *storageRESTClient) getInstanceID() (err error) {
+	respBody, err := client.restClient.Call(storageRESTMethodGetInstanceID, nil, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	instanceIDBuf := make([]byte, 64)
+	n, err := io.ReadFull(respBody, instanceIDBuf)
+	if err != io.EOF && err != io.ErrUnexpectedEOF {
+		return err
+	}
+	client.instanceID = string(instanceIDBuf[:n])
+	return nil
+}
+
 // Close - marks the client as closed.
 func (client *storageRESTClient) Close() error {
 	client.connected = false
@@ -382,5 +405,7 @@ func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 	}
 
 	restClient := rest.NewClient(serverURL, tlsConfig, storageRESTTimeout, newAuthToken)
-	return &storageRESTClient{endpoint: endpoint, restClient: restClient, connected: true}
+	client := &storageRESTClient{endpoint: endpoint, restClient: restClient, connected: true}
+	client.connected = client.getInstanceID() == nil
+	return client
 }

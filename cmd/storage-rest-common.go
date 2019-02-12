@@ -36,6 +36,7 @@ const (
 	storageRESTMethodListDir        = "listdir"
 	storageRESTMethodDeleteFile     = "deletefile"
 	storageRESTMethodRenameFile     = "renamefile"
+	storageRESTMethodGetInstanceID  = "getinstanceid"
 )
 
 const (
@@ -51,4 +52,5 @@ const (
 	storageRESTCount      = "count"
 	storageRESTBitrotAlgo = "bitrot-algo"
 	storageRESTBitrotHash = "bitrot-hash"
+	storageRESTInstanceID = "instance-id"
 )
