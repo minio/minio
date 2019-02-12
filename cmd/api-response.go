@@ -568,13 +568,13 @@ func writeSuccessResponseHeadersOnly(w http.ResponseWriter) {
 }
 
 // writeErrorRespone writes error headers
-func writeErrorResponse(w http.ResponseWriter, errorCode APIErrorCode, reqURL *url.URL, browser bool) {
-	switch errorCode {
-	case ErrSlowDown, ErrServerNotInitialized, ErrReadQuorum, ErrWriteQuorum:
+func writeErrorResponse(w http.ResponseWriter, err APIError, reqURL *url.URL, browser bool) {
+	switch err.Code {
+	case "SlowDown", "XMinioServerNotInitialized", "XMinioReadQuorum", "XMinioWriteQuorum":
 		// Set retry-after header to indicate user-agents to retry request after 120secs.
 		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
 		w.Header().Set("Retry-After", "120")
-	case ErrAccessDenied:
+	case "AccessDenied":
 		// The request is from browser and also if browser
 		// is enabled we need to redirect.
 		if browser && globalIsBrowserEnabled {
@@ -584,42 +584,38 @@ func writeErrorResponse(w http.ResponseWriter, errorCode APIErrorCode, reqURL *u
 		}
 	}
 
-	apiError := getAPIError(errorCode)
 	// Generate error response.
-	errorResponse := getAPIErrorResponse(apiError, reqURL.Path, w.Header().Get(responseRequestIDKey))
+	errorResponse := getAPIErrorResponse(err, reqURL.Path, w.Header().Get(responseRequestIDKey))
 	encodedErrorResponse := encodeResponse(errorResponse)
-	writeResponse(w, apiError.HTTPStatusCode, encodedErrorResponse, mimeXML)
+	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
 }
 
-func writeErrorResponseHeadersOnly(w http.ResponseWriter, errorCode APIErrorCode) {
-	apiError := getAPIError(errorCode)
-	writeResponse(w, apiError.HTTPStatusCode, nil, mimeNone)
+func writeErrorResponseHeadersOnly(w http.ResponseWriter, err APIError) {
+	writeResponse(w, err.HTTPStatusCode, nil, mimeNone)
 }
 
 // writeErrorResponseJSON - writes error response in JSON format;
 // useful for admin APIs.
-func writeErrorResponseJSON(w http.ResponseWriter, errorCode APIErrorCode, reqURL *url.URL) {
-	apiError := getAPIError(errorCode)
+func writeErrorResponseJSON(w http.ResponseWriter, err APIError, reqURL *url.URL) {
 	// Generate error response.
-	errorResponse := getAPIErrorResponse(apiError, reqURL.Path, w.Header().Get(responseRequestIDKey))
+	errorResponse := getAPIErrorResponse(err, reqURL.Path, w.Header().Get(responseRequestIDKey))
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
-	writeResponse(w, apiError.HTTPStatusCode, encodedErrorResponse, mimeJSON)
+	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
 }
 
 // writeCustomErrorResponseJSON - similar to writeErrorResponseJSON,
 // but accepts the error message directly (this allows messages to be
 // dynamically generated.)
-func writeCustomErrorResponseJSON(w http.ResponseWriter, errorCode APIErrorCode,
+func writeCustomErrorResponseJSON(w http.ResponseWriter, err APIError,
 	errBody string, reqURL *url.URL) {
 
-	apiError := getAPIError(errorCode)
 	errorResponse := APIErrorResponse{
-		Code:      apiError.Code,
+		Code:      err.Code,
 		Message:   errBody,
 		Resource:  reqURL.Path,
 		RequestID: w.Header().Get(responseRequestIDKey),
 		HostID:    "3L137",
 	}
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
-	writeResponse(w, apiError.HTTPStatusCode, encodedErrorResponse, mimeJSON)
+	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
 }

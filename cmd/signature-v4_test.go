@@ -31,7 +31,7 @@ func niceError(code APIErrorCode) string {
 		return "ErrNone"
 	}
 
-	return fmt.Sprintf("%s (%s)", errorCodeResponse[code].Code, errorCodeResponse[code].Description)
+	return fmt.Sprintf("%s (%s)", errorCodes[code].Code, errorCodes[code].Description)
 }
 
 func TestDoesPolicySignatureMatch(t *testing.T) {

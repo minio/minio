@@ -375,15 +375,6 @@ func TestGCSToObjectError(t *testing.T) {
 				Object: "object",
 			},
 		},
-		{
-			[]string{"bucket", "object"},
-			&googleapi.Error{
-				Errors: []googleapi.ErrorItem{{
-					Reason: "unknown",
-				}},
-			},
-			fmt.Errorf("Unsupported error reason: unknown"),
-		},
 	}
 
 	for i, testCase := range testCases {

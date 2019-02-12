@@ -63,8 +63,7 @@ var (
 	errHealStopSignalled    = fmt.Errorf("heal stop signaled")
 
 	errFnHealFromAPIErr = func(ctx context.Context, err error) error {
-		errCode := toAPIErrorCode(ctx, err)
-		apiErr := getAPIError(errCode)
+		apiErr := toAPIError(ctx, err)
 		return fmt.Errorf("Heal internal error: %s: %s",
 			apiErr.Code, apiErr.Description)
 	}
@@ -150,7 +149,7 @@ func (ahs *allHealState) getHealSequence(path string) (h *healSequence, exists b
 	return h, exists
 }
 
-func (ahs *allHealState) stopHealSequence(path string) ([]byte, APIErrorCode) {
+func (ahs *allHealState) stopHealSequence(path string) ([]byte, APIError) {
 	var hsp madmin.HealStopSuccess
 	he, exists := ahs.getHealSequence(path)
 	if !exists {
@@ -176,7 +175,7 @@ func (ahs *allHealState) stopHealSequence(path string) ([]byte, APIErrorCode) {
 	}
 
 	b, err := json.Marshal(&hsp)
-	return b, toAdminAPIErrCode(context.Background(), err)
+	return b, toAdminAPIErr(context.Background(), err)
 }
 
 // LaunchNewHealSequence - launches a background routine that performs
@@ -190,7 +189,7 @@ func (ahs *allHealState) stopHealSequence(path string) ([]byte, APIErrorCode) {
 // background routine to clean up heal results after the
 // aforementioned duration.
 func (ahs *allHealState) LaunchNewHealSequence(h *healSequence) (
-	respBytes []byte, errCode APIErrorCode, errMsg string) {
+	respBytes []byte, apiErr APIError, errMsg string) {
 
 	existsAndLive := false
 	he, exists := ahs.getHealSequence(h.path)
@@ -213,8 +212,7 @@ func (ahs *allHealState) LaunchNewHealSequence(h *healSequence) (
 				"(use force-start option to stop and start afresh). " +
 				fmt.Sprintf("The heal was started by IP %s at %s, token is %s",
 					h.clientAddress, h.startTime.Format(http.TimeFormat), h.clientToken)
-
-			return nil, ErrHealAlreadyRunning, errMsg
+			return nil, errorCodes.ToAPIErr(ErrHealAlreadyRunning), errMsg
 		}
 	}
 
@@ -229,7 +227,7 @@ func (ahs *allHealState) LaunchNewHealSequence(h *healSequence) (
 
 			errMsg = "The provided heal sequence path overlaps with an existing " +
 				fmt.Sprintf("heal path: %s", k)
-			return nil, ErrHealOverlappingPaths, errMsg
+			return nil, errorCodes.ToAPIErr(ErrHealOverlappingPaths), errMsg
 		}
 	}
 
@@ -246,9 +244,9 @@ func (ahs *allHealState) LaunchNewHealSequence(h *healSequence) (
 	})
 	if err != nil {
 		logger.LogIf(h.ctx, err)
-		return nil, ErrInternalError, ""
+		return nil, toAPIError(h.ctx, err), ""
 	}
-	return b, ErrNone, ""
+	return b, noError, ""
 }
 
 // PopHealStatusJSON - Called by heal-status API. It fetches the heal
