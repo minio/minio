@@ -10,12 +10,12 @@ import (
 type Option func(*options)
 
 type options struct {
-	maxGoroutines              int
-	minSplitSize               int
-	useAVX2, useSSSE3, useSSE2 bool
-	usePAR1Matrix              bool
-	useCauchy                  bool
-	shardSize                  int
+	maxGoroutines                         int
+	minSplitSize                          int
+	useAVX512, useAVX2, useSSSE3, useSSE2 bool
+	usePAR1Matrix                         bool
+	useCauchy                             bool
+	shardSize                             int
 }
 
 var defaultOptions = options{
@@ -29,8 +29,9 @@ func init() {
 	}
 	// Detect CPU capabilities.
 	defaultOptions.useSSSE3 = cpuid.CPU.SSSE3()
-	defaultOptions.useAVX2 = cpuid.CPU.AVX2()
 	defaultOptions.useSSE2 = cpuid.CPU.SSE2()
+	defaultOptions.useAVX2 = cpuid.CPU.AVX2()
+	defaultOptions.useAVX512 = cpuid.CPU.AVX512F() && cpuid.CPU.AVX512BW()
 }
 
 // WithMaxGoroutines is the maximum number of goroutines number for encoding & decoding.
@@ -85,6 +86,12 @@ func withAVX2(enabled bool) Option {
 func withSSE2(enabled bool) Option {
 	return func(o *options) {
 		o.useSSE2 = enabled
+	}
+}
+
+func withAVX512(enabled bool) Option {
+	return func(o *options) {
+		o.useAVX512 = enabled
 	}
 }
 

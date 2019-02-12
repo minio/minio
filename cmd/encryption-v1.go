@@ -1103,22 +1103,22 @@ func (o *ObjectInfo) EncryptedSize() int64 {
 // decryption succeeded.
 //
 // DecryptCopyObjectInfo also returns whether the object is encrypted or not.
-func DecryptCopyObjectInfo(info *ObjectInfo, headers http.Header) (apiErr APIErrorCode, encrypted bool) {
+func DecryptCopyObjectInfo(info *ObjectInfo, headers http.Header) (errCode APIErrorCode, encrypted bool) {
 	// Directories are never encrypted.
 	if info.IsDir {
 		return ErrNone, false
 	}
-	if apiErr, encrypted = ErrNone, crypto.IsEncrypted(info.UserDefined); !encrypted && crypto.SSECopy.IsRequested(headers) {
-		apiErr = ErrInvalidEncryptionParameters
+	if errCode, encrypted = ErrNone, crypto.IsEncrypted(info.UserDefined); !encrypted && crypto.SSECopy.IsRequested(headers) {
+		errCode = ErrInvalidEncryptionParameters
 	} else if encrypted {
 		if (!crypto.SSECopy.IsRequested(headers) && crypto.SSEC.IsEncrypted(info.UserDefined)) ||
 			(crypto.SSECopy.IsRequested(headers) && crypto.S3.IsEncrypted(info.UserDefined)) {
-			apiErr = ErrSSEEncryptedObject
+			errCode = ErrSSEEncryptedObject
 			return
 		}
 		var err error
 		if info.Size, err = info.DecryptedSize(); err != nil {
-			apiErr = toAPIErrorCode(context.Background(), err)
+			errCode = toAPIErrorCode(context.Background(), err)
 		}
 	}
 	return

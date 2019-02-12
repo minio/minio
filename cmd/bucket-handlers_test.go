@@ -645,8 +645,8 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 	getDeleteErrorList := func(objects []ObjectIdentifier) (deleteErrorList []DeleteError) {
 		for _, obj := range objects {
 			deleteErrorList = append(deleteErrorList, DeleteError{
-				Code:    errorCodeResponse[ErrAccessDenied].Code,
-				Message: errorCodeResponse[ErrAccessDenied].Description,
+				Code:    errorCodes[ErrAccessDenied].Code,
+				Message: errorCodes[ErrAccessDenied].Description,
 				Key:     obj.ObjectName,
 			})
 		}

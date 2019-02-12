@@ -894,7 +894,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Extract incoming metadata if any.
 	metadata, err := extractMetadata(context.Background(), r)
 	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -943,7 +943,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	var opts ObjectOptions
 	opts, err = putOpts(ctx, r, bucket, object, metadata)
 	if err != nil {
-		writeErrorResponseHeadersOnly(w, toAPIErrorCode(ctx, err))
+		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
 	if objectAPI.IsEncryptionSupported() {
@@ -952,13 +952,13 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			var objectEncryptionKey []byte
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
+				writeErrorResponse(w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 			info := ObjectInfo{Size: size}
 			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size) // do not try to verify encrypted content
 			if err != nil {
-				writeErrorResponse(w, toAPIErrorCode(ctx, err), r.URL, guessIsBrowserReq(r))
+				writeErrorResponse(w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 			pReader = NewPutObjReader(rawReader, hashReader, objectEncryptionKey)

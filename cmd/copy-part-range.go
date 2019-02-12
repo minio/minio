@@ -17,21 +17,22 @@
 package cmd
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 )
 
 // Writes S3 compatible copy part range error.
-func writeCopyPartErr(w http.ResponseWriter, err error, url *url.URL, browser bool) {
+func writeCopyPartErr(ctx context.Context, w http.ResponseWriter, err error, url *url.URL, browser bool) {
 	switch err {
 	case errInvalidRange:
-		writeErrorResponse(w, ErrInvalidCopyPartRange, url, browser)
+		writeErrorResponse(w, errorCodes.ToAPIErr(ErrInvalidCopyPartRange), url, browser)
 		return
 	case errInvalidRangeSource:
-		writeErrorResponse(w, ErrInvalidCopyPartRangeSource, url, browser)
+		writeErrorResponse(w, errorCodes.ToAPIErr(ErrInvalidCopyPartRangeSource), url, browser)
 		return
 	default:
-		writeErrorResponse(w, ErrInternalError, url, browser)
+		writeErrorResponse(w, toAPIError(ctx, err), url, browser)
 		return
 	}
 }
