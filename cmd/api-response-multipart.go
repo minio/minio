@@ -43,11 +43,12 @@ type completeMultipartAPIError struct {
 // XML doesn't carry the additional fields required to send this
 // error. So we construct a new type which lies well within the scope
 // of this function.
-func writePartSmallErrorResponse(w http.ResponseWriter, r *http.Request, err PartTooSmall) {
-
-	apiError := toAPIError(context.Background(), err)
+func writePartSmallErrorResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, err PartTooSmall) {
+	apiError := toAPIError(ctx, err)
 	// Generate complete multipart error response.
-	errorResponse := getAPIErrorResponse(apiError, r.URL.Path, w.Header().Get(responseRequestIDKey))
+	errorResponse := getAPIErrorResponse(ctx, apiError, r.URL.Path,
+		w.Header().Get(responseRequestIDKey),
+		w.Header().Get(responseDeploymentIDKey))
 	cmpErrResp := completeMultipartAPIError{err.PartSize, int64(5242880), err.PartNumber, err.PartETag, errorResponse}
 	encodedErrorResponse := encodeResponse(cmpErrResp)
 

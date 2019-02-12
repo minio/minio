@@ -26,13 +26,13 @@ import (
 func writeCopyPartErr(ctx context.Context, w http.ResponseWriter, err error, url *url.URL, browser bool) {
 	switch err {
 	case errInvalidRange:
-		writeErrorResponse(w, errorCodes.ToAPIErr(ErrInvalidCopyPartRange), url, browser)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopyPartRange), url, browser)
 		return
 	case errInvalidRangeSource:
-		writeErrorResponse(w, errorCodes.ToAPIErr(ErrInvalidCopyPartRangeSource), url, browser)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopyPartRangeSource), url, browser)
 		return
 	default:
-		writeErrorResponse(w, toAPIError(ctx, err), url, browser)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), url, browser)
 		return
 	}
 }

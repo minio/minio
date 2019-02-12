@@ -83,7 +83,7 @@ func (a adminAPIHandlers) VersionHandler(w http.ResponseWriter, r *http.Request)
 
 	jsonBytes, err := json.Marshal(adminAPIVersionInfo)
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -119,7 +119,7 @@ func (a adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Re
 	// Marshal API response
 	jsonBytes, err := json.Marshal(serverStatus)
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -144,7 +144,7 @@ func (a adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWriter, r *h
 	var sa madmin.ServiceAction
 	err := json.NewDecoder(r.Body).Decode(&sa)
 	if err != nil {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrRequestBodyParse), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrRequestBodyParse), r.URL)
 		return
 	}
 
@@ -155,7 +155,7 @@ func (a adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWriter, r *h
 	case madmin.ServiceActionValueStop:
 		serviceSig = serviceStop
 	default:
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
 		logger.LogIf(ctx, errors.New("Invalid service action received"))
 		return
 	}
@@ -242,7 +242,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -268,7 +268,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	// Marshal API response
 	jsonBytes, err := json.Marshal(serverInfo)
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -324,7 +324,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 	if perfType == "drive" {
 		info := objectAPI.StorageInfo(ctx)
 		if !(info.Backend.Type == BackendFS || info.Backend.Type == BackendErasure) {
-			writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 			return
 		}
 		// Get drive performance details from local server's drive(s)
@@ -337,7 +337,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		// Marshal API response
 		jsonBytes, err := json.Marshal(dps)
 		if err != nil {
-			writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
 
@@ -354,7 +354,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		// Marshal API response
 		jsonBytes, err := json.Marshal(cpus)
 		if err != nil {
-			writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
 
@@ -371,7 +371,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		// Marshal API response
 		jsonBytes, err := json.Marshal(mems)
 		if err != nil {
-			writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
 
@@ -379,7 +379,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		// distributed setup) as json.
 		writeSuccessResponseJSON(w, jsonBytes)
 	} else {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 	}
 }
 
@@ -438,21 +438,13 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 
 	// Method only allowed in Distributed XL mode.
 	if !globalIsDistXL {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-		return
-	}
-
-	// Authenticate request
-	// Setting the region as empty so as the mc server info command is irrespective to the region.
-	adminAPIErr := checkAdminRequestAuthType(ctx, r, "")
-	if adminAPIErr != ErrNone {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
 	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -470,7 +462,7 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 	// Marshal API response
 	jsonBytes, err := json.Marshal(topLocks)
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -503,7 +495,7 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 
 	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -544,7 +536,7 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 	// Create JSON result and send it to the client
 	startProfilingResultInBytes, err := json.Marshal(startProfilingResult)
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -581,7 +573,7 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 	}
 
 	if !globalNotificationSys.DownloadProfilingData(ctx, w) {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminProfilerNotEnabled), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminProfilerNotEnabled), r.URL)
 		return
 	}
 }
@@ -659,13 +651,13 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Check if this setup has an erasure coded backend.
 	if !globalIsXL {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
 		return
 	}
 
 	bucket, objPrefix, hs, clientToken, forceStart, forceStop, errCode := extractHealInitParams(r)
 	if errCode != ErrNone {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(errCode), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(errCode), r.URL)
 		return
 	}
 
@@ -708,15 +700,16 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 				default:
 					var errorRespJSON []byte
 					if hr.errBody == "" {
-						errorRespJSON = encodeResponseJSON(getAPIErrorResponse(hr.apiErr,
-							r.URL.Path, w.Header().Get(responseRequestIDKey)))
+						errorRespJSON = encodeResponseJSON(getAPIErrorResponse(ctx, hr.apiErr,
+							r.URL.Path, w.Header().Get(responseRequestIDKey),
+							w.Header().Get(responseDeploymentIDKey)))
 					} else {
 						errorRespJSON = encodeResponseJSON(APIErrorResponse{
 							Code:      hr.apiErr.Code,
 							Message:   hr.errBody,
 							Resource:  r.URL.Path,
 							RequestID: w.Header().Get(responseRequestIDKey),
-							HostID:    "3L137",
+							HostID:    w.Header().Get(responseDeploymentIDKey),
 						})
 					}
 					if !started {
@@ -746,7 +739,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 				StartTime:     nh.startTime,
 			})
 			if err != nil {
-				writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 				return
 			}
 			// Client token not specified but a heal sequence exists on a path,
@@ -762,7 +755,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		respBytes, errCode := globalAllHealState.PopHealStatusJSON(
 			healPath, clientToken)
 		if errCode != ErrNone {
-			writeErrorResponseJSON(w, errorCodes.ToAPIErr(errCode), r.URL)
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(errCode), r.URL)
 		} else {
 			writeSuccessResponseJSON(w, respBytes)
 		}
@@ -804,20 +797,20 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 
 	config, err := readServerConfig(ctx, objectAPI)
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	configData, err := json.MarshalIndent(config, "", "\t")
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	password := config.GetCredential().SecretKey
 	econfigData, err := madmin.EncryptData(password, configData)
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -847,14 +840,14 @@ func validateAdminReq(ctx context.Context, w http.ResponseWriter, r *http.Reques
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
 	if objectAPI == nil || globalNotificationSys == nil || globalIAMSys == nil {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return nil
 	}
 
 	// Validate request signature.
 	adminAPIErr := checkAdminRequestAuthType(ctx, r, "")
 	if adminAPIErr != ErrNone {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return nil
 	}
 
@@ -880,13 +873,13 @@ func (a adminAPIHandlers) GetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 
 	config, err := readServerConfig(ctx, objectAPI)
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	configData, err := json.Marshal(config)
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -908,7 +901,7 @@ func (a adminAPIHandlers) GetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 	password := config.GetCredential().SecretKey
 	econfigData, err := madmin.EncryptData(password, []byte(newConfigStr))
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -941,14 +934,14 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
 	vars := mux.Vars(r)
 	accessKey := vars["accessKey"]
 	if err := globalIAMSys.DeleteUser(accessKey); err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 	}
 }
 
@@ -963,20 +956,20 @@ func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	allCredentials, err := globalIAMSys.ListUsers()
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	data, err := json.Marshal(allCredentials)
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	password := globalServerConfig.GetCredential().SecretKey
 	econfigData, err := madmin.EncryptData(password, data)
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -994,7 +987,7 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
@@ -1004,12 +997,12 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 
 	// Custom IAM policies not allowed for admin user.
 	if accessKey == globalServerConfig.GetCredential().AccessKey {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
 	}
 
 	if err := globalIAMSys.SetUserStatus(accessKey, madmin.AccountStatus(status)); err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -1033,7 +1026,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
@@ -1042,13 +1035,13 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 
 	// Custom IAM policies not allowed for admin user.
 	if accessKey == globalServerConfig.GetCredential().AccessKey {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAddUserInvalidArgument), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAddUserInvalidArgument), r.URL)
 		return
 	}
 
 	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
 		// More than maxConfigSize bytes were available
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigTooLarge), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigTooLarge), r.URL)
 		return
 	}
 
@@ -1056,19 +1049,19 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
 		return
 	}
 
 	var uinfo madmin.UserInfo
 	if err = json.Unmarshal(configBytes, &uinfo); err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
 		return
 	}
 
 	if err = globalIAMSys.SetUser(accessKey, uinfo); err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -1092,12 +1085,12 @@ func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Requ
 
 	policies, err := globalIAMSys.ListCannedPolicies()
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	if err = json.NewEncoder(w).Encode(policies); err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -1118,12 +1111,12 @@ func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Requ
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
 	if err := globalIAMSys.DeleteCannedPolicy(policyName); err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -1150,36 +1143,36 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
 	// Error out if Content-Length is missing.
 	if r.ContentLength <= 0 {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL)
 		return
 	}
 
 	// Error out if Content-Length is beyond allowed size.
 	if r.ContentLength > maxBucketPolicySize {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrEntityTooLarge), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrEntityTooLarge), r.URL)
 		return
 	}
 
 	iamPolicy, err := iampolicy.ParseConfig(io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMalformedPolicy), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPolicy), r.URL)
 		return
 	}
 
 	// Version in policy must not be empty
 	if iamPolicy.Version == "" {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMalformedPolicy), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPolicy), r.URL)
 		return
 	}
 
 	if err = globalIAMSys.SetCannedPolicy(policyName, *iamPolicy); err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -1207,18 +1200,18 @@ func (a adminAPIHandlers) SetUserPolicy(w http.ResponseWriter, r *http.Request) 
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
 	// Custom IAM policies not allowed for admin user.
 	if accessKey == globalServerConfig.GetCredential().AccessKey {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
 	}
 
 	if err := globalIAMSys.SetUserPolicy(accessKey, policyName); err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 	}
 
 	// Notify all other Minio peers to reload users
@@ -1241,13 +1234,13 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
 	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
 		// More than maxConfigSize bytes were available
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigTooLarge), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigTooLarge), r.URL)
 		return
 	}
 
@@ -1255,7 +1248,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
 		return
 	}
 
@@ -1263,14 +1256,14 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	// client has not sent JSON objects with duplicate keys.
 	if err = quick.CheckDuplicateKeys(string(configBytes)); err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
 		return
 	}
 
 	var config serverConfig
 	if err = json.Unmarshal(configBytes, &config); err != nil {
 		logger.LogIf(ctx, err)
-		writeCustomErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
+		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}
 
@@ -1278,23 +1271,23 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	// then credentials in the provided configuration must match.
 	if globalIsEnvCreds {
 		if !globalServerConfig.GetCredential().Equal(config.Credential) {
-			writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminCredentialsMismatch), r.URL)
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminCredentialsMismatch), r.URL)
 			return
 		}
 	}
 
 	if err = config.Validate(); err != nil {
-		writeCustomErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
+		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}
 
 	if err = config.TestNotificationTargets(); err != nil {
-		writeCustomErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
+		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}
 
 	if err = saveServerConfig(ctx, objectAPI, &config); err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -1329,21 +1322,21 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
 	// Load config
 	configStruct, err := readServerConfig(ctx, objectAPI)
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	// Convert config to json bytes
 	configBytes, err := json.Marshal(configStruct)
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -1360,14 +1353,14 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 			reqInfo := (&logger.ReqInfo{}).AppendTags("key", k)
 			ctx = logger.SetReqInfo(ctx, reqInfo)
 			logger.LogIf(ctx, dErr)
-			writeCustomErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), dErr.Error(), r.URL)
+			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), dErr.Error(), r.URL)
 			return
 		}
 
 		elem, dErr := madmin.DecryptData(password, bytes.NewBuffer([]byte(encryptedElem)))
 		if dErr != nil {
 			logger.LogIf(ctx, dErr)
-			writeCustomErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), dErr.Error(), r.URL)
+			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), dErr.Error(), r.URL)
 			return
 		}
 
@@ -1377,7 +1370,7 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 		// Convert passed value to json filed type
 		val, cErr := convertValueType(elem, jsonFieldType)
 		if cErr != nil {
-			writeCustomErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), cErr.Error(), r.URL)
+			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), cErr.Error(), r.URL)
 			return
 		}
 		// Set the key/value in the new json document
@@ -1391,17 +1384,17 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 	// Validate config
 	var config serverConfig
 	if err = json.Unmarshal(configBytes, &config); err != nil {
-		writeCustomErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
+		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}
 
 	if err = config.Validate(); err != nil {
-		writeCustomErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
+		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}
 
 	if err = config.TestNotificationTargets(); err != nil {
-		writeCustomErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
+		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}
 
@@ -1409,13 +1402,13 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 	// then credentials in the provided configuration must match.
 	if globalIsEnvCreds {
 		if !globalServerConfig.GetCredential().Equal(config.Credential) {
-			writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminCredentialsMismatch), r.URL)
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminCredentialsMismatch), r.URL)
 			return
 		}
 	}
 
 	if err = saveServerConfig(ctx, objectAPI, &config); err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -1439,13 +1432,13 @@ func (a adminAPIHandlers) UpdateAdminCredentialsHandler(w http.ResponseWriter,
 	// Avoid setting new credentials when they are already passed
 	// by the environment. Deny if WORM is enabled.
 	if globalIsEnvCreds || globalWORMEnabled {
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
 	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
 		// More than maxConfigSize bytes were available
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigTooLarge), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigTooLarge), r.URL)
 		return
 	}
 
@@ -1453,7 +1446,7 @@ func (a adminAPIHandlers) UpdateAdminCredentialsHandler(w http.ResponseWriter,
 	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		logger.LogIf(ctx, err)
-		writeCustomErrorResponseJSON(w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
+		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}
 
@@ -1461,13 +1454,13 @@ func (a adminAPIHandlers) UpdateAdminCredentialsHandler(w http.ResponseWriter,
 	var req madmin.SetCredsReq
 	if err = json.Unmarshal(configBytes, &req); err != nil {
 		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(w, errorCodes.ToAPIErr(ErrRequestBodyParse), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrRequestBodyParse), r.URL)
 		return
 	}
 
 	creds, err := auth.CreateCredentials(req.AccessKey, req.SecretKey)
 	if err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -1482,7 +1475,7 @@ func (a adminAPIHandlers) UpdateAdminCredentialsHandler(w http.ResponseWriter,
 	globalActiveCred = creds
 
 	if err = saveServerConfig(ctx, objectAPI, globalServerConfig); err != nil {
-		writeErrorResponseJSON(w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
