@@ -298,12 +298,6 @@
 			"revisionTime": "2017-01-13T15:16:12Z"
 		},
 		{
-			"checksumSHA1": "2UmMbNHc8FBr98mJFN1k8ISOIHk=",
-			"path": "github.com/garyburd/redigo/internal",
-			"revision": "0d253a66e6e1349f4581d6d2b300ee434ee2da9f",
-			"revisionTime": "2017-02-16T21:49:44Z"
-		},
-		{
 			"checksumSHA1": "+IH9gXMht4fL/fxKRZ4sqGBps1g=",
 			"path": "github.com/go-ini/ini",
 			"revision": "e7fea39b01aea8d5671f6858f0532f56e8bff3a5",
@@ -589,6 +583,24 @@
 			"path": "github.com/miekg/dns",
 			"revision": "db96a2b759cdef4f11a34506a42eb8d1290c598e",
 			"revisionTime": "2016-07-26T03:20:27Z"
+		},
+		{
+			"checksumSHA1": "uTShVxdYNwW+3WI6SfJwOc/LQgo=",
+			"path": "github.com/minio/blazer/base",
+			"revision": "2081f5bf046503f576d8712253724fbf2950fffe",
+			"revisionTime": "2017-11-26T20:28:54Z"
+		},
+		{
+			"checksumSHA1": "ucCxupZ1gyxvFsBg5igP13dySLI=",
+			"path": "github.com/minio/blazer/internal/b2types",
+			"revision": "2081f5bf046503f576d8712253724fbf2950fffe",
+			"revisionTime": "2017-11-26T20:28:54Z"
+		},
+		{
+			"checksumSHA1": "zgBbPwwuUH2sxz8smOzOA9TrD5g=",
+			"path": "github.com/minio/blazer/internal/blog",
+			"revision": "2081f5bf046503f576d8712253724fbf2950fffe",
+			"revisionTime": "2017-11-26T20:28:54Z"
 		},
 		{
 			"checksumSHA1": "fUWokilZyc1QDKnIgCDJE8n1S9U=",
