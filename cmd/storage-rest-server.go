@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -33,9 +34,14 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
+var errConnectionStale = errors.New("connection stale, REST client/server instance-id mismatch")
+
 // To abstract a disk over network.
 type storageRESTServer struct {
 	storage *posix
+	// Used to detect reboot of servers so that peers revalidate format.json as
+	// different disk might be available on the same mount point after reboot.
+	instanceID string
 }
 
 func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
@@ -43,23 +49,15 @@ func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error)
 	w.Write([]byte(err.Error()))
 }
 
-// Authenticates storage client's requests.
-func storageServerRequestAuthenticate(r *http.Request) error {
-	_, _, err := webRequestAuthenticate(r)
-	return err
-}
-
-// IsValid - To authenticate and verify the time difference.
-func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
-	if err := storageServerRequestAuthenticate(r); err != nil {
-		w.WriteHeader(http.StatusForbidden)
-		return false
+// Authenticates storage client's requests and validates for skewed time.
+func storageServerRequestValidate(r *http.Request) error {
+	if _, _, err := webRequestAuthenticate(r); err != nil {
+		return err
 	}
 	requestTimeStr := r.Header.Get("X-Minio-Time")
 	requestTime, err := time.Parse(time.RFC3339, requestTimeStr)
 	if err != nil {
-		s.writeErrorResponse(w, err)
-		return false
+		return err
 	}
 	utcNow := UTCNow()
 	delta := requestTime.Sub(utcNow)
@@ -67,10 +65,34 @@ func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool
 		delta = delta * -1
 	}
 	if delta > DefaultSkewTime {
-		s.writeErrorResponse(w, fmt.Errorf("client time %v is too apart with server time %v", requestTime, utcNow))
+		return fmt.Errorf("client time %v is too apart with server time %v", requestTime, utcNow)
+	}
+	return nil
+}
+
+// IsValid - To authenticate and verify the time difference.
+func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
+	if err := storageServerRequestValidate(r); err != nil {
+		s.writeErrorResponse(w, err)
+		return false
+	}
+	instanceID := r.URL.Query().Get(storageRESTInstanceID)
+	if instanceID != s.instanceID {
+		// This will cause the peer to revalidate format.json using a new storage-rest-client instance.
+		s.writeErrorResponse(w, errConnectionStale)
 		return false
 	}
 	return true
+}
+
+// GetInstanceID - returns the instance ID of the server.
+func (s *storageRESTServer) GetInstanceID(w http.ResponseWriter, r *http.Request) {
+	if err := storageServerRequestValidate(r); err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	w.Header().Set("Content-Length", strconv.Itoa(len(s.instanceID)))
+	w.Write([]byte(s.instanceID))
 }
 
 // DiskInfoHandler - returns disk info.
@@ -383,7 +405,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 			logger.Fatal(uiErrUnableToWriteInBackend(err), "Unable to initialize posix backend")
 		}
 
-		server := &storageRESTServer{storage}
+		server := &storageRESTServer{storage, mustGetUUID()}
 
 		subrouter := router.PathPrefix(path.Join(storageRESTPath, endpoint.Path)).Subrouter()
 
@@ -414,6 +436,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodRenameFile).HandlerFunc(httpTraceHdrs(server.RenameFileHandler)).
 			Queries(restQueries(storageRESTSrcVolume, storageRESTSrcPath, storageRESTDstVolume, storageRESTDstPath)...)
+		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodGetInstanceID).HandlerFunc(httpTraceAll(server.GetInstanceID))
 	}
 
 	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(notFoundHandler))
