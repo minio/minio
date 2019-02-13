@@ -95,12 +95,12 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
 		if !bytes.Equal(testCase.locationResponse, rec.Body.Bytes()) && testCase.shouldPass {
-			t.Errorf("Test %d: %s: Expected the response to be `%s`, but instead found `%s`", i+1, instanceType, string(testCase.locationResponse), string(rec.Body.Bytes()))
+			t.Errorf("Test %d: %s: Expected the response to be `%s`, but instead found `%s`", i+1, instanceType, string(testCase.locationResponse), rec.Body.String())
 		}
 		errorResponse := APIErrorResponse{}
 		err = xml.Unmarshal(rec.Body.Bytes(), &errorResponse)
 		if err != nil && !testCase.shouldPass {
-			t.Fatalf("Test %d: %s: Unable to marshal response body %s", i+1, instanceType, string(rec.Body.Bytes()))
+			t.Fatalf("Test %d: %s: Unable to marshal response body %s", i+1, instanceType, rec.Body.String())
 		}
 		if errorResponse.Resource != testCase.errorResponse.Resource {
 			t.Errorf("Test %d: %s: Expected the error resource to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Resource, errorResponse.Resource)
@@ -131,7 +131,7 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 		errorResponse = APIErrorResponse{}
 		err = xml.Unmarshal(recV2.Body.Bytes(), &errorResponse)
 		if err != nil && !testCase.shouldPass {
-			t.Fatalf("Test %d: %s: Unable to marshal response body %s", i+1, instanceType, string(recV2.Body.Bytes()))
+			t.Fatalf("Test %d: %s: Unable to marshal response body %s", i+1, instanceType, recV2.Body.String())
 		}
 		if errorResponse.Resource != testCase.errorResponse.Resource {
 			t.Errorf("Test %d: %s: Expected the error resource to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Resource, errorResponse.Resource)

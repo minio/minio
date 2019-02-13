@@ -855,6 +855,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			shouldPass:         true,
+			fault:              None,
 		},
 		// Test case - 2
 		// Small chunk size.
@@ -869,6 +870,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			shouldPass:         true,
+			fault:              None,
 		},
 		// Test case - 3
 		// Empty data
@@ -897,6 +899,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			accessKey:          "",
 			secretKey:          "",
 			shouldPass:         false,
+			fault:              None,
 		},
 		// Test case - 5
 		// Wrong auth header returns as bad request.
@@ -912,6 +915,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			secretKey:          credentials.SecretKey,
 			shouldPass:         false,
 			removeAuthHeader:   true,
+			fault:              None,
 		},
 		// Test case - 6
 		// Large chunk size.. also passes.
@@ -926,6 +930,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			shouldPass:         true,
+			fault:              None,
 		},
 		// Test case - 7
 		// Chunk with malformed encoding.
@@ -1017,6 +1022,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			secretKey:          credentials.SecretKey,
 			shouldPass:         true,
 			contentEncoding:    "aws-chunked,gzip",
+			fault:              None,
 		},
 	}
 	// Iterating over the cases, fetching the object validating the response.

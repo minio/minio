@@ -234,7 +234,9 @@ func handleDateAdd(r Record, d *DateAddFunc) (*Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	inferTypeAsTimestamp(ts)
+	if err = inferTypeAsTimestamp(ts); err != nil {
+		return nil, err
+	}
 	t, ok := ts.ToTimestamp()
 	if !ok {
 		return nil, fmt.Errorf("%s() expects a timestamp argument", sqlFnDateAdd)
@@ -248,7 +250,9 @@ func handleDateDiff(r Record, d *DateDiffFunc) (*Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	inferTypeAsTimestamp(tval1)
+	if err = inferTypeAsTimestamp(tval1); err != nil {
+		return nil, err
+	}
 	ts1, ok := tval1.ToTimestamp()
 	if !ok {
 		return nil, fmt.Errorf("%s() expects two timestamp arguments", sqlFnDateDiff)
@@ -258,7 +262,9 @@ func handleDateDiff(r Record, d *DateDiffFunc) (*Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	inferTypeAsTimestamp(tval2)
+	if err = inferTypeAsTimestamp(tval2); err != nil {
+		return nil, err
+	}
 	ts2, ok := tval2.ToTimestamp()
 	if !ok {
 		return nil, fmt.Errorf("%s() expects two timestamp arguments", sqlFnDateDiff)
@@ -363,7 +369,9 @@ func handleSQLExtract(r Record, e *ExtractFunc) (res *Value, err error) {
 		return nil, verr
 	}
 
-	inferTypeAsTimestamp(timeVal)
+	if err = inferTypeAsTimestamp(timeVal); err != nil {
+		return nil, err
+	}
 
 	t, ok := timeVal.ToTimestamp()
 	if !ok {

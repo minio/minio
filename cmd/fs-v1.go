@@ -532,8 +532,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		nsUnlocker()
 		return nil, toObjectErr(err, bucket, object)
 	}
-	var reader io.Reader
-	reader = io.LimitReader(readCloser, length)
+	reader := io.LimitReader(readCloser, length)
 	closeFn := func() {
 		readCloser.Close()
 	}

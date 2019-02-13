@@ -94,7 +94,7 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 		// - Scheme field must contain "http" or "https"
 		// - All field should be empty except Host and Path.
 		if !((u.Scheme == "http" || u.Scheme == "https") &&
-			u.User == nil && u.Opaque == "" && u.ForceQuery == false && u.RawQuery == "" && u.Fragment == "") {
+			u.User == nil && u.Opaque == "" && !u.ForceQuery && u.RawQuery == "" && u.Fragment == "") {
 			return ep, fmt.Errorf("invalid URL endpoint format")
 		}
 

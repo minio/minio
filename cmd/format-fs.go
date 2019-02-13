@@ -341,35 +341,35 @@ func formatFSFixDeploymentID(fsFormatPath string) error {
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
-	retryTimerCh := newRetryTimerSimple(doneCh)
-	for {
-		select {
-		case <-retryTimerCh:
+	var wlk *lock.LockedFile
+	for range newRetryTimerSimple(doneCh) {
+		wlk, err = lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR, 0)
+		if err == lock.ErrAlreadyLocked {
+			// Lock already present, sleep and attempt again
+			logger.Info("Another minio process(es) might be holding a lock to the file %s. Please kill that minio process(es) (elapsed %s)\n", fsFormatPath, getElapsedTime())
+			continue
+		}
+		if err != nil {
+			break
+		}
 
-			wlk, err := lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR, 0)
-			if err == lock.ErrAlreadyLocked {
-				// Lock already present, sleep and attempt again
+		if err = jsonLoad(wlk, format); err != nil {
+			break
+		}
 
-				logger.Info("Another minio process(es) might be holding a lock to the file %s. Please kill that minio process(es) (elapsed %s)\n", fsFormatPath, getElapsedTime())
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			defer wlk.Close()
+		// Check if format needs to be updated
+		if format.ID != "" {
+			err = nil
+			break
+		}
 
-			err = jsonLoad(wlk, format)
-			if err != nil {
-				return err
-			}
-
-			// Check if it needs to be updated
-			if format.ID != "" {
-				return nil
-			}
-			format.ID = mustGetUUID()
-			return jsonSave(wlk, format)
+		format.ID = mustGetUUID()
+		if err = jsonSave(wlk, format); err != nil {
+			break
 		}
 	}
-
+	if wlk != nil {
+		wlk.Close()
+	}
+	return err
 }

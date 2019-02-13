@@ -38,7 +38,6 @@ var (
 		layoutSecond,
 		layoutNanosecond,
 	}
-	oneNanoSecond = 1
 )
 
 func parseSQLTimestamp(s string) (t time.Time, err error) {

@@ -19,15 +19,7 @@ package http
 import (
 	"io"
 	"io/ioutil"
-	"sync"
 )
-
-var b512pool = sync.Pool{
-	New: func() interface{} {
-		buf := make([]byte, 512)
-		return &buf
-	},
-}
 
 // DrainBody close non nil response with any response Body.
 // convenient wrapper to drain any remaining data on response body.

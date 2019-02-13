@@ -102,7 +102,6 @@ func newNSLock(isDistXL bool) *nsLockMap {
 	nsMutex := nsLockMap{
 		isDistXL: isDistXL,
 		lockMap:  make(map[nsParam]*nsLock),
-		counters: &lockStat{},
 	}
 	return &nsMutex
 }
@@ -127,9 +126,6 @@ type nsLock struct {
 // nsLockMap - namespace lock map, provides primitives to Lock,
 // Unlock, RLock and RUnlock.
 type nsLockMap struct {
-	// Lock counter used for lock debugging.
-	counters *lockStat
-
 	// Indicates if namespace is part of a distributed setup.
 	isDistXL     bool
 	lockMap      map[nsParam]*nsLock
@@ -259,11 +255,8 @@ func (n *nsLockMap) ForceUnlock(volume, path string) {
 		dsync.NewDRWMutex(pathJoin(volume, path), globalDsync).ForceUnlock()
 	}
 
-	param := nsParam{volume, path}
-	if _, found := n.lockMap[param]; found {
-		// Remove lock from the map.
-		delete(n.lockMap, param)
-	}
+	// Remove lock from the map.
+	delete(n.lockMap, nsParam{volume, path})
 }
 
 // lockInstance - frontend/top-level interface for namespace locks.

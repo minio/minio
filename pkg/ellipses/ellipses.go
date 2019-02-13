@@ -38,10 +38,10 @@ var (
 // `{1...64}`
 // `{33...64}`
 func parseEllipsesRange(pattern string) (seq []string, err error) {
-	if strings.Index(pattern, openBraces) == -1 {
+	if !strings.Contains(pattern, openBraces) {
 		return nil, errors.New("Invalid argument")
 	}
-	if strings.Index(pattern, closeBraces) == -1 {
+	if !strings.Contains(pattern, closeBraces) {
 		return nil, errors.New("Invalid argument")
 	}
 
@@ -145,7 +145,7 @@ func (p Pattern) Expand() []string {
 		case p.Suffix != "" && p.Prefix == "":
 			labels = append(labels, fmt.Sprintf("%s%s", p.Seq[i], p.Suffix))
 		case p.Suffix == "" && p.Prefix == "":
-			labels = append(labels, fmt.Sprintf("%s", p.Seq[i]))
+			labels = append(labels, p.Seq[i])
 		default:
 			labels = append(labels, fmt.Sprintf("%s%s%s", p.Prefix, p.Seq[i], p.Suffix))
 		}

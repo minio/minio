@@ -860,7 +860,7 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 		return 0, err
 	}
 
-	if bytes.Compare(h.Sum(nil), verifier.sum) != 0 {
+	if !bytes.Equal(h.Sum(nil), verifier.sum) {
 		return 0, hashMismatchError{hex.EncodeToString(verifier.sum), hex.EncodeToString(h.Sum(nil))}
 	}
 

@@ -838,7 +838,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		reader = pipeReader
 		length = -1
 
-		snappyWriter := snappy.NewWriter(pipeWriter)
+		snappyWriter := snappy.NewBufferedWriter(pipeWriter)
 
 		go func() {
 			// Compress the decompressed source object.
@@ -1217,7 +1217,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
 
 		pipeReader, pipeWriter := io.Pipe()
-		snappyWriter := snappy.NewWriter(pipeWriter)
+		snappyWriter := snappy.NewBufferedWriter(pipeWriter)
 
 		var actualReader *hash.Reader
 		actualReader, err = hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
@@ -1660,7 +1660,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		reader = pipeReader
 		length = -1
 
-		snappyWriter := snappy.NewWriter(pipeWriter)
+		snappyWriter := snappy.NewBufferedWriter(pipeWriter)
 
 		go func() {
 			// Compress the decompressed source object.
@@ -1902,7 +1902,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	isCompressed := false
 	if objectAPI.IsCompressionSupported() && compressPart {
 		pipeReader, pipeWriter = io.Pipe()
-		snappyWriter := snappy.NewWriter(pipeWriter)
+		snappyWriter := snappy.NewBufferedWriter(pipeWriter)
 
 		var actualReader *hash.Reader
 		actualReader, err = hash.NewReader(reader, size, md5hex, sha256hex, actualSize)

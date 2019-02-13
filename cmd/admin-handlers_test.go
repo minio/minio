@@ -29,7 +29,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/auth"
@@ -231,10 +230,9 @@ var (
 // adminXLTestBed - encapsulates subsystems that need to be setup for
 // admin-handler unit tests.
 type adminXLTestBed struct {
-	configPath string
-	xlDirs     []string
-	objLayer   ObjectLayer
-	router     *mux.Router
+	xlDirs   []string
+	objLayer ObjectLayer
+	router   *mux.Router
 }
 
 // prepareAdminXLTestBed - helper function that setups a single-node
@@ -773,7 +771,7 @@ func TestSetConfigHandler(t *testing.T) {
 
 		rec := httptest.NewRecorder()
 		adminTestBed.router.ServeHTTP(rec, req)
-		respBody := string(rec.Body.Bytes())
+		respBody := rec.Body.String()
 		if rec.Code != http.StatusBadRequest ||
 			!strings.Contains(respBody, "Configuration data provided exceeds the allowed maximum of") {
 			t.Errorf("Got unexpected response code or body %d - %s", rec.Code, respBody)
@@ -792,7 +790,7 @@ func TestSetConfigHandler(t *testing.T) {
 
 		rec := httptest.NewRecorder()
 		adminTestBed.router.ServeHTTP(rec, req)
-		respBody := string(rec.Body.Bytes())
+		respBody := rec.Body.String()
 		if rec.Code != http.StatusBadRequest ||
 			!strings.Contains(respBody, "JSON configuration provided is of incorrect format") {
 			t.Errorf("Got unexpected response code or body %d - %s", rec.Code, respBody)
@@ -878,91 +876,4 @@ func TestToAdminAPIErrCode(t *testing.T) {
 				i+1, test.expectedAPIErr, actualErr)
 		}
 	}
-}
-
-func mkHealStartReq(t *testing.T, bucket, prefix string,
-	opts madmin.HealOpts) *http.Request {
-
-	body, err := json.Marshal(opts)
-	if err != nil {
-		t.Fatalf("Unable marshal heal opts")
-	}
-
-	path := fmt.Sprintf("/minio/admin/v1/heal/%s", bucket)
-	if bucket != "" && prefix != "" {
-		path += "/" + prefix
-	}
-
-	req, err := newTestRequest("POST", path,
-		int64(len(body)), bytes.NewReader(body))
-	if err != nil {
-		t.Fatalf("Failed to construct request - %v", err)
-	}
-	cred := globalServerConfig.GetCredential()
-	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-	if err != nil {
-		t.Fatalf("Failed to sign request - %v", err)
-	}
-
-	return req
-}
-
-func mkHealStatusReq(t *testing.T, bucket, prefix,
-	clientToken string) *http.Request {
-
-	path := fmt.Sprintf("/minio/admin/v1/heal/%s", bucket)
-	if bucket != "" && prefix != "" {
-		path += "/" + prefix
-	}
-	path += fmt.Sprintf("?clientToken=%s", clientToken)
-
-	req, err := newTestRequest("POST", path, 0, nil)
-	if err != nil {
-		t.Fatalf("Failed to construct request - %v", err)
-	}
-	cred := globalServerConfig.GetCredential()
-	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-	if err != nil {
-		t.Fatalf("Failed to sign request - %v", err)
-	}
-
-	return req
-}
-
-func collectHealResults(t *testing.T, adminTestBed *adminXLTestBed, bucket,
-	prefix, clientToken string, timeLimitSecs int) madmin.HealTaskStatus {
-
-	var res, cur madmin.HealTaskStatus
-
-	// loop and fetch heal status. have a time-limit to loop over
-	// all statuses.
-	timeLimit := UTCNow().Add(time.Second * time.Duration(timeLimitSecs))
-	for cur.Summary != healStoppedStatus && cur.Summary != healFinishedStatus {
-		if UTCNow().After(timeLimit) {
-			t.Fatalf("heal-status loop took too long - clientToken: %s", clientToken)
-		}
-		req := mkHealStatusReq(t, bucket, prefix, clientToken)
-		rec := httptest.NewRecorder()
-		adminTestBed.router.ServeHTTP(rec, req)
-		if http.StatusOK != rec.Code {
-			t.Errorf("Unexpected status code - got %d but expected %d",
-				rec.Code, http.StatusOK)
-			break
-		}
-		err := json.NewDecoder(rec.Body).Decode(&cur)
-		if err != nil {
-			t.Errorf("unable to unmarshal resp: %v", err)
-			break
-		}
-
-		// all results are accumulated into a slice
-		// and returned to caller in the end
-		allItems := append(res.Items, cur.Items...)
-		res = cur
-		res.Items = allItems
-
-		time.Sleep(time.Millisecond * 200)
-	}
-
-	return res
 }

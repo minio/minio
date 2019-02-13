@@ -83,8 +83,6 @@ type Select struct {
 type SelectExpression struct {
 	All         bool                 `parser:"  @\"*\""`
 	Expressions []*AliasedExpression `parser:"| @@ { \",\" @@ }"`
-
-	prop qProp
 }
 
 // TableExpression represents the FROM clause

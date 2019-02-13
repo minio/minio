@@ -742,7 +742,7 @@ func DecryptBlocksRequest(client io.Writer, r *http.Request, bucket, object stri
 		return writer, encStartOffset, encLength, nil
 	}
 
-	seqNumber, encStartOffset, encLength = getEncryptedMultipartsOffsetLength(startOffset, length, objInfo)
+	_, encStartOffset, encLength = getEncryptedMultipartsOffsetLength(startOffset, length, objInfo)
 
 	var partStartIndex int
 	var partStartOffset = startOffset

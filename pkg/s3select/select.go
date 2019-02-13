@@ -408,9 +408,7 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 	}
 
 	if err != nil {
-		if serr := writer.FinishWithError("InternalError", err.Error()); serr != nil {
-			// FIXME: log errors.
-		}
+		_ = writer.FinishWithError("InternalError", err.Error())
 	}
 }
 

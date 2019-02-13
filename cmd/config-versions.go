@@ -263,9 +263,6 @@ type serverConfigV7 struct {
 
 	// Notification queue configuration.
 	Notify notifierV1 `json:"notify"`
-
-	// Read Write mutex.
-	rwMutex *sync.RWMutex
 }
 
 // serverConfigV8 server configuration version '8'. Adds NATS notifier
@@ -282,9 +279,6 @@ type serverConfigV8 struct {
 
 	// Notification queue configuration.
 	Notify notifierV1 `json:"notify"`
-
-	// Read Write mutex.
-	rwMutex *sync.RWMutex
 }
 
 // serverConfigV9 server configuration version '9'. Adds PostgreSQL
@@ -301,9 +295,6 @@ type serverConfigV9 struct {
 
 	// Notification queue configuration.
 	Notify notifierV1 `json:"notify"`
-
-	// Read Write mutex.
-	rwMutex *sync.RWMutex
 }
 
 type loggerV7 struct {

@@ -56,12 +56,11 @@ func (l *logOnceType) logOnceIf(ctx context.Context, err error, id interface{}) 
 // Cleanup the map every 30 minutes so that the log message is printed again for the user to notice.
 func (l *logOnceType) cleanupRoutine() {
 	for {
-		select {
-		case <-time.After(time.Minute * 30):
-			l.Lock()
-			l.IDMap = make(map[interface{}]error)
-			l.Unlock()
-		}
+		l.Lock()
+		l.IDMap = make(map[interface{}]error)
+		l.Unlock()
+
+		time.Sleep(30 * time.Minute)
 	}
 }
 

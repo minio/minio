@@ -465,7 +465,7 @@ func testObjectOverwriteWorks(obj ObjectLayer, instanceType string, t TestErrHan
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	if string(bytesBuffer.Bytes()) != "The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed." {
+	if bytesBuffer.String() != "The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed." {
 		t.Errorf("%s: Invalid upload ID error mismatch.", instanceType)
 	}
 }

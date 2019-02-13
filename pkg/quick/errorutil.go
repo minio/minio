@@ -62,17 +62,16 @@ func FormatJSONSyntaxError(data io.Reader, offset int64) (highlight string) {
 		if readBytes > offset {
 			break
 		}
-		switch b {
-		case '\n':
+		if b == '\n' {
 			readLine.Reset()
 			errLine++
-		case '\t':
+			continue
+		} else if b == '\t' {
 			readLine.WriteByte(' ')
-		case '\r':
+		} else if b == '\r' {
 			break
-		default:
-			readLine.WriteByte(b)
 		}
+		readLine.WriteByte(b)
 	}
 
 	lineLen := readLine.Len()

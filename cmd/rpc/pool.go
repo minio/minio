@@ -21,13 +21,6 @@ import (
 	"sync"
 )
 
-var b512pool = sync.Pool{
-	New: func() interface{} {
-		buf := make([]byte, 512)
-		return &buf
-	},
-}
-
 // A Pool is a type-safe wrapper around a sync.Pool.
 type Pool struct {
 	p *sync.Pool

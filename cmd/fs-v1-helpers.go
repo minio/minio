@@ -294,7 +294,7 @@ func fsOpenFile(ctx context.Context, readPath string, offset int64) (io.ReadClos
 
 	// Seek to the requested offset.
 	if offset > 0 {
-		_, err = fr.Seek(offset, os.SEEK_SET)
+		_, err = fr.Seek(offset, io.SeekStart)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return nil, 0, err

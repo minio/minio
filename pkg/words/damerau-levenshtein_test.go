@@ -26,7 +26,6 @@ func TestMinimum(t *testing.T) {
 	type testCase struct {
 		listval  []int
 		expected int
-		pass     bool
 	}
 	testCases := []testCase{
 		{listval: []int{3, 4, 15}, expected: 3},
