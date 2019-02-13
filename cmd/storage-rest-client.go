@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"time"
 
 	"encoding/gob"
 	"encoding/hex"
@@ -37,6 +38,10 @@ import (
 	"github.com/minio/minio/cmd/rest"
 	xnet "github.com/minio/minio/pkg/net"
 )
+
+// The timeout of TCP connect and sending/receiving
+// data for all internode storage REST requests.
+const storageRESTTimeout = 5 * time.Minute
 
 func isNetworkDisconnectError(err error) bool {
 	if err == nil {
@@ -376,6 +381,6 @@ func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 		}
 	}
 
-	restClient := rest.NewClient(serverURL, tlsConfig, rest.DefaultRESTTimeout, newAuthToken)
+	restClient := rest.NewClient(serverURL, tlsConfig, storageRESTTimeout, newAuthToken)
 	return &storageRESTClient{endpoint: endpoint, restClient: restClient, connected: true}
 }

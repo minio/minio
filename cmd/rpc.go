@@ -31,6 +31,12 @@ import (
 // DefaultSkewTime - skew time is 15 minutes between minio peers.
 const DefaultSkewTime = 15 * time.Minute
 
+// defaultRPCTimeout - default RPC timeout is one minute.
+const defaultRPCTimeout = 5 * time.Minute
+
+// defaultRPCRetryTime - default RPC time to wait before retry after a network error
+const defaultRPCRetryTime = 1 * time.Minute
+
 var errRPCRetry = fmt.Errorf("rpc: retry error")
 
 func isNetError(err error) bool {
@@ -217,7 +223,7 @@ func (client *RPCClient) Call(serviceMethod string, args interface {
 		}
 
 		if isNetError(err) {
-			client.setRetryTicker(time.NewTicker(xrpc.DefaultRPCTimeout))
+			client.setRetryTicker(time.NewTicker(defaultRPCRetryTime))
 		} else {
 			client.setRetryTicker(nil)
 		}
@@ -265,6 +271,6 @@ func NewRPCClient(args RPCClientArgs) (*RPCClient, error) {
 	return &RPCClient{
 		args:      args,
 		authToken: args.NewAuthTokenFunc(),
-		rpcClient: xrpc.NewClient(args.ServiceURL, args.TLSConfig, xrpc.DefaultRPCTimeout),
+		rpcClient: xrpc.NewClient(args.ServiceURL, args.TLSConfig, defaultRPCTimeout),
 	}, nil
 }
