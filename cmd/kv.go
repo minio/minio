@@ -1,10 +1,111 @@
 package cmd
 
+/*
+#include <stdio.h>
+#include <stdlib.h>
+#include "nkv_api.h"
+#include "nkv_result.h"
+
+struct minio_nkv_handle {
+  uint64_t nkv_handle;
+  uint64_t container_hash;
+  uint64_t network_path_hash;
+};
+
+static int minio_nkv_open(char *config, struct minio_nkv_handle *handle) {
+  uint64_t instance_uuid = 0;
+  nkv_result result;
+  result = nkv_open(config, "minio", "msl-ssg-sk01", 1023, &instance_uuid, &handle->nkv_handle);
+
+  uint32_t index = 0;
+  uint32_t cnt_count = NKV_MAX_ENTRIES_PER_CALL;
+  nkv_container_info *cntlist = malloc(sizeof(nkv_container_info)*NKV_MAX_ENTRIES_PER_CALL);
+  memset(cntlist, 0, sizeof(nkv_container_info) * NKV_MAX_ENTRIES_PER_CALL);
+
+  for (int i = 0; i < NKV_MAX_ENTRIES_PER_CALL; i++) {
+    cntlist[i].num_container_transport = NKV_MAX_CONT_TRANSPORT;
+    cntlist[i].transport_list = malloc(sizeof(nkv_container_transport)*NKV_MAX_CONT_TRANSPORT);
+    memset(cntlist[i].transport_list, 0, sizeof(nkv_container_transport)*NKV_MAX_CONT_TRANSPORT);
+  }
+
+  result = nkv_physical_container_list (handle->nkv_handle, index, cntlist, &cnt_count);
+  if (result != 0) {
+    printf("NKV getting physical container list failed !!, error = %d\n", result);
+    exit(1);
+  }
+  printf("Got container list, count = %u\n", cnt_count);
+  nkv_io_context io_ctx[16];
+  memset(io_ctx, 0, sizeof(nkv_io_context) * 16);
+  uint32_t io_ctx_cnt = 0;
+
+  for (uint32_t i = 0; i < cnt_count; i++) {
+    printf("Container Information :: hash = %u, id = %u, uuid = %s, name = %s, target node = %s, status = %u, space available pcnt = %u\n",
+             cntlist[i].container_hash, cntlist[i].container_id, cntlist[i].container_uuid, cntlist[i].container_name, cntlist[i].hosting_target_name,
+             cntlist[i].container_status, cntlist[i].container_space_available_percentage);
+
+    printf("\n");
+    io_ctx[io_ctx_cnt].container_hash = cntlist[i].container_hash;
+
+    printf("Number of Container transport = %d\n", cntlist[i].num_container_transport);
+    for (int p = 0; p < cntlist[i].num_container_transport; p++) {
+      printf("Transport information :: hash = %u, id = %d, address = %s, port = %d, family = %d, speed = %d, status = %d, numa_node = %d\n",
+              cntlist[i].transport_list[p].network_path_hash, cntlist[i].transport_list[p].network_path_id, cntlist[i].transport_list[p].ip_addr,
+              cntlist[i].transport_list[p].port, cntlist[i].transport_list[p].addr_family, cntlist[i].transport_list[p].speed,
+              cntlist[i].transport_list[p].status, cntlist[i].transport_list[p].numa_node);
+
+      io_ctx[io_ctx_cnt].is_pass_through = 1;
+      io_ctx[io_ctx_cnt].container_hash = cntlist[i].container_hash;
+      io_ctx[io_ctx_cnt].network_path_hash = cntlist[i].transport_list[p].network_path_hash;
+      io_ctx_cnt++;
+    }
+  }
+  handle->container_hash = io_ctx[0].container_hash;
+  handle->network_path_hash = io_ctx[0].network_path_hash;
+  return result;
+}
+
+static int minio_nkv_put(struct minio_nkv_handle *handle, void *key, int keyLen, void *value, int valueLen) {
+  nkv_result result;
+  nkv_io_context ctx;
+  ctx.is_pass_through = 1;
+  ctx.container_hash = handle->container_hash;
+  ctx.network_path_hash = handle->network_path_hash;
+  ctx.ks_id = 0;
+
+  const nkv_key  nkvkey = {key, keyLen};
+  nkv_store_option option = {0};
+  nkv_value nkvvalue = {value, valueLen, 0};
+  result = nkv_store_kvp(handle->nkv_handle, &ctx, &nkvkey, &option, &nkvvalue);
+  return result;
+}
+
+static int minio_nkv_get(struct minio_nkv_handle *handle, void *key, int keyLen, void *value, int valueLen, int *actual_length) {
+  nkv_result result;
+  nkv_io_context ctx;
+  ctx.is_pass_through = 1;
+  ctx.container_hash = handle->container_hash;
+  ctx.network_path_hash = handle->network_path_hash;
+  ctx.ks_id = 0;
+
+  const nkv_key  nkvkey = {key, keyLen};
+  nkv_retrieve_option option = {0};
+
+  nkv_value nkvvalue = {value, valueLen, 0};
+  result = nkv_retrieve_kvp(handle->nkv_handle, &ctx, &nkvkey, &option, &nkvvalue);
+  *actual_length = nkvvalue.actual_length;
+  return result;
+}
+
+
+*/
+import "C"
+
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -12,15 +113,17 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unsafe"
 )
 
 type KV struct {
-	path string
+	handle C.struct_minio_nkv_handle
 }
 
 type KVNSEntry struct {
-	Size int64
-	IDs  []string
+	Size    int64
+	ModTime time.Time
+	IDs     []string
 }
 
 var errValueTooLong = errors.New("value too long")
@@ -28,38 +131,31 @@ var errValueTooLong = errors.New("value too long")
 const kvDataDir = ".minio.sys/.data"
 const kvMaxValueSize = 2 * 1024 * 1024
 
-func (k *KV) Put(key string, value []byte) error {
+func (k *KV) Put(keyStr string, value []byte) error {
 	if len(value) > kvMaxValueSize {
 		return errValueTooLong
 	}
-	fullPath := pathJoin(k.path, key)
-	os.MkdirAll(path.Dir(fullPath), 0755)
-	return ioutil.WriteFile(pathJoin(k.path, key), value, 0644)
+	key := []byte(keyStr)
+	status := C.minio_nkv_put(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)), unsafe.Pointer(&value[0]), C.int(len(value)))
+	if status != 0 {
+		return errors.New("error during put")
+	}
+	return nil
 }
 
-func (k *KV) Get(key string) ([]byte, error) {
-	st, err := os.Stat(pathJoin(k.path, key))
-	if err != nil {
-		// File is really not found.
-		if os.IsNotExist(err) {
-			return nil, errFileNotFound
-		} else if isSysErrNotDir(err) {
-			// File path cannot be verified since one of the parents is a file.
-			return nil, errFileNotFound
-		}
-
-		// Return all errors here.
-		return nil, err
-	}
-	// If its a directory its not a regular file.
-	if st.Mode().IsDir() {
+func (k *KV) Get(keyStr string) ([]byte, error) {
+	key := []byte(keyStr)
+	var actualLength C.int
+	value := make([]byte, kvMaxValueSize)
+	status := C.minio_nkv_get(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)), unsafe.Pointer(&value[0]), C.int(len(value)), &actualLength)
+	if status != 0 {
 		return nil, errFileNotFound
 	}
-	return ioutil.ReadFile(pathJoin(k.path, key))
+	return value[:actualLength], nil
 }
 
 func (k *KV) Delete(key string) error {
-	return os.Remove(pathJoin(k.path, key))
+	return nil
 }
 
 func (k *KV) DataKey(id string) string {
@@ -67,7 +163,7 @@ func (k *KV) DataKey(id string) string {
 }
 
 func (k *KV) CreateFile(nskey string, size int64, reader io.Reader) error {
-	entry := KVNSEntry{Size: size}
+	entry := KVNSEntry{Size: size, ModTime: time.Now()}
 	buf := make([]byte, kvMaxValueSize)
 	for {
 		if size < int64(len(buf)) {
@@ -148,11 +244,7 @@ func (k *KV) StatFile(nskey string) (size int64, modTime time.Time, err error) {
 	if err = json.Unmarshal(b, &entry); err != nil {
 		return
 	}
-	fi, err := os.Stat(pathJoin(k.path, nskey))
-	if err != nil {
-		return
-	}
-	return entry.Size, fi.ModTime(), nil
+	return entry.Size, entry.ModTime, nil
 }
 
 func (k *KV) ListDir(nskey string) ([]string, error) {
@@ -180,20 +272,26 @@ func (k *KV) ListDir(nskey string) ([]string, error) {
 }
 
 type KVStorage struct {
-	kv   *KV
-	path string
+	kv     *KV
+	volDir string
 }
 
 func newPosix(path string) (StorageAPI, error) {
 	os.MkdirAll(path, 0777)
-	os.MkdirAll(pathJoin(path, kvVolumeDir), 0777)
+	os.MkdirAll(pathJoin("/tmp", path), 0777)
 
-	var err error
-	path, err = filepath.Abs(path)
+	fullPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
 	}
-	p := &KVStorage{&KV{path}, path}
+	kv := &KV{}
+	fmt.Println("opening", fullPath)
+	status := C.minio_nkv_open(C.CString(fullPath), &kv.handle)
+	fmt.Println("status", status)
+	if status != 0 {
+		return nil, errors.New("unable to open device")
+	}
+	p := &KVStorage{kv, pathJoin("/tmp", path)}
 	if strings.HasSuffix(path, "export-xl/disk1") {
 		return &debugStorage{path, p}, nil
 	}
@@ -201,7 +299,7 @@ func newPosix(path string) (StorageAPI, error) {
 }
 
 func (k *KVStorage) String() string {
-	return k.path
+	return k.volDir
 }
 
 func (k *KVStorage) IsOnline() bool {
@@ -217,24 +315,16 @@ func (k *KVStorage) Close() error {
 }
 
 func (k *KVStorage) DiskInfo() (info DiskInfo, err error) {
-	di, err := getDiskInfo(k.path)
-	if err != nil {
-		return info, err
-	}
-
 	return DiskInfo{
-		Total: di.Total,
-		Free:  di.Free,
+		Total: 3 * 1024 * 1024 * 1024 * 1024,
+		Free:  3 * 1024 * 1024 * 1024 * 1024,
 	}, nil
 }
 
-const kvVolumeDir = ".volumes"
+// const kvVolumeDir = ".volumes"
 
 func (k *KVStorage) getVolumeDir(volume string) string {
-	if strings.HasPrefix(volume, minioMetaBucket) {
-		return pathJoin(k.path, volume)
-	}
-	return pathJoin(k.path, kvVolumeDir, volume)
+	return pathJoin(k.volDir, volume)
 }
 
 func (k *KVStorage) verifyVolume(volume string) error {
@@ -259,7 +349,7 @@ func (k *KVStorage) MakeVol(volume string) (err error) {
 }
 
 func (k *KVStorage) ListVols() (vols []VolInfo, err error) {
-	vols, err = listVols(pathJoin(k.path, kvVolumeDir))
+	vols, err = listVols(k.volDir)
 	return vols, err
 }
 
@@ -334,8 +424,35 @@ func (k *KVStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) er
 	if err := k.verifyVolume(dstVolume); err != nil {
 		return err
 	}
-	err := renameAll(path.Join(k.path, srcVolume, srcPath), path.Join(k.path, dstVolume, dstPath))
-	return err
+	rename := func(src, dst string) error {
+		value, err := k.kv.Get(src)
+		if err != nil {
+			return err
+		}
+		err = k.kv.Put(dst, value)
+		if err != nil {
+			return err
+		}
+		err = k.kv.Delete(src)
+		return err
+	}
+	if !strings.HasSuffix(srcPath, slashSeparator) && !strings.HasSuffix(dstPath, slashSeparator) {
+		return rename(pathJoin(srcVolume, srcPath), pathJoin(dstVolume, dstPath))
+	}
+	if strings.HasSuffix(srcPath, slashSeparator) && strings.HasSuffix(dstPath, slashSeparator) {
+		entries, err := k.ListDir(srcVolume, srcPath, -1)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			if err = rename(pathJoin(srcVolume, srcPath, entry), pathJoin(dstVolume, dstPath, entry)); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	return errUnexpected
 }
 
 func (k *KVStorage) StatFile(volume string, path string) (fi FileInfo, err error) {
@@ -367,7 +484,7 @@ func (k *KVStorage) WriteAll(volume string, filePath string, buf []byte) (err er
 		return err
 	}
 	if filePath == "format.json.tmp" {
-		return ioutil.WriteFile(pathJoin(k.path, volume, filePath), buf, 0644)
+		return k.kv.Put(pathJoin(volume, filePath), buf)
 	}
 	return k.CreateFile(volume, filePath, int64(len(buf)), bytes.NewBuffer(buf))
 }
@@ -378,23 +495,8 @@ func (k *KVStorage) ReadAll(volume string, filePath string) (buf []byte, err err
 	}
 
 	if filePath == "format.json" {
-		buf, err = ioutil.ReadFile(pathJoin(k.path, volume, filePath))
-		if err != nil {
-			switch {
-			case os.IsNotExist(err):
-				return nil, errFileNotFound
-			case os.IsPermission(err):
-				return nil, errFileAccessDenied
-			case isSysErrNotDir(err):
-				return nil, errFileAccessDenied
-			case isSysErrIO(err):
-				return nil, errFaultyDisk
-			default:
-				return nil, err
-			}
-		}
+		buf, err = k.kv.Get(pathJoin(volume, filePath))
 		return buf, err
-
 	}
 	nsKey := pathJoin(volume, filePath)
 	size, _, err := k.kv.StatFile(nsKey)

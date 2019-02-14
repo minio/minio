@@ -263,13 +263,13 @@ func waitForFormatXL(ctx context.Context, firstDisk bool, endpoints EndpointList
 		return nil, errInvalidArgument
 	}
 
-	if err = formatXLMigrateLocalEndpoints(endpoints); err != nil {
-		return nil, err
-	}
+	// if err = formatXLMigrateLocalEndpoints(endpoints); err != nil {
+	// 	return nil, err
+	// }
 
-	if err = formatXLCleanupTmpLocalEndpoints(endpoints); err != nil {
-		return nil, err
-	}
+	// if err = formatXLCleanupTmpLocalEndpoints(endpoints); err != nil {
+	// 	return nil, err
+	// }
 
 	// Done channel is used to close any lingering retry routine, as soon
 	// as this function returns.
