@@ -277,7 +277,7 @@ func (e *FuncExpr) aggregateRow(r Record) error {
 func (e *FuncExpr) getAggregate() (*Value, error) {
 	switch e.getFunctionName() {
 	case aggFnCount:
-		return FromFloat(float64(e.aggregate.runningCount)), nil
+		return FromInt(e.aggregate.runningCount), nil
 
 	case aggFnAvg:
 		if e.aggregate.runningCount == 0 {
