@@ -70,13 +70,13 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	// Parse the incoming form data.
 	if err := r.ParseForm(); err != nil {
 		logger.LogIf(ctx, err)
-		writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
 		return
 	}
 
 	if r.Form.Get("Version") != stsAPIVersion {
 		logger.LogIf(ctx, fmt.Errorf("Invalid STS API version %s, expecting %s", r.Form.Get("Version"), stsAPIVersion))
-		writeSTSErrorResponse(w, ErrSTSMissingParameter)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSMissingParameter))
 		return
 	}
 
@@ -85,7 +85,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	case clientGrants, webIdentity:
 	default:
 		logger.LogIf(ctx, fmt.Errorf("Unsupported action %s", action))
-		writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
 		return
 	}
 
@@ -93,14 +93,14 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	defer logger.AuditLog(w, r, action, nil)
 
 	if globalIAMValidators == nil {
-		writeSTSErrorResponse(w, ErrSTSNotInitialized)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSNotInitialized))
 		return
 	}
 
 	v, err := globalIAMValidators.Get("jwt")
 	if err != nil {
 		logger.LogIf(ctx, err)
-		writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
 		return
 	}
 
@@ -115,17 +115,17 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 		case validator.ErrTokenExpired:
 			switch action {
 			case clientGrants:
-				writeSTSErrorResponse(w, ErrSTSClientGrantsExpiredToken)
+				writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSClientGrantsExpiredToken))
 			case webIdentity:
-				writeSTSErrorResponse(w, ErrSTSWebIdentityExpiredToken)
+				writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSWebIdentityExpiredToken))
 			}
 			return
 		case validator.ErrInvalidDuration:
-			writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
+			writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
 			return
 		}
 		logger.LogIf(ctx, err)
-		writeSTSErrorResponse(w, ErrSTSInvalidParameterValue)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
 		return
 	}
 
@@ -133,7 +133,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	cred, err := auth.GetNewCredentialsWithMetadata(m, secret)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		writeSTSErrorResponse(w, ErrSTSInternalError)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInternalError))
 		return
 	}
 
@@ -154,7 +154,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	// Set the newly generated credentials.
 	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
 		logger.LogIf(ctx, err)
-		writeSTSErrorResponse(w, ErrSTSInternalError)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInternalError))
 		return
 	}
 
