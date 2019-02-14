@@ -1715,12 +1715,15 @@ func getAPIError(code APIErrorCode) APIError {
 
 // getErrorResponse gets in standard error and resource value and
 // provides a encodable populated response values
-func getAPIErrorResponse(err APIError, resource, requestid string) APIErrorResponse {
+func getAPIErrorResponse(ctx context.Context, err APIError, resource, requestID, hostID string) APIErrorResponse {
+	reqInfo := logger.GetReqInfo(ctx)
 	return APIErrorResponse{
-		Code:      err.Code,
-		Message:   err.Description,
-		Resource:  resource,
-		RequestID: requestid,
-		HostID:    "3L137",
+		Code:       err.Code,
+		Message:    err.Description,
+		BucketName: reqInfo.BucketName,
+		Key:        reqInfo.ObjectName,
+		Resource:   resource,
+		RequestID:  requestID,
+		HostID:     hostID,
 	}
 }

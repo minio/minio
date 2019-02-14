@@ -1741,9 +1741,6 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 		t.Fatal(failTestStr(anonTestStr, fmt.Sprintf("Object API Nil Test expected to fail with %d, but failed with %d", accesDeniedHTTPStatus, rec.Code)))
 	}
 
-	// expected error response in bytes when objectLayer is not initialized, or set to `nil`.
-	expectedErrResponse := encodeResponse(getAPIErrorResponse(getAPIError(ErrAccessDenied), getGetObjectURL("", bucketName, objectName), ""))
-
 	// HEAD HTTTP request doesn't contain response body.
 	if anonReq.Method != "HEAD" {
 		// read the response body.
@@ -1752,9 +1749,18 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 		if err != nil {
 			t.Fatal(failTestStr(anonTestStr, fmt.Sprintf("Failed parsing response body: <ERROR> %v", err)))
 		}
-		// verify whether actual error response (from the response body), matches the expected error response.
-		if !bytes.Equal(expectedErrResponse, actualContent) {
-			t.Fatal(failTestStr(anonTestStr, "error response content differs from expected value"))
+
+		actualError := &APIErrorResponse{}
+		if err = xml.Unmarshal(actualContent, actualError); err != nil {
+			t.Fatal(failTestStr(anonTestStr, "error response failed to parse error XML"))
+		}
+
+		if actualError.BucketName != bucketName {
+			t.Fatal(failTestStr(anonTestStr, "error response bucket name differs from expected value"))
+		}
+
+		if actualError.Key != objectName {
+			t.Fatal(failTestStr(anonTestStr, "error response object name differs from expected value"))
 		}
 	}
 
@@ -1804,11 +1810,18 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 		if err != nil {
 			t.Fatal(failTestStr(unknownSignTestStr, fmt.Sprintf("Failed parsing response body: <ERROR> %v", err)))
 		}
-		// verify whether actual error response (from the response body), matches the expected error response.
-		if !bytes.Equal(expectedErrResponse, actualContent) {
-			fmt.Println(string(expectedErrResponse))
-			fmt.Println(string(actualContent))
-			t.Fatal(failTestStr(unknownSignTestStr, "error response content differs from expected value"))
+
+		actualError := &APIErrorResponse{}
+		if err = xml.Unmarshal(actualContent, actualError); err != nil {
+			t.Fatal(failTestStr(unknownSignTestStr, "error response failed to parse error XML"))
+		}
+
+		if actualError.BucketName != bucketName {
+			t.Fatal(failTestStr(unknownSignTestStr, "error response bucket name differs from expected value"))
+		}
+
+		if actualError.Key != objectName {
+			t.Fatal(failTestStr(unknownSignTestStr, "error response object name differs from expected value"))
 		}
 	}
 
@@ -1843,9 +1856,6 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 	if rec.Code != serverNotInitializedErr {
 		t.Errorf("Object API Nil Test expected to fail with %d, but failed with %d", serverNotInitializedErr, rec.Code)
 	}
-	// expected error response in bytes when objectLayer is not initialized, or set to `nil`.
-	expectedErrResponse := encodeResponse(getAPIErrorResponse(getAPIError(ErrServerNotInitialized),
-		getGetObjectURL("", bucketName, objectName), ""))
 
 	// HEAD HTTP Request doesn't contain body in its response,
 	// for other type of HTTP requests compare the response body content with the expected one.
@@ -1855,9 +1865,18 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 		if err != nil {
 			t.Fatalf("Minio %s: Failed parsing response body: <ERROR> %v", instanceType, err)
 		}
-		// verify whether actual error response (from the response body), matches the expected error response.
-		if !bytes.Equal(expectedErrResponse, actualContent) {
-			t.Errorf("Minio %s: Object content differs from expected value", instanceType)
+
+		actualError := &APIErrorResponse{}
+		if err = xml.Unmarshal(actualContent, actualError); err != nil {
+			t.Errorf("Minio %s: error response failed to parse error XML", instanceType)
+		}
+
+		if actualError.BucketName != bucketName {
+			t.Errorf("Minio %s: error response bucket name differs from expected value", instanceType)
+		}
+
+		if actualError.Key != objectName {
+			t.Errorf("Minio %s: error response object name differs from expected value", instanceType)
 		}
 	}
 }

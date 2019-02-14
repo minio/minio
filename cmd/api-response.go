@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/xml"
 	"net/http"
 	"net/url"
@@ -24,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
 )
 
@@ -568,7 +570,7 @@ func writeSuccessResponseHeadersOnly(w http.ResponseWriter) {
 }
 
 // writeErrorRespone writes error headers
-func writeErrorResponse(w http.ResponseWriter, err APIError, reqURL *url.URL, browser bool) {
+func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL, browser bool) {
 	switch err.Code {
 	case "SlowDown", "XMinioServerNotInitialized", "XMinioReadQuorum", "XMinioWriteQuorum":
 		// Set retry-after header to indicate user-agents to retry request after 120secs.
@@ -585,7 +587,7 @@ func writeErrorResponse(w http.ResponseWriter, err APIError, reqURL *url.URL, br
 	}
 
 	// Generate error response.
-	errorResponse := getAPIErrorResponse(err, reqURL.Path, w.Header().Get(responseRequestIDKey))
+	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path, w.Header().Get(responseRequestIDKey), w.Header().Get(responseDeploymentIDKey))
 	encodedErrorResponse := encodeResponse(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
 }
@@ -596,9 +598,9 @@ func writeErrorResponseHeadersOnly(w http.ResponseWriter, err APIError) {
 
 // writeErrorResponseJSON - writes error response in JSON format;
 // useful for admin APIs.
-func writeErrorResponseJSON(w http.ResponseWriter, err APIError, reqURL *url.URL) {
+func writeErrorResponseJSON(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {
 	// Generate error response.
-	errorResponse := getAPIErrorResponse(err, reqURL.Path, w.Header().Get(responseRequestIDKey))
+	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path, w.Header().Get(responseRequestIDKey), w.Header().Get(responseDeploymentIDKey))
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
 }
@@ -606,15 +608,18 @@ func writeErrorResponseJSON(w http.ResponseWriter, err APIError, reqURL *url.URL
 // writeCustomErrorResponseJSON - similar to writeErrorResponseJSON,
 // but accepts the error message directly (this allows messages to be
 // dynamically generated.)
-func writeCustomErrorResponseJSON(w http.ResponseWriter, err APIError,
+func writeCustomErrorResponseJSON(ctx context.Context, w http.ResponseWriter, err APIError,
 	errBody string, reqURL *url.URL) {
 
+	reqInfo := logger.GetReqInfo(ctx)
 	errorResponse := APIErrorResponse{
-		Code:      err.Code,
-		Message:   errBody,
-		Resource:  reqURL.Path,
-		RequestID: w.Header().Get(responseRequestIDKey),
-		HostID:    "3L137",
+		Code:       err.Code,
+		Message:    errBody,
+		Resource:   reqURL.Path,
+		BucketName: reqInfo.BucketName,
+		Key:        reqInfo.ObjectName,
+		RequestID:  w.Header().Get(responseRequestIDKey),
+		HostID:     w.Header().Get(responseDeploymentIDKey),
 	}
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)

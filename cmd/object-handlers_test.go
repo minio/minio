@@ -364,6 +364,8 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		}
 	}
 
+	ctx := context.Background()
+
 	// test cases with inputs and expected result for GetObject.
 	testCases := []struct {
 		bucketName string
@@ -396,7 +398,9 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
 
-			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrNoSuchKey), getGetObjectURL("", bucketName, "abcd"), "")),
+			expectedContent: encodeResponse(getAPIErrorResponse(ctx,
+				getAPIError(ErrNoSuchKey),
+				getGetObjectURL("", bucketName, "abcd"), "", "")),
 			expectedRespStatus: http.StatusNotFound,
 		},
 		// Test case - 3.
@@ -420,7 +424,9 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
 
-			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidRange), getGetObjectURL("", bucketName, objectName), "")),
+			expectedContent: encodeResponse(getAPIErrorResponse(ctx,
+				getAPIError(ErrInvalidRange),
+				getGetObjectURL("", bucketName, objectName), "", "")),
 			expectedRespStatus: http.StatusRequestedRangeNotSatisfiable,
 		},
 		// Test case - 5.
@@ -446,7 +452,9 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:  "Invalid-AccessID",
 			secretKey:  credentials.SecretKey,
 
-			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidAccessKeyID), getGetObjectURL("", bucketName, objectName), "")),
+			expectedContent: encodeResponse(getAPIErrorResponse(ctx,
+				getAPIError(ErrInvalidAccessKeyID),
+				getGetObjectURL("", bucketName, objectName), "", "")),
 			expectedRespStatus: http.StatusForbidden,
 		},
 		// Test case - 7.
@@ -458,8 +466,9 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
 
-			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidObjectName),
-				getGetObjectURL("", bucketName, "../../etc"), "")),
+			expectedContent: encodeResponse(getAPIErrorResponse(ctx,
+				getAPIError(ErrInvalidObjectName),
+				getGetObjectURL("", bucketName, "../../etc"), "", "")),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 8.
@@ -471,8 +480,9 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
 
-			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrNoSuchKey),
-				"/"+bucketName+"/"+". ./. ./etc", "")),
+			expectedContent: encodeResponse(getAPIErrorResponse(ctx,
+				getAPIError(ErrNoSuchKey),
+				"/"+bucketName+"/"+". ./. ./etc", "", "")),
 			expectedRespStatus: http.StatusNotFound,
 		},
 		// Test case - 9.
@@ -484,8 +494,9 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
 
-			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidObjectName),
-				"/"+bucketName+"/"+". ./../etc", "")),
+			expectedContent: encodeResponse(getAPIErrorResponse(ctx,
+				getAPIError(ErrInvalidObjectName),
+				"/"+bucketName+"/"+". ./../etc", "", "")),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 10.
@@ -497,8 +508,10 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
 
-			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrNoSuchKey),
-				getGetObjectURL("", bucketName, "etc/path/proper/.../etc"), "")),
+			expectedContent: encodeResponse(getAPIErrorResponse(ctx,
+				getAPIError(ErrNoSuchKey),
+				getGetObjectURL("", bucketName, "etc/path/proper/.../etc"),
+				"", "")),
 			expectedRespStatus: http.StatusNotFound,
 		},
 	}
@@ -527,11 +540,28 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		// read the response body.
 		actualContent, err := ioutil.ReadAll(rec.Body)
 		if err != nil {
+			t.Fatalf("Test %d: %s: Failed reading response body: <ERROR> %v", i+1, instanceType, err)
+		}
+
+		if rec.Code == http.StatusOK || rec.Code == http.StatusPartialContent {
+			if !bytes.Equal(testCase.expectedContent, actualContent) {
+				t.Errorf("Test %d: %s: Object content differs from expected value %s, got %s", i+1, instanceType, testCase.expectedContent, string(actualContent))
+			}
+			continue
+		}
+
+		// Verify whether the bucket obtained object is same as the one created.
+		actualError := &APIErrorResponse{}
+		if err = xml.Unmarshal(actualContent, actualError); err != nil {
 			t.Fatalf("Test %d: %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
-		// Verify whether the bucket obtained object is same as the one created.
-		if !bytes.Equal(testCase.expectedContent, actualContent) {
-			t.Errorf("Test %d: %s: Object content differs from expected value %s, got %s", i+1, instanceType, testCase.expectedContent, string(actualContent))
+
+		if actualError.BucketName != testCase.bucketName {
+			t.Fatalf("Test %d: %s: Unexpected bucket name, expected %s, got %s", i+1, instanceType, testCase.bucketName, actualError.BucketName)
+		}
+
+		if actualError.Key != testCase.objectName {
+			t.Fatalf("Test %d: %s: Unexpected object name, expected %s, got %s", i+1, instanceType, testCase.objectName, actualError.Key)
 		}
 
 		// Verify response of the V2 signed HTTP request.
@@ -559,11 +589,28 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		// read the response body.
 		actualContent, err = ioutil.ReadAll(recV2.Body)
 		if err != nil {
+			t.Fatalf("Test %d: %s: Failed to read response body: <ERROR> %v", i+1, instanceType, err)
+		}
+
+		if rec.Code == http.StatusOK || rec.Code == http.StatusPartialContent {
+			// Verify whether the bucket obtained object is same as the one created.
+			if !bytes.Equal(testCase.expectedContent, actualContent) {
+				t.Errorf("Test %d: %s: Object content differs from expected value.", i+1, instanceType)
+			}
+			continue
+		}
+
+		actualError = &APIErrorResponse{}
+		if err = xml.Unmarshal(actualContent, actualError); err != nil {
 			t.Fatalf("Test %d: %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
-		// Verify whether the bucket obtained object is same as the one created.
-		if !bytes.Equal(testCase.expectedContent, actualContent) {
-			t.Errorf("Test %d: %s: Object content differs from expected value.", i+1, instanceType)
+
+		if actualError.BucketName != testCase.bucketName {
+			t.Fatalf("Test %d: %s: Unexpected bucket name, expected %s, got %s", i+1, instanceType, testCase.bucketName, actualError.BucketName)
+		}
+
+		if actualError.Key != testCase.objectName {
+			t.Fatalf("Test %d: %s: Unexpected object name, expected %s, got %s", i+1, instanceType, testCase.objectName, actualError.Key)
 		}
 	}
 
@@ -2646,8 +2693,9 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			accessKey: credentials.AccessKey,
 			secretKey: credentials.SecretKey,
 
-			expectedContent: encodeResponse(getAPIErrorResponse(toAPIError(ctx, InvalidPart{}),
-				getGetObjectURL("", bucketName, objectName), "")),
+			expectedContent: encodeResponse(getAPIErrorResponse(ctx,
+				toAPIError(ctx, InvalidPart{}),
+				getGetObjectURL("", bucketName, objectName), "", "")),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 2.
@@ -2661,8 +2709,9 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			accessKey: credentials.AccessKey,
 			secretKey: credentials.SecretKey,
 
-			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrMalformedXML),
-				getGetObjectURL("", bucketName, objectName), "")),
+			expectedContent: encodeResponse(getAPIErrorResponse(ctx,
+				getAPIError(ErrMalformedXML),
+				getGetObjectURL("", bucketName, objectName), "", "")),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 3.
@@ -2676,8 +2725,9 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			accessKey: credentials.AccessKey,
 			secretKey: credentials.SecretKey,
 
-			expectedContent: encodeResponse(getAPIErrorResponse(toAPIError(ctx, InvalidUploadID{UploadID: "abc"}),
-				getGetObjectURL("", bucketName, objectName), "")),
+			expectedContent: encodeResponse(getAPIErrorResponse(ctx,
+				toAPIError(ctx, InvalidUploadID{UploadID: "abc"}),
+				getGetObjectURL("", bucketName, objectName), "", "")),
 			expectedRespStatus: http.StatusNotFound,
 		},
 		// Test case - 4.
@@ -2691,8 +2741,8 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			secretKey: credentials.SecretKey,
 
 			expectedContent: encodeResponse(completeMultipartAPIError{int64(4), int64(5242880), 1, "e2fc714c4727ee9395f324cd2e7f331f",
-				getAPIErrorResponse(toAPIError(ctx, PartTooSmall{PartNumber: 1}),
-					getGetObjectURL("", bucketName, objectName), "")}),
+				getAPIErrorResponse(ctx, toAPIError(ctx, PartTooSmall{PartNumber: 1}),
+					getGetObjectURL("", bucketName, objectName), "", "")}),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 5.
@@ -2705,8 +2755,9 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			accessKey: credentials.AccessKey,
 			secretKey: credentials.SecretKey,
 
-			expectedContent: encodeResponse(getAPIErrorResponse(toAPIError(ctx, InvalidPart{}),
-				getGetObjectURL("", bucketName, objectName), "")),
+			expectedContent: encodeResponse(getAPIErrorResponse(ctx,
+				toAPIError(ctx, InvalidPart{}),
+				getGetObjectURL("", bucketName, objectName), "", "")),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 6.
@@ -2720,8 +2771,9 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			accessKey: credentials.AccessKey,
 			secretKey: credentials.SecretKey,
 
-			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidPartOrder),
-				getGetObjectURL("", bucketName, objectName), "")),
+			expectedContent: encodeResponse(getAPIErrorResponse(ctx,
+				getAPIError(ErrInvalidPartOrder),
+				getGetObjectURL("", bucketName, objectName), "", "")),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 7.
@@ -2735,8 +2787,9 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			accessKey: "Invalid-AccessID",
 			secretKey: credentials.SecretKey,
 
-			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidAccessKeyID),
-				getGetObjectURL("", bucketName, objectName), "")),
+			expectedContent: encodeResponse(getAPIErrorResponse(ctx,
+				getAPIError(ErrInvalidAccessKeyID),
+				getGetObjectURL("", bucketName, objectName), "", "")),
 			expectedRespStatus: http.StatusForbidden,
 		},
 		// Test case - 8.
@@ -2788,11 +2841,27 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		if err != nil {
 			t.Fatalf("Test %d : Minio %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
-		// Verify whether the bucket obtained object is same as the one created.
-		if !bytes.Equal(testCase.expectedContent, actualContent) {
-			t.Errorf("Test %d : Minio %s: Object content differs from expected value.", i+1, instanceType)
+
+		if rec.Code == http.StatusOK {
+			// Verify whether the bucket obtained object is same as the one created.
+			if !bytes.Equal(testCase.expectedContent, actualContent) {
+				t.Errorf("Test %d : Minio %s: Object content differs from expected value.", i+1, instanceType)
+			}
+			continue
 		}
 
+		actualError := &APIErrorResponse{}
+		if err = xml.Unmarshal(actualContent, actualError); err != nil {
+			t.Errorf("Minio %s: error response failed to parse error XML", instanceType)
+		}
+
+		if actualError.BucketName != bucketName {
+			t.Errorf("Minio %s: error response bucket name differs from expected value", instanceType)
+		}
+
+		if actualError.Key != objectName {
+			t.Errorf("Minio %s: error response object name differs from expected value", instanceType)
+		}
 	}
 
 	// Testing for anonymous API request.
