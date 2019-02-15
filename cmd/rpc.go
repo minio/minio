@@ -268,9 +268,14 @@ func NewRPCClient(args RPCClientArgs) (*RPCClient, error) {
 		return nil, err
 	}
 
+	rpcClient, err := xrpc.NewClient(args.ServiceURL, args.TLSConfig, defaultRPCTimeout)
+	if err != nil {
+		return nil, err
+	}
+
 	return &RPCClient{
 		args:      args,
 		authToken: args.NewAuthTokenFunc(),
-		rpcClient: xrpc.NewClient(args.ServiceURL, args.TLSConfig, defaultRPCTimeout),
+		rpcClient: rpcClient,
 	}, nil
 }
