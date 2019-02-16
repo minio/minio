@@ -2152,27 +2152,52 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 }
 
-// Send white spaces every 10 seconds to the client till completeMultiPartUpload() is done so that the client does not time out.
-// Downside is we might send 200OK and then send error XML. But accoording to S3 spec
-// the client is supposed to check for error XML even if it received 200OK. But for erasure this is not a
-// problem as completeMultiPartUpload() is quick. Even For FS, it would not be an issue
-// as we do background append as and when the parts arrive and completeMultiPartUpload is quick.
-// Only in a rare case where parts would be out of order will FS' completeMultiPartUpload() take a longer time.
-func sendWhiteSpace(ctx context.Context, w http.ResponseWriter) <-chan struct{} {
-	doneCh := make(chan struct{})
+type whiteSpaceWriter struct {
+	http.ResponseWriter
+	http.Flusher
+	written bool
+}
+
+func (w *whiteSpaceWriter) Write(b []byte) (n int, err error) {
+	n, err = w.ResponseWriter.Write(b)
+	w.written = true
+	return
+}
+
+func (w *whiteSpaceWriter) WriteHeader(statusCode int) {
+	if !w.written {
+		w.ResponseWriter.WriteHeader(statusCode)
+	}
+}
+
+// Send empty whitespaces every 10 seconds to the client till completeMultiPartUpload() is
+// done so that the client does not time out. Downside is we might send 200 OK and
+// then send error XML. But accoording to S3 spec the client is supposed to check
+// for error XML even if it received 200 OK. But for erasure this is not a problem
+// as completeMultiPartUpload() is quick. Even For FS, it would not be an issue as
+// we do background append as and when the parts arrive and completeMultiPartUpload
+// is quick. Only in a rare case where parts would be out of order will
+// FS:completeMultiPartUpload() take a longer time.
+func sendWhiteSpace(ctx context.Context, w http.ResponseWriter) <-chan bool {
+	doneCh := make(chan bool)
 	go func() {
 		ticker := time.NewTicker(time.Second * 10)
+		headerWritten := false
 		for {
 			select {
 			case <-ticker.C:
-				// Write a white space char to the client to prevent client timeouts
-				// when the server takes a long time to completeMultiPartUpload()
-				if _, err := w.Write([]byte("\n\r")); err != nil {
-					logger.LogIf(ctx, err)
-					return
+				// Write header if not written yet.
+				if !headerWritten {
+					w.Write([]byte(xml.Header))
+					headerWritten = true
 				}
+
+				// Once header is written keep writing empty spaces
+				// which are ignored by client SDK XML parsers.
+				// This occurs when server takes long time to completeMultiPartUpload()
+				w.Write([]byte(" "))
 				w.(http.Flusher).Flush()
-			case doneCh <- struct{}{}:
+			case doneCh <- headerWritten:
 				ticker.Stop()
 				return
 			}
@@ -2309,18 +2334,36 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	if api.CacheAPI() != nil {
 		completeMultiPartUpload = api.CacheAPI().CompleteMultipartUpload
 	}
+
+	// This code is specifically to handle the requirements for slow
+	// complete multipart upload operations on FS mode.
+	writeErrorResponseWithoutXMLHeader := func(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {
+		switch err.Code {
+		case "SlowDown", "XMinioServerNotInitialized", "XMinioReadQuorum", "XMinioWriteQuorum":
+			// Set retry-after header to indicate user-agents to retry request after 120secs.
+			// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
+			w.Header().Set("Retry-After", "120")
+		}
+
+		// Generate error response.
+		errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path,
+			w.Header().Get(responseRequestIDKey), w.Header().Get(responseDeploymentIDKey))
+		encodedErrorResponse, _ := xml.Marshal(errorResponse)
+		setCommonHeaders(w)
+		w.Header().Set("Content-Type", string(mimeXML))
+		w.Write(encodedErrorResponse)
+		w.(http.Flusher).Flush()
+	}
+	w = &whiteSpaceWriter{ResponseWriter: w, Flusher: w.(http.Flusher)}
 	completeDoneCh := sendWhiteSpace(ctx, w)
 	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, completeParts, opts)
 	// Stop writing white spaces to the client. Note that close(doneCh) style is not used as it
 	// can cause white space to be written after we send XML response in a race condition.
-	<-completeDoneCh
+	headerWritten := <-completeDoneCh
 	if err != nil {
-		switch oErr := err.(type) {
-		case PartTooSmall:
-			// Write part too small error.
-			writePartSmallErrorResponse(ctx, w, r, oErr)
-		default:
-			// Handle all other generic issues.
+		if headerWritten {
+			writeErrorResponseWithoutXMLHeader(ctx, w, toAPIError(ctx, err), r.URL)
+		} else {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		}
 		return
@@ -2330,10 +2373,15 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	location := getObjectLocation(r, globalDomainName, bucket, object)
 	// Generate complete multipart response.
 	response := generateCompleteMultpartUploadResponse(bucket, object, location, objInfo.ETag)
-	encodedSuccessResponse := encodeResponse(response)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAdminAPIErr(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
+	var encodedSuccessResponse []byte
+	if !headerWritten {
+		encodedSuccessResponse = encodeResponse(response)
+	} else {
+		encodedSuccessResponse, err = xml.Marshal(response)
+		if err != nil {
+			writeErrorResponseWithoutXMLHeader(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
 	}
 
 	// Set etag.
