@@ -23,9 +23,7 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -33,9 +31,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
-var sslRequiredErrMsg = []byte("HTTP/1.0 403 Forbidden\r\n\r\nSSL required")
-
-var badRequestMsg = []byte("HTTP/1.0 400 Bad Request\r\n\r\n")
+var sslRequiredErrMsg = []byte("HTTP/1.1 403 Forbidden\r\n\r\nSSL required")
 
 // HTTP methods.
 var methods = []string{
@@ -49,30 +45,6 @@ var methods = []string{
 	http.MethodOptions,
 	http.MethodTrace,
 	"PRI", // HTTP 2 method
-}
-
-// maximum length of above methods + one space.
-var methodMaxLen = getMethodMaxLen() + 1
-
-func getMethodMaxLen() int {
-	maxLen := 0
-	for _, method := range methods {
-		if len(method) > maxLen {
-			maxLen = len(method)
-		}
-	}
-
-	return maxLen
-}
-
-func isHTTPMethod(s string) bool {
-	for _, method := range methods {
-		if s == method {
-			return true
-		}
-	}
-
-	return false
 }
 
 func getPlainText(bufConn *BufConn) (bool, error) {
@@ -95,66 +67,6 @@ func getPlainText(bufConn *BufConn) (bool, error) {
 	return false, nil
 }
 
-func getMethodResourceHost(bufConn *BufConn, maxHeaderBytes int) (method string, resource string, host string, err error) {
-	defer bufConn.setReadTimeout()
-
-	var data []byte
-	for dataLen := 1; dataLen < maxHeaderBytes; dataLen++ {
-		if bufConn.canSetReadDeadline() {
-			// Set deadline such that we close the connection quickly
-			// of no data was received from the Peek()
-			bufConn.SetReadDeadline(time.Now().UTC().Add(time.Second * 3))
-		}
-
-		data, err = bufConn.bufReader.Peek(dataLen)
-		if err != nil {
-			return "", "", "", err
-		}
-
-		tokens := strings.Split(string(data), "\n")
-		if len(tokens) < 2 {
-			continue
-		}
-
-		if method == "" && resource == "" {
-			if i := strings.IndexByte(tokens[0], ' '); i == -1 {
-				return "", "", "", fmt.Errorf("malformed HTTP request from '%s'", bufConn.LocalAddr())
-			}
-			httpTokens := strings.SplitN(tokens[0], " ", 3)
-			if len(httpTokens) < 3 {
-				return "", "", "", fmt.Errorf("malformed HTTP request from '%s'", bufConn.LocalAddr())
-			}
-			if !isHTTPMethod(httpTokens[0]) {
-				return "", "", "", fmt.Errorf("malformed HTTP request, invalid HTTP method '%s' from '%s'",
-					httpTokens[0], bufConn.LocalAddr())
-			}
-
-			method = httpTokens[0]
-			resource = httpTokens[1]
-		}
-
-		for _, token := range tokens[1:] {
-			if token == "" || !strings.HasSuffix(token, "\r") {
-				continue
-			}
-
-			// HTTP headers are case insensitive, so we should simply convert
-			// each tokens to their lower case form to match 'host' header.
-			token = strings.ToLower(token)
-			if strings.HasPrefix(token, "host:") {
-				host = strings.TrimPrefix(strings.TrimSuffix(token, "\r"), "host:")
-				return method, resource, host, nil
-			}
-		}
-
-		if tokens[len(tokens)-1] == "\r" {
-			break
-		}
-	}
-
-	return "", "", "", fmt.Errorf("malformed HTTP request from %s", bufConn.LocalAddr())
-}
-
 type acceptResult struct {
 	conn net.Conn
 	err  error
@@ -171,8 +83,8 @@ type httpListener struct {
 	readTimeout            time.Duration
 	writeTimeout           time.Duration
 	maxHeaderBytes         int
-	updateBytesReadFunc    func(*http.Request, int) // function to be called to update bytes read in BufConn.
-	updateBytesWrittenFunc func(*http.Request, int) // function to be called to update bytes written in BufConn.
+	updateBytesReadFunc    func(int) // function to be called to update bytes read in BufConn.
+	updateBytesWrittenFunc func(int) // function to be called to update bytes written in BufConn.
 }
 
 // isRoutineNetErr returns true if error is due to a network timeout,
@@ -222,7 +134,8 @@ func (listener *httpListener) start() {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(listener.tcpKeepAliveTimeout)
 
-		bufconn := newBufConn(tcpConn, listener.readTimeout, listener.writeTimeout, listener.maxHeaderBytes)
+		bufconn := newBufConn(tcpConn, listener.readTimeout, listener.writeTimeout, listener.maxHeaderBytes,
+			listener.updateBytesReadFunc, listener.updateBytesWrittenFunc)
 		if listener.tlsConfig != nil {
 			ok, err := getPlainText(bufconn)
 			if err != nil {
@@ -248,51 +161,7 @@ func (listener *httpListener) start() {
 				bufconn.Close()
 				return
 			}
-
-			// As the listener is configured with TLS, try to do TLS handshake, drop the connection if it fails.
-			tlsConn := tls.Server(bufconn, listener.tlsConfig)
-
-			if err := tlsConn.Handshake(); err != nil {
-				reqInfo := (&logger.ReqInfo{}).AppendTags("remoteAddr", bufconn.RemoteAddr().String())
-				reqInfo.AppendTags("localAddr", bufconn.LocalAddr().String())
-				ctx := logger.SetReqInfo(context.Background(), reqInfo)
-				logger.LogIf(ctx, err)
-				bufconn.Close()
-				return
-			}
-
-			bufconn = newBufConn(tlsConn, listener.readTimeout, listener.writeTimeout, listener.maxHeaderBytes)
 		}
-
-		method, resource, host, err := getMethodResourceHost(bufconn, listener.maxHeaderBytes)
-		if err != nil {
-			// Peek could fail legitimately when clients abruptly close
-			// connection. E.g. Chrome browser opens connections speculatively to
-			// speed up loading of a web page. Peek may also fail due to network
-			// saturation on a transport with read timeout set. All other kind of
-			// errors should be logged for further investigation. Thanks @brendanashworth.
-			if !isRoutineNetErr(err) {
-				reqInfo := (&logger.ReqInfo{}).AppendTags("remoteAddr", bufconn.RemoteAddr().String())
-				reqInfo.AppendTags("localAddr", bufconn.LocalAddr().String())
-				ctx := logger.SetReqInfo(context.Background(), reqInfo)
-				logger.LogIf(ctx, err)
-				bufconn.Write(badRequestMsg)
-			}
-			bufconn.Close()
-			return
-		}
-
-		header := make(http.Header)
-		if host != "" {
-			header.Add("Host", host)
-		}
-		bufconn.setRequest(&http.Request{
-			Method: method,
-			URL:    &url.URL{Path: resource},
-			Host:   bufconn.LocalAddr().String(),
-			Header: header,
-		})
-		bufconn.setUpdateFuncs(listener.updateBytesReadFunc, listener.updateBytesWrittenFunc)
 
 		send(acceptResult{bufconn, nil}, doneCh)
 	}
@@ -380,8 +249,8 @@ func newHTTPListener(serverAddrs []string,
 	readTimeout time.Duration,
 	writeTimeout time.Duration,
 	maxHeaderBytes int,
-	updateBytesReadFunc func(*http.Request, int),
-	updateBytesWrittenFunc func(*http.Request, int)) (listener *httpListener, err error) {
+	updateBytesReadFunc func(int),
+	updateBytesWrittenFunc func(int)) (listener *httpListener, err error) {
 
 	var tcpListeners []*net.TCPListener
 

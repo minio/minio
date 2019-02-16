@@ -1323,82 +1323,6 @@ func (s *xlSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 	return listBuckets, nil
 }
 
-// Returns function "listDir" of the type listDirFunc.
-// isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
-// disks - used for doing disk.ListDir(). Sets passes set of disks.
-func listDirSetsHealFactory(isLeaf isLeafFunc, sets ...[]StorageAPI) listDirFunc {
-	listDirInternal := func(bucket, prefixDir, prefixEntry string, disks []StorageAPI) (mergedEntries []string) {
-		for _, disk := range disks {
-			if disk == nil {
-				continue
-			}
-
-			var entries []string
-			var newEntries []string
-			var err error
-			entries, err = disk.ListDir(bucket, prefixDir, -1)
-			if err != nil {
-				continue
-			}
-
-			// Filter entries that have the prefix prefixEntry.
-			entries = filterMatchingPrefix(entries, prefixEntry)
-
-			// isLeaf() check has to happen here so that
-			// trailing "/" for objects can be removed.
-			for i, entry := range entries {
-				if isLeaf(bucket, pathJoin(prefixDir, entry)) {
-					entries[i] = strings.TrimSuffix(entry, slashSeparator)
-				}
-			}
-
-			// Find elements in entries which are not in mergedEntries
-			for _, entry := range entries {
-				idx := sort.SearchStrings(mergedEntries, entry)
-				// if entry is already present in mergedEntries don't add.
-				if idx < len(mergedEntries) && mergedEntries[idx] == entry {
-					continue
-				}
-				newEntries = append(newEntries, entry)
-			}
-
-			if len(newEntries) > 0 {
-				// Merge the entries and sort it.
-				mergedEntries = append(mergedEntries, newEntries...)
-				sort.Strings(mergedEntries)
-			}
-		}
-		return mergedEntries
-
-	}
-
-	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string, delayIsLeaf bool) {
-		for _, disks := range sets {
-			entries := listDirInternal(bucket, prefixDir, prefixEntry, disks)
-
-			var newEntries []string
-			// Find elements in entries which are not in mergedEntries
-			for _, entry := range entries {
-				idx := sort.SearchStrings(mergedEntries, entry)
-				// if entry is already present in mergedEntries don't add.
-				if idx < len(mergedEntries) && mergedEntries[idx] == entry {
-					continue
-				}
-				newEntries = append(newEntries, entry)
-			}
-
-			if len(newEntries) > 0 {
-				// Merge the entries and sort it.
-				mergedEntries = append(mergedEntries, newEntries...)
-				sort.Strings(mergedEntries)
-			}
-		}
-		return mergedEntries, false
-	}
-	return listDir
-}
-
 // listObjectsHeal - wrapper function implemented over file tree walk.
 func (s *xlSets) listObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	// Default is recursive, if delimiter is set then list non recursive.
@@ -1434,8 +1358,8 @@ func (s *xlSets) listObjectsHeal(ctx context.Context, bucket, prefix, marker, de
 			setDisks = append(setDisks, set.getLoadBalancedDisks())
 		}
 
-		listDir := listDirSetsHealFactory(isLeaf, setDisks...)
-		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, nil, isLeafDir, endWalkCh)
+		listDir := listDirSetsFactory(ctx, isLeaf, isLeafDir, setDisks...)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
 	}
 
 	var objInfos []ObjectInfo
