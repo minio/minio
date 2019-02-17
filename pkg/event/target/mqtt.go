@@ -25,8 +25,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/eclipse/paho.mqtt.golang"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/event/target/paho.mqtt.golang"
 	xnet "github.com/minio/minio/pkg/net"
 )
 
@@ -84,7 +84,8 @@ func (target *MQTTTarget) ID() event.TargetID {
 
 // Send - sends event to MQTT.
 func (target *MQTTTarget) Send(eventData event.Event) error {
-	if !target.client.IsConnected() {
+	// Ping the ARN and probe the error back if queueDir is not configured.
+	if !target.client.IsConnected() && target.args.QueueDir == "" {
 		token := target.client.Connect()
 		if token.Wait() {
 			if err := token.Error(); err != nil {
@@ -92,7 +93,6 @@ func (target *MQTTTarget) Send(eventData event.Event) error {
 			}
 		}
 	}
-
 	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
 	if err != nil {
 		return err
@@ -124,9 +124,16 @@ func (target *MQTTTarget) Close() error {
 
 // NewMQTTTarget - creates new MQTT target.
 func NewMQTTTarget(id string, args MQTTArgs) (*MQTTTarget, error) {
+
+	// Assign unique clientIDs for the each connection.
+	clientID, err := getNewUUID()
+	if err != nil {
+		return nil, err
+	}
+
 	options := mqtt.NewClientOptions().
-		SetClientID("").
-		SetCleanSession(true).
+		SetClientID(clientID).
+		SetCleanSession(false).
 		SetUsername(args.User).
 		SetPassword(args.Password).
 		SetMaxReconnectInterval(args.MaxReconnectInterval).
@@ -135,13 +142,17 @@ func NewMQTTTarget(id string, args MQTTArgs) (*MQTTTarget, error) {
 		AddBroker(args.Broker.String())
 
 	if args.QueueDir != "" {
-		options = options.SetStore(mqtt.NewFileStore(args.QueueDir))
+		options = options.SetStore(mqtt.NewFileStore(args.QueueDir)).SetConnectionRetry(true)
 	}
 
 	client := mqtt.NewClient(options)
 	token := client.Connect()
-	if token.Wait() && token.Error() != nil {
-		return nil, token.Error()
+
+	if args.QueueDir == "" {
+		// Probe the error back if the event persistence is not chosen.
+		if token.Wait() && token.Error() != nil {
+			return nil, token.Error()
+		}
 	}
 
 	return &MQTTTarget{
