@@ -28,6 +28,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 func TestRepeatPutObjectPart(t *testing.T) {
@@ -308,7 +309,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = xl.HealObject(context.Background(), bucket, object, false, false)
+	_, err = xl.HealObject(context.Background(), bucket, object, false, false, madmin.HealNormalScan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,7 +338,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = xl.HealObject(context.Background(), bucket, object, false, false)
+	_, err = xl.HealObject(context.Background(), bucket, object, false, false, madmin.HealDeepScan)
 	if err != nil {
 		t.Fatal(err)
 	}

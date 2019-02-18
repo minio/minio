@@ -208,7 +208,8 @@ func shouldHealObjectOnDisk(xlErr, dataErr error, meta xlMetaV1, quorumModTime t
 
 // Heals an object by re-writing corrupt/missing erasure blocks.
 func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, object string,
-	quorum int, dryRun bool) (result madmin.HealResultItem, err error) {
+	quorum int, dryRun bool, scanMode madmin.HealScanMode) (result madmin.HealResultItem, err error) {
+
 	partsMetadata, errs := readAllXLMetadata(ctx, storageDisks, bucket, object)
 
 	errCount := 0
@@ -232,7 +233,7 @@ func healObject(ctx context.Context, storageDisks []StorageAPI, bucket string, o
 	latestDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
 
 	// List of disks having all parts as per latest xl.json.
-	availableDisks, dataErrs := disksWithAllParts(ctx, latestDisks, partsMetadata, errs, bucket, object)
+	availableDisks, dataErrs := disksWithAllParts(ctx, latestDisks, partsMetadata, errs, bucket, object, scanMode)
 
 	// Initialize heal result object
 	result = madmin.HealResultItem{
@@ -621,7 +622,7 @@ func (xl xlObjects) isObjectDangling(metaArr []xlMetaV1, errs []error) (validMet
 // FIXME: If an object object was deleted and one disk was down,
 // and later the disk comes back up again, heal on the object
 // should delete it.
-func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRun bool, remove bool) (hr madmin.HealResultItem, err error) {
+func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRun bool, remove bool, scanMode madmin.HealScanMode) (hr madmin.HealResultItem, err error) {
 	// Create context that also contains information about the object and bucket.
 	// The top level handler might not have this information.
 	reqInfo := logger.GetReqInfo(ctx)
@@ -670,5 +671,5 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 	defer objectLock.RUnlock()
 
 	// Heal the object.
-	return healObject(healCtx, xl.getDisks(), bucket, object, latestXLMeta.Erasure.DataBlocks, dryRun)
+	return healObject(healCtx, xl.getDisks(), bucket, object, latestXLMeta.Erasure.DataBlocks, dryRun, scanMode)
 }

@@ -21,6 +21,8 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // Tests undoes and validates if the undoing completes successfully.
@@ -114,7 +116,7 @@ func TestHealObjectXL(t *testing.T) {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
 
-	_, err = obj.HealObject(context.Background(), bucket, object, false, false)
+	_, err = obj.HealObject(context.Background(), bucket, object, false, false, madmin.HealNormalScan)
 	if err != nil {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
@@ -130,7 +132,7 @@ func TestHealObjectXL(t *testing.T) {
 	}
 
 	// Try healing now, expect to receive errDiskNotFound.
-	_, err = obj.HealObject(context.Background(), bucket, object, false, false)
+	_, err = obj.HealObject(context.Background(), bucket, object, false, false, madmin.HealDeepScan)
 	// since majority of xl.jsons are not available, object quorum can't be read properly and error will be errXLReadQuorum
 	if _, ok := err.(InsufficientReadQuorum); !ok {
 		t.Errorf("Expected %v but received %v", InsufficientReadQuorum{}, err)

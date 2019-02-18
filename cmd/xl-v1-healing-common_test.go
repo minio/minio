@@ -23,6 +23,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // validates functionality provided to find most common
@@ -239,7 +241,7 @@ func TestListOnlineDisks(t *testing.T) {
 				i+1, test.expectedTime, modTime)
 		}
 
-		availableDisks, newErrs := disksWithAllParts(context.Background(), onlineDisks, partsMetadata, test.errs, bucket, object)
+		availableDisks, newErrs := disksWithAllParts(context.Background(), onlineDisks, partsMetadata, test.errs, bucket, object, madmin.HealDeepScan)
 		test.errs = newErrs
 
 		if test._tamperBackend != noTamper {
@@ -291,7 +293,7 @@ func TestDisksWithAllParts(t *testing.T) {
 		t.Fatalf("Failed to read xl meta data %v", err)
 	}
 
-	filteredDisks, errs := disksWithAllParts(ctx, xlDisks, partsMetadata, errs, bucket, object)
+	filteredDisks, errs := disksWithAllParts(ctx, xlDisks, partsMetadata, errs, bucket, object, madmin.HealDeepScan)
 
 	if len(filteredDisks) != len(xlDisks) {
 		t.Errorf("Unexpected number of disks: %d", len(filteredDisks))
@@ -328,7 +330,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	}
 
 	errs = make([]error, len(xlDisks))
-	filteredDisks, errs = disksWithAllParts(ctx, xlDisks, partsMetadata, errs, bucket, object)
+	filteredDisks, errs = disksWithAllParts(ctx, xlDisks, partsMetadata, errs, bucket, object, madmin.HealDeepScan)
 
 	if len(filteredDisks) != len(xlDisks) {
 		t.Errorf("Unexpected number of disks: %d", len(filteredDisks))

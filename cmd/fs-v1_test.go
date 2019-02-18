@@ -22,6 +22,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // Tests for if parent directory is object
@@ -390,7 +392,7 @@ func TestFSHealObject(t *testing.T) {
 	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	_, err := obj.HealObject(context.Background(), "bucket", "object", false, false)
+	_, err := obj.HealObject(context.Background(), "bucket", "object", false, false, madmin.HealDeepScan)
 	if err == nil || !isSameType(err, NotImplemented{}) {
 		t.Fatalf("Heal Object should return NotImplemented error ")
 	}
