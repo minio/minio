@@ -17,7 +17,6 @@
 package parquet
 
 import (
-	"encoding/json"
 	"io"
 
 	"github.com/bcicen/jstream"
@@ -75,11 +74,7 @@ func (r *Reader) Read() (rec sql.Record, rerr error) {
 	}
 
 	parquetRecord.Range(f)
-	data, err := json.Marshal(kvs)
-	if err != nil {
-		return nil, err
-	}
-	return &jsonfmt.Record{Data: data}, rerr
+	return &jsonfmt.Record{KVS: kvs, SelectFormat: sql.SelectFmtParquet}, nil
 }
 
 // Close - closes underlaying readers.

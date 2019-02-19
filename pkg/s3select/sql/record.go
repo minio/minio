@@ -16,10 +16,32 @@
 
 package sql
 
+import "github.com/bcicen/jstream"
+
+// SelectObjectFormat specifies the format of the underlying data
+type SelectObjectFormat int
+
+const (
+	// SelectFmtUnknown - unknown format (default value)
+	SelectFmtUnknown SelectObjectFormat = iota
+	// SelectFmtCSV - CSV format
+	SelectFmtCSV
+	// SelectFmtJSON - JSON format
+	SelectFmtJSON
+	// SelectFmtParquet - Parquet format
+	SelectFmtParquet
+)
+
 // Record - is a type containing columns and their values.
 type Record interface {
 	Get(name string) (*Value, error)
 	Set(name string, value *Value) error
 	MarshalCSV(fieldDelimiter rune) ([]byte, error)
 	MarshalJSON() ([]byte, error)
+
+	// Returns underlying representation
+	Raw() (SelectObjectFormat, interface{})
+
+	// Replaces the underlying data
+	Replace(k jstream.KVS) error
 }

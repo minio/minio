@@ -16,6 +16,8 @@
 
 package sql
 
+import "fmt"
+
 type s3Error struct {
 	code       string
 	message    string
@@ -91,7 +93,16 @@ func errQueryAnalysisFailure(err error) *s3Error {
 func errBadTableName(err error) *s3Error {
 	return &s3Error{
 		code:       "BadTableName",
-		message:    "The table name is not supported",
+		message:    fmt.Sprintf("The table name is not supported: %v", err),
+		statusCode: 400,
+		cause:      err,
+	}
+}
+
+func errDataSource(err error) *s3Error {
+	return &s3Error{
+		code:       "DataSourcePathUnsupported",
+		message:    fmt.Sprintf("Data source: %v", err),
 		statusCode: 400,
 		cause:      err,
 	}

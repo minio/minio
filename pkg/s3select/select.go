@@ -246,7 +246,7 @@ func (s3Select *S3Select) outputRecord() sql.Record {
 	case csvFormat:
 		return csv.NewRecord()
 	case jsonFormat:
-		return json.NewRecord()
+		return json.NewRecord(sql.SelectFmtJSON)
 	}
 
 	panic(fmt.Errorf("unknown output format '%v'", s3Select.Output.format))
@@ -388,6 +388,10 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 				// FIXME: log this error.
 				err = nil
 			}
+			break
+		}
+
+		if inputRecord, err = s3Select.statement.EvalFrom(s3Select.Input.format, inputRecord); err != nil {
 			break
 		}
 

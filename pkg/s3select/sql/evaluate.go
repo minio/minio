@@ -17,8 +17,11 @@
 package sql
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
+
+	"github.com/bcicen/jstream"
 )
 
 var (
@@ -319,7 +322,44 @@ func (e *JSONPath) evalNode(r Record) (*Value, error) {
 	if len(ps) == 2 {
 		keypath = ps[1]
 	}
-	return r.Get(keypath)
+	objFmt, rawVal := r.Raw()
+	switch objFmt {
+	case SelectFmtJSON, SelectFmtParquet:
+		rowVal := rawVal.(jstream.KVS)
+
+		pathExpr := e.PathExpr
+		if len(pathExpr) == 0 {
+			pathExpr = []*JSONPathElement{{Key: &ObjectKey{ID: e.BaseKey}}}
+		}
+
+		result, err := jsonpathEval(pathExpr, rowVal)
+		if err != nil {
+			return nil, err
+		}
+
+		switch rval := result.(type) {
+		case string:
+			return FromString(rval), nil
+		case float64:
+			return FromFloat(rval), nil
+		case int64:
+			return FromInt(rval), nil
+		case bool:
+			return FromBool(rval), nil
+		case jstream.KVS, []interface{}:
+			bs, err := json.Marshal(result)
+			if err != nil {
+				return nil, err
+			}
+			return FromBytes(bs), nil
+		case nil:
+			return FromNull(), nil
+		default:
+			return nil, errors.New("Unhandled value type")
+		}
+	default:
+		return r.Get(keypath)
+	}
 }
 
 func (e *PrimaryTerm) evalNode(r Record) (res *Value, err error) {

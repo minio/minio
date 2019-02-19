@@ -17,7 +17,6 @@
 package json
 
 import (
-	"encoding/json"
 	"io"
 
 	"github.com/minio/minio/pkg/s3select/sql"
@@ -43,24 +42,22 @@ func (r *Reader) Read() (sql.Record, error) {
 		return nil, io.EOF
 	}
 
-	var data []byte
-	var err error
-
+	var kvs jstream.KVS
 	if v.ValueType == jstream.Object {
-		data, err = json.Marshal(v.Value)
+		// This is a JSON object type (that preserves key
+		// order)
+		kvs = v.Value.(jstream.KVS)
 	} else {
 		// To be AWS S3 compatible Select for JSON needs to
 		// output non-object JSON as single column value
 		// i.e. a map with `_1` as key and value as the
 		// non-object.
-		data, err = json.Marshal(jstream.KVS{jstream.KV{Key: "_1", Value: v.Value}})
-	}
-	if err != nil {
-		return nil, errJSONParsingError(err)
+		kvs = jstream.KVS{jstream.KV{Key: "_1", Value: v.Value}}
 	}
 
 	return &Record{
-		Data: data,
+		KVS:          kvs,
+		SelectFormat: sql.SelectFmtJSON,
 	}, nil
 }
 
