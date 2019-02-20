@@ -52,7 +52,7 @@ func getChunkSignature(cred auth.Credentials, seedSignature string, region strin
 		hashedChunk
 
 	// Get hmac signing key.
-	signingKey := getSigningKey(cred.SecretKey, date, region)
+	signingKey := getSigningKey(cred.SecretKey, date, region, serviceS3)
 
 	// Calculate signature.
 	newSignature := getSignature(signingKey, stringToSign)
@@ -72,7 +72,7 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 	v4Auth := req.Header.Get("Authorization")
 
 	// Parse signature version '4' header.
-	signV4Values, errCode := parseSignV4(v4Auth, globalServerConfig.GetRegion())
+	signV4Values, errCode := parseSignV4(v4Auth, globalServerConfig.GetRegion(), serviceS3)
 	if errCode != ErrNone {
 		return cred, "", "", time.Time{}, errCode
 	}
@@ -124,7 +124,7 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 	stringToSign := getStringToSign(canonicalRequest, date, signV4Values.Credential.getScope())
 
 	// Get hmac signing key.
-	signingKey := getSigningKey(cred.SecretKey, signV4Values.Credential.scope.date, region)
+	signingKey := getSigningKey(cred.SecretKey, signV4Values.Credential.scope.date, region, serviceS3)
 
 	// Calculate signature.
 	newSignature := getSignature(signingKey, stringToSign)

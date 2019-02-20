@@ -1,3 +1,5 @@
+**Using OPA is optional with Minio. We recommend using [`policy` JWT claims](https://github.com/minio/minio/blob/master/docs/sts/wso2.md#4-jwt-claims) instead, let Minio manage your policies using `mc admin policy` and apply them on the STS credentials.**
+
 # OPA Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 OPA is a lightweight general-purpose policy engine that can be co-located with Minio server, in this document we talk about how to use OPA HTTP API to authorize Minio STS credentials.
 

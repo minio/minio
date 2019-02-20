@@ -46,6 +46,13 @@ const (
 	yyyymmdd        = "20060102"
 )
 
+type serviceType string
+
+const (
+	serviceS3  serviceType = "s3"
+	serviceSTS serviceType = "sts"
+)
+
 // getCanonicalHeaders generate a list of request headers with their values
 func getCanonicalHeaders(signedHeaders http.Header) string {
 	var headers []string
@@ -110,7 +117,7 @@ func getScope(t time.Time, region string) string {
 	scope := strings.Join([]string{
 		t.Format(yyyymmdd),
 		region,
-		"s3",
+		string(serviceS3),
 		"aws4_request",
 	}, "/")
 	return scope
@@ -126,10 +133,10 @@ func getStringToSign(canonicalRequest string, t time.Time, scope string) string 
 }
 
 // getSigningKey hmac seed to calculate final signature.
-func getSigningKey(secretKey string, t time.Time, region string) []byte {
+func getSigningKey(secretKey string, t time.Time, region string, stype serviceType) []byte {
 	date := sumHMAC([]byte("AWS4"+secretKey), []byte(t.Format(yyyymmdd)))
 	regionBytes := sumHMAC(date, []byte(region))
-	service := sumHMAC(regionBytes, []byte("s3"))
+	service := sumHMAC(regionBytes, []byte(stype))
 	signingKey := sumHMAC(service, []byte("aws4_request"))
 	return signingKey
 }
@@ -165,7 +172,7 @@ func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 	region := globalServerConfig.GetRegion()
 
 	// Parse credential tag.
-	credHeader, err := parseCredentialHeader("Credential="+formValues.Get("X-Amz-Credential"), region)
+	credHeader, err := parseCredentialHeader("Credential="+formValues.Get("X-Amz-Credential"), region, serviceS3)
 	if err != ErrNone {
 		return ErrMissingFields
 	}
@@ -176,7 +183,7 @@ func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 	}
 
 	// Get signing key.
-	signingKey := getSigningKey(cred.SecretKey, credHeader.scope.date, credHeader.scope.region)
+	signingKey := getSigningKey(cred.SecretKey, credHeader.scope.date, credHeader.scope.region, serviceS3)
 
 	// Get signature.
 	newSignature := getSignature(signingKey, formValues.Get("Policy"))
@@ -193,12 +200,12 @@ func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 // doesPresignedSignatureMatch - Verify query headers with presigned signature
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
 // returns ErrNone if the signature matches.
-func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region string) APIErrorCode {
+func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region string, stype serviceType) APIErrorCode {
 	// Copy request
 	req := *r
 
 	// Parse request query string.
-	pSignValues, err := parsePreSignV4(req.URL.Query(), region)
+	pSignValues, err := parsePreSignV4(req.URL.Query(), region, stype)
 	if err != ErrNone {
 		return err
 	}
@@ -240,7 +247,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	query.Set("X-Amz-Date", t.Format(iso8601Format))
 	query.Set("X-Amz-Expires", strconv.Itoa(expireSeconds))
 	query.Set("X-Amz-SignedHeaders", getSignedHeaders(extractedSignedHeaders))
-	query.Set("X-Amz-Credential", cred.AccessKey+"/"+getScope(t, pSignValues.Credential.scope.region))
+	query.Set("X-Amz-Credential", cred.AccessKey+"/"+pSignValues.Credential.getScope())
 
 	// Save other headers available in the request parameters.
 	for k, v := range req.URL.Query() {
@@ -291,7 +298,8 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	presignedStringToSign := getStringToSign(presignedCanonicalReq, t, pSignValues.Credential.getScope())
 
 	// Get hmac presigned signing key.
-	presignedSigningKey := getSigningKey(cred.SecretKey, pSignValues.Credential.scope.date, pSignValues.Credential.scope.region)
+	presignedSigningKey := getSigningKey(cred.SecretKey, pSignValues.Credential.scope.date,
+		pSignValues.Credential.scope.region, stype)
 
 	// Get new signature.
 	newSignature := getSignature(presignedSigningKey, presignedStringToSign)
@@ -306,7 +314,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 // doesSignatureMatch - Verify authorization header with calculated header in accordance with
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
 // returns ErrNone if signature matches.
-func doesSignatureMatch(hashedPayload string, r *http.Request, region string) APIErrorCode {
+func doesSignatureMatch(hashedPayload string, r *http.Request, region string, stype serviceType) APIErrorCode {
 	// Copy request.
 	req := *r
 
@@ -314,7 +322,7 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 	v4Auth := req.Header.Get("Authorization")
 
 	// Parse signature version '4' header.
-	signV4Values, err := parseSignV4(v4Auth, region)
+	signV4Values, err := parseSignV4(v4Auth, region, stype)
 	if err != ErrNone {
 		return err
 	}
@@ -354,7 +362,8 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 	stringToSign := getStringToSign(canonicalRequest, t, signV4Values.Credential.getScope())
 
 	// Get hmac signing key.
-	signingKey := getSigningKey(cred.SecretKey, signV4Values.Credential.scope.date, signV4Values.Credential.scope.region)
+	signingKey := getSigningKey(cred.SecretKey, signV4Values.Credential.scope.date,
+		signV4Values.Credential.scope.region, stype)
 
 	// Calculate signature.
 	newSignature := getSignature(signingKey, stringToSign)

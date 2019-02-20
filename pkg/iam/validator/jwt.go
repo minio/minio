@@ -130,23 +130,24 @@ func expToInt64(expI interface{}) (expAt int64, err error) {
 			return 0, err
 		}
 	default:
-		return 0, errors.New("invalid expiry value")
+		return 0, ErrInvalidDuration
 	}
 	return expAt, nil
 }
 
-func getDefaultExpiration(dsecs string) (time.Duration, error) {
+// GetDefaultExpiration - returns the expiration seconds expected.
+func GetDefaultExpiration(dsecs string) (time.Duration, error) {
 	defaultExpiryDuration := time.Duration(60) * time.Minute // Defaults to 1hr.
 	if dsecs != "" {
 		expirySecs, err := strconv.ParseInt(dsecs, 10, 64)
 		if err != nil {
-			return 0, err
+			return 0, ErrInvalidDuration
 		}
 		// The duration, in seconds, of the role session.
 		// The value can range from 900 seconds (15 minutes)
 		// to 12 hours.
 		if expirySecs < 900 || expirySecs > 43200 {
-			return 0, errors.New("out of range value for duration in seconds")
+			return 0, ErrInvalidDuration
 		}
 
 		defaultExpiryDuration = time.Duration(expirySecs) * time.Second
@@ -201,7 +202,7 @@ func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 	}
 
 	if !jwtToken.Valid {
-		return nil, fmt.Errorf("Invalid token: %v", token)
+		return nil, ErrTokenExpired
 	}
 
 	expAt, err := expToInt64(claims["exp"])
@@ -209,7 +210,7 @@ func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	defaultExpiryDuration, err := getDefaultExpiration(dsecs)
+	defaultExpiryDuration, err := GetDefaultExpiration(dsecs)
 	if err != nil {
 		return nil, err
 	}
