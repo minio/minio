@@ -73,6 +73,7 @@ type posix struct {
 	diskMount bool // indicates if the path is an actual mount.
 	driveSync bool // indicates if the backend is synchronous.
 
+	diskFileInfo os.FileInfo
 	// Disk usage metrics
 	stopUsageCh chan struct{}
 }
@@ -177,7 +178,10 @@ func newPosix(path string) (*posix, error) {
 	if path, err = getValidPath(path); err != nil {
 		return nil, err
 	}
-
+	fi, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
 	p := &posix{
 		connected: true,
 		diskPath:  path,
@@ -188,8 +192,9 @@ func newPosix(path string) (*posix, error) {
 				return &b
 			},
 		},
-		stopUsageCh: make(chan struct{}),
-		diskMount:   mountinfo.IsLikelyMountPoint(path),
+		stopUsageCh:  make(chan struct{}),
+		diskFileInfo: fi,
+		diskMount:    mountinfo.IsLikelyMountPoint(path),
 	}
 
 	var pf BoolFlag
@@ -351,7 +356,7 @@ func (s *posix) checkDiskFound() (err error) {
 	if !s.IsOnline() {
 		return errDiskNotFound
 	}
-	_, err = os.Stat(s.diskPath)
+	fi, err := os.Stat(s.diskPath)
 	if err != nil {
 		switch {
 		case os.IsNotExist(err):
@@ -363,6 +368,10 @@ func (s *posix) checkDiskFound() (err error) {
 		default:
 			return err
 		}
+	}
+	if !os.SameFile(s.diskFileInfo, fi) {
+		s.connected = false
+		return errDiskNotFound
 	}
 	return nil
 }
