@@ -587,7 +587,8 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 	}
 
 	// Generate error response.
-	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path, w.Header().Get(responseRequestIDKey), w.Header().Get(responseDeploymentIDKey))
+	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path,
+		w.Header().Get(responseRequestIDKey), w.Header().Get(responseDeploymentIDKey))
 	encodedErrorResponse := encodeResponse(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
 }
