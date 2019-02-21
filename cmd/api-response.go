@@ -304,6 +304,21 @@ func getObjectLocation(r *http.Request, domain, bucket, object string) string {
 	return u.String()
 }
 
+// s3EncodeName encodes string in response when encodingType
+// is specified in AWS S3 requests.
+func s3EncodeName(name string, encodingType string) (result string) {
+	// Quick path to exit
+	if encodingType == "" {
+		return name
+	}
+	encodingType = strings.ToLower(encodingType)
+	switch encodingType {
+	case "url":
+		return url.QueryEscape(name)
+	}
+	return name
+}
+
 // generates ListBucketsResponse from array of BucketInfo which can be
 // serialized to match XML and JSON API spec output.
 func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
@@ -326,7 +341,7 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 }
 
 // generates an ListObjectsV1 response for the said bucket with other enumerated options.
-func generateListObjectsV1Response(bucket, prefix, marker, delimiter string, maxKeys int, resp ListObjectsInfo) ListObjectsResponse {
+func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingType string, maxKeys int, resp ListObjectsInfo) ListObjectsResponse {
 	var contents []Object
 	var prefixes []CommonPrefix
 	var owner = Owner{}
@@ -338,7 +353,7 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter string, max
 		if object.Name == "" {
 			continue
 		}
-		content.Key = object.Name
+		content.Key = s3EncodeName(object.Name, encodingType)
 		content.LastModified = object.ModTime.UTC().Format(timeFormatAMZLong)
 		if object.ETag != "" {
 			content.ETag = "\"" + object.ETag + "\""
@@ -348,20 +363,20 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter string, max
 		content.Owner = owner
 		contents = append(contents, content)
 	}
-	// TODO - support EncodingType in xml decoding
 	data.Name = bucket
 	data.Contents = contents
 
-	data.Prefix = prefix
-	data.Marker = marker
-	data.Delimiter = delimiter
+	data.EncodingType = encodingType
+	data.Prefix = s3EncodeName(prefix, encodingType)
+	data.Marker = s3EncodeName(marker, encodingType)
+	data.Delimiter = s3EncodeName(delimiter, encodingType)
 	data.MaxKeys = maxKeys
 
-	data.NextMarker = resp.NextMarker
+	data.NextMarker = s3EncodeName(resp.NextMarker, encodingType)
 	data.IsTruncated = resp.IsTruncated
 	for _, prefix := range resp.Prefixes {
 		var prefixItem = CommonPrefix{}
-		prefixItem.Prefix = prefix
+		prefixItem.Prefix = s3EncodeName(prefix, encodingType)
 		prefixes = append(prefixes, prefixItem)
 	}
 	data.CommonPrefixes = prefixes
@@ -369,7 +384,7 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter string, max
 }
 
 // generates an ListObjectsV2 response for the said bucket with other enumerated options.
-func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter, delimiter string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string) ListObjectsV2Response {
+func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter, delimiter, encodingType string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string) ListObjectsV2Response {
 	var contents []Object
 	var commonPrefixes []CommonPrefix
 	var owner = Owner{}
@@ -384,7 +399,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 		if object.Name == "" {
 			continue
 		}
-		content.Key = object.Name
+		content.Key = s3EncodeName(object.Name, encodingType)
 		content.LastModified = object.ModTime.UTC().Format(timeFormatAMZLong)
 		if object.ETag != "" {
 			content.ETag = "\"" + object.ETag + "\""
@@ -394,20 +409,20 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 		content.Owner = owner
 		contents = append(contents, content)
 	}
-	// TODO - support EncodingType in xml decoding
 	data.Name = bucket
 	data.Contents = contents
 
+	data.EncodingType = encodingType
 	data.StartAfter = startAfter
-	data.Delimiter = delimiter
-	data.Prefix = prefix
+	data.Delimiter = s3EncodeName(delimiter, encodingType)
+	data.Prefix = s3EncodeName(prefix, encodingType)
 	data.MaxKeys = maxKeys
 	data.ContinuationToken = token
 	data.NextContinuationToken = nextToken
 	data.IsTruncated = isTruncated
 	for _, prefix := range prefixes {
 		var prefixItem = CommonPrefix{}
-		prefixItem.Prefix = prefix
+		prefixItem.Prefix = s3EncodeName(prefix, encodingType)
 		commonPrefixes = append(commonPrefixes, prefixItem)
 	}
 	data.CommonPrefixes = commonPrefixes
@@ -451,11 +466,10 @@ func generateCompleteMultpartUploadResponse(bucket, key, location, etag string) 
 }
 
 // generates ListPartsResponse from ListPartsInfo.
-func generateListPartsResponse(partsInfo ListPartsInfo) ListPartsResponse {
-	// TODO - support EncodingType in xml decoding
+func generateListPartsResponse(partsInfo ListPartsInfo, encodingType string) ListPartsResponse {
 	listPartsResponse := ListPartsResponse{}
 	listPartsResponse.Bucket = partsInfo.Bucket
-	listPartsResponse.Key = partsInfo.Object
+	listPartsResponse.Key = s3EncodeName(partsInfo.Object, encodingType)
 	listPartsResponse.UploadID = partsInfo.UploadID
 	listPartsResponse.StorageClass = globalMinioDefaultStorageClass
 	listPartsResponse.Initiator.ID = globalMinioDefaultOwnerID
@@ -479,29 +493,29 @@ func generateListPartsResponse(partsInfo ListPartsInfo) ListPartsResponse {
 }
 
 // generates ListMultipartUploadsResponse for given bucket and ListMultipartsInfo.
-func generateListMultipartUploadsResponse(bucket string, multipartsInfo ListMultipartsInfo) ListMultipartUploadsResponse {
+func generateListMultipartUploadsResponse(bucket string, multipartsInfo ListMultipartsInfo, encodingType string) ListMultipartUploadsResponse {
 	listMultipartUploadsResponse := ListMultipartUploadsResponse{}
 	listMultipartUploadsResponse.Bucket = bucket
-	listMultipartUploadsResponse.Delimiter = multipartsInfo.Delimiter
+	listMultipartUploadsResponse.Delimiter = s3EncodeName(multipartsInfo.Delimiter, encodingType)
 	listMultipartUploadsResponse.IsTruncated = multipartsInfo.IsTruncated
-	listMultipartUploadsResponse.EncodingType = multipartsInfo.EncodingType
-	listMultipartUploadsResponse.Prefix = multipartsInfo.Prefix
-	listMultipartUploadsResponse.KeyMarker = multipartsInfo.KeyMarker
-	listMultipartUploadsResponse.NextKeyMarker = multipartsInfo.NextKeyMarker
+	listMultipartUploadsResponse.EncodingType = encodingType
+	listMultipartUploadsResponse.Prefix = s3EncodeName(multipartsInfo.Prefix, encodingType)
+	listMultipartUploadsResponse.KeyMarker = s3EncodeName(multipartsInfo.KeyMarker, encodingType)
+	listMultipartUploadsResponse.NextKeyMarker = s3EncodeName(multipartsInfo.NextKeyMarker, encodingType)
 	listMultipartUploadsResponse.MaxUploads = multipartsInfo.MaxUploads
 	listMultipartUploadsResponse.NextUploadIDMarker = multipartsInfo.NextUploadIDMarker
 	listMultipartUploadsResponse.UploadIDMarker = multipartsInfo.UploadIDMarker
 	listMultipartUploadsResponse.CommonPrefixes = make([]CommonPrefix, len(multipartsInfo.CommonPrefixes))
 	for index, commonPrefix := range multipartsInfo.CommonPrefixes {
 		listMultipartUploadsResponse.CommonPrefixes[index] = CommonPrefix{
-			Prefix: commonPrefix,
+			Prefix: s3EncodeName(commonPrefix, encodingType),
 		}
 	}
 	listMultipartUploadsResponse.Uploads = make([]Upload, len(multipartsInfo.Uploads))
 	for index, upload := range multipartsInfo.Uploads {
 		newUpload := Upload{}
 		newUpload.UploadID = upload.UploadID
-		newUpload.Key = upload.Object
+		newUpload.Key = s3EncodeName(upload.Object, encodingType)
 		newUpload.Initiated = upload.Initiated.UTC().Format(timeFormatAMZLong)
 		listMultipartUploadsResponse.Uploads[index] = newUpload
 	}

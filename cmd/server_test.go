@@ -1658,62 +1658,59 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *check) {
 	c.Assert(err, nil)
 	c.Assert(response.StatusCode, http.StatusOK)
 
-	buffer1 := bytes.NewReader([]byte("Hello World"))
-	request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, "bar"),
-		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey, s.signer)
-	c.Assert(err, nil)
+	for _, objectName := range []string{"foo bar 1", "foo bar 2"} {
+		buffer := bytes.NewReader([]byte("Hello World"))
+		request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
+			int64(buffer.Len()), buffer, s.accessKey, s.secretKey, s.signer)
+		c.Assert(err, nil)
 
-	client = http.Client{Transport: s.transport}
-	response, err = client.Do(request)
-	c.Assert(err, nil)
-	c.Assert(response.StatusCode, http.StatusOK)
+		client = http.Client{Transport: s.transport}
+		response, err = client.Do(request)
+		c.Assert(err, nil)
+		c.Assert(response.StatusCode, http.StatusOK)
+	}
 
-	// create listObjectsV1 request with valid parameters
-	request, err = newTestSignedRequest("GET", getListObjectsV1URL(s.endPoint, bucketName, "1000"),
-		0, nil, s.accessKey, s.secretKey, s.signer)
-	c.Assert(err, nil)
-	client = http.Client{Transport: s.transport}
-	// execute the HTTP request.
-	response, err = client.Do(request)
-	c.Assert(err, nil)
-	c.Assert(response.StatusCode, http.StatusOK)
+	var testCases = []struct {
+		getURL          string
+		expectedStrings []string
+	}{
+		{getListObjectsV1URL(s.endPoint, bucketName, "", "1000", ""), []string{"<Key>foo bar 1</Key>", "<Key>foo bar 2</Key>"}},
+		{getListObjectsV1URL(s.endPoint, bucketName, "", "1000", "url"), []string{"<Key>foo+bar+1</Key>", "<Key>foo+bar+2</Key>"}},
+		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", ""),
+			[]string{
+				"<Key>foo bar 1</Key>",
+				"<Key>foo bar 2</Key>",
+				"<Owner><ID></ID><DisplayName></DisplayName></Owner>",
+			},
+		},
+		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "true", ""),
+			[]string{
+				"<Key>foo bar 1</Key>",
+				"<Key>foo bar 2</Key>",
+				fmt.Sprintf("<Owner><ID>%s</ID><DisplayName></DisplayName></Owner>", globalMinioDefaultOwnerID),
+			},
+		},
+		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", "url"), []string{"<Key>foo+bar+1</Key>", "<Key>foo+bar+2</Key>"}},
+	}
 
-	getContent, err := ioutil.ReadAll(response.Body)
-	c.Assert(err, nil)
-	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), true)
+	for i, testCase := range testCases {
+		// create listObjectsV1 request with valid parameters
+		request, err = newTestSignedRequest("GET", testCase.getURL, 0, nil, s.accessKey, s.secretKey, s.signer)
+		c.Assert(err, nil)
+		client = http.Client{Transport: s.transport}
+		// execute the HTTP request.
+		response, err = client.Do(request)
+		c.Assert(err, nil)
+		c.Assert(response.StatusCode, http.StatusOK)
 
-	// create listObjectsV2 request with valid parameters
-	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "1000", ""),
-		0, nil, s.accessKey, s.secretKey, s.signer)
-	c.Assert(err, nil)
-	client = http.Client{Transport: s.transport}
-	// execute the HTTP request.
-	response, err = client.Do(request)
-	c.Assert(err, nil)
-	c.Assert(response.StatusCode, http.StatusOK)
+		getContent, err := ioutil.ReadAll(response.Body)
+		c.Assert(err, nil)
 
-	getContent, err = ioutil.ReadAll(response.Body)
-	c.Assert(err, nil)
-	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), true)
-	c.Assert(strings.Contains(string(getContent), "<Owner><ID></ID><DisplayName></DisplayName></Owner>"), true)
-
-	// create listObjectsV2 request with valid parameters and fetch-owner activated
-	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "1000", "true"),
-		0, nil, s.accessKey, s.secretKey, s.signer)
-	c.Assert(err, nil)
-	client = http.Client{Transport: s.transport}
-	// execute the HTTP request.
-	response, err = client.Do(request)
-	c.Assert(err, nil)
-	c.Assert(response.StatusCode, http.StatusOK)
-
-	getContent, err = ioutil.ReadAll(response.Body)
-	c.Assert(err, nil)
-
-	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), true)
-	c.Assert(strings.Contains(string(getContent), fmt.Sprintf("<Owner><ID>%s</ID><DisplayName></DisplayName></Owner>",
-		globalMinioDefaultOwnerID)), true)
-
+		fmt.Printf("Test %d: %+v vs %+v\n", i+1, string(getContent), testCase.expectedStrings)
+		for _, expectedStr := range testCase.expectedStrings {
+			c.Assert(strings.Contains(string(getContent), expectedStr), true)
+		}
+	}
 }
 
 // TestListObjectsHandlerErrors - Setting invalid parameters to List Objects
@@ -1733,7 +1730,7 @@ func (s *TestSuiteCommon) TestListObjectsHandlerErrors(c *check) {
 	c.Assert(response.StatusCode, http.StatusOK)
 
 	// create listObjectsV1 request with invalid value of max-keys parameter. max-keys is set to -2.
-	request, err = newTestSignedRequest("GET", getListObjectsV1URL(s.endPoint, bucketName, "-2"),
+	request, err = newTestSignedRequest("GET", getListObjectsV1URL(s.endPoint, bucketName, "", "-2", ""),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
 	client = http.Client{Transport: s.transport}
@@ -1744,7 +1741,7 @@ func (s *TestSuiteCommon) TestListObjectsHandlerErrors(c *check) {
 	verifyError(c, response, "InvalidArgument", "Argument maxKeys must be an integer between 0 and 2147483647", http.StatusBadRequest)
 
 	// create listObjectsV2 request with invalid value of max-keys parameter. max-keys is set to -2.
-	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "-2", ""),
+	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "", "-2", "", ""),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
 	client = http.Client{Transport: s.transport}

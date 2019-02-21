@@ -73,6 +73,7 @@ const (
 	ErrInvalidCopyPartRange
 	ErrInvalidCopyPartRangeSource
 	ErrInvalidMaxKeys
+	ErrInvalidEncodingMethod
 	ErrInvalidMaxUploads
 	ErrInvalidMaxParts
 	ErrInvalidPartNumberMarker
@@ -355,6 +356,11 @@ var errorCodes = errorCodeMap{
 	ErrInvalidMaxKeys: {
 		Code:           "InvalidArgument",
 		Description:    "Argument maxKeys must be an integer between 0 and 2147483647",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidEncodingMethod: {
+		Code:           "InvalidArgument",
+		Description:    "Invalid Encoding Method specified in Request",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidMaxParts: {
