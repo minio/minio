@@ -16,7 +16,10 @@ static int minio_nkv_open(char *config, struct minio_nkv_handle *handle) {
   uint64_t instance_uuid = 0;
   nkv_result result;
   result = nkv_open(config, "minio", "msl-ssg-sk01", 1023, &instance_uuid, &handle->nkv_handle);
+  return result;
+}
 
+static int minio_nkv_open_path(struct minio_nkv_handle *handle, char *ipaddr) {
   uint32_t index = 0;
   uint32_t cnt_count = NKV_MAX_ENTRIES_PER_CALL;
   nkv_container_info *cntlist = malloc(sizeof(nkv_container_info)*NKV_MAX_ENTRIES_PER_CALL);
@@ -28,7 +31,7 @@ static int minio_nkv_open(char *config, struct minio_nkv_handle *handle) {
     memset(cntlist[i].transport_list, 0, sizeof(nkv_container_transport)*NKV_MAX_CONT_TRANSPORT);
   }
 
-  result = nkv_physical_container_list (handle->nkv_handle, index, cntlist, &cnt_count);
+  int result = nkv_physical_container_list (handle->nkv_handle, index, cntlist, &cnt_count);
   if (result != 0) {
     printf("NKV getting physical container list failed !!, error = %d\n", result);
     exit(1);
@@ -39,7 +42,7 @@ static int minio_nkv_open(char *config, struct minio_nkv_handle *handle) {
   uint32_t io_ctx_cnt = 0;
 
   for (uint32_t i = 0; i < cnt_count; i++) {
-    printf("Container Information :: hash = %u, id = %u, uuid = %s, name = %s, target node = %s, status = %u, space available pcnt = %u\n",
+    printf("Container Information :: hash = %ul, id = %ul, uuid = %s, name = %s, target node = %s, status = %u, space available pcnt = %u\n",
              cntlist[i].container_hash, cntlist[i].container_id, cntlist[i].container_uuid, cntlist[i].container_name, cntlist[i].hosting_target_name,
              cntlist[i].container_status, cntlist[i].container_space_available_percentage);
 
@@ -56,12 +59,16 @@ static int minio_nkv_open(char *config, struct minio_nkv_handle *handle) {
       io_ctx[io_ctx_cnt].is_pass_through = 1;
       io_ctx[io_ctx_cnt].container_hash = cntlist[i].container_hash;
       io_ctx[io_ctx_cnt].network_path_hash = cntlist[i].transport_list[p].network_path_hash;
+
+      if(!strcmp(cntlist[i].transport_list[p].ip_addr, ipaddr)) {
+              handle->container_hash = cntlist[i].container_hash;
+              handle->network_path_hash = cntlist[i].transport_list[p].network_path_hash;
+              return 0;
+      }
       io_ctx_cnt++;
     }
   }
-  handle->container_hash = io_ctx[0].container_hash;
-  handle->network_path_hash = io_ctx[0].network_path_hash;
-  return result;
+  return 1;
 }
 
 static int minio_nkv_put(struct minio_nkv_handle *handle, void *key, int keyLen, void *value, int valueLen) {
@@ -105,12 +112,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"time"
 	"unsafe"
@@ -271,6 +276,8 @@ func (k *KV) ListDir(nskey string) ([]string, error) {
 	return listEntries, err
 }
 
+var globalKVHandle *KV
+
 type KVStorage struct {
 	kv     *KV
 	volDir string
@@ -280,18 +287,23 @@ func newPosix(path string) (StorageAPI, error) {
 	os.MkdirAll(path, 0777)
 	os.MkdirAll(pathJoin("/tmp", path), 0777)
 
-	fullPath, err := filepath.Abs(path)
-	if err != nil {
-		return nil, err
+	configPath := os.Getenv("MINIO_NKV_CONFIG")
+	if configPath == "" {
+		return nil, errDiskNotFound
 	}
-	kv := &KV{}
-	fmt.Println("opening", fullPath)
-	status := C.minio_nkv_open(C.CString(fullPath), &kv.handle)
-	fmt.Println("status", status)
+	if globalKVHandle == nil {
+		globalKVHandle = &KV{}
+		status := C.minio_nkv_open(C.CString(configPath), &globalKVHandle.handle)
+		if status != 0 {
+			return nil, errDiskNotFound
+		}
+	}
+	kv := *globalKVHandle
+	status := C.minio_nkv_open_path(&kv.handle, C.CString(path))
 	if status != 0 {
 		return nil, errors.New("unable to open device")
 	}
-	p := &KVStorage{kv, pathJoin("/tmp", path)}
+	p := &KVStorage{&kv, pathJoin("/tmp", path)}
 	if strings.HasSuffix(path, "export-xl/disk1") {
 		return &debugStorage{path, p}, nil
 	}
