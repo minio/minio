@@ -71,7 +71,7 @@ func (r *Reader) Close() error {
 
 // NewReader - creates new JSON reader using readCloser.
 func NewReader(readCloser io.ReadCloser, args *ReaderArgs) *Reader {
-	d := jstream.NewDecoder(readCloser, 0)
+	d := jstream.NewDecoder(readCloser, 0).ObjectAsKVS()
 	return &Reader{
 		args:       args,
 		decoder:    d,

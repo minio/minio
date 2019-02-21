@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017, 2018, 2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -206,7 +206,6 @@ func (endpoints EndpointList) GetString(i int) string {
 func localEndpointsMemUsage(endpoints EndpointList) ServerMemUsageInfo {
 	var memUsages []mem.Usage
 	var historicUsages []mem.Usage
-	var addr string
 	seenEndpoints := set.NewStringSet()
 	for _, endpoint := range endpoints {
 		// Only proceed for local endpoints
@@ -214,16 +213,13 @@ func localEndpointsMemUsage(endpoints EndpointList) ServerMemUsageInfo {
 			if seenEndpoints.Contains(endpoint.Host) {
 				continue
 			}
-			addr = GetLocalPeer(endpoints)
-			memUsage := mem.GetUsage()
-			memUsages = append(memUsages, memUsage)
-			historicUsage := mem.GetHistoricUsage()
-			historicUsages = append(historicUsages, historicUsage)
-			seenEndpoints.Add(endpoint.Host)
+			memUsages = append(memUsages, mem.GetUsage())
+			historicUsages = append(historicUsages, mem.GetHistoricUsage())
+      seenEndpoints.Add(endpoint.Host)
 		}
 	}
 	return ServerMemUsageInfo{
-		Addr:          addr,
+		Addr:          GetLocalPeer(endpoints),
 		Usage:         memUsages,
 		HistoricUsage: historicUsages,
 	}
@@ -270,7 +266,6 @@ func localEndpointsNetStats(endpoints EndpointList) ServerNetStatsInfo {
 func localEndpointsCPULoad(endpoints EndpointList) ServerCPULoadInfo {
 	var cpuLoads []cpu.Load
 	var historicLoads []cpu.Load
-	var addr string
 	seenEndpoints := set.NewStringSet()
 	for _, endpoint := range endpoints {
 		// Only proceed for local endpoints
@@ -278,16 +273,13 @@ func localEndpointsCPULoad(endpoints EndpointList) ServerCPULoadInfo {
 			if seenEndpoints.Contains(endpoint.Host) {
 				continue
 			}
-			addr = GetLocalPeer(endpoints)
-			cpuLoad := cpu.GetLoad()
-			cpuLoads = append(cpuLoads, cpuLoad)
-			historicLoad := cpu.GetHistoricLoad()
-			historicLoads = append(historicLoads, historicLoad)
+			cpuLoads = append(cpuLoads, cpu.GetLoad())
+			historicLoads = append(historicLoads, cpu.GetHistoricLoad())
 			seenEndpoints.Add(endpoint.Host)
 		}
 	}
 	return ServerCPULoadInfo{
-		Addr:         addr,
+		Addr:         GetLocalPeer(endpoints),
 		Load:         cpuLoads,
 		HistoricLoad: historicLoads,
 	}
@@ -297,26 +289,22 @@ func localEndpointsCPULoad(endpoints EndpointList) ServerCPULoadInfo {
 // local endpoints from given list of endpoints
 func localEndpointsDrivePerf(endpoints EndpointList) ServerDrivesPerfInfo {
 	var dps []disk.Performance
-	var addr string
 	for _, endpoint := range endpoints {
 		// Only proceed for local endpoints
 		if endpoint.IsLocal {
-			addr = GetLocalPeer(endpoints)
 			if _, err := os.Stat(endpoint.Path); err != nil {
 				// Since this drive is not available, add relevant details and proceed
 				dps = append(dps, disk.Performance{Path: endpoint.Path, Error: err.Error()})
 				continue
 			}
-			tempObj := mustGetUUID()
-			fsPath := pathJoin(endpoint.Path, minioMetaTmpBucket, tempObj)
-			dp := disk.GetPerformance(fsPath)
+			dp := disk.GetPerformance(pathJoin(endpoint.Path, minioMetaTmpBucket, mustGetUUID()))
 			dp.Path = endpoint.Path
 			dps = append(dps, dp)
 		}
 	}
 
 	return ServerDrivesPerfInfo{
-		Addr: addr,
+		Addr: GetLocalPeer(endpoints),
 		Perf: dps,
 	}
 }

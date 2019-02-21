@@ -66,6 +66,7 @@ coverage: build
 build: checks
 	@echo "Building minio binary to './minio'"
 	@GOFLAGS="" CGO_ENABLED=0 go build -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio
+	@GOFLAGS="" CGO_ENABLED=0 go build -tags kqueue --ldflags="-s -w" -o $(PWD)/dockerscripts/healthcheck $(PWD)/dockerscripts/healthcheck.go
 
 docker: build
 	@docker build -t $(TAG) . -f Dockerfile.dev
