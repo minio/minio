@@ -122,7 +122,8 @@ var (
         "password": "",
         "reconnectInterval": 0,
 	"keepAliveInterval": 0,
-	"queueDir": ""
+	"queueDir": "",
+        "queueLimit": 0
       }
     },
     "mysql": {
