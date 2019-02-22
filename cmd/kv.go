@@ -36,26 +36,15 @@ static int minio_nkv_open_path(struct minio_nkv_handle *handle, char *ipaddr) {
     printf("NKV getting physical container list failed !!, error = %d\n", result);
     exit(1);
   }
-  printf("Got container list, count = %u\n", cnt_count);
+
   nkv_io_context io_ctx[16];
   memset(io_ctx, 0, sizeof(nkv_io_context) * 16);
   uint32_t io_ctx_cnt = 0;
 
   for (uint32_t i = 0; i < cnt_count; i++) {
-    printf("Container Information :: hash = %ul, id = %ul, uuid = %s, name = %s, target node = %s, status = %u, space available pcnt = %u\n",
-             cntlist[i].container_hash, cntlist[i].container_id, cntlist[i].container_uuid, cntlist[i].container_name, cntlist[i].hosting_target_name,
-             cntlist[i].container_status, cntlist[i].container_space_available_percentage);
-
-    printf("\n");
     io_ctx[io_ctx_cnt].container_hash = cntlist[i].container_hash;
 
-    printf("Number of Container transport = %d\n", cntlist[i].num_container_transport);
     for (int p = 0; p < cntlist[i].num_container_transport; p++) {
-      printf("Transport information :: hash = %u, id = %d, address = %s, port = %d, family = %d, speed = %d, status = %d, numa_node = %d\n",
-              cntlist[i].transport_list[p].network_path_hash, cntlist[i].transport_list[p].network_path_id, cntlist[i].transport_list[p].ip_addr,
-              cntlist[i].transport_list[p].port, cntlist[i].transport_list[p].addr_family, cntlist[i].transport_list[p].speed,
-              cntlist[i].transport_list[p].status, cntlist[i].transport_list[p].numa_node);
-
       io_ctx[io_ctx_cnt].is_pass_through = 1;
       io_ctx[io_ctx_cnt].container_hash = cntlist[i].container_hash;
       io_ctx[io_ctx_cnt].network_path_hash = cntlist[i].transport_list[p].network_path_hash;
@@ -138,17 +127,6 @@ type KV struct {
 	handle C.struct_minio_nkv_handle
 }
 
-type KVNSEntry struct {
-	Size    int64
-	ModTime time.Time
-	IDs     []string
-}
-
-var errValueTooLong = errors.New("value too long")
-
-const kvDataDir = ".minio.sys/.data"
-const kvMaxValueSize = 2 * 1024 * 1024
-
 func (k *KV) Put(keyStr string, value []byte) error {
 	if len(value) > kvMaxValueSize {
 		return errValueTooLong
@@ -181,135 +159,29 @@ func (k *KV) Delete(keyStr string) error {
 	return nil
 }
 
-func (k *KV) DataKey(id string) string {
-	return path.Join(kvDataDir, id)
-}
-
-func (k *KV) CreateFile(nskey string, size int64, reader io.Reader) error {
-	entry := KVNSEntry{Size: size, ModTime: time.Now()}
-	buf := make([]byte, kvMaxValueSize)
-	for {
-		if size < int64(len(buf)) {
-			buf = buf[:size]
-		}
-		n, err := io.ReadFull(reader, buf)
-		if err != nil {
-			return err
-		}
-		size -= int64(n)
-		id := mustGetUUID()
-		if err = k.Put(k.DataKey(id), buf); err != nil {
-			return err
-		}
-		entry.IDs = append(entry.IDs, id)
-		if size == 0 {
-			break
-		}
-	}
-	b, err := json.Marshal(entry)
-	if err != nil {
-		return err
-	}
-	return k.Put(nskey, b)
-}
-
-func (k *KV) ReadFileStream(nskey string, offset, size int64) (io.ReadCloser, error) {
-	entry := KVNSEntry{}
-	b, err := k.Get(nskey)
-	if err != nil {
-		return nil, err
-	}
-	if err = json.Unmarshal(b, &entry); err != nil {
-		return nil, err
-	}
-	if size != entry.Size {
-		return nil, errUnexpected
-	}
-	if offset != 0 {
-		return nil, errUnexpected
-	}
-	r, w := io.Pipe()
-	go func() {
-		for _, id := range entry.IDs {
-			data, err := k.Get(k.DataKey(id))
-			if err != nil {
-				w.CloseWithError(err)
-				return
-			}
-			w.Write(data)
-		}
-		w.Close()
-	}()
-	return ioutil.NopCloser(r), nil
-}
-
-func (k *KV) DeleteFile(nskey string) error {
-	entry := KVNSEntry{}
-	b, err := k.Get(nskey)
-	if err != nil {
-		return err
-	}
-	if err = json.Unmarshal(b, &entry); err != nil {
-		return err
-	}
-	for _, id := range entry.IDs {
-		k.Delete(k.DataKey(id))
-	}
-	return k.Delete(nskey)
-}
-
-func (k *KV) StatFile(nskey string) (size int64, modTime time.Time, err error) {
-	entry := KVNSEntry{}
-	b, err := k.Get(nskey)
-	if err != nil {
-		return
-	}
-	if err = json.Unmarshal(b, &entry); err != nil {
-		return
-	}
-	return entry.Size, entry.ModTime, nil
-}
-
-func (k *KV) ListDir(nskey string) ([]string, error) {
-	entry := KVNSEntry{}
-	b, err := k.Get(nskey)
-	if err != nil {
-		return nil, err
-	}
-	if err = json.Unmarshal(b, &entry); err != nil {
-		return nil, err
-	}
-	b, err = k.Get(k.DataKey(entry.IDs[0]))
-	if err != nil {
-		return nil, err
-	}
-	xlMeta, err := xlMetaV1UnmarshalJSON(context.Background(), b)
-	if err != nil {
-		return nil, err
-	}
-	listEntries := []string{"xl.json"}
-	for _, part := range xlMeta.Parts {
-		listEntries = append(listEntries, part.Name)
-	}
-	return listEntries, err
-}
-
 var globalKVHandle *KV
 
 type KVStorage struct {
-	kv     *KV
+	kv     KVInterface
 	volDir string
 }
 
 func newPosix(path string) (StorageAPI, error) {
 	path = strings.TrimPrefix(path, "/ip/")
-	os.MkdirAll(path, 0777)
-	os.MkdirAll(pathJoin("/tmp", path), 0777)
+	volumesDir := pathJoin("/tmp", path, "volumes")
+	os.MkdirAll(volumesDir, 0777)
+
+	if os.Getenv("MINIO_NKV_EMULATOR") != "" {
+		dataDir := pathJoin("/tmp", path, "data")
+		os.MkdirAll(dataDir, 0777)
+		return &debugStorage{path, &KVStorage{&KVEmulator{dataDir}, volumesDir}}, nil
+	}
 
 	configPath := os.Getenv("MINIO_NKV_CONFIG")
 	if configPath == "" {
 		return nil, errDiskNotFound
 	}
+
 	if globalKVHandle == nil {
 		globalKVHandle = &KV{}
 		status := C.minio_nkv_open(C.CString(configPath), &globalKVHandle.handle)
@@ -328,6 +200,10 @@ func newPosix(path string) (StorageAPI, error) {
 		return &debugStorage{path, p}, nil
 	}
 	return p, nil
+}
+
+func (k *KVStorage) DataKey(id string) string {
+	return path.Join(kvDataDir, id)
 }
 
 func (k *KVStorage) String() string {
@@ -352,8 +228,6 @@ func (k *KVStorage) DiskInfo() (info DiskInfo, err error) {
 		Free:  3 * 1024 * 1024 * 1024 * 1024,
 	}, nil
 }
-
-// const kvVolumeDir = ".volumes"
 
 func (k *KVStorage) getVolumeDir(volume string) string {
 	return pathJoin(k.volDir, volume)
@@ -418,7 +292,28 @@ func (k *KVStorage) DeleteVol(volume string) (err error) {
 }
 
 func (k *KVStorage) ListDir(volume, dirPath string, count int) ([]string, error) {
-	return k.kv.ListDir(pathJoin(volume, dirPath, "xl.json"))
+	nskey := pathJoin(volume, dirPath, "xl.json")
+	entry := KVNSEntry{}
+	b, err := k.kv.Get(nskey)
+	if err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(b, &entry); err != nil {
+		return nil, err
+	}
+	b, err = k.kv.Get(k.DataKey(entry.IDs[0]))
+	if err != nil {
+		return nil, err
+	}
+	xlMeta, err := xlMetaV1UnmarshalJSON(context.Background(), b)
+	if err != nil {
+		return nil, err
+	}
+	listEntries := []string{"xl.json"}
+	for _, part := range xlMeta.Parts {
+		listEntries = append(listEntries, part.Name)
+	}
+	return listEntries, err
 }
 
 func (k *KVStorage) ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
@@ -439,14 +334,66 @@ func (k *KVStorage) CreateFile(volume, filePath string, size int64, reader io.Re
 	if err := k.verifyVolume(volume); err != nil {
 		return err
 	}
-	return k.kv.CreateFile(pathJoin(volume, filePath), size, reader)
+	nskey := pathJoin(volume, filePath)
+	entry := KVNSEntry{Size: size, ModTime: time.Now()}
+	buf := make([]byte, kvMaxValueSize)
+	for {
+		if size < int64(len(buf)) {
+			buf = buf[:size]
+		}
+		n, err := io.ReadFull(reader, buf)
+		if err != nil {
+			return err
+		}
+		size -= int64(n)
+		id := mustGetUUID()
+		if err = k.kv.Put(k.DataKey(id), buf); err != nil {
+			return err
+		}
+		entry.IDs = append(entry.IDs, id)
+		if size == 0 {
+			break
+		}
+	}
+	b, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	return k.kv.Put(nskey, b)
 }
 
 func (k *KVStorage) ReadFileStream(volume, filePath string, offset, length int64) (io.ReadCloser, error) {
 	if err := k.verifyVolume(volume); err != nil {
 		return nil, err
 	}
-	return k.kv.ReadFileStream(pathJoin(volume, filePath), offset, length)
+	nskey := pathJoin(volume, filePath)
+	entry := KVNSEntry{}
+	b, err := k.kv.Get(nskey)
+	if err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(b, &entry); err != nil {
+		return nil, err
+	}
+	if length != entry.Size {
+		return nil, errUnexpected
+	}
+	if offset != 0 {
+		return nil, errUnexpected
+	}
+	r, w := io.Pipe()
+	go func() {
+		for _, id := range entry.IDs {
+			data, err := k.kv.Get(k.DataKey(id))
+			if err != nil {
+				w.CloseWithError(err)
+				return
+			}
+			w.Write(data)
+		}
+		w.Close()
+	}()
+	return ioutil.NopCloser(r), nil
 }
 
 func (k *KVStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
@@ -491,15 +438,20 @@ func (k *KVStorage) StatFile(volume string, path string) (fi FileInfo, err error
 	if err := k.verifyVolume(volume); err != nil {
 		return fi, err
 	}
-	size, modTime, err := k.kv.StatFile(pathJoin(volume, path))
+	nskey := pathJoin(volume, path)
+	entry := KVNSEntry{}
+	b, err := k.kv.Get(nskey)
 	if err != nil {
-		return fi, err
+		return
+	}
+	if err = json.Unmarshal(b, &entry); err != nil {
+		return
 	}
 	return FileInfo{
 		Volume:  volume,
 		Name:    path,
-		ModTime: modTime,
-		Size:    size,
+		ModTime: entry.ModTime,
+		Size:    entry.Size,
 		Mode:    0,
 	}, nil
 }
@@ -508,7 +460,19 @@ func (k *KVStorage) DeleteFile(volume string, path string) (err error) {
 	if err := k.verifyVolume(volume); err != nil {
 		return err
 	}
-	return k.kv.DeleteFile(pathJoin(volume, path))
+	nskey := pathJoin(volume, path)
+	entry := KVNSEntry{}
+	b, err := k.kv.Get(nskey)
+	if err != nil {
+		return err
+	}
+	if err = json.Unmarshal(b, &entry); err != nil {
+		return err
+	}
+	for _, id := range entry.IDs {
+		k.kv.Delete(k.DataKey(id))
+	}
+	return k.kv.Delete(nskey)
 }
 
 func (k *KVStorage) WriteAll(volume string, filePath string, buf []byte) (err error) {
@@ -530,12 +494,11 @@ func (k *KVStorage) ReadAll(volume string, filePath string) (buf []byte, err err
 		buf, err = k.kv.Get(pathJoin(volume, filePath))
 		return buf, err
 	}
-	nsKey := pathJoin(volume, filePath)
-	size, _, err := k.kv.StatFile(nsKey)
+	fi, err := k.StatFile(volume, filePath)
 	if err != nil {
 		return nil, err
 	}
-	r, err := k.kv.ReadFileStream(nsKey, 0, size)
+	r, err := k.ReadFileStream(volume, filePath, 0, fi.Size)
 	if err != nil {
 		return nil, err
 	}
