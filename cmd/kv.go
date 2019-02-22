@@ -103,6 +103,18 @@ static int minio_nkv_get(struct minio_nkv_handle *handle, void *key, int keyLen,
   return result;
 }
 
+static int minio_nkv_delete(struct minio_nkv_handle *handle, void *key, int keyLen) {
+  nkv_result result;
+  nkv_io_context ctx;
+  ctx.is_pass_through = 1;
+  ctx.container_hash = handle->container_hash;
+  ctx.network_path_hash = handle->network_path_hash;
+  ctx.ks_id = 0;
+
+  const nkv_key  nkvkey = {key, keyLen};
+  result = nkv_delete_kvp(handle->nkv_handle, &ctx, &nkvkey);
+  return result;
+}
 
 */
 import "C"
@@ -160,7 +172,12 @@ func (k *KV) Get(keyStr string) ([]byte, error) {
 	return value[:actualLength], nil
 }
 
-func (k *KV) Delete(key string) error {
+func (k *KV) Delete(keyStr string) error {
+	key := []byte(keyStr)
+	status := C.minio_nkv_delete(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)))
+	if status != 0 {
+		return errFileNotFound
+	}
 	return nil
 }
 
