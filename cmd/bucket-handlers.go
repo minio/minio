@@ -446,7 +446,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 				}
 
 				// Make sure to add Location information here only for bucket
-				w.Header().Set("Location", getObjectLocation(r, globalDomainName, bucket, ""))
+				w.Header().Set("Location", getObjectLocation(r, globalDomainNames, bucket, ""))
 
 				writeSuccessResponseHeadersOnly(w)
 				return
@@ -505,7 +505,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	resource, err := getResource(r.URL.Path, r.Host, globalDomainName)
+	resource, err := getResource(r.URL.Path, r.Host, globalDomainNames)
 	if err != nil {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL, guessIsBrowserReq(r))
 		return
@@ -677,7 +677,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	location := getObjectLocation(r, globalDomainName, bucket, object)
+	location := getObjectLocation(r, globalDomainNames, bucket, object)
 	w.Header().Set("ETag", `"`+objInfo.ETag+`"`)
 	w.Header().Set("Location", location)
 

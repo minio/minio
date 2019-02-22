@@ -341,8 +341,8 @@ func httpTraceHdrs(f http.HandlerFunc) http.HandlerFunc {
 }
 
 // Returns "/bucketName/objectName" for path-style or virtual-host-style requests.
-func getResource(path string, host string, domain string) (string, error) {
-	if domain == "" {
+func getResource(path string, host string, domains []string) (string, error) {
+	if len(domains) == 0 {
 		return path, nil
 	}
 	// If virtual-host-style is enabled construct the "resource" properly.
@@ -357,11 +357,14 @@ func getResource(path string, host string, domain string) (string, error) {
 			return "", err
 		}
 	}
-	if !strings.HasSuffix(host, "."+domain) {
-		return path, nil
+	for _, domain := range domains {
+		if !strings.HasSuffix(host, "."+domain) {
+			continue
+		}
+		bucket := strings.TrimSuffix(host, "."+domain)
+		return slashSeparator + pathJoin(bucket, path), nil
 	}
-	bucket := strings.TrimSuffix(host, "."+domain)
-	return slashSeparator + pathJoin(bucket, path), nil
+	return path, nil
 }
 
 // If none of the http routes match respond with MethodNotAllowed, in JSON

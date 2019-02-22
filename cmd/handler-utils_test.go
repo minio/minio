@@ -213,15 +213,15 @@ func TestGetResource(t *testing.T) {
 	testCases := []struct {
 		p                string
 		host             string
-		domain           string
+		domains          []string
 		expectedResource string
 	}{
-		{"/a/b/c", "test.mydomain.com", "mydomain.com", "/test/a/b/c"},
-		{"/a/b/c", "test.mydomain.com", "notmydomain.com", "/a/b/c"},
-		{"/a/b/c", "test.mydomain.com", "", "/a/b/c"},
+		{"/a/b/c", "test.mydomain.com", []string{"mydomain.com"}, "/test/a/b/c"},
+		{"/a/b/c", "test.mydomain.com", []string{"notmydomain.com"}, "/a/b/c"},
+		{"/a/b/c", "test.mydomain.com", nil, "/a/b/c"},
 	}
 	for i, test := range testCases {
-		gotResource, err := getResource(test.p, test.host, test.domain)
+		gotResource, err := getResource(test.p, test.host, test.domains)
 		if err != nil {
 			t.Fatal(err)
 		}

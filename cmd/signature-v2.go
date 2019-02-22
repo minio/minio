@@ -163,7 +163,7 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 		return ErrExpiredPresignRequest
 	}
 
-	encodedResource, err = getResource(encodedResource, r.Host, globalDomainName)
+	encodedResource, err = getResource(encodedResource, r.Host, globalDomainNames)
 	if err != nil {
 		return ErrInvalidRequest
 	}
@@ -257,7 +257,7 @@ func doesSignV2Match(r *http.Request) APIErrorCode {
 		return ErrInvalidQueryParams
 	}
 
-	encodedResource, err = getResource(encodedResource, r.Host, globalDomainName)
+	encodedResource, err = getResource(encodedResource, r.Host, globalDomainNames)
 	if err != nil {
 		return ErrInvalidRequest
 	}
