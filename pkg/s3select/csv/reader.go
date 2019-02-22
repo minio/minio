@@ -138,6 +138,12 @@ func NewReader(readCloser io.ReadCloser, args *ReaderArgs) (*Reader, error) {
 	csvReader.Comma = []rune(args.FieldDelimiter)[0]
 	csvReader.Comment = []rune(args.CommentCharacter)[0]
 	csvReader.FieldsPerRecord = -1
+	// If LazyQuotes is true, a quote may appear in an unquoted field and a
+	// non-doubled quote may appear in a quoted field.
+	csvReader.LazyQuotes = true
+	// If TrimLeadingSpace is true, leading white space in a field is ignored.
+	// This is done even if the field delimiter, Comma, is white space.
+	csvReader.TrimLeadingSpace = true
 
 	r := &Reader{
 		args:       args,
