@@ -83,6 +83,11 @@ func findEndpoint() string {
 			if strings.Count(addr, ":") > 0 {
 				addr = strings.Join([]string{"[", addr, "]"}, "")
 			}
+			// wait for cmd to complete before return
+			if err = cmd.Wait(); err != nil {
+				// command failed to run
+				log.Fatal(err.Error())
+			}
 			// return joint address and port
 			return strings.Join([]string{addr, port}, ":")
 		}
