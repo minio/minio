@@ -112,6 +112,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -284,6 +285,7 @@ type KVStorage struct {
 }
 
 func newPosix(path string) (StorageAPI, error) {
+	path = strings.TrimPrefix(path, "/ip/")
 	os.MkdirAll(path, 0777)
 	os.MkdirAll(pathJoin("/tmp", path), 0777)
 
@@ -301,6 +303,7 @@ func newPosix(path string) (StorageAPI, error) {
 	kv := *globalKVHandle
 	status := C.minio_nkv_open_path(&kv.handle, C.CString(path))
 	if status != 0 {
+		fmt.Println("unable to open", path)
 		return nil, errors.New("unable to open device")
 	}
 	p := &KVStorage{&kv, pathJoin("/tmp", path)}
