@@ -119,6 +119,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 )
@@ -161,20 +162,28 @@ func (k *KV) Delete(keyStr string) error {
 
 var globalKVHandle *KV
 
+const kvVolumesKey = ".minio.sys/kv-volumes"
+
+type kvVolumes struct {
+	Version  string
+	VolInfos []VolInfo
+}
+
 type KVStorage struct {
-	kv     KVInterface
-	volDir string
+	kv        KVInterface
+	volumes   *kvVolumes
+	path      string
+	volumesMu sync.RWMutex
 }
 
 func newPosix(path string) (StorageAPI, error) {
+	kvPath := path
 	path = strings.TrimPrefix(path, "/ip/")
-	volumesDir := pathJoin("/tmp", path, "volumes")
-	os.MkdirAll(volumesDir, 0777)
 
 	if os.Getenv("MINIO_NKV_EMULATOR") != "" {
 		dataDir := pathJoin("/tmp", path, "data")
 		os.MkdirAll(dataDir, 0777)
-		return &debugStorage{path, &KVStorage{&KVEmulator{dataDir}, volumesDir}}, nil
+		return &debugStorage{path, &KVStorage{kv: &KVEmulator{dataDir}, path: kvPath}}, nil
 	}
 
 	configPath := os.Getenv("MINIO_NKV_CONFIG")
@@ -195,7 +204,7 @@ func newPosix(path string) (StorageAPI, error) {
 		fmt.Println("unable to open", path)
 		return nil, errors.New("unable to open device")
 	}
-	p := &KVStorage{&kv, pathJoin("/tmp", path)}
+	p := &KVStorage{kv: &kv, path: kvPath}
 	if strings.HasSuffix(path, "export-xl/disk1") {
 		return &debugStorage{path, p}, nil
 	}
@@ -207,7 +216,7 @@ func (k *KVStorage) DataKey(id string) string {
 }
 
 func (k *KVStorage) String() string {
-	return k.volDir
+	return k.path
 }
 
 func (k *KVStorage) IsOnline() bool {
@@ -229,66 +238,117 @@ func (k *KVStorage) DiskInfo() (info DiskInfo, err error) {
 	}, nil
 }
 
-func (k *KVStorage) getVolumeDir(volume string) string {
-	return pathJoin(k.volDir, volume)
+func (k *KVStorage) loadVolumes() (*kvVolumes, error) {
+	volumes := &kvVolumes{}
+	b, err := k.kv.Get(kvVolumesKey)
+	if err != nil {
+		return volumes, nil
+	}
+	if err = json.Unmarshal(b, volumes); err != nil {
+		return nil, err
+	}
+	return volumes, nil
 }
 
 func (k *KVStorage) verifyVolume(volume string) error {
-	volumeDir := k.getVolumeDir(volume)
-	_, err := os.Stat(volumeDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return errVolumeNotFound
-		}
-		return err
-	}
-	return nil
+	_, err := k.StatVol(volume)
+	return err
 }
 
 func (k *KVStorage) MakeVol(volume string) (err error) {
-	volumeDir := k.getVolumeDir(volume)
-	_, err = os.Stat(volumeDir)
-	if err == nil {
-		return errVolumeExists
+	k.volumesMu.Lock()
+	defer k.volumesMu.Unlock()
+	volumes, err := k.loadVolumes()
+	if err != nil {
+		return err
 	}
-	return os.MkdirAll(volumeDir, 0777)
+
+	for _, vol := range volumes.VolInfos {
+		if vol.Name == volume {
+			return errVolumeExists
+		}
+	}
+
+	volumes.VolInfos = append(volumes.VolInfos, VolInfo{volume, time.Now()})
+	b, err := json.Marshal(volumes)
+	if err != nil {
+		return err
+	}
+	err = k.kv.Put(kvVolumesKey, b)
+	if err != nil {
+		return err
+	}
+	k.volumes = volumes
+	return nil
 }
 
 func (k *KVStorage) ListVols() (vols []VolInfo, err error) {
-	vols, err = listVols(k.volDir)
-	return vols, err
+	k.volumesMu.Lock()
+	defer k.volumesMu.Unlock()
+	if k.volumes == nil {
+		k.volumes, err = k.loadVolumes()
+		if err != nil {
+			return nil, err
+		}
+	}
+	for _, vol := range k.volumes.VolInfos {
+		if vol.Name == ".minio.sys/multipart" {
+			continue
+		}
+		if vol.Name == ".minio.sys/tmp" {
+			continue
+		}
+		vols = append(vols, vol)
+	}
+	return vols, nil
 }
 
 func (k *KVStorage) StatVol(volume string) (vol VolInfo, err error) {
-	fi, err := os.Stat(k.getVolumeDir(volume))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return VolInfo{}, errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return VolInfo{}, errFaultyDisk
+	k.volumesMu.Lock()
+	defer k.volumesMu.Unlock()
+	if k.volumes == nil {
+		k.volumes, err = k.loadVolumes()
+		if err != nil {
+			return vol, err
 		}
-		return VolInfo{}, err
 	}
-	return VolInfo{volume, fi.ModTime()}, nil
+	for _, vol := range k.volumes.VolInfos {
+		if vol.Name == volume {
+			return VolInfo{vol.Name, vol.Created}, nil
+		}
+	}
+	return vol, errVolumeNotFound
 }
 
 func (k *KVStorage) DeleteVol(volume string) (err error) {
-	err = os.Remove(k.getVolumeDir(volume))
+	k.volumesMu.Lock()
+	defer k.volumesMu.Unlock()
+	volumes, err := k.loadVolumes()
 	if err != nil {
-		switch {
-		case os.IsNotExist(err):
-			return errVolumeNotFound
-		case isSysErrNotEmpty(err):
-			return errVolumeNotEmpty
-		case os.IsPermission(err):
-			return errDiskAccessDenied
-		case isSysErrIO(err):
-			return errFaultyDisk
-		default:
-			return err
+		return err
+	}
+	foundIndex := -1
+	for i, vol := range volumes.VolInfos {
+		if vol.Name == volume {
+			foundIndex = i
+			break
 		}
 	}
-	return nil
+	if foundIndex == -1 {
+		return errVolumeNotFound
+	}
+	volumes.VolInfos = append(volumes.VolInfos[:foundIndex], volumes.VolInfos[foundIndex+1:]...)
+
+	b, err := json.Marshal(volumes)
+	if err != nil {
+		return err
+	}
+	err = k.kv.Put(kvVolumesKey, b)
+	if err != nil {
+		return err
+	}
+	k.volumes = volumes
+	return err
 }
 
 func (k *KVStorage) ListDir(volume, dirPath string, count int) ([]string, error) {

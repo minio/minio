@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"strings"
 )
 
 type debugStorage struct {
@@ -47,7 +48,11 @@ func (d *debugStorage) MakeVol(volume string) (err error) {
 
 func (d *debugStorage) ListVols() (vols []VolInfo, err error) {
 	vols, err = d.s.ListVols()
-	fmt.Printf("%s: ListVols() (_, %s)\n", d.path, errStr(err))
+	var volNames []string
+	for _, vol := range vols {
+		volNames = append(volNames, vol.Name)
+	}
+	fmt.Printf("%s: ListVols() (%s, %s)\n", d.path, strings.Join(volNames, ":"), errStr(err))
 	return vols, err
 }
 
