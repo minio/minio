@@ -280,7 +280,7 @@ func getURLScheme(tls bool) string {
 }
 
 // getObjectLocation gets the fully qualified URL of an object.
-func getObjectLocation(r *http.Request, domain, bucket, object string) string {
+func getObjectLocation(r *http.Request, domains []string, bucket, object string) string {
 	// unit tests do not have host set.
 	if r.Host == "" {
 		return path.Clean(r.URL.Path)
@@ -295,10 +295,11 @@ func getObjectLocation(r *http.Request, domain, bucket, object string) string {
 		Scheme: proto,
 	}
 	// If domain is set then we need to use bucket DNS style.
-	if domain != "" {
+	for _, domain := range domains {
 		if strings.Contains(r.Host, domain) {
 			u.Host = bucket + "." + r.Host
 			u.Path = path.Join(slashSeparator, object)
+			break
 		}
 	}
 	return u.String()

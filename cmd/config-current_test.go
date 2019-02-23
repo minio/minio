@@ -130,8 +130,8 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	}
 
 	// Check if serverConfig has the correct domain
-	if globalDomainName != "domain.com" {
-		t.Errorf("Expected Domain to be `domain.com`, found " + globalDomainName)
+	if globalDomainNames[0] != "domain.com" {
+		t.Errorf("Expected Domain to be `domain.com`, found " + globalDomainNames[0])
 	}
 }
 
