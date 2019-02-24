@@ -383,3 +383,15 @@ func isErrObjectNotFound(err error) bool {
 	_, ok := err.(ObjectNotFound)
 	return ok
 }
+
+// PreConditionFailed - Check if copy precondition failed
+type PreConditionFailed struct{}
+
+func (e PreConditionFailed) Error() string {
+	return "At least one of the pre-conditions you specified did not hold"
+}
+
+func isErrPreconditionFailed(err error) bool {
+	_, ok := err.(PreConditionFailed)
+	return ok
+}
