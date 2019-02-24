@@ -313,7 +313,7 @@ func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		return l.s3Objects.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 	}
 	objInfo.UserDefined = minio.CleanMinioInternalMetadataKeys(objInfo.UserDefined)
-	fn, off, length, err := minio.NewGetObjectReader(rs, objInfo)
+	fn, off, length, err := minio.NewGetObjectReader(rs, objInfo, o.CheckCopyPrecondFn)
 	if err != nil {
 		return nil, minio.ErrorRespToObjectError(err)
 	}
@@ -329,7 +329,7 @@ func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	// Setup cleanup function to cause the above go-routine to
 	// exit in case of partial read
 	pipeCloser := func() { pr.Close() }
-	return fn(pr, h, pipeCloser)
+	return fn(pr, h, o.CheckCopyPrecondFn, pipeCloser)
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo

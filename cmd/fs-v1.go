@@ -494,7 +494,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	if hasSuffix(object, slashSeparator) {
 		// The lock taken above is released when
 		// objReader.Close() is called by the caller.
-		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), ObjectInfo{}, nsUnlocker), nil
+		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), ObjectInfo{}, opts.CheckCopyPrecondFn, nsUnlocker), nil
 	}
 
 	// Otherwise we get the object info
@@ -519,7 +519,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		rwPoolUnlocker = func() { fs.rwPool.Close(fsMetaPath) }
 	}
 
-	objReaderFn, off, length, rErr := NewGetObjectReader(rs, objInfo, nsUnlocker, rwPoolUnlocker)
+	objReaderFn, off, length, rErr := NewGetObjectReader(rs, objInfo, opts.CheckCopyPrecondFn, nsUnlocker, rwPoolUnlocker)
 	if rErr != nil {
 		return nil, rErr
 	}
@@ -547,7 +547,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, err
 	}
 
-	return objReaderFn(reader, h, closeFn)
+	return objReaderFn(reader, h, opts.CheckCopyPrecondFn, closeFn)
 }
 
 // GetObject - reads an object from the disk.
