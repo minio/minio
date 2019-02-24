@@ -155,7 +155,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 		return
 	}
 
-	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, _, errCode := getBucketMultipartResources(r.URL.Query())
+	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, encodingType, errCode := getBucketMultipartResources(r.URL.Query())
 	if errCode != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(errCode), r.URL, guessIsBrowserReq(r))
 		return
@@ -180,7 +180,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 		return
 	}
 	// generate response
-	response := generateListMultipartUploadsResponse(bucket, listMultipartsInfo)
+	response := generateListMultipartUploadsResponse(bucket, listMultipartsInfo, encodingType)
 	encodedSuccessResponse := encodeResponse(response)
 
 	// write success response.
