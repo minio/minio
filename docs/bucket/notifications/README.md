@@ -549,7 +549,7 @@ Minio server also supports [NATS Streaming mode](http://nats.io/documentation/st
         "password": "yoursecret",
         "token": "",
         "secure": false,
-        "pingInterval": 0
+        "pingInterval": 0,
         "streaming": {
             "enable": true,
             "clusterID": "test-cluster",
