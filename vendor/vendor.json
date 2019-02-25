@@ -1179,6 +1179,12 @@
 			"revisionTime": "2017-11-09T13:50:42Z"
 		},
 		{
+			"checksumSHA1": "Hu8GoQK1euwtE4UjrhXepmk2NM8=",
+			"path": "golang.org/x/sys/windows",
+			"revision": "cd391775e71e684db52b63df9affd58269495083",
+			"revisionTime": "2019-02-22T15:12:32Z"
+		},
+		{
 			"checksumSHA1": "faFDXp++cLjLBlvsr+izZ+go1WU=",
 			"path": "golang.org/x/text/secure/bidirule",
 			"revision": "470f45bf29f4147d6fbd7dfd0a02a848e49f5bf4",
