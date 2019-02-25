@@ -414,7 +414,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 	data.Contents = contents
 
 	data.EncodingType = encodingType
-	data.StartAfter = startAfter
+	data.StartAfter = s3EncodeName(startAfter, encodingType)
 	data.Delimiter = s3EncodeName(delimiter, encodingType)
 	data.Prefix = s3EncodeName(prefix, encodingType)
 	data.MaxKeys = maxKeys
