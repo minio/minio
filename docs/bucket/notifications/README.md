@@ -163,6 +163,7 @@ The Minio server configuration file is stored on the backend in json format. The
 | `username` | _string_ | Username to connect to the MQTT server (if required) |
 | `password` | _string_ | Password to connect to the MQTT server (if required) |
 | `queueDir` | _string_ | Persistent store for events when MQTT broker is offline |
+| `queueLimit` | _int_ | Set the maximum event limit for the persistent store. The default limit is 10000 |
 
 An example configuration for MQTT is shown below:
 
@@ -175,12 +176,12 @@ An example configuration for MQTT is shown below:
         "qos": 1,
         "username": "",
         "password": "",
-        "queueDir": ""
+        "queueDir": "",
+        "queueLimit": 0
     }
 }
 ```
-MQTT supports persistent event store in the client-side. The persistent store will backup events when the MQTT broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field in the mqtt config. For eg, the `queueDir` can be `/home/events`.
-
+Minio supports persistent event store. The persistent store will backup events when the MQTT broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
 ```sh
