@@ -24,4 +24,4 @@ VOLUME ["/data"]
 
 HEALTHCHECK --interval=1m CMD healthcheck
 
-CMD ["minio"]
+CMD ["minio","server","/data"]

@@ -31,12 +31,12 @@ export class StorageInfo extends React.Component {
         <div className="fehu-chart">
           <div style={{ width: 0 }} />
         </div>
-        <ul>
+        {/* <ul>
           <li>
             <span>Used: </span>
             {humanize.filesize(used)}
           </li>
-        </ul>
+        </ul> */}
       </div>
     )
   }

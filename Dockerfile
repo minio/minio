@@ -9,8 +9,8 @@ WORKDIR /go/src/github.com/minio/
 
 RUN  \
      apk add --no-cache git && \
-     go get -v -d github.com/minio/minio && \
-     cd /go/src/github.com/minio/minio && \
+     go get -v -d github.com/krishnaji/minio && \
+     cd github.com/krishnaji/minio && \
      go install -v -ldflags "$(go run buildscripts/gen-ldflags.go)" && \
      go build -ldflags "-s -w" -o /usr/bin/healthcheck dockerscripts/healthcheck.go 
 
@@ -36,4 +36,4 @@ VOLUME ["/data"]
 
 HEALTHCHECK --interval=1m CMD healthcheck
 
-CMD ["minio"]
+CMD ["minio","server","/data"]

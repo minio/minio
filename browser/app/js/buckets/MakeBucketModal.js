@@ -60,7 +60,7 @@ export class MakeBucketModal extends React.Component {
               <input
                 className="ig-text"
                 type="text"
-                placeholder="Bucket Name"
+                placeholder="Folder Name"
                 value={this.state.bucketName}
                 onChange={e => this.setState({ bucketName: e.target.value })}
                 autoFocus

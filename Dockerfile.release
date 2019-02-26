@@ -7,8 +7,8 @@ WORKDIR /go/src/github.com/minio/
 
 RUN  \
      apk add --no-cache git && \
-     go get -v -d github.com/minio/minio && \
-     cd /go/src/github.com/minio/minio/dockerscripts && \
+     go get -v -d github.com/krishnaji/minio && \
+     cd /go/src/github.com/krishnaji/minio/dockerscripts && \
      go build -ldflags "-s -w" -o /usr/bin/healthcheck healthcheck.go
 
 FROM alpine:3.7
@@ -38,4 +38,4 @@ VOLUME ["/data"]
 
 HEALTHCHECK --interval=1m CMD healthcheck
 
-CMD ["minio"]
+CMD ["minio","server","/data"]

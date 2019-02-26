@@ -29,7 +29,7 @@ export const MainActions = ({
 }) => {
   const uploadTooltip = <Tooltip id="tt-upload-file">Upload file</Tooltip>
   const makeBucketTooltip = (
-    <Tooltip id="tt-create-bucket">Create bucket</Tooltip>
+    <Tooltip id="tt-create-bucket">Create folder</Tooltip>
   )
   const onFileUpload = e => {
     e.preventDefault()
