@@ -15,6 +15,10 @@ FROM alpine:3.7
 
 LABEL maintainer="Minio Inc <dev@minio.io>"
 
+RUN \
+     addgroup -S minio && \
+     adduser -S -u 1001 -G minio minio
+
 COPY --from=0 /usr/bin/healthcheck /usr/bin/healthcheck
 COPY dockerscripts/docker-entrypoint.sh /usr/bin/
 
@@ -28,7 +32,11 @@ RUN \
      curl https://dl.minio.io/server/minio/release/linux-amd64/minio > /usr/bin/minio && \
      chmod +x /usr/bin/minio  && \
      chmod +x /usr/bin/docker-entrypoint.sh && \
-     chmod +x /usr/bin/healthcheck
+     chmod +x /usr/bin/healthcheck && \
+     chown -R minio:0 /root && \
+     chmod -R g=u /root
+
+USER minio
 
 EXPOSE 9000
 

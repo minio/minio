@@ -2,6 +2,10 @@ FROM alpine:3.7
 
 LABEL maintainer="Minio Inc <dev@minio.io>"
 
+RUN \
+     addgroup -S minio && \
+     adduser -S -u 1001 -G minio minio
+
 COPY dockerscripts/docker-entrypoint.sh dockerscripts/healthcheck /usr/bin/
 COPY minio /usr/bin/
 
@@ -14,7 +18,11 @@ RUN \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
      chmod +x /usr/bin/minio  && \
      chmod +x /usr/bin/docker-entrypoint.sh && \
-     chmod +x /usr/bin/healthcheck
+     chmod +x /usr/bin/healthcheck && \
+     chown -R minio:0 /root && \
+     chmod -R g=u /root
+
+USER minio
 
 EXPOSE 9000
 
