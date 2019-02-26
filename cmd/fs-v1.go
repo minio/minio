@@ -490,20 +490,18 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		}
 	}
 
-	// For a directory, we need to send an reader that returns no bytes.
-	if hasSuffix(object, slashSeparator) {
-		// The lock taken above is released when
-		// objReader.Close() is called by the caller.
-		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), ObjectInfo{}, nsUnlocker), nil
-	}
-
 	// Otherwise we get the object info
 	var objInfo ObjectInfo
 	if objInfo, err = fs.getObjectInfo(ctx, bucket, object); err != nil {
 		nsUnlocker()
 		return nil, toObjectErr(err, bucket, object)
 	}
-
+	// For a directory, we need to send an reader that returns no bytes.
+	if hasSuffix(object, slashSeparator) {
+		// The lock taken above is released when
+		// objReader.Close() is called by the caller.
+		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, nsUnlocker), nil
+	}
 	// Take a rwPool lock for NFS gateway type deployment
 	rwPoolUnlocker := func() {}
 	if bucket != minioMetaBucket && lockType != noLock {
