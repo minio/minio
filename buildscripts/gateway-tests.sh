@@ -42,6 +42,7 @@ cd /mint
 export MINT_ROOT_DIR=${MINT_ROOT_DIR:-/mint}
 export MINT_RUN_CORE_DIR="$MINT_ROOT_DIR/run/core"
 export MINT_RUN_SECURITY_DIR="$MINT_ROOT_DIR/run/security"
+export MINT_MODE="full"
 export WGET="wget --quiet --no-check-certificate"
 
 go get github.com/go-ini/ini
