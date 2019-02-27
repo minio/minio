@@ -1693,7 +1693,7 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *check) {
 		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", "url"), []string{"<Key>foo+bar+1</Key>", "<Key>foo+bar+2</Key>"}},
 	}
 
-	for i, testCase := range testCases {
+	for _, testCase := range testCases {
 		// create listObjectsV1 request with valid parameters
 		request, err = newTestSignedRequest("GET", testCase.getURL, 0, nil, s.accessKey, s.secretKey, s.signer)
 		c.Assert(err, nil)
@@ -1706,7 +1706,6 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *check) {
 		getContent, err := ioutil.ReadAll(response.Body)
 		c.Assert(err, nil)
 
-		fmt.Printf("Test %d: %+v vs %+v\n", i+1, string(getContent), testCase.expectedStrings)
 		for _, expectedStr := range testCase.expectedStrings {
 			c.Assert(strings.Contains(string(getContent), expectedStr), true)
 		}
