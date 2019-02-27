@@ -133,7 +133,11 @@ func (k *KV) Put(keyStr string, value []byte) error {
 		return errValueTooLong
 	}
 	key := []byte(keyStr)
-	status := C.minio_nkv_put(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)), unsafe.Pointer(&value[0]), C.int(len(value)))
+	var valuePtr unsafe.Pointer
+	if len(value) > 0 {
+		valuePtr = unsafe.Pointer(&value[0])
+	}
+	status := C.minio_nkv_put(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)), valuePtr, C.int(len(value)))
 	if status != 0 {
 		return errors.New("error during put")
 	}
@@ -398,6 +402,9 @@ func (k *KVStorage) CreateFile(volume, filePath string, size int64, reader io.Re
 	entry := KVNSEntry{Size: size, ModTime: time.Now()}
 	buf := make([]byte, kvMaxValueSize)
 	for {
+		if size == 0 {
+			break
+		}
 		if size < int64(len(buf)) {
 			buf = buf[:size]
 		}
@@ -411,9 +418,6 @@ func (k *KVStorage) CreateFile(volume, filePath string, size int64, reader io.Re
 			return err
 		}
 		entry.IDs = append(entry.IDs, id)
-		if size == 0 {
-			break
-		}
 	}
 	b, err := json.Marshal(entry)
 	if err != nil {
