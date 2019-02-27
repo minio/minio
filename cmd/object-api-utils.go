@@ -207,8 +207,8 @@ func getCompleteMultipartMD5(ctx context.Context, parts []CompletePart) (string,
 func cleanMetadata(metadata map[string]string) map[string]string {
 	// Remove STANDARD StorageClass
 	metadata = removeStandardStorageClass(metadata)
-	// Clean meta etag keys 'md5Sum', 'etag'.
-	return cleanMetadataKeys(metadata, "md5Sum", "etag")
+	// Clean meta etag keys 'md5Sum', 'etag', "expires".
+	return cleanMetadataKeys(metadata, "md5Sum", "etag", "expires")
 }
 
 // Filter X-Amz-Storage-Class field only if it is set to STANDARD.
