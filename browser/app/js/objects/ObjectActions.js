@@ -67,7 +67,7 @@ export class ObjectActions extends React.Component {
             className="fiad-action"
             onClick={this.shareObject.bind(this)}
           >
-            <i className="fa fa-copy" />
+            <i className="fa fa-share-alt" />
           </a>
           <a
             href=""
