@@ -17,7 +17,10 @@
 
 package minio
 
-import "io"
+import (
+	"fmt"
+	"io"
+)
 
 // hookReader hooks additional reader in the source stream. It is
 // useful for making progress bars. Second reader is appropriately
@@ -34,12 +37,23 @@ func (hr *hookReader) Seek(offset int64, whence int) (n int64, err error) {
 	// Verify for source has embedded Seeker, use it.
 	sourceSeeker, ok := hr.source.(io.Seeker)
 	if ok {
-		return sourceSeeker.Seek(offset, whence)
+		n, err = sourceSeeker.Seek(offset, whence)
+		if err != nil {
+			return 0, err
+		}
 	}
+
 	// Verify if hook has embedded Seeker, use it.
 	hookSeeker, ok := hr.hook.(io.Seeker)
 	if ok {
-		return hookSeeker.Seek(offset, whence)
+		var m int64
+		m, err = hookSeeker.Seek(offset, whence)
+		if err != nil {
+			return 0, err
+		}
+		if n != m {
+			return 0, fmt.Errorf("hook seeker seeked %d bytes, expected source %d bytes", m, n)
+		}
 	}
 	return n, nil
 }

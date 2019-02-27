@@ -36,6 +36,8 @@ import (
 */
 
 // ErrorResponse - Is the typed error returned by all API operations.
+// ErrorResponse struct should be comparable since it is compared inside
+// golang http API (https://github.com/golang/go/issues/29768)
 type ErrorResponse struct {
 	XMLName    xml.Name `xml:"Error" json:"-"`
 	Code       string
@@ -51,9 +53,6 @@ type ErrorResponse struct {
 
 	// Underlying HTTP status code for the returned error
 	StatusCode int `xml:"-" json:"-"`
-
-	// Headers of the returned S3 XML error
-	Headers http.Header `xml:"-" json:"-"`
 }
 
 // ToErrorResponse - Returns parsed ErrorResponse struct from body and
@@ -176,9 +175,6 @@ func httpRespToErrorResponse(resp *http.Response, bucketName, objectName string)
 	if errResp.Code == "InvalidRegion" && errResp.Region != "" {
 		errResp.Message = fmt.Sprintf("Region does not match, expecting region ‘%s’.", errResp.Region)
 	}
-
-	// Save headers returned in the API XML error
-	errResp.Headers = resp.Header
 
 	return errResp
 }
