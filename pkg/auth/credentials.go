@@ -20,6 +20,8 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -104,6 +106,27 @@ func (cred Credentials) Equal(ccred Credentials) bool {
 
 var timeSentinel = time.Unix(0, 0).UTC()
 
+func expToInt64(expI interface{}) (expAt int64, err error) {
+	switch exp := expI.(type) {
+	case float64:
+		expAt = int64(exp)
+	case int64:
+		expAt = exp
+	case json.Number:
+		expAt, err = exp.Int64()
+		if err != nil {
+			return 0, err
+		}
+	case time.Duration:
+		return time.Now().UTC().Add(exp).Unix(), nil
+	case nil:
+		return 0, nil
+	default:
+		return 0, errors.New("invalid expiry value")
+	}
+	return expAt, nil
+}
+
 // GetNewCredentialsWithMetadata generates and returns new credential with expiry.
 func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string) (cred Credentials, err error) {
 	readBytes := func(size int) (data []byte, err error) {
@@ -135,8 +158,11 @@ func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string)
 	cred.SecretKey = strings.Replace(string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen]), "/", "+", -1)
 	cred.Status = "enabled"
 
-	expiry, ok := m["exp"].(float64)
-	if !ok {
+	expiry, err := expToInt64(m["exp"])
+	if err != nil {
+		return cred, err
+	}
+	if expiry == 0 {
 		cred.Expiration = timeSentinel
 		return cred, nil
 	}
@@ -144,7 +170,7 @@ func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string)
 	m["accessKey"] = cred.AccessKey
 	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.MapClaims(m))
 
-	cred.Expiration = time.Unix(int64(expiry), 0)
+	cred.Expiration = time.Unix(expiry, 0)
 	cred.SessionToken, err = jwt.SignedString([]byte(tokenSecret))
 	if err != nil {
 		return cred, err

@@ -74,7 +74,7 @@ func TestDoesPolicySignatureMatch(t *testing.T) {
 				"X-Amz-Date": []string{now.Format(iso8601Format)},
 				"X-Amz-Signature": []string{
 					getSignature(getSigningKey(globalServerConfig.GetCredential().SecretKey, now,
-						globalMinioDefaultRegion), "policy"),
+						globalMinioDefaultRegion, serviceS3), "policy"),
 				},
 				"Policy": []string{"policy"},
 			},
@@ -293,7 +293,7 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 		}
 
 		// Check if it matches!
-		err := doesPresignedSignatureMatch(payloadSHA256, req, testCase.region)
+		err := doesPresignedSignatureMatch(payloadSHA256, req, testCase.region, serviceS3)
 		if err != testCase.expected {
 			t.Errorf("(%d) expected to get %s, instead got %s", i, niceError(testCase.expected), niceError(err))
 		}

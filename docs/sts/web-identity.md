@@ -1,11 +1,11 @@
 ## AssumeRoleWithWebIdentity [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
-Calling AssumeRoleWithWebIdentity does not require the use of Minio default credentials. Therefore, you can distribute an application (for example, on mobile devices) that requests temporary security credentials without including Minio default credentials in the application. Instead, the identity of the caller is validated by using a JWT access token from the web identity provider. The temporary security credentials returned by this API consist of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to Minio API operations.
+Calling AssumeRoleWithWebIdentity does not require the use of Minio default credentials. Therefore, you can distribute an application (for example, on mobile devices) that requests temporary security credentials without including Minio default credentials in the application. Instead, the identity of the caller is validated by using a JWT access token from the web identity provider. The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to Minio API operations.
 
 By default, the temporary security credentials created by AssumeRoleWithWebIdentity last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration to 12 hours.
 
 ### Request Parameters
 #### DurationSeconds
-The duration, in seconds. The value can range from 900 seconds (15 minutes) up to the 12 hours. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds.
+The duration, in seconds. The value can range from 900 seconds (15 minutes) up to 12 hours. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds.
 
 | Params | Value |
 | :-- | :-- |
@@ -83,7 +83,7 @@ Testing with an example
 > Visit [Google Developer Console](https://console.cloud.google.com) under Project, APIs, Credentials to get your OAuth2 client credentials. Add `http://localhost:8080/oauth2/callback` as a valid OAuth2 Redirect URL.
 
 ```
-go run web-identity.go -cid 204367807228-ok7601k6gj1pgge7m09h7d79co8p35xx.apps.googleusercontent.com -csec XsT_PgPdT1nO9DD45rMLJw7G
+$ go run web-identity.go -cid 204367807228-ok7601k6gj1pgge7m09h7d79co8p35xx.apps.googleusercontent.com -csec XsT_PgPdT1nO9DD45rMLJw7G
 2018/12/26 17:49:36 listening on http://localhost:8080/
 ```
 

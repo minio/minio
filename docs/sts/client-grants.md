@@ -1,13 +1,13 @@
 ## AssumeRoleWithClientGrants [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 Returns a set of temporary security credentials for applications/clients who have been authenticated through client credential grants provided by identity provider. Example providers include WSO2, KeyCloak etc.
 
-Calling AssumeRoleWithClientGrants does not require the use of Minio default credentials. Therefore, client application can be distributed that requests temporary security credentials without including Minio default credentials. Instead, the identity of the caller is validated by using a JWT access token from the identity provider. The temporary security credentials returned by this API consist of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to Minio API operations.
+Calling AssumeRoleWithClientGrants does not require the use of Minio default credentials. Therefore, client application can be distributed that requests temporary security credentials without including Minio default credentials. Instead, the identity of the caller is validated by using a JWT access token from the identity provider. The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to Minio API operations.
 
 By default, the temporary security credentials created by AssumeRoleWithClientGrants last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration to 12 hours.
 
 ### Request Parameters
 #### DurationSeconds
-The duration, in seconds. The value can range from 900 seconds (15 minutes) up to the 12 hours. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds.
+The duration, in seconds. The value can range from 900 seconds (15 minutes) up to 12 hours. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds.
 
 | Params | Value |
 | :-- | :-- |
@@ -93,7 +93,7 @@ Testing with an example
 > Obtaining client ID and secrets follow [WSO2 configuring documentation](https://github.com/minio/minio/blob/master/docs/sts/wso2.md)
 
 ```
-go run client-grants.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
+$ go run client-grants.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
 
 ##### Credentials
 {

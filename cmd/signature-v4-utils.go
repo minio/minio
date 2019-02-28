@@ -17,11 +17,16 @@
 package cmd
 
 import (
+	"bytes"
+	"context"
 	"crypto/hmac"
+	"encoding/hex"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/sha256-simd"
 )
@@ -53,7 +58,18 @@ func skipContentSha256Cksum(r *http.Request) bool {
 }
 
 // Returns SHA256 for calculating canonical-request.
-func getContentSha256Cksum(r *http.Request) string {
+func getContentSha256Cksum(r *http.Request, stype serviceType) string {
+	if stype == serviceSTS {
+		payload, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			logger.CriticalIf(context.Background(), err)
+		}
+		sum256 := sha256.New()
+		sum256.Write(payload)
+		r.Body = ioutil.NopCloser(bytes.NewReader(payload))
+		return hex.EncodeToString(sum256.Sum(nil))
+	}
+
 	var (
 		defaultSha256Cksum string
 		v                  []string

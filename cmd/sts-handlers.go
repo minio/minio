@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * Minio Cloud Storage, (C) 2018, 2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -33,6 +34,7 @@ const (
 	// STS API action constants
 	clientGrants = "AssumeRoleWithClientGrants"
 	webIdentity  = "AssumeRoleWithWebIdentity"
+	assumeRole   = "AssumeRole"
 )
 
 // stsAPIHandlers implements and provides http handlers for AWS STS API.
@@ -45,6 +47,11 @@ func registerSTSRouter(router *mux.Router) {
 
 	// STS Router
 	stsRouter := router.NewRoute().PathPrefix("/").Subrouter()
+
+	// Assume roles with no JWT, handles AssumeRole.
+	stsRouter.Methods("POST").HeadersRegexp("Content-Type", "application/x-www-form-urlencoded*").
+		HeadersRegexp("Authorization", "AWS4-HMAC-SHA256*").
+		HandlerFunc(httpTraceAll(sts.AssumeRole))
 
 	// Assume roles with JWT handler, handles both ClientGrants and WebIdentity.
 	stsRouter.Methods("POST").HeadersRegexp("Content-Type", "application/x-www-form-urlencoded*").
@@ -64,12 +71,145 @@ func registerSTSRouter(router *mux.Router) {
 
 }
 
+func checkAssumeRoleAuth(ctx context.Context, r *http.Request) (user auth.Credentials, stsErr STSErrorCode) {
+	switch getRequestAuthType(r) {
+	default:
+		return user, ErrSTSAccessDenied
+	case authTypeSigned:
+		s3Err := isReqAuthenticated(ctx, r, globalServerConfig.GetRegion(), serviceSTS)
+		if STSErrorCode(s3Err) != ErrSTSNone {
+			return user, STSErrorCode(s3Err)
+		}
+		var owner bool
+		user, owner, s3Err = getReqAccessKeyV4(r, globalServerConfig.GetRegion(), serviceSTS)
+		if STSErrorCode(s3Err) != ErrSTSNone {
+			return user, STSErrorCode(s3Err)
+		}
+		// Root credentials are not allowed to use STS API
+		if owner {
+			return user, ErrSTSAccessDenied
+		}
+	}
+
+	// Session tokens are not allowed in STS AssumeRole requests.
+	if getSessionToken(r) != "" {
+		return user, ErrSTSAccessDenied
+	}
+
+	return user, ErrSTSNone
+}
+
+// AssumeRole - implementation of AWS STS API AssumeRole to get temporary
+// credentials for regular users on Minio.
+// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
+func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AssumeRole")
+
+	user, stsErr := checkAssumeRoleAuth(ctx, r)
+	if stsErr != ErrSTSNone {
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(stsErr))
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		logger.LogIf(ctx, err)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+
+	if r.Form.Get("Policy") != "" {
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+
+	if r.Form.Get("Version") != stsAPIVersion {
+		logger.LogIf(ctx, fmt.Errorf("Invalid STS API version %s, expecting %s", r.Form.Get("Version"), stsAPIVersion))
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSMissingParameter))
+		return
+	}
+
+	action := r.Form.Get("Action")
+	switch action {
+	case assumeRole:
+	default:
+		logger.LogIf(ctx, fmt.Errorf("Unsupported action %s", action))
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+
+	ctx = newContext(r, w, action)
+	defer logger.AuditLog(w, r, action, nil)
+
+	var err error
+	m := make(map[string]interface{})
+	m["exp"], err = validator.GetDefaultExpiration(r.Form.Get("DurationSeconds"))
+	if err != nil {
+		switch err {
+		case validator.ErrInvalidDuration:
+			writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		default:
+			logger.LogIf(ctx, err)
+			writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		}
+		return
+	}
+
+	policyName, err := globalIAMSys.GetUserPolicy(user.AccessKey)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+
+	// This policy is the policy associated with the user
+	// requesting for temporary credentials. The temporary
+	// credentials will inherit the same policy requirements.
+	m["policy"] = policyName
+
+	secret := globalServerConfig.GetCredential().SecretKey
+	cred, err := auth.GetNewCredentialsWithMetadata(m, secret)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInternalError))
+		return
+	}
+
+	// Set the newly generated credentials.
+	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
+		logger.LogIf(ctx, err)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInternalError))
+		return
+	}
+
+	// Notify all other Minio peers to reload temp users
+	for _, nerr := range globalNotificationSys.LoadUsers() {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+
+	assumeRoleResponse := &AssumeRoleResponse{
+		Result: AssumeRoleResult{
+			Credentials: cred,
+		},
+	}
+
+	assumeRoleResponse.ResponseMetadata.RequestID = w.Header().Get(responseRequestIDKey)
+	writeSuccessResponseXML(w, encodeResponse(assumeRoleResponse))
+}
+
 func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "AssumeRoleInternalFunction")
+	ctx := newContext(r, w, "AssumeRoleJWTCommon")
 
 	// Parse the incoming form data.
 	if err := r.ParseForm(); err != nil {
 		logger.LogIf(ctx, err)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+
+	if r.Form.Get("Policy") != "" {
 		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
 		return
 	}
@@ -169,19 +309,23 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	var encodedSuccessResponse []byte
 	switch action {
 	case clientGrants:
-		encodedSuccessResponse = encodeResponse(&AssumeRoleWithClientGrantsResponse{
+		clientGrantsResponse := &AssumeRoleWithClientGrantsResponse{
 			Result: ClientGrantsResult{
 				Credentials:      cred,
 				SubjectFromToken: subFromToken,
 			},
-		})
+		}
+		clientGrantsResponse.ResponseMetadata.RequestID = w.Header().Get(responseRequestIDKey)
+		encodedSuccessResponse = encodeResponse(clientGrantsResponse)
 	case webIdentity:
-		encodedSuccessResponse = encodeResponse(&AssumeRoleWithWebIdentityResponse{
+		webIdentityResponse := &AssumeRoleWithWebIdentityResponse{
 			Result: WebIdentityResult{
 				Credentials:                 cred,
 				SubjectFromWebIdentityToken: subFromToken,
 			},
-		})
+		}
+		webIdentityResponse.ResponseMetadata.RequestID = w.Header().Get(responseRequestIDKey)
+		encodedSuccessResponse = encodeResponse(webIdentityResponse)
 	}
 
 	writeSuccessResponseXML(w, encodedSuccessResponse)

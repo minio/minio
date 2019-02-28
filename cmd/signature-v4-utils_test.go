@@ -248,7 +248,7 @@ func TestGetContentSha256Cksum(t *testing.T) {
 		if testCase.h != "" {
 			r.Header.Set("x-amz-content-sha256", testCase.h)
 		}
-		got := getContentSha256Cksum(r)
+		got := getContentSha256Cksum(r, serviceS3)
 		if got != testCase.expected {
 			t.Errorf("Test %d: got:%s expected:%s", i+1, got, testCase.expected)
 		}

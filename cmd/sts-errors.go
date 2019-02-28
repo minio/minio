@@ -53,6 +53,7 @@ type STSErrorCode int
 // Error codes, non exhaustive list - http://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithSAML.html
 const (
 	ErrSTSNone STSErrorCode = iota
+	ErrSTSAccessDenied
 	ErrSTSMissingParameter
 	ErrSTSInvalidParameterValue
 	ErrSTSWebIdentityExpiredToken
@@ -76,6 +77,11 @@ func (e stsErrorCodeMap) ToSTSErr(errCode STSErrorCode) STSError {
 // error code to STSError structure, these fields carry respective
 // descriptions for all the error responses.
 var stsErrCodes = stsErrorCodeMap{
+	ErrSTSAccessDenied: {
+		Code:           "AccessDenied",
+		Description:    "Generating temporary credentials not allowed for this request.",
+		HTTPStatusCode: http.StatusForbidden,
+	},
 	ErrSTSMissingParameter: {
 		Code:           "MissingParameter",
 		Description:    "A required parameter for the specified action is not supplied.",

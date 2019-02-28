@@ -184,7 +184,7 @@ func getRedirectPostRawQuery(objInfo ObjectInfo) string {
 
 // Returns access credentials in the request Authorization header.
 func getReqAccessCred(r *http.Request, region string) (cred auth.Credentials) {
-	cred, _, _ = getReqAccessKeyV4(r, region)
+	cred, _, _ = getReqAccessKeyV4(r, region, serviceS3)
 	if cred.AccessKey == "" {
 		cred, _, _ = getReqAccessKeyV2(r)
 	}

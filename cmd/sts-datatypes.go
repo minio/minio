@@ -42,6 +42,39 @@ type AssumedRoleUser struct {
 	// contains filtered or unexported fields
 }
 
+// AssumeRoleResponse contains the result of successful AssumeRole request.
+type AssumeRoleResponse struct {
+	XMLName xml.Name `xml:"https://sts.amazonaws.com/doc/2011-06-15/ AssumeRoleResponse" json:"-"`
+
+	Result           AssumeRoleResult `xml:"AssumeRoleResult"`
+	ResponseMetadata struct {
+		RequestID string `xml:"RequestId,omitempty"`
+	} `xml:"ResponseMetadata,omitempty"`
+}
+
+// AssumeRoleResult - Contains the response to a successful AssumeRole
+// request, including temporary credentials that can be used to make
+// Minio API requests.
+type AssumeRoleResult struct {
+	// The identifiers for the temporary security credentials that the operation
+	// returns.
+	AssumedRoleUser AssumedRoleUser `xml:",omitempty"`
+
+	// The temporary security credentials, which include an access key ID, a secret
+	// access key, and a security (or session) token.
+	//
+	// Note: The size of the security token that STS APIs return is not fixed. We
+	// strongly recommend that you make no assumptions about the maximum size. As
+	// of this writing, the typical size is less than 4096 bytes, but that can vary.
+	// Also, future updates to AWS might require larger sizes.
+	Credentials auth.Credentials `xml:",omitempty"`
+
+	// A percentage value that indicates the size of the policy in packed form.
+	// The service rejects any policy with a packed size greater than 100 percent,
+	// which means the policy exceeded the allowed space.
+	PackedPolicySize int `xml:",omitempty"`
+}
+
 // AssumeRoleWithWebIdentityResponse contains the result of successful AssumeRoleWithWebIdentity request.
 type AssumeRoleWithWebIdentityResponse struct {
 	XMLName          xml.Name          `xml:"https://sts.amazonaws.com/doc/2011-06-15/ AssumeRoleWithWebIdentityResponse" json:"-"`
