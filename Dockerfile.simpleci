@@ -1,7 +1,7 @@
 #-------------------------------------------------------------
 # Stage 1: Build and Unit tests
 #-------------------------------------------------------------
-FROM golang:1.11.4
+FROM golang:1.12
 
 COPY . /go/src/github.com/minio/minio
 WORKDIR /go/src/github.com/minio/minio
@@ -35,8 +35,8 @@ COPY --from=0 /go/src/github.com/minio/minio/minio ./minio
 COPY buildscripts/gateway-tests.sh ./gateway-tests.sh
 RUN apt-get update && apt-get install -y git wget jq curl dnsmasq
 
-RUN wget https://dl.google.com/go/go1.11.4.linux-amd64.tar.gz && \
-	tar -C /usr/local -xzf go1.11.4.linux-amd64.tar.gz
+RUN wget https://dl.google.com/go/go1.12.linux-amd64.tar.gz && \
+	tar -C /usr/local -xzf go1.12.linux-amd64.tar.gz
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV LANG C.UTF-8
