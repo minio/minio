@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"time"
 
 	minio "github.com/minio/minio/cmd"
@@ -83,6 +84,7 @@ func (m gwMetaV1) ToObjectInfo(bucket, object string) minio.ObjectInfo {
 		"Content-Length",
 		"Last-Modified",
 		"Content-Type",
+		"Expires",
 	}, defaultFilterKeys...)
 	objInfo := minio.ObjectInfo{
 		IsDir:           false,
@@ -99,6 +101,15 @@ func (m gwMetaV1) ToObjectInfo(bucket, object string) minio.ObjectInfo {
 
 	if sc, ok := m.Meta["x-amz-storage-class"]; ok {
 		objInfo.StorageClass = sc
+	}
+	var (
+		t time.Time
+		e error
+	)
+	if exp, ok := m.Meta["expires"]; ok {
+		if t, e = time.Parse(http.TimeFormat, exp); e == nil {
+			objInfo.Expires = t.UTC()
+		}
 	}
 	// Success.
 	return objInfo

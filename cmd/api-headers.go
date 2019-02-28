@@ -87,6 +87,9 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 		w.Header().Set("Content-Encoding", objInfo.ContentEncoding)
 	}
 
+	if !objInfo.Expires.IsZero() {
+		w.Header().Set("Expires", objInfo.Expires.UTC().Format(http.TimeFormat))
+	}
 	// Set all other user defined metadata.
 	for k, v := range objInfo.UserDefined {
 		if hasPrefix(k, ReservedMetadataPrefix) {

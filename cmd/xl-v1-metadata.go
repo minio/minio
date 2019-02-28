@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
 	"path"
 	"sort"
 	"sync"
@@ -226,7 +227,16 @@ func (m xlMetaV1) ToObjectInfo(bucket, object string) ObjectInfo {
 		ContentType:     m.Meta["content-type"],
 		ContentEncoding: m.Meta["content-encoding"],
 	}
-
+	// Update expires
+	var (
+		t time.Time
+		e error
+	)
+	if exp, ok := m.Meta["expires"]; ok {
+		if t, e = time.Parse(http.TimeFormat, exp); e == nil {
+			objInfo.Expires = t.UTC()
+		}
+	}
 	objInfo.backendType = BackendErasure
 
 	// Extract etag from metadata.

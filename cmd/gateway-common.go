@@ -166,6 +166,7 @@ func FromMinioClientObjectInfo(bucket string, oi minio.ObjectInfo) ObjectInfo {
 		ContentType:     oi.ContentType,
 		ContentEncoding: oi.Metadata.Get("Content-Encoding"),
 		StorageClass:    oi.StorageClass,
+		Expires:         oi.Expires,
 	}
 }
 

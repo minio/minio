@@ -84,6 +84,7 @@ func extractObjMetadata(header http.Header) http.Header {
 		"Content-Length",
 		"Last-Modified",
 		"Content-Type",
+		"Expires",
 	}, defaultFilterKeys...)
 	return filterHeader(header, filterKeys)
 }
@@ -170,6 +171,11 @@ func (c Client) statObject(ctx context.Context, bucketName, objectName string, o
 		contentType = "application/octet-stream"
 	}
 
+	expiryStr := resp.Header.Get("Expires")
+	var expTime time.Time
+	if t, err := time.Parse(http.TimeFormat, expiryStr); err == nil {
+		expTime = t.UTC()
+	}
 	// Save object metadata info.
 	return ObjectInfo{
 		ETag:         md5sum,
@@ -177,6 +183,7 @@ func (c Client) statObject(ctx context.Context, bucketName, objectName string, o
 		Size:         size,
 		LastModified: date,
 		ContentType:  contentType,
+		Expires:      expTime,
 		// Extract only the relevant header keys describing the object.
 		// following function filters out a list of standard set of keys
 		// which are not part of object metadata.

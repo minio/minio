@@ -325,7 +325,7 @@ func (s *SelectResults) start(pipeWriter *io.PipeWriter) {
 
 			switch m {
 			case errorMsg:
-				pipeWriter.CloseWithError(errors.New("Error Type of " + headers.Get("error-type") + " " + headers.Get("error-message")))
+				pipeWriter.CloseWithError(errors.New(headers.Get("error-code") + ":\"" + headers.Get("error-message") + "\""))
 				closeResponse(s.resp)
 				return
 			case commonMsg:
