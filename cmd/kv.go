@@ -45,10 +45,13 @@ static int minio_nkv_open_path(struct minio_nkv_handle *handle, char *ipaddr) {
     io_ctx[io_ctx_cnt].container_hash = cntlist[i].container_hash;
 
     for (int p = 0; p < cntlist[i].num_container_transport; p++) {
+      printf("Transport information :: hash = %u, id = %d, address = %s, port = %d, family = %d, speed = %d, status = %d, numa_node = %d\n",
+              cntlist[i].transport_list[p].network_path_hash, cntlist[i].transport_list[p].network_path_id, cntlist[i].transport_list[p].ip_addr,
+              cntlist[i].transport_list[p].port, cntlist[i].transport_list[p].addr_family, cntlist[i].transport_list[p].speed,
+              cntlist[i].transport_list[p].status, cntlist[i].transport_list[p].numa_node);
       io_ctx[io_ctx_cnt].is_pass_through = 1;
       io_ctx[io_ctx_cnt].container_hash = cntlist[i].container_hash;
       io_ctx[io_ctx_cnt].network_path_hash = cntlist[i].transport_list[p].network_path_hash;
-
       if(!strcmp(cntlist[i].transport_list[p].ip_addr, ipaddr)) {
               handle->container_hash = cntlist[i].container_hash;
               handle->network_path_hash = cntlist[i].transport_list[p].network_path_hash;
@@ -152,6 +155,9 @@ func (k *KV) Get(keyStr string) ([]byte, error) {
 	if status != 0 {
 		return nil, errFileNotFound
 	}
+	if actualLength == 0 {
+		fmt.Println("Get returned 0 bytes for", keyStr)
+	}
 	return value[:actualLength], nil
 }
 
@@ -205,7 +211,7 @@ func newPosix(path string) (StorageAPI, error) {
 	kv := *globalKVHandle
 	status := C.minio_nkv_open_path(&kv.handle, C.CString(path))
 	if status != 0 {
-		fmt.Println("unable to open", path)
+		fmt.Println("unable to open", path, status)
 		return nil, errors.New("unable to open device")
 	}
 	p := &KVStorage{kv: &kv, path: kvPath}
