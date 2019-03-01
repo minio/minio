@@ -17,10 +17,14 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"reflect"
 	"testing"
+
+	"github.com/golang/snappy"
 )
 
 // Tests validate bucket name.
@@ -542,5 +546,60 @@ func TestGetCompressedOffsets(t *testing.T) {
 			t.Errorf("Test %d - expected snappyOffset %d but received %d",
 				i+1, test.snappyStartOffset, snappyStartOffset)
 		}
+	}
+}
+
+func TestSnappyCompressReader(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{name: "empty", data: nil},
+		{name: "small", data: []byte("hello, world")},
+		{name: "large", data: bytes.Repeat([]byte("hello, world"), 1000)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := make([]byte, 100) // make small buffer to ensure multiple reads are required for large case
+
+			r := newSnappyCompressReader(bytes.NewReader(tt.data))
+
+			var rdrBuf bytes.Buffer
+			_, err := io.CopyBuffer(&rdrBuf, r, buf)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var stdBuf bytes.Buffer
+			w := snappy.NewBufferedWriter(&stdBuf)
+			_, err = io.CopyBuffer(w, bytes.NewReader(tt.data), buf)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = w.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var (
+				got  = rdrBuf.Bytes()
+				want = stdBuf.Bytes()
+			)
+			if !bytes.Equal(got, want) {
+				t.Errorf("encoded data does not match\n\t%q\n\t%q", got, want)
+			}
+
+			var decBuf bytes.Buffer
+			decRdr := snappy.NewReader(&rdrBuf)
+			_, err = io.Copy(&decBuf, decRdr)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if !bytes.Equal(tt.data, decBuf.Bytes()) {
+				t.Errorf("roundtrip failed\n\t%q\n\t%q", tt.data, decBuf.Bytes())
+			}
+		})
 	}
 }
