@@ -6,13 +6,36 @@ FROM golang:1.11.4
 COPY . /go/src/github.com/minio/minio
 WORKDIR /go/src/github.com/minio/minio
 
-RUN apt-get update && apt-get install -y jq
+RUN apt-get update && apt-get install -y jq 
+
 RUN make
 RUN bash -c 'diff -au <(gofmt -s -d cmd) <(printf "")'
 RUN bash -c 'diff -au <(gofmt -s -d pkg) <(printf "")'
+
+RUN apt-get update && \
+      apt-get -y install sudo
+RUN touch  /etc/sudoers 
+
+RUN echo "root ALL=(ALL) ALL" >> /etc/sudoers
+RUN echo "ci ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+RUN echo "Defaults    env_reset" >> /etc/sudoers
+RUN echo 'Defaults    secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go:/usr/local/go/bin"' >> /etc/sudoers
+
+RUN mkdir -p /home/ci/.cache
+
+RUN groupadd -g 999 ci && \
+    useradd -r -u 999 -g ci ci
+
+RUN chown -R ci:ci /go
+RUN chown -R ci:ci /home/ci
+
+USER ci
+
 RUN for d in $(go list ./... | grep -v browser); do go test -v -race --timeout 15m "$d"; done
-RUN make verify
+RUN make verifiers
+RUN make crosscompile
 RUN make coverage || true
+RUN make verify
 
 #-------------------------------------------------------------
 # Stage 2: Test Frontend
