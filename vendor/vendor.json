@@ -897,10 +897,10 @@
 			"revisionTime": "2016-08-30T17:39:30Z"
 		},
 		{
-			"checksumSHA1": "j1wNJXkZyuFKjYFpPawESOaXYxk=",
+			"checksumSHA1": "IeRoFAG92dA1jUX27nMz1qczlOw=",
 			"path": "github.com/tidwall/sjson",
-			"revision": "6a22caf2fd45d5e2119bfc3717e984f15a7eb7ee",
-			"revisionTime": "2016-12-12T16:53:56Z"
+			"revision": "25fb082a20e29e83fb7b7ef5f5919166aad1f084",
+			"revisionTime": "2019-02-28T20:39:17Z"
 		},
 		{
 			"checksumSHA1": "R/Mpe0uUp5HeqWrdrH5qE2qZuE8=",
