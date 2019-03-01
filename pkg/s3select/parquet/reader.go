@@ -17,9 +17,11 @@
 package parquet
 
 import (
+	"encoding/json"
 	"io"
 
-	"github.com/minio/minio/pkg/s3select/json"
+	"github.com/bcicen/jstream"
+	jsonfmt "github.com/minio/minio/pkg/s3select/json"
 	"github.com/minio/minio/pkg/s3select/sql"
 	parquetgo "github.com/minio/parquet-go"
 	parquetgen "github.com/minio/parquet-go/gen-go/parquet"
@@ -42,42 +44,42 @@ func (r *Reader) Read() (rec sql.Record, rerr error) {
 		return nil, err
 	}
 
-	record := json.NewRecord()
+	kvs := jstream.KVS{}
 	f := func(name string, v parquetgo.Value) bool {
 		if v.Value == nil {
-			if err := record.Set(name, sql.FromNull()); err != nil {
-				rerr = errParquetParsingError(err)
-			}
-			return rerr == nil
+			kvs = append(kvs, jstream.KV{Key: name, Value: nil})
+			return true
 		}
 
-		var value *sql.Value
+		var value interface{}
 		switch v.Type {
 		case parquetgen.Type_BOOLEAN:
-			value = sql.FromBool(v.Value.(bool))
+			value = v.Value.(bool)
 		case parquetgen.Type_INT32:
-			value = sql.FromInt(int64(v.Value.(int32)))
+			value = int64(v.Value.(int32))
 		case parquetgen.Type_INT64:
-			value = sql.FromInt(int64(v.Value.(int64)))
+			value = int64(v.Value.(int64))
 		case parquetgen.Type_FLOAT:
-			value = sql.FromFloat(float64(v.Value.(float32)))
+			value = float64(v.Value.(float32))
 		case parquetgen.Type_DOUBLE:
-			value = sql.FromFloat(v.Value.(float64))
+			value = v.Value.(float64)
 		case parquetgen.Type_INT96, parquetgen.Type_BYTE_ARRAY, parquetgen.Type_FIXED_LEN_BYTE_ARRAY:
-			value = sql.FromString(string(v.Value.([]byte)))
+			value = string(v.Value.([]byte))
 		default:
 			rerr = errParquetParsingError(nil)
 			return false
 		}
 
-		if err = record.Set(name, value); err != nil {
-			rerr = errParquetParsingError(err)
-		}
-		return rerr == nil
+		kvs = append(kvs, jstream.KV{Key: name, Value: value})
+		return true
 	}
 
 	parquetRecord.Range(f)
-	return record, rerr
+	data, err := json.Marshal(kvs)
+	if err != nil {
+		return nil, err
+	}
+	return &jsonfmt.Record{Data: data}, rerr
 }
 
 // Close - closes underlaying readers.
