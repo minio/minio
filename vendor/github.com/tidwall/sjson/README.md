@@ -7,12 +7,12 @@
 <a href="https://godoc.org/github.com/tidwall/sjson"><img src="https://img.shields.io/badge/api-reference-blue.svg?style=flat-square" alt="GoDoc"></a>
 </p>
 
-<p align="center">set a json value quickly</a></p>
+<p align="center">set a json value quickly</p>
 
 SJSON is a Go package that provides a [very fast](#performance) and simple way to set a value in a json document. The purpose for this library is to provide efficient json updating for the [SummitDB](https://github.com/tidwall/summitdb) project. 
 For quickly retrieving json values check out [GJSON](https://github.com/tidwall/gjson).
 
-For a command line interface check out [JSONed](https://github.com/tidwall/jsoned).
+For a command line interface check out [JJ](https://github.com/tidwall/jj).
 
 Getting Started
 ===============
@@ -59,7 +59,7 @@ Path syntax
 -----------
 
 A path is a series of keys separated by a dot.
-The dot and colon characters can be escaped with '\'.
+The dot and colon characters can be escaped with ``\``.
 
 ```json
 {
@@ -268,7 +268,7 @@ widget.image.hOffset
 widget.text.onMouseUp
 ```
 
-*These benchmarks were run on a MacBook Pro 15" 2.8 GHz Intel Core i7 using Go 1.7.*
+*These benchmarks were run on a MacBook Pro 15" 2.8 GHz Intel Core i7 using Go 1.7 and can be be found [here](https://github.com/tidwall/sjson-benchmarks)*.
 
 ## Contact
 Josh Baker [@tidwall](http://twitter.com/tidwall)
