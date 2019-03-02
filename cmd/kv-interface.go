@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"strconv"
@@ -15,10 +16,34 @@ type KVInterface interface {
 	Delete(keyStr string) error
 }
 
+const kvNSEntryPaddingMultiple = 4 * 1024
+
 type KVNSEntry struct {
 	Size    int64
 	ModTime time.Time
 	IDs     []string
+}
+
+type KVNSEntry_ KVNSEntry
+
+func KVNSEntryMarshal(entry KVNSEntry) ([]byte, error) {
+	b, err := json.Marshal(entry)
+	if err != nil {
+		return nil, err
+	}
+	padded := make([]byte, ceilFrac(int64(len(b)), kvNSEntryPaddingMultiple)*kvNSEntryPaddingMultiple)
+	copy(padded, b)
+	return padded, nil
+}
+
+func KVNSEntryUnmarshal(b []byte, entry *KVNSEntry) error {
+	for i := range b {
+		if b[i] == '\x00' {
+			b = b[:i]
+			break
+		}
+	}
+	return json.Unmarshal(b, entry)
 }
 
 var errValueTooLong = errors.New("value too long")

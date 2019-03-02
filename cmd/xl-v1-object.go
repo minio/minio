@@ -567,7 +567,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// Delete temporary object in the event of failure.
 	// If PutObject succeeded there would be no temporary
 	// object to delete.
-	defer xl.deleteObject(ctx, minioMetaTmpBucket, tempObj, writeQuorum, false)
+	// defer xl.deleteObject(ctx, minioMetaTmpBucket, tempObj, writeQuorum, false)
 
 	// This is a special case with size as '0' and object ends with
 	// a slash separator, we treat it like a valid operation and
