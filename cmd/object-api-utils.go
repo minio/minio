@@ -428,13 +428,22 @@ type GetObjectReader struct {
 
 // NewGetObjectReaderFromReader sets up a GetObjectReader with a given
 // reader. This ignores any object properties.
-func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, pcfn CheckCopyPreconditionFn, cleanupFns ...func()) *GetObjectReader {
+func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, pcfn CheckCopyPreconditionFn, cleanupFns ...func()) (*GetObjectReader, error) {
+	if pcfn != nil {
+		if ok := pcfn(oi, ""); ok {
+			// Call the cleanup funcs
+			for i := len(cleanupFns) - 1; i >= 0; i-- {
+				cleanupFns[i]()
+			}
+			return nil, PreConditionFailed{}
+		}
+	}
 	return &GetObjectReader{
 		ObjInfo:    oi,
 		pReader:    r,
 		cleanUpFns: cleanupFns,
 		precondFn:  pcfn,
-	}
+	}, nil
 }
 
 // ObjReaderFn is a function type that takes a reader and returns

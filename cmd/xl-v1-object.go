@@ -182,7 +182,7 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 			nsUnlocker()
 			return nil, toObjectErr(err, bucket, object)
 		}
-		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts.CheckCopyPrecondFn, nsUnlocker), nil
+		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts.CheckCopyPrecondFn, nsUnlocker)
 	}
 
 	var objInfo ObjectInfo
