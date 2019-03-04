@@ -52,6 +52,9 @@ func handleSignals() {
 		err = globalHTTPServer.Shutdown()
 		logger.LogIf(context.Background(), err)
 
+		// send signal to various go-routines that they need to quit.
+		close(GlobalServiceDoneCh)
+
 		if objAPI := newObjectLayerFn(); objAPI != nil {
 			oerr = objAPI.Shutdown(context.Background())
 			logger.LogIf(context.Background(), oerr)

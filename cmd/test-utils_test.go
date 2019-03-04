@@ -407,6 +407,11 @@ func resetGlobalConfigPath() {
 	globalConfigDir = &ConfigDir{path: ""}
 }
 
+func resetGlobalServiceDoneCh() {
+	close(GlobalServiceDoneCh)
+	GlobalServiceDoneCh = make(chan struct{})
+}
+
 // sets globalObjectAPI to `nil`.
 func resetGlobalObjectAPI() {
 	globalObjLayerMutex.Lock()
@@ -479,6 +484,9 @@ func resetGlobalIAMSys() {
 // Resets all the globals used modified in tests.
 // Resetting ensures that the changes made to globals by one test doesn't affect others.
 func resetTestGlobals() {
+	// close any indefinitely running go-routines from previous
+	// tests.
+	resetGlobalServiceDoneCh()
 	// set globalObjectAPI to `nil`.
 	resetGlobalObjectAPI()
 	// Reset config path set.

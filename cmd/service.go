@@ -39,7 +39,7 @@ var GlobalServiceDoneCh chan struct{}
 
 // Initialize service mutex once.
 func init() {
-	GlobalServiceDoneCh = make(chan struct{}, 1)
+	GlobalServiceDoneCh = make(chan struct{})
 	globalServiceSignalCh = make(chan serviceSignal)
 }
 
