@@ -640,3 +640,38 @@ func writeCustomErrorResponseJSON(ctx context.Context, w http.ResponseWriter, er
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
 }
+
+// writeCustomErrorResponseXML - similar to writeErrorResponse,
+// but accepts the error message directly (this allows messages to be
+// dynamically generated.)
+func writeCustomErrorResponseXML(ctx context.Context, w http.ResponseWriter, err APIError, errBody string, reqURL *url.URL, browser bool) {
+
+	switch err.Code {
+	case "SlowDown", "XMinioServerNotInitialized", "XMinioReadQuorum", "XMinioWriteQuorum":
+		// Set retry-after header to indicate user-agents to retry request after 120secs.
+		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
+		w.Header().Set("Retry-After", "120")
+	case "AccessDenied":
+		// The request is from browser and also if browser
+		// is enabled we need to redirect.
+		if browser && globalIsBrowserEnabled {
+			w.Header().Set("Location", minioReservedBucketPath+reqURL.Path)
+			w.WriteHeader(http.StatusTemporaryRedirect)
+			return
+		}
+	}
+
+	reqInfo := logger.GetReqInfo(ctx)
+	errorResponse := APIErrorResponse{
+		Code:       err.Code,
+		Message:    errBody,
+		Resource:   reqURL.Path,
+		BucketName: reqInfo.BucketName,
+		Key:        reqInfo.ObjectName,
+		RequestID:  w.Header().Get(responseRequestIDKey),
+		HostID:     w.Header().Get(responseDeploymentIDKey),
+	}
+
+	encodedErrorResponse := encodeResponse(errorResponse)
+	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
+}

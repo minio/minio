@@ -114,7 +114,6 @@ const (
 	ErrInvalidRequestVersion
 	ErrMissingSignTag
 	ErrMissingSignHeadersTag
-	ErrPolicyAlreadyExpired
 	ErrMalformedDate
 	ErrMalformedPresignedDate
 	ErrMalformedCredentialDate
@@ -623,11 +622,6 @@ var errorCodes = errorCodeMap{
 	ErrMissingSignHeadersTag: {
 		Code:           "InvalidArgument",
 		Description:    "Signature header missing SignedHeaders field.",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
-	ErrPolicyAlreadyExpired: {
-		Code:           "AccessDenied",
-		Description:    "Invalid according to Policy: Policy expired.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMalformedExpires: {
