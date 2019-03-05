@@ -31,8 +31,18 @@ func (target *PeerRESTClientTarget) ID() event.TargetID {
 	return target.id
 }
 
-// Send - sends event to remote peer by making RPC call.
-func (target *PeerRESTClientTarget) Send(eventData event.Event) error {
+// Save - Sends event directly without persisting.
+func (target *PeerRESTClientTarget) Save(eventData event.Event) error {
+	return target.send(eventData)
+}
+
+// Send - interface compatible method does no-op.
+func (target *PeerRESTClientTarget) Send(eventKey string) error {
+	return nil
+}
+
+// sends event to remote peer by making RPC call.
+func (target *PeerRESTClientTarget) send(eventData event.Event) error {
 	return target.restClient.SendEvent(target.bucketName, target.id, target.remoteTargetID, eventData)
 }
 

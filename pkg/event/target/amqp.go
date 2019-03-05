@@ -107,8 +107,12 @@ func (target *AMQPTarget) channel() (*amqp.Channel, error) {
 	return ch, nil
 }
 
-// Send - sends event to AMQP.
-func (target *AMQPTarget) Send(eventData event.Event) error {
+// Save - Sends event directly without persisting.
+func (target *AMQPTarget) Save(eventData event.Event) error {
+	return target.send(eventData)
+}
+
+func (target *AMQPTarget) send(eventData event.Event) error {
 	ch, err := target.channel()
 	if err != nil {
 		return err
@@ -140,6 +144,11 @@ func (target *AMQPTarget) Send(eventData event.Event) error {
 			DeliveryMode: target.args.DeliveryMode,
 			Body:         data,
 		})
+}
+
+// Send - interface compatible method does no-op.
+func (target *AMQPTarget) Send(eventKey string) error {
+	return nil
 }
 
 // Close - does nothing and available for interface compatibility.
