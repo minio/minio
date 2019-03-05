@@ -408,8 +408,19 @@ func resetGlobalConfigPath() {
 }
 
 func resetGlobalServiceDoneCh() {
-	close(GlobalServiceDoneCh)
-	GlobalServiceDoneCh = make(chan struct{})
+	// Repeatedly send on the service done channel, so that
+	// listening go-routines will quit. This works better than
+	// closing the channel - closing introduces a new race, as the
+	// current thread writes to the variable, and other threads
+	// listening on it, read from it.
+loop:
+	for {
+		select {
+		case GlobalServiceDoneCh <- struct{}{}:
+		default:
+			break loop
+		}
+	}
 }
 
 // sets globalObjectAPI to `nil`.
