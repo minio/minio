@@ -300,7 +300,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		{
 			objectName:         "test",
 			data:               []byte("Hello, World"),
-			expectedRespStatus: http.StatusBadRequest,
+			expectedRespStatus: http.StatusForbidden,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			dates:              []interface{}{curTime.Add(-1 * time.Minute * 5).Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
