@@ -30,6 +30,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/minio/minio-go/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
@@ -289,10 +290,8 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket, locatio
 	}
 	defer bucketLock.Unlock()
 	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		err := BucketNameInvalid{Bucket: bucket}
-		logger.LogIf(ctx, err)
-		return err
+	if s3utils.CheckValidBucketNameStrict(bucket) != nil {
+		return BucketNameInvalid{Bucket: bucket}
 	}
 	bucketDir, err := fs.getBucketDir(ctx, bucket)
 	if err != nil {
@@ -341,7 +340,7 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 
 	for _, entry := range entries {
 		// Ignore all reserved bucket names and invalid bucket names.
-		if isReservedOrInvalidBucket(entry) {
+		if isReservedOrInvalidBucket(entry, false) {
 			continue
 		}
 		var fi os.FileInfo

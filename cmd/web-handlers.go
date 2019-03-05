@@ -157,7 +157,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	}
 
 	// Check if bucket is a reserved bucket name or invalid.
-	if isReservedOrInvalidBucket(args.BucketName) {
+	if isReservedOrInvalidBucket(args.BucketName, true) {
 		return toJSONError(errInvalidBucketName)
 	}
 

@@ -34,6 +34,7 @@ import (
 	"unicode/utf8"
 
 	snappy "github.com/golang/snappy"
+	"github.com/minio/minio-go/pkg/s3utils"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
@@ -273,10 +274,16 @@ func isStringEqual(s1 string, s2 string) bool {
 }
 
 // Ignores all reserved bucket names or invalid bucket names.
-func isReservedOrInvalidBucket(bucketEntry string) bool {
+func isReservedOrInvalidBucket(bucketEntry string, strict bool) bool {
 	bucketEntry = strings.TrimSuffix(bucketEntry, slashSeparator)
-	if !IsValidBucketName(bucketEntry) {
-		return true
+	if strict {
+		if err := s3utils.CheckValidBucketNameStrict(bucketEntry); err != nil {
+			return true
+		}
+	} else {
+		if err := s3utils.CheckValidBucketName(bucketEntry); err != nil {
+			return true
+		}
 	}
 	return isMinioMetaBucket(bucketEntry) || isMinioReservedBucket(bucketEntry)
 }

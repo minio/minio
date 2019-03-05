@@ -30,6 +30,7 @@ import (
 
 	"github.com/minio/cli"
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio-go/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -349,7 +350,7 @@ func ossIsValidBucketName(bucket string) bool {
 	if strings.Contains(bucket, ".") {
 		return false
 	}
-	if !minio.IsValidBucketName(bucket) {
+	if s3utils.CheckValidBucketNameStrict(bucket) != nil {
 		return false
 	}
 	return true
