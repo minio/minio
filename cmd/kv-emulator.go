@@ -19,12 +19,13 @@ func (k *KVEmulator) Put(keyStr string, value []byte) error {
 	return nil
 }
 
-func (k *KVEmulator) Get(keyStr string) ([]byte, error) {
+func (k *KVEmulator) Get(keyStr string, value []byte) ([]byte, error) {
 	b, err := ioutil.ReadFile(pathJoin(k.path, keyStr))
 	if err != nil {
 		return nil, errFileNotFound
 	}
-	return b, nil
+	n := copy(value, b)
+	return value[:n], nil
 }
 
 func (k *KVEmulator) Delete(keyStr string) error {

@@ -132,6 +132,13 @@ type KV struct {
 	path   string
 }
 
+var kvValuePool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, kvMaxValueSize)
+		return &b
+	},
+}
+
 const kvKeyLength = 200
 
 func (k *KV) Put(keyStr string, value []byte) error {
@@ -157,7 +164,7 @@ func (k *KV) Put(keyStr string, value []byte) error {
 	return nil
 }
 
-func (k *KV) Get(keyStr string) ([]byte, error) {
+func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 	key := []byte(keyStr)
 	for len(key) < kvKeyLength {
 		key = append(key, '\x00')
@@ -167,7 +174,7 @@ func (k *KV) Get(keyStr string) ([]byte, error) {
 		os.Exit(0)
 	}
 	var actualLength C.int
-	value := make([]byte, kvMaxValueSize)
+
 	tries := 10
 	for {
 		status := C.minio_nkv_get(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)), unsafe.Pointer(&value[0]), C.int(len(value)), &actualLength)
@@ -283,11 +290,14 @@ func (k *KVStorage) DiskInfo() (info DiskInfo, err error) {
 
 func (k *KVStorage) loadVolumes() (*kvVolumes, error) {
 	volumes := &kvVolumes{}
-	b, err := k.kv.Get(kvVolumesKey)
+	bufp := kvValuePool.Get().(*[]byte)
+	defer kvValuePool.Put(bufp)
+
+	value, err := k.kv.Get(kvVolumesKey, *bufp)
 	if err != nil {
 		return volumes, nil
 	}
-	if err = json.Unmarshal(b, volumes); err != nil {
+	if err = json.Unmarshal(value, volumes); err != nil {
 		return nil, err
 	}
 	return volumes, nil
@@ -396,18 +406,22 @@ func (k *KVStorage) DeleteVol(volume string) (err error) {
 
 func (k *KVStorage) getKVNSEntry(nskey string) (entry KVNSEntry, err error) {
 	tries := 10
+	bufp := kvValuePool.Get().(*[]byte)
+	defer kvValuePool.Put(bufp)
+
 	for {
-		b, err := k.kv.Get(nskey)
+		value, err := k.kv.Get(nskey, *bufp)
 		if err != nil {
 			return entry, err
 		}
-		err = KVNSEntryUnmarshal(b, &entry)
+		err = KVNSEntryUnmarshal(value, &entry)
 		if err == nil {
 			return entry, nil
 		}
+		fmt.Println("##### Unmarshal failed on ", nskey, len(value), string(value))
 		tries--
 		if tries == 0 {
-			fmt.Println("Unmarshal failed (after 10 retries on GET) on ", k.path, nskey)
+			fmt.Println("##### Unmarshal failed (after 10 retries on GET) on ", k.path, nskey)
 			os.Exit(0)
 		}
 	}
@@ -415,16 +429,22 @@ func (k *KVStorage) getKVNSEntry(nskey string) (entry KVNSEntry, err error) {
 
 func (k *KVStorage) ListDir(volume, dirPath string, count int) ([]string, error) {
 	nskey := pathJoin(volume, dirPath, "xl.json")
+
 	entry, err := k.getKVNSEntry(nskey)
 	if err != nil {
 		return nil, err
 	}
-	b, err := k.kv.Get(k.DataKey(entry.IDs[0]))
+
+	bufp := kvValuePool.Get().(*[]byte)
+	defer kvValuePool.Put(bufp)
+
+	value, err := k.kv.Get(k.DataKey(entry.IDs[0]), *bufp)
 	if err != nil {
 		return nil, err
 	}
-	xlMeta, err := xlMetaV1UnmarshalJSON(context.Background(), b)
+	xlMeta, err := xlMetaV1UnmarshalJSON(context.Background(), value)
 	if err != nil {
+		fmt.Println("##### xlMetaV1UnmarshalJSON failed on", k.DataKey(entry.IDs[0]), len(value), string(value))
 		return nil, err
 	}
 	listEntries := []string{"xl.json"}
@@ -454,7 +474,10 @@ func (k *KVStorage) CreateFile(volume, filePath string, size int64, reader io.Re
 	}
 	nskey := pathJoin(volume, filePath)
 	entry := KVNSEntry{Size: size, ModTime: time.Now()}
-	buf := make([]byte, kvMaxValueSize)
+	bufp := kvValuePool.Get().(*[]byte)
+	defer kvValuePool.Put(bufp)
+
+	buf := *bufp
 	for {
 		if size == 0 {
 			break
@@ -508,8 +531,11 @@ func (k *KVStorage) ReadFileStream(volume, filePath string, offset, length int64
 	r, w := io.Pipe()
 	size := entry.Size
 	go func() {
+		bufp := kvValuePool.Get().(*[]byte)
+		defer kvValuePool.Put(bufp)
+
 		for _, id := range entry.IDs {
-			data, err := k.kv.Get(k.DataKey(id))
+			data, err := k.kv.Get(k.DataKey(id), *bufp)
 			if err != nil {
 				w.CloseWithError(err)
 				return
@@ -533,7 +559,9 @@ func (k *KVStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) er
 		return err
 	}
 	rename := func(src, dst string) error {
-		value, err := k.kv.Get(src)
+		bufp := kvValuePool.Get().(*[]byte)
+		defer kvValuePool.Put(bufp)
+		value, err := k.kv.Get(src, *bufp)
 		if err != nil {
 			return err
 		}
@@ -619,7 +647,10 @@ func (k *KVStorage) ReadAll(volume string, filePath string) (buf []byte, err err
 	}
 
 	if filePath == "format.json" {
-		buf, err = k.kv.Get(pathJoin(volume, filePath))
+		bufp := kvValuePool.Get().(*[]byte)
+		defer kvValuePool.Put(bufp)
+
+		buf, err = k.kv.Get(pathJoin(volume, filePath), *bufp)
 		return buf, err
 	}
 	fi, err := k.StatFile(volume, filePath)

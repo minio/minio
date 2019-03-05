@@ -12,7 +12,7 @@ import (
 
 type KVInterface interface {
 	Put(keyStr string, value []byte) error
-	Get(keyStr string) ([]byte, error)
+	Get(keyStr string, value []byte) ([]byte, error)
 	Delete(keyStr string) error
 }
 
@@ -23,8 +23,6 @@ type KVNSEntry struct {
 	ModTime time.Time
 	IDs     []string
 }
-
-type KVNSEntry_ KVNSEntry
 
 func KVNSEntryMarshal(entry KVNSEntry) ([]byte, error) {
 	b, err := json.Marshal(entry)
