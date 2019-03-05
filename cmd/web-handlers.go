@@ -912,26 +912,15 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
 		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
 
-		pipeReader, pipeWriter := io.Pipe()
-		snappyWriter := snappy.NewBufferedWriter(pipeWriter)
-
-		var actualReader *hash.Reader
-		actualReader, err = hash.NewReader(reader, size, "", "", actualSize)
+		actualReader, err := hash.NewReader(reader, size, "", "", actualSize)
 		if err != nil {
 			writeWebErrorResponse(w, err)
 			return
 		}
 
-		go func() {
-			// Writing to the compressed writer.
-			_, cerr := io.CopyN(snappyWriter, actualReader, actualSize)
-			snappyWriter.Close()
-			pipeWriter.CloseWithError(cerr)
-		}()
-
 		// Set compression metrics.
 		size = -1 // Since compressed size is un-predictable.
-		reader = pipeReader
+		reader = newSnappyCompressReader(actualReader)
 		hashReader, err = hash.NewReader(reader, size, "", "", actualSize)
 		if err != nil {
 			writeWebErrorResponse(w, err)

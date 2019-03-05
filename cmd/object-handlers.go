@@ -33,7 +33,6 @@ import (
 
 	"time"
 
-	snappy "github.com/golang/snappy"
 	"github.com/gorilla/mux"
 	miniogo "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/encrypt"
@@ -831,21 +830,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// Remove all source encrypted related metadata to
 		// avoid copying them in target object.
 		crypto.RemoveInternalEntries(srcInfo.UserDefined)
-		// Open a pipe for compression.
-		// Where pipeWriter is piped to srcInfo.Reader.
-		// gr writes to pipeWriter.
-		pipeReader, pipeWriter := io.Pipe()
-		reader = pipeReader
+
+		reader = newSnappyCompressReader(gr)
 		length = -1
-
-		snappyWriter := snappy.NewBufferedWriter(pipeWriter)
-
-		go func() {
-			// Compress the decompressed source object.
-			_, cerr := io.Copy(snappyWriter, gr)
-			snappyWriter.Close()
-			pipeWriter.CloseWithError(cerr)
-		}()
 	} else {
 		// Remove the metadata for remote calls.
 		delete(srcInfo.UserDefined, ReservedMetadataPrefix+"compression")
@@ -1216,28 +1203,17 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
 		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
 
-		pipeReader, pipeWriter := io.Pipe()
-		snappyWriter := snappy.NewBufferedWriter(pipeWriter)
-
-		var actualReader *hash.Reader
-		actualReader, err = hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
+		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 
-		go func() {
-			// Writing to the compressed writer.
-			_, cerr := io.CopyN(snappyWriter, actualReader, actualSize)
-			snappyWriter.Close()
-			pipeWriter.CloseWithError(cerr)
-		}()
-
 		// Set compression metrics.
+		reader = newSnappyCompressReader(actualReader)
 		size = -1   // Since compressed size is un-predictable.
 		md5hex = "" // Do not try to verify the content.
 		sha256hex = ""
-		reader = pipeReader
 	}
 
 	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
@@ -1654,21 +1630,8 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	isCompressed := compressPart
 	// Compress only if the compression is enabled during initial multipart.
 	if isCompressed {
-		// Open a pipe for compression.
-		// Where pipeWriter is piped to srcInfo.Reader.
-		// gr writes to pipeWriter.
-		pipeReader, pipeWriter := io.Pipe()
-		reader = pipeReader
+		reader = newSnappyCompressReader(gr)
 		length = -1
-
-		snappyWriter := snappy.NewBufferedWriter(pipeWriter)
-
-		go func() {
-			// Compress the decompressed source object.
-			_, cerr := io.Copy(snappyWriter, gr)
-			snappyWriter.Close()
-			pipeWriter.CloseWithError(cerr)
-		}()
 	} else {
 		reader = gr
 	}
@@ -1879,8 +1842,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 
 	actualSize := size
-	var pipeReader *io.PipeReader
-	var pipeWriter *io.PipeWriter
 
 	// get encryption options
 	var opts ObjectOptions
@@ -1902,28 +1863,17 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	isCompressed := false
 	if objectAPI.IsCompressionSupported() && compressPart {
-		pipeReader, pipeWriter = io.Pipe()
-		snappyWriter := snappy.NewBufferedWriter(pipeWriter)
-
-		var actualReader *hash.Reader
-		actualReader, err = hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
+		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 
-		go func() {
-			// Writing to the compressed writer.
-			_, cerr := io.CopyN(snappyWriter, actualReader, actualSize)
-			snappyWriter.Close()
-			pipeWriter.CloseWithError(cerr)
-		}()
-
 		// Set compression metrics.
+		reader = newSnappyCompressReader(actualReader)
 		size = -1   // Since compressed size is un-predictable.
 		md5hex = "" // Do not try to verify the content.
 		sha256hex = ""
-		reader = pipeReader
 		isCompressed = true
 	}
 
@@ -2016,7 +1966,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	etag := partInfo.ETag
 	if isCompressed {
-		pipeWriter.Close()
 		// Suppress compressed ETag.
 		etag = partInfo.ETag + "-1"
 	} else if isEncrypted {
