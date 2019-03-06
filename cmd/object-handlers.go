@@ -760,20 +760,22 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if !cpSrcDstSame {
 		lock = readLock
 	}
-
+	checkCopyPrecondFn := func(o ObjectInfo, encETag string) bool {
+		return checkCopyObjectPreconditions(ctx, w, r, o, encETag)
+	}
+	getOpts.CheckCopyPrecondFn = checkCopyPrecondFn
+	srcOpts.CheckCopyPrecondFn = checkCopyPrecondFn
 	var rs *HTTPRangeSpec
 	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, getOpts)
 	if err != nil {
+		if isErrPreconditionFailed(err) {
+			return
+		}
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 	defer gr.Close()
 	srcInfo := gr.ObjInfo
-
-	// Verify before x-amz-copy-source preconditions before continuing with CopyObject.
-	if checkCopyObjectPreconditions(ctx, w, r, srcInfo) {
-		return
-	}
 
 	/// maximum Upload size for object in a single CopyObject operation.
 	if isMaxObjectSize(srcInfo.Size) {
@@ -1573,9 +1575,17 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 		}
 	}
+	checkCopyPartPrecondFn := func(o ObjectInfo, encETag string) bool {
+		return checkCopyObjectPartPreconditions(ctx, w, r, o, encETag)
+	}
+	getOpts.CheckCopyPrecondFn = checkCopyPartPrecondFn
+	srcOpts.CheckCopyPrecondFn = checkCopyPartPrecondFn
 
 	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, readLock, getOpts)
 	if err != nil {
+		if isErrPreconditionFailed(err) {
+			return
+		}
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1594,11 +1604,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// Special care for CopyObjectPart
 	if partRangeErr := checkCopyPartRangeWithSize(rs, actualPartSize); partRangeErr != nil {
 		writeCopyPartErr(ctx, w, partRangeErr, r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	// Verify before x-amz-copy-source preconditions before continuing with CopyObject.
-	if checkCopyObjectPartPreconditions(ctx, w, r, srcInfo) {
 		return
 	}
 

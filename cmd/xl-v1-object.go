@@ -182,7 +182,7 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 			nsUnlocker()
 			return nil, toObjectErr(err, bucket, object)
 		}
-		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, nsUnlocker), nil
+		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts.CheckCopyPrecondFn, nsUnlocker)
 	}
 
 	var objInfo ObjectInfo
@@ -192,7 +192,7 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 		return nil, toObjectErr(err, bucket, object)
 	}
 
-	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, nsUnlocker)
+	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts.CheckCopyPrecondFn, nsUnlocker)
 	if nErr != nil {
 		return nil, nErr
 	}
@@ -206,7 +206,7 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 	// case of incomplete read.
 	pipeCloser := func() { pr.Close() }
 
-	return fn(pr, h, pipeCloser)
+	return fn(pr, h, opts.CheckCopyPrecondFn, pipeCloser)
 }
 
 // GetObject - reads an object erasured coded across multiple

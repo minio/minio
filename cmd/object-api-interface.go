@@ -26,10 +26,14 @@ import (
 	"github.com/minio/minio/pkg/policy"
 )
 
+// CheckCopyPreconditionFn returns true if copy precondition check failed.
+type CheckCopyPreconditionFn func(o ObjectInfo, encETag string) bool
+
 // ObjectOptions represents object options for ObjectLayer operations
 type ObjectOptions struct {
 	ServerSideEncryption encrypt.ServerSide
 	UserDefined          map[string]string
+	CheckCopyPrecondFn   CheckCopyPreconditionFn
 }
 
 // LockType represents required locking for ObjectLayer operations
