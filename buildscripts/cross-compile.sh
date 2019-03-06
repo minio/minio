@@ -11,7 +11,7 @@ function _init() {
     SUPPORTED_OSARCH="linux/ppc64le linux/arm64 linux/s390x darwin/amd64 freebsd/amd64"
 }
 
-function _build_and_sign() {
+function _build() {
     local osarch=$1
     IFS=/ read -r -a arr <<<"$osarch"
     os="${arr[0]}"
@@ -22,13 +22,14 @@ function _build_and_sign() {
     # Go build to build the binary.
     export GOOS=$os
     export GOARCH=$arch
+    export GO111MODULE=on
     go build -tags kqueue -o /dev/null
 }
 
 function main() {
     echo "Testing builds for OS/Arch: ${SUPPORTED_OSARCH}"
     for each_osarch in ${SUPPORTED_OSARCH}; do
-        _build_and_sign "${each_osarch}"
+        _build "${each_osarch}"
     done
 }
 
