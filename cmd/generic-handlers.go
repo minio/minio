@@ -383,7 +383,23 @@ type resourceHandler struct {
 
 // setCorsHandler handler for CORS (Cross Origin Resource Sharing)
 func setCorsHandler(h http.Handler) http.Handler {
-	c := cors.AllowAll()
+
+	c := cors.New(cors.Options{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{
+			http.MethodGet,
+			http.MethodPut,
+			http.MethodHead,
+			http.MethodPost,
+			http.MethodDelete,
+			http.MethodOptions,
+			http.MethodPatch,
+		},
+		AllowedHeaders:   []string{"*"},
+		ExposedHeaders:   []string{"*"},
+		AllowCredentials: true,
+	})
+
 	return c.Handler(h)
 }
 
