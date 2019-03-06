@@ -21,6 +21,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
@@ -1641,11 +1642,25 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	case crypto.Error:
 		apiErr = ErrObjectTampered
 	default:
-		apiErr = ErrInternalError
-		// Make sure to log the errors which we cannot translate
-		// to a meaningful S3 API errors. This is added to aid in
-		// debugging unexpected/unhandled errors.
-		logger.LogIf(ctx, err)
+		var ie, iw int
+		// This work-around is to handle the issue golang/go#30648
+		if _, ferr := fmt.Fscanf(strings.NewReader(err.Error()),
+			"request declared a Content-Length of %d but only wrote %d bytes",
+			&ie, &iw); ferr != nil {
+			apiErr = ErrInternalError
+			// Make sure to log the errors which we cannot translate
+			// to a meaningful S3 API errors. This is added to aid in
+			// debugging unexpected/unhandled errors.
+			logger.LogIf(ctx, err)
+		} else if ie > iw {
+			apiErr = ErrIncompleteBody
+		} else {
+			apiErr = ErrInternalError
+			// Make sure to log the errors which we cannot translate
+			// to a meaningful S3 API errors. This is added to aid in
+			// debugging unexpected/unhandled errors.
+			logger.LogIf(ctx, err)
+		}
 	}
 
 	return apiErr
