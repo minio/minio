@@ -6,7 +6,7 @@ FROM golang:1.11.4
 COPY . /go/src/github.com/minio/minio
 WORKDIR /go/src/github.com/minio/minio
 
-RUN apt-get update && apt-get install -y jq 
+RUN apt-get update && apt-get install -y jq
 
 RUN make
 RUN bash -c 'diff -au <(gofmt -s -d cmd) <(printf "")'
@@ -14,7 +14,7 @@ RUN bash -c 'diff -au <(gofmt -s -d pkg) <(printf "")'
 
 RUN apt-get update && \
       apt-get -y install sudo
-RUN touch  /etc/sudoers 
+RUN touch  /etc/sudoers
 
 RUN echo "root ALL=(ALL) ALL" >> /etc/sudoers
 RUN echo "ci ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
@@ -34,7 +34,7 @@ USER ci
 RUN for d in $(go list ./... | grep -v browser); do go test -v -race --timeout 15m "$d"; done
 RUN make verifiers
 RUN make crosscompile
-RUN make coverage || true
+RUN make coverage
 RUN make verify
 
 #-------------------------------------------------------------

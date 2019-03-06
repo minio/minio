@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -33,15 +34,27 @@ func TestReadDirFail(t *testing.T) {
 		t.Fatalf("expected = %s, got: %s", errFileNotFound, err)
 	}
 
+	file := path.Join(os.TempDir(), "issue")
+	if err := ioutil.WriteFile(file, []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(file)
+
 	// Check if file is given.
-	if _, err := readDir("/etc/issue/mydir"); err != errFileNotFound {
+	if _, err := readDir(path.Join(file, "mydir")); err != errFileNotFound {
 		t.Fatalf("expected = %s, got: %s", errFileNotFound, err)
 	}
 
 	// Only valid for linux.
 	if runtime.GOOS == "linux" {
+		permDir := path.Join(os.TempDir(), "perm-dir")
+		if err := os.MkdirAll(permDir, os.FileMode(0200)); err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(permDir)
+
 		// Check if permission denied.
-		if _, err := readDir("/proc/1/fd"); err == nil {
+		if _, err := readDir(permDir); err == nil {
 			t.Fatalf("expected = an error, got: nil")
 		}
 	}

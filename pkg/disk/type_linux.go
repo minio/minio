@@ -20,7 +20,7 @@ package disk
 
 import "strconv"
 
-// fsType2StringMap - list of filesystems supported by donut on linux
+// fsType2StringMap - list of filesystems supported on linux
 var fsType2StringMap = map[string]string{
 	"1021994":  "TMPFS",
 	"137d":     "EXT",
@@ -34,6 +34,9 @@ var fsType2StringMap = map[string]string{
 	"ef51":     "EXT2OLD",
 	"ef53":     "EXT4",
 	"f15f":     "ecryptfs",
+	"794c7630": "overlayfs",
+	"2fc12fc1": "zfs",
+	"ff534d42": "cifs",
 }
 
 // getFSType returns the filesystem type of the underlying mounted filesystem

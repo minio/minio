@@ -29,12 +29,14 @@ import (
 )
 
 // file size for performance read and write checks
-const randBufSize = 1 * humanize.KiByte
-const randParts = 1024
-const fileSize = randParts * randBufSize
+const (
+	randBufSize = 1 * humanize.KiByte
+	randParts   = 1024
+	fileSize    = randParts * randBufSize
 
-// Total count of read / write iteration for performance measurement
-const iterations = 10
+	// Total count of read / write iteration for performance measurement
+	iterations = 10
+)
 
 // Info stat fs struct is container which holds following values
 // Total - total size of the volume / disk
