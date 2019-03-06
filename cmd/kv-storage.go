@@ -35,7 +35,7 @@ func newPosix(path string) (StorageAPI, error) {
 	if os.Getenv("MINIO_NKV_EMULATOR") != "" {
 		dataDir := pathJoin("/tmp", path, "data")
 		os.MkdirAll(dataDir, 0777)
-		return &debugStorage{path, &KVStorage{kv: &KVEmulator{dataDir}, path: kvPath}}, nil
+		return &debugStorage{path, &KVStorage{kv: &KVEmulator{dataDir}, path: kvPath}, true}, nil
 	}
 
 	configPath := os.Getenv("MINIO_NKV_CONFIG")
@@ -51,10 +51,10 @@ func newPosix(path string) (StorageAPI, error) {
 		return nil, err
 	}
 	p := &KVStorage{kv: kv, path: kvPath}
-	if strings.HasSuffix(path, "export-xl/disk1") {
-		return &debugStorage{path, p}, nil
+	if os.Getenv("MINIO_NKV_DEBUG") == "" {
+		return p, nil
 	}
-	return p, nil
+	return &debugStorage{path, p, true}, nil
 }
 
 func (k *KVStorage) DataKey(id string) string {
@@ -234,20 +234,28 @@ func (k *KVStorage) ListDir(volume, dirPath string, count int) ([]string, error)
 	bufp := kvValuePool.Get().(*[]byte)
 	defer kvValuePool.Put(bufp)
 
-	value, err := k.kv.Get(k.DataKey(entry.IDs[0]), *bufp)
-	if err != nil {
-		return nil, err
+	tries := 10
+	for {
+		value, err := k.kv.Get(k.DataKey(entry.IDs[0]), *bufp)
+		if err != nil {
+			return nil, err
+		}
+		xlMeta, err := xlMetaV1UnmarshalJSON(context.Background(), value)
+		if err != nil {
+			fmt.Println("##### xlMetaV1UnmarshalJSON failed on", k.DataKey(entry.IDs[0]), len(value), string(value))
+			tries--
+			if tries == 0 {
+				fmt.Println("##### xlMetaV1UnmarshalJSON failed on (10 retries)", k.DataKey(entry.IDs[0]), len(value), string(value))
+				os.Exit(1)
+			}
+			continue
+		}
+		listEntries := []string{"xl.json"}
+		for _, part := range xlMeta.Parts {
+			listEntries = append(listEntries, part.Name)
+		}
+		return listEntries, err
 	}
-	xlMeta, err := xlMetaV1UnmarshalJSON(context.Background(), value)
-	if err != nil {
-		fmt.Println("##### xlMetaV1UnmarshalJSON failed on", k.DataKey(entry.IDs[0]), len(value), string(value))
-		return nil, err
-	}
-	listEntries := []string{"xl.json"}
-	for _, part := range xlMeta.Parts {
-		listEntries = append(listEntries, part.Name)
-	}
-	return listEntries, err
 }
 
 func (k *KVStorage) ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {

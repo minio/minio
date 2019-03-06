@@ -211,7 +211,7 @@ func newPosix_(path string) (StorageAPI, error) {
 	}
 
 	// Success.
-	return &debugStorage{path, p}, nil
+	return &debugStorage{path, p, os.Getenv("MINIO_NKV_DEBUG") != ""}, nil
 }
 
 // getDiskInfo returns given disk information.
