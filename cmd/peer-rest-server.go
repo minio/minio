@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"path"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -37,9 +36,6 @@ import (
 
 // To abstract a node over network.
 type peerRESTServer struct {
-	// Used to detect reboot of servers so that peers revalidate format.json as
-	// different disk might be available on the same mount point after reboot.
-	instanceID string
 }
 
 func getServerInfo() (*ServerInfoData, error) {
@@ -473,7 +469,7 @@ func (s *peerRESTServer) PutBucketNotificationHandler(w http.ResponseWriter, r *
 	w.(http.Flusher).Flush()
 }
 
-type ListenBucketNotificationReq struct {
+type listenBucketNotificationReq struct {
 	EventNames []event.Name   `json:"eventNames"`
 	Pattern    string         `json:"pattern"`
 	TargetID   event.TargetID `json:"targetId"`
@@ -493,7 +489,7 @@ func (s *peerRESTServer) ListenBucketNotificationHandler(w http.ResponseWriter, 
 		return
 	}
 
-	var args ListenBucketNotificationReq
+	var args listenBucketNotificationReq
 	if r.ContentLength <= 0 {
 		s.writeErrorResponse(w, errInvalidArgument)
 		return
@@ -505,8 +501,8 @@ func (s *peerRESTServer) ListenBucketNotificationHandler(w http.ResponseWriter, 
 		return
 	}
 
-	restClient := newPeerRESTClient(&args.Addr)
-	if restClient == nil {
+	restClient, err := newPeerRESTClient(&args.Addr)
+	if err != nil {
 		s.writeErrorResponse(w, fmt.Errorf("unable to find PeerRESTClient for provided address %v. This happens only if remote and this minio run with different set of endpoints", args.Addr))
 		return
 	}
@@ -533,17 +529,16 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	vars := mux.Vars(r)
-	signal := vars[peerRESTSignal]
-	if signal == "" {
+	signalString := vars[peerRESTSignal]
+	if signalString == "" {
 		s.writeErrorResponse(w, errors.New("signal name is missing"))
 		return
 	}
-	sig := serviceSignalFromString(signal)
-
+	signal := serviceSignal(signalString)
 	defer w.(http.Flusher).Flush()
-	switch sig {
+	switch signal {
 	case serviceRestart, serviceStop:
-		globalServiceSignalCh <- sig
+		globalServiceSignalCh <- signal
 	default:
 		s.writeErrorResponse(w, errUnsupportedSignal)
 		return
@@ -561,23 +556,7 @@ func (s *peerRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
 		s.writeErrorResponse(w, err)
 		return false
 	}
-	instanceID := r.URL.Query().Get(peerRESTInstanceID)
-	if instanceID != s.instanceID {
-		// This will cause the peer to revalidate format.json using a new storage-rest-client instance.
-		s.writeErrorResponse(w, errConnectionStale)
-		return false
-	}
 	return true
-}
-
-// GetInstanceID - returns the instance ID of the server.
-func (s *peerRESTServer) GetInstanceIDHandler(w http.ResponseWriter, r *http.Request) {
-	if err := storageServerRequestValidate(r); err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-	w.Header().Set("Content-Length", strconv.Itoa(len(s.instanceID)))
-	w.Write([]byte(s.instanceID))
 }
 
 // registerPeerRESTHandlers - register peer rest router.
@@ -591,7 +570,6 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodDrivePerfInfo).HandlerFunc(httpTraceHdrs(server.DrivePerfInfoHandler))
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodDeleteBucket).HandlerFunc(httpTraceHdrs(server.DeleteBucketHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodSignalService).HandlerFunc(httpTraceHdrs(server.SignalServiceHandler)).Queries(restQueries(peerRESTSignal)...)
-	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodGetInstanceID).HandlerFunc(httpTraceAll(server.GetInstanceIDHandler))
 
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodBucketPolicyRemove).HandlerFunc(httpTraceAll(server.RemoveBucketPolicyHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodBucketPolicySet).HandlerFunc(httpTraceHdrs(server.SetBucketPolicyHandler)).Queries(restQueries(peerRESTBucket)...)
@@ -606,6 +584,8 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodSendEvent).HandlerFunc(httpTraceHdrs(server.SendEventHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodBucketNotificationPut).HandlerFunc(httpTraceHdrs(server.PutBucketNotificationHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodBucketNotificationListen).HandlerFunc(httpTraceHdrs(server.ListenBucketNotificationHandler)).Queries(restQueries(peerRESTBucket)...)
+
+	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodReloadFormat).HandlerFunc(httpTraceHdrs(server.ReloadFormatHandler)).Queries(restQueries(peerRESTDryRun)...)
 
 	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(notFoundHandler))
 }

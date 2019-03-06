@@ -26,7 +26,6 @@ const (
 	peerRESTMethodDrivePerfInfo            = "driveperfinfo"
 	peerRESTMethodDeleteBucket             = "deletebucket"
 	peerRESTMethodSignalService            = "signalservice"
-	peerRESTMethodGetInstanceID            = "instanceid"
 	peerRESTMethodGetLocks                 = "getlocks"
 	peerRESTMethodBucketPolicyRemove       = "removebucketpolicy"
 	peerRESTMethodLoadUsers                = "loadusers"
@@ -42,9 +41,8 @@ const (
 )
 
 const (
-	peerRESTBucket     = "bucket"
-	peerRESTSignal     = "signal"
-	peerRESTInstanceID = "instance-id"
-	peerRESTProfiler   = "profiler"
-	peerRESTDryRun     = "dry-run"
+	peerRESTBucket   = "bucket"
+	peerRESTSignal   = "signal"
+	peerRESTProfiler = "profiler"
+	peerRESTDryRun   = "dry-run"
 )

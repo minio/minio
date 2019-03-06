@@ -17,46 +17,19 @@
 package cmd
 
 import (
-	"context"
-	"errors"
 	"os"
 	"os/exec"
-
-	"github.com/minio/minio/cmd/logger"
 )
 
 // Type of service signals currently supported.
-type serviceSignal int
+type serviceSignal string
 
 const (
-	serviceStatus  = iota // Gets status about the service.
-	serviceRestart        // Restarts the service.
-	serviceStop           // Stops the server.
+	serviceStatus  serviceSignal = "serviceStatus"  // Gets status about the service.
+	serviceRestart               = "serviceRestart" // Restarts the service.
+	serviceStop                  = "serviceStop"    // Stops the server.
 	// Add new service requests here.
 )
-
-var serviceSignals = map[serviceSignal]string{
-	serviceStatus:  "serviceStatus",
-	serviceRestart: "serviceRestart",
-	serviceStop:    "serviceStop",
-}
-
-func (s serviceSignal) String() string {
-	name, ok := serviceSignals[s]
-	if !ok {
-		logger.CriticalIf(context.Background(), errors.New("Unsupported service signal"))
-	}
-	return name
-}
-
-func serviceSignalFromString(s string) (a serviceSignal) {
-	for sig, name := range serviceSignals {
-		if name == s {
-			return sig
-		}
-	}
-	return
-}
 
 // Global service signal channel.
 var globalServiceSignalCh chan serviceSignal

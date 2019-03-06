@@ -37,8 +37,40 @@ type peerRESTClient struct {
 	host       *xnet.Host
 	restClient *rest.Client
 	connected  bool
-	lastError  error
-	instanceID string // REST server's instanceID which is sent with every request for validation.
+}
+
+// Returns a peer rest client.
+func (client *peerRESTClient) reConnect() error {
+
+	scheme := "http"
+	if globalIsSSL {
+		scheme = "https"
+	}
+
+	serverURL := &url.URL{
+		Scheme: scheme,
+		Host:   client.host.String(),
+		Path:   peerRESTPath,
+	}
+
+	var tlsConfig *tls.Config
+	if globalIsSSL {
+		tlsConfig = &tls.Config{
+			ServerName: client.host.String(),
+			RootCAs:    globalRootCAs,
+		}
+	}
+
+	restClient, err := rest.NewClient(serverURL, tlsConfig, rest.DefaultRESTTimeout, newAuthToken)
+
+	if err != nil {
+		client.connected = false
+		return err
+	}
+
+	client.restClient = restClient
+	client.connected = true
+	return nil
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
@@ -46,40 +78,27 @@ type peerRESTClient struct {
 // after verifying format.json
 func (client *peerRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
 	if !client.connected {
-		return nil, errNodeConnection
+		err := client.reConnect()
+		logger.LogIf(context.Background(), err)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if values == nil {
 		values = make(url.Values)
 	}
-	values.Set(peerRESTInstanceID, client.instanceID)
 
 	respBody, err = client.restClient.Call(method, values, body, length)
 	if err == nil {
 		return respBody, nil
 	}
-	client.lastError = err
+
 	if isNetworkError(err) {
 		client.connected = false
 	}
 
 	return nil, err
-}
-
-// Gets peer server's instanceID - to be used with every REST call for validation.
-func (client *peerRESTClient) getInstanceID() (err error) {
-	respBody, err := client.restClient.Call(peerRESTMethodGetInstanceID, nil, nil, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	instanceIDBuf := make([]byte, 64)
-	n, err := io.ReadFull(respBody, instanceIDBuf)
-	if err != io.EOF && err != io.ErrUnexpectedEOF {
-		return err
-	}
-	client.instanceID = string(instanceIDBuf[:n])
-	return nil
 }
 
 // Stringer provides a canonicalized representation of node.
@@ -90,11 +109,6 @@ func (client *peerRESTClient) String() string {
 // IsOnline - returns whether RPC client failed to connect or not.
 func (client *peerRESTClient) IsOnline() bool {
 	return client.connected
-}
-
-// LastError - returns the network error if any.
-func (client *peerRESTClient) LastError() error {
-	return client.lastError
 }
 
 // Close - marks the client as closed.
@@ -206,7 +220,7 @@ func (client *peerRESTClient) ReloadFormat(dryRun bool) error {
 		values.Set(peerRESTDryRun, "false")
 	}
 
-	respBody, err := client.call(peerRESTMethodBucketPolicyRemove, values, nil, -1)
+	respBody, err := client.call(peerRESTMethodReloadFormat, values, nil, -1)
 	if err != nil {
 		return err
 	}
@@ -217,7 +231,7 @@ func (client *peerRESTClient) ReloadFormat(dryRun bool) error {
 // ListenBucketNotification - send listent bucket notification to peer nodes.
 func (client *peerRESTClient) ListenBucketNotification(bucket string, eventNames []event.Name,
 	pattern string, targetID event.TargetID, addr xnet.Host) error {
-	args := ListenBucketNotificationReq{
+	args := listenBucketNotificationReq{
 		EventNames: eventNames,
 		Pattern:    pattern,
 		TargetID:   targetID,
@@ -371,7 +385,7 @@ func (client *peerRESTClient) LoadCredentials() (err error) {
 // SignalService - sends signal to peer nodes.
 func (client *peerRESTClient) SignalService(sig serviceSignal) error {
 	values := make(url.Values)
-	values.Set(peerRESTSignal, sig.String())
+	values.Set(peerRESTSignal, string(sig))
 	respBody, err := client.call(peerRESTMethodSignalService, values, nil, -1)
 	if err != nil {
 		return err
@@ -391,8 +405,21 @@ func getRemoteHosts(endpoints EndpointList) []*xnet.Host {
 	return remoteHosts
 }
 
+func getRestClients(peerHosts []*xnet.Host) (map[*xnet.Host]*peerRESTClient, error) {
+	restClients := make(map[*xnet.Host]*peerRESTClient, len(peerHosts))
+	for _, host := range peerHosts {
+		client, err := newPeerRESTClient(host)
+		if err != nil {
+			logger.LogIf(context.Background(), err)
+		}
+		restClients[host] = client
+	}
+
+	return restClients, nil
+}
+
 // Returns a peer rest client.
-func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
+func newPeerRESTClient(peer *xnet.Host) (*peerRESTClient, error) {
 
 	scheme := "http"
 	if globalIsSSL {
@@ -413,6 +440,11 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 		}
 	}
 
-	restClient := rest.NewClient(serverURL, tlsConfig, rest.DefaultRESTTimeout, newAuthToken)
-	return &peerRESTClient{host: peer, restClient: restClient, connected: true}
+	restClient, err := rest.NewClient(serverURL, tlsConfig, rest.DefaultRESTTimeout, newAuthToken)
+
+	if err != nil {
+		return &peerRESTClient{host: peer, restClient: restClient, connected: false}, err
+	}
+
+	return &peerRESTClient{host: peer, restClient: restClient, connected: true}, nil
 }
