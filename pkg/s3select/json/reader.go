@@ -23,7 +23,6 @@ import (
 	"github.com/minio/minio/pkg/s3select/sql"
 
 	"github.com/bcicen/jstream"
-	"github.com/tidwall/sjson"
 )
 
 // Reader - JSON record reader for S3Select.
@@ -50,17 +49,18 @@ func (r *Reader) Read() (sql.Record, error) {
 	if v.ValueType == jstream.Object {
 		data, err = json.Marshal(v.Value)
 	} else {
-		// To be AWS S3 compatible
-		// Select for JSON needs to output non-object JSON as single column value
-		// i.e. a map with `_1` as key and value as the non-object.
-		data, err = sjson.SetBytes(data, "_1", v.Value)
+		// To be AWS S3 compatible Select for JSON needs to
+		// output non-object JSON as single column value
+		// i.e. a map with `_1` as key and value as the
+		// non-object.
+		data, err = json.Marshal(jstream.KVS{jstream.KV{Key: "_1", Value: v.Value}})
 	}
 	if err != nil {
 		return nil, errJSONParsingError(err)
 	}
 
 	return &Record{
-		data: data,
+		Data: data,
 	}, nil
 }
 
