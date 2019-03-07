@@ -211,15 +211,25 @@ func (k *KVStorage) getKVNSEntry(nskey string) (entry KVNSEntry, err error) {
 			return entry, err
 		}
 		err = KVNSEntryUnmarshal(value, &entry)
-		if err == nil {
-			return entry, nil
+		if err != nil {
+			fmt.Println("##### Unmarshal failed on ", nskey, len(value), string(value))
+			tries--
+			if tries == 0 {
+				fmt.Println("##### Unmarshal failed (after 10 retries on GET) on ", k.path, nskey)
+				os.Exit(0)
+			}
+			continue
 		}
-		fmt.Println("##### Unmarshal failed on ", nskey, len(value), string(value))
-		tries--
-		if tries == 0 {
-			fmt.Println("##### Unmarshal failed (after 10 retries on GET) on ", k.path, nskey)
-			os.Exit(0)
+		if entry.Key != nskey {
+			fmt.Printf("##### key mismatch, requested: %s, got: %s\n", nskey, entry.Key)
+			tries--
+			if tries == 0 {
+				fmt.Printf("##### key mismatch after 10 retries, requested: %s, got: %s\n", nskey, entry.Key)
+				os.Exit(0)
+			}
+			continue
 		}
+		return entry, nil
 	}
 }
 
@@ -277,7 +287,7 @@ func (k *KVStorage) CreateFile(volume, filePath string, size int64, reader io.Re
 		return err
 	}
 	nskey := pathJoin(volume, filePath)
-	entry := KVNSEntry{Size: size, ModTime: time.Now()}
+	entry := KVNSEntry{Key: nskey, Size: size, ModTime: time.Now()}
 	bufp := kvValuePool.Get().(*[]byte)
 	defer kvValuePool.Put(bufp)
 
@@ -327,7 +337,9 @@ func (k *KVStorage) ReadFileStream(volume, filePath string, offset, length int64
 	}
 
 	if length != entry.Size {
-		return nil, errUnexpected
+		fmt.Println("length != entry.Size", length, entry.Size, nskey, entry.Key)
+		fmt.Println(entry)
+		return nil, fmt.Errorf("ReadFileStream: %d != %d", length, entry.Size)
 	}
 	if offset != 0 {
 		return nil, errUnexpected
@@ -363,12 +375,30 @@ func (k *KVStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) er
 		return err
 	}
 	rename := func(src, dst string) error {
-		bufp := kvValuePool.Get().(*[]byte)
-		defer kvValuePool.Put(bufp)
-		value, err := k.kv.Get(src, *bufp)
+		if src == ".minio.sys/format.json.tmp" && dst == ".minio.sys/format.json" {
+			bufp := kvValuePool.Get().(*[]byte)
+			defer kvValuePool.Put(bufp)
+			value, err := k.kv.Get(src, *bufp)
+			if err != nil {
+				return err
+			}
+			err = k.kv.Put(dst, value)
+			if err != nil {
+				return err
+			}
+			err = k.kv.Delete(src)
+			return err
+		}
+		entry, err := k.getKVNSEntry(src)
 		if err != nil {
 			return err
 		}
+		entry.Key = dst
+		value, err := KVNSEntryMarshal(entry)
+		if err != nil {
+			return err
+		}
+
 		err = k.kv.Put(dst, value)
 		if err != nil {
 			return err

@@ -125,7 +125,9 @@ func minio_nkv_open(configPath string) error {
 	if globalNKVHandle != 0 {
 		return nil
 	}
-	status := C.minio_nkv_open(C.CString(configPath), &globalNKVHandle)
+	cs := C.CString(configPath)
+	status := C.minio_nkv_open(cs, &globalNKVHandle)
+	C.free(unsafe.Pointer(cs))
 	if status != 0 {
 		return errDiskNotFound
 	}
@@ -136,7 +138,9 @@ func newKVSync(path string) (*KVSync, error) {
 	kv := &KVSync{}
 	kv.path = path
 	kv.handle.nkv_handle = globalNKVHandle
+	cs := C.CString(path)
 	status := C.minio_nkv_open_path(&kv.handle, C.CString(path))
+	C.free(unsafe.Pointer(cs))
 	if status != 0 {
 		fmt.Println("unable to open", path, status)
 		return nil, errors.New("unable to open device")

@@ -19,6 +19,7 @@ type KVInterface interface {
 const kvNSEntryPaddingMultiple = 4 * 1024
 
 type KVNSEntry struct {
+	Key     string
 	Size    int64
 	ModTime time.Time
 	IDs     []string
