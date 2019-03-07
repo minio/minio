@@ -145,84 +145,6 @@
 			"revisionTime": "2018-01-21T19:28:21Z"
 		},
 		{
-			"checksumSHA1": "SVDbxtq6zlRJ/mB0EAau/f9r4Hc=",
-			"path": "github.com/coreos/etcd/auth/authpb",
-			"revision": "e4425ee79f2ff09d482c7e3ead6d11a6df1c9dd8",
-			"revisionTime": "2018-07-03T21:59:44Z"
-		},
-		{
-			"checksumSHA1": "yegNjeK23Hx7rjd/yq8YNKd5Vp0=",
-			"path": "github.com/coreos/etcd/clientv3",
-			"revision": "308f59058cf796c10d5754b5d410cb98d06e9126",
-			"revisionTime": "2018-07-02T18:07:35Z"
-		},
-		{
-			"checksumSHA1": "v4rXUHmDdOh/2xBwa8pIKH88yEI=",
-			"path": "github.com/coreos/etcd/clientv3/balancer",
-			"revision": "e4425ee79f2ff09d482c7e3ead6d11a6df1c9dd8",
-			"revisionTime": "2018-07-03T21:59:44Z"
-		},
-		{
-			"checksumSHA1": "7iXkpN5Ys54RxtN6moMGxi4ZdqE=",
-			"path": "github.com/coreos/etcd/clientv3/balancer/picker",
-			"revision": "e4425ee79f2ff09d482c7e3ead6d11a6df1c9dd8",
-			"revisionTime": "2018-07-03T21:59:44Z"
-		},
-		{
-			"checksumSHA1": "5G0Y6eyKdMXYv7iPuK+RlIjFpPc=",
-			"path": "github.com/coreos/etcd/clientv3/balancer/resolver/endpoint",
-			"revision": "e4425ee79f2ff09d482c7e3ead6d11a6df1c9dd8",
-			"revisionTime": "2018-07-03T21:59:44Z"
-		},
-		{
-			"checksumSHA1": "zC/2cfJsmVGUiaH6TfY+1P76Z5c=",
-			"path": "github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes",
-			"revision": "e4425ee79f2ff09d482c7e3ead6d11a6df1c9dd8",
-			"revisionTime": "2018-07-03T21:59:44Z"
-		},
-		{
-			"checksumSHA1": "JqRP34sop+fVIA0auqX7Sny8qBk=",
-			"path": "github.com/coreos/etcd/etcdserver/etcdserverpb",
-			"revision": "e4425ee79f2ff09d482c7e3ead6d11a6df1c9dd8",
-			"revisionTime": "2018-07-03T21:59:44Z"
-		},
-		{
-			"checksumSHA1": "Rh1RI/Mer0wYfvgqVyDUgrXlxyc=",
-			"path": "github.com/coreos/etcd/mvcc/mvccpb",
-			"revision": "e4425ee79f2ff09d482c7e3ead6d11a6df1c9dd8",
-			"revisionTime": "2018-07-03T21:59:44Z"
-		},
-		{
-			"checksumSHA1": "tkawrQIzwOwUl2VcaY4qYFn7zT8=",
-			"path": "github.com/coreos/etcd/pkg/logutil",
-			"revision": "e4425ee79f2ff09d482c7e3ead6d11a6df1c9dd8",
-			"revisionTime": "2018-07-03T21:59:44Z"
-		},
-		{
-			"checksumSHA1": "Hspf+u/wsBRUBNaXHgVUYBWeq10=",
-			"path": "github.com/coreos/etcd/pkg/systemd",
-			"revision": "e4425ee79f2ff09d482c7e3ead6d11a6df1c9dd8",
-			"revisionTime": "2018-07-03T21:59:44Z"
-		},
-		{
-			"checksumSHA1": "KU44RoTf7eoYTiIJcPuP70wFNrk=",
-			"path": "github.com/coreos/etcd/pkg/types",
-			"revision": "e4425ee79f2ff09d482c7e3ead6d11a6df1c9dd8",
-			"revisionTime": "2018-07-03T21:59:44Z"
-		},
-		{
-			"checksumSHA1": "5r1DsuosQ/Pr8vm/r2jO0L5Nkvs=",
-			"path": "github.com/coreos/etcd/raft",
-			"revision": "e4425ee79f2ff09d482c7e3ead6d11a6df1c9dd8",
-			"revisionTime": "2018-07-03T21:59:44Z"
-		},
-		{
-			"checksumSHA1": "cwEnAGl7uzwDepjDZcIocMVEVEE=",
-			"path": "github.com/coreos/etcd/raft/raftpb",
-			"revision": "e4425ee79f2ff09d482c7e3ead6d11a6df1c9dd8",
-			"revisionTime": "2018-07-03T21:59:44Z"
-		},
-		{
 			"checksumSHA1": "Ta/D4CzjyN2/EkKIBwcRvPPp6ic=",
 			"path": "github.com/coreos/go-systemd/journal",
 			"revision": "a4887aeaa186e68961d2d6af7d5fbac6bd6fa79b",
@@ -907,6 +829,84 @@
 			"path": "github.com/valyala/tcplisten",
 			"revision": "ceec8f93295a060cdb565ec25e4ccf17941dbd55",
 			"revisionTime": "2016-11-14T21:01:44Z"
+		},
+		{
+			"checksumSHA1": "8nCoO1ACxWgrtwUl84Se7YIWVMA=",
+			"path": "go.etcd.io/etcd/auth/authpb",
+			"revision": "6143c135bd92a8c9d46122efd0b65762c2f14c8b",
+			"revisionTime": "2018-09-03T20:48:01Z"
+		},
+		{
+			"checksumSHA1": "3BBi35WxlEdasyjZpHC5sKVg5sM=",
+			"path": "go.etcd.io/etcd/clientv3",
+			"revision": "6143c135bd92a8c9d46122efd0b65762c2f14c8b",
+			"revisionTime": "2018-09-03T20:48:01Z"
+		},
+		{
+			"checksumSHA1": "EXaUZbFolMaWfGUJUKXymQo63Fc=",
+			"path": "go.etcd.io/etcd/clientv3/balancer",
+			"revision": "6143c135bd92a8c9d46122efd0b65762c2f14c8b",
+			"revisionTime": "2018-09-03T20:48:01Z"
+		},
+		{
+			"checksumSHA1": "g6eRx00F7Xl/0v8OCxgiC57ARs0=",
+			"path": "go.etcd.io/etcd/clientv3/balancer/picker",
+			"revision": "6143c135bd92a8c9d46122efd0b65762c2f14c8b",
+			"revisionTime": "2018-09-03T20:48:01Z"
+		},
+		{
+			"checksumSHA1": "zsQzOE0KolNLwLKQfahcy3WZwjk=",
+			"path": "go.etcd.io/etcd/clientv3/balancer/resolver/endpoint",
+			"revision": "6143c135bd92a8c9d46122efd0b65762c2f14c8b",
+			"revisionTime": "2018-09-03T20:48:01Z"
+		},
+		{
+			"checksumSHA1": "yOSKjGRc0lR9rNHdnTrgGnJZz60=",
+			"path": "go.etcd.io/etcd/etcdserver/api/v3rpc/rpctypes",
+			"revision": "6143c135bd92a8c9d46122efd0b65762c2f14c8b",
+			"revisionTime": "2018-09-03T20:48:01Z"
+		},
+		{
+			"checksumSHA1": "Jk0gGFdOHgsqxhoj9atENsLkwD0=",
+			"path": "go.etcd.io/etcd/etcdserver/etcdserverpb",
+			"revision": "6143c135bd92a8c9d46122efd0b65762c2f14c8b",
+			"revisionTime": "2018-09-03T20:48:01Z"
+		},
+		{
+			"checksumSHA1": "C/ndQTz6TCtOsL29UYTxuax9/rw=",
+			"path": "go.etcd.io/etcd/mvcc/mvccpb",
+			"revision": "6143c135bd92a8c9d46122efd0b65762c2f14c8b",
+			"revisionTime": "2018-09-03T20:48:01Z"
+		},
+		{
+			"checksumSHA1": "38iFzK4Eq3kQ3t2xlTRQvypOeRI=",
+			"path": "go.etcd.io/etcd/pkg/logutil",
+			"revision": "6143c135bd92a8c9d46122efd0b65762c2f14c8b",
+			"revisionTime": "2018-09-03T20:48:01Z"
+		},
+		{
+			"checksumSHA1": "Xf7TwBAdBTSSeTlEzqFH1Deglbk=",
+			"path": "go.etcd.io/etcd/pkg/systemd",
+			"revision": "6143c135bd92a8c9d46122efd0b65762c2f14c8b",
+			"revisionTime": "2018-09-03T20:48:01Z"
+		},
+		{
+			"checksumSHA1": "VL9HsNKbbCb1Ntj9VcFCfiTmjmM=",
+			"path": "go.etcd.io/etcd/pkg/types",
+			"revision": "6143c135bd92a8c9d46122efd0b65762c2f14c8b",
+			"revisionTime": "2018-09-03T20:48:01Z"
+		},
+		{
+			"checksumSHA1": "CBe2a9xZgckToO9fmnw23GbM+cw=",
+			"path": "go.etcd.io/etcd/raft",
+			"revision": "6143c135bd92a8c9d46122efd0b65762c2f14c8b",
+			"revisionTime": "2018-09-03T20:48:01Z"
+		},
+		{
+			"checksumSHA1": "0ZI+YcuXXszApIhI+HcsmIcSVgg=",
+			"path": "go.etcd.io/etcd/raft/raftpb",
+			"revision": "6143c135bd92a8c9d46122efd0b65762c2f14c8b",
+			"revisionTime": "2018-09-03T20:48:01Z"
 		},
 		{
 			"checksumSHA1": "aggkkQOGetHku/ZafO6GKmI2eBk=",
