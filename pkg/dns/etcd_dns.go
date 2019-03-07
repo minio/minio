@@ -29,7 +29,7 @@ import (
 	"github.com/minio/minio-go/pkg/set"
 
 	"github.com/coredns/coredns/plugin/etcd/msg"
-	etcd "github.com/coreos/etcd/clientv3"
+	etcd "go.etcd.io/etcd/clientv3"
 )
 
 // ErrNoEntriesFound - Indicates no entries were found for the given key (directory)
