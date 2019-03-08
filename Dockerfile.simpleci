@@ -31,6 +31,7 @@ RUN chown -R ci:ci /home/ci
 
 USER ci
 
+
 RUN for d in $(go list ./... | grep -v browser); do go test -v -race --timeout 15m "$d"; done
 RUN make verifiers
 RUN make crosscompile
