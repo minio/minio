@@ -45,7 +45,7 @@ static int minio_nkv_open_path(struct minio_nkv_handle *handle, char *ipaddr) {
     io_ctx[io_ctx_cnt].container_hash = cntlist[i].container_hash;
 
     for (int p = 0; p < cntlist[i].num_container_transport; p++) {
-      printf("Transport information :: hash = %u, id = %d, address = %s, port = %d, family = %d, speed = %d, status = %d, numa_node = %d\n",
+      printf("Transport information :: hash = %lu, id = %d, address = %s, port = %d, family = %d, speed = %d, status = %d, numa_node = %d\n",
               cntlist[i].transport_list[p].network_path_hash, cntlist[i].transport_list[p].network_path_id, cntlist[i].transport_list[p].ip_addr,
               cntlist[i].transport_list[p].port, cntlist[i].transport_list[p].addr_family, cntlist[i].transport_list[p].speed,
               cntlist[i].transport_list[p].status, cntlist[i].transport_list[p].numa_node);
@@ -108,6 +108,99 @@ static int minio_nkv_delete(struct minio_nkv_handle *handle, void *key, int keyL
   return result;
 }
 
+typedef struct minio_nkv_private_ {
+  void *pfn;
+  uint64_t channel;
+  nkv_io_context ctx;
+  nkv_key  nkvkey;
+  nkv_value nkvvalue;
+  nkv_store_option store_option;
+  nkv_retrieve_option retrieve_option;
+} minio_nkv_private;
+
+extern void minio_nkv_callback(void *, int);
+
+static void nkv_aio_complete (nkv_aio_construct* op_data, int32_t num_op) {
+  printf("nkv_aio_complete called\n");
+  minio_nkv_private* pvt = (minio_nkv_private*) op_data->private_data;
+  if (!op_data) {
+    printf("NKV Async IO returned NULL op_Data, ignoring..");
+  }
+  printf("ACTUALLENGTH %ld\n", pvt->nkvvalue.actual_length);
+  minio_nkv_callback((void*)pvt->channel, op_data->result);
+  free(pvt->pfn);
+}
+
+static int minio_nkv_put_async(struct minio_nkv_handle *handle, struct minio_nkv_private_ *pvt, uint64_t channel, void *key, int keyLen, void *value, int valueLen) {
+  nkv_postprocess_function* pfn = (nkv_postprocess_function*) malloc (sizeof(nkv_postprocess_function));
+  pfn->nkv_aio_cb = nkv_aio_complete;
+  pfn->private_data = (void*)pvt;
+  pvt->pfn = pfn;
+
+  pvt->channel = channel;
+
+  pvt->ctx.is_pass_through = 1;
+  pvt->ctx.container_hash = handle->container_hash;
+  pvt->ctx.network_path_hash = handle->network_path_hash;
+  pvt->ctx.ks_id = 0;
+
+  const nkv_key  nkvkey = {key, keyLen};
+  pvt->nkvkey = nkvkey;
+  nkv_value nkvvalue = {value, valueLen, 0};
+  pvt->nkvvalue = nkvvalue;
+  nkv_store_option option = {0};
+  pvt->store_option = option;
+
+  nkv_result result = nkv_store_kvp_async(handle->nkv_handle, &pvt->ctx, &pvt->nkvkey, &pvt->store_option, &pvt->nkvvalue, pfn);
+  return result;
+}
+
+static int minio_nkv_get_async(struct minio_nkv_handle *handle, struct minio_nkv_private_ *pvt, uint64_t channel, void *key, int keyLen, void *value, int valueLen) {
+  nkv_postprocess_function* pfn = (nkv_postprocess_function*) malloc (sizeof(nkv_postprocess_function));
+
+  pfn->nkv_aio_cb = nkv_aio_complete;
+  pfn->private_data = (void*)pvt;
+  pvt->pfn = pfn;
+
+  pvt->channel = channel;
+
+  pvt->ctx.is_pass_through = 1;
+  pvt->ctx.container_hash = handle->container_hash;
+  pvt->ctx.network_path_hash = handle->network_path_hash;
+  pvt->ctx.ks_id = 0;
+
+  const nkv_key  nkvkey = {key, keyLen};
+  pvt->nkvkey = nkvkey;
+  nkv_value nkvvalue = {value, valueLen, 0};
+  pvt->nkvvalue = nkvvalue;
+  nkv_retrieve_option option = {0};
+  pvt->retrieve_option = option;
+
+  nkv_result result = nkv_retrieve_kvp_async(handle->nkv_handle, &pvt->ctx, &pvt->nkvkey, &pvt->retrieve_option, &pvt->nkvvalue, pfn);
+  return result;
+}
+
+static int minio_nkv_delete_async(struct minio_nkv_handle *handle, struct minio_nkv_private_ *pvt, uint64_t channel, void *key, int keyLen) {
+  nkv_postprocess_function* pfn = (nkv_postprocess_function*) malloc (sizeof(nkv_postprocess_function));
+
+  pfn->nkv_aio_cb = nkv_aio_complete;
+  pfn->private_data = (void*)pvt;
+  pvt->pfn = pfn;
+
+  pvt->channel = channel;
+
+  pvt->ctx.is_pass_through = 1;
+  pvt->ctx.container_hash = handle->container_hash;
+  pvt->ctx.network_path_hash = handle->network_path_hash;
+  pvt->ctx.ks_id = 0;
+
+  const nkv_key  nkvkey = {key, keyLen};
+  pvt->nkvkey = nkvkey;
+
+  nkv_result result = nkv_delete_kvp_async(handle->nkv_handle, &pvt->ctx, &pvt->nkvkey, pfn);
+  return result;
+}
+
 */
 import "C"
 
@@ -118,6 +211,12 @@ import (
 	"sync"
 	"unsafe"
 )
+
+//export minio_nkv_callback
+func minio_nkv_callback(chanPtr unsafe.Pointer, result C.int) {
+	c := *(*chan int)(chanPtr)
+	c <- int(result)
+}
 
 var globalNKVHandle C.uint64_t
 
@@ -225,6 +324,112 @@ func (k *KVSync) Delete(keyStr string) error {
 	}
 	status := C.minio_nkv_delete(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)))
 	if status != 0 {
+		return errFileNotFound
+	}
+	return nil
+}
+
+func newKVASync(path string) (*KVASync, error) {
+	kv := &KVASync{}
+	kv.path = path
+	kv.handle.nkv_handle = globalNKVHandle
+	cs := C.CString(path)
+	status := C.minio_nkv_open_path(&kv.handle, C.CString(path))
+	C.free(unsafe.Pointer(cs))
+	if status != 0 {
+		fmt.Println("unable to open", path, status)
+		return nil, errors.New("unable to open device")
+	}
+	return kv, nil
+}
+
+type KVASync struct {
+	handle C.struct_minio_nkv_handle
+	path   string
+}
+
+func (k *KVASync) Put(keyStr string, value []byte) error {
+	if len(value) > kvMaxValueSize {
+		return errValueTooLong
+	}
+	key := []byte(keyStr)
+	for len(key) < kvKeyLength {
+		key = append(key, '\x00')
+	}
+	if len(key) > kvKeyLength {
+		fmt.Println("invalid key length", key, len(key))
+		os.Exit(0)
+	}
+	var valuePtr unsafe.Pointer
+	if len(value) > 0 {
+		valuePtr = unsafe.Pointer(&value[0])
+	}
+	pvt := C.struct_minio_nkv_private_{}
+	c := make(chan int)
+	status := C.minio_nkv_put_async(&k.handle, &pvt, C.ulong(uintptr(unsafe.Pointer(&c))), unsafe.Pointer(&key[0]), C.int(len(key)), valuePtr, C.int(len(value)))
+	if status != 0 {
+		return errors.New("error during put")
+	}
+	asyncstatus := <-c
+	if asyncstatus != 0 {
+		return errors.New("error during put in the callback")
+	}
+	return nil
+}
+
+func (k *KVASync) Get(keyStr string, value []byte) ([]byte, error) {
+	key := []byte(keyStr)
+	for len(key) < kvKeyLength {
+		key = append(key, '\x00')
+	}
+	if len(key) > kvKeyLength {
+		fmt.Println("invalid key length", key, len(key))
+		os.Exit(0)
+	}
+	var actualLength int
+
+	tries := 10
+	for {
+		c := make(chan int)
+		pvt := C.struct_minio_nkv_private_{}
+		status := C.minio_nkv_get_async(&k.handle, &pvt, C.ulong(uintptr(unsafe.Pointer(&c))), unsafe.Pointer(&key[0]), C.int(len(key)), unsafe.Pointer(&value[0]), C.int(len(value)), &actualLength)
+		if status != 0 {
+			return nil, errFileNotFound
+		}
+		asyncstatus := <-c
+		if asyncstatus != 0 {
+			return nil, errFileNotFound
+		}
+		actualLength = int(pvt.nkvvalue.actual_length)
+		if actualLength > 0 {
+			break
+		}
+		tries--
+		if tries == 0 {
+			fmt.Println("GET failed (after 10 retries) on (actual_length=0)", k.path, keyStr)
+			os.Exit(1)
+		}
+	}
+	return value[:actualLength], nil
+}
+
+func (k *KVASync) Delete(keyStr string) error {
+	key := []byte(keyStr)
+	for len(key) < kvKeyLength {
+		key = append(key, '\x00')
+	}
+	if len(key) > kvKeyLength {
+		fmt.Println("invalid key length", key, len(key))
+		os.Exit(0)
+	}
+	pvt := C.struct_minio_nkv_private_{}
+	c := make(chan int)
+	status := C.minio_nkv_delete_async(&k.handle, &pvt, C.ulong(uintptr(unsafe.Pointer(&c))), unsafe.Pointer(&key[0]), C.int(len(key)))
+	if status != 0 {
+		return errFileNotFound
+	}
+	asyncstatus := <-c
+	if asyncstatus != 0 {
 		return errFileNotFound
 	}
 	return nil

@@ -46,7 +46,7 @@ func newPosix(path string) (StorageAPI, error) {
 	if err := minio_nkv_open(configPath); err != nil {
 		return nil, err
 	}
-	kv, err := newKVSync(path)
+	kv, err := newKVASync(path)
 	if err != nil {
 		return nil, err
 	}
