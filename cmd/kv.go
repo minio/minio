@@ -111,6 +111,7 @@ static int minio_nkv_delete(struct minio_nkv_handle *handle, void *key, int keyL
 typedef struct minio_nkv_private_ {
   void *pfn;
   uint64_t channel;
+  int actual_length;
   nkv_io_context ctx;
   nkv_key  nkvkey;
   nkv_value nkvvalue;
@@ -121,12 +122,13 @@ typedef struct minio_nkv_private_ {
 extern void minio_nkv_callback(void *, int);
 
 static void nkv_aio_complete (nkv_aio_construct* op_data, int32_t num_op) {
-  printf("nkv_aio_complete called\n");
   minio_nkv_private* pvt = (minio_nkv_private*) op_data->private_data;
   if (!op_data) {
     printf("NKV Async IO returned NULL op_Data, ignoring..");
   }
-  printf("ACTUALLENGTH %ld\n", pvt->nkvvalue.actual_length);
+  if (op_data->result == 0 && op_data->opcode == 0) {
+    pvt->actual_length = op_data->value.actual_length;
+  }
   minio_nkv_callback((void*)pvt->channel, op_data->result);
   free(pvt->pfn);
 }
@@ -208,15 +210,33 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
+	"time"
 	"unsafe"
 )
 
 //export minio_nkv_callback
 func minio_nkv_callback(chanPtr unsafe.Pointer, result C.int) {
 	c := *(*chan int)(chanPtr)
-	c <- int(result)
+	select {
+	case c <- int(result):
+	default:
+	}
 }
+
+var kvTimeout time.Duration = func() time.Duration {
+	timeoutStr := os.Getenv("MINIO_NKV_TIMEOUT")
+	if timeoutStr == "" {
+		return time.Duration(10) * time.Second
+	}
+	i, err := strconv.Atoi(timeoutStr)
+	if err != nil {
+		fmt.Println("MINIO_NKV_TIMEOUT is incorrect", timeoutStr, err)
+		os.Exit(1)
+	}
+	return time.Duration(i) * time.Second
+}()
 
 var globalNKVHandle C.uint64_t
 
@@ -233,9 +253,10 @@ func minio_nkv_open(configPath string) error {
 	return nil
 }
 
-func newKVSync(path string) (*KVSync, error) {
-	kv := &KVSync{}
+func newKV(path string, sync bool) (*KV, error) {
+	kv := &KV{}
 	kv.path = path
+	kv.sync = sync
 	kv.handle.nkv_handle = globalNKVHandle
 	cs := C.CString(path)
 	status := C.minio_nkv_open_path(&kv.handle, C.CString(path))
@@ -247,9 +268,10 @@ func newKVSync(path string) (*KVSync, error) {
 	return kv, nil
 }
 
-type KVSync struct {
+type KV struct {
 	handle C.struct_minio_nkv_handle
 	path   string
+	sync   bool
 }
 
 var kvValuePool = sync.Pool{
@@ -261,7 +283,7 @@ var kvValuePool = sync.Pool{
 
 const kvKeyLength = 200
 
-func (k *KVSync) Put(keyStr string, value []byte) error {
+func (k *KV) Put(keyStr string, value []byte) error {
 	if len(value) > kvMaxValueSize {
 		return errValueTooLong
 	}
@@ -277,14 +299,32 @@ func (k *KVSync) Put(keyStr string, value []byte) error {
 	if len(value) > 0 {
 		valuePtr = unsafe.Pointer(&value[0])
 	}
-	status := C.minio_nkv_put(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)), valuePtr, C.int(len(value)))
+	var status int
+	if k.sync {
+		cstatus := C.minio_nkv_put(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)), valuePtr, C.int(len(value)))
+		status = int(cstatus)
+	} else {
+		pvt := C.struct_minio_nkv_private_{}
+		c := make(chan int)
+		cstatus := C.minio_nkv_put_async(&k.handle, &pvt, C.ulong(uintptr(unsafe.Pointer(&c))), unsafe.Pointer(&key[0]), C.int(len(key)), valuePtr, C.int(len(value)))
+		if cstatus != 0 {
+			return errors.New("error during put")
+		}
+		status = 1
+		select {
+		case <-time.After(kvTimeout):
+			fmt.Println("Put timeout", k.path, keyStr)
+			return errDiskNotFound
+		case status = <-c:
+		}
+	}
 	if status != 0 {
 		return errors.New("error during put")
 	}
 	return nil
 }
 
-func (k *KVSync) Get(keyStr string, value []byte) ([]byte, error) {
+func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 	key := []byte(keyStr)
 	for len(key) < kvKeyLength {
 		key = append(key, '\x00')
@@ -297,7 +337,29 @@ func (k *KVSync) Get(keyStr string, value []byte) ([]byte, error) {
 
 	tries := 10
 	for {
-		status := C.minio_nkv_get(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)), unsafe.Pointer(&value[0]), C.int(len(value)), &actualLength)
+		status := 1
+		if k.sync {
+			cstatus := C.minio_nkv_get(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)), unsafe.Pointer(&value[0]), C.int(len(value)), &actualLength)
+			status = int(cstatus)
+		} else {
+			c := make(chan int)
+			pvt := C.struct_minio_nkv_private_{}
+			cstatus := C.minio_nkv_get_async(&k.handle, &pvt, C.ulong(uintptr(unsafe.Pointer(&c))), unsafe.Pointer(&key[0]), C.int(len(key)), unsafe.Pointer(&value[0]), C.int(len(value)))
+			if cstatus != 0 {
+				return nil, errFileNotFound
+			}
+			select {
+			case <-time.After(kvTimeout):
+				fmt.Println("Get timeout", k.path, keyStr)
+				os.Exit(1)
+				return nil, errDiskNotFound
+			case status = <-c:
+			}
+
+			if status == 0 {
+				actualLength = pvt.actual_length
+			}
+		}
 		if status != 0 {
 			return nil, errFileNotFound
 		}
@@ -313,7 +375,7 @@ func (k *KVSync) Get(keyStr string, value []byte) ([]byte, error) {
 	return value[:actualLength], nil
 }
 
-func (k *KVSync) Delete(keyStr string) error {
+func (k *KV) Delete(keyStr string) error {
 	key := []byte(keyStr)
 	for len(key) < kvKeyLength {
 		key = append(key, '\x00')
@@ -322,114 +384,27 @@ func (k *KVSync) Delete(keyStr string) error {
 		fmt.Println("invalid key length", key, len(key))
 		os.Exit(0)
 	}
-	status := C.minio_nkv_delete(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)))
-	if status != 0 {
-		return errFileNotFound
-	}
-	return nil
-}
-
-func newKVASync(path string) (*KVASync, error) {
-	kv := &KVASync{}
-	kv.path = path
-	kv.handle.nkv_handle = globalNKVHandle
-	cs := C.CString(path)
-	status := C.minio_nkv_open_path(&kv.handle, C.CString(path))
-	C.free(unsafe.Pointer(cs))
-	if status != 0 {
-		fmt.Println("unable to open", path, status)
-		return nil, errors.New("unable to open device")
-	}
-	return kv, nil
-}
-
-type KVASync struct {
-	handle C.struct_minio_nkv_handle
-	path   string
-}
-
-func (k *KVASync) Put(keyStr string, value []byte) error {
-	if len(value) > kvMaxValueSize {
-		return errValueTooLong
-	}
-	key := []byte(keyStr)
-	for len(key) < kvKeyLength {
-		key = append(key, '\x00')
-	}
-	if len(key) > kvKeyLength {
-		fmt.Println("invalid key length", key, len(key))
-		os.Exit(0)
-	}
-	var valuePtr unsafe.Pointer
-	if len(value) > 0 {
-		valuePtr = unsafe.Pointer(&value[0])
-	}
-	pvt := C.struct_minio_nkv_private_{}
-	c := make(chan int)
-	status := C.minio_nkv_put_async(&k.handle, &pvt, C.ulong(uintptr(unsafe.Pointer(&c))), unsafe.Pointer(&key[0]), C.int(len(key)), valuePtr, C.int(len(value)))
-	if status != 0 {
-		return errors.New("error during put")
-	}
-	asyncstatus := <-c
-	if asyncstatus != 0 {
-		return errors.New("error during put in the callback")
-	}
-	return nil
-}
-
-func (k *KVASync) Get(keyStr string, value []byte) ([]byte, error) {
-	key := []byte(keyStr)
-	for len(key) < kvKeyLength {
-		key = append(key, '\x00')
-	}
-	if len(key) > kvKeyLength {
-		fmt.Println("invalid key length", key, len(key))
-		os.Exit(0)
-	}
-	var actualLength int
-
-	tries := 10
-	for {
-		c := make(chan int)
+	var status int
+	if k.sync {
+		cstatus := C.minio_nkv_delete(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)))
+		status = int(cstatus)
+	} else {
 		pvt := C.struct_minio_nkv_private_{}
-		status := C.minio_nkv_get_async(&k.handle, &pvt, C.ulong(uintptr(unsafe.Pointer(&c))), unsafe.Pointer(&key[0]), C.int(len(key)), unsafe.Pointer(&value[0]), C.int(len(value)), &actualLength)
-		if status != 0 {
-			return nil, errFileNotFound
+		c := make(chan int)
+		cstatus := C.minio_nkv_delete_async(&k.handle, &pvt, C.ulong(uintptr(unsafe.Pointer(&c))), unsafe.Pointer(&key[0]), C.int(len(key)))
+		if cstatus != 0 {
+			return errFileNotFound
 		}
-		asyncstatus := <-c
-		if asyncstatus != 0 {
-			return nil, errFileNotFound
+		status = 1
+		select {
+		case <-time.After(kvTimeout):
+			fmt.Println("Get timeout", k.path, keyStr)
+			return errDiskNotFound
+		case status = <-c:
 		}
-		actualLength = int(pvt.nkvvalue.actual_length)
-		if actualLength > 0 {
-			break
-		}
-		tries--
-		if tries == 0 {
-			fmt.Println("GET failed (after 10 retries) on (actual_length=0)", k.path, keyStr)
-			os.Exit(1)
-		}
-	}
-	return value[:actualLength], nil
-}
 
-func (k *KVASync) Delete(keyStr string) error {
-	key := []byte(keyStr)
-	for len(key) < kvKeyLength {
-		key = append(key, '\x00')
 	}
-	if len(key) > kvKeyLength {
-		fmt.Println("invalid key length", key, len(key))
-		os.Exit(0)
-	}
-	pvt := C.struct_minio_nkv_private_{}
-	c := make(chan int)
-	status := C.minio_nkv_delete_async(&k.handle, &pvt, C.ulong(uintptr(unsafe.Pointer(&c))), unsafe.Pointer(&key[0]), C.int(len(key)))
 	if status != 0 {
-		return errFileNotFound
-	}
-	asyncstatus := <-c
-	if asyncstatus != 0 {
 		return errFileNotFound
 	}
 	return nil
