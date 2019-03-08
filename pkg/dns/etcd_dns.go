@@ -101,6 +101,15 @@ func (c *coreDNS) list(key string) ([]SrvRecord, error) {
 		}
 		srvRecord.Key = strings.TrimPrefix(string(n.Key), key)
 		srvRecord.Key = strings.TrimSuffix(srvRecord.Key, srvRecord.Host)
+
+		// Skip non-bucket entry like for a key
+		// /skydns/net/miniocloud/10.0.0.1 that may exist as
+		// dns entry for the server (rather than the bucket
+		// itself).
+		if srvRecord.Key == "" {
+			continue
+		}
+
 		// SRV records are stored in the following form
 		// /skydns/net/miniocloud/bucket1, so this function serves multiple
 		// purposes basically when we do a Get(bucketName) this function
