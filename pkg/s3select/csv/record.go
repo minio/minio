@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/bcicen/jstream"
@@ -84,6 +85,16 @@ func (r *Record) MarshalJSON() ([]byte, error) {
 		kvs[i] = jstream.KV{Key: r.columnNames[i], Value: r.csvRecord[i]}
 	}
 	return json.Marshal(kvs)
+}
+
+// Raw - returns the underlying data with format info.
+func (r *Record) Raw() (sql.SelectObjectFormat, interface{}) {
+	return sql.SelectFmtCSV, r
+}
+
+// Replace - is not supported for CSV
+func (r *Record) Replace(_ jstream.KVS) error {
+	return errors.New("Replace is not supported for CSV")
 }
 
 // NewRecord - creates new CSV record.

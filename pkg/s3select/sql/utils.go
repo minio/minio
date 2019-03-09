@@ -62,6 +62,13 @@ func (o *ObjectKey) String() string {
 	return fmt.Sprintf(".%s", o.ID.String())
 }
 
+func (o *ObjectKey) keyString() string {
+	if o.Lit != nil {
+		return string(*o.Lit)
+	}
+	return o.ID.String()
+}
+
 // getLastKeypathComponent checks if the given expression is a path
 // expression, and if so extracts the last dot separated component of
 // the path. Otherwise it returns false.
@@ -81,7 +88,19 @@ func getLastKeypathComponent(e *Expression) (string, bool) {
 		return "", false
 	}
 
-	keypath := operand.Left.Left.Primary.JPathExpr.String()
-	ps := strings.Split(keypath, ".")
+	// Check if path expression ends in a key
+	jpath := operand.Left.Left.Primary.JPathExpr
+	n := len(jpath.PathExpr)
+	if n > 0 && jpath.PathExpr[n-1].Key == nil {
+		return "", false
+	}
+
+	ps := strings.Split(jpath.String(), ".")
 	return ps[len(ps)-1], true
+}
+
+// HasKeypath returns if the from clause has a key path -
+// e.g. S3object[*].id
+func (from *TableExpression) HasKeypath() bool {
+	return len(from.Table.PathExpr) > 1
 }
