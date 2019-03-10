@@ -111,9 +111,9 @@ func (a GatewayUnsupported) ListObjectsV2(ctx context.Context, bucket, prefix, c
 	return result, NotImplemented{}
 }
 
-// ListObjectsHeal - Not implemented stub
-func (a GatewayUnsupported) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
-	return loi, NotImplemented{}
+// HealObjects - Not implemented stub
+func (a GatewayUnsupported) HealObjects(ctx context.Context, bucket, prefix string, fn func(string, string) error) (e error) {
+	return NotImplemented{}
 }
 
 // CopyObject copies a blob from source container to destination container.

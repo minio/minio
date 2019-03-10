@@ -1148,8 +1148,7 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 		return fs.getObjectInfo(ctx, bucket, entry)
 	}
 
-	heal := false // true only for xl.ListObjectsHeal()
-	walkResultCh, endWalkCh := fs.listPool.Release(listParams{bucket, recursive, marker, prefix, heal})
+	walkResultCh, endWalkCh := fs.listPool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		isLeaf := func(bucket, object string) bool {
@@ -1203,7 +1202,7 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 	}
 
 	// Save list routine for the next marker if we haven't reached EOF.
-	params := listParams{bucket, recursive, nextMarker, prefix, heal}
+	params := listParams{bucket, recursive, nextMarker, prefix}
 	if !eof {
 		fs.listPool.Set(params, walkResultCh, endWalkCh)
 	}
@@ -1254,10 +1253,10 @@ func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, dryRun, remo
 	return madmin.HealResultItem{}, NotImplemented{}
 }
 
-// ListObjectsHeal - list all objects to be healed. Valid only for XL
-func (fs *FSObjects) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
+// HealObjects - no-op for fs. Valid only for XL.
+func (fs *FSObjects) HealObjects(ctx context.Context, bucket, prefix string, fn func(string, string) error) (e error) {
 	logger.LogIf(ctx, NotImplemented{})
-	return loi, NotImplemented{}
+	return NotImplemented{}
 }
 
 // ListBucketsHeal - list all buckets to be healed. Valid only for XL

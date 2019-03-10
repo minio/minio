@@ -396,13 +396,13 @@ func TestFSHealObject(t *testing.T) {
 	}
 }
 
-// TestFSListObjectHeal - tests for fs ListObjectHeals
-func TestFSListObjectsHeal(t *testing.T) {
+// TestFSHealObjects - tests for fs HealObjects to return not implemented.
+func TestFSHealObjects(t *testing.T) {
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	_, err := obj.ListObjectsHeal(context.Background(), "bucket", "prefix", "marker", "delimiter", 1000)
+	err := obj.HealObjects(context.Background(), "bucket", "prefix", nil)
 	if err == nil || !isSameType(err, NotImplemented{}) {
 		t.Fatalf("Heal Object should return NotImplemented error ")
 	}
