@@ -226,7 +226,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 				continue
 			}
 			bucketsInfo = append(bucketsInfo, BucketInfo{
-				Name:    strings.Trim(dnsRecord.Key, slashSeparator),
+				Name:    dnsRecord.Key,
 				Created: dnsRecord.CreationDate,
 			})
 			bucketSet.Add(dnsRecord.Key)
