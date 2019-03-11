@@ -122,7 +122,7 @@ typedef struct minio_nkv_private_ {
 extern void minio_nkv_callback(void *, int);
 
 static void nkv_aio_complete (nkv_aio_construct* op_data, int32_t num_op) {
-  minio_nkv_private* pvt = (minio_nkv_private*) op_data->private_data;
+  minio_nkv_private* pvt = (minio_nkv_private*) op_data->private_data_1;
   if (!op_data) {
     printf("NKV Async IO returned NULL op_Data, ignoring..");
   }
@@ -136,7 +136,7 @@ static void nkv_aio_complete (nkv_aio_construct* op_data, int32_t num_op) {
 static int minio_nkv_put_async(struct minio_nkv_handle *handle, struct minio_nkv_private_ *pvt, uint64_t channel, void *key, int keyLen, void *value, int valueLen) {
   nkv_postprocess_function* pfn = (nkv_postprocess_function*) malloc (sizeof(nkv_postprocess_function));
   pfn->nkv_aio_cb = nkv_aio_complete;
-  pfn->private_data = (void*)pvt;
+  pfn->private_data_1 = (void*)pvt;
   pvt->pfn = pfn;
 
   pvt->channel = channel;
@@ -161,7 +161,7 @@ static int minio_nkv_get_async(struct minio_nkv_handle *handle, struct minio_nkv
   nkv_postprocess_function* pfn = (nkv_postprocess_function*) malloc (sizeof(nkv_postprocess_function));
 
   pfn->nkv_aio_cb = nkv_aio_complete;
-  pfn->private_data = (void*)pvt;
+  pfn->private_data_1 = (void*)pvt;
   pvt->pfn = pfn;
 
   pvt->channel = channel;
@@ -186,7 +186,7 @@ static int minio_nkv_delete_async(struct minio_nkv_handle *handle, struct minio_
   nkv_postprocess_function* pfn = (nkv_postprocess_function*) malloc (sizeof(nkv_postprocess_function));
 
   pfn->nkv_aio_cb = nkv_aio_complete;
-  pfn->private_data = (void*)pvt;
+  pfn->private_data_1 = (void*)pvt;
   pvt->pfn = pfn;
 
   pvt->channel = channel;
@@ -318,6 +318,7 @@ func (k *KV) Put(keyStr string, value []byte) error {
 		case status = <-c:
 		}
 	}
+
 	if status != 0 {
 		return errors.New("error during put")
 	}
