@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/url"
@@ -26,7 +27,9 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/cpu"
@@ -274,35 +277,80 @@ func localEndpointsDrivePerf(endpoints EndpointList) ServerDrivesPerfInfo {
 
 // NewEndpointList - returns new endpoint list based on input args.
 func NewEndpointList(args ...string) (endpoints EndpointList, err error) {
-	var endpointType EndpointType
-	var scheme string
+	// channel to indicate completion of host resolution
+	doneCh := make(chan struct{})
+	// Indicate retry routine to exit cleanly, upon this function return.
+	defer close(doneCh)
+	// Mark the starting time
+	startTime := time.Now()
+	// wait for hosts to resolve in exponentialbackoff manner
+	for range newRetryTimerSimple(doneCh) {
+		var endpointType EndpointType
+		var scheme string
 
-	uniqueArgs := set.NewStringSet()
-	// Loop through args and adds to endpoint list.
-	for i, arg := range args {
-		endpoint, err := NewEndpoint(arg)
-		if err != nil {
-			return nil, fmt.Errorf("'%s': %s", arg, err.Error())
+		uniqueArgs := set.NewStringSet()
+
+		var errs = make([]error, len(args))
+		endpoints = make([]Endpoint, len(args))
+
+		// Loop through args and adds to endpoint list.
+		for i, arg := range args {
+			endpoint, nerr := NewEndpoint(arg)
+			if nerr != nil {
+				if isNetError(nerr) {
+					errs[i] = nerr
+					continue
+				}
+				return nil, fmt.Errorf("'%s': %s", arg, nerr)
+			}
+
+			// All endpoints have to be same type and scheme if applicable.
+			if i == 0 {
+				endpointType = endpoint.Type()
+				scheme = endpoint.Scheme
+			} else if endpoint.Type() != endpointType {
+				return nil, fmt.Errorf("mixed style endpoints are not supported")
+			} else if endpoint.Scheme != scheme {
+				return nil, fmt.Errorf("mixed scheme is not supported")
+			}
+
+			arg = endpoint.String()
+			if uniqueArgs.Contains(arg) {
+				return nil, fmt.Errorf("duplicate endpoints found")
+			}
+			uniqueArgs.Add(arg)
+			endpoints[i] = endpoint
 		}
 
-		// All endpoints have to be same type and scheme if applicable.
-		if i == 0 {
-			endpointType = endpoint.Type()
-			scheme = endpoint.Scheme
-		} else if endpoint.Type() != endpointType {
-			return nil, fmt.Errorf("mixed style endpoints are not supported")
-		} else if endpoint.Scheme != scheme {
-			return nil, fmt.Errorf("mixed scheme is not supported")
+		var maxCount int
+		maxCount, err = reduceErrs(errs, nil)
+		if maxCount >= len(args)/2+1 && err == nil {
+			// Success in quorum, break out for all environments.
+			break
 		}
 
-		arg = endpoint.String()
-		if uniqueArgs.Contains(arg) {
-			return nil, fmt.Errorf("duplicate endpoints found")
+		// If we are on-prem deployment fail appropriately,
+		// without retry.
+		if !IsDocker() && !IsKubernetes() {
+			break
 		}
-		uniqueArgs.Add(arg)
-		endpoints = append(endpoints, endpoint)
+
+		// We see errors and quorum hasn't given us the success,
+		// retry again.
+
+		// time elapsed
+		timeElapsed := time.Since(startTime)
+		// log error only if more than 1s elapsed
+		if timeElapsed > time.Second {
+			// log the message to console about the host not being resolveable.
+			reqInfo := &logger.ReqInfo{}
+			reqInfo.AppendTags("elapsedTime", humanize.RelTime(startTime, startTime.Add(timeElapsed), "elapsed", ""))
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
+		}
 	}
-	return endpoints, nil
+
+	return endpoints, err
 }
 
 // Checks if there are any cross device mounts.

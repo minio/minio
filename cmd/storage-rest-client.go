@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/url"
 	"path"
 	"strconv"
@@ -49,16 +48,7 @@ func isNetworkError(err error) bool {
 	if err.Error() == errConnectionStale.Error() {
 		return true
 	}
-	if uerr, isURLError := err.(*url.Error); isURLError {
-		if uerr.Timeout() {
-			return true
-		}
-
-		err = uerr.Err
-	}
-
-	_, isNetOpError := err.(*net.OpError)
-	return isNetOpError
+	return isNetError(err)
 }
 
 // Converts rpc.ServerError to underlying error. This function is
