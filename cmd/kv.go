@@ -133,71 +133,51 @@ static void nkv_aio_complete (nkv_aio_construct* op_data, int32_t num_op) {
   free(pvt->pfn);
 }
 
-static int minio_nkv_put_async(struct minio_nkv_handle *handle, struct minio_nkv_private_ *pvt, uint64_t channel, void *key, int keyLen, void *value, int valueLen) {
+static int minio_nkv_put_async(struct minio_nkv_handle *handle, uint64_t pvtmasked) {
+  struct minio_nkv_private_ *pvt = (struct minio_nkv_private_ *) pvtmasked;
   nkv_postprocess_function* pfn = (nkv_postprocess_function*) malloc (sizeof(nkv_postprocess_function));
   pfn->nkv_aio_cb = nkv_aio_complete;
   pfn->private_data_1 = (void*)pvt;
   pvt->pfn = pfn;
 
-  pvt->channel = channel;
-
   pvt->ctx.is_pass_through = 1;
   pvt->ctx.container_hash = handle->container_hash;
   pvt->ctx.network_path_hash = handle->network_path_hash;
   pvt->ctx.ks_id = 0;
-
-  const nkv_key  nkvkey = {key, keyLen};
-  pvt->nkvkey = nkvkey;
-  nkv_value nkvvalue = {value, valueLen, 0};
-  pvt->nkvvalue = nkvvalue;
-  nkv_store_option option = {0};
-  pvt->store_option = option;
 
   nkv_result result = nkv_store_kvp_async(handle->nkv_handle, &pvt->ctx, &pvt->nkvkey, &pvt->store_option, &pvt->nkvvalue, pfn);
   return result;
 }
 
-static int minio_nkv_get_async(struct minio_nkv_handle *handle, struct minio_nkv_private_ *pvt, uint64_t channel, void *key, int keyLen, void *value, int valueLen) {
+static int minio_nkv_get_async(struct minio_nkv_handle *handle, uint64_t pvtmasked) {
+  struct minio_nkv_private_ *pvt = (struct minio_nkv_private_ *) pvtmasked;
   nkv_postprocess_function* pfn = (nkv_postprocess_function*) malloc (sizeof(nkv_postprocess_function));
 
   pfn->nkv_aio_cb = nkv_aio_complete;
   pfn->private_data_1 = (void*)pvt;
   pvt->pfn = pfn;
 
-  pvt->channel = channel;
-
   pvt->ctx.is_pass_through = 1;
   pvt->ctx.container_hash = handle->container_hash;
   pvt->ctx.network_path_hash = handle->network_path_hash;
   pvt->ctx.ks_id = 0;
-
-  const nkv_key  nkvkey = {key, keyLen};
-  pvt->nkvkey = nkvkey;
-  nkv_value nkvvalue = {value, valueLen, 0};
-  pvt->nkvvalue = nkvvalue;
-  nkv_retrieve_option option = {0};
-  pvt->retrieve_option = option;
 
   nkv_result result = nkv_retrieve_kvp_async(handle->nkv_handle, &pvt->ctx, &pvt->nkvkey, &pvt->retrieve_option, &pvt->nkvvalue, pfn);
   return result;
 }
 
-static int minio_nkv_delete_async(struct minio_nkv_handle *handle, struct minio_nkv_private_ *pvt, uint64_t channel, void *key, int keyLen) {
+static int minio_nkv_delete_async(struct minio_nkv_handle *handle, uint64_t pvtmasked) {
+  struct minio_nkv_private_ *pvt = (struct minio_nkv_private_ *) pvtmasked;
   nkv_postprocess_function* pfn = (nkv_postprocess_function*) malloc (sizeof(nkv_postprocess_function));
 
   pfn->nkv_aio_cb = nkv_aio_complete;
   pfn->private_data_1 = (void*)pvt;
   pvt->pfn = pfn;
 
-  pvt->channel = channel;
-
   pvt->ctx.is_pass_through = 1;
   pvt->ctx.container_hash = handle->container_hash;
   pvt->ctx.network_path_hash = handle->network_path_hash;
   pvt->ctx.ks_id = 0;
-
-  const nkv_key  nkvkey = {key, keyLen};
-  pvt->nkvkey = nkvkey;
 
   nkv_result result = nkv_delete_kvp_async(handle->nkv_handle, &pvt->ctx, &pvt->nkvkey, pfn);
   return result;
@@ -222,6 +202,7 @@ func minio_nkv_callback(chanPtr unsafe.Pointer, result C.int) {
 	select {
 	case c <- int(result):
 	default:
+		fmt.Println("No listeners for result chan")
 	}
 }
 
@@ -244,6 +225,7 @@ func minio_nkv_open(configPath string) error {
 	if globalNKVHandle != 0 {
 		return nil
 	}
+	go kvAsyncLoop()
 	cs := C.CString(configPath)
 	status := C.minio_nkv_open(cs, &globalNKVHandle)
 	C.free(unsafe.Pointer(cs))
@@ -283,7 +265,44 @@ var kvValuePool = sync.Pool{
 
 const kvKeyLength = 200
 
+var kvMu sync.Mutex
+var kvSerialize = os.Getenv("MINIO_NKV_SERIALIZE") != ""
+
+type kvCallType int
+
+const (
+	kvCallPut kvCallType = iota
+	kvCallGet
+	kvCallDel
+)
+
+type asyncKVRequest struct {
+	call   kvCallType
+	handle *C.struct_minio_nkv_handle
+	pvt    *C.struct_minio_nkv_private_
+}
+
+var globalAsyncKVRequestCh chan asyncKVRequest
+
+func kvAsyncLoop() {
+	globalAsyncKVRequestCh = make(chan asyncKVRequest)
+	for request := range globalAsyncKVRequestCh {
+		switch request.call {
+		case kvCallPut:
+			C.minio_nkv_put_async(request.handle, C.ulong(uintptr(unsafe.Pointer(request.pvt))))
+		case kvCallGet:
+			C.minio_nkv_get_async(request.handle, C.ulong(uintptr(unsafe.Pointer(request.pvt))))
+		case kvCallDel:
+			C.minio_nkv_delete_async(request.handle, C.ulong(uintptr(unsafe.Pointer(request.pvt))))
+		}
+	}
+}
+
 func (k *KV) Put(keyStr string, value []byte) error {
+	if kvSerialize {
+		kvMu.Lock()
+		defer kvMu.Unlock()
+	}
 	if len(value) > kvMaxValueSize {
 		return errValueTooLong
 	}
@@ -306,10 +325,12 @@ func (k *KV) Put(keyStr string, value []byte) error {
 	} else {
 		pvt := C.struct_minio_nkv_private_{}
 		c := make(chan int)
-		cstatus := C.minio_nkv_put_async(&k.handle, &pvt, C.ulong(uintptr(unsafe.Pointer(&c))), unsafe.Pointer(&key[0]), C.int(len(key)), valuePtr, C.int(len(value)))
-		if cstatus != 0 {
-			return errors.New("error during put")
-		}
+		pvt.channel = C.ulong(uintptr(unsafe.Pointer(&c)))
+		pvt.nkvkey.key = unsafe.Pointer(&key[0])
+		pvt.nkvkey.length = C.uint(len(key))
+		pvt.nkvvalue.value = valuePtr
+		pvt.nkvvalue.length = C.ulong(len(value))
+		globalAsyncKVRequestCh <- asyncKVRequest{kvCallPut, &k.handle, &pvt}
 		status = 1
 		select {
 		case <-time.After(kvTimeout):
@@ -326,6 +347,10 @@ func (k *KV) Put(keyStr string, value []byte) error {
 }
 
 func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
+	if kvSerialize {
+		kvMu.Lock()
+		defer kvMu.Unlock()
+	}
 	key := []byte(keyStr)
 	for len(key) < kvKeyLength {
 		key = append(key, '\x00')
@@ -345,10 +370,13 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 		} else {
 			c := make(chan int)
 			pvt := C.struct_minio_nkv_private_{}
-			cstatus := C.minio_nkv_get_async(&k.handle, &pvt, C.ulong(uintptr(unsafe.Pointer(&c))), unsafe.Pointer(&key[0]), C.int(len(key)), unsafe.Pointer(&value[0]), C.int(len(value)))
-			if cstatus != 0 {
-				return nil, errFileNotFound
-			}
+			pvt.channel = C.ulong(uintptr(unsafe.Pointer(&c)))
+			pvt.nkvkey.key = unsafe.Pointer(&key[0])
+			pvt.nkvkey.length = C.uint(len(key))
+			pvt.nkvvalue.value = unsafe.Pointer(&value[0])
+			pvt.nkvvalue.length = C.ulong(len(value))
+			globalAsyncKVRequestCh <- asyncKVRequest{kvCallGet, &k.handle, &pvt}
+			status = 1
 			select {
 			case <-time.After(kvTimeout):
 				fmt.Println("Get timeout", k.path, keyStr)
@@ -377,6 +405,10 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 }
 
 func (k *KV) Delete(keyStr string) error {
+	if kvSerialize {
+		kvMu.Lock()
+		defer kvMu.Unlock()
+	}
 	key := []byte(keyStr)
 	for len(key) < kvKeyLength {
 		key = append(key, '\x00')
@@ -392,10 +424,10 @@ func (k *KV) Delete(keyStr string) error {
 	} else {
 		pvt := C.struct_minio_nkv_private_{}
 		c := make(chan int)
-		cstatus := C.minio_nkv_delete_async(&k.handle, &pvt, C.ulong(uintptr(unsafe.Pointer(&c))), unsafe.Pointer(&key[0]), C.int(len(key)))
-		if cstatus != 0 {
-			return errFileNotFound
-		}
+		pvt.channel = C.ulong(uintptr(unsafe.Pointer(&c)))
+		pvt.nkvkey.key = unsafe.Pointer(&key[0])
+		pvt.nkvkey.length = C.uint(len(key))
+		globalAsyncKVRequestCh <- asyncKVRequest{kvCallDel, &k.handle, &pvt}
 		status = 1
 		select {
 		case <-time.After(kvTimeout):
