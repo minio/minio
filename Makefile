@@ -14,7 +14,7 @@ checks:
 
 getdeps:
 	@echo "Installing golint" && go get -u golang.org/x/lint/golint
-	@echo "Installing staticcheck" && go get -u honnef.co/go/tools/...
+	@echo "Installing staticcheck" && mkdir -p /go/bin && wget --quiet -O /go/bin/staticcheck https://github.com/dominikh/go-tools/releases/download/2019.1/staticcheck_linux_amd64 && chmod a+x /go/bin/staticcheck
 	@echo "Installing misspell" && go get -u github.com/client9/misspell/cmd/misspell
 
 crosscompile:

@@ -7,6 +7,7 @@ COPY . /go/src/github.com/minio/minio
 WORKDIR /go/src/github.com/minio/minio
 
 RUN apt-get update && apt-get install -y jq
+ENV GO111MODULE=on
 
 RUN make
 RUN bash -c 'diff -au <(gofmt -s -d cmd) <(printf "")'
