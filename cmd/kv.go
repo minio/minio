@@ -201,8 +201,9 @@ func minio_nkv_callback(chanPtr unsafe.Pointer, result C.int) {
 	c := *(*chan int)(chanPtr)
 	select {
 	case c <- int(result):
-	default:
+	case <-time.After(kvTimeout):
 		fmt.Println("No listeners for result chan")
+		os.Exit(1)
 	}
 }
 
@@ -324,7 +325,7 @@ func (k *KV) Put(keyStr string, value []byte) error {
 		status = int(cstatus)
 	} else {
 		pvt := C.struct_minio_nkv_private_{}
-		c := make(chan int)
+		c := make(chan int, 1)
 		pvt.channel = C.ulong(uintptr(unsafe.Pointer(&c)))
 		pvt.nkvkey.key = unsafe.Pointer(&key[0])
 		pvt.nkvkey.length = C.uint(len(key))
@@ -368,7 +369,7 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 			cstatus := C.minio_nkv_get(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)), unsafe.Pointer(&value[0]), C.int(len(value)), &actualLength)
 			status = int(cstatus)
 		} else {
-			c := make(chan int)
+			c := make(chan int, 1)
 			pvt := C.struct_minio_nkv_private_{}
 			pvt.channel = C.ulong(uintptr(unsafe.Pointer(&c)))
 			pvt.nkvkey.key = unsafe.Pointer(&key[0])
@@ -423,7 +424,7 @@ func (k *KV) Delete(keyStr string) error {
 		status = int(cstatus)
 	} else {
 		pvt := C.struct_minio_nkv_private_{}
-		c := make(chan int)
+		c := make(chan int, 1)
 		pvt.channel = C.ulong(uintptr(unsafe.Pointer(&c)))
 		pvt.nkvkey.key = unsafe.Pointer(&key[0])
 		pvt.nkvkey.length = C.uint(len(key))
@@ -431,7 +432,8 @@ func (k *KV) Delete(keyStr string) error {
 		status = 1
 		select {
 		case <-time.After(kvTimeout):
-			fmt.Println("Get timeout", k.path, keyStr)
+			fmt.Println("Delete timeout", k.path, keyStr)
+			os.Exit(1)
 			return errDiskNotFound
 		case status = <-c:
 		}
