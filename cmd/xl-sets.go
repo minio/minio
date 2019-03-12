@@ -1010,9 +1010,6 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 // If it is a single node XL and all disks are root disks, it is most likely a test setup, else it is a production setup.
 // On a test setup we allow creation of format.json on root disks to help with dev/testing.
 func isTestSetup(infos []DiskInfo, errs []error) bool {
-	if globalIsDistXL {
-		return false
-	}
 	rootDiskCount := 0
 	for i := range errs {
 		if errs[i] != nil {
