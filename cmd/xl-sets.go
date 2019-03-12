@@ -307,6 +307,7 @@ func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 	for _, set := range s.sets {
 		lstorageInfo := set.StorageInfo(ctx)
 		storageInfo.Used = storageInfo.Used + lstorageInfo.Used
+		storageInfo.Free = storageInfo.Free + lstorageInfo.Free
 		storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks + lstorageInfo.Backend.OnlineDisks
 		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks + lstorageInfo.Backend.OfflineDisks
 	}

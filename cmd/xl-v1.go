@@ -122,8 +122,23 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 
 	// Combine all disks to get total usage.
 	var used uint64
+	// In case multiple instances share the same underlying disk
+	// then we return the same total; This descrepancy is being allowed
+	// since that setup is a toy setup
+	var free uint64
 	for _, di := range validDisksInfo {
 		used = used + di.Used
+	}
+
+	for _, d := range disks {
+		if ep, err := NewEndpoint(d.String()); err == nil {
+			if ep.IsLocal {
+				di, err := getDiskInfo(d.String())
+				if err == nil {
+					free = di.Free
+				}
+			}
+		}
 	}
 
 	_, sscParity := getRedundancyCount(standardStorageClass, len(disks))
@@ -131,6 +146,7 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 
 	storageInfo := StorageInfo{
 		Used: used,
+		Free: free,
 	}
 	storageInfo.Backend.Type = BackendErasure
 	storageInfo.Backend.OnlineDisks = onlineDisks

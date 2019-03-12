@@ -251,6 +251,7 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
 	}
 	storageInfo := StorageInfo{
 		Used: used,
+		Free: di.Free,
 	}
 	storageInfo.Backend.Type = BackendFS
 	return storageInfo

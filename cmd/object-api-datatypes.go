@@ -40,6 +40,7 @@ const (
 // StorageInfo - represents total capacity of underlying storage.
 type StorageInfo struct {
 	Used uint64 // Used total used per tenant.
+	Free uint64 // Free disk size per tenant (does not dedup shared disk space with other instances)
 
 	// Backend type.
 	Backend struct {
