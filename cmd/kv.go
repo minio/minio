@@ -284,6 +284,7 @@ type asyncKVRequest struct {
 }
 
 var globalAsyncKVRequestCh chan asyncKVRequest
+var globalKVNilChan chan C.struct_minio_nkv_private_
 
 func kvAsyncLoop() {
 	globalAsyncKVRequestCh = make(chan asyncKVRequest)
@@ -338,6 +339,7 @@ func (k *KV) Put(keyStr string, value []byte) error {
 			fmt.Println("Put timeout", k.path, keyStr)
 			return errDiskNotFound
 		case status = <-c:
+		case globalKVNilChan <- pvt:
 		}
 	}
 
@@ -384,6 +386,7 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 				os.Exit(1)
 				return nil, errDiskNotFound
 			case status = <-c:
+			case globalKVNilChan <- pvt:
 			}
 
 			if status == 0 {
@@ -436,6 +439,7 @@ func (k *KV) Delete(keyStr string) error {
 			os.Exit(1)
 			return errDiskNotFound
 		case status = <-c:
+		case globalKVNilChan <- pvt:
 		}
 
 	}
