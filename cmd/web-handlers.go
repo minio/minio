@@ -39,6 +39,7 @@ import (
 	"github.com/gorilla/rpc/v2/json2"
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/browser"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
@@ -296,24 +297,29 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	// If etcd, dns federation configured list buckets from etcd.
 	if globalDNSConfig != nil {
 		dnsBuckets, err := globalDNSConfig.List()
-		if err != nil {
+		if err != nil && err != dns.ErrNoEntriesFound {
 			return toJSONError(err)
 		}
+		bucketSet := set.NewStringSet()
 		for _, dnsRecord := range dnsBuckets {
-			bucketName := strings.Trim(dnsRecord.Key, "/")
+			if bucketSet.Contains(dnsRecord.Key) {
+				continue
+			}
 
 			if globalIAMSys.IsAllowed(iampolicy.Args{
 				AccountName:     claims.Subject,
 				Action:          iampolicy.ListBucketAction,
-				BucketName:      bucketName,
+				BucketName:      dnsRecord.Key,
 				ConditionValues: getConditionValues(r, "", claims.Subject),
 				IsOwner:         owner,
 				ObjectName:      "",
 			}) {
 				reply.Buckets = append(reply.Buckets, WebBucketInfo{
-					Name:         bucketName,
+					Name:         dnsRecord.Key,
 					CreationDate: dnsRecord.CreationDate,
 				})
+
+				bucketSet.Add(dnsRecord.Key)
 			}
 		}
 	} else {
