@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package handlers
+package cmd
 
 import (
 	"bytes"
@@ -24,8 +24,12 @@ import (
 	"net/http"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
+
+	xnet "github.com/minio/minio/pkg/net"
+	trace "github.com/minio/minio/pkg/trace"
 )
 
 // recordRequest - records the first recLen bytes
@@ -109,92 +113,63 @@ func (r *recordResponseWriter) Flush() {
 	r.ResponseWriter.(http.Flusher).Flush()
 }
 
-// Return response headers.
-func (r *recordResponseWriter) Headers() []byte {
-	return r.headers.Bytes()
-}
-
 // Return response body.
 func (r *recordResponseWriter) Body() []byte {
 	return r.body.Bytes()
 }
 
-// TraceReqHandlerFunc logs request/response headers and body.
-func TraceReqHandlerFunc(f http.HandlerFunc, output io.Writer, logBody bool) http.HandlerFunc {
+// Trace gets trace of http request
+func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Request) trace.Info {
+
 	name := runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
 	name = strings.TrimPrefix(name, "github.com/minio/minio/cmd.")
+	name = strings.TrimSuffix(name, "-fm")
 	bodyPlaceHolder := []byte("<BODY>")
+	var reqBodyRecorder *recordRequest
 
-	return func(w http.ResponseWriter, r *http.Request) {
-		const timeFormat = "2006-01-02 15:04:05 -0700"
-		var reqBodyRecorder *recordRequest
+	t := trace.Info{FuncName: name}
+	reqBodyRecorder = &recordRequest{Reader: r.Body, logBody: logBody}
+	r.Body = ioutil.NopCloser(reqBodyRecorder)
 
-		// Generate short random request ID
-		reqID := fmt.Sprintf("%f", float64(time.Now().UnixNano())/1e10)
-
-		reqBodyRecorder = &recordRequest{Reader: r.Body, logBody: logBody}
-		r.Body = ioutil.NopCloser(reqBodyRecorder)
-
-		// Setup a http response body recorder
-		respBodyRecorder := &recordResponseWriter{ResponseWriter: w, logBody: logBody}
-
-		b := bytes.NewBuffer(nil)
-		fmt.Fprintf(b, "[REQUEST %s] [%s] [%s]\n", name, reqID, time.Now().Format(timeFormat))
-
-		f(respBodyRecorder, r)
-
-		// Build request log and write it to log file
-		fmt.Fprintf(b, "%s %s", r.Method, r.URL.Path)
-		if r.URL.RawQuery != "" {
-			fmt.Fprintf(b, "?%s", r.URL.RawQuery)
-		}
-		fmt.Fprintf(b, "\n")
-
-		fmt.Fprintf(b, "Host: %s\n", r.Host)
-		for k, v := range r.Header {
-			fmt.Fprintf(b, "%s: %s\n", k, v[0])
-		}
-		fmt.Fprintf(b, "\n")
-		if logBody {
-			bodyContents := reqBodyRecorder.Data()
-			if bodyContents != nil {
-				// If body logging is disabled then we print <BODY> as a placeholder
-				// for the actual body.
-				b.Write(bodyContents)
-				fmt.Fprintf(b, "\n")
-			}
-		} else {
-			b.Write(bodyPlaceHolder)
-			fmt.Fprintf(b, "\n")
-		}
-
-		fmt.Fprintf(b, "\n")
-
-		// Build response log and write it to log file
-		fmt.Fprintf(b, "[RESPONSE] [%s] [%s]\n", reqID, time.Now().Format(timeFormat))
-
-		b.Write(respBodyRecorder.Headers())
-		fmt.Fprintf(b, "\n")
-
-		// recordResponseWriter{} is configured to record only
-		// responses with http code != 200 &  != 206, we don't
-		// have to check for logBody value here.
-		bodyContents := respBodyRecorder.Body()
-		if bodyContents != nil {
-			b.Write(bodyContents)
-			fmt.Fprintf(b, "\n")
-		} else {
-			if !logBody {
-				// If there was no error response and body logging is disabled
-				// then we print <BODY> as a placeholder for the actual body.
-				b.Write(bodyPlaceHolder)
-				fmt.Fprintf(b, "\n")
-			}
-		}
-
-		fmt.Fprintf(b, "\n")
-
-		// Write the contents in one shot so that logs don't get interspersed.
-		output.Write(b.Bytes())
+	host, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
+	if err == nil {
+		t.NodeName = host.Name
 	}
+	rq := trace.RequestInfo{Time: time.Now().UTC(), Method: r.Method, URL: *r.URL}
+	rq.Headers = cloneHeader(r.Header)
+	rq.Headers.Set("Content-Length", strconv.Itoa(int(r.ContentLength)))
+	rq.Headers.Set("Host", r.Host)
+	for _, enc := range r.TransferEncoding {
+		rq.Headers.Add("Transfer-Encoding", enc)
+	}
+	if logBody {
+		// If body logging is disabled then we print <BODY> as a placeholder
+		// for the actual body.
+		rq.Body = reqBodyRecorder.Data()
+
+	} else {
+		rq.Body = bodyPlaceHolder
+	}
+	// Setup a http response body recorder
+	respBodyRecorder := &recordResponseWriter{ResponseWriter: w, logBody: logBody}
+	f(respBodyRecorder, r)
+
+	rs := trace.ResponseInfo{Time: time.Now().UTC()}
+	rs.Headers = cloneHeader(respBodyRecorder.Header())
+	rs.StatusCode = respBodyRecorder.statusCode
+	if rs.StatusCode == 0 {
+		rs.StatusCode = http.StatusOK
+	}
+	bodyContents := respBodyRecorder.Body()
+	if bodyContents != nil {
+		rs.Body = bodyContents
+	}
+	if !logBody {
+		// If there was no error response and body logging is disabled
+		// then we print <BODY> as a placeholder for the actual body.
+		rs.Body = bodyPlaceHolder
+	}
+	t.ReqInfo = rq
+	t.RespInfo = rs
+	return t
 }

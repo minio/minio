@@ -17,10 +17,12 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/gob"
+	"encoding/json"
 	"io"
 	"net/url"
 	"strconv"
@@ -31,6 +33,7 @@ import (
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/trace"
 )
 
 // client to talk to peer Nodes.
@@ -411,6 +414,64 @@ func (client *peerRESTClient) SignalService(sig serviceSignal) error {
 	}
 	defer http.DrainBody(respBody)
 	return nil
+}
+
+// Trace - send http trace request to peer nodes
+func (client *peerRESTClient) Trace(targetID string, doneCh chan struct{}, trcAll bool) (chan trace.Info, error) {
+	ch := make(chan trace.Info)
+	go func() {
+		for {
+
+			var reader bytes.Buffer
+			values := make(url.Values)
+			values.Set(peerRESTTraceAll, strconv.FormatBool(trcAll))
+			values.Set(peerRESTTraceTargetID, targetID)
+
+			respBody, err := client.call(peerRESTMethodTrace, values, &reader, -1)
+
+			if err != nil {
+				//retry
+				continue
+			}
+
+			bio := bufio.NewScanner(respBody)
+
+			// Close the response body.
+			defer respBody.Close()
+
+			// Unmarshal each line, returns marshaled values.
+			for bio.Scan() {
+				var traceRec trace.Info
+				if err = json.Unmarshal(bio.Bytes(), &traceRec); err != nil {
+					continue
+				}
+				ch <- traceRec
+			}
+			// Look for any underlying errors.
+			if err = bio.Err(); err != nil {
+				// For an unexpected connection drop from server, we close the body
+				// and re-connect.
+				if err == io.ErrUnexpectedEOF {
+					respBody.Close()
+				}
+			}
+			select {
+			case <-doneCh:
+				return
+			}
+		}
+	}()
+	return ch, nil
+}
+
+// UnsubscribeTrace unsubscribes trace target from peer node
+func (client *peerRESTClient) UnsubscribeTrace(targetID string) error {
+	var reader bytes.Buffer
+	values := make(url.Values)
+	values.Set(peerRESTTraceTargetID, targetID)
+
+	_, err := client.call(peerRESTMethodUnsubscribeTrace, values, &reader, -1)
+	return err
 }
 
 func getRemoteHosts(endpoints EndpointList) []*xnet.Host {

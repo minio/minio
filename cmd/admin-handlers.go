@@ -43,6 +43,7 @@ import (
 	"github.com/minio/minio/pkg/mem"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/quick"
+	trace "github.com/minio/minio/pkg/trace"
 )
 
 const (
@@ -1418,4 +1419,41 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 
 	// Send success response
 	writeSuccessResponseHeadersOnly(w)
+}
+
+// TraceHandler - POST /minio/admin/v1/trace
+// ----------
+// The handler sends http trace to the connected HTTP client.
+func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "HTTPTrace")
+	trcAll := false
+	if a := r.URL.Query().Get("all"); a != "false" {
+		trcAll = true
+	}
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+	traceCh := make(chan trace.Info)
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+	targetID := mustGetUUID()
+
+	globalTrace.Trace(targetID, traceCh, doneCh, trcAll)
+	defer globalTrace.Unsubscribe(targetID)
+	defer globalTrace.UnsubscribePeers(targetID)
+
+	for entry := range traceCh {
+		data, err := json.Marshal(entry)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		data = append(data, byte('\n'))
+
+		if _, err := w.Write(data); err != nil {
+			return
+		}
+		w.(http.Flusher).Flush()
+	}
 }

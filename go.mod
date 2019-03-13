@@ -81,6 +81,7 @@ require (
 	github.com/streadway/amqp v0.0.0-20190402114354-16ed540749f6
 	github.com/tidwall/gjson v1.2.1
 	github.com/tidwall/match v1.0.1 // indirect
+	github.com/tidwall/pretty v1.0.0 // indirect
 	github.com/tidwall/sjson v1.0.4
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	go.uber.org/atomic v1.3.2

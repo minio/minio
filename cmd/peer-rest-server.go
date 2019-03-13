@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -32,6 +33,7 @@ import (
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
+	trace "github.com/minio/minio/pkg/trace"
 )
 
 // To abstract a node over network.
@@ -666,6 +668,38 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
+func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
+	trcAll := false
+	if a := r.URL.Query().Get("all"); a != "false" {
+		trcAll = true
+	}
+	targetID := r.URL.Query().Get("target-id")
+	ch := globalTrace.pubsub.Subscribe()
+	defer globalTrace.pubsub.Unsubscribe(ch)
+	globalTrace.traceTargets[targetID] = ch
+	for entry := range ch {
+		trcInfo := entry.(trace.Info)
+		// omit inter-node traffic if trcAll is false
+		if !trcAll && strings.HasPrefix(trcInfo.ReqInfo.URL.Path, "/minio") {
+			continue
+		}
+		data, err := json.Marshal(trcInfo)
+		if err != nil {
+			return
+		}
+		data = append(data, byte('\n'))
+		if _, err = w.Write(data); err != nil {
+			return
+		}
+		w.(http.Flusher).Flush()
+	}
+}
+func (s *peerRESTServer) UnsubscribeTraceHandler(w http.ResponseWriter, r *http.Request) {
+	targetID := r.URL.Query().Get("target-id")
+	globalTrace.Unsubscribe(targetID)
+	w.(http.Flusher).Flush()
+}
+
 func (s *peerRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusForbidden)
 	w.Write([]byte(err.Error()))
@@ -710,6 +744,9 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodBucketNotificationListen).HandlerFunc(httpTraceHdrs(server.ListenBucketNotificationHandler)).Queries(restQueries(peerRESTBucket)...)
 
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodReloadFormat).HandlerFunc(httpTraceHdrs(server.ReloadFormatHandler)).Queries(restQueries(peerRESTDryRun)...)
+
+	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodTrace).HandlerFunc(server.TraceHandler)
+	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodUnsubscribeTrace).HandlerFunc(server.UnsubscribeTraceHandler)
 
 	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(notFoundHandler))
 }
