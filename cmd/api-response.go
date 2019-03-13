@@ -305,21 +305,6 @@ func getObjectLocation(r *http.Request, domains []string, bucket, object string)
 	return u.String()
 }
 
-// s3EncodeName encodes string in response when encodingType
-// is specified in AWS S3 requests.
-func s3EncodeName(name string, encodingType string) (result string) {
-	// Quick path to exit
-	if encodingType == "" {
-		return name
-	}
-	encodingType = strings.ToLower(encodingType)
-	switch encodingType {
-	case "url":
-		return url.QueryEscape(name)
-	}
-	return name
-}
-
 // generates ListBucketsResponse from array of BucketInfo which can be
 // serialized to match XML and JSON API spec output.
 func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
