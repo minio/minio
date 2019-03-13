@@ -279,6 +279,9 @@ const (
 
 type asyncKVRequest struct {
 	call   kvCallType
+	path   string
+	key    string
+	ch     chan int
 	handle *C.struct_minio_nkv_handle
 	pvt    *C.struct_minio_nkv_private_
 }
@@ -288,14 +291,24 @@ var globalKVNilChan chan C.struct_minio_nkv_private_
 
 func kvAsyncLoop() {
 	globalAsyncKVRequestCh = make(chan asyncKVRequest)
+	var requests []asyncKVRequest
 	for request := range globalAsyncKVRequestCh {
 		switch request.call {
 		case kvCallPut:
+			requests = append(requests, request)
+			fmt.Println("Put", request.path, request.key)
 			C.minio_nkv_put_async(request.handle, C.ulong(uintptr(unsafe.Pointer(request.pvt))))
+			fmt.Println("Put", request.path, request.key, "done")
 		case kvCallGet:
+			requests = append(requests, request)
+			fmt.Println("Get", request.path, request.key)
 			C.minio_nkv_get_async(request.handle, C.ulong(uintptr(unsafe.Pointer(request.pvt))))
+			fmt.Println("Get", request.path, request.key, "done")
 		case kvCallDel:
+			requests = append(requests, request)
+			fmt.Println("Delete", request.path, request.key)
 			C.minio_nkv_delete_async(request.handle, C.ulong(uintptr(unsafe.Pointer(request.pvt))))
+			fmt.Println("Delete", request.path, request.key, "done")
 		}
 	}
 }
@@ -332,11 +345,17 @@ func (k *KV) Put(keyStr string, value []byte) error {
 		pvt.nkvkey.length = C.uint(len(key))
 		pvt.nkvvalue.value = valuePtr
 		pvt.nkvvalue.length = C.ulong(len(value))
-		globalAsyncKVRequestCh <- asyncKVRequest{kvCallPut, &k.handle, &pvt}
+		select {
+		case globalAsyncKVRequestCh <- asyncKVRequest{kvCallPut, k.path, keyStr, c, &k.handle, &pvt}:
+		case <-time.After(kvTimeout):
+			fmt.Println("Put timeout on globalAsyncKVRequestCh", k.path, keyStr)
+			os.Exit(1)
+		}
 		status = 1
 		select {
 		case <-time.After(kvTimeout):
 			fmt.Println("Put timeout", k.path, keyStr)
+			os.Exit(1)
 			return errDiskNotFound
 		case status = <-c:
 		case globalKVNilChan <- pvt:
@@ -378,10 +397,16 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 			pvt.nkvkey.length = C.uint(len(key))
 			pvt.nkvvalue.value = unsafe.Pointer(&value[0])
 			pvt.nkvvalue.length = C.ulong(len(value))
-			globalAsyncKVRequestCh <- asyncKVRequest{kvCallGet, &k.handle, &pvt}
+			select {
+			case globalAsyncKVRequestCh <- asyncKVRequest{kvCallGet, k.path, keyStr, c, &k.handle, &pvt}:
+			case <-time.After(kvTimeout):
+				fmt.Println("Get timeout on globalAsyncKVRequestCh", k.path, keyStr)
+				os.Exit(1)
+			}
+
 			status = 1
 			select {
-			case <-time.After(kvTimeout):
+			case <-time.After(kvTimeout + 2):
 				fmt.Println("Get timeout", k.path, keyStr)
 				os.Exit(1)
 				return nil, errDiskNotFound
@@ -431,7 +456,13 @@ func (k *KV) Delete(keyStr string) error {
 		pvt.channel = C.ulong(uintptr(unsafe.Pointer(&c)))
 		pvt.nkvkey.key = unsafe.Pointer(&key[0])
 		pvt.nkvkey.length = C.uint(len(key))
-		globalAsyncKVRequestCh <- asyncKVRequest{kvCallDel, &k.handle, &pvt}
+		select {
+		case globalAsyncKVRequestCh <- asyncKVRequest{kvCallDel, k.path, keyStr, c, &k.handle, &pvt}:
+		case <-time.After(kvTimeout):
+			fmt.Println("Delete timeout on globalAsyncKVRequestCh", k.path, keyStr)
+			os.Exit(1)
+		}
+
 		status = 1
 		select {
 		case <-time.After(kvTimeout):
