@@ -1083,10 +1083,10 @@
 			"revisionTime": "2018-05-30T06:29:46Z"
 		},
 		{
-			"checksumSHA1": "Zh++JEDfXo0DKQtoKVfScwVdvww=",
+			"checksumSHA1": "pMsrfJZ8JwoPT2pBa1loXKhGODQ=",
 			"path": "golang.org/x/net/http2",
-			"revision": "da118f7b8e5954f39d0d2130ab35d4bf0e3cb344",
-			"revisionTime": "2017-04-23T14:02:46Z"
+			"revision": "9f648a60d9775ef5c977e7669d1673a7a67bef33",
+			"revisionTime": "2019-03-13T06:50:29Z"
 		},
 		{
 			"checksumSHA1": "CBoO1DFToP49Ezph60yZ4J4PBBs=",
@@ -1109,12 +1109,6 @@
 		{
 			"checksumSHA1": "UxahDzW2v4mf/+aFxruuupaoIwo=",
 			"path": "golang.org/x/net/internal/timeseries",
-			"revision": "da118f7b8e5954f39d0d2130ab35d4bf0e3cb344",
-			"revisionTime": "2017-04-23T14:02:46Z"
-		},
-		{
-			"checksumSHA1": "3xyuaSNmClqG4YWC7g0isQIbUTc=",
-			"path": "golang.org/x/net/lex/httplex",
 			"revision": "da118f7b8e5954f39d0d2130ab35d4bf0e3cb344",
 			"revisionTime": "2017-04-23T14:02:46Z"
 		},

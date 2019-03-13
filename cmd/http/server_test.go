@@ -77,10 +77,6 @@ func TestNewServer(t *testing.T) {
 			t.Fatalf("Case %v: server.TCPKeepAliveTimeout: expected: %v, got: %v", (i + 1), DefaultTCPKeepAliveTimeout, server.TCPKeepAliveTimeout)
 		}
 
-		if server.listenerMutex == nil {
-			t.Fatalf("Case %v: server.listenerMutex: expected: <non-nil>, got: <nil>", (i + 1))
-		}
-
 		if server.ReadTimeout != DefaultReadTimeout {
 			t.Fatalf("Case %v: server.ReadTimeout: expected: %v, got: %v", (i + 1), DefaultReadTimeout, server.ReadTimeout)
 		}
