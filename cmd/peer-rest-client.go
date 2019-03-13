@@ -39,36 +39,10 @@ type peerRESTClient struct {
 	connected  bool
 }
 
-// Returns a peer rest client.
+// Reconnect to a peer rest server.
 func (client *peerRESTClient) reConnect() error {
-
-	scheme := "http"
-	if globalIsSSL {
-		scheme = "https"
-	}
-
-	serverURL := &url.URL{
-		Scheme: scheme,
-		Host:   client.host.String(),
-		Path:   peerRESTPath,
-	}
-
-	var tlsConfig *tls.Config
-	if globalIsSSL {
-		tlsConfig = &tls.Config{
-			ServerName: client.host.String(),
-			RootCAs:    globalRootCAs,
-		}
-	}
-
-	restClient, err := rest.NewClient(serverURL, tlsConfig, rest.DefaultRESTTimeout, newAuthToken)
-
-	if err != nil {
-		client.connected = false
-		return err
-	}
-
-	client.restClient = restClient
+	// correct (intelligent) retry logic will be
+	// implemented in subsequent PRs.
 	client.connected = true
 	return nil
 }
@@ -276,10 +250,10 @@ func (client *peerRESTClient) SendEvent(bucket string, targetID, remoteTargetID 
 		return err
 	}
 
-	var sendEventREsp SendEventResp
-	err = gob.NewDecoder(respBody).Decode(&sendEventREsp)
+	var sendEventResp SendEventResp
+	err = gob.NewDecoder(respBody).Decode(&sendEventResp)
 
-	if err != nil && !sendEventREsp.success {
+	if err != nil && !sendEventResp.success {
 		reqInfo := &logger.ReqInfo{BucketName: bucket}
 		reqInfo.AppendTags("targetID", targetID.Name)
 		reqInfo.AppendTags("event", eventData.EventName.String())
@@ -405,14 +379,14 @@ func getRemoteHosts(endpoints EndpointList) []*xnet.Host {
 	return remoteHosts
 }
 
-func getRestClients(peerHosts []*xnet.Host) (map[*xnet.Host]*peerRESTClient, error) {
-	restClients := make(map[*xnet.Host]*peerRESTClient, len(peerHosts))
-	for _, host := range peerHosts {
+func getRestClients(peerHosts []*xnet.Host) ([]*peerRESTClient, error) {
+	restClients := make([]*peerRESTClient, len(peerHosts))
+	for i, host := range peerHosts {
 		client, err := newPeerRESTClient(host)
 		if err != nil {
 			logger.LogIf(context.Background(), err)
 		}
-		restClients[host] = client
+		restClients[i] = client
 	}
 
 	return restClients, nil
