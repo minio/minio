@@ -109,8 +109,9 @@ func (s *peerRESTServer) GetLocksHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	ctx := newContext(r, w, "GetLocks")
 	locks := globalLockServer.ll.DupLockMap()
-	gob.NewEncoder(w).Encode(locks)
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(locks))
 
 	w.(http.Flusher).Flush()
 
@@ -173,6 +174,7 @@ func (s *peerRESTServer) ServerInfoHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	ctx := newContext(r, w, "ServerInfo")
 	info, err := getServerInfo()
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -180,7 +182,7 @@ func (s *peerRESTServer) ServerInfoHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	defer w.(http.Flusher).Flush()
-	gob.NewEncoder(w).Encode(info)
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
 
 // DownloadProflingDataHandler - returns proflied data.
@@ -190,6 +192,7 @@ func (s *peerRESTServer) DownloadProflingDataHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	ctx := newContext(r, w, "DownloadProfiling")
 	profileData, err := getProfileData()
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -197,7 +200,7 @@ func (s *peerRESTServer) DownloadProflingDataHandler(w http.ResponseWriter, r *h
 	}
 
 	defer w.(http.Flusher).Flush()
-	gob.NewEncoder(w).Encode(profileData)
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(profileData))
 }
 
 // CPULoadInfoHandler - returns CPU Load info.
@@ -207,10 +210,11 @@ func (s *peerRESTServer) CPULoadInfoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	ctx := newContext(r, w, "CPULoadInfo")
 	info := localEndpointsCPULoad(globalEndpoints)
 
 	defer w.(http.Flusher).Flush()
-	gob.NewEncoder(w).Encode(info)
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
 
 // DrivePerfInfoHandler - returns Drive Performance info.
@@ -220,10 +224,11 @@ func (s *peerRESTServer) DrivePerfInfoHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	ctx := newContext(r, w, "DrivePerfInfo")
 	info := localEndpointsDrivePerf(globalEndpoints)
 
 	defer w.(http.Flusher).Flush()
-	gob.NewEncoder(w).Encode(info)
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
 
 // MemUsageInfoHandler - returns Memory Usage info.
@@ -232,11 +237,11 @@ func (s *peerRESTServer) MemUsageInfoHandler(w http.ResponseWriter, r *http.Requ
 		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
-
+	ctx := newContext(r, w, "MemUsageInfo")
 	info := localEndpointsMemUsage(globalEndpoints)
 
 	defer w.(http.Flusher).Flush()
-	gob.NewEncoder(w).Encode(info)
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
 
 // LoadCredentialsHandler - loads credentials.
@@ -371,13 +376,13 @@ func (s *peerRESTServer) SetBucketPolicyHandler(w http.ResponseWriter, r *http.R
 	w.(http.Flusher).Flush()
 }
 
-// RemoteTargetExistsResp - Remote Target Exists API Response.
-type RemoteTargetExistsResp struct {
-	exists bool
+type remoteTargetExistsResp struct {
+	Exists bool
 }
 
 // TargetExistsHandler - Check if Target exists.
 func (s *peerRESTServer) TargetExistsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "TargetExists")
 	if !s.IsValid(w, r) {
 		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
@@ -401,22 +406,20 @@ func (s *peerRESTServer) TargetExistsHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var targetExists RemoteTargetExistsResp
-	targetExists.exists = globalNotificationSys.RemoteTargetExist(bucketName, targetID)
+	var targetExists remoteTargetExistsResp
+	targetExists.Exists = globalNotificationSys.RemoteTargetExist(bucketName, targetID)
 
 	defer w.(http.Flusher).Flush()
-	gob.NewEncoder(w).Encode(targetExists)
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(&targetExists))
 }
 
-// SendEventRequest - send event arguments.
-type SendEventRequest struct {
+type sendEventRequest struct {
 	Event    event.Event
 	TargetID event.TargetID
 }
 
-// SendEventResp - send event Response.
-type SendEventResp struct {
-	success bool
+type sendEventResp struct {
+	Success bool
 }
 
 // SendEventHandler - Send Event.
@@ -426,39 +429,41 @@ func (s *peerRESTServer) SendEventHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	ctx := newContext(r, w, "SendEvent")
+
 	vars := mux.Vars(r)
 	bucketName := vars[peerRESTBucket]
 	if bucketName == "" {
 		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
 		return
 	}
-	var sendEventReq SendEventRequest
+	var eventReq sendEventRequest
 	if r.ContentLength <= 0 {
 		s.writeErrorResponse(w, errInvalidArgument)
 		return
 	}
 
-	err := gob.NewDecoder(r.Body).Decode(&sendEventReq)
+	err := gob.NewDecoder(r.Body).Decode(&eventReq)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 
-	var sendEventResp SendEventResp
-	sendEventResp.success = true
-	errs := globalNotificationSys.send(bucketName, sendEventReq.Event, sendEventReq.TargetID)
+	var eventResp sendEventResp
+	eventResp.Success = true
+	errs := globalNotificationSys.send(bucketName, eventReq.Event, eventReq.TargetID)
 
 	for i := range errs {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("Event", sendEventReq.Event.EventName.String())
-		reqInfo.AppendTags("targetName", sendEventReq.TargetID.Name)
+		reqInfo := (&logger.ReqInfo{}).AppendTags("Event", eventReq.Event.EventName.String())
+		reqInfo.AppendTags("targetName", eventReq.TargetID.Name)
 		ctx := logger.SetReqInfo(context.Background(), reqInfo)
 		logger.LogIf(ctx, errs[i].Err)
 
-		sendEventResp.success = false
+		eventResp.Success = false
 		s.writeErrorResponse(w, errs[i].Err)
 		return
 	}
-	gob.NewEncoder(w).Encode(&sendEventResp)
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(&eventResp))
 	w.(http.Flusher).Flush()
 }
 

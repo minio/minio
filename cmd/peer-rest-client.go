@@ -232,7 +232,7 @@ func (client *peerRESTClient) ListenBucketNotification(bucket string, eventNames
 
 // SendEvent - calls send event RPC.
 func (client *peerRESTClient) SendEvent(bucket string, targetID, remoteTargetID event.TargetID, eventData event.Event) error {
-	args := SendEventRequest{
+	args := sendEventRequest{
 		TargetID: remoteTargetID,
 		Event:    eventData,
 	}
@@ -250,11 +250,11 @@ func (client *peerRESTClient) SendEvent(bucket string, targetID, remoteTargetID 
 		return err
 	}
 
-	var sendEventResp SendEventResp
+	var eventResp sendEventResp
 	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&sendEventResp)
+	err = gob.NewDecoder(respBody).Decode(&eventResp)
 
-	if err != nil || !sendEventResp.success {
+	if err != nil || !eventResp.Success {
 		reqInfo := &logger.ReqInfo{BucketName: bucket}
 		reqInfo.AppendTags("targetID", targetID.Name)
 		reqInfo.AppendTags("event", eventData.EventName.String())
@@ -282,9 +282,9 @@ func (client *peerRESTClient) RemoteTargetExist(bucket string, targetID event.Ta
 		return false, err
 	}
 	defer http.DrainBody(respBody)
-	var targetExists RemoteTargetExistsResp
+	var targetExists remoteTargetExistsResp
 	err = gob.NewDecoder(respBody).Decode(&targetExists)
-	return targetExists.exists, err
+	return targetExists.Exists, err
 }
 
 // RemoveBucketPolicy - Remove bucket policy on the peer node.
