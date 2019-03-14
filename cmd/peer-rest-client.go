@@ -32,7 +32,7 @@ import (
 	"github.com/minio/minio/pkg/policy"
 )
 
-// Abstracts a remote disk.
+// client to talk to peer Nodes.
 type peerRESTClient struct {
 	host       *xnet.Host
 	restClient *rest.Client
