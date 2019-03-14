@@ -370,7 +370,7 @@ func (k *KV) Put(keyStr string, value []byte) error {
 		case globalAsyncKVLoopRequestCh <- asyncKVLoopRequest{call: kvCallPut, handle: &k.handle, path: k.path, key: key, value: value, ch: ch}:
 		case <-time.After(kvTimeout):
 			fmt.Println("Put timeout on globalAsyncKVRequestCh", k.path, keyStr)
-			close(globalAsyncKVLoopEndCh)
+			globalAsyncKVLoopEndCh <- struct{}{}
 			time.Sleep(time.Hour)
 			return errDiskNotFound
 		}
@@ -379,7 +379,7 @@ func (k *KV) Put(keyStr string, value []byte) error {
 		case response = <-ch:
 		case <-time.After(kvTimeout):
 			fmt.Println("Put timeout", k.path, keyStr)
-			close(globalAsyncKVLoopEndCh)
+			globalAsyncKVLoopEndCh <- struct{}{}
 			time.Sleep(time.Hour)
 			return errDiskNotFound
 		}
@@ -422,7 +422,7 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 			case globalAsyncKVLoopRequestCh <- asyncKVLoopRequest{call: kvCallGet, handle: &k.handle, path: k.path, key: key, value: value, ch: ch}:
 			case <-time.After(kvTimeout):
 				fmt.Println("Get timeout on globalAsyncKVRequestCh", k.path, keyStr)
-				close(globalAsyncKVLoopEndCh)
+				globalAsyncKVLoopEndCh <- struct{}{}
 				time.Sleep(time.Hour)
 				os.Exit(1)
 			}
@@ -431,7 +431,7 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 			case response = <-ch:
 			case <-time.After(kvTimeout):
 				fmt.Println("Get timeout", k.path, keyStr)
-				close(globalAsyncKVLoopEndCh)
+				globalAsyncKVLoopEndCh <- struct{}{}
 				time.Sleep(time.Hour)
 				os.Exit(1)
 				return nil, errDiskNotFound
@@ -481,7 +481,7 @@ func (k *KV) Delete(keyStr string) error {
 		case globalAsyncKVLoopRequestCh <- asyncKVLoopRequest{call: kvCallDel, handle: &k.handle, path: k.path, key: key, ch: ch}:
 		case <-time.After(kvTimeout):
 			fmt.Println("Delete timeout on globalAsyncKVRequestCh", k.path, keyStr)
-			close(globalAsyncKVLoopEndCh)
+			globalAsyncKVLoopEndCh <- struct{}{}
 			time.Sleep(time.Hour)
 			os.Exit(1)
 		}
@@ -489,7 +489,7 @@ func (k *KV) Delete(keyStr string) error {
 		case response = <-ch:
 		case <-time.After(kvTimeout):
 			fmt.Println("Delete timeout", k.path, keyStr)
-			close(globalAsyncKVLoopEndCh)
+			globalAsyncKVLoopEndCh <- struct{}{}
 			time.Sleep(time.Hour)
 			os.Exit(1)
 			return errDiskNotFound
