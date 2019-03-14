@@ -105,6 +105,7 @@ func getPeerUptimes(serverInfo []ServerInfo) time.Duration {
 // GetLocksHandler - returns list of older lock from the server.
 func (s *peerRESTServer) GetLocksHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -118,6 +119,7 @@ func (s *peerRESTServer) GetLocksHandler(w http.ResponseWriter, r *http.Request)
 // LoadUsersHandler - returns server info.
 func (s *peerRESTServer) LoadUsersHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -139,6 +141,7 @@ func (s *peerRESTServer) LoadUsersHandler(w http.ResponseWriter, r *http.Request
 // StartProfilingHandler - Issues the start profiling command.
 func (s *peerRESTServer) StartProfilingHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -166,6 +169,7 @@ func (s *peerRESTServer) StartProfilingHandler(w http.ResponseWriter, r *http.Re
 // ServerInfoHandler - returns server info.
 func (s *peerRESTServer) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -182,6 +186,7 @@ func (s *peerRESTServer) ServerInfoHandler(w http.ResponseWriter, r *http.Reques
 // DownloadProflingDataHandler - returns proflied data.
 func (s *peerRESTServer) DownloadProflingDataHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -198,6 +203,7 @@ func (s *peerRESTServer) DownloadProflingDataHandler(w http.ResponseWriter, r *h
 // CPULoadInfoHandler - returns CPU Load info.
 func (s *peerRESTServer) CPULoadInfoHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -210,6 +216,7 @@ func (s *peerRESTServer) CPULoadInfoHandler(w http.ResponseWriter, r *http.Reque
 // DrivePerfInfoHandler - returns Drive Performance info.
 func (s *peerRESTServer) DrivePerfInfoHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -222,6 +229,7 @@ func (s *peerRESTServer) DrivePerfInfoHandler(w http.ResponseWriter, r *http.Req
 // MemUsageInfoHandler - returns Memory Usage info.
 func (s *peerRESTServer) MemUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -234,6 +242,7 @@ func (s *peerRESTServer) MemUsageInfoHandler(w http.ResponseWriter, r *http.Requ
 // LoadCredentialsHandler - loads credentials.
 func (s *peerRESTServer) LoadCredentialsHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -246,11 +255,13 @@ func (s *peerRESTServer) LoadCredentialsHandler(w http.ResponseWriter, r *http.R
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
 	if err := objLock.GetRLock(globalOperationTimeout); err != nil {
 		s.writeErrorResponse(w, err)
+		return
 	}
 	objLock.RUnlock()
 
 	if err := globalConfigSys.Load(newObjectLayerFn()); err != nil {
 		s.writeErrorResponse(w, err)
+		return
 	}
 
 	w.(http.Flusher).Flush()
@@ -259,6 +270,7 @@ func (s *peerRESTServer) LoadCredentialsHandler(w http.ResponseWriter, r *http.R
 // DeleteBucketHandler - Delete notification and policies related to the bucket.
 func (s *peerRESTServer) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -278,6 +290,7 @@ func (s *peerRESTServer) DeleteBucketHandler(w http.ResponseWriter, r *http.Requ
 // ReloadFormatHandler - Reload Format.
 func (s *peerRESTServer) ReloadFormatHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -315,6 +328,7 @@ func (s *peerRESTServer) ReloadFormatHandler(w http.ResponseWriter, r *http.Requ
 // RemoveBucketPolicyHandler - Remove bucket policy.
 func (s *peerRESTServer) RemoveBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -332,6 +346,7 @@ func (s *peerRESTServer) RemoveBucketPolicyHandler(w http.ResponseWriter, r *htt
 // SetBucketPolicyHandler - Set bucket policy.
 func (s *peerRESTServer) SetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -350,6 +365,7 @@ func (s *peerRESTServer) SetBucketPolicyHandler(w http.ResponseWriter, r *http.R
 	err := gob.NewDecoder(r.Body).Decode(&policyData)
 	if err != nil {
 		s.writeErrorResponse(w, err)
+		return
 	}
 	globalPolicySys.Set(bucketName, policyData)
 	w.(http.Flusher).Flush()
@@ -363,6 +379,7 @@ type RemoteTargetExistsResp struct {
 // TargetExistsHandler - Check if Target exists.
 func (s *peerRESTServer) TargetExistsHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -381,6 +398,7 @@ func (s *peerRESTServer) TargetExistsHandler(w http.ResponseWriter, r *http.Requ
 	err := gob.NewDecoder(r.Body).Decode(&targetID)
 	if err != nil {
 		s.writeErrorResponse(w, err)
+		return
 	}
 
 	var targetExists RemoteTargetExistsResp
@@ -404,6 +422,7 @@ type SendEventResp struct {
 // SendEventHandler - Send Event.
 func (s *peerRESTServer) SendEventHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -422,11 +441,13 @@ func (s *peerRESTServer) SendEventHandler(w http.ResponseWriter, r *http.Request
 	err := gob.NewDecoder(r.Body).Decode(&sendEventReq)
 	if err != nil {
 		s.writeErrorResponse(w, err)
+		return
 	}
 
 	var sendEventResp SendEventResp
 	sendEventResp.success = true
 	errs := globalNotificationSys.send(bucketName, sendEventReq.Event, sendEventReq.TargetID)
+
 	for i := range errs {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("Event", sendEventReq.Event.EventName.String())
 		reqInfo.AppendTags("targetName", sendEventReq.TargetID.Name)
@@ -435,15 +456,16 @@ func (s *peerRESTServer) SendEventHandler(w http.ResponseWriter, r *http.Request
 
 		sendEventResp.success = false
 		s.writeErrorResponse(w, errs[i].Err)
+		return
 	}
-
-	defer w.(http.Flusher).Flush()
 	gob.NewEncoder(w).Encode(&sendEventResp)
+	w.(http.Flusher).Flush()
 }
 
 // PutBucketNotificationHandler - Set bucket policy.
 func (s *peerRESTServer) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -463,6 +485,7 @@ func (s *peerRESTServer) PutBucketNotificationHandler(w http.ResponseWriter, r *
 	err := gob.NewDecoder(r.Body).Decode(&rulesMap)
 	if err != nil {
 		s.writeErrorResponse(w, err)
+		return
 	}
 
 	globalNotificationSys.AddRulesMap(bucketName, rulesMap)
@@ -479,6 +502,7 @@ type listenBucketNotificationReq struct {
 // ListenBucketNotificationHandler - Listen bucket notification handler.
 func (s *peerRESTServer) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
@@ -525,6 +549,7 @@ var errUnsupportedSignal = fmt.Errorf("unsupported signal: only restart and stop
 // SignalServiceHandler - signal service handler.
 func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 

@@ -251,9 +251,10 @@ func (client *peerRESTClient) SendEvent(bucket string, targetID, remoteTargetID 
 	}
 
 	var sendEventResp SendEventResp
+	defer http.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&sendEventResp)
 
-	if err != nil && !sendEventResp.success {
+	if err != nil || !sendEventResp.success {
 		reqInfo := &logger.ReqInfo{BucketName: bucket}
 		reqInfo.AppendTags("targetID", targetID.Name)
 		reqInfo.AppendTags("event", eventData.EventName.String())
