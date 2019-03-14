@@ -19,34 +19,7 @@ package parquet
 import "github.com/minio/parquet-go/gen-go/parquet"
 
 func getTableValues(values interface{}, valueType parquet.Type) (tableValues []interface{}) {
-	switch valueType {
-	case parquet.Type_BOOLEAN:
-		for _, v := range values.([]bool) {
-			tableValues = append(tableValues, v)
-		}
-	case parquet.Type_INT32:
-		for _, v := range values.([]int32) {
-			tableValues = append(tableValues, v)
-		}
-	case parquet.Type_INT64:
-		for _, v := range values.([]int64) {
-			tableValues = append(tableValues, v)
-		}
-	case parquet.Type_FLOAT:
-		for _, v := range values.([]float32) {
-			tableValues = append(tableValues, v)
-		}
-	case parquet.Type_DOUBLE:
-		for _, v := range values.([]float64) {
-			tableValues = append(tableValues, v)
-		}
-	case parquet.Type_INT96, parquet.Type_BYTE_ARRAY, parquet.Type_FIXED_LEN_BYTE_ARRAY:
-		for _, v := range values.([][]byte) {
-			tableValues = append(tableValues, v)
-		}
-	}
-
-	return tableValues
+	return valuesToInterfaces(values, valueType)
 }
 
 type table struct {
@@ -58,6 +31,9 @@ type table struct {
 	Values             []interface{} // Parquet values
 	DefinitionLevels   []int32       // Definition Levels slice
 	RepetitionLevels   []int32       // Repetition Levels slice
+	ConvertedType      parquet.ConvertedType
+	Encoding           parquet.Encoding
+	BitWidth           int32
 }
 
 func newTableFromTable(srcTable *table) *table {

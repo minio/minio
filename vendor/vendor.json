@@ -674,16 +674,16 @@
 			"revisionTime": "2019-01-20T10:05:29Z"
 		},
 		{
-			"checksumSHA1": "FO6q7sC2QTZMGDWv+/cGWJfjTCk=",
+			"checksumSHA1": "KzX4Kc/eOb8Dd8yJtO8fh3CIxHs=",
 			"path": "github.com/minio/parquet-go",
-			"revision": "d5e4e922da820530a1851afc22499c826c08f1e8",
-			"revisionTime": "2019-02-10T14:56:30Z"
+			"revision": "54766442a4a1f0fee45d70ebbf8acebc6d66f24b",
+			"revisionTime": "2019-03-13T01:38:37Z"
 		},
 		{
 			"checksumSHA1": "N4WRPw4p3AN958RH/O53kUsJacQ=",
 			"path": "github.com/minio/parquet-go/gen-go/parquet",
-			"revision": "d50385ed243d7120cf0f78de3f4f4e171936f12f",
-			"revisionTime": "2018-11-07T21:57:30Z"
+			"revision": "54766442a4a1f0fee45d70ebbf8acebc6d66f24b",
+			"revisionTime": "2019-03-13T01:38:37Z"
 		},
 		{
 			"checksumSHA1": "cYuXpiVBMypgkEr0Wqd79jPPyBg=",

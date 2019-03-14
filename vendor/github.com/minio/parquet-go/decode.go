@@ -18,32 +18,11 @@ package parquet
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"math"
 
 	"github.com/minio/parquet-go/gen-go/parquet"
 )
-
-func uint32ToBytes(v uint32) []byte {
-	buf := make([]byte, 4)
-	binary.LittleEndian.PutUint32(buf, v)
-	return buf
-}
-
-func uint64ToBytes(v uint64) []byte {
-	buf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, v)
-	return buf
-}
-
-func bytesToUint32(buf []byte) uint32 {
-	return binary.LittleEndian.Uint32(buf)
-}
-
-func bytesToUint64(buf []byte) uint64 {
-	return binary.LittleEndian.Uint64(buf)
-}
 
 func i64sToi32s(i64s []int64) (i32s []int32) {
 	i32s = make([]int32, len(i64s))

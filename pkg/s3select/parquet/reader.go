@@ -28,13 +28,13 @@ import (
 
 // Reader - Parquet record reader for S3Select.
 type Reader struct {
-	args *ReaderArgs
-	file *parquetgo.File
+	args   *ReaderArgs
+	reader *parquetgo.Reader
 }
 
 // Read - reads single record.
 func (r *Reader) Read() (rec sql.Record, rerr error) {
-	parquetRecord, err := r.file.Read()
+	parquetRecord, err := r.reader.Read()
 	if err != nil {
 		if err != io.EOF {
 			return nil, errParquetParsingError(err)
@@ -79,12 +79,12 @@ func (r *Reader) Read() (rec sql.Record, rerr error) {
 
 // Close - closes underlaying readers.
 func (r *Reader) Close() error {
-	return r.file.Close()
+	return r.reader.Close()
 }
 
 // NewReader - creates new Parquet reader using readerFunc callback.
 func NewReader(getReaderFunc func(offset, length int64) (io.ReadCloser, error), args *ReaderArgs) (*Reader, error) {
-	file, err := parquetgo.Open(getReaderFunc, nil)
+	reader, err := parquetgo.NewReader(getReaderFunc, nil)
 	if err != nil {
 		if err != io.EOF {
 			return nil, errParquetParsingError(err)
@@ -94,7 +94,7 @@ func NewReader(getReaderFunc func(offset, length int64) (io.ReadCloser, error), 
 	}
 
 	return &Reader{
-		args: args,
-		file: file,
+		args:   args,
+		reader: reader,
 	}, nil
 }
