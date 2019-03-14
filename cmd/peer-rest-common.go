@@ -31,7 +31,6 @@ const (
 	peerRESTMethodLoadUsers                = "loadusers"
 	peerRESTMethodStartProfiling           = "startprofiling"
 	peerRESTMethodDownloadProfilingData    = "downloadprofilingdata"
-	peerRESTMethodLoadCredentials          = "loadcredentials"
 	peerRESTMethodBucketPolicySet          = "setbucketpolicy"
 	peerRESTMethodBucketNotificationPut    = "putbucketnotification"
 	peerRESTMethodBucketNotificationListen = "listenbucketnotification"

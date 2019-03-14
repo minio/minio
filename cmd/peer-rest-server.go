@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"path"
 	"sort"
 	"strings"
 	"time"
@@ -242,34 +241,6 @@ func (s *peerRESTServer) MemUsageInfoHandler(w http.ResponseWriter, r *http.Requ
 
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
-}
-
-// LoadCredentialsHandler - loads credentials.
-func (s *peerRESTServer) LoadCredentialsHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	// Construct path to config.json for the given bucket.
-	configFile := path.Join(bucketConfigPrefix, minioConfigFile)
-	transactionConfigFile := configFile + ".transaction"
-
-	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
-	// and configFile, take a transaction lock to avoid race.
-	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
-	if err := objLock.GetRLock(globalOperationTimeout); err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-	objLock.RUnlock()
-
-	if err := globalConfigSys.Load(newObjectLayerFn()); err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	w.(http.Flusher).Flush()
 }
 
 // DeleteBucketHandler - Delete notification and policies related to the bucket.
@@ -609,7 +580,6 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodStartProfiling).HandlerFunc(httpTraceAll(server.StartProfilingHandler)).Queries(restQueries(peerRESTProfiler)...)
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodDownloadProfilingData).HandlerFunc(httpTraceHdrs(server.DownloadProflingDataHandler))
 
-	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodLoadCredentials).HandlerFunc(httpTraceHdrs(server.LoadCredentialsHandler))
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodTargetExists).HandlerFunc(httpTraceHdrs(server.TargetExistsHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodSendEvent).HandlerFunc(httpTraceHdrs(server.SendEventHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodBucketNotificationPut).HandlerFunc(httpTraceHdrs(server.PutBucketNotificationHandler)).Queries(restQueries(peerRESTBucket)...)

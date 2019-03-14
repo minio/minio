@@ -347,16 +347,6 @@ func (client *peerRESTClient) LoadUsers() (err error) {
 	return nil
 }
 
-// LoadCredentials - send load credentials command to peer nodes.
-func (client *peerRESTClient) LoadCredentials() (err error) {
-	respBody, err := client.call(peerRESTMethodLoadCredentials, nil, nil, -1)
-	if err != nil {
-		return
-	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
 // SignalService - sends signal to peer nodes.
 func (client *peerRESTClient) SignalService(sig serviceSignal) error {
 	values := make(url.Values)
