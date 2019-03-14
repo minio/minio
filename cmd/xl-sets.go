@@ -725,7 +725,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		recursive = false
 	}
 
-	walkResultCh, endWalkCh := s.listPool.Release(listParams{bucket, recursive, marker, prefix, false})
+	walkResultCh, endWalkCh := s.listPool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		isLeaf := func(bucket, entry string) bool {
@@ -798,7 +798,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		}
 	}
 
-	params := listParams{bucket, recursive, nextMarker, prefix, false}
+	params := listParams{bucket, recursive, nextMarker, prefix}
 	if !eof {
 		s.listPool.Set(params, walkResultCh, endWalkCh)
 	}
@@ -1319,110 +1319,48 @@ func (s *xlSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 	return listBuckets, nil
 }
 
-// listObjectsHeal - wrapper function implemented over file tree walk.
-func (s *xlSets) listObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
-	// Default is recursive, if delimiter is set then list non recursive.
+// HealObjects - Heal all objects recursively at a specified prefix, any
+// dangling objects deleted as well automatically.
+func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObjectFn func(string, string) error) (err error) {
 	recursive := true
-	if delimiter == slashSeparator {
-		recursive = false
+
+	endWalkCh := make(chan struct{})
+	isLeaf := func(bucket, entry string) bool {
+		entry = strings.TrimSuffix(entry, slashSeparator)
+		// Verify if we are at the leaf, a leaf is where we
+		// see `xl.json` inside a directory.
+		return s.getHashedSet(entry).isObject(bucket, entry)
 	}
 
-	// "heal" true for listObjectsHeal() and false for listObjects()
-	walkResultCh, endWalkCh := s.listPool.Release(listParams{bucket, recursive, marker, prefix, true})
-	if walkResultCh == nil {
-		endWalkCh = make(chan struct{})
-		isLeaf := func(bucket, entry string) bool {
-			entry = strings.TrimSuffix(entry, slashSeparator)
-			// Verify if we are at the leaf, a leaf is where we
-			// see `xl.json` inside a directory.
-			return s.getHashedSet(entry).isObject(bucket, entry)
-		}
-
-		isLeafDir := func(bucket, entry string) bool {
-			var ok bool
-			for _, set := range s.sets {
-				ok = set.isObjectDir(bucket, entry)
-				if ok {
-					return true
-				}
+	isLeafDir := func(bucket, entry string) bool {
+		var ok bool
+		for _, set := range s.sets {
+			ok = set.isObjectDir(bucket, entry)
+			if ok {
+				return true
 			}
-			return false
 		}
-
-		listDir := listDirSetsFactory(ctx, isLeaf, isLeafDir, s.sets...)
-		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
+		return false
 	}
 
-	var objInfos []ObjectInfo
-	var eof bool
-	var nextMarker string
-	for i := 0; i < maxKeys; {
+	listDir := listDirSetsFactory(ctx, isLeaf, isLeafDir, s.sets...)
+	walkResultCh := startTreeWalk(ctx, bucket, prefix, "", recursive, listDir, isLeaf, isLeafDir, endWalkCh)
+	for {
 		walkResult, ok := <-walkResultCh
 		if !ok {
-			// Closed channel.
-			eof = true
 			break
 		}
 		// For any walk error return right away.
 		if walkResult.err != nil {
-			return loi, toObjectErr(walkResult.err, bucket, prefix)
+			return toObjectErr(walkResult.err, bucket, prefix)
 		}
-		var objInfo ObjectInfo
-		objInfo.Bucket = bucket
-		objInfo.Name = walkResult.entry
-		nextMarker = objInfo.Name
-		objInfos = append(objInfos, objInfo)
-		i++
+		if err := healObjectFn(bucket, walkResult.entry); err != nil {
+			return toObjectErr(err, bucket, walkResult.entry)
+		}
 		if walkResult.end {
-			eof = true
 			break
 		}
 	}
 
-	params := listParams{bucket, recursive, nextMarker, prefix, true}
-	if !eof {
-		s.listPool.Set(params, walkResultCh, endWalkCh)
-	}
-
-	result := ListObjectsInfo{IsTruncated: !eof}
-	for _, objInfo := range objInfos {
-		result.NextMarker = objInfo.Name
-		result.Objects = append(result.Objects, objInfo)
-	}
-	return result, nil
-}
-
-// This is not implemented yet, will be implemented later to comply with Admin API refactor.
-func (s *xlSets) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
-	if err = checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
-		return loi, err
-	}
-
-	// With max keys of zero we have reached eof, return right here.
-	if maxKeys == 0 {
-		return loi, nil
-	}
-
-	// For delimiter and prefix as '/' we do not list anything at all
-	// since according to s3 spec we stop at the 'delimiter' along
-	// with the prefix. On a flat namespace with 'prefix' as '/'
-	// we don't have any entries, since all the keys are of form 'keyName/...'
-	if delimiter == slashSeparator && prefix == slashSeparator {
-		return loi, nil
-	}
-
-	// Over flowing count - reset to maxObjectList.
-	if maxKeys < 0 || maxKeys > maxObjectList {
-		maxKeys = maxObjectList
-	}
-
-	// Initiate a list operation, if successful filter and return quickly.
-	listObjInfo, err := s.listObjectsHeal(ctx, bucket, prefix, marker, delimiter, maxKeys)
-	if err == nil {
-		// We got the entries successfully return.
-		return listObjInfo, nil
-	}
-
-	// Return error at the end.
-	return loi, toObjectErr(err, bucket, prefix)
+	return nil
 }

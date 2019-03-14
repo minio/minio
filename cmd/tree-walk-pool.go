@@ -33,7 +33,6 @@ type listParams struct {
 	recursive bool
 	marker    string
 	prefix    string
-	heal      bool
 }
 
 // errWalkAbort - returned by doTreeWalk() if it returns prematurely.

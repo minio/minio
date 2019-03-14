@@ -423,7 +423,7 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 	if delimiter == slashSeparator {
 		recursive = false
 	}
-	walkResultCh, endWalkCh := c.listPool.Release(listParams{bucket, recursive, marker, prefix, false})
+	walkResultCh, endWalkCh := c.listPool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		isLeaf := func(bucket, object string) bool {
@@ -495,7 +495,7 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 		}
 	}
 
-	params := listParams{bucket, recursive, nextMarker, prefix, false}
+	params := listParams{bucket, recursive, nextMarker, prefix}
 	if !eof {
 		c.listPool.Set(params, walkResultCh, endWalkCh)
 	}
