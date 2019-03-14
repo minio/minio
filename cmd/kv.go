@@ -267,12 +267,12 @@ const kvKeyLength = 200
 var kvMu sync.Mutex
 var kvSerialize = os.Getenv("MINIO_NKV_SERIALIZE") != ""
 
-type kvCallType int
+type kvCallType string
 
 const (
-	kvCallPut kvCallType = iota
-	kvCallGet
-	kvCallDel
+	kvCallPut kvCallType = "put"
+	kvCallGet            = "get"
+	kvCallDel            = "delete"
 )
 
 type asyncKVLoopRequest struct {
@@ -298,11 +298,14 @@ type asyncKVResponse struct {
 
 var globalAsyncKVLoopRequestCh chan asyncKVLoopRequest
 var globalAsyncKVResponseCh chan asyncKVResponse
+var globalAsyncKVLoopEndCh chan struct{}
 
 func kvAsyncLoop() {
 	runtime.LockOSThread()
 	globalAsyncKVLoopRequestCh = make(chan asyncKVLoopRequest)
 	globalAsyncKVResponseCh = make(chan asyncKVResponse)
+	globalAsyncKVLoopEndCh = make(chan struct{})
+
 	var id uint64
 	idMap := make(map[uint64]asyncKVLoopRequest)
 	for {
@@ -326,6 +329,12 @@ func kvAsyncLoop() {
 			}
 			delete(idMap, response.id)
 			request.ch <- asyncKVLoopResponse{response.status, response.actualLength}
+		case <-globalAsyncKVLoopEndCh:
+			fmt.Println("Pending requests:", len(idMap))
+			for id, request := range idMap {
+				fmt.Printf("private_data_1=%x key=%s request=%s", id, string(request.key), request.call)
+			}
+			os.Exit(1)
 		}
 	}
 }
@@ -361,14 +370,17 @@ func (k *KV) Put(keyStr string, value []byte) error {
 		case globalAsyncKVLoopRequestCh <- asyncKVLoopRequest{call: kvCallPut, handle: &k.handle, path: k.path, key: key, value: value, ch: ch}:
 		case <-time.After(kvTimeout):
 			fmt.Println("Put timeout on globalAsyncKVRequestCh", k.path, keyStr)
-			os.Exit(1)
+			close(globalAsyncKVLoopEndCh)
+			time.Sleep(time.Hour)
+			return errDiskNotFound
 		}
 
 		select {
 		case response = <-ch:
 		case <-time.After(kvTimeout):
 			fmt.Println("Put timeout", k.path, keyStr)
-			os.Exit(1)
+			close(globalAsyncKVLoopEndCh)
+			time.Sleep(time.Hour)
 			return errDiskNotFound
 		}
 		status = response.status
@@ -409,14 +421,18 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 			select {
 			case globalAsyncKVLoopRequestCh <- asyncKVLoopRequest{call: kvCallGet, handle: &k.handle, path: k.path, key: key, value: value, ch: ch}:
 			case <-time.After(kvTimeout):
-				fmt.Println("Put timeout on globalAsyncKVRequestCh", k.path, keyStr)
+				fmt.Println("Get timeout on globalAsyncKVRequestCh", k.path, keyStr)
+				close(globalAsyncKVLoopEndCh)
+				time.Sleep(time.Hour)
 				os.Exit(1)
 			}
 
 			select {
 			case response = <-ch:
 			case <-time.After(kvTimeout):
-				fmt.Println("Put timeout", k.path, keyStr)
+				fmt.Println("Get timeout", k.path, keyStr)
+				close(globalAsyncKVLoopEndCh)
+				time.Sleep(time.Hour)
 				os.Exit(1)
 				return nil, errDiskNotFound
 			}
@@ -464,13 +480,17 @@ func (k *KV) Delete(keyStr string) error {
 		select {
 		case globalAsyncKVLoopRequestCh <- asyncKVLoopRequest{call: kvCallDel, handle: &k.handle, path: k.path, key: key, ch: ch}:
 		case <-time.After(kvTimeout):
-			fmt.Println("Put timeout on globalAsyncKVRequestCh", k.path, keyStr)
+			fmt.Println("Delete timeout on globalAsyncKVRequestCh", k.path, keyStr)
+			close(globalAsyncKVLoopEndCh)
+			time.Sleep(time.Hour)
 			os.Exit(1)
 		}
 		select {
 		case response = <-ch:
 		case <-time.After(kvTimeout):
-			fmt.Println("Put timeout", k.path, keyStr)
+			fmt.Println("Delete timeout", k.path, keyStr)
+			close(globalAsyncKVLoopEndCh)
+			time.Sleep(time.Hour)
 			os.Exit(1)
 			return errDiskNotFound
 		}
