@@ -38,11 +38,12 @@ func registerDistXLRouters(router *mux.Router, endpoints EndpointList) {
 	// Register storage rpc router only if its a distributed setup.
 	registerStorageRESTHandlers(router, endpoints)
 
+	// Register peer REST router only if its a distributed setup.
+	registerPeerRESTHandlers(router)
+
 	// Register distributed namespace lock.
 	registerDistNSLockRouter(router)
 
-	// Register peer communication router.
-	registerPeerRPCRouter(router)
 }
 
 // List of some generic handlers which are applied for all incoming requests.

@@ -18,35 +18,35 @@ package cmd
 
 import "github.com/minio/minio/pkg/event"
 
-// PeerRPCClientTarget - RPCClient is an event.Target which sends event to target of remote peer.
-type PeerRPCClientTarget struct {
+// PeerRESTClientTarget - RPCClient is an event.Target which sends event to target of remote peer.
+type PeerRESTClientTarget struct {
 	id             event.TargetID
 	remoteTargetID event.TargetID
-	rpcClient      *PeerRPCClient
+	restClient     *peerRESTClient
 	bucketName     string
 }
 
 // ID - returns target ID.
-func (target *PeerRPCClientTarget) ID() event.TargetID {
+func (target *PeerRESTClientTarget) ID() event.TargetID {
 	return target.id
 }
 
 // Send - sends event to remote peer by making RPC call.
-func (target *PeerRPCClientTarget) Send(eventData event.Event) error {
-	return target.rpcClient.SendEvent(target.bucketName, target.id, target.remoteTargetID, eventData)
+func (target *PeerRESTClientTarget) Send(eventData event.Event) error {
+	return target.restClient.SendEvent(target.bucketName, target.id, target.remoteTargetID, eventData)
 }
 
 // Close - does nothing and available for interface compatibility.
-func (target *PeerRPCClientTarget) Close() error {
+func (target *PeerRESTClientTarget) Close() error {
 	return nil
 }
 
-// NewPeerRPCClientTarget - creates RPCClient target with given target ID available in remote peer.
-func NewPeerRPCClientTarget(bucketName string, targetID event.TargetID, rpcClient *PeerRPCClient) *PeerRPCClientTarget {
-	return &PeerRPCClientTarget{
+// NewPeerRESTClientTarget - creates RPCClient target with given target ID available in remote peer.
+func NewPeerRESTClientTarget(bucketName string, targetID event.TargetID, restClient *peerRESTClient) *PeerRESTClientTarget {
+	return &PeerRESTClientTarget{
 		id:             event.TargetID{ID: targetID.ID, Name: targetID.Name + "+" + mustGetUUID()},
 		remoteTargetID: targetID,
 		bucketName:     bucketName,
-		rpcClient:      rpcClient,
+		restClient:     restClient,
 	}
 }
