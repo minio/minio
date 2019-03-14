@@ -197,12 +197,7 @@ import (
 
 //export minio_nkv_callback
 func minio_nkv_callback(id unsafe.Pointer, result C.int, actualLength C.int) {
-	select {
-	case globalAsyncKVResponseCh <- asyncKVResponse{uint64(uintptr(id)), int(result), int(actualLength)}:
-	case <-time.After(kvTimeout):
-		fmt.Println("No listeners for result chan")
-		os.Exit(1)
-	}
+	globalAsyncKVResponseCh <- asyncKVResponse{uint64(uintptr(id)), int(result), int(actualLength)}
 }
 
 var kvTimeout time.Duration = func() time.Duration {
@@ -313,6 +308,9 @@ func kvAsyncLoop() {
 		case request := <-globalAsyncKVLoopRequestCh:
 			id++
 			idMap[id] = request
+			t := time.AfterFunc(kvTimeout, func() {
+				fmt.Println("timeout to KV", request.call, request.key)
+			})
 			switch request.call {
 			case kvCallPut:
 				C.minio_nkv_put_async(request.handle, unsafe.Pointer(uintptr(id)), unsafe.Pointer(&request.key[0]), C.int(len(request.key)), unsafe.Pointer(&request.value[0]), C.int(len(request.value)))
@@ -321,6 +319,7 @@ func kvAsyncLoop() {
 			case kvCallDel:
 				C.minio_nkv_delete_async(request.handle, unsafe.Pointer(uintptr(id)), unsafe.Pointer(&request.key[0]), C.int(len(request.key)))
 			}
+			t.Stop()
 		case response := <-globalAsyncKVResponseCh:
 			request, ok := idMap[response.id]
 			if !ok {
