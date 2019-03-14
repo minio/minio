@@ -190,6 +190,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -290,6 +291,7 @@ var globalAsyncKVRequestCh chan asyncKVRequest
 var globalKVNilChan chan C.struct_minio_nkv_private_
 
 func kvAsyncLoop() {
+	runtime.LockOSThread()
 	globalAsyncKVRequestCh = make(chan asyncKVRequest)
 	var requests []asyncKVRequest
 	for request := range globalAsyncKVRequestCh {
