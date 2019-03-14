@@ -26,11 +26,22 @@ import (
 	"time"
 )
 
+// HealScanMode represents the type of healing scan
+type HealScanMode int
+
+const (
+	// HealNormalScan checks if parts are present and not outdated
+	HealNormalScan HealScanMode = iota
+	// HealDeepScan checks for parts bitrot checksums
+	HealDeepScan
+)
+
 // HealOpts - collection of options for a heal sequence
 type HealOpts struct {
-	Recursive bool `json:"recursive"`
-	DryRun    bool `json:"dryRun"`
-	Remove    bool `json:"remove"`
+	Recursive bool         `json:"recursive"`
+	DryRun    bool         `json:"dryRun"`
+	Remove    bool         `json:"remove"`
+	ScanMode  HealScanMode `json:"scanMode"`
 }
 
 // HealStartSuccess - holds information about a successfully started

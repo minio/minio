@@ -575,7 +575,7 @@ func (h *healSequence) healMinioSysMeta(metaPrefix string) func() error {
 			if h.isQuitting() {
 				return errHealStopSignalled
 			}
-			res, herr := objectAPI.HealObject(h.ctx, bucket, object, h.settings.DryRun, h.settings.Remove)
+			res, herr := objectAPI.HealObject(h.ctx, bucket, object, h.settings.DryRun, h.settings.Remove, h.settings.ScanMode)
 			// Object might have been deleted, by the time heal
 			// was attempted we ignore this object an move on.
 			if isErrObjectNotFound(herr) {
@@ -718,7 +718,7 @@ func (h *healSequence) healObject(bucket, object string) error {
 		return errServerNotInitialized
 	}
 
-	hri, err := objectAPI.HealObject(h.ctx, bucket, object, h.settings.DryRun, h.settings.Remove)
+	hri, err := objectAPI.HealObject(h.ctx, bucket, object, h.settings.DryRun, h.settings.Remove, h.settings.ScanMode)
 	if isErrObjectNotFound(err) {
 		return nil
 	}
