@@ -309,7 +309,7 @@ func kvAsyncLoop() {
 			id++
 			idMap[id] = request
 			t := time.AfterFunc(kvTimeout, func() {
-				fmt.Println("timeout to KV", request.call, request.key)
+				fmt.Println("timeout while calling KV", request.call, string(request.key))
 			})
 			switch request.call {
 			case kvCallPut:
