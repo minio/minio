@@ -81,8 +81,8 @@ func (value Value) MarshalJSON() (data []byte, err error) {
 	return json.Marshal(value.Value)
 }
 
-// File - denotes parquet file.
-type File struct {
+// Reader - denotes parquet file.
+type Reader struct {
 	getReaderFunc  GetReaderFunc
 	schemaElements []*parquet.SchemaElement
 	rowGroups      []*parquet.RowGroup
@@ -94,8 +94,8 @@ type File struct {
 	rowIndex    int64
 }
 
-// Open - opens parquet file with given column names.
-func Open(getReaderFunc GetReaderFunc, columnNames set.StringSet) (*File, error) {
+// NewReader - creates new parquet reader. Reader calls getReaderFunc to get required data range for given columnNames. If columnNames is empty, all columns are used.
+func NewReader(getReaderFunc GetReaderFunc, columnNames set.StringSet) (*Reader, error) {
 	fileMeta, err := fileMetadata(getReaderFunc)
 	if err != nil {
 		return nil, err
@@ -107,7 +107,7 @@ func Open(getReaderFunc GetReaderFunc, columnNames set.StringSet) (*File, error)
 		nameList = append(nameList, element.Name)
 	}
 
-	return &File{
+	return &Reader{
 		getReaderFunc:  getReaderFunc,
 		rowGroups:      fileMeta.GetRowGroups(),
 		schemaElements: schemaElements,
@@ -117,54 +117,50 @@ func Open(getReaderFunc GetReaderFunc, columnNames set.StringSet) (*File, error)
 }
 
 // Read - reads single record.
-func (file *File) Read() (record *Record, err error) {
-	if file.rowGroupIndex >= len(file.rowGroups) {
+func (reader *Reader) Read() (record *Record, err error) {
+	if reader.rowGroupIndex >= len(reader.rowGroups) {
 		return nil, io.EOF
 	}
 
-	if file.columns == nil {
-		file.columns, err = getColumns(
-			file.rowGroups[file.rowGroupIndex],
-			file.columnNames,
-			file.schemaElements,
-			file.getReaderFunc,
+	if reader.columns == nil {
+		reader.columns, err = getColumns(
+			reader.rowGroups[reader.rowGroupIndex],
+			reader.columnNames,
+			reader.schemaElements,
+			reader.getReaderFunc,
 		)
 		if err != nil {
 			return nil, err
 		}
 
-		file.rowIndex = 0
+		reader.rowIndex = 0
 	}
 
-	if file.rowIndex >= file.rowGroups[file.rowGroupIndex].GetNumRows() {
-		file.rowGroupIndex++
-		file.Close()
-		return file.Read()
+	if reader.rowIndex >= reader.rowGroups[reader.rowGroupIndex].GetNumRows() {
+		reader.rowGroupIndex++
+		reader.Close()
+		return reader.Read()
 	}
 
-	record = newRecord(file.nameList)
-	for name := range file.columns {
-		value, valueType := file.columns[name].read()
+	record = newRecord(reader.nameList)
+	for name := range reader.columns {
+		value, valueType := reader.columns[name].read()
 		record.set(name, Value{value, valueType})
 	}
 
-	file.rowIndex++
+	reader.rowIndex++
 
 	return record, nil
 }
 
 // Close - closes underneath readers.
-func (file *File) Close() (err error) {
-	if file.columns != nil {
-		return nil
-	}
-
-	for _, column := range file.columns {
+func (reader *Reader) Close() (err error) {
+	for _, column := range reader.columns {
 		column.close()
 	}
 
-	file.columns = nil
-	file.rowIndex = 0
+	reader.columns = nil
+	reader.rowIndex = 0
 
 	return nil
 }
