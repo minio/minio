@@ -98,7 +98,6 @@ func (sys *PolicySys) IsAllowed(args policy.Args) bool {
 func (sys *PolicySys) refresh(objAPI ObjectLayer) error {
 	buckets, err := objAPI.ListBuckets(context.Background())
 	if err != nil {
-		logger.LogIf(context.Background(), err)
 		return err
 	}
 	sys.removeDeletedBuckets(buckets)
