@@ -273,7 +273,6 @@ const (
 type asyncKVLoopRequest struct {
 	call   kvCallType
 	handle *C.struct_minio_nkv_handle
-	pfn    *C.struct_nkv_postprocess_function
 	path   string
 	key    []byte
 	value  []byte
