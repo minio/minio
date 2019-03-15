@@ -19,6 +19,7 @@ package cmd
 import (
 	"os"
 	"os/exec"
+	"syscall"
 )
 
 // Type of service signals currently supported.
@@ -56,9 +57,7 @@ func restartProcess() error {
 		return err
 	}
 
-	// Pass on the environment and replace the old count key with the new one.
-	cmd := exec.Command(argv0, os.Args[1:]...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Start()
+	// Invokes the execve system call.
+	// Re-uses the same pid. This preserves the pid over multiple server-respawns.
+	return syscall.Exec(argv0, os.Args, os.Environ())
 }
