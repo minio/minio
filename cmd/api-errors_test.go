@@ -55,7 +55,7 @@ var toAPIErrorTests = []struct {
 	// SSE-C errors
 	{err: crypto.ErrInvalidCustomerAlgorithm, errCode: ErrInvalidSSECustomerAlgorithm},
 	{err: crypto.ErrMissingCustomerKey, errCode: ErrMissingSSECustomerKey},
-	{err: crypto.ErrInvalidCustomerKey, errCode: ErrInvalidSSECustomerKey},
+	{err: crypto.ErrInvalidCustomerKey, errCode: ErrAccessDenied},
 	{err: crypto.ErrMissingCustomerKeyMD5, errCode: ErrMissingSSECustomerKeyMD5},
 	{err: crypto.ErrCustomerKeyMD5Mismatch, errCode: ErrSSECustomerKeyMD5Mismatch},
 	{err: errObjectTampered, errCode: ErrObjectTampered},
