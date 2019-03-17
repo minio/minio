@@ -319,9 +319,8 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	vars := mux.Vars(r)
-	perfType := vars["perfType"]
-
-	if perfType == "drive" {
+	switch perfType := vars["perfType"]; perfType {
+	case "drive":
 		info := objectAPI.StorageInfo(ctx)
 		if !(info.Backend.Type == BackendFS || info.Backend.Type == BackendErasure) {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
@@ -344,7 +343,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		// Reply with performance information (across nodes in a
 		// distributed setup) as json.
 		writeSuccessResponseJSON(w, jsonBytes)
-	} else if perfType == "cpu" {
+	case "cpu":
 		// Get CPU load details from local server's cpu(s)
 		cpu := localEndpointsCPULoad(globalEndpoints)
 		// Notify all other Minio peers to report cpu load numbers
@@ -361,7 +360,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		// Reply with cpu load information (across nodes in a
 		// distributed setup) as json.
 		writeSuccessResponseJSON(w, jsonBytes)
-	} else if perfType == "mem" {
+	case "mem":
 		// Get mem usage details from local server(s)
 		m := localEndpointsMemUsage(globalEndpoints)
 		// Notify all other Minio peers to report mem usage numbers
@@ -378,7 +377,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		// Reply with mem usage information (across nodes in a
 		// distributed setup) as json.
 		writeSuccessResponseJSON(w, jsonBytes)
-	} else {
+	default:
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 	}
 }

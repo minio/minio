@@ -1798,67 +1798,50 @@ func toJSONError(err error, params ...string) (jerr *json2.Error) {
 
 // toWebAPIError - convert into error into APIError.
 func toWebAPIError(err error) APIError {
-	if err == errAuthentication {
-		return APIError{
-			Code:           "AccessDenied",
-			HTTPStatusCode: http.StatusForbidden,
-			Description:    err.Error(),
-		}
-	} else if err == errServerNotInitialized {
+	switch err {
+	case errServerNotInitialized:
 		return APIError{
 			Code:           "XMinioServerNotInitialized",
 			HTTPStatusCode: http.StatusServiceUnavailable,
 			Description:    err.Error(),
 		}
-	} else if err == auth.ErrInvalidAccessKeyLength {
+	case errAuthentication, auth.ErrInvalidAccessKeyLength, auth.ErrInvalidSecretKeyLength, errInvalidAccessKeyID:
 		return APIError{
 			Code:           "AccessDenied",
 			HTTPStatusCode: http.StatusForbidden,
 			Description:    err.Error(),
 		}
-	} else if err == auth.ErrInvalidSecretKeyLength {
-		return APIError{
-			Code:           "AccessDenied",
-			HTTPStatusCode: http.StatusForbidden,
-			Description:    err.Error(),
-		}
-	} else if err == errInvalidAccessKeyID {
-		return APIError{
-			Code:           "AccessDenied",
-			HTTPStatusCode: http.StatusForbidden,
-			Description:    err.Error(),
-		}
-	} else if err == errSizeUnspecified {
+	case errSizeUnspecified:
 		return APIError{
 			Code:           "InvalidRequest",
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
 		}
-	} else if err == errChangeCredNotAllowed {
+	case errChangeCredNotAllowed:
 		return APIError{
 			Code:           "MethodNotAllowed",
 			HTTPStatusCode: http.StatusMethodNotAllowed,
 			Description:    err.Error(),
 		}
-	} else if err == errInvalidBucketName {
+	case errInvalidBucketName:
 		return APIError{
 			Code:           "InvalidBucketName",
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
 		}
-	} else if err == errInvalidArgument {
+	case errInvalidArgument:
 		return APIError{
 			Code:           "InvalidArgument",
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
 		}
-	} else if err == errEncryptedObject {
+	case errEncryptedObject:
 		return getAPIError(ErrSSEEncryptedObject)
-	} else if err == errInvalidEncryptionParameters {
+	case errInvalidEncryptionParameters:
 		return getAPIError(ErrInvalidEncryptionParameters)
-	} else if err == errObjectTampered {
+	case errObjectTampered:
 		return getAPIError(ErrObjectTampered)
-	} else if err == errMethodNotAllowed {
+	case errMethodNotAllowed:
 		return getAPIError(ErrMethodNotAllowed)
 	}
 
