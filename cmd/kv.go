@@ -193,6 +193,8 @@ import (
 	"sync"
 	"time"
 	"unsafe"
+
+	"github.com/minio/minio/cmd/logger"
 )
 
 //export minio_nkv_callback
@@ -212,6 +214,18 @@ var kvTimeout time.Duration = func() time.Duration {
 	}
 	return time.Duration(i) * time.Second
 }()
+
+var kvMaxValueSize = getKVMaxValueSize()
+
+func getKVMaxValueSize() int {
+	str := os.Getenv("MINIO_NKV_MAX_VALUE_SIZE")
+	if str == "" {
+		return 2 * 1024 * 1024
+	}
+	valSize, err := strconv.Atoi(str)
+	logger.FatalIf(err, "parsing MINIO_NKV_MAX_VALUE_SIZE")
+	return valSize
+}
 
 var globalNKVHandle C.uint64_t
 
