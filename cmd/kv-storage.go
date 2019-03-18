@@ -305,13 +305,15 @@ func (k *KVStorage) CreateFile(volume, filePath string, size int64, reader io.Re
 		}
 		size -= int64(n)
 		id := mustGetUUID()
-		if len(buf) < kvMaxValueSize {
-			paddedSize := ceilFrac(int64(len(buf)), kvNSEntryPaddingMultiple) * kvNSEntryPaddingMultiple
-			for {
-				if int64(len(buf)) == paddedSize {
-					break
+		if kvPadding {
+			if len(buf) < kvMaxValueSize {
+				paddedSize := ceilFrac(int64(len(buf)), kvNSEntryPaddingMultiple) * kvNSEntryPaddingMultiple
+				for {
+					if int64(len(buf)) == paddedSize {
+						break
+					}
+					buf = append(buf, '\x00')
 				}
-				buf = append(buf, '\x00')
 			}
 		}
 		if err = k.kv.Put(k.DataKey(id), buf); err != nil {

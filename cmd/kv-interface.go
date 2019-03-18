@@ -26,16 +26,21 @@ func KVNSEntryMarshal(entry KVNSEntry) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !kvPadding {
+		return b, nil
+	}
 	padded := make([]byte, ceilFrac(int64(len(b)), kvNSEntryPaddingMultiple)*kvNSEntryPaddingMultiple)
 	copy(padded, b)
 	return padded, nil
 }
 
 func KVNSEntryUnmarshal(b []byte, entry *KVNSEntry) error {
-	for i := range b {
-		if b[i] == '\x00' {
-			b = b[:i]
-			break
+	if kvPadding {
+		for i := range b {
+			if b[i] == '\x00' {
+				b = b[:i]
+				break
+			}
 		}
 	}
 	return json.Unmarshal(b, entry)
