@@ -450,6 +450,11 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		// Return the new object info.
 		return fsMeta.ToObjectInfo(srcBucket, srcObject, fi), nil
 	}
+
+	if err := checkPutObjectArgs(ctx, dstBucket, dstObject, fs, srcInfo.PutObjReader.Size()); err != nil {
+		return ObjectInfo{}, err
+	}
+
 	objInfo, err := fs.putObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, ObjectOptions{ServerSideEncryption: dstOpts.ServerSideEncryption, UserDefined: srcInfo.UserDefined})
 	if err != nil {
 		return oi, toObjectErr(err, dstBucket, dstObject)
@@ -813,6 +818,7 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 		return objInfo, err
 	}
 	defer objectLock.Unlock()
+
 	return fs.putObject(ctx, bucket, object, r, opts)
 }
 
@@ -852,10 +858,6 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 		return fsMeta.ToObjectInfo(bucket, object, fi), nil
-	}
-
-	if err = checkPutObjectArgs(ctx, bucket, object, fs, data.Size()); err != nil {
-		return ObjectInfo{}, err
 	}
 
 	// Check if an object is present as one of the parent dir.
