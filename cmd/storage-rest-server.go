@@ -17,17 +17,14 @@
 package cmd
 
 import (
+	"encoding/gob"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"path"
 	"strconv"
-
-	"net/http"
-
-	"encoding/gob"
-	"encoding/hex"
-
 	"time"
 
 	"github.com/gorilla/mux"
