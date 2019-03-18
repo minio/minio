@@ -30,7 +30,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/iam/validator"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -284,6 +284,25 @@ func (s *serverConfig) loadFromEnvs() {
 		if u, err := xnet.ParseURL(jwksURL); err == nil {
 			s.OpenID.JWKS.URL = u
 			logger.FatalIf(s.OpenID.JWKS.PopulatePublicKey(), "Unable to populate public key from JWKS URL")
+		}
+	}
+
+	if idpURL, ok := os.LookupEnv("MINIO_IAM_IDP_URL"); ok {
+		if u, err := xnet.ParseURL(idpURL); err == nil {
+			clientID, okID := os.LookupEnv("MINIO_IAM_IDP_CLIENTID")
+			clientSecret, okSec := os.LookupEnv("MINIO_IAM_IDP_CLIENTSECRET")
+			if okID && okSec {
+				s.OpenID.IDP = validate.IDPArgs{
+					URL:          u,
+					ClientID:     clientID,
+					ClientSecret: clientSecret,
+				}
+				creds, err := s.OpenID.IDP.GetCredential()
+				logger.FatalIf(err, "Unable to populate admin credential from IDP URL")
+			} else {
+				err = fmt.Errorf("%s IDL URL configured but missing clientID/clientSecret credentials", u)
+				logger.FatalIf(err, "Unable to initialize IDP admin credentials")
+			}
 		}
 	}
 
