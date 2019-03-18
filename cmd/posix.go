@@ -232,7 +232,6 @@ func getDiskInfo(diskPath string) (di disk.Info, err error) {
 var ignoreDiskFreeOS = []string{
 	globalWindowsOSName,
 	globalNetBSDOSName,
-	globalSolarisOSName,
 }
 
 // check if disk total has minimum required size.
@@ -943,20 +942,6 @@ func (s *posix) openFile(volume, path string, mode int) (f *os.File, err error) 
 	return w, nil
 }
 
-// Just like io.LimitedReader but supports Close() to be compatible with io.ReadCloser that is
-// returned by posix.ReadFileStream()
-type posixLimitedReader struct {
-	io.LimitedReader
-}
-
-func (l *posixLimitedReader) Close() error {
-	c, ok := l.R.(io.Closer)
-	if !ok {
-		return errUnexpected
-	}
-	return c.Close()
-}
-
 // ReadFileStream - Returns the read stream of the file.
 func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
 	var err error
@@ -1030,7 +1015,10 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 	if _, err = file.Seek(offset, io.SeekStart); err != nil {
 		return nil, err
 	}
-	return &posixLimitedReader{io.LimitedReader{R: file, N: length}}, nil
+	return struct {
+		io.Reader
+		io.Closer
+	}{Reader: io.LimitReader(file, length), Closer: file}, nil
 }
 
 // CreateFile - creates the file.
