@@ -577,7 +577,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		// -- FIXME. (needs a new kind of lock).
 		// -- FIXME (this also causes performance issue when disks are down).
 		if xl.parentDirIsObject(ctx, bucket, path.Dir(object)) {
-			return ObjectInfo{}, toObjectErr(errFileAccessDenied, bucket, object)
+			return ObjectInfo{}, toObjectErr(errFileParentIsFile, bucket, object)
 		}
 
 		if err = xl.putObjectDir(ctx, minioMetaTmpBucket, tempObj, writeQuorum); err != nil {
@@ -608,7 +608,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// -- FIXME. (needs a new kind of lock).
 	// -- FIXME (this also causes performance issue when disks are down).
 	if xl.parentDirIsObject(ctx, bucket, path.Dir(object)) {
-		return ObjectInfo{}, toObjectErr(errFileAccessDenied, bucket, object)
+		return ObjectInfo{}, toObjectErr(errFileParentIsFile, bucket, object)
 	}
 
 	// Limit the reader to its provided size if specified.
