@@ -22,7 +22,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/iam/validator"
 	"github.com/minio/minio/pkg/quick"
 )
@@ -917,6 +917,9 @@ type serverConfigV33 struct {
 	OpenID struct {
 		// JWKS validator config.
 		JWKS validator.JWKSArgs `json:"jwks"`
+
+		// IDP config.
+		IDP validator.IDPArgs `json:"idp"`
 	} `json:"openid"`
 
 	// External policy enforcements.
