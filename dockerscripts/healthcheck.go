@@ -19,6 +19,7 @@ package main
 import (
 	"bufio"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -45,23 +46,23 @@ func getStartTime() time.Time {
 	di, err := os.Stat("/proc/1")
 	if err != nil {
 		// Cant stat proc dir successfully, exit with error
-		log.Fatal(err.Error())
+		log.Fatalln(err)
 	}
 	return di.ModTime()
 }
 
 // Returns the ip:port of the Minio process
 // running in the container
-func findEndpoint() string {
+func findEndpoint() (string, error) {
 	cmd := exec.Command("netstat", "-ntlp")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		// error getting stdout pipe
-		log.Fatal(err.Error())
+		return "", err
 	}
 	if err = cmd.Start(); err != nil {
-		// error starting the command
-		log.Fatal(err.Error())
+		// error executing the command.
+		return "", err
 	}
 	// split netstat output in rows
 	scanner := bufio.NewScanner(stdout)
@@ -85,20 +86,21 @@ func findEndpoint() string {
 			}
 			// wait for cmd to complete before return
 			if err = cmd.Wait(); err != nil {
-				// command failed to run
-				log.Fatal(err.Error())
+				return "", err
 			}
 			// return joint address and port
-			return strings.Join([]string{addr, port}, ":")
+			return strings.Join([]string{addr, port}, ":"), nil
 		}
+	}
+	if err = scanner.Err(); err != nil {
+		return "", err
 	}
 	if err = cmd.Wait(); err != nil {
 		// command failed to run
-		log.Fatal(err.Error())
+		return "", err
 	}
 	// minio process not found, exit with error
-	os.Exit(1)
-	return ""
+	return "", errors.New("no minio process found")
 }
 
 func main() {
@@ -110,16 +112,16 @@ func main() {
 
 	//  Refer: https://github.com/moby/moby/pull/28938#issuecomment-301753272
 
-	if (time.Now().Sub(startTime) / time.Second) < initGraceTime {
-		os.Exit(0)
-	} else {
-		endPoint := findEndpoint()
+	if (time.Now().Sub(startTime) / time.Second) > initGraceTime {
+		endPoint, err := findEndpoint()
+		if err != nil {
+			log.Fatalln(err)
+		}
 		u, err := url.Parse(fmt.Sprintf("http://%s%s", endPoint, healthPath))
 		if err != nil {
 			// Could not parse URL successfully
-			log.Fatal(err.Error())
+			log.Fatalln(err)
 		}
-
 		// Minio server may be using self-signed or CA certificates. To avoid
 		// making Docker setup complicated, we skip verifying certificates here.
 		// This is because, following request tests for health status within
@@ -132,7 +134,7 @@ func main() {
 		resp, err := client.Get(u.String())
 		if err != nil {
 			// GET failed exit
-			log.Fatal(err.Error())
+			log.Fatalln(err)
 		}
 		if resp.StatusCode == http.StatusOK {
 			// Drain any response.
@@ -145,7 +147,7 @@ func main() {
 			// Drain any response.
 			xhttp.DrainBody(resp.Body)
 			// GET failed exit
-			log.Fatal(err.Error())
+			log.Fatalln(err)
 		}
 		bodyString := string(bodyBytes)
 		// Drain any response.
@@ -157,7 +159,7 @@ func main() {
 			resp, err = client.Get(u.String())
 			if err != nil {
 				// GET failed exit
-				log.Fatal(err.Error())
+				log.Fatalln(err)
 			}
 			if resp.StatusCode == http.StatusOK {
 				// Drain any response.
@@ -168,8 +170,9 @@ func main() {
 			// Drain any response.
 			xhttp.DrainBody(resp.Body)
 		}
+		// Execution reaching here means none of
+		// the success cases were satisfied
+		os.Exit(1)
 	}
-	// Execution reaching here means none of
-	// the success cases were satisfied
-	os.Exit(1)
+	os.Exit(0)
 }
