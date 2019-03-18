@@ -1183,18 +1183,19 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 	}
 	st, err := os.Stat((filePath))
 	if err != nil {
-		// File is really not found.
-		if os.IsNotExist(err) {
+		switch {
+		case os.IsNotExist(err):
+			// File is really not found.
 			return FileInfo{}, errFileNotFound
-		} else if isSysErrIO(err) {
+		case isSysErrIO(err):
 			return FileInfo{}, errFaultyDisk
-		} else if isSysErrNotDir(err) {
+		case isSysErrNotDir(err):
 			// File path cannot be verified since one of the parents is a file.
 			return FileInfo{}, errFileNotFound
+		default:
+			// Return all errors here.
+			return FileInfo{}, err
 		}
-
-		// Return all errors here.
-		return FileInfo{}, err
 	}
 	// If its a directory its not a regular file.
 	if st.Mode().IsDir() {
@@ -1219,21 +1220,21 @@ func deleteFile(basePath, deletePath string) error {
 
 	// Attempt to remove path.
 	if err := os.Remove((deletePath)); err != nil {
-		// Ignore errors if the directory is not empty. The server relies on
-		// this functionality, and sometimes uses recursion that should not
-		// error on parent directories.
-		if isSysErrNotEmpty(err) {
+		switch {
+		case isSysErrNotEmpty(err):
+			// Ignore errors if the directory is not empty. The server relies on
+			// this functionality, and sometimes uses recursion that should not
+			// error on parent directories.
 			return nil
-		}
-
-		if os.IsNotExist(err) {
+		case os.IsNotExist(err):
 			return errFileNotFound
-		} else if os.IsPermission(err) {
+		case os.IsPermission(err):
 			return errFileAccessDenied
-		} else if isSysErrIO(err) {
+		case isSysErrIO(err):
 			return errFaultyDisk
+		default:
+			return err
 		}
-		return err
 	}
 
 	// Trailing slash is removed when found to ensure
