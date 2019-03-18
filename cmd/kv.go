@@ -194,6 +194,9 @@ import (
 	"time"
 	"unsafe"
 
+	"encoding/json"
+
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -285,12 +288,11 @@ const (
 )
 
 type asyncKVLoopRequest struct {
-	call   kvCallType
-	handle *C.struct_minio_nkv_handle
-	path   string
-	key    []byte
-	value  []byte
-	ch     chan asyncKVLoopResponse
+	call  kvCallType
+	kv    *KV
+	key   []byte
+	value []byte
+	ch    chan asyncKVLoopResponse
 }
 
 type asyncKVLoopResponse struct {
@@ -307,12 +309,49 @@ type asyncKVResponse struct {
 var globalAsyncKVLoopRequestCh chan asyncKVLoopRequest
 var globalAsyncKVResponseCh chan asyncKVResponse
 var globalAsyncKVLoopEndCh chan struct{}
+var globalDumpKVStatsCh chan chan []byte
+
+type kvDeviceStats struct {
+	PendingPuts    uint64
+	PendingGets    uint64
+	PendingDeletes uint64
+
+	TotalPutsCount    uint64
+	TotalGetsCount    uint64
+	TotalDeletesCount uint64
+
+	totalPutsSize uint64
+	TotalPutsSize string
+	totalGetsSize uint64
+	TotalGetsSize string
+
+	ThroughputPuts string
+	ThroughputGets string
+
+	currentPutsSum uint64
+	currentGetsSum uint64
+}
 
 func kvAsyncLoop() {
 	runtime.LockOSThread()
 	globalAsyncKVLoopRequestCh = make(chan asyncKVLoopRequest)
 	globalAsyncKVResponseCh = make(chan asyncKVResponse)
 	globalAsyncKVLoopEndCh = make(chan struct{})
+	globalDumpKVStatsCh = make(chan chan []byte)
+
+	statsMap := make(map[string]*kvDeviceStats)
+
+	getStatsStruct := func(path string) *kvDeviceStats {
+		stats, ok := statsMap[path]
+		if ok {
+			return stats
+		}
+		stats = &kvDeviceStats{}
+		statsMap[path] = stats
+		return stats
+	}
+
+	ticker := time.NewTicker(time.Second)
 
 	var id uint64
 	idMap := make(map[uint64]asyncKVLoopRequest)
@@ -326,11 +365,14 @@ func kvAsyncLoop() {
 			})
 			switch request.call {
 			case kvCallPut:
-				C.minio_nkv_put_async(request.handle, unsafe.Pointer(uintptr(id)), unsafe.Pointer(&request.key[0]), C.int(len(request.key)), unsafe.Pointer(&request.value[0]), C.int(len(request.value)))
+				getStatsStruct(request.kv.path).PendingPuts++
+				C.minio_nkv_put_async(&request.kv.handle, unsafe.Pointer(uintptr(id)), unsafe.Pointer(&request.key[0]), C.int(len(request.key)), unsafe.Pointer(&request.value[0]), C.int(len(request.value)))
 			case kvCallGet:
-				C.minio_nkv_get_async(request.handle, unsafe.Pointer(uintptr(id)), unsafe.Pointer(&request.key[0]), C.int(len(request.key)), unsafe.Pointer(&request.value[0]), C.int(len(request.value)))
+				getStatsStruct(request.kv.path).PendingGets++
+				C.minio_nkv_get_async(&request.kv.handle, unsafe.Pointer(uintptr(id)), unsafe.Pointer(&request.key[0]), C.int(len(request.key)), unsafe.Pointer(&request.value[0]), C.int(len(request.value)))
 			case kvCallDel:
-				C.minio_nkv_delete_async(request.handle, unsafe.Pointer(uintptr(id)), unsafe.Pointer(&request.key[0]), C.int(len(request.key)))
+				getStatsStruct(request.kv.path).PendingDeletes++
+				C.minio_nkv_delete_async(&request.kv.handle, unsafe.Pointer(uintptr(id)), unsafe.Pointer(&request.key[0]), C.int(len(request.key)))
 			}
 			t.Stop()
 		case response := <-globalAsyncKVResponseCh:
@@ -340,13 +382,58 @@ func kvAsyncLoop() {
 				os.Exit(1)
 			}
 			delete(idMap, response.id)
+
 			request.ch <- asyncKVLoopResponse{response.status, response.actualLength}
+
+			switch request.call {
+			case kvCallPut:
+				stats := getStatsStruct(request.kv.path)
+				stats.PendingPuts--
+				stats.TotalPutsCount++
+				if response.status != 0 {
+					break
+				}
+				stats.currentPutsSum += uint64(len(request.value))
+				stats.totalPutsSize += uint64(len(request.value))
+			case kvCallGet:
+				stats := getStatsStruct(request.kv.path)
+				stats.PendingGets--
+				stats.TotalGetsCount++
+				if response.status != 0 {
+					break
+				}
+				stats.currentGetsSum += uint64(response.actualLength)
+				stats.totalGetsSize += uint64(response.actualLength)
+			case kvCallDel:
+				stats := getStatsStruct(request.kv.path)
+				stats.PendingDeletes--
+				stats.TotalDeletesCount++
+			}
+
 		case <-globalAsyncKVLoopEndCh:
 			fmt.Println("Pending requests:", len(idMap))
 			for id, request := range idMap {
 				fmt.Printf("private_data_1=%x key=%s request=%s", id, string(request.key), request.call)
 			}
 			os.Exit(1)
+		case <-ticker.C:
+			for _, stats := range statsMap {
+				stats.ThroughputPuts = humanize.Bytes(stats.currentPutsSum) + "/sec"
+				stats.ThroughputGets = humanize.Bytes(stats.currentGetsSum) + "/sec"
+				stats.currentPutsSum = 0
+				stats.currentGetsSum = 0
+			}
+		case dumpStatsCh := <-globalDumpKVStatsCh:
+			for _, stats := range statsMap {
+				stats.TotalPutsSize = humanize.Bytes(stats.totalPutsSize)
+				stats.TotalGetsSize = humanize.Bytes(stats.totalGetsSize)
+			}
+			b, err := json.MarshalIndent(statsMap, "", "    ")
+			if err != nil {
+				dumpStatsCh <- []byte(err.Error())
+				continue
+			}
+			dumpStatsCh <- b
 		}
 	}
 }
@@ -379,7 +466,7 @@ func (k *KV) Put(keyStr string, value []byte) error {
 		ch := make(chan asyncKVLoopResponse, 1)
 		var response asyncKVLoopResponse
 		select {
-		case globalAsyncKVLoopRequestCh <- asyncKVLoopRequest{call: kvCallPut, handle: &k.handle, path: k.path, key: key, value: value, ch: ch}:
+		case globalAsyncKVLoopRequestCh <- asyncKVLoopRequest{call: kvCallPut, kv: k, key: key, value: value, ch: ch}:
 		case <-time.After(kvTimeout):
 			fmt.Println("Put timeout on globalAsyncKVRequestCh", k.path, keyStr)
 			globalAsyncKVLoopEndCh <- struct{}{}
@@ -431,7 +518,7 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 			ch := make(chan asyncKVLoopResponse, 1)
 			var response asyncKVLoopResponse
 			select {
-			case globalAsyncKVLoopRequestCh <- asyncKVLoopRequest{call: kvCallGet, handle: &k.handle, path: k.path, key: key, value: value, ch: ch}:
+			case globalAsyncKVLoopRequestCh <- asyncKVLoopRequest{call: kvCallGet, kv: k, key: key, value: value, ch: ch}:
 			case <-time.After(kvTimeout):
 				fmt.Println("Get timeout on globalAsyncKVRequestCh", k.path, keyStr)
 				globalAsyncKVLoopEndCh <- struct{}{}
@@ -490,7 +577,7 @@ func (k *KV) Delete(keyStr string) error {
 		ch := make(chan asyncKVLoopResponse, 1)
 		var response asyncKVLoopResponse
 		select {
-		case globalAsyncKVLoopRequestCh <- asyncKVLoopRequest{call: kvCallDel, handle: &k.handle, path: k.path, key: key, ch: ch}:
+		case globalAsyncKVLoopRequestCh <- asyncKVLoopRequest{call: kvCallDel, kv: k, key: key, ch: ch}:
 		case <-time.After(kvTimeout):
 			fmt.Println("Delete timeout on globalAsyncKVRequestCh", k.path, keyStr)
 			globalAsyncKVLoopEndCh <- struct{}{}

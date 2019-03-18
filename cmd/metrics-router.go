@@ -17,11 +17,14 @@
 package cmd
 
 import (
+	"net/http"
+
 	"github.com/gorilla/mux"
 )
 
 const (
 	prometheusMetricsPath = "/prometheus/metrics"
+	kvMetricsPath         = "/kvstats"
 )
 
 // registerMetricsRouter - add handler functions for metrics.
@@ -29,4 +32,10 @@ func registerMetricsRouter(router *mux.Router) {
 	// metrics router
 	metricsRouter := router.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
 	metricsRouter.Handle(prometheusMetricsPath, metricsHandler())
+	metricsRouter.Methods(http.MethodGet).Path(kvMetricsPath).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c := make(chan []byte)
+		globalDumpKVStatsCh <- c
+		b := <-c
+		w.Write(b)
+	})
 }
