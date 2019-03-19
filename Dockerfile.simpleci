@@ -7,6 +7,9 @@ COPY . /go/src/github.com/minio/minio
 WORKDIR /go/src/github.com/minio/minio
 
 RUN apt-get update && apt-get install -y jq
+ENV GO111MODULE=on
+
+RUN git config --global http.cookiefile /gitcookie/.gitcookie
 
 RUN make
 RUN bash -c 'diff -au <(gofmt -s -d cmd) <(printf "")'
@@ -28,6 +31,7 @@ RUN groupadd -g 999 ci && \
 
 RUN chown -R ci:ci /go
 RUN chown -R ci:ci /home/ci
+RUN chmod -R a+rw /go 
 
 USER ci
 
@@ -57,9 +61,6 @@ FROM ubuntu:16.04
 COPY --from=0 /go/src/github.com/minio/minio/minio ./minio
 COPY buildscripts/gateway-tests.sh ./gateway-tests.sh
 RUN apt-get update && apt-get install -y git wget jq curl dnsmasq
-
-RUN wget https://dl.google.com/go/go1.11.4.linux-amd64.tar.gz && \
-	tar -C /usr/local -xzf go1.11.4.linux-amd64.tar.gz
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV LANG C.UTF-8
