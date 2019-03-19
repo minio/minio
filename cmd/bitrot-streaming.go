@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"hash"
 	"io"
+	"strings"
 
 	"github.com/minio/minio/cmd/logger"
 )
@@ -84,9 +85,13 @@ func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length i
 		totalFileSize := bitrotSumsTotalSize + length
 		err := disk.CreateFile(volume, filePath, totalFileSize, r)
 		if err != nil {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("storageDisk", disk.String())
-			ctx := logger.SetReqInfo(context.Background(), reqInfo)
-			logger.LogIf(ctx, err)
+			// If S3 clients do not upload full object as advertised in Content-Length, we endup logging errors here
+			// and users incorrectly assume that Minio is misbehaving. Hence it is best not to log these errors.
+			if !strings.Contains(err.Error(), "transport connection broken: http: ContentLength") && err != errLessData {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("storageDisk", disk.String())
+				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				logger.LogIf(ctx, err)
+			}
 		}
 		r.CloseWithError(err)
 		close(bw.canClose)
