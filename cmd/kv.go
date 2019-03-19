@@ -37,27 +37,17 @@ static int minio_nkv_open_path(struct minio_nkv_handle *handle, char *ipaddr) {
     exit(1);
   }
 
-  nkv_io_context io_ctx[16];
-  memset(io_ctx, 0, sizeof(nkv_io_context) * 16);
-  uint32_t io_ctx_cnt = 0;
-
   for (uint32_t i = 0; i < cnt_count; i++) {
-    io_ctx[io_ctx_cnt].container_hash = cntlist[i].container_hash;
-
     for (int p = 0; p < cntlist[i].num_container_transport; p++) {
       printf("Transport information :: hash = %lu, id = %d, address = %s, port = %d, family = %d, speed = %d, status = %d, numa_node = %d\n",
               cntlist[i].transport_list[p].network_path_hash, cntlist[i].transport_list[p].network_path_id, cntlist[i].transport_list[p].ip_addr,
               cntlist[i].transport_list[p].port, cntlist[i].transport_list[p].addr_family, cntlist[i].transport_list[p].speed,
               cntlist[i].transport_list[p].status, cntlist[i].transport_list[p].numa_node);
-      io_ctx[io_ctx_cnt].is_pass_through = 1;
-      io_ctx[io_ctx_cnt].container_hash = cntlist[i].container_hash;
-      io_ctx[io_ctx_cnt].network_path_hash = cntlist[i].transport_list[p].network_path_hash;
       if(!strcmp(cntlist[i].transport_list[p].ip_addr, ipaddr)) {
               handle->container_hash = cntlist[i].container_hash;
               handle->network_path_hash = cntlist[i].transport_list[p].network_path_hash;
               return 0;
       }
-      io_ctx_cnt++;
     }
   }
   return 1;
