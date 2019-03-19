@@ -177,11 +177,12 @@ func (a adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWriter, r *h
 // ServerProperties holds some server information such as, version, region
 // uptime, etc..
 type ServerProperties struct {
-	Uptime   time.Duration `json:"uptime"`
-	Version  string        `json:"version"`
-	CommitID string        `json:"commitID"`
-	Region   string        `json:"region"`
-	SQSARN   []string      `json:"sqsARN"`
+	Uptime       time.Duration `json:"uptime"`
+	Version      string        `json:"version"`
+	CommitID     string        `json:"commitID"`
+	DeploymentID string        `json:"deploymentID"`
+	Region       string        `json:"region"`
+	SQSARN       []string      `json:"sqsARN"`
 }
 
 // ServerConnStats holds transferred bytes from/to the server
@@ -256,11 +257,12 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 			ConnStats:   globalConnStats.toServerConnStats(),
 			HTTPStats:   globalHTTPStats.toServerHTTPStats(),
 			Properties: ServerProperties{
-				Uptime:   UTCNow().Sub(globalBootTime),
-				Version:  Version,
-				CommitID: CommitID,
-				SQSARN:   globalNotificationSys.GetARNList(),
-				Region:   globalServerConfig.GetRegion(),
+				Uptime:       UTCNow().Sub(globalBootTime),
+				Version:      Version,
+				CommitID:     CommitID,
+				DeploymentID: globalDeploymentID,
+				SQSARN:       globalNotificationSys.GetARNList(),
+				Region:       globalServerConfig.GetRegion(),
 			},
 		},
 	})
