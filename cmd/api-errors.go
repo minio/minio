@@ -1507,8 +1507,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrInvalidEncryptionMethod
 	case crypto.ErrInvalidCustomerAlgorithm:
 		apiErr = ErrInvalidSSECustomerAlgorithm
-	case crypto.ErrInvalidCustomerKey:
-		apiErr = ErrInvalidSSECustomerKey
 	case crypto.ErrMissingCustomerKey:
 		apiErr = ErrMissingSSECustomerKey
 	case crypto.ErrMissingCustomerKeyMD5:
