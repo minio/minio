@@ -45,8 +45,6 @@ export MINT_RUN_SECURITY_DIR="$MINT_ROOT_DIR/run/security"
 export MINT_MODE="full"
 export WGET="wget --quiet --no-check-certificate"
 
-go get github.com/go-ini/ini
-
 ./create-data-files.sh
 ./preinstall.sh
 
