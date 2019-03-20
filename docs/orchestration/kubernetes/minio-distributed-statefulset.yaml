@@ -21,7 +21,7 @@ spec:
           value: "minio"
         - name: MINIO_SECRET_KEY
           value: "minio123"
-        image: minio/minio:RELEASE.2019-03-13T21-59-47Z
+        image: minio/minio:RELEASE.2019-03-20T22-38-47Z
         args:
         - server
         - http://minio-0.minio.default.svc.cluster.local/data
