@@ -66,8 +66,11 @@ var errVolumeNotEmpty = errors.New("volume is not empty")
 // errVolumeAccessDenied - cannot access volume, insufficient permissions.
 var errVolumeAccessDenied = errors.New("volume access denied")
 
-// errVolumeAccessDenied - cannot access file, insufficient permissions.
+// errFileAccessDenied - cannot access file, insufficient permissions.
 var errFileAccessDenied = errors.New("file access denied")
+
+// errFileParentIsFile - cannot have overlapping objects, parent is already a file.
+var errFileParentIsFile = errors.New("parent is a file")
 
 // errBitrotHashAlgoInvalid - the algo for bit-rot hash
 // verification is empty or invalid.

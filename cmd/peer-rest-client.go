@@ -410,7 +410,7 @@ func newPeerRESTClient(peer *xnet.Host) (*peerRESTClient, error) {
 	var tlsConfig *tls.Config
 	if globalIsSSL {
 		tlsConfig = &tls.Config{
-			ServerName: peer.String(),
+			ServerName: peer.Name,
 			RootCAs:    globalRootCAs,
 		}
 	}

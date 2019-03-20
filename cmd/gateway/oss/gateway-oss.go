@@ -182,7 +182,7 @@ func appendS3MetaToOSSOptions(ctx context.Context, opts []oss.Option, s3Metadata
 		case k == "X-Amz-Acl":
 			// Valid values: public-read, private, and public-read-write
 			opts = append(opts, oss.ObjectACL(oss.ACLType(v)))
-		case k == "X-Amz-Server-Side​-Encryption":
+		case k == "X-Amz-Server-Side-Encryption":
 			opts = append(opts, oss.ServerSideEncryption(v))
 		case k == "X-Amz-Copy-Source-If-Match":
 			opts = append(opts, oss.CopySourceIfMatch(v))
