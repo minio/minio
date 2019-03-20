@@ -180,6 +180,7 @@ const (
 	// Minio extended errors.
 	ErrReadQuorum
 	ErrWriteQuorum
+	ErrParentIsObject
 	ErrStorageFull
 	ErrRequestBodyParse
 	ErrObjectExistsAsDirectory
@@ -858,6 +859,11 @@ var errorCodes = errorCodeMap{
 		Description:    "Storage backend has reached its minimum free disk threshold. Please delete a few objects to proceed.",
 		HTTPStatusCode: http.StatusInsufficientStorage,
 	},
+	ErrParentIsObject: {
+		Code:           "XMinioParentIsObject",
+		Description:    "Object-prefix is already an object, please choose a different object-prefix name.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrRequestBodyParse: {
 		Code:           "XMinioRequestBodyParse",
 		Description:    "The request body failed to parse.",
@@ -1507,8 +1513,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrInvalidEncryptionMethod
 	case crypto.ErrInvalidCustomerAlgorithm:
 		apiErr = ErrInvalidSSECustomerAlgorithm
-	case crypto.ErrInvalidCustomerKey:
-		apiErr = ErrInvalidSSECustomerKey
 	case crypto.ErrMissingCustomerKey:
 		apiErr = ErrMissingSSECustomerKey
 	case crypto.ErrMissingCustomerKeyMD5:
@@ -1563,6 +1567,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrObjectExistsAsDirectory
 	case PrefixAccessDenied:
 		apiErr = ErrAccessDenied
+	case ParentIsObject:
+		apiErr = ErrParentIsObject
 	case BucketNameInvalid:
 		apiErr = ErrInvalidBucketName
 	case BucketNotFound:

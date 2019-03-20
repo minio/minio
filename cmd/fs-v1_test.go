@@ -230,8 +230,8 @@ func TestFSPutObject(t *testing.T) {
 	if err == nil {
 		t.Fatal("Unexpected should fail here, backend corruption occurred")
 	}
-	if nerr, ok := err.(PrefixAccessDenied); !ok {
-		t.Fatalf("Expected PrefixAccessDenied, got %#v", err)
+	if nerr, ok := err.(ParentIsObject); !ok {
+		t.Fatalf("Expected ParentIsObject, got %#v", err)
 	} else {
 		if nerr.Bucket != "bucket" {
 			t.Fatalf("Expected 'bucket', got %s", nerr.Bucket)
@@ -245,8 +245,8 @@ func TestFSPutObject(t *testing.T) {
 	if err == nil {
 		t.Fatal("Unexpected should fail here, backned corruption occurred")
 	}
-	if nerr, ok := err.(PrefixAccessDenied); !ok {
-		t.Fatalf("Expected PrefixAccessDenied, got %#v", err)
+	if nerr, ok := err.(ParentIsObject); !ok {
+		t.Fatalf("Expected ParentIsObject, got %#v", err)
 	} else {
 		if nerr.Bucket != "bucket" {
 			t.Fatalf("Expected 'bucket', got %s", nerr.Bucket)

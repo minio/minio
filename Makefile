@@ -13,9 +13,10 @@ checks:
 	@(env bash $(PWD)/buildscripts/checkgopath.sh)
 
 getdeps:
-	@echo "Installing golint" && go get -u golang.org/x/lint/golint
-	@echo "Installing staticcheck" && go get -u honnef.co/go/tools/...
-	@echo "Installing misspell" && go get -u github.com/client9/misspell/cmd/misspell
+	@mkdir -p $(GOPATH)/bin
+	@echo "Installing golint" && which golint || go get -u golang.org/x/lint/golint
+	@echo "Installing staticcheck" && which staticcheck || wget --quiet -O $(GOPATH)/bin/staticcheck https://github.com/dominikh/go-tools/releases/download/2019.1/staticcheck_linux_amd64 && chmod +x $(GOPATH)/bin/staticcheck
+	@echo "Installing misspell" && which misspell || wget --quiet https://github.com/client9/misspell/releases/download/v0.3.4/misspell_0.3.4_linux_64bit.tar.gz && tar xvf misspell_0.3.4_linux_64bit.tar.gz && mv misspell $(GOPATH)/bin/misspell && chmod +x $(GOPATH)/bin/misspell && rm -r misspell_0.3.4_linux_64bit.tar.gz
 
 crosscompile:
 	@(env bash $(PWD)/buildscripts/cross-compile.sh)

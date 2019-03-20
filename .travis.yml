@@ -17,6 +17,7 @@ matrix:
       env:
         - ARCH=x86_64
         - CGO_ENABLED=0
+        - GO111MODULE=on
       go: 1.11.4
       script:
         - make
