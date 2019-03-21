@@ -3,7 +3,7 @@
 ----------------------------*/
 .fe-sidebar {
 	width: @fe-sidebar-width;
-	background-color: @dark-gray;
+	background-color: @fe-sidebar-bg;
 	position: fixed;
 	height: 100%;
 	overflow: hidden;
@@ -27,7 +27,7 @@
 	}
 
 	a {
-		color: rgba(255, 255, 255, 0.58);
+		color: rgba(255, 255, 255, 0.75);
 
 		&:hover {
 			color: @white;
@@ -47,12 +47,14 @@
 	}
 
 	h2 {
-		margin: 13px 0 0 10px;
+		margin: 6px 0 0 13px;
 		font-weight: normal;
+		color: @white;
+		font-size: 20px;
 	}
 
 	img {
-		width: 32px;
+		width: 20px;
 	}
 }
 
@@ -95,7 +97,7 @@
 		}
 
 		&.active {
-			background-color: #282e32;
+			background-color: rgba(0,0,0,0.1);
 
 			& > a {
 				color: @white;
@@ -103,7 +105,7 @@
 		}
 
 		&:not(.active):hover {
-			background-color: rgba(0, 0, 0, 0.1);
+			background-color: rgba(0, 0, 0, 0.05);
 
 			& > a {
 				color: @white;
@@ -192,8 +194,7 @@
 	left: 0;
 	bottom: 0;
 	z-index: 1;
-	background: @dark-gray;
-	color: rgba(255, 255, 255, 0.4);
+	background-color: rgba(0,0,0,0.1);
 	font-size: 15px;
 	font-weight: 400;
 	width: @fe-sidebar-width;
