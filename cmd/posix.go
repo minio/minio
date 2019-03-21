@@ -1358,8 +1358,17 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		if err == nil && !isDirEmpty(dstFilePath) {
 			return errFileAccessDenied
 		}
-		if !os.IsNotExist(err) {
+		if err != nil && !os.IsNotExist(err) {
 			return err
+		}
+		// Empty destination remove it before rename.
+		if isDirEmpty(dstFilePath) {
+			if err = os.Remove(dstFilePath); err != nil {
+				if isSysErrNotEmpty(err) {
+					return errFileAccessDenied
+				}
+				return err
+			}
 		}
 	}
 
