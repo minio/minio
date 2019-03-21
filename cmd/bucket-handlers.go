@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015-2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -212,33 +212,11 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// If etcd, dns federation configured list buckets from etcd.
-	var bucketsInfo []BucketInfo
-	if globalDNSConfig != nil {
-		dnsBuckets, err := globalDNSConfig.List()
-		if err != nil && err != dns.ErrNoEntriesFound {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
-		bucketSet := set.NewStringSet()
-		for _, dnsRecord := range dnsBuckets {
-			if bucketSet.Contains(dnsRecord.Key) {
-				continue
-			}
-			bucketsInfo = append(bucketsInfo, BucketInfo{
-				Name:    dnsRecord.Key,
-				Created: dnsRecord.CreationDate,
-			})
-			bucketSet.Add(dnsRecord.Key)
-		}
-	} else {
-		// Invoke the list buckets.
-		var err error
-		bucketsInfo, err = listBuckets(ctx)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
+	// Invoke the list buckets.
+	bucketsInfo, err := listBuckets(ctx)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
 	}
 
 	// Generate response.
