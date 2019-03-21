@@ -1480,14 +1480,6 @@ func (a adminAPIHandlers) UpdateAdminCredentialsHandler(w http.ResponseWriter,
 		return
 	}
 
-	// Notify all other Minio peers to update credentials
-	for _, nerr := range globalNotificationSys.LoadCredentials() {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
-		}
-	}
-
 	// Reply to the client before restarting minio server.
 	writeSuccessResponseHeadersOnly(w)
 }
