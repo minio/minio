@@ -358,13 +358,13 @@ func kvAsyncLoop() {
 			switch request.call {
 			case kvCallPut:
 				getStatsStruct(request.kv.path).PendingPuts++
-				C.minio_nkv_put_async(&request.kv.handle, unsafe.Pointer(uintptr(id)), unsafe.Pointer(&request.key[0]), C.int(len(request.key)), unsafe.Pointer(&request.value[0]), C.int(len(request.value)))
+				C.minio_nkv_put_async(&request.kv.handle, unsafe.Pointer(uintptr(id)), unsafe.Pointer(uintptr(unsafe.Pointer(&request.key[0]))), C.int(len(request.key)), unsafe.Pointer(uintptr(unsafe.Pointer(&request.value[0]))), C.int(len(request.value)))
 			case kvCallGet:
 				getStatsStruct(request.kv.path).PendingGets++
-				C.minio_nkv_get_async(&request.kv.handle, unsafe.Pointer(uintptr(id)), unsafe.Pointer(&request.key[0]), C.int(len(request.key)), unsafe.Pointer(&request.value[0]), C.int(len(request.value)))
+				C.minio_nkv_get_async(&request.kv.handle, unsafe.Pointer(uintptr(id)), unsafe.Pointer(uintptr(unsafe.Pointer(&request.key[0]))), C.int(len(request.key)), unsafe.Pointer(uintptr(unsafe.Pointer(&request.value[0]))), C.int(len(request.value)))
 			case kvCallDel:
 				getStatsStruct(request.kv.path).PendingDeletes++
-				C.minio_nkv_delete_async(&request.kv.handle, unsafe.Pointer(uintptr(id)), unsafe.Pointer(&request.key[0]), C.int(len(request.key)))
+				C.minio_nkv_delete_async(&request.kv.handle, unsafe.Pointer(uintptr(id)), unsafe.Pointer(uintptr(unsafe.Pointer(&request.key[0]))), C.int(len(request.key)))
 			}
 			t.Stop()
 		case response := <-globalAsyncKVResponseCh:
