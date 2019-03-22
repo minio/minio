@@ -343,7 +343,7 @@ func logIf(ctx context.Context, err error) {
 		entry.API.Args.Bucket = hashString(entry.API.Args.Bucket)
 		entry.API.Args.Object = hashString(entry.API.Args.Object)
 		entry.RemoteHost = hashString(entry.RemoteHost)
-		entry.Message = reflect.TypeOf(err).String()
+		entry.Trace.Message = reflect.TypeOf(err).String()
 		entry.Trace.Variables = make(map[string]string)
 	}
 
