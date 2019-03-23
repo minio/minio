@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -253,9 +252,6 @@ func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, 
 		return err
 	}
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, _ := net.SplitHostPort(handlers.GetSourceIP(r))
-
 	// Notify object deleted event.
 	sendEvent(eventArgs{
 		EventName:  event.ObjectRemovedDelete,
@@ -265,8 +261,7 @@ func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, 
 		},
 		ReqParams: extractReqParams(r),
 		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
+		Host:      handlers.GetSourceIP(r),
 	})
 
 	return nil
