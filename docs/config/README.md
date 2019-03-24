@@ -11,6 +11,7 @@ Additionally `--config-dir` is now a legacy option which will is scheduled for r
 ```sh
 minio server /data
 ```
+In the storage backend, the config directory is named ```.minio.sys```. The config file is found under ```config``` directory below this. For the example above, the config will would thus be found at ```/data/.minio.sys/config/config.json```.
 
 ### Certificate Directory
 
