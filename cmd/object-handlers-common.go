@@ -98,13 +98,14 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 		}
 	}
 
-	ssec := crypto.SSECopy.IsRequested(r.Header)
+	shouldDecryptEtag := crypto.SSECopy.IsRequested(r.Header) && !crypto.IsMultiPart(objInfo.UserDefined)
+
 	// x-amz-copy-source-if-match : Return the object only if its entity tag (ETag) is the
 	// same as the one specified; otherwise return a 412 (precondition failed).
 	ifMatchETagHeader := r.Header.Get("x-amz-copy-source-if-match")
 	if ifMatchETagHeader != "" {
 		etag := objInfo.ETag
-		if ssec {
+		if shouldDecryptEtag {
 			etag = encETag[len(encETag)-32:]
 		}
 		if objInfo.ETag != "" && !isETagEqual(etag, ifMatchETagHeader) {
@@ -120,7 +121,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 	ifNoneMatchETagHeader := r.Header.Get("x-amz-copy-source-if-none-match")
 	if ifNoneMatchETagHeader != "" {
 		etag := objInfo.ETag
-		if ssec {
+		if shouldDecryptEtag {
 			etag = encETag[len(encETag)-32:]
 		}
 		if objInfo.ETag != "" && isETagEqual(etag, ifNoneMatchETagHeader) {
