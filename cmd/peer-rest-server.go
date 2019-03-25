@@ -52,11 +52,12 @@ func getServerInfo() (*ServerInfoData, error) {
 		ConnStats:   globalConnStats.toServerConnStats(),
 		HTTPStats:   globalHTTPStats.toServerHTTPStats(),
 		Properties: ServerProperties{
-			Uptime:   UTCNow().Sub(globalBootTime),
-			Version:  Version,
-			CommitID: CommitID,
-			SQSARN:   globalNotificationSys.GetARNList(),
-			Region:   globalServerConfig.GetRegion(),
+			Uptime:       UTCNow().Sub(globalBootTime),
+			Version:      Version,
+			CommitID:     CommitID,
+			DeploymentID: globalDeploymentID,
+			SQSARN:       globalNotificationSys.GetARNList(),
+			Region:       globalServerConfig.GetRegion(),
 		},
 	}, nil
 }
