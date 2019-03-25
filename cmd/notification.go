@@ -839,7 +839,6 @@ type eventArgs struct {
 	ReqParams    map[string]string
 	RespElements map[string]string
 	Host         string
-	Port         string
 	UserAgent    string
 }
 
@@ -894,7 +893,6 @@ func (args eventArgs) ToEvent() event.Event {
 		},
 		Source: event.Source{
 			Host:      args.Host,
-			Port:      args.Port,
 			UserAgent: args.UserAgent,
 		},
 	}
