@@ -53,10 +53,12 @@ func newPostPolicyBytesV4WithContentRange(credential, bucketName, objectKey stri
 	dateConditionStr := fmt.Sprintf(`["eq", "$x-amz-date", "%s"]`, t.Format(iso8601DateFormat))
 	// Add the credential string, only accept the credential passed.
 	credentialConditionStr := fmt.Sprintf(`["eq", "$x-amz-credential", "%s"]`, credential)
+	// Add the meta-uuid string, set to 1234
+	uuidConditionStr := fmt.Sprintf(`["eq", "$x-amz-meta-uuid", "%s"]`, "1234")
 
 	// Combine all conditions into one string.
-	conditionStr := fmt.Sprintf(`"conditions":[%s, %s, %s, %s, %s, %s]`, bucketConditionStr,
-		keyConditionStr, contentLengthCondStr, algorithmConditionStr, dateConditionStr, credentialConditionStr)
+	conditionStr := fmt.Sprintf(`"conditions":[%s, %s, %s, %s, %s, %s, %s]`, bucketConditionStr,
+		keyConditionStr, contentLengthCondStr, algorithmConditionStr, dateConditionStr, credentialConditionStr, uuidConditionStr)
 	retStr := "{"
 	retStr = retStr + expirationStr + ","
 	retStr = retStr + conditionStr
@@ -80,9 +82,11 @@ func newPostPolicyBytesV4(credential, bucketName, objectKey string, expiration t
 	dateConditionStr := fmt.Sprintf(`["eq", "$x-amz-date", "%s"]`, t.Format(iso8601DateFormat))
 	// Add the credential string, only accept the credential passed.
 	credentialConditionStr := fmt.Sprintf(`["eq", "$x-amz-credential", "%s"]`, credential)
+	// Add the meta-uuid string, set to 1234
+	uuidConditionStr := fmt.Sprintf(`["eq", "$x-amz-meta-uuid", "%s"]`, "1234")
 
 	// Combine all conditions into one string.
-	conditionStr := fmt.Sprintf(`"conditions":[%s, %s, %s, %s, %s]`, bucketConditionStr, keyConditionStr, algorithmConditionStr, dateConditionStr, credentialConditionStr)
+	conditionStr := fmt.Sprintf(`"conditions":[%s, %s, %s, %s, %s, %s]`, bucketConditionStr, keyConditionStr, algorithmConditionStr, dateConditionStr, credentialConditionStr, uuidConditionStr)
 	retStr := "{"
 	retStr = retStr + expirationStr + ","
 	retStr = retStr + conditionStr
@@ -261,7 +265,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			dates:              []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
-			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`,
+			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"],["eq", "$x-amz-meta-uuid", "1234"]]}`,
 		},
 		// Corrupted Base 64 result
 		{
@@ -457,7 +461,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	rec := httptest.NewRecorder()
 
 	dates := []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)}
-	policy := `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], {"success_action_redirect":"` + redirectURL.String() + `"},["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`
+	policy := `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], {"success_action_redirect":"` + redirectURL.String() + `"},["starts-with", "$key", "test/"], ["eq", "$x-amz-meta-uuid", "1234"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`
 
 	// Generate the final policy document
 	policy = fmt.Sprintf(policy, dates...)
