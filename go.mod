@@ -167,12 +167,12 @@ require (
 	github.com/tidwall/sjson v1.0.4
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	go.uber.org/atomic v1.3.2
-	golang.org/x/crypto v0.0.0-20190313024323-a1f597ede03a
+	golang.org/x/crypto v0.0.0-20190325154230-a5d413f7728c
 	golang.org/x/lint v0.0.0-20190313153728-d0100b6bd8b3 // indirect
-	golang.org/x/net v0.0.0-20190318221613-d196dffd7c2b
-	golang.org/x/sys v0.0.0-20190318195719-6c81ef8f67ca
+	golang.org/x/net v0.0.0-20190327214358-63eda1eb0650
+	golang.org/x/sys v0.0.0-20190322080309-f49334f85ddc
 	golang.org/x/time v0.0.0-20181108054448-85acf8d2951c
-	golang.org/x/tools v0.0.0-20190318200714-bb1270c20edf // indirect
+	golang.org/x/tools v0.0.0-20190327201419-c70d86f8b7cf // indirect
 	google.golang.org/api v0.0.0-20180916000451-19ff8768a5c0
 	google.golang.org/genproto v0.0.0-20180918203901-c3f76f3b92d1 // indirect
 	gopkg.in/Shopify/sarama.v1 v1.10.1
