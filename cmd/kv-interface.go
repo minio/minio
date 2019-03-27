@@ -48,4 +48,5 @@ func KVNSEntryUnmarshal(b []byte, entry *KVNSEntry) error {
 
 var errValueTooLong = errors.New("value too long")
 
-const kvDataDir = ".minio.sys/.data"
+const kvDataDir = "data/"
+const kvMetaDir = "meta/"

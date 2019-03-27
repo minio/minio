@@ -180,6 +180,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -431,6 +432,9 @@ func kvAsyncLoop() {
 }
 
 func (k *KV) Put(keyStr string, value []byte) error {
+	if !strings.HasPrefix(keyStr, kvDataDir) {
+		keyStr = pathJoin(kvMetaDir, keyStr)
+	}
 	if kvSerialize {
 		kvMu.Lock()
 		defer kvMu.Unlock()
@@ -486,6 +490,9 @@ func (k *KV) Put(keyStr string, value []byte) error {
 }
 
 func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
+	if !strings.HasPrefix(keyStr, kvDataDir) {
+		keyStr = pathJoin(kvMetaDir, keyStr)
+	}
 	if kvSerialize {
 		kvMu.Lock()
 		defer kvMu.Unlock()
@@ -553,6 +560,9 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 }
 
 func (k *KV) Delete(keyStr string) error {
+	if !strings.HasPrefix(keyStr, kvDataDir) {
+		keyStr = pathJoin(kvMetaDir, keyStr)
+	}
 	if kvSerialize {
 		kvMu.Lock()
 		defer kvMu.Unlock()
