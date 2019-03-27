@@ -353,6 +353,14 @@ func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPa
 
 // Gets peer storage server's instanceID - to be used with every REST call for validation.
 func (client *storageRESTClient) getInstanceID() (err error) {
+	// getInstanceID() does not use storageRESTClient.call()
+	// function so we need to update lastError field here.
+	defer func() {
+		if err != nil {
+			client.lastError = err
+		}
+	}()
+
 	respBody, err := client.restClient.Call(storageRESTMethodGetInstanceID, nil, nil, -1)
 	if err != nil {
 		return err
