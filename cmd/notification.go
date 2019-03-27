@@ -43,7 +43,7 @@ type NotificationSys struct {
 	targetList                 *event.TargetList
 	bucketRulesMap             map[string]event.RulesMap
 	bucketRemoteTargetRulesMap map[string]map[event.TargetID]event.RulesMap
-	peerRPCClientMap           map[xnet.Host]*PeerRPCClient
+	peerClients                []*peerRESTClient
 }
 
 // GetARNList - returns available ARNs.
@@ -63,11 +63,6 @@ func (sys *NotificationSys) GetARNList() []string {
 	return arns
 }
 
-// GetPeerRPCClient - returns PeerRPCClient of addr.
-func (sys *NotificationSys) GetPeerRPCClient(addr xnet.Host) *PeerRPCClient {
-	return sys.peerRPCClientMap[addr]
-}
-
 // NotificationPeerErr returns error associated for a remote peer.
 type NotificationPeerErr struct {
 	Host xnet.Host // Remote host on which the rpc call was initiated
@@ -78,15 +73,15 @@ type NotificationPeerErr struct {
 func (sys *NotificationSys) DeleteBucket(ctx context.Context, bucketName string) {
 	go func() {
 		var wg sync.WaitGroup
-		for addr, client := range sys.peerRPCClientMap {
+		for _, client := range sys.peerClients {
 			wg.Add(1)
-			go func(addr xnet.Host, client *PeerRPCClient) {
+			go func(client *peerRESTClient) {
 				defer wg.Done()
 				if err := client.DeleteBucket(bucketName); err != nil {
-					logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
+					logger.GetReqInfo(ctx).AppendTags("remotePeer", client.host.Name)
 					logger.LogIf(ctx, err)
 				}
-			}(addr, client)
+			}(client)
 		}
 		wg.Wait()
 	}()
@@ -146,52 +141,45 @@ func (g *NotificationGroup) Go(ctx context.Context, f func() error, index int, a
 	}()
 }
 
-// ReloadFormat - calls ReloadFormat RPC call on all peers.
+// ReloadFormat - calls ReloadFormat REST call on all peers.
 func (sys *NotificationSys) ReloadFormat(dryRun bool) []NotificationPeerErr {
-	var idx = 0
-	ng := WithNPeers(len(sys.peerRPCClientMap))
-	for addr, client := range sys.peerRPCClientMap {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
 		client := client
 		ng.Go(context.Background(), func() error {
 			return client.ReloadFormat(dryRun)
-		}, idx, addr)
-		idx++
+		}, idx, *client.host)
 	}
 	return ng.Wait()
 }
 
 // LoadUsers - calls LoadUsers RPC call on all peers.
 func (sys *NotificationSys) LoadUsers() []NotificationPeerErr {
-	var idx = 0
-	ng := WithNPeers(len(sys.peerRPCClientMap))
-	for addr, client := range sys.peerRPCClientMap {
-		ng.Go(context.Background(), client.LoadUsers, idx, addr)
-		idx++
-	}
-	return ng.Wait()
-}
-
-// LoadCredentials - calls LoadCredentials RPC call on all peers.
-func (sys *NotificationSys) LoadCredentials() []NotificationPeerErr {
-	var idx = 0
-	ng := WithNPeers(len(sys.peerRPCClientMap))
-	for addr, client := range sys.peerRPCClientMap {
-		ng.Go(context.Background(), client.LoadCredentials, idx, addr)
-		idx++
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(context.Background(), client.LoadUsers, idx, *client.host)
 	}
 	return ng.Wait()
 }
 
 // StartProfiling - start profiling on remote peers, by initiating a remote RPC.
 func (sys *NotificationSys) StartProfiling(profiler string) []NotificationPeerErr {
-	var idx = 0
-	ng := WithNPeers(len(sys.peerRPCClientMap))
-	for addr, client := range sys.peerRPCClientMap {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
 		client := client
 		ng.Go(context.Background(), func() error {
 			return client.StartProfiling(profiler)
-		}, idx, addr)
-		idx++
+		}, idx, *client.host)
 	}
 	return ng.Wait()
 }
@@ -205,10 +193,13 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 	zipWriter := zip.NewWriter(writer)
 	defer zipWriter.Close()
 
-	for addr, client := range sys.peerRPCClientMap {
-		data, err := client.DownloadProfilingData()
+	for _, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		data, err := client.DownloadProfileData()
 		if err != nil {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", addr.String())
+			reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
 			ctx := logger.SetReqInfo(ctx, reqInfo)
 			logger.LogIf(ctx, err)
 			continue
@@ -218,7 +209,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 
 		// Send profiling data to zip as file
 		header, zerr := zip.FileInfoHeader(dummyFileInfo{
-			name:    fmt.Sprintf("profiling-%s.pprof", addr),
+			name:    fmt.Sprintf("profiling-%s.pprof", client.host.String()),
 			size:    int64(len(data)),
 			mode:    0600,
 			modTime: UTCNow(),
@@ -226,20 +217,20 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 			sys:     nil,
 		})
 		if zerr != nil {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", addr.String())
+			reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
 			ctx := logger.SetReqInfo(ctx, reqInfo)
 			logger.LogIf(ctx, zerr)
 			continue
 		}
 		zwriter, zerr := zipWriter.CreateHeader(header)
 		if zerr != nil {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", addr.String())
+			reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
 			ctx := logger.SetReqInfo(ctx, reqInfo)
 			logger.LogIf(ctx, zerr)
 			continue
 		}
 		if _, err = io.Copy(zwriter, bytes.NewBuffer(data)); err != nil {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", addr.String())
+			reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
 			ctx := logger.SetReqInfo(ctx, reqInfo)
 			logger.LogIf(ctx, err)
 			continue
@@ -289,45 +280,48 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 
 // SignalService - calls signal service RPC call on all peers.
 func (sys *NotificationSys) SignalService(sig serviceSignal) []NotificationPeerErr {
-	var idx = 0
-	ng := WithNPeers(len(sys.peerRPCClientMap))
-	for addr, client := range sys.peerRPCClientMap {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
 		client := client
 		ng.Go(context.Background(), func() error {
 			return client.SignalService(sig)
-		}, idx, addr)
-		idx++
+		}, idx, *client.host)
 	}
 	return ng.Wait()
 }
 
 // ServerInfo - calls ServerInfo RPC call on all peers.
 func (sys *NotificationSys) ServerInfo(ctx context.Context) []ServerInfo {
-	var idx = 0
-	serverInfo := make([]ServerInfo, len(sys.peerRPCClientMap))
+	serverInfo := make([]ServerInfo, len(sys.peerClients))
 	var wg sync.WaitGroup
-	for addr, client := range sys.peerRPCClientMap {
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
 		wg.Add(1)
-		go func(idx int, addr xnet.Host, client *PeerRPCClient) {
+		go func(idx int, client *peerRESTClient) {
 			defer wg.Done()
 			// Try to fetch serverInfo remotely in three attempts.
 			for i := 0; i < 3; i++ {
 				info, err := client.ServerInfo()
 				if err == nil {
 					serverInfo[idx] = ServerInfo{
-						Addr: addr.String(),
+						Addr: client.host.String(),
 						Data: &info,
 					}
 					return
 				}
 				serverInfo[idx] = ServerInfo{
-					Addr:  addr.String(),
+					Addr:  client.host.String(),
 					Data:  &info,
 					Error: err.Error(),
 				}
 				// Last iteration log the error.
 				if i == 2 {
-					reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", addr.String())
+					reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
 					ctx := logger.SetReqInfo(ctx, reqInfo)
 					logger.LogIf(ctx, err)
 				}
@@ -336,8 +330,7 @@ func (sys *NotificationSys) ServerInfo(ctx context.Context) []ServerInfo {
 					time.Sleep(1 * time.Second)
 				}
 			}
-		}(idx, addr, client)
-		idx++
+		}(index, client)
 	}
 	wg.Wait()
 	return serverInfo
@@ -345,19 +338,22 @@ func (sys *NotificationSys) ServerInfo(ctx context.Context) []ServerInfo {
 
 // GetLocks - makes GetLocks RPC call on all peers.
 func (sys *NotificationSys) GetLocks(ctx context.Context) []*PeerLocks {
-	var idx = 0
-	locksResp := make([]*PeerLocks, len(sys.peerRPCClientMap))
+
+	locksResp := make([]*PeerLocks, len(sys.peerClients))
 	var wg sync.WaitGroup
-	for addr, client := range sys.peerRPCClientMap {
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
 		wg.Add(1)
-		go func(idx int, addr xnet.Host, client *PeerRPCClient) {
+		go func(idx int, client *peerRESTClient) {
 			defer wg.Done()
 			// Try to fetch serverInfo remotely in three attempts.
 			for i := 0; i < 3; i++ {
 				serverLocksResp, err := client.GetLocks()
 				if err == nil {
 					locksResp[idx] = &PeerLocks{
-						Addr:  addr.String(),
+						Addr:  client.host.String(),
 						Locks: serverLocksResp,
 					}
 					return
@@ -365,17 +361,16 @@ func (sys *NotificationSys) GetLocks(ctx context.Context) []*PeerLocks {
 
 				// Last iteration log the error.
 				if i == 2 {
-					reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", addr.String())
+					reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
 					ctx := logger.SetReqInfo(ctx, reqInfo)
-					logger.LogOnceIf(ctx, err, addr.String())
+					logger.LogOnceIf(ctx, err, client.host.String())
 				}
 				// Wait for one second and no need wait after last attempt.
 				if i < 2 {
 					time.Sleep(1 * time.Second)
 				}
 			}
-		}(idx, addr, client)
-		idx++
+		}(index, client)
 	}
 	wg.Wait()
 	return locksResp
@@ -385,15 +380,18 @@ func (sys *NotificationSys) GetLocks(ctx context.Context) []*PeerLocks {
 func (sys *NotificationSys) SetBucketPolicy(ctx context.Context, bucketName string, bucketPolicy *policy.Policy) {
 	go func() {
 		var wg sync.WaitGroup
-		for addr, client := range sys.peerRPCClientMap {
+		for _, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
 			wg.Add(1)
-			go func(addr xnet.Host, client *PeerRPCClient) {
+			go func(client *peerRESTClient) {
 				defer wg.Done()
 				if err := client.SetBucketPolicy(bucketName, bucketPolicy); err != nil {
-					logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
+					logger.GetReqInfo(ctx).AppendTags("remotePeer", client.host.Name)
 					logger.LogIf(ctx, err)
 				}
-			}(addr, client)
+			}(client)
 		}
 		wg.Wait()
 	}()
@@ -403,15 +401,18 @@ func (sys *NotificationSys) SetBucketPolicy(ctx context.Context, bucketName stri
 func (sys *NotificationSys) RemoveBucketPolicy(ctx context.Context, bucketName string) {
 	go func() {
 		var wg sync.WaitGroup
-		for addr, client := range sys.peerRPCClientMap {
+		for _, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
 			wg.Add(1)
-			go func(addr xnet.Host, client *PeerRPCClient) {
+			go func(client *peerRESTClient) {
 				defer wg.Done()
 				if err := client.RemoveBucketPolicy(bucketName); err != nil {
-					logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
+					logger.GetReqInfo(ctx).AppendTags("remotePeer", client.host.Name)
 					logger.LogIf(ctx, err)
 				}
-			}(addr, client)
+			}(client)
 		}
 		wg.Wait()
 	}()
@@ -421,15 +422,18 @@ func (sys *NotificationSys) RemoveBucketPolicy(ctx context.Context, bucketName s
 func (sys *NotificationSys) PutBucketNotification(ctx context.Context, bucketName string, rulesMap event.RulesMap) {
 	go func() {
 		var wg sync.WaitGroup
-		for addr, client := range sys.peerRPCClientMap {
+		for _, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
 			wg.Add(1)
-			go func(addr xnet.Host, client *PeerRPCClient, rulesMap event.RulesMap) {
+			go func(client *peerRESTClient, rulesMap event.RulesMap) {
 				defer wg.Done()
 				if err := client.PutBucketNotification(bucketName, rulesMap); err != nil {
-					logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
+					logger.GetReqInfo(ctx).AppendTags("remotePeer", client.host.Name)
 					logger.LogIf(ctx, err)
 				}
-			}(addr, client, rulesMap.Clone())
+			}(client, rulesMap.Clone())
 		}
 		wg.Wait()
 	}()
@@ -440,15 +444,18 @@ func (sys *NotificationSys) ListenBucketNotification(ctx context.Context, bucket
 	targetID event.TargetID, localPeer xnet.Host) {
 	go func() {
 		var wg sync.WaitGroup
-		for addr, client := range sys.peerRPCClientMap {
+		for _, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
 			wg.Add(1)
-			go func(addr xnet.Host, client *PeerRPCClient) {
+			go func(client *peerRESTClient) {
 				defer wg.Done()
 				if err := client.ListenBucketNotification(bucketName, eventNames, pattern, targetID, localPeer); err != nil {
-					logger.GetReqInfo(ctx).AppendTags("remotePeer", addr.Name)
+					logger.GetReqInfo(ctx).AppendTags("remotePeer", client.host.Name)
 					logger.LogIf(ctx, err)
 				}
-			}(addr, client)
+			}(client)
 		}
 		wg.Wait()
 	}()
@@ -492,7 +499,17 @@ func (sys *NotificationSys) RemoteTargetExist(bucketName string, targetID event.
 	return ok
 }
 
-// initListeners - initializes PeerRPC clients available in listener.json.
+// ListenBucketNotificationArgs - listen bucket notification RPC arguments.
+type ListenBucketNotificationArgs struct {
+	AuthArgs   `json:"-"`
+	BucketName string         `json:"-"`
+	EventNames []event.Name   `json:"eventNames"`
+	Pattern    string         `json:"pattern"`
+	TargetID   event.TargetID `json:"targetId"`
+	Addr       xnet.Host      `json:"addr"`
+}
+
+// initListeners - initializes PeerREST clients available in listener.json.
 func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLayer, bucketName string) error {
 	// listener.json is available/applicable only in DistXL mode.
 	if !globalIsDistXL {
@@ -542,12 +559,12 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 			continue
 		}
 
-		rpcClient := sys.GetPeerRPCClient(args.Addr)
-		if rpcClient == nil {
-			return fmt.Errorf("unable to find PeerRPCClient by address %v in listener.json for bucket %v", args.Addr, bucketName)
+		client, err := newPeerRESTClient(&args.Addr)
+		if err != nil {
+			return fmt.Errorf("unable to find PeerHost by address %v in listener.json for bucket %v", args.Addr, bucketName)
 		}
 
-		exist, err := rpcClient.RemoteTargetExist(bucketName, args.TargetID)
+		exist, err := client.RemoteTargetExist(bucketName, args.TargetID)
 		if err != nil {
 			logger.GetReqInfo(ctx).AppendTags("targetID", args.TargetID.Name)
 			logger.LogIf(ctx, err)
@@ -558,7 +575,7 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 			continue
 		}
 
-		target := NewPeerRPCClientTarget(bucketName, args.TargetID, rpcClient)
+		target := NewPeerRESTClientTarget(bucketName, args.TargetID, client)
 		rulesMap := event.NewRulesMap(args.EventNames, args.Pattern, target.ID())
 		if err = sys.AddRemoteTarget(bucketName, target, rulesMap); err != nil {
 			logger.GetReqInfo(ctx).AppendTags("targetName", target.id.Name)
@@ -721,24 +738,25 @@ func (sys *NotificationSys) Send(args eventArgs) []event.TargetIDErr {
 
 // DrivePerfInfo - Drive speed (read and write) information
 func (sys *NotificationSys) DrivePerfInfo() []ServerDrivesPerfInfo {
-	reply := make([]ServerDrivesPerfInfo, len(sys.peerRPCClientMap))
+	reply := make([]ServerDrivesPerfInfo, len(sys.peerClients))
 	var wg sync.WaitGroup
-	var i int
-	for addr, client := range sys.peerRPCClientMap {
+	for i, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
 		wg.Add(1)
-		go func(addr xnet.Host, client *PeerRPCClient, idx int) {
+		go func(client *peerRESTClient, idx int) {
 			defer wg.Done()
 			di, err := client.DrivePerfInfo()
 			if err != nil {
-				reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr.String())
+				reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", client.host.String())
 				ctx := logger.SetReqInfo(context.Background(), reqInfo)
 				logger.LogIf(ctx, err)
-				di.Addr = addr.String()
+				di.Addr = client.host.String()
 				di.Error = err.Error()
 			}
 			reply[idx] = di
-		}(addr, client, i)
-		i++
+		}(client, i)
 	}
 	wg.Wait()
 	return reply
@@ -746,24 +764,25 @@ func (sys *NotificationSys) DrivePerfInfo() []ServerDrivesPerfInfo {
 
 // MemUsageInfo - Mem utilization information
 func (sys *NotificationSys) MemUsageInfo() []ServerMemUsageInfo {
-	reply := make([]ServerMemUsageInfo, len(sys.peerRPCClientMap))
+	reply := make([]ServerMemUsageInfo, len(sys.peerClients))
 	var wg sync.WaitGroup
-	var i int
-	for addr, client := range sys.peerRPCClientMap {
+	for i, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
 		wg.Add(1)
-		go func(addr xnet.Host, client *PeerRPCClient, idx int) {
+		go func(client *peerRESTClient, idx int) {
 			defer wg.Done()
 			memi, err := client.MemUsageInfo()
 			if err != nil {
-				reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr.String())
+				reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", client.host.String())
 				ctx := logger.SetReqInfo(context.Background(), reqInfo)
 				logger.LogIf(ctx, err)
-				memi.Addr = addr.String()
+				memi.Addr = client.host.String()
 				memi.Error = err.Error()
 			}
 			reply[idx] = memi
-		}(addr, client, i)
-		i++
+		}(client, i)
 	}
 	wg.Wait()
 	return reply
@@ -771,24 +790,25 @@ func (sys *NotificationSys) MemUsageInfo() []ServerMemUsageInfo {
 
 // CPULoadInfo - CPU utilization information
 func (sys *NotificationSys) CPULoadInfo() []ServerCPULoadInfo {
-	reply := make([]ServerCPULoadInfo, len(sys.peerRPCClientMap))
+	reply := make([]ServerCPULoadInfo, len(sys.peerClients))
 	var wg sync.WaitGroup
-	var i int
-	for addr, client := range sys.peerRPCClientMap {
+	for i, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
 		wg.Add(1)
-		go func(addr xnet.Host, client *PeerRPCClient, idx int) {
+		go func(client *peerRESTClient, idx int) {
 			defer wg.Done()
 			cpui, err := client.CPULoadInfo()
 			if err != nil {
-				reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr.String())
+				reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", client.host.String())
 				ctx := logger.SetReqInfo(context.Background(), reqInfo)
 				logger.LogIf(ctx, err)
-				cpui.Addr = addr.String()
+				cpui.Addr = client.host.String()
 				cpui.Error = err.Error()
 			}
 			reply[idx] = cpui
-		}(addr, client, i)
-		i++
+		}(client, i)
 	}
 	wg.Wait()
 	return reply
@@ -797,14 +817,18 @@ func (sys *NotificationSys) CPULoadInfo() []ServerCPULoadInfo {
 // NewNotificationSys - creates new notification system object.
 func NewNotificationSys(config *serverConfig, endpoints EndpointList) *NotificationSys {
 	targetList := getNotificationTargets(config)
-	peerRPCClientMap := makeRemoteRPCClients(endpoints)
+	remoteHosts := getRemoteHosts(endpoints)
+	remoteClients, err := getRestClients(remoteHosts)
+	if err != nil {
+		logger.FatalIf(err, "Unable to start notification sub system")
+	}
 
 	// bucketRulesMap/bucketRemoteTargetRulesMap are initialized by NotificationSys.Init()
 	return &NotificationSys{
 		targetList:                 targetList,
 		bucketRulesMap:             make(map[string]event.RulesMap),
 		bucketRemoteTargetRulesMap: make(map[string]map[event.TargetID]event.RulesMap),
-		peerRPCClientMap:           peerRPCClientMap,
+		peerClients:                remoteClients,
 	}
 }
 
@@ -815,7 +839,6 @@ type eventArgs struct {
 	ReqParams    map[string]string
 	RespElements map[string]string
 	Host         string
-	Port         string
 	UserAgent    string
 }
 
@@ -870,7 +893,6 @@ func (args eventArgs) ToEvent() event.Event {
 		},
 		Source: event.Source{
 			Host:      args.Host,
-			Port:      args.Port,
 			UserAgent: args.UserAgent,
 		},
 	}

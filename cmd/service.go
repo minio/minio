@@ -19,15 +19,16 @@ package cmd
 import (
 	"os"
 	"os/exec"
+	"syscall"
 )
 
 // Type of service signals currently supported.
-type serviceSignal int
+type serviceSignal string
 
 const (
-	serviceStatus  = iota // Gets status about the service.
-	serviceRestart        // Restarts the service.
-	serviceStop           // Stops the server.
+	serviceStatus  serviceSignal = "serviceStatus"  // Gets status about the service.
+	serviceRestart               = "serviceRestart" // Restarts the service.
+	serviceStop                  = "serviceStop"    // Stops the server.
 	// Add new service requests here.
 )
 
@@ -39,7 +40,7 @@ var GlobalServiceDoneCh chan struct{}
 
 // Initialize service mutex once.
 func init() {
-	GlobalServiceDoneCh = make(chan struct{}, 1)
+	GlobalServiceDoneCh = make(chan struct{})
 	globalServiceSignalCh = make(chan serviceSignal)
 }
 
@@ -56,9 +57,7 @@ func restartProcess() error {
 		return err
 	}
 
-	// Pass on the environment and replace the old count key with the new one.
-	cmd := exec.Command(argv0, os.Args[1:]...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Start()
+	// Invokes the execve system call.
+	// Re-uses the same pid. This preserves the pid over multiple server-respawns.
+	return syscall.Exec(argv0, os.Args, os.Environ())
 }

@@ -7,12 +7,39 @@ COPY . /go/src/github.com/minio/minio
 WORKDIR /go/src/github.com/minio/minio
 
 RUN apt-get update && apt-get install -y jq
+ENV GO111MODULE=on
+
+RUN git config --global http.cookiefile /gitcookie/.gitcookie
+
 RUN make
 RUN bash -c 'diff -au <(gofmt -s -d cmd) <(printf "")'
 RUN bash -c 'diff -au <(gofmt -s -d pkg) <(printf "")'
+
+RUN apt-get update && \
+      apt-get -y install sudo
+RUN touch  /etc/sudoers
+
+RUN echo "root ALL=(ALL) ALL" >> /etc/sudoers
+RUN echo "ci ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+RUN echo "Defaults    env_reset" >> /etc/sudoers
+RUN echo 'Defaults    secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go:/usr/local/go/bin"' >> /etc/sudoers
+
+RUN mkdir -p /home/ci/.cache
+
+RUN groupadd -g 999 ci && \
+    useradd -r -u 999 -g ci ci
+
+RUN chown -R ci:ci /go
+RUN chown -R ci:ci /home/ci
+RUN chmod -R a+rw /go 
+
+USER ci
+
 RUN for d in $(go list ./... | grep -v browser); do go test -v -race --timeout 15m "$d"; done
+RUN make verifiers
+RUN make crosscompile
+RUN make coverage
 RUN make verify
-RUN make coverage || true
 
 #-------------------------------------------------------------
 # Stage 2: Test Frontend
@@ -34,9 +61,6 @@ FROM ubuntu:16.04
 COPY --from=0 /go/src/github.com/minio/minio/minio ./minio
 COPY buildscripts/gateway-tests.sh ./gateway-tests.sh
 RUN apt-get update && apt-get install -y git wget jq curl dnsmasq
-
-RUN wget https://dl.google.com/go/go1.11.4.linux-amd64.tar.gz && \
-	tar -C /usr/local -xzf go1.11.4.linux-amd64.tar.gz
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV LANG C.UTF-8

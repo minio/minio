@@ -22,12 +22,11 @@ import (
 )
 
 // writeSTSErrorRespone writes error headers
-func writeSTSErrorResponse(w http.ResponseWriter, errorCode STSErrorCode) {
-	stsError := getSTSError(errorCode)
+func writeSTSErrorResponse(w http.ResponseWriter, err STSError) {
 	// Generate error response.
-	stsErrorResponse := getSTSErrorResponse(stsError)
+	stsErrorResponse := getSTSErrorResponse(err, w.Header().Get(responseRequestIDKey))
 	encodedErrorResponse := encodeResponse(stsErrorResponse)
-	writeResponse(w, stsError.HTTPStatusCode, encodedErrorResponse, mimeXML)
+	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
 }
 
 // STSError structure
@@ -54,6 +53,7 @@ type STSErrorCode int
 // Error codes, non exhaustive list - http://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithSAML.html
 const (
 	ErrSTSNone STSErrorCode = iota
+	ErrSTSAccessDenied
 	ErrSTSMissingParameter
 	ErrSTSInvalidParameterValue
 	ErrSTSWebIdentityExpiredToken
@@ -64,9 +64,24 @@ const (
 	ErrSTSInternalError
 )
 
+type stsErrorCodeMap map[STSErrorCode]STSError
+
+func (e stsErrorCodeMap) ToSTSErr(errCode STSErrorCode) STSError {
+	apiErr, ok := e[errCode]
+	if !ok {
+		return e[ErrSTSInternalError]
+	}
+	return apiErr
+}
+
 // error code to STSError structure, these fields carry respective
 // descriptions for all the error responses.
-var stsErrCodeResponse = map[STSErrorCode]STSError{
+var stsErrCodes = stsErrorCodeMap{
+	ErrSTSAccessDenied: {
+		Code:           "AccessDenied",
+		Description:    "Generating temporary credentials not allowed for this request.",
+		HTTPStatusCode: http.StatusForbidden,
+	},
 	ErrSTSMissingParameter: {
 		Code:           "MissingParameter",
 		Description:    "A required parameter for the specified action is not supplied.",
@@ -109,17 +124,12 @@ var stsErrCodeResponse = map[STSErrorCode]STSError{
 	},
 }
 
-// getSTSError provides STS Error for input STS error code.
-func getSTSError(code STSErrorCode) STSError {
-	return stsErrCodeResponse[code]
-}
-
-// getErrorResponse gets in standard error and resource value and
+// getSTSErrorResponse gets in standard error and
 // provides a encodable populated response values
-func getSTSErrorResponse(err STSError) STSErrorResponse {
+func getSTSErrorResponse(err STSError, requestID string) STSErrorResponse {
 	errRsp := STSErrorResponse{}
 	errRsp.Error.Code = err.Code
 	errRsp.Error.Message = err.Description
-	errRsp.RequestID = "3L137"
+	errRsp.RequestID = requestID
 	return errRsp
 }

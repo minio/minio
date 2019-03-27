@@ -753,7 +753,7 @@ func (l *gcsGateway) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	// Setup cleanup function to cause the above go-routine to
 	// exit in case of partial read
 	pipeCloser := func() { pr.Close() }
-	return minio.NewGetObjectReaderFromReader(pr, objInfo, pipeCloser), nil
+	return minio.NewGetObjectReaderFromReader(pr, objInfo, opts.CheckCopyPrecondFn, pipeCloser)
 }
 
 // GetObject - reads an object from GCS. Supports additional
@@ -797,11 +797,21 @@ func fromGCSAttrsToObjectInfo(attrs *storage.ObjectAttrs) minio.ObjectInfo {
 	// All google cloud storage objects have a CRC32c hash, whereas composite objects may not have a MD5 hash
 	// Refer https://cloud.google.com/storage/docs/hashes-etags. Use CRC32C for ETag
 	metadata := make(map[string]string)
+	var (
+		expiry time.Time
+		e      error
+	)
 	for k, v := range attrs.Metadata {
 		k = http.CanonicalHeaderKey(k)
 		// Translate the GCS custom metadata prefix
 		if strings.HasPrefix(k, "X-Goog-Meta-") {
 			k = strings.Replace(k, "X-Goog-Meta-", "X-Amz-Meta-", 1)
+		}
+		if k == "Expires" {
+			if expiry, e = time.Parse(http.TimeFormat, v); e == nil {
+				expiry = expiry.UTC()
+			}
+			continue
 		}
 		metadata[k] = v
 	}
@@ -829,6 +839,7 @@ func fromGCSAttrsToObjectInfo(attrs *storage.ObjectAttrs) minio.ObjectInfo {
 		UserDefined:     metadata,
 		ContentType:     attrs.ContentType,
 		ContentEncoding: attrs.ContentEncoding,
+		Expires:         expiry,
 	}
 }
 
@@ -918,7 +929,9 @@ func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, r
 // CopyObject - Copies a blob from source container to destination container.
 func (l *gcsGateway) CopyObject(ctx context.Context, srcBucket string, srcObject string, destBucket string, destObject string,
 	srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (minio.ObjectInfo, error) {
-
+	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo, "") {
+		return minio.ObjectInfo{}, minio.PreConditionFailed{}
+	}
 	src := l.client.Bucket(srcBucket).Object(srcObject)
 	dst := l.client.Bucket(destBucket).Object(destObject)
 

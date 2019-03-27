@@ -38,6 +38,9 @@ func TestFSV1MetadataObjInfo(t *testing.T) {
 	if objInfo.IsDir {
 		t.Fatal("Unexpected object info value for IsDir", objInfo.IsDir)
 	}
+	if !objInfo.Expires.IsZero() {
+		t.Fatal("Unexpected object info value for Expires ", objInfo.Expires)
+	}
 }
 
 // TestReadFSMetadata - readFSMetadata testing with a healthy and faulty disk

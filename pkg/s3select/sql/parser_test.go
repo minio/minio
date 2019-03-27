@@ -29,6 +29,7 @@ func TestJSONPathElement(t *testing.T) {
 		&JSONPathElement{},
 		participle.Lexer(sqlLexer),
 		participle.CaseInsensitive("Keyword"),
+		participle.CaseInsensitive("Timeword"),
 	)
 
 	j := JSONPathElement{}
@@ -59,6 +60,7 @@ func TestJSONPath(t *testing.T) {
 		&JSONPath{},
 		participle.Lexer(sqlLexer),
 		participle.CaseInsensitive("Keyword"),
+		participle.CaseInsensitive("Timeword"),
 	)
 
 	j := JSONPath{}

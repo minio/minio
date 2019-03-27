@@ -108,7 +108,7 @@ func TestDefaultExpiryDuration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		d, err := getDefaultExpiration(u.Query().Get("DurationSeconds"))
+		d, err := GetDefaultExpiration(u.Query().Get("DurationSeconds"))
 		gotErr := (err != nil)
 		if testCase.expectErr != gotErr {
 			t.Errorf("Test %d: Expected %v, got %v with error %s", i+1, testCase.expectErr, gotErr, err)

@@ -300,7 +300,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		{
 			objectName:         "test",
 			data:               []byte("Hello, World"),
-			expectedRespStatus: http.StatusBadRequest,
+			expectedRespStatus: http.StatusForbidden,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			dates:              []interface{}{curTime.Add(-1 * time.Minute * 5).Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
@@ -499,7 +499,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 // postPresignSignatureV4 - presigned signature for PostPolicy requests.
 func postPresignSignatureV4(policyBase64 string, t time.Time, secretAccessKey, location string) string {
 	// Get signining key.
-	signingkey := getSigningKey(secretAccessKey, t, location)
+	signingkey := getSigningKey(secretAccessKey, t, location, "s3")
 	// Calculate signature.
 	signature := getSignature(signingkey, policyBase64)
 	return signature

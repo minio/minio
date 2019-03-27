@@ -25,7 +25,6 @@ import (
 	"net/url"
 	"path"
 	"strconv"
-	"time"
 
 	"encoding/gob"
 	"encoding/hex"
@@ -34,14 +33,9 @@ import (
 	"strings"
 
 	"github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	xnet "github.com/minio/minio/pkg/net"
 )
-
-// The timeout of TCP connect and sending/receiving
-// data for all internode storage REST requests.
-const storageRESTTimeout = 5 * time.Minute
 
 func isNetworkError(err error) bool {
 	if err == nil {
@@ -381,9 +375,11 @@ func (client *storageRESTClient) Close() error {
 }
 
 // Returns a storage rest client.
-func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
+func newStorageRESTClient(endpoint Endpoint) (*storageRESTClient, error) {
 	host, err := xnet.ParseHost(endpoint.Host)
-	logger.FatalIf(err, "Unable to parse storage Host")
+	if err != nil {
+		return nil, err
+	}
 
 	scheme := "http"
 	if globalIsSSL {
@@ -404,8 +400,11 @@ func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 		}
 	}
 
-	restClient := rest.NewClient(serverURL, tlsConfig, storageRESTTimeout, newAuthToken)
+	restClient, err := rest.NewClient(serverURL, tlsConfig, rest.DefaultRESTTimeout, newAuthToken)
+	if err != nil {
+		return nil, err
+	}
 	client := &storageRESTClient{endpoint: endpoint, restClient: restClient, connected: true}
 	client.connected = client.getInstanceID() == nil
-	return client
+	return client, nil
 }

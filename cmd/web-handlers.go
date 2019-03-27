@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -39,6 +38,7 @@ import (
 	"github.com/gorilla/rpc/v2/json2"
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/browser"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
@@ -47,7 +47,7 @@ import (
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/policy"
 )
@@ -157,7 +157,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	}
 
 	// Check if bucket is a reserved bucket name or invalid.
-	if isReservedOrInvalidBucket(args.BucketName) {
+	if isReservedOrInvalidBucket(args.BucketName, true) {
 		return toJSONError(errInvalidBucketName)
 	}
 
@@ -296,24 +296,29 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	// If etcd, dns federation configured list buckets from etcd.
 	if globalDNSConfig != nil {
 		dnsBuckets, err := globalDNSConfig.List()
-		if err != nil {
+		if err != nil && err != dns.ErrNoEntriesFound {
 			return toJSONError(err)
 		}
+		bucketSet := set.NewStringSet()
 		for _, dnsRecord := range dnsBuckets {
-			bucketName := strings.Trim(dnsRecord.Key, "/")
+			if bucketSet.Contains(dnsRecord.Key) {
+				continue
+			}
 
 			if globalIAMSys.IsAllowed(iampolicy.Args{
 				AccountName:     claims.Subject,
 				Action:          iampolicy.ListBucketAction,
-				BucketName:      bucketName,
+				BucketName:      dnsRecord.Key,
 				ConditionValues: getConditionValues(r, "", claims.Subject),
 				IsOwner:         owner,
 				ObjectName:      "",
 			}) {
 				reply.Buckets = append(reply.Buckets, WebBucketInfo{
-					Name:         bucketName,
+					Name:         dnsRecord.Key,
 					CreationDate: dnsRecord.CreationDate,
 				})
+
+				bucketSet.Add(dnsRecord.Key)
 			}
 		}
 	} else {
@@ -758,20 +763,11 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return toJSONError(err)
 	}
 
-	if errs := globalNotificationSys.LoadCredentials(); len(errs) != 0 {
-		reply.PeerErrMsgs = make(map[string]string)
-		for _, nerr := range errs {
-			err = fmt.Errorf("Unable to update credentials on server %v: %v", nerr.Host, nerr.Err)
-			logger.LogIf(context.Background(), err)
-			reply.PeerErrMsgs[nerr.Host.String()] = err.Error()
-		}
-	} else {
-		reply.Token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
-		if err != nil {
-			return toJSONError(err)
-		}
-		reply.UIVersion = browser.UIVersion
+	reply.Token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		return toJSONError(err)
 	}
+	reply.UIVersion = browser.UIVersion
 
 	return nil
 }
@@ -912,26 +908,15 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
 		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
 
-		pipeReader, pipeWriter := io.Pipe()
-		snappyWriter := snappy.NewBufferedWriter(pipeWriter)
-
-		var actualReader *hash.Reader
-		actualReader, err = hash.NewReader(reader, size, "", "", actualSize)
+		actualReader, err := hash.NewReader(reader, size, "", "", actualSize)
 		if err != nil {
 			writeWebErrorResponse(w, err)
 			return
 		}
 
-		go func() {
-			// Writing to the compressed writer.
-			_, cerr := io.CopyN(snappyWriter, actualReader, actualSize)
-			snappyWriter.Close()
-			pipeWriter.CloseWithError(cerr)
-		}()
-
 		// Set compression metrics.
 		size = -1 // Since compressed size is un-predictable.
-		reader = pipeReader
+		reader = newSnappyCompressReader(actualReader)
 		hashReader, err = hash.NewReader(reader, size, "", "", actualSize)
 		if err != nil {
 			writeWebErrorResponse(w, err)
@@ -997,12 +982,6 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
-	if err != nil {
-		host, port = "", ""
-	}
-
 	// Notify object created event.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectCreatedPut,
@@ -1011,8 +990,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		ReqParams:    extractReqParams(r),
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
-		Host:         host,
-		Port:         port,
+		Host:         handlers.GetSourceIP(r),
 	})
 }
 
@@ -1130,12 +1108,6 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
-	if err != nil {
-		host, port = "", ""
-	}
-
 	// Notify object accessed via a GET request.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectAccessedGet,
@@ -1144,8 +1116,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		ReqParams:    extractReqParams(r),
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
-		Host:         host,
-		Port:         port,
+		Host:         handlers.GetSourceIP(r),
 	})
 }
 
@@ -1160,11 +1131,7 @@ type DownloadZipArgs struct {
 
 // Takes a list of objects and creates a zip file that sent as the response body.
 func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
-	if err != nil {
-		host, port = "", ""
-	}
+	host := handlers.GetSourceIP(r)
 
 	ctx := newContext(r, w, "WebDownloadZip")
 	defer logger.AuditLog(w, r, "WebDownloadZip", mustGetClaimsFromToken(r))
@@ -1349,7 +1316,6 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				RespElements: extractRespElements(w),
 				UserAgent:    r.UserAgent(),
 				Host:         host,
-				Port:         port,
 			})
 
 			return nil
@@ -1753,7 +1719,7 @@ func presignedGet(host, bucket, object string, expiry int64, creds auth.Credenti
 	extractedSignedHeaders.Set("host", host)
 	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, queryStr, path, "GET")
 	stringToSign := getStringToSign(canonicalRequest, date, getScope(date, region))
-	signingKey := getSigningKey(secretKey, date, region)
+	signingKey := getSigningKey(secretKey, date, region, serviceS3)
 	signature := getSignature(signingKey, stringToSign)
 
 	// Construct the final presigned URL.
@@ -1803,67 +1769,50 @@ func toJSONError(err error, params ...string) (jerr *json2.Error) {
 
 // toWebAPIError - convert into error into APIError.
 func toWebAPIError(err error) APIError {
-	if err == errAuthentication {
-		return APIError{
-			Code:           "AccessDenied",
-			HTTPStatusCode: http.StatusForbidden,
-			Description:    err.Error(),
-		}
-	} else if err == errServerNotInitialized {
+	switch err {
+	case errServerNotInitialized:
 		return APIError{
 			Code:           "XMinioServerNotInitialized",
 			HTTPStatusCode: http.StatusServiceUnavailable,
 			Description:    err.Error(),
 		}
-	} else if err == auth.ErrInvalidAccessKeyLength {
+	case errAuthentication, auth.ErrInvalidAccessKeyLength, auth.ErrInvalidSecretKeyLength, errInvalidAccessKeyID:
 		return APIError{
 			Code:           "AccessDenied",
 			HTTPStatusCode: http.StatusForbidden,
 			Description:    err.Error(),
 		}
-	} else if err == auth.ErrInvalidSecretKeyLength {
-		return APIError{
-			Code:           "AccessDenied",
-			HTTPStatusCode: http.StatusForbidden,
-			Description:    err.Error(),
-		}
-	} else if err == errInvalidAccessKeyID {
-		return APIError{
-			Code:           "AccessDenied",
-			HTTPStatusCode: http.StatusForbidden,
-			Description:    err.Error(),
-		}
-	} else if err == errSizeUnspecified {
+	case errSizeUnspecified:
 		return APIError{
 			Code:           "InvalidRequest",
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
 		}
-	} else if err == errChangeCredNotAllowed {
+	case errChangeCredNotAllowed:
 		return APIError{
 			Code:           "MethodNotAllowed",
 			HTTPStatusCode: http.StatusMethodNotAllowed,
 			Description:    err.Error(),
 		}
-	} else if err == errInvalidBucketName {
+	case errInvalidBucketName:
 		return APIError{
 			Code:           "InvalidBucketName",
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
 		}
-	} else if err == errInvalidArgument {
+	case errInvalidArgument:
 		return APIError{
 			Code:           "InvalidArgument",
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
 		}
-	} else if err == errEncryptedObject {
+	case errEncryptedObject:
 		return getAPIError(ErrSSEEncryptedObject)
-	} else if err == errInvalidEncryptionParameters {
+	case errInvalidEncryptionParameters:
 		return getAPIError(ErrInvalidEncryptionParameters)
-	} else if err == errObjectTampered {
+	case errObjectTampered:
 		return getAPIError(ErrObjectTampered)
-	} else if err == errMethodNotAllowed {
+	case errMethodNotAllowed:
 		return getAPIError(ErrMethodNotAllowed)
 	}
 

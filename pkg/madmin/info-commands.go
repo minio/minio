@@ -72,11 +72,12 @@ type StorageInfo struct {
 // ServerProperties holds some of the server's information such as uptime,
 // version, region, ..
 type ServerProperties struct {
-	Uptime   time.Duration `json:"uptime"`
-	Version  string        `json:"version"`
-	CommitID string        `json:"commitID"`
-	Region   string        `json:"region"`
-	SQSARN   []string      `json:"sqsARN"`
+	Uptime       time.Duration `json:"uptime"`
+	Version      string        `json:"version"`
+	CommitID     string        `json:"commitID"`
+	DeploymentID string        `json:"deploymentID"`
+	Region       string        `json:"region"`
+	SQSARN       []string      `json:"sqsARN"`
 }
 
 // ServerConnStats holds network information

@@ -69,11 +69,13 @@ var exports = {
   plugins: [
     new CopyWebpackPlugin([
       {from: 'app/css/loader.css'},
-      {from: 'app/img/favicon.ico'},
       {from: 'app/img/browsers/chrome.png'},
       {from: 'app/img/browsers/firefox.png'},
       {from: 'app/img/browsers/safari.png'},
       {from: 'app/img/logo.svg'},
+      {from: 'app/img/favicon/favicon-16x16.png'},
+      {from: 'app/img/favicon/favicon-32x32.png'},
+      {from: 'app/img/favicon/favicon-96x96.png'},
       {from: 'app/index.html'}
     ]),
     new webpack.ContextReplacementPlugin(/moment[\\\/]locale$/, /^\.\/(en)$/),

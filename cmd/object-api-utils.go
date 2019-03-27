@@ -34,6 +34,7 @@ import (
 	"unicode/utf8"
 
 	snappy "github.com/golang/snappy"
+	"github.com/minio/minio-go/pkg/s3utils"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
@@ -207,8 +208,8 @@ func getCompleteMultipartMD5(ctx context.Context, parts []CompletePart) (string,
 func cleanMetadata(metadata map[string]string) map[string]string {
 	// Remove STANDARD StorageClass
 	metadata = removeStandardStorageClass(metadata)
-	// Clean meta etag keys 'md5Sum', 'etag'.
-	return cleanMetadataKeys(metadata, "md5Sum", "etag")
+	// Clean meta etag keys 'md5Sum', 'etag', "expires".
+	return cleanMetadataKeys(metadata, "md5Sum", "etag", "expires")
 }
 
 // Filter X-Amz-Storage-Class field only if it is set to STANDARD.
@@ -273,10 +274,16 @@ func isStringEqual(s1 string, s2 string) bool {
 }
 
 // Ignores all reserved bucket names or invalid bucket names.
-func isReservedOrInvalidBucket(bucketEntry string) bool {
+func isReservedOrInvalidBucket(bucketEntry string, strict bool) bool {
 	bucketEntry = strings.TrimSuffix(bucketEntry, slashSeparator)
-	if !IsValidBucketName(bucketEntry) {
-		return true
+	if strict {
+		if err := s3utils.CheckValidBucketNameStrict(bucketEntry); err != nil {
+			return true
+		}
+	} else {
+		if err := s3utils.CheckValidBucketName(bucketEntry); err != nil {
+			return true
+		}
 	}
 	return isMinioMetaBucket(bucketEntry) || isMinioReservedBucket(bucketEntry)
 }
@@ -422,30 +429,41 @@ type GetObjectReader struct {
 	pReader io.Reader
 
 	cleanUpFns []func()
+	precondFn  func(ObjectInfo, string) bool
 	once       sync.Once
 }
 
 // NewGetObjectReaderFromReader sets up a GetObjectReader with a given
 // reader. This ignores any object properties.
-func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, cleanupFns ...func()) *GetObjectReader {
+func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, pcfn CheckCopyPreconditionFn, cleanupFns ...func()) (*GetObjectReader, error) {
+	if pcfn != nil {
+		if ok := pcfn(oi, ""); ok {
+			// Call the cleanup funcs
+			for i := len(cleanupFns) - 1; i >= 0; i-- {
+				cleanupFns[i]()
+			}
+			return nil, PreConditionFailed{}
+		}
+	}
 	return &GetObjectReader{
 		ObjInfo:    oi,
 		pReader:    r,
 		cleanUpFns: cleanupFns,
-	}
+		precondFn:  pcfn,
+	}, nil
 }
 
 // ObjReaderFn is a function type that takes a reader and returns
 // GetObjectReader and an error. Request headers are passed to provide
 // encryption parameters. cleanupFns allow cleanup funcs to be
 // registered for calling after usage of the reader.
-type ObjReaderFn func(inputReader io.Reader, h http.Header, cleanupFns ...func()) (r *GetObjectReader, err error)
+type ObjReaderFn func(inputReader io.Reader, h http.Header, pcfn CheckCopyPreconditionFn, cleanupFns ...func()) (r *GetObjectReader, err error)
 
 // NewGetObjectReader creates a new GetObjectReader. The cleanUpFns
 // are called on Close() in reverse order as passed here. NOTE: It is
 // assumed that clean up functions do not panic (otherwise, they may
 // not all run!).
-func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, cleanUpFns ...func()) (
+func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPreconditionFn, cleanUpFns ...func()) (
 	fn ObjReaderFn, off, length int64, err error) {
 
 	// Call the clean-up functions immediately in case of exit
@@ -486,7 +504,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, cleanUpFns ...func()) 
 		// a reader that returns the desired range of
 		// encrypted bytes. The header parameter is used to
 		// provide encryption parameters.
-		fn = func(inputReader io.Reader, h http.Header, cFns ...func()) (r *GetObjectReader, err error) {
+		fn = func(inputReader io.Reader, h http.Header, pcfn CheckCopyPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
 			copySource := h.Get(crypto.SSECopyAlgorithm) != ""
 
 			cFns = append(cleanUpFns, cFns...)
@@ -501,9 +519,18 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, cleanUpFns ...func()) 
 				}
 				return nil, err
 			}
+			encETag := oi.ETag
+			oi.ETag = getDecryptedETag(h, oi, copySource) // Decrypt the ETag before top layer consumes this value.
 
-			// Decrypt the ETag before top layer consumes this value.
-			oi.ETag = getDecryptedETag(h, oi, copySource)
+			if pcfn != nil {
+				if ok := pcfn(oi, encETag); ok {
+					// Call the cleanup funcs
+					for i := len(cFns) - 1; i >= 0; i-- {
+						cFns[i]()
+					}
+					return nil, PreConditionFailed{}
+				}
+			}
 
 			// Apply the skipLen and limit on the
 			// decrypted stream
@@ -514,6 +541,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, cleanUpFns ...func()) 
 				ObjInfo:    oi,
 				pReader:    decReader,
 				cleanUpFns: cFns,
+				precondFn:  pcfn,
 			}
 			return r, nil
 		}
@@ -545,7 +573,17 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, cleanUpFns ...func()) 
 				return nil, 0, 0, errInvalidRange
 			}
 		}
-		fn = func(inputReader io.Reader, _ http.Header, cFns ...func()) (r *GetObjectReader, err error) {
+		fn = func(inputReader io.Reader, _ http.Header, pcfn CheckCopyPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
+			cFns = append(cleanUpFns, cFns...)
+			if pcfn != nil {
+				if ok := pcfn(oi, ""); ok {
+					// Call the cleanup funcs
+					for i := len(cFns) - 1; i >= 0; i-- {
+						cFns[i]()
+					}
+					return nil, PreConditionFailed{}
+				}
+			}
 			// Decompression reader.
 			snappyReader := snappy.NewReader(inputReader)
 			// Apply the skipLen and limit on the
@@ -557,7 +595,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, cleanUpFns ...func()) 
 			r = &GetObjectReader{
 				ObjInfo:    oi,
 				pReader:    decReader,
-				cleanUpFns: append(cleanUpFns, cFns...),
+				cleanUpFns: cFns,
+				precondFn:  pcfn,
 			}
 			return r, nil
 		}
@@ -567,11 +606,22 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, cleanUpFns ...func()) 
 		if err != nil {
 			return nil, 0, 0, err
 		}
-		fn = func(inputReader io.Reader, _ http.Header, cFns ...func()) (r *GetObjectReader, err error) {
+		fn = func(inputReader io.Reader, _ http.Header, pcfn CheckCopyPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
+			cFns = append(cleanUpFns, cFns...)
+			if pcfn != nil {
+				if ok := pcfn(oi, ""); ok {
+					// Call the cleanup funcs
+					for i := len(cFns) - 1; i >= 0; i-- {
+						cFns[i]()
+					}
+					return nil, PreConditionFailed{}
+				}
+			}
 			r = &GetObjectReader{
 				ObjInfo:    oi,
 				pReader:    inputReader,
-				cleanUpFns: append(cleanUpFns, cFns...),
+				cleanUpFns: cFns,
+				precondFn:  pcfn,
 			}
 			return r, nil
 		}
@@ -674,4 +724,55 @@ func CleanMinioInternalMetadataKeys(metadata map[string]string) map[string]strin
 		}
 	}
 	return newMeta
+}
+
+// snappyCompressReader compresses data as it reads
+// from the underlying io.Reader.
+type snappyCompressReader struct {
+	r      io.Reader
+	w      *snappy.Writer
+	closed bool
+	buf    bytes.Buffer
+}
+
+func newSnappyCompressReader(r io.Reader) *snappyCompressReader {
+	cr := &snappyCompressReader{r: r}
+	cr.w = snappy.NewBufferedWriter(&cr.buf)
+	return cr
+}
+
+func (cr *snappyCompressReader) Read(p []byte) (int, error) {
+	if cr.closed {
+		// if snappy writer is closed r has been completely read,
+		// return any remaining data in buf.
+		return cr.buf.Read(p)
+	}
+
+	// read from original using p as buffer
+	nr, readErr := cr.r.Read(p)
+
+	// write read bytes to snappy writer
+	nw, err := cr.w.Write(p[:nr])
+	if err != nil {
+		return 0, err
+	}
+	if nw != nr {
+		return 0, io.ErrShortWrite
+	}
+
+	// if last of data from reader, close snappy writer to flush
+	if readErr == io.EOF {
+		err := cr.w.Close()
+		cr.closed = true
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	// read compressed bytes out of buf
+	n, err := cr.buf.Read(p)
+	if readErr != io.EOF && (err == nil || err == io.EOF) {
+		err = readErr
+	}
+	return n, err
 }

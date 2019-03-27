@@ -96,6 +96,9 @@ type ObjectInfo struct {
 	// by the Content-Type header field.
 	ContentEncoding string
 
+	// Date and time at which the object is no longer able to be cached
+	Expires time.Time
+
 	// Specify object storage class
 	StorageClass string
 

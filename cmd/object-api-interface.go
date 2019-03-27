@@ -26,10 +26,14 @@ import (
 	"github.com/minio/minio/pkg/policy"
 )
 
+// CheckCopyPreconditionFn returns true if copy precondition check failed.
+type CheckCopyPreconditionFn func(o ObjectInfo, encETag string) bool
+
 // ObjectOptions represents object options for ObjectLayer operations
 type ObjectOptions struct {
 	ServerSideEncryption encrypt.ServerSide
 	UserDefined          map[string]string
+	CheckCopyPrecondFn   CheckCopyPreconditionFn
 }
 
 // LockType represents required locking for ObjectLayer operations
@@ -84,9 +88,9 @@ type ObjectLayer interface {
 	ReloadFormat(ctx context.Context, dryRun bool) error
 	HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error)
 	HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem, error)
-	HealObject(ctx context.Context, bucket, object string, dryRun, remove bool) (madmin.HealResultItem, error)
+	HealObject(ctx context.Context, bucket, object string, dryRun, remove bool, scanMode madmin.HealScanMode) (madmin.HealResultItem, error)
 	ListBucketsHeal(ctx context.Context) (buckets []BucketInfo, err error)
-	ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error)
+	HealObjects(ctx context.Context, bucket, prefix string, healObjectFn func(string, string) error) error
 
 	// Policy operations
 	SetBucketPolicy(context.Context, string, *policy.Policy) error

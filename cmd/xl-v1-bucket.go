@@ -21,6 +21,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/minio/minio-go/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/policy"
 )
@@ -36,8 +37,7 @@ var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
 // MakeBucket - make a bucket.
 func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
 	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		logger.LogIf(ctx, BucketNameInvalid{Bucket: bucket})
+	if err := s3utils.CheckValidBucketNameStrict(bucket); err != nil {
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
@@ -178,7 +178,7 @@ func (xl xlObjects) listBuckets(ctx context.Context) (bucketsInfo []BucketInfo, 
 			// should take care of this.
 			var bucketsInfo []BucketInfo
 			for _, volInfo := range volsInfo {
-				if isReservedOrInvalidBucket(volInfo.Name) {
+				if isReservedOrInvalidBucket(volInfo.Name, true) {
 					continue
 				}
 				bucketsInfo = append(bucketsInfo, BucketInfo(volInfo))

@@ -32,7 +32,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/policy"
 )
 
@@ -126,7 +126,7 @@ func checkAdminRequestAuthType(ctx context.Context, r *http.Request, region stri
 		// We only support admin credentials to access admin APIs.
 
 		var owner bool
-		_, owner, s3Err = getReqAccessKeyV4(r, region)
+		_, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
 		if s3Err != ErrNone {
 			return s3Err
 		}
@@ -136,7 +136,7 @@ func checkAdminRequestAuthType(ctx context.Context, r *http.Request, region stri
 		}
 
 		// we only support V4 (no presign) with auth body
-		s3Err = isReqAuthenticated(ctx, r, region)
+		s3Err = isReqAuthenticated(ctx, r, region, serviceS3)
 	}
 	if s3Err != ErrNone {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("requestHeaders", dumpRequest(r))
@@ -241,10 +241,10 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 		case policy.GetBucketLocationAction, policy.ListAllMyBucketsAction:
 			region = ""
 		}
-		if s3Err = isReqAuthenticated(ctx, r, region); s3Err != ErrNone {
+		if s3Err = isReqAuthenticated(ctx, r, region, serviceS3); s3Err != ErrNone {
 			return s3Err
 		}
-		cred, owner, s3Err = getReqAccessKeyV4(r, region)
+		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
 	}
 	if s3Err != ErrNone {
 		return s3Err
@@ -314,21 +314,21 @@ func isReqAuthenticatedV2(r *http.Request) (s3Error APIErrorCode) {
 	return doesPresignV2SignatureMatch(r)
 }
 
-func reqSignatureV4Verify(r *http.Request, region string) (s3Error APIErrorCode) {
-	sha256sum := getContentSha256Cksum(r)
+func reqSignatureV4Verify(r *http.Request, region string, stype serviceType) (s3Error APIErrorCode) {
+	sha256sum := getContentSha256Cksum(r, stype)
 	switch {
 	case isRequestSignatureV4(r):
-		return doesSignatureMatch(sha256sum, r, region)
+		return doesSignatureMatch(sha256sum, r, region, stype)
 	case isRequestPresignedSignatureV4(r):
-		return doesPresignedSignatureMatch(sha256sum, r, region)
+		return doesPresignedSignatureMatch(sha256sum, r, region, stype)
 	default:
 		return ErrAccessDenied
 	}
 }
 
 // Verify if request has valid AWS Signature Version '4'.
-func isReqAuthenticated(ctx context.Context, r *http.Request, region string) (s3Error APIErrorCode) {
-	if errCode := reqSignatureV4Verify(r, region); errCode != ErrNone {
+func isReqAuthenticated(ctx context.Context, r *http.Request, region string, stype serviceType) (s3Error APIErrorCode) {
+	if errCode := reqSignatureV4Verify(r, region, stype); errCode != ErrNone {
 		return errCode
 	}
 
@@ -432,7 +432,7 @@ func isPutAllowed(atype authType, bucketName, objectName string, r *http.Request
 		cred, owner, s3Err = getReqAccessKeyV2(r)
 	case authTypeStreamingSigned, authTypePresigned, authTypeSigned:
 		region := globalServerConfig.GetRegion()
-		cred, owner, s3Err = getReqAccessKeyV4(r, region)
+		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
 	}
 	if s3Err != ErrNone {
 		return s3Err

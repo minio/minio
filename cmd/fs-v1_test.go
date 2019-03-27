@@ -22,6 +22,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // Tests for if parent directory is object
@@ -228,8 +230,8 @@ func TestFSPutObject(t *testing.T) {
 	if err == nil {
 		t.Fatal("Unexpected should fail here, backend corruption occurred")
 	}
-	if nerr, ok := err.(PrefixAccessDenied); !ok {
-		t.Fatalf("Expected PrefixAccessDenied, got %#v", err)
+	if nerr, ok := err.(ParentIsObject); !ok {
+		t.Fatalf("Expected ParentIsObject, got %#v", err)
 	} else {
 		if nerr.Bucket != "bucket" {
 			t.Fatalf("Expected 'bucket', got %s", nerr.Bucket)
@@ -243,8 +245,8 @@ func TestFSPutObject(t *testing.T) {
 	if err == nil {
 		t.Fatal("Unexpected should fail here, backned corruption occurred")
 	}
-	if nerr, ok := err.(PrefixAccessDenied); !ok {
-		t.Fatalf("Expected PrefixAccessDenied, got %#v", err)
+	if nerr, ok := err.(ParentIsObject); !ok {
+		t.Fatalf("Expected ParentIsObject, got %#v", err)
 	} else {
 		if nerr.Bucket != "bucket" {
 			t.Fatalf("Expected 'bucket', got %s", nerr.Bucket)
@@ -390,19 +392,19 @@ func TestFSHealObject(t *testing.T) {
 	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	_, err := obj.HealObject(context.Background(), "bucket", "object", false, false)
+	_, err := obj.HealObject(context.Background(), "bucket", "object", false, false, madmin.HealDeepScan)
 	if err == nil || !isSameType(err, NotImplemented{}) {
 		t.Fatalf("Heal Object should return NotImplemented error ")
 	}
 }
 
-// TestFSListObjectHeal - tests for fs ListObjectHeals
-func TestFSListObjectsHeal(t *testing.T) {
+// TestFSHealObjects - tests for fs HealObjects to return not implemented.
+func TestFSHealObjects(t *testing.T) {
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	_, err := obj.ListObjectsHeal(context.Background(), "bucket", "prefix", "marker", "delimiter", 1000)
+	err := obj.HealObjects(context.Background(), "bucket", "prefix", nil)
 	if err == nil || !isSameType(err, NotImplemented{}) {
 		t.Fatalf("Heal Object should return NotImplemented error ")
 	}

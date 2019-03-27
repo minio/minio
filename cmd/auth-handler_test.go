@@ -381,7 +381,8 @@ func TestIsReqAuthenticated(t *testing.T) {
 	ctx := context.Background()
 	// Validates all testcases.
 	for i, testCase := range testCases {
-		if s3Error := isReqAuthenticated(ctx, testCase.req, globalServerConfig.GetRegion()); s3Error != testCase.s3Error {
+		s3Error := isReqAuthenticated(ctx, testCase.req, globalServerConfig.GetRegion(), serviceS3)
+		if s3Error != testCase.s3Error {
 			if _, err := ioutil.ReadAll(testCase.req.Body); toAPIErrorCode(ctx, err) != testCase.s3Error {
 				t.Fatalf("Test %d: Unexpected S3 error: want %d - got %d (got after reading request %s)", i, testCase.s3Error, s3Error, toAPIError(ctx, err).Code)
 			}

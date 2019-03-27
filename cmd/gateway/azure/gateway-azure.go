@@ -564,12 +564,35 @@ func (a *azureObjects) ListObjects(ctx context.Context, bucket, prefix, marker, 
 				// skip all the entries till we reach the marker.
 				continue
 			}
+			// Populate correct ETag's if possible, this code primarily exists
+			// because AWS S3 indicates that
+			//
+			// https://docs.aws.amazon.com/AmazonS3/latest/API/RESTCommonResponseHeaders.html
+			//
+			// Objects created by the PUT Object, POST Object, or Copy operation,
+			// or through the AWS Management Console, and are encrypted by SSE-S3
+			// or plaintext, have ETags that are an MD5 digest of their object data.
+			//
+			// Some applications depend on this behavior refer https://github.com/minio/minio/issues/6550
+			// So we handle it here and make this consistent.
+			etag := minio.ToS3ETag(blob.Properties.Etag)
+			switch {
+			case blob.Properties.ContentMD5 != "":
+				b, err := base64.StdEncoding.DecodeString(blob.Properties.ContentMD5)
+				if err == nil {
+					etag = hex.EncodeToString(b)
+				}
+			case blob.Metadata["md5sum"] != "":
+				etag = blob.Metadata["md5sum"]
+				delete(blob.Metadata, "md5sum")
+			}
+
 			objects = append(objects, minio.ObjectInfo{
 				Bucket:          bucket,
 				Name:            blob.Name,
 				ModTime:         time.Time(blob.Properties.LastModified),
 				Size:            blob.Properties.ContentLength,
-				ETag:            minio.ToS3ETag(blob.Properties.Etag),
+				ETag:            etag,
 				ContentType:     blob.Properties.ContentType,
 				ContentEncoding: blob.Properties.ContentEncoding,
 			})
@@ -651,7 +674,7 @@ func (a *azureObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	// Setup cleanup function to cause the above go-routine to
 	// exit in case of partial read
 	pipeCloser := func() { pr.Close() }
-	return minio.NewGetObjectReaderFromReader(pr, objInfo, pipeCloser), nil
+	return minio.NewGetObjectReaderFromReader(pr, objInfo, opts.CheckCopyPrecondFn, pipeCloser)
 }
 
 // GetObject - reads an object from azure. Supports additional
@@ -829,6 +852,9 @@ func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *
 // CopyObject - Copies a blob from source container to destination container.
 // Uses Azure equivalent CopyBlob API.
 func (a *azureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo, "") {
+		return minio.ObjectInfo{}, minio.PreConditionFailed{}
+	}
 	srcBlobURL := a.client.GetContainerReference(srcBucket).GetBlobReference(srcObject).GetURL()
 	destBlob := a.client.GetContainerReference(destBucket).GetBlobReference(destObject)
 	azureMeta, props, err := s3MetaToAzureProperties(ctx, srcInfo.UserDefined)

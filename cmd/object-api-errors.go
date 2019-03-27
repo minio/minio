@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"path"
 )
 
 // Converts underlying storage error. Convenience function written to
@@ -43,6 +44,13 @@ func toObjectErr(err error, params ...string) error {
 	case errFileAccessDenied:
 		if len(params) >= 2 {
 			err = PrefixAccessDenied{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
+	case errFileParentIsFile:
+		if len(params) >= 2 {
+			err = ParentIsObject{
 				Bucket: params[0],
 				Object: params[1],
 			}
@@ -180,6 +188,13 @@ type PrefixAccessDenied GenericError
 
 func (e PrefixAccessDenied) Error() string {
 	return "Prefix access is denied: " + e.Bucket + "/" + e.Object
+}
+
+// ParentIsObject object access is denied.
+type ParentIsObject GenericError
+
+func (e ParentIsObject) Error() string {
+	return "Parent is object " + e.Bucket + "/" + path.Dir(e.Object)
 }
 
 // BucketExists bucket exists.
@@ -381,5 +396,17 @@ func (e BackendDown) Error() string {
 // isErrObjectNotFound - Check if error type is ObjectNotFound.
 func isErrObjectNotFound(err error) bool {
 	_, ok := err.(ObjectNotFound)
+	return ok
+}
+
+// PreConditionFailed - Check if copy precondition failed
+type PreConditionFailed struct{}
+
+func (e PreConditionFailed) Error() string {
+	return "At least one of the pre-conditions you specified did not hold"
+}
+
+func isErrPreconditionFailed(err error) bool {
+	_, ok := err.(PreConditionFailed)
 	return ok
 }

@@ -254,8 +254,7 @@ func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 
 	cleanupBackend := func() { bkReader.Close() }
 	cleanupPipe := func() { pipeReader.Close() }
-	gr = NewGetObjectReaderFromReader(teeReader, bkReader.ObjInfo, cleanupBackend, cleanupPipe)
-	return gr, nil
+	return NewGetObjectReaderFromReader(teeReader, bkReader.ObjInfo, opts.CheckCopyPrecondFn, cleanupBackend, cleanupPipe)
 }
 
 // Uses cached-object to serve the request. If object is not cached it serves the request from the backend and also
@@ -424,7 +423,7 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 	if delimiter == slashSeparator {
 		recursive = false
 	}
-	walkResultCh, endWalkCh := c.listPool.Release(listParams{bucket, recursive, marker, prefix, false})
+	walkResultCh, endWalkCh := c.listPool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		isLeaf := func(bucket, object string) bool {
@@ -496,7 +495,7 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 		}
 	}
 
-	params := listParams{bucket, recursive, nextMarker, prefix, false}
+	params := listParams{bucket, recursive, nextMarker, prefix}
 	if !eof {
 		c.listPool.Set(params, walkResultCh, endWalkCh)
 	}

@@ -197,7 +197,7 @@ kubectl delete statefulset minio \
 
 If your cluster does not have a storage solution or PV abstraction, you must explicitly define what nodes you wish to run Minio on, and define a homogeneous path to a local fast block device available on every host.
 
-This must be changed in the example daemonset: [minio-distributed-daemonset.yaml](minio-distributed-daemonset.yaml)
+This must be changed in the example daemonset: [minio-distributed-daemonset.yaml](https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-distributed-daemonset.yaml)
 
 Specifically the hostpath:
 ```yaml

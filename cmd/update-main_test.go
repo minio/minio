@@ -23,6 +23,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -82,13 +83,19 @@ func TestReleaseTagToNFromTimeConversion(t *testing.T) {
 func TestDownloadURL(t *testing.T) {
 	minioVersion1 := releaseTimeToReleaseTag(UTCNow())
 	durl := getDownloadURL(minioVersion1)
-	if runtime.GOOS == "windows" {
-		if durl != minioReleaseURL+"minio.exe" {
-			t.Errorf("Expected %s, got %s", minioReleaseURL+"minio.exe", durl)
+	if IsDocker() {
+		if durl != "docker pull minio/minio:"+minioVersion1 {
+			t.Errorf("Expected %s, got %s", "docker pull minio/minio:"+minioVersion1, durl)
 		}
 	} else {
-		if durl != minioReleaseURL+"minio" {
-			t.Errorf("Expected %s, got %s", minioReleaseURL+"minio", durl)
+		if runtime.GOOS == "windows" {
+			if durl != minioReleaseURL+"minio.exe" {
+				t.Errorf("Expected %s, got %s", minioReleaseURL+"minio.exe", durl)
+			}
+		} else {
+			if durl != minioReleaseURL+"minio" {
+				t.Errorf("Expected %s, got %s", minioReleaseURL+"minio", durl)
+			}
 		}
 	}
 
@@ -141,8 +148,12 @@ func TestUserAgent(t *testing.T) {
 			os.Setenv("MARATHON_APP_LABEL_DCOS_PACKAGE_VERSION", "mesos-1111")
 		}
 		str := getUserAgent(testCase.mode)
-		if str != testCase.expectedStr {
-			t.Errorf("Test %d: expected: %s, got: %s", i+1, testCase.expectedStr, str)
+		expectedStr := testCase.expectedStr
+		if IsDocker() {
+			expectedStr = strings.Replace(expectedStr, "; source", "; docker; source", -1)
+		}
+		if str != expectedStr {
+			t.Errorf("Test %d: expected: %s, got: %s", i+1, expectedStr, str)
 		}
 		os.Unsetenv("MARATHON_APP_LABEL_DCOS_PACKAGE_VERSION")
 		os.Unsetenv(testCase.envName)

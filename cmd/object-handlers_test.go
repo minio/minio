@@ -2740,9 +2740,9 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			accessKey: credentials.AccessKey,
 			secretKey: credentials.SecretKey,
 
-			expectedContent: encodeResponse(completeMultipartAPIError{int64(4), int64(5242880), 1, "e2fc714c4727ee9395f324cd2e7f331f",
-				getAPIErrorResponse(ctx, toAPIError(ctx, PartTooSmall{PartNumber: 1}),
-					getGetObjectURL("", bucketName, objectName), "", "")}),
+			expectedContent: encodeResponse(getAPIErrorResponse(ctx,
+				toAPIError(ctx, PartTooSmall{PartNumber: 1}),
+				getGetObjectURL("", bucketName, objectName), "", "")),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 5.

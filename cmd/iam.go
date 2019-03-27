@@ -28,7 +28,7 @@ import (
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -324,6 +324,27 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 
 	sys.iamUsersMap[accessKey] = cred
 	return nil
+}
+
+// GetUserPolicy - returns canned policy name associated with a user.
+func (sys *IAMSys) GetUserPolicy(accessKey string) (policyName string, err error) {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return "", errServerNotInitialized
+	}
+
+	sys.RLock()
+	defer sys.RUnlock()
+
+	if _, ok := sys.iamUsersMap[accessKey]; !ok {
+		return "", errNoSuchUser
+	}
+
+	if _, ok := sys.iamPolicyMap[accessKey]; !ok {
+		return "", errNoSuchUser
+	}
+
+	return sys.iamPolicyMap[accessKey], nil
 }
 
 // ListUsers - list all users.

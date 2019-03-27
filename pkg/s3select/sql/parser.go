@@ -57,7 +57,7 @@ type ObjectKey struct {
 // quoted.
 type QuotedIdentifier string
 
-// Capture inferface used by participle
+// Capture interface used by participle
 func (qi *QuotedIdentifier) Capture(values []string) error {
 	// Remove enclosing quotes
 	n := len(values[0])
@@ -74,8 +74,8 @@ func (qi *QuotedIdentifier) Capture(values []string) error {
 type Select struct {
 	Expression *SelectExpression `parser:"\"SELECT\" @@"`
 	From       *TableExpression  `parser:"\"FROM\" @@"`
-	Where      *Expression       `parser:"[ \"WHERE\" @@ ]"`
-	Limit      *LitValue         `parser:"[ \"LIMIT\" @@ ]"`
+	Where      *Expression       `parser:"( \"WHERE\" @@ )?"`
+	Limit      *LitValue         `parser:"( \"LIMIT\" @@ )?"`
 }
 
 // SelectExpression represents the items requested in the select
@@ -94,7 +94,7 @@ type TableExpression struct {
 // JSONPathElement represents a keypath component
 type JSONPathElement struct {
 	Key            *ObjectKey `parser:"  @@"`                  // ['name'] and .name forms
-	Index          *uint64    `parser:"| \"[\" @Number \"]\""` // [3] form
+	Index          *int       `parser:"| \"[\" @Number \"]\""` // [3] form
 	ObjectWildcard bool       `parser:"| @\".*\""`             // .* form
 	ArrayWildcard  bool       `parser:"| @\"[*]\""`            // [*] form
 }

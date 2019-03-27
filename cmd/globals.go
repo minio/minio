@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/dns"
-	"github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/iam/validator"
 )
 
@@ -57,7 +57,6 @@ const (
 	globalMinioDefaultStorageClass = "STANDARD"
 	globalWindowsOSName            = "windows"
 	globalNetBSDOSName             = "netbsd"
-	globalSolarisOSName            = "solaris"
 	globalMinioModeFS              = "mode-server-fs"
 	globalMinioModeXL              = "mode-server-xl"
 	globalMinioModeDistXL          = "mode-server-distributed-xl"
@@ -79,7 +78,7 @@ const (
 	globalMaxSkewTime = 15 * time.Minute // 15 minutes skew allowed.
 
 	// GlobalMultipartExpiry - Expiry duration after which the multipart uploads are deemed stale.
-	GlobalMultipartExpiry = time.Hour * 24 * 14 // 2 weeks.
+	GlobalMultipartExpiry = time.Hour * 24 * 3 // 3 days.
 	// GlobalMultipartCleanupInterval - Cleanup interval when the stale multipart cleanup is initiated.
 	GlobalMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
 
@@ -175,9 +174,8 @@ var (
 	globalActiveCred  auth.Credentials
 	globalPublicCerts []*x509.Certificate
 
-	globalIsEnvDomainName bool
-	globalDomainName      string        // Root domain for virtual host style requests
-	globalDomainIPs       set.StringSet // Root domain IP address(s) for a distributed Minio deployment
+	globalDomainNames []string      // Root domains for virtual host style requests
+	globalDomainIPs   set.StringSet // Root domain IP address(s) for a distributed Minio deployment
 
 	globalListingTimeout   = newDynamicTimeout( /*30*/ 600*time.Second /*5*/, 600*time.Second) // timeout for listing related ops
 	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second)  // timeout for Object API related ops

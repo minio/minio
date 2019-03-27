@@ -319,11 +319,10 @@ function __init__()
     mkdir -p "$MINIO_CONFIG_DIR"
     mkdir -p "$MINT_DATA_DIR"
 
-    if ! go get -u github.com/minio/mc; then
-        echo "failed to download https://github.com/minio/mc"
-        exit 1
-    fi
-    /bin/cp -a "$(go env GOPATH)"/bin/mc "$WORK_DIR/mc"
+   git clone https://github.com/minio/mc 
+   cd mc
+   go build 
+   /bin/cp -a ./mc "$WORK_DIR/mc"
 
     chmod a+x "$WORK_DIR/mc"
 

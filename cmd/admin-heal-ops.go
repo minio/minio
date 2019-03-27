@@ -21,14 +21,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/madmin"
-	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
 // healStatusSummary - overall short summary of a healing sequence
@@ -573,51 +571,22 @@ func (h *healSequence) healMinioSysMeta(metaPrefix string) func() error {
 		// NOTE: Healing on meta is run regardless
 		// of any bucket being selected, this is to ensure that
 		// meta are always upto date and correct.
-		marker := ""
-		isTruncated := true
-		for isTruncated {
-			if globalHTTPServer != nil {
-				// Wait at max 1 minute for an inprogress request
-				// before proceeding to heal
-				waitCount := 60
-				// Any requests in progress, delay the heal.
-				for globalHTTPServer.GetRequestCount() > 2 && waitCount > 0 {
-					waitCount--
-					time.Sleep(1 * time.Second)
-				}
+		return objectAPI.HealObjects(h.ctx, minioMetaBucket, metaPrefix, func(bucket string, object string) error {
+			if h.isQuitting() {
+				return errHealStopSignalled
 			}
-
-			// Lists all objects under `config` prefix.
-			objectInfos, err := objectAPI.ListObjectsHeal(h.ctx, minioMetaBucket, metaPrefix,
-				marker, "", 1000)
-			if err != nil {
-				return errFnHealFromAPIErr(h.ctx, err)
+			res, herr := objectAPI.HealObject(h.ctx, bucket, object, h.settings.DryRun, h.settings.Remove, h.settings.ScanMode)
+			// Object might have been deleted, by the time heal
+			// was attempted we ignore this object an move on.
+			if isErrObjectNotFound(herr) {
+				return nil
 			}
-
-			for index := range objectInfos.Objects {
-				if h.isQuitting() {
-					return errHealStopSignalled
-				}
-				o := objectInfos.Objects[index]
-				res, herr := objectAPI.HealObject(h.ctx, o.Bucket, o.Name, h.settings.DryRun, h.settings.Remove)
-				// Object might have been deleted, by the time heal
-				// was attempted we ignore this file an move on.
-				if isErrObjectNotFound(herr) {
-					continue
-				}
-				if herr != nil {
-					return herr
-				}
-				res.Type = madmin.HealItemBucketMetadata
-				if err = h.pushHealResultItem(res); err != nil {
-					return err
-				}
+			if herr != nil {
+				return herr
 			}
-
-			isTruncated = objectInfos.IsTruncated
-			marker = objectInfos.NextMarker
-		}
-		return nil
+			res.Type = madmin.HealItemBucketMetadata
+			return h.pushHealResultItem(res)
+		})
 	}
 }
 
@@ -720,46 +689,9 @@ func (h *healSequence) healBucket(bucket string) error {
 		return nil
 	}
 
-	entries := runtime.NumCPU()
-
-	marker := ""
-	isTruncated := true
-	for isTruncated {
-		if globalHTTPServer != nil {
-			// Wait at max 1 minute for an inprogress request
-			// before proceeding to heal
-			waitCount := 60
-			// Any requests in progress, delay the heal.
-			for globalHTTPServer.GetRequestCount() > 2 && waitCount > 0 {
-				waitCount--
-				time.Sleep(1 * time.Second)
-			}
-		}
-
-		// Heal numCPU * nodes objects at a time.
-		objectInfos, err := objectAPI.ListObjectsHeal(h.ctx, bucket,
-			h.objPrefix, marker, "", entries)
-		if err != nil {
-			return errFnHealFromAPIErr(h.ctx, err)
-		}
-
-		g := errgroup.WithNErrs(len(objectInfos.Objects))
-		for index := range objectInfos.Objects {
-			index := index
-			g.Go(func() error {
-				o := objectInfos.Objects[index]
-				return h.healObject(o.Bucket, o.Name)
-			}, index)
-		}
-
-		for _, err := range g.Wait() {
-			if err != nil {
-				return err
-			}
-		}
-
-		isTruncated = objectInfos.IsTruncated
-		marker = objectInfos.NextMarker
+	if err = objectAPI.HealObjects(h.ctx, bucket,
+		h.objPrefix, h.healObject); err != nil {
+		return errFnHealFromAPIErr(h.ctx, err)
 	}
 	return nil
 }
@@ -770,13 +702,23 @@ func (h *healSequence) healObject(bucket, object string) error {
 		return errHealStopSignalled
 	}
 
+	if globalHTTPServer != nil {
+		// Wait at max 1 minute for an inprogress request
+		// before proceeding to heal
+		waitCount := 60
+		// Any requests in progress, delay the heal.
+		for globalHTTPServer.GetRequestCount() > 2 && waitCount > 0 {
+			waitCount--
+			time.Sleep(1 * time.Second)
+		}
+	}
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
 	if objectAPI == nil {
 		return errServerNotInitialized
 	}
 
-	hri, err := objectAPI.HealObject(h.ctx, bucket, object, h.settings.DryRun, h.settings.Remove)
+	hri, err := objectAPI.HealObject(h.ctx, bucket, object, h.settings.DryRun, h.settings.Remove, h.settings.ScanMode)
 	if isErrObjectNotFound(err) {
 		return nil
 	}

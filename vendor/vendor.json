@@ -116,10 +116,10 @@
 			"revisionTime": "2017-09-25T03:23:15Z"
 		},
 		{
-			"checksumSHA1": "mSo9Sti7F6+laUs4NLx/p23rHD0=",
+			"checksumSHA1": "YPGDETCyuMkceQvAXafFnj6ndkY=",
 			"path": "github.com/bcicen/jstream",
-			"revision": "f306cd3e1fa602a1b513114521a0d6a5a9d5c919",
-			"revisionTime": "2019-02-06T02:23:53Z"
+			"revision": "16c1f8af81c2a9967b30d365a29472126274f998",
+			"revisionTime": "2019-02-20T04:59:26Z"
 		},
 		{
 			"checksumSHA1": "0rido7hYHQtfq3UJzVT5LClLAWc=",
@@ -632,10 +632,10 @@
 			"revisionTime": "2016-02-29T08:42:30-08:00"
 		},
 		{
-			"checksumSHA1": "Sbze8wr7T6Avtc+4K8BbcHlIx4E=",
+			"checksumSHA1": "0f4Bah8pQ9Vd8Mw3RNPh298BYpQ=",
 			"path": "github.com/minio/minio-go",
-			"revision": "a42b0e14697ffdcb4ef223384c1cac12738f574f",
-			"revisionTime": "2019-01-20T10:05:29Z"
+			"revision": "59af836a7e6d99cbefa093475fbde0a4552d483f",
+			"revisionTime": "2019-02-27T18:09:23Z"
 		},
 		{
 			"checksumSHA1": "kgQZ7iWmuKVboL2d4DUU9l5isng=",
@@ -674,16 +674,16 @@
 			"revisionTime": "2019-01-20T10:05:29Z"
 		},
 		{
-			"checksumSHA1": "FO6q7sC2QTZMGDWv+/cGWJfjTCk=",
+			"checksumSHA1": "KzX4Kc/eOb8Dd8yJtO8fh3CIxHs=",
 			"path": "github.com/minio/parquet-go",
-			"revision": "d5e4e922da820530a1851afc22499c826c08f1e8",
-			"revisionTime": "2019-02-10T14:56:30Z"
+			"revision": "54766442a4a1f0fee45d70ebbf8acebc6d66f24b",
+			"revisionTime": "2019-03-13T01:38:37Z"
 		},
 		{
 			"checksumSHA1": "N4WRPw4p3AN958RH/O53kUsJacQ=",
 			"path": "github.com/minio/parquet-go/gen-go/parquet",
-			"revision": "d50385ed243d7120cf0f78de3f4f4e171936f12f",
-			"revisionTime": "2018-11-07T21:57:30Z"
+			"revision": "54766442a4a1f0fee45d70ebbf8acebc6d66f24b",
+			"revisionTime": "2019-03-13T01:38:37Z"
 		},
 		{
 			"checksumSHA1": "cYuXpiVBMypgkEr0Wqd79jPPyBg=",
@@ -897,10 +897,10 @@
 			"revisionTime": "2016-08-30T17:39:30Z"
 		},
 		{
-			"checksumSHA1": "j1wNJXkZyuFKjYFpPawESOaXYxk=",
+			"checksumSHA1": "IeRoFAG92dA1jUX27nMz1qczlOw=",
 			"path": "github.com/tidwall/sjson",
-			"revision": "6a22caf2fd45d5e2119bfc3717e984f15a7eb7ee",
-			"revisionTime": "2016-12-12T16:53:56Z"
+			"revision": "25fb082a20e29e83fb7b7ef5f5919166aad1f084",
+			"revisionTime": "2019-02-28T20:39:17Z"
 		},
 		{
 			"checksumSHA1": "R/Mpe0uUp5HeqWrdrH5qE2qZuE8=",
@@ -1083,10 +1083,10 @@
 			"revisionTime": "2018-05-30T06:29:46Z"
 		},
 		{
-			"checksumSHA1": "Zh++JEDfXo0DKQtoKVfScwVdvww=",
+			"checksumSHA1": "pMsrfJZ8JwoPT2pBa1loXKhGODQ=",
 			"path": "golang.org/x/net/http2",
-			"revision": "da118f7b8e5954f39d0d2130ab35d4bf0e3cb344",
-			"revisionTime": "2017-04-23T14:02:46Z"
+			"revision": "9f648a60d9775ef5c977e7669d1673a7a67bef33",
+			"revisionTime": "2019-03-13T06:50:29Z"
 		},
 		{
 			"checksumSHA1": "CBoO1DFToP49Ezph60yZ4J4PBBs=",
@@ -1109,12 +1109,6 @@
 		{
 			"checksumSHA1": "UxahDzW2v4mf/+aFxruuupaoIwo=",
 			"path": "golang.org/x/net/internal/timeseries",
-			"revision": "da118f7b8e5954f39d0d2130ab35d4bf0e3cb344",
-			"revisionTime": "2017-04-23T14:02:46Z"
-		},
-		{
-			"checksumSHA1": "3xyuaSNmClqG4YWC7g0isQIbUTc=",
-			"path": "golang.org/x/net/lex/httplex",
 			"revision": "da118f7b8e5954f39d0d2130ab35d4bf0e3cb344",
 			"revisionTime": "2017-04-23T14:02:46Z"
 		},
@@ -1177,6 +1171,12 @@
 			"path": "golang.org/x/sys/unix",
 			"revision": "1e2299c37cc91a509f1b12369872d27be0ce98a6",
 			"revisionTime": "2017-11-09T13:50:42Z"
+		},
+		{
+			"checksumSHA1": "Hu8GoQK1euwtE4UjrhXepmk2NM8=",
+			"path": "golang.org/x/sys/windows",
+			"revision": "cd391775e71e684db52b63df9affd58269495083",
+			"revisionTime": "2019-02-22T15:12:32Z"
 		},
 		{
 			"checksumSHA1": "faFDXp++cLjLBlvsr+izZ+go1WU=",

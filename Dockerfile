@@ -11,7 +11,8 @@ RUN  \
      apk add --no-cache git && \
      go get -v -d github.com/minio/minio && \
      cd /go/src/github.com/minio/minio && \
-     go install -v -ldflags "$(go run buildscripts/gen-ldflags.go)"
+     go install -v -ldflags "$(go run buildscripts/gen-ldflags.go)" && \
+     go build -ldflags "-s -w" -o /usr/bin/healthcheck dockerscripts/healthcheck.go 
 
 FROM alpine:3.7
 
@@ -22,7 +23,8 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
 EXPOSE 9000
 
 COPY --from=0 /go/bin/minio /usr/bin/minio
-COPY dockerscripts/docker-entrypoint.sh dockerscripts/healthcheck.sh /usr/bin/
+COPY --from=0 /usr/bin/healthcheck /usr/bin/healthcheck
+COPY dockerscripts/docker-entrypoint.sh /usr/bin/
 
 RUN  \
      apk add --no-cache ca-certificates 'curl>7.61.0' && \
@@ -32,7 +34,6 @@ ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 
 VOLUME ["/data"]
 
-HEALTHCHECK --interval=30s --timeout=5s \
-    CMD /usr/bin/healthcheck.sh
+HEALTHCHECK --interval=1m CMD healthcheck
 
 CMD ["minio"]

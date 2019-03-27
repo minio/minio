@@ -383,7 +383,23 @@ type resourceHandler struct {
 
 // setCorsHandler handler for CORS (Cross Origin Resource Sharing)
 func setCorsHandler(h http.Handler) http.Handler {
-	c := cors.AllowAll()
+
+	c := cors.New(cors.Options{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{
+			http.MethodGet,
+			http.MethodPut,
+			http.MethodHead,
+			http.MethodPost,
+			http.MethodDelete,
+			http.MethodOptions,
+			http.MethodPatch,
+		},
+		AllowedHeaders:   []string{"*"},
+		ExposedHeaders:   []string{"*"},
+		AllowCredentials: true,
+	})
+
 	return c.Handler(h)
 }
 
@@ -550,14 +566,14 @@ func (h httpStatsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	globalHTTPStats.updateStats(r, ww, durationSecs)
 }
 
-// pathValidityHandler validates all the incoming paths for
-// any bad components and rejects them.
-type pathValidityHandler struct {
+// requestValidityHandler validates all the incoming paths for
+// any malicious requests.
+type requestValidityHandler struct {
 	handler http.Handler
 }
 
-func setPathValidityHandler(h http.Handler) http.Handler {
-	return pathValidityHandler{handler: h}
+func setRequestValidityHandler(h http.Handler) http.Handler {
+	return requestValidityHandler{handler: h}
 }
 
 // Bad path components to be rejected by the path validity handler.
@@ -581,7 +597,18 @@ func hasBadPathComponent(path string) bool {
 	return false
 }
 
-func (h pathValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// Check if client is sending a malicious request.
+func hasMultipleAuth(r *http.Request) bool {
+	authTypeCount := 0
+	for _, hasValidAuth := range []func(*http.Request) bool{isRequestSignatureV2, isRequestPresignedSignatureV2, isRequestSignatureV4, isRequestPresignedSignatureV4, isRequestJWT, isRequestPostPolicySignatureV4} {
+		if hasValidAuth(r) {
+			authTypeCount++
+		}
+	}
+	return authTypeCount > 1
+}
+
+func (h requestValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check for bad components in URL path.
 	if hasBadPathComponent(r.URL.Path) {
 		writeErrorResponse(context.Background(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL, guessIsBrowserReq(r))
@@ -596,6 +623,10 @@ func (h pathValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if hasMultipleAuth(r) {
+		writeErrorResponse(context.Background(), w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL, guessIsBrowserReq(r))
+		return
+	}
 	h.handler.ServeHTTP(w, r)
 }
 
@@ -608,7 +639,7 @@ type bucketForwardingHandler struct {
 }
 
 func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if globalDNSConfig == nil || globalDomainName == "" ||
+	if globalDNSConfig == nil || len(globalDomainNames) == 0 ||
 		guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
 		guessIsRPCReq(r) || isAdminReq(r) {
 		f.handler.ServeHTTP(w, r)
@@ -617,7 +648,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 
 	// For browser requests, when federation is setup we need to
 	// specifically handle download and upload for browser requests.
-	if guessIsBrowserReq(r) && globalDNSConfig != nil && globalDomainName != "" {
+	if guessIsBrowserReq(r) && globalDNSConfig != nil && len(globalDomainNames) > 0 {
 		var bucket, _ string
 		switch r.Method {
 		case http.MethodPut:

@@ -29,6 +29,60 @@ import (
 
 type compressionCodec parquet.CompressionCodec
 
+func (c compressionCodec) compress(buf []byte) ([]byte, error) {
+	switch parquet.CompressionCodec(c) {
+	case parquet.CompressionCodec_UNCOMPRESSED:
+		return buf, nil
+
+	case parquet.CompressionCodec_SNAPPY:
+		return snappy.Encode(nil, buf), nil
+
+	case parquet.CompressionCodec_GZIP:
+		byteBuf := new(bytes.Buffer)
+		writer := gzip.NewWriter(byteBuf)
+		n, err := writer.Write(buf)
+		if err != nil {
+			return nil, err
+		}
+		if n != len(buf) {
+			return nil, fmt.Errorf("short writes")
+		}
+
+		if err = writer.Flush(); err != nil {
+			return nil, err
+		}
+
+		if err = writer.Close(); err != nil {
+			return nil, err
+		}
+
+		return byteBuf.Bytes(), nil
+
+	case parquet.CompressionCodec_LZ4:
+		byteBuf := new(bytes.Buffer)
+		writer := lz4.NewWriter(byteBuf)
+		n, err := writer.Write(buf)
+		if err != nil {
+			return nil, err
+		}
+		if n != len(buf) {
+			return nil, fmt.Errorf("short writes")
+		}
+
+		if err = writer.Flush(); err != nil {
+			return nil, err
+		}
+
+		if err = writer.Close(); err != nil {
+			return nil, err
+		}
+
+		return byteBuf.Bytes(), nil
+	}
+
+	return nil, fmt.Errorf("invalid compression codec %v", c)
+}
+
 func (c compressionCodec) uncompress(buf []byte) ([]byte, error) {
 	switch parquet.CompressionCodec(c) {
 	case parquet.CompressionCodec_UNCOMPRESSED:

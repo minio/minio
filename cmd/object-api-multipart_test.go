@@ -239,8 +239,8 @@ func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks [
 	if err == nil {
 		t.Fatalf("Test %s: expected to fail but passed instead", instanceType)
 	}
-	// as majority of xl.json are not available, we expect InsufficientReadQuorum while trying to fetch the object quorum
-	expectedErr := InsufficientReadQuorum{}
+	// as majority of xl.json are not available, we expect uploadID to be not available.
+	expectedErr := InvalidUploadID{UploadID: testCase.uploadID}
 	if err.Error() != expectedErr.Error() {
 		t.Fatalf("Test %s: expected error %s, got %s instead.", instanceType, expectedErr, err)
 	}

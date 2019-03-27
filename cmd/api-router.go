@@ -44,8 +44,8 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled bool) {
 	// API Router
 	apiRouter := router.PathPrefix("/").Subrouter()
 	var routers []*mux.Router
-	if globalDomainName != "" {
-		routers = append(routers, apiRouter.Host("{bucket:.+}."+globalDomainName).Subrouter())
+	for _, domainName := range globalDomainNames {
+		routers = append(routers, apiRouter.Host("{bucket:.+}."+domainName).Subrouter())
 	}
 	routers = append(routers, apiRouter.PathPrefix("/{bucket}").Subrouter())
 

@@ -641,22 +641,27 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir(). Sets passes set of disks.
-func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, isLeafDir isLeafDirFunc, sets ...[]StorageAPI) listDirFunc {
+func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, isLeafDir isLeafDirFunc, sets ...*xlObjects) listDirFunc {
 	listDirInternal := func(bucket, prefixDir, prefixEntry string, disks []StorageAPI) (mergedEntries []string) {
-		for _, disk := range disks {
+		var diskEntries = make([][]string, len(disks))
+		var wg sync.WaitGroup
+		for index, disk := range disks {
 			if disk == nil {
 				continue
 			}
+			wg.Add(1)
+			go func(index int, disk StorageAPI) {
+				defer wg.Done()
+				diskEntries[index], _ = disk.ListDir(bucket, prefixDir, -1)
+			}(index, disk)
+		}
 
-			var entries []string
+		wg.Wait()
+
+		// Find elements in entries which are not in mergedEntries
+		for _, entries := range diskEntries {
 			var newEntries []string
-			var err error
-			entries, err = disk.ListDir(bucket, prefixDir, -1)
-			if err != nil {
-				continue
-			}
 
-			// Find elements in entries which are not in mergedEntries
 			for _, entry := range entries {
 				idx := sort.SearchStrings(mergedEntries, entry)
 				// if entry is already present in mergedEntries don't add.
@@ -672,16 +677,16 @@ func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, isLeafDir isLeaf
 				sort.Strings(mergedEntries)
 			}
 		}
+
 		return mergedEntries
 	}
 
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
 	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string, delayIsLeaf bool) {
-		for _, disks := range sets {
-			entries := listDirInternal(bucket, prefixDir, prefixEntry, disks)
+		for _, set := range sets {
 			var newEntries []string
 			// Find elements in entries which are not in mergedEntries
-			for _, entry := range entries {
+			for _, entry := range listDirInternal(bucket, prefixDir, prefixEntry, set.getLoadBalancedDisks()) {
 				idx := sort.SearchStrings(mergedEntries, entry)
 				// if entry is already present in mergedEntries don't add.
 				if idx < len(mergedEntries) && mergedEntries[idx] == entry {
@@ -696,8 +701,7 @@ func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, isLeafDir isLeaf
 				sort.Strings(mergedEntries)
 			}
 		}
-		mergedEntries, delayIsLeaf = filterListEntries(bucket, prefixDir, mergedEntries, prefixEntry, isLeaf)
-		return mergedEntries, delayIsLeaf
+		return filterListEntries(bucket, prefixDir, mergedEntries, prefixEntry, isLeaf)
 	}
 	return listDir
 }
@@ -721,7 +725,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		recursive = false
 	}
 
-	walkResultCh, endWalkCh := s.listPool.Release(listParams{bucket, recursive, marker, prefix, false})
+	walkResultCh, endWalkCh := s.listPool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		isLeaf := func(bucket, entry string) bool {
@@ -743,12 +747,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 			return false
 		}
 
-		var setDisks = make([][]StorageAPI, len(s.sets))
-		for _, set := range s.sets {
-			setDisks = append(setDisks, set.getLoadBalancedDisks())
-		}
-
-		listDir := listDirSetsFactory(ctx, isLeaf, isLeafDir, setDisks...)
+		listDir := listDirSetsFactory(ctx, isLeaf, isLeafDir, s.sets...)
 		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
 	}
 
@@ -799,7 +798,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		}
 	}
 
-	params := listParams{bucket, recursive, nextMarker, prefix, false}
+	params := listParams{bucket, recursive, nextMarker, prefix}
 	if !eof {
 		s.listPool.Set(params, walkResultCh, endWalkCh)
 	}
@@ -1011,9 +1010,6 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 // If it is a single node XL and all disks are root disks, it is most likely a test setup, else it is a production setup.
 // On a test setup we allow creation of format.json on root disks to help with dev/testing.
 func isTestSetup(infos []DiskInfo, errs []error) bool {
-	if globalIsDistXL {
-		return false
-	}
 	rootDiskCount := 0
 	for i := range errs {
 		if errs[i] != nil {
@@ -1300,8 +1296,8 @@ func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove b
 }
 
 // HealObject - heals inconsistent object on a hashedSet based on object name.
-func (s *xlSets) HealObject(ctx context.Context, bucket, object string, dryRun, remove bool) (madmin.HealResultItem, error) {
-	return s.getHashedSet(object).HealObject(ctx, bucket, object, dryRun, remove)
+func (s *xlSets) HealObject(ctx context.Context, bucket, object string, dryRun, remove bool, scanMode madmin.HealScanMode) (madmin.HealResultItem, error) {
+	return s.getHashedSet(object).HealObject(ctx, bucket, object, dryRun, remove, scanMode)
 }
 
 // Lists all buckets which need healing.
@@ -1323,191 +1319,38 @@ func (s *xlSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 	return listBuckets, nil
 }
 
-// Returns function "listDir" of the type listDirFunc.
-// isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
-// disks - used for doing disk.ListDir(). Sets passes set of disks.
-func listDirSetsHealFactory(isLeaf isLeafFunc, sets ...[]StorageAPI) listDirFunc {
-	listDirInternal := func(bucket, prefixDir, prefixEntry string, disks []StorageAPI) (mergedEntries []string) {
-		for _, disk := range disks {
-			if disk == nil {
-				continue
-			}
-
-			var entries []string
-			var newEntries []string
-			var err error
-			entries, err = disk.ListDir(bucket, prefixDir, -1)
-			if err != nil {
-				continue
-			}
-
-			// Filter entries that have the prefix prefixEntry.
-			entries = filterMatchingPrefix(entries, prefixEntry)
-
-			// isLeaf() check has to happen here so that
-			// trailing "/" for objects can be removed.
-			for i, entry := range entries {
-				if isLeaf(bucket, pathJoin(prefixDir, entry)) {
-					entries[i] = strings.TrimSuffix(entry, slashSeparator)
-				}
-			}
-
-			// Find elements in entries which are not in mergedEntries
-			for _, entry := range entries {
-				idx := sort.SearchStrings(mergedEntries, entry)
-				// if entry is already present in mergedEntries don't add.
-				if idx < len(mergedEntries) && mergedEntries[idx] == entry {
-					continue
-				}
-				newEntries = append(newEntries, entry)
-			}
-
-			if len(newEntries) > 0 {
-				// Merge the entries and sort it.
-				mergedEntries = append(mergedEntries, newEntries...)
-				sort.Strings(mergedEntries)
-			}
-		}
-		return mergedEntries
-
-	}
-
-	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string, delayIsLeaf bool) {
-		for _, disks := range sets {
-			entries := listDirInternal(bucket, prefixDir, prefixEntry, disks)
-
-			var newEntries []string
-			// Find elements in entries which are not in mergedEntries
-			for _, entry := range entries {
-				idx := sort.SearchStrings(mergedEntries, entry)
-				// if entry is already present in mergedEntries don't add.
-				if idx < len(mergedEntries) && mergedEntries[idx] == entry {
-					continue
-				}
-				newEntries = append(newEntries, entry)
-			}
-
-			if len(newEntries) > 0 {
-				// Merge the entries and sort it.
-				mergedEntries = append(mergedEntries, newEntries...)
-				sort.Strings(mergedEntries)
-			}
-		}
-		return mergedEntries, false
-	}
-	return listDir
-}
-
-// listObjectsHeal - wrapper function implemented over file tree walk.
-func (s *xlSets) listObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
-	// Default is recursive, if delimiter is set then list non recursive.
+// HealObjects - Heal all objects recursively at a specified prefix, any
+// dangling objects deleted as well automatically.
+func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObjectFn func(string, string) error) (err error) {
 	recursive := true
-	if delimiter == slashSeparator {
-		recursive = false
+
+	endWalkCh := make(chan struct{})
+	isLeaf := func(bucket, entry string) bool {
+		return hasSuffix(entry, xlMetaJSONFile)
 	}
 
-	// "heal" true for listObjectsHeal() and false for listObjects()
-	walkResultCh, endWalkCh := s.listPool.Release(listParams{bucket, recursive, marker, prefix, true})
-	if walkResultCh == nil {
-		endWalkCh = make(chan struct{})
-		isLeaf := func(bucket, entry string) bool {
-			entry = strings.TrimSuffix(entry, slashSeparator)
-			// Verify if we are at the leaf, a leaf is where we
-			// see `xl.json` inside a directory.
-			return s.getHashedSet(entry).isObject(bucket, entry)
-		}
-
-		isLeafDir := func(bucket, entry string) bool {
-			var ok bool
-			for _, set := range s.sets {
-				ok = set.isObjectDir(bucket, entry)
-				if ok {
-					return true
-				}
-			}
-			return false
-		}
-
-		var setDisks = make([][]StorageAPI, len(s.sets))
-		for _, set := range s.sets {
-			setDisks = append(setDisks, set.getLoadBalancedDisks())
-		}
-
-		listDir := listDirSetsHealFactory(isLeaf, setDisks...)
-		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, nil, isLeafDir, endWalkCh)
+	isLeafDir := func(bucket, entry string) bool {
+		return false
 	}
 
-	var objInfos []ObjectInfo
-	var eof bool
-	var nextMarker string
-	for i := 0; i < maxKeys; {
+	listDir := listDirSetsFactory(ctx, isLeaf, isLeafDir, s.sets...)
+	walkResultCh := startTreeWalk(ctx, bucket, prefix, "", recursive, listDir, isLeaf, isLeafDir, endWalkCh)
+	for {
 		walkResult, ok := <-walkResultCh
 		if !ok {
-			// Closed channel.
-			eof = true
 			break
 		}
 		// For any walk error return right away.
 		if walkResult.err != nil {
-			return loi, toObjectErr(walkResult.err, bucket, prefix)
+			return toObjectErr(walkResult.err, bucket, prefix)
 		}
-		var objInfo ObjectInfo
-		objInfo.Bucket = bucket
-		objInfo.Name = walkResult.entry
-		nextMarker = objInfo.Name
-		objInfos = append(objInfos, objInfo)
-		i++
+		if err := healObjectFn(bucket, strings.TrimSuffix(walkResult.entry, slashSeparator+xlMetaJSONFile)); err != nil {
+			return toObjectErr(err, bucket, walkResult.entry)
+		}
 		if walkResult.end {
-			eof = true
 			break
 		}
 	}
 
-	params := listParams{bucket, recursive, nextMarker, prefix, true}
-	if !eof {
-		s.listPool.Set(params, walkResultCh, endWalkCh)
-	}
-
-	result := ListObjectsInfo{IsTruncated: !eof}
-	for _, objInfo := range objInfos {
-		result.NextMarker = objInfo.Name
-		result.Objects = append(result.Objects, objInfo)
-	}
-	return result, nil
-}
-
-// This is not implemented yet, will be implemented later to comply with Admin API refactor.
-func (s *xlSets) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
-	if err = checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
-		return loi, err
-	}
-
-	// With max keys of zero we have reached eof, return right here.
-	if maxKeys == 0 {
-		return loi, nil
-	}
-
-	// For delimiter and prefix as '/' we do not list anything at all
-	// since according to s3 spec we stop at the 'delimiter' along
-	// with the prefix. On a flat namespace with 'prefix' as '/'
-	// we don't have any entries, since all the keys are of form 'keyName/...'
-	if delimiter == slashSeparator && prefix == slashSeparator {
-		return loi, nil
-	}
-
-	// Over flowing count - reset to maxObjectList.
-	if maxKeys < 0 || maxKeys > maxObjectList {
-		maxKeys = maxObjectList
-	}
-
-	// Initiate a list operation, if successful filter and return quickly.
-	listObjInfo, err := s.listObjectsHeal(ctx, bucket, prefix, marker, delimiter, maxKeys)
-	if err == nil {
-		// We got the entries successfully return.
-		return listObjInfo, nil
-	}
-
-	// Return error at the end.
-	return loi, toObjectErr(err, bucket, prefix)
+	return nil
 }

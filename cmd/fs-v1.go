@@ -30,6 +30,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/minio/minio-go/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
@@ -289,10 +290,8 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket, locatio
 	}
 	defer bucketLock.Unlock()
 	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		err := BucketNameInvalid{Bucket: bucket}
-		logger.LogIf(ctx, err)
-		return err
+	if s3utils.CheckValidBucketNameStrict(bucket) != nil {
+		return BucketNameInvalid{Bucket: bucket}
 	}
 	bucketDir, err := fs.getBucketDir(ctx, bucket)
 	if err != nil {
@@ -341,7 +340,7 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 
 	for _, entry := range entries {
 		// Ignore all reserved bucket names and invalid bucket names.
-		if isReservedOrInvalidBucket(entry) {
+		if isReservedOrInvalidBucket(entry, false) {
 			continue
 		}
 		var fi os.FileInfo
@@ -490,20 +489,18 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		}
 	}
 
-	// For a directory, we need to send an reader that returns no bytes.
-	if hasSuffix(object, slashSeparator) {
-		// The lock taken above is released when
-		// objReader.Close() is called by the caller.
-		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), ObjectInfo{}, nsUnlocker), nil
-	}
-
 	// Otherwise we get the object info
 	var objInfo ObjectInfo
 	if objInfo, err = fs.getObjectInfo(ctx, bucket, object); err != nil {
 		nsUnlocker()
 		return nil, toObjectErr(err, bucket, object)
 	}
-
+	// For a directory, we need to send an reader that returns no bytes.
+	if hasSuffix(object, slashSeparator) {
+		// The lock taken above is released when
+		// objReader.Close() is called by the caller.
+		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts.CheckCopyPrecondFn, nsUnlocker)
+	}
 	// Take a rwPool lock for NFS gateway type deployment
 	rwPoolUnlocker := func() {}
 	if bucket != minioMetaBucket && lockType != noLock {
@@ -519,7 +516,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		rwPoolUnlocker = func() { fs.rwPool.Close(fsMetaPath) }
 	}
 
-	objReaderFn, off, length, rErr := NewGetObjectReader(rs, objInfo, nsUnlocker, rwPoolUnlocker)
+	objReaderFn, off, length, rErr := NewGetObjectReader(rs, objInfo, opts.CheckCopyPrecondFn, nsUnlocker, rwPoolUnlocker)
 	if rErr != nil {
 		return nil, rErr
 	}
@@ -547,7 +544,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, err
 	}
 
-	return objReaderFn(reader, h, closeFn)
+	return objReaderFn(reader, h, opts.CheckCopyPrecondFn, closeFn)
 }
 
 // GetObject - reads an object from the disk.
@@ -842,8 +839,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	if isObjectDir(object, data.Size()) {
 		// Check if an object is present as one of the parent dir.
 		if fs.parentDirIsObject(ctx, bucket, path.Dir(object)) {
-			logger.LogIf(ctx, errFileAccessDenied)
-			return ObjectInfo{}, toObjectErr(errFileAccessDenied, bucket, object)
+			return ObjectInfo{}, toObjectErr(errFileParentIsFile, bucket, object)
 		}
 		if err = mkdirAll(pathJoin(fs.fsPath, bucket, object), 0777); err != nil {
 			logger.LogIf(ctx, err)
@@ -862,8 +858,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 
 	// Check if an object is present as one of the parent dir.
 	if fs.parentDirIsObject(ctx, bucket, path.Dir(object)) {
-		logger.LogIf(ctx, errFileAccessDenied)
-		return ObjectInfo{}, toObjectErr(errFileAccessDenied, bucket, object)
+		return ObjectInfo{}, toObjectErr(errFileParentIsFile, bucket, object)
 	}
 
 	// Validate input data size and it can never be less than zero.
@@ -1151,8 +1146,7 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 		return fs.getObjectInfo(ctx, bucket, entry)
 	}
 
-	heal := false // true only for xl.ListObjectsHeal()
-	walkResultCh, endWalkCh := fs.listPool.Release(listParams{bucket, recursive, marker, prefix, heal})
+	walkResultCh, endWalkCh := fs.listPool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		isLeaf := func(bucket, object string) bool {
@@ -1206,7 +1200,7 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 	}
 
 	// Save list routine for the next marker if we haven't reached EOF.
-	params := listParams{bucket, recursive, nextMarker, prefix, heal}
+	params := listParams{bucket, recursive, nextMarker, prefix}
 	if !eof {
 		fs.listPool.Set(params, walkResultCh, endWalkCh)
 	}
@@ -1244,7 +1238,7 @@ func (fs *FSObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealRe
 }
 
 // HealObject - no-op for fs. Valid only for XL.
-func (fs *FSObjects) HealObject(ctx context.Context, bucket, object string, dryRun, remove bool) (
+func (fs *FSObjects) HealObject(ctx context.Context, bucket, object string, dryRun, remove bool, scanMode madmin.HealScanMode) (
 	res madmin.HealResultItem, err error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return res, NotImplemented{}
@@ -1257,10 +1251,10 @@ func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, dryRun, remo
 	return madmin.HealResultItem{}, NotImplemented{}
 }
 
-// ListObjectsHeal - list all objects to be healed. Valid only for XL
-func (fs *FSObjects) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
+// HealObjects - no-op for fs. Valid only for XL.
+func (fs *FSObjects) HealObjects(ctx context.Context, bucket, prefix string, fn func(string, string) error) (e error) {
 	logger.LogIf(ctx, NotImplemented{})
-	return loi, NotImplemented{}
+	return NotImplemented{}
 }
 
 // ListBucketsHeal - list all buckets to be healed. Valid only for XL
