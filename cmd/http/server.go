@@ -57,6 +57,8 @@ const (
 type Server struct {
 	http.Server
 	Addrs                  []string      // addresses on which the server listens for new connection.
+	ReadTimeout            time.Duration // timeout used for net.Conn.Read() deadlines.
+	WriteTimeout           time.Duration // timeout used for net.Conn.Write() deadlines.
 	ShutdownTimeout        time.Duration // timeout used for graceful server shutdown.
 	TCPKeepAliveTimeout    time.Duration // timeout used for underneath TCP connection.
 	UpdateBytesReadFunc    func(int)     // function to be called to update bytes read in bufConn.
