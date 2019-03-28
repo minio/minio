@@ -127,9 +127,9 @@ func getSetIndexes(args []string, totalSizes []uint64) (setIndexes [][]uint64, e
 		if customSetDriveCount > setSize {
 			return nil, uiErrInvalidErasureSetSize(nil).Msg(msg)
 		}
-		if setSize%customSetDriveCount != 0 {
-			return nil, uiErrInvalidErasureSetSize(nil).Msg(msg)
-		}
+		// if setSize%customSetDriveCount != 0 {
+		// 	return nil, uiErrInvalidErasureSetSize(nil).Msg(msg)
+		// }
 		setSize = customSetDriveCount
 	}
 
