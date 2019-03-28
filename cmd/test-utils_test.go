@@ -1614,7 +1614,7 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 	}
 
 	// Initialize list pool.
-	listPool := newTreeWalkPool(globalLookupTimeout)
+	listPool := NewTreeWalkPool(globalLookupTimeout)
 
 	// Initialize xl objects.
 	xl := &xlObjects{

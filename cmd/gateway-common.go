@@ -36,6 +36,21 @@ var (
 
 	// CleanMetadataKeys provides cleanMetadataKeys function alias.
 	CleanMetadataKeys = cleanMetadataKeys
+
+	// PathJoin function alias.
+	PathJoin = pathJoin
+
+	// ListObjects function alias.
+	ListObjects = listObjects
+
+	// FilterListEntries function alias.
+	FilterListEntries = filterListEntries
+
+	// IsStringEqual is string equal.
+	IsStringEqual = isStringEqual
+
+	// GetCompleteMultipartMD5 returns multipart MD5
+	GetCompleteMultipartMD5 = getCompleteMultipartMD5
 )
 
 // StatInfo -  alias for statInfo

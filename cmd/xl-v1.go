@@ -48,7 +48,7 @@ type xlObjects struct {
 	storageDisks []StorageAPI
 
 	// TODO: ListObjects pool management, should be removed in future.
-	listPool *treeWalkPool
+	listPool *TreeWalkPool
 }
 
 // Shutdown function for object storage interface.
