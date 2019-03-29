@@ -1796,6 +1796,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		// Part with size larger than 5Mb.
 		{bucketNames[0], objectNames[0], uploadIDs[0], 5, string(validPart), validPartMD5, int64(len(string(validPart)))},
 		{bucketNames[0], objectNames[0], uploadIDs[0], 6, string(validPart), validPartMD5, int64(len(string(validPart)))},
+		{bucketNames[0], objectNames[0], uploadIDs[0], 7, string(validPart), validPartMD5, int64(len(string(validPart)))},
 	}
 	sha256sum := ""
 	var opts ObjectOptions
@@ -1837,7 +1838,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		// Part size greater than 5MB.
 		{
 			[]CompletePart{
-				{ETag: validPartMD5, PartNumber: 5},
+				{ETag: fmt.Sprintf("\"\"\"\"\"%s\"\"\"", validPartMD5), PartNumber: 5},
 			},
 		},
 		// inputParts - 4.

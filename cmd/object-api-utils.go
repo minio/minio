@@ -193,7 +193,7 @@ func mustGetUUID() string {
 func getCompleteMultipartMD5(ctx context.Context, parts []CompletePart) (string, error) {
 	var finalMD5Bytes []byte
 	for _, part := range parts {
-		md5Bytes, err := hex.DecodeString(part.ETag)
+		md5Bytes, err := hex.DecodeString(canonicalizeETag(part.ETag))
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return "", err
