@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -259,6 +260,10 @@ func getAllSets(args ...string) ([][]string, error) {
 			uniqueArgs.Add(arg)
 		}
 	}
+
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "    ")
+	encoder.Encode(setArgs)
 
 	return setArgs, nil
 }

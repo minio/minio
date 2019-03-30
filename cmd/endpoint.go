@@ -431,20 +431,20 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 		}
 	}
 
-	// Check whether same path is used for more than 1 local endpoints.
-	{
-		localPathSet := set.CreateStringSet()
-		for _, endpoint := range endpoints {
-			if !endpoint.IsLocal {
-				continue
-			}
-			if localPathSet.Contains(endpoint.Path) {
-				return serverAddr, endpoints, setupType,
-					uiErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("path '%s' cannot be served by different address on same server", endpoint.Path))
-			}
-			localPathSet.Add(endpoint.Path)
-		}
-	}
+	// // Check whether same path is used for more than 1 local endpoints.
+	// {
+	// 	localPathSet := set.CreateStringSet()
+	// 	for _, endpoint := range endpoints {
+	// 		if !endpoint.IsLocal {
+	// 			continue
+	// 		}
+	// 		if localPathSet.Contains(endpoint.Path) {
+	// 			return serverAddr, endpoints, setupType,
+	// 				uiErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("path '%s' cannot be served by different address on same server", endpoint.Path))
+	// 		}
+	// 		localPathSet.Add(endpoint.Path)
+	// 	}
+	// }
 
 	// Check whether serverAddrPort matches at least in one of port used in local endpoints.
 	{
