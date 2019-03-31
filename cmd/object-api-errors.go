@@ -372,13 +372,6 @@ func (e NotImplemented) Error() string {
 	return "Not Implemented"
 }
 
-// PolicyNesting - policy nesting conflict.
-type PolicyNesting struct{}
-
-func (e PolicyNesting) Error() string {
-	return "New bucket policy conflicts with an existing policy. Please try again with new prefix."
-}
-
 // UnsupportedMetadata - unsupported metadata
 type UnsupportedMetadata struct{}
 

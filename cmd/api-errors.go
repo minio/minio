@@ -184,7 +184,6 @@ const (
 	ErrStorageFull
 	ErrRequestBodyParse
 	ErrObjectExistsAsDirectory
-	ErrPolicyNesting
 	ErrInvalidObjectName
 	ErrInvalidResourceName
 	ErrServerNotInitialized
@@ -883,11 +882,6 @@ var errorCodes = errorCodeMap{
 		Code:           "XMinioWriteQuorum",
 		Description:    "Multiple disks failures, unable to write data.",
 		HTTPStatusCode: http.StatusServiceUnavailable,
-	},
-	ErrPolicyNesting: {
-		Code:           "XMinioPolicyNesting",
-		Description:    "New bucket policy conflicts with an existing policy. Please try again with new prefix.",
-		HTTPStatusCode: http.StatusConflict,
 	},
 	ErrInvalidObjectName: {
 		Code:           "XMinioInvalidObjectName",

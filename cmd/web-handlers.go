@@ -1840,8 +1840,6 @@ func toWebAPIError(err error) APIError {
 		return getAPIError(ErrWriteQuorum)
 	case InsufficientReadQuorum:
 		return getAPIError(ErrReadQuorum)
-	case PolicyNesting:
-		return getAPIError(ErrPolicyNesting)
 	case NotImplemented:
 		return APIError{
 			Code:           "NotImplemented",
