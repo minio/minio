@@ -19,12 +19,16 @@ package cmd
 import (
 	"context"
 	"net/http"
-	"strings"
+	"regexp"
 	"time"
 
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
+)
+
+var (
+	etagRegex = regexp.MustCompile("\"*?([^\"]*?)\"*?$")
 )
 
 // Validates the preconditions for CopyObjectPart, returns true if CopyObjectPart
@@ -230,8 +234,7 @@ func ifModifiedSince(objTime time.Time, givenTime time.Time) bool {
 // canonicalizeETag returns ETag with leading and trailing double-quotes removed,
 // if any present
 func canonicalizeETag(etag string) string {
-	canonicalETag := strings.TrimPrefix(etag, "\"")
-	return strings.TrimSuffix(canonicalETag, "\"")
+	return etagRegex.ReplaceAllString(etag, "$1")
 }
 
 // isETagEqual return true if the canonical representations of two ETag strings

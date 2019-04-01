@@ -675,6 +675,8 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 
 	// Validate each part and then commit to disk.
 	for i, part := range parts {
+		// ensure that part ETag is canonicalized to strip off extraneous quotes
+		part.ETag = canonicalizeETag(part.ETag)
 		partIdx := objectPartIndex(currentXLMeta.Parts, part.PartNumber)
 		// All parts should have same part number.
 		if partIdx == -1 {

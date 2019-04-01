@@ -524,6 +524,11 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 		return oi, err
 	}
 
+	// ensure that part ETag is canonicalized to strip off extraneous quotes
+	for i := range parts {
+		parts[i].ETag = canonicalizeETag(parts[i].ETag)
+	}
+
 	// Save consolidated actual size.
 	var objectActualSize int64
 	// Validate all parts and then commit to disk.
