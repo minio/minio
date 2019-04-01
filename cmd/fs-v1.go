@@ -250,7 +250,9 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
 		used = atomic.LoadUint64(&fs.totalUsed)
 	}
 	storageInfo := StorageInfo{
-		Used: used,
+		Used:      used,
+		Total:     di.Total,
+		Available: di.Free,
 	}
 	storageInfo.Backend.Type = BackendFS
 	return storageInfo

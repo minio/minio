@@ -120,18 +120,23 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 		return StorageInfo{}
 	}
 
-	// Combine all disks to get total usage.
-	var used uint64
+	// Combine all disks to get total usage
+	var used, total, available uint64
 	for _, di := range validDisksInfo {
 		used = used + di.Used
+		total = total + di.Total
+		available = available + di.Free
 	}
 
 	_, sscParity := getRedundancyCount(standardStorageClass, len(disks))
 	_, rrscparity := getRedundancyCount(reducedRedundancyStorageClass, len(disks))
 
 	storageInfo := StorageInfo{
-		Used: used,
+		Used:      used,
+		Total:     total,
+		Available: available,
 	}
+
 	storageInfo.Backend.Type = BackendErasure
 	storageInfo.Backend.OnlineDisks = onlineDisks
 	storageInfo.Backend.OfflineDisks = offlineDisks
