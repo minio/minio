@@ -31,8 +31,6 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/logger/target/console"
-	"github.com/minio/minio/cmd/logger/target/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dns"
 	xnet "github.com/minio/minio/pkg/net"
@@ -48,34 +46,6 @@ func checkUpdate(mode string) {
 			logger.StartupMessage(prepareUpdateMessage("Run `minio update`", latestReleaseTime.Sub(currentReleaseTime)))
 		}
 	}
-}
-
-// Load logger targets based on user's configuration
-func loadLoggers() {
-	auditEndpoint, ok := os.LookupEnv("MINIO_AUDIT_LOGGER_HTTP_ENDPOINT")
-	if ok {
-		// Enable audit HTTP logging through ENV.
-		logger.AddAuditTarget(http.New(auditEndpoint, NewCustomHTTPTransport()))
-	}
-
-	loggerEndpoint, ok := os.LookupEnv("MINIO_LOGGER_HTTP_ENDPOINT")
-	if ok {
-		// Enable HTTP logging through ENV.
-		logger.AddTarget(http.New(loggerEndpoint, NewCustomHTTPTransport()))
-	} else {
-		for _, l := range globalServerConfig.Logger.HTTP {
-			if l.Enabled {
-				// Enable http logging
-				logger.AddTarget(http.New(l.Endpoint, NewCustomHTTPTransport()))
-			}
-		}
-	}
-
-	if globalServerConfig.Logger.Console.Enabled {
-		// Enable console logging
-		logger.AddTarget(console.New())
-	}
-
 }
 
 func newConfigDirFromCtx(ctx *cli.Context, option string, getDefaultDir func() string) (*ConfigDir, bool) {
@@ -193,10 +163,8 @@ func handleCommonEnvVars() {
 			logger.Fatal(uiErrInvalidCredentials(err), "Unable to validate credentials inherited from the shell environment")
 		}
 		cred.Expiration = timeSentinel
-
-		// credential Envs are set globally.
 		globalIsEnvCreds = true
-		globalActiveCred = cred
+		globalEnvCred = cred
 	}
 
 	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {

@@ -38,11 +38,7 @@ const (
 	minioConfigBackupFile = minioConfigFile + ".backup"
 )
 
-func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config *serverConfig) error {
-	if err := quick.CheckData(config); err != nil {
-		return err
-	}
-
+func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config interface{}) error {
 	data, err := json.MarshalIndent(config, "", "\t")
 	if err != nil {
 		return err
@@ -57,7 +53,7 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config *serverCon
 			return err
 		}
 	} else {
-		if err != errConfigNotFound {
+		if err != errFileNotFound {
 			return err
 		}
 	}
@@ -66,7 +62,7 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config *serverCon
 	return saveConfig(ctx, objAPI, configFile, data)
 }
 
-func readServerConfig(ctx context.Context, objAPI ObjectLayer) (*serverConfig, error) {
+func readServerConfig(ctx context.Context, objAPI ObjectLayer) (serverConfig, error) {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
@@ -81,12 +77,8 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (*serverConfig, e
 		return nil, err
 	}
 
-	var config = &serverConfig{}
-	if err = json.Unmarshal(configData, config); err != nil {
-		return nil, err
-	}
-
-	if err = quick.CheckData(config); err != nil {
+	var config = make(serverConfig)
+	if err = json.Unmarshal(configData, &config); err != nil {
 		return nil, err
 	}
 
@@ -158,6 +150,12 @@ func initConfig(objAPI ObjectLayer) error {
 
 	// Migrates backend '<export_path>/.minio.sys/config/config.json' to latest version.
 	if err := migrateMinioSysConfig(objAPI); err != nil {
+		return err
+	}
+
+	// Migrates backend '<export_path>/.minio.sys/config/config.json' to
+	// latest config format.
+	if err := migrateMinioSysConfigToKV(objAPI); err != nil {
 		return err
 	}
 

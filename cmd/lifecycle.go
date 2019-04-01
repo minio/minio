@@ -67,7 +67,7 @@ func getLifecycleConfig(objAPI ObjectLayer, bucketName string) (*lifecycle.Lifec
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketLifecycleConfig)
 	configData, err := readConfig(context.Background(), objAPI, configFile)
 	if err != nil {
-		if err == errConfigNotFound {
+		if err == errFileNotFound {
 			err = BucketLifecycleNotFound{Bucket: bucketName}
 		}
 		return nil, err

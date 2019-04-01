@@ -254,18 +254,24 @@ func serverMain(ctx *cli.Context) {
 		// Check for backward compatibility and newer style.
 		if !globalIsEnvCreds && globalIsDistXL {
 			// Try to load old config file if any, for backward compatibility.
-			var config = &serverConfig{}
+			var config = &serverConfigV33{}
 			if _, err = Load(getConfigFile(), config); err == nil {
-				globalActiveCred = config.Credential
+				if config.Credential.IsValid() {
+					globalIsEnvCreds = true
+					globalEnvCred = config.Credential
+				}
 			}
 
 			if os.IsNotExist(err) {
 				if _, err = Load(getConfigFile()+".deprecated", config); err == nil {
-					globalActiveCred = config.Credential
+					if config.Credential.IsValid() {
+						globalIsEnvCreds = true
+						globalEnvCred = config.Credential
+					}
 				}
 			}
 
-			if globalActiveCred.IsValid() {
+			if globalEnvCred.IsValid() {
 				// Credential is valid don't throw an error instead print a message regarding deprecation of 'config.json'
 				// based model and proceed to use it for now in distributed setup.
 				logger.Info(`Supplying credentials from your 'config.json' is **DEPRECATED**, Access key and Secret key in distributed server mode is expected to be specified with environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY. This approach will become mandatory in future releases, please migrate to this approach soon.`)
@@ -340,9 +346,6 @@ func serverMain(ctx *cli.Context) {
 	if err = globalConfigSys.Init(newObject); err != nil {
 		logger.Fatal(err, "Unable to initialize config system")
 	}
-
-	// Load logger subsystem
-	loadLoggers()
 
 	var cacheConfig = globalServerConfig.GetCacheConfig()
 	if len(cacheConfig.Drives) > 0 {

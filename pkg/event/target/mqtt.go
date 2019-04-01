@@ -26,7 +26,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/eclipse/paho.mqtt.golang"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -34,6 +34,19 @@ import (
 const (
 	reconnectInterval = 5 // In Seconds
 	storePrefix       = "minio"
+)
+
+// MQTT input constants
+const (
+	MqttBroker            = "broker"
+	MqttTopic             = "topic"
+	MqttQoS               = "qos"
+	MqttUsername          = "username"
+	MqttPassword          = "password"
+	MqttReconnectInterval = "reconnectInterval"
+	MqttKeepAliveInterval = "keepAliveInterval"
+	MqttQueueDir          = "queueDir"
+	MqttQueueLimit        = "queueLimit"
 )
 
 // MQTTArgs - MQTT target arguments.

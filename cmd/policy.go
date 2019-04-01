@@ -236,7 +236,7 @@ func getPolicyConfig(objAPI ObjectLayer, bucketName string) (*policy.Policy, err
 
 	configData, err := readConfig(context.Background(), objAPI, configFile)
 	if err != nil {
-		if err == errConfigNotFound {
+		if err == errFileNotFound {
 			err = BucketPolicyNotFound{Bucket: bucketName}
 		}
 

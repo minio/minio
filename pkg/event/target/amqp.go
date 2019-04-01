@@ -28,6 +28,21 @@ import (
 	"github.com/streadway/amqp"
 )
 
+// AMQP input constants.
+const (
+	AmqpURL          = "url"
+	AmqpExchange     = "exchange"
+	AmqpRoutingKey   = "rountingKey"
+	AmqpExchangeType = "exchangeType"
+	AmqpDeliveryMode = "deliveryMode"
+	AmqpMandatory    = "mandatory"
+	AmqpImmediate    = "immediate"
+	AmqpDurable      = "durable"
+	AmqpInternal     = "internal"
+	AmqpNoWait       = "noWait"
+	AmqpAutoDeleted  = "autoDeleted"
+)
+
 // AMQPArgs - AMQP target arguments.
 type AMQPArgs struct {
 	Enable       bool     `json:"enable"`

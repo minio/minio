@@ -38,6 +38,10 @@ type JWKSArgs struct {
 	publicKeys map[string]crypto.PublicKey
 }
 
+// IsEmpty returns true if the jwks args struct is an
+// empty configuration.
+func (r *JWKSArgs) IsEmpty() bool { return r.URL == nil || r.URL.Scheme == "" }
+
 // Validate JWT authentication target arguments
 func (r *JWKSArgs) Validate() error {
 	return nil

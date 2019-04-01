@@ -33,6 +33,7 @@ import (
 	"github.com/minio/minio/pkg/iam/validator"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/quick"
+	"github.com/tidwall/gjson"
 )
 
 // DO NOT EDIT following message template, please open a github issue to discuss instead.
@@ -221,7 +222,7 @@ func migrateConfig() error {
 			return err
 		}
 		fallthrough
-	case serverConfigVersion:
+	case "33":
 		// No migration needed. this always points to current version.
 		err = nil
 	}
@@ -2419,7 +2420,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 
 	// Verify if config was already available in .minio.sys in which case, nothing more to be done.
-	if err = checkConfig(context.Background(), objAPI, configFile); err != errConfigNotFound {
+	if err = checkConfig(context.Background(), objAPI, configFile); err != errFileNotFound {
 		return err
 	}
 
@@ -2447,16 +2448,16 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 	defer objLock.Unlock()
 
 	// Verify if backend already has the file (after holding lock)
-	if err = checkConfig(context.Background(), objAPI, configFile); err != errConfigNotFound {
+	if err = checkConfig(context.Background(), objAPI, configFile); err != errFileNotFound {
 		return err
-	} // if errConfigNotFound proceed to migrate..
+	} // if errFileNotFound proceed to migrate..
 
 	var configFiles = []string{
 		getConfigFile(),
 		getConfigFile() + ".deprecated",
 		configFile,
 	}
-	var config = &serverConfig{}
+	var config = &serverConfigV27{}
 	for _, cfgFile := range configFiles {
 		if _, err = Load(cfgFile, config); err != nil {
 			if !os.IsNotExist(err) {
@@ -2473,12 +2474,88 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 	return saveServerConfig(context.Background(), objAPI, config)
 }
 
+func migrateMinioSysConfigToKV(objAPI ObjectLayer) error {
+	configFile := path.Join(minioConfigPrefix, minioConfigFile)
+
+	// Check if the config version is latest, if not migrate.
+	ok, data, err := checkConfigVersion(objAPI, configFile, "33")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+
+	cfg := &serverConfigV33{}
+	if err = json.Unmarshal(data, cfg); err != nil {
+		return err
+	}
+
+	newCfg := newServerConfig()
+	newCfg.SetCredential(cfg.Credential)
+	newCfg.SetRegion(cfg.Region)
+	newCfg.SetWorm(bool(cfg.Worm))
+	newCfg.SetStorageClass(cfg.StorageClass.Standard, cfg.StorageClass.RRS)
+	newCfg.SetCacheConfig(cfg.Cache)
+	newCfg.SetCompressionConfig(cfg.Compression)
+	for k, args := range cfg.Notify.AMQP {
+		newCfg.SetNotifyAMQP(k, args)
+	}
+	for k, args := range cfg.Notify.Elasticsearch {
+		newCfg.SetNotifyES(k, args)
+	}
+	for k, args := range cfg.Notify.Kafka {
+		newCfg.SetNotifyKafka(k, args)
+	}
+	for k, args := range cfg.Notify.MQTT {
+		newCfg.SetNotifyMQTT(k, args)
+	}
+	for k, args := range cfg.Notify.MySQL {
+		newCfg.SetNotifyMySQL(k, args)
+	}
+	for k, args := range cfg.Notify.NATS {
+		newCfg.SetNotifyNATS(k, args)
+	}
+	for k, args := range cfg.Notify.NSQ {
+		newCfg.SetNotifyNSQ(k, args)
+	}
+	for k, args := range cfg.Notify.PostgreSQL {
+		newCfg.SetNotifyPostgres(k, args)
+	}
+	for k, args := range cfg.Notify.Redis {
+		newCfg.SetNotifyRedis(k, args)
+	}
+	for k, args := range cfg.Notify.Webhook {
+		newCfg.SetNotifyWebhook(k, args)
+	}
+
+	// Construct path to config.json for the given bucket.
+	transactionConfigFile := configFile + ".transaction"
+
+	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
+	// and configFile, take a transaction lock to avoid data race between readConfig()
+	// and saveConfig().
+	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigFile)
+	if err = objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
+	defer objLock.Unlock()
+
+	if err = saveServerConfig(context.Background(), objAPI, newCfg); err != nil {
+		return err
+	}
+
+	logger.Info("Configuration file %s migrated from version '%s' to new KV format successfully.",
+		configFile, "33")
+	return nil
+}
+
 // Migrates '.minio.sys/config.json' to v33.
 func migrateMinioSysConfig(objAPI ObjectLayer) error {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 
 	// Check if the config version is latest, if not migrate.
-	ok, _, err := checkConfigVersion(objAPI, configFile, serverConfigVersion)
+	ok, _, err := checkConfigVersion(objAPI, configFile, "33")
 	if err != nil {
 		return err
 	}
@@ -2522,21 +2599,17 @@ func checkConfigVersion(objAPI ObjectLayer, configFile string, version string) (
 		return false, nil, err
 	}
 
-	var versionConfig struct {
-		Version string `json:"version"`
+	v := gjson.GetBytes(data, "version").String()
+	if v == "" {
+		return false, data, nil
 	}
-
-	vcfg := &versionConfig
-	if err = json.Unmarshal(data, vcfg); err != nil {
-		return false, nil, err
-	}
-	return vcfg.Version == version, data, nil
+	return v == version, data, nil
 }
 
 func migrateV27ToV28MinioSys(objAPI ObjectLayer) error {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 	ok, data, err := checkConfigVersion(objAPI, configFile, "27")
-	if err == errConfigNotFound {
+	if err == errFileNotFound {
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("Unable to load config file. %v", err)
@@ -2570,7 +2643,7 @@ func migrateV28ToV29MinioSys(objAPI ObjectLayer) error {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 
 	ok, data, err := checkConfigVersion(objAPI, configFile, "28")
-	if err == errConfigNotFound {
+	if err == errFileNotFound {
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("Unable to load config file. %v", err)
@@ -2602,7 +2675,7 @@ func migrateV29ToV30MinioSys(objAPI ObjectLayer) error {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 
 	ok, data, err := checkConfigVersion(objAPI, configFile, "29")
-	if err == errConfigNotFound {
+	if err == errFileNotFound {
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("Unable to load config file. %v", err)
@@ -2639,7 +2712,7 @@ func migrateV30ToV31MinioSys(objAPI ObjectLayer) error {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 
 	ok, data, err := checkConfigVersion(objAPI, configFile, "30")
-	if err == errConfigNotFound {
+	if err == errFileNotFound {
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("Unable to load config file. %v", err)
@@ -2679,7 +2752,7 @@ func migrateV31ToV32MinioSys(objAPI ObjectLayer) error {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 
 	ok, data, err := checkConfigVersion(objAPI, configFile, "31")
-	if err == errConfigNotFound {
+	if err == errFileNotFound {
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("Unable to load config file. %v", err)
@@ -2714,7 +2787,7 @@ func migrateV32ToV33MinioSys(objAPI ObjectLayer) error {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 
 	ok, data, err := checkConfigVersion(objAPI, configFile, "32")
-	if err == errConfigNotFound {
+	if err == errFileNotFound {
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("Unable to load config file. %v", err)

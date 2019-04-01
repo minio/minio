@@ -25,6 +25,12 @@ import (
 )
 
 func testAuthenticate(authType string, t *testing.T) {
+	tempCred := globalEnvCred
+	defer func() {
+		globalEnvCred = tempCred
+	}()
+	resetGlobalCred()
+
 	obj, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatal(err)

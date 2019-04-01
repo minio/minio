@@ -325,8 +325,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 		t.Fatalf("%s", err)
 	}
 
-	// Test Server needs to start before formatting of disks.
-	// Get credential.
+	// Test Server needs to start before formatting of disks. Get credential.
 	credentials := globalServerConfig.GetCredential()
 
 	testServer.Obj = objLayer
@@ -408,6 +407,10 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 // Sets the global config path to empty string.
 func resetGlobalConfigPath() {
 	globalConfigDir = &ConfigDir{path: ""}
+}
+
+func resetGlobalCred() {
+	globalEnvCred = auth.Credentials{}
 }
 
 func resetGlobalServiceDoneCh() {
@@ -508,6 +511,8 @@ func resetTestGlobals() {
 	resetGlobalObjectAPI()
 	// Reset config path set.
 	resetGlobalConfigPath()
+	// Reset global cred
+	resetGlobalCred()
 	// Reset Global server config.
 	resetGlobalConfig()
 	// Reset global NSLock.
@@ -533,15 +538,7 @@ func resetTestGlobals() {
 // Configure the server for the test run.
 func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 	// Initialize server config.
-	if err = newSrvConfig(obj); err != nil {
-		return err
-	}
-
-	// Set a default region.
-	globalServerConfig.SetRegion(bucketLocation)
-
-	// Save config.
-	return saveServerConfig(context.Background(), obj, globalServerConfig)
+	return newSrvConfig(obj)
 }
 
 // Deleting the temporary backend and stopping the server.

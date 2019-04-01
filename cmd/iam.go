@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"path"
 	"strings"
 	"sync"
@@ -53,6 +54,51 @@ const (
 	// IAM policy file which provides policies for each users.
 	iamPolicyFile = "policy.json"
 )
+
+func readEtcd(ctx context.Context, client *etcd.Client, configFile string) ([]byte, error) {
+	timeoutCtx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
+	defer cancel()
+	resp, err := client.Get(timeoutCtx, configFile)
+	if err != nil {
+		if err == context.DeadlineExceeded {
+			return nil, fmt.Errorf("etcd setup is unreachable, please check your endpoints %s", client.Endpoints())
+		}
+		return nil, fmt.Errorf("unexpected error %s returned by etcd setup, please check your endpoints %s", err, client.Endpoints())
+	}
+	if resp.Count == 0 {
+		return nil, errFileNotFound
+	}
+	for _, ev := range resp.Kvs {
+		if string(ev.Key) == configFile {
+			return ev.Value, nil
+		}
+	}
+	return nil, errFileNotFound
+}
+
+func saveEtcd(ctx context.Context, client *etcd.Client, configFile string, data []byte) error {
+	timeoutCtx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
+	defer cancel()
+	_, err := client.Put(timeoutCtx, configFile, string(data))
+	if err == context.DeadlineExceeded {
+		return fmt.Errorf("etcd setup is unreachable, please check your endpoints %s", client.Endpoints())
+	} else if err != nil {
+		return fmt.Errorf("unexpected error %s returned by etcd setup, please check your endpoints %s", err, client.Endpoints())
+	}
+	return nil
+}
+
+func deleteEtcd(ctx context.Context, client *etcd.Client, configFile string) error {
+	timeoutCtx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
+	defer cancel()
+	_, err := client.Delete(timeoutCtx, configFile)
+	if err == context.DeadlineExceeded {
+		return fmt.Errorf("etcd setup is unreachable, please check your endpoints %s", client.Endpoints())
+	} else if err != nil {
+		return fmt.Errorf("unexpected error %s returned by etcd setup, please check your endpoints %s", err, client.Endpoints())
+	}
+	return nil
+}
 
 // IAMSys - config system.
 type IAMSys struct {
@@ -260,7 +306,7 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 	var err error
 	pFile := pathJoin(iamConfigPoliciesPrefix, policyName, iamPolicyFile)
 	if globalEtcdClient != nil {
-		err = deleteConfigEtcd(context.Background(), globalEtcdClient, pFile)
+		err = deleteEtcd(context.Background(), globalEtcdClient, pFile)
 	} else {
 		err = deleteConfig(context.Background(), objectAPI, pFile)
 	}
@@ -319,7 +365,7 @@ func (sys *IAMSys) SetPolicy(policyName string, p iampolicy.Policy) error {
 	}
 
 	if globalEtcdClient != nil {
-		err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
+		err = saveEtcd(context.Background(), globalEtcdClient, configFile, data)
 	} else {
 		err = saveConfig(context.Background(), objectAPI, configFile, data)
 	}
@@ -360,7 +406,7 @@ func (sys *IAMSys) SetUserPolicy(accessKey, policyName string) error {
 
 	configFile := pathJoin(iamConfigUsersPrefix, accessKey, iamPolicyFile)
 	if globalEtcdClient != nil {
-		err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
+		err = saveEtcd(context.Background(), globalEtcdClient, configFile, data)
 	} else {
 		err = saveConfig(context.Background(), objectAPI, configFile, data)
 	}
@@ -384,8 +430,8 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 	iFile := pathJoin(iamConfigUsersPrefix, accessKey, iamIdentityFile)
 	if globalEtcdClient != nil {
 		// It is okay to ignore errors when deleting policy.json for the user.
-		deleteConfigEtcd(context.Background(), globalEtcdClient, pFile)
-		err = deleteConfigEtcd(context.Background(), globalEtcdClient, iFile)
+		deleteEtcd(context.Background(), globalEtcdClient, pFile)
+		err = deleteEtcd(context.Background(), globalEtcdClient, iFile)
 	} else {
 		// It is okay to ignore errors when deleting policy.json for the user.
 		_ = deleteConfig(context.Background(), objectAPI, pFile)
@@ -438,7 +484,7 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 
 		configFile := pathJoin(iamConfigSTSPrefix, accessKey, iamPolicyFile)
 		if globalEtcdClient != nil {
-			err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
+			err = saveEtcd(context.Background(), globalEtcdClient, configFile, data)
 		} else {
 			err = saveConfig(context.Background(), objectAPI, configFile, data)
 		}
@@ -456,7 +502,7 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 	}
 
 	if globalEtcdClient != nil {
-		err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
+		err = saveEtcd(context.Background(), globalEtcdClient, configFile, data)
 	} else {
 		err = saveConfig(context.Background(), objectAPI, configFile, data)
 	}
@@ -543,7 +589,7 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 	}
 
 	if globalEtcdClient != nil {
-		err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
+		err = saveEtcd(context.Background(), globalEtcdClient, configFile, data)
 	} else {
 		err = saveConfig(context.Background(), objectAPI, configFile, data)
 	}
@@ -575,7 +621,7 @@ func (sys *IAMSys) SetUser(accessKey string, uinfo madmin.UserInfo) error {
 	}
 
 	if globalEtcdClient != nil {
-		err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
+		err = saveEtcd(context.Background(), globalEtcdClient, configFile, data)
 	} else {
 		err = saveConfig(context.Background(), objectAPI, configFile, data)
 	}
@@ -623,7 +669,7 @@ func (sys *IAMSys) SetUserSecretKey(accessKey string, secretKey string) error {
 	}
 
 	if globalEtcdClient != nil {
-		err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
+		err = saveEtcd(context.Background(), globalEtcdClient, configFile, data)
 	} else {
 		err = saveConfig(context.Background(), objectAPI, configFile, data)
 	}
@@ -786,10 +832,33 @@ func reloadEtcdUsers(prefix string, usersMap map[string]auth.Credentials, policy
 	return nil
 }
 
+func readFromEtcd(ctx context.Context, client *etcd.Client, configFile string) ([]byte, error) {
+	timeoutCtx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
+	defer cancel()
+	resp, err := client.Get(timeoutCtx, configFile)
+	if err != nil {
+		if err == context.DeadlineExceeded {
+			return nil, fmt.Errorf("etcd setup is unreachable, please check your endpoints %s",
+				client.Endpoints())
+		}
+		return nil, fmt.Errorf("unexpected error %s returned by etcd setup, please check your endpoints %s",
+			err, client.Endpoints())
+	}
+	if resp.Count == 0 {
+		return nil, errFileNotFound
+	}
+	for _, ev := range resp.Kvs {
+		if string(ev.Key) == configFile {
+			return ev.Value, nil
+		}
+	}
+	return nil, errFileNotFound
+}
+
 func reloadEtcdPolicy(ctx context.Context, prefix string, policyName string,
 	cannedPolicyMap map[string]iampolicy.Policy) error {
 	pFile := pathJoin(prefix, policyName, iamPolicyFile)
-	pdata, err := readConfigEtcd(ctx, globalEtcdClient, pFile)
+	pdata, err := readFromEtcd(ctx, globalEtcdClient, pFile)
 	if err != nil {
 		return err
 	}
@@ -867,15 +936,15 @@ func reloadEtcdUser(ctx context.Context, prefix string, accessKey string,
 	usersMap map[string]auth.Credentials, policyMap map[string]string) error {
 	idFile := pathJoin(prefix, accessKey, iamIdentityFile)
 	pFile := pathJoin(prefix, accessKey, iamPolicyFile)
-	cdata, cerr := readConfigEtcd(ctx, globalEtcdClient, idFile)
-	pdata, perr := readConfigEtcd(ctx, globalEtcdClient, pFile)
-	if cerr != nil && cerr != errConfigNotFound {
+	cdata, cerr := readEtcd(ctx, globalEtcdClient, idFile)
+	pdata, perr := readEtcd(ctx, globalEtcdClient, pFile)
+	if cerr != nil && cerr != errFileNotFound {
 		return cerr
 	}
-	if perr != nil && perr != errConfigNotFound {
+	if perr != nil && perr != errFileNotFound {
 		return perr
 	}
-	if cerr == errConfigNotFound && perr == errConfigNotFound {
+	if cerr == errFileNotFound && perr == errFileNotFound {
 		return nil
 	}
 	if cerr == nil {
@@ -886,9 +955,9 @@ func reloadEtcdUser(ctx context.Context, prefix string, accessKey string,
 		cred.AccessKey = path.Base(accessKey)
 		if cred.IsExpired() {
 			// Delete expired identity.
-			deleteConfigEtcd(ctx, globalEtcdClient, idFile)
+			deleteEtcd(ctx, globalEtcdClient, idFile)
 			// Delete expired identity policy.
-			deleteConfigEtcd(ctx, globalEtcdClient, pFile)
+			deleteEtcd(ctx, globalEtcdClient, pFile)
 			return nil
 		}
 		usersMap[cred.AccessKey] = cred
@@ -909,13 +978,13 @@ func reloadUser(ctx context.Context, objectAPI ObjectLayer, prefix string, acces
 	pFile := pathJoin(prefix, accessKey, iamPolicyFile)
 	cdata, cerr := readConfig(ctx, objectAPI, idFile)
 	pdata, perr := readConfig(ctx, objectAPI, pFile)
-	if cerr != nil && cerr != errConfigNotFound {
+	if cerr != nil && cerr != errFileNotFound {
 		return cerr
 	}
-	if perr != nil && perr != errConfigNotFound {
+	if perr != nil && perr != errFileNotFound {
 		return perr
 	}
-	if cerr == errConfigNotFound && perr == errConfigNotFound {
+	if cerr == errFileNotFound && perr == errFileNotFound {
 		return nil
 	}
 	if cerr == nil {

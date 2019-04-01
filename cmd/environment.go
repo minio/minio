@@ -1,16 +1,18 @@
-// MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * MinIO Cloud Storage, (C) 2018, 2019 MinIO, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package cmd
 
@@ -23,6 +25,13 @@ import (
 	"strings"
 
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/cmd/logger/target/console"
+	"github.com/minio/minio/cmd/logger/target/http"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/iam/validator"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 const (
@@ -100,8 +109,89 @@ func (environment) Get(key, defaultValue string) string {
 // be false.
 func (environment) Lookup(key string) (string, bool) { return os.LookupEnv(key) }
 
-// LookupKMSConfig extracts the KMS configuration provided by environment
-// variables and merge them with the provided KMS configuration. The
+// IAM specific envs.
+const (
+	EnvIAMJWKSURL      = "MINIO_IAM_JWKS_URL"
+	EnvIAMOPAURL       = "MINIO_IAM_OPA_URL"
+	EnvIAMOPAAuthToken = "MINIO_IAM_OPA_AUTHTOKEN"
+)
+
+// Logger specific envs.
+const (
+	EnvLoggerHTTPEndpoint      = "MINIO_LOGGER_HTTP_ENDPOINT"
+	EnvAuditLoggerHTTPEndpoint = "MINIO_AUDIT_LOGGER_HTTP_ENDPOINT"
+)
+
+func (env environment) LookupAuditLoggerConfig(kvs KVS) error {
+	if kvs.Get("state") == "enabled" {
+		loggerEndpoint := env.Get(EnvAuditLoggerHTTPEndpoint, kvs.Get("endpoint"))
+		u, err := xnet.ParseURL(loggerEndpoint)
+		if err != nil {
+			return err
+		}
+		// Enable Audit logging.
+		logger.AddAuditTarget(http.New(u.String(), NewCustomHTTPTransport()))
+	}
+	return nil
+}
+
+func (env environment) LookupLoggerConsoleConfig(kvs KVS) error {
+	if kvs.Get("state") == "enabled" {
+		// Enable console logging
+		logger.AddTarget(console.New())
+	}
+	return nil
+}
+
+func (env environment) LookupLoggerHTTPConfig(kvs KVS) error {
+	if kvs.Get("state") == "enabled" {
+		loggerEndpoint := env.Get(EnvLoggerHTTPEndpoint, kvs.Get("endpoint"))
+		u, err := xnet.ParseURL(loggerEndpoint)
+		if err != nil {
+			return err
+		}
+		// Enable HTTP logging.
+		logger.AddTarget(http.New(u.String(), NewCustomHTTPTransport()))
+	}
+	return nil
+}
+
+func (env environment) LookupIAMConfig(kvs KVS) error {
+	jwksURL := env.Get(EnvIAMJWKSURL, kvs.Get("jwks.url"))
+	opaURL := env.Get(EnvIAMOPAURL, kvs.Get("opa.url"))
+	opaAuthToken := env.Get(EnvIAMOPAAuthToken, kvs.Get("opa.authToken"))
+
+	u, err := xnet.ParseURL(jwksURL)
+	if err != nil {
+		return err
+	}
+	jwks := validator.JWKSArgs{
+		URL: u,
+	}
+	if !jwks.IsEmpty() {
+		if err := jwks.PopulatePublicKey(); err != nil {
+			return fmt.Errorf("Unable to populate public key from JWKS URL %s", err)
+		}
+		globalIAMValidators = validator.NewValidators()
+		globalIAMValidators.Add(validator.NewJWT(jwks))
+	}
+	if opaURL != "" {
+		u, err = xnet.ParseURL(opaURL)
+		if err != nil {
+			return err
+		}
+		globalPolicyOPA = iampolicy.NewOpa(iampolicy.OpaArgs{
+			URL:         u,
+			AuthToken:   opaAuthToken,
+			Transport:   NewCustomHTTPTransport(),
+			CloseRespFn: xhttp.DrainBody,
+		})
+	}
+	return nil
+}
+
+// LookupVaultConfig extracts the Vault configuration provided by environment
+// variables and merge them with the provided Vault configuration. The
 // merging follows the following rules:
 //
 // 1. A valid value provided as environment variable is higher prioritized
@@ -111,29 +201,34 @@ func (environment) Lookup(key string) (string, bool) { return os.LookupEnv(key) 
 // 2. A value specified as environment variable never changes the configuration
 // file. So it is never made a persistent setting.
 //
-// It sets the global KMS configuration according to the merged configuration
+// It sets the global Vault configuration according to the merged configuration
 // on success.
-func (env environment) LookupKMSConfig(config crypto.KMSConfig) (err error) {
+func (env environment) LookupVaultConfig(kvs KVS) (err error) {
+	config := crypto.VaultConfig{}
 	// Lookup Hashicorp-Vault configuration & overwrite config entry if ENV var is present
-	config.Vault.Endpoint = env.Get(EnvVaultEndpoint, config.Vault.Endpoint)
-	config.Vault.CAPath = env.Get(EnvVaultCAPath, config.Vault.CAPath)
-	config.Vault.Auth.Type = env.Get(EnvVaultAuthType, config.Vault.Auth.Type)
-	config.Vault.Auth.AppRole.ID = env.Get(EnvVaultAppRoleID, config.Vault.Auth.AppRole.ID)
-	config.Vault.Auth.AppRole.Secret = env.Get(EnvVaultAppSecretID, config.Vault.Auth.AppRole.Secret)
-	config.Vault.Key.Name = env.Get(EnvVaultKeyName, config.Vault.Key.Name)
-	config.Vault.Namespace = env.Get(EnvVaultNamespace, config.Vault.Namespace)
-	keyVersion := env.Get(EnvVaultKeyVersion, strconv.Itoa(config.Vault.Key.Version))
-	config.Vault.Key.Version, err = strconv.Atoi(keyVersion)
-	if err != nil {
-		return fmt.Errorf("Invalid ENV variable: Unable to parse %s value (`%s`)", EnvVaultKeyVersion, keyVersion)
+	config.Endpoint = env.Get(EnvVaultEndpoint, kvs.Get("endpoint"))
+	config.CAPath = env.Get(EnvVaultCAPath, kvs.Get("capath"))
+	config.Auth.Type = env.Get(EnvVaultAuthType, kvs.Get("auth.type"))
+	config.Auth.AppRole.ID = env.Get(EnvVaultAppRoleID, kvs.Get("auth.approle.id"))
+	config.Auth.AppRole.Secret = env.Get(EnvVaultAppSecretID, kvs.Get("auth.approle.secret"))
+	config.Key.Name = env.Get(EnvVaultKeyName, kvs.Get("key.name"))
+	config.Namespace = env.Get(EnvVaultNamespace, kvs.Get("namespace"))
+	keyVersion := env.Get(EnvVaultKeyVersion, kvs.Get("key.version"))
+	if keyVersion != "" {
+		config.Key.Version, err = strconv.Atoi(keyVersion)
+		if err != nil {
+			return fmt.Errorf("Invalid ENV variable: Unable to parse %s value (`%s`)", EnvVaultKeyVersion,
+				keyVersion)
+		}
 	}
-	if err = config.Vault.Verify(); err != nil {
+
+	if err = config.Verify(); err != nil {
 		return err
 	}
 
 	// Lookup KMS master keys - only available through ENV.
 	if masterKey, ok := env.Lookup(EnvKMSMasterKey); ok {
-		if !config.Vault.IsEmpty() { // Vault and KMS master key provided
+		if !config.IsEmpty() { // Vault and KMS master key provided
 			return errors.New("Ambiguous KMS configuration: vault configuration and a master key are provided at the same time")
 		}
 		globalKMSKeyID, GlobalKMS, err = parseKMSMasterKey(masterKey)
@@ -141,12 +236,12 @@ func (env environment) LookupKMSConfig(config crypto.KMSConfig) (err error) {
 			return err
 		}
 	}
-	if !config.Vault.IsEmpty() {
-		GlobalKMS, err = crypto.NewVault(config.Vault)
+	if !config.IsEmpty() {
+		GlobalKMS, err = crypto.NewVault(config)
 		if err != nil {
 			return err
 		}
-		globalKMSKeyID = config.Vault.Key.Name
+		globalKMSKeyID = config.Key.Name
 	}
 
 	autoEncryption, err := ParseBoolFlag(env.Get(EnvAutoEncryption, "off"))

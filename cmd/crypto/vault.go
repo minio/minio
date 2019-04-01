@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	//ErrKMSAuthLogin is raised when there is a failure authenticating to KMS
+	// ErrKMSAuthLogin is raised when there is a failure authenticating to KMS
 	ErrKMSAuthLogin = errors.New("Vault service did not return auth info")
 )
 

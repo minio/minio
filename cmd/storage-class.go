@@ -90,10 +90,14 @@ func (sc *storageClass) UnmarshalText(b []byte) error {
 }
 
 func (sc *storageClass) MarshalText() ([]byte, error) {
+	return []byte(sc.String()), nil
+}
+
+func (sc *storageClass) String() string {
 	if sc.Scheme != "" && sc.Parity != 0 {
-		return []byte(fmt.Sprintf("%s:%d", sc.Scheme, sc.Parity)), nil
+		return fmt.Sprintf("%s:%d", sc.Scheme, sc.Parity)
 	}
-	return []byte(""), nil
+	return ""
 }
 
 // Parses given storageClassEnv and returns a storageClass structure.
