@@ -30,6 +30,16 @@ import (
 	xnet "github.com/minio/minio/pkg/net"
 )
 
+// NSQ constants
+const (
+	NSQAddress       = "nsqdAddress"
+	NSQTopic         = "topic"
+	NSQTLSEnable     = "tls.enable"
+	NSQTLSSkipVerify = "tls.skipVerify"
+	NSQQueueDir      = "queueDir"
+	NSQQueueLimit    = "queueLimit"
+)
+
 // NSQArgs - NSQ target arguments.
 type NSQArgs struct {
 	Enable      bool      `json:"enable"`

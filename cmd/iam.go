@@ -233,11 +233,11 @@ func (sys *IAMSys) LoadGroup(objAPI ObjectLayer, group string) error {
 	}
 
 	err := sys.store.loadGroup(group, sys.iamGroupsMap)
-	if err != nil && err != errConfigNotFound {
+	if err != nil && err != errFileNotFound {
 		return err
 	}
 
-	if err == errConfigNotFound {
+	if err == errFileNotFound {
 		// group does not exist - so remove from memory.
 		sys.removeGroupFromMembershipsMap(group)
 		delete(sys.iamGroupsMap, group)
@@ -295,7 +295,7 @@ func (sys *IAMSys) LoadPolicyMapping(objAPI ObjectLayer, userOrGroup string, isG
 		}
 
 		// Ignore policy not mapped error
-		if err != nil && err != errConfigNotFound {
+		if err != nil && err != errFileNotFound {
 			return err
 		}
 	}
@@ -319,7 +319,7 @@ func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, isSTS bool) er
 		}
 		err = sys.store.loadMappedPolicy(accessKey, isSTS, false, sys.iamUserPolicyMap)
 		// Ignore policy not mapped error
-		if err != nil && err != errConfigNotFound {
+		if err != nil && err != errFileNotFound {
 			return err
 		}
 	}
@@ -805,7 +805,7 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 		// mapped policy.
 		err := sys.store.deleteMappedPolicy(group, false, true)
 		// No-mapped-policy case is ignored.
-		if err != nil && err != errConfigNotFound {
+		if err != nil && err != errFileNotFound {
 			return err
 		}
 		err = sys.store.deleteGroupInfo(group)
@@ -1288,7 +1288,7 @@ func NewIAMSys() *IAMSys {
 	// The default users system
 	var utype UsersSysType
 	switch {
-	case globalServerConfig.LDAPServerConfig.ServerAddr != "":
+	case globalLDAPConfig.ServerAddr != "":
 		utype = LDAPUsersSysType
 	default:
 		utype = MinIOUsersSysType

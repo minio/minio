@@ -24,15 +24,15 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"io/ioutil"
-	"os"
 
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/minio/pkg/env"
 )
 
-// TLSPrivateKeyPassword is the environment variable which contains the password used
+// EnvTLSPrivateKeyPassword is the environment variable which contains the password used
 // to decrypt the TLS private key. It must be set if the TLS private key is
 // password protected.
-const TLSPrivateKeyPassword = "MINIO_CERT_PASSWD"
+const EnvTLSPrivateKeyPassword = "MINIO_CERT_PASSWD"
 
 func parsePublicCertFile(certFile string) (x509Certs []*x509.Certificate, err error) {
 	// Read certificate file.
@@ -116,7 +116,7 @@ func loadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
 		return tls.Certificate{}, uiErrSSLUnexpectedData(nil).Msg("The private key contains additional data")
 	}
 	if x509.IsEncryptedPEMBlock(key) {
-		password, ok := os.LookupEnv(TLSPrivateKeyPassword)
+		password, ok := env.Lookup(EnvTLSPrivateKeyPassword)
 		if !ok {
 			return tls.Certificate{}, uiErrSSLNoPassword(nil)
 		}

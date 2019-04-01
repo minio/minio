@@ -33,10 +33,6 @@ const (
 	reducedRedundancyStorageClass = "REDUCED_REDUNDANCY"
 	// Standard storage class
 	standardStorageClass = "STANDARD"
-	// Reduced redundancy storage class environment variable
-	reducedRedundancyStorageClassEnv = "MINIO_STORAGE_CLASS_RRS"
-	// Standard storage class environment variable
-	standardStorageClassEnv = "MINIO_STORAGE_CLASS_STANDARD"
 	// Supported storage class scheme is EC
 	supportedStorageClassScheme = "EC"
 	// Minimum parity disks
@@ -90,10 +86,14 @@ func (sc *storageClass) UnmarshalText(b []byte) error {
 }
 
 func (sc *storageClass) MarshalText() ([]byte, error) {
+	return []byte(sc.String()), nil
+}
+
+func (sc *storageClass) String() string {
 	if sc.Scheme != "" && sc.Parity != 0 {
-		return []byte(fmt.Sprintf("%s:%d", sc.Scheme, sc.Parity)), nil
+		return fmt.Sprintf("%s:%d", sc.Scheme, sc.Parity)
 	}
-	return []byte(""), nil
+	return ""
 }
 
 // Parses given storageClassEnv and returns a storageClass structure.

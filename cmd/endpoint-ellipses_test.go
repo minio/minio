@@ -125,7 +125,7 @@ func TestGetSetIndexesEnvOverride(t *testing.T) {
 
 	for i, testCase := range testCases {
 		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
-			if err := os.Setenv("MINIO_ERASURE_SET_DRIVE_COUNT", testCase.envOverride); err != nil {
+			if err := os.Setenv(EnvErasureSetDriveCount, testCase.envOverride); err != nil {
 				t.Fatal(err)
 			}
 			gotIndexes, err := getSetIndexes(testCase.args, testCase.totalSizes)
@@ -138,7 +138,7 @@ func TestGetSetIndexesEnvOverride(t *testing.T) {
 			if !reflect.DeepEqual(testCase.indexes, gotIndexes) {
 				t.Errorf("Expected %v, got %v", testCase.indexes, gotIndexes)
 			}
-			os.Unsetenv("MINIO_ERASURE_SET_DRIVE_COUNT")
+			os.Unsetenv(EnvErasureSetDriveCount)
 		})
 	}
 }

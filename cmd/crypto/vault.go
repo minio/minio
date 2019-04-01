@@ -19,14 +19,29 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	vault "github.com/hashicorp/vault/api"
+	"github.com/minio/minio/pkg/env"
+	config "github.com/minio/minio/pkg/server-config"
+)
+
+// KMS Vault constants.
+const (
+	KMSEndpoint      = "endpoint"
+	KMSCAPath        = "capath"
+	KMSKeyName       = "key_name"
+	KMSKeyVersion    = "key_version"
+	KMSNamespace     = "namespace"
+	KMSAuthType      = "auth_type"
+	KMSAppRoleID     = "auth_approle_id"
+	KMSAppRoleSecret = "auth_approle_secret"
 )
 
 var (
-	//ErrKMSAuthLogin is raised when there is a failure authenticating to KMS
+	// ErrKMSAuthLogin is raised when there is a failure authenticating to KMS
 	ErrKMSAuthLogin = errors.New("Vault service did not return auth info")
 )
 
@@ -56,6 +71,116 @@ type VaultConfig struct {
 	Auth      VaultAuth `json:"auth"`     // The vault authentication configuration
 	Key       VaultKey  `json:"key-id"`   // The named key used for key-generation / decryption.
 	Namespace string    `json:"-"`        // The vault namespace of enterprise vault instances
+}
+
+const (
+	// EnvKMSMasterKey is the environment variable used to specify
+	// a KMS master key used to protect KMS-S3 per-object keys.
+	// Valid values must be of the from: "KEY_ID:32_BYTE_HEX_VALUE".
+	EnvKMSMasterKey = "MINIO_KMS_MASTER_KEY"
+
+	// EnvAutoEncryption is the environment variable used to en/disable
+	// KMS-S3 auto-encryption. KMS-S3 auto-encryption, if enabled,
+	// requires a valid KMS configuration and turns any non-KMS-C
+	// request into an KMS-S3 request.
+	// If present EnvAutoEncryption must be either "on" or "off".
+	EnvAutoEncryption = "MINIO_KMS_AUTO_ENCRYPTION"
+)
+
+const (
+	// EnvVaultEndpoint is the environment variable used to specify
+	// the vault HTTPS endpoint.
+	EnvVaultEndpoint = "MINIO_KMS_VAULT_ENDPOINT"
+
+	// EnvVaultAuthType is the environment variable used to specify
+	// the authentication type for vault.
+	EnvVaultAuthType = "MINIO_KMS_VAULT_AUTH_TYPE"
+
+	// EnvVaultAppRoleID is the environment variable used to specify
+	// the vault AppRole ID.
+	EnvVaultAppRoleID = "MINIO_KMS_VAULT_APPROLE_ID"
+
+	// EnvVaultAppSecretID is the environment variable used to specify
+	// the vault AppRole secret corresponding to the AppRole ID.
+	EnvVaultAppSecretID = "MINIO_KMS_VAULT_APPROLE_SECRET"
+
+	// EnvVaultKeyVersion is the environment variable used to specify
+	// the vault key version.
+	EnvVaultKeyVersion = "MINIO_KMS_VAULT_KEY_VERSION"
+
+	// EnvVaultKeyName is the environment variable used to specify
+	// the vault named key-ring. In the S3 context it's referred as
+	// customer master key ID (CMK-ID).
+	EnvVaultKeyName = "MINIO_KMS_VAULT_KEY_NAME"
+
+	// EnvVaultCAPath is the environment variable used to specify the
+	// path to a directory of PEM-encoded CA cert files. These CA cert
+	// files are used to authenticate MinIO to Vault over mTLS.
+	EnvVaultCAPath = "MINIO_KMS_VAULT_CAPATH"
+
+	// EnvVaultNamespace is the environment variable used to specify
+	// vault namespace. The vault namespace is used if the enterprise
+	// version of Hashicorp Vault is used.
+	EnvVaultNamespace = "MINIO_KMS_VAULT_NAMESPACE"
+)
+
+// NewVault extracts the Vault configuration provided by environment
+// variables and merge them with the provided Vault configuration. The
+// merging follows the following rules:
+//
+// 1. A valid value provided as environment variable is higher prioritized
+// than the provided configuration and overwrites the value from the
+// configuration file.
+//
+// 2. A value specified as environment variable never changes the configuration
+// file. So it is never made a persistent setting.
+//
+// It sets the global Vault configuration according to the merged configuration
+// on success.
+func NewVault(kvs config.KVS) (keyID string, kms KMS, err error) {
+	if kvs.Get(config.State) != config.StateEnabled {
+		return "", kms, nil
+	}
+	vcfg := VaultConfig{}
+	// Lookup Hashicorp-Vault configuration & overwrite config entry if ENV var is present
+	vcfg.Endpoint = env.Get(EnvVaultEndpoint, kvs.Get(KMSEndpoint))
+	vcfg.CAPath = env.Get(EnvVaultCAPath, kvs.Get(KMSCAPath))
+	vcfg.Auth.Type = env.Get(EnvVaultAuthType, kvs.Get(KMSAuthType))
+	vcfg.Auth.AppRole.ID = env.Get(EnvVaultAppRoleID, kvs.Get(KMSAppRoleID))
+	vcfg.Auth.AppRole.Secret = env.Get(EnvVaultAppSecretID, kvs.Get(KMSAppRoleSecret))
+	vcfg.Key.Name = env.Get(EnvVaultKeyName, kvs.Get(KMSKeyName))
+	vcfg.Namespace = env.Get(EnvVaultNamespace, kvs.Get(KMSNamespace))
+	keyVersion := env.Get(EnvVaultKeyVersion, kvs.Get(KMSKeyVersion))
+	if keyVersion != "" {
+		vcfg.Key.Version, err = strconv.Atoi(keyVersion)
+		if err != nil {
+			return keyID, kms, fmt.Errorf("Invalid ENV variable: Unable to parse %s value (`%s`)",
+				EnvVaultKeyVersion, keyVersion)
+		}
+	}
+
+	if err = vcfg.Verify(); err != nil {
+		return keyID, kms, err
+	}
+
+	// Lookup KMS master keys - only available through ENV.
+	if masterKey, ok := env.Lookup(EnvKMSMasterKey); ok {
+		if !vcfg.IsEmpty() { // Vault and KMS master key provided
+			return keyID, kms, errors.New("Ambiguous KMS configuration: vault configuration and a master key are provided at the same time")
+		}
+		keyID, kms, err = ParseKMSMasterKey(masterKey)
+		if err != nil {
+			return keyID, kms, err
+		}
+	}
+	if !vcfg.IsEmpty() {
+		kms, err = NewVaultKMS(vcfg)
+		if err != nil {
+			return keyID, kms, err
+		}
+		keyID = vcfg.Key.Name
+	}
+	return keyID, kms, nil
 }
 
 // vaultService represents a connection to a vault KMS.
@@ -99,10 +224,10 @@ func (v *VaultConfig) Verify() (err error) {
 	return
 }
 
-// NewVault initializes Hashicorp Vault KMS by authenticating
+// NewVaultKMS initializes Hashicorp Vault KMS by authenticating
 // to Vault with the credentials in config and gets a client
 // token for future api calls.
-func NewVault(config VaultConfig) (KMS, error) {
+func NewVaultKMS(config VaultConfig) (KMS, error) {
 	if config.IsEmpty() {
 		return nil, errors.New("crypto: the hashicorp vault configuration must not be empty")
 	}

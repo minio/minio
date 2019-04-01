@@ -177,7 +177,7 @@ Example 1:
 
 	uiErrSSLNoPassword = newUIErrFn(
 		"Missing TLS password",
-		"Please set the password to environment variable `"+TLSPrivateKeyPassword+"` so that the private key can be decrypted",
+		"Please set the password to environment variable `"+EnvTLSPrivateKeyPassword+"` so that the private key can be decrypted",
 		"",
 	)
 
@@ -195,7 +195,7 @@ Example 1:
 
 	uiErrSSLWrongPassword = newUIErrFn(
 		"Unable to decrypt the private key using the provided password",
-		"Please set the correct password in environment variable "+TLSPrivateKeyPassword,
+		"Please set the correct password in environment variable "+EnvTLSPrivateKeyPassword,
 		"",
 	)
 

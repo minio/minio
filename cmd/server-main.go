@@ -31,6 +31,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/minio/pkg/env"
 )
 
 func init() {
@@ -132,8 +133,8 @@ EXAMPLES:
 // Checks if endpoints are either available through environment
 // or command line, returns false if both fails.
 func endpointsPresent(ctx *cli.Context) bool {
-	_, ok := os.LookupEnv("MINIO_ENDPOINTS")
-	if !ok {
+	var ok bool
+	if _, ok = env.Lookup(EnvEndpoints); !ok {
 		ok = ctx.Args().Present()
 	}
 	return ok
@@ -154,7 +155,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 		logger.FatalIf(uErr, "Unable to validate passed endpoints")
 	}
 
-	endpoints := strings.Fields(os.Getenv("MINIO_ENDPOINTS"))
+	endpoints := strings.Fields(env.Get(EnvEndpoints, ""))
 	if len(endpoints) > 0 {
 		globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLSetDriveCount, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
 	} else {
@@ -183,9 +184,8 @@ func serverHandleEnvVars() {
 	// Handle common environment variables.
 	handleCommonEnvVars()
 
-	if serverRegion := os.Getenv("MINIO_REGION"); serverRegion != "" {
-		// region Envs are set globally.
-		globalIsEnvRegion = true
+	var serverRegion string
+	if serverRegion, globalIsEnvRegion = env.Lookup(EnvRegion); globalIsEnvRegion {
 		globalServerRegion = serverRegion
 	}
 
@@ -240,18 +240,24 @@ func serverMain(ctx *cli.Context) {
 		// Check for backward compatibility and newer style.
 		if !globalIsEnvCreds && globalIsDistXL {
 			// Try to load old config file if any, for backward compatibility.
-			var config = &serverConfig{}
+			var config = &serverConfigV33{}
 			if _, err = Load(getConfigFile(), config); err == nil {
-				globalActiveCred = config.Credential
+				if config.Credential.IsValid() {
+					globalIsEnvCreds = true
+					globalEnvCred = config.Credential
+				}
 			}
 
 			if os.IsNotExist(err) {
 				if _, err = Load(getConfigFile()+".deprecated", config); err == nil {
-					globalActiveCred = config.Credential
+					if config.Credential.IsValid() {
+						globalIsEnvCreds = true
+						globalEnvCred = config.Credential
+					}
 				}
 			}
 
-			if globalActiveCred.IsValid() {
+			if globalEnvCred.IsValid() {
 				// Credential is valid don't throw an error instead print a message regarding deprecation of 'config.json'
 				// based model and proceed to use it for now in distributed setup.
 				logger.Info(`Supplying credentials from your 'config.json' is **DEPRECATED**, Access key and Secret key in distributed server mode is expected to be specified with environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY. This approach will become mandatory in future releases, please migrate to this approach soon.`)
@@ -328,9 +334,6 @@ func serverMain(ctx *cli.Context) {
 	if err = globalConfigSys.Init(newObject); err != nil {
 		logger.Fatal(err, "Unable to initialize config system")
 	}
-
-	// Load logger subsystem
-	loadLoggers()
 
 	// Create new IAM system.
 	globalIAMSys = NewIAMSys()

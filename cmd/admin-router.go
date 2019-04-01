@@ -37,7 +37,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 	// Admin router
 	adminRouter := router.PathPrefix(adminAPIPathPrefix).Subrouter()
 
-	// Version handler
+	// Version router
 	adminV1Router := adminRouter.PathPrefix("/v1").Subrouter()
 
 	/// Service operations

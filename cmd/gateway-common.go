@@ -18,11 +18,11 @@ package cmd
 
 import (
 	"net/http"
-	"os"
 	"strings"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/hash"
 	xnet "github.com/minio/minio/pkg/net"
 
@@ -370,10 +370,15 @@ func parseGatewaySSE(s string) (gatewaySSE, error) {
 	return gatewaySSE(gwSlice), nil
 }
 
+// Set gateway encryption and deployment specific environment variables.
+const (
+	EnvGatewaySSE          = "MINIO_GATEWAY_SSE"
+	EnvGatewayDeploymentID = "MINIO_GATEWAY_DEPLOYMENT_ID"
+)
+
 // handle gateway env vars
 func handleGatewayEnvVars() {
-	gwsseVal, ok := os.LookupEnv("MINIO_GATEWAY_SSE")
-	if ok {
+	if gwsseVal, ok := env.Lookup(EnvGatewaySSE); ok {
 		var err error
 		GlobalGatewaySSE, err = parseGatewaySSE(gwsseVal)
 		if err != nil {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package validator
+package openid
 
 import (
 	"crypto"
@@ -30,6 +30,9 @@ import (
 	jwtgo "github.com/dgrijalva/jwt-go"
 	xnet "github.com/minio/minio/pkg/net"
 )
+
+// JwksURL - jwks url
+const JwksURL = "url"
 
 // JWKSArgs - RSA authentication target arguments
 type JWKSArgs struct {
@@ -82,11 +85,6 @@ func (r *JWKSArgs) UnmarshalJSON(data []byte) error {
 	}
 
 	ar := JWKSArgs(sr)
-	if ar.URL == nil || ar.URL.String() == "" {
-		*r = ar
-		return nil
-	}
-
 	*r = ar
 	return nil
 }

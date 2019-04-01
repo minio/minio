@@ -32,6 +32,20 @@ import (
 	sarama "gopkg.in/Shopify/sarama.v1"
 )
 
+// MQTT input constants
+const (
+	KafkaBrokers       = "brokers"
+	KafkaTopic         = "topic"
+	KafkaQueueDir      = "queueDir"
+	KafkaQueueLimit    = "queueLimit"
+	KafkaTLSEnable     = "tls.enable"
+	KafkaTLSSkipVerify = "tls.skipVerify"
+	KafkaTLSClientAuth = "tls.clientAuth"
+	KafkaSASLEnable    = "sasl.enable"
+	KafkaSASLUsername  = "sasl.username"
+	KafkaSASLPassword  = "sasl.password"
+)
+
 // KafkaArgs - Kafka target arguments.
 type KafkaArgs struct {
 	Enable     bool        `json:"enable"`

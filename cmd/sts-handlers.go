@@ -27,8 +27,9 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	xldap "github.com/minio/minio/pkg/iam/ldap"
+	"github.com/minio/minio/pkg/iam/openid"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/iam/validator"
 	"github.com/minio/minio/pkg/wildcard"
 	ldap "gopkg.in/ldap.v3"
 )
@@ -185,10 +186,10 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	m := make(map[string]interface{})
-	m["exp"], err = validator.GetDefaultExpiration(r.Form.Get("DurationSeconds"))
+	m["exp"], err = openid.GetDefaultExpiration(r.Form.Get("DurationSeconds"))
 	if err != nil {
 		switch err {
-		case validator.ErrInvalidDuration:
+		case openid.ErrInvalidDuration:
 			writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
 		default:
 			logger.LogIf(ctx, err)
@@ -279,12 +280,12 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	ctx = newContext(r, w, action)
 	defer logger.AuditLog(w, r, action, nil)
 
-	if globalIAMValidators == nil {
+	if globalOpenIDValidators == nil {
 		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSNotInitialized))
 		return
 	}
 
-	v, err := globalIAMValidators.Get("jwt")
+	v, err := globalOpenIDValidators.Get("jwt")
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
@@ -299,7 +300,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	m, err := v.Validate(token, r.Form.Get("DurationSeconds"))
 	if err != nil {
 		switch err {
-		case validator.ErrTokenExpired:
+		case openid.ErrTokenExpired:
 			switch action {
 			case clientGrants:
 				writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSClientGrantsExpiredToken))
@@ -307,7 +308,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 				writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSWebIdentityExpiredToken))
 			}
 			return
-		case validator.ErrInvalidDuration:
+		case openid.ErrInvalidDuration:
 			writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
 			return
 		}
@@ -461,7 +462,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		return
 	}
 
-	ldapConn, err := globalServerConfig.LDAPServerConfig.Connect()
+	ldapConn, err := globalLDAPConfig.Connect()
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("LDAP server connection failure: %v", err))
 		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
@@ -473,10 +474,10 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		return
 	}
 
-	usernameSubs := newSubstituter("username", ldapUsername)
+	usernameSubs := xldap.NewSubstituter("username", ldapUsername)
 	// We ignore error below as we already validated the username
 	// format string at startup.
-	usernameDN, _ := usernameSubs.substitute(globalServerConfig.LDAPServerConfig.UsernameFormat)
+	usernameDN, _ := usernameSubs.Substitute(globalLDAPConfig.UsernameFormat)
 	// Bind with user credentials to validate the password
 	err = ldapConn.Bind(usernameDN, ldapPassword)
 	if err != nil {
@@ -486,22 +487,22 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	}
 
 	groups := []string{}
-	if globalServerConfig.LDAPServerConfig.GroupSearchFilter != "" {
+	if globalLDAPConfig.GroupSearchFilter != "" {
 		// Verified user credentials. Now we find the groups they are
 		// a member of.
-		searchSubs := newSubstituter(
+		searchSubs := xldap.NewSubstituter(
 			"username", ldapUsername,
 			"usernamedn", usernameDN,
 		)
 		// We ignore error below as we already validated the search string
 		// at startup.
-		groupSearchFilter, _ := searchSubs.substitute(globalServerConfig.LDAPServerConfig.GroupSearchFilter)
-		baseDN, _ := searchSubs.substitute(globalServerConfig.LDAPServerConfig.GroupSearchBaseDN)
+		groupSearchFilter, _ := searchSubs.Substitute(globalLDAPConfig.GroupSearchFilter)
+		baseDN, _ := searchSubs.Substitute(globalLDAPConfig.GroupSearchBaseDN)
 		searchRequest := ldap.NewSearchRequest(
 			baseDN,
 			ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 			groupSearchFilter,
-			[]string{globalServerConfig.LDAPServerConfig.GroupNameAttribute},
+			[]string{globalLDAPConfig.GroupNameAttribute},
 			nil,
 		)
 
@@ -517,7 +518,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 			groups = append(groups, entry.Attributes[0].Values...)
 		}
 	}
-	expiryDur := globalServerConfig.LDAPServerConfig.stsExpiryDuration
+	expiryDur := globalLDAPConfig.GetExpiryDuration()
 	m := map[string]interface{}{
 		"exp":        UTCNow().Add(expiryDur).Unix(),
 		"ldapUser":   ldapUsername,

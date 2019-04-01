@@ -110,9 +110,9 @@ func (m *cacheMeta) ToObjectInfo(bucket, object string) (o ObjectInfo) {
 
 // represents disk cache struct
 type diskCache struct {
-	dir             string // caching directory
-	maxDiskUsagePct int    // max usage in %
-	expiry          int    // cache expiry in days
+	dir      string // caching directory
+	quotaPct int    // max usage in %
+	expiry   int    // cache expiry in days
 	// mark false if drive is offline
 	online bool
 	// mutex to protect updates to online variable
@@ -123,7 +123,7 @@ type diskCache struct {
 }
 
 // Inits the disk cache dir if it is not initialized already.
-func newdiskCache(dir string, expiry int, maxDiskUsagePct int) (*diskCache, error) {
+func newDiskCache(dir string, expiry int, quotaPct int) (*diskCache, error) {
 	if err := os.MkdirAll(dir, 0777); err != nil {
 		return nil, fmt.Errorf("Unable to initialize '%s' dir, %s", dir, err)
 	}
@@ -132,12 +132,12 @@ func newdiskCache(dir string, expiry int, maxDiskUsagePct int) (*diskCache, erro
 		expiry = globalCacheExpiry
 	}
 	cache := diskCache{
-		dir:             dir,
-		expiry:          expiry,
-		maxDiskUsagePct: maxDiskUsagePct,
-		purgeChan:       make(chan struct{}),
-		online:          true,
-		onlineMutex:     &sync.RWMutex{},
+		dir:         dir,
+		expiry:      expiry,
+		quotaPct:    quotaPct,
+		purgeChan:   make(chan struct{}),
+		online:      true,
+		onlineMutex: &sync.RWMutex{},
 		pool: sync.Pool{
 			New: func() interface{} {
 				b := directio.AlignedBlock(int(cacheBlkSize))
@@ -153,7 +153,7 @@ func newdiskCache(dir string, expiry int, maxDiskUsagePct int) (*diskCache, erro
 // Ex. for a 100GB disk, if maxUsage is configured as 70% then cacheMaxDiskUsagePct is 70G
 // hence disk usage is low if the disk usage is less than 56G (because 80% of 70G is 56G)
 func (c *diskCache) diskUsageLow() bool {
-	minUsage := c.maxDiskUsagePct * 80 / 100
+	minUsage := c.quotaPct * 80 / 100
 	di, err := disk.GetInfo(c.dir)
 	if err != nil {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", c.dir)
@@ -176,7 +176,7 @@ func (c *diskCache) diskUsageHigh() bool {
 		return true
 	}
 	usedPercent := (di.Total - di.Free) * 100 / di.Total
-	return int(usedPercent) > c.maxDiskUsagePct
+	return int(usedPercent) > c.quotaPct
 }
 
 // Returns if size space can be allocated without exceeding
@@ -190,7 +190,7 @@ func (c *diskCache) diskAvailable(size int64) bool {
 		return false
 	}
 	usedPercent := (di.Total - (di.Free - uint64(size))) * 100 / di.Total
-	return int(usedPercent) < c.maxDiskUsagePct
+	return int(usedPercent) < c.quotaPct
 }
 
 // Purge cache entries that were not accessed.

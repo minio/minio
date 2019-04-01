@@ -20,7 +20,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"net"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -30,10 +29,11 @@ import (
 	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/logger/target/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dns"
+	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
 )
 
@@ -69,36 +69,6 @@ func checkUpdate(mode string) {
 			logger.StartupMessage(prepareUpdateMessage("Run `mc admin update`", latestReleaseTime.Sub(currentReleaseTime)))
 		}
 	}
-}
-
-// Load logger targets based on user's configuration
-func loadLoggers() {
-	loggerUserAgent := getUserAgent(getMinioMode())
-
-	auditEndpoint, ok := os.LookupEnv("MINIO_AUDIT_LOGGER_HTTP_ENDPOINT")
-	if ok {
-		// Enable audit HTTP logging through ENV.
-		logger.AddAuditTarget(http.New(auditEndpoint, loggerUserAgent, NewCustomHTTPTransport()))
-	}
-
-	loggerEndpoint, ok := os.LookupEnv("MINIO_LOGGER_HTTP_ENDPOINT")
-	if ok {
-		// Enable HTTP logging through ENV.
-		logger.AddTarget(http.New(loggerEndpoint, loggerUserAgent, NewCustomHTTPTransport()))
-	} else {
-		for _, l := range globalServerConfig.Logger.HTTP {
-			if l.Enabled {
-				// Enable http logging
-				logger.AddTarget(http.New(l.Endpoint, loggerUserAgent, NewCustomHTTPTransport()))
-			}
-		}
-	}
-
-	if globalServerConfig.Logger.Console.Enabled {
-		// Enable console logging
-		logger.AddTarget(globalConsoleSys.Console())
-	}
-
 }
 
 func newConfigDirFromCtx(ctx *cli.Context, option string, getDefaultDir func() string) (*ConfigDir, bool) {
@@ -189,52 +159,56 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	globalCLIContext.StrictS3Compat = ctx.IsSet("compat") || ctx.GlobalIsSet("compat")
 }
 
-// Parses the given compression exclude list `extensions` or `content-types`.
-func parseCompressIncludes(includes []string) ([]string, error) {
-	for _, e := range includes {
-		if len(e) == 0 {
-			return nil, uiErrInvalidCompressionIncludesValue(nil).Msg("extension/mime-type (%s) cannot be empty", e)
-		}
-	}
-	return includes, nil
-}
+// Env only config options
+const (
+	EnvDomain            = "MINIO_DOMAIN"
+	EnvBrowser           = "MINIO_BROWSER"
+	EnvUpdate            = "MINIO_UPDATE"
+	EnvEndpoints         = "MINIO_ENDPOINTS"
+	EnvEtcdEndpoints     = "MINIO_ETCD_ENDPOINTS"
+	EnvEtcdClientCert    = "MINIO_ETCD_CLIENT_CERT"
+	EnvEtcdClientCertKey = "MINIO_ETCD_CLIENT_CERT_KEY"
+	EnvPublicIPs         = "MINIO_PUBLIC_IPS"
+
+	EnvAccessKey = "MINIO_ACCESS_KEY"
+	EnvSecretKey = "MINIO_SECRET_KEY"
+
+	EnvInternalProfiler = "_MINIO_PROFILER"
+)
 
 func handleCommonEnvVars() {
 	compressEnvDelimiter := ","
 	// Start profiler if env is set.
-	if profiler := os.Getenv("_MINIO_PROFILER"); profiler != "" {
+	if profiler := env.Get(EnvInternalProfiler, ""); profiler != "" {
 		var err error
 		globalProfiler, err = startProfiler(profiler, "")
 		logger.FatalIf(err, "Unable to setup a profiler")
 	}
 
-	accessKey := os.Getenv("MINIO_ACCESS_KEY")
-	secretKey := os.Getenv("MINIO_SECRET_KEY")
+	accessKey := env.Get(EnvAccessKey, "")
+	secretKey := env.Get(EnvSecretKey, "")
 	if accessKey != "" && secretKey != "" {
 		cred, err := auth.CreateCredentials(accessKey, secretKey)
 		if err != nil {
-			logger.Fatal(uiErrInvalidCredentials(err), "Unable to validate credentials inherited from the shell environment")
+			logger.Fatal(uiErrInvalidCredentials(err),
+				"Unable to validate credentials inherited from the shell environment")
 		}
 		cred.Expiration = timeSentinel
-
-		// credential Envs are set globally.
 		globalIsEnvCreds = true
-		globalActiveCred = cred
+		globalEnvCred = cred
 	}
 
-	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
-		browserFlag, err := ParseBoolFlag(browser)
+	var err error
+	var browser string
+	if browser, globalIsEnvBrowser = env.Lookup(EnvBrowser); browser != "" {
+		globalIsBrowserEnabled, err = parseBool(browser)
 		if err != nil {
-			logger.Fatal(uiErrInvalidBrowserValue(nil).Msg("Unknown value `%s`", browser), "Invalid MINIO_BROWSER value in environment variable")
+			logger.Fatal(uiErrInvalidBrowserValue(err).Msg("Unknown value `%s`", browser),
+				"Invalid MINIO_BROWSER value in environment variable")
 		}
-
-		// browser Envs are set globally, this does not represent
-		// if browser is turned off or on.
-		globalIsEnvBrowser = true
-		globalIsBrowserEnabled = bool(browserFlag)
 	}
 
-	etcdEndpointsEnv, ok := os.LookupEnv("MINIO_ETCD_ENDPOINTS")
+	etcdEndpointsEnv, ok := env.Lookup(EnvEtcdEndpoints)
 	if ok {
 		etcdEndpoints := strings.Split(etcdEndpointsEnv, ",")
 
@@ -248,12 +222,11 @@ func handleCommonEnvVars() {
 			etcdSecure = etcdSecure || u.Scheme == "https"
 		}
 
-		var err error
 		if etcdSecure {
 			// This is only to support client side certificate authentication
 			// https://coreos.com/etcd/docs/latest/op-guide/security.html
-			etcdClientCertFile, ok1 := os.LookupEnv("MINIO_ETCD_CLIENT_CERT")
-			etcdClientCertKey, ok2 := os.LookupEnv("MINIO_ETCD_CLIENT_CERT_KEY")
+			etcdClientCertFile, ok1 := env.Lookup(EnvEtcdClientCert)
+			etcdClientCertKey, ok2 := env.Lookup(EnvEtcdClientCertKey)
 			var getClientCertificate func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
 			if ok1 && ok2 {
 				getClientCertificate = func(unused *tls.CertificateRequestInfo) (*tls.Certificate, error) {
@@ -281,8 +254,7 @@ func handleCommonEnvVars() {
 		logger.FatalIf(err, "Unable to initialize etcd with %s", etcdEndpoints)
 	}
 
-	v, ok := os.LookupEnv("MINIO_DOMAIN")
-	if ok {
+	if v, ok := env.Lookup(EnvDomain); ok {
 		for _, domainName := range strings.Split(v, ",") {
 			if _, ok = dns2.IsDomainName(domainName); !ok {
 				logger.Fatal(uiErrInvalidDomainValue(nil).Msg("Unknown value `%s`", domainName),
@@ -292,8 +264,7 @@ func handleCommonEnvVars() {
 		}
 	}
 
-	minioEndpointsEnv, ok := os.LookupEnv("MINIO_PUBLIC_IPS")
-	if ok {
+	if minioEndpointsEnv, ok := env.Lookup(EnvPublicIPs); ok {
 		minioEndpoints := strings.Split(minioEndpointsEnv, ",")
 		var domainIPs = set.NewStringSet()
 		for _, endpoint := range minioEndpoints {
@@ -301,7 +272,8 @@ func handleCommonEnvVars() {
 				// Checking if the IP is a DNS entry.
 				addrs, err := net.LookupHost(endpoint)
 				if err != nil {
-					logger.FatalIf(err, "Unable to initialize MinIO server with [%s] invalid entry found in MINIO_PUBLIC_IPS", endpoint)
+					logger.FatalIf(err,
+						"Unable to initialize MinIO server with [%s] invalid entry found in MINIO_PUBLIC_IPS", endpoint)
 				}
 				for _, addr := range addrs {
 					domainIPs.Add(addr)
@@ -318,110 +290,64 @@ func handleCommonEnvVars() {
 	}
 
 	if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
-		var err error
 		globalDNSConfig, err = dns.NewCoreDNS(globalDomainNames, globalDomainIPs, globalMinioPort, globalEtcdClient)
 		logger.FatalIf(err, "Unable to initialize DNS config for %s.", globalDomainNames)
 	}
 
-	if drives := os.Getenv("MINIO_CACHE_DRIVES"); drives != "" {
-		driveList, err := parseCacheDrives(strings.Split(drives, cacheEnvDelimiter))
-		if err != nil {
-			logger.Fatal(err, "Unable to parse MINIO_CACHE_DRIVES value (%s)", drives)
-		}
-		globalCacheDrives = driveList
-		globalIsDiskCacheEnabled = true
-	}
-
-	if excludes := os.Getenv("MINIO_CACHE_EXCLUDE"); excludes != "" {
-		excludeList, err := parseCacheExcludes(strings.Split(excludes, cacheEnvDelimiter))
-		if err != nil {
-			logger.Fatal(err, "Unable to parse MINIO_CACHE_EXCLUDE value (`%s`)", excludes)
-		}
-		globalCacheExcludes = excludeList
-	}
-
-	if expiryStr := os.Getenv("MINIO_CACHE_EXPIRY"); expiryStr != "" {
-		expiry, err := strconv.Atoi(expiryStr)
-		if err != nil {
-			logger.Fatal(uiErrInvalidCacheExpiryValue(err), "Unable to parse MINIO_CACHE_EXPIRY value (`%s`)", expiryStr)
-		}
-		globalCacheExpiry = expiry
-	}
-
-	if maxUseStr := os.Getenv("MINIO_CACHE_MAXUSE"); maxUseStr != "" {
-		maxUse, err := strconv.Atoi(maxUseStr)
-		if err != nil {
-			logger.Fatal(uiErrInvalidCacheMaxUse(err), "Unable to parse MINIO_CACHE_MAXUSE value (`%s`)", maxUseStr)
-		}
-		// maxUse should be a valid percentage.
-		if maxUse > 0 && maxUse <= 100 {
-			globalCacheMaxUse = maxUse
-		}
-	}
-
-	var err error
-	if cacheEncKey := os.Getenv("MINIO_CACHE_ENCRYPTION_MASTER_KEY"); cacheEncKey != "" {
-		globalCacheKMSKeyID, globalCacheKMS, err = parseKMSMasterKey(cacheEncKey)
-		if err != nil {
-			logger.Fatal(uiErrInvalidCacheEncryptionKey(err), "Invalid cache encryption master key")
-		}
-	}
 	// In place update is true by default if the MINIO_UPDATE is not set
 	// or is not set to 'off', if MINIO_UPDATE is set to 'off' then
 	// in-place update is off.
-	globalInplaceUpdateDisabled = strings.EqualFold(os.Getenv("MINIO_UPDATE"), "off")
+	globalInplaceUpdateDisabled = strings.EqualFold(env.Get(EnvUpdate, "on"), "off")
 
 	// Validate and store the storage class env variables only for XL/Dist XL setups
 	if globalIsXL {
-		var err error
-
 		// Check for environment variables and parse into storageClass struct
-		if ssc := os.Getenv(standardStorageClassEnv); ssc != "" {
+		if ssc := env.Get(EnvStandardStorageClass, ""); ssc != "" {
 			globalStandardStorageClass, err = parseStorageClass(ssc)
-			logger.FatalIf(err, "Invalid value set in environment variable %s", standardStorageClassEnv)
+			logger.FatalIf(err, "Invalid value set in environment variable %s", EnvStandardStorageClass)
 		}
 
-		if rrsc := os.Getenv(reducedRedundancyStorageClassEnv); rrsc != "" {
+		if rrsc := env.Get(EnvReducedRedundancyStorageClass, ""); rrsc != "" {
 			globalRRStorageClass, err = parseStorageClass(rrsc)
-			logger.FatalIf(err, "Invalid value set in environment variable %s", reducedRedundancyStorageClassEnv)
+			logger.FatalIf(err, "Invalid value set in environment variable %s", EnvReducedRedundancyStorageClass)
 		}
 
 		// Validation is done after parsing both the storage classes. This is needed because we need one
 		// storage class value to deduce the correct value of the other storage class.
 		if globalRRStorageClass.Scheme != "" {
 			err = validateParity(globalStandardStorageClass.Parity, globalRRStorageClass.Parity)
-			logger.FatalIf(err, "Invalid value set in environment variable %s", reducedRedundancyStorageClassEnv)
+			logger.FatalIf(err, "Invalid value set in environment variable %s", EnvReducedRedundancyStorageClass)
 			globalIsStorageClass = true
 		}
 
 		if globalStandardStorageClass.Scheme != "" {
 			err = validateParity(globalStandardStorageClass.Parity, globalRRStorageClass.Parity)
-			logger.FatalIf(err, "Invalid value set in environment variable %s", standardStorageClassEnv)
+			logger.FatalIf(err, "Invalid value set in environment variable %s", EnvStandardStorageClass)
 			globalIsStorageClass = true
 		}
 	}
 
 	// Get WORM environment variable.
-	if worm := os.Getenv("MINIO_WORM"); worm != "" {
-		wormFlag, err := ParseBoolFlag(worm)
+	var worm string
+	if worm, globalIsEnvWORM = env.Lookup(EnvWORM); globalIsEnvWORM {
+		globalWORMEnabled, err = parseBool(worm)
 		if err != nil {
-			logger.Fatal(uiErrInvalidWormValue(nil).Msg("Unknown value `%s`", worm), "Invalid MINIO_WORM value in environment variable")
+			logger.Fatal(uiErrInvalidWormValue(err).Msg("Unknown value `%s`", worm),
+				"Invalid "+EnvWORM+" value in environment variable")
 		}
-
-		// worm Envs are set globally, this does not represent
-		// if worm is turned off or on.
-		globalIsEnvWORM = true
-		globalWORMEnabled = bool(wormFlag)
 	}
 
-	if compress := os.Getenv("MINIO_COMPRESS"); compress != "" {
-		globalIsCompressionEnabled = strings.EqualFold(compress, "true")
+	var compress string
+	if compress, globalIsEnvCompression = env.Lookup(EnvCompress); globalIsEnvCompression {
+		globalIsCompressionEnabled, err = parseBool(compress)
+		if err != nil {
+			logger.Fatal(err, "Invalid "+EnvCompress+" value in environment variable")
+		}
 	}
 
-	compressExtensions := os.Getenv("MINIO_COMPRESS_EXTENSIONS")
-	compressMimeTypes := os.Getenv("MINIO_COMPRESS_MIMETYPES")
-	if compressExtensions != "" || compressMimeTypes != "" {
-		globalIsEnvCompression = true
+	if globalIsEnvCompression {
+		compressExtensions := env.Get(EnvCompressExtensions, "")
+		compressMimeTypes := env.Get(EnvCompressMimeTypes, "")
 		if compressExtensions != "" {
 			extensions, err := parseCompressIncludes(strings.Split(compressExtensions, compressEnvDelimiter))
 			if err != nil {
@@ -435,6 +361,54 @@ func handleCommonEnvVars() {
 				logger.Fatal(err, "Invalid MINIO_COMPRESS_MIMETYPES value (`%s`)", contenttypes)
 			}
 			globalCompressMimeTypes = contenttypes
+		}
+	}
+
+	if drives := env.Get(EnvCacheDrives, ""); drives != "" {
+		driveList, err := parseCacheDrives(strings.Split(drives, cacheEnvDelimiter))
+		if err != nil {
+			logger.Fatal(err, "Unable to parse MINIO_CACHE_DRIVES value (%s)", drives)
+		}
+		globalCacheDrives = driveList
+		globalIsDiskCacheEnabled = true
+	}
+
+	if globalIsDiskCacheEnabled {
+		if excludes := env.Get(EnvCacheExclude, ""); excludes != "" {
+			excludeList, err := parseCacheExcludes(strings.Split(excludes, cacheEnvDelimiter))
+			if err != nil {
+				logger.Fatal(err, "Unable to parse MINIO_CACHE_EXCLUDE value (`%s`)", excludes)
+			}
+			globalCacheExcludes = excludeList
+		}
+
+		if expiryStr := env.Get(EnvCacheExpiry, ""); expiryStr != "" {
+			expiry, err := strconv.Atoi(expiryStr)
+			if err != nil {
+				logger.Fatal(uiErrInvalidCacheExpiryValue(err),
+					"Unable to parse MINIO_CACHE_EXPIRY value (`%s`)", expiryStr)
+			}
+			globalCacheExpiry = expiry
+		}
+
+		if quotaStr := env.Get(EnvCacheQuota, ""); quotaStr != "" {
+			quota, err := strconv.Atoi(quotaStr)
+			if err != nil {
+				logger.Fatal(uiErrInvalidCacheMaxUse(err),
+					"Unable to parse MINIO_CACHE_MAXUSE value (`%s`)", quotaStr)
+			}
+			// quota should be a valid percentage.
+			if quota > 0 && quota <= 100 {
+				globalCacheQuota = quota
+			}
+		}
+
+		if cacheEncKey := env.Get(EnvCacheEncryptionMasterKey, ""); cacheEncKey != "" {
+			cacheKMSKeyID, cacheKMS, err := crypto.ParseKMSMasterKey(cacheEncKey)
+			if err != nil {
+				logger.Fatal(uiErrInvalidCacheEncryptionKey(err), "Invalid cache encryption master key")
+			}
+			globalCacheKMSKeyID, globalCacheKMS = cacheKMSKeyID, cacheKMS
 		}
 	}
 }

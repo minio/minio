@@ -80,7 +80,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 
 	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
-		if err != errConfigNotFound {
+		if err != errFileNotFound {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}

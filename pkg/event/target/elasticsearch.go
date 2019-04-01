@@ -31,6 +31,15 @@ import (
 	"gopkg.in/olivere/elastic.v5"
 )
 
+// Elastic constants
+const (
+	ElasticFormat     = "format"
+	ElasticURL        = "url"
+	ElasticIndex      = "index"
+	ElasticQueueDir   = "queueDir"
+	ElasticQueueLimit = "queueLimit"
+)
+
 // ElasticsearchArgs - Elasticsearch target arguments.
 type ElasticsearchArgs struct {
 	Enable     bool     `json:"enable"`

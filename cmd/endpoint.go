@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"os"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -33,6 +32,7 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/mountinfo"
 )
 
@@ -571,9 +571,9 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 		return serverAddr, endpoints, setupType, err
 	}
 
-	_, dok := os.LookupEnv("MINIO_DOMAIN")
-	_, eok := os.LookupEnv("MINIO_ETCD_ENDPOINTS")
-	_, iok := os.LookupEnv("MINIO_PUBLIC_IPS")
+	_, dok := env.Lookup(EnvDomain)
+	_, eok := env.Lookup(EnvEtcdEndpoints)
+	_, iok := env.Lookup(EnvPublicIPs)
 	if dok && eok && !iok {
 		updateDomainIPs(uniqueArgs)
 	}

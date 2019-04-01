@@ -148,7 +148,7 @@ func (ies *IAMEtcdStore) migrateUsersConfigToV1(isSTS bool) error {
 			err := ies.loadIAMConfig(&policyName, oldPolicyPath)
 			if err != nil {
 				switch err {
-				case errConfigNotFound:
+				case errFileNotFound:
 					// No mapped policy or already migrated.
 				default:
 					// corrupt data/read error, etc
@@ -173,7 +173,7 @@ func (ies *IAMEtcdStore) migrateUsersConfigToV1(isSTS bool) error {
 		var cred auth.Credentials
 		if err := ies.loadIAMConfig(&cred, identityPath); err != nil {
 			switch err {
-			case errConfigNotFound:
+			case errFileNotFound:
 				// This case should not happen.
 			default:
 				// corrupt file or read error
@@ -210,7 +210,7 @@ func (ies *IAMEtcdStore) migrateToV1() error {
 	path := getIAMFormatFilePath()
 	if err := ies.loadIAMConfig(&iamFmt, path); err != nil {
 		switch err {
-		case errConfigNotFound:
+		case errFileNotFound:
 			// Need to migrate to V1.
 		default:
 			return err

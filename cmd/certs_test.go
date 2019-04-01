@@ -260,9 +260,9 @@ func TestLoadX509KeyPair(t *testing.T) {
 			t.Fatalf("Test %d: failed to create tmp certificate file: %v", i, err)
 		}
 
-		os.Unsetenv(TLSPrivateKeyPassword)
+		os.Unsetenv(EnvTLSPrivateKeyPassword)
 		if testCase.password != "" {
-			os.Setenv(TLSPrivateKeyPassword, testCase.password)
+			os.Setenv(EnvTLSPrivateKeyPassword, testCase.password)
 		}
 		_, err = loadX509KeyPair(certificate, privateKey)
 		if err != nil && !testCase.shouldFail {

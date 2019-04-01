@@ -80,6 +80,20 @@ const (
 	mysqlInsertRow = `INSERT INTO %s (event_time, event_data) VALUES (?, ?);`
 )
 
+// MySQL related constants
+const (
+	MySQLFormat     = "format"
+	MySQLDSNString  = "dsnString"
+	MySQLTable      = "table"
+	MySQLHost       = "host"
+	MySQLPort       = "port"
+	MySQLUsername   = "username"
+	MySQLPassword   = "password"
+	MySQLDatabase   = "database"
+	MySQLQueueLimit = "queueLimit"
+	MySQLQueueDir   = "queueDir"
+)
+
 // MySQLArgs - MySQL target arguments.
 type MySQLArgs struct {
 	Enable     bool     `json:"enable"`

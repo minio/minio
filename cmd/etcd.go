@@ -61,12 +61,12 @@ func readKeyEtcd(ctx context.Context, client *etcd.Client, key string) ([]byte, 
 		return nil, etcdErrToErr(err, client.Endpoints())
 	}
 	if resp.Count == 0 {
-		return nil, errConfigNotFound
+		return nil, errFileNotFound
 	}
 	for _, ev := range resp.Kvs {
 		if string(ev.Key) == key {
 			return ev.Value, nil
 		}
 	}
-	return nil, errConfigNotFound
+	return nil, errFileNotFound
 }

@@ -99,7 +99,7 @@ func (iamOS *IAMObjectStore) migrateUsersConfigToV1(isSTS bool) error {
 			var policyName string
 			if err := iamOS.loadIAMConfig(&policyName, oldPolicyPath); err != nil {
 				switch err {
-				case errConfigNotFound:
+				case errFileNotFound:
 					// This case means it is already
 					// migrated or there is no policy on
 					// user.
@@ -128,7 +128,7 @@ func (iamOS *IAMObjectStore) migrateUsersConfigToV1(isSTS bool) error {
 		var cred auth.Credentials
 		if err := iamOS.loadIAMConfig(&cred, identityPath); err != nil {
 			switch err {
-			case errConfigNotFound:
+			case errFileNotFound:
 				// This should not happen.
 			default:
 				// File may be corrupt or network error
@@ -166,7 +166,7 @@ func (iamOS *IAMObjectStore) migrateToV1() error {
 	path := getIAMFormatFilePath()
 	if err := iamOS.loadIAMConfig(&iamFmt, path); err != nil {
 		switch err {
-		case errConfigNotFound:
+		case errFileNotFound:
 			// Need to migrate to V1.
 		default:
 			return err
@@ -230,7 +230,7 @@ func (iamOS *IAMObjectStore) loadIAMConfig(item interface{}, path string) error 
 func (iamOS *IAMObjectStore) deleteIAMConfig(path string) error {
 	err := deleteConfig(context.Background(), iamOS.getObjectAPI(), path)
 	if _, ok := err.(ObjectNotFound); ok {
-		return errConfigNotFound
+		return errFileNotFound
 	}
 	return err
 }

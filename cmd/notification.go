@@ -713,7 +713,7 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 	defer objLock.RUnlock()
 
 	configData, e := readConfig(ctx, objAPI, configFile)
-	if e != nil && !IsErrIgnored(e, errDiskNotFound, errConfigNotFound) {
+	if e != nil && !IsErrIgnored(e, errDiskNotFound, errFileNotFound) {
 		return e
 	}
 
@@ -1055,17 +1055,15 @@ func (sys *NotificationSys) CPULoadInfo() []ServerCPULoadInfo {
 }
 
 // NewNotificationSys - creates new notification system object.
-func NewNotificationSys(config *serverConfig, endpoints EndpointList) *NotificationSys {
-	targetList := getNotificationTargets(config)
-	remoteHosts := getRemoteHosts(endpoints)
-	remoteClients, err := getRestClients(remoteHosts)
+func NewNotificationSys(config serverConfig, endpoints EndpointList) *NotificationSys {
+	remoteClients, err := getRestClients(getRemoteHosts(endpoints))
 	if err != nil {
 		logger.FatalIf(err, "Unable to start notification sub system")
 	}
 
 	// bucketRulesMap/bucketRemoteTargetRulesMap are initialized by NotificationSys.Init()
 	return &NotificationSys{
-		targetList:                 targetList,
+		targetList:                 config.GetNotificationTargets(),
 		bucketRulesMap:             make(map[string]event.RulesMap),
 		bucketRemoteTargetRulesMap: make(map[string]map[event.TargetID]event.RulesMap),
 		peerClients:                remoteClients,
@@ -1178,7 +1176,7 @@ func readNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucketName 
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketNotificationConfig)
 	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
-		if err == errConfigNotFound {
+		if err == errFileNotFound {
 			err = errNoSuchNotifications
 		}
 
@@ -1223,7 +1221,7 @@ func SaveListener(objAPI ObjectLayer, bucketName string, eventNames []event.Name
 	defer objLock.Unlock()
 
 	configData, err := readConfig(ctx, objAPI, configFile)
-	if err != nil && !IsErrIgnored(err, errDiskNotFound, errConfigNotFound) {
+	if err != nil && !IsErrIgnored(err, errDiskNotFound, errFileNotFound) {
 		return err
 	}
 
@@ -1274,7 +1272,7 @@ func RemoveListener(objAPI ObjectLayer, bucketName string, targetID event.Target
 	defer objLock.Unlock()
 
 	configData, err := readConfig(ctx, objAPI, configFile)
-	if err != nil && !IsErrIgnored(err, errDiskNotFound, errConfigNotFound) {
+	if err != nil && !IsErrIgnored(err, errDiskNotFound, errFileNotFound) {
 		return err
 	}
 

@@ -29,6 +29,25 @@ import (
 	"github.com/nats-io/stan.go"
 )
 
+// NATS related constants
+const (
+	NATSAddress      = "address"
+	NATSSubject      = "subject"
+	NATSUsername     = "username"
+	NATSPassword     = "password"
+	NATSToken        = "token"
+	NATSSecure       = "secure"
+	NATSPingInterval = "pingInterval"
+	NATSQueueDir     = "queueDir"
+	NATSQueueLimit   = "queueLimit"
+
+	// Streaming constants
+	NATSStreamingEnable             = "streaming.enable"
+	NATSStreamingClusterID          = "streaming.clusterID"
+	NATSStreamingAsync              = "streaming.async"
+	NATSStreamingMaxPubAcksInFlight = "streaming.maxPubAcksInflight"
+)
+
 // NATSArgs - NATS target arguments.
 type NATSArgs struct {
 	Enable       bool      `json:"enable"`

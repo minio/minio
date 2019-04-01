@@ -14,12 +14,16 @@
  * limitations under the License.
  */
 
-package validator
+package openid
 
 import (
 	"errors"
 	"fmt"
 	"sync"
+
+	"github.com/minio/minio/pkg/env"
+	xnet "github.com/minio/minio/pkg/net"
+	config "github.com/minio/minio/pkg/server-config"
 )
 
 // ID - holds identification name authentication validator target.
@@ -86,7 +90,30 @@ func (list *Validators) Get(id ID) (p Validator, err error) {
 	return p, nil
 }
 
-// NewValidators - creates Validators.
-func NewValidators() *Validators {
-	return &Validators{providers: make(map[ID]Validator)}
+// OpenID JWKS URL.
+const (
+	EnvIdentityOpenIDJWKSURL = "MINIO_IDENTITY_OPENID_JWKS_URL"
+)
+
+// NewValidators - initialize new OpenID validators
+func NewValidators(kvs config.KVS) (*Validators, error) {
+	if kvs.Get(config.State) != config.StateEnabled {
+		return nil, nil
+	}
+	jwksURL := env.Get(EnvIdentityOpenIDJWKSURL, kvs.Get(JwksURL))
+	u, err := xnet.ParseURL(jwksURL)
+	if err != nil {
+		return nil, err
+	}
+	jwks := JWKSArgs{
+		URL: u,
+	}
+	// JWKS url is configured, try to populate public key.
+	if err = jwks.PopulatePublicKey(); err != nil {
+		return nil, fmt.Errorf("Unable to populate public key from JWKS URL %s: %s", jwksURL, err)
+	}
+
+	validators := &Validators{providers: make(map[ID]Validator)}
+	validators.Add(NewJWT(jwks))
+	return validators, nil
 }

@@ -18,12 +18,28 @@ package iampolicy
 
 import (
 	"bytes"
+	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 
+	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
+	config "github.com/minio/minio/pkg/server-config"
+)
+
+// OPA config constants
+const (
+	OpaURL       = "url"
+	OpaAuthToken = "authToken"
+)
+
+// Policy OPA configuration.
+const (
+	EnvPolicyOPAURL       = "MINIO_POLICY_OPA_URL"
+	EnvPolicyOPAAuthToken = "MINIO_POLICY_OPA_AUTHTOKEN"
 )
 
 // OpaArgs opa general purpose policy engine configuration.
@@ -83,15 +99,31 @@ type Opa struct {
 }
 
 // NewOpa - initializes opa policy engine connector.
-func NewOpa(args OpaArgs) *Opa {
-	// No opa args.
-	if args.URL == nil && args.AuthToken == "" {
-		return nil
+func NewOpa(kvs config.KVS, rootCAs *x509.CertPool, transport *http.Transport, closeFn func(io.ReadCloser)) (*Opa, error) {
+	if kvs.Get(config.State) != config.StateEnabled {
+		return nil, nil
 	}
+
+	opaURL := env.Get(EnvPolicyOPAURL, kvs.Get(OpaURL))
+	opaAuthToken := env.Get(EnvPolicyOPAAuthToken, kvs.Get(OpaAuthToken))
+	u, err := xnet.ParseURL(opaURL)
+	if err != nil {
+		return nil, err
+	}
+	opaArgs := OpaArgs{
+		URL:         u,
+		AuthToken:   opaAuthToken,
+		Transport:   transport,
+		CloseRespFn: closeFn,
+	}
+	if err = opaArgs.Validate(); err != nil {
+		return nil, fmt.Errorf("Unable to reach OPA URL %s: %s", opaURL, err)
+	}
+
 	return &Opa{
-		args:   args,
-		client: &http.Client{Transport: args.Transport},
-	}
+		args:   opaArgs,
+		client: &http.Client{Transport: opaArgs.Transport},
+	}, nil
 }
 
 // IsAllowed - checks given policy args is allowed to continue the REST API.

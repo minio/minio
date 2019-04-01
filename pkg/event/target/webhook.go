@@ -36,6 +36,13 @@ import (
 	xnet "github.com/minio/minio/pkg/net"
 )
 
+// Webhook constants
+const (
+	WebhookEndpoint   = "endpoint"
+	WebhookQueueDir   = "queueDir"
+	WebhookQueueLimit = "queueLimit"
+)
+
 // WebhookArgs - Webhook target arguments.
 type WebhookArgs struct {
 	Enable     bool           `json:"enable"`

@@ -22,8 +22,9 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event/target"
+	"github.com/minio/minio/pkg/iam/ldap"
+	"github.com/minio/minio/pkg/iam/openid"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/iam/validator"
 	"github.com/minio/minio/pkg/quick"
 )
 
@@ -817,7 +818,7 @@ type serverConfigV31 struct {
 	// OpenID configuration
 	OpenID struct {
 		// JWKS validator config.
-		JWKS validator.JWKSArgs `json:"jwks"`
+		JWKS openid.JWKSArgs `json:"jwks"`
 	} `json:"openid"`
 
 	// External policy enforcements.
@@ -872,7 +873,7 @@ type serverConfigV32 struct {
 	// OpenID configuration
 	OpenID struct {
 		// JWKS validator config.
-		JWKS validator.JWKSArgs `json:"jwks"`
+		JWKS openid.JWKSArgs `json:"jwks"`
 	} `json:"openid"`
 
 	// External policy enforcements.
@@ -916,7 +917,7 @@ type serverConfigV33 struct {
 	// OpenID configuration
 	OpenID struct {
 		// JWKS validator config.
-		JWKS validator.JWKSArgs `json:"jwks"`
+		JWKS openid.JWKSArgs `json:"jwks"`
 	} `json:"openid"`
 
 	// External policy enforcements.
@@ -927,5 +928,5 @@ type serverConfigV33 struct {
 		// Add new external policy enforcements here.
 	} `json:"policy"`
 
-	LDAPServerConfig ldapServerConfig `json:"ldapserverconfig"`
+	LDAPServerConfig ldap.Config `json:"ldapserverconfig"`
 }

@@ -18,12 +18,12 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/pkg/ellipses"
+	"github.com/minio/minio/pkg/env"
 )
 
 // This file implements and supports ellipses pattern for
@@ -62,6 +62,9 @@ func getDivisibleSize(totalSizes []uint64) (result uint64) {
 	return result
 }
 
+// EnvErasureSetDriveCount - Erasure set drive count override default automatic detection.
+const EnvErasureSetDriveCount = "MINIO_ERASURE_SET_DRIVE_COUNT"
+
 // getSetIndexes returns list of indexes which provides the set size
 // on each index, this function also determines the final set size
 // The final set size has the affinity towards choosing smaller
@@ -77,7 +80,7 @@ func getSetIndexes(args []string, totalSizes []uint64) (setIndexes [][]uint64, e
 	}
 
 	var customSetDriveCount uint64
-	if v := os.Getenv("MINIO_ERASURE_SET_DRIVE_COUNT"); v != "" {
+	if v, ok := env.Lookup(EnvErasureSetDriveCount); ok {
 		customSetDriveCount, err = strconv.ParseUint(v, 10, 64)
 		if err != nil {
 			return nil, uiErrInvalidErasureSetSize(err)

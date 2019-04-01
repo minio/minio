@@ -33,6 +33,16 @@ import (
 	xnet "github.com/minio/minio/pkg/net"
 )
 
+// Redis constants
+const (
+	RedisFormat     = "format"
+	RedisAddress    = "address"
+	RedisPassword   = "password"
+	RedisKey        = "key"
+	RedisQueueDir   = "queueDir"
+	RedisQueueLimit = "queueLimit"
+)
+
 // RedisArgs - Redis target arguments.
 type RedisArgs struct {
 	Enable     bool      `json:"enable"`

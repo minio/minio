@@ -1,7 +1,7 @@
 // +build ignore
 
 /*
- * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,7 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
+	"fmt"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -38,17 +37,12 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	configBytes, err := madmClnt.GetConfig()
+	input := "worm"
+	kvs, err := madmClnt.GetConfigKeyValue(input)
 	if err != nil {
-		log.Fatalf("failed due to: %v", err)
+		log.Fatalln(err)
 	}
-
-	// Pretty-print config received as json.
-	var buf bytes.Buffer
-	err = json.Indent(&buf, configBytes, "", "\t")
-	if err != nil {
-		log.Fatalf("failed due to: %v", err)
+	for _, kv := range kvs {
+		fmt.Printf("%s=%s\n", kv.Key, kv.Value)
 	}
-
-	log.Println("config received successfully: ", string(buf.Bytes()))
 }

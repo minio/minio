@@ -81,6 +81,20 @@ const (
 	psqlInsertRow = `INSERT INTO %s (event_time, event_data) VALUES ($1, $2);`
 )
 
+// Postgres constants
+const (
+	PostgresFormat           = "format"
+	PostgresConnectionString = "connectionString"
+	PostgresTable            = "table"
+	PostgresHost             = "host"
+	PostgresPort             = "port"
+	PostgresUsername         = "username"
+	PostgresPassword         = "password"
+	PostgresDatabase         = "database"
+	PostgresQueueDir         = "queueDir"
+	PostgresQueueLimit       = "queueLimit"
+)
+
 // PostgreSQLArgs - PostgreSQL target arguments.
 type PostgreSQLArgs struct {
 	Enable           bool      `json:"enable"`

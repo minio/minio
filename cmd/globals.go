@@ -33,8 +33,9 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/dns"
+	"github.com/minio/minio/pkg/iam/ldap"
+	"github.com/minio/minio/pkg/iam/openid"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/iam/validator"
 	"github.com/minio/minio/pkg/pubsub"
 )
 
@@ -189,7 +190,7 @@ var (
 	// Time when object layer was initialized on start up.
 	globalBootTime time.Time
 
-	globalActiveCred  auth.Credentials
+	globalEnvCred     auth.Credentials
 	globalPublicCerts []*x509.Certificate
 
 	globalDomainNames []string      // Root domains for virtual host style requests
@@ -223,8 +224,8 @@ var (
 
 	// Disk cache expiry
 	globalCacheExpiry = 90
-	// Max allowed disk cache percentage
-	globalCacheMaxUse = 80
+	// Quota disk cache percentage
+	globalCacheQuota = 80
 	// Disk cache KMS Key
 	globalCacheKMSKeyID string
 	// Initialized KMS configuration for disk cache
@@ -268,7 +269,10 @@ var (
 	standardExcludeCompressContentTypes = []string{"video/*", "audio/*", "application/zip", "application/x-gzip", "application/x-zip-compressed", " application/x-compress", "application/x-spoon"}
 
 	// Authorization validators list.
-	globalIAMValidators *validator.Validators
+	globalOpenIDValidators *openid.Validators
+
+	// LDAP server config
+	globalLDAPConfig ldap.Config
 
 	// OPA policy system.
 	globalPolicyOPA *iampolicy.Opa

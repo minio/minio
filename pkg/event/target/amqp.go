@@ -32,22 +32,41 @@ import (
 	"github.com/streadway/amqp"
 )
 
+// AMQP input constants.
+const (
+	AmqpURL               = "url"
+	AmqpExchange          = "exchange"
+	AmqpRoutingKey        = "routingKey"
+	AmqpExchangeType      = "exchangeType"
+	AmqpDeliveryMode      = "deliveryMode"
+	AmqpMandatory         = "mandatory"
+	AmqpImmediate         = "immediate"
+	AmqpDurable           = "durable"
+	AmqpInternal          = "internal"
+	AmqpNoWait            = "noWait"
+	AmqpAutoDeleted       = "autoDeleted"
+	AmqpArguments         = "arguments"
+	AmqpPublishingHeaders = "publishingHeaders"
+)
+
 // AMQPArgs - AMQP target arguments.
 type AMQPArgs struct {
-	Enable       bool     `json:"enable"`
-	URL          xnet.URL `json:"url"`
-	Exchange     string   `json:"exchange"`
-	RoutingKey   string   `json:"routingKey"`
-	ExchangeType string   `json:"exchangeType"`
-	DeliveryMode uint8    `json:"deliveryMode"`
-	Mandatory    bool     `json:"mandatory"`
-	Immediate    bool     `json:"immediate"`
-	Durable      bool     `json:"durable"`
-	Internal     bool     `json:"internal"`
-	NoWait       bool     `json:"noWait"`
-	AutoDeleted  bool     `json:"autoDeleted"`
-	QueueDir     string   `json:"queueDir"`
-	QueueLimit   uint64   `json:"queueLimit"`
+	Enable            bool       `json:"enable", help:"enable/disable an AMQP target"`
+	URL               xnet.URL   `json:"url", help:"AMQP server endpoint, e.g. 'amqp://myuser:mypassword@localhost:5672'"`
+	Exchange          string     `json:"exchange", help:"name of the AMQP exchange"`
+	RoutingKey        string     `json:"routingKey", help:"routing key used for AMQP publishing"`
+	ExchangeType      string     `json:"exchangeType", help:"AMQP exchange type"`
+	DeliveryMode      uint8      `json:"deliveryMode", help:"delivery mode for publishing. 0 or 1 - transient; 2 - persistent"`
+	Mandatory         bool       `json:"mandatory", help:"AMQP mandatory publishing"`
+	Immediate         bool       `json:"immediate", help:"AMQP immediate publishing"`
+	Durable           bool       `json:"durable", help:"durability of AMQP exchange"`
+	Internal          bool       `json:"internal", help:""`
+	NoWait            bool       `json:"noWait"`
+	AutoDeleted       bool       `json:"autoDeleted"`
+	Arguments         amqp.Table `json:"arguments"`
+	PublishingHeaders amqp.Table `json:"publishingHeaders"`
+	QueueDir          string     `json:"queueDir"`
+	QueueLimit        uint64     `json:"queueLimit"`
 }
 
 // Validate AMQP arguments
@@ -66,8 +85,10 @@ func (a *AMQPArgs) Validate() error {
 	if a.QueueLimit > 10000 {
 		return errors.New("queueLimit should not exceed 10000")
 	}
-
-	return nil
+	if err := a.Arguments.Validate(); err != nil {
+		return err
+	}
+	return a.PublishingHeaders.Validate()
 }
 
 // AMQPTarget - AMQP target

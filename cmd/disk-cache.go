@@ -406,7 +406,7 @@ func newCache(config CacheConfig) ([]*diskCache, bool, error) {
 			return nil, false, errors.New("Atime support required for disk caching")
 		}
 
-		cache, err := newdiskCache(dir, config.Expiry, config.MaxUse)
+		cache, err := newDiskCache(dir, config.Expiry, config.Quota)
 		if err != nil {
 			return nil, false, err
 		}

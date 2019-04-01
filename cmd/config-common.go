@@ -19,21 +19,18 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 )
 
-var errConfigNotFound = errors.New("config file not found")
-
 func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]byte, error) {
 	var buffer bytes.Buffer
 	// Read entire content by setting size to -1
 	if err := objAPI.GetObject(ctx, minioMetaBucket, configFile, 0, -1, &buffer, "", ObjectOptions{}); err != nil {
-		// Treat object not found as config not found.
+		// Treat object not found as config file not found.
 		if isErrObjectNotFound(err) {
-			return nil, errConfigNotFound
+			return nil, errFileNotFound
 		}
 
 		logger.GetReqInfo(ctx).AppendTags("configFile", configFile)
@@ -41,9 +38,9 @@ func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]b
 		return nil, err
 	}
 
-	// Return config not found on empty content.
+	// Return config file not found on empty content.
 	if buffer.Len() == 0 {
-		return nil, errConfigNotFound
+		return nil, errFileNotFound
 	}
 
 	return buffer.Bytes(), nil
@@ -67,7 +64,7 @@ func checkConfig(ctx context.Context, objAPI ObjectLayer, configFile string) err
 	if _, err := objAPI.GetObjectInfo(ctx, minioMetaBucket, configFile, ObjectOptions{}); err != nil {
 		// Treat object not found as config not found.
 		if isErrObjectNotFound(err) {
-			return errConfigNotFound
+			return errFileNotFound
 		}
 
 		logger.GetReqInfo(ctx).AppendTags("configFile", configFile)

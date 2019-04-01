@@ -45,7 +45,6 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mem"
 	xnet "github.com/minio/minio/pkg/net"
-	"github.com/minio/minio/pkg/quick"
 	trace "github.com/minio/minio/pkg/trace"
 )
 
@@ -1503,14 +1502,6 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Validate JSON provided in the request body: check the
-	// client has not sent JSON objects with duplicate keys.
-	if err = quick.CheckDuplicateKeys(string(configBytes)); err != nil {
-		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
-		return
-	}
-
 	var config serverConfig
 	if err = json.Unmarshal(configBytes, &config); err != nil {
 		logger.LogIf(ctx, err)
@@ -1521,15 +1512,10 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	// If credentials for the server are provided via environment,
 	// then credentials in the provided configuration must match.
 	if globalIsEnvCreds {
-		if !globalServerConfig.GetCredential().Equal(config.Credential) {
+		if !globalServerConfig.GetCredential().Equal(config.GetCredential()) {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminCredentialsMismatch), r.URL)
 			return
 		}
-	}
-
-	if err = config.Validate(); err != nil {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
-		return
 	}
 
 	if err = config.TestNotificationTargets(); err != nil {
@@ -1537,7 +1523,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err = saveServerConfig(ctx, objectAPI, &config); err != nil {
+	if err = saveServerConfig(ctx, objectAPI, config); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}

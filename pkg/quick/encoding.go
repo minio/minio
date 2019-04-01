@@ -78,14 +78,11 @@ func (j jsonEncoding) Marshal(v interface{}) ([]byte, error) {
 
 // Convert a file extension to the appropriate struct capable
 // to marshal/unmarshal data
-func ext2EncFormat(fileExtension string) ConfigEncoding {
-	// Lower the file extension
-	ext := strings.ToLower(fileExtension)
-	ext = strings.TrimPrefix(ext, ".")
+func ext2EncFormat(ext string) ConfigEncoding {
 	// Return the appropriate encoder/decoder according
 	// to the extension
 	switch ext {
-	case "yml", "yaml":
+	case ".yml", ".yaml":
 		// YAML
 		return yamlEncoding{}
 	default:
@@ -169,7 +166,7 @@ func loadFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error
 				fileData = bytes.Replace(fileData, []byte("\r\n"), []byte("\n"), -1)
 			}
 			// Unmarshal file's content
-			return toUnmarshaller(filepath.Ext(filename))(fileData, v)
+			return toUnmarshaller(strings.ToLower(filepath.Ext(filename)))(fileData, v)
 		}
 	}
 	return os.ErrNotExist
@@ -190,10 +187,7 @@ func loadFileConfig(filename string, v interface{}) error {
 		fileData = []byte(strings.Replace(string(fileData), "\r\n", "\n", -1))
 	}
 
-	if err = checkDupJSONKeys(string(fileData)); err != nil {
-		return err
-	}
-
+	ext := strings.ToLower(filepath.Ext(filename))
 	// Unmarshal file's content
-	return toUnmarshaller(filepath.Ext(filename))(fileData, v)
+	return toUnmarshaller(ext)(fileData, v)
 }
