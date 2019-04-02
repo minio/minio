@@ -66,7 +66,10 @@ func (c *Client) Call(method string, values url.Values, body io.Reader, length i
 		if err != nil {
 			return nil, err
 		}
-		return nil, errors.New(string(b))
+		if len(b) > 0 {
+			return nil, errors.New(string(b))
+		}
+		return nil, errors.New(resp.Status)
 	}
 	return resp.Body, nil
 }
