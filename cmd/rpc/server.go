@@ -40,8 +40,6 @@ var errorType = reflect.TypeOf((*error)(nil)).Elem()
 // reflect.Type of Authenticator interface.
 var authenticatorType = reflect.TypeOf((*Authenticator)(nil)).Elem()
 
-var bufPool = NewPool()
-
 func gobEncodeBuf(e interface{}, buf *bytes.Buffer) error {
 	return gob.NewEncoder(buf).Encode(e)
 }
@@ -239,8 +237,8 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	callResponse := CallResponse{}
-	buf := bufPool.Get()
-	defer bufPool.Put(buf)
+
+	buf := bytes.NewBuffer(make([]byte, 0, 1024))
 
 	if err := server.call(callRequest.Method, callRequest.ArgBytes, buf); err != nil {
 		callResponse.Error = err.Error()
