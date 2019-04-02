@@ -38,7 +38,7 @@ import (
 var globalNSMutex *nsLockMap
 
 // Global lock server one per server.
-var globalLockServer *lockRPCReceiver
+var globalLockServer *lockRESTServer
 
 // Instance of dsync for distributed clients.
 var globalDsync *dsync.Dsync
@@ -66,7 +66,7 @@ func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int)
 		if endpoint.IsLocal {
 			myNode = len(clnts)
 
-			receiver := &lockRPCReceiver{
+			receiver := &lockRESTServer{
 				ll: localLocker{
 					serverAddr:      endpoint.Host,
 					serviceEndpoint: lockServicePath,
@@ -79,7 +79,7 @@ func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int)
 		} else {
 			host, err := xnet.ParseHost(endpoint.Host)
 			logger.FatalIf(err, "Unable to parse Lock RPC Host")
-			locker, err = NewLockRPCClient(host)
+			locker, err = newlockRESTClient(host)
 			logger.FatalIf(err, "Unable to initialize Lock RPC Client")
 		}
 

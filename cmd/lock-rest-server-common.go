@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018, 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,15 +19,34 @@ package cmd
 import (
 	"context"
 	"errors"
+	"path"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+)
+
+const lockRESTVersion = "v1"
+const lockRESTPath = minioReservedBucketPath + "/dsynclock/" + lockRESTVersion
+
+var lockServicePath = path.Join(minioReservedBucketPath, lockServiceSubPath)
+
+const (
+	lockRESTMethodLock        = "lock"
+	lockRESTMethodRLock       = "rlock"
+	lockRESTMethodUnlock      = "unlock"
+	lockRESTMethodRUnlock     = "runlock"
+	lockRESTMethodForceUnlock = "forceunlock"
+	lockRESTMethodExpired     = "expired"
 )
 
 // nameLockRequesterInfoPair is a helper type for lock maintenance
 type nameLockRequesterInfoPair struct {
 	name string
 	lri  lockRequesterInfo
+}
+
+type lockResponse struct {
+	Success bool
 }
 
 // Similar to removeEntry but only removes an entry only if the lock entry exists in map.
