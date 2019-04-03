@@ -1,4 +1,4 @@
-## Minio Azure网关限制
+## MinIO Azure网关限制
 
 网关继承了下列Azure限制:
 

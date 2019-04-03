@@ -1,8 +1,8 @@
-# Kernel Tuning for Minio Production Deployment on Linux Servers [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# Kernel Tuning for MinIO Production Deployment on Linux Servers [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
 ## Tuning Network Parameters
 
-Following network parameter settings can help ensure optimal Minio server performance on production workloads.
+Following network parameter settings can help ensure optimal MinIO server performance on production workloads.
 
 - *`tcp_fin_timeout`* : A socket left in memory takes approximately 1.5Kb of memory. It makes sense to close the unused sockets preemptively to ensure no memory leakage. This way, even if a peer doesn't close the socket due to some reason, the system itself closes it after a timeout. `tcp_fin_timeout` variable defines this timeout and tells kernel how long to keep sockets in the state FIN-WAIT-2. We recommend setting it to 30. You can set it as shown below
 
@@ -60,7 +60,7 @@ Also, set `transparent_hugepage=madvise` on your kernel command line (e.g. in /e
 
 ## Tuning Scheduler
 
-Proper scheduler configuration makes sure Minio process gets adequate CPU time. Here are the recommended scheduler settings
+Proper scheduler configuration makes sure MinIO process gets adequate CPU time. Here are the recommended scheduler settings
 
 - *`sched_min_granularity_ns`*: This parameter decides the minimum time a task will be be allowed to run on CPU before being pre-empted out. We recommend setting it to 10ms.
 
