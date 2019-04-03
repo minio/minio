@@ -37,12 +37,14 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mountinfo"
+	"github.com/ncw/directio"
 )
 
 const (
-	diskMinFreeSpace  = 900 * humanize.MiByte // Min 900MiB free space.
-	diskMinTotalSpace = diskMinFreeSpace      // Min 900MiB total space.
-	maxAllowedIOError = 5
+	diskMinFreeSpace    = 900 * humanize.MiByte // Min 900MiB free space.
+	diskMinTotalSpace   = diskMinFreeSpace      // Min 900MiB total space.
+	maxAllowedIOError   = 5
+	posixWriteBlockSize = 4 * humanize.MiByte
 )
 
 // isValidVolname verifies a volname name in accordance with object
@@ -188,7 +190,7 @@ func newPosix(path string) (*posix, error) {
 		// 1MiB buffer pool for posix internal operations.
 		pool: sync.Pool{
 			New: func() interface{} {
-				b := make([]byte, readSizeV1)
+				b := directio.AlignedBlock(posixWriteBlockSize)
 				return &b
 			},
 		},
@@ -1045,13 +1047,49 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 		return err
 	}
 
-	// Create file if not found. Note that it is created with os.O_EXCL flag as the file
-	// always is supposed to be created in the tmp directory with a unique file name.
-	w, err := s.openFile(volume, path, os.O_CREATE|os.O_APPEND|os.O_WRONLY|os.O_EXCL)
-	if err != nil {
+	if err = s.checkDiskFound(); err != nil {
 		return err
 	}
 
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return err
+	}
+	// Stat a volume entry.
+	_, err = os.Stat((volumeDir))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errVolumeNotFound
+		} else if isSysErrIO(err) {
+			return errFaultyDisk
+		}
+		return err
+	}
+
+	filePath := pathJoin(volumeDir, path)
+	if err = checkPathLength((filePath)); err != nil {
+		return err
+	}
+
+	// Create top level directories if they don't exist.
+	// with mode 0777 mkdir honors system umask.
+	if err = mkdirAll(slashpath.Dir(filePath), 0777); err != nil {
+		return err
+	}
+
+	w, err := disk.OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL|os.O_SYNC, 0666)
+	if err != nil {
+		switch {
+		case os.IsPermission(err):
+			return errFileAccessDenied
+		case os.IsExist(err):
+			return errFileAccessDenied
+		case isSysErrIO(err):
+			return errFaultyDisk
+		default:
+			return err
+		}
+	}
 	defer w.Close()
 
 	var e error
@@ -1078,16 +1116,69 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 	bufp := s.pool.Get().(*[]byte)
 	defer s.pool.Put(bufp)
 
-	n, err := io.CopyBuffer(w, r, *bufp)
-	if err != nil {
-		return err
+	buf := *bufp
+	var written int64
+	dioCount := int(fileSize) / len(buf)
+	for i := 0; i < dioCount; i++ {
+		var n int
+		_, err = io.ReadFull(r, buf)
+		if err != nil {
+			return err
+		}
+		n, err = w.Write(buf)
+		if err != nil {
+			return err
+		}
+		written += int64(n)
 	}
-	if n < fileSize {
-		return errLessData
+	// The following logic writes the remainging data such that it writes whatever best is possible (aligned buffer)
+	// in O_DIRECT mode and remaining (unaligned buffer) in non-O_DIRECT mode.
+	remaining := fileSize % int64(len(buf))
+	if remaining != 0 {
+		buf = buf[:remaining]
+		_, err = io.ReadFull(r, buf)
+		if err != nil {
+			return err
+		}
+		remainingAligned := (remaining / directio.AlignSize) * directio.AlignSize
+		remainingAlignedBuf := buf[:remainingAligned]
+		remainingUnalignedBuf := buf[remainingAligned:]
+		if len(remainingAlignedBuf) > 0 {
+			var n int
+			n, err = w.Write(remainingAlignedBuf)
+			if err != nil {
+				return err
+			}
+			written += int64(n)
+		}
+		if len(remainingUnalignedBuf) > 0 {
+			var n int
+			// Write on O_DIRECT fds fail if buffer is not 4K aligned, hence disable O_DIRECT.
+			if err = disk.DisableDirectIO(w); err != nil {
+				return err
+			}
+			n, err = w.Write(remainingUnalignedBuf)
+			if err != nil {
+				return err
+			}
+			written += int64(n)
+		}
 	}
-	if n > fileSize {
+
+	// Do some sanity checks.
+	_, err = io.ReadFull(r, buf)
+	if err != io.EOF {
 		return errMoreData
 	}
+
+	if written < fileSize {
+		return errLessData
+	}
+
+	if written > fileSize {
+		return errMoreData
+	}
+
 	return nil
 }
 
