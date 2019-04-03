@@ -212,7 +212,7 @@ func (k *KVStorage) getKVNSEntry(nskey string) (entry KVNSEntry, err error) {
 		}
 		err = KVNSEntryUnmarshal(value, &entry)
 		if err != nil {
-			fmt.Println("##### Unmarshal failed on ", nskey, len(value), string(value))
+			fmt.Println("##### Unmarshal failed on ", nskey, len(value), string(value[:32]))
 			tries--
 			if tries == 0 {
 				fmt.Println("##### Unmarshal failed (after 10 retries on GET) on ", k.path, nskey)

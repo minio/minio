@@ -354,7 +354,7 @@ func kvAsyncLoop() {
 			id++
 			idMap[id] = request
 			t := time.AfterFunc(kvTimeout, func() {
-				fmt.Println("timeout while calling KV", request.call, string(request.key))
+				fmt.Println("##### timeout while calling KV", request.call, string(request.key))
 			})
 			switch request.call {
 			case kvCallPut:
@@ -371,7 +371,7 @@ func kvAsyncLoop() {
 		case response := <-globalAsyncKVResponseCh:
 			request, ok := idMap[response.id]
 			if !ok {
-				fmt.Println(id, "not found in the map")
+				fmt.Println("#####", id, "not found in the map")
 				os.Exit(1)
 			}
 			delete(idMap, response.id)
@@ -449,7 +449,7 @@ func (k *KV) Put(keyStr string, value []byte) error {
 		}
 	}
 	if len(key) > kvKeyLength {
-		fmt.Println("invalid key length", key, len(key))
+		fmt.Println("##### invalid key length", key, len(key))
 		os.Exit(0)
 	}
 	var valuePtr unsafe.Pointer
@@ -466,7 +466,7 @@ func (k *KV) Put(keyStr string, value []byte) error {
 		select {
 		case globalAsyncKVLoopRequestCh <- asyncKVLoopRequest{call: kvCallPut, kv: k, key: key, value: value, ch: ch}:
 		case <-time.After(kvTimeout):
-			fmt.Println("Put timeout on globalAsyncKVRequestCh", k.path, keyStr)
+			fmt.Println("##### Put timeout on globalAsyncKVRequestCh", k.path, keyStr)
 			globalAsyncKVLoopEndCh <- struct{}{}
 			time.Sleep(time.Hour)
 			return errDiskNotFound
@@ -475,7 +475,7 @@ func (k *KV) Put(keyStr string, value []byte) error {
 		select {
 		case response = <-ch:
 		case <-time.After(kvTimeout):
-			fmt.Println("Put timeout", k.path, keyStr)
+			fmt.Println("##### Put timeout", k.path, keyStr)
 			globalAsyncKVLoopEndCh <- struct{}{}
 			time.Sleep(time.Hour)
 			return errDiskNotFound
@@ -504,7 +504,7 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 		}
 	}
 	if len(key) > kvKeyLength {
-		fmt.Println("invalid key length", key, len(key))
+		fmt.Println("##### invalid key length", key, len(key))
 		os.Exit(0)
 	}
 	var actualLength int
@@ -523,7 +523,7 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 			select {
 			case globalAsyncKVLoopRequestCh <- asyncKVLoopRequest{call: kvCallGet, kv: k, key: key, value: value, ch: ch}:
 			case <-time.After(kvTimeout):
-				fmt.Println("Get timeout on globalAsyncKVRequestCh", k.path, keyStr)
+				fmt.Println("##### Get timeout on globalAsyncKVRequestCh", k.path, keyStr)
 				globalAsyncKVLoopEndCh <- struct{}{}
 				time.Sleep(time.Hour)
 				os.Exit(1)
@@ -532,7 +532,7 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 			select {
 			case response = <-ch:
 			case <-time.After(kvTimeout):
-				fmt.Println("Get timeout", k.path, keyStr)
+				fmt.Println("##### Get timeout", k.path, keyStr)
 				globalAsyncKVLoopEndCh <- struct{}{}
 				time.Sleep(time.Hour)
 				os.Exit(1)
@@ -550,9 +550,10 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 		if actualLength > 0 {
 			break
 		}
+		fmt.Println("##### GET returned actual_length=", actualLength)
 		tries--
 		if tries == 0 {
-			fmt.Println("GET failed (after 10 retries) on (actual_length=0)", k.path, keyStr)
+			fmt.Println("##### GET failed (after 10 retries) on (actual_length=0)", k.path, keyStr)
 			os.Exit(1)
 		}
 	}
@@ -574,7 +575,7 @@ func (k *KV) Delete(keyStr string) error {
 		}
 	}
 	if len(key) > kvKeyLength {
-		fmt.Println("invalid key length", key, len(key))
+		fmt.Println("##### invalid key length", key, len(key))
 		os.Exit(0)
 	}
 	var status int
@@ -587,7 +588,7 @@ func (k *KV) Delete(keyStr string) error {
 		select {
 		case globalAsyncKVLoopRequestCh <- asyncKVLoopRequest{call: kvCallDel, kv: k, key: key, ch: ch}:
 		case <-time.After(kvTimeout):
-			fmt.Println("Delete timeout on globalAsyncKVRequestCh", k.path, keyStr)
+			fmt.Println("##### Delete timeout on globalAsyncKVRequestCh", k.path, keyStr)
 			globalAsyncKVLoopEndCh <- struct{}{}
 			time.Sleep(time.Hour)
 			os.Exit(1)
@@ -595,7 +596,7 @@ func (k *KV) Delete(keyStr string) error {
 		select {
 		case response = <-ch:
 		case <-time.After(kvTimeout):
-			fmt.Println("Delete timeout", k.path, keyStr)
+			fmt.Println("##### Delete timeout", k.path, keyStr)
 			globalAsyncKVLoopEndCh <- struct{}{}
 			time.Sleep(time.Hour)
 			os.Exit(1)
