@@ -49,9 +49,14 @@ func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error)
 
 // Authenticates storage client's requests and validates for skewed time.
 func storageServerRequestValidate(r *http.Request) error {
-	if _, _, err := webRequestAuthenticate(r); err != nil {
+	_, owner, err := webRequestAuthenticate(r)
+	if err != nil {
 		return err
 	}
+	if !owner { // Disable access for non-admin users.
+		return errAuthentication
+	}
+
 	requestTimeStr := r.Header.Get("X-Minio-Time")
 	requestTime, err := time.Parse(time.RFC3339, requestTimeStr)
 	if err != nil {
