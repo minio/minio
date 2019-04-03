@@ -92,11 +92,9 @@ func (srv *Server) Start() (err error) {
 	var listener *httpListener
 	listener, err = newHTTPListener(
 		addrs,
-		tlsConfig,
 		tcpKeepAliveTimeout,
 		readTimeout,
 		writeTimeout,
-		srv.MaxHeaderBytes,
 		srv.UpdateBytesReadFunc,
 		srv.UpdateBytesWrittenFunc,
 	)

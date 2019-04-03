@@ -57,15 +57,13 @@ $ git push origin my-new-feature
 Pull requests can be created via GitHub. Refer to [this document](https://help.github.com/articles/creating-a-pull-request/) for detailed steps on how to create a pull request. After a Pull Request gets peer reviewed and approved, it will be merged.
 
 ## FAQs
-### How does ``Minio`` manages dependencies? 
-``Minio`` manages its dependencies using [govendor](https://github.com/kardianos/govendor). To add a dependency
-- Run `go get foo/bar`
-- Edit your code to import foo/bar
-- Run `make pkg-add PKG=foo/bar` from top-level directory
+### How does ``Minio`` manages dependencies?
+``Minio`` uses `go mod` to manage its dependencies.
+- Run `go get foo/bar` in the source folder to add the dependency to `go.mod` file.
 
 To remove a dependency
-- Edit your code to not import foo/bar
-- Run `make pkg-remove PKG=foo/bar` from top-level directory
+- Edit your code and remove the import reference.
+- Run `go mod tidy` in the source folder to remove dependency from `go.mod` file.
 
 ### What are the coding guidelines for Minio?
 ``Minio`` is fully conformant with Golang style. Refer: [Effective Go](https://github.com/golang/go/wiki/CodeReviewComments) article from Golang project. If you observe offending code, please feel free to send a pull request or ping us on [Slack](https://slack.minio.io).

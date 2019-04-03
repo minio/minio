@@ -18,7 +18,7 @@ matrix:
         - ARCH=x86_64
         - CGO_ENABLED=0
         - GO111MODULE=on
-      go: 1.11.4
+      go: 1.12.1
       script:
         - make
         - diff -au <(gofmt -s -d cmd) <(printf "")
@@ -33,7 +33,8 @@ matrix:
       env:
         - ARCH=x86_64
         - CGO_ENABLED=0
-      go: 1.11.4
+        - GO111MODULE=on
+      go: 1.12.1
       script:
         - go build --ldflags="$(go run buildscripts/gen-ldflags.go)" -o %GOPATH%\bin\minio.exe
         - for d in $(go list ./... | grep -v browser); do CGO_ENABLED=1 go test -v -race --timeout 20m "$d"; done
