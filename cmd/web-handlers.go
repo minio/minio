@@ -861,6 +861,11 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Disable access to '.minio.sys' for non-admin users.
+	if bucket == minioMetaBucket && !owner {
+		writeWebErrorResponse(w, errAuthentication)
+		return
+	}
 
 	// For authenticated users apply IAM policy.
 	if authErr == nil {
@@ -1030,6 +1035,11 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Disable access to '.minio.sys' for non-admin users.
+	if bucket == minioMetaBucket && !owner {
+		writeWebErrorResponse(w, errAuthentication)
+		return
+	}
 
 	// For authenticated users apply IAM policy.
 	if authErr == nil {
@@ -1174,6 +1184,11 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			writeWebErrorResponse(w, authErr)
 			return
 		}
+	}
+	// Disable access to '.minio.sys' for non-admin users.
+	if args.BucketName == minioMetaBucket && !owner {
+		writeWebErrorResponse(w, errAuthentication)
+		return
 	}
 
 	// For authenticated users apply IAM policy.

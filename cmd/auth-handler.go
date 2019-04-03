@@ -255,6 +255,11 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 		return s3Err
 	}
 
+	// Disable access to '.minio.sys' for non-admin users.
+	if bucketName == minioMetaBucket && cred.AccessKey != globalServerConfig.GetCredential().AccessKey {
+		return ErrAccessDenied
+	}
+
 	// LocationConstraint is valid only for CreateBucketAction.
 	var locationConstraint string
 	if action == policy.CreateBucketAction {
