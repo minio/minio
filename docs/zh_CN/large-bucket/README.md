@@ -1,4 +1,4 @@
-# 超大存储桶快速入门 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# 超大存储桶快速入门 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
 Minio的纠删码功能限制了最多只能使用16块磁盘。这就限制了一个租户的数据可以用多少存储空间。不过，为了满足需要大量磁盘或者是超大容量存储空间的需求，我们引入了超大存储桶的支持。
 
@@ -8,7 +8,7 @@ Minio的纠删码功能限制了最多只能使用16块磁盘。这就限制了�
 安装和部署方式和分布式Minio一样。只不过是在输入参数的语法上，用`...`来做为磁盘参数的简写。分布式设置中的远程磁盘被编码为HTTP（s）URI，它也可以被同样的缩写。
 
 ### 1. 前提条件
-安装Minio - [Minio快速入门](https://docs.minio.io/docs/minio-quickstart-guide)。
+安装Minio - [Minio快速入门](https://docs.min.io/docs/minio-quickstart-guide)。
 
 ### 2. 在多个磁盘上运行Minio
 我们将在下面的章节中看到如何做到这一点的例子。
@@ -37,11 +37,11 @@ minio server http://host{1...4}/export{1...16}
 ```
 
 ### 3. 验证设置是否成功
-要验证是否部署成功，你可以通过浏览器或者[`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide)来访问刚刚部署的Minio服务。你应该可以看到上传的文件在所有Minio节点上都可以访问。
+要验证是否部署成功，你可以通过浏览器或者[`mc`](https://docs.min.io/docs/minio-client-quickstart-guide)来访问刚刚部署的Minio服务。你应该可以看到上传的文件在所有Minio节点上都可以访问。
 
 ## 了解更多
-- [mc快速入门](https://docs.minio.io/docs/minio-client-quickstart-guide)
-- [使用 aws-cli](https://docs.minio.io/docs/aws-cli-with-minio)
-- [使用 s3cmd](https://docs.minio.io/docs/s3cmd-with-minio)
-- [使用 minio-go SDK](https://docs.minio.io/docs/golang-client-quickstart-guide)
-- [Minio文档](https://docs.minio.io)
+- [mc快速入门](https://docs.min.io/docs/minio-client-quickstart-guide)
+- [使用 aws-cli](https://docs.min.io/docs/aws-cli-with-minio)
+- [使用 s3cmd](https://docs.min.io/docs/s3cmd-with-minio)
+- [使用 minio-go SDK](https://docs.min.io/docs/golang-client-quickstart-guide)
+- [Minio文档](https://docs.min.io)

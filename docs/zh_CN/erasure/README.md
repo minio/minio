@@ -1,4 +1,4 @@
-# Minio纠删码快速入门 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# Minio纠删码快速入门 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
 Minio使用纠删码`erasure code`和校验和`checksum`来保护数据免受硬件故障和无声数据损坏。 即便您丢失一半数量（N/2）的硬盘，您仍然可以恢复数据。
 
@@ -20,7 +20,7 @@ Minio使用纠删码`erasure code`和校验和`checksum`来保护数据免受硬
 
 ### 1. 前提条件:
 
-安装Minio- [Minio快速入门](https://docs.minio.io/cn/minio-quickstart-guide)
+安装Minio- [Minio快速入门](https://docs.min.io/cn/minio-quickstart-guide)
 
 ### 2. 以纠删码模式运行Minio
 

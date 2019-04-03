@@ -1,8 +1,8 @@
-# Golang Admin Client API Reference [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# Golang Admin Client API Reference [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-## Initialize Minio Admin Client object.
+## Initialize MinIO Admin Client object.
 
-##  Minio
+##  MinIO
 
 ```go
 
@@ -45,7 +45,7 @@ func main() {
 
 
 ## 1. Constructor
-<a name="Minio"></a>
+<a name="MinIO"></a>
 
 ### New(endpoint string, accessKeyID string, secretAccessKey string, ssl bool) (*AdminClient, error)
 Initializes a new admin client object.
@@ -54,7 +54,7 @@ __Parameters__
 
 |Param   |Type   |Description   |
 |:---|:---| :---|
-|`endpoint`   | _string_  |Minio endpoint.   |
+|`endpoint`   | _string_  |MinIO endpoint.   |
 |`accessKeyID`  |_string_   | Access key for the object storage endpoint.  |
 |`secretAccessKey`  | _string_  |Secret key for the object storage endpoint.   |
 |`ssl`   | _bool_  | Set this value to 'true' to enable secure (HTTPS) access.  |
@@ -326,7 +326,7 @@ __Example__
 
 <a name="GetConfig"></a>
 ### GetConfig() ([]byte, error)
-Get current `config.json` of a Minio server.
+Get current `config.json` of a MinIO server.
 
 __Example__
 
@@ -349,7 +349,7 @@ __Example__
 
 <a name="SetConfig"></a>
 ### SetConfig(config io.Reader) error
-Set a new `config.json` for a Minio server.
+Set a new `config.json` for a MinIO server.
 
 __Example__
 
@@ -386,7 +386,7 @@ __Example__
 
 <a name="SetConfigKeys"></a>
 ### SetConfigKeys(params map[string]string) error
-Set a set of keys and values for Minio server or distributed setup and restart the Minio
+Set a set of keys and values for MinIO server or distributed setup and restart the MinIO
 server for the new configuration changes to take effect.
 
 __Example__
@@ -404,7 +404,7 @@ __Example__
 
 <a name="TopLocks"></a>
 ### TopLocks() (LockEntries, error)
-Get the oldest locks from Minio server.
+Get the oldest locks from MinIO server.
 
 __Example__
 
@@ -426,7 +426,7 @@ __Example__
 
 <a name="AddCannedPolicy"></a>
 ### AddCannedPolicy(policyName string, policy string) error
-Create a new canned policy on Minio server.
+Create a new canned policy on MinIO server.
 
 __Example__
 
@@ -440,7 +440,7 @@ __Example__
 
 <a name="AddUser"></a>
 ### AddUser(user string, secret string) error
-Add a new user on a Minio server.
+Add a new user on a MinIO server.
 
 __Example__
 
@@ -452,7 +452,7 @@ __Example__
 
 <a name="SetUserPolicy"></a>
 ### SetUserPolicy(user string, policyName string) error
-Enable a canned policy `get-only` for a given user on Minio server.
+Enable a canned policy `get-only` for a given user on MinIO server.
 
 __Example__
 
@@ -464,7 +464,7 @@ __Example__
 
 <a name="ListUsers"></a>
 ### ListUsers() (map[string]UserInfo, error)
-Lists all users on Minio server.
+Lists all users on MinIO server.
 
 __Example__
 
@@ -482,7 +482,7 @@ __Example__
 
 <a name="SetAdminCredentials"></a>
 ### SetAdminCredentials() error
-Set new credentials of a Minio setup.
+Set new credentials of a MinIO setup.
 
 __Example__
 

@@ -1,7 +1,7 @@
-# Minio NAS网关 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
-Minio网关使用NAS存储支持Amazon S3。你可以在同一个共享NAS卷上运行多个minio实例，作为一个分布式的对象网关。
+# MinIO NAS网关 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+MinIO网关使用NAS存储支持Amazon S3。你可以在同一个共享NAS卷上运行多个minio实例，作为一个分布式的对象网关。
 
-## 为NAS存储运行Minio网关
+## 为NAS存储运行MinIO网关
 ### 使用Docker
 ```
 docker run -p 9000:9000 --name nas-s3 \
@@ -38,6 +38,6 @@ mc ls mynas
 ```
 
 ## 了解更多
-- [`mc`快速入门](https://docs.minio.io/docs/minio-client-quickstart-guide)
-- [使用 aws-cli](https://docs.minio.io/docs/aws-cli-with-minio)
-- [使用 minio-go SDK](https://docs.minio.io/docs/golang-client-quickstart-guide)
+- [`mc`快速入门](https://docs.min.io/docs/minio-client-quickstart-guide)
+- [使用 aws-cli](https://docs.min.io/docs/aws-cli-with-minio)
+- [使用 minio-go SDK](https://docs.min.io/docs/golang-client-quickstart-guide)

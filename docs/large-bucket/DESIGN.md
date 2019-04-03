@@ -1,4 +1,4 @@
-# Large Bucket Support Design Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# Large Bucket Support Design Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
 This document explains the design approach, advanced use cases and limits of the large bucket feature. If you're looking to get started with large bucket support, we suggest you go through the [getting started document](https://github.com/minio/minio/blob/master/docs/large-bucket/README.md) first.
 
@@ -64,7 +64,7 @@ minio server http://rack1-host{1...8}.example.net/export{1...16} http://rack2-ho
 
 ### Expected expansion for double ellipses
 
-Minio server internally expands ellipses passed as arguments. Here is a sample expansion to demonstrate the process
+MinIO server internally expands ellipses passed as arguments. Here is a sample expansion to demonstrate the process
 
 ```
 minio server http://host{1...4}/export{1...8}

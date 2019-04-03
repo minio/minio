@@ -1,6 +1,6 @@
-## Minio Browser
+## MinIO Browser
 
-Minio Browser使用Json Web Token来验证JSON RPC请求。
+MinIO Browser使用Json Web Token来验证JSON RPC请求。
 
 初使请求为用户提供的`AccessKey`和`SecretKey`生成一个token令牌
 

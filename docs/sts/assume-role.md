@@ -1,10 +1,10 @@
-## AssumeRole [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
-Returns a set of temporary security credentials that you can use to access Minio resources. AssumeRole requires authorization credentials for an existing user on Minio. The advantages of this API are
+## AssumeRole [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+Returns a set of temporary security credentials that you can use to access MinIO resources. AssumeRole requires authorization credentials for an existing user on MinIO. The advantages of this API are
 
 - To be able to reliably use S3 multipart APIs feature of the SDKs without re-inventing the wheel of pre-signing the each URL in multipart API. This is very tedious to implement with all the scenarios of fault tolerance that's already implemented by the client SDK. The general client SDKs don't support multipart with presigned URLs.
 - To be able to easily get the temporary credentials to upload to a prefix. Make it possible for a client to upload a whole folder using the session. The server side applications need not create a presigned URL and serve to the client for each file. Since, the client would have the session it can do it by itself.
 
-The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to Minio API operations. The policy applied to these temporary credentials is inherited from the Minio user credentials. By default, the temporary security credentials created by AssumeRole last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration to 12 hours.
+The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to MinIO API operations. The policy applied to these temporary credentials is inherited from the MinIO user credentials. By default, the temporary security credentials created by AssumeRole last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration to 12 hours.
 
 ### Request Parameters
 #### DurationSeconds
@@ -67,7 +67,7 @@ $ export MINIO_SECRET_KEY=minio123
 $ minio server ~/test
 ```
 
-Create new users following the multi-user guide [here](https://docs.minio.io/docs/minio-multi-user-quickstart-guide.html)
+Create new users following the multi-user guide [here](https://docs.min.io/docs/minio-multi-user-quickstart-guide.html)
 
 Testing with an example
 > Use the same username and password created in the previous steps.
@@ -79,7 +79,7 @@ aws_access_key_id = foobar
 aws_secret_access_key = foo12345
 ```
 
-> NOTE: In the following commands `--role-arn` and `--role-session-name` are not meaningful for Minio and can be set to any value satisfying the command line requirements.
+> NOTE: In the following commands `--role-arn` and `--role-session-name` are not meaningful for MinIO and can be set to any value satisfying the command line requirements.
 
 ```
 $ aws --profile foobar --endpoint-url http://localhost:9000 sts assume-role --role-arn arn:xxx:xxx:xxx:xxx --role-session-name anything
