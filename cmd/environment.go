@@ -21,6 +21,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/minio/minio/cmd/crypto"
 )
@@ -74,6 +75,15 @@ const (
 	// vault namespace. The vault namespace is used if the enterprise
 	// version of Hashicorp Vault is used.
 	EnvVaultNamespace = "MINIO_SSE_VAULT_NAMESPACE"
+
+	// EnvVaultClientTimeout is the environment variable used to specify
+	// vault client timeout. The vault client timeout defaults to 60
+	// seconds.
+	EnvVaultClientTimeout = "MINIO_SSE_VAULT_CLIENT_TIMEOUT"
+	// EnvVaultRateLimit is the environment variable used to specify
+	// vault client rate limiter.
+	// See https://www.vaultproject.io/docs/commands/#vault_rate_limit
+	EnvVaultRateLimit = "MINIO_SSE_VAULT_RATE_LIMIT"
 )
 
 // Environment provides functions for accessing environment
@@ -127,6 +137,22 @@ func (env environment) LookupKMSConfig(config crypto.KMSConfig) (err error) {
 	if err != nil {
 		return fmt.Errorf("Invalid ENV variable: Unable to parse %s value (`%s`)", EnvVaultKeyVersion, keyVersion)
 	}
+	t := env.Get(EnvVaultClientTimeout, fmt.Sprintf("%d", int64(config.Vault.Timeout/time.Millisecond)))
+	timeout, err := strconv.Atoi(t)
+	if err != nil {
+		return fmt.Errorf("Invalid ENV variable: Unable to parse %s value (`%d`)", EnvVaultClientTimeout, timeout)
+	}
+	config.Vault.Timeout = time.Duration(timeout) * time.Second
+
+	if v := os.Getenv(EnvVaultRateLimit); v != "" {
+		rateLimit, burstLimit, err := parseRateLimit(v)
+		if err != nil {
+			return fmt.Errorf("Invalid ENV variable: Unable to parse %s value (`%s`)", EnvVaultRateLimit, v)
+		}
+		config.Vault.RateLimit = rateLimit
+		config.Vault.BurstLimit = burstLimit
+	}
+
 	if err = config.Vault.Verify(); err != nil {
 		return err
 	}
@@ -158,6 +184,19 @@ func (env environment) LookupKMSConfig(config crypto.KMSConfig) (err error) {
 		return errors.New("Invalid KMS configuration: auto-encryption is enabled but no valid KMS configuration is present")
 	}
 	return nil
+}
+
+// parses rate limit value in the format rate[:burst] where :burst is optional
+func parseRateLimit(val string) (rate float64, burst int, err error) {
+	_, err = fmt.Sscanf(val, "%f:%d", &rate, &burst)
+	if err != nil {
+		rate, err = strconv.ParseFloat(val, 64)
+		if err != nil {
+			err = fmt.Errorf("%v was provided but incorrectly formatted", val)
+		}
+		burst = int(rate)
+	}
+	return rate, burst, err
 }
 
 // parseKMSMasterKey parses the value of the environment variable

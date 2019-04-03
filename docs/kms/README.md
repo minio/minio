@@ -108,6 +108,15 @@ export MINIO_SSE_VAULT_NAMESPACE=ns1
 
 Note: If [Vault Namespaces](https://learn.hashicorp.com/vault/operations/namespaces) are in use, MINIO_SSE_VAULT_NAMESPACE variable needs to be set before setting approle and transit secrets engine.
 
+Advanced options:
+MINIO_SSE_VAULT_CLIENT_TIMEOUT can be set to a custom timeout, defaults to 60 seconds.
+MINIO_SSE_VAULT_RATE_LIMIT limits the rate at which requests are sent to Vault,and can be specified in the format rate:[burst] where rate and burst are "operations per second". If burst is unspecified, it defaults to rate. 
+```
+export MINIO_SSE_VAULT_CLIENT_TIMEOUT=50  # timeout duration in seconds
+export MINIO_SSE_VAULT_RATE_LIMIT=50:10 # rate limit to 50 requests, with burst limit of 10
+```
+
+
 Minio gateway to S3 supports encryption. Three encryption modes are possible - encryption can be set to ``pass-through`` to backend, ``single encryption`` (at the gateway) or ``double encryption`` (single encryption at gateway and pass through to backend). This can be specified by setting MINIO_GATEWAY_SSE and KMS environment variables set in Step 2.1.2.
 
 If MINIO_GATEWAY_SSE and KMS are not setup, all encryption headers are passed through to the backend. If KMS environment variables are set up, ``single encryption`` is automatically performed at the gateway and encrypted object is saved at the backend.

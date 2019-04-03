@@ -51,11 +51,15 @@ type VaultAppRole struct {
 
 // VaultConfig represents vault configuration.
 type VaultConfig struct {
-	Endpoint  string    `json:"endpoint"` // The vault API endpoint as URL
-	CAPath    string    `json:"-"`        // The path to PEM-encoded certificate files used for mTLS. Currently not used in config file.
-	Auth      VaultAuth `json:"auth"`     // The vault authentication configuration
-	Key       VaultKey  `json:"key-id"`   // The named key used for key-generation / decryption.
-	Namespace string    `json:"-"`        // The vault namespace of enterprise vault instances
+	Endpoint   string        `json:"endpoint"` // The vault API endpoint as URL
+	CAPath     string        `json:"-"`        // The path to PEM-encoded certificate files used for mTLS. Currently not used in config file.
+	Auth       VaultAuth     `json:"auth"`     // The vault authentication configuration
+	Key        VaultKey      `json:"key-id"`   // The named key used for key-generation / decryption.
+	Namespace  string        `json:"-"`        // The vault namespace of enterprise vault instances
+	Timeout    time.Duration `json:"-"`        // The vault client timeout
+	RateLimit  float64       `json:"-"`        // The vault client rate limit
+	BurstLimit int           `json:"-"`        // The vault client rate burst
+
 }
 
 // vaultService represents a connection to a vault KMS.
@@ -118,9 +122,16 @@ func NewVault(config VaultConfig) (KMS, error) {
 	if err != nil {
 		return nil, err
 	}
+	if config.Timeout > 0 {
+		client.SetClientTimeout(config.Timeout)
+	}
+	if config.RateLimit > 0 {
+		client.SetLimiter(config.RateLimit, config.BurstLimit)
+	}
 	if config.Namespace != "" {
 		client.SetNamespace(config.Namespace)
 	}
+
 	v := &vaultService{client: client, config: &config}
 	if err := v.authenticate(); err != nil {
 		return nil, err
