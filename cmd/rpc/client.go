@@ -17,6 +17,7 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/gob"
@@ -49,8 +50,7 @@ func (client *Client) Call(serviceMethod string, args, reply interface{}) error 
 		return fmt.Errorf("rpc reply must be a pointer type, but found %v", replyKind)
 	}
 
-	argBuf := bufPool.Get()
-	defer bufPool.Put(argBuf)
+	argBuf := bytes.NewBuffer(make([]byte, 0, 1024))
 
 	if err := gobEncodeBuf(args, argBuf); err != nil {
 		return err
@@ -61,8 +61,7 @@ func (client *Client) Call(serviceMethod string, args, reply interface{}) error 
 		ArgBytes: argBuf.Bytes(),
 	}
 
-	reqBuf := bufPool.Get()
-	defer bufPool.Put(reqBuf)
+	reqBuf := bytes.NewBuffer(make([]byte, 0, 1024))
 	if err := gob.NewEncoder(reqBuf).Encode(callRequest); err != nil {
 		return err
 	}

@@ -19,41 +19,50 @@ set -e
 set -E
 set -o pipefail
 
-export SERVER_ENDPOINT=127.0.0.1:24240
-export ENABLE_HTTPS=0
-export ACCESS_KEY=minio
-export SECRET_KEY=minio123
-export MINIO_ACCESS_KEY=minio
-export MINIO_SECRET_KEY=minio123
-export AWS_ACCESS_KEY_ID=minio
-export AWS_SECRET_ACCESS_KEY=minio123
+function start_minio_server()
+{
+    MINIO_ACCESS_KEY=minio MINIO_SECRET_KEY=minio123 \
+                    minio --quiet --json server data --address 127.0.0.1:24242 > server.log 2>&1 &
+    server_pid=$!
+    sleep 3
 
-trap "cat server.log;cat gateway.log" SIGHUP SIGINT SIGTERM
+    echo "$server_pid"
+}
 
-./minio --quiet --json server data --address 127.0.0.1:24242 > server.log &
-sleep 3
-./minio --quiet --json gateway s3 http://127.0.0.1:24242 --address 127.0.0.1:24240 > gateway.log &
-sleep 3
+function start_minio_gateway_s3()
+{
+    MINIO_ACCESS_KEY=minio MINIO_SECRET_KEY=minio123 \
+                    minio --quiet --json gateway s3 http://127.0.0.1:24242 \
+                    --address 127.0.0.1:24240 > gateway.log 2>&1 &
+    gw_pid=$!
+    sleep 3
 
-mkdir -p /mint
-git clone https://github.com/minio/mint /mint
-cd /mint
+    echo "$gw_pid"
+}
 
-export MINT_ROOT_DIR=${MINT_ROOT_DIR:-/mint}
-export MINT_RUN_CORE_DIR="$MINT_ROOT_DIR/run/core"
-export MINT_RUN_SECURITY_DIR="$MINT_ROOT_DIR/run/security"
-export MINT_MODE="full"
-export WGET="wget --quiet --no-check-certificate"
+function main()
+{
+    sr_pid="$(start_minio_server)"
+    gw_pid="$(start_minio_gateway_s3)"
 
-./create-data-files.sh
-./preinstall.sh
+    SERVER_ENDPOINT=127.0.0.1:24240 ENABLE_HTTPS=0 ACCESS_KEY=minio \
+                   SECRET_KEY=minio123 MINT_MODE="full" /mint/entrypoint.sh aws-sdk-go \
+                   aws-sdk-java aws-sdk-php aws-sdk-ruby awscli healthcheck minio-dotnet \
+                   minio-go minio-java minio-js minio-py
+    rv=$?
 
-# install mint app packages
-for pkg in "build"/*/install.sh; do
-    echo "Running $pkg"
-    $pkg
-done
+    kill "$sr_pid"
+    kill "$gw_pid"
+    sleep 3
 
-./postinstall.sh
+    if [ "$rv" -ne 0 ]; then
+        echo "=========== Gateway ==========="
+        cat "gateway.log"
+        echo "=========== Server ==========="
+        cat "server.log"
+    fi
 
-/mint/entrypoint.sh || cat server.log gateway.log fail
+    rm -f gateway.log server.log
+}
+
+main "$@"

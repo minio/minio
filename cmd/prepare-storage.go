@@ -198,7 +198,14 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints EndpointLi
 
 	// All disks report unformatted we should initialized everyone.
 	if shouldInitXLDisks(sErrs) && firstDisk {
-		return initFormatXL(context.Background(), storageDisks, setCount, drivesPerSet)
+		// Initialize erasure code format on disks
+		format, err := initFormatXL(context.Background(), storageDisks, setCount, drivesPerSet)
+		if err != nil {
+			return nil, err
+		}
+		// Assign globalDeploymentID on first run for the
+		// minio server managing the first disk
+		globalDeploymentID = format.ID
 	}
 
 	// Return error when quorum unformatted disks - indicating we are
@@ -244,14 +251,14 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints EndpointLi
 	}
 
 	if format.ID == "" {
-		if err = formatXLFixDeploymentID(context.Background(), storageDisks, format); err != nil {
+		if err = formatXLFixDeploymentID(context.Background(), endpoints, storageDisks, format); err != nil {
 			return nil, err
 		}
 	}
 
 	globalDeploymentID = format.ID
 
-	if err = formatXLFixLocalDeploymentID(context.Background(), storageDisks, format); err != nil {
+	if err = formatXLFixLocalDeploymentID(context.Background(), endpoints, storageDisks, format); err != nil {
 		return nil, err
 	}
 	return format, nil

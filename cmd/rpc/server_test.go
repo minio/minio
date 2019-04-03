@@ -253,8 +253,7 @@ func TestServerCall(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		buf := bufPool.Get()
-		defer bufPool.Put(buf)
+		buf := bytes.NewBuffer([]byte{})
 
 		err := testCase.server.call(testCase.serviceMethod, testCase.argBytes, buf)
 		expectErr := (err != nil)

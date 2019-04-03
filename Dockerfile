@@ -1,4 +1,4 @@
-FROM golang:1.11.4-alpine3.7
+FROM golang:1.12-alpine3.7
 
 LABEL maintainer="Minio Inc <dev@minio.io>"
 
@@ -12,7 +12,7 @@ RUN  \
      go get -v -d github.com/minio/minio && \
      cd /go/src/github.com/minio/minio && \
      go install -v -ldflags "$(go run buildscripts/gen-ldflags.go)" && \
-     go build -ldflags "-s -w" -o /usr/bin/healthcheck dockerscripts/healthcheck.go 
+     go build -ldflags "-s -w" -o /usr/bin/healthcheck dockerscripts/healthcheck.go
 
 FROM alpine:3.7
 
