@@ -209,6 +209,11 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 		return toJSONError(errAccessDenied)
 	}
 
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
+	}
+
 	reply.UIVersion = browser.UIVersion
 
 	if isRemoteCallRequired(context.Background(), args.BucketName, objectAPI) {
@@ -500,6 +505,11 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		}
 	}
 
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
+	}
+
 	lo, err := listObjects(context.Background(), args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
@@ -564,6 +574,11 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 
 	if args.BucketName == "" || len(args.Objects) == 0 {
 		return toJSONError(errInvalidArgument)
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	reply.UIVersion = browser.UIVersion
@@ -876,6 +891,13 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(bucket, false) {
+		writeWebErrorResponse(w, errInvalidBucketName)
+		return
+	}
+
 	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
@@ -1046,6 +1068,12 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(bucket, false) {
+		writeWebErrorResponse(w, errInvalidBucketName)
+		return
+	}
+
 	getObjectNInfo := objectAPI.GetObjectNInfo
 	if web.CacheAPI() != nil {
 		getObjectNInfo = web.CacheAPI().GetObjectNInfo
@@ -1191,6 +1219,12 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		writeWebErrorResponse(w, errInvalidBucketName)
+		return
 	}
 
 	getObject := objectAPI.GetObject
@@ -1379,6 +1413,11 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return toJSONError(errAccessDenied)
 	}
 
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
+	}
+
 	var policyInfo = &miniogopolicy.BucketAccessPolicy{Version: "2012-10-17"}
 	if isRemoteCallRequired(context.Background(), args.BucketName, objectAPI) {
 		sr, err := globalDNSConfig.Get(args.BucketName)
@@ -1462,6 +1501,11 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 		return toJSONError(errAccessDenied)
 	}
 
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
+	}
+
 	var policyInfo = new(miniogopolicy.BucketAccessPolicy)
 	if isRemoteCallRequired(context.Background(), args.BucketName, objectAPI) {
 		sr, err := globalDNSConfig.Get(args.BucketName)
@@ -1536,6 +1580,11 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	}
 	if !owner {
 		return toJSONError(errAccessDenied)
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	policyType := miniogopolicy.BucketPolicy(args.Policy)
@@ -1683,6 +1732,11 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 		return &json2.Error{
 			Message: "Bucket and Object are mandatory arguments.",
 		}
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	reply.UIVersion = browser.UIVersion

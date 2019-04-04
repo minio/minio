@@ -169,8 +169,7 @@ func listAllBuckets(storageDisks []StorageAPI) (buckets map[string]VolInfo,
 			// StorageAPI can send volume names which are
 			// incompatible with buckets - these are
 			// skipped, like the meta-bucket.
-			if !IsValidBucketName(volInfo.Name) ||
-				isMinioMetaBucketName(volInfo.Name) {
+			if isReservedOrInvalidBucket(volInfo.Name, false) {
 				continue
 			}
 			// Increase counter per bucket name

@@ -103,18 +103,25 @@ func TestGuessIsRPC(t *testing.T) {
 
 // Tests browser request guess function.
 func TestGuessIsBrowser(t *testing.T) {
+	globalIsBrowserEnabled = true
 	if guessIsBrowserReq(nil) {
 		t.Fatal("Unexpected return for nil request")
 	}
 	r := &http.Request{
 		Header: http.Header{},
+		URL:    &url.URL{},
 	}
 	r.Header.Set("User-Agent", "Mozilla")
 	if !guessIsBrowserReq(r) {
-		t.Fatal("Test shouldn't fail for a possible browser request.")
+		t.Fatal("Test shouldn't fail for a possible browser request anonymous user")
+	}
+	r.Header.Set("Authorization", "Bearer token")
+	if !guessIsBrowserReq(r) {
+		t.Fatal("Test shouldn't fail for a possible browser request JWT user")
 	}
 	r = &http.Request{
 		Header: http.Header{},
+		URL:    &url.URL{},
 	}
 	r.Header.Set("User-Agent", "mc")
 	if guessIsBrowserReq(r) {

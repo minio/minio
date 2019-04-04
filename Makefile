@@ -33,20 +33,20 @@ fmt:
 
 lint:
 	@echo "Running $@"
-	@${GOPATH}/bin/golint -set_exit_status github.com/minio/minio/cmd/...
-	@${GOPATH}/bin/golint -set_exit_status github.com/minio/minio/pkg/...
+	@GO111MODULE=on ${GOPATH}/bin/golint -set_exit_status github.com/minio/minio/cmd/...
+	@GO111MODULE=on ${GOPATH}/bin/golint -set_exit_status github.com/minio/minio/pkg/...
 
 staticcheck:
 	@echo "Running $@"
-	@${GOPATH}/bin/staticcheck github.com/minio/minio/cmd/...
-	@${GOPATH}/bin/staticcheck github.com/minio/minio/pkg/...
+	@GO111MODULE=on ${GOPATH}/bin/staticcheck github.com/minio/minio/cmd/...
+	@GO111MODULE=on ${GOPATH}/bin/staticcheck github.com/minio/minio/pkg/...
 
 spelling:
-	@${GOPATH}/bin/misspell -locale US -error `find cmd/`
-	@${GOPATH}/bin/misspell -locale US -error `find pkg/`
-	@${GOPATH}/bin/misspell -locale US -error `find docs/`
-	@${GOPATH}/bin/misspell -locale US -error `find buildscripts/`
-	@${GOPATH}/bin/misspell -locale US -error `find dockerscripts/`
+	@GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find cmd/`
+	@GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find pkg/`
+	@GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find docs/`
+	@GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find buildscripts/`
+	@GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find dockerscripts/`
 
 # Builds minio, runs the verifiers then runs the tests.
 check: test
