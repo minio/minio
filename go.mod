@@ -92,11 +92,11 @@ require (
 	go.uber.org/atomic v1.3.2
 	go.uber.org/multierr v1.1.0 // indirect
 	go.uber.org/zap v1.9.1 // indirect
-	golang.org/x/crypto v0.0.0-20190325154230-a5d413f7728c
-	golang.org/x/net v0.0.0-20190328230028-74de082e2cca
-	golang.org/x/sys v0.0.0-20190329044733-9eb1bfa1ce65
+	golang.org/x/crypto v0.0.0-20190404164418-38d8ce5564a5
+	golang.org/x/net v0.0.0-20190403144856-b630fd6fe46b
+	golang.org/x/sys v0.0.0-20190403152447-81d4e9dc473e
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
-	golang.org/x/tools v0.0.0-20190401201229-1bac838f5b88 // indirect
+	golang.org/x/tools v0.0.0-20190404132500-923d25813098 // indirect
 	google.golang.org/api v0.3.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
 	gopkg.in/olivere/elastic.v5 v5.0.80
