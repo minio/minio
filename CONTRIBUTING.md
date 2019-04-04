@@ -10,15 +10,14 @@ Start by forking the Minio GitHub repository, make changes in a branch and then 
 Fork [Minio upstream](https://github.com/minio/minio/fork) source repository to your own personal repository. Copy the URL of your Minio fork (you will need it for the `git clone` command below).
 
 ```sh
-$ mkdir -p $GOPATH/src/github.com/minio
-$ cd $GOPATH/src/github.com/minio
-$ git clone <paste saved URL for personal forked minio repo>
-$ cd minio
+$ git clone https://github.com/minio/minio
+$ go install -v
+$ ls /go/bin/minio
 ```
 
 ### Set up git remote as ``upstream``
 ```sh
-$ cd $GOPATH/src/github.com/minio/minio
+$ cd minio
 $ git remote add upstream https://github.com/minio/minio
 $ git fetch upstream
 $ git merge upstream/master
