@@ -18,6 +18,14 @@ matrix:
         - ARCH=x86_64
         - CGO_ENABLED=0
         - GO111MODULE=on
+      # Enable build cache
+      # https://restic.net/blog/2018-09-02/travis-build-cache
+      cache:
+       directories:
+         - $HOME/.cache/go-build
+         - $HOME/gopath/pkg/mod
+         - $HOME/go/pkg/mod
+
       go: 1.12.1
       script:
         - make
@@ -37,7 +45,6 @@ matrix:
       go: 1.12.1
       script:
         - go build --ldflags="$(go run buildscripts/gen-ldflags.go)" -o %GOPATH%\bin\minio.exe
-        - for d in $(go list ./... | grep -v browser); do CGO_ENABLED=1 go test -v -race --timeout 20m "$d"; done
         - bash buildscripts/go-coverage.sh
 
 before_script:
