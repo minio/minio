@@ -51,6 +51,10 @@ type DriveInfo HealDriveInfo
 type StorageInfo struct {
 	Used uint64 // Total used spaced per tenant.
 
+	Available uint64 // Total available space.
+
+	Total uint64 // Total disk space.
+
 	// Backend type.
 	Backend struct {
 		// Represents various backend types, currently on FS and Erasure.
