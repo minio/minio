@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016-2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -147,12 +147,19 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	_, owner, authErr := webRequestAuthenticate(r)
+	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
 
-	if !owner {
+	// For authenticated users apply IAM policy.
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     claims.Subject,
+		Action:          iampolicy.CreateBucketAction,
+		BucketName:      args.BucketName,
+		ConditionValues: getConditionValues(r, "", claims.Subject),
+		IsOwner:         owner,
+	}) {
 		return toJSONError(errAccessDenied)
 	}
 
@@ -200,12 +207,19 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	_, owner, authErr := webRequestAuthenticate(r)
+	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
 
-	if !owner {
+	// For authenticated users apply IAM policy.
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     claims.Subject,
+		Action:          iampolicy.DeleteBucketAction,
+		BucketName:      args.BucketName,
+		ConditionValues: getConditionValues(r, "", claims.Subject),
+		IsOwner:         owner,
+	}) {
 		return toJSONError(errAccessDenied)
 	}
 
@@ -1405,11 +1419,18 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return toJSONError(errServerNotInitialized)
 	}
 
-	_, owner, authErr := webRequestAuthenticate(r)
+	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
-	if !owner {
+	// For authenticated users apply IAM policy.
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     claims.Subject,
+		Action:          iampolicy.GetBucketPolicyAction,
+		BucketName:      args.BucketName,
+		ConditionValues: getConditionValues(r, "", claims.Subject),
+		IsOwner:         owner,
+	}) {
 		return toJSONError(errAccessDenied)
 	}
 
@@ -1497,6 +1518,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
+
 	if !owner {
 		return toJSONError(errAccessDenied)
 	}
@@ -1574,11 +1596,19 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		return toJSONError(errServerNotInitialized)
 	}
 
-	_, owner, authErr := webRequestAuthenticate(r)
+	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
-	if !owner {
+
+	// For authenticated users apply IAM policy.
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     claims.Subject,
+		Action:          iampolicy.PutBucketPolicyAction,
+		BucketName:      args.BucketName,
+		ConditionValues: getConditionValues(r, "", claims.Subject),
+		IsOwner:         owner,
+	}) {
 		return toJSONError(errAccessDenied)
 	}
 
