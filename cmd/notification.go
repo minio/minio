@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018, 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018, 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -859,7 +859,7 @@ func (args eventArgs) ToEvent() event.Event {
 
 	respElements := map[string]string{
 		"x-amz-request-id":        args.RespElements["requestId"],
-		"x-minio-origin-endpoint": getOriginEndpoint(), // Minio specific custom elements.
+		"x-minio-origin-endpoint": getOriginEndpoint(), // MinIO specific custom elements.
 	}
 	// Add deployment as part of
 	if globalDeploymentID != "" {

@@ -36,7 +36,7 @@ brew install minio/stable/minio
 ### Binary Download
 | Platform    | Architecture | URL                                                         |
 | ----------  | --------     | ------                                                      |
-| Apple macOS | 64-bit Intel | https://dl.minio.io/server/minio/release/darwin-amd64/minio |
+| Apple macOS | 64-bit Intel | https://dl.min.io/server/minio/release/darwin-amd64/minio |
 ```sh
 chmod 755 minio
 ./minio server /data
@@ -46,18 +46,18 @@ chmod 755 minio
 ### Binary Download
 | Platform   | Architecture | URL                                                        |
 | ---------- | --------     | ------                                                     |
-| GNU/Linux  | 64-bit Intel | https://dl.minio.io/server/minio/release/linux-amd64/minio |
+| GNU/Linux  | 64-bit Intel | https://dl.min.io/server/minio/release/linux-amd64/minio |
 ```sh
-wget https://dl.minio.io/server/minio/release/linux-amd64/minio
+wget https://dl.min.io/server/minio/release/linux-amd64/minio
 chmod +x minio
 ./minio server /data
 ```
 
 | Platform   | Architecture | URL                                                          |
 | ---------- | --------     | ------                                                       |
-| GNU/Linux  | ppc64le      | https://dl.minio.io/server/minio/release/linux-ppc64le/minio |
+| GNU/Linux  | ppc64le      | https://dl.min.io/server/minio/release/linux-ppc64le/minio |
 ```sh
-wget https://dl.minio.io/server/minio/release/linux-ppc64le/minio
+wget https://dl.min.io/server/minio/release/linux-ppc64le/minio
 chmod +x minio
 ./minio server /data
 ```
@@ -66,7 +66,7 @@ chmod +x minio
 ### Binary Download
 | Platform          | Architecture | URL                                                              |
 | ----------        | --------     | ------                                                           |
-| Microsoft Windows | 64-bit       | https://dl.minio.io/server/minio/release/windows-amd64/minio.exe |
+| Microsoft Windows | 64-bit       | https://dl.min.io/server/minio/release/windows-amd64/minio.exe |
 ```sh
 minio.exe server D:\Photos
 ```

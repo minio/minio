@@ -1,7 +1,7 @@
 // +build ignore
 
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ type AssumeRoleWithWebIdentityResponse struct {
 }
 
 // WebIdentityResult - Contains the response to a successful AssumeRoleWithWebIdentity
-// request, including temporary credentials that can be used to make Minio API requests.
+// request, including temporary credentials that can be used to make MinIO API requests.
 type WebIdentityResult struct {
 	AssumedRoleUser             AssumedRoleUser  `xml:",omitempty"`
 	Audience                    string           `xml:",omitempty"`

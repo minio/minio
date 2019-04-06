@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ type SetCredsReq struct {
 }
 
 // SetAdminCredentials - Call Set Credentials API to set new access and
-// secret keys in the specified Minio server
+// secret keys in the specified MinIO server
 func (adm *AdminClient) SetAdminCredentials(access, secret string) error {
 	// Setup request's body
 	body, err := json.Marshal(SetCredsReq{access, secret})

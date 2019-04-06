@@ -1,5 +1,5 @@
 /*
- * Isomorphic Javascript library for Minio Browser JSON-RPC API, (C) 2016 Minio, Inc.
+ * Isomorphic Javascript library for MinIO Browser JSON-RPC API, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.

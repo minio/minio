@@ -37,7 +37,7 @@ brew install minio/stable/minio
 ### 下载二进制文件
 | 操作系统    | CPU架构      | 地址                                                        |
 | ----------  | --------     | ------                                                      |
-| Apple macOS | 64-bit Intel | https://dl.minio.io/server/minio/release/darwin-amd64/minio |
+| Apple macOS | 64-bit Intel | https://dl.min.io/server/minio/release/darwin-amd64/minio |
 ```sh
 chmod 755 minio
 ./minio server /data
@@ -47,7 +47,7 @@ chmod 755 minio
 ### 下载二进制文件
 | 操作系统   | CPU架构      | 地址                                                       |
 | ---------- | --------     | ------                                                     |
-| GNU/Linux  | 64-bit Intel | https://dl.minio.io/server/minio/release/linux-amd64/minio |
+| GNU/Linux  | 64-bit Intel | https://dl.min.io/server/minio/release/linux-amd64/minio |
 ```sh
 chmod +x minio
 ./minio server /data
@@ -57,7 +57,7 @@ chmod +x minio
 ### 下载二进制文件
 | 操作系统        | CPU架构  | 地址                                                             |
 | ----------      | -------- | ------                                                           |
-| 微软Windows系统 | 64位     | https://dl.minio.io/server/minio/release/windows-amd64/minio.exe |
+| 微软Windows系统 | 64位     | https://dl.min.io/server/minio/release/windows-amd64/minio.exe |
 ```sh
 minio.exe server D:\Photos
 ```

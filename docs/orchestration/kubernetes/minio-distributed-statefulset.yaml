@@ -35,7 +35,7 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /data
-        # Liveness probe detects situations where Minio server instance
+        # Liveness probe detects situations where MinIO server instance
         # is not working properly and needs restart. Kubernetes automatically
         # restarts the pods if liveness checks fail.
         livenessProbe:

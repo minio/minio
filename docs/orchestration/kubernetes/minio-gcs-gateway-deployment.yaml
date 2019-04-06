@@ -20,14 +20,14 @@ spec:
           secretName: gcs-credentials
       containers:
       - name: minio
-        # Pulls the default Minio image from Docker Hub
+        # Pulls the default MinIO image from Docker Hub
         image: minio/minio:RELEASE.2019-04-04T18-31-46Z
         args:
         - gateway
         - gcs
         - gcp_project_id
         env:
-        # Minio access key and secret key
+        # MinIO access key and secret key
         - name: MINIO_ACCESS_KEY
           value: "minio"
         - name: MINIO_SECRET_KEY

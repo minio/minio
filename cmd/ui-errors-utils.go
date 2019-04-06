@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ type uiErrFn func(err error) uiErr
 
 // Create a UI error generator, this is needed to simplify
 // the update of the detailed error message in several places
-// in Minio code
+// in MinIO code
 func newUIErrFn(msg, action, help string) uiErrFn {
 	return func(err error) uiErr {
 		u := uiErr{

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -174,17 +174,17 @@ func TestIsMinioMetaBucketName(t *testing.T) {
 		bucket string
 		result bool
 	}{
-		// Minio meta bucket.
+		// MinIO meta bucket.
 		{
 			bucket: minioMetaBucket,
 			result: true,
 		},
-		// Minio meta bucket.
+		// MinIO meta bucket.
 		{
 			bucket: minioMetaMultipartBucket,
 			result: true,
 		},
-		// Minio meta bucket.
+		// MinIO meta bucket.
 		{
 			bucket: minioMetaTmpBucket,
 			result: true,

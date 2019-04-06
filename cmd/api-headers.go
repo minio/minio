@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ func mustGetRequestID(t time.Time) string {
 
 // Write http common headers
 func setCommonHeaders(w http.ResponseWriter) {
-	w.Header().Set("Server", "Minio/"+ReleaseTag)
+	w.Header().Set("Server", "MinIO/"+ReleaseTag)
 	// Set `x-amz-bucket-region` only if region is set on the server
 	// by default minio uses an empty region.
 	if region := globalServerConfig.GetRegion(); region != "" {
