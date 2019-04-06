@@ -41,6 +41,10 @@ const (
 type StorageInfo struct {
 	Used uint64 // Used total used per tenant.
 
+	Total uint64 // Total disk space.
+
+	Available uint64 // Total disk space available.
+
 	// Backend type.
 	Backend struct {
 		// Represents various backend types, currently on FS and Erasure.

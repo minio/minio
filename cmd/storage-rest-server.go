@@ -17,17 +17,14 @@
 package cmd
 
 import (
+	"encoding/gob"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"path"
 	"strconv"
-
-	"net/http"
-
-	"encoding/gob"
-	"encoding/hex"
-
 	"time"
 
 	"github.com/gorilla/mux"
@@ -47,13 +44,19 @@ type storageRESTServer struct {
 func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusForbidden)
 	w.Write([]byte(err.Error()))
+	w.(http.Flusher).Flush()
 }
 
 // Authenticates storage client's requests and validates for skewed time.
 func storageServerRequestValidate(r *http.Request) error {
-	if _, _, err := webRequestAuthenticate(r); err != nil {
+	_, owner, err := webRequestAuthenticate(r)
+	if err != nil {
 		return err
 	}
+	if !owner { // Disable access for non-admin users.
+		return errAuthentication
+	}
+
 	requestTimeStr := r.Header.Get("X-Minio-Time")
 	requestTime, err := time.Parse(time.RFC3339, requestTimeStr)
 	if err != nil {
@@ -93,6 +96,7 @@ func (s *storageRESTServer) GetInstanceID(w http.ResponseWriter, r *http.Request
 	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(s.instanceID)))
 	w.Write([]byte(s.instanceID))
+	w.(http.Flusher).Flush()
 }
 
 // DiskInfoHandler - returns disk info.
@@ -268,6 +272,7 @@ func (s *storageRESTServer) ReadAllHandler(w http.ResponseWriter, r *http.Reques
 	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
 	w.Write(buf)
+	w.(http.Flusher).Flush()
 }
 
 // ReadFileHandler - read section of a file.
@@ -311,6 +316,7 @@ func (s *storageRESTServer) ReadFileHandler(w http.ResponseWriter, r *http.Reque
 	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
 	w.Write(buf)
+	w.(http.Flusher).Flush()
 }
 
 // ReadFileHandler - read section of a file.
@@ -331,6 +337,7 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 		s.writeErrorResponse(w, err)
 		return
 	}
+
 	rc, err := s.storage.ReadFileStream(volume, filePath, int64(offset), int64(length))
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -338,7 +345,9 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 	}
 	defer rc.Close()
 	w.Header().Set("Content-Length", strconv.Itoa(length))
+
 	io.Copy(w, rc)
+	w.(http.Flusher).Flush()
 }
 
 // ListDirHandler - list a directory.

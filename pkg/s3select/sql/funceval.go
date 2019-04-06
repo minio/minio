@@ -549,11 +549,12 @@ func timestampCast(v *Value) (t time.Time, _ error) {
 
 func boolCast(v *Value) (b bool, _ error) {
 	sToB := func(s string) (bool, error) {
-		if s == "true" {
+		switch s {
+		case "true":
 			return true, nil
-		} else if s == "false" {
+		case "false":
 			return false, nil
-		} else {
+		default:
 			return false, errCastFailure("cannot cast to Bool")
 		}
 	}

@@ -51,6 +51,10 @@ type DriveInfo HealDriveInfo
 type StorageInfo struct {
 	Used uint64 // Total used spaced per tenant.
 
+	Available uint64 // Total available space.
+
+	Total uint64 // Total disk space.
+
 	// Backend type.
 	Backend struct {
 		// Represents various backend types, currently on FS and Erasure.
@@ -72,11 +76,12 @@ type StorageInfo struct {
 // ServerProperties holds some of the server's information such as uptime,
 // version, region, ..
 type ServerProperties struct {
-	Uptime   time.Duration `json:"uptime"`
-	Version  string        `json:"version"`
-	CommitID string        `json:"commitID"`
-	Region   string        `json:"region"`
-	SQSARN   []string      `json:"sqsARN"`
+	Uptime       time.Duration `json:"uptime"`
+	Version      string        `json:"version"`
+	CommitID     string        `json:"commitID"`
+	DeploymentID string        `json:"deploymentID"`
+	Region       string        `json:"region"`
+	SQSARN       []string      `json:"sqsARN"`
 }
 
 // ServerConnStats holds network information

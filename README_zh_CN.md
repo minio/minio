@@ -1,6 +1,6 @@
 # Minio Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-Minio 是一个基于Apache License v2.0开源协议的对象存储服务。它兼容亚马逊S3云存储服务接口，非常适合于存储大容量非结构化的数据，例如图片、视频、日志文件、备份数据和容器/虚拟机镜像等，而一个对象文件可以是任意大小，从几kb到最大5T不等。 
+Minio 是一个基于Apache License v2.0开源协议的对象存储服务。它兼容亚马逊S3云存储服务接口，非常适合于存储大容量非结构化的数据，例如图片、视频、日志文件、备份数据和容器/虚拟机镜像等，而一个对象文件可以是任意大小，从几kb到最大5T不等。
 
 Minio是一个非常轻量的服务,可以很简单的和其他应用的结合，类似 NodeJS, Redis 或者 MySQL。
 
@@ -35,9 +35,9 @@ brew install minio/stable/minio
 ```
 
 ### 下载二进制文件
-| 操作系统| CPU架构 | 地址|
-| ----------| -------- | ------|
-|Apple macOS|64-bit Intel|https://dl.minio.io/server/minio/release/darwin-amd64/minio |
+| 操作系统    | CPU架构      | 地址                                                        |
+| ----------  | --------     | ------                                                      |
+| Apple macOS | 64-bit Intel | https://dl.minio.io/server/minio/release/darwin-amd64/minio |
 ```sh
 chmod 755 minio
 ./minio server /data
@@ -45,9 +45,9 @@ chmod 755 minio
 
 ## GNU/Linux
 ### 下载二进制文件
-| 操作系统| CPU架构 | 地址|
-| ----------| -------- | ------|
-|GNU/Linux|64-bit Intel|https://dl.minio.io/server/minio/release/linux-amd64/minio |
+| 操作系统   | CPU架构      | 地址                                                       |
+| ---------- | --------     | ------                                                     |
+| GNU/Linux  | 64-bit Intel | https://dl.minio.io/server/minio/release/linux-amd64/minio |
 ```sh
 chmod +x minio
 ./minio server /data
@@ -55,9 +55,9 @@ chmod +x minio
 
 ## 微软Windows系统
 ### 下载二进制文件
-| 操作系统| CPU架构 | 地址|
-| ----------| -------- | ------|
-|微软Windows系统|64位|https://dl.minio.io/server/minio/release/windows-amd64/minio.exe |
+| 操作系统        | CPU架构  | 地址                                                             |
+| ----------      | -------- | ------                                                           |
+| 微软Windows系统 | 64位     | https://dl.minio.io/server/minio/release/windows-amd64/minio.exe |
 ```sh
 minio.exe server D:\Photos
 ```

@@ -39,7 +39,7 @@ import (
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/handlers"
-	"github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mem"
 	xnet "github.com/minio/minio/pkg/net"
@@ -177,11 +177,12 @@ func (a adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWriter, r *h
 // ServerProperties holds some server information such as, version, region
 // uptime, etc..
 type ServerProperties struct {
-	Uptime   time.Duration `json:"uptime"`
-	Version  string        `json:"version"`
-	CommitID string        `json:"commitID"`
-	Region   string        `json:"region"`
-	SQSARN   []string      `json:"sqsARN"`
+	Uptime       time.Duration `json:"uptime"`
+	Version      string        `json:"version"`
+	CommitID     string        `json:"commitID"`
+	DeploymentID string        `json:"deploymentID"`
+	Region       string        `json:"region"`
+	SQSARN       []string      `json:"sqsARN"`
 }
 
 // ServerConnStats holds transferred bytes from/to the server
@@ -256,11 +257,12 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 			ConnStats:   globalConnStats.toServerConnStats(),
 			HTTPStats:   globalHTTPStats.toServerHTTPStats(),
 			Properties: ServerProperties{
-				Uptime:   UTCNow().Sub(globalBootTime),
-				Version:  Version,
-				CommitID: CommitID,
-				SQSARN:   globalNotificationSys.GetARNList(),
-				Region:   globalServerConfig.GetRegion(),
+				Uptime:       UTCNow().Sub(globalBootTime),
+				Version:      Version,
+				CommitID:     CommitID,
+				DeploymentID: globalDeploymentID,
+				SQSARN:       globalNotificationSys.GetARNList(),
+				Region:       globalServerConfig.GetRegion(),
 			},
 		},
 	})
@@ -319,9 +321,8 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	vars := mux.Vars(r)
-	perfType := vars["perfType"]
-
-	if perfType == "drive" {
+	switch perfType := vars["perfType"]; perfType {
+	case "drive":
 		info := objectAPI.StorageInfo(ctx)
 		if !(info.Backend.Type == BackendFS || info.Backend.Type == BackendErasure) {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
@@ -344,7 +345,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		// Reply with performance information (across nodes in a
 		// distributed setup) as json.
 		writeSuccessResponseJSON(w, jsonBytes)
-	} else if perfType == "cpu" {
+	case "cpu":
 		// Get CPU load details from local server's cpu(s)
 		cpu := localEndpointsCPULoad(globalEndpoints)
 		// Notify all other Minio peers to report cpu load numbers
@@ -361,7 +362,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		// Reply with cpu load information (across nodes in a
 		// distributed setup) as json.
 		writeSuccessResponseJSON(w, jsonBytes)
-	} else if perfType == "mem" {
+	case "mem":
 		// Get mem usage details from local server(s)
 		m := localEndpointsMemUsage(globalEndpoints)
 		// Notify all other Minio peers to report mem usage numbers
@@ -378,7 +379,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		// Reply with mem usage information (across nodes in a
 		// distributed setup) as json.
 		writeSuccessResponseJSON(w, jsonBytes)
-	} else {
+	default:
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 	}
 }
@@ -593,7 +594,7 @@ func extractHealInitParams(r *http.Request) (bucket, objPrefix string,
 			err = ErrHealMissingBucket
 			return
 		}
-	} else if !IsValidBucketName(bucket) {
+	} else if isReservedOrInvalidBucket(bucket, false) {
 		err = ErrInvalidBucketName
 		return
 	}
@@ -1477,14 +1478,6 @@ func (a adminAPIHandlers) UpdateAdminCredentialsHandler(w http.ResponseWriter,
 	if err = saveServerConfig(ctx, objectAPI, globalServerConfig); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
-	}
-
-	// Notify all other Minio peers to update credentials
-	for _, nerr := range globalNotificationSys.LoadCredentials() {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
-		}
 	}
 
 	// Reply to the client before restarting minio server.

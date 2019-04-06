@@ -488,7 +488,7 @@ func formatXLGetDeploymentID(refFormat *formatXLV3, formats []*formatXLV3) (stri
 }
 
 // formatXLFixDeploymentID - Add deployment id if it is not present.
-func formatXLFixDeploymentID(ctx context.Context, storageDisks []StorageAPI, refFormat *formatXLV3) (err error) {
+func formatXLFixDeploymentID(ctx context.Context, endpoints EndpointList, storageDisks []StorageAPI, refFormat *formatXLV3) (err error) {
 	// Acquire lock on format.json
 	mutex := newNSLock(globalIsDistXL)
 	formatLock := mutex.NewNSLock(minioMetaBucket, formatConfigFile)
@@ -502,7 +502,7 @@ func formatXLFixDeploymentID(ctx context.Context, storageDisks []StorageAPI, ref
 	formats, sErrs := loadFormatXLAll(storageDisks)
 	for i, sErr := range sErrs {
 		if _, ok := formatCriticalErrors[sErr]; ok {
-			return fmt.Errorf("Disk %s: %s", globalEndpoints[i], sErr)
+			return fmt.Errorf("Disk %s: %s", endpoints[i], sErr)
 		}
 	}
 
@@ -540,11 +540,11 @@ func formatXLFixDeploymentID(ctx context.Context, storageDisks []StorageAPI, ref
 }
 
 // Update only the valid local disks which have not been updated before.
-func formatXLFixLocalDeploymentID(ctx context.Context, storageDisks []StorageAPI, refFormat *formatXLV3) error {
+func formatXLFixLocalDeploymentID(ctx context.Context, endpoints EndpointList, storageDisks []StorageAPI, refFormat *formatXLV3) error {
 	// If this server was down when the deploymentID was updated
 	// then we make sure that we update the local disks with the deploymentID.
 	for index, storageDisk := range storageDisks {
-		if globalEndpoints[index].IsLocal && storageDisk != nil && storageDisk.IsOnline() {
+		if endpoints[index].IsLocal && storageDisk != nil && storageDisk.IsOnline() {
 			format, err := loadFormatXL(storageDisk)
 			if err != nil {
 				// Disk can be offline etc.

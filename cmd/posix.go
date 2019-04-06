@@ -232,7 +232,6 @@ func getDiskInfo(diskPath string) (di disk.Info, err error) {
 var ignoreDiskFreeOS = []string{
 	globalWindowsOSName,
 	globalNetBSDOSName,
-	globalSolarisOSName,
 }
 
 // check if disk total has minimum required size.
@@ -943,20 +942,6 @@ func (s *posix) openFile(volume, path string, mode int) (f *os.File, err error) 
 	return w, nil
 }
 
-// Just like io.LimitedReader but supports Close() to be compatible with io.ReadCloser that is
-// returned by posix.ReadFileStream()
-type posixLimitedReader struct {
-	io.LimitedReader
-}
-
-func (l *posixLimitedReader) Close() error {
-	c, ok := l.R.(io.Closer)
-	if !ok {
-		return errUnexpected
-	}
-	return c.Close()
-}
-
 // ReadFileStream - Returns the read stream of the file.
 func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
 	var err error
@@ -1030,7 +1015,10 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 	if _, err = file.Seek(offset, io.SeekStart); err != nil {
 		return nil, err
 	}
-	return &posixLimitedReader{io.LimitedReader{R: file, N: length}}, nil
+	return struct {
+		io.Reader
+		io.Closer
+	}{Reader: io.LimitReader(file, length), Closer: file}, nil
 }
 
 // CreateFile - creates the file.
@@ -1195,18 +1183,19 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 	}
 	st, err := os.Stat((filePath))
 	if err != nil {
-		// File is really not found.
-		if os.IsNotExist(err) {
+		switch {
+		case os.IsNotExist(err):
+			// File is really not found.
 			return FileInfo{}, errFileNotFound
-		} else if isSysErrIO(err) {
+		case isSysErrIO(err):
 			return FileInfo{}, errFaultyDisk
-		} else if isSysErrNotDir(err) {
+		case isSysErrNotDir(err):
 			// File path cannot be verified since one of the parents is a file.
 			return FileInfo{}, errFileNotFound
+		default:
+			// Return all errors here.
+			return FileInfo{}, err
 		}
-
-		// Return all errors here.
-		return FileInfo{}, err
 	}
 	// If its a directory its not a regular file.
 	if st.Mode().IsDir() {
@@ -1231,21 +1220,21 @@ func deleteFile(basePath, deletePath string) error {
 
 	// Attempt to remove path.
 	if err := os.Remove((deletePath)); err != nil {
-		// Ignore errors if the directory is not empty. The server relies on
-		// this functionality, and sometimes uses recursion that should not
-		// error on parent directories.
-		if isSysErrNotEmpty(err) {
+		switch {
+		case isSysErrNotEmpty(err):
+			// Ignore errors if the directory is not empty. The server relies on
+			// this functionality, and sometimes uses recursion that should not
+			// error on parent directories.
 			return nil
-		}
-
-		if os.IsNotExist(err) {
+		case os.IsNotExist(err):
 			return errFileNotFound
-		} else if os.IsPermission(err) {
+		case os.IsPermission(err):
 			return errFileAccessDenied
-		} else if isSysErrIO(err) {
+		case isSysErrIO(err):
 			return errFaultyDisk
+		default:
+			return err
 		}
-		return err
 	}
 
 	// Trailing slash is removed when found to ensure
@@ -1369,8 +1358,17 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		if err == nil && !isDirEmpty(dstFilePath) {
 			return errFileAccessDenied
 		}
-		if !os.IsNotExist(err) {
+		if err != nil && !os.IsNotExist(err) {
 			return err
+		}
+		// Empty destination remove it before rename.
+		if isDirEmpty(dstFilePath) {
+			if err = os.Remove(dstFilePath); err != nil {
+				if isSysErrNotEmpty(err) {
+					return errFileAccessDenied
+				}
+				return err
+			}
 		}
 	}
 

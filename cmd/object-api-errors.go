@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"path"
 )
 
 // Converts underlying storage error. Convenience function written to
@@ -43,6 +44,13 @@ func toObjectErr(err error, params ...string) error {
 	case errFileAccessDenied:
 		if len(params) >= 2 {
 			err = PrefixAccessDenied{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
+	case errFileParentIsFile:
+		if len(params) >= 2 {
+			err = ParentIsObject{
 				Bucket: params[0],
 				Object: params[1],
 			}
@@ -180,6 +188,13 @@ type PrefixAccessDenied GenericError
 
 func (e PrefixAccessDenied) Error() string {
 	return "Prefix access is denied: " + e.Bucket + "/" + e.Object
+}
+
+// ParentIsObject object access is denied.
+type ParentIsObject GenericError
+
+func (e ParentIsObject) Error() string {
+	return "Parent is object " + e.Bucket + "/" + path.Dir(e.Object)
 }
 
 // BucketExists bucket exists.
@@ -355,13 +370,6 @@ type NotImplemented struct{}
 
 func (e NotImplemented) Error() string {
 	return "Not Implemented"
-}
-
-// PolicyNesting - policy nesting conflict.
-type PolicyNesting struct{}
-
-func (e PolicyNesting) Error() string {
-	return "New bucket policy conflicts with an existing policy. Please try again with new prefix."
 }
 
 // UnsupportedMetadata - unsupported metadata

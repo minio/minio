@@ -165,7 +165,7 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 
 	for i, onlineDisk := range onlineDisks {
 		if onlineDisk == nil {
-			dataErrs[i] = errDiskNotFound
+			dataErrs[i] = errs[i]
 			continue
 		}
 

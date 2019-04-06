@@ -196,7 +196,9 @@ func guessIsBrowserReq(req *http.Request) bool {
 	if req == nil {
 		return false
 	}
-	return strings.Contains(req.Header.Get("User-Agent"), "Mozilla")
+	aType := getRequestAuthType(req)
+	return strings.Contains(req.Header.Get("User-Agent"), "Mozilla") && globalIsBrowserEnabled &&
+		(aType == authTypeJWT || aType == authTypeAnonymous)
 }
 
 // guessIsHealthCheckReq - returns true if incoming request looks
@@ -232,18 +234,14 @@ func guessIsRPCReq(req *http.Request) bool {
 }
 
 func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	aType := getRequestAuthType(r)
-	// Re-direct only for JWT and anonymous requests from browser.
-	if aType == authTypeJWT || aType == authTypeAnonymous {
-		// Re-direction is handled specifically for browser requests.
-		if guessIsBrowserReq(r) && globalIsBrowserEnabled {
-			// Fetch the redirect location if any.
-			redirectLocation := getRedirectLocation(r.URL.Path)
-			if redirectLocation != "" {
-				// Employ a temporary re-direct.
-				http.Redirect(w, r, redirectLocation, http.StatusTemporaryRedirect)
-				return
-			}
+	// Re-direction is handled specifically for browser requests.
+	if guessIsBrowserReq(r) {
+		// Fetch the redirect location if any.
+		redirectLocation := getRedirectLocation(r.URL.Path)
+		if redirectLocation != "" {
+			// Employ a temporary re-direct.
+			http.Redirect(w, r, redirectLocation, http.StatusTemporaryRedirect)
+			return
 		}
 	}
 	h.handler.ServeHTTP(w, r)
@@ -259,7 +257,7 @@ func setBrowserCacheControlHandler(h http.Handler) http.Handler {
 }
 
 func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet && guessIsBrowserReq(r) && globalIsBrowserEnabled {
+	if r.Method == http.MethodGet && guessIsBrowserReq(r) {
 		// For all browser requests set appropriate Cache-Control policies
 		if hasPrefix(r.URL.Path, minioReservedBucketPath+"/") {
 			if hasSuffix(r.URL.Path, ".js") || r.URL.Path == minioReservedBucketPath+"/favicon.ico" {

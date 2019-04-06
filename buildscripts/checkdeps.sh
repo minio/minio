@@ -21,7 +21,7 @@ _init() {
 
     ## Minimum required versions for build dependencies
     GIT_VERSION="1.0"
-    GO_VERSION="1.10.1"
+    GO_VERSION="1.12"
     OSX_VERSION="10.8"
     KNAME=$(uname -s)
     ARCH=$(uname -m)
@@ -36,7 +36,7 @@ _init() {
 ## In OSX, 'readlink -f' option does not exist, hence
 ## we have our own readlink -f behavior here.
 ## Once OSX has the option, below function is good enough.
-## 
+##
 ## readlink() {
 ##     return /bin/readlink -f "$1"
 ## }

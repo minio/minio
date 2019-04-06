@@ -32,6 +32,7 @@ export SERVER_ENDPOINT="127.0.0.1:9000"
 export ACCESS_KEY="minio"
 export SECRET_KEY="minio123"
 export ENABLE_HTTPS=0
+export GO111MODULE=on
 
 MINIO_CONFIG_DIR="$WORK_DIR/.minio"
 MINIO=( "$PWD/minio" --config-dir "$MINIO_CONFIG_DIR" )
@@ -144,16 +145,6 @@ function start_minio_dist_erasure()
 
     sleep 30
     echo "${minio_pids[@]}"
-}
-
-function start_minio_gateway_s3()
-{
-    MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG \
-                    "${MINIO[@]}" gateway s3 https://play.minio.io:9000 >"$WORK_DIR/minio-gateway-s3.log" 2>&1 &
-    minio_pid=$!
-    sleep 3
-
-    echo "$minio_pid"
 }
 
 function run_test_fs()
@@ -291,25 +282,9 @@ function run_test_dist_erasure()
    return "$rv"
 }
 
-function run_test_gateway_s3()
+function purge()
 {
-    minio_pid="$(start_minio_gateway_s3)"
-
-    export SERVER_ENDPOINT="127.0.0.1:9000"
-    export ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
-    export SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-    (cd "$WORK_DIR" && "$FUNCTIONAL_TESTS")
-    rv=$?
-
-    kill "$minio_pid"
-    sleep 3
-
-    if [ "$rv" -ne 0 ]; then
-        cat "$WORK_DIR/minio-gateway-s3.log"
-    fi
-    rm -f "$WORK_DIR/minio-gateway-s3.log"
-
-    return "$rv"
+    rm -rf "$1"
 }
 
 function __init__()
@@ -319,13 +294,17 @@ function __init__()
     mkdir -p "$MINIO_CONFIG_DIR"
     mkdir -p "$MINT_DATA_DIR"
 
-    if ! go get -u github.com/minio/mc; then
+    MC_BUILD_DIR="mc-$RANDOM"
+    if ! git clone --quiet https://github.com/minio/mc "$MC_BUILD_DIR"; then
         echo "failed to download https://github.com/minio/mc"
+        purge "${MC_BUILD_DIR}"
         exit 1
     fi
-    /bin/cp -a "$(go env GOPATH)"/bin/mc "$WORK_DIR/mc"
 
-    chmod a+x "$WORK_DIR/mc"
+    (cd "${MC_BUILD_DIR}" && go build -o "$WORK_DIR/mc")
+
+    # remove mc source.
+    purge "${MC_BUILD_DIR}"
 
     shred -n 1 -s 1M - 1>"$FILE_1_MB" 2>/dev/null
     shred -n 1 -s 65M - 1>"$FILE_65_MB" 2>/dev/null
@@ -347,56 +326,49 @@ function main()
     echo "Testing in FS setup"
     if ! run_test_fs; then
         echo "FAILED"
-        rm -fr "$WORK_DIR"
+        purge "$WORK_DIR"
         exit 1
     fi
 
     echo "Testing in Erasure setup"
     if ! run_test_erasure; then
         echo "FAILED"
-        rm -fr "$WORK_DIR"
+        purge "$WORK_DIR"
         exit 1
     fi
 
     echo "Testing in Distributed Erasure setup"
     if ! run_test_dist_erasure; then
         echo "FAILED"
-        rm -fr "$WORK_DIR"
+        purge "$WORK_DIR"
         exit 1
     fi
 
     echo "Testing in Erasure setup as sets"
     if ! run_test_erasure_sets; then
         echo "FAILED"
-        rm -fr "$WORK_DIR"
+        purge "$WORK_DIR"
         exit 1
     fi
 
     echo "Testing in Distributed Erasure setup as sets"
     if ! run_test_dist_erasure_sets; then
         echo "FAILED"
-        rm -fr "$WORK_DIR"
+        purge "$WORK_DIR"
         exit 1
     fi
 
     echo "Testing in Distributed Erasure setup as sets with ipv6"
     if ! run_test_dist_erasure_sets_ipv6; then
         echo "FAILED"
-        rm -fr "$WORK_DIR"
+        purge "$WORK_DIR"
         exit 1
     fi
 
-    echo "Testing in Gateway S3 setup"
-    if ! run_test_gateway_s3; then
-        echo "FAILED"
-        rm -fr "$WORK_DIR"
-        exit 1
-    fi
-
-    rm -fr "$WORK_DIR"
+    purge "$WORK_DIR"
 }
 
 ( __init__ "$@" && main "$@" )
 rv=$?
-rm -fr "$WORK_DIR"
+purge "$WORK_DIR"
 exit "$rv"

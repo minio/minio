@@ -25,7 +25,6 @@ import (
 	"net/url"
 	"path"
 	"strconv"
-	"time"
 
 	"encoding/gob"
 	"encoding/hex"
@@ -37,10 +36,6 @@ import (
 	"github.com/minio/minio/cmd/rest"
 	xnet "github.com/minio/minio/pkg/net"
 )
-
-// The timeout of TCP connect and sending/receiving
-// data for all internode storage REST requests.
-const storageRESTTimeout = 5 * time.Minute
 
 func isNetworkError(err error) bool {
 	if err == nil {
@@ -358,6 +353,14 @@ func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPa
 
 // Gets peer storage server's instanceID - to be used with every REST call for validation.
 func (client *storageRESTClient) getInstanceID() (err error) {
+	// getInstanceID() does not use storageRESTClient.call()
+	// function so we need to update lastError field here.
+	defer func() {
+		if err != nil {
+			client.lastError = err
+		}
+	}()
+
 	respBody, err := client.restClient.Call(storageRESTMethodGetInstanceID, nil, nil, -1)
 	if err != nil {
 		return err
@@ -405,7 +408,7 @@ func newStorageRESTClient(endpoint Endpoint) (*storageRESTClient, error) {
 		}
 	}
 
-	restClient, err := rest.NewClient(serverURL, tlsConfig, storageRESTTimeout, newAuthToken)
+	restClient, err := rest.NewClient(serverURL, tlsConfig, rest.DefaultRESTTimeout, newAuthToken)
 	if err != nil {
 		return nil, err
 	}

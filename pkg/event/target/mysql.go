@@ -205,11 +205,12 @@ func (target *MySQLTarget) Close() error {
 func NewMySQLTarget(id string, args MySQLArgs) (*MySQLTarget, error) {
 	if args.DSN == "" {
 		config := mysql.Config{
-			User:   args.User,
-			Passwd: args.Password,
-			Net:    "tcp",
-			Addr:   args.Host.String() + ":" + args.Port,
-			DBName: args.Database,
+			User:                 args.User,
+			Passwd:               args.Password,
+			Net:                  "tcp",
+			Addr:                 args.Host.String() + ":" + args.Port,
+			DBName:               args.Database,
+			AllowNativePasswords: true,
 		}
 
 		args.DSN = config.FormatDSN()

@@ -57,7 +57,6 @@ const (
 	globalMinioDefaultStorageClass = "STANDARD"
 	globalWindowsOSName            = "windows"
 	globalNetBSDOSName             = "netbsd"
-	globalSolarisOSName            = "solaris"
 	globalMinioModeFS              = "mode-server-fs"
 	globalMinioModeXL              = "mode-server-xl"
 	globalMinioModeDistXL          = "mode-server-distributed-xl"
@@ -79,7 +78,7 @@ const (
 	globalMaxSkewTime = 15 * time.Minute // 15 minutes skew allowed.
 
 	// GlobalMultipartExpiry - Expiry duration after which the multipart uploads are deemed stale.
-	GlobalMultipartExpiry = time.Hour * 24 * 14 // 2 weeks.
+	GlobalMultipartExpiry = time.Hour * 24 * 3 // 3 days.
 	// GlobalMultipartCleanupInterval - Cleanup interval when the stale multipart cleanup is initiated.
 	GlobalMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
 

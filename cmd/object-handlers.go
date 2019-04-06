@@ -24,7 +24,6 @@ import (
 	"encoding/xml"
 	"io"
 	goioutil "io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -221,12 +220,6 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	s3Select.Evaluate(w)
 	s3Select.Close()
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
-	if err != nil {
-		host, port = "", ""
-	}
-
 	// Notify object accessed via a GET request.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectAccessedGet,
@@ -235,8 +228,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		ReqParams:    extractReqParams(r),
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
-		Host:         host,
-		Port:         port,
+		Host:         handlers.GetSourceIP(r),
 	})
 }
 
@@ -402,12 +394,6 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
-	if err != nil {
-		host, port = "", ""
-	}
-
 	// Notify object accessed via a GET request.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectAccessedGet,
@@ -416,8 +402,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		ReqParams:    extractReqParams(r),
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
-		Host:         host,
-		Port:         port,
+		Host:         handlers.GetSourceIP(r),
 	})
 }
 
@@ -562,11 +547,6 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		w.WriteHeader(http.StatusOK)
 	}
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
-	if err != nil {
-		host, port = "", ""
-	}
 	// Notify object accessed via a HEAD request.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectAccessedHead,
@@ -575,8 +555,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		ReqParams:    extractReqParams(r),
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
-		Host:         host,
-		Port:         port,
+		Host:         handlers.GetSourceIP(r),
 	})
 }
 
@@ -1032,12 +1011,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
-	if err != nil {
-		host, port = "", ""
-	}
-
 	if objInfo.IsCompressed() {
 		objInfo.Size = actualSize
 	}
@@ -1050,8 +1023,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		ReqParams:    extractReqParams(r),
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
-		Host:         host,
-		Port:         port,
+		Host:         handlers.GetSourceIP(r),
 	})
 }
 
@@ -1303,12 +1275,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	writeSuccessResponseHeadersOnly(w)
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
-	if err != nil {
-		host, port = "", ""
-	}
-
 	// Notify object created event.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectCreatedPut,
@@ -1317,8 +1283,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		ReqParams:    extractReqParams(r),
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
-		Host:         host,
-		Port:         port,
+		Host:         handlers.GetSourceIP(r),
 	})
 }
 
@@ -2345,16 +2310,12 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
 	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
-	if err != nil {
-		host, port = "", ""
-	}
-
 	if objectAPI.IsEncryptionSupported() {
 		if crypto.IsEncrypted(objInfo.UserDefined) {
 			objInfo.Size, _ = objInfo.DecryptedSize()
 		}
 	}
+
 	// Notify object created event.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectCreatedCompleteMultipartUpload,
@@ -2363,8 +2324,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		ReqParams:    extractReqParams(r),
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
-		Host:         host,
-		Port:         port,
+		Host:         handlers.GetSourceIP(r),
 	})
 }
 

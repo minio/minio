@@ -84,9 +84,11 @@ func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length i
 		totalFileSize := bitrotSumsTotalSize + length
 		err := disk.CreateFile(volume, filePath, totalFileSize, r)
 		if err != nil {
-			logger.LogIf(context.Background(), err)
-			r.CloseWithError(err)
+			reqInfo := (&logger.ReqInfo{}).AppendTags("storageDisk", disk.String())
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
 		}
+		r.CloseWithError(err)
 		close(bw.canClose)
 	}()
 	return bw
@@ -125,7 +127,9 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 		streamOffset := (offset/b.shardSize)*int64(b.h.Size()) + offset
 		b.rc, err = b.disk.ReadFileStream(b.volume, b.filePath, streamOffset, b.tillOffset-streamOffset)
 		if err != nil {
-			logger.LogIf(context.Background(), err)
+			reqInfo := (&logger.ReqInfo{}).AppendTags("storageDisk", b.disk.String())
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
 			return 0, err
 		}
 	}
