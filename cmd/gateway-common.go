@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -271,7 +271,7 @@ func ToMinioClientCompleteParts(parts []CompletePart) []minio.CompletePart {
 	return mparts
 }
 
-// ErrorRespToObjectError converts Minio errors to minio object layer errors.
+// ErrorRespToObjectError converts MinIO errors to minio object layer errors.
 func ErrorRespToObjectError(err error, params ...string) error {
 	if err == nil {
 		return nil
@@ -292,7 +292,7 @@ func ErrorRespToObjectError(err error, params ...string) error {
 
 	minioErr, ok := err.(minio.ErrorResponse)
 	if !ok {
-		// We don't interpret non Minio errors. As minio errors will
+		// We don't interpret non MinIO errors. As minio errors will
 		// have StatusCode to help to convert to object errors.
 		return err
 	}

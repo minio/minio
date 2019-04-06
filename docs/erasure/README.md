@@ -1,4 +1,4 @@
-# MinIO Erasure Code Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# MinIO Erasure Code Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
 MinIO protects data against hardware failures and silent data corruption using erasure code and checksums. With the highest level of redundancy, you may lose up to half (N/2) of the total drives and still be able to recover the data.
 
@@ -20,13 +20,13 @@ Erasure code protects data from multiple drives failure, unlike RAID or replicat
 
 Bit Rot, also known as data rot or silent data corruption is a data loss issue faced by disk drives today. Data on the drive may silently get corrupted without signaling an error has occurred, making bit rot more dangerous than a permanent hard drive failure.
 
-MinIO's erasure coded backend uses high speed [HighwayHash](https://blog.minio.io/highwayhash-fast-hashing-at-over-10-gb-s-per-core-in-golang-fee938b5218a) checksums to protect against Bit Rot.
+MinIO's erasure coded backend uses high speed [HighwayHash](https://blog.min.io/highwayhash-fast-hashing-at-over-10-gb-s-per-core-in-golang-fee938b5218a) checksums to protect against Bit Rot.
 
 ## Get Started with MinIO in Erasure Code
 
 ### 1. Prerequisites
 
-Install MinIO - [MinIO Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide)
+Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide)
 
 ### 2. Run MinIO Server with Erasure Code
 

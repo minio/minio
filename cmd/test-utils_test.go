@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -295,7 +295,7 @@ func isSameType(obj1, obj2 interface{}) bool {
 	return reflect.TypeOf(obj1) == reflect.TypeOf(obj2)
 }
 
-// TestServer encapsulates an instantiation of a Minio instance with a temporary backend.
+// TestServer encapsulates an instantiation of a MinIO instance with a temporary backend.
 // Example usage:
 //   s := StartTestServer(t,"XL")
 //   defer s.Stop()
@@ -1738,7 +1738,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	// simple function which returns a message which gives the context of the test
 	// and then followed by the the actual error message.
 	failTestStr := func(testType, failMsg string) string {
-		return fmt.Sprintf("Minio %s: %s fail for \"%s\": \n<Error> %s", instanceType, testType, testName, failMsg)
+		return fmt.Sprintf("MinIO %s: %s fail for \"%s\": \n<Error> %s", instanceType, testType, testName, failMsg)
 	}
 
 	// httptest Recorder to capture all the response by the http handler.
@@ -1888,20 +1888,20 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 		// read the response body.
 		actualContent, err := ioutil.ReadAll(rec.Body)
 		if err != nil {
-			t.Fatalf("Minio %s: Failed parsing response body: <ERROR> %v", instanceType, err)
+			t.Fatalf("MinIO %s: Failed parsing response body: <ERROR> %v", instanceType, err)
 		}
 
 		actualError := &APIErrorResponse{}
 		if err = xml.Unmarshal(actualContent, actualError); err != nil {
-			t.Errorf("Minio %s: error response failed to parse error XML", instanceType)
+			t.Errorf("MinIO %s: error response failed to parse error XML", instanceType)
 		}
 
 		if actualError.BucketName != bucketName {
-			t.Errorf("Minio %s: error response bucket name differs from expected value", instanceType)
+			t.Errorf("MinIO %s: error response bucket name differs from expected value", instanceType)
 		}
 
 		if actualError.Key != objectName {
-			t.Errorf("Minio %s: error response object name differs from expected value", instanceType)
+			t.Errorf("MinIO %s: error response object name differs from expected value", instanceType)
 		}
 	}
 }

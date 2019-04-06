@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -282,7 +282,7 @@ func handleCommonEnvVars() {
 				// Checking if the IP is a DNS entry.
 				addrs, err := net.LookupHost(endpoint)
 				if err != nil {
-					logger.FatalIf(err, "Unable to initialize Minio server with [%s] invalid entry found in MINIO_PUBLIC_IPS", endpoint)
+					logger.FatalIf(err, "Unable to initialize MinIO server with [%s] invalid entry found in MINIO_PUBLIC_IPS", endpoint)
 				}
 				for _, addr := range addrs {
 					domainIPs.Add(addr)

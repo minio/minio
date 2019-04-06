@@ -9,7 +9,7 @@ Chroot allows user based namespace isolation on many standard Linux deployments.
 ## 2. Install MinIO in Chroot
 ```sh
 mkdir -p /mnt/export/${USER}/bin
-wget https://dl.minio.io/server/minio/release/linux-amd64/minio -O /mnt/export/${USER}/bin/minio
+wget https://dl.min.io/server/minio/release/linux-amd64/minio -O /mnt/export/${USER}/bin/minio
 chmod +x /mnt/export/${USER}/bin/minio
 ```
 

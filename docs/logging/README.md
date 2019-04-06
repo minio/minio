@@ -115,7 +115,7 @@ Setting this environment variable automatically enables audit logging to the HTT
     "Server": "MinIO/DEVELOPMENT.2018-11-21T23-15-06Z (linux; amd64)",
     "Vary": "Origin",
     "X-Amz-Request-Id": "156946C6C1E7842C",
-    "X-MinIO-Deployment-Id": "1b3002bf-5005-4d9b-853e-64a05008ebb2",
+    "X-Minio-Deployment-Id": "1b3002bf-5005-4d9b-853e-64a05008ebb2",
     "X-Xss-Protection": "1; mode=block"
   }
 }

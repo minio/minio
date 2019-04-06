@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ func TestPrepareUpdateMessage(t *testing.T) {
 		{2 * 365 * 24 * time.Hour, "my_download_url", "2 years ago"},
 	}
 
-	plainMsg := "You are running an older version of Minio released"
+	plainMsg := "You are running an older version of MinIO released"
 
 	for i, testCase := range testCases {
 		output := prepareUpdateMessage(testCase.dlURL, testCase.older)

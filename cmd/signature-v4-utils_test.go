@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,7 +133,7 @@ func TestExtractSignedHeaders(t *testing.T) {
 	expectedTransferEncoding := "gzip"
 	expectedExpect := "100-continue"
 
-	r, err := http.NewRequest("GET", "http://play.minio.io:9000", nil)
+	r, err := http.NewRequest("GET", "http://play.min.io:9000", nil)
 	if err != nil {
 		t.Fatal("Unable to create http.Request :", err)
 	}
