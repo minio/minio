@@ -34,9 +34,9 @@ brew install minio/stable/minio
 ```
 
 ### Binary Download
-| Platform| Architecture | URL|
-| ----------| -------- | ------|
-|Apple macOS|64-bit Intel|https://dl.minio.io/server/minio/release/darwin-amd64/minio |
+| Platform    | Architecture | URL                                                         |
+| ----------  | --------     | ------                                                      |
+| Apple macOS | 64-bit Intel | https://dl.minio.io/server/minio/release/darwin-amd64/minio |
 ```sh
 chmod 755 minio
 ./minio server /data
@@ -44,18 +44,18 @@ chmod 755 minio
 
 ## GNU/Linux
 ### Binary Download
-| Platform| Architecture | URL|
-| ----------| -------- | ------|
-|GNU/Linux|64-bit Intel|https://dl.minio.io/server/minio/release/linux-amd64/minio |
+| Platform   | Architecture | URL                                                        |
+| ---------- | --------     | ------                                                     |
+| GNU/Linux  | 64-bit Intel | https://dl.minio.io/server/minio/release/linux-amd64/minio |
 ```sh
 wget https://dl.minio.io/server/minio/release/linux-amd64/minio
 chmod +x minio
 ./minio server /data
 ```
 
-| Platform| Architecture | URL|
-| ----------| -------- | ------|
-|GNU/Linux|ppc64le|https://dl.minio.io/server/minio/release/linux-ppc64le/minio |
+| Platform   | Architecture | URL                                                          |
+| ---------- | --------     | ------                                                       |
+| GNU/Linux  | ppc64le      | https://dl.minio.io/server/minio/release/linux-ppc64le/minio |
 ```sh
 wget https://dl.minio.io/server/minio/release/linux-ppc64le/minio
 chmod +x minio
@@ -64,9 +64,9 @@ chmod +x minio
 
 ## Microsoft Windows
 ### Binary Download
-| Platform| Architecture | URL|
-| ----------| -------- | ------|
-|Microsoft Windows|64-bit|https://dl.minio.io/server/minio/release/windows-amd64/minio.exe |
+| Platform          | Architecture | URL                                                              |
+| ----------        | --------     | ------                                                           |
+| Microsoft Windows | 64-bit       | https://dl.minio.io/server/minio/release/windows-amd64/minio.exe |
 ```sh
 minio.exe server D:\Photos
 ```
@@ -83,10 +83,10 @@ service minio start
 ```
 
 ## Install from Source
-Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://docs.minio.io/docs/how-to-install-golang).
+Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://golang.org/doc/install). Minimum version required is [go1.12](https://golang.org/dl/#stable)
 
 ```sh
-go get -u github.com/minio/minio
+GO111MODULE=on go get github.com/minio/minio
 ```
 
 ## Allow port access for Firewalls
@@ -167,7 +167,6 @@ The above statement is also valid for all gateway backends.
 
 ## Contribute to Minio Project
 Please follow Minio [Contributor's Guide](https://github.com/minio/minio/blob/master/CONTRIBUTING.md)
-
 
 ## License
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fminio%2Fminio.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fminio%2Fminio?ref=badge_large)

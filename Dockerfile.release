@@ -1,17 +1,15 @@
-FROM golang:1.11.4-alpine3.7
+FROM golang:1.12-alpine
 
 ENV GOPATH /go
 ENV CGO_ENABLED 0
-
-WORKDIR /go/src/github.com/minio/
+ENV GO111MODULE on
 
 RUN  \
      apk add --no-cache git && \
-     go get -v -d github.com/minio/minio && \
-     cd /go/src/github.com/minio/minio/dockerscripts && \
+     git clone https://github.com/minio/minio && cd minio/dockerscripts && \
      go build -ldflags "-s -w" -o /usr/bin/healthcheck healthcheck.go
 
-FROM alpine:3.7
+FROM alpine:3.9
 
 LABEL maintainer="Minio Inc <dev@minio.io>"
 

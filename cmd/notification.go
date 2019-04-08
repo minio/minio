@@ -169,19 +169,6 @@ func (sys *NotificationSys) LoadUsers() []NotificationPeerErr {
 	return ng.Wait()
 }
 
-// LoadCredentials - calls LoadCredentials RPC call on all peers.
-func (sys *NotificationSys) LoadCredentials() []NotificationPeerErr {
-	ng := WithNPeers(len(sys.peerClients))
-	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
-		client := client
-		ng.Go(context.Background(), client.LoadCredentials, idx, *client.host)
-	}
-	return ng.Wait()
-}
-
 // StartProfiling - start profiling on remote peers, by initiating a remote RPC.
 func (sys *NotificationSys) StartProfiling(profiler string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
@@ -852,7 +839,6 @@ type eventArgs struct {
 	ReqParams    map[string]string
 	RespElements map[string]string
 	Host         string
-	Port         string
 	UserAgent    string
 }
 
@@ -907,7 +893,6 @@ func (args eventArgs) ToEvent() event.Event {
 		},
 		Source: event.Source{
 			Host:      args.Host,
-			Port:      args.Port,
 			UserAgent: args.UserAgent,
 		},
 	}

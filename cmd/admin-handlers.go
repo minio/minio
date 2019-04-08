@@ -39,7 +39,7 @@ import (
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/handlers"
-	"github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mem"
 	xnet "github.com/minio/minio/pkg/net"
@@ -594,7 +594,7 @@ func extractHealInitParams(r *http.Request) (bucket, objPrefix string,
 			err = ErrHealMissingBucket
 			return
 		}
-	} else if !IsValidBucketName(bucket) {
+	} else if isReservedOrInvalidBucket(bucket, false) {
 		err = ErrInvalidBucketName
 		return
 	}
@@ -1478,14 +1478,6 @@ func (a adminAPIHandlers) UpdateAdminCredentialsHandler(w http.ResponseWriter,
 	if err = saveServerConfig(ctx, objectAPI, globalServerConfig); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
-	}
-
-	// Notify all other Minio peers to update credentials
-	for _, nerr := range globalNotificationSys.LoadCredentials() {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
-		}
 	}
 
 	// Reply to the client before restarting minio server.

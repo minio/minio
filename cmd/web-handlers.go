@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -208,6 +207,11 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 
 	if !owner {
 		return toJSONError(errAccessDenied)
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	reply.UIVersion = browser.UIVersion
@@ -501,6 +505,11 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		}
 	}
 
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
+	}
+
 	lo, err := listObjects(context.Background(), args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
@@ -565,6 +574,11 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 
 	if args.BucketName == "" || len(args.Objects) == 0 {
 		return toJSONError(errInvalidArgument)
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	reply.UIVersion = browser.UIVersion
@@ -764,20 +778,11 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return toJSONError(err)
 	}
 
-	if errs := globalNotificationSys.LoadCredentials(); len(errs) != 0 {
-		reply.PeerErrMsgs = make(map[string]string)
-		for _, nerr := range errs {
-			err = fmt.Errorf("Unable to update credentials on server %v: %v", nerr.Host, nerr.Err)
-			logger.LogIf(context.Background(), err)
-			reply.PeerErrMsgs[nerr.Host.String()] = err.Error()
-		}
-	} else {
-		reply.Token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
-		if err != nil {
-			return toJSONError(err)
-		}
-		reply.UIVersion = browser.UIVersion
+	reply.Token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		return toJSONError(err)
 	}
+	reply.UIVersion = browser.UIVersion
 
 	return nil
 }
@@ -886,6 +891,13 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(bucket, false) {
+		writeWebErrorResponse(w, errInvalidBucketName)
+		return
+	}
+
 	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
@@ -992,12 +1004,6 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
-	if err != nil {
-		host, port = "", ""
-	}
-
 	// Notify object created event.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectCreatedPut,
@@ -1006,8 +1012,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		ReqParams:    extractReqParams(r),
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
-		Host:         host,
-		Port:         port,
+		Host:         handlers.GetSourceIP(r),
 	})
 }
 
@@ -1061,6 +1066,12 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 			writeWebErrorResponse(w, errAuthentication)
 			return
 		}
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(bucket, false) {
+		writeWebErrorResponse(w, errInvalidBucketName)
+		return
 	}
 
 	getObjectNInfo := objectAPI.GetObjectNInfo
@@ -1125,12 +1136,6 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
-	if err != nil {
-		host, port = "", ""
-	}
-
 	// Notify object accessed via a GET request.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectAccessedGet,
@@ -1139,8 +1144,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		ReqParams:    extractReqParams(r),
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
-		Host:         host,
-		Port:         port,
+		Host:         handlers.GetSourceIP(r),
 	})
 }
 
@@ -1155,11 +1159,7 @@ type DownloadZipArgs struct {
 
 // Takes a list of objects and creates a zip file that sent as the response body.
 func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(handlers.GetSourceIP(r))
-	if err != nil {
-		host, port = "", ""
-	}
+	host := handlers.GetSourceIP(r)
 
 	ctx := newContext(r, w, "WebDownloadZip")
 	defer logger.AuditLog(w, r, "WebDownloadZip", mustGetClaimsFromToken(r))
@@ -1219,6 +1219,12 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		writeWebErrorResponse(w, errInvalidBucketName)
+		return
 	}
 
 	getObject := objectAPI.GetObject
@@ -1344,7 +1350,6 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				RespElements: extractRespElements(w),
 				UserAgent:    r.UserAgent(),
 				Host:         host,
-				Port:         port,
 			})
 
 			return nil
@@ -1406,6 +1411,11 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 	}
 	if !owner {
 		return toJSONError(errAccessDenied)
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	var policyInfo = &miniogopolicy.BucketAccessPolicy{Version: "2012-10-17"}
@@ -1491,6 +1501,11 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 		return toJSONError(errAccessDenied)
 	}
 
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
+	}
+
 	var policyInfo = new(miniogopolicy.BucketAccessPolicy)
 	if isRemoteCallRequired(context.Background(), args.BucketName, objectAPI) {
 		sr, err := globalDNSConfig.Get(args.BucketName)
@@ -1565,6 +1580,11 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	}
 	if !owner {
 		return toJSONError(errAccessDenied)
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	policyType := miniogopolicy.BucketPolicy(args.Policy)
@@ -1712,6 +1732,11 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 		return &json2.Error{
 			Message: "Bucket and Object are mandatory arguments.",
 		}
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	reply.UIVersion = browser.UIVersion
@@ -1869,8 +1894,6 @@ func toWebAPIError(err error) APIError {
 		return getAPIError(ErrWriteQuorum)
 	case InsufficientReadQuorum:
 		return getAPIError(ErrReadQuorum)
-	case PolicyNesting:
-		return getAPIError(ErrPolicyNesting)
 	case NotImplemented:
 		return APIError{
 			Code:           "NotImplemented",

@@ -487,7 +487,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 
 	// Check if an object is present as one of the parent dir.
 	if fs.parentDirIsObject(ctx, bucket, pathutil.Dir(object)) {
-		return oi, toObjectErr(errFileAccessDenied, bucket, object)
+		return oi, toObjectErr(errFileParentIsFile, bucket, object)
 	}
 
 	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
@@ -522,6 +522,11 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 		logger.GetReqInfo(ctx).AppendTags("uploadIDDir", uploadIDDir)
 		logger.LogIf(ctx, err)
 		return oi, err
+	}
+
+	// ensure that part ETag is canonicalized to strip off extraneous quotes
+	for i := range parts {
+		parts[i].ETag = canonicalizeETag(parts[i].ETag)
 	}
 
 	// Save consolidated actual size.

@@ -130,64 +130,65 @@ Sends a service action command to service - possible actions are restarting and 
 ### ServerInfo() ([]ServerInfo, error)
 Fetches information for all cluster nodes, such as server properties, storage information, network statistics, etc.
 
-| Param | Type | Description |
-|---|---|---|
-|`si.Addr` | _string_ | Address of the server the following information is retrieved from. |
-|`si.ConnStats` | _ServerConnStats_ | Connection statistics from the given server. |
-|`si.HTTPStats` | _ServerHTTPStats_ | HTTP connection statistics from the given server. |
-|`si.Properties` | _ServerProperties_ | Server properties such as region, notification targets. |
-|`si.Data.StorageInfo.Total`  | _int64_  | Total disk space. |
-|`si.Data.StorageInfo.Free`  | _int64_  | Free disk space. |
-|`si.Data.StorageInfo.Backend`| _struct{}_ | Represents backend type embedded structure. |
+| Param                           | Type               | Description                                                        |
+|---------------------------------|--------------------|--------------------------------------------------------------------|
+| `si.Addr`                       | _string_           | Address of the server the following information is retrieved from. |
+| `si.ConnStats`                  | _ServerConnStats_  | Connection statistics from the given server.                       |
+| `si.HTTPStats`                  | _ServerHTTPStats_  | HTTP connection statistics from the given server.                  |
+| `si.Properties`                 | _ServerProperties_ | Server properties such as region, notification targets.            |
+| `si.Data.StorageInfo.Used`      | _int64_            | Used disk space.                                                   |
+| `si.Data.StorageInfo.Total`     | _int64_            | Total disk space.                                                  |
+| `si.Data.StorageInfo.Available` | _int64_            | Available disk space.                                              |
+| `si.Data.StorageInfo.Backend`   | _struct{}_         | Represents backend type embedded structure.                        |
 
-| Param | Type | Description |
-|---|---|---|
-|`ServerProperties.Uptime`| _time.Duration_ | Total duration in seconds since server is running. |
-|`ServerProperties.Version`| _string_ | Current server version. |
-|`ServerProperties.CommitID` | _string_ | Current server commitID. |
-|`ServerProperties.Region` | _string_ | Configured server region. |
-|`ServerProperties.SQSARN` | _[]string_ | List of notification target ARNs. |
+| Param                       | Type            | Description                                        |
+|-----------------------------|-----------------|----------------------------------------------------|
+| `ServerProperties.Uptime`   | _time.Duration_ | Total duration in seconds since server is running. |
+| `ServerProperties.Version`  | _string_        | Current server version.                            |
+| `ServerProperties.CommitID` | _string_        | Current server commitID.                           |
+| `ServerProperties.Region`   | _string_        | Configured server region.                          |
+| `ServerProperties.SQSARN`   | _[]string_      | List of notification target ARNs.                  |
 
-| Param | Type | Description |
-|---|---|---|
-|`ServerConnStats.TotalInputBytes` | _uint64_ | Total bytes received by the server. |
-|`ServerConnStats.TotalOutputBytes` | _uint64_ | Total bytes sent by the server. |
+| Param                              | Type     | Description                         |
+|------------------------------------|----------|-------------------------------------|
+| `ServerConnStats.TotalInputBytes`  | _uint64_ | Total bytes received by the server. |
+| `ServerConnStats.TotalOutputBytes` | _uint64_ | Total bytes sent by the server.     |
 
-| Param | Type | Description |
-|---|---|---|
-|`ServerHTTPStats.TotalHEADStats`| _ServerHTTPMethodStats_ | Total statistics regarding HEAD operations |
-|`ServerHTTPStats.SuccessHEADStats`| _ServerHTTPMethodStats_ | Total statistics regarding successful HEAD operations |
-|`ServerHTTPStats.TotalGETStats`| _ServerHTTPMethodStats_ |  Total statistics regarding GET operations |
-|`ServerHTTPStats.SuccessGETStats`| _ServerHTTPMethodStats_ | Total statistics regarding successful GET operations |
-|`ServerHTTPStats.TotalPUTStats`| _ServerHTTPMethodStats_ | Total statistics regarding PUT operations |
-|`ServerHTTPStats.SuccessPUTStats`| _ServerHTTPMethodStats_ | Total statistics regarding successful PUT operations |
-|`ServerHTTPStats.TotalPOSTStats`| _ServerHTTPMethodStats_ | Total statistics regarding POST operations |
-|`ServerHTTPStats.SuccessPOSTStats`| _ServerHTTPMethodStats_ | Total statistics regarding successful POST operations |
-|`ServerHTTPStats.TotalDELETEStats`| _ServerHTTPMethodStats_ | Total statistics regarding DELETE operations |
-|`ServerHTTPStats.SuccessDELETEStats`| _ServerHTTPMethodStats_ | Total statistics regarding successful DELETE operations |
+| Param                                | Type                    | Description                                             |
+|--------------------------------------|-------------------------|---------------------------------------------------------|
+| `ServerHTTPStats.TotalHEADStats`     | _ServerHTTPMethodStats_ | Total statistics regarding HEAD operations              |
+| `ServerHTTPStats.SuccessHEADStats`   | _ServerHTTPMethodStats_ | Total statistics regarding successful HEAD operations   |
+| `ServerHTTPStats.TotalGETStats`      | _ServerHTTPMethodStats_ | Total statistics regarding GET operations               |
+| `ServerHTTPStats.SuccessGETStats`    | _ServerHTTPMethodStats_ | Total statistics regarding successful GET operations    |
+| `ServerHTTPStats.TotalPUTStats`      | _ServerHTTPMethodStats_ | Total statistics regarding PUT operations               |
+| `ServerHTTPStats.SuccessPUTStats`    | _ServerHTTPMethodStats_ | Total statistics regarding successful PUT operations    |
+| `ServerHTTPStats.TotalPOSTStats`     | _ServerHTTPMethodStats_ | Total statistics regarding POST operations              |
+| `ServerHTTPStats.SuccessPOSTStats`   | _ServerHTTPMethodStats_ | Total statistics regarding successful POST operations   |
+| `ServerHTTPStats.TotalDELETEStats`   | _ServerHTTPMethodStats_ | Total statistics regarding DELETE operations            |
+| `ServerHTTPStats.SuccessDELETEStats` | _ServerHTTPMethodStats_ | Total statistics regarding successful DELETE operations |
 
 
-| Param | Type | Description |
-|---|---|---|
-|`ServerHTTPMethodStats.Count` | _uint64_ | Total number of operations. |
-|`ServerHTTPMethodStats.AvgDuration` | _string_ | Average duration of Count number of operations. |
+| Param                               | Type     | Description                                     |
+|-------------------------------------|----------|-------------------------------------------------|
+| `ServerHTTPMethodStats.Count`       | _uint64_ | Total number of operations.                     |
+| `ServerHTTPMethodStats.AvgDuration` | _string_ | Average duration of Count number of operations. |
 
-| Param | Type | Description |
-|---|---|---|
-|`Backend.Type` | _BackendType_ | Type of backend used by the server currently only FS or Erasure. |
-|`Backend.OnlineDisks`| _int_ | Total number of disks online (only applies to Erasure backend), is empty for FS. |
-|`Backend.OfflineDisks` | _int_ | Total number of disks offline (only applies to Erasure backend), is empty for FS. |
-|`Backend.StandardSCData` | _int_ | Data disks set for standard storage class, is empty for FS. |
-|`Backend.StandardSCParity` | _int_ | Parity disks set for standard storage class, is empty for FS. |
-|`Backend.RRSCData` | _int_ | Data disks set for reduced redundancy storage class, is empty for FS. |
-|`Backend.RRSCParity` | _int_ | Parity disks set for reduced redundancy storage class, is empty for FS. |
-|`Backend.Sets` | _[][]DriveInfo_ | Represents topology of drives in erasure coded sets. |
+| Param                      | Type            | Description                                                                       |
+|----------------------------|-----------------|-----------------------------------------------------------------------------------|
+| `Backend.Type`             | _BackendType_   | Type of backend used by the server currently only FS or Erasure.                  |
+| `Backend.OnlineDisks`      | _int_           | Total number of disks online (only applies to Erasure backend), is empty for FS.  |
+| `Backend.OfflineDisks`     | _int_           | Total number of disks offline (only applies to Erasure backend), is empty for FS. |
+| `Backend.StandardSCData`   | _int_           | Data disks set for standard storage class, is empty for FS.                       |
+| `Backend.StandardSCParity` | _int_           | Parity disks set for standard storage class, is empty for FS.                     |
+| `Backend.RRSCData`         | _int_           | Data disks set for reduced redundancy storage class, is empty for FS.             |
+| `Backend.RRSCParity`       | _int_           | Parity disks set for reduced redundancy storage class, is empty for FS.           |
+| `Backend.Sets`             | _[][]DriveInfo_ | Represents topology of drives in erasure coded sets.                              |
 
-| Param | Type | Description |
-|---|---|---|
-|`DriveInfo.UUID`| _string_ | Unique ID for each disk provisioned by server format. |
-|`DriveInfo.Endpoint` | _string_ | Endpoint location of the remote/local disk. |
-|`DriveInfo.State` | _string_ | Current state of the disk at endpoint. |
+| Param                | Type     | Description                                           |
+|----------------------|----------|-------------------------------------------------------|
+| `DriveInfo.UUID`     | _string_ | Unique ID for each disk provisioned by server format. |
+| `DriveInfo.Endpoint` | _string_ | Endpoint location of the remote/local disk.           |
+| `DriveInfo.State`    | _string_ | Current state of the disk at endpoint.                |
 
  __Example__
 
@@ -468,7 +469,7 @@ Lists all users on Minio server.
 __Example__
 
 ``` go
-	users, err := madmClnt.ListUsers(); 
+	users, err := madmClnt.ListUsers();
     if err != nil {
 		log.Fatalln(err)
 	}
