@@ -76,7 +76,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 
 	// Set Etag if available.
 	if objInfo.ETag != "" {
-		w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
+		w.Header()["ETag"] = []string{"\"" + objInfo.ETag + "\""}
 	}
 
 	if objInfo.ContentType != "" {
@@ -90,6 +90,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	if !objInfo.Expires.IsZero() {
 		w.Header().Set("Expires", objInfo.Expires.UTC().Format(http.TimeFormat))
 	}
+
 	// Set all other user defined metadata.
 	for k, v := range objInfo.UserDefined {
 		if hasPrefix(k, ReservedMetadataPrefix) {

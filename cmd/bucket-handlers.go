@@ -669,7 +669,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 
 	location := getObjectLocation(r, globalDomainNames, bucket, object)
-	w.Header().Set("ETag", `"`+objInfo.ETag+`"`)
+	w.Header()["ETag"] = []string{`"` + objInfo.ETag + `"`}
 	w.Header().Set("Location", location)
 
 	// Notify object created event.
