@@ -48,7 +48,7 @@ const (
 	fsMetaVersion101 = "1.0.1"
 
 	// FS backend meta 1.0.2
-	// Removed the fields "Format" and "Minio" from fsMetaV1 as they were unused. Added "Checksum" field - to be used in future for bit-rot protection.
+	// Removed the fields "Format" and "MinIO" from fsMetaV1 as they were unused. Added "Checksum" field - to be used in future for bit-rot protection.
 	fsMetaVersion = "1.0.2"
 
 	// Add more constants here.

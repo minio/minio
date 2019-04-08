@@ -146,7 +146,7 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
 			prometheus.BuildFQName("minio", "disk", "storage_available_bytes"),
-			"Total disk available space seen by Minio server instance",
+			"Total disk available space seen by MinIO server instance",
 			nil, nil),
 		prometheus.GaugeValue,
 		float64(s.Available),
@@ -156,13 +156,13 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
 			prometheus.BuildFQName("minio", "disk", "storage_total_bytes"),
-			"Total disk space seen by Minio server instance",
+			"Total disk space seen by MinIO server instance",
 			nil, nil),
 		prometheus.GaugeValue,
 		float64(s.Total),
 	)
 
-	// Minio Total Disk/Offline Disk
+	// MinIO Total Disk/Offline Disk
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
 			prometheus.BuildFQName("minio", "total", "disks"),

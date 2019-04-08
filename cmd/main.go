@@ -123,7 +123,7 @@ func newApp(name string) *cli.App {
 
 	app := cli.NewApp()
 	app.Name = name
-	app.Author = "Min.io"
+	app.Author = "MinIO, Inc."
 	app.Version = Version
 	app.Usage = "Cloud Storage Server."
 	app.Description = `MinIO is an Amazon S3 compatible object storage server. Use it to store photos, videos, VMs, containers, log files, or any blob of data as objects.`
