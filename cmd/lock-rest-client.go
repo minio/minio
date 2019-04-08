@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,7 +91,7 @@ func (client *lockRESTClient) String() string {
 	return client.host.String()
 }
 
-// IsOnline - returns whether RPC client failed to connect or not.
+// IsOnline - returns whether REST client failed to connect or not.
 func (client *lockRESTClient) IsOnline() bool {
 	return client.connected
 }
@@ -309,7 +309,7 @@ func newlockRESTClient(peer *xnet.Host) (*lockRESTClient, error) {
 	restClient, err := rest.NewClient(serverURL, tlsConfig, rest.DefaultRESTTimeout, newAuthToken)
 
 	if err != nil {
-		return &lockRESTClient{serverURL: serverURL, host: peer, restClient: restClient, connected: false}, err
+		return nil, err
 	}
 
 	return &lockRESTClient{serverURL: serverURL, host: peer, restClient: restClient, connected: true}, nil
