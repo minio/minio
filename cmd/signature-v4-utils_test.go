@@ -127,7 +127,7 @@ func TestExtractSignedHeaders(t *testing.T) {
 	// If the `expect` key exists in the signed headers then golang server would have stripped out the value, expecting the `expect` header set to `100-continue` in the result.
 	signedHeaders = append(signedHeaders, "expect")
 	// expected header values.
-	expectedHost := "play.minio.io:9000"
+	expectedHost := "play.min.io:9000"
 	expectedContentSha256 := "1234abcd"
 	expectedTime := UTCNow().Format(iso8601Format)
 	expectedTransferEncoding := "gzip"

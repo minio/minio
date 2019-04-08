@@ -44,11 +44,11 @@ func TestParseGatewayEndpoint(t *testing.T) {
 	}{
 		{"http://127.0.0.1:9000", "127.0.0.1:9000", false, false},
 		{"https://127.0.0.1:9000", "127.0.0.1:9000", true, false},
-		{"http://play.min.io:9000", "play.minio.io:9000", false, false},
-		{"https://play.min.io:9000", "play.minio.io:9000", true, false},
+		{"http://play.min.io:9000", "play.min.io:9000", false, false},
+		{"https://play.min.io:9000", "play.min.io:9000", true, false},
 		{"ftp://127.0.0.1:9000", "", false, true},
 		{"ftp://play.min.io:9000", "", false, true},
-		{"play.minio.io:9000", "play.minio.io:9000", true, false},
+		{"play.min.io:9000", "play.min.io:9000", true, false},
 	}
 
 	for i, test := range testCases {

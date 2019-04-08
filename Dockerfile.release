@@ -11,7 +11,7 @@ RUN  \
 
 FROM alpine:3.9
 
-LABEL maintainer="MinIO Inc <dev@minio.io>"
+LABEL maintainer="MinIO Inc <dev@min.io>"
 
 COPY --from=0 /usr/bin/healthcheck /usr/bin/healthcheck
 COPY dockerscripts/docker-entrypoint.sh /usr/bin/

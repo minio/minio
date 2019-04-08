@@ -11,7 +11,7 @@ Vendor:         MinIO, Inc.
 License:        Apache v2.0
 Group:          Applications/File
 Source0:        https://github.com/minio/minio/archive/%{tag}.tar.gz
-URL:            https://www.minio.io/
+URL:            https://www.min.io/
 BuildRequires:  golang >= 1.7
 BuildRoot:      %{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
