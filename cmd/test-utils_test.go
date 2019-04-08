@@ -2413,7 +2413,7 @@ func uploadTestObject(t *testing.T, apiRouter http.Handler, creds auth.Credentia
 			rec = httptest.NewRecorder()
 			apiRouter.ServeHTTP(rec, req)
 			checkRespErr(rec, http.StatusOK)
-			etag := rec.Header().Get("ETag")
+			etag := rec.Header()["ETag"][0]
 			if etag == "" {
 				t.Fatalf("Unexpected empty etag")
 			}

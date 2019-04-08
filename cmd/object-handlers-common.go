@@ -71,7 +71,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 		w.Header().Set("Last-Modified", objInfo.ModTime.UTC().Format(http.TimeFormat))
 
 		if objInfo.ETag != "" {
-			w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
+			w.Header()["ETag"] = []string{"\"" + objInfo.ETag + "\""}
 		}
 	}
 	// x-amz-copy-source-if-modified-since: Return the object only if it has been modified
@@ -166,7 +166,7 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		w.Header().Set("Last-Modified", objInfo.ModTime.UTC().Format(http.TimeFormat))
 
 		if objInfo.ETag != "" {
-			w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
+			w.Header()["ETag"] = []string{"\"" + objInfo.ETag + "\""}
 		}
 	}
 	// If-Modified-Since : Return the object only if it has been modified since the specified time,
