@@ -19,6 +19,7 @@ package azure
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -1167,6 +1168,7 @@ func (a *azureObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 	}
 
 	objBlob := a.client.GetContainerReference(bucket).GetBlobReference(object)
+	hasher := md5.New()
 
 	var allBlocks []storage.Block
 	for i, part := range uploadedParts {
@@ -1186,6 +1188,13 @@ func (a *azureObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 		if partMetadata.ETag != part.ETag {
 			return objInfo, minio.InvalidPart{}
 		}
+		checksum, err := hex.DecodeString(partMetadata.ETag)
+		if err != nil {
+			return objInfo, minio.InvalidPart{}
+		}
+		if _, err := hasher.Write(checksum); err != nil {
+			return objInfo, minio.InvalidPart{}
+		}
 		for _, blockID := range partMetadata.BlockIDs {
 			allBlocks = append(allBlocks, storage.Block{ID: blockID, Status: storage.BlockStatusUncommitted})
 		}
@@ -1202,19 +1211,18 @@ func (a *azureObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 	if err != nil {
 		return objInfo, azureToObjectError(err, bucket, object)
 	}
-	if len(metadata.Metadata) > 0 {
-		objBlob.Metadata, objBlob.Properties, err = s3MetaToAzureProperties(ctx, metadata.Metadata)
-		if err != nil {
-			return objInfo, azureToObjectError(err, bucket, object)
-		}
-		err = objBlob.SetProperties(nil)
-		if err != nil {
-			return objInfo, azureToObjectError(err, bucket, object)
-		}
-		err = objBlob.SetMetadata(nil)
-		if err != nil {
-			return objInfo, azureToObjectError(err, bucket, object)
-		}
+	objBlob.Metadata, objBlob.Properties, err = s3MetaToAzureProperties(ctx, metadata.Metadata)
+	objBlob.Metadata["md5sum"] = fmt.Sprintf("%s-%d", hex.EncodeToString(hasher.Sum(nil)), len(uploadedParts))
+	if err != nil {
+		return objInfo, azureToObjectError(err, bucket, object)
+	}
+	err = objBlob.SetProperties(nil)
+	if err != nil {
+		return objInfo, azureToObjectError(err, bucket, object)
+	}
+	err = objBlob.SetMetadata(nil)
+	if err != nil {
+		return objInfo, azureToObjectError(err, bucket, object)
 	}
 	var partNumberMarker int
 	for {
