@@ -1264,7 +1264,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	} else if hasServerSideEncryptionHeader(r.Header) {
 		etag = getDecryptedETag(r.Header, objInfo, false)
 	}
-	w.Header().Set("ETag", "\""+etag+"\"")
+	w.Header()["ETag"] = []string{"\"" + etag + "\""}
 
 	if objectAPI.IsEncryptionSupported() {
 		if crypto.IsEncrypted(objInfo.UserDefined) {
@@ -1947,7 +1947,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	} else if isEncrypted {
 		etag = tryDecryptETag(objectEncryptionKey, partInfo.ETag, crypto.SSEC.IsRequested(r.Header))
 	}
-	w.Header().Set("ETag", "\""+etag+"\"")
+	w.Header()["ETag"] = []string{"\"" + etag + "\""}
 
 	writeSuccessResponseHeadersOnly(w)
 }
@@ -2310,7 +2310,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	// Set etag.
-	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
+	w.Header()["ETag"] = []string{"\"" + objInfo.ETag + "\""}
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
