@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,7 +115,7 @@ ENVIRONMENT VARIABLES:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
   DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
+     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to MinIO host domain name.
 
   CACHE:
      MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
@@ -198,7 +198,7 @@ func (g *GCS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	// Initialize a GCS client.
 	// Send user-agent in this format for Google to obtain usage insights while participating in the
 	// Google Cloud Technology Partners (https://cloud.google.com/partners/)
-	client, err := storage.NewClient(ctx, option.WithUserAgent(fmt.Sprintf("Minio/%s (GPN:Minio;)", minio.Version)))
+	client, err := storage.NewClient(ctx, option.WithUserAgent(fmt.Sprintf("MinIO/%s (GPN:MinIO;)", minio.Version)))
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +236,7 @@ func gcsMultipartDataName(uploadID string, partNumber int, etag string) string {
 	return fmt.Sprintf("%s/%s/%05d.%s", gcsMinioMultipartPathV1, uploadID, partNumber, etag)
 }
 
-// Convert Minio errors to minio object layer errors.
+// Convert MinIO errors to minio object layer errors.
 func gcsToObjectError(err error, params ...string) error {
 	if err == nil {
 		return nil
@@ -278,7 +278,7 @@ func gcsToObjectError(err error, params ...string) error {
 
 	googleAPIErr, ok := err.(*googleapi.Error)
 	if !ok {
-		// We don't interpret non Minio errors. As minio errors will
+		// We don't interpret non MinIO errors. As minio errors will
 		// have StatusCode to help to convert to object errors.
 		return err
 	}
@@ -341,7 +341,7 @@ func isValidGCSProjectIDFormat(projectID string) bool {
 	return gcsProjectIDRegex.MatchString(projectID)
 }
 
-// gcsGateway - Implements gateway for Minio and GCS compatible object storage servers.
+// gcsGateway - Implements gateway for MinIO and GCS compatible object storage servers.
 type gcsGateway struct {
 	minio.GatewayUnsupported
 	client    *storage.Client

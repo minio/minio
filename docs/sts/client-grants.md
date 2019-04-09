@@ -1,7 +1,7 @@
-## AssumeRoleWithClientGrants [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+## AssumeRoleWithClientGrants [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 Returns a set of temporary security credentials for applications/clients who have been authenticated through client credential grants provided by identity provider. Example providers include WSO2, KeyCloak etc.
 
-Calling AssumeRoleWithClientGrants does not require the use of Minio default credentials. Therefore, client application can be distributed that requests temporary security credentials without including Minio default credentials. Instead, the identity of the caller is validated by using a JWT access token from the identity provider. The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to Minio API operations.
+Calling AssumeRoleWithClientGrants does not require the use of MinIO default credentials. Therefore, client application can be distributed that requests temporary security credentials without including MinIO default credentials. Instead, the identity of the caller is validated by using a JWT access token from the identity provider. The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to MinIO API operations.
 
 By default, the temporary security credentials created by AssumeRoleWithClientGrants last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration to 12 hours.
 

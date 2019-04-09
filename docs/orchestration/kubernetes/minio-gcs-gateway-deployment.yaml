@@ -27,7 +27,7 @@ spec:
         - gcs
         - gcp_project_id
         env:
-        # Minio access key and secret key
+        # MinIO access key and secret key
         - name: MINIO_ACCESS_KEY
           value: "minio"
         - name: MINIO_SECRET_KEY

@@ -1,4 +1,4 @@
-// Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
+// MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ const (
 
 	// EnvVaultCAPath is the environment variable used to specify the
 	// path to a directory of PEM-encoded CA cert files. These CA cert
-	// files are used to authenticate Minio to Vault over mTLS.
+	// files are used to authenticate MinIO to Vault over mTLS.
 	EnvVaultCAPath = "MINIO_SSE_VAULT_CAPATH"
 
 	// EnvVaultNamespace is the environment variable used to specify

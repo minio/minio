@@ -1,16 +1,16 @@
-# Compression Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# Compression Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-Minio server allows streaming compression to ensure efficient disk space usage. Compression happens inflight, i.e objects are compressed before being written to disk(s). Minio uses [`golang/snappy`](https://github.com/golang/snappy) streaming compression due to its stability and performance.
+MinIO server allows streaming compression to ensure efficient disk space usage. Compression happens inflight, i.e objects are compressed before being written to disk(s). MinIO uses [`golang/snappy`](https://github.com/golang/snappy) streaming compression due to its stability and performance.
 
 ## Get Started
 
 ### 1. Prerequisites
 
-Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide).
+Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide).
 
-### 2. Run Minio with compression
+### 2. Run MinIO with compression
 
-Compression can be enabled by updating the `compress` config settings for Minio server config. Config `compress` settings take extensions and mime-types to be compressed.
+Compression can be enabled by updating the `compress` config settings for MinIO server config. Config `compress` settings take extensions and mime-types to be compressed.
 
 ```json
 "compress": {
@@ -28,7 +28,7 @@ To update the configuration, use `mc admin config get` command to get the curren
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
 
-After updating the compression configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the cluster. Restart the Minio server to put the changes into effect.
+After updating the compression configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the cluster. Restart the MinIO server to put the changes into effect.
 
 ```sh
 $ mc admin config set myminio < /tmp/myconfig
@@ -64,9 +64,9 @@ export MINIO_COMPRESS_MIMETYPES="application/pdf"
       | `application/x-compress` |
       | `application/x-spoon` |
 
-- Minio does not support encryption with compression because compression and encryption together enables room for side channel attacks like [`CRIME and BREACH`](https://en.wikipedia.org/wiki/CRIME)
+- MinIO does not support encryption with compression because compression and encryption together enables room for side channel attacks like [`CRIME and BREACH`](https://en.wikipedia.org/wiki/CRIME)
 
-- Minio does not support compression for Gateway (Azure/GCS/NAS) implementations.
+- MinIO does not support compression for Gateway (Azure/GCS/NAS) implementations.
 
 ## To test the setup
 
@@ -74,8 +74,8 @@ To test this setup, practice put calls to the server using `mc` and use `mc ls` 
 
 ## Explore Further
 
-- [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
-- [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/aws-cli-with-minio)
-- [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio)
-- [Use `minio-go` SDK with Minio Server](https://docs.minio.io/docs/golang-client-quickstart-guide)
-- [The Minio documentation website](https://docs.minio.io)
+- [Use `mc` with MinIO Server](https://docs.min.io/docs/minio-client-quickstart-guide)
+- [Use `aws-cli` with MinIO Server](https://docs.min.io/docs/aws-cli-with-minio)
+- [Use `s3cmd` with MinIO Server](https://docs.min.io/docs/s3cmd-with-minio)
+- [Use `minio-go` SDK with MinIO Server](https://docs.min.io/docs/golang-client-quickstart-guide)
+- [The MinIO documentation website](https://docs.min.io)

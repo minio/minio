@@ -1,4 +1,4 @@
-# 分布式Minio快速入门 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# 分布式Minio快速入门 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
 分布式Minio可以让你将多块硬盘（甚至在不同的机器上）组成一个对象存储服务。由于硬盘分布在不同的节点上，分布式Minio避免了单点故障。   
 
@@ -9,7 +9,7 @@
 ### 数据保护
 
 
-分布式Minio采用 [erasure code](https://docs.minio.io/cn/minio-erasure-code-quickstart-guide)来防范多个节点宕机和[位衰减`bit rot`](https://github.com/minio/minio/blob/master/docs/zh_CN/erasure/README.md#what-is-bit-rot-protection)。  
+分布式Minio采用 [erasure code](https://docs.min.io/cn/minio-erasure-code-quickstart-guide)来防范多个节点宕机和[位衰减`bit rot`](https://github.com/minio/minio/blob/master/docs/zh_CN/erasure/README.md#what-is-bit-rot-protection)。  
 
 分布式Minio至少需要4个节点，使用分布式Minio自动引入了纠删码功能。
 
@@ -35,7 +35,7 @@ Minio在分布式和单机模式下，所有读写操作都严格遵守**read-af
 
 ## 1. 前提条件
 
-安装Minio - [Minio快速入门](https://docs.minio.io/cn/minio-quickstart-guide).
+安装Minio - [Minio快速入门](https://docs.min.io/cn/minio-quickstart-guide).
 
 ## 2. 运行分布式Minio
 
@@ -110,14 +110,14 @@ minio.exe server http://192.168.1.11/C:/data1 http://192.168.1.11/C:/data2 ^
 
 ## 3. 验证
 
-验证是否部署成功，使用浏览器访问Minio服务或者使用 [`mc`](https://docs.minio.io/cn/minio-client-quickstart-guide)。多个节点的存储容量和就是分布式Minio的存储容量。
+验证是否部署成功，使用浏览器访问Minio服务或者使用 [`mc`](https://docs.min.io/cn/minio-client-quickstart-guide)。多个节点的存储容量和就是分布式Minio的存储容量。
 
 ## 了解更多
 
-- [Minio纠删码快速入门](https://docs.minio.io/cn/minio-erasure-code-quickstart-guide)
-- [使用 `mc`](https://docs.minio.io/cn/minio-client-quickstart-guide)
-- [使用 `aws-cli`](https://docs.minio.io/cn/aws-cli-with-minio)
-- [使用 `s3cmd](https://docs.minio.io/cn/s3cmd-with-minio)
-- [使用 `minio-go` SDK ](https://docs.minio.io/cn/golang-client-quickstart-guide)
+- [Minio纠删码快速入门](https://docs.min.io/cn/minio-erasure-code-quickstart-guide)
+- [使用 `mc`](https://docs.min.io/cn/minio-client-quickstart-guide)
+- [使用 `aws-cli`](https://docs.min.io/cn/aws-cli-with-minio)
+- [使用 `s3cmd](https://docs.min.io/cn/s3cmd-with-minio)
+- [使用 `minio-go` SDK ](https://docs.min.io/cn/golang-client-quickstart-guide)
 
-- [minio官方文档](https://docs.minio.io)
+- [minio官方文档](https://docs.min.io)

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,14 +93,14 @@ func TestHostMarshalJSON(t *testing.T) {
 		{Host{"play", 0, false}, []byte(`"play"`), false},
 		{Host{"play", 0, true}, []byte(`"play:0"`), false},
 		{Host{"play", 9000, true}, []byte(`"play:9000"`), false},
-		{Host{"play.minio.io", 0, false}, []byte(`"play.minio.io"`), false},
-		{Host{"play.minio.io", 9000, true}, []byte(`"play.minio.io:9000"`), false},
+		{Host{"play.min.io", 0, false}, []byte(`"play.min.io"`), false},
+		{Host{"play.min.io", 9000, true}, []byte(`"play.min.io:9000"`), false},
 		{Host{"147.75.201.93", 0, false}, []byte(`"147.75.201.93"`), false},
 		{Host{"147.75.201.93", 9000, true}, []byte(`"147.75.201.93:9000"`), false},
 		{Host{"play12", 0, false}, []byte(`"play12"`), false},
 		{Host{"12play", 0, false}, []byte(`"12play"`), false},
 		{Host{"play-minio-io", 0, false}, []byte(`"play-minio-io"`), false},
-		{Host{"play--minio.io", 0, false}, []byte(`"play--minio.io"`), false},
+		{Host{"play--min.io", 0, false}, []byte(`"play--min.io"`), false},
 	}
 
 	for i, testCase := range testCases {
@@ -129,14 +129,14 @@ func TestHostUnmarshalJSON(t *testing.T) {
 		{[]byte(`"play"`), &Host{"play", 0, false}, false},
 		{[]byte(`"play:0"`), &Host{"play", 0, true}, false},
 		{[]byte(`"play:9000"`), &Host{"play", 9000, true}, false},
-		{[]byte(`"play.minio.io"`), &Host{"play.minio.io", 0, false}, false},
-		{[]byte(`"play.minio.io:9000"`), &Host{"play.minio.io", 9000, true}, false},
+		{[]byte(`"play.min.io"`), &Host{"play.min.io", 0, false}, false},
+		{[]byte(`"play.min.io:9000"`), &Host{"play.min.io", 9000, true}, false},
 		{[]byte(`"147.75.201.93"`), &Host{"147.75.201.93", 0, false}, false},
 		{[]byte(`"147.75.201.93:9000"`), &Host{"147.75.201.93", 9000, true}, false},
 		{[]byte(`"play12"`), &Host{"play12", 0, false}, false},
 		{[]byte(`"12play"`), &Host{"12play", 0, false}, false},
 		{[]byte(`"play-minio-io"`), &Host{"play-minio-io", 0, false}, false},
-		{[]byte(`"play--minio.io"`), &Host{"play--minio.io", 0, false}, false},
+		{[]byte(`"play--min.io"`), &Host{"play--min.io", 0, false}, false},
 		{[]byte(`":9000"`), nil, true},
 		{[]byte(`"play:"`), nil, true},
 		{[]byte(`"play::"`), nil, true},
@@ -173,14 +173,14 @@ func TestParseHost(t *testing.T) {
 		{"play", &Host{"play", 0, false}, false},
 		{"play:0", &Host{"play", 0, true}, false},
 		{"play:9000", &Host{"play", 9000, true}, false},
-		{"play.minio.io", &Host{"play.minio.io", 0, false}, false},
-		{"play.minio.io:9000", &Host{"play.minio.io", 9000, true}, false},
+		{"play.min.io", &Host{"play.min.io", 0, false}, false},
+		{"play.min.io:9000", &Host{"play.min.io", 9000, true}, false},
 		{"147.75.201.93", &Host{"147.75.201.93", 0, false}, false},
 		{"147.75.201.93:9000", &Host{"147.75.201.93", 9000, true}, false},
 		{"play12", &Host{"play12", 0, false}, false},
 		{"12play", &Host{"12play", 0, false}, false},
 		{"play-minio-io", &Host{"play-minio-io", 0, false}, false},
-		{"play--minio.io", &Host{"play--minio.io", 0, false}, false},
+		{"play--min.io", &Host{"play--min.io", 0, false}, false},
 		{":9000", nil, true},
 		{"play:", nil, true},
 		{"play::", nil, true},

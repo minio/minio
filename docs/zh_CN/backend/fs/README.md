@@ -14,7 +14,7 @@ type ObjectPartInfo struct {
 type fsMetaV1 struct {
 	Version string `json:"version"`
 	Format  string `json:"format"`
-	Minio   struct {
+	MinIO   struct {
 		Release string `json:"release"`
 	} `json:"minio"`
 	// Metadata map for current object `fs.json`.

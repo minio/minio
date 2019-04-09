@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,7 +70,7 @@ const (
 	ListBucketMultipartUploadsAction = "s3:ListBucketMultipartUploads"
 
 	// ListenBucketNotificationAction - ListenBucketNotification Rest API action.
-	// This is Minio extension.
+	// This is MinIO extension.
 	ListenBucketNotificationAction = "s3:ListenBucketNotification"
 
 	// ListMultipartUploadPartsAction - ListParts Rest API action.

@@ -1,8 +1,8 @@
-# Minio NAS Gateway [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# MinIO NAS Gateway [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-Minio Gateway adds Amazon S3 compatibility to NAS storage. You may run multiple minio instances on the same shared NAS volume as a distributed object gateway.
+MinIO Gateway adds Amazon S3 compatibility to NAS storage. You may run multiple minio instances on the same shared NAS volume as a distributed object gateway.
 
-## Run Minio Gateway for NAS Storage
+## Run MinIO Gateway for NAS Storage
 
 ### Using Docker
 
@@ -24,13 +24,13 @@ export MINIO_SECRET_KEY=minio123
 minio gateway nas /shared/nasvol
 ```
 
-## Test using Minio Browser
+## Test using MinIO Browser
 
-Minio Gateway comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure that your server has started successfully.
+MinIO Gateway comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure that your server has started successfully.
 
 ![Screenshot](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/minio-browser-gateway.png)
 
-## Test using Minio Client `mc`
+## Test using MinIO Client `mc`
 
 `mc` provides a modern alternative to UNIX commands such as ls, cat, cp, mirror, diff etc. It supports filesystems and Amazon S3 compatible cloud storage services.
 
@@ -50,6 +50,6 @@ mc ls mynas
 ```
 
 ## Explore Further
-- [`mc` command-line interface](https://docs.minio.io/docs/minio-client-quickstart-guide)
-- [`aws` command-line interface](https://docs.minio.io/docs/aws-cli-with-minio)
-- [`minio-go` Go SDK](https://docs.minio.io/docs/golang-client-quickstart-guide)
+- [`mc` command-line interface](https://docs.min.io/docs/minio-client-quickstart-guide)
+- [`aws` command-line interface](https://docs.min.io/docs/aws-cli-with-minio)
+- [`minio-go` Go SDK](https://docs.min.io/docs/golang-client-quickstart-guide)
