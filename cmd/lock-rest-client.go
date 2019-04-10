@@ -303,6 +303,7 @@ func newlockRESTClient(peer *xnet.Host) (*lockRESTClient, error) {
 		tlsConfig = &tls.Config{
 			ServerName: peer.Name,
 			RootCAs:    globalRootCAs,
+			NextProtos: []string{"http/1.1"}, // Force http1.1
 		}
 	}
 
