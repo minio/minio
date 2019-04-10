@@ -1,12 +1,12 @@
-# Minio GCS Gateway [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# MinIO GCS Gateway [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-Minio GCS Gateway allows you to access Google Cloud Storage (GCS) with Amazon S3-compatible APIs
+MinIO GCS Gateway allows you to access Google Cloud Storage (GCS) with Amazon S3-compatible APIs
 
-- [Run Minio Gateway for GCS](#run-minio-gateway-for-gcs)
-- [Test Using Minio Browser](#test-using-minio-browser)
-- [Test Using Minio Client](#test-using-minio-client)
+- [Run MinIO Gateway for GCS](#run-minio-gateway-for-gcs)
+- [Test Using MinIO Browser](#test-using-minio-browser)
+- [Test Using MinIO Client](#test-using-minio-client)
 
-## <a name="run-minio-gateway-for-gcs"></a>1. Run Minio Gateway for GCS
+## <a name="run-minio-gateway-for-gcs"></a>1. Run MinIO Gateway for GCS
 
 ### 1.1 Create a Service Account key for GCS and get the Credentials File
 1. Navigate to the [API Console Credentials page](https://console.developers.google.com/project/_/apis/credentials).
@@ -19,7 +19,7 @@ Minio GCS Gateway allows you to access Google Cloud Storage (GCS) with Amazon S3
 
 **Note:** For alternate ways to set up *Application Default Credentials*, see [Setting Up Authentication for Server to Server Production Applications](https://developers.google.com/identity/protocols/application-default-credentials).
 
-### 1.1 Run Minio GCS Gateway Using Docker
+### 1.1 Run MinIO GCS Gateway Using Docker
 ```sh
 docker run -p 9000:9000 --name gcs-s3 \
  -v /path/to/credentials.json:/credentials.json \
@@ -29,7 +29,7 @@ docker run -p 9000:9000 --name gcs-s3 \
  minio/minio gateway gcs yourprojectid
 ```
 
-### 1.2 Run Minio GCS Gateway Using the Minio Binary
+### 1.2 Run MinIO GCS Gateway Using the MinIO Binary
 
 ```sh
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
@@ -38,17 +38,17 @@ export MINIO_SECRET_KEY=miniosecretkey
 minio gateway gcs yourprojectid
 ```
 
-## <a name="test-using-minio-browser"></a>2. Test Using Minio Browser
+## <a name="test-using-minio-browser"></a>2. Test Using MinIO Browser
 
-Minio Gateway comes with an embedded web-based object browser that outputs content to http://127.0.0.1:9000. To test that Minio Gateway is running, open a web browser, navigate to http://127.0.0.1:9000, and ensure that the object browser is displayed.
+MinIO Gateway comes with an embedded web-based object browser that outputs content to http://127.0.0.1:9000. To test that MinIO Gateway is running, open a web browser, navigate to http://127.0.0.1:9000, and ensure that the object browser is displayed.
 
 ![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser-gateway.png?raw=true)
 
-## <a name="test-using-minio-client"></a>3. Test Using Minio Client
+## <a name="test-using-minio-client"></a>3. Test Using MinIO Client
 
-Minio Client is a command-line tool called `mc` that provides UNIX-like commands for interacting with the server (e.g. ls, cat, cp, mirror, diff, find, etc.).  `mc` supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
+MinIO Client is a command-line tool called `mc` that provides UNIX-like commands for interacting with the server (e.g. ls, cat, cp, mirror, diff, find, etc.).  `mc` supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
 
-### 3.1 Configure the Gateway using Minio Client
+### 3.1 Configure the Gateway using MinIO Client
 
 Use the following command to configure the gateway:
 
@@ -73,7 +73,7 @@ A response similar to this one should be displayed:
 ```
 
 ### 3.3 Known limitations
-Minio Gateway has the following limitations when used with GCS:
+MinIO Gateway has the following limitations when used with GCS:
 
 * It only supports read-only and write-only bucket policies at the bucket level; all other variations will return `API Not implemented`.
 * The `List Multipart Uploads` and `List Object parts` commands always return empty lists. Therefore, the client must store all of the parts that it has uploaded and use that information when invoking the `_Complete Multipart Upload` command.
@@ -83,6 +83,6 @@ Other limitations:
 * Bucket notification APIs are not supported.
 
 ## <a name="explore-further"></a>4. Explore Further
-- [`mc` command-line interface](https://docs.minio.io/docs/minio-client-quickstart-guide)
-- [`aws` command-line interface](https://docs.minio.io/docs/aws-cli-with-minio)
-- [`minio-go` Go SDK](https://docs.minio.io/docs/golang-client-quickstart-guide)
+- [`mc` command-line interface](https://docs.min.io/docs/minio-client-quickstart-guide)
+- [`aws` command-line interface](https://docs.min.io/docs/aws-cli-with-minio)
+- [`minio-go` Go SDK](https://docs.min.io/docs/golang-client-quickstart-guide)

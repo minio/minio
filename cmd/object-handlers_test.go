@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -173,7 +173,7 @@ func testAPIHeadObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	anonReq, err := newTestRequest("HEAD", getHeadObjectURL("", bucketName, objectName), 0, nil)
 
 	if err != nil {
-		t.Fatalf("Minio %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
+		t.Fatalf("MinIO %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
 			instanceType, bucketName, objectName, err)
 	}
 
@@ -193,7 +193,7 @@ func testAPIHeadObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		0, nil, "", "", nil)
 
 	if err != nil {
-		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+		t.Errorf("MinIO %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
@@ -618,7 +618,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 	anonReq, err := newTestRequest("GET", getGetObjectURL("", bucketName, objectName), 0, nil)
 
 	if err != nil {
-		t.Fatalf("Minio %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
+		t.Fatalf("MinIO %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
 			instanceType, bucketName, objectName, err)
 	}
 
@@ -638,7 +638,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		0, nil, "", "", nil)
 
 	if err != nil {
-		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+		t.Errorf("MinIO %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
@@ -835,7 +835,7 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 		0, nil, "", "", nil)
 
 	if err != nil {
-		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+		t.Errorf("MinIO %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
@@ -1380,7 +1380,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 	anonReq, err := newTestRequest("PUT", getPutObjectURL("", bucketName, objectName),
 		int64(len("hello")), bytes.NewReader([]byte("hello")))
 	if err != nil {
-		t.Fatalf("Minio %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
+		t.Fatalf("MinIO %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
 			instanceType, bucketName, objectName, err)
 	}
 
@@ -1400,7 +1400,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		0, nil, "", "", nil)
 
 	if err != nil {
-		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+		t.Errorf("MinIO %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
@@ -1462,7 +1462,7 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, testObject, opts)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
-		t.Fatalf("Minio %s : <ERROR>  %s", instanceType, err)
+		t.Fatalf("MinIO %s : <ERROR>  %s", instanceType, err)
 	}
 
 	a := 0
@@ -1572,7 +1572,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, testObject, opts)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
-		t.Fatalf("Minio %s : <ERROR>  %s", instanceType, err)
+		t.Fatalf("MinIO %s : <ERROR>  %s", instanceType, err)
 	}
 
 	// test cases with inputs and expected result for Copy Object.
@@ -1846,7 +1846,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 	nilReq, err := newTestSignedRequestV4("PUT", getCopyObjectPartURL("", nilBucket, nilObject, "0", "0"),
 		0, bytes.NewReader([]byte("testNilObjLayer")), "", "", nil)
 	if err != nil {
-		t.Errorf("Minio %s: Failed to create http request for testing the response when object Layer is set to `nil`.", instanceType)
+		t.Errorf("MinIO %s: Failed to create http request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
 
 	// Below is how CopyObjectPartHandler is registered.
@@ -2314,7 +2314,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	// Its necessary to set the "X-Amz-Copy-Source" header for the request to be accepted by the handler.
 	nilReq.Header.Set("X-Amz-Copy-Source", url.QueryEscape("/"+nilBucket+"/"+nilObject))
 	if err != nil {
-		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+		t.Errorf("MinIO %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
 
 	// execute the object layer set to `nil` test.
@@ -2441,7 +2441,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 	anonReq, err := newTestRequest("POST", getNewMultipartURL("", bucketName, objectName), 0, nil)
 
 	if err != nil {
-		t.Fatalf("Minio %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
+		t.Fatalf("MinIO %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
 			instanceType, bucketName, objectName, err)
 	}
 
@@ -2461,7 +2461,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 		0, nil, "", "", nil)
 
 	if err != nil {
-		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+		t.Errorf("MinIO %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
@@ -2505,7 +2505,7 @@ func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketNam
 			apiRouter.ServeHTTP(rec, req)
 			// Assert the response code with the expected status.
 			if rec.Code != http.StatusOK {
-				t.Errorf("Minio %s:  Expected the response status to be `%d`, but instead found `%d`", instanceType, http.StatusOK, rec.Code)
+				t.Errorf("MinIO %s:  Expected the response status to be `%d`, but instead found `%d`", instanceType, http.StatusOK, rec.Code)
 				return
 			}
 			// decode the response body.
@@ -2514,7 +2514,7 @@ func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketNam
 
 			err = decoder.Decode(multipartResponse)
 			if err != nil {
-				t.Errorf("Minio %s: Error decoding the recorded response Body", instanceType)
+				t.Errorf("MinIO %s: Error decoding the recorded response Body", instanceType)
 				return
 			}
 			// push the obtained upload ID from the response into the array.
@@ -2559,7 +2559,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		uploadID, err = obj.NewMultipartUpload(context.Background(), bucketName, objectName, opts)
 		if err != nil {
 			// Failed to create NewMultipartUpload, abort.
-			t.Fatalf("Minio %s : <ERROR>  %s", instanceType, err)
+			t.Fatalf("MinIO %s : <ERROR>  %s", instanceType, err)
 		}
 
 		uploadIDs = append(uploadIDs, uploadID)
@@ -2833,34 +2833,34 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		apiRouter.ServeHTTP(rec, req)
 		// Assert the response code with the expected status.
 		if rec.Code != testCase.expectedRespStatus {
-			t.Errorf("Case %d: Minio %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+			t.Errorf("Case %d: MinIO %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
 
 		// read the response body.
 		actualContent, err = ioutil.ReadAll(rec.Body)
 		if err != nil {
-			t.Fatalf("Test %d : Minio %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
+			t.Fatalf("Test %d : MinIO %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
 
 		if rec.Code == http.StatusOK {
 			// Verify whether the bucket obtained object is same as the one created.
 			if !bytes.Equal(testCase.expectedContent, actualContent) {
-				t.Errorf("Test %d : Minio %s: Object content differs from expected value.", i+1, instanceType)
+				t.Errorf("Test %d : MinIO %s: Object content differs from expected value.", i+1, instanceType)
 			}
 			continue
 		}
 
 		actualError := &APIErrorResponse{}
 		if err = xml.Unmarshal(actualContent, actualError); err != nil {
-			t.Errorf("Minio %s: error response failed to parse error XML", instanceType)
+			t.Errorf("MinIO %s: error response failed to parse error XML", instanceType)
 		}
 
 		if actualError.BucketName != bucketName {
-			t.Errorf("Minio %s: error response bucket name differs from expected value", instanceType)
+			t.Errorf("MinIO %s: error response bucket name differs from expected value", instanceType)
 		}
 
 		if actualError.Key != objectName {
-			t.Errorf("Minio %s: error response object name differs from expected value", instanceType)
+			t.Errorf("MinIO %s: error response object name differs from expected value", instanceType)
 		}
 	}
 
@@ -2879,7 +2879,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	anonReq, err := newTestRequest("POST", getCompleteMultipartUploadURL("", bucketName, objectName, uploadIDs[1]),
 		int64(len(completeBytes)), bytes.NewReader(completeBytes))
 	if err != nil {
-		t.Fatalf("Minio %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
+		t.Fatalf("MinIO %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
 			instanceType, bucketName, objectName, err)
 	}
 
@@ -2901,7 +2901,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		0, nil, "", "", nil)
 
 	if err != nil {
-		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+		t.Errorf("MinIO %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
@@ -2932,7 +2932,7 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 		uploadID, err = obj.NewMultipartUpload(context.Background(), bucketName, objectName, opts)
 		if err != nil {
 			// Failed to create NewMultipartUpload, abort.
-			t.Fatalf("Minio %s : <ERROR>  %s", instanceType, err)
+			t.Fatalf("MinIO %s : <ERROR>  %s", instanceType, err)
 		}
 
 		uploadIDs = append(uploadIDs, uploadID)
@@ -3034,7 +3034,7 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 		apiRouter.ServeHTTP(rec, req)
 		// Assert the response code with the expected status.
 		if rec.Code != testCase.expectedRespStatus {
-			t.Errorf("Case %d: Minio %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+			t.Errorf("Case %d: MinIO %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
 	}
 
@@ -3042,7 +3042,7 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 	anonReq, err := newTestRequest("DELETE", getAbortMultipartUploadURL("", bucketName, objectName, uploadIDs[1]),
 		0, nil)
 	if err != nil {
-		t.Fatalf("Minio %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
+		t.Fatalf("MinIO %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
 			instanceType, bucketName, objectName, err)
 	}
 
@@ -3064,7 +3064,7 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 		0, nil, "", "", nil)
 
 	if err != nil {
-		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+		t.Errorf("MinIO %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
@@ -3176,7 +3176,7 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 		apiRouter.ServeHTTP(rec, req)
 		// Assert the response code with the expected status.
 		if rec.Code != testCase.expectedRespStatus {
-			t.Fatalf("Minio %s: Case %d: Expected the response status to be `%d`, but instead found `%d`", instanceType, i+1, testCase.expectedRespStatus, rec.Code)
+			t.Fatalf("MinIO %s: Case %d: Expected the response status to be `%d`, but instead found `%d`", instanceType, i+1, testCase.expectedRespStatus, rec.Code)
 		}
 
 		// Verify response of the V2 signed HTTP request.
@@ -3195,7 +3195,7 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 		apiRouter.ServeHTTP(recV2, reqV2)
 		// Assert the response code with the expected status.
 		if recV2.Code != testCase.expectedRespStatus {
-			t.Errorf("Case %d: Minio %s: Expected the response status to be `%d`, but instead found `%d`", i+1,
+			t.Errorf("Case %d: MinIO %s: Expected the response status to be `%d`, but instead found `%d`", i+1,
 				instanceType, testCase.expectedRespStatus, recV2.Code)
 		}
 
@@ -3204,7 +3204,7 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 	// Test for Anonymous/unsigned http request.
 	anonReq, err := newTestRequest("DELETE", getDeleteObjectURL("", bucketName, anonObjectName), 0, nil)
 	if err != nil {
-		t.Fatalf("Minio %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
+		t.Fatalf("MinIO %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
 			instanceType, bucketName, anonObjectName, err)
 	}
 
@@ -3224,7 +3224,7 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 		0, nil, "", "", nil)
 
 	if err != nil {
-		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+		t.Errorf("MinIO %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
@@ -3338,7 +3338,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, testObject, opts)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
-		t.Fatalf("Minio %s : <ERROR>  %s", instanceType, err)
+		t.Fatalf("MinIO %s : <ERROR>  %s", instanceType, err)
 	}
 
 	uploadIDCopy := uploadID
@@ -3498,7 +3498,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 
 	for i, test := range testCases {
 		// Using sub-tests introduced in Go 1.7.
-		t.Run(fmt.Sprintf("Minio %s : Test case %d.", instanceType, i+1), func(t *testing.T) {
+		t.Run(fmt.Sprintf("MinIO %s : Test case %d.", instanceType, i+1), func(t *testing.T) {
 
 			var reqV4, reqV2 *http.Request
 			var recV4, recV2 *httptest.ResponseRecorder
@@ -3608,7 +3608,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 	anonReq, err := newTestRequest("PUT", getPutObjectPartURL("", bucketName, testObject, uploadIDCopy, "1"),
 		int64(len("hello")), bytes.NewReader([]byte("hello")))
 	if err != nil {
-		t.Fatalf("Minio %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
+		t.Fatalf("MinIO %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
 			instanceType, bucketName, testObject, err)
 	}
 
@@ -3628,7 +3628,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 		0, bytes.NewReader([]byte("testNilObjLayer")), "", "", nil)
 
 	if err != nil {
-		t.Errorf("Minio %s: Failed to create http request for testing the response when object Layer is set to `nil`.", instanceType)
+		t.Errorf("MinIO %s: Failed to create http request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
@@ -3741,7 +3741,7 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, testObject, opts)
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
-		t.Fatalf("Minio %s : <ERROR>  %s", instanceType, err)
+		t.Fatalf("MinIO %s : <ERROR>  %s", instanceType, err)
 	}
 
 	uploadIDCopy := uploadID
@@ -3749,7 +3749,7 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 	// create an object Part, will be used to test list object parts.
 	_, err = obj.PutObjectPart(context.Background(), bucketName, testObject, uploadID, 1, mustGetPutObjReader(t, bytes.NewReader([]byte("hello")), int64(len("hello")), "5d41402abc4b2a76b9719d911017c592", ""), opts)
 	if err != nil {
-		t.Fatalf("Minio %s : %s.", instanceType, err)
+		t.Fatalf("MinIO %s : %s.", instanceType, err)
 	}
 
 	// expected error types for invalid inputs to ListObjectParts handler.
@@ -3818,7 +3818,7 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 	for i, test := range testCases {
 		var reqV4, reqV2 *http.Request
 		// Using sub-tests introduced in Go 1.7.
-		t.Run(fmt.Sprintf("Minio %s: Test case %d failed.", instanceType, i+1), func(t *testing.T) {
+		t.Run(fmt.Sprintf("MinIO %s: Test case %d failed.", instanceType, i+1), func(t *testing.T) {
 			recV2 := httptest.NewRecorder()
 			recV4 := httptest.NewRecorder()
 
@@ -3911,7 +3911,7 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 	anonReq, err := newTestRequest("GET",
 		getListMultipartURLWithParams("", bucketName, testObject, uploadIDCopy, "", "", ""), 0, nil)
 	if err != nil {
-		t.Fatalf("Minio %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
+		t.Fatalf("MinIO %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
 			instanceType, bucketName, testObject, err)
 	}
 
@@ -3931,7 +3931,7 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 		getListMultipartURLWithParams("", nilBucket, nilObject, "dummy-uploadID", "0", "0", ""),
 		0, nil, "", "", nil)
 	if err != nil {
-		t.Errorf("Minio %s:Failed to create http request for testing the response when object Layer is set to `nil`.", instanceType)
+		t.Errorf("MinIO %s:Failed to create http request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` sets the Object Layer to `nil` and calls the handler.

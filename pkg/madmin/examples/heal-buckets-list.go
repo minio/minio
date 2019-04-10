@@ -3,7 +3,7 @@
 package main
 
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ func main() {
 	// dummy values, please replace them with original values.
 
 	// API requests are secure (HTTPS) if secure=true and insecure (HTTPS) otherwise.
-	// New returns an Minio Admin client object.
+	// New returns an MinIO Admin client object.
 	madmClnt, err := madmin.New("your-minio.example.com:9000", "YOUR-ACCESSKEYID", "YOUR-SECRETACCESSKEY", true)
 	if err != nil {
 		log.Fatalln(err)

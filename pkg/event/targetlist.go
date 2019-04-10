@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,8 @@ import (
 // Target - event target interface
 type Target interface {
 	ID() TargetID
-	Send(Event) error
+	Save(Event) error
+	Send(string) error
 	Close() error
 }
 
@@ -130,7 +131,7 @@ func (list *TargetList) Send(event Event, targetIDs ...TargetID) <-chan TargetID
 				wg.Add(1)
 				go func(id TargetID, target Target) {
 					defer wg.Done()
-					if err := target.Send(event); err != nil {
+					if err := target.Save(event); err != nil {
 						errCh <- TargetIDErr{
 							ID:  id,
 							Err: err,

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,8 +64,12 @@ func (target WebhookTarget) ID() event.TargetID {
 	return target.id
 }
 
-// Send - sends event to Webhook.
-func (target *WebhookTarget) Send(eventData event.Event) error {
+// Save - Sends event directly without persisting.
+func (target *WebhookTarget) Save(eventData event.Event) error {
+	return target.send(eventData)
+}
+
+func (target *WebhookTarget) send(eventData event.Event) error {
 	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
 	if err != nil {
 		return err
@@ -97,6 +101,11 @@ func (target *WebhookTarget) Send(eventData event.Event) error {
 		return fmt.Errorf("sending event failed with %v", resp.Status)
 	}
 
+	return nil
+}
+
+// Send - interface compatible method does no-op.
+func (target *WebhookTarget) Send(eventKey string) error {
 	return nil
 }
 

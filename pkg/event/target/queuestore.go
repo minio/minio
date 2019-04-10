@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/minio/minio/pkg/event"
@@ -61,9 +60,9 @@ func (store *QueueStore) Open() error {
 		return terr
 	}
 
-	eCount := uint16(len(store.listAll()))
+	eCount := uint16(len(store.listN(-1)))
 	if eCount >= store.limit {
-		return ErrLimitExceeded
+		return errLimitExceeded
 	}
 
 	store.eC = eCount
@@ -96,7 +95,7 @@ func (store *QueueStore) Put(e event.Event) error {
 	store.Lock()
 	defer store.Unlock()
 	if store.eC >= store.limit {
-		return ErrLimitExceeded
+		return errLimitExceeded
 	}
 	key, kErr := getNewUUID()
 	if kErr != nil {
@@ -134,45 +133,38 @@ func (store *QueueStore) Get(key string) (event.Event, error) {
 }
 
 // Del - Deletes an entry from the store.
-func (store *QueueStore) Del(key string) {
+func (store *QueueStore) Del(key string) error {
 	store.Lock()
 	defer store.Unlock()
-	store.del(key)
+	return store.del(key)
 }
 
 // lockless call
-func (store *QueueStore) del(key string) {
+func (store *QueueStore) del(key string) error {
 	p := filepath.Join(store.directory, key+eventExt)
 
 	rerr := os.Remove(p)
 	if rerr != nil {
-		return
+		return rerr
 	}
 
 	// Decrement the event count.
 	store.eC--
+
+	return nil
 }
 
-// ListAll - lists all the keys in the directory.
-func (store *QueueStore) ListAll() []string {
+// ListN - lists atmost N files from the directory.
+func (store *QueueStore) ListN(n int) []string {
 	store.RLock()
 	defer store.RUnlock()
-	return store.listAll()
+	return store.listN(n)
 }
 
 // lockless call.
-func (store *QueueStore) listAll() []string {
-	var err error
-	var keys []string
-	var files []os.FileInfo
-
-	files, err = ioutil.ReadDir(store.directory)
-	if err != nil {
-		return nil
-	}
-
-	for _, f := range files {
-		keys = append(keys, strings.TrimSuffix(f.Name(), eventExt))
-	}
-	return keys
+func (store *QueueStore) listN(n int) []string {
+	storeDir, _ := os.Open(store.directory)
+	names, _ := storeDir.Readdirnames(n)
+	_ = storeDir.Close()
+	return names
 }

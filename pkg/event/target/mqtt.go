@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -31,8 +32,8 @@ import (
 )
 
 const (
-	retryInterval     = 3 // In Seconds
 	reconnectInterval = 5 // In Seconds
+	storePrefix       = "minio"
 )
 
 // MQTTArgs - MQTT target arguments.
@@ -82,7 +83,6 @@ type MQTTTarget struct {
 	args   MQTTArgs
 	client mqtt.Client
 	store  Store
-	reconn bool
 }
 
 // ID - returns target ID.
@@ -90,33 +90,22 @@ func (target *MQTTTarget) ID() event.TargetID {
 	return target.id
 }
 
-// Reads persisted events from the store and re-plays.
-func (target *MQTTTarget) retry() {
-	target.reconn = true
-	events := target.store.ListAll()
-	for len(events) != 0 {
-		for _, key := range events {
-			event, eErr := target.store.Get(key)
-			if eErr != nil {
-				continue
-			}
-			for !target.client.IsConnectionOpen() {
-				time.Sleep(retryInterval * time.Second)
-			}
-			// The connection is open.
-			if err := target.send(event); err != nil {
-				continue
-			}
-			// Delete after a successful publish.
-			target.store.Del(key)
-		}
-		events = target.store.ListAll()
-	}
-	// Release the reconn state.
-	target.reconn = false
-}
+// Send - sends event to MQTT.
+func (target *MQTTTarget) Send(eventKey string) error {
 
-func (target *MQTTTarget) send(eventData event.Event) error {
+	if !target.client.IsConnectionOpen() {
+		return errNotConnected
+	}
+
+	eventData, eErr := target.store.Get(eventKey)
+	if eErr != nil {
+		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
+		// Such events will not exist and wouldve been already been sent successfully.
+		if os.IsNotExist(eErr) {
+			return nil
+		}
+		return eErr
+	}
 
 	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
 	if err != nil {
@@ -131,26 +120,17 @@ func (target *MQTTTarget) send(eventData event.Event) error {
 
 	token := target.client.Publish(target.args.Topic, target.args.QoS, false, string(data))
 	token.Wait()
-	return token.Error()
-
-}
-
-// Send - sends event to MQTT when the connection is active.
-func (target *MQTTTarget) Send(eventData event.Event) error {
-	// Persist the events if the connection is not active.
-	if !target.client.IsConnectionOpen() {
-		if err := target.store.Put(eventData); err != nil {
-			return err
-		}
-		// Ignore if retry is triggered already.
-		if !target.reconn {
-			go target.retry()
-		}
-		return nil
+	if token.Error() != nil {
+		return token.Error()
 	}
 
-	// Publishes to the broker as the connection is active.
-	return target.send(eventData)
+	// Delete the event from store.
+	return target.store.Del(eventKey)
+}
+
+// Save - saves the events to the store which will be replayed when the mqtt connection is active.
+func (target *MQTTTarget) Save(eventData event.Event) error {
+	return target.store.Put(eventData)
 }
 
 // Close - does nothing and available for interface compatibility.
@@ -159,7 +139,7 @@ func (target *MQTTTarget) Close() error {
 }
 
 // NewMQTTTarget - creates new MQTT target.
-func NewMQTTTarget(id string, args MQTTArgs) (*MQTTTarget, error) {
+func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}) (*MQTTTarget, error) {
 	options := mqtt.NewClientOptions().
 		SetClientID("").
 		SetCleanSession(true).
@@ -173,7 +153,8 @@ func NewMQTTTarget(id string, args MQTTArgs) (*MQTTTarget, error) {
 	var store Store
 
 	if args.QueueDir != "" {
-		store = NewQueueStore(args.QueueDir, args.QueueLimit)
+		queueDir := filepath.Join(args.QueueDir, storePrefix+"-mqtt-"+id)
+		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
 			return nil, oErr
 		}
@@ -205,14 +186,13 @@ func NewMQTTTarget(id string, args MQTTArgs) (*MQTTTarget, error) {
 		args:   args,
 		client: client,
 		store:  store,
-		reconn: false,
 	}
 
-	// Replay any previously persisted events in the store.
-	if len(target.store.ListAll()) != 0 {
-		go target.retry()
+	// Replays the events from the store.
+	eventKeyCh := replayEvents(target.store, doneCh)
 
-	}
+	// Start replaying events from the store.
+	go sendEvents(target, eventKeyCh, doneCh)
 
 	return target, nil
 }

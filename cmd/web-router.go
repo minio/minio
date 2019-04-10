@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,7 +69,7 @@ func registerWebRouter(router *mux.Router) error {
 	// Initialize a new json2 codec.
 	codec := json2.NewCodec()
 
-	// Minio browser router.
+	// MinIO browser router.
 	webBrowserRouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
 
 	// Initialize json rpc handlers.

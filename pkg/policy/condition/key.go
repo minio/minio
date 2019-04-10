@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,10 +80,10 @@ const (
 	// AWSPrincipalType - user principal type currently supported values are "User" and "Anonymous".
 	AWSPrincipalType Key = "aws:principaltype"
 
-	// AWSUserID - user unique ID, in Minio this value is same as your user Access Key.
+	// AWSUserID - user unique ID, in MinIO this value is same as your user Access Key.
 	AWSUserID Key = "aws:userid"
 
-	// AWSUsername - user friendly name, in Minio this value is same as your user Access Key.
+	// AWSUsername - user friendly name, in MinIO this value is same as your user Access Key.
 	AWSUsername Key = "aws:username"
 )
 

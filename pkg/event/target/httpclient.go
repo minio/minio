@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,8 +89,12 @@ func (target *HTTPClientTarget) start() {
 	}()
 }
 
-// Send - sends event to HTTP client.
-func (target *HTTPClientTarget) Send(eventData event.Event) error {
+// Save - sends event to HTTP client.
+func (target *HTTPClientTarget) Save(eventData event.Event) error {
+	return target.send(eventData)
+}
+
+func (target *HTTPClientTarget) send(eventData event.Event) error {
 	if atomic.LoadUint32(&target.isRunning) != 0 {
 		return errors.New("closed http connection")
 	}
@@ -107,6 +111,11 @@ func (target *HTTPClientTarget) Send(eventData event.Event) error {
 	case <-target.DoneCh:
 		return errors.New("error in sending event")
 	}
+}
+
+// Send - interface compatible method does no-op.
+func (target *HTTPClientTarget) Send(eventKey string) error {
+	return nil
 }
 
 // Close - closes underneath goroutine.

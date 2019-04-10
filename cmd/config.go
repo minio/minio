@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,10 +31,10 @@ import (
 const (
 	minioConfigPrefix = "config"
 
-	// Minio configuration file.
+	// MinIO configuration file.
 	minioConfigFile = "config.json"
 
-	// Minio backup file
+	// MinIO backup file
 	minioConfigBackupFile = minioConfigFile + ".backup"
 )
 

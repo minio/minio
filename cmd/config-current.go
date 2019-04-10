@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -336,7 +336,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewMQTTTarget(k, v)
+		t, err := target.NewMQTTTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("mqtt(%s): %s", k, err.Error())
 		}
@@ -682,7 +682,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 	for id, args := range config.Notify.MQTT {
 		if args.Enable {
 			args.RootCAs = globalRootCAs
-			newTarget, err := target.NewMQTTTarget(id, args)
+			newTarget, err := target.NewMQTTTarget(id, args, GlobalServiceDoneCh)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
