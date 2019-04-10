@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -234,38 +233,39 @@ func (k *KVStorage) getKVNSEntry(nskey string) (entry KVNSEntry, err error) {
 }
 
 func (k *KVStorage) ListDir(volume, dirPath string, count int) ([]string, error) {
-	nskey := pathJoin(volume, dirPath, "xl.json")
+	return k.kv.List(pathJoin(volume, dirPath))
+	// nskey := pathJoin(volume, dirPath, "xl.json")
 
-	entry, err := k.getKVNSEntry(nskey)
-	if err != nil {
-		return nil, err
-	}
+	// entry, err := k.getKVNSEntry(nskey)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	bufp := kvValuePool.Get().(*[]byte)
-	defer kvValuePool.Put(bufp)
+	// bufp := kvValuePool.Get().(*[]byte)
+	// defer kvValuePool.Put(bufp)
 
-	tries := 10
-	for {
-		value, err := k.kv.Get(k.DataKey(entry.IDs[0]), *bufp)
-		if err != nil {
-			return nil, err
-		}
-		xlMeta, err := xlMetaV1UnmarshalJSON(context.Background(), value)
-		if err != nil {
-			fmt.Println("##### xlMetaV1UnmarshalJSON failed on", k.DataKey(entry.IDs[0]), len(value), string(value))
-			tries--
-			if tries == 0 {
-				fmt.Println("##### xlMetaV1UnmarshalJSON failed on (10 retries)", k.DataKey(entry.IDs[0]), len(value), string(value))
-				os.Exit(1)
-			}
-			continue
-		}
-		listEntries := []string{"xl.json"}
-		for _, part := range xlMeta.Parts {
-			listEntries = append(listEntries, part.Name)
-		}
-		return listEntries, err
-	}
+	// tries := 10
+	// for {
+	// 	value, err := k.kv.Get(k.DataKey(entry.IDs[0]), *bufp)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	xlMeta, err := xlMetaV1UnmarshalJSON(context.Background(), value)
+	// 	if err != nil {
+	// 		fmt.Println("##### xlMetaV1UnmarshalJSON failed on", k.DataKey(entry.IDs[0]), len(value), string(value))
+	// 		tries--
+	// 		if tries == 0 {
+	// 			fmt.Println("##### xlMetaV1UnmarshalJSON failed on (10 retries)", k.DataKey(entry.IDs[0]), len(value), string(value))
+	// 			os.Exit(1)
+	// 		}
+	// 		continue
+	// 	}
+	// 	listEntries := []string{"xl.json"}
+	// 	for _, part := range xlMeta.Parts {
+	// 		listEntries = append(listEntries, part.Name)
+	// 	}
+	// 	return listEntries, err
+	// }
 }
 
 func (k *KVStorage) ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {

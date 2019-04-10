@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -43,4 +44,14 @@ func (k *KVEmulator) Delete(keyStr string) error {
 		return errFileNotFound
 	}
 	return nil
+}
+
+func (k *KVEmulator) List(prefix string) ([]string, error) {
+	if !strings.HasPrefix(prefix, kvDataDir) {
+		prefix = pathJoin(kvMetaDir, prefix)
+	}
+	fullPath := pathJoin(k.path, prefix)
+	entries, err := readDir(fullPath)
+	fmt.Println("List", fullPath, entries, err)
+	return entries, err
 }

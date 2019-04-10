@@ -609,3 +609,7 @@ func (k *KV) Delete(keyStr string) error {
 	}
 	return nil
 }
+
+func (k *KV) List(keyStr string) ([]string, error) {
+	return nil, errDiskNotFound
+}

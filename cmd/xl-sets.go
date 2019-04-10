@@ -768,12 +768,14 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		var err error
 		if hasSuffix(walkResult.entry, slashSeparator) {
 			// Verify prefixes in all sets.
-			for _, set := range s.sets {
-				objInfo, err = set.getObjectInfoDir(ctx, bucket, walkResult.entry)
-				if err == nil {
-					break
-				}
-			}
+			// for _, set := range s.sets {
+			// 	objInfo, err = set.getObjectInfoDir(ctx, bucket, walkResult.entry)
+			// 	if err == nil {
+			// 		break
+			// 	}
+			// }
+			objInfo.Name = walkResult.entry
+			objInfo.IsDir = true
 		} else {
 			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfo(ctx, bucket, walkResult.entry)
 		}
