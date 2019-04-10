@@ -20,19 +20,23 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"hash"
 	"io"
+	"strconv"
 
 	"github.com/minio/minio/cmd/logger"
 )
 
 // Calculates bitrot in chunks and writes the hash into the stream.
 type streamingBitrotWriter struct {
-	iow       *io.PipeWriter
-	h         hash.Hash
-	shardSize int64
-	canClose  chan struct{} // Needed to avoid race explained in Close() call.
-
+	iow            *io.PipeWriter
+	h              hash.Hash
+	shardSize      int64
+	canClose       chan struct{} // Needed to avoid race explained in Close() call.
+	providedLength int64
+	currentLength  int64
+	closed         bool
 	// Following two fields are used only to make sure that Write(p) is called such that
 	// len(p) is always the block size except the last block, i.e prevent programmer errors.
 	currentBlockIdx int
@@ -40,6 +44,10 @@ type streamingBitrotWriter struct {
 }
 
 func (b *streamingBitrotWriter) Write(p []byte) (int, error) {
+	if b.closed {
+		logger.LogIf(context.Background(), errors.New("Writing to an already closed BitRotWriter"))
+	}
+
 	if b.currentBlockIdx < b.verifyTillIdx && int64(len(p)) != b.shardSize {
 		// All blocks except last should be of the length b.shardSize
 		logger.LogIf(context.Background(), errUnexpected)
@@ -58,10 +66,15 @@ func (b *streamingBitrotWriter) Write(p []byte) (int, error) {
 	}
 	n, err = b.iow.Write(p)
 	b.currentBlockIdx++
+	b.currentLength += int64(n)
 	return n, err
 }
 
 func (b *streamingBitrotWriter) Close() error {
+	if b.currentLength < b.providedLength {
+		logger.LogIf(context.Background(), errors.New("currentLength is less than provided Length: "+strconv.Itoa(int(b.currentLength))+", "+strconv.Itoa(int(b.providedLength))))
+	}
+	b.closed = true
 	err := b.iow.Close()
 	// Wait for all data to be written before returning else it causes race conditions.
 	// Race condition is because of io.PipeWriter implementation. i.e consider the following
@@ -78,7 +91,7 @@ func (b *streamingBitrotWriter) Close() error {
 func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64) io.WriteCloser {
 	r, w := io.Pipe()
 	h := algo.New()
-	bw := &streamingBitrotWriter{w, h, shardSize, make(chan struct{}), 0, int(length / shardSize)}
+	bw := &streamingBitrotWriter{w, h, shardSize, make(chan struct{}), length, 0, false, 0, int(length / shardSize)}
 	go func() {
 		bitrotSumsTotalSize := ceilFrac(length, shardSize) * int64(h.Size()) // Size used for storing bitrot checksums.
 		totalFileSize := bitrotSumsTotalSize + length
@@ -87,6 +100,11 @@ func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length i
 			reqInfo := (&logger.ReqInfo{}).AppendTags("storageDisk", disk.String())
 			ctx := logger.SetReqInfo(context.Background(), reqInfo)
 			logger.LogIf(ctx, err)
+		}
+		if bw.currentLength < bw.providedLength {
+			reqInfo := (&logger.ReqInfo{}).AppendTags("storageDisk", disk.String())
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, errors.New("currentLength is less than provided Length: "+strconv.Itoa(int(bw.currentLength))+", "+strconv.Itoa(int(bw.providedLength))))
 		}
 		r.CloseWithError(err)
 		close(bw.canClose)
