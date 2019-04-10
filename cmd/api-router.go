@@ -91,7 +91,9 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// GetBucketLocation
 		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.GetBucketLocationHandler)).Queries("location", "")
 		// GetBucketPolicy
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.GetBucketPolicyHandler)).Queries("policy", "")
+		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketPolicyHandler)).Queries("policy", "")
+		// GetBucketLifecycle
+		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketLifecycleHandler)).Queries("lifecycle", "")
 
 		// Dummy Bucket Calls
 		// GetBucketACL -- this is a dummy call.
@@ -128,9 +130,12 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// ListObjectsV2
 		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.ListObjectsV2Handler)).Queries("list-type", "2")
 		// ListObjectsV1 (Legacy)
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.ListObjectsV1Handler))
+		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListObjectsV1Handler))
+		// PutBucketLifecycle
+		bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketLifecycleHandler)).Queries("lifecycle", "")
 		// PutBucketPolicy
-		bucket.Methods(http.MethodPut).HandlerFunc(httpTraceAll(api.PutBucketPolicyHandler)).Queries("policy", "")
+		bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketPolicyHandler)).Queries("policy", "")
+
 		// PutBucketNotification
 		bucket.Methods(http.MethodPut).HandlerFunc(httpTraceAll(api.PutBucketNotificationHandler)).Queries("notification", "")
 		// PutBucket
@@ -142,7 +147,9 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// DeleteMultipleObjects
 		bucket.Methods(http.MethodPost).HandlerFunc(httpTraceAll(api.DeleteMultipleObjectsHandler)).Queries("delete", "")
 		// DeleteBucketPolicy
-		bucket.Methods(http.MethodDelete).HandlerFunc(httpTraceAll(api.DeleteBucketPolicyHandler)).Queries("policy", "")
+		bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketPolicyHandler)).Queries("policy", "")
+		// DeleteBucketLifecycle
+		bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketLifecycleHandler)).Queries("lifecycle", "")
 		// DeleteBucket
 		bucket.Methods(http.MethodDelete).HandlerFunc(httpTraceAll(api.DeleteBucketHandler))
 	}

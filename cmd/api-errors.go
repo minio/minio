@@ -92,6 +92,7 @@ const (
 	ErrMissingRequestBodyError
 	ErrNoSuchBucket
 	ErrNoSuchBucketPolicy
+	ErrNoSuchBucketLifecycle
 	ErrNoSuchKey
 	ErrNoSuchUpload
 	ErrNoSuchVersion
@@ -465,6 +466,11 @@ var errorCodes = errorCodeMap{
 	ErrNoSuchBucketPolicy: {
 		Code:           "NoSuchBucketPolicy",
 		Description:    "The bucket policy does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrNoSuchBucketLifecycle: {
+		Code:           "NoSuchBucketLifecycle",
+		Description:    "The bucket lifecycle configuration does not exist",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrNoSuchKey: {
@@ -1627,6 +1633,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrUnsupportedMetadata
 	case BucketPolicyNotFound:
 		apiErr = ErrNoSuchBucketPolicy
+	case BucketLifecycleNotFound:
+		apiErr = ErrNoSuchBucketLifecycle
 	case *event.ErrInvalidEventName:
 		apiErr = ErrEventNotification
 	case *event.ErrInvalidARN:
