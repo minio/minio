@@ -140,8 +140,12 @@ func (target *PostgreSQLTarget) ID() event.TargetID {
 	return target.id
 }
 
-// Send - sends event to PostgreSQL.
-func (target *PostgreSQLTarget) Send(eventData event.Event) error {
+// Save - Sends event directly without persisting.
+func (target *PostgreSQLTarget) Save(eventData event.Event) error {
+	return target.send(eventData)
+}
+
+func (target *PostgreSQLTarget) send(eventData event.Event) error {
 	if target.args.Format == event.NamespaceFormat {
 		objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
 		if err != nil {
@@ -177,6 +181,11 @@ func (target *PostgreSQLTarget) Send(eventData event.Event) error {
 		return err
 	}
 
+	return nil
+}
+
+// Send - interface compatible method does no-op.
+func (target *PostgreSQLTarget) Send(eventKey string) error {
 	return nil
 }
 

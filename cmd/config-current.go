@@ -336,7 +336,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewMQTTTarget(k, v)
+		t, err := target.NewMQTTTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("mqtt(%s): %s", k, err.Error())
 		}
@@ -682,7 +682,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 	for id, args := range config.Notify.MQTT {
 		if args.Enable {
 			args.RootCAs = globalRootCAs
-			newTarget, err := target.NewMQTTTarget(id, args)
+			newTarget, err := target.NewMQTTTarget(id, args, GlobalServiceDoneCh)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
