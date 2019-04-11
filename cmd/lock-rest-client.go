@@ -285,7 +285,7 @@ func (client *lockRESTClient) Expired(args dsync.LockArgs) (reply bool, err erro
 }
 
 // Returns a lock rest client.
-func newlockRESTClient(peer *xnet.Host) (*lockRESTClient, error) {
+func newlockRESTClient(peer *xnet.Host) *lockRESTClient {
 
 	scheme := "http"
 	if globalIsSSL {
@@ -310,8 +310,9 @@ func newlockRESTClient(peer *xnet.Host) (*lockRESTClient, error) {
 	restClient, err := rest.NewClient(serverURL, tlsConfig, rest.DefaultRESTTimeout, newAuthToken)
 
 	if err != nil {
-		return nil, err
+		logger.LogIf(context.Background(), err)
+		return &lockRESTClient{serverURL: serverURL, host: peer, restClient: restClient, connected: false}
 	}
 
-	return &lockRESTClient{serverURL: serverURL, host: peer, restClient: restClient, connected: true}, nil
+	return &lockRESTClient{serverURL: serverURL, host: peer, restClient: restClient, connected: true}
 }

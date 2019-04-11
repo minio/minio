@@ -275,9 +275,8 @@ func (l *lockRESTServer) lockMaintenance(interval time.Duration) {
 			logger.LogIf(context.Background(), err)
 			continue
 		}
-		c, err := newlockRESTClient(host)
-		if err != nil {
-			logger.LogIf(context.Background(), err)
+		c := newlockRESTClient(host)
+		if c.connected == false {
 			continue
 		}
 

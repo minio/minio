@@ -29,9 +29,9 @@ func TestLockRESTlient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
-	lkClient, err := newlockRESTClient(host)
-	if err != nil {
-		t.Fatalf("unexpected error %v", err)
+	lkClient := newlockRESTClient(host)
+	if lkClient.connected == false {
+		t.Fatalf("unexpected error. connection failed")
 	}
 
 	// Attempt all calls.
