@@ -726,6 +726,8 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 			return nil, errVolumeNotFound
 		} else if isSysErrIO(err) {
 			return nil, errFaultyDisk
+		} else if isSysErrTooManyFiles(err) {
+			return nil, errTooManyOpenFiles
 		}
 		return nil, err
 	}
@@ -829,6 +831,8 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 			return 0, errFileAccessDenied
 		case isSysErrIO(err):
 			return 0, errFaultyDisk
+		case isSysErrTooManyFiles(err):
+			return 0, errTooManyOpenFiles
 		default:
 			return 0, err
 		}
@@ -939,6 +943,8 @@ func (s *posix) openFile(volume, path string, mode int) (f *os.File, err error) 
 			return nil, errFileAccessDenied
 		case isSysErrIO(err):
 			return nil, errFaultyDisk
+		case isSysErrTooManyFiles(err):
+			return nil, errTooManyOpenFiles
 		default:
 			return nil, err
 		}
@@ -1001,6 +1007,8 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 			return nil, errFileAccessDenied
 		case isSysErrIO(err):
 			return nil, errFaultyDisk
+		case isSysErrTooManyFiles(err):
+			return nil, errTooManyOpenFiles
 		default:
 			return nil, err
 		}
