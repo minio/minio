@@ -21,7 +21,10 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/gob"
+	"errors"
 	"io"
+	"sync"
+	"time"
 
 	"net/url"
 
@@ -34,10 +37,13 @@ import (
 
 // lockRESTClient is authenticable lock REST client
 type lockRESTClient struct {
-	host       *xnet.Host
-	restClient *rest.Client
-	serverURL  *url.URL
-	connected  bool
+	localSync   sync.RWMutex
+	host        *xnet.Host
+	restClient  *rest.Client
+	serverURL   *url.URL
+	connected   bool
+	lastChecked time.Time
+	retryWait   time.Duration
 }
 
 // ServerAddr - dsync.NetLocker interface compatible method.
@@ -50,24 +56,48 @@ func (client *lockRESTClient) ServiceEndpoint() string {
 	return client.serverURL.Path
 }
 
-// Reconnect to a lock rest server.
-func (client *lockRESTClient) reConnect() error {
-	// correct (intelligent) retry logic will be
-	// implemented in subsequent PRs.
-	client.connected = true
+// check if it is ok to make a call to a lock rest server.
+func (client *lockRESTClient) retry() error {
+	client.localSync.Lock()
+	defer client.localSync.Unlock()
+	if !client.connected {
+		if time.Now().Sub(client.lastChecked) < client.retryWait {
+			return errors.New("Host unavailable retry after some time")
+		}
+	}
+
 	return nil
+}
+
+// Set retryWait and other assocaited values based
+// on whether the call succeeded or not
+func (client *lockRESTClient) setRetryWait(callSuccess bool) {
+	client.localSync.Lock()
+	defer client.localSync.Unlock()
+	client.lastChecked = time.Now()
+	if callSuccess {
+		client.connected = true
+		client.retryWait = defaultRetryUnit
+		return
+	}
+	// Increase till 32 seconds and then go back to 1 second
+	if client.connected || client.retryWait > defaultRetryCap {
+		client.retryWait = defaultRetryUnit
+	} else {
+		client.retryWait *= 2
+	}
+
+	client.connected = false
+
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *lockRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-	if !client.connected {
-		err := client.reConnect()
-		logger.LogIf(context.Background(), err)
-		if err != nil {
-			return nil, err
-		}
+
+	if err = client.retry(); err != nil {
+		return nil, err
 	}
 
 	if values == nil {
@@ -75,14 +105,13 @@ func (client *lockRESTClient) call(method string, values url.Values, body io.Rea
 	}
 
 	respBody, err = client.restClient.Call(method, values, body, length)
+
 	if err == nil {
+		client.setRetryWait(true)
 		return respBody, nil
 	}
 
-	if isNetworkError(err) {
-		client.connected = false
-	}
-
+	client.setRetryWait(false)
 	return nil, err
 }
 
@@ -311,8 +340,8 @@ func newlockRESTClient(peer *xnet.Host) *lockRESTClient {
 
 	if err != nil {
 		logger.LogIf(context.Background(), err)
-		return &lockRESTClient{serverURL: serverURL, host: peer, restClient: restClient, connected: false}
+		return &lockRESTClient{serverURL: serverURL, host: peer, restClient: restClient, connected: false, lastChecked: time.Now(), retryWait: defaultRetryUnit}
 	}
 
-	return &lockRESTClient{serverURL: serverURL, host: peer, restClient: restClient, connected: true}
+	return &lockRESTClient{serverURL: serverURL, host: peer, restClient: restClient, connected: true, lastChecked: time.Now(), retryWait: defaultRetryUnit}
 }
