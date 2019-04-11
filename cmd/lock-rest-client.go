@@ -37,13 +37,12 @@ import (
 
 // lockRESTClient is authenticable lock REST client
 type lockRESTClient struct {
-	localSync   sync.RWMutex
-	host        *xnet.Host
-	restClient  *rest.Client
-	serverURL   *url.URL
-	connected   bool
-	lastChecked time.Time
-	retryWait   time.Duration
+	lockSync   sync.RWMutex
+	host       *xnet.Host
+	restClient *rest.Client
+	serverURL  *url.URL
+	connected  bool
+	timer      *time.Timer
 }
 
 // ServerAddr - dsync.NetLocker interface compatible method.
@@ -56,39 +55,35 @@ func (client *lockRESTClient) ServiceEndpoint() string {
 	return client.serverURL.Path
 }
 
-// check if it is ok to make a call to a lock rest server.
-func (client *lockRESTClient) retry() error {
-	client.localSync.Lock()
-	defer client.localSync.Unlock()
-	if !client.connected {
-		if time.Now().Sub(client.lastChecked) < client.retryWait {
-			return errors.New("Host unavailable retry after some time")
-		}
-	}
+// check if the host is up or if it is fine
+// to make a call to the lock rest server.
+func (client *lockRESTClient) isHostUp() bool {
+	client.lockSync.Lock()
+	defer client.lockSync.Unlock()
 
-	return nil
+	if client.connected {
+		return true
+	}
+	select {
+	case <-client.timer.C:
+		client.connected = true
+		client.timer = nil
+		return true
+	default:
+	}
+	return false
 }
 
-// Set retryWait and other assocaited values based
-// on whether the call succeeded or not
-func (client *lockRESTClient) setRetryWait(callSuccess bool) {
-	client.localSync.Lock()
-	defer client.localSync.Unlock()
-	client.lastChecked = time.Now()
-	if callSuccess {
-		client.connected = true
-		client.retryWait = defaultRetryUnit
+// Mark the host as down if there is a Network error.
+func (client *lockRESTClient) markHostDown() {
+	client.lockSync.Lock()
+	defer client.lockSync.Unlock()
+
+	if !client.connected {
 		return
 	}
-	// Increase till 32 seconds and then go back to 1 second
-	if client.connected || client.retryWait > defaultRetryCap {
-		client.retryWait = defaultRetryUnit
-	} else {
-		client.retryWait *= 2
-	}
-
 	client.connected = false
-
+	client.timer = time.NewTimer(defaultRetryUnit * 5)
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
@@ -96,8 +91,8 @@ func (client *lockRESTClient) setRetryWait(callSuccess bool) {
 // after verifying format.json
 func (client *lockRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
 
-	if err = client.retry(); err != nil {
-		return nil, err
+	if !client.isHostUp() {
+		return nil, errors.New("Lock rest server node is down")
 	}
 
 	if values == nil {
@@ -107,11 +102,13 @@ func (client *lockRESTClient) call(method string, values url.Values, body io.Rea
 	respBody, err = client.restClient.Call(method, values, body, length)
 
 	if err == nil {
-		client.setRetryWait(true)
 		return respBody, nil
 	}
 
-	client.setRetryWait(false)
+	if isNetworkError(err) {
+		client.markHostDown()
+	}
+
 	return nil, err
 }
 
@@ -132,185 +129,64 @@ func (client *lockRESTClient) Close() error {
 	return nil
 }
 
+// restCall makes a call to the lock REST server.
+func (client *lockRESTClient) restCall(call string, args dsync.LockArgs) (reply bool, err error) {
+
+	reader := bytes.NewBuffer(make([]byte, 0, 2048))
+	err = gob.NewEncoder(reader).Encode(args)
+	if err != nil {
+		return false, err
+	}
+	respBody, err := client.call(call, nil, reader, -1)
+	if err != nil {
+		return false, err
+	}
+
+	var resp lockResponse
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&resp)
+
+	if err != nil || !resp.Success {
+		reqInfo := &logger.ReqInfo{}
+		reqInfo.AppendTags("resource", args.Resource)
+		reqInfo.AppendTags("serveraddress", args.ServerAddr)
+		reqInfo.AppendTags("serviceendpoint", args.ServiceEndpoint)
+		reqInfo.AppendTags("source", args.Source)
+		reqInfo.AppendTags("uid", args.UID)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
+	}
+	return resp.Success, err
+}
+
 // RLock calls read lock REST API.
 func (client *lockRESTClient) RLock(args dsync.LockArgs) (reply bool, err error) {
-
-	reader := bytes.NewBuffer(make([]byte, 0, 1024))
-	err = gob.NewEncoder(reader).Encode(args)
-	if err != nil {
-		return false, err
-	}
-	respBody, err := client.call(lockRESTMethodRLock, nil, reader, -1)
-	if err != nil {
-		return false, err
-	}
-
-	var resp lockResponse
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&resp)
-
-	if err != nil || !resp.Success {
-		reqInfo := &logger.ReqInfo{}
-		reqInfo.AppendTags("resource", args.Resource)
-		reqInfo.AppendTags("serveraddress", args.ServerAddr)
-		reqInfo.AppendTags("serviceendpoint", args.ServiceEndpoint)
-		reqInfo.AppendTags("source", args.Source)
-		reqInfo.AppendTags("uid", args.UID)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
-	}
-	return resp.Success, err
+	return client.restCall(lockRESTMethodRLock, args)
 }
 
-// Lock calls read lock REST API.
+// Lock calls lock REST API.
 func (client *lockRESTClient) Lock(args dsync.LockArgs) (reply bool, err error) {
-
-	reader := bytes.NewBuffer(make([]byte, 0, 1024))
-	err = gob.NewEncoder(reader).Encode(args)
-	if err != nil {
-		return false, err
-	}
-	respBody, err := client.call(lockRESTMethodLock, nil, reader, -1)
-	if err != nil {
-		return false, err
-	}
-
-	var resp lockResponse
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&resp)
-
-	if err != nil || !resp.Success {
-		reqInfo := &logger.ReqInfo{}
-		reqInfo.AppendTags("resource", args.Resource)
-		reqInfo.AppendTags("serveraddress", args.ServerAddr)
-		reqInfo.AppendTags("serviceendpoint", args.ServiceEndpoint)
-		reqInfo.AppendTags("source", args.Source)
-		reqInfo.AppendTags("uid", args.UID)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
-	}
-
-	return resp.Success, err
+	return client.restCall(lockRESTMethodLock, args)
 }
 
-// RUnlock calls read unlock RPC.
+// RUnlock calls read unlock REST API.
 func (client *lockRESTClient) RUnlock(args dsync.LockArgs) (reply bool, err error) {
-	reader := bytes.NewBuffer(make([]byte, 0, 1024))
-	err = gob.NewEncoder(reader).Encode(args)
-	if err != nil {
-		return false, err
-	}
-	respBody, err := client.call(lockRESTMethodRUnlock, nil, reader, -1)
-	if err != nil {
-		return false, err
-	}
-
-	var resp lockResponse
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&resp)
-
-	if err != nil || !resp.Success {
-		reqInfo := &logger.ReqInfo{}
-		reqInfo.AppendTags("resource", args.Resource)
-		reqInfo.AppendTags("serveraddress", args.ServerAddr)
-		reqInfo.AppendTags("serviceendpoint", args.ServiceEndpoint)
-		reqInfo.AppendTags("source", args.Source)
-		reqInfo.AppendTags("uid", args.UID)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
-	}
-
-	return resp.Success, err
+	return client.restCall(lockRESTMethodRUnlock, args)
 }
 
 // Unlock calls write unlock RPC.
 func (client *lockRESTClient) Unlock(args dsync.LockArgs) (reply bool, err error) {
-	reader := bytes.NewBuffer(make([]byte, 0, 1024))
-	err = gob.NewEncoder(reader).Encode(args)
-	if err != nil {
-		return false, err
-	}
-	respBody, err := client.call(lockRESTMethodUnlock, nil, reader, -1)
-	if err != nil {
-		return false, err
-	}
-
-	var resp lockResponse
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&resp)
-
-	if err != nil || !resp.Success {
-		reqInfo := &logger.ReqInfo{}
-		reqInfo.AppendTags("resource", args.Resource)
-		reqInfo.AppendTags("serveraddress", args.ServerAddr)
-		reqInfo.AppendTags("serviceendpoint", args.ServiceEndpoint)
-		reqInfo.AppendTags("source", args.Source)
-		reqInfo.AppendTags("uid", args.UID)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
-	}
-
-	return resp.Success, err
+	return client.restCall(lockRESTMethodUnlock, args)
 }
 
 // ForceUnlock calls force unlock RPC.
 func (client *lockRESTClient) ForceUnlock(args dsync.LockArgs) (reply bool, err error) {
-	reader := bytes.NewBuffer(make([]byte, 0, 1024))
-	err = gob.NewEncoder(reader).Encode(args)
-	if err != nil {
-		return false, err
-	}
-	respBody, err := client.call(lockRESTMethodForceUnlock, nil, reader, -1)
-	if err != nil {
-		return false, err
-	}
-
-	var resp lockResponse
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&resp)
-
-	if err != nil || !resp.Success {
-		reqInfo := &logger.ReqInfo{}
-		reqInfo.AppendTags("resource", args.Resource)
-		reqInfo.AppendTags("serveraddress", args.ServerAddr)
-		reqInfo.AppendTags("serviceendpoint", args.ServiceEndpoint)
-		reqInfo.AppendTags("source", args.Source)
-		reqInfo.AppendTags("uid", args.UID)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
-	}
-
-	return resp.Success, err
+	return client.restCall(lockRESTMethodForceUnlock, args)
 }
 
 // Expired calls expired RPC.
 func (client *lockRESTClient) Expired(args dsync.LockArgs) (reply bool, err error) {
-	reader := bytes.NewBuffer(make([]byte, 0, 1024))
-	err = gob.NewEncoder(reader).Encode(args)
-	if err != nil {
-		return false, err
-	}
-	respBody, err := client.call(lockRESTMethodExpired, nil, reader, -1)
-	if err != nil {
-		return false, err
-	}
-
-	var resp lockResponse
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&resp)
-
-	if err != nil || !resp.Success {
-		reqInfo := &logger.ReqInfo{}
-		reqInfo.AppendTags("resource", args.Resource)
-		reqInfo.AppendTags("serveraddress", args.ServerAddr)
-		reqInfo.AppendTags("serviceendpoint", args.ServiceEndpoint)
-		reqInfo.AppendTags("source", args.Source)
-		reqInfo.AppendTags("uid", args.UID)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
-	}
-
-	return resp.Success, err
+	return client.restCall(lockRESTMethodExpired, args)
 }
 
 // Returns a lock rest client.
@@ -340,8 +216,8 @@ func newlockRESTClient(peer *xnet.Host) *lockRESTClient {
 
 	if err != nil {
 		logger.LogIf(context.Background(), err)
-		return &lockRESTClient{serverURL: serverURL, host: peer, restClient: restClient, connected: false, lastChecked: time.Now(), retryWait: defaultRetryUnit}
+		return &lockRESTClient{serverURL: serverURL, host: peer, restClient: restClient, connected: false, timer: time.NewTimer(defaultRetryUnit * 5)}
 	}
 
-	return &lockRESTClient{serverURL: serverURL, host: peer, restClient: restClient, connected: true, lastChecked: time.Now(), retryWait: defaultRetryUnit}
+	return &lockRESTClient{serverURL: serverURL, host: peer, restClient: restClient, connected: true}
 }

@@ -26,7 +26,7 @@ import (
 )
 
 const lockRESTVersion = "v1"
-const lockRESTPath = minioReservedBucketPath + "/dsynclock/" + lockRESTVersion
+const lockRESTPath = minioReservedBucketPath + "/lock/" + lockRESTVersion
 
 var lockServicePath = path.Join(minioReservedBucketPath, lockServiceSubPath)
 
