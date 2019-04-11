@@ -83,7 +83,9 @@ var (
         "durable": false,
         "internal": false,
         "noWait": false,
-        "autoDeleted": false
+        "autoDeleted": false,
+        "queueDir": "",
+        "queueLimit": 0
       }
     },
     "elasticsearch": {

@@ -34,20 +34,22 @@ Install RabbitMQ from [here](https://www.rabbitmq.com/).
 
 The MinIO server configuration file is stored on the backend in json format. The AMQP configuration is located in the `amqp` key under the `notify` top-level key. Create a configuration key-value pair here for your AMQP instance. The key is a name for your AMQP endpoint, and the value is a collection of key-value parameters described in the table below.
 
-| Parameter      | Type     | Description                                                                     |
-| :------------- | :------- | :------------------------------------------------------------------------------ |
-| `enable`       | _bool_   | (Required) Is this server endpoint configuration active/enabled?                |
-| `url`          | _string_ | (Required) AMQP server endpoint, e.g. `amqp://myuser:mypassword@localhost:5672` |
-| `exchange`     | _string_ | Name of the exchange.                                                           |
-| `routingKey`   | _string_ | Routing key for publishing.                                                     |
-| `exchangeType` | _string_ | Kind of exchange.                                                               |
-| `deliveryMode` | _uint8_  | Delivery mode for publishing. 0 or 1 - transient; 2 - persistent.               |
-| `mandatory`    | _bool_   | Publishing related bool.                                                        |
-| `immediate`    | _bool_   | Publishing related bool.                                                        |
-| `durable`      | _bool_   | Exchange declaration related bool.                                              |
-| `internal`     | _bool_   | Exchange declaration related bool.                                              |
-| `noWait`       | _bool_   | Exchange declaration related bool.                                              |
-| `autoDeleted`  | _bool_   | Exchange declaration related bool.                                              |
+| Parameter      | Type     | Description                                                                      |
+| :------------- | :------- | :------------------------------------------------------------------------------- |
+| `enable`       | _bool_   | (Required) Is this server endpoint configuration active/enabled?                 |
+| `url`          | _string_ | (Required) AMQP server endpoint, e.g. `amqp://myuser:mypassword@localhost:5672`  |
+| `exchange`     | _string_ | Name of the exchange.                                                            |
+| `routingKey`   | _string_ | Routing key for publishing.                                                      |
+| `exchangeType` | _string_ | Kind of exchange.                                                                |
+| `deliveryMode` | _uint8_  | Delivery mode for publishing. 0 or 1 - transient; 2 - persistent.                |
+| `mandatory`    | _bool_   | Publishing related bool.                                                         |
+| `immediate`    | _bool_   | Publishing related bool.                                                         |
+| `durable`      | _bool_   | Exchange declaration related bool.                                               |
+| `internal`     | _bool_   | Exchange declaration related bool.                                               |
+| `noWait`       | _bool_   | Exchange declaration related bool.                                               |
+| `autoDeleted`  | _bool_   | Exchange declaration related bool.                                               |
+| `queueDir`     | _string_ | Persistent store for events when AMQP broker is offline                          |
+| `queueLimit`   | _int_    | Set the maximum event limit for the persistent store. The default limit is 10000 |
 
 An example configuration for RabbitMQ is shown below:
 
@@ -65,10 +67,13 @@ An example configuration for RabbitMQ is shown below:
         "durable": false,
         "internal": false,
         "noWait": false,
-        "autoDeleted": false
+        "autoDeleted": false,
+        "queueDir": "",
+        "queueLimit": 0
     }
 }
 ```
+MinIO supports persistent event store. The persistent store will backup events when the AMQP broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
 
@@ -310,7 +315,7 @@ An example of Elasticsearch configuration is as follows:
 },
 ```
 
-Minio supports persistent event store. The persistent store will backup events when the Elasticsearch broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
+MinIO supports persistent event store. The persistent store will backup events when the Elasticsearch broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 If Elasticsearch has authentication enabled, the credentials can be supplied to MinIO via the `url` parameter formatted as `PROTO://USERNAME:PASSWORD@ELASTICSEARCH_HOST:PORT`.
 
