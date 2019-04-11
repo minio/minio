@@ -47,6 +47,9 @@ The MinIO server configuration file is stored on the backend in json format. The
 | `internal` | _bool_ | Exchange declaration related bool. |
 | `noWait` | _bool_ | Exchange declaration related bool. |
 | `autoDeleted` | _bool_ | Exchange declaration related bool. |
+| `queueDir` | _string_ | Persistent store for events when AMQP broker is offline |
+| `queueLimit` | _int_ | Set the maximum event limit for the persistent store. The default limit is 10000 |
+
 
 An example configuration for RabbitMQ is shown below:
 
@@ -64,7 +67,9 @@ An example configuration for RabbitMQ is shown below:
         "durable": false,
         "internal": false,
         "noWait": false,
-        "autoDeleted": false
+        "autoDeleted": false,
+        "queueDir": "",
+        "queueLimit": 0
     }
 }
 ```
@@ -296,6 +301,8 @@ An example of Elasticsearch configuration is as follows:
     }
 },
 ```
+
+MinIO supports persistent event store. The persistent store will backup events when the AMQP broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 If Elasticsearch has authentication enabled, the credentials can be supplied to MinIO via the `url` parameter formatted as `PROTO://USERNAME:PASSWORD@ELASTICSEARCH_HOST:PORT`.
 

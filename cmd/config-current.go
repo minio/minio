@@ -303,7 +303,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewAMQPTarget(k, v)
+		t, err := target.NewAMQPTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("amqp(%s): %s", k, err.Error())
 		}
@@ -637,7 +637,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 	}
 	for id, args := range config.Notify.AMQP {
 		if args.Enable {
-			newTarget, err := target.NewAMQPTarget(id, args)
+			newTarget, err := target.NewAMQPTarget(id, args, GlobalServiceDoneCh)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
