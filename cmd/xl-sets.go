@@ -654,7 +654,7 @@ func listDirSetsFactory(ctx context.Context, isLeaf IsLeafFunc, isLeafDir IsLeaf
 			wg.Add(1)
 			go func(index int, disk StorageAPI) {
 				defer wg.Done()
-				diskEntries[index], _ = disk.ListDir(bucket, prefixDir, -1)
+				diskEntries[index], _ = disk.ListDir(bucket, prefixDir, -1, xlMetaJSONFile)
 			}(index, disk)
 		}
 
@@ -713,21 +713,10 @@ func listDirSetsFactory(ctx context.Context, isLeaf IsLeafFunc, isLeafDir IsLeaf
 // value through the walk channel receives the data properly lexically sorted.
 func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	isLeaf := func(bucket, entry string) bool {
-		entry = strings.TrimSuffix(entry, slashSeparator)
-		// Verify if we are at the leaf, a leaf is where we
-		// see `xl.json` inside a directory.
-		return s.getHashedSet(entry).isObject(bucket, entry)
+		return !hasSuffix(entry, slashSeparator)
 	}
 
 	isLeafDir := func(bucket, entry string) bool {
-		// Verify prefixes in all sets.
-		var ok bool
-		for _, set := range s.sets {
-			ok = set.isObjectDir(bucket, entry)
-			if ok {
-				return true
-			}
-		}
 		return false
 	}
 
@@ -1270,10 +1259,6 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObj
 		walkResult, ok := <-walkResultCh
 		if !ok {
 			break
-		}
-		// For any walk error return right away.
-		if walkResult.err != nil {
-			return toObjectErr(walkResult.err, bucket, prefix)
 		}
 		if err := healObjectFn(bucket, strings.TrimSuffix(walkResult.entry, slashSeparator+xlMetaJSONFile)); err != nil {
 			return toObjectErr(err, bucket, walkResult.entry)

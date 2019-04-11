@@ -116,7 +116,7 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 		}
 
 		// If it's a directory, list and call delFunc() for each entry.
-		entries, err := storage.ListDir(volume, entryPath, -1)
+		entries, err := storage.ListDir(volume, entryPath, -1, "")
 		// If entryPath prefix never existed, safe to ignore.
 		if err == errFileNotFound {
 			return nil
@@ -218,14 +218,6 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 			eof = true
 			break
 		}
-		// For any walk error return right away.
-		if walkResult.err != nil {
-			// File not found is a valid case.
-			if walkResult.err == errFileNotFound {
-				continue
-			}
-			return loi, toObjectErr(walkResult.err, bucket, prefix)
-		}
 
 		var objInfo ObjectInfo
 		var err error
@@ -234,6 +226,14 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 				objInfo, err = getObjectInfoDir(ctx, bucket, walkResult.entry)
 				if err == nil {
 					break
+				}
+				if err == errFileNotFound {
+					err = nil
+					objInfo = ObjectInfo{
+						Bucket: bucket,
+						Name:   walkResult.entry,
+						IsDir:  true,
+					}
 				}
 			}
 		} else {

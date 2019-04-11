@@ -34,7 +34,7 @@ func listDirFactory(ctx context.Context, isLeaf IsLeafFunc, disks ...StorageAPI)
 			var entries []string
 			var newEntries []string
 			var err error
-			entries, err = disk.ListDir(bucket, prefixDir, -1)
+			entries, err = disk.ListDir(bucket, prefixDir, -1, xlMetaJSONFile)
 			if err != nil {
 				continue
 			}
@@ -89,10 +89,6 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 			eof = true
 			break
 		}
-		// For any walk error return right away.
-		if walkResult.err != nil {
-			return loi, toObjectErr(walkResult.err, bucket, prefix)
-		}
 		entry := walkResult.entry
 		var objInfo ObjectInfo
 		if hasSuffix(entry, slashSeparator) {
@@ -108,8 +104,10 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 				// Ignore errFileNotFound as the object might have got
 				// deleted in the interim period of listing and getObjectInfo(),
 				// ignore quorum error as it might be an entry from an outdated disk.
-				switch err {
-				case errFileNotFound, errXLReadQuorum:
+				if IsErrIgnored(err, []error{
+					errFileNotFound,
+					errXLReadQuorum,
+				}...) {
 					continue
 				}
 				return loi, toObjectErr(err, bucket, prefix)

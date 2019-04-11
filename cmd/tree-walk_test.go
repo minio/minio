@@ -189,7 +189,7 @@ func TestTreeWalk(t *testing.T) {
 	}
 
 	isLeafDir := func(volume, prefix string) bool {
-		entries, listErr := disk.ListDir(volume, prefix, 1)
+		entries, listErr := disk.ListDir(volume, prefix, 1, "")
 		if listErr != nil {
 			return false
 		}
@@ -233,7 +233,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 	}
 
 	isLeafDir := func(volume, prefix string) bool {
-		entries, listErr := disk.ListDir(volume, prefix, 1)
+		entries, listErr := disk.ListDir(volume, prefix, 1, "")
 		if listErr != nil {
 			return false
 		}
@@ -379,7 +379,7 @@ func TestRecursiveTreeWalk(t *testing.T) {
 	}
 
 	isLeafDir := func(volume, prefix string) bool {
-		entries, listErr := disk1.ListDir(volume, prefix, 1)
+		entries, listErr := disk1.ListDir(volume, prefix, 1, "")
 		if listErr != nil {
 			return false
 		}
@@ -494,7 +494,7 @@ func TestSortedness(t *testing.T) {
 	}
 
 	isLeafDir := func(volume, prefix string) bool {
-		entries, listErr := disk1.ListDir(volume, prefix, 1)
+		entries, listErr := disk1.ListDir(volume, prefix, 1, "")
 		if listErr != nil {
 			return false
 		}
@@ -577,7 +577,7 @@ func TestTreeWalkIsEnd(t *testing.T) {
 	}
 
 	isLeafDir := func(volume, prefix string) bool {
-		entries, listErr := disk1.ListDir(volume, prefix, 1)
+		entries, listErr := disk1.ListDir(volume, prefix, 1, "")
 		if listErr != nil {
 			return false
 		}

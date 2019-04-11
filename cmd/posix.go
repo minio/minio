@@ -651,7 +651,7 @@ func (s *posix) DeleteVol(volume string) (err error) {
 
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing "/".
-func (s *posix) ListDir(volume, dirPath string, count int) (entries []string, err error) {
+func (s *posix) ListDir(volume, dirPath string, count int, leafFile string) (entries []string, err error) {
 	defer func() {
 		if err == errFaultyDisk {
 			atomic.AddInt32(&s.ioErrCount, 1)
@@ -684,9 +684,21 @@ func (s *posix) ListDir(volume, dirPath string, count int) (entries []string, er
 
 	dirPath = pathJoin(volumeDir, dirPath)
 	if count > 0 {
-		return readDirN(dirPath, count)
+		entries, err = readDirN(dirPath, count)
+	} else {
+		entries, err = readDir(dirPath)
 	}
-	return readDir(dirPath)
+
+	// If leaf file is specified, filter out the entries.
+	if leafFile != "" {
+		for i, entry := range entries {
+			if _, serr := os.Stat(pathJoin(dirPath, entry, leafFile)); serr == nil {
+				entries[i] = strings.TrimSuffix(entry, slashSeparator)
+			}
+		}
+	}
+
+	return entries, err
 }
 
 // ReadAll reads from r until an error or EOF and returns the data it read.

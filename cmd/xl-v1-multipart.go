@@ -47,9 +47,10 @@ func (xl xlObjects) getMultipartSHADir(bucket, object string) string {
 	return getSHA256Hash([]byte(pathJoin(bucket, object)))
 }
 
-// isUploadIDExists - verify if a given uploadID exists and is valid.
-func (xl xlObjects) isUploadIDExists(ctx context.Context, bucket, object, uploadID string) bool {
-	return xl.isObject(minioMetaMultipartBucket, xl.getUploadIDDir(bucket, object, uploadID))
+// checkUploadIDExists - verify if a given uploadID exists and is valid.
+func (xl xlObjects) checkUploadIDExists(ctx context.Context, bucket, object, uploadID string) error {
+	_, err := xl.getObjectInfo(ctx, minioMetaMultipartBucket, xl.getUploadIDDir(bucket, object, uploadID))
+	return err
 }
 
 // Removes part given by partName belonging to a mulitpart upload from minioMetaBucket
@@ -163,7 +164,7 @@ func (xl xlObjects) ListMultipartUploads(ctx context.Context, bucket, object, ke
 		if disk == nil {
 			continue
 		}
-		uploadIDs, err := disk.ListDir(minioMetaMultipartBucket, xl.getMultipartSHADir(bucket, object), -1)
+		uploadIDs, err := disk.ListDir(minioMetaMultipartBucket, xl.getMultipartSHADir(bucket, object), -1, "")
 		if err != nil {
 			if err == errFileNotFound {
 				return result, nil
@@ -308,9 +309,9 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	}
 
 	// Validates if upload ID exists.
-	if !xl.isUploadIDExists(ctx, bucket, object, uploadID) {
+	if err := xl.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		preUploadIDLock.RUnlock()
-		return pi, InvalidUploadID{UploadID: uploadID}
+		return pi, toObjectErr(err, bucket, object, uploadID)
 	}
 
 	// Read metadata associated with the object from all disks.
@@ -406,9 +407,9 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	}
 	defer postUploadIDLock.Unlock()
 
-	// Validate again if upload ID still exists.
-	if !xl.isUploadIDExists(ctx, bucket, object, uploadID) {
-		return pi, InvalidUploadID{UploadID: uploadID}
+	// Validates if upload ID exists.
+	if err := xl.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
+		return pi, toObjectErr(err, bucket, object, uploadID)
 	}
 
 	// Rename temporary part file to its final location.
@@ -499,8 +500,8 @@ func (xl xlObjects) ListObjectParts(ctx context.Context, bucket, object, uploadI
 	}
 	defer uploadIDLock.Unlock()
 
-	if !xl.isUploadIDExists(ctx, bucket, object, uploadID) {
-		return result, InvalidUploadID{UploadID: uploadID}
+	if err := xl.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
+		return result, toObjectErr(err, bucket, object, uploadID)
 	}
 
 	uploadIDPath := xl.getUploadIDDir(bucket, object, uploadID)
@@ -617,8 +618,8 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	}
 	defer uploadIDLock.Unlock()
 
-	if !xl.isUploadIDExists(ctx, bucket, object, uploadID) {
-		return oi, InvalidUploadID{UploadID: uploadID}
+	if err := xl.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
+		return oi, toObjectErr(err, bucket, object, uploadID)
 	}
 
 	// Check if an object is present as one of the parent dir.
@@ -821,8 +822,9 @@ func (xl xlObjects) AbortMultipartUpload(ctx context.Context, bucket, object, up
 	}
 	defer uploadIDLock.Unlock()
 
-	if !xl.isUploadIDExists(ctx, bucket, object, uploadID) {
-		return InvalidUploadID{UploadID: uploadID}
+	// Validates if upload ID exists.
+	if err := xl.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
+		return toObjectErr(err, bucket, object, uploadID)
 	}
 
 	// Read metadata associated with the object from all disks.
@@ -871,12 +873,12 @@ func (xl xlObjects) cleanupStaleMultipartUploads(ctx context.Context, cleanupInt
 // Remove the old multipart uploads on the given disk.
 func (xl xlObjects) cleanupStaleMultipartUploadsOnDisk(ctx context.Context, disk StorageAPI, expiry time.Duration) {
 	now := time.Now()
-	shaDirs, err := disk.ListDir(minioMetaMultipartBucket, "", -1)
+	shaDirs, err := disk.ListDir(minioMetaMultipartBucket, "", -1, "")
 	if err != nil {
 		return
 	}
 	for _, shaDir := range shaDirs {
-		uploadIDDirs, err := disk.ListDir(minioMetaMultipartBucket, shaDir, -1)
+		uploadIDDirs, err := disk.ListDir(minioMetaMultipartBucket, shaDir, -1, "")
 		if err != nil {
 			continue
 		}

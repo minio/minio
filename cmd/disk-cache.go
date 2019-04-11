@@ -458,10 +458,6 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 			eof = true
 			break
 		}
-		// For any walk error return right away.
-		if walkResult.err != nil {
-			return result, toObjectErr(walkResult.err, bucket, prefix)
-		}
 
 		entry := walkResult.entry
 		var objInfo ObjectInfo
