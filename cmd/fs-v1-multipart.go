@@ -98,9 +98,8 @@ func (fs *FSObjects) backgroundAppend(ctx context.Context, bucket, object, uploa
 		}
 		partNumber, etag, actualSize, err := fs.decodePartFile(entry)
 		if err != nil {
-			logger.GetReqInfo(ctx).AppendTags("entry", entry)
-			logger.LogIf(ctx, err)
-			return
+			// Skip part files whose name don't match expected format. These could be backend filesystem specific files.
+			continue
 		}
 		if partNumber < nextPartNumber {
 			// Part already appended.
@@ -389,8 +388,8 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 		}
 		partNumber, etag1, _, derr := fs.decodePartFile(entry)
 		if derr != nil {
-			logger.LogIf(ctx, derr)
-			return result, toObjectErr(derr)
+			// Skip part files whose name don't match expected format. These could be backend filesystem specific files.
+			continue
 		}
 		etag2, ok := partsMap[partNumber]
 		if !ok {
