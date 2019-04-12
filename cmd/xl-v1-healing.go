@@ -425,6 +425,10 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 		}
 	}
 
+	// Cleanup in case of xl.json writing failure
+	writeQuorum := latestMeta.Erasure.DataBlocks + 1
+	defer xl.deleteObject(ctx, minioMetaTmpBucket, tmpID, writeQuorum, false)
+
 	// Generate and write `xl.json` generated from other disks.
 	outDatedDisks, aErr := writeUniqueXLMetadata(ctx, outDatedDisks, minioMetaTmpBucket, tmpID,
 		partsMetadata, diskCount(outDatedDisks))
