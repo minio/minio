@@ -29,6 +29,7 @@ const (
 	peerRESTMethodGetLocks                 = "getlocks"
 	peerRESTMethodBucketPolicyRemove       = "removebucketpolicy"
 	peerRESTMethodLoadUser                 = "loaduser"
+	peerRESTMethodLoadKrbUserPolicy        = "loadkrbuserpolicy"
 	peerRESTMethodDeleteUser               = "deleteuser"
 	peerRESTMethodLoadPolicy               = "loadpolicy"
 	peerRESTMethodDeletePolicy             = "deletepolicy"
@@ -45,12 +46,13 @@ const (
 )
 
 const (
-	peerRESTBucket   = "bucket"
-	peerRESTUser     = "user"
-	peerRESTUserTemp = "user-temp"
-	peerRESTPolicy   = "policy"
-	peerRESTSignal   = "signal"
-	peerRESTProfiler = "profiler"
-	peerRESTDryRun   = "dry-run"
-	peerRESTTraceAll = "all"
+	peerRESTBucket           = "bucket"
+	peerRESTUser             = "user"
+	peerRESTKrbUserPrincipal = "krb-user-principal"
+	peerRESTUserTemp         = "user-temp"
+	peerRESTPolicy           = "policy"
+	peerRESTSignal           = "signal"
+	peerRESTProfiler         = "profiler"
+	peerRESTDryRun           = "dry-run"
+	peerRESTTraceAll         = "all"
 )

@@ -58,6 +58,7 @@ const (
 	ErrSTSInvalidParameterValue
 	ErrSTSWebIdentityExpiredToken
 	ErrSTSClientGrantsExpiredToken
+	ErrSTSKerberosExpiredToken
 	ErrSTSInvalidClientGrantsToken
 	ErrSTSMalformedPolicyDocument
 	ErrSTSNotInitialized
@@ -100,6 +101,11 @@ var stsErrCodes = stsErrorCodeMap{
 	ErrSTSClientGrantsExpiredToken: {
 		Code:           "ExpiredToken",
 		Description:    "The client grants that was passed is expired or is not valid. Get a new client grants token from the identity provider and then retry the request.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrSTSKerberosExpiredToken: {
+		Code:           "ExpiredToken",
+		Description:    "The Kerberos service ticket has an expired token",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrSTSInvalidClientGrantsToken: {

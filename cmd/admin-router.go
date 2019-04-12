@@ -98,6 +98,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 			Queries("accessKey", "{accessKey:.*}").Queries("name", "{name:.*}")
 		adminV1Router.Methods(http.MethodPut).Path("/set-user-status").HandlerFunc(httpTraceHdrs(adminAPI.SetUserStatus)).
 			Queries("accessKey", "{accessKey:.*}").Queries("status", "{status:.*}")
+		adminV1Router.Methods(http.MethodPut).Path("/set-krb-sts-user-policy").HandlerFunc(httpTraceHdrs(adminAPI.SetSTSKrbUserPolicy)).
+			Queries("krbPrincipal", "{krbPrincipal:.*}").Queries("name", "{name:.*}")
 
 		// Remove policy IAM
 		adminV1Router.Methods(http.MethodDelete).Path("/remove-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.RemoveCannedPolicy)).Queries("name", "{name:.*}")

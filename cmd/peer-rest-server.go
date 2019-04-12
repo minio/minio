@@ -238,6 +238,31 @@ func (s *peerRESTServer) LoadUserHandler(w http.ResponseWriter, r *http.Request)
 	w.(http.Flusher).Flush()
 }
 
+func (s *peerRESTServer) LoadKrbUserPolicy(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	vars := mux.Vars(r)
+	clientPrincipal := vars[peerRESTKrbUserPrincipal]
+	if clientPrincipal == "" {
+		s.writeErrorResponse(w, errors.New("Krb client principal is missing"))
+		return
+	}
+
+	if err := globalIAMSys.LoadKrbUserPolicy(objAPI, clientPrincipal); err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+}
+
 // LoadUsersHandler - reloads all users and canned policies.
 func (s *peerRESTServer) LoadUsersHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -742,6 +767,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodLoadPolicy).HandlerFunc(httpTraceAll(server.LoadPolicyHandler)).Queries(restQueries(peerRESTPolicy)...)
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodDeleteUser).HandlerFunc(httpTraceAll(server.LoadUserHandler)).Queries(restQueries(peerRESTUser)...)
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodLoadUser).HandlerFunc(httpTraceAll(server.LoadUserHandler)).Queries(restQueries(peerRESTUser, peerRESTUserTemp)...)
+	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodLoadKrbUserPolicy).HandlerFunc(httpTraceAll(server.LoadKrbUserPolicy)).Queries(restQueries(peerRESTKrbUserPrincipal)...)
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodLoadUsers).HandlerFunc(httpTraceAll(server.LoadUsersHandler))
 
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodStartProfiling).HandlerFunc(httpTraceAll(server.StartProfilingHandler)).Queries(restQueries(peerRESTProfiler)...)

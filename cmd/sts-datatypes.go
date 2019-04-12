@@ -174,3 +174,19 @@ type ClientGrantsResult struct {
 	// provider as the token's sub (Subject) claim.
 	SubjectFromToken string `xml:",omitempty"`
 }
+
+// AssumeRoleWithKerberosResponse contains the result of successful
+// AssumeRoleWithKerberosIdentity request
+type AssumeRoleWithKerberosResponse struct {
+	XMLName          xml.Name               `xml:"https://sts.amazonaws.com/doc/2011-06-15/ AssumeRoleWithClientGrantsResponse" json:"-"`
+	Result           KerberosIdentityResult `xml:"AssumeRoleWithKerberosIdentity"`
+	ResponseMetadata struct {
+		RequestID string `xml:"RequestId,omitempty"`
+	} `xml:"ResponseMetadata,omitempty"`
+}
+
+// KerberosIdentityResult - contains credentials for a successful
+// AssumeRoleWithKerberosIdentity request.
+type KerberosIdentityResult struct {
+	Credentials auth.Credentials `xml:",omitempty"`
+}

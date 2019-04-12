@@ -1233,6 +1233,38 @@ func (a adminAPIHandlers) SetUserPolicy(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// SetSTSKrbUserPolicy - PUT /minio/admin/v1/set-krb-sts-user-policy?krbPrincipal=<krb_principal>&name<policy_name>
+func (a adminAPIHandlers) SetSTSKrbUserPolicy(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SetSTSKrbUserPolicy")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	userPrincipal := vars["krbPrincipal"]
+	policyName := vars["name"]
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		return
+	}
+
+	if err := globalIAMSys.SetSTSKrbUserPolicy(userPrincipal, policyName); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+	}
+
+	// Notify all other MinIO peers to reload users
+	for _, nerr := range globalNotificationSys.LoadKrbUserPolicy(userPrincipal) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+}
+
 // SetConfigHandler - PUT /minio/admin/v1/config
 func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetConfigHandler")

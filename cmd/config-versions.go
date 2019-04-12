@@ -19,10 +19,11 @@ package cmd
 import (
 	"sync"
 
+	"github.com/minio/gokrb5/v7/service"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/iam/validator"
 	"github.com/minio/minio/pkg/quick"
 )
@@ -926,4 +927,13 @@ type serverConfigV33 struct {
 
 		// Add new external policy enforcements here.
 	} `json:"policy"`
+
+	Kerberos struct {
+		// Path to keytab file - saved to config
+		KeytabFile string `json:"keytab"`
+
+		// Loaded keytab data - not saved to config on disk,
+		// but loaded each time server starts up
+		settings *service.Settings
+	} `json:"kerberos"`
 }

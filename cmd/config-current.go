@@ -24,13 +24,15 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/minio/gokrb5/v7/keytab"
+	"github.com/minio/gokrb5/v7/service"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/iam/validator"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -292,6 +294,15 @@ func (s *serverConfig) loadFromEnvs() {
 			s.Policy.OPA.URL = u
 			s.Policy.OPA.AuthToken = os.Getenv("MINIO_IAM_OPA_AUTHTOKEN")
 		}
+	}
+
+	if kerberosKeytab, ok := os.LookupEnv("MINIO_KERBEROS_KEYTAB"); ok {
+		s.Kerberos.KeytabFile = kerberosKeytab
+
+		keytab, err := keytab.Load(kerberosKeytab)
+		logger.FatalIf(err, "Unable to load the Kerberos Keytab file")
+
+		s.Kerberos.settings = service.NewSettings(keytab)
 	}
 }
 

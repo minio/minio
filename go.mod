@@ -35,14 +35,13 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway v1.9.0 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.1 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
-	github.com/hashicorp/go-uuid v1.0.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hashicorp/raft v1.1.0 // indirect
 	github.com/hashicorp/vault v1.1.0
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/json-iterator/go v1.1.6
-	github.com/klauspost/compress v1.5.0 // indirect
+	github.com/klauspost/compress v1.7.0 // indirect
 	github.com/klauspost/cpuid v1.2.1 // indirect
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.0
@@ -54,6 +53,7 @@ require (
 	github.com/minio/blazer v0.0.0-20171126203752-2081f5bf0465
 	github.com/minio/cli v1.20.0
 	github.com/minio/dsync v1.0.0
+	github.com/minio/gokrb5/v7 v7.2.5
 	github.com/minio/hdfs/v3 v3.0.0
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/lsync v0.1.0
@@ -90,10 +90,8 @@ require (
 	go.etcd.io/bbolt v1.3.3 // indirect
 	go.uber.org/atomic v1.3.2
 	golang.org/x/crypto v0.0.0-20190618222545-ea8f1a30c443
-	golang.org/x/lint v0.0.0-20190409202823-959b441ac422 // indirect
 	golang.org/x/net v0.0.0-20190619014844-b5b0513f8c1b // indirect
 	golang.org/x/sys v0.0.0-20190618155005-516e3c20635f
-	golang.org/x/tools v0.0.0-20190619181801-b76e30ffa0aa // indirect
 	google.golang.org/api v0.4.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
 	gopkg.in/olivere/elastic.v5 v5.0.80

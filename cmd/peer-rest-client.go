@@ -400,6 +400,19 @@ func (client *peerRESTClient) LoadUser(accessKey string, temp bool) (err error) 
 	return nil
 }
 
+// LoadKrbUserPolicy - reload a specific user.
+func (client *peerRESTClient) LoadKrbUserPolicy(clientPrincipal string) (err error) {
+	values := make(url.Values)
+	values.Set(peerRESTKrbUserPrincipal, clientPrincipal)
+
+	respBody, err := client.call(peerRESTMethodLoadKrbUserPolicy, values, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 // LoadUsers - send load users command to peer nodes.
 func (client *peerRESTClient) LoadUsers() (err error) {
 	respBody, err := client.call(peerRESTMethodLoadUsers, nil, nil, -1)

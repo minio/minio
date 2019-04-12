@@ -18,10 +18,14 @@ package cmd
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/gokrb5/v7/messages"
+	"github.com/minio/gokrb5/v7/service"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/iam/validator"
@@ -33,9 +37,10 @@ const (
 	stsAPIVersion = "2011-06-15"
 
 	// STS API action constants
-	clientGrants = "AssumeRoleWithClientGrants"
-	webIdentity  = "AssumeRoleWithWebIdentity"
-	assumeRole   = "AssumeRole"
+	clientGrants     = "AssumeRoleWithClientGrants"
+	webIdentity      = "AssumeRoleWithWebIdentity"
+	kerberosIdentity = "AssumeRoleWithKerberosIdentity"
+	assumeRole       = "AssumeRole"
 )
 
 // stsAPIHandlers implements and provides http handlers for AWS STS API.
@@ -75,6 +80,12 @@ func registerSTSRouter(router *mux.Router) {
 		Queries("Action", webIdentity).
 		Queries("Version", stsAPIVersion).
 		Queries("WebIdentityToken", "{Token:.*}")
+
+	// AssumeRoleWithKerberosIdentity
+	stsRouter.Methods("POST").HandlerFunc(httpTraceAll(sts.AssumeRoleWithKerberosIdentity)).
+		Queries("Action", kerberosIdentity).
+		Queries("Version", stsAPIVersion).
+		Queries("APReq", "{APReq:.*}")
 
 }
 
@@ -355,4 +366,118 @@ func (sts *stsAPIHandlers) AssumeRoleWithWebIdentity(w http.ResponseWriter, r *h
 //    $ curl https://minio:9000/?Action=AssumeRoleWithClientGrants&Token=<jwt>
 func (sts *stsAPIHandlers) AssumeRoleWithClientGrants(w http.ResponseWriter, r *http.Request) {
 	sts.AssumeRoleWithJWT(w, r)
+}
+
+// AssumeRoleWithKerberosIdentity - implements authentication of a
+// user with Kerberos.
+func (sts *stsAPIHandlers) AssumeRoleWithKerberosIdentity(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AssumeRoleWithKerberosIdentity")
+
+	// Parse the incoming form data.
+	if err := r.ParseForm(); err != nil {
+		logger.LogIf(ctx, err)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+
+	if r.Form.Get("Version") != stsAPIVersion {
+		logger.LogIf(ctx, fmt.Errorf("Invalid STS API version %s, expecting %s", r.Form.Get("Version"), stsAPIVersion))
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSMissingParameter))
+		return
+	}
+
+	action := r.Form.Get("Action")
+	switch action {
+	case kerberosIdentity:
+	default:
+		logger.LogIf(ctx, fmt.Errorf("Unsupported action %s", action))
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+
+	ctx = newContext(r, w, action)
+	defer logger.AuditLog(w, r, action, nil)
+
+	apReqBase64Str := r.Form.Get("APReq")
+	if apReqBase64Str == "" {
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSMissingParameter))
+		return
+	}
+
+	apReqBytes, err := base64.StdEncoding.DecodeString(apReqBase64Str)
+	if err != nil {
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+
+	var APReq messages.APReq
+	err = APReq.Unmarshal(apReqBytes)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Error unmarshalling AP_REQ: %v", err))
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+
+	ok, creds, err := service.VerifyAPREQ(&APReq, globalServerConfig.Kerberos.settings)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Authentication failure: %v", err))
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+	if !ok {
+		logger.LogIf(ctx, fmt.Errorf("Authentication not accepted: %v", err))
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+
+	if creds.Expired() {
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSKerberosExpiredToken))
+		return
+	}
+
+	expTime := APReq.Ticket.DecryptedEncPart.EndTime
+	if expTime.IsZero() {
+		logger.LogIf(ctx, fmt.Errorf("Service Ticket does not have an expiry time"))
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+	clientPrincipal := strings.Join(creds.CName().NameString, ".") + "@" + creds.Realm()
+	m := map[string]interface{}{
+		"exp":          expTime.Unix(),
+		iamKrbPrincKey: clientPrincipal,
+	}
+
+	secret := globalServerConfig.GetCredential().SecretKey
+	cred, err := auth.GetNewCredentialsWithMetadata(m, secret)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInternalError))
+		return
+	}
+
+	policyName := ""
+	// Set the newly generated credentials.
+	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
+		logger.LogIf(ctx, err)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInternalError))
+		return
+	}
+
+	// Notify all other MinIO peers to reload temp users
+	for _, nerr := range globalNotificationSys.LoadUser(cred.AccessKey, true) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+
+	kerberosIdentityResponse := &AssumeRoleWithKerberosResponse{
+		Result: KerberosIdentityResult{
+			Credentials: cred,
+		},
+	}
+	kerberosIdentityResponse.ResponseMetadata.RequestID = w.Header().Get(responseRequestIDKey)
+	encodedSuccessResponse := encodeResponse(kerberosIdentityResponse)
+
+	writeSuccessResponseXML(w, encodedSuccessResponse)
 }
