@@ -211,7 +211,7 @@ func (k *KVStorage) getKVNSEntry(nskey string) (entry KVNSEntry, err error) {
 		}
 		err = KVNSEntryUnmarshal(value, &entry)
 		if err != nil {
-			fmt.Println("##### Unmarshal failed on ", nskey, len(value), string(value[:32]))
+			fmt.Println("##### Unmarshal failed on ", nskey, len(value))
 			tries--
 			if tries == 0 {
 				fmt.Println("##### Unmarshal failed (after 10 retries on GET) on ", k.path, nskey)
@@ -233,7 +233,13 @@ func (k *KVStorage) getKVNSEntry(nskey string) (entry KVNSEntry, err error) {
 }
 
 func (k *KVStorage) ListDir(volume, dirPath string, count int) ([]string, error) {
-	return k.kv.List(pathJoin(volume, dirPath))
+	bufp := kvValuePool.Get().(*[]byte)
+	defer kvValuePool.Put(bufp)
+	entries, err := k.kv.List(pathJoin(volume, dirPath), *bufp)
+	if err != nil {
+		return nil, err
+	}
+	return entries, nil
 	// nskey := pathJoin(volume, dirPath, "xl.json")
 
 	// entry, err := k.getKVNSEntry(nskey)
@@ -280,6 +286,31 @@ func (k *KVStorage) AppendFile(volume string, path string, buf []byte) (err erro
 		return err
 	}
 	return errFileAccessDenied
+}
+
+func (k *KVStorage) CreateDir(volume, dirPath string) error {
+	if err := k.verifyVolume(volume); err != nil {
+		return err
+	}
+	return k.kv.Put(pathJoin(volume, dirPath), []byte("abcd"))
+}
+
+func (k *KVStorage) StatDir(volume, dirPath string) error {
+	if err := k.verifyVolume(volume); err != nil {
+		return err
+	}
+	bufp := kvValuePool.Get().(*[]byte)
+	defer kvValuePool.Put(bufp)
+
+	_, err := k.kv.Get(pathJoin(volume, dirPath), *bufp)
+	return err
+}
+
+func (k *KVStorage) DeleteDir(volume, dirPath string) error {
+	if err := k.verifyVolume(volume); err != nil {
+		return err
+	}
+	return k.kv.Delete(pathJoin(volume, dirPath))
 }
 
 func (k *KVStorage) CreateFile(volume, filePath string, size int64, reader io.Reader) error {
@@ -340,7 +371,6 @@ func (k *KVStorage) ReadFileStream(volume, filePath string, offset, length int64
 
 	if length != entry.Size {
 		fmt.Println("length != entry.Size", length, entry.Size, nskey, entry.Key)
-		fmt.Println(entry)
 		return nil, fmt.Errorf("ReadFileStream: %d != %d", length, entry.Size)
 	}
 	if offset != 0 {

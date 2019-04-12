@@ -208,6 +208,48 @@ func (s *storageRESTServer) CreateFileHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
+func (s *storageRESTServer) CreateDirHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := mux.Vars(r)
+	volume := vars[storageRESTVolume]
+	dirPath := vars[storageRESTFilePath]
+
+	err := s.storage.CreateDir(volume, dirPath)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+	}
+}
+
+func (s *storageRESTServer) DeleteDirHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := mux.Vars(r)
+	volume := vars[storageRESTVolume]
+	dirPath := vars[storageRESTFilePath]
+
+	err := s.storage.DeleteDir(volume, dirPath)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+	}
+}
+
+func (s *storageRESTServer) StatDirHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := mux.Vars(r)
+	volume := vars[storageRESTVolume]
+	dirPath := vars[storageRESTFilePath]
+
+	err := s.storage.StatDir(volume, dirPath)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+	}
+}
+
 // WriteAllHandler - write to file all content.
 func (s *storageRESTServer) WriteAllHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -425,6 +467,14 @@ func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodStatFile).HandlerFunc(httpTraceHdrs(server.StatFileHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
+
+		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodCreateDir).HandlerFunc(httpTraceHdrs(server.CreateDirHandler)).
+			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
+		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodStatDir).HandlerFunc(httpTraceHdrs(server.StatDirHandler)).
+			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
+		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodDeleteDir).HandlerFunc(httpTraceHdrs(server.DeleteDirHandler)).
+			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
+
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodReadAll).HandlerFunc(httpTraceHdrs(server.ReadAllHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodReadFile).HandlerFunc(httpTraceHdrs(server.ReadFileHandler)).

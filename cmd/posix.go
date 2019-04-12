@@ -338,6 +338,18 @@ func (s *posix) DiskInfo() (info DiskInfo, err error) {
 	}, nil
 }
 
+func (s *posix) CreateDir(volume, dirPath string) error {
+	return nil
+}
+
+func (s *posix) StatDir(volume, dirPath string) error {
+	return nil
+}
+
+func (s *posix) DeleteDir(volume, dirPath string) error {
+	return nil
+}
+
 // getVolDir - will convert incoming volume names to
 // corresponding valid volume names on the backend in a platform
 // compatible way for all operating systems. If volume is not found

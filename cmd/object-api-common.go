@@ -127,9 +127,10 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 
 		// Entry path is empty, just delete it.
 		if len(entries) == 0 {
-			err = storage.DeleteFile(volume, path.Clean(entryPath))
-			logger.LogIf(ctx, err)
-			return err
+			return nil
+			// err = storage.DeleteFile(volume, path.Clean(entryPath))
+			// logger.LogIf(ctx, err)
+			// return err
 		}
 
 		// Recurse and delete all other entries.

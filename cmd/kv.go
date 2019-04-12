@@ -98,6 +98,43 @@ static int minio_nkv_delete(struct minio_nkv_handle *handle, void *key, int keyL
   return result;
 }
 
+static int minio_nkv_list(struct minio_nkv_handle *handle, void *prefix, int prefixLen, void *buf, int bufLen, int *numKeys, void **iter_context) {
+  nkv_result result;
+  nkv_io_context ctx;
+  ctx.is_pass_through = 1;
+  ctx.container_hash = handle->container_hash;
+  ctx.network_path_hash = handle->network_path_hash;
+  ctx.ks_id = 0;
+
+  uint32_t count = 100;
+  uint32_t max_keys = count;
+  nkv_key* keys_out = (nkv_key*) malloc (sizeof(nkv_key) * count);
+  memset(keys_out, 0, (sizeof(nkv_key) * count));
+  for (int iter = 0; iter < count; iter++) {
+    keys_out[iter].key = malloc(256);
+    memset(keys_out[iter].key, 0, 256);
+    keys_out[iter].length = 256;
+  }
+  char *prefixStr = malloc(257);
+  memset(prefixStr, 0, 256);
+  strncpy(prefixStr, prefix, prefixLen);
+  // printf("List on %s\n", prefixStr);
+  result = nkv_indexing_list_keys(handle->nkv_handle, &ctx, NULL, prefixStr, "/", NULL, &max_keys, keys_out, iter_context);
+  *numKeys = (int)max_keys;
+  char *bufChar = (char *) buf;
+  for (int iter = 0; iter < *numKeys; iter++) {
+    // printf("C: %s\n",(char *)keys_out[iter].key);
+    strcpy(bufChar, keys_out[iter].key);
+    bufChar += keys_out[iter].length;
+    bufChar++;
+  }
+  for (int iter = 0; iter < count; iter++) {
+    free(keys_out[iter].key);
+  }
+  free(keys_out);
+  return result;
+}
+
 extern void minio_nkv_callback(void *, int, int);
 
 static void nkv_aio_complete (nkv_aio_construct* op_data, int32_t num_op) {
@@ -175,6 +212,7 @@ static int minio_nkv_delete_async(struct minio_nkv_handle *handle, void *id, voi
 import "C"
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -610,6 +648,38 @@ func (k *KV) Delete(keyStr string) error {
 	return nil
 }
 
-func (k *KV) List(keyStr string) ([]string, error) {
-	return nil, errDiskNotFound
+func (k *KV) List(keyStr string, buf []byte) ([]string, error) {
+	if kvSerialize {
+		kvMu.Lock()
+		defer kvMu.Unlock()
+	}
+	keyStr = pathJoin(kvMetaDir, keyStr)
+	if !strings.HasSuffix(keyStr, slashSeparator) {
+		keyStr += slashSeparator
+	}
+	key := []byte(keyStr)
+	var numKeysC C.int
+	var numKeys int
+	var entries []string
+	var iterContext unsafe.Pointer
+	for {
+		cstatus := C.minio_nkv_list(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)), unsafe.Pointer(&buf[0]), C.int(len(buf)), &numKeysC, &iterContext)
+		if cstatus != 0 && cstatus != 0x01F {
+			return nil, errFileNotFound
+		}
+		numKeys = int(numKeysC)
+		for i := 0; i < numKeys; i++ {
+			index := bytes.IndexByte(buf, '\x00')
+			if index == -1 {
+				break
+			}
+			entries = append(entries, string(buf[:index]))
+			buf = buf[index+1:]
+		}
+
+		if cstatus == 0 {
+			break
+		}
+	}
+	return entries, nil
 }

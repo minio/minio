@@ -10,7 +10,7 @@ type KVInterface interface {
 	Put(keyStr string, value []byte) error
 	Get(keyStr string, value []byte) ([]byte, error)
 	Delete(keyStr string) error
-	List(prefix string) ([]string, error)
+	List(prefix string, buf []byte) ([]string, error)
 }
 
 const kvNSEntryPaddingMultiple = 4 * 1024

@@ -356,6 +356,33 @@ func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPa
 	return err
 }
 
+func (client *storageRESTClient) CreateDir(volume, dir string) error {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, dir)
+	respBody, err := client.call(storageRESTMethodCreateDir, values, nil, -1)
+	defer http.DrainBody(respBody)
+	return err
+}
+
+func (client *storageRESTClient) StatDir(volume, dir string) error {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, dir)
+	respBody, err := client.call(storageRESTMethodStatDir, values, nil, -1)
+	defer http.DrainBody(respBody)
+	return err
+}
+
+func (client *storageRESTClient) DeleteDir(volume, dir string) error {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, dir)
+	respBody, err := client.call(storageRESTMethodDeleteDir, values, nil, -1)
+	defer http.DrainBody(respBody)
+	return err
+}
+
 // Gets peer storage server's instanceID - to be used with every REST call for validation.
 func (client *storageRESTClient) getInstanceID() (err error) {
 	respBody, err := client.restClient.Call(storageRESTMethodGetInstanceID, nil, nil, -1)

@@ -37,6 +37,9 @@ const (
 	storageRESTMethodDeleteFile     = "deletefile"
 	storageRESTMethodRenameFile     = "renamefile"
 	storageRESTMethodGetInstanceID  = "getinstanceid"
+	storageRESTMethodCreateDir      = "createdir"
+	storageRESTMethodStatDir        = "statdir"
+	storageRESTMethodDeleteDir      = "deletedir"
 )
 
 const (

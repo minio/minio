@@ -46,7 +46,7 @@ func (k *KVEmulator) Delete(keyStr string) error {
 	return nil
 }
 
-func (k *KVEmulator) List(prefix string) ([]string, error) {
+func (k *KVEmulator) List(prefix string, buf []byte) ([]string, error) {
 	if !strings.HasPrefix(prefix, kvDataDir) {
 		prefix = pathJoin(kvMetaDir, prefix)
 	}

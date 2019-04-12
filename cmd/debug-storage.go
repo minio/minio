@@ -107,6 +107,21 @@ func (d *debugStorage) AppendFile(volume string, path string, buf []byte) (err e
 	return err
 }
 
+func (d *debugStorage) CreateDir(volume, dirPath string) error {
+	err := d.s.CreateDir(volume, dirPath)
+	return err
+}
+
+func (d *debugStorage) StatDir(volume, dirPath string) error {
+	err := d.s.StatDir(volume, dirPath)
+	return err
+}
+
+func (d *debugStorage) DeleteDir(volume, dirPath string) error {
+	err := d.s.DeleteDir(volume, dirPath)
+	return err
+}
+
 func (d *debugStorage) CreateFile(volume, filePath string, size int64, reader io.Reader) error {
 	err := d.s.CreateFile(volume, filePath, size, reader)
 	if d.enable {
