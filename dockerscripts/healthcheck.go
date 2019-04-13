@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -142,18 +141,10 @@ func main() {
 			// exit with success
 			os.Exit(0)
 		}
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			// Drain any response.
-			xhttp.DrainBody(resp.Body)
-			// GET failed exit
-			log.Fatalln(err)
-		}
-		bodyString := string(bodyBytes)
 		// Drain any response.
 		xhttp.DrainBody(resp.Body)
-		// This means sever is configured with https
-		if resp.StatusCode == http.StatusForbidden && bodyString == "SSL required" {
+		// 400 response may mean sever is configured with https
+		if resp.StatusCode == http.StatusBadRequest {
 			// Try with https
 			u.Scheme = "https"
 			resp, err = client.Get(u.String())
