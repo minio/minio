@@ -92,7 +92,9 @@ var (
         "enable": false,
         "format": "namespace",
         "url": "",
-        "index": ""
+        "index": "",
+        "queueDir": "",
+        "queueLimit": 0
       }
     },
     "kafka": {
