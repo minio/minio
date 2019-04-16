@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/sys"
 )
 
 const (
@@ -36,15 +37,22 @@ const (
 type QueueStore struct {
 	sync.RWMutex
 	directory string
-	eC        uint16
-	limit     uint16
+	eC        uint64
+	limit     uint64
 }
 
 // NewQueueStore - Creates an instance for QueueStore.
-func NewQueueStore(directory string, limit uint16) *QueueStore {
+func NewQueueStore(directory string, limit uint64) *QueueStore {
 	if limit == 0 {
 		limit = maxLimit
+		currRlimit, _, err := sys.GetMaxOpenFileLimit()
+		if err == nil {
+			if currRlimit > limit {
+				limit = currRlimit
+			}
+		}
 	}
+
 	queueStore := &QueueStore{
 		directory: directory,
 		limit:     limit,
@@ -61,7 +69,7 @@ func (store *QueueStore) Open() error {
 		return terr
 	}
 
-	eCount := uint16(len(store.list()))
+	eCount := uint64(len(store.list()))
 	if eCount >= store.limit {
 		return errLimitExceeded
 	}
