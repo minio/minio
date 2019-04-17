@@ -200,6 +200,7 @@ func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 		return cacheReader, nil
 	} else if err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
+			cacheReader.Close()
 			// Delete cached entry if backend object was deleted.
 			dcache.Delete(ctx, bucket, object)
 		}
