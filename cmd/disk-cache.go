@@ -53,7 +53,7 @@ type cacheObjects struct {
 	// pointer to disk cache
 	cache *diskCache
 	// ListObjects pool management.
-	listPool *treeWalkPool
+	listPool *TreeWalkPool
 	// file path patterns to exclude from cache
 	exclude []string
 	// Object functions pointing to the corresponding functions of backend implementation.
@@ -372,7 +372,7 @@ func (c cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string, 
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - list of fsObjects
-func listDirCacheFactory(isLeaf isLeafFunc, disks []*cacheFSObjects) listDirFunc {
+func listDirCacheFactory(isLeaf IsLeafFunc, disks []*cacheFSObjects) ListDirFunc {
 	listCacheDirs := func(bucket, prefixDir, prefixEntry string) (dirs []string) {
 		var entries []string
 		for _, disk := range disks {
@@ -962,7 +962,7 @@ func newServerCacheObjects(config CacheConfig) (CacheObjectLayer, error) {
 	return &cacheObjects{
 		cache:    dcache,
 		exclude:  config.Exclude,
-		listPool: newTreeWalkPool(globalLookupTimeout),
+		listPool: NewTreeWalkPool(globalLookupTimeout),
 		GetObjectFn: func(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
 			return newObjectLayerFn().GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
 		},
