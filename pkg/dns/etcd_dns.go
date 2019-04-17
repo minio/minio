@@ -70,7 +70,20 @@ func (c *coreDNS) Get(bucket string) ([]SrvRecord, error) {
 		if err != nil {
 			return nil, err
 		}
-		srvRecords = append(srvRecords, records...)
+		// Make sure we have record.Key is empty
+		// this can only happen when record.Key
+		// has bucket entry with exact prefix
+		// match any record.Key which do not
+		// match the prefixes we skip them.
+		for _, record := range records {
+			if record.Key != "" {
+				continue
+			}
+			srvRecords = append(srvRecords, records...)
+		}
+	}
+	if len(srvRecords) == 0 {
+		return nil, ErrNoEntriesFound
 	}
 	return srvRecords, nil
 }
