@@ -30,6 +30,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/cpu"
@@ -389,6 +390,26 @@ func NewEndpointList(args ...string) (endpoints EndpointList, err error) {
 	}
 
 	return endpoints, nil
+}
+
+func checkEndpointsSubOptimal(ctx *cli.Context, setupType SetupType, endpoints EndpointList) (err error) {
+	// Validate sub optimal ordering only for distributed setup.
+	if setupType != DistXLSetupType {
+		return nil
+	}
+	var endpointOrder int
+	err = fmt.Errorf("Too many disk args are local, input is in sub-optimal order. Please review input args: %s", ctx.Args())
+	for _, endpoint := range endpoints {
+		if endpoint.IsLocal {
+			endpointOrder++
+		} else {
+			endpointOrder--
+		}
+		if endpointOrder >= 2 {
+			return err
+		}
+	}
+	return nil
 }
 
 // Checks if there are any cross device mounts.
