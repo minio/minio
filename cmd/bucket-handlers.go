@@ -774,10 +774,6 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	globalNotificationSys.RemoveNotification(bucket)
-	globalPolicySys.Remove(bucket)
-	globalNotificationSys.DeleteBucket(ctx, bucket)
-
 	if globalDNSConfig != nil {
 		if err := globalDNSConfig.Delete(bucket); err != nil {
 			// Deleting DNS entry failed, attempt to create the bucket again.
@@ -786,6 +782,10 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 			return
 		}
 	}
+
+	globalNotificationSys.RemoveNotification(bucket)
+	globalPolicySys.Remove(bucket)
+	globalNotificationSys.DeleteBucket(ctx, bucket)
 
 	// Write success response.
 	writeSuccessNoContent(w)
