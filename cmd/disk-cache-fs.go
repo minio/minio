@@ -87,7 +87,7 @@ func newCacheFSObjects(dir string, expiry int, maxDiskUsagePct int) (*cacheFSObj
 			readersMap: make(map[string]*lock.RLockedFile),
 		},
 		nsMutex:       newNSLock(false),
-		listPool:      newTreeWalkPool(globalLookupTimeout),
+		listPool:      NewTreeWalkPool(globalLookupTimeout),
 		appendFileMap: make(map[string]*fsAppendFile),
 	}
 
