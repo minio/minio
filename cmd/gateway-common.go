@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"strings"
@@ -347,6 +348,11 @@ func ErrorRespToObjectError(err error, params ...string) error {
 	}
 
 	return err
+}
+
+// ComputeCompleteMultipartMD5 calculates MD5 ETag for complete multipart responses
+func ComputeCompleteMultipartMD5(parts []CompletePart) (string, error) {
+	return getCompleteMultipartMD5(context.Background(), parts)
 }
 
 // parse gateway sse env variable

@@ -37,6 +37,7 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/cli"
 	miniogopolicy "github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/policy"
@@ -1202,19 +1203,21 @@ func (a *azureObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 	if err != nil {
 		return objInfo, azureToObjectError(err, bucket, object)
 	}
-	if len(metadata.Metadata) > 0 {
-		objBlob.Metadata, objBlob.Properties, err = s3MetaToAzureProperties(ctx, metadata.Metadata)
-		if err != nil {
-			return objInfo, azureToObjectError(err, bucket, object)
-		}
-		err = objBlob.SetProperties(nil)
-		if err != nil {
-			return objInfo, azureToObjectError(err, bucket, object)
-		}
-		err = objBlob.SetMetadata(nil)
-		if err != nil {
-			return objInfo, azureToObjectError(err, bucket, object)
-		}
+	objBlob.Metadata, objBlob.Properties, err = s3MetaToAzureProperties(ctx, metadata.Metadata)
+	if err != nil {
+		return objInfo, azureToObjectError(err, bucket, object)
+	}
+	objBlob.Metadata["md5sum"], err = cmd.ComputeCompleteMultipartMD5(uploadedParts)
+	if err != nil {
+		return objInfo, err
+	}
+	err = objBlob.SetProperties(nil)
+	if err != nil {
+		return objInfo, azureToObjectError(err, bucket, object)
+	}
+	err = objBlob.SetMetadata(nil)
+	if err != nil {
+		return objInfo, azureToObjectError(err, bucket, object)
 	}
 	var partNumberMarker int
 	for {

@@ -501,7 +501,6 @@ func (sys *NotificationSys) RemoteTargetExist(bucketName string, targetID event.
 
 // ListenBucketNotificationArgs - listen bucket notification RPC arguments.
 type ListenBucketNotificationArgs struct {
-	AuthArgs   `json:"-"`
 	BucketName string         `json:"-"`
 	EventNames []event.Name   `json:"eventNames"`
 	Pattern    string         `json:"pattern"`

@@ -47,6 +47,9 @@ func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error)
 	w.(http.Flusher).Flush()
 }
 
+// DefaultSkewTime - skew time is 15 minutes between minio peers.
+const DefaultSkewTime = 15 * time.Minute
+
 // Authenticates storage client's requests and validates for skewed time.
 func storageServerRequestValidate(r *http.Request) error {
 	_, owner, err := webRequestAuthenticate(r)

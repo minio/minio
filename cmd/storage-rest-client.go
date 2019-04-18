@@ -405,6 +405,7 @@ func newStorageRESTClient(endpoint Endpoint) (*storageRESTClient, error) {
 		tlsConfig = &tls.Config{
 			ServerName: host.Name,
 			RootCAs:    globalRootCAs,
+			NextProtos: []string{"http/1.1"}, // Force http1.1
 		}
 	}
 

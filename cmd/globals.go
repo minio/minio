@@ -208,13 +208,6 @@ var (
 	// Max allowed disk cache percentage
 	globalCacheMaxUse = 80
 
-	// RPC V1 - Initial version
-	// RPC V2 - format.json XL version changed to 2
-	// RPC V3 - format.json XL version changed to 3
-	// RPC V4 - ReadFile() arguments signature changed
-	// Current RPC version
-	globalRPCAPIVersion = RPCVersion{4, 0, 0}
-
 	// Allocated etcd endpoint for config and bucket DNS.
 	globalEtcdClient *etcd.Client
 
