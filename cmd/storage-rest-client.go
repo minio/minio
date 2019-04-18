@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -353,6 +353,14 @@ func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPa
 
 // Gets peer storage server's instanceID - to be used with every REST call for validation.
 func (client *storageRESTClient) getInstanceID() (err error) {
+	// getInstanceID() does not use storageRESTClient.call()
+	// function so we need to update lastError field here.
+	defer func() {
+		if err != nil {
+			client.lastError = err
+		}
+	}()
+
 	respBody, err := client.restClient.Call(storageRESTMethodGetInstanceID, nil, nil, -1)
 	if err != nil {
 		return err
@@ -397,6 +405,7 @@ func newStorageRESTClient(endpoint Endpoint) (*storageRESTClient, error) {
 		tlsConfig = &tls.Config{
 			ServerName: host.Name,
 			RootCAs:    globalRootCAs,
+			NextProtos: []string{"http/1.1"}, // Force http1.1
 		}
 	}
 

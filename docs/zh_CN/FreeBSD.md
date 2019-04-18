@@ -1,6 +1,6 @@
-# Minio FreeBSD 快速入门 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# MinIO FreeBSD 快速入门 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-### Minio with ZFS backend - FreeBSD
+### MinIO with ZFS backend - FreeBSD
 此示例假设你已经有正在运行的FreeBSD 11.x。
 
 #### 启动 ZFS service
@@ -51,13 +51,13 @@ zpool status -x
 all pools are healthy
 ```
 
-#### 启动Minio服务
-从FreeBSD port安装 [Minio](https://minio.io)。
+#### 启动MinIO服务
+从FreeBSD port安装 [MinIO](https://min.io)。
 ```sh
 pkg install minio
 ```
 
-配置Minio,让其使用挂载在`/minio-example/compressed-objects`的ZFS卷。
+配置MinIO,让其使用挂载在`/minio-example/compressed-objects`的ZFS卷。
 ```
 sysrc minio_enable=yes
 sysrc minio_disks=/minio-example/compressed-objects
@@ -68,9 +68,9 @@ sysrc minio_disks=/minio-example/compressed-objects
 service minio start
 ```
 
-现在你已经成功的让Minio运行在ZFS上，你上传的对象都获得了磁盘级别的压缩功能，访问 http://localhost:9000。
+现在你已经成功的让MinIO运行在ZFS上，你上传的对象都获得了磁盘级别的压缩功能，访问 http://localhost:9000。
 
-#### 关闭Minio服务
+#### 关闭MinIO服务
 ```sh
 service minio stop
 ```

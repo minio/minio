@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ type xlSets struct {
 	distributionAlgo string
 
 	// Pack level listObjects pool management.
-	listPool *treeWalkPool
+	listPool *TreeWalkPool
 }
 
 // isConnected - checks if the endpoint is connected or not.
@@ -270,7 +270,7 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 		format:             format,
 		disksConnectDoneCh: make(chan struct{}),
 		distributionAlgo:   format.XL.DistributionAlgo,
-		listPool:           newTreeWalkPool(globalLookupTimeout),
+		listPool:           NewTreeWalkPool(globalLookupTimeout),
 	}
 
 	mutex := newNSLock(globalIsDistXL)
@@ -307,6 +307,8 @@ func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 	for _, set := range s.sets {
 		lstorageInfo := set.StorageInfo(ctx)
 		storageInfo.Used = storageInfo.Used + lstorageInfo.Used
+		storageInfo.Total = storageInfo.Total + lstorageInfo.Total
+		storageInfo.Available = storageInfo.Available + lstorageInfo.Available
 		storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks + lstorageInfo.Backend.OnlineDisks
 		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks + lstorageInfo.Backend.OfflineDisks
 	}
@@ -641,7 +643,7 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir(). Sets passes set of disks.
-func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, isLeafDir isLeafDirFunc, sets ...*xlObjects) listDirFunc {
+func listDirSetsFactory(ctx context.Context, isLeaf IsLeafFunc, isLeafDir IsLeafDirFunc, sets ...*xlObjects) ListDirFunc {
 	listDirInternal := func(bucket, prefixDir, prefixEntry string, disks []StorageAPI) (mergedEntries []string) {
 		var diskEntries = make([][]string, len(disks))
 		var wg sync.WaitGroup
@@ -710,109 +712,38 @@ func listDirSetsFactory(ctx context.Context, isLeaf isLeafFunc, isLeafDir isLeaf
 // listed and subsequently merge lexically sorted inside listDirSetsFactory(). Resulting
 // value through the walk channel receives the data properly lexically sorted.
 func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	var result ListObjectsInfo
-	// validate all the inputs for listObjects
-	if err := checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
-		return result, err
+	isLeaf := func(bucket, entry string) bool {
+		entry = strings.TrimSuffix(entry, slashSeparator)
+		// Verify if we are at the leaf, a leaf is where we
+		// see `xl.json` inside a directory.
+		return s.getHashedSet(entry).isObject(bucket, entry)
 	}
 
-	var objInfos []ObjectInfo
-	var eof bool
-	var nextMarker string
-
-	recursive := true
-	if delimiter == slashSeparator {
-		recursive = false
-	}
-
-	walkResultCh, endWalkCh := s.listPool.Release(listParams{bucket, recursive, marker, prefix})
-	if walkResultCh == nil {
-		endWalkCh = make(chan struct{})
-		isLeaf := func(bucket, entry string) bool {
-			entry = strings.TrimSuffix(entry, slashSeparator)
-			// Verify if we are at the leaf, a leaf is where we
-			// see `xl.json` inside a directory.
-			return s.getHashedSet(entry).isObject(bucket, entry)
-		}
-
-		isLeafDir := func(bucket, entry string) bool {
-			// Verify prefixes in all sets.
-			var ok bool
-			for _, set := range s.sets {
-				ok = set.isObjectDir(bucket, entry)
-				if ok {
-					return true
-				}
+	isLeafDir := func(bucket, entry string) bool {
+		// Verify prefixes in all sets.
+		var ok bool
+		for _, set := range s.sets {
+			ok = set.isObjectDir(bucket, entry)
+			if ok {
+				return true
 			}
-			return false
 		}
-
-		listDir := listDirSetsFactory(ctx, isLeaf, isLeafDir, s.sets...)
-		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
+		return false
 	}
 
-	for i := 0; i < maxKeys; {
-		walkResult, ok := <-walkResultCh
-		if !ok {
-			// Closed channel.
-			eof = true
-			break
-		}
+	listDir := listDirSetsFactory(ctx, isLeaf, isLeafDir, s.sets...)
 
-		// For any walk error return right away.
-		if walkResult.err != nil {
-			return result, toObjectErr(walkResult.err, bucket, prefix)
-		}
-
-		var objInfo ObjectInfo
-		var err error
-		if hasSuffix(walkResult.entry, slashSeparator) {
-			// Verify prefixes in all sets.
-			for _, set := range s.sets {
-				objInfo, err = set.getObjectInfoDir(ctx, bucket, walkResult.entry)
-				if err == nil {
-					break
-				}
-			}
-		} else {
-			objInfo, err = s.getHashedSet(walkResult.entry).getObjectInfo(ctx, bucket, walkResult.entry)
-		}
-		if err != nil {
-			// Ignore errFileNotFound as the object might have got
-			// deleted in the interim period of listing and getObjectInfo(),
-			// ignore quorum error as it might be an entry from an outdated disk.
-			if IsErrIgnored(err, []error{
-				errFileNotFound,
-				errXLReadQuorum,
-			}...) {
-				continue
-			}
-			return result, toObjectErr(err, bucket, prefix)
-		}
-		nextMarker = objInfo.Name
-		objInfos = append(objInfos, objInfo)
-		i++
-		if walkResult.end {
-			eof = true
-			break
-		}
+	var getObjectInfoDirs []func(context.Context, string, string) (ObjectInfo, error)
+	// Verify prefixes in all sets.
+	for _, set := range s.sets {
+		getObjectInfoDirs = append(getObjectInfoDirs, set.getObjectInfoDir)
 	}
 
-	params := listParams{bucket, recursive, nextMarker, prefix}
-	if !eof {
-		s.listPool.Set(params, walkResultCh, endWalkCh)
+	var getObjectInfo = func(ctx context.Context, bucket string, entry string) (ObjectInfo, error) {
+		return s.getHashedSet(entry).getObjectInfo(ctx, bucket, entry)
 	}
 
-	result = ListObjectsInfo{IsTruncated: !eof}
-	for _, objInfo := range objInfos {
-		result.NextMarker = objInfo.Name
-		if objInfo.IsDir && delimiter == slashSeparator {
-			result.Prefixes = append(result.Prefixes, objInfo.Name)
-			continue
-		}
-		result.Objects = append(result.Objects, objInfo)
-	}
-	return result, nil
+	return listObjects(ctx, s, bucket, prefix, marker, delimiter, maxKeys, s.listPool, isLeaf, isLeafDir, listDir, getObjectInfo, getObjectInfoDirs...)
 }
 
 func (s *xlSets) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error) {

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018, 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017, 2018, 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ const (
 	adminAPIPathPrefix = "/minio/admin"
 )
 
-// adminAPIHandlers provides HTTP handlers for Minio admin API.
+// adminAPIHandlers provides HTTP handlers for MinIO admin API.
 type adminAPIHandlers struct {
 }
 

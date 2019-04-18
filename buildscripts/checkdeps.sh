@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Minio Cloud Storage, (C) 2014-2018 Minio, Inc.
+# MinIO Cloud Storage, (C) 2014-2018 MinIO, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ _init() {
 
     ## Minimum required versions for build dependencies
     GIT_VERSION="1.0"
-    GO_VERSION="1.10.1"
+    GO_VERSION="1.12"
     OSX_VERSION="10.8"
     KNAME=$(uname -s)
     ARCH=$(uname -m)
@@ -36,7 +36,7 @@ _init() {
 ## In OSX, 'readlink -f' option does not exist, hence
 ## we have our own readlink -f behavior here.
 ## Once OSX has the option, below function is good enough.
-## 
+##
 ## readlink() {
 ##     return /bin/readlink -f "$1"
 ## }
@@ -119,7 +119,7 @@ assert_is_supported_os() {
 
 assert_check_golang_env() {
     if ! which go >/dev/null 2>&1; then
-        echo "Cannot find go binary in your PATH configuration, please refer to Go installation document at https://docs.minio.io/docs/how-to-install-golang"
+        echo "Cannot find go binary in your PATH configuration, please refer to Go installation document at https://docs.min.io/docs/how-to-install-golang"
         exit 1
     fi
 

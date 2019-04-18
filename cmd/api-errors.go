@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -177,20 +177,19 @@ const (
 
 	// Add new extended error codes here.
 
-	// Minio extended errors.
+	// MinIO extended errors.
 	ErrReadQuorum
 	ErrWriteQuorum
 	ErrParentIsObject
 	ErrStorageFull
 	ErrRequestBodyParse
 	ErrObjectExistsAsDirectory
-	ErrPolicyNesting
 	ErrInvalidObjectName
 	ErrInvalidResourceName
 	ErrServerNotInitialized
 	ErrOperationTimedOut
 	ErrInvalidRequest
-	// Minio storage class error codes
+	// MinIO storage class error codes
 	ErrInvalidStorageClass
 	ErrBackendDown
 	// Add new extended error codes here.
@@ -747,7 +746,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrUnsupportedNotification: {
 		Code:           "UnsupportedNotification",
-		Description:    "Minio server does not support Topic or Cloud Function based notifications.",
+		Description:    "MinIO server does not support Topic or Cloud Function based notifications.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidCopyPartRange: {
@@ -853,7 +852,7 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 
-	/// Minio extensions.
+	/// MinIO extensions.
 	ErrStorageFull: {
 		Code:           "XMinioStorageFull",
 		Description:    "Storage backend has reached its minimum free disk threshold. Please delete a few objects to proceed.",
@@ -883,11 +882,6 @@ var errorCodes = errorCodeMap{
 		Code:           "XMinioWriteQuorum",
 		Description:    "Multiple disks failures, unable to write data.",
 		HTTPStatusCode: http.StatusServiceUnavailable,
-	},
-	ErrPolicyNesting: {
-		Code:           "XMinioPolicyNesting",
-		Description:    "New bucket policy conflicts with an existing policy. Please try again with new prefix.",
-		HTTPStatusCode: http.StatusConflict,
 	},
 	ErrInvalidObjectName: {
 		Code:           "XMinioInvalidObjectName",

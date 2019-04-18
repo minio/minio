@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -123,10 +123,10 @@ func newApp(name string) *cli.App {
 
 	app := cli.NewApp()
 	app.Name = name
-	app.Author = "Minio.io"
+	app.Author = "MinIO, Inc."
 	app.Version = Version
 	app.Usage = "Cloud Storage Server."
-	app.Description = `Minio is an Amazon S3 compatible object storage server. Use it to store photos, videos, VMs, containers, log files, or any blob of data as objects.`
+	app.Description = `MinIO is an Amazon S3 compatible object storage server. Use it to store photos, videos, VMs, containers, log files, or any blob of data as objects.`
 	app.Flags = globalFlags
 	app.HideVersion = true     // Hide `--version` flag, we already have `minio version`.
 	app.HideHelpCommand = true // Hide `help, h` command, we already have `minio --help`.

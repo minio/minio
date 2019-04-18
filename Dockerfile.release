@@ -1,19 +1,17 @@
-FROM golang:1.11.4-alpine3.7
+FROM golang:1.12-alpine
 
 ENV GOPATH /go
 ENV CGO_ENABLED 0
-
-WORKDIR /go/src/github.com/minio/
+ENV GO111MODULE on
 
 RUN  \
      apk add --no-cache git && \
-     go get -v -d github.com/minio/minio && \
-     cd /go/src/github.com/minio/minio/dockerscripts && \
+     git clone https://github.com/minio/minio && cd minio/dockerscripts && \
      go build -ldflags "-s -w" -o /usr/bin/healthcheck healthcheck.go
 
-FROM alpine:3.7
+FROM alpine:3.9
 
-LABEL maintainer="Minio Inc <dev@minio.io>"
+LABEL maintainer="MinIO Inc <dev@min.io>"
 
 COPY --from=0 /usr/bin/healthcheck /usr/bin/healthcheck
 COPY dockerscripts/docker-entrypoint.sh /usr/bin/
@@ -25,7 +23,7 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
 RUN \
      apk add --no-cache ca-certificates 'curl>7.61.0' && \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
-     curl https://dl.minio.io/server/minio/release/linux-amd64/minio > /usr/bin/minio && \
+     curl https://dl.min.io/server/minio/release/linux-amd64/minio > /usr/bin/minio && \
      chmod +x /usr/bin/minio  && \
      chmod +x /usr/bin/docker-entrypoint.sh && \
      chmod +x /usr/bin/healthcheck

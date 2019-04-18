@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,14 +83,14 @@ ENVIRONMENT VARIABLES:
      MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
 
   DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
+     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to MinIO host domain name.
 
   WORM:
      MINIO_WORM: To turn on Write-Once-Read-Many in server, set this value to "on".
 
   BUCKET-DNS:
-     MINIO_DOMAIN:    To enable bucket DNS requests, set this value to Minio host domain name.
-     MINIO_PUBLIC_IPS: To enable bucket DNS requests, set this value to list of Minio host public IP(s) delimited by ",".
+     MINIO_DOMAIN:    To enable bucket DNS requests, set this value to MinIO host domain name.
+     MINIO_PUBLIC_IPS: To enable bucket DNS requests, set this value to list of MinIO host public IP(s) delimited by ",".
      MINIO_ETCD_ENDPOINTS: To enable bucket DNS requests, set this value to list of etcd endpoints delimited by ",".
 
    KMS:
@@ -230,7 +230,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	if !globalCLIContext.Quiet {
-		// Check for new updates from dl.minio.io.
+		// Check for new updates from dl.min.io.
 		mode := globalMinioModeFS
 		if globalIsDistXL {
 			mode = globalMinioModeDistXL

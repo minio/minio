@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,6 +50,10 @@ type DriveInfo HealDriveInfo
 // StorageInfo - represents total capacity of underlying storage.
 type StorageInfo struct {
 	Used uint64 // Total used spaced per tenant.
+
+	Available uint64 // Total available space.
+
+	Total uint64 // Total disk space.
 
 	// Backend type.
 	Backend struct {

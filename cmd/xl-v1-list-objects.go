@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import (
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir()
-func listDirFactory(ctx context.Context, isLeaf isLeafFunc, disks ...StorageAPI) listDirFunc {
+func listDirFactory(ctx context.Context, isLeaf IsLeafFunc, disks ...StorageAPI) ListDirFunc {
 	// Returns sorted merged entries from all the disks.
 	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string, delayIsLeaf bool) {
 		for _, disk := range disks {

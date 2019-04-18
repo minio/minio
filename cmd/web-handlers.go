@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,7 +122,7 @@ type StorageInfoRep struct {
 }
 
 // StorageInfo - web call to gather storage usage statistics.
-func (web *webAPIHandlers) StorageInfo(r *http.Request, args *AuthArgs, reply *StorageInfoRep) error {
+func (web *webAPIHandlers) StorageInfo(r *http.Request, args *WebGenericArgs, reply *StorageInfoRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
@@ -147,12 +147,19 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	_, owner, authErr := webRequestAuthenticate(r)
+	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
 
-	if !owner {
+	// For authenticated users apply IAM policy.
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     claims.Subject,
+		Action:          iampolicy.CreateBucketAction,
+		BucketName:      args.BucketName,
+		ConditionValues: getConditionValues(r, "", claims.Subject),
+		IsOwner:         owner,
+	}) {
 		return toJSONError(errAccessDenied)
 	}
 
@@ -200,13 +207,25 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	_, owner, authErr := webRequestAuthenticate(r)
+	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
 
-	if !owner {
+	// For authenticated users apply IAM policy.
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     claims.Subject,
+		Action:          iampolicy.DeleteBucketAction,
+		BucketName:      args.BucketName,
+		ConditionValues: getConditionValues(r, "", claims.Subject),
+		IsOwner:         owner,
+	}) {
 		return toJSONError(errAccessDenied)
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	reply.UIVersion = browser.UIVersion
@@ -500,6 +519,11 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		}
 	}
 
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
+	}
+
 	lo, err := listObjects(context.Background(), args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
@@ -564,6 +588,11 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 
 	if args.BucketName == "" || len(args.Objects) == 0 {
 		return toJSONError(errInvalidArgument)
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	reply.UIVersion = browser.UIVersion
@@ -876,6 +905,13 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(bucket, false) {
+		writeWebErrorResponse(w, errInvalidBucketName)
+		return
+	}
+
 	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
@@ -1046,6 +1082,12 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(bucket, false) {
+		writeWebErrorResponse(w, errInvalidBucketName)
+		return
+	}
+
 	getObjectNInfo := objectAPI.GetObjectNInfo
 	if web.CacheAPI() != nil {
 		getObjectNInfo = web.CacheAPI().GetObjectNInfo
@@ -1191,6 +1233,12 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		writeWebErrorResponse(w, errInvalidBucketName)
+		return
 	}
 
 	getObject := objectAPI.GetObject
@@ -1371,12 +1419,24 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return toJSONError(errServerNotInitialized)
 	}
 
-	_, owner, authErr := webRequestAuthenticate(r)
+	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
-	if !owner {
+	// For authenticated users apply IAM policy.
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     claims.Subject,
+		Action:          iampolicy.GetBucketPolicyAction,
+		BucketName:      args.BucketName,
+		ConditionValues: getConditionValues(r, "", claims.Subject),
+		IsOwner:         owner,
+	}) {
 		return toJSONError(errAccessDenied)
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	var policyInfo = &miniogopolicy.BucketAccessPolicy{Version: "2012-10-17"}
@@ -1458,8 +1518,14 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
+
 	if !owner {
 		return toJSONError(errAccessDenied)
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	var policyInfo = new(miniogopolicy.BucketAccessPolicy)
@@ -1530,12 +1596,25 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		return toJSONError(errServerNotInitialized)
 	}
 
-	_, owner, authErr := webRequestAuthenticate(r)
+	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
-	if !owner {
+
+	// For authenticated users apply IAM policy.
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     claims.Subject,
+		Action:          iampolicy.PutBucketPolicyAction,
+		BucketName:      args.BucketName,
+		ConditionValues: getConditionValues(r, "", claims.Subject),
+		IsOwner:         owner,
+	}) {
 		return toJSONError(errAccessDenied)
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	policyType := miniogopolicy.BucketPolicy(args.Policy)
@@ -1683,6 +1762,11 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 		return &json2.Error{
 			Message: "Bucket and Object are mandatory arguments.",
 		}
+	}
+
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName, false) {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	reply.UIVersion = browser.UIVersion
@@ -1840,8 +1924,6 @@ func toWebAPIError(err error) APIError {
 		return getAPIError(ErrWriteQuorum)
 	case InsufficientReadQuorum:
 		return getAPIError(ErrReadQuorum)
-	case PolicyNesting:
-		return getAPIError(ErrPolicyNesting)
 	case NotImplemented:
 		return APIError{
 			Code:           "NotImplemented",

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -160,4 +160,128 @@ func removeListenerConfig(ctx context.Context, objAPI ObjectLayer, bucket string
 	// make the path
 	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
 	return objAPI.DeleteObject(ctx, minioMetaBucket, lcPath)
+}
+
+func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, isLeaf IsLeafFunc, isLeafDir IsLeafDirFunc, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {
+	if err := checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, obj); err != nil {
+		return loi, err
+	}
+
+	// Marker is set validate pre-condition.
+	if marker != "" {
+		// Marker not common with prefix is not implemented. Send an empty response
+		if !hasPrefix(marker, prefix) {
+			return loi, nil
+		}
+	}
+
+	// With max keys of zero we have reached eof, return right here.
+	if maxKeys == 0 {
+		return loi, nil
+	}
+
+	// For delimiter and prefix as '/' we do not list anything at all
+	// since according to s3 spec we stop at the 'delimiter'
+	// along // with the prefix. On a flat namespace with 'prefix'
+	// as '/' we don't have any entries, since all the keys are
+	// of form 'keyName/...'
+	if delimiter == slashSeparator && prefix == slashSeparator {
+		return loi, nil
+	}
+
+	// Over flowing count - reset to maxObjectList.
+	if maxKeys < 0 || maxKeys > maxObjectList {
+		maxKeys = maxObjectList
+	}
+
+	// Default is recursive, if delimiter is set then list non recursive.
+	recursive := true
+	if delimiter == slashSeparator {
+		recursive = false
+	}
+
+	walkResultCh, endWalkCh := tpool.Release(listParams{bucket, recursive, marker, prefix})
+	if walkResultCh == nil {
+		endWalkCh = make(chan struct{})
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
+	}
+
+	var objInfos []ObjectInfo
+	var eof bool
+	var nextMarker string
+
+	// List until maxKeys requested.
+	for i := 0; i < maxKeys; {
+		walkResult, ok := <-walkResultCh
+		if !ok {
+			// Closed channel.
+			eof = true
+			break
+		}
+		// For any walk error return right away.
+		if walkResult.err != nil {
+			// File not found is a valid case.
+			if walkResult.err == errFileNotFound {
+				continue
+			}
+			return loi, toObjectErr(walkResult.err, bucket, prefix)
+		}
+
+		var objInfo ObjectInfo
+		var err error
+		if hasSuffix(walkResult.entry, slashSeparator) {
+			for _, getObjectInfoDir := range getObjectInfoDirs {
+				objInfo, err = getObjectInfoDir(ctx, bucket, walkResult.entry)
+				if err == nil {
+					break
+				}
+			}
+		} else {
+			objInfo, err = getObjInfo(ctx, bucket, walkResult.entry)
+		}
+		if err != nil {
+			// Ignore errFileNotFound as the object might have got
+			// deleted in the interim period of listing and getObjectInfo(),
+			// ignore quorum error as it might be an entry from an outdated disk.
+			if IsErrIgnored(err, []error{
+				errFileNotFound,
+				errXLReadQuorum,
+			}...) {
+				continue
+			}
+			return loi, toObjectErr(err, bucket, prefix)
+		}
+		nextMarker = objInfo.Name
+		objInfos = append(objInfos, objInfo)
+		if walkResult.end {
+			eof = true
+			break
+		}
+		i++
+	}
+
+	// Save list routine for the next marker if we haven't reached EOF.
+	params := listParams{bucket, recursive, nextMarker, prefix}
+	if !eof {
+		tpool.Set(params, walkResultCh, endWalkCh)
+	}
+
+	result := ListObjectsInfo{}
+	for _, objInfo := range objInfos {
+		if objInfo.IsDir && delimiter == slashSeparator {
+			result.Prefixes = append(result.Prefixes, objInfo.Name)
+			continue
+		}
+		result.Objects = append(result.Objects, objInfo)
+	}
+
+	if !eof {
+		result.IsTruncated = true
+		if len(objInfos) > 0 {
+			result.NextMarker = objInfos[len(objInfos)-1].Name
+		}
+	}
+
+	// Success.
+	return result, nil
 }

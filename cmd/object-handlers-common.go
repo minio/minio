@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,16 @@ package cmd
 import (
 	"context"
 	"net/http"
-	"strings"
+	"regexp"
 	"time"
 
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
+)
+
+var (
+	etagRegex = regexp.MustCompile("\"*?([^\"]*?)\"*?$")
 )
 
 // Validates the preconditions for CopyObjectPart, returns true if CopyObjectPart
@@ -67,7 +71,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 		w.Header().Set("Last-Modified", objInfo.ModTime.UTC().Format(http.TimeFormat))
 
 		if objInfo.ETag != "" {
-			w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
+			w.Header()["ETag"] = []string{"\"" + objInfo.ETag + "\""}
 		}
 	}
 	// x-amz-copy-source-if-modified-since: Return the object only if it has been modified
@@ -162,7 +166,7 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		w.Header().Set("Last-Modified", objInfo.ModTime.UTC().Format(http.TimeFormat))
 
 		if objInfo.ETag != "" {
-			w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
+			w.Header()["ETag"] = []string{"\"" + objInfo.ETag + "\""}
 		}
 	}
 	// If-Modified-Since : Return the object only if it has been modified since the specified time,
@@ -230,8 +234,7 @@ func ifModifiedSince(objTime time.Time, givenTime time.Time) bool {
 // canonicalizeETag returns ETag with leading and trailing double-quotes removed,
 // if any present
 func canonicalizeETag(etag string) string {
-	canonicalETag := strings.TrimPrefix(etag, "\"")
-	return strings.TrimSuffix(canonicalETag, "\"")
+	return etagRegex.ReplaceAllString(etag, "$1")
 }
 
 // isETagEqual return true if the canonical representations of two ETag strings

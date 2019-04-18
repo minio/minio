@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,8 @@ import (
 	"strings"
 )
 
-// Tree walk result carries results of tree walking.
-type treeWalkResult struct {
+// TreeWalkResult - Tree walk result carries results of tree walking.
+type TreeWalkResult struct {
 	entry string
 	err   error
 	end   bool
@@ -36,7 +36,7 @@ type treeWalkResult struct {
 //     sorting with out trailing "/" = ["a", "a-b"]
 //     sorting with trailing "/"     = ["a-b/", "a/"]
 // Hence if entries[] does not have a case like the above example then isLeaf() check
-// can be delayed till the entry is pushed into the treeWalkResult channel.
+// can be delayed till the entry is pushed into the TreeWalkResult channel.
 // delayIsLeafCheck() returns true if isLeaf can be delayed or false if
 // isLeaf should be done in listDir()
 func delayIsLeafCheck(entries []string) bool {
@@ -85,21 +85,21 @@ func filterMatchingPrefix(entries []string, prefixEntry string) []string {
 	return entries[start:end]
 }
 
-// "listDir" function of type listDirFunc returned by listDirFactory() - explained below.
-type listDirFunc func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool)
+// ListDirFunc - "listDir" function of type listDirFunc returned by listDirFactory() - explained below.
+type ListDirFunc func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool)
 
-// A function isLeaf of type isLeafFunc is used to detect if an entry is a leaf entry. There are four scenarios
+// IsLeafFunc - A function isLeaf of type isLeafFunc is used to detect if an entry is a leaf entry. There are four scenarios
 // where isLeaf should behave differently:
 // 1. FS backend object listing - isLeaf is true if the entry has a trailing "/"
 // 2. FS backend multipart listing - isLeaf is true if the entry is a directory and contains uploads.json
 // 3. XL backend object listing - isLeaf is true if the entry is a directory and contains xl.json
 // 4. XL backend multipart listing - isLeaf is true if the entry is a directory and contains uploads.json
-type isLeafFunc func(string, string) bool
+type IsLeafFunc func(string, string) bool
 
-// A function isLeafDir of type isLeafDirFunc is used to detect if an entry represents an empty directory.
-type isLeafDirFunc func(string, string) bool
+// IsLeafDirFunc - A function isLeafDir of type isLeafDirFunc is used to detect if an entry represents an empty directory.
+type IsLeafDirFunc func(string, string) bool
 
-func filterListEntries(bucket, prefixDir string, entries []string, prefixEntry string, isLeaf isLeafFunc) ([]string, bool) {
+func filterListEntries(bucket, prefixDir string, entries []string, prefixEntry string, isLeaf IsLeafFunc) ([]string, bool) {
 	// Listing needs to be sorted.
 	sort.Strings(entries)
 
@@ -107,7 +107,7 @@ func filterListEntries(bucket, prefixDir string, entries []string, prefixEntry s
 	entries = filterMatchingPrefix(entries, prefixEntry)
 
 	// Can isLeaf() check be delayed till when it has to be sent down the
-	// treeWalkResult channel?
+	// TreeWalkResult channel?
 	delayIsLeaf := delayIsLeafCheck(entries)
 	if delayIsLeaf {
 		return entries, true
@@ -125,8 +125,8 @@ func filterListEntries(bucket, prefixDir string, entries []string, prefixEntry s
 	return entries, false
 }
 
-// treeWalk walks directory tree recursively pushing treeWalkResult into the channel as and when it encounters files.
-func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, listDir listDirFunc, isLeaf isLeafFunc, isLeafDir isLeafDirFunc, resultCh chan treeWalkResult, endWalkCh chan struct{}, isEnd bool) error {
+// treeWalk walks directory tree recursively pushing TreeWalkResult into the channel as and when it encounters files.
+func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, listDir ListDirFunc, isLeaf IsLeafFunc, isLeafDir IsLeafDirFunc, resultCh chan TreeWalkResult, endWalkCh chan struct{}, isEnd bool) error {
 	// Example:
 	// if prefixDir="one/two/three/" and marker="four/five.txt" treeWalk is recursively
 	// called with prefixDir="one/two/three/four/" and marker="five.txt"
@@ -219,7 +219,7 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 		select {
 		case <-endWalkCh:
 			return errWalkAbort
-		case resultCh <- treeWalkResult{entry: pathJoin(prefixDir, entry), end: isEOF}:
+		case resultCh <- TreeWalkResult{entry: pathJoin(prefixDir, entry), end: isEOF}:
 		}
 	}
 
@@ -228,7 +228,7 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 }
 
 // Initiate a new treeWalk in a goroutine.
-func startTreeWalk(ctx context.Context, bucket, prefix, marker string, recursive bool, listDir listDirFunc, isLeaf isLeafFunc, isLeafDir isLeafDirFunc, endWalkCh chan struct{}) chan treeWalkResult {
+func startTreeWalk(ctx context.Context, bucket, prefix, marker string, recursive bool, listDir ListDirFunc, isLeaf IsLeafFunc, isLeafDir IsLeafDirFunc, endWalkCh chan struct{}) chan TreeWalkResult {
 	// Example 1
 	// If prefix is "one/two/three/" and marker is "one/two/three/four/five.txt"
 	// treeWalk is called with prefixDir="one/two/three/" and marker="four/five.txt"
@@ -239,7 +239,7 @@ func startTreeWalk(ctx context.Context, bucket, prefix, marker string, recursive
 	// treeWalk is called with prefixDir="one/two/" and marker="three/four/five.txt"
 	// and entryPrefixMatch="th"
 
-	resultCh := make(chan treeWalkResult, maxObjectList)
+	resultCh := make(chan TreeWalkResult, maxObjectList)
 	entryPrefixMatch := prefix
 	prefixDir := ""
 	lastIndex := strings.LastIndex(prefix, slashSeparator)

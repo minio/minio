@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,13 +127,13 @@ func TestExtractSignedHeaders(t *testing.T) {
 	// If the `expect` key exists in the signed headers then golang server would have stripped out the value, expecting the `expect` header set to `100-continue` in the result.
 	signedHeaders = append(signedHeaders, "expect")
 	// expected header values.
-	expectedHost := "play.minio.io:9000"
+	expectedHost := "play.min.io:9000"
 	expectedContentSha256 := "1234abcd"
 	expectedTime := UTCNow().Format(iso8601Format)
 	expectedTransferEncoding := "gzip"
 	expectedExpect := "100-continue"
 
-	r, err := http.NewRequest("GET", "http://play.minio.io:9000", nil)
+	r, err := http.NewRequest("GET", "http://play.min.io:9000", nil)
 	if err != nil {
 		t.Fatal("Unable to create http.Request :", err)
 	}

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 
 // TestMemoryStorePut - Tests for store.Put
 func TestMemoryStorePut(t *testing.T) {
-	store := NewMemoryStore(1000)
+	store := NewMemoryStore(100)
 	defer func() {
 		store = nil
 	}()
@@ -32,14 +32,14 @@ func TestMemoryStorePut(t *testing.T) {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
-	if len(store.ListAll()) != 100 {
-		t.Fatalf("ListAll() Expected: 100, got %d", len(store.ListAll()))
+	if len(store.ListN(-1)) != 100 {
+		t.Fatalf("ListN() Expected: 100, got %d", len(store.ListN(-1)))
 	}
 }
 
 // TestMemoryStoreGet - Tests for store.Get.
 func TestMemoryStoreGet(t *testing.T) {
-	store := NewMemoryStore(1000)
+	store := NewMemoryStore(10)
 	defer func() {
 		store = nil
 	}()
@@ -48,7 +48,7 @@ func TestMemoryStoreGet(t *testing.T) {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
-	eventKeys := store.ListAll()
+	eventKeys := store.ListN(-1)
 	if len(eventKeys) == 10 {
 		for _, key := range eventKeys {
 			event, eErr := store.Get(key)
@@ -60,13 +60,13 @@ func TestMemoryStoreGet(t *testing.T) {
 			}
 		}
 	} else {
-		t.Fatalf("ListAll() Expected: 10, got %d", len(eventKeys))
+		t.Fatalf("ListN() Expected: 10, got %d", len(eventKeys))
 	}
 }
 
 // TestMemoryStoreDel - Tests for store.Del.
 func TestMemoryStoreDel(t *testing.T) {
-	store := NewMemoryStore(1000)
+	store := NewMemoryStore(20)
 	defer func() {
 		store = nil
 	}()
@@ -75,17 +75,17 @@ func TestMemoryStoreDel(t *testing.T) {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
-	eventKeys := store.ListAll()
+	eventKeys := store.ListN(-1)
 	if len(eventKeys) == 20 {
 		for _, key := range eventKeys {
-			store.Del(key)
+			_ = store.Del(key)
 		}
 	} else {
-		t.Fatalf("ListAll() Expected: 20, got %d", len(eventKeys))
+		t.Fatalf("ListN() Expected: 20, got %d", len(eventKeys))
 	}
 
-	if len(store.ListAll()) != 0 {
-		t.Fatalf("ListAll() Expected: 0, got %d", len(store.ListAll()))
+	if len(store.ListN(-1)) != 0 {
+		t.Fatalf("ListN() Expected: 0, got %d", len(store.ListN(-1)))
 	}
 }
 
@@ -101,6 +101,25 @@ func TestMemoryStoreLimit(t *testing.T) {
 		}
 	}
 	if err := store.Put(testEvent); err == nil {
-		t.Fatalf("Expected to fail with %s, but passes", ErrLimitExceeded)
+		t.Fatalf("Expected to fail with %s, but passes", errLimitExceeded)
+	}
+}
+
+// TestMemoryStoreListN - tests for store.ListN.
+func TestMemoryStoreListN(t *testing.T) {
+	store := NewMemoryStore(10)
+	defer func() {
+		store = nil
+	}()
+	for i := 0; i < 10; i++ {
+		if err := store.Put(testEvent); err != nil {
+			t.Fatal("Failed to put to queue store ", err)
+		}
+	}
+	if len(store.ListN(5)) != 5 {
+		t.Fatalf("ListN(5) Expected: 5, got %d", len(store.ListN(5)))
+	}
+	if len(store.ListN(-1)) != 10 {
+		t.Fatalf("ListN(-1) Expected: 10, got %d", len(store.ListN(-1)))
 	}
 }

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -370,13 +370,6 @@ type NotImplemented struct{}
 
 func (e NotImplemented) Error() string {
 	return "Not Implemented"
-}
-
-// PolicyNesting - policy nesting conflict.
-type PolicyNesting struct{}
-
-func (e PolicyNesting) Error() string {
-	return "New bucket policy conflicts with an existing policy. Please try again with new prefix."
 }
 
 // UnsupportedMetadata - unsupported metadata

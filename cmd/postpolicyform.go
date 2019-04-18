@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -221,6 +221,22 @@ func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) erro
 	// Check if policy document expiry date is still not reached
 	if !postPolicyForm.Expiration.After(UTCNow()) {
 		return fmt.Errorf("Invalid according to Policy: Policy expired")
+	}
+	// map to store the metadata
+	metaMap := make(map[string]string)
+	for cond, v := range postPolicyForm.Conditions.Policies {
+		if strings.HasPrefix(cond, "$x-amz-meta-") {
+			formCanonicalName := http.CanonicalHeaderKey(strings.TrimPrefix(cond, "$"))
+			metaMap[formCanonicalName] = v.Value
+		}
+	}
+	// Check if any extra metadata field is passed as input
+	for key := range formValues {
+		if strings.HasPrefix(key, "X-Amz-Meta-") {
+			if _, ok := metaMap[key]; !ok {
+				return fmt.Errorf("Invalid according to Policy: Extra input fields: %s", key)
+			}
+		}
 	}
 
 	// Flag to indicate if all policies conditions are satisfied

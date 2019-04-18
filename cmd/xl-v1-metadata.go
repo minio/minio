@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -147,7 +147,7 @@ type xlMetaV1 struct {
 	Stat    statInfo `json:"stat"`    // Stat of the current object `xl.json`.
 	// Erasure coded info for the current object `xl.json`.
 	Erasure ErasureInfo `json:"erasure"`
-	// Minio release tag for current object `xl.json`.
+	// MinIO release tag for current object `xl.json`.
 	Minio struct {
 		Release string `json:"release"`
 	} `json:"minio"`

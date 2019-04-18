@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,10 @@ func (c *Client) Call(method string, values url.Values, body io.Reader, length i
 		if err != nil {
 			return nil, err
 		}
-		return nil, errors.New(string(b))
+		if len(b) > 0 {
+			return nil, errors.New(string(b))
+		}
+		return nil, errors.New(resp.Status)
 	}
 	return resp.Body, nil
 }

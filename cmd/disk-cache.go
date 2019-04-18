@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ type cacheObjects struct {
 	// pointer to disk cache
 	cache *diskCache
 	// ListObjects pool management.
-	listPool *treeWalkPool
+	listPool *TreeWalkPool
 	// file path patterns to exclude from cache
 	exclude []string
 	// Object functions pointing to the corresponding functions of backend implementation.
@@ -184,13 +184,13 @@ func (c cacheObjects) getMetadata(objInfo ObjectInfo) map[string]string {
 
 func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	if c.isCacheExclude(bucket, object) {
-		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
+		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
 
 	// fetch cacheFSObjects if object is currently cached or nearest available cache drive
 	dcache, err := c.cache.getCachedFSLoc(ctx, bucket, object)
 	if err != nil {
-		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
+		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
 
 	cacheReader, cacheErr := dcache.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
@@ -200,14 +200,18 @@ func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 		return cacheReader, nil
 	} else if err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
-			// Delete cached entry if backend object was deleted.
-			dcache.Delete(ctx, bucket, object)
+			if cacheErr == nil {
+				cacheReader.Close()
+				// Delete cached entry if backend object
+				// was deleted.
+				dcache.Delete(ctx, bucket, object)
+			}
 		}
 		return nil, err
 	}
 
 	if !objInfo.IsCacheable() || filterFromCache(objInfo.UserDefined) {
-		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
+		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
 
 	if cacheErr == nil {
@@ -225,13 +229,13 @@ func (c cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 
 	if rs != nil {
 		// We don't cache partial objects.
-		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
+		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
 	if !dcache.diskAvailable(objInfo.Size) {
-		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
+		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
 
-	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, writeLock, opts)
+	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	if bkErr != nil {
 		return nil, bkErr
 	}
@@ -371,7 +375,7 @@ func (c cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string, 
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - list of fsObjects
-func listDirCacheFactory(isLeaf isLeafFunc, disks []*cacheFSObjects) listDirFunc {
+func listDirCacheFactory(isLeaf IsLeafFunc, disks []*cacheFSObjects) ListDirFunc {
 	listCacheDirs := func(bucket, prefixDir, prefixEntry string) (dirs []string) {
 		var entries []string
 		for _, disk := range disks {
@@ -961,7 +965,7 @@ func newServerCacheObjects(config CacheConfig) (CacheObjectLayer, error) {
 	return &cacheObjects{
 		cache:    dcache,
 		exclude:  config.Exclude,
-		listPool: newTreeWalkPool(globalLookupTimeout),
+		listPool: NewTreeWalkPool(globalLookupTimeout),
 		GetObjectFn: func(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
 			return newObjectLayerFn().GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
 		},

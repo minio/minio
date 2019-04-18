@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"net/http"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,6 +31,13 @@ import (
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/certs"
 )
+
+func init() {
+	// Opt-in to TLS 1.3. See: https://golang.org/pkg/crypto/tls
+	// In future Go versions TLS 1.3 probably gets enabled by default.
+	// So, we can remove this line as soon as this is the case.
+	os.Setenv("GODEBUG", os.Getenv("GODEBUG")+",tls13=1")
+}
 
 const (
 	serverShutdownPoll = 500 * time.Millisecond
@@ -92,11 +100,9 @@ func (srv *Server) Start() (err error) {
 	var listener *httpListener
 	listener, err = newHTTPListener(
 		addrs,
-		tlsConfig,
 		tcpKeepAliveTimeout,
 		readTimeout,
 		writeTimeout,
-		srv.MaxHeaderBytes,
 		srv.UpdateBytesReadFunc,
 		srv.UpdateBytesWrittenFunc,
 	)

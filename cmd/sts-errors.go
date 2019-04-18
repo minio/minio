@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,7 +104,7 @@ var stsErrCodes = stsErrorCodeMap{
 	},
 	ErrSTSInvalidClientGrantsToken: {
 		Code:           "InvalidClientGrantsToken",
-		Description:    "The client grants token that was passed could not be validated by Minio.",
+		Description:    "The client grants token that was passed could not be validated by MinIO.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrSTSMalformedPolicyDocument: {

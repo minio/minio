@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -51,7 +50,7 @@ func getStartTime() time.Time {
 	return di.ModTime()
 }
 
-// Returns the ip:port of the Minio process
+// Returns the ip:port of the MinIO process
 // running in the container
 func findEndpoint() (string, error) {
 	cmd := exec.Command("netstat", "-ntlp")
@@ -67,7 +66,7 @@ func findEndpoint() (string, error) {
 	// split netstat output in rows
 	scanner := bufio.NewScanner(stdout)
 	scanner.Split(bufio.ScanLines)
-	// loop over the rows to find Minio process
+	// loop over the rows to find MinIO process
 	for scanner.Scan() {
 		if strings.Contains(scanner.Text(), minioProcess) {
 			line := scanner.Text()
@@ -108,7 +107,7 @@ func main() {
 
 	//  In distributed environment like Swarm, traffic is routed
 	//  to a container only when it reports a `healthy` status. So, we exit
-	//  with 0 to ensure healthy status till distributed Minio starts (120s).
+	//  with 0 to ensure healthy status till distributed MinIO starts (120s).
 
 	//  Refer: https://github.com/moby/moby/pull/28938#issuecomment-301753272
 
@@ -122,10 +121,10 @@ func main() {
 			// Could not parse URL successfully
 			log.Fatalln(err)
 		}
-		// Minio server may be using self-signed or CA certificates. To avoid
+		// MinIO server may be using self-signed or CA certificates. To avoid
 		// making Docker setup complicated, we skip verifying certificates here.
 		// This is because, following request tests for health status within
-		// containerized environment, i.e. requests are always made to the Minio
+		// containerized environment, i.e. requests are always made to the MinIO
 		// server running on the same host.
 		tr := &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -142,18 +141,10 @@ func main() {
 			// exit with success
 			os.Exit(0)
 		}
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			// Drain any response.
-			xhttp.DrainBody(resp.Body)
-			// GET failed exit
-			log.Fatalln(err)
-		}
-		bodyString := string(bodyBytes)
 		// Drain any response.
 		xhttp.DrainBody(resp.Body)
-		// This means sever is configured with https
-		if resp.StatusCode == http.StatusForbidden && bodyString == "SSL required" {
+		// 400 response may mean sever is configured with https
+		if resp.StatusCode == http.StatusBadRequest {
 			// Try with https
 			u.Scheme = "https"
 			resp, err = client.Get(u.String())

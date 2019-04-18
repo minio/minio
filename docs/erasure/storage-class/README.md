@@ -1,12 +1,12 @@
-# Minio Storage Class Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# MinIO Storage Class Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-Minio server supports storage class in erasure coding mode. This allows configurable data and parity disks per object.
+MinIO server supports storage class in erasure coding mode. This allows configurable data and parity disks per object.
 
 ## Overview
 
-Minio supports two storage classes, Reduced Redundancy class and Standard class. These classes can be defined using environment variables
-set before starting Minio server. After the data and parity disks for each storage class are defined using environment variables,
-you can set the storage class of an object via request metadata field `x-amz-storage-class`. Minio server then honors the storage class by
+MinIO supports two storage classes, Reduced Redundancy class and Standard class. These classes can be defined using environment variables
+set before starting MinIO server. After the data and parity disks for each storage class are defined using environment variables,
+you can set the storage class of an object via request metadata field `x-amz-storage-class`. MinIO server then honors the storage class by
 saving the object in specific number of data and parity disks.
 
 ## Storage usage
@@ -15,11 +15,11 @@ The selection of varying data and parity drives has a direct impact on the drive
 redundancy or better drive space utilization.
 
 To get an idea of how various combinations of data and parity drives affect the storage usage, let’s take an example of a 100 MiB file stored
-on 16 drive Minio deployment. If you use eight data and eight parity drives, the file space usage will be approximately twice, i.e. 100 MiB
+on 16 drive MinIO deployment. If you use eight data and eight parity drives, the file space usage will be approximately twice, i.e. 100 MiB
 file will take 200 MiB space. But, if you use ten data and six parity drives, same 100 MiB file takes around 160 MiB. If you use 14 data and
 two parity drives, 100 MiB file takes only approximately 114 MiB.
 
-Below is a list of data/parity drives and corresponding _approximate_ storage space usage on a 16 drive Minio deployment. The field _storage
+Below is a list of data/parity drives and corresponding _approximate_ storage space usage on a 16 drive MinIO deployment. The field _storage
 usage ratio_ is simply the drive space used by the file after erasure-encoding, divided by actual file size.
 
 | Total Drives (N) | Data Drives (D) | Parity Drives (P) | Storage Usage Ratio |
@@ -77,11 +77,11 @@ more details.
 
 *Note*
 
-- If `STANDARD` storage class is set via environment variables or `mc admin config` get/set commands, and `x-amz-storage-class` is not present in request metadata, Minio server will 
+- If `STANDARD` storage class is set via environment variables or `mc admin config` get/set commands, and `x-amz-storage-class` is not present in request metadata, MinIO server will 
 apply `STANDARD` storage class to the object. This means the data and parity disks will be used as set in `STANDARD` storage class.
 
-- If storage class is not defined before starting Minio server, and subsequent PutObject metadata field has `x-amz-storage-class` present
-with values `REDUCED_REDUNDANCY` or `STANDARD`, Minio server uses default parity values.
+- If storage class is not defined before starting MinIO server, and subsequent PutObject metadata field has `x-amz-storage-class` present
+with values `REDUCED_REDUNDANCY` or `STANDARD`, MinIO server uses default parity values.
 
 ### Set metadata
 

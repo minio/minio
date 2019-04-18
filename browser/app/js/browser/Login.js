@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2016, 2018 Minio, Inc.
+ * MinIO Cloud Storage (C) 2016, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ export class Login extends React.Component {
 
   handleSubmit(event) {
     event.preventDefault()
-    const { showAlert, history } = this.props
+    const { showAlert, clearAlert, history } = this.props
     let message = ""
     if (this.state.accessKey === "") {
       message = "Access Key cannot be empty"
@@ -66,6 +66,9 @@ export class Login extends React.Component {
         password: this.state.secretKey
       })
       .then(res => {
+        // Clear alerts from previous login attempts
+        clearAlert()
+
         history.push("/")
       })
       .catch(e => {
@@ -145,4 +148,7 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(state => state, mapDispatchToProps)(Login)
+export default connect(
+  state => state,
+  mapDispatchToProps
+)(Login)

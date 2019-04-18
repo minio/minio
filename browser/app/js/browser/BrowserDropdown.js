@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage (C) 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,12 +98,12 @@ export class BrowserDropdown extends React.Component {
               </a>
             </li>
             <li>
-              <a target="_blank" href="https://docs.minio.io/">
+              <a target="_blank" href="https://docs.min.io/">
                 Documentation <i className="fa fa-book" />
               </a>
             </li>
             <li>
-              <a target="_blank" href="https://slack.minio.io">
+              <a target="_blank" href="https://slack.min.io">
                 Ask for help <i className="fa fa-question-circle" />
               </a>
             </li>

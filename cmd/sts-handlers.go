@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018, 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018, 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -181,7 +181,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Notify all other Minio peers to reload temp users
+	// Notify all other MinIO peers to reload temp users
 	for _, nerr := range globalNotificationSys.LoadUsers() {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
@@ -278,7 +278,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	}
 
 	// JWT has requested a custom claim with policy value set.
-	// This is a Minio STS API specific value, this value should
+	// This is a MinIO STS API specific value, this value should
 	// be set and configured on your identity provider as part of
 	// JWT custom claims.
 	var policyName string
@@ -298,7 +298,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Notify all other Minio peers to reload temp users
+	// Notify all other MinIO peers to reload temp users
 	for _, nerr := range globalNotificationSys.LoadUsers() {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())

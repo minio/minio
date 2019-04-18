@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,19 +126,19 @@ func TestUserAgent(t *testing.T) {
 			envName:     "",
 			envValue:    "",
 			mode:        globalMinioModeFS,
-			expectedStr: fmt.Sprintf("Minio (%s; %s; %s; source) Minio/DEVELOPMENT.GOGET Minio/DEVELOPMENT.GOGET Minio/DEVELOPMENT.GOGET", runtime.GOOS, runtime.GOARCH, globalMinioModeFS),
+			expectedStr: fmt.Sprintf("MinIO (%s; %s; %s; source) MinIO/DEVELOPMENT.GOGET MinIO/DEVELOPMENT.GOGET MinIO/DEVELOPMENT.GOGET", runtime.GOOS, runtime.GOARCH, globalMinioModeFS),
 		},
 		{
 			envName:     "MESOS_CONTAINER_NAME",
 			envValue:    "mesos-11111",
 			mode:        globalMinioModeXL,
-			expectedStr: fmt.Sprintf("Minio (%s; %s; %s; %s; source) Minio/DEVELOPMENT.GOGET Minio/DEVELOPMENT.GOGET Minio/DEVELOPMENT.GOGET Minio/universe-%s", runtime.GOOS, runtime.GOARCH, globalMinioModeXL, "dcos", "mesos-1111"),
+			expectedStr: fmt.Sprintf("MinIO (%s; %s; %s; %s; source) MinIO/DEVELOPMENT.GOGET MinIO/DEVELOPMENT.GOGET MinIO/DEVELOPMENT.GOGET MinIO/universe-%s", runtime.GOOS, runtime.GOARCH, globalMinioModeXL, "dcos", "mesos-1111"),
 		},
 		{
 			envName:     "KUBERNETES_SERVICE_HOST",
 			envValue:    "10.11.148.5",
 			mode:        globalMinioModeXL,
-			expectedStr: fmt.Sprintf("Minio (%s; %s; %s; %s; source) Minio/DEVELOPMENT.GOGET Minio/DEVELOPMENT.GOGET Minio/DEVELOPMENT.GOGET", runtime.GOOS, runtime.GOARCH, globalMinioModeXL, "kubernetes"),
+			expectedStr: fmt.Sprintf("MinIO (%s; %s; %s; %s; source) MinIO/DEVELOPMENT.GOGET MinIO/DEVELOPMENT.GOGET MinIO/DEVELOPMENT.GOGET", runtime.GOOS, runtime.GOARCH, globalMinioModeXL, "kubernetes"),
 		},
 	}
 
