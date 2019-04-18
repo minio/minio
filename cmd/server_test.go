@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1790,7 +1790,7 @@ func (s *TestSuiteCommon) TestPutBucketErrors(c *check) {
 		http.StatusConflict)
 
 	// request for ACL.
-	// Since Minio server doesn't support ACL's the request is expected to fail with  "NotImplemented" error message.
+	// Since MinIO server doesn't support ACL's the request is expected to fail with  "NotImplemented" error message.
 	request, err = newTestSignedRequest("PUT", s.endPoint+"/"+bucketName+"?acl",
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)

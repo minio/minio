@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,11 +47,19 @@ func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error)
 	w.(http.Flusher).Flush()
 }
 
+// DefaultSkewTime - skew time is 15 minutes between minio peers.
+const DefaultSkewTime = 15 * time.Minute
+
 // Authenticates storage client's requests and validates for skewed time.
 func storageServerRequestValidate(r *http.Request) error {
-	if _, _, err := webRequestAuthenticate(r); err != nil {
+	_, owner, err := webRequestAuthenticate(r)
+	if err != nil {
 		return err
 	}
+	if !owner { // Disable access for non-admin users.
+		return errAuthentication
+	}
+
 	requestTimeStr := r.Header.Get("X-Minio-Time")
 	requestTime, err := time.Parse(time.RFC3339, requestTimeStr)
 	if err != nil {

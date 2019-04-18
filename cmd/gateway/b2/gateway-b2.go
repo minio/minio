@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ ENVIRONMENT VARIABLES:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
   DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
+     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to MinIO host domain name.
 
   CACHE:
      MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
@@ -104,7 +104,7 @@ func b2GatewayMain(ctx *cli.Context) {
 	minio.StartGateway(ctx, &B2{})
 }
 
-// B2 implements Minio Gateway
+// B2 implements MinIO Gateway
 type B2 struct{}
 
 // Name implements Gateway interface.
@@ -133,7 +133,7 @@ func (g *B2) Production() bool {
 	return true
 }
 
-// b2Object implements gateway for Minio and BackBlaze B2 compatible object storage servers.
+// b2Object implements gateway for MinIO and BackBlaze B2 compatible object storage servers.
 type b2Objects struct {
 	minio.GatewayUnsupported
 	mu       sync.Mutex

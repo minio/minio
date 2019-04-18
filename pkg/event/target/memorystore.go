@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ func (store *MemoryStore) Put(e event.Event) error {
 	store.Lock()
 	defer store.Unlock()
 	if store.eC == store.limit {
-		return ErrLimitExceeded
+		return errLimitExceeded
 	}
 	key, kErr := getNewUUID()
 	if kErr != nil {
@@ -77,27 +77,41 @@ func (store *MemoryStore) Get(key string) (event.Event, error) {
 		return event, nil
 	}
 
-	return event.Event{}, ErrNoSuchKey
+	return event.Event{}, errNoSuchKey
 }
 
 // Del - deletes the event from store.
-func (store *MemoryStore) Del(key string) {
+func (store *MemoryStore) Del(key string) error {
 	store.Lock()
 	defer store.Unlock()
 
 	delete(store.events, key)
 
 	store.eC--
+
+	return nil
 }
 
-// ListAll - lists all the keys in the store.
-func (store *MemoryStore) ListAll() []string {
+// ListN - lists atmost N keys in the store.
+func (store *MemoryStore) ListN(n int) []string {
 	store.RLock()
 	defer store.RUnlock()
 
+	var i int
+
+	if n == -1 {
+		n = len(store.events)
+	}
+
 	keys := []string{}
 	for k := range store.events {
-		keys = append(keys, k)
+		if i < n {
+			keys = append(keys, k)
+			i++
+			continue
+		} else {
+			break
+		}
 	}
 
 	return keys

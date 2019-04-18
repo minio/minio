@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ func mustGetRequestID(t time.Time) string {
 
 // Write http common headers
 func setCommonHeaders(w http.ResponseWriter) {
-	w.Header().Set("Server", "Minio/"+ReleaseTag)
+	w.Header().Set("Server", "MinIO/"+ReleaseTag)
 	// Set `x-amz-bucket-region` only if region is set on the server
 	// by default minio uses an empty region.
 	if region := globalServerConfig.GetRegion(); region != "" {
@@ -76,7 +76,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 
 	// Set Etag if available.
 	if objInfo.ETag != "" {
-		w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
+		w.Header()["ETag"] = []string{"\"" + objInfo.ETag + "\""}
 	}
 
 	if objInfo.ContentType != "" {
@@ -90,6 +90,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	if !objInfo.Expires.IsZero() {
 		w.Header().Set("Expires", objInfo.Expires.UTC().Format(http.TimeFormat))
 	}
+
 	// Set all other user defined metadata.
 	for k, v := range objInfo.UserDefined {
 		if hasPrefix(k, ReservedMetadataPrefix) {

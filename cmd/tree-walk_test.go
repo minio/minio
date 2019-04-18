@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -128,7 +128,7 @@ func createNamespace(disk StorageAPI, volume string, files []string) error {
 
 // Test if tree walker returns entries matching prefix alone are received
 // when a non empty prefix is supplied.
-func testTreeWalkPrefix(t *testing.T, listDir listDirFunc, isLeaf isLeafFunc, isLeafDir isLeafDirFunc) {
+func testTreeWalkPrefix(t *testing.T, listDir ListDirFunc, isLeaf IsLeafFunc, isLeafDir IsLeafDirFunc) {
 	// Start the tree walk go-routine.
 	prefix := "d/"
 	endWalkCh := make(chan struct{})
@@ -143,7 +143,7 @@ func testTreeWalkPrefix(t *testing.T, listDir listDirFunc, isLeaf isLeafFunc, is
 }
 
 // Test if entries received on tree walk's channel appear after the supplied marker.
-func testTreeWalkMarker(t *testing.T, listDir listDirFunc, isLeaf isLeafFunc, isLeafDir isLeafDirFunc) {
+func testTreeWalkMarker(t *testing.T, listDir ListDirFunc, isLeaf IsLeafFunc, isLeafDir IsLeafDirFunc) {
 	// Start the tree walk go-routine.
 	prefix := ""
 	endWalkCh := make(chan struct{})
@@ -243,7 +243,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 	listDir := listDirFactory(context.Background(), isLeaf, disk)
 
 	// TreeWalk pool with 2 seconds timeout for tree-walk go routines.
-	pool := newTreeWalkPool(2 * time.Second)
+	pool := NewTreeWalkPool(2 * time.Second)
 
 	endWalkCh := make(chan struct{})
 	prefix := ""
@@ -625,7 +625,7 @@ func TestTreeWalkIsEnd(t *testing.T) {
 		{"d/", "d/e", true, "d/g/h"},
 	}
 	for i, test := range testCases {
-		var entry treeWalkResult
+		var entry TreeWalkResult
 		for entry = range startTreeWalk(context.Background(), volume, test.prefix, test.marker, test.recursive, listDir, isLeaf, isLeafDir, endWalkCh) {
 		}
 		if entry.entry != test.expectedEntry {

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -669,7 +669,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 
 	location := getObjectLocation(r, globalDomainNames, bucket, object)
-	w.Header().Set("ETag", `"`+objInfo.ETag+`"`)
+	w.Header()["ETag"] = []string{`"` + objInfo.ETag + `"`}
 	w.Header().Set("Location", location)
 
 	// Notify object created event.
@@ -774,10 +774,6 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	globalNotificationSys.RemoveNotification(bucket)
-	globalPolicySys.Remove(bucket)
-	globalNotificationSys.DeleteBucket(ctx, bucket)
-
 	if globalDNSConfig != nil {
 		if err := globalDNSConfig.Delete(bucket); err != nil {
 			// Deleting DNS entry failed, attempt to create the bucket again.
@@ -786,6 +782,10 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 			return
 		}
 	}
+
+	globalNotificationSys.RemoveNotification(bucket)
+	globalPolicySys.Remove(bucket)
+	globalNotificationSys.DeleteBucket(ctx, bucket)
 
 	// Write success response.
 	writeSuccessNoContent(w)

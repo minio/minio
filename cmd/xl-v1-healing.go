@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -169,8 +169,7 @@ func listAllBuckets(storageDisks []StorageAPI) (buckets map[string]VolInfo,
 			// StorageAPI can send volume names which are
 			// incompatible with buckets - these are
 			// skipped, like the meta-bucket.
-			if !IsValidBucketName(volInfo.Name) ||
-				isMinioMetaBucketName(volInfo.Name) {
+			if isReservedOrInvalidBucket(volInfo.Name, false) {
 				continue
 			}
 			// Increase counter per bucket name

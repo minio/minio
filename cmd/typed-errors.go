@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ var errServerTimeMismatch = errors.New("Server times are too far apart")
 // errOperationTimedOut
 var errOperationTimedOut = errors.New("Operation timed out")
 
-// errInvalidBucketName - bucket name is reserved for Minio, usually
+// errInvalidBucketName - bucket name is reserved for MinIO, usually
 // returned for 'minio', '.minio.sys', buckets with capital letters.
 var errInvalidBucketName = errors.New("The specified bucket is not valid")
 

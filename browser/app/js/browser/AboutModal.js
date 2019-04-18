@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ export const AboutModal = ({ serverInfo, hideAbout }) => {
       </button>
       <div className="ma-inner">
         <div className="mai-item hidden-xs">
-          <a href="https://minio.io" target="_blank">
+          <a href="https://min.io" target="_blank">
             <img className="maii-logo" src={logo} alt="" />
           </a>
         </div>

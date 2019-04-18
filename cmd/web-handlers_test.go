@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -189,9 +189,7 @@ func testStorageInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 
 	rec := httptest.NewRecorder()
 
-	storageInfoRequest := AuthArgs{
-		RPCVersion: globalRPCAPIVersion,
-	}
+	storageInfoRequest := &WebGenericArgs{}
 	storageInfoReply := &StorageInfoRep{}
 	req, err := newTestWebRPCRequest("Web.StorageInfo", authorization, storageInfoRequest)
 	if err != nil {
@@ -224,9 +222,7 @@ func testServerInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 
 	rec := httptest.NewRecorder()
 
-	serverInfoRequest := AuthArgs{
-		RPCVersion: globalRPCAPIVersion,
-	}
+	serverInfoRequest := &WebGenericArgs{}
 	serverInfoReply := &ServerInfoRep{}
 	req, err := newTestWebRPCRequest("Web.ServerInfo", authorization, serverInfoRequest)
 	if err != nil {
@@ -334,13 +330,13 @@ func testDeleteBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 		// Empty string = no error
 		expect string
 	}{
-		{"", false, token, "The specified bucket  does not exist."},
+		{"", false, token, "The specified bucket is not valid"},
 		{".", false, "auth", "Authentication failed"},
-		{".", false, token, "The specified bucket . does not exist."},
-		{"..", false, token, "The specified bucket .. does not exist."},
-		{"ab", false, token, "The specified bucket ab does not exist."},
+		{".", false, token, "The specified bucket is not valid"},
+		{"..", false, token, "The specified bucket is not valid"},
+		{"ab", false, token, "The specified bucket is not valid"},
 		{"minio", false, "false token", "Authentication failed"},
-		{"minio", false, token, "specified bucket minio does not exist"},
+		{"minio", false, token, "The specified bucket is not valid"},
 		{bucketName, false, token, ""},
 		{bucketName, true, token, "Bucket not empty"},
 		{bucketName, false, "", "JWT token missing"},
@@ -1527,11 +1523,8 @@ func TestWebCheckAuthorization(t *testing.T) {
 		"PresignedGet",
 	}
 	for _, rpcCall := range webRPCs {
-		args := &AuthArgs{
-			RPCVersion: globalRPCAPIVersion,
-		}
 		reply := &WebGenericRep{}
-		req, nerr := newTestWebRPCRequest("Web."+rpcCall, "Bearer fooauthorization", args)
+		req, nerr := newTestWebRPCRequest("Web."+rpcCall, "Bearer fooauthorization", &WebGenericArgs{})
 		if nerr != nil {
 			t.Fatalf("Test %s: Failed to create HTTP request: <ERROR> %v", rpcCall, nerr)
 		}
@@ -1634,7 +1627,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 		RepArgs    interface{}
 	}{
 		{"MakeBucket", MakeBucketArgs{BucketName: bucketName}, WebGenericRep{}},
-		{"ListBuckets", AuthArgs{RPCVersion: globalRPCAPIVersion}, ListBucketsRep{}},
+		{"ListBuckets", WebGenericArgs{}, ListBucketsRep{}},
 		{"ListObjects", ListObjectsArgs{BucketName: bucketName, Prefix: ""}, ListObjectsRep{}},
 		{"GetBucketPolicy", GetBucketPolicyArgs{BucketName: bucketName, Prefix: ""}, GetBucketPolicyRep{}},
 		{"SetBucketPolicy", SetBucketPolicyWebArgs{BucketName: bucketName, Prefix: "", Policy: "none"}, WebGenericRep{}},
@@ -1658,9 +1651,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	}
 
 	// Test Web.StorageInfo
-	storageInfoRequest := AuthArgs{
-		RPCVersion: globalRPCAPIVersion,
-	}
+	storageInfoRequest := &WebGenericArgs{}
 	storageInfoReply := &StorageInfoRep{}
 	req, err := newTestWebRPCRequest("Web.StorageInfo", authorization, storageInfoRequest)
 	if err != nil {

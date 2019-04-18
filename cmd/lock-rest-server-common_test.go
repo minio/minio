@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018, 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,35 @@ package cmd
 import (
 	"os"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 )
+
+// Helper function to create a lock server for testing
+func createLockTestServer(t *testing.T) (string, *lockRESTServer, string) {
+	obj, fsDir, err := prepareFS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatalf("unable initialize config file, %s", err)
+	}
+
+	locker := &lockRESTServer{
+		ll: localLocker{
+			mutex:           sync.Mutex{},
+			serviceEndpoint: "rpc-path",
+			lockMap:         make(map[string][]lockRequesterInfo),
+		},
+	}
+	creds := globalServerConfig.GetCredential()
+	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fsDir, locker, token
+}
 
 // Test function to remove lock entries from map only in case they still exist based on name & uid combination
 func TestLockRpcServerRemoveEntryIfExists(t *testing.T) {

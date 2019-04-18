@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,10 @@ const (
 // StorageInfo - represents total capacity of underlying storage.
 type StorageInfo struct {
 	Used uint64 // Used total used per tenant.
+
+	Total uint64 // Total disk space.
+
+	Available uint64 // Total disk space available.
 
 	// Backend type.
 	Backend struct {

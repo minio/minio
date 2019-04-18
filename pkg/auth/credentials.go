@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,17 +30,17 @@ import (
 )
 
 const (
-	// Minimum length for Minio access key.
+	// Minimum length for MinIO access key.
 	accessKeyMinLen = 3
 
-	// Maximum length for Minio access key.
+	// Maximum length for MinIO access key.
 	// There is no max length enforcement for access keys
 	accessKeyMaxLen = 20
 
-	// Minimum length for Minio secret key for both server and gateway mode.
+	// Minimum length for MinIO secret key for both server and gateway mode.
 	secretKeyMinLen = 8
 
-	// Maximum secret key length for Minio, this
+	// Maximum secret key length for MinIO, this
 	// is used when autogenerating new credentials.
 	// There is no max length enforcement for secret keys
 	secretKeyMaxLen = 40

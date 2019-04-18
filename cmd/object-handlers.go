@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015-2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015-2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -720,15 +720,16 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
+	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
+
+	// Deny if WORM is enabled. If operation is key rotation of SSE-S3 encrypted object
+	// allow the operation
+	if globalWORMEnabled && !(cpSrcDstSame && crypto.S3.IsRequested(r.Header)) {
 		if _, err = objectAPI.GetObjectInfo(ctx, dstBucket, dstObject, dstOpts); err == nil {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
-
-	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 
 	getObjectNInfo := objectAPI.GetObjectNInfo
 	if api.CacheAPI() != nil {
@@ -762,6 +763,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Deny if WORM is enabled, and it is not a SSE-S3 -> SSE-S3 key rotation or if metadata replacement is requested.
+	if globalWORMEnabled && cpSrcDstSame && (!crypto.S3.IsEncrypted(srcInfo.UserDefined) || isMetadataReplace(r.Header)) {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
+		return
+	}
 	// We have to copy metadata only if source and destination are same.
 	// this changes for encryption which can be observed below.
 	if cpSrcDstSame {
@@ -1258,7 +1264,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	} else if hasServerSideEncryptionHeader(r.Header) {
 		etag = getDecryptedETag(r.Header, objInfo, false)
 	}
-	w.Header().Set("ETag", "\""+etag+"\"")
+	w.Header()["ETag"] = []string{"\"" + etag + "\""}
 
 	if objectAPI.IsEncryptionSupported() {
 		if crypto.IsEncrypted(objInfo.UserDefined) {
@@ -1941,7 +1947,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	} else if isEncrypted {
 		etag = tryDecryptETag(objectEncryptionKey, partInfo.ETag, crypto.SSEC.IsRequested(r.Header))
 	}
-	w.Header().Set("ETag", "\""+etag+"\"")
+	w.Header()["ETag"] = []string{"\"" + etag + "\""}
 
 	writeSuccessResponseHeadersOnly(w)
 }
@@ -2304,7 +2310,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	// Set etag.
-	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
+	w.Header()["ETag"] = []string{"\"" + objInfo.ETag + "\""}
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)

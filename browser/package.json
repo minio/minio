@@ -1,7 +1,7 @@
 {
   "name": "browser",
   "version": "0.0.1",
-  "description": "Minio Browser",
+  "description": "MinIO Browser",
   "scripts": {
     "test": "jest",
     "dev": "NODE_ENV=dev webpack-dev-server --devtool cheap-module-eval-source-map --progress --colors --hot --content-base dev",
@@ -21,7 +21,7 @@
     "type": "git",
     "url": "https://github.com/minio/minio"
   },
-  "author": "Minio Inc",
+  "author": "MinIO Inc",
   "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/minio/minio/issues"

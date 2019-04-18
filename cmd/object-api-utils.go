@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,19 +45,19 @@ import (
 )
 
 const (
-	// Minio meta bucket.
+	// MinIO meta bucket.
 	minioMetaBucket = ".minio.sys"
 	// Multipart meta prefix.
 	mpartMetaPrefix = "multipart"
-	// Minio Multipart meta prefix.
+	// MinIO Multipart meta prefix.
 	minioMetaMultipartBucket = minioMetaBucket + "/" + mpartMetaPrefix
-	// Minio Tmp meta prefix.
+	// MinIO Tmp meta prefix.
 	minioMetaTmpBucket = minioMetaBucket + "/tmp"
 	// DNS separator (period), used for bucket name validation.
 	dnsDelimiter = "."
 )
 
-// isMinioBucket returns true if given bucket is a Minio internal
+// isMinioBucket returns true if given bucket is a MinIO internal
 // bucket and false otherwise.
 func isMinioMetaBucketName(bucket string) bool {
 	return bucket == minioMetaBucket ||

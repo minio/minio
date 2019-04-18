@@ -1,9 +1,9 @@
-# Minio Admin Library. [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
-The Minio Admin Golang Client SDK provides APIs to manage Minio services.
+# MinIO Admin Library. [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+The MinIO Admin Golang Client SDK provides APIs to manage MinIO services.
 
-This quickstart guide will show you how to install the Minio Admin client SDK, connect to Minio admin service, and provide a walkthrough of a simple file uploader.
+This quickstart guide will show you how to install the MinIO Admin client SDK, connect to MinIO admin service, and provide a walkthrough of a simple file uploader.
 
-This document assumes that you have a working [Golang setup](https://docs.minio.io/docs/how-to-install-golang).
+This document assumes that you have a working [Golang setup](https://docs.min.io/docs/how-to-install-golang).
 
 ## Download from GitHub
 
@@ -13,9 +13,9 @@ go get -u github.com/minio/minio/pkg/madmin
 
 ```
 
-## Initialize Minio Admin Client
+## Initialize MinIO Admin Client
 
-You need four items to connect to Minio admin services.
+You need four items to connect to MinIO admin services.
 
 
 | Parameter  | Description|
@@ -47,7 +47,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	log.Println("%v", madmClnt) // Minio admin client is now setup
+	log.Println("%v", madmClnt) // MinIO admin client is now setup
 }
 ```
 
