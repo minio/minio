@@ -1249,10 +1249,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Ensure that metadata does not contain sensitive information
 	crypto.RemoveSensitiveEntries(metadata)
 
-	if api.CacheAPI() != nil && !hasServerSideEncryptionHeader(r.Header) {
-		putObject = api.CacheAPI().PutObject
-	}
-
 	// Create the object..
 	objInfo, err := putObject(ctx, bucket, object, pReader, opts)
 	if err != nil {
@@ -1404,9 +1400,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		return
 	}
 	newMultipartUpload := objectAPI.NewMultipartUpload
-	if api.CacheAPI() != nil && !hasServerSideEncryptionHeader(r.Header) {
-		newMultipartUpload = api.CacheAPI().NewMultipartUpload
-	}
+
 	uploadID, err := newMultipartUpload(ctx, bucket, object, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -1935,9 +1929,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 
 	putObjectPart := objectAPI.PutObjectPart
-	if api.CacheAPI() != nil && !isEncrypted {
-		putObjectPart = api.CacheAPI().PutObjectPart
-	}
+
 	partInfo, err := putObjectPart(ctx, bucket, object, uploadID, partID, pReader, opts)
 	if err != nil {
 		// Verify if the underlying error is signature mismatch.
@@ -1970,9 +1962,6 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 		return
 	}
 	abortMultipartUpload := objectAPI.AbortMultipartUpload
-	if api.CacheAPI() != nil {
-		abortMultipartUpload = api.CacheAPI().AbortMultipartUpload
-	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.AbortMultipartUploadAction, bucket, object); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
@@ -2253,9 +2242,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	completeMultiPartUpload := objectAPI.CompleteMultipartUpload
-	if api.CacheAPI() != nil {
-		completeMultiPartUpload = api.CacheAPI().CompleteMultipartUpload
-	}
 
 	// This code is specifically to handle the requirements for slow
 	// complete multipart upload operations on FS mode.
