@@ -122,7 +122,7 @@ type StorageInfoRep struct {
 }
 
 // StorageInfo - web call to gather storage usage statistics.
-func (web *webAPIHandlers) StorageInfo(r *http.Request, args *AuthArgs, reply *StorageInfoRep) error {
+func (web *webAPIHandlers) StorageInfo(r *http.Request, args *WebGenericArgs, reply *StorageInfoRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
