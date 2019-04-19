@@ -508,6 +508,10 @@ func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRES
 		t.Fatalf("NewEndpoint failed %v", endpoint)
 	}
 
+	if err := endpoint.UpdateIsLocal(); err != nil {
+		t.Fatalf("UpdateIsLocal failed %v", err)
+	}
+
 	registerStorageRESTHandlers(router, EndpointList{endpoint})
 	restClient, err := newStorageRESTClient(endpoint)
 	if err != nil {

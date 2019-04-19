@@ -200,6 +200,8 @@ func serverMain(ctx *cli.Context) {
 		cli.ShowCommandHelpAndExit(ctx, "server", 1)
 	}
 
+	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
+
 	// Disable logging until server initialization is complete, any
 	// error during initialization will be shown as a fatal message
 	logger.Disable = true
@@ -304,8 +306,6 @@ func serverMain(ctx *cli.Context) {
 	go func() {
 		globalHTTPServerErrorCh <- globalHTTPServer.Start()
 	}()
-
-	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
 
 	newObject, err := newObjectLayer(globalEndpoints)
 	if err != nil {

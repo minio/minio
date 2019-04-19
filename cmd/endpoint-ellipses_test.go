@@ -44,7 +44,6 @@ func TestCreateServerEndpoints(t *testing.T) {
 		{":9000", []string{"/export1{1...32}", "/export1{1...32}"}, false},
 		// Same host cannot export same disk on two ports - special case localhost.
 		{":9001", []string{"http://localhost:900{1...2}/export{1...64}"}, false},
-
 		// Valid inputs.
 		{":9000", []string{"/export1"}, true},
 		{":9000", []string{"/export1", "/export2", "/export3", "/export4"}, true},
