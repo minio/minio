@@ -313,22 +313,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		getObjectNInfo = api.CacheAPI().GetObjectNInfo
 	}
 
-	// Get request range.
 	var rs *HTTPRangeSpec
-	rangeHeader := r.Header.Get("Range")
-	if rangeHeader != "" {
-		if rs, err = parseRequestRangeSpec(rangeHeader); err != nil {
-			// Handle only errInvalidRange. Ignore other
-			// parse error and treat it as regular Get
-			// request like Amazon S3.
-			if err == errInvalidRange {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRange), r.URL, guessIsBrowserReq(r))
-				return
-			}
-
-			logger.LogIf(ctx, err)
-		}
-	}
 
 	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
 	if err != nil {
@@ -350,6 +335,22 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	// Validate pre-conditions if any.
 	if checkPreconditions(ctx, w, r, objInfo) {
 		return
+	}
+
+	// Get request range.
+	rangeHeader := r.Header.Get("Range")
+	if rangeHeader != "" {
+		if rs, err = parseRequestRangeSpec(rangeHeader); err != nil {
+			// Handle only errInvalidRange. Ignore other
+			// parse error and treat it as regular Get
+			// request like Amazon S3.
+			if err == errInvalidRange {
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRange), r.URL, guessIsBrowserReq(r))
+				return
+			}
+
+			logger.LogIf(ctx, err)
+		}
 	}
 
 	// Set encryption response headers
