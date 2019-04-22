@@ -29,7 +29,7 @@ type KVStorage struct {
 
 func newPosix(path string) (StorageAPI, error) {
 	kvPath := path
-	path = strings.TrimPrefix(path, "/ip/")
+	path = strings.TrimPrefix(path, "/nkv/")
 
 	if os.Getenv("MINIO_NKV_EMULATOR") != "" {
 		dataDir := pathJoin("/tmp", path, "data")
