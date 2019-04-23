@@ -25,7 +25,6 @@ import (
 // TreeWalkResult - Tree walk result carries results of tree walking.
 type TreeWalkResult struct {
 	entry string
-	err   error
 	end   bool
 }
 
@@ -99,10 +98,8 @@ type IsLeafFunc func(string, string) bool
 // IsLeafDirFunc - A function isLeafDir of type isLeafDirFunc is used to detect if an entry represents an empty directory.
 type IsLeafDirFunc func(string, string) bool
 
+// Note: input entries are expected to be sorted.
 func filterListEntries(bucket, prefixDir string, entries []string, prefixEntry string, isLeaf IsLeafFunc) ([]string, bool) {
-	// Listing needs to be sorted.
-	sort.Strings(entries)
-
 	// Filter entries that have the prefix prefixEntry.
 	entries = filterMatchingPrefix(entries, prefixEntry)
 
@@ -168,9 +165,10 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 	for i, entry := range entries {
 		var leaf, leafDir bool
 
+		pentry := pathJoin(prefixDir, entry)
 		// Decision to do isLeaf check was pushed from listDir() to here.
 		if delayIsLeaf {
-			leaf = isLeaf(bucket, pathJoin(prefixDir, entry))
+			leaf = isLeaf(bucket, pentry)
 			if leaf {
 				entry = strings.TrimSuffix(entry, slashSeparator)
 			}
@@ -179,7 +177,7 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 		}
 
 		if strings.HasSuffix(entry, slashSeparator) {
-			leafDir = isLeafDir(bucket, pathJoin(prefixDir, entry))
+			leafDir = isLeafDir(bucket, pentry)
 		}
 
 		isDir := !leafDir && !leaf
@@ -209,17 +207,19 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 			// markIsEnd is passed to this entry's treeWalk() so that treeWalker.end can be marked
 			// true at the end of the treeWalk stream.
 			markIsEnd := i == len(entries)-1 && isEnd
-			if tErr := doTreeWalk(ctx, bucket, pathJoin(prefixDir, entry), prefixMatch, markerArg, recursive, listDir, isLeaf, isLeafDir, resultCh, endWalkCh, markIsEnd); tErr != nil {
-				return tErr
+			if err := doTreeWalk(ctx, bucket, pentry, prefixMatch, markerArg, recursive,
+				listDir, isLeaf, isLeafDir, resultCh, endWalkCh, markIsEnd); err != nil {
+				return err
 			}
 			continue
 		}
+
 		// EOF is set if we are at last entry and the caller indicated we at the end.
 		isEOF := ((i == len(entries)-1) && isEnd)
 		select {
 		case <-endWalkCh:
 			return errWalkAbort
-		case resultCh <- TreeWalkResult{entry: pathJoin(prefixDir, entry), end: isEOF}:
+		case resultCh <- TreeWalkResult{entry: pentry, end: isEOF}:
 		}
 	}
 

@@ -20,7 +20,6 @@ package cmd
 
 import (
 	"os"
-	"path"
 	"strings"
 	"syscall"
 )
@@ -82,7 +81,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 		case data.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0:
 			// If its symbolic link, follow the link using os.Stat()
 			var fi os.FileInfo
-			fi, err = os.Stat(path.Join(dirPath, name))
+			fi, err = os.Stat(pathJoin(dirPath, name))
 			if err != nil {
 				// If file does not exist, we continue and skip it.
 				// Could happen if it was deleted in the middle while

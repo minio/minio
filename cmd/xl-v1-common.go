@@ -98,7 +98,7 @@ func (xl xlObjects) isObjectDir(bucket, prefix string) (ok bool) {
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			// Check if 'prefix' is an object on this 'disk', else continue the check the next disk
-			entries, err := disk.ListDir(bucket, prefix, 1)
+			entries, err := disk.ListDir(bucket, prefix, 1, "")
 			if err != nil {
 				errs[index] = err
 				return

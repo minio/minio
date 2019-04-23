@@ -1010,8 +1010,8 @@ func (fs *FSObjects) listDirFactory(isLeaf IsLeafFunc) ListDirFunc {
 			logger.LogIf(context.Background(), err)
 			return
 		}
-		entries, delayIsLeaf = filterListEntries(bucket, prefixDir, entries, prefixEntry, isLeaf)
-		return entries, delayIsLeaf
+		sort.Strings(entries)
+		return filterListEntries(bucket, prefixDir, entries, prefixEntry, isLeaf)
 	}
 
 	// Return list factory instance.

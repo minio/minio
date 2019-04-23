@@ -16,7 +16,7 @@
 
 package cmd
 
-const storageRESTVersion = "v4"
+const storageRESTVersion = "v5"
 const storageRESTPath = minioReservedBucketPath + "/storage/" + storageRESTVersion + "/"
 
 const (
@@ -50,6 +50,7 @@ const (
 	storageRESTOffset     = "offset"
 	storageRESTLength     = "length"
 	storageRESTCount      = "count"
+	storageRESTLeafFile   = "leaf-file"
 	storageRESTBitrotAlgo = "bitrot-algo"
 	storageRESTBitrotHash = "bitrot-hash"
 	storageRESTInstanceID = "instance-id"
