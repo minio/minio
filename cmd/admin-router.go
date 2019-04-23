@@ -74,8 +74,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 	/// Config operations
 	if enableConfigOps {
-		// Update credentials
-		adminV1Router.Methods(http.MethodPut).Path("/config/credential").HandlerFunc(httpTraceHdrs(adminAPI.UpdateAdminCredentialsHandler))
 		// Get config
 		adminV1Router.Methods(http.MethodGet).Path("/config").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigHandler))
 		// Set config

@@ -35,7 +35,6 @@ import (
 	"github.com/tidwall/sjson"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/handlers"
@@ -1414,72 +1413,5 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Send success response
-	writeSuccessResponseHeadersOnly(w)
-}
-
-// UpdateAdminCredsHandler - POST /minio/admin/v1/config/credential
-// ----------
-// Update admin credentials in a minio server
-func (a adminAPIHandlers) UpdateAdminCredentialsHandler(w http.ResponseWriter,
-	r *http.Request) {
-
-	ctx := newContext(r, w, "UpdateCredentialsHandler")
-
-	objectAPI := validateAdminReq(ctx, w, r)
-	if objectAPI == nil {
-		return
-	}
-
-	// Avoid setting new credentials when they are already passed
-	// by the environment. Deny if WORM is enabled.
-	if globalIsEnvCreds || globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-		return
-	}
-
-	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
-		// More than maxConfigSize bytes were available
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigTooLarge), r.URL)
-		return
-	}
-
-	password := globalServerConfig.GetCredential().SecretKey
-	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
-	if err != nil {
-		logger.LogIf(ctx, err)
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
-		return
-	}
-
-	// Decode request body
-	var req madmin.SetCredsReq
-	if err = json.Unmarshal(configBytes, &req); err != nil {
-		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrRequestBodyParse), r.URL)
-		return
-	}
-
-	creds, err := auth.CreateCredentials(req.AccessKey, req.SecretKey)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	// Acquire lock before updating global configuration.
-	globalServerConfigMu.Lock()
-	defer globalServerConfigMu.Unlock()
-
-	// Update local credentials in memory.
-	globalServerConfig.SetCredential(creds)
-
-	// Set active creds.
-	globalActiveCred = creds
-
-	if err = saveServerConfig(ctx, objectAPI, globalServerConfig); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	// Reply to the client before restarting minio server.
 	writeSuccessResponseHeadersOnly(w)
 }
