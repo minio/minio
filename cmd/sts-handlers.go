@@ -25,6 +25,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/iam/validator"
+	"github.com/minio/minio/pkg/wildcard"
 )
 
 const (
@@ -49,13 +50,19 @@ func registerSTSRouter(router *mux.Router) {
 	stsRouter := router.NewRoute().PathPrefix("/").Subrouter()
 
 	// Assume roles with no JWT, handles AssumeRole.
-	stsRouter.Methods("POST").HeadersRegexp("Content-Type", "application/x-www-form-urlencoded*").
-		HeadersRegexp("Authorization", "AWS4-HMAC-SHA256*").
-		HandlerFunc(httpTraceAll(sts.AssumeRole))
+	stsRouter.Methods("POST").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
+		ctypeOk := wildcard.MatchSimple("application/x-www-form-urlencoded*", r.Header.Get("Content-Type"))
+		authOk := wildcard.MatchSimple("AWS4-HMAC-SHA256*", r.Header.Get("Authorization"))
+		noQueries := len(r.URL.Query()) == 0
+		return ctypeOk && authOk && noQueries
+	}).HandlerFunc(httpTraceAll(sts.AssumeRole))
 
 	// Assume roles with JWT handler, handles both ClientGrants and WebIdentity.
-	stsRouter.Methods("POST").HeadersRegexp("Content-Type", "application/x-www-form-urlencoded*").
-		HandlerFunc(httpTraceAll(sts.AssumeRoleWithJWT))
+	stsRouter.Methods("POST").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
+		ctypeOk := wildcard.MatchSimple("application/x-www-form-urlencoded*", r.Header.Get("Content-Type"))
+		noQueries := len(r.URL.Query()) == 0
+		return ctypeOk && noQueries
+	}).HandlerFunc(httpTraceAll(sts.AssumeRoleWithJWT))
 
 	// AssumeRoleWithClientGrants
 	stsRouter.Methods("POST").HandlerFunc(httpTraceAll(sts.AssumeRoleWithClientGrants)).
