@@ -144,34 +144,6 @@ func testReadinessEndpoint(endpoint string) {
 	defer successLogger(function, nil, startTime).Info()
 }
 
-func testPrometheusEndpoint(endpoint string) {
-	startTime := time.Now()
-	function := "testPrometheusEndpoint"
-
-	u, err := url.Parse(fmt.Sprintf("%s%s", endpoint, prometheusPath))
-	if err != nil {
-		// Could not parse URL successfully
-		failureLog(function, nil, startTime, "", "URL Parsing for Healthcheck Prometheus handler failed", err).Fatal()
-	}
-
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr, Timeout: timeout}
-	resp, err := client.Get(u.String())
-	if err != nil {
-		// GET request errored
-		failureLog(function, nil, startTime, "", "GET request to Prometheus endpoint failed", err).Fatal()
-	}
-	if resp.StatusCode != http.StatusOK {
-		// Status not 200 OK
-		failureLog(function, nil, startTime, "", "GET /minio/prometheus/metrics returned non OK status", err).Fatal()
-	}
-
-	defer resp.Body.Close()
-	defer successLogger(function, nil, startTime).Info()
-}
-
 func main() {
 	endpoint := os.Getenv("SERVER_ENDPOINT")
 	secure := os.Getenv("ENABLE_HTTPS")
@@ -191,5 +163,4 @@ func main() {
 	// execute tests
 	testLivenessEndpoint(endpoint)
 	testReadinessEndpoint(endpoint)
-	testPrometheusEndpoint(endpoint)
 }

@@ -199,6 +199,7 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func metricsHandler() http.Handler {
+
 	registry := prometheus.NewRegistry()
 
 	err := registry.Register(minioVersionInfo)
@@ -222,4 +223,17 @@ func metricsHandler() http.Handler {
 				ErrorHandling: promhttp.ContinueOnError,
 			}),
 	)
+
+}
+
+// AuthMiddleware checks if the bearer token is valid and authorized.
+func AuthMiddleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims, _, authErr := webRequestAuthenticate(r)
+		if authErr != nil || !claims.VerifyIssuer("prometheus", true) {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }
