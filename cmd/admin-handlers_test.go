@@ -168,7 +168,9 @@ var (
         "tls": {
 			"enable": false,
 			"skipVerify": false
-		}
+		},
+        "queueDir": "",
+        "queueLimit": 0
       }
     },
     "postgresql": {

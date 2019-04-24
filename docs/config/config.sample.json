@@ -133,7 +133,9 @@
 				"tls": {
 					"enable": false,
 					"skipVerify": true
-				}
+				},
+                                "queueDir": "",
+                                "queueLimit": 0                 
 			}
 		},
 		"postgresql": {
