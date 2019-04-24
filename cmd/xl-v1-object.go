@@ -366,6 +366,8 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 
 // getObjectInfoDir - This getObjectInfo is specific to object directory lookup.
 func (xl xlObjects) getObjectInfoDir(ctx context.Context, bucket, object string) (oi ObjectInfo, err error) {
+	return dirObjectInfo(bucket, object, 0, map[string]string{}), nil
+
 	var wg = &sync.WaitGroup{}
 
 	errs := make([]error, len(xl.getDisks()))
@@ -577,6 +579,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// a slash separator, we treat it like a valid operation and
 	// return success.
 	if isObjectDir(object, data.Size()) {
+		return dirObjectInfo(bucket, object, data.Size(), opts.UserDefined), nil
 		// Check if an object is present as one of the parent dir.
 		// -- FIXME. (needs a new kind of lock).
 		// -- FIXME (this also causes performance issue when disks are down).
