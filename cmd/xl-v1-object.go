@@ -103,6 +103,9 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 
 		tempObj := mustGetUUID()
 
+		// Cleanup in case of xl.json writing failure
+		defer xl.deleteObject(ctx, minioMetaTmpBucket, tempObj, writeQuorum, false)
+
 		// Write unique `xl.json` for each disk.
 		if onlineDisks, err = writeUniqueXLMetadata(ctx, storageDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
 			return oi, toObjectErr(err, srcBucket, srcObject)
