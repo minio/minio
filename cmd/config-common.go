@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	etcd "github.com/coreos/etcd/clientv3"
 	"github.com/minio/minio/cmd/logger"
@@ -105,12 +106,26 @@ func readConfigEtcd(ctx context.Context, client *etcd.Client, configFile string)
 
 // watchConfigEtcd - watches for changes on `configFile` on etcd and loads them.
 func watchConfigEtcd(objAPI ObjectLayer, configFile string, loadCfgFn func(ObjectLayer) error) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-	defer cancel()
-	for watchResp := range globalEtcdClient.Watch(ctx, configFile) {
-		for _, event := range watchResp.Events {
-			if event.IsModify() || event.IsCreate() {
-				loadCfgFn(objAPI)
+	for {
+		watchCh := globalEtcdClient.Watch(context.Background(), iamConfigPrefix)
+		select {
+		case <-GlobalServiceDoneCh:
+			return
+		case watchResp, ok := <-watchCh:
+			if !ok {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			if err := watchResp.Err(); err != nil {
+				logger.LogIf(context.Background(), err)
+				// log and retry.
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			for _, event := range watchResp.Events {
+				if event.IsModify() || event.IsCreate() {
+					loadCfgFn(objAPI)
+				}
 			}
 		}
 	}
