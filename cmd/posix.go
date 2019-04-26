@@ -187,7 +187,7 @@ func newPosix(path string) (*posix, error) {
 	p := &posix{
 		connected: true,
 		diskPath:  path,
-		// 1MiB buffer pool for posix internal operations.
+		// 4MiB buffer pool for posix internal operations.
 		pool: sync.Pool{
 			New: func() interface{} {
 				b := directio.AlignedBlock(posixWriteBlockSize)
@@ -1028,10 +1028,9 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 
 // CreateFile - creates the file.
 func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (err error) {
-	if fileSize < 0 {
+	if fileSize < -1 {
 		return errInvalidArgument
 	}
-
 	defer func() {
 		if err == errFaultyDisk {
 			atomic.AddInt32(&s.ioErrCount, 1)
@@ -1120,83 +1119,69 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 	defer s.pool.Put(bufp)
 
 	buf := *bufp
-	var written int64
 
 	// Writes remaining bytes in the buffer.
-	writeRemaining := func(remaining int64) error {
+	writeRemaining := func(w *os.File, buf []byte) (remainingWritten int, err error) {
+		var n int
+		remaining := len(buf)
 		// The following logic writes the remainging data such that it writes whatever best is possible (aligned buffer)
 		// in O_DIRECT mode and remaining (unaligned buffer) in non-O_DIRECT mode.
-		if remaining != 0 {
-			buf = buf[:remaining]
-
-			remainingAligned := (remaining / directioAlignSize) * directioAlignSize
-			remainingAlignedBuf := buf[:remainingAligned]
-			remainingUnalignedBuf := buf[remainingAligned:]
-			if len(remainingAlignedBuf) > 0 {
-				var n int
-				n, err = w.Write(remainingAlignedBuf)
-				if err != nil {
-					return err
-				}
-				written += int64(n)
+		remainingAligned := (remaining / directioAlignSize) * directioAlignSize
+		remainingAlignedBuf := buf[:remainingAligned]
+		remainingUnalignedBuf := buf[remainingAligned:]
+		if len(remainingAlignedBuf) > 0 {
+			n, err = w.Write(remainingAlignedBuf)
+			if err != nil {
+				return 0, err
 			}
-			if len(remainingUnalignedBuf) > 0 {
-				var n int
-				// Write on O_DIRECT fds fail if buffer is not 4K aligned, hence disable O_DIRECT.
-				if err = disk.DisableDirectIO(w); err != nil {
-					return err
-				}
-				n, err = w.Write(remainingUnalignedBuf)
-				if err != nil {
-					return err
-				}
-				written += int64(n)
-			}
+			remainingWritten += n
 		}
-		return nil
+		if len(remainingUnalignedBuf) > 0 {
+			// Write on O_DIRECT fds fail if buffer is not 4K aligned, hence disable O_DIRECT.
+			if err = disk.DisableDirectIO(w); err != nil {
+				return 0, err
+			}
+			n, err = w.Write(remainingUnalignedBuf)
+			if err != nil {
+				return 0, err
+			}
+			remainingWritten += n
+		}
+		return remainingWritten, nil
 	}
 
+	var written int
 	for {
 		var n int
 		n, err = io.ReadFull(r, buf)
-		if err != nil {
-			if err == io.EOF {
-				err = nil
-				break
-			}
-			if err != io.ErrUnexpectedEOF {
-				return err
-			}
-		}
-		if n == len(buf) {
-			_, err = w.Write(buf)
+		switch err {
+		case nil:
+			n, err = w.Write(buf)
 			if err != nil {
 				return err
 			}
-			written += int64(n)
-		} else {
-			if err := writeRemaining(int64(n)); err != nil {
+			written += n
+		case io.ErrUnexpectedEOF:
+			n, err = writeRemaining(w, buf[:n])
+			if err != nil {
 				return err
 			}
+			written += n
+			fallthrough
+		case io.EOF:
+			if fileSize != -1 {
+				if written < int(fileSize) {
+					return errLessData
+				}
+				if written > int(fileSize) {
+					return errMoreData
+				}
+			}
+			return nil
+		default:
+			return err
 		}
-
 	}
-
-	// Do some sanity checks.
-	_, err = io.ReadFull(r, buf)
-	if err != io.EOF {
-		return errMoreData
-	}
-
-	if written < fileSize && fileSize > 0 {
-		return errLessData
-	}
-
-	if written > fileSize && fileSize > 0 {
-		return errMoreData
-	}
-
-	return nil
 }
 
 func (s *posix) WriteAll(volume, path string, buf []byte) (err error) {
