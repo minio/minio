@@ -45,6 +45,7 @@ const (
 	diskMinTotalSpace   = diskMinFreeSpace      // Min 900MiB total space.
 	maxAllowedIOError   = 5
 	posixWriteBlockSize = 4 * humanize.MiByte
+	directioAlignSize   = 4096 // DirectIO alignment needs to be 4K. Defined here as directio.AlignSize is defined as 0 in MacOS causing divide by 0 error.
 )
 
 // isValidVolname verifies a volname name in accordance with object
@@ -1142,7 +1143,7 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 		if err != nil {
 			return err
 		}
-		remainingAligned := (remaining / directio.AlignSize) * directio.AlignSize
+		remainingAligned := (remaining / directioAlignSize) * directioAlignSize
 		remainingAlignedBuf := buf[:remainingAligned]
 		remainingUnalignedBuf := buf[remainingAligned:]
 		if len(remainingAlignedBuf) > 0 {
