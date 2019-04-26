@@ -192,7 +192,9 @@ var (
         "format": "namespace",
         "address": "",
         "password": "",
-        "key": ""
+        "key": "",
+        "queueDir": "",
+        "queueLimit": 0
       }
     },
     "webhook": {
