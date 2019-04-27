@@ -23,7 +23,7 @@ import (
 
 // DeadlineConn - is a generic stream-oriented network connection supporting buffered reader and read/write timeout.
 type DeadlineConn struct {
-	QuirkConn
+	net.Conn
 	readTimeout            time.Duration // sets the read timeout in the connection.
 	writeTimeout           time.Duration // sets the write timeout in the connection.
 	updateBytesReadFunc    func(int)     // function to be called to update bytes read.
@@ -32,7 +32,7 @@ type DeadlineConn struct {
 
 // Sets read timeout
 func (c *DeadlineConn) setReadTimeout() {
-	if c.readTimeout != 0 && c.canSetReadDeadline() {
+	if c.readTimeout != 0 {
 		c.SetReadDeadline(time.Now().UTC().Add(c.readTimeout))
 	}
 }
@@ -68,7 +68,7 @@ func (c *DeadlineConn) Write(b []byte) (n int, err error) {
 // newDeadlineConn - creates a new connection object wrapping net.Conn with deadlines.
 func newDeadlineConn(c net.Conn, readTimeout, writeTimeout time.Duration, updateBytesReadFunc, updateBytesWrittenFunc func(int)) *DeadlineConn {
 	return &DeadlineConn{
-		QuirkConn:              QuirkConn{Conn: c},
+		Conn:                   c,
 		readTimeout:            readTimeout,
 		writeTimeout:           writeTimeout,
 		updateBytesReadFunc:    updateBytesReadFunc,

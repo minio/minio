@@ -89,12 +89,7 @@ func newCustomDialContext(timeout time.Duration) func(ctx context.Context, netwo
 			DualStack: true,
 		}
 
-		conn, err := dialer.DialContext(ctx, network, addr)
-		if err != nil {
-			return nil, err
-		}
-
-		return xhttp.NewTimeoutConn(conn, timeout, timeout), nil
+		return dialer.DialContext(ctx, network, addr)
 	}
 }
 
