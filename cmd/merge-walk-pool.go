@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,64 +17,48 @@
 package cmd
 
 import (
-	"errors"
 	"reflect"
 	"sync"
 	"time"
 )
 
-// Global lookup timeout.
 const (
-	globalLookupTimeout = time.Minute * 30 // 30minutes.
+	globalMergeLookupTimeout = time.Minute * 1 // 1 minutes.
 )
 
-// listParams - list object params used for list object map
-type listParams struct {
-	bucket    string
-	recursive bool
-	marker    string
-	prefix    string
-}
-
-// errWalkAbort - returned by doTreeWalk() if it returns prematurely.
-// doTreeWalk() can return prematurely if
-// 1) treeWalk is timed out by the timer go-routine.
-// 2) there is an error during tree walk.
-var errWalkAbort = errors.New("treeWalk abort")
-
-// treeWalk - represents the go routine that does the file tree walk.
-type treeWalk struct {
-	resultCh   chan TreeWalkResult
-	endWalkCh  chan struct{}   // To signal when treeWalk go-routine should end.
+// mergeWalk - represents the go routine that does the merge walk.
+type mergeWalk struct {
+	entryChs   []FileInfoCh
+	endWalkCh  chan struct{}   // To signal when mergeWalk go-routine should end.
 	endTimerCh chan<- struct{} // To signal when timer go-routine should end.
 }
 
-// TreeWalkPool - pool of treeWalk go routines.
-// A treeWalk is added to the pool by Set() and removed either by
+// MergeWalkPool - pool of mergeWalk go routines.
+// A mergeWalk is added to the pool by Set() and removed either by
 // doing a Release() or if the concerned timer goes off.
-// treeWalkPool's purpose is to maintain active treeWalk go-routines in a map so that
+// mergeWalkPool's purpose is to maintain active mergeWalk go-routines in a map so that
 // it can be looked up across related list calls.
-type TreeWalkPool struct {
-	pool    map[listParams][]treeWalk
+type MergeWalkPool struct {
+	pool    map[listParams][]mergeWalk
 	timeOut time.Duration
 	lock    *sync.Mutex
 }
 
-// NewTreeWalkPool - initialize new tree walk pool.
-func NewTreeWalkPool(timeout time.Duration) *TreeWalkPool {
-	tPool := &TreeWalkPool{
-		pool:    make(map[listParams][]treeWalk),
+// NewMergeWalkPool - initialize new tree walk pool.
+func NewMergeWalkPool(timeout time.Duration) *MergeWalkPool {
+	tPool := &MergeWalkPool{
+		pool:    make(map[listParams][]mergeWalk),
 		timeOut: timeout,
 		lock:    &sync.Mutex{},
 	}
 	return tPool
 }
 
-// Release - selects a treeWalk from the pool based on the input
-// listParams, removes it from the pool, and returns the TreeWalkResult
+// Release - selects a mergeWalk from the pool based on the input
+// listParams, removes it from the pool, and returns the MergeWalkResult
 // channel.
-// Returns nil if listParams does not have an asccociated treeWalk.
-func (t TreeWalkPool) Release(params listParams) (resultCh chan TreeWalkResult, endWalkCh chan struct{}) {
+// Returns nil if listParams does not have an asccociated mergeWalk.
+func (t MergeWalkPool) Release(params listParams) ([]FileInfoCh, chan struct{}) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	walks, ok := t.pool[params] // Pick the valid walks.
@@ -89,42 +73,44 @@ func (t TreeWalkPool) Release(params listParams) (resultCh chan TreeWalkResult, 
 				delete(t.pool, params)
 			}
 			walk.endTimerCh <- struct{}{}
-			return walk.resultCh, walk.endWalkCh
+			return walk.entryChs, walk.endWalkCh
 		}
 	}
 	// Release return nil if params not found.
 	return nil, nil
 }
 
-// Set - adds a treeWalk to the treeWalkPool.
+// Set - adds a mergeWalk to the mergeWalkPool.
 // Also starts a timer go-routine that ends when:
 // 1) time.After() expires after t.timeOut seconds.
-//    The expiration is needed so that the treeWalk go-routine resources are freed after a timeout
+//    The expiration is needed so that the mergeWalk go-routine resources are freed after a timeout
 //    if the S3 client does only partial listing of objects.
 // 2) Relase() signals the timer go-routine to end on endTimerCh.
-//    During listing the timer should not timeout and end the treeWalk go-routine, hence the
+//    During listing the timer should not timeout and end the mergeWalk go-routine, hence the
 //    timer go-routine should be ended.
-func (t TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endWalkCh chan struct{}) {
+func (t MergeWalkPool) Set(params listParams, resultChs []FileInfoCh, endWalkCh chan struct{}) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
 	// Should be a buffered channel so that Release() never blocks.
 	endTimerCh := make(chan struct{}, 1)
-	walkInfo := treeWalk{
-		resultCh:   resultCh,
+
+	walkInfo := mergeWalk{
+		entryChs:   resultChs,
 		endWalkCh:  endWalkCh,
 		endTimerCh: endTimerCh,
 	}
+
 	// Append new walk info.
 	t.pool[params] = append(t.pool[params], walkInfo)
 
 	// Timer go-routine which times out after t.timeOut seconds.
-	go func(endTimerCh <-chan struct{}) {
+	go func(endTimerCh <-chan struct{}, walkInfo mergeWalk) {
 		select {
 		// Wait until timeOut
 		case <-time.After(t.timeOut):
-			// Timeout has expired. Remove the treeWalk from treeWalkPool and
-			// end the treeWalk go-routine.
+			// Timeout has expired. Remove the mergeWalk from mergeWalkPool and
+			// end the mergeWalk go-routine.
 			t.lock.Lock()
 			walks, ok := t.pool[params]
 			if ok {
@@ -138,20 +124,20 @@ func (t TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endWa
 					}
 				}
 				if len(nwalks) == 0 {
-					// No more treeWalk go-routines associated with listParams
+					// No more mergeWalk go-routines associated with listParams
 					// hence remove map entry.
 					delete(t.pool, params)
 				} else {
-					// There are more treeWalk go-routines associated with listParams
+					// There are more mergeWalk go-routines associated with listParams
 					// hence save the list in the map.
 					t.pool[params] = nwalks
 				}
 			}
-			// Signal the treeWalk go-routine to die.
+			// Signal the mergeWalk go-routine to die.
 			close(endWalkCh)
 			t.lock.Unlock()
 		case <-endTimerCh:
 			return
 		}
-	}(endTimerCh)
+	}(endTimerCh, walkInfo)
 }

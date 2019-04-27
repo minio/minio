@@ -30,6 +30,13 @@ type VolInfo struct {
 	Created time.Time
 }
 
+// FilesInfo represent a list of files, additionally
+// indicates if the list is last.
+type FilesInfo struct {
+	Files       []FileInfo
+	IsTruncated bool
+}
+
 // FileInfo - represents file stat information.
 type FileInfo struct {
 	// Name of the volume.
@@ -46,4 +53,12 @@ type FileInfo struct {
 
 	// File mode bits.
 	Mode os.FileMode
+
+	// File metadata
+	Metadata map[string]string
+
+	// All the parts per object.
+	Parts []ObjectPartInfo
+
+	Quorum int
 }

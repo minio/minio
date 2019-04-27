@@ -330,6 +330,43 @@ func (client *storageRESTClient) ReadFile(volume, path string, offset int64, buf
 	return int64(n), err
 }
 
+func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive bool, leafFile string,
+	readMetadataFn readMetadataFunc, endWalkCh chan struct{}) (chan FileInfo, error) {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTDirPath, dirPath)
+	values.Set(storageRESTMarkerPath, marker)
+	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
+	values.Set(storageRESTLeafFile, leafFile)
+	respBody, err := client.call(storageRESTMethodWalk, values, nil, -1)
+	if err != nil {
+		return nil, err
+	}
+
+	ch := make(chan FileInfo)
+	go func() {
+		defer close(ch)
+		defer http.DrainBody(respBody)
+
+		decoder := gob.NewDecoder(respBody)
+		for {
+			var fi FileInfo
+			if gerr := decoder.Decode(&fi); gerr != nil {
+				// Upon error return
+				return
+			}
+			select {
+			case ch <- fi:
+			case <-endWalkCh:
+				return
+			}
+
+		}
+	}()
+
+	return ch, nil
+}
+
 // ListDir - lists a directory.
 func (client *storageRESTClient) ListDir(volume, dirPath string, count int, leafFile string) (entries []string, err error) {
 	values := make(url.Values)

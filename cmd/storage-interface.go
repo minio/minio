@@ -38,6 +38,10 @@ type StorageAPI interface {
 	StatVol(volume string) (vol VolInfo, err error)
 	DeleteVol(volume string) (err error)
 
+	// Walk in sorted order directly on disk.
+	Walk(volume, dirPath string, marker string, recursive bool, leafFile string,
+		readMetadataFn readMetadataFunc, endWalkCh chan struct{}) (chan FileInfo, error)
+
 	// File operations.
 	ListDir(volume, dirPath string, count int, leafFile string) ([]string, error)
 	ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error)

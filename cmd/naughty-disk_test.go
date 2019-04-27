@@ -111,6 +111,13 @@ func (d *naughtyDisk) DeleteVol(volume string) (err error) {
 	return d.disk.DeleteVol(volume)
 }
 
+func (d *naughtyDisk) Walk(volume, path, marker string, recursive bool, leafFile string, readMetadataFn readMetadataFunc, endWalkCh chan struct{}) (chan FileInfo, error) {
+	if err := d.calcError(); err != nil {
+		return nil, err
+	}
+	return d.disk.Walk(volume, path, marker, recursive, leafFile, readMetadataFn, endWalkCh)
+}
+
 func (d *naughtyDisk) ListDir(volume, path string, count int, leafFile string) (entries []string, err error) {
 	if err := d.calcError(); err != nil {
 		return []string{}, err
