@@ -67,7 +67,7 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 		recursive = false
 	}
 
-	walkResultCh, endWalkCh := xl.listPool.Release(listParams{bucket, recursive, marker, prefix})
+	walkResultCh, endWalkCh := xl.listPool.Release(listParams{bucket, recursive, marker, prefix, false})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		listDir := listDirFactory(ctx, xl.getLoadBalancedDisks()...)
@@ -118,7 +118,7 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 		}
 	}
 
-	params := listParams{bucket, recursive, nextMarker, prefix}
+	params := listParams{bucket, recursive, nextMarker, prefix, false}
 	if !eof {
 		xl.listPool.Set(params, walkResultCh, endWalkCh)
 	}
