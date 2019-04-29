@@ -10,9 +10,9 @@ require (
 	github.com/DataDog/zstd v1.3.5 // indirect
 	github.com/alecthomas/participle v0.2.1
 	github.com/aliyun/aliyun-oss-go-sdk v0.0.0-20190307165228-86c17b95fcd5
+	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
 	github.com/bcicen/jstream v0.0.0-20190220045926-16c1f8af81c2
 	github.com/cheggaaa/pb v1.0.28
-	github.com/colinmarc/hdfs/v2 v2.0.0
 	github.com/coredns/coredns v1.4.0
 	github.com/coreos/bbolt v1.3.2 // indirect
 	github.com/coreos/etcd v3.3.12+incompatible
@@ -37,11 +37,13 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.8.5 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.1 // indirect
-	github.com/hashicorp/go-retryablehttp v0.5.3 // indirect
+	github.com/hashicorp/go-msgpack v0.5.4 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.0 // indirect
+	github.com/hashicorp/raft v1.0.1 // indirect
 	github.com/hashicorp/vault v1.1.0
 	github.com/howeyc/gopass v0.0.0-20170109162249-bf9dde6d0d2c // indirect
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
+	github.com/jcmturner/gofork v0.0.0-20190328161633-dc7c13fece03 // indirect
 	github.com/jonboulle/clockwork v0.1.0 // indirect
 	github.com/json-iterator/go v1.1.6
 	github.com/klauspost/compress v1.4.1 // indirect
@@ -54,7 +56,8 @@ require (
 	github.com/miekg/dns v1.1.8
 	github.com/minio/blazer v0.0.0-20171126203752-2081f5bf0465
 	github.com/minio/cli v1.3.0
-	github.com/minio/dsync v0.0.0-20190131060523-fb604afd87b2
+	github.com/minio/dsync v1.0.0
+	github.com/minio/hdfs/v3 v3.0.0
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/lsync v0.0.0-20190207022115-a4e43e3d0887
 	github.com/minio/mc v0.0.0-20190401030144-a1355e50e2e8
@@ -67,12 +70,11 @@ require (
 	github.com/nats-io/go-nats v1.7.2 // indirect
 	github.com/nats-io/go-nats-streaming v0.4.2
 	github.com/nats-io/nats v1.7.2
+	github.com/nats-io/nats-streaming-server v0.14.1 // indirect
 	github.com/nats-io/nkeys v0.0.2 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.0.7
-	github.com/pascaldekloe/goe v0.1.0 // indirect
-	github.com/pkg/errors v0.8.1 // indirect
 	github.com/pkg/profile v1.3.0
 	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829
 	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90 // indirect
@@ -95,12 +97,12 @@ require (
 	go.uber.org/atomic v1.3.2
 	go.uber.org/multierr v1.1.0 // indirect
 	go.uber.org/zap v1.9.1 // indirect
-	golang.org/x/crypto v0.0.0-20190422183909-d864b10871cd
-	golang.org/x/lint v0.0.0-20190409202823-959b441ac422 // indirect
-	golang.org/x/net v0.0.0-20190420063019-afa5a82059c6
-	golang.org/x/sys v0.0.0-20190422165155-953cdadca894
-	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
-	golang.org/x/tools v0.0.0-20190423232328-15bbd99efc6f // indirect
+	golang.org/x/crypto v0.0.0-20190426145343-a29dc8fdc734
+	golang.org/x/net v0.0.0-20190424112056-4829fb13d2c6
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58 // indirect
+	golang.org/x/sys v0.0.0-20190429190828-d89cdac9e872
+	golang.org/x/text v0.3.2 // indirect
+	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
 	google.golang.org/api v0.3.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
 	gopkg.in/cheggaaa/pb.v1 v1.0.28 // indirect

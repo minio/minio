@@ -29,8 +29,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/colinmarc/hdfs/v2"
 	"github.com/minio/cli"
+	"github.com/minio/hdfs/v3"
 	"github.com/minio/minio-go/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
@@ -477,13 +477,15 @@ func (n *hdfsObjects) GetObject(ctx context.Context, bucket, key string, startOf
 	if err != nil {
 		return hdfsToObjectErr(ctx, err, bucket, key)
 	}
-	if _, err = rd.Seek(startOffset, io.SeekStart); err != nil {
-		return hdfsToObjectErr(ctx, err, bucket, key)
+	defer rd.Close()
+	_, err = io.Copy(writer, io.NewSectionReader(rd, startOffset, length))
+	if err == io.ErrClosedPipe {
+		// hdfs library doesn't send EOF correctly, so io.Copy attempts
+		// to write which returns io.ErrClosedPipe - just ignore
+		// this for now.
+		err = nil
 	}
-	if _, err = io.Copy(writer, io.LimitReader(rd, length)); err != nil {
-		return hdfsToObjectErr(ctx, err, bucket, key)
-	}
-	return nil
+	return hdfsToObjectErr(ctx, err, bucket, key)
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo.
@@ -528,17 +530,19 @@ func (n *hdfsObjects) PutObject(ctx context.Context, bucket string, object strin
 			return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
 		}
 		defer n.deleteObject(minio.PathJoin(hdfsSeparator, minioMetaTmpBucket), tmpname)
-		defer w.Close()
 		if _, err = io.Copy(w, r); err != nil {
+			w.Close()
 			return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
 		}
 		dir := path.Dir(name)
 		if dir != "" {
 			if err = n.clnt.MkdirAll(dir, os.FileMode(0755)); err != nil {
+				w.Close()
 				n.deleteObject(minio.PathJoin(hdfsSeparator, bucket), dir)
 				return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
 			}
 		}
+		w.Close()
 		if err = n.clnt.Rename(tmpname, name); err != nil {
 			return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
 		}
