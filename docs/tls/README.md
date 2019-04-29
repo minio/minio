@@ -22,7 +22,7 @@ Copy the existing private key and public certificate to the `certs` directory. T
 > NOTE: Location of custom certs directory can be specified using `--certs-dir` command line option.
 
 **Note:** 
-* The key and certificate files must be appended with `.key` and `.crt`, respectively.
+* Inside the `certs` directory, the private key must by named `private.key` and the public key must be named `public.crt`.
 * A certificate signed by a CA contains information about the issued identity (e.g. name, expiry, public key) and any intermediate certificates. The root CA is not included.
 
 ## <a name="generate-use-self-signed-keys-certificates"></a>3. Generate and use Self-signed Keys and Certificates with MinIO
