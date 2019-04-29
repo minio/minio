@@ -167,6 +167,8 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	}
 	logger.FatalIf(err, "Invalid command line arguments")
 
+	logger.LogIf(context.Background(), checkEndpointsSubOptimal(ctx, setupType, globalEndpoints))
+
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
