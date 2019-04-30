@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -211,7 +212,11 @@ func (k *KVStorage) getKVNSEntry(nskey string) (entry KVNSEntry, err error) {
 		}
 		err = KVNSEntryUnmarshal(value, &entry)
 		if err != nil {
-			fmt.Println("##### Unmarshal failed on ", nskey, len(value))
+			length := 200
+			if len(value) < length {
+				length = len(value)
+			}
+			fmt.Println("##### Unmarshal failed on ", nskey, len(value), "\n", "hexdump: ", hex.EncodeToString(value[:length]))
 			tries--
 			if tries == 0 {
 				fmt.Println("##### Unmarshal failed (after 10 retries on GET) on ", k.path, nskey)
