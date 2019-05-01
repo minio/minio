@@ -350,6 +350,9 @@ func calculatePartSizeFromIdx(ctx context.Context, totalSize int64, partSize int
 		logger.LogIf(ctx, errPartSizeIndex)
 		return 0, errPartSizeIndex
 	}
+	if totalSize == -1 {
+		return -1, nil
+	}
 	if totalSize > 0 {
 		// Compute the total count of parts
 		partsCount := totalSize/partSize + 1
