@@ -896,6 +896,14 @@ func (a *azureObjects) DeleteObject(ctx context.Context, bucket, object string) 
 	return nil
 }
 
+func (a *azureObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = a.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
+}
+
 // ListMultipartUploads - It's decided not to support List Multipart Uploads, hence returning empty result.
 func (a *azureObjects) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result minio.ListMultipartsInfo, err error) {
 	// It's decided not to support List Multipart Uploads, hence returning empty result.

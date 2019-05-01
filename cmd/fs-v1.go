@@ -951,6 +951,16 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	return fsMeta.ToObjectInfo(bucket, object, fi), nil
 }
 
+// DeleteObjects - deletes an object from a bucket, this operation is destructive
+// and there are no rollbacks supported.
+func (fs *FSObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = fs.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
+}
+
 // DeleteObject - deletes an object from a bucket, this operation is destructive
 // and there are no rollbacks supported.
 func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string) error {

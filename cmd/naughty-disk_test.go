@@ -167,6 +167,14 @@ func (d *naughtyDisk) DeleteFile(volume string, path string) (err error) {
 	return d.disk.DeleteFile(volume, path)
 }
 
+func (d *naughtyDisk) DeleteFileBulk(volume string, paths []string) ([]error, error) {
+	errs := make([]error, len(paths))
+	for idx, path := range paths {
+		errs[idx] = d.disk.DeleteFile(volume, path)
+	}
+	return errs, nil
+}
+
 func (d *naughtyDisk) WriteAll(volume string, path string, buf []byte) (err error) {
 	if err := d.calcError(); err != nil {
 		return err

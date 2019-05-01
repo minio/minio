@@ -828,6 +828,14 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string, wri
 	return reduceWriteQuorumErrs(ctx, dErrs, objectOpIgnoredErrs, writeQuorum)
 }
 
+func (xl xlObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = xl.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
+}
+
 // DeleteObject - deletes an object, this call doesn't necessary reply
 // any error as it is not necessary for the handler to reply back a
 // response to the client request.

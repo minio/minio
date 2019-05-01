@@ -62,6 +62,7 @@ type cacheObjects struct {
 	GetObjectInfoFn           func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	PutObjectFn               func(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	DeleteObjectFn            func(ctx context.Context, bucket, object string) error
+	DeleteObjectsFn           func(ctx context.Context, bucket string, objects []string) ([]error, error)
 	ListObjectsFn             func(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
 	ListObjectsV2Fn           func(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
 	ListBucketsFn             func(ctx context.Context) (buckets []BucketInfo, err error)
@@ -94,6 +95,7 @@ type CacheObjectLayer interface {
 	GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	PutObject(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	DeleteObject(ctx context.Context, bucket, object string) error
+	DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error)
 
 	// Multipart operations.
 	NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (uploadID string, err error)
@@ -629,6 +631,14 @@ func (c cacheObjects) DeleteObject(ctx context.Context, bucket, object string) (
 	return
 }
 
+func (c cacheObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = c.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
+}
+
 // Returns true if object should be excluded from cache
 func (c cacheObjects) isCacheExclude(bucket, object string) bool {
 	for _, pattern := range c.exclude {
@@ -974,6 +984,14 @@ func newServerCacheObjects(config CacheConfig) (CacheObjectLayer, error) {
 		DeleteObjectFn: func(ctx context.Context, bucket, object string) error {
 			return newObjectLayerFn().DeleteObject(ctx, bucket, object)
 		},
+		DeleteObjectsFn: func(ctx context.Context, bucket string, objects []string) ([]error, error) {
+			errs := make([]error, len(objects))
+			for idx, object := range objects {
+				errs[idx] = newObjectLayerFn().DeleteObject(ctx, bucket, object)
+			}
+			return errs, nil
+		},
+
 		ListObjectsFn: func(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
 			return newObjectLayerFn().ListObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)
 		},

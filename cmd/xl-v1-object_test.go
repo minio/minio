@@ -111,6 +111,80 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 	// Cleanup backend directories
 	removeRoots(fsDirs)
 }
+
+func TestXLDeleteObjectsXLSet(t *testing.T) {
+
+	var objs []*xlObjects
+	for i := 0; i < 32; i++ {
+		obj, fsDirs, err := prepareXL(16)
+		if err != nil {
+			t.Fatal("Unable to initialize 'XL' object layer.", err)
+		}
+		// Remove all dirs.
+		for _, dir := range fsDirs {
+			defer os.RemoveAll(dir)
+		}
+		objs = append(objs, obj.(*xlObjects))
+	}
+
+	xlSets := &xlSets{sets: objs, distributionAlgo: "CRCMOD"}
+
+	type testCaseType struct {
+		bucket string
+		object string
+	}
+
+	bucketName := "bucket"
+	testCases := []testCaseType{
+		{bucketName, "dir/obj1"},
+		{bucketName, "dir/obj2"},
+		{bucketName, "obj3"},
+		{bucketName, "obj_4"},
+	}
+
+	err := xlSets.MakeBucketWithLocation(context.Background(), bucketName, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, testCase := range testCases {
+		_, err = xlSets.PutObject(context.Background(), testCase.bucket, testCase.object,
+			mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{})
+		if err != nil {
+			t.Fatalf("XL Object upload failed: <ERROR> %s", err)
+		}
+	}
+
+	toObjectNames := func(testCases []testCaseType) []string {
+		names := make([]string, len(testCases))
+		for i := range testCases {
+			names[i] = testCases[i].object
+		}
+		return names
+	}
+
+	objectNames := toObjectNames(testCases)
+	delErrs, err := xlSets.DeleteObjects(context.Background(), bucketName, objectNames)
+	if err != nil {
+		t.Errorf("Failed to call DeleteObjects with the error: `%v`", err)
+	}
+
+	for i := range delErrs {
+		if delErrs[i] != nil {
+			t.Errorf("Failed to remove object `%v` with the error: `%v`", objectNames[i], delErrs[i])
+		}
+	}
+
+	for _, test := range testCases {
+		_, statErr := xlSets.GetObjectInfo(context.Background(), test.bucket, test.object, ObjectOptions{})
+		switch statErr.(type) {
+		case ObjectNotFound:
+		default:
+			t.Fatalf("Object %s is not removed", test.bucket+"/"+test.object)
+		}
+	}
+}
+
 func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	// Reset global storage class flags
 	resetGlobalStorageEnvs()

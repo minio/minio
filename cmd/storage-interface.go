@@ -47,6 +47,7 @@ type StorageAPI interface {
 	RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error
 	StatFile(volume string, path string) (file FileInfo, err error)
 	DeleteFile(volume string, path string) (err error)
+	DeleteFileBulk(volume string, paths []string) (errs []error, err error)
 
 	// Write all data, syncs the data to disk.
 	WriteAll(volume string, path string, buf []byte) (err error)

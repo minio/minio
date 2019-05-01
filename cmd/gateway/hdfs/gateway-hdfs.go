@@ -400,6 +400,14 @@ func (n *hdfsObjects) DeleteObject(ctx context.Context, bucket, object string) e
 	return hdfsToObjectErr(ctx, n.deleteObject(minio.PathJoin(hdfsSeparator, bucket), minio.PathJoin(hdfsSeparator, bucket, object)), bucket, object)
 }
 
+func (n *hdfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = n.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
+}
+
 func (n *hdfsObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, opts minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
 	objInfo, err := n.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {

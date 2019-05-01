@@ -955,6 +955,14 @@ func (l *gcsGateway) DeleteObject(ctx context.Context, bucket string, object str
 	return nil
 }
 
+func (l *gcsGateway) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = l.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
+}
+
 // NewMultipartUpload - upload object in multiple parts
 func (l *gcsGateway) NewMultipartUpload(ctx context.Context, bucket string, key string, o minio.ObjectOptions) (uploadID string, err error) {
 	// generate new uploadid

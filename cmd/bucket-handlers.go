@@ -309,12 +309,19 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
-	deleteObject := objectAPI.DeleteObject
+	deleteObjectsFn := objectAPI.DeleteObjects
 	if api.CacheAPI() != nil {
-		deleteObject = api.CacheAPI().DeleteObject
+		deleteObjectsFn = api.CacheAPI().DeleteObjects
 	}
 
+	type delObj struct {
+		origIndex int
+		name      string
+	}
+
+	var objectsToDelete []delObj
 	var dErrs = make([]APIErrorCode, len(deleteObjects.Objects))
+
 	for index, object := range deleteObjects.Objects {
 		if dErrs[index] = checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object.ObjectName); dErrs[index] != ErrNone {
 			if dErrs[index] == ErrSignatureDoesNotMatch || dErrs[index] == ErrInvalidAccessKeyID {
@@ -323,10 +330,26 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			}
 			continue
 		}
-		err := deleteObject(ctx, bucket, object.ObjectName)
-		if err != nil {
-			dErrs[index] = toAPIErrorCode(ctx, err)
+
+		objectsToDelete = append(objectsToDelete, delObj{index, object.ObjectName})
+	}
+
+	toNames := func(input []delObj) (output []string) {
+		output = make([]string, len(input))
+		for i := range input {
+			output[i] = input[i].name
 		}
+		return
+	}
+
+	errs, err := deleteObjectsFn(ctx, bucket, toNames(objectsToDelete))
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	for i, obj := range objectsToDelete {
+		dErrs[obj.origIndex] = toAPIErrorCode(ctx, errs[i])
 	}
 
 	// Collect deleted objects and errors if any.

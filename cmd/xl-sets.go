@@ -467,8 +467,13 @@ func hashKey(algo string, key string, cardinality int) int {
 }
 
 // Returns always a same erasure coded set for a given input.
+func (s *xlSets) getHashedSetIndex(input string) int {
+	return hashKey(s.distributionAlgo, input, len(s.sets))
+}
+
+// Returns always a same erasure coded set for a given input.
 func (s *xlSets) getHashedSet(input string) (set *xlObjects) {
-	return s.sets[hashKey(s.distributionAlgo, input, len(s.sets))]
+	return s.sets[s.getHashedSetIndex(input)]
 }
 
 // GetBucketInfo - returns bucket info from one of the erasure coded set.
@@ -616,6 +621,58 @@ func (s *xlSets) GetObjectInfo(ctx context.Context, bucket, object string, opts 
 // DeleteObject - deletes an object from the hashedSet based on the object name.
 func (s *xlSets) DeleteObject(ctx context.Context, bucket string, object string) (err error) {
 	return s.getHashedSet(object).DeleteObject(ctx, bucket, object)
+}
+
+// DeleteObjects - bulk delete of objects
+// Bulk delete is only possible within one set. For that purpose
+// objects are group by set first, and then bulk delete is invoked
+// for each set, the error response of each delete will be returned
+func (s *xlSets) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+
+	type delObj struct {
+		// Set index associated to this object
+		setIndex int
+		// Original index from the list of arguments
+		// where this object is passed
+		origIndex int
+		// Object name
+		name string
+	}
+
+	// Transform []delObj to the list of object names
+	toNames := func(delObjs []delObj) []string {
+		names := make([]string, len(delObjs))
+		for i, obj := range delObjs {
+			names[i] = obj.name
+		}
+		return names
+	}
+
+	// The result of delete operation on all passed objects
+	var delErrs = make([]error, len(objects))
+
+	// A map between a set and its associated objects
+	var objSetMap = make(map[int][]delObj)
+
+	// Group objects by set index
+	for i, object := range objects {
+		index := s.getHashedSetIndex(object)
+		objSetMap[index] = append(objSetMap[index], delObj{setIndex: index, origIndex: i, name: object})
+	}
+
+	// Invoke bulk delete on objects per set and save
+	// the result of the delete operation
+	for _, objsGroup := range objSetMap {
+		errs, err := s.getHashedSet(objsGroup[0].name).DeleteObjects(ctx, bucket, toNames(objsGroup))
+		if err != nil {
+			return nil, err
+		}
+		for i, obj := range objsGroup {
+			delErrs[obj.origIndex] = errs[i]
+		}
+	}
+
+	return delErrs, nil
 }
 
 // CopyObject - copies objects from one hashedSet to another hashedSet, on server side.
