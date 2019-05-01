@@ -32,19 +32,9 @@ type streamingBitrotWriter struct {
 	h         hash.Hash
 	shardSize int64
 	canClose  chan struct{} // Needed to avoid race explained in Close() call.
-
-	// Following two fields are used only to make sure that Write(p) is called such that
-	// len(p) is always the block size except the last block, i.e prevent programmer errors.
-	currentBlockIdx int
-	verifyTillIdx   int
 }
 
 func (b *streamingBitrotWriter) Write(p []byte) (int, error) {
-	if b.currentBlockIdx < b.verifyTillIdx && int64(len(p)) != b.shardSize {
-		// All blocks except last should be of the length b.shardSize
-		logger.LogIf(context.Background(), errUnexpected)
-		return 0, errUnexpected
-	}
 	if len(p) == 0 {
 		return 0, nil
 	}
@@ -57,7 +47,6 @@ func (b *streamingBitrotWriter) Write(p []byte) (int, error) {
 		return 0, err
 	}
 	n, err = b.iow.Write(p)
-	b.currentBlockIdx++
 	return n, err
 }
 
@@ -78,10 +67,13 @@ func (b *streamingBitrotWriter) Close() error {
 func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64) io.WriteCloser {
 	r, w := io.Pipe()
 	h := algo.New()
-	bw := &streamingBitrotWriter{w, h, shardSize, make(chan struct{}), 0, int(length / shardSize)}
+	bw := &streamingBitrotWriter{w, h, shardSize, make(chan struct{})}
 	go func() {
-		bitrotSumsTotalSize := ceilFrac(length, shardSize) * int64(h.Size()) // Size used for storing bitrot checksums.
-		totalFileSize := bitrotSumsTotalSize + length
+		totalFileSize := int64(-1) // For compressed objects length will be unknown (represented by length=-1)
+		if length != -1 {
+			bitrotSumsTotalSize := ceilFrac(length, shardSize) * int64(h.Size()) // Size used for storing bitrot checksums.
+			totalFileSize = bitrotSumsTotalSize + length
+		}
 		err := disk.CreateFile(volume, filePath, totalFileSize, r)
 		if err != nil {
 			reqInfo := (&logger.ReqInfo{}).AppendTags("storageDisk", disk.String())

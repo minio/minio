@@ -103,6 +103,9 @@ func (e *Erasure) ShardFileSize(totalLength int64) int64 {
 	if totalLength == 0 {
 		return 0
 	}
+	if totalLength == -1 {
+		return -1
+	}
 	numShards := totalLength / e.blockSize
 	lastBlockSize := totalLength % int64(e.blockSize)
 	lastShardSize := ceilFrac(lastBlockSize, int64(e.dataBlocks))
