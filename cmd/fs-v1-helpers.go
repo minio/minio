@@ -206,6 +206,9 @@ func osErrToFSFileErr(err error) error {
 	if isSysErrPathNotFound(err) {
 		return errFileNotFound
 	}
+	if isSysErrTooManyFiles(err) {
+		return errTooManyOpenFiles
+	}
 	return err
 }
 
