@@ -1485,7 +1485,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	if err == nil {
 		return ErrNone
 	}
-
 	// Verify if the underlying error is signature mismatch.
 	switch err {
 	case errInvalidArgument:
@@ -1535,6 +1534,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrKMSAuthFailure
 	case errOperationTimedOut, context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
+	case errNetworkConnReset:
+		apiErr = ErrSlowDown
 	}
 
 	// Compression errors

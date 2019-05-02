@@ -57,6 +57,8 @@ func toObjectErr(err error, params ...string) error {
 		}
 	case errDiskFull:
 		err = StorageFull{}
+	case errTooManyOpenFiles:
+		err = SlowDown{}
 	case errFileAccessDenied:
 		if len(params) >= 2 {
 			err = PrefixAccessDenied{
@@ -135,6 +137,13 @@ type StorageFull struct{}
 
 func (e StorageFull) Error() string {
 	return "Storage reached its minimum free disk threshold."
+}
+
+// SlowDown  too many file descriptors open or backend busy .
+type SlowDown struct{}
+
+func (e SlowDown) Error() string {
+	return "Please reduce your request rate"
 }
 
 // InsufficientReadQuorum storage cannot satisfy quorum for read operation.
