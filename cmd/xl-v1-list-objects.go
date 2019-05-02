@@ -22,11 +22,10 @@ import (
 )
 
 // Returns function "listDir" of the type listDirFunc.
-// isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir()
-func listDirFactory(ctx context.Context, isLeaf IsLeafFunc, disks ...StorageAPI) ListDirFunc {
+func listDirFactory(ctx context.Context, disks ...StorageAPI) ListDirFunc {
 	// Returns sorted merged entries from all the disks.
-	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string, delayIsLeaf bool) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string) {
 		for _, disk := range disks {
 			if disk == nil {
 				continue
@@ -55,8 +54,7 @@ func listDirFactory(ctx context.Context, isLeaf IsLeafFunc, disks ...StorageAPI)
 				sort.Strings(mergedEntries)
 			}
 		}
-		mergedEntries, delayIsLeaf = filterListEntries(bucket, prefixDir, mergedEntries, prefixEntry, isLeaf)
-		return mergedEntries, delayIsLeaf
+		return filterMatchingPrefix(mergedEntries, prefixEntry)
 	}
 	return listDir
 }
@@ -72,10 +70,8 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 	walkResultCh, endWalkCh := xl.listPool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
-		isLeaf := xl.isObject
-		isLeafDir := xl.isObjectDir
-		listDir := listDirFactory(ctx, isLeaf, xl.getLoadBalancedDisks()...)
-		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
+		listDir := listDirFactory(ctx, xl.getLoadBalancedDisks()...)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, endWalkCh)
 	}
 
 	var objInfos []ObjectInfo

@@ -4,7 +4,8 @@
 
 |Item|Specification|
 |:---|:---|
-|Maximum number of servers| 32|
+|Maximum number of servers per cluster| 32|
+|Maximum number of Federated clusters | Unlimited|
 |Minimum number of servers| 02|
 |Maximum number of drives per server| Unlimited|
 |Read quorum| N/2|
