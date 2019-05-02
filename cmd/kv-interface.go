@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"time"
@@ -13,7 +14,7 @@ type KVInterface interface {
 	List(prefix string, buf []byte) ([]string, error)
 }
 
-const kvNSEntryPaddingMultiple = 4 * 1024
+const kvNSEntryPaddingMultiple = 4
 
 type KVNSEntry struct {
 	Key     string
@@ -22,7 +23,7 @@ type KVNSEntry struct {
 	IDs     []string
 }
 
-func KVNSEntryMarshal(entry KVNSEntry) ([]byte, error) {
+func KVNSEntryMarshal(entry KVNSEntry, buf []byte) ([]byte, error) {
 	b, err := json.Marshal(entry)
 	if err != nil {
 		return nil, err
@@ -30,19 +31,18 @@ func KVNSEntryMarshal(entry KVNSEntry) ([]byte, error) {
 	if !kvPadding {
 		return b, nil
 	}
-	padded := make([]byte, ceilFrac(int64(len(b)), kvNSEntryPaddingMultiple)*kvNSEntryPaddingMultiple)
-	copy(padded, b)
-	return padded, nil
+	binary.PutVarint(buf[:4], int64(len(b)))
+	copy(buf[4:], b)
+	buf = buf[:4+len(b)]
+	paddedLength := ceilFrac(int64(len(buf)), kvNSEntryPaddingMultiple) * kvNSEntryPaddingMultiple
+	buf = buf[:paddedLength]
+	return buf, nil
 }
 
 func KVNSEntryUnmarshal(b []byte, entry *KVNSEntry) error {
 	if kvPadding {
-		for i := range b {
-			if b[i] == '\x00' {
-				b = b[:i]
-				break
-			}
-		}
+		length, _ := binary.Varint(b[:4])
+		b = b[4 : 4+length]
 	}
 	return json.Unmarshal(b, entry)
 }

@@ -216,7 +216,7 @@ func (k *KVStorage) getKVNSEntry(nskey string) (entry KVNSEntry, err error) {
 			if len(value) < length {
 				length = len(value)
 			}
-			fmt.Println("##### Unmarshal failed on ", nskey, len(value), "\n", "hexdump: ", hex.EncodeToString(value[:length]))
+			fmt.Println("##### Unmarshal failed on ", nskey, err, "\n", "hexdump: ", hex.EncodeToString(value[:length]))
 			tries--
 			if tries == 0 {
 				fmt.Println("##### Unmarshal failed (after 10 retries on GET) on ", k.path, nskey)
@@ -357,7 +357,7 @@ func (k *KVStorage) CreateFile(volume, filePath string, size int64, reader io.Re
 		}
 		entry.IDs = append(entry.IDs, id)
 	}
-	b, err := KVNSEntryMarshal(entry)
+	b, err := KVNSEntryMarshal(entry, buf)
 	if err != nil {
 		return err
 	}
@@ -412,9 +412,9 @@ func (k *KVStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) er
 		return err
 	}
 	rename := func(src, dst string) error {
+		bufp := kvValuePool.Get().(*[]byte)
+		defer kvValuePool.Put(bufp)
 		if src == ".minio.sys/format.json.tmp" && dst == ".minio.sys/format.json" {
-			bufp := kvValuePool.Get().(*[]byte)
-			defer kvValuePool.Put(bufp)
 			value, err := k.kv.Get(src, *bufp)
 			if err != nil {
 				return err
@@ -431,7 +431,7 @@ func (k *KVStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) er
 			return err
 		}
 		entry.Key = dst
-		value, err := KVNSEntryMarshal(entry)
+		value, err := KVNSEntryMarshal(entry, *bufp)
 		if err != nil {
 			return err
 		}

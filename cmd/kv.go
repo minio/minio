@@ -247,7 +247,7 @@ var kvTimeout time.Duration = func() time.Duration {
 	return time.Duration(i) * time.Second
 }()
 
-var kvPadding bool = os.Getenv("MINIO_NKV_PADDING") != ""
+var kvPadding bool = os.Getenv("MINIO_NKV_PADDING") != "off"
 
 var kvMaxValueSize = getKVMaxValueSize()
 
@@ -481,11 +481,11 @@ func (k *KV) Put(keyStr string, value []byte) error {
 		return errValueTooLong
 	}
 	key := []byte(keyStr)
-	if kvPadding {
-		for len(key) < kvKeyLength {
-			key = append(key, '\x00')
-		}
-	}
+	// if kvPadding {
+	// 	for len(key) < kvKeyLength {
+	// 		key = append(key, '\x00')
+	// 	}
+	// }
 	if len(key) > kvKeyLength {
 		fmt.Println("##### invalid key length", key, len(key))
 		os.Exit(0)
@@ -536,11 +536,11 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 		defer kvMu.Unlock()
 	}
 	key := []byte(keyStr)
-	if kvPadding {
-		for len(key) < kvKeyLength {
-			key = append(key, '\x00')
-		}
-	}
+	// if kvPadding {
+	// 	for len(key) < kvKeyLength {
+	// 		key = append(key, '\x00')
+	// 	}
+	// }
 	if len(key) > kvKeyLength {
 		fmt.Println("##### invalid key length", key, len(key))
 		os.Exit(0)
@@ -607,11 +607,11 @@ func (k *KV) Delete(keyStr string) error {
 		defer kvMu.Unlock()
 	}
 	key := []byte(keyStr)
-	if kvPadding {
-		for len(key) < kvKeyLength {
-			key = append(key, '\x00')
-		}
-	}
+	// if kvPadding {
+	// 	for len(key) < kvKeyLength {
+	// 		key = append(key, '\x00')
+	// 	}
+	// }
 	if len(key) > kvKeyLength {
 		fmt.Println("##### invalid key length", key, len(key))
 		os.Exit(0)
