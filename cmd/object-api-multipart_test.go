@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"reflect"
@@ -1866,10 +1865,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 			},
 		},
 	}
-	s3MD5, err := getCompleteMultipartMD5(context.Background(), inputParts[3].parts)
-	if err != nil {
-		t.Fatalf("Obtaining S3MD5 failed")
-	}
+	s3MD5 := getCompleteMultipartMD5(inputParts[3].parts)
 
 	// Test cases with sample input values for CompleteMultipartUpload.
 	testCases := []struct {
@@ -1898,8 +1894,8 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		// Asserting for Invalid UploadID (Test number 9).
 		{bucketNames[0], objectNames[0], "abc", []CompletePart{}, "", InvalidUploadID{UploadID: "abc"}, false},
 		// Test case with invalid Part Etag (Test number 10-11).
-		{bucketNames[0], objectNames[0], uploadIDs[0], []CompletePart{{ETag: "abc"}}, "", hex.ErrLength, false},
-		{bucketNames[0], objectNames[0], uploadIDs[0], []CompletePart{{ETag: "abcz"}}, "", hex.InvalidByteError(00), false},
+		{bucketNames[0], objectNames[0], uploadIDs[0], []CompletePart{{ETag: "abc"}}, "", InvalidPart{}, false},
+		{bucketNames[0], objectNames[0], uploadIDs[0], []CompletePart{{ETag: "abcz"}}, "", InvalidPart{}, false},
 		// Part number 0 doesn't exist, expecting InvalidPart error (Test number 12).
 		{bucketNames[0], objectNames[0], uploadIDs[0], []CompletePart{{ETag: "abcd", PartNumber: 0}}, "", InvalidPart{}, false},
 		// // Upload and PartNumber exists, But a deliberate ETag mismatch is introduced (Test number 13).

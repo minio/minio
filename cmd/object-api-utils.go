@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2015, 2016 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2015-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -190,18 +190,18 @@ func mustGetUUID() string {
 }
 
 // Create an s3 compatible MD5sum for complete multipart transaction.
-func getCompleteMultipartMD5(ctx context.Context, parts []CompletePart) (string, error) {
+func getCompleteMultipartMD5(parts []CompletePart) string {
 	var finalMD5Bytes []byte
 	for _, part := range parts {
 		md5Bytes, err := hex.DecodeString(canonicalizeETag(part.ETag))
 		if err != nil {
-			logger.LogIf(ctx, err)
-			return "", err
+			finalMD5Bytes = append(finalMD5Bytes, []byte(part.ETag)...)
+		} else {
+			finalMD5Bytes = append(finalMD5Bytes, md5Bytes...)
 		}
-		finalMD5Bytes = append(finalMD5Bytes, md5Bytes...)
 	}
 	s3MD5 := fmt.Sprintf("%s-%d", getMD5Hash(finalMD5Bytes), len(parts))
-	return s3MD5, nil
+	return s3MD5
 }
 
 // Clean unwanted fields from metadata
@@ -675,8 +675,25 @@ func (p *PutObjReader) Size() int64 {
 // as a hex encoded string
 func (p *PutObjReader) MD5CurrentHexString() string {
 	md5sumCurr := p.rawReader.MD5Current()
+	var appendHyphen bool
+	// md5sumcurr is not empty in two scenarios
+	// - server is running in strict compatibility mode
+	// - client set Content-Md5 during PUT operation
+	if len(md5sumCurr) == 0 {
+		// md5sumCurr is only empty when we are running
+		// in non-compatibility mode.
+		md5sumCurr = make([]byte, 16)
+		rand.Read(md5sumCurr)
+		appendHyphen = true
+	}
 	if p.sealMD5Fn != nil {
 		md5sumCurr = p.sealMD5Fn(md5sumCurr)
+	}
+	if appendHyphen {
+		// Make sure to return etag string upto 32 length, for SSE
+		// requests ETag might be longer and the code decrypting the
+		// ETag ignores ETag in multipart ETag form i.e <hex>-N
+		return hex.EncodeToString(md5sumCurr)[:32] + "-1"
 	}
 	return hex.EncodeToString(md5sumCurr)
 }

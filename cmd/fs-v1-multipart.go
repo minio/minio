@@ -504,10 +504,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 	}
 
 	// Calculate s3 compatible md5sum for complete multipart.
-	s3MD5, err := getCompleteMultipartMD5(ctx, parts)
-	if err != nil {
-		return oi, err
-	}
+	s3MD5 := getCompleteMultipartMD5(parts)
 
 	partSize := int64(-1) // Used later to ensure that all parts sizes are same.
 

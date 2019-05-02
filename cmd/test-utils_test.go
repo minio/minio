@@ -138,7 +138,7 @@ func calculateSignedChunkLength(chunkDataSize int64) int64 {
 }
 
 func mustGetPutObjReader(t TestErrHandler, data io.Reader, size int64, md5hex, sha256hex string) *PutObjReader {
-	hr, err := hash.NewReader(data, size, md5hex, sha256hex, size)
+	hr, err := hash.NewReader(data, size, md5hex, sha256hex, size, globalCLIContext.StrictS3Compat)
 	if err != nil {
 		t.Fatal(err)
 	}

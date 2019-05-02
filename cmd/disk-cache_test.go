@@ -194,7 +194,7 @@ func TestDiskCache(t *testing.T) {
 	objInfo.UserDefined = httpMeta
 	var opts ObjectOptions
 	byteReader := bytes.NewReader([]byte(content))
-	hashReader, err := hash.NewReader(byteReader, int64(size), "", "", int64(size))
+	hashReader, err := hash.NewReader(byteReader, int64(size), "", "", int64(size), globalCLIContext.StrictS3Compat)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,7 @@ func TestDiskCacheMaxUse(t *testing.T) {
 	opts := ObjectOptions{}
 
 	byteReader := bytes.NewReader([]byte(content))
-	hashReader, err := hash.NewReader(byteReader, int64(size), "", "", int64(size))
+	hashReader, err := hash.NewReader(byteReader, int64(size), "", "", int64(size), globalCLIContext.StrictS3Compat)
 	if err != nil {
 		t.Fatal(err)
 	}

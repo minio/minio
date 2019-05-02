@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"net/http"
 	"os"
 	"strings"
@@ -49,9 +48,6 @@ var (
 
 	// IsStringEqual is string equal.
 	IsStringEqual = isStringEqual
-
-	// GetCompleteMultipartMD5 returns multipart MD5
-	GetCompleteMultipartMD5 = getCompleteMultipartMD5
 )
 
 // StatInfo -  alias for statInfo
@@ -351,8 +347,8 @@ func ErrorRespToObjectError(err error, params ...string) error {
 }
 
 // ComputeCompleteMultipartMD5 calculates MD5 ETag for complete multipart responses
-func ComputeCompleteMultipartMD5(parts []CompletePart) (string, error) {
-	return getCompleteMultipartMD5(context.Background(), parts)
+func ComputeCompleteMultipartMD5(parts []CompletePart) string {
+	return getCompleteMultipartMD5(parts)
 }
 
 // parse gateway sse env variable

@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/xml"
@@ -2725,12 +2724,9 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *check) {
 	c.Assert(response.StatusCode, http.StatusOK)
 	var parts []CompletePart
 	for _, part := range completeUploads.Parts {
-		// For compressed objects, we dont treat E-Tag as checksum.
-		part.ETag = strings.Replace(part.ETag, "-1", "", -1)
 		part.ETag = canonicalizeETag(part.ETag)
 		parts = append(parts, part)
 	}
-	etag, err := getCompleteMultipartMD5(context.Background(), parts)
-	c.Assert(err, nil)
+	etag := getCompleteMultipartMD5(parts)
 	c.Assert(canonicalizeETag(response.Header.Get("Etag")), etag)
 }
