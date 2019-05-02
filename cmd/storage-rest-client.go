@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/url"
 	"path"
 	"strconv"
@@ -44,32 +43,10 @@ func isNetworkError(err error) bool {
 	if err.Error() == errConnectionStale.Error() {
 		return true
 	}
-	if strings.Contains(err.Error(), "connection reset by peer") {
+	if _, ok := err.(*rest.NetworkError); ok {
 		return true
 	}
-	if uerr, isURLError := err.(*url.Error); isURLError {
-		if uerr.Timeout() {
-			return true
-		}
-
-		err = uerr.Err
-	}
-
-	_, isNetOpError := err.(*net.OpError)
-	return isNetOpError
-}
-
-// Attempt to approximate network error with a
-// typed network error, otherwise default to
-// errDiskNotFound
-func toNetworkError(err error) error {
-	if err == nil {
-		return err
-	}
-	if strings.Contains(err.Error(), "connection reset by peer") {
-		return errNetworkConnReset
-	}
-	return errDiskNotFound
+	return false
 }
 
 // Converts rpc.ServerError to underlying error. This function is
@@ -81,7 +58,7 @@ func toStorageErr(err error) error {
 	}
 
 	if isNetworkError(err) {
-		return toNetworkError(err)
+		return errDiskNotFound
 	}
 
 	switch err.Error() {

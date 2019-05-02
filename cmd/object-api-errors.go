@@ -27,22 +27,6 @@ import (
 // underlying storage layer.
 func toObjectErr(err error, params ...string) error {
 	switch err {
-	case errDiskNotFound:
-		switch len(params) {
-		case 1:
-			err = BucketNotFound{Bucket: params[0]}
-		case 2:
-			err = ObjectNotFound{
-				Bucket: params[0],
-				Object: params[1],
-			}
-		case 3:
-			err = InvalidUploadID{
-				Bucket:   params[0],
-				Object:   params[1],
-				UploadID: params[2],
-			}
-		}
 	case errVolumeNotFound:
 		if len(params) >= 1 {
 			err = BucketNotFound{Bucket: params[0]}

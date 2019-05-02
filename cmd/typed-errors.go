@@ -85,6 +85,3 @@ var errNoSuchPolicy = errors.New("Specified canned policy does not exist")
 
 // error returned when access is denied.
 var errAccessDenied = errors.New("Do not have enough permissions to access this resource")
-
-// errNetworkConnReset - connection reset by peer
-var errNetworkConnReset = errors.New("connection reset by peer")
