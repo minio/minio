@@ -543,17 +543,20 @@ The NATS configuration block in `config.json` is as follows:
         "password": "yoursecret",
         "token": "",
         "secure": false,
-        "pingInterval": 0
+        "pingInterval": 0,
+        "queueDir": "",
+        "queueLimit": 0,
         "streaming": {
             "enable": false,
             "clusterID": "",
-            "clientID": "",
             "async": false,
             "maxPubAcksInflight": 0
         }
     }
 },
 ```
+
+MinIO supports persistent event store. The persistent store will backup events when the NATS broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
 
@@ -567,7 +570,7 @@ After updating the NATS configuration in /tmp/myconfig , use `mc admin config se
 $ mc admin config set myminio < /tmp/myconfig
 ```
 
-MinIO server also supports [NATS Streaming mode](http://nats.io/documentation/streaming/nats-streaming-intro/) that offers additional functionality like `Message/event persistence`, `At-least-once-delivery`, and `Publisher rate limiting`. To configure MinIO server to send notifications to NATS Streaming server, update the MinIO server configuration file as follows:
+MinIO server also supports [NATS Streaming mode](http://nats.io/documentation/streaming/nats-streaming-intro/) that offers additional functionality like `At-least-once-delivery`, and `Publisher rate limiting`. To configure MinIO server to send notifications to NATS Streaming server, update the MinIO server configuration file as follows:
 
 ```
 "nats": {
@@ -580,10 +583,11 @@ MinIO server also supports [NATS Streaming mode](http://nats.io/documentation/st
         "token": "",
         "secure": false,
         "pingInterval": 0,
+        "queueDir": "",
+        "queueLimit": 0,
         "streaming": {
             "enable": true,
             "clusterID": "test-cluster",
-            "clientID": "minio-client",
             "async": true,
             "maxPubAcksInflight": 10
         }
@@ -673,20 +677,47 @@ import (
 )
 
 func main() {
-	natsConnection, _ := stan.Connect("test-cluster", "test-client")
-	log.Println("Connected")
+
+	var stanConnection stan.Conn
+
+	subscribe := func() {
+		fmt.Printf("Subscribing to subject 'bucketevents'\n")
+		stanConnection.Subscribe("bucketevents", func(m *stan.Msg) {
+
+			// Handle the message
+			fmt.Printf("Received a message: %s\n", string(m.Data))
+		})
+	}
+
+
+	stanConnection, _ = stan.Connect("test-cluster", "test-client", stan.NatsURL("nats://yourusername:yoursecret@0.0.0.0:4222"), stan.SetConnectionLostHandler(func(c stan.Conn, _ error) {
+		go func() {
+			for {
+				// Reconnect if the connection is lost.
+				if stanConnection == nil || stanConnection.NatsConn() == nil ||  !stanConnection.NatsConn().IsConnected() {
+					stanConnection, _ = stan.Connect("test-cluster", "test-client", stan.NatsURL("nats://yourusername:yoursecret@0.0.0.0:4222"), stan.SetConnectionLostHandler(func(c stan.Conn, _ error) {
+						if c.NatsConn() != nil {
+							c.NatsConn().Close()
+						}
+						_ = c.Close()
+					}))
+					if stanConnection != nil {
+						subscribe()
+					}
+
+				}
+			}
+
+		}()
+	}))
 
 	// Subscribe to subject
-	log.Printf("Subscribing to subject 'bucketevents'\n")
-	natsConnection.Subscribe("bucketevents", func(m *stan.Msg) {
-
-		// Handle the message
-		fmt.Printf("Received a message: %s\n", string(m.Data))
-	})
+	subscribe()
 
 	// Keep the connection alive
 	runtime.Goexit()
 }
+
 ```
 
 ```
@@ -953,6 +984,7 @@ The MinIO server configuration file is stored on the backend in json format. Upd
     }
 }
 ```
+
 MinIO supports persistent event store. The persistent store will backup events when the kafka broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
