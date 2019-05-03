@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -476,7 +477,6 @@ func newLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEntr
 }
 
 func topLockEntries(peerLocks []*PeerLocks) madmin.LockEntries {
-	const listCount int = 10
 	entryMap := make(map[string]*madmin.LockEntry)
 	for _, peerLock := range peerLocks {
 		if peerLock == nil {
@@ -497,6 +497,7 @@ func topLockEntries(peerLocks []*PeerLocks) madmin.LockEntries {
 		lockEntries = append(lockEntries, *v)
 	}
 	sort.Sort(lockEntries)
+	const listCount int = 10
 	if len(lockEntries) > listCount {
 		lockEntries = lockEntries[:listCount]
 	}
@@ -654,45 +655,60 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 	}
 }
 
+type healInitParams struct {
+	bucket, objPrefix     string
+	hs                    madmin.HealOpts
+	clientToken           string
+	forceStart, forceStop bool
+}
+
 // extractHealInitParams - Validates params for heal init API.
-func extractHealInitParams(r *http.Request) (bucket, objPrefix string,
-	hs madmin.HealOpts, clientToken string, forceStart bool, forceStop bool,
-	err APIErrorCode) {
+func extractHealInitParams(vars map[string]string, qParms url.Values, r io.Reader) (hip healInitParams, err APIErrorCode) {
+	hip.bucket = vars[string(mgmtBucket)]
+	hip.objPrefix = vars[string(mgmtPrefix)]
 
-	vars := mux.Vars(r)
-	bucket = vars[string(mgmtBucket)]
-	objPrefix = vars[string(mgmtPrefix)]
-
-	if bucket == "" {
-		if objPrefix != "" {
+	if hip.bucket == "" {
+		if hip.objPrefix != "" {
 			// Bucket is required if object-prefix is given
 			err = ErrHealMissingBucket
 			return
 		}
-	} else if isReservedOrInvalidBucket(bucket, false) {
+	} else if isReservedOrInvalidBucket(hip.bucket, false) {
 		err = ErrInvalidBucketName
 		return
 	}
 
 	// empty prefix is valid.
-	if !IsValidObjectPrefix(objPrefix) {
+	if !IsValidObjectPrefix(hip.objPrefix) {
 		err = ErrInvalidObjectName
 		return
 	}
 
-	qParms := r.URL.Query()
 	if len(qParms[string(mgmtClientToken)]) > 0 {
-		clientToken = qParms[string(mgmtClientToken)][0]
+		hip.clientToken = qParms[string(mgmtClientToken)][0]
 	}
 	if _, ok := qParms[string(mgmtForceStart)]; ok {
-		forceStart = true
+		hip.forceStart = true
 	}
 	if _, ok := qParms[string(mgmtForceStop)]; ok {
-		forceStop = true
+		hip.forceStop = true
 	}
+
+	// Invalid request conditions:
+	//
+	//   Cannot have both forceStart and forceStop in the same
+	//   request; If clientToken is provided, request can only be
+	//   to continue receiving logs, so it cannot be start or
+	//   stop;
+	if (hip.forceStart && hip.forceStop) ||
+		(hip.clientToken != "" && (hip.forceStart || hip.forceStop)) {
+		err = ErrInvalidRequest
+		return
+	}
+
 	// ignore body if clientToken is provided
-	if clientToken == "" {
-		jerr := json.NewDecoder(r.Body).Decode(&hs)
+	if hip.clientToken == "" {
+		jerr := json.NewDecoder(r).Decode(&hip.hs)
 		if jerr != nil {
 			logger.LogIf(context.Background(), jerr)
 			err = ErrRequestBodyParse
@@ -731,7 +747,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bucket, objPrefix, hs, clientToken, forceStart, forceStop, errCode := extractHealInitParams(r)
+	hip, errCode := extractHealInitParams(mux.Vars(r), r.URL.Query(), r.Body)
 	if errCode != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(errCode), r.URL)
 		return
@@ -805,8 +821,8 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	info := objectAPI.StorageInfo(ctx)
 	numDisks := info.Backend.OfflineDisks + info.Backend.OnlineDisks
 
-	healPath := pathJoin(bucket, objPrefix)
-	if clientToken == "" && !forceStart && !forceStop {
+	healPath := pathJoin(hip.bucket, hip.objPrefix)
+	if hip.clientToken == "" && !hip.forceStart && !hip.forceStop {
 		nh, exists := globalAllHealState.getHealSequence(healPath)
 		if exists && !nh.hasEnded() && len(nh.currentStatus.Items) > 0 {
 			b, err := json.Marshal(madmin.HealStartSuccess{
@@ -825,11 +841,11 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if clientToken != "" && !forceStart && !forceStop {
+	if hip.clientToken != "" && !hip.forceStart && !hip.forceStop {
 		// Since clientToken is given, fetch heal status from running
 		// heal sequence.
 		respBytes, errCode := globalAllHealState.PopHealStatusJSON(
-			healPath, clientToken)
+			healPath, hip.clientToken)
 		if errCode != ErrNone {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(errCode), r.URL)
 		} else {
@@ -840,14 +856,14 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 
 	respCh := make(chan healResp)
 	switch {
-	case forceStop:
+	case hip.forceStop:
 		go func() {
 			respBytes, apiErr := globalAllHealState.stopHealSequence(healPath)
 			hr := healResp{respBytes: respBytes, apiErr: apiErr}
 			respCh <- hr
 		}()
-	case clientToken == "":
-		nh := newHealSequence(bucket, objPrefix, handlers.GetSourceIP(r), numDisks, hs, forceStart)
+	case hip.clientToken == "":
+		nh := newHealSequence(hip.bucket, hip.objPrefix, handlers.GetSourceIP(r), numDisks, hip.hs, hip.forceStart)
 		go func() {
 			respBytes, apiErr, errMsg := globalAllHealState.LaunchNewHealSequence(nh)
 			hr := healResp{respBytes, apiErr, errMsg}
@@ -1609,7 +1625,10 @@ func convertValueType(elem []byte, jsonType gjson.Type) (interface{}, error) {
 	case gjson.False, gjson.True:
 		return strconv.ParseBool(str)
 	case gjson.JSON:
-		return gjson.Parse(str).Value(), nil
+		if gjson.Valid(str) {
+			return gjson.Parse(str).Value(), nil
+		}
+		return nil, errors.New("invalid json")
 	case gjson.String:
 		return str, nil
 	case gjson.Number:
