@@ -80,15 +80,15 @@ const (
 
 // PostgreSQLArgs - PostgreSQL target arguments.
 type PostgreSQLArgs struct {
-	Enable           bool     `json:"enable"`
-	Format           string   `json:"format"`
-	ConnectionString string   `json:"connectionString"`
-	Table            string   `json:"table"`
-	Host             xnet.URL `json:"host"`     // default: localhost
-	Port             string   `json:"port"`     // default: 5432
-	User             string   `json:"user"`     // default: user running minio
-	Password         string   `json:"password"` // default: no password
-	Database         string   `json:"database"` // default: same as user
+	Enable           bool      `json:"enable"`
+	Format           string    `json:"format"`
+	ConnectionString string    `json:"connectionString"`
+	Table            string    `json:"table"`
+	Host             xnet.Host `json:"host"`     // default: localhost
+	Port             string    `json:"port"`     // default: 5432
+	User             string    `json:"user"`     // default: user running minio
+	Password         string    `json:"password"` // default: no password
+	Database         string    `json:"database"` // default: same as user
 }
 
 // Validate PostgreSQLArgs fields
