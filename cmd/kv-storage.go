@@ -357,10 +357,11 @@ func (k *KVStorage) CreateFile(volume, filePath string, size int64, reader io.Re
 		}
 		entry.IDs = append(entry.IDs, id)
 	}
-	b, err := KVNSEntryMarshal(entry, buf)
+	b, err := KVNSEntryMarshal(entry, *bufp)
 	if err != nil {
 		return err
 	}
+
 	return k.kv.Put(nskey, b)
 }
 
@@ -435,7 +436,6 @@ func (k *KVStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) er
 		if err != nil {
 			return err
 		}
-
 		err = k.kv.Put(dst, value)
 		if err != nil {
 			return err

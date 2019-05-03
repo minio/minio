@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -31,20 +31,32 @@ func KVNSEntryMarshal(entry KVNSEntry, buf []byte) ([]byte, error) {
 	if !kvPadding {
 		return b, nil
 	}
-	binary.PutVarint(buf[:4], int64(len(b)))
-	copy(buf[4:], b)
-	buf = buf[:4+len(b)]
+	length := len(b)
+	lengthInBytes := []byte(fmt.Sprintf("%.8x", length))
+	n := copy(buf, lengthInBytes)
+	if n != 8 {
+		panic("length is not 8")
+	}
+	n = copy(buf[8:], b)
+	buf = buf[:8+n]
 	paddedLength := ceilFrac(int64(len(buf)), kvNSEntryPaddingMultiple) * kvNSEntryPaddingMultiple
 	buf = buf[:paddedLength]
 	return buf, nil
 }
 
 func KVNSEntryUnmarshal(b []byte, entry *KVNSEntry) error {
+	var buf []byte
+	buf = b
+	var length int
 	if kvPadding {
-		length, _ := binary.Varint(b[:4])
-		b = b[4 : 4+length]
+		_, err := fmt.Sscanf(string(buf[:8]), "%x", &length)
+		if err != nil {
+			return err
+		}
+		buf = buf[8 : 8+length]
 	}
-	return json.Unmarshal(b, entry)
+	err := json.Unmarshal(buf, entry)
+	return err
 }
 
 var errValueTooLong = errors.New("value too long")
