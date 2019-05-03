@@ -194,7 +194,9 @@ var (
     "webhook": {
       "1": {
         "enable": false,
-        "endpoint": ""
+        "endpoint": "",
+        "queueDir": "",
+        "queueLimit": 0
       }
     }
   },
