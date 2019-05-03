@@ -85,34 +85,3 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 
 	return reduceReadQuorumErrs(context.Background(), errs, objectOpIgnoredErrs, readQuorum) == nil
 }
-
-// isObjectDir returns if the specified path represents an empty directory.
-func (xl xlObjects) isObjectDir(bucket, prefix string) (ok bool) {
-	var errs = make([]error, len(xl.getDisks()))
-	var wg sync.WaitGroup
-	for index, disk := range xl.getDisks() {
-		if disk == nil {
-			continue
-		}
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			// Check if 'prefix' is an object on this 'disk', else continue the check the next disk
-			entries, err := disk.ListDir(bucket, prefix, 1)
-			if err != nil {
-				errs[index] = err
-				return
-			}
-			if len(entries) > 0 {
-				errs[index] = errVolumeNotEmpty
-				return
-			}
-		}(index, disk)
-	}
-
-	wg.Wait()
-
-	readQuorum := len(xl.getDisks()) / 2
-
-	return reduceReadQuorumErrs(context.Background(), errs, objectOpIgnoredErrs, readQuorum) == nil
-}

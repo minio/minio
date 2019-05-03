@@ -45,12 +45,13 @@ func (c *Target) Send(e interface{}) error {
 		return nil
 	}
 
-	trace := make([]string, len(entry.Trace.Source))
+	traceLength := len(entry.Trace.Source)
+	trace := make([]string, traceLength)
 
 	// Add a sequence number and formatting for each stack trace
 	// No formatting is required for the first entry
 	for i, element := range entry.Trace.Source {
-		trace[i] = fmt.Sprintf("%8v: %s", i+1, element)
+		trace[i] = fmt.Sprintf("%8v: %s", traceLength-i, element)
 	}
 
 	tagString := ""

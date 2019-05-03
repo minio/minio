@@ -37,12 +37,15 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mountinfo"
+	"github.com/ncw/directio"
 )
 
 const (
-	diskMinFreeSpace  = 900 * humanize.MiByte // Min 900MiB free space.
-	diskMinTotalSpace = diskMinFreeSpace      // Min 900MiB total space.
-	maxAllowedIOError = 5
+	diskMinFreeSpace    = 900 * humanize.MiByte // Min 900MiB free space.
+	diskMinTotalSpace   = diskMinFreeSpace      // Min 900MiB total space.
+	maxAllowedIOError   = 5
+	posixWriteBlockSize = 4 * humanize.MiByte
+	directioAlignSize   = 4096 // DirectIO alignment needs to be 4K. Defined here as directio.AlignSize is defined as 0 in MacOS causing divide by 0 error.
 )
 
 // isValidVolname verifies a volname name in accordance with object
@@ -71,7 +74,6 @@ type posix struct {
 	connected bool
 
 	diskMount bool // indicates if the path is an actual mount.
-	driveSync bool // indicates if the backend is synchronous.
 
 	diskFileInfo os.FileInfo
 	// Disk usage metrics
@@ -185,25 +187,16 @@ func newPosix(path string) (*posix, error) {
 	p := &posix{
 		connected: true,
 		diskPath:  path,
-		// 1MiB buffer pool for posix internal operations.
+		// 4MiB buffer pool for posix internal operations.
 		pool: sync.Pool{
 			New: func() interface{} {
-				b := make([]byte, readSizeV1)
+				b := directio.AlignedBlock(posixWriteBlockSize)
 				return &b
 			},
 		},
 		stopUsageCh:  make(chan struct{}),
 		diskFileInfo: fi,
 		diskMount:    mountinfo.IsLikelyMountPoint(path),
-	}
-
-	var pf BoolFlag
-	if driveSync := os.Getenv("MINIO_DRIVE_SYNC"); driveSync != "" {
-		pf, err = ParseBoolFlag(driveSync)
-		if err != nil {
-			return nil, err
-		}
-		p.driveSync = bool(pf)
 	}
 
 	if !p.diskMount {
@@ -651,7 +644,7 @@ func (s *posix) DeleteVol(volume string) (err error) {
 
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing "/".
-func (s *posix) ListDir(volume, dirPath string, count int) (entries []string, err error) {
+func (s *posix) ListDir(volume, dirPath string, count int, leafFile string) (entries []string, err error) {
 	defer func() {
 		if err == errFaultyDisk {
 			atomic.AddInt32(&s.ioErrCount, 1)
@@ -684,9 +677,21 @@ func (s *posix) ListDir(volume, dirPath string, count int) (entries []string, er
 
 	dirPath = pathJoin(volumeDir, dirPath)
 	if count > 0 {
-		return readDirN(dirPath, count)
+		entries, err = readDirN(dirPath, count)
+	} else {
+		entries, err = readDir(dirPath)
 	}
-	return readDir(dirPath)
+
+	// If leaf file is specified, filter out the entries.
+	if leafFile != "" {
+		for i, entry := range entries {
+			if _, serr := os.Stat(pathJoin(dirPath, entry, leafFile)); serr == nil {
+				entries[i] = strings.TrimSuffix(entry, slashSeparator)
+			}
+		}
+	}
+
+	return entries, err
 }
 
 // ReadAll reads from r until an error or EOF and returns the data it read.
@@ -721,6 +726,8 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 			return nil, errVolumeNotFound
 		} else if isSysErrIO(err) {
 			return nil, errFaultyDisk
+		} else if isSysErrTooManyFiles(err) {
+			return nil, errTooManyOpenFiles
 		}
 		return nil, err
 	}
@@ -824,6 +831,8 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 			return 0, errFileAccessDenied
 		case isSysErrIO(err):
 			return 0, errFaultyDisk
+		case isSysErrTooManyFiles(err):
+			return 0, errTooManyOpenFiles
 		default:
 			return 0, err
 		}
@@ -934,6 +943,8 @@ func (s *posix) openFile(volume, path string, mode int) (f *os.File, err error) 
 			return nil, errFileAccessDenied
 		case isSysErrIO(err):
 			return nil, errFaultyDisk
+		case isSysErrTooManyFiles(err):
+			return nil, errTooManyOpenFiles
 		default:
 			return nil, err
 		}
@@ -996,6 +1007,8 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 			return nil, errFileAccessDenied
 		case isSysErrIO(err):
 			return nil, errFaultyDisk
+		case isSysErrTooManyFiles(err):
+			return nil, errTooManyOpenFiles
 		default:
 			return nil, err
 		}
@@ -1023,10 +1036,9 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 
 // CreateFile - creates the file.
 func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (err error) {
-	if fileSize < 0 {
+	if fileSize < -1 {
 		return errInvalidArgument
 	}
-
 	defer func() {
 		if err == errFaultyDisk {
 			atomic.AddInt32(&s.ioErrCount, 1)
@@ -1045,13 +1057,49 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 		return err
 	}
 
-	// Create file if not found. Note that it is created with os.O_EXCL flag as the file
-	// always is supposed to be created in the tmp directory with a unique file name.
-	w, err := s.openFile(volume, path, os.O_CREATE|os.O_APPEND|os.O_WRONLY|os.O_EXCL)
-	if err != nil {
+	if err = s.checkDiskFound(); err != nil {
 		return err
 	}
 
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return err
+	}
+	// Stat a volume entry.
+	_, err = os.Stat((volumeDir))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errVolumeNotFound
+		} else if isSysErrIO(err) {
+			return errFaultyDisk
+		}
+		return err
+	}
+
+	filePath := pathJoin(volumeDir, path)
+	if err = checkPathLength((filePath)); err != nil {
+		return err
+	}
+
+	// Create top level directories if they don't exist.
+	// with mode 0777 mkdir honors system umask.
+	if err = mkdirAll(slashpath.Dir(filePath), 0777); err != nil {
+		return err
+	}
+
+	w, err := disk.OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL|os.O_SYNC, 0666)
+	if err != nil {
+		switch {
+		case os.IsPermission(err):
+			return errFileAccessDenied
+		case os.IsExist(err):
+			return errFileAccessDenied
+		case isSysErrIO(err):
+			return errFaultyDisk
+		default:
+			return err
+		}
+	}
 	defer w.Close()
 
 	var e error
@@ -1078,17 +1126,70 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 	bufp := s.pool.Get().(*[]byte)
 	defer s.pool.Put(bufp)
 
-	n, err := io.CopyBuffer(w, r, *bufp)
-	if err != nil {
-		return err
+	buf := *bufp
+
+	// Writes remaining bytes in the buffer.
+	writeRemaining := func(w *os.File, buf []byte) (remainingWritten int, err error) {
+		var n int
+		remaining := len(buf)
+		// The following logic writes the remainging data such that it writes whatever best is possible (aligned buffer)
+		// in O_DIRECT mode and remaining (unaligned buffer) in non-O_DIRECT mode.
+		remainingAligned := (remaining / directioAlignSize) * directioAlignSize
+		remainingAlignedBuf := buf[:remainingAligned]
+		remainingUnalignedBuf := buf[remainingAligned:]
+		if len(remainingAlignedBuf) > 0 {
+			n, err = w.Write(remainingAlignedBuf)
+			if err != nil {
+				return 0, err
+			}
+			remainingWritten += n
+		}
+		if len(remainingUnalignedBuf) > 0 {
+			// Write on O_DIRECT fds fail if buffer is not 4K aligned, hence disable O_DIRECT.
+			if err = disk.DisableDirectIO(w); err != nil {
+				return 0, err
+			}
+			n, err = w.Write(remainingUnalignedBuf)
+			if err != nil {
+				return 0, err
+			}
+			remainingWritten += n
+		}
+		return remainingWritten, nil
 	}
-	if n < fileSize {
-		return errLessData
+
+	var written int
+	for {
+		var n int
+		n, err = io.ReadFull(r, buf)
+		switch err {
+		case nil:
+			n, err = w.Write(buf)
+			if err != nil {
+				return err
+			}
+			written += n
+		case io.ErrUnexpectedEOF:
+			n, err = writeRemaining(w, buf[:n])
+			if err != nil {
+				return err
+			}
+			written += n
+			fallthrough
+		case io.EOF:
+			if fileSize != -1 {
+				if written < int(fileSize) {
+					return errLessData
+				}
+				if written > int(fileSize) {
+					return errMoreData
+				}
+			}
+			return nil
+		default:
+			return err
+		}
 	}
-	if n > fileSize {
-		return errMoreData
-	}
-	return nil
 }
 
 func (s *posix) WriteAll(volume, path string, buf []byte) (err error) {
@@ -1130,13 +1231,9 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 	}
 
 	var w *os.File
-	// Create file if not found, additionally also enables synchronous
-	// operation if asked by the user.
-	if s.driveSync {
-		w, err = s.openFile(volume, path, os.O_CREATE|os.O_SYNC|os.O_APPEND|os.O_WRONLY)
-	} else {
-		w, err = s.openFile(volume, path, os.O_CREATE|os.O_APPEND|os.O_WRONLY)
-	}
+	// Create file if not found. Not doing O_DIRECT here to avoid the code that does buffer aligned writes.
+	// AppendFile() is only used by healing code to heal objects written in old format.
+	w, err = s.openFile(volume, path, os.O_CREATE|os.O_SYNC|os.O_APPEND|os.O_WRONLY)
 	if err != nil {
 		return err
 	}

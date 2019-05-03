@@ -116,7 +116,7 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 		}
 
 		// If it's a directory, list and call delFunc() for each entry.
-		entries, err := storage.ListDir(volume, entryPath, -1)
+		entries, err := storage.ListDir(volume, entryPath, -1, "")
 		// If entryPath prefix never existed, safe to ignore.
 		if err == errFileNotFound {
 			return nil
@@ -162,7 +162,7 @@ func removeListenerConfig(ctx context.Context, objAPI ObjectLayer, bucket string
 	return objAPI.DeleteObject(ctx, minioMetaBucket, lcPath)
 }
 
-func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, isLeaf IsLeafFunc, isLeafDir IsLeafDirFunc, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {
+func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {
 	if err := checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, obj); err != nil {
 		return loi, err
 	}
@@ -203,7 +203,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 	walkResultCh, endWalkCh := tpool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
-		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, endWalkCh)
 	}
 
 	var objInfos []ObjectInfo
@@ -218,14 +218,6 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 			eof = true
 			break
 		}
-		// For any walk error return right away.
-		if walkResult.err != nil {
-			// File not found is a valid case.
-			if walkResult.err == errFileNotFound {
-				continue
-			}
-			return loi, toObjectErr(walkResult.err, bucket, prefix)
-		}
 
 		var objInfo ObjectInfo
 		var err error
@@ -234,6 +226,14 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 				objInfo, err = getObjectInfoDir(ctx, bucket, walkResult.entry)
 				if err == nil {
 					break
+				}
+				if err == errFileNotFound {
+					err = nil
+					objInfo = ObjectInfo{
+						Bucket: bucket,
+						Name:   walkResult.entry,
+						IsDir:  true,
+					}
 				}
 			}
 		} else {

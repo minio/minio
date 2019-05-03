@@ -583,7 +583,22 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
-		return toJSONError(authErr)
+		if authErr == errNoAuthToken {
+			// Check if all objects are allowed to be deleted anonymously
+			for _, object := range args.Objects {
+				if !globalPolicySys.IsAllowed(policy.Args{
+					Action:          policy.DeleteObjectAction,
+					BucketName:      args.BucketName,
+					ConditionValues: getConditionValues(r, "", ""),
+					IsOwner:         false,
+					ObjectName:      object,
+				}) {
+					return toJSONError(errAuthentication)
+				}
+			}
+		} else {
+			return toJSONError(authErr)
+		}
 	}
 
 	if args.BucketName == "" || len(args.Objects) == 0 {
@@ -640,16 +655,20 @@ next:
 					return toJSONError(errMethodNotAllowed)
 				}
 			}
-
-			if !globalIAMSys.IsAllowed(iampolicy.Args{
-				AccountName:     claims.Subject,
-				Action:          iampolicy.DeleteObjectAction,
-				BucketName:      args.BucketName,
-				ConditionValues: getConditionValues(r, "", claims.Subject),
-				IsOwner:         owner,
-				ObjectName:      objectName,
-			}) {
-				return toJSONError(errAccessDenied)
+			// Check for permissions only in the case of
+			// non-anonymous login. For anonymous login, policy has already
+			// been checked.
+			if authErr != errNoAuthToken {
+				if !globalIAMSys.IsAllowed(iampolicy.Args{
+					AccountName:     claims.Subject,
+					Action:          iampolicy.DeleteObjectAction,
+					BucketName:      args.BucketName,
+					ConditionValues: getConditionValues(r, "", claims.Subject),
+					IsOwner:         owner,
+					ObjectName:      objectName,
+				}) {
+					return toJSONError(errAccessDenied)
+				}
 			}
 
 			if err = deleteObject(context.Background(), objectAPI, web.CacheAPI(), args.BucketName, objectName, r); err != nil {

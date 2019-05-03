@@ -915,15 +915,12 @@ func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, r
 	}
 
 	// Close the object writer upon success.
-	w.Close()
-
-	attrs, err := object.Attrs(ctx)
-	if err != nil {
+	if err := w.Close(); err != nil {
 		logger.LogIf(ctx, err)
 		return minio.ObjectInfo{}, gcsToObjectError(err, bucket, key)
 	}
 
-	return fromGCSAttrsToObjectInfo(attrs), nil
+	return fromGCSAttrsToObjectInfo(w.Attrs()), nil
 }
 
 // CopyObject - Copies a blob from source container to destination container.
@@ -1093,7 +1090,10 @@ func (l *gcsGateway) PutObjectPart(ctx context.Context, bucket string, key strin
 		return minio.PartInfo{}, gcsToObjectError(err, bucket, key)
 	}
 	// Make sure to close the object writer upon success.
-	w.Close()
+	if err := w.Close(); err != nil {
+		logger.LogIf(ctx, err)
+		return minio.PartInfo{}, gcsToObjectError(err, bucket, key)
+	}
 	return minio.PartInfo{
 		PartNumber:   partNumber,
 		ETag:         etag,

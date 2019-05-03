@@ -44,6 +44,9 @@ func isNetworkError(err error) bool {
 	if err.Error() == errConnectionStale.Error() {
 		return true
 	}
+	if strings.Contains(err.Error(), "connection reset by peer") {
+		return true
+	}
 	if uerr, isURLError := err.(*url.Error); isURLError {
 		if uerr.Timeout() {
 			return true
@@ -56,6 +59,19 @@ func isNetworkError(err error) bool {
 	return isNetOpError
 }
 
+// Attempt to approximate network error with a
+// typed network error, otherwise default to
+// errDiskNotFound
+func toNetworkError(err error) error {
+	if err == nil {
+		return err
+	}
+	if strings.Contains(err.Error(), "connection reset by peer") {
+		return errNetworkConnReset
+	}
+	return errDiskNotFound
+}
+
 // Converts rpc.ServerError to underlying error. This function is
 // written so that the storageAPI errors are consistent across network
 // disks as well.
@@ -65,7 +81,7 @@ func toStorageErr(err error) error {
 	}
 
 	if isNetworkError(err) {
-		return errDiskNotFound
+		return toNetworkError(err)
 	}
 
 	switch err.Error() {
@@ -234,7 +250,7 @@ func (client *storageRESTClient) CreateFile(volume, path string, length int64, r
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTLength, strconv.Itoa(int(length)))
-	respBody, err := client.call(storageRESTMethodCreateFile, values, r, length)
+	respBody, err := client.call(storageRESTMethodCreateFile, values, ioutil.NopCloser(r), length)
 	defer http.DrainBody(respBody)
 	return err
 }
@@ -315,11 +331,12 @@ func (client *storageRESTClient) ReadFile(volume, path string, offset int64, buf
 }
 
 // ListDir - lists a directory.
-func (client *storageRESTClient) ListDir(volume, dirPath string, count int) (entries []string, err error) {
+func (client *storageRESTClient) ListDir(volume, dirPath string, count int, leafFile string) (entries []string, err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTCount, strconv.Itoa(count))
+	values.Set(storageRESTLeafFile, leafFile)
 	respBody, err := client.call(storageRESTMethodListDir, values, nil, -1)
 	if err != nil {
 		return nil, err

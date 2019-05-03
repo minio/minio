@@ -643,7 +643,7 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir(). Sets passes set of disks.
-func listDirSetsFactory(ctx context.Context, isLeaf IsLeafFunc, isLeafDir IsLeafDirFunc, sets ...*xlObjects) ListDirFunc {
+func listDirSetsFactory(ctx context.Context, sets ...*xlObjects) ListDirFunc {
 	listDirInternal := func(bucket, prefixDir, prefixEntry string, disks []StorageAPI) (mergedEntries []string) {
 		var diskEntries = make([][]string, len(disks))
 		var wg sync.WaitGroup
@@ -654,7 +654,7 @@ func listDirSetsFactory(ctx context.Context, isLeaf IsLeafFunc, isLeafDir IsLeaf
 			wg.Add(1)
 			go func(index int, disk StorageAPI) {
 				defer wg.Done()
-				diskEntries[index], _ = disk.ListDir(bucket, prefixDir, -1)
+				diskEntries[index], _ = disk.ListDir(bucket, prefixDir, -1, xlMetaJSONFile)
 			}(index, disk)
 		}
 
@@ -684,7 +684,7 @@ func listDirSetsFactory(ctx context.Context, isLeaf IsLeafFunc, isLeafDir IsLeaf
 	}
 
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string, delayIsLeaf bool) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string) {
 		for _, set := range sets {
 			var newEntries []string
 			// Find elements in entries which are not in mergedEntries
@@ -703,7 +703,7 @@ func listDirSetsFactory(ctx context.Context, isLeaf IsLeafFunc, isLeafDir IsLeaf
 				sort.Strings(mergedEntries)
 			}
 		}
-		return filterListEntries(bucket, prefixDir, mergedEntries, prefixEntry, isLeaf)
+		return filterMatchingPrefix(mergedEntries, prefixEntry)
 	}
 	return listDir
 }
@@ -712,26 +712,7 @@ func listDirSetsFactory(ctx context.Context, isLeaf IsLeafFunc, isLeafDir IsLeaf
 // listed and subsequently merge lexically sorted inside listDirSetsFactory(). Resulting
 // value through the walk channel receives the data properly lexically sorted.
 func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	isLeaf := func(bucket, entry string) bool {
-		entry = strings.TrimSuffix(entry, slashSeparator)
-		// Verify if we are at the leaf, a leaf is where we
-		// see `xl.json` inside a directory.
-		return s.getHashedSet(entry).isObject(bucket, entry)
-	}
-
-	isLeafDir := func(bucket, entry string) bool {
-		// Verify prefixes in all sets.
-		var ok bool
-		for _, set := range s.sets {
-			ok = set.isObjectDir(bucket, entry)
-			if ok {
-				return true
-			}
-		}
-		return false
-	}
-
-	listDir := listDirSetsFactory(ctx, isLeaf, isLeafDir, s.sets...)
+	listDir := listDirSetsFactory(ctx, s.sets...)
 
 	var getObjectInfoDirs []func(context.Context, string, string) (ObjectInfo, error)
 	// Verify prefixes in all sets.
@@ -743,7 +724,7 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		return s.getHashedSet(entry).getObjectInfo(ctx, bucket, entry)
 	}
 
-	return listObjects(ctx, s, bucket, prefix, marker, delimiter, maxKeys, s.listPool, isLeaf, isLeafDir, listDir, getObjectInfo, getObjectInfoDirs...)
+	return listObjects(ctx, s, bucket, prefix, marker, delimiter, maxKeys, s.listPool, listDir, getObjectInfo, getObjectInfoDirs...)
 }
 
 func (s *xlSets) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error) {
@@ -1256,24 +1237,12 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObj
 	recursive := true
 
 	endWalkCh := make(chan struct{})
-	isLeaf := func(bucket, entry string) bool {
-		return hasSuffix(entry, xlMetaJSONFile)
-	}
-
-	isLeafDir := func(bucket, entry string) bool {
-		return false
-	}
-
-	listDir := listDirSetsFactory(ctx, isLeaf, isLeafDir, s.sets...)
-	walkResultCh := startTreeWalk(ctx, bucket, prefix, "", recursive, listDir, isLeaf, isLeafDir, endWalkCh)
+	listDir := listDirSetsFactory(ctx, s.sets...)
+	walkResultCh := startTreeWalk(ctx, bucket, prefix, "", recursive, listDir, endWalkCh)
 	for {
 		walkResult, ok := <-walkResultCh
 		if !ok {
 			break
-		}
-		// For any walk error return right away.
-		if walkResult.err != nil {
-			return toObjectErr(walkResult.err, bucket, prefix)
 		}
 		if err := healObjectFn(bucket, strings.TrimSuffix(walkResult.entry, slashSeparator+xlMetaJSONFile)); err != nil {
 			return toObjectErr(err, bucket, walkResult.entry)

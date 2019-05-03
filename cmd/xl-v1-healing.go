@@ -341,7 +341,7 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 		}
 
 		// List and delete the object directory,
-		files, derr := disk.ListDir(bucket, object, -1)
+		files, derr := disk.ListDir(bucket, object, -1, "")
 		if derr == nil {
 			for _, entry := range files {
 				_ = disk.DeleteFile(bucket,
@@ -425,6 +425,10 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 		}
 	}
 
+	// Cleanup in case of xl.json writing failure
+	writeQuorum := latestMeta.Erasure.DataBlocks + 1
+	defer xl.deleteObject(ctx, minioMetaTmpBucket, tmpID, writeQuorum, false)
+
 	// Generate and write `xl.json` generated from other disks.
 	outDatedDisks, aErr := writeUniqueXLMetadata(ctx, outDatedDisks, minioMetaTmpBucket, tmpID,
 		partsMetadata, diskCount(outDatedDisks))
@@ -478,52 +482,51 @@ func (xl xlObjects) healObjectDir(ctx context.Context, bucket, object string, dr
 	hr.Before.Drives = make([]madmin.HealDriveInfo, len(storageDisks))
 	hr.After.Drives = make([]madmin.HealDriveInfo, len(storageDisks))
 
-	var wg sync.WaitGroup
-
-	// Prepare object creation in all disks
-	for i, d := range storageDisks {
-		wg.Add(1)
-		go func(idx int, disk StorageAPI) {
-			defer wg.Done()
-			if disk == nil {
-				hr.Before.Drives[idx] = madmin.HealDriveInfo{State: madmin.DriveStateOffline}
-				hr.After.Drives[idx] = madmin.HealDriveInfo{State: madmin.DriveStateOffline}
-				return
+	errs := statAllDirs(ctx, storageDisks, bucket, object)
+	if isObjectDirDangling(errs) {
+		for i, err := range errs {
+			if err == nil {
+				storageDisks[i].DeleteFile(bucket, object)
 			}
-
-			drive := disk.String()
-			hr.Before.Drives[idx] = madmin.HealDriveInfo{UUID: "", Endpoint: drive, State: madmin.DriveStateOffline}
-			hr.After.Drives[idx] = madmin.HealDriveInfo{UUID: "", Endpoint: drive, State: madmin.DriveStateOffline}
-
-			_, statErr := disk.StatVol(pathJoin(bucket, object))
-			switch statErr {
-			case nil:
-				hr.Before.Drives[idx].State = madmin.DriveStateOk
-				hr.After.Drives[idx].State = madmin.DriveStateOk
-				// Object is fine in this disk, nothing to be done anymore, exiting
-				return
-			case errVolumeNotFound:
-				hr.Before.Drives[idx].State = madmin.DriveStateMissing
-				hr.After.Drives[idx].State = madmin.DriveStateMissing
-			default:
-				logger.LogIf(ctx, err)
-				return
-			}
-
-			if dryRun {
-				return
-			}
-
-			if err := disk.MakeVol(pathJoin(bucket, object)); err == nil || err == errVolumeExists {
-				hr.After.Drives[idx].State = madmin.DriveStateOk
-			} else {
-				logger.LogIf(ctx, err)
-				hr.After.Drives[idx].State = madmin.DriveStateOffline
-			}
-		}(i, d)
+		}
 	}
 
-	wg.Wait()
+	// Prepare object creation in all disks
+	for i, err := range errs {
+		var drive string
+		if storageDisks[i] != nil {
+			drive = storageDisks[i].String()
+		}
+		switch err {
+		case errDiskNotFound:
+			hr.Before.Drives[i] = madmin.HealDriveInfo{State: madmin.DriveStateOffline}
+			hr.After.Drives[i] = madmin.HealDriveInfo{State: madmin.DriveStateOffline}
+		case errVolumeNotFound:
+			hr.Before.Drives[i] = madmin.HealDriveInfo{Endpoint: drive, State: madmin.DriveStateMissing}
+			hr.After.Drives[i] = madmin.HealDriveInfo{Endpoint: drive, State: madmin.DriveStateMissing}
+		default:
+			hr.Before.Drives[i] = madmin.HealDriveInfo{Endpoint: drive, State: madmin.DriveStateCorrupt}
+			hr.After.Drives[i] = madmin.HealDriveInfo{Endpoint: drive, State: madmin.DriveStateCorrupt}
+		}
+	}
+	if dryRun {
+		return hr, nil
+	}
+	for i, err := range errs {
+		switch err {
+		case errVolumeNotFound:
+			merr := storageDisks[i].MakeVol(pathJoin(bucket, object))
+			switch merr {
+			case nil, errVolumeExists:
+				hr.After.Drives[i].State = madmin.DriveStateOk
+			case errDiskNotFound:
+				hr.After.Drives[i].State = madmin.DriveStateOffline
+			default:
+				logger.LogIf(ctx, merr)
+				hr.After.Drives[i].State = madmin.DriveStateCorrupt
+			}
+		}
+	}
 	return hr, nil
 }
 
@@ -585,6 +588,46 @@ func defaultHealResult(latestXLMeta xlMetaV1, storageDisks []StorageAPI, errs []
 	}
 
 	return result
+}
+
+// Stat all directories.
+func statAllDirs(ctx context.Context, storageDisks []StorageAPI, bucket, prefix string) []error {
+	var errs = make([]error, len(storageDisks))
+	var wg sync.WaitGroup
+	for index, disk := range storageDisks {
+		if disk == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			entries, err := disk.ListDir(bucket, prefix, 1, "")
+			if err != nil {
+				errs[index] = err
+				return
+			}
+			if len(entries) > 0 {
+				errs[index] = errVolumeNotEmpty
+				return
+			}
+		}(index, disk)
+	}
+
+	wg.Wait()
+	return errs
+}
+
+// ObjectDir is considered dangling/corrupted if any only
+// if total disks - a combination of corrupted and missing
+// files is lesser than N/2+1 number of disks.
+func isObjectDirDangling(errs []error) (ok bool) {
+	var notFoundDir int
+	for _, readErr := range errs {
+		if readErr == errFileNotFound {
+			notFoundDir++
+		}
+	}
+	return notFoundDir > len(errs)/2
 }
 
 // Object is considered dangling/corrupted if any only

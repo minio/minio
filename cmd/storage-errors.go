@@ -48,6 +48,9 @@ var errDiskAccessDenied = errors.New("disk access denied")
 // errFileNotFound - cannot find the file.
 var errFileNotFound = errors.New("file not found")
 
+// errTooManyOpenFiles - too many open files.
+var errTooManyOpenFiles = errors.New("too many open files")
+
 // errFileNameTooLong - given file name is too long than supported length.
 var errFileNameTooLong = errors.New("file name too long")
 

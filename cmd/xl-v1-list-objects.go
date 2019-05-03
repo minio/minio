@@ -22,11 +22,10 @@ import (
 )
 
 // Returns function "listDir" of the type listDirFunc.
-// isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir()
-func listDirFactory(ctx context.Context, isLeaf IsLeafFunc, disks ...StorageAPI) ListDirFunc {
+func listDirFactory(ctx context.Context, disks ...StorageAPI) ListDirFunc {
 	// Returns sorted merged entries from all the disks.
-	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string, delayIsLeaf bool) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string) {
 		for _, disk := range disks {
 			if disk == nil {
 				continue
@@ -34,7 +33,7 @@ func listDirFactory(ctx context.Context, isLeaf IsLeafFunc, disks ...StorageAPI)
 			var entries []string
 			var newEntries []string
 			var err error
-			entries, err = disk.ListDir(bucket, prefixDir, -1)
+			entries, err = disk.ListDir(bucket, prefixDir, -1, xlMetaJSONFile)
 			if err != nil {
 				continue
 			}
@@ -55,8 +54,7 @@ func listDirFactory(ctx context.Context, isLeaf IsLeafFunc, disks ...StorageAPI)
 				sort.Strings(mergedEntries)
 			}
 		}
-		mergedEntries, delayIsLeaf = filterListEntries(bucket, prefixDir, mergedEntries, prefixEntry, isLeaf)
-		return mergedEntries, delayIsLeaf
+		return filterMatchingPrefix(mergedEntries, prefixEntry)
 	}
 	return listDir
 }
@@ -72,10 +70,8 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 	walkResultCh, endWalkCh := xl.listPool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
-		isLeaf := xl.isObject
-		isLeafDir := xl.isObjectDir
-		listDir := listDirFactory(ctx, isLeaf, xl.getLoadBalancedDisks()...)
-		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
+		listDir := listDirFactory(ctx, xl.getLoadBalancedDisks()...)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, endWalkCh)
 	}
 
 	var objInfos []ObjectInfo
@@ -88,10 +84,6 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 			// Closed channel.
 			eof = true
 			break
-		}
-		// For any walk error return right away.
-		if walkResult.err != nil {
-			return loi, toObjectErr(walkResult.err, bucket, prefix)
 		}
 		entry := walkResult.entry
 		var objInfo ObjectInfo
@@ -108,8 +100,10 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 				// Ignore errFileNotFound as the object might have got
 				// deleted in the interim period of listing and getObjectInfo(),
 				// ignore quorum error as it might be an entry from an outdated disk.
-				switch err {
-				case errFileNotFound, errXLReadQuorum:
+				if IsErrIgnored(err, []error{
+					errFileNotFound,
+					errXLReadQuorum,
+				}...) {
 					continue
 				}
 				return loi, toObjectErr(err, bucket, prefix)

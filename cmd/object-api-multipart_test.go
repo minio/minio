@@ -228,8 +228,7 @@ func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks [
 	}
 
 	// This causes quorum failure verify.
-	disks = disks[len(disks)-3:]
-	for _, disk := range disks {
+	for _, disk := range disks[len(disks)-3:] {
 		os.RemoveAll(disk)
 	}
 
@@ -240,9 +239,26 @@ func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks [
 		t.Fatalf("Test %s: expected to fail but passed instead", instanceType)
 	}
 	// as majority of xl.json are not available, we expect uploadID to be not available.
-	expectedErr := InvalidUploadID{UploadID: testCase.uploadID}
-	if err.Error() != expectedErr.Error() {
-		t.Fatalf("Test %s: expected error %s, got %s instead.", instanceType, expectedErr, err)
+	expectedErr1 := InsufficientReadQuorum{}
+	if err.Error() != expectedErr1.Error() {
+		t.Fatalf("Test %s: expected error %s, got %s instead.", instanceType, expectedErr1, err)
+	}
+
+	// This causes invalid upload id.
+	for _, disk := range disks {
+		os.RemoveAll(disk)
+	}
+
+	// Object part upload should fail with bucket not found.
+	_, err = obj.PutObjectPart(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, mustGetPutObjReader(t, bytes.NewBufferString(testCase.inputReaderData), testCase.intputDataSize, testCase.inputMd5, sha256sum), ObjectOptions{})
+	if err == nil {
+		t.Fatalf("Test %s: expected to fail but passed instead", instanceType)
+	}
+
+	// As all disks at not available, bucket not found.
+	expectedErr2 := BucketNotFound{Bucket: testCase.bucketName}
+	if err.Error() != expectedErr2.Error() {
+		t.Fatalf("Test %s: expected error %s, got %s instead.", instanceType, expectedErr2, err)
 	}
 }
 

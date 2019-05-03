@@ -29,8 +29,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/colinmarc/hdfs/v2"
 	"github.com/minio/cli"
+	"github.com/minio/hdfs/v3"
 	"github.com/minio/minio-go/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
@@ -287,24 +287,9 @@ func (n *hdfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketIn
 	return buckets, nil
 }
 
-func (n *hdfsObjects) isObjectDir(bucket, object string) bool {
-	f, err := n.clnt.Open(minio.PathJoin(hdfsSeparator, bucket, object))
-	if err != nil {
-		return false
-	}
-	defer f.Close()
-
-	entries, err := f.Readdir(1)
-	if err != nil {
-		return false
-	}
-
-	return len(entries) == 0
-}
-
-func (n *hdfsObjects) listDirFactory(isLeaf minio.IsLeafFunc) minio.ListDirFunc {
+func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string) {
 		f, err := n.clnt.Open(minio.PathJoin(hdfsSeparator, bucket, prefixDir))
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -327,8 +312,7 @@ func (n *hdfsObjects) listDirFactory(isLeaf minio.IsLeafFunc) minio.ListDirFunc 
 			}
 		}
 		fis = nil
-		entries, delayIsLeaf = minio.FilterListEntries(bucket, prefixDir, entries, prefixEntry, isLeaf)
-		return entries, delayIsLeaf
+		return minio.FilterMatchingPrefix(entries, prefixEntry)
 	}
 
 	// Return list factory instance.
@@ -337,27 +321,11 @@ func (n *hdfsObjects) listDirFactory(isLeaf minio.IsLeafFunc) minio.ListDirFunc 
 
 // ListObjects lists all blobs in HDFS bucket filtered by prefix.
 func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, err error) {
-	isLeaf := func(bucket, object string) bool {
-		// bucket argument is unused as we don't need to StatFile
-		// to figure if it's a file, just need to check that the
-		// object string does not end with "/".
-		return !strings.HasSuffix(object, hdfsSeparator)
-	}
-
-	// Return true if the specified object is an empty directory
-	isLeafDir := func(bucket, object string) bool {
-		if !strings.HasSuffix(object, hdfsSeparator) {
-			return false
-		}
-		return n.isObjectDir(bucket, object)
-	}
-	listDir := n.listDirFactory(isLeaf)
-
 	getObjectInfo := func(ctx context.Context, bucket, entry string) (minio.ObjectInfo, error) {
 		return n.GetObjectInfo(ctx, bucket, entry, minio.ObjectOptions{})
 	}
 
-	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, isLeaf, isLeafDir, listDir, getObjectInfo, getObjectInfo)
+	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), getObjectInfo, getObjectInfo)
 }
 
 // Check if the given error corresponds to ENOTEMPTY for unix
@@ -477,13 +445,15 @@ func (n *hdfsObjects) GetObject(ctx context.Context, bucket, key string, startOf
 	if err != nil {
 		return hdfsToObjectErr(ctx, err, bucket, key)
 	}
-	if _, err = rd.Seek(startOffset, io.SeekStart); err != nil {
-		return hdfsToObjectErr(ctx, err, bucket, key)
+	defer rd.Close()
+	_, err = io.Copy(writer, io.NewSectionReader(rd, startOffset, length))
+	if err == io.ErrClosedPipe {
+		// hdfs library doesn't send EOF correctly, so io.Copy attempts
+		// to write which returns io.ErrClosedPipe - just ignore
+		// this for now.
+		err = nil
 	}
-	if _, err = io.Copy(writer, io.LimitReader(rd, length)); err != nil {
-		return hdfsToObjectErr(ctx, err, bucket, key)
-	}
-	return nil
+	return hdfsToObjectErr(ctx, err, bucket, key)
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo.
@@ -528,17 +498,19 @@ func (n *hdfsObjects) PutObject(ctx context.Context, bucket string, object strin
 			return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
 		}
 		defer n.deleteObject(minio.PathJoin(hdfsSeparator, minioMetaTmpBucket), tmpname)
-		defer w.Close()
 		if _, err = io.Copy(w, r); err != nil {
+			w.Close()
 			return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
 		}
 		dir := path.Dir(name)
 		if dir != "" {
 			if err = n.clnt.MkdirAll(dir, os.FileMode(0755)); err != nil {
+				w.Close()
 				n.deleteObject(minio.PathJoin(hdfsSeparator, bucket), dir)
 				return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
 			}
 		}
+		w.Close()
 		if err = n.clnt.Rename(tmpname, name); err != nil {
 			return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
 		}

@@ -103,6 +103,9 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 
 		tempObj := mustGetUUID()
 
+		// Cleanup in case of xl.json writing failure
+		defer xl.deleteObject(ctx, minioMetaTmpBucket, tempObj, writeQuorum, false)
+
 		// Write unique `xl.json` for each disk.
 		if onlineDisks, err = writeUniqueXLMetadata(ctx, storageDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
 			return oi, toObjectErr(err, srcBucket, srcObject)
@@ -173,10 +176,6 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 	// Handler directory request by returning a reader that
 	// returns no bytes.
 	if hasSuffix(object, slashSeparator) {
-		if !xl.isObjectDir(bucket, object) {
-			nsUnlocker()
-			return nil, toObjectErr(errFileNotFound, bucket, object)
-		}
 		var objInfo ObjectInfo
 		if objInfo, err = xl.getObjectInfoDir(ctx, bucket, object); err != nil {
 			nsUnlocker()
@@ -375,19 +374,16 @@ func (xl xlObjects) getObjectInfoDir(ctx context.Context, bucket, object string)
 		wg.Add(1)
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			if _, err := disk.StatVol(pathJoin(bucket, object)); err != nil {
-				// Since we are re-purposing StatVol, an object which
-				// is a directory if it doesn't exist should be
-				// returned as errFileNotFound instead, convert
-				// the error right here accordingly.
-				if err == errVolumeNotFound {
-					err = errFileNotFound
-				} else if err == errVolumeAccessDenied {
-					err = errFileAccessDenied
-				}
-
-				// Save error to reduce it later
+			// Check if 'prefix' is an object on this 'disk'.
+			entries, err := disk.ListDir(bucket, object, 1, "")
+			if err != nil {
 				errs[index] = err
+				return
+			}
+			if len(entries) > 0 {
+				// Not a directory if not empty.
+				errs[index] = errFileNotFound
+				return
 			}
 		}(index, disk)
 	}
@@ -412,13 +408,11 @@ func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string, op
 	}
 
 	if hasSuffix(object, slashSeparator) {
-		if !xl.isObjectDir(bucket, object) {
-			return oi, toObjectErr(errFileNotFound, bucket, object)
+		info, err := xl.getObjectInfoDir(ctx, bucket, object)
+		if err != nil {
+			return oi, toObjectErr(err, bucket, object)
 		}
-		if oi, e = xl.getObjectInfoDir(ctx, bucket, object); e != nil {
-			return oi, toObjectErr(e, bucket, object)
-		}
-		return oi, nil
+		return info, nil
 	}
 
 	info, err := xl.getObjectInfo(ctx, bucket, object)
@@ -879,8 +873,17 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (er
 	var writeQuorum int
 	var isObjectDir = hasSuffix(object, slashSeparator)
 
-	if isObjectDir && !xl.isObjectDir(bucket, object) {
-		return toObjectErr(errFileNotFound, bucket, object)
+	if isObjectDir {
+		_, err = xl.getObjectInfoDir(ctx, bucket, object)
+		if err == errXLReadQuorum {
+			if isObjectDirDangling(statAllDirs(ctx, xl.getDisks(), bucket, object)) {
+				// If object is indeed dangling, purge it.
+				err = nil
+			}
+		}
+		if err != nil {
+			return toObjectErr(err, bucket, object)
+		}
 	}
 
 	if isObjectDir {

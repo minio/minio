@@ -263,16 +263,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
-	var s3Error APIErrorCode
-	if s3Error = checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, ""); s3Error != ErrNone {
-		// In the event access is denied, a 200 response should still be returned
-		// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
-		if s3Error != ErrAccessDenied {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
-			return
-		}
-	}
-
 	// Content-Length is required and should be non-zero
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 	if r.ContentLength <= 0 {
@@ -324,37 +314,32 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		deleteObject = api.CacheAPI().DeleteObject
 	}
 
-	var dErrs = make([]error, len(deleteObjects.Objects))
+	var dErrs = make([]APIErrorCode, len(deleteObjects.Objects))
 	for index, object := range deleteObjects.Objects {
-		// If the request is denied access, each item
-		// should be marked as 'AccessDenied'
-		if s3Error == ErrAccessDenied {
-			dErrs[index] = PrefixAccessDenied{
-				Bucket: bucket,
-				Object: object.ObjectName,
+		if dErrs[index] = checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object.ObjectName); dErrs[index] != ErrNone {
+			if dErrs[index] == ErrSignatureDoesNotMatch || dErrs[index] == ErrInvalidAccessKeyID {
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(dErrs[index]), r.URL, guessIsBrowserReq(r))
+				return
 			}
 			continue
 		}
-		dErrs[index] = deleteObject(ctx, bucket, object.ObjectName)
+		err := deleteObject(ctx, bucket, object.ObjectName)
+		if err != nil {
+			dErrs[index] = toAPIErrorCode(ctx, err)
+		}
 	}
 
 	// Collect deleted objects and errors if any.
 	var deletedObjects []ObjectIdentifier
 	var deleteErrors []DeleteError
-	for index, err := range dErrs {
+	for index, errCode := range dErrs {
 		object := deleteObjects.Objects[index]
 		// Success deleted objects are collected separately.
-		if err == nil {
+		if errCode == ErrNone || errCode == ErrNoSuchKey {
 			deletedObjects = append(deletedObjects, object)
 			continue
 		}
-		if _, ok := err.(ObjectNotFound); ok {
-			// If the object is not found it should be
-			// accounted as deleted as per S3 spec.
-			deletedObjects = append(deletedObjects, object)
-			continue
-		}
-		apiErr := toAPIError(ctx, err)
+		apiErr := getAPIError(errCode)
 		// Error during delete should be collected separately.
 		deleteErrors = append(deleteErrors, DeleteError{
 			Code:    apiErr.Code,

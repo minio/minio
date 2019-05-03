@@ -1001,17 +1001,17 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string) er
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry
 // is a leaf or non-leaf entry.
-func (fs *FSObjects) listDirFactory(isLeaf IsLeafFunc) ListDirFunc {
+func (fs *FSObjects) listDirFactory() ListDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string) {
 		var err error
 		entries, err = readDir(pathJoin(fs.fsPath, bucket, prefixDir))
 		if err != nil && err != errFileNotFound {
 			logger.LogIf(context.Background(), err)
 			return
 		}
-		entries, delayIsLeaf = filterListEntries(bucket, prefixDir, entries, prefixEntry, isLeaf)
-		return entries, delayIsLeaf
+		sort.Strings(entries)
+		return filterMatchingPrefix(entries, prefixEntry)
 	}
 
 	// Return list factory instance.
@@ -1097,22 +1097,8 @@ func (fs *FSObjects) getObjectETag(ctx context.Context, bucket, entry string, lo
 // ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool
 // state for future re-entrant list requests.
 func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
-	isLeaf := func(bucket, object string) bool {
-		// bucket argument is unused as we don't need to StatFile
-		// to figure if it's a file, just need to check that the
-		// object string does not end with "/".
-		return !hasSuffix(object, slashSeparator)
-	}
-	// Return true if the specified object is an empty directory
-	isLeafDir := func(bucket, object string) bool {
-		if !hasSuffix(object, slashSeparator) {
-			return false
-		}
-		return fs.isObjectDir(bucket, object)
-	}
-	listDir := fs.listDirFactory(isLeaf)
-
-	return listObjects(ctx, fs, bucket, prefix, marker, delimiter, maxKeys, fs.listPool, isLeaf, isLeafDir, listDir, fs.getObjectInfo, fs.getObjectInfo)
+	return listObjects(ctx, fs, bucket, prefix, marker, delimiter, maxKeys, fs.listPool,
+		fs.listDirFactory(), fs.getObjectInfo, fs.getObjectInfo)
 }
 
 // ReloadFormat - no-op for fs, Valid only for XL.

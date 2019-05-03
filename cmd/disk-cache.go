@@ -375,7 +375,7 @@ func (c cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string, 
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - list of fsObjects
-func listDirCacheFactory(isLeaf IsLeafFunc, disks []*cacheFSObjects) ListDirFunc {
+func listDirCacheFactory(isLeaf func(string, string) bool, disks []*cacheFSObjects) ListDirFunc {
 	listCacheDirs := func(bucket, prefixDir, prefixEntry string) (dirs []string) {
 		var entries []string
 		for _, disk := range disks {
@@ -391,6 +391,12 @@ func listDirCacheFactory(isLeaf IsLeafFunc, disks []*cacheFSObjects) ListDirFunc
 				continue
 			}
 
+			for i := range entries {
+				if isLeaf(bucket, entries[i]) {
+					entries[i] = strings.TrimSuffix(entries[i], slashSeparator)
+				}
+			}
+
 			// Filter entries that have the prefix prefixEntry.
 			entries = filterMatchingPrefix(entries, prefixEntry)
 			dirs = append(dirs, entries...)
@@ -399,7 +405,7 @@ func listDirCacheFactory(isLeaf IsLeafFunc, disks []*cacheFSObjects) ListDirFunc
 	}
 
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string, delayIsLeaf bool) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string) {
 		cacheEntries := listCacheDirs(bucket, prefixDir, prefixEntry)
 		for _, entry := range cacheEntries {
 			// Find elements in entries which are not in mergedEntries
@@ -411,7 +417,7 @@ func listDirCacheFactory(isLeaf IsLeafFunc, disks []*cacheFSObjects) ListDirFunc
 			mergedEntries = append(mergedEntries, entry)
 			sort.Strings(mergedEntries)
 		}
-		return mergedEntries, false
+		return mergedEntries
 	}
 	return listDir
 }
@@ -430,25 +436,16 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 	walkResultCh, endWalkCh := c.listPool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
-		isLeaf := func(bucket, object string) bool {
+
+		listDir := listDirCacheFactory(func(bucket, object string) bool {
 			fs, err := c.cache.getCacheFS(ctx, bucket, object)
 			if err != nil {
 				return false
 			}
 			_, err = fs.getObjectInfo(ctx, bucket, object)
 			return err == nil
-		}
-
-		isLeafDir := func(bucket, object string) bool {
-			fs, err := c.cache.getCacheFS(ctx, bucket, object)
-			if err != nil {
-				return false
-			}
-			return fs.isObjectDir(bucket, object)
-		}
-
-		listDir := listDirCacheFactory(isLeaf, c.cache.cfs)
-		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
+		}, c.cache.cfs)
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, endWalkCh)
 	}
 
 	for i := 0; i < maxKeys; {
@@ -457,10 +454,6 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 			// Closed channel.
 			eof = true
 			break
-		}
-		// For any walk error return right away.
-		if walkResult.err != nil {
-			return result, toObjectErr(walkResult.err, bucket, prefix)
 		}
 
 		entry := walkResult.entry

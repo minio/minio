@@ -20,7 +20,6 @@ package cmd
 
 import (
 	"os"
-	"path"
 	"runtime"
 	"sync"
 	"syscall"
@@ -79,7 +78,7 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 			// On Linux XFS does not implement d_type for on disk
 			// format << v5. Fall back to OsStat().
 			var fi os.FileInfo
-			fi, err = os.Stat(path.Join(dirPath, name))
+			fi, err = os.Stat(pathJoin(dirPath, name))
 			if err != nil {
 				// If file does not exist, we continue and skip it.
 				// Could happen if it was deleted in the middle while

@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"net"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -45,7 +46,13 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled bool) {
 	apiRouter := router.PathPrefix("/").Subrouter()
 	var routers []*mux.Router
 	for _, domainName := range globalDomainNames {
-		routers = append(routers, apiRouter.Host("{bucket:.+}."+domainName).Subrouter())
+		var hostPort string
+		if globalMinioPort != "443" && globalMinioPort != "80" {
+			hostPort = net.JoinHostPort(domainName, globalMinioPort)
+		} else {
+			hostPort = domainName
+		}
+		routers = append(routers, apiRouter.Host("{bucket:.+}."+hostPort).Subrouter())
 	}
 	routers = append(routers, apiRouter.PathPrefix("/{bucket}").Subrouter())
 

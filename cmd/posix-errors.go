@@ -136,3 +136,12 @@ func isSysErrCrossDevice(err error) bool {
 	e, ok := err.(*os.LinkError)
 	return ok && e.Err == syscall.EXDEV
 }
+
+// Check if given error corresponds to too many open files
+func isSysErrTooManyFiles(err error) bool {
+	if err == syscall.ENFILE || err == syscall.EMFILE {
+		return true
+	}
+	pathErr, ok := err.(*os.PathError)
+	return ok && (pathErr.Err == syscall.ENFILE || pathErr.Err == syscall.EMFILE)
+}

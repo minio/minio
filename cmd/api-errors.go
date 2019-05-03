@@ -65,6 +65,7 @@ const (
 	ErrBadDigest
 	ErrEntityTooSmall
 	ErrEntityTooLarge
+	ErrPolicyTooLarge
 	ErrIncompleteBody
 	ErrInternalError
 	ErrInvalidAccessKeyID
@@ -396,6 +397,11 @@ var errorCodes = errorCodeMap{
 	ErrEntityTooLarge: {
 		Code:           "EntityTooLarge",
 		Description:    "Your proposed upload exceeds the maximum allowed object size.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrPolicyTooLarge: {
+		Code:           "PolicyTooLarge",
+		Description:    "Policy exceeds the maximum allowed document size.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrIncompleteBody: {
@@ -1479,7 +1485,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	if err == nil {
 		return ErrNone
 	}
-
 	// Verify if the underlying error is signature mismatch.
 	switch err {
 	case errInvalidArgument:
@@ -1529,6 +1534,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrKMSAuthFailure
 	case errOperationTimedOut, context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
+	case errNetworkConnReset:
+		apiErr = ErrSlowDown
 	}
 
 	// Compression errors

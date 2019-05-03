@@ -35,8 +35,8 @@ func TestListObjects(t *testing.T) {
 }
 
 // Unit test for ListObjects in general.
-func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
-
+func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
+	t, _ := t1.(*testing.T)
 	testBuckets := []string{
 		// This bucket is used for testing ListObject operations.
 		"test-bucket-list-object",
@@ -66,7 +66,6 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{"obj0", "obj0", nil},
 		{"obj1", "obj1", nil},
 		{"obj2", "obj2", nil},
-		{"z-empty-dir/", "", nil},
 	}
 	for _, object := range testObjects {
 		md5Bytes := md5.Sum([]byte(object.content))
@@ -96,7 +95,6 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 				{Name: "obj0"},
 				{Name: "obj1"},
 				{Name: "obj2"},
-				{Name: "z-empty-dir/"},
 			},
 		},
 		// ListObjectsResult-1.
@@ -193,7 +191,6 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 				{Name: "obj0"},
 				{Name: "obj1"},
 				{Name: "obj2"},
-				{Name: "z-empty-dir/"},
 			},
 		},
 		// ListObjectsResult-10.
@@ -205,7 +202,6 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 				{Name: "obj0"},
 				{Name: "obj1"},
 				{Name: "obj2"},
-				{Name: "z-empty-dir/"},
 			},
 		},
 		// ListObjectsResult-11.
@@ -215,7 +211,6 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 			Objects: []ObjectInfo{
 				{Name: "obj1"},
 				{Name: "obj2"},
-				{Name: "z-empty-dir/"},
 			},
 		},
 		// ListObjectsResult-12.
@@ -224,7 +219,6 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "obj2"},
-				{Name: "z-empty-dir/"},
 			},
 		},
 		// ListObjectsResult-13.
@@ -238,7 +232,6 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 				{Name: "obj0"},
 				{Name: "obj1"},
 				{Name: "obj2"},
-				{Name: "z-empty-dir/"},
 			},
 		},
 		// ListObjectsResult-14.
@@ -255,7 +248,6 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 				{Name: "obj0"},
 				{Name: "obj1"},
 				{Name: "obj2"},
-				{Name: "z-empty-dir/"},
 			},
 		},
 		// ListObjectsResult-15.
@@ -270,7 +262,6 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 				{Name: "obj0"},
 				{Name: "obj1"},
 				{Name: "obj2"},
-				{Name: "z-empty-dir/"},
 			},
 		},
 		// ListObjectsResult-16.
@@ -284,7 +275,6 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 				{Name: "obj0"},
 				{Name: "obj1"},
 				{Name: "obj2"},
-				{Name: "z-empty-dir/"},
 			},
 		},
 		// ListObjectsResult-17.
@@ -535,61 +525,66 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 
 	for i, testCase := range testCases {
-		result, err := obj.ListObjects(context.Background(), testCase.bucketName, testCase.prefix, testCase.marker, testCase.delimeter, int(testCase.maxKeys))
-		if err != nil && testCase.shouldPass {
-			t.Errorf("Test %d: %s:  Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
-		}
-		if err == nil && !testCase.shouldPass {
-			t.Errorf("Test %d: %s: Expected to fail with <ERROR> \"%s\", but passed instead", i+1, instanceType, testCase.err.Error())
-		}
-		// Failed as expected, but does it fail for the expected reason.
-		if err != nil && !testCase.shouldPass {
-			if !strings.Contains(err.Error(), testCase.err.Error()) {
-				t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, instanceType, testCase.err.Error(), err.Error())
+		testCase := testCase
+		t.Run(fmt.Sprintf("Test%d-%s", i+1, instanceType), func(t *testing.T) {
+			result, err := obj.ListObjects(context.Background(), testCase.bucketName,
+				testCase.prefix, testCase.marker, testCase.delimeter, int(testCase.maxKeys))
+			if err != nil && testCase.shouldPass {
+				t.Errorf("Test %d: %s:  Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
 			}
-		}
-		// Since there are cases for which ListObjects fails, this is
-		// necessary. Test passes as expected, but the output values
-		// are verified for correctness here.
-		if err == nil && testCase.shouldPass {
-			// The length of the expected ListObjectsResult.Objects
-			// should match in both expected result from test cases
-			// and in the output. On failure calling t.Fatalf,
-			// otherwise it may lead to index out of range error in
-			// assertion following this.
-			if len(testCase.result.Objects) != len(result.Objects) {
-				t.Fatalf("Test %d: %s: Expected number of object in the result to be '%d', but found '%d' objects instead", i+1, instanceType, len(testCase.result.Objects), len(result.Objects))
+			if err == nil && !testCase.shouldPass {
+				t.Errorf("Test %d: %s: Expected to fail with <ERROR> \"%s\", but passed instead", i+1, instanceType, testCase.err.Error())
 			}
-			for j := 0; j < len(testCase.result.Objects); j++ {
-				if testCase.result.Objects[j].Name != result.Objects[j].Name {
-					t.Errorf("Test %d: %s: Expected object name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.result.Objects[j].Name, result.Objects[j].Name)
+			// Failed as expected, but does it fail for the expected reason.
+			if err != nil && !testCase.shouldPass {
+				if !strings.Contains(err.Error(), testCase.err.Error()) {
+					t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, instanceType, testCase.err.Error(), err.Error())
 				}
-				//FIXME: we should always check for ETag
-				if result.Objects[j].ETag == "" && !strings.HasSuffix(result.Objects[j].Name, slashSeparator) {
-					t.Errorf("Test %d: %s: Expected ETag to be not empty, but found empty instead (%v)", i+1, instanceType, result.Objects[j].Name)
+			}
+			// Since there are cases for which ListObjects fails, this is
+			// necessary. Test passes as expected, but the output values
+			// are verified for correctness here.
+			if err == nil && testCase.shouldPass {
+				// The length of the expected ListObjectsResult.Objects
+				// should match in both expected result from test cases
+				// and in the output. On failure calling t.Fatalf,
+				// otherwise it may lead to index out of range error in
+				// assertion following this.
+				if len(testCase.result.Objects) != len(result.Objects) {
+					t.Fatalf("Test %d: %s: Expected number of object in the result to be '%d', but found '%d' objects instead", i+1, instanceType, len(testCase.result.Objects), len(result.Objects))
+				}
+				for j := 0; j < len(testCase.result.Objects); j++ {
+					if testCase.result.Objects[j].Name != result.Objects[j].Name {
+						t.Errorf("Test %d: %s: Expected object name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.result.Objects[j].Name, result.Objects[j].Name)
+					}
+					// FIXME: we should always check for ETag
+					if result.Objects[j].ETag == "" && !strings.HasSuffix(result.Objects[j].Name, slashSeparator) {
+						t.Errorf("Test %d: %s: Expected ETag to be not empty, but found empty instead (%v)", i+1, instanceType, result.Objects[j].Name)
+					}
+
+				}
+				if testCase.result.IsTruncated != result.IsTruncated {
+					t.Errorf("Test %d: %s: Expected IsTruncated flag to be %v, but instead found it to be %v", i+1, instanceType, testCase.result.IsTruncated, result.IsTruncated)
+				}
+
+				if testCase.result.IsTruncated && result.NextMarker == "" {
+					t.Errorf("Test %d: %s: Expected NextContinuationToken to contain a string since listing is truncated, but instead found it to be empty", i+1, instanceType)
+				}
+
+				if !testCase.result.IsTruncated && result.NextMarker != "" {
+					t.Errorf("Test %d: %s: Expected NextContinuationToken to be empty since listing is not truncated, but instead found `%v`", i+1, instanceType, result.NextMarker)
 				}
 
 			}
-			if testCase.result.IsTruncated != result.IsTruncated {
-				t.Errorf("Test %d: %s: Expected IsTruncated flag to be %v, but instead found it to be %v", i+1, instanceType, testCase.result.IsTruncated, result.IsTruncated)
+			// Take ListObject treeWalk go-routine to completion, if available in the treewalk pool.
+			if result.IsTruncated {
+				_, err = obj.ListObjects(context.Background(), testCase.bucketName,
+					testCase.prefix, result.NextMarker, testCase.delimeter, 1000)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
-
-			if testCase.result.IsTruncated && result.NextMarker == "" {
-				t.Errorf("Test %d: %s: Expected NextContinuationToken to contain a string since listing is truncated, but instead found it to be empty", i+1, instanceType)
-			}
-
-			if !testCase.result.IsTruncated && result.NextMarker != "" {
-				t.Errorf("Test %d: %s: Expected NextContinuationToken to be empty since listing is not truncated, but instead found `%v`", i+1, instanceType, result.NextMarker)
-			}
-
-		}
-		// Take ListObject treeWalk go-routine to completion, if available in the treewalk pool.
-		if result.IsTruncated {
-			_, err = obj.ListObjects(context.Background(), testCase.bucketName, testCase.prefix, result.NextMarker, testCase.delimeter, 1000)
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
+		})
 	}
 }
 
