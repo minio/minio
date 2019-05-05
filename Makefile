@@ -74,7 +74,7 @@ docker: build
 # Builds minio and installs it to $GOPATH/bin.
 install: build
 	@echo "Installing minio binary to '$(GOPATH)/bin/minio'"
-	@mkdir -p $(GOPATH)/bin && cp -uf $(PWD)/minio $(GOPATH)/bin/minio
+	@mkdir -p $(GOPATH)/bin && cp -f $(PWD)/minio $(GOPATH)/bin/minio
 	@echo "Installation successful. To learn more, try \"minio --help\"."
 
 clean:
