@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -237,6 +238,41 @@ func (k *KVStorage) getKVNSEntry(nskey string) (entry KVNSEntry, err error) {
 	}
 }
 
+func (k *KVStorage) ListDirForRename(volume, dirPath string, count int) ([]string, error) {
+	nskey := pathJoin(volume, dirPath, "xl.json")
+
+	entry, err := k.getKVNSEntry(nskey)
+	if err != nil {
+		return nil, err
+	}
+
+	bufp := kvValuePool.Get().(*[]byte)
+	defer kvValuePool.Put(bufp)
+
+	tries := 10
+	for {
+		value, err := k.kv.Get(k.DataKey(entry.IDs[0]), *bufp)
+		if err != nil {
+			return nil, err
+		}
+		xlMeta, err := xlMetaV1UnmarshalJSON(context.Background(), value)
+		if err != nil {
+			fmt.Println("##### xlMetaV1UnmarshalJSON failed on", k.DataKey(entry.IDs[0]), len(value), string(value))
+			tries--
+			if tries == 0 {
+				fmt.Println("##### xlMetaV1UnmarshalJSON failed on (10 retries)", k.DataKey(entry.IDs[0]), len(value), string(value))
+				os.Exit(1)
+			}
+			continue
+		}
+		listEntries := []string{"xl.json"}
+		for _, part := range xlMeta.Parts {
+			listEntries = append(listEntries, part.Name)
+		}
+		return listEntries, err
+	}
+}
+
 func (k *KVStorage) ListDir(volume, dirPath string, count int) ([]string, error) {
 	bufp := kvValuePool.Get().(*[]byte)
 	defer kvValuePool.Put(bufp)
@@ -245,38 +281,6 @@ func (k *KVStorage) ListDir(volume, dirPath string, count int) ([]string, error)
 		return nil, err
 	}
 	return entries, nil
-	// nskey := pathJoin(volume, dirPath, "xl.json")
-
-	// entry, err := k.getKVNSEntry(nskey)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// bufp := kvValuePool.Get().(*[]byte)
-	// defer kvValuePool.Put(bufp)
-
-	// tries := 10
-	// for {
-	// 	value, err := k.kv.Get(k.DataKey(entry.IDs[0]), *bufp)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	xlMeta, err := xlMetaV1UnmarshalJSON(context.Background(), value)
-	// 	if err != nil {
-	// 		fmt.Println("##### xlMetaV1UnmarshalJSON failed on", k.DataKey(entry.IDs[0]), len(value), string(value))
-	// 		tries--
-	// 		if tries == 0 {
-	// 			fmt.Println("##### xlMetaV1UnmarshalJSON failed on (10 retries)", k.DataKey(entry.IDs[0]), len(value), string(value))
-	// 			os.Exit(1)
-	// 		}
-	// 		continue
-	// 	}
-	// 	listEntries := []string{"xl.json"}
-	// 	for _, part := range xlMeta.Parts {
-	// 		listEntries = append(listEntries, part.Name)
-	// 	}
-	// 	return listEntries, err
-	// }
 }
 
 func (k *KVStorage) ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
@@ -375,30 +379,39 @@ func (k *KVStorage) ReadFileStream(volume, filePath string, offset, length int64
 		return nil, err
 	}
 
-	if length != entry.Size {
-		fmt.Println("length != entry.Size", length, entry.Size, nskey, entry.Key)
-		return nil, fmt.Errorf("ReadFileStream: %d != %d", length, entry.Size)
-	}
-	if offset != 0 {
-		return nil, errUnexpected
-	}
 	r, w := io.Pipe()
-	size := entry.Size
 	go func() {
 		bufp := kvValuePool.Get().(*[]byte)
 		defer kvValuePool.Put(bufp)
-
-		for _, id := range entry.IDs {
+		kvMaxValueSize := int64(kvMaxValueSize)
+		startIndex := offset / kvMaxValueSize
+		endIndex := (offset + length) / kvMaxValueSize
+		for index := startIndex; index <= endIndex; index++ {
+			var blockOffset, blockLength int64
+			switch {
+			case startIndex == endIndex:
+				blockOffset = offset % kvMaxValueSize
+				blockLength = length
+			case index == startIndex:
+				blockOffset = offset % kvMaxValueSize
+				blockLength = kvMaxValueSize - blockOffset
+			case index == endIndex:
+				blockOffset = 0
+				blockLength = (offset + length) % kvMaxValueSize
+			default:
+				blockOffset = 0
+				blockLength = kvMaxValueSize
+			}
+			if blockLength == 0 {
+				break
+			}
+			id := entry.IDs[index]
 			data, err := k.kv.Get(k.DataKey(id), *bufp)
 			if err != nil {
 				w.CloseWithError(err)
 				return
 			}
-			if size < int64(len(data)) {
-				data = data[:size]
-			}
-			w.Write(data)
-			size -= int64(len(data))
+			w.Write(data[blockOffset:blockLength])
 		}
 		w.Close()
 	}()
@@ -447,7 +460,7 @@ func (k *KVStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) er
 		return rename(pathJoin(srcVolume, srcPath), pathJoin(dstVolume, dstPath))
 	}
 	if strings.HasSuffix(srcPath, slashSeparator) && strings.HasSuffix(dstPath, slashSeparator) {
-		entries, err := k.ListDir(srcVolume, srcPath, -1)
+		entries, err := k.ListDirForRename(srcVolume, srcPath, -1)
 		if err != nil {
 			return err
 		}
