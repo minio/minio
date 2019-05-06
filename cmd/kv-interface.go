@@ -40,7 +40,9 @@ func KVNSEntryMarshal(entry KVNSEntry, buf []byte) ([]byte, error) {
 	n = copy(buf[8:], b)
 	buf = buf[:8+n]
 	paddedLength := ceilFrac(int64(len(buf)), kvNSEntryPaddingMultiple) * kvNSEntryPaddingMultiple
-	buf = buf[:paddedLength]
+	for len(buf) < int(paddedLength) {
+		buf = append(buf, '#')
+	}
 	return buf, nil
 }
 

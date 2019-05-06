@@ -223,6 +223,7 @@ import (
 	"time"
 	"unsafe"
 
+	"encoding/hex"
 	"encoding/json"
 
 	humanize "github.com/dustin/go-humanize"
@@ -282,6 +283,7 @@ func newKV(path string, sync bool) (*KV, error) {
 	kv.path = path
 	kv.sync = sync
 	kv.handle.nkv_handle = globalNKVHandle
+	kv.kvHashSumMap = make(map[string]*kvHashSum)
 	cs := C.CString(path)
 	status := C.minio_nkv_open_path(&kv.handle, C.CString(path))
 	C.free(unsafe.Pointer(cs))
@@ -292,10 +294,17 @@ func newKV(path string, sync bool) (*KV, error) {
 	return kv, nil
 }
 
+type kvHashSum struct {
+	sum string
+	sync.RWMutex
+}
+
 type KV struct {
-	handle C.struct_minio_nkv_handle
-	path   string
-	sync   bool
+	handle         C.struct_minio_nkv_handle
+	path           string
+	sync           bool
+	kvHashSumMap   map[string]*kvHashSum
+	kvHashSumMapMu sync.RWMutex
 }
 
 var kvValuePool = sync.Pool{
@@ -494,6 +503,16 @@ func (k *KV) Put(keyStr string, value []byte) error {
 	if len(value) > 0 {
 		valuePtr = unsafe.Pointer(&value[0])
 	}
+	k.kvHashSumMapMu.Lock()
+	hashSum := k.kvHashSumMap[keyStr]
+	if hashSum == nil {
+		hashSum = new(kvHashSum)
+		k.kvHashSumMap[keyStr] = hashSum
+	}
+	k.kvHashSumMapMu.Unlock()
+	hashSum.Lock()
+	defer hashSum.Unlock()
+
 	var status int
 	if k.sync {
 		cstatus := C.minio_nkv_put(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)), valuePtr, C.int(len(value)))
@@ -524,6 +543,9 @@ func (k *KV) Put(keyStr string, value []byte) error {
 	if status != 0 {
 		return errors.New("error during put")
 	}
+	sum := HighwayHash256.New()
+	sum.Write(value)
+	hashSum.sum = hex.EncodeToString(sum.Sum(nil))
 	return nil
 }
 
@@ -546,6 +568,16 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 		os.Exit(0)
 	}
 	var actualLength int
+
+	k.kvHashSumMapMu.Lock()
+	hashSum := k.kvHashSumMap[keyStr]
+	if hashSum == nil {
+		hashSum = new(kvHashSum)
+		k.kvHashSumMap[keyStr] = hashSum
+	}
+	k.kvHashSumMapMu.Unlock()
+	hashSum.Lock()
+	defer hashSum.Unlock()
 
 	tries := 10
 	for {
@@ -595,6 +627,13 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 			os.Exit(1)
 		}
 	}
+	if hashSum.sum != "" {
+		sum := HighwayHash256.New()
+		sum.Write(value[:actualLength])
+		if hashSum.sum != hex.EncodeToString(sum.Sum(nil)) {
+			fmt.Printf("DATA CORRUPTION: (%s) (%s), (expected:%s != got:%s)\n", k.path, keyStr, hashSum.sum, hex.EncodeToString(sum.Sum(nil)))
+		}
+	}
 	return value[:actualLength], nil
 }
 
@@ -616,6 +655,16 @@ func (k *KV) Delete(keyStr string) error {
 		fmt.Println("##### invalid key length", key, len(key))
 		os.Exit(0)
 	}
+	k.kvHashSumMapMu.Lock()
+	hashSum := k.kvHashSumMap[keyStr]
+	if hashSum == nil {
+		hashSum = new(kvHashSum)
+		k.kvHashSumMap[keyStr] = hashSum
+	}
+	k.kvHashSumMapMu.Unlock()
+	hashSum.Lock()
+	defer hashSum.Unlock()
+
 	var status int
 	if k.sync {
 		cstatus := C.minio_nkv_delete(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)))
@@ -642,6 +691,9 @@ func (k *KV) Delete(keyStr string) error {
 		}
 		status = response.status
 	}
+	k.kvHashSumMapMu.Lock()
+	delete(k.kvHashSumMap, keyStr)
+	k.kvHashSumMapMu.Unlock()
 	if status != 0 {
 		return errFileNotFound
 	}
