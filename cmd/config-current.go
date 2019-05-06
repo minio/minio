@@ -347,7 +347,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewMySQLTarget(k, v)
+		t, err := target.NewMySQLTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("mysql(%s): %s", k, err.Error())
 		}
@@ -380,7 +380,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewPostgreSQLTarget(k, v)
+		t, err := target.NewPostgreSQLTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("postgreSQL(%s): %s", k, err.Error())
 		}
@@ -696,7 +696,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.MySQL {
 		if args.Enable {
-			newTarget, err := target.NewMySQLTarget(id, args)
+			newTarget, err := target.NewMySQLTarget(id, args, GlobalServiceDoneCh)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
@@ -738,7 +738,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.PostgreSQL {
 		if args.Enable {
-			newTarget, err := target.NewPostgreSQLTarget(id, args)
+			newTarget, err := target.NewPostgreSQLTarget(id, args, GlobalServiceDoneCh)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue

@@ -789,10 +789,14 @@ An example of PostgreSQL configuration is as follows:
         "port": "5432",
         "user": "postgres",
         "password": "password",
-        "database": "minio_events"
+        "database": "minio_events",
+        "queueDir": "",
+        "queueLimit": 0
     }
 }
 ```
+
+MinIO supports persistent event store. The persistent store will backup events when the PostgreSQL connection goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 Note that for illustration here, we have disabled SSL. In the interest of security, for production this is not recommended.
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
@@ -884,20 +888,26 @@ The MinIO server configuration file is stored on the backend in json format. The
 
 An example of MySQL configuration is as follows:
 
-```
+```json
 "mysql": {
-        "1": {
-                "enable": true,
-                "dsnString": "",
-                "table": "minio_images",
-                "host": "172.17.0.1",
-                "port": "3306",
-                "user": "root",
-                "password": "password",
-                "database": "miniodb"
-        }
+       "1": {
+           "enable": true,
+           "dsnString": "",
+           "format": "namespace",
+           "table": "minio_images",
+           "host": "172.17.0.1",
+           "port": "3306",
+           "user": "root",
+           "password": "password",
+           "database": "miniodb",
+           "queueDir": "",
+           "queueLimit": 0
+       }
 }
 ```
+
+
+MinIO supports persistent event store. The persistent store will backup events when the MySQL connection goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
 
