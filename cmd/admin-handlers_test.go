@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -296,60 +295,6 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 func (atb *adminXLTestBed) TearDown() {
 	removeRoots(atb.xlDirs)
 	resetTestGlobals()
-}
-
-func (atb *adminXLTestBed) GenerateHealTestData(t *testing.T) {
-	// Create an object myobject under bucket mybucket.
-	bucketName := "mybucket"
-	err := atb.objLayer.MakeBucketWithLocation(context.Background(), bucketName, "")
-	if err != nil {
-		t.Fatalf("Failed to make bucket %s - %v", bucketName,
-			err)
-	}
-
-	// create some objects
-	{
-		objName := "myobject"
-		for i := 0; i < 10; i++ {
-			objectName := fmt.Sprintf("%s-%d", objName, i)
-			_, err = atb.objLayer.PutObject(context.Background(), bucketName, objectName,
-				mustGetPutObjReader(t, bytes.NewReader([]byte("hello")),
-					int64(len("hello")), "", ""), ObjectOptions{})
-			if err != nil {
-				t.Fatalf("Failed to create %s - %v", objectName,
-					err)
-			}
-		}
-	}
-
-	// create a multipart upload (incomplete)
-	{
-		objName := "mpObject"
-		uploadID, err := atb.objLayer.NewMultipartUpload(context.Background(), bucketName,
-			objName, ObjectOptions{})
-		if err != nil {
-			t.Fatalf("mp new error: %v", err)
-		}
-
-		_, err = atb.objLayer.PutObjectPart(context.Background(), bucketName, objName,
-			uploadID, 3, mustGetPutObjReader(t, bytes.NewReader(
-				[]byte("hello")), int64(len("hello")), "", ""), ObjectOptions{})
-		if err != nil {
-			t.Fatalf("mp put error: %v", err)
-		}
-
-	}
-}
-
-func (atb *adminXLTestBed) CleanupHealTestData(t *testing.T) {
-	bucketName := "mybucket"
-	objName := "myobject"
-	for i := 0; i < 10; i++ {
-		atb.objLayer.DeleteObject(context.Background(), bucketName,
-			fmt.Sprintf("%s-%d", objName, i))
-	}
-
-	atb.objLayer.DeleteBucket(context.Background(), bucketName)
 }
 
 // initTestObjLayer - Helper function to initialize an XL-based object
