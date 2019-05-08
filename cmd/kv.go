@@ -19,7 +19,7 @@ static int minio_nkv_open(char *config, uint64_t *nkv_handle) {
   return result;
 }
 
-static int minio_nkv_open_path(struct minio_nkv_handle *handle, char *ipaddr) {
+static int minio_nkv_open_path(struct minio_nkv_handle *handle, char *mount_point) {
   uint32_t index = 0;
   uint32_t cnt_count = NKV_MAX_ENTRIES_PER_CALL;
   nkv_container_info *cntlist = malloc(sizeof(nkv_container_info)*NKV_MAX_ENTRIES_PER_CALL);
@@ -43,7 +43,7 @@ static int minio_nkv_open_path(struct minio_nkv_handle *handle, char *ipaddr) {
               cntlist[i].transport_list[p].network_path_hash, cntlist[i].transport_list[p].network_path_id, cntlist[i].transport_list[p].ip_addr,
               cntlist[i].transport_list[p].port, cntlist[i].transport_list[p].addr_family, cntlist[i].transport_list[p].speed,
               cntlist[i].transport_list[p].status, cntlist[i].transport_list[p].numa_node);
-      if(!strcmp(cntlist[i].transport_list[p].ip_addr, ipaddr)) {
+      if(!strcmp(cntlist[i].transport_list[p].mount_point, mount_point)) {
               handle->container_hash = cntlist[i].container_hash;
               handle->network_path_hash = cntlist[i].transport_list[p].network_path_hash;
               return 0;
@@ -631,7 +631,7 @@ func (k *KV) Get(keyStr string, value []byte) ([]byte, error) {
 		sum := HighwayHash256.New()
 		sum.Write(value[:actualLength])
 		if hashSum.sum != hex.EncodeToString(sum.Sum(nil)) {
-			fmt.Printf("DATA CORRUPTION: (%s) (%s), (expected:%s != got:%s)\n", k.path, keyStr, hashSum.sum, hex.EncodeToString(sum.Sum(nil)))
+			fmt.Printf("Value content mismatch: (%s) (%s), (expected:%s != got:%s)\n", k.path, keyStr, hashSum.sum, hex.EncodeToString(sum.Sum(nil)))
 		}
 	}
 	return value[:actualLength], nil
