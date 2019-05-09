@@ -953,7 +953,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	var reader io.Reader = r.Body
 	actualSize := size
 
-	hashReader, err := hash.NewReader(reader, size, "", "", actualSize)
+	hashReader, err := hash.NewReader(reader, size, "", "", actualSize, globalCLIContext.StrictS3Compat)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -963,7 +963,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
 		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
 
-		actualReader, err := hash.NewReader(reader, size, "", "", actualSize)
+		actualReader, err := hash.NewReader(reader, size, "", "", actualSize, globalCLIContext.StrictS3Compat)
 		if err != nil {
 			writeWebErrorResponse(w, err)
 			return
@@ -972,7 +972,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		// Set compression metrics.
 		size = -1 // Since compressed size is un-predictable.
 		reader = newSnappyCompressReader(actualReader)
-		hashReader, err = hash.NewReader(reader, size, "", "", actualSize)
+		hashReader, err = hash.NewReader(reader, size, "", "", actualSize, globalCLIContext.StrictS3Compat)
 		if err != nil {
 			writeWebErrorResponse(w, err)
 			return
@@ -996,7 +996,8 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			info := ObjectInfo{Size: size}
-			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size) // do not try to verify encrypted content
+			// do not try to verify encrypted content
+			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size, globalCLIContext.StrictS3Compat)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return

@@ -32,24 +32,28 @@ var globalFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "config-dir, C",
 		Value: defaultConfigDir.Get(),
-		Usage: "[DEPRECATED] Path to legacy configuration directory.",
+		Usage: "[DEPRECATED] path to legacy configuration directory",
 	},
 	cli.StringFlag{
 		Name:  "certs-dir, S",
 		Value: defaultCertsDir.Get(),
-		Usage: "Path to certs directory.",
+		Usage: "path to certs directory",
 	},
 	cli.BoolFlag{
 		Name:  "quiet",
-		Usage: "Disable startup information.",
+		Usage: "disable startup information",
 	},
 	cli.BoolFlag{
 		Name:  "anonymous",
-		Usage: "Hide sensitive information from logging.",
+		Usage: "hide sensitive information from logging",
 	},
 	cli.BoolFlag{
 		Name:  "json",
-		Usage: "Output server logs and startup information in json format.",
+		Usage: "output server logs and startup information in json format",
+	},
+	cli.BoolFlag{
+		Name:  "compat",
+		Usage: "trade off performance for S3 compatibility",
 	},
 }
 
@@ -118,7 +122,7 @@ func newApp(name string) *cli.App {
 	// Set up app.
 	cli.HelpFlag = cli.BoolFlag{
 		Name:  "help, h",
-		Usage: "Show help.",
+		Usage: "show help",
 	}
 
 	app := cli.NewApp()

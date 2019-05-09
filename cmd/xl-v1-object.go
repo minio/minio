@@ -26,7 +26,6 @@ import (
 	"sync"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/mimedb"
 )
 
@@ -64,35 +63,32 @@ func (xl xlObjects) putObjectDir(ctx context.Context, bucket, object string, wri
 func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (oi ObjectInfo, e error) {
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 
-	// Read metadata associated with the object from all disks.
-	storageDisks := xl.getDisks()
-
-	metaArr, errs := readAllXLMetadata(ctx, storageDisks, srcBucket, srcObject)
-
-	// get Quorum for this object
-	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
-	if err != nil {
-		return oi, toObjectErr(err, srcBucket, srcObject)
-	}
-
-	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
-		return oi, toObjectErr(reducedErr, srcBucket, srcObject)
-	}
-
-	// List all online disks.
-	_, modTime := listOnlineDisks(storageDisks, metaArr, errs)
-
-	// Pick latest valid metadata.
-	xlMeta, err := pickValidXLMeta(ctx, metaArr, modTime, readQuorum)
-	if err != nil {
-		return oi, toObjectErr(err, srcBucket, srcObject)
-	}
-
-	// Length of the file to read.
-	length := xlMeta.Stat.Size
-
 	// Check if this request is only metadata update.
 	if cpSrcDstSame {
+		// Read metadata associated with the object from all disks.
+		storageDisks := xl.getDisks()
+
+		metaArr, errs := readAllXLMetadata(ctx, storageDisks, srcBucket, srcObject)
+
+		// get Quorum for this object
+		readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
+		if err != nil {
+			return oi, toObjectErr(err, srcBucket, srcObject)
+		}
+
+		if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
+			return oi, toObjectErr(reducedErr, srcBucket, srcObject)
+		}
+
+		// List all online disks.
+		_, modTime := listOnlineDisks(storageDisks, metaArr, errs)
+
+		// Pick latest valid metadata.
+		xlMeta, err := pickValidXLMeta(ctx, metaArr, modTime, readQuorum)
+		if err != nil {
+			return oi, toObjectErr(err, srcBucket, srcObject)
+		}
+
 		// Update `xl.json` content on each disks.
 		for index := range metaArr {
 			metaArr[index].Meta = srcInfo.UserDefined
@@ -110,40 +106,17 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 		if onlineDisks, err = writeUniqueXLMetadata(ctx, storageDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
 			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
+
 		// Rename atomically `xl.json` from tmp location to destination for each disk.
 		if _, err = renameXLMetadata(ctx, onlineDisks, minioMetaTmpBucket, tempObj, srcBucket, srcObject, writeQuorum); err != nil {
 			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
+
 		return xlMeta.ToObjectInfo(srcBucket, srcObject), nil
 	}
 
-	// Initialize pipe.
-	pipeReader, pipeWriter := io.Pipe()
-
-	go func() {
-		var startOffset int64 // Read the whole file.
-		if gerr := xl.getObject(ctx, srcBucket, srcObject, startOffset, length, pipeWriter, srcInfo.ETag, srcOpts); gerr != nil {
-			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
-			return
-		}
-		pipeWriter.Close() // Close writer explicitly signaling we wrote all data.
-	}()
-
-	hashReader, err := hash.NewReader(pipeReader, length, "", "", length)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return oi, toObjectErr(err, dstBucket, dstObject)
-	}
-	putOpts := ObjectOptions{UserDefined: srcInfo.UserDefined, ServerSideEncryption: dstOpts.ServerSideEncryption}
-	objInfo, err := xl.putObject(ctx, dstBucket, dstObject, NewPutObjReader(hashReader, nil, nil), putOpts)
-	if err != nil {
-		return oi, toObjectErr(err, dstBucket, dstObject)
-	}
-
-	// Explicitly close the reader.
-	pipeReader.Close()
-
-	return objInfo, nil
+	putOpts := ObjectOptions{ServerSideEncryption: dstOpts.ServerSideEncryption, UserDefined: srcInfo.UserDefined}
+	return xl.putObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
 }
 
 // GetObjectNInfo - returns object info and an object

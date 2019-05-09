@@ -647,10 +647,7 @@ func (n *hdfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, objec
 	}
 
 	// Calculate s3 compatible md5sum for complete multipart.
-	s3MD5, err := minio.GetCompleteMultipartMD5(ctx, parts)
-	if err != nil {
-		return objInfo, err
-	}
+	s3MD5 := minio.ComputeCompleteMultipartMD5(parts)
 
 	return minio.ObjectInfo{
 		Bucket:  bucket,

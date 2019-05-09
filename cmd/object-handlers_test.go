@@ -1916,7 +1916,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	for i, input := range putObjectInputs {
 		// uploading the object.
 		var objInfo ObjectInfo
-		objInfo, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetPutObjReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData[""], ""), ObjectOptions{UserDefined: input.metaData})
+		objInfo, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetPutObjReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.md5sum, ""), ObjectOptions{UserDefined: input.metaData})
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -2231,11 +2231,6 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			var cpObjResp CopyObjectResponse
 			if err = xml.Unmarshal(rec.Body.Bytes(), &cpObjResp); err != nil {
 				t.Fatalf("Test %d: %s: Failed to parse the CopyObjectResult response: <ERROR> %s", i+1, instanceType, err)
-			}
-
-			retag := canonicalizeETag(cpObjResp.ETag)
-			if retag != bytesData[0].md5sum {
-				t.Fatalf("Test %d: %s: Failed to CopyObject: <ERROR> got %s, expected %s", i+1, instanceType, retag, bytesData[0].md5sum)
 			}
 
 			// See if the new object is formed.
@@ -2660,10 +2655,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	}
 
 	// on successful complete multipart operation the s3MD5 for the parts uploaded will be returned.
-	s3MD5, err := getCompleteMultipartMD5(context.Background(), inputParts[3].parts)
-	if err != nil {
-		t.Fatalf("Obtaining S3MD5 failed")
-	}
+	s3MD5 := getCompleteMultipartMD5(inputParts[3].parts)
 
 	// generating the response body content for the success case.
 	successResponse := generateCompleteMultpartUploadResponse(bucketName, objectName, getGetObjectURL("", bucketName, objectName), s3MD5)

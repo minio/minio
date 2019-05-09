@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -399,7 +398,7 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 	if fsMeta.Meta["etag"] == "" {
-		fsMeta.Meta["etag"] = hex.EncodeToString(data.MD5Current())
+		fsMeta.Meta["etag"] = r.MD5CurrentHexString()
 	}
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.

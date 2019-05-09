@@ -241,7 +241,7 @@ func getGWMetadata(ctx context.Context, bucket, prefix string, gwMeta gwMetaV1) 
 		logger.LogIf(ctx, err)
 		return nil, err
 	}
-	hashReader, err := hash.NewReader(bytes.NewReader(metadataBytes), int64(len(metadataBytes)), "", "", int64(len(metadataBytes)))
+	hashReader, err := hash.NewReader(bytes.NewReader(metadataBytes), int64(len(metadataBytes)), "", "", int64(len(metadataBytes)), false)
 	if err != nil {
 		return nil, err
 	}

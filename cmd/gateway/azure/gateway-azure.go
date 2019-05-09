@@ -835,7 +835,7 @@ func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *
 	}
 
 	// Save md5sum for future processing on the object.
-	opts.UserDefined["x-amz-meta-md5sum"] = hex.EncodeToString(data.MD5Current())
+	opts.UserDefined["x-amz-meta-md5sum"] = r.MD5CurrentHexString()
 	objBlob.Metadata, objBlob.Properties, err = s3MetaToAzureProperties(ctx, opts.UserDefined)
 	if err != nil {
 		return objInfo, azureToObjectError(err, bucket, object)
@@ -1207,10 +1207,7 @@ func (a *azureObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 	if err != nil {
 		return objInfo, azureToObjectError(err, bucket, object)
 	}
-	objBlob.Metadata["md5sum"], err = cmd.ComputeCompleteMultipartMD5(uploadedParts)
-	if err != nil {
-		return objInfo, err
-	}
+	objBlob.Metadata["md5sum"] = cmd.ComputeCompleteMultipartMD5(uploadedParts)
 	err = objBlob.SetProperties(nil)
 	if err != nil {
 		return objInfo, azureToObjectError(err, bucket, object)

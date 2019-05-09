@@ -628,10 +628,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	}
 
 	// Calculate s3 compatible md5sum for complete multipart.
-	s3MD5, err := getCompleteMultipartMD5(ctx, parts)
-	if err != nil {
-		return oi, err
-	}
+	s3MD5 := getCompleteMultipartMD5(parts)
 
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), minioMetaMultipartBucket, uploadIDPath)

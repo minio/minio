@@ -92,9 +92,10 @@ const (
 )
 
 var globalCLIContext = struct {
-	JSON, Quiet bool
-	Anonymous   bool
-	Addr        string
+	JSON, Quiet    bool
+	Anonymous      bool
+	Addr           string
+	StrictS3Compat bool
 }{}
 
 var (
