@@ -37,91 +37,21 @@ For this example, consider a server with 4 NKV disks (`/dev/nvme0n1` `/dev/nvme1
   "drive_iter_support_required" : 1,
   "iter_prefix_to_filter" : "meta",
   "nkv_listing_with_cached_keys" : 1,
+  "nkv_num_path_per_container_to_iterate" : 0,
+  "nkv_is_on_local_kv" : 1,
 
-  "nkv_mounts": [
+  "nkv_local_mounts": [
     {
-      "mount_point": "/dev/nvme0n1",
-      "remote_nqn_name": "nqn-02",
-      "remote_target_node_name": "msl-ssg-sk01",
-      "nqn_transport_address": "101.100.10.31",
-      "nqn_transport_port": 1023,
-      "numa_node_attached" : 0,
-      "driver_thread_core" : 23
+      "mount_point": "/dev/nvme0n1"
     },
     {
-      "mount_point": "/dev/nvme1n1",
-      "remote_nqn_name": "nqn-02",
-      "remote_target_node_name": "msl-ssg-sk01",
-      "nqn_transport_address": "102.100.10.31",
-      "nqn_transport_port": 1023,
-      "numa_node_attached" : 1,
-      "driver_thread_core" : 24
+      "mount_point": "/dev/nvme1n1"
     },
     {
-      "mount_point": "/dev/nvme2n1",
-      "remote_nqn_name": "nqn-02",
-      "remote_target_node_name": "msl-ssg-sk01",
-      "nqn_transport_address": "103.100.10.31",
-      "nqn_transport_port": 1023,
-      "numa_node_attached" : 1,
-      "driver_thread_core" : 25
+      "mount_point": "/dev/nvme2n1"
     },
     {
-      "mount_point": "/dev/nvme3n1",
-      "remote_nqn_name": "nqn-02",
-      "remote_target_node_name": "msl-ssg-sk01",
-      "nqn_transport_address": "104.100.10.31",
-      "nqn_transport_port": 1023,
-      "numa_node_attached" : 1,
-      "driver_thread_core" : 26
-    }
-  ],
-  "subsystem_maps": [
-    {
-      "target_server_name": "msl-ssg-sk01",
-      "subsystem_nqn_id": "dce20d46",
-      "subsystem_nqn": "nqn-02",
-      "subsystem_nqn_nsid": 1,
-      "subsystem_transport": [
-        {
-          "subsystem_type": 1,
-          "subsystem_address": "101.100.10.31",
-          "subsystem_port": 1023,
-          "subsystem_addr_fam": 2,
-          "subsystem_interface_speed": 3,
-          "subsystem_interface_numa_aligned": true,
-          "subsystem_interface_status":1
-        },
-        {
-          "subsystem_type": 1,
-          "subsystem_address": "102.100.10.31",
-          "subsystem_port": 1023,
-          "subsystem_addr_fam": 2,
-          "subsystem_interface_speed": 3,
-          "subsystem_interface_numa_aligned": false,
-          "subsystem_interface_status":1
-        },
-        {
-          "subsystem_type": 1,
-          "subsystem_address": "103.100.10.31",
-          "subsystem_port": 1023,
-          "subsystem_addr_fam": 2,
-          "subsystem_interface_speed": 3,
-          "subsystem_interface_numa_aligned": false,
-          "subsystem_interface_status":1
-        },
-        {
-          "subsystem_type": 1,
-          "subsystem_address": "104.100.10.31",
-          "subsystem_port": 1023,
-          "subsystem_addr_fam": 2,
-          "subsystem_interface_speed": 3,
-          "subsystem_interface_numa_aligned": false,
-          "subsystem_interface_status":1
-        }
-      ],
-      "subsystem_status": 0,
-      "subsystem_space_avail_percent": 87
+      "mount_point": "/dev/nvme3n1"
     }
   ]
 }
@@ -131,10 +61,8 @@ Minio server can be started like this:
 ```
 export LD_LIBRARY_PATH=<nkv-package>/lib
 export MINIO_NKV_CONFIG=/path/to/nkv_config.json
-minio server /nkv/{100...104}.100.10.31
+minio server /dev/nvme{0...3}n1
 ```
-
-Note that the IP addresses provided as arguments to `minio server` must match with the IP addresses specified in nkv_config.json
 
 By default MinIO server will listen on the port 9000 for incoming S3 requests.
 
@@ -146,7 +74,7 @@ Minio server should be started like this:
 ```
 export LD_LIBRARY_PATH=<nkv-package>/lib
 export MINIO_NKV_CONFIG=/path/to/nkv_config.json
-minio server http://host{1...4}/nkv/{100...104}.100.10.31
+minio server http://host{1...4}/dev/nvme{0...3}n1
 ```
 
 Minio will run in distributed mode on NKV storage.

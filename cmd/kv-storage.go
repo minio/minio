@@ -47,7 +47,11 @@ func newPosix(path string) (StorageAPI, error) {
 	if err := minio_nkv_open(configPath); err != nil {
 		return nil, err
 	}
-	kv, err := newKV(path, os.Getenv("MINIO_NKV_SYNC") != "")
+	nkvSync := true
+	if os.Getenv("MINIO_NKV_ASYNC") != "" {
+		nkvSync = false
+	}
+	kv, err := newKV(path, nkvSync)
 	if err != nil {
 		return nil, err
 	}
