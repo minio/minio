@@ -1087,7 +1087,7 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 		return err
 	}
 
-	w, err := disk.OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL|os.O_SYNC, 0666)
+	w, err := disk.OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0666)
 	if err != nil {
 		switch {
 		case os.IsPermission(err):
@@ -1100,6 +1100,7 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 			return err
 		}
 	}
+	defer w.Sync() // Sync before close.
 	defer w.Close()
 
 	var e error
