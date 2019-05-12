@@ -123,14 +123,12 @@ func (o *Opa) IsAllowed(args Args) bool {
 
 	// Handle OPA response
 	type opaResponse struct {
-		Result struct {
-			Allow bool `json:"allow"`
-		} `json:"result"`
+		Allow bool `json:"allow"`
 	}
 	var result opaResponse
 	if err = json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return false
 	}
 
-	return result.Result.Allow
+	return result.Allow
 }
