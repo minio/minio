@@ -116,7 +116,7 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 	}
 
 	putOpts := ObjectOptions{ServerSideEncryption: dstOpts.ServerSideEncryption, UserDefined: srcInfo.UserDefined}
-	return xl.putObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
+	return xl.PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
 }
 
 // GetObjectNInfo - returns object info and an object
@@ -510,6 +510,7 @@ func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string,
 		return objInfo, err
 	}
 	defer objectLock.Unlock()
+
 	return xl.putObject(ctx, bucket, object, data, opts)
 }
 
@@ -558,11 +559,6 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		}
 
 		return dirObjectInfo(bucket, object, data.Size(), opts.UserDefined), nil
-	}
-
-	// Validate put object input args.
-	if err = checkPutObjectArgs(ctx, bucket, object, xl, data.Size()); err != nil {
-		return ObjectInfo{}, err
 	}
 
 	// Validate input data size and it can never be less than zero.
