@@ -824,6 +824,199 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string, wri
 	return reduceWriteQuorumErrs(ctx, dErrs, objectOpIgnoredErrs, writeQuorum)
 }
 
+// deleteObject - wrapper for delete object, deletes an object from
+// all the disks in parallel, including `xl.json` associated with the
+// object.
+func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects []string, errs []error, writeQuorums []int, isDirs []bool) ([]error, error) {
+	var tmpObjs = make([]string, len(objects))
+	var disks = xl.getDisks()
+
+	if bucket == minioMetaTmpBucket {
+		copy(tmpObjs, objects)
+	} else {
+		for i, object := range objects {
+			if errs[i] != nil {
+				continue
+			}
+			var err error
+			tmpObjs[i] = mustGetUUID()
+			// Rename the current object while requiring write quorum, but also consider
+			// that a non found object in a given disk as a success since it already
+			// confirms that the object doesn't have a part in that disk (already removed)
+			if isDirs[i] {
+				disks, err = rename(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, tmpObjs[i], true, writeQuorums[i],
+					[]error{errFileNotFound, errFileAccessDenied})
+			} else {
+				disks, err = rename(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, tmpObjs[i], true, writeQuorums[i],
+					[]error{errFileNotFound})
+			}
+			if err != nil {
+				errs[i] = err
+			}
+		}
+	}
+
+	// Initialize sync waitgroup.
+	var wg = &sync.WaitGroup{}
+	// Initialize list of errors.
+	var opErrs = make([]error, len(disks))
+	var delObjErrs = make([][]error, len(disks))
+
+	for index, disk := range disks {
+		if disk == nil {
+			opErrs[index] = errDiskNotFound
+			continue
+		}
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			delObjErrs[index], opErrs[index] = cleanupObjectsBulk(ctx, disk, minioMetaTmpBucket, tmpObjs, errs)
+			if opErrs[index] == errVolumeNotFound {
+				opErrs[index] = nil
+			}
+		}(index, disk)
+	}
+
+	// Wait for all routines to finish.
+	wg.Wait()
+
+	// Return errors if any during deletion
+	if err := reduceWriteQuorumErrs(ctx, opErrs, objectOpIgnoredErrs, len(xl.getDisks())/2+1); err != nil {
+		return nil, err
+	}
+
+	// Reduce errors for each object
+	for objIndex := range objects {
+		if errs[objIndex] != nil {
+			continue
+		}
+		listErrs := make([]error, len(xl.getDisks()))
+		for i := range delObjErrs {
+			if delObjErrs[i] != nil {
+				listErrs[i] = delObjErrs[i][objIndex]
+			}
+		}
+		errs[objIndex] = reduceWriteQuorumErrs(ctx, listErrs, objectOpIgnoredErrs, writeQuorums[objIndex])
+	}
+
+	return errs, nil
+}
+
+func (xl xlObjects) deleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	writeQuorums := make([]int, len(objects))
+	isObjectDirs := make([]bool, len(objects))
+
+	for i, object := range objects {
+		errs[i] = checkDelObjArgs(ctx, bucket, object)
+	}
+
+	var objectLocks = make([]RWLocker, len(objects))
+
+	for i, object := range objects {
+		if errs[i] != nil {
+			continue
+		}
+		// Acquire a write lock before deleting the object.
+		objectLocks[i] = xl.nsMutex.NewNSLock(bucket, object)
+		if errs[i] = objectLocks[i].GetLock(globalOperationTimeout); errs[i] != nil {
+			continue
+		}
+		defer objectLocks[i].Unlock()
+	}
+
+	for i, object := range objects {
+		isObjectDirs[i] = hasSuffix(object, slashSeparator)
+	}
+
+	for i, object := range objects {
+		if isObjectDirs[i] {
+			_, err := xl.getObjectInfoDir(ctx, bucket, object)
+			if err == errXLReadQuorum {
+				if isObjectDirDangling(statAllDirs(ctx, xl.getDisks(), bucket, object)) {
+					// If object is indeed dangling, purge it.
+					errs[i] = nil
+				}
+			}
+			if err != nil {
+				errs[i] = toObjectErr(err, bucket, object)
+				continue
+			}
+		}
+	}
+
+	for i, object := range objects {
+		if errs[i] != nil {
+			continue
+		}
+		if isObjectDirs[i] {
+			writeQuorums[i] = len(xl.getDisks())/2 + 1
+		} else {
+			var err error
+			// Read metadata associated with the object from all disks.
+			partsMetadata, readXLErrs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
+			// get Quorum for this object
+			_, writeQuorums[i], err = objectQuorumFromMeta(ctx, xl, partsMetadata, readXLErrs)
+			if err != nil {
+				errs[i] = toObjectErr(err, bucket, object)
+				continue
+			}
+		}
+	}
+
+	return xl.doDeleteObjects(ctx, bucket, objects, errs, writeQuorums, isObjectDirs)
+}
+
+// DeleteObjects deletes objects in bulk, this function will still automatically split objects list
+// into smaller bulks if some object names are found to be duplicated in the delete list, splitting
+// into smaller bulks will avoid holding twice the write lock of the duplicated object names.
+func (xl xlObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+
+	var (
+		i, start, end int
+		// Deletion result for all objects
+		deleteErrs []error
+		// Object names store will be used to check for object name duplication
+		objectNamesStore = make(map[string]interface{})
+	)
+
+	for {
+		if i >= len(objects) {
+			break
+		}
+
+		object := objects[i]
+
+		_, duplicationFound := objectNamesStore[object]
+		if duplicationFound {
+			end = i - 1
+		} else {
+			objectNamesStore[object] = true
+			end = i
+		}
+
+		if duplicationFound || i == len(objects)-1 {
+			errs, err := xl.deleteObjects(ctx, bucket, objects[start:end+1])
+			if err != nil {
+				return nil, err
+			}
+			deleteErrs = append(deleteErrs, errs...)
+			objectNamesStore = make(map[string]interface{})
+		}
+
+		if duplicationFound {
+			// Avoid to increase the index if object
+			// name is found to be duplicated.
+			start = i
+			end = i
+		} else {
+			i++
+		}
+	}
+
+	return deleteErrs, nil
+}
+
 // DeleteObject - deletes an object, this call doesn't necessary reply
 // any error as it is not necessary for the handler to reply back a
 // response to the client request.

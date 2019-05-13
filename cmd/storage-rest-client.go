@@ -356,6 +356,34 @@ func (client *storageRESTClient) DeleteFile(volume, path string) error {
 	return err
 }
 
+// DeleteFileBulk - deletes files in bulk.
+func (client *storageRESTClient) DeleteFileBulk(volume string, paths []string) (errs []error, err error) {
+	errs = make([]error, len(paths))
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	for _, path := range paths {
+		values.Add(storageRESTFilePath, path)
+	}
+	respBody, err := client.call(storageRESTMethodDeleteFileBulk, values, nil, -1)
+	defer http.DrainBody(respBody)
+
+	if err != nil {
+		return nil, err
+	}
+
+	bulkErrs := bulkErrorsResponse{}
+	gob.NewDecoder(respBody).Decode(&bulkErrs)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, dErr := range bulkErrs.Errs {
+		errs[i] = toStorageErr(dErr)
+	}
+
+	return errs, nil
+}
+
 // RenameFile - renames a file.
 func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
 	values := make(url.Values)

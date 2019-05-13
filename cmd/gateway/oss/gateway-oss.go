@@ -710,6 +710,14 @@ func (l *ossObjects) DeleteObject(ctx context.Context, bucket, object string) er
 	return nil
 }
 
+func (l *ossObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = l.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
+}
+
 // fromOSSClientListMultipartsInfo converts oss ListMultipartUploadResult to ListMultipartsInfo
 func fromOSSClientListMultipartsInfo(lmur oss.ListMultipartUploadResult) minio.ListMultipartsInfo {
 	uploads := make([]minio.MultipartInfo, len(lmur.Uploads))

@@ -1388,6 +1388,14 @@ func (s *posix) DeleteFile(volume, path string) (err error) {
 	return deleteFile(volumeDir, filePath)
 }
 
+func (s *posix) DeleteFileBulk(volume string, paths []string) (errs []error, err error) {
+	errs = make([]error, len(paths))
+	for idx, path := range paths {
+		errs[idx] = s.DeleteFile(volume, path)
+	}
+	return
+}
+
 // RenameFile - rename source path to destination path atomically.
 func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
 	defer func() {

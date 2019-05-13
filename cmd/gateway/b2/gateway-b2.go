@@ -595,6 +595,14 @@ func (l *b2Objects) DeleteObject(ctx context.Context, bucket string, object stri
 	return b2ToObjectError(err, bucket, object)
 }
 
+func (l *b2Objects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = l.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
+}
+
 // ListMultipartUploads lists all multipart uploads.
 func (l *b2Objects) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string,
 	delimiter string, maxUploads int) (lmi minio.ListMultipartsInfo, err error) {

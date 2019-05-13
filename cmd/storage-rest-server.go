@@ -47,6 +47,22 @@ func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error)
 	w.(http.Flusher).Flush()
 }
 
+type bulkErrorsResponse struct {
+	Errs []error `json:"errors"`
+}
+
+func (s *storageRESTServer) writeErrorsResponse(w http.ResponseWriter, errs []error) {
+	resp := bulkErrorsResponse{Errs: make([]error, len(errs))}
+	for idx, err := range errs {
+		if err == nil {
+			continue
+		}
+		resp.Errs[idx] = err
+	}
+	gob.NewEncoder(w).Encode(resp)
+	w.(http.Flusher).Flush()
+}
+
 // DefaultSkewTime - skew time is 15 minutes between minio peers.
 const DefaultSkewTime = 15 * time.Minute
 
@@ -391,6 +407,24 @@ func (s *storageRESTServer) DeleteFileHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// DeleteFileBulkHandler - delete a file.
+func (s *storageRESTServer) DeleteFileBulkHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := r.URL.Query()
+	volume := vars.Get(storageRESTVolume)
+	filePaths := vars[storageRESTFilePath]
+
+	errs, err := s.storage.DeleteFileBulk(volume, filePaths)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	s.writeErrorsResponse(w, errs)
+}
+
 // RenameFileHandler - rename a file.
 func (s *storageRESTServer) RenameFileHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -447,6 +481,9 @@ func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 			Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTCount, storageRESTLeafFile)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodDeleteFile).HandlerFunc(httpTraceHdrs(server.DeleteFileHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
+		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodDeleteFileBulk).HandlerFunc(httpTraceHdrs(server.DeleteFileBulkHandler)).
+			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
+
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodRenameFile).HandlerFunc(httpTraceHdrs(server.RenameFileHandler)).
 			Queries(restQueries(storageRESTSrcVolume, storageRESTSrcPath, storageRESTDstVolume, storageRESTDstPath)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodGetInstanceID).HandlerFunc(httpTraceAll(server.GetInstanceID))

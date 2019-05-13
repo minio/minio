@@ -35,6 +35,7 @@ const (
 	storageRESTMethodReadFileStream = "readfilestream"
 	storageRESTMethodListDir        = "listdir"
 	storageRESTMethodDeleteFile     = "deletefile"
+	storageRESTMethodDeleteFileBulk = "deletefilebulk"
 	storageRESTMethodRenameFile     = "renamefile"
 	storageRESTMethodGetInstanceID  = "getinstanceid"
 )

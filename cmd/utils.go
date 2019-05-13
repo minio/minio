@@ -474,3 +474,10 @@ func restQueries(keys ...string) []string {
 	}
 	return accumulator
 }
+
+// Reverse the input order of a slice of string
+func reverseStringSlice(input []string) {
+	for left, right := 0, len(input)-1; left < right; left, right = left+1, right-1 {
+		input[left], input[right] = input[right], input[left]
+	}
+}
