@@ -37,6 +37,7 @@ For this example, consider a server with 4 NKV disks (`/dev/nvme0n1` `/dev/nvme1
   "drive_iter_support_required" : 1,
   "iter_prefix_to_filter" : "meta",
   "nkv_listing_with_cached_keys" : 1,
+
   "nkv_num_path_per_container_to_iterate" : 0,
   "nkv_is_on_local_kv" : 1,
 
