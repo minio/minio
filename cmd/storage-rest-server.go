@@ -415,6 +415,7 @@ func (s *storageRESTServer) WalkHandler(w http.ResponseWriter, r *http.Request) 
 	}
 	defer w.(http.Flusher).Flush()
 
+	w.Header().Set("Connection", "close") // Pro-actively ask client to close this connection.
 	encoder := gob.NewEncoder(w)
 	for fi := range fch {
 		encoder.Encode(&fi)
