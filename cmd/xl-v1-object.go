@@ -22,7 +22,6 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"strconv"
 	"sync"
 
 	"github.com/minio/minio/cmd/logger"
@@ -574,9 +573,6 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		return ObjectInfo{}, toObjectErr(errFileParentIsFile, bucket, object)
 	}
 
-	// Limit the reader to its provided size if specified.
-	var reader io.Reader = data
-
 	// Initialize parts metadata
 	partsMetadata := make([]xlMetaV1, len(xl.getDisks()))
 
@@ -588,10 +584,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	}
 
 	// Order disks according to erasure distribution
-	onlineDisks := shuffleDisks(xl.getDisks(), partsMetadata[0].Erasure.Distribution)
-
-	// Total size of the written object
-	var sizeWritten int64
+	onlineDisks := shuffleDisks(xl.getDisks(), xlMeta.Erasure.Distribution)
 
 	erasure, err := NewErasure(ctx, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xlMeta.Erasure.BlockSize)
 	if err != nil {
@@ -615,82 +608,37 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		buffer = buffer[:xlMeta.Erasure.BlockSize]
 	}
 
-	// Read data and split into parts - similar to multipart mechanism
-	for partIdx := 1; ; partIdx++ {
-		// Compute part name
-		partName := "part." + strconv.Itoa(partIdx)
-		// Compute the path of current part
-		tempErasureObj := pathJoin(uniqueID, partName)
+	partName := "part.1"
+	tempErasureObj := pathJoin(uniqueID, partName)
 
-		// Calculate the size of the current part.
-		var curPartSize int64
-		curPartSize, err = calculatePartSizeFromIdx(ctx, data.Size(), globalPutPartSize, partIdx)
-		if err != nil {
-			logger.LogIf(ctx, err)
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
+	writers := make([]io.Writer, len(onlineDisks))
+	for i, disk := range onlineDisks {
+		if disk == nil {
+			continue
 		}
+		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj, erasure.ShardFileSize(data.Size()), DefaultBitrotAlgorithm, erasure.ShardSize())
+	}
 
-		// Hint the filesystem to pre-allocate one continuous large block.
-		// This is only an optimization.
-		var curPartReader io.Reader
+	n, erasureErr := erasure.Encode(ctx, data, writers, buffer, erasure.dataBlocks+1)
+	closeBitrotWriters(writers)
+	if erasureErr != nil {
+		return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)
+	}
 
-		if curPartSize < data.Size() {
-			curPartReader = io.LimitReader(reader, curPartSize)
-		} else {
-			curPartReader = reader
+	// Should return IncompleteBody{} error when reader has fewer bytes
+	// than specified in request header.
+	if n < data.Size() {
+		logger.LogIf(ctx, IncompleteBody{})
+		return ObjectInfo{}, IncompleteBody{}
+	}
+
+	for i, w := range writers {
+		if w == nil {
+			onlineDisks[i] = nil
+			continue
 		}
-
-		writers := make([]io.Writer, len(onlineDisks))
-		for i, disk := range onlineDisks {
-			if disk == nil {
-				continue
-			}
-			writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj, erasure.ShardFileSize(curPartSize), DefaultBitrotAlgorithm, erasure.ShardSize())
-		}
-
-		n, erasureErr := erasure.Encode(ctx, curPartReader, writers, buffer, erasure.dataBlocks+1)
-		// Note: we should not be defer'ing the following closeBitrotWriters() call as we are inside a for loop i.e if we use defer, we would accumulate a lot of open files by the time
-		// we return from this function.
-		closeBitrotWriters(writers)
-		if erasureErr != nil {
-			return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)
-		}
-
-		// Should return IncompleteBody{} error when reader has fewer bytes
-		// than specified in request header.
-
-		if n < curPartSize && data.Size() > 0 {
-			logger.LogIf(ctx, IncompleteBody{})
-			return ObjectInfo{}, IncompleteBody{}
-		}
-
-		if n == 0 && data.Size() == -1 {
-			// The last part of a compressed object will always be empty
-			// Since the compressed size is unpredictable.
-			// Hence removing the last (empty) part from all `xl.disks`.
-			dErr := xl.deleteObject(ctx, minioMetaTmpBucket, tempErasureObj, writeQuorum, true)
-			if dErr != nil {
-				return ObjectInfo{}, toObjectErr(dErr, minioMetaTmpBucket, tempErasureObj)
-			}
-			break
-		}
-
-		// Update the total written size
-		sizeWritten += n
-
-		for i, w := range writers {
-			if w == nil {
-				onlineDisks[i] = nil
-				continue
-			}
-			partsMetadata[i].AddObjectPart(partIdx, partName, "", n, data.ActualSize())
-			partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, DefaultBitrotAlgorithm, bitrotWriterSum(w)})
-		}
-
-		// We wrote everything, break out.
-		if sizeWritten == data.Size() {
-			break
-		}
+		partsMetadata[i].AddObjectPart(1, partName, "", n, data.ActualSize())
+		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, DefaultBitrotAlgorithm, bitrotWriterSum(w)})
 	}
 
 	// Save additional erasureMetadata.
@@ -728,7 +676,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// Update `xl.json` content on each disks.
 	for index := range partsMetadata {
 		partsMetadata[index].Meta = opts.UserDefined
-		partsMetadata[index].Stat.Size = sizeWritten
+		partsMetadata[index].Stat.Size = n
 		partsMetadata[index].Stat.ModTime = modTime
 	}
 
@@ -758,7 +706,6 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		UserDefined:     xlMeta.Meta,
 	}
 
-	// Success, return object info.
 	return objInfo, nil
 }
 

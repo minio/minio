@@ -311,9 +311,9 @@ func TestDisksWithAllParts(t *testing.T) {
 
 	diskFailures := make(map[int]string)
 	// key = disk index, value = part name with hash mismatch
-	diskFailures[0] = "part.3"
+	diskFailures[0] = "part.1"
 	diskFailures[3] = "part.1"
-	diskFailures[15] = "part.2"
+	diskFailures[15] = "part.1"
 
 	for diskIndex, partName := range diskFailures {
 		for _, info := range partsMetadata[diskIndex].Erasure.Checksums {
@@ -354,5 +354,4 @@ func TestDisksWithAllParts(t *testing.T) {
 
 		}
 	}
-
 }
