@@ -37,7 +37,11 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.8.5 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.1 // indirect
+<<<<<<< HEAD
 	github.com/hashicorp/go-msgpack v0.5.4 // indirect
+=======
+	github.com/hashicorp/go-msgpack v0.5.5 // indirect
+>>>>>>> Adjusts help content dynamically according to OS
 	github.com/hashicorp/go-rootcerts v1.0.0 // indirect
 	github.com/hashicorp/raft v1.0.1 // indirect
 	github.com/hashicorp/vault v1.1.0
@@ -55,9 +59,14 @@ require (
 	github.com/mattn/go-runewidth v0.0.4 // indirect
 	github.com/miekg/dns v1.1.8
 	github.com/minio/blazer v0.0.0-20171126203752-2081f5bf0465
+<<<<<<< HEAD
 	github.com/minio/cli v1.3.0
 	github.com/minio/dsync v1.0.0
 	github.com/minio/hdfs/v3 v3.0.0
+=======
+	github.com/minio/cli v1.20.0
+	github.com/minio/dsync v0.0.0-20190131060523-fb604afd87b2
+>>>>>>> Adjusts help content dynamically according to OS
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/lsync v0.0.0-20190207022115-a4e43e3d0887
 	github.com/minio/mc v0.0.0-20190401030144-a1355e50e2e8

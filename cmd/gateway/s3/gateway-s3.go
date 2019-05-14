@@ -77,38 +77,38 @@ ENVIRONMENT VARIABLES:
 
 EXAMPLES:
   1. Start minio gateway server for AWS S3 backend.
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ {{.HelpName}}
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.HelpName}}
 
   2. Start minio gateway server for S3 backend on custom endpoint.
-     $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
-     $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-     $ {{.HelpName}} https://play.min.io:9000
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}Q3AM3UQ867SPQQA43P2F
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+     {{.Prompt}} {{.HelpName}} https://play.min.io:9000
 
   3. Start minio gateway server for AWS S3 backend logging all requests to http endpoint.
-     $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
-     $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-     $ export MINIO_LOGGER_HTTP_ENDPOINT="http://localhost:8000/"
-     $ {{.HelpName}} https://play.min.io:9000
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}Q3AM3UQ867SPQQA43P2F
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}"http://localhost:8000/"
+     {{.Prompt}} {{.HelpName}} https://play.min.io:9000
 
   4. Start minio gateway server for AWS S3 backend with edge caching enabled.
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-     $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
-     $ export MINIO_CACHE_EXPIRY=40
-     $ export MINIO_CACHE_MAXUSE=80
-     $ {{.HelpName}}
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}"/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}"bucket1/*;*.png"
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}40
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}80
+     {{.Prompt}} {{.HelpName}}
 
   4. Start minio gateway server for AWS S3 backend using AWS environment variables.
      NOTE: The access and secret key in this case will authenticate with MinIO instead
      of AWS and AWS envs will be used to authenticate to AWS S3.
-     $ export AWS_ACCESS_KEY_ID=aws_access_key
-     $ export AWS_SECRET_ACCESS_KEY=aws_secret_key
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ {{.HelpName}}
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}aws_access_key
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}aws_secret_key
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.HelpName}}
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
