@@ -803,29 +803,21 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 		}
 	}
 
-	// Initialize sync waitgroup.
-	var wg = &sync.WaitGroup{}
 	// Initialize list of errors.
 	var opErrs = make([]error, len(disks))
 	var delObjErrs = make([][]error, len(disks))
 
+	// Remove objects in bulk for each disk
 	for index, disk := range disks {
 		if disk == nil {
 			opErrs[index] = errDiskNotFound
 			continue
 		}
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			delObjErrs[index], opErrs[index] = cleanupObjectsBulk(ctx, disk, minioMetaTmpBucket, tmpObjs, errs)
-			if opErrs[index] == errVolumeNotFound {
-				opErrs[index] = nil
-			}
-		}(index, disk)
+		delObjErrs[index], opErrs[index] = cleanupObjectsBulk(ctx, disk, minioMetaTmpBucket, tmpObjs, errs)
+		if opErrs[index] == errVolumeNotFound {
+			opErrs[index] = nil
+		}
 	}
-
-	// Wait for all routines to finish.
-	wg.Wait()
 
 	// Return errors if any during deletion
 	if err := reduceWriteQuorumErrs(ctx, opErrs, objectOpIgnoredErrs, len(xl.getDisks())/2+1); err != nil {
