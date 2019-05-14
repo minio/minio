@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	slashpath "path"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -45,7 +46,9 @@ const (
 	diskMinTotalSpace   = diskMinFreeSpace      // Min 900MiB total space.
 	maxAllowedIOError   = 5
 	posixWriteBlockSize = 4 * humanize.MiByte
-	directioAlignSize   = 4096 // DirectIO alignment needs to be 4K. Defined here as directio.AlignSize is defined as 0 in MacOS causing divide by 0 error.
+	// DirectIO alignment needs to be 4K. Defined here as
+	// directio.AlignSize is defined as 0 in MacOS causing divide by 0 error.
+	directioAlignSize = 4096
 )
 
 // isValidVolname verifies a volname name in accordance with object
@@ -640,6 +643,85 @@ func (s *posix) DeleteVol(volume string) (err error) {
 		}
 	}
 	return nil
+}
+
+// Walk - is a sorted walker which returns file entries in lexically
+// sorted order, additionally along with metadata about each of those entries.
+func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile string,
+	readMetadataFn readMetadataFunc, endWalkCh chan struct{}) (ch chan FileInfo, err error) {
+
+	defer func() {
+		if err == errFaultyDisk {
+			atomic.AddInt32(&s.ioErrCount, 1)
+		}
+	}()
+
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
+		return nil, errFaultyDisk
+	}
+
+	if err = s.checkDiskFound(); err != nil {
+		return nil, err
+	}
+
+	// Verify if volume is valid and it exists.
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return nil, err
+	}
+
+	// Stat a volume entry.
+	_, err = os.Stat(volumeDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errVolumeNotFound
+		} else if isSysErrIO(err) {
+			return nil, errFaultyDisk
+		}
+		return nil, err
+	}
+
+	ch = make(chan FileInfo)
+	go func() {
+		defer close(ch)
+		listDir := func(volume, dirPath, dirEntry string) (entries []string) {
+			entries, err := s.ListDir(volume, dirPath, -1, leafFile)
+			if err != nil {
+				return
+			}
+			sort.Strings(entries)
+			return filterMatchingPrefix(entries, dirEntry)
+		}
+
+		walkResultCh := startTreeWalk(context.Background(), volume, dirPath, marker, recursive, listDir, endWalkCh)
+		for {
+			walkResult, ok := <-walkResultCh
+			if !ok {
+				return
+			}
+			var fi FileInfo
+			if hasSuffix(walkResult.entry, slashSeparator) {
+				fi = FileInfo{
+					Volume: volume,
+					Name:   walkResult.entry,
+					Mode:   os.ModeDir,
+				}
+			} else {
+				buf, err := s.ReadAll(volume, pathJoin(walkResult.entry, leafFile))
+				if err != nil {
+					continue
+				}
+				fi = readMetadataFn(buf, volume, walkResult.entry)
+			}
+			select {
+			case ch <- fi:
+			case <-endWalkCh:
+				return
+			}
+		}
+	}()
+
+	return ch, nil
 }
 
 // ListDir - return all the entries at the given directory path.

@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/http"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -76,8 +75,8 @@ type xlSets struct {
 	// Distribution algorithm of choice.
 	distributionAlgo string
 
-	// Pack level listObjects pool management.
-	listPool *TreeWalkPool
+	// Merge tree walk
+	pool *MergeWalkPool
 }
 
 // isConnected - checks if the endpoint is connected or not.
@@ -270,7 +269,7 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 		format:             format,
 		disksConnectDoneCh: make(chan struct{}),
 		distributionAlgo:   format.XL.DistributionAlgo,
-		listPool:           NewTreeWalkPool(globalLookupTimeout),
+		pool:               NewMergeWalkPool(globalMergeLookupTimeout),
 	}
 
 	mutex := newNSLock(globalIsDistXL)
@@ -698,7 +697,6 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 }
 
 // Returns function "listDir" of the type listDirFunc.
-// isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir(). Sets passes set of disks.
 func listDirSetsFactory(ctx context.Context, sets ...*xlObjects) ListDirFunc {
 	listDirInternal := func(bucket, prefixDir, prefixEntry string, disks []StorageAPI) (mergedEntries []string) {
@@ -765,23 +763,240 @@ func listDirSetsFactory(ctx context.Context, sets ...*xlObjects) ListDirFunc {
 	return listDir
 }
 
-// ListObjects - implements listing of objects across sets, each set is independently
-// listed and subsequently merge lexically sorted inside listDirSetsFactory(). Resulting
-// value through the walk channel receives the data properly lexically sorted.
-func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	listDir := listDirSetsFactory(ctx, s.sets...)
+// FileInfoCh - file info channel
+type FileInfoCh struct {
+	Ch    chan FileInfo
+	Prev  FileInfo
+	Valid bool
+}
 
-	var getObjectInfoDirs []func(context.Context, string, string) (ObjectInfo, error)
-	// Verify prefixes in all sets.
+// Pop - pops a cached entry if any, or from the cached channel.
+func (f *FileInfoCh) Pop() (fi FileInfo, ok bool) {
+	if f.Valid {
+		f.Valid = false
+		return f.Prev, true
+	} // No cached entries found, read from channel
+	f.Prev, ok = <-f.Ch
+	return f.Prev, ok
+}
+
+// Push - cache an entry, for Pop() later.
+func (f *FileInfoCh) Push(fi FileInfo) {
+	f.Prev = fi
+	f.Valid = true
+}
+
+// Calculate least entry across multiple FileInfo channels, additionally
+// returns a boolean to indicate if the caller needs to call again.
+func leastEntry(entriesCh []FileInfoCh, readQuorum int) (FileInfo, bool) {
+	var entriesValid = make([]bool, len(entriesCh))
+	var entries = make([]FileInfo, len(entriesCh))
+	for i := range entriesCh {
+		entries[i], entriesValid[i] = entriesCh[i].Pop()
+	}
+
+	var isTruncated = false
+	for _, valid := range entriesValid {
+		if !valid {
+			continue
+		}
+		isTruncated = true
+		break
+	}
+
+	var lentry FileInfo
+	var found bool
+	for i, valid := range entriesValid {
+		if !valid {
+			continue
+		}
+		if !found {
+			lentry = entries[i]
+			found = true
+			continue
+		}
+		if entries[i].Name < lentry.Name {
+			lentry = entries[i]
+		}
+	}
+
+	// We haven't been able to find any least entry,
+	// this would mean that we don't have valid.
+	if !found {
+		return lentry, isTruncated
+	}
+
+	leastEntryCount := 0
+	for i, valid := range entriesValid {
+		if !valid {
+			continue
+		}
+
+		// Entries are duplicated across disks,
+		// we should simply skip such entries.
+		if lentry.Name == entries[i].Name && lentry.ModTime.Equal(entries[i].ModTime) {
+			leastEntryCount++
+			continue
+		}
+
+		// Push all entries which are lexically higher
+		// and will be returned later in Pop()
+		entriesCh[i].Push(entries[i])
+	}
+
+	quorum := lentry.Quorum
+	if quorum == 0 {
+		quorum = readQuorum
+	}
+
+	if leastEntryCount >= quorum {
+		return lentry, isTruncated
+	}
+
+	return leastEntry(entriesCh, readQuorum)
+}
+
+// mergeEntriesCh - merges FileInfo channel to entries upto maxKeys.
+func mergeEntriesCh(entriesCh []FileInfoCh, maxKeys int, readQuorum int) (entries FilesInfo) {
+	for i := 0; i < maxKeys; {
+		var fi FileInfo
+		fi, entries.IsTruncated = leastEntry(entriesCh, readQuorum)
+		if !entries.IsTruncated {
+			break
+		}
+		entries.Files = append(entries.Files, fi)
+		i++
+	}
+	return entries
+}
+
+// Starts a walk channel across all disks and returns a slice.
+func (s *xlSets) startMergeWalks(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh chan struct{}) []FileInfoCh {
+	var entryChs []FileInfoCh
 	for _, set := range s.sets {
-		getObjectInfoDirs = append(getObjectInfoDirs, set.getObjectInfoDir)
+		for _, disk := range set.getDisks() {
+			if disk == nil {
+				// Disk can be offline
+				continue
+			}
+			entryCh, err := disk.Walk(bucket, prefix, marker, recursive, xlMetaJSONFile, readMetadata, endWalkCh)
+			if err != nil {
+				// Disk walk returned error, ignore it.
+				continue
+			}
+			entryChs = append(entryChs, FileInfoCh{
+				Ch: entryCh,
+			})
+		}
+	}
+	return entryChs
+}
+
+// ListObjects - implements listing of objects across disks, each disk is indepenently
+// walked and merged at this layer. Resulting value through the merge process sends
+// the data in lexically sorted order.
+func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
+	if err = checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
+		return loi, err
 	}
 
-	var getObjectInfo = func(ctx context.Context, bucket string, entry string) (ObjectInfo, error) {
-		return s.getHashedSet(entry).getObjectInfo(ctx, bucket, entry)
+	// Marker is set validate pre-condition.
+	if marker != "" {
+		// Marker not common with prefix is not implemented. Send an empty response
+		if !hasPrefix(marker, prefix) {
+			return loi, nil
+		}
 	}
 
-	return listObjects(ctx, s, bucket, prefix, marker, delimiter, maxKeys, s.listPool, listDir, getObjectInfo, getObjectInfoDirs...)
+	// With max keys of zero we have reached eof, return right here.
+	if maxKeys == 0 {
+		return loi, nil
+	}
+
+	// For delimiter and prefix as '/' we do not list anything at all
+	// since according to s3 spec we stop at the 'delimiter'
+	// along // with the prefix. On a flat namespace with 'prefix'
+	// as '/' we don't have any entries, since all the keys are
+	// of form 'keyName/...'
+	if delimiter == slashSeparator && prefix == slashSeparator {
+		return loi, nil
+	}
+
+	// Over flowing count - reset to maxObjectList.
+	if maxKeys < 0 || maxKeys > maxObjectList {
+		maxKeys = maxObjectList
+	}
+
+	// Default is recursive, if delimiter is set then list non recursive.
+	recursive := true
+	if delimiter == slashSeparator {
+		recursive = false
+	}
+
+	entryChs, endWalkCh := s.pool.Release(listParams{bucket, recursive, marker, prefix})
+	if entryChs == nil {
+		endWalkCh = make(chan struct{})
+		entryChs = s.startMergeWalks(context.Background(), bucket, prefix, marker, recursive, endWalkCh)
+	}
+
+	entries := mergeEntriesCh(entryChs, maxKeys, s.drivesPerSet/2)
+	if len(entries.Files) == 0 {
+		return loi, nil
+	}
+
+	loi.Objects = make([]ObjectInfo, len(entries.Files))
+	loi.IsTruncated = entries.IsTruncated
+	if loi.IsTruncated {
+		loi.NextMarker = entries.Files[len(entries.Files)-1].Name
+	}
+
+	for _, entry := range entries.Files {
+		var objInfo ObjectInfo
+		if hasSuffix(entry.Name, slashSeparator) {
+			if !recursive {
+				loi.Prefixes = append(loi.Prefixes, entry.Name)
+				continue
+			}
+			objInfo = ObjectInfo{
+				Bucket: bucket,
+				Name:   entry.Name,
+				IsDir:  true,
+			}
+		} else {
+			objInfo = ObjectInfo{
+				IsDir:           false,
+				Bucket:          bucket,
+				Name:            entry.Name,
+				ModTime:         entry.ModTime,
+				Size:            entry.Size,
+				ContentType:     entry.Metadata["content-type"],
+				ContentEncoding: entry.Metadata["content-encoding"],
+			}
+
+			// Extract etag from metadata.
+			objInfo.ETag = extractETag(entry.Metadata)
+
+			// All the parts per object.
+			objInfo.Parts = entry.Parts
+
+			// etag/md5Sum has already been extracted. We need to
+			// remove to avoid it from appearing as part of
+			// response headers. e.g, X-Minio-* or X-Amz-*.
+			objInfo.UserDefined = cleanMetadata(entry.Metadata)
+
+			// Update storage class
+			if sc, ok := entry.Metadata[amzStorageClass]; ok {
+				objInfo.StorageClass = sc
+			} else {
+				objInfo.StorageClass = globalMinioDefaultStorageClass
+			}
+		}
+		loi.Objects = append(loi.Objects, objInfo)
+	}
+	if loi.IsTruncated {
+		s.pool.Set(listParams{bucket, recursive, loi.NextMarker, prefix}, entryChs, endWalkCh)
+	}
+	return loi, nil
 }
 
 func (s *xlSets) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error) {
@@ -1301,7 +1516,7 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObj
 		if !ok {
 			break
 		}
-		if err := healObjectFn(bucket, strings.TrimSuffix(walkResult.entry, slashSeparator+xlMetaJSONFile)); err != nil {
+		if err := healObjectFn(bucket, walkResult.entry); err != nil {
 			return toObjectErr(err, bucket, walkResult.entry)
 		}
 		if walkResult.end {
