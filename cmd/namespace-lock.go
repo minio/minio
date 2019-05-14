@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"math"
 	pathutil "path"
 	"runtime"
 	"strings"
@@ -40,8 +41,8 @@ var globalNSMutex *nsLockMap
 // Global lock server one per server.
 var globalLockServer *lockRESTServer
 
-// Instance of dsync for distributed clients.
-var globalDsync *dsync.Dsync
+// Instance of dsyncs for distributed clients.
+var globalDsyncs []*dsync.Dsync
 
 // RWLocker - locker interface to introduce GetRLock, RUnlock.
 type RWLocker interface {
@@ -49,6 +50,96 @@ type RWLocker interface {
 	Unlock()
 	GetRLock(timeout *dynamicTimeout) (timedOutErr error)
 	RUnlock()
+}
+
+// Supported lock sets sizes this is used to find the optimal
+// single lock set size.
+var lockSetSizes = []int{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+
+// Find the optimal lock size for total number of nodes in
+// a cluster. This function returns the optimal set size
+// required per lock set, remainder size is not 0 only if
+// the clusterSize is divisible properly by lockSetSizes.
+func getLockSetSize(clusterSize int) (setSize, remainderSize int) {
+	even := clusterSize%2 == 0
+	if clusterSize > lockSetSizes[len(setSizes)-1] {
+		prevD := clusterSize / lockSetSizes[0]
+		prevR := clusterSize % lockSetSizes[0]
+		for _, i := range lockSetSizes {
+			if clusterSize%i == 0 {
+				d := clusterSize / i
+				if d <= prevD {
+					prevD = d
+					setSize = i
+				}
+			} else if !even {
+				r := clusterSize % i
+				if r >= prevR {
+					setSize = i
+					prevR = r
+				}
+			}
+
+		}
+	} else {
+		setSize = clusterSize
+	}
+	if clusterSize%setSize != 0 {
+		remainderSize = clusterSize - setSize
+	}
+	return setSize, remainderSize
+}
+
+// dsyncNew - initialize sets based dsync clients for performing lock operations.
+func dsyncNew(endpoints EndpointList) (dsyncs []*dsync.Dsync, err error) {
+	lockers, mynode := newDsyncNodes(endpoints)
+	if len(lockers) <= lockSetSizes[len(lockSetSizes)-1] {
+		var ds *dsync.Dsync
+		ds, err = dsync.New(lockers, mynode)
+		if err != nil {
+			return nil, err
+		}
+		dsyncs = append(dsyncs, ds)
+		return dsyncs, nil
+	}
+
+	// Find the right lock set size, and remainder size if any.
+	setSize, remainderSize := getLockSetSize(len(lockers))
+
+	floorLockCount := int(math.Floor(float64(len(lockers)) / float64(setSize)))
+	var lastLockers []dsync.NetLocker
+	if remainderSize > 0 {
+		// Remainder size if greater than zero should be used
+		// to get the proper last remaining lockers.
+		lastLockers = lockers[(floorLockCount * int(setSize)):]
+	}
+
+	var setLockers [][]dsync.NetLocker
+	for j := 0; j < floorLockCount; j++ {
+		var tmpLockers []dsync.NetLocker
+		for i := 0; i < setSize; i++ {
+			tmpLockers = append(tmpLockers, lockers[j*setSize+i])
+		}
+		setLockers = append(setLockers, tmpLockers)
+	}
+
+	if len(lastLockers) > 0 {
+		setLockers = append(setLockers, lastLockers)
+	}
+
+	for _, lockers := range setLockers {
+		if mynode >= setSize {
+			mynode = mynode - setSize
+		}
+		var ds *dsync.Dsync
+		ds, err = dsync.New(lockers, mynode)
+		if err != nil {
+			return nil, err
+		}
+		dsyncs = append(dsyncs, ds)
+	}
+
+	return dsyncs, nil
 }
 
 // Initialize distributed locking only in case of distributed setup.
@@ -241,7 +332,7 @@ func (n *nsLockMap) ForceUnlock(volume, path string) {
 	//   are blocking can now proceed as normal and any new locks will also
 	//   participate normally.
 	if n.isDistXL { // For distributed mode, broadcast ForceUnlock message.
-		dsync.NewDRWMutex(context.Background(), pathJoin(volume, path), globalDsync).ForceUnlock()
+		dsync.NewDRWMutex(context.Background(), pathJoin(volume, path), n.getHashDsync(path)).ForceUnlock()
 	}
 
 	// Remove lock from the map.
@@ -296,13 +387,22 @@ type localLockInstance struct {
 	volume, path, opsID string
 }
 
+func (n *nsLockMap) getHashDsync(path string) *dsync.Dsync {
+	return globalDsyncs[n.getHashIndex(path)]
+}
+
+func (n *nsLockMap) getHashIndex(path string) int {
+	return hashKey("CRCMOD", path, len(globalDsyncs))
+}
+
 // NewNSLock - returns a lock instance for a given volume and
 // path. The returned lockInstance object encapsulates the nsLockMap,
 // volume, path and operation ID.
 func (n *nsLockMap) NewNSLock(ctx context.Context, volume, path string) RWLocker {
 	opsID := mustGetUUID()
 	if n.isDistXL {
-		return &distLockInstance{dsync.NewDRWMutex(ctx, pathJoin(volume, path), globalDsync), volume, path, opsID}
+		return &distLockInstance{dsync.NewDRWMutex(ctx, pathJoin(volume, path),
+			n.getHashDsync(path)), volume, path, opsID}
 	}
 	return &localLockInstance{ctx, n, volume, path, opsID}
 }

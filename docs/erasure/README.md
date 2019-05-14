@@ -30,10 +30,10 @@ Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quicksta
 
 ### 2. Run MinIO Server with Erasure Code
 
-Example: Start MinIO server in a 12 drives setup, using MinIO binary.
+Example: Start MinIO server in a 8 drives setup, using MinIO binary.
 
 ```sh
-minio server /data1 /data2 /data3 /data4 /data5 /data6 /data7 /data8 /data9 /data10 /data11 /data12
+minio server /data{1...8}
 ```
 
 Example: Start MinIO server in a 8 drives setup, using MinIO Docker image. 
@@ -48,7 +48,7 @@ docker run -p 9000:9000 --name minio \
   -v /mnt/data6:/data6 \
   -v /mnt/data7:/data7 \
   -v /mnt/data8:/data8 \
-  minio/minio server /data1 /data2 /data3 /data4 /data5 /data6 /data7 /data8
+  minio/minio server /data{1...8}
 ```
 
 ### 3. Test your setup

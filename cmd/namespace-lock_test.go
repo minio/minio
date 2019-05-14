@@ -18,23 +18,87 @@ package cmd
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 	"testing"
 	"time"
 )
 
 // WARNING:
 //
-// Expected source line number is hard coded, 32, in the
+// Expected source line number is hard coded, 34, in the
 // following test. Adding new code before this test or changing its
 // position will cause the line number to change and the test to FAIL
 // Tests getSource().
 func TestGetSource(t *testing.T) {
 	currentSource := func() string { return getSource() }
 	gotSource := currentSource()
-	// Hard coded line number, 32, in the "expectedSource" value
-	expectedSource := "[namespace-lock_test.go:33:TestGetSource()]"
+	// Hard coded line number, 34, in the "expectedSource" value
+	expectedSource := "[namespace-lock_test.go:34:TestGetSource()]"
 	if gotSource != expectedSource {
 		t.Errorf("expected : %s, got : %s", expectedSource, gotSource)
+	}
+}
+
+// Tests initializating dsync nodes with returned
+// results for clnts, mynode.
+func TestNewDsyncNodes(t *testing.T) {
+	tests := []struct {
+		endpoints  EndpointList
+		totalClnts int
+		clntNode   int
+	}{
+		{
+			endpoints: EndpointList{
+				Endpoint{URL: &url.URL{Host: "localhost1", Path: "/d1"}, IsLocal: true},
+				Endpoint{URL: &url.URL{Host: "localhost1", Path: "/d2"}, IsLocal: true},
+				Endpoint{URL: &url.URL{Host: "localhost1", Path: "/d3"}, IsLocal: true},
+				Endpoint{URL: &url.URL{Host: "localhost2", Path: "/d1"}, IsLocal: false},
+				Endpoint{URL: &url.URL{Host: "localhost2", Path: "/d2"}, IsLocal: false},
+				Endpoint{URL: &url.URL{Host: "localhost2", Path: "/d3"}, IsLocal: false},
+			},
+			totalClnts: 2,
+			clntNode:   0,
+		},
+		{
+			endpoints: EndpointList{
+				Endpoint{URL: &url.URL{Host: "localhost1", Path: "/d1"}, IsLocal: false},
+				Endpoint{URL: &url.URL{Host: "localhost1", Path: "/d2"}, IsLocal: false},
+				Endpoint{URL: &url.URL{Host: "localhost1", Path: "/d3"}, IsLocal: false},
+				Endpoint{URL: &url.URL{Host: "localhost2", Path: "/d1"}, IsLocal: true},
+				Endpoint{URL: &url.URL{Host: "localhost2", Path: "/d2"}, IsLocal: true},
+				Endpoint{URL: &url.URL{Host: "localhost2", Path: "/d3"}, IsLocal: true},
+			},
+			totalClnts: 2,
+			clntNode:   1,
+		},
+		{
+			endpoints: EndpointList{
+				Endpoint{URL: &url.URL{Host: "localhost1", Path: "/d1"}, IsLocal: false},
+				Endpoint{URL: &url.URL{Host: "localhost1", Path: "/d2"}, IsLocal: false},
+				Endpoint{URL: &url.URL{Host: "localhost1", Path: "/d3"}, IsLocal: false},
+				Endpoint{URL: &url.URL{Host: "localhost2", Path: "/d1"}, IsLocal: false},
+				Endpoint{URL: &url.URL{Host: "localhost2", Path: "/d2"}, IsLocal: false},
+				Endpoint{URL: &url.URL{Host: "localhost2", Path: "/d3"}, IsLocal: false},
+				Endpoint{URL: &url.URL{Host: "localhost3", Path: "/d1"}, IsLocal: true},
+				Endpoint{URL: &url.URL{Host: "localhost3", Path: "/d2"}, IsLocal: true},
+				Endpoint{URL: &url.URL{Host: "localhost3", Path: "/d3"}, IsLocal: true},
+			},
+			totalClnts: 3,
+			clntNode:   2,
+		},
+	}
+	for i, test := range tests {
+		test := test
+		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
+			clnts, mynode := newDsyncNodes(test.endpoints)
+			if len(clnts) != test.totalClnts {
+				t.Errorf("Expected %d, got %d", test.totalClnts, len(clnts))
+			}
+			if mynode != test.clntNode {
+				t.Errorf("Expected %d, got %d", test.clntNode, mynode)
+			}
+		})
 	}
 }
 

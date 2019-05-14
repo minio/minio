@@ -18,7 +18,7 @@ For example, an 16-node distributed MinIO setup with 16 disks per node would con
 
 ### Limits
 
-As with MinIO in stand-alone mode, distributed MinIO has a per tenant limit of minimum of 2 and maximum of 32 servers. There are no limits on number of disks across these servers. If you need a multiple tenant setup, you can easily spin up multiple MinIO instances managed by orchestration tools like Kubernetes, Docker Swarm etc.
+As with MinIO in stand-alone mode, distributed MinIO has a per tenant limit of minimum of 2 and maximum of unlimited servers. There are also no limits on number of disks across these servers. If you need a multiple tenant setup, you can easily spin up multiple MinIO instances managed by orchestration tools like Kubernetes, Docker Swarm etc.
 
 Note that with distributed MinIO you can play around with the number of nodes and drives as long as the limits are adhered to. For example, you can have 2 nodes with 4 drives each, 4 nodes with 4 drives each, 8 nodes with 2 drives each, 32 servers with 64 drives each and so on.
 
