@@ -1,4 +1,4 @@
-# Minio部署快速入门 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# Minio部署快速入门 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) 
 
 Minio是一个[云原生](https://baike.baidu.com/item/Cloud%20Native/19865304?fr=aladdin)的应用程序，旨在在多租户环境中以可持续的方式进行扩展。编排（orchestration）平台为Minio的扩展提供了非常好的支撑。以下是各种编排平台的Minio部署文档:
 
