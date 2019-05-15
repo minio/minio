@@ -101,36 +101,36 @@ ENVIRONMENT VARIABLES:
 
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
-     $ {{.HelpName}} /home/shared
+     {{.Prompt}} {{.HelpName}} /home/shared
 
   2. Start minio server bound to a specific ADDRESS:PORT.
-     $ {{.HelpName}} --address 192.168.1.101:9000 /home/shared
+     {{.Prompt}} {{.HelpName}} --address 192.168.1.101:9000 /home/shared
 
   3. Start minio server and enable virtual-host-style requests.
-     $ export MINIO_DOMAIN=mydomain.com
-     $ {{.HelpName}} --address mydomain.com:9000 /mnt/export
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_DOMAIN{{.AssignmentOperator}}mydomain.com
+     {{.Prompt}} {{.HelpName}} --address mydomain.com:9000 /mnt/export
 
   4. Start erasure coded minio server on a node with 64 drives.
-     $ {{.HelpName}} /mnt/export{1...64}
+     {{.Prompt}} {{.HelpName}} /mnt/export{1...64}
 
   5. Start distributed minio server on an 32 node setup with 32 drives each. Run following command on all the 32 nodes.
-     $ export MINIO_ACCESS_KEY=minio
-     $ export MINIO_SECRET_KEY=miniostorage
-     $ {{.HelpName}} http://node{1...32}.example.com/mnt/export/{1...32}
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}minio
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
+     {{.Prompt}} {{.HelpName}} http://node{1...32}.example.com/mnt/export/{1...32}
 
   6. Start minio server with edge caching enabled.
-     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-     $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
-     $ export MINIO_CACHE_EXPIRY=40
-     $ export MINIO_CACHE_MAXUSE=80
-     $ {{.HelpName}} /home/shared
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*;*.png"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXPIRY{{.AssignmentOperator}}40
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_MAXUSE{{.AssignmentOperator}}80
+     {{.Prompt}} {{.HelpName}} /home/shared
 
   7. Start minio server with KMS enabled.
-     $ export MINIO_SSE_VAULT_APPROLE_ID=9b56cc08-8258-45d5-24a3-679876769126
-     $ export MINIO_SSE_VAULT_APPROLE_SECRET=4e30c52f-13e4-a6f5-0763-d50e8cb4321f
-     $ export MINIO_SSE_VAULT_ENDPOINT=https://vault-endpoint-ip:8200
-     $ export MINIO_SSE_VAULT_KEY_NAME=my-minio-key
-     $ {{.HelpName}} /home/shared
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SSE_VAULT_APPROLE_ID{{.AssignmentOperator}}9b56cc08-8258-45d5-24a3-679876769126
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SSE_VAULT_APPROLE_SECRET{{.AssignmentOperator}}4e30c52f-13e4-a6f5-0763-d50e8cb4321f
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SSE_VAULT_ENDPOINT{{.AssignmentOperator}}https://vault-endpoint-ip:8200
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SSE_VAULT_KEY_NAME{{.AssignmentOperator}}my-minio-key
+     {{.Prompt}} {{.HelpName}} /home/shared
 `,
 }
 
