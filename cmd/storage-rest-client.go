@@ -256,11 +256,10 @@ func (client *storageRESTClient) CreateFile(volume, path string, length int64, r
 }
 
 // WriteAll - write all data to a file.
-func (client *storageRESTClient) WriteAll(volume, path string, buffer []byte) error {
+func (client *storageRESTClient) WriteAll(volume, path string, reader io.Reader) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	reader := bytes.NewBuffer(buffer)
 	respBody, err := client.call(storageRESTMethodWriteAll, values, reader, -1)
 	defer http.DrainBody(respBody)
 	return err

@@ -20,8 +20,10 @@ package ioutil
 
 import (
 	"io"
+	"os"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/pkg/disk"
 )
 
 // defaultAppendBufferSize - Default buffer size for the AppendFile
@@ -156,4 +158,94 @@ func (s *SkipReader) Read(p []byte) (int, error) {
 // NewSkipReader - creates a SkipReader
 func NewSkipReader(r io.Reader, n int64) io.Reader {
 	return &SkipReader{r, n}
+}
+
+// DirectIO alignment needs to be 4K. Defined here as
+// directio.AlignSize is defined as 0 in MacOS causing divide by 0 error.
+const directioAlignSize = 4096
+
+// CopyAligned - copies from reader to writer using the aligned input
+// buffer, it is expected that input buffer is page aligned to
+// 4K page boundaries. Without passing aligned buffer may cause
+// this function to return error.
+//
+// This code is similar in spirit to io.CopyBuffer but it is only to be
+// used with DIRECT I/O based file descriptor and it is expected that
+// input writer *os.File not a generic io.Writer. Make sure to have
+// the file opened for writes with syscall.O_DIRECT flag.
+func CopyAligned(w *os.File, r io.Reader, alignedBuf []byte) (int64, error) {
+	// Writes remaining bytes in the buffer.
+	writeUnaligned := func(w *os.File, buf []byte) (remainingWritten int, err error) {
+		var n int
+		remaining := len(buf)
+		// The following logic writes the remainging data such that it writes whatever best is possible (aligned buffer)
+		// in O_DIRECT mode and remaining (unaligned buffer) in non-O_DIRECT mode.
+		remainingAligned := (remaining / directioAlignSize) * directioAlignSize
+		remainingAlignedBuf := buf[:remainingAligned]
+		remainingUnalignedBuf := buf[remainingAligned:]
+		if len(remainingAlignedBuf) > 0 {
+			n, err = w.Write(remainingAlignedBuf)
+			if err != nil {
+				return remainingWritten, err
+			}
+			remainingWritten += n
+		}
+		if len(remainingUnalignedBuf) > 0 {
+			// Write on O_DIRECT fds fail if buffer is not 4K aligned, hence disable O_DIRECT.
+			if err = disk.DisableDirectIO(w); err != nil {
+				return remainingWritten, err
+			}
+			n, err = w.Write(remainingUnalignedBuf)
+			if err != nil {
+				return remainingWritten, err
+			}
+			remainingWritten += n
+		}
+		return remainingWritten, nil
+	}
+
+	var written int64
+	var err error
+	for {
+		nr, er := r.Read(alignedBuf)
+		if nr == len(alignedBuf) {
+			// Buffer read is aligned with input buffer, proceed to write.
+			nw, ew := w.Write(alignedBuf)
+			if nw > 0 {
+				written += int64(nw)
+			}
+			if ew != nil {
+				err = ew
+				break
+			}
+			if nr != nw {
+				err = io.ErrShortWrite
+				break
+			}
+		} else if nr > 0 {
+			// Buffer read is not aligned with input buffer, proceed to write
+			// whatever possible as aligned and turn off direct I/O.
+			nw, ew := writeUnaligned(w, alignedBuf[:nr])
+			if nw > 0 {
+				written += int64(nw)
+			}
+			if ew != nil {
+				err = ew
+				break
+			}
+			if nr != nw {
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		// For any read errors break out and return error.
+		if er != nil {
+			if er != io.EOF {
+				err = er
+			}
+			break
+		}
+	}
+
+	return written, err
 }
