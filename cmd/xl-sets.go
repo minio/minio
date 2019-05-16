@@ -944,7 +944,6 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		return loi, nil
 	}
 
-	loi.Objects = make([]ObjectInfo, len(entries.Files))
 	loi.IsTruncated = entries.IsTruncated
 	if loi.IsTruncated {
 		loi.NextMarker = entries.Files[len(entries.Files)-1].Name
