@@ -19,6 +19,7 @@ package gcs
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -830,12 +831,17 @@ func fromGCSAttrsToObjectInfo(attrs *storage.ObjectAttrs) minio.ObjectInfo {
 	if attrs.ContentLanguage != "" {
 		metadata["Content-Language"] = attrs.ContentLanguage
 	}
+
+	etag := hex.EncodeToString(attrs.MD5)
+	if etag == "" {
+		etag = minio.ToS3ETag(fmt.Sprintf("%d", attrs.CRC32C))
+	}
 	return minio.ObjectInfo{
 		Name:            attrs.Name,
 		Bucket:          attrs.Bucket,
 		ModTime:         attrs.Updated,
 		Size:            attrs.Size,
-		ETag:            minio.ToS3ETag(fmt.Sprintf("%d", attrs.CRC32C)),
+		ETag:            etag,
 		UserDefined:     metadata,
 		ContentType:     attrs.ContentType,
 		ContentEncoding: attrs.ContentEncoding,
