@@ -100,9 +100,8 @@ func NewClient(url *url.URL, tlsConfig *tls.Config, timeout time.Duration, newAu
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           newCustomDialContext(timeout),
-		MaxIdleConnsPerHost:   4096,
-		MaxIdleConns:          4096,
-		IdleConnTimeout:       120 * time.Second,
+		MaxIdleConnsPerHost:   256,
+		IdleConnTimeout:       60 * time.Second,
 		TLSHandshakeTimeout:   30 * time.Second,
 		ExpectContinueTimeout: 10 * time.Second,
 		TLSClientConfig:       tlsConfig,
