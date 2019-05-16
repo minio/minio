@@ -23,6 +23,7 @@ import (
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mem"
 )
 
@@ -86,7 +87,7 @@ func getLocalCPULoad(endpoints EndpointList, r *http.Request) ServerCPULoadInfo 
 
 // getLocalDrivesPerf - returns ServerDrivesPerfInfo for only the
 // local endpoints from given list of endpoints
-func getLocalDrivesPerf(endpoints EndpointList, r *http.Request) ServerDrivesPerfInfo {
+func getLocalDrivesPerf(endpoints EndpointList, size int64, r *http.Request) madmin.ServerDrivesPerfInfo {
 	var dps []disk.Performance
 	for _, endpoint := range endpoints {
 		// Only proceed for local endpoints
@@ -96,7 +97,7 @@ func getLocalDrivesPerf(endpoints EndpointList, r *http.Request) ServerDrivesPer
 				dps = append(dps, disk.Performance{Path: endpoint.Path, Error: err.Error()})
 				continue
 			}
-			dp := disk.GetPerformance(pathJoin(endpoint.Path, minioMetaTmpBucket, mustGetUUID()))
+			dp := disk.GetPerformance(pathJoin(endpoint.Path, minioMetaTmpBucket, mustGetUUID()), size)
 			dp.Path = endpoint.Path
 			dps = append(dps, dp)
 		}
@@ -105,7 +106,7 @@ func getLocalDrivesPerf(endpoints EndpointList, r *http.Request) ServerDrivesPer
 	if globalIsDistXL {
 		addr = GetLocalPeer(endpoints)
 	}
-	return ServerDrivesPerfInfo{
+	return madmin.ServerDrivesPerfInfo{
 		Addr: addr,
 		Perf: dps,
 	}
