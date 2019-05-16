@@ -1,4 +1,4 @@
-# 在 DC/OS上部署minio [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# 在 DC/OS上部署minio [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
 要在DC/OS上部署MinIO，可以使用我们的 [official universe package](https://github.com/mesosphere/universe/tree/version-3.x/repo/packages/M/minio/6).
 
@@ -9,7 +9,7 @@
   - 识别Marathon-LB或者一个指向Marathon-LB的public agent(s)的可用主机名的 [IP of the public agent](https://dcos.io/docs/1.9/administration/locate-public-agent/) 。
 
 
-## 2. 设置MinIO 
+## 2. 设置MinIO
 
 你可以使用DC/OS GUI或者CLI安装MinIO Universe package。
 
