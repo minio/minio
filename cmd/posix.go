@@ -1182,8 +1182,10 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 			return err
 		}
 	}
-	defer w.Sync() // Sync before close.
-	defer w.Close()
+	defer func() {
+		w.Sync() // Sync before close.
+		w.Close()
+	}()
 
 	var e error
 	if fileSize > 0 {
