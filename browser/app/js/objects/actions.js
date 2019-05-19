@@ -208,7 +208,8 @@ export const shareObject = (object, days, hours, minutes) => {
         .PresignedGet({
           host: location.host,
           bucket: currentBucket,
-          object: objectName
+          object: objectName,
+          expiry: expiry
         })
         .then(obj => {
           dispatch(showShareObject(object, obj.url))
