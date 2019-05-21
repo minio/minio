@@ -4,7 +4,7 @@ Minio for Samsung-NKV provides S3 API on top of Samsung-NKV Storage. Minio uses 
 
 ### Install NKV library
 
-Download [NKV library](https://dl.minio.io/server/minio/labs/samsung/nkv-sdk-bin-20190423.tgz) and run:
+Download [NKV library](https://dl.minio.io/server/minio/labs/samsung/) and run:
 
 ```
 tar -xzvf nkv-sdk.tgz
