@@ -17,10 +17,12 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/xml"
 	"errors"
 	"io"
 	"net/http"
+	"path"
 
 	"github.com/gorilla/mux"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -49,6 +51,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 
 	vars := mux.Vars(r)
 	bucketName := vars["bucket"]
+	var config *event.Config
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
@@ -72,24 +75,31 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	// Attempt to successfully load notification config.
-	nConfig, err := readNotificationConfig(ctx, objAPI, bucketName)
+	// Construct path to notification.xml for the given bucket.
+	configFile := path.Join(bucketConfigPrefix, bucketName, bucketNotificationConfig)
+
+	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
-		// Ignore errNoSuchNotifications to comply with AWS S3.
-		if err != errNoSuchNotifications {
+		if err != errConfigNotFound {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-
-		nConfig = &event.Config{}
+		config = &event.Config{}
+	} else {
+		if err = xml.NewDecoder(bytes.NewReader(configData)).Decode(&config); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
 	}
+
+	config.SetRegion(globalServerConfig.GetRegion())
 
 	// If xml namespace is empty, set a default value before returning.
-	if nConfig.XMLNS == "" {
-		nConfig.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
+	if config.XMLNS == "" {
+		config.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
 	}
 
-	notificationBytes, err := xml.Marshal(nConfig)
+	notificationBytes, err := xml.Marshal(config)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -143,9 +153,10 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		if event.IsEventError(err) {
 			apiErr = toAPIError(ctx, err)
 		}
-
-		writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
-		return
+		if _, ok := err.(*event.ErrARNNotFound); !ok {
+			writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
+			return
+		}
 	}
 
 	if err = saveNotificationConfig(ctx, objectAPI, bucketName, config); err != nil {
