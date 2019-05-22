@@ -40,7 +40,8 @@ describe("ChangePasswordModal", () => {
     memory: "test",
     platform: "test",
     runtime: "test",
-    info: { isEnvCreds: false }
+    info: { isEnvCreds: false },
+    userInfo: { isIAMUser: false }
   }
 
   it("should render without crashing", () => {
@@ -64,6 +65,15 @@ describe("ChangePasswordModal", () => {
     expect(wrapper.find("#secretKey").prop("readonly")).toBeTruthy()
     expect(wrapper.find("#generate-keys").hasClass("hidden")).toBeTruthy()
     expect(wrapper.find("#update-keys").hasClass("hidden")).toBeTruthy()
+  })
+
+  it("should not show Generate button for IAM user", () => {
+    const wrapper = shallow(
+      <ChangePasswordModal
+        serverInfo={{ ...serverInfo, userInfo: { isIAMUser: true } }}
+      />
+    )
+    expect(wrapper.find("#generate-keys").hasClass("hidden")).toBeTruthy()
   })
 
   it("should generate accessKey and secretKey when Generate buttons is clicked", () => {

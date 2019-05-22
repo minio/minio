@@ -42,7 +42,10 @@ export class ChangePasswordModal extends React.Component {
     const { serverInfo } = this.props
 
     // Check environment variables first.
-    if (serverInfo.info.isEnvCreds || serverInfo.info.isWorm) {
+    if (
+      (serverInfo.info.isEnvCreds || serverInfo.info.isWorm) &&
+      !serverInfo.userInfo.isIAMUser
+    ) {
       this.setState({
         accessKey: "xxxxxxxxx",
         secretKey: "xxxxxxxxx",
@@ -112,7 +115,7 @@ export class ChangePasswordModal extends React.Component {
   }
 
   render() {
-    const { hideChangePassword } = this.props
+    const { hideChangePassword, serverInfo } = this.props
     return (
       <Modal bsSize="sm" animation={false} show={true}>
         <ModalHeader>Change Password</ModalHeader>
@@ -128,7 +131,7 @@ export class ChangePasswordModal extends React.Component {
             required="required"
             autoComplete="false"
             align="ig-left"
-            readonly={this.state.keysReadOnly}
+            readonly={serverInfo.userInfo.isIAMUser || this.state.keysReadOnly}
           />
           <i
             onClick={this.secretKeyVisible.bind(
@@ -158,7 +161,10 @@ export class ChangePasswordModal extends React.Component {
           <button
             id="generate-keys"
             className={
-              "btn btn-primary " + (this.state.keysReadOnly ? "hidden" : "")
+              "btn btn-primary " +
+              (serverInfo.userInfo.isIAMUser || this.state.keysReadOnly
+                ? "hidden"
+                : "")
             }
             onClick={this.generateAuth.bind(this)}
           >
@@ -198,4 +204,7 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(ChangePasswordModal)
+export default connect(
+  mapStateToProps,
+  mapDispatchToProps
+)(ChangePasswordModal)

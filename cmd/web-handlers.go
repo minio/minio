@@ -69,6 +69,7 @@ type ServerInfoRep struct {
 	MinioPlatform   string
 	MinioRuntime    string
 	MinioGlobalInfo map[string]interface{}
+	MinioUserInfo   map[string]interface{}
 	UIVersion       string `json:"uiVersion"`
 }
 
@@ -97,15 +98,15 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 
 	reply.MinioVersion = Version
 	reply.MinioGlobalInfo = getGlobalInfo()
-	// If ENV creds are not set and incoming user is not owner
-	// disable changing credentials.
-	v, ok := reply.MinioGlobalInfo["isEnvCreds"].(bool)
-	if ok && !v {
-		reply.MinioGlobalInfo["isEnvCreds"] = !owner
-	}
-	// if etcd is set disallow changing credentials through UI
+
+	// if etcd is set, disallow changing credentials through UI for owner
 	if globalEtcdClient != nil {
 		reply.MinioGlobalInfo["isEnvCreds"] = true
+	}
+
+	// Check if the user is IAM user
+	reply.MinioUserInfo = map[string]interface{}{
+		"isIAMUser": !owner,
 	}
 
 	reply.MinioMemory = mem
@@ -781,40 +782,52 @@ type SetAuthReply struct {
 
 // SetAuth - Set accessKey and secretKey credentials.
 func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthReply) error {
-	_, owner, authErr := webRequestAuthenticate(r)
+	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
 
-	// If creds are set through ENV disallow changing credentials.
-	if globalIsEnvCreds || globalWORMEnabled || !owner || globalEtcdClient != nil {
+	// When WORM is enabled, disallow changing credenatials for owner and user
+	if globalWORMEnabled {
 		return toJSONError(errChangeCredNotAllowed)
 	}
 
-	creds, err := auth.CreateCredentials(args.AccessKey, args.SecretKey)
+	if owner {
+		if globalIsEnvCreds || globalEtcdClient != nil {
+			return toJSONError(errChangeCredNotAllowed)
+		}
+
+		creds, err := auth.CreateCredentials(args.AccessKey, args.SecretKey)
+		if err != nil {
+			return toJSONError(err)
+		}
+
+		// Acquire lock before updating global configuration.
+		globalServerConfigMu.Lock()
+		defer globalServerConfigMu.Unlock()
+
+		// Update credentials in memory
+		prevCred := globalServerConfig.SetCredential(creds)
+
+		// Persist updated credentials.
+		if err = saveServerConfig(context.Background(), newObjectLayerFn(), globalServerConfig); err != nil {
+			// Save the current creds when failed to update.
+			globalServerConfig.SetCredential(prevCred)
+			logger.LogIf(context.Background(), err)
+			return toJSONError(err)
+		}
+	} else {
+		err := globalIAMSys.SetUserSecretKey(claims.Subject, args.SecretKey)
+		if err != nil {
+			return toJSONError(err)
+		}
+	}
+
+	token, err := authenticateWeb(args.AccessKey, args.SecretKey)
 	if err != nil {
 		return toJSONError(err)
 	}
-
-	// Acquire lock before updating global configuration.
-	globalServerConfigMu.Lock()
-	defer globalServerConfigMu.Unlock()
-
-	// Update credentials in memory
-	prevCred := globalServerConfig.SetCredential(creds)
-
-	// Persist updated credentials.
-	if err = saveServerConfig(context.Background(), newObjectLayerFn(), globalServerConfig); err != nil {
-		// Save the current creds when failed to update.
-		globalServerConfig.SetCredential(prevCred)
-		logger.LogIf(context.Background(), err)
-		return toJSONError(err)
-	}
-
-	reply.Token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
-	if err != nil {
-		return toJSONError(err)
-	}
+	reply.Token = token
 	reply.UIVersion = browser.UIVersion
 
 	return nil
@@ -829,18 +842,27 @@ type GetAuthReply struct {
 
 // GetAuth - return accessKey and secretKey credentials.
 func (web *webAPIHandlers) GetAuth(r *http.Request, args *WebGenericArgs, reply *GetAuthReply) error {
-	_, owner, authErr := webRequestAuthenticate(r)
+	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
-	if !owner {
-		return toJSONError(errAccessDenied)
-	}
-	creds := globalServerConfig.GetCredential()
-	reply.AccessKey = creds.AccessKey
-	reply.SecretKey = creds.SecretKey
+
 	reply.UIVersion = browser.UIVersion
-	return nil
+
+	if owner {
+		creds := globalServerConfig.GetCredential()
+		reply.AccessKey = creds.AccessKey
+		reply.SecretKey = creds.SecretKey
+		return nil
+	}
+
+	if creds, ok := globalIAMSys.GetUser(claims.Subject); ok {
+		reply.AccessKey = creds.AccessKey
+		reply.SecretKey = creds.SecretKey
+		return nil
+	}
+
+	return toJSONError(errAccessDenied)
 }
 
 // URLTokenReply contains the reply for CreateURLToken.
