@@ -34,12 +34,13 @@ minio server -h
 - An object is only cached when drive has sufficient disk space.
 
 ## Behavior
-Disk caching caches objects for **downloaded** objects i.e
+Disk caching caches objects for both **uploaded** and **downloaded** objects i.e
 
 - Caches new objects for entries not found in cache while downloading. Otherwise serves from the cache.
+- Caches all successfully uploaded objects. Replaces existing cached entry of the same object if needed.
 - When an object is deleted, corresponding entry in cache if any is deleted as well.
 - Cache continues to work for read-only operations such as GET, HEAD when backend is offline.
-- Cache-Control and Expires headers can be used to control how long objects stay in the cache
+- Cache disallows write operations when backend is offline.
 
 > NOTE: Expiration happens automatically based on the configured interval as explained above, frequently accessed objects stay alive in cache for a significantly longer time.
 
@@ -48,6 +49,5 @@ Upon restart of minio server after a running minio process is killed or crashes,
 
 ## Limits
 - Bucket policies are not cached, so anonymous operations are not supported when backend is offline.
-- To ensure security guarantees, encrypted objects are never cached.
 - Objects are distributed using deterministic hashing among the list of configured cache drives. If one or more drives go offline, or cache drive configuration is altered in any way, performance may degrade to a linear lookup time depending on the number of disks in cache.
 
