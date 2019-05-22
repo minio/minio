@@ -253,9 +253,6 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 	ctx := context.Background()
 
 	deleteBucket := objectAPI.DeleteBucket
-	if web.CacheAPI() != nil {
-		deleteBucket = web.CacheAPI().DeleteBucket
-	}
 
 	if err := deleteBucket(ctx, args.BucketName); err != nil {
 		return toJSONError(err, args.BucketName)
@@ -297,9 +294,6 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		return toJSONError(errServerNotInitialized)
 	}
 	listBuckets := objectAPI.ListBuckets
-	if web.CacheAPI() != nil {
-		listBuckets = web.CacheAPI().ListBuckets
-	}
 
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
@@ -403,9 +397,6 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	}
 
 	listObjects := objectAPI.ListObjects
-	if web.CacheAPI() != nil {
-		listObjects = web.CacheAPI().ListObjects
-	}
 
 	if isRemoteCallRequired(context.Background(), args.BucketName, objectAPI) {
 		sr, err := globalDNSConfig.Get(args.BucketName)
@@ -577,9 +568,6 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		return toJSONError(errServerNotInitialized)
 	}
 	listObjects := objectAPI.ListObjects
-	if web.CacheAPI() != nil {
-		listObjects = web.CacheAPI().ListObjects
-	}
 
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
@@ -1018,9 +1006,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	putObject := objectAPI.PutObject
-	if !hasServerSideEncryptionHeader(r.Header) && web.CacheAPI() != nil {
-		putObject = web.CacheAPI().PutObject
-	}
+
 	objInfo, err := putObject(context.Background(), bucket, object, pReader, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
@@ -1260,32 +1246,29 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 		writeWebErrorResponse(w, errInvalidBucketName)
 		return
 	}
+	getObjectNInfo := objectAPI.GetObjectNInfo
+	if web.CacheAPI() != nil {
+		getObjectNInfo = web.CacheAPI().GetObjectNInfo
+	}
 
-	getObject := objectAPI.GetObject
-	if web.CacheAPI() != nil {
-		getObject = web.CacheAPI().GetObject
-	}
 	listObjects := objectAPI.ListObjects
-	if web.CacheAPI() != nil {
-		listObjects = web.CacheAPI().ListObjects
-	}
 
 	archive := zip.NewWriter(w)
 	defer archive.Close()
 
-	getObjectInfo := objectAPI.GetObjectInfo
-	if web.CacheAPI() != nil {
-		getObjectInfo = web.CacheAPI().GetObjectInfo
-	}
-	opts := ObjectOptions{}
 	var length int64
 	for _, object := range args.Objects {
 		// Writes compressed object file to the response.
 		zipit := func(objectName string) error {
-			info, err := getObjectInfo(ctx, args.BucketName, objectName, opts)
+			var opts ObjectOptions
+			gr, err := getObjectNInfo(ctx, args.BucketName, objectName, nil, r.Header, readLock, opts)
 			if err != nil {
 				return err
 			}
+			defer gr.Close()
+
+			info := gr.ObjInfo
+
 			length = info.Size
 			if objectAPI.IsEncryptionSupported() {
 				if _, err = DecryptObjectInfo(&info, r.Header); err != nil {
@@ -1348,7 +1331,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				// Response writer should be limited early on for decryption upto required length,
 				// additionally also skipping mod(offset)64KiB boundaries.
 				writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
-				writer, startOffset, length, err = DecryptBlocksRequest(writer, r,
+				writer, _, length, err = DecryptBlocksRequest(writer, r,
 					args.BucketName, objectName, startOffset, length, info, false)
 				if err != nil {
 					writeWebErrorResponse(w, err)
@@ -1356,14 +1339,20 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			httpWriter := ioutil.WriteOnClose(writer)
-			if err = getObject(ctx, args.BucketName, objectName, startOffset, length, httpWriter, "", opts); err != nil {
+
+			// Write object content to response body
+			if _, err = io.Copy(httpWriter, gr); err != nil {
 				httpWriter.Close()
 				if info.IsCompressed() {
 					// Wait for decompression go-routine to retire.
 					wg.Wait()
 				}
+				if !httpWriter.HasWritten() { // write error response only if no data or headers has been written to client yet
+					writeWebErrorResponse(w, err)
+				}
 				return err
 			}
+
 			if err = httpWriter.Close(); err != nil {
 				if !httpWriter.HasWritten() { // write error response only if no data has been written to client yet
 					writeWebErrorResponse(w, err)
