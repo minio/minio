@@ -100,7 +100,9 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	}
 
 	listObjectsV2 := objectAPI.ListObjectsV2
-
+	if api.CacheAPI() != nil {
+		listObjectsV2 = api.CacheAPI().ListObjectsV2
+	}
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
 	// marshaled into S3 compatible XML header.
@@ -177,6 +179,9 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	}
 
 	listObjects := objectAPI.ListObjects
+	if api.CacheAPI() != nil {
+		listObjects = api.CacheAPI().ListObjects
+	}
 
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be

@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018,2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"io"
-	"net/http"
 	"reflect"
 	"testing"
 	"time"
@@ -28,45 +26,27 @@ import (
 	"github.com/minio/minio/pkg/hash"
 )
 
-// Initialize cache objects.
-func initCacheObjects(disk string, cacheMaxUse int) (*diskCache, error) {
-	return newdiskCache(disk, globalCacheExpiry, cacheMaxUse)
+// Initialize cache FS objects.
+func initCacheFSObjects(disk string, cacheMaxUse int) (*cacheFSObjects, error) {
+	return newCacheFSObjects(disk, globalCacheExpiry, cacheMaxUse)
 }
 
 // inits diskCache struct for nDisks
-func initDiskCaches(drives []string, cacheMaxUse int, t *testing.T) ([]*diskCache, error) {
-	var cb []*diskCache
+func initDiskCaches(drives []string, cacheMaxUse int, t *testing.T) (*diskCache, error) {
+	var cfs []*cacheFSObjects
 	for _, d := range drives {
-		obj, err := initCacheObjects(d, cacheMaxUse)
+		obj, err := initCacheFSObjects(d, cacheMaxUse)
 		if err != nil {
 			return nil, err
 		}
-		cb = append(cb, obj)
+		cfs = append(cfs, obj)
 	}
-	return cb, nil
-}
-
-// Tests ToObjectInfo function.
-func TestCacheMetadataObjInfo(t *testing.T) {
-	m := cacheMeta{Meta: nil}
-	objInfo := m.ToObjectInfo("testbucket", "testobject", nil)
-	if objInfo.Size != 0 {
-		t.Fatal("Unexpected object info value for Size", objInfo.Size)
-	}
-	if objInfo.ModTime != timeSentinel {
-		t.Fatal("Unexpected object info value for ModTime ", objInfo.ModTime)
-	}
-	if objInfo.IsDir {
-		t.Fatal("Unexpected object info value for IsDir", objInfo.IsDir)
-	}
-	if !objInfo.Expires.IsZero() {
-		t.Fatal("Unexpected object info value for Expires ", objInfo.Expires)
-	}
+	return &diskCache{cfs: cfs}, nil
 }
 
 // test whether a drive being offline causes
-// getCachedLoc to fetch next online drive
-func TestGetCachedLoc(t *testing.T) {
+// getCacheFS to fetch next online drive
+func TestGetCacheFS(t *testing.T) {
 	for n := 1; n < 10; n++ {
 		fsDirs, err := getRandomDisks(n)
 		if err != nil {
@@ -76,15 +56,14 @@ func TestGetCachedLoc(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		c := cacheObjects{cache: d}
 		bucketName := "testbucket"
 		objectName := "testobject"
 		ctx := context.Background()
 		// find cache drive where object would be hashed
-		index := c.hashIndex(bucketName, objectName)
+		index := d.hashIndex(bucketName, objectName)
 		// turn off drive by setting online status to false
-		c.cache[index].online = false
-		cfs, err := c.getCachedLoc(ctx, bucketName, objectName)
+		d.cfs[index].online = false
+		cfs, err := d.getCacheFS(ctx, bucketName, objectName)
 		if n == 1 && err == errDiskNotFound {
 			continue
 		}
@@ -92,7 +71,7 @@ func TestGetCachedLoc(t *testing.T) {
 			t.Fatal(err)
 		}
 		i := -1
-		for j, f := range c.cache {
+		for j, f := range d.cfs {
 			if f == cfs {
 				i = j
 				break
@@ -105,8 +84,8 @@ func TestGetCachedLoc(t *testing.T) {
 }
 
 // test whether a drive being offline causes
-// getCachedLoc to fetch next online drive
-func TestGetCacheMaxUse(t *testing.T) {
+// getCacheFS to fetch next online drive
+func TestGetCacheFSMaxUse(t *testing.T) {
 	for n := 1; n < 10; n++ {
 		fsDirs, err := getRandomDisks(n)
 		if err != nil {
@@ -116,16 +95,14 @@ func TestGetCacheMaxUse(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		c := cacheObjects{cache: d}
-
 		bucketName := "testbucket"
 		objectName := "testobject"
 		ctx := context.Background()
 		// find cache drive where object would be hashed
-		index := c.hashIndex(bucketName, objectName)
+		index := d.hashIndex(bucketName, objectName)
 		// turn off drive by setting online status to false
-		c.cache[index].online = false
-		cb, err := c.getCachedLoc(ctx, bucketName, objectName)
+		d.cfs[index].online = false
+		cfs, err := d.getCacheFS(ctx, bucketName, objectName)
 		if n == 1 && err == errDiskNotFound {
 			continue
 		}
@@ -133,8 +110,8 @@ func TestGetCacheMaxUse(t *testing.T) {
 			t.Fatal(err)
 		}
 		i := -1
-		for j, f := range d {
-			if f == cb {
+		for j, f := range d.cfs {
+			if f == cfs {
 				i = j
 				break
 			}
@@ -195,9 +172,7 @@ func TestDiskCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := cacheObjects{cache: d}
-
-	cache := c.cache[0]
+	cache := d.cfs[0]
 	ctx := context.Background()
 	bucketName := "testbucket"
 	objectName := "testobject"
@@ -223,17 +198,14 @@ func TestDiskCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cache.Put(ctx, bucketName, objectName, hashReader, hashReader.Size(), ObjectOptions{UserDefined: httpMeta})
+	err = cache.Put(ctx, bucketName, objectName, NewPutObjReader(hashReader, nil, nil), ObjectOptions{UserDefined: httpMeta})
 	if err != nil {
 		t.Fatal(err)
 	}
-	cReader, err := cache.Get(ctx, bucketName, objectName, nil, http.Header{
-		"Content-Type": []string{"application/json"},
-	}, opts)
+	cachedObjInfo, err := cache.GetObjectInfo(ctx, bucketName, objectName, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cachedObjInfo := cReader.ObjInfo
 	if !cache.Exists(ctx, bucketName, objectName) {
 		t.Fatal("Expected object to exist on cache")
 	}
@@ -247,7 +219,7 @@ func TestDiskCache(t *testing.T) {
 		t.Fatal("Cached content-type does not match")
 	}
 	writer := bytes.NewBuffer(nil)
-	_, err = io.Copy(writer, cReader)
+	err = cache.Get(ctx, bucketName, objectName, 0, int64(size), writer, "", opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +246,7 @@ func TestDiskCacheMaxUse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cache := d[0]
+	cache := d.cfs[0]
 	ctx := context.Background()
 	bucketName := "testbucket"
 	objectName := "testobject"
@@ -302,20 +274,19 @@ func TestDiskCacheMaxUse(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !cache.diskAvailable(int64(size)) {
-		err = cache.Put(ctx, bucketName, objectName, hashReader, hashReader.Size(), ObjectOptions{UserDefined: httpMeta})
+		err = cache.Put(ctx, bucketName, objectName, NewPutObjReader(hashReader, nil, nil), ObjectOptions{UserDefined: httpMeta})
 		if err != errDiskFull {
 			t.Fatal("Cache max-use limit violated.")
 		}
 	} else {
-		err = cache.Put(ctx, bucketName, objectName, hashReader, hashReader.Size(), ObjectOptions{UserDefined: httpMeta})
+		err = cache.Put(ctx, bucketName, objectName, NewPutObjReader(hashReader, nil, nil), ObjectOptions{UserDefined: httpMeta})
 		if err != nil {
 			t.Fatal(err)
 		}
-		cReader, err := cache.Get(ctx, bucketName, objectName, nil, nil, opts)
+		cachedObjInfo, err := cache.GetObjectInfo(ctx, bucketName, objectName, opts)
 		if err != nil {
 			t.Fatal(err)
 		}
-		cachedObjInfo := cReader.ObjInfo
 		if !cache.Exists(ctx, bucketName, objectName) {
 			t.Fatal("Expected object to exist on cache")
 		}
@@ -329,7 +300,7 @@ func TestDiskCacheMaxUse(t *testing.T) {
 			t.Fatal("Cached content-type does not match")
 		}
 		writer := bytes.NewBuffer(nil)
-		_, err = io.Copy(writer, cReader)
+		err = cache.Get(ctx, bucketName, objectName, 0, int64(size), writer, "", opts)
 		if err != nil {
 			t.Fatal(err)
 		}
