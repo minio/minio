@@ -50,6 +50,7 @@ require (
 	github.com/klauspost/compress v1.4.1 // indirect
 	github.com/klauspost/cpuid v1.2.0 // indirect
 	github.com/klauspost/pgzip v1.2.1
+	github.com/klauspost/readahead v1.3.0
 	github.com/klauspost/reedsolomon v1.9.1
 	github.com/lib/pq v1.0.0
 	github.com/mattn/go-isatty v0.0.7

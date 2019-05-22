@@ -54,7 +54,7 @@ type StorageAPI interface {
 	DeleteFileBulk(volume string, paths []string) (errs []error, err error)
 
 	// Write all data, syncs the data to disk.
-	WriteAll(volume string, path string, buf []byte) (err error)
+	WriteAll(volume string, path string, reader io.Reader) (err error)
 
 	// Read all.
 	ReadAll(volume string, path string) (buf []byte, err error)
