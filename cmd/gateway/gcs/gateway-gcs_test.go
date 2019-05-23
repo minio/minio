@@ -28,7 +28,7 @@ import (
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/googleapi"
 
-	miniogo "github.com/minio/minio-go"
+	miniogo "github.com/minio/minio-go/v6"
 	minio "github.com/minio/minio/cmd"
 )
 

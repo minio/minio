@@ -27,8 +27,8 @@ import (
 	"sync"
 	"time"
 
-	miniogopolicy "github.com/minio/minio-go/pkg/policy"
-	"github.com/minio/minio-go/pkg/set"
+	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"

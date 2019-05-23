@@ -31,7 +31,7 @@ import (
 
 	b2 "github.com/minio/blazer/base"
 	"github.com/minio/cli"
-	miniogopolicy "github.com/minio/minio-go/pkg/policy"
+	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	h2 "github.com/minio/minio/pkg/hash"
