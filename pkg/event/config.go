@@ -222,6 +222,10 @@ func (conf *Config) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	if len(parsedConfig.QueueList) > 0 {
 		for i, q1 := range parsedConfig.QueueList[:len(parsedConfig.QueueList)-1] {
 			for _, q2 := range parsedConfig.QueueList[i+1:] {
+				// Removes the region from ARN if server region is not set
+				if q2.ARN.region != "" && q1.ARN.region == "" {
+					q2.ARN.region = ""
+				}
 				if reflect.DeepEqual(q1, q2) {
 					return &ErrDuplicateQueueConfiguration{q1}
 				}
