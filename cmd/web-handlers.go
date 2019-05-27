@@ -769,8 +769,10 @@ func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, re
 
 // SetAuthArgs - argument for SetAuth
 type SetAuthArgs struct {
-	AccessKey string `json:"accessKey"`
-	SecretKey string `json:"secretKey"`
+	CurrentAccessKey string `json:"currentAccessKey"`
+	CurrentSecretKey string `json:"currentSecretKey"`
+	NewAccessKey     string `json:"newAccessKey"`
+	NewSecretKey     string `json:"newSecretKey"`
 }
 
 // SetAuthReply - reply for SetAuth
@@ -797,7 +799,13 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 			return toJSONError(errChangeCredNotAllowed)
 		}
 
-		creds, err := auth.CreateCredentials(args.AccessKey, args.SecretKey)
+		// get Current creds and verify
+		prevCred := globalServerConfig.GetCredential()
+		if prevCred.AccessKey != args.CurrentAccessKey || prevCred.SecretKey != args.CurrentSecretKey {
+			return errIncorrectCreds
+		}
+
+		creds, err := auth.CreateCredentials(args.NewAccessKey, args.NewSecretKey)
 		if err != nil {
 			return toJSONError(err)
 		}
@@ -807,7 +815,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		defer globalServerConfigMu.Unlock()
 
 		// Update credentials in memory
-		prevCred := globalServerConfig.SetCredential(creds)
+		prevCred = globalServerConfig.SetCredential(creds)
 
 		// Persist updated credentials.
 		if err = saveServerConfig(context.Background(), newObjectLayerFn(), globalServerConfig); err != nil {
@@ -816,18 +824,35 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 			logger.LogIf(context.Background(), err)
 			return toJSONError(err)
 		}
+
+		reply.Token, err = authenticateWeb(args.NewAccessKey, args.NewSecretKey)
+		if err != nil {
+			return toJSONError(err)
+		}
 	} else {
-		err := globalIAMSys.SetUserSecretKey(claims.Subject, args.SecretKey)
+		// for IAM users, access key cannot be updated
+		// claims.Subject is used instead of accesskey from args
+		prevCred, ok := globalIAMSys.GetUser(claims.Subject)
+		if !ok {
+			return errInvalidAccessKeyID
+		}
+
+		// Throw error when wrong secret key is provided
+		if prevCred.SecretKey != args.CurrentSecretKey {
+			return errIncorrectCreds
+		}
+
+		err := globalIAMSys.SetUserSecretKey(claims.Subject, args.NewSecretKey)
+		if err != nil {
+			return toJSONError(err)
+		}
+
+		reply.Token, err = authenticateWeb(claims.Subject, args.NewSecretKey)
 		if err != nil {
 			return toJSONError(err)
 		}
 	}
 
-	token, err := authenticateWeb(args.AccessKey, args.SecretKey)
-	if err != nil {
-		return toJSONError(err)
-	}
-	reply.Token = token
 	reply.UIVersion = browser.UIVersion
 
 	return nil

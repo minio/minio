@@ -47,6 +47,7 @@ var (
 	errChangeCredNotAllowed = errors.New("Changing access key and secret key not allowed")
 	errAuthentication       = errors.New("Authentication failed, check your access credentials")
 	errNoAuthToken          = errors.New("JWT token missing")
+	errIncorrectCreds       = errors.New("Current access key or secret key is incorrect")
 )
 
 func authenticateJWTUsers(accessKey, secretKey string, expiry time.Duration) (string, error) {
