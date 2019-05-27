@@ -102,9 +102,6 @@ class Web {
   RemoveObject(args) {
     return this.makeCall('RemoveObject', args)
   }
-  GetAuth() {
-    return this.makeCall('GetAuth')
-  }
   SetAuth(args) {
     return this.makeCall('SetAuth', args)
       .then(res => {
