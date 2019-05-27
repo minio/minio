@@ -858,38 +858,6 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	return nil
 }
 
-// GetAuthReply - Reply current credentials.
-type GetAuthReply struct {
-	AccessKey string `json:"accessKey"`
-	SecretKey string `json:"secretKey"`
-	UIVersion string `json:"uiVersion"`
-}
-
-// GetAuth - return accessKey and secretKey credentials.
-func (web *webAPIHandlers) GetAuth(r *http.Request, args *WebGenericArgs, reply *GetAuthReply) error {
-	claims, owner, authErr := webRequestAuthenticate(r)
-	if authErr != nil {
-		return toJSONError(authErr)
-	}
-
-	reply.UIVersion = browser.UIVersion
-
-	if owner {
-		creds := globalServerConfig.GetCredential()
-		reply.AccessKey = creds.AccessKey
-		reply.SecretKey = creds.SecretKey
-		return nil
-	}
-
-	if creds, ok := globalIAMSys.GetUser(claims.Subject); ok {
-		reply.AccessKey = creds.AccessKey
-		reply.SecretKey = creds.SecretKey
-		return nil
-	}
-
-	return toJSONError(errAccessDenied)
-}
-
 // URLTokenReply contains the reply for CreateURLToken.
 type URLTokenReply struct {
 	Token     string `json:"token"`
