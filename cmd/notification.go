@@ -157,6 +157,66 @@ func (sys *NotificationSys) ReloadFormat(dryRun bool) []NotificationPeerErr {
 	return ng.Wait()
 }
 
+// DeletePolicy - deletes policy across all peers.
+func (sys *NotificationSys) DeletePolicy(policyName string) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(context.Background(), func() error {
+			return client.DeletePolicy(policyName)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
+// LoadPolicy - reloads a specific modified policy across all peers
+func (sys *NotificationSys) LoadPolicy(policyName string) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(context.Background(), func() error {
+			return client.LoadPolicy(policyName)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
+// DeleteUser - deletes a specific user across all peers
+func (sys *NotificationSys) DeleteUser(accessKey string) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(context.Background(), func() error {
+			return client.DeleteUser(accessKey)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
+// LoadUser - reloads a specific user across all peers
+func (sys *NotificationSys) LoadUser(accessKey string, temp bool) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(context.Background(), func() error {
+			return client.LoadUser(accessKey, temp)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
 // LoadUsers - calls LoadUsers RPC call on all peers.
 func (sys *NotificationSys) LoadUsers() []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
