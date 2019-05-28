@@ -130,7 +130,7 @@ func (c *coreDNS) list(key string) ([]SrvRecord, error) {
 		// /skydns/net/miniocloud/10.0.0.1 that may exist as
 		// dns entry for the server (rather than the bucket
 		// itself).
-		if srvRecord.Key == "" {
+		if srvRecord.Key == "" || srvRecord.Key == etcdPathSeparator {
 			continue
 		}
 
