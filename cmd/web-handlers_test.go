@@ -1484,7 +1484,7 @@ func TestWebCheckAuthorization(t *testing.T) {
 	webRPCs := []string{
 		"ServerInfo", "StorageInfo", "MakeBucket",
 		"ListBuckets", "ListObjects", "RemoveObject",
-		"GenerateAuth", "SetAuth", "GetAuth",
+		"GenerateAuth", "SetAuth",
 		"GetBucketPolicy", "SetBucketPolicy", "ListAllBucketPolicies",
 		"PresignedGet",
 	}
