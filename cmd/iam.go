@@ -79,7 +79,8 @@ func (sys *IAMSys) Init(objAPI ObjectLayer) error {
 			go func() {
 				// Refresh IAMSys with etcd watch.
 				for {
-					watchCh := globalEtcdClient.Watch(context.Background(), iamConfigPrefix)
+					watchCh := globalEtcdClient.Watch(context.Background(),
+						iamConfigPrefix, etcd.WithPrefix())
 					select {
 					case <-GlobalServiceDoneCh:
 						return
