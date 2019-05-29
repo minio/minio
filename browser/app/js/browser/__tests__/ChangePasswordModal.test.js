@@ -73,7 +73,7 @@ describe("ChangePasswordModal", () => {
         .find("ModalBody")
         .childAt(0)
         .text()
-    ).toBe("Credentials of this user cannot be updated through MinIO Broswer.")
+    ).toBe("Credentials of this user cannot be updated through MinIO Browser.")
   })
 
   it("should not allow changing password when isEnvCreds is true and not IAM user", () => {
@@ -88,7 +88,7 @@ describe("ChangePasswordModal", () => {
         .find("ModalBody")
         .childAt(0)
         .text()
-    ).toBe("Credentials of this user cannot be updated through MinIO Broswer.")
+    ).toBe("Credentials of this user cannot be updated through MinIO Browser.")
   })
 
   it("should generate accessKey and secretKey when Generate buttons is clicked", () => {
