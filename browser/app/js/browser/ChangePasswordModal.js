@@ -20,6 +20,7 @@ import web from "../web"
 import * as alertActions from "../alert/actions"
 import { getRandomAccessKey, getRandomSecretKey } from "../utils"
 import jwtDecode from "jwt-decode"
+import classNames from "classnames"
 
 import { Modal, ModalBody, ModalHeader } from "react-bootstrap"
 import InputGroup from "./InputGroup"
@@ -33,7 +34,7 @@ export class ChangePasswordModal extends React.Component {
       currentSecretKeyVisible: false,
       newAccessKey: "",
       newSecretKey: "",
-      currentSecretKeyVisible: false
+      newSecretKeyVisible: false
     }
   }
   // When its shown, it loads the access key from JWT token
@@ -48,11 +49,12 @@ export class ChangePasswordModal extends React.Component {
   // Save the auth params and set them.
   setAuth(e) {
     const { showAlert } = this.props
-    const currentAccessKey = this.state.currentAccessKey.trim()
-    const currentSecretKey = this.state.currentSecretKey.trim()
-    const newAccessKey = this.state.newAccessKey.trim()
-    const newSecretKey = this.state.newSecretKey.trim()
-    if (currentAccessKey && currentSecretKey && newAccessKey && newSecretKey) {
+
+    if (this.canUpdateCredentials()) {
+      const currentAccessKey = this.state.currentAccessKey
+      const currentSecretKey = this.state.currentSecretKey
+      const newAccessKey = this.state.newAccessKey
+      const newSecretKey = this.state.newSecretKey
       web
         .SetAuth({
           currentAccessKey,
@@ -104,16 +106,25 @@ export class ChangePasswordModal extends React.Component {
     return true
   }
 
+  canUpdateCredentials() {
+    return (
+      this.state.currentAccessKey.length > 0 &&
+      this.state.currentSecretKey.length > 0 &&
+      this.state.newAccessKey.length > 0 &&
+      this.state.newSecretKey.length > 0
+    )
+  }
+
   render() {
     const { hideChangePassword, serverInfo } = this.props
-    const alllowChangePassword = this.canChangePassword()
+    const allowChangePassword = this.canChangePassword()
 
-    if (!alllowChangePassword) {
+    if (!allowChangePassword) {
       return (
         <Modal bsSize="sm" animation={false} show={true}>
           <ModalHeader>Change Password</ModalHeader>
           <ModalBody>
-            Credentials of this user cannot be updated through MinIO Broswer.
+            Credentials of this user cannot be updated through MinIO Browser.
           </ModalBody>
           <div className="modal-footer">
             <button
@@ -232,7 +243,11 @@ export class ChangePasswordModal extends React.Component {
           </button>
           <button
             id="update-keys"
-            className={"btn btn-success"}
+            className={classNames({
+              btn: true,
+              "btn-success": this.canUpdateCredentials()
+            })}
+            disabled={!this.canUpdateCredentials()}
             onClick={this.setAuth.bind(this)}
           >
             Update
