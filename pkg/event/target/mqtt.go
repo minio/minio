@@ -111,7 +111,6 @@ func (target *MQTTTarget) send(eventData event.Event) error {
 	if token.Error() != nil {
 		return token.Error()
 	}
-
 	return nil
 }
 

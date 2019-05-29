@@ -884,7 +884,7 @@ type serverConfigV32 struct {
 	} `json:"policy"`
 }
 
-// serverConfigV33 is just like version '32', removes clientID from NATS and MQTT, and adds queueDir, queueLimit with MQTT.
+// serverConfigV33 is just like version '32', removes clientID from NATS and MQTT, and adds queueDir, queueLimit in MQTT and kafka.
 type serverConfigV33 struct {
 	quick.Config `json:"-"` // ignore interfaces
 
