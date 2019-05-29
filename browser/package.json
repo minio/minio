@@ -68,6 +68,7 @@
     "humanize": "0.0.9",
     "identity-obj-proxy": "^3.0.0",
     "json-loader": "^0.5.4",
+    "jwt-decode": "^2.2.0",
     "local-storage-fallback": "^4.0.2",
     "material-design-iconic-font": "^2.2.0",
     "mime-db": "^1.25.0",

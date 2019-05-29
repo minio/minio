@@ -69,6 +69,7 @@ type ServerInfoRep struct {
 	MinioPlatform   string
 	MinioRuntime    string
 	MinioGlobalInfo map[string]interface{}
+	MinioUserInfo   map[string]interface{}
 	UIVersion       string `json:"uiVersion"`
 }
 
@@ -97,15 +98,15 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 
 	reply.MinioVersion = Version
 	reply.MinioGlobalInfo = getGlobalInfo()
-	// If ENV creds are not set and incoming user is not owner
-	// disable changing credentials.
-	v, ok := reply.MinioGlobalInfo["isEnvCreds"].(bool)
-	if ok && !v {
-		reply.MinioGlobalInfo["isEnvCreds"] = !owner
-	}
-	// if etcd is set disallow changing credentials through UI
+
+	// if etcd is set, disallow changing credentials through UI for owner
 	if globalEtcdClient != nil {
 		reply.MinioGlobalInfo["isEnvCreds"] = true
+	}
+
+	// Check if the user is IAM user
+	reply.MinioUserInfo = map[string]interface{}{
+		"isIAMUser": !owner,
 	}
 
 	reply.MinioMemory = mem
@@ -768,8 +769,10 @@ func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, re
 
 // SetAuthArgs - argument for SetAuth
 type SetAuthArgs struct {
-	AccessKey string `json:"accessKey"`
-	SecretKey string `json:"secretKey"`
+	CurrentAccessKey string `json:"currentAccessKey"`
+	CurrentSecretKey string `json:"currentSecretKey"`
+	NewAccessKey     string `json:"newAccessKey"`
+	NewSecretKey     string `json:"newSecretKey"`
 }
 
 // SetAuthReply - reply for SetAuth
@@ -781,65 +784,77 @@ type SetAuthReply struct {
 
 // SetAuth - Set accessKey and secretKey credentials.
 func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthReply) error {
-	_, owner, authErr := webRequestAuthenticate(r)
+	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
 
-	// If creds are set through ENV disallow changing credentials.
-	if globalIsEnvCreds || globalWORMEnabled || !owner || globalEtcdClient != nil {
+	// When WORM is enabled, disallow changing credenatials for owner and user
+	if globalWORMEnabled {
 		return toJSONError(errChangeCredNotAllowed)
 	}
 
-	creds, err := auth.CreateCredentials(args.AccessKey, args.SecretKey)
-	if err != nil {
-		return toJSONError(err)
+	if owner {
+		if globalIsEnvCreds || globalEtcdClient != nil {
+			return toJSONError(errChangeCredNotAllowed)
+		}
+
+		// get Current creds and verify
+		prevCred := globalServerConfig.GetCredential()
+		if prevCred.AccessKey != args.CurrentAccessKey || prevCred.SecretKey != args.CurrentSecretKey {
+			return errIncorrectCreds
+		}
+
+		creds, err := auth.CreateCredentials(args.NewAccessKey, args.NewSecretKey)
+		if err != nil {
+			return toJSONError(err)
+		}
+
+		// Acquire lock before updating global configuration.
+		globalServerConfigMu.Lock()
+		defer globalServerConfigMu.Unlock()
+
+		// Update credentials in memory
+		prevCred = globalServerConfig.SetCredential(creds)
+
+		// Persist updated credentials.
+		if err = saveServerConfig(context.Background(), newObjectLayerFn(), globalServerConfig); err != nil {
+			// Save the current creds when failed to update.
+			globalServerConfig.SetCredential(prevCred)
+			logger.LogIf(context.Background(), err)
+			return toJSONError(err)
+		}
+
+		reply.Token, err = authenticateWeb(args.NewAccessKey, args.NewSecretKey)
+		if err != nil {
+			return toJSONError(err)
+		}
+	} else {
+		// for IAM users, access key cannot be updated
+		// claims.Subject is used instead of accesskey from args
+		prevCred, ok := globalIAMSys.GetUser(claims.Subject)
+		if !ok {
+			return errInvalidAccessKeyID
+		}
+
+		// Throw error when wrong secret key is provided
+		if prevCred.SecretKey != args.CurrentSecretKey {
+			return errIncorrectCreds
+		}
+
+		err := globalIAMSys.SetUserSecretKey(claims.Subject, args.NewSecretKey)
+		if err != nil {
+			return toJSONError(err)
+		}
+
+		reply.Token, err = authenticateWeb(claims.Subject, args.NewSecretKey)
+		if err != nil {
+			return toJSONError(err)
+		}
 	}
 
-	// Acquire lock before updating global configuration.
-	globalServerConfigMu.Lock()
-	defer globalServerConfigMu.Unlock()
-
-	// Update credentials in memory
-	prevCred := globalServerConfig.SetCredential(creds)
-
-	// Persist updated credentials.
-	if err = saveServerConfig(context.Background(), newObjectLayerFn(), globalServerConfig); err != nil {
-		// Save the current creds when failed to update.
-		globalServerConfig.SetCredential(prevCred)
-		logger.LogIf(context.Background(), err)
-		return toJSONError(err)
-	}
-
-	reply.Token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
-	if err != nil {
-		return toJSONError(err)
-	}
 	reply.UIVersion = browser.UIVersion
 
-	return nil
-}
-
-// GetAuthReply - Reply current credentials.
-type GetAuthReply struct {
-	AccessKey string `json:"accessKey"`
-	SecretKey string `json:"secretKey"`
-	UIVersion string `json:"uiVersion"`
-}
-
-// GetAuth - return accessKey and secretKey credentials.
-func (web *webAPIHandlers) GetAuth(r *http.Request, args *WebGenericArgs, reply *GetAuthReply) error {
-	_, owner, authErr := webRequestAuthenticate(r)
-	if authErr != nil {
-		return toJSONError(authErr)
-	}
-	if !owner {
-		return toJSONError(errAccessDenied)
-	}
-	creds := globalServerConfig.GetCredential()
-	reply.AccessKey = creds.AccessKey
-	reply.SecretKey = creds.SecretKey
-	reply.UIVersion = browser.UIVersion
 	return nil
 }
 

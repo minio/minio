@@ -491,6 +491,51 @@ func (sys *IAMSys) SetUser(accessKey string, uinfo madmin.UserInfo) error {
 	return nil
 }
 
+// SetUserSecretKey - sets user secret key
+func (sys *IAMSys) SetUserSecretKey(accessKey string, secretKey string) error {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return errServerNotInitialized
+	}
+
+	sys.Lock()
+	defer sys.Unlock()
+
+	cred, ok := sys.iamUsersMap[accessKey]
+	if !ok {
+		return errNoSuchUser
+	}
+
+	uinfo := madmin.UserInfo{
+		SecretKey: secretKey,
+		Status:    madmin.AccountStatus(cred.Status),
+	}
+
+	configFile := pathJoin(iamConfigUsersPrefix, accessKey, iamIdentityFile)
+	data, err := json.Marshal(uinfo)
+	if err != nil {
+		return err
+	}
+
+	if globalEtcdClient != nil {
+		err = saveConfigEtcd(context.Background(), globalEtcdClient, configFile, data)
+	} else {
+		err = saveConfig(context.Background(), objectAPI, configFile, data)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	sys.iamUsersMap[accessKey] = auth.Credentials{
+		AccessKey: accessKey,
+		SecretKey: secretKey,
+		Status:    string(uinfo.Status),
+	}
+
+	return nil
+}
+
 // GetUser - get user credentials
 func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 	sys.RLock()
