@@ -23,7 +23,7 @@ import (
 	"time"
 
 	isatty "github.com/mattn/go-isatty"
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 
 	etcd "github.com/coreos/etcd/clientv3"
 	humanize "github.com/dustin/go-humanize"

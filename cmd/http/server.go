@@ -28,7 +28,7 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"golang.org/x/net/http2"
 
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/pkg/certs"
 )
 

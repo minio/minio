@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"testing"
 
-	minio "github.com/minio/minio-go"
+	minio "github.com/minio/minio-go/v6"
 )
 
 // Test Post Policy parsing and checking conditions
