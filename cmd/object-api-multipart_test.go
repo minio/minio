@@ -255,8 +255,8 @@ func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks [
 	}
 
 	// As all disks at not available, bucket not found.
-	expectedErr2 := BucketNotFound{Bucket: testCase.bucketName}
-	if err.Error() != expectedErr2.Error() {
+	expectedErr2 := errDiskNotFound
+	if err != errDiskNotFound {
 		t.Fatalf("Test %s: expected error %s, got %s instead.", instanceType, expectedErr2, err)
 	}
 }

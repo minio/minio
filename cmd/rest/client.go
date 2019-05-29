@@ -34,6 +34,17 @@ import (
 // DefaultRESTTimeout - default RPC timeout is one minute.
 const DefaultRESTTimeout = 1 * time.Minute
 
+// NetworkError - error type in case of errors related to http/transport
+// for ex. connection refused, connection reset, dns resolution failure etc.
+// All errors returned by storage-rest-server (ex errFileNotFound, errDiskNotFound) are not considered to be network errors.
+type NetworkError struct {
+	Err error
+}
+
+func (n *NetworkError) Error() string {
+	return n.Err.Error()
+}
+
 // Client - http based RPC client.
 type Client struct {
 	httpClient          *http.Client
@@ -46,7 +57,7 @@ type Client struct {
 func (c *Client) Call(method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
 	req, err := http.NewRequest(http.MethodPost, c.url.String()+"/"+method+"?"+values.Encode(), body)
 	if err != nil {
-		return nil, err
+		return nil, &NetworkError{err}
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.newAuthToken())
@@ -56,7 +67,7 @@ func (c *Client) Call(method string, values url.Values, body io.Reader, length i
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, &NetworkError{err}
 	}
 
 	if resp.StatusCode != http.StatusOK {
