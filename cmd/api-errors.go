@@ -27,7 +27,7 @@ import (
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"google.golang.org/api/googleapi"
 
-	minio "github.com/minio/minio-go"
+	minio "github.com/minio/minio-go/v6"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"

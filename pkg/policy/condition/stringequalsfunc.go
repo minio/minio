@@ -21,8 +21,8 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/minio/minio-go/pkg/s3utils"
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/set"
 )
 
 func toStringEqualsFuncString(n name, key Key, values set.StringSet) string {

@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 )
 
 // ResourceSet - set of resources in policy statement.

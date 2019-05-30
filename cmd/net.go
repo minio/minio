@@ -27,7 +27,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 )
 

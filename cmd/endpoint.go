@@ -31,7 +31,7 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/cli"
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"

@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 
 	"github.com/coredns/coredns/plugin/etcd/msg"
 	etcd "github.com/coreos/etcd/clientv3"
