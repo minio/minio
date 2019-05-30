@@ -379,6 +379,20 @@ type resourceHandler struct {
 
 // setCorsHandler handler for CORS (Cross Origin Resource Sharing)
 func setCorsHandler(h http.Handler) http.Handler {
+	commonS3Headers := []string{
+		"Date",
+		"ETag",
+		"Server",
+		"Connection",
+		"Accept-Ranges",
+		"Content-Range",
+		"Content-Encoding",
+		"Content-Length",
+		"Content-Type",
+		"X-Amz*",
+		"x-amz*",
+		"*",
+	}
 
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
@@ -391,8 +405,8 @@ func setCorsHandler(h http.Handler) http.Handler {
 			http.MethodOptions,
 			http.MethodPatch,
 		},
-		AllowedHeaders:   []string{"*"},
-		ExposedHeaders:   []string{"*"},
+		AllowedHeaders:   commonS3Headers,
+		ExposedHeaders:   commonS3Headers,
 		AllowCredentials: true,
 	})
 
