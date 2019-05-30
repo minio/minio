@@ -45,7 +45,7 @@ func main() {
 |:------------------------------------------|:--------------------------------------------|:-------------------|:----------------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|
 | [`ServiceStatus`](#ServiceStatus)         | [`ServerInfo`](#ServerInfo)                 | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig)         | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   |
 | [`ServiceSendAction`](#ServiceSendAction) | [`ServerCPULoadInfo`](#ServerCPULoadInfo)   |                    | [`SetConfig`](#SetConfig)         |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |
-| [`ListenTrace`](#ListenTrace)                                          | [`ServerMemUsageInfo`](#ServerMemUsageInfo) |                    | [`GetConfigKeys`](#GetConfigKeys) |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |
+| [`Trace`](#Trace)                                          | [`ServerMemUsageInfo`](#ServerMemUsageInfo) |                    | [`GetConfigKeys`](#GetConfigKeys) |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |
 |                                           |                                             |                    | [`SetConfigKeys`](#SetConfigKeys) |                         | [`AddCannedPolicy`](#AddCannedPolicy) |                                                   |
 
 
@@ -538,9 +538,9 @@ __Example__
     log.Println("Profiling data successfully downloaded.")
 ```
 
-<a name="ListenTrace"></a>
-### ListenTrace(allTrace bool,doneCh <-chan struct{}) <-chan TraceInfo
-get http trace from minio server
+<a name="Trace"></a>
+### Trace(allTrace bool,doneCh <-chan struct{}) <-chan TraceInfo
+Enable HTTP request tracing on all nodes in a MinIO cluster
 
 __Example__
 
@@ -550,7 +550,7 @@ __Example__
     // listen to all trace including internal API calls
     allTrace := true
     // Start listening on all trace activity.
-    traceCh := madmClnt.ListenTrace(allTrace,doneCh)
+    traceCh := madmClnt.Trace(allTrace,doneCh)
     for traceInfo := range traceCh {
         fmt.Println(traceInfo.String())
     }

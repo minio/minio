@@ -123,7 +123,8 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 
 	name := runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
 	name = strings.TrimPrefix(name, "github.com/minio/minio/cmd.")
-	name = strings.TrimSuffix(name, "-fm")
+	name = strings.TrimSuffix(name, "Handler-fm")
+
 	bodyPlaceHolder := []byte("<BODY>")
 	var reqBodyRecorder *recordRequest
 
@@ -135,7 +136,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	if err == nil {
 		t.NodeName = host.Name
 	}
-	rq := trace.RequestInfo{Time: time.Now().UTC(), Method: r.Method, URL: *r.URL}
+	rq := trace.RequestInfo{Time: time.Now().UTC(), Method: r.Method, Path: r.URL.Path, RawQuery: r.URL.RawQuery}
 	rq.Headers = cloneHeader(r.Header)
 	rq.Headers.Set("Content-Length", strconv.Itoa(int(r.ContentLength)))
 	rq.Headers.Set("Host", r.Host)

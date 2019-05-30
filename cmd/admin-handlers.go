@@ -43,7 +43,6 @@ import (
 	"github.com/minio/minio/pkg/mem"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/quick"
-	trace "github.com/minio/minio/pkg/trace"
 )
 
 const (
@@ -1426,34 +1425,34 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 // The handler sends http trace to the connected HTTP client.
 func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HTTPTrace")
-	trcAll := false
-	if a := r.URL.Query().Get("all"); a != "false" {
-		trcAll = true
-	}
+	trcAll := r.URL.Query().Get("all") == "true"
 	objectAPI := validateAdminReq(ctx, w, r)
 	if objectAPI == nil {
 		return
 	}
-	traceCh := make(chan trace.Info)
+	// Avoid reusing tcp connection if read timeout is hit
+	// This is needed to make r.Context().Done() work as
+	// expected in case of read timeout
+	w.Header().Add("Connection", "close")
+
 	doneCh := make(chan struct{})
 	defer close(doneCh)
-	targetID := mustGetUUID()
 
-	globalTrace.Trace(targetID, traceCh, doneCh, trcAll)
-	defer globalTrace.Unsubscribe(targetID)
-	defer globalTrace.UnsubscribePeers(targetID)
-
-	for entry := range traceCh {
-		data, err := json.Marshal(entry)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+	traceCh := globalTrace.Trace(doneCh, trcAll)
+	for {
+		select {
+		case entry := <-traceCh:
+			if _, err := w.Write(entry); err != nil {
+				return
+			}
+			if _, err := w.Write([]byte("\n")); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-r.Context().Done():
+			return
+		case <-GlobalServiceDoneCh:
 			return
 		}
-		data = append(data, byte('\n'))
-
-		if _, err := w.Write(data); err != nil {
-			return
-		}
-		w.(http.Flusher).Flush()
 	}
 }

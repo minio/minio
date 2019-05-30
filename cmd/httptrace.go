@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,11 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"strings"
+	"sync"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/pubsub"
@@ -27,9 +30,8 @@ import (
 
 //HTTPTraceSys holds global trace state
 type HTTPTraceSys struct {
-	peers        []*peerRESTClient
-	pubsub       *pubsub.PubSub
-	traceTargets map[string]chan interface{}
+	peers  []*peerRESTClient
+	pubsub *pubsub.PubSub
 }
 
 // NewTraceSys - creates new HTTPTraceSys with all nodes subscribed to
@@ -43,7 +45,7 @@ func NewTraceSys(ctx context.Context, endpoints EndpointList) *HTTPTraceSys {
 
 	ps := pubsub.New()
 	return &HTTPTraceSys{
-		remoteClients, ps, make(map[string]chan interface{}),
+		remoteClients, ps,
 	}
 }
 
@@ -53,62 +55,61 @@ func (sys *HTTPTraceSys) HasTraceListeners() bool {
 	return sys != nil && sys.pubsub.HasSubscribers()
 }
 
-// UnsubscribeAll unsubscribes all listeners
-func (sys *HTTPTraceSys) UnsubscribeAll() {
-	sys.pubsub.UnsubscribeAll()
-}
-
-// Unsubscribe trace client
-func (sys *HTTPTraceSys) Unsubscribe(targetID string) {
-	if ch, ok := sys.traceTargets[targetID]; ok {
-		sys.pubsub.Unsubscribe(ch)
-	}
-	delete(sys.traceTargets, targetID)
-}
-func (sys *HTTPTraceSys) UnsubscribePeers(targetID string) {
-	for _, peer := range sys.peers {
-		peer.UnsubscribeTrace(targetID)
-	}
-}
-
 // Publish - publishes trace message to the http trace pubsub system
 func (sys *HTTPTraceSys) Publish(traceMsg trace.Info) {
 	sys.pubsub.Publish(traceMsg)
 }
 
 // Trace writes http trace to writer
-func (sys *HTTPTraceSys) Trace(targetID string, traceCh chan trace.Info, doneCh chan struct{}, trcAll bool) {
+func (sys *HTTPTraceSys) Trace(doneCh chan struct{}, trcAll bool) chan []byte {
+	traceCh := make(chan []byte)
 	go func() {
-		ch := sys.pubsub.Subscribe()
-		sys.traceTargets[targetID] = ch
-		for entry := range ch {
-			trcInfo := entry.(trace.Info)
-			// skip tracing of inter-node traffic if trcAll is false
-			if !trcAll && strings.HasPrefix(trcInfo.ReqInfo.URL.Path, "/minio") {
-				continue
-			}
-			select {
-			case traceCh <- trcInfo:
-			case <-doneCh:
-				return
-			}
-		}
-	}()
+		defer close(traceCh)
 
-	for _, peer := range sys.peers {
-		go func(peer *peerRESTClient) {
-			ch, err := peer.Trace(targetID, doneCh, trcAll)
-			if err != nil {
-				return
-			}
-			for entry := range ch {
+		var wg = &sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			buf := &bytes.Buffer{}
+			ch := sys.pubsub.Subscribe()
+			defer sys.pubsub.Unsubscribe(ch)
+			for {
 				select {
-				case traceCh <- entry:
+				case entry := <-ch:
+					trcInfo := entry.(trace.Info)
+					path := strings.TrimPrefix(trcInfo.ReqInfo.Path, "/")
+					// omit inter-node traffic if trcAll is false
+					if !trcAll && strings.HasPrefix(path, minioReservedBucket) {
+						continue
+					}
+					buf.Reset()
+					enc := json.NewEncoder(buf)
+					enc.SetEscapeHTML(false)
+					if err := enc.Encode(trcInfo); err != nil {
+						continue
+					}
+					traceCh <- buf.Bytes()
 				case <-doneCh:
 					return
 				}
 			}
-		}(peer)
-	}
-	return
+		}()
+
+		for _, peer := range sys.peers {
+			wg.Add(1)
+			go func(peer *peerRESTClient) {
+				defer wg.Done()
+				ch, err := peer.Trace(doneCh, trcAll)
+				if err != nil {
+					return
+				}
+				for entry := range ch {
+					traceCh <- entry
+				}
+			}(peer)
+		}
+		wg.Wait()
+	}()
+	return traceCh
 }

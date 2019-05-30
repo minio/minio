@@ -1,6 +1,5 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage
- * Copyright 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,30 +24,22 @@ import (
 	"net/url"
 	"strconv"
 
-	trc "github.com/minio/minio/pkg/trace"
+	trace "github.com/minio/minio/pkg/trace"
 )
 
 // TraceInfo holds http trace
 type TraceInfo struct {
-	Trc trc.Info
-	Err error
+	Trace trace.Info
+	Err   error `json:"-"`
 }
 
-// ListenTrace - listen on http trace notifications.
-func (adm AdminClient) ListenTrace(allTrace bool, doneCh <-chan struct{}) <-chan TraceInfo {
+// Trace - listen on http trace notifications.
+func (adm AdminClient) Trace(allTrace bool, doneCh <-chan struct{}) <-chan TraceInfo {
 	traceInfoCh := make(chan TraceInfo, 1)
 	// Only success, start a routine to start reading line by line.
 	go func(traceInfoCh chan<- TraceInfo) {
 		defer close(traceInfoCh)
-		// Continuously run and listen on trace.
-		// Create a done channel to control go routine.
-		retryDoneCh := make(chan struct{}, 1)
-
-		// Indicate to our routine to exit cleanly upon return.
-		defer close(retryDoneCh)
-
 		for {
-
 			urlValues := make(url.Values)
 			urlValues.Set("all", strconv.FormatBool(allTrace))
 			reqData := requestData{
@@ -75,11 +66,15 @@ func (adm AdminClient) ListenTrace(allTrace bool, doneCh <-chan struct{}) <-chan
 
 			// Unmarshal each line, returns marshaled values.
 			for bio.Scan() {
-				var traceRec trc.Info
+				var traceRec trace.Info
 				if err = json.Unmarshal(bio.Bytes(), &traceRec); err != nil {
 					continue
 				}
-				traceInfoCh <- TraceInfo{Trc: traceRec}
+				select {
+				case <-doneCh:
+					return
+				case traceInfoCh <- TraceInfo{Trace: traceRec}:
+				}
 			}
 			// Look for any underlying errors.
 			if err = bio.Err(); err != nil {

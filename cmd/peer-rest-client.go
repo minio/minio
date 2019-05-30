@@ -22,10 +22,10 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/gob"
-	"encoding/json"
 	"io"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -33,7 +33,6 @@ import (
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
-	"github.com/minio/minio/pkg/trace"
 )
 
 // client to talk to peer Nodes.
@@ -55,9 +54,16 @@ func (client *peerRESTClient) reConnect() error {
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *peerRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
+	return client.callWithContext(context.Background(), method, values, body, length)
+}
+
+// Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
+// permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
+// after verifying format.json
+func (client *peerRESTClient) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
 	if !client.connected {
 		err := client.reConnect()
-		logger.LogIf(context.Background(), err)
+		logger.LogIf(ctx, err)
 		if err != nil {
 			return nil, err
 		}
@@ -67,7 +73,7 @@ func (client *peerRESTClient) call(method string, values url.Values, body io.Rea
 		values = make(url.Values)
 	}
 
-	respBody, err = client.restClient.Call(method, values, body, length)
+	respBody, err = client.restClient.CallWithContext(ctx, method, values, body, length)
 	if err == nil {
 		return respBody, nil
 	}
@@ -417,61 +423,51 @@ func (client *peerRESTClient) SignalService(sig serviceSignal) error {
 }
 
 // Trace - send http trace request to peer nodes
-func (client *peerRESTClient) Trace(targetID string, doneCh chan struct{}, trcAll bool) (chan trace.Info, error) {
-	ch := make(chan trace.Info)
+func (client *peerRESTClient) Trace(doneCh chan struct{}, trcAll bool) (chan []byte, error) {
+	ch := make(chan []byte)
 	go func() {
+		cleanupFn := func(cancel context.CancelFunc, ch chan []byte, respBody io.ReadCloser) {
+			close(ch)
+			if cancel != nil {
+				cancel()
+			}
+			http.DrainBody(respBody)
+		}
 		for {
-
-			var reader bytes.Buffer
 			values := make(url.Values)
 			values.Set(peerRESTTraceAll, strconv.FormatBool(trcAll))
-			values.Set(peerRESTTraceTargetID, targetID)
-
-			respBody, err := client.call(peerRESTMethodTrace, values, &reader, -1)
-
+			// get cancellation context to properly unsubscribe peers
+			ctx, cancel := context.WithCancel(context.Background())
+			respBody, err := client.callWithContext(ctx, peerRESTMethodTrace, values, nil, -1)
 			if err != nil {
 				//retry
+				time.Sleep(5 * time.Second)
+				select {
+				case <-doneCh:
+					cleanupFn(cancel, ch, respBody)
+					return
+				default:
+				}
 				continue
 			}
-
 			bio := bufio.NewScanner(respBody)
-
-			// Close the response body.
-			defer respBody.Close()
-
+			go func() {
+				<-doneCh
+				cancel()
+			}()
 			// Unmarshal each line, returns marshaled values.
 			for bio.Scan() {
-				var traceRec trace.Info
-				if err = json.Unmarshal(bio.Bytes(), &traceRec); err != nil {
-					continue
-				}
-				ch <- traceRec
-			}
-			// Look for any underlying errors.
-			if err = bio.Err(); err != nil {
-				// For an unexpected connection drop from server, we close the body
-				// and re-connect.
-				if err == io.ErrUnexpectedEOF {
-					respBody.Close()
-				}
+				ch <- bio.Bytes()
 			}
 			select {
 			case <-doneCh:
+				cleanupFn(cancel, ch, respBody)
 				return
+			default:
 			}
 		}
 	}()
 	return ch, nil
-}
-
-// UnsubscribeTrace unsubscribes trace target from peer node
-func (client *peerRESTClient) UnsubscribeTrace(targetID string) error {
-	var reader bytes.Buffer
-	values := make(url.Values)
-	values.Set(peerRESTTraceTargetID, targetID)
-
-	_, err := client.call(peerRESTMethodUnsubscribeTrace, values, &reader, -1)
-	return err
 }
 
 func getRemoteHosts(endpoints EndpointList) []*xnet.Host {

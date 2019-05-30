@@ -17,35 +17,34 @@
  *
  */
 
- package main
+package main
 
- import (
-	 "log"
-	"fmt"
-	 "github.com/minio/minio/pkg/madmin"
- )
- 
- func main() {
-	 // Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY are
-	 // dummy values, please replace them with original values.
- 
-	 // API requests are secure (HTTPS) if secure=true and insecure (HTTPS) otherwise.
-	 // New returns an MinIO Admin client object.
-	 madmClnt, err := madmin.New("your-minio.example.com:9000", "YOUR-ACCESSKEYID", "YOUR-SECRETACCESSKEY", true)
-	 if err != nil {
-		 log.Fatalln(err)
-	 }
-	 doneCh := make(chan struct{})
-	 defer close(doneCh)
- 
-	// Start listening on all trace activity.
-	traceCh := madmClnt.ListenTrace(false, doneCh)
+import (
+	"log"
+
+	"github.com/minio/minio/pkg/madmin"
+)
+
+func main() {
+	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY are
+	// dummy values, please replace them with original values.
+
+	// API requests are secure (HTTPS) if secure=true and insecure (HTTPS) otherwise.
+	// New returns an MinIO Admin client object.
+	madmClnt, err := madmin.New("your-minio.example.com:9000", "YOUR-ACCESSKEYID", "YOUR-SECRETACCESSKEY", true)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	// Start listening on all http trace activity from all servers
+	// in the minio cluster.
+	traceCh := madmClnt.Trace(false, doneCh)
 	for traceInfo := range traceCh {
 		if traceInfo.Err != nil {
 			fmt.Println(traceInfo.Err)
 		}
 		fmt.Println(traceInfo)
-	} 
-
- }
-
+	}
+}

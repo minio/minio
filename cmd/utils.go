@@ -59,11 +59,6 @@ func IsErr(err error, errs ...error) bool {
 	return false
 }
 
-// stop sending HTTP trace to registered listeners.
-func stopHTTPTrace() {
-	globalTrace.UnsubscribeAll()
-}
-
 // make a copy of http.Header
 func cloneHeader(h http.Header) http.Header {
 	h2 := make(http.Header, len(h))

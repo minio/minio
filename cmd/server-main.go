@@ -290,6 +290,9 @@ func serverMain(ctx *cli.Context) {
 	// Init global heal state
 	initAllHealState(globalIsXL)
 
+	// initialize globalTrace system
+	globalTrace = NewTraceSys(context.Background(), globalEndpoints)
+
 	// Configure server.
 	var handler http.Handler
 	handler, err = configureServerHandler(globalEndpoints)
@@ -358,8 +361,6 @@ func serverMain(ctx *cli.Context) {
 		logger.Fatal(err, "Unable to initialize policy system")
 	}
 
-	// initialize pubsub system
-	globalTrace = NewTraceSys(context.Background(), globalEndpoints)
 	// Create new notification system.
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
 
