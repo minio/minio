@@ -24,6 +24,7 @@ import classNames from "classnames"
 
 import { Modal, ModalBody, ModalHeader } from "react-bootstrap"
 import InputGroup from "./InputGroup"
+import { ACCESS_KEY_MIN_LENGTH, SECRET_KEY_MIN_LENGTH } from "../constants"
 
 export class ChangePasswordModal extends React.Component {
   constructor(props) {
@@ -110,8 +111,8 @@ export class ChangePasswordModal extends React.Component {
     return (
       this.state.currentAccessKey.length > 0 &&
       this.state.currentSecretKey.length > 0 &&
-      this.state.newAccessKey.length > 0 &&
-      this.state.newSecretKey.length > 0
+      this.state.newAccessKey.length >= ACCESS_KEY_MIN_LENGTH &&
+      this.state.newSecretKey.length >= SECRET_KEY_MIN_LENGTH
     )
   }
 

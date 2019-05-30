@@ -33,7 +33,7 @@ jest.mock("../../web", () => ({
         currentAccessKey == "minio" &&
         currentSecretKey == "minio123" &&
         newAccessKey == "test" &&
-        newSecretKey == "test123"
+        newSecretKey == "test1234"
       ) {
         return Promise.resolve({})
       } else {
@@ -122,6 +122,24 @@ describe("ChangePasswordModal", () => {
     expect(wrapper.find("#newAccesskey").exists()).toBeFalsy()
   })
 
+  it("should disble Update button for invalid accessKey or secretKey", () => {
+    const showAlert = jest.fn()
+    const wrapper = shallow(
+      <ChangePasswordModal serverInfo={serverInfo} showAlert={showAlert} />
+    )
+    wrapper
+      .find("#currentAccessKey")
+      .simulate("change", { target: { value: "minio" } })
+    wrapper
+      .find("#currentSecretKey")
+      .simulate("change", { target: { value: "minio123" } })
+    wrapper.find("#newAccessKey").simulate("change", { target: { value: "t" } })
+    wrapper
+      .find("#newSecretKey")
+      .simulate("change", { target: { value: "t1" } })
+    expect(wrapper.find("#update-keys").prop("disabled")).toBeTruthy()
+  })
+
   it("should update accessKey and secretKey when Update button is clicked", () => {
     const showAlert = jest.fn()
     const wrapper = shallow(
@@ -138,7 +156,8 @@ describe("ChangePasswordModal", () => {
       .simulate("change", { target: { value: "test" } })
     wrapper
       .find("#newSecretKey")
-      .simulate("change", { target: { value: "test123" } })
+      .simulate("change", { target: { value: "test1234" } })
+    expect(wrapper.find("#update-keys").prop("disabled")).toBeFalsy()
     wrapper.find("#update-keys").simulate("click")
     setImmediate(() => {
       expect(showAlert).toHaveBeenCalledWith({
