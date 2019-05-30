@@ -842,12 +842,17 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 			return errIncorrectCreds
 		}
 
-		err := globalIAMSys.SetUserSecretKey(claims.Subject, args.NewSecretKey)
+		creds, err := auth.CreateCredentials(claims.Subject, args.NewSecretKey)
 		if err != nil {
 			return toJSONError(err)
 		}
 
-		reply.Token, err = authenticateWeb(claims.Subject, args.NewSecretKey)
+		err = globalIAMSys.SetUserSecretKey(creds.AccessKey, creds.SecretKey)
+		if err != nil {
+			return toJSONError(err)
+		}
+
+		reply.Token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
 		if err != nil {
 			return toJSONError(err)
 		}
