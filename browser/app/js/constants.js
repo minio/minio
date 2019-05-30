@@ -28,3 +28,6 @@ export const NONE = "none"
 export const SHARE_OBJECT_EXPIRY_DAYS = 5
 export const SHARE_OBJECT_EXPIRY_HOURS = 0
 export const SHARE_OBJECT_EXPIRY_MINUTES = 0
+
+export const ACCESS_KEY_MIN_LENGTH = 3
+export const SECRET_KEY_MIN_LENGTH = 8
