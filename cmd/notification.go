@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
@@ -910,6 +911,11 @@ func (args eventArgs) ToEvent() event.Event {
 }
 
 func sendEvent(args eventArgs) {
+
+	// remove sensitive encryption entries in metadata.
+	crypto.RemoveSensitiveEntries(args.Object.UserDefined)
+	crypto.RemoveInternalEntries(args.Object.UserDefined)
+
 	// globalNotificationSys is not initialized in gateway mode.
 	if globalNotificationSys == nil {
 		return
