@@ -28,7 +28,6 @@ import (
 	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
-	"golang.org/x/net/http2"
 )
 
 // DefaultRESTTimeout - default RPC timeout is one minute.
@@ -117,12 +116,6 @@ func NewClient(url *url.URL, tlsConfig *tls.Config, timeout time.Duration, newAu
 		ExpectContinueTimeout: 10 * time.Second,
 		TLSClientConfig:       tlsConfig,
 		DisableCompression:    true,
-	}
-	if tlsConfig != nil {
-		// If TLS is enabled configure http2
-		if err := http2.ConfigureTransport(tr); err != nil {
-			return nil, err
-		}
 	}
 	return &Client{
 		httpClient:          &http.Client{Transport: tr},
