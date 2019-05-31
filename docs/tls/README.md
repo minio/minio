@@ -19,9 +19,8 @@ Copy the existing private key and public certificate to the `certs` directory. T
 * **Linux:** `${HOME}/.minio/certs`
 * **Windows:** `%%USERPROFILE%%\.minio\certs`
 
-> NOTE: Location of custom certs directory can be specified using `--certs-dir` command line option.
-
-**Note:** 
+**Note:**
+* Location of custom certs directory can be specified using `--certs-dir` command line option.
 * Inside the `certs` directory, the private key must by named `private.key` and the public key must be named `public.crt`.
 * A certificate signed by a CA contains information about the issued identity (e.g. name, expiry, public key) and any intermediate certificates. The root CA is not included.
 
@@ -29,10 +28,10 @@ Copy the existing private key and public certificate to the `certs` directory. T
 
 This section describes how to generate a self-signed certificate using various tools:
 
-3.1 [Use generate_cert.go to Generate a Certificate](#using-go) 
-3.2 [Use OpenSSL to Generate a Certificate](#using-open-ssl) 
-3.3 [Use OpenSSL (with IP address) to Generate a Certificate](#using-open-ssl-with-ip) 
-3.4 [Use GnuTLS (for Windows) to Generate a Certificate](#using-gnu-tls)
+* 3.1 [Use generate_cert.go to Generate a Certificate](#using-go) 
+* 3.2 [Use OpenSSL to Generate a Certificate](#using-open-ssl) 
+* 3.3 [Use OpenSSL (with IP address) to Generate a Certificate](#using-open-ssl-with-ip) 
+* 3.4 [Use GnuTLS (for Windows) to Generate a Certificate](#using-gnu-tls) 
 
 **Note:**
 * MinIO only supports keys and certificates in PEM format on Linux and Windows.
@@ -64,7 +63,6 @@ Use one of the following methods to generate a certificate using `openssl`:
 * 3.2.1 [Generate a private key with ECDSA](#generate-private-key-with-ecdsa) 
 * 3.2.2 [Generate a private key with RSA](#generate-private-key-with-rsa)
 * 3.2.3 [Generate a self-signed certificate](#generate-a-self-signed-certificate)
-
 
 #### 3.2.1 <a name="generate-private-key-with-ecdsa"></a>Generate a private key with ECDSA.
 
