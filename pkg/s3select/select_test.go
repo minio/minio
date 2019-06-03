@@ -18,12 +18,10 @@ package s3select
 
 import (
 	"bytes"
-	"go/build"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
-	"path"
 	"reflect"
 	"testing"
 )
