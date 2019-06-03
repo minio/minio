@@ -879,7 +879,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 
 		err = globalIAMSys.SetUserSecretKey(creds.AccessKey, creds.SecretKey)
 		if err != nil {
-			return toJSONError(err)
+			return toJSONError(ctx, err)
 		}
 
 		reply.Token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
