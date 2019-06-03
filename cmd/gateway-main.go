@@ -304,6 +304,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		printGatewayStartupMessage(getAPIEndpoints(), gatewayName)
 	}
 
+	// Set when gateway is enabled
+	globalIsGateway = true
+
 	// Set uptime time after object layer has initialized.
 	globalBootTime = UTCNow()
 
