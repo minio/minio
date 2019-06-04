@@ -37,18 +37,34 @@ func init() {
 	logger.RegisterUIError(fmtError)
 }
 
+const (
+	gatewayBucketFilterFlag = "bucket-filter"
+)
+
+var gatewayFlags = []cli.Flag{
+	cli.StringSliceFlag{
+		Name:   gatewayBucketFilterFlag,
+		Usage:  "whitelist patterns of visible buckets which can include wildcard *",
+		EnvVar: "BUCKET_FILTER",
+	},
+}
+
+func gatewayBucketFilter(ctx *cli.Context) []string {
+	return ctx.StringSlice(gatewayBucketFilterFlag)
+}
+
 var (
 	gatewayCmd = cli.Command{
 		Name:            "gateway",
 		Usage:           "start object storage gateway",
-		Flags:           append(ServerFlags, GlobalFlags...),
+		Flags:           append(gatewayFlags, append(ServerFlags, GlobalFlags...)...),
 		HideHelpCommand: true,
 	}
 )
 
 // RegisterGatewayCommand registers a new command for gateway.
 func RegisterGatewayCommand(cmd cli.Command) error {
-	cmd.Flags = append(append(cmd.Flags, append(cmd.Flags, ServerFlags...)...), GlobalFlags...)
+	cmd.Flags = append(cmd.Flags, gatewayCmd.Flags...)
 	gatewayCmd.Subcommands = append(gatewayCmd.Subcommands, cmd)
 	return nil
 }
