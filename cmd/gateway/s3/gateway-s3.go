@@ -177,6 +177,14 @@ func isAmazonS3Endpoint(urlStr string) bool {
 	return s3utils.IsAmazonEndpoint(*u)
 }
 
+func url2BucketAndEndpoint(urlstr string) (string, url.URL) {
+	u, err := url.Parse(urlstr)
+	if err != nil {
+		panic(err)
+	}
+	return s3utils.GetBucketFromURL(*u)
+}
+
 // Chains all credential types, in the following order:
 //  - AWS env vars (i.e. AWS_ACCESS_KEY_ID)
 //  - AWS creds file (i.e. AWS_SHARED_CREDENTIALS_FILE or ~/.aws/credentials)
@@ -205,7 +213,7 @@ var defaultAWSCredProviders = []credentials.Provider{
 }
 
 // newS3 - Initializes a new client by auto probing S3 server signature.
-func newS3(urlStr string) (*miniogo.Core, error) {
+func newS3(urlStr string) (*miniogo.Core, string, error) {
 	if urlStr == "" {
 		urlStr = "https://s3.amazonaws.com"
 	}
@@ -213,11 +221,16 @@ func newS3(urlStr string) (*miniogo.Core, error) {
 	// Override default params if the host is provided
 	endpoint, secure, err := minio.ParseGatewayEndpoint(urlStr)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
+	// parse bucket if present from the endpoint url
+	bucket, endpointURL := url2BucketAndEndpoint(urlStr)
 
+	if bucket != "" {
+		endpoint = endpointURL.String()
+	}
 	var creds *credentials.Credentials
-	if isAmazonS3Endpoint(urlStr) {
+	if isAmazonS3Endpoint(endpoint) {
 		// If we see an Amazon S3 endpoint, then we use more ways to fetch backend credentials.
 		// Specifically IAM style rotating credentials are only supported with AWS S3 endpoint.
 		creds = credentials.NewChainCredentials(defaultAWSCredProviders)
@@ -225,34 +238,44 @@ func newS3(urlStr string) (*miniogo.Core, error) {
 		creds = credentials.NewChainCredentials(defaultProviders)
 	}
 
-	clnt, err := miniogo.NewWithCredentials(endpoint, creds, secure, "")
+	opts := &miniogo.Options{Creds: creds, Secure: secure, Bucket: bucket}
+
+	clnt, err := miniogo.NewWithOptions(endpoint, opts)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// Set custom transport
 	clnt.SetCustomTransport(minio.NewCustomHTTPTransport())
 
 	probeBucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "probe-bucket-sign-")
+	// if bucket is configured in the endpoint, use that as a probe
+	if bucket != "" {
+		if _, err = clnt.BucketExists(bucket); err != nil {
+			return nil, "", err
+		}
+		return &miniogo.Core{Client: clnt}, bucket, nil
+	}
 	// Check if the provided keys are valid.
 	if _, err = clnt.BucketExists(probeBucketName); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return &miniogo.Core{Client: clnt}, nil
+	return &miniogo.Core{Client: clnt}, bucket, nil
 }
 
 // NewGatewayLayer returns s3 ObjectLayer.
 func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	// creds are ignored here, since S3 gateway implements chaining
 	// all credentials.
-	clnt, err := newS3(g.host)
+	clnt, bucket, err := newS3(g.host)
 	if err != nil {
 		return nil, err
 	}
 
 	s := s3Objects{
 		Client: clnt,
+		bucket: bucket,
 	}
 	// Enables single encyption of KMS is configured.
 	if minio.GlobalKMS != nil {
@@ -276,6 +299,7 @@ func (g *S3) Production() bool {
 type s3Objects struct {
 	minio.GatewayUnsupported
 	Client *miniogo.Core
+	bucket string
 }
 
 // Shutdown saves any gateway metadata to disk
@@ -291,6 +315,11 @@ func (l *s3Objects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
 
 // MakeBucket creates a new container on S3 backend.
 func (l *s3Objects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
+	// deny MakeBucket requests if bucket is configured in the endpoint
+	if l.bucket != "" {
+		return minio.AccessDenied{Bucket: bucket}
+	}
+
 	// Verify if bucket name is valid.
 	// We are using a separate helper function here to validate bucket
 	// names instead of IsValidBucketName() because there is a possibility
@@ -311,7 +340,25 @@ func (l *s3Objects) MakeBucketWithLocation(ctx context.Context, bucket, location
 
 // GetBucketInfo gets bucket metadata..
 func (l *s3Objects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.BucketInfo, e error) {
-	buckets, err := l.Client.ListBuckets()
+	var buckets []miniogo.BucketInfo
+	var err error
+
+	if l.bucket != "" {
+		// if bucket set in endpoint, ignore bucket passed in as arg
+		var ok bool
+		if ok, err = l.Client.BucketExists(bucket); err != nil {
+			return bi, minio.ErrorRespToObjectError(err, bucket)
+		}
+		if !ok {
+			return bi, minio.BucketNotFound{Bucket: l.bucket}
+		}
+		return minio.BucketInfo{
+			Name:    bucket,
+			Created: time.Now().UTC(),
+		}, nil
+	}
+
+	buckets, err = l.Client.ListBuckets()
 	if err != nil {
 		return bi, minio.ErrorRespToObjectError(err, bucket)
 	}

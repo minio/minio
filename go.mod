@@ -55,6 +55,7 @@ require (
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/lsync v0.1.0
 	github.com/minio/mc v0.0.0-20190529152718-f4bb0b8850cb
+	github.com/minio/minio-go v0.0.0-20190327203652-5325257a208f
 	github.com/minio/minio-go/v6 v6.0.27
 	github.com/minio/parquet-go v0.0.0-20190318185229-9d767baf1679
 	github.com/minio/sha256-simd v0.1.0
@@ -66,7 +67,7 @@ require (
 	github.com/nats-io/go-nats-streaming v0.4.2
 	github.com/nats-io/nats v1.7.2
 	github.com/nats-io/nats-streaming-server v0.14.2 // indirect
-	github.com/nats-io/nats.go v1.8.0
+	github.com/nats-io/nats.go v1.8.1
 	github.com/nats-io/stan.go v0.4.5
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.0.7
@@ -81,6 +82,7 @@ require (
 	github.com/streadway/amqp v0.0.0-20190402114354-16ed540749f6
 	github.com/tidwall/gjson v1.2.1
 	github.com/tidwall/match v1.0.1 // indirect
+	github.com/tidwall/pretty v1.0.0 // indirect
 	github.com/tidwall/sjson v1.0.4
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	go.uber.org/atomic v1.3.2
@@ -94,3 +96,5 @@ require (
 	gopkg.in/olivere/elastic.v5 v5.0.80
 	gopkg.in/yaml.v2 v2.2.2
 )
+
+replace github.com/minio/minio-go/v6 v6.0.27 => ../../minio/minio-go

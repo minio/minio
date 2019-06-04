@@ -178,6 +178,13 @@ func (e BucketNotEmpty) Error() string {
 	return "Bucket not empty: " + e.Bucket
 }
 
+//AccessDenied bucket create denied.
+type AccessDenied GenericError
+
+func (e AccessDenied) Error() string {
+	return "Access denied: " + e.Bucket
+}
+
 // ObjectNotFound object does not exist.
 type ObjectNotFound GenericError
 
