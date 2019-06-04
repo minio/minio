@@ -23,8 +23,8 @@ import (
 
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
-	"github.com/nats-io/go-nats-streaming"
-	"github.com/nats-io/nats"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/stan.go"
 )
 
 // NATSArgs - NATS target arguments.
