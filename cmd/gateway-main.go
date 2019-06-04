@@ -44,7 +44,7 @@ const (
 var gatewayFlags = []cli.Flag{
 	cli.StringSliceFlag{
 		Name:   gatewayBucketFilterFlag,
-		Usage:  "whitelist patterns of visible buckets which can include wildcard *",
+		Usage:  "whitelist patterns of exposed buckets which can include wildcard *",
 		EnvVar: "BUCKET_FILTER",
 	},
 }
@@ -52,7 +52,6 @@ var gatewayFlags = []cli.Flag{
 var globalGatewayContext = struct {
 	bucketFilter []string
 }{}
-
 
 var (
 	gatewayCmd = cli.Command{
@@ -112,9 +111,23 @@ func ValidateGatewayArguments(serverAddr, endpointAddr string) error {
 	return nil
 }
 
-// handle gateway sub command specific arguments
+// handle gateway subcommand specific arguments
 func handleGatewayArgs(ctx *cli.Context) {
 	globalGatewayContext.bucketFilter = ctx.StringSlice(gatewayBucketFilterFlag)
+}
+
+type filteringObjectLayerWrapper struct {
+	ObjectLayer
+	filters []string
+}
+
+func (f *filteringObjectLayerWrapper) ListBuckets(ctx context.Context) (buckets []BucketInfo, err error) {
+	buckets, err = f.ObjectLayer.ListBuckets(ctx)
+	if err != nil {
+		return
+	}
+	buckets = filterBuckets(buckets, f.filters)
+	return
 }
 
 // StartGateway - handler for 'minio gateway <name>'.
@@ -252,10 +265,14 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		globalHTTPServer.Shutdown()
 		logger.FatalIf(err, "Unable to initialize gateway backend")
 	}
+	filterLayer := &filteringObjectLayerWrapper{
+		ObjectLayer: newObject,
+		filters:     globalGatewayContext.bucketFilter,
+	}
 
 	// Populate existing buckets to the etcd backend
 	if globalDNSConfig != nil {
-		initFederatorBackend(newObject)
+		initFederatorBackend(filterLayer)
 	}
 
 	if enableConfigOps {
@@ -263,7 +280,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		globalConfigSys = NewConfigSys()
 
 		// Load globalServerConfig from etcd
-		logger.LogIf(context.Background(), globalConfigSys.Init(newObject))
+		logger.LogIf(context.Background(), globalConfigSys.Init(filterLayer))
 	}
 
 	// Load logger subsystem
@@ -287,25 +304,25 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalIAMSys = NewIAMSys()
 	if enableIAMOps {
 		// Initialize IAM sys.
-		logger.LogIf(context.Background(), globalIAMSys.Init(newObject))
+		logger.LogIf(context.Background(), globalIAMSys.Init(filterLayer))
 	}
 
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()
 
 	// Initialize policy system.
-	go globalPolicySys.Init(newObject)
+	go globalPolicySys.Init(filterLayer)
 
 	// Create new notification system.
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
-	if globalEtcdClient != nil && newObject.IsNotificationSupported() {
-		logger.LogIf(context.Background(), globalNotificationSys.Init(newObject))
+	if globalEtcdClient != nil && filterLayer.IsNotificationSupported() {
+		logger.LogIf(context.Background(), globalNotificationSys.Init(filterLayer))
 	}
 
 	// Encryption support checks in gateway mode.
 	{
 
-		if (globalAutoEncryption || GlobalKMS != nil) && !newObject.IsEncryptionSupported() {
+		if (globalAutoEncryption || GlobalKMS != nil) && !filterLayer.IsEncryptionSupported() {
 			logger.Fatal(errInvalidArgument,
 				"Encryption support is requested but (%s) gateway does not support encryption", gw.Name())
 		}
@@ -318,7 +335,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Once endpoints are finalized, initialize the new object api.
 	globalObjLayerMutex.Lock()
-	globalObjectAPI = newObject
+	globalObjectAPI = filterLayer
 	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
