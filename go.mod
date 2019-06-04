@@ -66,6 +66,8 @@ require (
 	github.com/nats-io/go-nats-streaming v0.4.2
 	github.com/nats-io/nats v1.7.2
 	github.com/nats-io/nats-streaming-server v0.14.2 // indirect
+	github.com/nats-io/nats.go v1.8.0
+	github.com/nats-io/stan.go v0.4.5
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.0.7
 	github.com/pkg/profile v1.3.0
@@ -82,9 +84,11 @@ require (
 	github.com/tidwall/sjson v1.0.4
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	go.uber.org/atomic v1.3.2
-	golang.org/x/crypto v0.0.0-20190513172903-22d7a77e9e5f
-	golang.org/x/net v0.0.0-20190522155817-f3200d17e092
-	golang.org/x/sys v0.0.0-20190522044717-8097e1b27ff5
+	golang.org/x/crypto v0.0.0-20190530122614-20be4c3c3ed5
+	golang.org/x/lint v0.0.0-20190409202823-959b441ac422 // indirect
+	golang.org/x/net v0.0.0-20190603091049-60506f45cf65
+	golang.org/x/sys v0.0.0-20190602015325-4c4f7f33c9ed
+	golang.org/x/tools v0.0.0-20190603231351-8aaa1484dc10 // indirect
 	google.golang.org/api v0.4.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
 	gopkg.in/olivere/elastic.v5 v5.0.80
