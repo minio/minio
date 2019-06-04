@@ -49,9 +49,10 @@ var gatewayFlags = []cli.Flag{
 	},
 }
 
-func gatewayBucketFilter(ctx *cli.Context) []string {
-	return ctx.StringSlice(gatewayBucketFilterFlag)
-}
+var globalGatewayContext = struct {
+	bucketFilter []string
+}{}
+
 
 var (
 	gatewayCmd = cli.Command{
@@ -111,6 +112,11 @@ func ValidateGatewayArguments(serverAddr, endpointAddr string) error {
 	return nil
 }
 
+// handle gateway sub command specific arguments
+func handleGatewayArgs(ctx *cli.Context) {
+	globalGatewayContext.bucketFilter = ctx.StringSlice(gatewayBucketFilterFlag)
+}
+
 // StartGateway - handler for 'minio gateway <name>'.
 func StartGateway(ctx *cli.Context, gw Gateway) {
 	if gw == nil {
@@ -129,6 +135,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
+
+	// Handle gateway command specific args.
+	handleGatewayArgs(ctx)
 
 	// Get port to listen on from gateway address
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalCLIContext.Addr)

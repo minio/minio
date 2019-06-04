@@ -160,6 +160,20 @@ func IsValidObjectPrefix(object string) bool {
 	return true
 }
 
+// Extract buckets whose name matches any of the given wildcard patterns
+// Returns all buckets if no pattern is specified
+func filterBuckets(buckets []BucketInfo, patterns []string) (filtered []BucketInfo) {
+	if patterns == nil || len(patterns) == 0 {
+		return buckets
+	}
+	for _, bucket := range buckets {
+		if hasPattern(patterns, bucket.Name) {
+			filtered = append(filtered, bucket)
+		}
+	}
+	return filtered
+}
+
 // Slash separator.
 const slashSeparator = "/"
 
