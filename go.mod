@@ -3,7 +3,7 @@ module github.com/minio/minio
 go 1.12
 
 require (
-	cloud.google.com/go v0.37.2
+	cloud.google.com/go v0.39.0
 	contrib.go.opencensus.io/exporter/ocagent v0.5.0 // indirect
 	github.com/Azure/azure-sdk-for-go v27.0.0+incompatible
 	github.com/Azure/go-autorest v11.7.0+incompatible
@@ -89,12 +89,13 @@ require (
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	go.etcd.io/bbolt v1.3.3 // indirect
 	go.uber.org/atomic v1.3.2
+	golang.org/x/build v0.0.0-20190314133821-5284462c4bec // indirect
 	golang.org/x/crypto v0.0.0-20190618222545-ea8f1a30c443
 	golang.org/x/lint v0.0.0-20190409202823-959b441ac422 // indirect
-	golang.org/x/net v0.0.0-20190619014844-b5b0513f8c1b // indirect
+	golang.org/x/net v0.0.0-20190619014844-b5b0513f8c1b
 	golang.org/x/sys v0.0.0-20190618155005-516e3c20635f
 	golang.org/x/tools v0.0.0-20190619181801-b76e30ffa0aa // indirect
-	google.golang.org/api v0.4.0
+	google.golang.org/api v0.5.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
 	gopkg.in/olivere/elastic.v5 v5.0.80
 	gopkg.in/yaml.v2 v2.2.2
