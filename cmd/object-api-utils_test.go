@@ -138,33 +138,33 @@ func TestIsValidObjectName(t *testing.T) {
 // Tests for filter bucket.
 func TestFilterBucket(t *testing.T) {
 	testCases := []struct {
-		buckets []string
-		filters []string
+		buckets  []string
+		filters  []string
 		expected []string
 	}{
 		{
-			buckets: []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
-			filters: nil,
+			buckets:  []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
+			filters:  nil,
 			expected: []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
 		},
 		{
-			buckets: []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
-			filters: []string{},
+			buckets:  []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
+			filters:  []string{},
 			expected: []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
 		},
 		{
-			buckets: []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
-			filters: []string{"BBB", "BCC"},
+			buckets:  []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
+			filters:  []string{"BBB", "BCC"},
 			expected: []string{"BBB", "BCC"},
 		},
 		{
-			buckets: []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
-			filters: []string{"A*"},
+			buckets:  []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
+			filters:  []string{"A*"},
 			expected: []string{"AAA", "ABB"},
 		},
 		{
-			buckets: []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
-			filters: []string{"A*", "B*"},
+			buckets:  []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
+			filters:  []string{"A*", "B*"},
 			expected: []string{"AAA", "ABB", "BBB", "BCC"},
 		},
 	}

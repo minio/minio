@@ -27,7 +27,14 @@ import (
 func TestRegisterGatewayCommand(t *testing.T) {
 	var err error
 
-	cmd := cli.Command{Name: "test"}
+	cmd := cli.Command{
+		Name: "test",
+		Flags: []cli.Flag{
+			cli.StringFlag{
+				Name: "flag",
+			},
+		},
+	}
 	err = RegisterGatewayCommand(cmd)
 	if err != nil {
 		t.Errorf("RegisterGatewayCommand got unexpected error: %s", err)

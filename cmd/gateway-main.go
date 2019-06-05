@@ -44,7 +44,7 @@ const (
 var gatewayFlags = []cli.Flag{
 	cli.StringSliceFlag{
 		Name:   gatewayBucketFilterFlag,
-		Usage:  "whitelist patterns of exposed buckets which can include wildcard *",
+		Usage:  "whitelist patterns of buckets to expose which can include wildcard *",
 		EnvVar: "BUCKET_FILTER",
 	},
 }
