@@ -136,7 +136,7 @@ func IsValidObjectName(object string) bool {
 	if len(object) == 0 {
 		return false
 	}
-	if hasSuffix(object, slashSeparator) || hasPrefix(object, slashSeparator) {
+	if hasSuffix(object, slashSeparator) {
 		return false
 	}
 	return IsValidObjectPrefix(object)
@@ -148,9 +148,6 @@ func IsValidObjectPrefix(object string) bool {
 	if hasBadPathComponent(object) {
 		return false
 	}
-	if len(object) > 1024 {
-		return false
-	}
 	if !utf8.ValidString(object) {
 		return false
 	}
@@ -159,6 +156,25 @@ func IsValidObjectPrefix(object string) bool {
 		return false
 	}
 	return true
+}
+
+// checkObjectNameForLengthAndSlash -check for the validity of object name length and prefis as slash
+func checkObjectNameForLengthAndSlash(bucket, object string) error {
+	// Check for the length of object name
+	if len(object) > 1024 {
+		return ObjectNameTooLong{
+			Bucket: bucket,
+			Object: object,
+		}
+	}
+	// Check for slash as prefix in object name
+	if hasPrefix(object, slashSeparator) {
+		return ObjectNamePrefixAsSlash{
+			Bucket: bucket,
+			Object: object,
+		}
+	}
+	return nil
 }
 
 // Slash separator.
