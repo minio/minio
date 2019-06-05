@@ -3,7 +3,10 @@ GOPATH := $(shell go env GOPATH)
 LDFLAGS := $(shell go run buildscripts/gen-ldflags.go)
 
 GOOS := $(shell go env GOOS)
-GOOSALT := $(shell if [ ${GOOS} == 'darwin' ]; then echo 'mac'; else echo ${GOOS}; fi;)
+GOOSALT ?= 'linux'
+ifeq ($(GOOS),'darwin')
+  GOOSALT = 'mac'
+endif
 
 TAG ?= $(USER)
 BUILD_LDFLAGS := '$(LDFLAGS)'
