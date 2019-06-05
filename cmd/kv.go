@@ -106,7 +106,7 @@ static int minio_nkv_list(struct minio_nkv_handle *handle, void *prefix, int pre
   ctx.network_path_hash = handle->network_path_hash;
   ctx.ks_id = 0;
 
-  uint32_t count = 100;
+  uint32_t count = 1000;
   uint32_t max_keys = count;
   nkv_key* keys_out = (nkv_key*) malloc (sizeof(nkv_key) * count);
   memset(keys_out, 0, (sizeof(nkv_key) * count));
