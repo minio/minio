@@ -135,6 +135,56 @@ func TestIsValidObjectName(t *testing.T) {
 	}
 }
 
+// Tests for filter bucket.
+func TestFilterBucket(t *testing.T) {
+	testCases := []struct {
+		buckets []string
+		filters []string
+		expected []string
+	}{
+		{
+			buckets: []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
+			filters: nil,
+			expected: []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
+		},
+		{
+			buckets: []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
+			filters: []string{},
+			expected: []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
+		},
+		{
+			buckets: []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
+			filters: []string{"BBB", "BCC"},
+			expected: []string{"BBB", "BCC"},
+		},
+		{
+			buckets: []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
+			filters: []string{"A*"},
+			expected: []string{"AAA", "ABB"},
+		},
+		{
+			buckets: []string{"AAA", "ABB", "BBB", "BCC", "CCC"},
+			filters: []string{"A*", "B*"},
+			expected: []string{"AAA", "ABB", "BBB", "BCC"},
+		},
+	}
+
+	for i, testCase := range testCases {
+		var buckets []BucketInfo
+		var expected []BucketInfo
+		for _, name := range testCase.buckets {
+			buckets = append(buckets, BucketInfo{Name: name})
+		}
+		for _, name := range testCase.expected {
+			expected = append(expected, BucketInfo{Name: name})
+		}
+
+		if actual := filterBuckets(buckets, testCase.filters); !reflect.DeepEqual(actual, expected) {
+			t.Fatalf("test %d failed: expected: result=%v, got=%v", i+1, expected, actual)
+		}
+	}
+}
+
 // Tests getCompleteMultipartMD5
 func TestGetCompleteMultipartMD5(t *testing.T) {
 	testCases := []struct {
