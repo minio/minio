@@ -124,8 +124,9 @@ static int minio_nkv_list(struct minio_nkv_handle *handle, void *prefix, int pre
   char *bufChar = (char *) buf;
   for (int iter = 0; iter < *numKeys; iter++) {
     // printf("C: %s\n",(char *)keys_out[iter].key);
-    strcpy(bufChar, keys_out[iter].key);
+    strncpy(bufChar, keys_out[iter].key, keys_out[iter].length);
     bufChar += keys_out[iter].length;
+    *bufChar = 0;
     bufChar++;
   }
   for (int iter = 0; iter < count; iter++) {
@@ -715,7 +716,7 @@ func (k *KV) Delete(keyStr string) error {
 	return nil
 }
 
-func (k *KV) List(keyStr string, buf []byte) ([]string, error) {
+func (k *KV) List(keyStr string, b []byte) ([]string, error) {
 	if kvSerialize {
 		kvMu.Lock()
 		defer kvMu.Unlock()
@@ -730,6 +731,7 @@ func (k *KV) List(keyStr string, buf []byte) ([]string, error) {
 	var entries []string
 	var iterContext unsafe.Pointer
 	for {
+		buf := b
 		cstatus := C.minio_nkv_list(&k.handle, unsafe.Pointer(&key[0]), C.int(len(key)), unsafe.Pointer(&buf[0]), C.int(len(buf)), &numKeysC, &iterContext)
 		if cstatus != 0 && cstatus != 0x01F {
 			return nil, errFileNotFound
