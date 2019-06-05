@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"github.com/minio/minio/cmd/crypto"
 	"net/http"
 	"testing"
 )
@@ -145,6 +146,22 @@ func TestExtractSignedHeaders(t *testing.T) {
 	inputHeader.Set("x-amz-date", expectedTime)
 	// calling the function being tested.
 	extractedSignedHeaders, errCode := extractSignedHeaders(signedHeaders, r)
+	if errCode != ErrNone {
+		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
+	}
+
+	inputQuery := r.URL.Query()
+	// case where some headers need to get from request query
+	signedHeaders = append(signedHeaders, "x-amz-server-side-encryption")
+	// expect to fail with `ErrUnsignedHeaders` because couldn't find some header
+	_, errCode = extractSignedHeaders(signedHeaders, r)
+	if errCode != ErrUnsignedHeaders {
+		t.Fatalf("Expected the APIErrorCode to %d, but got %d", ErrUnsignedHeaders, errCode)
+	}
+	// set headers value through Get parameter
+	inputQuery.Add("x-amz-server-side-encryption", crypto.SSEAlgorithmAES256)
+	r.URL.RawQuery = inputQuery.Encode()
+	_, errCode = extractSignedHeaders(signedHeaders, r)
 	if errCode != ErrNone {
 		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
 	}

@@ -286,17 +286,17 @@ func (l *lockRESTServer) lockMaintenance(interval time.Duration) {
 			Resource: nlrip.name,
 		})
 
-		// Close the connection regardless of the call response.
-		c.Close()
-
-		// For successful response, verify if lock is indeed active or stale.
+		// For successful response, verify if lock was indeed active or stale.
 		if expired {
-			// The lock is no longer active at server that originated the lock
-			// So remove the lock from the map.
+			// The lock is no longer active at server that originated
+			// the lock, attempt to remove the lock.
 			l.ll.mutex.Lock()
 			l.ll.removeEntryIfExists(nlrip) // Purge the stale entry if it exists.
 			l.ll.mutex.Unlock()
 		}
+
+		// Close the connection regardless of the call response.
+		c.Close()
 	}
 }
 

@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 
 	"github.com/coredns/coredns/plugin/etcd/msg"
 	etcd "github.com/coreos/etcd/clientv3"
@@ -56,7 +56,12 @@ func (c *coreDNS) List() ([]SrvRecord, error) {
 		if err != nil {
 			return nil, err
 		}
-		srvRecords = append(srvRecords, records...)
+		for _, record := range records {
+			if record.Key == "" {
+				continue
+			}
+			srvRecords = append(srvRecords, record)
+		}
 	}
 	return srvRecords, nil
 }

@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/pkg/encrypt"
+	"github.com/minio/minio-go/v6/pkg/encrypt"
 	minio "github.com/minio/minio/cmd"
 
 	"github.com/minio/minio/cmd/logger"

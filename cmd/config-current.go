@@ -325,7 +325,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewKafkaTarget(k, v)
+		t, err := target.NewKafkaTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("kafka(%s): %s", k, err.Error())
 		}
@@ -667,7 +667,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.Kafka {
 		if args.Enable {
-			newTarget, err := target.NewKafkaTarget(id, args)
+			newTarget, err := target.NewKafkaTarget(id, args, GlobalServiceDoneCh)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue

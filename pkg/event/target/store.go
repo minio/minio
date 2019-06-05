@@ -33,14 +33,11 @@ var errNotConnected = errors.New("not connected to target server/service")
 // errLimitExceeded error is sent when the maximum limit is reached.
 var errLimitExceeded = errors.New("the maximum store limit reached")
 
-// errNoSuchKey error is sent in Get when the key is not found.
-var errNoSuchKey = errors.New("no such key found in store")
-
 // Store - To persist the events.
 type Store interface {
 	Put(event event.Event) error
 	Get(key string) (event.Event, error)
-	ListN(n int) []string
+	List() []string
 	Del(key string) error
 	Open() error
 }
@@ -55,7 +52,7 @@ func replayEvents(store Store, doneCh <-chan struct{}) <-chan string {
 		defer retryTimer.Stop()
 		defer close(eventKeyCh)
 		for {
-			names = store.ListN(100)
+			names = store.List()
 			for _, name := range names {
 				select {
 				case eventKeyCh <- strings.TrimSuffix(name, eventExt):

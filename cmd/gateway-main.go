@@ -221,6 +221,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(err, "Unable to initialize gateway backend")
 	}
 
+	// Populate existing buckets to the etcd backend
+	if globalDNSConfig != nil {
+		initFederatorBackend(newObject)
+	}
+
 	if enableConfigOps {
 		// Create a new config system.
 		globalConfigSys = NewConfigSys()
@@ -298,6 +303,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// Print gateway startup message.
 		printGatewayStartupMessage(getAPIEndpoints(), gatewayName)
 	}
+
+	// Set when gateway is enabled
+	globalIsGateway = true
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = UTCNow()

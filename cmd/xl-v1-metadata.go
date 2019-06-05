@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -437,7 +438,7 @@ func writeXLMetadata(ctx context.Context, disk StorageAPI, bucket, prefix string
 	}
 
 	// Persist marshaled data.
-	err = disk.WriteAll(bucket, jsonFile, metadataBytes)
+	err = disk.WriteAll(bucket, jsonFile, bytes.NewReader(metadataBytes))
 	logger.LogIf(ctx, err)
 	return err
 }

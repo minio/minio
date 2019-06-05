@@ -21,7 +21,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/minio/minio-go/pkg/encrypt"
+	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/policy"
 )

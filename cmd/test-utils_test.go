@@ -54,8 +54,8 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/gorilla/mux"
-	"github.com/minio/minio-go/pkg/s3signer"
-	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/s3signer"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bpool"
@@ -174,7 +174,7 @@ func prepareFS() (ObjectLayer, string, error) {
 	return obj, fsDirs[0], nil
 }
 
-func prepareXL32() (ObjectLayer, []string, error) {
+func prepareXLSets32() (ObjectLayer, []string, error) {
 	fsDirs1, err := getRandomDisks(16)
 	if err != nil {
 		return nil, nil, err
@@ -1704,7 +1704,7 @@ func prepareTestBackend(instanceType string) (ObjectLayer, []string, error) {
 	switch instanceType {
 	// Total number of disks for XL sets backend is set to 32.
 	case XLSetsTestStr:
-		return prepareXL32()
+		return prepareXLSets32()
 	// Total number of disks for XL backend is set to 16.
 	case XLTestStr:
 		return prepareXL16()
@@ -1986,7 +1986,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, FSTestStr, t)
 
-	objLayer, fsDirs, err := prepareXL16()
+	objLayer, fsDirs, err := prepareXLSets32()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}

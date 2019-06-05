@@ -858,10 +858,21 @@ func leastEntry(entriesCh []FileInfoCh, readQuorum int) (FileInfo, bool) {
 
 // mergeEntriesCh - merges FileInfo channel to entries upto maxKeys.
 func mergeEntriesCh(entriesCh []FileInfoCh, maxKeys int, readQuorum int) (entries FilesInfo) {
-	for i := 0; i < maxKeys; {
-		var fi FileInfo
-		fi, entries.IsTruncated = leastEntry(entriesCh, readQuorum)
-		if !entries.IsTruncated {
+	var i = 0
+	for {
+		fi, valid := leastEntry(entriesCh, readQuorum)
+		if !valid {
+			break
+		}
+		if i == maxKeys {
+			entries.IsTruncated = true
+			// Re-insert the last entry so it can be
+			// listed in the next listing iteration.
+			for j := range entriesCh {
+				if !entriesCh[j].Valid {
+					entriesCh[j].Push(fi)
+				}
+			}
 			break
 		}
 		entries.Files = append(entries.Files, fi)

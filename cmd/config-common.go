@@ -107,7 +107,7 @@ func readConfigEtcd(ctx context.Context, client *etcd.Client, configFile string)
 // watchConfigEtcd - watches for changes on `configFile` on etcd and loads them.
 func watchConfigEtcd(objAPI ObjectLayer, configFile string, loadCfgFn func(ObjectLayer) error) {
 	for {
-		watchCh := globalEtcdClient.Watch(context.Background(), iamConfigPrefix)
+		watchCh := globalEtcdClient.Watch(context.Background(), configFile)
 		select {
 		case <-GlobalServiceDoneCh:
 			return

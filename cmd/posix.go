@@ -35,20 +35,19 @@ import (
 	"bytes"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/klauspost/readahead"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
+	xioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/mountinfo"
 	"github.com/ncw/directio"
 )
 
 const (
-	diskMinFreeSpace    = 900 * humanize.MiByte // Min 900MiB free space.
-	diskMinTotalSpace   = diskMinFreeSpace      // Min 900MiB total space.
-	maxAllowedIOError   = 5
-	posixWriteBlockSize = 4 * humanize.MiByte
-	// DirectIO alignment needs to be 4K. Defined here as
-	// directio.AlignSize is defined as 0 in MacOS causing divide by 0 error.
-	directioAlignSize = 4096
+	diskMinFreeSpace  = 900 * humanize.MiByte // Min 900MiB free space.
+	diskMinTotalSpace = diskMinFreeSpace      // Min 900MiB total space.
+	maxAllowedIOError = 5
+	readBlockSize     = humanize.KiByte * 32 // Default read block size 32KiB.
 )
 
 // isValidVolname verifies a volname name in accordance with object
@@ -190,10 +189,9 @@ func newPosix(path string) (*posix, error) {
 	p := &posix{
 		connected: true,
 		diskPath:  path,
-		// 4MiB buffer pool for posix internal operations.
 		pool: sync.Pool{
 			New: func() interface{} {
-				b := directio.AlignedBlock(posixWriteBlockSize)
+				b := directio.AlignedBlock(readBlockSize)
 				return &b
 			},
 		},
@@ -1110,10 +1108,13 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 	if _, err = file.Seek(offset, io.SeekStart); err != nil {
 		return nil, err
 	}
-	return struct {
+
+	r := struct {
 		io.Reader
 		io.Closer
-	}{Reader: io.LimitReader(file, length), Closer: file}, nil
+	}{Reader: io.LimitReader(file, length), Closer: file}
+
+	return readahead.NewReadCloser(r), nil
 }
 
 // CreateFile - creates the file.
@@ -1182,10 +1183,6 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 			return err
 		}
 	}
-	defer func() {
-		w.Sync() // Sync before close.
-		w.Close()
-	}()
 
 	var e error
 	if fileSize > 0 {
@@ -1208,76 +1205,26 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 		return err
 	}
 
+	defer w.Close()
+
 	bufp := s.pool.Get().(*[]byte)
 	defer s.pool.Put(bufp)
 
-	buf := *bufp
-
-	// Writes remaining bytes in the buffer.
-	writeRemaining := func(w *os.File, buf []byte) (remainingWritten int, err error) {
-		var n int
-		remaining := len(buf)
-		// The following logic writes the remainging data such that it writes whatever best is possible (aligned buffer)
-		// in O_DIRECT mode and remaining (unaligned buffer) in non-O_DIRECT mode.
-		remainingAligned := (remaining / directioAlignSize) * directioAlignSize
-		remainingAlignedBuf := buf[:remainingAligned]
-		remainingUnalignedBuf := buf[remainingAligned:]
-		if len(remainingAlignedBuf) > 0 {
-			n, err = w.Write(remainingAlignedBuf)
-			if err != nil {
-				return 0, err
-			}
-			remainingWritten += n
-		}
-		if len(remainingUnalignedBuf) > 0 {
-			// Write on O_DIRECT fds fail if buffer is not 4K aligned, hence disable O_DIRECT.
-			if err = disk.DisableDirectIO(w); err != nil {
-				return 0, err
-			}
-			n, err = w.Write(remainingUnalignedBuf)
-			if err != nil {
-				return 0, err
-			}
-			remainingWritten += n
-		}
-		return remainingWritten, nil
+	written, err := xioutil.CopyAligned(w, r, *bufp)
+	if err != nil {
+		return err
 	}
 
-	var written int
-	for {
-		var n int
-		n, err = io.ReadFull(r, buf)
-		switch err {
-		case nil:
-			n, err = w.Write(buf)
-			if err != nil {
-				return err
-			}
-			written += n
-		case io.ErrUnexpectedEOF:
-			n, err = writeRemaining(w, buf[:n])
-			if err != nil {
-				return err
-			}
-			written += n
-			fallthrough
-		case io.EOF:
-			if fileSize != -1 {
-				if written < int(fileSize) {
-					return errLessData
-				}
-				if written > int(fileSize) {
-					return errMoreData
-				}
-			}
-			return nil
-		default:
-			return err
-		}
+	if written < fileSize {
+		return errLessData
+	} else if written > fileSize {
+		return errMoreData
 	}
+
+	return nil
 }
 
-func (s *posix) WriteAll(volume, path string, buf []byte) (err error) {
+func (s *posix) WriteAll(volume, path string, reader io.Reader) (err error) {
 	defer func() {
 		if err == errFaultyDisk {
 			atomic.AddInt32(&s.ioErrCount, 1)
@@ -1295,11 +1242,13 @@ func (s *posix) WriteAll(volume, path string, buf []byte) (err error) {
 		return err
 	}
 
-	if _, err = w.Write(buf); err != nil {
-		return err
-	}
+	defer w.Close()
 
-	return w.Close()
+	bufp := s.pool.Get().(*[]byte)
+	defer s.pool.Put(bufp)
+
+	_, err = io.CopyBuffer(w, reader, *bufp)
+	return err
 }
 
 // AppendFile - append a byte array at path, if file doesn't exist at

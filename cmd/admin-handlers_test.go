@@ -99,6 +99,8 @@ var (
         "enable": false,
         "brokers": null,
         "topic": "",
+        "queueDir": "",
+        "queueLimit": 0,
         "tls": {
           "enable": false,
           "skipVerify": false,

@@ -245,14 +245,7 @@ func (s *storageRESTServer) WriteAllHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	buf := make([]byte, r.ContentLength)
-	_, err := io.ReadFull(r.Body, buf)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	err = s.storage.WriteAll(volume, filePath, buf)
+	err := s.storage.WriteAll(volume, filePath, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}

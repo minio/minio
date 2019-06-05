@@ -31,7 +31,7 @@ import (
 
 	"github.com/minio/cli"
 	"github.com/minio/hdfs/v3"
-	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"

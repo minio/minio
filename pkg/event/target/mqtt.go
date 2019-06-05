@@ -73,6 +73,9 @@ func (m MQTTArgs) Validate() error {
 			return errors.New("qos should be set to 1 or 2 if queueDir is set")
 		}
 	}
+	if m.QueueLimit > 10000 {
+		return errors.New("queueLimit should not exceed 10000")
+	}
 
 	return nil
 }
@@ -90,23 +93,8 @@ func (target *MQTTTarget) ID() event.TargetID {
 	return target.id
 }
 
-// Send - sends event to MQTT.
-func (target *MQTTTarget) Send(eventKey string) error {
-
-	if !target.client.IsConnectionOpen() {
-		return errNotConnected
-	}
-
-	eventData, eErr := target.store.Get(eventKey)
-	if eErr != nil {
-		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
-		// Such events will not exist and wouldve been already been sent successfully.
-		if os.IsNotExist(eErr) {
-			return nil
-		}
-		return eErr
-	}
-
+// send - sends an event to the mqtt.
+func (target *MQTTTarget) send(eventData event.Event) error {
 	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
 	if err != nil {
 		return err
@@ -123,14 +111,46 @@ func (target *MQTTTarget) Send(eventKey string) error {
 	if token.Error() != nil {
 		return token.Error()
 	}
+	return nil
+}
+
+// Send - reads an event from store and sends it to MQTT.
+func (target *MQTTTarget) Send(eventKey string) error {
+
+	if !target.client.IsConnectionOpen() {
+		return errNotConnected
+	}
+
+	eventData, eErr := target.store.Get(eventKey)
+	if eErr != nil {
+		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
+		// Such events will not exist and wouldve been already been sent successfully.
+		if os.IsNotExist(eErr) {
+			return nil
+		}
+		return eErr
+	}
+
+	if err := target.send(eventData); err != nil {
+		return err
+	}
 
 	// Delete the event from store.
 	return target.store.Del(eventKey)
 }
 
-// Save - saves the events to the store which will be replayed when the mqtt connection is active.
+// Save - saves the events to the store if questore is configured, which will be replayed when the mqtt connection is active.
 func (target *MQTTTarget) Save(eventData event.Event) error {
-	return target.store.Put(eventData)
+	if target.store != nil {
+		return target.store.Put(eventData)
+	}
+
+	// Do not send if the connection is not active.
+	if !target.client.IsConnectionOpen() {
+		return errNotConnected
+	}
+
+	return target.send(eventData)
 }
 
 // Close - does nothing and available for interface compatibility.
@@ -158,8 +178,6 @@ func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}) (*MQTTTarge
 		if oErr := store.Open(); oErr != nil {
 			return nil, oErr
 		}
-	} else {
-		store = NewMemoryStore(args.QueueLimit)
 	}
 
 	client := mqtt.NewClient(options)
@@ -168,7 +186,8 @@ func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}) (*MQTTTarge
 	// Connect() should be successful atleast once to publish events.
 	token := client.Connect()
 
-	go func() {
+	// Retries until the clientID gets registered.
+	retryRegister := func() {
 		// Repeat the pings until the client registers the clientId and receives a token.
 		for {
 			if token.Wait() && token.Error() == nil {
@@ -179,7 +198,15 @@ func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}) (*MQTTTarge
 			time.Sleep(reconnectInterval * time.Second)
 			token = client.Connect()
 		}
-	}()
+	}
+
+	if store == nil {
+		if token.Wait() && token.Error() != nil {
+			return nil, token.Error()
+		}
+	} else {
+		go retryRegister()
+	}
 
 	target := &MQTTTarget{
 		id:     event.TargetID{ID: id, Name: "mqtt"},
@@ -188,11 +215,12 @@ func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}) (*MQTTTarge
 		store:  store,
 	}
 
-	// Replays the events from the store.
-	eventKeyCh := replayEvents(target.store, doneCh)
-
-	// Start replaying events from the store.
-	go sendEvents(target, eventKeyCh, doneCh)
+	if target.store != nil {
+		// Replays the events from the store.
+		eventKeyCh := replayEvents(target.store, doneCh)
+		// Start replaying events from the store.
+		go sendEvents(target, eventKeyCh, doneCh)
+	}
 
 	return target, nil
 }

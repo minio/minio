@@ -526,7 +526,7 @@ MinIO服务也支持 [NATS Streaming mode](http://nats.io/documentation/streamin
     }
 },
 ```
-更多关于 `clusterID`, `clientID` 的信息，请看 [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). 关于 `maxPubAcksInflight` ，请看 [这里](https://github.com/nats-io/go-nats-streaming#publisher-rate-limiting).
+更多关于 `clusterID`, `clientID` 的信息，请看 [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). 关于 `maxPubAcksInflight` ，请看 [这里](https://github.com/nats-io/stan.go#publisher-rate-limiting).
 
 ### 第二步: 使用MinIO客户端启用bucket通知
 
@@ -551,7 +551,7 @@ import (
 	"log"
 	"runtime"
 
-	"github.com/nats-io/nats"
+	"github.com/nats-io/nats.go"
 )
 
 func main() {
@@ -604,7 +604,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/nats-io/go-nats-streaming"
+	"github.com/nats-io/stan.go"
 )
 
 func main() {

@@ -74,6 +74,11 @@ func (c *Target) Send(e interface{}) error {
 	apiString += ")"
 	timeString := "Time: " + time.Now().Format(logger.TimeFormat)
 
+	var deploymentID string
+	if entry.DeploymentID != "" {
+		deploymentID = "\nDeploymentID: " + entry.DeploymentID
+	}
+
 	var requestID string
 	if entry.RequestID != "" {
 		requestID = "\nRequestID: " + entry.RequestID
@@ -94,8 +99,8 @@ func (c *Target) Send(e interface{}) error {
 	}
 
 	var msg = logger.ColorFgRed(logger.ColorBold(entry.Trace.Message))
-	var output = fmt.Sprintf("\n%s\n%s%s%s%s\nError: %s%s\n%s",
-		apiString, timeString, requestID, remoteHost, userAgent,
+	var output = fmt.Sprintf("\n%s\n%s%s%s%s%s\nError: %s%s\n%s",
+		apiString, timeString, deploymentID, requestID, remoteHost, userAgent,
 		msg, tagString, strings.Join(trace, "\n"))
 
 	fmt.Println(output)

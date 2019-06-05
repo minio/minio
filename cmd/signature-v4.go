@@ -35,7 +35,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	sha256 "github.com/minio/sha256-simd"
 )
 
@@ -251,13 +251,19 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 
 	// Save other headers available in the request parameters.
 	for k, v := range req.URL.Query() {
+		key := strings.ToLower(k)
 
 		// Handle the metadata in presigned put query string
-		if strings.Contains(strings.ToLower(k), "x-amz-meta-") {
+		if strings.Contains(key, "x-amz-meta-") {
+			query.Set(k, v[0])
+			continue
+		}
+
+		if strings.Contains(key, "x-amz-server-side-") {
 			query.Set(k, v[0])
 		}
 
-		if strings.HasPrefix(strings.ToLower(k), "x-amz") {
+		if strings.HasPrefix(key, "x-amz") {
 			continue
 		}
 		query[k] = v

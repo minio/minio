@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/minio/minio/pkg/event"
@@ -60,7 +61,7 @@ func (store *QueueStore) Open() error {
 		return terr
 	}
 
-	eCount := uint16(len(store.listN(-1)))
+	eCount := uint16(len(store.list()))
 	if eCount >= store.limit {
 		return errLimitExceeded
 	}
@@ -154,17 +155,28 @@ func (store *QueueStore) del(key string) error {
 	return nil
 }
 
-// ListN - lists atmost N files from the directory.
-func (store *QueueStore) ListN(n int) []string {
+// List - lists all files from the directory.
+func (store *QueueStore) List() []string {
 	store.RLock()
 	defer store.RUnlock()
-	return store.listN(n)
+	return store.list()
 }
 
 // lockless call.
-func (store *QueueStore) listN(n int) []string {
+func (store *QueueStore) list() []string {
+	var names []string
 	storeDir, _ := os.Open(store.directory)
-	names, _ := storeDir.Readdirnames(n)
+	files, _ := storeDir.Readdir(-1)
+
+	// Sort the dentries.
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].ModTime().Unix() < files[j].ModTime().Unix()
+	})
+
+	for _, file := range files {
+		names = append(names, file.Name())
+	}
+
 	_ = storeDir.Close()
 	return names
 }

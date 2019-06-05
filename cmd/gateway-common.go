@@ -24,7 +24,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 
-	minio "github.com/minio/minio-go"
+	minio "github.com/minio/minio-go/v6"
 )
 
 var (
