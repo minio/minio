@@ -51,6 +51,7 @@ type APIErrorResponse struct {
 	Key        string `xml:"Key,omitempty" json:"Key,omitempty"`
 	BucketName string `xml:"BucketName,omitempty" json:"BucketName,omitempty"`
 	Resource   string
+	Region     string `xml:"Region,omitempty" json:"Region,omitempty"`
 	RequestID  string `xml:"RequestId" json:"RequestId"`
 	HostID     string `xml:"HostId" json:"HostId"`
 }
@@ -1735,6 +1736,7 @@ func getAPIErrorResponse(ctx context.Context, err APIError, resource, requestID,
 		BucketName: reqInfo.BucketName,
 		Key:        reqInfo.ObjectName,
 		Resource:   resource,
+		Region:     globalServerConfig.GetRegion(),
 		RequestID:  requestID,
 		HostID:     hostID,
 	}
