@@ -1,8 +1,8 @@
-# Minio多租户（Multi-tenant）部署指南 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# MinIO多租户（Multi-tenant）部署指南 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
 ## 单机部署
 
-要在单台机器上托管多个租户，为每个租户运行一个Minio server,使用不同的HTTPS端口、配置和数据目录。
+要在单台机器上托管多个租户，为每个租户运行一个MinIO server,使用不同的HTTPS端口、配置和数据目录。
 
 #### 示例1：单主机，单磁盘
 
@@ -26,7 +26,7 @@ minio --config-dir ~/tenant3 server --address :9003 /disk1/data/tenant3 /disk2/d
 ![示例2](https://github.com/minio/minio/blob/master/docs/screenshots/Example-2.jpg?raw=true)
 
 ## 分布式部署
-要在分布式环境中托管多个租户，同时运行多个分布式Minio实例。
+要在分布式环境中托管多个租户，同时运行多个分布式MinIO实例。
 
 #### 示例3 : 多主机，多块磁盘 (erasure code)
 
@@ -49,6 +49,6 @@ minio --config-dir ~/tenant3 server --address :9003 http://192.168.10.11/data/te
 ![示例3](https://github.com/minio/minio/blob/master/docs/screenshots/Example-3.jpg?raw=true)
 
 ## 云端可伸缩部署
-对于大型多租户Minio部署，我们建议使用一个流行的容器编排平台，比如Kubernetes、DC/OS，或者是Docker Swarm.参考 [这个文档](https://docs.minio.io/cn/minio-deployment-quickstart-guide) ,学习如何在编排平台中使用Minio。
+对于大型多租户MinIO部署，我们建议使用一个流行的容器编排平台，比如Kubernetes、DC/OS，或者是Docker Swarm.参考 [这个文档](https://docs.min.io/cn/minio-deployment-quickstart-guide) ,学习如何在编排平台中使用MinIO。
 
 

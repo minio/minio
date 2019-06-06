@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015-2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015-2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -362,7 +362,7 @@ func isReqAuthenticated(ctx context.Context, r *http.Request, region string, sty
 
 	// Verify 'Content-Md5' and/or 'X-Amz-Content-Sha256' if present.
 	// The verification happens implicit during reading.
-	reader, err := hash.NewReader(r.Body, -1, hex.EncodeToString(contentMD5), hex.EncodeToString(contentSHA256), -1)
+	reader, err := hash.NewReader(r.Body, -1, hex.EncodeToString(contentMD5), hex.EncodeToString(contentSHA256), -1, globalCLIContext.StrictS3Compat)
 	if err != nil {
 		return toAPIErrorCode(ctx, err)
 	}

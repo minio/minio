@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
+	"sort"
 	"sync"
 
 	"github.com/minio/minio/pkg/event"
@@ -61,9 +61,9 @@ func (store *QueueStore) Open() error {
 		return terr
 	}
 
-	eCount := uint16(len(store.listAll()))
+	eCount := uint16(len(store.list()))
 	if eCount >= store.limit {
-		return ErrLimitExceeded
+		return errLimitExceeded
 	}
 
 	store.eC = eCount
@@ -96,7 +96,7 @@ func (store *QueueStore) Put(e event.Event) error {
 	store.Lock()
 	defer store.Unlock()
 	if store.eC >= store.limit {
-		return ErrLimitExceeded
+		return errLimitExceeded
 	}
 	key, kErr := getNewUUID()
 	if kErr != nil {
@@ -134,45 +134,49 @@ func (store *QueueStore) Get(key string) (event.Event, error) {
 }
 
 // Del - Deletes an entry from the store.
-func (store *QueueStore) Del(key string) {
+func (store *QueueStore) Del(key string) error {
 	store.Lock()
 	defer store.Unlock()
-	store.del(key)
+	return store.del(key)
 }
 
 // lockless call
-func (store *QueueStore) del(key string) {
+func (store *QueueStore) del(key string) error {
 	p := filepath.Join(store.directory, key+eventExt)
 
 	rerr := os.Remove(p)
 	if rerr != nil {
-		return
+		return rerr
 	}
 
 	// Decrement the event count.
 	store.eC--
+
+	return nil
 }
 
-// ListAll - lists all the keys in the directory.
-func (store *QueueStore) ListAll() []string {
+// List - lists all files from the directory.
+func (store *QueueStore) List() []string {
 	store.RLock()
 	defer store.RUnlock()
-	return store.listAll()
+	return store.list()
 }
 
 // lockless call.
-func (store *QueueStore) listAll() []string {
-	var err error
-	var keys []string
-	var files []os.FileInfo
+func (store *QueueStore) list() []string {
+	var names []string
+	storeDir, _ := os.Open(store.directory)
+	files, _ := storeDir.Readdir(-1)
 
-	files, err = ioutil.ReadDir(store.directory)
-	if err != nil {
-		return nil
+	// Sort the dentries.
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].ModTime().Unix() < files[j].ModTime().Unix()
+	})
+
+	for _, file := range files {
+		names = append(names, file.Name())
 	}
 
-	for _, f := range files {
-		keys = append(keys, strings.TrimSuffix(f.Name(), eventExt))
-	}
-	return keys
+	_ = storeDir.Close()
+	return names
 }

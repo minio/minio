@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -27,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -74,8 +76,8 @@ func (c ChecksumInfo) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON - should never be called, instead xlMetaV1UnmarshalJSON() should be used.
 func (c *ChecksumInfo) UnmarshalJSON(data []byte) error {
-	logger.LogIf(context.Background(), errUnexpected)
 	var info checksumInfoJSON
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(data, &info); err != nil {
 		return err
 	}
@@ -147,7 +149,7 @@ type xlMetaV1 struct {
 	Stat    statInfo `json:"stat"`    // Stat of the current object `xl.json`.
 	// Erasure coded info for the current object `xl.json`.
 	Erasure ErasureInfo `json:"erasure"`
-	// Minio release tag for current object `xl.json`.
+	// MinIO release tag for current object `xl.json`.
 	Minio struct {
 		Release string `json:"release"`
 	} `json:"minio"`
@@ -424,14 +426,6 @@ func (xl xlObjects) readXLMetaStat(ctx context.Context, bucket, object string) (
 	return statInfo{}, nil, reduceReadQuorumErrs(ctx, ignoredErrs, nil, readQuorum)
 }
 
-// deleteXLMetadata - deletes `xl.json` on a single disk.
-func deleteXLMetdata(ctx context.Context, disk StorageAPI, bucket, prefix string) error {
-	jsonFile := path.Join(prefix, xlMetaJSONFile)
-	err := disk.DeleteFile(bucket, jsonFile)
-	logger.LogIf(ctx, err)
-	return err
-}
-
 // writeXLMetadata - writes `xl.json` to a single disk.
 func writeXLMetadata(ctx context.Context, disk StorageAPI, bucket, prefix string, xlMeta xlMetaV1) error {
 	jsonFile := path.Join(prefix, xlMetaJSONFile)
@@ -444,30 +438,9 @@ func writeXLMetadata(ctx context.Context, disk StorageAPI, bucket, prefix string
 	}
 
 	// Persist marshaled data.
-	err = disk.WriteAll(bucket, jsonFile, metadataBytes)
+	err = disk.WriteAll(bucket, jsonFile, bytes.NewReader(metadataBytes))
 	logger.LogIf(ctx, err)
 	return err
-}
-
-// deleteAllXLMetadata - deletes all partially written `xl.json` depending on errs.
-func deleteAllXLMetadata(ctx context.Context, disks []StorageAPI, bucket, prefix string, errs []error) {
-	var wg = &sync.WaitGroup{}
-	// Delete all the `xl.json` left over.
-	for index, disk := range disks {
-		if disk == nil {
-			continue
-		}
-		// Undo rename object in parallel.
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			if errs[index] != nil {
-				return
-			}
-			_ = deleteXLMetdata(ctx, disk, bucket, prefix)
-		}(index, disk)
-	}
-	wg.Wait()
 }
 
 // Rename `xl.json` content to destination location for each disk in order.
@@ -509,10 +482,6 @@ func writeUniqueXLMetadata(ctx context.Context, disks []StorageAPI, bucket, pref
 	wg.Wait()
 
 	err := reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, quorum)
-	if err == errXLWriteQuorum {
-		// Delete all `xl.json` successfully renamed.
-		deleteAllXLMetadata(ctx, disks, bucket, prefix, mErrs)
-	}
 	return evalDisks(disks, mErrs), err
 }
 
@@ -547,9 +516,5 @@ func writeSameXLMetadata(ctx context.Context, disks []StorageAPI, bucket, prefix
 	wg.Wait()
 
 	err := reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, writeQuorum)
-	if err == errXLWriteQuorum {
-		// Delete all `xl.json` successfully renamed.
-		deleteAllXLMetadata(ctx, disks, bucket, prefix, mErrs)
-	}
 	return evalDisks(disks, mErrs), err
 }

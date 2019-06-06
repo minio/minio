@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,7 +118,6 @@ func ParseHost(s string) (*Host, error) {
 		if !strings.Contains(err.Error(), "missing port in address") {
 			return nil, err
 		}
-
 		host = s
 		portStr = ""
 	} else {
@@ -129,11 +128,23 @@ func ParseHost(s string) (*Host, error) {
 		isPortSet = true
 	}
 
-	if i := strings.Index(host, "%"); i > -1 {
-		host = host[:i]
+	if host != "" {
+		host, err = trimIPv6(host)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	if !isValidHost(host) {
+	// IPv6 requires a link-local address on every network interface.
+	// `%interface` should be preserved.
+	trimmedHost := host
+
+	if i := strings.LastIndex(trimmedHost, "%"); i > -1 {
+		// `%interface` can be skipped for validity check though.
+		trimmedHost = trimmedHost[:i]
+	}
+
+	if !isValidHost(trimmedHost) {
 		return nil, errors.New("invalid hostname")
 	}
 
@@ -142,4 +153,16 @@ func ParseHost(s string) (*Host, error) {
 		Port:      port,
 		IsPortSet: isPortSet,
 	}, nil
+}
+
+// IPv6 can be embedded with square brackets.
+func trimIPv6(host string) (string, error) {
+	// `missing ']' in host` error is already handled in `SplitHostPort`
+	if host[len(host)-1] == ']' {
+		if host[0] != '[' {
+			return "", errors.New("missing '[' in host")
+		}
+		return host[1:][:len(host)-2], nil
+	}
+	return host, nil
 }

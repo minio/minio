@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,12 +45,13 @@ func (c *Target) Send(e interface{}) error {
 		return nil
 	}
 
-	trace := make([]string, len(entry.Trace.Source))
+	traceLength := len(entry.Trace.Source)
+	trace := make([]string, traceLength)
 
 	// Add a sequence number and formatting for each stack trace
 	// No formatting is required for the first entry
 	for i, element := range entry.Trace.Source {
-		trace[i] = fmt.Sprintf("%8v: %s", i+1, element)
+		trace[i] = fmt.Sprintf("%8v: %s", traceLength-i, element)
 	}
 
 	tagString := ""
@@ -73,6 +74,11 @@ func (c *Target) Send(e interface{}) error {
 	apiString += ")"
 	timeString := "Time: " + time.Now().Format(logger.TimeFormat)
 
+	var deploymentID string
+	if entry.DeploymentID != "" {
+		deploymentID = "\nDeploymentID: " + entry.DeploymentID
+	}
+
 	var requestID string
 	if entry.RequestID != "" {
 		requestID = "\nRequestID: " + entry.RequestID
@@ -93,8 +99,8 @@ func (c *Target) Send(e interface{}) error {
 	}
 
 	var msg = logger.ColorFgRed(logger.ColorBold(entry.Trace.Message))
-	var output = fmt.Sprintf("\n%s\n%s%s%s%s\nError: %s%s\n%s",
-		apiString, timeString, requestID, remoteHost, userAgent,
+	var output = fmt.Sprintf("\n%s\n%s%s%s%s%s\nError: %s%s\n%s",
+		apiString, timeString, deploymentID, requestID, remoteHost, userAgent,
 		msg, tagString, strings.Join(trace, "\n"))
 
 	fmt.Println(output)

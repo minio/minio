@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,13 @@ type VolInfo struct {
 	Created time.Time
 }
 
+// FilesInfo represent a list of files, additionally
+// indicates if the list is last.
+type FilesInfo struct {
+	Files       []FileInfo
+	IsTruncated bool
+}
+
 // FileInfo - represents file stat information.
 type FileInfo struct {
 	// Name of the volume.
@@ -46,4 +53,12 @@ type FileInfo struct {
 
 	// File mode bits.
 	Mode os.FileMode
+
+	// File metadata
+	Metadata map[string]string
+
+	// All the parts per object.
+	Parts []ObjectPartInfo
+
+	Quorum int
 }

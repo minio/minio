@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
@@ -62,7 +62,7 @@ type FSObjects struct {
 	rwPool *fsIOPool
 
 	// ListObjects pool management.
-	listPool *treeWalkPool
+	listPool *TreeWalkPool
 
 	diskMount bool
 
@@ -141,7 +141,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 			readersMap: make(map[string]*lock.RLockedFile),
 		},
 		nsMutex:       newNSLock(false),
-		listPool:      newTreeWalkPool(globalLookupTimeout),
+		listPool:      NewTreeWalkPool(globalLookupTimeout),
 		appendFileMap: make(map[string]*fsAppendFile),
 		diskMount:     mountinfo.IsLikelyMountPoint(fsPath),
 	}
@@ -450,6 +450,11 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		// Return the new object info.
 		return fsMeta.ToObjectInfo(srcBucket, srcObject, fi), nil
 	}
+
+	if err := checkPutObjectArgs(ctx, dstBucket, dstObject, fs, srcInfo.PutObjReader.Size()); err != nil {
+		return ObjectInfo{}, err
+	}
+
 	objInfo, err := fs.putObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, ObjectOptions{ServerSideEncryption: dstOpts.ServerSideEncryption, UserDefined: srcInfo.UserDefined})
 	if err != nil {
 		return oi, toObjectErr(err, dstBucket, dstObject)
@@ -813,6 +818,7 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 		return objInfo, err
 	}
 	defer objectLock.Unlock()
+
 	return fs.putObject(ctx, bucket, object, r, opts)
 }
 
@@ -852,10 +858,6 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 		return fsMeta.ToObjectInfo(bucket, object, fi), nil
-	}
-
-	if err = checkPutObjectArgs(ctx, bucket, object, fs, data.Size()); err != nil {
-		return ObjectInfo{}, err
 	}
 
 	// Check if an object is present as one of the parent dir.
@@ -951,6 +953,16 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	return fsMeta.ToObjectInfo(bucket, object, fi), nil
 }
 
+// DeleteObjects - deletes an object from a bucket, this operation is destructive
+// and there are no rollbacks supported.
+func (fs *FSObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = fs.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
+}
+
 // DeleteObject - deletes an object from a bucket, this operation is destructive
 // and there are no rollbacks supported.
 func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string) error {
@@ -1001,17 +1013,17 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string) er
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry
 // is a leaf or non-leaf entry.
-func (fs *FSObjects) listDirFactory(isLeaf isLeafFunc) listDirFunc {
+func (fs *FSObjects) listDirFactory() ListDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string) {
 		var err error
 		entries, err = readDir(pathJoin(fs.fsPath, bucket, prefixDir))
 		if err != nil && err != errFileNotFound {
 			logger.LogIf(context.Background(), err)
 			return
 		}
-		entries, delayIsLeaf = filterListEntries(bucket, prefixDir, entries, prefixEntry, isLeaf)
-		return entries, delayIsLeaf
+		sort.Strings(entries)
+		return filterMatchingPrefix(entries, prefixEntry)
 	}
 
 	// Return list factory instance.
@@ -1097,134 +1109,8 @@ func (fs *FSObjects) getObjectETag(ctx context.Context, bucket, entry string, lo
 // ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool
 // state for future re-entrant list requests.
 func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
-	if err := checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, fs); err != nil {
-		return loi, err
-	}
-	// Marker is set validate pre-condition.
-	if marker != "" {
-		// Marker not common with prefix is not implemented.Send an empty response
-		if !hasPrefix(marker, prefix) {
-			return ListObjectsInfo{}, e
-		}
-	}
-	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
-		return loi, err
-	}
-
-	// With max keys of zero we have reached eof, return right here.
-	if maxKeys == 0 {
-		return loi, nil
-	}
-
-	// For delimiter and prefix as '/' we do not list anything at all
-	// since according to s3 spec we stop at the 'delimiter'
-	// along // with the prefix. On a flat namespace with 'prefix'
-	// as '/' we don't have any entries, since all the keys are
-	// of form 'keyName/...'
-	if delimiter == slashSeparator && prefix == slashSeparator {
-		return loi, nil
-	}
-
-	// Over flowing count - reset to maxObjectList.
-	if maxKeys < 0 || maxKeys > maxObjectList {
-		maxKeys = maxObjectList
-	}
-
-	// Default is recursive, if delimiter is set then list non recursive.
-	recursive := true
-	if delimiter == slashSeparator {
-		recursive = false
-	}
-
-	// Convert entry to ObjectInfo
-	entryToObjectInfo := func(entry string) (objInfo ObjectInfo, err error) {
-		// Protect the entry from concurrent deletes, or renames.
-		objectLock := fs.nsMutex.NewNSLock(bucket, entry)
-		if err = objectLock.GetRLock(globalListingTimeout); err != nil {
-			logger.LogIf(ctx, err)
-			return ObjectInfo{}, err
-		}
-		defer objectLock.RUnlock()
-		return fs.getObjectInfo(ctx, bucket, entry)
-	}
-
-	walkResultCh, endWalkCh := fs.listPool.Release(listParams{bucket, recursive, marker, prefix})
-	if walkResultCh == nil {
-		endWalkCh = make(chan struct{})
-		isLeaf := func(bucket, object string) bool {
-			// bucket argument is unused as we don't need to StatFile
-			// to figure if it's a file, just need to check that the
-			// object string does not end with "/".
-			return !hasSuffix(object, slashSeparator)
-		}
-		// Return true if the specified object is an empty directory
-		isLeafDir := func(bucket, object string) bool {
-			if !hasSuffix(object, slashSeparator) {
-				return false
-			}
-			return fs.isObjectDir(bucket, object)
-		}
-		listDir := fs.listDirFactory(isLeaf)
-		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
-	}
-
-	var objInfos []ObjectInfo
-	var eof bool
-	var nextMarker string
-
-	// List until maxKeys requested.
-	for i := 0; i < maxKeys; {
-		walkResult, ok := <-walkResultCh
-		if !ok {
-			// Closed channel.
-			eof = true
-			break
-		}
-		// For any walk error return right away.
-		if walkResult.err != nil {
-			// File not found is a valid case.
-			if walkResult.err == errFileNotFound {
-				return loi, nil
-			}
-			return loi, toObjectErr(walkResult.err, bucket, prefix)
-		}
-		objInfo, err := entryToObjectInfo(walkResult.entry)
-		if err != nil {
-			return loi, nil
-		}
-		nextMarker = objInfo.Name
-		objInfos = append(objInfos, objInfo)
-		if walkResult.end {
-			eof = true
-			break
-		}
-		i++
-	}
-
-	// Save list routine for the next marker if we haven't reached EOF.
-	params := listParams{bucket, recursive, nextMarker, prefix}
-	if !eof {
-		fs.listPool.Set(params, walkResultCh, endWalkCh)
-	}
-
-	result := ListObjectsInfo{}
-	for _, objInfo := range objInfos {
-		if objInfo.IsDir && delimiter == slashSeparator {
-			result.Prefixes = append(result.Prefixes, objInfo.Name)
-			continue
-		}
-		result.Objects = append(result.Objects, objInfo)
-	}
-
-	if !eof {
-		result.IsTruncated = true
-		if len(objInfos) > 0 {
-			result.NextMarker = objInfos[len(objInfos)-1].Name
-		}
-	}
-
-	// Success.
-	return result, nil
+	return listObjects(ctx, fs, bucket, prefix, marker, delimiter, maxKeys, fs.listPool,
+		fs.listDirFactory(), fs.getObjectInfo, fs.getObjectInfo)
 }
 
 // ReloadFormat - no-op for fs, Valid only for XL.

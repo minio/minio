@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"testing"
 
-	minio "github.com/minio/minio-go"
+	minio "github.com/minio/minio-go/v6"
 )
 
 // Test Post Policy parsing and checking conditions

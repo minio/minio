@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/minio/minio/pkg/event"
@@ -55,7 +56,7 @@ func TestQueueStorePut(t *testing.T) {
 			t.Fatal("Failed to tear down store ", err)
 		}
 	}()
-	store, err := setUpStore(queueDir, 10000)
+	store, err := setUpStore(queueDir, 100)
 	if err != nil {
 		t.Fatal("Failed to create a queue store ", err)
 
@@ -67,8 +68,8 @@ func TestQueueStorePut(t *testing.T) {
 		}
 	}
 	// Count the events.
-	if len(store.ListAll()) != 100 {
-		t.Fatalf("ListAll() Expected: 100, got %d", len(store.ListAll()))
+	if len(store.List()) != 100 {
+		t.Fatalf("List() Expected: 100, got %d", len(store.List()))
 	}
 }
 
@@ -79,7 +80,7 @@ func TestQueueStoreGet(t *testing.T) {
 			t.Fatal("Failed to tear down store ", err)
 		}
 	}()
-	store, err := setUpStore(queueDir, 10000)
+	store, err := setUpStore(queueDir, 10)
 	if err != nil {
 		t.Fatal("Failed to create a queue store ", err)
 	}
@@ -89,11 +90,11 @@ func TestQueueStoreGet(t *testing.T) {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
-	eventKeys := store.ListAll()
+	eventKeys := store.List()
 	// Get 10 events.
 	if len(eventKeys) == 10 {
 		for _, key := range eventKeys {
-			event, eErr := store.Get(key)
+			event, eErr := store.Get(strings.TrimSuffix(key, eventExt))
 			if eErr != nil {
 				t.Fatal("Failed to Get the event from the queue store ", eErr)
 			}
@@ -102,7 +103,7 @@ func TestQueueStoreGet(t *testing.T) {
 			}
 		}
 	} else {
-		t.Fatalf("ListAll() Expected: 10, got %d", len(eventKeys))
+		t.Fatalf("List() Expected: 10, got %d", len(eventKeys))
 	}
 }
 
@@ -113,7 +114,7 @@ func TestQueueStoreDel(t *testing.T) {
 			t.Fatal("Failed to tear down store ", err)
 		}
 	}()
-	store, err := setUpStore(queueDir, 10000)
+	store, err := setUpStore(queueDir, 20)
 	if err != nil {
 		t.Fatal("Failed to create a queue store ", err)
 	}
@@ -123,18 +124,21 @@ func TestQueueStoreDel(t *testing.T) {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
-	eventKeys := store.ListAll()
+	eventKeys := store.List()
 	// Remove all the events.
 	if len(eventKeys) == 20 {
 		for _, key := range eventKeys {
-			store.Del(key)
+			err := store.Del(strings.TrimSuffix(key, eventExt))
+			if err != nil {
+				t.Fatal("queue store Del failed with ", err)
+			}
 		}
 	} else {
-		t.Fatalf("ListAll() Expected: 20, got %d", len(eventKeys))
+		t.Fatalf("List() Expected: 20, got %d", len(eventKeys))
 	}
 
-	if len(store.ListAll()) != 0 {
-		t.Fatalf("ListAll() Expected: 0, got %d", len(store.ListAll()))
+	if len(store.List()) != 0 {
+		t.Fatalf("List() Expected: 0, got %d", len(store.List()))
 	}
 }
 
@@ -157,6 +161,28 @@ func TestQueueStoreLimit(t *testing.T) {
 	}
 	// Should not allow 6th Put.
 	if err := store.Put(testEvent); err == nil {
-		t.Fatalf("Expected to fail with %s, but passes", ErrLimitExceeded)
+		t.Fatalf("Expected to fail with %s, but passes", errLimitExceeded)
+	}
+}
+
+// TestQueueStoreLimit - tests for store.LimitN.
+func TestQueueStoreListN(t *testing.T) {
+	defer func() {
+		if err := tearDownStore(); err != nil {
+			t.Fatal("Failed to tear down store ", err)
+		}
+	}()
+	store, err := setUpStore(queueDir, 10)
+	if err != nil {
+		t.Fatal("Failed to create a queue store ", err)
+	}
+	for i := 0; i < 10; i++ {
+		if err := store.Put(testEvent); err != nil {
+			t.Fatal("Failed to put to queue store ", err)
+		}
+	}
+	// Should return all the event keys in the store.
+	if len(store.List()) != 10 {
+		t.Fatalf("List() Expected: 10, got %d", len(store.List()))
 	}
 }

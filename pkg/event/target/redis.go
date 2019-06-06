@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,8 +69,12 @@ func (target *RedisTarget) ID() event.TargetID {
 	return target.id
 }
 
-// Send - sends event to Redis.
-func (target *RedisTarget) Send(eventData event.Event) error {
+// Save - Sends event directly without persisting.
+func (target *RedisTarget) Save(eventData event.Event) error {
+	return target.send(eventData)
+}
+
+func (target *RedisTarget) send(eventData event.Event) error {
 	conn := target.pool.Get()
 	defer func() {
 		// FIXME: log returned error. ignore time being.
@@ -106,6 +110,11 @@ func (target *RedisTarget) Send(eventData event.Event) error {
 		return err
 	}
 
+	return nil
+}
+
+// Send - interface compatible method does no-op.
+func (target *RedisTarget) Send(eventKey string) error {
 	return nil
 }
 

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,8 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/cli"
-	miniogopolicy "github.com/minio/minio-go/pkg/policy"
+	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
+	"github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/policy"
@@ -79,7 +80,7 @@ ENVIRONMENT VARIABLES:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
   DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
+     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to MinIO host domain name.
 
   CACHE:
      MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
@@ -89,23 +90,23 @@ ENVIRONMENT VARIABLES:
 
 EXAMPLES:
   1. Start minio gateway server for Azure Blob Storage backend.
-     $ export MINIO_ACCESS_KEY=azureaccountname
-     $ export MINIO_SECRET_KEY=azureaccountkey
-     $ {{.HelpName}}
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}azureaccountname
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}azureaccountkey
+     {{.Prompt}} {{.HelpName}}
 
   2. Start minio gateway server for Azure Blob Storage backend on custom endpoint.
-     $ export MINIO_ACCESS_KEY=azureaccountname
-     $ export MINIO_SECRET_KEY=azureaccountkey
-     $ {{.HelpName}} https://azureaccountname.blob.custom.azure.endpoint
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}azureaccountname
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}azureaccountkey
+     {{.Prompt}} {{.HelpName}} https://azureaccountname.blob.custom.azure.endpoint
 
   3. Start minio gateway server for Azure Blob Storage backend with edge caching enabled.
-     $ export MINIO_ACCESS_KEY=azureaccountname
-     $ export MINIO_SECRET_KEY=azureaccountkey
-     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-     $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
-     $ export MINIO_CACHE_EXPIRY=40
-     $ export MINIO_CACHE_MAXUSE=80
-     $ {{.HelpName}}
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}azureaccountname
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}azureaccountkey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*;*.png"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXPIRY{{.AssignmentOperator}}40
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_MAXUSE{{.AssignmentOperator}}80
+     {{.Prompt}} {{.HelpName}}
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
@@ -180,7 +181,7 @@ func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 		return &azureObjects{}, err
 	}
 
-	c.AddToUserAgent(fmt.Sprintf("APN/1.0 Minio/1.0 Minio/%s", minio.Version))
+	c.AddToUserAgent(fmt.Sprintf("APN/1.0 MinIO/1.0 MinIO/%s", minio.Version))
 	c.HTTPClient = &http.Client{Transport: minio.NewCustomHTTPTransport()}
 
 	return &azureObjects{
@@ -834,7 +835,7 @@ func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *
 	}
 
 	// Save md5sum for future processing on the object.
-	opts.UserDefined["x-amz-meta-md5sum"] = hex.EncodeToString(data.MD5Current())
+	opts.UserDefined["x-amz-meta-md5sum"] = r.MD5CurrentHexString()
 	objBlob.Metadata, objBlob.Properties, err = s3MetaToAzureProperties(ctx, opts.UserDefined)
 	if err != nil {
 		return objInfo, azureToObjectError(err, bucket, object)
@@ -893,6 +894,14 @@ func (a *azureObjects) DeleteObject(ctx context.Context, bucket, object string) 
 		return azureToObjectError(err, bucket, object)
 	}
 	return nil
+}
+
+func (a *azureObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = a.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
 }
 
 // ListMultipartUploads - It's decided not to support List Multipart Uploads, hence returning empty result.
@@ -1202,19 +1211,18 @@ func (a *azureObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 	if err != nil {
 		return objInfo, azureToObjectError(err, bucket, object)
 	}
-	if len(metadata.Metadata) > 0 {
-		objBlob.Metadata, objBlob.Properties, err = s3MetaToAzureProperties(ctx, metadata.Metadata)
-		if err != nil {
-			return objInfo, azureToObjectError(err, bucket, object)
-		}
-		err = objBlob.SetProperties(nil)
-		if err != nil {
-			return objInfo, azureToObjectError(err, bucket, object)
-		}
-		err = objBlob.SetMetadata(nil)
-		if err != nil {
-			return objInfo, azureToObjectError(err, bucket, object)
-		}
+	objBlob.Metadata, objBlob.Properties, err = s3MetaToAzureProperties(ctx, metadata.Metadata)
+	if err != nil {
+		return objInfo, azureToObjectError(err, bucket, object)
+	}
+	objBlob.Metadata["md5sum"] = cmd.ComputeCompleteMultipartMD5(uploadedParts)
+	err = objBlob.SetProperties(nil)
+	if err != nil {
+		return objInfo, azureToObjectError(err, bucket, object)
+	}
+	err = objBlob.SetMetadata(nil)
+	if err != nil {
+		return objInfo, azureToObjectError(err, bucket, object)
 	}
 	var partNumberMarker int
 	for {

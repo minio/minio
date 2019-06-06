@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -473,4 +473,11 @@ func restQueries(keys ...string) []string {
 		accumulator = append(accumulator, key, "{"+key+":.*}")
 	}
 	return accumulator
+}
+
+// Reverse the input order of a slice of string
+func reverseStringSlice(input []string) {
+	for left, right := 0, len(input)-1; left < right; left, right = left+1, right-1 {
+		input[left], input[right] = input[right], input[left]
+	}
 }

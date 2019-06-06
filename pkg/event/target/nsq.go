@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,8 +68,12 @@ func (target *NSQTarget) ID() event.TargetID {
 	return target.id
 }
 
-// Send - sends event to NSQD.
-func (target *NSQTarget) Send(eventData event.Event) (err error) {
+// Save - Sends event directly without persisting.
+func (target *NSQTarget) Save(eventData event.Event) error {
+	return target.send(eventData)
+}
+
+func (target *NSQTarget) send(eventData event.Event) (err error) {
 	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
 	if err != nil {
 		return err
@@ -84,6 +88,11 @@ func (target *NSQTarget) Send(eventData event.Event) (err error) {
 	err = target.producer.Publish(target.args.Topic, data)
 
 	return err
+}
+
+// Send - interface compatible method does no-op.
+func (target *NSQTarget) Send(eventKey string) error {
+	return nil
 }
 
 // Close - closes underneath connections to NSQD server.

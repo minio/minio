@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,14 +24,14 @@ import (
 )
 
 // Tests lock rpc client.
-func TestLockRPCClient(t *testing.T) {
+func TestLockRESTlient(t *testing.T) {
 	host, err := xnet.ParseHost("localhost:9000")
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
-	lkClient, err := NewLockRPCClient(host)
-	if err != nil {
-		t.Fatalf("unexpected error %v", err)
+	lkClient := newlockRESTClient(host)
+	if lkClient.connected == false {
+		t.Fatalf("unexpected error. connection failed")
 	}
 
 	// Attempt all calls.

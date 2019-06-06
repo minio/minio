@@ -1,7 +1,7 @@
-**Using OPA is optional with Minio. We recommend using [`policy` JWT claims](https://github.com/minio/minio/blob/master/docs/sts/wso2.md#4-jwt-claims) instead, let Minio manage your policies using `mc admin policy` and apply them on the STS credentials.**
+**Using OPA is optional with MinIO. We recommend using [`policy` JWT claims](https://github.com/minio/minio/blob/master/docs/sts/wso2.md#4-jwt-claims) instead, let MinIO manage your policies using `mc admin policy` and apply them on the STS credentials.**
 
-# OPA Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
-OPA is a lightweight general-purpose policy engine that can be co-located with Minio server, in this document we talk about how to use OPA HTTP API to authorize Minio STS credentials.
+# OPA Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+OPA is a lightweight general-purpose policy engine that can be co-located with MinIO server, in this document we talk about how to use OPA HTTP API to authorize MinIO STS credentials.
 
 ## Get started
 ### 1. Prerequisites
@@ -59,15 +59,15 @@ curl -X PUT --data-binary @putobject.rego \
   localhost:8181/v1/policies/putobject
 ```
 
-### 4. Setup Minio with OPA
-Minio server expects environment variable for OPA http API url as `MINIO_IAM_OPA_URL`, this environment variable takes a single entry.
+### 4. Setup MinIO with OPA
+MinIO server expects environment variable for OPA http API url as `MINIO_IAM_OPA_URL`, this environment variable takes a single entry.
 ```
 export MINIO_IAM_OPA_URL=http://localhost:8181/v1/data/httpapi/authz
 minio server /mnt/data
 ```
 
-### 5. Test with Minio STS API
-Assuming that Minio server is configured to support STS API by following the doc [Minio STS Quickstart Guide](https://docs.minio.io/docs/minio-sts-quickstart-guide), execute the following command to temporary credentials from Minio server.
+### 5. Test with MinIO STS API
+Assuming that MinIO server is configured to support STS API by following the doc [MinIO STS Quickstart Guide](https://docs.min.io/docs/minio-sts-quickstart-guide), execute the following command to temporary credentials from MinIO server.
 ```
 go run client-grants.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
 
@@ -80,8 +80,8 @@ go run client-grants.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrO
 }
 ```
 
-These credentials can now be used to perform Minio API operations, these credentials automatically expire in 1hr. To understand more about credential expiry duration and client grants STS API read further [here](https://github.com/minio/minio/blob/master/docs/sts/client-grants.md).
+These credentials can now be used to perform MinIO API operations, these credentials automatically expire in 1hr. To understand more about credential expiry duration and client grants STS API read further [here](https://github.com/minio/minio/blob/master/docs/sts/client-grants.md).
 
 ## Explore Further
-- [Minio STS Quickstart Guide](https://docs.minio.io/docs/minio-sts-quickstart-guide)
-- [The Minio documentation website](https://docs.minio.io)
+- [MinIO STS Quickstart Guide](https://docs.min.io/docs/minio-sts-quickstart-guide)
+- [The MinIO documentation website](https://docs.min.io)

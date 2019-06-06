@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/xml"
@@ -1790,7 +1789,7 @@ func (s *TestSuiteCommon) TestPutBucketErrors(c *check) {
 		http.StatusConflict)
 
 	// request for ACL.
-	// Since Minio server doesn't support ACL's the request is expected to fail with  "NotImplemented" error message.
+	// Since MinIO server doesn't support ACL's the request is expected to fail with  "NotImplemented" error message.
 	request, err = newTestSignedRequest("PUT", s.endPoint+"/"+bucketName+"?acl",
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
@@ -2725,12 +2724,9 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *check) {
 	c.Assert(response.StatusCode, http.StatusOK)
 	var parts []CompletePart
 	for _, part := range completeUploads.Parts {
-		// For compressed objects, we dont treat E-Tag as checksum.
-		part.ETag = strings.Replace(part.ETag, "-1", "", -1)
 		part.ETag = canonicalizeETag(part.ETag)
 		parts = append(parts, part)
 	}
-	etag, err := getCompleteMultipartMD5(context.Background(), parts)
-	c.Assert(err, nil)
+	etag := getCompleteMultipartMD5(parts)
 	c.Assert(canonicalizeETag(response.Header.Get("Etag")), etag)
 }

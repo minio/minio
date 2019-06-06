@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	etcd "github.com/coreos/etcd/clientv3"
 	"github.com/minio/minio/cmd/logger"
@@ -73,7 +74,7 @@ func saveConfigEtcd(ctx context.Context, client *etcd.Client, configFile string,
 }
 
 func saveConfig(ctx context.Context, objAPI ObjectLayer, configFile string, data []byte) error {
-	hashReader, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), "", getSHA256Hash(data), int64(len(data)))
+	hashReader, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), "", getSHA256Hash(data), int64(len(data)), globalCLIContext.StrictS3Compat)
 	if err != nil {
 		return err
 	}
@@ -105,12 +106,26 @@ func readConfigEtcd(ctx context.Context, client *etcd.Client, configFile string)
 
 // watchConfigEtcd - watches for changes on `configFile` on etcd and loads them.
 func watchConfigEtcd(objAPI ObjectLayer, configFile string, loadCfgFn func(ObjectLayer) error) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-	defer cancel()
-	for watchResp := range globalEtcdClient.Watch(ctx, configFile) {
-		for _, event := range watchResp.Events {
-			if event.IsModify() || event.IsCreate() {
-				loadCfgFn(objAPI)
+	for {
+		watchCh := globalEtcdClient.Watch(context.Background(), configFile)
+		select {
+		case <-GlobalServiceDoneCh:
+			return
+		case watchResp, ok := <-watchCh:
+			if !ok {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			if err := watchResp.Err(); err != nil {
+				logger.LogIf(context.Background(), err)
+				// log and retry.
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			for _, event := range watchResp.Events {
+				if event.IsModify() || event.IsCreate() {
+					loadCfgFn(objAPI)
+				}
 			}
 		}
 	}

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,16 +20,23 @@ import (
 	"crypto/tls"
 	"errors"
 	"net/http"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	"golang.org/x/net/http2"
 
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/pkg/certs"
 )
+
+func init() {
+	// Opt-in to TLS 1.3. See: https://golang.org/pkg/crypto/tls
+	// In future Go versions TLS 1.3 probably gets enabled by default.
+	// So, we can remove this line as soon as this is the case.
+	os.Setenv("GODEBUG", os.Getenv("GODEBUG")+",tls13=1")
+}
 
 const (
 	serverShutdownPoll = 500 * time.Millisecond
@@ -48,9 +55,6 @@ const (
 
 	// DefaultMaxHeaderBytes - default maximum HTTP header size in bytes.
 	DefaultMaxHeaderBytes = 1 * humanize.MiByte
-
-	// DefaultHTTP2MaxConcurrentStreams - default value for HTTP 2.0 maximum concurrent streams allowed.
-	DefaultHTTP2MaxConcurrentStreams = 1024
 )
 
 // Server - extended http.Server supports multiple addresses to serve and enhanced connection handling.
@@ -125,11 +129,6 @@ func (srv *Server) Start() (err error) {
 
 	// Start servicing with listener.
 	if tlsConfig != nil {
-		if err = http2.ConfigureServer(&srv.Server, &http2.Server{
-			MaxConcurrentStreams: DefaultHTTP2MaxConcurrentStreams,
-		}); err != nil {
-			return err
-		}
 		return srv.Server.Serve(tls.NewListener(listener, tlsConfig))
 	}
 	return srv.Server.Serve(listener)
@@ -203,7 +202,14 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 			CipherSuites:             defaultCipherSuites,
 			CurvePreferences:         secureCurves,
 			MinVersion:               tls.VersionTLS12,
-			NextProtos:               []string{"h2", "http/1.1"},
+			// Do not edit the next line, protos priority is kept
+			// on purpose in this manner for HTTP 2.0, we would
+			// still like HTTP 2.0 clients to negotiate connection
+			// to server if needed but by default HTTP 1.1 is
+			// expected. We need to change this in future
+			// when we wish to go back to HTTP 2.0 as default
+			// priority for HTTP protocol negotiation.
+			NextProtos: []string{"http/1.1", "h2"},
 		}
 		tlsConfig.GetCertificate = getCert
 	}

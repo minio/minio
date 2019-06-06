@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -116,7 +116,7 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 		}
 
 		// If it's a directory, list and call delFunc() for each entry.
-		entries, err := storage.ListDir(volume, entryPath, -1)
+		entries, err := storage.ListDir(volume, entryPath, -1, "")
 		// If entryPath prefix never existed, safe to ignore.
 		if err == errFileNotFound {
 			return nil
@@ -144,6 +144,78 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 	return err
 }
 
+// Cleanup objects in bulk and recursively: each object will have a list of sub-files to delete in the backend
+func cleanupObjectsBulk(ctx context.Context, storage StorageAPI, volume string, objsPaths []string, errs []error) ([]error, error) {
+	// The list of files in disk to delete
+	var filesToDelete []string
+	// Map files to delete to the passed objsPaths
+	var filesToDeleteObjsIndexes []int
+
+	// Traverse and return the list of sub entries
+	var traverse func(string) ([]string, error)
+	traverse = func(entryPath string) ([]string, error) {
+		var output = make([]string, 0)
+		if !hasSuffix(entryPath, slashSeparator) {
+			output = append(output, entryPath)
+			return output, nil
+		}
+		entries, err := storage.ListDir(volume, entryPath, -1, "")
+		if err != nil {
+			if err == errFileNotFound {
+				return nil, nil
+			}
+			return nil, err
+		}
+
+		for _, entry := range entries {
+			subEntries, err := traverse(pathJoin(entryPath, entry))
+			if err != nil {
+				return nil, err
+			}
+			output = append(output, subEntries...)
+		}
+		return output, nil
+	}
+
+	// Find and collect the list of files to remove associated
+	// to the passed objects paths
+	for idx, objPath := range objsPaths {
+		if errs[idx] != nil {
+			continue
+		}
+		output, err := traverse(objPath)
+		if err != nil {
+			errs[idx] = err
+			continue
+		} else {
+			errs[idx] = nil
+		}
+		filesToDelete = append(filesToDelete, output...)
+		for i := 0; i < len(output); i++ {
+			filesToDeleteObjsIndexes = append(filesToDeleteObjsIndexes, idx)
+		}
+	}
+
+	// Reverse the list so remove can succeed
+	reverseStringSlice(filesToDelete)
+
+	dErrs, err := storage.DeleteFileBulk(volume, filesToDelete)
+	if err != nil {
+		return nil, err
+	}
+
+	// Map files deletion errors to the correspondent objects
+	for i := range dErrs {
+		if dErrs[i] != nil {
+			if errs[filesToDeleteObjsIndexes[i]] != nil {
+				errs[filesToDeleteObjsIndexes[i]] = dErrs[i]
+			}
+		}
+	}
+
+	return errs, nil
+}
+
 // Removes notification.xml for a given bucket, only used during DeleteBucket.
 func removeNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucket string) error {
 	// Verify bucket is valid.
@@ -160,4 +232,128 @@ func removeListenerConfig(ctx context.Context, objAPI ObjectLayer, bucket string
 	// make the path
 	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
 	return objAPI.DeleteObject(ctx, minioMetaBucket, lcPath)
+}
+
+func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {
+	if err := checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, obj); err != nil {
+		return loi, err
+	}
+
+	// Marker is set validate pre-condition.
+	if marker != "" {
+		// Marker not common with prefix is not implemented. Send an empty response
+		if !hasPrefix(marker, prefix) {
+			return loi, nil
+		}
+	}
+
+	// With max keys of zero we have reached eof, return right here.
+	if maxKeys == 0 {
+		return loi, nil
+	}
+
+	// For delimiter and prefix as '/' we do not list anything at all
+	// since according to s3 spec we stop at the 'delimiter'
+	// along // with the prefix. On a flat namespace with 'prefix'
+	// as '/' we don't have any entries, since all the keys are
+	// of form 'keyName/...'
+	if delimiter == slashSeparator && prefix == slashSeparator {
+		return loi, nil
+	}
+
+	// Over flowing count - reset to maxObjectList.
+	if maxKeys < 0 || maxKeys > maxObjectList {
+		maxKeys = maxObjectList
+	}
+
+	// Default is recursive, if delimiter is set then list non recursive.
+	recursive := true
+	if delimiter == slashSeparator {
+		recursive = false
+	}
+
+	walkResultCh, endWalkCh := tpool.Release(listParams{bucket, recursive, marker, prefix})
+	if walkResultCh == nil {
+		endWalkCh = make(chan struct{})
+		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, endWalkCh)
+	}
+
+	var objInfos []ObjectInfo
+	var eof bool
+	var nextMarker string
+
+	// List until maxKeys requested.
+	for i := 0; i < maxKeys; {
+		walkResult, ok := <-walkResultCh
+		if !ok {
+			// Closed channel.
+			eof = true
+			break
+		}
+
+		var objInfo ObjectInfo
+		var err error
+		if hasSuffix(walkResult.entry, slashSeparator) {
+			for _, getObjectInfoDir := range getObjectInfoDirs {
+				objInfo, err = getObjectInfoDir(ctx, bucket, walkResult.entry)
+				if err == nil {
+					break
+				}
+				if err == errFileNotFound {
+					err = nil
+					objInfo = ObjectInfo{
+						Bucket: bucket,
+						Name:   walkResult.entry,
+						IsDir:  true,
+					}
+				}
+			}
+		} else {
+			objInfo, err = getObjInfo(ctx, bucket, walkResult.entry)
+		}
+		if err != nil {
+			// Ignore errFileNotFound as the object might have got
+			// deleted in the interim period of listing and getObjectInfo(),
+			// ignore quorum error as it might be an entry from an outdated disk.
+			if IsErrIgnored(err, []error{
+				errFileNotFound,
+				errXLReadQuorum,
+			}...) {
+				continue
+			}
+			return loi, toObjectErr(err, bucket, prefix)
+		}
+		nextMarker = objInfo.Name
+		objInfos = append(objInfos, objInfo)
+		if walkResult.end {
+			eof = true
+			break
+		}
+		i++
+	}
+
+	// Save list routine for the next marker if we haven't reached EOF.
+	params := listParams{bucket, recursive, nextMarker, prefix}
+	if !eof {
+		tpool.Set(params, walkResultCh, endWalkCh)
+	}
+
+	result := ListObjectsInfo{}
+	for _, objInfo := range objInfos {
+		if objInfo.IsDir && delimiter == slashSeparator {
+			result.Prefixes = append(result.Prefixes, objInfo.Name)
+			continue
+		}
+		result.Objects = append(result.Objects, objInfo)
+	}
+
+	if !eof {
+		result.IsTruncated = true
+		if len(objInfos) > 0 {
+			result.NextMarker = objInfos[len(objInfos)-1].Name
+		}
+	}
+
+	// Success.
+	return result, nil
 }

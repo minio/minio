@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/pkg/encrypt"
+	"github.com/minio/minio-go/v6/pkg/encrypt"
 	minio "github.com/minio/minio/cmd"
 
 	"github.com/minio/minio/cmd/logger"
@@ -138,14 +138,17 @@ func (l *s3EncObjects) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 	loi.ContinuationToken = continuationToken
 	loi.Objects = make([]minio.ObjectInfo, 0)
 	loi.Prefixes = make([]string, 0)
+	loi.Objects = append(loi.Objects, objects...)
 
-	for _, obj := range objects {
-		loi.NextContinuationToken = obj.Name
-		loi.Objects = append(loi.Objects, obj)
-	}
 	for _, pfx := range prefixes {
 		if pfx != prefix {
 			loi.Prefixes = append(loi.Prefixes, pfx)
+		}
+	}
+	// Set continuation token if s3 returned truncated list
+	if isTruncated {
+		if len(objects) > 0 {
+			loi.NextContinuationToken = objects[len(objects)-1].Name
 		}
 	}
 	return loi, nil

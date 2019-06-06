@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018, 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017, 2018, 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import (
 
 	"github.com/minio/dsync"
 	"github.com/minio/lsync"
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -38,7 +38,7 @@ import (
 var globalNSMutex *nsLockMap
 
 // Global lock server one per server.
-var globalLockServer *lockRPCReceiver
+var globalLockServer *lockRESTServer
 
 // Instance of dsync for distributed clients.
 var globalDsync *dsync.Dsync
@@ -66,7 +66,7 @@ func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int)
 		if endpoint.IsLocal {
 			myNode = len(clnts)
 
-			receiver := &lockRPCReceiver{
+			receiver := &lockRESTServer{
 				ll: localLocker{
 					serverAddr:      endpoint.Host,
 					serviceEndpoint: lockServicePath,
@@ -79,8 +79,7 @@ func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int)
 		} else {
 			host, err := xnet.ParseHost(endpoint.Host)
 			logger.FatalIf(err, "Unable to parse Lock RPC Host")
-			locker, err = NewLockRPCClient(host)
-			logger.FatalIf(err, "Unable to initialize Lock RPC Client")
+			locker = newlockRESTClient(host)
 		}
 
 		clnts = append(clnts, locker)

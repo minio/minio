@@ -1,10 +1,10 @@
-# 使用Kubernetes部署Minio [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# 使用Kubernetes部署MinIO [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
-Kubernetes的部署和状态集提供了在独立，分布式或共享模式下部署Minio服务器的完美平台。 在Kubernetes上部署Minio有多种选择，您可以选择最适合您的。
+Kubernetes的部署和状态集提供了在独立，分布式或共享模式下部署MinIO服务器的完美平台。 在Kubernetes上部署MinIO有多种选择，您可以选择最适合您的。
 
-- Minio [Helm](https://helm.sh) Chart通过一个简单的命令即可提供自定义而且简单的Minio部署。更多关于Minio Helm部署的资料，请访问[这里](#prerequisites).
+- MinIO [Helm](https://helm.sh) Chart通过一个简单的命令即可提供自定义而且简单的MinIO部署。更多关于MinIO Helm部署的资料，请访问[这里](#prerequisites).
 
-- 你也可以浏览Kubernetes [Minio示例](https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/README.md) ，通过`.yaml`文件来部署Minio。
+- 你也可以浏览Kubernetes [MinIO示例](https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/README.md) ，通过`.yaml`文件来部署MinIO。
 
 <a name="prerequisites"></a>
 ## 1. 前提条件
@@ -14,23 +14,23 @@ Kubernetes的部署和状态集提供了在独立，分布式或共享模式下�
 * 底层支持PV provisioner。
 * 你的K8s集群里需要有Helm package manager [installed](https://github.com/kubernetes/helm#install)。
 
-## 2. 使用Helm Chart部署Minio
+## 2. 使用Helm Chart部署MinIO
 
-安装 Minio chart
+安装 MinIO chart
 
 ```bash
 $ helm install stable/minio
 ```
-以上命令以默认配置在Kubernetes群集上部署Minio。 以下部分列出了Minio图表的所有可配置参数及其默认值。
+以上命令以默认配置在Kubernetes群集上部署MinIO。 以下部分列出了MinIO图表的所有可配置参数及其默认值。
 
 ### 配置
 
 | 参数                  | 描述                         | 默认值                                                 |
 |----------------------------|-------------------------------------|---------------------------------------------------------|
-| `image`                    | Minio镜像名称                | `minio/minio`                                           |
-| `imageTag`                 | Minio镜像tag. 可选值在 [这里](https://hub.docker.com/r/minio/minio/tags/).| `RELEASE.2017-08-05T00-00-53Z`|
+| `image`                    | MinIO镜像名称                | `minio/minio`                                           |
+| `imageTag`                 | MinIO镜像tag. 可选值在 [这里](https://hub.docker.com/r/minio/minio/tags/).| `RELEASE.2017-08-05T00-00-53Z`|
 | `imagePullPolicy`          | Image pull policy                   | `Always`                                                |
-| `mode`                     | Minio server模式 (`standalone`, `shared` 或者 `distributed`)| `standalone`                     |
+| `mode`                     | MinIO server模式 (`standalone`, `shared` 或者 `distributed`)| `standalone`                     |
 | `numberOfNodes`            | 节点数 (仅对分布式模式生效). 可选值 4 <= x <= 16 | `4`    |
 | `accessKey`                | 默认access key                  | `AKIAIOSFODNN7EXAMPLE`                                  |
 | `secretKey`                | 默认secret key                  | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`              |
@@ -52,7 +52,7 @@ $ helm install --name my-release \
     stable/minio
 ```
 
-上述命令部署了一个带上100G持久卷的Minio服务。
+上述命令部署了一个带上100G持久卷的MinIO服务。
 
 或者，您可以提供一个YAML文件，用于在安装chart时指定参数值。 例如，
 
@@ -60,43 +60,43 @@ $ helm install --name my-release \
 $ helm install --name my-release -f values.yaml stable/minio
 ```
 
-### 分布式Minio
+### 分布式MinIO
 
-默认情况下，此图表以独立模式提供Minio服务器。 要在[分布式模式](https://docs.minio.io/cn/distributed-minio-quickstart-guide)中配置Minio服务器，请将`mode`字段设置为`distributed`,
+默认情况下，此图表以独立模式提供MinIO服务器。 要在[分布式模式](https://docs.min.io/cn/distributed-minio-quickstart-guide)中配置MinIO服务器，请将`mode`字段设置为`distributed`,
 
 ```bash
 $ helm install --set mode=distributed stable/minio
 ```
 
-上述命令部署了个带有4个节点的分布式Minio服务器。 要更改分布式Minio服务器中的节点数，请设置`numberOfNodes`属性。
+上述命令部署了个带有4个节点的分布式MinIO服务器。 要更改分布式MinIO服务器中的节点数，请设置`numberOfNodes`属性。
 
 
 ```bash
 $ helm install --set mode=distributed,numberOfNodes=8 stable/minio
 ```
 
-上述命令部署了个带有8个节点的分布式Minio服务器。注意一下，`numberOfNodes`取值范围是[4,16]。
+上述命令部署了个带有8个节点的分布式MinIO服务器。注意一下，`numberOfNodes`取值范围是[4,16]。
 
-#### StatefulSet [限制](http://kubernetes.io/docs/concepts/abstractions/controllers/statefulsets/#limitations)，适用于分布式Minio
+#### StatefulSet [限制](http://kubernetes.io/docs/concepts/abstractions/controllers/statefulsets/#limitations)，适用于分布式MinIO
 
 * StatefulSets需要持久化存储，所以如果 `mode`设成 `distributed`的话，`persistence.enabled`参数不生效。
-* 卸载分布式Minio版本时，需要手动删除与StatefulSet关联的卷。
+* 卸载分布式MinIO版本时，需要手动删除与StatefulSet关联的卷。
 
-### Shared Minio
+### Shared MinIO
 
-如需采用[shared mode](https://github.com/minio/minio/blob/master/docs/shared-backend/README.md)部署Minio, 将`mode` 设为`shared`,
+如需采用[shared mode](https://github.com/minio/minio/blob/master/docs/shared-backend/README.md)部署MinIO, 将`mode` 设为`shared`,
 
 ```bash
 $ helm install --set mode=shared stable/minio
 ```
 
-上述命令规定了4个Minio服务器节点，一个存储。 要更改共享的Minio部署中的节点数，请设置`numberOfNodes`字段，
+上述命令规定了4个MinIO服务器节点，一个存储。 要更改共享的MinIO部署中的节点数，请设置`numberOfNodes`字段，
 
 ```bash
 $ helm install --set mode=shared,numberOfNodes=8 stable/minio
 ```
 
-上述命令规定了Minio服务有8个节点，采用shared模式。
+上述命令规定了MinIO服务有8个节点，采用shared模式。
 
 ### 持久化
 
@@ -108,9 +108,9 @@ $ helm install --set persistence.enabled=false stable/minio
 
 > *"当Pod分配给节点时，首先创建一个emptyDir卷，只要该节点上的Pod正在运行，它就会存在。 当某个Pod由于任何原因从节点中删除时，emptyDir中的数据将永久删除。"*
 
-## 3. 使用Helm更新Minio版本
+## 3. 使用Helm更新MinIO版本
 
-您可以更新现有的Minio Helm Release以使用较新的Minio Docker镜像。 为此，请使用`helm upgrade`命令：
+您可以更新现有的MinIO Helm Release以使用较新的MinIO Docker镜像。 为此，请使用`helm upgrade`命令：
 
 ```bash
 $ helm upgrade --set imageTag=<replace-with-minio-docker-image-tag> <helm-release-name> stable/minio
@@ -149,6 +149,6 @@ $ helm install --set accessKey=myaccesskey,secretKey=mysecretkey \
 
 ### 了解更多
 
-- [Minio纠删码快速入门](https://docs.minio.io/cn/minio-erasure-code-quickstart-guide)
+- [MinIO纠删码快速入门](https://docs.min.io/cn/minio-erasure-code-quickstart-guide)
 - [Kubernetes文档](https://kubernetes.io/docs/home/)
 - [Helm package manager for kubernetes](https://helm.sh/)

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
@@ -263,16 +263,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
-	var s3Error APIErrorCode
-	if s3Error = checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, ""); s3Error != ErrNone {
-		// In the event access is denied, a 200 response should still be returned
-		// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
-		if s3Error != ErrAccessDenied {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
-			return
-		}
-	}
-
 	// Content-Length is required and should be non-zero
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 	if r.ContentLength <= 0 {
@@ -319,42 +309,60 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
-	deleteObject := objectAPI.DeleteObject
+	deleteObjectsFn := objectAPI.DeleteObjects
 	if api.CacheAPI() != nil {
-		deleteObject = api.CacheAPI().DeleteObject
+		deleteObjectsFn = api.CacheAPI().DeleteObjects
 	}
 
-	var dErrs = make([]error, len(deleteObjects.Objects))
+	type delObj struct {
+		origIndex int
+		name      string
+	}
+
+	var objectsToDelete []delObj
+	var dErrs = make([]APIErrorCode, len(deleteObjects.Objects))
+
 	for index, object := range deleteObjects.Objects {
-		// If the request is denied access, each item
-		// should be marked as 'AccessDenied'
-		if s3Error == ErrAccessDenied {
-			dErrs[index] = PrefixAccessDenied{
-				Bucket: bucket,
-				Object: object.ObjectName,
+		if dErrs[index] = checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object.ObjectName); dErrs[index] != ErrNone {
+			if dErrs[index] == ErrSignatureDoesNotMatch || dErrs[index] == ErrInvalidAccessKeyID {
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(dErrs[index]), r.URL, guessIsBrowserReq(r))
+				return
 			}
 			continue
 		}
-		dErrs[index] = deleteObject(ctx, bucket, object.ObjectName)
+
+		objectsToDelete = append(objectsToDelete, delObj{index, object.ObjectName})
+	}
+
+	toNames := func(input []delObj) (output []string) {
+		output = make([]string, len(input))
+		for i := range input {
+			output[i] = input[i].name
+		}
+		return
+	}
+
+	errs, err := deleteObjectsFn(ctx, bucket, toNames(objectsToDelete))
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	for i, obj := range objectsToDelete {
+		dErrs[obj.origIndex] = toAPIErrorCode(ctx, errs[i])
 	}
 
 	// Collect deleted objects and errors if any.
 	var deletedObjects []ObjectIdentifier
 	var deleteErrors []DeleteError
-	for index, err := range dErrs {
+	for index, errCode := range dErrs {
 		object := deleteObjects.Objects[index]
 		// Success deleted objects are collected separately.
-		if err == nil {
+		if errCode == ErrNone || errCode == ErrNoSuchKey {
 			deletedObjects = append(deletedObjects, object)
 			continue
 		}
-		if _, ok := err.(ObjectNotFound); ok {
-			// If the object is not found it should be
-			// accounted as deleted as per S3 spec.
-			deletedObjects = append(deletedObjects, object)
-			continue
-		}
-		apiErr := toAPIError(ctx, err)
+		apiErr := getAPIError(errCode)
 		// Error during delete should be collected separately.
 		deleteErrors = append(deleteErrors, DeleteError{
 			Code:    apiErr.Code,
@@ -615,7 +623,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	hashReader, err := hash.NewReader(fileBody, fileSize, "", "", fileSize)
+	hashReader, err := hash.NewReader(fileBody, fileSize, "", "", fileSize, globalCLIContext.StrictS3Compat)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -653,7 +661,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 				return
 			}
 			info := ObjectInfo{Size: fileSize}
-			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", fileSize) // do not try to verify encrypted content
+			// do not try to verify encrypted content
+			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", fileSize, globalCLIContext.StrictS3Compat)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
@@ -669,7 +678,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 
 	location := getObjectLocation(r, globalDomainNames, bucket, object)
-	w.Header().Set("ETag", `"`+objInfo.ETag+`"`)
+	w.Header()["ETag"] = []string{`"` + objInfo.ETag + `"`}
 	w.Header().Set("Location", location)
 
 	// Notify object created event.
@@ -774,10 +783,6 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	globalNotificationSys.RemoveNotification(bucket)
-	globalPolicySys.Remove(bucket)
-	globalNotificationSys.DeleteBucket(ctx, bucket)
-
 	if globalDNSConfig != nil {
 		if err := globalDNSConfig.Delete(bucket); err != nil {
 			// Deleting DNS entry failed, attempt to create the bucket again.
@@ -786,6 +791,10 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 			return
 		}
 	}
+
+	globalNotificationSys.RemoveNotification(bucket)
+	globalPolicySys.Remove(bucket)
+	globalNotificationSys.DeleteBucket(ctx, bucket)
 
 	// Write success response.
 	writeSuccessNoContent(w)

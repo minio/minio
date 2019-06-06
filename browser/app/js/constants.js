@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,3 +28,6 @@ export const NONE = "none"
 export const SHARE_OBJECT_EXPIRY_DAYS = 5
 export const SHARE_OBJECT_EXPIRY_HOURS = 0
 export const SHARE_OBJECT_EXPIRY_MINUTES = 0
+
+export const ACCESS_KEY_MIN_LENGTH = 3
+export const SECRET_KEY_MIN_LENGTH = 8

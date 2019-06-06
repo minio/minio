@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,20 +18,103 @@ package target
 
 import (
 	"errors"
+	"fmt"
+	"strings"
+	"time"
+
 	"github.com/minio/minio/pkg/event"
 )
 
-// ErrLimitExceeded error is sent when the maximum limit is reached.
-var ErrLimitExceeded = errors.New("[Store] The maximum limit reached")
+const retryInterval = 3 * time.Second
 
-// ErrNoSuchKey error is sent in Get when the key is not found.
-var ErrNoSuchKey = errors.New("[Store] No such key found")
+// errNotConnected - indicates that the target connection is not active.
+var errNotConnected = errors.New("not connected to target server/service")
+
+// errLimitExceeded error is sent when the maximum limit is reached.
+var errLimitExceeded = errors.New("the maximum store limit reached")
 
 // Store - To persist the events.
 type Store interface {
 	Put(event event.Event) error
 	Get(key string) (event.Event, error)
-	ListAll() []string
-	Del(key string)
+	List() []string
+	Del(key string) error
 	Open() error
+}
+
+// replayEvents - Reads the events from the store and replays.
+func replayEvents(store Store, doneCh <-chan struct{}) <-chan string {
+	var names []string
+	eventKeyCh := make(chan string)
+
+	go func() {
+		retryTimer := time.NewTimer(retryInterval)
+		defer retryTimer.Stop()
+		defer close(eventKeyCh)
+		for {
+			names = store.List()
+			for _, name := range names {
+				select {
+				case eventKeyCh <- strings.TrimSuffix(name, eventExt):
+					// Get next key.
+				case <-doneCh:
+					return
+				}
+			}
+
+			if len(names) < 2 {
+				retryTimer.Reset(retryInterval)
+				select {
+				case <-retryTimer.C:
+				case <-doneCh:
+					return
+				}
+			}
+		}
+	}()
+
+	return eventKeyCh
+}
+
+// sendEvents - Reads events from the store and re-plays.
+func sendEvents(target event.Target, eventKeyCh <-chan string, doneCh <-chan struct{}) {
+	retryTimer := time.NewTimer(retryInterval)
+	defer retryTimer.Stop()
+
+	send := func(eventKey string) bool {
+		for {
+			err := target.Send(eventKey)
+			if err == nil {
+				break
+			}
+
+			if err != errNotConnected {
+				panic(fmt.Errorf("target.Send() failed with '%v'", err))
+			}
+
+			retryTimer.Reset(retryInterval)
+			select {
+			case <-retryTimer.C:
+			case <-doneCh:
+				return false
+			}
+		}
+		return true
+	}
+
+	for {
+		select {
+		case eventKey, ok := <-eventKeyCh:
+			if !ok {
+				// closed channel.
+				return
+			}
+
+			if !send(eventKey) {
+				return
+			}
+		case <-doneCh:
+			return
+		}
+	}
 }

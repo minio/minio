@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -260,7 +260,7 @@ func testStorageAPIListDir(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		result, err := storage.ListDir(testCase.volumeName, testCase.prefix, -1)
+		result, err := storage.ListDir(testCase.volumeName, testCase.prefix, -1, "")
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -506,6 +506,10 @@ func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRES
 	endpoint, err := NewEndpoint(url.String())
 	if err != nil {
 		t.Fatalf("NewEndpoint failed %v", endpoint)
+	}
+
+	if err := endpoint.UpdateIsLocal(); err != nil {
+		t.Fatalf("UpdateIsLocal failed %v", err)
 	}
 
 	registerStorageRESTHandlers(router, EndpointList{endpoint})

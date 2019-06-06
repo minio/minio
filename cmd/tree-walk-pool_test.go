@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import (
 // and that is available in the pool before the timeout.
 func TestTreeWalkPoolBasic(t *testing.T) {
 	// Create a treeWalkPool
-	tw := newTreeWalkPool(1 * time.Second)
+	tw := NewTreeWalkPool(1 * time.Second)
 
 	// Create sample params
 	params := listParams{
@@ -33,7 +33,7 @@ func TestTreeWalkPoolBasic(t *testing.T) {
 	}
 
 	// Add a treeWalk to the pool
-	resultCh := make(chan treeWalkResult)
+	resultCh := make(chan TreeWalkResult)
 	endWalkCh := make(chan struct{})
 	tw.Set(params, resultCh, endWalkCh)
 
@@ -60,7 +60,7 @@ func TestTreeWalkPoolBasic(t *testing.T) {
 // Test if multiple tree walkers for the same listParams are managed as expected by the pool.
 func TestManyWalksSameParam(t *testing.T) {
 	// Create a treeWalkPool.
-	tw := newTreeWalkPool(5 * time.Second)
+	tw := NewTreeWalkPool(5 * time.Second)
 
 	// Create sample params.
 	params := listParams{
@@ -75,7 +75,7 @@ func TestManyWalksSameParam(t *testing.T) {
 	default:
 		// Create many treeWalk go-routines for the same params.
 		for i := 0; i < 10; i++ {
-			resultCh := make(chan treeWalkResult)
+			resultCh := make(chan TreeWalkResult)
 			endWalkCh := make(chan struct{})
 			tw.Set(params, resultCh, endWalkCh)
 		}

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,10 @@ package s3select
 
 import (
 	"bytes"
-	"go/build"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
-	"path"
 	"reflect"
 	"testing"
 )
@@ -174,7 +172,7 @@ func TestParquetInput(t *testing.T) {
 `)
 
 	getReader := func(offset int64, length int64) (io.ReadCloser, error) {
-		testdataFile := path.Join(build.Default.GOPATH, "src/github.com/minio/minio/pkg/s3select/testdata.parquet")
+		testdataFile := "testdata.parquet"
 		file, err := os.Open(testdataFile)
 		if err != nil {
 			return nil, err

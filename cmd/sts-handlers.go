@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018, 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018, 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/iam/validator"
+	"github.com/minio/minio/pkg/wildcard"
 )
 
 const (
@@ -49,13 +50,19 @@ func registerSTSRouter(router *mux.Router) {
 	stsRouter := router.NewRoute().PathPrefix("/").Subrouter()
 
 	// Assume roles with no JWT, handles AssumeRole.
-	stsRouter.Methods("POST").HeadersRegexp("Content-Type", "application/x-www-form-urlencoded*").
-		HeadersRegexp("Authorization", "AWS4-HMAC-SHA256*").
-		HandlerFunc(httpTraceAll(sts.AssumeRole))
+	stsRouter.Methods("POST").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
+		ctypeOk := wildcard.MatchSimple("application/x-www-form-urlencoded*", r.Header.Get("Content-Type"))
+		authOk := wildcard.MatchSimple("AWS4-HMAC-SHA256*", r.Header.Get("Authorization"))
+		noQueries := len(r.URL.Query()) == 0
+		return ctypeOk && authOk && noQueries
+	}).HandlerFunc(httpTraceAll(sts.AssumeRole))
 
 	// Assume roles with JWT handler, handles both ClientGrants and WebIdentity.
-	stsRouter.Methods("POST").HeadersRegexp("Content-Type", "application/x-www-form-urlencoded*").
-		HandlerFunc(httpTraceAll(sts.AssumeRoleWithJWT))
+	stsRouter.Methods("POST").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
+		ctypeOk := wildcard.MatchSimple("application/x-www-form-urlencoded*", r.Header.Get("Content-Type"))
+		noQueries := len(r.URL.Query()) == 0
+		return ctypeOk && noQueries
+	}).HandlerFunc(httpTraceAll(sts.AssumeRoleWithJWT))
 
 	// AssumeRoleWithClientGrants
 	stsRouter.Methods("POST").HandlerFunc(httpTraceAll(sts.AssumeRoleWithClientGrants)).
@@ -181,7 +188,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Notify all other Minio peers to reload temp users
+	// Notify all other MinIO peers to reload temp users
 	for _, nerr := range globalNotificationSys.LoadUsers() {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
@@ -278,7 +285,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	}
 
 	// JWT has requested a custom claim with policy value set.
-	// This is a Minio STS API specific value, this value should
+	// This is a MinIO STS API specific value, this value should
 	// be set and configured on your identity provider as part of
 	// JWT custom claims.
 	var policyName string
@@ -298,7 +305,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Notify all other Minio peers to reload temp users
+	// Notify all other MinIO peers to reload temp users
 	for _, nerr := range globalNotificationSys.LoadUsers() {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())

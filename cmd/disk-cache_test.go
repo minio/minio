@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -194,7 +194,7 @@ func TestDiskCache(t *testing.T) {
 	objInfo.UserDefined = httpMeta
 	var opts ObjectOptions
 	byteReader := bytes.NewReader([]byte(content))
-	hashReader, err := hash.NewReader(byteReader, int64(size), "", "", int64(size))
+	hashReader, err := hash.NewReader(byteReader, int64(size), "", "", int64(size), globalCLIContext.StrictS3Compat)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,7 @@ func TestDiskCacheMaxUse(t *testing.T) {
 	opts := ObjectOptions{}
 
 	byteReader := bytes.NewReader([]byte(content))
-	hashReader, err := hash.NewReader(byteReader, int64(size), "", "", int64(size))
+	hashReader, err := hash.NewReader(byteReader, int64(size), "", "", int64(size), globalCLIContext.StrictS3Compat)
 	if err != nil {
 		t.Fatal(err)
 	}

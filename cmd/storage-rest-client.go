@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/url"
 	"path"
 	"strconv"
@@ -44,16 +43,10 @@ func isNetworkError(err error) bool {
 	if err.Error() == errConnectionStale.Error() {
 		return true
 	}
-	if uerr, isURLError := err.(*url.Error); isURLError {
-		if uerr.Timeout() {
-			return true
-		}
-
-		err = uerr.Err
+	if _, ok := err.(*rest.NetworkError); ok {
+		return true
 	}
-
-	_, isNetOpError := err.(*net.OpError)
-	return isNetOpError
+	return false
 }
 
 // Converts rpc.ServerError to underlying error. This function is
@@ -234,17 +227,16 @@ func (client *storageRESTClient) CreateFile(volume, path string, length int64, r
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTLength, strconv.Itoa(int(length)))
-	respBody, err := client.call(storageRESTMethodCreateFile, values, r, length)
+	respBody, err := client.call(storageRESTMethodCreateFile, values, ioutil.NopCloser(r), length)
 	defer http.DrainBody(respBody)
 	return err
 }
 
 // WriteAll - write all data to a file.
-func (client *storageRESTClient) WriteAll(volume, path string, buffer []byte) error {
+func (client *storageRESTClient) WriteAll(volume, path string, reader io.Reader) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	reader := bytes.NewBuffer(buffer)
 	respBody, err := client.call(storageRESTMethodWriteAll, values, reader, -1)
 	defer http.DrainBody(respBody)
 	return err
@@ -314,12 +306,50 @@ func (client *storageRESTClient) ReadFile(volume, path string, offset int64, buf
 	return int64(n), err
 }
 
+func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive bool, leafFile string,
+	readMetadataFn readMetadataFunc, endWalkCh chan struct{}) (chan FileInfo, error) {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTDirPath, dirPath)
+	values.Set(storageRESTMarkerPath, marker)
+	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
+	values.Set(storageRESTLeafFile, leafFile)
+	respBody, err := client.call(storageRESTMethodWalk, values, nil, -1)
+	if err != nil {
+		return nil, err
+	}
+
+	ch := make(chan FileInfo)
+	go func() {
+		defer close(ch)
+		defer http.DrainBody(respBody)
+
+		decoder := gob.NewDecoder(respBody)
+		for {
+			var fi FileInfo
+			if gerr := decoder.Decode(&fi); gerr != nil {
+				// Upon error return
+				return
+			}
+			select {
+			case ch <- fi:
+			case <-endWalkCh:
+				return
+			}
+
+		}
+	}()
+
+	return ch, nil
+}
+
 // ListDir - lists a directory.
-func (client *storageRESTClient) ListDir(volume, dirPath string, count int) (entries []string, err error) {
+func (client *storageRESTClient) ListDir(volume, dirPath string, count int, leafFile string) (entries []string, err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTCount, strconv.Itoa(count))
+	values.Set(storageRESTLeafFile, leafFile)
 	respBody, err := client.call(storageRESTMethodListDir, values, nil, -1)
 	if err != nil {
 		return nil, err
@@ -337,6 +367,34 @@ func (client *storageRESTClient) DeleteFile(volume, path string) error {
 	respBody, err := client.call(storageRESTMethodDeleteFile, values, nil, -1)
 	defer http.DrainBody(respBody)
 	return err
+}
+
+// DeleteFileBulk - deletes files in bulk.
+func (client *storageRESTClient) DeleteFileBulk(volume string, paths []string) (errs []error, err error) {
+	errs = make([]error, len(paths))
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	for _, path := range paths {
+		values.Add(storageRESTFilePath, path)
+	}
+	respBody, err := client.call(storageRESTMethodDeleteFileBulk, values, nil, -1)
+	defer http.DrainBody(respBody)
+
+	if err != nil {
+		return nil, err
+	}
+
+	bulkErrs := bulkErrorsResponse{}
+	gob.NewDecoder(respBody).Decode(&bulkErrs)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, dErr := range bulkErrs.Errs {
+		errs[i] = toStorageErr(dErr)
+	}
+
+	return errs, nil
 }
 
 // RenameFile - renames a file.
@@ -405,6 +463,7 @@ func newStorageRESTClient(endpoint Endpoint) (*storageRESTClient, error) {
 		tlsConfig = &tls.Config{
 			ServerName: host.Name,
 			RootCAs:    globalRootCAs,
+			NextProtos: []string{"http/1.1"}, // Force http1.1
 		}
 	}
 

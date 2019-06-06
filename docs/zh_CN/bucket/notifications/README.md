@@ -1,4 +1,4 @@
-# Minio存储桶通知指南 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# MinIO存储桶通知指南 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
 存储桶（Bucket）如果发生改变,比如上传对象和删除对象，可以使用存储桶事件通知机制进行监控，并通过以下方式发布出去:
 
@@ -16,17 +16,17 @@
 
 ## 前提条件
 
-* 从[这里](https://docs.minio.io/cn/minio-quickstart-guide)下载并安装Minio Server。
-* 从[这里](https://docs.minio.io/cn/minio-client-quickstart-guide)下载并安装Minio Client。
+* 从[这里](https://docs.min.io/cn/minio-quickstart-guide)下载并安装MinIO Server。
+* 从[这里](https://docs.min.io/cn/minio-client-quickstart-guide)下载并安装MinIO Client。
 
 <a name="AMQP"></a>
-## 使用AMQP发布Minio事件
+## 使用AMQP发布MinIO事件
 
 从[这里](https://www.rabbitmq.com/)下载安装RabbitMQ。
 
-### 第一步: 将AMQP endpoint添加到Minio
+### 第一步: 将AMQP endpoint添加到MinIO
 
-Minio Server的配置文件默认路径是 ``~/.minio/config.json``。AMQP配置信息是在`notify`这个节点下的`amqp`节点下，在这里为你的AMQP实例创建配置信息键值对，key是你的AMQP endpoint的名称，value是下面表格中列列的键值对集合。
+MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。AMQP配置信息是在`notify`这个节点下的`amqp`节点下，在这里为你的AMQP实例创建配置信息键值对，key是你的AMQP endpoint的名称，value是下面表格中列列的键值对集合。
 
 | 参数 | 类型 | 描述 |
 |:---|:---|:---|
@@ -64,14 +64,14 @@ Minio Server的配置文件默认路径是 ``~/.minio/config.json``。AMQP配置
 }
 ```
 
-更新完配置文件后，重启Minio Server让配置生效。如果一切顺利，Minio Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:amqp`。
+更新完配置文件后，重启MinIO Server让配置生效。如果一切顺利，MinIO Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:amqp`。
 
-Minio支持[RabbitMQ](https://www.rabbitmq.com/)中所有的交换方式，这次我们采用  ``fanout`` 交换。
+MinIO支持[RabbitMQ](https://www.rabbitmq.com/)中所有的交换方式，这次我们采用  ``fanout`` 交换。
 
 注意一下，你可以听从你内心的想法，想配几个AMQP服务就配几个，只要每个AMQP服务实例有不同的ID (比如前面示例中的"1") 和配置信息。
 
 
-### 第二步: 使用Minio客户端启用bucket通知
+### 第二步: 使用MinIO客户端启用bucket通知
 
 如果一个JPEG图片上传到``myminio`` server里的``images`` 存储桶或者从桶中删除，一个存储桶事件通知就会被触发。 这里ARN值是``arn:minio:sqs:us-east-1:1:amqp``，想了解更多关于ARN的信息，请参考[AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
 
@@ -135,13 +135,13 @@ python rabbit.py
 ```
 
 <a name="MQTT"></a>
-## 使用MQTT发布Minio事件
+## 使用MQTT发布MinIO事件
 
 从 [这里](https://mosquitto.org/)安装MQTT Broker。
 
-### 第一步: 添加MQTT endpoint到Minio
+### 第一步: 添加MQTT endpoint到MinIO
 
-Minio Server的配置文件默认路径是 ``~/.minio/config.json``。MQTT配置信息是在`notify`这个节点下的`mqtt`节点下，在这里为你的MQTT实例创建配置信息键值对，key是你的MQTT endpoint的名称，value是下面表格中列列的键值对集合。
+MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。MQTT配置信息是在`notify`这个节点下的`mqtt`节点下，在这里为你的MQTT实例创建配置信息键值对，key是你的MQTT endpoint的名称，value是下面表格中列列的键值对集合。
 
 
 | 参数 | 类型 | 描述 |
@@ -150,7 +150,7 @@ Minio Server的配置文件默认路径是 ``~/.minio/config.json``。MQTT配置
 | `broker` | _string_ | (必须) MQTT server endpoint, 例如. `tcp://localhost:1883` |
 | `topic` | _string_ | (必须) 要发布的MQTT主题的名称, 例如. `minio` |
 | `qos` | _int_ | 设置服务质量级别 |
-| `clientId` | _string_ | MQTT代理识别Minio的唯一ID |
+| `clientId` | _string_ | MQTT代理识别MinIO的唯一ID |
 | `username` | _string_ | 连接MQTT server的用户名 (如果需要的话) |
 | `password` | _string_ | 链接MQTT server的密码 (如果需要的话) |
 
@@ -170,14 +170,14 @@ Minio Server的配置文件默认路径是 ``~/.minio/config.json``。MQTT配置
 }
 ```
 
-更新完配置文件后，重启Minio Server让配置生效。如果一切顺利，Minio Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:mqtt`。
+更新完配置文件后，重启MinIO Server让配置生效。如果一切顺利，MinIO Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:mqtt`。
 
-Minio支持任何支持MQTT 3.1或3.1.1的MQTT服务器，并且可以通过TCP，TLS或Websocket连接使用``tcp://``, ``tls://``, or ``ws://``分别作为代理URL的方案。 更多信息，请参考 [Go Client](http://www.eclipse.org/paho/clients/golang/)。
+MinIO支持任何支持MQTT 3.1或3.1.1的MQTT服务器，并且可以通过TCP，TLS或Websocket连接使用``tcp://``, ``tls://``, or ``ws://``分别作为代理URL的方案。 更多信息，请参考 [Go Client](http://www.eclipse.org/paho/clients/golang/)。
 
 注意一下，你还是和之前AMQP一样可以听从你内心的想法，想配几个MQTT服务就配几个，只要每个MQTT服务实例有不同的ID (比如前面示例中的"1") 和配置信息。
 
 
-### 第二步: 使用Minio客户端启用bucket通知
+### 第二步: 使用MinIO客户端启用bucket通知
 
 如果一个JPEG图片上传到``myminio`` server里的``images`` 存储桶或者从桶中删除，一个存储桶事件通知就会被触发。 这里ARN值是``arn:minio:sqs:us-east-1:1:mqtt``。
 
@@ -242,33 +242,33 @@ python mqtt.py
 ```
 
 <a name="Elasticsearch"></a>
-## 使用Elasticsearch发布Minio事件
+## 使用Elasticsearch发布MinIO事件
 
 安装 [Elasticsearch](https://www.elastic.co/downloads/elasticsearch) 。
 
 这个通知目标支持两种格式: _namespace_ and _access_。
 
-如果使用的是 _namespace_ 格式, Minio将桶中的对象与索引中的文档进行同步。对于Minio的每一个事件，ES都会创建一个document,这个document的ID就是存储桶以及存储对象的名称。事件的其他细节存储在document的正文中。因此，如果一个已经存在的对象在Minio中被覆盖，在ES中的相对应的document也会被更新。如果一个对象被删除，相对应的document也会从index中删除。
+如果使用的是 _namespace_ 格式, MinIO将桶中的对象与索引中的文档进行同步。对于MinIO的每一个事件，ES都会创建一个document,这个document的ID就是存储桶以及存储对象的名称。事件的其他细节存储在document的正文中。因此，如果一个已经存在的对象在MinIO中被覆盖，在ES中的相对应的document也会被更新。如果一个对象被删除，相对应的document也会从index中删除。
 
-如果使用的是_access_格式，Minio将事件作为document加到ES的index中。对于每一个事件，ES同样会创建一个document,这个document包含事件的所有细节，document的时间戳设置为事件的时间戳，并将该document加到ES的index中。这个document的ID是由ES随机生成的。在_access_格式下，没有文档会被删除或者修改，对于一个对象的操作，都会生成新的document附加到index中。
+如果使用的是_access_格式，MinIO将事件作为document加到ES的index中。对于每一个事件，ES同样会创建一个document,这个document包含事件的所有细节，document的时间戳设置为事件的时间戳，并将该document加到ES的index中。这个document的ID是由ES随机生成的。在_access_格式下，没有文档会被删除或者修改，对于一个对象的操作，都会生成新的document附加到index中。
 
 下面的步骤展示的是在`namespace`格式下，如何使用通知目标。另一种格式和这个很类似，为了不让你们说我墨迹，就不再赘述了。
 
 
 ### 第一步：确保至少满足第低要求
 
-Minio要求使用的是ES 5.X系统版本。如果使用的是低版本的ES，也没关系，ES官方支持升级迁移，详情请看[这里](https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-upgrade.html)。
+MinIO要求使用的是ES 5.X系统版本。如果使用的是低版本的ES，也没关系，ES官方支持升级迁移，详情请看[这里](https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-upgrade.html)。
 
-### 第二步：把ES集成到Minio中
+### 第二步：把ES集成到MinIO中
 
-Minio Server的配置文件默认路径是 ``~/.minio/config.json``。ES配置信息是在`notify`这个节点下的`elasticsearch`节点下，在这里为你的ES实例创建配置信息键值对，key是你的ES的名称，value是下面表格中列列的键值对集合。
+MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。ES配置信息是在`notify`这个节点下的`elasticsearch`节点下，在这里为你的ES实例创建配置信息键值对，key是你的ES的名称，value是下面表格中列列的键值对集合。
 
 | 参数 | 类型 | 描述 |
 |:---|:---|:---|
 | `enable` | _bool_ | (必须) 是否启用这个配置? |
 | `format` | _string_ | (必须)  是`namespace` 还是 `access` |
 | `url` | _string_ | (必须) ES地址，比如: `http://localhost:9200` |
-| `index` | _string_ | (必须) 给Minio用的index |
+| `index` | _string_ | (必须) 给MinIO用的index |
 
 以下是ES的一个配置示例:
 
@@ -283,17 +283,17 @@ Minio Server的配置文件默认路径是 ``~/.minio/config.json``。ES配置�
 },
 ```
 
-更新完配置文件后，重启Minio Server让配置生效。如果一切顺利，Minio Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:elasticsearch`。
+更新完配置文件后，重启MinIO Server让配置生效。如果一切顺利，MinIO Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:elasticsearch`。
 
 注意一下，你又可以再一次听从你内心的想法，想配几个ES服务就配几个，只要每个ES服务实例有不同的ID (比如前面示例中的"1") 和配置信息。
 
-### 第三步：使用Minio客户端启用bucket通知
+### 第三步：使用MinIO客户端启用bucket通知
 
 我们现在可以在一个叫`images`的存储桶上开启事件通知。一旦有文件被创建或者覆盖，一个新的ES的document会被创建或者更新到之前咱配的index里。如果一个已经存在的对象被删除，这个对应的document也会从index中删除。因此，这个ES index里的行，就映射着`images`存储桶里的对象。
 
-要配置这种存储桶通知，我们需要用到前面步骤Minio输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
+要配置这种存储桶通知，我们需要用到前面步骤MinIO输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
-有了`mc`这个工具，这些配置信息很容易就能添加上。假设咱们的Minio服务别名叫`myminio`,可执行下列脚本：
+有了`mc`这个工具，这些配置信息很容易就能添加上。假设咱们的MinIO服务别名叫`myminio`,可执行下列脚本：
 
 ```
 mc mb myminio/images
@@ -369,7 +369,7 @@ $ curl  "http://localhost:9200/minio_events/_search?pretty=true"
               "source" : {
                 "host" : "127.0.0.1",
                 "port" : "38062",
-                "userAgent" : "Minio (linux; amd64) minio-go/2.0.3 mc/2017-02-15T17:57:25Z"
+                "userAgent" : "MinIO (linux; amd64) minio-go/2.0.3 mc/2017-02-15T17:57:25Z"
               }
             }
           ]
@@ -385,21 +385,21 @@ $ curl  "http://localhost:9200/minio_events/_search?pretty=true"
 这里我们可以看到这个document ID就是存储桶和对象的名称。如果用的是`access`格式，这个document ID就是由ES随机生成的。
 
 <a name="Redis"></a>
-## 使用Redis发布Minio事件
+## 使用Redis发布MinIO事件
 
 安装 [Redis](http://redis.io/download)。为了演示，我们将数据库密码设为"yoursecret"。
 
 这种通知目标支持两种格式: _namespace_ 和 _access_。
 
-如果用的是_namespacee_格式，Minio将存储桶里的对象同步成Redis hash中的条目。对于每一个条目，对应一个存储桶里的对象，其key都被设为"存储桶名称/对象名称"，value都是一个有关这个Minio对象的JSON格式的事件数据。如果对象更新或者删除，hash中对象的条目也会相应的更新或者删除。
+如果用的是_namespacee_格式，MinIO将存储桶里的对象同步成Redis hash中的条目。对于每一个条目，对应一个存储桶里的对象，其key都被设为"存储桶名称/对象名称"，value都是一个有关这个MinIO对象的JSON格式的事件数据。如果对象更新或者删除，hash中对象的条目也会相应的更新或者删除。
 
-如果使用的是_access_,Minio使用[RPUSH](https://redis.io/commands/rpush)将事件添加到list中。这个list中每一个元素都是一个JSON格式的list,这个list中又有两个元素，第一个元素是时间戳的字符串，第二个元素是一个含有在这个存储桶上进行操作的事件数据的JSON对象。在这种格式下，list中的元素不会更新或者删除。
+如果使用的是_access_,MinIO使用[RPUSH](https://redis.io/commands/rpush)将事件添加到list中。这个list中每一个元素都是一个JSON格式的list,这个list中又有两个元素，第一个元素是时间戳的字符串，第二个元素是一个含有在这个存储桶上进行操作的事件数据的JSON对象。在这种格式下，list中的元素不会更新或者删除。
 
 下面的步骤展示如何在`namespace`和`access`格式下使用通知目标。
 
-### 第一步：集成Redis到Minio
+### 第一步：集成Redis到MinIO
 
-Minio Server的配置文件默认路径是 ``~/.minio/config.json``。Redis配置信息是在`notify`这个节点下的`redis`节点下，在这里为你的Redis实例创建配置信息键值对，key是你的Redis端的名称，value是下面表格中的键值对里面值的集合。
+MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。Redis配置信息是在`notify`这个节点下的`redis`节点下，在这里为你的Redis实例创建配置信息键值对，key是你的Redis端的名称，value是下面表格中的键值对里面值的集合。
 
 | 参数 | 类型 | 描述 |
 |:---|:---|:---|
@@ -422,17 +422,17 @@ Minio Server的配置文件默认路径是 ``~/.minio/config.json``。Redis配�
 }
 ```
 
-更新完配置文件后，重启Minio Server让配置生效。如果一切顺利，Minio Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:redis`。
+更新完配置文件后，重启MinIO Server让配置生效。如果一切顺利，MinIO Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:redis`。
 
 注意一下，你永远都可以听从你内心的想法，想配几个Redis服务就配几个，只要每个Redis服务实例有不同的ID (比如前面示例中的"1") 和配置信息。
 
-### 第二步: 使用Minio客户端启用bucket通知
+### 第二步: 使用MinIO客户端启用bucket通知
 
 我们现在可以在一个叫`images`的存储桶上开启事件通知。一旦有文件被创建或者覆盖，一个新的key会被创建,或者一个已经存在的key就会被更新到之前配置好的redis hash里。如果一个已经存在的对象被删除，这个对应的key也会从hash中删除。因此，这个Redis hash里的行，就映射着`images`存储桶里的`.jpg`对象。
 
-要配置这种存储桶通知，我们需要用到前面步骤Minio输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
+要配置这种存储桶通知，我们需要用到前面步骤MinIO输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
-有了`mc`这个工具，这些配置信息很容易就能添加上。假设咱们的Minio服务别名叫`myminio`,可执行下列脚本：
+有了`mc`这个工具，这些配置信息很容易就能添加上。假设咱们的MinIO服务别名叫`myminio`,可执行下列脚本：
 
 ```
 mc mb myminio/images
@@ -457,27 +457,27 @@ OK
 mc cp myphoto.jpg myminio/images
 ```
 
-在上一个终端中，你将看到Minio在Redis上执行的操作：
+在上一个终端中，你将看到MinIO在Redis上执行的操作：
 
 ```
 127.0.0.1:6379> monitor
 OK
 1490686879.650649 [0 172.17.0.1:44710] "PING"
-1490686879.651061 [0 172.17.0.1:44710] "HSET" "minio_events" "images/myphoto.jpg" "{\"Records\":[{\"eventVersion\":\"2.0\",\"eventSource\":\"minio:s3\",\"awsRegion\":\"us-east-1\",\"eventTime\":\"2017-03-28T07:41:19Z\",\"eventName\":\"s3:ObjectCreated:Put\",\"userIdentity\":{\"principalId\":\"minio\"},\"requestParameters\":{\"sourceIPAddress\":\"127.0.0.1:52234\"},\"responseElements\":{\"x-amz-request-id\":\"14AFFBD1ACE5F632\",\"x-minio-origin-endpoint\":\"http://192.168.86.115:9000\"},\"s3\":{\"s3SchemaVersion\":\"1.0\",\"configurationId\":\"Config\",\"bucket\":{\"name\":\"images\",\"ownerIdentity\":{\"principalId\":\"minio\"},\"arn\":\"arn:aws:s3:::images\"},\"object\":{\"key\":\"myphoto.jpg\",\"size\":2586,\"eTag\":\"5d284463f9da279f060f0ea4d11af098\",\"sequencer\":\"14AFFBD1ACE5F632\"}},\"source\":{\"host\":\"127.0.0.1\",\"port\":\"52234\",\"userAgent\":\"Minio (linux; amd64) minio-go/2.0.3 mc/2017-02-15T17:57:25Z\"}}]}"
+1490686879.651061 [0 172.17.0.1:44710] "HSET" "minio_events" "images/myphoto.jpg" "{\"Records\":[{\"eventVersion\":\"2.0\",\"eventSource\":\"minio:s3\",\"awsRegion\":\"us-east-1\",\"eventTime\":\"2017-03-28T07:41:19Z\",\"eventName\":\"s3:ObjectCreated:Put\",\"userIdentity\":{\"principalId\":\"minio\"},\"requestParameters\":{\"sourceIPAddress\":\"127.0.0.1:52234\"},\"responseElements\":{\"x-amz-request-id\":\"14AFFBD1ACE5F632\",\"x-minio-origin-endpoint\":\"http://192.168.86.115:9000\"},\"s3\":{\"s3SchemaVersion\":\"1.0\",\"configurationId\":\"Config\",\"bucket\":{\"name\":\"images\",\"ownerIdentity\":{\"principalId\":\"minio\"},\"arn\":\"arn:aws:s3:::images\"},\"object\":{\"key\":\"myphoto.jpg\",\"size\":2586,\"eTag\":\"5d284463f9da279f060f0ea4d11af098\",\"sequencer\":\"14AFFBD1ACE5F632\"}},\"source\":{\"host\":\"127.0.0.1\",\"port\":\"52234\",\"userAgent\":\"MinIO (linux; amd64) minio-go/2.0.3 mc/2017-02-15T17:57:25Z\"}}]}"
 ```
 
-在这我们可以看到Minio在`minio_events`这个key上执行了`HSET`命令。
+在这我们可以看到MinIO在`minio_events`这个key上执行了`HSET`命令。
 
-如果用的是`access`格式，那么`minio_events`就是一个list,Minio就会调用`RPUSH`添加到list中。这个list的消费者会使用`BLPOP`从list的最左端删除list元素。
+如果用的是`access`格式，那么`minio_events`就是一个list,MinIO就会调用`RPUSH`添加到list中。这个list的消费者会使用`BLPOP`从list的最左端删除list元素。
 
 <a name="NATS"></a>
-## 使用NATS发布Minio事件
+## 使用NATS发布MinIO事件
 
 安装 [NATS](http://nats.io/).
 
-### 第一步：集成NATS到Minio
+### 第一步：集成NATS到MinIO
 
-Minio Server的配置文件默认路径是 ``~/.minio/config.json``。参考下面的示例修改NATS的配置:
+MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。参考下面的示例修改NATS的配置:
 
 ```
 "nats": {
@@ -501,9 +501,9 @@ Minio Server的配置文件默认路径是 ``~/.minio/config.json``。参考下�
 },
 ```
 
-更新完配置文件后，重启Minio Server让配置生效。``bucketevents``是NATS在这个例子中使用的主题。
+更新完配置文件后，重启MinIO Server让配置生效。``bucketevents``是NATS在这个例子中使用的主题。
 
-Minio服务也支持 [NATS Streaming mode](http://nats.io/documentation/streaming/nats-streaming-intro/) ，这种模式额外提供了像 `Message/event persistence`, `At-least-once-delivery`, 以及 `Publisher rate limiting`这样的功能。如果想让Minio服务发送通知到NATS Streaming server,参考下面示面进行配置：
+MinIO服务也支持 [NATS Streaming mode](http://nats.io/documentation/streaming/nats-streaming-intro/) ，这种模式额外提供了像 `Message/event persistence`, `At-least-once-delivery`, 以及 `Publisher rate limiting`这样的功能。如果想让MinIO服务发送通知到NATS Streaming server,参考下面示面进行配置：
 
 ```
 "nats": {
@@ -526,9 +526,9 @@ Minio服务也支持 [NATS Streaming mode](http://nats.io/documentation/streamin
     }
 },
 ```
-更多关于 `clusterID`, `clientID` 的信息，请看 [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). 关于 `maxPubAcksInflight` ，请看 [这里](https://github.com/nats-io/go-nats-streaming#publisher-rate-limiting).
+更多关于 `clusterID`, `clientID` 的信息，请看 [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). 关于 `maxPubAcksInflight` ，请看 [这里](https://github.com/nats-io/stan.go#publisher-rate-limiting).
 
-### 第二步: 使用Minio客户端启用bucket通知
+### 第二步: 使用MinIO客户端启用bucket通知
 
 我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦``myminio`` server上有文件  从``images``存储桶里删除或者上传到存储桶中，事件即被触发。在这里，ARN的值是``arn:minio:sqs:us-east-1:1:nats``。 更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
@@ -551,7 +551,7 @@ import (
 	"log"
 	"runtime"
 
-	"github.com/nats-io/nats"
+	"github.com/nats-io/nats.go"
 )
 
 func main() {
@@ -604,7 +604,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/nats-io/go-nats-streaming"
+	"github.com/nats-io/stan.go"
 )
 
 func main() {
@@ -638,29 +638,29 @@ mc cp myphoto.jpg myminio/images
  ``nats.go``示例程序将事件通知打印到控制台。
 
 ```
-Received a message: {"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jpg","Records":[{"eventVersion":"2.0","eventSource":"minio:s3","awsRegion":"","eventTime":"2017-07-07T18:46:37Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"minio"},"requestParameters":{"sourceIPAddress":"192.168.1.80:55328"},"responseElements":{"x-amz-request-id":"14CF20BD1EFD5B93","x-minio-origin-endpoint":"http://127.0.0.1:9000"},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"minio"},"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg","size":248682,"eTag":"f1671feacb8bbf7b0397c6e9364e8c92","contentType":"image/jpeg","userDefined":{"content-type":"image/jpeg"},"versionId":"1","sequencer":"14CF20BD1EFD5B93"}},"source":{"host":"192.168.1.80","port":"55328","userAgent":"Minio (linux; amd64) minio-go/2.0.4 mc/DEVELOPMENT.GOGET"}}],"level":"info","msg":"","time":"2017-07-07T11:46:37-07:00"}
+Received a message: {"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jpg","Records":[{"eventVersion":"2.0","eventSource":"minio:s3","awsRegion":"","eventTime":"2017-07-07T18:46:37Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"minio"},"requestParameters":{"sourceIPAddress":"192.168.1.80:55328"},"responseElements":{"x-amz-request-id":"14CF20BD1EFD5B93","x-minio-origin-endpoint":"http://127.0.0.1:9000"},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"minio"},"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg","size":248682,"eTag":"f1671feacb8bbf7b0397c6e9364e8c92","contentType":"image/jpeg","userDefined":{"content-type":"image/jpeg"},"versionId":"1","sequencer":"14CF20BD1EFD5B93"}},"source":{"host":"192.168.1.80","port":"55328","userAgent":"MinIO (linux; amd64) minio-go/2.0.4 mc/DEVELOPMENT.GOGET"}}],"level":"info","msg":"","time":"2017-07-07T11:46:37-07:00"}
 ```
 
 <a name="PostgreSQL"></a>
-## 使用PostgreSQL发布Minio事件
+## 使用PostgreSQL发布MinIO事件
 
 安装 [PostgreSQL](https://www.postgresql.org/) 数据库。为了演示，我们将"postgres"用户的密码设为`password`，并且创建了一个`minio_events`数据库来存储事件信息。
 
 这个通知目标支持两种格式: _namespace_ and _access_。
 
-如果使用的是_namespace_格式，Minio将存储桶里的对象同步成数据库表中的行。每一行有两列：key和value。key是这个对象的存储桶名字加上对象名，value都是一个有关这个Minio对象的JSON格式的事件数据。如果对象更新或者删除，表中相应的行也会相应的更新或者删除。
+如果使用的是_namespace_格式，MinIO将存储桶里的对象同步成数据库表中的行。每一行有两列：key和value。key是这个对象的存储桶名字加上对象名，value都是一个有关这个MinIO对象的JSON格式的事件数据。如果对象更新或者删除，表中相应的行也会相应的更新或者删除。
 
-如果使用的是_access_,Minio将将事件添加到表里，行有两列：event_time 和 event_data。event_time是事件在Minio server里发生的时间，event_data是有关这个Minio对象的JSON格式的事件数据。在这种格式下，不会有行会被删除或者修改。
+如果使用的是_access_,MinIO将将事件添加到表里，行有两列：event_time 和 event_data。event_time是事件在MinIO server里发生的时间，event_data是有关这个MinIO对象的JSON格式的事件数据。在这种格式下，不会有行会被删除或者修改。
 
 下面的步骤展示的是如何在`namespace`格式下使用通知目标，`_access_`差不多，不再赘述，我相信你可以触类旁通，举一反三，不要让我失望哦。
 
 ### 第一步：确保确保至少满足第低要求
 
-Minio要求PostgresSQL9.5版本及以上。 Minio用了PostgreSQL9.5引入的[`INSERT ON CONFLICT`](https://www.postgresql.org/docs/9.5/static/sql-insert.html#SQL-ON-CONFLICT) (aka UPSERT) 特性,以及9.4引入的 [JSONB](https://www.postgresql.org/docs/9.4/static/datatype-json.html) 数据类型。
+MinIO要求PostgresSQL9.5版本及以上。 MinIO用了PostgreSQL9.5引入的[`INSERT ON CONFLICT`](https://www.postgresql.org/docs/9.5/static/sql-insert.html#SQL-ON-CONFLICT) (aka UPSERT) 特性,以及9.4引入的 [JSONB](https://www.postgresql.org/docs/9.4/static/datatype-json.html) 数据类型。
 
-### 第二步：集成PostgreSQL到Minio
+### 第二步：集成PostgreSQL到MinIO
 
-Minio Server的配置文件默认路径是 ``~/.minio/config.json``。PostgreSQL配置信息是在`notify`这个节点下的`postgresql`节点下，在这里为你的PostgreSQL实例创建配置信息键值对，key是你的PostgreSQL的名称，value是下面表格中列列的键值对集合。
+MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。PostgreSQL配置信息是在`notify`这个节点下的`postgresql`节点下，在这里为你的PostgreSQL实例创建配置信息键值对，key是你的PostgreSQL的名称，value是下面表格中列列的键值对集合。
 
 | 参数 | 类型 | 描述 |
 |:---|:---|:---|
@@ -670,7 +670,7 @@ Minio Server的配置文件默认路径是 ``~/.minio/config.json``。PostgreSQL
 | `table` | _string_ | (必须) 事件对应的表名，如果该表不存在，Mniio server会在启动时创建。|
 | `host` | _string_ | (可选) PostgresSQL的主机名，默认是`localhost`|
 | `port` | _string_ | (可选) PostgreSQL的端口号，默认是`5432` |
-| `user` | _string_ | (可选)数据库用户名，默认是运行Minio server进程的用户|
+| `user` | _string_ | (可选)数据库用户名，默认是运行MinIO server进程的用户|
 | `password` | _string_ | (可选) 数据库密码 |
 | `database` | _string_ | (可选)库名 |
 
@@ -694,18 +694,18 @@ Minio Server的配置文件默认路径是 ``~/.minio/config.json``。PostgreSQL
 
 注意一下，为了演示，咱们这把SSL禁掉了，但是为了安全起见，不建议在生产环境这么弄。
 
-更新完配置文件后，重启Minio Server让配置生效。如果一切顺利，Minio Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:postgresql`。
+更新完配置文件后，重启MinIO Server让配置生效。如果一切顺利，MinIO Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:postgresql`。
 
 和之前描述的一样，你也可以添加多个PostreSQL实例，只要ID不重复就行。
 
 
-### 第三步：使用Minio客户端启用bucket通知
+### 第三步：使用MinIO客户端启用bucket通知
 
 我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦上有文件上传到存储桶中，PostgreSQL中会insert一条新的记录或者一条已经存在的记录会被update，如果一个存在对象被删除，一条对应的记录也会从PostgreSQL表中删除。因此，PostgreSQL表中的行，对应的就是存储桶里的一个对象。
 
-要配置这种存储桶通知，我们需要用到前面步骤中Minio输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
+要配置这种存储桶通知，我们需要用到前面步骤中MinIO输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
-有了`mc`这个工具，这些配置信息很容易就能添加上。假设Minio服务别名叫`myminio`,可执行下列脚本：
+有了`mc`这个工具，这些配置信息很容易就能添加上。假设MinIO服务别名叫`myminio`,可执行下列脚本：
 
 ```
 # Create bucket named `images` in myminio
@@ -739,25 +739,25 @@ key                 |                      value
 ```
 
 <a name="MySQL"></a>
-## 使用MySQL发布Minio事件
+## 使用MySQL发布MinIO事件
 
 安装 [MySQL](https://dev.mysql.com/downloads/mysql/). 为了演示，我们将"postgres"用户的密码设为`password`，并且创建了一个`miniodb`数据库来存储事件信息。
 
 这个通知目标支持两种格式: _namespace_ and _access_。
 
-如果使用的是_namespace_格式，Minio将存储桶里的对象同步成数据库表中的行。每一行有两列：key_name和value。key_name是这个对象的存储桶名字加上对象名，value都是一个有关这个Minio对象的JSON格式的事件数据。如果对象更新或者删除，表中相应的行也会相应的更新或者删除。
+如果使用的是_namespace_格式，MinIO将存储桶里的对象同步成数据库表中的行。每一行有两列：key_name和value。key_name是这个对象的存储桶名字加上对象名，value都是一个有关这个MinIO对象的JSON格式的事件数据。如果对象更新或者删除，表中相应的行也会相应的更新或者删除。
 
-如果使用的是_access_,Minio将将事件添加到表里，行有两列：event_time 和 event_data。event_time是事件在Minio server里发生的时间，event_data是有关这个Minio对象的JSON格式的事件数据。在这种格式下，不会有行会被删除或者修改。
+如果使用的是_access_,MinIO将将事件添加到表里，行有两列：event_time 和 event_data。event_time是事件在MinIO server里发生的时间，event_data是有关这个MinIO对象的JSON格式的事件数据。在这种格式下，不会有行会被删除或者修改。
 
 下面的步骤展示的是如何在`namespace`格式下使用通知目标，`_access_`差不多，不再赘述。
 
 ### 第一步：确保确保至少满足第低要求
 
-Minio要求MySQL 版本 5.7.8及以上，Minio使用了MySQL5.7.8版本引入的 [JSON](https://dev.mysql.com/doc/refman/5.7/en/json.html) 数据类型。我们使用的是MySQL5.7.17进行的测试。
+MinIO要求MySQL 版本 5.7.8及以上，MinIO使用了MySQL5.7.8版本引入的 [JSON](https://dev.mysql.com/doc/refman/5.7/en/json.html) 数据类型。我们使用的是MySQL5.7.17进行的测试。
 
-### 第二步：集成MySQL到Minio
+### 第二步：集成MySQL到MinIO
 
-Minio Server的配置文件默认路径是 ``~/.minio/config.json``。MySQL配置信息是在`notify`这个节点下的`mysql`节点下，在这里为你的MySQL实例创建配置信息键值对，key是你的PostgreSQL的名称，value是下面表格中列列的键值对集合。
+MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。MySQL配置信息是在`notify`这个节点下的`mysql`节点下，在这里为你的MySQL实例创建配置信息键值对，key是你的PostgreSQL的名称，value是下面表格中列列的键值对集合。
 
 | 参数 | 类型 | 描述 |
 |:---|:---|:---|
@@ -788,18 +788,18 @@ Minio Server的配置文件默认路径是 ``~/.minio/config.json``。MySQL配�
 }
 ```
 
-更新完配置文件后，重启Minio Server让配置生效。如果一切顺利，Minio Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:mysql`。
+更新完配置文件后，重启MinIO Server让配置生效。如果一切顺利，MinIO Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:mysql`。
 
 和之前描述的一样，你也可以添加多个MySQL实例，只要ID不重复就行。
 
 
-### 第三步：使用Minio客户端启用bucket通知
+### 第三步：使用MinIO客户端启用bucket通知
 
 我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦上有文件上传到存储桶中，MySQL中会insert一条新的记录或者一条已经存在的记录会被update，如果一个存在对象被删除，一条对应的记录也会从MySQL表中删除。因此，MySQL表中的行，对应的就是存储桶里的一个对象。
 
-要配置这种存储桶通知，我们需要用到前面步骤Minio输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
+要配置这种存储桶通知，我们需要用到前面步骤MinIO输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
-有了`mc`这个工具，这些配置信息很容易就能添加上。假设咱们的Minio服务别名叫`myminio`,可执行下列脚本：
+有了`mc`这个工具，这些配置信息很容易就能添加上。假设咱们的MinIO服务别名叫`myminio`,可执行下列脚本：
 
 ```
 # Create bucket named `images` in myminio
@@ -834,17 +834,17 @@ mysql> select * from minio_images;
 ```
 
 <a name="apache-kafka"></a>
-## 使用Kafka发布Minio事件
+## 使用Kafka发布MinIO事件
 
 安装[ Apache Kafka](http://kafka.apache.org/).
 
 ### 第一步：确保确保至少满足第低要求
 
-Minio要求Kafka版本0.10或者0.9.Minio内部使用了 [Shopify/sarama](https://github.com/Shopify/sarama/) 库，因此需要和该库有同样的版本兼容性。
+MinIO要求Kafka版本0.10或者0.9.MinIO内部使用了 [Shopify/sarama](https://github.com/Shopify/sarama/) 库，因此需要和该库有同样的版本兼容性。
 
-###第二步：集成Kafka到Minio
+###第二步：集成Kafka到MinIO
 
-Minio Server的配置文件默认路径是 ``~/.minio/config.json``。参考下面的示例更新Kafka配置：
+MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。参考下面的示例更新Kafka配置：
 
 ```
 "kafka": {
@@ -856,9 +856,9 @@ Minio Server的配置文件默认路径是 ``~/.minio/config.json``。参考下�
 }
 ```
 
-重启Minio server让配置生效。``bucketevents``是本示例用到的Kafka主题（topic）。
+重启MinIO server让配置生效。``bucketevents``是本示例用到的Kafka主题（topic）。
 
-### 第三步：使用Minio客户端启用bucket通知
+### 第三步：使用MinIO客户端启用bucket通知
 
 
 我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦上有文件上传到存储桶中，事件将被触发。在这里，ARN的值是``arn:minio:sqs:us-east-1:1:kafka``。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
@@ -892,13 +892,13 @@ kafkacat -b localhost:9092 -t bucketevents
 ```
 
 <a name="webhooks"></a>
-## 使用Webhook发布Minio事件
+## 使用Webhook发布MinIO事件
 
 [Webhooks](https://en.wikipedia.org/wiki/Webhook) 采用推的方式获取数据，而不是一直去拉取。
 
-### 第一步：集成MySQL到Minio
+### 第一步：集成MySQL到MinIO
 
-Minio Server的配置文件默认路径是 ``~/.minio/config.json``。参考下面的示例更新Webhook配置：
+MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。参考下面的示例更新Webhook配置：
 
 ```
 "webhook": {
@@ -907,9 +907,9 @@ Minio Server的配置文件默认路径是 ``~/.minio/config.json``。参考下�
     "endpoint": "http://localhost:3000/"
 }
 ```
-endpoint是监听webhook通知的服务。保存配置文件并重启Minio服务让配配置生效。注意一下，在重启Minio时，这个endpoint必须是启动并且可访问到。
+endpoint是监听webhook通知的服务。保存配置文件并重启MinIO服务让配配置生效。注意一下，在重启MinIO时，这个endpoint必须是启动并且可访问到。
 
-### 第二步：使用Minio客户端启用bucket通知
+### 第二步：使用MinIO客户端启用bucket通知
 
 我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦上有文件上传到存储桶中，事件将被触发。在这里，ARN的值是``arn:minio:sqs:us-east-1:1:webhook``。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
@@ -933,7 +933,7 @@ arn:minio:sqs:us-east-1:1:webhook   s3:ObjectCreated:*   Filter: suffix=".jpg"
 
 ### 第三步：采用Thumbnailer进行验证
 
-我们使用 [Thumbnailer](https://github.com/minio/thumbnailer) 来监听Minio通知。如果有文件上传于是Minio服务，Thumnailer监听到该通知，生成一个缩略图并上传到Minio服务。
+我们使用 [Thumbnailer](https://github.com/minio/thumbnailer) 来监听MinIO通知。如果有文件上传于是MinIO服务，Thumnailer监听到该通知，生成一个缩略图并上传到MinIO服务。
 安装Thumbnailer:
 
 ```
@@ -941,13 +941,13 @@ git clone https://github.com/minio/thumbnailer/
 npm install
 ```
 
-然后打开Thumbnailer的``config/webhook.json``配置文件，添加有关Minio server的配置，使用下面的方式启动Thumbnailer:
+然后打开Thumbnailer的``config/webhook.json``配置文件，添加有关MinIO server的配置，使用下面的方式启动Thumbnailer:
 
 ```
 NODE_ENV=webhook node thumbnail-webhook.js
 ```
 
-Thumbnailer运行在``http://localhost:3000/``。下一步，配置Minio server,让其发送消息到这个URL（第一步提到的），并使用 ``mc`` 来设置存储桶通知（第二步提到的）。然后上传一张图片到Minio server:
+Thumbnailer运行在``http://localhost:3000/``。下一步，配置MinIO server,让其发送消息到这个URL（第一步提到的），并使用 ``mc`` 来设置存储桶通知（第二步提到的）。然后上传一张图片到MinIO server:
 
 ```
 mc cp ~/images.jpg myminio/images
@@ -960,4 +960,4 @@ mc ls myminio/images-thumbnail
 [2017-02-08 11:39:40 IST]   992B images-thumbnail.jpg
 ```
 
-*注意* 如果你用的是 [distributed Minio](https://docs.minio.io/cn/distributed-minio-quickstart-guide),请修改所有节点的 ``~/.minio/config.json``。
+*注意* 如果你用的是 [distributed MinIO](https://docs.min.io/cn/distributed-minio-quickstart-guide),请修改所有节点的 ``~/.minio/config.json``。

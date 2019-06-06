@@ -1,5 +1,7 @@
+// +build !linux,!netbsd,!freebsd,!darwin
+
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * Minio Cloud Storage, (C) 2019 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,35 +16,20 @@
  * limitations under the License.
  */
 
-package rpc
+package disk
 
 import (
-	"bytes"
-	"sync"
+	"os"
 )
 
-// A Pool is a type-safe wrapper around a sync.Pool.
-type Pool struct {
-	p *sync.Pool
+// OpenBSD and Windows not supported.
+// On OpenBSD O_DIRECT is not supported
+// On Windows there is no documentation on disabling O_DIRECT
+
+func OpenFileDirectIO(filePath string, flag int, perm os.FileMode) (*os.File, error) {
+	return os.OpenFile(filePath, flag, perm)
 }
 
-// NewPool constructs a new Pool.
-func NewPool() Pool {
-	return Pool{p: &sync.Pool{
-		New: func() interface{} {
-			return &bytes.Buffer{}
-		},
-	}}
-}
-
-// Get retrieves a bytes.Buffer from the pool, creating one if necessary.
-func (p Pool) Get() *bytes.Buffer {
-	buf := p.p.Get().(*bytes.Buffer)
-	return buf
-}
-
-// Put - returns a bytes.Buffer to the pool.
-func (p Pool) Put(buf *bytes.Buffer) {
-	buf.Reset()
-	p.p.Put(buf)
+func DisableDirectIO(f *os.File) error {
+	return nil
 }

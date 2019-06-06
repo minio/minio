@@ -1,7 +1,7 @@
 // +build ignore
 
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,8 +29,8 @@ import (
 	"net/url"
 	"strings"
 
-	minio "github.com/minio/minio-go"
-	"github.com/minio/minio-go/pkg/credentials"
+	minio "github.com/minio/minio-go/v6"
+	"github.com/minio/minio-go/v6/pkg/credentials"
 )
 
 // JWTToken - parses the output from IDP access token.
@@ -99,7 +99,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Uncommend this to use Minio API operations by initializing minio
+	// Uncommend this to use MinIO API operations by initializing minio
 	// client with obtained credentials.
 
 	opts := &minio.Options{

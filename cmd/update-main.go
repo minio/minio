@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,14 +65,14 @@ EXIT STATUS:
 
 EXAMPLES:
    1. Check and update minio:
-      $ {{.HelpName}}
+      {{.Prompt}} {{.HelpName}}
 `,
 }
 
 const (
 	minioReleaseTagTimeLayout = "2006-01-02T15-04-05Z"
 	minioOSARCH               = runtime.GOOS + "-" + runtime.GOARCH
-	minioReleaseURL           = "https://dl.minio.io/server/minio/release/" + minioOSARCH + "/"
+	minioReleaseURL           = "https://dl.min.io/server/minio/release/" + minioOSARCH + "/"
 )
 
 var (
@@ -90,7 +90,7 @@ var (
 )
 
 // minioVersionToReleaseTime - parses a standard official release
-// Minio version string.
+// MinIO version string.
 //
 // An official binary's version string is the release time formatted
 // with RFC3339 (in UTC) - e.g. `2017-09-29T19:16:56Z`
@@ -99,7 +99,7 @@ func minioVersionToReleaseTime(version string) (releaseTime time.Time, err error
 }
 
 // releaseTimeToReleaseTag - converts a time to a string formatted as
-// an official Minio release tag.
+// an official MinIO release tag.
 //
 // An official minio release tag looks like:
 // `RELEASE.2017-09-29T19-16-56Z`
@@ -197,14 +197,14 @@ func IsBOSH() bool {
 	return err == nil
 }
 
-// Minio Helm chart uses DownwardAPIFile to write pod label info to /podinfo/labels
+// MinIO Helm chart uses DownwardAPIFile to write pod label info to /podinfo/labels
 // More info: https://kubernetes.io/docs/tasks/inject-data-application/downward-api-volume-expose-pod-information/#store-pod-fields
 // Check if this is Helm package installation and report helm chart version
 func getHelmVersion(helmInfoFilePath string) string {
 	// Read the file exists.
 	helmInfoFile, err := os.Open(helmInfoFilePath)
 	if err != nil {
-		// Log errors and return "" as Minio can be deployed
+		// Log errors and return "" as MinIO can be deployed
 		// without Helm charts as well.
 		if !os.IsNotExist(err) {
 			reqInfo := (&logger.ReqInfo{}).AppendTags("helmInfoFilePath", helmInfoFilePath)
@@ -236,7 +236,7 @@ func IsSourceBuild() bool {
 // DO NOT CHANGE USER AGENT STYLE.
 // The style should be
 //
-//   Minio (<OS>; <ARCH>[; <MODE>][; dcos][; kubernetes][; docker][; source]) Minio/<VERSION> Minio/<RELEASE-TAG> Minio/<COMMIT-ID> [Minio/universe-<PACKAGE-NAME>] [Minio/helm-<HELM-VERSION>]
+//   MinIO (<OS>; <ARCH>[; <MODE>][; dcos][; kubernetes][; docker][; source]) MinIO/<VERSION> MinIO/<RELEASE-TAG> MinIO/<COMMIT-ID> [MinIO/universe-<PACKAGE-NAME>] [MinIO/helm-<HELM-VERSION>]
 //
 // Any change here should be discussed by opening an issue at
 // https://github.com/minio/minio/issues.
@@ -249,7 +249,7 @@ func getUserAgent(mode string) string {
 		userAgentParts = append(userAgentParts, p, q)
 	}
 
-	uaAppend("Minio (", runtime.GOOS)
+	uaAppend("MinIO (", runtime.GOOS)
 	uaAppend("; ", runtime.GOARCH)
 	if mode != "" {
 		uaAppend("; ", mode)
@@ -270,14 +270,14 @@ func getUserAgent(mode string) string {
 		uaAppend("; ", "source")
 	}
 
-	uaAppend(") Minio/", Version)
-	uaAppend(" Minio/", ReleaseTag)
-	uaAppend(" Minio/", CommitID)
+	uaAppend(") MinIO/", Version)
+	uaAppend(" MinIO/", ReleaseTag)
+	uaAppend(" MinIO/", CommitID)
 	if IsDCOS() {
 		universePkgVersion := os.Getenv("MARATHON_APP_LABEL_DCOS_PACKAGE_VERSION")
 		// On DC/OS environment try to the get universe package version.
 		if universePkgVersion != "" {
-			uaAppend(" Minio/universe-", universePkgVersion)
+			uaAppend(" MinIO/universe-", universePkgVersion)
 		}
 	}
 
@@ -285,13 +285,13 @@ func getUserAgent(mode string) string {
 		// In Kubernetes environment, try to fetch the helm package version
 		helmChartVersion := getHelmVersion("/podinfo/labels")
 		if helmChartVersion != "" {
-			uaAppend(" Minio/helm-", helmChartVersion)
+			uaAppend(" MinIO/helm-", helmChartVersion)
 		}
 	}
 
 	pcfTileVersion := os.Getenv("MINIO_PCF_TILE_VERSION")
 	if pcfTileVersion != "" {
-		uaAppend(" Minio/pcf-tile-", pcfTileVersion)
+		uaAppend(" MinIO/pcf-tile-", pcfTileVersion)
 	}
 
 	return strings.Join(userAgentParts, "")
@@ -396,10 +396,10 @@ func getLatestReleaseTime(timeout time.Duration, mode string) (sha256Hex string,
 
 const (
 	// Kubernetes deployment doc link.
-	kubernetesDeploymentDoc = "https://docs.minio.io/docs/deploy-minio-on-kubernetes"
+	kubernetesDeploymentDoc = "https://docs.min.io/docs/deploy-minio-on-kubernetes"
 
 	// Mesos deployment doc link.
-	mesosDeploymentDoc = "https://docs.minio.io/docs/deploy-minio-on-dc-os"
+	mesosDeploymentDoc = "https://docs.min.io/docs/deploy-minio-on-dc-os"
 )
 
 func getDownloadURL(releaseTag string) (downloadURL string) {
@@ -452,7 +452,7 @@ func getUpdateInfo(timeout time.Duration, mode string) (updateMsg string, sha256
 
 func doUpdate(sha256Hex string, latestReleaseTime time.Time, ok bool) (updateStatusMsg string, err error) {
 	if !ok {
-		updateStatusMsg = colorGreenBold("Minio update to version RELEASE.%s canceled.",
+		updateStatusMsg = colorGreenBold("MinIO update to version RELEASE.%s canceled.",
 			latestReleaseTime.Format(minioReleaseTagTimeLayout))
 		return updateStatusMsg, nil
 	}
@@ -478,7 +478,7 @@ func doUpdate(sha256Hex string, latestReleaseTime time.Time, ok bool) (updateSta
 		return updateStatusMsg, err
 	}
 
-	return colorGreenBold("Minio updated to version RELEASE.%s successfully.",
+	return colorGreenBold("MinIO updated to version RELEASE.%s successfully.",
 		latestReleaseTime.Format(minioReleaseTagTimeLayout)), nil
 }
 

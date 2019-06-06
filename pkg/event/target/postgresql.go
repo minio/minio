@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 //
 // * Namespace format
 //
-// On each create or update object event in Minio Object storage
+// On each create or update object event in MinIO Object storage
 // server, a row is created or updated in the table in Postgres. On
 // each object removal, the corresponding row is deleted from the
 // table.
@@ -80,15 +80,15 @@ const (
 
 // PostgreSQLArgs - PostgreSQL target arguments.
 type PostgreSQLArgs struct {
-	Enable           bool     `json:"enable"`
-	Format           string   `json:"format"`
-	ConnectionString string   `json:"connectionString"`
-	Table            string   `json:"table"`
-	Host             xnet.URL `json:"host"`     // default: localhost
-	Port             string   `json:"port"`     // default: 5432
-	User             string   `json:"user"`     // default: user running minio
-	Password         string   `json:"password"` // default: no password
-	Database         string   `json:"database"` // default: same as user
+	Enable           bool      `json:"enable"`
+	Format           string    `json:"format"`
+	ConnectionString string    `json:"connectionString"`
+	Table            string    `json:"table"`
+	Host             xnet.Host `json:"host"`     // default: localhost
+	Port             string    `json:"port"`     // default: 5432
+	User             string    `json:"user"`     // default: user running minio
+	Password         string    `json:"password"` // default: no password
+	Database         string    `json:"database"` // default: same as user
 }
 
 // Validate PostgreSQLArgs fields
@@ -140,8 +140,12 @@ func (target *PostgreSQLTarget) ID() event.TargetID {
 	return target.id
 }
 
-// Send - sends event to PostgreSQL.
-func (target *PostgreSQLTarget) Send(eventData event.Event) error {
+// Save - Sends event directly without persisting.
+func (target *PostgreSQLTarget) Save(eventData event.Event) error {
+	return target.send(eventData)
+}
+
+func (target *PostgreSQLTarget) send(eventData event.Event) error {
 	if target.args.Format == event.NamespaceFormat {
 		objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
 		if err != nil {
@@ -177,6 +181,11 @@ func (target *PostgreSQLTarget) Send(eventData event.Event) error {
 		return err
 	}
 
+	return nil
+}
+
+// Send - interface compatible method does no-op.
+func (target *PostgreSQLTarget) Send(eventKey string) error {
 	return nil
 }
 

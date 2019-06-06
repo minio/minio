@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/url"
@@ -26,8 +27,11 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/minio/minio-go/pkg/set"
+	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/cli"
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
@@ -44,6 +48,8 @@ const (
 
 	// URLEndpointType - URL style endpoint type enum.
 	URLEndpointType
+
+	retryInterval = 5 // In Seconds.
 )
 
 // Endpoint - any type of endpoint.
@@ -51,6 +57,7 @@ type Endpoint struct {
 	*url.URL
 	IsLocal  bool
 	SetIndex int
+	HostName string
 }
 
 func (endpoint Endpoint) String() string {
@@ -75,6 +82,19 @@ func (endpoint Endpoint) IsHTTPS() bool {
 	return endpoint.Scheme == "https"
 }
 
+// UpdateIsLocal - resolves the host and updates if it is local or not.
+func (endpoint *Endpoint) UpdateIsLocal() error {
+	if !endpoint.IsLocal {
+		isLocal, err := isLocalHost(endpoint.HostName)
+		if err != nil {
+			return err
+		}
+		endpoint.IsLocal = isLocal
+
+	}
+	return nil
+}
+
 // NewEndpoint - returns new endpoint based on given arguments.
 func NewEndpoint(arg string) (ep Endpoint, e error) {
 	// isEmptyPath - check whether given path is not empty.
@@ -87,6 +107,7 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 	}
 
 	var isLocal bool
+	var host string
 	u, err := url.Parse(arg)
 	if err == nil && u.Host != "" {
 		// URL style of endpoint.
@@ -98,7 +119,7 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 			return ep, fmt.Errorf("invalid URL endpoint format")
 		}
 
-		var host, port string
+		var port string
 		host, port, err = net.SplitHostPort(u.Host)
 		if err != nil {
 			if !strings.Contains(err.Error(), "missing port in address") {
@@ -150,10 +171,6 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 			}
 		}
 
-		isLocal, err = isLocalHost(host)
-		if err != nil {
-			return ep, err
-		}
 	} else {
 		// Only check if the arg is an ip address and ask for scheme since its absent.
 		// localhost, example.com, any FQDN cannot be disambiguated from a regular file path such as
@@ -166,8 +183,9 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 	}
 
 	return Endpoint{
-		URL:     u,
-		IsLocal: isLocal,
+		URL:      u,
+		IsLocal:  isLocal,
+		HostName: host,
 	}, nil
 }
 
@@ -198,6 +216,74 @@ func (endpoints EndpointList) GetString(i int) string {
 		return ""
 	}
 	return endpoints[i].String()
+}
+
+// UpdateIsLocal - resolves the host and discovers the local host.
+func (endpoints EndpointList) UpdateIsLocal() error {
+	var epsResolved int
+	var foundLocal bool
+	resolvedList := make([]bool, len(endpoints))
+	// Mark the starting time
+	startTime := time.Now()
+	keepAliveTicker := time.NewTicker(retryInterval * time.Second)
+	defer keepAliveTicker.Stop()
+	for {
+		// Break if the local endpoint is found already. Or all the endpoints are resolved.
+		if foundLocal || (epsResolved == len(endpoints)) {
+			break
+		}
+		// Retry infinitely on Kubernetes and Docker swarm.
+		// This is needed as the remote hosts are sometime
+		// not available immediately.
+		select {
+		case <-globalOSSignalCh:
+			return fmt.Errorf("The endpoint resolution got interrupted")
+		default:
+			for i, resolved := range resolvedList {
+				if resolved {
+					continue
+				}
+
+				// return err if not Docker or Kubernetes
+				// We use IsDocker() method to check for Docker Swarm environment
+				// as there is no reliable way to clearly identify Swarm from
+				// Docker environment.
+				isLocal, err := isLocalHost(endpoints[i].HostName)
+				if err != nil {
+					if !IsDocker() && !IsKubernetes() {
+						return err
+					}
+					// time elapsed
+					timeElapsed := time.Since(startTime)
+					// log error only if more than 1s elapsed
+					if timeElapsed > time.Second {
+						// log the message to console about the host not being
+						// resolveable.
+						reqInfo := (&logger.ReqInfo{}).AppendTags("host", endpoints[i].HostName)
+						reqInfo.AppendTags("elapsedTime", humanize.RelTime(startTime, startTime.Add(timeElapsed), "elapsed", ""))
+						ctx := logger.SetReqInfo(context.Background(), reqInfo)
+						logger.LogIf(ctx, err)
+					}
+				} else {
+					resolvedList[i] = true
+					endpoints[i].IsLocal = isLocal
+					epsResolved++
+					if !foundLocal {
+						foundLocal = isLocal
+					}
+				}
+			}
+
+			// Wait for the tick, if the there exist a local endpoint in discovery.
+			// Non docker/kubernetes environment does not need to wait.
+			if !foundLocal && (IsDocker() && IsKubernetes()) {
+				<-keepAliveTicker.C
+			}
+		}
+	}
+
+	return nil
+
 }
 
 // localEndpointsMemUsage - returns ServerMemUsageInfo for only the
@@ -302,7 +388,28 @@ func NewEndpointList(args ...string) (endpoints EndpointList, err error) {
 		uniqueArgs.Add(arg)
 		endpoints = append(endpoints, endpoint)
 	}
+
 	return endpoints, nil
+}
+
+func checkEndpointsSubOptimal(ctx *cli.Context, setupType SetupType, endpoints EndpointList) (err error) {
+	// Validate sub optimal ordering only for distributed setup.
+	if setupType != DistXLSetupType {
+		return nil
+	}
+	var endpointOrder int
+	err = fmt.Errorf("Too many disk args are local, input is in sub-optimal order. Please review input args: %s", ctx.Args())
+	for _, endpoint := range endpoints {
+		if endpoint.IsLocal {
+			endpointOrder++
+		} else {
+			endpointOrder--
+		}
+		if endpointOrder >= 2 {
+			return err
+		}
+	}
+	return nil
 }
 
 // Checks if there are any cross device mounts.
@@ -339,6 +446,9 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 		var endpoint Endpoint
 		endpoint, err = NewEndpoint(args[0][0])
 		if err != nil {
+			return serverAddr, endpoints, setupType, err
+		}
+		if err := endpoint.UpdateIsLocal(); err != nil {
 			return serverAddr, endpoints, setupType, err
 		}
 		if endpoint.Type() != PathEndpointType {
@@ -379,6 +489,10 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 	if endpoints[0].Type() == PathEndpointType {
 		setupType = XLSetupType
 		return serverAddr, endpoints, setupType, nil
+	}
+
+	if err := endpoints.UpdateIsLocal(); err != nil {
+		return serverAddr, endpoints, setupType, uiErrInvalidErasureEndpoints(nil).Msg(err.Error())
 	}
 
 	// Here all endpoints are URL style.

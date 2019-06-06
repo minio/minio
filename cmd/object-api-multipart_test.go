@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"reflect"
@@ -228,8 +227,7 @@ func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks [
 	}
 
 	// This causes quorum failure verify.
-	disks = disks[len(disks)-3:]
-	for _, disk := range disks {
+	for _, disk := range disks[len(disks)-3:] {
 		os.RemoveAll(disk)
 	}
 
@@ -240,9 +238,26 @@ func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks [
 		t.Fatalf("Test %s: expected to fail but passed instead", instanceType)
 	}
 	// as majority of xl.json are not available, we expect uploadID to be not available.
-	expectedErr := InvalidUploadID{UploadID: testCase.uploadID}
-	if err.Error() != expectedErr.Error() {
-		t.Fatalf("Test %s: expected error %s, got %s instead.", instanceType, expectedErr, err)
+	expectedErr1 := InsufficientReadQuorum{}
+	if err.Error() != expectedErr1.Error() {
+		t.Fatalf("Test %s: expected error %s, got %s instead.", instanceType, expectedErr1, err)
+	}
+
+	// This causes invalid upload id.
+	for _, disk := range disks {
+		os.RemoveAll(disk)
+	}
+
+	// Object part upload should fail with bucket not found.
+	_, err = obj.PutObjectPart(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, mustGetPutObjReader(t, bytes.NewBufferString(testCase.inputReaderData), testCase.intputDataSize, testCase.inputMd5, sha256sum), ObjectOptions{})
+	if err == nil {
+		t.Fatalf("Test %s: expected to fail but passed instead", instanceType)
+	}
+
+	// As all disks at not available, bucket not found.
+	expectedErr2 := errDiskNotFound
+	if err != errDiskNotFound {
+		t.Fatalf("Test %s: expected error %s, got %s instead.", instanceType, expectedErr2, err)
 	}
 }
 
@@ -1850,10 +1865,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 			},
 		},
 	}
-	s3MD5, err := getCompleteMultipartMD5(context.Background(), inputParts[3].parts)
-	if err != nil {
-		t.Fatalf("Obtaining S3MD5 failed")
-	}
+	s3MD5 := getCompleteMultipartMD5(inputParts[3].parts)
 
 	// Test cases with sample input values for CompleteMultipartUpload.
 	testCases := []struct {
@@ -1882,8 +1894,8 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		// Asserting for Invalid UploadID (Test number 9).
 		{bucketNames[0], objectNames[0], "abc", []CompletePart{}, "", InvalidUploadID{UploadID: "abc"}, false},
 		// Test case with invalid Part Etag (Test number 10-11).
-		{bucketNames[0], objectNames[0], uploadIDs[0], []CompletePart{{ETag: "abc"}}, "", hex.ErrLength, false},
-		{bucketNames[0], objectNames[0], uploadIDs[0], []CompletePart{{ETag: "abcz"}}, "", hex.InvalidByteError(00), false},
+		{bucketNames[0], objectNames[0], uploadIDs[0], []CompletePart{{ETag: "abc"}}, "", InvalidPart{}, false},
+		{bucketNames[0], objectNames[0], uploadIDs[0], []CompletePart{{ETag: "abcz"}}, "", InvalidPart{}, false},
 		// Part number 0 doesn't exist, expecting InvalidPart error (Test number 12).
 		{bucketNames[0], objectNames[0], uploadIDs[0], []CompletePart{{ETag: "abcd", PartNumber: 0}}, "", InvalidPart{}, false},
 		// // Upload and PartNumber exists, But a deliberate ETag mismatch is introduced (Test number 13).

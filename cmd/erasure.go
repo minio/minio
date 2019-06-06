@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,6 +102,9 @@ func (e *Erasure) ShardSize() int64 {
 func (e *Erasure) ShardFileSize(totalLength int64) int64 {
 	if totalLength == 0 {
 		return 0
+	}
+	if totalLength == -1 {
+		return -1
 	}
 	numShards := totalLength / e.blockSize
 	lastBlockSize := totalLength % int64(e.blockSize)

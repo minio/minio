@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,8 @@ import (
 
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
-	"github.com/nats-io/go-nats-streaming"
-	"github.com/nats-io/nats"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/stan.go"
 )
 
 // NATSArgs - NATS target arguments.
@@ -81,8 +81,12 @@ func (target *NATSTarget) ID() event.TargetID {
 	return target.id
 }
 
-// Send - sends event to NATS.
-func (target *NATSTarget) Send(eventData event.Event) (err error) {
+// Save - Sends event directly without persisting.
+func (target *NATSTarget) Save(eventData event.Event) error {
+	return target.send(eventData)
+}
+
+func (target *NATSTarget) send(eventData event.Event) error {
 	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
 	if err != nil {
 		return err
@@ -105,6 +109,11 @@ func (target *NATSTarget) Send(eventData event.Event) (err error) {
 	}
 
 	return err
+}
+
+// Send - interface compatible method does no-op.
+func (target *NATSTarget) Send(eventKey string) error {
+	return nil
 }
 
 // Close - closes underneath connections to NATS server.

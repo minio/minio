@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/gob"
 	"encoding/hex"
 	"errors"
@@ -46,6 +47,25 @@ func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error)
 	w.Write([]byte(err.Error()))
 	w.(http.Flusher).Flush()
 }
+
+type bulkErrorsResponse struct {
+	Errs []error `json:"errors"`
+}
+
+func (s *storageRESTServer) writeErrorsResponse(w http.ResponseWriter, errs []error) {
+	resp := bulkErrorsResponse{Errs: make([]error, len(errs))}
+	for idx, err := range errs {
+		if err == nil {
+			continue
+		}
+		resp.Errs[idx] = err
+	}
+	gob.NewEncoder(w).Encode(resp)
+	w.(http.Flusher).Flush()
+}
+
+// DefaultSkewTime - skew time is 15 minutes between minio peers.
+const DefaultSkewTime = 15 * time.Minute
 
 // Authenticates storage client's requests and validates for skewed time.
 func storageServerRequestValidate(r *http.Request) error {
@@ -225,14 +245,7 @@ func (s *storageRESTServer) WriteAllHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	buf := make([]byte, r.ContentLength)
-	_, err := io.ReadFull(r.Body, buf)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	err = s.storage.WriteAll(volume, filePath, buf)
+	err := s.storage.WriteAll(volume, filePath, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}
@@ -350,6 +363,57 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 	w.(http.Flusher).Flush()
 }
 
+// readMetadata func provides the function types for reading leaf metadata.
+type readMetadataFunc func(buf []byte, volume, entry string) FileInfo
+
+func readMetadata(buf []byte, volume, entry string) FileInfo {
+	m, err := xlMetaV1UnmarshalJSON(context.Background(), buf)
+	if err != nil {
+		return FileInfo{}
+	}
+	return FileInfo{
+		Volume:   volume,
+		Name:     entry,
+		ModTime:  m.Stat.ModTime,
+		Size:     m.Stat.Size,
+		Metadata: m.Meta,
+		Parts:    m.Parts,
+		Quorum:   m.Erasure.DataBlocks,
+	}
+}
+
+// WalkHandler - remote caller to start walking at a requested directory path.
+func (s *storageRESTServer) WalkHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := mux.Vars(r)
+	volume := vars[storageRESTVolume]
+	dirPath := vars[storageRESTDirPath]
+	markerPath := vars[storageRESTMarkerPath]
+	recursive, err := strconv.ParseBool(vars[storageRESTRecursive])
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	leafFile := vars[storageRESTLeafFile]
+
+	endWalkCh := make(chan struct{})
+	defer close(endWalkCh)
+
+	fch, err := s.storage.Walk(volume, dirPath, markerPath, recursive, leafFile, readMetadata, endWalkCh)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	defer w.(http.Flusher).Flush()
+
+	encoder := gob.NewEncoder(w)
+	for fi := range fch {
+		encoder.Encode(&fi)
+	}
+}
+
 // ListDirHandler - list a directory.
 func (s *storageRESTServer) ListDirHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -358,12 +422,13 @@ func (s *storageRESTServer) ListDirHandler(w http.ResponseWriter, r *http.Reques
 	vars := mux.Vars(r)
 	volume := vars[storageRESTVolume]
 	dirPath := vars[storageRESTDirPath]
+	leafFile := vars[storageRESTLeafFile]
 	count, err := strconv.Atoi(vars[storageRESTCount])
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
-	entries, err := s.storage.ListDir(volume, dirPath, count)
+	entries, err := s.storage.ListDir(volume, dirPath, count, leafFile)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -385,6 +450,24 @@ func (s *storageRESTServer) DeleteFileHandler(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}
+}
+
+// DeleteFileBulkHandler - delete a file.
+func (s *storageRESTServer) DeleteFileBulkHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := r.URL.Query()
+	volume := vars.Get(storageRESTVolume)
+	filePaths := vars[storageRESTFilePath]
+
+	errs, err := s.storage.DeleteFileBulk(volume, filePaths)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	s.writeErrorsResponse(w, errs)
 }
 
 // RenameFileHandler - rename a file.
@@ -440,9 +523,14 @@ func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodReadFileStream).HandlerFunc(httpTraceHdrs(server.ReadFileStreamHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTOffset, storageRESTLength)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodListDir).HandlerFunc(httpTraceHdrs(server.ListDirHandler)).
-			Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTCount)...)
+			Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTCount, storageRESTLeafFile)...)
+		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodWalk).HandlerFunc(httpTraceHdrs(server.WalkHandler)).
+			Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath, storageRESTRecursive, storageRESTLeafFile)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodDeleteFile).HandlerFunc(httpTraceHdrs(server.DeleteFileHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
+		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodDeleteFileBulk).HandlerFunc(httpTraceHdrs(server.DeleteFileBulkHandler)).
+			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
+
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodRenameFile).HandlerFunc(httpTraceHdrs(server.RenameFileHandler)).
 			Queries(restQueries(storageRESTSrcVolume, storageRESTSrcPath, storageRESTDstVolume, storageRESTDstPath)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodGetInstanceID).HandlerFunc(httpTraceAll(server.GetInstanceID))

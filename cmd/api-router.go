@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled bool) {
 	var routers []*mux.Router
 	for _, domainName := range globalDomainNames {
 		routers = append(routers, apiRouter.Host("{bucket:.+}."+domainName).Subrouter())
+		routers = append(routers, apiRouter.Host("{bucket:.+}."+domainName+":{port:.*}").Subrouter())
 	}
 	routers = append(routers, apiRouter.PathPrefix("/{bucket}").Subrouter())
 

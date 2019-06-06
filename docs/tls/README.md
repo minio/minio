@@ -1,42 +1,41 @@
-# How to secure access to Minio server with TLS [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# How to secure access to MinIO server with TLS [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-This guide explains how to configure Minio Server with TLS certificates on Linux and Windows platforms.
+This guide explains how to configure MinIO Server with TLS certificates on Linux and Windows platforms.
 
-1. [Install Minio Server](#install-minio-server) 
-2. [Use an Existing Key and Certificate with Minio](#use-an-existing-key-and-certificate-with-minio) 
-3. [Generate and use Self-signed Keys and Certificates with Minio](#generate-use-self-signed-keys-certificates) 
+1. [Install MinIO Server](#install-minio-server) 
+2. [Use an Existing Key and Certificate with MinIO](#use-an-existing-key-and-certificate-with-minio) 
+3. [Generate and use Self-signed Keys and Certificates with MinIO](#generate-use-self-signed-keys-certificates) 
 4. [Install Certificates from Third-party CAs](#install-certificates-from-third-party-cas)
 
-## <a name="install-minio-server"></a>1. Install Minio Server
+## <a name="install-minio-server"></a>1. Install MinIO Server
 
-Install Minio Server using the instructions in the [Minio Quickstart Guide](http://docs.minio.io/docs/minio-quickstart-guide).
+Install MinIO Server using the instructions in the [MinIO Quickstart Guide](http://docs.min.io/docs/minio-quickstart-guide).
 
-## <a name="use-an-existing-key-and-certificate-with-minio"></a>2. Use an Existing Key and Certificate with Minio 
+## <a name="use-an-existing-key-and-certificate-with-minio"></a>2. Use an Existing Key and Certificate with MinIO 
 
-This section describes how to use a private key and public certificate that have been obtained from a certificate authority (CA). If these files have not been obtained, skip to [3. Generate Self-signed Certificates](#generate-use-self-signed-keys-certificates) or generate them with [Let's Encrypt](https://letsencrypt.org) using these instructions: [https://docs.minio.io/docs/generate-let-s-encypt-certificate-using-concert-for-minio](https://docs.minio.io/docs/).
+This section describes how to use a private key and public certificate that have been obtained from a certificate authority (CA). If these files have not been obtained, skip to [3. Generate Self-signed Certificates](#generate-use-self-signed-keys-certificates) or generate them with [Let's Encrypt](https://letsencrypt.org) using these instructions: [https://docs.min.io/docs/generate-let-s-encypt-certificate-using-concert-for-minio](https://docs.min.io/docs/).
 
 Copy the existing private key and public certificate to the `certs` directory. The default certs directory is:
 * **Linux:** `${HOME}/.minio/certs`
 * **Windows:** `%%USERPROFILE%%\.minio\certs`
 
-> NOTE: Location of custom certs directory can be specified using `--certs-dir` command line option.
-
-**Note:** 
-* The key and certificate files must be appended with `.key` and `.crt`, respectively.
+**Note:**
+* Location of custom certs directory can be specified using `--certs-dir` command line option.
+* Inside the `certs` directory, the private key must by named `private.key` and the public key must be named `public.crt`.
 * A certificate signed by a CA contains information about the issued identity (e.g. name, expiry, public key) and any intermediate certificates. The root CA is not included.
 
-## <a name="generate-use-self-signed-keys-certificates"></a>3. Generate and use Self-signed Keys and Certificates with Minio
+## <a name="generate-use-self-signed-keys-certificates"></a>3. Generate and use Self-signed Keys and Certificates with MinIO
 
 This section describes how to generate a self-signed certificate using various tools:
 
-3.1 [Use generate_cert.go to Generate a Certificate](#using-go) 
-3.2 [Use OpenSSL to Generate a Certificate](#using-open-ssl) 
-3.3 [Use OpenSSL (with IP address) to Generate a Certificate](#using-open-ssl-with-ip) 
-3.4 [Use GnuTLS (for Windows) to Generate a Certificate](#using-gnu-tls)
+* 3.1 [Use generate_cert.go to Generate a Certificate](#using-go) 
+* 3.2 [Use OpenSSL to Generate a Certificate](#using-open-ssl) 
+* 3.3 [Use OpenSSL (with IP address) to Generate a Certificate](#using-open-ssl-with-ip) 
+* 3.4 [Use GnuTLS (for Windows) to Generate a Certificate](#using-gnu-tls) 
 
 **Note:**
-* Minio only supports keys and certificates in PEM format on Linux and Windows.
-* Minio doesn't currently support PFX certificates.
+* MinIO only supports keys and certificates in PEM format on Linux and Windows.
+* MinIO doesn't currently support PFX certificates.
 
 ### <a name="using-go"></a>3.1 Use generate_cert.go to Generate a Certificate
 
@@ -64,7 +63,6 @@ Use one of the following methods to generate a certificate using `openssl`:
 * 3.2.1 [Generate a private key with ECDSA](#generate-private-key-with-ecdsa) 
 * 3.2.2 [Generate a private key with RSA](#generate-private-key-with-rsa)
 * 3.2.3 [Generate a self-signed certificate](#generate-a-self-signed-certificate)
-
 
 #### 3.2.1 <a name="generate-private-key-with-ecdsa"></a>Generate a private key with ECDSA.
 
@@ -117,7 +115,7 @@ openssl genrsa -aes256 -out private.key 2048 -passout pass:PASSWORD
 export MINIO_CERT_PASSWD=<PASSWORD>
 ``` 
 
-The default OpenSSL format for private encrypted keys is PKCS-8, but Minio only supports PKCS-1. An RSA key that has been formatted with PKCS-8 can be converted to PKCS-1 using the following command:
+The default OpenSSL format for private encrypted keys is PKCS-8, but MinIO only supports PKCS-1. An RSA key that has been formatted with PKCS-8 can be converted to PKCS-1 using the following command:
 
 ```sh
 openssl rsa -in private-pkcs8-key.key -aes256 -passout pass:PASSWORD -out private.key
@@ -133,7 +131,7 @@ openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=US/
 
 **Note:** Replace `<domain.com>` with the development domain name.
 
-Alternatively, use the command below to generate a self-signed wildcard certificate that is valid for all subdomains under `<domain.com>`. Wildcard certificates are useful for deploying distributed Minio instances, where each instance runs on a subdomain under a single parent domain.
+Alternatively, use the command below to generate a self-signed wildcard certificate that is valid for all subdomains under `<domain.com>`. Wildcard certificates are useful for deploying distributed MinIO instances, where each instance runs on a subdomain under a single parent domain.
 
 ```sh
 openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=US/ST=state/L=location/O=organization/CN=<*.domain.com>"
@@ -254,12 +252,12 @@ certtool.exe --generate-self-signed --load-privkey private.key --template cert.c
 
 ## <a name="install-certificates-from-third-party-cas"></a>4. Install Certificates from Third-party CAs
 
-Minio can connect to other servers, including Minio nodes or other server types such as NATs and Redis. If these servers use certificates that were not registered with a known CA, add trust for these certificates to Minio Server by placing these certificates under one of the following Minio configuration paths:
+MinIO can connect to other servers, including MinIO nodes or other server types such as NATs and Redis. If these servers use certificates that were not registered with a known CA, add trust for these certificates to MinIO Server by placing these certificates under one of the following MinIO configuration paths:
 * **Linux:** `~/.minio/certs/CAs/`
 * **Windows**: `C:\Users\<Username>\.minio\certs\CAs`
 
 # Explore Further
-* [TLS Configuration for Minio server on Kubernetes](https://github.com/minio/minio/tree/master/docs/tls/kubernetes)
-* [Minio Client Complete Guide](https://docs.minio.io/docs/minio-client-complete-guide)
-* [Generate Let's Encrypt Certificate](https://docs.minio.io/docs/generate-let-s-encypt-certificate-using-concert-for-minio)
-* [Setup nginx Proxy with Minio Server](https://docs.minio.io/docs/setup-nginx-proxy-with-minio)
+* [TLS Configuration for MinIO server on Kubernetes](https://github.com/minio/minio/tree/master/docs/tls/kubernetes)
+* [MinIO Client Complete Guide](https://docs.min.io/docs/minio-client-complete-guide)
+* [Generate Let's Encrypt Certificate](https://docs.min.io/docs/generate-let-s-encypt-certificate-using-concert-for-minio)
+* [Setup nginx Proxy with MinIO Server](https://docs.min.io/docs/setup-nginx-proxy-with-minio)

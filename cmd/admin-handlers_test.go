@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -100,6 +99,8 @@ var (
         "enable": false,
         "brokers": null,
         "topic": "",
+        "queueDir": "",
+        "queueLimit": 0,
         "tls": {
           "enable": false,
           "skipVerify": false,
@@ -296,60 +297,6 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 func (atb *adminXLTestBed) TearDown() {
 	removeRoots(atb.xlDirs)
 	resetTestGlobals()
-}
-
-func (atb *adminXLTestBed) GenerateHealTestData(t *testing.T) {
-	// Create an object myobject under bucket mybucket.
-	bucketName := "mybucket"
-	err := atb.objLayer.MakeBucketWithLocation(context.Background(), bucketName, "")
-	if err != nil {
-		t.Fatalf("Failed to make bucket %s - %v", bucketName,
-			err)
-	}
-
-	// create some objects
-	{
-		objName := "myobject"
-		for i := 0; i < 10; i++ {
-			objectName := fmt.Sprintf("%s-%d", objName, i)
-			_, err = atb.objLayer.PutObject(context.Background(), bucketName, objectName,
-				mustGetPutObjReader(t, bytes.NewReader([]byte("hello")),
-					int64(len("hello")), "", ""), ObjectOptions{})
-			if err != nil {
-				t.Fatalf("Failed to create %s - %v", objectName,
-					err)
-			}
-		}
-	}
-
-	// create a multipart upload (incomplete)
-	{
-		objName := "mpObject"
-		uploadID, err := atb.objLayer.NewMultipartUpload(context.Background(), bucketName,
-			objName, ObjectOptions{})
-		if err != nil {
-			t.Fatalf("mp new error: %v", err)
-		}
-
-		_, err = atb.objLayer.PutObjectPart(context.Background(), bucketName, objName,
-			uploadID, 3, mustGetPutObjReader(t, bytes.NewReader(
-				[]byte("hello")), int64(len("hello")), "", ""), ObjectOptions{})
-		if err != nil {
-			t.Fatalf("mp put error: %v", err)
-		}
-
-	}
-}
-
-func (atb *adminXLTestBed) CleanupHealTestData(t *testing.T) {
-	bucketName := "mybucket"
-	objName := "myobject"
-	for i := 0; i < 10; i++ {
-		atb.objLayer.DeleteObject(context.Background(), bucketName,
-			fmt.Sprintf("%s-%d", objName, i))
-	}
-
-	atb.objLayer.DeleteBucket(context.Background(), bucketName)
 }
 
 // initTestObjLayer - Helper function to initialize an XL-based object
@@ -597,86 +544,6 @@ func TestServiceStatusHandler(t *testing.T) {
 // Test for service restart management REST API.
 func TestServiceRestartHandler(t *testing.T) {
 	testServicesCmdHandler(restartCmd, t)
-}
-
-// Test for service set creds management REST API.
-func TestServiceSetCreds(t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
-	if err != nil {
-		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
-	}
-	defer adminTestBed.TearDown()
-
-	// Initialize admin peers to make admin RPC calls. Note: In a
-	// single node setup, this degenerates to a simple function
-	// call under the hood.
-	globalMinioAddr = "127.0.0.1:9000"
-
-	credentials := globalServerConfig.GetCredential()
-
-	testCases := []struct {
-		AccessKey          string
-		SecretKey          string
-		EnvKeysSet         bool
-		ExpectedStatusCode int
-	}{
-		// Bad secret key
-		{"minio", "minio", false, http.StatusBadRequest},
-		// Bad  secret key set from the env
-		{"minio", "minio", true, http.StatusMethodNotAllowed},
-		// Good keys set from the env
-		{"minio", "minio123", true, http.StatusMethodNotAllowed},
-		// Successful operation should be the last one to
-		// not change server credentials during tests.
-		{"minio", "minio123", false, http.StatusOK},
-	}
-	for i, testCase := range testCases {
-		// Set or unset environement keys
-		globalIsEnvCreds = testCase.EnvKeysSet
-
-		// Construct setCreds request body
-		body, err := json.Marshal(madmin.SetCredsReq{
-			AccessKey: testCase.AccessKey,
-			SecretKey: testCase.SecretKey})
-		if err != nil {
-			t.Fatalf("JSONify err: %v", err)
-		}
-
-		ebody, err := madmin.EncryptData(credentials.SecretKey, body)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// Construct setCreds request
-		req, err := getServiceCmdRequest(setCreds, credentials, ebody)
-		if err != nil {
-			t.Fatalf("Failed to build service status request %v", err)
-		}
-
-		rec := httptest.NewRecorder()
-
-		// Execute request
-		adminTestBed.router.ServeHTTP(rec, req)
-
-		// Check if the http code response is expected
-		if rec.Code != testCase.ExpectedStatusCode {
-			t.Errorf("Test %d: Wrong status code, expected = %d, found = %d", i+1, testCase.ExpectedStatusCode, rec.Code)
-			resp, _ := ioutil.ReadAll(rec.Body)
-			t.Errorf("Expected to receive %d status code but received %d. Body (%s)",
-				http.StatusOK, rec.Code, string(resp))
-		}
-
-		// If we got 200 OK, check if new credentials are really set
-		if rec.Code == http.StatusOK {
-			cred := globalServerConfig.GetCredential()
-			if cred.AccessKey != testCase.AccessKey {
-				t.Errorf("Test %d: Wrong access key, expected = %s, found = %s", i+1, testCase.AccessKey, cred.AccessKey)
-			}
-			if cred.SecretKey != testCase.SecretKey {
-				t.Errorf("Test %d: Wrong secret key, expected = %s, found = %s", i+1, testCase.SecretKey, cred.SecretKey)
-			}
-		}
-	}
 }
 
 // buildAdminRequest - helper function to build an admin API request.

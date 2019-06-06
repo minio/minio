@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,8 +54,8 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/gorilla/mux"
-	"github.com/minio/minio-go/pkg/s3signer"
-	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/s3signer"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bpool"
@@ -138,7 +138,7 @@ func calculateSignedChunkLength(chunkDataSize int64) int64 {
 }
 
 func mustGetPutObjReader(t TestErrHandler, data io.Reader, size int64, md5hex, sha256hex string) *PutObjReader {
-	hr, err := hash.NewReader(data, size, md5hex, sha256hex, size)
+	hr, err := hash.NewReader(data, size, md5hex, sha256hex, size, globalCLIContext.StrictS3Compat)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func prepareFS() (ObjectLayer, string, error) {
 	return obj, fsDirs[0], nil
 }
 
-func prepareXL32() (ObjectLayer, []string, error) {
+func prepareXLSets32() (ObjectLayer, []string, error) {
 	fsDirs1, err := getRandomDisks(16)
 	if err != nil {
 		return nil, nil, err
@@ -295,7 +295,7 @@ func isSameType(obj1, obj2 interface{}) bool {
 	return reflect.TypeOf(obj1) == reflect.TypeOf(obj2)
 }
 
-// TestServer encapsulates an instantiation of a Minio instance with a temporary backend.
+// TestServer encapsulates an instantiation of a MinIO instance with a temporary backend.
 // Example usage:
 //   s := StartTestServer(t,"XL")
 //   defer s.Stop()
@@ -1614,7 +1614,7 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 	}
 
 	// Initialize list pool.
-	listPool := newTreeWalkPool(globalLookupTimeout)
+	listPool := NewTreeWalkPool(globalLookupTimeout)
 
 	// Initialize xl objects.
 	xl := &xlObjects{
@@ -1704,7 +1704,7 @@ func prepareTestBackend(instanceType string) (ObjectLayer, []string, error) {
 	switch instanceType {
 	// Total number of disks for XL sets backend is set to 32.
 	case XLSetsTestStr:
-		return prepareXL32()
+		return prepareXLSets32()
 	// Total number of disks for XL backend is set to 16.
 	case XLTestStr:
 		return prepareXL16()
@@ -1738,7 +1738,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	// simple function which returns a message which gives the context of the test
 	// and then followed by the the actual error message.
 	failTestStr := func(testType, failMsg string) string {
-		return fmt.Sprintf("Minio %s: %s fail for \"%s\": \n<Error> %s", instanceType, testType, testName, failMsg)
+		return fmt.Sprintf("MinIO %s: %s fail for \"%s\": \n<Error> %s", instanceType, testType, testName, failMsg)
 	}
 
 	// httptest Recorder to capture all the response by the http handler.
@@ -1888,20 +1888,20 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 		// read the response body.
 		actualContent, err := ioutil.ReadAll(rec.Body)
 		if err != nil {
-			t.Fatalf("Minio %s: Failed parsing response body: <ERROR> %v", instanceType, err)
+			t.Fatalf("MinIO %s: Failed parsing response body: <ERROR> %v", instanceType, err)
 		}
 
 		actualError := &APIErrorResponse{}
 		if err = xml.Unmarshal(actualContent, actualError); err != nil {
-			t.Errorf("Minio %s: error response failed to parse error XML", instanceType)
+			t.Errorf("MinIO %s: error response failed to parse error XML", instanceType)
 		}
 
 		if actualError.BucketName != bucketName {
-			t.Errorf("Minio %s: error response bucket name differs from expected value", instanceType)
+			t.Errorf("MinIO %s: error response bucket name differs from expected value", instanceType)
 		}
 
 		if actualError.Key != objectName {
-			t.Errorf("Minio %s: error response object name differs from expected value", instanceType)
+			t.Errorf("MinIO %s: error response object name differs from expected value", instanceType)
 		}
 	}
 }
@@ -1927,6 +1927,10 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 
 	globalIAMSys = NewIAMSys()
 	globalIAMSys.Init(objLayer)
+
+	globalPolicySys = NewPolicySys()
+	globalPolicySys.Init(objLayer)
+
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
 	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
@@ -1982,7 +1986,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, FSTestStr, t)
 
-	objLayer, fsDirs, err := prepareXL16()
+	objLayer, fsDirs, err := prepareXLSets32()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
@@ -2413,7 +2417,7 @@ func uploadTestObject(t *testing.T, apiRouter http.Handler, creds auth.Credentia
 			rec = httptest.NewRecorder()
 			apiRouter.ServeHTTP(rec, req)
 			checkRespErr(rec, http.StatusOK)
-			etag := rec.Header().Get("ETag")
+			etag := rec.Header()["ETag"][0]
 			if etag == "" {
 				t.Fatalf("Unexpected empty etag")
 			}

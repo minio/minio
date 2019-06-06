@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -146,6 +146,7 @@ func sumHMAC(key []byte, data []byte) []byte {
 // extractSignedHeaders extract signed headers from Authorization header
 func extractSignedHeaders(signedHeaders []string, r *http.Request) (http.Header, APIErrorCode) {
 	reqHeaders := r.Header
+	reqQueries := r.URL.Query()
 	// find whether "host" is part of list of signed headers.
 	// if not return ErrUnsignedHeaders. "host" is mandatory.
 	if !contains(signedHeaders, "host") {
@@ -156,6 +157,10 @@ func extractSignedHeaders(signedHeaders []string, r *http.Request) (http.Header,
 		// `host` will not be found in the headers, can be found in r.Host.
 		// but its alway necessary that the list of signed headers containing host in it.
 		val, ok := reqHeaders[http.CanonicalHeaderKey(header)]
+		if !ok {
+			// try to set headers from Query String
+			val, ok = reqQueries[header]
+		}
 		if ok {
 			for _, enc := range val {
 				extractedSignedHeaders.Add(header, enc)

@@ -1,10 +1,11 @@
-## Minio Server Limits Per Tenant
+## MinIO Server Limits Per Tenant
 
 ### Erasure Code (Multiple Drives / Servers)
 
 |Item|Specification|
 |:---|:---|
-|Maximum number of servers| 32|
+|Maximum number of servers per cluster| 32|
+|Maximum number of Federated clusters | Unlimited|
 |Minimum number of servers| 02|
 |Maximum number of drives per server| Unlimited|
 |Read quorum| N/2|
@@ -31,26 +32,26 @@
 |Maximum number of objects returned per list objects request| 1000|
 |Maximum number of multipart uploads returned per list multipart uploads request| 1000|
 
-### List of Amazon S3 API's not supported on Minio
+### List of Amazon S3 API's not supported on MinIO
 We found the following APIs to be redundant or less useful outside of AWS S3. If you have a different view on any of the APIs we missed, please open a [github issue](https://github.com/minio/minio/issues).
 
-#### List of Amazon S3 Bucket API's not supported on Minio
+#### List of Amazon S3 Bucket API's not supported on MinIO
 
-- BucketACL (Use [bucket policies](https://docs.minio.io/docs/minio-client-complete-guide#policy) instead)
+- BucketACL (Use [bucket policies](https://docs.min.io/docs/minio-client-complete-guide#policy) instead)
 - BucketCORS (CORS enabled by default on all buckets for all HTTP verbs)
-- BucketLifecycle (Not required for Minio erasure coded backend)
-- BucketReplication (Use [`mc mirror`](https://docs.minio.io/docs/minio-client-complete-guide#mirror) instead)
+- BucketLifecycle (Not required for MinIO erasure coded backend)
+- BucketReplication (Use [`mc mirror`](https://docs.min.io/docs/minio-client-complete-guide#mirror) instead)
 - BucketVersions, BucketVersioning (Use [`s3git`](https://github.com/s3git/s3git))
 - BucketWebsite (Use [`caddy`](https://github.com/mholt/caddy) or [`nginx`](https://www.nginx.com/resources/wiki/))
-- BucketAnalytics, BucketMetrics, BucketLogging (Use [bucket notification](https://docs.minio.io/docs/minio-client-complete-guide#events) APIs)
+- BucketAnalytics, BucketMetrics, BucketLogging (Use [bucket notification](https://docs.min.io/docs/minio-client-complete-guide#events) APIs)
 - BucketRequestPayment
 - BucketTagging
 
-#### List of Amazon S3 Object API's not supported on Minio
+#### List of Amazon S3 Object API's not supported on MinIO
 
-- ObjectACL (Use [bucket policies](https://docs.minio.io/docs/minio-client-complete-guide#policy) instead)
+- ObjectACL (Use [bucket policies](https://docs.min.io/docs/minio-client-complete-guide#policy) instead)
 - ObjectTorrent
 - ObjectVersions
 
-### Object name restrictions on Minio
+### Object name restrictions on MinIO
 Object names that contain characters `^*|\/&";` are unsupported on Windows and other file systems which do not support filenames with these characters. Note that this list is not exhaustive, and depends on the maintainers of the filesystem itself.

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,49 +29,6 @@ import (
 
 // Fixed volume name that could be used across tests
 const volume = "testvolume"
-
-// Test for delayIsLeafCheck.
-func TestDelayIsLeafCheck(t *testing.T) {
-	testCases := []struct {
-		entries []string
-		delay   bool
-	}{
-		// Test cases where isLeaf check can't be delayed.
-		{
-			[]string{"a-b/", "a/"},
-			false,
-		},
-		{
-			[]string{"a%b/", "a/"},
-			false,
-		},
-		{
-			[]string{"a-b-c", "a-b/"},
-			false,
-		},
-
-		// Test cases where isLeaf check can be delayed.
-		{
-			[]string{"a-b/", "aa/"},
-			true,
-		},
-		{
-			[]string{"a", "a-b"},
-			true,
-		},
-		{
-			[]string{"aaa", "bbb"},
-			true,
-		},
-	}
-	for i, testCase := range testCases {
-		expected := testCase.delay
-		got := delayIsLeafCheck(testCase.entries)
-		if expected != got {
-			t.Errorf("Test %d : Expected %t got %t", i+1, expected, got)
-		}
-	}
-}
 
 // Test for filterMatchingPrefix.
 func TestFilterMatchingPrefix(t *testing.T) {
@@ -128,11 +85,11 @@ func createNamespace(disk StorageAPI, volume string, files []string) error {
 
 // Test if tree walker returns entries matching prefix alone are received
 // when a non empty prefix is supplied.
-func testTreeWalkPrefix(t *testing.T, listDir listDirFunc, isLeaf isLeafFunc, isLeafDir isLeafDirFunc) {
+func testTreeWalkPrefix(t *testing.T, listDir ListDirFunc) {
 	// Start the tree walk go-routine.
 	prefix := "d/"
 	endWalkCh := make(chan struct{})
-	twResultCh := startTreeWalk(context.Background(), volume, prefix, "", true, listDir, isLeaf, isLeafDir, endWalkCh)
+	twResultCh := startTreeWalk(context.Background(), volume, prefix, "", true, listDir, endWalkCh)
 
 	// Check if all entries received on the channel match the prefix.
 	for res := range twResultCh {
@@ -143,11 +100,11 @@ func testTreeWalkPrefix(t *testing.T, listDir listDirFunc, isLeaf isLeafFunc, is
 }
 
 // Test if entries received on tree walk's channel appear after the supplied marker.
-func testTreeWalkMarker(t *testing.T, listDir listDirFunc, isLeaf isLeafFunc, isLeafDir isLeafDirFunc) {
+func testTreeWalkMarker(t *testing.T, listDir ListDirFunc) {
 	// Start the tree walk go-routine.
 	prefix := ""
 	endWalkCh := make(chan struct{})
-	twResultCh := startTreeWalk(context.Background(), volume, prefix, "d/g", true, listDir, isLeaf, isLeafDir, endWalkCh)
+	twResultCh := startTreeWalk(context.Background(), volume, prefix, "d/g", true, listDir, endWalkCh)
 
 	// Check if only 3 entries, namely d/g/h, i/j/k, lmn are received on the channel.
 	expectedCount := 3
@@ -184,23 +141,13 @@ func TestTreeWalk(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	isLeaf := func(volume, prefix string) bool {
-		return !hasSuffix(prefix, slashSeparator)
-	}
+	listDir := listDirFactory(context.Background(), disk)
 
-	isLeafDir := func(volume, prefix string) bool {
-		entries, listErr := disk.ListDir(volume, prefix, 1)
-		if listErr != nil {
-			return false
-		}
-		return len(entries) == 0
-	}
-
-	listDir := listDirFactory(context.Background(), isLeaf, disk)
 	// Simple test for prefix based walk.
-	testTreeWalkPrefix(t, listDir, isLeaf, isLeafDir)
+	testTreeWalkPrefix(t, listDir)
 	// Simple test when marker is set.
-	testTreeWalkMarker(t, listDir, isLeaf, isLeafDir)
+	testTreeWalkMarker(t, listDir)
+
 	err = os.RemoveAll(fsDir)
 	if err != nil {
 		t.Fatal(err)
@@ -228,28 +175,16 @@ func TestTreeWalkTimeout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	isLeaf := func(volume, prefix string) bool {
-		return !hasSuffix(prefix, slashSeparator)
-	}
-
-	isLeafDir := func(volume, prefix string) bool {
-		entries, listErr := disk.ListDir(volume, prefix, 1)
-		if listErr != nil {
-			return false
-		}
-		return len(entries) == 0
-	}
-
-	listDir := listDirFactory(context.Background(), isLeaf, disk)
+	listDir := listDirFactory(context.Background(), disk)
 
 	// TreeWalk pool with 2 seconds timeout for tree-walk go routines.
-	pool := newTreeWalkPool(2 * time.Second)
+	pool := NewTreeWalkPool(2 * time.Second)
 
 	endWalkCh := make(chan struct{})
 	prefix := ""
 	marker := ""
 	recursive := true
-	resultCh := startTreeWalk(context.Background(), volume, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
+	resultCh := startTreeWalk(context.Background(), volume, prefix, marker, recursive, listDir, endWalkCh)
 
 	params := listParams{
 		bucket:    volume,
@@ -313,9 +248,7 @@ func TestListDir(t *testing.T) {
 	}
 
 	// create listDir function.
-	listDir := listDirFactory(context.Background(), func(volume, prefix string) bool {
-		return !hasSuffix(prefix, slashSeparator)
-	}, disk1, disk2)
+	listDir := listDirFactory(context.Background(), disk1, disk2)
 
 	// Create file1 in fsDir1 and file2 in fsDir2.
 	disks := []StorageAPI{disk1, disk2}
@@ -327,7 +260,7 @@ func TestListDir(t *testing.T) {
 	}
 
 	// Should list "file1" from fsDir1.
-	entries, _ := listDir(volume, "", "")
+	entries := listDir(volume, "", "")
 	if len(entries) != 2 {
 		t.Fatal("Expected the number of entries to be 2")
 	}
@@ -345,7 +278,7 @@ func TestListDir(t *testing.T) {
 	}
 
 	// Should list "file2" from fsDir2.
-	entries, _ = listDir(volume, "", "")
+	entries = listDir(volume, "", "")
 	if len(entries) != 1 {
 		t.Fatal("Expected the number of entries to be 1")
 	}
@@ -373,21 +306,8 @@ func TestRecursiveTreeWalk(t *testing.T) {
 		t.Fatalf("Unable to create StorageAPI: %s", err)
 	}
 
-	// Simple isLeaf check, returns true if there is no trailing "/"
-	isLeaf := func(volume, prefix string) bool {
-		return !hasSuffix(prefix, slashSeparator)
-	}
-
-	isLeafDir := func(volume, prefix string) bool {
-		entries, listErr := disk1.ListDir(volume, prefix, 1)
-		if listErr != nil {
-			return false
-		}
-		return len(entries) == 0
-	}
-
 	// Create listDir function.
-	listDir := listDirFactory(context.Background(), isLeaf, disk1)
+	listDir := listDirFactory(context.Background(), disk1)
 
 	// Create the namespace.
 	var files = []string{
@@ -461,13 +381,16 @@ func TestRecursiveTreeWalk(t *testing.T) {
 		}},
 	}
 	for i, testCase := range testCases {
-		for entry := range startTreeWalk(context.Background(), volume,
-			testCase.prefix, testCase.marker, testCase.recursive,
-			listDir, isLeaf, isLeafDir, endWalkCh) {
-			if _, found := testCase.expected[entry.entry]; !found {
-				t.Errorf("Test %d: Expected %s, but couldn't find", i+1, entry.entry)
+		testCase := testCase
+		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
+			for entry := range startTreeWalk(context.Background(), volume,
+				testCase.prefix, testCase.marker, testCase.recursive,
+				listDir, endWalkCh) {
+				if _, found := testCase.expected[entry.entry]; !found {
+					t.Errorf("Expected %s, but couldn't find", entry.entry)
+				}
 			}
-		}
+		})
 	}
 	err = os.RemoveAll(fsDir1)
 	if err != nil {
@@ -488,21 +411,8 @@ func TestSortedness(t *testing.T) {
 		t.Fatalf("Unable to create StorageAPI: %s", err)
 	}
 
-	// Simple isLeaf check, returns true if there is no trailing "/"
-	isLeaf := func(volume, prefix string) bool {
-		return !hasSuffix(prefix, slashSeparator)
-	}
-
-	isLeafDir := func(volume, prefix string) bool {
-		entries, listErr := disk1.ListDir(volume, prefix, 1)
-		if listErr != nil {
-			return false
-		}
-		return len(entries) == 0
-	}
-
 	// Create listDir function.
-	listDir := listDirFactory(context.Background(), isLeaf, disk1)
+	listDir := listDirFactory(context.Background(), disk1)
 
 	// Create the namespace.
 	var files = []string{
@@ -544,7 +454,7 @@ func TestSortedness(t *testing.T) {
 		var actualEntries []string
 		for entry := range startTreeWalk(context.Background(), volume,
 			test.prefix, test.marker, test.recursive,
-			listDir, isLeaf, isLeafDir, endWalkCh) {
+			listDir, endWalkCh) {
 			actualEntries = append(actualEntries, entry.entry)
 		}
 		if !sort.IsSorted(sort.StringSlice(actualEntries)) {
@@ -572,20 +482,8 @@ func TestTreeWalkIsEnd(t *testing.T) {
 		t.Fatalf("Unable to create StorageAPI: %s", err)
 	}
 
-	isLeaf := func(volume, prefix string) bool {
-		return !hasSuffix(prefix, slashSeparator)
-	}
-
-	isLeafDir := func(volume, prefix string) bool {
-		entries, listErr := disk1.ListDir(volume, prefix, 1)
-		if listErr != nil {
-			return false
-		}
-		return len(entries) == 0
-	}
-
 	// Create listDir function.
-	listDir := listDirFactory(context.Background(), isLeaf, disk1)
+	listDir := listDirFactory(context.Background(), disk1)
 
 	// Create the namespace.
 	var files = []string{
@@ -625,8 +523,9 @@ func TestTreeWalkIsEnd(t *testing.T) {
 		{"d/", "d/e", true, "d/g/h"},
 	}
 	for i, test := range testCases {
-		var entry treeWalkResult
-		for entry = range startTreeWalk(context.Background(), volume, test.prefix, test.marker, test.recursive, listDir, isLeaf, isLeafDir, endWalkCh) {
+		var entry TreeWalkResult
+		for entry = range startTreeWalk(context.Background(), volume, test.prefix,
+			test.marker, test.recursive, listDir, endWalkCh) {
 		}
 		if entry.entry != test.expectedEntry {
 			t.Errorf("Test %d: Expected entry %s, but received %s with the EOF marker", i, test.expectedEntry, entry.entry)

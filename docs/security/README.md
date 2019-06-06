@@ -1,24 +1,24 @@
-# Minio Security Overview [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# MinIO Security Overview [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
 ## Server-Side Encryption
 
-Minio supports two different types of server-side encryption ([SSE](#sse)):
- - **SSE-C**: The Minio server en/decrypts an object with a secret key provided by the S3 client
+MinIO supports two different types of server-side encryption ([SSE](#sse)):
+ - **SSE-C**: The MinIO server en/decrypts an object with a secret key provided by the S3 client
               as part of the HTTP request headers. Therefore, [SSE-C](#ssec) requires TLS/HTTPS.
- - **SSE-S3**: The Minio server en/decrypts an object with a secret key managed by a KMS.
-               Therefore, Minio requires a valid KMS configuration for [SSE-S3](#sses3).
+ - **SSE-S3**: The MinIO server en/decrypts an object with a secret key managed by a KMS.
+               Therefore, MinIO requires a valid KMS configuration for [SSE-S3](#sses3).
 
 ### Server-Side Encryption - Preliminaries
 
 #### Secret Keys
 
-The Minio server uses an unique, randomly generated secret key per object also known as,
+The MinIO server uses an unique, randomly generated secret key per object also known as,
 Object Encryption Key ([OEK](#oek)). Neither the client-provided SSE-C key nor the KMS-managed
 key is directly used to en/decrypt an object. Instead, the OEK is stored as part of the object
 metadata next to the object in an encrypted form. To en/decrypt the OEK another secret key is
 needed also known as, Key Encryption Key ([KEK](#kek)).  
 
-The Minio server runs a key-derivation algorithm to generate the KEK using a pseudo-random 
+The MinIO server runs a key-derivation algorithm to generate the KEK using a pseudo-random 
 function ([PRF](#prf)):  
 `KEK := PRF(EK, IV, context_values)` where
  - [EK](#ek): is the external key. In case of SSE-C this is the client-provided key. In case of SSE-S3
@@ -41,7 +41,7 @@ To summarize for any encrypted object there exists (at least) three different ke
 
 #### Content Encryption
 
-The Minio server uses an authenticated encryption scheme ([AEAD](#aead)) to en/decrypt and 
+The MinIO server uses an authenticated encryption scheme ([AEAD](#aead)) to en/decrypt and 
 authenticate the object content. The AEAD is combined with some state to build a 
 *Secure Channel*. A *Secure Channel* is a cryptographic construction that ensures confidentiality 
 and integrity of the processed data. In particular the *Secure Channel* splits the plaintext content 
@@ -66,7 +66,7 @@ is used as secret key.
 #### Cryptographic Primitives
 
 The SSE schemes described in [Secret Keys](#Secret-Keys) and [Content Encryption](#Content-Encryption)
-are generic over the cryptographic primitives. However, the Minio server uses the following
+are generic over the cryptographic primitives. However, the MinIO server uses the following
 cryptographic primitive implementations:
  - [PRF](#prf): HMAC-SHA-256
  - [AEAD](#aead): AES-256-GCM if the CPU supports AES-NI, ChaCha20-Poly1305 otherwise.
@@ -82,20 +82,20 @@ attacks. The nonce value is 96 bits long and generated randomly per object / mul
 
 #### Randomness
 
-The Minio server generates unique keys and other cryptographic values using a cryptographically
+The MinIO server generates unique keys and other cryptographic values using a cryptographically
 secure pseudo-random number generator ([CSPRNG](#csprng)). However, in the context of SSE,
-the Minio server does not require that the CSPRNG generates values that are indistinguishable
+the MinIO server does not require that the CSPRNG generates values that are indistinguishable
 from truly random bit strings. Instead, it is sufficient if the generated values are unique - which
 is a weaker requirement. Nevertheless other parts - for example the TLS-stack - may require that
 CSPRNG-generated values are indistinguishable from truly random bit strings.
 
 ### Server-Side Encryption with client-provided Keys
 
-SSE-C allows an S3 client to en/decrypt an object at the Minio server. Therefore the S3 client
+SSE-C allows an S3 client to en/decrypt an object at the MinIO server. Therefore the S3 client
 sends a secret key as part of the HTTP request. This secret key is **never** stored by the
-Minio server and only resides in RAM during the en/decryption process. 
+MinIO server and only resides in RAM during the en/decryption process. 
 
-Minio does not assume or require that the client-provided key is unique. It may be used for
+MinIO does not assume or require that the client-provided key is unique. It may be used for
 multiple objects or buckets. Especially a single client-provided key may be used for all 
 objects - even though all objects must be treated as compromised if that key is ever compromised.
 
@@ -111,7 +111,7 @@ Such a special COPY request is also known as S3 SSE-C key rotation.
 
 ### Server-Side Encryption with a KMS
 
-SSE-S3 allows an S3 client to en/decrypt an object at the Minio server using a KMS. The Minio 
+SSE-S3 allows an S3 client to en/decrypt an object at the MinIO server using a KMS. The MinIO 
 server only assumes that the KMS provides two services:
  1. `GenerateKey`: Takes a key ID and generates a new data key from a master key referenced by
                    the key ID. It returns the new data key in two different forms: The plain data key
@@ -122,10 +122,10 @@ server only assumes that the KMS provides two services:
 
 More details about supported KMS implementations and configuration can be found at the [KMS guide](https://github.com/minio/minio/blob/master/docs/kms/README.md).
 
-The Minio server requests a new data key from the KMS for each uploaded object and uses that data key
+The MinIO server requests a new data key from the KMS for each uploaded object and uses that data key
 as EK. Additionally it stores the encrypted form of the data key and the master key ID as part
 of the object metadata. The plain data only resides in RAM during the en/decryption process.
-The Minio server does not store any SSE-related key at the KMS. Instead the KMS is treated as trusted
+The MinIO server does not store any SSE-related key at the KMS. Instead the KMS is treated as trusted
 component that performs key sealing/unsealing operations to build a key hierarchy:
 
 ```
@@ -158,11 +158,11 @@ component that performs key sealing/unsealing operations to build a key hierarch
 
 #### Key rotation - Basic Operation
 
-The Minio server supports key rotation for SSE-S3 encrypted objects. Therefore, an S3 client 
+The MinIO server supports key rotation for SSE-S3 encrypted objects. Therefore, an S3 client 
 must perform a S3 COPY operation where the copy source and destination are equal and the SSE-S3 HTTP 
 header is set. The minio server decrypts the OEK using the current encrypted data key and the
 master key ID of the object metadata. If this succeeds, the server requests a new data key
-from the KMS using the master key ID of the **current Minio KMS configuration** and re-wraps the
+from the KMS using the master key ID of the **current MinIO KMS configuration** and re-wraps the
 *OEK* with a new *KEK* derived from the new data key / EK:
 
 ```
@@ -221,10 +221,10 @@ functional API's at this time.
 
 #### Secure Erasure and Locking
 
-The Minio server requires an available KMS to en/decrypt SSE-S3 encrypted objects. Therefore it
+The MinIO server requires an available KMS to en/decrypt SSE-S3 encrypted objects. Therefore it
 is possible to erase or lock some or all encrypted objects. For example in case of a detected attack
 or other emergency situations the following actions can be taken:
- - Seal the KMS such that it cannot be accessed by Minio server anymore. That will lock **all**
+ - Seal the KMS such that it cannot be accessed by MinIO server anymore. That will lock **all**
    SSE-S3 encrypted objects protected by master keys stored on the KMS. All these objects
    can not be decrypted as long as the KMS is sealed.
  - Seal/Unmount one/some master keys. That will lock all SSE-S3 encrypted objects protected by

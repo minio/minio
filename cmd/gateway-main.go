@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -221,6 +221,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(err, "Unable to initialize gateway backend")
 	}
 
+	// Populate existing buckets to the etcd backend
+	if globalDNSConfig != nil {
+		initFederatorBackend(newObject)
+	}
+
 	if enableConfigOps {
 		// Create a new config system.
 		globalConfigSys = NewConfigSys()
@@ -298,6 +303,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// Print gateway startup message.
 		printGatewayStartupMessage(getAPIEndpoints(), gatewayName)
 	}
+
+	// Set when gateway is enabled
+	globalIsGateway = true
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = UTCNow()

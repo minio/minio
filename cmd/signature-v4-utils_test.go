@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"github.com/minio/minio/cmd/crypto"
 	"net/http"
 	"testing"
 )
@@ -127,13 +128,13 @@ func TestExtractSignedHeaders(t *testing.T) {
 	// If the `expect` key exists in the signed headers then golang server would have stripped out the value, expecting the `expect` header set to `100-continue` in the result.
 	signedHeaders = append(signedHeaders, "expect")
 	// expected header values.
-	expectedHost := "play.minio.io:9000"
+	expectedHost := "play.min.io:9000"
 	expectedContentSha256 := "1234abcd"
 	expectedTime := UTCNow().Format(iso8601Format)
 	expectedTransferEncoding := "gzip"
 	expectedExpect := "100-continue"
 
-	r, err := http.NewRequest("GET", "http://play.minio.io:9000", nil)
+	r, err := http.NewRequest("GET", "http://play.min.io:9000", nil)
 	if err != nil {
 		t.Fatal("Unable to create http.Request :", err)
 	}
@@ -145,6 +146,22 @@ func TestExtractSignedHeaders(t *testing.T) {
 	inputHeader.Set("x-amz-date", expectedTime)
 	// calling the function being tested.
 	extractedSignedHeaders, errCode := extractSignedHeaders(signedHeaders, r)
+	if errCode != ErrNone {
+		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
+	}
+
+	inputQuery := r.URL.Query()
+	// case where some headers need to get from request query
+	signedHeaders = append(signedHeaders, "x-amz-server-side-encryption")
+	// expect to fail with `ErrUnsignedHeaders` because couldn't find some header
+	_, errCode = extractSignedHeaders(signedHeaders, r)
+	if errCode != ErrUnsignedHeaders {
+		t.Fatalf("Expected the APIErrorCode to %d, but got %d", ErrUnsignedHeaders, errCode)
+	}
+	// set headers value through Get parameter
+	inputQuery.Add("x-amz-server-side-encryption", crypto.SSEAlgorithmAES256)
+	r.URL.RawQuery = inputQuery.Encode()
+	_, errCode = extractSignedHeaders(signedHeaders, r)
 	if errCode != ErrNone {
 		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
 	}

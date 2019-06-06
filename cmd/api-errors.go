@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import (
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"google.golang.org/api/googleapi"
 
-	minio "github.com/minio/minio-go"
+	minio "github.com/minio/minio-go/v6"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -51,6 +51,7 @@ type APIErrorResponse struct {
 	Key        string `xml:"Key,omitempty" json:"Key,omitempty"`
 	BucketName string `xml:"BucketName,omitempty" json:"BucketName,omitempty"`
 	Resource   string
+	Region     string `xml:"Region,omitempty" json:"Region,omitempty"`
 	RequestID  string `xml:"RequestId" json:"RequestId"`
 	HostID     string `xml:"HostId" json:"HostId"`
 }
@@ -65,6 +66,7 @@ const (
 	ErrBadDigest
 	ErrEntityTooSmall
 	ErrEntityTooLarge
+	ErrPolicyTooLarge
 	ErrIncompleteBody
 	ErrInternalError
 	ErrInvalidAccessKeyID
@@ -177,7 +179,7 @@ const (
 
 	// Add new extended error codes here.
 
-	// Minio extended errors.
+	// MinIO extended errors.
 	ErrReadQuorum
 	ErrWriteQuorum
 	ErrParentIsObject
@@ -189,7 +191,7 @@ const (
 	ErrServerNotInitialized
 	ErrOperationTimedOut
 	ErrInvalidRequest
-	// Minio storage class error codes
+	// MinIO storage class error codes
 	ErrInvalidStorageClass
 	ErrBackendDown
 	// Add new extended error codes here.
@@ -396,6 +398,11 @@ var errorCodes = errorCodeMap{
 	ErrEntityTooLarge: {
 		Code:           "EntityTooLarge",
 		Description:    "Your proposed upload exceeds the maximum allowed object size.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrPolicyTooLarge: {
+		Code:           "PolicyTooLarge",
+		Description:    "Policy exceeds the maximum allowed document size.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrIncompleteBody: {
@@ -746,7 +753,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrUnsupportedNotification: {
 		Code:           "UnsupportedNotification",
-		Description:    "Minio server does not support Topic or Cloud Function based notifications.",
+		Description:    "MinIO server does not support Topic or Cloud Function based notifications.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidCopyPartRange: {
@@ -852,7 +859,7 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 
-	/// Minio extensions.
+	/// MinIO extensions.
 	ErrStorageFull: {
 		Code:           "XMinioStorageFull",
 		Description:    "Storage backend has reached its minimum free disk threshold. Please delete a few objects to proceed.",
@@ -872,16 +879,6 @@ var errorCodes = errorCodeMap{
 		Code:           "XMinioObjectExistsAsDirectory",
 		Description:    "Object name already exists as a directory.",
 		HTTPStatusCode: http.StatusConflict,
-	},
-	ErrReadQuorum: {
-		Code:           "XMinioReadQuorum",
-		Description:    "Multiple disk failures, unable to reconstruct data.",
-		HTTPStatusCode: http.StatusServiceUnavailable,
-	},
-	ErrWriteQuorum: {
-		Code:           "XMinioWriteQuorum",
-		Description:    "Multiple disks failures, unable to write data.",
-		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	ErrInvalidObjectName: {
 		Code:           "XMinioInvalidObjectName",
@@ -1479,7 +1476,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	if err == nil {
 		return ErrNone
 	}
-
 	// Verify if the underlying error is signature mismatch.
 	switch err {
 	case errInvalidArgument:
@@ -1529,6 +1525,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrKMSAuthFailure
 	case errOperationTimedOut, context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
+	case errDiskNotFound:
+		apiErr = ErrSlowDown
 	}
 
 	// Compression errors
@@ -1586,9 +1584,9 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	case InvalidPart:
 		apiErr = ErrInvalidPart
 	case InsufficientWriteQuorum:
-		apiErr = ErrWriteQuorum
+		apiErr = ErrSlowDown
 	case InsufficientReadQuorum:
-		apiErr = ErrReadQuorum
+		apiErr = ErrSlowDown
 	case UnsupportedDelimiter:
 		apiErr = ErrNotImplemented
 	case InvalidMarkerPrefixCombination:
@@ -1738,6 +1736,7 @@ func getAPIErrorResponse(ctx context.Context, err APIError, resource, requestID,
 		BucketName: reqInfo.BucketName,
 		Key:        reqInfo.ObjectName,
 		Resource:   resource,
+		Region:     globalServerConfig.GetRegion(),
 		RequestID:  requestID,
 		HostID:     hostID,
 	}

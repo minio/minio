@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import (
 
 // Validate all the ListObjects query arguments, returns an APIErrorCode
 // if one of the args do not meet the required conditions.
-// Special conditions required by Minio server are as below
+// Special conditions required by MinIO server are as below
 // - delimiter if set should be equal to '/', otherwise the request is rejected.
 // - marker if set should have a common prefix with 'prefix' param, otherwise
 //   the request is rejected.
@@ -46,7 +46,7 @@ func validateListObjectsArgs(prefix, marker, delimiter, encodingType string, max
 		}
 	}
 
-	/// Minio special conditions for ListObjects.
+	/// MinIO special conditions for ListObjects.
 
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != "/" {
@@ -63,7 +63,7 @@ func validateListObjectsArgs(prefix, marker, delimiter, encodingType string, max
 // criteria to return a subset of the objects in a bucket.
 //
 // NOTE: It is recommended that this API to be used for application development.
-// Minio continues to support ListObjectsV1 for supporting legacy tools.
+// MinIO continues to support ListObjectsV1 for supporting legacy tools.
 func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListObjectsV2")
 

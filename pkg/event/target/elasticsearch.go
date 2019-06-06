@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,8 +69,13 @@ func (target *ElasticsearchTarget) ID() event.TargetID {
 	return target.id
 }
 
-// Send - sends event to Elasticsearch.
-func (target *ElasticsearchTarget) Send(eventData event.Event) error {
+// Save - Sends event directly without persisting.
+func (target *ElasticsearchTarget) Save(eventData event.Event) error {
+	return target.send(eventData)
+}
+
+func (target *ElasticsearchTarget) send(eventData event.Event) error {
+
 	var key string
 
 	remove := func() error {
@@ -108,6 +113,11 @@ func (target *ElasticsearchTarget) Send(eventData event.Event) error {
 		return add()
 	}
 
+	return nil
+}
+
+// Send - interface compatible method does no-op.
+func (target *ElasticsearchTarget) Send(eventKey string) error {
 	return nil
 }
 

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -839,7 +839,7 @@ func TestPosixPosixListDir(t *testing.T) {
 		} else {
 			t.Errorf("Expected the StorageAPI to be of type *posix")
 		}
-		dirList, err = posixStorage.ListDir(testCase.srcVol, testCase.srcPath, -1)
+		dirList, err = posixStorage.ListDir(testCase.srcVol, testCase.srcPath, -1, "")
 		if err != testCase.expectedErr {
 			t.Fatalf("TestPosix case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}

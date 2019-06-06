@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017, 2018, 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017, 2018, 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,12 +27,12 @@ import (
 	"time"
 
 	"github.com/minio/cli"
-	miniogo "github.com/minio/minio-go"
-	"github.com/minio/minio-go/pkg/credentials"
+	miniogo "github.com/minio/minio-go/v6"
+	"github.com/minio/minio-go/v6/pkg/credentials"
 	minio "github.com/minio/minio/cmd"
 
-	"github.com/minio/minio-go/pkg/encrypt"
-	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/encrypt"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/policy"
@@ -64,7 +64,7 @@ ENVIRONMENT VARIABLES:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
   DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
+     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to MinIO host domain name.
 
   CACHE:
      MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
@@ -77,38 +77,38 @@ ENVIRONMENT VARIABLES:
 
 EXAMPLES:
   1. Start minio gateway server for AWS S3 backend.
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ {{.HelpName}}
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.HelpName}}
 
   2. Start minio gateway server for S3 backend on custom endpoint.
-     $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
-     $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-     $ {{.HelpName}} https://play.minio.io:9000
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}Q3AM3UQ867SPQQA43P2F
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+     {{.Prompt}} {{.HelpName}} https://play.min.io:9000
 
   3. Start minio gateway server for AWS S3 backend logging all requests to http endpoint.
-     $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
-     $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-     $ export MINIO_LOGGER_HTTP_ENDPOINT="http://localhost:8000/"
-     $ {{.HelpName}} https://play.minio.io:9000
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}Q3AM3UQ867SPQQA43P2F
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}"http://localhost:8000/"
+     {{.Prompt}} {{.HelpName}} https://play.min.io:9000
 
   4. Start minio gateway server for AWS S3 backend with edge caching enabled.
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-     $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
-     $ export MINIO_CACHE_EXPIRY=40
-     $ export MINIO_CACHE_MAXUSE=80
-     $ {{.HelpName}}
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}"/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}"bucket1/*;*.png"
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}40
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}80
+     {{.Prompt}} {{.HelpName}}
 
   4. Start minio gateway server for AWS S3 backend using AWS environment variables.
-     NOTE: The access and secret key in this case will authenticate with Minio instead
+     NOTE: The access and secret key in this case will authenticate with MinIO instead
      of AWS and AWS envs will be used to authenticate to AWS S3.
-     $ export AWS_ACCESS_KEY_ID=aws_access_key
-     $ export AWS_SECRET_ACCESS_KEY=aws_secret_key
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ {{.HelpName}}
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}aws_access_key
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}aws_secret_key
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}}(.*){{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.HelpName}}
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
@@ -272,7 +272,7 @@ func (g *S3) Production() bool {
 	return true
 }
 
-// s3Objects implements gateway for Minio and S3 compatible object storage servers.
+// s3Objects implements gateway for MinIO and S3 compatible object storage servers.
 type s3Objects struct {
 	minio.GatewayUnsupported
 	Client *miniogo.Core
@@ -498,6 +498,14 @@ func (l *s3Objects) DeleteObject(ctx context.Context, bucket string, object stri
 	}
 
 	return nil
+}
+
+func (l *s3Objects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = l.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
 }
 
 // ListMultipartUploads lists all multipart uploads.

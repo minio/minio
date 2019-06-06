@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -884,7 +884,7 @@ type serverConfigV32 struct {
 	} `json:"policy"`
 }
 
-// serverConfigV33 is just like version '32', removes clientID from NATS and MQTT, and adds queueDir, queueLimit with MQTT.
+// serverConfigV33 is just like version '32', removes clientID from NATS and MQTT, and adds queueDir, queueLimit in MQTT and kafka.
 type serverConfigV33 struct {
 	quick.Config `json:"-"` // ignore interfaces
 

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 
 	"github.com/coredns/coredns/plugin/etcd/msg"
 	etcd "github.com/coreos/etcd/clientv3"
@@ -56,7 +56,12 @@ func (c *coreDNS) List() ([]SrvRecord, error) {
 		if err != nil {
 			return nil, err
 		}
-		srvRecords = append(srvRecords, records...)
+		for _, record := range records {
+			if record.Key == "" {
+				continue
+			}
+			srvRecords = append(srvRecords, record)
+		}
 	}
 	return srvRecords, nil
 }
@@ -70,7 +75,20 @@ func (c *coreDNS) Get(bucket string) ([]SrvRecord, error) {
 		if err != nil {
 			return nil, err
 		}
-		srvRecords = append(srvRecords, records...)
+		// Make sure we have record.Key is empty
+		// this can only happen when record.Key
+		// has bucket entry with exact prefix
+		// match any record.Key which do not
+		// match the prefixes we skip them.
+		for _, record := range records {
+			if record.Key != "" {
+				continue
+			}
+			srvRecords = append(srvRecords, records...)
+		}
+	}
+	if len(srvRecords) == 0 {
+		return nil, ErrNoEntriesFound
 	}
 	return srvRecords, nil
 }

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -87,7 +86,7 @@ func newCacheFSObjects(dir string, expiry int, maxDiskUsagePct int) (*cacheFSObj
 			readersMap: make(map[string]*lock.RLockedFile),
 		},
 		nsMutex:       newNSLock(false),
-		listPool:      newTreeWalkPool(globalLookupTimeout),
+		listPool:      NewTreeWalkPool(globalLookupTimeout),
 		appendFileMap: make(map[string]*fsAppendFile),
 	}
 
@@ -399,7 +398,7 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 	if fsMeta.Meta["etag"] == "" {
-		fsMeta.Meta["etag"] = hex.EncodeToString(data.MD5Current())
+		fsMeta.Meta["etag"] = r.MD5CurrentHexString()
 	}
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.

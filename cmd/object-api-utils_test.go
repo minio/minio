@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"net/http"
 	"reflect"
@@ -143,8 +142,8 @@ func TestGetCompleteMultipartMD5(t *testing.T) {
 		expectedResult string
 		expectedErr    string
 	}{
-		// Wrong MD5 hash string
-		{[]CompletePart{{ETag: "wrong-md5-hash-string"}}, "", "encoding/hex: invalid byte: U+0077 'w'"},
+		// Wrong MD5 hash string, returns md5um of hash
+		{[]CompletePart{{ETag: "wrong-md5-hash-string"}}, "0deb8cb07527b4b2669c861cb9653607-1", ""},
 
 		// Single CompletePart with valid MD5 hash string.
 		{[]CompletePart{{ETag: "cf1f738a5924e645913c984e0fe3d708"}}, "10dc1617fbcf0bd0858048cb96e6bd77-1", ""},
@@ -154,16 +153,9 @@ func TestGetCompleteMultipartMD5(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		result, err := getCompleteMultipartMD5(context.Background(), test.parts)
+		result := getCompleteMultipartMD5(test.parts)
 		if result != test.expectedResult {
 			t.Fatalf("test %d failed: expected: result=%v, got=%v", i+1, test.expectedResult, result)
-		}
-		errString := ""
-		if err != nil {
-			errString = err.Error()
-		}
-		if errString != test.expectedErr {
-			t.Fatalf("test %d failed: expected: err=%v, got=%v", i+1, test.expectedErr, err)
 		}
 	}
 }
@@ -174,17 +166,17 @@ func TestIsMinioMetaBucketName(t *testing.T) {
 		bucket string
 		result bool
 	}{
-		// Minio meta bucket.
+		// MinIO meta bucket.
 		{
 			bucket: minioMetaBucket,
 			result: true,
 		},
-		// Minio meta bucket.
+		// MinIO meta bucket.
 		{
 			bucket: minioMetaMultipartBucket,
 			result: true,
 		},
-		// Minio meta bucket.
+		// MinIO meta bucket.
 		{
 			bucket: minioMetaTmpBucket,
 			result: true,

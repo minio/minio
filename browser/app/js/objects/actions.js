@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -208,7 +208,8 @@ export const shareObject = (object, days, hours, minutes) => {
         .PresignedGet({
           host: location.host,
           bucket: currentBucket,
-          object: objectName
+          object: objectName,
+          expiry: expiry
         })
         .then(obj => {
           dispatch(showShareObject(object, obj.url))

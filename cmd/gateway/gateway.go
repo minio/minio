@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	// Import all gateways.
 	_ "github.com/minio/minio/cmd/gateway/azure"
 	_ "github.com/minio/minio/cmd/gateway/gcs"
+	_ "github.com/minio/minio/cmd/gateway/hdfs"
 	_ "github.com/minio/minio/cmd/gateway/nas"
 	_ "github.com/minio/minio/cmd/gateway/oss"
 	_ "github.com/minio/minio/cmd/gateway/s3"

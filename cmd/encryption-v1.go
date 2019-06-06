@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/minio/minio-go/pkg/encrypt"
+	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/ioutil"
@@ -42,7 +42,7 @@ var (
 	errEncryptedObject      = errors.New("The object was stored using a form of SSE")
 	errInvalidSSEParameters = errors.New("The SSE-C key for key-rotation is not correct") // special access denied
 	errKMSNotConfigured     = errors.New("KMS not configured for a server side encrypted object")
-	// Additional Minio errors for SSE-C requests.
+	// Additional MinIO errors for SSE-C requests.
 	errObjectTampered = errors.New("The requested object was modified and may be compromised")
 	// error returned when invalid encryption parameters are specified
 	errInvalidEncryptionParameters = errors.New("The encryption parameters are not applicable to this object")

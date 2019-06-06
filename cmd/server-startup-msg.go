@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,12 +31,12 @@ import (
 
 // Documentation links, these are part of message printing code.
 const (
-	mcQuickStartGuide     = "https://docs.minio.io/docs/minio-client-quickstart-guide"
-	goQuickStartGuide     = "https://docs.minio.io/docs/golang-client-quickstart-guide"
-	jsQuickStartGuide     = "https://docs.minio.io/docs/javascript-client-quickstart-guide"
-	javaQuickStartGuide   = "https://docs.minio.io/docs/java-client-quickstart-guide"
-	pyQuickStartGuide     = "https://docs.minio.io/docs/python-client-quickstart-guide"
-	dotnetQuickStartGuide = "https://docs.minio.io/docs/dotnet-client-quickstart-guide"
+	mcQuickStartGuide     = "https://docs.min.io/docs/minio-client-quickstart-guide"
+	goQuickStartGuide     = "https://docs.min.io/docs/golang-client-quickstart-guide"
+	jsQuickStartGuide     = "https://docs.min.io/docs/javascript-client-quickstart-guide"
+	javaQuickStartGuide   = "https://docs.min.io/docs/java-client-quickstart-guide"
+	pyQuickStartGuide     = "https://docs.min.io/docs/python-client-quickstart-guide"
+	dotnetQuickStartGuide = "https://docs.min.io/docs/dotnet-client-quickstart-guide"
 )
 
 // generates format string depending on the string length and padding.

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,19 +31,9 @@ type wholeBitrotWriter struct {
 	filePath  string
 	shardSize int64 // This is the shard size of the erasure logic
 	hash.Hash       // For bitrot hash
-
-	// Following two fields are used only to make sure that Write(p) is called such that
-	// len(p) is always the block size except the last block and prevent programmer errors.
-	currentBlockIdx int
-	lastBlockIdx    int
 }
 
 func (b *wholeBitrotWriter) Write(p []byte) (int, error) {
-	if b.currentBlockIdx < b.lastBlockIdx && int64(len(p)) != b.shardSize {
-		// All blocks except last should be of the length b.shardSize
-		logger.LogIf(context.Background(), errUnexpected)
-		return 0, errUnexpected
-	}
 	err := b.disk.AppendFile(b.volume, b.filePath, p)
 	if err != nil {
 		logger.LogIf(context.Background(), err)
@@ -54,7 +44,6 @@ func (b *wholeBitrotWriter) Write(p []byte) (int, error) {
 		logger.LogIf(context.Background(), err)
 		return 0, err
 	}
-	b.currentBlockIdx++
 	return len(p), nil
 }
 
@@ -63,8 +52,8 @@ func (b *wholeBitrotWriter) Close() error {
 }
 
 // Returns whole-file bitrot writer.
-func newWholeBitrotWriter(disk StorageAPI, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64) io.WriteCloser {
-	return &wholeBitrotWriter{disk, volume, filePath, shardSize, algo.New(), 0, int(length / shardSize)}
+func newWholeBitrotWriter(disk StorageAPI, volume, filePath string, algo BitrotAlgorithm, shardSize int64) io.WriteCloser {
+	return &wholeBitrotWriter{disk, volume, filePath, shardSize, algo.New()}
 }
 
 // Implementation to verify bitrot for the whole file.

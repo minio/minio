@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018, 2019 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017, 2018, 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,6 @@ import (
 	"github.com/tidwall/sjson"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/handlers"
@@ -163,7 +162,7 @@ func (a adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWriter, r *h
 	// Reply to the client before restarting minio server.
 	writeSuccessResponseHeadersOnly(w)
 
-	// Notify all other Minio peers signal service.
+	// Notify all other MinIO peers signal service.
 	for _, nerr := range globalNotificationSys.SignalService(serviceSig) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
@@ -331,7 +330,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		// Get drive performance details from local server's drive(s)
 		dp := localEndpointsDrivePerf(globalEndpoints)
 
-		// Notify all other Minio peers to report drive performance numbers
+		// Notify all other MinIO peers to report drive performance numbers
 		dps := globalNotificationSys.DrivePerfInfo()
 		dps = append(dps, dp)
 
@@ -348,7 +347,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 	case "cpu":
 		// Get CPU load details from local server's cpu(s)
 		cpu := localEndpointsCPULoad(globalEndpoints)
-		// Notify all other Minio peers to report cpu load numbers
+		// Notify all other MinIO peers to report cpu load numbers
 		cpus := globalNotificationSys.CPULoadInfo()
 		cpus = append(cpus, cpu)
 
@@ -365,7 +364,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 	case "mem":
 		// Get mem usage details from local server(s)
 		m := localEndpointsMemUsage(globalEndpoints)
-		// Notify all other Minio peers to report mem usage numbers
+		// Notify all other MinIO peers to report mem usage numbers
 		mems := globalNotificationSys.MemUsageInfo()
 		mems = append(mems, m)
 
@@ -821,7 +820,7 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 // Disable tidwall json array notation in JSON key path so
 // users can set json with a key as a number.
 // In tidwall json, notify.webhook.0 = val means { "notify" : { "webhook" : [val] }}
-// In Minio, notify.webhook.0 = val means { "notify" : { "webhook" : {"0" : val}}}
+// In MinIO, notify.webhook.0 = val means { "notify" : { "webhook" : {"0" : val}}}
 func normalizeJSONKey(input string) (key string) {
 	subKeys := strings.Split(input, ".")
 	for i, k := range subKeys {
@@ -1007,7 +1006,7 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Notify all other Minio peers to reload users
+	// Notify all other MinIO peers to reload users
 	for _, nerr := range globalNotificationSys.LoadUsers() {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
@@ -1066,7 +1065,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Notify all other Minio peers to reload users
+	// Notify all other MinIO peers to reload users
 	for _, nerr := range globalNotificationSys.LoadUsers() {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
@@ -1121,7 +1120,7 @@ func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Notify all other Minio peers to reload users
+	// Notify all other MinIO peers to reload users
 	for _, nerr := range globalNotificationSys.LoadUsers() {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
@@ -1177,7 +1176,7 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Notify all other Minio peers to reload users
+	// Notify all other MinIO peers to reload users
 	for _, nerr := range globalNotificationSys.LoadUsers() {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
@@ -1215,7 +1214,7 @@ func (a adminAPIHandlers) SetUserPolicy(w http.ResponseWriter, r *http.Request) 
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 	}
 
-	// Notify all other Minio peers to reload users
+	// Notify all other MinIO peers to reload users
 	for _, nerr := range globalNotificationSys.LoadUsers() {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
@@ -1414,72 +1413,5 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Send success response
-	writeSuccessResponseHeadersOnly(w)
-}
-
-// UpdateAdminCredsHandler - POST /minio/admin/v1/config/credential
-// ----------
-// Update admin credentials in a minio server
-func (a adminAPIHandlers) UpdateAdminCredentialsHandler(w http.ResponseWriter,
-	r *http.Request) {
-
-	ctx := newContext(r, w, "UpdateCredentialsHandler")
-
-	objectAPI := validateAdminReq(ctx, w, r)
-	if objectAPI == nil {
-		return
-	}
-
-	// Avoid setting new credentials when they are already passed
-	// by the environment. Deny if WORM is enabled.
-	if globalIsEnvCreds || globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-		return
-	}
-
-	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
-		// More than maxConfigSize bytes were available
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigTooLarge), r.URL)
-		return
-	}
-
-	password := globalServerConfig.GetCredential().SecretKey
-	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
-	if err != nil {
-		logger.LogIf(ctx, err)
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
-		return
-	}
-
-	// Decode request body
-	var req madmin.SetCredsReq
-	if err = json.Unmarshal(configBytes, &req); err != nil {
-		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrRequestBodyParse), r.URL)
-		return
-	}
-
-	creds, err := auth.CreateCredentials(req.AccessKey, req.SecretKey)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	// Acquire lock before updating global configuration.
-	globalServerConfigMu.Lock()
-	defer globalServerConfigMu.Unlock()
-
-	// Update local credentials in memory.
-	globalServerConfig.SetCredential(creds)
-
-	// Set active creds.
-	globalActiveCred = creds
-
-	if err = saveServerConfig(ctx, objectAPI, globalServerConfig); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	// Reply to the client before restarting minio server.
 	writeSuccessResponseHeadersOnly(w)
 }

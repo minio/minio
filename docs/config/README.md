@@ -1,10 +1,10 @@
-# Minio Server Config Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# MinIO Server Config Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
 ## Configuration Directory
 
-Till Minio release `RELEASE.2018-08-02T23-11-36Z`, Minio server configuration file (`config.json`) was stored in the configuration directory specified by `--config-dir` or defaulted to `${HOME}/.minio`. However from releases after `RELEASE.2018-08-18T03-49-57Z`, the configuration file (only), has been migrated to the storage backend (storage backend is the directory passed to Minio server while starting the server).
+Till MinIO release `RELEASE.2018-08-02T23-11-36Z`, MinIO server configuration file (`config.json`) was stored in the configuration directory specified by `--config-dir` or defaulted to `${HOME}/.minio`. However from releases after `RELEASE.2018-08-18T03-49-57Z`, the configuration file (only), has been migrated to the storage backend (storage backend is the directory passed to MinIO server while starting the server).
 
-You can specify the location of your existing config using `--config-dir`, Minio will migrate the `config.json` to your backend storage. Your current `config.json` will be renamed upon successful migration as `config.json.deprecated` in your current `--config-dir`. All your existing configurations are honored after this migration.
+You can specify the location of your existing config using `--config-dir`, MinIO will migrate the `config.json` to your backend storage. Your current `config.json` will be renamed upon successful migration as `config.json.deprecated` in your current `--config-dir`. All your existing configurations are honored after this migration.
 
 Additionally `--config-dir` is now a legacy option which will is scheduled for removal in future, so please update your local startup, ansible scripts accordingly.
 
@@ -14,9 +14,9 @@ minio server /data
 
 ### Certificate Directory
 
-TLS certificates by default are stored under ``${HOME}/.minio/certs`` directory. You need to place certificates here to enable `HTTPS` based access. Read more about [How to secure access to Minio server with TLS](https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls).
+TLS certificates by default are stored under ``${HOME}/.minio/certs`` directory. You need to place certificates here to enable `HTTPS` based access. Read more about [How to secure access to MinIO server with TLS](https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls).
 
-Following is the directory structure for Minio server with TLS certificates.
+Following is the directory structure for MinIO server with TLS certificates.
 
 ```sh
 $ tree ~/.minio
@@ -35,13 +35,13 @@ All configuration changes can be made using [`mc admin config` get/set commands]
 
 #### Editing configuration file fields
 
-##### Get current configuration for Minio deployment
+##### Get current configuration for MinIO deployment
 
 ```sh
 $ mc admin config get myminio/ > /tmp/myconfig
 ```
 
-##### Set current configuration for Minio deployment
+##### Set current configuration for MinIO deployment
 
 ```sh
 $ mc admin config set myminio < /tmp/myconfig
@@ -107,7 +107,7 @@ minio server /data
 |``storageclass.standard`` | _string_ | Value for standard storage class. It should be in the format `EC:Parity`, for example to set 4 disk parity for standard storage class objects, set this field to `EC:4`.|
 |``storageclass.rrs`` | _string_ |  Value for reduced redundancy storage class. It should be in the format `EC:Parity`, for example to set 3 disk parity for reduced redundancy storage class objects, set this field to `EC:3`.|
 
-By default, parity for objects with standard storage class is set to `N/2`, and parity for objects with reduced redundancy storage class objects is set to `2`. Read more about storage class support in Minio server [here](https://github.com/minio/minio/blob/master/docs/erasure/storage-class/README.md).
+By default, parity for objects with standard storage class is set to `N/2`, and parity for objects with reduced redundancy storage class objects is set to `2`. Read more about storage class support in MinIO server [here](https://github.com/minio/minio/blob/master/docs/erasure/storage-class/README.md).
 
 ### Cache
 
@@ -123,15 +123,15 @@ By default, parity for objects with standard storage class is set to `N/2`, and 
 |Field|Type|Description|
 |:---|:---|:---|
 |``notify``| |Notify enables bucket notification events for lambda computing via the following targets.|
-|``notify.amqp``| |[Configure to publish Minio events via AMQP target.](https://docs.minio.io/docs/minio-bucket-notification-guide#AMQP)|
-|``notify.nats``| |[Configure to publish Minio events via NATS target.](https://docs.minio.io/docs/minio-bucket-notification-guide#NATS)|
-|``notify.elasticsearch``| |[Configure to publish Minio events via Elasticsearch target.](https://docs.minio.io/docs/minio-bucket-notification-guide#Elasticsearch)|
-|``notify.redis``| |[Configure to publish Minio events via Redis target.](https://docs.minio.io/docs/minio-bucket-notification-guide#Redis)|
-|``notify.postgresql``| |[Configure to publish Minio events via PostgreSQL target.](https://docs.minio.io/docs/minio-bucket-notification-guide#PostgreSQL)|
-|``notify.kafka``| |[Configure to publish Minio events via Apache Kafka target.](https://docs.minio.io/docs/minio-bucket-notification-guide#apache-kafka)|
-|``notify.webhook``| |[Configure to publish Minio events via Webhooks target.](https://docs.minio.io/docs/minio-bucket-notification-guide#webhooks)|
-|``notify.mysql``| |[Configure to publish Minio events via MySql target.](https://docs.minio.io/docs/minio-bucket-notification-guide#MySQL)|
-|``notify.mqtt``| |[Configure to publish Minio events via MQTT target.](https://docs.minio.io/docs/minio-bucket-notification-guide#MQTT)|
+|``notify.amqp``| |[Configure to publish MinIO events via AMQP target.](https://docs.min.io/docs/minio-bucket-notification-guide#AMQP)|
+|``notify.nats``| |[Configure to publish MinIO events via NATS target.](https://docs.min.io/docs/minio-bucket-notification-guide#NATS)|
+|``notify.elasticsearch``| |[Configure to publish MinIO events via Elasticsearch target.](https://docs.min.io/docs/minio-bucket-notification-guide#Elasticsearch)|
+|``notify.redis``| |[Configure to publish MinIO events via Redis target.](https://docs.min.io/docs/minio-bucket-notification-guide#Redis)|
+|``notify.postgresql``| |[Configure to publish MinIO events via PostgreSQL target.](https://docs.min.io/docs/minio-bucket-notification-guide#PostgreSQL)|
+|``notify.kafka``| |[Configure to publish MinIO events via Apache Kafka target.](https://docs.min.io/docs/minio-bucket-notification-guide#apache-kafka)|
+|``notify.webhook``| |[Configure to publish MinIO events via Webhooks target.](https://docs.min.io/docs/minio-bucket-notification-guide#webhooks)|
+|``notify.mysql``| |[Configure to publish MinIO events via MySql target.](https://docs.min.io/docs/minio-bucket-notification-guide#MySQL)|
+|``notify.mqtt``| |[Configure to publish MinIO events via MQTT target.](https://docs.min.io/docs/minio-bucket-notification-guide#MQTT)|
 
 ## Environment only settings
 
@@ -148,7 +148,7 @@ minio server /data
 
 ### Domain
 
-By default, Minio supports path-style requests that are of the format http://mydomain.com/bucket/object. `MINIO_DOMAIN` environment variable is used to enable virtual-host-style requests. If the request `Host` header matches with `(.+).mydomain.com` then the matched pattern `$1` is used as bucket and the path is used as object. More information on path-style and virtual-host-style [here](http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAPI.html)
+By default, MinIO supports path-style requests that are of the format http://mydomain.com/bucket/object. `MINIO_DOMAIN` environment variable is used to enable virtual-host-style requests. If the request `Host` header matches with `(.+).mydomain.com` then the matched pattern `$1` is used as bucket and the path is used as object. More information on path-style and virtual-host-style [here](http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAPI.html)
 Example:
 
 ```sh
@@ -164,7 +164,7 @@ minio server /data
 
 ### Drive Sync
 
-By default, Minio writes to disk in synchronous mode for all metadata operations. Set `MINIO_DRIVE_SYNC` environment variable to enable synchronous mode for all data operations as well.
+By default, MinIO writes to disk in synchronous mode for all metadata operations. Set `MINIO_DRIVE_SYNC` environment variable to enable synchronous mode for all data operations as well.
 
 Example:
 
@@ -175,7 +175,7 @@ minio server /data
 
 ### HTTP Trace
 
-By default, Minio disables the feature to log HTTP trace. You may enable this feature by setting `MINIO_HTTP_TRACE` environment variable.
+By default, MinIO disables the feature to log HTTP trace. You may enable this feature by setting `MINIO_HTTP_TRACE` environment variable.
 
 Example:
 
@@ -186,5 +186,5 @@ minio server /data
 
 ## Explore Further
 
-* [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide)
-* [Configure Minio Server with TLS](https://docs.minio.io/docs/how-to-secure-access-to-minio-server-with-tls)
+* [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide)
+* [Configure MinIO Server with TLS](https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls)

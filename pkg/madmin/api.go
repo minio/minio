@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -29,9 +30,10 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 
-	"github.com/minio/minio-go/pkg/s3signer"
-	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/s3signer"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 )
 
 // AdminClient implements Amazon S3 compatible methods.
@@ -57,6 +59,8 @@ type AdminClient struct {
 	// Needs allocation.
 	httpClient *http.Client
 
+	random *rand.Rand
+
 	// Advanced functionality.
 	isTraceEnabled bool
 	traceOutput    io.Writer
@@ -73,9 +77,9 @@ const (
 // User Agent should always following the below style.
 // Please open an issue to discuss any new changes here.
 //
-//       Minio (OS; ARCH) LIB/VER APP/VER
+//       MinIO (OS; ARCH) LIB/VER APP/VER
 const (
-	libraryUserAgentPrefix = "Minio (" + runtime.GOOS + "; " + runtime.GOARCH + ") "
+	libraryUserAgentPrefix = "MinIO (" + runtime.GOOS + "; " + runtime.GOARCH + ") "
 	libraryUserAgent       = libraryUserAgentPrefix + libraryName + "/" + libraryVersion
 )
 
@@ -107,6 +111,8 @@ func privateNew(endpoint, accessKeyID, secretAccessKey string, secure bool) (*Ad
 		httpClient: &http.Client{
 			Transport: http.DefaultTransport,
 		},
+		// Introduce a new locked random seed.
+		random: rand.New(&lockedRandSource{src: rand.NewSource(time.Now().UTC().UnixNano())}),
 	}
 
 	// Return.
@@ -315,6 +321,7 @@ var successStatus = []int{
 // request upon any error up to maxRetries attempts in a binomially
 // delayed manner using a standard back off algorithm.
 func (adm AdminClient) executeMethod(method string, reqData requestData) (res *http.Response, err error) {
+	var reqRetry = MaxRetry // Indicates how many times we can retry the request
 
 	// Create a done channel to control 'ListObjects' go routine.
 	doneCh := make(chan struct{}, 1)
@@ -322,39 +329,63 @@ func (adm AdminClient) executeMethod(method string, reqData requestData) (res *h
 	// Indicate to our routine to exit cleanly upon return.
 	defer close(doneCh)
 
-	// Instantiate a new request.
-	var req *http.Request
-	req, err = adm.newRequest(method, reqData)
-	if err != nil {
-		return nil, err
-	}
-
-	// Initiate the request.
-	res, err = adm.do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	// For any known successful http status, return quickly.
-	for _, httpStatus := range successStatus {
-		if httpStatus == res.StatusCode {
-			return res, nil
+	for range adm.newRetryTimer(reqRetry, DefaultRetryUnit, DefaultRetryCap, MaxJitter, doneCh) {
+		// Instantiate a new request.
+		var req *http.Request
+		req, err = adm.newRequest(method, reqData)
+		if err != nil {
+			return nil, err
 		}
+
+		// Initiate the request.
+		res, err = adm.do(req)
+		if err != nil {
+			// For supported http requests errors verify.
+			if isHTTPReqErrorRetryable(err) {
+				continue // Retry.
+			}
+			// For other errors, return here no need to retry.
+			return nil, err
+		}
+
+		// For any known successful http status, return quickly.
+		for _, httpStatus := range successStatus {
+			if httpStatus == res.StatusCode {
+				return res, nil
+			}
+		}
+
+		// Read the body to be saved later.
+		errBodyBytes, err := ioutil.ReadAll(res.Body)
+		// res.Body should be closed
+		closeResponse(res)
+		if err != nil {
+			return nil, err
+		}
+
+		// Save the body.
+		errBodySeeker := bytes.NewReader(errBodyBytes)
+		res.Body = ioutil.NopCloser(errBodySeeker)
+
+		// For errors verify if its retryable otherwise fail quickly.
+		errResponse := ToErrorResponse(httpRespToErrorResponse(res))
+
+		// Save the body back again.
+		errBodySeeker.Seek(0, 0) // Seek back to starting point.
+		res.Body = ioutil.NopCloser(errBodySeeker)
+
+		// Verify if error response code is retryable.
+		if isS3CodeRetryable(errResponse.Code) {
+			continue // Retry.
+		}
+
+		// Verify if http status code is retryable.
+		if isHTTPStatusRetryable(res.StatusCode) {
+			continue // Retry.
+		}
+
+		break
 	}
-
-	// Read the body to be saved later.
-	errBodyBytes, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
-	}
-	// Save the body.
-	errBodySeeker := bytes.NewReader(errBodyBytes)
-	res.Body = ioutil.NopCloser(errBodySeeker)
-
-	// Save the body back again.
-	errBodySeeker.Seek(0, 0) // Seek back to starting point.
-	res.Body = ioutil.NopCloser(errBodySeeker)
-
 	return res, err
 }
 

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ func TestURLString(t *testing.T) {
 		{URL{}, ""},
 		{URL{Scheme: "http", Host: "play"}, "http://play"},
 		{URL{Scheme: "https", Host: "play:443"}, "https://play"},
-		{URL{Scheme: "https", Host: "play.minio.io:80"}, "https://play.minio.io:80"},
+		{URL{Scheme: "https", Host: "play.min.io:80"}, "https://play.min.io:80"},
 		{URL{Scheme: "https", Host: "147.75.201.93:9000", Path: "/"}, "https://147.75.201.93:9000/"},
 		{URL{Scheme: "https", Host: "s3.amazonaws.com", Path: "/", RawQuery: "location"}, "https://s3.amazonaws.com/?location"},
 		{URL{Scheme: "http", Host: "myminio:10000", Path: "/mybucket/myobject"}, "http://myminio:10000/mybucket/myobject"},
@@ -73,7 +73,7 @@ func TestURLMarshalJSON(t *testing.T) {
 	}{
 		{URL{}, []byte(`""`), false},
 		{URL{Scheme: "http", Host: "play"}, []byte(`"http://play"`), false},
-		{URL{Scheme: "https", Host: "play.minio.io:0"}, []byte(`"https://play.minio.io:0"`), false},
+		{URL{Scheme: "https", Host: "play.min.io:0"}, []byte(`"https://play.min.io:0"`), false},
 		{URL{Scheme: "https", Host: "147.75.201.93:9000", Path: "/"}, []byte(`"https://147.75.201.93:9000/"`), false},
 		{URL{Scheme: "https", Host: "s3.amazonaws.com", Path: "/", RawQuery: "location"}, []byte(`"https://s3.amazonaws.com/?location"`), false},
 		{URL{Scheme: "http", Host: "myminio:10000", Path: "/mybucket/myobject"}, []byte(`"http://myminio:10000/mybucket/myobject"`), false},
@@ -104,7 +104,7 @@ func TestURLUnmarshalJSON(t *testing.T) {
 	}{
 		{[]byte(`""`), &URL{}, false},
 		{[]byte(`"http://play"`), &URL{Scheme: "http", Host: "play"}, false},
-		{[]byte(`"https://play.minio.io:0"`), &URL{Scheme: "https", Host: "play.minio.io:0"}, false},
+		{[]byte(`"https://play.min.io:0"`), &URL{Scheme: "https", Host: "play.min.io:0"}, false},
 		{[]byte(`"https://147.75.201.93:9000/"`), &URL{Scheme: "https", Host: "147.75.201.93:9000", Path: "/"}, false},
 		{[]byte(`"https://s3.amazonaws.com/?location"`), &URL{Scheme: "https", Host: "s3.amazonaws.com", Path: "/", RawQuery: "location"}, false},
 		{[]byte(`"http://myminio:10000/mybucket//myobject/"`), &URL{Scheme: "http", Host: "myminio:10000", Path: "/mybucket/myobject"}, false},
@@ -139,7 +139,7 @@ func TestParseURL(t *testing.T) {
 		expectErr   bool
 	}{
 		{"http://play", &URL{Scheme: "http", Host: "play"}, false},
-		{"https://play.minio.io:0", &URL{Scheme: "https", Host: "play.minio.io:0"}, false},
+		{"https://play.min.io:0", &URL{Scheme: "https", Host: "play.min.io:0"}, false},
 		{"https://147.75.201.93:9000/", &URL{Scheme: "https", Host: "147.75.201.93:9000", Path: "/"}, false},
 		{"https://s3.amazonaws.com/?location", &URL{Scheme: "https", Host: "s3.amazonaws.com", Path: "/", RawQuery: "location"}, false},
 		{"http://myminio:10000/mybucket//myobject/", &URL{Scheme: "http", Host: "myminio:10000", Path: "/mybucket/myobject"}, false},

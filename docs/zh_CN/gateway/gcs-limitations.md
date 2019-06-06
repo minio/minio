@@ -1,4 +1,4 @@
-## Minio GCS 网关限制
+## MinIO GCS 网关限制
 
 网关继承了以下GCS限制:
 

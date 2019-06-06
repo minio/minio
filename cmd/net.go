@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -27,10 +26,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
-	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -102,40 +99,7 @@ func getHostIP(host string) (ipList set.StringSet, err error) {
 	var ips []net.IP
 
 	if ips, err = net.LookupIP(host); err != nil {
-		// return err if not Docker or Kubernetes
-		// We use IsDocker() method to check for Docker Swarm environment
-		// as there is no reliable way to clearly identify Swarm from
-		// Docker environment.
-		if !IsDocker() && !IsKubernetes() {
-			return ipList, err
-		}
-
-		// channel to indicate completion of host resolution
-		doneCh := make(chan struct{})
-		// Indicate retry routine to exit cleanly, upon this function return.
-		defer close(doneCh)
-		// Mark the starting time
-		startTime := time.Now()
-		// wait for hosts to resolve in exponentialbackoff manner
-		for range newRetryTimerSimple(doneCh) {
-			// Retry infinitely on Kubernetes and Docker swarm.
-			// This is needed as the remote hosts are sometime
-			// not available immediately.
-			if ips, err = net.LookupIP(host); err == nil {
-				break
-			}
-			// time elapsed
-			timeElapsed := time.Since(startTime)
-			// log error only if more than 1s elapsed
-			if timeElapsed > time.Second {
-				// log the message to console about the host not being
-				// resolveable.
-				reqInfo := (&logger.ReqInfo{}).AppendTags("host", host)
-				reqInfo.AppendTags("elapsedTime", humanize.RelTime(startTime, startTime.Add(timeElapsed), "elapsed", ""))
-				ctx := logger.SetReqInfo(context.Background(), reqInfo)
-				logger.LogIf(ctx, err)
-			}
-		}
+		return ipList, err
 	}
 
 	ipList = set.NewStringSet()

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import (
 	etcd "github.com/coreos/etcd/clientv3"
 	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/target/console"
 	"github.com/minio/minio/cmd/logger/target/http"
@@ -161,6 +161,9 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	globalCertsCADir = &ConfigDir{path: filepath.Join(globalCertsDir.Get(), certsCADir)}
 
 	logger.FatalIf(mkdirAllIgnorePerm(globalCertsCADir.Get()), "Unable to create certs CA directory at %s", globalCertsCADir.Get())
+
+	// Check "compat" flag from command line argument.
+	globalCLIContext.StrictS3Compat = ctx.IsSet("compat") || ctx.GlobalIsSet("compat")
 }
 
 // Parses the given compression exclude list `extensions` or `content-types`.
@@ -282,7 +285,7 @@ func handleCommonEnvVars() {
 				// Checking if the IP is a DNS entry.
 				addrs, err := net.LookupHost(endpoint)
 				if err != nil {
-					logger.FatalIf(err, "Unable to initialize Minio server with [%s] invalid entry found in MINIO_PUBLIC_IPS", endpoint)
+					logger.FatalIf(err, "Unable to initialize MinIO server with [%s] invalid entry found in MINIO_PUBLIC_IPS", endpoint)
 				}
 				for _, addr := range addrs {
 					domainIPs.Add(addr)

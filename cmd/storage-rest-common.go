@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package cmd
 
-const storageRESTVersion = "v4"
+const storageRESTVersion = "v6"
 const storageRESTPath = minioReservedBucketPath + "/storage/" + storageRESTVersion + "/"
 
 const (
@@ -34,7 +34,9 @@ const (
 	storageRESTMethodReadFile       = "readfile"
 	storageRESTMethodReadFileStream = "readfilestream"
 	storageRESTMethodListDir        = "listdir"
+	storageRESTMethodWalk           = "walk"
 	storageRESTMethodDeleteFile     = "deletefile"
+	storageRESTMethodDeleteFileBulk = "deletefilebulk"
 	storageRESTMethodRenameFile     = "renamefile"
 	storageRESTMethodGetInstanceID  = "getinstanceid"
 )
@@ -50,6 +52,9 @@ const (
 	storageRESTOffset     = "offset"
 	storageRESTLength     = "length"
 	storageRESTCount      = "count"
+	storageRESTMarkerPath = "marker"
+	storageRESTLeafFile   = "leaf-file"
+	storageRESTRecursive  = "recursive"
 	storageRESTBitrotAlgo = "bitrot-algo"
 	storageRESTBitrotHash = "bitrot-hash"
 	storageRESTInstanceID = "instance-id"

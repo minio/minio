@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Minio Cloud Storage, (C) 2019 Minio, Inc.
+# MinIO Cloud Storage, (C) 2019 MinIO, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ set -o pipefail
 function start_minio_server()
 {
     MINIO_ACCESS_KEY=minio MINIO_SECRET_KEY=minio123 \
-                    minio --quiet --json server data --address 127.0.0.1:24242 > server.log 2>&1 &
+                    minio --quiet --json server /data --address 127.0.0.1:24242 > server.log 2>&1 &
     server_pid=$!
     sleep 3
 

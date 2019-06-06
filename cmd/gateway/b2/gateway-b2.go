@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ import (
 
 	b2 "github.com/minio/blazer/base"
 	"github.com/minio/cli"
-	miniogopolicy "github.com/minio/minio-go/pkg/policy"
+	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	h2 "github.com/minio/minio/pkg/hash"
@@ -67,7 +67,7 @@ ENVIRONMENT VARIABLES:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
   DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
+     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to MinIO host domain name.
 
   CACHE:
      MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
@@ -77,18 +77,18 @@ ENVIRONMENT VARIABLES:
 
 EXAMPLES:
   1. Start minio gateway server for B2 backend.
-     $ export MINIO_ACCESS_KEY=accountID
-     $ export MINIO_SECRET_KEY=applicationKey
-     $ {{.HelpName}}
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accountID
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}applicationKey
+     {{.Prompt}} {{.HelpName}}
 
   2. Start minio gateway server for B2 backend with edge caching enabled.
-     $ export MINIO_ACCESS_KEY=accountID
-     $ export MINIO_SECRET_KEY=applicationKey
-     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-     $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
-     $ export MINIO_CACHE_EXPIRY=40
-     $ export MINIO_CACHE_MAXUSE=80
-     $ {{.HelpName}}
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accountID
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}applicationKey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*;*.png"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXPIRY{{.AssignmentOperator}}40
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_MAXUSE{{.AssignmentOperator}}80
+     {{.Prompt}} {{.HelpName}}
 `
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               b2Backend,
@@ -104,7 +104,7 @@ func b2GatewayMain(ctx *cli.Context) {
 	minio.StartGateway(ctx, &B2{})
 }
 
-// B2 implements Minio Gateway
+// B2 implements MinIO Gateway
 type B2 struct{}
 
 // Name implements Gateway interface.
@@ -133,7 +133,7 @@ func (g *B2) Production() bool {
 	return true
 }
 
-// b2Object implements gateway for Minio and BackBlaze B2 compatible object storage servers.
+// b2Object implements gateway for MinIO and BackBlaze B2 compatible object storage servers.
 type b2Objects struct {
 	minio.GatewayUnsupported
 	mu       sync.Mutex
@@ -593,6 +593,14 @@ func (l *b2Objects) DeleteObject(ctx context.Context, bucket string, object stri
 	err = bkt.File(reader.ID, object).DeleteFileVersion(l.ctx)
 	logger.LogIf(ctx, err)
 	return b2ToObjectError(err, bucket, object)
+}
+
+func (l *b2Objects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = l.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
 }
 
 // ListMultipartUploads lists all multipart uploads.

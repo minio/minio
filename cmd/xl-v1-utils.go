@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,13 @@ package cmd
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"hash/crc32"
 	"path"
 	"sync"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/tidwall/gjson"
 )
@@ -139,59 +139,6 @@ func parseXLFormat(xlMetaBuf []byte) string {
 	return gjson.GetBytes(xlMetaBuf, "format").String()
 }
 
-func parseXLRelease(xlMetaBuf []byte) string {
-	return gjson.GetBytes(xlMetaBuf, "minio.release").String()
-}
-
-func parseXLErasureInfo(ctx context.Context, xlMetaBuf []byte) (ErasureInfo, error) {
-	erasure := ErasureInfo{}
-	erasureResult := gjson.GetBytes(xlMetaBuf, "erasure")
-	// parse the xlV1Meta.Erasure.Distribution.
-	disResult := erasureResult.Get("distribution").Array()
-
-	distribution := make([]int, len(disResult))
-	for i, dis := range disResult {
-		distribution[i] = int(dis.Int())
-	}
-	erasure.Distribution = distribution
-
-	erasure.Algorithm = erasureResult.Get("algorithm").String()
-	erasure.DataBlocks = int(erasureResult.Get("data").Int())
-	erasure.ParityBlocks = int(erasureResult.Get("parity").Int())
-	erasure.BlockSize = erasureResult.Get("blockSize").Int()
-	erasure.Index = int(erasureResult.Get("index").Int())
-
-	checkSumsResult := erasureResult.Get("checksum").Array()
-
-	// Check for scenario where checksum information missing for some parts.
-	partsResult := gjson.GetBytes(xlMetaBuf, "parts").Array()
-	if len(checkSumsResult) != len(partsResult) {
-		return erasure, errCorruptedFormat
-	}
-
-	// Parse xlMetaV1.Erasure.Checksum array.
-	checkSums := make([]ChecksumInfo, len(checkSumsResult))
-	for i, v := range checkSumsResult {
-		algorithm := BitrotAlgorithmFromString(v.Get("algorithm").String())
-		if !algorithm.Available() {
-			logger.LogIf(ctx, errBitrotHashAlgoInvalid)
-			return erasure, errBitrotHashAlgoInvalid
-		}
-		hash, err := hex.DecodeString(v.Get("hash").String())
-		if err != nil {
-			logger.LogIf(ctx, err)
-			return erasure, err
-		}
-		name := v.Get("name").String()
-		if name == "" {
-			return erasure, errCorruptedFormat
-		}
-		checkSums[i] = ChecksumInfo{Name: name, Algorithm: algorithm, Hash: hash}
-	}
-	erasure.Checksums = checkSums
-	return erasure, nil
-}
-
 func parseXLParts(xlMetaBuf []byte) []ObjectPartInfo {
 	// Parse the XL Parts.
 	partsResult := gjson.GetBytes(xlMetaBuf, "parts").Array()
@@ -220,32 +167,9 @@ func parseXLMetaMap(xlMetaBuf []byte) map[string]string {
 
 // Constructs XLMetaV1 using `gjson` lib to retrieve each field.
 func xlMetaV1UnmarshalJSON(ctx context.Context, xlMetaBuf []byte) (xlMeta xlMetaV1, e error) {
-	// obtain version.
-	xlMeta.Version = parseXLVersion(xlMetaBuf)
-	// obtain format.
-	xlMeta.Format = parseXLFormat(xlMetaBuf)
-	// Parse xlMetaV1.Stat .
-	stat, err := parseXLStat(xlMetaBuf)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return xlMeta, err
-	}
-
-	xlMeta.Stat = stat
-	// parse the xlV1Meta.Erasure fields.
-	xlMeta.Erasure, err = parseXLErasureInfo(ctx, xlMetaBuf)
-	if err != nil {
-		return xlMeta, err
-	}
-
-	// Parse the XL Parts.
-	xlMeta.Parts = parseXLParts(xlMetaBuf)
-	// Get the xlMetaV1.Realse field.
-	xlMeta.Minio.Release = parseXLRelease(xlMetaBuf)
-	// parse xlMetaV1.
-	xlMeta.Meta = parseXLMetaMap(xlMetaBuf)
-
-	return xlMeta, nil
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	e = json.Unmarshal(xlMetaBuf, &xlMeta)
+	return xlMeta, e
 }
 
 // read xl.json from the given disk, parse and return xlV1MetaV1.Parts.
@@ -425,6 +349,9 @@ func calculatePartSizeFromIdx(ctx context.Context, totalSize int64, partSize int
 	if partIndex < 1 {
 		logger.LogIf(ctx, errPartSizeIndex)
 		return 0, errPartSizeIndex
+	}
+	if totalSize == -1 {
+		return -1, nil
 	}
 	if totalSize > 0 {
 		// Compute the total count of parts

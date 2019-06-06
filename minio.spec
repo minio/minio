@@ -7,11 +7,11 @@ Summary:        Cloud Storage Server.
 Name:           minio
 Version:        0.0.%{subver}
 Release:        1
-Vendor:         Minio, Inc.
+Vendor:         MinIO, Inc.
 License:        Apache v2.0
 Group:          Applications/File
 Source0:        https://github.com/minio/minio/archive/%{tag}.tar.gz
-URL:            https://www.minio.io/
+URL:            https://www.min.io/
 BuildRequires:  golang >= 1.7
 BuildRoot:      %{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
@@ -24,7 +24,7 @@ BuildRoot:      %{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 %define         import_path     github.com/minio/minio
 
 %description
-Minio is an object storage server released under Apache License v2.0.
+MinIO is an object storage server released under Apache License v2.0.
 It is compatible with Amazon S3 cloud storage service. It is best
 suited for storing unstructured data such as photos, videos, log
 files, backups and container / VM images. Size of an object can

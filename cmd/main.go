@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,24 +32,28 @@ var globalFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "config-dir, C",
 		Value: defaultConfigDir.Get(),
-		Usage: "[DEPRECATED] Path to legacy configuration directory.",
+		Usage: "[DEPRECATED] path to legacy configuration directory",
 	},
 	cli.StringFlag{
 		Name:  "certs-dir, S",
 		Value: defaultCertsDir.Get(),
-		Usage: "Path to certs directory.",
+		Usage: "path to certs directory",
 	},
 	cli.BoolFlag{
 		Name:  "quiet",
-		Usage: "Disable startup information.",
+		Usage: "disable startup information",
 	},
 	cli.BoolFlag{
 		Name:  "anonymous",
-		Usage: "Hide sensitive information from logging.",
+		Usage: "hide sensitive information from logging",
 	},
 	cli.BoolFlag{
 		Name:  "json",
-		Usage: "Output server logs and startup information in json format.",
+		Usage: "output server logs and startup information in json format",
+	},
+	cli.BoolFlag{
+		Name:  "compat",
+		Usage: "trade off performance for S3 compatibility",
 	},
 }
 
@@ -118,15 +122,15 @@ func newApp(name string) *cli.App {
 	// Set up app.
 	cli.HelpFlag = cli.BoolFlag{
 		Name:  "help, h",
-		Usage: "Show help.",
+		Usage: "show help",
 	}
 
 	app := cli.NewApp()
 	app.Name = name
-	app.Author = "Minio.io"
+	app.Author = "MinIO, Inc."
 	app.Version = Version
 	app.Usage = "Cloud Storage Server."
-	app.Description = `Minio is an Amazon S3 compatible object storage server. Use it to store photos, videos, VMs, containers, log files, or any blob of data as objects.`
+	app.Description = `MinIO is an Amazon S3 compatible object storage server. Use it to store photos, videos, VMs, containers, log files, or any blob of data as objects.`
 	app.Flags = globalFlags
 	app.HideVersion = true     // Hide `--version` flag, we already have `minio version`.
 	app.HideHelpCommand = true // Hide `help, h` command, we already have `minio --help`.
