@@ -596,7 +596,9 @@ func (sys *NotificationSys) refresh(objAPI ObjectLayer) error {
 		ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{BucketName: bucket.Name})
 		config, err := readNotificationConfig(ctx, objAPI, bucket.Name)
 		if err != nil && err != errNoSuchNotifications {
-			return err
+			if _, ok := err.(*event.ErrARNNotFound); ok {
+				continue
+			}
 		}
 		if err == errNoSuchNotifications {
 			continue
