@@ -23,6 +23,7 @@ import (
 	"encoding/gob"
 	"io"
 	"net/url"
+	"strconv"
 
 	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -332,6 +333,59 @@ func (client *peerRESTClient) PutBucketNotification(bucket string, rulesMap even
 	respBody, err := client.call(peerRESTMethodBucketNotificationPut, values, &reader, -1)
 	if err != nil {
 		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// DeletePolicy - delete a specific canned policy.
+func (client *peerRESTClient) DeletePolicy(policyName string) (err error) {
+	values := make(url.Values)
+	values.Set(peerRESTPolicy, policyName)
+
+	respBody, err := client.call(peerRESTMethodDeletePolicy, values, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// LoadPolicy - reload a specific canned policy.
+func (client *peerRESTClient) LoadPolicy(policyName string) (err error) {
+	values := make(url.Values)
+	values.Set(peerRESTPolicy, policyName)
+
+	respBody, err := client.call(peerRESTMethodLoadPolicy, values, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// DeleteUser - delete a specific user.
+func (client *peerRESTClient) DeleteUser(accessKey string) (err error) {
+	values := make(url.Values)
+	values.Set(peerRESTUser, accessKey)
+
+	respBody, err := client.call(peerRESTMethodDeleteUser, values, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// LoadUser - reload a specific user.
+func (client *peerRESTClient) LoadUser(accessKey string, temp bool) (err error) {
+	values := make(url.Values)
+	values.Set(peerRESTUser, accessKey)
+	values.Set(peerRESTUserTemp, strconv.FormatBool(temp))
+
+	respBody, err := client.call(peerRESTMethodLoadUser, values, nil, -1)
+	if err != nil {
+		return
 	}
 	defer http.DrainBody(respBody)
 	return nil
