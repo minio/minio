@@ -55,7 +55,7 @@ require (
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/lsync v0.1.0
 	github.com/minio/mc v0.0.0-20190529152718-f4bb0b8850cb
-	github.com/minio/minio-go/v6 v6.0.27
+	github.com/minio/minio-go/v6 v6.0.28
 	github.com/minio/parquet-go v0.0.0-20190318185229-9d767baf1679
 	github.com/minio/sha256-simd v0.1.0
 	github.com/minio/sio v0.2.0
@@ -63,7 +63,6 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/nats-io/gnatsd v1.4.1 // indirect
-	github.com/nats-io/go-nats-streaming v0.4.2
 	github.com/nats-io/nats v1.7.2
 	github.com/nats-io/nats-streaming-server v0.14.2 // indirect
 	github.com/nats-io/nats.go v1.8.0
