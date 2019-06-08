@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -32,6 +33,7 @@ import (
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
+	trace "github.com/minio/minio/pkg/trace"
 )
 
 // To abstract a node over network.
@@ -666,6 +668,47 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// TraceHandler sends http trace messages back to peer rest client
+func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+	trcAll := r.URL.Query().Get(peerRESTTraceAll) == "true"
+
+	w.Header().Set("Connection", "close")
+	w.WriteHeader(http.StatusOK)
+	w.(http.Flusher).Flush()
+	ch := globalTrace.pubsub.Subscribe()
+	defer globalTrace.pubsub.Unsubscribe(ch)
+
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	for {
+		select {
+		case entry := <-ch:
+			trcInfo := entry.(trace.Info)
+			path := strings.TrimPrefix(trcInfo.ReqInfo.Path, "/")
+			// omit inter-node traffic if trcAll is false
+			if !trcAll && strings.HasPrefix(path, minioReservedBucket) {
+				continue
+			}
+
+			if err := enc.Encode(trcInfo); err != nil {
+				return
+			}
+
+			if _, err := w.Write([]byte("\n")); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-r.Context().Done():
+			return
+
+		}
+	}
+}
+
 func (s *peerRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusForbidden)
 	w.Write([]byte(err.Error()))
@@ -710,6 +753,8 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodBucketNotificationListen).HandlerFunc(httpTraceHdrs(server.ListenBucketNotificationHandler)).Queries(restQueries(peerRESTBucket)...)
 
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodReloadFormat).HandlerFunc(httpTraceHdrs(server.ReloadFormatHandler)).Queries(restQueries(peerRESTDryRun)...)
+
+	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodTrace).HandlerFunc(server.TraceHandler)
 
 	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(notFoundHandler))
 }

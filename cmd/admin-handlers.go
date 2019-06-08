@@ -1419,3 +1419,40 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 	// Send success response
 	writeSuccessResponseHeadersOnly(w)
 }
+
+// TraceHandler - POST /minio/admin/v1/trace
+// ----------
+// The handler sends http trace to the connected HTTP client.
+func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "HTTPTrace")
+	trcAll := r.URL.Query().Get("all") == "true"
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+	// Avoid reusing tcp connection if read timeout is hit
+	// This is needed to make r.Context().Done() work as
+	// expected in case of read timeout
+	w.Header().Add("Connection", "close")
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	traceCh := globalTrace.Trace(doneCh, trcAll)
+	for {
+		select {
+		case entry := <-traceCh:
+			if _, err := w.Write(entry); err != nil {
+				return
+			}
+			if _, err := w.Write([]byte("\n")); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-r.Context().Done():
+			return
+		case <-GlobalServiceDoneCh:
+			return
+		}
+	}
+}

@@ -290,6 +290,9 @@ func serverMain(ctx *cli.Context) {
 	// Init global heal state
 	initAllHealState(globalIsXL)
 
+	// initialize globalTrace system
+	globalTrace = NewTraceSys(context.Background(), globalEndpoints)
+
 	// Configure server.
 	var handler http.Handler
 	handler, err = configureServerHandler(globalEndpoints)

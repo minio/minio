@@ -41,6 +41,7 @@ const (
 	peerRESTMethodReloadFormat             = "reloadformat"
 	peerRESTMethodTargetExists             = "targetexists"
 	peerRESTMethodSendEvent                = "sendevent"
+	peerRESTMethodTrace                    = "trace"
 )
 
 const (
@@ -51,4 +52,5 @@ const (
 	peerRESTSignal   = "signal"
 	peerRESTProfiler = "profiler"
 	peerRESTDryRun   = "dry-run"
+	peerRESTTraceAll = "all"
 )
