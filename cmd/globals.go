@@ -23,7 +23,7 @@ import (
 	"time"
 
 	isatty "github.com/mattn/go-isatty"
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 
 	etcd "github.com/coreos/etcd/clientv3"
 	humanize "github.com/dustin/go-humanize"
@@ -82,8 +82,6 @@ const (
 	// GlobalMultipartCleanupInterval - Cleanup interval when the stale multipart cleanup is initiated.
 	GlobalMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
 
-	// Refresh interval to update in-memory bucket policy cache.
-	globalRefreshBucketPolicyInterval = 5 * time.Minute
 	// Refresh interval to update in-memory iam config cache.
 	globalRefreshIAMInterval = 5 * time.Minute
 
@@ -110,6 +108,9 @@ var (
 
 	// Indicates if the running minio server is an erasure-code backend.
 	globalIsXL = false
+
+	// Indicates if the running minio is in gateway mode.
+	globalIsGateway = false
 
 	// This flag is set to 'true' by default
 	globalIsBrowserEnabled = true

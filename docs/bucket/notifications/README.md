@@ -585,7 +585,7 @@ MinIO server also supports [NATS Streaming mode](http://nats.io/documentation/st
 },
 ```
 
-Read more about sections `clusterID`, `clientID` on [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). Section `maxPubAcksInflight` is explained [here](https://github.com/nats-io/go-nats-streaming#publisher-rate-limiting).
+Read more about sections `clusterID`, `clientID` on [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). Section `maxPubAcksInflight` is explained [here](https://github.com/nats-io/stan.go#publisher-rate-limiting).
 
 ### Step 2: Enable bucket notification using MinIO client
 
@@ -610,7 +610,7 @@ import (
 	"log"
 	"runtime"
 
-	"github.com/nats-io/nats"
+	"github.com/nats-io/nats.go"
 )
 
 func main() {
@@ -663,7 +663,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/nats-io/go-nats-streaming"
+	"github.com/nats-io/stan.go"
 )
 
 func main() {

@@ -35,7 +35,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	sha256 "github.com/minio/sha256-simd"
 )
 

@@ -148,6 +148,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	initNSLock(false) // Enable local namespace lock.
 
+	// Set when gateway is enabled
+	globalIsGateway = true
+
 	router := mux.NewRouter().SkipClean(true)
 
 	if globalEtcdClient != nil {

@@ -189,7 +189,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Notify all other MinIO peers to reload temp users
-	for _, nerr := range globalNotificationSys.LoadUsers() {
+	for _, nerr := range globalNotificationSys.LoadUser(cred.AccessKey, true) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -306,7 +306,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Notify all other MinIO peers to reload temp users
-	for _, nerr := range globalNotificationSys.LoadUsers() {
+	for _, nerr := range globalNotificationSys.LoadUser(cred.AccessKey, true) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)

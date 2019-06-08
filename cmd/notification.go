@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
@@ -151,6 +152,66 @@ func (sys *NotificationSys) ReloadFormat(dryRun bool) []NotificationPeerErr {
 		client := client
 		ng.Go(context.Background(), func() error {
 			return client.ReloadFormat(dryRun)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
+// DeletePolicy - deletes policy across all peers.
+func (sys *NotificationSys) DeletePolicy(policyName string) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(context.Background(), func() error {
+			return client.DeletePolicy(policyName)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
+// LoadPolicy - reloads a specific modified policy across all peers
+func (sys *NotificationSys) LoadPolicy(policyName string) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(context.Background(), func() error {
+			return client.LoadPolicy(policyName)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
+// DeleteUser - deletes a specific user across all peers
+func (sys *NotificationSys) DeleteUser(accessKey string) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(context.Background(), func() error {
+			return client.DeleteUser(accessKey)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
+// LoadUser - reloads a specific user across all peers
+func (sys *NotificationSys) LoadUser(accessKey string, temp bool) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(context.Background(), func() error {
+			return client.LoadUser(accessKey, temp)
 		}, idx, *client.host)
 	}
 	return ng.Wait()
@@ -910,6 +971,11 @@ func (args eventArgs) ToEvent() event.Event {
 }
 
 func sendEvent(args eventArgs) {
+
+	// remove sensitive encryption entries in metadata.
+	crypto.RemoveSensitiveEntries(args.Object.UserDefined)
+	crypto.RemoveInternalEntries(args.Object.UserDefined)
+
 	// globalNotificationSys is not initialized in gateway mode.
 	if globalNotificationSys == nil {
 		return
