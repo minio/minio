@@ -15,7 +15,7 @@ cat >docker-compose.yml <<EOF
 version: '2'
 services:
   opa:
-    image: openpolicyagent/opa:0.9.1
+    image: openpolicyagent/opa:0.11.0
     ports:
       - 8181:8181
     command:
@@ -45,11 +45,12 @@ package httpapi.authz
 
 import input as http_api
 
-allow {
- input.action = "s3:PutObject"
- input.owner = false
-}
+default allow = false
 
+allow = true {
+ http_api.action = "s3:PutObject"
+ http_api.owner = false
+}
 EOF
 ```
 
@@ -62,7 +63,7 @@ curl -X PUT --data-binary @putobject.rego \
 ### 4. Setup MinIO with OPA
 MinIO server expects environment variable for OPA http API url as `MINIO_IAM_OPA_URL`, this environment variable takes a single entry.
 ```
-export MINIO_IAM_OPA_URL=http://localhost:8181/v1/data/httpapi/authz
+export MINIO_IAM_OPA_URL=http://localhost:8181/v1/data/httpapi/authz/allow
 minio server /mnt/data
 ```
 
