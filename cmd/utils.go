@@ -59,16 +59,6 @@ func IsErr(err error, errs ...error) bool {
 	return false
 }
 
-// Close Http tracing file.
-func stopHTTPTrace() {
-	if globalHTTPTraceFile != nil {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("traceFile", globalHTTPTraceFile.Name())
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, globalHTTPTraceFile.Close())
-		globalHTTPTraceFile = nil
-	}
-}
-
 // make a copy of http.Header
 func cloneHeader(h http.Header) http.Header {
 	h2 := make(http.Header, len(h))

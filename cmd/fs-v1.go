@@ -1151,6 +1151,12 @@ func (fs *FSObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) 
 	return []BucketInfo{}, NotImplemented{}
 }
 
+// ListObjectsHeal - list all objects to be healed. Valid only for XL
+func (fs *FSObjects) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
+	logger.LogIf(ctx, NotImplemented{})
+	return ListObjectsInfo{}, NotImplemented{}
+}
+
 // SetBucketPolicy sets policy on bucket
 func (fs *FSObjects) SetBucketPolicy(ctx context.Context, bucket string, policy *policy.Policy) error {
 	return savePolicyConfig(ctx, fs, bucket, policy)

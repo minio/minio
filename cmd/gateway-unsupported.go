@@ -101,6 +101,11 @@ func (a GatewayUnsupported) ListBucketsHeal(ctx context.Context) (buckets []Buck
 	return nil, NotImplemented{}
 }
 
+// ListObjectsHeal - Not implemented stub
+func (a GatewayUnsupported) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
+	return ListObjectsInfo{}, NotImplemented{}
+}
+
 // HealObject - Not implemented stub
 func (a GatewayUnsupported) HealObject(ctx context.Context, bucket, object string, dryRun, remove bool, scanMode madmin.HealScanMode) (h madmin.HealResultItem, e error) {
 	return h, NotImplemented{}

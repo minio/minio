@@ -148,12 +148,18 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	initNSLock(false) // Enable local namespace lock.
 
+	// Set when gateway is enabled
+	globalIsGateway = true
+
 	router := mux.NewRouter().SkipClean(true)
 
 	if globalEtcdClient != nil {
 		// Enable STS router if etcd is enabled.
 		registerSTSRouter(router)
 	}
+
+	// initialize globalTrace system
+	globalTrace = NewTraceSys(context.Background(), globalEndpoints)
 
 	enableConfigOps := globalEtcdClient != nil && gatewayName == "nas"
 	enableIAMOps := globalEtcdClient != nil
@@ -303,9 +309,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// Print gateway startup message.
 		printGatewayStartupMessage(getAPIEndpoints(), gatewayName)
 	}
-
-	// Set when gateway is enabled
-	globalIsGateway = true
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = UTCNow()
