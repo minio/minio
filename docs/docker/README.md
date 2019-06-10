@@ -58,6 +58,35 @@ docker run -p 9000:9000 --name minio1 \
   minio/minio server /data
 ```
 
+### Run MinIO Docker as non root user
+MinIO server runs as non-root within the container by default. However, this is applicable only if you're deploying new MinIO instance (not upgrading from older releases). Deployments upgrading from older MinIO deployments, will continue to run as the user previously used if any.
+
+By default `minio` is username and groupname. Use environment variables `MINIO_USERNAME` and `MINIO_GROUPNAME` to override these default values.
+
+#### GNU/Linux and macOS
+```sh
+docker run -p 9000:9000 --name minio1 \
+  -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
+  -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
+  -e "MINIO_USERNAME=custom" \
+  -e "MINIO_GROUPNAME=custom" \
+  -v /mnt/data:/data \
+  -v /mnt/config:/root/.minio \
+  minio/minio server /data
+```
+
+#### Windows
+```powershell
+docker run -p 9000:9000 --name minio1 \
+  -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
+  -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
+  -e "MINIO_USERNAME=custom" \
+  -e "MINIO_GROUPNAME=custom" \
+  -v D:\data:/data \
+  -v D:\minio\config:/root/.minio \
+  minio/minio server /data
+```
+
 ### MinIO Custom Access and Secret Keys using Docker secrets
 To override MinIO's auto-generated keys, you may pass secret and access keys explicitly by creating access and secret keys as [Docker secrets](https://docs.docker.com/engine/swarm/secrets/). MinIO server also allows regular strings as access and secret keys.
 
