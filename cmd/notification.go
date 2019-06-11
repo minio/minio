@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
 )
@@ -228,6 +229,24 @@ func (sys *NotificationSys) LoadUsers() []NotificationPeerErr {
 		ng.Go(context.Background(), client.LoadUsers, idx, *client.host)
 	}
 	return ng.Wait()
+}
+
+// BackgroundHealStatus - returns background heal status of all peers
+func (sys *NotificationSys) BackgroundHealStatus() []madmin.BgHealState {
+	states := make([]madmin.BgHealState, len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		st, err := client.BackgroundHealStatus()
+		if err != nil {
+			logger.LogIf(context.Background(), err)
+		} else {
+			states[idx] = st
+		}
+	}
+
+	return states
 }
 
 // StartProfiling - start profiling on remote peers, by initiating a remote RPC.

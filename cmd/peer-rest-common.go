@@ -26,6 +26,7 @@ const (
 	peerRESTMethodDrivePerfInfo            = "driveperfinfo"
 	peerRESTMethodDeleteBucket             = "deletebucket"
 	peerRESTMethodSignalService            = "signalservice"
+	peerRESTMethodBackgroundHealStatus     = "backgroundhealstatus"
 	peerRESTMethodGetLocks                 = "getlocks"
 	peerRESTMethodBucketPolicyRemove       = "removebucketpolicy"
 	peerRESTMethodLoadUser                 = "loaduser"

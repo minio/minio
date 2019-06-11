@@ -60,6 +60,18 @@ func newBgHealSequence(numDisks int) *healSequence {
 	}
 }
 
+func getLocalBackgroundHealStatus() madmin.BgHealState {
+	backgroundSequence, ok := globalSweepHealState.getHealSequenceByToken(bgHealingUUID)
+	if !ok {
+		return madmin.BgHealState{}
+	}
+
+	return madmin.BgHealState{
+		ScannedItemsCount: backgroundSequence.scannedItemsCount,
+		LastHealActivity:  backgroundSequence.lastHealActivity,
+	}
+}
+
 func initDailyHeal() {
 	go startDailyHeal()
 }

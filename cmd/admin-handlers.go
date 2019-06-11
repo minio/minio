@@ -785,6 +785,49 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	keepConnLive(w, respCh)
 }
 
+func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "HealBackgroundStatus")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	// Check if this setup has an erasure coded backend.
+	if !globalIsXL {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
+		return
+	}
+
+	var bgHealStates []madmin.BgHealState
+
+	// Get local heal status first
+	bgHealStates = append(bgHealStates, getLocalBackgroundHealStatus())
+
+	if globalIsDistXL {
+		// Get heal status from other peers
+		peersHealStates := globalNotificationSys.BackgroundHealStatus()
+		bgHealStates = append(bgHealStates, peersHealStates...)
+	}
+
+	// Aggregate healing result
+	var aggregatedHealStateResult = madmin.BgHealState{}
+	for _, state := range bgHealStates {
+		aggregatedHealStateResult.ScannedItemsCount += state.ScannedItemsCount
+		if aggregatedHealStateResult.LastHealActivity.Before(state.LastHealActivity) {
+			aggregatedHealStateResult.LastHealActivity = state.LastHealActivity
+		}
+
+	}
+
+	if err := json.NewEncoder(w).Encode(aggregatedHealStateResult); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	w.(http.Flusher).Flush()
+}
+
 // GetConfigHandler - GET /minio/admin/v1/config
 // Get config.json of this minio setup.
 func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {

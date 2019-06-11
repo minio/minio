@@ -31,6 +31,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
 )
@@ -420,6 +421,18 @@ func (client *peerRESTClient) SignalService(sig serviceSignal) error {
 	}
 	defer http.DrainBody(respBody)
 	return nil
+}
+
+func (client *peerRESTClient) BackgroundHealStatus() (madmin.BgHealState, error) {
+	respBody, err := client.call(peerRESTMethodBackgroundHealStatus, nil, nil, -1)
+	if err != nil {
+		return madmin.BgHealState{}, err
+	}
+	defer http.DrainBody(respBody)
+
+	state := madmin.BgHealState{}
+	err = gob.NewDecoder(respBody).Decode(&state)
+	return state, err
 }
 
 // Trace - send http trace request to peer nodes
