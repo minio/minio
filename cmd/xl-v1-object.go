@@ -579,7 +579,6 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// a slash separator, we treat it like a valid operation and
 	// return success.
 	if isObjectDir(object, data.Size()) {
-		return dirObjectInfo(bucket, object, data.Size(), opts.UserDefined), nil
 		// Check if an object is present as one of the parent dir.
 		// -- FIXME. (needs a new kind of lock).
 		// -- FIXME (this also causes performance issue when disks are down).
