@@ -763,7 +763,7 @@ func reloadPolicy(ctx context.Context, objectAPI ObjectLayer, prefix string,
 	if err = json.Unmarshal(pdata, &p); err != nil {
 		return err
 	}
-	cannedPolicyMap[path.Base(prefix)] = p
+	cannedPolicyMap[policyName] = p
 	return nil
 }
 
@@ -778,7 +778,8 @@ func reloadPolicies(objectAPI ObjectLayer, prefix string, cannedPolicyMap map[st
 		}
 		marker = lo.NextMarker
 		for _, prefix := range lo.Prefixes {
-			if err = reloadPolicy(context.Background(), objectAPI, "", prefix, cannedPolicyMap); err != nil {
+			if err = reloadPolicy(context.Background(), objectAPI, iamConfigPoliciesPrefix,
+				path.Base(prefix), cannedPolicyMap); err != nil {
 				return err
 			}
 		}
