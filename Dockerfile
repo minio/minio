@@ -27,7 +27,7 @@ COPY --from=0 /usr/bin/check-user /usr/bin/check-user
 COPY dockerscripts/docker-entrypoint.sh /usr/bin/
 
 RUN  \
-     apk add --no-cache ca-certificates 'curl>7.61.0' && \
+     apk add --no-cache ca-certificates 'curl>7.61.0' 'su-exec>=0.2' && \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf
 
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
