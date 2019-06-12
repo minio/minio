@@ -60,7 +60,12 @@ docker_switch_user() {
             return
         fi
     fi
-    exec su-exec "${owner}" "$@"
+    # check if su-exec is allowed, if yes proceed proceed.
+    if su-exec "${owner}" "/bin/ls" >/dev/null 2>&1; then
+        exec su-exec "${owner}" "$@"
+    fi
+    # fallback
+    exec "$@"
 }
 
 ## Set access env from secrets if necessary.
