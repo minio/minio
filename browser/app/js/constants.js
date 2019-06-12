@@ -31,3 +31,10 @@ export const SHARE_OBJECT_EXPIRY_MINUTES = 0
 
 export const ACCESS_KEY_MIN_LENGTH = 3
 export const SECRET_KEY_MIN_LENGTH = 8
+
+export const SORT_BY_NAME = "name"
+export const SORT_BY_SIZE = "size"
+export const SORT_BY_LAST_MODIFIED = "last-modified"
+
+export const SORT_ORDER_ASC = "asc"
+export const SORT_ORDER_DESC = "desc"
