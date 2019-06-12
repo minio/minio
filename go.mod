@@ -14,6 +14,7 @@ require (
 	github.com/bcicen/jstream v0.0.0-20190220045926-16c1f8af81c2
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coredns/coredns v1.4.0
+	github.com/coreos/bbolt v1.3.3 // indirect
 	github.com/coreos/etcd v3.3.12+incompatible
 	github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
@@ -64,7 +65,8 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/nats-io/gnatsd v1.4.1 // indirect
-	github.com/nats-io/nats v1.7.2
+	github.com/nats-io/go-nats-streaming v0.4.4 // indirect
+	github.com/nats-io/nats-server v1.4.1 // indirect
 	github.com/nats-io/nats-streaming-server v0.14.2 // indirect
 	github.com/nats-io/nats.go v1.8.0
 	github.com/nats-io/stan.go v0.4.5
@@ -84,12 +86,11 @@ require (
 	github.com/tidwall/pretty v1.0.0 // indirect
 	github.com/tidwall/sjson v1.0.4
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
+	go.etcd.io/bbolt v1.3.3 // indirect
 	go.uber.org/atomic v1.3.2
 	golang.org/x/crypto v0.0.0-20190605123033-f99c8df09eb5
-	golang.org/x/lint v0.0.0-20190409202823-959b441ac422 // indirect
-	golang.org/x/net v0.0.0-20190607181551-461777fb6f67
+	golang.org/x/net v0.0.0-20190607181551-461777fb6f67 // indirect
 	golang.org/x/sys v0.0.0-20190610200419-93c9922d18ae
-	golang.org/x/tools v0.0.0-20190610231749-f8d1dee965f7 // indirect
 	google.golang.org/api v0.4.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
 	gopkg.in/olivere/elastic.v5 v5.0.80
