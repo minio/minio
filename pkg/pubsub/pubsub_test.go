@@ -19,12 +19,19 @@ package pubsub
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestSubscribe(t *testing.T) {
 	ps := New()
-	ps.Subscribe()
-	ps.Subscribe()
+	ch1 := make(chan interface{}, 1)
+	ch2 := make(chan interface{}, 1)
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+	ps.Subscribe(ch1, doneCh, nil)
+	ps.Subscribe(ch2, doneCh, nil)
+	ps.mutex.Lock()
+	defer ps.mutex.Unlock()
 	if len(ps.subs) != 2 {
 		t.Errorf("expected 2 subscribers")
 	}
@@ -32,20 +39,33 @@ func TestSubscribe(t *testing.T) {
 
 func TestUnsubscribe(t *testing.T) {
 	ps := New()
-	c1 := ps.Subscribe()
-	ps.Subscribe()
-	ps.Unsubscribe(c1)
+	ch1 := make(chan interface{}, 1)
+	ch2 := make(chan interface{}, 1)
+	doneCh1 := make(chan struct{})
+	doneCh2 := make(chan struct{})
+	ps.Subscribe(ch1, doneCh1, nil)
+	ps.Subscribe(ch2, doneCh2, nil)
+
+	close(doneCh1)
+	// Allow for the above statement to take effect.
+	time.Sleep(100 * time.Millisecond)
+	ps.mutex.Lock()
 	if len(ps.subs) != 1 {
 		t.Errorf("expected 1 subscriber")
 	}
+	ps.mutex.Unlock()
+	close(doneCh2)
 }
 
 func TestPubSub(t *testing.T) {
 	ps := New()
-	c1 := ps.Subscribe()
+	ch1 := make(chan interface{}, 1)
+	doneCh1 := make(chan struct{})
+	defer close(doneCh1)
+	ps.Subscribe(ch1, doneCh1, func(entry interface{}) bool { return true })
 	val := "hello"
 	ps.Publish(val)
-	msg := <-c1
+	msg := <-ch1
 	if msg != "hello" {
 		t.Errorf(fmt.Sprintf("expected %s , found %s", val, msg))
 	}
@@ -53,13 +73,17 @@ func TestPubSub(t *testing.T) {
 
 func TestMultiPubSub(t *testing.T) {
 	ps := New()
-	c1 := ps.Subscribe()
-	c2 := ps.Subscribe()
+	ch1 := make(chan interface{}, 1)
+	ch2 := make(chan interface{}, 1)
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+	ps.Subscribe(ch1, doneCh, func(entry interface{}) bool { return true })
+	ps.Subscribe(ch2, doneCh, func(entry interface{}) bool { return true })
 	val := "hello"
 	ps.Publish(val)
 
-	msg1 := <-c1
-	msg2 := <-c2
+	msg1 := <-ch1
+	msg2 := <-ch2
 	if msg1 != "hello" && msg2 != "hello" {
 		t.Errorf(fmt.Sprintf("expected both subscribers to have%s , found %s and  %s", val, msg1, msg2))
 	}

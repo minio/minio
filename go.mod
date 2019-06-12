@@ -20,6 +20,7 @@ require (
 	github.com/djherbis/atime v1.0.0
 	github.com/dnaeon/go-vcr v1.0.1 // indirect
 	github.com/dustin/go-humanize v1.0.0
+	github.com/eapache/go-resiliency v1.2.0 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.1.2-0.20190322152051-20337d8c3947
 	github.com/elazarl/go-bindata-assetfs v1.0.0
 	github.com/fatih/color v1.7.0

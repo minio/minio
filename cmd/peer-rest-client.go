@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -33,6 +32,7 @@ import (
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
+	trace "github.com/minio/minio/pkg/trace"
 )
 
 // client to talk to peer Nodes.
@@ -423,51 +423,49 @@ func (client *peerRESTClient) SignalService(sig serviceSignal) error {
 }
 
 // Trace - send http trace request to peer nodes
-func (client *peerRESTClient) Trace(doneCh chan struct{}, trcAll bool) (chan []byte, error) {
-	ch := make(chan []byte)
+func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh chan struct{}, trcAll bool) {
 	go func() {
-		cleanupFn := func(cancel context.CancelFunc, ch chan []byte, respBody io.ReadCloser) {
-			close(ch)
-			if cancel != nil {
-				cancel()
-			}
-			http.DrainBody(respBody)
-		}
 		for {
 			values := make(url.Values)
 			values.Set(peerRESTTraceAll, strconv.FormatBool(trcAll))
+
 			// get cancellation context to properly unsubscribe peers
 			ctx, cancel := context.WithCancel(context.Background())
 			respBody, err := client.callWithContext(ctx, peerRESTMethodTrace, values, nil, -1)
 			if err != nil {
-				//retry
+				// Retry the failed request.
 				time.Sleep(5 * time.Second)
-				select {
-				case <-doneCh:
-					cleanupFn(cancel, ch, respBody)
-					return
-				default:
+			} else {
+				dec := gob.NewDecoder(respBody)
+
+				go func() {
+					<-doneCh
+					// cancel() the request so that bio.Scan() can return.
+					cancel()
+				}()
+
+				for {
+					var info trace.Info
+					if err = dec.Decode(&info); err != nil {
+						break
+					}
+					select {
+					case traceCh <- info:
+					default:
+					}
 				}
-				continue
 			}
-			bio := bufio.NewScanner(respBody)
-			go func() {
-				<-doneCh
-				cancel()
-			}()
-			// Unmarshal each line, returns marshaled values.
-			for bio.Scan() {
-				ch <- bio.Bytes()
-			}
+
 			select {
 			case <-doneCh:
-				cleanupFn(cancel, ch, respBody)
+				cancel()
+				http.DrainBody(respBody)
 				return
 			default:
+				// There was error in the REST request, retry.
 			}
 		}
 	}()
-	return ch, nil
 }
 
 func getRemoteHosts(endpoints EndpointList) []*xnet.Host {
