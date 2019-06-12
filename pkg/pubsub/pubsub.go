@@ -20,64 +20,65 @@ import (
 	"sync"
 )
 
+// Sub - subscriber entity.
+type Sub struct {
+	ch     chan interface{}
+	filter func(entry interface{}) bool
+}
+
 // PubSub holds publishers and subscribers
 type PubSub struct {
-	subs  []chan interface{}
-	pub   chan interface{}
-	mutex sync.Mutex
+	subs []*Sub
+	sync.RWMutex
 }
 
-// process item to subscribers.
-func (ps *PubSub) process() {
-	for item := range ps.pub {
-		ps.mutex.Lock()
-		for _, sub := range ps.subs {
-			go func(s chan interface{}) {
-				s <- item
-			}(sub)
-		}
-		ps.mutex.Unlock()
-	}
-}
-
-// Publish message to pubsub system
+// Publish message to the subscribers.
+// Note that publish is always nob-blocking send so that we don't block on slow receivers.
+// Hence receivers should use buffered channel so as not to miss the published events.
 func (ps *PubSub) Publish(item interface{}) {
-	ps.pub <- item
+	ps.RLock()
+	defer ps.RUnlock()
+
+	for _, sub := range ps.subs {
+		if sub.filter(item) {
+			select {
+			case sub.ch <- item:
+			default:
+			}
+		}
+	}
 }
 
 // Subscribe - Adds a subscriber to pubsub system
-func (ps *PubSub) Subscribe() chan interface{} {
-	ps.mutex.Lock()
-	defer ps.mutex.Unlock()
-	ch := make(chan interface{})
-	ps.subs = append(ps.subs, ch)
-	return ch
-}
+func (ps *PubSub) Subscribe(subCh chan interface{}, doneCh chan struct{}, filter func(entry interface{}) bool) {
+	ps.Lock()
+	defer ps.Unlock()
 
-// Unsubscribe removes current subscriber
-func (ps *PubSub) Unsubscribe(ch chan interface{}) {
-	ps.mutex.Lock()
-	defer ps.mutex.Unlock()
+	sub := &Sub{subCh, filter}
+	ps.subs = append(ps.subs, sub)
 
-	for i, sub := range ps.subs {
-		if sub == ch {
-			close(ch)
-			ps.subs = append(ps.subs[:i], ps.subs[i+1:]...)
+	go func() {
+		<-doneCh
+
+		ps.Lock()
+		defer ps.Unlock()
+
+		for i, s := range ps.subs {
+			if s == sub {
+				ps.subs = append(ps.subs[:i], ps.subs[i+1:]...)
+			}
 		}
-	}
+	}()
 }
 
 // HasSubscribers returns true if pubsub system has subscribers
 func (ps *PubSub) HasSubscribers() bool {
-	ps.mutex.Lock()
-	defer ps.mutex.Unlock()
+	ps.RLock()
+	defer ps.RUnlock()
 	return len(ps.subs) > 0
 }
 
 // New inits a PubSub system
 func New() *PubSub {
-	ps := &PubSub{}
-	ps.pub = make(chan interface{})
-	go ps.process()
-	return ps
+	return &PubSub{}
 }

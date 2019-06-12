@@ -35,6 +35,7 @@ import (
 	"github.com/minio/minio/pkg/dns"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/iam/validator"
+	"github.com/minio/minio/pkg/pubsub"
 )
 
 // minio configuration related constants.
@@ -161,7 +162,7 @@ var (
 
 	// global Trace system to send HTTP request/response logs to
 	// registered listeners
-	globalTrace *HTTPTraceSys
+	globalHTTPTrace = pubsub.New()
 
 	globalEndpoints EndpointList
 

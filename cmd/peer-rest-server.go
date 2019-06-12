@@ -19,7 +19,6 @@ package cmd
 import (
 	"context"
 	"encoding/gob"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -679,32 +678,33 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "close")
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
-	ch := globalTrace.pubsub.Subscribe()
-	defer globalTrace.pubsub.Unsubscribe(ch)
 
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
+	filter := func(entry interface{}) bool {
+		if trcAll {
+			return true
+		}
+		trcInfo := entry.(trace.Info)
+		return !strings.HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath)
+	}
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	// Trace Publisher uses nonblocking publish and hence does not wait for slow subscribers.
+	// Use buffered channel to take care of burst sends or slow w.Write()
+	ch := make(chan interface{}, 2000)
+	globalHTTPTrace.Subscribe(ch, doneCh, filter)
+
+	enc := gob.NewEncoder(w)
 	for {
 		select {
 		case entry := <-ch:
-			trcInfo := entry.(trace.Info)
-			path := strings.TrimPrefix(trcInfo.ReqInfo.Path, "/")
-			// omit inter-node traffic if trcAll is false
-			if !trcAll && strings.HasPrefix(path, minioReservedBucket) {
-				continue
-			}
-
-			if err := enc.Encode(trcInfo); err != nil {
-				return
-			}
-
-			if _, err := w.Write([]byte("\n")); err != nil {
+			if err := enc.Encode(entry); err != nil {
 				return
 			}
 			w.(http.Flusher).Flush()
 		case <-r.Context().Done():
 			return
-
 		}
 	}
 }
