@@ -240,9 +240,6 @@ func newS3(urlStr string) (*miniogo.Core, error) {
 
 	probeBucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "probe-bucket-sign-")
 
-	// Set maximum retry operations.
-	miniogo.MaxRetry = 1
-
 	// Check if the provided keys are valid.
 	if _, err = clnt.BucketExists(probeBucketName); err != nil {
 		if miniogo.ToErrorResponse(err).Code != "AccessDenied" {

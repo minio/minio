@@ -57,7 +57,7 @@ require (
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/lsync v0.1.0
 	github.com/minio/mc v0.0.0-20190529152718-f4bb0b8850cb
-	github.com/minio/minio-go/v6 v6.0.28
+	github.com/minio/minio-go/v6 v6.0.29
 	github.com/minio/parquet-go v0.0.0-20190318185229-9d767baf1679
 	github.com/minio/sha256-simd v0.1.0
 	github.com/minio/sio v0.2.0
