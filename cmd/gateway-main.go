@@ -181,9 +181,10 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Currently only NAS and S3 gateway support encryption headers.
 	encryptionEnabled := gatewayName == "s3" || gatewayName == "nas"
+	allowSSEKMS := gatewayName == "s3" // Only S3 can support SSE-KMS (as pass-through)
 
 	// Add API router.
-	registerAPIRouter(router, encryptionEnabled)
+	registerAPIRouter(router, encryptionEnabled, allowSSEKMS)
 
 	var getCert certs.GetCertificateFunc
 	if globalTLSCerts != nil {
