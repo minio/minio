@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	etcd "github.com/coreos/etcd/clientv3"
 	"github.com/minio/minio/cmd/logger"
@@ -53,8 +52,19 @@ func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]b
 }
 
 func deleteConfigEtcd(ctx context.Context, client *etcd.Client, configFile string) error {
-	_, err := client.Delete(ctx, configFile)
-	return err
+	timeoutCtx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
+	defer cancel()
+
+	_, err := client.Delete(timeoutCtx, configFile)
+	if err != nil {
+		if err == context.DeadlineExceeded {
+			return fmt.Errorf("etcd setup is unreachable, please check your endpoints %s",
+				client.Endpoints())
+		}
+		return fmt.Errorf("unexpected error %s returned by etcd setup, please check your endpoints %s",
+			err, client.Endpoints())
+	}
+	return nil
 }
 
 func deleteConfig(ctx context.Context, objAPI ObjectLayer, configFile string) error {
@@ -89,9 +99,11 @@ func readConfigEtcd(ctx context.Context, client *etcd.Client, configFile string)
 	resp, err := client.Get(timeoutCtx, configFile)
 	if err != nil {
 		if err == context.DeadlineExceeded {
-			return nil, fmt.Errorf("etcd setup is unreachable, please check your endpoints %s", client.Endpoints())
+			return nil, fmt.Errorf("etcd setup is unreachable, please check your endpoints %s",
+				client.Endpoints())
 		}
-		return nil, fmt.Errorf("unexpected error %s returned by etcd setup, please check your endpoints %s", err, client.Endpoints())
+		return nil, fmt.Errorf("unexpected error %s returned by etcd setup, please check your endpoints %s",
+			err, client.Endpoints())
 	}
 	if resp.Count == 0 {
 		return nil, errConfigNotFound
@@ -104,54 +116,7 @@ func readConfigEtcd(ctx context.Context, client *etcd.Client, configFile string)
 	return nil, errConfigNotFound
 }
 
-// watchConfigEtcd - watches for changes on `configFile` on etcd and loads them.
-func watchConfigEtcd(objAPI ObjectLayer, configFile string, loadCfgFn func(ObjectLayer) error) {
-	for {
-		watchCh := globalEtcdClient.Watch(context.Background(), configFile)
-		select {
-		case <-GlobalServiceDoneCh:
-			return
-		case watchResp, ok := <-watchCh:
-			if !ok {
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			if err := watchResp.Err(); err != nil {
-				logger.LogIf(context.Background(), err)
-				// log and retry.
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			for _, event := range watchResp.Events {
-				if event.IsModify() || event.IsCreate() {
-					loadCfgFn(objAPI)
-				}
-			}
-		}
-	}
-}
-
-func checkConfigEtcd(ctx context.Context, client *etcd.Client, configFile string) error {
-	timeoutCtx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
-	defer cancel()
-	resp, err := client.Get(timeoutCtx, configFile)
-	if err != nil {
-		if err == context.DeadlineExceeded {
-			return fmt.Errorf("etcd setup is unreachable, please check your endpoints %s", client.Endpoints())
-		}
-		return fmt.Errorf("unexpected error %s returned by etcd setup, please check your endpoints %s", err, client.Endpoints())
-	}
-	if resp.Count == 0 {
-		return errConfigNotFound
-	}
-	return nil
-}
-
 func checkConfig(ctx context.Context, objAPI ObjectLayer, configFile string) error {
-	if globalEtcdClient != nil {
-		return checkConfigEtcd(ctx, globalEtcdClient, configFile)
-	}
-
 	if _, err := objAPI.GetObjectInfo(ctx, minioMetaBucket, configFile, ObjectOptions{}); err != nil {
 		// Treat object not found as config not found.
 		if isErrObjectNotFound(err) {
