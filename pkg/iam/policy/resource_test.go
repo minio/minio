@@ -18,6 +18,7 @@ package iampolicy
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -120,15 +121,17 @@ func TestResourceMatch(t *testing.T) {
 		{NewResource("*", "*"), "mybucket", false},
 		{NewResource("mybucket", "*"), "mybucket10/myobject", false},
 		{NewResource("mybucket?0", "/2010/photos/*"), "mybucket0/2010/photos/1.jpg", false},
-		{NewResource("mybucket", ""), "mybucket/myobject", true},
+		{NewResource("mybucket", ""), "mybucket/myobject", false},
 	}
 
 	for i, testCase := range testCases {
-		result := testCase.resource.Match(testCase.objectName, nil)
-
-		if result != testCase.expectedResult {
-			t.Fatalf("case %v: expected: %v, got: %v", i+1, testCase.expectedResult, result)
-		}
+		testCase := testCase
+		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
+			result := testCase.resource.Match(testCase.objectName, nil)
+			if result != testCase.expectedResult {
+				t.Errorf("case %v: expected: %v, got: %v", i+1, testCase.expectedResult, result)
+			}
+		})
 	}
 }
 

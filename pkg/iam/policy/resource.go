@@ -19,6 +19,7 @@ package iampolicy
 import (
 	"encoding/json"
 	"fmt"
+	"path"
 	"strings"
 
 	"github.com/minio/minio/pkg/policy/condition"
@@ -56,7 +57,7 @@ func (r Resource) Match(resource string, conditionValues map[string][]string) bo
 			pattern = strings.Replace(pattern, key.VarName(), rvalues[0], -1)
 		}
 	}
-	if strings.HasPrefix(resource, pattern) {
+	if path.Clean(resource) == pattern {
 		return true
 	}
 	return wildcard.Match(pattern, resource)
