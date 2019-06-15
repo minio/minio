@@ -56,8 +56,13 @@ func (r Resource) Match(resource string, conditionValues map[string][]string) bo
 			pattern = strings.Replace(pattern, key.VarName(), rvalues[0], -1)
 		}
 	}
-	if strings.HasPrefix(resource, pattern) {
+	if strings.EqualFold(resource, pattern) {
 		return true
+	}
+	if !strings.HasSuffix(pattern, "/") {
+		if strings.EqualFold(resource, pattern+"/") {
+			return true
+		}
 	}
 	return wildcard.Match(pattern, resource)
 }
