@@ -470,6 +470,9 @@ func resetGlobalStorageEnvs() {
 
 // reset global heal state
 func resetGlobalHealState() {
+	if globalAllHealState == nil {
+		return
+	}
 	globalAllHealState.Lock()
 	defer globalAllHealState.Unlock()
 	for _, v := range globalAllHealState.healSeqMap {

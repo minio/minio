@@ -159,8 +159,9 @@ var (
 	globalHTTPServerErrorCh = make(chan error)
 	globalOSSignalCh        = make(chan os.Signal, 1)
 
-	// File to log HTTP request/response headers and body.
-	globalHTTPTraceFile *os.File
+	// global Trace system to send HTTP request/response logs to
+	// registered listeners
+	globalTrace *HTTPTraceSys
 
 	globalEndpoints EndpointList
 
@@ -259,6 +260,11 @@ var (
 
 	// GlobalGatewaySSE sse options
 	GlobalGatewaySSE gatewaySSE
+
+	// The always present healing routine ready to heal objects
+	globalBackgroundHealing *healRoutine
+	globalAllHealState      *allHealState
+	globalSweepHealState    *allHealState
 
 	// Add new variable global values here.
 )

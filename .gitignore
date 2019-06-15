@@ -24,3 +24,4 @@ stage/
 .sia_temp/
 config.json
 healthcheck
+check-user

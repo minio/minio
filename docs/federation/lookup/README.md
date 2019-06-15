@@ -9,8 +9,8 @@ Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quicksta
 ### 2. Run MinIO in federated mode
 Bucket lookup from DNS federation requires two dependencies
 
-- etcd (for config, bucket SRV records)
-- CoreDNS (for DNS management based on populated bucket SRV records, optional)
+- etcd (for bucket DNS service records)
+- CoreDNS (for DNS management based on populated bucket DNS service records, optional)
 
 ## Architecture
 

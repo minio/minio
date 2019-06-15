@@ -73,6 +73,7 @@ build: checks
 	@echo "Building minio binary to './minio'"
 	@GO111MODULE=on GOFLAGS="" CGO_ENABLED=0 go build -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio 1>/dev/null
 	@GO111MODULE=on GOFLAGS="" CGO_ENABLED=0 go build -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/dockerscripts/healthcheck $(PWD)/dockerscripts/healthcheck.go 1>/dev/null
+	@GO111MODULE=on GOFLAGS="" CGO_ENABLED=0 go build -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/dockerscripts/check-user $(PWD)/dockerscripts/check-user.go 1>/dev/null
 
 docker: build
 	@docker build -t $(TAG) . -f Dockerfile.dev

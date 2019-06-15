@@ -211,13 +211,6 @@ func handleCommonEnvVars() {
 		globalIsBrowserEnabled = bool(browserFlag)
 	}
 
-	traceFile := os.Getenv("MINIO_HTTP_TRACE")
-	if traceFile != "" {
-		var err error
-		globalHTTPTraceFile, err = os.OpenFile(traceFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0660)
-		logger.FatalIf(err, "error opening file %s", traceFile)
-	}
-
 	etcdEndpointsEnv, ok := os.LookupEnv("MINIO_ETCD_ENDPOINTS")
 	if ok {
 		etcdEndpoints := strings.Split(etcdEndpointsEnv, ",")

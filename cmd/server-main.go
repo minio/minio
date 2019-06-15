@@ -38,7 +38,8 @@ func init() {
 	logger.RegisterUIError(fmtError)
 }
 
-var serverFlags = []cli.Flag{
+// ServerFlags - server command specific flags
+var ServerFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
 		Value: ":" + globalMinioDefaultPort,
@@ -49,7 +50,7 @@ var serverFlags = []cli.Flag{
 var serverCmd = cli.Command{
 	Name:   "server",
 	Usage:  "start object storage server",
-	Flags:  append(serverFlags, globalFlags...),
+	Flags:  append(ServerFlags, GlobalFlags...),
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
   {{.HelpName}} - {{.Usage}}
@@ -287,8 +288,14 @@ func serverMain(ctx *cli.Context) {
 	// Initialize name space lock.
 	initNSLock(globalIsDistXL)
 
-	// Init global heal state
-	initAllHealState(globalIsXL)
+	if globalIsXL {
+		// Init global heal state
+		globalAllHealState = initHealState()
+		globalSweepHealState = initHealState()
+	}
+
+	// initialize globalTrace system
+	globalTrace = NewTraceSys(context.Background(), globalEndpoints)
 
 	// Configure server.
 	var handler http.Handler
@@ -367,6 +374,12 @@ func serverMain(ctx *cli.Context) {
 	}
 	if globalAutoEncryption && !newObject.IsEncryptionSupported() {
 		logger.Fatal(errors.New("Invalid KMS configuration"), "auto-encryption is enabled but server does not support encryption")
+	}
+
+	if globalIsXL {
+		initBackgroundHealing()
+		initDailyHeal()
+		initDailySweeper()
 	}
 
 	globalObjLayerMutex.Lock()

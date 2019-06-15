@@ -431,8 +431,9 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 
 		// Save objects' metadata in `fs.json`.
 		fsMeta := newFSMetaV1()
-		if _, err = fsMeta.ReadFrom(ctx, wlk); err != nil && err != io.EOF {
-			return oi, toObjectErr(err, srcBucket, srcObject)
+		if _, err = fsMeta.ReadFrom(ctx, wlk); err != nil {
+			// For any error to read fsMeta, set default ETag and proceed.
+			fsMeta = fs.defaultFsJSON(srcObject)
 		}
 
 		fsMeta.Meta = srcInfo.UserDefined
@@ -710,10 +711,7 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 		_, rerr := fsMeta.ReadFrom(ctx, rlk.LockedFile)
 		fs.rwPool.Close(fsMetaPath)
 		if rerr != nil {
-			if rerr != io.EOF {
-				return oi, rerr
-			}
-			// Set Default ETag, if fs.json is empty
+			// For any error to read fsMeta, set default ETag and proceed.
 			fsMeta = fs.defaultFsJSON(object)
 		}
 	}
@@ -1149,6 +1147,12 @@ func (fs *FSObjects) HealObjects(ctx context.Context, bucket, prefix string, fn 
 func (fs *FSObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return []BucketInfo{}, NotImplemented{}
+}
+
+// ListObjectsHeal - list all objects to be healed. Valid only for XL
+func (fs *FSObjects) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
+	logger.LogIf(ctx, NotImplemented{})
+	return ListObjectsInfo{}, NotImplemented{}
 }
 
 // SetBucketPolicy sets policy on bucket

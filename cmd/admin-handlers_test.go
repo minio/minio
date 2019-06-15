@@ -268,7 +268,9 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	initNSLock(isDistXL)
 
 	// Init global heal state
-	initAllHealState(globalIsXL)
+	if globalIsXL {
+		globalAllHealState = initHealState()
+	}
 
 	globalConfigSys = NewConfigSys()
 

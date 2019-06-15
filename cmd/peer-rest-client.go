@@ -17,12 +17,15 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/gob"
 	"io"
 	"net/url"
+	"strconv"
+	"time"
 
 	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -51,9 +54,16 @@ func (client *peerRESTClient) reConnect() error {
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *peerRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
+	return client.callWithContext(context.Background(), method, values, body, length)
+}
+
+// Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
+// permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
+// after verifying format.json
+func (client *peerRESTClient) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
 	if !client.connected {
 		err := client.reConnect()
-		logger.LogIf(context.Background(), err)
+		logger.LogIf(ctx, err)
 		if err != nil {
 			return nil, err
 		}
@@ -63,7 +73,7 @@ func (client *peerRESTClient) call(method string, values url.Values, body io.Rea
 		values = make(url.Values)
 	}
 
-	respBody, err = client.restClient.Call(method, values, body, length)
+	respBody, err = client.restClient.CallWithContext(ctx, method, values, body, length)
 	if err == nil {
 		return respBody, nil
 	}
@@ -337,6 +347,59 @@ func (client *peerRESTClient) PutBucketNotification(bucket string, rulesMap even
 	return nil
 }
 
+// DeletePolicy - delete a specific canned policy.
+func (client *peerRESTClient) DeletePolicy(policyName string) (err error) {
+	values := make(url.Values)
+	values.Set(peerRESTPolicy, policyName)
+
+	respBody, err := client.call(peerRESTMethodDeletePolicy, values, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// LoadPolicy - reload a specific canned policy.
+func (client *peerRESTClient) LoadPolicy(policyName string) (err error) {
+	values := make(url.Values)
+	values.Set(peerRESTPolicy, policyName)
+
+	respBody, err := client.call(peerRESTMethodLoadPolicy, values, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// DeleteUser - delete a specific user.
+func (client *peerRESTClient) DeleteUser(accessKey string) (err error) {
+	values := make(url.Values)
+	values.Set(peerRESTUser, accessKey)
+
+	respBody, err := client.call(peerRESTMethodDeleteUser, values, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// LoadUser - reload a specific user.
+func (client *peerRESTClient) LoadUser(accessKey string, temp bool) (err error) {
+	values := make(url.Values)
+	values.Set(peerRESTUser, accessKey)
+	values.Set(peerRESTUserTemp, strconv.FormatBool(temp))
+
+	respBody, err := client.call(peerRESTMethodLoadUser, values, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 // LoadUsers - send load users command to peer nodes.
 func (client *peerRESTClient) LoadUsers() (err error) {
 	respBody, err := client.call(peerRESTMethodLoadUsers, nil, nil, -1)
@@ -357,6 +420,54 @@ func (client *peerRESTClient) SignalService(sig serviceSignal) error {
 	}
 	defer http.DrainBody(respBody)
 	return nil
+}
+
+// Trace - send http trace request to peer nodes
+func (client *peerRESTClient) Trace(doneCh chan struct{}, trcAll bool) (chan []byte, error) {
+	ch := make(chan []byte)
+	go func() {
+		cleanupFn := func(cancel context.CancelFunc, ch chan []byte, respBody io.ReadCloser) {
+			close(ch)
+			if cancel != nil {
+				cancel()
+			}
+			http.DrainBody(respBody)
+		}
+		for {
+			values := make(url.Values)
+			values.Set(peerRESTTraceAll, strconv.FormatBool(trcAll))
+			// get cancellation context to properly unsubscribe peers
+			ctx, cancel := context.WithCancel(context.Background())
+			respBody, err := client.callWithContext(ctx, peerRESTMethodTrace, values, nil, -1)
+			if err != nil {
+				//retry
+				time.Sleep(5 * time.Second)
+				select {
+				case <-doneCh:
+					cleanupFn(cancel, ch, respBody)
+					return
+				default:
+				}
+				continue
+			}
+			bio := bufio.NewScanner(respBody)
+			go func() {
+				<-doneCh
+				cancel()
+			}()
+			// Unmarshal each line, returns marshaled values.
+			for bio.Scan() {
+				ch <- bio.Bytes()
+			}
+			select {
+			case <-doneCh:
+				cleanupFn(cancel, ch, respBody)
+				return
+			default:
+			}
+		}
+	}()
+	return ch, nil
 }
 
 func getRemoteHosts(endpoints EndpointList) []*xnet.Host {

@@ -116,6 +116,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 	// Top locks
 	adminV1Router.Methods(http.MethodGet).Path("/top/locks").HandlerFunc(httpTraceHdrs(adminAPI.TopLocksHandler))
 
+	// HTTP Trace
+	adminV1Router.Methods(http.MethodGet).Path("/trace").HandlerFunc(adminAPI.TraceHandler)
 	// If none of the routes match, return error.
 	adminV1Router.NotFoundHandler = http.HandlerFunc(httpTraceHdrs(notFoundHandlerJSON))
 }

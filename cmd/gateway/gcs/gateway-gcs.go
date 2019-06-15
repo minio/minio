@@ -395,10 +395,6 @@ func (l *gcsGateway) CleanupGCSMinioSysTmp(ctx context.Context) {
 		for {
 			attrs, err := it.Next()
 			if err != nil {
-				if err != iterator.Done {
-					ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{})
-					logger.LogIf(ctx, err)
-				}
 				break
 			}
 			l.CleanupGCSMinioSysTmpBucket(ctx, attrs.Name)
@@ -461,7 +457,6 @@ func (l *gcsGateway) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 		}
 
 		if ierr != nil {
-			logger.LogIf(ctx, ierr)
 			return buckets, gcsToObjectError(ierr)
 		}
 
