@@ -49,10 +49,6 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config *serverCon
 	}
 
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
-	if globalEtcdClient != nil {
-		return saveConfigEtcd(ctx, globalEtcdClient, configFile, data)
-	}
-
 	// Create a backup of the current config
 	oldData, err := readConfig(ctx, objAPI, configFile)
 	if err == nil {
@@ -71,15 +67,8 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config *serverCon
 }
 
 func readServerConfig(ctx context.Context, objAPI ObjectLayer) (*serverConfig, error) {
-	var configData []byte
-	var err error
-
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
-	if globalEtcdClient != nil {
-		configData, err = readConfigEtcd(ctx, globalEtcdClient, configFile)
-	} else {
-		configData, err = readConfig(ctx, objAPI, configFile)
-	}
+	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
 		return nil, err
 	}
@@ -152,44 +141,24 @@ func initConfig(objAPI ObjectLayer) error {
 		return errServerNotInitialized
 	}
 
-	configFile := path.Join(minioConfigPrefix, minioConfigFile)
-
-	if globalEtcdClient != nil {
-		if err := checkConfigEtcd(context.Background(), globalEtcdClient, getConfigFile()); err != nil {
-			if err == errConfigNotFound {
-				// Migrates all configs at old location.
-				if err = migrateConfig(); err != nil {
-					return err
-				}
-				// Migrates etcd ${HOME}/.minio/config.json to '/config/config.json'
-				if err = migrateConfigToMinioSys(objAPI); err != nil {
-					return err
-				}
-			} else {
-				return err
-			}
-		}
-
-		// Watch config for changes and reloads them.
-		go watchConfigEtcd(objAPI, configFile, loadConfig)
-
-	} else {
-		if isFile(getConfigFile()) {
-			if err := migrateConfig(); err != nil {
-				return err
-			}
-		}
-		// Migrates ${HOME}/.minio/config.json or config.json.deprecated
-		// to '<export_path>/.minio.sys/config/config.json'
-		// ignore if the file doesn't exist.
-		if err := migrateConfigToMinioSys(objAPI); err != nil {
+	if isFile(getConfigFile()) {
+		if err := migrateConfig(); err != nil {
 			return err
 		}
+	}
 
-		// Migrates backend '<export_path>/.minio.sys/config/config.json' to latest version.
-		if err := migrateMinioSysConfig(objAPI); err != nil {
-			return err
-		}
+	// Migrates ${HOME}/.minio/config.json or config.json.deprecated
+	// to '<export_path>/.minio.sys/config/config.json'
+	// ignore if the file doesn't exist.
+	// If etcd is set then migrates /config/config.json
+	// to '<export_path>/.minio.sys/config/config.json'
+	if err := migrateConfigToMinioSys(objAPI); err != nil {
+		return err
+	}
+
+	// Migrates backend '<export_path>/.minio.sys/config/config.json' to latest version.
+	if err := migrateMinioSysConfig(objAPI); err != nil {
+		return err
 	}
 
 	return loadConfig(objAPI)
