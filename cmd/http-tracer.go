@@ -118,12 +118,26 @@ func (r *recordResponseWriter) Body() []byte {
 	return r.body.Bytes()
 }
 
+// getOpName sanitizes the operation name for mc
+func getOpName(name string) (op string) {
+	op = strings.TrimPrefix(name, "github.com/minio/minio/cmd.")
+	op = strings.TrimSuffix(op, "Handler-fm")
+	op = strings.Replace(op, "objectAPIHandlers", "s3", 1)
+	op = strings.Replace(op, "webAPIHandlers", "s3", 1)
+	op = strings.Replace(op, "adminAPIHandlers", "admin", 1)
+	op = strings.Replace(op, "(*storageRESTServer)", "internal", 1)
+	op = strings.Replace(op, "(*peerRESTServer)", "internal", 1)
+	op = strings.Replace(op, "(*lockRESTServer)", "internal", 1)
+	op = strings.Replace(op, "stsAPIHandlers", "sts", 1)
+	op = strings.Replace(op, "LivenessCheckHandler", "healthcheck", 1)
+	op = strings.Replace(op, "ReadinessCheckHandler", "healthcheck", 1)
+	return op
+}
+
 // Trace gets trace of http request
 func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Request) trace.Info {
 
-	name := runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
-	name = strings.TrimPrefix(name, "github.com/minio/minio/cmd.")
-	name = strings.TrimSuffix(name, "Handler-fm")
+	name := getOpName(runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name())
 
 	bodyPlaceHolder := []byte("<BODY>")
 	var reqBodyRecorder *recordRequest
@@ -136,7 +150,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	if err == nil {
 		t.NodeName = host.Name
 	}
-	rq := trace.RequestInfo{Time: time.Now().UTC(), Method: r.Method, Path: r.URL.Path, RawQuery: r.URL.RawQuery}
+	rq := trace.RequestInfo{Time: time.Now().UTC(), Method: r.Method, Path: r.URL.Path, RawQuery: r.URL.RawQuery, Client: r.RemoteAddr}
 	rq.Headers = cloneHeader(r.Header)
 	rq.Headers.Set("Content-Length", strconv.Itoa(int(r.ContentLength)))
 	rq.Headers.Set("Host", r.Host)
