@@ -85,9 +85,6 @@ func (sys *PolicySys) Remove(bucketName string) {
 
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
 func (sys *PolicySys) IsAllowed(args policy.Args) bool {
-	sys.RLock()
-	defer sys.RUnlock()
-
 	if globalIsGateway {
 		// When gateway is enabled, no cached value
 		// is used to validate bucket policies.
@@ -99,6 +96,9 @@ func (sys *PolicySys) IsAllowed(args policy.Args) bool {
 			}
 		}
 	} else {
+		sys.RLock()
+		defer sys.RUnlock()
+
 		// If policy is available for given bucket, check the policy.
 		if p, found := sys.bucketPolicyMap[args.BucketName]; found {
 			return p.IsAllowed(args)
@@ -114,7 +114,6 @@ func (sys *PolicySys) IsAllowed(args policy.Args) bool {
 func (sys *PolicySys) refresh(objAPI ObjectLayer) error {
 	buckets, err := objAPI.ListBuckets(context.Background())
 	if err != nil {
-		logger.LogIf(context.Background(), err)
 		return err
 	}
 	sys.removeDeletedBuckets(buckets)

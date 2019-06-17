@@ -41,14 +41,14 @@ var (
 	gatewayCmd = cli.Command{
 		Name:            "gateway",
 		Usage:           "start object storage gateway",
-		Flags:           append(serverFlags, globalFlags...),
+		Flags:           append(ServerFlags, GlobalFlags...),
 		HideHelpCommand: true,
 	}
 )
 
 // RegisterGatewayCommand registers a new command for gateway.
 func RegisterGatewayCommand(cmd cli.Command) error {
-	cmd.Flags = append(append(cmd.Flags, append(cmd.Flags, serverFlags...)...), globalFlags...)
+	cmd.Flags = append(append(cmd.Flags, append(cmd.Flags, ServerFlags...)...), GlobalFlags...)
 	gatewayCmd.Subcommands = append(gatewayCmd.Subcommands, cmd)
 	return nil
 }
@@ -148,12 +148,18 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	initNSLock(false) // Enable local namespace lock.
 
+	// Set when gateway is enabled
+	globalIsGateway = true
+
 	router := mux.NewRouter().SkipClean(true)
 
 	if globalEtcdClient != nil {
 		// Enable STS router if etcd is enabled.
 		registerSTSRouter(router)
 	}
+
+	// initialize globalTrace system
+	globalTrace = NewTraceSys(context.Background(), globalEndpoints)
 
 	enableConfigOps := globalEtcdClient != nil && gatewayName == "nas"
 	enableIAMOps := globalEtcdClient != nil
@@ -303,9 +309,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// Print gateway startup message.
 		printGatewayStartupMessage(getAPIEndpoints(), gatewayName)
 	}
-
-	// Set when gateway is enabled
-	globalIsGateway = true
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = UTCNow()

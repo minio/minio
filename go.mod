@@ -14,12 +14,14 @@ require (
 	github.com/bcicen/jstream v0.0.0-20190220045926-16c1f8af81c2
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coredns/coredns v1.4.0
+	github.com/coreos/bbolt v1.3.3 // indirect
 	github.com/coreos/etcd v3.3.12+incompatible
 	github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/djherbis/atime v1.0.0
 	github.com/dnaeon/go-vcr v1.0.1 // indirect
 	github.com/dustin/go-humanize v1.0.0
+	github.com/eapache/go-resiliency v1.2.0 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.1.2-0.20190322152051-20337d8c3947
 	github.com/elazarl/go-bindata-assetfs v1.0.0
 	github.com/fatih/color v1.7.0
@@ -31,6 +33,7 @@ require (
 	github.com/gorilla/mux v1.7.0
 	github.com/gorilla/rpc v1.2.0+incompatible
 	github.com/grpc-ecosystem/grpc-gateway v1.9.0 // indirect
+	github.com/hashicorp/go-rootcerts v1.0.1 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
 	github.com/hashicorp/go-uuid v1.0.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
@@ -55,7 +58,7 @@ require (
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/lsync v0.1.0
 	github.com/minio/mc v0.0.0-20190529152718-f4bb0b8850cb
-	github.com/minio/minio-go/v6 v6.0.27
+	github.com/minio/minio-go/v6 v6.0.29
 	github.com/minio/parquet-go v0.0.0-20190318185229-9d767baf1679
 	github.com/minio/sha256-simd v0.1.0
 	github.com/minio/sio v0.2.0
@@ -63,8 +66,8 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/nats-io/gnatsd v1.4.1 // indirect
-	github.com/nats-io/go-nats-streaming v0.4.2
-	github.com/nats-io/nats v1.7.2
+	github.com/nats-io/go-nats-streaming v0.4.4 // indirect
+	github.com/nats-io/nats-server v1.4.1 // indirect
 	github.com/nats-io/nats-streaming-server v0.14.2 // indirect
 	github.com/nats-io/nats.go v1.8.0
 	github.com/nats-io/stan.go v0.4.5
@@ -81,14 +84,16 @@ require (
 	github.com/streadway/amqp v0.0.0-20190402114354-16ed540749f6
 	github.com/tidwall/gjson v1.2.1
 	github.com/tidwall/match v1.0.1 // indirect
+	github.com/tidwall/pretty v1.0.0 // indirect
 	github.com/tidwall/sjson v1.0.4
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
+	go.etcd.io/bbolt v1.3.3 // indirect
 	go.uber.org/atomic v1.3.2
-	golang.org/x/crypto v0.0.0-20190530122614-20be4c3c3ed5
+	golang.org/x/crypto v0.0.0-20190611184440-5c40567a22f8
 	golang.org/x/lint v0.0.0-20190409202823-959b441ac422 // indirect
-	golang.org/x/net v0.0.0-20190603091049-60506f45cf65
-	golang.org/x/sys v0.0.0-20190602015325-4c4f7f33c9ed
-	golang.org/x/tools v0.0.0-20190603231351-8aaa1484dc10 // indirect
+	golang.org/x/net v0.0.0-20190613194153-d28f0bde5980 // indirect
+	golang.org/x/sys v0.0.0-20190614160838-b47fdc937951
+	golang.org/x/tools v0.0.0-20190614205625-5aca471b1d59 // indirect
 	google.golang.org/api v0.4.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
 	gopkg.in/olivere/elastic.v5 v5.0.80

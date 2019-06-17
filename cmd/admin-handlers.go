@@ -940,8 +940,12 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	accessKey := vars["accessKey"]
-	if err := globalIAMSys.DeleteUser(accessKey); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+	// Notify all other MinIO peers to delete user.
+	for _, nerr := range globalNotificationSys.DeleteUser(accessKey) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
 	}
 }
 
@@ -1006,8 +1010,8 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Notify all other MinIO peers to reload users
-	for _, nerr := range globalNotificationSys.LoadUsers() {
+	// Notify all other MinIO peers to reload user.
+	for _, nerr := range globalNotificationSys.LoadUser(accessKey, false) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -1065,8 +1069,8 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Notify all other MinIO peers to reload users
-	for _, nerr := range globalNotificationSys.LoadUsers() {
+	// Notify all other Minio peers to reload user
+	for _, nerr := range globalNotificationSys.LoadUser(accessKey, false) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -1083,7 +1087,7 @@ func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	policies, err := globalIAMSys.ListCannedPolicies()
+	policies, err := globalIAMSys.ListPolicies()
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -1115,13 +1119,13 @@ func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := globalIAMSys.DeleteCannedPolicy(policyName); err != nil {
+	if err := globalIAMSys.DeletePolicy(policyName); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	// Notify all other MinIO peers to reload users
-	for _, nerr := range globalNotificationSys.LoadUsers() {
+	// Notify all other MinIO peers to delete policy
+	for _, nerr := range globalNotificationSys.DeletePolicy(policyName) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -1171,13 +1175,13 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err = globalIAMSys.SetCannedPolicy(policyName, *iamPolicy); err != nil {
+	if err = globalIAMSys.SetPolicy(policyName, *iamPolicy); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	// Notify all other MinIO peers to reload users
-	for _, nerr := range globalNotificationSys.LoadUsers() {
+	// Notify all other MinIO peers to reload policy
+	for _, nerr := range globalNotificationSys.LoadPolicy(policyName) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -1214,8 +1218,8 @@ func (a adminAPIHandlers) SetUserPolicy(w http.ResponseWriter, r *http.Request) 
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 	}
 
-	// Notify all other MinIO peers to reload users
-	for _, nerr := range globalNotificationSys.LoadUsers() {
+	// Notify all other Minio peers to reload user
+	for _, nerr := range globalNotificationSys.LoadUser(accessKey, false) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -1414,4 +1418,41 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 
 	// Send success response
 	writeSuccessResponseHeadersOnly(w)
+}
+
+// TraceHandler - POST /minio/admin/v1/trace
+// ----------
+// The handler sends http trace to the connected HTTP client.
+func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "HTTPTrace")
+	trcAll := r.URL.Query().Get("all") == "true"
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+	// Avoid reusing tcp connection if read timeout is hit
+	// This is needed to make r.Context().Done() work as
+	// expected in case of read timeout
+	w.Header().Add("Connection", "close")
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	traceCh := globalTrace.Trace(doneCh, trcAll)
+	for {
+		select {
+		case entry := <-traceCh:
+			if _, err := w.Write(entry); err != nil {
+				return
+			}
+			if _, err := w.Write([]byte("\n")); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-r.Context().Done():
+			return
+		case <-GlobalServiceDoneCh:
+			return
+		}
+	}
 }

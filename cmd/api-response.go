@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -523,6 +524,7 @@ func writeResponse(w http.ResponseWriter, statusCode int, response []byte, mType
 	if mType != mimeNone {
 		w.Header().Set("Content-Type", string(mType))
 	}
+	w.Header().Set("Content-Length", strconv.Itoa(len(response)))
 	w.WriteHeader(statusCode)
 	if response != nil {
 		w.Write(response)

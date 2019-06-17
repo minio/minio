@@ -27,8 +27,8 @@ import (
 	"github.com/minio/minio/pkg/words"
 )
 
-// global flags for minio.
-var globalFlags = []cli.Flag{
+// GlobalFlags - global flags for minio.
+var GlobalFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "config-dir, C",
 		Value: defaultConfigDir.Get(),
@@ -131,7 +131,7 @@ func newApp(name string) *cli.App {
 	app.Version = Version
 	app.Usage = "Cloud Storage Server."
 	app.Description = `MinIO is an Amazon S3 compatible object storage server. Use it to store photos, videos, VMs, containers, log files, or any blob of data as objects.`
-	app.Flags = globalFlags
+	app.Flags = GlobalFlags
 	app.HideVersion = true     // Hide `--version` flag, we already have `minio version`.
 	app.HideHelpCommand = true // Hide `help, h` command, we already have `minio --help`.
 	app.Commands = commands

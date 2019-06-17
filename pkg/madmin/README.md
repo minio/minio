@@ -45,7 +45,7 @@ func main() {
 |:------------------------------------------|:--------------------------------------------|:-------------------|:----------------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|
 | [`ServiceStatus`](#ServiceStatus)         | [`ServerInfo`](#ServerInfo)                 | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig)         | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   |
 | [`ServiceSendAction`](#ServiceSendAction) | [`ServerCPULoadInfo`](#ServerCPULoadInfo)   |                    | [`SetConfig`](#SetConfig)         |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |
-|                                           | [`ServerMemUsageInfo`](#ServerMemUsageInfo) |                    | [`GetConfigKeys`](#GetConfigKeys) |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |
+| [`Trace`](#Trace)                                          | [`ServerMemUsageInfo`](#ServerMemUsageInfo) |                    | [`GetConfigKeys`](#GetConfigKeys) |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |
 |                                           |                                             |                    | [`SetConfigKeys`](#SetConfigKeys) |                         | [`AddCannedPolicy`](#AddCannedPolicy) |                                                   |
 
 
@@ -536,4 +536,23 @@ __Example__
     }
 
     log.Println("Profiling data successfully downloaded.")
+```
+
+<a name="Trace"></a>
+### Trace(allTrace bool,doneCh <-chan struct{}) <-chan TraceInfo
+Enable HTTP request tracing on all nodes in a MinIO cluster
+
+__Example__
+
+``` go
+    doneCh := make(chan struct{})
+    defer close(doneCh)
+    // listen to all trace including internal API calls
+    allTrace := true
+    // Start listening on all trace activity.
+    traceCh := madmClnt.Trace(allTrace,doneCh)
+    for traceInfo := range traceCh {
+        fmt.Println(traceInfo.String())
+    }
+    log.Println("Success")
 ```

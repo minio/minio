@@ -54,19 +54,6 @@ func TestCloneHeader(t *testing.T) {
 	}
 }
 
-// Tests closing http tracing file.
-func TestStopHTTPTrace(t *testing.T) {
-	var err error
-	globalHTTPTraceFile, err = ioutil.TempFile("", "")
-	if err != nil {
-		defer os.Remove(globalHTTPTraceFile.Name())
-		stopHTTPTrace()
-		if globalHTTPTraceFile != nil {
-			t.Errorf("globalHTTPTraceFile is not nil, it is expected to be nil")
-		}
-	}
-}
-
 // Tests maximum object size.
 func TestMaxObjectSize(t *testing.T) {
 	sizes := []struct {
