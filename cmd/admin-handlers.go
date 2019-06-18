@@ -940,6 +940,12 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	accessKey := vars["accessKey"]
+
+	if err := globalIAMSys.DeleteUser(accessKey); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
 	// Notify all other MinIO peers to delete user.
 	for _, nerr := range globalNotificationSys.DeleteUser(accessKey) {
 		if nerr.Err != nil {
