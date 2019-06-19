@@ -42,6 +42,17 @@ docker_secrets_env() {
     fi
 }
 
+## Set SSE_MASTER_KEY from docker secrets if provided
+docker_sse_encryption_env() {
+    SSE_MASTER_KEY_FILE="/run/secrets/$MINIO_SSE_MASTER_KEY_FILE"
+
+    if [ -f "$SSE_MASTER_KEY_FILE" ]; then
+        MINIO_SSE_MASTER_KEY="$(cat "$SSE_MASTER_KEY_FILE")"
+        export MINIO_SSE_MASTER_KEY
+
+    fi
+}
+
 ## Create UID/GID based on available environment variables.
 docker_set_uid_gid() {
     addgroup -S "$MINIO_GROUPNAME" >/dev/null 2>&1 && \
@@ -70,6 +81,9 @@ docker_switch_user() {
 
 ## Set access env from secrets if necessary.
 docker_secrets_env
+
+## Set sse encryption from secrets if necessary.
+docker_sse_encryption_env
 
 ## User Input UID and GID
 docker_set_uid_gid
