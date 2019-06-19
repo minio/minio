@@ -181,7 +181,7 @@ Example:
 minio server /data
 ```
 
-Default trace is succint only to indicate the API operations being called and the HTTP response status.
+Default trace is succinct only to indicate the API operations being called and the HTTP response status.
 ```sh
 mc admin trace myminio
 17:21:45.729309964 objectAPIHandlers.GetBucketLocation localhost:9000/vk-photos/?location= 	200 OK
