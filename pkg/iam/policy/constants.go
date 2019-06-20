@@ -20,6 +20,12 @@ import (
 	"github.com/minio/minio/pkg/policy"
 )
 
+// Policy claim constants
+const (
+	PolicyName        = "policy"
+	SessionPolicyName = "sessionPolicy"
+)
+
 // ReadWrite - provides full access to all buckets and all objects
 var ReadWrite = Policy{
 	Version: DefaultVersion,
