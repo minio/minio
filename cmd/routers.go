@@ -119,8 +119,9 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 		}
 	}
 
-	// Add API router, additionally all server mode support encryption.
-	registerAPIRouter(router, true)
+	// Add API router, additionally all server mode support encryption
+	// but don't allow SSE-KMS.
+	registerAPIRouter(router, true, false)
 
 	// Register rest of the handlers.
 	return registerHandlers(router, globalHandlers...), nil

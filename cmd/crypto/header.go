@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"strings"
 )
@@ -123,6 +124,25 @@ func (s3KMS) IsRequested(h http.Header) bool {
 		return strings.ToUpper(h.Get(SSEHeader)) != SSEAlgorithmAES256 // Return only true if the SSE header is specified and does not contain the SSE-S3 value
 	}
 	return false
+}
+
+// ParseHTTP parses the SSE-KMS headers and returns the SSE-KMS key ID
+// and context, if present, on success.
+func (s3KMS) ParseHTTP(h http.Header) (string, interface{}, error) {
+	algorithm := h.Get(SSEHeader)
+	if algorithm != SSEAlgorithmKMS {
+		return "", nil, ErrInvalidEncryptionMethod
+	}
+
+	contextStr, ok := h[SSEKmsContext]
+	if ok {
+		var context map[string]interface{}
+		if err := json.Unmarshal([]byte(contextStr[0]), &context); err != nil {
+			return "", nil, err
+		}
+		return h.Get(SSEKmsID), context, nil
+	}
+	return h.Get(SSEKmsID), nil, nil
 }
 
 var (

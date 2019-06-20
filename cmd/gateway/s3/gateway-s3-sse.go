@@ -442,7 +442,8 @@ func (l *s3EncObjects) PutObject(ctx context.Context, bucket string, object stri
 	// Decide if sse options needed to be passed to backend
 	if opts.ServerSideEncryption != nil &&
 		((minio.GlobalGatewaySSE.SSEC() && opts.ServerSideEncryption.Type() == encrypt.SSEC) ||
-			(minio.GlobalGatewaySSE.SSES3() && opts.ServerSideEncryption.Type() == encrypt.S3)) {
+			(minio.GlobalGatewaySSE.SSES3() && opts.ServerSideEncryption.Type() == encrypt.S3) ||
+			opts.ServerSideEncryption.Type() == encrypt.KMS) {
 		sseOpts = opts.ServerSideEncryption
 	}
 	if opts.ServerSideEncryption == nil {
