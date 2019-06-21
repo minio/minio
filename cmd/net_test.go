@@ -206,11 +206,13 @@ func TestCheckPortAvailability(t *testing.T) {
 	defer listener.Close()
 
 	testCases := []struct {
+		host        string
 		port        string
 		expectedErr error
 	}{
-		{port, fmt.Errorf("listen tcp :%v: bind: address already in use", port)},
-		{getFreePort(), nil},
+		{"", port, fmt.Errorf("listen tcp :%v: bind: address already in use", port)},
+		{"127.0.0.1", port, fmt.Errorf("listen tcp 127.0.0.1:%v: bind: address already in use", port)},
+		{"", getFreePort(), nil},
 	}
 
 	for _, testCase := range testCases {
@@ -219,7 +221,7 @@ func TestCheckPortAvailability(t *testing.T) {
 			continue
 		}
 
-		err := checkPortAvailability(testCase.port)
+		err := checkPortAvailability(testCase.host, testCase.port)
 		if testCase.expectedErr == nil {
 			if err != nil {
 				t.Fatalf("error: expected = <nil>, got = %v", err)
