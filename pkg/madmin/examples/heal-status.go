@@ -41,5 +41,5 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	log.Printf("Heal status result: %#v\n", healStatusResult)
+	log.Printf("Heal status result: %+v\n", healStatusResult)
 }

@@ -280,7 +280,7 @@ type BgHealState struct {
 // current server or cluster.
 func (adm *AdminClient) BackgroundHealStatus() (BgHealState, error) {
 	// Execute POST request to background heal status api
-	resp, err := adm.executeMethod("POST", requestData{relPath: "/v1/background-heal-status"})
+	resp, err := adm.executeMethod("POST", requestData{relPath: "/v1/background-heal/status"})
 	if err != nil {
 		return BgHealState{}, err
 	}
