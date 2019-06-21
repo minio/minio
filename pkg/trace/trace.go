@@ -38,6 +38,7 @@ type RequestInfo struct {
 	RawQuery string      `json:"rawquery,omitempty"`
 	Headers  http.Header `json:"headers,omitempty"`
 	Body     []byte      `json:"body,omitempty"`
+	Client   string      `json:"client"`
 }
 
 // ResponseInfo represents trace of http request

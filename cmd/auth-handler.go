@@ -200,6 +200,39 @@ func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
 	if _, ok = v.(string); !ok {
 		return nil, errInvalidAccessKeyID
 	}
+
+	if globalPolicyOPA == nil {
+		// If OPA is not set, session token should
+		// have a policy and its mandatory, reject
+		// requests without policy claim.
+		p, pok := claims[iampolicy.PolicyName]
+		if !pok {
+			return nil, errAuthentication
+		}
+		if _, pok = p.(string); !pok {
+			return nil, errAuthentication
+		}
+		sp, spok := claims[iampolicy.SessionPolicyName]
+		// Sub policy is optional, if not set return success.
+		if !spok {
+			return claims, nil
+		}
+		// Sub policy is set but its not a string, reject such requests
+		spStr, spok := sp.(string)
+		if !spok {
+			return nil, errAuthentication
+		}
+		// Looks like subpolicy is set and is a string, if set then its
+		// base64 encoded, decode it. Decoding fails reject such requests.
+		spBytes, err := base64.StdEncoding.DecodeString(spStr)
+		if err != nil {
+			// Base64 decoding fails, we should log to indicate
+			// something is malforming the request sent by client.
+			logger.LogIf(context.Background(), err)
+			return nil, errAuthentication
+		}
+		claims[iampolicy.SessionPolicyName] = string(spBytes)
+	}
 	return claims, nil
 }
 

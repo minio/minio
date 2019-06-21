@@ -659,6 +659,7 @@ func (sys *NotificationSys) refresh(objAPI ObjectLayer) error {
 			if _, ok := err.(*event.ErrARNNotFound); ok {
 				continue
 			}
+			return err
 		}
 		if err == errNoSuchNotifications {
 			continue

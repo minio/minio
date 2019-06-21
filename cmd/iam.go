@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"path"
@@ -649,15 +650,86 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 	return cred, ok && cred.IsValid()
 }
 
-// IsAllowed - checks given policy args is allowed to continue the Rest API.
-func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
+// IsAllowedSTS is meant for STS based temporary credentials,
+// which implements claims validation and verification other than
+// applying policies.
+func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
+	pname, ok := args.Claims[iampolicy.PolicyName]
+	if !ok {
+		// When claims are set, it should have a "policy" field.
+		return false
+	}
+	pnameStr, ok := pname.(string)
+	if !ok {
+		// When claims has "policy" field, it should be string.
+		return false
+	}
+
 	sys.RLock()
 	defer sys.RUnlock()
 
+	// If policy is available for given user, check the policy.
+	name, ok := sys.iamPolicyMap[args.AccountName]
+	if !ok {
+		// No policy available reject.
+		return false
+	}
+
+	if pnameStr != name {
+		// When claims has a policy, it should match the
+		// policy of args.AccountName which server remembers.
+		// if not reject such requests.
+		return false
+	}
+
+	// Now check if we have a sessionPolicy.
+	spolicy, ok := args.Claims[iampolicy.SessionPolicyName]
+	if !ok {
+		// Sub policy not set, this is most common since subPolicy
+		// is optional, use the top level policy only.
+		p, ok := sys.iamCannedPolicyMap[pnameStr]
+		return ok && p.IsAllowed(args)
+	}
+
+	spolicyStr, ok := spolicy.(string)
+	if !ok {
+		// Sub policy if set, should be a string reject
+		// malformed/malicious requests.
+		return false
+	}
+
+	// Check if policy is parseable.
+	subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
+	if err != nil {
+		// Log any error in input session policy config.
+		logger.LogIf(context.Background(), err)
+		return false
+	}
+
+	// Policy without Version string value reject it.
+	if subPolicy.Version == "" {
+		return false
+	}
+
+	// Sub policy is set and valid.
+	p, ok := sys.iamCannedPolicyMap[pnameStr]
+	return ok && p.IsAllowed(args) && subPolicy.IsAllowed(args)
+}
+
+// IsAllowed - checks given policy args is allowed to continue the Rest API.
+func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	// If opa is configured, use OPA always.
 	if globalPolicyOPA != nil {
 		return globalPolicyOPA.IsAllowed(args)
 	}
+
+	// With claims set, we should do STS related checks and validation.
+	if len(args.Claims) > 0 {
+		return sys.IsAllowedSTS(args)
+	}
+
+	sys.RLock()
+	defer sys.RUnlock()
 
 	// If policy is available for given user, check the policy.
 	if name, found := sys.iamPolicyMap[args.AccountName]; found {

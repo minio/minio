@@ -40,7 +40,20 @@ Add the following optimal entries for _core-site.xml_ to configure _s3a_ with **
 *  _fs.s3a.access.key=minio_ (Access Key to access MinIO instance, this is obtained after the deployment on k8s)
 *  _fs.s3a.secret.key=minio123_ (Secret Key to access MinIO instance, this is obtained after the deployment on k8s)
 *  _fs.s3a.endpoint=`http://minio-address/`_
-*  _fs.s3a.path.style.acces=true_
+*  _fs.s3a.multipart.size=128M_
+*  _fs.s3a.fast.upload=true_
+*  _fs.s3a.fast.upload.buffer=bytebuffer_
+*  _fs.s3a.path.style.access=true_
+*  _fs.s3a.block.size=256M_
+*  _fs.s3a.commiter.name=magic_
+*  _fs.s3a.committer.magic.enabled=true_
+*  _fs.s3a.committer.threads=16_
+*  _fs.s3a.connection.maximum=32_
+*  _fs.s3a.fast.upload.active.blocks=8_
+*  _fs.s3a.max.total.tasks=16_
+*  _fs.s3a.threads.core=32_
+*  _fs.s3a.threads.max=32_
+*  _mapreduce.outputcommitter.factory.scheme.s3a=org.apache.hadoop.fs.s3a.commit.S3ACommitterFactory_
 
 ![s3a-config](https://github.com/minio/minio/blob/master/docs/bigdata/images/image4.png?raw=true "custom core-site s3a")
 
