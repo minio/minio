@@ -590,7 +590,7 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 
 	// Generate error response.
 	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path,
-		w.Header().Get(responseRequestIDKey), w.Header().Get(responseDeploymentIDKey))
+		w.Header().Get(responseRequestIDKey), globalDeploymentID)
 	encodedErrorResponse := encodeResponse(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
 }
@@ -603,7 +603,7 @@ func writeErrorResponseHeadersOnly(w http.ResponseWriter, err APIError) {
 // useful for admin APIs.
 func writeErrorResponseJSON(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {
 	// Generate error response.
-	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path, w.Header().Get(responseRequestIDKey), w.Header().Get(responseDeploymentIDKey))
+	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path, w.Header().Get(responseRequestIDKey), globalDeploymentID)
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
 }
@@ -622,7 +622,7 @@ func writeCustomErrorResponseJSON(ctx context.Context, w http.ResponseWriter, er
 		BucketName: reqInfo.BucketName,
 		Key:        reqInfo.ObjectName,
 		RequestID:  w.Header().Get(responseRequestIDKey),
-		HostID:     w.Header().Get(responseDeploymentIDKey),
+		HostID:     globalDeploymentID,
 	}
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
@@ -656,7 +656,7 @@ func writeCustomErrorResponseXML(ctx context.Context, w http.ResponseWriter, err
 		BucketName: reqInfo.BucketName,
 		Key:        reqInfo.ObjectName,
 		RequestID:  w.Header().Get(responseRequestIDKey),
-		HostID:     w.Header().Get(responseDeploymentIDKey),
+		HostID:     globalDeploymentID,
 	}
 
 	encodedErrorResponse := encodeResponse(errorResponse)

@@ -749,7 +749,7 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 	return bucketForwardingHandler{fwd, h}
 }
 
-// customHeaderHandler sets x-amz-request-id, x-minio-deployment-id header.
+// customHeaderHandler sets x-amz-request-id header.
 // Previously, this value was set right before a response was sent to
 // the client. So, logger and Error response XML were not using this
 // value. This is set here so that this header can be logged as
@@ -763,12 +763,8 @@ func addCustomHeaders(h http.Handler) http.Handler {
 }
 
 func (s customHeaderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Set custom headers such as x-amz-request-id and x-minio-deployment-id
-	// for each request.
+	// Set custom headers such as x-amz-request-id for each request.
 	w.Header().Set(responseRequestIDKey, mustGetRequestID(UTCNow()))
-	if globalDeploymentID != "" {
-		w.Header().Set(responseDeploymentIDKey, globalDeploymentID)
-	}
 	s.handler.ServeHTTP(logger.NewResponseWriter(w), r)
 }
 

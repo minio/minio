@@ -702,14 +702,14 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 					if hr.errBody == "" {
 						errorRespJSON = encodeResponseJSON(getAPIErrorResponse(ctx, hr.apiErr,
 							r.URL.Path, w.Header().Get(responseRequestIDKey),
-							w.Header().Get(responseDeploymentIDKey)))
+							globalDeploymentID))
 					} else {
 						errorRespJSON = encodeResponseJSON(APIErrorResponse{
 							Code:      hr.apiErr.Code,
 							Message:   hr.errBody,
 							Resource:  r.URL.Path,
 							RequestID: w.Header().Get(responseRequestIDKey),
-							HostID:    w.Header().Get(responseDeploymentIDKey),
+							HostID:    globalDeploymentID,
 						})
 					}
 					if !started {
