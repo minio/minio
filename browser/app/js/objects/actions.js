@@ -48,9 +48,9 @@ export const CHECKED_LIST_REMOVE = "objects/CHECKED_LIST_REMOVE"
 export const CHECKED_LIST_RESET = "objects/CHECKED_LIST_RESET"
 export const SET_LIST_LOADING = "objects/SET_LIST_LOADING"
 
-export const setList = (objects) => ({
+export const setList = objects => ({
   type: SET_LIST,
-  objects,
+  objects
 })
 
 export const resetList = () => ({
@@ -65,12 +65,12 @@ export const setListLoading = listLoading => ({
 export const fetchObjects = () => {
   return function(dispatch, getState) {
     dispatch(resetList())
-    dispatch(setListLoading(true))
     const {
       buckets: { currentBucket },
       objects: { currentPrefix }
     } = getState()
     if (currentBucket) {
+      dispatch(setListLoading(true))
       return web
         .ListObjects({
           bucketName: currentBucket,

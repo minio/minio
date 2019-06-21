@@ -43,8 +43,6 @@ jest.mock("../../web", () => ({
     } else {
       return Promise.resolve({
         objects: [{ name: "test1" }, { name: "test2" }],
-        istruncated: false,
-        nextmarker: "test2",
         writable: false
       })
     }
@@ -198,9 +196,7 @@ describe("Objects actions", () => {
       objects: {
         list: [],
         sortBy: "",
-        sortOrder: false,
-        isTruncated: false,
-        marker: ""
+        sortOrder: SORT_ORDER_ASC
       }
     })
     const expectedActions = [
