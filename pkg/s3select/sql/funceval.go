@@ -337,20 +337,25 @@ func handleSQLSubstring(r Record, e *SubstringFunc) (val *Value, err error) {
 }
 
 func handleSQLTrim(r Record, e *TrimFunc) (res *Value, err error) {
-	charsV, cerr := e.TrimChars.evalNode(r)
-	if cerr != nil {
-		return nil, cerr
-	}
-	inferTypeAsString(charsV)
-	chars, ok := charsV.ToString()
-	if !ok {
-		return nil, errNonStringTrimArg
+	chars := ""
+	ok := false
+	if e.TrimChars != nil {
+		charsV, cerr := e.TrimChars.evalNode(r)
+		if cerr != nil {
+			return nil, cerr
+		}
+		inferTypeAsString(charsV)
+		chars, ok = charsV.ToString()
+		if !ok {
+			return nil, errNonStringTrimArg
+		}
 	}
 
 	fromV, ferr := e.TrimFrom.evalNode(r)
 	if ferr != nil {
 		return nil, ferr
 	}
+	inferTypeAsString(fromV)
 	from, ok := fromV.ToString()
 	if !ok {
 		return nil, errNonStringTrimArg

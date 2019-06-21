@@ -274,6 +274,15 @@ func (e *FuncExpr) analyze(s *Select) (result qProp) {
 		}
 		return result
 
+	case sqlFnTrim:
+		if e.Trim.TrimChars != nil {
+			result.combine(e.Trim.TrimChars.analyze(s))
+		}
+		if e.Trim.TrimFrom != nil {
+			result.combine(e.Trim.TrimFrom.analyze(s))
+		}
+		return result
+
 	case sqlFnSubstring:
 		errVal := fmt.Errorf("Invalid argument(s) to %s", string(funcName))
 		result.combine(e.Substring.Expr.analyze(s))
