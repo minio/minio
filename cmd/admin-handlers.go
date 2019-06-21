@@ -1432,10 +1432,19 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HTTPTrace")
 	trcAll := r.URL.Query().Get("all") == "true"
-	objectAPI := validateAdminReq(ctx, w, r)
-	if objectAPI == nil {
+
+	// Validate request signature.
+	adminAPIErr := checkAdminRequestAuthType(ctx, r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
 	}
+
+	if globalTrace == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
 	// Avoid reusing tcp connection if read timeout is hit
 	// This is needed to make r.Context().Done() work as
 	// expected in case of read timeout
