@@ -412,7 +412,8 @@ func (k *KVStorage) ReadFileStream(volume, filePath string, offset, length int64
 				w.CloseWithError(err)
 				return
 			}
-			w.Write(data[blockOffset:blockLength])
+
+			w.Write(data[blockOffset : blockOffset+blockLength])
 		}
 		w.Close()
 	}()
@@ -536,7 +537,12 @@ func (k *KVStorage) ReadAll(volume string, filePath string) (buf []byte, err err
 		defer kvValuePool.Put(bufp)
 
 		buf, err = k.kv.Get(pathJoin(volume, filePath), *bufp)
-		return buf, err
+		if err != nil {
+			return nil, err
+		}
+		newBuf := make([]byte, len(buf))
+		copy(newBuf, buf)
+		return newBuf, err
 	}
 	fi, err := k.StatFile(volume, filePath)
 	if err != nil {

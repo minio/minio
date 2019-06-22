@@ -133,6 +133,7 @@ static int minio_nkv_list(struct minio_nkv_handle *handle, void *prefix, int pre
     free(keys_out[iter].key);
   }
   free(keys_out);
+  free(prefixStr);
   return result;
 }
 
