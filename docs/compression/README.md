@@ -69,7 +69,7 @@ export MINIO_COMPRESS_MIMETYPES="application/pdf"
       | `application/x-compress` |
       | `application/x-xz` |
 
-- MinIO does not support encryption with compression because compression and encryption together potentialy enables room for side channel attacks like [`CRIME and BREACH`](https://blog.minio.io/c-e-compression-encryption-cb6b7f04a369)
+- MinIO does not support encryption with compression because compression and encryption together potentially enables room for side channel attacks like [`CRIME and BREACH`](https://blog.minio.io/c-e-compression-encryption-cb6b7f04a369)
 
 - MinIO does not support compression for Gateway (Azure/GCS/NAS) implementations.
 
