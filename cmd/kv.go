@@ -98,6 +98,8 @@ static int minio_nkv_delete(struct minio_nkv_handle *handle, void *key, int keyL
   return result;
 }
 
+#define LIST_KEYS_COUNT 1000
+
 static int minio_nkv_list(struct minio_nkv_handle *handle, void *prefix, int prefixLen, void *buf, int bufLen, int *numKeys, void **iter_context) {
   nkv_result result;
   nkv_io_context ctx;
@@ -106,34 +108,27 @@ static int minio_nkv_list(struct minio_nkv_handle *handle, void *prefix, int pre
   ctx.network_path_hash = handle->network_path_hash;
   ctx.ks_id = 0;
 
-  uint32_t count = 1000;
-  uint32_t max_keys = count;
-  nkv_key* keys_out = (nkv_key*) malloc (sizeof(nkv_key) * count);
-  memset(keys_out, 0, (sizeof(nkv_key) * count));
-  for (int iter = 0; iter < count; iter++) {
-    keys_out[iter].key = malloc(256);
-    memset(keys_out[iter].key, 0, 256);
+  uint32_t max_keys = LIST_KEYS_COUNT;
+  nkv_key keys_out[LIST_KEYS_COUNT];
+  char keys[LIST_KEYS_COUNT][256];
+  for (int iter = 0; iter < LIST_KEYS_COUNT; iter++) {
+    memset(&keys_out[iter], 0, sizeof(nkv_key));
+    memset(keys[iter], 0, 256);
+    keys_out[iter].key = keys[iter];
     keys_out[iter].length = 256;
   }
-  char *prefixStr = malloc(257);
-  memset(prefixStr, 0, 256);
+  char prefixStr[257];
+  memset(prefixStr, 0, 257);
   strncpy(prefixStr, prefix, prefixLen);
-  // printf("List on %s\n", prefixStr);
   result = nkv_indexing_list_keys(handle->nkv_handle, &ctx, NULL, prefixStr, "/", NULL, &max_keys, keys_out, iter_context);
   *numKeys = (int)max_keys;
   char *bufChar = (char *) buf;
   for (int iter = 0; iter < *numKeys; iter++) {
-    // printf("C: %s\n",(char *)keys_out[iter].key);
     strncpy(bufChar, keys_out[iter].key, keys_out[iter].length);
     bufChar += keys_out[iter].length;
     *bufChar = 0;
     bufChar++;
   }
-  for (int iter = 0; iter < count; iter++) {
-    free(keys_out[iter].key);
-  }
-  free(keys_out);
-  free(prefixStr);
   return result;
 }
 
