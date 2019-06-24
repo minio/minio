@@ -121,7 +121,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
 	// (non-)minio process is listening on IPv4 of given port.
 	// To avoid this error situation we check for port availability.
-	logger.FatalIf(checkPortAvailability(globalMinioPort), "Unable to start the gateway")
+	logger.FatalIf(checkPortAvailability(globalMinioHost, globalMinioPort), "Unable to start the gateway")
 
 	// Check and load TLS certificates.
 	var err error
