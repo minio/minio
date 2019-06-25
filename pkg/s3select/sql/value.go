@@ -340,6 +340,12 @@ func (v *Value) compareOp(op string, a *Value) (res bool, err error) {
 		return boolCompare(op, boolV, boolA)
 	}
 
+	timestampV, ok1t := v.ToTimestamp()
+	timestampA, ok2t := a.ToTimestamp()
+	if ok1t && ok2t {
+		return timestampCompare(op, timestampV, timestampA), nil
+	}
+
 	return false, errCmpMismatchedTypes
 }
 
@@ -719,6 +725,25 @@ func boolCompare(op string, left, right bool) (bool, error) {
 	default:
 		return false, errCmpInvalidBoolOperator
 	}
+}
+
+func timestampCompare(op string, left, right time.Time) bool {
+	switch op {
+	case opLt:
+		return left.Before(right)
+	case opLte:
+		return left.Before(right) || left.Equal(right)
+	case opGt:
+		return left.After(right)
+	case opGte:
+		return left.After(right) || left.Equal(right)
+	case opEq:
+		return left.Equal(right)
+	case opIneq:
+		return !left.Equal(right)
+	}
+	// This case does not happen
+	return false
 }
 
 func isValidArithOperator(op string) bool {
