@@ -97,7 +97,7 @@ func (v *Value) Repr() string {
 	case typeBool, typeInt, typeFloat:
 		return fmt.Sprintf("%v:%s", v.value, v.GetTypeString())
 	case typeTimestamp:
-		return fmt.Sprintf("%s:TIMESTAMP", v.value.(*time.Time))
+		return fmt.Sprintf("%s:TIMESTAMP", v.value.(time.Time))
 	case typeString:
 		return fmt.Sprintf("\"%s\":%s", v.value.(string), v.GetTypeString())
 	case typeBytes:
