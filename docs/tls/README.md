@@ -237,11 +237,6 @@ ip_address = "127.0.0.1"
 
 # Whether this certificate will be used for a TLS server
 tls_www_server
-
-# Whether this certificate will be used to encrypt data (needed
-# in TLS RSA cipher suites). Note that it is preferred to use different
-# keys for encryption and signing.
-encryption_key
 ```
 
 Run `certtool.exe` and specify the configuration file to generate a certificate:

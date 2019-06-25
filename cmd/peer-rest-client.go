@@ -212,7 +212,7 @@ func (client *peerRESTClient) ReloadFormat(dryRun bool) error {
 	return nil
 }
 
-// ListenBucketNotification - send listent bucket notification to peer nodes.
+// ListenBucketNotification - send listen bucket notification to peer nodes.
 func (client *peerRESTClient) ListenBucketNotification(bucket string, eventNames []event.Name,
 	pattern string, targetID event.TargetID, addr xnet.Host) error {
 	args := listenBucketNotificationReq{

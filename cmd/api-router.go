@@ -28,16 +28,21 @@ type objectAPIHandlers struct {
 	CacheAPI  func() CacheObjectLayer
 	// Returns true of handlers should interpret encryption.
 	EncryptionEnabled func() bool
+	// Returns true if handlers allow SSE-KMS encryption headers.
+	AllowSSEKMS func() bool
 }
 
 // registerAPIRouter - registers S3 compatible APIs.
-func registerAPIRouter(router *mux.Router, encryptionEnabled bool) {
+func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) {
 	// Initialize API.
 	api := objectAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
 		CacheAPI:  newCacheObjectsFn,
 		EncryptionEnabled: func() bool {
 			return encryptionEnabled
+		},
+		AllowSSEKMS: func() bool {
+			return allowSSEKMS
 		},
 	}
 
