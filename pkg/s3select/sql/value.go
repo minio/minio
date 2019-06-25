@@ -335,7 +335,7 @@ func (v *Value) compareOp(op string, a *Value) (res bool, err error) {
 	}
 
 	boolV, ok1b := v.ToBool()
-	boolA, ok2b := v.ToBool()
+	boolA, ok2b := a.ToBool()
 	if ok1b && ok2b {
 		return boolCompare(op, boolV, boolA)
 	}
