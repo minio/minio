@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/dsync"
+	"github.com/minio/dsync/v2"
 	"github.com/minio/minio/cmd/logger"
 	xnet "github.com/minio/minio/pkg/net"
 )

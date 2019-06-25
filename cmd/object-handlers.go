@@ -1064,6 +1064,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	bucket := vars["bucket"]
 	object := vars["object"]
 
+	// To detect if the client has disconnected.
 	r.Body = &detectDisconnect{r.Body, r.Context().Done()}
 
 	// X-Amz-Copy-Source shouldn't be set for this call.

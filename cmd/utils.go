@@ -433,7 +433,7 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 		BucketName:   bucket,
 		ObjectName:   object,
 	}
-	return logger.SetReqInfo(context.Background(), reqInfo)
+	return logger.SetReqInfo(r.Context(), reqInfo)
 }
 
 // isNetworkOrHostDown - if there was a network error or if the host is down.

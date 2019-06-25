@@ -19,7 +19,7 @@ package cmd
 import (
 	"testing"
 
-	"github.com/minio/dsync"
+	"github.com/minio/dsync/v2"
 	xnet "github.com/minio/minio/pkg/net"
 )
 

@@ -27,7 +27,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/minio/dsync"
+	"github.com/minio/dsync/v2"
 	"github.com/minio/lsync"
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
@@ -127,7 +127,7 @@ type nsLockMap struct {
 }
 
 // Lock the namespace resource.
-func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock bool, timeout time.Duration) (locked bool) {
+func (n *nsLockMap) lock(ctx context.Context, volume, path string, lockSource, opsID string, readLock bool, timeout time.Duration) (locked bool) {
 	var nsLk *nsLock
 
 	n.lockMapMutex.Lock()
@@ -135,7 +135,7 @@ func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock
 	nsLk, found := n.lockMap[param]
 	if !found {
 		n.lockMap[param] = &nsLock{
-			LRWMutex: &lsync.LRWMutex{},
+			LRWMutex: lsync.NewLRWMutex(ctx),
 			ref:      1,
 		}
 		nsLk = n.lockMap[param]
@@ -199,7 +199,7 @@ func (n *nsLockMap) Lock(volume, path, opsID string, timeout time.Duration) (loc
 	readLock := false // This is a write lock.
 
 	lockSource := getSource() // Useful for debugging
-	return n.lock(volume, path, lockSource, opsID, readLock, timeout)
+	return n.lock(context.Background(), volume, path, lockSource, opsID, readLock, timeout)
 }
 
 // Unlock - unlocks any previously acquired write locks.
@@ -213,7 +213,7 @@ func (n *nsLockMap) RLock(volume, path, opsID string, timeout time.Duration) (lo
 	readLock := true
 
 	lockSource := getSource() // Useful for debugging
-	return n.lock(volume, path, lockSource, opsID, readLock, timeout)
+	return n.lock(context.Background(), volume, path, lockSource, opsID, readLock, timeout)
 }
 
 // RUnlock - unlocks any previously acquired read locks.
@@ -241,7 +241,7 @@ func (n *nsLockMap) ForceUnlock(volume, path string) {
 	//   are blocking can now proceed as normal and any new locks will also
 	//   participate normally.
 	if n.isDistXL { // For distributed mode, broadcast ForceUnlock message.
-		dsync.NewDRWMutex(pathJoin(volume, path), globalDsync).ForceUnlock()
+		dsync.NewDRWMutex(context.Background(), pathJoin(volume, path), globalDsync).ForceUnlock()
 	}
 
 	// Remove lock from the map.
@@ -291,6 +291,7 @@ func (di *distLockInstance) RUnlock() {
 
 // localLockInstance - frontend/top-level interface for namespace locks.
 type localLockInstance struct {
+	ctx                 context.Context
 	ns                  *nsLockMap
 	volume, path, opsID string
 }
@@ -298,12 +299,12 @@ type localLockInstance struct {
 // NewNSLock - returns a lock instance for a given volume and
 // path. The returned lockInstance object encapsulates the nsLockMap,
 // volume, path and operation ID.
-func (n *nsLockMap) NewNSLock(volume, path string) RWLocker {
+func (n *nsLockMap) NewNSLock(ctx context.Context, volume, path string) RWLocker {
 	opsID := mustGetUUID()
 	if n.isDistXL {
-		return &distLockInstance{dsync.NewDRWMutex(pathJoin(volume, path), globalDsync), volume, path, opsID}
+		return &distLockInstance{dsync.NewDRWMutex(ctx, pathJoin(volume, path), globalDsync), volume, path, opsID}
 	}
-	return &localLockInstance{n, volume, path, opsID}
+	return &localLockInstance{ctx, n, volume, path, opsID}
 }
 
 // Lock - block until write lock is taken or timeout has occurred.
@@ -311,7 +312,7 @@ func (li *localLockInstance) GetLock(timeout *dynamicTimeout) (timedOutErr error
 	lockSource := getSource()
 	start := UTCNow()
 	readLock := false
-	if !li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock, timeout.Timeout()) {
+	if !li.ns.lock(li.ctx, li.volume, li.path, lockSource, li.opsID, readLock, timeout.Timeout()) {
 		timeout.LogFailure()
 		return OperationTimedOut{Path: li.path}
 	}
@@ -330,7 +331,7 @@ func (li *localLockInstance) GetRLock(timeout *dynamicTimeout) (timedOutErr erro
 	lockSource := getSource()
 	start := UTCNow()
 	readLock := true
-	if !li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock, timeout.Timeout()) {
+	if !li.ns.lock(li.ctx, li.volume, li.path, lockSource, li.opsID, readLock, timeout.Timeout()) {
 		timeout.LogFailure()
 		return OperationTimedOut{Path: li.path}
 	}

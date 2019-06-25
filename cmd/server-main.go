@@ -27,7 +27,7 @@ import (
 	"syscall"
 
 	"github.com/minio/cli"
-	"github.com/minio/dsync"
+	"github.com/minio/dsync/v2"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/certs"

@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -31,7 +32,7 @@ func TestGetSource(t *testing.T) {
 	currentSource := func() string { return getSource() }
 	gotSource := currentSource()
 	// Hard coded line number, 32, in the "expectedSource" value
-	expectedSource := "[namespace-lock_test.go:32:TestGetSource()]"
+	expectedSource := "[namespace-lock_test.go:33:TestGetSource()]"
 	if gotSource != expectedSource {
 		t.Errorf("expected : %s, got : %s", expectedSource, gotSource)
 	}
@@ -204,7 +205,7 @@ func TestNamespaceForceUnlockTest(t *testing.T) {
 	isDistXL := false
 	initNSLock(isDistXL)
 	// Create lock.
-	lock := globalNSMutex.NewNSLock("bucket", "object")
+	lock := globalNSMutex.NewNSLock(context.Background(), "bucket", "object")
 	if lock.GetLock(newDynamicTimeout(60*time.Second, time.Second)) != nil {
 		t.Fatalf("Failed to get lock")
 	}
@@ -215,7 +216,7 @@ func TestNamespaceForceUnlockTest(t *testing.T) {
 
 	go func() {
 		// Try to claim lock again.
-		anotherLock := globalNSMutex.NewNSLock("bucket", "object")
+		anotherLock := globalNSMutex.NewNSLock(context.Background(), "bucket", "object")
 		if anotherLock.GetLock(newDynamicTimeout(60*time.Second, time.Second)) != nil {
 			t.Errorf("Failed to get lock")
 			return
