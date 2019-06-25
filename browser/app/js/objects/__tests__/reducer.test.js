@@ -16,17 +16,17 @@
 
 import reducer from "../reducer"
 import * as actions from "../actions"
+import { SORT_ORDER_ASC, SORT_BY_NAME } from "../../constants"
 
 describe("objects reducer", () => {
   it("should return the initial state", () => {
     const initialState = reducer(undefined, {})
     expect(initialState).toEqual({
       list: [],
+      listLoading: false,
       sortBy: "",
-      sortOrder: false,
+      sortOrder: SORT_ORDER_ASC,
       currentPrefix: "",
-      marker: "",
-      isTruncated: false,
       prefixWritable: false,
       shareObject: {
         show: false,
@@ -40,37 +40,9 @@ describe("objects reducer", () => {
   it("should handle SET_LIST", () => {
     const newState = reducer(undefined, {
       type: actions.SET_LIST,
-      objects: [{ name: "obj1" }, { name: "obj2" }],
-      marker: "obj2",
-      isTruncated: false
+      objects: [{ name: "obj1" }, { name: "obj2" }]
     })
     expect(newState.list).toEqual([{ name: "obj1" }, { name: "obj2" }])
-    expect(newState.marker).toBe("obj2")
-    expect(newState.isTruncated).toBeFalsy()
-  })
-
-  it("should handle APPEND_LIST", () => {
-    const newState = reducer(
-      {
-        list: [{ name: "obj1" }, { name: "obj2" }],
-        marker: "obj2",
-        isTruncated: true
-      },
-      {
-        type: actions.APPEND_LIST,
-        objects: [{ name: "obj3" }, { name: "obj4" }],
-        marker: "obj4",
-        isTruncated: false
-      }
-    )
-    expect(newState.list).toEqual([
-      { name: "obj1" },
-      { name: "obj2" },
-      { name: "obj3" },
-      { name: "obj4" }
-    ])
-    expect(newState.marker).toBe("obj4")
-    expect(newState.isTruncated).toBeFalsy()
   })
 
   it("should handle REMOVE", () => {
@@ -98,30 +70,28 @@ describe("objects reducer", () => {
   it("should handle SET_SORT_BY", () => {
     const newState = reducer(undefined, {
       type: actions.SET_SORT_BY,
-      sortBy: "name"
+      sortBy: SORT_BY_NAME
     })
-    expect(newState.sortBy).toEqual("name")
+    expect(newState.sortBy).toEqual(SORT_BY_NAME)
   })
 
   it("should handle SET_SORT_ORDER", () => {
     const newState = reducer(undefined, {
       type: actions.SET_SORT_ORDER,
-      sortOrder: true
+      sortOrder: SORT_ORDER_ASC
     })
-    expect(newState.sortOrder).toEqual(true)
+    expect(newState.sortOrder).toEqual(SORT_ORDER_ASC)
   })
 
   it("should handle SET_CURRENT_PREFIX", () => {
     const newState = reducer(
-      { currentPrefix: "test1/", marker: "abc", isTruncated: true },
+      { currentPrefix: "test1/" },
       {
         type: actions.SET_CURRENT_PREFIX,
         prefix: "test2/"
       }
     )
     expect(newState.currentPrefix).toEqual("test2/")
-    expect(newState.marker).toEqual("")
-    expect(newState.isTruncated).toBeFalsy()
   })
 
   it("should handle SET_PREFIX_WRITABLE", () => {

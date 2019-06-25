@@ -401,11 +401,9 @@ type ListObjectsArgs struct {
 
 // ListObjectsRep - list objects response.
 type ListObjectsRep struct {
-	Objects     []WebObjectInfo `json:"objects"`
-	NextMarker  string          `json:"nextmarker"`
-	IsTruncated bool            `json:"istruncated"`
-	Writable    bool            `json:"writable"` // Used by client to show "upload file" button.
-	UIVersion   string          `json:"uiVersion"`
+	Objects   []WebObjectInfo `json:"objects"`
+	Writable  bool            `json:"writable"` // Used by client to show "upload file" button.
+	UIVersion string          `json:"uiVersion"`
 }
 
 // WebObjectInfo container for list objects metadata.
@@ -448,26 +446,36 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
-		result, err := core.ListObjects(args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)
-		if err != nil {
-			return toJSONError(ctx, err, args.BucketName)
+
+		nextMarker := ""
+		// Fetch all the objects
+		for {
+			result, err := core.ListObjects(args.BucketName, args.Prefix, nextMarker, slashSeparator, 1000)
+			if err != nil {
+				return toJSONError(ctx, err, args.BucketName)
+			}
+
+			for _, obj := range result.Contents {
+				reply.Objects = append(reply.Objects, WebObjectInfo{
+					Key:          obj.Key,
+					LastModified: obj.LastModified,
+					Size:         obj.Size,
+					ContentType:  obj.ContentType,
+				})
+			}
+			for _, p := range result.CommonPrefixes {
+				reply.Objects = append(reply.Objects, WebObjectInfo{
+					Key: p.Prefix,
+				})
+			}
+
+			nextMarker = result.NextMarker
+
+			// Return when there are no more objects
+			if !result.IsTruncated {
+				return nil
+			}
 		}
-		reply.NextMarker = result.NextMarker
-		reply.IsTruncated = result.IsTruncated
-		for _, obj := range result.Contents {
-			reply.Objects = append(reply.Objects, WebObjectInfo{
-				Key:          obj.Key,
-				LastModified: obj.LastModified,
-				Size:         obj.Size,
-				ContentType:  obj.ContentType,
-			})
-		}
-		for _, p := range result.CommonPrefixes {
-			reply.Objects = append(reply.Objects, WebObjectInfo{
-				Key: p.Prefix,
-			})
-		}
-		return nil
 	}
 
 	claims, owner, authErr := webRequestAuthenticate(r)
@@ -551,35 +559,43 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		return toJSONError(ctx, errInvalidBucketName)
 	}
 
-	lo, err := listObjects(ctx, args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)
-	if err != nil {
-		return &json2.Error{Message: err.Error()}
-	}
-	for i := range lo.Objects {
-		if crypto.IsEncrypted(lo.Objects[i].UserDefined) {
-			lo.Objects[i].Size, err = lo.Objects[i].DecryptedSize()
-			if err != nil {
-				return toJSONError(ctx, err)
+	nextMarker := ""
+	// Fetch all the objects
+	for {
+		lo, err := listObjects(ctx, args.BucketName, args.Prefix, nextMarker, slashSeparator, 1000)
+		if err != nil {
+			return &json2.Error{Message: err.Error()}
+		}
+		for i := range lo.Objects {
+			if crypto.IsEncrypted(lo.Objects[i].UserDefined) {
+				lo.Objects[i].Size, err = lo.Objects[i].DecryptedSize()
+				if err != nil {
+					return toJSONError(ctx, err)
+				}
 			}
 		}
-	}
-	reply.NextMarker = lo.NextMarker
-	reply.IsTruncated = lo.IsTruncated
-	for _, obj := range lo.Objects {
-		reply.Objects = append(reply.Objects, WebObjectInfo{
-			Key:          obj.Name,
-			LastModified: obj.ModTime,
-			Size:         obj.Size,
-			ContentType:  obj.ContentType,
-		})
-	}
-	for _, prefix := range lo.Prefixes {
-		reply.Objects = append(reply.Objects, WebObjectInfo{
-			Key: prefix,
-		})
-	}
 
-	return nil
+		for _, obj := range lo.Objects {
+			reply.Objects = append(reply.Objects, WebObjectInfo{
+				Key:          obj.Name,
+				LastModified: obj.ModTime,
+				Size:         obj.Size,
+				ContentType:  obj.ContentType,
+			})
+		}
+		for _, prefix := range lo.Prefixes {
+			reply.Objects = append(reply.Objects, WebObjectInfo{
+				Key: prefix,
+			})
+		}
+
+		nextMarker = lo.NextMarker
+
+		// Return when there are no more objects
+		if !lo.IsTruncated {
+			return nil
+		}
+	}
 }
 
 // RemoveObjectArgs - args to remove an object, JSON will look like.

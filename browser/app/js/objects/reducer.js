@@ -15,6 +15,7 @@
  */
 
 import * as actionsObjects from "./actions"
+import { SORT_ORDER_ASC } from "../constants"
 
 const removeObject = (list, objectToRemove, lookup) => {
   const idx = list.findIndex(object => lookup(object) === objectToRemove)
@@ -27,11 +28,10 @@ const removeObject = (list, objectToRemove, lookup) => {
 export default (
   state = {
     list: [],
+    listLoading: false,
     sortBy: "",
-    sortOrder: false,
+    sortOrder: SORT_ORDER_ASC,
     currentPrefix: "",
-    marker: "",
-    isTruncated: false,
     prefixWritable: false,
     shareObject: {
       show: false,
@@ -46,23 +46,17 @@ export default (
     case actionsObjects.SET_LIST:
       return {
         ...state,
-        list: action.objects,
-        marker: action.marker,
-        isTruncated: action.isTruncated
+        list: action.objects
       }
     case actionsObjects.RESET_LIST:
       return {
         ...state,
-        list: [],
-        marker: "",
-        isTruncated: false
+        list: []
       }
-    case actionsObjects.APPEND_LIST:
+    case actionsObjects.SET_LIST_LOADING:
       return {
         ...state,
-        list: [...state.list, ...action.objects],
-        marker: action.marker,
-        isTruncated: action.isTruncated
+        listLoading: action.listLoading
       }
     case actionsObjects.REMOVE:
       return {
@@ -82,9 +76,7 @@ export default (
     case actionsObjects.SET_CURRENT_PREFIX:
       return {
         ...state,
-        currentPrefix: action.prefix,
-        marker: "",
-        isTruncated: false
+        currentPrefix: action.prefix
       }
     case actionsObjects.SET_PREFIX_WRITABLE:
       return {
