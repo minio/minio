@@ -131,6 +131,19 @@ func (ahs *allHealState) periodicHealSeqsClean() {
 	}
 }
 
+// getHealSequenceByToken - Retrieve a heal sequence by token. The second
+// argument returns if a heal sequence actually exists.
+func (ahs *allHealState) getHealSequenceByToken(token string) (h *healSequence, exists bool) {
+	ahs.Lock()
+	defer ahs.Unlock()
+	for _, healSeq := range ahs.healSeqMap {
+		if healSeq.clientToken == token {
+			return healSeq, true
+		}
+	}
+	return nil, false
+}
+
 // getHealSequence - Retrieve a heal sequence by path. The second
 // argument returns if a heal sequence actually exists.
 func (ahs *allHealState) getHealSequence(path string) (h *healSequence, exists bool) {
@@ -334,6 +347,12 @@ type healSequence struct {
 
 	// the last result index sent to client
 	lastSentResultIndex int64
+
+	// Number of total items scanned
+	scannedItemsCount int64
+
+	// The time of the last scan/heal activity
+	lastHealActivity time.Time
 
 	// Holds the request-info for logging
 	ctx context.Context
@@ -552,17 +571,20 @@ func (h *healSequence) queueHealTask(path string, healType madmin.HealItemType) 
 }
 
 func (h *healSequence) healItemsFromSourceCh() error {
+	h.lastHealActivity = UTCNow()
+
 	// Start healing the config prefix.
 	if err := h.healMinioSysMeta(minioConfigPrefix)(); err != nil {
-		return err
+		logger.LogIf(h.ctx, err)
 	}
 
 	// Start healing the bucket config prefix.
 	if err := h.healMinioSysMeta(bucketConfigPrefix)(); err != nil {
-		return err
+		logger.LogIf(h.ctx, err)
 	}
 
 	for path := range h.sourceCh {
+
 		var itemType madmin.HealItemType
 		switch {
 		case path == "/":
@@ -574,8 +596,11 @@ func (h *healSequence) healItemsFromSourceCh() error {
 		}
 
 		if err := h.queueHealTask(path, itemType); err != nil {
-			return err
+			logger.LogIf(h.ctx, err)
 		}
+
+		h.scannedItemsCount++
+		h.lastHealActivity = UTCNow()
 	}
 
 	return nil
