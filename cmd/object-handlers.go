@@ -151,11 +151,6 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if r.ContentLength <= 0 {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrEmptyRequestBody), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
 	s3Select, err := s3select.NewS3Select(r.Body)
 	if err != nil {
 		if serr, ok := err.(s3select.SelectError); ok {
