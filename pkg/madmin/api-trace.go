@@ -17,9 +17,7 @@
 package madmin
 
 import (
-	"bufio"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -35,7 +33,7 @@ type TraceInfo struct {
 
 // Trace - listen on http trace notifications.
 func (adm AdminClient) Trace(allTrace bool, doneCh <-chan struct{}) <-chan TraceInfo {
-	traceInfoCh := make(chan TraceInfo, 1)
+	traceInfoCh := make(chan TraceInfo)
 	// Only success, start a routine to start reading line by line.
 	go func(traceInfoCh chan<- TraceInfo) {
 		defer close(traceInfoCh)
@@ -58,30 +56,16 @@ func (adm AdminClient) Trace(allTrace bool, doneCh <-chan struct{}) <-chan Trace
 				return
 			}
 
-			// Initialize a new bufio scanner, to read line by line.
-			bio := bufio.NewScanner(resp.Body)
-
-			// Close the response body.
-			defer resp.Body.Close()
-
-			// Unmarshal each line, returns marshaled values.
-			for bio.Scan() {
-				var traceRec trace.Info
-				if err = json.Unmarshal(bio.Bytes(), &traceRec); err != nil {
-					continue
+			dec := json.NewDecoder(resp.Body)
+			for {
+				var info trace.Info
+				if err = dec.Decode(&info); err != nil {
+					break
 				}
 				select {
 				case <-doneCh:
 					return
-				case traceInfoCh <- TraceInfo{Trace: traceRec}:
-				}
-			}
-			// Look for any underlying errors.
-			if err = bio.Err(); err != nil {
-				// For an unexpected connection drop from server, we close the body
-				// and re-connect.
-				if err == io.ErrUnexpectedEOF {
-					resp.Body.Close()
+				case traceInfoCh <- TraceInfo{Trace: info}:
 				}
 			}
 		}

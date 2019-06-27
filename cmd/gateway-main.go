@@ -158,9 +158,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		registerSTSRouter(router)
 	}
 
-	// initialize globalTrace system
-	globalTrace = NewTraceSys(context.Background(), globalEndpoints)
-
 	enableConfigOps := globalEtcdClient != nil && gatewayName == "nas"
 	enableIAMOps := globalEtcdClient != nil
 
