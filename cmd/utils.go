@@ -508,3 +508,16 @@ func lcp(l []string) string {
 	// are equal, min is the answer ("foo" < "foobar").
 	return min
 }
+
+// Returns the mode in which MinIO is running
+func getMinioMode() string {
+	mode := globalMinioModeFS
+	if globalIsDistXL {
+		mode = globalMinioModeDistXL
+	} else if globalIsXL {
+		mode = globalMinioModeXL
+	} else if globalIsGateway {
+		mode = globalMinioModeGatewayPrefix + globalGatewayName
+	}
+	return mode
+}

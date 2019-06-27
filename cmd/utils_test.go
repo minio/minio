@@ -500,5 +500,25 @@ func TestLCP(t *testing.T) {
 			t.Fatalf("Test %d: Common prefix found: `%v`, expected: `%v`", i+1, foundPrefix, test.commonPrefix)
 		}
 	}
+}
+
+func TestGetMinioMode(t *testing.T) {
+	testMinioMode := func(expected string) {
+		if mode := getMinioMode(); mode != expected {
+			t.Fatalf("Expected %s got %s", expected, mode)
+		}
+	}
+	globalIsDistXL = true
+	testMinioMode(globalMinioModeDistXL)
+
+	globalIsDistXL = false
+	globalIsXL = true
+	testMinioMode(globalMinioModeXL)
+
+	globalIsDistXL, globalIsXL = false, false
+	testMinioMode(globalMinioModeFS)
+
+	globalIsGateway, globalGatewayName = true, "azure"
+	testMinioMode(globalMinioModeGatewayPrefix + globalGatewayName)
 
 }
