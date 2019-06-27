@@ -71,8 +71,20 @@ func cloneHeader(h http.Header) http.Header {
 	return h2
 }
 
+func request2BucketObjectName(r *http.Request) (bucketName, objectName string) {
+	path, err := getResource(r.URL.Path, r.Host, globalDomainNames)
+	if err != nil {
+		logger.CriticalIf(context.Background(), err)
+	}
+	return urlPath2BucketObjectName(path)
+}
+
 // Convert url path into bucket and object name.
 func urlPath2BucketObjectName(path string) (bucketName, objectName string) {
+	if path == "" || path == slashSeparator {
+		return "", ""
+	}
+
 	// Trim any preceding slash separator.
 	urlPath := strings.TrimPrefix(path, slashSeparator)
 

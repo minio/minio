@@ -294,7 +294,7 @@ func (h minioReservedBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 	default:
 		// For all other requests reject access to reserved
 		// buckets
-		bucketName, _ := urlPath2BucketObjectName(r.URL.Path)
+		bucketName, _ := request2BucketObjectName(r)
 		if isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName) {
 			writeErrorResponse(context.Background(), w, errorCodes.ToAPIErr(ErrAllAccessDisabled), r.URL, guessIsBrowserReq(r))
 			return
@@ -494,7 +494,7 @@ var notimplementedObjectResourceNames = map[string]bool{
 
 // Resource handler ServeHTTP() wrapper
 func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	bucketName, objectName := urlPath2BucketObjectName(r.URL.Path)
+	bucketName, objectName := request2BucketObjectName(r)
 
 	// If bucketName is present and not objectName check for bucket level resource queries.
 	if bucketName != "" && objectName == "" {
@@ -696,7 +696,8 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	bucket, object := urlPath2BucketObjectName(r.URL.Path)
+	bucket, object := request2BucketObjectName(r)
+
 	// ListBucket requests should be handled at current endpoint as
 	// all buckets data can be fetched from here.
 	if r.Method == http.MethodGet && bucket == "" && object == "" {
