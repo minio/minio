@@ -34,6 +34,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/policy"
 )
 
@@ -1202,7 +1203,7 @@ func (s *TestSuiteCommon) TestPutObject(c *check) {
 	c.Assert(err, nil)
 	c.Assert(response.StatusCode, http.StatusOK)
 	// The response Etag header should contain Md5sum of an empty string.
-	c.Assert(response.Header.Get("Etag"), "\""+emptyETag+"\"")
+	c.Assert(response.Header.Get(xhttp.ETag), "\""+emptyETag+"\"")
 }
 
 // TestListBuckets - Make request for listing of all buckets.
@@ -2728,5 +2729,5 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *check) {
 		parts = append(parts, part)
 	}
 	etag := getCompleteMultipartMD5(parts)
-	c.Assert(canonicalizeETag(response.Header.Get("Etag")), etag)
+	c.Assert(canonicalizeETag(response.Header.Get(xhttp.ETag)), etag)
 }

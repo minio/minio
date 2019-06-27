@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/handlers"
 )
 
@@ -67,13 +68,13 @@ func ToEntry(w http.ResponseWriter, r *http.Request, api string, statusCode int,
 	for k, v := range w.Header() {
 		respHeader[k] = strings.Join(v, ",")
 	}
-	respHeader["Etag"] = strings.Trim(respHeader["Etag"], `"`)
+	respHeader[xhttp.ETag] = strings.Trim(respHeader[xhttp.ETag], `"`)
 
 	entry := Entry{
 		Version:      Version,
 		DeploymentID: deploymentID,
 		RemoteHost:   handlers.GetSourceIP(r),
-		RequestID:    w.Header().Get("x-amz-request-id"),
+		RequestID:    w.Header().Get(xhttp.AmzRequestID),
 		UserAgent:    r.UserAgent(),
 		Time:         time.Now().UTC().Format(time.RFC3339Nano),
 		ReqQuery:     reqQuery,

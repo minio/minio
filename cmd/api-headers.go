@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 )
 
 // Returns a hexadecimal representation of time at the
@@ -36,13 +37,13 @@ func mustGetRequestID(t time.Time) string {
 
 // Write http common headers
 func setCommonHeaders(w http.ResponseWriter) {
-	w.Header().Set("Server", "MinIO/"+ReleaseTag)
+	w.Header().Set(xhttp.ServerInfo, "MinIO/"+ReleaseTag)
 	// Set `x-amz-bucket-region` only if region is set on the server
 	// by default minio uses an empty region.
 	if region := globalServerConfig.GetRegion(); region != "" {
-		w.Header().Set("X-Amz-Bucket-Region", region)
+		w.Header().Set(xhttp.AmzBucketRegion, region)
 	}
-	w.Header().Set("Accept-Ranges", "bytes")
+	w.Header().Set(xhttp.AcceptRanges, "bytes")
 
 	// Remove sensitive information
 	crypto.RemoveSensitiveHeaders(w.Header())
@@ -72,23 +73,23 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 
 	// Set last modified time.
 	lastModified := objInfo.ModTime.UTC().Format(http.TimeFormat)
-	w.Header().Set("Last-Modified", lastModified)
+	w.Header().Set(xhttp.LastModified, lastModified)
 
 	// Set Etag if available.
 	if objInfo.ETag != "" {
-		w.Header()["ETag"] = []string{"\"" + objInfo.ETag + "\""}
+		w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
 	}
 
 	if objInfo.ContentType != "" {
-		w.Header().Set("Content-Type", objInfo.ContentType)
+		w.Header().Set(xhttp.ContentType, objInfo.ContentType)
 	}
 
 	if objInfo.ContentEncoding != "" {
-		w.Header().Set("Content-Encoding", objInfo.ContentEncoding)
+		w.Header().Set(xhttp.ContentEncoding, objInfo.ContentEncoding)
 	}
 
 	if !objInfo.Expires.IsZero() {
-		w.Header().Set("Expires", objInfo.Expires.UTC().Format(http.TimeFormat))
+		w.Header().Set(xhttp.Expires, objInfo.Expires.UTC().Format(http.TimeFormat))
 	}
 
 	// Set all other user defined metadata.
@@ -124,10 +125,10 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	}
 
 	// Set content length.
-	w.Header().Set("Content-Length", strconv.FormatInt(rangeLen, 10))
+	w.Header().Set(xhttp.ContentLength, strconv.FormatInt(rangeLen, 10))
 	if rs != nil {
 		contentRange := fmt.Sprintf("bytes %d-%d/%d", start, start+rangeLen-1, totalObjectSize)
-		w.Header().Set("Content-Range", contentRange)
+		w.Header().Set(xhttp.ContentRange, contentRange)
 	}
 
 	return nil

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -114,7 +115,7 @@ func (s *storageRESTServer) GetInstanceID(w http.ResponseWriter, r *http.Request
 		s.writeErrorResponse(w, err)
 		return
 	}
-	w.Header().Set("Content-Length", strconv.Itoa(len(s.instanceID)))
+	w.Header().Set(xhttp.ContentLength, strconv.Itoa(len(s.instanceID)))
 	w.Write([]byte(s.instanceID))
 	w.(http.Flusher).Flush()
 }
@@ -283,7 +284,7 @@ func (s *storageRESTServer) ReadAllHandler(w http.ResponseWriter, r *http.Reques
 		s.writeErrorResponse(w, err)
 		return
 	}
-	w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
+	w.Header().Set(xhttp.ContentLength, strconv.Itoa(len(buf)))
 	w.Write(buf)
 	w.(http.Flusher).Flush()
 }
@@ -327,7 +328,7 @@ func (s *storageRESTServer) ReadFileHandler(w http.ResponseWriter, r *http.Reque
 		s.writeErrorResponse(w, err)
 		return
 	}
-	w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
+	w.Header().Set(xhttp.ContentLength, strconv.Itoa(len(buf)))
 	w.Write(buf)
 	w.(http.Flusher).Flush()
 }
@@ -357,7 +358,7 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 		return
 	}
 	defer rc.Close()
-	w.Header().Set("Content-Length", strconv.Itoa(length))
+	w.Header().Set(xhttp.ContentLength, strconv.Itoa(length))
 
 	io.Copy(w, rc)
 	w.(http.Flusher).Flush()
