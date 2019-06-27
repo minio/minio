@@ -77,10 +77,7 @@ func (e *Erasure) DecodeDataBlocks(data [][]byte) error {
 	if !needsReconstruction {
 		return nil
 	}
-	if err := e.encoder.ReconstructData(data); err != nil {
-		return err
-	}
-	return nil
+	return e.encoder.ReconstructData(data)
 }
 
 // DecodeDataAndParityBlocks decodes the given erasure-coded data and verifies it.

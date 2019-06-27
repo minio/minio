@@ -43,10 +43,7 @@ func setUpStore(directory string, limit uint16) (Store, error) {
 
 // Tear down store
 func tearDownStore() error {
-	if err := os.RemoveAll(queueDir); err != nil {
-		return err
-	}
-	return nil
+	return os.RemoveAll(queueDir)
 }
 
 // TestQueueStorePut - tests for store.Put
