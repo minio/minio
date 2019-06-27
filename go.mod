@@ -89,11 +89,11 @@ require (
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	go.etcd.io/bbolt v1.3.3 // indirect
 	go.uber.org/atomic v1.3.2
-	golang.org/x/crypto v0.0.0-20190618222545-ea8f1a30c443
+	golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4
 	golang.org/x/lint v0.0.0-20190409202823-959b441ac422 // indirect
-	golang.org/x/net v0.0.0-20190619014844-b5b0513f8c1b // indirect
-	golang.org/x/sys v0.0.0-20190618155005-516e3c20635f
-	golang.org/x/tools v0.0.0-20190619181801-b76e30ffa0aa // indirect
+	golang.org/x/net v0.0.0-20190620200207-3b0461eec859 // indirect
+	golang.org/x/sys v0.0.0-20190626221950-04f50cda93cb
+	golang.org/x/tools v0.0.0-20190627203933-19ff4fff8850 // indirect
 	google.golang.org/api v0.4.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
 	gopkg.in/olivere/elastic.v5 v5.0.80
