@@ -30,6 +30,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/handlers"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Parses location constraint from the incoming reader.
@@ -382,4 +383,18 @@ func notFoundHandlerJSON(w http.ResponseWriter, r *http.Request) {
 // If none of the http routes match respond with MethodNotAllowed
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	writeErrorResponse(context.Background(), w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
+}
+
+// gets host name for current node
+func getHostName(r *http.Request) (hostName string, err error) {
+	var thisAddr *xnet.Host
+	hostName = r.Host
+	if globalIsDistXL {
+		thisAddr, err = xnet.ParseHost(GetLocalPeer(globalEndpoints))
+		if err != nil {
+			return
+		}
+		hostName = thisAddr.String()
+	}
+	return
 }
