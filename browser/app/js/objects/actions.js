@@ -77,25 +77,32 @@ export const fetchObjects = () => {
           prefix: currentPrefix
         })
         .then(res => {
-          let objects = []
-          if (res.objects) {
-            objects = res.objects.map(object => {
-              return {
-                ...object,
-                name: object.name.replace(currentPrefix, "")
-              }
-            })
+          // we need to check if the bucket name and prefix are the same as
+          // when the request was made before updating the displayed objects
+          if (
+            currentBucket === getCurrentBucket(getState()) &&
+            currentPrefix === getCurrentPrefix(getState())
+          ) {
+            let objects = []
+            if (res.objects) {
+              objects = res.objects.map(object => {
+                return {
+                  ...object,
+                  name: object.name.replace(currentPrefix, "")
+                }
+              })
+            }
+
+            const sortBy = SORT_BY_LAST_MODIFIED
+            const sortOrder = SORT_ORDER_DESC
+            dispatch(setSortBy(sortBy))
+            dispatch(setSortOrder(sortOrder))
+            const sortedList = sortObjectsList(objects, sortBy, sortOrder)
+            dispatch(setList(sortedList))
+
+            dispatch(setPrefixWritable(res.writable))
+            dispatch(setListLoading(false))
           }
-
-          const sortBy = SORT_BY_LAST_MODIFIED
-          const sortOrder = SORT_ORDER_DESC
-          dispatch(setSortBy(sortBy))
-          dispatch(setSortOrder(sortOrder))
-          const sortedList = sortObjectsList(objects, sortBy, sortOrder)
-          dispatch(setList(sortedList))
-
-          dispatch(setPrefixWritable(res.writable))
-          dispatch(setListLoading(false))
         })
         .catch(err => {
           if (web.LoggedIn()) {
