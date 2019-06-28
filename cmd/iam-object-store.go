@@ -429,24 +429,33 @@ func (iamOS *IAMObjectStore) loadAll(sys *IAMSys, objectAPI ObjectLayer) error {
 	iamUserPolicyMap := make(map[string]MappedPolicy)
 	iamGroupPolicyMap := make(map[string]MappedPolicy)
 
+	isMinIOUsersSys := false
+	sys.RLock()
+	if sys.usersSysType == MinIOUsersSysType {
+		isMinIOUsersSys = true
+	}
+	sys.RUnlock()
+
 	if err := iamOS.loadPolicyDocs(iamPolicyDocsMap); err != nil {
 		return err
 	}
-	if err := iamOS.loadUsers(false, iamUsersMap); err != nil {
-		return err
-	}
-	// load STS temp users into the same map
+	// load STS temp users
 	if err := iamOS.loadUsers(true, iamUsersMap); err != nil {
 		return err
 	}
-	if err := iamOS.loadGroups(iamGroupsMap); err != nil {
-		return err
-	}
+	if isMinIOUsersSys {
+		if err := iamOS.loadUsers(false, iamUsersMap); err != nil {
+			return err
+		}
+		if err := iamOS.loadGroups(iamGroupsMap); err != nil {
+			return err
+		}
 
-	if err := iamOS.loadMappedPolicies(false, false, iamUserPolicyMap); err != nil {
-		return err
+		if err := iamOS.loadMappedPolicies(false, false, iamUserPolicyMap); err != nil {
+			return err
+		}
 	}
-	// load STS policy mappings into the same map
+	// load STS policy mappings
 	if err := iamOS.loadMappedPolicies(true, false, iamUserPolicyMap); err != nil {
 		return err
 	}

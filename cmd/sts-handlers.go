@@ -30,6 +30,7 @@ import (
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/iam/validator"
 	"github.com/minio/minio/pkg/wildcard"
+	ldap "gopkg.in/ldap.v3"
 )
 
 const (
@@ -39,9 +40,14 @@ const (
 	// STS API action constants
 	clientGrants = "AssumeRoleWithClientGrants"
 	webIdentity  = "AssumeRoleWithWebIdentity"
+	ldapIdentity = "AssumeRoleWithLDAPIdentity"
 	assumeRole   = "AssumeRole"
 
 	stsRequestBodyLimit = 10 * (1 << 20) // 10 MiB
+
+	// LDAP claim keys
+	ldapUser   = "ldapUser"
+	ldapGroups = "ldapGroups"
 )
 
 // stsAPIHandlers implements and provides http handlers for AWS STS API.
@@ -82,6 +88,12 @@ func registerSTSRouter(router *mux.Router) {
 		Queries("Version", stsAPIVersion).
 		Queries("WebIdentityToken", "{Token:.*}")
 
+	// AssumeRoleWithLDAPIdentity
+	stsRouter.Methods("POST").HandlerFunc(httpTraceAll(sts.AssumeRoleWithLDAPIdentity)).
+		Queries("Action", ldapIdentity).
+		Queries("Version", stsAPIVersion).
+		Queries("LDAPUsername", "{LDAPUsername:.*}").
+		Queries("LDAPPassword", "{LDAPPassword:.*}")
 }
 
 func checkAssumeRoleAuth(ctx context.Context, r *http.Request) (user auth.Credentials, stsErr STSErrorCode) {
@@ -410,4 +422,139 @@ func (sts *stsAPIHandlers) AssumeRoleWithWebIdentity(w http.ResponseWriter, r *h
 //    $ curl https://minio:9000/?Action=AssumeRoleWithClientGrants&Token=<jwt>
 func (sts *stsAPIHandlers) AssumeRoleWithClientGrants(w http.ResponseWriter, r *http.Request) {
 	sts.AssumeRoleWithJWT(w, r)
+}
+
+// AssumeRoleWithLDAPIdentity - implements user auth against LDAP server
+func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AssumeRoleWithLDAPIdentity")
+
+	// Parse the incoming form data.
+	if err := r.ParseForm(); err != nil {
+		logger.LogIf(ctx, err)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+
+	if r.Form.Get("Version") != stsAPIVersion {
+		logger.LogIf(ctx, fmt.Errorf("Invalid STS API version %s, expecting %s", r.Form.Get("Version"), stsAPIVersion))
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSMissingParameter))
+		return
+	}
+
+	action := r.Form.Get("Action")
+	switch action {
+	case ldapIdentity:
+	default:
+		logger.LogIf(ctx, fmt.Errorf("Unsupported action %s", action))
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+
+	ctx = newContext(r, w, action)
+	defer logger.AuditLog(w, r, action, nil)
+
+	ldapUsername := r.Form.Get("LDAPUsername")
+	ldapPassword := r.Form.Get("LDAPPassword")
+
+	if ldapUsername == "" || ldapPassword == "" {
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSMissingParameter))
+		return
+	}
+
+	ldapConn, err := globalServerConfig.LDAPServerConfig.Connect()
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("LDAP server connection failure: %v", err))
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+	if ldapConn == nil {
+		logger.LogIf(ctx, fmt.Errorf("LDAP server not configured: %v", err))
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+
+	usernameSubs := newSubstituter("username", ldapUsername)
+	// We ignore error below as we already validated the username
+	// format string at startup.
+	usernameDN, _ := usernameSubs.substitute(globalServerConfig.LDAPServerConfig.UsernameFormat)
+	// Bind with user credentials to validate the password
+	err = ldapConn.Bind(usernameDN, ldapPassword)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("LDAP authentication failure: %v", err))
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+
+	groups := []string{}
+	if globalServerConfig.LDAPServerConfig.GroupSearchFilter != "" {
+		// Verified user credentials. Now we find the groups they are
+		// a member of.
+		searchSubs := newSubstituter(
+			"username", ldapUsername,
+			"usernamedn", usernameDN,
+		)
+		// We ignore error below as we already validated the search string
+		// at startup.
+		groupSearchFilter, _ := searchSubs.substitute(globalServerConfig.LDAPServerConfig.GroupSearchFilter)
+		baseDN, _ := searchSubs.substitute(globalServerConfig.LDAPServerConfig.GroupSearchBaseDN)
+		searchRequest := ldap.NewSearchRequest(
+			baseDN,
+			ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+			groupSearchFilter,
+			[]string{globalServerConfig.LDAPServerConfig.GroupNameAttribute},
+			nil,
+		)
+
+		sr, err := ldapConn.Search(searchRequest)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("LDAP search failure: %v", err))
+			writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+			return
+		}
+		for _, entry := range sr.Entries {
+			// We only queried one attribute, so we only look up
+			// the first one.
+			groups = append(groups, entry.Attributes[0].Values...)
+		}
+	}
+	expiryDur := globalServerConfig.LDAPServerConfig.stsExpiryDuration
+	m := map[string]interface{}{
+		"exp":        UTCNow().Add(expiryDur).Unix(),
+		"ldapUser":   ldapUsername,
+		"ldapGroups": groups,
+	}
+
+	secret := globalServerConfig.GetCredential().SecretKey
+	cred, err := auth.GetNewCredentialsWithMetadata(m, secret)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInternalError))
+		return
+	}
+
+	policyName := ""
+	// Set the newly generated credentials.
+	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
+		logger.LogIf(ctx, err)
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInternalError))
+		return
+	}
+
+	// Notify all other MinIO peers to reload temp users
+	for _, nerr := range globalNotificationSys.LoadUser(cred.AccessKey, true) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+
+	ldapIdentityResponse := &AssumeRoleWithLDAPResponse{
+		Result: LDAPIdentityResult{
+			Credentials: cred,
+		},
+	}
+	ldapIdentityResponse.ResponseMetadata.RequestID = w.Header().Get(xhttp.AmzRequestID)
+	encodedSuccessResponse := encodeResponse(ldapIdentityResponse)
+
+	writeSuccessResponseXML(w, encodedSuccessResponse)
 }

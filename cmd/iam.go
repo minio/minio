@@ -30,6 +30,20 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 )
 
+// UsersSysType - defines the type of users and groups system that is
+// active on the server.
+type UsersSysType string
+
+// Types of users configured in the server.
+const (
+	// This mode uses the internal users system in MinIO.
+	MinIOUsersSysType UsersSysType = "MinIOUsersSys"
+
+	// This mode uses users and groups from a configured LDAP
+	// server.
+	LDAPUsersSysType UsersSysType = "LDAPUsersSys"
+)
+
 const (
 	// IAM configuration directory.
 	iamConfigPrefix = minioConfigPrefix + "/iam"
@@ -145,6 +159,9 @@ func newMappedPolicy(policy string) MappedPolicy {
 // IAMSys - config system.
 type IAMSys struct {
 	sync.RWMutex
+
+	usersSysType UsersSysType
+
 	// map of policy names to policy definitions
 	iamPolicyDocsMap map[string]iampolicy.Policy
 	// map of usernames to credentials
@@ -463,6 +480,13 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 		return errServerNotInitialized
 	}
 
+	sys.Lock()
+	defer sys.Unlock()
+
+	if sys.usersSysType != MinIOUsersSysType {
+		return errIAMActionNotPossible
+	}
+
 	// It is ok to ignore deletion error on the mapped policy
 	sys.store.deleteMappedPolicy(accessKey, false, false)
 	err := sys.store.deleteUserIdentity(accessKey, false)
@@ -471,9 +495,6 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 		// ignore if user is already deleted.
 		err = nil
 	}
-
-	sys.Lock()
-	defer sys.Unlock()
 
 	delete(sys.iamUsersMap, accessKey)
 	delete(sys.iamUserPolicyMap, accessKey)
@@ -533,6 +554,10 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 	sys.RLock()
 	defer sys.RUnlock()
 
+	if sys.usersSysType != MinIOUsersSysType {
+		return nil, errIAMActionNotPossible
+	}
+
 	for k, v := range sys.iamUsersMap {
 		users[k] = madmin.UserInfo{
 			PolicyName: sys.iamUserPolicyMap[k].Policy,
@@ -552,6 +577,12 @@ func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
 
 	sys.RLock()
 	defer sys.RUnlock()
+
+	if sys.usersSysType != MinIOUsersSysType {
+		return madmin.UserInfo{
+			PolicyName: sys.iamUserPolicyMap[name].Policy,
+		}, nil
+	}
 
 	creds, found := sys.iamUsersMap[name]
 	if !found {
@@ -579,6 +610,10 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 
 	sys.Lock()
 	defer sys.Unlock()
+
+	if sys.usersSysType != MinIOUsersSysType {
+		return errIAMActionNotPossible
+	}
 
 	cred, ok := sys.iamUsersMap[accessKey]
 	if !ok {
@@ -614,6 +649,10 @@ func (sys *IAMSys) SetUser(accessKey string, uinfo madmin.UserInfo) error {
 	sys.Lock()
 	defer sys.Unlock()
 
+	if sys.usersSysType != MinIOUsersSysType {
+		return errIAMActionNotPossible
+	}
+
 	if err := sys.store.saveUserIdentity(accessKey, false, u); err != nil {
 		return err
 	}
@@ -635,6 +674,10 @@ func (sys *IAMSys) SetUserSecretKey(accessKey string, secretKey string) error {
 
 	sys.Lock()
 	defer sys.Unlock()
+
+	if sys.usersSysType != MinIOUsersSysType {
+		return errIAMActionNotPossible
+	}
 
 	cred, ok := sys.iamUsersMap[accessKey]
 	if !ok {
@@ -674,6 +717,10 @@ func (sys *IAMSys) AddUsersToGroup(group string, members []string) error {
 
 	sys.Lock()
 	defer sys.Unlock()
+
+	if sys.usersSysType != MinIOUsersSysType {
+		return errIAMActionNotPossible
+	}
 
 	// Validate that all members exist.
 	for _, member := range members {
@@ -728,6 +775,10 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 
 	sys.Lock()
 	defer sys.Unlock()
+
+	if sys.usersSysType != MinIOUsersSysType {
+		return errIAMActionNotPossible
+	}
 
 	// Validate that all members exist.
 	for _, member := range members {
@@ -802,6 +853,10 @@ func (sys *IAMSys) SetGroupStatus(group string, enabled bool) error {
 	sys.Lock()
 	defer sys.Unlock()
 
+	if sys.usersSysType != MinIOUsersSysType {
+		return errIAMActionNotPossible
+	}
+
 	if group == "" {
 		return errInvalidArgument
 	}
@@ -830,6 +885,7 @@ func (sys *IAMSys) GetGroupDescription(group string) (gd madmin.GroupDesc, err e
 	if err != nil {
 		return gd, err
 	}
+
 	// A group may be mapped to at most one policy.
 	policy := ""
 	if len(ps) > 0 {
@@ -838,6 +894,13 @@ func (sys *IAMSys) GetGroupDescription(group string) (gd madmin.GroupDesc, err e
 
 	sys.RLock()
 	defer sys.RUnlock()
+
+	if sys.usersSysType != MinIOUsersSysType {
+		return madmin.GroupDesc{
+			Name:   group,
+			Policy: policy,
+		}, nil
+	}
 
 	gi, ok := sys.iamGroupsMap[group]
 	if !ok {
@@ -852,15 +915,19 @@ func (sys *IAMSys) GetGroupDescription(group string) (gd madmin.GroupDesc, err e
 	}, nil
 }
 
-// ListGroups - lists groups
-func (sys *IAMSys) ListGroups() (r []string) {
+// ListGroups - lists groups.
+func (sys *IAMSys) ListGroups() (r []string, err error) {
 	sys.RLock()
 	defer sys.RUnlock()
+
+	if sys.usersSysType != MinIOUsersSysType {
+		return nil, errIAMActionNotPossible
+	}
 
 	for k := range sys.iamGroupsMap {
 		r = append(r, k)
 	}
-	return r
+	return r, nil
 }
 
 // PolicyDBSet - sets a policy for a user or group in the
@@ -889,13 +956,16 @@ func (sys *IAMSys) policyDBSet(objectAPI ObjectLayer, name, policy string, isSTS
 	if _, ok := sys.iamPolicyDocsMap[policy]; !ok {
 		return errNoSuchPolicy
 	}
-	if !isGroup {
-		if _, ok := sys.iamUsersMap[name]; !ok {
-			return errNoSuchUser
-		}
-	} else {
-		if _, ok := sys.iamGroupsMap[name]; !ok {
-			return errNoSuchGroup
+
+	if sys.usersSysType == MinIOUsersSysType {
+		if !isGroup {
+			if _, ok := sys.iamUsersMap[name]; !ok {
+				return errNoSuchUser
+			}
+		} else {
+			if _, ok := sys.iamGroupsMap[name]; !ok {
+				return errNoSuchGroup
+			}
 		}
 	}
 
@@ -980,6 +1050,63 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 // which implements claims validation and verification other than
 // applying policies.
 func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
+	// If it is an LDAP request, check that user and group
+	// policies allow the request.
+	if userIface, ok := args.Claims[ldapUser]; ok {
+		var user string
+		if u, ok := userIface.(string); ok {
+			user = u
+		} else {
+			return false
+		}
+
+		var groups []string
+		groupsVal := args.Claims[ldapGroups]
+		if g, ok := groupsVal.([]interface{}); ok {
+			for _, eachG := range g {
+				if eachGStr, ok := eachG.(string); ok {
+					groups = append(groups, eachGStr)
+				}
+			}
+		} else {
+			return false
+		}
+
+		sys.RLock()
+		defer sys.RUnlock()
+
+		// We look up the policy mapping directly to bypass
+		// users exists, group exists validations that do not
+		// apply here.
+		var policies []iampolicy.Policy
+		if policy, ok := sys.iamUserPolicyMap[user]; ok {
+			p, found := sys.iamPolicyDocsMap[policy.Policy]
+			if found {
+				policies = append(policies, p)
+			}
+		}
+		for _, group := range groups {
+			policy, ok := sys.iamGroupPolicyMap[group]
+			if !ok {
+				continue
+			}
+			p, found := sys.iamPolicyDocsMap[policy.Policy]
+			if found {
+				policies = append(policies, p)
+			}
+		}
+		if len(policies) == 0 {
+			return false
+		}
+		combinedPolicy := policies[0]
+		for i := 1; i < len(policies); i++ {
+			combinedPolicy.Statements =
+				append(combinedPolicy.Statements,
+					policies[i].Statements...)
+		}
+		return combinedPolicy.IsAllowed(args)
+	}
+
 	pname, ok := args.Claims[iampolicy.PolicyName]
 	if !ok {
 		// When claims are set, it should have a "policy" field.
@@ -1155,7 +1282,20 @@ func (sys *IAMSys) removeGroupFromMembershipsMap(group string) {
 
 // NewIAMSys - creates new config system object.
 func NewIAMSys() *IAMSys {
+	// Check global server configuration to determine the type of
+	// users system configured.
+
+	// The default users system
+	var utype UsersSysType
+	switch {
+	case globalServerConfig.LDAPServerConfig.ServerAddr != "":
+		utype = LDAPUsersSysType
+	default:
+		utype = MinIOUsersSysType
+	}
+
 	return &IAMSys{
+		usersSysType:            utype,
 		iamUsersMap:             make(map[string]auth.Credentials),
 		iamPolicyDocsMap:        make(map[string]iampolicy.Policy),
 		iamUserPolicyMap:        make(map[string]MappedPolicy),
