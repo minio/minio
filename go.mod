@@ -53,10 +53,10 @@ require (
 	github.com/miekg/dns v1.1.8
 	github.com/minio/blazer v0.0.0-20171126203752-2081f5bf0465
 	github.com/minio/cli v1.20.0
-	github.com/minio/dsync v1.0.0
+	github.com/minio/dsync/v2 v2.0.0
 	github.com/minio/hdfs/v3 v3.0.0
 	github.com/minio/highwayhash v1.0.0
-	github.com/minio/lsync v0.1.0
+	github.com/minio/lsync v1.0.1
 	github.com/minio/mc v0.0.0-20190529152718-f4bb0b8850cb
 	github.com/minio/minio-go/v6 v6.0.29
 	github.com/minio/parquet-go v0.0.0-20190318185229-9d767baf1679

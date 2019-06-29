@@ -686,7 +686,7 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 	}
 
 	if !cpSrcDstSame {
-		objectDWLock := destSet.nsMutex.NewNSLock(destBucket, destObject)
+		objectDWLock := destSet.nsMutex.NewNSLock(ctx, destBucket, destObject)
 		if err := objectDWLock.GetLock(globalObjectTimeout); err != nil {
 			return objInfo, err
 		}
@@ -1157,7 +1157,7 @@ func formatsToDrivesInfo(endpoints EndpointList, formats []*formatXLV3, sErrs []
 // healing in a distributed setup.
 func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 	// Acquire lock on format.json
-	formatLock := s.getHashedSet(formatConfigFile).nsMutex.NewNSLock(minioMetaBucket, formatConfigFile)
+	formatLock := s.getHashedSet(formatConfigFile).nsMutex.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
 	if err = formatLock.GetRLock(globalHealingTimeout); err != nil {
 		return err
 	}
@@ -1278,7 +1278,7 @@ func markRootDisksAsDown(storageDisks []StorageAPI) {
 // coded data in it.
 func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealResultItem, err error) {
 	// Acquire lock on format.json
-	formatLock := s.getHashedSet(formatConfigFile).nsMutex.NewNSLock(minioMetaBucket, formatConfigFile)
+	formatLock := s.getHashedSet(formatConfigFile).nsMutex.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
 	if err = formatLock.GetLock(globalHealingTimeout); err != nil {
 		return madmin.HealResultItem{}, err
 	}
@@ -1431,7 +1431,7 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 
 // HealBucket - heals inconsistent buckets and bucket metadata on all sets.
 func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (result madmin.HealResultItem, err error) {
-	bucketLock := globalNSMutex.NewNSLock(bucket, "")
+	bucketLock := globalNSMutex.NewNSLock(ctx, bucket, "")
 	if err := bucketLock.GetLock(globalHealingTimeout); err != nil {
 		return result, err
 	}

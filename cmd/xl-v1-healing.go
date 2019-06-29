@@ -717,7 +717,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 	}
 
 	// Lock the object before healing.
-	objectLock := xl.nsMutex.NewNSLock(bucket, object)
+	objectLock := xl.nsMutex.NewNSLock(ctx, bucket, object)
 	if lerr := objectLock.GetRLock(globalHealingTimeout); lerr != nil {
 		return defaultHealResult(latestXLMeta, storageDisks, errs, bucket, object), lerr
 	}

@@ -55,7 +55,7 @@ func sweepRound(ctx context.Context, objAPI ObjectLayer) error {
 	zeroDynamicTimeout := newDynamicTimeout(zeroDuration, zeroDuration)
 
 	// General lock so we avoid parallel daily sweep by different instances.
-	sweepLock := globalNSMutex.NewNSLock("system", "daily-sweep")
+	sweepLock := globalNSMutex.NewNSLock(ctx, "system", "daily-sweep")
 	if err := sweepLock.GetLock(zeroDynamicTimeout); err != nil {
 		return err
 	}

@@ -2440,7 +2440,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
 	// and configFile, take a transaction lock to avoid data race between readConfig()
 	// and saveConfig().
-	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
+	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigFile)
 	if err = objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
@@ -2492,7 +2492,7 @@ func migrateMinioSysConfig(objAPI ObjectLayer) error {
 	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
 	// and configFile, take a transaction lock to avoid data race between readConfig()
 	// and saveConfig().
-	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
+	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigFile)
 	if err := objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}

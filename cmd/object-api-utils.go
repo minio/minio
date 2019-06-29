@@ -793,3 +793,18 @@ func (cr *snappyCompressReader) Read(p []byte) (int, error) {
 	}
 	return n, err
 }
+
+// Returns error if the cancelCh has been closed (indicating that S3 client has disconnected)
+type detectDisconnect struct {
+	io.ReadCloser
+	cancelCh <-chan struct{}
+}
+
+func (d *detectDisconnect) Read(p []byte) (int, error) {
+	select {
+	case <-d.cancelCh:
+		return 0, io.ErrUnexpectedEOF
+	default:
+		return d.ReadCloser.Read(p)
+	}
+}
