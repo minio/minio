@@ -50,7 +50,7 @@ type Entry struct {
 }
 
 // ToEntry - constructs an audit entry object.
-func ToEntry(w http.ResponseWriter, r *http.Request, api string, statusCode int, reqClaims map[string]interface{}) Entry {
+func ToEntry(w http.ResponseWriter, r *http.Request, api string, statusCode int, reqClaims map[string]interface{}, deploymentID string) Entry {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -71,7 +71,7 @@ func ToEntry(w http.ResponseWriter, r *http.Request, api string, statusCode int,
 
 	entry := Entry{
 		Version:      Version,
-		DeploymentID: w.Header().Get("x-minio-deployment-id"),
+		DeploymentID: deploymentID,
 		RemoteHost:   handlers.GetSourceIP(r),
 		RequestID:    w.Header().Get("x-amz-request-id"),
 		UserAgent:    r.UserAgent(),

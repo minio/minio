@@ -166,7 +166,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 				Key:        object,
 				Resource:   r.URL.Path,
 				RequestID:  w.Header().Get(responseRequestIDKey),
-				HostID:     w.Header().Get(responseDeploymentIDKey),
+				HostID:     globalDeploymentID,
 			})
 			writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
 		} else {
@@ -208,7 +208,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 				Key:        object,
 				Resource:   r.URL.Path,
 				RequestID:  w.Header().Get(responseRequestIDKey),
-				HostID:     w.Header().Get(responseDeploymentIDKey),
+				HostID:     globalDeploymentID,
 			})
 			writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
 		} else {
@@ -2272,7 +2272,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 		// Generate error response.
 		errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path,
-			w.Header().Get(responseRequestIDKey), w.Header().Get(responseDeploymentIDKey))
+			w.Header().Get(responseRequestIDKey), globalDeploymentID)
 		encodedErrorResponse, _ := xml.Marshal(errorResponse)
 		setCommonHeaders(w)
 		w.Header().Set("Content-Type", string(mimeXML))

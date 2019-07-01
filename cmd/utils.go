@@ -425,7 +425,7 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 		object = prefix
 	}
 	reqInfo := &logger.ReqInfo{
-		DeploymentID: w.Header().Get(responseDeploymentIDKey),
+		DeploymentID: globalDeploymentID,
 		RequestID:    w.Header().Get(responseRequestIDKey),
 		RemoteHost:   handlers.GetSourceIP(r),
 		UserAgent:    r.UserAgent(),
