@@ -29,7 +29,7 @@ JSON RPC命名空间是`Web`.
 * SetAuth - 使用新的用户名，密码更改访问凭据。
 * GetAuth - 从服务器获取当前的身份验证。
 
-#### Bucket/Object operations.
+#### 存储桶/对象 操作.
 
 * ListBuckets - 列出所有的存储桶，需要有合法的token令牌。
 * ListObjects - 列出存储对象, 需要有合法的token令牌。

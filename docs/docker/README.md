@@ -1,4 +1,4 @@
-# MinIO Docker Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
+# MinIO Docker Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
 ## Prerequisites
 Docker installed on your machine. Download the relevant installer from [here](https://www.docker.com/community-edition#/download).
@@ -53,35 +53,6 @@ docker run -p 9000:9000 --name minio1 \
 docker run -p 9000:9000 --name minio1 \
   -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
-  -v D:\data:/data \
-  -v D:\minio\config:/root/.minio \
-  minio/minio server /data
-```
-
-### Run MinIO Docker as non root user
-MinIO server runs as non-root within the container by default. However, this is applicable only if you're deploying new MinIO instance (not upgrading from older releases). Deployments upgrading from older MinIO deployments, will continue to run as the user previously used if any.
-
-By default `minio` is username and groupname. Use environment variables `MINIO_USERNAME` and `MINIO_GROUPNAME` to override these default values.
-
-#### GNU/Linux and macOS
-```sh
-docker run -p 9000:9000 --name minio1 \
-  -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
-  -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
-  -e "MINIO_USERNAME=custom" \
-  -e "MINIO_GROUPNAME=custom" \
-  -v /mnt/data:/data \
-  -v /mnt/config:/root/.minio \
-  minio/minio server /data
-```
-
-#### Windows
-```powershell
-docker run -p 9000:9000 --name minio1 \
-  -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
-  -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
-  -e "MINIO_USERNAME=custom" \
-  -e "MINIO_GROUPNAME=custom" \
   -v D:\data:/data \
   -v D:\minio\config:/root/.minio \
   minio/minio server /data

@@ -68,7 +68,7 @@ sysrc minio_disks=/minio-example/compressed-objects
 service minio start
 ```
 
-现在你已经成功的让MinIO运行在ZFS上，你上传的对象都获得了磁盘级别的压缩功能，访问 http://localhost:9000。
+现在你已经成功地让MinIO运行在ZFS上，你上传的对象都获得了磁盘级别的压缩功能，访问 http://localhost:9000。
 
 #### 关闭MinIO服务
 ```sh

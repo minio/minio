@@ -1,18 +1,23 @@
 # MinIO存储桶通知指南 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-存储桶（Bucket）如果发生改变,比如上传对象和删除对象，可以使用存储桶事件通知机制进行监控，并通过以下方式发布出去:
+可以使用存储桶事件通知来监视存储桶中对象所发生的事件。MinIO服务器支持的事件类型是：
 
-| Notification Targets|
-|:---|
-| [`AMQP`](#AMQP) |
-| [`MQTT`](#MQTT) |
-| [`Elasticsearch`](#Elasticsearch) |
-| [`Redis`](#Redis) |
-| [`NATS`](#NATS) |
-| [`PostgreSQL`](#PostgreSQL) |
-| [`MySQL`](#MySQL) |
-| [`Apache Kafka`](#apache-kafka) |
-| [`Webhooks`](#webhooks) |
+|支持的事件类型| | |
+--| --| --|
+`s3:ObjectCreated:Put` | `s3:ObjectCreated:CompleteMultipartUpload` | `s3:ObjectAccessed:Head`
+`s3:ObjectCreated:Post` | `s3:ObjectRemoved:Delete`
+`s3:ObjectCreated:Copy` | `s3:ObjectAccessed:Get`
+
+可以使用像`mc`的客户端工具执行[`event`子命令](https://docs.min.io/cn/minio-client-complete-guide#events)设置和侦听事件通知，也可以使用MinIO SDK的Bucket Notification API来达到相同的目的。MinIO发布事件的通知消息是具有以下[结构](https://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html)的JSON消息。
+
+桶事件可以被发送到以下的目标：
+
+Notification Targets| | |
+:--| --| --|
+| [`AMQP`](#AMQP) |[`Redis`](#Redis) |[`MySQL`](#MySQL) |
+| [`MQTT`](#MQTT) |[`NATS`](#NATS) |[`Apache Kafka`](#apache-kafka) |
+| [`Elasticsearch`](#Elasticsearch) |[`PostgreSQL`](#PostgreSQL) |[`Webhooks`](#webhooks)|
+| [`NSQ`](#NSQ)|
 
 ## 前提条件
 
@@ -20,13 +25,14 @@
 * 从[这里](https://docs.min.io/cn/minio-client-quickstart-guide)下载并安装MinIO Client。
 
 <a name="AMQP"></a>
+
 ## 使用AMQP发布MinIO事件
 
 从[这里](https://www.rabbitmq.com/)下载安装RabbitMQ。
 
 ### 第一步: 将AMQP endpoint添加到MinIO
 
-MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。AMQP配置信息是在`notify`这个节点下的`amqp`节点下，在这里为你的AMQP实例创建配置信息键值对，key是你的AMQP endpoint的名称，value是下面表格中列列的键值对集合。
+MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。AMQP配置信息是在`notify`这个节点下的`amqp`节点下，在这里为你的AMQP实例创建配置信息键值对，key是你的AMQP endpoint的名称，value是下面表格中列的键值对集合。
 
 | 参数 | 类型 | 描述 |
 |:---|:---|:---|
@@ -36,14 +42,14 @@ MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。AMQP配置
 | `routingKey` | _string_ | 发布用的Routing key  |
 | `exchangeType` | _string_ | exchange类型 |
 | `deliveryMode` | _uint8_ | 发布方式。 0或1 - 瞬态; 2 - 持久。|
-| `mandatory` | _bool_ | Publishing related bool. |
-| `immediate` | _bool_ | Publishing related bool. |
-| `durable` | _bool_ | Exchange declaration related bool. |
-| `internal` | _bool_ | Exchange declaration related bool. |
-| `noWait` | _bool_ | Exchange declaration related bool. |
-| `autoDeleted` | _bool_ | Exchange declaration related bool. |
+| `mandatory` | _bool_ | 与发版相关的布尔。 |
+| `immediate` | _bool_ | 与发版相关的布尔。 |
+| `durable` | _bool_ | 与交换声明相关的布尔。 |
+| `internal` | _bool_ | 与交换声明相关的布尔。 |
+| `noWait` | _bool_ | 与交换声明相关的布尔。 |
+| `autoDeleted` | _bool_ | 与交换声明相关的布尔。 |
 
-下面展示的是RabbitMQ的配置示例:
+下面是一个RabbitMQ的配置示例:
 
 ```json
 "amqp": {
@@ -64,16 +70,27 @@ MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。AMQP配置
 }
 ```
 
-更新完配置文件后，重启MinIO Server让配置生效。如果一切顺利，MinIO Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:amqp`。
+为了更新配置，可以使用`mc admin config get`命令得到当前minio部署的json配置文件，之后将其保存在本地：
 
-MinIO支持[RabbitMQ](https://www.rabbitmq.com/)中所有的交换方式，这次我们采用  ``fanout`` 交换。
+```sh
+$ mc admin config get myminio/ > /tmp/myconfig
+```
 
-注意一下，你可以听从你内心的想法，想配几个AMQP服务就配几个，只要每个AMQP服务实例有不同的ID (比如前面示例中的"1") 和配置信息。
+
+更新完/tmp/myconfig下的AMQP配置文件后，使用`mc admin config set`命令更新部署配置。重启MinIO服务器让配置生效。如果没有任何报错，MinIO服务器会在启动时输出一行类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:amqp`的信息。
+
+```sh
+$ mc admin config set myminio < /tmp/myconfig
+```
+
+MinIO支持[RabbitMQ](https://www.rabbitmq.com/)中所有的交换方式，这次我们采用``fanout``交换。
+
+注意一下，你可以听从你内心的想法，想配几个AMQP endpoint就配几个，只要你提供了AMQP实例的标识符(像上面的例子中“1”)以及每个服务器配置参数的对象。
 
 
 ### 第二步: 使用MinIO客户端启用bucket通知
 
-如果一个JPEG图片上传到``myminio`` server里的``images`` 存储桶或者从桶中删除，一个存储桶事件通知就会被触发。 这里ARN值是``arn:minio:sqs:us-east-1:1:amqp``，想了解更多关于ARN的信息，请参考[AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+如果一个JPEG图片上传到``myminio``服务器里的``images`` 存储桶或者从桶中删除，一个存储桶事件通知就会被触发。 这里的ARN值是``arn:minio:sqs:us-east-1:1:amqp``，想了解更多关于ARN的信息，请参考[AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) 文献.
 
 ```
 mc mb myminio/images
@@ -84,7 +101,7 @@ arn:minio:sqs:us-east-1:1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suf
 
 ### 第三步:在RabbitMQ上进行验证
 
-下面将要出场的python程序会等待队列交换T``bucketevents``并在控制台中输出事件通知。我们使用的是[Pika Python Client](https://www.rabbitmq.com/tutorials/tutorial-three-python.html) 来实现此功能。
+下面将要出场的python程序会等待队列交换``bucketevents``并在控制台中输出事件通知。我们使用的是[Pika Python Client](https://www.rabbitmq.com/tutorials/tutorial-three-python.html) 来实现此功能。
 
 ```py
 #!/usr/bin/env python
@@ -115,7 +132,7 @@ channel.basic_consume(callback,
 channel.start_consuming()
 ```
 
-执行示例中的python程序来观察RabbitMQ事件。
+执行示例中的python程序来在控制台观察RabbitMQ事件。
 
 ```py
 python rabbit.py
@@ -131,17 +148,18 @@ mc cp myphoto.jpg myminio/images
 
 ```py
 python rabbit.py
-‘{“Records”:[{“eventVersion”:”2.0",”eventSource”:”aws:s3",”awsRegion”:”us-east-1",”eventTime”:”2016–09–08T22:34:38.226Z”,”eventName”:”s3:ObjectCreated:Put”,”userIdentity”:{“principalId”:”minio”},”requestParameters”:{“sourceIPAddress”:”10.1.10.150:44576"},”responseElements”:{},”s3":{“s3SchemaVersion”:”1.0",”configurationId”:”Config”,”bucket”:{“name”:”images”,”ownerIdentity”:{“principalId”:”minio”},”arn”:”arn:aws:s3:::images”},”object”:{“key”:”myphoto.jpg”,”size”:200436,”sequencer”:”147279EAF9F40933"}}}],”level”:”info”,”msg”:””,”time”:”2016–09–08T15:34:38–07:00"}\n
+'{“Records”:[{“eventVersion”:”2.0",”eventSource”:”aws:s3",”awsRegion”:”us-east-1",”eventTime”:”2016–09–08T22:34:38.226Z”,”eventName”:”s3:ObjectCreated:Put”,”userIdentity”:{“principalId”:”minio”},”requestParameters”:{“sourceIPAddress”:”10.1.10.150:44576"},”responseElements”:{},”s3":{“s3SchemaVersion”:”1.0",”configurationId”:”Config”,”bucket”:{“name”:”images”,”ownerIdentity”:{“principalId”:”minio”},”arn”:”arn:aws:s3:::images”},”object”:{“key”:”myphoto.jpg”,”size”:200436,”sequencer”:”147279EAF9F40933"}}}],”level”:”info”,”msg”:””,”time”:”2016–09–08T15:34:38–07:00"}'
 ```
 
 <a name="MQTT"></a>
+
 ## 使用MQTT发布MinIO事件
 
 从 [这里](https://mosquitto.org/)安装MQTT Broker。
 
 ### 第一步: 添加MQTT endpoint到MinIO
 
-MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。MQTT配置信息是在`notify`这个节点下的`mqtt`节点下，在这里为你的MQTT实例创建配置信息键值对，key是你的MQTT endpoint的名称，value是下面表格中列列的键值对集合。
+MinIO Server的配置文件是以json格式存储在后端的。MQTT配置信息是在`notify`这个节点下的`mqtt`节点下，在这里为你的MQTT实例创建配置信息键值对，key是你的MQTT endpoint的名称，value是下面表格中列列的键值对集合。
 
 
 | 参数 | 类型 | 描述 |
@@ -150,11 +168,14 @@ MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。MQTT配置
 | `broker` | _string_ | (必须) MQTT server endpoint, 例如. `tcp://localhost:1883` |
 | `topic` | _string_ | (必须) 要发布的MQTT主题的名称, 例如. `minio` |
 | `qos` | _int_ | 设置服务质量级别 |
-| `clientId` | _string_ | MQTT代理识别MinIO的唯一ID |
 | `username` | _string_ | 连接MQTT server的用户名 (如果需要的话) |
 | `password` | _string_ | 链接MQTT server的密码 (如果需要的话) |
+| `queueDir`| _string_ | 当MQTT代理脱机时事件持久化存储 |
+| `queueLimit` | _int_ | 为持久化存储设置最大事件限制，默认的限制是10000 |
 
 以下是一个MQTT的配置示例:
+
+一个MQTT的配置例子如下所示：
 
 ```json
 "mqtt": {
@@ -163,14 +184,27 @@ MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。MQTT配置
         "broker": "tcp://localhost:1883",
         "topic": "minio",
         "qos": 1,
-        "clientId": "minio",
         "username": "",
-        "password": ""
+        "password": "",
+        "queueDir": "",
+        "queueLimit": 0,
     }
 }
 ```
 
-更新完配置文件后，重启MinIO Server让配置生效。如果一切顺利，MinIO Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:mqtt`。
+MinIO支持持久事件存储。持久化存储将在MQTT代理脱机时备份事件，并在代理联机时重新使用它。事件存储可以通过设置在`queueDir`字段的文件路径以及在`queueLimit`字段中queueDir的最大事件限制来进行配置。例如，`queueDir`可以被设置为`/home/events`以及`queueLimit`可以设置为`1000`。在默认情况下，`queueLimit`可以被设置为10000。
+
+为了更新配置，使用`mc admin config get`命令来得到当前的MinIO部署的json配置文件，并将它保存在本地。
+
+```sh
+$ mc admin config get muminio / > /tmp/myconfig
+```
+
+在更新完位于/tmp/myconfig目录下的MQTT配置后，使用`mc admin config set`命令来更新部署配置。重启MinIO服务器来使更改生效。如果没有任何错误信息，服务器将会在启动时打印一条像`SQS ARNs: arn:minio:sqs::1:mqtt`的消息。
+
+```sh
+$ mc admin config set myminio < /tmp/myconfig
+```
 
 MinIO支持任何支持MQTT 3.1或3.1.1的MQTT服务器，并且可以通过TCP，TLS或Websocket连接使用``tcp://``, ``tls://``, or ``ws://``分别作为代理URL的方案。 更多信息，请参考 [Go Client](http://www.eclipse.org/paho/clients/golang/)。
 
@@ -193,36 +227,31 @@ arn:minio:sqs:us-east-1:1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suf
 下面的python程序等待mqtt主题``/ minio``，并在控制台上打印事件通知。 我们使用[paho-mqtt](https://pypi.python.org/pypi/paho-mqtt/)库来执行此操作。
 
 ```py
-#!/usr/bin/env python
+#!/usr/bin/env python3
 from __future__ import print_function
 import paho.mqtt.client as mqtt
 
-# The callback for when the client receives a CONNACK response from the server.
+# This is the Subscriber
+
 def on_connect(client, userdata, flags, rc):
-    print("Connected with result code", rc)
+  print("Connected with result code "+str(rc))
+  # qos level is set to 1
+  client.subscribe("minio", 1)
 
-    # Subscribing in on_connect() means that if we lose the connection and
-    # reconnect then subscriptions will be renewed.
-    client.subscribe("/minio")
-
-# The callback for when a PUBLISH message is received from the server.
 def on_message(client, userdata, msg):
     print(msg.payload)
 
-client = mqtt.Client()
+# client_id is a randomly generated unique ID for the mqtt broker to identify the connection.
+client = mqtt.Client(client_id="myclientid",clean_session=False)
+
 client.on_connect = on_connect
 client.on_message = on_message
 
-client.connect("localhost:1883", 1883, 60)
-
-# Blocking call that processes network traffic, dispatches callbacks and
-# handles reconnecting.
-# Other loop*() functions are available that give a threaded interface and a
-# manual interface.
+client.connect("localhost",1883,60)
 client.loop_forever()
 ```
 
-执行这个python示例程序来观察MQTT事件。
+执行这个python示例程序并在控制台上观察MQTT事件。
 
 ```py
 python mqtt.py
@@ -242,7 +271,7 @@ python mqtt.py
 ```
 
 <a name="Elasticsearch"></a>
-## 使用Elasticsearch发布MinIO事件
+## Elasticsearch发布MinIO事件
 
 安装 [Elasticsearch](https://www.elastic.co/downloads/elasticsearch) 。
 
@@ -250,9 +279,9 @@ python mqtt.py
 
 如果使用的是 _namespace_ 格式, MinIO将桶中的对象与索引中的文档进行同步。对于MinIO的每一个事件，ES都会创建一个document,这个document的ID就是存储桶以及存储对象的名称。事件的其他细节存储在document的正文中。因此，如果一个已经存在的对象在MinIO中被覆盖，在ES中的相对应的document也会被更新。如果一个对象被删除，相对应的document也会从index中删除。
 
-如果使用的是_access_格式，MinIO将事件作为document加到ES的index中。对于每一个事件，ES同样会创建一个document,这个document包含事件的所有细节，document的时间戳设置为事件的时间戳，并将该document加到ES的index中。这个document的ID是由ES随机生成的。在_access_格式下，没有文档会被删除或者修改，对于一个对象的操作，都会生成新的document附加到index中。
+如果使用的是_access_格式，MinIO将事件作为document加到ES的index中。对于每一个事件，ES同样会创建一个document，这个document包含事件的所有细节，document的时间戳设置为事件的时间戳，并将该document加到ES的index中。这个document的ID是由ES随机生成的。在_access_格式下，没有文档会被删除或者修改，对于一个对象的操作，都会生成新的document附加到index中。
 
-下面的步骤展示的是在`namespace`格式下，如何使用通知目标。另一种格式和这个很类似，为了不让你们说我墨迹，就不再赘述了。
+下面的步骤展示的是在`namespace`格式下，如何使用通知目标。另一种格式和这个很类似，为了不让你们说我磨叽，就不再赘述了。
 
 
 ### 第一步：确保至少满足第低要求
@@ -261,14 +290,14 @@ MinIO要求使用的是ES 5.X系统版本。如果使用的是低版本的ES，�
 
 ### 第二步：把ES集成到MinIO中
 
-MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。ES配置信息是在`notify`这个节点下的`elasticsearch`节点下，在这里为你的ES实例创建配置信息键值对，key是你的ES的名称，value是下面表格中列列的键值对集合。
+MinIO服务器配置文件是以json形式存储在后端的，Elasticsearch配置位于`notify`顶级节点下的`elasticsearch`节点下。在这里为你的ES实例创建配置信息键值对，key是你的ES的名称，value是下面表格中列列的键值对集合。
 
 | 参数 | 类型 | 描述 |
 |:---|:---|:---|
 | `enable` | _bool_ | (必须) 是否启用这个配置? |
 | `format` | _string_ | (必须)  是`namespace` 还是 `access` |
 | `url` | _string_ | (必须) ES地址，比如: `http://localhost:9200` |
-| `index` | _string_ | (必须) 给MinIO用的index |
+| `index` | _string_ | (必须) 给MinIO用的index|
 
 以下是ES的一个配置示例:
 
@@ -283,13 +312,25 @@ MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。ES配置�
 },
 ```
 
-更新完配置文件后，重启MinIO Server让配置生效。如果一切顺利，MinIO Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:elasticsearch`。
 
-注意一下，你又可以再一次听从你内心的想法，想配几个ES服务就配几个，只要每个ES服务实例有不同的ID (比如前面示例中的"1") 和配置信息。
+如果Elasticsearch已经授权启动，证书将会被通过`url`参数提供给MinIO，`url`参数的形式如下：`PROTO://USERNAME:PASSWORD@ELASTICSEARCH_HOST:POST`
+
+为了更新配置，使用mc admin config get 命令来得到当前的json格式的minio部署配置文件，并在本地保存。
+```sh
+$ mc admin config get myminio/ > /tmp/myconfig
+```
+
+在更新了位于/tmp/myconfig目录下的Elasticsearch的配置文件，使用`mc admin config set` 命令去更新部署配置。重启MinIO服务使配置生效。如果没有任何报错，MinIO服务在启动时会打印一行像`SQS ARNs: arn:minio:sqs::1:elasticsearch`的消息。
+
+```sh
+$ mc admin config set myminio < /tmp/myconfig
+```
+
+需要注意的是，你能够通过提供Elasticsearch标识符（像上面例子中的“1”）和每台服务器配置参数的对象来按照需要为Elasticsearch实例和每个服务配置参数对象添加尽可能多的Elastucsearch服务端点配置。
 
 ### 第三步：使用MinIO客户端启用bucket通知
 
-我们现在可以在一个叫`images`的存储桶上开启事件通知。一旦有文件被创建或者覆盖，一个新的ES的document会被创建或者更新到之前咱配的index里。如果一个已经存在的对象被删除，这个对应的document也会从index中删除。因此，这个ES index里的行，就映射着`images`存储桶里的对象。
+我们现在可以在一个叫`images`的存储桶上开启事件通知。一旦有文件被创建或者覆盖，一个新的ES的document会被创建或者更新到之前咱配的index里。如果一个已经存在的对象被删除，这个对应的document也会从index中删除。因此，这个ES index里的行，就映射着`images`存储桶里的`.jpg`对象。
 
 要配置这种存储桶通知，我们需要用到前面步骤MinIO输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
@@ -380,7 +421,7 @@ $ curl  "http://localhost:9200/minio_events/_search?pretty=true"
 }
 ```
 
-这个输出显示在ES中为这个事件创建了一个document。
+这个输出显示出在ES中为这个事件创建了一个document。
 
 这里我们可以看到这个document ID就是存储桶和对象的名称。如果用的是`access`格式，这个document ID就是由ES随机生成的。
 
@@ -399,7 +440,7 @@ $ curl  "http://localhost:9200/minio_events/_search?pretty=true"
 
 ### 第一步：集成Redis到MinIO
 
-MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。Redis配置信息是在`notify`这个节点下的`redis`节点下，在这里为你的Redis实例创建配置信息键值对，key是你的Redis端的名称，value是下面表格中的键值对里面值的集合。
+MinIO Server的配置文件是以json格式存储在后端的。Redis配置信息是在`notify`这个节点下的`redis`节点下，在这里为你的Redis实例创建配置信息键值对，key是你的Redis端的名称，value是下面表格中的键值对里面值的集合。
 
 | 参数 | 类型 | 描述 |
 |:---|:---|:---|
@@ -422,13 +463,23 @@ MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。Redis配�
 }
 ```
 
-更新完配置文件后，重启MinIO Server让配置生效。如果一切顺利，MinIO Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:redis`。
+为了更新配置，使用`mc admin config get`命令来得到当前的json格式的minio部署配置文件，并在本地保存。
 
-注意一下，你永远都可以听从你内心的想法，想配几个Redis服务就配几个，只要每个Redis服务实例有不同的ID (比如前面示例中的"1") 和配置信息。
+```sh
+$ mc admin config get myminio/ > /tmp/myconfig
+```
+
+在更新了位于/tmp/myconfig目录下的Redis的配置文件，使用`mc admin config set` 命令去更新部署配置。重启MinIO服务使配置生效。如果没有任何报错，MinIO服务在启动时会打印一行像`SQS ARNs: arn:minio:sqs::1:redis`的消息。
+
+```sh
+$ mc admin config set myminio < /tmp/myconfig
+```
+
+注意一下，你能够通过提供Redis标识符（像上面例子中的“1”）和每台服务器配置参数的对象来按照需要为Redis实例和每个服务配置参数对象添加尽可能多的Elastucsearch服务端点配置。
 
 ### 第二步: 使用MinIO客户端启用bucket通知
 
-我们现在可以在一个叫`images`的存储桶上开启事件通知。一旦有文件被创建或者覆盖，一个新的key会被创建,或者一个已经存在的key就会被更新到之前配置好的redis hash里。如果一个已经存在的对象被删除，这个对应的key也会从hash中删除。因此，这个Redis hash里的行，就映射着`images`存储桶里的`.jpg`对象。
+我们现在可以在一个叫`images`的存储桶上开启事件通知。一旦有JPEG文件被创建或者覆盖，一个新的key会被创建,或者一个已经存在的key就会被更新到之前配置好的redis hash里。如果一个已经存在的对象被删除，这个对应的key也会从hash中删除。因此，这个Redis hash里的行，就映射着`images`存储桶里的`.jpg`对象。
 
 要配置这种存储桶通知，我们需要用到前面步骤MinIO输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
@@ -501,7 +552,16 @@ MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。参考下�
 },
 ```
 
-更新完配置文件后，重启MinIO Server让配置生效。``bucketevents``是NATS在这个例子中使用的主题。
+为了更新配置，使用`mc admin config get`命令来得到当前的json格式的minio部署配置文件，并在本地保存。
+```sh
+$ mc admin config get myminio/ > /tmp/myconfig
+```
+
+在更新了位于/tmp/myconfig目录下的NATS的配置文件，使用`mc admin config set` 命令去更新部署配置。重启MinIO服务使配置生效。在这个例子中，``bucketevents``是被NATS所使用的主题。
+
+```sh
+$ mc admin config set myminio < /tmp/myconfig
+```
 
 MinIO服务也支持 [NATS Streaming mode](http://nats.io/documentation/streaming/nats-streaming-intro/) ，这种模式额外提供了像 `Message/event persistence`, `At-least-once-delivery`, 以及 `Publisher rate limiting`这样的功能。如果想让MinIO服务发送通知到NATS Streaming server,参考下面示面进行配置：
 
@@ -526,11 +586,11 @@ MinIO服务也支持 [NATS Streaming mode](http://nats.io/documentation/streamin
     }
 },
 ```
-更多关于 `clusterID`, `clientID` 的信息，请看 [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). 关于 `maxPubAcksInflight` ，请看 [这里](https://github.com/nats-io/stan.go#publisher-rate-limiting).
+更多关于 `clusterID`, `clientID` 的信息，请看 [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). 关于 `maxPubAcksInflight` ，请看 [这里](https://github.com/nats-io/go-nats-streaming#publisher-rate-limiting).
 
 ### 第二步: 使用MinIO客户端启用bucket通知
 
-我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦``myminio`` server上有文件  从``images``存储桶里删除或者上传到存储桶中，事件即被触发。在这里，ARN的值是``arn:minio:sqs:us-east-1:1:nats``。 更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
+我们通过设置可以使桶事件通知具有如下功能：一旦``myminio`` server上有JPEG图像从``images``存储桶里删除或者上传到存储桶中，事件即被触发。在这里，ARN的值是``arn:minio:sqs:us-east-1:1:nats``。 更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
 ```
 mc mb myminio/images
@@ -551,7 +611,7 @@ import (
 	"log"
 	"runtime"
 
-	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats"
 )
 
 func main() {
@@ -604,7 +664,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/nats-io/stan.go"
+	"github.com/nats-io/go-nats-streaming"
 )
 
 func main() {
@@ -652,7 +712,7 @@ Received a message: {"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jp
 
 如果使用的是_access_,MinIO将将事件添加到表里，行有两列：event_time 和 event_data。event_time是事件在MinIO server里发生的时间，event_data是有关这个MinIO对象的JSON格式的事件数据。在这种格式下，不会有行会被删除或者修改。
 
-下面的步骤展示的是如何在`namespace`格式下使用通知目标，`_access_`差不多，不再赘述，我相信你可以触类旁通，举一反三，不要让我失望哦。
+下面的步骤展示的是如何在`namespace`格式下使用通知目标，其他的格式与它非常相似，不再赘述，我相信你可以触类旁通，举一反三，不要让我失望哦。
 
 ### 第一步：确保确保至少满足第低要求
 
@@ -664,15 +724,15 @@ MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。PostgreSQL
 
 | 参数 | 类型 | 描述 |
 |:---|:---|:---|
-| `enable` | _bool_ | (必须)此配置是否启用 |
-| `format` | _string_ | (必须) 是 `namespace` 还是 `access`|
-| `connectionString` | _string_ | (可选) PostgreSQL的[连接参数](https://godoc.org/github.com/lib/pq#hdr-Connection_String_Parameters) 。比如可以用来设置  `sslmode` |
+| `enable` | _bool_ | (必须)此配置是否启用? |
+| `format` | _string_ | (必须) 是 `namespace` 或是 `access`。|
+| `connectionString` | _string_ | (可选) PostgreSQL的[连接参数](https://godoc.org/github.com/lib/pq#hdr-Connection_String_Parameters) 。比如可以用来设置  `sslmode`。 |
 | `table` | _string_ | (必须) 事件对应的表名，如果该表不存在，Mniio server会在启动时创建。|
-| `host` | _string_ | (可选) PostgresSQL的主机名，默认是`localhost`|
-| `port` | _string_ | (可选) PostgreSQL的端口号，默认是`5432` |
-| `user` | _string_ | (可选)数据库用户名，默认是运行MinIO server进程的用户|
-| `password` | _string_ | (可选) 数据库密码 |
-| `database` | _string_ | (可选)库名 |
+| `host` | _string_ | (可选) PostgresSQL的主机名，默认是`localhost`。|
+| `port` | _string_ | (可选) PostgreSQL的端口号，默认是`5432`。 |
+| `user` | _string_ | (可选)数据库用户名，默认是运行MinIO server进程的用户。|
+| `password` | _string_ | (可选) 数据库密码。 |
+| `database` | _string_ | (可选)库名。 |
 
 下面是一个PostgreSQL配置示例:
 
@@ -694,14 +754,25 @@ MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。PostgreSQL
 
 注意一下，为了演示，咱们这把SSL禁掉了，但是为了安全起见，不建议在生产环境这么弄。
 
-更新完配置文件后，重启MinIO Server让配置生效。如果一切顺利，MinIO Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:postgresql`。
+为了更新配置，使用`mc admin config get` 命令来得到当前的json格式的minio部署配置文件，并在本地保存。
 
-和之前描述的一样，你也可以添加多个PostreSQL实例，只要ID不重复就行。
+```sh
+$ mc admin config get myminio/ > /tmp/myconfig
+```
+
+在更新了位于/tmp/myconfig目录下的Redis的配置文件，使用`mc admin config set` 命令去更新部署配置。重启MinIO服务使配置生效。如果没有任何报错，MinIO服务在启动时会打印一行像`SQS ARNs: arn:minio:sqs::1:postgresql`的消息。
+
+```sh
+$ mc admin config set myminio < /tmp/myconfig
+```
+
+注意一下，你能够通过提供PostgreSQL标识符（像上面例子中的“1”）和每台服务器配置参数的对象来按照需要为PostgreSQL实例和每个服务配置参数对象添加尽可能多的PostgreSQL服务端点配置。
+
 
 
 ### 第三步：使用MinIO客户端启用bucket通知
 
-我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦上有文件上传到存储桶中，PostgreSQL中会insert一条新的记录或者一条已经存在的记录会被update，如果一个存在对象被删除，一条对应的记录也会从PostgreSQL表中删除。因此，PostgreSQL表中的行，对应的就是存储桶里的一个对象。
+我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦上有文件上传到存储桶中，PostgreSQL中会插入一条新的记录或者更新一条已经存在的记录。如果一个存在对象被删除，一条对应的记录也会从PostgreSQL表中删除。因此，PostgreSQL表中的行，对应的就是存储桶里的一个对象。因此，在PostgreSQL表中的记录对应着`image`存储桶中的`.jpg`对象。
 
 要配置这种存储桶通知，我们需要用到前面步骤中MinIO输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
@@ -745,11 +816,11 @@ key                 |                      value
 
 这个通知目标支持两种格式: _namespace_ and _access_。
 
-如果使用的是_namespace_格式，MinIO将存储桶里的对象同步成数据库表中的行。每一行有两列：key_name和value。key_name是这个对象的存储桶名字加上对象名，value都是一个有关这个MinIO对象的JSON格式的事件数据。如果对象更新或者删除，表中相应的行也会相应的更新或者删除。
+如果使用的是_namespace_格式，MinIO将存储桶里的对象同步成数据库表中的行。每一行有两列：key_name和value。key_name是这个对象的存储桶名字加上对象名，value都是一个有关这个MinIO对象的JSON格式的事件数据。如果对象更新或者删除，表中相应的行也会相应地更新或者删除。
 
-如果使用的是_access_,MinIO将将事件添加到表里，行有两列：event_time 和 event_data。event_time是事件在MinIO server里发生的时间，event_data是有关这个MinIO对象的JSON格式的事件数据。在这种格式下，不会有行会被删除或者修改。
+如果使用的是_access_,MinIO将将事件添加到表里。行有两列：event_time 和 event_data。event_time是事件在MinIO server里发生的时间，event_data是有关这个MinIO对象的JSON格式的事件数据。在这种格式下，不会有行会被删除或者修改。
 
-下面的步骤展示的是如何在`namespace`格式下使用通知目标，`_access_`差不多，不再赘述。
+下面的步骤展示的是如何在`namespace`格式下使用通知目标，其他格式与之非常类似，不再赘述。
 
 ### 第一步：确保确保至少满足第低要求
 
@@ -757,7 +828,7 @@ MinIO要求MySQL 版本 5.7.8及以上，MinIO使用了MySQL5.7.8版本引入的
 
 ### 第二步：集成MySQL到MinIO
 
-MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。MySQL配置信息是在`notify`这个节点下的`mysql`节点下，在这里为你的MySQL实例创建配置信息键值对，key是你的PostgreSQL的名称，value是下面表格中列列的键值对集合。
+MinIO Server的配置文件是以json格式存储在后端的。MySQL配置信息是在`notify`这个节点下的`mysql`节点下，在这里为你的MySQL实例创建配置信息键值对，key是你的PostgreSQL的名称，value是下面表格中列列的键值对集合。
 
 | 参数 | 类型 | 描述 |
 |:---|:---|:---|
@@ -788,14 +859,24 @@ MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。MySQL配�
 }
 ```
 
-更新完配置文件后，重启MinIO Server让配置生效。如果一切顺利，MinIO Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:mysql`。
+为了更新配置，使用`mc admin config get` 命令来得到当前的json形式的minio部署配置文件，并在本地保存。
 
-和之前描述的一样，你也可以添加多个MySQL实例，只要ID不重复就行。
+```sh
+$ mc admin config get myminio/ > /tmp/myconfig
+```
+
+在更新了位于/tmp/myconfig目录下的Redis的配置文件，使用`mc admin config set` 命令去更新部署配置。重启MinIO服务使配置生效。如果没有任何报错，MinIO服务在启动时会打印一行像`SQS ARNs: arn:minio:sqs::1:mysql`的消息。
+
+```sh
+$ mc admin config set myminio < /tmp/myconfig
+```
+
+注意一下，你能够通过提供MySQL标识符（像上面例子中的“1”）和每台服务器配置参数的对象来按照需要为MySQL实例和每个服务配置参数对象添加尽可能多的MySQL服务端点配置.
 
 
 ### 第三步：使用MinIO客户端启用bucket通知
 
-我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦上有文件上传到存储桶中，MySQL中会insert一条新的记录或者一条已经存在的记录会被update，如果一个存在对象被删除，一条对应的记录也会从MySQL表中删除。因此，MySQL表中的行，对应的就是存储桶里的一个对象。
+我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦上有文件上传到存储桶中，MySQL中会insert一条新的记录或者一条已经存在的记录会被update，如果一个存在对象被删除，一条对应的记录也会从MySQL表中删除。因此，MySQL表中的行，对应的就是`image`存储桶里的一个`.jpg`对象。
 
 要配置这种存储桶通知，我们需要用到前面步骤MinIO输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
@@ -836,15 +917,15 @@ mysql> select * from minio_images;
 <a name="apache-kafka"></a>
 ## 使用Kafka发布MinIO事件
 
-安装[ Apache Kafka](http://kafka.apache.org/).
+安装[Apache Kafka](http://kafka.apache.org/).
 
 ### 第一步：确保确保至少满足第低要求
 
 MinIO要求Kafka版本0.10或者0.9.MinIO内部使用了 [Shopify/sarama](https://github.com/Shopify/sarama/) 库，因此需要和该库有同样的版本兼容性。
 
-###第二步：集成Kafka到MinIO
+### 第二步：集成Kafka到MinIO
 
-MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。参考下面的示例更新Kafka配置：
+MinIO Server的配置文件是以json格式存储在后端的。参考下面的示例在`config.json`更新Kafka配置：
 
 ```
 "kafka": {
@@ -856,9 +937,19 @@ MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。参考下�
 }
 ```
 
-重启MinIO server让配置生效。``bucketevents``是本示例用到的Kafka主题（topic）。
+为了更新配置，使用`mc admin config get`命令来得到当前的json形式的minio部署配置文件，并在本地保存。
 
-### 第三步：使用MinIO客户端启用bucket通知
+```sh
+$ mc admin config get myminio/ > /tmp/myconfig
+```
+
+在更新了位于/tmp/myconfig目录下的Redis的配置文件，使用`mc admin config set` 命令去更新部署配置。重启MinIO服务使配置生效。如果没有任何报错，MinIO服务在启动时会打印一行像`SQS ARNs: arn:minio:sqs::1:kafka`的消息。``bucketevents``是这个例子中的主题。
+
+```sh
+$ mc admin config set myminio < /tmp/myconfig
+```
+
+### 第三步：使用MinIO客户端启用存储桶通知`bucket notificaiton`
 
 
 我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦上有文件上传到存储桶中，事件将被触发。在这里，ARN的值是``arn:minio:sqs:us-east-1:1:kafka``。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
@@ -896,9 +987,9 @@ kafkacat -b localhost:9092 -t bucketevents
 
 [Webhooks](https://en.wikipedia.org/wiki/Webhook) 采用推的方式获取数据，而不是一直去拉取。
 
-### 第一步：集成MySQL到MinIO
+### 第一步：集成Webhook端点到MinIO
 
-MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。参考下面的示例更新Webhook配置：
+MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。参考下面的示例在config.json中更新Webhook配置块：
 
 ```
 "webhook": {
@@ -907,11 +998,20 @@ MinIO Server的配置文件默认路径是 ``~/.minio/config.json``。参考下�
     "endpoint": "http://localhost:3000/"
 }
 ```
-endpoint是监听webhook通知的服务。保存配置文件并重启MinIO服务让配配置生效。注意一下，在重启MinIO时，这个endpoint必须是启动并且可访问到。
+为了更新配置，使用`mc admin config get` 命令来得到当前的json形式的minio部署配置文件，并在本地保存。
+```sh
+$ mc admin config get myminio/ > /tmp/myconfig
+```
+
+在更新了位于/tmp/myconfig目录下的Webhook的配置文件后，使用`mc admin config set` 命令去更新部署配置。在这里端点是Webhook服务监听器。保存文件并重启MinIO服务使配置生效。请注意当你重启MinIO服务器的时候端点必须是在运行和可达的。
+
+```sh
+$ mc admin config set myminio < /tmp/myconfig
+```
 
 ### 第二步：使用MinIO客户端启用bucket通知
 
-我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦上有文件上传到存储桶中，事件将被触发。在这里，ARN的值是``arn:minio:sqs:us-east-1:1:webhook``。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
+我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦上有JPEG图像上传到``myminio``服务器的``image``存储桶中，存储桶事件通知将被触发。在这里，ARN的值是``arn:minio:sqs:us-east-1:1:webhook``。更多有关ARN的资料，请参考[AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
 ```
 mc mb myminio/images
@@ -960,4 +1060,87 @@ mc ls myminio/images-thumbnail
 [2017-02-08 11:39:40 IST]   992B images-thumbnail.jpg
 ```
 
-*注意* 如果你用的是 [distributed MinIO](https://docs.min.io/cn/distributed-minio-quickstart-guide),请修改所有节点的 ``~/.minio/config.json``。
+*注意* 如果你用的是 [distributed MinIO](https://docs.minio.io/cn/distributed-minio-quickstart-guide),请修改所有节点的 ``~/.minio/config.json``。
+
+<a name="NSQ"></a>
+## 使用NSQ发布MinIO事件
+
+从[这里](https://nsq.io/)安装一个NSQ Deamon，或者使用如下的Docker命令去启动一个nsq守护进程。
+
+```sh
+docker run -rm -p 4150-5151:4150-4151 msqio/nsq /nsqd
+```
+### 第一步：添加NSQ端点到MinIO
+
+MinIO服务配置文件是以json格式存储在后端的。NSQ配置位于`notify`节点下的`nsq`节点。在这里为你的NSQ实例创建一个键值对。这个键是NSQ的端点名字，这个值是你键值参数的集合。
+
+一个NSQ配置的如下所示：
+
+```json
+"nsq": {
+    "1": {
+        "enable": true,
+        "nsqdAddress": "127.0.0.1:4150",
+        "topic": "minio",
+        "tls": {
+            "enable": false,
+            "skipVerify": true
+        }
+    }
+}
+```
+
+为了更新配置，使用`mc admin config get`命令来得到当前的json格式的minio部署配置文件，并在本地保存。
+
+```sh
+$ mc admin config get myminio/ > /tmp/myconfig
+```
+
+在更新了位于/tmp/myconfig目录下的Redis的配置文件，使用`mc admin config set` 命令去更新部署配置。重启MinIO服务使配置生效。如果没有任何报错，MinIO服务在启动时会打印一行像`SQS ARNs: arn:minio:sqs::1:nsq`的消息。
+
+```sh
+$ mc admin config set myminio < /tmp/myconfig
+```
+
+注意一下，你能够通过提供NSQ标识符（像上面例子中的“1”）和每台服务器配置参数的对象来按照需要为NSQ实例和每个服务配置参数对象添加尽可能多的NSQ服务端点配置。
+
+
+### 第二步：使用MinIO客户端启用bucket通知
+
+我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦有一个JPEG图像从`myminio` 服务上和删除或上传到`myminio`，事件将被触发。在这里，ARN的值是``arn:minio:sqs:us-east-1:1:nsq``。
+
+```
+mc mb myminio/images
+mc event add  myminio/images arn:minio:sqs::1:nsq --suffix .jpg
+mc event list myminio/images
+arn:minio:sqs::1:nsq s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
+```
+
+### 第三步：采用Thumbnailer进行验证
+
+最简单的测试是从[nsq github](https://github.com/nsqio/nsq/release)上下载`nsq_tail` 
+
+```sh
+./nsq_tail -nsqd-tcp-address 127.0.0.1:4150 -topic minio
+```
+
+打开另一个控制台并且上传一个JEPG图像到`images`桶中。
+
+```
+mc cp gopher.jpg myminio/images
+```
+
+一旦上传完成，你应该接收基于NSQ的下列事件通知。
+
+```
+{"EventName":"s3:ObjectCreated:Put","Key":"images/gopher.jpg","Records":[{"eventVersion":"2.0","eventSource":"minio:s3","awsRegion":"","eventTime":"2018-10-31T09:31:11Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"21EJ9HYV110O8NVX2VMS"},"requestParameters":{"sourceIPAddress":"10.1.1.1"},"responseElements":{"x-amz-request-id":"1562A792DAA53426","x-minio-origin-endpoint":"http://10.0.3.1:9000"},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"21EJ9HYV110O8NVX2VMS"},"arn":"arn:aws:s3:::images"},"object":{"key":"gopher.jpg","size":162023,"eTag":"5337769ffa594e742408ad3f30713cd7","contentType":"image/jpeg","userMetadata":{"content-type":"image/jpeg"},"versionId":"1","sequencer":"1562A792DAA53426"}},"source":{"host":"","port":"","userAgent":"MinIO (linux; amd64) minio-go/v6.0.8 mc/DEVELOPMENT.GOGET"}}]}
+```
+
+*请注意:* 如果你在运行[分布式MinIO](https://docs.minio.io/cn/distributed-minio-quickstart-guide)，请在具有桶事件通知后端配置的所有节点上更正``~/.minio/config.json``。
+
+
+
+
+
+
+

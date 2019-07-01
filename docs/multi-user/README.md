@@ -62,13 +62,13 @@ Change the policy for user `newuser` to `putonly` canned policy.
 mc admin user policy myminio newuser putonly
 ```
 
-### 5. List all users
+### 6. List all users
 List all enabled and disabled users.
 ```
 mc admin user list myminio
 ```
 
-### 6. Configure `mc`
+### 7. Configure `mc`
 ```
 mc config host add myminio-newuser http://localhost:9000 newuser newuser123 --api s3v4
 mc cat myminio-newuser/my-bucketname/my-objectname

@@ -9,8 +9,8 @@ Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quicksta
 ### 2. Run MinIO in federated mode
 Bucket lookup from DNS federation requires two dependencies
 
-- etcd (for bucket DNS service records)
-- CoreDNS (for DNS management based on populated bucket DNS service records, optional)
+- etcd (for config, bucket SRV records)
+- CoreDNS (for DNS management based on populated bucket SRV records, optional)
 
 ## Architecture
 
@@ -28,20 +28,17 @@ etcd back-end.
 
 This is the top level domain name used for the federated setup. This domain name should ideally resolve to a load-balancer
 running in front of all the federated MinIO instances. The domain name is used to create sub domain entries to etcd. For
-example, if the domain is set to `domain.com`, the buckets `bucket1`, `bucket2` will be accessible as `bucket1.domain.com`
-and `bucket2.domain.com`.
+example, if the domain is set to `domain.com`, the buckets `bucket1`, `bucket2` will be accessible as `bucket1.domain.com`and `bucket2.domain.com`.
 
 #### MINIO_PUBLIC_IPS
 
-This is comma separated list of IP addresses to which buckets created on this MinIO instance will resolve to. For example,
-a bucket `bucket1` created on current MinIO instance will be accessible as `bucket1.domain.com`, and the DNS entry for
+This is comma separated list of IP addresses to which buckets created on this MinIO instance will resolve to. For example, a bucket `bucket1` created on current MinIO instance will be accessible as `bucket1.domain.com`, and the DNS entry for
 `bucket1.domain.com` will point to IP address set in `MINIO_PUBLIC_IPS`.
 
 *Note*
 
 - This field is mandatory for standalone and erasure code MinIO server deployments, to enable federated mode.
-- This field is optional for distributed deployments. If you don't set this field in a federated setup, we use the IP addresses of
-hosts passed to the MinIO server startup and use them for DNS entries.
+- This field is optional for distributed deployments. If you don't set this field in a federated setup, we use the IP addresses of hosts passed to the MinIO server startup and use them for DNS entries.
 
 ### Run Multiple Clusters
 
@@ -67,7 +64,7 @@ In this configuration you can see `MINIO_ETCD_ENDPOINTS` points to the etcd back
 `config.json` and bucket DNS SRV records. `MINIO_DOMAIN` indicates the domain suffix for the bucket which
 will be used to resolve bucket through DNS. For example if you have a bucket such as `mybucket`, the
 client can use now `mybucket.domain.com` to directly resolve itself to the right cluster. `MINIO_PUBLIC_IPS`
-points to the public IP address where each cluster might be accessible, this is unique for each cluster.
+points to the public IP address where each cluster might be accessible, and this is unique for each cluster.
 
 NOTE: `mybucket` only exists on one cluster either `cluster1` or `cluster2` this is random and
 is decided by how `domain.com` gets resolved, if there is a round-robin DNS on `domain.com` then

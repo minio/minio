@@ -1,20 +1,21 @@
-## Minio服务限制/租户
+## MinIO服务限制/租户
 
 ### 纠删码 (多块硬盘 / 服务)
 
 
 |项目|参数|
 |:---|:---|
-|最大驱动器数量|16|
-|最小驱动器数量|4|
-|读仲裁|N / 2|
-|写仲裁|N / 2+1 |
+|最大驱动器数量| 32|
+|最小驱动器数量| 02|
+|每个服务器的最大驱动数量|无限制|
+|读仲裁| N/2|
+|写仲裁| N/2+1 |
 
 ### 浏览器访问
 
 |项目|参数|
 |:---|:---|
-|Web浏览器上传大小限制| 5GB|
+|Web浏览器上传大小限制| 5TB|
 
 ### Limits of S3 API
 
@@ -24,7 +25,7 @@
 |每桶最大对象数|无限额|
 |最大对象大小| 5 TB |
 |最小对象大小| 0 B |
-|每次PUT操作的最大对象大小| 5 GB |
+|每次PUT操作的最大对象大小| 5 TB |
 |每次上传的最大Part数量| 	10,000|
 |Part大小 |5MB到5GB. 最后一个part可以从0B到5GB|
 |每次list parts请求可返回的part最大数量| 1000|
@@ -33,11 +34,11 @@
 
 我们认为下列AWS S3的API有些冗余或者说用处不大，因此我们在minio中没有实现这些接口。如果您有不同意见，欢迎在[github](https://github.com/minio/minio/issues)上提issue。
 
-###  Minio不支持的Amazon S3 Bucket API
+###  MinIO不支持的Amazon S3 Bucket API
 
 - BucketACL (可以用 [bucket policies](https://docs.min.io/docs/minio-client-complete-guide#policy))
 - BucketCORS (所有HTTP方法的所有存储桶都默认启用CORS)
-- BucketLifecycle (Minio纠删码不需要)
+- BucketLifecycle (MinIO纠删码不需要)
 - BucketReplication (可以用 [`mc mirror`](https://docs.min.io/docs/minio-client-complete-guide#mirror))
 - BucketVersions, BucketVersioning (可以用 [`s3git`](https://github.com/s3git/s3git))
 - BucketWebsite (可以用 [`caddy`](https://github.com/mholt/caddy) or [`nginx`](https://www.nginx.com/resources/wiki/))
@@ -45,7 +46,12 @@
 - BucketRequestPayment
 - BucketTagging
 
-### Minio不支持的Amazon S3 Object API.
+### MinIO不支持的Amazon S3 Object API.
 
 - ObjectACL (可以用 [bucket policies](https://docs.min.io/docs/minio-client-complete-guide#policy))
 - ObjectTorrent
+- ObjectVersions
+
+### MinIO的对象名字限制
+
+包含`^*|\/&";`的对象名字是不被Windows或者其他不支持这些符号的文件系统所支持的。请注意这个名单并不彻底，而且取决于文件系统本身的可支持性。

@@ -1,4 +1,4 @@
-# 使用Docker Compose部署MinIO [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
+# 使用Docker Compose部署MinIO [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
 Docker Compose允许定义和运行单主机，多容器Docker应用程序。
 
@@ -38,7 +38,7 @@ docker-compose.exe up
   * 更新每个服务中的命令部分。
   * 更新要为新服务公开的端口号。 另外，请确保分配给新服务的端口尚未使用。
 
-  关于分布式MinIO的更多资料，请访问[这里](https://docs.min.io/cn/distributed-minio-quickstart-guide).
+  关于分布式MinIO的更多资料，请访问[这里](https://docs.minio.io/cn/distributed-minio-quickstart-guide).
 
 * Docker compose file中的MinIO服务使用的端口是9001到9004，这允许多个服务在主机上运行。
 
