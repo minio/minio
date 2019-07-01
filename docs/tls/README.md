@@ -24,6 +24,14 @@ Copy the existing private key and public certificate to the `certs` directory. T
 * Inside the `certs` directory, the private key must by named `private.key` and the public key must be named `public.crt`.
 * A certificate signed by a CA contains information about the issued identity (e.g. name, expiry, public key) and any intermediate certificates. The root CA is not included.
 
+**Note:**
+* Getting TLS to work with a containerized version of MinIO requires that the docker command take this form - 
+
+```
+docker run -it -p 443:443 --name <name> -v <localpath to persistent store>:/data -v <localpath to config>:/root/.minio minio/minio:latest server --address ":443" /data
+```
+Take note of the --address flag needed to force the server into https mode
+
 ## <a name="generate-use-self-signed-keys-certificates"></a>3. Generate and use Self-signed Keys and Certificates with MinIO
 
 This section describes how to generate a self-signed certificate using various tools:
