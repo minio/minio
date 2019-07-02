@@ -29,7 +29,26 @@ type KVStorage struct {
 	volumesMu sync.RWMutex
 }
 
+var kvStorageCache = make(map[string]StorageAPI)
+var kvStorageCacheMu sync.Mutex
+
 func newPosix(path string) (StorageAPI, error) {
+	kvStorageCacheMu.Lock()
+	defer kvStorageCacheMu.Unlock()
+
+	cache := kvStorageCache[path]
+	if cache != nil {
+		return cache, nil
+	}
+	cache, err := newKVPosix(path)
+	if err != nil {
+		return nil, err
+	}
+	kvStorageCache[path] = cache
+	return cache, nil
+}
+
+func newKVPosix(path string) (StorageAPI, error) {
 	kvPath := path
 	path = strings.TrimPrefix(path, "/nkv/")
 
