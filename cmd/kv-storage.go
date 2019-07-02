@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,8 +23,10 @@ type kvVolumes struct {
 }
 
 type KVStorage struct {
-	kv   KVInterface
-	path string
+	kv        KVInterface
+	volumes   *kvVolumes
+	path      string
+	volumesMu sync.RWMutex
 }
 
 func newPosix(path string) (StorageAPI, error) {
@@ -107,6 +110,8 @@ func (k *KVStorage) verifyVolume(volume string) error {
 }
 
 func (k *KVStorage) MakeVol(volume string) (err error) {
+	k.volumesMu.Lock()
+	defer k.volumesMu.Unlock()
 	volumes, err := k.loadVolumes()
 	if err != nil {
 		return err
@@ -127,16 +132,20 @@ func (k *KVStorage) MakeVol(volume string) (err error) {
 	if err != nil {
 		return err
 	}
-
+	k.volumes = volumes
 	return nil
 }
 
 func (k *KVStorage) ListVols() (vols []VolInfo, err error) {
-	volumes, err := k.loadVolumes()
-	if err != nil {
-		return nil, err
+	k.volumesMu.Lock()
+	defer k.volumesMu.Unlock()
+	if k.volumes == nil {
+		k.volumes, err = k.loadVolumes()
+		if err != nil {
+			return nil, err
+		}
 	}
-	for _, vol := range volumes.VolInfos {
+	for _, vol := range k.volumes.VolInfos {
 		if vol.Name == ".minio.sys/multipart" {
 			continue
 		}
@@ -149,12 +158,15 @@ func (k *KVStorage) ListVols() (vols []VolInfo, err error) {
 }
 
 func (k *KVStorage) StatVol(volume string) (vol VolInfo, err error) {
-	volumes, err := k.loadVolumes()
-	if err != nil {
-		return vol, err
+	k.volumesMu.Lock()
+	defer k.volumesMu.Unlock()
+	if k.volumes == nil {
+		k.volumes, err = k.loadVolumes()
+		if err != nil {
+			return vol, err
+		}
 	}
-
-	for _, vol := range volumes.VolInfos {
+	for _, vol := range k.volumes.VolInfos {
 		if vol.Name == volume {
 			return VolInfo{vol.Name, vol.Created}, nil
 		}
@@ -163,17 +175,8 @@ func (k *KVStorage) StatVol(volume string) (vol VolInfo, err error) {
 }
 
 func (k *KVStorage) DeleteVol(volume string) (err error) {
-	entries, err := k.ListDir("", "", -1)
-	if err != nil {
-		return err
-	}
-
-	for _, entry := range entries {
-		if entry == volume {
-			return errVolumeNotEmpty
-		}
-	}
-
+	k.volumesMu.Lock()
+	defer k.volumesMu.Unlock()
 	volumes, err := k.loadVolumes()
 	if err != nil {
 		return err
@@ -198,7 +201,7 @@ func (k *KVStorage) DeleteVol(volume string) (err error) {
 	if err != nil {
 		return err
 	}
-
+	k.volumes = volumes
 	return err
 }
 
