@@ -114,7 +114,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 			etag = encETag[len(encETag)-32:]
 		}
 		if objInfo.ETag != "" && !isETagEqual(etag, ifMatchETagHeader) {
-			// If the object ETag does not match with thre specified ETag.
+			// If the object ETag does not match with the specified ETag.
 			writeHeaders()
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL, guessIsBrowserReq(r))
 			return true
