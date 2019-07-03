@@ -60,7 +60,7 @@ var supportedHeadGetReqParams = map[string]string{
 }
 
 const (
-	compressionAlgorithmV1 = "golang/snappy/LZ77"
+	compressionAlgorithmV1 = "klauspost/compress/LZ77"
 )
 
 // setHeadGetRespHeaders - set any requested parameters as response headers.

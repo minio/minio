@@ -33,7 +33,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	snappy "github.com/golang/snappy"
+	snappy "github.com/klauspost/compress/s2"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -771,7 +771,7 @@ type snappyCompressReader struct {
 
 func newSnappyCompressReader(r io.Reader) *snappyCompressReader {
 	cr := &snappyCompressReader{r: r}
-	cr.w = snappy.NewBufferedWriter(&cr.buf)
+	cr.w = snappy.NewWriter(&cr.buf)
 	return cr
 }
 

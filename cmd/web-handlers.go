@@ -33,9 +33,9 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	snappy "github.com/golang/snappy"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
+	snappy "github.com/klauspost/compress/s2"
 	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio-go/v6/pkg/set"

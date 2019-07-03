@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/golang/snappy"
+	snappy "github.com/klauspost/compress/s2"
 )
 
 // Tests validate bucket name.
@@ -301,7 +301,7 @@ func TestIsCompressed(t *testing.T) {
 	}{
 		{
 			objInfo: ObjectInfo{
-				UserDefined: map[string]string{"X-Minio-Internal-compression": "golang/snappy/LZ77",
+				UserDefined: map[string]string{"X-Minio-Internal-compression": "klauspost/compress/LZ77",
 					"content-type": "application/octet-stream",
 					"etag":         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
 			},
@@ -309,7 +309,7 @@ func TestIsCompressed(t *testing.T) {
 		},
 		{
 			objInfo: ObjectInfo{
-				UserDefined: map[string]string{"X-Minio-Internal-XYZ": "golang/snappy/LZ77",
+				UserDefined: map[string]string{"X-Minio-Internal-XYZ": "klauspost/compress/LZ77",
 					"content-type": "application/octet-stream",
 					"etag":         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
 			},
@@ -422,7 +422,7 @@ func TestGetActualSize(t *testing.T) {
 	}{
 		{
 			objInfo: ObjectInfo{
-				UserDefined: map[string]string{"X-Minio-Internal-compression": "golang/snappy/LZ77",
+				UserDefined: map[string]string{"X-Minio-Internal-compression": "klauspost/compress/LZ77",
 					"X-Minio-Internal-actual-size": "100000001",
 					"content-type":                 "application/octet-stream",
 					"etag":                         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
@@ -441,7 +441,7 @@ func TestGetActualSize(t *testing.T) {
 		},
 		{
 			objInfo: ObjectInfo{
-				UserDefined: map[string]string{"X-Minio-Internal-compression": "golang/snappy/LZ77",
+				UserDefined: map[string]string{"X-Minio-Internal-compression": "klauspost/compress/LZ77",
 					"X-Minio-Internal-actual-size": "841",
 					"content-type":                 "application/octet-stream",
 					"etag":                         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
@@ -451,7 +451,7 @@ func TestGetActualSize(t *testing.T) {
 		},
 		{
 			objInfo: ObjectInfo{
-				UserDefined: map[string]string{"X-Minio-Internal-compression": "golang/snappy/LZ77",
+				UserDefined: map[string]string{"X-Minio-Internal-compression": "klauspost/compress/LZ77",
 					"content-type": "application/octet-stream",
 					"etag":         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
 				Parts: []ObjectPartInfo{},
@@ -563,7 +563,7 @@ func TestSnappyCompressReader(t *testing.T) {
 			}
 
 			var stdBuf bytes.Buffer
-			w := snappy.NewBufferedWriter(&stdBuf)
+			w := snappy.NewWriter(&stdBuf)
 			_, err = io.CopyBuffer(w, bytes.NewReader(tt.data), buf)
 			if err != nil {
 				t.Fatal(err)
