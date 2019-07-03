@@ -31,6 +31,7 @@ import (
 	"github.com/gorilla/mux"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/pierrec/lz4"
 )
 
 var errConnectionStale = errors.New("connection stale, REST client/server instance-id mismatch")
@@ -284,9 +285,9 @@ func (s *storageRESTServer) ReadAllHandler(w http.ResponseWriter, r *http.Reques
 		s.writeErrorResponse(w, err)
 		return
 	}
-	w.Header().Set(xhttp.ContentLength, strconv.Itoa(len(buf)))
-	w.Write(buf)
-	w.(http.Flusher).Flush()
+	lw := lz4.NewWriter(w)
+	lw.Write(buf)
+	lw.Close()
 }
 
 // ReadFileHandler - read section of a file.
@@ -328,9 +329,9 @@ func (s *storageRESTServer) ReadFileHandler(w http.ResponseWriter, r *http.Reque
 		s.writeErrorResponse(w, err)
 		return
 	}
-	w.Header().Set(xhttp.ContentLength, strconv.Itoa(len(buf)))
-	w.Write(buf)
-	w.(http.Flusher).Flush()
+	lw := lz4.NewWriter(w)
+	lw.Write(buf)
+	lw.Close()
 }
 
 // ReadFileHandler - read section of a file.
@@ -358,10 +359,10 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 		return
 	}
 	defer rc.Close()
-	w.Header().Set(xhttp.ContentLength, strconv.Itoa(length))
 
-	io.Copy(w, rc)
-	w.(http.Flusher).Flush()
+	lw := lz4.NewWriter(w)
+	io.Copy(lw, rc)
+	lw.Close()
 }
 
 // readMetadata func provides the function types for reading leaf metadata.

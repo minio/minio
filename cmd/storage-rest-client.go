@@ -35,6 +35,7 @@ import (
 	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/rest"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/pierrec/lz4"
 )
 
 func isNetworkError(err error) bool {
@@ -269,7 +270,7 @@ func (client *storageRESTClient) ReadAll(volume, path string) ([]byte, error) {
 		return nil, err
 	}
 	defer http.DrainBody(respBody)
-	return ioutil.ReadAll(respBody)
+	return ioutil.ReadAll(lz4.NewReader(respBody))
 }
 
 // ReadFileStream - returns a reader for the requested file.
@@ -283,7 +284,10 @@ func (client *storageRESTClient) ReadFileStream(volume, path string, offset, len
 	if err != nil {
 		return nil, err
 	}
-	return respBody, nil
+	return struct {
+		io.Reader
+		io.Closer
+	}{Reader: lz4.NewReader(respBody), Closer: respBody}, nil
 }
 
 // ReadFile - reads section of a file.
@@ -305,7 +309,7 @@ func (client *storageRESTClient) ReadFile(volume, path string, offset int64, buf
 		return 0, err
 	}
 	defer http.DrainBody(respBody)
-	n, err := io.ReadFull(respBody, buffer)
+	n, err := io.ReadFull(lz4.NewReader(respBody), buffer)
 	return int64(n), err
 }
 
