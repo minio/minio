@@ -106,7 +106,7 @@ func toStorageErr(err error) error {
 		fmt.Sscanf(err.Error(), "Bitrot verification mismatch - expected %s received %s", &expected, &received)
 		// Go's Sscanf %s scans "," that comes after the expected hash, hence remove it. Providing "," in the format string does not help.
 		expected = strings.TrimSuffix(expected, ",")
-		bitrotErr := hashMismatchError{expected, received}
+		bitrotErr := HashMismatchError{expected, received}
 		return bitrotErr
 	}
 	return err

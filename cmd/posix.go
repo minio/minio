@@ -958,7 +958,7 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 	}
 
 	if !bytes.Equal(h.Sum(nil), verifier.sum) {
-		return 0, hashMismatchError{hex.EncodeToString(verifier.sum), hex.EncodeToString(h.Sum(nil))}
+		return 0, HashMismatchError{hex.EncodeToString(verifier.sum), hex.EncodeToString(h.Sum(nil))}
 	}
 
 	return int64(len(buffer)), nil
@@ -1589,7 +1589,7 @@ func (s *posix) VerifyFile(volume, path string, algo BitrotAlgorithm, sum []byte
 			return err
 		}
 		if !bytes.Equal(h.Sum(nil), sum) {
-			return hashMismatchError{hex.EncodeToString(sum), hex.EncodeToString(h.Sum(nil))}
+			return HashMismatchError{hex.EncodeToString(sum), hex.EncodeToString(h.Sum(nil))}
 		}
 		return nil
 	}
@@ -1622,7 +1622,7 @@ func (s *posix) VerifyFile(volume, path string, algo BitrotAlgorithm, sum []byte
 		size -= int64(n)
 		h.Write(buf)
 		if !bytes.Equal(h.Sum(nil), hashBuf) {
-			return hashMismatchError{hex.EncodeToString(hashBuf), hex.EncodeToString(h.Sum(nil))}
+			return HashMismatchError{hex.EncodeToString(hashBuf), hex.EncodeToString(h.Sum(nil))}
 		}
 	}
 }

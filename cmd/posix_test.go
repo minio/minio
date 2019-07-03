@@ -1251,13 +1251,13 @@ var posixReadFileWithVerifyTests = []struct {
 	{file: "myobject", offset: 25, length: 74, algorithm: SHA256, expError: nil},                     // 1
 	{file: "myobject", offset: 29, length: 70, algorithm: SHA256, expError: nil},                     // 2
 	{file: "myobject", offset: 100, length: 0, algorithm: SHA256, expError: nil},                     // 3
-	{file: "myobject", offset: 1, length: 120, algorithm: SHA256, expError: hashMismatchError{}},     // 4
+	{file: "myobject", offset: 1, length: 120, algorithm: SHA256, expError: HashMismatchError{}},     // 4
 	{file: "myobject", offset: 3, length: 1100, algorithm: SHA256, expError: nil},                    // 5
-	{file: "myobject", offset: 2, length: 100, algorithm: SHA256, expError: hashMismatchError{}},     // 6
+	{file: "myobject", offset: 2, length: 100, algorithm: SHA256, expError: HashMismatchError{}},     // 6
 	{file: "myobject", offset: 1000, length: 1001, algorithm: SHA256, expError: nil},                 // 7
-	{file: "myobject", offset: 0, length: 100, algorithm: BLAKE2b512, expError: hashMismatchError{}}, // 8
+	{file: "myobject", offset: 0, length: 100, algorithm: BLAKE2b512, expError: HashMismatchError{}}, // 8
 	{file: "myobject", offset: 25, length: 74, algorithm: BLAKE2b512, expError: nil},                 // 9
-	{file: "myobject", offset: 29, length: 70, algorithm: BLAKE2b512, expError: hashMismatchError{}}, // 10
+	{file: "myobject", offset: 29, length: 70, algorithm: BLAKE2b512, expError: HashMismatchError{}}, // 10
 	{file: "myobject", offset: 100, length: 0, algorithm: BLAKE2b512, expError: nil},                 // 11
 	{file: "myobject", offset: 1, length: 120, algorithm: BLAKE2b512, expError: nil},                 // 12
 	{file: "myobject", offset: 3, length: 1100, algorithm: BLAKE2b512, expError: nil},                // 13
@@ -1296,7 +1296,7 @@ func TestPosixReadFileWithVerify(t *testing.T) {
 		if test.expError != nil {
 			expected := h.Sum(nil)
 			h.Write([]byte{0})
-			test.expError = hashMismatchError{hex.EncodeToString(h.Sum(nil)), hex.EncodeToString(expected)}
+			test.expError = HashMismatchError{hex.EncodeToString(h.Sum(nil)), hex.EncodeToString(expected)}
 		}
 
 		buffer := make([]byte, test.length)
