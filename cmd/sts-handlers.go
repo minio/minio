@@ -24,6 +24,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
@@ -53,16 +54,16 @@ func registerSTSRouter(router *mux.Router) {
 	stsRouter := router.NewRoute().PathPrefix("/").Subrouter()
 
 	// Assume roles with no JWT, handles AssumeRole.
-	stsRouter.Methods("POST").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
-		ctypeOk := wildcard.MatchSimple("application/x-www-form-urlencoded*", r.Header.Get("Content-Type"))
-		authOk := wildcard.MatchSimple("AWS4-HMAC-SHA256*", r.Header.Get("Authorization"))
+	stsRouter.Methods(http.MethodPost).MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
+		ctypeOk := wildcard.MatchSimple("application/x-www-form-urlencoded*", r.Header.Get(xhttp.ContentType))
+		authOk := wildcard.MatchSimple(signV4Algorithm+"*", r.Header.Get(xhttp.Authorization))
 		noQueries := len(r.URL.Query()) == 0
 		return ctypeOk && authOk && noQueries
 	}).HandlerFunc(httpTraceAll(sts.AssumeRole))
 
 	// Assume roles with JWT handler, handles both ClientGrants and WebIdentity.
 	stsRouter.Methods("POST").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
-		ctypeOk := wildcard.MatchSimple("application/x-www-form-urlencoded*", r.Header.Get("Content-Type"))
+		ctypeOk := wildcard.MatchSimple("application/x-www-form-urlencoded*", r.Header.Get(xhttp.ContentType))
 		noQueries := len(r.URL.Query()) == 0
 		return ctypeOk && noQueries
 	}).HandlerFunc(httpTraceAll(sts.AssumeRoleWithJWT))
@@ -227,7 +228,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	assumeRoleResponse.ResponseMetadata.RequestID = w.Header().Get(responseRequestIDKey)
+	assumeRoleResponse.ResponseMetadata.RequestID = w.Header().Get(xhttp.AmzRequestID)
 	writeSuccessResponseXML(w, encodeResponse(assumeRoleResponse))
 }
 
@@ -369,7 +370,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 				SubjectFromToken: subFromToken,
 			},
 		}
-		clientGrantsResponse.ResponseMetadata.RequestID = w.Header().Get(responseRequestIDKey)
+		clientGrantsResponse.ResponseMetadata.RequestID = w.Header().Get(xhttp.AmzRequestID)
 		encodedSuccessResponse = encodeResponse(clientGrantsResponse)
 	case webIdentity:
 		webIdentityResponse := &AssumeRoleWithWebIdentityResponse{
@@ -378,7 +379,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 				SubjectFromWebIdentityToken: subFromToken,
 			},
 		}
-		webIdentityResponse.ResponseMetadata.RequestID = w.Header().Get(responseRequestIDKey)
+		webIdentityResponse.ResponseMetadata.RequestID = w.Header().Get(xhttp.AmzRequestID)
 		encodedSuccessResponse = encodeResponse(webIdentityResponse)
 	}
 

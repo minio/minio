@@ -36,6 +36,7 @@ import (
 	snappy "github.com/golang/snappy"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/hash"
@@ -346,7 +347,7 @@ func isCompressible(header http.Header, object string) bool {
 // Eliminate the non-compressible objects.
 func excludeForCompression(header http.Header, object string) bool {
 	objStr := object
-	contentType := header.Get("Content-Type")
+	contentType := header.Get(xhttp.ContentType)
 	if globalIsCompressionEnabled {
 		// We strictly disable compression for standard extensions/content-types (`compressed`).
 		if hasStringSuffixInSlice(objStr, standardExcludeCompressExtensions) || hasPattern(standardExcludeCompressContentTypes, contentType) {
