@@ -170,7 +170,11 @@ func (e *SelectStatement) AggregateResult(output Record) error {
 		if err != nil {
 			return err
 		}
-		output.Set(fmt.Sprintf("_%d", i+1), v)
+		if expr.As != "" {
+			output.Set(expr.As, v)
+		} else {
+			output.Set(fmt.Sprintf("_%d", i+1), v)
+		}
 	}
 	return nil
 }
