@@ -325,15 +325,22 @@ func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 		storageInfo.Backend.Sets[i] = make([]madmin.DriveInfo, s.drivesPerSet)
 	}
 
-	storageDisks, err := initStorageDisks(s.endpoints)
-	if err != nil {
-		return storageInfo
-	}
+	storageDisks, dErrs := initDisksWithErrors(s.endpoints)
 	defer closeStorageDisks(storageDisks)
 
 	formats, sErrs := loadFormatXLAll(storageDisks)
 
-	drivesInfo := formatsToDrivesInfo(s.endpoints, formats, sErrs)
+	combineStorageErrors := func(diskErrs []error, storageErrs []error) []error {
+		for index, err := range diskErrs {
+			if err != nil {
+				storageErrs[index] = err
+			}
+		}
+		return storageErrs
+	}
+
+	errs := combineStorageErrors(dErrs, sErrs)
+	drivesInfo := formatsToDrivesInfo(s.endpoints, formats, errs)
 	refFormat, err := getFormatXLInQuorum(formats)
 	if err != nil {
 		// Ignore errors here, since this call cannot do anything at
@@ -354,7 +361,6 @@ func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 			}
 		}
 	}
-
 	// fill all the offline, missing endpoints as well.
 	for _, drive := range drivesInfo {
 		if drive.UUID == "" {
@@ -1135,17 +1141,17 @@ func formatsToDrivesInfo(endpoints EndpointList, formats []*formatXLV3, sErrs []
 				Endpoint: drive,
 				State:    madmin.DriveStateMissing,
 			})
-		case sErrs[i] == errCorruptedFormat:
+		case sErrs[i] == errDiskNotFound:
 			beforeDrives = append(beforeDrives, madmin.DriveInfo{
 				UUID:     "",
 				Endpoint: drive,
-				State:    madmin.DriveStateCorrupt,
+				State:    madmin.DriveStateOffline,
 			})
 		default:
 			beforeDrives = append(beforeDrives, madmin.DriveInfo{
 				UUID:     "",
 				Endpoint: drive,
-				State:    madmin.DriveStateOffline,
+				State:    madmin.DriveStateCorrupt,
 			})
 		}
 	}
