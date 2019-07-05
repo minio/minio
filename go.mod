@@ -75,6 +75,7 @@ require (
 	github.com/nsqio/go-nsq v1.0.7
 	github.com/pkg/profile v1.3.0
 	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829
+	github.com/rcrowley/go-metrics v0.0.0-20190704165056-9c2d0518ed81 // indirect
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.6.0
 	github.com/ryanuber/go-glob v1.0.0 // indirect

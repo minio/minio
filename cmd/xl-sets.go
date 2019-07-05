@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -907,10 +908,108 @@ func (s *xlSets) startMergeWalks(ctx context.Context, bucket, prefix, marker str
 	return entryChs
 }
 
+func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
+	endWalkCh := make(chan struct{})
+	defer close(endWalkCh)
+	recursive := true
+	entryChs := s.startMergeWalks(context.Background(), bucket, prefix, "", recursive, endWalkCh)
+
+	readQuorum := s.drivesPerSet / 2
+	var objInfos []ObjectInfo
+	var eof bool
+	var prevPrefix string
+
+	for {
+		if len(objInfos) == maxKeys {
+			break
+		}
+		result, ok := leastEntry(entryChs, readQuorum)
+		if !ok {
+			eof = true
+			break
+		}
+
+		var objInfo ObjectInfo
+
+		index := strings.Index(strings.TrimPrefix(result.Name, prefix), delimiter)
+		if index == -1 {
+			objInfo = ObjectInfo{
+				IsDir:           false,
+				Bucket:          bucket,
+				Name:            result.Name,
+				ModTime:         result.ModTime,
+				Size:            result.Size,
+				ContentType:     result.Metadata["content-type"],
+				ContentEncoding: result.Metadata["content-encoding"],
+			}
+
+			// Extract etag from metadata.
+			objInfo.ETag = extractETag(result.Metadata)
+
+			// All the parts per object.
+			objInfo.Parts = result.Parts
+
+			// etag/md5Sum has already been extracted. We need to
+			// remove to avoid it from appearing as part of
+			// response headers. e.g, X-Minio-* or X-Amz-*.
+			objInfo.UserDefined = cleanMetadata(result.Metadata)
+
+			// Update storage class
+			if sc, ok := result.Metadata[amzStorageClass]; ok {
+				objInfo.StorageClass = sc
+			} else {
+				objInfo.StorageClass = globalMinioDefaultStorageClass
+			}
+		} else {
+			index = len(prefix) + index + len(delimiter)
+			currPrefix := result.Name[:index]
+			if currPrefix == prevPrefix {
+				continue
+			}
+			prevPrefix = currPrefix
+
+			objInfo = ObjectInfo{
+				Bucket: bucket,
+				Name:   currPrefix,
+				IsDir:  true,
+			}
+		}
+
+		if objInfo.Name <= marker {
+			continue
+		}
+
+		objInfos = append(objInfos, objInfo)
+	}
+
+	result := ListObjectsInfo{}
+	for _, objInfo := range objInfos {
+		if objInfo.IsDir {
+			result.Prefixes = append(result.Prefixes, objInfo.Name)
+			continue
+		}
+		result.Objects = append(result.Objects, objInfo)
+	}
+
+	if !eof {
+		result.IsTruncated = true
+		if len(objInfos) > 0 {
+			result.NextMarker = objInfos[len(objInfos)-1].Name
+		}
+	}
+
+	return result, nil
+}
+
 // ListObjects - implements listing of objects across disks, each disk is indepenently
 // walked and merged at this layer. Resulting value through the merge process sends
 // the data in lexically sorted order.
 func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, heal bool) (loi ListObjectsInfo, err error) {
+	if delimiter != slashSeparator && delimiter != "" {
+		// "heal" option passed can be ignored as the heal-listing does not send non-standard delimiter.
+		return s.listObjectsNonSlash(ctx, bucket, prefix, marker, delimiter, maxKeys)
+	}
+
 	if err = checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
 		return loi, err
 	}
