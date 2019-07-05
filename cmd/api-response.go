@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
 )
@@ -522,9 +523,9 @@ func generateMultiDeleteResponse(quiet bool, deletedObjects []ObjectIdentifier, 
 func writeResponse(w http.ResponseWriter, statusCode int, response []byte, mType mimeType) {
 	setCommonHeaders(w)
 	if mType != mimeNone {
-		w.Header().Set("Content-Type", string(mType))
+		w.Header().Set(xhttp.ContentType, string(mType))
 	}
-	w.Header().Set("Content-Length", strconv.Itoa(len(response)))
+	w.Header().Set(xhttp.ContentLength, strconv.Itoa(len(response)))
 	w.WriteHeader(statusCode)
 	if response != nil {
 		w.Write(response)
@@ -563,7 +564,7 @@ func writeSuccessNoContent(w http.ResponseWriter) {
 
 // writeRedirectSeeOther writes Location header with http status 303
 func writeRedirectSeeOther(w http.ResponseWriter, location string) {
-	w.Header().Set("Location", location)
+	w.Header().Set(xhttp.Location, location)
 	writeResponse(w, http.StatusSeeOther, nil, mimeNone)
 }
 
@@ -577,12 +578,12 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 	case "SlowDown", "XMinioServerNotInitialized", "XMinioReadQuorum", "XMinioWriteQuorum":
 		// Set retry-after header to indicate user-agents to retry request after 120secs.
 		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
-		w.Header().Set("Retry-After", "120")
+		w.Header().Set(xhttp.RetryAfter, "120")
 	case "AccessDenied":
 		// The request is from browser and also if browser
 		// is enabled we need to redirect.
 		if browser {
-			w.Header().Set("Location", minioReservedBucketPath+reqURL.Path)
+			w.Header().Set(xhttp.Location, minioReservedBucketPath+reqURL.Path)
 			w.WriteHeader(http.StatusTemporaryRedirect)
 			return
 		}
@@ -590,7 +591,7 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 
 	// Generate error response.
 	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path,
-		w.Header().Get(responseRequestIDKey), w.Header().Get(responseDeploymentIDKey))
+		w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
 	encodedErrorResponse := encodeResponse(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
 }
@@ -603,7 +604,7 @@ func writeErrorResponseHeadersOnly(w http.ResponseWriter, err APIError) {
 // useful for admin APIs.
 func writeErrorResponseJSON(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {
 	// Generate error response.
-	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path, w.Header().Get(responseRequestIDKey), w.Header().Get(responseDeploymentIDKey))
+	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path, w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
 }
@@ -621,8 +622,8 @@ func writeCustomErrorResponseJSON(ctx context.Context, w http.ResponseWriter, er
 		Resource:   reqURL.Path,
 		BucketName: reqInfo.BucketName,
 		Key:        reqInfo.ObjectName,
-		RequestID:  w.Header().Get(responseRequestIDKey),
-		HostID:     w.Header().Get(responseDeploymentIDKey),
+		RequestID:  w.Header().Get(xhttp.AmzRequestID),
+		HostID:     globalDeploymentID,
 	}
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
@@ -637,12 +638,12 @@ func writeCustomErrorResponseXML(ctx context.Context, w http.ResponseWriter, err
 	case "SlowDown", "XMinioServerNotInitialized", "XMinioReadQuorum", "XMinioWriteQuorum":
 		// Set retry-after header to indicate user-agents to retry request after 120secs.
 		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
-		w.Header().Set("Retry-After", "120")
+		w.Header().Set(xhttp.RetryAfter, "120")
 	case "AccessDenied":
 		// The request is from browser and also if browser
 		// is enabled we need to redirect.
 		if browser && globalIsBrowserEnabled {
-			w.Header().Set("Location", minioReservedBucketPath+reqURL.Path)
+			w.Header().Set(xhttp.Location, minioReservedBucketPath+reqURL.Path)
 			w.WriteHeader(http.StatusTemporaryRedirect)
 			return
 		}
@@ -655,8 +656,8 @@ func writeCustomErrorResponseXML(ctx context.Context, w http.ResponseWriter, err
 		Resource:   reqURL.Path,
 		BucketName: reqInfo.BucketName,
 		Key:        reqInfo.ObjectName,
-		RequestID:  w.Header().Get(responseRequestIDKey),
-		HostID:     w.Header().Get(responseDeploymentIDKey),
+		RequestID:  w.Header().Get(xhttp.AmzRequestID),
+		HostID:     globalDeploymentID,
 	}
 
 	encodedErrorResponse := encodeResponse(errorResponse)

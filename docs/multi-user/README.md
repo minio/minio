@@ -59,7 +59,7 @@ mc admin user remove myminio newuser
 ### 5. Change user policy
 Change the policy for user `newuser` to `putonly` canned policy.
 ```
-mc admin user policy myminio newuser putonly
+mc admin user set-policy myminio newuser putonly
 ```
 
 ### 5. List all users

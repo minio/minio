@@ -314,6 +314,7 @@ func serverMain(ctx *cli.Context) {
 	}()
 
 	newObject, err := newObjectLayer(globalEndpoints)
+	logger.SetDeploymentID(globalDeploymentID)
 	if err != nil {
 		// Stop watching for any certificate changes.
 		globalTLSCerts.Stop()

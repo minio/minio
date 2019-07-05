@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"strings"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/handlers"
@@ -219,8 +220,8 @@ func extractReqParams(r *http.Request) map[string]string {
 func extractRespElements(w http.ResponseWriter) map[string]string {
 
 	return map[string]string{
-		"requestId":      w.Header().Get(responseRequestIDKey),
-		"content-length": w.Header().Get("Content-Length"),
+		"requestId":      w.Header().Get(xhttp.AmzRequestID),
+		"content-length": w.Header().Get(xhttp.ContentLength),
 		// Add more fields here.
 	}
 }

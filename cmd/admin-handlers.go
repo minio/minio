@@ -34,6 +34,7 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
@@ -682,7 +683,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 					// Start writing response to client
 					started = true
 					setCommonHeaders(w)
-					w.Header().Set("Content-Type", string(mimeJSON))
+					w.Header().Set(xhttp.ContentType, string(mimeJSON))
 					// Set 200 OK status
 					w.WriteHeader(200)
 				}
@@ -702,20 +703,20 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 					var errorRespJSON []byte
 					if hr.errBody == "" {
 						errorRespJSON = encodeResponseJSON(getAPIErrorResponse(ctx, hr.apiErr,
-							r.URL.Path, w.Header().Get(responseRequestIDKey),
-							w.Header().Get(responseDeploymentIDKey)))
+							r.URL.Path, w.Header().Get(xhttp.AmzRequestID),
+							globalDeploymentID))
 					} else {
 						errorRespJSON = encodeResponseJSON(APIErrorResponse{
 							Code:      hr.apiErr.Code,
 							Message:   hr.errBody,
 							Resource:  r.URL.Path,
-							RequestID: w.Header().Get(responseRequestIDKey),
-							HostID:    w.Header().Get(responseDeploymentIDKey),
+							RequestID: w.Header().Get(xhttp.AmzRequestID),
+							HostID:    globalDeploymentID,
 						})
 					}
 					if !started {
 						setCommonHeaders(w)
-						w.Header().Set("Content-Type", string(mimeJSON))
+						w.Header().Set(xhttp.ContentType, string(mimeJSON))
 						w.WriteHeader(hr.apiErr.HTTPStatusCode)
 					}
 					w.Write(errorRespJSON)
@@ -1487,7 +1488,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	// Avoid reusing tcp connection if read timeout is hit
 	// This is needed to make r.Context().Done() work as
 	// expected in case of read timeout
-	w.Header().Add("Connection", "close")
+	w.Header().Add(xhttp.Connection, "close")
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)
