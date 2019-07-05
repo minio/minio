@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/sha256-simd"
@@ -44,12 +45,12 @@ func skipContentSha256Cksum(r *http.Request) bool {
 	)
 
 	if isRequestPresignedSignatureV4(r) {
-		v, ok = r.URL.Query()["X-Amz-Content-Sha256"]
+		v, ok = r.URL.Query()[xhttp.AmzContentSha256]
 		if !ok {
-			v, ok = r.Header["X-Amz-Content-Sha256"]
+			v, ok = r.Header[xhttp.AmzContentSha256]
 		}
 	} else {
-		v, ok = r.Header["X-Amz-Content-Sha256"]
+		v, ok = r.Header[xhttp.AmzContentSha256]
 	}
 
 	// If x-amz-content-sha256 is set and the value is not
@@ -81,15 +82,15 @@ func getContentSha256Cksum(r *http.Request, stype serviceType) string {
 		// X-Amz-Content-Sha256, if not set in presigned requests, checksum
 		// will default to 'UNSIGNED-PAYLOAD'.
 		defaultSha256Cksum = unsignedPayload
-		v, ok = r.URL.Query()["X-Amz-Content-Sha256"]
+		v, ok = r.URL.Query()[xhttp.AmzContentSha256]
 		if !ok {
-			v, ok = r.Header["X-Amz-Content-Sha256"]
+			v, ok = r.Header[xhttp.AmzContentSha256]
 		}
 	} else {
 		// X-Amz-Content-Sha256, if not set in signed requests, checksum
 		// will default to sha256([]byte("")).
 		defaultSha256Cksum = emptySHA256
-		v, ok = r.Header["X-Amz-Content-Sha256"]
+		v, ok = r.Header[xhttp.AmzContentSha256]
 	}
 
 	// We found 'X-Amz-Content-Sha256' return the captured value.

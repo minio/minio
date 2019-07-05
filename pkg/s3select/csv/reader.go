@@ -59,10 +59,10 @@ func (rr *recordReader) Read(p []byte) (n int, err error) {
 		p[i] = '\n'
 		if len(rr.recordDelimiter) > 1 {
 			p = append(p[:i+1], p[i+len(rr.recordDelimiter):]...)
+			n--
 		}
 	}
 
-	n = len(p)
 	if len(rr.recordDelimiter) == 1 || p[n-1] != rr.recordDelimiter[0] {
 		return n, nil
 	}
@@ -141,9 +141,8 @@ func NewReader(readCloser io.ReadCloser, args *ReaderArgs) (*Reader, error) {
 	// If LazyQuotes is true, a quote may appear in an unquoted field and a
 	// non-doubled quote may appear in a quoted field.
 	csvReader.LazyQuotes = true
-	// If TrimLeadingSpace is true, leading white space in a field is ignored.
-	// This is done even if the field delimiter, Comma, is white space.
-	csvReader.TrimLeadingSpace = true
+	// We do not trim leading space to keep consistent with s3.
+	csvReader.TrimLeadingSpace = false
 
 	r := &Reader{
 		args:       args,

@@ -196,7 +196,7 @@ func charlen(v *Value) (*Value, error) {
 		err := fmt.Errorf("%s/%s expects a string argument", sqlFnCharLength, sqlFnCharacterLength)
 		return nil, errIncorrectSQLFunctionArgumentType(err)
 	}
-	return FromInt(int64(len(s))), nil
+	return FromInt(int64(len([]rune(s)))), nil
 }
 
 func lowerCase(v *Value) (*Value, error) {

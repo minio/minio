@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"os/user"
 	"syscall"
 
@@ -43,13 +42,13 @@ func getUserGroup(path string) (string, error) {
 	if err != nil {
 		// Fresh directory we should default to what was requested by user.
 		if os.IsNotExist(err) {
-			cmd := exec.Command("chown", "-R", defaultUserGroup, path)
-			if err = cmd.Run(); err != nil {
+			fi, err = os.Stat(path)
+			if err != nil {
 				return "", err
 			}
-			return defaultUserGroup, nil
+		} else {
+			return "", err
 		}
-		return "", err
 	}
 	stat, ok := fi.Sys().(*syscall.Stat_t)
 	if !ok {

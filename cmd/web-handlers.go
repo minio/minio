@@ -41,6 +41,7 @@ import (
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/browser"
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dns"
@@ -1217,7 +1218,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add content disposition.
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(objInfo.Name)))
+	w.Header().Set(xhttp.ContentDisposition, fmt.Sprintf("attachment; filename=\"%s\"", path.Base(objInfo.Name)))
 
 	setHeadGetRespHeaders(w, r.URL.Query())
 
@@ -1879,11 +1880,11 @@ func presignedGet(host, bucket, object string, expiry int64, creds auth.Credenti
 	}
 
 	query := url.Values{}
-	query.Set("X-Amz-Algorithm", signV4Algorithm)
-	query.Set("X-Amz-Credential", credential)
-	query.Set("X-Amz-Date", dateStr)
-	query.Set("X-Amz-Expires", expiryStr)
-	query.Set("X-Amz-SignedHeaders", "host")
+	query.Set(xhttp.AmzAlgorithm, signV4Algorithm)
+	query.Set(xhttp.AmzCredential, credential)
+	query.Set(xhttp.AmzDate, dateStr)
+	query.Set(xhttp.AmzExpires, expiryStr)
+	query.Set(xhttp.AmzSignedHeaders, "host")
 	queryStr := s3utils.QueryEncode(query)
 
 	path := "/" + path.Join(bucket, object)
@@ -1897,7 +1898,7 @@ func presignedGet(host, bucket, object string, expiry int64, creds auth.Credenti
 	signature := getSignature(signingKey, stringToSign)
 
 	// Construct the final presigned URL.
-	return host + s3utils.EncodePath(path) + "?" + queryStr + "&" + "X-Amz-Signature=" + signature
+	return host + s3utils.EncodePath(path) + "?" + queryStr + "&" + xhttp.AmzSignature + "=" + signature
 }
 
 // toJSONError converts regular errors into more user friendly
