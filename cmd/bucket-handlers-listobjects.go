@@ -46,13 +46,6 @@ func validateListObjectsArgs(prefix, marker, delimiter, encodingType string, max
 		}
 	}
 
-	/// MinIO special conditions for ListObjects.
-
-	// Verify if delimiter is anything other than '/', which we do not support.
-	if delimiter != "" && delimiter != "/" {
-		return ErrNotImplemented
-	}
-	// Success.
 	return ErrNone
 }
 
