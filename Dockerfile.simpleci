@@ -33,7 +33,7 @@ USER ci
 RUN make
 RUN bash -c 'diff -au <(gofmt -s -d cmd) <(printf "")'
 RUN bash -c 'diff -au <(gofmt -s -d pkg) <(printf "")'
-RUN for d in $(go list ./... | grep -v browser); do go test -v -race --timeout 15m "$d"; done
+RUN for d in $(go list ./... | grep -v browser); do go test -v -race --timeout 20m "$d"; done
 RUN make verifiers
 RUN make crosscompile
 RUN make verify
@@ -56,15 +56,17 @@ FROM ubuntu:16.04
 
 COPY --from=0 /go/src/github.com/minio/minio/minio /usr/bin/minio
 COPY buildscripts/gateway-tests.sh /usr/bin/gateway-tests.sh
+COPY mint /mint
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV LANG C.UTF-8
 ENV GOROOT /usr/local/go
 ENV GOPATH /usr/local
 ENV PATH $GOPATH/bin:$GOROOT/bin:$PATH
+ENV MINT_ROOT_DIR /mint
 
-RUN apt-get --yes update && apt-get --yes upgrade && apt-get --yes --quiet install wget jq curl git dnsmasq && \
-    git clone https://github.com/minio/mint.git /mint && \
+RUN apt-get --yes update && apt-get --yes upgrade && \
+    apt-get --yes --quiet install wget jq curl git dnsmasq && \
     cd /mint && /mint/release.sh
 
 WORKDIR /mint
