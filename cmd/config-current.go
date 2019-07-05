@@ -767,7 +767,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 	for id, args := range config.Notify.Webhook {
 		if args.Enable {
 			args.RootCAs = globalRootCAs
-			newTarget := target.NewWebhookTarget(id, args)
+			newTarget := target.NewWebhookTarget(id, args, GlobalServiceDoneCh)
 			if err := targetList.Add(newTarget); err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
