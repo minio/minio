@@ -7,28 +7,37 @@ By default, the temporary security credentials created by AssumeRoleWithWebIdent
 #### DurationSeconds
 The duration, in seconds. The value can range from 900 seconds (15 minutes) up to 12 hours. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds.
 
-| Params | Value |
-| :-- | :-- |
-| *Type* | *Integer* |
+| Params        | Value                                           |
+| :--           | :--                                             |
+| *Type*        | *Integer*                                       |
 | *Valid Range* | *Minimum value of 900. Maximum value of 43200.* |
-| *Required* | *No* |
+| *Required*    | *No*                                            |
+
+#### Policy
+An IAM policy in JSON format that you want to use as an inline session policy. This parameter is optional. Passing policies to this operation returns new temporary credentials. The resulting session's permissions are the intersection of the canned policy name and the policy set here. You cannot use this policy to grant more permissions than those allowed by the canned policy name being assumed.
+
+| Params        | Value                                          |
+| :--           | :--                                            |
+| *Type*        | *String*                                       |
+| *Valid Range* | *Minimum length of 1. Maximum length of 2048.* |
+| *Required*    | *No*                                           |
 
 #### WebIdentityToken
 The OAuth 2.0 access token that is provided by the web identity provider. Application must get this token by authenticating the user who is using your application with a web identity provider before the application makes an AssumeRoleWithWebIdentity call.
 
-| Params | Value |
-| :-- | :-- |
-| *Type* | *String* |
+| Params               | Value                                          |
+| :--                  | :--                                            |
+| *Type*               | *String*                                       |
 | *Length Constraints* | *Minimum length of 4. Maximum length of 2048.* |
-| *Required* | *Yes* |
+| *Required*           | *Yes*                                          |
 
 #### Version
 Indicates STS API version information, the only supported value is '2011-06-15'. This value is borrowed from AWS STS API documentation for compatibility reasons.
 
-| Params | Value |
-| :-- | :-- |
-| *Type* | *String* |
-| *Required* | *Yes* |
+| Params     | Value    |
+| :--        | :--      |
+| *Type*     | *String* |
+| *Required* | *Yes*    |
 
 #### Response Elements
 XML response for this API is similar to [AWS STS AssumeRoleWithWebIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html#API_AssumeRoleWithWebIdentity_ResponseElements)

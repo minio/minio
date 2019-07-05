@@ -686,7 +686,7 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 	}
 
 	if !cpSrcDstSame {
-		objectDWLock := destSet.nsMutex.NewNSLock(destBucket, destObject)
+		objectDWLock := destSet.nsMutex.NewNSLock(ctx, destBucket, destObject)
 		if err := objectDWLock.GetLock(globalObjectTimeout); err != nil {
 			return objInfo, err
 		}
@@ -844,6 +844,10 @@ func leastEntry(entriesCh []FileInfoCh, readQuorum int) (FileInfo, bool) {
 		entriesCh[i].Push(entries[i])
 	}
 
+	if readQuorum < 0 {
+		return lentry, isTruncated
+	}
+
 	quorum := lentry.Quorum
 	if quorum == 0 {
 		quorum = readQuorum
@@ -906,7 +910,7 @@ func (s *xlSets) startMergeWalks(ctx context.Context, bucket, prefix, marker str
 // ListObjects - implements listing of objects across disks, each disk is indepenently
 // walked and merged at this layer. Resulting value through the merge process sends
 // the data in lexically sorted order.
-func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
+func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, heal bool) (loi ListObjectsInfo, err error) {
 	if err = checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
 		return loi, err
 	}
@@ -944,13 +948,18 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		recursive = false
 	}
 
-	entryChs, endWalkCh := s.pool.Release(listParams{bucket, recursive, marker, prefix})
+	entryChs, endWalkCh := s.pool.Release(listParams{bucket, recursive, marker, prefix, heal})
 	if entryChs == nil {
 		endWalkCh = make(chan struct{})
 		entryChs = s.startMergeWalks(context.Background(), bucket, prefix, marker, recursive, endWalkCh)
 	}
 
-	entries := mergeEntriesCh(entryChs, maxKeys, s.drivesPerSet/2)
+	readQuorum := s.drivesPerSet / 2
+	if heal {
+		readQuorum = -1
+	}
+
+	entries := mergeEntriesCh(entryChs, maxKeys, readQuorum)
 	if len(entries.Files) == 0 {
 		return loi, nil
 	}
@@ -1004,9 +1013,16 @@ func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimi
 		loi.Objects = append(loi.Objects, objInfo)
 	}
 	if loi.IsTruncated {
-		s.pool.Set(listParams{bucket, recursive, loi.NextMarker, prefix}, entryChs, endWalkCh)
+		s.pool.Set(listParams{bucket, recursive, loi.NextMarker, prefix, heal}, entryChs, endWalkCh)
 	}
 	return loi, nil
+}
+
+// ListObjects - implements listing of objects across disks, each disk is indepenently
+// walked and merged at this layer. Resulting value through the merge process sends
+// the data in lexically sorted order.
+func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
+	return s.listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys, false)
 }
 
 func (s *xlSets) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error) {
@@ -1141,7 +1157,7 @@ func formatsToDrivesInfo(endpoints EndpointList, formats []*formatXLV3, sErrs []
 // healing in a distributed setup.
 func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 	// Acquire lock on format.json
-	formatLock := s.getHashedSet(formatConfigFile).nsMutex.NewNSLock(minioMetaBucket, formatConfigFile)
+	formatLock := s.getHashedSet(formatConfigFile).nsMutex.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
 	if err = formatLock.GetRLock(globalHealingTimeout); err != nil {
 		return err
 	}
@@ -1262,7 +1278,7 @@ func markRootDisksAsDown(storageDisks []StorageAPI) {
 // coded data in it.
 func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealResultItem, err error) {
 	// Acquire lock on format.json
-	formatLock := s.getHashedSet(formatConfigFile).nsMutex.NewNSLock(minioMetaBucket, formatConfigFile)
+	formatLock := s.getHashedSet(formatConfigFile).nsMutex.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
 	if err = formatLock.GetLock(globalHealingTimeout); err != nil {
 		return madmin.HealResultItem{}, err
 	}
@@ -1415,7 +1431,7 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 
 // HealBucket - heals inconsistent buckets and bucket metadata on all sets.
 func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (result madmin.HealResultItem, err error) {
-	bucketLock := globalNSMutex.NewNSLock(bucket, "")
+	bucketLock := globalNSMutex.NewNSLock(ctx, bucket, "")
 	if err := bucketLock.GetLock(globalHealingTimeout); err != nil {
 		return result, err
 	}
@@ -1535,4 +1551,8 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObj
 	}
 
 	return nil
+}
+
+func (s *xlSets) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
+	return s.listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys, true)
 }

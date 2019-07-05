@@ -20,14 +20,13 @@ import { ObjectsListContainer } from "../ObjectsListContainer"
 
 describe("ObjectsList", () => {
   it("should render without crashing", () => {
-    shallow(<ObjectsListContainer loadObjects={jest.fn()} />)
+    shallow(<ObjectsListContainer objects={[]} />)
   })
 
   it("should render ObjectsList with objects", () => {
     const wrapper = shallow(
       <ObjectsListContainer
         objects={[{ name: "test1.jpg" }, { name: "test2.jpg" }]}
-        loadObjects={jest.fn()}
       />
     )
     expect(wrapper.find("ObjectsList").length).toBe(1)
@@ -37,10 +36,14 @@ describe("ObjectsList", () => {
     ])
   })
 
-  it("should show the loading indicator at the bottom if there are more elements to display", () => {
+  it("should show the loading indicator when the objects are being loaded", () => {
     const wrapper = shallow(
-      <ObjectsListContainer currentBucket="test1" isTruncated={true} />
+      <ObjectsListContainer
+        currentBucket="test1"
+        objects={[]}
+        listLoading={true}
+      />
     )
-    expect(wrapper.find(".text-center").prop("style")).toHaveProperty("display", "block")
+    expect(wrapper.find(".loading").exists()).toBeTruthy()
   })
 })

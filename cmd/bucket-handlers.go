@@ -32,6 +32,7 @@ import (
 
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
@@ -445,7 +446,8 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 				}
 
 				// Make sure to add Location information here only for bucket
-				w.Header().Set("Location", getObjectLocation(r, globalDomainNames, bucket, ""))
+				w.Header().Set(xhttp.Location,
+					getObjectLocation(r, globalDomainNames, bucket, ""))
 
 				writeSuccessResponseHeadersOnly(w)
 				return
@@ -466,7 +468,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Make sure to add Location information here only for bucket
-	w.Header().Set("Location", path.Clean(r.URL.Path)) // Clean any trailing slashes.
+	w.Header().Set(xhttp.Location, path.Clean(r.URL.Path)) // Clean any trailing slashes.
 
 	writeSuccessResponseHeadersOnly(w)
 }
@@ -497,6 +499,9 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 
 	bucket := mux.Vars(r)["bucket"]
+
+	// To detect if the client has disconnected.
+	r.Body = &detectDisconnect{r.Body, r.Context().Done()}
 
 	// Require Content-Length to be set in the request
 	size := r.ContentLength
@@ -678,8 +683,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 
 	location := getObjectLocation(r, globalDomainNames, bucket, object)
-	w.Header()["ETag"] = []string{`"` + objInfo.ETag + `"`}
-	w.Header().Set("Location", location)
+	w.Header()[xhttp.ETag] = []string{`"` + objInfo.ETag + `"`}
+	w.Header().Set(xhttp.Location, location)
 
 	// Notify object created event.
 	defer sendEvent(eventArgs{

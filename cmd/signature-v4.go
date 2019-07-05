@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v6/pkg/s3utils"
+	xhttp "github.com/minio/minio/cmd/http"
 	sha256 "github.com/minio/sha256-simd"
 )
 
@@ -172,7 +173,7 @@ func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 	region := globalServerConfig.GetRegion()
 
 	// Parse credential tag.
-	credHeader, err := parseCredentialHeader("Credential="+formValues.Get("X-Amz-Credential"), region, serviceS3)
+	credHeader, err := parseCredentialHeader("Credential="+formValues.Get(xhttp.AmzCredential), region, serviceS3)
 	if err != ErrNone {
 		return ErrMissingFields
 	}
@@ -189,7 +190,7 @@ func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 	newSignature := getSignature(signingKey, formValues.Get("Policy"))
 
 	// Verify signature.
-	if !compareSignatureV4(newSignature, formValues.Get("X-Amz-Signature")) {
+	if !compareSignatureV4(newSignature, formValues.Get(xhttp.AmzSignature)) {
 		return ErrSignatureDoesNotMatch
 	}
 
@@ -223,11 +224,11 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 
 	// Construct new query.
 	query := make(url.Values)
-	if req.URL.Query().Get("X-Amz-Content-Sha256") != "" {
-		query.Set("X-Amz-Content-Sha256", hashedPayload)
+	if req.URL.Query().Get(xhttp.AmzContentSha256) != "" {
+		query.Set(xhttp.AmzContentSha256, hashedPayload)
 	}
 
-	query.Set("X-Amz-Algorithm", signV4Algorithm)
+	query.Set(xhttp.AmzAlgorithm, signV4Algorithm)
 
 	// If the host which signed the request is slightly ahead in time (by less than globalMaxSkewTime) the
 	// request should still be allowed.
@@ -244,10 +245,10 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	expireSeconds := int(pSignValues.Expires / time.Second)
 
 	// Construct the query.
-	query.Set("X-Amz-Date", t.Format(iso8601Format))
-	query.Set("X-Amz-Expires", strconv.Itoa(expireSeconds))
-	query.Set("X-Amz-SignedHeaders", getSignedHeaders(extractedSignedHeaders))
-	query.Set("X-Amz-Credential", cred.AccessKey+"/"+pSignValues.Credential.getScope())
+	query.Set(xhttp.AmzDate, t.Format(iso8601Format))
+	query.Set(xhttp.AmzExpires, strconv.Itoa(expireSeconds))
+	query.Set(xhttp.AmzSignedHeaders, getSignedHeaders(extractedSignedHeaders))
+	query.Set(xhttp.AmzCredential, cred.AccessKey+"/"+pSignValues.Credential.getScope())
 
 	// Save other headers available in the request parameters.
 	for k, v := range req.URL.Query() {
@@ -273,24 +274,24 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	encodedQuery := query.Encode()
 
 	// Verify if date query is same.
-	if req.URL.Query().Get("X-Amz-Date") != query.Get("X-Amz-Date") {
+	if req.URL.Query().Get(xhttp.AmzDate) != query.Get(xhttp.AmzDate) {
 		return ErrSignatureDoesNotMatch
 	}
 	// Verify if expires query is same.
-	if req.URL.Query().Get("X-Amz-Expires") != query.Get("X-Amz-Expires") {
+	if req.URL.Query().Get(xhttp.AmzExpires) != query.Get(xhttp.AmzExpires) {
 		return ErrSignatureDoesNotMatch
 	}
 	// Verify if signed headers query is same.
-	if req.URL.Query().Get("X-Amz-SignedHeaders") != query.Get("X-Amz-SignedHeaders") {
+	if req.URL.Query().Get(xhttp.AmzSignedHeaders) != query.Get(xhttp.AmzSignedHeaders) {
 		return ErrSignatureDoesNotMatch
 	}
 	// Verify if credential query is same.
-	if req.URL.Query().Get("X-Amz-Credential") != query.Get("X-Amz-Credential") {
+	if req.URL.Query().Get(xhttp.AmzCredential) != query.Get(xhttp.AmzCredential) {
 		return ErrSignatureDoesNotMatch
 	}
 	// Verify if sha256 payload query is same.
-	if req.URL.Query().Get("X-Amz-Content-Sha256") != "" {
-		if req.URL.Query().Get("X-Amz-Content-Sha256") != query.Get("X-Amz-Content-Sha256") {
+	if req.URL.Query().Get(xhttp.AmzContentSha256) != "" {
+		if req.URL.Query().Get(xhttp.AmzContentSha256) != query.Get(xhttp.AmzContentSha256) {
 			return ErrContentSHA256Mismatch
 		}
 	}
@@ -311,7 +312,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	newSignature := getSignature(presignedSigningKey, presignedStringToSign)
 
 	// Verify signature.
-	if !compareSignatureV4(req.URL.Query().Get("X-Amz-Signature"), newSignature) {
+	if !compareSignatureV4(req.URL.Query().Get(xhttp.AmzSignature), newSignature) {
 		return ErrSignatureDoesNotMatch
 	}
 	return ErrNone
@@ -325,7 +326,7 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string, st
 	req := *r
 
 	// Save authorization header.
-	v4Auth := req.Header.Get("Authorization")
+	v4Auth := req.Header.Get(xhttp.Authorization)
 
 	// Parse signature version '4' header.
 	signV4Values, err := parseSignV4(v4Auth, region, stype)
@@ -346,8 +347,8 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string, st
 
 	// Extract date, if not present throw error.
 	var date string
-	if date = req.Header.Get(http.CanonicalHeaderKey("x-amz-date")); date == "" {
-		if date = r.Header.Get("Date"); date == "" {
+	if date = req.Header.Get(xhttp.AmzDate); date == "" {
+		if date = r.Header.Get(xhttp.Date); date == "" {
 			return ErrMissingDateHeader
 		}
 	}

@@ -18,7 +18,7 @@ Kubernetes concepts like Deployments and StatefulSets provide perfect platform t
 
 ## Prerequisites
 
-To run this example, you need Kubernetes version >=1.4 cluster installed and running, and that you have installed the [`kubectl`](https://kubernetes.io/docs/tasks/kubectl/install/) command line tool in your path. Please see the [getting started guides](https://kubernetes.io/docs/getting-started-guides/) for installation instructions for your platform.
+To run this example, you need Kubernetes version >=1.4 cluster installed and running, and that you have installed the [`kubectl`](https://kubernetes.io/docs/tasks/kubectl/install/) command line tool in your path. Please see the [getting started guides](https://kubernetes.io/docs/setup/) for installation instructions for your platform.
 
 <a name="minio-standalone-server-deployment"></a>
 

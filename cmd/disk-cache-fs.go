@@ -303,7 +303,7 @@ func (cfs *cacheFSObjects) PutObject(ctx context.Context, bucket string, object 
 	data := r.Reader
 	fs := cfs.FSObjects
 	// Lock the object.
-	objectLock := fs.nsMutex.NewNSLock(bucket, object)
+	objectLock := fs.nsMutex.NewNSLock(ctx, bucket, object)
 	if err := objectLock.GetLock(globalObjectTimeout); err != nil {
 		return objInfo, err
 	}
@@ -489,7 +489,7 @@ func (cfs *cacheFSObjects) NewMultipartUpload(ctx context.Context, bucket, objec
 // moveBucketToTrash clears cacheFSObjects of bucket contents and moves it to trash folder.
 func (cfs *cacheFSObjects) moveBucketToTrash(ctx context.Context, bucket string) (err error) {
 	fs := cfs.FSObjects
-	bucketLock := fs.nsMutex.NewNSLock(bucket, "")
+	bucketLock := fs.nsMutex.NewNSLock(ctx, bucket, "")
 	if err = bucketLock.GetLock(globalObjectTimeout); err != nil {
 		return err
 	}

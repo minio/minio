@@ -1238,6 +1238,17 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		opts.UserDefined = metadata
 		return
 	}
+	if crypto.S3KMS.IsRequested(r.Header) {
+		keyID, context, err := crypto.S3KMS.ParseHTTP(r.Header)
+		if err != nil {
+			return ObjectOptions{}, err
+		}
+		sseKms, err := encrypt.NewSSEKMS(keyID, context)
+		if err != nil {
+			return ObjectOptions{}, err
+		}
+		return ObjectOptions{ServerSideEncryption: sseKms, UserDefined: metadata}, nil
+	}
 	// default case of passing encryption headers and UserDefined metadata to backend
 	return getDefaultOpts(r.Header, false, metadata)
 }

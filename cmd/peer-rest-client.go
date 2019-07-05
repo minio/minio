@@ -23,13 +23,17 @@ import (
 	"encoding/gob"
 	"io"
 	"net/url"
+	"strconv"
+	"time"
 
 	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
+	trace "github.com/minio/minio/pkg/trace"
 )
 
 // client to talk to peer Nodes.
@@ -51,9 +55,16 @@ func (client *peerRESTClient) reConnect() error {
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *peerRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
+	return client.callWithContext(context.Background(), method, values, body, length)
+}
+
+// Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
+// permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
+// after verifying format.json
+func (client *peerRESTClient) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
 	if !client.connected {
 		err := client.reConnect()
-		logger.LogIf(context.Background(), err)
+		logger.LogIf(ctx, err)
 		if err != nil {
 			return nil, err
 		}
@@ -63,7 +74,7 @@ func (client *peerRESTClient) call(method string, values url.Values, body io.Rea
 		values = make(url.Values)
 	}
 
-	respBody, err = client.restClient.Call(method, values, body, length)
+	respBody, err = client.restClient.CallWithContext(ctx, method, values, body, length)
 	if err == nil {
 		return respBody, nil
 	}
@@ -202,7 +213,7 @@ func (client *peerRESTClient) ReloadFormat(dryRun bool) error {
 	return nil
 }
 
-// ListenBucketNotification - send listent bucket notification to peer nodes.
+// ListenBucketNotification - send listen bucket notification to peer nodes.
 func (client *peerRESTClient) ListenBucketNotification(bucket string, eventNames []event.Name,
 	pattern string, targetID event.TargetID, addr xnet.Host) error {
 	args := listenBucketNotificationReq{
@@ -337,6 +348,59 @@ func (client *peerRESTClient) PutBucketNotification(bucket string, rulesMap even
 	return nil
 }
 
+// DeletePolicy - delete a specific canned policy.
+func (client *peerRESTClient) DeletePolicy(policyName string) (err error) {
+	values := make(url.Values)
+	values.Set(peerRESTPolicy, policyName)
+
+	respBody, err := client.call(peerRESTMethodDeletePolicy, values, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// LoadPolicy - reload a specific canned policy.
+func (client *peerRESTClient) LoadPolicy(policyName string) (err error) {
+	values := make(url.Values)
+	values.Set(peerRESTPolicy, policyName)
+
+	respBody, err := client.call(peerRESTMethodLoadPolicy, values, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// DeleteUser - delete a specific user.
+func (client *peerRESTClient) DeleteUser(accessKey string) (err error) {
+	values := make(url.Values)
+	values.Set(peerRESTUser, accessKey)
+
+	respBody, err := client.call(peerRESTMethodDeleteUser, values, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// LoadUser - reload a specific user.
+func (client *peerRESTClient) LoadUser(accessKey string, temp bool) (err error) {
+	values := make(url.Values)
+	values.Set(peerRESTUser, accessKey)
+	values.Set(peerRESTUserTemp, strconv.FormatBool(temp))
+
+	respBody, err := client.call(peerRESTMethodLoadUser, values, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 // LoadUsers - send load users command to peer nodes.
 func (client *peerRESTClient) LoadUsers() (err error) {
 	respBody, err := client.call(peerRESTMethodLoadUsers, nil, nil, -1)
@@ -357,6 +421,73 @@ func (client *peerRESTClient) SignalService(sig serviceSignal) error {
 	}
 	defer http.DrainBody(respBody)
 	return nil
+}
+
+func (client *peerRESTClient) BackgroundHealStatus() (madmin.BgHealState, error) {
+	respBody, err := client.call(peerRESTMethodBackgroundHealStatus, nil, nil, -1)
+	if err != nil {
+		return madmin.BgHealState{}, err
+	}
+	defer http.DrainBody(respBody)
+
+	state := madmin.BgHealState{}
+	err = gob.NewDecoder(respBody).Decode(&state)
+	return state, err
+}
+
+func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan struct{}, trcAll bool) {
+	values := make(url.Values)
+	values.Set(peerRESTTraceAll, strconv.FormatBool(trcAll))
+
+	// To cancel the REST request in case doneCh gets closed.
+	ctx, cancel := context.WithCancel(context.Background())
+
+	cancelCh := make(chan struct{})
+	defer close(cancelCh)
+	go func() {
+		select {
+		case <-doneCh:
+		case <-cancelCh:
+			// There was an error in the REST request.
+		}
+		cancel()
+	}()
+
+	respBody, err := client.callWithContext(ctx, peerRESTMethodTrace, values, nil, -1)
+	defer http.DrainBody(respBody)
+
+	if err != nil {
+		return
+	}
+
+	dec := gob.NewDecoder(respBody)
+	for {
+		var info trace.Info
+		if err = dec.Decode(&info); err != nil {
+			return
+		}
+		select {
+		case traceCh <- info:
+		default:
+			// Do not block on slow receivers.
+		}
+	}
+}
+
+// Trace - send http trace request to peer nodes
+func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh chan struct{}, trcAll bool) {
+	go func() {
+		for {
+			client.doTrace(traceCh, doneCh, trcAll)
+			select {
+			case <-doneCh:
+				return
+			default:
+				// There was error in the REST request, retry after sometime as probably the peer is down.
+				time.Sleep(5 * time.Second)
+			}
+		}
+	}()
 }
 
 func getRemoteHosts(endpoints EndpointList) []*xnet.Host {

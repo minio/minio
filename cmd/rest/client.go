@@ -28,7 +28,6 @@ import (
 	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
-	"golang.org/x/net/http2"
 )
 
 // DefaultRESTTimeout - default RPC timeout is one minute.
@@ -53,13 +52,13 @@ type Client struct {
 	newAuthToken        func() string
 }
 
-// Call - make a REST call.
-func (c *Client) Call(method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
+// CallWithContext - make a REST call with context.
+func (c *Client) CallWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
 	req, err := http.NewRequest(http.MethodPost, c.url.String()+"/"+method+"?"+values.Encode(), body)
 	if err != nil {
 		return nil, &NetworkError{err}
 	}
-
+	req = req.WithContext(ctx)
 	req.Header.Set("Authorization", "Bearer "+c.newAuthToken())
 	req.Header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
 	if length > 0 {
@@ -83,6 +82,12 @@ func (c *Client) Call(method string, values url.Values, body io.Reader, length i
 		return nil, errors.New(resp.Status)
 	}
 	return resp.Body, nil
+}
+
+// Call - make a REST call.
+func (c *Client) Call(method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
+	ctx := context.Background()
+	return c.CallWithContext(ctx, method, values, body, length)
 }
 
 // Close closes all idle connections of the underlying http client
@@ -117,12 +122,6 @@ func NewClient(url *url.URL, tlsConfig *tls.Config, timeout time.Duration, newAu
 		ExpectContinueTimeout: 10 * time.Second,
 		TLSClientConfig:       tlsConfig,
 		DisableCompression:    true,
-	}
-	if tlsConfig != nil {
-		// If TLS is enabled configure http2
-		if err := http2.ConfigureTransport(tr); err != nil {
-			return nil, err
-		}
 	}
 	return &Client{
 		httpClient:          &http.Client{Transport: tr},

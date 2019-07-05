@@ -27,7 +27,7 @@ import (
 	"syscall"
 
 	"github.com/minio/cli"
-	"github.com/minio/dsync"
+	"github.com/minio/dsync/v2"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/certs"
@@ -38,7 +38,8 @@ func init() {
 	logger.RegisterUIError(fmtError)
 }
 
-var serverFlags = []cli.Flag{
+// ServerFlags - server command specific flags
+var ServerFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
 		Value: ":" + globalMinioDefaultPort,
@@ -49,7 +50,7 @@ var serverFlags = []cli.Flag{
 var serverCmd = cli.Command{
 	Name:   "server",
 	Usage:  "start object storage server",
-	Flags:  append(serverFlags, globalFlags...),
+	Flags:  append(ServerFlags, GlobalFlags...),
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
   {{.HelpName}} - {{.Usage}}
@@ -175,7 +176,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
 	// (non-)minio process is listening on IPv4 of given port.
 	// To avoid this error sutiation we check for port availability.
-	logger.FatalIf(checkPortAvailability(globalMinioPort), "Unable to start the server")
+	logger.FatalIf(checkPortAvailability(globalMinioHost, globalMinioPort), "Unable to start the server")
 
 	globalIsXL = (setupType == XLSetupType)
 	globalIsDistXL = (setupType == DistXLSetupType)
@@ -287,8 +288,11 @@ func serverMain(ctx *cli.Context) {
 	// Initialize name space lock.
 	initNSLock(globalIsDistXL)
 
-	// Init global heal state
-	initAllHealState(globalIsXL)
+	if globalIsXL {
+		// Init global heal state
+		globalAllHealState = initHealState()
+		globalSweepHealState = initHealState()
+	}
 
 	// Configure server.
 	var handler http.Handler
@@ -310,6 +314,7 @@ func serverMain(ctx *cli.Context) {
 	}()
 
 	newObject, err := newObjectLayer(globalEndpoints)
+	logger.SetDeploymentID(globalDeploymentID)
 	if err != nil {
 		// Stop watching for any certificate changes.
 		globalTLSCerts.Stop()
@@ -367,6 +372,12 @@ func serverMain(ctx *cli.Context) {
 	}
 	if globalAutoEncryption && !newObject.IsEncryptionSupported() {
 		logger.Fatal(errors.New("Invalid KMS configuration"), "auto-encryption is enabled but server does not support encryption")
+	}
+
+	if globalIsXL {
+		initBackgroundHealing()
+		initDailyHeal()
+		initDailySweeper()
 	}
 
 	globalObjLayerMutex.Lock()

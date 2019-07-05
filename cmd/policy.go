@@ -25,7 +25,6 @@ import (
 	"path"
 	"strings"
 	"sync"
-	"time"
 
 	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
 	"github.com/minio/minio-go/v6/pkg/set"
@@ -61,6 +60,11 @@ func (sys *PolicySys) removeDeletedBuckets(bucketInfos []BucketInfo) {
 
 // Set - sets policy to given bucket name.  If policy is empty, existing policy is removed.
 func (sys *PolicySys) Set(bucketName string, policy policy.Policy) {
+	if globalIsGateway {
+		// Set policy is a non-op under gateway mode.
+		return
+	}
+
 	sys.Lock()
 	defer sys.Unlock()
 
@@ -81,12 +85,24 @@ func (sys *PolicySys) Remove(bucketName string) {
 
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
 func (sys *PolicySys) IsAllowed(args policy.Args) bool {
-	sys.RLock()
-	defer sys.RUnlock()
+	if globalIsGateway {
+		// When gateway is enabled, no cached value
+		// is used to validate bucket policies.
+		objAPI := newObjectLayerFn()
+		if objAPI != nil {
+			config, err := objAPI.GetBucketPolicy(context.Background(), args.BucketName)
+			if err == nil {
+				return config.IsAllowed(args)
+			}
+		}
+	} else {
+		sys.RLock()
+		defer sys.RUnlock()
 
-	// If policy is available for given bucket, check the policy.
-	if p, found := sys.bucketPolicyMap[args.BucketName]; found {
-		return p.IsAllowed(args)
+		// If policy is available for given bucket, check the policy.
+		if p, found := sys.bucketPolicyMap[args.BucketName]; found {
+			return p.IsAllowed(args)
+		}
 	}
 
 	// As policy is not available for given bucket name, returns IsOwner i.e.
@@ -98,7 +114,6 @@ func (sys *PolicySys) IsAllowed(args policy.Args) bool {
 func (sys *PolicySys) refresh(objAPI ObjectLayer) error {
 	buckets, err := objAPI.ListBuckets(context.Background())
 	if err != nil {
-		logger.LogIf(context.Background(), err)
 		return err
 	}
 	sys.removeDeletedBuckets(buckets)
@@ -135,21 +150,11 @@ func (sys *PolicySys) Init(objAPI ObjectLayer) error {
 		return errInvalidArgument
 	}
 
-	defer func() {
-		// Refresh PolicySys in background.
-		go func() {
-			ticker := time.NewTicker(globalRefreshBucketPolicyInterval)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-GlobalServiceDoneCh:
-					return
-				case <-ticker.C:
-					sys.refresh(objAPI)
-				}
-			}
-		}()
-	}()
+	// In gateway mode, we don't need to load the policies
+	// from the backend.
+	if globalIsGateway {
+		return nil
+	}
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)
