@@ -59,10 +59,10 @@ func (rr *recordReader) Read(p []byte) (n int, err error) {
 		p[i] = '\n'
 		if len(rr.recordDelimiter) > 1 {
 			p = append(p[:i+1], p[i+len(rr.recordDelimiter):]...)
+			n--
 		}
 	}
 
-	n = len(p)
 	if len(rr.recordDelimiter) == 1 || p[n-1] != rr.recordDelimiter[0] {
 		return n, nil
 	}
