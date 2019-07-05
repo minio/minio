@@ -142,18 +142,29 @@ func dropRune(text string) (res string, ok bool) {
 }
 
 func evalSQLSubstring(s string, startIdx, length int) (res string, err error) {
-	if startIdx <= 0 || startIdx > len(s) {
-		return "", errInvalidSubstringIndexLen
+	rs := []rune(s)
+
+	// According to s3 document, if startIdx < 1, it is set to 1.
+	if startIdx < 1 {
+		startIdx = 1
 	}
+
+	if startIdx > len(rs) {
+		startIdx = len(rs) + 1
+	}
+
 	// StartIdx is 1-based in the input
 	startIdx--
-
-	rs := []rune(s)
 	endIdx := len(rs)
 	if length != -1 {
-		if length < 0 || startIdx+length > len(s) {
+		if length < 0 {
 			return "", errInvalidSubstringIndexLen
 		}
+
+		if length > (endIdx - startIdx) {
+			length = endIdx - startIdx
+		}
+
 		endIdx = startIdx + length
 	}
 
