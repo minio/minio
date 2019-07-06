@@ -241,8 +241,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	if objectAPI == nil {
 		return
 	}
-
-	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
+	hostName, err := getHostName(r)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -252,7 +251,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	// Once we have received all the ServerInfo from peers
 	// add the local peer server info as well.
 	serverInfo = append(serverInfo, ServerInfo{
-		Addr: thisAddr.String(),
+		Addr: hostName,
 		Data: &ServerInfoData{
 			StorageInfo: objectAPI.StorageInfo(ctx),
 			ConnStats:   globalConnStats.toServerConnStats(),
@@ -330,7 +329,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 			return
 		}
 		// Get drive performance details from local server's drive(s)
-		dp := localEndpointsDrivePerf(globalEndpoints)
+		dp := localEndpointsDrivePerf(globalEndpoints, r)
 
 		// Notify all other MinIO peers to report drive performance numbers
 		dps := globalNotificationSys.DrivePerfInfo()
@@ -348,7 +347,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		writeSuccessResponseJSON(w, jsonBytes)
 	case "cpu":
 		// Get CPU load details from local server's cpu(s)
-		cpu := localEndpointsCPULoad(globalEndpoints)
+		cpu := localEndpointsCPULoad(globalEndpoints, r)
 		// Notify all other MinIO peers to report cpu load numbers
 		cpus := globalNotificationSys.CPULoadInfo()
 		cpus = append(cpus, cpu)
@@ -365,7 +364,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		writeSuccessResponseJSON(w, jsonBytes)
 	case "mem":
 		// Get mem usage details from local server(s)
-		m := localEndpointsMemUsage(globalEndpoints)
+		m := localEndpointsMemUsage(globalEndpoints, r)
 		// Notify all other MinIO peers to report mem usage numbers
 		mems := globalNotificationSys.MemUsageInfo()
 		mems = append(mems, m)
@@ -443,8 +442,7 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
-
-	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
+	hostName, err := getHostName(r)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -455,7 +453,7 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 	// add the local peer locks list as well.
 	localLocks := globalLockServer.ll.DupLockMap()
 	peerLocks = append(peerLocks, &PeerLocks{
-		Addr:  thisAddr.String(),
+		Addr:  hostName,
 		Locks: localLocks,
 	})
 

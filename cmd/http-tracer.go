@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"reflect"
 	"runtime"
@@ -28,7 +29,6 @@ import (
 	"strings"
 	"time"
 
-	xnet "github.com/minio/minio/pkg/net"
 	trace "github.com/minio/minio/pkg/trace"
 )
 
@@ -145,11 +145,15 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	t := trace.Info{FuncName: name}
 	reqBodyRecorder = &recordRequest{Reader: r.Body, logBody: logBody}
 	r.Body = ioutil.NopCloser(reqBodyRecorder)
-
-	host, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
-	if err == nil {
-		t.NodeName = host.Name
+	t.NodeName = r.Host
+	if globalIsDistXL {
+		t.NodeName = GetLocalPeer(globalEndpoints)
 	}
+	// strip port from the host address
+	if host, _, err := net.SplitHostPort(t.NodeName); err == nil {
+		t.NodeName = host
+	}
+
 	rq := trace.RequestInfo{Time: time.Now().UTC(), Method: r.Method, Path: r.URL.Path, RawQuery: r.URL.RawQuery, Client: r.RemoteAddr}
 	rq.Headers = cloneHeader(r.Header)
 	rq.Headers.Set("Content-Length", strconv.Itoa(int(r.ContentLength)))
