@@ -30,12 +30,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/inconshreveable/go-update"
 	"github.com/minio/cli"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	_ "github.com/minio/sha256-simd" // Needed for sha256 hash verifier.
-	"github.com/segmentio/go-prompt"
 )
 
 // Check for new software updates.
@@ -452,7 +452,7 @@ func getUpdateInfo(timeout time.Duration, mode string) (updateMsg string, sha256
 
 func doUpdate(sha256Hex string, latestReleaseTime time.Time, ok bool) (updateStatusMsg string, err error) {
 	if !ok {
-		updateStatusMsg = colorGreenBold("MinIO update to version RELEASE.%s canceled.",
+		updateStatusMsg = colorRedBold("MinIO update to version RELEASE.%s canceled.",
 			latestReleaseTime.Format(minioReleaseTagTimeLayout))
 		return updateStatusMsg, nil
 	}
@@ -482,10 +482,25 @@ func doUpdate(sha256Hex string, latestReleaseTime time.Time, ok bool) (updateSta
 		latestReleaseTime.Format(minioReleaseTagTimeLayout)), nil
 }
 
+// Confirm continues prompting until the input is boolean-ish.
+func confirm(prompt string, args ...interface{}) bool {
+	for {
+		var s string
+		fmt.Fprintf(color.Output, prompt+": ", args...)
+		fmt.Scanln(&s)
+		switch s {
+		case "Yes", "yes", "y", "Y":
+			return true
+		case "No", "no", "n", "N":
+			return false
+		}
+	}
+}
+
 func shouldUpdate(quiet bool, sha256Hex string, latestReleaseTime time.Time) (ok bool) {
 	ok = true
 	if !quiet {
-		ok = prompt.Confirm(colorGreenBold("Update to RELEASE.%s [%s]", latestReleaseTime.Format(minioReleaseTagTimeLayout), "yes"))
+		ok = confirm(colorGreenBold("Update to RELEASE.%s ? [%s]", latestReleaseTime.Format(minioReleaseTagTimeLayout), "y/n"))
 	}
 	return ok
 }
