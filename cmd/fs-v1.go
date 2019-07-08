@@ -286,7 +286,7 @@ func (fs *FSObjects) statBucketDir(ctx context.Context, bucket string) (os.FileI
 // MakeBucketWithLocation - create a new bucket, returns if it
 // already exists.
 func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
-	bucketLock := fs.nsMutex.NewNSLock(bucket, "")
+	bucketLock := fs.nsMutex.NewNSLock(ctx, bucket, "")
 	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
 		return err
 	}
@@ -309,7 +309,7 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket, locatio
 
 // GetBucketInfo - fetch bucket metadata info.
 func (fs *FSObjects) GetBucketInfo(ctx context.Context, bucket string) (bi BucketInfo, e error) {
-	bucketLock := fs.nsMutex.NewNSLock(bucket, "")
+	bucketLock := fs.nsMutex.NewNSLock(ctx, bucket, "")
 	if e := bucketLock.GetRLock(globalObjectTimeout); e != nil {
 		return bi, e
 	}
@@ -372,7 +372,7 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 // DeleteBucket - delete a bucket and all the metadata associated
 // with the bucket including pending multipart, object metadata.
 func (fs *FSObjects) DeleteBucket(ctx context.Context, bucket string) error {
-	bucketLock := fs.nsMutex.NewNSLock(bucket, "")
+	bucketLock := fs.nsMutex.NewNSLock(ctx, bucket, "")
 	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
 		logger.LogIf(ctx, err)
 		return err
@@ -408,7 +408,7 @@ func (fs *FSObjects) DeleteBucket(ctx context.Context, bucket string) error {
 func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (oi ObjectInfo, e error) {
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 	if !cpSrcDstSame {
-		objectDWLock := fs.nsMutex.NewNSLock(dstBucket, dstObject)
+		objectDWLock := fs.nsMutex.NewNSLock(ctx, dstBucket, dstObject)
 		if err := objectDWLock.GetLock(globalObjectTimeout); err != nil {
 			return oi, err
 		}
@@ -431,8 +431,9 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 
 		// Save objects' metadata in `fs.json`.
 		fsMeta := newFSMetaV1()
-		if _, err = fsMeta.ReadFrom(ctx, wlk); err != nil && err != io.EOF {
-			return oi, toObjectErr(err, srcBucket, srcObject)
+		if _, err = fsMeta.ReadFrom(ctx, wlk); err != nil {
+			// For any error to read fsMeta, set default ETag and proceed.
+			fsMeta = fs.defaultFsJSON(srcObject)
 		}
 
 		fsMeta.Meta = srcInfo.UserDefined
@@ -479,7 +480,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 
 	if lockType != noLock {
 		// Lock the object before reading.
-		lock := fs.nsMutex.NewNSLock(bucket, object)
+		lock := fs.nsMutex.NewNSLock(ctx, bucket, object)
 		switch lockType {
 		case writeLock:
 			if err = lock.GetLock(globalObjectTimeout); err != nil {
@@ -566,7 +567,7 @@ func (fs *FSObjects) GetObject(ctx context.Context, bucket, object string, offse
 	}
 
 	// Lock the object before reading.
-	objectLock := fs.nsMutex.NewNSLock(bucket, object)
+	objectLock := fs.nsMutex.NewNSLock(ctx, bucket, object)
 	if err := objectLock.GetRLock(globalObjectTimeout); err != nil {
 		logger.LogIf(ctx, err)
 		return err
@@ -710,10 +711,7 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 		_, rerr := fsMeta.ReadFrom(ctx, rlk.LockedFile)
 		fs.rwPool.Close(fsMetaPath)
 		if rerr != nil {
-			if rerr != io.EOF {
-				return oi, rerr
-			}
-			// Set Default ETag, if fs.json is empty
+			// For any error to read fsMeta, set default ETag and proceed.
 			fsMeta = fs.defaultFsJSON(object)
 		}
 	}
@@ -741,7 +739,7 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 // getObjectInfoWithLock - reads object metadata and replies back ObjectInfo.
 func (fs *FSObjects) getObjectInfoWithLock(ctx context.Context, bucket, object string) (oi ObjectInfo, e error) {
 	// Lock the object before reading.
-	objectLock := fs.nsMutex.NewNSLock(bucket, object)
+	objectLock := fs.nsMutex.NewNSLock(ctx, bucket, object)
 	if err := objectLock.GetRLock(globalObjectTimeout); err != nil {
 		return oi, err
 	}
@@ -766,7 +764,7 @@ func (fs *FSObjects) getObjectInfoWithLock(ctx context.Context, bucket, object s
 func (fs *FSObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (oi ObjectInfo, e error) {
 	oi, err := fs.getObjectInfoWithLock(ctx, bucket, object)
 	if err == errCorruptedFormat || err == io.EOF {
-		objectLock := fs.nsMutex.NewNSLock(bucket, object)
+		objectLock := fs.nsMutex.NewNSLock(ctx, bucket, object)
 		if err = objectLock.GetLock(globalObjectTimeout); err != nil {
 			return oi, toObjectErr(err, bucket, object)
 		}
@@ -812,7 +810,7 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 		return ObjectInfo{}, err
 	}
 	// Lock the object.
-	objectLock := fs.nsMutex.NewNSLock(bucket, object)
+	objectLock := fs.nsMutex.NewNSLock(ctx, bucket, object)
 	if err := objectLock.GetLock(globalObjectTimeout); err != nil {
 		logger.LogIf(ctx, err)
 		return objInfo, err
@@ -967,7 +965,7 @@ func (fs *FSObjects) DeleteObjects(ctx context.Context, bucket string, objects [
 // and there are no rollbacks supported.
 func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string) error {
 	// Acquire a write lock before deleting the object.
-	objectLock := fs.nsMutex.NewNSLock(bucket, object)
+	objectLock := fs.nsMutex.NewNSLock(ctx, bucket, object)
 	if err := objectLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
@@ -1149,6 +1147,12 @@ func (fs *FSObjects) HealObjects(ctx context.Context, bucket, prefix string, fn 
 func (fs *FSObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return []BucketInfo{}, NotImplemented{}
+}
+
+// ListObjectsHeal - list all objects to be healed. Valid only for XL
+func (fs *FSObjects) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
+	logger.LogIf(ctx, NotImplemented{})
+	return ListObjectsInfo{}, NotImplemented{}
 }
 
 // SetBucketPolicy sets policy on bucket

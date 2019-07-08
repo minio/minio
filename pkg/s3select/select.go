@@ -272,11 +272,13 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 
 		s3Select.progressReader, err = newProgressReader(rc, s3Select.Input.CompressionType)
 		if err != nil {
+			rc.Close()
 			return err
 		}
 
 		s3Select.recordReader, err = csv.NewReader(s3Select.progressReader, &s3Select.Input.CSVArgs)
 		if err != nil {
+			rc.Close()
 			return err
 		}
 
@@ -289,6 +291,7 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 
 		s3Select.progressReader, err = newProgressReader(rc, s3Select.Input.CompressionType)
 		if err != nil {
+			rc.Close()
 			return err
 		}
 

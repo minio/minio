@@ -29,7 +29,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/iam/validator"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/quick"
@@ -2413,6 +2413,7 @@ func migrateV27ToV28() error {
 }
 
 // Migrates ${HOME}/.minio/config.json to '<export_path>/.minio.sys/config/config.json'
+// if etcd is configured then migrates /config/config.json to '<export_path>/.minio.sys/config/config.json'
 func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 	// Construct path to config.json for the given bucket.
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
@@ -2423,10 +2424,14 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 	}
 
 	defer func() {
-		// Rename config.json to config.json.deprecated only upon
-		// success of this function.
 		if err == nil {
-			os.Rename(getConfigFile(), getConfigFile()+".deprecated")
+			if globalEtcdClient != nil {
+				deleteConfigEtcd(context.Background(), globalEtcdClient, configFile)
+			} else {
+				// Rename config.json to config.json.deprecated only upon
+				// success of this function.
+				os.Rename(getConfigFile(), getConfigFile()+".deprecated")
+			}
 		}
 	}()
 
@@ -2435,7 +2440,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
 	// and configFile, take a transaction lock to avoid data race between readConfig()
 	// and saveConfig().
-	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
+	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigFile)
 	if err = objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
@@ -2446,20 +2451,24 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 		return err
 	} // if errConfigNotFound proceed to migrate..
 
+	var configFiles = []string{
+		getConfigFile(),
+		getConfigFile() + ".deprecated",
+		configFile,
+	}
 	var config = &serverConfig{}
-	if _, err = Load(getConfigFile(), config); err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
-		// Read from deprecate file as well if necessary.
-		if _, err = Load(getConfigFile()+".deprecated", config); err != nil {
+	for _, cfgFile := range configFiles {
+		if _, err = Load(cfgFile, config); err != nil {
 			if !os.IsNotExist(err) {
 				return err
 			}
-			// If all else fails simply initialize the server config.
-			return newSrvConfig(objAPI)
+			continue
 		}
-
+		break
+	}
+	if os.IsNotExist(err) {
+		// Initialize the server config, if no config exists.
+		return newSrvConfig(objAPI)
 	}
 	return saveServerConfig(context.Background(), objAPI, config)
 }
@@ -2483,7 +2492,7 @@ func migrateMinioSysConfig(objAPI ObjectLayer) error {
 	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
 	// and configFile, take a transaction lock to avoid data race between readConfig()
 	// and saveConfig().
-	objLock := globalNSMutex.NewNSLock(minioMetaBucket, transactionConfigFile)
+	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigFile)
 	if err := objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}

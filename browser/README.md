@@ -4,10 +4,11 @@
 
 ## Installation
 
-### Install yarn
+### Install node
 ```sh
-curl -o- -L https://yarnpkg.com/install.sh | bash
-yarn
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
+exec -l $SHELL
+nvm install stable
 ```
 
 ### Install `go-bindata` and `go-bindata-assetfs`
@@ -15,8 +16,8 @@ yarn
 If you do not have a working Golang environment, please follow [Install Golang](https://docs.min.io/docs/how-to-install-golang)
 
 ```sh
-go get github.com/jteeuwen/go-bindata/...
-go get github.com/elazarl/go-bindata-assetfs/...
+go get github.com/go-bindata/go-bindata/go-bindata
+go get github.com/elazarl/go-bindata-assetfs/go-bindata-assetfs
 ```
 
 ## Generating Assets
@@ -24,7 +25,7 @@ go get github.com/elazarl/go-bindata-assetfs/...
 ### Generate ui-assets.go
 
 ```sh
-yarn release
+npm run release
 ```
 
 This generates ui-assets.go in the current directory. Now do `make` in the parent directory to build the minio binary with the newly generated ``ui-assets.go``
@@ -32,7 +33,7 @@ This generates ui-assets.go in the current directory. Now do `make` in the paren
 ### Run MinIO Browser with live reload
 
 ```sh
-yarn dev
+npm run dev
 ```
 
 Open [http://localhost:8080/minio/](http://localhost:8080/minio/) in your browser to play with the application
@@ -66,7 +67,7 @@ index 3ccdaba..9496c56 100644
 ```
 
 ```sh
-yarn dev
+npm run dev
 ```
 
 Open [http://localhost:8888/minio/](http://localhost:8888/minio/) in your browser to play with the application

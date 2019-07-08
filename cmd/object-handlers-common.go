@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 )
@@ -49,7 +50,7 @@ func checkCopyObjectPartPreconditions(ctx context.Context, w http.ResponseWriter
 //  x-amz-copy-source-if-none-match
 func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo, encETag string) bool {
 	// Return false for methods other than GET and HEAD.
-	if r.Method != "PUT" {
+	if r.Method != http.MethodPut {
 		return false
 	}
 	if encETag == "" {
@@ -68,15 +69,15 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 		setCommonHeaders(w)
 
 		// set object-related metadata headers
-		w.Header().Set("Last-Modified", objInfo.ModTime.UTC().Format(http.TimeFormat))
+		w.Header().Set(xhttp.LastModified, objInfo.ModTime.UTC().Format(http.TimeFormat))
 
 		if objInfo.ETag != "" {
-			w.Header()["ETag"] = []string{"\"" + objInfo.ETag + "\""}
+			w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
 		}
 	}
 	// x-amz-copy-source-if-modified-since: Return the object only if it has been modified
 	// since the specified time otherwise return 412 (precondition failed).
-	ifModifiedSinceHeader := r.Header.Get("x-amz-copy-source-if-modified-since")
+	ifModifiedSinceHeader := r.Header.Get(xhttp.AmzCopySourceIfModifiedSince)
 	if ifModifiedSinceHeader != "" {
 		if givenTime, err := time.Parse(http.TimeFormat, ifModifiedSinceHeader); err == nil {
 			if !ifModifiedSince(objInfo.ModTime, givenTime) {
@@ -90,7 +91,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 
 	// x-amz-copy-source-if-unmodified-since : Return the object only if it has not been
 	// modified since the specified time, otherwise return a 412 (precondition failed).
-	ifUnmodifiedSinceHeader := r.Header.Get("x-amz-copy-source-if-unmodified-since")
+	ifUnmodifiedSinceHeader := r.Header.Get(xhttp.AmzCopySourceIfUnmodifiedSince)
 	if ifUnmodifiedSinceHeader != "" {
 		if givenTime, err := time.Parse(http.TimeFormat, ifUnmodifiedSinceHeader); err == nil {
 			if ifModifiedSince(objInfo.ModTime, givenTime) {
@@ -106,7 +107,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 
 	// x-amz-copy-source-if-match : Return the object only if its entity tag (ETag) is the
 	// same as the one specified; otherwise return a 412 (precondition failed).
-	ifMatchETagHeader := r.Header.Get("x-amz-copy-source-if-match")
+	ifMatchETagHeader := r.Header.Get(xhttp.AmzCopySourceIfMatch)
 	if ifMatchETagHeader != "" {
 		etag := objInfo.ETag
 		if shouldDecryptEtag {
@@ -122,7 +123,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 
 	// If-None-Match : Return the object only if its entity tag (ETag) is different from the
 	// one specified otherwise, return a 304 (not modified).
-	ifNoneMatchETagHeader := r.Header.Get("x-amz-copy-source-if-none-match")
+	ifNoneMatchETagHeader := r.Header.Get(xhttp.AmzCopySourceIfNoneMatch)
 	if ifNoneMatchETagHeader != "" {
 		etag := objInfo.ETag
 		if shouldDecryptEtag {
@@ -147,7 +148,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 //  If-None-Match
 func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) bool {
 	// Return false for methods other than GET and HEAD.
-	if r.Method != "GET" && r.Method != "HEAD" {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		return false
 	}
 	// If the object doesn't have a modtime (IsZero), or the modtime
@@ -163,15 +164,15 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		setCommonHeaders(w)
 
 		// set object-related metadata headers
-		w.Header().Set("Last-Modified", objInfo.ModTime.UTC().Format(http.TimeFormat))
+		w.Header().Set(xhttp.LastModified, objInfo.ModTime.UTC().Format(http.TimeFormat))
 
 		if objInfo.ETag != "" {
-			w.Header()["ETag"] = []string{"\"" + objInfo.ETag + "\""}
+			w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
 		}
 	}
 	// If-Modified-Since : Return the object only if it has been modified since the specified time,
 	// otherwise return a 304 (not modified).
-	ifModifiedSinceHeader := r.Header.Get("If-Modified-Since")
+	ifModifiedSinceHeader := r.Header.Get(xhttp.IfModifiedSince)
 	if ifModifiedSinceHeader != "" {
 		if givenTime, err := time.Parse(http.TimeFormat, ifModifiedSinceHeader); err == nil {
 			if !ifModifiedSince(objInfo.ModTime, givenTime) {
@@ -185,7 +186,7 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	// If-Unmodified-Since : Return the object only if it has not been modified since the specified
 	// time, otherwise return a 412 (precondition failed).
-	ifUnmodifiedSinceHeader := r.Header.Get("If-Unmodified-Since")
+	ifUnmodifiedSinceHeader := r.Header.Get(xhttp.IfUnmodifiedSince)
 	if ifUnmodifiedSinceHeader != "" {
 		if givenTime, err := time.Parse(http.TimeFormat, ifUnmodifiedSinceHeader); err == nil {
 			if ifModifiedSince(objInfo.ModTime, givenTime) {
@@ -199,7 +200,7 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	// If-Match : Return the object only if its entity tag (ETag) is the same as the one specified;
 	// otherwise return a 412 (precondition failed).
-	ifMatchETagHeader := r.Header.Get("If-Match")
+	ifMatchETagHeader := r.Header.Get(xhttp.IfMatch)
 	if ifMatchETagHeader != "" {
 		if !isETagEqual(objInfo.ETag, ifMatchETagHeader) {
 			// If the object ETag does not match with the specified ETag.
@@ -211,7 +212,7 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	// If-None-Match : Return the object only if its entity tag (ETag) is different from the
 	// one specified otherwise, return a 304 (not modified).
-	ifNoneMatchETagHeader := r.Header.Get("If-None-Match")
+	ifNoneMatchETagHeader := r.Header.Get(xhttp.IfNoneMatch)
 	if ifNoneMatchETagHeader != "" {
 		if isETagEqual(objInfo.ETag, ifNoneMatchETagHeader) {
 			// If the object ETag matches with the specified ETag.

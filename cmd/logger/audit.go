@@ -63,6 +63,6 @@ func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[
 	}
 	// Send audit logs only to http targets.
 	for _, t := range AuditTargets {
-		_ = t.Send(audit.ToEntry(w, r, api, statusCode, reqClaims))
+		_ = t.Send(audit.ToEntry(w, r, api, statusCode, reqClaims, globalDeploymentID))
 	}
 }

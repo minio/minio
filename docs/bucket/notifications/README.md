@@ -1007,9 +1007,13 @@ The MinIO server configuration file is stored on the backend in json format. Upd
 "webhook": {
   "1": {
     "enable": true,
-    "endpoint": "http://localhost:3000/"
+    "endpoint": "http://localhost:3000/",
+    "queueDir": "",
+    "queueLimit": 0
 }
 ```
+
+MinIO supports persistent event store. The persistent store will backup events when the webhook goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
 

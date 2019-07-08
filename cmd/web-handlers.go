@@ -41,6 +41,7 @@ import (
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/browser"
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dns"
@@ -401,11 +402,9 @@ type ListObjectsArgs struct {
 
 // ListObjectsRep - list objects response.
 type ListObjectsRep struct {
-	Objects     []WebObjectInfo `json:"objects"`
-	NextMarker  string          `json:"nextmarker"`
-	IsTruncated bool            `json:"istruncated"`
-	Writable    bool            `json:"writable"` // Used by client to show "upload file" button.
-	UIVersion   string          `json:"uiVersion"`
+	Objects   []WebObjectInfo `json:"objects"`
+	Writable  bool            `json:"writable"` // Used by client to show "upload file" button.
+	UIVersion string          `json:"uiVersion"`
 }
 
 // WebObjectInfo container for list objects metadata.
@@ -448,26 +447,36 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
-		result, err := core.ListObjects(args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)
-		if err != nil {
-			return toJSONError(ctx, err, args.BucketName)
+
+		nextMarker := ""
+		// Fetch all the objects
+		for {
+			result, err := core.ListObjects(args.BucketName, args.Prefix, nextMarker, slashSeparator, 1000)
+			if err != nil {
+				return toJSONError(ctx, err, args.BucketName)
+			}
+
+			for _, obj := range result.Contents {
+				reply.Objects = append(reply.Objects, WebObjectInfo{
+					Key:          obj.Key,
+					LastModified: obj.LastModified,
+					Size:         obj.Size,
+					ContentType:  obj.ContentType,
+				})
+			}
+			for _, p := range result.CommonPrefixes {
+				reply.Objects = append(reply.Objects, WebObjectInfo{
+					Key: p.Prefix,
+				})
+			}
+
+			nextMarker = result.NextMarker
+
+			// Return when there are no more objects
+			if !result.IsTruncated {
+				return nil
+			}
 		}
-		reply.NextMarker = result.NextMarker
-		reply.IsTruncated = result.IsTruncated
-		for _, obj := range result.Contents {
-			reply.Objects = append(reply.Objects, WebObjectInfo{
-				Key:          obj.Key,
-				LastModified: obj.LastModified,
-				Size:         obj.Size,
-				ContentType:  obj.ContentType,
-			})
-		}
-		for _, p := range result.CommonPrefixes {
-			reply.Objects = append(reply.Objects, WebObjectInfo{
-				Key: p.Prefix,
-			})
-		}
-		return nil
 	}
 
 	claims, owner, authErr := webRequestAuthenticate(r)
@@ -551,35 +560,43 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		return toJSONError(ctx, errInvalidBucketName)
 	}
 
-	lo, err := listObjects(ctx, args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)
-	if err != nil {
-		return &json2.Error{Message: err.Error()}
-	}
-	for i := range lo.Objects {
-		if crypto.IsEncrypted(lo.Objects[i].UserDefined) {
-			lo.Objects[i].Size, err = lo.Objects[i].DecryptedSize()
-			if err != nil {
-				return toJSONError(ctx, err)
+	nextMarker := ""
+	// Fetch all the objects
+	for {
+		lo, err := listObjects(ctx, args.BucketName, args.Prefix, nextMarker, slashSeparator, 1000)
+		if err != nil {
+			return &json2.Error{Message: err.Error()}
+		}
+		for i := range lo.Objects {
+			if crypto.IsEncrypted(lo.Objects[i].UserDefined) {
+				lo.Objects[i].Size, err = lo.Objects[i].DecryptedSize()
+				if err != nil {
+					return toJSONError(ctx, err)
+				}
 			}
 		}
-	}
-	reply.NextMarker = lo.NextMarker
-	reply.IsTruncated = lo.IsTruncated
-	for _, obj := range lo.Objects {
-		reply.Objects = append(reply.Objects, WebObjectInfo{
-			Key:          obj.Name,
-			LastModified: obj.ModTime,
-			Size:         obj.Size,
-			ContentType:  obj.ContentType,
-		})
-	}
-	for _, prefix := range lo.Prefixes {
-		reply.Objects = append(reply.Objects, WebObjectInfo{
-			Key: prefix,
-		})
-	}
 
-	return nil
+		for _, obj := range lo.Objects {
+			reply.Objects = append(reply.Objects, WebObjectInfo{
+				Key:          obj.Name,
+				LastModified: obj.ModTime,
+				Size:         obj.Size,
+				ContentType:  obj.ContentType,
+			})
+		}
+		for _, prefix := range lo.Prefixes {
+			reply.Objects = append(reply.Objects, WebObjectInfo{
+				Key: prefix,
+			})
+		}
+
+		nextMarker = lo.NextMarker
+
+		// Return when there are no more objects
+		if !lo.IsTruncated {
+			return nil
+		}
+	}
 }
 
 // RemoveObjectArgs - args to remove an object, JSON will look like.
@@ -1201,7 +1218,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add content disposition.
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(objInfo.Name)))
+	w.Header().Set(xhttp.ContentDisposition, fmt.Sprintf("attachment; filename=\"%s\"", path.Base(objInfo.Name)))
 
 	setHeadGetRespHeaders(w, r.URL.Query())
 
@@ -1863,11 +1880,11 @@ func presignedGet(host, bucket, object string, expiry int64, creds auth.Credenti
 	}
 
 	query := url.Values{}
-	query.Set("X-Amz-Algorithm", signV4Algorithm)
-	query.Set("X-Amz-Credential", credential)
-	query.Set("X-Amz-Date", dateStr)
-	query.Set("X-Amz-Expires", expiryStr)
-	query.Set("X-Amz-SignedHeaders", "host")
+	query.Set(xhttp.AmzAlgorithm, signV4Algorithm)
+	query.Set(xhttp.AmzCredential, credential)
+	query.Set(xhttp.AmzDate, dateStr)
+	query.Set(xhttp.AmzExpires, expiryStr)
+	query.Set(xhttp.AmzSignedHeaders, "host")
 	queryStr := s3utils.QueryEncode(query)
 
 	path := "/" + path.Join(bucket, object)
@@ -1881,7 +1898,7 @@ func presignedGet(host, bucket, object string, expiry int64, creds auth.Credenti
 	signature := getSignature(signingKey, stringToSign)
 
 	// Construct the final presigned URL.
-	return host + s3utils.EncodePath(path) + "?" + queryStr + "&" + "X-Amz-Signature=" + signature
+	return host + s3utils.EncodePath(path) + "?" + queryStr + "&" + xhttp.AmzSignature + "=" + signature
 }
 
 // toJSONError converts regular errors into more user friendly

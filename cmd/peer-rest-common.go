@@ -16,7 +16,7 @@
 
 package cmd
 
-const peerRESTVersion = "v1"
+const peerRESTVersion = "v2"
 const peerRESTPath = minioReservedBucketPath + "/peer/" + peerRESTVersion
 
 const (
@@ -26,8 +26,13 @@ const (
 	peerRESTMethodDrivePerfInfo            = "driveperfinfo"
 	peerRESTMethodDeleteBucket             = "deletebucket"
 	peerRESTMethodSignalService            = "signalservice"
+	peerRESTMethodBackgroundHealStatus     = "backgroundhealstatus"
 	peerRESTMethodGetLocks                 = "getlocks"
 	peerRESTMethodBucketPolicyRemove       = "removebucketpolicy"
+	peerRESTMethodLoadUser                 = "loaduser"
+	peerRESTMethodDeleteUser               = "deleteuser"
+	peerRESTMethodLoadPolicy               = "loadpolicy"
+	peerRESTMethodDeletePolicy             = "deletepolicy"
 	peerRESTMethodLoadUsers                = "loadusers"
 	peerRESTMethodStartProfiling           = "startprofiling"
 	peerRESTMethodDownloadProfilingData    = "downloadprofilingdata"
@@ -37,11 +42,16 @@ const (
 	peerRESTMethodReloadFormat             = "reloadformat"
 	peerRESTMethodTargetExists             = "targetexists"
 	peerRESTMethodSendEvent                = "sendevent"
+	peerRESTMethodTrace                    = "trace"
 )
 
 const (
 	peerRESTBucket   = "bucket"
+	peerRESTUser     = "user"
+	peerRESTUserTemp = "user-temp"
+	peerRESTPolicy   = "policy"
 	peerRESTSignal   = "signal"
 	peerRESTProfiler = "profiler"
 	peerRESTDryRun   = "dry-run"
+	peerRESTTraceAll = "all"
 )

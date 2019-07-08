@@ -55,6 +55,8 @@ const (
 
 var trimStrings []string
 
+var globalDeploymentID string
+
 // TimeFormat - logging time format.
 const TimeFormat string = "15:04:05 MST 01/02/2006"
 
@@ -152,6 +154,11 @@ func uniqueEntries(paths []string) []string {
 		}
 	}
 	return m.ToSlice()
+}
+
+// SetDeploymentID -- Deployment Id from the main package is set here
+func SetDeploymentID(deploymentID string) {
+	globalDeploymentID = deploymentID
 }
 
 // Init sets the trimStrings to possible GOPATHs
@@ -317,7 +324,9 @@ func logIf(ctx context.Context, err error) {
 
 	// Get the cause for the Error
 	message := err.Error()
-
+	if req.DeploymentID == "" {
+		req.DeploymentID = globalDeploymentID
+	}
 	entry := log.Entry{
 		DeploymentID: req.DeploymentID,
 		Level:        ErrorLvl.String(),

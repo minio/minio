@@ -44,7 +44,7 @@ export MINIO_COMPRESS_MIMETYPES="application/pdf"
 
 ### 3. Note
 
-- Already compressed objects are not fit for compression since they do not have compressible patterns. Such objects do not produce efficient [`Run-length encoding (RLE)`](https://en.wikipedia.org/wiki/Run-length_encoding) which is a fitness factor for a lossless data compression. Below is a list of common files and content-types which are not suitable for compression.
+- Already compressed objects are not fit for compression since they do not have compressible patterns. Such objects do not produce efficient [`LZ compression`](https://en.wikipedia.org/wiki/LZ77_and_LZ78) which is a fitness factor for a lossless data compression. Below is a list of common files and content-types which are not suitable for compression.
 
     - Extensions
 
@@ -53,6 +53,10 @@ export MINIO_COMPRESS_MIMETYPES="application/pdf"
       | `rar` | (WinRAR)
       | `zip` | (ZIP)
       | `7z` | (7-Zip)
+      | `xz` | (LZMA)
+      | `mp4` | (MP4)
+      | `mkv` | (MKV media)
+      | `mov` | (MOV)
 
     - Content-Types
 
@@ -61,10 +65,11 @@ export MINIO_COMPRESS_MIMETYPES="application/pdf"
       | `application/zip` |
       | `application/x-gzip` |
       | `application/zip` |
+      | `application/x-bz2` |
       | `application/x-compress` |
-      | `application/x-spoon` |
+      | `application/x-xz` |
 
-- MinIO does not support encryption with compression because compression and encryption together enables room for side channel attacks like [`CRIME and BREACH`](https://en.wikipedia.org/wiki/CRIME)
+- MinIO does not support encryption with compression because compression and encryption together potentially enables room for side channel attacks like [`CRIME and BREACH`](https://blog.minio.io/c-e-compression-encryption-cb6b7f04a369)
 
 - MinIO does not support compression for Gateway (Azure/GCS/NAS) implementations.
 

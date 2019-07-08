@@ -35,6 +35,7 @@ import (
 	"github.com/minio/minio/pkg/dns"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/iam/validator"
+	"github.com/minio/minio/pkg/pubsub"
 )
 
 // minio configuration related constants.
@@ -159,8 +160,9 @@ var (
 	globalHTTPServerErrorCh = make(chan error)
 	globalOSSignalCh        = make(chan os.Signal, 1)
 
-	// File to log HTTP request/response headers and body.
-	globalHTTPTraceFile *os.File
+	// global Trace system to send HTTP request/response logs to
+	// registered listeners
+	globalHTTPTrace = pubsub.New()
 
 	globalEndpoints EndpointList
 
@@ -259,6 +261,11 @@ var (
 
 	// GlobalGatewaySSE sse options
 	GlobalGatewaySSE gatewaySSE
+
+	// The always present healing routine ready to heal objects
+	globalBackgroundHealing *healRoutine
+	globalAllHealState      *allHealState
+	globalSweepHealState    *allHealState
 
 	// Add new variable global values here.
 )

@@ -97,7 +97,7 @@ func (v *Value) Repr() string {
 	case typeBool, typeInt, typeFloat:
 		return fmt.Sprintf("%v:%s", v.value, v.GetTypeString())
 	case typeTimestamp:
-		return fmt.Sprintf("%s:TIMESTAMP", v.value.(*time.Time))
+		return fmt.Sprintf("%s:TIMESTAMP", v.value.(time.Time))
 	case typeString:
 		return fmt.Sprintf("\"%s\":%s", v.value.(string), v.GetTypeString())
 	case typeBytes:
@@ -335,9 +335,15 @@ func (v *Value) compareOp(op string, a *Value) (res bool, err error) {
 	}
 
 	boolV, ok1b := v.ToBool()
-	boolA, ok2b := v.ToBool()
+	boolA, ok2b := a.ToBool()
 	if ok1b && ok2b {
 		return boolCompare(op, boolV, boolA)
+	}
+
+	timestampV, ok1t := v.ToTimestamp()
+	timestampA, ok2t := a.ToTimestamp()
+	if ok1t && ok2t {
+		return timestampCompare(op, timestampV, timestampA), nil
 	}
 
 	return false, errCmpMismatchedTypes
@@ -719,6 +725,25 @@ func boolCompare(op string, left, right bool) (bool, error) {
 	default:
 		return false, errCmpInvalidBoolOperator
 	}
+}
+
+func timestampCompare(op string, left, right time.Time) bool {
+	switch op {
+	case opLt:
+		return left.Before(right)
+	case opLte:
+		return left.Before(right) || left.Equal(right)
+	case opGt:
+		return left.After(right)
+	case opGte:
+		return left.After(right) || left.Equal(right)
+	case opEq:
+		return left.Equal(right)
+	case opIneq:
+		return !left.Equal(right)
+	}
+	// This case does not happen
+	return false
 }
 
 func isValidArithOperator(op string) bool {

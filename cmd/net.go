@@ -190,10 +190,10 @@ func isHostIP(ipAddress string) bool {
 	return net.ParseIP(host) != nil
 }
 
-// checkPortAvailability - check if given port is already in use.
+// checkPortAvailability - check if given host and port is already in use.
 // Note: The check method tries to listen on given port and closes it.
 // It is possible to have a disconnected client in this tiny window of time.
-func checkPortAvailability(port string) (err error) {
+func checkPortAvailability(host, port string) (err error) {
 	// Return true if err is "address already in use" error.
 	isAddrInUseErr := func(err error) (b bool) {
 		if opErr, ok := err.(*net.OpError); ok {
@@ -209,7 +209,7 @@ func checkPortAvailability(port string) (err error) {
 
 	network := []string{"tcp", "tcp4", "tcp6"}
 	for _, n := range network {
-		l, err := net.Listen(n, net.JoinHostPort("", port))
+		l, err := net.Listen(n, net.JoinHostPort(host, port))
 		if err == nil {
 			// As we are able to listen on this network, the port is not in use.
 			// Close the listener and continue check other networks.

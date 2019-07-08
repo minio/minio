@@ -195,7 +195,7 @@ func shouldHealObjectOnDisk(xlErr, dataErr error, meta xlMetaV1, quorumModTime t
 		if dataErr == errFileNotFound {
 			return true
 		}
-		if _, ok := dataErr.(hashMismatchError); ok {
+		if _, ok := dataErr.(HashMismatchError); ok {
 			return true
 		}
 		if quorumModTime != meta.Stat.ModTime {
@@ -351,7 +351,7 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 	}
 
 	// Reorder so that we have data disks first and parity disks next.
-	latestDisks = shuffleDisks(latestDisks, latestMeta.Erasure.Distribution)
+	latestDisks = shuffleDisks(availableDisks, latestMeta.Erasure.Distribution)
 	outDatedDisks = shuffleDisks(outDatedDisks, latestMeta.Erasure.Distribution)
 	partsMetadata = shufflePartsMetadata(partsMetadata, latestMeta.Erasure.Distribution)
 	for i := range outDatedDisks {
@@ -717,7 +717,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 	}
 
 	// Lock the object before healing.
-	objectLock := xl.nsMutex.NewNSLock(bucket, object)
+	objectLock := xl.nsMutex.NewNSLock(ctx, bucket, object)
 	if lerr := objectLock.GetRLock(globalHealingTimeout); lerr != nil {
 		return defaultHealResult(latestXLMeta, storageDisks, errs, bucket, object), lerr
 	}

@@ -54,6 +54,56 @@ func TestKMSIsRequested(t *testing.T) {
 	}
 }
 
+var kmsParseHTTPTests = []struct {
+	Header     http.Header
+	ShouldFail bool
+}{
+	{Header: http.Header{}, ShouldFail: true},                                                     // 0
+	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"aws:kms"}}, ShouldFail: false}, // 1
+	{Header: http.Header{
+		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
+		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
+	}, ShouldFail: false}, // 2
+	{Header: http.Header{
+		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
+		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
+		"X-Amz-Server-Side-Encryption-Context":        []string{"{}"},
+	}, ShouldFail: false}, // 3
+	{Header: http.Header{
+		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
+		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
+		"X-Amz-Server-Side-Encryption-Context":        []string{"{\"bucket\": \"some-bucket\"}"},
+	}, ShouldFail: false}, // 4
+	{Header: http.Header{
+		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
+		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
+		"X-Amz-Server-Side-Encryption-Context":        []string{"{\"bucket\": \"some-bucket\"}"},
+	}, ShouldFail: false}, // 5
+	{Header: http.Header{
+		"X-Amz-Server-Side-Encryption":                []string{"AES256"},
+		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
+		"X-Amz-Server-Side-Encryption-Context":        []string{"{\"bucket\": \"some-bucket\"}"},
+	}, ShouldFail: true}, // 6
+	{Header: http.Header{
+		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
+		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
+		"X-Amz-Server-Side-Encryption-Context":        []string{"{\"bucket\": \"some-bucket\""}, // invalid JSON
+	}, ShouldFail: true}, // 7
+
+}
+
+func TestKMSParseHTTP(t *testing.T) {
+	for i, test := range kmsParseHTTPTests {
+		_, _, err := S3KMS.ParseHTTP(test.Header)
+		if err == nil && test.ShouldFail {
+			t.Errorf("Test %d: should fail but succeeded", i)
+		}
+		if err != nil && !test.ShouldFail {
+			t.Errorf("Test %d: should pass but failed with: %v", i, err)
+		}
+	}
+}
+
 var s3IsRequestedTests = []struct {
 	Header   http.Header
 	Expected bool

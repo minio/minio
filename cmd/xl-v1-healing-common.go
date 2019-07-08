@@ -183,8 +183,7 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			// it needs healing too.
 			for _, part := range partsMetadata[i].Parts {
 				checksumInfo := erasureInfo.GetChecksumInfo(part.Name)
-				tillOffset := erasure.ShardFileTillOffset(0, part.Size, part.Size)
-				err = bitrotCheckFile(onlineDisk, bucket, pathJoin(object, part.Name), tillOffset, checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
+				err = onlineDisk.VerifyFile(bucket, pathJoin(object, part.Name), checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
 				if err != nil {
 					isCorrupt := strings.HasPrefix(err.Error(), "Bitrot verification mismatch - expected ")
 					if !isCorrupt && err != errFileNotFound && err != errVolumeNotFound {

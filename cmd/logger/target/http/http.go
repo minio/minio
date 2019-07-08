@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"net/http"
 	gohttp "net/http"
 
 	xhttp "github.com/minio/minio/cmd/http"
@@ -49,11 +50,11 @@ func (h *Target) startHTTPLogger() {
 				continue
 			}
 
-			req, err := gohttp.NewRequest("POST", h.endpoint, bytes.NewBuffer(logJSON))
+			req, err := gohttp.NewRequest(http.MethodPost, h.endpoint, bytes.NewBuffer(logJSON))
 			if err != nil {
 				continue
 			}
-			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set(xhttp.ContentType, "application/json")
 
 			resp, err := h.client.Do(req)
 			if err != nil {

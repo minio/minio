@@ -36,6 +36,7 @@ import (
 	miniogo "github.com/minio/minio-go/v6"
 	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/event"
@@ -50,12 +51,12 @@ import (
 
 // supportedHeadGetReqParams - supported request parameters for GET and HEAD presigned request.
 var supportedHeadGetReqParams = map[string]string{
-	"response-expires":             "Expires",
-	"response-content-type":        "Content-Type",
-	"response-cache-control":       "Cache-Control",
-	"response-content-encoding":    "Content-Encoding",
-	"response-content-language":    "Content-Language",
-	"response-content-disposition": "Content-Disposition",
+	"response-expires":             xhttp.Expires,
+	"response-content-type":        xhttp.ContentType,
+	"response-cache-control":       xhttp.CacheControl,
+	"response-content-encoding":    xhttp.ContentEncoding,
+	"response-content-language":    xhttp.ContentLanguage,
+	"response-content-disposition": xhttp.ContentDisposition,
 }
 
 const (
@@ -165,8 +166,8 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 				BucketName: bucket,
 				Key:        object,
 				Resource:   r.URL.Path,
-				RequestID:  w.Header().Get(responseRequestIDKey),
-				HostID:     w.Header().Get(responseDeploymentIDKey),
+				RequestID:  w.Header().Get(xhttp.AmzRequestID),
+				HostID:     globalDeploymentID,
 			})
 			writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
 		} else {
@@ -207,8 +208,8 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 				BucketName: bucket,
 				Key:        object,
 				Resource:   r.URL.Path,
-				RequestID:  w.Header().Get(responseRequestIDKey),
-				HostID:     w.Header().Get(responseDeploymentIDKey),
+				RequestID:  w.Header().Get(xhttp.AmzRequestID),
+				HostID:     globalDeploymentID,
 			})
 			writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
 		} else {
@@ -650,7 +651,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// TODO: Reject requests where body/payload is present, for now we don't even read it.
 
 	// Read escaped copy source path to check for parameters.
-	cpSrcPath := r.Header.Get("X-Amz-Copy-Source")
+	cpSrcPath := r.Header.Get(xhttp.AmzCopySource)
 
 	// Check https://docs.aws.amazon.com/AmazonS3/latest/dev/ObjectVersioning.html
 	// Regardless of whether you have enabled versioning, each object in your bucket
@@ -668,7 +669,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// Note that url.Parse does the unescaping
 		cpSrcPath = u.Path
 	}
-	if vid := r.Header.Get("X-Amz-Copy-Source-Version-Id"); vid != "" {
+	if vid := r.Header.Get(xhttp.AmzCopySourceVersionID); vid != "" {
 		// Check if versionId header was added, if yes then check if
 		// its non "null" value, we should error out since we do not support
 		// any versions other than "null".
@@ -1052,7 +1053,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if crypto.S3KMS.IsRequested(r.Header) {
+	if crypto.S3KMS.IsRequested(r.Header) && !api.AllowSSEKMS() {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
@@ -1063,6 +1064,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
+
+	// To detect if the client has disconnected.
+	r.Body = &detectDisconnect{r.Body, r.Context().Done()}
 
 	// X-Amz-Copy-Source shouldn't be set for this call.
 	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
@@ -1178,7 +1182,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// This request header needs to be set prior to setting ObjectOptions
-	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
+	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) && !crypto.S3KMS.IsRequested(r.Header) {
 		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
@@ -1268,7 +1272,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	} else if hasServerSideEncryptionHeader(r.Header) {
 		etag = getDecryptedETag(r.Header, objInfo, false)
 	}
-	w.Header()["ETag"] = []string{"\"" + etag + "\""}
+	w.Header()[xhttp.ETag] = []string{"\"" + etag + "\""}
 
 	if objectAPI.IsEncryptionSupported() {
 		if crypto.IsEncrypted(objInfo.UserDefined) {
@@ -1315,7 +1319,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if crypto.S3KMS.IsRequested(r.Header) {
+	if crypto.S3KMS.IsRequested(r.Header) && !api.AllowSSEKMS() {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
@@ -1333,7 +1337,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	}
 
 	// This request header needs to be set prior to setting ObjectOptions
-	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
+	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) && !crypto.S3KMS.IsRequested(r.Header) {
 		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
@@ -1450,7 +1454,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	// Read escaped copy source path to check for parameters.
-	cpSrcPath := r.Header.Get("X-Amz-Copy-Source")
+	cpSrcPath := r.Header.Get(xhttp.AmzCopySource)
 
 	// Check https://docs.aws.amazon.com/AmazonS3/latest/dev/ObjectVersioning.html
 	// Regardless of whether you have enabled versioning, each object in your bucket
@@ -1468,7 +1472,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		// Note that url.Parse does the unescaping
 		cpSrcPath = u.Path
 	}
-	if vid := r.Header.Get("X-Amz-Copy-Source-Version-Id"); vid != "" {
+	if vid := r.Header.Get(xhttp.AmzCopySourceVersionID); vid != "" {
 		// Check if X-Amz-Copy-Source-Version-Id header was added, if yes then check if
 		// its non "null" value, we should error out since we do not support
 		// any versions other than "null".
@@ -1537,7 +1541,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	// Get request range.
 	var rs *HTTPRangeSpec
-	rangeHeader := r.Header.Get("x-amz-copy-source-range")
+	rangeHeader := r.Header.Get(xhttp.AmzCopySourceRange)
 	if rangeHeader != "" {
 		var parseRangeErr error
 		if rs, parseRangeErr = parseCopyPartRangeSpec(rangeHeader); parseRangeErr != nil {
@@ -1729,7 +1733,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	object := vars["object"]
 
 	// X-Amz-Copy-Source shouldn't be set for this call.
-	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
+	if _, ok := r.Header[xhttp.AmzCopySource]; ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopySource), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1747,7 +1751,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	rAuthType := getRequestAuthType(r)
 	// For auth type streaming signature, we need to gather a different content length.
 	if rAuthType == authTypeStreamingSigned {
-		if sizeStr, ok := r.Header["X-Amz-Decoded-Content-Length"]; ok {
+		if sizeStr, ok := r.Header[xhttp.AmzDecodedContentLength]; ok {
 			if sizeStr[0] == "" {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL, guessIsBrowserReq(r))
 				return
@@ -1949,7 +1953,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	if isEncrypted {
 		etag = tryDecryptETag(objectEncryptionKey, partInfo.ETag, crypto.SSEC.IsRequested(r.Header))
 	}
-	w.Header()["ETag"] = []string{"\"" + etag + "\""}
+	w.Header()[xhttp.ETag] = []string{"\"" + etag + "\""}
 
 	writeSuccessResponseHeadersOnly(w)
 }
@@ -2264,15 +2268,15 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		case "SlowDown", "XMinioServerNotInitialized", "XMinioReadQuorum", "XMinioWriteQuorum":
 			// Set retry-after header to indicate user-agents to retry request after 120secs.
 			// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
-			w.Header().Set("Retry-After", "120")
+			w.Header().Set(xhttp.RetryAfter, "120")
 		}
 
 		// Generate error response.
 		errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path,
-			w.Header().Get(responseRequestIDKey), w.Header().Get(responseDeploymentIDKey))
+			w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
 		encodedErrorResponse, _ := xml.Marshal(errorResponse)
 		setCommonHeaders(w)
-		w.Header().Set("Content-Type", string(mimeXML))
+		w.Header().Set(xhttp.ContentType, string(mimeXML))
 		w.Write(encodedErrorResponse)
 		w.(http.Flusher).Flush()
 	}
@@ -2307,7 +2311,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	// Set etag.
-	w.Header()["ETag"] = []string{"\"" + objInfo.ETag + "\""}
+	w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
