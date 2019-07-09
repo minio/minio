@@ -47,11 +47,11 @@ require (
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.0
 	github.com/klauspost/reedsolomon v1.9.1
+	github.com/kurin/blazer v0.5.4-0.20190613185654-cf2f27cc0be3
 	github.com/lib/pq v1.0.0
 	github.com/marstr/guid v1.1.0 // indirect
 	github.com/mattn/go-isatty v0.0.7
 	github.com/miekg/dns v1.1.8
-	github.com/minio/blazer v0.0.0-20171126203752-2081f5bf0465
 	github.com/minio/cli v1.20.0
 	github.com/minio/dsync/v2 v2.0.0
 	github.com/minio/hdfs/v3 v3.0.0

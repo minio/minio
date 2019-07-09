@@ -29,7 +29,7 @@ import (
 	"sync"
 	"time"
 
-	b2 "github.com/minio/blazer/base"
+	b2 "github.com/kurin/blazer/base"
 	"github.com/minio/cli"
 	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
@@ -147,6 +147,29 @@ func b2ToObjectError(err error, params ...string) error {
 	if err == nil {
 		return nil
 	}
+
+	code, msgCode, msg := b2.MsgCode(err)
+	if code == 0 {
+		// We don't interpret non B2 errors. B2 errors have statusCode
+		// to help us convert them to S3 object errors.
+		return err
+	}
+
+	objErr := b2MsgCodeToObjectError(code, msgCode, msg, params...)
+	if objErr == nil {
+		return err
+	}
+	return objErr
+}
+
+func b2MsgCodeToObjectError(code int, msgCode string, msg string, params ...string) error {
+	// Following code is a non-exhaustive check to convert
+	// B2 errors into S3 compatible errors.
+	//
+	// For a more complete information - https://www.backblaze.com/b2/docs/
+
+	var err error
+
 	bucket := ""
 	object := ""
 	uploadID := ""
@@ -160,18 +183,7 @@ func b2ToObjectError(err error, params ...string) error {
 		uploadID = params[2]
 	}
 
-	// Following code is a non-exhaustive check to convert
-	// B2 errors into S3 compatible errors.
-	//
-	// For a more complete information - https://www.backblaze.com/b2/docs/
-	statusCode, code, msg := b2.Code(err)
-	if statusCode == 0 {
-		// We don't interpret non B2 errors. B2 errors have statusCode
-		// to help us convert them to S3 object errors.
-		return err
-	}
-
-	switch code {
+	switch msgCode {
 	case "duplicate_bucket_name":
 		err = minio.BucketAlreadyOwnedByYou{Bucket: bucket}
 	case "bad_request":
@@ -343,7 +355,7 @@ func (l *b2Objects) ListObjects(ctx context.Context, bucket string, prefix strin
 				Name:        file.Name,
 				ModTime:     file.Timestamp,
 				Size:        file.Size,
-				ETag:        minio.ToS3ETag(file.Info.ID),
+				ETag:        minio.ToS3ETag(file.ID),
 				ContentType: file.Info.ContentType,
 				UserDefined: file.Info.Info,
 			})
@@ -386,7 +398,7 @@ func (l *b2Objects) ListObjectsV2(ctx context.Context, bucket, prefix, continuat
 				Name:        file.Name,
 				ModTime:     file.Timestamp,
 				Size:        file.Size,
-				ETag:        minio.ToS3ETag(file.Info.ID),
+				ETag:        minio.ToS3ETag(file.ID),
 				ContentType: file.Info.ContentType,
 				UserDefined: file.Info.Info,
 			})
@@ -462,7 +474,7 @@ func (l *b2Objects) GetObjectInfo(ctx context.Context, bucket string, object str
 	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
-		ETag:        minio.ToS3ETag(fi.ID),
+		ETag:        minio.ToS3ETag(f.ID),
 		Size:        fi.Size,
 		ModTime:     fi.Timestamp,
 		ContentType: fi.ContentType,
@@ -569,7 +581,7 @@ func (l *b2Objects) PutObject(ctx context.Context, bucket string, object string,
 	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
-		ETag:        minio.ToS3ETag(fi.ID),
+		ETag:        minio.ToS3ETag(f.ID),
 		Size:        fi.Size,
 		ModTime:     fi.Timestamp,
 		ContentType: fi.ContentType,
@@ -617,7 +629,7 @@ func (l *b2Objects) ListMultipartUploads(ctx context.Context, bucket string, pre
 	if maxUploads > 100 {
 		maxUploads = 100
 	}
-	largeFiles, nextMarker, err := bkt.ListUnfinishedLargeFiles(l.ctx, uploadIDMarker, maxUploads)
+	largeFiles, nextMarker, err := bkt.ListUnfinishedLargeFiles(l.ctx, maxUploads, uploadIDMarker)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return lmi, b2ToObjectError(err, bucket)
@@ -677,7 +689,7 @@ func (l *b2Objects) PutObjectPart(ctx context.Context, bucket string, object str
 	}
 
 	hr := newB2Reader(data, data.Size())
-	sha1, err := fc.UploadPart(l.ctx, hr, sha1AtEOF, int(hr.Size()), partID)
+	_, err = fc.UploadPart(l.ctx, hr, sha1AtEOF, int(hr.Size()), partID)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return pi, b2ToObjectError(err, bucket, object, uploadID)
@@ -686,7 +698,7 @@ func (l *b2Objects) PutObjectPart(ctx context.Context, bucket string, object str
 	return minio.PartInfo{
 		PartNumber:   partID,
 		LastModified: minio.UTCNow(),
-		ETag:         minio.ToS3ETag(sha1),
+		ETag:         minio.ToS3ETag(fmt.Sprintf("%x", hr.sha1Hash.Sum(nil))),
 		Size:         data.Size(),
 	}, nil
 }
