@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/tls"
 	"io"
@@ -105,7 +106,7 @@ func toStorageErr(err error) error {
 		fmt.Sscanf(err.Error(), "Bitrot verification mismatch - expected %s received %s", &expected, &received)
 		// Go's Sscanf %s scans "," that comes after the expected hash, hence remove it. Providing "," in the format string does not help.
 		expected = strings.TrimSuffix(expected, ",")
-		bitrotErr := hashMismatchError{expected, received}
+		bitrotErr := HashMismatchError{expected, received}
 		return bitrotErr
 	}
 	return err
@@ -431,6 +432,39 @@ func (client *storageRESTClient) getInstanceID() (err error) {
 	}
 	client.instanceID = string(instanceIDBuf[:n])
 	return nil
+}
+
+func (client *storageRESTClient) VerifyFile(volume, path string, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, path)
+	values.Set(storageRESTBitrotAlgo, algo.String())
+	values.Set(storageRESTLength, strconv.Itoa(int(shardSize)))
+	if len(sum) != 0 {
+		values.Set(storageRESTBitrotHash, hex.EncodeToString(sum))
+	}
+	respBody, err := client.call(storageRESTMethodVerifyFile, values, nil, -1)
+	defer http.DrainBody(respBody)
+	if err != nil {
+		return err
+	}
+	reader := bufio.NewReader(respBody)
+	for {
+		b, err := reader.ReadByte()
+		if err != nil {
+			return err
+		}
+		if b != ' ' {
+			reader.UnreadByte()
+			break
+		}
+	}
+	verifyResp := &VerifyFileResp{}
+	err = gob.NewDecoder(reader).Decode(verifyResp)
+	if err != nil {
+		return err
+	}
+	return toStorageErr(verifyResp.Err)
 }
 
 // Close - marks the client as closed.
