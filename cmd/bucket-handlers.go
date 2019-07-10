@@ -537,7 +537,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Remove all tmp files creating during multipart upload
+	// Remove all tmp files created during multipart upload
 	defer form.RemoveAll()
 
 	// Extract all form fields
