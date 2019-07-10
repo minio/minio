@@ -540,6 +540,7 @@ func (s *storageRESTServer) VerifyFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	algo := BitrotAlgorithmFromString(algoStr)
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
 	doneCh := sendWhiteSpaceVerifyFile(w)
 	err = s.storage.VerifyFile(volume, filePath, algo, hash, int64(shardSize))
 	<-doneCh
