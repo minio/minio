@@ -109,7 +109,7 @@ type PostPolicyForm struct {
 	}
 }
 
-// parsePostPolicyForm - Parse JSON policy string into typed POostPolicyForm structure.
+// parsePostPolicyForm - Parse JSON policy string into typed PostPolicyForm structure.
 func parsePostPolicyForm(policy string) (ppf PostPolicyForm, e error) {
 	// Convert po into interfaces and
 	// perform strict type conversion using reflection.
@@ -191,13 +191,13 @@ func parsePostPolicyForm(policy string) (ppf PostPolicyForm, e error) {
 					Valid: true,
 				}
 			default:
-				// Condition should be valid.
+				// Condition is not one of the known types.
 				return parsedPolicy, fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form",
 					reflect.TypeOf(condt).String(), condt)
 			}
 		default:
-			return parsedPolicy, fmt.Errorf("Unknown field %s of type %s found in POST policy form",
-				condt, reflect.TypeOf(condt).String())
+			return parsedPolicy, fmt.Errorf("Unknown field %s of type %T found in POST policy form",
+				condt, condt)
 		}
 	}
 	return parsedPolicy, nil
@@ -222,6 +222,7 @@ func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) erro
 	if !postPolicyForm.Expiration.After(UTCNow()) {
 		return fmt.Errorf("Invalid according to Policy: Policy expired")
 	}
+
 	// map to store the metadata
 	metaMap := make(map[string]string)
 	for cond, v := range postPolicyForm.Conditions.Policies {
@@ -230,11 +231,12 @@ func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) erro
 			metaMap[formCanonicalName] = v.Value
 		}
 	}
+
 	// Check if any extra metadata field is passed as input
 	for key := range formValues {
 		if strings.HasPrefix(key, "X-Amz-Meta-") {
 			if _, ok := metaMap[key]; !ok {
-				return fmt.Errorf("Invalid according to Policy: Extra input fields: %s", key)
+				return fmt.Errorf("Check Policy failure: Extra input fields: %s", key)
 			}
 		}
 	}
@@ -253,11 +255,13 @@ func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) erro
 		if startsWithSupported, condFound := startsWithConds[cond]; condFound {
 			// Check if the current condition supports starts-with operator
 			if op == policyCondStartsWith && !startsWithSupported {
-				return fmt.Errorf("Invalid according to Policy: Policy Condition failed")
+				return fmt.Errorf("Invalid Policy: '%v' operation is not supported", op)
 			}
 			// Check if current policy condition is satisfied
+
+			condPassed = checkPolicyCond(op, formValues.Get(formCanonicalName), v.Value)
 			if !condPassed {
-				return fmt.Errorf("Invalid according to Policy: Policy Condition failed")
+				return fmt.Errorf("Policy condition check failure: %+v %+v %+v", formCanonicalName, op, v.Value)
 			}
 		} else {
 			// This covers all conditions X-Amz-Meta-* and X-Amz-*
