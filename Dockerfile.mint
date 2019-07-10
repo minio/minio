@@ -10,10 +10,13 @@ ENV GOPATH /usr/local
 
 ENV PATH $GOPATH/bin:$GOROOT/bin:$PATH
 
+ENV MINT_ROOT_DIR /mint
+
+COPY mint /mint
+
 RUN apt-get --yes update && apt-get --yes upgrade && \
     apt-get --yes --quiet install wget jq curl git dnsmasq && \
-    git clone https://github.com/minio/minio.git /minio && \
-    ln -sf /minio/mint /mint && /mint/release.sh
+    cd /mint && /mint/release.sh
 
 WORKDIR /mint
 

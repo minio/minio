@@ -29,7 +29,6 @@ $APT install apt-transport-https
 wget -q https://packages.microsoft.com/config/ubuntu/16.04/packages-microsoft-prod.deb
 dpkg -i packages-microsoft-prod.deb
 rm -f packages-microsoft-prod.deb
-$APT install apt-transport-https
 $APT update
 
 # download and install golang
@@ -41,7 +40,7 @@ if ! $WGET --output-document=- "$download_url" | tar -C "${GO_INSTALL_PATH}" -zx
     exit 1
 fi
 
-xargs --arg-file=install-packages.list apt --quiet --yes install
+xargs --arg-file="${MINT_ROOT_DIR}/install-packages.list" apt --quiet --yes install
 
 # set python 3.5 as default
 update-alternatives --install /usr/bin/python python /usr/bin/python3.5 1

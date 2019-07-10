@@ -15,9 +15,11 @@
 #  limitations under the License.
 #
 
+export APT="apt --quiet --yes"
+
 # remove all packages listed in remove-packages.list
-xargs --arg-file=remove-packages.list apt --quiet --yes purge
-apt --quiet --yes autoremove
+xargs --arg-file="${MINT_ROOT_DIR}/remove-packages.list" apt --quiet --yes purge
+${APT} autoremove
 
 # remove unwanted files
 rm -fr "$GOROOT" "$GOPATH/src" /var/lib/apt/lists/*
