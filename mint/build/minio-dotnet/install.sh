@@ -30,12 +30,12 @@ if [ -z "$out_dir" ]; then
     mkdir "$out_dir"
 fi
 
-curl https://raw.githubusercontent.com/minio/minio-dotnet/"${MINIO_DOTNET_SDK_VERSION}"/Minio.Functional.Tests/FunctionalTest.cs > "${MINIO_DOTNET_SDK_PATH}/FunctionalTest.cs"
-curl https://raw.githubusercontent.com/minio/minio-dotnet/"${MINIO_DOTNET_SDK_VERSION}"/Minio.Functional.Tests/MintLogger.cs > "${MINIO_DOTNET_SDK_PATH}/MintLogger.cs"
-curl https://raw.githubusercontent.com/minio/minio-dotnet/"${MINIO_DOTNET_SDK_VERSION}"/Minio.Functional.Tests/JsonNetLogger.cs > "${MINIO_DOTNET_SDK_PATH}/JsonNetLogger.cs"
-curl https://raw.githubusercontent.com/minio/minio-dotnet/"${MINIO_DOTNET_SDK_VERSION}"/Minio.Functional.Tests/Program.cs > "${MINIO_DOTNET_SDK_PATH}/Program.cs"
-curl https://raw.githubusercontent.com/minio/minio-dotnet/"${MINIO_DOTNET_SDK_VERSION}"/Minio.Functional.Tests/RandomStreamGenerator.cs > "${MINIO_DOTNET_SDK_PATH}/RandomStreamGenerator.cs"
-curl https://raw.githubusercontent.com/minio/minio-dotnet/"${MINIO_DOTNET_SDK_VERSION}"/Minio.Functional.Tests/Minio.Functional.Tests.csproj > "${MINIO_DOTNET_SDK_PATH}/Minio.Functional.Tests.csproj"
+temp_dir="$MINIO_DOTNET_SDK_PATH/temp"
+git clone --quiet https://github.com/minio/minio-dotnet.git "${temp_dir}/minio-dotnet.git/"
+(cd "${temp_dir}/minio-dotnet.git"; git checkout --quiet "tags/${MINIO_DOTNET_SDK_VERSION}")
+
+cp -a "${temp_dir}/minio-dotnet.git/Minio.Functional.Tests/"* "${MINIO_DOTNET_SDK_PATH}/"
+rm -fr "${temp_dir}"
 
 cd "$MINIO_DOTNET_SDK_PATH"
 dotnet restore /p:Configuration=Mint
