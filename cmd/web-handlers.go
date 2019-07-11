@@ -74,31 +74,9 @@ type ServerInfoRep struct {
 	UIVersion       string `json:"uiVersion"`
 }
 
-// newWebContext creates a context with ReqInfo values from the given
-// http request and api name.
-func newWebContext(r *http.Request, api string) context.Context {
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-	object := vars["object"]
-	prefix := vars["prefix"]
-
-	if prefix != "" {
-		object = prefix
-	}
-	reqInfo := &logger.ReqInfo{
-		DeploymentID: globalDeploymentID,
-		RemoteHost:   handlers.GetSourceIP(r),
-		UserAgent:    r.UserAgent(),
-		API:          api,
-		BucketName:   bucket,
-		ObjectName:   object,
-	}
-	return logger.SetReqInfo(context.Background(), reqInfo)
-}
-
 // ServerInfo - get server info.
 func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, reply *ServerInfoRep) error {
-	ctx := newWebContext(r, "webServerInfo")
+	ctx := newWebContext(r, args, "webServerInfo")
 	_, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
@@ -148,7 +126,7 @@ type StorageInfoRep struct {
 
 // StorageInfo - web call to gather storage usage statistics.
 func (web *webAPIHandlers) StorageInfo(r *http.Request, args *WebGenericArgs, reply *StorageInfoRep) error {
-	ctx := newWebContext(r, "webStorageInfo")
+	ctx := newWebContext(r, args, "webStorageInfo")
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)
@@ -169,7 +147,7 @@ type MakeBucketArgs struct {
 
 // MakeBucket - creates a new bucket.
 func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *WebGenericRep) error {
-	ctx := newWebContext(r, "webMakeBucket")
+	ctx := newWebContext(r, args, "webMakeBucket")
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)
@@ -230,7 +208,7 @@ type RemoveBucketArgs struct {
 
 // DeleteBucket - removes a bucket, must be empty.
 func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs, reply *WebGenericRep) error {
-	ctx := newWebContext(r, "webDeleteBucket")
+	ctx := newWebContext(r, args, "webDeleteBucket")
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)
@@ -318,7 +296,7 @@ type WebBucketInfo struct {
 
 // ListBuckets - list buckets api.
 func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, reply *ListBucketsRep) error {
-	ctx := newWebContext(r, "webListBuckets")
+	ctx := newWebContext(r, args, "webListBuckets")
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)
@@ -421,7 +399,7 @@ type WebObjectInfo struct {
 
 // ListObjects - list objects api.
 func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, reply *ListObjectsRep) error {
-	ctx := newWebContext(r, "webListObjects")
+	ctx := newWebContext(r, args, "webListObjects")
 	reply.UIVersion = browser.UIVersion
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -616,7 +594,7 @@ type RemoveObjectArgs struct {
 
 // RemoveObject - removes an object, or all the objects at a given prefix.
 func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *WebGenericRep) error {
-	ctx := newWebContext(r, "webRemoveObject")
+	ctx := newWebContext(r, args, "webRemoveObject")
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)
@@ -776,7 +754,7 @@ type LoginRep struct {
 
 // Login - user login handler.
 func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
-	ctx := newWebContext(r, "webLogin")
+	ctx := newWebContext(r, args, "webLogin")
 	token, err := authenticateWeb(args.Username, args.Password)
 	if err != nil {
 		return toJSONError(ctx, err)
@@ -795,7 +773,7 @@ type GenerateAuthReply struct {
 }
 
 func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, reply *GenerateAuthReply) error {
-	ctx := newWebContext(r, "webGenerateAuth")
+	ctx := newWebContext(r, args, "webGenerateAuth")
 	_, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
@@ -830,7 +808,7 @@ type SetAuthReply struct {
 
 // SetAuth - Set accessKey and secretKey credentials.
 func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthReply) error {
-	ctx := newWebContext(r, "webSetAuth")
+	ctx := newWebContext(r, args, "webSetAuth")
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
@@ -919,7 +897,7 @@ type URLTokenReply struct {
 
 // CreateURLToken creates a URL token (short-lived) for GET requests.
 func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs, reply *URLTokenReply) error {
-	ctx := newWebContext(r, "webCreateURLToken")
+	ctx := newWebContext(r, args, "webCreateURLToken")
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
@@ -1503,7 +1481,7 @@ type GetBucketPolicyRep struct {
 
 // GetBucketPolicy - get bucket policy for the requested prefix.
 func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolicyArgs, reply *GetBucketPolicyRep) error {
-	ctx := newWebContext(r, "webGetBucketPolicy")
+	ctx := newWebContext(r, args, "webGetBucketPolicy")
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)
@@ -1599,7 +1577,7 @@ type ListAllBucketPoliciesRep struct {
 
 // ListAllBucketPolicies - get all bucket policy.
 func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllBucketPoliciesArgs, reply *ListAllBucketPoliciesRep) error {
-	ctx := newWebContext(r, "WebListAllBucketPolicies")
+	ctx := newWebContext(r, args, "WebListAllBucketPolicies")
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)
@@ -1680,7 +1658,7 @@ type SetBucketPolicyWebArgs struct {
 
 // SetBucketPolicy - set bucket policy.
 func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolicyWebArgs, reply *WebGenericRep) error {
-	ctx := newWebContext(r, "webSetBucketPolicy")
+	ctx := newWebContext(r, args, "webSetBucketPolicy")
 	objectAPI := web.ObjectAPI()
 	reply.UIVersion = browser.UIVersion
 
@@ -1832,7 +1810,7 @@ type PresignedGetRep struct {
 
 // PresignedGET - returns presigned-Get url.
 func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs, reply *PresignedGetRep) error {
-	ctx := newWebContext(r, "webPresignedGet")
+	ctx := newWebContext(r, args, "webPresignedGet")
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
