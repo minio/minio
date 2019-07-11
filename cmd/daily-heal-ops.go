@@ -39,7 +39,7 @@ func newBgHealSequence(numDisks int) *healSequence {
 	hs := madmin.HealOpts{
 		// Remove objects that do not have read-quorum
 		Remove:   true,
-		ScanMode: madmin.HealDeepScan,
+		ScanMode: madmin.HealNormalScan,
 	}
 
 	return &healSequence{

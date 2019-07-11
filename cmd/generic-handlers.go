@@ -28,6 +28,7 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/handlers"
@@ -261,10 +262,10 @@ func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if hasSuffix(r.URL.Path, ".js") || r.URL.Path == minioReservedBucketPath+"/favicon.ico" {
 				// For assets set cache expiry of one year. For each release, the name
 				// of the asset name will change and hence it can not be served from cache.
-				w.Header().Set("Cache-Control", "max-age=31536000")
+				w.Header().Set(xhttp.CacheControl, "max-age=31536000")
 			} else {
 				// For non asset requests we serve index.html which will never be cached.
-				w.Header().Set("Cache-Control", "no-store")
+				w.Header().Set(xhttp.CacheControl, "no-store")
 			}
 		}
 	}
@@ -380,15 +381,15 @@ type resourceHandler struct {
 // setCorsHandler handler for CORS (Cross Origin Resource Sharing)
 func setCorsHandler(h http.Handler) http.Handler {
 	commonS3Headers := []string{
-		"Date",
-		"ETag",
-		"Server",
-		"Connection",
-		"Accept-Ranges",
-		"Content-Range",
-		"Content-Encoding",
-		"Content-Length",
-		"Content-Type",
+		xhttp.Date,
+		xhttp.ETag,
+		xhttp.ServerInfo,
+		xhttp.Connection,
+		xhttp.AcceptRanges,
+		xhttp.ContentRange,
+		xhttp.ContentEncoding,
+		xhttp.ContentLength,
+		xhttp.ContentType,
 		"X-Amz*",
 		"x-amz*",
 		"*",
@@ -765,7 +766,7 @@ func addCustomHeaders(h http.Handler) http.Handler {
 
 func (s customHeaderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Set custom headers such as x-amz-request-id for each request.
-	w.Header().Set(responseRequestIDKey, mustGetRequestID(UTCNow()))
+	w.Header().Set(xhttp.AmzRequestID, mustGetRequestID(UTCNow()))
 	s.handler.ServeHTTP(logger.NewResponseWriter(w), r)
 }
 

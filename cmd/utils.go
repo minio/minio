@@ -36,6 +36,7 @@ import (
 	"strings"
 	"time"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
 
@@ -426,7 +427,7 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 	}
 	reqInfo := &logger.ReqInfo{
 		DeploymentID: globalDeploymentID,
-		RequestID:    w.Header().Get(responseRequestIDKey),
+		RequestID:    w.Header().Get(xhttp.AmzRequestID),
 		RemoteHost:   handlers.GetSourceIP(r),
 		UserAgent:    r.UserAgent(),
 		API:          api,

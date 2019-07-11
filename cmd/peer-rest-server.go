@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
@@ -331,7 +332,7 @@ func (s *peerRESTServer) CPULoadInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	ctx := newContext(r, w, "CPULoadInfo")
-	info := localEndpointsCPULoad(globalEndpoints)
+	info := localEndpointsCPULoad(globalEndpoints, r)
 
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
@@ -345,7 +346,7 @@ func (s *peerRESTServer) DrivePerfInfoHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	ctx := newContext(r, w, "DrivePerfInfo")
-	info := localEndpointsDrivePerf(globalEndpoints)
+	info := localEndpointsDrivePerf(globalEndpoints, r)
 
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
@@ -358,7 +359,7 @@ func (s *peerRESTServer) MemUsageInfoHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	ctx := newContext(r, w, "MemUsageInfo")
-	info := localEndpointsMemUsage(globalEndpoints)
+	info := localEndpointsMemUsage(globalEndpoints, r)
 
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
@@ -675,7 +676,7 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	trcAll := r.URL.Query().Get(peerRESTTraceAll) == "true"
 
-	w.Header().Set("Connection", "close")
+	w.Header().Set(xhttp.Connection, "close")
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
 

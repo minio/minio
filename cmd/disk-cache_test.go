@@ -124,17 +124,10 @@ func TestGetCacheFSMaxUse(t *testing.T) {
 
 // test wildcard patterns for excluding entries from cache
 func TestCacheExclusion(t *testing.T) {
-	fsDirs, err := getRandomDisks(1)
-	if err != nil {
-		t.Fatal(err)
+	cobjects := &cacheObjects{
+		cache: nil,
 	}
-	cconfig := CacheConfig{Expiry: 30, Drives: fsDirs}
-	cobjects, err := newServerCacheObjects(cconfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cobj := cobjects.(*cacheObjects)
-	GlobalServiceDoneCh <- struct{}{}
+
 	testCases := []struct {
 		bucketName     string
 		objectName     string
@@ -155,8 +148,8 @@ func TestCacheExclusion(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		cobj.exclude = []string{testCase.excludePattern}
-		if cobj.isCacheExclude(testCase.bucketName, testCase.objectName) != testCase.expectedResult {
+		cobjects.exclude = []string{testCase.excludePattern}
+		if cobjects.isCacheExclude(testCase.bucketName, testCase.objectName) != testCase.expectedResult {
 			t.Fatal("Cache exclusion test failed for case ", i)
 		}
 	}

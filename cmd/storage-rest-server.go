@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -114,7 +115,7 @@ func (s *storageRESTServer) GetInstanceID(w http.ResponseWriter, r *http.Request
 		s.writeErrorResponse(w, err)
 		return
 	}
-	w.Header().Set("Content-Length", strconv.Itoa(len(s.instanceID)))
+	w.Header().Set(xhttp.ContentLength, strconv.Itoa(len(s.instanceID)))
 	w.Write([]byte(s.instanceID))
 	w.(http.Flusher).Flush()
 }
@@ -283,7 +284,7 @@ func (s *storageRESTServer) ReadAllHandler(w http.ResponseWriter, r *http.Reques
 		s.writeErrorResponse(w, err)
 		return
 	}
-	w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
+	w.Header().Set(xhttp.ContentLength, strconv.Itoa(len(buf)))
 	w.Write(buf)
 	w.(http.Flusher).Flush()
 }
@@ -327,7 +328,7 @@ func (s *storageRESTServer) ReadFileHandler(w http.ResponseWriter, r *http.Reque
 		s.writeErrorResponse(w, err)
 		return
 	}
-	w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
+	w.Header().Set(xhttp.ContentLength, strconv.Itoa(len(buf)))
 	w.Write(buf)
 	w.(http.Flusher).Flush()
 }
@@ -357,7 +358,7 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 		return
 	}
 	defer rc.Close()
-	w.Header().Set("Content-Length", strconv.Itoa(length))
+	w.Header().Set(xhttp.ContentLength, strconv.Itoa(length))
 
 	io.Copy(w, rc)
 	w.(http.Flusher).Flush()
@@ -486,6 +487,65 @@ func (s *storageRESTServer) RenameFileHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// Send whitespace to the client to avoid timeouts as bitrot verification can take time on spinning/slow disks.
+func sendWhiteSpaceVerifyFile(w http.ResponseWriter) <-chan struct{} {
+	doneCh := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(time.Second * 10)
+		for {
+			select {
+			case <-ticker.C:
+				w.Write([]byte(" "))
+				w.(http.Flusher).Flush()
+			case doneCh <- struct{}{}:
+				ticker.Stop()
+				return
+			}
+		}
+
+	}()
+	return doneCh
+}
+
+// VerifyFileResp - VerifyFile()'s response.
+type VerifyFileResp struct {
+	Err error
+}
+
+// VerifyFile - Verify the file for bitrot errors.
+func (s *storageRESTServer) VerifyFile(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := mux.Vars(r)
+	volume := vars[storageRESTVolume]
+	filePath := vars[storageRESTFilePath]
+	shardSize, err := strconv.Atoi(vars[storageRESTLength])
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	hashStr := vars[storageRESTBitrotHash]
+	var hash []byte
+	if hashStr != "" {
+		hash, err = hex.DecodeString(hashStr)
+		if err != nil {
+			s.writeErrorResponse(w, err)
+			return
+		}
+	}
+	algoStr := vars[storageRESTBitrotAlgo]
+	if algoStr == "" {
+		s.writeErrorResponse(w, errInvalidArgument)
+		return
+	}
+	algo := BitrotAlgorithmFromString(algoStr)
+	doneCh := sendWhiteSpaceVerifyFile(w)
+	err = s.storage.VerifyFile(volume, filePath, algo, hash, int64(shardSize))
+	<-doneCh
+	gob.NewEncoder(w).Encode(VerifyFileResp{err})
+}
+
 // registerStorageRPCRouter - register storage rpc router.
 func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 	for _, endpoint := range endpoints {
@@ -533,6 +593,8 @@ func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodRenameFile).HandlerFunc(httpTraceHdrs(server.RenameFileHandler)).
 			Queries(restQueries(storageRESTSrcVolume, storageRESTSrcPath, storageRESTDstVolume, storageRESTDstPath)...)
+		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodVerifyFile).HandlerFunc(httpTraceHdrs(server.VerifyFile)).
+			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTBitrotAlgo, storageRESTLength)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodGetInstanceID).HandlerFunc(httpTraceAll(server.GetInstanceID))
 	}
 

@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"net/http"
@@ -36,6 +37,7 @@ import (
 func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterUIError(fmtError)
+	gob.Register(HashMismatchError{})
 }
 
 // ServerFlags - server command specific flags

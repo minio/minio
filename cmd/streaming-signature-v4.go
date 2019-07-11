@@ -29,6 +29,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	sha256 "github.com/minio/sha256-simd"
 )
@@ -69,7 +70,7 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 	req := *r
 
 	// Save authorization header.
-	v4Auth := req.Header.Get("Authorization")
+	v4Auth := req.Header.Get(xhttp.Authorization)
 
 	// Parse signature version '4' header.
 	signV4Values, errCode := parseSignV4(v4Auth, globalServerConfig.GetRegion(), serviceS3)
@@ -81,7 +82,7 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 	payload := streamingContentSHA256
 
 	// Payload for STREAMING signature should be 'STREAMING-AWS4-HMAC-SHA256-PAYLOAD'
-	if payload != req.Header.Get("X-Amz-Content-Sha256") {
+	if payload != req.Header.Get(xhttp.AmzContentSha256) {
 		return cred, "", "", time.Time{}, ErrContentSHA256Mismatch
 	}
 

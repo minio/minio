@@ -109,7 +109,7 @@ type PostPolicyForm struct {
 	}
 }
 
-// parsePostPolicyForm - Parse JSON policy string into typed POostPolicyForm structure.
+// parsePostPolicyForm - Parse JSON policy string into typed PostPolicyForm structure.
 func parsePostPolicyForm(policy string) (ppf PostPolicyForm, e error) {
 	// Convert po into interfaces and
 	// perform strict type conversion using reflection.
@@ -256,6 +256,7 @@ func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) erro
 				return fmt.Errorf("Invalid according to Policy: Policy Condition failed")
 			}
 			// Check if current policy condition is satisfied
+			condPassed = checkPolicyCond(op, formValues.Get(formCanonicalName), v.Value)
 			if !condPassed {
 				return fmt.Errorf("Invalid according to Policy: Policy Condition failed")
 			}
