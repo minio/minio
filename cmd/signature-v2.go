@@ -28,6 +28,8 @@ import (
 	"strconv"
 	"strings"
 
+	xhttp "github.com/minio/minio/cmd/http"
+
 	"github.com/minio/minio/pkg/auth"
 )
 
@@ -68,13 +70,13 @@ var resourceList = []string{
 
 func doesPolicySignatureV2Match(formValues http.Header) APIErrorCode {
 	cred := globalServerConfig.GetCredential()
-	accessKey := formValues.Get("AWSAccessKeyId")
+	accessKey := formValues.Get(xhttp.AmzAccessKeyID)
 	cred, _, s3Err := checkKeyValid(accessKey)
 	if s3Err != ErrNone {
 		return s3Err
 	}
 	policy := formValues.Get("Policy")
-	signature := formValues.Get("Signature")
+	signature := formValues.Get(xhttp.AmzSignatureV2)
 	if !compareSignatureV2(signature, calculateSignatureV2(policy, cred.SecretKey)) {
 		return ErrSignatureDoesNotMatch
 	}
@@ -131,11 +133,11 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 			return ErrInvalidQueryParams
 		}
 		switch keyval[0] {
-		case "AWSAccessKeyId":
+		case xhttp.AmzAccessKeyID:
 			accessKey = keyval[1]
-		case "Signature":
+		case xhttp.AmzSignatureV2:
 			gotSignature = keyval[1]
-		case "Expires":
+		case xhttp.Expires:
 			expires = keyval[1]
 		default:
 			filteredQueries = append(filteredQueries, query)
@@ -177,13 +179,13 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 }
 
 func getReqAccessKeyV2(r *http.Request) (auth.Credentials, bool, APIErrorCode) {
-	if accessKey := r.URL.Query().Get("AWSAccessKeyId"); accessKey != "" {
+	if accessKey := r.URL.Query().Get(xhttp.AmzAccessKeyID); accessKey != "" {
 		return checkKeyValid(accessKey)
 	}
 
 	// below is V2 Signed Auth header format, splitting on `space` (after the `AWS` string).
 	// Authorization = "AWS" + " " + AWSAccessKeyId + ":" + Signature
-	authFields := strings.Split(r.Header.Get("Authorization"), " ")
+	authFields := strings.Split(r.Header.Get(xhttp.Authorization), " ")
 	if len(authFields) != 2 {
 		return auth.Credentials{}, false, ErrMissingFields
 	}
@@ -219,7 +221,7 @@ func getReqAccessKeyV2(r *http.Request) (auth.Credentials, bool, APIErrorCode) {
 
 func validateV2AuthHeader(r *http.Request) (auth.Credentials, APIErrorCode) {
 	var cred auth.Credentials
-	v2Auth := r.Header.Get("Authorization")
+	v2Auth := r.Header.Get(xhttp.Authorization)
 	if v2Auth == "" {
 		return cred, ErrAuthHeaderEmpty
 	}
@@ -238,7 +240,7 @@ func validateV2AuthHeader(r *http.Request) (auth.Credentials, APIErrorCode) {
 }
 
 func doesSignV2Match(r *http.Request) APIErrorCode {
-	v2Auth := r.Header.Get("Authorization")
+	v2Auth := r.Header.Get(xhttp.Authorization)
 	cred, apiError := validateV2AuthHeader(r)
 	if apiError != ErrNone {
 		return apiError
@@ -380,7 +382,7 @@ func getStringToSignV2(method string, encodedResource, encodedQuery string, head
 	date := expires // Date is set to expires date for presign operations.
 	if date == "" {
 		// If expires date is empty then request header Date is used.
-		date = headers.Get("Date")
+		date = headers.Get(xhttp.Date)
 	}
 
 	// From the Amazon docs:
@@ -393,8 +395,8 @@ func getStringToSignV2(method string, encodedResource, encodedQuery string, head
 	//	 CanonicalizedResource;
 	stringToSign := strings.Join([]string{
 		method,
-		headers.Get("Content-MD5"),
-		headers.Get("Content-Type"),
+		headers.Get(xhttp.ContentMD5),
+		headers.Get(xhttp.ContentType),
 		date,
 		canonicalHeaders,
 	}, "\n")

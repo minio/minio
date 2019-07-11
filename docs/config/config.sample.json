@@ -64,6 +64,8 @@
 				"enable": false,
 				"brokers": null,
 				"topic": "",
+                                "queueDir": "",
+                                "queueLimit": 0,
 				"tls": {
 					"enable": false,
 					"skipVerify": false,
@@ -73,7 +75,7 @@
 					"enable": false,
 					"username": "",
 					"password": ""
-				}
+				}       
 			}
 		},
 		"mqtt": {
@@ -157,7 +159,9 @@
 		"webhook": {
 			"1": {
 				"enable": false,
-				"endpoint": ""
+				"endpoint": "",
+                                "queueDir": "",
+                                "queueLimit": 0
 			}
 		}
 	},

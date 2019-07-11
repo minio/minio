@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -31,6 +32,36 @@ func TestRegisterGatewayCommand(t *testing.T) {
 	err = RegisterGatewayCommand(cmd)
 	if err != nil {
 		t.Errorf("RegisterGatewayCommand got unexpected error: %s", err)
+	}
+}
+
+// Test running a registered gateway command with a flag
+func TestRunRegisteredGatewayCommand(t *testing.T) {
+	var err error
+
+	flagName := "test-flag"
+	flagValue := "foo"
+
+	cmd := cli.Command{
+		Name: "test-run-with-flag",
+		Flags: []cli.Flag{
+			cli.StringFlag{Name: flagName},
+		},
+		Action: func(ctx *cli.Context) {
+			if actual := ctx.String(flagName); actual != flagValue {
+				t.Errorf("value of %s expects %s, but got %s", flagName, flagValue, actual)
+			}
+		},
+	}
+
+	err = RegisterGatewayCommand(cmd)
+	if err != nil {
+		t.Errorf("RegisterGatewayCommand got unexpected error: %s", err)
+	}
+
+	if err = newApp("minio").Run(
+		[]string{"minio", "gateway", cmd.Name, fmt.Sprintf("--%s", flagName), flagValue}); err != nil {
+		t.Errorf("running registered gateway command got unexpected error: %s", err)
 	}
 }
 

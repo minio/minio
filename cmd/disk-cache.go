@@ -435,7 +435,7 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 	if delimiter == slashSeparator {
 		recursive = false
 	}
-	walkResultCh, endWalkCh := c.listPool.Release(listParams{bucket, recursive, marker, prefix})
+	walkResultCh, endWalkCh := c.listPool.Release(listParams{bucket, recursive, marker, prefix, false})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 
@@ -494,7 +494,7 @@ func (c cacheObjects) listCacheObjects(ctx context.Context, bucket, prefix, mark
 		}
 	}
 
-	params := listParams{bucket, recursive, nextMarker, prefix}
+	params := listParams{bucket, recursive, nextMarker, prefix, false}
 	if !eof {
 		c.listPool.Set(params, walkResultCh, endWalkCh)
 	}
@@ -945,7 +945,10 @@ func checkAtimeSupport(dir string) (err error) {
 	if err != nil {
 		return
 	}
-	if _, err = io.Copy(ioutil.Discard, file); err != io.EOF {
+	// add a sleep to ensure atime change is detected
+	time.Sleep(10 * time.Millisecond)
+
+	if _, err = io.Copy(ioutil.Discard, file); err != nil {
 		return
 	}
 

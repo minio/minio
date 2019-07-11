@@ -18,157 +18,237 @@ import React from "react"
 import { connect } from "react-redux"
 import web from "../web"
 import * as alertActions from "../alert/actions"
+import { getRandomAccessKey, getRandomSecretKey } from "../utils"
+import jwtDecode from "jwt-decode"
+import classNames from "classnames"
 
-import {
-  Tooltip,
-  Modal,
-  ModalBody,
-  ModalHeader,
-  OverlayTrigger
-} from "react-bootstrap"
+import { Modal, ModalBody, ModalHeader } from "react-bootstrap"
 import InputGroup from "./InputGroup"
+import { ACCESS_KEY_MIN_LENGTH, SECRET_KEY_MIN_LENGTH } from "../constants"
 
 export class ChangePasswordModal extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
-      accessKey: "",
-      secretKey: "",
-      keysReadOnly: false
+      currentAccessKey: "",
+      currentSecretKey: "",
+      currentSecretKeyVisible: false,
+      newAccessKey: "",
+      newSecretKey: "",
+      newSecretKeyVisible: false
     }
   }
-  // When its shown, it loads the access key and secret key.
+  // When its shown, it loads the access key from JWT token
   componentWillMount() {
-    const { serverInfo } = this.props
-
-    // Check environment variables first.
-    if (serverInfo.info.isEnvCreds || serverInfo.info.isWorm) {
-      this.setState({
-        accessKey: "xxxxxxxxx",
-        secretKey: "xxxxxxxxx",
-        keysReadOnly: true
-      })
-    } else {
-      web.GetAuth().then(data => {
-        this.setState({
-          accessKey: data.accessKey,
-          secretKey: data.secretKey
-        })
-      })
-    }
-  }
-
-  // Handle field changes from inside the modal.
-  accessKeyChange(e) {
+    const token = jwtDecode(web.GetToken())
     this.setState({
-      accessKey: e.target.value
-    })
-  }
-
-  secretKeyChange(e) {
-    this.setState({
-      secretKey: e.target.value
-    })
-  }
-
-  secretKeyVisible(secretKeyVisible) {
-    this.setState({
-      secretKeyVisible
+      currentAccessKey: token.sub,
+      newAccessKey: token.sub
     })
   }
 
   // Save the auth params and set them.
   setAuth(e) {
     const { showAlert } = this.props
-    const accessKey = this.state.accessKey
-    const secretKey = this.state.secretKey
-    web
-      .SetAuth({
-        accessKey,
-        secretKey
-      })
-      .then(data => {
-        showAlert({
-          type: "success",
-          message: "Changed credentials"
+
+    if (this.canUpdateCredentials()) {
+      const currentAccessKey = this.state.currentAccessKey
+      const currentSecretKey = this.state.currentSecretKey
+      const newAccessKey = this.state.newAccessKey
+      const newSecretKey = this.state.newSecretKey
+      web
+        .SetAuth({
+          currentAccessKey,
+          currentSecretKey,
+          newAccessKey,
+          newSecretKey
         })
-      })
-      .catch(err => {
-        showAlert({
-          type: "danger",
-          message: err.message
+        .then(data => {
+          showAlert({
+            type: "success",
+            message: "Credentials updated successfully."
+          })
         })
-      })
+        .catch(err => {
+          showAlert({
+            type: "danger",
+            message: err.message
+          })
+        })
+    }
   }
 
   generateAuth(e) {
-    web.GenerateAuth().then(data => {
+    const { serverInfo } = this.props
+    // Generate random access key only for root user
+    if (!serverInfo.userInfo.isIAMUser) {
       this.setState({
-        accessKey: data.accessKey,
-        secretKey: data.secretKey,
-        secretKeyVisible: true
+        newAccessKey: getRandomAccessKey()
       })
+    }
+
+    this.setState({
+      newSecretKey: getRandomSecretKey(),
+      newSecretKeyVisible: true
     })
   }
 
+  canChangePassword() {
+    const { serverInfo } = this.props
+    // Password change is not allowed in WORM mode
+    if (serverInfo.info.isWorm) {
+      return false
+    }
+
+    // When credentials are set on ENV, password change not allowed for owner
+    if (serverInfo.info.isEnvCreds && !serverInfo.userInfo.isIAMUser) {
+      return false
+    }
+    return true
+  }
+
+  canUpdateCredentials() {
+    return (
+      this.state.currentAccessKey.length > 0 &&
+      this.state.currentSecretKey.length > 0 &&
+      this.state.newAccessKey.length >= ACCESS_KEY_MIN_LENGTH &&
+      this.state.newSecretKey.length >= SECRET_KEY_MIN_LENGTH
+    )
+  }
+
   render() {
-    const { hideChangePassword } = this.props
+    const { hideChangePassword, serverInfo } = this.props
+    const allowChangePassword = this.canChangePassword()
+
+    if (!allowChangePassword) {
+      return (
+        <Modal bsSize="sm" animation={false} show={true}>
+          <ModalHeader>Change Password</ModalHeader>
+          <ModalBody>
+            Credentials of this user cannot be updated through MinIO Browser.
+          </ModalBody>
+          <div className="modal-footer">
+            <button
+              id="cancel-change-password"
+              className="btn btn-link"
+              onClick={hideChangePassword}
+            >
+              Close
+            </button>
+          </div>
+        </Modal>
+      )
+    }
+
     return (
       <Modal bsSize="sm" animation={false} show={true}>
         <ModalHeader>Change Password</ModalHeader>
         <ModalBody className="m-t-20">
-          <InputGroup
-            value={this.state.accessKey}
-            onChange={this.accessKeyChange.bind(this)}
-            id="accessKey"
-            label="Access Key"
-            name="accesskey"
-            type="text"
-            spellCheck="false"
-            required="required"
-            autoComplete="false"
-            align="ig-left"
-            readonly={this.state.keysReadOnly}
-          />
-          <i
-            onClick={this.secretKeyVisible.bind(
-              this,
-              !this.state.secretKeyVisible
+          <div className="has-toggle-password">
+            <InputGroup
+              value={this.state.currentAccessKey}
+              id="currentAccessKey"
+              label="Current Access Key"
+              name="currentAccesskey"
+              type="text"
+              spellCheck="false"
+              required="required"
+              autoComplete="false"
+              align="ig-left"
+              readonly={true}
+            />
+
+            <i
+              onClick={() => {
+                this.setState({
+                  currentSecretKeyVisible: !this.state.currentSecretKeyVisible
+                })
+              }}
+              className={
+                "toggle-password fa fa-eye " +
+                (this.state.currentSecretKeyVisible ? "toggled" : "")
+              }
+            />
+            <InputGroup
+              value={this.state.currentSecretKey}
+              onChange={e => {
+                this.setState({ currentSecretKey: e.target.value })
+              }}
+              id="currentSecretKey"
+              label="Current Secret Key"
+              name="currentSecretKey"
+              type={this.state.currentSecretKeyVisible ? "text" : "password"}
+              spellCheck="false"
+              required="required"
+              autoComplete="false"
+              align="ig-left"
+            />
+          </div>
+
+          <div className="has-toggle-password m-t-30">
+            {!serverInfo.userInfo.isIAMUser && (
+              <InputGroup
+                value={this.state.newAccessKey}
+                id="newAccessKey"
+                label={"New Access Key"}
+                name="newAccesskey"
+                type="text"
+                spellCheck="false"
+                required="required"
+                autoComplete="false"
+                align="ig-left"
+                onChange={e => {
+                  this.setState({ newAccessKey: e.target.value })
+                }}
+                readonly={serverInfo.userInfo.isIAMUser}
+              />
             )}
-            className={
-              "toggle-password fa fa-eye " +
-              (this.state.secretKeyVisible ? "toggled" : "")
-            }
-          />
-          <InputGroup
-            value={this.state.secretKey}
-            onChange={this.secretKeyChange.bind(this)}
-            id="secretKey"
-            label="Secret Key"
-            name="accesskey"
-            type={this.state.secretKeyVisible ? "text" : "password"}
-            spellCheck="false"
-            required="required"
-            autoComplete="false"
-            align="ig-left"
-            readonly={this.state.keysReadOnly}
-          />
+
+            <i
+              onClick={() => {
+                this.setState({
+                  newSecretKeyVisible: !this.state.newSecretKeyVisible
+                })
+              }}
+              className={
+                "toggle-password fa fa-eye " +
+                (this.state.newSecretKeyVisible ? "toggled" : "")
+              }
+            />
+            <InputGroup
+              value={this.state.newSecretKey}
+              onChange={e => {
+                this.setState({ newSecretKey: e.target.value })
+              }}
+              id="newSecretKey"
+              label="New Secret Key"
+              name="newSecretKey"
+              type={this.state.newSecretKeyVisible ? "text" : "password"}
+              spellCheck="false"
+              required="required"
+              autoComplete="false"
+              align="ig-left"
+              onChange={e => {
+                this.setState({ newSecretKey: e.target.value })
+              }}
+            />
+          </div>
         </ModalBody>
         <div className="modal-footer">
           <button
             id="generate-keys"
-            className={
-              "btn btn-primary " + (this.state.keysReadOnly ? "hidden" : "")
-            }
+            className={"btn btn-primary"}
             onClick={this.generateAuth.bind(this)}
           >
             Generate
           </button>
           <button
             id="update-keys"
-            className={
-              "btn btn-success " + (this.state.keysReadOnly ? "hidden" : "")
-            }
+            className={classNames({
+              btn: true,
+              "btn-success": this.canUpdateCredentials()
+            })}
+            disabled={!this.canUpdateCredentials()}
             onClick={this.setAuth.bind(this)}
           >
             Update
@@ -198,4 +278,7 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(ChangePasswordModal)
+export default connect(
+  mapStateToProps,
+  mapDispatchToProps
+)(ChangePasswordModal)

@@ -16,15 +16,26 @@
 
 import web from "../web"
 import history from "../history"
-import { sortObjectsByName, sortObjectsBySize, sortObjectsByDate } from "../utils"
+import {
+  sortObjectsByName,
+  sortObjectsBySize,
+  sortObjectsByDate
+} from "../utils"
 import { getCurrentBucket } from "../buckets/selectors"
 import { getCurrentPrefix, getCheckedList } from "./selectors"
 import * as alertActions from "../alert/actions"
 import * as bucketActions from "../buckets/actions"
-import { minioBrowserPrefix } from "../constants"
+import {
+  minioBrowserPrefix,
+  SORT_BY_NAME,
+  SORT_BY_SIZE,
+  SORT_BY_LAST_MODIFIED,
+  SORT_ORDER_ASC,
+  SORT_ORDER_DESC
+} from "../constants"
 
 export const SET_LIST = "objects/SET_LIST"
-export const RESET_LIST = "object/RESET_LIST"
+export const RESET_LIST = "objects/RESET_LIST"
 export const APPEND_LIST = "objects/APPEND_LIST"
 export const REMOVE = "objects/REMOVE"
 export const SET_SORT_BY = "objects/SET_SORT_BY"
@@ -35,53 +46,63 @@ export const SET_SHARE_OBJECT = "objects/SET_SHARE_OBJECT"
 export const CHECKED_LIST_ADD = "objects/CHECKED_LIST_ADD"
 export const CHECKED_LIST_REMOVE = "objects/CHECKED_LIST_REMOVE"
 export const CHECKED_LIST_RESET = "objects/CHECKED_LIST_RESET"
+export const SET_LIST_LOADING = "objects/SET_LIST_LOADING"
 
-export const setList = (objects, marker, isTruncated) => ({
+export const setList = objects => ({
   type: SET_LIST,
-  objects,
-  marker,
-  isTruncated
+  objects
 })
 
 export const resetList = () => ({
   type: RESET_LIST
 })
 
-export const appendList = (objects, marker, isTruncated) => ({
-  type: APPEND_LIST,
-  objects,
-  marker,
-  isTruncated
+export const setListLoading = listLoading => ({
+  type: SET_LIST_LOADING,
+  listLoading
 })
 
-export const fetchObjects = append => {
+export const fetchObjects = () => {
   return function(dispatch, getState) {
-    const {buckets: {currentBucket}, objects: {currentPrefix, marker}} = getState()
+    dispatch(resetList())
+    const {
+      buckets: { currentBucket },
+      objects: { currentPrefix }
+    } = getState()
     if (currentBucket) {
+      dispatch(setListLoading(true))
       return web
         .ListObjects({
           bucketName: currentBucket,
-          prefix: currentPrefix,
-          marker: append ? marker : ""
+          prefix: currentPrefix
         })
         .then(res => {
-          let objects = []
-          if (res.objects) {
-            objects = res.objects.map(object => {
-              return {
-                ...object,
-                name: object.name.replace(currentPrefix, "")
-              }
-            })
+          // we need to check if the bucket name and prefix are the same as
+          // when the request was made before updating the displayed objects
+          if (
+            currentBucket === getCurrentBucket(getState()) &&
+            currentPrefix === getCurrentPrefix(getState())
+          ) {
+            let objects = []
+            if (res.objects) {
+              objects = res.objects.map(object => {
+                return {
+                  ...object,
+                  name: object.name.replace(currentPrefix, "")
+                }
+              })
+            }
+
+            const sortBy = SORT_BY_LAST_MODIFIED
+            const sortOrder = SORT_ORDER_DESC
+            dispatch(setSortBy(sortBy))
+            dispatch(setSortOrder(sortOrder))
+            const sortedList = sortObjectsList(objects, sortBy, sortOrder)
+            dispatch(setList(sortedList))
+
+            dispatch(setPrefixWritable(res.writable))
+            dispatch(setListLoading(false))
           }
-          if (append) {
-            dispatch(appendList(objects, res.nextmarker, res.istruncated))
-          } else {
-            dispatch(setList(objects, res.nextmarker, res.istruncated))
-            dispatch(setSortBy(""))
-            dispatch(setSortOrder(false))
-          }
-          dispatch(setPrefixWritable(res.writable))
         })
         .catch(err => {
           if (web.LoggedIn()) {
@@ -96,6 +117,7 @@ export const fetchObjects = append => {
           } else {
             history.push("/login")
           }
+          dispatch(setListLoading(false))
         })
     }
   }
@@ -103,26 +125,27 @@ export const fetchObjects = append => {
 
 export const sortObjects = sortBy => {
   return function(dispatch, getState) {
-    const {objects} = getState()
-    const sortOrder = objects.sortBy == sortBy ? !objects.sortOrder : true
+    const { objects } = getState()
+    let sortOrder = SORT_ORDER_ASC
+    // Reverse sort order if the list is already sorted on same field
+    if (objects.sortBy === sortBy && objects.sortOrder === SORT_ORDER_ASC) {
+      sortOrder = SORT_ORDER_DESC
+    }
     dispatch(setSortBy(sortBy))
     dispatch(setSortOrder(sortOrder))
-    let list
-    switch (sortBy) {
-      case "name":
-        list = sortObjectsByName(objects.list, sortOrder)
-        break
-      case "size":
-        list = sortObjectsBySize(objects.list, sortOrder)
-        break
-      case "last-modified":
-        list = sortObjectsByDate(objects.list, sortOrder)
-        break
-      default:
-        list = objects.list
-        break
-    }
-    dispatch(setList(list, objects.marker, objects.isTruncated))
+    const sortedList = sortObjectsList(objects.list, sortBy, sortOrder)
+    dispatch(setList(sortedList))
+  }
+}
+
+const sortObjectsList = (list, sortBy, sortOrder) => {
+  switch (sortBy) {
+    case SORT_BY_NAME:
+      return sortObjectsByName(list, sortOrder)
+    case SORT_BY_SIZE:
+      return sortObjectsBySize(list, sortOrder)
+    case SORT_BY_LAST_MODIFIED:
+      return sortObjectsByDate(list, sortOrder)
   }
 }
 
@@ -229,7 +252,16 @@ export const shareObject = (object, days, hours, minutes) => {
           )
         })
     } else {
-      dispatch(showShareObject(object, `${location.host}` + '/' + `${currentBucket}` + '/' + encodeURI(objectName)))
+      dispatch(
+        showShareObject(
+          object,
+          `${location.host}` +
+            "/" +
+            `${currentBucket}` +
+            "/" +
+            encodeURI(objectName)
+        )
+      )
       dispatch(
         alertActions.set({
           type: "success",
@@ -322,13 +354,14 @@ export const downloadCheckedObjects = () => {
           }${minioBrowserPrefix}/zip?token=${res.token}`
           downloadZip(requestUrl, req, dispatch)
         })
-        .catch(err => dispatch(
-          alertActions.set({
-            type: "danger",
-            message: err.message
-          })
+        .catch(err =>
+          dispatch(
+            alertActions.set({
+              type: "danger",
+              message: err.message
+            })
+          )
         )
-      )
     }
   }
 }
@@ -351,7 +384,8 @@ const downloadZip = (url, req, dispatch) => {
       var separator = req.prefix.length > 1 ? "-" : ""
 
       anchor.href = blobUrl
-      anchor.download = req.bucketName + separator + req.prefix.slice(0, -1) + ".zip"
+      anchor.download =
+        req.bucketName + separator + req.prefix.slice(0, -1) + ".zip"
 
       anchor.click()
       window.URL.revokeObjectURL(blobUrl)

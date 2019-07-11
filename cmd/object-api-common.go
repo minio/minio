@@ -21,6 +21,8 @@ import (
 	"path"
 	"sync"
 
+	"strings"
+
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
 )
@@ -234,7 +236,94 @@ func removeListenerConfig(ctx context.Context, objAPI ObjectLayer, bucket string
 	return objAPI.DeleteObject(ctx, minioMetaBucket, lcPath)
 }
 
+func listObjectsNonSlash(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {
+	endWalkCh := make(chan struct{})
+	defer close(endWalkCh)
+	recursive := true
+	walkResultCh := startTreeWalk(ctx, bucket, prefix, "", recursive, listDir, endWalkCh)
+
+	var objInfos []ObjectInfo
+	var eof bool
+	var prevPrefix string
+
+	for {
+		if len(objInfos) == maxKeys {
+			break
+		}
+		result, ok := <-walkResultCh
+		if !ok {
+			eof = true
+			break
+		}
+
+		var objInfo ObjectInfo
+		var err error
+
+		index := strings.Index(strings.TrimPrefix(result.entry, prefix), delimiter)
+		if index == -1 {
+			objInfo, err = getObjInfo(ctx, bucket, result.entry)
+			if err != nil {
+				// Ignore errFileNotFound as the object might have got
+				// deleted in the interim period of listing and getObjectInfo(),
+				// ignore quorum error as it might be an entry from an outdated disk.
+				if IsErrIgnored(err, []error{
+					errFileNotFound,
+					errXLReadQuorum,
+				}...) {
+					continue
+				}
+				return loi, toObjectErr(err, bucket, prefix)
+			}
+		} else {
+			index = len(prefix) + index + len(delimiter)
+			currPrefix := result.entry[:index]
+			if currPrefix == prevPrefix {
+				continue
+			}
+			prevPrefix = currPrefix
+
+			objInfo = ObjectInfo{
+				Bucket: bucket,
+				Name:   currPrefix,
+				IsDir:  true,
+			}
+		}
+
+		if objInfo.Name <= marker {
+			continue
+		}
+
+		objInfos = append(objInfos, objInfo)
+		if result.end {
+			eof = true
+			break
+		}
+	}
+
+	result := ListObjectsInfo{}
+	for _, objInfo := range objInfos {
+		if objInfo.IsDir {
+			result.Prefixes = append(result.Prefixes, objInfo.Name)
+			continue
+		}
+		result.Objects = append(result.Objects, objInfo)
+	}
+
+	if !eof {
+		result.IsTruncated = true
+		if len(objInfos) > 0 {
+			result.NextMarker = objInfos[len(objInfos)-1].Name
+		}
+	}
+
+	return result, nil
+}
+
 func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {
+	if delimiter != slashSeparator && delimiter != "" {
+		return listObjectsNonSlash(ctx, obj, bucket, prefix, marker, delimiter, maxKeys, tpool, listDir, getObjInfo, getObjectInfoDirs...)
+	}
+
 	if err := checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, obj); err != nil {
 		return loi, err
 	}
@@ -272,7 +361,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 		recursive = false
 	}
 
-	walkResultCh, endWalkCh := tpool.Release(listParams{bucket, recursive, marker, prefix})
+	walkResultCh, endWalkCh := tpool.Release(listParams{bucket, recursive, marker, prefix, false})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, endWalkCh)
@@ -333,7 +422,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 	}
 
 	// Save list routine for the next marker if we haven't reached EOF.
-	params := listParams{bucket, recursive, nextMarker, prefix}
+	params := listParams{bucket, recursive, nextMarker, prefix, false}
 	if !eof {
 		tpool.Set(params, walkResultCh, endWalkCh)
 	}

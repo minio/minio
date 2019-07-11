@@ -29,7 +29,7 @@ import (
 	etcd "github.com/coreos/etcd/clientv3"
 	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/target/console"
 	"github.com/minio/minio/cmd/logger/target/http"
@@ -209,13 +209,6 @@ func handleCommonEnvVars() {
 		// if browser is turned off or on.
 		globalIsEnvBrowser = true
 		globalIsBrowserEnabled = bool(browserFlag)
-	}
-
-	traceFile := os.Getenv("MINIO_HTTP_TRACE")
-	if traceFile != "" {
-		var err error
-		globalHTTPTraceFile, err = os.OpenFile(traceFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0660)
-		logger.FatalIf(err, "error opening file %s", traceFile)
 	}
 
 	etcdEndpointsEnv, ok := os.LookupEnv("MINIO_ETCD_ENDPOINTS")

@@ -41,14 +41,14 @@ var (
 	gatewayCmd = cli.Command{
 		Name:            "gateway",
 		Usage:           "start object storage gateway",
-		Flags:           append(serverFlags, globalFlags...),
+		Flags:           append(ServerFlags, GlobalFlags...),
 		HideHelpCommand: true,
 	}
 )
 
 // RegisterGatewayCommand registers a new command for gateway.
 func RegisterGatewayCommand(cmd cli.Command) error {
-	cmd.Flags = append(append(cmd.Flags, append(cmd.Flags, serverFlags...)...), globalFlags...)
+	cmd.Flags = append(append(cmd.Flags, ServerFlags...), GlobalFlags...)
 	gatewayCmd.Subcommands = append(gatewayCmd.Subcommands, cmd)
 	return nil
 }
@@ -121,7 +121,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
 	// (non-)minio process is listening on IPv4 of given port.
 	// To avoid this error situation we check for port availability.
-	logger.FatalIf(checkPortAvailability(globalMinioPort), "Unable to start the gateway")
+	logger.FatalIf(checkPortAvailability(globalMinioHost, globalMinioPort), "Unable to start the gateway")
 
 	// Check and load TLS certificates.
 	var err error
@@ -147,6 +147,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	logger.LogIf(context.Background(), setMaxResources())
 
 	initNSLock(false) // Enable local namespace lock.
+
+	// Set when gateway is enabled
+	globalIsGateway = true
 
 	router := mux.NewRouter().SkipClean(true)
 
@@ -175,9 +178,10 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Currently only NAS and S3 gateway support encryption headers.
 	encryptionEnabled := gatewayName == "s3" || gatewayName == "nas"
+	allowSSEKMS := gatewayName == "s3" // Only S3 can support SSE-KMS (as pass-through)
 
 	// Add API router.
-	registerAPIRouter(router, encryptionEnabled)
+	registerAPIRouter(router, encryptionEnabled, allowSSEKMS)
 
 	var getCert certs.GetCertificateFunc
 	if globalTLSCerts != nil {
@@ -239,6 +243,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// This is only to uniquely identify each gateway deployments.
 	globalDeploymentID = os.Getenv("MINIO_GATEWAY_DEPLOYMENT_ID")
+	logger.SetDeploymentID(globalDeploymentID)
 
 	var cacheConfig = globalServerConfig.GetCacheConfig()
 	if len(cacheConfig.Drives) > 0 {

@@ -17,11 +17,11 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/tls"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/url"
 	"path"
 	"strconv"
@@ -44,32 +44,10 @@ func isNetworkError(err error) bool {
 	if err.Error() == errConnectionStale.Error() {
 		return true
 	}
-	if strings.Contains(err.Error(), "connection reset by peer") {
+	if _, ok := err.(*rest.NetworkError); ok {
 		return true
 	}
-	if uerr, isURLError := err.(*url.Error); isURLError {
-		if uerr.Timeout() {
-			return true
-		}
-
-		err = uerr.Err
-	}
-
-	_, isNetOpError := err.(*net.OpError)
-	return isNetOpError
-}
-
-// Attempt to approximate network error with a
-// typed network error, otherwise default to
-// errDiskNotFound
-func toNetworkError(err error) error {
-	if err == nil {
-		return err
-	}
-	if strings.Contains(err.Error(), "connection reset by peer") {
-		return errNetworkConnReset
-	}
-	return errDiskNotFound
+	return false
 }
 
 // Converts rpc.ServerError to underlying error. This function is
@@ -81,7 +59,7 @@ func toStorageErr(err error) error {
 	}
 
 	if isNetworkError(err) {
-		return toNetworkError(err)
+		return errDiskNotFound
 	}
 
 	switch err.Error() {
@@ -128,7 +106,7 @@ func toStorageErr(err error) error {
 		fmt.Sscanf(err.Error(), "Bitrot verification mismatch - expected %s received %s", &expected, &received)
 		// Go's Sscanf %s scans "," that comes after the expected hash, hence remove it. Providing "," in the format string does not help.
 		expected = strings.TrimSuffix(expected, ",")
-		bitrotErr := hashMismatchError{expected, received}
+		bitrotErr := HashMismatchError{expected, received}
 		return bitrotErr
 	}
 	return err
@@ -454,6 +432,39 @@ func (client *storageRESTClient) getInstanceID() (err error) {
 	}
 	client.instanceID = string(instanceIDBuf[:n])
 	return nil
+}
+
+func (client *storageRESTClient) VerifyFile(volume, path string, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, path)
+	values.Set(storageRESTBitrotAlgo, algo.String())
+	values.Set(storageRESTLength, strconv.Itoa(int(shardSize)))
+	if len(sum) != 0 {
+		values.Set(storageRESTBitrotHash, hex.EncodeToString(sum))
+	}
+	respBody, err := client.call(storageRESTMethodVerifyFile, values, nil, -1)
+	defer http.DrainBody(respBody)
+	if err != nil {
+		return err
+	}
+	reader := bufio.NewReader(respBody)
+	for {
+		b, err := reader.ReadByte()
+		if err != nil {
+			return err
+		}
+		if b != ' ' {
+			reader.UnreadByte()
+			break
+		}
+	}
+	verifyResp := &VerifyFileResp{}
+	err = gob.NewDecoder(reader).Decode(verifyResp)
+	if err != nil {
+		return err
+	}
+	return toStorageErr(verifyResp.Err)
 }
 
 // Close - marks the client as closed.

@@ -29,7 +29,7 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/minio/minio-go/pkg/encrypt"
+	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/ioutil"
@@ -1237,6 +1237,17 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		opts, err = getOpts(ctx, r, bucket, object)
 		opts.UserDefined = metadata
 		return
+	}
+	if crypto.S3KMS.IsRequested(r.Header) {
+		keyID, context, err := crypto.S3KMS.ParseHTTP(r.Header)
+		if err != nil {
+			return ObjectOptions{}, err
+		}
+		sseKms, err := encrypt.NewSSEKMS(keyID, context)
+		if err != nil {
+			return ObjectOptions{}, err
+		}
+		return ObjectOptions{ServerSideEncryption: sseKms, UserDefined: metadata}, nil
 	}
 	// default case of passing encryption headers and UserDefined metadata to backend
 	return getDefaultOpts(r.Header, false, metadata)

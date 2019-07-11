@@ -74,7 +74,6 @@ func handleSignals() {
 
 			exit(err == nil && oerr == nil)
 		case osSignal := <-globalOSSignalCh:
-			stopHTTPTrace()
 			logger.Info("Exiting on signal: %s", strings.ToUpper(osSignal.String()))
 			exit(stopProcess())
 		case signal := <-globalServiceSignalCh:
@@ -83,14 +82,12 @@ func handleSignals() {
 				// Ignore this at the moment.
 			case serviceRestart:
 				logger.Info("Restarting on service signal")
-				stopHTTPTrace()
 				stop := stopProcess()
 				rerr := restartProcess()
 				logger.LogIf(context.Background(), rerr)
 				exit(stop && rerr == nil)
 			case serviceStop:
 				logger.Info("Stopping on service signal")
-				stopHTTPTrace()
 				exit(stopProcess())
 			}
 		}

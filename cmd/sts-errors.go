@@ -19,12 +19,14 @@ package cmd
 import (
 	"encoding/xml"
 	"net/http"
+
+	xhttp "github.com/minio/minio/cmd/http"
 )
 
 // writeSTSErrorRespone writes error headers
 func writeSTSErrorResponse(w http.ResponseWriter, err STSError) {
 	// Generate error response.
-	stsErrorResponse := getSTSErrorResponse(err, w.Header().Get(responseRequestIDKey))
+	stsErrorResponse := getSTSErrorResponse(err, w.Header().Get(xhttp.AmzRequestID))
 	encodedErrorResponse := encodeResponse(stsErrorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
 }

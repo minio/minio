@@ -36,6 +36,7 @@ import (
 	"strings"
 	"time"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
 
@@ -59,16 +60,6 @@ func IsErr(err error, errs ...error) bool {
 	return false
 }
 
-// Close Http tracing file.
-func stopHTTPTrace() {
-	if globalHTTPTraceFile != nil {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("traceFile", globalHTTPTraceFile.Name())
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, globalHTTPTraceFile.Close())
-		globalHTTPTraceFile = nil
-	}
-}
-
 // make a copy of http.Header
 func cloneHeader(h http.Header) http.Header {
 	h2 := make(http.Header, len(h))
@@ -81,8 +72,20 @@ func cloneHeader(h http.Header) http.Header {
 	return h2
 }
 
+func request2BucketObjectName(r *http.Request) (bucketName, objectName string) {
+	path, err := getResource(r.URL.Path, r.Host, globalDomainNames)
+	if err != nil {
+		logger.CriticalIf(context.Background(), err)
+	}
+	return urlPath2BucketObjectName(path)
+}
+
 // Convert url path into bucket and object name.
 func urlPath2BucketObjectName(path string) (bucketName, objectName string) {
+	if path == "" || path == slashSeparator {
+		return "", ""
+	}
+
 	// Trim any preceding slash separator.
 	urlPath := strings.TrimPrefix(path, slashSeparator)
 
@@ -423,15 +426,15 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 		object = prefix
 	}
 	reqInfo := &logger.ReqInfo{
-		DeploymentID: w.Header().Get(responseDeploymentIDKey),
-		RequestID:    w.Header().Get(responseRequestIDKey),
+		DeploymentID: globalDeploymentID,
+		RequestID:    w.Header().Get(xhttp.AmzRequestID),
 		RemoteHost:   handlers.GetSourceIP(r),
 		UserAgent:    r.UserAgent(),
 		API:          api,
 		BucketName:   bucket,
 		ObjectName:   object,
 	}
-	return logger.SetReqInfo(context.Background(), reqInfo)
+	return logger.SetReqInfo(r.Context(), reqInfo)
 }
 
 // isNetworkOrHostDown - if there was a network error or if the host is down.

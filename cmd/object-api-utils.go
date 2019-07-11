@@ -34,8 +34,9 @@ import (
 	"unicode/utf8"
 
 	snappy "github.com/golang/snappy"
-	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/hash"
@@ -346,7 +347,7 @@ func isCompressible(header http.Header, object string) bool {
 // Eliminate the non-compressible objects.
 func excludeForCompression(header http.Header, object string) bool {
 	objStr := object
-	contentType := header.Get("Content-Type")
+	contentType := header.Get(xhttp.ContentType)
 	if globalIsCompressionEnabled {
 		// We strictly disable compression for standard extensions/content-types (`compressed`).
 		if hasStringSuffixInSlice(objStr, standardExcludeCompressExtensions) || hasPattern(standardExcludeCompressContentTypes, contentType) {
@@ -792,4 +793,19 @@ func (cr *snappyCompressReader) Read(p []byte) (int, error) {
 		err = readErr
 	}
 	return n, err
+}
+
+// Returns error if the cancelCh has been closed (indicating that S3 client has disconnected)
+type detectDisconnect struct {
+	io.ReadCloser
+	cancelCh <-chan struct{}
+}
+
+func (d *detectDisconnect) Read(p []byte) (int, error) {
+	select {
+	case <-d.cancelCh:
+		return 0, io.ErrUnexpectedEOF
+	default:
+		return d.ReadCloser.Read(p)
+	}
 }

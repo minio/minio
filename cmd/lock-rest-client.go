@@ -28,7 +28,7 @@ import (
 
 	"net/url"
 
-	"github.com/minio/dsync"
+	"github.com/minio/dsync/v2"
 	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"

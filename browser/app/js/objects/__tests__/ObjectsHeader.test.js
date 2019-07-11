@@ -17,6 +17,7 @@
 import React from "react"
 import { shallow } from "enzyme"
 import { ObjectsHeader } from "../ObjectsHeader"
+import { SORT_ORDER_ASC, SORT_ORDER_DESC } from "../../constants"
 
 describe("ObjectsHeader", () => {
   it("should render without crashing", () => {
@@ -24,44 +25,84 @@ describe("ObjectsHeader", () => {
     shallow(<ObjectsHeader sortObjects={sortObjects} />)
   })
 
-  it("should render columns with asc classes by default", () => {
+  it("should render the name column with asc class when objects are sorted by name asc", () => {
     const sortObjects = jest.fn()
-    const wrapper = shallow(<ObjectsHeader sortObjects={sortObjects} />)
+    const wrapper = shallow(
+      <ObjectsHeader
+        sortObjects={sortObjects}
+        sortedByName={true}
+        sortOrder={SORT_ORDER_ASC}
+      />
+    )
     expect(
       wrapper.find("#sort-by-name i").hasClass("fa-sort-alpha-asc")
     ).toBeTruthy()
-    expect(
-      wrapper.find("#sort-by-size i").hasClass("fa-sort-amount-asc")
-    ).toBeTruthy()
-    expect(
-      wrapper.find("#sort-by-last-modified i").hasClass("fa-sort-numeric-asc")
-    ).toBeTruthy()
   })
 
-  it("should render name column with desc class when objects are sorted by name", () => {
+  it("should render the name column with desc class when objects are sorted by name desc", () => {
     const sortObjects = jest.fn()
     const wrapper = shallow(
-      <ObjectsHeader sortObjects={sortObjects} sortNameOrder={true} />
+      <ObjectsHeader
+        sortObjects={sortObjects}
+        sortedByName={true}
+        sortOrder={SORT_ORDER_DESC}
+      />
     )
     expect(
       wrapper.find("#sort-by-name i").hasClass("fa-sort-alpha-desc")
     ).toBeTruthy()
   })
 
-  it("should render size column with desc class when objects are sorted by size", () => {
+  it("should render the size column with asc class when objects are sorted by size asc", () => {
     const sortObjects = jest.fn()
     const wrapper = shallow(
-      <ObjectsHeader sortObjects={sortObjects} sortSizeOrder={true} />
+      <ObjectsHeader
+        sortObjects={sortObjects}
+        sortedBySize={true}
+        sortOrder={SORT_ORDER_ASC}
+      />
+    )
+    expect(
+      wrapper.find("#sort-by-size i").hasClass("fa-sort-amount-asc")
+    ).toBeTruthy()
+  })
+
+  it("should render the size column with desc class when objects are sorted by size desc", () => {
+    const sortObjects = jest.fn()
+    const wrapper = shallow(
+      <ObjectsHeader
+        sortObjects={sortObjects}
+        sortedBySize={true}
+        sortOrder={SORT_ORDER_DESC}
+      />
     )
     expect(
       wrapper.find("#sort-by-size i").hasClass("fa-sort-amount-desc")
     ).toBeTruthy()
   })
 
-  it("should render last modified column with desc class when objects are sorted by last modified", () => {
+  it("should render the date column with asc class when objects are sorted by date asc", () => {
     const sortObjects = jest.fn()
     const wrapper = shallow(
-      <ObjectsHeader sortObjects={sortObjects} sortLastModifiedOrder={true} />
+      <ObjectsHeader
+        sortObjects={sortObjects}
+        sortedByLastModified={true}
+        sortOrder={SORT_ORDER_ASC}
+      />
+    )
+    expect(
+      wrapper.find("#sort-by-last-modified i").hasClass("fa-sort-numeric-asc")
+    ).toBeTruthy()
+  })
+
+  it("should render the date column with desc class when objects are sorted by date desc", () => {
+    const sortObjects = jest.fn()
+    const wrapper = shallow(
+      <ObjectsHeader
+        sortObjects={sortObjects}
+        sortedByLastModified={true}
+        sortOrder={SORT_ORDER_DESC}
+      />
     )
     expect(
       wrapper.find("#sort-by-last-modified i").hasClass("fa-sort-numeric-desc")

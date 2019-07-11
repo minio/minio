@@ -43,6 +43,9 @@ header.fesl-row {
                 color: @dark-gray;
                 font-size: 14px;
             }
+            & > .fesli-sort--active {
+                .opacity(0.5);
+            }
 
             &:hover:not(.fesl-item-actions) {
                 background: lighten(@text-muted-color, 22%);

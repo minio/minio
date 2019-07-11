@@ -27,7 +27,7 @@ import (
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"google.golang.org/api/googleapi"
 
-	minio "github.com/minio/minio-go"
+	minio "github.com/minio/minio-go/v6"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -51,6 +51,7 @@ type APIErrorResponse struct {
 	Key        string `xml:"Key,omitempty" json:"Key,omitempty"`
 	BucketName string `xml:"BucketName,omitempty" json:"BucketName,omitempty"`
 	Resource   string
+	Region     string `xml:"Region,omitempty" json:"Region,omitempty"`
 	RequestID  string `xml:"RequestId" json:"RequestId"`
 	HostID     string `xml:"HostId" json:"HostId"`
 }
@@ -879,16 +880,6 @@ var errorCodes = errorCodeMap{
 		Description:    "Object name already exists as a directory.",
 		HTTPStatusCode: http.StatusConflict,
 	},
-	ErrReadQuorum: {
-		Code:           "XMinioReadQuorum",
-		Description:    "Multiple disk failures, unable to reconstruct data.",
-		HTTPStatusCode: http.StatusServiceUnavailable,
-	},
-	ErrWriteQuorum: {
-		Code:           "XMinioWriteQuorum",
-		Description:    "Multiple disks failures, unable to write data.",
-		HTTPStatusCode: http.StatusServiceUnavailable,
-	},
 	ErrInvalidObjectName: {
 		Code:           "XMinioInvalidObjectName",
 		Description:    "Object name contains unsupported characters.",
@@ -1534,7 +1525,7 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrKMSAuthFailure
 	case errOperationTimedOut, context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
-	case errNetworkConnReset:
+	case errDiskNotFound:
 		apiErr = ErrSlowDown
 	}
 
@@ -1593,9 +1584,9 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	case InvalidPart:
 		apiErr = ErrInvalidPart
 	case InsufficientWriteQuorum:
-		apiErr = ErrWriteQuorum
+		apiErr = ErrSlowDown
 	case InsufficientReadQuorum:
-		apiErr = ErrReadQuorum
+		apiErr = ErrSlowDown
 	case UnsupportedDelimiter:
 		apiErr = ErrNotImplemented
 	case InvalidMarkerPrefixCombination:
@@ -1745,6 +1736,7 @@ func getAPIErrorResponse(ctx context.Context, err APIError, resource, requestID,
 		BucketName: reqInfo.BucketName,
 		Key:        reqInfo.ObjectName,
 		Resource:   resource,
+		Region:     globalServerConfig.GetRegion(),
 		RequestID:  requestID,
 		HostID:     hostID,
 	}

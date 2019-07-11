@@ -48,7 +48,7 @@ func registerDistXLRouters(router *mux.Router, endpoints EndpointList) {
 
 // List of some generic handlers which are applied for all incoming requests.
 var globalHandlers = []HandlerFunc{
-	// set x-amz-request-id, x-minio-deployment-id header.
+	// set x-amz-request-id header.
 	addCustomHeaders,
 	// set HTTP security headers such as Content-Security-Policy.
 	addSecurityHeaders,
@@ -119,8 +119,9 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 		}
 	}
 
-	// Add API router, additionally all server mode support encryption.
-	registerAPIRouter(router, true)
+	// Add API router, additionally all server mode support encryption
+	// but don't allow SSE-KMS.
+	registerAPIRouter(router, true, false)
 
 	// Register rest of the handlers.
 	return registerHandlers(router, globalHandlers...), nil

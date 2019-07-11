@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/pkg/encrypt"
+	"github.com/minio/minio-go/v6/pkg/encrypt"
 	minio "github.com/minio/minio/cmd"
 
 	"github.com/minio/minio/cmd/logger"
@@ -442,7 +442,8 @@ func (l *s3EncObjects) PutObject(ctx context.Context, bucket string, object stri
 	// Decide if sse options needed to be passed to backend
 	if opts.ServerSideEncryption != nil &&
 		((minio.GlobalGatewaySSE.SSEC() && opts.ServerSideEncryption.Type() == encrypt.SSEC) ||
-			(minio.GlobalGatewaySSE.SSES3() && opts.ServerSideEncryption.Type() == encrypt.S3)) {
+			(minio.GlobalGatewaySSE.SSES3() && opts.ServerSideEncryption.Type() == encrypt.S3) ||
+			opts.ServerSideEncryption.Type() == encrypt.KMS) {
 		sseOpts = opts.ServerSideEncryption
 	}
 	if opts.ServerSideEncryption == nil {

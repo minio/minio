@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"testing"
 
-	b2 "github.com/minio/blazer/base"
-
 	minio "github.com/minio/minio/cmd"
 )
 
@@ -41,75 +39,104 @@ func TestB2ObjectError(t *testing.T) {
 		{
 			[]string{}, fmt.Errorf("Non B2 Error"), fmt.Errorf("Non B2 Error"),
 		},
+	}
+
+	for i, testCase := range testCases {
+		actualErr := b2ToObjectError(testCase.b2Err, testCase.params...)
+		if actualErr != nil {
+			if actualErr.Error() != testCase.expectedErr.Error() {
+				t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.expectedErr, actualErr)
+			}
+		}
+	}
+}
+
+// Test b2 msg code to object error.
+func TestB2MsgCodeToObjectError(t *testing.T) {
+	testCases := []struct {
+		params      []string
+		code        int
+		msgCode     string
+		msg         string
+		expectedErr error
+	}{
 		{
-			[]string{"bucket"}, b2.Error{
-				StatusCode: 1,
-				Code:       "duplicate_bucket_name",
-			}, minio.BucketAlreadyOwnedByYou{
+			[]string{"bucket"},
+			1,
+			"duplicate_bucket_name",
+			"",
+			minio.BucketAlreadyOwnedByYou{
 				Bucket: "bucket",
 			},
 		},
 		{
-			[]string{"bucket"}, b2.Error{
-				StatusCode: 1,
-				Code:       "bad_request",
-			}, minio.BucketNotFound{
+			[]string{"bucket"},
+			1,
+			"bad_request",
+			"",
+			minio.BucketNotFound{
 				Bucket: "bucket",
 			},
 		},
 		{
-			[]string{"bucket", "object"}, b2.Error{
-				StatusCode: 1,
-				Code:       "bad_request",
-			}, minio.ObjectNameInvalid{
+			[]string{"bucket", "object"},
+			1,
+			"bad_request",
+			"",
+			minio.ObjectNameInvalid{
 				Bucket: "bucket",
 				Object: "object",
 			},
 		},
 		{
-			[]string{"bucket"}, b2.Error{
-				StatusCode: 1,
-				Code:       "bad_bucket_id",
-			}, minio.BucketNotFound{Bucket: "bucket"},
+			[]string{"bucket"},
+			1,
+			"bad_bucket_id",
+			"",
+			minio.BucketNotFound{Bucket: "bucket"},
 		},
 		{
-			[]string{"bucket", "object"}, b2.Error{
-				StatusCode: 1,
-				Code:       "file_not_present",
-			}, minio.ObjectNotFound{
+			[]string{"bucket", "object"},
+			1,
+			"file_not_present",
+			"",
+			minio.ObjectNotFound{
 				Bucket: "bucket",
 				Object: "object",
 			},
 		},
 		{
-			[]string{"bucket", "object"}, b2.Error{
-				StatusCode: 1,
-				Code:       "not_found",
-			}, minio.ObjectNotFound{
+			[]string{"bucket", "object"},
+			1,
+			"not_found",
+			"",
+			minio.ObjectNotFound{
 				Bucket: "bucket",
 				Object: "object",
 			},
 		},
 		{
-			[]string{"bucket"}, b2.Error{
-				StatusCode: 1,
-				Code:       "cannot_delete_non_empty_bucket",
-			}, minio.BucketNotEmpty{
+			[]string{"bucket"},
+			1,
+			"cannot_delete_non_empty_bucket",
+			"",
+			minio.BucketNotEmpty{
 				Bucket: "bucket",
 			},
 		},
 		{
-			[]string{"bucket", "object", "uploadID"}, b2.Error{
-				StatusCode: 1,
-				Message:    "No active upload for",
-			}, minio.InvalidUploadID{
+			[]string{"bucket", "object", "uploadID"},
+			1,
+			"",
+			"No active upload for",
+			minio.InvalidUploadID{
 				UploadID: "uploadID",
 			},
 		},
 	}
 
 	for i, testCase := range testCases {
-		actualErr := b2ToObjectError(testCase.b2Err, testCase.params...)
+		actualErr := b2MsgCodeToObjectError(testCase.code, testCase.msgCode, testCase.msg, testCase.params...)
 		if actualErr != nil {
 			if actualErr.Error() != testCase.expectedErr.Error() {
 				t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.expectedErr, actualErr)

@@ -54,8 +54,8 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/gorilla/mux"
-	"github.com/minio/minio-go/pkg/s3signer"
-	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/s3signer"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bpool"
@@ -470,6 +470,9 @@ func resetGlobalStorageEnvs() {
 
 // reset global heal state
 func resetGlobalHealState() {
+	if globalAllHealState == nil {
+		return
+	}
 	globalAllHealState.Lock()
 	defer globalAllHealState.Unlock()
 	for _, v := range globalAllHealState.healSeqMap {
@@ -2132,7 +2135,7 @@ func registerBucketLevelFunc(bucket *mux.Router, api objectAPIHandlers, apiFunct
 func registerAPIFunctions(muxRouter *mux.Router, objLayer ObjectLayer, apiFunctions ...string) {
 	if len(apiFunctions) == 0 {
 		// Register all api endpoints by default.
-		registerAPIRouter(muxRouter, true)
+		registerAPIRouter(muxRouter, true, false)
 		return
 	}
 	// API Router.
@@ -2173,7 +2176,7 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 		registerAPIFunctions(muxRouter, objLayer, apiFunctions...)
 		return muxRouter
 	}
-	registerAPIRouter(muxRouter, true)
+	registerAPIRouter(muxRouter, true, false)
 	return muxRouter
 }
 

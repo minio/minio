@@ -21,10 +21,11 @@ import (
 	"os"
 	"strings"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 
-	minio "github.com/minio/minio-go"
+	minio "github.com/minio/minio-go/v6"
 )
 
 var (
@@ -166,7 +167,7 @@ func FromMinioClientListMultipartsInfo(lmur minio.ListMultipartUploadsResult) Li
 // FromMinioClientObjectInfo converts minio ObjectInfo to gateway ObjectInfo
 func FromMinioClientObjectInfo(bucket string, oi minio.ObjectInfo) ObjectInfo {
 	userDefined := FromMinioClientMetadata(oi.Metadata)
-	userDefined["Content-Type"] = oi.ContentType
+	userDefined[xhttp.ContentType] = oi.ContentType
 
 	return ObjectInfo{
 		Bucket:          bucket,
@@ -176,7 +177,7 @@ func FromMinioClientObjectInfo(bucket string, oi minio.ObjectInfo) ObjectInfo {
 		ETag:            canonicalizeETag(oi.ETag),
 		UserDefined:     userDefined,
 		ContentType:     oi.ContentType,
-		ContentEncoding: oi.Metadata.Get("Content-Encoding"),
+		ContentEncoding: oi.Metadata.Get(xhttp.ContentEncoding),
 		StorageClass:    oi.StorageClass,
 		Expires:         oi.Expires,
 	}

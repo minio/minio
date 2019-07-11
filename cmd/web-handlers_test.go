@@ -35,7 +35,7 @@ import (
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	humanize "github.com/dustin/go-humanize"
-	miniogopolicy "github.com/minio/minio-go/pkg/policy"
+	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/policy/condition"
@@ -701,18 +701,21 @@ func testSetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	}
 
 	testCases := []struct {
-		username string
-		password string
-		success  bool
+		currentAccessKey string
+		currentSecretKey string
+		newAccessKey     string
+		newSecretKey     string
+		success          bool
 	}{
-		{"", "", false},
-		{"1", "1", false},
-		{"azerty", "foooooooooooooo", true},
+		{"", "", "", "", false},
+		{"1", "1", "1", "1", false},
+		{credentials.AccessKey, credentials.SecretKey, "azerty", "bar", false},
+		{credentials.AccessKey, credentials.SecretKey, "azerty", "foooooooooooooo", true},
 	}
 
 	// Iterating over the test cases, calling the function under test and asserting the response.
 	for i, testCase := range testCases {
-		setAuthRequest := SetAuthArgs{AccessKey: testCase.username, SecretKey: testCase.password}
+		setAuthRequest := SetAuthArgs{CurrentAccessKey: testCase.currentAccessKey, CurrentSecretKey: testCase.currentSecretKey, NewAccessKey: testCase.newAccessKey, NewSecretKey: testCase.newSecretKey}
 		setAuthReply := &SetAuthReply{}
 		req, err := newTestWebRPCRequest("Web.SetAuth", authorization, setAuthRequest)
 		if err != nil {
@@ -732,42 +735,6 @@ func testSetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 		if testCase.success && setAuthReply.Token == "" {
 			t.Fatalf("Test %d: Failed to set auth keys", i+1)
 		}
-	}
-}
-
-// Wrapper for calling Get Auth Handler
-func TestWebHandlerGetAuth(t *testing.T) {
-	ExecObjectLayerTest(t, testGetAuthWebHandler)
-}
-
-// testGetAuthWebHandler - Test GetAuth web handler
-func testGetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// Register the API end points with XL/FS object layer.
-	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
-
-	rec := httptest.NewRecorder()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
-	if err != nil {
-		t.Fatal("Cannot authenticate")
-	}
-
-	getAuthRequest := WebGenericArgs{}
-	getAuthReply := &GetAuthReply{}
-	req, err := newTestWebRPCRequest("Web.GetAuth", authorization, getAuthRequest)
-	if err != nil {
-		t.Fatalf("Failed to create HTTP request: <ERROR> %v", err)
-	}
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
-	}
-	err = getTestWebRPCResponse(rec, &getAuthReply)
-	if err != nil {
-		t.Fatalf("Failed, %v", err)
-	}
-	if getAuthReply.AccessKey != credentials.AccessKey || getAuthReply.SecretKey != credentials.SecretKey {
-		t.Fatalf("Failed to get correct auth keys")
 	}
 }
 
@@ -1518,7 +1485,7 @@ func TestWebCheckAuthorization(t *testing.T) {
 	webRPCs := []string{
 		"ServerInfo", "StorageInfo", "MakeBucket",
 		"ListBuckets", "ListObjects", "RemoveObject",
-		"GenerateAuth", "SetAuth", "GetAuth",
+		"GenerateAuth", "SetAuth",
 		"GetBucketPolicy", "SetBucketPolicy", "ListAllBucketPolicies",
 		"PresignedGet",
 	}

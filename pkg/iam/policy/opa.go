@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 
@@ -121,14 +122,36 @@ func (o *Opa) IsAllowed(args Args) bool {
 	}
 	defer o.args.CloseRespFn(resp.Body)
 
-	// Handle OPA response
-	type opaResponse struct {
-		Allow bool `json:"allow"`
-	}
-	var result opaResponse
-	if err = json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	// Read the body to be saved later.
+	opaRespBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
 		return false
 	}
 
-	return result.Allow
+	// Handle large OPA responses when OPA URL is of
+	// form http://localhost:8181/v1/data/httpapi/authz
+	type opaResultAllow struct {
+		Result struct {
+			Allow bool `json:"allow"`
+		} `json:"result"`
+	}
+
+	// Handle simpler OPA responses when OPA URL is of
+	// form http://localhost:8181/v1/data/httpapi/authz/allow
+	type opaResult struct {
+		Result bool `json:"result"`
+	}
+
+	respBody := bytes.NewReader(opaRespBytes)
+
+	var result opaResult
+	if err = json.NewDecoder(respBody).Decode(&result); err != nil {
+		respBody.Seek(0, 0)
+		var resultAllow opaResultAllow
+		if err = json.NewDecoder(respBody).Decode(&resultAllow); err != nil {
+			return false
+		}
+		return resultAllow.Result.Allow
+	}
+	return result.Result
 }
