@@ -27,6 +27,7 @@ require (
 	github.com/fatih/color v1.7.0
 	github.com/fatih/structs v1.1.0
 	github.com/go-sql-driver/mysql v1.4.1
+	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
 	github.com/golang/snappy v0.0.1
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/gorilla/handlers v1.4.0
@@ -80,7 +81,6 @@ require (
 	github.com/rs/cors v1.6.0
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	github.com/satori/go.uuid v1.2.0 // indirect
-	github.com/segmentio/go-prompt v1.2.1-0.20161017233205-f0d19b6901ad
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e
 	github.com/streadway/amqp v0.0.0-20190402114354-16ed540749f6
 	github.com/tidwall/gjson v1.2.1
@@ -91,10 +91,8 @@ require (
 	go.etcd.io/bbolt v1.3.3 // indirect
 	go.uber.org/atomic v1.3.2
 	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
-	golang.org/x/lint v0.0.0-20190409202823-959b441ac422 // indirect
 	golang.org/x/net v0.0.0-20190628185345-da137c7871d7 // indirect
 	golang.org/x/sys v0.0.0-20190626221950-04f50cda93cb
-	golang.org/x/tools v0.0.0-20190703212419-2214986f1668 // indirect
 	google.golang.org/api v0.4.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
 	gopkg.in/olivere/elastic.v5 v5.0.80

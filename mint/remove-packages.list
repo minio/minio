@@ -1,0 +1,9 @@
+wget
+git
+python3-pip
+ruby-dev
+ruby-bundler
+default-jdk
+ant
+dotnet
+nuget
