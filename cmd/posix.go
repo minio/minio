@@ -1526,7 +1526,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 	return nil
 }
 
-func (s *posix) VerifyFile(volume, path string, algo BitrotAlgorithm, sum []byte, shardSize int64) (err error) {
+func (s *posix) VerifyFile(volume, path string, empty bool, algo BitrotAlgorithm, sum []byte, shardSize int64) (err error) {
 	defer func() {
 		if err == errFaultyDisk {
 			atomic.AddInt32(&s.ioErrCount, 1)
@@ -1546,7 +1546,7 @@ func (s *posix) VerifyFile(volume, path string, algo BitrotAlgorithm, sum []byte
 		return err
 	}
 	// Stat a volume entry.
-	_, err = os.Stat((volumeDir))
+	_, err = os.Stat(volumeDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
@@ -1556,12 +1556,12 @@ func (s *posix) VerifyFile(volume, path string, algo BitrotAlgorithm, sum []byte
 
 	// Validate effective path length before reading.
 	filePath := pathJoin(volumeDir, path)
-	if err = checkPathLength((filePath)); err != nil {
+	if err = checkPathLength(filePath); err != nil {
 		return err
 	}
 
 	// Open the file for reading.
-	file, err := os.Open((filePath))
+	file, err := os.Open(filePath)
 	if err != nil {
 		switch {
 		case os.IsNotExist(err):
@@ -1601,6 +1601,11 @@ func (s *posix) VerifyFile(volume, path string, algo BitrotAlgorithm, sum []byte
 	if err != nil {
 		return err
 	}
+
+	if empty && fi.Size() != 0 || !empty && fi.Size() == 0 {
+		return errFileUnexpectedSize
+	}
+
 	size := fi.Size()
 	for {
 		if size == 0 {

@@ -195,6 +195,9 @@ func shouldHealObjectOnDisk(xlErr, dataErr error, meta xlMetaV1, quorumModTime t
 		if dataErr == errFileNotFound {
 			return true
 		}
+		if dataErr == errFileUnexpectedSize {
+			return true
+		}
 		if _, ok := dataErr.(HashMismatchError); ok {
 			return true
 		}
