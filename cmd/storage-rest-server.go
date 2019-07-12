@@ -520,6 +520,11 @@ func (s *storageRESTServer) VerifyFile(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	volume := vars[storageRESTVolume]
 	filePath := vars[storageRESTFilePath]
+	empty, err := strconv.ParseBool(vars[storageRESTEmpty])
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
 	shardSize, err := strconv.Atoi(vars[storageRESTLength])
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -542,7 +547,7 @@ func (s *storageRESTServer) VerifyFile(w http.ResponseWriter, r *http.Request) {
 	algo := BitrotAlgorithmFromString(algoStr)
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
 	doneCh := sendWhiteSpaceVerifyFile(w)
-	err = s.storage.VerifyFile(volume, filePath, algo, hash, int64(shardSize))
+	err = s.storage.VerifyFile(volume, filePath, empty, algo, hash, int64(shardSize))
 	<-doneCh
 	gob.NewEncoder(w).Encode(VerifyFileResp{err})
 }

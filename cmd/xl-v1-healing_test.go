@@ -107,7 +107,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Fatalf("Failed to complete multipart upload - %v", err)
 	}
 
-	// Remove the object backend files from the first disk.
+	// Test 1: Remove the object backend files from the first disk.
 	xl := obj.(*xlObjects)
 	firstDisk := xl.storageDisks[0]
 	err = firstDisk.DeleteFile(bucket, filepath.Join(object, xlMetaJSONFile))
@@ -125,7 +125,34 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Errorf("Expected xl.json file to be present but stat failed - %v", err)
 	}
 
-	// Delete xl.json from more than read quorum number of disks, to create a corrupted situation.
+	// Test 2: Heal when part.1 is empty
+	partSt1, err := firstDisk.StatFile(bucket, filepath.Join(object, "part.1"))
+	if err != nil {
+		t.Errorf("Expected part.1 file to be present but stat failed - %v", err)
+	}
+	err = firstDisk.DeleteFile(bucket, filepath.Join(object, "part.1"))
+	if err != nil {
+		t.Errorf("Failure during part.1 removal - %v", err)
+	}
+	err = firstDisk.AppendFile(bucket, filepath.Join(object, "part.1"), []byte{})
+	if err != nil {
+		t.Errorf("Failure during creating part.1 - %v", err)
+	}
+	_, err = obj.HealObject(context.Background(), bucket, object, false, true, madmin.HealDeepScan)
+	if err != nil {
+		t.Errorf("Expected nil but received %v", err)
+	}
+	partSt2, err := firstDisk.StatFile(bucket, filepath.Join(object, "part.1"))
+	if err != nil {
+		t.Errorf("Expected from part.1 file to be present but stat failed - %v", err)
+	}
+	if partSt1.Size != partSt2.Size {
+		t.Errorf("part.1 file size is not the same before and after heal")
+	}
+
+	// Test 3: checks if HealObject returns an error when xl.json is not found
+	// in more than read quorum number of disks, to create a corrupted situation.
+
 	for i := 0; i <= len(xl.storageDisks)/2; i++ {
 		xl.storageDisks[i].DeleteFile(bucket, filepath.Join(object, xlMetaJSONFile))
 	}
