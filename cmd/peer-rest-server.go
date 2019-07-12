@@ -717,17 +717,23 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	trcAll := r.URL.Query().Get(peerRESTTraceAll) == "true"
+	trcErr := r.URL.Query().Get(peerRESTTraceErr) == "true"
 
 	w.Header().Set(xhttp.Connection, "close")
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
 
 	filter := func(entry interface{}) bool {
+		trcInfo := entry.(trace.Info)
+
+		if trcErr && isHTTPStatusOK(trcInfo.RespInfo.StatusCode) {
+			return false
+		}
 		if trcAll {
 			return true
 		}
-		trcInfo := entry.(trace.Info)
 		return !strings.HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath)
+
 	}
 
 	doneCh := make(chan struct{})

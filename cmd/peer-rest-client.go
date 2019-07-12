@@ -467,9 +467,10 @@ func (client *peerRESTClient) BackgroundHealStatus() (madmin.BgHealState, error)
 	return state, err
 }
 
-func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan struct{}, trcAll bool) {
+func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan struct{}, trcAll, trcErr bool) {
 	values := make(url.Values)
 	values.Set(peerRESTTraceAll, strconv.FormatBool(trcAll))
+	values.Set(peerRESTTraceErr, strconv.FormatBool(trcErr))
 
 	// To cancel the REST request in case doneCh gets closed.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -507,10 +508,10 @@ func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan stru
 }
 
 // Trace - send http trace request to peer nodes
-func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh chan struct{}, trcAll bool) {
+func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh chan struct{}, trcAll, trcErr bool) {
 	go func() {
 		for {
-			client.doTrace(traceCh, doneCh, trcAll)
+			client.doTrace(traceCh, doneCh, trcAll, trcErr)
 			select {
 			case <-doneCh:
 				return

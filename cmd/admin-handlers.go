@@ -1465,6 +1465,7 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HTTPTrace")
 	trcAll := r.URL.Query().Get("all") == "true"
+	trcErr := r.URL.Query().Get("err") == "true"
 
 	// Validate request signature.
 	adminAPIErr := checkAdminRequestAuthType(ctx, r, "")
@@ -1487,11 +1488,15 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	traceCh := make(chan interface{}, 4000)
 
 	filter := func(entry interface{}) bool {
+		trcInfo := entry.(trace.Info)
+		if trcErr && isHTTPStatusOK(trcInfo.RespInfo.StatusCode) {
+			return false
+		}
 		if trcAll {
 			return true
 		}
-		trcInfo := entry.(trace.Info)
 		return !strings.HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath)
+
 	}
 	remoteHosts := getRemoteHosts(globalEndpoints)
 	peers, err := getRestClients(remoteHosts)
@@ -1501,7 +1506,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	globalHTTPTrace.Subscribe(traceCh, doneCh, filter)
 
 	for _, peer := range peers {
-		peer.Trace(traceCh, doneCh, trcAll)
+		peer.Trace(traceCh, doneCh, trcAll, trcErr)
 	}
 
 	enc := json.NewEncoder(w)
