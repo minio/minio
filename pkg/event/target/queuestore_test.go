@@ -33,7 +33,7 @@ var queueDir = filepath.Join(os.TempDir(), "minio_test")
 var testEvent = event.Event{EventVersion: "1.0", EventSource: "test_source", AwsRegion: "test_region", EventTime: "test_time", EventName: event.ObjectAccessedGet}
 
 // Initialize the store.
-func setUpStore(directory string, limit uint16) (Store, error) {
+func setUpStore(directory string, limit uint64) (Store, error) {
 	store := NewQueueStore(queueDir, limit)
 	if oErr := store.Open(); oErr != nil {
 		return nil, oErr

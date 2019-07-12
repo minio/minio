@@ -37,7 +37,7 @@ type KafkaArgs struct {
 	Brokers    []xnet.Host `json:"brokers"`
 	Topic      string      `json:"topic"`
 	QueueDir   string      `json:"queueDir"`
-	QueueLimit uint16      `json:"queueLimit"`
+	QueueLimit uint64      `json:"queueLimit"`
 	TLS        struct {
 		Enable     bool               `json:"enable"`
 		SkipVerify bool               `json:"skipVerify"`

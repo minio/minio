@@ -56,7 +56,9 @@
 				"enable": false,
 				"format": "",
 				"url": "",
-				"index": ""
+				"index": "",
+                                "queueDir": "",
+                                "queueLimit": 0
 			}
 		},
 		"kafka": {
