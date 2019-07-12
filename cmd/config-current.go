@@ -369,7 +369,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewNSQTarget(k, v)
+		t, err := target.NewNSQTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("nsq(%s): %s", k, err.Error())
 		}
@@ -724,7 +724,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.NSQ {
 		if args.Enable {
-			newTarget, err := target.NewNSQTarget(id, args)
+			newTarget, err := target.NewNSQTarget(id, args, GlobalServiceDoneCh)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue

@@ -17,70 +17,9 @@
 package target
 
 import (
-	"reflect"
-	"testing"
-
-	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/net"
 	xnet "github.com/minio/minio/pkg/net"
-	"github.com/nsqio/go-nsq"
+	"testing"
 )
-
-func TestNewNSQTarget(t *testing.T) {
-	type args struct {
-		id   string
-		args NSQArgs
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    *NSQTarget
-		wantErr bool
-	}{
-		{
-			name: "test1",
-			args: args{
-				id: "id",
-				args: NSQArgs{
-					Enable: true,
-					Topic:  "",
-					TLS: struct {
-						Enable     bool `json:"enable"`
-						SkipVerify bool `json:"skipVerify"`
-					}{true, true},
-				},
-			},
-			want: &NSQTarget{
-				id: event.TargetID{ID: "id", Name: "nsq"},
-				args: NSQArgs{
-					Enable:      true,
-					NSQDAddress: net.Host{},
-					Topic:       "",
-					TLS: struct {
-						Enable     bool `json:"enable"`
-						SkipVerify bool `json:"skipVerify"`
-					}{true, true},
-				},
-				producer: &nsq.Producer{},
-			},
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewNSQTarget(tt.args.id, tt.args.args)
-			// dirty hack, otherwhise cannot compare the pointers:
-			tt.want.producer = got.producer
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewNSQTarget() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewNSQTarget() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 
 func TestNSQArgs_Validate(t *testing.T) {
 	type fields struct {
