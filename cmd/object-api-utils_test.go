@@ -113,7 +113,6 @@ func TestIsValidObjectName(t *testing.T) {
 		// passing invalid object names.
 		{"", false},
 		{"a/b/c/", false},
-		{"/a/b/c", false},
 		{"../../etc", false},
 		{"../../", false},
 		{"/../../etc", false},
