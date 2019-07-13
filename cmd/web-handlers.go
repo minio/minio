@@ -1491,6 +1491,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
 	}
+
 	// For authenticated users apply IAM policy.
 	if !globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     claims.Subject,
@@ -1583,12 +1584,19 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 		return toJSONError(ctx, errServerNotInitialized)
 	}
 
-	_, owner, authErr := webRequestAuthenticate(r)
+	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
 	}
 
-	if !owner {
+	// For authenticated users apply IAM policy.
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     claims.Subject,
+		Action:          iampolicy.GetBucketPolicyAction,
+		BucketName:      args.BucketName,
+		ConditionValues: getConditionValues(r, "", claims.Subject),
+		IsOwner:         owner,
+	}) {
 		return toJSONError(ctx, errAccessDenied)
 	}
 
