@@ -77,7 +77,7 @@ ENVIRONMENT VARIABLES:
 
 EXAMPLES:
   1. Start minio gateway server for AWS S3 backend.
-     {{.Prompt}} {{.EnvVarSetCommand}}MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
      {{.Prompt}} {{.EnvVarSetCommand}}MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
      {{.Prompt}} {{.HelpName}}
 
