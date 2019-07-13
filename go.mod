@@ -53,7 +53,7 @@ require (
 	github.com/marstr/guid v1.1.0 // indirect
 	github.com/mattn/go-isatty v0.0.7
 	github.com/miekg/dns v1.1.8
-	github.com/minio/cli v1.20.0
+	github.com/minio/cli v1.21.0
 	github.com/minio/dsync/v2 v2.0.0
 	github.com/minio/hdfs/v3 v3.0.0
 	github.com/minio/highwayhash v1.0.0
