@@ -111,7 +111,7 @@ EXAMPLES:
 
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               azureBackend,
-		Usage:              "Microsoft Azure Blob Storage.",
+		Usage:              "Microsoft Azure Blob Storage",
 		Action:             azureGatewayMain,
 		CustomHelpTemplate: azureGatewayTemplate,
 		HideHelpCommand:    true,
