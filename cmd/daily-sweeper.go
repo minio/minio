@@ -119,9 +119,9 @@ func dailySweeper() {
 		break
 	}
 
-	// Perform a sweep round each 24 hours
+	// Perform a sweep round each month
 	for {
-		if time.Since(lastSweepTime) < 24*time.Hour {
+		if time.Since(lastSweepTime) < 30*24*time.Hour {
 			time.Sleep(time.Hour)
 			continue
 		}
