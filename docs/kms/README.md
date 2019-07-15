@@ -44,7 +44,7 @@ MinIO requires the following Vault setup:
 
 **2.1.1 Start Vault server**
 
-Vault requires access to `mlock` syscall by default. Use `setcap` Vault executable the ability to use the `mlock` syscall without running the process as root, run:
+Vault requires access to `mlock` syscall by default. Use `setcap` to give the Vault executable the ability to use the `mlock` syscall without running the process as root.  To do so run:
 ```
 sudo setcap cap_ipc_lock=+ep $(readlink -f $(which vault))
 ```
@@ -93,7 +93,7 @@ Unseal Key 5: UPdDVPto+H6ko+20NKmagK40MOskqOBw4y/S51WpgVy/
 
 Initial Root Token: s.zaU4Gbcu0Wh46uj2V3VuUde0
 
-Vault initialized with 5 key shares and a key threshold of 3. Please securely
+Vault is initialized with 5 key shares and a key threshold of 3. Please securely
 distribute the key shares printed above. When the Vault is re-sealed,
 restarted, or stopped, you must supply at least 3 of these keys to unseal it
 before it can start servicing requests.
@@ -123,7 +123,7 @@ Cluster ID      8c92e999-7062-4da6-4434-0fc05f34824d
 HA Enabled      false
 ```
 
-Obtain root token from `vault operator init` output, it is displayed as `Initial Root Token: s.zaU4Gbcu0Wh46uj2V3VuUde0`
+Obtain root token from the `vault operator init` output above. It is displayed as `Initial Root Token: s.zaU4Gbcu0Wh46uj2V3VuUde0`
 
 **2.1.3 Set up vault transit backend and create an app role**
 ```
@@ -131,7 +131,7 @@ export VAULT_TOKEN=s.zaU4Gbcu0Wh46uj2V3VuUde0
 
 vault auth enable approle    # enable approle style auth
 vault secrets enable transit  # enable transit secrets engine
-# define a encryption key-ring for the transit path
+# define an encryption key-ring for the transit path
 vault write -f  transit/keys/my-minio-key
 
 cat > vaultpolicy.hcl <<EOF
