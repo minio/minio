@@ -280,7 +280,7 @@ func fsOpenFile(ctx context.Context, readPath string, offset int64) (io.ReadClos
 	}
 
 	// Stat to get the size of the file at path.
-	st, err := os.Stat(readPath)
+	st, err := fr.Stat()
 	if err != nil {
 		err = osErrToFSFileErr(err)
 		if err != errFileNotFound {

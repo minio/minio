@@ -152,7 +152,7 @@ func (fs *FSObjects) ListMultipartUploads(ctx context.Context, bucket, object, k
 		return result, toObjectErr(err)
 	}
 
-	// S3 spec says uploaIDs should be sorted based on initiated time. ModTime of fs.json
+	// S3 spec says uploadIDs should be sorted based on initiated time. ModTime of fs.json
 	// is the creation time of the uploadID, hence we will use that.
 	var uploads []MultipartInfo
 	for _, uploadID := range uploadIDs {
