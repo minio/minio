@@ -386,6 +386,26 @@ func fsFAllocate(fd int, offset int64, len int64) (err error) {
 	return nil
 }
 
+// Renames source path to destination path, fails if the destination path
+// parents are not already created.
+func fsSimpleRenameFile(ctx context.Context, sourcePath, destPath string) error {
+	if err := checkPathLength(sourcePath); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+	if err := checkPathLength(destPath); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+
+	if err := os.Rename(sourcePath, destPath); err != nil {
+		logger.LogIf(ctx, err)
+		return osErrToFSFileErr(err)
+	}
+
+	return nil
+}
+
 // Renames source path to destination path, creates all the
 // missing parents if they don't exist.
 func fsRenameFile(ctx context.Context, sourcePath, destPath string) error {
