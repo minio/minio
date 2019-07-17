@@ -89,6 +89,11 @@ func (c *Target) Send(e interface{}) error {
 		remoteHost = "\nRemoteHost: " + entry.RemoteHost
 	}
 
+	var host string
+	if entry.Host != "" {
+		host = "\nHost: " + entry.Host
+	}
+
 	var userAgent string
 	if entry.UserAgent != "" {
 		userAgent = "\nUserAgent: " + entry.UserAgent
@@ -99,8 +104,8 @@ func (c *Target) Send(e interface{}) error {
 	}
 
 	var msg = logger.ColorFgRed(logger.ColorBold(entry.Trace.Message))
-	var output = fmt.Sprintf("\n%s\n%s%s%s%s%s\nError: %s%s\n%s",
-		apiString, timeString, deploymentID, requestID, remoteHost, userAgent,
+	var output = fmt.Sprintf("\n%s\n%s%s%s%s%s%s\nError: %s%s\n%s",
+		apiString, timeString, deploymentID, requestID, remoteHost, host, userAgent,
 		msg, tagString, strings.Join(trace, "\n"))
 
 	fmt.Println(output)

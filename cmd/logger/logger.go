@@ -331,6 +331,7 @@ func logIf(ctx context.Context, err error) {
 		DeploymentID: req.DeploymentID,
 		Level:        ErrorLvl.String(),
 		RemoteHost:   req.RemoteHost,
+		Host:         req.Host,
 		RequestID:    req.RequestID,
 		UserAgent:    req.UserAgent,
 		Time:         time.Now().UTC().Format(time.RFC3339Nano),
