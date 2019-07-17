@@ -326,7 +326,12 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 
 	partPath := pathJoin(uploadIDDir, fs.encodePartFile(partID, etag, data.ActualSize()))
 
-	if err = fsRenameFile(ctx, tmpPartPath, partPath); err != nil {
+	// Don't use fsRenameFile here. We don't want to create missing parent directories in this case.
+	if err = os.Rename(tmpPartPath, partPath); err != nil {
+		// The upload has probably been aborted if the target directory doesn't exist.
+		if os.IsNotExist(err) {
+			return pi, InvalidUploadID{UploadID: uploadID}
+		}
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
 
