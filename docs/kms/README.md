@@ -12,7 +12,7 @@ MinIO supports two different KMS concepts:
    by enabling or disabling the corresponding master keys on demand.
 
 - Direct KMS master keys:
-   MinIO can also be configured to directly use a master key specified by the environment variable `MINIO_SSE_MASTER_KEY`.
+   MinIO can also be configured to directly use a master key specified by the environment variable `MINIO_SSE_MASTER_KEY` or with a docker secret key.
    Direct master keys are useful if the storage backend is not on the same machine as the MinIO server, e.g.,
    if network drives or MinIO gateway is used and an external KMS would cause too much management overhead.
 
@@ -215,6 +215,8 @@ minio gateway s3
 
 #### 2.2 Specify a master key
 
+**2.2.1 KMS master key from environment variables**
+
 A KMS master key consists of a master-key ID (CMK) and the 256 bit master key encoded as HEX value separated by a `:`.
 A KMS master key can be specified directly using:
 
@@ -226,6 +228,23 @@ Please use your own master key. A random master key can be generated using e.g. 
 
 ```
 head -c 32 /dev/urandom | xxd -c 32 -ps
+```
+
+**2.2.2 KMS master key from docker secret**
+
+Alternatively, you may pass a master key as a [Docker secret](https://docs.docker.com/engine/swarm/secrets/).
+
+```bash
+echo "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574" | docker secret create sse_master_key
+```
+
+Obviously, do not use this demo key for anything real!
+
+To use another secret name, follow the instructions above and replace sse_master_key with your custom names (e.g. my_sse_master_key).
+Then, set the MINIO_SSE_MASTER_KEY_FILE environment variable to your secret name:
+
+```bash
+export MINIO_SSE_MASTER_KEY_FILE=my_sse_master_key
 ```
 
 ### 3. Test your setup
