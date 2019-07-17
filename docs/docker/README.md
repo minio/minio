@@ -58,20 +58,19 @@ docker run -p 9000:9000 --name minio1 \
   minio/minio server /data
 ```
 
-### Run MinIO Docker as non root user
-MinIO server runs as non-root within the container by default. However, this is applicable only if you're deploying new MinIO instance (not upgrading from older releases). Deployments upgrading from older MinIO deployments, will continue to run as the user previously used if any.
+### Run MinIO Docker as regular user
+MinIO server doesn't run as a regular user by default in docker containers. To run MinIO container as regular user use environment variables `MINIO_USERNAME` and `MINIO_GROUPNAME`.
 
-By default `minio` is username and groupname. Use environment variables `MINIO_USERNAME` and `MINIO_GROUPNAME` to override these default values.
+> NOTE: If you are upgrading from existing deployments, you need to make sure this user has write access to previous persistent volumes. MinIO will not migrate the content automatically.
 
 #### GNU/Linux and macOS
 ```sh
 docker run -p 9000:9000 --name minio1 \
   -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
-  -e "MINIO_USERNAME=custom" \
-  -e "MINIO_GROUPNAME=custom" \
+  -e "MINIO_USERNAME=minio-user" \
+  -e "MINIO_GROUPNAME=minio-user" \
   -v /mnt/data:/data \
-  -v /mnt/config:/root/.minio \
   minio/minio server /data
 ```
 
@@ -80,10 +79,9 @@ docker run -p 9000:9000 --name minio1 \
 docker run -p 9000:9000 --name minio1 \
   -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
-  -e "MINIO_USERNAME=custom" \
-  -e "MINIO_GROUPNAME=custom" \
+  -e "MINIO_USERNAME=minio-user" \
+  -e "MINIO_GROUPNAME=minio-user" \
   -v D:\data:/data \
-  -v D:\minio\config:/root/.minio \
   minio/minio server /data
 ```
 
