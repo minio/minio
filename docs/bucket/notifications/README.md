@@ -286,12 +286,14 @@ MinIO requires a 5.x series version of Elasticsearch. This is the latest major r
 
 The MinIO server configuration file is stored on the backend in json format. The Elasticsearch configuration is located in the `elasticsearch` key under the `notify` top-level key. Create a configuration key-value pair here for your Elasticsearch instance. The key is a name for your Elasticsearch endpoint, and the value is a collection of key-value parameters described in the table below.
 
-| Parameter | Type     | Description                                                                                                                                                                                   |
-| :-------- | :------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enable`  | _bool_   | (Required) Is this server endpoint configuration active/enabled?                                                                                                                              |
-| `format`  | _string_ | (Required) Either `namespace` or `access`.                                                                                                                                                    |
-| `url`     | _string_ | (Required) The Elasticsearch server's address, with optional authentication info. For example: `http://localhost:9200` or with authentication info `http://elastic:MagicWord@127.0.0.1:9200`. |
-| `index`   | _string_ | (Required) The name of an Elasticsearch index in which MinIO will store documents.                                                                                                            |
+| Parameter    | Type     | Description                                                                                                                                                                                   |
+| :----------- | :------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enable`     | _bool_   | (Required) Is this server endpoint configuration active/enabled?                                                                                                                              |
+| `format`     | _string_ | (Required) Either `namespace` or `access`.                                                                                                                                                    |
+| `url`        | _string_ | (Required) The Elasticsearch server's address, with optional authentication info. For example: `http://localhost:9200` or with authentication info `http://elastic:MagicWord@127.0.0.1:9200`. |
+| `index`      | _string_ | (Required) The name of an Elasticsearch index in which MinIO will store documents.                                                                                                            |
+| `queueDir`   | _string_ | Persistent store for events when Elasticsearch broker is offline                                                                                                                              |
+| `queueLimit` | _int_    | Set the maximum event limit for the persistent store. The default limit is 10000                                                                                                              |
 
 An example of Elasticsearch configuration is as follows:
 
@@ -301,10 +303,14 @@ An example of Elasticsearch configuration is as follows:
         "enable": true,
         "format": "namespace",
         "url": "http://127.0.0.1:9200",
-        "index": "minio_events"
+        "index": "minio_events",
+        "queueDir": "",
+        "queueLimit": 0
     }
 },
 ```
+
+Minio supports persistent event store. The persistent store will backup events when the Elasticsearch broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 If Elasticsearch has authentication enabled, the credentials can be supplied to MinIO via the `url` parameter formatted as `PROTO://USERNAME:PASSWORD@ELASTICSEARCH_HOST:PORT`.
 
@@ -1104,12 +1110,17 @@ An example configuration for NSQ is shown below:
         "tls": {
             "enable": false,
             "skipVerify": true
-        }
+        },
+        "queueDir": "",
+        "queueLimit": 0
     }
 }
+
+MinIO supports persistent event store. The persistent store will backup events when the NSQ broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
+
 ```
 
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+To update the configuration, use `mc admin config get` command to get the current configuration file for the MinIO deployment in json format, and save it locally.
 
 ```sh
 $ mc admin config get myminio/ > /tmp/myconfig

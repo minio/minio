@@ -20,8 +20,8 @@ export MINT_RUN_CORE_DIR="$MINT_ROOT_DIR/run/core"
 export MINT_RUN_SECURITY_DIR="$MINT_ROOT_DIR/run/security"
 export WGET="wget --quiet --no-check-certificate"
 
-./create-data-files.sh
-./preinstall.sh
+"${MINT_ROOT_DIR}"/create-data-files.sh
+"${MINT_ROOT_DIR}"/preinstall.sh
 
 # install mint app packages
 for pkg in "$MINT_ROOT_DIR/build"/*/install.sh; do
@@ -29,4 +29,4 @@ for pkg in "$MINT_ROOT_DIR/build"/*/install.sh; do
     $pkg
 done
 
-./postinstall.sh
+"${MINT_ROOT_DIR}"/postinstall.sh

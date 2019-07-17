@@ -22,5 +22,4 @@ prime/
 stage/
 .sia_temp/
 config.json
-dockerscripts/check-user
 dockerscripts/healthcheck

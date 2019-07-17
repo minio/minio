@@ -43,7 +43,7 @@ type WebhookArgs struct {
 	Endpoint   xnet.URL       `json:"endpoint"`
 	RootCAs    *x509.CertPool `json:"-"`
 	QueueDir   string         `json:"queueDir"`
-	QueueLimit uint16         `json:"queueLimit"`
+	QueueLimit uint64         `json:"queueLimit"`
 }
 
 // Validate WebhookArgs fields

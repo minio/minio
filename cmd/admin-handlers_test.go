@@ -91,7 +91,9 @@ var (
         "enable": false,
         "format": "namespace",
         "url": "",
-        "index": ""
+        "index": "",
+        "queueDir": "",
+        "queueLimit": 0
       }
     },
     "kafka": {
@@ -166,7 +168,9 @@ var (
         "tls": {
 			"enable": false,
 			"skipVerify": false
-		}
+		},
+        "queueDir": "",
+        "queueLimit": 0
       }
     },
     "postgresql": {

@@ -67,6 +67,8 @@ func toStorageErr(err error) error {
 		return io.EOF
 	case io.ErrUnexpectedEOF.Error():
 		return io.ErrUnexpectedEOF
+	case errFileUnexpectedSize.Error():
+		return errFileUnexpectedSize
 	case errUnexpected.Error():
 		return errUnexpected
 	case errDiskFull.Error():
@@ -434,11 +436,12 @@ func (client *storageRESTClient) getInstanceID() (err error) {
 	return nil
 }
 
-func (client *storageRESTClient) VerifyFile(volume, path string, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
+func (client *storageRESTClient) VerifyFile(volume, path string, empty bool, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTBitrotAlgo, algo.String())
+	values.Set(storageRESTEmpty, strconv.FormatBool(empty))
 	values.Set(storageRESTLength, strconv.Itoa(int(shardSize)))
 	if len(sum) != 0 {
 		values.Set(storageRESTBitrotHash, hex.EncodeToString(sum))

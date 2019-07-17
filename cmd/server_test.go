@@ -1354,7 +1354,37 @@ func (s *TestSuiteCommon) TestPutObjectLongName(c *check) {
 	response, err = client.Do(request)
 	c.Assert(err, nil)
 	c.Assert(response.StatusCode, http.StatusOK)
-	// make long object name.
+
+	//make long object name.
+	longObjName = fmt.Sprintf("%0255d/%0255d/%0255d/%0255d/%0255d", 1, 1, 1, 1, 1)
+	if IsDocker() || IsKubernetes() {
+		longObjName = fmt.Sprintf("%0242d/%0242d/%0242d/%0242d/%0242d", 1, 1, 1, 1, 1)
+	}
+	// create new HTTP request to insert the object.
+	buffer = bytes.NewReader([]byte("hello world"))
+	request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, longObjName),
+		int64(buffer.Len()), buffer, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	// execute the HTTP request.
+	response, err = client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusBadRequest)
+	verifyError(c, response, "KeyTooLongError", "Your key is too long", http.StatusBadRequest)
+
+	// make object name with prefix as slash
+	longObjName = fmt.Sprintf("/%0255d/%0255d", 1, 1)
+	buffer = bytes.NewReader([]byte("hello world"))
+	// create new HTTP request to insert the object.
+	request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, longObjName),
+		int64(buffer.Len()), buffer, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	// execute the HTTP request.
+	response, err = client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusBadRequest)
+	verifyError(c, response, "XMinioInvalidObjectName", "Object name contains a leading slash.", http.StatusBadRequest)
+
+	//make object name as unsuported
 	longObjName = fmt.Sprintf("%0256d", 1)
 	buffer = bytes.NewReader([]byte("hello world"))
 	request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, longObjName),

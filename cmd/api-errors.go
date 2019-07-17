@@ -139,6 +139,7 @@ const (
 	ErrSlowDown
 	ErrInvalidPrefixMarker
 	ErrBadRequest
+	ErrKeyTooLongError
 	// Add new error codes here.
 
 	// SSE-S3 related API errors
@@ -187,6 +188,7 @@ const (
 	ErrRequestBodyParse
 	ErrObjectExistsAsDirectory
 	ErrInvalidObjectName
+	ErrInvalidObjectNamePrefixSlash
 	ErrInvalidResourceName
 	ErrServerNotInitialized
 	ErrOperationTimedOut
@@ -682,6 +684,11 @@ var errorCodes = errorCodeMap{
 		Description:    "400 BadRequest",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrKeyTooLongError: {
+		Code:           "KeyTooLongError",
+		Description:    "Your key is too long",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 
 	// FIXME: Actual XML error response also contains the header which missed in list of signed header parameters.
 	ErrUnsignedHeaders: {
@@ -883,6 +890,11 @@ var errorCodes = errorCodeMap{
 	ErrInvalidObjectName: {
 		Code:           "XMinioInvalidObjectName",
 		Description:    "Object name contains unsupported characters.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidObjectNamePrefixSlash: {
+		Code:           "XMinioInvalidObjectName",
+		Description:    "Object name contains a leading slash.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidResourceName: {
@@ -1579,6 +1591,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrMethodNotAllowed
 	case ObjectNameInvalid:
 		apiErr = ErrInvalidObjectName
+	case ObjectNamePrefixAsSlash:
+		apiErr = ErrInvalidObjectNamePrefixSlash
 	case InvalidUploadID:
 		apiErr = ErrNoSuchUpload
 	case InvalidPart:
@@ -1639,6 +1653,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrBackendDown
 	case crypto.Error:
 		apiErr = ErrObjectTampered
+	case ObjectNameTooLong:
+		apiErr = ErrKeyTooLongError
 	default:
 		var ie, iw int
 		// This work-around is to handle the issue golang/go#30648

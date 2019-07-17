@@ -53,7 +53,7 @@ require (
 	github.com/marstr/guid v1.1.0 // indirect
 	github.com/mattn/go-isatty v0.0.7
 	github.com/miekg/dns v1.1.8
-	github.com/minio/cli v1.20.0
+	github.com/minio/cli v1.21.0
 	github.com/minio/dsync/v2 v2.0.0
 	github.com/minio/hdfs/v3 v3.0.0
 	github.com/minio/highwayhash v1.0.0
@@ -74,6 +74,7 @@ require (
 	github.com/nats-io/stan.go v0.4.5
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.0.7
+	github.com/pkg/errors v0.8.1
 	github.com/pkg/profile v1.3.0
 	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829
 	github.com/rcrowley/go-metrics v0.0.0-20190704165056-9c2d0518ed81 // indirect

@@ -681,12 +681,12 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 					// Start writing response to client
 					started = true
 					setCommonHeaders(w)
-					w.Header().Set(xhttp.ContentType, string(mimeJSON))
+					w.Header().Set(xhttp.ContentType, "text/event-stream")
 					// Set 200 OK status
 					w.WriteHeader(200)
 				}
 				// Send whitespace and keep connection open
-				w.Write([]byte("\n\r"))
+				w.Write([]byte(" "))
 				w.(http.Flusher).Flush()
 			case hr := <-respCh:
 				switch hr.apiErr {
@@ -1486,7 +1486,8 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	// Avoid reusing tcp connection if read timeout is hit
 	// This is needed to make r.Context().Done() work as
 	// expected in case of read timeout
-	w.Header().Add(xhttp.Connection, "close")
+	w.Header().Set(xhttp.Connection, "close")
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)

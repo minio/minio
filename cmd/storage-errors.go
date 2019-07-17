@@ -72,6 +72,9 @@ var errVolumeAccessDenied = errors.New("volume access denied")
 // errFileAccessDenied - cannot access file, insufficient permissions.
 var errFileAccessDenied = errors.New("file access denied")
 
+// errFileUnexpectedSize - file has an unexpected size
+var errFileUnexpectedSize = errors.New("file has unexpected size")
+
 // errFileParentIsFile - cannot have overlapping objects, parent is already a file.
 var errFileParentIsFile = errors.New("parent is a file")
 
