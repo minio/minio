@@ -389,6 +389,7 @@ func serverMain(ctx *cli.Context) {
 		initBackgroundHealing()
 		initDailyHeal()
 		initDailySweeper()
+		initLocalDisksAutoHeal()
 	}
 
 	globalObjLayerMutex.Lock()

@@ -83,7 +83,9 @@ func (h *healRoutine) run() {
 			case bucket != "" && object != "":
 				res, err = bgHealObject(ctx, bucket, object, task.opts)
 			}
-			task.responseCh <- healResult{result: res, err: err}
+			if task.responseCh != nil {
+				task.responseCh <- healResult{result: res, err: err}
+			}
 		case <-h.doneCh:
 			return
 		case <-GlobalServiceDoneCh:
