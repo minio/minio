@@ -429,6 +429,7 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 		DeploymentID: globalDeploymentID,
 		RequestID:    w.Header().Get(xhttp.AmzRequestID),
 		RemoteHost:   handlers.GetSourceIP(r),
+		Host:         getHostName(r),
 		UserAgent:    r.UserAgent(),
 		API:          api,
 		BucketName:   bucket,
