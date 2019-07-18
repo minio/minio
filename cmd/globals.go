@@ -244,10 +244,11 @@ var (
 	// GlobalGatewaySSE sse options
 	GlobalGatewaySSE gatewaySSE
 
+	globalAllHealState *allHealState
+
 	// The always present healing routine ready to heal objects
-	globalBackgroundHealing *healRoutine
-	globalAllHealState      *allHealState
-	globalSweepHealState    *allHealState
+	globalBackgroundHealRoutine *healRoutine
+	globalBackgroundHealState   *allHealState
 
 	// Add new variable global values here.
 )

@@ -83,7 +83,9 @@ func (h *healRoutine) run() {
 			case bucket != "" && object != "":
 				res, err = bgHealObject(ctx, bucket, object, task.opts)
 			}
-			task.responseCh <- healResult{result: res, err: err}
+			if task.responseCh != nil {
+				task.responseCh <- healResult{result: res, err: err}
+			}
 		case <-h.doneCh:
 			return
 		case <-GlobalServiceDoneCh:
@@ -100,11 +102,33 @@ func initHealRoutine() *healRoutine {
 
 }
 
-func initBackgroundHealing() {
-	healBg := initHealRoutine()
-	go healBg.run()
+func startBackgroundHealing() {
+	ctx := context.Background()
 
-	globalBackgroundHealing = healBg
+	var objAPI ObjectLayer
+	for {
+		objAPI = newObjectLayerFn()
+		if objAPI == nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		break
+	}
+
+	// Run the background healer
+	globalBackgroundHealRoutine = initHealRoutine()
+	go globalBackgroundHealRoutine.run()
+
+	// Launch the background healer sequence to track
+	// background healing operations
+	info := objAPI.StorageInfo(ctx)
+	numDisks := info.Backend.OnlineDisks.Sum() + info.Backend.OfflineDisks.Sum()
+	nh := newBgHealSequence(numDisks)
+	globalBackgroundHealState.LaunchNewHealSequence(nh)
+}
+
+func initBackgroundHealing() {
+	go startBackgroundHealing()
 }
 
 // bgHealDiskFormat - heals format.json, return value indicates if a
