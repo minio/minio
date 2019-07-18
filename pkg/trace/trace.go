@@ -24,10 +24,18 @@ import (
 // Info - represents a trace record, additionally
 // also reports errors if any while listening on trace.
 type Info struct {
-	NodeName string       `json:"nodename"`
-	FuncName string       `json:"funcname"`
-	ReqInfo  RequestInfo  `json:"request"`
-	RespInfo ResponseInfo `json:"response"`
+	NodeName  string       `json:"nodename"`
+	FuncName  string       `json:"funcname"`
+	ReqInfo   RequestInfo  `json:"request"`
+	RespInfo  ResponseInfo `json:"response"`
+	CallStats CallStats    `json:"stats"`
+}
+
+// CallStats records request stats
+type CallStats struct {
+	InputBytes  int           `json:"inputbytes"`
+	OutputBytes int           `json:"outputbytes"`
+	Latency     time.Duration `json:"latency"`
 }
 
 // RequestInfo represents trace of http request
