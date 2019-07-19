@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -750,11 +751,20 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 	if api.CacheAPI() != nil {
 		getBucketInfo = api.CacheAPI().GetBucketInfo
 	}
+
 	if _, err := getBucketInfo(ctx, bucket); err != nil {
+		if globalDNSConfig != nil && reflect.TypeOf(err).String() == "cmd.BucketNotFound" {
+			_, dnsErr := globalDNSConfig.Get(bucket)
+			if dnsErr == nil {
+				writeSuccessResponseHeadersOnly(w)
+				return
+			}
+			writeErrorResponseHeadersOnly(w, toAPIError(ctx, dnsErr))
+			return
+		}
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
-
 	writeSuccessResponseHeadersOnly(w)
 }
 
