@@ -82,15 +82,16 @@ func (target *WebhookTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	urlStr, pErr := xnet.ParseURL(target.args.Endpoint.String())
+	u, pErr := xnet.ParseURL(target.args.Endpoint.String())
 	if pErr != nil {
 		return pErr
 	}
-	_, dErr := net.Dial("tcp", urlStr.Host)
-	if dErr != nil {
-		// To treat "connection refused" errors as errNotConnected.
-		if IsConnRefusedErr(dErr) {
-			return errNotConnected
+	if dErr := u.DialHTTP(); dErr != nil {
+		if urlErr, ok := dErr.(*url.Error); ok {
+			// To treat "connection refused" errors as errNotConnected.
+			if IsConnRefusedErr(urlErr.Err) {
+				return errNotConnected
+			}
 		}
 		return dErr
 	}
@@ -136,15 +137,16 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 // Send - reads an event from store and sends it to webhook.
 func (target *WebhookTarget) Send(eventKey string) error {
 
-	urlStr, pErr := xnet.ParseURL(target.args.Endpoint.String())
+	u, pErr := xnet.ParseURL(target.args.Endpoint.String())
 	if pErr != nil {
 		return pErr
 	}
-	_, dErr := net.Dial("tcp", urlStr.Host)
-	if dErr != nil {
-		// To treat "connection refused" errors as errNotConnected.
-		if IsConnRefusedErr(dErr) {
-			return errNotConnected
+	if dErr := u.DialHTTP(); dErr != nil {
+		if urlErr, ok := dErr.(*url.Error); ok {
+			// To treat "connection refused" errors as errNotConnected.
+			if IsConnRefusedErr(urlErr.Err) {
+				return errNotConnected
+			}
 		}
 		return dErr
 	}
