@@ -365,6 +365,14 @@ func serverMain(ctx *cli.Context) {
 		logger.Fatal(err, "Unable to initialize policy system")
 	}
 
+	// Create new lifecycle system.
+	globalLifecycleSys = NewLifecycleSys()
+
+	// Initialize lifecycle system.
+	if err = globalLifecycleSys.Init(newObject); err != nil {
+		logger.Fatal(err, "Unable to initialize lifecycle system")
+	}
+
 	// Create new notification system.
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
 

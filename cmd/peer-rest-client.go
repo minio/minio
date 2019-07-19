@@ -30,6 +30,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
@@ -322,6 +323,37 @@ func (client *peerRESTClient) SetBucketPolicy(bucket string, bucketPolicy *polic
 	}
 
 	respBody, err := client.call(peerRESTMethodBucketPolicySet, values, &reader, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// RemoveBucketLifecycle - Remove bucket lifecycle configuration on the peer node
+func (client *peerRESTClient) RemoveBucketLifecycle(bucket string) error {
+	values := make(url.Values)
+	values.Set(peerRESTBucket, bucket)
+	respBody, err := client.call(peerRESTMethodBucketLifecycleRemove, values, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// SetBucketLifecycle - Set bucket lifecycle configuration on the peer node
+func (client *peerRESTClient) SetBucketLifecycle(bucket string, bucketLifecycle *lifecycle.Lifecycle) error {
+	values := make(url.Values)
+	values.Set(peerRESTBucket, bucket)
+
+	var reader bytes.Buffer
+	err := gob.NewEncoder(&reader).Encode(bucketLifecycle)
+	if err != nil {
+		return err
+	}
+
+	respBody, err := client.call(peerRESTMethodBucketLifecycleSet, values, &reader, -1)
 	if err != nil {
 		return err
 	}
