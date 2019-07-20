@@ -56,4 +56,5 @@ const (
 	peerRESTProfiler = "profiler"
 	peerRESTDryRun   = "dry-run"
 	peerRESTTraceAll = "all"
+	peerRESTTraceErr = "err"
 )
