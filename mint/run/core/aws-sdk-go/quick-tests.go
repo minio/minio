@@ -312,7 +312,7 @@ func testSelectObject(s3Client *s3.S3) {
 		return
 	}
 
-	// Test comma field seperator
+	// Test comma field separator
 	inputCsv1 := `year,gender,ethnicity,firstname,count,rank
 2011,FEMALE,ASIAN AND PACIFIC ISLANDER,SOPHIA,119,1
 2011,FEMALE,ASIAN AND PACIFIC ISLANDER,CHLOE,106,2
@@ -392,7 +392,7 @@ func testSelectObject(s3Client *s3.S3) {
 		return
 	}
 
-	// Test unicode field seperator
+	// Test unicode field separator
 	inputCsv2 := `"year"╦"gender"╦"ethnicity"╦"firstname"╦"count"╦"rank"
 "2011"╦"FEMALE"╦"ASIAN AND PACIFIC ISLANDER"╦"SOPHIA"╦"119"╦"1"
 "2011"╦"FEMALE"╦"ASIAN AND PACIFIC ISLANDER"╦"CHLOE"╦"106"╦"2"

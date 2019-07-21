@@ -1177,7 +1177,7 @@ func (s *TestSuiteCommon) TestPutObject(c *check) {
 	c.Assert(response.StatusCode, http.StatusOK)
 	c.Assert(response.ContentLength, int64(len([]byte("hello world"))))
 	var buffer2 bytes.Buffer
-	// retrive the contents of response body.
+	// retrieve the contents of response body.
 	n, err := io.Copy(&buffer2, response.Body)
 	c.Assert(err, nil)
 	c.Assert(n, int64(len([]byte("hello world"))))
@@ -1461,7 +1461,7 @@ func (s *TestSuiteCommon) TestHeadOnObjectLastModified(c *check) {
 	// verify the status of the HTTP response.
 	c.Assert(response.StatusCode, http.StatusOK)
 
-	// retrive the info of last modification time of the object from the response header.
+	// retrieve the info of last modification time of the object from the response header.
 	lastModified := response.Header.Get("Last-Modified")
 	// Parse it into time.Time structure.
 	t, err := time.Parse(http.TimeFormat, lastModified)
