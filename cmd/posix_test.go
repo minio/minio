@@ -1830,9 +1830,7 @@ func TestPosixVerifyFile(t *testing.T) {
 		if err == io.EOF {
 			break
 		}
-		if err != nil {
-			t.Fatal(err)
-		}
+		t.Fatal(err)
 	}
 	w.Close()
 	if err := posixStorage.VerifyFile(volName, fileName, false, algo, nil, shardSize); err != nil {
