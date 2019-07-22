@@ -45,7 +45,7 @@ Expansion of ellipses and choice of erasure sets based on this expansion is an a
 
 - *If total disks has many common divisors the algorithm chooses the minimum amounts of erasure sets possible for a erasure set size of any N*.  In the example with 1024 disks - 4, 8, 16 are GCD factors. With 16 disks we get a total of 64 possible sets, with 8 disks we get a total of 128 possible sets, with 4 disks we get a total of 256 possible sets. So algorithm automatically chooses 64 sets, which is *16 * 64 = 1024* disks in total.
 
-- In this algorithm, we also make sure that we spread the disks out evenly for example. MinIO server expands ellipses passed as arguments. Here is a sample expansion to demonstrate the process.
+- In this algorithm, we also make sure that we spread the disks out evenly. MinIO server expands ellipses passed as arguments. Here is a sample expansion to demonstrate the process.
 
 ```
 minio server http://host{1...4}/export{1...8}
@@ -87,7 +87,7 @@ Expected expansion
 > http://host4/export8
 ```
 
-A noticeable trait of this expansion is that it chooses unique hosts such that the erasure code is efficient across drives across hosts.
+A noticeable trait of this expansion is that it chooses unique hosts such that the erasure code is efficient across drives and hosts.
 
 - Choosing an erasure set for the object is decided during `PutObject()`, object names are used to find the right erasure set using the following pseudo code.
 ```go
@@ -99,7 +99,7 @@ func crcHashMod(key string, cardinality int) int {
 ```
 Input for the key is the object name specified in `PutObject()`, returns a unique index. This index is one of the erasure sets where the object will reside. This function is a consistent hash for a given object name i.e for a given object name the index returned is always the same.
 
-- Write and Read quorum are required to be satisfied only across the erasure set for an object, healing is also done per object which contains the object with in the erasure set.
+- Write and Read quorum are required to be satisfied only across the erasure set for an object. Healing is also done per object within the erasure set which contains the object.
 
 - MinIO does erasure coding at the object level not at the volume level, unlike other object storage vendors. This allows applications to choose different storage class by setting `x-amz-storage-class=STANDARD/REDUCED_REDUNDANCY` for each object uploads so effectively utilizing the capacity of the cluster. Additionally these can also be enforced using IAM policies to make sure the client uploads with correct HTTP headers.
 
@@ -112,12 +112,12 @@ Standalone erasure coded configuration with 4 sets with 16 disks each, which spa
 minio server /mnt/controller{1...4}/data{1...16}
 ```
 
-Standalone erasure coded configuration with 16 sets 16 disks per set, across mnts, across controllers.
+Standalone erasure coded configuration with 16 sets, 16 disks per set, across mounts and controllers.
 ```
 minio server /mnt{1..4}/controller{1...4}/data{1...16}
 ```
 
-Distributed erasure coded configuration with 2 sets 16 disks per set across hosts.
+Distributed erasure coded configuration with 2 sets, 16 disks per set across hosts.
 ```
 minio server http://host{1...32}/disk1
 ```
