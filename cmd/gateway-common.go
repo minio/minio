@@ -317,6 +317,8 @@ func ErrorRespToObjectError(err error, params ...string) error {
 		err = BucketNotEmpty{}
 	case "NoSuchBucketPolicy":
 		err = BucketPolicyNotFound{}
+	case "NoSuchBucketLifecycle":
+		err = BucketLifecycleNotFound{}
 	case "InvalidBucketName":
 		err = BucketNameInvalid{Bucket: bucket}
 	case "InvalidPart":

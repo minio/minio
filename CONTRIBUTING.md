@@ -37,7 +37,7 @@ After your code changes, make sure
 - To add test cases for the new code. If you have questions about how to do it, please ask on our [Slack](https://slack.min.io) channel.
 - To run `make verifiers`
 - To squash your commits into a single commit. `git rebase -i`. It's okay to force update your pull request.
-- To run `go test -race ./...` and `go build` completes.
+- To run `make test` and `make build` completes.
 
 ### Commit changes
 After verification, commit your changes. This is a [great post](https://chris.beams.io/posts/git-commit/) on how to write useful commit messages

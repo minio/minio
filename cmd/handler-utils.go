@@ -31,7 +31,6 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/handlers"
-	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Parses location constraint from the incoming reader.
@@ -387,15 +386,28 @@ func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // gets host name for current node
-func getHostName(r *http.Request) (hostName string, err error) {
-	var thisAddr *xnet.Host
-	hostName = r.Host
+func getHostName(r *http.Request) (hostName string) {
 	if globalIsDistXL {
-		thisAddr, err = xnet.ParseHost(GetLocalPeer(globalEndpoints))
-		if err != nil {
-			return
-		}
-		hostName = thisAddr.String()
+		hostName = GetLocalPeer(globalEndpoints)
+	} else {
+		hostName = r.Host
 	}
 	return
+}
+
+func isHTTPStatusOK(statusCode int) bool {
+	// List of success status.
+	var successStatus = []int{
+		http.StatusOK,
+		http.StatusCreated,
+		http.StatusAccepted,
+		http.StatusNoContent,
+		http.StatusPartialContent,
+	}
+	for _, okstatus := range successStatus {
+		if statusCode == okstatus {
+			return true
+		}
+	}
+	return false
 }

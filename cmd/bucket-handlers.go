@@ -800,6 +800,8 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	globalNotificationSys.RemoveNotification(bucket)
 	globalPolicySys.Remove(bucket)
 	globalNotificationSys.DeleteBucket(ctx, bucket)
+	globalLifecycleSys.Remove(bucket)
+	globalNotificationSys.RemoveBucketLifecycle(ctx, bucket)
 
 	// Write success response.
 	writeSuccessNoContent(w)

@@ -43,10 +43,16 @@ type recordRequest struct {
 	logBody bool
 	// Internal recording buffer
 	buf bytes.Buffer
+	// request headers
+	headers http.Header
+	// total bytes read including header size
+	bytesRead int
 }
 
 func (r *recordRequest) Read(p []byte) (n int, err error) {
 	n, err = r.Reader.Read(p)
+	r.bytesRead += n
+
 	if r.logBody {
 		r.buf.Write(p[:n])
 	}
@@ -54,6 +60,13 @@ func (r *recordRequest) Read(p []byte) (n int, err error) {
 		return n, err
 	}
 	return n, err
+}
+func (r *recordRequest) Size() int {
+	sz := r.bytesRead
+	for k, v := range r.headers {
+		sz += len(k) + len(v)
+	}
+	return sz
 }
 
 // Return the bytes that were recorded.
@@ -80,13 +93,17 @@ type recordResponseWriter struct {
 	statusCode int
 	// Indicate if headers are written in the log
 	headersLogged bool
+	// number of bytes written
+	bytesWritten int
 }
 
 // Write the headers into the given buffer
-func writeHeaders(w io.Writer, statusCode int, headers http.Header) {
-	fmt.Fprintf(w, "%d %s\n", statusCode, http.StatusText(statusCode))
+func (r *recordResponseWriter) writeHeaders(w io.Writer, statusCode int, headers http.Header) {
+	n, _ := fmt.Fprintf(w, "%d %s\n", statusCode, http.StatusText(statusCode))
+	r.bytesWritten += n
 	for k, v := range headers {
-		fmt.Fprintf(w, "%s: %s\n", k, v[0])
+		n, _ := fmt.Fprintf(w, "%s: %s\n", k, v[0])
+		r.bytesWritten += n
 	}
 }
 
@@ -94,7 +111,7 @@ func writeHeaders(w io.Writer, statusCode int, headers http.Header) {
 func (r *recordResponseWriter) WriteHeader(i int) {
 	r.statusCode = i
 	if !r.headersLogged {
-		writeHeaders(&r.headers, i, r.ResponseWriter.Header())
+		r.writeHeaders(&r.headers, i, r.ResponseWriter.Header())
 		r.headersLogged = true
 	}
 	r.ResponseWriter.WriteHeader(i)
@@ -102,10 +119,11 @@ func (r *recordResponseWriter) WriteHeader(i int) {
 
 func (r *recordResponseWriter) Write(p []byte) (n int, err error) {
 	n, err = r.ResponseWriter.Write(p)
+	r.bytesWritten += n
 	if !r.headersLogged {
 		// We assume the response code to be '200 OK' when WriteHeader() is not called,
 		// that way following Golang HTTP response behavior.
-		writeHeaders(&r.headers, http.StatusOK, r.ResponseWriter.Header())
+		r.writeHeaders(&r.headers, http.StatusOK, r.ResponseWriter.Header())
 		r.headersLogged = true
 	}
 	if (r.statusCode != http.StatusOK && r.statusCode != http.StatusPartialContent && r.statusCode != 0) || r.logBody {
@@ -113,6 +131,10 @@ func (r *recordResponseWriter) Write(p []byte) (n int, err error) {
 		r.body.Write(p)
 	}
 	return n, err
+}
+
+func (r *recordResponseWriter) Size() int {
+	return r.bytesWritten
 }
 
 // Calls the underlying Flush.
@@ -151,9 +173,17 @@ func getOpName(name string) (op string) {
 func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Request) trace.Info {
 	name := getOpName(runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name())
 
+	// Setup a http request body recorder
+	reqHeaders := cloneHeader(r.Header)
+	reqHeaders.Set("Content-Length", strconv.Itoa(int(r.ContentLength)))
+	reqHeaders.Set("Host", r.Host)
+	for _, enc := range r.TransferEncoding {
+		reqHeaders.Add("Transfer-Encoding", enc)
+	}
+
 	var reqBodyRecorder *recordRequest
 	t := trace.Info{FuncName: name}
-	reqBodyRecorder = &recordRequest{Reader: r.Body, logBody: logBody}
+	reqBodyRecorder = &recordRequest{Reader: r.Body, logBody: logBody, headers: reqHeaders}
 	r.Body = ioutil.NopCloser(reqBodyRecorder)
 	t.NodeName = r.Host
 	if globalIsDistXL {
@@ -162,14 +192,6 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	// strip port from the host address
 	if host, _, err := net.SplitHostPort(t.NodeName); err == nil {
 		t.NodeName = host
-	}
-
-	// Setup a http request body recorder
-	reqHeaders := cloneHeader(r.Header)
-	reqHeaders.Set("Content-Length", strconv.Itoa(int(r.ContentLength)))
-	reqHeaders.Set("Host", r.Host)
-	for _, enc := range r.TransferEncoding {
-		reqHeaders.Add("Transfer-Encoding", enc)
 	}
 
 	rq := trace.RequestInfo{
@@ -199,5 +221,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 
 	t.ReqInfo = rq
 	t.RespInfo = rs
+
+	t.CallStats = trace.CallStats{Latency: rs.Time.Sub(rq.Time), InputBytes: reqBodyRecorder.Size(), OutputBytes: respBodyRecorder.Size()}
 	return t
 }

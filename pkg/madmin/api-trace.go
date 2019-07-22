@@ -32,7 +32,7 @@ type TraceInfo struct {
 }
 
 // Trace - listen on http trace notifications.
-func (adm AdminClient) Trace(allTrace bool, doneCh <-chan struct{}) <-chan TraceInfo {
+func (adm AdminClient) Trace(allTrace, errTrace bool, doneCh <-chan struct{}) <-chan TraceInfo {
 	traceInfoCh := make(chan TraceInfo)
 	// Only success, start a routine to start reading line by line.
 	go func(traceInfoCh chan<- TraceInfo) {
@@ -40,6 +40,7 @@ func (adm AdminClient) Trace(allTrace bool, doneCh <-chan struct{}) <-chan Trace
 		for {
 			urlValues := make(url.Values)
 			urlValues.Set("all", strconv.FormatBool(allTrace))
+			urlValues.Set("err", strconv.FormatBool(errTrace))
 			reqData := requestData{
 				relPath:     "/v1/trace",
 				queryValues: urlValues,

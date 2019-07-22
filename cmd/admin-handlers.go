@@ -241,17 +241,12 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	if objectAPI == nil {
 		return
 	}
-	hostName, err := getHostName(r)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
 
 	serverInfo := globalNotificationSys.ServerInfo(ctx)
 	// Once we have received all the ServerInfo from peers
 	// add the local peer server info as well.
 	serverInfo = append(serverInfo, ServerInfo{
-		Addr: hostName,
+		Addr: getHostName(r),
 		Data: &ServerInfoData{
 			StorageInfo: objectAPI.StorageInfo(ctx),
 			ConnStats:   globalConnStats.toServerConnStats(),
@@ -442,18 +437,13 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
-	hostName, err := getHostName(r)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
 
 	peerLocks := globalNotificationSys.GetLocks(ctx)
 	// Once we have received all the locks currently used from peers
 	// add the local peer locks list as well.
 	localLocks := globalLockServer.ll.DupLockMap()
 	peerLocks = append(peerLocks, &PeerLocks{
-		Addr:  hostName,
+		Addr:  getHostName(r),
 		Locks: localLocks,
 	})
 
@@ -1475,6 +1465,7 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HTTPTrace")
 	trcAll := r.URL.Query().Get("all") == "true"
+	trcErr := r.URL.Query().Get("err") == "true"
 
 	// Validate request signature.
 	adminAPIErr := checkAdminRequestAuthType(ctx, r, "")
@@ -1497,11 +1488,15 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	traceCh := make(chan interface{}, 4000)
 
 	filter := func(entry interface{}) bool {
+		trcInfo := entry.(trace.Info)
+		if trcErr && isHTTPStatusOK(trcInfo.RespInfo.StatusCode) {
+			return false
+		}
 		if trcAll {
 			return true
 		}
-		trcInfo := entry.(trace.Info)
 		return !strings.HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath)
+
 	}
 	remoteHosts := getRemoteHosts(globalEndpoints)
 	peers, err := getRestClients(remoteHosts)
@@ -1511,7 +1506,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	globalHTTPTrace.Subscribe(traceCh, doneCh, filter)
 
 	for _, peer := range peers {
-		peer.Trace(traceCh, doneCh, trcAll)
+		peer.Trace(traceCh, doneCh, trcAll, trcErr)
 	}
 
 	enc := json.NewEncoder(w)

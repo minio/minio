@@ -36,6 +36,7 @@ type KeyVal struct {
 // ReqInfo stores the request info.
 type ReqInfo struct {
 	RemoteHost   string   // Client Host/IP
+	Host         string   // Node Host/IP
 	UserAgent    string   // User Agent
 	DeploymentID string   // x-minio-deployment-id
 	RequestID    string   // x-amz-request-id

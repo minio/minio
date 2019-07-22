@@ -43,6 +43,8 @@ const (
 	peerRESTMethodTargetExists             = "targetexists"
 	peerRESTMethodSendEvent                = "sendevent"
 	peerRESTMethodTrace                    = "trace"
+	peerRESTMethodBucketLifecycleSet       = "setbucketlifecycle"
+	peerRESTMethodBucketLifecycleRemove    = "removebucketlifecycle"
 )
 
 const (
@@ -54,4 +56,5 @@ const (
 	peerRESTProfiler = "profiler"
 	peerRESTDryRun   = "dry-run"
 	peerRESTTraceAll = "all"
+	peerRESTTraceErr = "err"
 )

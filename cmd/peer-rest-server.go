@@ -31,6 +31,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/lifecycle"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
 	trace "github.com/minio/minio/pkg/trace"
@@ -469,6 +470,47 @@ func (s *peerRESTServer) SetBucketPolicyHandler(w http.ResponseWriter, r *http.R
 	w.(http.Flusher).Flush()
 }
 
+// RemoveBucketLifecycleHandler - Remove bucket lifecycle.
+func (s *peerRESTServer) RemoveBucketLifecycleHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucketName := vars[peerRESTBucket]
+	if bucketName == "" {
+		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
+		return
+	}
+
+	globalLifecycleSys.Remove(bucketName)
+	w.(http.Flusher).Flush()
+}
+
+// SetBucketLifecycleHandler - Set bucket lifecycle.
+func (s *peerRESTServer) SetBucketLifecycleHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	bucketName := vars[peerRESTBucket]
+	if bucketName == "" {
+		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
+		return
+	}
+	var lifecycleData lifecycle.Lifecycle
+	if r.ContentLength < 0 {
+		s.writeErrorResponse(w, errInvalidArgument)
+		return
+	}
+
+	err := gob.NewDecoder(r.Body).Decode(&lifecycleData)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	globalLifecycleSys.Set(bucketName, lifecycleData)
+	w.(http.Flusher).Flush()
+}
+
 type remoteTargetExistsResp struct {
 	Exists bool
 }
@@ -675,17 +717,23 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	trcAll := r.URL.Query().Get(peerRESTTraceAll) == "true"
+	trcErr := r.URL.Query().Get(peerRESTTraceErr) == "true"
 
 	w.Header().Set(xhttp.Connection, "close")
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
 
 	filter := func(entry interface{}) bool {
+		trcInfo := entry.(trace.Info)
+
+		if trcErr && isHTTPStatusOK(trcInfo.RespInfo.StatusCode) {
+			return false
+		}
 		if trcAll {
 			return true
 		}
-		trcInfo := entry.(trace.Info)
 		return !strings.HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath)
+
 	}
 
 	doneCh := make(chan struct{})
@@ -768,6 +816,8 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodBucketNotificationListen).HandlerFunc(httpTraceHdrs(server.ListenBucketNotificationHandler)).Queries(restQueries(peerRESTBucket)...)
 
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodReloadFormat).HandlerFunc(httpTraceHdrs(server.ReloadFormatHandler)).Queries(restQueries(peerRESTDryRun)...)
+	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodBucketLifecycleSet).HandlerFunc(httpTraceHdrs(server.SetBucketLifecycleHandler)).Queries(restQueries(peerRESTBucket)...)
+	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodBucketLifecycleRemove).HandlerFunc(httpTraceHdrs(server.RemoveBucketLifecycleHandler)).Queries(restQueries(peerRESTBucket)...)
 
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodTrace).HandlerFunc(server.TraceHandler)
 	subrouter.Methods(http.MethodPost).Path("/" + peerRESTMethodBackgroundHealStatus).HandlerFunc(server.BackgroundHealStatusHandler)
