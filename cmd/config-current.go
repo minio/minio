@@ -391,7 +391,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewRedisTarget(k, v)
+		t, err := target.NewRedisTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("redis(%s): %s", k, err.Error())
 		}
@@ -752,7 +752,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.Redis {
 		if args.Enable {
-			newTarget, err := target.NewRedisTarget(id, args)
+			newTarget, err := target.NewRedisTarget(id, args, GlobalServiceDoneCh)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue

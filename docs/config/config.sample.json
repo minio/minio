@@ -157,7 +157,9 @@
 				"format": "",
 				"address": "",
 				"password": "",
-				"key": ""
+				"key": "",
+                                "queueDir": "",
+                                "queueLimit": 0                 
 			}
 		},
 		"webhook": {
