@@ -163,13 +163,14 @@ func NewAMQPTarget(id string, args AMQPArgs) (*AMQPTarget, error) {
 	// Retry 5 times with time interval of 2 seconds.
 	for i := 1; i <= 5; i++ {
 		conn, err = amqp.Dial(args.URL.String())
-		if err == nil {
-			break
+		if err != nil {
+			if i == 5 {
+				return nil, err
+			}
+			time.Sleep(2 * time.Second)
+			continue
 		}
-		if err != nil && i == 5 {
-			return nil, err
-		}
-		time.Sleep(2 * time.Second)
+		break
 	}
 
 	return &AMQPTarget{
