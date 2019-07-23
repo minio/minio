@@ -152,6 +152,8 @@ var (
         "token": "",
         "secure": false,
         "pingInterval": 0,
+        "queueDir": "",
+        "queueLimit": 0,
         "streaming": {
           "enable": false,
           "clusterID": "",
