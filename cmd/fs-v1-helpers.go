@@ -280,7 +280,7 @@ func fsOpenFile(ctx context.Context, readPath string, offset int64) (io.ReadClos
 	}
 
 	// Stat to get the size of the file at path.
-	st, err := os.Stat(readPath)
+	st, err := fr.Stat()
 	if err != nil {
 		err = osErrToFSFileErr(err)
 		if err != errFileNotFound {
@@ -381,6 +381,26 @@ func fsFAllocate(fd int, offset int64, len int64) (err error) {
 			err = errUnexpected
 		}
 		return err
+	}
+
+	return nil
+}
+
+// Renames source path to destination path, fails if the destination path
+// parents are not already created.
+func fsSimpleRenameFile(ctx context.Context, sourcePath, destPath string) error {
+	if err := checkPathLength(sourcePath); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+	if err := checkPathLength(destPath); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+
+	if err := os.Rename(sourcePath, destPath); err != nil {
+		logger.LogIf(ctx, err)
+		return osErrToFSFileErr(err)
 	}
 
 	return nil
