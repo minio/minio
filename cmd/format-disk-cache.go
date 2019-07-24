@@ -30,6 +30,7 @@ import (
 	"strings"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/sio"
 )
 
 const (
@@ -362,7 +363,7 @@ func loadAndValidateCacheFormat(ctx context.Context, drives []string) (formats [
 
 // reads cached object on disk and writes it back after adding bitrot
 // hashsum per block as per the new disk cache format.
-func migrateData(ctx context.Context, c *diskCache, oldfile, destDir string) error {
+func migrateCacheData(ctx context.Context, c *diskCache, bucket, object, oldfile, destDir string, metadata map[string]string) error {
 	st, err := os.Stat(oldfile)
 	if err != nil {
 		err = osErrToFSFileErr(err)
@@ -372,7 +373,18 @@ func migrateData(ctx context.Context, c *diskCache, oldfile, destDir string) err
 	if err != nil {
 		return err
 	}
-	_, err = c.bitrotWriteToCache(ctx, destDir, readCloser, st.Size())
+	var reader io.Reader = readCloser
+
+	actualSize := uint64(st.Size())
+	if globalCacheKMS != nil {
+		reader, err = newCacheEncryptReader(readCloser, bucket, object, metadata)
+		if err != nil {
+			return err
+		}
+		actualSize, _ = sio.EncryptedSize(uint64(st.Size()))
+	}
+
+	_, err = c.bitrotWriteToCache(ctx, destDir, reader, uint64(actualSize))
 	return err
 }
 
@@ -401,6 +413,7 @@ func migrateOldCache(ctx context.Context, c *diskCache) error {
 	}
 
 	for _, bucket := range buckets {
+		bucket = strings.TrimSuffix(bucket, SlashSeparator)
 		var objMetaPaths []string
 		root := path.Join(oldCacheBucketsPath, bucket)
 		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -422,10 +435,23 @@ func migrateOldCache(ctx context.Context, c *diskCache) error {
 				return err
 			}
 			prevCachedPath := path.Join(c.dir, bucket, object)
+
+			// get old cached metadata
+			oldMetaPath := pathJoin(oldCacheBucketsPath, bucket, object, cacheMetaJSONFile)
+			metaPath := pathJoin(destdir, cacheMetaJSONFile)
+			metaBytes, err := ioutil.ReadFile(oldMetaPath)
+			if err != nil {
+				return err
+			}
+			// marshal cache metadata after adding version and stat info
+			meta := &cacheMeta{}
+			if err = json.Unmarshal(metaBytes, &meta); err != nil {
+				return err
+			}
 			// move cached object to new cache directory path
 			// migrate cache data and add bit-rot protection hash sum
 			// at the start of each block
-			if err := migrateData(ctx, c, prevCachedPath, destdir); err != nil {
+			if err := migrateCacheData(ctx, c, bucket, object, prevCachedPath, destdir, meta.Meta); err != nil {
 				continue
 			}
 			stat, err := os.Stat(prevCachedPath)
@@ -440,19 +466,7 @@ func migrateOldCache(ctx context.Context, c *diskCache) error {
 			if err := os.Remove(prevCachedPath); err != nil {
 				return err
 			}
-
 			// move cached metadata after changing cache metadata version
-			oldMetaPath := pathJoin(oldCacheBucketsPath, bucket, object, cacheMetaJSONFile)
-			metaPath := pathJoin(destdir, cacheMetaJSONFile)
-			metaBytes, err := ioutil.ReadFile(oldMetaPath)
-			if err != nil {
-				return err
-			}
-			// marshal cache metadata after adding version and stat info
-			meta := &cacheMeta{}
-			if err = json.Unmarshal(metaBytes, &meta); err != nil {
-				return err
-			}
 			meta.Checksum = CacheChecksumInfoV1{Algorithm: HighwayHash256S.String(), Blocksize: cacheBlkSize}
 			meta.Version = cacheMetaVersion
 			meta.Stat.Size = stat.Size()

@@ -221,7 +221,10 @@ var (
 	globalCacheExpiry = 90
 	// Max allowed disk cache percentage
 	globalCacheMaxUse = 80
-
+	// Disk cache KMS Key
+	globalCacheKMSKeyID string
+	// Initialized KMS configuration for disk cache
+	globalCacheKMS crypto.KMS
 	// Allocated etcd endpoint for config and bucket DNS.
 	globalEtcdClient *etcd.Client
 
