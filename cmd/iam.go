@@ -601,7 +601,7 @@ func migrateUsersConfigEtcdToV1(isSTS bool) error {
 			}
 
 			// 3. delete policy file in old loc.
-			deleteConfigEtcd(ctx, globalEtcdClient, path)
+			deleteConfigEtcd(ctx, globalEtcdClient, oldPolicyPath)
 		}
 
 	next:
