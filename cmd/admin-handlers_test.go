@@ -139,7 +139,9 @@ var (
         "port": "",
         "user": "",
         "password": "",
-        "database": ""
+        "database": "",
+        "queueDir": "",
+        "queueLimit": 0
       }
     },
     "nats": {
@@ -185,7 +187,9 @@ var (
         "port": "",
         "user": "",
         "password": "",
-        "database": ""
+        "database": "",
+        "queueDir": "",
+        "queueLimit": 0
       }
     },
     "redis": {
