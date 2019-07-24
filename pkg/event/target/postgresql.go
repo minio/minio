@@ -56,8 +56,11 @@ package target
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -89,6 +92,8 @@ type PostgreSQLArgs struct {
 	User             string    `json:"user"`     // default: user running minio
 	Password         string    `json:"password"` // default: no password
 	Database         string    `json:"database"` // default: same as user
+	QueueDir         string    `json:"queueDir"`
+	QueueLimit       uint64    `json:"queueLimit"`
 }
 
 // Validate PostgreSQLArgs fields
@@ -122,6 +127,15 @@ func (p PostgreSQLArgs) Validate() error {
 		}
 	}
 
+	if p.QueueDir != "" {
+		if !filepath.IsAbs(p.QueueDir) {
+			return errors.New("queueDir path should be absolute")
+		}
+	}
+	if p.QueueLimit > 10000 {
+		return errors.New("queueLimit should not exceed 10000")
+	}
+
 	return nil
 }
 
@@ -133,6 +147,8 @@ type PostgreSQLTarget struct {
 	deleteStmt *sql.Stmt
 	insertStmt *sql.Stmt
 	db         *sql.DB
+	store      Store
+	firstPing  bool
 }
 
 // ID - returns target ID.
@@ -140,11 +156,26 @@ func (target *PostgreSQLTarget) ID() event.TargetID {
 	return target.id
 }
 
-// Save - Sends event directly without persisting.
+// Save - saves the events to the store if questore is configured, which will be replayed when the PostgreSQL connection is active.
 func (target *PostgreSQLTarget) Save(eventData event.Event) error {
+	if target.store != nil {
+		return target.store.Put(eventData)
+	}
+	if err := target.db.Ping(); err != nil {
+		if IsConnErr(err) {
+			return errNotConnected
+		}
+		return err
+	}
 	return target.send(eventData)
 }
 
+// IsConnErr - To detect a connection error.
+func IsConnErr(err error) bool {
+	return IsConnRefusedErr(err) || err.Error() == "sql: database is closed" || err.Error() == "sql: statement is closed" || err.Error() == "invalid connection"
+}
+
+// send - sends an event to the PostgreSQL.
 func (target *PostgreSQLTarget) send(eventData event.Event) error {
 	if target.args.Format == event.NamespaceFormat {
 		objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
@@ -177,16 +208,52 @@ func (target *PostgreSQLTarget) send(eventData event.Event) error {
 			return err
 		}
 
-		_, err = target.insertStmt.Exec(eventTime, data)
-		return err
+		if _, err = target.insertStmt.Exec(eventTime, data); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-// Send - interface compatible method does no-op.
+// Send - reads an event from store and sends it to PostgreSQL.
 func (target *PostgreSQLTarget) Send(eventKey string) error {
-	return nil
+
+	if err := target.db.Ping(); err != nil {
+		if IsConnErr(err) {
+			return errNotConnected
+		}
+		return err
+	}
+
+	if !target.firstPing {
+		if err := target.executeStmts(); err != nil {
+			if IsConnErr(err) {
+				return errNotConnected
+			}
+			return err
+		}
+	}
+
+	eventData, eErr := target.store.Get(eventKey)
+	if eErr != nil {
+		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
+		// Such events will not exist and wouldve been already been sent successfully.
+		if os.IsNotExist(eErr) {
+			return nil
+		}
+		return eErr
+	}
+
+	if err := target.send(eventData); err != nil {
+		if IsConnErr(err) {
+			return errNotConnected
+		}
+		return err
+	}
+
+	// Delete the event from store.
+	return target.store.Del(eventKey)
 }
 
 // Close - closes underneath connections to PostgreSQL database.
@@ -209,8 +276,45 @@ func (target *PostgreSQLTarget) Close() error {
 	return target.db.Close()
 }
 
+// Executes the table creation statements.
+func (target *PostgreSQLTarget) executeStmts() error {
+
+	_, err := target.db.Exec(fmt.Sprintf(psqlTableExists, target.args.Table))
+	if err != nil {
+		createStmt := psqlCreateNamespaceTable
+		if target.args.Format == event.AccessFormat {
+			createStmt = psqlCreateAccessTable
+		}
+
+		if _, dbErr := target.db.Exec(fmt.Sprintf(createStmt, target.args.Table)); dbErr != nil {
+			return dbErr
+		}
+	}
+
+	switch target.args.Format {
+	case event.NamespaceFormat:
+		// insert or update statement
+		if target.updateStmt, err = target.db.Prepare(fmt.Sprintf(psqlUpdateRow, target.args.Table)); err != nil {
+			return err
+		}
+		// delete statement
+		if target.deleteStmt, err = target.db.Prepare(fmt.Sprintf(psqlDeleteRow, target.args.Table)); err != nil {
+			return err
+		}
+	case event.AccessFormat:
+		// insert statement
+		if target.insertStmt, err = target.db.Prepare(fmt.Sprintf(psqlInsertRow, target.args.Table)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // NewPostgreSQLTarget - creates new PostgreSQL target.
-func NewPostgreSQLTarget(id string, args PostgreSQLArgs) (*PostgreSQLTarget, error) {
+func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{}) (*PostgreSQLTarget, error) {
+	var firstPing bool
+
 	params := []string{args.ConnectionString}
 	if !args.Host.IsEmpty() {
 		params = append(params, "host="+args.Host.String())
@@ -234,45 +338,42 @@ func NewPostgreSQLTarget(id string, args PostgreSQLArgs) (*PostgreSQLTarget, err
 		return nil, err
 	}
 
-	if err = db.Ping(); err != nil {
-		return nil, err
-	}
+	var store Store
 
-	if _, err = db.Exec(fmt.Sprintf(psqlTableExists, args.Table)); err != nil {
-		createStmt := psqlCreateNamespaceTable
-		if args.Format == event.AccessFormat {
-			createStmt = psqlCreateAccessTable
-		}
-
-		if _, err = db.Exec(fmt.Sprintf(createStmt, args.Table)); err != nil {
-			return nil, err
+	if args.QueueDir != "" {
+		queueDir := filepath.Join(args.QueueDir, storePrefix+"-postgresql-"+id)
+		store = NewQueueStore(queueDir, args.QueueLimit)
+		if oErr := store.Open(); oErr != nil {
+			return nil, oErr
 		}
 	}
 
-	var updateStmt, deleteStmt, insertStmt *sql.Stmt
-	switch args.Format {
-	case event.NamespaceFormat:
-		// insert or update statement
-		if updateStmt, err = db.Prepare(fmt.Sprintf(psqlUpdateRow, args.Table)); err != nil {
-			return nil, err
-		}
-		// delete statement
-		if deleteStmt, err = db.Prepare(fmt.Sprintf(psqlDeleteRow, args.Table)); err != nil {
-			return nil, err
-		}
-	case event.AccessFormat:
-		// insert statement
-		if insertStmt, err = db.Prepare(fmt.Sprintf(psqlInsertRow, args.Table)); err != nil {
-			return nil, err
-		}
+	target := &PostgreSQLTarget{
+		id:        event.TargetID{ID: id, Name: "postgresql"},
+		args:      args,
+		db:        db,
+		store:     store,
+		firstPing: firstPing,
 	}
 
-	return &PostgreSQLTarget{
-		id:         event.TargetID{ID: id, Name: "postgresql"},
-		args:       args,
-		updateStmt: updateStmt,
-		deleteStmt: deleteStmt,
-		insertStmt: insertStmt,
-		db:         db,
-	}, nil
+	err = target.db.Ping()
+	if err != nil {
+		if target.store == nil || !IsConnRefusedErr(err) {
+			return nil, err
+		}
+	} else {
+		if err = target.executeStmts(); err != nil {
+			return nil, err
+		}
+		target.firstPing = true
+	}
+
+	if target.store != nil {
+		// Replays the events from the store.
+		eventKeyCh := replayEvents(target.store, doneCh)
+		// Start replaying events from the store.
+		go sendEvents(target, eventKeyCh, doneCh)
+	}
+
+	return target, nil
 }

@@ -104,7 +104,9 @@
 				"port": "",
 				"user": "",
 				"password": "",
-				"database": ""
+				"database": "",
+                               "queueDir": "",
+                               "queueLimit": 0
 			}
 		},
 		"nats": {
@@ -150,7 +152,9 @@
 				"port": "",
 				"user": "",
 				"password": "",
-				"database": ""
+				"database": "",
+                               "queueDir": "",
+                               "queueLimit": 0
 			}
 		},
 		"redis": {
