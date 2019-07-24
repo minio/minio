@@ -228,15 +228,6 @@ func fsStatDir(ctx context.Context, statDir string) (os.FileInfo, error) {
 	return fi, nil
 }
 
-// Returns if the dirPath is a directory.
-func fsIsDir(ctx context.Context, dirPath string) bool {
-	fi, err := fsStat(ctx, dirPath)
-	if err != nil {
-		return false
-	}
-	return fi.IsDir()
-}
-
 // Lookup if file exists, returns file attributes upon success.
 func fsStatFile(ctx context.Context, statFile string) (os.FileInfo, error) {
 	fi, err := fsStat(ctx, statFile)
@@ -416,11 +407,6 @@ func fsRenameFile(ctx context.Context, sourcePath, destPath string) error {
 	if err := checkPathLength(destPath); err != nil {
 		logger.LogIf(ctx, err)
 		return err
-	}
-
-	// Verify if source path exists.
-	if _, err := os.Stat(sourcePath); err != nil {
-		return osErrToFSFileErr(err)
 	}
 
 	if err := renameAll(sourcePath, destPath); err != nil {
