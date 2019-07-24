@@ -55,3 +55,7 @@ func (k *KVEmulator) List(prefix string, buf []byte) ([]string, error) {
 	fmt.Println("List", fullPath, entries, err)
 	return entries, err
 }
+
+func (k *KVEmulator) DiskInfo() (DiskInfo, error) {
+	return DiskInfo{}, nil
+}

@@ -205,6 +205,23 @@ static int minio_nkv_delete_async(struct minio_nkv_handle *handle, void *id, voi
   return result;
 }
 
+static int minio_nkv_diskinfo(struct minio_nkv_handle *handle, long long *total, long long *used) {
+  nkv_mgmt_context mg_ctx = {0};
+  mg_ctx.is_pass_through = 1;
+
+  mg_ctx.container_hash = handle->container_hash;
+  mg_ctx.network_path_hash = handle->network_path_hash;
+
+  nkv_path_stat p_stat = {0};
+  nkv_result stat = nkv_get_path_stat (handle->nkv_handle, &mg_ctx, &p_stat);
+
+  if (stat == NKV_SUCCESS) {
+    *total = (long long)p_stat.path_storage_capacity_in_bytes;
+    *used = (long long)p_stat.path_storage_usage_in_bytes;
+  }
+  return stat;
+}
+
 */
 import "C"
 
@@ -747,4 +764,22 @@ func (k *KV) List(keyStr string, b []byte) ([]string, error) {
 		}
 	}
 	return entries, nil
+}
+
+func (k *KV) DiskInfo() (DiskInfo, error) {
+	var total C.longlong
+	var used C.longlong
+
+	status := C.minio_nkv_diskinfo(&k.handle, &total, &used)
+
+	if status != 0 {
+		return DiskInfo{}, errDiskNotFound
+	}
+
+	return DiskInfo{
+		Total:    uint64(total),
+		Free:     uint64(total - used),
+		Used:     uint64(used),
+		RootDisk: false,
+	}, nil
 }

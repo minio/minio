@@ -102,10 +102,7 @@ func (k *KVStorage) Close() error {
 }
 
 func (k *KVStorage) DiskInfo() (info DiskInfo, err error) {
-	return DiskInfo{
-		Total: 3 * 1024 * 1024 * 1024 * 1024,
-		Free:  3 * 1024 * 1024 * 1024 * 1024,
-	}, nil
+	return k.kv.DiskInfo()
 }
 
 func (k *KVStorage) loadVolumes() (*kvVolumes, error) {
@@ -209,6 +206,13 @@ func (k *KVStorage) DeleteVol(volume string) (err error) {
 	}
 	if foundIndex == -1 {
 		return errVolumeNotFound
+	}
+	entries, err := k.ListDir(volume, "", -1)
+	if err != nil {
+		return err
+	}
+	if len(entries) > 0 {
+		return errVolumeNotEmpty
 	}
 	volumes.VolInfos = append(volumes.VolInfos[:foundIndex], volumes.VolInfos[foundIndex+1:]...)
 
