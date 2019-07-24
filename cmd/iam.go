@@ -66,7 +66,7 @@ const (
 )
 
 type iamFormat struct {
-	Version int `json:"format"`
+	Version int `json:"version"`
 }
 
 func getCurrentIAMFormat() iamFormat {
