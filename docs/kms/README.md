@@ -141,8 +141,8 @@ path "transit/datakey/plaintext/my-minio-key" {
 path "transit/decrypt/my-minio-key" {
   capabilities = [ "read", "update"]
 }
-path "transit/encrypt/my-minio-key" {
-  capabilities = [ "read", "update"]
+path "transit/rewrap/my-minio-key" {
+  capabilities = ["update"]
 }
 
 EOF

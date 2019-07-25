@@ -86,6 +86,19 @@ type KMS interface {
 	// referenced by the keyID. The provided context must
 	// match the context used to generate the sealed key.
 	UnsealKey(keyID string, sealedKey []byte, context Context) (key [32]byte, err error)
+
+	// UpdateKey re-wraps the sealedKey if the master key, referenced by
+	// `keyID`, has changed in the meantime. This usually happens when the
+	// KMS operator performs a key-rotation operation of the master key.
+	// UpdateKey fails if the provided sealedKey cannot be decrypted using
+	// the master key referenced by keyID.
+	//
+	// UpdateKey makes no guarantees whatsoever about whether the returned
+	// rotatedKey is actually different from the sealedKey. If nothing has
+	// changed at the KMS or if the KMS does not support updating generated
+	// keys this method may behave like a NOP and just return the sealedKey
+	// itself.
+	UpdateKey(keyID string, sealedKey []byte, context Context) (rotatedKey []byte, err error)
 }
 
 type masterKeyKMS struct {
@@ -124,6 +137,13 @@ func (kms *masterKeyKMS) UnsealKey(keyID string, sealedKey []byte, ctx Context) 
 	}
 	copy(key[:], buffer.Bytes())
 	return key, nil
+}
+
+func (kms *masterKeyKMS) UpdateKey(keyID string, sealedKey []byte, ctx Context) ([]byte, error) {
+	if _, err := kms.UnsealKey(keyID, sealedKey, ctx); err != nil {
+		return nil, err
+	}
+	return sealedKey, nil // The master key cannot update data keys -> Do nothing.
 }
 
 func (kms *masterKeyKMS) deriveKey(keyID string, context Context) (key [32]byte) {
