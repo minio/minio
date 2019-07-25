@@ -21,10 +21,7 @@ import { StorageInfo } from "../StorageInfo"
 describe("StorageInfo", () => {
   it("should render without crashing", () => {
     shallow(
-      <StorageInfo
-        storageInfo={{ used: 60 }}
-        fetchStorageInfo={jest.fn()}
-      />
+      <StorageInfo storageInfo={{ used: [60] }} fetchStorageInfo={jest.fn()} />
     )
   })
 
@@ -32,7 +29,7 @@ describe("StorageInfo", () => {
     const fetchStorageInfo = jest.fn()
     shallow(
       <StorageInfo
-        storageInfo={{ used: 60 }}
+        storageInfo={{ used: [60] }}
         fetchStorageInfo={fetchStorageInfo}
       />
     )

@@ -59,108 +59,108 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 	for _, bucket := range routers {
 		// Object operations
 		// HeadObject
-		bucket.Methods(http.MethodHead).Path("/{object:.+}").HandlerFunc(httpTraceAll(api.HeadObjectHandler))
+		bucket.Methods(http.MethodHead).Path("/{object:.+}").HandlerFunc(collectAPIStats("headobject", httpTraceAll(api.HeadObjectHandler)))
 		// CopyObjectPart
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").HeadersRegexp(xhttp.AmzCopySource, ".*?(\\/|%2F).*?").HandlerFunc(httpTraceAll(api.CopyObjectPartHandler)).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+		bucket.Methods(http.MethodPut).Path("/{object:.+}").HeadersRegexp(xhttp.AmzCopySource, ".*?(\\/|%2F).*?").HandlerFunc(collectAPIStats("copyobjectpart", httpTraceAll(api.CopyObjectPartHandler))).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
 		// PutObjectPart
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(httpTraceHdrs(api.PutObjectPartHandler)).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(collectAPIStats("putobjectpart", httpTraceHdrs(api.PutObjectPartHandler))).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
 		// ListObjectParts
-		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(httpTraceAll(api.ListObjectPartsHandler)).Queries("uploadId", "{uploadId:.*}")
+		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(collectAPIStats("listobjectparts", httpTraceAll(api.ListObjectPartsHandler))).Queries("uploadId", "{uploadId:.*}")
 		// CompleteMultipartUpload
-		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(httpTraceAll(api.CompleteMultipartUploadHandler)).Queries("uploadId", "{uploadId:.*}")
+		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(collectAPIStats("completemutipartupload", httpTraceAll(api.CompleteMultipartUploadHandler))).Queries("uploadId", "{uploadId:.*}")
 		// NewMultipartUpload
-		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(httpTraceAll(api.NewMultipartUploadHandler)).Queries("uploads", "")
+		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(collectAPIStats("newmultipartupload", httpTraceAll(api.NewMultipartUploadHandler))).Queries("uploads", "")
 		// AbortMultipartUpload
-		bucket.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(httpTraceAll(api.AbortMultipartUploadHandler)).Queries("uploadId", "{uploadId:.*}")
+		bucket.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(collectAPIStats("abortmultipartupload", httpTraceAll(api.AbortMultipartUploadHandler))).Queries("uploadId", "{uploadId:.*}")
 		// GetObjectACL - this is a dummy call.
-		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(httpTraceHdrs(api.GetObjectACLHandler)).Queries("acl", "")
+		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(collectAPIStats("getobjectacl", httpTraceHdrs(api.GetObjectACLHandler))).Queries("acl", "")
 		// GetObjectTagging - this is a dummy call.
-		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(httpTraceHdrs(api.GetObjectTaggingHandler)).Queries("tagging", "")
+		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(collectAPIStats("getobjecttagging", httpTraceHdrs(api.GetObjectTaggingHandler))).Queries("tagging", "")
 		// SelectObjectContent
-		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(httpTraceHdrs(api.SelectObjectContentHandler)).Queries("select", "").Queries("select-type", "2")
+		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(collectAPIStats("selectobjectcontent", httpTraceHdrs(api.SelectObjectContentHandler))).Queries("select", "").Queries("select-type", "2")
 		// GetObject
-		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(httpTraceHdrs(api.GetObjectHandler))
+		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(collectAPIStats("getobject", httpTraceHdrs(api.GetObjectHandler)))
 		// CopyObject
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").HeadersRegexp(xhttp.AmzCopySource, ".*?(\\/|%2F).*?").HandlerFunc(httpTraceAll(api.CopyObjectHandler))
+		bucket.Methods(http.MethodPut).Path("/{object:.+}").HeadersRegexp(xhttp.AmzCopySource, ".*?(\\/|%2F).*?").HandlerFunc(collectAPIStats("copyobject", httpTraceAll(api.CopyObjectHandler)))
 		// PutObject
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(httpTraceHdrs(api.PutObjectHandler))
+		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(collectAPIStats("putobject", httpTraceHdrs(api.PutObjectHandler)))
 		// DeleteObject
-		bucket.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(httpTraceAll(api.DeleteObjectHandler))
+		bucket.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(collectAPIStats("deleteobject", httpTraceAll(api.DeleteObjectHandler)))
 
 		/// Bucket operations
 		// GetBucketLocation
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.GetBucketLocationHandler)).Queries("location", "")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getobjectlocation", httpTraceAll(api.GetBucketLocationHandler))).Queries("location", "")
 		// GetBucketPolicy
-		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketPolicyHandler)).Queries("policy", "")
+		bucket.Methods("GET").HandlerFunc(collectAPIStats("getbucketpolicy", httpTraceAll(api.GetBucketPolicyHandler))).Queries("policy", "")
 		// GetBucketLifecycle
-		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketLifecycleHandler)).Queries("lifecycle", "")
+		bucket.Methods("GET").HandlerFunc(collectAPIStats("getbucketlifecycle", httpTraceAll(api.GetBucketLifecycleHandler))).Queries("lifecycle", "")
 
 		// Dummy Bucket Calls
 		// GetBucketACL -- this is a dummy call.
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.GetBucketACLHandler)).Queries("acl", "")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketacl", httpTraceAll(api.GetBucketACLHandler))).Queries("acl", "")
 		// GetBucketCors - this is a dummy call.
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.GetBucketCorsHandler)).Queries("cors", "")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketcors", httpTraceAll(api.GetBucketCorsHandler))).Queries("cors", "")
 		// GetBucketWebsiteHandler - this is a dummy call.
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.GetBucketWebsiteHandler)).Queries("website", "")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketwebsite", httpTraceAll(api.GetBucketWebsiteHandler))).Queries("website", "")
 		// GetBucketVersioningHandler - this is a dummy call.
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.GetBucketVersioningHandler)).Queries("versioning", "")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketversion", httpTraceAll(api.GetBucketVersioningHandler))).Queries("versioning", "")
 		// GetBucketAccelerateHandler - this is a dummy call.
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.GetBucketAccelerateHandler)).Queries("accelerate", "")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketaccelerate", httpTraceAll(api.GetBucketAccelerateHandler))).Queries("accelerate", "")
 		// GetBucketRequestPaymentHandler - this is a dummy call.
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.GetBucketRequestPaymentHandler)).Queries("requestPayment", "")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketrequestpayment", httpTraceAll(api.GetBucketRequestPaymentHandler))).Queries("requestPayment", "")
 		// GetBucketLoggingHandler - this is a dummy call.
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.GetBucketLoggingHandler)).Queries("logging", "")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketlogging", httpTraceAll(api.GetBucketLoggingHandler))).Queries("logging", "")
 		// GetBucketLifecycleHandler - this is a dummy call.
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.GetBucketLifecycleHandler)).Queries("lifecycle", "")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketlifecycle", httpTraceAll(api.GetBucketLifecycleHandler))).Queries("lifecycle", "")
 		// GetBucketReplicationHandler - this is a dummy call.
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.GetBucketReplicationHandler)).Queries("replication", "")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketreplication", httpTraceAll(api.GetBucketReplicationHandler))).Queries("replication", "")
 		// GetBucketTaggingHandler - this is a dummy call.
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.GetBucketTaggingHandler)).Queries("tagging", "")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbuckettagging", httpTraceAll(api.GetBucketTaggingHandler))).Queries("tagging", "")
 		//DeleteBucketWebsiteHandler
-		bucket.Methods(http.MethodDelete).HandlerFunc(httpTraceAll(api.DeleteBucketWebsiteHandler)).Queries("website", "")
+		bucket.Methods(http.MethodDelete).HandlerFunc(collectAPIStats("deletebucketwebsite", httpTraceAll(api.DeleteBucketWebsiteHandler))).Queries("website", "")
 		// DeleteBucketTaggingHandler
-		bucket.Methods(http.MethodDelete).HandlerFunc(httpTraceAll(api.DeleteBucketTaggingHandler)).Queries("tagging", "")
+		bucket.Methods(http.MethodDelete).HandlerFunc(collectAPIStats("deletebuckettagging", httpTraceAll(api.DeleteBucketTaggingHandler))).Queries("tagging", "")
 
 		// GetBucketNotification
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.GetBucketNotificationHandler)).Queries("notification", "")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketnotification", httpTraceAll(api.GetBucketNotificationHandler))).Queries("notification", "")
 		// ListenBucketNotification
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.ListenBucketNotificationHandler)).Queries("events", "{events:.*}")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("listenbucketnotification", httpTraceAll(api.ListenBucketNotificationHandler))).Queries("events", "{events:.*}")
 		// ListMultipartUploads
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.ListMultipartUploadsHandler)).Queries("uploads", "")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("listmultipartuploads", httpTraceAll(api.ListMultipartUploadsHandler))).Queries("uploads", "")
 		// ListObjectsV2
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.ListObjectsV2Handler)).Queries("list-type", "2")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("listobjectsv2", httpTraceAll(api.ListObjectsV2Handler))).Queries("list-type", "2")
 		// ListBucketVersions
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.ListBucketObjectVersionsHandler)).Queries("versions", "")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("listbucketversions", httpTraceAll(api.ListBucketObjectVersionsHandler))).Queries("versions", "")
 		// ListObjectsV1 (Legacy)
-		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListObjectsV1Handler))
+		bucket.Methods("GET").HandlerFunc(collectAPIStats("listobjectsv1", httpTraceAll(api.ListObjectsV1Handler)))
 		// PutBucketLifecycle
-		bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketLifecycleHandler)).Queries("lifecycle", "")
+		bucket.Methods("PUT").HandlerFunc(collectAPIStats("putbucketlifecycle", httpTraceAll(api.PutBucketLifecycleHandler))).Queries("lifecycle", "")
 		// PutBucketPolicy
-		bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketPolicyHandler)).Queries("policy", "")
+		bucket.Methods("PUT").HandlerFunc(collectAPIStats("putbucketpolicy", httpTraceAll(api.PutBucketPolicyHandler))).Queries("policy", "")
 
 		// PutBucketNotification
-		bucket.Methods(http.MethodPut).HandlerFunc(httpTraceAll(api.PutBucketNotificationHandler)).Queries("notification", "")
+		bucket.Methods(http.MethodPut).HandlerFunc(collectAPIStats("putbucketnotification", httpTraceAll(api.PutBucketNotificationHandler))).Queries("notification", "")
 		// PutBucket
-		bucket.Methods(http.MethodPut).HandlerFunc(httpTraceAll(api.PutBucketHandler))
+		bucket.Methods(http.MethodPut).HandlerFunc(collectAPIStats("putbucket", httpTraceAll(api.PutBucketHandler)))
 		// HeadBucket
-		bucket.Methods(http.MethodHead).HandlerFunc(httpTraceAll(api.HeadBucketHandler))
+		bucket.Methods(http.MethodHead).HandlerFunc(collectAPIStats("headbucket", httpTraceAll(api.HeadBucketHandler)))
 		// PostPolicy
-		bucket.Methods(http.MethodPost).HeadersRegexp(xhttp.ContentType, "multipart/form-data*").HandlerFunc(httpTraceHdrs(api.PostPolicyBucketHandler))
+		bucket.Methods(http.MethodPost).HeadersRegexp(xhttp.ContentType, "multipart/form-data*").HandlerFunc(collectAPIStats("postpolicybucket", httpTraceHdrs(api.PostPolicyBucketHandler)))
 		// DeleteMultipleObjects
-		bucket.Methods(http.MethodPost).HandlerFunc(httpTraceAll(api.DeleteMultipleObjectsHandler)).Queries("delete", "")
+		bucket.Methods(http.MethodPost).HandlerFunc(collectAPIStats("deletemultipleobjects", httpTraceAll(api.DeleteMultipleObjectsHandler))).Queries("delete", "")
 		// DeleteBucketPolicy
-		bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketPolicyHandler)).Queries("policy", "")
+		bucket.Methods("DELETE").HandlerFunc(collectAPIStats("deletebucketpolicy", httpTraceAll(api.DeleteBucketPolicyHandler))).Queries("policy", "")
 		// DeleteBucketLifecycle
-		bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketLifecycleHandler)).Queries("lifecycle", "")
+		bucket.Methods("DELETE").HandlerFunc(collectAPIStats("deletebucketlifecycle", httpTraceAll(api.DeleteBucketLifecycleHandler))).Queries("lifecycle", "")
 		// DeleteBucket
-		bucket.Methods(http.MethodDelete).HandlerFunc(httpTraceAll(api.DeleteBucketHandler))
+		bucket.Methods(http.MethodDelete).HandlerFunc(collectAPIStats("deletebucket", httpTraceAll(api.DeleteBucketHandler)))
 	}
 
 	/// Root operation
 
 	// ListBuckets
-	apiRouter.Methods(http.MethodGet).Path(SlashSeparator).HandlerFunc(httpTraceAll(api.ListBucketsHandler))
+	apiRouter.Methods(http.MethodGet).Path(SlashSeparator).HandlerFunc(collectAPIStats("listbuckets", httpTraceAll(api.ListBucketsHandler)))
 
 	// If none of the routes match.
-	apiRouter.NotFoundHandler = http.HandlerFunc(httpTraceAll(notFoundHandler))
+	apiRouter.NotFoundHandler = http.HandlerFunc(collectAPIStats("notfound", httpTraceAll(notFoundHandler)))
 }

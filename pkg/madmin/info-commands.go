@@ -59,11 +59,13 @@ type DriveInfo HealDriveInfo
 
 // StorageInfo - represents total capacity of underlying storage.
 type StorageInfo struct {
-	Used uint64 // Total used spaced per tenant.
+	Used []uint64 // Used total used per disk.
 
-	Available uint64 // Total available space.
+	Total []uint64 // Total disk space per disk.
 
-	Total uint64 // Total disk space.
+	Available []uint64 // Total disk space available per disk.
+
+	MountPaths []string // Disk mountpoints
 
 	// Backend type.
 	Backend struct {
@@ -71,16 +73,39 @@ type StorageInfo struct {
 		Type BackendType
 
 		// Following fields are only meaningful if BackendType is Erasure.
-		OnlineDisks      int // Online disks during server startup.
-		OfflineDisks     int // Offline disks during server startup.
-		StandardSCData   int // Data disks for currently configured Standard storage class.
-		StandardSCParity int // Parity disks for currently configured Standard storage class.
-		RRSCData         int // Data disks for currently configured Reduced Redundancy storage class.
-		RRSCParity       int // Parity disks for currently configured Reduced Redundancy storage class.
+		OnlineDisks      BackendDisks // Online disks during server startup.
+		OfflineDisks     BackendDisks // Offline disks during server startup.
+		StandardSCData   int          // Data disks for currently configured Standard storage class.
+		StandardSCParity int          // Parity disks for currently configured Standard storage class.
+		RRSCData         int          // Data disks for currently configured Reduced Redundancy storage class.
+		RRSCParity       int          // Parity disks for currently configured Reduced Redundancy storage class.
 
 		// List of all disk status, this is only meaningful if BackendType is Erasure.
 		Sets [][]DriveInfo
 	}
+}
+
+// BackendDisks - represents the map of endpoint-disks.
+type BackendDisks map[string]int
+
+// Sum - Return the sum of the disks in the endpoint-disk map.
+func (d1 BackendDisks) Sum() (sum int) {
+	for _, count := range d1 {
+		sum += count
+	}
+	return sum
+}
+
+// Merge - Reduces two endpoint-disk maps.
+func (d1 BackendDisks) Merge(d2 BackendDisks) BackendDisks {
+	for i1, v1 := range d1 {
+		if v2, ok := d2[i1]; ok {
+			d2[i1] = v2 + v1
+			continue
+		}
+		d2[i1] = v1
+	}
+	return d2
 }
 
 // ServerProperties holds some of the server's information such as uptime,
@@ -141,7 +166,7 @@ type ServerInfo struct {
 // ServerInfo - Connect to a minio server and call Server Info Management API
 // to fetch server's information represented by ServerInfo structure
 func (adm *AdminClient) ServerInfo() ([]ServerInfo, error) {
-	resp, err := adm.executeMethod("GET", requestData{relPath: "/v1/info"})
+	resp, err := adm.executeMethod("GET", requestData{relPath: adminAPIPrefix + "/info"})
 	defer closeResponse(resp)
 	if err != nil {
 		return nil, err
@@ -168,6 +193,36 @@ func (adm *AdminClient) ServerInfo() ([]ServerInfo, error) {
 	return serversInfo, nil
 }
 
+// StorageInfo - Connect to a minio server and call Storage Info Management API
+// to fetch server's information represented by StorageInfo structure
+func (adm *AdminClient) StorageInfo() (StorageInfo, error) {
+	resp, err := adm.executeMethod("GET", requestData{relPath: adminAPIPrefix + "/storageinfo"})
+	defer closeResponse(resp)
+	if err != nil {
+		return StorageInfo{}, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return StorageInfo{}, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var storageInfo StorageInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return StorageInfo{}, err
+	}
+
+	err = json.Unmarshal(respBytes, &storageInfo)
+	if err != nil {
+		return StorageInfo{}, err
+	}
+
+	return storageInfo, nil
+}
+
 // ServerDrivesPerfInfo holds informantion about address and write speed of
 // all drives in a single server node
 type ServerDrivesPerfInfo struct {
@@ -185,7 +240,7 @@ func (adm *AdminClient) ServerDrivesPerfInfo(size int64) ([]ServerDrivesPerfInfo
 	v.Set("size", strconv.FormatInt(size, 10))
 
 	resp, err := adm.executeMethod("GET", requestData{
-		relPath:     "/v1/performance",
+		relPath:     adminAPIPrefix + "/performance",
 		queryValues: v,
 	})
 
@@ -229,7 +284,7 @@ func (adm *AdminClient) ServerCPULoadInfo() ([]ServerCPULoadInfo, error) {
 	v := url.Values{}
 	v.Set("perfType", string("cpu"))
 	resp, err := adm.executeMethod("GET", requestData{
-		relPath:     "/v1/performance",
+		relPath:     adminAPIPrefix + "/performance",
 		queryValues: v,
 	})
 
@@ -273,7 +328,7 @@ func (adm *AdminClient) ServerMemUsageInfo() ([]ServerMemUsageInfo, error) {
 	v := url.Values{}
 	v.Set("perfType", string("mem"))
 	resp, err := adm.executeMethod("GET", requestData{
-		relPath:     "/v1/performance",
+		relPath:     adminAPIPrefix + "/performance",
 		queryValues: v,
 	})
 
@@ -318,7 +373,7 @@ func (adm *AdminClient) NetPerfInfo(size int) (map[string][]NetPerfInfo, error) 
 		v.Set("size", strconv.Itoa(size))
 	}
 	resp, err := adm.executeMethod("GET", requestData{
-		relPath:     "/v1/performance",
+		relPath:     adminAPIPrefix + "/performance",
 		queryValues: v,
 	})
 

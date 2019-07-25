@@ -51,7 +51,7 @@ func (adm *AdminClient) ServerCPUHardwareInfo() ([]ServerCPUHardwareInfo, error)
 	v := url.Values{}
 	v.Set(HARDWARE, string(CPU))
 	resp, err := adm.executeMethod("GET", requestData{
-		relPath:     "/v1/hardware",
+		relPath:     adminAPIPrefix + "/hardware",
 		queryValues: v,
 	})
 

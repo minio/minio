@@ -92,7 +92,7 @@ func startDailyHeal() {
 
 	// Find number of disks in the setup
 	info := objAPI.StorageInfo(ctx)
-	numDisks := info.Backend.OnlineDisks + info.Backend.OfflineDisks
+	numDisks := info.Backend.OnlineDisks.Sum() + info.Backend.OfflineDisks.Sum()
 
 	nh := newBgHealSequence(numDisks)
 	globalSweepHealState.LaunchNewHealSequence(nh)

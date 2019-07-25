@@ -50,11 +50,11 @@ func getServerInfo() (*ServerInfoData, error) {
 	if objLayer == nil {
 		return nil, errServerNotInitialized
 	}
+
 	// Server info data.
 	return &ServerInfoData{
-		StorageInfo: objLayer.StorageInfo(context.Background()),
-		ConnStats:   globalConnStats.toServerConnStats(),
-		HTTPStats:   globalHTTPStats.toServerHTTPStats(),
+		ConnStats: globalConnStats.toServerConnStats(),
+		HTTPStats: globalHTTPStats.toServerHTTPStats(),
 		Properties: ServerProperties{
 			Uptime:       UTCNow().Sub(globalBootTime),
 			Version:      Version,

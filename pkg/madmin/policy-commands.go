@@ -30,11 +30,11 @@ func (adm *AdminClient) InfoCannedPolicy(policyName string) ([]byte, error) {
 	queryValues.Set("name", policyName)
 
 	reqData := requestData{
-		relPath:     "/v1/info-canned-policy",
+		relPath:     adminAPIPrefix + "/info-canned-policy",
 		queryValues: queryValues,
 	}
 
-	// Execute GET on /minio/admin/v1/info-canned-policy
+	// Execute GET on /minio/admin/v2/info-canned-policy
 	resp, err := adm.executeMethod("GET", reqData)
 
 	defer closeResponse(resp)
@@ -52,10 +52,10 @@ func (adm *AdminClient) InfoCannedPolicy(policyName string) ([]byte, error) {
 // ListCannedPolicies - list all configured canned policies.
 func (adm *AdminClient) ListCannedPolicies() (map[string][]byte, error) {
 	reqData := requestData{
-		relPath: "/v1/list-canned-policies",
+		relPath: adminAPIPrefix + "/list-canned-policies",
 	}
 
-	// Execute GET on /minio/admin/v1/list-canned-policies
+	// Execute GET on /minio/admin/v2/list-canned-policies
 	resp, err := adm.executeMethod("GET", reqData)
 
 	defer closeResponse(resp)
@@ -86,11 +86,11 @@ func (adm *AdminClient) RemoveCannedPolicy(policyName string) error {
 	queryValues.Set("name", policyName)
 
 	reqData := requestData{
-		relPath:     "/v1/remove-canned-policy",
+		relPath:     adminAPIPrefix + "/remove-canned-policy",
 		queryValues: queryValues,
 	}
 
-	// Execute DELETE on /minio/admin/v1/remove-canned-policy to remove policy.
+	// Execute DELETE on /minio/admin/v2/remove-canned-policy to remove policy.
 	resp, err := adm.executeMethod("DELETE", reqData)
 
 	defer closeResponse(resp)
@@ -111,12 +111,12 @@ func (adm *AdminClient) AddCannedPolicy(policyName, policy string) error {
 	queryValues.Set("name", policyName)
 
 	reqData := requestData{
-		relPath:     "/v1/add-canned-policy",
+		relPath:     adminAPIPrefix + "/add-canned-policy",
 		queryValues: queryValues,
 		content:     []byte(policy),
 	}
 
-	// Execute PUT on /minio/admin/v1/add-canned-policy to set policy.
+	// Execute PUT on /minio/admin/v2/add-canned-policy to set policy.
 	resp, err := adm.executeMethod("PUT", reqData)
 
 	defer closeResponse(resp)
@@ -143,11 +143,11 @@ func (adm *AdminClient) SetPolicy(policyName, entityName string, isGroup bool) e
 	queryValues.Set("isGroup", groupStr)
 
 	reqData := requestData{
-		relPath:     "/v1/set-user-or-group-policy",
+		relPath:     adminAPIPrefix + "/set-user-or-group-policy",
 		queryValues: queryValues,
 	}
 
-	// Execute PUT on /minio/admin/v1/set-user-or-group-policy to set policy.
+	// Execute PUT on /minio/admin/v2/set-user-or-group-policy to set policy.
 	resp, err := adm.executeMethod("PUT", reqData)
 	defer closeResponse(resp)
 	if err != nil {

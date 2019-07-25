@@ -54,7 +54,7 @@ func (adm AdminClient) GetLogs(node string, lineCnt int, logKind string, doneCh 
 		urlValues.Set("logType", logKind)
 		for {
 			reqData := requestData{
-				relPath:     "/v1/log",
+				relPath:     adminAPIPrefix + "/log",
 				queryValues: urlValues,
 			}
 			// Execute GET to call log handler

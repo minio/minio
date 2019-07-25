@@ -132,30 +132,26 @@ func getNonLoopBackIP(t *testing.T) string {
 
 func TestNewHTTPListener(t *testing.T) {
 	testCases := []struct {
-		serverAddrs            []string
-		tcpKeepAliveTimeout    time.Duration
-		readTimeout            time.Duration
-		writeTimeout           time.Duration
-		updateBytesReadFunc    func(int)
-		updateBytesWrittenFunc func(int)
-		expectedErr            bool
+		serverAddrs         []string
+		tcpKeepAliveTimeout time.Duration
+		readTimeout         time.Duration
+		writeTimeout        time.Duration
+		expectedErr         bool
 	}{
-		{[]string{"93.184.216.34:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, true},
-		{[]string{"example.org:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, true},
-		{[]string{"unknown-host"}, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, true},
-		{[]string{"unknown-host:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, true},
-		{[]string{"localhost:65432", "93.184.216.34:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, true},
-		{[]string{"localhost:65432", "unknown-host:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, true},
-		{[]string{"localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, false},
-		{[]string{"localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, false},
+		{[]string{"93.184.216.34:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
+		{[]string{"example.org:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
+		{[]string{"unknown-host"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
+		{[]string{"unknown-host:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
+		{[]string{"localhost:65432", "93.184.216.34:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
+		{[]string{"localhost:65432", "unknown-host:65432"}, time.Duration(0), time.Duration(0), time.Duration(0), true},
+		{[]string{"localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), false},
+		{[]string{"localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), false},
 	}
 
 	for _, testCase := range testCases {
 		listener, err := newHTTPListener(
 			testCase.serverAddrs,
 			testCase.tcpKeepAliveTimeout,
-			testCase.updateBytesReadFunc,
-			testCase.updateBytesWrittenFunc,
 		)
 
 		if !testCase.expectedErr {
@@ -190,7 +186,6 @@ func TestHTTPListenerStartClose(t *testing.T) {
 		listener, err := newHTTPListener(
 			testCase.serverAddrs,
 			time.Duration(0),
-			nil, nil,
 		)
 		if err != nil {
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
@@ -231,7 +226,6 @@ func TestHTTPListenerAddr(t *testing.T) {
 		listener, err := newHTTPListener(
 			testCase.serverAddrs,
 			time.Duration(0),
-			nil, nil,
 		)
 		if err != nil {
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
@@ -269,7 +263,6 @@ func TestHTTPListenerAddrs(t *testing.T) {
 		listener, err := newHTTPListener(
 			testCase.serverAddrs,
 			time.Duration(0),
-			nil, nil,
 		)
 		if err != nil {
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)

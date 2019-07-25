@@ -54,7 +54,7 @@ func (adm *AdminClient) StartProfiling(profiler ProfilerType) ([]StartProfilingR
 	v := url.Values{}
 	v.Set("profilerType", string(profiler))
 	resp, err := adm.executeMethod("POST", requestData{
-		relPath:     "/v1/profiling/start",
+		relPath:     adminAPIPrefix + "/profiling/start",
 		queryValues: v,
 	})
 	defer closeResponse(resp)
@@ -83,7 +83,7 @@ func (adm *AdminClient) StartProfiling(profiler ProfilerType) ([]StartProfilingR
 // DownloadProfilingData makes an admin call to download profiling data of a standalone
 // server or of the whole cluster in  case of a distributed setup.
 func (adm *AdminClient) DownloadProfilingData() (io.ReadCloser, error) {
-	path := fmt.Sprintf("/v1/profiling/download")
+	path := fmt.Sprintf(adminAPIPrefix + "/profiling/download")
 	resp, err := adm.executeMethod("GET", requestData{
 		relPath: path,
 	})
