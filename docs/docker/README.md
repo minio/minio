@@ -16,7 +16,6 @@ To create a MinIO container with persistent storage, you need to map local persi
 ```sh
 docker run -p 9000:9000 --name minio1 \
   -v /mnt/data:/data \
-  -v /mnt/config:/root/.minio \
   minio/minio server /data
 ```
 
@@ -24,7 +23,6 @@ docker run -p 9000:9000 --name minio1 \
 ```sh
 docker run -p 9000:9000 --name minio1 \
   -v D:\data:/data \
-  -v D:\minio\config:/root/.minio \
   minio/minio server /data
 ```
 
@@ -44,7 +42,6 @@ docker run -p 9000:9000 --name minio1 \
   -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
   -v /mnt/data:/data \
-  -v /mnt/config:/root/.minio \
   minio/minio server /data
 ```
 
@@ -54,33 +51,38 @@ docker run -p 9000:9000 --name minio1 \
   -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
   -v D:\data:/data \
-  -v D:\minio\config:/root/.minio \
   minio/minio server /data
 ```
 
-### Run MinIO Docker as regular user
-MinIO server doesn't run as a regular user by default in docker containers. To run MinIO container as regular user use environment variables `MINIO_USERNAME` and `MINIO_GROUPNAME`.
-
-> NOTE: If you are upgrading from existing deployments, you need to make sure this user has write access to previous persistent volumes. MinIO will not migrate the content automatically.
+### Run MinIO Docker as a regular user
+Docker provides standardized mechanisms to run docker containers as non-root users.
 
 #### GNU/Linux and macOS
+On Linux and macOS you can use `--user` to run the container as regular user.
+
+> NOTE: make sure --user has write permission to *${HOME}/data* prior to using `--user`.
 ```sh
-docker run -p 9000:9000 --name minio1 \
+mkdir -p ${HOME}/data
+docker run -p 9000:9000 \
+  --user $(id -u):$(id -g) \
+  --name minio1 \
   -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
-  -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
-  -e "MINIO_USERNAME=minio-user" \
-  -e "MINIO_GROUPNAME=minio-user" \
-  -v /mnt/data:/data \
+  -e "MINIO_SECRET_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY" \
+  -v ${HOME}/data:/data \
   minio/minio server /data
 ```
 
 #### Windows
+On windows you would need to use [Docker integrated windows authentication](https://success.docker.com/article/modernizing-traditional-dot-net-applications#integratedwindowsauthentication) and [Create a container with Active Directory Support](https://blogs.msdn.microsoft.com/containerstuff/2017/01/30/create-a-container-with-active-directory-support/)
+
+> NOTE: make sure your AD/Windows user has write permissions to *D:\data* prior to using `credentialspec=`.
+
 ```powershell
-docker run -p 9000:9000 --name minio1 \
+docker run -p 9000:9000 \
+  --name minio1 \
+  --security-opt "credentialspec=file://myuser.json"
   -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
-  -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
-  -e "MINIO_USERNAME=minio-user" \
-  -e "MINIO_GROUPNAME=minio-user" \
+  -e "MINIO_SECRET_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY" \
   -v D:\data:/data \
   minio/minio server /data
 ```
