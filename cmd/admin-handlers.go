@@ -1253,7 +1253,7 @@ func (a adminAPIHandlers) SetUserPolicy(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := globalIAMSys.SetUserPolicy(accessKey, policyName); err != nil {
+	if err := globalIAMSys.PolicyDBSet(accessKey, policyName); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 	}
 

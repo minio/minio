@@ -37,7 +37,6 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway v1.9.0 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.1 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
-	github.com/hashicorp/go-uuid v1.0.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hashicorp/raft v1.1.0 // indirect
@@ -56,7 +55,8 @@ require (
 	github.com/miekg/dns v1.1.8
 	github.com/minio/cli v1.21.0
 	github.com/minio/dsync/v2 v2.0.0
-	github.com/minio/hdfs/v3 v3.0.0
+	github.com/minio/gokrb5/v7 v7.2.5
+	github.com/minio/hdfs/v3 v3.0.1
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/lsync v1.0.1
 	github.com/minio/mc v0.0.0-20190529152718-f4bb0b8850cb

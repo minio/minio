@@ -214,8 +214,13 @@ func getDiskInfo(diskPath string) (di disk.Info, err error) {
 		di, err = disk.GetInfo(diskPath)
 	}
 
-	if os.IsNotExist(err) {
+	switch {
+	case os.IsNotExist(err):
 		err = errDiskNotFound
+	case isSysErrTooLong(err):
+		err = errFileNameTooLong
+	case isSysErrIO(err):
+		err = errFaultyDisk
 	}
 
 	return di, err
@@ -285,6 +290,9 @@ func (s *posix) String() string {
 }
 
 func (s *posix) LastError() error {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
+		return errFaultyDisk
+	}
 	return nil
 }
 
@@ -310,10 +318,21 @@ type DiskInfo struct {
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
 func (s *posix) DiskInfo() (info DiskInfo, err error) {
+	defer func() {
+		if err == errFaultyDisk {
+			atomic.AddInt32(&s.ioErrCount, 1)
+		}
+	}()
+
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
+		return info, errFaultyDisk
+	}
+
 	di, err := getDiskInfo(s.diskPath)
 	if err != nil {
 		return info, err
 	}
+
 	used := di.Total - di.Free
 	if !s.diskMount {
 		used = atomic.LoadUint64(&s.totalUsed)
@@ -323,6 +342,7 @@ func (s *posix) DiskInfo() (info DiskInfo, err error) {
 	if err != nil {
 		return info, err
 	}
+
 	return DiskInfo{
 		Total:    di.Total,
 		Free:     di.Free,
