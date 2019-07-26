@@ -194,7 +194,7 @@ func listIAMConfigItems(objectAPI ObjectLayer, pathPrefix string, dirs bool,
 }
 
 func loadIAMConfigItemEtcd(ctx context.Context, item interface{}, path string) error {
-	pdata, err := readConfigEtcd(ctx, globalEtcdClient, path)
+	pdata, err := readKeyEtcd(ctx, globalEtcdClient, path)
 	if err != nil {
 		return err
 	}
@@ -206,7 +206,7 @@ func saveIAMConfigItemEtcd(ctx context.Context, item interface{}, path string) e
 	if err != nil {
 		return err
 	}
-	return saveConfigEtcd(context.Background(), globalEtcdClient, path, data)
+	return saveKeyEtcd(ctx, globalEtcdClient, path, data)
 }
 
 // IAMSys - config system.
@@ -601,7 +601,7 @@ func migrateUsersConfigEtcdToV1(isSTS bool) error {
 			}
 
 			// 3. delete policy file in old loc.
-			deleteConfigEtcd(ctx, globalEtcdClient, oldPolicyPath)
+			deleteKeyEtcd(ctx, globalEtcdClient, oldPolicyPath)
 		}
 
 	next:
@@ -793,7 +793,7 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 	var err error
 	pFile := getPolicyDocPath(policyName)
 	if globalEtcdClient != nil {
-		err = deleteConfigEtcd(context.Background(), globalEtcdClient, pFile)
+		err = deleteKeyEtcd(context.Background(), globalEtcdClient, pFile)
 	} else {
 		err = deleteConfig(context.Background(), objectAPI, pFile)
 	}
@@ -875,8 +875,8 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 	idPath := getUserIdentityPath(accessKey, false)
 	if globalEtcdClient != nil {
 		// It is okay to ignore errors when deleting policy.json for the user.
-		deleteConfigEtcd(context.Background(), globalEtcdClient, mappingPath)
-		err = deleteConfigEtcd(context.Background(), globalEtcdClient, idPath)
+		deleteKeyEtcd(context.Background(), globalEtcdClient, mappingPath)
+		err = deleteKeyEtcd(context.Background(), globalEtcdClient, idPath)
 	} else {
 		// It is okay to ignore errors when deleting policy.json for the user.
 		_ = deleteConfig(context.Background(), objectAPI, mappingPath)
@@ -1338,10 +1338,9 @@ func loadEtcdUser(ctx context.Context, user string, isSTS bool, m map[string]aut
 	}
 
 	if u.Credentials.IsExpired() {
-		idPath := getUserIdentityPath(user, isSTS)
 		// Delete expired identity.
-		deleteConfigEtcd(ctx, globalEtcdClient, idPath)
-		deleteConfigEtcd(ctx, globalEtcdClient, getMappedPolicyPath(user, isSTS))
+		deleteKeyEtcd(ctx, globalEtcdClient, getUserIdentityPath(user, isSTS))
+		deleteKeyEtcd(ctx, globalEtcdClient, getMappedPolicyPath(user, isSTS))
 		return nil
 	}
 
