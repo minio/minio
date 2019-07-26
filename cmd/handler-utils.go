@@ -394,20 +394,3 @@ func getHostName(r *http.Request) (hostName string) {
 	}
 	return
 }
-
-func isHTTPStatusOK(statusCode int) bool {
-	// List of success status.
-	var successStatus = []int{
-		http.StatusOK,
-		http.StatusCreated,
-		http.StatusAccepted,
-		http.StatusNoContent,
-		http.StatusPartialContent,
-	}
-	for _, okstatus := range successStatus {
-		if statusCode == okstatus {
-			return true
-		}
-	}
-	return false
-}

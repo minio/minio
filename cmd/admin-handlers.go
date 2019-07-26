@@ -1459,6 +1459,23 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseHeadersOnly(w)
 }
 
+// Returns true if the trace.Info should be traced,
+// false if certain conditions are not met.
+// - input entry is not of the type *trace.Info*
+// - errOnly entries are to be traced, not status code 2xx, 3xx.
+// - all entries to be traced, if not trace only S3 API requests.
+func mustTrace(entry interface{}, trcAll, errOnly bool) bool {
+	trcInfo, ok := entry.(trace.Info)
+	if !ok {
+		return false
+	}
+	trace := trcAll || !hasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+slashSeparator)
+	if errOnly {
+		return trace && trcInfo.RespInfo.StatusCode >= http.StatusBadRequest
+	}
+	return trace
+}
+
 // TraceHandler - POST /minio/admin/v1/trace
 // ----------
 // The handler sends http trace to the connected HTTP client.
@@ -1474,10 +1491,6 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Avoid reusing tcp connection if read timeout is hit
-	// This is needed to make r.Context().Done() work as
-	// expected in case of read timeout
-	w.Header().Set(xhttp.Connection, "close")
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
 
 	doneCh := make(chan struct{})
@@ -1487,27 +1500,21 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	// Use buffered channel to take care of burst sends or slow w.Write()
 	traceCh := make(chan interface{}, 4000)
 
-	filter := func(entry interface{}) bool {
-		trcInfo := entry.(trace.Info)
-		if trcErr && isHTTPStatusOK(trcInfo.RespInfo.StatusCode) {
-			return false
-		}
-		if trcAll {
-			return true
-		}
-		return !strings.HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath)
-
-	}
-	remoteHosts := getRemoteHosts(globalEndpoints)
-	peers, err := getRestClients(remoteHosts)
+	peers, err := getRestClients(getRemoteHosts(globalEndpoints))
 	if err != nil {
 		return
 	}
-	globalHTTPTrace.Subscribe(traceCh, doneCh, filter)
+
+	globalHTTPTrace.Subscribe(traceCh, doneCh, func(entry interface{}) bool {
+		return mustTrace(entry, trcAll, trcErr)
+	})
 
 	for _, peer := range peers {
 		peer.Trace(traceCh, doneCh, trcAll, trcErr)
 	}
+
+	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	defer keepAliveTicker.Stop()
 
 	enc := json.NewEncoder(w)
 	for {
@@ -1517,8 +1524,11 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.(http.Flusher).Flush()
-		case <-r.Context().Done():
-			return
+		case <-keepAliveTicker.C:
+			if _, err := w.Write([]byte(" ")); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
 		case <-GlobalServiceDoneCh:
 			return
 		}

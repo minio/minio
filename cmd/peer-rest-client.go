@@ -499,10 +499,12 @@ func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan stru
 		if err = dec.Decode(&info); err != nil {
 			return
 		}
-		select {
-		case traceCh <- info:
-		default:
-			// Do not block on slow receivers.
+		if len(info.NodeName) > 0 {
+			select {
+			case traceCh <- info:
+			default:
+				// Do not block on slow receivers.
+			}
 		}
 	}
 }
