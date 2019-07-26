@@ -19,7 +19,6 @@ package cmd
 import (
 	"context"
 	"encoding/gob"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -380,9 +379,11 @@ func serverMain(ctx *cli.Context) {
 	if err = globalNotificationSys.Init(newObject); err != nil {
 		logger.LogIf(context.Background(), err)
 	}
-	if globalAutoEncryption && !newObject.IsEncryptionSupported() {
-		logger.Fatal(errors.New("Invalid KMS configuration"), "auto-encryption is enabled but server does not support encryption")
-	}
+
+	// Verify if object layer supports
+	// - encryption
+	// - compression
+	verifyObjectLayerFeatures("server", newObject)
 
 	if globalIsXL {
 		initBackgroundHealing()

@@ -278,23 +278,14 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Create new notification system.
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
-	if globalEtcdClient != nil && newObject.IsNotificationSupported() {
+	if enableConfigOps && newObject.IsNotificationSupported() {
 		logger.LogIf(context.Background(), globalNotificationSys.Init(newObject))
 	}
 
-	// Encryption support checks in gateway mode.
-	{
-
-		if (globalAutoEncryption || GlobalKMS != nil) && !newObject.IsEncryptionSupported() {
-			logger.Fatal(errInvalidArgument,
-				"Encryption support is requested but (%s) gateway does not support encryption", gw.Name())
-		}
-
-		if GlobalGatewaySSE.IsSet() && GlobalKMS == nil {
-			logger.Fatal(uiErrInvalidGWSSEEnvValue(nil).Msg("MINIO_GATEWAY_SSE set but KMS is not configured"),
-				"Unable to start gateway with SSE")
-		}
-	}
+	// Verify if object layer supports
+	// - encryption
+	// - compression
+	verifyObjectLayerFeatures("gateway "+gatewayName, newObject)
 
 	// Once endpoints are finalized, initialize the new object api.
 	globalObjLayerMutex.Lock()
