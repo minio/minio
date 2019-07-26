@@ -1236,7 +1236,11 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	// If opa is configured, use OPA always.
 	if globalPolicyOPA != nil {
-		return globalPolicyOPA.IsAllowed(args)
+		ok, err := globalPolicyOPA.IsAllowed(args)
+		if err != nil {
+			logger.LogIf(context.Background(), err)
+		}
+		return ok
 	}
 
 	// With claims set, we should do STS related checks and validation.
