@@ -21,6 +21,7 @@ import (
 	"errors"
 	"net/url"
 	"path"
+	"strings"
 )
 
 // URL - improved JSON friendly url.URL.
@@ -98,6 +99,11 @@ func ParseURL(s string) (u *URL, err error) {
 	// `/` into `\` ie `/foo` becomes `\foo`
 	if uu.Path != "" {
 		uu.Path = path.Clean(uu.Path)
+	}
+
+	// path.Clean removes the trailing '/' and converts '//' to '/'.
+	if strings.HasSuffix(s, "/") && !strings.HasSuffix(uu.Path, "/") {
+		uu.Path += "/"
 	}
 
 	v := URL(*uu)
