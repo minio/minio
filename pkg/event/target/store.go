@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/event"
+	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
 const retryInterval = 3 * time.Second
@@ -42,6 +43,15 @@ type Store interface {
 	List() ([]string, error)
 	Del(key string) error
 	Open() error
+}
+
+func getNewUUID() (string, error) {
+	uuid, err := uuid.New()
+	if err != nil {
+		return "", err
+	}
+
+	return uuid.String(), nil
 }
 
 // replayEvents - Reads the events from the store and replays.

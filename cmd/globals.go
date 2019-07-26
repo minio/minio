@@ -168,6 +168,10 @@ var (
 	// global Listen system to send S3 API events to registered listeners
 	globalHTTPListen = pubsub.New()
 
+	// global MinIO notification target send S3 API events to single
+	// registered notification target
+	globalMinioNotification = pubsub.New()
+
 	// global console system to send console logs to
 	// registered listeners
 	globalConsoleSys *HTTPConsoleLoggerSys

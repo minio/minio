@@ -91,6 +91,7 @@ const (
 	NotifyPostgresSubSys = "notify_postgres"
 	NotifyRedisSubSys    = "notify_redis"
 	NotifyWebhookSubSys  = "notify_webhook"
+	NotifyMinioSubSys    = "notify_minio"
 
 	// Add new constants here if you add new fields to config.
 )
@@ -120,6 +121,7 @@ var SubSystems = set.CreateStringSet([]string{
 	NotifyPostgresSubSys,
 	NotifyRedisSubSys,
 	NotifyWebhookSubSys,
+	NotifyMinioSubSys,
 }...)
 
 // SubSystemsSingleTargets - subsystems which only support single target.

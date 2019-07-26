@@ -70,7 +70,7 @@ func (w WebhookArgs) Validate() error {
 			return errors.New("queueDir path should be absolute")
 		}
 	}
-	if w.QueueLimit > maxLimit {
+	if w.QueueLimit > MaxLimit {
 		return errors.New("queueLimit should not exceed 10000")
 	}
 	return nil

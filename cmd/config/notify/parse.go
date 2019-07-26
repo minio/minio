@@ -282,6 +282,9 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		// Verify if user is trying to disable already configured
 		// notification targets, based on their target IDs
 		for _, targetID := range targetIDs {
+			if strings.HasSuffix(targetID.String(), "minio") {
+				continue
+			}
 			if !targetList.Exists(targetID) {
 				return nil, config.Errorf(
 					"Unable to disable configured targets '%v'",

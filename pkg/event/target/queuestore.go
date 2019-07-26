@@ -29,8 +29,10 @@ import (
 	"github.com/minio/minio/pkg/sys"
 )
 
+// Max store limit
 const (
-	maxLimit = 10000 // Max store limit.
+	MaxLimit = 10000
+	// event file extension
 	eventExt = ".event"
 )
 
@@ -45,7 +47,7 @@ type QueueStore struct {
 // NewQueueStore - Creates an instance for QueueStore.
 func NewQueueStore(directory string, limit uint64) Store {
 	if limit == 0 {
-		limit = maxLimit
+		limit = MaxLimit
 		_, maxRLimit, err := sys.GetMaxOpenFileLimit()
 		if err == nil {
 			// Limit the maximum number of entries

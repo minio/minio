@@ -19,6 +19,8 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -58,6 +60,7 @@ func initHelp() {
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
 	}
+	kvs[config.NotifyMinioSubSys] = DefaultMinioKVS
 	if globalIsXL {
 		kvs[config.StorageClassSubSys] = storageclass.DefaultKVS
 	}
@@ -161,6 +164,10 @@ func initHelp() {
 			Description:     "publish bucket notifications to Redis datastores",
 			MultipleTargets: true,
 		},
+		config.HelpKV{
+			Key:         config.NotifyMinioSubSys,
+			Description: "publish bucket notifications to running MinIO server",
+		},
 	}
 
 	if globalIsXL {
@@ -196,6 +203,7 @@ func initHelp() {
 		config.NotifyRedisSubSys:    notify.HelpRedis,
 		config.NotifyWebhookSubSys:  notify.HelpWebhook,
 		config.NotifyESSubSys:       notify.HelpES,
+		config.NotifyMinioSubSys:    HelpMinio,
 	}
 
 	config.RegisterHelpSubSys(helpMap)
@@ -419,6 +427,35 @@ func lookupConfigs(s config.Config) {
 	globalConfigTargetList, err = notify.GetNotificationTargets(s, GlobalServiceDoneCh, NewCustomHTTPTransport())
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
+	}
+
+	kv := s[config.NotifyMinioSubSys][config.Default]
+	enable := env.Get(EnvMinioEnable, kv.Get(config.Enable)) == config.EnableOn
+	if enable {
+		numEvents, err := strconv.ParseInt(env.Get(EnvMinioEvents, kv.Get(MinioEvents)), 10, 64)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification minio target(s): %w", err))
+			return
+		}
+
+		pr, pw := io.Pipe()
+		tgt, err := NewMinioTarget(config.Default, MinioArgs{
+			Enable:    enable,
+			Bucket:    env.Get(EnvMinioBucket, kv.Get(MinioBucket)),
+			Writer:    pw,
+			Reader:    pr,
+			Store:     newObjectLayerWithoutSafeModeFn(),
+			NumEvents: numEvents,
+		}, GlobalServiceDoneCh)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification minio target(s): %w", err))
+		}
+
+		if tgt != nil {
+			if err = globalConfigTargetList.Add(tgt); err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification minio target(s): %w", err))
+			}
+		}
 	}
 }
 
