@@ -80,6 +80,13 @@ var errInvalidDecompressedSize = errors.New("Invalid Decompressed Size")
 // error returned in IAM subsystem when user doesn't exist.
 var errNoSuchUser = errors.New("Specified user does not exist")
 
+// error returned in IAM subsystem when groups doesn't exist.
+var errNoSuchGroup = errors.New("Specified group does not exist")
+
+// error returned in IAM subsystem when a non-empty group needs to be
+// deleted.
+var errGroupNotEmpty = errors.New("Specified group is not empty - cannot remove it")
+
 // error returned in IAM subsystem when policy doesn't exist.
 var errNoSuchPolicy = errors.New("Specified canned policy does not exist")
 

@@ -34,6 +34,7 @@ const (
 	peerRESTMethodLoadPolicy               = "loadpolicy"
 	peerRESTMethodDeletePolicy             = "deletepolicy"
 	peerRESTMethodLoadUsers                = "loadusers"
+	peerRESTMethodLoadGroup                = "loadgroup"
 	peerRESTMethodStartProfiling           = "startprofiling"
 	peerRESTMethodDownloadProfilingData    = "downloadprofilingdata"
 	peerRESTMethodBucketPolicySet          = "setbucketpolicy"
@@ -50,6 +51,7 @@ const (
 const (
 	peerRESTBucket   = "bucket"
 	peerRESTUser     = "user"
+	peerRESTGroup    = "group"
 	peerRESTUserTemp = "user-temp"
 	peerRESTPolicy   = "policy"
 	peerRESTSignal   = "signal"

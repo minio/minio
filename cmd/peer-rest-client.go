@@ -443,6 +443,18 @@ func (client *peerRESTClient) LoadUsers() (err error) {
 	return nil
 }
 
+// LoadGroup - send load group command to peers.
+func (client *peerRESTClient) LoadGroup(group string) error {
+	values := make(url.Values)
+	values.Set(peerRESTGroup, group)
+	respBody, err := client.call(peerRESTMethodLoadGroup, values, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 // SignalService - sends signal to peer nodes.
 func (client *peerRESTClient) SignalService(sig serviceSignal) error {
 	values := make(url.Values)

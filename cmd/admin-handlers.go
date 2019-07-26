@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"sort"
@@ -1019,6 +1020,130 @@ func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponseJSON(w, econfigData)
 }
 
+// UpdateGroupMembers - PUT /minio/admin/v1/update-group-members
+func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "UpdateGroupMembers")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	defer r.Body.Close()
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+		return
+	}
+
+	var updReq madmin.GroupAddRemove
+	err = json.Unmarshal(data, &updReq)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+		return
+	}
+
+	if updReq.IsRemove {
+		err = globalIAMSys.RemoveUsersFromGroup(updReq.Group, updReq.Members)
+	} else {
+		err = globalIAMSys.AddUsersToGroup(updReq.Group, updReq.Members)
+	}
+
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// Notify all other MinIO peers to load group.
+	for _, nerr := range globalNotificationSys.LoadGroup(updReq.Group) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+}
+
+// GetGroup - /minio/admin/v1/group?group=mygroup1
+func (a adminAPIHandlers) GetGroup(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetGroup")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	group := vars["group"]
+
+	gdesc, err := globalIAMSys.GetGroupDescription(group)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	body, err := json.Marshal(gdesc)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, body)
+}
+
+// ListGroups - GET /minio/admin/v1/groups
+func (a adminAPIHandlers) ListGroups(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListGroups")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	groups := globalIAMSys.ListGroups()
+	body, err := json.Marshal(groups)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, body)
+}
+
+// SetGroupStatus - PUT /minio/admin/v1/set-group-status?group=mygroup1&status=enabled
+func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SetGroupStatus")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	group := vars["group"]
+	status := vars["status"]
+
+	var err error
+	if status == statusEnabled {
+		err = globalIAMSys.SetGroupStatus(group, true)
+	} else if status == statusDisabled {
+		err = globalIAMSys.SetGroupStatus(group, false)
+	} else {
+		err = errInvalidArgument
+	}
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// Notify all other MinIO peers to reload user.
+	for _, nerr := range globalNotificationSys.LoadGroup(group) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+}
+
 // SetUserStatus - PUT /minio/admin/v1/set-user-status?accessKey=<access_key>&status=[enabled|disabled]
 func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetUserStatus")
@@ -1253,7 +1378,7 @@ func (a adminAPIHandlers) SetUserPolicy(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := globalIAMSys.PolicyDBSet(accessKey, policyName); err != nil {
+	if err := globalIAMSys.PolicyDBSet(accessKey, policyName, false); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 	}
 

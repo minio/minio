@@ -183,11 +183,16 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	policyName, err := globalIAMSys.PolicyDBGet(user.AccessKey)
+	policies, err := globalIAMSys.PolicyDBGet(user.AccessKey, false)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
 		return
+	}
+
+	policyName := ""
+	if len(policies) > 0 {
+		policyName = policies[0]
 	}
 
 	// This policy is the policy associated with the user

@@ -42,6 +42,9 @@ const (
 	// IAM users directory.
 	iamConfigUsersPrefix = iamConfigPrefix + "/users/"
 
+	// IAM groups directory.
+	iamConfigGroupsPrefix = iamConfigPrefix + "/groups/"
+
 	// IAM policies directory.
 	iamConfigPoliciesPrefix = iamConfigPrefix + "/policies/"
 
@@ -52,6 +55,7 @@ const (
 	iamConfigPolicyDBPrefix         = iamConfigPrefix + "/policydb/"
 	iamConfigPolicyDBUsersPrefix    = iamConfigPolicyDBPrefix + "users/"
 	iamConfigPolicyDBSTSUsersPrefix = iamConfigPolicyDBPrefix + "sts-users/"
+	iamConfigPolicyDBGroupsPrefix   = iamConfigPolicyDBPrefix + "groups/"
 
 	// IAM identity file which captures identity credentials.
 	iamIdentityFile = "identity.json"
@@ -59,10 +63,18 @@ const (
 	// IAM policy file which provides policies for each users.
 	iamPolicyFile = "policy.json"
 
+	// IAM group members file
+	iamGroupMembersFile = "members.json"
+
 	// IAM format file
 	iamFormatFile = "format.json"
 
 	iamFormatVersion1 = 1
+)
+
+const (
+	statusEnabled  = "enabled"
+	statusDisabled = "disabled"
 )
 
 type iamFormat struct {
@@ -85,25 +97,23 @@ func getUserIdentityPath(user string, isSTS bool) string {
 	return pathJoin(basePath, user, iamIdentityFile)
 }
 
+func getGroupInfoPath(group string) string {
+	return pathJoin(iamConfigGroupsPrefix, group, iamGroupMembersFile)
+}
+
 func getPolicyDocPath(name string) string {
 	return pathJoin(iamConfigPoliciesPrefix, name, iamPolicyFile)
 }
 
-func getMappedPolicyPath(name string, isSTS bool) string {
-	if isSTS {
+func getMappedPolicyPath(name string, isSTS, isGroup bool) string {
+	switch {
+	case isSTS:
 		return pathJoin(iamConfigPolicyDBSTSUsersPrefix, name+".json")
+	case isGroup:
+		return pathJoin(iamConfigPolicyDBGroupsPrefix, name+".json")
+	default:
+		return pathJoin(iamConfigPolicyDBUsersPrefix, name+".json")
 	}
-	return pathJoin(iamConfigPolicyDBUsersPrefix, name+".json")
-}
-
-// MappedPolicy represents a policy name mapped to a user or group
-type MappedPolicy struct {
-	Version int    `json:"version"`
-	Policy  string `json:"policy"`
-}
-
-func newMappedPolicy(policy string) MappedPolicy {
-	return MappedPolicy{Version: 1, Policy: policy}
 }
 
 // UserIdentity represents a user's secret key and their status
@@ -114,6 +124,27 @@ type UserIdentity struct {
 
 func newUserIdentity(creds auth.Credentials) UserIdentity {
 	return UserIdentity{Version: 1, Credentials: creds}
+}
+
+// GroupInfo contains info about a group
+type GroupInfo struct {
+	Version int      `json:"version"`
+	Status  string   `json:"status"`
+	Members []string `json:"members"`
+}
+
+func newGroupInfo(members []string) GroupInfo {
+	return GroupInfo{Version: 1, Status: statusEnabled, Members: members}
+}
+
+// MappedPolicy represents a policy name mapped to a user or group
+type MappedPolicy struct {
+	Version int    `json:"version"`
+	Policy  string `json:"policy"`
+}
+
+func newMappedPolicy(policy string) MappedPolicy {
+	return MappedPolicy{Version: 1, Policy: policy}
 }
 
 func loadIAMConfigItem(objectAPI ObjectLayer, item interface{}, path string) error {
@@ -212,12 +243,18 @@ func saveIAMConfigItemEtcd(ctx context.Context, item interface{}, path string) e
 // IAMSys - config system.
 type IAMSys struct {
 	sync.RWMutex
-	// map of usernames to credentials
-	iamUsersMap map[string]auth.Credentials
 	// map of policy names to policy definitions
 	iamPolicyDocsMap map[string]iampolicy.Policy
+	// map of usernames to credentials
+	iamUsersMap map[string]auth.Credentials
+	// map of group names to group info
+	iamGroupsMap map[string]GroupInfo
+	// map of user names to groups they are a member of
+	iamUserGroupMemberships map[string]set.StringSet
 	// map of usernames/temporary access keys to policy names
 	iamUserPolicyMap map[string]MappedPolicy
+	// map of group names to policy names
+	iamGroupPolicyMap map[string]MappedPolicy
 }
 
 func loadPolicyDoc(objectAPI ObjectLayer, policy string, m map[string]iampolicy.Policy) error {
@@ -260,7 +297,7 @@ func loadUser(objectAPI ObjectLayer, user string, isSTS bool,
 		idFile := getUserIdentityPath(user, isSTS)
 		// Delete expired identity - ignoring errors here.
 		deleteConfig(context.Background(), objectAPI, idFile)
-		deleteConfig(context.Background(), objectAPI, getMappedPolicyPath(user, isSTS))
+		deleteConfig(context.Background(), objectAPI, getMappedPolicyPath(user, isSTS, false))
 		return nil
 	}
 
@@ -291,11 +328,38 @@ func loadUsers(objectAPI ObjectLayer, isSTS bool, m map[string]auth.Credentials)
 	return nil
 }
 
-func loadMappedPolicy(objectAPI ObjectLayer, name string, isSTS bool,
+func loadGroup(objectAPI ObjectLayer, group string, m map[string]GroupInfo) error {
+	var g GroupInfo
+	err := loadIAMConfigItem(objectAPI, &g, getGroupInfoPath(group))
+	if err != nil {
+		return err
+	}
+	m[group] = g
+	return nil
+}
+
+func loadGroups(objectAPI ObjectLayer, m map[string]GroupInfo) error {
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+	for item := range listIAMConfigItems(objectAPI, iamConfigGroupsPrefix, true, doneCh) {
+		if item.Err != nil {
+			return item.Err
+		}
+
+		group := item.Item
+		err := loadGroup(objectAPI, group, m)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func loadMappedPolicy(objectAPI ObjectLayer, name string, isSTS, isGroup bool,
 	m map[string]MappedPolicy) error {
 
 	var p MappedPolicy
-	err := loadIAMConfigItem(objectAPI, &p, getMappedPolicyPath(name, isSTS))
+	err := loadIAMConfigItem(objectAPI, &p, getMappedPolicyPath(name, isSTS, isGroup))
 	if err != nil {
 		return err
 	}
@@ -303,7 +367,7 @@ func loadMappedPolicy(objectAPI ObjectLayer, name string, isSTS bool,
 	return nil
 }
 
-func loadMappedPolicies(objectAPI ObjectLayer, isSTS bool, m map[string]MappedPolicy) error {
+func loadMappedPolicies(objectAPI ObjectLayer, isSTS, isGroup bool, m map[string]MappedPolicy) error {
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 	basePath := iamConfigPolicyDBUsersPrefix
@@ -317,11 +381,56 @@ func loadMappedPolicies(objectAPI ObjectLayer, isSTS bool, m map[string]MappedPo
 
 		policyFile := item.Item
 		userOrGroupName := strings.TrimSuffix(policyFile, ".json")
-		err := loadMappedPolicy(objectAPI, userOrGroupName, isSTS, m)
+		err := loadMappedPolicy(objectAPI, userOrGroupName, isSTS, isGroup, m)
 		if err != nil {
 			return err
 		}
 	}
+	return nil
+}
+
+// LoadGroup - loads a specific group from storage, and updates the
+// memberships cache. If the specified group does not exist in
+// storage, it is removed from in-memory maps as well - this
+// simplifies the implementation for group removal. This is called
+// only via IAM notifications.
+func (sys *IAMSys) LoadGroup(objAPI ObjectLayer, group string) error {
+	if objAPI == nil {
+		return errInvalidArgument
+	}
+
+	sys.Lock()
+	defer sys.Unlock()
+
+	if globalEtcdClient != nil {
+		// Watch APIs cover this case, so nothing to do.
+		return nil
+	}
+
+	err := loadGroup(objAPI, group, sys.iamGroupsMap)
+	if err != nil && err != errConfigNotFound {
+		return err
+	}
+
+	if err == errConfigNotFound {
+		// group does not exist - so remove from memory.
+		sys.removeGroupFromMembershipsMap(group)
+		delete(sys.iamGroupsMap, group)
+		delete(sys.iamGroupPolicyMap, group)
+		return nil
+	}
+
+	gi := sys.iamGroupsMap[group]
+
+	// Updating the group memberships cache happens in two steps:
+	//
+	// 1. Remove the group from each user's list of memberships.
+	// 2. Add the group to each member's list of memberships.
+	//
+	// This ensures that regardless of members being added or
+	// removed, the cache stays current.
+	sys.removeGroupFromMembershipsMap(group)
+	sys.updateGroupMembershipsMap(group, &gi)
 	return nil
 }
 
@@ -356,7 +465,7 @@ func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, isSTS bool) er
 		if err != nil {
 			return err
 		}
-		err = loadMappedPolicy(objAPI, accessKey, isSTS, sys.iamUserPolicyMap)
+		err = loadMappedPolicy(objAPI, accessKey, isSTS, false, sys.iamUserPolicyMap)
 		if err != nil {
 			return err
 		}
@@ -378,6 +487,7 @@ func (sys *IAMSys) reloadFromEvent(event *etcd.Event) {
 	eventCreate := event.IsModify() || event.IsCreate()
 	eventDelete := event.Type == etcd.EventTypeDelete
 	usersPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigUsersPrefix)
+	groupsPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigGroupsPrefix)
 	stsPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigSTSPrefix)
 	policyPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigPoliciesPrefix)
 	policyDBUsersPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigPolicyDBUsersPrefix)
@@ -398,6 +508,13 @@ func (sys *IAMSys) reloadFromEvent(event *etcd.Event) {
 			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigSTSPrefix))
 			loadEtcdUser(ctx, accessKey, true, sys.iamUsersMap)
+		case groupsPrefix:
+			group := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
+				iamConfigGroupsPrefix))
+			loadEtcdGroup(ctx, group, sys.iamGroupsMap)
+			gi := sys.iamGroupsMap[group]
+			sys.removeGroupFromMembershipsMap(group)
+			sys.updateGroupMembershipsMap(group, &gi)
 		case policyPrefix:
 			policyName := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigPoliciesPrefix))
@@ -406,12 +523,12 @@ func (sys *IAMSys) reloadFromEvent(event *etcd.Event) {
 			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigPolicyDBUsersPrefix)
 			user := strings.TrimSuffix(policyMapFile, ".json")
-			loadEtcdMappedPolicy(ctx, user, false, sys.iamUserPolicyMap)
+			loadEtcdMappedPolicy(ctx, user, false, false, sys.iamUserPolicyMap)
 		case policyDBSTSUsersPrefix:
 			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigPolicyDBSTSUsersPrefix)
 			user := strings.TrimSuffix(policyMapFile, ".json")
-			loadEtcdMappedPolicy(ctx, user, true, sys.iamUserPolicyMap)
+			loadEtcdMappedPolicy(ctx, user, true, false, sys.iamUserPolicyMap)
 		}
 	case eventDelete:
 		switch {
@@ -423,6 +540,12 @@ func (sys *IAMSys) reloadFromEvent(event *etcd.Event) {
 			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigSTSPrefix))
 			delete(sys.iamUsersMap, accessKey)
+		case groupsPrefix:
+			group := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
+				iamConfigGroupsPrefix))
+			sys.removeGroupFromMembershipsMap(group)
+			delete(sys.iamGroupsMap, group)
+			delete(sys.iamGroupPolicyMap, group)
 		case policyPrefix:
 			policyName := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigPoliciesPrefix))
@@ -541,7 +664,7 @@ func migrateUsersConfigToV1(objAPI ObjectLayer, isSTS bool) error {
 
 			// 2. copy policy file to new location.
 			mp := newMappedPolicy(policyName)
-			path := getMappedPolicyPath(user, isSTS)
+			path := getMappedPolicyPath(user, isSTS, false)
 			if err := saveIAMConfigItem(objAPI, mp, path); err != nil {
 				return err
 			}
@@ -621,7 +744,7 @@ func migrateUsersConfigEtcdToV1(isSTS bool) error {
 
 			// 2. copy policy to new loc.
 			mp := newMappedPolicy(policyName)
-			path := getMappedPolicyPath(user, isSTS)
+			path := getMappedPolicyPath(user, isSTS, false)
 			if err := saveIAMConfigItemEtcd(ctx, mp, path); err != nil {
 				return err
 			}
@@ -898,7 +1021,7 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 	}
 
 	var err error
-	mappingPath := getMappedPolicyPath(accessKey, false)
+	mappingPath := getMappedPolicyPath(accessKey, false, false)
 	idPath := getUserIdentityPath(accessKey, false)
 	if globalEtcdClient != nil {
 		// It is okay to ignore errors when deleting policy.json for the user.
@@ -950,7 +1073,7 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 
 		mp := newMappedPolicy(policyName)
 
-		mappingPath := getMappedPolicyPath(accessKey, true)
+		mappingPath := getMappedPolicyPath(accessKey, true, false)
 		var err error
 		if globalEtcdClient != nil {
 			err = saveIAMConfigItemEtcd(context.Background(), mp, mappingPath)
@@ -1072,7 +1195,7 @@ func (sys *IAMSys) SetUser(accessKey string, uinfo madmin.UserInfo) error {
 
 	// Set policy if specified.
 	if uinfo.PolicyName != "" {
-		return sys.policyDBSet(objectAPI, accessKey, uinfo.PolicyName, false)
+		return sys.policyDBSet(objectAPI, accessKey, uinfo.PolicyName, false, false)
 	}
 	return nil
 }
@@ -1119,10 +1242,9 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 	return cred, ok && cred.IsValid()
 }
 
-// PolicyDBSet - sets a policy for a user or group in the
-// PolicyDB. This function applies only long-term users. For STS
-// users, policy is set directly by called sys.policyDBSet().
-func (sys *IAMSys) PolicyDBSet(name, policy string) error {
+// AddUsersToGroup - adds users to a group, creating the group if
+// needed. No error if user(s) already are in the group.
+func (sys *IAMSys) AddUsersToGroup(group string, members []string) error {
 	objectAPI := newObjectLayerFn()
 	if objectAPI == nil {
 		return errServerNotInitialized
@@ -1131,12 +1253,248 @@ func (sys *IAMSys) PolicyDBSet(name, policy string) error {
 	sys.Lock()
 	defer sys.Unlock()
 
-	return sys.policyDBSet(objectAPI, name, policy, false)
+	if group == "" {
+		return errInvalidArgument
+	}
+
+	// Validate that all members exist.
+	for _, member := range members {
+		_, ok := sys.iamUsersMap[member]
+		if !ok {
+			return errNoSuchUser
+		}
+	}
+
+	gi, ok := sys.iamGroupsMap[group]
+	if !ok {
+		// Set group as enabled by default when it doesn't
+		// exist.
+		gi = newGroupInfo(members)
+	} else {
+		mergedMembers := append(gi.Members, members...)
+		uniqMembers := set.CreateStringSet(mergedMembers...).ToSlice()
+		gi.Members = uniqMembers
+	}
+
+	var err error
+	if globalEtcdClient == nil {
+		err = saveIAMConfigItem(objectAPI, gi, getGroupInfoPath(group))
+	} else {
+		err = saveIAMConfigItemEtcd(context.Background(), gi, getGroupInfoPath(group))
+	}
+	if err != nil {
+		return err
+	}
+
+	sys.iamGroupsMap[group] = gi
+
+	// update user-group membership map
+	for _, member := range members {
+		gset := sys.iamUserGroupMemberships[member]
+		if gset == nil {
+			gset = set.CreateStringSet(group)
+		} else {
+			gset.Add(group)
+		}
+		sys.iamUserGroupMemberships[member] = gset
+	}
+
+	return nil
+}
+
+// RemoveUsersFromGroup - remove users from group. If no users are
+// given, and the group is empty, deletes the group as well.
+func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return errServerNotInitialized
+	}
+
+	sys.Lock()
+	defer sys.Unlock()
+
+	if group == "" {
+		return errInvalidArgument
+	}
+
+	// Validate that all members exist.
+	for _, member := range members {
+		_, ok := sys.iamUsersMap[member]
+		if !ok {
+			return errNoSuchUser
+		}
+	}
+
+	gi, ok := sys.iamGroupsMap[group]
+	if !ok {
+		return errNoSuchGroup
+	}
+
+	// Check if attempting to delete a non-empty group.
+	if len(members) == 0 && len(gi.Members) != 0 {
+		return errGroupNotEmpty
+	}
+
+	if len(members) == 0 {
+		// len(gi.Members) == 0 here.
+
+		// Remove the group from storage.
+		giPath := getGroupInfoPath(group)
+		giPolicyPath := getMappedPolicyPath(group, false, true)
+		if globalEtcdClient == nil {
+			err := deleteConfig(context.Background(), objectAPI, giPath)
+			if err != nil {
+				return err
+			}
+
+			// Remove mapped policy from storage.
+			err = deleteConfig(context.Background(), objectAPI,
+				getMappedPolicyPath(group, false, true))
+			if err != nil {
+				return err
+			}
+		} else {
+			err := deleteKeyEtcd(context.Background(), globalEtcdClient, giPath)
+			if err != nil {
+				return err
+			}
+
+			err = deleteKeyEtcd(context.Background(), globalEtcdClient, giPolicyPath)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Delete from server memory
+		delete(sys.iamGroupsMap, group)
+		delete(sys.iamGroupPolicyMap, group)
+		return nil
+	}
+
+	// Only removing members.
+	s := set.CreateStringSet(gi.Members...)
+	d := set.CreateStringSet(members...)
+	gi.Members = s.Difference(d).ToSlice()
+
+	err := saveIAMConfigItem(objectAPI, gi, getGroupInfoPath(group))
+	if err != nil {
+		return err
+	}
+	sys.iamGroupsMap[group] = gi
+
+	// update user-group membership map
+	for _, member := range members {
+		gset := sys.iamUserGroupMemberships[member]
+		if gset == nil {
+			continue
+		}
+		gset.Remove(group)
+		sys.iamUserGroupMemberships[member] = gset
+	}
+
+	return nil
+}
+
+// SetGroupStatus - enable/disabled a group
+func (sys *IAMSys) SetGroupStatus(group string, enabled bool) error {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return errServerNotInitialized
+	}
+
+	sys.Lock()
+	defer sys.Unlock()
+
+	if group == "" {
+		return errInvalidArgument
+	}
+
+	gi, ok := sys.iamGroupsMap[group]
+	if !ok {
+		return errNoSuchGroup
+	}
+
+	if enabled {
+		gi.Status = statusEnabled
+	} else {
+		gi.Status = statusDisabled
+	}
+
+	var err error
+	if globalEtcdClient == nil {
+		err = saveIAMConfigItem(objectAPI, gi, getGroupInfoPath(group))
+	} else {
+		err = saveIAMConfigItemEtcd(context.Background(), gi, getGroupInfoPath(group))
+	}
+	if err != nil {
+		return err
+	}
+
+	sys.iamGroupsMap[group] = gi
+
+	return nil
+}
+
+// GetGroupDescription - builds up group description
+func (sys *IAMSys) GetGroupDescription(group string) (gd madmin.GroupDesc, err error) {
+	sys.RLock()
+	defer sys.RUnlock()
+
+	gi, ok := sys.iamGroupsMap[group]
+	if !ok {
+		return gd, errNoSuchGroup
+	}
+
+	var p []string
+	p, err = sys.policyDBGet(group, true)
+	if err != nil {
+		return gd, err
+	}
+
+	policy := ""
+	if len(p) > 0 {
+		policy = p[0]
+	}
+
+	return madmin.GroupDesc{
+		Name:    group,
+		Status:  gi.Status,
+		Members: gi.Members,
+		Policy:  policy,
+	}, nil
+}
+
+// ListGroups - lists groups
+func (sys *IAMSys) ListGroups() (r []string) {
+	sys.RLock()
+	defer sys.RUnlock()
+
+	for k := range sys.iamGroupsMap {
+		r = append(r, k)
+	}
+	return r
+}
+
+// PolicyDBSet - sets a policy for a user or group in the
+// PolicyDB. This function applies only long-term users. For STS
+// users, policy is set directly by called sys.policyDBSet().
+func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return errServerNotInitialized
+	}
+
+	sys.Lock()
+	defer sys.Unlock()
+
+	// isSTS is always false when called via PolicyDBSet as policy
+	// is never set by an external API call for STS users.
+	return sys.policyDBSet(objectAPI, name, policy, false, isGroup)
 }
 
 // policyDBSet - sets a policy for user in the policy db. Assumes that
 // caller has sys.Lock().
-func (sys *IAMSys) policyDBSet(objectAPI ObjectLayer, name, policy string, isSTS bool) error {
+func (sys *IAMSys) policyDBSet(objectAPI ObjectLayer, name, policy string, isSTS, isGroup bool) error {
 	if name == "" || policy == "" {
 		return errInvalidArgument
 	}
@@ -1156,7 +1514,7 @@ func (sys *IAMSys) policyDBSet(objectAPI ObjectLayer, name, policy string, isSTS
 		return errNoSuchUser
 	}
 	var err error
-	mappingPath := getMappedPolicyPath(name, isSTS)
+	mappingPath := getMappedPolicyPath(name, isSTS, isGroup)
 	if globalEtcdClient != nil {
 		err = saveIAMConfigItemEtcd(context.Background(), mp, mappingPath)
 	} else {
@@ -1169,27 +1527,57 @@ func (sys *IAMSys) policyDBSet(objectAPI ObjectLayer, name, policy string, isSTS
 	return nil
 }
 
-// PolicyDBGet - gets policy set on a user
-func (sys *IAMSys) PolicyDBGet(name string) (string, error) {
+// PolicyDBGet - gets policy set on a user or group. Since a user may
+// be a member of multiple groups, this function returns an array of
+// applicable policies (each group is mapped to at most one policy).
+func (sys *IAMSys) PolicyDBGet(name string, isGroup bool) ([]string, error) {
 	if name == "" {
-		return "", errInvalidArgument
+		return nil, errInvalidArgument
 	}
 
 	objectAPI := newObjectLayerFn()
 	if objectAPI == nil {
-		return "", errServerNotInitialized
+		return nil, errServerNotInitialized
 	}
 
 	sys.RLock()
 	defer sys.RUnlock()
 
-	if _, ok := sys.iamUsersMap[name]; !ok {
-		return "", errNoSuchUser
+	return sys.policyDBGet(name, isGroup)
+}
+
+// This call assumes that caller has the sys.RLock()
+func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
+	if isGroup {
+		if _, ok := sys.iamGroupsMap[name]; !ok {
+			return nil, errNoSuchGroup
+		}
+
+		policy := sys.iamGroupPolicyMap[name]
+		// returned policy could be empty
+		if policy.Policy == "" {
+			return nil, nil
+		}
+		return []string{policy.Policy}, nil
 	}
 
+	if _, ok := sys.iamUsersMap[name]; !ok {
+		return nil, errNoSuchUser
+	}
+
+	result := []string{}
 	policy := sys.iamUserPolicyMap[name]
 	// returned policy could be empty
-	return policy.Policy, nil
+	if policy.Policy != "" {
+		result = append(result, policy.Policy)
+	}
+	for _, group := range sys.iamUserGroupMemberships[name].ToSlice() {
+		p, ok := sys.iamGroupPolicyMap[group]
+		if ok && p.Policy != "" {
+			result = append(result, p.Policy)
+		}
+	}
+	return result, nil
 }
 
 // IsAllowedSTS is meant for STS based temporary credentials,
@@ -1326,11 +1714,11 @@ func etcdKvsToSetPolicyDB(prefix string, kvs []*mvccpb.KeyValue) set.StringSet {
 	return items
 }
 
-func loadEtcdMappedPolicy(ctx context.Context, name string, isSTS bool,
+func loadEtcdMappedPolicy(ctx context.Context, name string, isSTS, isGroup bool,
 	m map[string]MappedPolicy) error {
 
 	var p MappedPolicy
-	err := loadIAMConfigItemEtcd(ctx, &p, getMappedPolicyPath(name, isSTS))
+	err := loadIAMConfigItemEtcd(ctx, &p, getMappedPolicyPath(name, isSTS, isGroup))
 	if err != nil {
 		return err
 	}
@@ -1338,7 +1726,7 @@ func loadEtcdMappedPolicy(ctx context.Context, name string, isSTS bool,
 	return nil
 }
 
-func loadEtcdMappedPolicies(isSTS bool, m map[string]MappedPolicy) error {
+func loadEtcdMappedPolicies(isSTS, isGroup bool, m map[string]MappedPolicy) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 	defer cancel()
 	basePrefix := iamConfigPolicyDBUsersPrefix
@@ -1354,7 +1742,7 @@ func loadEtcdMappedPolicies(isSTS bool, m map[string]MappedPolicy) error {
 
 	// Reload config and policies for all users.
 	for _, user := range users.ToSlice() {
-		if err = loadEtcdMappedPolicy(ctx, user, isSTS, m); err != nil {
+		if err = loadEtcdMappedPolicy(ctx, user, isSTS, isGroup, m); err != nil {
 			return err
 		}
 	}
@@ -1371,7 +1759,7 @@ func loadEtcdUser(ctx context.Context, user string, isSTS bool, m map[string]aut
 	if u.Credentials.IsExpired() {
 		// Delete expired identity.
 		deleteKeyEtcd(ctx, globalEtcdClient, getUserIdentityPath(user, isSTS))
-		deleteKeyEtcd(ctx, globalEtcdClient, getMappedPolicyPath(user, isSTS))
+		deleteKeyEtcd(ctx, globalEtcdClient, getMappedPolicyPath(user, isSTS, false))
 		return nil
 	}
 
@@ -1394,9 +1782,38 @@ func loadEtcdUsers(isSTS bool, m map[string]auth.Credentials) error {
 
 	users := etcdKvsToSet(basePrefix, r.Kvs)
 
-	// Reload config and policies for all users.
+	// Reload config for all users.
 	for _, user := range users.ToSlice() {
 		if err = loadEtcdUser(ctx, user, isSTS, m); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func loadEtcdGroup(ctx context.Context, group string, m map[string]GroupInfo) error {
+	var gi GroupInfo
+	err := loadIAMConfigItemEtcd(ctx, &gi, getGroupInfoPath(group))
+	if err != nil {
+		return err
+	}
+	m[group] = gi
+	return nil
+}
+
+func loadEtcdGroups(m map[string]GroupInfo) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
+	defer cancel()
+	r, err := globalEtcdClient.Get(ctx, iamConfigGroupsPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+	if err != nil {
+		return err
+	}
+
+	groups := etcdKvsToSet(iamConfigGroupsPrefix, r.Kvs)
+
+	// Reload config for all groups.
+	for _, group := range groups.ToSlice() {
+		if err = loadEtcdGroup(ctx, group, m); err != nil {
 			return err
 		}
 	}
@@ -1451,8 +1868,10 @@ func setDefaultCannedPolicies(policies map[string]iampolicy.Policy) {
 
 func (sys *IAMSys) refreshEtcd() error {
 	iamUsersMap := make(map[string]auth.Credentials)
+	iamGroupsMap := make(map[string]GroupInfo)
 	iamPolicyDocsMap := make(map[string]iampolicy.Policy)
 	iamUserPolicyMap := make(map[string]MappedPolicy)
+	iamGroupPolicyMap := make(map[string]MappedPolicy)
 
 	if err := loadEtcdPolicies(iamPolicyDocsMap); err != nil {
 		return err
@@ -1464,11 +1883,19 @@ func (sys *IAMSys) refreshEtcd() error {
 	if err := loadEtcdUsers(true, iamUsersMap); err != nil {
 		return err
 	}
-	if err := loadEtcdMappedPolicies(false, iamUserPolicyMap); err != nil {
+	if err := loadEtcdGroups(iamGroupsMap); err != nil {
+		return err
+	}
+
+	if err := loadEtcdMappedPolicies(false, false, iamUserPolicyMap); err != nil {
 		return err
 	}
 	// load STS users policy mapping into the same map
-	if err := loadEtcdMappedPolicies(true, iamUserPolicyMap); err != nil {
+	if err := loadEtcdMappedPolicies(true, false, iamUserPolicyMap); err != nil {
+		return err
+	}
+	// load group policy mapping
+	if err := loadEtcdMappedPolicies(false, true, iamGroupPolicyMap); err != nil {
 		return err
 	}
 
@@ -1479,8 +1906,10 @@ func (sys *IAMSys) refreshEtcd() error {
 	defer sys.Unlock()
 
 	sys.iamUsersMap = iamUsersMap
+	sys.iamGroupsMap = iamGroupsMap
 	sys.iamUserPolicyMap = iamUserPolicyMap
 	sys.iamPolicyDocsMap = iamPolicyDocsMap
+	sys.iamGroupPolicyMap = iamGroupPolicyMap
 
 	return nil
 }
@@ -1488,8 +1917,10 @@ func (sys *IAMSys) refreshEtcd() error {
 // Refresh IAMSys.
 func (sys *IAMSys) refresh(objAPI ObjectLayer) error {
 	iamUsersMap := make(map[string]auth.Credentials)
+	iamGroupsMap := make(map[string]GroupInfo)
 	iamPolicyDocsMap := make(map[string]iampolicy.Policy)
 	iamUserPolicyMap := make(map[string]MappedPolicy)
+	iamGroupPolicyMap := make(map[string]MappedPolicy)
 
 	if err := loadPolicyDocs(objAPI, iamPolicyDocsMap); err != nil {
 		return err
@@ -1501,12 +1932,19 @@ func (sys *IAMSys) refresh(objAPI ObjectLayer) error {
 	if err := loadUsers(objAPI, true, iamUsersMap); err != nil {
 		return err
 	}
+	if err := loadGroups(objAPI, iamGroupsMap); err != nil {
+		return err
+	}
 
-	if err := loadMappedPolicies(objAPI, false, iamUserPolicyMap); err != nil {
+	if err := loadMappedPolicies(objAPI, false, false, iamUserPolicyMap); err != nil {
 		return err
 	}
 	// load STS policy mappings into the same map
-	if err := loadMappedPolicies(objAPI, true, iamUserPolicyMap); err != nil {
+	if err := loadMappedPolicies(objAPI, true, false, iamUserPolicyMap); err != nil {
+		return err
+	}
+	// load policies mapped to groups
+	if err := loadMappedPolicies(objAPI, false, false, iamGroupPolicyMap); err != nil {
 		return err
 	}
 
@@ -1519,15 +1957,60 @@ func (sys *IAMSys) refresh(objAPI ObjectLayer) error {
 	sys.iamUsersMap = iamUsersMap
 	sys.iamPolicyDocsMap = iamPolicyDocsMap
 	sys.iamUserPolicyMap = iamUserPolicyMap
+	sys.iamGroupPolicyMap = iamGroupPolicyMap
+	sys.iamGroupsMap = iamGroupsMap
+	sys.buildUserGroupMemberships()
 
 	return nil
+}
+
+// buildUserGroupMemberships - builds the memberships map. IMPORTANT:
+// Assumes that sys.Lock is held by caller.
+func (sys *IAMSys) buildUserGroupMemberships() {
+	for group, gi := range sys.iamGroupsMap {
+		sys.updateGroupMembershipsMap(group, &gi)
+	}
+}
+
+// updateGroupMembershipsMap - updates the memberships map for a
+// group. IMPORTANT: Assumes sys.Lock() is held by caller.
+func (sys *IAMSys) updateGroupMembershipsMap(group string, gi *GroupInfo) {
+	if gi == nil {
+		return
+	}
+	for _, member := range gi.Members {
+		v := sys.iamUserGroupMemberships[member]
+		if v == nil {
+			v = set.CreateStringSet(group)
+		} else {
+			v.Add(group)
+		}
+		sys.iamUserGroupMemberships[member] = v
+	}
+}
+
+// removeGroupFromMembershipsMap - removes the group from every member
+// in the cache. IMPORTANT: Assumes sys.Lock() is held by caller.
+func (sys *IAMSys) removeGroupFromMembershipsMap(group string) {
+	if _, ok := sys.iamUserGroupMemberships[group]; !ok {
+		return
+	}
+	for member, groups := range sys.iamUserGroupMemberships {
+		if !groups.Contains(group) {
+			continue
+		}
+		groups.Remove(group)
+		sys.iamUserGroupMemberships[member] = groups
+	}
 }
 
 // NewIAMSys - creates new config system object.
 func NewIAMSys() *IAMSys {
 	return &IAMSys{
-		iamUsersMap:      make(map[string]auth.Credentials),
-		iamPolicyDocsMap: make(map[string]iampolicy.Policy),
-		iamUserPolicyMap: make(map[string]MappedPolicy),
+		iamUsersMap:             make(map[string]auth.Credentials),
+		iamPolicyDocsMap:        make(map[string]iampolicy.Policy),
+		iamUserPolicyMap:        make(map[string]MappedPolicy),
+		iamGroupsMap:            make(map[string]GroupInfo),
+		iamUserGroupMemberships: make(map[string]set.StringSet),
 	}
 }
