@@ -43,6 +43,12 @@ func (a GatewayUnsupported) CopyObjectPart(ctx context.Context, srcBucket, srcOb
 	return pi, NotImplemented{}
 }
 
+// PutObjectChunked - stub append object API
+func (a GatewayUnsupported) PutObjectChunked(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	logger.LogIf(ctx, NotImplemented{})
+	return objInfo, NotImplemented{}
+}
+
 // PutObjectPart puts a part of object in bucket
 func (a GatewayUnsupported) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, data *PutObjReader, opts ObjectOptions) (pi PartInfo, err error) {
 	logger.LogIf(ctx, NotImplemented{})

@@ -1295,6 +1295,135 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	})
 }
 
+// PutObjectChunkedHandler - takes PUT without a predefined Content-Length
+func (api objectAPIHandlers) PutObjectChunkedHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "PutObjectChunked")
+
+	defer logger.AuditLog(w, r, "PutObjectChunked", mustGetClaimsFromToken(r))
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	if crypto.S3KMS.IsRequested(r.Header) && !api.AllowSSEKMS() {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
+		return
+	}
+	if !api.EncryptionEnabled() && hasServerSideEncryptionHeader(r.Header) {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object := vars["object"]
+
+	// To detect if the client has disconnected.
+	r.Body = &detectDisconnect{r.Body, r.Context().Done()}
+
+	// X-Amz-Copy-Source shouldn't be set for this call.
+	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopySource), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Validate storage class metadata if present
+	if _, ok := r.Header[amzStorageClassCanonical]; ok {
+		if !isValidStorageClassMeta(r.Header.Get(amzStorageClassCanonical)) {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidStorageClass), r.URL, guessIsBrowserReq(r))
+			return
+		}
+	}
+
+	if r.ContentLength != -1 {
+		// Do not provide a predefined content-length for Append API, this API
+		// expects Transfer-Encoding: chunked input stream.
+		writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	metadata, err := extractMetadata(ctx, r)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	var (
+		reader io.Reader
+		s3Err  APIErrorCode
+	)
+	reader = r.Body
+
+	rAuthType := getRequestAuthType(r)
+	// Check if put is allowed
+	if s3Err = isPutAllowed(rAuthType, bucket, object, r); s3Err != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	switch rAuthType {
+	case authTypeSignedV2, authTypePresignedV2:
+		s3Err = isReqAuthenticatedV2(r)
+		if s3Err != ErrNone {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+	case authTypePresigned, authTypeSigned:
+		if s3Err = reqSignatureV4Verify(r, globalServerConfig.GetRegion(), serviceS3); s3Err != ErrNone {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+	}
+
+	// This request header needs to be set prior to setting ObjectOptions
+	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) && !crypto.S3KMS.IsRequested(r.Header) {
+		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+	}
+
+	// No strict compat, since this not an S3 API.
+	hashReader, err := hash.NewReader(reader, -1, "", "", -1, false)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	rawReader := hashReader
+	pReader := NewPutObjReader(rawReader, nil, nil)
+
+	// get gateway encryption options
+	var opts ObjectOptions
+	opts, err = putOpts(ctx, r, bucket, object, metadata)
+	if err != nil {
+		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
+		return
+	}
+
+	// Ensure that metadata does not contain sensitive information
+	crypto.RemoveSensitiveEntries(metadata)
+
+	// Create the object..
+	objInfo, err := objectAPI.PutObjectChunked(ctx, bucket, object, pReader, opts)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
+	writeSuccessResponseHeadersOnly(w)
+
+	// Notify object created event.
+	sendEvent(eventArgs{
+		EventName:    event.ObjectCreatedPutChunked,
+		BucketName:   bucket,
+		Object:       objInfo,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         handlers.GetSourceIP(r),
+	})
+}
+
 /// Multipart objectAPIHandlers
 
 // NewMultipartUploadHandler - New multipart upload.

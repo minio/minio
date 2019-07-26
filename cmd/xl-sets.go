@@ -630,6 +630,11 @@ func (s *xlSets) GetObject(ctx context.Context, bucket, object string, startOffs
 	return s.getHashedSet(object).GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
 }
 
+// PutObjectChunked - appends to an existing object at a hashedSet based on the object name.
+func (s *xlSets) PutObjectChunked(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	return s.getHashedSet(object).PutObjectChunked(ctx, bucket, object, data, opts)
+}
+
 // PutObject - writes an object to hashedSet based on the object name.
 func (s *xlSets) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	return s.getHashedSet(object).PutObject(ctx, bucket, object, data, opts)

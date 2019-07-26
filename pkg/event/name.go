@@ -35,6 +35,7 @@ const (
 	ObjectCreatedCopy
 	ObjectCreatedPost
 	ObjectCreatedPut
+	ObjectCreatedPutChunked
 	ObjectRemovedAll
 	ObjectRemovedDelete
 )

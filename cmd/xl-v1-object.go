@@ -493,6 +493,185 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 	return evalDisks(disks, errs), err
 }
 
+var appendPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, blockSizeV1/2)
+		return &b
+	},
+}
+
+// PutObjectChunked - appends to an existing object, appends at the end.
+func (xl xlObjects) PutObjectChunked(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	// Validate put object input args.
+	if err = checkPutObjectArgs(ctx, bucket, object, xl, data.Size()); err != nil {
+		return ObjectInfo{}, err
+	}
+
+	uniqueID := mustGetUUID()
+	tempObj := uniqueID
+	partName := "part.1"
+	tempErasureObj := pathJoin(uniqueID, partName)
+
+	// Lock the object.
+	objectLock := xl.nsMutex.NewNSLock(ctx, bucket, object)
+	if err := objectLock.GetLock(globalObjectTimeout); err != nil {
+		return objInfo, err
+	}
+	defer objectLock.Unlock()
+
+	// Input stream should be without a predefined content-length.
+	if data.Size() != -1 {
+		return ObjectInfo{}, toObjectErr(errInvalidArgument, bucket, object)
+	}
+
+	// Check if an object is present as one of the parent dir.
+	// -- FIXME. (needs a new kind of lock).
+	// -- FIXME (this also causes performance issue when disks are down).
+	if xl.parentDirIsObject(ctx, bucket, path.Dir(object)) {
+		return ObjectInfo{}, toObjectErr(errFileParentIsFile, bucket, object)
+	}
+
+	if _, err := xl.getObjectInfo(ctx, bucket, object); err == nil {
+		return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
+	}
+
+	// Get parity and data drive count based on storage class metadata
+	dataDrives, parityDrives := getRedundancyCount(opts.UserDefined[amzStorageClass], len(xl.getDisks()))
+
+	// we now know the number of blocks this object needs for data and parity.
+	// writeQuorum is dataBlocks + 1
+	writeQuorum := dataDrives + 1
+
+	// Initialize parts metadata
+	partsMetadata := make([]xlMetaV1, len(xl.getDisks()))
+
+	xlMeta := newXLMetaV1(object, dataDrives, parityDrives)
+	xlMeta.Erasure.BlockSize = blockSizeV1 / 2
+
+	// Initialize xl meta.
+	for index := range partsMetadata {
+		partsMetadata[index] = xlMeta
+	}
+
+	// Reorder online disks based on erasure distribution order.
+	onlineDisks := shuffleDisks(xl.getDisks(), xlMeta.Erasure.Distribution)
+
+	// Delete temporary object in the event of failure.
+	// If PutObject succeeded there would be no temporary
+	// object to delete.
+	defer xl.deleteObject(ctx, minioMetaTmpBucket, tempObj, writeQuorum, false)
+
+	// No metadata is set, allocate a new one.
+	if opts.UserDefined == nil {
+		opts.UserDefined = make(map[string]string)
+	}
+
+	erasure, err := NewErasure(ctx, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xlMeta.Erasure.BlockSize)
+	if err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	bufp := appendPool.Get().(*[]byte)
+	defer appendPool.Put(bufp)
+
+	var hasher = DefaultBitrotAlgorithm.New()
+	var appendSize int64
+	for {
+		n, err := io.ReadFull(data.Reader, *bufp)
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+			logger.LogIf(ctx, err)
+			return ObjectInfo{}, toObjectErr(err, minioMetaTmpBucket, tempErasureObj)
+		}
+
+		eof := err == io.EOF || err == io.ErrUnexpectedEOF
+		if n == 0 && appendSize != 0 {
+			// Reached EOF, nothing more to be done.
+			break
+		}
+
+		// We take care of the situation where if n == 0 and appendSize == 0
+		// by creating empty data and parity files.
+		blocks, err := erasure.EncodeData(ctx, (*bufp)[:n])
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return ObjectInfo{}, toObjectErr(err, minioMetaTmpBucket, tempErasureObj)
+		}
+
+		for i, disk := range onlineDisks {
+			if disk == nil {
+				continue
+			}
+			hasher.Reset()
+			hasher.Write(blocks[i])
+			hashBytes := hasher.Sum(nil)
+			err = disk.AppendFile(minioMetaTmpBucket, tempErasureObj, append(hashBytes, blocks[i]...))
+			if err != nil {
+				logger.LogIf(ctx, err)
+				return ObjectInfo{}, toObjectErr(err, minioMetaTmpBucket, tempErasureObj)
+			}
+		}
+		appendSize += int64(n)
+		if eof {
+			break
+		}
+	}
+
+	for i, disk := range onlineDisks {
+		if disk == nil {
+			onlineDisks[i] = nil
+			continue
+		}
+		partsMetadata[i].AddObjectPart(1, partName, "", appendSize, appendSize)
+		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, DefaultBitrotAlgorithm, nil})
+	}
+
+	// Save additional erasureMetadata.
+	modTime := UTCNow()
+	opts.UserDefined["etag"] = data.MD5CurrentHexString()
+
+	// Guess content-type from the extension if possible.
+	if opts.UserDefined["content-type"] == "" {
+		opts.UserDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
+	}
+
+	// Fill all the necessary metadata.
+	// Update `xl.json` content on each disks.
+	for index := range partsMetadata {
+		partsMetadata[index].Meta = opts.UserDefined
+		partsMetadata[index].Stat.Size = appendSize
+		partsMetadata[index].Stat.ModTime = modTime
+	}
+
+	// Write unique `xl.json` for each disk.
+	if onlineDisks, err = writeUniqueXLMetadata(ctx, onlineDisks, minioMetaTmpBucket,
+		tempObj, partsMetadata, writeQuorum); err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	// Rename the successfully written temporary object to final location.
+	if _, err = rename(ctx, onlineDisks, minioMetaTmpBucket, tempObj,
+		bucket, object, true, writeQuorum, nil); err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	// Object info is the same in all disks, so we can pick the first meta
+	// of the first disk
+	xlMeta = partsMetadata[0]
+
+	objInfo = ObjectInfo{
+		IsDir:       false,
+		Bucket:      bucket,
+		Name:        object,
+		Size:        xlMeta.Stat.Size,
+		ModTime:     xlMeta.Stat.ModTime,
+		ETag:        xlMeta.Meta["etag"],
+		ContentType: xlMeta.Meta["content-type"],
+		UserDefined: xlMeta.Meta,
+	}
+
+	return objInfo, nil
+}
+
 // PutObject - creates an object upon reading from the input stream
 // until EOF, erasure codes the data across all disk and additionally
 // writes `xl.json` which carries the necessary metadata for future

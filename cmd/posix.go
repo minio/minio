@@ -1287,6 +1287,7 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 	var w *os.File
 	// Create file if not found. Not doing O_DIRECT here to avoid the code that does buffer aligned writes.
 	// AppendFile() is only used by healing code to heal objects written in old format.
+	// and also by PutObjectChunked API.
 	w, err = s.openFile(volume, path, os.O_CREATE|os.O_SYNC|os.O_APPEND|os.O_WRONLY)
 	if err != nil {
 		return err

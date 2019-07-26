@@ -798,6 +798,118 @@ func (fs *FSObjects) parentDirIsObject(ctx context.Context, bucket, parent strin
 	return isParentDirObject(parent)
 }
 
+// PutObjectChunked -- appends an entire stream atomically.
+func (fs *FSObjects) PutObjectChunked(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, retErr error) {
+
+	if err := checkPutObjectArgs(ctx, bucket, object, fs, r.Size()); err != nil {
+		return ObjectInfo{}, err
+	}
+	// Lock the object.
+	objectLock := fs.nsMutex.NewNSLock(ctx, bucket, object)
+	if err := objectLock.GetLock(globalObjectTimeout); err != nil {
+		logger.LogIf(ctx, err)
+		return objInfo, err
+	}
+	defer objectLock.Unlock()
+
+	data := r.Reader
+
+	// No metadata is set, allocate a new one.
+	meta := make(map[string]string)
+	for k, v := range opts.UserDefined {
+		meta[k] = v
+	}
+	var err error
+
+	// Validate if bucket name is valid and exists.
+	if _, err = fs.statBucketDir(ctx, bucket); err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket)
+	}
+
+	// Validate input data size and it can never be less than zero.
+	if data.Size() != -1 {
+		return ObjectInfo{}, toObjectErr(errInvalidArgument, bucket, object)
+	}
+
+	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
+	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)
+	if _, err = fsStatFile(ctx, fsNSObjPath); err == nil {
+		return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
+	}
+
+	fsMeta := newFSMetaV1()
+	fsMeta.Meta = meta
+
+	// Check if an object is present as one of the parent dir.
+	if fs.parentDirIsObject(ctx, bucket, path.Dir(object)) {
+		return ObjectInfo{}, toObjectErr(errFileParentIsFile, bucket, object)
+	}
+
+	var wlk *lock.LockedFile
+	if bucket != minioMetaBucket {
+		bucketMetaDir := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix)
+
+		fsMetaPath := pathJoin(bucketMetaDir, bucket, object, fs.metaJSONFile)
+		wlk, err = fs.rwPool.Create(fsMetaPath)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+		// This close will allow for locks to be synchronized on `fs.json`.
+		defer wlk.Close()
+		defer func() {
+			// Remove meta file when PutObject encounters any error
+			if retErr != nil {
+				tmpDir := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID)
+				fsRemoveMeta(ctx, bucketMetaDir, fsMetaPath, tmpDir)
+			}
+		}()
+	}
+
+	// Uploaded object will first be written to the temporary location which will eventually
+	// be renamed to the actual location. It is first written to the temporary location
+	// so that cleaning it up will be easy if the server goes down.
+	tempObj := mustGetUUID()
+
+	// Allocate a buffer to Read() from request body
+	bufSize := int64(readSizeV1)
+	if size := data.Size(); size > 0 && bufSize > size {
+		bufSize = size
+	}
+
+	buf := make([]byte, int(bufSize))
+	fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tempObj)
+
+	// Delete the temporary object in the case of a failure. If PutObject
+	// succeeds, then there would be nothing to delete.
+	defer fsRemoveFile(ctx, fsTmpObjPath)
+
+	if _, err = fsCreateFile(ctx, fsTmpObjPath, data, buf, data.Size()); err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+	fsMeta.Meta["etag"] = r.MD5CurrentHexString()
+
+	if err = fsRenameFile(ctx, fsTmpObjPath, fsNSObjPath); err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	if bucket != minioMetaBucket {
+		// Write FS metadata after a successful namespace operation.
+		if _, err = fsMeta.WriteTo(wlk); err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+	}
+
+	// Stat the file to fetch timestamp, size.
+	fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
+	if err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	// Success.
+	return fsMeta.ToObjectInfo(bucket, object, fi), nil
+}
+
 // PutObject - creates an object upon reading from the input stream
 // until EOF, writes data directly to configured filesystem path.
 // Additionally writes `fs.json` which carries the necessary metadata
