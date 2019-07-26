@@ -158,7 +158,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		registerSTSRouter(router)
 	}
 
-	enableConfigOps := globalEtcdClient != nil && gatewayName == "nas"
+	enableConfigOps := gatewayName == "nas"
 	enableIAMOps := globalEtcdClient != nil
 
 	// Enable IAM admin APIs if etcd is enabled, if not just enable basic
@@ -236,6 +236,10 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 		// Load globalServerConfig from etcd
 		logger.LogIf(context.Background(), globalConfigSys.Init(newObject))
+
+		// Start watching disk for reloading config, this
+		// is only enabled for "NAS" gateway.
+		globalConfigSys.WatchConfigNASDisk(newObject)
 	}
 
 	// Load logger subsystem
