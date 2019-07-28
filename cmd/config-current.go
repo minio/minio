@@ -30,7 +30,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/iam/validator"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -284,13 +284,24 @@ func (s *serverConfig) loadFromEnvs() {
 		if u, err := xnet.ParseURL(jwksURL); err == nil {
 			s.OpenID.JWKS.URL = u
 			logger.FatalIf(s.OpenID.JWKS.PopulatePublicKey(), "Unable to populate public key from JWKS URL")
+		} else {
+			logger.FatalIf(err, "Unable to parse MINIO_IAM_JWKS_URL %s", jwksURL)
 		}
 	}
 
 	if opaURL, ok := os.LookupEnv("MINIO_IAM_OPA_URL"); ok {
 		if u, err := xnet.ParseURL(opaURL); err == nil {
-			s.Policy.OPA.URL = u
-			s.Policy.OPA.AuthToken = os.Getenv("MINIO_IAM_OPA_AUTHTOKEN")
+			opaArgs := iampolicy.OpaArgs{
+				URL:         u,
+				AuthToken:   os.Getenv("MINIO_IAM_OPA_AUTHTOKEN"),
+				Transport:   NewCustomHTTPTransport(),
+				CloseRespFn: xhttp.DrainBody,
+			}
+			s.Policy.OPA.URL = opaArgs.URL
+			s.Policy.OPA.AuthToken = opaArgs.AuthToken
+			logger.FatalIf(opaArgs.Validate(), "Unable to reach MINIO_IAM_OPA_URL %s", opaURL)
+		} else {
+			logger.FatalIf(err, "Unable to parse MINIO_IAM_OPA_URL %s", opaURL)
 		}
 	}
 }
