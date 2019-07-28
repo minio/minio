@@ -16,4 +16,4 @@
 #
 
 test_run_dir="$MINT_RUN_CORE_DIR/healthcheck"
-GO111MODULE=on go build -o "$test_run_dir/healthcheck" "$test_run_dir/healthcheck.go"
+GOPROXY=https://proxy.golang.org GO111MODULE=on go build -o "$test_run_dir/healthcheck" "$test_run_dir/healthcheck.go"

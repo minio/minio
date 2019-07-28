@@ -26,6 +26,7 @@ matrix:
         - ARCH=x86_64
         - CGO_ENABLED=0
         - GO111MODULE=on
+        - GOPROXY=https://proxy.golang.org
       # Enable build cache
       # https://restic.net/blog/2018-09-02/travis-build-cache
       cache:
@@ -52,6 +53,7 @@ matrix:
         - ARCH=x86_64
         - CGO_ENABLED=0
         - GO111MODULE=on
+        - GOPROXY=https://proxy.golang.org
       go: 1.12.5
       script:
         - go build --ldflags="$(go run buildscripts/gen-ldflags.go)" -o %GOPATH%\bin\minio.exe
