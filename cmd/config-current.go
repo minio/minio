@@ -281,28 +281,27 @@ func (s *serverConfig) loadFromEnvs() {
 	}
 
 	if jwksURL, ok := os.LookupEnv("MINIO_IAM_JWKS_URL"); ok {
-		if u, err := xnet.ParseURL(jwksURL); err == nil {
-			s.OpenID.JWKS.URL = u
-			logger.FatalIf(s.OpenID.JWKS.PopulatePublicKey(), "Unable to populate public key from JWKS URL")
-		} else {
+		u, err := xnet.ParseURL(jwksURL)
+		if err != nil {
 			logger.FatalIf(err, "Unable to parse MINIO_IAM_JWKS_URL %s", jwksURL)
 		}
+		s.OpenID.JWKS.URL = u
 	}
 
 	if opaURL, ok := os.LookupEnv("MINIO_IAM_OPA_URL"); ok {
-		if u, err := xnet.ParseURL(opaURL); err == nil {
-			opaArgs := iampolicy.OpaArgs{
-				URL:         u,
-				AuthToken:   os.Getenv("MINIO_IAM_OPA_AUTHTOKEN"),
-				Transport:   NewCustomHTTPTransport(),
-				CloseRespFn: xhttp.DrainBody,
-			}
-			s.Policy.OPA.URL = opaArgs.URL
-			s.Policy.OPA.AuthToken = opaArgs.AuthToken
-			logger.FatalIf(opaArgs.Validate(), "Unable to reach MINIO_IAM_OPA_URL %s", opaURL)
-		} else {
+		u, err := xnet.ParseURL(opaURL)
+		if err != nil {
 			logger.FatalIf(err, "Unable to parse MINIO_IAM_OPA_URL %s", opaURL)
 		}
+		opaArgs := iampolicy.OpaArgs{
+			URL:         u,
+			AuthToken:   os.Getenv("MINIO_IAM_OPA_AUTHTOKEN"),
+			Transport:   NewCustomHTTPTransport(),
+			CloseRespFn: xhttp.DrainBody,
+		}
+		logger.FatalIf(opaArgs.Validate(), "Unable to reach MINIO_IAM_OPA_URL %s", opaURL)
+		s.Policy.OPA.URL = opaArgs.URL
+		s.Policy.OPA.AuthToken = opaArgs.AuthToken
 	}
 }
 
@@ -547,7 +546,7 @@ func (s *serverConfig) loadToCachedConfigs() {
 		globalCacheMaxUse = cacheConf.MaxUse
 	}
 	if err := Environment.LookupKMSConfig(s.KMS); err != nil {
-		logger.FatalIf(err, "Unable to setup the KMS")
+		logger.FatalIf(err, "Unable to setup the KMS %s", s.KMS.Vault.Endpoint)
 	}
 
 	if !globalIsCompressionEnabled {
@@ -557,15 +556,22 @@ func (s *serverConfig) loadToCachedConfigs() {
 		globalIsCompressionEnabled = compressionConf.Enabled
 	}
 
+	if s.OpenID.JWKS.URL != nil && s.OpenID.JWKS.URL.String() != "" {
+		logger.FatalIf(s.OpenID.JWKS.PopulatePublicKey(),
+			"Unable to populate public key from JWKS URL %s", s.OpenID.JWKS.URL)
+	}
+
 	globalIAMValidators = getAuthValidators(s)
 
 	if s.Policy.OPA.URL != nil && s.Policy.OPA.URL.String() != "" {
-		globalPolicyOPA = iampolicy.NewOpa(iampolicy.OpaArgs{
+		opaArgs := iampolicy.OpaArgs{
 			URL:         s.Policy.OPA.URL,
 			AuthToken:   s.Policy.OPA.AuthToken,
 			Transport:   NewCustomHTTPTransport(),
 			CloseRespFn: xhttp.DrainBody,
-		})
+		}
+		logger.FatalIf(opaArgs.Validate(), "Unable to reach OPA URL %s", s.Policy.OPA.URL)
+		globalPolicyOPA = iampolicy.NewOpa(opaArgs)
 	}
 }
 

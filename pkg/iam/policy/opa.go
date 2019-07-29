@@ -22,7 +22,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -63,27 +62,14 @@ func (a *OpaArgs) UnmarshalJSON(data []byte) error {
 	type subOpaArgs OpaArgs
 	var so subOpaArgs
 
-	if opaURL, ok := os.LookupEnv("MINIO_IAM_OPA_URL"); ok {
-		u, err := xnet.ParseURL(opaURL)
-		if err != nil {
-			return err
-		}
-		so.URL = u
-		so.AuthToken = os.Getenv("MINIO_IAM_OPA_AUTHTOKEN")
-	} else {
-		if err := json.Unmarshal(data, &so); err != nil {
-			return err
-		}
+	if err := json.Unmarshal(data, &so); err != nil {
+		return err
 	}
 
 	oa := OpaArgs(so)
 	if oa.URL == nil || oa.URL.String() == "" {
 		*a = oa
 		return nil
-	}
-
-	if err := oa.Validate(); err != nil {
-		return err
 	}
 
 	*a = oa

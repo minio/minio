@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -36,11 +35,6 @@ import (
 type JWKSArgs struct {
 	URL        *xnet.URL `json:"url"`
 	publicKeys map[string]crypto.PublicKey
-}
-
-// Validate JWT authentication target arguments
-func (r *JWKSArgs) Validate() error {
-	return nil
 }
 
 // PopulatePublicKey - populates a new publickey from the JWKS URL.
@@ -83,30 +77,14 @@ func (r *JWKSArgs) UnmarshalJSON(data []byte) error {
 	type subJWKSArgs JWKSArgs
 	var sr subJWKSArgs
 
-	// IAM related envs.
-	if jwksURL, ok := os.LookupEnv("MINIO_IAM_JWKS_URL"); ok {
-		u, err := xnet.ParseURL(jwksURL)
-		if err != nil {
-			return err
-		}
-		sr.URL = u
-	} else {
-		if err := json.Unmarshal(data, &sr); err != nil {
-			return err
-		}
+	if err := json.Unmarshal(data, &sr); err != nil {
+		return err
 	}
 
 	ar := JWKSArgs(sr)
 	if ar.URL == nil || ar.URL.String() == "" {
 		*r = ar
 		return nil
-	}
-	if err := ar.Validate(); err != nil {
-		return err
-	}
-
-	if err := ar.PopulatePublicKey(); err != nil {
-		return err
 	}
 
 	*r = ar
