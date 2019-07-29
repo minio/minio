@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,14 +20,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
-	"path"
 	"strings"
 	"sync"
-	"time"
 
-	etcd "github.com/coreos/etcd/clientv3"
-	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -81,7 +76,7 @@ type iamFormat struct {
 	Version int `json:"version"`
 }
 
-func getCurrentIAMFormat() iamFormat {
+func newIAMFormatVersion1() iamFormat {
 	return iamFormat{Version: iamFormatVersion1}
 }
 
@@ -147,99 +142,6 @@ func newMappedPolicy(policy string) MappedPolicy {
 	return MappedPolicy{Version: 1, Policy: policy}
 }
 
-func loadIAMConfigItem(objectAPI ObjectLayer, item interface{}, path string) error {
-	data, err := readConfig(context.Background(), objectAPI, path)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(data, item)
-}
-
-func saveIAMConfigItem(objectAPI ObjectLayer, item interface{}, path string) error {
-	data, err := json.Marshal(item)
-	if err != nil {
-		return err
-	}
-	return saveConfig(context.Background(), objectAPI, path, data)
-}
-
-// helper type for listIAMConfigItems
-type itemOrErr struct {
-	Item string
-	Err  error
-}
-
-// Lists files or dirs in the minioMetaBucket at the given path
-// prefix. If dirs is true, only directories are listed, otherwise
-// only objects are listed. All returned items have the pathPrefix
-// removed from their names.
-func listIAMConfigItems(objectAPI ObjectLayer, pathPrefix string, dirs bool,
-	doneCh <-chan struct{}) <-chan itemOrErr {
-
-	ch := make(chan itemOrErr)
-	dirList := func(lo ListObjectsInfo) []string {
-		return lo.Prefixes
-	}
-	filesList := func(lo ListObjectsInfo) (r []string) {
-		for _, o := range lo.Objects {
-			r = append(r, o.Name)
-		}
-		return r
-	}
-
-	go func() {
-		marker := ""
-		for {
-			lo, err := objectAPI.ListObjects(context.Background(),
-				minioMetaBucket, pathPrefix, marker, SlashSeparator, 1000)
-			if err != nil {
-				select {
-				case ch <- itemOrErr{Err: err}:
-				case <-doneCh:
-				}
-				close(ch)
-				return
-			}
-			marker = lo.NextMarker
-			lister := dirList(lo)
-			if !dirs {
-				lister = filesList(lo)
-			}
-			for _, itemPrefix := range lister {
-				item := strings.TrimPrefix(itemPrefix, pathPrefix)
-				item = strings.TrimSuffix(item, SlashSeparator)
-				select {
-				case ch <- itemOrErr{Item: item}:
-				case <-doneCh:
-					close(ch)
-					return
-				}
-			}
-			if !lo.IsTruncated {
-				close(ch)
-				return
-			}
-		}
-	}()
-	return ch
-}
-
-func loadIAMConfigItemEtcd(ctx context.Context, item interface{}, path string) error {
-	pdata, err := readKeyEtcd(ctx, globalEtcdClient, path)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(pdata, item)
-}
-
-func saveIAMConfigItemEtcd(ctx context.Context, item interface{}, path string) error {
-	data, err := json.Marshal(item)
-	if err != nil {
-		return err
-	}
-	return saveKeyEtcd(ctx, globalEtcdClient, path, data)
-}
-
 // IAMSys - config system.
 type IAMSys struct {
 	sync.RWMutex
@@ -255,145 +157,44 @@ type IAMSys struct {
 	iamUserPolicyMap map[string]MappedPolicy
 	// map of group names to policy names
 	iamGroupPolicyMap map[string]MappedPolicy
+
+	// Persistence layer for IAM subsystem
+	store IAMStorageAPI
 }
 
-func loadPolicyDoc(objectAPI ObjectLayer, policy string, m map[string]iampolicy.Policy) error {
-	var p iampolicy.Policy
-	err := loadIAMConfigItem(objectAPI, &p, getPolicyDocPath(policy))
-	if err != nil {
-		return err
-	}
-	m[policy] = p
-	return nil
-}
+// IAMStorageAPI defines an interface for the IAM persistence layer
+type IAMStorageAPI interface {
+	migrateBackendFormat(ObjectLayer) error
 
-func loadPolicyDocs(objectAPI ObjectLayer, m map[string]iampolicy.Policy) error {
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-	for item := range listIAMConfigItems(objectAPI, iamConfigPoliciesPrefix, true, doneCh) {
-		if item.Err != nil {
-			return item.Err
-		}
+	loadPolicyDoc(policy string, m map[string]iampolicy.Policy) error
+	loadPolicyDocs(m map[string]iampolicy.Policy) error
 
-		policyName := item.Item
-		err := loadPolicyDoc(objectAPI, policyName, m)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
+	loadUser(user string, isSTS bool, m map[string]auth.Credentials) error
+	loadUsers(isSTS bool, m map[string]auth.Credentials) error
 
-func loadUser(objectAPI ObjectLayer, user string, isSTS bool,
-	m map[string]auth.Credentials) error {
+	loadGroup(group string, m map[string]GroupInfo) error
+	loadGroups(m map[string]GroupInfo) error
 
-	var u UserIdentity
-	err := loadIAMConfigItem(objectAPI, &u, getUserIdentityPath(user, isSTS))
-	if err != nil {
-		return err
-	}
+	loadMappedPolicy(name string, isSTS, isGroup bool, m map[string]MappedPolicy) error
+	loadMappedPolicies(isSTS, isGroup bool, m map[string]MappedPolicy) error
 
-	if u.Credentials.IsExpired() {
-		idFile := getUserIdentityPath(user, isSTS)
-		// Delete expired identity - ignoring errors here.
-		deleteConfig(context.Background(), objectAPI, idFile)
-		deleteConfig(context.Background(), objectAPI, getMappedPolicyPath(user, isSTS, false))
-		return nil
-	}
+	loadAll(*IAMSys, ObjectLayer) error
 
-	// In some cases access key may not be set, so we set it explicitly.
-	if u.Credentials.AccessKey == "" {
-		u.Credentials.AccessKey = user
-	}
-	m[user] = u.Credentials
-	return nil
-}
+	saveIAMConfig(item interface{}, path string) error
+	loadIAMConfig(item interface{}, path string) error
+	deleteIAMConfig(path string) error
 
-func loadUsers(objectAPI ObjectLayer, isSTS bool, m map[string]auth.Credentials) error {
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-	basePrefix := iamConfigUsersPrefix
-	if isSTS {
-		basePrefix = iamConfigSTSPrefix
-	}
-	for item := range listIAMConfigItems(objectAPI, basePrefix, true, doneCh) {
-		if item.Err != nil {
-			return item.Err
-		}
+	savePolicyDoc(policyName string, p iampolicy.Policy) error
+	saveMappedPolicy(name string, isSTS, isGroup bool, mp MappedPolicy) error
+	saveUserIdentity(name string, isSTS bool, u UserIdentity) error
+	saveGroupInfo(group string, gi GroupInfo) error
 
-		userName := item.Item
-		err := loadUser(objectAPI, userName, isSTS, m)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
+	deletePolicyDoc(policyName string) error
+	deleteMappedPolicy(name string, isSTS, isGroup bool) error
+	deleteUserIdentity(name string, isSTS bool) error
+	deleteGroupInfo(name string) error
 
-func loadGroup(objectAPI ObjectLayer, group string, m map[string]GroupInfo) error {
-	var g GroupInfo
-	err := loadIAMConfigItem(objectAPI, &g, getGroupInfoPath(group))
-	if err != nil {
-		return err
-	}
-	m[group] = g
-	return nil
-}
-
-func loadGroups(objectAPI ObjectLayer, m map[string]GroupInfo) error {
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-	for item := range listIAMConfigItems(objectAPI, iamConfigGroupsPrefix, true, doneCh) {
-		if item.Err != nil {
-			return item.Err
-		}
-
-		group := item.Item
-		err := loadGroup(objectAPI, group, m)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func loadMappedPolicy(objectAPI ObjectLayer, name string, isSTS, isGroup bool,
-	m map[string]MappedPolicy) error {
-
-	var p MappedPolicy
-	err := loadIAMConfigItem(objectAPI, &p, getMappedPolicyPath(name, isSTS, isGroup))
-	if err != nil {
-		return err
-	}
-	m[name] = p
-	return nil
-}
-
-func loadMappedPolicies(objectAPI ObjectLayer, isSTS, isGroup bool, m map[string]MappedPolicy) error {
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-	var basePath string
-	switch {
-	case isSTS:
-		basePath = iamConfigPolicyDBSTSUsersPrefix
-	case isGroup:
-		basePath = iamConfigPolicyDBGroupsPrefix
-	default:
-		basePath = iamConfigPolicyDBUsersPrefix
-	}
-	for item := range listIAMConfigItems(objectAPI, basePath, false, doneCh) {
-		if item.Err != nil {
-			return item.Err
-		}
-
-		policyFile := item.Item
-		userOrGroupName := strings.TrimSuffix(policyFile, ".json")
-		err := loadMappedPolicy(objectAPI, userOrGroupName, isSTS, isGroup, m)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	watch(*IAMSys)
 }
 
 // LoadGroup - loads a specific group from storage, and updates the
@@ -414,7 +215,7 @@ func (sys *IAMSys) LoadGroup(objAPI ObjectLayer, group string) error {
 		return nil
 	}
 
-	err := loadGroup(objAPI, group, sys.iamGroupsMap)
+	err := sys.store.loadGroup(group, sys.iamGroupsMap)
 	if err != nil && err != errConfigNotFound {
 		return err
 	}
@@ -451,7 +252,7 @@ func (sys *IAMSys) LoadPolicy(objAPI ObjectLayer, policyName string) error {
 	defer sys.Unlock()
 
 	if globalEtcdClient == nil {
-		return loadPolicyDoc(objAPI, policyName, sys.iamPolicyDocsMap)
+		return sys.store.loadPolicyDoc(policyName, sys.iamPolicyDocsMap)
 	}
 
 	// When etcd is set, we use watch APIs so this code is not needed.
@@ -468,12 +269,13 @@ func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, isSTS bool) er
 	defer sys.Unlock()
 
 	if globalEtcdClient == nil {
-		err := loadUser(objAPI, accessKey, isSTS, sys.iamUsersMap)
+		err := sys.store.loadUser(accessKey, isSTS, sys.iamUsersMap)
 		if err != nil {
 			return err
 		}
-		err = loadMappedPolicy(objAPI, accessKey, isSTS, false, sys.iamUserPolicyMap)
-		if err != nil {
+		err = sys.store.loadMappedPolicy(accessKey, isSTS, false, sys.iamUserPolicyMap)
+		// Ignore policy not mapped error
+		if err != nil && err != errConfigNotFound {
 			return err
 		}
 	}
@@ -482,402 +284,14 @@ func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, isSTS bool) er
 }
 
 // Load - loads iam subsystem
-func (sys *IAMSys) Load(objAPI ObjectLayer) error {
-	if globalEtcdClient != nil {
-		return sys.refreshEtcd()
-	}
-	return sys.refresh(objAPI)
-}
-
-// sys.RLock is held by caller.
-func (sys *IAMSys) reloadFromEvent(event *etcd.Event) {
-	eventCreate := event.IsModify() || event.IsCreate()
-	eventDelete := event.Type == etcd.EventTypeDelete
-	usersPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigUsersPrefix)
-	groupsPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigGroupsPrefix)
-	stsPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigSTSPrefix)
-	policyPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigPoliciesPrefix)
-	policyDBUsersPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigPolicyDBUsersPrefix)
-	policyDBSTSUsersPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigPolicyDBSTSUsersPrefix)
-
-	ctx, cancel := context.WithTimeout(context.Background(),
-		defaultContextTimeout)
-	defer cancel()
-
-	switch {
-	case eventCreate:
-		switch {
-		case usersPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigUsersPrefix))
-			loadEtcdUser(ctx, accessKey, false, sys.iamUsersMap)
-		case stsPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigSTSPrefix))
-			loadEtcdUser(ctx, accessKey, true, sys.iamUsersMap)
-		case groupsPrefix:
-			group := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigGroupsPrefix))
-			loadEtcdGroup(ctx, group, sys.iamGroupsMap)
-			gi := sys.iamGroupsMap[group]
-			sys.removeGroupFromMembershipsMap(group)
-			sys.updateGroupMembershipsMap(group, &gi)
-		case policyPrefix:
-			policyName := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigPoliciesPrefix))
-			loadEtcdPolicy(ctx, policyName, sys.iamPolicyDocsMap)
-		case policyDBUsersPrefix:
-			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigPolicyDBUsersPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			loadEtcdMappedPolicy(ctx, user, false, false, sys.iamUserPolicyMap)
-		case policyDBSTSUsersPrefix:
-			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigPolicyDBSTSUsersPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			loadEtcdMappedPolicy(ctx, user, true, false, sys.iamUserPolicyMap)
-		}
-	case eventDelete:
-		switch {
-		case usersPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigUsersPrefix))
-			delete(sys.iamUsersMap, accessKey)
-		case stsPrefix:
-			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigSTSPrefix))
-			delete(sys.iamUsersMap, accessKey)
-		case groupsPrefix:
-			group := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigGroupsPrefix))
-			sys.removeGroupFromMembershipsMap(group)
-			delete(sys.iamGroupsMap, group)
-			delete(sys.iamGroupPolicyMap, group)
-		case policyPrefix:
-			policyName := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigPoliciesPrefix))
-			delete(sys.iamPolicyDocsMap, policyName)
-		case policyDBUsersPrefix:
-			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigPolicyDBUsersPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			delete(sys.iamUserPolicyMap, user)
-		case policyDBSTSUsersPrefix:
-			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
-				iamConfigPolicyDBSTSUsersPrefix)
-			user := strings.TrimSuffix(policyMapFile, ".json")
-			delete(sys.iamUserPolicyMap, user)
-		}
-	}
-}
-
-// Watch etcd entries for IAM
-func (sys *IAMSys) watchIAMEtcd() {
-	watchEtcd := func() {
-		// Refresh IAMSys with etcd watch.
-	mainLoop:
-		for {
-			watchCh := globalEtcdClient.Watch(context.Background(),
-				iamConfigPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
-			for {
-				select {
-				case <-GlobalServiceDoneCh:
-					return
-				case watchResp, ok := <-watchCh:
-					if !ok {
-						goto mainLoop
-					}
-					if err := watchResp.Err(); err != nil {
-						logger.LogIf(context.Background(), err)
-						// log and retry.
-						continue
-					}
-					sys.Lock()
-					for _, event := range watchResp.Events {
-						sys.reloadFromEvent(event)
-					}
-					sys.Unlock()
-				}
-			}
-		}
-	}
-	go watchEtcd()
-}
-
-func (sys *IAMSys) watchIAMDisk(objAPI ObjectLayer) {
-	watchDisk := func() {
-		ticker := time.NewTicker(globalRefreshIAMInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-GlobalServiceDoneCh:
-				return
-			case <-ticker.C:
-				sys.refresh(objAPI)
-			}
-		}
-	}
-	// Refresh IAMSys in background.
-	go watchDisk()
-}
-
-// Migrate users directory in a single scan.
-//
-// 1. Migrate user policy from:
-//
-// `iamConfigUsersPrefix + "<username>/policy.json"`
-//
-// to:
-//
-// `iamConfigPolicyDBUsersPrefix + "<username>.json"`.
-//
-// 2. Add versioning to the policy json file in the new
-// location.
-//
-// 3. Migrate user identity json file to include version info.
-func migrateUsersConfigToV1(objAPI ObjectLayer, isSTS bool) error {
-	basePrefix := iamConfigUsersPrefix
-	if isSTS {
-		basePrefix = iamConfigSTSPrefix
-	}
-
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-	for item := range listIAMConfigItems(objAPI, basePrefix, true, doneCh) {
-		if item.Err != nil {
-			return item.Err
-		}
-
-		user := item.Item
-
-		{
-			// 1. check if there is policy file in old location.
-			oldPolicyPath := pathJoin(basePrefix, user, iamPolicyFile)
-			var policyName string
-			if err := loadIAMConfigItem(objAPI, &policyName, oldPolicyPath); err != nil {
-				switch err {
-				case errConfigNotFound:
-					// This case means it is already
-					// migrated or there is no policy on
-					// user.
-				default:
-					// File may be corrupt or network error
-				}
-
-				// Nothing to do on the policy file,
-				// so move on to check the id file.
-				goto next
-			}
-
-			// 2. copy policy file to new location.
-			mp := newMappedPolicy(policyName)
-			path := getMappedPolicyPath(user, isSTS, false)
-			if err := saveIAMConfigItem(objAPI, mp, path); err != nil {
-				return err
-			}
-
-			// 3. delete policy file from old
-			// location. Ignore error.
-			deleteConfig(context.Background(), objAPI, oldPolicyPath)
-		}
-	next:
-		// 4. check if user identity has old format.
-		identityPath := pathJoin(basePrefix, user, iamIdentityFile)
-		var cred auth.Credentials
-		if err := loadIAMConfigItem(objAPI, &cred, identityPath); err != nil {
-			switch err.(type) {
-			case ObjectNotFound:
-				// This should not happen.
-			default:
-				// File may be corrupt or network error
-			}
-			continue
-		}
-
-		// If the file is already in the new format,
-		// then the parsed auth.Credentials will have
-		// the zero value for the struct.
-		var zeroCred auth.Credentials
-		if cred == zeroCred {
-			// nothing to do
-			continue
-		}
-
-		// Found a id file in old format. Copy value
-		// into new format and save it.
-		cred.AccessKey = user
-		u := newUserIdentity(cred)
-		if err := saveIAMConfigItem(objAPI, u, identityPath); err != nil {
-			logger.LogIf(context.Background(), err)
-			return err
-		}
-
-		// Nothing to delete as identity file location
-		// has not changed.
-	}
-	return nil
-}
-
-// migrateUsersConfigEtcd - same as migrateUsersConfig but on etcd.
-func migrateUsersConfigEtcdToV1(isSTS bool) error {
-	basePrefix := iamConfigUsersPrefix
-	if isSTS {
-		basePrefix = iamConfigSTSPrefix
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-	defer cancel()
-	r, err := globalEtcdClient.Get(ctx, basePrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
-	if err != nil {
-		return err
-	}
-
-	users := etcdKvsToSet(basePrefix, r.Kvs)
-	for _, user := range users.ToSlice() {
-		{
-			// 1. check if there is a policy file in the old loc.
-			oldPolicyPath := pathJoin(basePrefix, user, iamPolicyFile)
-			var policyName string
-			err := loadIAMConfigItemEtcd(ctx, &policyName, oldPolicyPath)
-			if err != nil {
-				switch err {
-				case errConfigNotFound:
-					// No mapped policy or already migrated.
-				default:
-					// corrupt data/read error, etc
-				}
-				goto next
-			}
-
-			// 2. copy policy to new loc.
-			mp := newMappedPolicy(policyName)
-			path := getMappedPolicyPath(user, isSTS, false)
-			if err := saveIAMConfigItemEtcd(ctx, mp, path); err != nil {
-				return err
-			}
-
-			// 3. delete policy file in old loc.
-			deleteKeyEtcd(ctx, globalEtcdClient, oldPolicyPath)
-		}
-
-	next:
-		// 4. check if user identity has old format.
-		identityPath := pathJoin(basePrefix, user, iamIdentityFile)
-		var cred auth.Credentials
-		if err := loadIAMConfigItemEtcd(ctx, &cred, identityPath); err != nil {
-			switch err {
-			case errConfigNotFound:
-				// This case should not happen.
-			default:
-				// corrupt file or read error
-			}
-			continue
-		}
-
-		// If the file is already in the new format,
-		// then the parsed auth.Credentials will have
-		// the zero value for the struct.
-		var zeroCred auth.Credentials
-		if cred == zeroCred {
-			// nothing to do
-			continue
-		}
-
-		// Found a id file in old format. Copy value
-		// into new format and save it.
-		cred.AccessKey = user
-		u := newUserIdentity(cred)
-		if err := saveIAMConfigItemEtcd(ctx, u, identityPath); err != nil {
-			logger.LogIf(context.Background(), err)
-			return err
-		}
-
-		// Nothing to delete as identity file location
-		// has not changed.
-	}
-	return nil
-
-}
-
-func migrateToV1(objAPI ObjectLayer) error {
-	currentIAMFormat := getCurrentIAMFormat()
-	path := getIAMFormatFilePath()
-
-	if globalEtcdClient == nil {
-		var iamFmt iamFormat
-		if err := loadIAMConfigItem(objAPI, &iamFmt, path); err != nil {
-			switch err {
-			case errConfigNotFound:
-				// Need to migrate to V1.
-			default:
-				return errors.New("corrupt IAM format file")
-			}
-		} else {
-			if iamFmt.Version >= currentIAMFormat.Version {
-				// Already migrated to V1 or higher!
-				return nil
-			}
-			// This case should not happen
-			// (i.e. Version is 0 or negative.)
-			return errors.New("got an invalid IAM format version")
-		}
-
-		// Migrate long-term users
-		if err := migrateUsersConfigToV1(objAPI, false); err != nil {
-			logger.LogIf(context.Background(), err)
-			return err
-		}
-		// Migrate STS users
-		if err := migrateUsersConfigToV1(objAPI, true); err != nil {
-			logger.LogIf(context.Background(), err)
-			return err
-		}
-		// Save iam version file.
-		if err := saveIAMConfigItem(objAPI, currentIAMFormat, path); err != nil {
-			logger.LogIf(context.Background(), err)
-			return err
-		}
-	} else {
-		var iamFmt iamFormat
-		if err := loadIAMConfigItemEtcd(context.Background(), &iamFmt, path); err != nil {
-			switch err {
-			case errConfigNotFound:
-				// Need to migrate to V1.
-			default:
-				return errors.New("corrupt IAM format file")
-			}
-		} else {
-			if iamFmt.Version >= currentIAMFormat.Version {
-				// Already migrated to V1 of higher!
-				return nil
-			}
-			// This case should not happen
-			// (i.e. Version is 0 or negative.)
-			return errors.New("got an invalid IAM format version")
-
-		}
-
-		// Migrate long-term users
-		if err := migrateUsersConfigEtcdToV1(false); err != nil {
-			logger.LogIf(context.Background(), err)
-			return err
-		}
-		// Migrate STS users
-		if err := migrateUsersConfigEtcdToV1(true); err != nil {
-			logger.LogIf(context.Background(), err)
-			return err
-		}
-		// Save iam version file.
-		if err := saveIAMConfigItemEtcd(context.Background(), currentIAMFormat, path); err != nil {
-			logger.LogIf(context.Background(), err)
-			return err
-		}
-	}
-	return nil
+func (sys *IAMSys) Load() error {
+	// Pass nil objectlayer here - it will be loaded internally
+	// from the IAMStorageAPI.
+	return sys.store.loadAll(sys, nil)
 }
 
 // Perform IAM configuration migration.
-func doIAMConfigMigration(objAPI ObjectLayer) error {
+func (sys *IAMSys) doIAMConfigMigration(objAPI ObjectLayer) error {
 	// Take IAM configuration migration lock
 	lockPath := iamConfigPrefix + "/migration.lock"
 	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, lockPath)
@@ -886,17 +300,19 @@ func doIAMConfigMigration(objAPI ObjectLayer) error {
 	}
 	defer objLock.Unlock()
 
-	if err := migrateToV1(objAPI); err != nil {
-		return err
-	}
-	// Add future IAM migrations here.
-	return nil
+	return sys.store.migrateBackendFormat(objAPI)
 }
 
 // Init - initializes config system from iam.json
 func (sys *IAMSys) Init(objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errInvalidArgument
+	}
+
+	if globalEtcdClient == nil {
+		sys.store = newIAMObjectStore()
+	} else {
+		sys.store = newIAMEtcdStore()
 	}
 
 	doneCh := make(chan struct{})
@@ -908,7 +324,7 @@ func (sys *IAMSys) Init(objAPI ObjectLayer) error {
 	//    of the object layer.
 	for range newRetryTimerSimple(doneCh) {
 		// Migrate IAM configuration
-		if err := doIAMConfigMigration(objAPI); err != nil {
+		if err := sys.doIAMConfigMigration(objAPI); err != nil {
 			if err == errDiskNotFound ||
 				strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
 				strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
@@ -920,22 +336,16 @@ func (sys *IAMSys) Init(objAPI ObjectLayer) error {
 		break
 	}
 
-	if globalEtcdClient != nil {
-		defer sys.watchIAMEtcd()
-	} else {
-		defer sys.watchIAMDisk(objAPI)
-	}
+	sys.store.watch(sys)
 
 	// Initializing IAM needs a retry mechanism for
 	// the following reasons:
 	//  - Read quorum is lost just after the initialization
 	//    of the object layer.
 	for range newRetryTimerSimple(doneCh) {
-		if globalEtcdClient != nil {
-			return sys.refreshEtcd()
-		}
-		// Load IAMSys once during boot.
-		if err := sys.refresh(objAPI); err != nil {
+		// Load IAMSys once during boot. Need to pass in
+		// objAPI as server has not yet initialized.
+		if err := sys.store.loadAll(sys, objAPI); err != nil {
 			if err == errDiskNotFound ||
 				strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
 				strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
@@ -961,13 +371,7 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 		return errInvalidArgument
 	}
 
-	var err error
-	pFile := getPolicyDocPath(policyName)
-	if globalEtcdClient != nil {
-		err = deleteKeyEtcd(context.Background(), globalEtcdClient, pFile)
-	} else {
-		err = deleteConfig(context.Background(), objectAPI, pFile)
-	}
+	err := sys.store.deletePolicyDoc(policyName)
 	switch err.(type) {
 	case ObjectNotFound:
 		// Ignore error if policy is already deleted.
@@ -1015,22 +419,13 @@ func (sys *IAMSys) SetPolicy(policyName string, p iampolicy.Policy) error {
 		return errInvalidArgument
 	}
 
-	path := getPolicyDocPath(policyName)
-	var err error
-	if globalEtcdClient != nil {
-		err = saveIAMConfigItemEtcd(context.Background(), p, path)
-	} else {
-		err = saveIAMConfigItem(objectAPI, p, path)
-	}
-	if err != nil {
+	if err := sys.store.savePolicyDoc(policyName, p); err != nil {
 		return err
 	}
 
 	sys.Lock()
 	defer sys.Unlock()
-
 	sys.iamPolicyDocsMap[policyName] = p
-
 	return nil
 }
 
@@ -1041,19 +436,9 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 		return errServerNotInitialized
 	}
 
-	var err error
-	mappingPath := getMappedPolicyPath(accessKey, false, false)
-	idPath := getUserIdentityPath(accessKey, false)
-	if globalEtcdClient != nil {
-		// It is okay to ignore errors when deleting policy.json for the user.
-		deleteKeyEtcd(context.Background(), globalEtcdClient, mappingPath)
-		err = deleteKeyEtcd(context.Background(), globalEtcdClient, idPath)
-	} else {
-		// It is okay to ignore errors when deleting policy.json for the user.
-		_ = deleteConfig(context.Background(), objectAPI, mappingPath)
-		err = deleteConfig(context.Background(), objectAPI, idPath)
-	}
-
+	// It is ok to ignore deletion error on the mapped policy
+	sys.store.deleteMappedPolicy(accessKey, false, false)
+	err := sys.store.deleteUserIdentity(accessKey, false)
 	switch err.(type) {
 	case ObjectNotFound:
 		// ignore if user is already deleted.
@@ -1093,31 +478,15 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 		}
 
 		mp := newMappedPolicy(policyName)
-
-		mappingPath := getMappedPolicyPath(accessKey, true, false)
-		var err error
-		if globalEtcdClient != nil {
-			err = saveIAMConfigItemEtcd(context.Background(), mp, mappingPath)
-		} else {
-			err = saveIAMConfigItem(objectAPI, mp, mappingPath)
-		}
-		if err != nil {
+		if err := sys.store.saveMappedPolicy(accessKey, true, false, mp); err != nil {
 			return err
 		}
 
 		sys.iamUserPolicyMap[accessKey] = mp
 	}
 
-	idPath := getUserIdentityPath(accessKey, true)
 	u := newUserIdentity(cred)
-
-	var err error
-	if globalEtcdClient != nil {
-		err = saveIAMConfigItemEtcd(context.Background(), u, idPath)
-	} else {
-		err = saveIAMConfigItem(objectAPI, u, idPath)
-	}
-	if err != nil {
+	if err := sys.store.saveUserIdentity(accessKey, true, u); err != nil {
 		return err
 	}
 
@@ -1171,14 +540,7 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 		SecretKey: cred.SecretKey,
 		Status:    string(status),
 	})
-	idFile := getUserIdentityPath(accessKey, false)
-	var err error
-	if globalEtcdClient != nil {
-		err = saveIAMConfigItemEtcd(context.Background(), uinfo, idFile)
-	} else {
-		err = saveIAMConfigItem(objectAPI, uinfo, idFile)
-	}
-	if err != nil {
+	if err := sys.store.saveUserIdentity(accessKey, false, uinfo); err != nil {
 		return err
 	}
 
@@ -1193,7 +555,6 @@ func (sys *IAMSys) SetUser(accessKey string, uinfo madmin.UserInfo) error {
 		return errServerNotInitialized
 	}
 
-	idFile := getUserIdentityPath(accessKey, false)
 	u := newUserIdentity(auth.Credentials{
 		AccessKey: accessKey,
 		SecretKey: uinfo.SecretKey,
@@ -1203,13 +564,7 @@ func (sys *IAMSys) SetUser(accessKey string, uinfo madmin.UserInfo) error {
 	sys.Lock()
 	defer sys.Unlock()
 
-	var err error
-	if globalEtcdClient != nil {
-		err = saveIAMConfigItemEtcd(context.Background(), u, idFile)
-	} else {
-		err = saveIAMConfigItem(objectAPI, u, idFile)
-	}
-	if err != nil {
+	if err := sys.store.saveUserIdentity(accessKey, false, u); err != nil {
 		return err
 	}
 	sys.iamUsersMap[accessKey] = u.Credentials
@@ -1238,15 +593,7 @@ func (sys *IAMSys) SetUserSecretKey(accessKey string, secretKey string) error {
 
 	cred.SecretKey = secretKey
 	u := newUserIdentity(cred)
-	idFile := getUserIdentityPath(accessKey, false)
-
-	var err error
-	if globalEtcdClient != nil {
-		err = saveIAMConfigItemEtcd(context.Background(), u, idFile)
-	} else {
-		err = saveIAMConfigItem(objectAPI, u, idFile)
-	}
-	if err != nil {
+	if err := sys.store.saveUserIdentity(accessKey, false, u); err != nil {
 		return err
 	}
 
@@ -1297,13 +644,7 @@ func (sys *IAMSys) AddUsersToGroup(group string, members []string) error {
 		gi.Members = uniqMembers
 	}
 
-	var err error
-	if globalEtcdClient == nil {
-		err = saveIAMConfigItem(objectAPI, gi, getGroupInfoPath(group))
-	} else {
-		err = saveIAMConfigItemEtcd(context.Background(), gi, getGroupInfoPath(group))
-	}
-	if err != nil {
+	if err := sys.store.saveGroupInfo(group, gi); err != nil {
 		return err
 	}
 
@@ -1359,31 +700,16 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 	if len(members) == 0 {
 		// len(gi.Members) == 0 here.
 
-		// Remove the group from storage.
-		giPath := getGroupInfoPath(group)
-		giPolicyPath := getMappedPolicyPath(group, false, true)
-		if globalEtcdClient == nil {
-			err := deleteConfig(context.Background(), objectAPI, giPath)
-			if err != nil {
-				return err
-			}
-
-			// Remove mapped policy from storage.
-			err = deleteConfig(context.Background(), objectAPI,
-				getMappedPolicyPath(group, false, true))
-			if err != nil {
-				return err
-			}
-		} else {
-			err := deleteKeyEtcd(context.Background(), globalEtcdClient, giPath)
-			if err != nil {
-				return err
-			}
-
-			err = deleteKeyEtcd(context.Background(), globalEtcdClient, giPolicyPath)
-			if err != nil {
-				return err
-			}
+		// Remove the group from storage. First delete the
+		// mapped policy.
+		err := sys.store.deleteMappedPolicy(group, false, true)
+		// No-mapped-policy case is ignored.
+		if err != nil && err != errConfigNotFound {
+			return err
+		}
+		err = sys.store.deleteGroupInfo(group)
+		if err != nil {
+			return err
 		}
 
 		// Delete from server memory
@@ -1397,7 +723,7 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 	d := set.CreateStringSet(members...)
 	gi.Members = s.Difference(d).ToSlice()
 
-	err := saveIAMConfigItem(objectAPI, gi, getGroupInfoPath(group))
+	err := sys.store.saveGroupInfo(group, gi)
 	if err != nil {
 		return err
 	}
@@ -1441,18 +767,10 @@ func (sys *IAMSys) SetGroupStatus(group string, enabled bool) error {
 		gi.Status = statusDisabled
 	}
 
-	var err error
-	if globalEtcdClient == nil {
-		err = saveIAMConfigItem(objectAPI, gi, getGroupInfoPath(group))
-	} else {
-		err = saveIAMConfigItemEtcd(context.Background(), gi, getGroupInfoPath(group))
-	}
-	if err != nil {
+	if err := sys.store.saveGroupInfo(group, gi); err != nil {
 		return err
 	}
-
 	sys.iamGroupsMap[group] = gi
-
 	return nil
 }
 
@@ -1519,29 +837,18 @@ func (sys *IAMSys) policyDBSet(objectAPI ObjectLayer, name, policy string, isSTS
 	if name == "" || policy == "" {
 		return errInvalidArgument
 	}
-
+	if _, ok := sys.iamUsersMap[name]; !ok {
+		return errNoSuchUser
+	}
+	if _, ok := sys.iamPolicyDocsMap[policy]; !ok {
+		return errNoSuchPolicy
+	}
 	if _, ok := sys.iamUsersMap[name]; !ok {
 		return errNoSuchUser
 	}
 
-	_, ok := sys.iamPolicyDocsMap[policy]
-	if !ok {
-		return errNoSuchPolicy
-	}
-
 	mp := newMappedPolicy(policy)
-	_, ok = sys.iamUsersMap[name]
-	if !ok {
-		return errNoSuchUser
-	}
-	var err error
-	mappingPath := getMappedPolicyPath(name, isSTS, isGroup)
-	if globalEtcdClient != nil {
-		err = saveIAMConfigItemEtcd(context.Background(), mp, mappingPath)
-	} else {
-		err = saveIAMConfigItem(objectAPI, mp, mappingPath)
-	}
-	if err != nil {
+	if err := sys.store.saveMappedPolicy(name, isSTS, isGroup, mp); err != nil {
 		return err
 	}
 	sys.iamUserPolicyMap[name] = mp
@@ -1698,187 +1005,6 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	return args.IsOwner
 }
 
-var defaultContextTimeout = 30 * time.Second
-
-func etcdKvsToSet(prefix string, kvs []*mvccpb.KeyValue) set.StringSet {
-	users := set.NewStringSet()
-	for _, kv := range kvs {
-		// Extract user by stripping off the `prefix` value as suffix,
-		// then strip off the remaining basename to obtain the prefix
-		// value, usually in the following form.
-		//
-		//  key := "config/iam/users/newuser/identity.json"
-		//  prefix := "config/iam/users/"
-		//  v := trim(trim(key, prefix), base(key)) == "newuser"
-		//
-		user := path.Clean(strings.TrimSuffix(strings.TrimPrefix(string(kv.Key), prefix), path.Base(string(kv.Key))))
-		if !users.Contains(user) {
-			users.Add(user)
-		}
-	}
-	return users
-}
-
-func etcdKvsToSetPolicyDB(prefix string, kvs []*mvccpb.KeyValue) set.StringSet {
-	items := set.NewStringSet()
-	for _, kv := range kvs {
-		// Extract user item by stripping off prefix and then
-		// stripping of ".json" suffix.
-		//
-		// key := "config/iam/policydb/users/myuser1.json"
-		// prefix := "config/iam/policydb/users/"
-		// v := trimSuffix(trimPrefix(key, prefix), ".json")
-		key := string(kv.Key)
-		item := path.Clean(strings.TrimSuffix(strings.TrimPrefix(key, prefix), ".json"))
-		items.Add(item)
-	}
-	return items
-}
-
-func loadEtcdMappedPolicy(ctx context.Context, name string, isSTS, isGroup bool,
-	m map[string]MappedPolicy) error {
-
-	var p MappedPolicy
-	err := loadIAMConfigItemEtcd(ctx, &p, getMappedPolicyPath(name, isSTS, isGroup))
-	if err != nil {
-		return err
-	}
-	m[name] = p
-	return nil
-}
-
-func loadEtcdMappedPolicies(isSTS, isGroup bool, m map[string]MappedPolicy) error {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-	defer cancel()
-	var basePath string
-	switch {
-	case isSTS:
-		basePath = iamConfigPolicyDBSTSUsersPrefix
-	case isGroup:
-		basePath = iamConfigPolicyDBGroupsPrefix
-	default:
-		basePath = iamConfigPolicyDBUsersPrefix
-	}
-	r, err := globalEtcdClient.Get(ctx, basePath, etcd.WithPrefix(), etcd.WithKeysOnly())
-	if err != nil {
-		return err
-	}
-
-	users := etcdKvsToSetPolicyDB(basePath, r.Kvs)
-
-	// Reload config and policies for all users.
-	for _, user := range users.ToSlice() {
-		if err = loadEtcdMappedPolicy(ctx, user, isSTS, isGroup, m); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func loadEtcdUser(ctx context.Context, user string, isSTS bool, m map[string]auth.Credentials) error {
-	var u UserIdentity
-	err := loadIAMConfigItemEtcd(ctx, &u, getUserIdentityPath(user, isSTS))
-	if err != nil {
-		return err
-	}
-
-	if u.Credentials.IsExpired() {
-		// Delete expired identity.
-		deleteKeyEtcd(ctx, globalEtcdClient, getUserIdentityPath(user, isSTS))
-		deleteKeyEtcd(ctx, globalEtcdClient, getMappedPolicyPath(user, isSTS, false))
-		return nil
-	}
-
-	if u.Credentials.AccessKey == "" {
-		u.Credentials.AccessKey = user
-	}
-	m[user] = u.Credentials
-	return nil
-}
-
-func loadEtcdUsers(isSTS bool, m map[string]auth.Credentials) error {
-	basePrefix := iamConfigUsersPrefix
-	if isSTS {
-		basePrefix = iamConfigSTSPrefix
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-	defer cancel()
-	r, err := globalEtcdClient.Get(ctx, basePrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
-	if err != nil {
-		return err
-	}
-
-	users := etcdKvsToSet(basePrefix, r.Kvs)
-
-	// Reload config for all users.
-	for _, user := range users.ToSlice() {
-		if err = loadEtcdUser(ctx, user, isSTS, m); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func loadEtcdGroup(ctx context.Context, group string, m map[string]GroupInfo) error {
-	var gi GroupInfo
-	err := loadIAMConfigItemEtcd(ctx, &gi, getGroupInfoPath(group))
-	if err != nil {
-		return err
-	}
-	m[group] = gi
-	return nil
-}
-
-func loadEtcdGroups(m map[string]GroupInfo) error {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-	defer cancel()
-	r, err := globalEtcdClient.Get(ctx, iamConfigGroupsPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
-	if err != nil {
-		return err
-	}
-
-	groups := etcdKvsToSet(iamConfigGroupsPrefix, r.Kvs)
-
-	// Reload config for all groups.
-	for _, group := range groups.ToSlice() {
-		if err = loadEtcdGroup(ctx, group, m); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func loadEtcdPolicy(ctx context.Context, policyName string, m map[string]iampolicy.Policy) error {
-	var p iampolicy.Policy
-	err := loadIAMConfigItemEtcd(ctx, &p, getPolicyDocPath(policyName))
-	if err != nil {
-		return err
-	}
-	m[policyName] = p
-	return nil
-}
-
-func loadEtcdPolicies(policyDocsMap map[string]iampolicy.Policy) error {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-	defer cancel()
-	r, err := globalEtcdClient.Get(ctx, iamConfigPoliciesPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
-	if err != nil {
-		return err
-	}
-
-	policies := etcdKvsToSet(iamConfigPoliciesPrefix, r.Kvs)
-
-	// Reload config and policies for all policys.
-	for _, policyName := range policies.ToSlice() {
-		err = loadEtcdPolicy(ctx, policyName, policyDocsMap)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // Set default canned policies only if not already overridden by users.
 func setDefaultCannedPolicies(policies map[string]iampolicy.Policy) {
 	_, ok := policies["writeonly"]
@@ -1893,106 +1019,6 @@ func setDefaultCannedPolicies(policies map[string]iampolicy.Policy) {
 	if !ok {
 		policies["readwrite"] = iampolicy.ReadWrite
 	}
-}
-
-func (sys *IAMSys) refreshEtcd() error {
-	iamUsersMap := make(map[string]auth.Credentials)
-	iamGroupsMap := make(map[string]GroupInfo)
-	iamPolicyDocsMap := make(map[string]iampolicy.Policy)
-	iamUserPolicyMap := make(map[string]MappedPolicy)
-	iamGroupPolicyMap := make(map[string]MappedPolicy)
-
-	if err := loadEtcdPolicies(iamPolicyDocsMap); err != nil {
-		return err
-	}
-	if err := loadEtcdUsers(false, iamUsersMap); err != nil {
-		return err
-	}
-	// load STS temp users into the same map
-	if err := loadEtcdUsers(true, iamUsersMap); err != nil {
-		return err
-	}
-	if err := loadEtcdGroups(iamGroupsMap); err != nil {
-		return err
-	}
-
-	// load policies mapped for long-term users
-	if err := loadEtcdMappedPolicies(false, false, iamUserPolicyMap); err != nil {
-		return err
-	}
-	// load STS users policy mapping into the same map
-	if err := loadEtcdMappedPolicies(true, false, iamUserPolicyMap); err != nil {
-		return err
-	}
-	// load group policy mapping
-	if err := loadEtcdMappedPolicies(false, true, iamGroupPolicyMap); err != nil {
-		return err
-	}
-
-	// Sets default canned policies, if none are set.
-	setDefaultCannedPolicies(iamPolicyDocsMap)
-
-	sys.Lock()
-	defer sys.Unlock()
-
-	sys.iamUsersMap = iamUsersMap
-	sys.iamGroupsMap = iamGroupsMap
-	sys.iamUserPolicyMap = iamUserPolicyMap
-	sys.iamPolicyDocsMap = iamPolicyDocsMap
-	sys.iamGroupPolicyMap = iamGroupPolicyMap
-
-	return nil
-}
-
-// Refresh IAMSys.
-func (sys *IAMSys) refresh(objAPI ObjectLayer) error {
-	iamUsersMap := make(map[string]auth.Credentials)
-	iamGroupsMap := make(map[string]GroupInfo)
-	iamPolicyDocsMap := make(map[string]iampolicy.Policy)
-	iamUserPolicyMap := make(map[string]MappedPolicy)
-	iamGroupPolicyMap := make(map[string]MappedPolicy)
-
-	if err := loadPolicyDocs(objAPI, iamPolicyDocsMap); err != nil {
-		return err
-	}
-	if err := loadUsers(objAPI, false, iamUsersMap); err != nil {
-		return err
-	}
-	// load STS temp users into the same map
-	if err := loadUsers(objAPI, true, iamUsersMap); err != nil {
-		return err
-	}
-	if err := loadGroups(objAPI, iamGroupsMap); err != nil {
-		return err
-	}
-
-	// load policies mapped for long-term users
-	if err := loadMappedPolicies(objAPI, false, false, iamUserPolicyMap); err != nil {
-		return err
-	}
-	// load STS policy mappings into the same map
-	if err := loadMappedPolicies(objAPI, true, false, iamUserPolicyMap); err != nil {
-		return err
-	}
-	// load policies mapped to groups
-	if err := loadMappedPolicies(objAPI, false, true, iamGroupPolicyMap); err != nil {
-		return err
-	}
-
-	// Sets default canned policies, if none are set.
-	setDefaultCannedPolicies(iamPolicyDocsMap)
-
-	sys.Lock()
-	defer sys.Unlock()
-
-	sys.iamUsersMap = iamUsersMap
-	sys.iamPolicyDocsMap = iamPolicyDocsMap
-	sys.iamUserPolicyMap = iamUserPolicyMap
-	sys.iamGroupPolicyMap = iamGroupPolicyMap
-	sys.iamGroupsMap = iamGroupsMap
-	sys.buildUserGroupMemberships()
-
-	return nil
 }
 
 // buildUserGroupMemberships - builds the memberships map. IMPORTANT:
