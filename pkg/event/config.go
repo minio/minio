@@ -276,15 +276,20 @@ func (conf *Config) ToRulesMap() RulesMap {
 // ParseConfig - parses data in reader to notification configuration.
 func ParseConfig(reader io.Reader, region string, targetList *TargetList) (*Config, error) {
 	var config Config
-	if err := xml.NewDecoder(reader).Decode(&config); err != nil {
+	var err error
+
+	if err = xml.NewDecoder(reader).Decode(&config); err != nil {
 		return nil, err
 	}
 
-	if err := config.Validate(region, targetList); err != nil {
-		return nil, err
-	}
+	err = config.Validate(region, targetList)
 
 	config.SetRegion(region)
 
-	return &config, nil
+	// If xml namespace is empty, set a default value before returning.
+	if config.XMLNS == "" {
+		config.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
+	}
+
+	return &config, err
 }
