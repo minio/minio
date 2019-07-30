@@ -16,6 +16,10 @@
         font-weight: normal;
         margin: 0;
 
+        @media(min-width: (@screen-md-min)) {
+            width: calc(100% - 60px);
+        }
+
         & > span {
             margin-bottom: 7px;
             display: inline-block;
@@ -27,7 +31,7 @@
                     color: @text-color;
                 }
             }
-            &:last-child {
+            &:last-of-type {
                 &:after {
                     content: '/';
                     margin: 0 4px;
@@ -42,6 +46,18 @@
     }
 }
 
+
+/*--------------------------
+    Edit path
+----------------------------*/
+.fe-edit {
+    color: @text-muted-color;
+    margin-left: 4px;
+    
+    &:hover {
+        color: @text-color;
+    }
+}
 
 /*--------------------------
     Disk used

@@ -73,19 +73,19 @@ var exports = {
     },
     proxy: {
       '/minio/webrpc': {
-	target: 'http://localhost:9000',
+	target: 'http://localhost:8000',
 	secure: false
       },
       '/minio/upload/*': {
-	target: 'http://localhost:9000',
+	target: 'http://localhost:8000',
 	secure: false
       },
       '/minio/download/*': {
-	target: 'http://localhost:9000',
+	target: 'http://localhost:8000',
 	secure: false
       },
       '/minio/zip': {
-        target: 'http://localhost:9000',
+        target: 'http://localhost:8000',
         secure: false
       }
     }
