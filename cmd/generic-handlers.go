@@ -746,6 +746,9 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 	fwd := handlers.NewForwarder(&handlers.Forwarder{
 		PassHost:     true,
 		RoundTripper: NewCustomHTTPTransport(),
+		Logger: func(err error) {
+			logger.LogIf(context.Background(), err)
+		},
 	})
 	return bucketForwardingHandler{fwd, h}
 }
