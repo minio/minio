@@ -34,13 +34,13 @@ type cacheControl struct {
 	maxStale int
 }
 
-func (c cacheControl) set() bool {
-	return c != cacheControl{}
+func (c cacheControl) isEmpty() bool {
+	return c == cacheControl{}
 
 }
 
-func (c cacheControl) isStaleCache(modTime time.Time) bool {
-	if !c.set() {
+func (c cacheControl) isStale(modTime time.Time) bool {
+	if c.isEmpty() {
 		return false
 	}
 	now := time.Now()
@@ -140,9 +140,8 @@ func readCacheFileStream(filePath string, offset, length int64) (io.ReadCloser, 
 	if err != nil {
 		return nil, osErrToFSFileErr(err)
 	}
-
 	// Stat to get the size of the file at path.
-	st, err := os.Stat(filePath)
+	st, err := fr.Stat()
 	if err != nil {
 		err = osErrToFSFileErr(err)
 		return nil, err
@@ -151,6 +150,10 @@ func readCacheFileStream(filePath string, offset, length int64) (io.ReadCloser, 
 	// Verify if its not a regular file, since subsequent Seek is undefined.
 	if !st.Mode().IsRegular() {
 		return nil, errIsNotRegular
+	}
+
+	if err = os.Chtimes(filePath, time.Now(), st.ModTime()); err != nil {
+		return nil, err
 	}
 
 	// Seek to the requested offset.

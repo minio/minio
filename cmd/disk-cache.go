@@ -158,7 +158,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	cacheReader, cacheErr := c.get(ctx, dcache, bucket, object, rs, h, opts)
 	if cacheErr == nil {
 		cc = cacheControlOpts(cacheReader.ObjInfo)
-		if cc.set() && !cc.isStaleCache(cacheReader.ObjInfo.ModTime) {
+		if !cc.isEmpty() && !cc.isStale(cacheReader.ObjInfo.ModTime) {
 			return cacheReader, nil
 		}
 	}
@@ -196,7 +196,12 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 
 	// Since we got here, we are serving the request from backend,
 	// and also adding the object to the cache.
-
+	if !dcache.diskUsageLow() {
+		select {
+		case dcache.purgeChan <- struct{}{}:
+		default:
+		}
+	}
 	if !dcache.diskAvailable(objInfo.Size) {
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
@@ -254,7 +259,7 @@ func (c *cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 	cachedObjInfo, cerr := c.stat(ctx, dcache, bucket, object)
 	if cerr == nil {
 		cc = cacheControlOpts(cachedObjInfo)
-		if cc.set() && !cc.isStaleCache(cachedObjInfo.ModTime) {
+		if !cc.isEmpty() && !cc.isStale(cachedObjInfo.ModTime) {
 			return cachedObjInfo, nil
 		}
 	}
@@ -315,7 +320,7 @@ func (c *cacheObjects) skipCache() bool {
 // Returns true if object should be excluded from cache
 func (c *cacheObjects) isCacheExclude(bucket, object string) bool {
 	// exclude directories from cache
-	if strings.HasSuffix(object, slashSeparator) {
+	if strings.HasSuffix(object, SlashSeparator) {
 		return true
 	}
 	for _, pattern := range c.exclude {
@@ -404,8 +409,10 @@ func newCache(config CacheConfig) ([]*diskCache, bool, error) {
 		if err != nil {
 			return nil, false, err
 		}
-		// Start the purging go-routine for entries that have expired
-		go cache.purge()
+		// Start the purging go-routine for entries that have expired if no migration in progress
+		if !migrating {
+			go cache.purge()
+		}
 
 		caches = append(caches, cache)
 	}
@@ -452,7 +459,10 @@ func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
 			if err := migrateOldCache(ctx, dc); err != nil {
 				errs[idx] = err
 				logger.LogIf(ctx, err)
+				return
 			}
+			// start purge routine after migration completes.
+			go dc.purge()
 		}(ctx, dc, errs, i)
 	}
 	wg.Wait()

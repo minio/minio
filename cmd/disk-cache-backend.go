@@ -211,7 +211,7 @@ func (c *diskCache) purge() {
 				}
 				// stat entry to get atime
 				var fi os.FileInfo
-				fi, err := os.Stat(pathJoin(c.dir, obj.Name()))
+				fi, err := os.Stat(pathJoin(c.dir, obj.Name(), cacheDataFile))
 				if err != nil {
 					continue
 				}
@@ -224,19 +224,29 @@ func (c *diskCache) purge() {
 				}
 				cc := cacheControlOpts(objInfo)
 				if atime.Get(fi).Before(expiry) ||
-					cc.isStaleCache(objInfo.ModTime) {
+					cc.isStale(objInfo.ModTime) {
 					if err = removeAll(pathJoin(c.dir, obj.Name())); err != nil {
 						logger.LogIf(ctx, err)
 					}
 					deletedCount++
+					// break early if sufficient disk space reclaimed.
+					if !c.diskUsageLow() {
+						break
+					}
 				}
 			}
 			if deletedCount == 0 {
-				// to avoid a busy loop
-				time.Sleep(time.Minute * 30)
+				break
 			}
 		}
-		<-c.purgeChan
+		lastRunTime := time.Now()
+		for {
+			<-c.purgeChan
+			timeElapsed := time.Since(lastRunTime)
+			if timeElapsed > time.Hour {
+				break
+			}
+		}
 	}
 }
 
@@ -280,6 +290,11 @@ func (c *diskCache) statCache(ctx context.Context, cacheObjPath string) (oi Obje
 	if err := jsonLoad(f, meta); err != nil {
 		return oi, err
 	}
+	fi, err := os.Stat(pathJoin(cacheObjPath, cacheDataFile))
+	if err != nil {
+		return oi, err
+	}
+	meta.Stat.ModTime = atime.Get(fi)
 	return meta.ToObjectInfo("", ""), nil
 }
 
@@ -518,7 +533,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 
 	var nsUnlocker = func() {}
 	// For a directory, we need to send an reader that returns no bytes.
-	if hasSuffix(object, slashSeparator) {
+	if hasSuffix(object, SlashSeparator) {
 		// The lock taken above is released when
 		// objReader.Close() is called by the caller.
 		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts.CheckCopyPrecondFn, nsUnlocker)
