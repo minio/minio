@@ -98,7 +98,7 @@ export class Path extends React.Component {
     }
   }
   render() {
-    const pathTooltip = <Tooltip id="tt-path">Go to path</Tooltip>
+    const pathTooltip = <Tooltip id="tt-path">Choose or create new path</Tooltip>
     const { currentBucket, currentPrefix } = this.props
     let dirPath = []
     let path = ""
@@ -125,7 +125,7 @@ export class Path extends React.Component {
               <input
                 className="form-control form-control--path"
                 type="text"
-                placeholder="Go to Path..."
+                placeholder="Choose or create new path"
                 ref={node => (this.pathInput = node)}
                 onKeyDown={e => this.onKeyDown(e)}
                 value={this.state.path}
