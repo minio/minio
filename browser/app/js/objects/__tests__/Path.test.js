@@ -15,7 +15,7 @@
  */
 
 import React from "react"
-import { shallow } from "enzyme"
+import { shallow, mount } from "enzyme"
 import { Path } from "../Path"
 
 describe("Path", () => {
@@ -26,7 +26,12 @@ describe("Path", () => {
   it("should render only bucket if there is no prefix", () => {
     const wrapper = shallow(<Path currentBucket={"test1"} currentPrefix={""} />)
     expect(wrapper.find("span").length).toBe(1)
-    expect(wrapper.text()).toBe("test1")
+    expect(
+      wrapper
+        .find("span")
+        .at(0)
+        .text()
+    ).toBe("test1")
   })
 
   it("should render bucket and prefix", () => {
@@ -68,5 +73,71 @@ describe("Path", () => {
       .at(2)
       .simulate("click", { preventDefault: jest.fn() })
     expect(selectPrefix).toHaveBeenCalledWith("a/b/")
+  })
+
+  it("should switch to input mode when edit icon is clicked", () => {
+    const wrapper = mount(<Path currentBucket={"test1"} currentPrefix={""} />)
+    wrapper.find(".fe-edit").simulate("click", { preventDefault: jest.fn() })
+    expect(wrapper.find(".form-control--path").exists()).toBeTruthy()
+  })
+
+  it("should navigate to prefix when user types path for existing bucket", () => {
+    const selectBucket = jest.fn()
+    const buckets = ["test1", "test2"]
+    const wrapper = mount(
+      <Path
+        buckets={buckets}
+        currentBucket={"test1"}
+        currentPrefix={""}
+        selectBucket={selectBucket}
+      />
+    )
+    wrapper.setState({
+      isEditing: true,
+      path: "test2/dir1/"
+    })
+    wrapper.find("form").simulate("submit", { preventDefault: jest.fn() })
+    expect(selectBucket).toHaveBeenCalledWith("test2", "dir1/")
+  })
+
+  it("should create a new bucket if bucket typed in path doesn't exist", () => {
+    const makeBucket = jest.fn()
+    const buckets = ["test1", "test2"]
+    const wrapper = mount(
+      <Path
+        buckets={buckets}
+        currentBucket={"test1"}
+        currentPrefix={""}
+        makeBucket={makeBucket}
+      />
+    )
+    wrapper.setState({
+      isEditing: true,
+      path: "test3/dir1/"
+    })
+    wrapper.find("form").simulate("submit", { preventDefault: jest.fn() })
+    expect(makeBucket).toHaveBeenCalledWith("test3")
+  })
+
+  it("should not make or select bucket if path doesn't point to bucket", () => {
+    const makeBucket = jest.fn()
+    const selectBucket = jest.fn()
+    const buckets = ["test1", "test2"]
+    const wrapper = mount(
+      <Path
+        buckets={buckets}
+        currentBucket={"test1"}
+        currentPrefix={""}
+        makeBucket={makeBucket}
+        selectBucket={selectBucket}
+      />
+    )
+    wrapper.setState({
+      isEditing: true,
+      path: "//dir1/dir2/"
+    })
+    wrapper.find("form").simulate("submit", { preventDefault: jest.fn() })
+    expect(makeBucket).not.toHaveBeenCalled()
+    expect(selectBucket).not.toHaveBeenCalled()
   })
 })
