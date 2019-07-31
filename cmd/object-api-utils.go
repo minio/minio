@@ -319,7 +319,7 @@ func isMinioReservedBucket(bucketName string) bool {
 func getHostsSlice(records []dns.SrvRecord) []string {
 	var hosts []string
 	for _, r := range records {
-		hosts = append(hosts, r.Host)
+		hosts = append(hosts, net.JoinHostPort(r.Host, fmt.Sprintf("%d", r.Port)))
 	}
 	return hosts
 }

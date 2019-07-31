@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/minio/cli"
+	"github.com/minio/minio-go/v6/pkg/set"
 )
 
 func TestSubOptimalEndpointInput(t *testing.T) {
@@ -441,6 +442,46 @@ func TestGetRemotePeers(t *testing.T) {
 		remotePeers := GetRemotePeers(endpoints)
 		if !reflect.DeepEqual(remotePeers, testCase.expectedResult) {
 			t.Fatalf("expected: %v, got: %v", testCase.expectedResult, remotePeers)
+		}
+	}
+}
+
+func TestUpdateDomainIPs(t *testing.T) {
+	tempGlobalMinioPort := globalMinioPort
+	defer func() {
+		globalMinioPort = tempGlobalMinioPort
+	}()
+	globalMinioPort = "9000"
+
+	tempGlobalDomainIPs := globalDomainIPs
+	defer func() {
+		globalDomainIPs = tempGlobalDomainIPs
+	}()
+
+	ipv4TestCases := []struct {
+		endPoints      set.StringSet
+		expectedResult set.StringSet
+	}{
+		{set.NewStringSet(), set.NewStringSet()},
+		{set.CreateStringSet("localhost"), set.NewStringSet()},
+		{set.CreateStringSet("localhost", "10.0.0.1"), set.CreateStringSet("10.0.0.1:9000")},
+		{set.CreateStringSet("localhost:9001", "10.0.0.1"), set.CreateStringSet("10.0.0.1:9000")},
+		{set.CreateStringSet("localhost", "10.0.0.1:9001"), set.CreateStringSet("10.0.0.1:9001")},
+		{set.CreateStringSet("localhost:9000", "10.0.0.1:9001"), set.CreateStringSet("10.0.0.1:9001")},
+
+		{set.CreateStringSet("10.0.0.1", "10.0.0.2"), set.CreateStringSet("10.0.0.1:9000", "10.0.0.2:9000")},
+		{set.CreateStringSet("10.0.0.1:9001", "10.0.0.2"), set.CreateStringSet("10.0.0.1:9001", "10.0.0.2:9000")},
+		{set.CreateStringSet("10.0.0.1", "10.0.0.2:9002"), set.CreateStringSet("10.0.0.1:9000", "10.0.0.2:9002")},
+		{set.CreateStringSet("10.0.0.1:9001", "10.0.0.2:9002"), set.CreateStringSet("10.0.0.1:9001", "10.0.0.2:9002")},
+	}
+
+	for _, testCase := range ipv4TestCases {
+		globalDomainIPs = nil
+
+		updateDomainIPs(testCase.endPoints)
+
+		if !testCase.expectedResult.Equals(globalDomainIPs) {
+			t.Fatalf("error: expected = %s, got = %s", testCase.expectedResult, globalDomainIPs)
 		}
 	}
 }
