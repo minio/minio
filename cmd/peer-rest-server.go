@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/lifecycle"
@@ -719,22 +718,8 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	trcAll := r.URL.Query().Get(peerRESTTraceAll) == "true"
 	trcErr := r.URL.Query().Get(peerRESTTraceErr) == "true"
 
-	w.Header().Set(xhttp.Connection, "close")
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
-
-	filter := func(entry interface{}) bool {
-		trcInfo := entry.(trace.Info)
-
-		if trcErr && isHTTPStatusOK(trcInfo.RespInfo.StatusCode) {
-			return false
-		}
-		if trcAll {
-			return true
-		}
-		return !strings.HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath)
-
-	}
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)
@@ -742,7 +727,13 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	// Trace Publisher uses nonblocking publish and hence does not wait for slow subscribers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
 	ch := make(chan interface{}, 2000)
-	globalHTTPTrace.Subscribe(ch, doneCh, filter)
+
+	globalHTTPTrace.Subscribe(ch, doneCh, func(entry interface{}) bool {
+		return mustTrace(entry, trcAll, trcErr)
+	})
+
+	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	defer keepAliveTicker.Stop()
 
 	enc := gob.NewEncoder(w)
 	for {
@@ -752,8 +743,11 @@ func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.(http.Flusher).Flush()
-		case <-r.Context().Done():
-			return
+		case <-keepAliveTicker.C:
+			if err := enc.Encode(&trace.Info{}); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
 		}
 	}
 }
