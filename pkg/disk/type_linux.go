@@ -37,6 +37,7 @@ var fsType2StringMap = map[string]string{
 	"794c7630": "overlayfs",
 	"2fc12fc1": "zfs",
 	"ff534d42": "cifs",
+	"53464846": "wslfs",
 }
 
 // getFSType returns the filesystem type of the underlying mounted filesystem
