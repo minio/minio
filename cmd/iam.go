@@ -264,6 +264,7 @@ func loadUser(objectAPI ObjectLayer, user string, isSTS bool,
 		return nil
 	}
 
+	// In some cases access key may not be set, so we set it explicitly.
 	u.Credentials.AccessKey = user
 	m[user] = u.Credentials
 	return nil
