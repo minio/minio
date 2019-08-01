@@ -264,6 +264,7 @@ func loadUser(objectAPI ObjectLayer, user string, isSTS bool,
 		return nil
 	}
 
+	u.Credentials.AccessKey = user
 	m[user] = u.Credentials
 	return nil
 }
@@ -573,6 +574,7 @@ func migrateUsersConfigToV1(objAPI ObjectLayer, isSTS bool) error {
 
 		// Found a id file in old format. Copy value
 		// into new format and save it.
+		cred.AccessKey = user
 		u := newUserIdentity(cred)
 		if err := saveIAMConfigItem(objAPI, u, identityPath); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -799,6 +801,7 @@ func (sys *IAMSys) Init(objAPI ObjectLayer) error {
 		}
 		break
 	}
+
 	return nil
 }
 
