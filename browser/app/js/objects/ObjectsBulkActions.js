@@ -59,7 +59,7 @@ export class ObjectsBulkActions extends React.Component {
         }
       >
         <span className="la-label">
-          <i className="fa fa-check-circle" /> {checkedObjects.length}
+          <i className="fas fa-check-circle" /> {checkedObjects.length}
           {checkedObjects.length === 1 ? " Object " : " Objects "}
           selected
         </span>
@@ -81,7 +81,7 @@ export class ObjectsBulkActions extends React.Component {
           </button>
         </span>
         <i
-          className="la-close fa fa-times"
+          className="la-close fas fa-times"
           id="close-bulk-actions"
           onClick={clearChecked}
         />

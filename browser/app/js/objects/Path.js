@@ -143,7 +143,7 @@ export class Path extends React.Component {
             {path}
             <OverlayTrigger placement="bottom" overlay={pathTooltip}>
               <a href="" onClick={e => this.onEditClick(e)} className="fe-edit">
-                <i className="fa fa-pencil" />
+                <i className="fas fa-folder-plus" />
               </a>
             </OverlayTrigger>
           </React.Fragment>

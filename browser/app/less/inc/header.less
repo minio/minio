@@ -51,11 +51,12 @@
     Edit path
 ----------------------------*/
 .fe-edit {
-    color: @text-muted-color;
+    font-size: 20px;
+    color: @link-color;
     margin-left: 4px;
-    
-    &:hover {
-        color: @text-color;
+
+    i {
+        vertical-align: middle;
     }
 }
 
@@ -148,7 +149,7 @@
             @media(max-width: (@screen-sm-max)) {
                 background: url(../../img/more-h-light.svg) no-repeat center;
 
-                .fa-reorder {
+                .fa-bars {
                     display: none;
                 }
             }
