@@ -1250,12 +1250,12 @@ func (sys *IAMSys) AddUsersToGroup(group string, members []string) error {
 		return errServerNotInitialized
 	}
 
-	sys.Lock()
-	defer sys.Unlock()
-
 	if group == "" {
 		return errInvalidArgument
 	}
+
+	sys.Lock()
+	defer sys.Unlock()
 
 	// Validate that all members exist.
 	for _, member := range members {
@@ -1310,12 +1310,12 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 		return errServerNotInitialized
 	}
 
-	sys.Lock()
-	defer sys.Unlock()
-
 	if group == "" {
 		return errInvalidArgument
 	}
+
+	sys.Lock()
+	defer sys.Unlock()
 
 	// Validate that all members exist.
 	for _, member := range members {
