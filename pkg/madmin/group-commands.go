@@ -140,10 +140,10 @@ const (
 )
 
 // SetGroupStatus - sets the status of a group.
-func (adm *AdminClient) SetGroupStatus(group string, status string) error {
+func (adm *AdminClient) SetGroupStatus(group string, status GroupStatus) error {
 	v := url.Values{}
 	v.Set("group", group)
-	v.Set("status", status)
+	v.Set("status", string(status))
 
 	reqData := requestData{
 		relPath:     "/v1/set-group-status",
