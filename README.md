@@ -5,7 +5,7 @@ MinIO is an object storage server released under Apache License v2.0. It is comp
 
 MinIO server is light enough to be bundled with the application stack, similar to NodeJS, Redis and MySQL.
 
-[1]: Some software such as S3QL will not work with MinIO in its default mode which is faster but not fully compatible with S3. For full compatibility with Amazon S3 protocols, it must be started in server (not gateway) mode and given the --compat option.
+[1]: Some software such as S3QL will not work with MinIO in its default mode which is faster but not fully compatible with S3. For full compatibility with Amazon S3 protocols, start MinIO with `--compat` option.
 ```sh
 minio --compat server /data
 ```
