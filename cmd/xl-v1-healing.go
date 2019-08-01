@@ -501,10 +501,14 @@ func (xl xlObjects) healObjectDir(ctx context.Context, bucket, object string, dr
 			drive = storageDisks[i].String()
 		}
 		switch err {
+		case nil:
+			hr.Before.Drives[i] = madmin.HealDriveInfo{State: madmin.DriveStateOk}
+			hr.After.Drives[i] = madmin.HealDriveInfo{State: madmin.DriveStateOk}
 		case errDiskNotFound:
 			hr.Before.Drives[i] = madmin.HealDriveInfo{State: madmin.DriveStateOffline}
 			hr.After.Drives[i] = madmin.HealDriveInfo{State: madmin.DriveStateOffline}
-		case errVolumeNotFound:
+		case errVolumeNotFound, errFileNotFound:
+			// Bucket or prefix/directory not found
 			hr.Before.Drives[i] = madmin.HealDriveInfo{Endpoint: drive, State: madmin.DriveStateMissing}
 			hr.After.Drives[i] = madmin.HealDriveInfo{Endpoint: drive, State: madmin.DriveStateMissing}
 		default:
@@ -517,7 +521,8 @@ func (xl xlObjects) healObjectDir(ctx context.Context, bucket, object string, dr
 	}
 	for i, err := range errs {
 		switch err {
-		case errVolumeNotFound:
+		case errVolumeNotFound, errFileNotFound:
+			// Bucket or prefix/directory not found
 			merr := storageDisks[i].MakeVol(pathJoin(bucket, object))
 			switch merr {
 			case nil, errVolumeExists:
