@@ -698,6 +698,22 @@ func initStorageDisks(endpoints EndpointList) ([]StorageAPI, error) {
 	return storageDisks, nil
 }
 
+// Runs through the faulty disks and record their errors.
+func initDisksWithErrors(endpoints EndpointList) ([]StorageAPI, []error) {
+	storageDisks := make([]StorageAPI, len(endpoints))
+	var dErrs = make([]error, len(storageDisks))
+	for index, endpoint := range endpoints {
+		storage, err := newStorageAPI(endpoint)
+		if err != nil {
+			logger.LogIf(context.Background(), err)
+			dErrs[index] = err
+			continue
+		}
+		storageDisks[index] = storage
+	}
+	return storageDisks, dErrs
+}
+
 // formatXLV3ThisEmpty - find out if '.This' field is empty
 // in any of the input `formats`, if yes return true.
 func formatXLV3ThisEmpty(formats []*formatXLV3) bool {
