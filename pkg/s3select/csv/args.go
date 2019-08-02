@@ -112,10 +112,6 @@ func (args *ReaderArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 		return fmt.Errorf("unsupported Comments '%v'", parsedArgs.CommentCharacter)
 	}
 
-	if parsedArgs.AllowQuotedRecordDelimiter {
-		return fmt.Errorf("flag AllowQuotedRecordDelimiter is unsupported at the moment")
-	}
-
 	*args = ReaderArgs(parsedArgs)
 	args.unmarshaled = true
 	return nil
