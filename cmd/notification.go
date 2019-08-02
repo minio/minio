@@ -232,6 +232,19 @@ func (sys *NotificationSys) LoadUsers() []NotificationPeerErr {
 	return ng.Wait()
 }
 
+// LoadGroup - loads a specific group on all peers.
+func (sys *NotificationSys) LoadGroup(group string) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(context.Background(), func() error { return client.LoadGroup(group) }, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
 // BackgroundHealStatus - returns background heal status of all peers
 func (sys *NotificationSys) BackgroundHealStatus() []madmin.BgHealState {
 	states := make([]madmin.BgHealState, len(sys.peerClients))

@@ -110,6 +110,18 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		// List users
 		adminV1Router.Methods(http.MethodGet).Path("/list-users").HandlerFunc(httpTraceHdrs(adminAPI.ListUsers))
 
+		// Add/Remove members from group
+		adminV1Router.Methods(http.MethodPut).Path("/update-group-members").HandlerFunc(httpTraceHdrs(adminAPI.UpdateGroupMembers))
+
+		// Get Group
+		adminV1Router.Methods(http.MethodGet).Path("/group").HandlerFunc(httpTraceHdrs(adminAPI.GetGroup)).Queries("group", "{group:.*}")
+
+		// List Groups
+		adminV1Router.Methods(http.MethodGet).Path("/groups").HandlerFunc(httpTraceHdrs(adminAPI.ListGroups))
+
+		// Set Group Status
+		adminV1Router.Methods(http.MethodPut).Path("/set-group-status").HandlerFunc(httpTraceHdrs(adminAPI.SetGroupStatus)).Queries("group", "{group:.*}").Queries("status", "{status:.*}")
+
 		// List policies
 		adminV1Router.Methods(http.MethodGet).Path("/list-canned-policies").HandlerFunc(httpTraceHdrs(adminAPI.ListCannedPolicies))
 	}

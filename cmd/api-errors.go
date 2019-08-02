@@ -203,6 +203,8 @@ const (
 
 	ErrMalformedJSON
 	ErrAdminNoSuchUser
+	ErrAdminNoSuchGroup
+	ErrAdminGroupNotEmpty
 	ErrAdminNoSuchPolicy
 	ErrAdminInvalidArgument
 	ErrAdminInvalidAccessKey
@@ -923,6 +925,16 @@ var errorCodes = errorCodeMap{
 		Description:    "The specified user does not exist.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
+	ErrAdminNoSuchGroup: {
+		Code:           "XMinioAdminNoSuchGroup",
+		Description:    "The specified group does not exist.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrAdminGroupNotEmpty: {
+		Code:           "XMinioAdminGroupNotEmpty",
+		Description:    "The specified group is not empty - cannot remove it.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrAdminNoSuchPolicy: {
 		Code:           "XMinioAdminNoSuchPolicy",
 		Description:    "The canned policy does not exist.",
@@ -1500,6 +1512,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminInvalidArgument
 	case errNoSuchUser:
 		apiErr = ErrAdminNoSuchUser
+	case errNoSuchGroup:
+		apiErr = ErrAdminNoSuchGroup
+	case errGroupNotEmpty:
+		apiErr = ErrAdminGroupNotEmpty
 	case errNoSuchPolicy:
 		apiErr = ErrAdminNoSuchPolicy
 	case errSignatureMismatch:
