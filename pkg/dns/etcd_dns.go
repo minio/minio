@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -215,9 +216,20 @@ func NewCoreDNS(domainNames []string, domainIPs set.StringSet, domainPort string
 		return nil, err
 	}
 
+	// strip ports off of domainIPs
+	domainIPsWithoutPorts := domainIPs.ApplyFunc(func(ip string) string {
+		host, _, err := net.SplitHostPort(ip)
+		if err != nil {
+			if strings.Contains(err.Error(), "missing port in address") {
+				host = ip
+			}
+		}
+		return host
+	})
+
 	return &coreDNS{
 		domainNames: domainNames,
-		domainIPs:   domainIPs,
+		domainIPs:   domainIPsWithoutPorts,
 		domainPort:  port,
 		etcdClient:  etcdClient,
 	}, nil

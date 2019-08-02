@@ -720,18 +720,27 @@ func GetRemotePeers(endpoints EndpointList) []string {
 func updateDomainIPs(endPoints set.StringSet) {
 	ipList := set.NewStringSet()
 	for e := range endPoints {
-		host, _, err := net.SplitHostPort(e)
+		host, port, err := net.SplitHostPort(e)
 		if err != nil {
 			if strings.Contains(err.Error(), "missing port in address") {
 				host = e
+				port = globalMinioPort
 			} else {
 				continue
 			}
 		}
-		IPs, _ := getHostIP(host)
-		ipList = ipList.Union(IPs)
+		IPs, err := getHostIP(host)
+		if err != nil {
+			continue
+		}
+
+		IPsWithPort := IPs.ApplyFunc(func(ip string) string {
+			return net.JoinHostPort(ip, port)
+		})
+
+		ipList = ipList.Union(IPsWithPort)
 	}
 	globalDomainIPs = ipList.FuncMatch(func(ip string, matchString string) bool {
-		return !strings.HasPrefix(ip, "127.") || strings.HasPrefix(ip, "::1")
+		return !(strings.HasPrefix(ip, "127.") || strings.HasPrefix(ip, "::1") || strings.HasPrefix(ip, "[::1]"))
 	}, "")
 }
