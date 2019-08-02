@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -288,7 +289,7 @@ func (endpoints EndpointList) UpdateIsLocal() error {
 
 // localEndpointsMemUsage - returns ServerMemUsageInfo for only the
 // local endpoints from given list of endpoints
-func localEndpointsMemUsage(endpoints EndpointList) ServerMemUsageInfo {
+func localEndpointsMemUsage(endpoints EndpointList, r *http.Request) ServerMemUsageInfo {
 	var memUsages []mem.Usage
 	var historicUsages []mem.Usage
 	scratchSpace := map[string]bool{}
@@ -303,8 +304,12 @@ func localEndpointsMemUsage(endpoints EndpointList) ServerMemUsageInfo {
 			scratchSpace[endpoint.Host] = true
 		}
 	}
+	addr := r.Host
+	if globalIsDistXL {
+		addr = GetLocalPeer(endpoints)
+	}
 	return ServerMemUsageInfo{
-		Addr:          GetLocalPeer(endpoints),
+		Addr:          addr,
 		Usage:         memUsages,
 		HistoricUsage: historicUsages,
 	}
@@ -312,7 +317,7 @@ func localEndpointsMemUsage(endpoints EndpointList) ServerMemUsageInfo {
 
 // localEndpointsCPULoad - returns ServerCPULoadInfo for only the
 // local endpoints from given list of endpoints
-func localEndpointsCPULoad(endpoints EndpointList) ServerCPULoadInfo {
+func localEndpointsCPULoad(endpoints EndpointList, r *http.Request) ServerCPULoadInfo {
 	var cpuLoads []cpu.Load
 	var historicLoads []cpu.Load
 	scratchSpace := map[string]bool{}
@@ -327,8 +332,12 @@ func localEndpointsCPULoad(endpoints EndpointList) ServerCPULoadInfo {
 			scratchSpace[endpoint.Host] = true
 		}
 	}
+	addr := r.Host
+	if globalIsDistXL {
+		addr = GetLocalPeer(endpoints)
+	}
 	return ServerCPULoadInfo{
-		Addr:         GetLocalPeer(endpoints),
+		Addr:         addr,
 		Load:         cpuLoads,
 		HistoricLoad: historicLoads,
 	}
@@ -336,7 +345,7 @@ func localEndpointsCPULoad(endpoints EndpointList) ServerCPULoadInfo {
 
 // localEndpointsDrivePerf - returns ServerDrivesPerfInfo for only the
 // local endpoints from given list of endpoints
-func localEndpointsDrivePerf(endpoints EndpointList) ServerDrivesPerfInfo {
+func localEndpointsDrivePerf(endpoints EndpointList, r *http.Request) ServerDrivesPerfInfo {
 	var dps []disk.Performance
 	for _, endpoint := range endpoints {
 		// Only proceed for local endpoints
@@ -351,9 +360,12 @@ func localEndpointsDrivePerf(endpoints EndpointList) ServerDrivesPerfInfo {
 			dps = append(dps, dp)
 		}
 	}
-
+	addr := r.Host
+	if globalIsDistXL {
+		addr = GetLocalPeer(endpoints)
+	}
 	return ServerDrivesPerfInfo{
-		Addr: GetLocalPeer(endpoints),
+		Addr: addr,
 		Perf: dps,
 	}
 }

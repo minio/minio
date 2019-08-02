@@ -107,7 +107,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Fatalf("Failed to complete multipart upload - %v", err)
 	}
 
-	// Remove the object backend files from the first disk.
+	// Test 1: Remove the object backend files from the first disk.
 	xl := obj.(*xlObjects)
 	firstDisk := xl.storageDisks[0]
 	err = firstDisk.DeleteFile(bucket, filepath.Join(object, xlMetaJSONFile))
@@ -125,7 +125,34 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Errorf("Expected xl.json file to be present but stat failed - %v", err)
 	}
 
-	// Delete xl.json from more than read quorum number of disks, to create a corrupted situation.
+	// Test 2: Heal when part.1 is empty
+	partSt1, err := firstDisk.StatFile(bucket, filepath.Join(object, "part.1"))
+	if err != nil {
+		t.Errorf("Expected part.1 file to be present but stat failed - %v", err)
+	}
+	err = firstDisk.DeleteFile(bucket, filepath.Join(object, "part.1"))
+	if err != nil {
+		t.Errorf("Failure during part.1 removal - %v", err)
+	}
+	err = firstDisk.AppendFile(bucket, filepath.Join(object, "part.1"), []byte{})
+	if err != nil {
+		t.Errorf("Failure during creating part.1 - %v", err)
+	}
+	_, err = obj.HealObject(context.Background(), bucket, object, false, true, madmin.HealDeepScan)
+	if err != nil {
+		t.Errorf("Expected nil but received %v", err)
+	}
+	partSt2, err := firstDisk.StatFile(bucket, filepath.Join(object, "part.1"))
+	if err != nil {
+		t.Errorf("Expected from part.1 file to be present but stat failed - %v", err)
+	}
+	if partSt1.Size != partSt2.Size {
+		t.Errorf("part.1 file size is not the same before and after heal")
+	}
+
+	// Test 3: checks if HealObject returns an error when xl.json is not found
+	// in more than read quorum number of disks, to create a corrupted situation.
+
 	for i := 0; i <= len(xl.storageDisks)/2; i++ {
 		xl.storageDisks[i].DeleteFile(bucket, filepath.Join(object, xlMetaJSONFile))
 	}
@@ -221,5 +248,81 @@ func TestHealObjectXL(t *testing.T) {
 	// since majority of xl.jsons are not available, object quorum can't be read properly and error will be errXLReadQuorum
 	if _, ok := err.(InsufficientReadQuorum); !ok {
 		t.Errorf("Expected %v but received %v", InsufficientReadQuorum{}, err)
+	}
+}
+
+// Tests healing of empty directories
+func TestHealEmptyDirectoryXL(t *testing.T) {
+	nDisks := 16
+	fsDirs, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeRoots(fsDirs)
+
+	// Everything is fine, should return nil
+	obj, _, err := initObjectLayer(mustGetNewEndpointList(fsDirs...))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bucket := "bucket"
+	object := "empty-dir/"
+	var opts ObjectOptions
+
+	err = obj.MakeBucketWithLocation(context.Background(), bucket, "")
+	if err != nil {
+		t.Fatalf("Failed to make a bucket - %v", err)
+	}
+
+	// Upload an empty directory
+	_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte{}), 0, "", ""), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Remove the object backend files from the first disk.
+	xl := obj.(*xlObjects)
+	firstDisk := xl.storageDisks[0]
+	err = firstDisk.DeleteFile(bucket, object)
+	if err != nil {
+		t.Fatalf("Failed to delete a file - %v", err)
+	}
+
+	// Heal the object
+	hr, err := obj.HealObject(context.Background(), bucket, object, false, false, madmin.HealNormalScan)
+	if err != nil {
+		t.Fatalf("Failed to heal object - %v", err)
+	}
+
+	// Check if the empty directory is restored in the first disk
+	_, err = firstDisk.StatVol(pathJoin(bucket, object))
+	if err != nil {
+		t.Fatalf("Expected object to be present but stat failed - %v", err)
+	}
+
+	// Check the state of the object in the first disk (should be missing)
+	if hr.Before.Drives[0].State != madmin.DriveStateMissing {
+		t.Fatalf("Unexpected drive state: %v", hr.Before.Drives[0].State)
+	}
+
+	// Check the state of all other disks (should be ok)
+	for i, h := range append(hr.Before.Drives[1:], hr.After.Drives...) {
+		if h.State != madmin.DriveStateOk {
+			t.Fatalf("Unexpected drive state (%d): %v", i+1, h.State)
+		}
+	}
+
+	// Heal the same object again
+	hr, err = obj.HealObject(context.Background(), bucket, object, false, false, madmin.HealNormalScan)
+	if err != nil {
+		t.Fatalf("Failed to heal object - %v", err)
+	}
+
+	// Check that Before & After states are all okay
+	for i, h := range append(hr.Before.Drives, hr.After.Drives...) {
+		if h.State != madmin.DriveStateOk {
+			t.Fatalf("Unexpected drive state (%d): %v", i+1, h.State)
+		}
 	}
 }

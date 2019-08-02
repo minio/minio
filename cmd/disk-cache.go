@@ -945,7 +945,10 @@ func checkAtimeSupport(dir string) (err error) {
 	if err != nil {
 		return
 	}
-	if _, err = io.Copy(ioutil.Discard, file); err != io.EOF {
+	// add a sleep to ensure atime change is detected
+	time.Sleep(10 * time.Millisecond)
+
+	if _, err = io.Copy(ioutil.Discard, file); err != nil {
 		return
 	}
 

@@ -22,7 +22,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/iam/validator"
 	"github.com/minio/minio/pkg/quick"
 )
@@ -884,7 +884,7 @@ type serverConfigV32 struct {
 	} `json:"policy"`
 }
 
-// serverConfigV33 is just like version '32', removes clientID from NATS and MQTT, and adds queueDir, queueLimit in MQTT and kafka.
+// serverConfigV33 is just like version '32', removes clientID from NATS and MQTT, and adds queueDir, queueLimit in all notification targets.
 type serverConfigV33 struct {
 	quick.Config `json:"-"` // ignore interfaces
 

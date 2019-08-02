@@ -183,7 +183,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	policyName, err := globalIAMSys.GetUserPolicy(user.AccessKey)
+	policyName, err := globalIAMSys.PolicyDBGet(user.AccessKey)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))

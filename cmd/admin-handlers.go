@@ -242,17 +242,11 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
 	serverInfo := globalNotificationSys.ServerInfo(ctx)
 	// Once we have received all the ServerInfo from peers
 	// add the local peer server info as well.
 	serverInfo = append(serverInfo, ServerInfo{
-		Addr: thisAddr.String(),
+		Addr: getHostName(r),
 		Data: &ServerInfoData{
 			StorageInfo: objectAPI.StorageInfo(ctx),
 			ConnStats:   globalConnStats.toServerConnStats(),
@@ -330,7 +324,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 			return
 		}
 		// Get drive performance details from local server's drive(s)
-		dp := localEndpointsDrivePerf(globalEndpoints)
+		dp := localEndpointsDrivePerf(globalEndpoints, r)
 
 		// Notify all other MinIO peers to report drive performance numbers
 		dps := globalNotificationSys.DrivePerfInfo()
@@ -348,7 +342,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		writeSuccessResponseJSON(w, jsonBytes)
 	case "cpu":
 		// Get CPU load details from local server's cpu(s)
-		cpu := localEndpointsCPULoad(globalEndpoints)
+		cpu := localEndpointsCPULoad(globalEndpoints, r)
 		// Notify all other MinIO peers to report cpu load numbers
 		cpus := globalNotificationSys.CPULoadInfo()
 		cpus = append(cpus, cpu)
@@ -365,7 +359,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		writeSuccessResponseJSON(w, jsonBytes)
 	case "mem":
 		// Get mem usage details from local server(s)
-		m := localEndpointsMemUsage(globalEndpoints)
+		m := localEndpointsMemUsage(globalEndpoints, r)
 		// Notify all other MinIO peers to report mem usage numbers
 		mems := globalNotificationSys.MemUsageInfo()
 		mems = append(mems, m)
@@ -444,18 +438,12 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
 	peerLocks := globalNotificationSys.GetLocks(ctx)
 	// Once we have received all the locks currently used from peers
 	// add the local peer locks list as well.
 	localLocks := globalLockServer.ll.DupLockMap()
 	peerLocks = append(peerLocks, &PeerLocks{
-		Addr:  thisAddr.String(),
+		Addr:  getHostName(r),
 		Locks: localLocks,
 	})
 
@@ -683,12 +671,12 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 					// Start writing response to client
 					started = true
 					setCommonHeaders(w)
-					w.Header().Set(xhttp.ContentType, string(mimeJSON))
+					w.Header().Set(xhttp.ContentType, "text/event-stream")
 					// Set 200 OK status
 					w.WriteHeader(200)
 				}
 				// Send whitespace and keep connection open
-				w.Write([]byte("\n\r"))
+				w.Write([]byte(" "))
 				w.(http.Flusher).Flush()
 			case hr := <-respCh:
 				switch hr.apiErr {
@@ -1265,7 +1253,7 @@ func (a adminAPIHandlers) SetUserPolicy(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := globalIAMSys.SetUserPolicy(accessKey, policyName); err != nil {
+	if err := globalIAMSys.PolicyDBSet(accessKey, policyName); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 	}
 
@@ -1471,12 +1459,30 @@ func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseHeadersOnly(w)
 }
 
+// Returns true if the trace.Info should be traced,
+// false if certain conditions are not met.
+// - input entry is not of the type *trace.Info*
+// - errOnly entries are to be traced, not status code 2xx, 3xx.
+// - all entries to be traced, if not trace only S3 API requests.
+func mustTrace(entry interface{}, trcAll, errOnly bool) bool {
+	trcInfo, ok := entry.(trace.Info)
+	if !ok {
+		return false
+	}
+	trace := trcAll || !hasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+slashSeparator)
+	if errOnly {
+		return trace && trcInfo.RespInfo.StatusCode >= http.StatusBadRequest
+	}
+	return trace
+}
+
 // TraceHandler - POST /minio/admin/v1/trace
 // ----------
 // The handler sends http trace to the connected HTTP client.
 func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HTTPTrace")
 	trcAll := r.URL.Query().Get("all") == "true"
+	trcErr := r.URL.Query().Get("err") == "true"
 
 	// Validate request signature.
 	adminAPIErr := checkAdminRequestAuthType(ctx, r, "")
@@ -1485,10 +1491,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Avoid reusing tcp connection if read timeout is hit
-	// This is needed to make r.Context().Done() work as
-	// expected in case of read timeout
-	w.Header().Add(xhttp.Connection, "close")
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)
@@ -1497,23 +1500,21 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	// Use buffered channel to take care of burst sends or slow w.Write()
 	traceCh := make(chan interface{}, 4000)
 
-	filter := func(entry interface{}) bool {
-		if trcAll {
-			return true
-		}
-		trcInfo := entry.(trace.Info)
-		return !strings.HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath)
-	}
-	remoteHosts := getRemoteHosts(globalEndpoints)
-	peers, err := getRestClients(remoteHosts)
+	peers, err := getRestClients(getRemoteHosts(globalEndpoints))
 	if err != nil {
 		return
 	}
-	globalHTTPTrace.Subscribe(traceCh, doneCh, filter)
+
+	globalHTTPTrace.Subscribe(traceCh, doneCh, func(entry interface{}) bool {
+		return mustTrace(entry, trcAll, trcErr)
+	})
 
 	for _, peer := range peers {
-		peer.Trace(traceCh, doneCh, trcAll)
+		peer.Trace(traceCh, doneCh, trcAll, trcErr)
 	}
+
+	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	defer keepAliveTicker.Stop()
 
 	enc := json.NewEncoder(w)
 	for {
@@ -1523,8 +1524,11 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.(http.Flusher).Flush()
-		case <-r.Context().Done():
-			return
+		case <-keepAliveTicker.C:
+			if _, err := w.Write([]byte(" ")); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
 		case <-GlobalServiceDoneCh:
 			return
 		}

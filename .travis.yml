@@ -2,6 +2,14 @@ go_import_path: github.com/minio/minio
 
 language: go
 
+addons:
+  apt:
+    packages:
+    - shellcheck
+
+services:
+  - docker
+
 # this ensures PRs based on a local branch are not built twice
 # the downside is that a PR targeting a different branch is not built
 # but as a workaround you can add the branch to this list
@@ -18,6 +26,7 @@ matrix:
         - ARCH=x86_64
         - CGO_ENABLED=0
         - GO111MODULE=on
+        - GOPROXY=https://proxy.golang.org
       # Enable build cache
       # https://restic.net/blog/2018-09-02/travis-build-cache
       cache:
@@ -26,7 +35,7 @@ matrix:
          - $HOME/gopath/pkg/mod
          - $HOME/go/pkg/mod
 
-      go: 1.12.1
+      go: 1.12.5
       script:
         - make
         - diff -au <(gofmt -s -d cmd) <(printf "")
@@ -37,12 +46,15 @@ matrix:
         - make verify
         - make coverage
         - cd browser && yarn && yarn test && cd ..
+        - bash -c 'shopt -s globstar; shellcheck mint/**/*.sh'
+
     - os: windows
       env:
         - ARCH=x86_64
         - CGO_ENABLED=0
         - GO111MODULE=on
-      go: 1.12.1
+        - GOPROXY=https://proxy.golang.org
+      go: 1.12.5
       script:
         - go build --ldflags="$(go run buildscripts/gen-ldflags.go)" -o %GOPATH%\bin\minio.exe
         - bash buildscripts/go-coverage.sh

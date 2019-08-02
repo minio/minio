@@ -19,7 +19,10 @@ package target
 import (
 	"errors"
 	"fmt"
+	"net"
+	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/minio/minio/pkg/event"
@@ -76,6 +79,32 @@ func replayEvents(store Store, doneCh <-chan struct{}) <-chan string {
 	return eventKeyCh
 }
 
+// IsConnRefusedErr - To check fot "connection refused" error.
+func IsConnRefusedErr(err error) bool {
+	if opErr, ok := err.(*net.OpError); ok {
+		if sysErr, ok := opErr.Err.(*os.SyscallError); ok {
+			if errno, ok := sysErr.Err.(syscall.Errno); ok {
+				if errno == syscall.ECONNREFUSED {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// isConnResetErr - Checks for connection reset errors.
+func isConnResetErr(err error) bool {
+	if opErr, ok := err.(*net.OpError); ok {
+		if syscallErr, ok := opErr.Err.(*os.SyscallError); ok {
+			if syscallErr.Err == syscall.ECONNRESET {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // sendEvents - Reads events from the store and re-plays.
 func sendEvents(target event.Target, eventKeyCh <-chan string, doneCh <-chan struct{}) {
 	retryTimer := time.NewTimer(retryInterval)
@@ -88,7 +117,7 @@ func sendEvents(target event.Target, eventKeyCh <-chan string, doneCh <-chan str
 				break
 			}
 
-			if err != errNotConnected {
+			if err != errNotConnected && !isConnResetErr(err) {
 				panic(fmt.Errorf("target.Send() failed with '%v'", err))
 			}
 

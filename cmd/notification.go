@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
@@ -489,6 +490,48 @@ func (sys *NotificationSys) RemoveBucketPolicy(ctx context.Context, bucketName s
 			go func(client *peerRESTClient) {
 				defer wg.Done()
 				if err := client.RemoveBucketPolicy(bucketName); err != nil {
+					logger.GetReqInfo(ctx).AppendTags("remotePeer", client.host.Name)
+					logger.LogIf(ctx, err)
+				}
+			}(client)
+		}
+		wg.Wait()
+	}()
+}
+
+// SetBucketLifecycle - calls SetBucketLifecycle on all peers.
+func (sys *NotificationSys) SetBucketLifecycle(ctx context.Context, bucketName string, bucketLifecycle *lifecycle.Lifecycle) {
+	go func() {
+		var wg sync.WaitGroup
+		for _, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
+			wg.Add(1)
+			go func(client *peerRESTClient) {
+				defer wg.Done()
+				if err := client.SetBucketLifecycle(bucketName, bucketLifecycle); err != nil {
+					logger.GetReqInfo(ctx).AppendTags("remotePeer", client.host.Name)
+					logger.LogIf(ctx, err)
+				}
+			}(client)
+		}
+		wg.Wait()
+	}()
+}
+
+// RemoveBucketLifecycle - calls RemoveLifecycle on all peers.
+func (sys *NotificationSys) RemoveBucketLifecycle(ctx context.Context, bucketName string) {
+	go func() {
+		var wg sync.WaitGroup
+		for _, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
+			wg.Add(1)
+			go func(client *peerRESTClient) {
+				defer wg.Done()
+				if err := client.RemoveBucketLifecycle(bucketName); err != nil {
 					logger.GetReqInfo(ctx).AppendTags("remotePeer", client.host.Name)
 					logger.LogIf(ctx, err)
 				}

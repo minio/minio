@@ -537,7 +537,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Remove all tmp files creating during multipart upload
+	// Remove all tmp files created during multipart upload
 	defer form.RemoveAll()
 
 	// Extract all form fields
@@ -800,6 +800,8 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	globalNotificationSys.RemoveNotification(bucket)
 	globalPolicySys.Remove(bucket)
 	globalNotificationSys.DeleteBucket(ctx, bucket)
+	globalLifecycleSys.Remove(bucket)
+	globalNotificationSys.RemoveBucketLifecycle(ctx, bucket)
 
 	// Write success response.
 	writeSuccessNoContent(w)

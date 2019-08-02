@@ -254,6 +254,13 @@ func (e BucketPolicyNotFound) Error() string {
 	return "No bucket policy found for bucket: " + e.Bucket
 }
 
+// BucketLifecycleNotFound - no bucket lifecycle found.
+type BucketLifecycleNotFound GenericError
+
+func (e BucketLifecycleNotFound) Error() string {
+	return "No bucket life cycle found for bucket : " + e.Bucket
+}
+
 /// Bucket related errors.
 
 // BucketNameInvalid - bucketname provided is invalid.
@@ -269,9 +276,25 @@ func (e BucketNameInvalid) Error() string {
 // ObjectNameInvalid - object name provided is invalid.
 type ObjectNameInvalid GenericError
 
+// ObjectNameTooLong - object name too long.
+type ObjectNameTooLong GenericError
+
+// ObjectNamePrefixAsSlash - object name has a slash as prefix.
+type ObjectNamePrefixAsSlash GenericError
+
 // Return string an error formatted as the given text.
 func (e ObjectNameInvalid) Error() string {
 	return "Object name invalid: " + e.Bucket + "#" + e.Object
+}
+
+// Return string an error formatted as the given text.
+func (e ObjectNameTooLong) Error() string {
+	return "Object name too long: " + e.Bucket + "#" + e.Object
+}
+
+// Return string an error formatted as the given text.
+func (e ObjectNamePrefixAsSlash) Error() string {
+	return "Object name contains forward slash as pefix: " + e.Bucket + "#" + e.Object
 }
 
 // AllAccessDisabled All access to this object has been disabled

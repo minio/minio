@@ -384,3 +384,13 @@ func notFoundHandlerJSON(w http.ResponseWriter, r *http.Request) {
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	writeErrorResponse(context.Background(), w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
 }
+
+// gets host name for current node
+func getHostName(r *http.Request) (hostName string) {
+	if globalIsDistXL {
+		hostName = GetLocalPeer(globalEndpoints)
+	} else {
+		hostName = r.Host
+	}
+	return
+}

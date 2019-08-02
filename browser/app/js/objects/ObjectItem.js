@@ -51,7 +51,7 @@ export const ObjectItem = ({
       </div>
       <div className="fesl-item fesl-item-name">
         <a
-          href="#"
+          href={getDataType(name, contentType) === "folder" ? name : "#"}
           onClick={e => {
             e.preventDefault()
             if (onClick) {

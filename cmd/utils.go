@@ -29,7 +29,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -429,6 +428,7 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 		DeploymentID: globalDeploymentID,
 		RequestID:    w.Header().Get(xhttp.AmzRequestID),
 		RemoteHost:   handlers.GetSourceIP(r),
+		Host:         getHostName(r),
 		UserAgent:    r.UserAgent(),
 		API:          api,
 		BucketName:   bucket,
@@ -442,30 +442,21 @@ func isNetworkOrHostDown(err error) bool {
 	if err == nil {
 		return false
 	}
-	switch err.(type) {
-	case *net.DNSError, *net.OpError, net.UnknownNetworkError:
-		return true
-	case *url.Error:
-		// For a URL error, where it replies back "connection closed"
-		if strings.Contains(err.Error(), "Connection closed by foreign host") {
-			return true
-		}
-		return true
-	default:
-		if strings.Contains(err.Error(), "net/http: TLS handshake timeout") {
-			// If error is - tlsHandshakeTimeoutError,.
-			return true
-		} else if strings.Contains(err.Error(), "i/o timeout") {
-			// If error is - tcp timeoutError.
-			return true
-		} else if strings.Contains(err.Error(), "connection timed out") {
-			// If err is a net.Dial timeout.
-			return true
-		} else if strings.Contains(err.Error(), "net/http: HTTP/1.x transport connection broken") {
-			return true
-		}
+	// We need to figure if the error either a timeout
+	// or a non-temporary error.
+	e, ok := err.(net.Error)
+	if ok {
+		return e.Timeout()
 	}
-	return false
+	// Fallback to other mechanisms.
+	if strings.Contains(err.Error(), "i/o timeout") {
+		// If error is - tcp timeoutError.
+		ok = true
+	} else if strings.Contains(err.Error(), "connection timed out") {
+		// If err is a net.Dial timeout.
+		ok = true
+	}
+	return ok
 }
 
 // Used for registering with rest handlers (have a look at registerStorageRESTHandlers for usage example)

@@ -43,6 +43,7 @@ type Entry struct {
 	Time         string `json:"time"`
 	API          *API   `json:"api,omitempty"`
 	RemoteHost   string `json:"remotehost,omitempty"`
+	Host         string `json:"host,omitempty"`
 	RequestID    string `json:"requestID,omitempty"`
 	UserAgent    string `json:"userAgent,omitempty"`
 	Message      string `json:"message,omitempty"`

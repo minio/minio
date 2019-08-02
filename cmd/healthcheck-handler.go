@@ -62,6 +62,7 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		if s.Backend.Type == Unknown {
 			// ListBuckets to confirm gateway backend is up
 			if _, err := objLayer.ListBuckets(ctx); err != nil {
+				logger.LogOnceIf(ctx, err, struct{}{})
 				writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
 				return
 			}

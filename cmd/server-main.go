@@ -18,7 +18,7 @@ package cmd
 
 import (
 	"context"
-	"errors"
+	"encoding/gob"
 	"fmt"
 	"net/http"
 	"os"
@@ -36,6 +36,7 @@ import (
 func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterUIError(fmtError)
+	gob.Register(HashMismatchError{})
 }
 
 // ServerFlags - server command specific flags
@@ -363,6 +364,14 @@ func serverMain(ctx *cli.Context) {
 		logger.Fatal(err, "Unable to initialize policy system")
 	}
 
+	// Create new lifecycle system.
+	globalLifecycleSys = NewLifecycleSys()
+
+	// Initialize lifecycle system.
+	if err = globalLifecycleSys.Init(newObject); err != nil {
+		logger.Fatal(err, "Unable to initialize lifecycle system")
+	}
+
 	// Create new notification system.
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
 
@@ -370,9 +379,11 @@ func serverMain(ctx *cli.Context) {
 	if err = globalNotificationSys.Init(newObject); err != nil {
 		logger.LogIf(context.Background(), err)
 	}
-	if globalAutoEncryption && !newObject.IsEncryptionSupported() {
-		logger.Fatal(errors.New("Invalid KMS configuration"), "auto-encryption is enabled but server does not support encryption")
-	}
+
+	// Verify if object layer supports
+	// - encryption
+	// - compression
+	verifyObjectLayerFeatures("server", newObject)
 
 	if globalIsXL {
 		initBackgroundHealing()

@@ -487,6 +487,71 @@ func (s *storageRESTServer) RenameFileHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// Send whitespace to the client to avoid timeouts as bitrot verification can take time on spinning/slow disks.
+func sendWhiteSpaceVerifyFile(w http.ResponseWriter) <-chan struct{} {
+	doneCh := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(time.Second * 10)
+		for {
+			select {
+			case <-ticker.C:
+				w.Write([]byte(" "))
+				w.(http.Flusher).Flush()
+			case doneCh <- struct{}{}:
+				ticker.Stop()
+				return
+			}
+		}
+
+	}()
+	return doneCh
+}
+
+// VerifyFileResp - VerifyFile()'s response.
+type VerifyFileResp struct {
+	Err error
+}
+
+// VerifyFile - Verify the file for bitrot errors.
+func (s *storageRESTServer) VerifyFile(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := mux.Vars(r)
+	volume := vars[storageRESTVolume]
+	filePath := vars[storageRESTFilePath]
+	empty, err := strconv.ParseBool(vars[storageRESTEmpty])
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	shardSize, err := strconv.Atoi(vars[storageRESTLength])
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	hashStr := vars[storageRESTBitrotHash]
+	var hash []byte
+	if hashStr != "" {
+		hash, err = hex.DecodeString(hashStr)
+		if err != nil {
+			s.writeErrorResponse(w, err)
+			return
+		}
+	}
+	algoStr := vars[storageRESTBitrotAlgo]
+	if algoStr == "" {
+		s.writeErrorResponse(w, errInvalidArgument)
+		return
+	}
+	algo := BitrotAlgorithmFromString(algoStr)
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	doneCh := sendWhiteSpaceVerifyFile(w)
+	err = s.storage.VerifyFile(volume, filePath, empty, algo, hash, int64(shardSize))
+	<-doneCh
+	gob.NewEncoder(w).Encode(VerifyFileResp{err})
+}
+
 // registerStorageRPCRouter - register storage rpc router.
 func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 	for _, endpoint := range endpoints {
@@ -534,6 +599,8 @@ func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodRenameFile).HandlerFunc(httpTraceHdrs(server.RenameFileHandler)).
 			Queries(restQueries(storageRESTSrcVolume, storageRESTSrcPath, storageRESTDstVolume, storageRESTDstPath)...)
+		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodVerifyFile).HandlerFunc(httpTraceHdrs(server.VerifyFile)).
+			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTBitrotAlgo, storageRESTLength)...)
 		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodGetInstanceID).HandlerFunc(httpTraceAll(server.GetInstanceID))
 	}
 

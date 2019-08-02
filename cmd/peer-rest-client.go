@@ -30,6 +30,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
@@ -329,6 +330,37 @@ func (client *peerRESTClient) SetBucketPolicy(bucket string, bucketPolicy *polic
 	return nil
 }
 
+// RemoveBucketLifecycle - Remove bucket lifecycle configuration on the peer node
+func (client *peerRESTClient) RemoveBucketLifecycle(bucket string) error {
+	values := make(url.Values)
+	values.Set(peerRESTBucket, bucket)
+	respBody, err := client.call(peerRESTMethodBucketLifecycleRemove, values, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// SetBucketLifecycle - Set bucket lifecycle configuration on the peer node
+func (client *peerRESTClient) SetBucketLifecycle(bucket string, bucketLifecycle *lifecycle.Lifecycle) error {
+	values := make(url.Values)
+	values.Set(peerRESTBucket, bucket)
+
+	var reader bytes.Buffer
+	err := gob.NewEncoder(&reader).Encode(bucketLifecycle)
+	if err != nil {
+		return err
+	}
+
+	respBody, err := client.call(peerRESTMethodBucketLifecycleSet, values, &reader, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 // PutBucketNotification - Put bucket notification on the peer node.
 func (client *peerRESTClient) PutBucketNotification(bucket string, rulesMap event.RulesMap) error {
 	values := make(url.Values)
@@ -435,9 +467,10 @@ func (client *peerRESTClient) BackgroundHealStatus() (madmin.BgHealState, error)
 	return state, err
 }
 
-func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan struct{}, trcAll bool) {
+func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan struct{}, trcAll, trcErr bool) {
 	values := make(url.Values)
 	values.Set(peerRESTTraceAll, strconv.FormatBool(trcAll))
+	values.Set(peerRESTTraceErr, strconv.FormatBool(trcErr))
 
 	// To cancel the REST request in case doneCh gets closed.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -466,19 +499,21 @@ func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan stru
 		if err = dec.Decode(&info); err != nil {
 			return
 		}
-		select {
-		case traceCh <- info:
-		default:
-			// Do not block on slow receivers.
+		if len(info.NodeName) > 0 {
+			select {
+			case traceCh <- info:
+			default:
+				// Do not block on slow receivers.
+			}
 		}
 	}
 }
 
 // Trace - send http trace request to peer nodes
-func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh chan struct{}, trcAll bool) {
+func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh chan struct{}, trcAll, trcErr bool) {
 	go func() {
 		for {
-			client.doTrace(traceCh, doneCh, trcAll)
+			client.doTrace(traceCh, doneCh, trcAll, trcErr)
 			select {
 			case <-doneCh:
 				return

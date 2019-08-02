@@ -1177,7 +1177,7 @@ func (s *TestSuiteCommon) TestPutObject(c *check) {
 	c.Assert(response.StatusCode, http.StatusOK)
 	c.Assert(response.ContentLength, int64(len([]byte("hello world"))))
 	var buffer2 bytes.Buffer
-	// retrive the contents of response body.
+	// retrieve the contents of response body.
 	n, err := io.Copy(&buffer2, response.Body)
 	c.Assert(err, nil)
 	c.Assert(n, int64(len([]byte("hello world"))))
@@ -1354,7 +1354,37 @@ func (s *TestSuiteCommon) TestPutObjectLongName(c *check) {
 	response, err = client.Do(request)
 	c.Assert(err, nil)
 	c.Assert(response.StatusCode, http.StatusOK)
-	// make long object name.
+
+	//make long object name.
+	longObjName = fmt.Sprintf("%0255d/%0255d/%0255d/%0255d/%0255d", 1, 1, 1, 1, 1)
+	if IsDocker() || IsKubernetes() {
+		longObjName = fmt.Sprintf("%0242d/%0242d/%0242d/%0242d/%0242d", 1, 1, 1, 1, 1)
+	}
+	// create new HTTP request to insert the object.
+	buffer = bytes.NewReader([]byte("hello world"))
+	request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, longObjName),
+		int64(buffer.Len()), buffer, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	// execute the HTTP request.
+	response, err = client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusBadRequest)
+	verifyError(c, response, "KeyTooLongError", "Your key is too long", http.StatusBadRequest)
+
+	// make object name with prefix as slash
+	longObjName = fmt.Sprintf("/%0255d/%0255d", 1, 1)
+	buffer = bytes.NewReader([]byte("hello world"))
+	// create new HTTP request to insert the object.
+	request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, longObjName),
+		int64(buffer.Len()), buffer, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	// execute the HTTP request.
+	response, err = client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusBadRequest)
+	verifyError(c, response, "XMinioInvalidObjectName", "Object name contains a leading slash.", http.StatusBadRequest)
+
+	//make object name as unsuported
 	longObjName = fmt.Sprintf("%0256d", 1)
 	buffer = bytes.NewReader([]byte("hello world"))
 	request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, longObjName),
@@ -1431,7 +1461,7 @@ func (s *TestSuiteCommon) TestHeadOnObjectLastModified(c *check) {
 	// verify the status of the HTTP response.
 	c.Assert(response.StatusCode, http.StatusOK)
 
-	// retrive the info of last modification time of the object from the response header.
+	// retrieve the info of last modification time of the object from the response header.
 	lastModified := response.Header.Get("Last-Modified")
 	// Parse it into time.Time structure.
 	t, err := time.Parse(http.TimeFormat, lastModified)

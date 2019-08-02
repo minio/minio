@@ -103,12 +103,14 @@ func (e *FuncExpr) evalAggregationNode(r Record) error {
 
 		// Here, we diverge from Amazon S3 behavior by
 		// inferring untyped values are numbers.
-		if i, ok := argVal.bytesToInt(); ok {
-			argVal.setInt(i)
-		} else if f, ok := argVal.bytesToFloat(); ok {
-			argVal.setFloat(f)
-		} else {
-			return errNonNumericArg(funcName)
+		if !argVal.isNumeric() {
+			if i, ok := argVal.bytesToInt(); ok {
+				argVal.setInt(i)
+			} else if f, ok := argVal.bytesToFloat(); ok {
+				argVal.setFloat(f)
+			} else {
+				return errNonNumericArg(funcName)
+			}
 		}
 	}
 

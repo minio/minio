@@ -9,7 +9,6 @@ site/
 /.idea/
 /Minio.iml
 **/access.log
-build/
 vendor/**/*.js
 vendor/**/*.json
 release
@@ -23,5 +22,4 @@ prime/
 stage/
 .sia_temp/
 config.json
-healthcheck
-check-user
+dockerscripts/healthcheck

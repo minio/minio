@@ -48,7 +48,9 @@
 				"durable": false,
 				"internal": false,
 				"noWait": false,
-				"autoDeleted": false
+				"autoDeleted": false,
+                                "queueDir": "",
+                                "queueLimit": 0
 			}
 		},
 		"elasticsearch": {
@@ -56,7 +58,9 @@
 				"enable": false,
 				"format": "",
 				"url": "",
-				"index": ""
+				"index": "",
+                                "queueDir": "",
+                                "queueLimit": 0
 			}
 		},
 		"kafka": {
@@ -102,7 +106,9 @@
 				"port": "",
 				"user": "",
 				"password": "",
-				"database": ""
+				"database": "",
+                               "queueDir": "",
+                               "queueLimit": 0
 			}
 		},
 		"nats": {
@@ -115,6 +121,8 @@
 				"token": "",
 				"secure": false,
 				"pingInterval": 0,
+                                "queueDir": "",
+                                "queueLimit": 0,
 				"streaming": {
 					"enable": false,
 					"clusterID": "",
@@ -131,7 +139,9 @@
 				"tls": {
 					"enable": false,
 					"skipVerify": true
-				}
+				},
+                                "queueDir": "",
+                                "queueLimit": 0                 
 			}
 		},
 		"postgresql": {
@@ -144,7 +154,9 @@
 				"port": "",
 				"user": "",
 				"password": "",
-				"database": ""
+				"database": "",
+                               "queueDir": "",
+                               "queueLimit": 0
 			}
 		},
 		"redis": {
@@ -153,13 +165,17 @@
 				"format": "",
 				"address": "",
 				"password": "",
-				"key": ""
+				"key": "",
+                                "queueDir": "",
+                                "queueLimit": 0                 
 			}
 		},
 		"webhook": {
 			"1": {
 				"enable": false,
-				"endpoint": ""
+				"endpoint": "",
+                                "queueDir": "",
+                                "queueLimit": 0
 			}
 		}
 	},
