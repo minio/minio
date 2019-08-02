@@ -548,18 +548,6 @@ func TestFSRemoveMeta(t *testing.T) {
 	}
 }
 
-func TestFSIsDir(t *testing.T) {
-	dirPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
-	if err != nil {
-		t.Fatalf("Unable to create tmp directory %s", err)
-	}
-	defer os.RemoveAll(dirPath)
-
-	if !fsIsDir(context.Background(), dirPath) {
-		t.Fatalf("Expected %s to be a directory", dirPath)
-	}
-}
-
 func TestFSIsFile(t *testing.T) {
 	dirPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {

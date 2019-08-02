@@ -30,7 +30,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/iam/validator"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -281,17 +281,27 @@ func (s *serverConfig) loadFromEnvs() {
 	}
 
 	if jwksURL, ok := os.LookupEnv("MINIO_IAM_JWKS_URL"); ok {
-		if u, err := xnet.ParseURL(jwksURL); err == nil {
-			s.OpenID.JWKS.URL = u
-			logger.FatalIf(s.OpenID.JWKS.PopulatePublicKey(), "Unable to populate public key from JWKS URL")
+		u, err := xnet.ParseURL(jwksURL)
+		if err != nil {
+			logger.FatalIf(err, "Unable to parse MINIO_IAM_JWKS_URL %s", jwksURL)
 		}
+		s.OpenID.JWKS.URL = u
 	}
 
 	if opaURL, ok := os.LookupEnv("MINIO_IAM_OPA_URL"); ok {
-		if u, err := xnet.ParseURL(opaURL); err == nil {
-			s.Policy.OPA.URL = u
-			s.Policy.OPA.AuthToken = os.Getenv("MINIO_IAM_OPA_AUTHTOKEN")
+		u, err := xnet.ParseURL(opaURL)
+		if err != nil {
+			logger.FatalIf(err, "Unable to parse MINIO_IAM_OPA_URL %s", opaURL)
 		}
+		opaArgs := iampolicy.OpaArgs{
+			URL:         u,
+			AuthToken:   os.Getenv("MINIO_IAM_OPA_AUTHTOKEN"),
+			Transport:   NewCustomHTTPTransport(),
+			CloseRespFn: xhttp.DrainBody,
+		}
+		logger.FatalIf(opaArgs.Validate(), "Unable to reach MINIO_IAM_OPA_URL %s", opaURL)
+		s.Policy.OPA.URL = opaArgs.URL
+		s.Policy.OPA.AuthToken = opaArgs.AuthToken
 	}
 }
 
@@ -303,7 +313,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewAMQPTarget(k, v)
+		t, err := target.NewAMQPTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("amqp(%s): %s", k, err.Error())
 		}
@@ -347,7 +357,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewMySQLTarget(k, v)
+		t, err := target.NewMySQLTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("mysql(%s): %s", k, err.Error())
 		}
@@ -358,7 +368,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewNATSTarget(k, v)
+		t, err := target.NewNATSTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("nats(%s): %s", k, err.Error())
 		}
@@ -380,7 +390,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewPostgreSQLTarget(k, v)
+		t, err := target.NewPostgreSQLTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("postgreSQL(%s): %s", k, err.Error())
 		}
@@ -391,7 +401,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewRedisTarget(k, v)
+		t, err := target.NewRedisTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("redis(%s): %s", k, err.Error())
 		}
@@ -536,7 +546,7 @@ func (s *serverConfig) loadToCachedConfigs() {
 		globalCacheMaxUse = cacheConf.MaxUse
 	}
 	if err := Environment.LookupKMSConfig(s.KMS); err != nil {
-		logger.FatalIf(err, "Unable to setup the KMS")
+		logger.FatalIf(err, "Unable to setup the KMS %s", s.KMS.Vault.Endpoint)
 	}
 
 	if !globalIsCompressionEnabled {
@@ -546,15 +556,22 @@ func (s *serverConfig) loadToCachedConfigs() {
 		globalIsCompressionEnabled = compressionConf.Enabled
 	}
 
+	if s.OpenID.JWKS.URL != nil && s.OpenID.JWKS.URL.String() != "" {
+		logger.FatalIf(s.OpenID.JWKS.PopulatePublicKey(),
+			"Unable to populate public key from JWKS URL %s", s.OpenID.JWKS.URL)
+	}
+
 	globalIAMValidators = getAuthValidators(s)
 
 	if s.Policy.OPA.URL != nil && s.Policy.OPA.URL.String() != "" {
-		globalPolicyOPA = iampolicy.NewOpa(iampolicy.OpaArgs{
+		opaArgs := iampolicy.OpaArgs{
 			URL:         s.Policy.OPA.URL,
 			AuthToken:   s.Policy.OPA.AuthToken,
 			Transport:   NewCustomHTTPTransport(),
 			CloseRespFn: xhttp.DrainBody,
-		})
+		}
+		logger.FatalIf(opaArgs.Validate(), "Unable to reach OPA URL %s", s.Policy.OPA.URL)
+		globalPolicyOPA = iampolicy.NewOpa(opaArgs)
 	}
 }
 
@@ -637,7 +654,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 	}
 	for id, args := range config.Notify.AMQP {
 		if args.Enable {
-			newTarget, err := target.NewAMQPTarget(id, args)
+			newTarget, err := target.NewAMQPTarget(id, args, GlobalServiceDoneCh)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
@@ -696,7 +713,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.MySQL {
 		if args.Enable {
-			newTarget, err := target.NewMySQLTarget(id, args)
+			newTarget, err := target.NewMySQLTarget(id, args, GlobalServiceDoneCh)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
@@ -710,7 +727,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.NATS {
 		if args.Enable {
-			newTarget, err := target.NewNATSTarget(id, args)
+			newTarget, err := target.NewNATSTarget(id, args, GlobalServiceDoneCh)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
@@ -738,7 +755,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.PostgreSQL {
 		if args.Enable {
-			newTarget, err := target.NewPostgreSQLTarget(id, args)
+			newTarget, err := target.NewPostgreSQLTarget(id, args, GlobalServiceDoneCh)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
@@ -752,7 +769,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.Redis {
 		if args.Enable {
-			newTarget, err := target.NewRedisTarget(id, args)
+			newTarget, err := target.NewRedisTarget(id, args, GlobalServiceDoneCh)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue

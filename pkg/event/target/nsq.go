@@ -20,11 +20,9 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"net"
 	"net/url"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"github.com/nsqio/go-nsq"
 
@@ -90,26 +88,12 @@ func (target *NSQTarget) Save(eventData event.Event) error {
 	}
 	if err := target.producer.Ping(); err != nil {
 		// To treat "connection refused" errors as errNotConnected.
-		if isConnRefusedErr(err) {
+		if IsConnRefusedErr(err) {
 			return errNotConnected
 		}
 		return err
 	}
 	return target.send(eventData)
-}
-
-// isConnRefusedErr - To check fot "connection refused" error.
-func isConnRefusedErr(err error) bool {
-	if opErr, ok := err.(*net.OpError); ok {
-		if sysErr, ok := opErr.Err.(*os.SyscallError); ok {
-			if errno, ok := sysErr.Err.(syscall.Errno); ok {
-				if errno == syscall.ECONNREFUSED {
-					return true
-				}
-			}
-		}
-	}
-	return false
 }
 
 // send - sends an event to the NSQ.
@@ -133,7 +117,7 @@ func (target *NSQTarget) Send(eventKey string) error {
 
 	if err := target.producer.Ping(); err != nil {
 		// To treat "connection refused" errors as errNotConnected.
-		if isConnRefusedErr(err) {
+		if IsConnRefusedErr(err) {
 			return errNotConnected
 		}
 		return err
@@ -198,7 +182,7 @@ func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}) (*NSQTarget, 
 
 	if err := target.producer.Ping(); err != nil {
 		// To treat "connection refused" errors as errNotConnected.
-		if target.store == nil || !isConnRefusedErr(err) {
+		if target.store == nil || !IsConnRefusedErr(err) {
 			return nil, err
 		}
 	}

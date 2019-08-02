@@ -235,6 +235,7 @@ func newWebContext(r *http.Request, args ToKeyValuer, api string) context.Contex
 	reqInfo := &logger.ReqInfo{
 		DeploymentID: globalDeploymentID,
 		RemoteHost:   handlers.GetSourceIP(r),
+		Host:         getHostName(r),
 		UserAgent:    r.UserAgent(),
 		API:          api,
 		BucketName:   bucket,

@@ -365,6 +365,9 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalNotificationSys = NewNotificationSys(globalServerConfig, testServer.Disks)
 	globalNotificationSys.Init(objLayer)
 
+	globalLifecycleSys = NewLifecycleSys()
+	globalLifecycleSys.Init(objLayer)
+
 	return testServer
 }
 

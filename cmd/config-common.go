@@ -20,9 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 
-	etcd "github.com/coreos/etcd/clientv3"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 )
@@ -51,36 +49,8 @@ func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]b
 	return buffer.Bytes(), nil
 }
 
-func deleteConfigEtcd(ctx context.Context, client *etcd.Client, configFile string) error {
-	timeoutCtx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
-	defer cancel()
-
-	_, err := client.Delete(timeoutCtx, configFile)
-	if err != nil {
-		if err == context.DeadlineExceeded {
-			return fmt.Errorf("etcd setup is unreachable, please check your endpoints %s",
-				client.Endpoints())
-		}
-		return fmt.Errorf("unexpected error %s returned by etcd setup, please check your endpoints %s",
-			err, client.Endpoints())
-	}
-	return nil
-}
-
 func deleteConfig(ctx context.Context, objAPI ObjectLayer, configFile string) error {
 	return objAPI.DeleteObject(ctx, minioMetaBucket, configFile)
-}
-
-func saveConfigEtcd(ctx context.Context, client *etcd.Client, configFile string, data []byte) error {
-	timeoutCtx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
-	defer cancel()
-	_, err := client.Put(timeoutCtx, configFile, string(data))
-	if err == context.DeadlineExceeded {
-		return fmt.Errorf("etcd setup is unreachable, please check your endpoints %s", client.Endpoints())
-	} else if err != nil {
-		return fmt.Errorf("unexpected error %s returned by etcd setup, please check your endpoints %s", err, client.Endpoints())
-	}
-	return nil
 }
 
 func saveConfig(ctx context.Context, objAPI ObjectLayer, configFile string, data []byte) error {
@@ -91,29 +61,6 @@ func saveConfig(ctx context.Context, objAPI ObjectLayer, configFile string, data
 
 	_, err = objAPI.PutObject(ctx, minioMetaBucket, configFile, NewPutObjReader(hashReader, nil, nil), ObjectOptions{})
 	return err
-}
-
-func readConfigEtcd(ctx context.Context, client *etcd.Client, configFile string) ([]byte, error) {
-	timeoutCtx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
-	defer cancel()
-	resp, err := client.Get(timeoutCtx, configFile)
-	if err != nil {
-		if err == context.DeadlineExceeded {
-			return nil, fmt.Errorf("etcd setup is unreachable, please check your endpoints %s",
-				client.Endpoints())
-		}
-		return nil, fmt.Errorf("unexpected error %s returned by etcd setup, please check your endpoints %s",
-			err, client.Endpoints())
-	}
-	if resp.Count == 0 {
-		return nil, errConfigNotFound
-	}
-	for _, ev := range resp.Kvs {
-		if string(ev.Key) == configFile {
-			return ev.Value, nil
-		}
-	}
-	return nil, errConfigNotFound
 }
 
 func checkConfig(ctx context.Context, objAPI ObjectLayer, configFile string) error {

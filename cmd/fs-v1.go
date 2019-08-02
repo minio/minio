@@ -32,6 +32,7 @@ import (
 
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mimedb"
@@ -690,10 +691,6 @@ func (fs *FSObjects) defaultFsJSON(object string) fsMetaV1 {
 func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (oi ObjectInfo, e error) {
 	fsMeta := fsMetaV1{}
 	if hasSuffix(object, slashSeparator) {
-		// Since we support PUT of a "directory" object, we allow HEAD.
-		if !fsIsDir(ctx, pathJoin(fs.fsPath, bucket, object)) {
-			return oi, errFileNotFound
-		}
 		fi, err := fsStatDir(ctx, pathJoin(fs.fsPath, bucket, object))
 		if err != nil {
 			return oi, err
@@ -1168,6 +1165,21 @@ func (fs *FSObjects) GetBucketPolicy(ctx context.Context, bucket string) (*polic
 // DeleteBucketPolicy deletes all policies on bucket
 func (fs *FSObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	return removePolicyConfig(ctx, fs, bucket)
+}
+
+// SetBucketLifecycle sets lifecycle on bucket
+func (fs *FSObjects) SetBucketLifecycle(ctx context.Context, bucket string, lifecycle *lifecycle.Lifecycle) error {
+	return saveLifecycleConfig(ctx, fs, bucket, lifecycle)
+}
+
+// GetBucketLifecycle will get lifecycle on bucket
+func (fs *FSObjects) GetBucketLifecycle(ctx context.Context, bucket string) (*lifecycle.Lifecycle, error) {
+	return getLifecycleConfig(fs, bucket)
+}
+
+// DeleteBucketLifecycle deletes all lifecycle on bucket
+func (fs *FSObjects) DeleteBucketLifecycle(ctx context.Context, bucket string) error {
+	return removeLifecycleConfig(ctx, fs, bucket)
 }
 
 // ListObjectsV2 lists all blobs in bucket filtered by prefix

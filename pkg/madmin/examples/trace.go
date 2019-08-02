@@ -20,6 +20,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -40,7 +41,9 @@ func main() {
 
 	// Start listening on all http trace activity from all servers
 	// in the minio cluster.
-	traceCh := madmClnt.Trace(false, doneCh)
+	allTrace := false
+	errTrace := false
+	traceCh := madmClnt.Trace(allTrace, errTrace, doneCh)
 	for traceInfo := range traceCh {
 		if traceInfo.Err != nil {
 			fmt.Println(traceInfo.Err)

@@ -10,6 +10,7 @@ require (
 	github.com/DataDog/zstd v1.4.0 // indirect
 	github.com/alecthomas/participle v0.2.1
 	github.com/aliyun/aliyun-oss-go-sdk v0.0.0-20190307165228-86c17b95fcd5
+	github.com/aws/aws-sdk-go v1.20.21
 	github.com/baiyubin/aliyun-sts-go-sdk v0.0.0-20180326062324-cfa1a18b161f // indirect
 	github.com/bcicen/jstream v0.0.0-20190220045926-16c1f8af81c2
 	github.com/cheggaaa/pb v1.0.28
@@ -36,7 +37,6 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway v1.9.0 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.1 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
-	github.com/hashicorp/go-uuid v1.0.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hashicorp/raft v1.1.0 // indirect
@@ -55,10 +55,12 @@ require (
 	github.com/miekg/dns v1.1.8
 	github.com/minio/cli v1.21.0
 	github.com/minio/dsync/v2 v2.0.0
-	github.com/minio/hdfs/v3 v3.0.0
+	github.com/minio/gokrb5/v7 v7.2.5
+	github.com/minio/hdfs/v3 v3.0.1
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/lsync v1.0.1
 	github.com/minio/mc v0.0.0-20190529152718-f4bb0b8850cb
+	github.com/minio/minio-go v0.0.0-20190327203652-5325257a208f
 	github.com/minio/minio-go/v6 v6.0.29
 	github.com/minio/parquet-go v0.0.0-20190318185229-9d767baf1679
 	github.com/minio/sha256-simd v0.1.0
@@ -82,6 +84,7 @@ require (
 	github.com/rs/cors v1.6.0
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	github.com/satori/go.uuid v1.2.0 // indirect
+	github.com/sirupsen/logrus v1.4.2
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e
 	github.com/streadway/amqp v0.0.0-20190402114354-16ed540749f6
 	github.com/tidwall/gjson v1.2.1
@@ -92,8 +95,8 @@ require (
 	go.etcd.io/bbolt v1.3.3 // indirect
 	go.uber.org/atomic v1.3.2
 	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
-	golang.org/x/net v0.0.0-20190628185345-da137c7871d7 // indirect
-	golang.org/x/sys v0.0.0-20190626221950-04f50cda93cb
+	golang.org/x/net v0.0.0-20190724013045-ca1201d0de80 // indirect
+	golang.org/x/sys v0.0.0-20190801041406-cbf593c0f2f3
 	google.golang.org/api v0.4.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
 	gopkg.in/olivere/elastic.v5 v5.0.80

@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/policy"
 )
@@ -78,6 +79,22 @@ func (a GatewayUnsupported) GetBucketPolicy(ctx context.Context, bucket string) 
 
 // DeleteBucketPolicy deletes all policies on bucket
 func (a GatewayUnsupported) DeleteBucketPolicy(ctx context.Context, bucket string) error {
+	return NotImplemented{}
+}
+
+// SetBucketLifecycle sets lifecycle on bucket
+func (a GatewayUnsupported) SetBucketLifecycle(ctx context.Context, bucket string, lifecycle *lifecycle.Lifecycle) error {
+	logger.LogIf(ctx, NotImplemented{})
+	return NotImplemented{}
+}
+
+// GetBucketLifecycle will get lifecycle on bucket
+func (a GatewayUnsupported) GetBucketLifecycle(ctx context.Context, bucket string) (*lifecycle.Lifecycle, error) {
+	return nil, NotImplemented{}
+}
+
+// DeleteBucketLifecycle deletes all lifecycle on bucket
+func (a GatewayUnsupported) DeleteBucketLifecycle(ctx context.Context, bucket string) error {
 	return NotImplemented{}
 }
 

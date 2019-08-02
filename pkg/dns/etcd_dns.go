@@ -84,7 +84,7 @@ func (c *coreDNS) Get(bucket string) ([]SrvRecord, error) {
 			if record.Key != "" {
 				continue
 			}
-			srvRecords = append(srvRecords, records...)
+			srvRecords = append(srvRecords, record)
 		}
 	}
 	if len(srvRecords) == 0 {

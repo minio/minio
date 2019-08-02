@@ -72,7 +72,7 @@ func (args *ReaderArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 		return errInvalidFileHeaderInfo(fmt.Errorf("invalid FileHeaderInfo '%v'", parsedArgs.FileHeaderInfo))
 	}
 
-	switch len(parsedArgs.RecordDelimiter) {
+	switch len([]rune(parsedArgs.RecordDelimiter)) {
 	case 0:
 		parsedArgs.RecordDelimiter = defaultRecordDelimiter
 	case 1, 2:
@@ -80,7 +80,7 @@ func (args *ReaderArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 		return fmt.Errorf("invalid RecordDelimiter '%v'", parsedArgs.RecordDelimiter)
 	}
 
-	switch len(parsedArgs.FieldDelimiter) {
+	switch len([]rune(parsedArgs.FieldDelimiter)) {
 	case 0:
 		parsedArgs.FieldDelimiter = defaultFieldDelimiter
 	case 1:
@@ -154,7 +154,7 @@ func (args *WriterArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 		return errInvalidQuoteFields(fmt.Errorf("invalid QuoteFields '%v'", parsedArgs.QuoteFields))
 	}
 
-	switch len(parsedArgs.RecordDelimiter) {
+	switch len([]rune(parsedArgs.RecordDelimiter)) {
 	case 0:
 		parsedArgs.RecordDelimiter = defaultRecordDelimiter
 	case 1, 2:
@@ -162,7 +162,7 @@ func (args *WriterArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 		return fmt.Errorf("invalid RecordDelimiter '%v'", parsedArgs.RecordDelimiter)
 	}
 
-	switch len(parsedArgs.FieldDelimiter) {
+	switch len([]rune(parsedArgs.FieldDelimiter)) {
 	case 0:
 		parsedArgs.FieldDelimiter = defaultFieldDelimiter
 	case 1:
