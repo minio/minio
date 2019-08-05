@@ -891,9 +891,25 @@ func (sys *IAMSys) Init(objAPI ObjectLayer) error {
 		return errInvalidArgument
 	}
 
-	// Migrate IAM configuration
-	if err := doIAMConfigMigration(objAPI); err != nil {
-		return err
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	// Migrating IAM needs a retry mechanism for
+	// the following reasons:
+	//  - Read quorum is lost just after the initialization
+	//    of the object layer.
+	for range newRetryTimerSimple(doneCh) {
+		// Migrate IAM configuration
+		if err := doIAMConfigMigration(objAPI); err != nil {
+			if err == errDiskNotFound ||
+				strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
+				strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
+				logger.Info("Waiting for IAM subsystem to be initialized..")
+				continue
+			}
+			return err
+		}
+		break
 	}
 
 	if globalEtcdClient != nil {
@@ -901,9 +917,6 @@ func (sys *IAMSys) Init(objAPI ObjectLayer) error {
 	} else {
 		defer sys.watchIAMDisk(objAPI)
 	}
-
-	doneCh := make(chan struct{})
-	defer close(doneCh)
 
 	// Initializing IAM needs a retry mechanism for
 	// the following reasons:
