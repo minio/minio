@@ -315,7 +315,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	r.Header.Set("prefix", "")
 
 	// Set delimiter value for "s3:delimiter" policy conditionals.
-	r.Header.Set("delimiter", slashSeparator)
+	r.Header.Set("delimiter", SlashSeparator)
 
 	// If etcd, dns federation configured list buckets from etcd.
 	if globalDNSConfig != nil {
@@ -429,7 +429,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		nextMarker := ""
 		// Fetch all the objects
 		for {
-			result, err := core.ListObjects(args.BucketName, args.Prefix, nextMarker, slashSeparator, 1000)
+			result, err := core.ListObjects(args.BucketName, args.Prefix, nextMarker, SlashSeparator, 1000)
 			if err != nil {
 				return toJSONError(ctx, err, args.BucketName)
 			}
@@ -464,7 +464,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			r.Header.Set("prefix", args.Prefix)
 
 			// Set delimiter value for "s3:delimiter" policy conditionals.
-			r.Header.Set("delimiter", slashSeparator)
+			r.Header.Set("delimiter", SlashSeparator)
 
 			// Check if anonymous (non-owner) has access to download objects.
 			readable := globalPolicySys.IsAllowed(policy.Args{
@@ -480,7 +480,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 				BucketName:      args.BucketName,
 				ConditionValues: getConditionValues(r, "", ""),
 				IsOwner:         false,
-				ObjectName:      args.Prefix + "/",
+				ObjectName:      args.Prefix + SlashSeparator,
 			})
 
 			reply.Writable = writable
@@ -503,7 +503,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		r.Header.Set("prefix", args.Prefix)
 
 		// Set delimiter value for "s3:delimiter" policy conditionals.
-		r.Header.Set("delimiter", slashSeparator)
+		r.Header.Set("delimiter", SlashSeparator)
 
 		readable := globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     claims.Subject,
@@ -519,7 +519,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			BucketName:      args.BucketName,
 			ConditionValues: getConditionValues(r, "", claims.Subject),
 			IsOwner:         owner,
-			ObjectName:      args.Prefix + "/",
+			ObjectName:      args.Prefix + SlashSeparator,
 		})
 
 		reply.Writable = writable
@@ -541,7 +541,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	nextMarker := ""
 	// Fetch all the objects
 	for {
-		lo, err := listObjects(ctx, args.BucketName, args.Prefix, nextMarker, slashSeparator, 1000)
+		lo, err := listObjects(ctx, args.BucketName, args.Prefix, nextMarker, SlashSeparator, 1000)
 		if err != nil {
 			return &json2.Error{Message: err.Error()}
 		}
@@ -671,7 +671,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 next:
 	for _, objectName := range args.Objects {
 		// If not a directory, remove the object.
-		if !hasSuffix(objectName, slashSeparator) && objectName != "" {
+		if !hasSuffix(objectName, SlashSeparator) && objectName != "" {
 			// Deny if WORM is enabled
 			if globalWORMEnabled {
 				if _, err = objectAPI.GetObjectInfo(ctx, args.BucketName, objectName, ObjectOptions{}); err == nil {
@@ -1034,7 +1034,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if objectAPI.IsEncryptionSupported() {
-		if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(object, slashSeparator) { // handle SSE requests
+		if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(object, SlashSeparator) { // handle SSE requests
 			rawReader := hashReader
 			var objectEncryptionKey []byte
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
@@ -1436,7 +1436,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 
-		if !hasSuffix(object, slashSeparator) {
+		if !hasSuffix(object, SlashSeparator) {
 			// If not a directory, compress the file and write it to response.
 			err := zipit(pathJoin(args.Prefix, object))
 			if err != nil {
@@ -1873,7 +1873,7 @@ func presignedGet(host, bucket, object string, expiry int64, creds auth.Credenti
 	query.Set(xhttp.AmzSignedHeaders, "host")
 	queryStr := s3utils.QueryEncode(query)
 
-	path := "/" + path.Join(bucket, object)
+	path := SlashSeparator + path.Join(bucket, object)
 
 	// "host" is the only header required to be signed for Presigned URLs.
 	extractedSignedHeaders := make(http.Header)

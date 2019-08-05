@@ -1233,7 +1233,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	var objectEncryptionKey []byte
 	if objectAPI.IsEncryptionSupported() {
-		if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(object, slashSeparator) { // handle SSE requests
+		if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(object, SlashSeparator) { // handle SSE requests
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))

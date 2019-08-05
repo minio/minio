@@ -203,14 +203,14 @@ func (e ObjectExistsAsDirectory) Error() string {
 type PrefixAccessDenied GenericError
 
 func (e PrefixAccessDenied) Error() string {
-	return "Prefix access is denied: " + e.Bucket + "/" + e.Object
+	return "Prefix access is denied: " + e.Bucket + SlashSeparator + e.Object
 }
 
 // ParentIsObject object access is denied.
 type ParentIsObject GenericError
 
 func (e ParentIsObject) Error() string {
-	return "Parent is object " + e.Bucket + "/" + path.Dir(e.Object)
+	return "Parent is object " + e.Bucket + SlashSeparator + path.Dir(e.Object)
 }
 
 // BucketExists bucket exists.

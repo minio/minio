@@ -148,7 +148,7 @@ func TestURL2BucketObjectName(t *testing.T) {
 		// Test case 2 where url only has separator.
 		{
 			u: &url.URL{
-				Path: "/",
+				Path: SlashSeparator,
 			},
 			bucket: "",
 			object: "",

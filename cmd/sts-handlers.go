@@ -53,7 +53,7 @@ func registerSTSRouter(router *mux.Router) {
 	sts := &stsAPIHandlers{}
 
 	// STS Router
-	stsRouter := router.NewRoute().PathPrefix("/").Subrouter()
+	stsRouter := router.NewRoute().PathPrefix(SlashSeparator).Subrouter()
 
 	// Assume roles with no JWT, handles AssumeRole.
 	stsRouter.Methods(http.MethodPost).MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {

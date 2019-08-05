@@ -169,7 +169,7 @@ func (xl xlObjects) ListMultipartUploads(ctx context.Context, bucket, object, ke
 			return result, err
 		}
 		for i := range uploadIDs {
-			uploadIDs[i] = strings.TrimSuffix(uploadIDs[i], slashSeparator)
+			uploadIDs[i] = strings.TrimSuffix(uploadIDs[i], SlashSeparator)
 		}
 		sort.Strings(uploadIDs)
 		for _, uploadID := range uploadIDs {

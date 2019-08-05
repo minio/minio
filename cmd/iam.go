@@ -86,7 +86,7 @@ func getCurrentIAMFormat() iamFormat {
 }
 
 func getIAMFormatFilePath() string {
-	return iamConfigPrefix + "/" + iamFormatFile
+	return iamConfigPrefix + SlashSeparator + iamFormatFile
 }
 
 func getUserIdentityPath(user string, isSTS bool) string {
@@ -191,7 +191,7 @@ func listIAMConfigItems(objectAPI ObjectLayer, pathPrefix string, dirs bool,
 		marker := ""
 		for {
 			lo, err := objectAPI.ListObjects(context.Background(),
-				minioMetaBucket, pathPrefix, marker, "/", 1000)
+				minioMetaBucket, pathPrefix, marker, SlashSeparator, 1000)
 			if err != nil {
 				select {
 				case ch <- itemOrErr{Err: err}:
@@ -207,7 +207,7 @@ func listIAMConfigItems(objectAPI ObjectLayer, pathPrefix string, dirs bool,
 			}
 			for _, itemPrefix := range lister {
 				item := strings.TrimPrefix(itemPrefix, pathPrefix)
-				item = strings.TrimSuffix(item, "/")
+				item = strings.TrimSuffix(item, SlashSeparator)
 				select {
 				case ch <- itemOrErr{Item: item}:
 				case <-doneCh:

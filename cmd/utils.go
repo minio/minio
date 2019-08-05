@@ -81,16 +81,16 @@ func request2BucketObjectName(r *http.Request) (bucketName, objectName string) {
 
 // Convert url path into bucket and object name.
 func urlPath2BucketObjectName(path string) (bucketName, objectName string) {
-	if path == "" || path == slashSeparator {
+	if path == "" || path == SlashSeparator {
 		return "", ""
 	}
 
 	// Trim any preceding slash separator.
-	urlPath := strings.TrimPrefix(path, slashSeparator)
+	urlPath := strings.TrimPrefix(path, SlashSeparator)
 
 	// Split urlpath using slash separator into a given number of
 	// expected tokens.
-	tokens := strings.SplitN(urlPath, slashSeparator, 2)
+	tokens := strings.SplitN(urlPath, SlashSeparator, 2)
 	bucketName = tokens[0]
 	if len(tokens) == 2 {
 		objectName = tokens[1]
