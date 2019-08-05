@@ -40,6 +40,8 @@ const (
 	clientGrants = "AssumeRoleWithClientGrants"
 	webIdentity  = "AssumeRoleWithWebIdentity"
 	assumeRole   = "AssumeRole"
+
+	stsRequestBodyLimit = 10 * (1 << 20) // 10 MiB
 )
 
 // stsAPIHandlers implements and provides http handlers for AWS STS API.
