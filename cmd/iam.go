@@ -259,6 +259,33 @@ func (sys *IAMSys) LoadPolicy(objAPI ObjectLayer, policyName string) error {
 	return nil
 }
 
+// LoadPolicyMapping - loads the mapped policy for a user or group
+// from storage into server memory.
+func (sys *IAMSys) LoadPolicyMapping(objAPI ObjectLayer, userOrGroup string, isGroup bool) error {
+	if objAPI == nil {
+		return errInvalidArgument
+	}
+
+	sys.Lock()
+	defer sys.Unlock()
+
+	if globalEtcdClient == nil {
+		var err error
+		if isGroup {
+			err = sys.store.loadMappedPolicy(userOrGroup, false, isGroup, sys.iamGroupPolicyMap)
+		} else {
+			err = sys.store.loadMappedPolicy(userOrGroup, false, isGroup, sys.iamUserPolicyMap)
+		}
+
+		// Ignore policy not mapped error
+		if err != nil && err != errConfigNotFound {
+			return err
+		}
+	}
+	// When etcd is set, we use watch APIs so this code is not needed.
+	return nil
+}
+
 // LoadUser - reloads a specific user from backend disks or etcd.
 func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, isSTS bool) error {
 	if objAPI == nil {
@@ -776,23 +803,22 @@ func (sys *IAMSys) SetGroupStatus(group string, enabled bool) error {
 
 // GetGroupDescription - builds up group description
 func (sys *IAMSys) GetGroupDescription(group string) (gd madmin.GroupDesc, err error) {
+	ps, err := sys.PolicyDBGet(group, true)
+	if err != nil {
+		return gd, err
+	}
+	// A group may be mapped to at most one policy.
+	policy := ""
+	if len(ps) > 0 {
+		policy = ps[0]
+	}
+
 	sys.RLock()
 	defer sys.RUnlock()
 
 	gi, ok := sys.iamGroupsMap[group]
 	if !ok {
 		return gd, errNoSuchGroup
-	}
-
-	var p []string
-	p, err = sys.policyDBGet(group, true)
-	if err != nil {
-		return gd, err
-	}
-
-	policy := ""
-	if len(p) > 0 {
-		policy = p[0]
 	}
 
 	return madmin.GroupDesc{
@@ -837,21 +863,28 @@ func (sys *IAMSys) policyDBSet(objectAPI ObjectLayer, name, policy string, isSTS
 	if name == "" || policy == "" {
 		return errInvalidArgument
 	}
-	if _, ok := sys.iamUsersMap[name]; !ok {
-		return errNoSuchUser
-	}
 	if _, ok := sys.iamPolicyDocsMap[policy]; !ok {
 		return errNoSuchPolicy
 	}
-	if _, ok := sys.iamUsersMap[name]; !ok {
-		return errNoSuchUser
+	if !isGroup {
+		if _, ok := sys.iamUsersMap[name]; !ok {
+			return errNoSuchUser
+		}
+	} else {
+		if _, ok := sys.iamGroupsMap[name]; !ok {
+			return errNoSuchGroup
+		}
 	}
 
 	mp := newMappedPolicy(policy)
 	if err := sys.store.saveMappedPolicy(name, isSTS, isGroup, mp); err != nil {
 		return err
 	}
-	sys.iamUserPolicyMap[name] = mp
+	if !isGroup {
+		sys.iamUserPolicyMap[name] = mp
+	} else {
+		sys.iamGroupPolicyMap[name] = mp
+	}
 	return nil
 }
 
@@ -991,18 +1024,34 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 		return sys.IsAllowedSTS(args)
 	}
 
+	// Policies don't apply to the owner.
+	if args.IsOwner {
+		return true
+	}
+
+	policies, err := sys.PolicyDBGet(args.AccountName, false)
+	if err != nil {
+		logger.LogIf(context.Background(), err)
+		return false
+	}
+
+	if len(policies) == 0 {
+		// No policy found.
+		return false
+	}
+
+	// Policies were found, evaluate all of them.
 	sys.RLock()
 	defer sys.RUnlock()
 
-	// If policy is available for given user, check the policy.
-	if mp, found := sys.iamUserPolicyMap[args.AccountName]; found {
-		p, ok := sys.iamPolicyDocsMap[mp.Policy]
-		return ok && p.IsAllowed(args)
+	ok := true
+	for _, policyName := range policies {
+		p, found := sys.iamPolicyDocsMap[policyName]
+		if found {
+			ok = ok && p.IsAllowed(args)
+		}
 	}
-
-	// As policy is not available and OPA is not configured,
-	// return the owner value.
-	return args.IsOwner
+	return ok
 }
 
 // Set default canned policies only if not already overridden by users.

@@ -530,6 +530,7 @@ func (ies *IAMEtcdStore) reloadFromEvent(sys *IAMSys, event *etcd.Event) {
 	policyPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigPoliciesPrefix)
 	policyDBUsersPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigPolicyDBUsersPrefix)
 	policyDBSTSUsersPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigPolicyDBSTSUsersPrefix)
+	policyDBGroupsPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigPolicyDBGroupsPrefix)
 
 	switch {
 	case eventCreate:
@@ -563,6 +564,11 @@ func (ies *IAMEtcdStore) reloadFromEvent(sys *IAMSys, event *etcd.Event) {
 				iamConfigPolicyDBSTSUsersPrefix)
 			user := strings.TrimSuffix(policyMapFile, ".json")
 			ies.loadMappedPolicy(user, true, false, sys.iamUserPolicyMap)
+		case policyDBGroupsPrefix:
+			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
+				iamConfigPolicyDBGroupsPrefix)
+			user := strings.TrimSuffix(policyMapFile, ".json")
+			ies.loadMappedPolicy(user, false, true, sys.iamGroupPolicyMap)
 		}
 	case eventDelete:
 		switch {
@@ -594,6 +600,11 @@ func (ies *IAMEtcdStore) reloadFromEvent(sys *IAMSys, event *etcd.Event) {
 				iamConfigPolicyDBSTSUsersPrefix)
 			user := strings.TrimSuffix(policyMapFile, ".json")
 			delete(sys.iamUserPolicyMap, user)
+		case policyDBGroupsPrefix:
+			policyMapFile := strings.TrimPrefix(string(event.Kv.Key),
+				iamConfigPolicyDBGroupsPrefix)
+			user := strings.TrimSuffix(policyMapFile, ".json")
+			delete(sys.iamGroupPolicyMap, user)
 		}
 	}
 }

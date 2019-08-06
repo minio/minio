@@ -149,32 +149,6 @@ func (adm *AdminClient) AddUser(accessKey, secretKey string) error {
 	return adm.SetUser(accessKey, secretKey, AccountEnabled)
 }
 
-// SetUserPolicy - adds a policy for a user.
-func (adm *AdminClient) SetUserPolicy(accessKey, policyName string) error {
-	queryValues := url.Values{}
-	queryValues.Set("accessKey", accessKey)
-	queryValues.Set("name", policyName)
-
-	reqData := requestData{
-		relPath:     "/v1/set-user-policy",
-		queryValues: queryValues,
-	}
-
-	// Execute PUT on /minio/admin/v1/set-user-policy to set policy.
-	resp, err := adm.executeMethod("PUT", reqData)
-
-	defer closeResponse(resp)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return httpRespToErrorResponse(resp)
-	}
-
-	return nil
-}
-
 // SetUserStatus - adds a status for a user.
 func (adm *AdminClient) SetUserStatus(accessKey string, status AccountStatus) error {
 	queryValues := url.Values{}

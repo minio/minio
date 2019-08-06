@@ -96,13 +96,16 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 		// Add user IAM
 		adminV1Router.Methods(http.MethodPut).Path("/add-user").HandlerFunc(httpTraceHdrs(adminAPI.AddUser)).Queries("accessKey", "{accessKey:.*}")
-		adminV1Router.Methods(http.MethodPut).Path("/set-user-policy").HandlerFunc(httpTraceHdrs(adminAPI.SetUserPolicy)).
-			Queries("accessKey", "{accessKey:.*}").Queries("name", "{name:.*}")
 		adminV1Router.Methods(http.MethodPut).Path("/set-user-status").HandlerFunc(httpTraceHdrs(adminAPI.SetUserStatus)).
 			Queries("accessKey", "{accessKey:.*}").Queries("status", "{status:.*}")
 
 		// Remove policy IAM
 		adminV1Router.Methods(http.MethodDelete).Path("/remove-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.RemoveCannedPolicy)).Queries("name", "{name:.*}")
+
+		// Set user or group policy
+		adminV1Router.Methods(http.MethodPut).Path("/set-user-or-group-policy").
+			HandlerFunc(httpTraceHdrs(adminAPI.SetPolicyForUserOrGroup)).
+			Queries("policyName", "{policyName:.*}", "userOrGroup", "{userOrGroup:.*}", "isGroup", "{isGroup:t|f}")
 
 		// Remove user IAM
 		adminV1Router.Methods(http.MethodDelete).Path("/remove-user").HandlerFunc(httpTraceHdrs(adminAPI.RemoveUser)).Queries("accessKey", "{accessKey:.*}")
