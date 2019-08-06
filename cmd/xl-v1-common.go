@@ -37,7 +37,7 @@ func (xl xlObjects) getLoadBalancedDisks() (disks []StorageAPI) {
 func (xl xlObjects) parentDirIsObject(ctx context.Context, bucket, parent string) bool {
 	var isParentDirObject func(string) bool
 	isParentDirObject = func(p string) bool {
-		if p == "." || p == "/" {
+		if p == "." || p == SlashSeparator {
 			return false
 		}
 		if xl.isObject(bucket, p) {

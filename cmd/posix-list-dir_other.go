@@ -86,7 +86,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 				}
 				// Append to entries if symbolic link exists and is valid.
 				if st.IsDir() {
-					entries = append(entries, fi.Name()+slashSeparator)
+					entries = append(entries, fi.Name()+SlashSeparator)
 				} else if st.Mode().IsRegular() {
 					entries = append(entries, fi.Name())
 				}
@@ -96,8 +96,8 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 				continue
 			}
 			if fi.Mode().IsDir() {
-				// Append "/" instead of "\" so that sorting is achieved as expected.
-				entries = append(entries, fi.Name()+slashSeparator)
+				// Append SlashSeparator instead of "\" so that sorting is achieved as expected.
+				entries = append(entries, fi.Name()+SlashSeparator)
 			} else if fi.Mode().IsRegular() {
 				entries = append(entries, fi.Name())
 			}

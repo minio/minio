@@ -650,7 +650,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 	if objectAPI.IsEncryptionSupported() {
-		if hasServerSideEncryptionHeader(formValues) && !hasSuffix(object, slashSeparator) { // handle SSE-C and SSE-S3 requests
+		if hasServerSideEncryptionHeader(formValues) && !hasSuffix(object, SlashSeparator) { // handle SSE-C and SSE-S3 requests
 			var reader io.Reader
 			var key []byte
 			if crypto.SSEC.IsRequested(formValues) {

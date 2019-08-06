@@ -259,7 +259,7 @@ func testGetObjectPermissionDenied(obj ObjectLayer, instanceType string, disks [
 
 	for i, testCase := range testCases {
 		for _, d := range disks {
-			err = os.Chmod(d+"/"+testCase.bucketName+"/"+testCase.chmodPath, 0)
+			err = os.Chmod(d+SlashSeparator+testCase.bucketName+SlashSeparator+testCase.chmodPath, 0)
 			if err != nil {
 				t.Fatalf("Test %d, Unable to chmod: %v", i+1, err)
 			}

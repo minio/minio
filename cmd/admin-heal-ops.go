@@ -587,9 +587,9 @@ func (h *healSequence) healItemsFromSourceCh() error {
 
 		var itemType madmin.HealItemType
 		switch {
-		case path == "/":
+		case path == SlashSeparator:
 			itemType = madmin.HealItemMetadata
-		case !strings.Contains(path, "/"):
+		case !strings.Contains(path, SlashSeparator):
 			itemType = madmin.HealItemBucket
 		default:
 			itemType = madmin.HealItemObject
@@ -693,7 +693,7 @@ func (h *healSequence) healDiskFormat() error {
 		return errServerNotInitialized
 	}
 
-	return h.queueHealTask("/", madmin.HealItemMetadata)
+	return h.queueHealTask(SlashSeparator, madmin.HealItemMetadata)
 }
 
 // healBuckets - check for all buckets heal or just particular bucket.

@@ -44,7 +44,7 @@ func (c credentialHeader) getScope() string {
 		c.scope.region,
 		c.scope.service,
 		c.scope.request,
-	}, "/")
+	}, SlashSeparator)
 }
 
 func getReqAccessKeyV4(r *http.Request, region string, stype serviceType) (auth.Credentials, bool, APIErrorCode) {
@@ -73,11 +73,11 @@ func parseCredentialHeader(credElement string, region string, stype serviceType)
 	if creds[0] != "Credential" {
 		return ch, ErrMissingCredTag
 	}
-	credElements := strings.Split(strings.TrimSpace(creds[1]), "/")
+	credElements := strings.Split(strings.TrimSpace(creds[1]), SlashSeparator)
 	if len(credElements) < 5 {
 		return ch, ErrCredMalformed
 	}
-	accessKey := strings.Join(credElements[:len(credElements)-4], "/") // The access key may contain one or more `/`
+	accessKey := strings.Join(credElements[:len(credElements)-4], SlashSeparator) // The access key may contain one or more `/`
 	if !auth.IsAccessKeyValid(accessKey) {
 		return ch, ErrInvalidAccessKeyID
 	}

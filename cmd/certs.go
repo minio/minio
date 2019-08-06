@@ -87,7 +87,7 @@ func getRootCAs(certsCAsDir string) (*x509.CertPool, error) {
 	// Load all custom CA files.
 	for _, fi := range fis {
 		// Skip all directories.
-		if hasSuffix(fi, slashSeparator) {
+		if hasSuffix(fi, SlashSeparator) {
 			continue
 		}
 		caCert, err := ioutil.ReadFile(pathJoin(certsCAsDir, fi))

@@ -69,7 +69,7 @@ func TestIsValidVolname(t *testing.T) {
 		// cases for which test should fail.
 		// passing invalid bucket names.
 		{"", false},
-		{"/", false},
+		{SlashSeparator, false},
 		{"a", false},
 		{"ab", false},
 		{"ab/", true},
@@ -319,9 +319,9 @@ func TestPosixReadAll(t *testing.T) {
 // TestPosixNewPosix all the cases handled in posix storage layer initialization.
 func TestPosixNewPosix(t *testing.T) {
 	// Temporary dir name.
-	tmpDirName := globalTestTmpDir + "/" + "minio-" + nextSuffix()
+	tmpDirName := globalTestTmpDir + SlashSeparator + "minio-" + nextSuffix()
 	// Temporary file name.
-	tmpFileName := globalTestTmpDir + "/" + "minio-" + nextSuffix()
+	tmpFileName := globalTestTmpDir + SlashSeparator + "minio-" + nextSuffix()
 	f, _ := os.Create(tmpFileName)
 	f.Close()
 	defer os.Remove(tmpFileName)

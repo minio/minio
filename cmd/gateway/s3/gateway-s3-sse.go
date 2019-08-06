@@ -41,7 +41,6 @@ const (
 	// custom multipart files are stored under the defaultMinioGWPrefix
 	defaultMinioGWPrefix     = ".minio"
 	defaultGWContentFileName = "data"
-	slashSeparator           = "/"
 )
 
 // s3EncObjects is a wrapper around s3Objects and implements gateway calls for
@@ -102,7 +101,7 @@ func (l *s3EncObjects) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 			}
 			// get objectname and ObjectInfo from the custom metadata file
 			if strings.HasSuffix(obj.Name, gwdareMetaJSON) {
-				objSlice := strings.Split(obj.Name, slashSeparator+defaultMinioGWPrefix)
+				objSlice := strings.Split(obj.Name, minio.SlashSeparator+defaultMinioGWPrefix)
 				gwMeta, e := l.getGWMetadata(ctx, bucket, getDareMetaPath(objSlice[0]))
 				if e != nil {
 					continue
@@ -117,7 +116,7 @@ func (l *s3EncObjects) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 			}
 		}
 		for _, p := range loi.Prefixes {
-			objName := strings.TrimSuffix(p, slashSeparator)
+			objName := strings.TrimSuffix(p, minio.SlashSeparator)
 			gm, err := l.getGWMetadata(ctx, bucket, getDareMetaPath(objName))
 			// if prefix is actually a custom multi-part object, append it to objects
 			if err == nil {
@@ -165,7 +164,7 @@ func isGWObject(objName string) bool {
 		return false
 	}
 
-	pfxSlice := strings.Split(objName, slashSeparator)
+	pfxSlice := strings.Split(objName, minio.SlashSeparator)
 	var i1, i2 int
 	for i := len(pfxSlice) - 1; i >= 0; i-- {
 		p := pfxSlice[i]
@@ -401,10 +400,10 @@ func (l *s3EncObjects) ListMultipartUploads(ctx context.Context, bucket string, 
 	if e != nil {
 		return
 	}
-	lmi.KeyMarker = strings.TrimSuffix(lmi.KeyMarker, getGWContentPath("/"))
-	lmi.NextKeyMarker = strings.TrimSuffix(lmi.NextKeyMarker, getGWContentPath("/"))
+	lmi.KeyMarker = strings.TrimSuffix(lmi.KeyMarker, getGWContentPath(minio.SlashSeparator))
+	lmi.NextKeyMarker = strings.TrimSuffix(lmi.NextKeyMarker, getGWContentPath(minio.SlashSeparator))
 	for i := range lmi.Uploads {
-		lmi.Uploads[i].Object = strings.TrimSuffix(lmi.Uploads[i].Object, getGWContentPath("/"))
+		lmi.Uploads[i].Object = strings.TrimSuffix(lmi.Uploads[i].Object, getGWContentPath(minio.SlashSeparator))
 	}
 	return
 }
