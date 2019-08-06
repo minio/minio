@@ -372,9 +372,14 @@ func loadMappedPolicy(objectAPI ObjectLayer, name string, isSTS, isGroup bool,
 func loadMappedPolicies(objectAPI ObjectLayer, isSTS, isGroup bool, m map[string]MappedPolicy) error {
 	doneCh := make(chan struct{})
 	defer close(doneCh)
-	basePath := iamConfigPolicyDBUsersPrefix
-	if isSTS {
+	var basePath string
+	switch {
+	case isSTS:
 		basePath = iamConfigPolicyDBSTSUsersPrefix
+	case isGroup:
+		basePath = iamConfigPolicyDBGroupsPrefix
+	default:
+		basePath = iamConfigPolicyDBUsersPrefix
 	}
 	for item := range listIAMConfigItems(objectAPI, basePath, false, doneCh) {
 		if item.Err != nil {
@@ -1745,16 +1750,21 @@ func loadEtcdMappedPolicy(ctx context.Context, name string, isSTS, isGroup bool,
 func loadEtcdMappedPolicies(isSTS, isGroup bool, m map[string]MappedPolicy) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 	defer cancel()
-	basePrefix := iamConfigPolicyDBUsersPrefix
-	if isSTS {
-		basePrefix = iamConfigPolicyDBSTSUsersPrefix
+	var basePath string
+	switch {
+	case isSTS:
+		basePath = iamConfigPolicyDBSTSUsersPrefix
+	case isGroup:
+		basePath = iamConfigPolicyDBGroupsPrefix
+	default:
+		basePath = iamConfigPolicyDBUsersPrefix
 	}
-	r, err := globalEtcdClient.Get(ctx, basePrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+	r, err := globalEtcdClient.Get(ctx, basePath, etcd.WithPrefix(), etcd.WithKeysOnly())
 	if err != nil {
 		return err
 	}
 
-	users := etcdKvsToSetPolicyDB(basePrefix, r.Kvs)
+	users := etcdKvsToSetPolicyDB(basePath, r.Kvs)
 
 	// Reload config and policies for all users.
 	for _, user := range users.ToSlice() {
@@ -1906,6 +1916,7 @@ func (sys *IAMSys) refreshEtcd() error {
 		return err
 	}
 
+	// load policies mapped for long-term users
 	if err := loadEtcdMappedPolicies(false, false, iamUserPolicyMap); err != nil {
 		return err
 	}
@@ -1914,7 +1925,7 @@ func (sys *IAMSys) refreshEtcd() error {
 		return err
 	}
 	// load group policy mapping
-	if err := loadEtcdMappedPolicies(false, false, iamGroupPolicyMap); err != nil {
+	if err := loadEtcdMappedPolicies(false, true, iamGroupPolicyMap); err != nil {
 		return err
 	}
 
@@ -1955,6 +1966,7 @@ func (sys *IAMSys) refresh(objAPI ObjectLayer) error {
 		return err
 	}
 
+	// load policies mapped for long-term users
 	if err := loadMappedPolicies(objAPI, false, false, iamUserPolicyMap); err != nil {
 		return err
 	}
@@ -1963,7 +1975,7 @@ func (sys *IAMSys) refresh(objAPI ObjectLayer) error {
 		return err
 	}
 	// load policies mapped to groups
-	if err := loadMappedPolicies(objAPI, false, false, iamGroupPolicyMap); err != nil {
+	if err := loadMappedPolicies(objAPI, false, true, iamGroupPolicyMap); err != nil {
 		return err
 	}
 
