@@ -302,7 +302,9 @@ func loadUser(objectAPI ObjectLayer, user string, isSTS bool,
 	}
 
 	// In some cases access key may not be set, so we set it explicitly.
-	u.Credentials.AccessKey = user
+	if u.Credentials.AccessKey == "" {
+		u.Credentials.AccessKey = user
+	}
 	m[user] = u.Credentials
 	return nil
 }
@@ -778,6 +780,7 @@ func migrateUsersConfigEtcdToV1(isSTS bool) error {
 
 		// Found a id file in old format. Copy value
 		// into new format and save it.
+		cred.AccessKey = user
 		u := newUserIdentity(cred)
 		if err := saveIAMConfigItemEtcd(ctx, u, identityPath); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -1776,6 +1779,9 @@ func loadEtcdUser(ctx context.Context, user string, isSTS bool, m map[string]aut
 		return nil
 	}
 
+	if u.Credentials.AccessKey == "" {
+		u.Credentials.AccessKey = user
+	}
 	m[user] = u.Credentials
 	return nil
 }
@@ -1908,7 +1914,7 @@ func (sys *IAMSys) refreshEtcd() error {
 		return err
 	}
 	// load group policy mapping
-	if err := loadEtcdMappedPolicies(false, true, iamGroupPolicyMap); err != nil {
+	if err := loadEtcdMappedPolicies(false, false, iamGroupPolicyMap); err != nil {
 		return err
 	}
 
