@@ -72,7 +72,7 @@ func TestXLParentDirIsObject(t *testing.T) {
 		// Should not cause infinite loop.
 		{
 			parentIsObject: false,
-			objectName:     "/",
+			objectName:     SlashSeparator,
 		},
 		{
 			parentIsObject: false,

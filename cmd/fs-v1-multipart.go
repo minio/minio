@@ -163,7 +163,7 @@ func (fs *FSObjects) ListMultipartUploads(ctx context.Context, bucket, object, k
 		}
 		uploads = append(uploads, MultipartInfo{
 			Object:    object,
-			UploadID:  strings.TrimSuffix(uploadID, slashSeparator),
+			UploadID:  strings.TrimSuffix(uploadID, SlashSeparator),
 			Initiated: fi.ModTime(),
 		})
 	}

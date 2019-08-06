@@ -92,12 +92,12 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 				return nil, err
 			}
 			if fi.IsDir() {
-				entries = append(entries, name+slashSeparator)
+				entries = append(entries, name+SlashSeparator)
 			} else if fi.Mode().IsRegular() {
 				entries = append(entries, name)
 			}
 		case data.FileAttributes&syscall.FILE_ATTRIBUTE_DIRECTORY != 0:
-			entries = append(entries, name+slashSeparator)
+			entries = append(entries, name+SlashSeparator)
 		default:
 			entries = append(entries, name)
 		}

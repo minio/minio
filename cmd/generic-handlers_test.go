@@ -35,12 +35,12 @@ func TestRedirectLocation(t *testing.T) {
 		{
 			// 1. When urlPath is '/minio'
 			urlPath:  minioReservedBucketPath,
-			location: minioReservedBucketPath + "/",
+			location: minioReservedBucketPath + SlashSeparator,
 		},
 		{
 			// 2. When urlPath is '/'
-			urlPath:  "/",
-			location: minioReservedBucketPath + "/",
+			urlPath:  SlashSeparator,
+			location: minioReservedBucketPath + SlashSeparator,
 		},
 		{
 			// 3. When urlPath is '/webrpc'

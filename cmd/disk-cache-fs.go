@@ -182,7 +182,7 @@ func (cfs *cacheFSObjects) purgeTrash() {
 
 // Purge cache entries that were not accessed.
 func (cfs *cacheFSObjects) purge() {
-	delimiter := slashSeparator
+	delimiter := SlashSeparator
 	maxKeys := 1000
 	ctx := context.Background()
 	for {

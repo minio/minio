@@ -40,7 +40,7 @@ type indexHandler struct {
 }
 
 func (h indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r.URL.Path = minioReservedBucketPath + "/"
+	r.URL.Path = minioReservedBucketPath + SlashSeparator
 	h.handler.ServeHTTP(w, r)
 }
 

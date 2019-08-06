@@ -46,7 +46,7 @@ import (
 const (
 	hdfsBackend = "hdfs"
 
-	hdfsSeparator = "/"
+	hdfsSeparator = minio.SlashSeparator
 )
 
 func init() {

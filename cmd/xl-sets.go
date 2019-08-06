@@ -1027,7 +1027,7 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 // walked and merged at this layer. Resulting value through the merge process sends
 // the data in lexically sorted order.
 func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, heal bool) (loi ListObjectsInfo, err error) {
-	if delimiter != slashSeparator && delimiter != "" {
+	if delimiter != SlashSeparator && delimiter != "" {
 		// "heal" option passed can be ignored as the heal-listing does not send non-standard delimiter.
 		return s.listObjectsNonSlash(ctx, bucket, prefix, marker, delimiter, maxKeys)
 	}
@@ -1054,7 +1054,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 	// along // with the prefix. On a flat namespace with 'prefix'
 	// as '/' we don't have any entries, since all the keys are
 	// of form 'keyName/...'
-	if delimiter == slashSeparator && prefix == slashSeparator {
+	if delimiter == SlashSeparator && prefix == SlashSeparator {
 		return loi, nil
 	}
 
@@ -1065,7 +1065,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 
 	// Default is recursive, if delimiter is set then list non recursive.
 	recursive := true
-	if delimiter == slashSeparator {
+	if delimiter == SlashSeparator {
 		recursive = false
 	}
 
@@ -1092,7 +1092,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 
 	for _, entry := range entries.Files {
 		var objInfo ObjectInfo
-		if hasSuffix(entry.Name, slashSeparator) {
+		if hasSuffix(entry.Name, SlashSeparator) {
 			if !recursive {
 				loi.Prefixes = append(loi.Prefixes, entry.Name)
 				continue

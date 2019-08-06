@@ -69,7 +69,7 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 
 		switch dirent.Type {
 		case syscall.DT_DIR:
-			entries = append(entries, name+slashSeparator)
+			entries = append(entries, name+SlashSeparator)
 		case syscall.DT_REG:
 			entries = append(entries, name)
 		case syscall.DT_LNK, syscall.DT_UNKNOWN:
@@ -89,7 +89,7 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 				return nil, err
 			}
 			if fi.IsDir() {
-				entries = append(entries, name+slashSeparator)
+				entries = append(entries, name+SlashSeparator)
 			} else if fi.Mode().IsRegular() {
 				entries = append(entries, name)
 			}

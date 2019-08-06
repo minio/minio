@@ -72,7 +72,7 @@ EXAMPLES:
 const (
 	minioReleaseTagTimeLayout = "2006-01-02T15-04-05Z"
 	minioOSARCH               = runtime.GOOS + "-" + runtime.GOARCH
-	minioReleaseURL           = "https://dl.min.io/server/minio/release/" + minioOSARCH + "/"
+	minioReleaseURL           = "https://dl.min.io/server/minio/release/" + minioOSARCH + SlashSeparator
 )
 
 var (

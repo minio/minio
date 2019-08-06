@@ -707,7 +707,7 @@ func signStreamingRequest(req *http.Request, accessKey, secretKey string, currTi
 		globalMinioDefaultRegion,
 		string(serviceS3),
 		"aws4_request",
-	}, "/")
+	}, SlashSeparator)
 
 	stringToSign := "AWS4-HMAC-SHA256" + "\n" + currTime.Format(iso8601Format) + "\n"
 	stringToSign = stringToSign + scope + "\n"
@@ -722,7 +722,7 @@ func signStreamingRequest(req *http.Request, accessKey, secretKey string, currTi
 
 	// final Authorization header
 	parts := []string{
-		"AWS4-HMAC-SHA256" + " Credential=" + accessKey + "/" + scope,
+		"AWS4-HMAC-SHA256" + " Credential=" + accessKey + SlashSeparator + scope,
 		"SignedHeaders=" + signedHeaders,
 		"Signature=" + signature,
 	}
@@ -787,7 +787,7 @@ func assembleStreamingChunks(req *http.Request, body io.ReadSeeker, chunkSize in
 			regionStr,
 			string(serviceS3),
 			"aws4_request",
-		}, "/")
+		}, SlashSeparator)
 
 		stringToSign := "AWS4-HMAC-SHA256-PAYLOAD" + "\n"
 		stringToSign = stringToSign + currTime.Format(iso8601Format) + "\n"
@@ -1062,7 +1062,7 @@ func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 		region,
 		string(serviceS3),
 		"aws4_request",
-	}, "/")
+	}, SlashSeparator)
 
 	stringToSign := "AWS4-HMAC-SHA256" + "\n" + currTime.Format(iso8601Format) + "\n"
 	stringToSign = stringToSign + scope + "\n"
@@ -1077,7 +1077,7 @@ func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 
 	// final Authorization header
 	parts := []string{
-		"AWS4-HMAC-SHA256" + " Credential=" + accessKey + "/" + scope,
+		"AWS4-HMAC-SHA256" + " Credential=" + accessKey + SlashSeparator + scope,
 		"SignedHeaders=" + signedHeaders,
 		"Signature=" + signature,
 	}
@@ -1089,7 +1089,7 @@ func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 
 // getCredentialString generate a credential string.
 func getCredentialString(accessKeyID, location string, t time.Time) string {
-	return accessKeyID + "/" + getScope(t, location)
+	return accessKeyID + SlashSeparator + getScope(t, location)
 }
 
 // getMD5HashBase64 returns MD5 hash in base64 encoding of given data.
@@ -1360,9 +1360,9 @@ func (t *EOFWriter) Write(p []byte) (n int, err error) {
 
 // construct URL for http requests for bucket operations.
 func makeTestTargetURL(endPoint, bucketName, objectName string, queryValues url.Values) string {
-	urlStr := endPoint + "/"
+	urlStr := endPoint + SlashSeparator
 	if bucketName != "" {
-		urlStr = urlStr + bucketName + "/"
+		urlStr = urlStr + bucketName + SlashSeparator
 	}
 	if objectName != "" {
 		urlStr = urlStr + s3utils.EncodePath(objectName)
@@ -2142,7 +2142,7 @@ func registerAPIFunctions(muxRouter *mux.Router, objLayer ObjectLayer, apiFuncti
 		return
 	}
 	// API Router.
-	apiRouter := muxRouter.PathPrefix("/").Subrouter()
+	apiRouter := muxRouter.PathPrefix(SlashSeparator).Subrouter()
 	// Bucket router.
 	bucketRouter := apiRouter.PathPrefix("/{bucket}").Subrouter()
 
