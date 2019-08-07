@@ -45,7 +45,7 @@ func main() {
 | Service operations                  | Info operations                                   | Healing operations | Config operations         | Top operations          | IAM operations                        | Misc                                              | KMS                             |
 |:------------------------------------|:--------------------------------------------------|:-------------------|:--------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|:--------------------------------|
 | [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                       | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig) | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   | [`GetKeyStatus`](#GetKeyStatus) |
-| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)         |                    | [`SetConfig`](#SetConfig) |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |                                 |
+| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)         |                    | [`SetConfig`](#SetConfig) |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               | [`ListKeys`](#ListKeys)         |
 |                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)       |                    |                           |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
 | [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo)   |                    |                           |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                 |
 |                                     | [`NetPerfInfo`](#NetPerfInfo)                     |                    |                           |                         |                                       |                                                   |                                 |
@@ -636,4 +636,26 @@ __Example__
     if keyInfo.DecryptionErr != "" {
        log.Fatalf("Failed to perform decryption operation using '%s': %v\n", keyInfo.KeyID, keyInfo.DecryptionErr)
     }
+```
+
+
+<a name="ListKeys"></a>
+### ListKeys(bucket, prefix, keyID string, recursive bool) (io.ReadCloser, error)
+List all KMS master keys of all objects at the specified bucket that match the prefix.
+If the keyID is empty it lists all KMS master keys. If the recursive flag is true
+ListKeys performs a recursive list operations.
+
+__Example__
+
+``` go
+    // List all key-IDs that match "my-min" of all objects stored at the
+    // "my-bucket" bucket.
+    listing, err := madmClnt.ListKeys("my-bucket", "", "my-min", false)
+    if err != nil {
+            log.Fatalln(err)
+    }
+   	scanner := bufio.NewScanner(listing)
+	for scanner.Scan() {
+		log.Println(scanner.Text()) // Print JSON output
+	}
 ```

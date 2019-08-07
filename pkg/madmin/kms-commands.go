@@ -18,6 +18,8 @@ package madmin
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 )
@@ -59,4 +61,63 @@ type KMSKeyStatus struct {
 	EncryptionErr string `json:"encryption-error,omitempty"` // An empty error == success
 	UpdateErr     string `json:"update-error,omitempty"`     // An empty error == success
 	DecryptionErr string `json:"decryption-error,omitempty"` // An empty error == success
+}
+
+// KMSListKeyRequest represents the request arguments for
+// listing objects encrypted with a particular master key (prefix).
+// If the KeyID is empty the server will use the currently configured
+// default master key. If the bucket is empty the server will lookup
+// all buckets (ListBucket API), first. An non-empty prefix causes the
+// list operation to only show entries that match this prefix. The same
+// is true for the KeyID.
+type KMSListKeyRequest struct {
+	KeyID     string `json:"key-id,omitempty"`
+	Bucket    string `json:"bucket,omitempty"`
+	Prefix    string `json:"prefix,omitempty"`
+	Recursive bool   `json:"recursive,omitempty"`
+}
+
+// KMSListKeyResponse represents one object at the S3 server.
+// The server will answer a KMSKeyListReqeuest with a list
+// (separated by new-line) of KMSListKeyResponses (encoded as JSON).
+type KMSListKeyResponse struct {
+	Bucket string `json:"bucket"`
+	Object string `json:"object"`
+	KeyID  string `json:"key-id"`
+	Size   uint64 `json:"size"`
+}
+
+// JSON returns the JSON representation of the KMSListKeyResponse.
+func (r *KMSListKeyResponse) JSON() string {
+	const fmtStr = `{"bucket":"%s","object":"%s","key-id":"%s","size":%d}`
+	return fmt.Sprintf(fmtStr, r.Bucket, r.Object, r.KeyID, r.Size)
+}
+
+// ListKeys performs a KMS key listing operation.
+// On success the server returns a list of KMSKeyResponses
+// encoded as JSON values.
+func (adm *AdminClient) ListKeys(bucket, prefix, keyID string, recursive bool) (io.ReadCloser, error) {
+	reqBody, err := json.Marshal(KMSListKeyRequest{
+		KeyID:     keyID,
+		Bucket:    bucket,
+		Prefix:    prefix,
+		Recursive: recursive,
+	})
+	if err != nil {
+		return nil, err
+	}
+	reqData := requestData{
+		relPath: "/v1/kms/key/list",
+		content: reqBody,
+	}
+
+	resp, err := adm.executeMethod("POST", reqData)
+	if err != nil {
+		closeResponse(resp)
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+	return resp.Body, nil
 }

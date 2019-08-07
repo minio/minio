@@ -1741,7 +1741,6 @@ func (a adminAPIHandlers) ServerHardwareInfoHandler(w http.ResponseWriter, r *ht
 		// Reply with cpu hardware information (across nodes in a
 		// distributed setup) as json.
 		writeSuccessResponseJSON(w, jsonBytes)
-
 	case madmin.NETWORK:
 		// Get Network hardware details from local server's network(s)
 		network := getLocalNetworkInfo(globalEndpoints, r)
@@ -1759,8 +1758,97 @@ func (a adminAPIHandlers) ServerHardwareInfoHandler(w http.ResponseWriter, r *ht
 		// Reply with cpu network information (across nodes in a
 		// distributed setup) as json.
 		writeSuccessResponseJSON(w, jsonBytes)
-
 	default:
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+	}
+}
+
+// KMSListKeysHandler - POST /minio/admin/v1/kms/key/list
+func (a adminAPIHandlers) KMSListKeysHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "KMSListKeysHandler")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	if GlobalKMS == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
+		return
+	}
+
+	var req madmin.KMSListKeyRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// If the bucket is empty and listing is not recursive the listing is
+	// always empty (only objects are encrypted).
+	if req.Bucket == "" && !req.Recursive {
+		writeSuccessResponseHeadersOnly(w)
+		return
+	}
+
+	// Either check whether the requested bucket exists or
+	// of (no bucket is specified) list all buckets.
+	var bucketNames []string
+	if req.Bucket != "" {
+		if _, err := objectAPI.GetBucketInfo(ctx, req.Bucket); err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		bucketNames = []string{req.Bucket}
+	} else {
+		bucketInfo, err := objectAPI.ListBuckets(ctx)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		bucketNames = make([]string, len(bucketInfo))
+		for i, b := range bucketInfo {
+			bucketNames[i] = b.Name
+		}
+	}
+
+	for _, bucket := range bucketNames {
+		var err error
+		var objectListing ListObjectsV2Info
+		for {
+			objectListing, err = objectAPI.ListObjectsV2(ctx, bucket, req.Prefix, objectListing.NextContinuationToken, "", 1000, false, objectListing.ContinuationToken)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			for _, object := range objectListing.Objects {
+				if !req.Recursive && strings.Contains(object.Name, "/") {
+					continue
+				}
+				if crypto.IsEncrypted(object.UserDefined) && crypto.S3.IsEncrypted(object.UserDefined) {
+					keyID := object.UserDefined[crypto.S3KMSKeyID]
+					if req.KeyID != "" && !strings.HasPrefix(keyID, req.KeyID) {
+						continue
+					}
+					plaintextSize, err := object.DecryptedSize()
+					if err != nil {
+						writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+						return
+					}
+					listResponse := madmin.KMSListKeyResponse{
+						Bucket: bucket,
+						Object: object.Name,
+						KeyID:  keyID,
+						Size:   uint64(plaintextSize),
+					}
+					if _, err = fmt.Fprintln(w, listResponse.JSON()); err != nil {
+						writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+						return
+					}
+				}
+			}
+			if !objectListing.IsTruncated {
+				break
+			}
+		}
 	}
 }
