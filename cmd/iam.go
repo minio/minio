@@ -302,7 +302,9 @@ func loadUser(objectAPI ObjectLayer, user string, isSTS bool,
 	}
 
 	// In some cases access key may not be set, so we set it explicitly.
-	u.Credentials.AccessKey = user
+	if u.Credentials.AccessKey == "" {
+		u.Credentials.AccessKey = user
+	}
 	m[user] = u.Credentials
 	return nil
 }
@@ -370,9 +372,14 @@ func loadMappedPolicy(objectAPI ObjectLayer, name string, isSTS, isGroup bool,
 func loadMappedPolicies(objectAPI ObjectLayer, isSTS, isGroup bool, m map[string]MappedPolicy) error {
 	doneCh := make(chan struct{})
 	defer close(doneCh)
-	basePath := iamConfigPolicyDBUsersPrefix
-	if isSTS {
+	var basePath string
+	switch {
+	case isSTS:
 		basePath = iamConfigPolicyDBSTSUsersPrefix
+	case isGroup:
+		basePath = iamConfigPolicyDBGroupsPrefix
+	default:
+		basePath = iamConfigPolicyDBUsersPrefix
 	}
 	for item := range listIAMConfigItems(objectAPI, basePath, false, doneCh) {
 		if item.Err != nil {
@@ -778,6 +785,7 @@ func migrateUsersConfigEtcdToV1(isSTS bool) error {
 
 		// Found a id file in old format. Copy value
 		// into new format and save it.
+		cred.AccessKey = user
 		u := newUserIdentity(cred)
 		if err := saveIAMConfigItemEtcd(ctx, u, identityPath); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -1742,16 +1750,21 @@ func loadEtcdMappedPolicy(ctx context.Context, name string, isSTS, isGroup bool,
 func loadEtcdMappedPolicies(isSTS, isGroup bool, m map[string]MappedPolicy) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 	defer cancel()
-	basePrefix := iamConfigPolicyDBUsersPrefix
-	if isSTS {
-		basePrefix = iamConfigPolicyDBSTSUsersPrefix
+	var basePath string
+	switch {
+	case isSTS:
+		basePath = iamConfigPolicyDBSTSUsersPrefix
+	case isGroup:
+		basePath = iamConfigPolicyDBGroupsPrefix
+	default:
+		basePath = iamConfigPolicyDBUsersPrefix
 	}
-	r, err := globalEtcdClient.Get(ctx, basePrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+	r, err := globalEtcdClient.Get(ctx, basePath, etcd.WithPrefix(), etcd.WithKeysOnly())
 	if err != nil {
 		return err
 	}
 
-	users := etcdKvsToSetPolicyDB(basePrefix, r.Kvs)
+	users := etcdKvsToSetPolicyDB(basePath, r.Kvs)
 
 	// Reload config and policies for all users.
 	for _, user := range users.ToSlice() {
@@ -1776,6 +1789,9 @@ func loadEtcdUser(ctx context.Context, user string, isSTS bool, m map[string]aut
 		return nil
 	}
 
+	if u.Credentials.AccessKey == "" {
+		u.Credentials.AccessKey = user
+	}
 	m[user] = u.Credentials
 	return nil
 }
@@ -1900,6 +1916,7 @@ func (sys *IAMSys) refreshEtcd() error {
 		return err
 	}
 
+	// load policies mapped for long-term users
 	if err := loadEtcdMappedPolicies(false, false, iamUserPolicyMap); err != nil {
 		return err
 	}
@@ -1949,6 +1966,7 @@ func (sys *IAMSys) refresh(objAPI ObjectLayer) error {
 		return err
 	}
 
+	// load policies mapped for long-term users
 	if err := loadMappedPolicies(objAPI, false, false, iamUserPolicyMap); err != nil {
 		return err
 	}
@@ -1957,7 +1975,7 @@ func (sys *IAMSys) refresh(objAPI ObjectLayer) error {
 		return err
 	}
 	// load policies mapped to groups
-	if err := loadMappedPolicies(objAPI, false, false, iamGroupPolicyMap); err != nil {
+	if err := loadMappedPolicies(objAPI, false, true, iamGroupPolicyMap); err != nil {
 		return err
 	}
 

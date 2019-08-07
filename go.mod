@@ -102,3 +102,6 @@ require (
 	gopkg.in/olivere/elastic.v5 v5.0.80
 	gopkg.in/yaml.v2 v2.2.2
 )
+
+// Added for go1.13 migration https://github.com/golang/go/issues/32805
+replace github.com/gorilla/rpc v1.2.0+incompatible => github.com/gorilla/rpc v1.2.0
