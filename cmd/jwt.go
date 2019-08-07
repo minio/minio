@@ -55,23 +55,27 @@ func authenticateJWTUsers(accessKey, secretKey string, expiry time.Duration) (st
 	if err != nil {
 		return "", err
 	}
+	expiresAt := UTCNow().Add(expiry)
+	return authenticateJWTUsersWithCredentials(passedCredential, expiresAt)
+}
 
+func authenticateJWTUsersWithCredentials(credentials auth.Credentials, expiresAt time.Time) (string, error) {
 	serverCred := globalServerConfig.GetCredential()
-	if serverCred.AccessKey != passedCredential.AccessKey {
+	if serverCred.AccessKey != credentials.AccessKey {
 		var ok bool
-		serverCred, ok = globalIAMSys.GetUser(accessKey)
+		serverCred, ok = globalIAMSys.GetUser(credentials.AccessKey)
 		if !ok {
 			return "", errInvalidAccessKeyID
 		}
 	}
 
-	if !serverCred.Equal(passedCredential) {
+	if !serverCred.Equal(credentials) {
 		return "", errAuthentication
 	}
 
 	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.StandardClaims{
-		ExpiresAt: UTCNow().Add(expiry).Unix(),
-		Subject:   accessKey,
+		ExpiresAt: expiresAt.Unix(),
+		Subject:   credentials.AccessKey,
 	})
 	return jwt.SignedString([]byte(serverCred.SecretKey))
 }
@@ -105,6 +109,10 @@ func authenticateNode(accessKey, secretKey string) (string, error) {
 
 func authenticateWeb(accessKey, secretKey string) (string, error) {
 	return authenticateJWTUsers(accessKey, secretKey, defaultJWTExpiry)
+}
+
+func authenticateWebSTS(creds auth.Credentials) (string, error) {
+	return authenticateJWTUsersWithCredentials(creds, creds.Expiration)
 }
 
 func authenticateURL(accessKey, secretKey string) (string, error) {

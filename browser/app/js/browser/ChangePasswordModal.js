@@ -100,6 +100,11 @@ export class ChangePasswordModal extends React.Component {
       return false
     }
 
+    // Password change is not allowed for temporary users(STS)
+    if(serverInfo.userInfo.isTempUser) {
+      return false
+    }
+
     // When credentials are set on ENV, password change not allowed for owner
     if (serverInfo.info.isEnvCreds && !serverInfo.userInfo.isIAMUser) {
       return false

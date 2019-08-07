@@ -1125,7 +1125,7 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 		return combinedPolicy.IsAllowed(args)
 	}
 
-	pname, ok := args.Claims[iampolicy.PolicyName]
+	pname, ok := args.Claims[iamPolicyName()]
 	if !ok {
 		// When claims are set, it should have a "policy" field.
 		return false

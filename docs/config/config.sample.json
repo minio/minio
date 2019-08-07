@@ -207,7 +207,9 @@
 	"openid": {
 		"jwks": {
 			"url": null
-		}
+		},
+		"configURL": "",
+		"policyClaimPrefix": ""
 	},
 	"policy": {
 		"opa": {

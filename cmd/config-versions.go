@@ -914,10 +914,7 @@ type serverConfigV33 struct {
 	Compression compressionConfig `json:"compress"`
 
 	// OpenID configuration
-	OpenID struct {
-		// JWKS validator config.
-		JWKS validator.JWKSArgs `json:"jwks"`
-	} `json:"openid"`
+	OpenID openIDConfig `json:"openid"`
 
 	// External policy enforcements.
 	Policy struct {
@@ -928,4 +925,11 @@ type serverConfigV33 struct {
 	} `json:"policy"`
 
 	LDAPServerConfig ldapServerConfig `json:"ldapserverconfig"`
+}
+
+type openIDConfig struct {
+	// JWKS validator config.
+	JWKS              validator.JWKSArgs `json:"jwks"`
+	ConfigURL         string             `json:"configURL"`
+	PolicyClaimPrefix string             `json:"policyClaimPrefix"`
 }

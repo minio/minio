@@ -170,6 +170,37 @@ func testLoginWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler)
 	}
 }
 
+// Wrapper for calling OpenIDConfig Web Handler
+func TestWebHandlerOpenIDConfig(t *testing.T) {
+	ExecObjectLayerTest(t, testOpenIDConfigWebHandler)
+}
+
+// testServerInfoWebHandler - Test OpenIDConfig web handler
+func testOpenIDConfigWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	// Register the API end points with XL/FS object layer.
+	apiRouter := initTestWebRPCEndPoint(obj)
+	rec := httptest.NewRecorder()
+
+	openIDConfigRequest := &WebGenericArgs{}
+	openIDConfigReply := &OpenIDConfigResp{}
+	req, err := newTestWebRPCRequest("Web.OpenIDConfig", "", openIDConfigRequest)
+	if err != nil {
+		t.Fatalf("Failed to create HTTP request: <ERROR> %v", err)
+	}
+	apiRouter.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
+	}
+	err = getTestWebRPCResponse(rec, &openIDConfigReply)
+	if err != nil {
+		t.Fatalf("Failed, %v", err)
+	}
+
+	if openIDConfigReply.OpenIDConfigURL != globalServerConfig.OpenID.ConfigURL {
+		t.Fatalf("OpenIDConfigURL did not match, got %#v, expected %#v", openIDConfigReply.OpenIDConfigURL, globalServerConfig.OpenID.ConfigURL)
+	}
+}
+
 // Wrapper for calling StorageInfo Web Handler
 func TestWebHandlerStorageInfo(t *testing.T) {
 	ExecObjectLayerTest(t, testStorageInfoWebHandler)
