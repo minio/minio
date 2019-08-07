@@ -90,6 +90,20 @@ describe("ChangePasswordModal", () => {
     ).toBe("Credentials of this user cannot be updated through MinIO Browser.")
   })
 
+  it("should not allow changing password for STS user", () => {
+    const newServerInfo = {
+      ...serverInfo,
+      userInfo: { isTempUser: true }
+    }
+    const wrapper = shallow(<ChangePasswordModal serverInfo={newServerInfo} />)
+    expect(
+      wrapper
+        .find("ModalBody")
+        .childAt(0)
+        .text()
+    ).toBe("Credentials of this user cannot be updated through MinIO Browser.")
+  })
+
   it("should not generate accessKey for IAM User", () => {
     const wrapper = shallow(<ChangePasswordModal serverInfo={serverInfo} />)
     wrapper.find("#generate-keys").simulate("click")

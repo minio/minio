@@ -40,6 +40,13 @@ type JWKSArgs struct {
 	closeRespFn func(io.ReadCloser)
 }
 
+// Config - OpenID Config
+type Config struct {
+	JWKS              JWKSArgs `json:"jwks"`
+	ConfigURL         string   `json:"configURL"`
+	PolicyClaimPrefix string   `json:"policyClaimPrefix"`
+}
+
 // PopulatePublicKey - populates a new publickey from the JWKS URL.
 func (r *JWKSArgs) PopulatePublicKey() error {
 	if r.URL == nil {
@@ -194,40 +201,45 @@ func (p *JWT) ID() ID {
 
 // OpenID keys and envs.
 const (
-	JwksURL = "jwks_url"
+	JwksURL           = "jwks_url"
+	ConfigURL         = "config_url"
+	PolicyClaimPrefix = "policy_claim_prefix"
 
-	EnvIdentityOpenID = "MINIO_IDENTITY_OPENID_JWKS_URL"
+	EnvIdentityOpenID                  = "MINIO_IDENTITY_OPENID_JWKS_URL"
+	EnvIdentityOpenIDConfigURL         = "MINIO_IDENTITY_OPENID_CONFIG_URL"
+	EnvIdentityOpenIDPolicyClaimPrefix = "MINIO_IDENTITY_OPENID_POLICY_CLAIM_PREFIX"
 )
 
 // LookupConfig lookup jwks from config, override with any ENVs.
-func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.ReadCloser)) (JWKSArgs, error) {
-	args := JWKSArgs{}
+func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.ReadCloser)) (c Config, err error) {
+	c = Config{}
 
 	jwksURL := env.Get(EnvIamJwksURL, "")
 	if jwksURL == "" {
 		jwksURL = env.Get(EnvIdentityOpenID, kv.Get(JwksURL))
-		if jwksURL == "" {
-			return args, nil
+	}
+
+	if jwksURL != "" {
+		u, err := xnet.ParseURL(jwksURL)
+		if err != nil {
+			return c, err
+		}
+
+		c.JWKS = JWKSArgs{
+			URL:         u,
+			publicKeys:  make(map[string]crypto.PublicKey),
+			transport:   transport,
+			closeRespFn: closeRespFn,
+		}
+
+		if err = c.JWKS.PopulatePublicKey(); err != nil {
+			return c, err
 		}
 	}
 
-	u, err := xnet.ParseURL(jwksURL)
-	if err != nil {
-		return args, err
-	}
-
-	args = JWKSArgs{
-		URL:         u,
-		publicKeys:  make(map[string]crypto.PublicKey),
-		transport:   transport,
-		closeRespFn: closeRespFn,
-	}
-
-	if err = args.PopulatePublicKey(); err != nil {
-		return args, err
-	}
-
-	return args, nil
+	c.ConfigURL = env.Get(EnvIdentityOpenIDConfigURL, kv.Get(ConfigURL))
+	c.PolicyClaimPrefix = env.Get(EnvIdentityOpenIDPolicyClaimPrefix, kv.Get(PolicyClaimPrefix))
+	return c, nil
 }
 
 // NewJWT - initialize new jwt authenticator.

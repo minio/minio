@@ -19,11 +19,14 @@ import { shallow, mount } from "enzyme"
 import { Login } from "../Login"
 import web from "../../web"
 
-jest.mock('../../web', () => ({
+jest.mock("../../web", () => ({
   Login: jest.fn(() => {
     return Promise.resolve({ token: "test", uiVersion: "2018-02-01T01:17:47Z" })
   }),
-  LoggedIn: jest.fn()
+  LoggedIn: jest.fn(),
+  OpenIDConfig: jest.fn(() => {
+    return Promise.resolve({ OpenIDConfigURL: "test" })
+  })
 }))
 
 describe("Login", () => {

@@ -19,6 +19,8 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -75,7 +77,7 @@ type ServerInfoRep struct {
 // ServerInfo - get server info.
 func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, reply *ServerInfoRep) error {
 	ctx := newWebContext(r, args, "WebServerInfo")
-	_, owner, authErr := webRequestAuthenticate(r)
+	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
 	}
@@ -102,6 +104,13 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 	// Check if the user is IAM user.
 	reply.MinioUserInfo = map[string]interface{}{
 		"isIAMUser": !owner,
+	}
+
+	if !owner {
+		creds, ok := globalIAMSys.GetUser(claims.Subject)
+		if ok && creds.SessionToken != "" {
+			reply.MinioUserInfo["isTempUser"] = true
+		}
 	}
 
 	reply.MinioMemory = mem
@@ -1776,6 +1785,80 @@ func presignedGet(host, bucket, object string, expiry int64, creds auth.Credenti
 
 	// Construct the final presigned URL.
 	return host + s3utils.EncodePath(path) + "?" + queryStr + "&" + xhttp.AmzSignature + "=" + signature
+}
+
+// OpenIDConfigResp - OpenIDConfigResp reply.
+type OpenIDConfigResp struct {
+	OpenIDConfigURL string
+	UIVersion       string `json:"uiVersion"`
+}
+
+// OpenIDConfig - get OpenID config.
+func (web *webAPIHandlers) OpenIDConfig(r *http.Request, args *WebGenericArgs, reply *OpenIDConfigResp) error {
+	reply.OpenIDConfigURL = globalOpenidConfig.ConfigURL
+	reply.UIVersion = browser.UIVersion
+	return nil
+}
+
+// LoginSTSArgs - login arguments.
+type LoginSTSArgs struct {
+	Token string `json:"token" form:"token"`
+}
+
+// LoginSTSRep - login reply.
+type LoginSTSRep struct {
+	Token     string `json:"token"`
+	UIVersion string `json:"uiVersion"`
+}
+
+// LoginSTS - STS user login handler.
+func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *LoginRep) error {
+	ctx := newWebContext(r, args, "webLoginSTS")
+
+	v := url.Values{}
+	v.Set("Action", "AssumeRoleWithWebIdentity")
+	v.Set("WebIdentityToken", args.Token)
+	v.Set("Version", "2011-06-15")
+
+	scheme := "http"
+	if globalIsSSL {
+		scheme = "https"
+	}
+
+	u := &url.URL{
+		Scheme: scheme,
+		Host:   r.Host,
+	}
+
+	u.RawQuery = v.Encode()
+
+	req, err := http.NewRequest("POST", u.String(), nil)
+	if err != nil {
+		return toJSONError(ctx, err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return toJSONError(ctx, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return toJSONError(ctx, errors.New(resp.Status))
+	}
+
+	a := AssumeRoleWithWebIdentityResponse{}
+	if err = xml.NewDecoder(resp.Body).Decode(&a); err != nil {
+		return toJSONError(ctx, err)
+	}
+
+	token, err := authenticateWebSTS(a.Result.Credentials)
+	if err != nil {
+		return toJSONError(ctx, err)
+	}
+
+	reply.Token = token
+	reply.UIVersion = browser.UIVersion
+	return nil
 }
 
 // toJSONError converts regular errors into more user friendly

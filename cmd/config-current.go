@@ -111,7 +111,7 @@ func (s serverConfig) lookupConfigs() {
 		globalCompressMimeTypes = compCfg.MimeTypes
 	}
 
-	openidCfg, err := openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
+	globalOpenidConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
 		NewCustomHTTPTransport(), xhttp.DrainBody)
 	if err != nil {
 		logger.FatalIf(err, "Unable to initialize OpenID")
@@ -123,7 +123,7 @@ func (s serverConfig) lookupConfigs() {
 		logger.FatalIf(err, "Unable to initialize OPA")
 	}
 
-	globalOpenIDValidators = getOpenIDValidators(openidCfg)
+	globalOpenIDValidators = getOpenIDValidators(globalOpenidConfig.JWKS)
 	globalPolicyOPA = iampolicy.NewOpa(opaCfg)
 
 	globalLDAPConfig, err = xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
