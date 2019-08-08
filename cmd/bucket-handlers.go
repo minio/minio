@@ -38,6 +38,7 @@ import (
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -202,7 +203,8 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 	listBuckets := objectAPI.ListBuckets
 
-	if s3Error := checkRequestAuthType(ctx, r, policy.ListAllMyBucketsAction, "", ""); s3Error != ErrNone {
+	accessKey, owner, s3Error := checkRequestAuthTypeToAccessKey(ctx, r, policy.ListAllMyBucketsAction, "", "")
+	if s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -236,8 +238,28 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		}
 	}
 
+	// Set prefix value for "s3:prefix" policy conditionals.
+	r.Header.Set("prefix", "")
+
+	// Set delimiter value for "s3:delimiter" policy conditionals.
+	r.Header.Set("delimiter", SlashSeparator)
+
+	var newBucketsInfo []BucketInfo
+	for _, bucketInfo := range bucketsInfo {
+		if globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     accessKey,
+			Action:          iampolicy.ListBucketAction,
+			BucketName:      bucketInfo.Name,
+			ConditionValues: getConditionValues(r, "", accessKey),
+			IsOwner:         owner,
+			ObjectName:      "",
+		}) {
+			newBucketsInfo = append(newBucketsInfo, bucketInfo)
+		}
+	}
+
 	// Generate response.
-	response := generateListBucketsResponse(bucketsInfo)
+	response := generateListBucketsResponse(newBucketsInfo)
 	encodedSuccessResponse := encodeResponse(response)
 
 	// Write response.
