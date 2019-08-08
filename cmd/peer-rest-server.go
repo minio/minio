@@ -245,13 +245,7 @@ func (s *peerRESTServer) LoadUsersHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	objAPI := newObjectLayerFn()
-	if objAPI == nil {
-		s.writeErrorResponse(w, errServerNotInitialized)
-		return
-	}
-
-	err := globalIAMSys.Load(objAPI)
+	err := globalIAMSys.Load()
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
