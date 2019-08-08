@@ -1232,6 +1232,7 @@ func newWebRPCRequest(methodRPC, authorization string, body io.ReadSeeker) (*htt
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("User-Agent", "Mozilla")
 	req.Header.Set("Content-Type", "application/json")
 	if authorization != "" {
 		req.Header.Set("Authorization", "Bearer "+authorization)
