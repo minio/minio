@@ -170,7 +170,7 @@ func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string)
 	m["accessKey"] = cred.AccessKey
 	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.MapClaims(m))
 
-	cred.Expiration = time.Unix(expiry, 0)
+	cred.Expiration = time.Unix(expiry, 0).UTC()
 	cred.SessionToken, err = jwt.SignedString([]byte(tokenSecret))
 	if err != nil {
 		return cred, err
