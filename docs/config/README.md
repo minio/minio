@@ -162,17 +162,6 @@ export MINIO_DOMAIN=sub1.mydomain.com,sub2.mydomain.com
 minio server /data
 ```
 
-### Drive Sync
-
-By default, MinIO writes to disk in synchronous mode for all metadata operations. Set `MINIO_DRIVE_SYNC` environment variable to enable synchronous mode for all data operations as well.
-
-Example:
-
-```sh
-export MINIO_DRIVE_SYNC=on
-minio server /data
-```
-
 ### HTTP Trace
 HTTP tracing can be enabled by using [`mc admin trace`](https://github.com/minio/mc/blob/master/docs/minio-admin-complete-guide.md#command-trace---display-minio-server-http-trace) command.
 
