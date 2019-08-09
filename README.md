@@ -1,9 +1,14 @@
 # MinIO Quickstart Guide
 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
-MinIO is an object storage server released under Apache License v2.0. It is compatible with Amazon S3 cloud storage service. It is best suited for storing unstructured data such as photos, videos, log files, backups and container / VM images. Size of an object can range from a few KBs to a maximum of 5TB.
+MinIO is an object storage server released under Apache License v2.0. It is compatible[1] with Amazon S3 cloud storage service. It is best suited for storing unstructured data such as photos, videos, log files, backups and container / VM images. Size of an object can range from a few KBs to a maximum of 5TB.
 
 MinIO server is light enough to be bundled with the application stack, similar to NodeJS, Redis and MySQL.
+
+[1]: MinIO in its default mode is faster and does not calculate MD5Sum unless passed by client. This may lead to incompatibility with few S3 clients like s3ql that heavily depend on MD5Sum. For full compatibility with Amazon S3 API, start MinIO with `--compat` option.
+```sh
+minio --compat server /data
+```
 
 ## Docker Container
 ### Stable
@@ -86,7 +91,7 @@ service minio start
 Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://golang.org/doc/install). Minimum version required is [go1.12](https://golang.org/dl/#stable)
 
 ```sh
-GO111MODULE=on go get github.com/minio/minio
+GOPROXY=https://proxy.golang.org GO111MODULE=on go get github.com/minio/minio
 ```
 
 ## Allow port access for Firewalls

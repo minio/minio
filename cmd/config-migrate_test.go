@@ -175,7 +175,7 @@ func TestServerConfigMigrateV2toV33(t *testing.T) {
 	}
 	defer os.RemoveAll(fsDir)
 
-	configPath := rootPath + "/" + minioConfigFile
+	configPath := rootPath + SlashSeparator + minioConfigFile
 
 	// Create a corrupted config file
 	if err := ioutil.WriteFile(configPath, []byte("{ \"version\":\"2\","), 0644); err != nil {
@@ -238,7 +238,7 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	defer os.RemoveAll(rootPath)
 
 	globalConfigDir = &ConfigDir{path: rootPath}
-	configPath := rootPath + "/" + minioConfigFile
+	configPath := rootPath + SlashSeparator + minioConfigFile
 
 	// Create a corrupted config file
 	if err := ioutil.WriteFile(configPath, []byte("{ \"version\":\"2\", \"test\":"), 0644); err != nil {
@@ -335,7 +335,7 @@ func TestServerConfigMigrateCorruptedConfig(t *testing.T) {
 	defer os.RemoveAll(rootPath)
 
 	globalConfigDir = &ConfigDir{path: rootPath}
-	configPath := rootPath + "/" + minioConfigFile
+	configPath := rootPath + SlashSeparator + minioConfigFile
 
 	for i := 3; i <= 17; i++ {
 		// Create a corrupted config file

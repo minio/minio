@@ -34,20 +34,22 @@ Install RabbitMQ from [here](https://www.rabbitmq.com/).
 
 The MinIO server configuration file is stored on the backend in json format. The AMQP configuration is located in the `amqp` key under the `notify` top-level key. Create a configuration key-value pair here for your AMQP instance. The key is a name for your AMQP endpoint, and the value is a collection of key-value parameters described in the table below.
 
-| Parameter      | Type     | Description                                                                     |
-| :------------- | :------- | :------------------------------------------------------------------------------ |
-| `enable`       | _bool_   | (Required) Is this server endpoint configuration active/enabled?                |
-| `url`          | _string_ | (Required) AMQP server endpoint, e.g. `amqp://myuser:mypassword@localhost:5672` |
-| `exchange`     | _string_ | Name of the exchange.                                                           |
-| `routingKey`   | _string_ | Routing key for publishing.                                                     |
-| `exchangeType` | _string_ | Kind of exchange.                                                               |
-| `deliveryMode` | _uint8_  | Delivery mode for publishing. 0 or 1 - transient; 2 - persistent.               |
-| `mandatory`    | _bool_   | Publishing related bool.                                                        |
-| `immediate`    | _bool_   | Publishing related bool.                                                        |
-| `durable`      | _bool_   | Exchange declaration related bool.                                              |
-| `internal`     | _bool_   | Exchange declaration related bool.                                              |
-| `noWait`       | _bool_   | Exchange declaration related bool.                                              |
-| `autoDeleted`  | _bool_   | Exchange declaration related bool.                                              |
+| Parameter      | Type     | Description                                                                      |
+| :------------- | :------- | :------------------------------------------------------------------------------- |
+| `enable`       | _bool_   | (Required) Is this server endpoint configuration active/enabled?                 |
+| `url`          | _string_ | (Required) AMQP server endpoint, e.g. `amqp://myuser:mypassword@localhost:5672`  |
+| `exchange`     | _string_ | Name of the exchange.                                                            |
+| `routingKey`   | _string_ | Routing key for publishing.                                                      |
+| `exchangeType` | _string_ | Kind of exchange.                                                                |
+| `deliveryMode` | _uint8_  | Delivery mode for publishing. 0 or 1 - transient; 2 - persistent.                |
+| `mandatory`    | _bool_   | Publishing related bool.                                                         |
+| `immediate`    | _bool_   | Publishing related bool.                                                         |
+| `durable`      | _bool_   | Exchange declaration related bool.                                               |
+| `internal`     | _bool_   | Exchange declaration related bool.                                               |
+| `noWait`       | _bool_   | Exchange declaration related bool.                                               |
+| `autoDeleted`  | _bool_   | Exchange declaration related bool.                                               |
+| `queueDir`     | _string_ | Persistent store for events when AMQP broker is offline                          |
+| `queueLimit`   | _int_    | Set the maximum event limit for the persistent store. The default limit is 10000 |
 
 An example configuration for RabbitMQ is shown below:
 
@@ -65,10 +67,13 @@ An example configuration for RabbitMQ is shown below:
         "durable": false,
         "internal": false,
         "noWait": false,
-        "autoDeleted": false
+        "autoDeleted": false,
+        "queueDir": "",
+        "queueLimit": 0
     }
 }
 ```
+MinIO supports persistent event store. The persistent store will backup events when the AMQP broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
 
@@ -310,7 +315,7 @@ An example of Elasticsearch configuration is as follows:
 },
 ```
 
-Minio supports persistent event store. The persistent store will backup events when the Elasticsearch broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
+MinIO supports persistent event store. The persistent store will backup events when the Elasticsearch broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 If Elasticsearch has authentication enabled, the credentials can be supplied to MinIO via the `url` parameter formatted as `PROTO://USERNAME:PASSWORD@ELASTICSEARCH_HOST:PORT`.
 
@@ -460,10 +465,14 @@ An example of Redis configuration is as follows:
         "format": "namespace",
         "address": "127.0.0.1:6379",
         "password": "yoursecret",
-        "key": "bucketevents"
+        "key": "bucketevents",
+        "queueDir": "",
+        "queueLimit": 0
     }
 }
 ```
+
+MinIO supports persistent event store. The persistent store will backup events when the Redis broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
 
@@ -543,17 +552,20 @@ The NATS configuration block in `config.json` is as follows:
         "password": "yoursecret",
         "token": "",
         "secure": false,
-        "pingInterval": 0
+        "pingInterval": 0,
+        "queueDir": "",
+        "queueLimit": 0,
         "streaming": {
             "enable": false,
             "clusterID": "",
-            "clientID": "",
             "async": false,
             "maxPubAcksInflight": 0
         }
     }
 },
 ```
+
+MinIO supports persistent event store. The persistent store will backup events when the NATS broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
 
@@ -567,7 +579,7 @@ After updating the NATS configuration in /tmp/myconfig , use `mc admin config se
 $ mc admin config set myminio < /tmp/myconfig
 ```
 
-MinIO server also supports [NATS Streaming mode](http://nats.io/documentation/streaming/nats-streaming-intro/) that offers additional functionality like `Message/event persistence`, `At-least-once-delivery`, and `Publisher rate limiting`. To configure MinIO server to send notifications to NATS Streaming server, update the MinIO server configuration file as follows:
+MinIO server also supports [NATS Streaming mode](http://nats.io/documentation/streaming/nats-streaming-intro/) that offers additional functionality like `At-least-once-delivery`, and `Publisher rate limiting`. To configure MinIO server to send notifications to NATS Streaming server, update the MinIO server configuration file as follows:
 
 ```
 "nats": {
@@ -580,10 +592,11 @@ MinIO server also supports [NATS Streaming mode](http://nats.io/documentation/st
         "token": "",
         "secure": false,
         "pingInterval": 0,
+        "queueDir": "",
+        "queueLimit": 0,
         "streaming": {
             "enable": true,
             "clusterID": "test-cluster",
-            "clientID": "minio-client",
             "async": true,
             "maxPubAcksInflight": 10
         }
@@ -673,20 +686,47 @@ import (
 )
 
 func main() {
-	natsConnection, _ := stan.Connect("test-cluster", "test-client")
-	log.Println("Connected")
+
+	var stanConnection stan.Conn
+
+	subscribe := func() {
+		fmt.Printf("Subscribing to subject 'bucketevents'\n")
+		stanConnection.Subscribe("bucketevents", func(m *stan.Msg) {
+
+			// Handle the message
+			fmt.Printf("Received a message: %s\n", string(m.Data))
+		})
+	}
+
+
+	stanConnection, _ = stan.Connect("test-cluster", "test-client", stan.NatsURL("nats://yourusername:yoursecret@0.0.0.0:4222"), stan.SetConnectionLostHandler(func(c stan.Conn, _ error) {
+		go func() {
+			for {
+				// Reconnect if the connection is lost.
+				if stanConnection == nil || stanConnection.NatsConn() == nil ||  !stanConnection.NatsConn().IsConnected() {
+					stanConnection, _ = stan.Connect("test-cluster", "test-client", stan.NatsURL("nats://yourusername:yoursecret@0.0.0.0:4222"), stan.SetConnectionLostHandler(func(c stan.Conn, _ error) {
+						if c.NatsConn() != nil {
+							c.NatsConn().Close()
+						}
+						_ = c.Close()
+					}))
+					if stanConnection != nil {
+						subscribe()
+					}
+
+				}
+			}
+
+		}()
+	}))
 
 	// Subscribe to subject
-	log.Printf("Subscribing to subject 'bucketevents'\n")
-	natsConnection.Subscribe("bucketevents", func(m *stan.Msg) {
-
-		// Handle the message
-		fmt.Printf("Received a message: %s\n", string(m.Data))
-	})
+	subscribe()
 
 	// Keep the connection alive
 	runtime.Goexit()
 }
+
 ```
 
 ```
@@ -754,10 +794,14 @@ An example of PostgreSQL configuration is as follows:
         "port": "5432",
         "user": "postgres",
         "password": "password",
-        "database": "minio_events"
+        "database": "minio_events",
+        "queueDir": "",
+        "queueLimit": 0
     }
 }
 ```
+
+MinIO supports persistent event store. The persistent store will backup events when the PostgreSQL connection goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 Note that for illustration here, we have disabled SSL. In the interest of security, for production this is not recommended.
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
@@ -849,20 +893,26 @@ The MinIO server configuration file is stored on the backend in json format. The
 
 An example of MySQL configuration is as follows:
 
-```
+```json
 "mysql": {
-        "1": {
-                "enable": true,
-                "dsnString": "",
-                "table": "minio_images",
-                "host": "172.17.0.1",
-                "port": "3306",
-                "user": "root",
-                "password": "password",
-                "database": "miniodb"
-        }
+       "1": {
+           "enable": true,
+           "dsnString": "",
+           "format": "namespace",
+           "table": "minio_images",
+           "host": "172.17.0.1",
+           "port": "3306",
+           "user": "root",
+           "password": "password",
+           "database": "miniodb",
+           "queueDir": "",
+           "queueLimit": 0
+       }
 }
 ```
+
+
+MinIO supports persistent event store. The persistent store will backup events when the MySQL connection goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
 
@@ -953,6 +1003,7 @@ The MinIO server configuration file is stored on the backend in json format. Upd
     }
 }
 ```
+
 MinIO supports persistent event store. The persistent store will backup events when the kafka broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
 
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.

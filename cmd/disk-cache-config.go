@@ -109,7 +109,7 @@ func parseCacheExcludes(excludes []string) ([]string, error) {
 		if len(e) == 0 {
 			return nil, uiErrInvalidCacheExcludesValue(nil).Msg("cache exclude path (%s) cannot be empty", e)
 		}
-		if hasPrefix(e, slashSeparator) {
+		if hasPrefix(e, SlashSeparator) {
 			return nil, uiErrInvalidCacheExcludesValue(nil).Msg("cache exclude pattern (%s) cannot start with / as prefix", e)
 		}
 	}

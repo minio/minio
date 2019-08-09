@@ -40,6 +40,8 @@ const (
 	clientGrants = "AssumeRoleWithClientGrants"
 	webIdentity  = "AssumeRoleWithWebIdentity"
 	assumeRole   = "AssumeRole"
+
+	stsRequestBodyLimit = 10 * (1 << 20) // 10 MiB
 )
 
 // stsAPIHandlers implements and provides http handlers for AWS STS API.
@@ -51,7 +53,7 @@ func registerSTSRouter(router *mux.Router) {
 	sts := &stsAPIHandlers{}
 
 	// STS Router
-	stsRouter := router.NewRoute().PathPrefix("/").Subrouter()
+	stsRouter := router.NewRoute().PathPrefix(SlashSeparator).Subrouter()
 
 	// Assume roles with no JWT, handles AssumeRole.
 	stsRouter.Methods(http.MethodPost).MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
@@ -183,11 +185,16 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	policyName, err := globalIAMSys.GetUserPolicy(user.AccessKey)
+	policies, err := globalIAMSys.PolicyDBGet(user.AccessKey, false)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
 		return
+	}
+
+	policyName := ""
+	if len(policies) > 0 {
+		policyName = policies[0]
 	}
 
 	// This policy is the policy associated with the user

@@ -30,7 +30,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/minio/minio/pkg/event"
@@ -132,20 +131,6 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 	}
 
 	return nil
-}
-
-// IsConnRefusedErr - To check for "connection refused" errors.
-func IsConnRefusedErr(err error) bool {
-	if opErr, ok := err.(*net.OpError); ok {
-		if sysErr, ok := opErr.Err.(*os.SyscallError); ok {
-			if errno, ok := sysErr.Err.(syscall.Errno); ok {
-				if errno == syscall.ECONNREFUSED {
-					return true
-				}
-			}
-		}
-	}
-	return false
 }
 
 // Send - reads an event from store and sends it to webhook.

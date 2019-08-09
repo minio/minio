@@ -505,7 +505,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, toObjectErr(err, bucket, object)
 	}
 	// For a directory, we need to send an reader that returns no bytes.
-	if hasSuffix(object, slashSeparator) {
+	if hasSuffix(object, SlashSeparator) {
 		// The lock taken above is released when
 		// objReader.Close() is called by the caller.
 		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts.CheckCopyPrecondFn, nsUnlocker)
@@ -596,7 +596,7 @@ func (fs *FSObjects) getObject(ctx context.Context, bucket, object string, offse
 	}
 
 	// If its a directory request, we return an empty body.
-	if hasSuffix(object, slashSeparator) {
+	if hasSuffix(object, SlashSeparator) {
 		_, err = writer.Write([]byte(""))
 		logger.LogIf(ctx, err)
 		return toObjectErr(err, bucket, object)
@@ -690,11 +690,7 @@ func (fs *FSObjects) defaultFsJSON(object string) fsMetaV1 {
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
 func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (oi ObjectInfo, e error) {
 	fsMeta := fsMetaV1{}
-	if hasSuffix(object, slashSeparator) {
-		// Since we support PUT of a "directory" object, we allow HEAD.
-		if !fsIsDir(ctx, pathJoin(fs.fsPath, bucket, object)) {
-			return oi, errFileNotFound
-		}
+	if hasSuffix(object, SlashSeparator) {
 		fi, err := fsStatDir(ctx, pathJoin(fs.fsPath, bucket, object))
 		if err != nil {
 			return oi, err
@@ -754,7 +750,7 @@ func (fs *FSObjects) getObjectInfoWithLock(ctx context.Context, bucket, object s
 		return oi, err
 	}
 
-	if strings.HasSuffix(object, slashSeparator) && !fs.isObjectDir(bucket, object) {
+	if strings.HasSuffix(object, SlashSeparator) && !fs.isObjectDir(bucket, object) {
 		return oi, errFileNotFound
 	}
 
@@ -788,7 +784,7 @@ func (fs *FSObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 func (fs *FSObjects) parentDirIsObject(ctx context.Context, bucket, parent string) bool {
 	var isParentDirObject func(string) bool
 	isParentDirObject = func(p string) bool {
-		if p == "." || p == "/" {
+		if p == "." || p == SlashSeparator {
 			return false
 		}
 		if fsIsFile(ctx, pathJoin(fs.fsPath, bucket, p)) {

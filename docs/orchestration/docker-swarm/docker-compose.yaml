@@ -2,7 +2,7 @@ version: '3'
 
 services:
   minio1:
-    image: minio/minio:RELEASE.2019-07-17T22-54-12Z
+    image: minio/minio:RELEASE.2019-08-07T01-59-21Z
     hostname: minio1
     volumes:
       - minio1-data:/export
@@ -24,7 +24,7 @@ services:
     command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
 
   minio2:
-    image: minio/minio:RELEASE.2019-07-17T22-54-12Z
+    image: minio/minio:RELEASE.2019-08-07T01-59-21Z
     hostname: minio2
     volumes:
       - minio2-data:/export
@@ -46,7 +46,7 @@ services:
     command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
 
   minio3:
-    image: minio/minio:RELEASE.2019-07-17T22-54-12Z
+    image: minio/minio:RELEASE.2019-08-07T01-59-21Z
     hostname: minio3
     volumes:
       - minio3-data:/export
@@ -68,7 +68,7 @@ services:
     command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
 
   minio4:
-    image: minio/minio:RELEASE.2019-07-17T22-54-12Z
+    image: minio/minio:RELEASE.2019-08-07T01-59-21Z
     hostname: minio4
     volumes:
       - minio4-data:/export

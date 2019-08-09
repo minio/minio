@@ -100,7 +100,7 @@ func (endpoint *Endpoint) UpdateIsLocal() error {
 func NewEndpoint(arg string) (ep Endpoint, e error) {
 	// isEmptyPath - check whether given path is not empty.
 	isEmptyPath := func(path string) bool {
-		return path == "" || path == "/" || path == `\`
+		return path == "" || path == SlashSeparator || path == `\`
 	}
 
 	if isEmptyPath(arg) {
@@ -152,7 +152,7 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 			return ep, fmt.Errorf("empty or root path is not supported in URL endpoint")
 		}
 
-		// On windows having a preceding "/" will cause problems, if the
+		// On windows having a preceding SlashSeparator will cause problems, if the
 		// command line already has C:/<export-folder/ in it. Final resulting
 		// path on windows might become C:/C:/ this will cause problems
 		// of starting minio server properly in distributed mode on windows.
@@ -720,18 +720,27 @@ func GetRemotePeers(endpoints EndpointList) []string {
 func updateDomainIPs(endPoints set.StringSet) {
 	ipList := set.NewStringSet()
 	for e := range endPoints {
-		host, _, err := net.SplitHostPort(e)
+		host, port, err := net.SplitHostPort(e)
 		if err != nil {
 			if strings.Contains(err.Error(), "missing port in address") {
 				host = e
+				port = globalMinioPort
 			} else {
 				continue
 			}
 		}
-		IPs, _ := getHostIP(host)
-		ipList = ipList.Union(IPs)
+		IPs, err := getHostIP(host)
+		if err != nil {
+			continue
+		}
+
+		IPsWithPort := IPs.ApplyFunc(func(ip string) string {
+			return net.JoinHostPort(ip, port)
+		})
+
+		ipList = ipList.Union(IPsWithPort)
 	}
 	globalDomainIPs = ipList.FuncMatch(func(ip string, matchString string) bool {
-		return !strings.HasPrefix(ip, "127.") || strings.HasPrefix(ip, "::1")
+		return !(strings.HasPrefix(ip, "127.") || strings.HasPrefix(ip, "::1") || strings.HasPrefix(ip, "[::1]"))
 	}, "")
 }

@@ -44,8 +44,8 @@ func isNetworkError(err error) bool {
 	if err.Error() == errConnectionStale.Error() {
 		return true
 	}
-	if _, ok := err.(*rest.NetworkError); ok {
-		return true
+	if nerr, ok := err.(*rest.NetworkError); ok {
+		return isNetworkOrHostDown(nerr.Err)
 	}
 	return false
 }

@@ -1000,7 +1000,7 @@ func (s *TestSuiteCommon) TestMultipleObjects(c *check) {
 func (s *TestSuiteCommon) TestNotImplemented(c *check) {
 	// Generate a random bucket name.
 	bucketName := getRandomBucketName()
-	request, err := newTestSignedRequest("GET", s.endPoint+"/"+bucketName+"/object?policy",
+	request, err := newTestSignedRequest("GET", s.endPoint+SlashSeparator+bucketName+"/object?policy",
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
 
@@ -1111,7 +1111,7 @@ func (s *TestSuiteCommon) TestCopyObject(c *check) {
 	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName2), 0, nil)
 	c.Assert(err, nil)
 	// setting the "X-Amz-Copy-Source" to allow copying the content of previously uploaded object.
-	request.Header.Set("X-Amz-Copy-Source", url.QueryEscape("/"+bucketName+"/"+objectName))
+	request.Header.Set("X-Amz-Copy-Source", url.QueryEscape(SlashSeparator+bucketName+SlashSeparator+objectName))
 	if s.signer == signerV4 {
 		err = signRequestV4(request, s.accessKey, s.secretKey)
 	} else {
@@ -1821,7 +1821,7 @@ func (s *TestSuiteCommon) TestPutBucketErrors(c *check) {
 
 	// request for ACL.
 	// Since MinIO server doesn't support ACL's the request is expected to fail with  "NotImplemented" error message.
-	request, err = newTestSignedRequest("PUT", s.endPoint+"/"+bucketName+"?acl",
+	request, err = newTestSignedRequest("PUT", s.endPoint+SlashSeparator+bucketName+"?acl",
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
 

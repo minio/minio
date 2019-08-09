@@ -152,7 +152,7 @@ func (fs *FSObjects) ListMultipartUploads(ctx context.Context, bucket, object, k
 		return result, toObjectErr(err)
 	}
 
-	// S3 spec says uploaIDs should be sorted based on initiated time. ModTime of fs.json
+	// S3 spec says uploadIDs should be sorted based on initiated time. ModTime of fs.json
 	// is the creation time of the uploadID, hence we will use that.
 	var uploads []MultipartInfo
 	for _, uploadID := range uploadIDs {
@@ -163,7 +163,7 @@ func (fs *FSObjects) ListMultipartUploads(ctx context.Context, bucket, object, k
 		}
 		uploads = append(uploads, MultipartInfo{
 			Object:    object,
-			UploadID:  strings.TrimSuffix(uploadID, slashSeparator),
+			UploadID:  strings.TrimSuffix(uploadID, SlashSeparator),
 			Initiated: fi.ModTime(),
 		})
 	}
@@ -326,7 +326,11 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 
 	partPath := pathJoin(uploadIDDir, fs.encodePartFile(partID, etag, data.ActualSize()))
 
-	if err = fsRenameFile(ctx, tmpPartPath, partPath); err != nil {
+	// Make sure not to create parent directories if they don't exist - the upload might have been aborted.
+	if err = fsSimpleRenameFile(ctx, tmpPartPath, partPath); err != nil {
+		if err == errFileNotFound || err == errFileAccessDenied {
+			return pi, InvalidUploadID{UploadID: uploadID}
+		}
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
 

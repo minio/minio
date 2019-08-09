@@ -95,8 +95,8 @@ func isMetadataReplace(h http.Header) bool {
 // Splits an incoming path into bucket and object components.
 func path2BucketAndObject(path string) (bucket, object string) {
 	// Skip the first element if it is '/', split the rest.
-	path = strings.TrimPrefix(path, "/")
-	pathComponents := strings.SplitN(path, "/", 2)
+	path = strings.TrimPrefix(path, SlashSeparator)
+	pathComponents := strings.SplitN(path, SlashSeparator, 2)
 
 	// Save the bucket and object extracted from path.
 	switch len(pathComponents) {
@@ -370,7 +370,7 @@ func getResource(path string, host string, domains []string) (string, error) {
 			continue
 		}
 		bucket := strings.TrimSuffix(host, "."+domain)
-		return slashSeparator + pathJoin(bucket, path), nil
+		return SlashSeparator + pathJoin(bucket, path), nil
 	}
 	return path, nil
 }
@@ -393,21 +393,4 @@ func getHostName(r *http.Request) (hostName string) {
 		hostName = r.Host
 	}
 	return
-}
-
-func isHTTPStatusOK(statusCode int) bool {
-	// List of success status.
-	var successStatus = []int{
-		http.StatusOK,
-		http.StatusCreated,
-		http.StatusAccepted,
-		http.StatusNoContent,
-		http.StatusPartialContent,
-	}
-	for _, okstatus := range successStatus {
-		if statusCode == okstatus {
-			return true
-		}
-	}
-	return false
 }

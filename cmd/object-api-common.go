@@ -56,10 +56,10 @@ func init() {
 }
 
 // Checks if the object is a directory, this logic uses
-// if size == 0 and object ends with slashSeparator then
+// if size == 0 and object ends with SlashSeparator then
 // returns true.
 func isObjectDir(object string, size int64) bool {
-	return hasSuffix(object, slashSeparator) && size == 0
+	return hasSuffix(object, SlashSeparator) && size == 0
 }
 
 // Converts just bucket, object metadata into ObjectInfo datatype.
@@ -110,7 +110,7 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 	var delFunc func(string) error
 	// Function to delete entries recursively.
 	delFunc = func(entryPath string) error {
-		if !hasSuffix(entryPath, slashSeparator) {
+		if !hasSuffix(entryPath, SlashSeparator) {
 			// Delete the file entry.
 			err := storage.DeleteFile(volume, entryPath)
 			logger.LogIf(ctx, err)
@@ -129,7 +129,7 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 
 		// Entry path is empty, just delete it.
 		if len(entries) == 0 {
-			err = storage.DeleteFile(volume, path.Clean(entryPath))
+			err = storage.DeleteFile(volume, entryPath)
 			logger.LogIf(ctx, err)
 			return err
 		}
@@ -157,7 +157,7 @@ func cleanupObjectsBulk(ctx context.Context, storage StorageAPI, volume string, 
 	var traverse func(string) ([]string, error)
 	traverse = func(entryPath string) ([]string, error) {
 		var output = make([]string, 0)
-		if !hasSuffix(entryPath, slashSeparator) {
+		if !hasSuffix(entryPath, SlashSeparator) {
 			output = append(output, entryPath)
 			return output, nil
 		}
@@ -320,7 +320,7 @@ func listObjectsNonSlash(ctx context.Context, obj ObjectLayer, bucket, prefix, m
 }
 
 func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {
-	if delimiter != slashSeparator && delimiter != "" {
+	if delimiter != SlashSeparator && delimiter != "" {
 		return listObjectsNonSlash(ctx, obj, bucket, prefix, marker, delimiter, maxKeys, tpool, listDir, getObjInfo, getObjectInfoDirs...)
 	}
 
@@ -346,7 +346,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 	// along // with the prefix. On a flat namespace with 'prefix'
 	// as '/' we don't have any entries, since all the keys are
 	// of form 'keyName/...'
-	if delimiter == slashSeparator && prefix == slashSeparator {
+	if delimiter == SlashSeparator && prefix == SlashSeparator {
 		return loi, nil
 	}
 
@@ -357,7 +357,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 
 	// Default is recursive, if delimiter is set then list non recursive.
 	recursive := true
-	if delimiter == slashSeparator {
+	if delimiter == SlashSeparator {
 		recursive = false
 	}
 
@@ -382,7 +382,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 
 		var objInfo ObjectInfo
 		var err error
-		if hasSuffix(walkResult.entry, slashSeparator) {
+		if hasSuffix(walkResult.entry, SlashSeparator) {
 			for _, getObjectInfoDir := range getObjectInfoDirs {
 				objInfo, err = getObjectInfoDir(ctx, bucket, walkResult.entry)
 				if err == nil {
@@ -429,7 +429,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 
 	result := ListObjectsInfo{}
 	for _, objInfo := range objInfos {
-		if objInfo.IsDir && delimiter == slashSeparator {
+		if objInfo.IsDir && delimiter == SlashSeparator {
 			result.Prefixes = append(result.Prefixes, objInfo.Name)
 			continue
 		}

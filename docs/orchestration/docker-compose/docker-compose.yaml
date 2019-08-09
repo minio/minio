@@ -5,7 +5,7 @@ version: '2'
 # 9001 through 9004.
 services:
  minio1:
-  image: minio/minio:RELEASE.2019-07-17T22-54-12Z
+  image: minio/minio:RELEASE.2019-08-07T01-59-21Z
   volumes:
    - data1:/data
   ports:
@@ -15,7 +15,7 @@ services:
    MINIO_SECRET_KEY: minio123
   command: server http://minio1/data http://minio2/data http://minio3/data http://minio4/data 
  minio2:
-  image: minio/minio:RELEASE.2019-07-17T22-54-12Z
+  image: minio/minio:RELEASE.2019-08-07T01-59-21Z
   volumes:
    - data2:/data
   ports:
@@ -25,7 +25,7 @@ services:
    MINIO_SECRET_KEY: minio123
   command: server http://minio1/data http://minio2/data http://minio3/data http://minio4/data 
  minio3:
-  image: minio/minio:RELEASE.2019-07-17T22-54-12Z
+  image: minio/minio:RELEASE.2019-08-07T01-59-21Z
   volumes:
    - data3:/data
   ports:
@@ -35,7 +35,7 @@ services:
    MINIO_SECRET_KEY: minio123
   command: server http://minio1/data http://minio2/data http://minio3/data http://minio4/data 
  minio4:
-  image: minio/minio:RELEASE.2019-07-17T22-54-12Z
+  image: minio/minio:RELEASE.2019-08-07T01-59-21Z
   volumes:
    - data4:/data
   ports:

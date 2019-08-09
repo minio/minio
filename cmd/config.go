@@ -23,6 +23,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/quick"
@@ -99,6 +100,25 @@ type ConfigSys struct{}
 // Load - load config.json.
 func (sys *ConfigSys) Load(objAPI ObjectLayer) error {
 	return sys.Init(objAPI)
+}
+
+// WatchConfigNASDisk - watches nas disk on periodic basis.
+func (sys *ConfigSys) WatchConfigNASDisk(objAPI ObjectLayer) {
+	configInterval := globalRefreshIAMInterval
+	watchDisk := func() {
+		ticker := time.NewTicker(configInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-GlobalServiceDoneCh:
+				return
+			case <-ticker.C:
+				loadConfig(objAPI)
+			}
+		}
+	}
+	// Refresh configSys in background for NAS gateway.
+	go watchDisk()
 }
 
 // Init - initializes config system from config.json.

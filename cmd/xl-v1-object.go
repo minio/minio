@@ -147,7 +147,7 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 
 	// Handler directory request by returning a reader that
 	// returns no bytes.
-	if hasSuffix(object, slashSeparator) {
+	if hasSuffix(object, SlashSeparator) {
 		var objInfo ObjectInfo
 		if objInfo, err = xl.getObjectInfoDir(ctx, bucket, object); err != nil {
 			nsUnlocker()
@@ -216,7 +216,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 	}
 
 	// If its a directory request, we return an empty body.
-	if hasSuffix(object, slashSeparator) {
+	if hasSuffix(object, SlashSeparator) {
 		_, err := writer.Write([]byte(""))
 		logger.LogIf(ctx, err)
 		return toObjectErr(err, bucket, object)
@@ -379,7 +379,7 @@ func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string, op
 		return oi, err
 	}
 
-	if hasSuffix(object, slashSeparator) {
+	if hasSuffix(object, SlashSeparator) {
 		info, err := xl.getObjectInfoDir(ctx, bucket, object)
 		if err != nil {
 			return oi, toObjectErr(err, bucket, object)
@@ -865,7 +865,7 @@ func (xl xlObjects) deleteObjects(ctx context.Context, bucket string, objects []
 	}
 
 	for i, object := range objects {
-		isObjectDirs[i] = hasSuffix(object, slashSeparator)
+		isObjectDirs[i] = hasSuffix(object, SlashSeparator)
 	}
 
 	for i, object := range objects {
@@ -972,7 +972,7 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (er
 	}
 
 	var writeQuorum int
-	var isObjectDir = hasSuffix(object, slashSeparator)
+	var isObjectDir = hasSuffix(object, SlashSeparator)
 
 	if isObjectDir {
 		_, err = xl.getObjectInfoDir(ctx, bucket, object)

@@ -567,41 +567,41 @@ func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 
 		subrouter := router.PathPrefix(path.Join(storageRESTPath, endpoint.Path)).Subrouter()
 
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodDiskInfo).HandlerFunc(httpTraceHdrs(server.DiskInfoHandler))
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodMakeVol).HandlerFunc(httpTraceHdrs(server.MakeVolHandler)).Queries(restQueries(storageRESTVolume)...)
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodStatVol).HandlerFunc(httpTraceHdrs(server.StatVolHandler)).Queries(restQueries(storageRESTVolume)...)
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodDeleteVol).HandlerFunc(httpTraceHdrs(server.DeleteVolHandler)).Queries(restQueries(storageRESTVolume)...)
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodListVols).HandlerFunc(httpTraceHdrs(server.ListVolsHandler))
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodDiskInfo).HandlerFunc(httpTraceHdrs(server.DiskInfoHandler))
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodMakeVol).HandlerFunc(httpTraceHdrs(server.MakeVolHandler)).Queries(restQueries(storageRESTVolume)...)
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodStatVol).HandlerFunc(httpTraceHdrs(server.StatVolHandler)).Queries(restQueries(storageRESTVolume)...)
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodDeleteVol).HandlerFunc(httpTraceHdrs(server.DeleteVolHandler)).Queries(restQueries(storageRESTVolume)...)
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodListVols).HandlerFunc(httpTraceHdrs(server.ListVolsHandler))
 
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodAppendFile).HandlerFunc(httpTraceHdrs(server.AppendFileHandler)).
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodAppendFile).HandlerFunc(httpTraceHdrs(server.AppendFileHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodWriteAll).HandlerFunc(httpTraceHdrs(server.WriteAllHandler)).
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodWriteAll).HandlerFunc(httpTraceHdrs(server.WriteAllHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodCreateFile).HandlerFunc(httpTraceHdrs(server.CreateFileHandler)).
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodCreateFile).HandlerFunc(httpTraceHdrs(server.CreateFileHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTLength)...)
 
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodStatFile).HandlerFunc(httpTraceHdrs(server.StatFileHandler)).
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodStatFile).HandlerFunc(httpTraceHdrs(server.StatFileHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodReadAll).HandlerFunc(httpTraceHdrs(server.ReadAllHandler)).
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodReadAll).HandlerFunc(httpTraceHdrs(server.ReadAllHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodReadFile).HandlerFunc(httpTraceHdrs(server.ReadFileHandler)).
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodReadFile).HandlerFunc(httpTraceHdrs(server.ReadFileHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTOffset, storageRESTLength, storageRESTBitrotAlgo, storageRESTBitrotHash)...)
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodReadFileStream).HandlerFunc(httpTraceHdrs(server.ReadFileStreamHandler)).
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodReadFileStream).HandlerFunc(httpTraceHdrs(server.ReadFileStreamHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTOffset, storageRESTLength)...)
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodListDir).HandlerFunc(httpTraceHdrs(server.ListDirHandler)).
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodListDir).HandlerFunc(httpTraceHdrs(server.ListDirHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTCount, storageRESTLeafFile)...)
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodWalk).HandlerFunc(httpTraceHdrs(server.WalkHandler)).
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodWalk).HandlerFunc(httpTraceHdrs(server.WalkHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath, storageRESTRecursive, storageRESTLeafFile)...)
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodDeleteFile).HandlerFunc(httpTraceHdrs(server.DeleteFileHandler)).
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodDeleteFile).HandlerFunc(httpTraceHdrs(server.DeleteFileHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodDeleteFileBulk).HandlerFunc(httpTraceHdrs(server.DeleteFileBulkHandler)).
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodDeleteFileBulk).HandlerFunc(httpTraceHdrs(server.DeleteFileBulkHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodRenameFile).HandlerFunc(httpTraceHdrs(server.RenameFileHandler)).
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodRenameFile).HandlerFunc(httpTraceHdrs(server.RenameFileHandler)).
 			Queries(restQueries(storageRESTSrcVolume, storageRESTSrcPath, storageRESTDstVolume, storageRESTDstPath)...)
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodVerifyFile).HandlerFunc(httpTraceHdrs(server.VerifyFile)).
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodVerifyFile).HandlerFunc(httpTraceHdrs(server.VerifyFile)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTBitrotAlgo, storageRESTLength)...)
-		subrouter.Methods(http.MethodPost).Path("/" + storageRESTMethodGetInstanceID).HandlerFunc(httpTraceAll(server.GetInstanceID))
+		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodGetInstanceID).HandlerFunc(httpTraceAll(server.GetInstanceID))
 	}
 
 	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(notFoundHandler))

@@ -17,10 +17,8 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/gob"
 	"errors"
 	"io"
 	"sync"
@@ -131,32 +129,16 @@ func (client *lockRESTClient) Close() error {
 
 // restCall makes a call to the lock REST server.
 func (client *lockRESTClient) restCall(call string, args dsync.LockArgs) (reply bool, err error) {
+	values := url.Values{}
+	values.Set(lockRESTUID, args.UID)
+	values.Set(lockRESTSource, args.Source)
+	values.Set(lockRESTResource, args.Resource)
+	values.Set(lockRESTServerAddr, args.ServerAddr)
+	values.Set(lockRESTServerEndpoint, args.ServiceEndpoint)
 
-	reader := bytes.NewBuffer(make([]byte, 0, 2048))
-	err = gob.NewEncoder(reader).Encode(args)
-	if err != nil {
-		return false, err
-	}
-	respBody, err := client.call(call, nil, reader, -1)
-	if err != nil {
-		return false, err
-	}
-
-	var resp lockResponse
+	respBody, err := client.call(call, values, nil, -1)
 	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&resp)
-
-	if err != nil || !resp.Success {
-		reqInfo := &logger.ReqInfo{}
-		reqInfo.AppendTags("resource", args.Resource)
-		reqInfo.AppendTags("serveraddress", args.ServerAddr)
-		reqInfo.AppendTags("serviceendpoint", args.ServiceEndpoint)
-		reqInfo.AppendTags("source", args.Source)
-		reqInfo.AppendTags("uid", args.UID)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
-	}
-	return resp.Success, err
+	return err == nil, err
 }
 
 // RLock calls read lock REST API.

@@ -83,6 +83,12 @@ const (
 
 	// PutObjectAction - PutObject Rest API action.
 	PutObjectAction = "s3:PutObject"
+
+	// PutBucketLifecycleAction - PutBucketLifecycle Rest API action.
+	PutBucketLifecycleAction = "s3:PutBucketLifecycle"
+
+	// GetBucketLifecycleAction - GetBucketLifecycle Rest API action.
+	GetBucketLifecycleAction = "s3:GetBucketLifecycle"
 )
 
 // isObjectAction - returns whether action is object type or not.
@@ -113,6 +119,8 @@ func (action Action) IsValid() bool {
 	case ListMultipartUploadPartsAction, PutBucketNotificationAction:
 		fallthrough
 	case PutBucketPolicyAction, PutObjectAction:
+		fallthrough
+	case PutBucketLifecycleAction, GetBucketLifecycleAction:
 		return true
 	}
 

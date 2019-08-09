@@ -37,7 +37,6 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway v1.9.0 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.1 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
-	github.com/hashicorp/go-uuid v1.0.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hashicorp/raft v1.1.0 // indirect
@@ -56,7 +55,8 @@ require (
 	github.com/miekg/dns v1.1.8
 	github.com/minio/cli v1.21.0
 	github.com/minio/dsync/v2 v2.0.0
-	github.com/minio/hdfs/v3 v3.0.0
+	github.com/minio/gokrb5/v7 v7.2.5
+	github.com/minio/hdfs/v3 v3.0.1
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/lsync v1.0.1
 	github.com/minio/mc v0.0.0-20190529152718-f4bb0b8850cb
@@ -94,11 +94,14 @@ require (
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	go.etcd.io/bbolt v1.3.3 // indirect
 	go.uber.org/atomic v1.3.2
-	golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4
-	golang.org/x/net v0.0.0-20190620200207-3b0461eec859 // indirect
-	golang.org/x/sys v0.0.0-20190626221950-04f50cda93cb
+	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
+	golang.org/x/net v0.0.0-20190724013045-ca1201d0de80 // indirect
+	golang.org/x/sys v0.0.0-20190804053845-51ab0e2deafa
 	google.golang.org/api v0.4.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
 	gopkg.in/olivere/elastic.v5 v5.0.80
 	gopkg.in/yaml.v2 v2.2.2
 )
+
+// Added for go1.13 migration https://github.com/golang/go/issues/32805
+replace github.com/gorilla/rpc v1.2.0+incompatible => github.com/gorilla/rpc v1.2.0

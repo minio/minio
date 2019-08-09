@@ -16,4 +16,4 @@
 #
 
 test_run_dir="$MINT_RUN_CORE_DIR/worm"
-GO111MODULE=on CGO_ENABLED=0 go build -o "$test_run_dir/worm" "$test_run_dir/quick-worm-tests.go"
+GOPROXY=https://proxy.golang.org GO111MODULE=on CGO_ENABLED=0 go build -o "$test_run_dir/worm" "$test_run_dir/quick-worm-tests.go"

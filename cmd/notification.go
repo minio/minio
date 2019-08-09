@@ -232,6 +232,19 @@ func (sys *NotificationSys) LoadUsers() []NotificationPeerErr {
 	return ng.Wait()
 }
 
+// LoadGroup - loads a specific group on all peers.
+func (sys *NotificationSys) LoadGroup(group string) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(context.Background(), func() error { return client.LoadGroup(group) }, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
 // BackgroundHealStatus - returns background heal status of all peers
 func (sys *NotificationSys) BackgroundHealStatus() []madmin.BgHealState {
 	states := make([]madmin.BgHealState, len(sys.peerClients))
@@ -240,6 +253,24 @@ func (sys *NotificationSys) BackgroundHealStatus() []madmin.BgHealState {
 			continue
 		}
 		st, err := client.BackgroundHealStatus()
+		if err != nil {
+			logger.LogIf(context.Background(), err)
+		} else {
+			states[idx] = st
+		}
+	}
+
+	return states
+}
+
+// BackgroundOpsStatus - returns the status of all background operations of all peers
+func (sys *NotificationSys) BackgroundOpsStatus() []BgOpsStatus {
+	states := make([]BgOpsStatus, len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		st, err := client.BackgroundOpsStatus()
 		if err != nil {
 			logger.LogIf(context.Background(), err)
 		} else {

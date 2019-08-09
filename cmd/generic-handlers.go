@@ -153,7 +153,7 @@ func containsReservedMetadata(header http.Header) bool {
 // Reserved bucket.
 const (
 	minioReservedBucket     = "minio"
-	minioReservedBucketPath = "/" + minioReservedBucket
+	minioReservedBucketPath = SlashSeparator + minioReservedBucket
 )
 
 // Adds redirect rules for incoming requests.
@@ -172,10 +172,10 @@ func setBrowserRedirectHandler(h http.Handler) http.Handler {
 // browser requests.
 func getRedirectLocation(urlPath string) (rLocation string) {
 	if urlPath == minioReservedBucketPath {
-		rLocation = minioReservedBucketPath + "/"
+		rLocation = minioReservedBucketPath + SlashSeparator
 	}
 	if contains([]string{
-		"/",
+		SlashSeparator,
 		"/webrpc",
 		"/login",
 		"/favicon.ico",
@@ -229,7 +229,7 @@ func guessIsRPCReq(req *http.Request) bool {
 		return false
 	}
 	return req.Method == http.MethodPost &&
-		strings.HasPrefix(req.URL.Path, minioReservedBucketPath+"/")
+		strings.HasPrefix(req.URL.Path, minioReservedBucketPath+SlashSeparator)
 }
 
 func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -258,7 +258,7 @@ func setBrowserCacheControlHandler(h http.Handler) http.Handler {
 func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet && guessIsBrowserReq(r) {
 		// For all browser requests set appropriate Cache-Control policies
-		if hasPrefix(r.URL.Path, minioReservedBucketPath+"/") {
+		if hasPrefix(r.URL.Path, minioReservedBucketPath+SlashSeparator) {
 			if hasSuffix(r.URL.Path, ".js") || r.URL.Path == minioReservedBucketPath+"/favicon.ico" {
 				// For assets set cache expiry of one year. For each release, the name
 				// of the asset name will change and hence it can not be served from cache.
@@ -276,7 +276,7 @@ func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Check to allow access to the reserved "bucket" `/minio` for Admin
 // API requests.
 func isAdminReq(r *http.Request) bool {
-	return strings.HasPrefix(r.URL.Path, adminAPIPathPrefix+"/")
+	return strings.HasPrefix(r.URL.Path, adminAPIPathPrefix+SlashSeparator)
 }
 
 // Adds verification for incoming paths.
@@ -596,7 +596,7 @@ const (
 // such as ".." and "."
 func hasBadPathComponent(path string) bool {
 	path = strings.TrimSpace(path)
-	for _, p := range strings.Split(path, slashSeparator) {
+	for _, p := range strings.Split(path, SlashSeparator) {
 		switch strings.TrimSpace(p) {
 		case dotdotComponent:
 			return true
@@ -746,6 +746,9 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 	fwd := handlers.NewForwarder(&handlers.Forwarder{
 		PassHost:     true,
 		RoundTripper: NewCustomHTTPTransport(),
+		Logger: func(err error) {
+			logger.LogIf(context.Background(), err)
+		},
 	})
 	return bucketForwardingHandler{fwd, h}
 }

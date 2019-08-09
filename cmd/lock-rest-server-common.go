@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-const lockRESTVersion = "v1"
+const lockRESTVersion = "v2"
 const lockRESTPath = minioReservedBucketPath + "/lock/" + lockRESTVersion
 
 var lockServicePath = path.Join(minioReservedBucketPath, lockServiceSubPath)
@@ -33,16 +33,24 @@ const (
 	lockRESTMethodRUnlock     = "runlock"
 	lockRESTMethodForceUnlock = "forceunlock"
 	lockRESTMethodExpired     = "expired"
+
+	// Unique ID of lock/unlock request.
+	lockRESTUID = "uid"
+	// Source contains the line number, function and file name of the code
+	// on the client node that requested the lock.
+	lockRESTSource = "source"
+	// Resource contains a entity to be locked/unlocked.
+	lockRESTResource = "resource"
+	// ServerAddr contains the address of the server who requested lock/unlock of the above resource.
+	lockRESTServerAddr = "serverAddr"
+	// ServiceEndpoint contains the network path of above server to do lock/unlock.
+	lockRESTServerEndpoint = "serverEndpoint"
 )
 
 // nameLockRequesterInfoPair is a helper type for lock maintenance
 type nameLockRequesterInfoPair struct {
 	name string
 	lri  lockRequesterInfo
-}
-
-type lockResponse struct {
-	Success bool
 }
 
 // Similar to removeEntry but only removes an entry only if the lock entry exists in map.

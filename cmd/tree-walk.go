@@ -67,10 +67,10 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 	var markerBase, markerDir string
 	if marker != "" {
 		// Ex: if marker="four/five.txt", markerDir="four/" markerBase="five.txt"
-		markerSplit := strings.SplitN(marker, slashSeparator, 2)
+		markerSplit := strings.SplitN(marker, SlashSeparator, 2)
 		markerDir = markerSplit[0]
 		if len(markerSplit) == 2 {
-			markerDir += slashSeparator
+			markerDir += SlashSeparator
 			markerBase = markerSplit[1]
 		}
 	}
@@ -95,7 +95,7 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 
 	for i, entry := range entries {
 		pentry := pathJoin(prefixDir, entry)
-		isDir := hasSuffix(pentry, slashSeparator)
+		isDir := hasSuffix(pentry, SlashSeparator)
 
 		if i == 0 && markerDir == entry {
 			if !recursive {
@@ -165,7 +165,7 @@ func startTreeWalk(ctx context.Context, bucket, prefix, marker string, recursive
 	resultCh := make(chan TreeWalkResult, maxObjectList)
 	entryPrefixMatch := prefix
 	prefixDir := ""
-	lastIndex := strings.LastIndex(prefix, slashSeparator)
+	lastIndex := strings.LastIndex(prefix, SlashSeparator)
 	if lastIndex != -1 {
 		entryPrefixMatch = prefix[lastIndex+1:]
 		prefixDir = prefix[:lastIndex+1]

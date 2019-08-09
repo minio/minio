@@ -48,7 +48,9 @@
 				"durable": false,
 				"internal": false,
 				"noWait": false,
-				"autoDeleted": false
+				"autoDeleted": false,
+                                "queueDir": "",
+                                "queueLimit": 0
 			}
 		},
 		"elasticsearch": {
@@ -104,7 +106,9 @@
 				"port": "",
 				"user": "",
 				"password": "",
-				"database": ""
+				"database": "",
+                               "queueDir": "",
+                               "queueLimit": 0
 			}
 		},
 		"nats": {
@@ -117,6 +121,8 @@
 				"token": "",
 				"secure": false,
 				"pingInterval": 0,
+                                "queueDir": "",
+                                "queueLimit": 0,
 				"streaming": {
 					"enable": false,
 					"clusterID": "",
@@ -148,7 +154,9 @@
 				"port": "",
 				"user": "",
 				"password": "",
-				"database": ""
+				"database": "",
+                               "queueDir": "",
+                               "queueLimit": 0
 			}
 		},
 		"redis": {
@@ -157,7 +165,9 @@
 				"format": "",
 				"address": "",
 				"password": "",
-				"key": ""
+				"key": "",
+                                "queueDir": "",
+                                "queueLimit": 0                 
 			}
 		},
 		"webhook": {

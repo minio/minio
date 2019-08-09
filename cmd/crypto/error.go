@@ -62,6 +62,8 @@ var (
 
 	errInvalidInternalIV            = Error{"The internal encryption IV is malformed"}
 	errInvalidInternalSealAlgorithm = Error{"The internal seal algorithm is invalid and not supported"}
+
+	errMissingUpdatedKey = Error{"The key update returned no error but also no sealed key"}
 )
 
 var (
