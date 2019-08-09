@@ -385,6 +385,8 @@ func serverMain(ctx *cli.Context) {
 	// - compression
 	verifyObjectLayerFeatures("server", newObject)
 
+	initDailyLifecycle()
+
 	if globalIsXL {
 		initBackgroundHealing()
 		initDailyHeal()
