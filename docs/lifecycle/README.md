@@ -9,7 +9,7 @@ Using object lifecycle configuration on buckets to setup automatic objects delet
 
 ## 2. Setup a bucket lifecycle using AWS
 
-1. Create the following bucket lifecycle configuration expires the objects under the prefix `uploads/2015` on 2020-01-01T00:00:00.000Z since upload and the objects under `temporary-uploads/` after 7 days after upload, as shown below:
+1. Create a bucket lifecycle configuration which expires the objects under the prefix `uploads/2015` on `2020-01-01T00:00:00.000Z` date and the objects under `temporary-uploads/` after 7 days.  Generate it as shown below:
 
 ```sh
 $ cat >bucket-lifecycle.json << EOF
