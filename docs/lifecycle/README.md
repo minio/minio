@@ -49,4 +49,5 @@ $ aws s3api put-bucket-lifecycle-configuration --bucket your-bucket --endpoint-u
 ```
 
 ## Explore Further
+- [MinIO | Golang Client API Reference](https://docs.min.io/docs/golang-client-api-reference.html#SetBucketLifecycle)
 - [Object Lifecycle Management](https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lifecycle-mgmt.html)
