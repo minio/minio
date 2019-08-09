@@ -77,7 +77,7 @@ func startDailyLifecycle() {
 	for {
 		// Check if we should perform lifecycle ops based on the last lifecycle activity, sleep one hour otherwise
 		allLifecycleStatus := []BgOpsStatus{
-			BgOpsStatus{LifecycleOps: getLocalBgLifecycleOpsStatus()},
+			{LifecycleOps: getLocalBgLifecycleOpsStatus()},
 		}
 		if globalIsDistXL {
 			allLifecycleStatus = append(allLifecycleStatus, globalNotificationSys.BackgroundOpsStatus()...)
