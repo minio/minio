@@ -7,7 +7,7 @@ Enable object lifecycle configuration on buckets to setup automatic deletion of 
 - Install AWS Cli - [Installing the AWS CLI - AWS Command Line Interface](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html)
 
 
-## 2. Setup a bucket lifecycle using AWS
+## 2. Enable bucket lifecycle configuration
 
 1. Create a bucket lifecycle configuration which expires the objects under the prefix `uploads/2015` on `2020-01-01T00:00:00.000Z` date and the objects under `temporary-uploads/` after 7 days.  Generate it as shown below:
 
