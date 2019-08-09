@@ -4,7 +4,7 @@ Enable object lifecycle configuration on buckets to setup automatic deletion of 
 
 ## 1. Prerequisites
 - Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide).
-- Install AWS Cli - [Installing the AWS CLI - AWS Command Line Interface](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html)
+- Install AWS Cli - [Installing AWS Command Line Interface](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html)
 
 
 ## 2. Enable bucket lifecycle configuration
