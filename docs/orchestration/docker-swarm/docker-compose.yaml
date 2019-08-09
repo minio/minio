@@ -1,4 +1,4 @@
-version: '3'
+version: '3.7'
 
 services:
   minio1:
@@ -9,7 +9,11 @@ services:
     ports:
       - "9001:9000"
     networks:
-      - minio_distributed
+      # On the internal you are exposed as minio1/2/3/4 by default
+      internal:  {}
+      minio_distributed:
+        aliases:
+          - minio-cluster
     environment:
       MINIO_ACCESS_KEY: AKIAIOSFODNN7EXAMPLE
       MINIO_SECRET_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
@@ -31,7 +35,11 @@ services:
     ports:
       - "9002:9000"
     networks:
-      - minio_distributed
+      # On the internal you are exposed as minio1/2/3/4 by default
+      internal:  {}
+      minio_distributed:
+        aliases:
+          - minio-cluster
     environment:
       MINIO_ACCESS_KEY: AKIAIOSFODNN7EXAMPLE
       MINIO_SECRET_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
@@ -53,7 +61,11 @@ services:
     ports:
       - "9003:9000"
     networks:
-      - minio_distributed
+      # On the internal you are exposed as minio1/2/3/4 by default
+      internal:  {}
+      minio_distributed:
+        aliases:
+          - minio-cluster
     environment:
       MINIO_ACCESS_KEY: AKIAIOSFODNN7EXAMPLE
       MINIO_SECRET_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
@@ -75,7 +87,11 @@ services:
     ports:
       - "9004:9000"
     networks:
-      - minio_distributed
+      # On the internal you are exposed as minio1/2/3/4 by default
+      internal:  {}
+      minio_distributed:
+        aliases:
+          - minio-cluster
     environment:
       MINIO_ACCESS_KEY: AKIAIOSFODNN7EXAMPLE
       MINIO_SECRET_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
@@ -101,3 +117,4 @@ volumes:
 networks:
   minio_distributed:
     driver: overlay
+  internal: {}
