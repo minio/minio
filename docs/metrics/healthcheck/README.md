@@ -14,7 +14,7 @@ When liveness probe fails, Kubernetes like platforms restart the container.
 
 This probe is used to identify situations where the server is not ready to accept requests yet. In most cases, such conditions recover in some time.
 
-Internally, MinIO readiness probe handler checks for total go-routines. If the number of go-routines is less than 1000 (threshold), the server returns 200 OK, otherwise 503 Service Unavailable.
+Internally, MinIO readiness probe handler checks for total go-routines. If the number of go-routines is less than 10000 (threshold), the server returns 200 OK, otherwise 503 Service Unavailable.
 
 Platforms like Kubernetes *do not* forward traffic to a pod until its readiness probe is successful. 
 
