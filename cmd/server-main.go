@@ -346,7 +346,7 @@ func serverMain(ctx *cli.Context) {
 	var cacheConfig = globalServerConfig.GetCacheConfig()
 	if len(cacheConfig.Drives) > 0 {
 		// initialize the new disk cache objects.
-		globalCacheObjectAPI, err = newServerCacheObjects(cacheConfig)
+		globalCacheObjectAPI, err = newServerCacheObjects(context.Background(), cacheConfig)
 		logger.FatalIf(err, "Unable to initialize disk caching")
 	}
 
