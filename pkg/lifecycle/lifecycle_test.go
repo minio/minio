@@ -158,3 +158,73 @@ func TestMarshalLifecycleConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestComputeActions(t *testing.T) {
+	testCases := []struct {
+		inputConfig    string
+		objectName     string
+		objectModTime  time.Time
+		expectedAction Action
+	}{
+		// Empty object name (unexpected case) should always return NoneAction
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>prefix</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			expectedAction: NoneAction,
+		},
+		// Disabled should always return NoneAction
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Disabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			objectName:     "foodir/fooobject",
+			objectModTime:  time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			expectedAction: NoneAction,
+		},
+		// Prefix not matched
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			objectName:     "foxdir/fooobject",
+			objectModTime:  time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			expectedAction: NoneAction,
+		},
+		// Too early to remove (test Days)
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			objectName:     "foxdir/fooobject",
+			objectModTime:  time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			expectedAction: NoneAction,
+		},
+		// Should remove (test Days)
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			objectName:     "foodir/fooobject",
+			objectModTime:  time.Now().UTC().Add(-6 * 24 * time.Hour), // Created 6 days ago
+			expectedAction: DeleteAction,
+		},
+		// Too early to remove (test Date)
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Date>` + time.Now().Truncate(24*time.Hour).UTC().Add(24*time.Hour).Format(time.RFC3339) + `</Date></Expiration></Rule></LifecycleConfiguration>`,
+			objectName:     "foodir/fooobject",
+			objectModTime:  time.Now().UTC().Add(-24 * time.Hour), // Created 1 day ago
+			expectedAction: NoneAction,
+		},
+		// Should remove (test Days)
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Date>` + time.Now().Truncate(24*time.Hour).UTC().Add(-24*time.Hour).Format(time.RFC3339) + `</Date></Expiration></Rule></LifecycleConfiguration>`,
+			objectName:     "foodir/fooobject",
+			objectModTime:  time.Now().UTC().Add(-24 * time.Hour), // Created 1 day ago
+			expectedAction: DeleteAction,
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("Test %d", i+1), func(t *testing.T) {
+			lc, err := ParseLifecycleConfig(bytes.NewReader([]byte(tc.inputConfig)))
+			if err != nil {
+				t.Fatalf("%d: Got unexpected error: %v", i+1, err)
+			}
+			if resultAction := lc.ComputeAction(tc.objectName, tc.objectModTime); resultAction != tc.expectedAction {
+				t.Fatalf("%d: Expected action: `%v`, got: `%v`", i+1, tc.expectedAction, resultAction)
+			}
+		})
+
+	}
+}

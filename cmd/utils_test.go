@@ -479,3 +479,26 @@ func TestQueries(t *testing.T) {
 		}
 	}
 }
+
+func TestLCP(t *testing.T) {
+	var testCases = []struct {
+		prefixes     []string
+		commonPrefix string
+	}{
+		{[]string{"", ""}, ""},
+		{[]string{"a", "b"}, ""},
+		{[]string{"a", "a"}, "a"},
+		{[]string{"a/", "a/"}, "a/"},
+		{[]string{"abcd/", ""}, ""},
+		{[]string{"abcd/foo/", "abcd/bar/"}, "abcd/"},
+		{[]string{"abcd/foo/bar/", "abcd/foo/bar/zoo"}, "abcd/foo/bar/"},
+	}
+
+	for i, test := range testCases {
+		foundPrefix := lcp(test.prefixes)
+		if foundPrefix != test.commonPrefix {
+			t.Fatalf("Test %d: Common prefix found: `%v`, expected: `%v`", i+1, foundPrefix, test.commonPrefix)
+		}
+	}
+
+}

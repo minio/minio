@@ -21,12 +21,24 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"time"
 )
 
 var (
 	errLifecycleTooManyRules      = errors.New("Lifecycle configuration allows a maximum of 1000 rules")
 	errLifecycleNoRule            = errors.New("Lifecycle configuration should have at least one rule")
 	errLifecycleOverlappingPrefix = errors.New("Lifecycle configuration has rules with overlapping prefix")
+)
+
+// Action represents a delete action or other transition
+// actions that will be implemented later.
+type Action int
+
+const (
+	// NoneAction means no action required after evaluting lifecycle rules
+	NoneAction Action = iota
+	// DeleteAction means the object needs to be removed after evaluting lifecycle rules
+	DeleteAction
 )
 
 // Lifecycle - Configuration for bucket lifecycle.
@@ -83,4 +95,36 @@ func (lc Lifecycle) Validate() error {
 		}
 	}
 	return nil
+}
+
+// FilterRuleActions returns the expiration and transition from the object name
+// after evaluating all rules.
+func (lc Lifecycle) FilterRuleActions(objName string) (Expiration, Transition) {
+	for _, rule := range lc.Rules {
+		if strings.ToLower(rule.Status) != "enabled" {
+			continue
+		}
+		if strings.HasPrefix(objName, rule.Filter.Prefix) {
+			return rule.Expiration, Transition{}
+		}
+	}
+	return Expiration{}, Transition{}
+}
+
+// ComputeAction returns the action to perform by evaluating all lifecycle rules
+// against the object name and its modification time.
+func (lc Lifecycle) ComputeAction(objName string, modTime time.Time) Action {
+	var action = NoneAction
+	exp, _ := lc.FilterRuleActions(objName)
+	if !exp.IsDateNull() {
+		if time.Now().After(exp.Date.Time) {
+			action = DeleteAction
+		}
+	}
+	if !exp.IsDaysNull() {
+		if time.Now().After(modTime.Add(time.Duration(exp.Days) * 24 * time.Hour)) {
+			action = DeleteAction
+		}
+	}
+	return action
 }

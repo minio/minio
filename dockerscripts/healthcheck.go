@@ -39,7 +39,8 @@ const (
 	healthPath    = "/minio/health/live"
 	timeout       = time.Duration(30 * time.Second)
 	tcp           = "tcp"
-	anyIP		  = ":::"
+	anyIPv6		  = ":::"
+	anyIPv4		  = "0.0.0.0"
 )
 
 // returns container boot time by finding
@@ -71,14 +72,17 @@ func findEndpoint() (string, error) {
 	scanner.Split(bufio.ScanLines)
 	// MinIO works on TCP and it is supposed to be
 	// the only process listening on a port on any IP address 
-	// (on :::) inside container.
-	// Since MinIO is running as non-root user, we can
+	// (on ::: or 0.0.0.0) inside container.
+	// Since MinIO may run as non-root user, we can
 	// not depend on the PID/Program name column
 	// of netstat output
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.Contains(line, tcp) && strings.Contains(line, anyIP) {
-			newLine := strings.Replace(line, anyIP, "127.0.0.1:", 1)
+		if strings.Contains(line, tcp) && (strings.Contains(line, anyIPv6) || strings.Contains(line, anyIPv4)) {
+			newLine := strings.Replace(line, anyIPv4, "127.0.0.1:", 1)
+			if strings.Contains(line, anyIPv6) {
+				newLine = strings.Replace(line, anyIPv6, "::1:", 1)
+			}
 			fields := strings.Fields(newLine)
 			// index 3 in the row has the Local address
 			// find the last index of ":" - address will

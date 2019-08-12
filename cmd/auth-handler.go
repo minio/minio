@@ -259,14 +259,24 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 //   for authenticated requests validates IAM policies.
 // returns APIErrorCode if any to be replied to the client.
 func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) (s3Err APIErrorCode) {
+	_, _, s3Err = checkRequestAuthTypeToAccessKey(ctx, r, action, bucketName, objectName)
+	return s3Err
+}
+
+// Check request auth type verifies the incoming http request
+// - validates the request signature
+// - validates the policy action if anonymous tests bucket policies if any,
+//   for authenticated requests validates IAM policies.
+// returns APIErrorCode if any to be replied to the client.
+// Additionally returns the accessKey used in the request, and if this request is by an admin.
+func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) (accessKey string, owner bool, s3Err APIErrorCode) {
 	var cred auth.Credentials
-	var owner bool
 	switch getRequestAuthType(r) {
 	case authTypeUnknown, authTypeStreamingSigned:
-		return ErrAccessDenied
+		return accessKey, owner, ErrAccessDenied
 	case authTypePresignedV2, authTypeSignedV2:
 		if s3Err = isReqAuthenticatedV2(r); s3Err != ErrNone {
-			return s3Err
+			return accessKey, owner, s3Err
 		}
 		cred, owner, s3Err = getReqAccessKeyV2(r)
 	case authTypeSigned, authTypePresigned:
@@ -276,17 +286,18 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 			region = ""
 		}
 		if s3Err = isReqAuthenticated(ctx, r, region, serviceS3); s3Err != ErrNone {
-			return s3Err
+			return accessKey, owner, s3Err
 		}
 		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
 	}
 	if s3Err != ErrNone {
-		return s3Err
+		return accessKey, owner, s3Err
 	}
 
-	claims, s3Err := checkClaimsFromToken(r, cred)
+	var claims map[string]interface{}
+	claims, s3Err = checkClaimsFromToken(r, cred)
 	if s3Err != ErrNone {
-		return s3Err
+		return accessKey, owner, s3Err
 	}
 
 	// LocationConstraint is valid only for CreateBucketAction.
@@ -296,7 +307,7 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 		payload, err := ioutil.ReadAll(io.LimitReader(r.Body, maxLocationConstraintSize))
 		if err != nil {
 			logger.LogIf(ctx, err)
-			return ErrMalformedXML
+			return accessKey, owner, ErrMalformedXML
 		}
 
 		// Populate payload to extract location constraint.
@@ -305,7 +316,7 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 		var s3Error APIErrorCode
 		locationConstraint, s3Error = parseLocationConstraint(r)
 		if s3Error != ErrNone {
-			return s3Error
+			return accessKey, owner, s3Error
 		}
 
 		// Populate payload again to handle it in HTTP handler.
@@ -321,9 +332,10 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 			IsOwner:         false,
 			ObjectName:      objectName,
 		}) {
-			return ErrNone
+			// Request is allowed return the appropriate access key.
+			return cred.AccessKey, owner, ErrNone
 		}
-		return ErrAccessDenied
+		return accessKey, owner, ErrAccessDenied
 	}
 
 	if globalIAMSys.IsAllowed(iampolicy.Args{
@@ -335,9 +347,10 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 		IsOwner:         owner,
 		Claims:          claims,
 	}) {
-		return ErrNone
+		// Request is allowed return the appropriate access key.
+		return cred.AccessKey, owner, ErrNone
 	}
-	return ErrAccessDenied
+	return accessKey, owner, ErrAccessDenied
 }
 
 // Verify if request has valid AWS Signature Version '2'.
