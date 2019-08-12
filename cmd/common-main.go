@@ -61,6 +61,9 @@ func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
 func checkUpdate(mode string) {
 	// Its OK to ignore any errors during doUpdate() here.
 	if updateMsg, _, currentReleaseTime, latestReleaseTime, err := getUpdateInfo(2*time.Second, mode); err == nil {
+		if updateMsg == "" {
+			return
+		}
 		if globalInplaceUpdateDisabled {
 			logger.StartupMessage(updateMsg)
 		} else {

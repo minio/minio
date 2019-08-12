@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2015-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -347,7 +347,7 @@ func serverMain(ctx *cli.Context) {
 	if len(cacheConfig.Drives) > 0 {
 		// initialize the new disk cache objects.
 		globalCacheObjectAPI, err = newServerCacheObjects(context.Background(), cacheConfig)
-		logger.FatalIf(err, "Unable to initialize disk caching")
+		logger.Fatal(err, "Unable to initialize disk caching")
 	}
 
 	// Create new IAM system.
@@ -377,7 +377,7 @@ func serverMain(ctx *cli.Context) {
 
 	// Initialize notification system.
 	if err = globalNotificationSys.Init(newObject); err != nil {
-		logger.LogIf(context.Background(), err)
+		logger.Fatal(err, "Unable to initialize notification system")
 	}
 
 	// Verify if object layer supports
