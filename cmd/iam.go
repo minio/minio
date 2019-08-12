@@ -1044,14 +1044,22 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	sys.RLock()
 	defer sys.RUnlock()
 
-	ok := true
-	for _, policyName := range policies {
-		p, found := sys.iamPolicyDocsMap[policyName]
+	var availablePolicies []iampolicy.Policy
+	for _, pname := range policies {
+		p, found := sys.iamPolicyDocsMap[pname]
 		if found {
-			ok = ok && p.IsAllowed(args)
+			availablePolicies = append(availablePolicies, p)
 		}
 	}
-	return ok
+	if len(availablePolicies) == 0 {
+		return false
+	}
+	combinedPolicy := availablePolicies[0]
+	for i := 1; i < len(availablePolicies); i++ {
+		combinedPolicy.Statements = append(combinedPolicy.Statements,
+			availablePolicies[i].Statements...)
+	}
+	return combinedPolicy.IsAllowed(args)
 }
 
 // Set default canned policies only if not already overridden by users.
