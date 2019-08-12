@@ -274,6 +274,6 @@ func (v *vaultService) UpdateKey(keyID string, sealedKey []byte, ctx Context) (r
 	if !ok {
 		return nil, errMissingUpdatedKey
 	}
-	rotatedKey = ciphertext.([]byte)
+	rotatedKey = []byte(ciphertext.(string))
 	return rotatedKey, nil
 }
