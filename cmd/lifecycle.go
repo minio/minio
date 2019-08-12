@@ -50,6 +50,15 @@ func (sys *LifecycleSys) Set(bucketName string, lifecycle lifecycle.Lifecycle) {
 	sys.bucketLifecycleMap[bucketName] = lifecycle
 }
 
+// Get - gets lifecycle config associated to a given bucket name.
+func (sys *LifecycleSys) Get(bucketName string) (lifecycle lifecycle.Lifecycle, ok bool) {
+	sys.Lock()
+	defer sys.Unlock()
+
+	l, ok := sys.bucketLifecycleMap[bucketName]
+	return l, ok
+}
+
 func saveLifecycleConfig(ctx context.Context, objAPI ObjectLayer, bucketName string, bucketLifecycle *lifecycle.Lifecycle) error {
 	data, err := xml.Marshal(bucketLifecycle)
 	if err != nil {

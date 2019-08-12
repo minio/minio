@@ -107,13 +107,29 @@ type Expiration struct {
 // Validate - validates the "Expiration" element
 func (e Expiration) Validate() error {
 	// Neither expiration days or date is specified
-	if e.Days == ExpirationDays(0) && e.Date == (ExpirationDate{time.Time{}}) {
+	if e.IsDaysNull() && e.IsDateNull() {
 		return errLifecycleInvalidExpiration
 	}
 
 	// Both expiration days and date are specified
-	if e.Days != ExpirationDays(0) && e.Date != (ExpirationDate{time.Time{}}) {
+	if !e.IsDaysNull() && !e.IsDateNull() {
 		return errLifecycleInvalidExpiration
 	}
 	return nil
+}
+
+// IsDaysNull returns true if days field is null
+func (e Expiration) IsDaysNull() bool {
+	return e.Days == ExpirationDays(0)
+
+}
+
+// IsDateNull returns true if date field is null
+func (e Expiration) IsDateNull() bool {
+	return e.Date == ExpirationDate{time.Time{}}
+}
+
+// IsNull returns true if both date and days fields are null
+func (e Expiration) IsNull() bool {
+	return e.IsDaysNull() && e.IsDateNull()
 }

@@ -76,6 +76,12 @@ const (
 	// ListMultipartUploadPartsAction - ListParts Rest API action.
 	ListMultipartUploadPartsAction = "s3:ListMultipartUploadParts"
 
+	// PutBucketLifecycleAction - PutBucketLifecycle Rest API action.
+	PutBucketLifecycleAction = "s3:PutBucketLifecycle"
+
+	// GetBucketLifecycleAction - GetBucketLifecycle Rest API action.
+	GetBucketLifecycleAction = "s3:GetBucketLifecycle"
+
 	// PutBucketNotificationAction - PutObjectNotification Rest API action.
 	PutBucketNotificationAction = "s3:PutBucketNotification"
 
@@ -110,6 +116,8 @@ var supportedActions = map[Action]struct{}{
 	PutBucketNotificationAction:      {},
 	PutBucketPolicyAction:            {},
 	PutObjectAction:                  {},
+	GetBucketLifecycleAction:         {},
+	PutBucketLifecycleAction:         {},
 }
 
 // isObjectAction - returns whether action is object type or not.
