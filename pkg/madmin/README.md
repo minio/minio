@@ -46,7 +46,7 @@ func main() {
 | [`ServiceStatus`](#ServiceStatus)         | [`ServerInfo`](#ServerInfo)                 | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig)         | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   |
 | [`ServiceSendAction`](#ServiceSendAction) | [`ServerCPULoadInfo`](#ServerCPULoadInfo)   |                    | [`SetConfig`](#SetConfig)         |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |
 | [`Trace`](#Trace)                                          | [`ServerMemUsageInfo`](#ServerMemUsageInfo) |                    | [`GetConfigKeys`](#GetConfigKeys) |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |
-|                                           |                                             |                    | [`SetConfigKeys`](#SetConfigKeys) |                         | [`AddCannedPolicy`](#AddCannedPolicy) |                                                   |
+|                                           |       [`ServerVaultInfo`](#ServerVaultInfo)                                      |                    | [`SetConfigKeys`](#SetConfigKeys) |                         | [`AddCannedPolicy`](#AddCannedPolicy) |                                                   |
 
 
 ## 1. Constructor
@@ -229,7 +229,7 @@ Fetches drive performance information for all cluster nodes. Returned value is i
 | `disk.Performance.ReadSpeed`  | _float64_ | Read speed on above path in Bytes/s.                   |
 
 <a name="ServerCPULoadInfo"></a>
-### ServerCPULoadInfo() ([]ServerCPULoadInfo, error)
+### ) ([]ServerCPULoadInfo, error)
 
 Fetches CPU utilization for all cluster nodes. Returned value is in Bytes.
 
@@ -261,6 +261,24 @@ Fetches Mem utilization for all cluster nodes. Returned value is in Bytes.
 |-------------------|----------|--------------------------------------------------------|
 | `mem.Usage.Mem`   | _uint64_ | The total number of bytes obtained from the OS         |
 | `mem.Usage.Error` | _string_ | Error (if any) encountered while accesing the CPU info |
+
+
+<a name="ServerVaultInfo"></a>
+### ServerVaultInfo() (ServerVaultInfo, error)
+
+Fetches Vault information. Returned value is in Bytes.
+
+| Param           | Type               | Description                                                         |
+|-----------------|--------------------|---------------------------------------------------------------------|
+| `vi.EndPoint`   | _string_           | Address of the vault server                                         |
+| `vi.Name`       | _string_           | The name of the encryption key-ring                                 |
+| `vi.Type`       | _string_           | The authentication type                                             |
+| `vi.Perm`       | _vi.Permission_    | The Permission for Encrypt and Decrypt                              |
+
+| Param                | Type     | Description                                            |
+|----------------------|----------|--------------------------------------------------------|
+| `vi.Perm.Encryption` | _string_ | Permission to Encrypt                                  |
+| `vi.Perm.Decryption` | _string_ | Permission to Decrypt                                  |
 
 ## 6. Heal operations
 

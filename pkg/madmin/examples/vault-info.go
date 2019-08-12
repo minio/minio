@@ -20,9 +20,8 @@
 package main
 
 import (
-	"log"
-
 	"github.com/minio/minio/pkg/madmin"
+	"log"
 )
 
 func main() {
@@ -31,14 +30,14 @@ func main() {
 
 	// API requests are secure (HTTPS) if secure=true and insecure (HTTPS) otherwise.
 	// New returns an MinIO Admin client object.
-	madmClnt, err := madmin.New("localhost:9000", "minio", "minio123", false)
+	madmClnt, err := madmin.New("your-minio.example.com:9000", "YOUR-ACCESSKEYID", "YOUR-SECRETACCESSKEY", true)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	st, err := madmClnt.ServerMemUsageInfo()
+	vaultInfo, err := madmClnt.ServerVaultInfo()
 	if err != nil {
 		log.Fatalln(err)
 	}
-	log.Println(st)
+	log.Println(vaultInfo)
 }

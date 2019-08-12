@@ -131,7 +131,9 @@ type ServerInfo struct {
 // ServerInfo - Connect to a minio server and call Server Info Management API
 // to fetch server's information represented by ServerInfo structure
 func (adm *AdminClient) ServerInfo() ([]ServerInfo, error) {
-	resp, err := adm.executeMethod("GET", requestData{relPath: "/v1/info"})
+	v := url.Values{}
+	v.Set("infoType", string("server"))
+	resp, err := adm.executeMethod("GET", requestData{relPath: "/v1/info", queryValues: v})
 	defer closeResponse(resp)
 	if err != nil {
 		return nil, err
@@ -158,6 +160,54 @@ func (adm *AdminClient) ServerInfo() ([]ServerInfo, error) {
 	return serversInfo, nil
 }
 
+// Permission holds the info for encrypt and decrypt
+type Permission struct {
+	Encryption string `json:"encryption,omitempty"`
+	Decryption string `json:"decryption,omitempty"`
+}
+
+// VaultInfo Contains the vault info
+type VaultInfo struct {
+	Endpoint string     `json:"endpoint"` // The vault API endpoint as URL
+	Name     string     `json:"name"`     // The name of the encryption key-ring
+	Type     string     `json:"type"`     // The authentication type
+	Perm     Permission `json:"perm"`
+}
+
+// ServerVaultInfo fetches the vault info
+func (adm *AdminClient) ServerVaultInfo() (VaultInfo, error) {
+	v := url.Values{}
+	v.Set("infoType", string("vault"))
+	resp, err := adm.executeMethod("GET", requestData{
+		relPath:     "/v1/info",
+		queryValues: v,
+	})
+	defer closeResponse(resp)
+	if err != nil {
+		return VaultInfo{}, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return VaultInfo{}, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var vInfo VaultInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return VaultInfo{}, err
+	}
+
+	err = json.Unmarshal(respBytes, &vInfo)
+	if err != nil {
+		return VaultInfo{}, err
+	}
+
+	return vInfo, nil
+}
+
 // ServerDrivesPerfInfo holds informantion about address and write speed of
 // all drives in a single server node
 type ServerDrivesPerfInfo struct {
@@ -169,9 +219,9 @@ type ServerDrivesPerfInfo struct {
 // ServerDrivesPerfInfo - Returns drive's read and write performance information
 func (adm *AdminClient) ServerDrivesPerfInfo() ([]ServerDrivesPerfInfo, error) {
 	v := url.Values{}
-	v.Set("perfType", string("drive"))
+	v.Set("infoType", string("drive"))
 	resp, err := adm.executeMethod("GET", requestData{
-		relPath:     "/v1/performance",
+		relPath:     "/v1/info",
 		queryValues: v,
 	})
 
@@ -213,9 +263,9 @@ type ServerCPULoadInfo struct {
 // ServerCPULoadInfo - Returns cpu utilization information
 func (adm *AdminClient) ServerCPULoadInfo() ([]ServerCPULoadInfo, error) {
 	v := url.Values{}
-	v.Set("perfType", string("cpu"))
+	v.Set("infoType", string("cpu"))
 	resp, err := adm.executeMethod("GET", requestData{
-		relPath:     "/v1/performance",
+		relPath:     "/v1/info",
 		queryValues: v,
 	})
 
@@ -257,9 +307,9 @@ type ServerMemUsageInfo struct {
 // ServerMemUsageInfo - Returns mem utilization information
 func (adm *AdminClient) ServerMemUsageInfo() ([]ServerMemUsageInfo, error) {
 	v := url.Values{}
-	v.Set("perfType", string("mem"))
+	v.Set("infoType", string("mem"))
 	resp, err := adm.executeMethod("GET", requestData{
-		relPath:     "/v1/performance",
+		relPath:     "/v1/info",
 		queryValues: v,
 	})
 

@@ -696,7 +696,7 @@ func TestAdminServerInfo(t *testing.T) {
 
 	// Prepare query params for set-config mgmt REST API.
 	queryVal := url.Values{}
-	queryVal.Set("info", "")
+	queryVal.Set("infoType", "server")
 
 	req, err := buildAdminRequest(queryVal, http.MethodGet, "/info", 0, nil)
 	if err != nil {

@@ -36,6 +36,7 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
+	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/cpu"
@@ -234,7 +235,21 @@ type ServerInfo struct {
 	Data  *ServerInfoData `json:"data"`
 }
 
-// ServerInfoHandler - GET /minio/admin/v1/info
+// Permission holds the info for encrypt and decrypt
+type Permission struct {
+	Encryption string `json:"encryption,omitempty"`
+	Decryption string `json:"decryption,omitempty"`
+}
+
+// VaultInfo holds vault information
+type VaultInfo struct {
+	Endpoint string     `json:"endpoint"` // The vault API endpoint as URL
+	Name     string     `json:"name"`     // The name of the encryption key-ring
+	Type     string     `json:"type"`     // The authentication type
+	Perm     Permission `json:"perm"`
+}
+
+// ServerInfoHandler - GET /minio/admin/v1/info?infoType={infoType}
 // ----------
 // Get server information
 func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
@@ -245,88 +260,8 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	serverInfo := globalNotificationSys.ServerInfo(ctx)
-	// Once we have received all the ServerInfo from peers
-	// add the local peer server info as well.
-	serverInfo = append(serverInfo, ServerInfo{
-		Addr: getHostName(r),
-		Data: &ServerInfoData{
-			StorageInfo: objectAPI.StorageInfo(ctx),
-			ConnStats:   globalConnStats.toServerConnStats(),
-			HTTPStats:   globalHTTPStats.toServerHTTPStats(),
-			Properties: ServerProperties{
-				Uptime:       UTCNow().Sub(globalBootTime),
-				Version:      Version,
-				CommitID:     CommitID,
-				DeploymentID: globalDeploymentID,
-				SQSARN:       globalNotificationSys.GetARNList(),
-				Region:       globalServerConfig.GetRegion(),
-			},
-		},
-	})
-
-	// Marshal API response
-	jsonBytes, err := json.Marshal(serverInfo)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	// Reply with storage information (across nodes in a
-	// distributed setup) as json.
-	writeSuccessResponseJSON(w, jsonBytes)
-}
-
-// ServerDrivesPerfInfo holds information about address, performance
-// of all drives on one server. It also reports any errors if encountered
-// while trying to reach this server.
-type ServerDrivesPerfInfo struct {
-	Addr  string             `json:"addr"`
-	Error string             `json:"error,omitempty"`
-	Perf  []disk.Performance `json:"perf"`
-}
-
-// ServerCPULoadInfo holds informantion about cpu utilization
-// of one minio node. It also reports any errors if encountered
-// while trying to reach this server.
-type ServerCPULoadInfo struct {
-	Addr         string     `json:"addr"`
-	Error        string     `json:"error,omitempty"`
-	Load         []cpu.Load `json:"load"`
-	HistoricLoad []cpu.Load `json:"historicLoad"`
-}
-
-// ServerMemUsageInfo holds informantion about memory utilization
-// of one minio node. It also reports any errors if encountered
-// while trying to reach this server.
-type ServerMemUsageInfo struct {
-	Addr          string      `json:"addr"`
-	Error         string      `json:"error,omitempty"`
-	Usage         []mem.Usage `json:"usage"`
-	HistoricUsage []mem.Usage `json:"historicUsage"`
-}
-
-// ServerNetReadPerfInfo network read performance information.
-type ServerNetReadPerfInfo struct {
-	Addr     string        `json:"addr"`
-	ReadPerf time.Duration `json:"readPerf"`
-	Error    string        `json:"error,omitempty"`
-}
-
-// PerfInfoHandler - GET /minio/admin/v1/performance?perfType={perfType}
-// ----------
-// Get all performance information based on input type
-// Supported types = drive
-func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "PerfInfo")
-
-	objectAPI := validateAdminReq(ctx, w, r)
-	if objectAPI == nil {
-		return
-	}
-
 	vars := mux.Vars(r)
-	switch perfType := vars["perfType"]; perfType {
+	switch infoType := vars["infoType"]; infoType {
 	case "net":
 		var size int64 = defaultNetPerfSize
 		if sizeStr, found := vars["size"]; found {
@@ -422,9 +357,124 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		// Reply with mem usage information (across nodes in a
 		// distributed setup) as json.
 		writeSuccessResponseJSON(w, jsonBytes)
-	default:
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+	case "vault":
+		if GlobalKMS == nil {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
+			return
+		}
+		config, err := readServerConfig(ctx, objectAPI)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		var Environment = environment{}
+		endPoint := Environment.Get(EnvVaultEndpoint, config.KMS.Vault.Endpoint)
+		vaultName := Environment.Get(EnvVaultKeyName, config.KMS.Vault.Key.Name)
+		vaultType := Environment.Get(EnvVaultAuthType, config.KMS.Vault.Auth.Type)
+
+		var perm = Permission{}
+		kmsContext := crypto.Context{"MinIO admin API": "KMSKeyStatusHandler"} // Context for a test key operation
+		// Generate a new key using the KMS.
+		_, sealedKey, e := GlobalKMS.GenerateKey(vaultName, kmsContext)
+		if e == nil {
+			perm.Encryption = "OK"
+		} else {
+			perm.Encryption = "FAIL"
+		}
+
+		// Verify that we can indeed decrypt the (encrypted) key
+		_, e = GlobalKMS.UnsealKey(vaultName, sealedKey, kmsContext)
+		if e == nil {
+			perm.Decryption = "OK"
+		} else {
+			perm.Decryption = "FAIL"
+		}
+
+		vaultInfo := VaultInfo{
+			Endpoint: endPoint,
+			Name:     vaultName,
+			Type:     vaultType,
+			Perm: Permission{
+				Encryption: perm.Encryption,
+				Decryption: perm.Decryption,
+			},
+		}
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(vaultInfo)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		writeSuccessResponseJSON(w, jsonBytes)
+	case "server":
+		serverInfo := globalNotificationSys.ServerInfo(ctx)
+		// Once we have received all the ServerInfo from peers
+		// add the local peer server info as well.
+		serverInfo = append(serverInfo, ServerInfo{
+			Addr: getHostName(r),
+			Data: &ServerInfoData{
+				StorageInfo: objectAPI.StorageInfo(ctx),
+				ConnStats:   globalConnStats.toServerConnStats(),
+				HTTPStats:   globalHTTPStats.toServerHTTPStats(),
+				Properties: ServerProperties{
+					Uptime:       UTCNow().Sub(globalBootTime),
+					Version:      Version,
+					CommitID:     CommitID,
+					DeploymentID: globalDeploymentID,
+					SQSARN:       globalNotificationSys.GetARNList(),
+					Region:       globalServerConfig.GetRegion(),
+				},
+			},
+		})
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(serverInfo)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		// Reply with storage information (across nodes in a
+		// distributed setup) as json.
+		writeSuccessResponseJSON(w, jsonBytes)
 	}
+}
+
+// ServerDrivesPerfInfo holds information about address, performance
+// of all drives on one server. It also reports any errors if encountered
+// while trying to reach this server.
+type ServerDrivesPerfInfo struct {
+	Addr  string             `json:"addr"`
+	Error string             `json:"error,omitempty"`
+	Perf  []disk.Performance `json:"perf"`
+}
+
+// ServerCPULoadInfo holds informantion about cpu utilization
+// of one minio node. It also reports any errors if encountered
+// while trying to reach this server.
+type ServerCPULoadInfo struct {
+	Addr         string     `json:"addr"`
+	Error        string     `json:"error,omitempty"`
+	Load         []cpu.Load `json:"load"`
+	HistoricLoad []cpu.Load `json:"historicLoad"`
+}
+
+// ServerMemUsageInfo holds informantion about memory utilization
+// of one minio node. It also reports any errors if encountered
+// while trying to reach this server.
+type ServerMemUsageInfo struct {
+	Addr          string      `json:"addr"`
+	Error         string      `json:"error,omitempty"`
+	Usage         []mem.Usage `json:"usage"`
+	HistoricUsage []mem.Usage `json:"historicUsage"`
+}
+
+// ServerNetReadPerfInfo network read performance information.
+type ServerNetReadPerfInfo struct {
+	Addr     string        `json:"addr"`
+	ReadPerf time.Duration `json:"readPerf"`
+	Error    string        `json:"error,omitempty"`
 }
 
 func newLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEntry {

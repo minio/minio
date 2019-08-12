@@ -50,8 +50,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 	// Service restart and stop - TODO
 	adminV1Router.Methods(http.MethodPost).Path("/service").HandlerFunc(httpTraceAll(adminAPI.ServiceStopNRestartHandler))
 
-	// Info operations
-	adminV1Router.Methods(http.MethodGet).Path("/info").HandlerFunc(httpTraceAll(adminAPI.ServerInfoHandler))
+	// Info operations - return details based on input type
+	adminV1Router.Methods(http.MethodGet).Path("/info").HandlerFunc(httpTraceAll(adminAPI.ServerInfoHandler)).Queries("infoType", "{infoType:.*}")
 
 	if globalIsDistXL || globalIsXL {
 		/// Heal operations
@@ -66,9 +66,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		/// Health operations
 
 	}
-	// Performance command - return performance details based on input type
-	adminV1Router.Methods(http.MethodGet).Path("/performance").HandlerFunc(httpTraceAll(adminAPI.PerfInfoHandler)).Queries("perfType", "{perfType:.*}")
-
 	// Profiling operations
 	adminV1Router.Methods(http.MethodPost).Path("/profiling/start").HandlerFunc(httpTraceAll(adminAPI.StartProfilingHandler)).
 		Queries("profilerType", "{profilerType:.*}")
