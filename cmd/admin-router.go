@@ -105,7 +105,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		// Set user or group policy
 		adminV1Router.Methods(http.MethodPut).Path("/set-user-or-group-policy").
 			HandlerFunc(httpTraceHdrs(adminAPI.SetPolicyForUserOrGroup)).
-			Queries("policyName", "{policyName:.*}", "userOrGroup", "{userOrGroup:.*}", "isGroup", "{isGroup:t|f}")
+			Queries("policyName", "{policyName:.*}", "userOrGroup", "{userOrGroup:.*}", "isGroup", "{isGroup:true|false}")
 
 		// Remove user IAM
 		adminV1Router.Methods(http.MethodDelete).Path("/remove-user").HandlerFunc(httpTraceHdrs(adminAPI.RemoveUser)).Queries("accessKey", "{accessKey:.*}")

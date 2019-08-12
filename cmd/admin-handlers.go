@@ -1365,7 +1365,7 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 	vars := mux.Vars(r)
 	policyName := vars["policyName"]
 	entityName := vars["userOrGroup"]
-	isGroup := vars["isGroup"] == "t"
+	isGroup := vars["isGroup"] == "true"
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {

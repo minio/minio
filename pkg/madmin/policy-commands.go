@@ -111,9 +111,9 @@ func (adm *AdminClient) SetPolicy(policyName, entityName string, isGroup bool) e
 	queryValues := url.Values{}
 	queryValues.Set("policyName", policyName)
 	queryValues.Set("userOrGroup", entityName)
-	groupStr := "f"
+	groupStr := "false"
 	if isGroup {
-		groupStr = "t"
+		groupStr = "true"
 	}
 	queryValues.Set("isGroup", groupStr)
 
