@@ -19,6 +19,7 @@ package madmin
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 
@@ -39,6 +40,7 @@ type UserInfo struct {
 	SecretKey  string        `json:"secretKey,omitempty"`
 	PolicyName string        `json:"policyName,omitempty"`
 	Status     AccountStatus `json:"status"`
+	MemberOf   []string      `json:"memberOf,omitempty"`
 }
 
 // RemoveUser - remove a user.
@@ -95,6 +97,40 @@ func (adm *AdminClient) ListUsers() (map[string]UserInfo, error) {
 	}
 
 	return users, nil
+}
+
+// GetUserInfo - get info on a user
+func (adm *AdminClient) GetUserInfo(name string) (u UserInfo, err error) {
+	queryValues := url.Values{}
+	queryValues.Set("accessKey", name)
+
+	reqData := requestData{
+		relPath:     "/v1/user-info",
+		queryValues: queryValues,
+	}
+
+	// Execute GET on /minio/admin/v1/user-info
+	resp, err := adm.executeMethod("GET", reqData)
+
+	defer closeResponse(resp)
+	if err != nil {
+		return u, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return u, httpRespToErrorResponse(resp)
+	}
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return u, err
+	}
+
+	if err = json.Unmarshal(b, &u); err != nil {
+		return u, err
+	}
+
+	return u, nil
 }
 
 // SetUser - sets a user info.

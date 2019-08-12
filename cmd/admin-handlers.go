@@ -1020,6 +1020,33 @@ func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponseJSON(w, econfigData)
 }
 
+// GetUserInfo - GET /minio/admin/v1/user-info
+func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetUserInfo")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	name := vars["accessKey"]
+
+	userInfo, err := globalIAMSys.GetUserInfo(name)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	data, err := json.Marshal(userInfo)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, data)
+}
+
 // UpdateGroupMembers - PUT /minio/admin/v1/update-group-members
 func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "UpdateGroupMembers")

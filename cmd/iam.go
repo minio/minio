@@ -543,6 +543,29 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 	return users, nil
 }
 
+// GetUserInfo - get info on a user.
+func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return u, errServerNotInitialized
+	}
+
+	sys.RLock()
+	defer sys.RUnlock()
+
+	creds, found := sys.iamUsersMap[name]
+	if !found {
+		return u, errNoSuchUser
+	}
+
+	u = madmin.UserInfo{
+		PolicyName: sys.iamUserPolicyMap[name].Policy,
+		Status:     madmin.AccountStatus(creds.Status),
+		MemberOf:   sys.iamUserGroupMemberships[name].ToSlice(),
+	}
+	return u, nil
+}
+
 // SetUserStatus - sets current user status, supports disabled or enabled.
 func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) error {
 	objectAPI := newObjectLayerFn()
