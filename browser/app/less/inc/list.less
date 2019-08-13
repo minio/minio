@@ -113,7 +113,7 @@ div.fesl-row {
         Icons
     ----------------------------*/
     &[data-type=folder] {
-        .list-type(#a1d6dd, '\f114');
+        .list-type(#a1d6dd, '\f07b');
 
         .fesl-item-name {
             a {
@@ -128,8 +128,8 @@ div.fesl-row {
     &[data-type=excel] { .list-type(#64c866, '\f1c3'); }
     &[data-type=image] { .list-type(#f06292, '\f1c5'); }
     &[data-type=video] { .list-type(#f8c363, '\f1c8'); }
-    &[data-type=other] { .list-type(#afafaf, '\f016'); }
-    &[data-type=text] { .list-type(#8a8a8a, '\f0f6'); }
+    &[data-type=other] { .list-type(#afafaf, '\f15b'); }
+    &[data-type=text] { .list-type(#8a8a8a, '\f15c'); }
     &[data-type=doc] { .list-type(#2196f5, '\f1c2'); }
     &[data-type=presentation] { .list-type(#896ea6, '\f1c4'); }
 
@@ -249,6 +249,7 @@ div.fesl-row {
 
     &:after {
         font-family: @font-family-icon;
+        font-weight: 900;
         content: '\f00c';
         top: 8px;
         left: 9px;
@@ -449,7 +450,7 @@ div.fesl-row {
     float: left;
     padding: 4px 0;
 
-    .fa {
+    .fas {
         font-size: 22px;
         vertical-align: top;
         margin-right: 10px;

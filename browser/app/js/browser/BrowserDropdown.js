@@ -84,32 +84,32 @@ export class BrowserDropdown extends React.Component {
       <li>
         <Dropdown pullRight id="top-right-menu">
           <Dropdown.Toggle noCaret>
-            <i className="fa fa-reorder" />
+            <i className="fas fa-bars" />
           </Dropdown.Toggle>
           <Dropdown.Menu className="dropdown-menu-right">
             <li>
               <a target="_blank" href="https://github.com/minio/minio">
-                GitHub <i className="fa fa-github" />
+                GitHub <i className="fab fa-github" />
               </a>
             </li>
             <li>
               <a href="" onClick={this.fullScreen}>
-                Fullscreen <i className="fa fa-expand" />
+                Fullscreen <i className="fas fa-expand" />
               </a>
             </li>
             <li>
               <a target="_blank" href="https://docs.min.io/">
-                Documentation <i className="fa fa-book" />
+                Documentation <i className="fas fa-book" />
               </a>
             </li>
             <li>
               <a target="_blank" href="https://slack.min.io">
-                Ask for help <i className="fa fa-question-circle" />
+                Ask for help <i className="fas fa-question-circle" />
               </a>
             </li>
             <li>
               <a href="" id="show-about" onClick={this.showAbout.bind(this)}>
-                About <i className="fa fa-info-circle" />
+                About <i className="fas fa-info-circle" />
               </a>
               {this.state.showAboutModal && (
                 <AboutModal
@@ -120,7 +120,7 @@ export class BrowserDropdown extends React.Component {
             </li>
             <li>
               <a href="" onClick={this.showChangePassword.bind(this)}>
-                Change Password <i className="fa fa-cog" />
+                Change Password <i className="fas fa-cog" />
               </a>
               {this.state.showChangePasswordModal && (
                 <ChangePasswordModal
@@ -131,7 +131,7 @@ export class BrowserDropdown extends React.Component {
             </li>
             <li>
               <a href="" id="logout" onClick={this.logout}>
-                Sign Out <i className="fa fa-sign-out" />
+                Sign Out <i className="fas fa-sign-out-alt" />
               </a>
             </li>
           </Dropdown.Menu>

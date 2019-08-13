@@ -35,7 +35,7 @@ describe("ObjectsHeader", () => {
       />
     )
     expect(
-      wrapper.find("#sort-by-name i").hasClass("fa-sort-alpha-asc")
+      wrapper.find("#sort-by-name i").hasClass("fa-sort-alpha-down")
     ).toBeTruthy()
   })
 
@@ -49,7 +49,7 @@ describe("ObjectsHeader", () => {
       />
     )
     expect(
-      wrapper.find("#sort-by-name i").hasClass("fa-sort-alpha-desc")
+      wrapper.find("#sort-by-name i").hasClass("fa-sort-alpha-down-alt")
     ).toBeTruthy()
   })
 
@@ -63,7 +63,7 @@ describe("ObjectsHeader", () => {
       />
     )
     expect(
-      wrapper.find("#sort-by-size i").hasClass("fa-sort-amount-asc")
+      wrapper.find("#sort-by-size i").hasClass("fa-sort-amount-down-alt")
     ).toBeTruthy()
   })
 
@@ -77,7 +77,7 @@ describe("ObjectsHeader", () => {
       />
     )
     expect(
-      wrapper.find("#sort-by-size i").hasClass("fa-sort-amount-desc")
+      wrapper.find("#sort-by-size i").hasClass("fa-sort-amount-down")
     ).toBeTruthy()
   })
 
@@ -91,7 +91,7 @@ describe("ObjectsHeader", () => {
       />
     )
     expect(
-      wrapper.find("#sort-by-last-modified i").hasClass("fa-sort-numeric-asc")
+      wrapper.find("#sort-by-last-modified i").hasClass("fa-sort-numeric-down")
     ).toBeTruthy()
   })
 
@@ -105,7 +105,7 @@ describe("ObjectsHeader", () => {
       />
     )
     expect(
-      wrapper.find("#sort-by-last-modified i").hasClass("fa-sort-numeric-desc")
+      wrapper.find("#sort-by-last-modified i").hasClass("fa-sort-numeric-down-alt")
     ).toBeTruthy()
   })
 

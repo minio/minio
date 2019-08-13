@@ -23,7 +23,7 @@ export const DeleteObjectConfirmModal = ({
 }) => (
   <ConfirmModal
     show={true}
-    icon="fa fa-exclamation-triangle mci-red"
+    icon="fas fa-exclamation-triangle mci-red"
     text="Are you sure you want to delete?"
     sub="This cannot be undone!"
     okText="Delete"
