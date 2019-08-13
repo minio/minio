@@ -831,6 +831,7 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 
 		req.Header.Set("x-amz-date", "20160814T114029Z")
 		req.Header.Set("Accept", "*/*")
+		req.Header.Set("User-Agent", "Mozilla")
 
 		req.Body = ioutil.NopCloser(bytes.NewReader(content))
 
@@ -936,6 +937,8 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 		if err != nil {
 			t.Fatalf("Cannot create upload request, %v", err)
 		}
+
+		req.Header.Set("User-Agent", "Mozilla")
 
 		apiRouter.ServeHTTP(rec, req)
 		return rec.Code, rec.Body.Bytes()
@@ -1080,6 +1083,8 @@ func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHa
 		if err != nil {
 			t.Fatalf("Cannot create upload request, %v", err)
 		}
+
+		req.Header.Set("User-Agent", "Mozilla")
 
 		apiRouter.ServeHTTP(rec, req)
 		return rec.Code, rec.Body.Bytes()
@@ -1515,6 +1520,7 @@ func TestWebCheckAuthorization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot create upload request, %v", err)
 	}
+	req.Header.Set("User-Agent", "Mozilla")
 	apiRouter.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("Expected the response status to be 403, but instead found `%d`", rec.Code)
@@ -1529,6 +1535,7 @@ func TestWebCheckAuthorization(t *testing.T) {
 	content := []byte("temporary file's content")
 	req, err = http.NewRequest("PUT", "/minio/upload/bucket/object", nil)
 	req.Header.Set("Authorization", "Bearer foo-authorization")
+	req.Header.Set("User-Agent", "Mozilla")
 	req.Header.Set("Content-Length", strconv.Itoa(len(content)))
 	req.Header.Set("x-amz-date", "20160814T114029Z")
 	req.Header.Set("Accept", "*/*")

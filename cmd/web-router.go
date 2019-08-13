@@ -70,7 +70,7 @@ func registerWebRouter(router *mux.Router) error {
 	codec := json2.NewCodec()
 
 	// MinIO browser router.
-	webBrowserRouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
+	webBrowserRouter := router.PathPrefix(minioReservedBucketPath).HeadersRegexp("User-Agent", ".*Mozilla.*").Subrouter()
 
 	// Initialize json rpc handlers.
 	webRPC := jsonrpc.NewServer()
