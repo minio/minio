@@ -19,7 +19,6 @@ package target
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -83,8 +82,14 @@ func (target *ElasticsearchTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	if _, err := net.Dial("tcp", target.args.URL.Host); err != nil {
-		return errNotConnected
+	if dErr := target.args.URL.DialHTTP(); dErr != nil {
+		if urlErr, ok := dErr.(*url.Error); ok {
+			// To treat "connection refused" errors as errNotConnected.
+			if IsConnRefusedErr(urlErr.Err) {
+				return errNotConnected
+			}
+		}
+		return dErr
 	}
 	return target.send(eventData)
 }
@@ -151,8 +156,14 @@ func (target *ElasticsearchTarget) Send(eventKey string) error {
 		}
 	}
 
-	if _, err := net.Dial("tcp", target.args.URL.Host); err != nil {
-		return errNotConnected
+	if dErr := target.args.URL.DialHTTP(); dErr != nil {
+		if urlErr, ok := dErr.(*url.Error); ok {
+			// To treat "connection refused" errors as errNotConnected.
+			if IsConnRefusedErr(urlErr.Err) {
+				return errNotConnected
+			}
+		}
+		return dErr
 	}
 
 	eventData, eErr := target.store.Get(eventKey)
@@ -227,10 +238,10 @@ func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan str
 		}
 	}
 
-	_, derr := net.Dial("tcp", args.URL.Host)
-	if derr != nil {
+	dErr := args.URL.DialHTTP()
+	if dErr != nil {
 		if store == nil {
-			return nil, derr
+			return nil, dErr
 		}
 	} else {
 		client, err = newClient(args)
