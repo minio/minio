@@ -506,7 +506,7 @@ func (client *peerRESTClient) LoadGroup(group string) error {
 // SignalService - sends signal to peer nodes.
 func (client *peerRESTClient) SignalService(sig serviceSignal) error {
 	values := make(url.Values)
-	values.Set(peerRESTSignal, string(sig))
+	values.Set(peerRESTSignal, strconv.Itoa(int(sig)))
 	respBody, err := client.call(peerRESTMethodSignalService, values, nil, -1)
 	if err != nil {
 		return err

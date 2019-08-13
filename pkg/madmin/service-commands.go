@@ -21,7 +21,11 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
+
+	trace "github.com/minio/minio/pkg/trace"
 )
 
 // ServerVersion - server version
@@ -30,72 +34,134 @@ type ServerVersion struct {
 	CommitID string `json:"commitID"`
 }
 
+// ServiceUpdateStatus - contains the response of service update API
+type ServiceUpdateStatus struct {
+	CurrentVersion string `json:"currentVersion"`
+	UpdatedVersion string `json:"updatedVersion"`
+}
+
 // ServiceStatus - contains the response of service status API
 type ServiceStatus struct {
 	ServerVersion ServerVersion `json:"serverVersion"`
 	Uptime        time.Duration `json:"uptime"`
 }
 
-// ServiceStatus - Connect to a minio server and call Service Status
-// Management API to fetch server's storage information represented by
-// ServiceStatusMetadata structure
+// ServiceStatus - Returns current server uptime and current
+// running version of MinIO server.
 func (adm *AdminClient) ServiceStatus() (ss ServiceStatus, err error) {
-	// Request API to GET service status
-	resp, err := adm.executeMethod("GET", requestData{relPath: "/v1/service"})
-	defer closeResponse(resp)
+	respBytes, err := adm.serviceCallAction(ServiceActionStatus)
 	if err != nil {
 		return ss, err
 	}
-
-	// Check response http status code
-	if resp.StatusCode != http.StatusOK {
-		return ss, httpRespToErrorResponse(resp)
-	}
-
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return ss, err
-	}
-
 	err = json.Unmarshal(respBytes, &ss)
 	return ss, err
 }
 
-// ServiceActionValue - type to restrict service-action values
-type ServiceActionValue string
-
-const (
-	// ServiceActionValueRestart represents restart action
-	ServiceActionValueRestart ServiceActionValue = "restart"
-	// ServiceActionValueStop represents stop action
-	ServiceActionValueStop = "stop"
-)
-
-// ServiceAction - represents POST body for service action APIs
-type ServiceAction struct {
-	Action ServiceActionValue `json:"action"`
+// ServiceRestart - restarts the MinIO cluster
+func (adm *AdminClient) ServiceRestart() error {
+	_, err := adm.serviceCallAction(ServiceActionRestart)
+	return err
 }
 
-// ServiceSendAction - Call Service Restart/Stop API to restart/stop a
-// MinIO server
-func (adm *AdminClient) ServiceSendAction(action ServiceActionValue) error {
-	body, err := json.Marshal(ServiceAction{action})
+// ServiceStop - stops the MinIO cluster
+func (adm *AdminClient) ServiceStop() error {
+	_, err := adm.serviceCallAction(ServiceActionStop)
+	return err
+}
+
+// ServiceUpdate - updates and restarts the MinIO cluster to latest version.
+func (adm *AdminClient) ServiceUpdate() (us ServiceUpdateStatus, err error) {
+	respBytes, err := adm.serviceCallAction(ServiceActionUpdate)
 	if err != nil {
-		return err
+		return us, err
 	}
+	err = json.Unmarshal(respBytes, &us)
+	return us, err
+}
+
+// ServiceAction - type to restrict service-action values
+type ServiceAction string
+
+const (
+	// ServiceActionStatus represents status action
+	ServiceActionStatus ServiceAction = "status"
+	// ServiceActionRestart represents restart action
+	ServiceActionRestart = "restart"
+	// ServiceActionStop represents stop action
+	ServiceActionStop = "stop"
+	// ServiceActionUpdate represents update action
+	ServiceActionUpdate = "update"
+)
+
+// serviceCallAction - call service restart/update/stop API.
+func (adm *AdminClient) serviceCallAction(action ServiceAction) ([]byte, error) {
+	queryValues := url.Values{}
+	queryValues.Set("action", string(action))
 
 	// Request API to Restart server
 	resp, err := adm.executeMethod("POST", requestData{
-		relPath: "/v1/service",
-		content: body,
+		relPath:     "/v1/service",
+		queryValues: queryValues,
 	})
 	defer closeResponse(resp)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return httpRespToErrorResponse(resp)
+		return nil, httpRespToErrorResponse(resp)
 	}
-	return nil
+
+	return ioutil.ReadAll(resp.Body)
+}
+
+// ServiceTraceInfo holds http trace
+type ServiceTraceInfo struct {
+	Trace trace.Info
+	Err   error `json:"-"`
+}
+
+// ServiceTrace - listen on http trace notifications.
+func (adm AdminClient) ServiceTrace(allTrace, errTrace bool, doneCh <-chan struct{}) <-chan ServiceTraceInfo {
+	traceInfoCh := make(chan ServiceTraceInfo)
+	// Only success, start a routine to start reading line by line.
+	go func(traceInfoCh chan<- ServiceTraceInfo) {
+		defer close(traceInfoCh)
+		for {
+			urlValues := make(url.Values)
+			urlValues.Set("all", strconv.FormatBool(allTrace))
+			urlValues.Set("err", strconv.FormatBool(errTrace))
+			reqData := requestData{
+				relPath:     "/v1/trace",
+				queryValues: urlValues,
+			}
+			// Execute GET to call trace handler
+			resp, err := adm.executeMethod("GET", reqData)
+			if err != nil {
+				closeResponse(resp)
+				return
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				traceInfoCh <- ServiceTraceInfo{Err: httpRespToErrorResponse(resp)}
+				return
+			}
+
+			dec := json.NewDecoder(resp.Body)
+			for {
+				var info trace.Info
+				if err = dec.Decode(&info); err != nil {
+					break
+				}
+				select {
+				case <-doneCh:
+					return
+				case traceInfoCh <- ServiceTraceInfo{Trace: info}:
+				}
+			}
+		}
+	}(traceInfoCh)
+
+	// Returns the trace info channel, for caller to start reading from.
+	return traceInfoCh
 }

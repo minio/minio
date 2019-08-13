@@ -77,16 +77,14 @@ func handleSignals() {
 			logger.Info("Exiting on signal: %s", strings.ToUpper(osSignal.String()))
 			exit(stopProcess())
 		case signal := <-globalServiceSignalCh:
-			switch signal {
-			case serviceStatus:
-				// Ignore this at the moment.
-			case serviceRestart:
+			switch {
+			case signal&serviceRestart == serviceRestart:
 				logger.Info("Restarting on service signal")
 				stop := stopProcess()
 				rerr := restartProcess()
 				logger.LogIf(context.Background(), rerr)
 				exit(stop && rerr == nil)
-			case serviceStop:
+			case signal&serviceStop == serviceStop:
 				logger.Info("Stopping on service signal")
 				exit(stopProcess())
 			}

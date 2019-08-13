@@ -824,10 +824,29 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 		s.writeErrorResponse(w, errors.New("signal name is missing"))
 		return
 	}
-	signal := serviceSignal(signalString)
+	si, err := strconv.Atoi(signalString)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	signal := serviceSignal(si)
 	defer w.(http.Flusher).Flush()
-	switch signal {
-	case serviceRestart, serviceStop:
+	switch {
+	case signal&serviceUpdate == serviceUpdate:
+		us, err := updateServer()
+		if err != nil {
+			s.writeErrorResponse(w, err)
+			return
+		}
+		// We didn't upgrade, no need to restart
+		// the services.
+		if us.CurrentVersion == us.UpdatedVersion {
+			return
+		}
+		fallthrough
+	case signal&serviceRestart == serviceRestart:
+		fallthrough
+	case signal&serviceStop == serviceStop:
 		globalServiceSignalCh <- signal
 	default:
 		s.writeErrorResponse(w, errUnsupportedSignal)
