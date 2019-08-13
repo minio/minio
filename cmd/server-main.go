@@ -347,7 +347,7 @@ func serverMain(ctx *cli.Context) {
 	if len(cacheConfig.Drives) > 0 {
 		// initialize the new disk cache objects.
 		globalCacheObjectAPI, err = newServerCacheObjects(context.Background(), cacheConfig)
-		logger.Fatal(err, "Unable to initialize disk caching")
+		logger.FatalIf(err, "Unable to initialize disk caching")
 	}
 
 	// Create new IAM system.
