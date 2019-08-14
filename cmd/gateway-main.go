@@ -106,6 +106,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	logger.Disable = true
 
 	// Validate if we have access, secret set through environment.
+	globalGatewayName = gw.Name()
 	gatewayName := gw.Name()
 	if ctx.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)

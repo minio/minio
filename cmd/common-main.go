@@ -74,21 +74,23 @@ func checkUpdate(mode string) {
 
 // Load logger targets based on user's configuration
 func loadLoggers() {
+	loggerUserAgent := getUserAgent(getMinioMode())
+
 	auditEndpoint, ok := os.LookupEnv("MINIO_AUDIT_LOGGER_HTTP_ENDPOINT")
 	if ok {
 		// Enable audit HTTP logging through ENV.
-		logger.AddAuditTarget(http.New(auditEndpoint, NewCustomHTTPTransport()))
+		logger.AddAuditTarget(http.New(auditEndpoint, loggerUserAgent, NewCustomHTTPTransport()))
 	}
 
 	loggerEndpoint, ok := os.LookupEnv("MINIO_LOGGER_HTTP_ENDPOINT")
 	if ok {
 		// Enable HTTP logging through ENV.
-		logger.AddTarget(http.New(loggerEndpoint, NewCustomHTTPTransport()))
+		logger.AddTarget(http.New(loggerEndpoint, loggerUserAgent, NewCustomHTTPTransport()))
 	} else {
 		for _, l := range globalServerConfig.Logger.HTTP {
 			if l.Enabled {
 				// Enable http logging
-				logger.AddTarget(http.New(l.Endpoint, NewCustomHTTPTransport()))
+				logger.AddTarget(http.New(l.Endpoint, loggerUserAgent, NewCustomHTTPTransport()))
 			}
 		}
 	}

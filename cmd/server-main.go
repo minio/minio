@@ -237,13 +237,7 @@ func serverMain(ctx *cli.Context) {
 
 	if !globalCLIContext.Quiet {
 		// Check for new updates from dl.min.io.
-		mode := globalMinioModeFS
-		if globalIsDistXL {
-			mode = globalMinioModeDistXL
-		} else if globalIsXL {
-			mode = globalMinioModeXL
-		}
-		checkUpdate(mode)
+		checkUpdate(getMinioMode())
 	}
 
 	// FIXME: This code should be removed in future releases and we should have mandatory
