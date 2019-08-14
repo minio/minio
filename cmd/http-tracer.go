@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/cmd/logger"
 	trace "github.com/minio/minio/pkg/trace"
 )
 
@@ -126,7 +127,7 @@ func (r *recordResponseWriter) Write(p []byte) (n int, err error) {
 		r.writeHeaders(&r.headers, http.StatusOK, r.ResponseWriter.Header())
 		r.headersLogged = true
 	}
-	if (r.statusCode != http.StatusOK && r.statusCode != http.StatusPartialContent && r.statusCode != 0) || r.logBody {
+	if r.statusCode >= http.StatusBadRequest || r.logBody {
 		// Always logging error responses.
 		r.body.Write(p)
 	}
@@ -146,7 +147,7 @@ func (r *recordResponseWriter) Flush() {
 func (r *recordResponseWriter) Body() []byte {
 	// If there was an error response or body logging is enabled
 	// then we return the body contents
-	if r.statusCode >= 400 || r.logBody {
+	if r.statusCode >= http.StatusBadRequest || r.logBody {
 		return r.body.Bytes()
 	}
 	// ... otherwise we return the <BODY> place holder
@@ -206,7 +207,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 
 	// Setup a http response body recorder
 	respBodyRecorder := &recordResponseWriter{ResponseWriter: w, logBody: logBody}
-	f(respBodyRecorder, r)
+	f(logger.NewResponseWriter(respBodyRecorder), r)
 
 	rs := trace.ResponseInfo{
 		Time:       time.Now().UTC(),
@@ -222,6 +223,10 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	t.ReqInfo = rq
 	t.RespInfo = rs
 
-	t.CallStats = trace.CallStats{Latency: rs.Time.Sub(rq.Time), InputBytes: reqBodyRecorder.Size(), OutputBytes: respBodyRecorder.Size()}
+	t.CallStats = trace.CallStats{
+		Latency:     rs.Time.Sub(rq.Time),
+		InputBytes:  reqBodyRecorder.Size(),
+		OutputBytes: respBodyRecorder.Size(),
+	}
 	return t
 }
