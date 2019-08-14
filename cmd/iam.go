@@ -945,8 +945,14 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 		return []string{policy.Policy}, nil
 	}
 
-	if _, ok := sys.iamUsersMap[name]; !ok {
+	// When looking for a user's policies, we also check if the
+	// user and the groups they are member of are enabled.
+	if u, ok := sys.iamUsersMap[name]; !ok {
 		return nil, errNoSuchUser
+	} else if u.Status == statusDisabled {
+		// User is disabled, so we return no policy - this
+		// ensures the request is denied.
+		return nil, nil
 	}
 
 	result := []string{}
@@ -956,6 +962,12 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 		result = append(result, policy.Policy)
 	}
 	for _, group := range sys.iamUserGroupMemberships[name].ToSlice() {
+		// Skip missing or disabled groups
+		gi, ok := sys.iamGroupsMap[group]
+		if !ok || gi.Status == statusDisabled {
+			continue
+		}
+
 		p, ok := sys.iamGroupPolicyMap[group]
 		if ok && p.Policy != "" {
 			result = append(result, p.Policy)
