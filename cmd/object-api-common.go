@@ -185,7 +185,7 @@ func cleanupObjectsBulk(ctx context.Context, storage StorageAPI, volume string, 
 		if errs[idx] != nil {
 			continue
 		}
-		output, err := traverse(objPath)
+		output, err := traverse(retainSlash(pathJoin(objPath)))
 		if err != nil {
 			errs[idx] = err
 			continue
