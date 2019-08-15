@@ -119,7 +119,7 @@ assert_is_supported_os() {
 
 assert_check_golang_env() {
     if ! which go >/dev/null 2>&1; then
-        echo "Cannot find go binary in your PATH configuration, please refer to Go installation document at https://docs.min.io/docs/how-to-install-golang"
+        echo "Cannot find go binary in your PATH configuration, please refer to Go installation document at https://golang.org/doc/install"
         exit 1
     fi
 
