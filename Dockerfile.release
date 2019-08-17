@@ -6,14 +6,12 @@ ENV GO111MODULE on
 
 RUN  \
      apk add --no-cache git && \
-     git clone https://github.com/minio/minio && cd minio/dockerscripts && \
-     go build -tags kqueue -ldflags "-s -w" -o /usr/bin/healthcheck healthcheck.go
+     git clone https://github.com/minio/minio
 
 FROM alpine:3.9
 
 LABEL maintainer="MinIO Inc <dev@min.io>"
 
-COPY --from=0 /usr/bin/healthcheck /usr/bin/healthcheck
 COPY dockerscripts/docker-entrypoint.sh /usr/bin/
 
 ENV MINIO_UPDATE off
@@ -26,15 +24,12 @@ RUN \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
      curl https://dl.min.io/server/minio/release/linux-amd64/minio > /usr/bin/minio && \
      chmod +x /usr/bin/minio  && \
-     chmod +x /usr/bin/docker-entrypoint.sh && \
-     chmod +x /usr/bin/healthcheck
+     chmod +x /usr/bin/docker-entrypoint.sh
 
 EXPOSE 9000
 
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 
 VOLUME ["/data"]
-
-HEALTHCHECK --interval=1m CMD healthcheck
 
 CMD ["minio"]
