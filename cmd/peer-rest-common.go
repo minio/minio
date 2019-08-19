@@ -20,6 +20,8 @@ const peerRESTVersion = "v4"
 const peerRESTPath = minioReservedBucketPath + "/peer/" + peerRESTVersion
 
 const (
+	peerRESTMethodNetReadPerfInfo          = "netreadperfinfo"
+	peerRESTMethodCollectNetPerfInfo       = "collectnetperfinfo"
 	peerRESTMethodServerInfo               = "serverinfo"
 	peerRESTMethodCPULoadInfo              = "cpuloadinfo"
 	peerRESTMethodMemUsageInfo             = "memusageinfo"
@@ -51,6 +53,7 @@ const (
 )
 
 const (
+	peerRESTNetPerfSize = "netperfsize"
 	peerRESTBucket      = "bucket"
 	peerRESTUser        = "user"
 	peerRESTGroup       = "group"

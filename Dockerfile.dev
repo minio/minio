@@ -2,7 +2,7 @@ FROM alpine:3.9
 
 LABEL maintainer="MinIO Inc <dev@min.io>"
 
-COPY dockerscripts/docker-entrypoint.sh dockerscripts/healthcheck /usr/bin/
+COPY dockerscripts/docker-entrypoint.sh /usr/bin/
 COPY minio /usr/bin/
 
 ENV MINIO_UPDATE off
@@ -14,15 +14,12 @@ RUN \
      apk add --no-cache ca-certificates 'curl>7.61.0' 'su-exec>=0.2' && \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
      chmod +x /usr/bin/minio  && \
-     chmod +x /usr/bin/docker-entrypoint.sh && \
-     chmod +x /usr/bin/healthcheck
+     chmod +x /usr/bin/docker-entrypoint.sh
 
 EXPOSE 9000
 
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 
 VOLUME ["/data"]
-
-HEALTHCHECK --interval=1m CMD healthcheck
 
 CMD ["minio"]

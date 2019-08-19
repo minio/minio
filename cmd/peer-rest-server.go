@@ -21,6 +21,8 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"sort"
 	"strconv"
@@ -103,6 +105,83 @@ func getPeerUptimes(serverInfo []ServerInfo) time.Duration {
 
 	// Return the latest time as the uptime.
 	return times[0]
+}
+
+// NetReadPerfInfoHandler - returns network read performance information.
+func (s *peerRESTServer) NetReadPerfInfoHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	params := mux.Vars(r)
+
+	sizeStr, found := params[peerRESTNetPerfSize]
+	if !found {
+		s.writeErrorResponse(w, errors.New("size is missing"))
+		return
+	}
+
+	size, err := strconv.ParseInt(sizeStr, 10, 64)
+	if err != nil || size < 0 {
+		s.writeErrorResponse(w, errInvalidArgument)
+		return
+	}
+
+	start := time.Now()
+	n, err := io.CopyN(ioutil.Discard, r.Body, size)
+	end := time.Now()
+
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	if n != size {
+		s.writeErrorResponse(w, fmt.Errorf("short read; expected: %v, got: %v", size, n))
+		return
+	}
+
+	addr := r.Host
+	if globalIsDistXL {
+		addr = GetLocalPeer(globalEndpoints)
+	}
+
+	info := ServerNetReadPerfInfo{
+		Addr:     addr,
+		ReadPerf: end.Sub(start),
+	}
+
+	ctx := newContext(r, w, "NetReadPerfInfo")
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+	w.(http.Flusher).Flush()
+}
+
+// CollectNetPerfInfoHandler - returns network performance information collected from other peers.
+func (s *peerRESTServer) CollectNetPerfInfoHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	params := mux.Vars(r)
+	sizeStr, found := params[peerRESTNetPerfSize]
+	if !found {
+		s.writeErrorResponse(w, errors.New("size is missing"))
+		return
+	}
+
+	size, err := strconv.ParseInt(sizeStr, 10, 64)
+	if err != nil || size < 0 {
+		s.writeErrorResponse(w, errInvalidArgument)
+		return
+	}
+
+	info := globalNotificationSys.NetReadPerfInfo(size)
+
+	ctx := newContext(r, w, "CollectNetPerfInfo")
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+	w.(http.Flusher).Flush()
 }
 
 // GetLocksHandler - returns list of older lock from the server.
@@ -847,6 +926,8 @@ func (s *peerRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
 func registerPeerRESTHandlers(router *mux.Router) {
 	server := &peerRESTServer{}
 	subrouter := router.PathPrefix(peerRESTPath).Subrouter()
+	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodNetReadPerfInfo).HandlerFunc(httpTraceHdrs(server.NetReadPerfInfoHandler))
+	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodCollectNetPerfInfo).HandlerFunc(httpTraceHdrs(server.CollectNetPerfInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodGetLocks).HandlerFunc(httpTraceHdrs(server.GetLocksHandler))
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodServerInfo).HandlerFunc(httpTraceHdrs(server.ServerInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodCPULoadInfo).HandlerFunc(httpTraceHdrs(server.CPULoadInfoHandler))
