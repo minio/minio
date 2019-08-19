@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -50,6 +51,7 @@ import (
 
 const (
 	maxEConfigJSONSize = 262272
+	defaultNetPerfSize = 100 * humanize.MiByte
 )
 
 // Type-safe query params.
@@ -304,6 +306,13 @@ type ServerMemUsageInfo struct {
 	HistoricUsage []mem.Usage `json:"historicUsage"`
 }
 
+// ServerNetReadPerfInfo network read performance information.
+type ServerNetReadPerfInfo struct {
+	Addr     string        `json:"addr"`
+	ReadPerf time.Duration `json:"readPerf"`
+	Error    string        `json:"error,omitempty"`
+}
+
 // PerfInfoHandler - GET /minio/admin/v1/performance?perfType={perfType}
 // ----------
 // Get all performance information based on input type
@@ -318,6 +327,44 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 
 	vars := mux.Vars(r)
 	switch perfType := vars["perfType"]; perfType {
+	case "net":
+		var size int64 = defaultNetPerfSize
+		if sizeStr, found := vars["size"]; found {
+			var err error
+			if size, err = strconv.ParseInt(sizeStr, 10, 64); err != nil || size < 0 {
+				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
+				return
+			}
+		}
+
+		storage := objectAPI.StorageInfo(ctx)
+		if !(storage.Backend.Type == BackendFS || storage.Backend.Type == BackendErasure) {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+			return
+		}
+
+		addr := r.Host
+		if globalIsDistXL {
+			addr = GetLocalPeer(globalEndpoints)
+		}
+
+		infos := map[string][]ServerNetReadPerfInfo{}
+		infos[addr] = globalNotificationSys.NetReadPerfInfo(size)
+		for peer, info := range globalNotificationSys.CollectNetPerfInfo(size) {
+			infos[peer] = info
+		}
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(infos)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		// Reply with performance information (across nodes in a
+		// distributed setup) as json.
+		writeSuccessResponseJSON(w, jsonBytes)
+
 	case "drive":
 		info := objectAPI.StorageInfo(ctx)
 		if !(info.Backend.Type == BackendFS || info.Backend.Type == BackendErasure) {
