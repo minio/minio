@@ -1053,6 +1053,9 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	putObject := objectAPI.PutObject
+	if web.CacheAPI() != nil {
+		putObject = web.CacheAPI().PutObject
+	}
 
 	objInfo, err := putObject(context.Background(), bucket, object, pReader, opts)
 	if err != nil {
