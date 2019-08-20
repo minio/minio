@@ -1972,6 +1972,8 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 		return getAPIError(ErrStorageFull)
 	case BucketNotFound:
 		return getAPIError(ErrNoSuchBucket)
+	case BucketNotEmpty:
+		return getAPIError(ErrBucketNotEmpty)
 	case BucketExists:
 		return getAPIError(ErrBucketAlreadyOwnedByYou)
 	case BucketNameInvalid:
