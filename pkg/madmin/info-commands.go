@@ -53,6 +53,14 @@ const (
 	// Add your own backend.
 )
 
+// InfoType - type to external services
+type InfoType string
+
+const (
+	// Vault represnt the vault
+	Vault InfoType = "vault"
+)
+
 // DriveInfo - represents each drive info, describing
 // status, uuid and endpoint.
 type DriveInfo HealDriveInfo
@@ -350,4 +358,53 @@ func (adm *AdminClient) NetPerfInfo(size int) (map[string][]NetPerfInfo, error) 
 	}
 
 	return info, nil
+}
+
+// KMSPermissionInfo holds the info for encryption and decryption
+type KMSPermissionInfo struct {
+	EncryptionErr string `json:"encryption-error,omitempty"`
+	DecryptionErr string `json:"decryption-error,omitempty"`
+}
+
+// VaultInfo Contains the vault info
+type VaultInfo struct {
+	Endpoint string            `json:"endpoint"` // The vault API endpoint as URL
+	Name     string            `json:"name"`     // The name of the encryption key-ring
+	Type     string            `json:"type"`     // The authentication type
+	Error    string            `json:"error"`
+	Perm     KMSPermissionInfo `json:"perm"`
+}
+
+// ServerVaultInfo fetches the vault info
+func (adm *AdminClient) ServerVaultInfo() (VaultInfo, error) {
+	v := url.Values{}
+	v.Set("type", "vault")
+	resp, err := adm.executeMethod("GET", requestData{
+		relPath:     "/v1/serviceinfo",
+		queryValues: v,
+	})
+	defer closeResponse(resp)
+	if err != nil {
+		return VaultInfo{}, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return VaultInfo{}, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var vInfo VaultInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return VaultInfo{}, err
+	}
+
+	err = json.Unmarshal(respBytes, &vInfo)
+	if err != nil {
+		return VaultInfo{}, err
+	}
+
+	return vInfo, nil
 }

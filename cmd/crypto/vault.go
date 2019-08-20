@@ -164,6 +164,15 @@ func (v *vaultService) renewToken() {
 	}()
 }
 
+func (v *vaultService) Info() (kmsInfo KMSInfo) {
+	return KMSInfo{
+		Endpoint: v.config.Endpoint,
+		Name:     v.config.Key.Name,
+		AuthType: v.config.Auth.Type,
+	}
+
+}
+
 // authenticate logs the app to vault, and starts the auto renewer
 // before secret expires
 func (v *vaultService) authenticate() (err error) {

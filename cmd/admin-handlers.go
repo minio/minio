@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -40,6 +41,8 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/cpu"
+
+	"github.com/minio/minio/pkg/event/target"
 	"github.com/minio/minio/pkg/handlers"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
@@ -53,6 +56,9 @@ const (
 	maxEConfigJSONSize = 262272
 	defaultNetPerfSize = 100 * humanize.MiByte
 )
+
+// errNotConnected - indicates that the target connection is not active.
+var errNotConnected = errors.New("not connected to target server/service")
 
 // Type-safe query params.
 type mgmtQueryKey string
@@ -538,8 +544,6 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Reply with storage information (across nodes in a
-	// distributed setup) as json.
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
@@ -1767,4 +1771,86 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeSuccessResponseJSON(w, resp)
+}
+
+// ServiceInfoHandler - GET /minio/admin/v1/serviceinfo?type={serviceType}
+// ----------
+// Get service information
+func (a adminAPIHandlers) ServiceInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ServiceInfo")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+	var jsonBytes []byte
+
+	vars := mux.Vars(r)
+	infoType := vars["serviceType"]
+
+	switch madmin.InfoType(infoType) {
+	case madmin.Vault:
+		errorString := ""
+		if GlobalKMS == nil {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
+			return
+		}
+		kmsInfo := GlobalKMS.Info()
+		// check for online/offline status of endpoint
+		if err := checkStatus(kmsInfo.Endpoint); err != nil {
+			errorString = err.Error()
+		}
+
+		var perm = madmin.KMSPermissionInfo{}
+		kmsContext := crypto.Context{"MinIO admin API": "KMSKeyStatusHandler"} // Context for a test key operation
+		// Generate a new key using the KMS.
+		_, sealedKey, err := GlobalKMS.GenerateKey(kmsInfo.Name, kmsContext)
+		if err != nil {
+			perm.EncryptionErr = err.Error()
+		}
+
+		// Verify that we can indeed decrypt the (encrypted) key
+		_, err = GlobalKMS.UnsealKey(kmsInfo.Name, sealedKey, kmsContext)
+		if err != nil {
+			perm.DecryptionErr = err.Error()
+		}
+
+		vaultInfo := madmin.VaultInfo{
+			Endpoint: kmsInfo.Endpoint,
+			Name:     kmsInfo.Name,
+			Type:     kmsInfo.AuthType,
+			Error:    errorString,
+			Perm:     perm,
+		}
+
+		// Marshal API response
+		jsonBytes, err = json.Marshal(vaultInfo)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		writeSuccessResponseJSON(w, jsonBytes)
+
+	default:
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+	}
+}
+
+//checkStatus - ping an endpoint , return err in case of no connection
+func checkStatus(endpoint string) error {
+	u, pErr := xnet.ParseURL(endpoint)
+	if pErr != nil {
+		return pErr
+	}
+	if dErr := u.DialHTTP(); dErr != nil {
+		if urlErr, ok := dErr.(*url.Error); ok {
+			// To treat "connection refused" errors as errNotConnected.
+			if target.IsConnRefusedErr(urlErr.Err) {
+				return errNotConnected
+			}
+		}
+		return dErr
+	}
+	return nil
 }

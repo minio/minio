@@ -47,8 +47,11 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 	// Update MinIO servers.
 	adminV1Router.Methods(http.MethodPost).Path("/update").HandlerFunc(httpTraceAll(adminAPI.ServerUpdateHandler)).Queries("updateURL", "{updateURL:.*}")
 
-	// Info operations
+	// Info operations - return details based on input type
 	adminV1Router.Methods(http.MethodGet).Path("/info").HandlerFunc(httpTraceAll(adminAPI.ServerInfoHandler))
+
+	// Info operations - return details based on input type
+	adminV1Router.Methods(http.MethodGet).Path("/serviceinfo").HandlerFunc(httpTraceAll(adminAPI.ServiceInfoHandler)).Queries("type", "{serviceType:.*}")
 
 	if globalIsDistXL || globalIsXL {
 		/// Heal operations

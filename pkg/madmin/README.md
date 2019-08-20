@@ -49,6 +49,7 @@ func main() {
 |                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)     |                    |                           |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
 | [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) |                    |                           |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                 |
 |                                     | [`NetPerfInfo`](#NetPerfInfo)                   |                    |                           |                         |                                       |                                                   |                                 |
+|                                     | [`ServerVaultInfo`](#ServerVaultInfo)           |                    |                           |                         |                                       |                                                   |                                 |
 
 ## 1. Constructor
 <a name="MinIO"></a>
@@ -286,7 +287,25 @@ Fetches network performance of all cluster nodes using given sized payload. Retu
 | `Error`    | _string_         | Errors (if any) encountered while reaching this node               |
 | `ReadPerf` | _time.Duration_  | Network read performance of the server                             |
 
-## 5. Heal operations
+<a name="ServerVaultInfo"></a>
+### ServerVaultInfo() (ServerVaultInfo, error)
+
+Fetches Vault information.
+
+| Param           | Type              | Description                                                         |
+|-----------------|-------------------|---------------------------------------------------------------------|
+| `vi.EndPoint`   | _string_          | Address of the vault server                                         |
+| `vi.Name`       | _string_          | The name of the encryption key-ring                                 |
+| `vi.Type`       | _string_          | The authentication type                                             |
+| `vi.Error`      | _string_          | Errors (if any) encountered while reaching this server              |
+| `vi.Perm`       | _vi.Permission_   | The Permission for Encrypt and Decrypt                              |
+
+| Param                    | Type     | Description                                            |
+|--------------------------|----------|--------------------------------------------------------|
+| `vi.Perm.EncryptionErr`  | _string_ | Errors (if any) encountered while encrypting           |
+| `vi.Perm.DecryptionErr`  | _string_ | Errors (if any) encountered while decrypting           |
+
+## 4. Heal operations
 
 <a name="Heal"></a>
 ### Heal(bucket, prefix string, healOpts HealOpts, clientToken string, forceStart bool, forceStop bool) (start HealStartSuccess, status HealTaskStatus, err error)
@@ -351,7 +370,7 @@ __Example__
 | `DiskInfo.AvailableOn` | _[]int_        | List of disks on which the healed entity is present and healthy |
 | `DiskInfo.HealedOn`    | _[]int_        | List of disks on which the healed entity was restored           |
 
-## 6. Config operations
+## 5. Config operations
 
 <a name="GetConfig"></a>
 ### GetConfig() ([]byte, error)
@@ -390,7 +409,50 @@ __Example__
     log.Println("SetConfig was successful")
 ```
 
+<<<<<<< HEAD
 ## 7. Top operations
+=======
+<a name="GetConfigKeys"></a>
+### GetConfigKeys(keys []string) ([]byte, error)
+Get a json document which contains a set of keys and their values from config.json.
+
+__Example__
+
+``` go
+    configBytes, err := madmClnt.GetConfigKeys([]string{"version", "notify.amqp.1"})
+    if err != nil {
+        log.Fatalf("failed due to: %v", err)
+    }
+
+    // Pretty-print config received as json.
+    var buf bytes.Buffer
+    err = json.Indent(buf, configBytes, "", "\t")
+    if err != nil {
+        log.Fatalf("failed due to: %v", err)
+    }
+
+    log.Println("config received successfully: ", string(buf.Bytes()))
+```
+
+
+<a name="SetConfigKeys"></a>
+### SetConfigKeys(params map[string]string) error
+Set a set of keys and values for MinIO server or distributed setup and restart the MinIO
+server for the new configuration changes to take effect.
+
+__Example__
+
+``` go
+    err := madmClnt.SetConfigKeys(map[string]string{"notify.webhook.1": "{\"enable\": true, \"endpoint\": \"http://example.com/api\"}"})
+    if err != nil {
+        log.Fatalf("failed due to: %v", err)
+    }
+
+    log.Println("New configuration successfully set")
+```
+
+## 6. Top operations
+>>>>>>> b3fc903ed... Add function to fetch vault info
 
 <a name="TopLocks"></a>
 ### TopLocks() (LockEntries, error)
@@ -412,7 +474,7 @@ __Example__
     log.Println("TopLocks received successfully: ", string(out))
 ```
 
-## 8. IAM operations
+## 7. IAM operations
 
 <a name="AddCannedPolicy"></a>
 ### AddCannedPolicy(policyName string, policy string) error
@@ -468,7 +530,7 @@ __Example__
     }
 ```
 
-## 9. Misc operations
+## 8. Misc operations
 
 <a name="ServerUpdate"></a>
 ### ServerUpdate(updateURL string) (ServerUpdateStatus, error)
