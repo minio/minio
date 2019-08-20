@@ -189,6 +189,21 @@ func (sys *NotificationSys) LoadPolicy(policyName string) []NotificationPeerErr 
 	return ng.Wait()
 }
 
+// LoadPolicyMapping - reloads a policy mapping across all peers
+func (sys *NotificationSys) LoadPolicyMapping(userOrGroup string, isGroup bool) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(context.Background(), func() error {
+			return client.LoadPolicyMapping(userOrGroup, isGroup)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
 // DeleteUser - deletes a specific user across all peers
 func (sys *NotificationSys) DeleteUser(accessKey string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
@@ -890,6 +905,55 @@ func (sys *NotificationSys) Send(args eventArgs) []event.TargetIDErr {
 
 	targetIDs := targetIDSet.ToSlice()
 	return sys.send(args.BucketName, args.ToEvent(), targetIDs...)
+}
+
+// NetReadPerfInfo - Network read performance information.
+func (sys *NotificationSys) NetReadPerfInfo(size int64) []ServerNetReadPerfInfo {
+	reply := make([]ServerNetReadPerfInfo, len(sys.peerClients))
+
+	// Execution is done serially.
+	for i, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+
+		info, err := client.NetReadPerfInfo(size)
+		if err != nil {
+			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", client.host.String())
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
+
+			info.Addr = client.host.String()
+			info.Error = err.Error()
+		}
+
+		reply[i] = info
+	}
+
+	return reply
+}
+
+// CollectNetPerfInfo - Collect network performance information of all peers.
+func (sys *NotificationSys) CollectNetPerfInfo(size int64) map[string][]ServerNetReadPerfInfo {
+	reply := map[string][]ServerNetReadPerfInfo{}
+
+	// Execution is done serially.
+	for _, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+
+		info, err := client.CollectNetPerfInfo(size)
+		if err != nil {
+			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", client.host.String())
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
+		}
+
+		reply[client.host.String()] = info
+	}
+
+	return reply
 }
 
 // DrivePerfInfo - Drive speed (read and write) information

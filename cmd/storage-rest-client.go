@@ -374,6 +374,9 @@ func (client *storageRESTClient) DeleteFile(volume, path string) error {
 
 // DeleteFileBulk - deletes files in bulk.
 func (client *storageRESTClient) DeleteFileBulk(volume string, paths []string) (errs []error, err error) {
+	if len(paths) == 0 {
+		return errs, err
+	}
 	errs = make([]error, len(paths))
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)

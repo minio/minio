@@ -212,99 +212,99 @@ func getSampleXLMeta(totalParts int) xlMetaV1 {
 	return xlMeta
 }
 
-// Compare the unmarshaled XLMetaV1 with the one obtained from gjson parsing.
-func compareXLMetaV1(t *testing.T, unMarshalXLMeta, gjsonXLMeta xlMetaV1) {
-	// Start comparing the fields of xlMetaV1 obtained from gjson parsing with one parsed using json unmarshaling.
-	if unMarshalXLMeta.Version != gjsonXLMeta.Version {
-		t.Errorf("Expected the Version to be \"%s\", but got \"%s\".", unMarshalXLMeta.Version, gjsonXLMeta.Version)
+// Compare the unmarshaled XLMetaV1 with the one obtained from fastjson parsing.
+func compareXLMetaV1(t *testing.T, unMarshalXLMeta, fastjsonXLMeta xlMetaV1) {
+	// Start comparing the fields of xlMetaV1 obtained from fastjson parsing with one parsed using json unmarshaling.
+	if unMarshalXLMeta.Version != fastjsonXLMeta.Version {
+		t.Errorf("Expected the Version to be \"%s\", but got \"%s\".", unMarshalXLMeta.Version, fastjsonXLMeta.Version)
 	}
-	if unMarshalXLMeta.Format != gjsonXLMeta.Format {
-		t.Errorf("Expected the format to be \"%s\", but got \"%s\".", unMarshalXLMeta.Format, gjsonXLMeta.Format)
+	if unMarshalXLMeta.Format != fastjsonXLMeta.Format {
+		t.Errorf("Expected the format to be \"%s\", but got \"%s\".", unMarshalXLMeta.Format, fastjsonXLMeta.Format)
 	}
-	if unMarshalXLMeta.Stat.Size != gjsonXLMeta.Stat.Size {
-		t.Errorf("Expected the stat size to be %v, but got %v.", unMarshalXLMeta.Stat.Size, gjsonXLMeta.Stat.Size)
+	if unMarshalXLMeta.Stat.Size != fastjsonXLMeta.Stat.Size {
+		t.Errorf("Expected the stat size to be %v, but got %v.", unMarshalXLMeta.Stat.Size, fastjsonXLMeta.Stat.Size)
 	}
-	if !unMarshalXLMeta.Stat.ModTime.Equal(gjsonXLMeta.Stat.ModTime) {
-		t.Errorf("Expected the modTime to be \"%v\", but got \"%v\".", unMarshalXLMeta.Stat.ModTime, gjsonXLMeta.Stat.ModTime)
+	if !unMarshalXLMeta.Stat.ModTime.Equal(fastjsonXLMeta.Stat.ModTime) {
+		t.Errorf("Expected the modTime to be \"%v\", but got \"%v\".", unMarshalXLMeta.Stat.ModTime, fastjsonXLMeta.Stat.ModTime)
 	}
-	if unMarshalXLMeta.Erasure.Algorithm != gjsonXLMeta.Erasure.Algorithm {
-		t.Errorf("Expected the erasure algorithm to be \"%v\", but got \"%v\".", unMarshalXLMeta.Erasure.Algorithm, gjsonXLMeta.Erasure.Algorithm)
+	if unMarshalXLMeta.Erasure.Algorithm != fastjsonXLMeta.Erasure.Algorithm {
+		t.Errorf("Expected the erasure algorithm to be \"%v\", but got \"%v\".", unMarshalXLMeta.Erasure.Algorithm, fastjsonXLMeta.Erasure.Algorithm)
 	}
-	if unMarshalXLMeta.Erasure.DataBlocks != gjsonXLMeta.Erasure.DataBlocks {
-		t.Errorf("Expected the erasure data blocks to be %v, but got %v.", unMarshalXLMeta.Erasure.DataBlocks, gjsonXLMeta.Erasure.DataBlocks)
+	if unMarshalXLMeta.Erasure.DataBlocks != fastjsonXLMeta.Erasure.DataBlocks {
+		t.Errorf("Expected the erasure data blocks to be %v, but got %v.", unMarshalXLMeta.Erasure.DataBlocks, fastjsonXLMeta.Erasure.DataBlocks)
 	}
-	if unMarshalXLMeta.Erasure.ParityBlocks != gjsonXLMeta.Erasure.ParityBlocks {
-		t.Errorf("Expected the erasure parity blocks to be %v, but got %v.", unMarshalXLMeta.Erasure.ParityBlocks, gjsonXLMeta.Erasure.ParityBlocks)
+	if unMarshalXLMeta.Erasure.ParityBlocks != fastjsonXLMeta.Erasure.ParityBlocks {
+		t.Errorf("Expected the erasure parity blocks to be %v, but got %v.", unMarshalXLMeta.Erasure.ParityBlocks, fastjsonXLMeta.Erasure.ParityBlocks)
 	}
-	if unMarshalXLMeta.Erasure.BlockSize != gjsonXLMeta.Erasure.BlockSize {
-		t.Errorf("Expected the erasure block size to be %v, but got %v.", unMarshalXLMeta.Erasure.BlockSize, gjsonXLMeta.Erasure.BlockSize)
+	if unMarshalXLMeta.Erasure.BlockSize != fastjsonXLMeta.Erasure.BlockSize {
+		t.Errorf("Expected the erasure block size to be %v, but got %v.", unMarshalXLMeta.Erasure.BlockSize, fastjsonXLMeta.Erasure.BlockSize)
 	}
-	if unMarshalXLMeta.Erasure.Index != gjsonXLMeta.Erasure.Index {
-		t.Errorf("Expected the erasure index to be %v, but got %v.", unMarshalXLMeta.Erasure.Index, gjsonXLMeta.Erasure.Index)
+	if unMarshalXLMeta.Erasure.Index != fastjsonXLMeta.Erasure.Index {
+		t.Errorf("Expected the erasure index to be %v, but got %v.", unMarshalXLMeta.Erasure.Index, fastjsonXLMeta.Erasure.Index)
 	}
-	if len(unMarshalXLMeta.Erasure.Distribution) != len(gjsonXLMeta.Erasure.Distribution) {
-		t.Errorf("Expected the size of Erasure Distribution to be %d, but got %d.", len(unMarshalXLMeta.Erasure.Distribution), len(gjsonXLMeta.Erasure.Distribution))
+	if len(unMarshalXLMeta.Erasure.Distribution) != len(fastjsonXLMeta.Erasure.Distribution) {
+		t.Errorf("Expected the size of Erasure Distribution to be %d, but got %d.", len(unMarshalXLMeta.Erasure.Distribution), len(fastjsonXLMeta.Erasure.Distribution))
 	} else {
 		for i := 0; i < len(unMarshalXLMeta.Erasure.Distribution); i++ {
-			if unMarshalXLMeta.Erasure.Distribution[i] != gjsonXLMeta.Erasure.Distribution[i] {
-				t.Errorf("Expected the Erasure Distribution to be %d, got %d.", unMarshalXLMeta.Erasure.Distribution[i], gjsonXLMeta.Erasure.Distribution[i])
+			if unMarshalXLMeta.Erasure.Distribution[i] != fastjsonXLMeta.Erasure.Distribution[i] {
+				t.Errorf("Expected the Erasure Distribution to be %d, got %d.", unMarshalXLMeta.Erasure.Distribution[i], fastjsonXLMeta.Erasure.Distribution[i])
 			}
 		}
 	}
 
-	if len(unMarshalXLMeta.Erasure.Checksums) != len(gjsonXLMeta.Erasure.Checksums) {
-		t.Errorf("Expected the size of Erasure Checksums to be %d, but got %d.", len(unMarshalXLMeta.Erasure.Checksums), len(gjsonXLMeta.Erasure.Checksums))
+	if len(unMarshalXLMeta.Erasure.Checksums) != len(fastjsonXLMeta.Erasure.Checksums) {
+		t.Errorf("Expected the size of Erasure Checksums to be %d, but got %d.", len(unMarshalXLMeta.Erasure.Checksums), len(fastjsonXLMeta.Erasure.Checksums))
 	} else {
 		for i := 0; i < len(unMarshalXLMeta.Erasure.Checksums); i++ {
-			if unMarshalXLMeta.Erasure.Checksums[i].Name != gjsonXLMeta.Erasure.Checksums[i].Name {
-				t.Errorf("Expected the Erasure Checksum Name to be \"%s\", got \"%s\".", unMarshalXLMeta.Erasure.Checksums[i].Name, gjsonXLMeta.Erasure.Checksums[i].Name)
+			if unMarshalXLMeta.Erasure.Checksums[i].Name != fastjsonXLMeta.Erasure.Checksums[i].Name {
+				t.Errorf("Expected the Erasure Checksum Name to be \"%s\", got \"%s\".", unMarshalXLMeta.Erasure.Checksums[i].Name, fastjsonXLMeta.Erasure.Checksums[i].Name)
 			}
-			if unMarshalXLMeta.Erasure.Checksums[i].Algorithm != gjsonXLMeta.Erasure.Checksums[i].Algorithm {
-				t.Errorf("Expected the Erasure Checksum Algorithm to be \"%s\", got \"%s\".", unMarshalXLMeta.Erasure.Checksums[i].Algorithm, gjsonXLMeta.Erasure.Checksums[i].Algorithm)
+			if unMarshalXLMeta.Erasure.Checksums[i].Algorithm != fastjsonXLMeta.Erasure.Checksums[i].Algorithm {
+				t.Errorf("Expected the Erasure Checksum Algorithm to be \"%s\", got \"%s\".", unMarshalXLMeta.Erasure.Checksums[i].Algorithm, fastjsonXLMeta.Erasure.Checksums[i].Algorithm)
 			}
-			if !bytes.Equal(unMarshalXLMeta.Erasure.Checksums[i].Hash, gjsonXLMeta.Erasure.Checksums[i].Hash) {
-				t.Errorf("Expected the Erasure Checksum Hash to be \"%s\", got \"%s\".", unMarshalXLMeta.Erasure.Checksums[i].Hash, gjsonXLMeta.Erasure.Checksums[i].Hash)
+			if !bytes.Equal(unMarshalXLMeta.Erasure.Checksums[i].Hash, fastjsonXLMeta.Erasure.Checksums[i].Hash) {
+				t.Errorf("Expected the Erasure Checksum Hash to be \"%s\", got \"%s\".", unMarshalXLMeta.Erasure.Checksums[i].Hash, fastjsonXLMeta.Erasure.Checksums[i].Hash)
 			}
 		}
 	}
 
-	if unMarshalXLMeta.Minio.Release != gjsonXLMeta.Minio.Release {
-		t.Errorf("Expected the Release string to be \"%s\", but got \"%s\".", unMarshalXLMeta.Minio.Release, gjsonXLMeta.Minio.Release)
+	if unMarshalXLMeta.Minio.Release != fastjsonXLMeta.Minio.Release {
+		t.Errorf("Expected the Release string to be \"%s\", but got \"%s\".", unMarshalXLMeta.Minio.Release, fastjsonXLMeta.Minio.Release)
 	}
-	if len(unMarshalXLMeta.Parts) != len(gjsonXLMeta.Parts) {
-		t.Errorf("Expected info of  %d parts to be present, but got %d instead.", len(unMarshalXLMeta.Parts), len(gjsonXLMeta.Parts))
+	if len(unMarshalXLMeta.Parts) != len(fastjsonXLMeta.Parts) {
+		t.Errorf("Expected info of  %d parts to be present, but got %d instead.", len(unMarshalXLMeta.Parts), len(fastjsonXLMeta.Parts))
 	} else {
 		for i := 0; i < len(unMarshalXLMeta.Parts); i++ {
-			if unMarshalXLMeta.Parts[i].Name != gjsonXLMeta.Parts[i].Name {
-				t.Errorf("Expected the name of part %d to be \"%s\", got \"%s\".", i+1, unMarshalXLMeta.Parts[i].Name, gjsonXLMeta.Parts[i].Name)
+			if unMarshalXLMeta.Parts[i].Name != fastjsonXLMeta.Parts[i].Name {
+				t.Errorf("Expected the name of part %d to be \"%s\", got \"%s\".", i+1, unMarshalXLMeta.Parts[i].Name, fastjsonXLMeta.Parts[i].Name)
 			}
-			if unMarshalXLMeta.Parts[i].ETag != gjsonXLMeta.Parts[i].ETag {
-				t.Errorf("Expected the ETag of part %d to be \"%s\", got \"%s\".", i+1, unMarshalXLMeta.Parts[i].ETag, gjsonXLMeta.Parts[i].ETag)
+			if unMarshalXLMeta.Parts[i].ETag != fastjsonXLMeta.Parts[i].ETag {
+				t.Errorf("Expected the ETag of part %d to be \"%s\", got \"%s\".", i+1, unMarshalXLMeta.Parts[i].ETag, fastjsonXLMeta.Parts[i].ETag)
 			}
-			if unMarshalXLMeta.Parts[i].Number != gjsonXLMeta.Parts[i].Number {
-				t.Errorf("Expected the number of part %d to be \"%d\", got \"%d\".", i+1, unMarshalXLMeta.Parts[i].Number, gjsonXLMeta.Parts[i].Number)
+			if unMarshalXLMeta.Parts[i].Number != fastjsonXLMeta.Parts[i].Number {
+				t.Errorf("Expected the number of part %d to be \"%d\", got \"%d\".", i+1, unMarshalXLMeta.Parts[i].Number, fastjsonXLMeta.Parts[i].Number)
 			}
-			if unMarshalXLMeta.Parts[i].Size != gjsonXLMeta.Parts[i].Size {
-				t.Errorf("Expected the size of part %d to be %v, got %v.", i+1, unMarshalXLMeta.Parts[i].Size, gjsonXLMeta.Parts[i].Size)
+			if unMarshalXLMeta.Parts[i].Size != fastjsonXLMeta.Parts[i].Size {
+				t.Errorf("Expected the size of part %d to be %v, got %v.", i+1, unMarshalXLMeta.Parts[i].Size, fastjsonXLMeta.Parts[i].Size)
 			}
 		}
 	}
 
 	for key, val := range unMarshalXLMeta.Meta {
-		gjsonVal, exists := gjsonXLMeta.Meta[key]
+		fastjsonVal, exists := fastjsonXLMeta.Meta[key]
 		if !exists {
 			t.Errorf("No meta data entry for Key \"%s\" exists.", key)
 		}
-		if val != gjsonVal {
-			t.Errorf("Expected the value for Meta data key \"%s\" to be \"%s\", but got \"%s\".", key, val, gjsonVal)
+		if val != fastjsonVal {
+			t.Errorf("Expected the value for Meta data key \"%s\" to be \"%s\", but got \"%s\".", key, val, fastjsonVal)
 		}
 
 	}
 }
 
-// Tests the correctness of constructing XLMetaV1 using gjson lib.
+// Tests the correctness of constructing XLMetaV1 using fastjson lib.
 // The result will be compared with the result obtained from json.unMarshal of the byte data.
-func TestGetXLMetaV1GJson1(t *testing.T) {
+func TestGetXLMetaV1Fastjson1(t *testing.T) {
 	xlMetaJSON := getXLMetaBytes(1)
 
 	var unMarshalXLMeta xlMetaV1
@@ -312,16 +312,16 @@ func TestGetXLMetaV1GJson1(t *testing.T) {
 		t.Errorf("Unmarshalling failed: %v", err)
 	}
 
-	gjsonXLMeta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaJSON)
+	fastjsonXLMeta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaJSON)
 	if err != nil {
-		t.Errorf("gjson parsing of XLMeta failed: %v", err)
+		t.Errorf("fastjson parsing of XLMeta failed: %v", err)
 	}
-	compareXLMetaV1(t, unMarshalXLMeta, gjsonXLMeta)
+	compareXLMetaV1(t, unMarshalXLMeta, fastjsonXLMeta)
 }
 
-// Tests the correctness of constructing XLMetaV1 using gjson lib for XLMetaV1 of size 10 parts.
+// Tests the correctness of constructing XLMetaV1 using fastjson lib for XLMetaV1 of size 10 parts.
 // The result will be compared with the result obtained from json.unMarshal of the byte data.
-func TestGetXLMetaV1GJson10(t *testing.T) {
+func TestGetXLMetaV1Fastjson10(t *testing.T) {
 
 	xlMetaJSON := getXLMetaBytes(10)
 
@@ -329,11 +329,11 @@ func TestGetXLMetaV1GJson10(t *testing.T) {
 	if err := json.Unmarshal(xlMetaJSON, &unMarshalXLMeta); err != nil {
 		t.Errorf("Unmarshalling failed: %v", err)
 	}
-	gjsonXLMeta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaJSON)
+	fastjsonXLMeta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaJSON)
 	if err != nil {
-		t.Errorf("gjson parsing of XLMeta failed: %v", err)
+		t.Errorf("fastjson parsing of XLMeta failed: %v", err)
 	}
-	compareXLMetaV1(t, unMarshalXLMeta, gjsonXLMeta)
+	compareXLMetaV1(t, unMarshalXLMeta, fastjsonXLMeta)
 }
 
 // Test the predicted part size from the part index

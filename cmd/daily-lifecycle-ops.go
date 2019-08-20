@@ -103,14 +103,12 @@ func startDailyLifecycle() {
 	}
 }
 
+var lifecycleTimeout = newDynamicTimeout(60*time.Second, time.Second)
+
 func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
-
-	zeroDuration := time.Millisecond
-	zeroDynamicTimeout := newDynamicTimeout(zeroDuration, zeroDuration)
-
 	// Lock to avoid concurrent lifecycle ops from other nodes
 	sweepLock := globalNSMutex.NewNSLock(ctx, "system", "daily-lifecycle-ops")
-	if err := sweepLock.GetLock(zeroDynamicTimeout); err != nil {
+	if err := sweepLock.GetLock(lifecycleTimeout); err != nil {
 		return err
 	}
 	defer sweepLock.Unlock()

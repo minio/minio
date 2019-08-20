@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"encoding/gob"
 	"io"
+	"math/rand"
 	"net/url"
 	"strconv"
 	"time"
@@ -106,6 +107,37 @@ func (client *peerRESTClient) Close() error {
 
 // GetLocksResp stores various info from the client for each lock that is requested.
 type GetLocksResp map[string][]lockRequesterInfo
+
+// NetReadPerfInfo - fetch network read performance information for a remote node.
+func (client *peerRESTClient) NetReadPerfInfo(size int64) (info ServerNetReadPerfInfo, err error) {
+	params := make(url.Values)
+	params.Set(peerRESTNetPerfSize, strconv.FormatInt(size, 10))
+	respBody, err := client.call(
+		peerRESTMethodNetReadPerfInfo,
+		params,
+		rand.New(rand.NewSource(time.Now().UnixNano())),
+		size,
+	)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
+// CollectNetPerfInfo - collect network performance information of other peers.
+func (client *peerRESTClient) CollectNetPerfInfo(size int64) (info []ServerNetReadPerfInfo, err error) {
+	params := make(url.Values)
+	params.Set(peerRESTNetPerfSize, strconv.FormatInt(size, 10))
+	respBody, err := client.call(peerRESTMethodCollectNetPerfInfo, params, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
 
 // GetLocks - fetch older locks for a remote node.
 func (client *peerRESTClient) GetLocks() (locks GetLocksResp, err error) {
@@ -401,6 +433,22 @@ func (client *peerRESTClient) LoadPolicy(policyName string) (err error) {
 	respBody, err := client.call(peerRESTMethodLoadPolicy, values, nil, -1)
 	if err != nil {
 		return
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// LoadPolicyMapping - reload a specific policy mapping
+func (client *peerRESTClient) LoadPolicyMapping(userOrGroup string, isGroup bool) error {
+	values := make(url.Values)
+	values.Set(peerRESTUserOrGroup, userOrGroup)
+	if isGroup {
+		values.Set(peerRESTIsGroup, "")
+	}
+
+	respBody, err := client.call(peerRESTMethodLoadPolicyMapping, values, nil, -1)
+	if err != nil {
+		return err
 	}
 	defer http.DrainBody(respBody)
 	return nil

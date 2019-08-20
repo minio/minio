@@ -3,7 +3,7 @@ The MinIO Admin Golang Client SDK provides APIs to manage MinIO services.
 
 This quickstart guide will show you how to install the MinIO Admin client SDK, connect to MinIO admin service, and provide a walkthrough of a simple file uploader.
 
-This document assumes that you have a working [Golang setup](https://docs.min.io/docs/how-to-install-golang).
+This document assumes that you have a working [Golang setup](https://golang.org/doc/install).
 
 ## Initialize MinIO Admin Client object.
 

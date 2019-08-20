@@ -197,6 +197,21 @@ func (c *coreDNS) Delete(bucket string) error {
 	return nil
 }
 
+// Removes a specific DNS entry
+func (c *coreDNS) DeleteRecord(record SrvRecord) error {
+	for _, domainName := range c.domainNames {
+		key := msg.Path(fmt.Sprintf("%s.%s.", record.Key, domainName), defaultPrefixPath)
+
+		dctx, dcancel := context.WithTimeout(context.Background(), defaultContextTimeout)
+		if _, err := c.etcdClient.Delete(dctx, key+etcdPathSeparator+record.Host); err != nil {
+			dcancel()
+			return err
+		}
+		dcancel()
+	}
+	return nil
+}
+
 // CoreDNS - represents dns config for coredns server.
 type coreDNS struct {
 	domainNames []string

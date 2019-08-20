@@ -28,7 +28,6 @@ import (
 	"sync"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -76,8 +75,9 @@ func (c ChecksumInfo) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON - should never be called, instead xlMetaV1UnmarshalJSON() should be used.
 func (c *ChecksumInfo) UnmarshalJSON(data []byte) error {
+	logger.LogIf(context.Background(), errUnexpected)
+
 	var info checksumInfoJSON
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(data, &info); err != nil {
 		return err
 	}

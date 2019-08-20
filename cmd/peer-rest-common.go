@@ -16,10 +16,12 @@
 
 package cmd
 
-const peerRESTVersion = "v3"
+const peerRESTVersion = "v4"
 const peerRESTPath = minioReservedBucketPath + "/peer/" + peerRESTVersion
 
 const (
+	peerRESTMethodNetReadPerfInfo          = "netreadperfinfo"
+	peerRESTMethodCollectNetPerfInfo       = "collectnetperfinfo"
 	peerRESTMethodServerInfo               = "serverinfo"
 	peerRESTMethodCPULoadInfo              = "cpuloadinfo"
 	peerRESTMethodMemUsageInfo             = "memusageinfo"
@@ -33,6 +35,7 @@ const (
 	peerRESTMethodLoadUser                 = "loaduser"
 	peerRESTMethodDeleteUser               = "deleteuser"
 	peerRESTMethodLoadPolicy               = "loadpolicy"
+	peerRESTMethodLoadPolicyMapping        = "loadpolicymapping"
 	peerRESTMethodDeletePolicy             = "deletepolicy"
 	peerRESTMethodLoadUsers                = "loadusers"
 	peerRESTMethodLoadGroup                = "loadgroup"
@@ -50,14 +53,17 @@ const (
 )
 
 const (
-	peerRESTBucket   = "bucket"
-	peerRESTUser     = "user"
-	peerRESTGroup    = "group"
-	peerRESTUserTemp = "user-temp"
-	peerRESTPolicy   = "policy"
-	peerRESTSignal   = "signal"
-	peerRESTProfiler = "profiler"
-	peerRESTDryRun   = "dry-run"
-	peerRESTTraceAll = "all"
-	peerRESTTraceErr = "err"
+	peerRESTNetPerfSize = "netperfsize"
+	peerRESTBucket      = "bucket"
+	peerRESTUser        = "user"
+	peerRESTGroup       = "group"
+	peerRESTUserTemp    = "user-temp"
+	peerRESTPolicy      = "policy"
+	peerRESTUserOrGroup = "user-or-group"
+	peerRESTIsGroup     = "is-group"
+	peerRESTSignal      = "signal"
+	peerRESTProfiler    = "profiler"
+	peerRESTDryRun      = "dry-run"
+	peerRESTTraceAll    = "all"
+	peerRESTTraceErr    = "err"
 )

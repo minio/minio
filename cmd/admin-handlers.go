@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -50,6 +51,7 @@ import (
 
 const (
 	maxEConfigJSONSize = 262272
+	defaultNetPerfSize = 100 * humanize.MiByte
 )
 
 // Type-safe query params.
@@ -304,6 +306,13 @@ type ServerMemUsageInfo struct {
 	HistoricUsage []mem.Usage `json:"historicUsage"`
 }
 
+// ServerNetReadPerfInfo network read performance information.
+type ServerNetReadPerfInfo struct {
+	Addr     string        `json:"addr"`
+	ReadPerf time.Duration `json:"readPerf"`
+	Error    string        `json:"error,omitempty"`
+}
+
 // PerfInfoHandler - GET /minio/admin/v1/performance?perfType={perfType}
 // ----------
 // Get all performance information based on input type
@@ -318,6 +327,44 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 
 	vars := mux.Vars(r)
 	switch perfType := vars["perfType"]; perfType {
+	case "net":
+		var size int64 = defaultNetPerfSize
+		if sizeStr, found := vars["size"]; found {
+			var err error
+			if size, err = strconv.ParseInt(sizeStr, 10, 64); err != nil || size < 0 {
+				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
+				return
+			}
+		}
+
+		storage := objectAPI.StorageInfo(ctx)
+		if !(storage.Backend.Type == BackendFS || storage.Backend.Type == BackendErasure) {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+			return
+		}
+
+		addr := r.Host
+		if globalIsDistXL {
+			addr = GetLocalPeer(globalEndpoints)
+		}
+
+		infos := map[string][]ServerNetReadPerfInfo{}
+		infos[addr] = globalNotificationSys.NetReadPerfInfo(size)
+		for peer, info := range globalNotificationSys.CollectNetPerfInfo(size) {
+			infos[peer] = info
+		}
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(infos)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		// Reply with performance information (across nodes in a
+		// distributed setup) as json.
+		writeSuccessResponseJSON(w, jsonBytes)
+
 	case "drive":
 		info := objectAPI.StorageInfo(ctx)
 		if !(info.Backend.Type == BackendFS || info.Backend.Type == BackendErasure) {
@@ -1020,6 +1067,33 @@ func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponseJSON(w, econfigData)
 }
 
+// GetUserInfo - GET /minio/admin/v1/user-info
+func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetUserInfo")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	name := vars["accessKey"]
+
+	userInfo, err := globalIAMSys.GetUserInfo(name)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	data, err := json.Marshal(userInfo)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, data)
+}
+
 // UpdateGroupMembers - PUT /minio/admin/v1/update-group-members
 func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "UpdateGroupMembers")
@@ -1353,9 +1427,9 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// SetUserPolicy - PUT /minio/admin/v1/set-user-policy?accessKey=<access_key>&name=<policy_name>
-func (a adminAPIHandlers) SetUserPolicy(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SetUserPolicy")
+// SetPolicyForUserOrGroup - PUT /minio/admin/v1/set-policy?policy=xxx&user-or-group=?[&is-group]
+func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SetPolicyForUserOrGroup")
 
 	objectAPI := validateAdminReq(ctx, w, r)
 	if objectAPI == nil {
@@ -1363,8 +1437,9 @@ func (a adminAPIHandlers) SetUserPolicy(w http.ResponseWriter, r *http.Request) 
 	}
 
 	vars := mux.Vars(r)
-	accessKey := vars["accessKey"]
-	policyName := vars["name"]
+	policyName := vars["policyName"]
+	entityName := vars["userOrGroup"]
+	isGroup := vars["isGroup"] == "true"
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
@@ -1372,18 +1447,13 @@ func (a adminAPIHandlers) SetUserPolicy(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Custom IAM policies not allowed for admin user.
-	if accessKey == globalServerConfig.GetCredential().AccessKey {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+	if err := globalIAMSys.PolicyDBSet(entityName, policyName, isGroup); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	if err := globalIAMSys.PolicyDBSet(accessKey, policyName, false); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-	}
-
-	// Notify all other Minio peers to reload user
-	for _, nerr := range globalNotificationSys.LoadUser(accessKey, false) {
+	// Notify all other MinIO peers to reload policy
+	for _, nerr := range globalNotificationSys.LoadPolicyMapping(entityName, isGroup) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
