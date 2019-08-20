@@ -77,6 +77,26 @@ func (target WebhookTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - Return true if target is up and active
+func (target *WebhookTarget) IsActive() (bool, error) {
+	u, pErr := xnet.ParseURL(target.args.Endpoint.String())
+	if pErr != nil {
+		return false, pErr
+	}
+	if dErr := u.DialHTTP(); dErr != nil {
+		if xnet.IsNetworkOrHostDown(dErr) {
+			return false, errNotConnected
+		}
+		return false, dErr
+	}
+	return true, nil
+}
+
+// MarshalJSON - converts target arguments into JSON data.
+func (target *WebhookTarget) MarshalJSON() ([]byte, error) {
+	return json.Marshal(target.args)
+}
+
 // Save - saves the events to the store if queuestore is configured, which will be replayed when the wenhook connection is active.
 func (target *WebhookTarget) Save(eventData event.Event) error {
 	if target.store != nil {

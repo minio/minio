@@ -31,6 +31,16 @@ func (target *PeerRESTClientTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - does nothing and available for interface compatibility.
+func (target *PeerRESTClientTarget) IsActive() (bool, error) {
+	return true, nil
+}
+
+// MarshalJSON - interface compatible method does no-op.
+func (target *PeerRESTClientTarget) MarshalJSON() ([]byte, error) {
+	return nil, nil
+}
+
 // Save - Sends event directly without persisting.
 func (target *PeerRESTClientTarget) Save(eventData event.Event) error {
 	return target.send(eventData)

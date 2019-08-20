@@ -44,6 +44,10 @@ func (target HTTPClientTarget) ID() event.TargetID {
 	return target.id
 }
 
+// MarshalJSON - interface compatible method does no-op.
+func (target *HTTPClientTarget) MarshalJSON() ([]byte, error) {
+	return nil, nil
+}
 func (target *HTTPClientTarget) start() {
 	go func() {
 		defer func() {

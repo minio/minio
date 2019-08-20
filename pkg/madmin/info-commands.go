@@ -27,9 +27,27 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/mem"
+)
+
+// InfoType - Info for different services
+type InfoType string
+
+const (
+	// INFO represents info for several services
+	INFO = "info"
+	// ETCD represents info for etcd endpoints
+	ETCD InfoType = "etcd"
+	// LOGGER represents info for log endpoints
+	LOGGER InfoType = "logger"
+	// AUDIT represents info for audit endpoints
+	AUDIT InfoType = "audit"
+	// LAMBDA represents info for lambda endpoints
+	LAMBDA InfoType = "lambda"
 )
 
 const (
@@ -350,4 +368,163 @@ func (adm *AdminClient) NetPerfInfo(size int) (map[string][]NetPerfInfo, error) 
 	}
 
 	return info, nil
+}
+
+// ETCDInfo Contains the vault info
+type ETCDInfo struct {
+	ETCDEndpoint []string      `json:"endpoint"` // The ETCD API endpoint as URL
+	Domain       string        `json:"domain"`   // The domain specified
+	PublicIPs    set.StringSet `json:"ip"`       // The defined Public IPs
+	Error        []string      `json:"error,omitempty"`
+}
+
+// ServerETCDInfo fetches the etcd server info
+func (adm *AdminClient) ServerETCDInfo() (ETCDInfo, error) {
+	v := url.Values{}
+	v.Set(INFO, string(ETCD))
+	resp, err := adm.executeMethod("GET", requestData{
+		relPath:     "/v1/serviceinfo",
+		queryValues: v,
+	})
+	defer closeResponse(resp)
+	if err != nil {
+		return ETCDInfo{}, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return ETCDInfo{}, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var etcd ETCDInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return ETCDInfo{}, err
+	}
+
+	err = json.Unmarshal(respBytes, &etcd)
+	if err != nil {
+		return ETCDInfo{}, err
+	}
+
+	return etcd, nil
+}
+
+// ServerLoggerInfo - contains Log info
+type ServerLoggerInfo struct {
+	Endpoint string `json:"endpoint"`
+	Error    string `json:"error,omitempty"`
+}
+
+// ServerLoggerInfo fetches the HTTP log endpoint of server
+func (adm *AdminClient) ServerLoggerInfo() ([]ServerLoggerInfo, error) {
+	v := url.Values{}
+	v.Set(INFO, string(LOGGER))
+	resp, err := adm.executeMethod("GET", requestData{
+		relPath:     "/v1/serviceinfo",
+		queryValues: v,
+	})
+	defer closeResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var loggersInfo []ServerLoggerInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(respBytes, &loggersInfo)
+	if err != nil {
+		return nil, err
+	}
+	return loggersInfo, nil
+}
+
+// ServerAuditInfo - contains Audit info of server
+type ServerAuditInfo struct {
+	Endpoint string `json:"endpoint,omitempty"`
+	Error    string `json:"error,omitempty"`
+}
+
+// ServerAuditInfo fetches the Audit log info of server
+func (adm *AdminClient) ServerAuditInfo() (ServerAuditInfo, error) {
+	v := url.Values{}
+	v.Set(INFO, string(AUDIT))
+	resp, err := adm.executeMethod("GET", requestData{
+		relPath:     "/v1/serviceinfo",
+		queryValues: v,
+	})
+	defer closeResponse(resp)
+	if err != nil {
+		return ServerAuditInfo{}, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return ServerAuditInfo{}, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var auditInfo ServerAuditInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return ServerAuditInfo{}, err
+	}
+	err = json.Unmarshal(respBytes, &auditInfo)
+	if err != nil {
+		return ServerAuditInfo{}, err
+	}
+	return auditInfo, nil
+}
+
+// TargetInfo has the list of targets with their status availibility info
+type TargetInfo struct {
+	ID     event.TargetID `json:"TargetId"`
+	Config string         `json:"config"`
+	Error  string         `json:"error,omitempty"`
+}
+
+// ServerLambdaInfo fetches the lambda server info
+func (adm *AdminClient) ServerLambdaInfo() ([]TargetInfo, error) {
+	v := url.Values{}
+	v.Set(INFO, string(LAMBDA))
+	resp, err := adm.executeMethod("GET", requestData{
+		relPath:     "/v1/serviceinfo",
+		queryValues: v,
+	})
+	defer closeResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+
+	var lambdaInfo []TargetInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(respBytes, &lambdaInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	return lambdaInfo, nil
 }

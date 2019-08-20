@@ -127,6 +127,42 @@ func (target *NATSTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - Return true if target is up and active
+func (target *NATSTarget) IsActive() (bool, error) {
+	var connErr error
+
+	if target.args.Streaming.Enable {
+		if target.stanConn == nil || target.stanConn.NatsConn() == nil {
+			target.stanConn, connErr = target.args.connectStan()
+		} else {
+			if !target.stanConn.NatsConn().IsConnected() {
+				return false, errNotConnected
+			}
+		}
+	} else {
+		if target.natsConn == nil {
+			target.natsConn, connErr = target.args.connectNats()
+		} else {
+			if !target.natsConn.IsConnected() {
+				return false, errNotConnected
+			}
+		}
+	}
+
+	if connErr != nil {
+		if connErr.Error() == nats.ErrNoServers.Error() {
+			return false, errNotConnected
+		}
+		return false, connErr
+	}
+	return true, nil
+}
+
+// MarshalJSON - converts target arguments into JSON data.
+func (target *NATSTarget) MarshalJSON() ([]byte, error) {
+	return json.Marshal(target.args)
+}
+
 // Save - saves the events to the store which will be replayed when the Nats connection is active.
 func (target *NATSTarget) Save(eventData event.Event) error {
 	if target.store != nil {

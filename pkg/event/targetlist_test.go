@@ -39,6 +39,11 @@ func (target ExampleTarget) Save(eventData Event) error {
 	return target.send(eventData)
 }
 
+// MarshalJSON - interface compatible method does no-op.
+func (target ExampleTarget) MarshalJSON() ([]byte, error) {
+	return nil, nil
+}
+
 func (target ExampleTarget) send(eventData Event) error {
 	b := make([]byte, 1)
 	if _, err := rand.Read(b); err != nil {
@@ -67,6 +72,9 @@ func (target ExampleTarget) Close() error {
 	return nil
 }
 
+func (target ExampleTarget) IsActive() (bool, error) {
+	return false, errors.New("not connected to target server/service")
+}
 func TestTargetListAdd(t *testing.T) {
 	targetListCase1 := NewTargetList()
 

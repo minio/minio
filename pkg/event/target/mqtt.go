@@ -26,7 +26,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/eclipse/paho.mqtt.golang"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -91,6 +91,20 @@ type MQTTTarget struct {
 // ID - returns target ID.
 func (target *MQTTTarget) ID() event.TargetID {
 	return target.id
+}
+
+// IsActive - Return true if target is up and active
+func (target *MQTTTarget) IsActive() (bool, error) {
+	// Do not send if the connection is not active.
+	if !target.client.IsConnectionOpen() {
+		return false, errNotConnected
+	}
+	return true, nil
+}
+
+// MarshalJSON - converts target arguments into JSON data.
+func (target *MQTTTarget) MarshalJSON() ([]byte, error) {
+	return json.Marshal(target.args)
 }
 
 // send - sends an event to the mqtt.

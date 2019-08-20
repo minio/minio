@@ -74,6 +74,17 @@ const (
 	// vault namespace. The vault namespace is used if the enterprise
 	// version of Hashicorp Vault is used.
 	EnvVaultNamespace = "MINIO_SSE_VAULT_NAMESPACE"
+
+	// EnvMinioDomain indicates the domain suffix for the bucket which
+	// will be used to resolve bucket through DNS.
+	EnvMinioDomain = "MINIO_DOMAIN"
+
+	// EnvLoggerHTTPEndpoint is the environment variable for HTTP target logging,
+	// this setting will override the endpoint settings in the MinIO server config.
+	EnvLoggerHTTPEndpoint = "MINIO_LOGGER_HTTP_ENDPOINT"
+
+	// EnvAuditLoggerHTTPEndpoint is the environment variable for Audit log.
+	EnvAuditLoggerHTTPEndpoint = "MINIO_AUDIT_LOGGER_HTTP_ENDPOINT"
 )
 
 // Environment provides functions for accessing environment

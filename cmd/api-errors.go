@@ -161,6 +161,10 @@ const (
 	ErrKMSNotConfigured
 	ErrKMSAuthFailure
 
+	ErrETCDNotConfigured
+	ErrHTTPLogNotConfigured
+	ErrAuditLogNotConfigured
+	ErrLambdaNotConfigured
 	ErrNoAccessKey
 	ErrInvalidToken
 
@@ -866,6 +870,26 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidTokenId",
 		Description:    "The security token included in the request is invalid",
 		HTTPStatusCode: http.StatusForbidden,
+	},
+	ErrETCDNotConfigured: {
+		Code:           "InvalidArgument",
+		Description:    "ETCD is not configured",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHTTPLogNotConfigured: {
+		Code:           "InvalidArgument",
+		Description:    "HTTTP log endpoint not configured",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAuditLogNotConfigured: {
+		Code:           "InvalidArgument",
+		Description:    "HTTP audit log is not configured",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrLambdaNotConfigured: {
+		Code:           "InvalidArgument",
+		Description:    "Notification target is not configured",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 
 	/// S3 extensions.

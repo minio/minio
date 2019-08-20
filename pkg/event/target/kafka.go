@@ -90,6 +90,19 @@ func (target *KafkaTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - Return true if target is up and active
+func (target *KafkaTarget) IsActive() (bool, error) {
+	if !target.args.pingBrokers() {
+		return false, errNotConnected
+	}
+	return true, nil
+}
+
+// MarshalJSON - converts target arguments into JSON data.
+func (target *KafkaTarget) MarshalJSON() ([]byte, error) {
+	return json.Marshal(target.args)
+}
+
 // Save - saves the events to the store which will be replayed when the Kafka connection is active.
 func (target *KafkaTarget) Save(eventData event.Event) error {
 	if target.store != nil {

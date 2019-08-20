@@ -1309,3 +1309,26 @@ func RemoveListener(objAPI ObjectLayer, bucketName string, targetID event.Target
 
 	return saveConfig(ctx, objAPI, configFile, data)
 }
+
+// getLambdaInfo - return the status of notification targets
+func (sys *NotificationSys) getLambdaInfo() []madmin.TargetInfo {
+	var targetInfos []madmin.TargetInfo
+	var wg sync.WaitGroup
+
+	for id, target := range sys.targetList.TargetList() {
+		wg.Add(1)
+		go func(id event.TargetID, target event.Target) {
+			defer wg.Done()
+			targetInfo := madmin.TargetInfo{ID: id}
+			args, _ := target.MarshalJSON()
+			targetInfo.Config = string(args)
+			if _, err := sys.targetList.Status(id); err != nil {
+				targetInfo.Error = err.Error()
+			}
+			targetInfos = append(targetInfos, targetInfo)
+		}(id, target)
+	}
+	// Wait for all routines to finish.
+	wg.Wait()
+	return targetInfos
+}

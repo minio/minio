@@ -18,6 +18,7 @@ package target
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -75,6 +76,22 @@ type ElasticsearchTarget struct {
 // ID - returns target ID.
 func (target *ElasticsearchTarget) ID() event.TargetID {
 	return target.id
+}
+
+// IsActive - Return true if target is up and active
+func (target *ElasticsearchTarget) IsActive() (bool, error) {
+	if dErr := target.args.URL.DialHTTP(); dErr != nil {
+		if xnet.IsNetworkOrHostDown(dErr) {
+			return false, errNotConnected
+		}
+		return false, dErr
+	}
+	return true, nil
+}
+
+// MarshalJSON - converts target arguments into JSON data.
+func (target *ElasticsearchTarget) MarshalJSON() ([]byte, error) {
+	return json.Marshal(target.args)
 }
 
 // Save - saves the events to the store if queuestore is configured, which will be replayed when the elasticsearch connection is active.

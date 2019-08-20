@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -31,6 +32,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
@@ -40,6 +42,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/cpu"
+	"github.com/minio/minio/pkg/event/target"
 	"github.com/minio/minio/pkg/handlers"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
@@ -48,6 +51,8 @@ import (
 	"github.com/minio/minio/pkg/quick"
 	trace "github.com/minio/minio/pkg/trace"
 )
+
+var errUnreachableEndpoint = errors.New("endpoint unreachable, please check your endpoint")
 
 const (
 	maxEConfigJSONSize = 262272
@@ -1767,4 +1772,150 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeSuccessResponseJSON(w, resp)
+}
+
+// ServiceInfoHandler - GET /minio/admin/v1/serviceinfo?info={info}
+// ----------
+// Get service information
+func (a adminAPIHandlers) ServiceInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ServiceInfo")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+	var jsonBytes []byte
+	var err error
+
+	vars := mux.Vars(r)
+	var wg sync.WaitGroup
+
+	switch madmin.InfoType(vars[madmin.INFO]) {
+	case madmin.ETCD:
+		if globalEtcdClient == nil {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrETCDNotConfigured), r.URL)
+			return
+		}
+		etcdEndPoints := globalEtcdClient.Endpoints()
+		endPoints := make([]string, len(etcdEndPoints))
+		errorString := make([]string, len(etcdEndPoints))
+
+		for i, endPoint := range etcdEndPoints {
+			wg.Add(1)
+			go func(i int, endPoint string) {
+				defer wg.Done()
+				endPoints[i] = endPoint
+				if err := checkConnection(endPoint); err != nil {
+					errorString[i] = err.Error()
+				}
+
+			}(i, endPoint)
+		}
+		// Wait for all routines to finish.
+		wg.Wait()
+
+		etcdInfo := madmin.ETCDInfo{
+			ETCDEndpoint: endPoints,
+			Domain:       Environment.Get(EnvMinioDomain, ""),
+			PublicIPs:    globalDomainIPs,
+			Error:        errorString,
+		}
+		// Marshal API response
+		jsonBytes, err = json.Marshal(etcdInfo)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+	case madmin.LOGGER:
+		var loggerInfo []madmin.ServerLoggerInfo
+		if endpoint, ok := Environment.Lookup(EnvLoggerHTTPEndpoint); ok {
+			result := madmin.ServerLoggerInfo{Endpoint: endpoint}
+			if e := checkConnection(endpoint); e != nil {
+				result.Error = e.Error()
+			}
+			loggerInfo = append(loggerInfo, result)
+
+		} else {
+			for _, http := range globalServerConfig.Logger.HTTP {
+				wg.Add(1)
+				go func(http loggerHTTP) {
+					defer wg.Done()
+					result := madmin.ServerLoggerInfo{Endpoint: http.Endpoint}
+					if http.Enabled {
+						e := checkConnection(http.Endpoint)
+						if e != nil {
+							result.Error = e.Error()
+						}
+					}
+					loggerInfo = append(loggerInfo, result)
+				}(http)
+			}
+			// Wait for all routines to finish.
+			wg.Wait()
+		}
+		if len(loggerInfo) == 0 {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHTTPLogNotConfigured), r.URL)
+			return
+		}
+
+		// Marshal API response
+		jsonBytes, err = json.Marshal(loggerInfo)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+	case madmin.AUDIT:
+		var auditInfo madmin.ServerAuditInfo
+		endpoint, ok := Environment.Lookup(EnvAuditLoggerHTTPEndpoint)
+		if !ok {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAuditLogNotConfigured), r.URL)
+			return
+		}
+		auditInfo = madmin.ServerAuditInfo{Endpoint: endpoint}
+		if e := checkConnection(endpoint); e != nil {
+			auditInfo.Error = e.Error()
+		}
+
+		// Marshal API response
+		jsonBytes, err = json.Marshal(auditInfo)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	case madmin.LAMBDA:
+		lambdaInfo := globalNotificationSys.getLambdaInfo()
+		if len(lambdaInfo) == 0 {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrLambdaNotConfigured), r.URL)
+			return
+		}
+		jsonBytes, err = json.Marshal(lambdaInfo)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	default:
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+	}
+
+	writeSuccessResponseJSON(w, jsonBytes)
+}
+
+// checkConnection - ping an endpoint , return err in case of no connection
+func checkConnection(endpointStr string) error {
+	u, pErr := xnet.ParseURL(endpointStr)
+	if pErr != nil {
+		return pErr
+	}
+	if dErr := u.DialHTTP(); dErr != nil {
+		if urlErr, ok := dErr.(*url.Error); ok {
+			// To treat "connection refused" errors as errUnreachableEndpoint.
+			if target.IsConnRefusedErr(urlErr.Err) {
+				return errUnreachableEndpoint
+			}
+		}
+		return dErr
+	}
+	return nil
 }

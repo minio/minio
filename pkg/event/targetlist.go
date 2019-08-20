@@ -24,9 +24,11 @@ import (
 // Target - event target interface
 type Target interface {
 	ID() TargetID
+	IsActive() (bool, error)
 	Save(Event) error
 	Send(string) error
 	Close() error
+	MarshalJSON() ([]byte, error)
 }
 
 // TargetList - holds list of targets indexed by target ID.
@@ -149,4 +151,20 @@ func (list *TargetList) Send(event Event, targetIDs ...TargetID) <-chan TargetID
 // NewTargetList - creates TargetList.
 func NewTargetList() *TargetList {
 	return &TargetList{targets: make(map[TargetID]Target)}
+}
+
+// Status return status of target
+func (list *TargetList) Status(id TargetID) (bool, error) {
+	var status bool
+	var err error
+	target, ok := list.targets[id]
+	if ok {
+		status, err = target.IsActive()
+	}
+	return status, err
+}
+
+// TargetList list of target
+func (list *TargetList) TargetList() map[TargetID]Target {
+	return list.targets
 }

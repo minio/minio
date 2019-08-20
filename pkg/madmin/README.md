@@ -49,6 +49,10 @@ func main() {
 |                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)     |                    |                           |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
 | [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) |                    |                           |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                 |
 |                                     | [`NetPerfInfo`](#NetPerfInfo)                   |                    |                           |                         |                                       |                                                   |                                 |
+|                                     | [`ServerETCDInfo`](#ServerETCDInfo)             |                    |                           |                         |                                       |                                                   |                                 |
+|                                     | [`ServerLoggerInfo`](#ServerLoggerInfo)         |                    |                           |                         |                                       |                                                   |                                 |
+|                                     | [`ServerAuditInfo`](#ServerAuditInfo)           |                    |                           |                         |                                       |                                                   |                                 |
+|                                     | [`ServerLambdaInfo`](#ServerLambdaInfo)         |                    |                           |                         |                                       |                                                   |                                 |
 
 ## 1. Constructor
 <a name="MinIO"></a>
@@ -286,7 +290,52 @@ Fetches network performance of all cluster nodes using given sized payload. Retu
 | `Error`    | _string_         | Errors (if any) encountered while reaching this node               |
 | `ReadPerf` | _time.Duration_  | Network read performance of the server                             |
 
-## 5. Heal operations
+<a name="ServerETCDInfo"></a>
+### ServerETCDInfo() (ServerETCDInfo, error)
+
+Fetches etcd info of the server.
+
+| Param             | Type        | Description                                                         |
+|-------------------|-------------|---------------------------------------------------------------------|
+| `ei.ETCDEndpoint` | _[]string_  | List of etcd servers that is used as the MinIO federation back-end. |
+| `ei.Domain`       | _string_    | Domain name used for the federated setup.                           |
+| `ei.PublicIPs`    | _string_    | The list of IP addresses to which buckets created on MinIO.         |
+| `ei.Error`        | _[]string_  | Error (if any) encountered while accesing etcd server.              |
+
+<a name="ServerLoggerInfo"></a>
+### ServerLoggerInfo() (ServerLoggerInfo, error)
+
+Fetches information of HTTP log endpoint of the server.
+
+| Param             | Type        | Description                                                         |
+|-------------------|-------------|---------------------------------------------------------------------|
+| `li.EndPoint`     | _string_    | Http log endpoint.                                                  |
+| `li.Success`      |  _bool_     | True, if HTTP log endpoint is up and active.                        |
+| `li.Error`        | _string_    | Error (if any) encountered while accesing log server.               |
+
+<a name="ServerAuditInfo"></a>
+### ServerAuditInfo() (ServerAuditInfo, error)
+
+Fetches information of HTTP audit log endpoint of server.
+
+| Param             | Type        | Description                                                         |
+|-------------------|-------------|---------------------------------------------------------------------|
+| `ai.EndPoint`     | _string_    | Http log endpoint for audit log.                                    |
+| `ai.Success`      |  _bool_     | True, if HTTP log endpoint for audit log is up and active.          |
+| `ai.Error`        | _string_    | Error (if any) encountered while accesing audit log server.         |
+
+<a name="ServerLambdaInfo"></a>
+### ServerLambdaInfo() ([]TargetInfo, error)
+
+Fetches lambda info of the server.
+
+| Param             | Type                       | Description                                          |
+|-------------------|----------------------|------------------------------------------------------------|
+| `sl.ID`           |  _event.TargetID_    | Identification and name of notification target.            |
+| `sl.Config`       |  _string_            | Target arguments.                                          |
+| `sl.Error`        |  _string_            | Error (if any) encountered while accesing lambda endpoint. |
+
+## 4. Heal operations
 
 <a name="Heal"></a>
 ### Heal(bucket, prefix string, healOpts HealOpts, clientToken string, forceStart bool, forceStop bool) (start HealStartSuccess, status HealTaskStatus, err error)
@@ -351,7 +400,7 @@ __Example__
 | `DiskInfo.AvailableOn` | _[]int_        | List of disks on which the healed entity is present and healthy |
 | `DiskInfo.HealedOn`    | _[]int_        | List of disks on which the healed entity was restored           |
 
-## 6. Config operations
+## 5. Config operations
 
 <a name="GetConfig"></a>
 ### GetConfig() ([]byte, error)
@@ -389,8 +438,7 @@ __Example__
     }
     log.Println("SetConfig was successful")
 ```
-
-## 7. Top operations
+## 6. Top operations
 
 <a name="TopLocks"></a>
 ### TopLocks() (LockEntries, error)
@@ -412,7 +460,7 @@ __Example__
     log.Println("TopLocks received successfully: ", string(out))
 ```
 
-## 8. IAM operations
+## 7. IAM operations
 
 <a name="AddCannedPolicy"></a>
 ### AddCannedPolicy(policyName string, policy string) error
@@ -468,7 +516,7 @@ __Example__
     }
 ```
 
-## 9. Misc operations
+## 8. Misc operations
 
 <a name="ServerUpdate"></a>
 ### ServerUpdate(updateURL string) (ServerUpdateStatus, error)
