@@ -304,14 +304,26 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
 func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 	var storageInfo StorageInfo
+	var wg sync.WaitGroup
+
+	storageInfos := make([]StorageInfo, len(s.sets))
 	storageInfo.Backend.Type = BackendErasure
-	for _, set := range s.sets {
-		lstorageInfo := set.StorageInfo(ctx)
-		storageInfo.Used = storageInfo.Used + lstorageInfo.Used
-		storageInfo.Total = storageInfo.Total + lstorageInfo.Total
-		storageInfo.Available = storageInfo.Available + lstorageInfo.Available
-		storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks + lstorageInfo.Backend.OnlineDisks
-		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks + lstorageInfo.Backend.OfflineDisks
+	for index, set := range s.sets {
+		wg.Add(1)
+		go func(id int, set *xlObjects) {
+			defer wg.Done()
+			storageInfos[id] = set.StorageInfo(ctx)
+		}(index, set)
+	}
+	// Wait for the go routines.
+	wg.Wait()
+
+	for _, lstorageInfo := range storageInfos {
+		storageInfo.Used += lstorageInfo.Used
+		storageInfo.Total += lstorageInfo.Total
+		storageInfo.Available += lstorageInfo.Available
+		storageInfo.Backend.OnlineDisks += lstorageInfo.Backend.OnlineDisks
+		storageInfo.Backend.OfflineDisks += lstorageInfo.Backend.OfflineDisks
 	}
 
 	scData, scParity := getRedundancyCount(standardStorageClass, s.drivesPerSet)
