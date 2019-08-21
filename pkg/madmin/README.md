@@ -49,6 +49,7 @@ func main() {
 | [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)       |                    | [`SetConfig`](#SetConfig)         |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |
 |                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)     |                    | [`GetConfigKeys`](#GetConfigKeys) |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |
 | [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) |                    | [`SetConfigKeys`](#SetConfigKeys) |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |
+|                                     | [`NetPerfInfo`](#NetPerfInfo)                   |                    |                                   |                         |                                       |                                                   |
     
 ## 1. Constructor
 <a name="MinIO"></a>
@@ -257,7 +258,7 @@ Fetches CPU utilization for all cluster nodes.
 | `cpu.Load.Avg`   | _float64_ | The average utilization of the CPU measured in a 200ms interval |
 | `cpu.Load.Min`   | _float64_ | The minimum utilization of the CPU measured in a 200ms interval |
 | `cpu.Load.Max`   | _float64_ | The maximum utilization of the CPU measured in a 200ms interval |
-| `cpu.Load.Error` | _string_  | Error (if any) encountered while accesing the CPU info          |
+| `cpu.Load.Error` | _string_  | Error (if any) encountered while accessing the CPU info         |
 
 <a name="ServerMemUsageInfo"></a>
 ### ServerMemUsageInfo() ([]ServerMemUsageInfo, error)
@@ -273,7 +274,18 @@ Fetches Mem utilization for all cluster nodes.
 | Param             | Type     | Description                                            |
 |-------------------|----------|--------------------------------------------------------|
 | `mem.Usage.Mem`   | _uint64_ | The total number of bytes obtained from the OS         |
-| `mem.Usage.Error` | _string_ | Error (if any) encountered while accesing the CPU info |
+| `mem.Usage.Error` | _string_ | Error (if any) encountered while accessing the CPU info |
+
+<a name="NetPerfInfo"></a>
+### NetPerfInfo(int size) (map[string][]NetPerfInfo, error)
+
+Fetches network performance of all cluster nodes using given sized payload. Returned value is a map containing each node indexed list of performance of other nodes.
+
+| Param      | Type             | Description                                                        |
+|------------|------------------|--------------------------------------------------------------------|
+| `Addr`     | _string_         | Address of the server the following information is retrieved from. |
+| `Error`    | _string_         | Errors (if any) encountered while reaching this node               |
+| `ReadPerf` | _time.Duration_  | Network read performance of the server                             |
 
 ## 5. Heal operations
 
