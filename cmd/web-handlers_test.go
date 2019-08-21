@@ -338,7 +338,7 @@ func testDeleteBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 		{"minio", false, "false token", "Authentication failed"},
 		{"minio", false, token, "The specified bucket is not valid"},
 		{bucketName, false, token, ""},
-		{bucketName, true, token, "Bucket not empty"},
+		{bucketName, true, token, "The bucket you tried to delete is not empty"},
 		{bucketName, false, "", "JWT token missing"},
 	}
 
