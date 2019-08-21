@@ -52,6 +52,7 @@ We found the following APIs to be redundant or less useful outside of AWS S3. If
 - ObjectACL (Use [bucket policies](https://docs.min.io/docs/minio-client-complete-guide#policy) instead)
 - ObjectTorrent
 - ObjectVersions
+- ObjectTagging
 
 ### Object name restrictions on MinIO
 Object names that contain characters `^*|\/&";` are unsupported on Windows and other file systems which do not support filenames with these characters. Note that this list is not exhaustive, and depends on the maintainers of the filesystem itself.
