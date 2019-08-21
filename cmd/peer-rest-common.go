@@ -16,7 +16,7 @@
 
 package cmd
 
-const peerRESTVersion = "v4"
+const peerRESTVersion = "v5"
 const peerRESTPath = minioReservedBucketPath + "/peer/" + peerRESTVersion
 
 const (
@@ -52,6 +52,7 @@ const (
 	peerRESTMethodBucketLifecycleSet       = "setbucketlifecycle"
 	peerRESTMethodBucketLifecycleRemove    = "removebucketlifecycle"
 	peerRESTMethodLog                      = "log"
+	peerRESTMethodHardwareCPUInfo          = "cpuhardwareinfo"
 )
 
 const (
