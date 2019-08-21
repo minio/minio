@@ -27,15 +27,7 @@ matrix:
         - CGO_ENABLED=0
         - GO111MODULE=on
         - GOPROXY=https://proxy.golang.org
-      # Enable build cache
-      # https://restic.net/blog/2018-09-02/travis-build-cache
-      cache:
-       directories:
-         - $HOME/.cache/go-build
-         - $HOME/gopath/pkg/mod
-         - $HOME/go/pkg/mod
-
-      go: 1.12.5
+      go: 1.12.x
       script:
         - make
         - diff -au <(gofmt -s -d cmd) <(printf "")
@@ -54,7 +46,7 @@ matrix:
         - CGO_ENABLED=0
         - GO111MODULE=on
         - GOPROXY=https://proxy.golang.org
-      go: 1.12.5
+      go: 1.12.x
       script:
         - go build --ldflags="$(go run buildscripts/gen-ldflags.go)" -o %GOPATH%\bin\minio.exe
         - bash buildscripts/go-coverage.sh
