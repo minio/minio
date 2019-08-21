@@ -288,6 +288,9 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	// Set delimiter value for "s3:delimiter" policy conditionals.
 	r.Header.Set("delimiter", SlashSeparator)
 
+	// err will be nil here as we already called this function
+	// earlier in this request.
+	claims, _ := getClaimsFromToken(r)
 	var newBucketsInfo []BucketInfo
 	for _, bucketInfo := range bucketsInfo {
 		if globalIAMSys.IsAllowed(iampolicy.Args{
@@ -297,6 +300,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 			ConditionValues: getConditionValues(r, "", accessKey),
 			IsOwner:         owner,
 			ObjectName:      "",
+			Claims:          claims,
 		}) {
 			newBucketsInfo = append(newBucketsInfo, bucketInfo)
 		}
