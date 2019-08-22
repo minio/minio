@@ -658,7 +658,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	}
 
 	// For browser requests, when federation is setup we need to
-	// specifically handle download and upload for browser requests.
+	// specifically handle download and upload of objects.
 	if guessIsBrowserReq(r) && globalDNSConfig != nil && len(globalDomainNames) > 0 {
 		var bucket, _ string
 		switch r.Method {
@@ -697,6 +697,9 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 			f.fwd.ServeHTTP(w, r)
 			return
 		}
+		// No conditions are valid, let the current server handle
+		// the request and fail appropriately if possible.
+		f.handler.ServeHTTP(w, r)
 		return
 	}
 
