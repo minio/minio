@@ -1063,7 +1063,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	r.Body = &detectDisconnect{r.Body, r.Context().Done()}
 
 	// X-Amz-Copy-Source shouldn't be set for this call.
-	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
+	if _, ok := r.Header[xhttp.AmzCopySource]; ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopySource), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1086,7 +1086,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	size := r.ContentLength
 	rAuthType := getRequestAuthType(r)
 	if rAuthType == authTypeStreamingSigned {
-		if sizeStr, ok := r.Header["X-Amz-Decoded-Content-Length"]; ok {
+		if sizeStr, ok := r.Header[xhttp.AmzDecodedContentLength]; ok {
 			if sizeStr[0] == "" {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL, guessIsBrowserReq(r))
 				return

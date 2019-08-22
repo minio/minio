@@ -673,27 +673,30 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 				bucket, _ = urlPath2BucketObjectName(r.URL.Path)
 			}
 		}
-		if bucket != "" {
-			sr, err := globalDNSConfig.Get(bucket)
-			if err != nil {
-				if err == dns.ErrNoEntriesFound {
-					writeErrorResponse(context.Background(), w, errorCodes.ToAPIErr(ErrNoSuchBucket), r.URL, guessIsBrowserReq(r))
-				} else {
-					writeErrorResponse(context.Background(), w, toAPIError(context.Background(), err), r.URL, guessIsBrowserReq(r))
-				}
-				return
-			}
-			if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(sr)...)).IsEmpty() {
-				r.URL.Scheme = "http"
-				if globalIsSSL {
-					r.URL.Scheme = "https"
-				}
-				r.URL.Host = getHostFromSrv(sr)
-				f.fwd.ServeHTTP(w, r)
-				return
-			}
+		if bucket == "" {
+			f.handler.ServeHTTP(w, r)
+			return
 		}
-		f.handler.ServeHTTP(w, r)
+		sr, err := globalDNSConfig.Get(bucket)
+		if err != nil {
+			if err == dns.ErrNoEntriesFound {
+				writeErrorResponse(context.Background(), w, errorCodes.ToAPIErr(ErrNoSuchBucket),
+					r.URL, guessIsBrowserReq(r))
+			} else {
+				writeErrorResponse(context.Background(), w, toAPIError(context.Background(), err),
+					r.URL, guessIsBrowserReq(r))
+			}
+			return
+		}
+		if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(sr)...)).IsEmpty() {
+			r.URL.Scheme = "http"
+			if globalIsSSL {
+				r.URL.Scheme = "https"
+			}
+			r.URL.Host = getHostFromSrv(sr)
+			f.fwd.ServeHTTP(w, r)
+			return
+		}
 		return
 	}
 
@@ -715,9 +718,12 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	// CopyObject requests should be handled at current endpoint as path style
 	// requests have target bucket and object in URI and source details are in
 	// header fields
-	if r.Method == http.MethodPut && r.Header.Get("X-Amz-Copy-Source") != "" {
-		f.handler.ServeHTTP(w, r)
-		return
+	if r.Method == http.MethodPut && r.Header.Get(xhttp.AmzCopySource) != "" {
+		bucket, object = urlPath2BucketObjectName(r.Header.Get(xhttp.AmzCopySource))
+		if bucket == "" || object == "" {
+			f.handler.ServeHTTP(w, r)
+			return
+		}
 	}
 	sr, err := globalDNSConfig.Get(bucket)
 	if err != nil {
