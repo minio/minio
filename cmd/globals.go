@@ -202,6 +202,8 @@ var (
 	// Is worm enabled
 	globalWORMEnabled bool
 
+	globalBucketRetentionConfig = newBucketRetentionConfig()
+
 	// Disk cache drives
 	globalCacheConfig cache.Config
 

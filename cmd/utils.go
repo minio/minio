@@ -492,3 +492,11 @@ func getMinioMode() string {
 func iamPolicyName() string {
 	return globalOpenIDConfig.ClaimPrefix + iampolicy.PolicyName
 }
+
+func isWORMEnabled(bucket string) (Retention, bool) {
+	if globalWORMEnabled {
+		return Retention{}, true
+	}
+
+	return globalBucketRetentionConfig.Get(bucket)
+}

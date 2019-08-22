@@ -683,8 +683,8 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 	}
 
 	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		if _, err = fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object)); err == nil {
+	if retention, isWORMBucket := isWORMEnabled(bucket); isWORMBucket {
+		if fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object)); err == nil && retention.Retain(fi.ModTime()) {
 			return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
 		}
 	}

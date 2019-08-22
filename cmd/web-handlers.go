@@ -668,8 +668,8 @@ next:
 		// If not a directory, remove the object.
 		if !hasSuffix(objectName, SlashSeparator) && objectName != "" {
 			// Deny if WORM is enabled
-			if globalWORMEnabled {
-				if _, err = objectAPI.GetObjectInfo(ctx, args.BucketName, objectName, ObjectOptions{}); err == nil {
+			if retention, isWORMBucket := isWORMEnabled(args.BucketName); isWORMBucket {
+				if oi, err := objectAPI.GetObjectInfo(ctx, args.BucketName, objectName, ObjectOptions{}); err == nil && retention.Retain(oi.ModTime) {
 					return toJSONError(ctx, errMethodNotAllowed)
 				}
 			}
@@ -1029,8 +1029,8 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	crypto.RemoveSensitiveEntries(metadata)
 
 	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
+	if retention, isWORMBucket := isWORMEnabled(bucket); isWORMBucket {
+		if oi, err := objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil && retention.Retain(oi.ModTime) {
 			writeWebErrorResponse(w, errMethodNotAllowed)
 			return
 		}
