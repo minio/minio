@@ -71,11 +71,12 @@ func (d byDiskTotal) Less(i, j int) bool {
 // getDisksInfo - fetch disks info across all other storage API.
 func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks int, offlineDisks int) {
 	disksInfo = make([]DiskInfo, len(disks))
+	errs := make([]error, len(disks))
 	var wg sync.WaitGroup
 	for i, storageDisk := range disks {
 		if storageDisk == nil {
 			// Storage disk is empty, perhaps ignored disk or not available.
-			offlineDisks++
+			errs[i] = errDiskNotFound
 			continue
 		}
 		wg.Add(1)
@@ -87,16 +88,23 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks int, of
 				ctx := logger.SetReqInfo(context.Background(), reqInfo)
 				logger.LogIf(ctx, err)
 				if IsErr(err, baseErrs...) {
-					offlineDisks++
+					errs[id] = err
 					return
 				}
 			}
-			onlineDisks++
 			disksInfo[id] = info
 		}(i, storageDisk)
 	}
 	// Wait for the routines.
 	wg.Wait()
+
+	for _, err := range errs {
+		if err != nil {
+			offlineDisks++
+		}
+		onlineDisks++
+	}
+
 	// Success.
 	return disksInfo, onlineDisks, offlineDisks
 }
