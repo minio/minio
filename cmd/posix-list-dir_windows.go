@@ -57,9 +57,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 
 	data := &syscall.Win32finddata{}
 
-	remaining := count
-	done := false
-	for !done {
+	for count != 0 {
 		e := syscall.FindNextFile(syscall.Handle(d.Fd()), data)
 		if e != nil {
 			if e == syscall.ERROR_NO_MORE_FILES {
@@ -74,7 +72,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 			}
 		}
 		name := syscall.UTF16ToString(data.FileName[0:])
-		if name == "." || name == ".." { // Useless names
+		if name == "" || name == "." || name == ".." { // Useless names
 			continue
 		}
 		switch {
@@ -92,19 +90,16 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 				return nil, err
 			}
 			if fi.IsDir() {
-				entries = append(entries, name+slashSeparator)
+				entries = append(entries, name+SlashSeparator)
 			} else if fi.Mode().IsRegular() {
 				entries = append(entries, name)
 			}
 		case data.FileAttributes&syscall.FILE_ATTRIBUTE_DIRECTORY != 0:
-			entries = append(entries, name+slashSeparator)
+			entries = append(entries, name+SlashSeparator)
 		default:
 			entries = append(entries, name)
 		}
-		if remaining > 0 {
-			remaining--
-			done = remaining == 0
-		}
+		count--
 	}
 	return entries, nil
 }

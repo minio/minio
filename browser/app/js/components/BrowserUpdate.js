@@ -29,7 +29,7 @@ let BrowserUpdate = ({latestUiVersion}) => {
       <a href="">
         <OverlayTrigger placement="left" overlay={ <Tooltip id="tt-version-update">
                                                      New update available. Click to refresh.
-                                                   </Tooltip> }> <i className="fa fa-refresh"></i> </OverlayTrigger>
+                                                   </Tooltip> }> <i className="fas fa-sync"></i> </OverlayTrigger>
       </a>
     </li>
   )

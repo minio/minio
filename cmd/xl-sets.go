@@ -29,6 +29,7 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
+	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -303,14 +304,26 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
 func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 	var storageInfo StorageInfo
+	var wg sync.WaitGroup
+
+	storageInfos := make([]StorageInfo, len(s.sets))
 	storageInfo.Backend.Type = BackendErasure
-	for _, set := range s.sets {
-		lstorageInfo := set.StorageInfo(ctx)
-		storageInfo.Used = storageInfo.Used + lstorageInfo.Used
-		storageInfo.Total = storageInfo.Total + lstorageInfo.Total
-		storageInfo.Available = storageInfo.Available + lstorageInfo.Available
-		storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks + lstorageInfo.Backend.OnlineDisks
-		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks + lstorageInfo.Backend.OfflineDisks
+	for index, set := range s.sets {
+		wg.Add(1)
+		go func(id int, set *xlObjects) {
+			defer wg.Done()
+			storageInfos[id] = set.StorageInfo(ctx)
+		}(index, set)
+	}
+	// Wait for the go routines.
+	wg.Wait()
+
+	for _, lstorageInfo := range storageInfos {
+		storageInfo.Used += lstorageInfo.Used
+		storageInfo.Total += lstorageInfo.Total
+		storageInfo.Available += lstorageInfo.Available
+		storageInfo.Backend.OnlineDisks += lstorageInfo.Backend.OnlineDisks
+		storageInfo.Backend.OfflineDisks += lstorageInfo.Backend.OfflineDisks
 	}
 
 	scData, scParity := getRedundancyCount(standardStorageClass, s.drivesPerSet)
@@ -326,15 +339,22 @@ func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 		storageInfo.Backend.Sets[i] = make([]madmin.DriveInfo, s.drivesPerSet)
 	}
 
-	storageDisks, err := initStorageDisks(s.endpoints)
-	if err != nil {
-		return storageInfo
-	}
+	storageDisks, dErrs := initDisksWithErrors(s.endpoints)
 	defer closeStorageDisks(storageDisks)
 
 	formats, sErrs := loadFormatXLAll(storageDisks)
 
-	drivesInfo := formatsToDrivesInfo(s.endpoints, formats, sErrs)
+	combineStorageErrors := func(diskErrs []error, storageErrs []error) []error {
+		for index, err := range diskErrs {
+			if err != nil {
+				storageErrs[index] = err
+			}
+		}
+		return storageErrs
+	}
+
+	errs := combineStorageErrors(dErrs, sErrs)
+	drivesInfo := formatsToDrivesInfo(s.endpoints, formats, errs)
 	refFormat, err := getFormatXLInQuorum(formats)
 	if err != nil {
 		// Ignore errors here, since this call cannot do anything at
@@ -355,7 +375,6 @@ func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 			}
 		}
 	}
-
 	// fill all the offline, missing endpoints as well.
 	for _, drive := range drivesInfo {
 		if drive.UUID == "" {
@@ -516,6 +535,21 @@ func (s *xlSets) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Po
 // DeleteBucketPolicy deletes all policies on bucket
 func (s *xlSets) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	return removePolicyConfig(ctx, s, bucket)
+}
+
+// SetBucketLifecycle sets lifecycle on bucket
+func (s *xlSets) SetBucketLifecycle(ctx context.Context, bucket string, lifecycle *lifecycle.Lifecycle) error {
+	return saveLifecycleConfig(ctx, s, bucket, lifecycle)
+}
+
+// GetBucketLifecycle will get lifecycle on bucket
+func (s *xlSets) GetBucketLifecycle(ctx context.Context, bucket string) (*lifecycle.Lifecycle, error) {
+	return getLifecycleConfig(s, bucket)
+}
+
+// DeleteBucketLifecycle deletes all lifecycle on bucket
+func (s *xlSets) DeleteBucketLifecycle(ctx context.Context, bucket string) error {
+	return removeLifecycleConfig(ctx, s, bucket)
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
@@ -1005,7 +1039,7 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 // walked and merged at this layer. Resulting value through the merge process sends
 // the data in lexically sorted order.
 func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, heal bool) (loi ListObjectsInfo, err error) {
-	if delimiter != slashSeparator && delimiter != "" {
+	if delimiter != SlashSeparator && delimiter != "" {
 		// "heal" option passed can be ignored as the heal-listing does not send non-standard delimiter.
 		return s.listObjectsNonSlash(ctx, bucket, prefix, marker, delimiter, maxKeys)
 	}
@@ -1032,7 +1066,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 	// along // with the prefix. On a flat namespace with 'prefix'
 	// as '/' we don't have any entries, since all the keys are
 	// of form 'keyName/...'
-	if delimiter == slashSeparator && prefix == slashSeparator {
+	if delimiter == SlashSeparator && prefix == SlashSeparator {
 		return loi, nil
 	}
 
@@ -1043,7 +1077,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 
 	// Default is recursive, if delimiter is set then list non recursive.
 	recursive := true
-	if delimiter == slashSeparator {
+	if delimiter == SlashSeparator {
 		recursive = false
 	}
 
@@ -1070,7 +1104,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 
 	for _, entry := range entries.Files {
 		var objInfo ObjectInfo
-		if hasSuffix(entry.Name, slashSeparator) {
+		if hasSuffix(entry.Name, SlashSeparator) {
 			if !recursive {
 				loi.Prefixes = append(loi.Prefixes, entry.Name)
 				continue
@@ -1234,17 +1268,17 @@ func formatsToDrivesInfo(endpoints EndpointList, formats []*formatXLV3, sErrs []
 				Endpoint: drive,
 				State:    madmin.DriveStateMissing,
 			})
-		case sErrs[i] == errCorruptedFormat:
+		case sErrs[i] == errDiskNotFound:
 			beforeDrives = append(beforeDrives, madmin.DriveInfo{
 				UUID:     "",
 				Endpoint: drive,
-				State:    madmin.DriveStateCorrupt,
+				State:    madmin.DriveStateOffline,
 			})
 		default:
 			beforeDrives = append(beforeDrives, madmin.DriveInfo{
 				UUID:     "",
 				Endpoint: drive,
-				State:    madmin.DriveStateOffline,
+				State:    madmin.DriveStateCorrupt,
 			})
 		}
 	}

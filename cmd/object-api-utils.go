@@ -51,7 +51,7 @@ const (
 	// Multipart meta prefix.
 	mpartMetaPrefix = "multipart"
 	// MinIO Multipart meta prefix.
-	minioMetaMultipartBucket = minioMetaBucket + "/" + mpartMetaPrefix
+	minioMetaMultipartBucket = minioMetaBucket + SlashSeparator + mpartMetaPrefix
 	// MinIO Tmp meta prefix.
 	minioMetaTmpBucket = minioMetaBucket + "/tmp"
 	// DNS separator (period), used for bucket name validation.
@@ -131,12 +131,12 @@ func IsValidBucketName(bucket string) bool {
 //
 // - Backslash ("\")
 //
-// additionally minio does not support object names with trailing "/".
+// additionally minio does not support object names with trailing SlashSeparator.
 func IsValidObjectName(object string) bool {
 	if len(object) == 0 {
 		return false
 	}
-	if hasSuffix(object, slashSeparator) || hasPrefix(object, slashSeparator) {
+	if hasSuffix(object, SlashSeparator) {
 		return false
 	}
 	return IsValidObjectPrefix(object)
@@ -146,9 +146,6 @@ func IsValidObjectName(object string) bool {
 // Its valid to have a empty prefix.
 func IsValidObjectPrefix(object string) bool {
 	if hasBadPathComponent(object) {
-		return false
-	}
-	if len(object) > 1024 {
 		return false
 	}
 	if !utf8.ValidString(object) {
@@ -161,20 +158,39 @@ func IsValidObjectPrefix(object string) bool {
 	return true
 }
 
-// Slash separator.
-const slashSeparator = "/"
+// checkObjectNameForLengthAndSlash -check for the validity of object name length and prefis as slash
+func checkObjectNameForLengthAndSlash(bucket, object string) error {
+	// Check for the length of object name
+	if len(object) > 1024 {
+		return ObjectNameTooLong{
+			Bucket: bucket,
+			Object: object,
+		}
+	}
+	// Check for slash as prefix in object name
+	if hasPrefix(object, SlashSeparator) {
+		return ObjectNamePrefixAsSlash{
+			Bucket: bucket,
+			Object: object,
+		}
+	}
+	return nil
+}
+
+// SlashSeparator - slash separator.
+const SlashSeparator = "/"
 
 // retainSlash - retains slash from a path.
 func retainSlash(s string) string {
-	return strings.TrimSuffix(s, slashSeparator) + slashSeparator
+	return strings.TrimSuffix(s, SlashSeparator) + SlashSeparator
 }
 
-// pathJoin - like path.Join() but retains trailing "/" of the last element
+// pathJoin - like path.Join() but retains trailing SlashSeparator of the last element
 func pathJoin(elem ...string) string {
 	trailingSlash := ""
 	if len(elem) > 0 {
-		if hasSuffix(elem[len(elem)-1], slashSeparator) {
-			trailingSlash = "/"
+		if hasSuffix(elem[len(elem)-1], SlashSeparator) {
+			trailingSlash = SlashSeparator
 		}
 	}
 	return path.Join(elem...) + trailingSlash
@@ -276,7 +292,7 @@ func isStringEqual(s1 string, s2 string) bool {
 
 // Ignores all reserved bucket names or invalid bucket names.
 func isReservedOrInvalidBucket(bucketEntry string, strict bool) bool {
-	bucketEntry = strings.TrimSuffix(bucketEntry, slashSeparator)
+	bucketEntry = strings.TrimSuffix(bucketEntry, SlashSeparator)
 	if strict {
 		if err := s3utils.CheckValidBucketNameStrict(bucketEntry); err != nil {
 			return true
@@ -303,7 +319,7 @@ func isMinioReservedBucket(bucketName string) bool {
 func getHostsSlice(records []dns.SrvRecord) []string {
 	var hosts []string
 	for _, r := range records {
-		hosts = append(hosts, r.Host)
+		hosts = append(hosts, net.JoinHostPort(r.Host, fmt.Sprintf("%d", r.Port)))
 	}
 	return hosts
 }

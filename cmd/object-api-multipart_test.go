@@ -680,7 +680,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		// Expecting the result to contain one MultipartInfo entry and IsTruncated to be false.
 		{
 			MaxUploads:  2,
-			Delimiter:   "/",
+			Delimiter:   SlashSeparator,
 			Prefix:      "",
 			IsTruncated: false,
 			Uploads: []MultipartInfo{
@@ -1170,7 +1170,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		{bucketNames[0], "orange", "", "", "", 2, listMultipartResults[12], nil, true},
 		{bucketNames[0], "Asia", "", "", "", 2, listMultipartResults[13], nil, true},
 		// setting delimiter (Test number 27).
-		{bucketNames[0], "", "", "", "/", 2, listMultipartResults[14], nil, true},
+		{bucketNames[0], "", "", "", SlashSeparator, 2, listMultipartResults[14], nil, true},
 		//Test case with multiple uploadID listing for given object (Test number 28).
 		{bucketNames[1], "", "", "", "", 100, listMultipartResults[15], nil, true},
 		// Test case with multiple uploadID listing for given object, but uploadID marker set.

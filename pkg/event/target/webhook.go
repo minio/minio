@@ -30,7 +30,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/minio/minio/pkg/event"
@@ -43,7 +42,7 @@ type WebhookArgs struct {
 	Endpoint   xnet.URL       `json:"endpoint"`
 	RootCAs    *x509.CertPool `json:"-"`
 	QueueDir   string         `json:"queueDir"`
-	QueueLimit uint16         `json:"queueLimit"`
+	QueueLimit uint64         `json:"queueLimit"`
 }
 
 // Validate WebhookArgs fields
@@ -83,15 +82,16 @@ func (target *WebhookTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	urlStr, pErr := xnet.ParseURL(target.args.Endpoint.String())
+	u, pErr := xnet.ParseURL(target.args.Endpoint.String())
 	if pErr != nil {
 		return pErr
 	}
-	_, dErr := net.Dial("tcp", urlStr.Host)
-	if dErr != nil {
-		// To treat "connection refused" errors as errNotConnected.
-		if IsConnRefusedErr(dErr) {
-			return errNotConnected
+	if dErr := u.DialHTTP(); dErr != nil {
+		if urlErr, ok := dErr.(*url.Error); ok {
+			// To treat "connection refused" errors as errNotConnected.
+			if IsConnRefusedErr(urlErr.Err) {
+				return errNotConnected
+			}
 		}
 		return dErr
 	}
@@ -134,32 +134,19 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 	return nil
 }
 
-// IsConnRefusedErr - To check for "connection refused" errors.
-func IsConnRefusedErr(err error) bool {
-	if opErr, ok := err.(*net.OpError); ok {
-		if sysErr, ok := opErr.Err.(*os.SyscallError); ok {
-			if errno, ok := sysErr.Err.(syscall.Errno); ok {
-				if errno == syscall.ECONNREFUSED {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
 // Send - reads an event from store and sends it to webhook.
 func (target *WebhookTarget) Send(eventKey string) error {
 
-	urlStr, pErr := xnet.ParseURL(target.args.Endpoint.String())
+	u, pErr := xnet.ParseURL(target.args.Endpoint.String())
 	if pErr != nil {
 		return pErr
 	}
-	_, dErr := net.Dial("tcp", urlStr.Host)
-	if dErr != nil {
-		// To treat "connection refused" errors as errNotConnected.
-		if IsConnRefusedErr(dErr) {
-			return errNotConnected
+	if dErr := u.DialHTTP(); dErr != nil {
+		if urlErr, ok := dErr.(*url.Error); ok {
+			// To treat "connection refused" errors as errNotConnected.
+			if IsConnRefusedErr(urlErr.Err) {
+				return errNotConnected
+			}
 		}
 		return dErr
 	}

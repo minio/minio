@@ -48,7 +48,7 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 	}
 
 	// API Router
-	apiRouter := router.PathPrefix("/").Subrouter()
+	apiRouter := router.PathPrefix(SlashSeparator).Subrouter()
 	var routers []*mux.Router
 	for _, domainName := range globalDomainNames {
 		routers = append(routers, apiRouter.Host("{bucket:.+}."+domainName).Subrouter())
@@ -64,7 +64,7 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		bucket.Methods(http.MethodPut).Path("/{object:.+}").HeadersRegexp(xhttp.AmzCopySource, ".*?(\\/|%2F).*?").HandlerFunc(httpTraceAll(api.CopyObjectPartHandler)).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
 		// PutObjectPart
 		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(httpTraceHdrs(api.PutObjectPartHandler)).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
-		// ListObjectPxarts
+		// ListObjectParts
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(httpTraceAll(api.ListObjectPartsHandler)).Queries("uploadId", "{uploadId:.*}")
 		// CompleteMultipartUpload
 		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(httpTraceAll(api.CompleteMultipartUploadHandler)).Queries("uploadId", "{uploadId:.*}")
@@ -91,7 +91,9 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// GetBucketLocation
 		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.GetBucketLocationHandler)).Queries("location", "")
 		// GetBucketPolicy
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.GetBucketPolicyHandler)).Queries("policy", "")
+		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketPolicyHandler)).Queries("policy", "")
+		// GetBucketLifecycle
+		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.GetBucketLifecycleHandler)).Queries("lifecycle", "")
 
 		// Dummy Bucket Calls
 		// GetBucketACL -- this is a dummy call.
@@ -127,10 +129,15 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.ListMultipartUploadsHandler)).Queries("uploads", "")
 		// ListObjectsV2
 		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.ListObjectsV2Handler)).Queries("list-type", "2")
+		// ListBucketVersions
+		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.ListBucketObjectVersionsHandler)).Queries("versions", "")
 		// ListObjectsV1 (Legacy)
-		bucket.Methods(http.MethodGet).HandlerFunc(httpTraceAll(api.ListObjectsV1Handler))
+		bucket.Methods("GET").HandlerFunc(httpTraceAll(api.ListObjectsV1Handler))
+		// PutBucketLifecycle
+		bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketLifecycleHandler)).Queries("lifecycle", "")
 		// PutBucketPolicy
-		bucket.Methods(http.MethodPut).HandlerFunc(httpTraceAll(api.PutBucketPolicyHandler)).Queries("policy", "")
+		bucket.Methods("PUT").HandlerFunc(httpTraceAll(api.PutBucketPolicyHandler)).Queries("policy", "")
+
 		// PutBucketNotification
 		bucket.Methods(http.MethodPut).HandlerFunc(httpTraceAll(api.PutBucketNotificationHandler)).Queries("notification", "")
 		// PutBucket
@@ -142,7 +149,9 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// DeleteMultipleObjects
 		bucket.Methods(http.MethodPost).HandlerFunc(httpTraceAll(api.DeleteMultipleObjectsHandler)).Queries("delete", "")
 		// DeleteBucketPolicy
-		bucket.Methods(http.MethodDelete).HandlerFunc(httpTraceAll(api.DeleteBucketPolicyHandler)).Queries("policy", "")
+		bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketPolicyHandler)).Queries("policy", "")
+		// DeleteBucketLifecycle
+		bucket.Methods("DELETE").HandlerFunc(httpTraceAll(api.DeleteBucketLifecycleHandler)).Queries("lifecycle", "")
 		// DeleteBucket
 		bucket.Methods(http.MethodDelete).HandlerFunc(httpTraceAll(api.DeleteBucketHandler))
 	}
@@ -150,7 +159,7 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 	/// Root operation
 
 	// ListBuckets
-	apiRouter.Methods(http.MethodGet).Path("/").HandlerFunc(httpTraceAll(api.ListBucketsHandler))
+	apiRouter.Methods(http.MethodGet).Path(SlashSeparator).HandlerFunc(httpTraceAll(api.ListBucketsHandler))
 
 	// If none of the routes match.
 	apiRouter.NotFoundHandler = http.HandlerFunc(httpTraceAll(notFoundHandler))

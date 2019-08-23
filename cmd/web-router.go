@@ -40,7 +40,7 @@ type indexHandler struct {
 }
 
 func (h indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r.URL.Path = minioReservedBucketPath + "/"
+	r.URL.Path = minioReservedBucketPath + SlashSeparator
 	h.handler.ServeHTTP(w, r)
 }
 
@@ -56,7 +56,7 @@ func assetFS() *assetfs.AssetFS {
 }
 
 // specialAssets are files which are unique files not embedded inside index_bundle.js.
-const specialAssets = "index_bundle.*.js|loader.css|logo.svg|firefox.png|safari.png|chrome.png|favicon.ico"
+const specialAssets = "index_bundle.*.js|loader.css|logo.svg|firefox.png|safari.png|chrome.png|favicon-16x16.png|favicon-32x32.png|favicon-96x96.png"
 
 // registerWebRouter - registers web router for serving minio browser.
 func registerWebRouter(router *mux.Router) error {
@@ -70,7 +70,7 @@ func registerWebRouter(router *mux.Router) error {
 	codec := json2.NewCodec()
 
 	// MinIO browser router.
-	webBrowserRouter := router.PathPrefix(minioReservedBucketPath).Subrouter()
+	webBrowserRouter := router.PathPrefix(minioReservedBucketPath).HeadersRegexp("User-Agent", ".*Mozilla.*").Subrouter()
 
 	// Initialize json rpc handlers.
 	webRPC := jsonrpc.NewServer()

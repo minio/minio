@@ -72,12 +72,6 @@ func (api objectAPIHandlers) GetBucketLoggingHandler(w http.ResponseWriter, r *h
 	w.(http.Flusher).Flush()
 }
 
-// GetBucketLifecycleHandler - GET bucket lifecycle, a dummy api
-func (api objectAPIHandlers) GetBucketLifecycleHandler(w http.ResponseWriter, r *http.Request) {
-	writeSuccessResponseHeadersOnly(w)
-	w.(http.Flusher).Flush()
-}
-
 // GetBucketReplicationHandler - GET bucket replication, a dummy api
 func (api objectAPIHandlers) GetBucketReplicationHandler(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponseHeadersOnly(w)

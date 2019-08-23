@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"syscall"
 )
 
 // uiErr is a structure which contains all information
@@ -30,7 +31,7 @@ type uiErr struct {
 	msg    string
 	detail string
 	action string
-	help   string
+	hint   string
 }
 
 // Return the error message
@@ -47,7 +48,7 @@ func (u uiErr) Msg(m string, args ...interface{}) uiErr {
 		msg:    fmt.Sprintf(m, args...),
 		detail: u.detail,
 		action: u.action,
-		help:   u.help,
+		hint:   u.hint,
 	}
 }
 
@@ -56,12 +57,12 @@ type uiErrFn func(err error) uiErr
 // Create a UI error generator, this is needed to simplify
 // the update of the detailed error message in several places
 // in MinIO code
-func newUIErrFn(msg, action, help string) uiErrFn {
+func newUIErrFn(msg, action, hint string) uiErrFn {
 	return func(err error) uiErr {
 		u := uiErr{
 			msg:    msg,
 			action: action,
-			help:   help,
+			hint:   hint,
 		}
 		if err != nil {
 			u.detail = err.Error()
@@ -82,8 +83,13 @@ func errorToUIErr(err error) uiErr {
 	switch e := err.(type) {
 	case *net.OpError:
 		if e.Op == "listen" {
-			return uiErrPortAlreadyInUse(e).Msg("Port " + e.Addr.String() + " is already in use")
-
+			if oe, ok := e.Err.(*os.SyscallError); ok {
+				if oe.Err == syscall.EADDRINUSE {
+					return uiErrPortAlreadyInUse(e).Msg("Specified port '" + e.Addr.String() + "' is already in use")
+				} else if oe.Err == syscall.EACCES {
+					return uiErrPortAccess(e).Msg("Insufficient permissions to use specified port '" + e.Addr.String() + "'")
+				}
+			}
 		}
 	case *os.PathError:
 		if os.IsPermission(e) {
@@ -117,19 +123,19 @@ func fmtError(introMsg string, err error, jsonFlag bool) string {
 	// Pretty print error message
 	introMsg += ": "
 	if uiErr.msg != "" {
-		introMsg += colorBold(uiErr.msg + ".")
+		introMsg += colorBold(uiErr.msg)
 	} else {
-		introMsg += colorBold(err.Error() + ".")
+		introMsg += colorBold(err.Error())
 	}
 	renderedTxt += colorRed(introMsg) + "\n"
 	// Add action message
 	if uiErr.action != "" {
-		renderedTxt += "> " + colorBgYellow(colorBlack(uiErr.action+".")) + "\n"
+		renderedTxt += "> " + colorBgYellow(colorBlack(uiErr.action)) + "\n"
 	}
-	// Add help
-	if uiErr.help != "" {
-		renderedTxt += colorBold("HELP:") + "\n"
-		renderedTxt += "  " + uiErr.help
+	// Add hint
+	if uiErr.hint != "" {
+		renderedTxt += colorBold("HINT:") + "\n"
+		renderedTxt += "  " + uiErr.hint
 	}
 	return renderedTxt
 }

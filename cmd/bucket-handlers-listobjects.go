@@ -49,6 +49,83 @@ func validateListObjectsArgs(prefix, marker, delimiter, encodingType string, max
 	return ErrNone
 }
 
+// ListBucketObjectVersions - GET Bucket Object versions
+// You can use the versions subresource to list metadata about all
+// of the versions of objects in a bucket.
+func (api objectAPIHandlers) ListBucketObjectVersionsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListBucketObjectVersions")
+
+	defer logger.AuditLog(w, r, "ListBucketObjectVersions", mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.ListBucketAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	urlValues := r.URL.Query()
+
+	// Extract all the listBucketVersions query params to their native values.
+	// versionIDMarker is ignored here.
+	prefix, marker, delimiter, maxkeys, encodingType, _, errCode := getListBucketObjectVersionsArgs(urlValues)
+	if errCode != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(errCode), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Validate the query params before beginning to serve the request.
+	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, encodingType, maxkeys); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	listObjects := objectAPI.ListObjects
+
+	// Inititate a list objects operation based on the input params.
+	// On success would return back ListObjectsInfo object to be
+	// marshaled into S3 compatible XML header.
+	listObjectsInfo, err := listObjects(ctx, bucket, prefix, marker, delimiter, maxkeys)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	for i := range listObjectsInfo.Objects {
+		var actualSize int64
+		if listObjectsInfo.Objects[i].IsCompressed() {
+			// Read the decompressed size from the meta.json.
+			actualSize = listObjectsInfo.Objects[i].GetActualSize()
+			if actualSize < 0 {
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidDecompressedSize),
+					r.URL, guessIsBrowserReq(r))
+				return
+			}
+			// Set the info.Size to the actualSize.
+			listObjectsInfo.Objects[i].Size = actualSize
+		} else if crypto.IsEncrypted(listObjectsInfo.Objects[i].UserDefined) {
+			listObjectsInfo.Objects[i].ETag = getDecryptedETag(r.Header, listObjectsInfo.Objects[i], false)
+			listObjectsInfo.Objects[i].Size, err = listObjectsInfo.Objects[i].DecryptedSize()
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				return
+			}
+		}
+	}
+
+	response := generateListVersionsResponse(bucket, prefix, marker, delimiter, encodingType, maxkeys, listObjectsInfo)
+
+	// Write success response.
+	writeSuccessResponseXML(w, encodeResponse(response))
+}
+
 // ListObjectsV2Handler - GET Bucket (List Objects) Version 2.
 // --------------------------
 // This implementation of the GET operation returns some or all (up to 1000)
@@ -93,9 +170,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	}
 
 	listObjectsV2 := objectAPI.ListObjectsV2
-	if api.CacheAPI() != nil {
-		listObjectsV2 = api.CacheAPI().ListObjectsV2
-	}
+
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
 	// marshaled into S3 compatible XML header.
@@ -172,9 +247,6 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	}
 
 	listObjects := objectAPI.ListObjects
-	if api.CacheAPI() != nil {
-		listObjects = api.CacheAPI().ListObjects
-	}
 
 	// Inititate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be

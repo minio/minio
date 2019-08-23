@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
@@ -188,6 +189,21 @@ func (sys *NotificationSys) LoadPolicy(policyName string) []NotificationPeerErr 
 	return ng.Wait()
 }
 
+// LoadPolicyMapping - reloads a policy mapping across all peers
+func (sys *NotificationSys) LoadPolicyMapping(userOrGroup string, isGroup bool) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(context.Background(), func() error {
+			return client.LoadPolicyMapping(userOrGroup, isGroup)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
 // DeleteUser - deletes a specific user across all peers
 func (sys *NotificationSys) DeleteUser(accessKey string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
@@ -231,6 +247,19 @@ func (sys *NotificationSys) LoadUsers() []NotificationPeerErr {
 	return ng.Wait()
 }
 
+// LoadGroup - loads a specific group on all peers.
+func (sys *NotificationSys) LoadGroup(group string) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(context.Background(), func() error { return client.LoadGroup(group) }, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
 // BackgroundHealStatus - returns background heal status of all peers
 func (sys *NotificationSys) BackgroundHealStatus() []madmin.BgHealState {
 	states := make([]madmin.BgHealState, len(sys.peerClients))
@@ -239,6 +268,24 @@ func (sys *NotificationSys) BackgroundHealStatus() []madmin.BgHealState {
 			continue
 		}
 		st, err := client.BackgroundHealStatus()
+		if err != nil {
+			logger.LogIf(context.Background(), err)
+		} else {
+			states[idx] = st
+		}
+	}
+
+	return states
+}
+
+// BackgroundOpsStatus - returns the status of all background operations of all peers
+func (sys *NotificationSys) BackgroundOpsStatus() []BgOpsStatus {
+	states := make([]BgOpsStatus, len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		st, err := client.BackgroundOpsStatus()
 		if err != nil {
 			logger.LogIf(context.Background(), err)
 		} else {
@@ -489,6 +536,48 @@ func (sys *NotificationSys) RemoveBucketPolicy(ctx context.Context, bucketName s
 			go func(client *peerRESTClient) {
 				defer wg.Done()
 				if err := client.RemoveBucketPolicy(bucketName); err != nil {
+					logger.GetReqInfo(ctx).AppendTags("remotePeer", client.host.Name)
+					logger.LogIf(ctx, err)
+				}
+			}(client)
+		}
+		wg.Wait()
+	}()
+}
+
+// SetBucketLifecycle - calls SetBucketLifecycle on all peers.
+func (sys *NotificationSys) SetBucketLifecycle(ctx context.Context, bucketName string, bucketLifecycle *lifecycle.Lifecycle) {
+	go func() {
+		var wg sync.WaitGroup
+		for _, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
+			wg.Add(1)
+			go func(client *peerRESTClient) {
+				defer wg.Done()
+				if err := client.SetBucketLifecycle(bucketName, bucketLifecycle); err != nil {
+					logger.GetReqInfo(ctx).AppendTags("remotePeer", client.host.Name)
+					logger.LogIf(ctx, err)
+				}
+			}(client)
+		}
+		wg.Wait()
+	}()
+}
+
+// RemoveBucketLifecycle - calls RemoveLifecycle on all peers.
+func (sys *NotificationSys) RemoveBucketLifecycle(ctx context.Context, bucketName string) {
+	go func() {
+		var wg sync.WaitGroup
+		for _, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
+			wg.Add(1)
+			go func(client *peerRESTClient) {
+				defer wg.Done()
+				if err := client.RemoveBucketLifecycle(bucketName); err != nil {
 					logger.GetReqInfo(ctx).AppendTags("remotePeer", client.host.Name)
 					logger.LogIf(ctx, err)
 				}
@@ -816,6 +905,55 @@ func (sys *NotificationSys) Send(args eventArgs) []event.TargetIDErr {
 
 	targetIDs := targetIDSet.ToSlice()
 	return sys.send(args.BucketName, args.ToEvent(), targetIDs...)
+}
+
+// NetReadPerfInfo - Network read performance information.
+func (sys *NotificationSys) NetReadPerfInfo(size int64) []ServerNetReadPerfInfo {
+	reply := make([]ServerNetReadPerfInfo, len(sys.peerClients))
+
+	// Execution is done serially.
+	for i, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+
+		info, err := client.NetReadPerfInfo(size)
+		if err != nil {
+			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", client.host.String())
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
+
+			info.Addr = client.host.String()
+			info.Error = err.Error()
+		}
+
+		reply[i] = info
+	}
+
+	return reply
+}
+
+// CollectNetPerfInfo - Collect network performance information of all peers.
+func (sys *NotificationSys) CollectNetPerfInfo(size int64) map[string][]ServerNetReadPerfInfo {
+	reply := map[string][]ServerNetReadPerfInfo{}
+
+	// Execution is done serially.
+	for _, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+
+		info, err := client.CollectNetPerfInfo(size)
+		if err != nil {
+			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", client.host.String())
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
+		}
+
+		reply[client.host.String()] = info
+	}
+
+	return reply
 }
 
 // DrivePerfInfo - Drive speed (read and write) information

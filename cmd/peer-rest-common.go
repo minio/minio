@@ -16,10 +16,12 @@
 
 package cmd
 
-const peerRESTVersion = "v2"
+const peerRESTVersion = "v4"
 const peerRESTPath = minioReservedBucketPath + "/peer/" + peerRESTVersion
 
 const (
+	peerRESTMethodNetReadPerfInfo          = "netreadperfinfo"
+	peerRESTMethodCollectNetPerfInfo       = "collectnetperfinfo"
 	peerRESTMethodServerInfo               = "serverinfo"
 	peerRESTMethodCPULoadInfo              = "cpuloadinfo"
 	peerRESTMethodMemUsageInfo             = "memusageinfo"
@@ -27,13 +29,16 @@ const (
 	peerRESTMethodDeleteBucket             = "deletebucket"
 	peerRESTMethodSignalService            = "signalservice"
 	peerRESTMethodBackgroundHealStatus     = "backgroundhealstatus"
+	peerRESTMethodBackgroundOpsStatus      = "backgroundopsstatus"
 	peerRESTMethodGetLocks                 = "getlocks"
 	peerRESTMethodBucketPolicyRemove       = "removebucketpolicy"
 	peerRESTMethodLoadUser                 = "loaduser"
 	peerRESTMethodDeleteUser               = "deleteuser"
 	peerRESTMethodLoadPolicy               = "loadpolicy"
+	peerRESTMethodLoadPolicyMapping        = "loadpolicymapping"
 	peerRESTMethodDeletePolicy             = "deletepolicy"
 	peerRESTMethodLoadUsers                = "loadusers"
+	peerRESTMethodLoadGroup                = "loadgroup"
 	peerRESTMethodStartProfiling           = "startprofiling"
 	peerRESTMethodDownloadProfilingData    = "downloadprofilingdata"
 	peerRESTMethodBucketPolicySet          = "setbucketpolicy"
@@ -43,15 +48,22 @@ const (
 	peerRESTMethodTargetExists             = "targetexists"
 	peerRESTMethodSendEvent                = "sendevent"
 	peerRESTMethodTrace                    = "trace"
+	peerRESTMethodBucketLifecycleSet       = "setbucketlifecycle"
+	peerRESTMethodBucketLifecycleRemove    = "removebucketlifecycle"
 )
 
 const (
-	peerRESTBucket   = "bucket"
-	peerRESTUser     = "user"
-	peerRESTUserTemp = "user-temp"
-	peerRESTPolicy   = "policy"
-	peerRESTSignal   = "signal"
-	peerRESTProfiler = "profiler"
-	peerRESTDryRun   = "dry-run"
-	peerRESTTraceAll = "all"
+	peerRESTNetPerfSize = "netperfsize"
+	peerRESTBucket      = "bucket"
+	peerRESTUser        = "user"
+	peerRESTGroup       = "group"
+	peerRESTUserTemp    = "user-temp"
+	peerRESTPolicy      = "policy"
+	peerRESTUserOrGroup = "user-or-group"
+	peerRESTIsGroup     = "is-group"
+	peerRESTSignal      = "signal"
+	peerRESTProfiler    = "profiler"
+	peerRESTDryRun      = "dry-run"
+	peerRESTTraceAll    = "all"
+	peerRESTTraceErr    = "err"
 )

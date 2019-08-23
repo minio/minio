@@ -16,7 +16,7 @@
 
 import "babel-polyfill"
 import "./less/main.less"
-import "font-awesome/css/font-awesome.css"
+import "@fortawesome/fontawesome-free/css/all.css"
 import "material-design-iconic-font/dist/css/material-design-iconic-font.min.css"
 
 import React from "react"

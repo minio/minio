@@ -36,7 +36,7 @@ const (
 
 // Ignores all reserved bucket names or invalid bucket names.
 func isReservedOrInvalidBucket(bucketEntry string, strict bool) bool {
-	bucketEntry = strings.TrimSuffix(bucketEntry, "/")
+	bucketEntry = strings.TrimSuffix(bucketEntry, minio.SlashSeparator)
 	if strict {
 		if err := s3utils.CheckValidBucketNameStrict(bucketEntry); err != nil {
 			return true

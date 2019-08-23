@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"os"
+	"path/filepath"
 
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
@@ -37,6 +39,8 @@ type NATSArgs struct {
 	Token        string    `json:"token"`
 	Secure       bool      `json:"secure"`
 	PingInterval int64     `json:"pingInterval"`
+	QueueDir     string    `json:"queueDir"`
+	QueueLimit   uint64    `json:"queueLimit"`
 	Streaming    struct {
 		Enable             bool   `json:"enable"`
 		ClusterID          string `json:"clusterID"`
@@ -65,7 +69,48 @@ func (n NATSArgs) Validate() error {
 		}
 	}
 
+	if n.QueueDir != "" {
+		if !filepath.IsAbs(n.QueueDir) {
+			return errors.New("queueDir path should be absolute")
+		}
+	}
+	if n.QueueLimit > 10000 {
+		return errors.New("queueLimit should not exceed 10000")
+	}
+
 	return nil
+}
+
+// To obtain a nats connection from args.
+func (n NATSArgs) connectNats() (*nats.Conn, error) {
+	options := nats.DefaultOptions
+	options.Url = "nats://" + n.Address.String()
+	options.User = n.Username
+	options.Password = n.Password
+	options.Token = n.Token
+	options.Secure = n.Secure
+	return options.Connect()
+}
+
+// To obtain a streaming connection from args.
+func (n NATSArgs) connectStan() (stan.Conn, error) {
+	scheme := "nats"
+	if n.Secure {
+		scheme = "tls"
+	}
+	addressURL := scheme + "://" + n.Username + ":" + n.Password + "@" + n.Address.String()
+
+	clientID, err := getNewUUID()
+	if err != nil {
+		return nil, err
+	}
+
+	connOpts := []stan.Option{stan.NatsURL(addressURL)}
+	if n.Streaming.MaxPubAcksInflight > 0 {
+		connOpts = append(connOpts, stan.MaxPubAcksInflight(n.Streaming.MaxPubAcksInflight))
+	}
+
+	return stan.Connect(n.Streaming.ClusterID, clientID, connOpts...)
 }
 
 // NATSTarget - NATS target.
@@ -74,6 +119,7 @@ type NATSTarget struct {
 	args     NATSArgs
 	natsConn *nats.Conn
 	stanConn stan.Conn
+	store    Store
 }
 
 // ID - returns target ID.
@@ -81,11 +127,24 @@ func (target *NATSTarget) ID() event.TargetID {
 	return target.id
 }
 
-// Save - Sends event directly without persisting.
+// Save - saves the events to the store which will be replayed when the Nats connection is active.
 func (target *NATSTarget) Save(eventData event.Event) error {
+	if target.store != nil {
+		return target.store.Put(eventData)
+	}
+	if target.args.Streaming.Enable {
+		if !target.stanConn.NatsConn().IsConnected() {
+			return errNotConnected
+		}
+	} else {
+		if !target.natsConn.IsConnected() {
+			return errNotConnected
+		}
+	}
 	return target.send(eventData)
 }
 
+// send - sends an event to the Nats.
 func (target *NATSTarget) send(eventData event.Event) error {
 	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
 	if err != nil {
@@ -107,18 +166,62 @@ func (target *NATSTarget) send(eventData event.Event) error {
 	} else {
 		err = target.natsConn.Publish(target.args.Subject, data)
 	}
-
 	return err
 }
 
-// Send - interface compatible method does no-op.
+// Send - sends event to Nats.
 func (target *NATSTarget) Send(eventKey string) error {
-	return nil
+	var connErr error
+
+	if target.args.Streaming.Enable {
+		if target.stanConn == nil || target.stanConn.NatsConn() == nil {
+			target.stanConn, connErr = target.args.connectStan()
+		} else {
+			if !target.stanConn.NatsConn().IsConnected() {
+				return errNotConnected
+			}
+		}
+	} else {
+		if target.natsConn == nil {
+			target.natsConn, connErr = target.args.connectNats()
+		} else {
+			if !target.natsConn.IsConnected() {
+				return errNotConnected
+			}
+		}
+	}
+
+	if connErr != nil {
+		if connErr.Error() == nats.ErrNoServers.Error() {
+			return errNotConnected
+		}
+		return connErr
+	}
+
+	eventData, eErr := target.store.Get(eventKey)
+	if eErr != nil {
+		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
+		// Such events will not exist and wouldve been already been sent successfully.
+		if os.IsNotExist(eErr) {
+			return nil
+		}
+		return eErr
+	}
+
+	if err := target.send(eventData); err != nil {
+		return err
+	}
+
+	return target.store.Del(eventKey)
 }
 
 // Close - closes underneath connections to NATS server.
 func (target *NATSTarget) Close() (err error) {
 	if target.stanConn != nil {
+		// closing the streaming connection does not close the provided NATS connection.
+		if target.stanConn.NatsConn() != nil {
+			target.stanConn.NatsConn().Close()
+		}
 		err = target.stanConn.Close()
 	}
 
@@ -130,47 +233,48 @@ func (target *NATSTarget) Close() (err error) {
 }
 
 // NewNATSTarget - creates new NATS target.
-func NewNATSTarget(id string, args NATSArgs) (*NATSTarget, error) {
+func NewNATSTarget(id string, args NATSArgs, doneCh <-chan struct{}) (*NATSTarget, error) {
 	var natsConn *nats.Conn
 	var stanConn stan.Conn
-	var clientID string
+
 	var err error
 
-	if args.Streaming.Enable {
-		scheme := "nats"
-		if args.Secure {
-			scheme = "tls"
-		}
-		addressURL := scheme + "://" + args.Username + ":" + args.Password + "@" + args.Address.String()
+	var store Store
 
-		clientID, err = getNewUUID()
-		if err != nil {
+	if args.QueueDir != "" {
+		queueDir := filepath.Join(args.QueueDir, storePrefix+"-nats-"+id)
+		store = NewQueueStore(queueDir, args.QueueLimit)
+		if oErr := store.Open(); oErr != nil {
+			return nil, oErr
+		}
+	}
+
+	if args.Streaming.Enable {
+		stanConn, err = args.connectStan()
+	} else {
+		natsConn, err = args.connectNats()
+	}
+
+	if err != nil {
+		if store == nil || err.Error() != nats.ErrNoServers.Error() {
 			return nil, err
 		}
-
-		connOpts := []stan.Option{stan.NatsURL(addressURL)}
-		if args.Streaming.MaxPubAcksInflight > 0 {
-			connOpts = append(connOpts, stan.MaxPubAcksInflight(args.Streaming.MaxPubAcksInflight))
-		}
-
-		stanConn, err = stan.Connect(args.Streaming.ClusterID, clientID, connOpts...)
-	} else {
-		options := nats.DefaultOptions
-		options.Url = "nats://" + args.Address.String()
-		options.User = args.Username
-		options.Password = args.Password
-		options.Token = args.Token
-		options.Secure = args.Secure
-		natsConn, err = options.Connect()
-	}
-	if err != nil {
-		return nil, err
 	}
 
-	return &NATSTarget{
+	target := &NATSTarget{
 		id:       event.TargetID{ID: id, Name: "nats"},
 		args:     args,
 		stanConn: stanConn,
 		natsConn: natsConn,
-	}, nil
+		store:    store,
+	}
+
+	if target.store != nil {
+		// Replays the events from the store.
+		eventKeyCh := replayEvents(target.store, doneCh)
+		// Start replaying events from the store.
+		go sendEvents(target, eventKeyCh, doneCh)
+	}
+
+	return target, nil
 }

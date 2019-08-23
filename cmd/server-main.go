@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2015-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ package cmd
 
 import (
 	"context"
-	"errors"
+	"encoding/gob"
 	"fmt"
 	"net/http"
 	"os"
@@ -36,6 +36,7 @@ import (
 func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterUIError(fmtError)
+	gob.Register(HashMismatchError{})
 }
 
 // ServerFlags - server command specific flags
@@ -236,13 +237,7 @@ func serverMain(ctx *cli.Context) {
 
 	if !globalCLIContext.Quiet {
 		// Check for new updates from dl.min.io.
-		mode := globalMinioModeFS
-		if globalIsDistXL {
-			mode = globalMinioModeDistXL
-		} else if globalIsXL {
-			mode = globalMinioModeXL
-		}
-		checkUpdate(mode)
+		checkUpdate(getMinioMode())
 	}
 
 	// FIXME: This code should be removed in future releases and we should have mandatory
@@ -345,7 +340,7 @@ func serverMain(ctx *cli.Context) {
 	var cacheConfig = globalServerConfig.GetCacheConfig()
 	if len(cacheConfig.Drives) > 0 {
 		// initialize the new disk cache objects.
-		globalCacheObjectAPI, err = newServerCacheObjects(cacheConfig)
+		globalCacheObjectAPI, err = newServerCacheObjects(context.Background(), cacheConfig)
 		logger.FatalIf(err, "Unable to initialize disk caching")
 	}
 
@@ -363,16 +358,28 @@ func serverMain(ctx *cli.Context) {
 		logger.Fatal(err, "Unable to initialize policy system")
 	}
 
+	// Create new lifecycle system.
+	globalLifecycleSys = NewLifecycleSys()
+
+	// Initialize lifecycle system.
+	if err = globalLifecycleSys.Init(newObject); err != nil {
+		logger.Fatal(err, "Unable to initialize lifecycle system")
+	}
+
 	// Create new notification system.
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
 
 	// Initialize notification system.
 	if err = globalNotificationSys.Init(newObject); err != nil {
-		logger.LogIf(context.Background(), err)
+		logger.Fatal(err, "Unable to initialize notification system")
 	}
-	if globalAutoEncryption && !newObject.IsEncryptionSupported() {
-		logger.Fatal(errors.New("Invalid KMS configuration"), "auto-encryption is enabled but server does not support encryption")
-	}
+
+	// Verify if object layer supports
+	// - encryption
+	// - compression
+	verifyObjectLayerFeatures("server", newObject)
+
+	initDailyLifecycle()
 
 	if globalIsXL {
 		initBackgroundHealing()

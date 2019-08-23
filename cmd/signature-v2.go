@@ -209,7 +209,7 @@ func getReqAccessKeyV2(r *http.Request) (auth.Credentials, bool, APIErrorCode) {
 //  	CanonicalizedProtocolHeaders +
 //  	CanonicalizedResource;
 //
-// CanonicalizedResource = [ "/" + Bucket ] +
+// CanonicalizedResource = [ SlashSeparator + Bucket ] +
 //  	<HTTP-Request-URI, from the protocol name up to the query string> +
 //  	[ subresource, if present. For example "?acl", "?location", "?logging", or "?torrent"];
 //

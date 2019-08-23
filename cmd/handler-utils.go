@@ -31,7 +31,6 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/handlers"
-	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Parses location constraint from the incoming reader.
@@ -96,8 +95,8 @@ func isMetadataReplace(h http.Header) bool {
 // Splits an incoming path into bucket and object components.
 func path2BucketAndObject(path string) (bucket, object string) {
 	// Skip the first element if it is '/', split the rest.
-	path = strings.TrimPrefix(path, "/")
-	pathComponents := strings.SplitN(path, "/", 2)
+	path = strings.TrimPrefix(path, SlashSeparator)
+	pathComponents := strings.SplitN(path, SlashSeparator, 2)
 
 	// Save the bucket and object extracted from path.
 	switch len(pathComponents) {
@@ -371,7 +370,7 @@ func getResource(path string, host string, domains []string) (string, error) {
 			continue
 		}
 		bucket := strings.TrimSuffix(host, "."+domain)
-		return slashSeparator + pathJoin(bucket, path), nil
+		return SlashSeparator + pathJoin(bucket, path), nil
 	}
 	return path, nil
 }
@@ -387,15 +386,11 @@ func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // gets host name for current node
-func getHostName(r *http.Request) (hostName string, err error) {
-	var thisAddr *xnet.Host
-	hostName = r.Host
+func getHostName(r *http.Request) (hostName string) {
 	if globalIsDistXL {
-		thisAddr, err = xnet.ParseHost(GetLocalPeer(globalEndpoints))
-		if err != nil {
-			return
-		}
-		hostName = thisAddr.String()
+		hostName = GetLocalPeer(globalEndpoints)
+	} else {
+		hostName = r.Host
 	}
 	return
 }

@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"encoding/gob"
 	"io"
+	"math/rand"
 	"net/url"
 	"strconv"
 	"time"
@@ -30,6 +31,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
@@ -105,6 +107,37 @@ func (client *peerRESTClient) Close() error {
 
 // GetLocksResp stores various info from the client for each lock that is requested.
 type GetLocksResp map[string][]lockRequesterInfo
+
+// NetReadPerfInfo - fetch network read performance information for a remote node.
+func (client *peerRESTClient) NetReadPerfInfo(size int64) (info ServerNetReadPerfInfo, err error) {
+	params := make(url.Values)
+	params.Set(peerRESTNetPerfSize, strconv.FormatInt(size, 10))
+	respBody, err := client.call(
+		peerRESTMethodNetReadPerfInfo,
+		params,
+		rand.New(rand.NewSource(time.Now().UnixNano())),
+		size,
+	)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
+// CollectNetPerfInfo - collect network performance information of other peers.
+func (client *peerRESTClient) CollectNetPerfInfo(size int64) (info []ServerNetReadPerfInfo, err error) {
+	params := make(url.Values)
+	params.Set(peerRESTNetPerfSize, strconv.FormatInt(size, 10))
+	respBody, err := client.call(peerRESTMethodCollectNetPerfInfo, params, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
 
 // GetLocks - fetch older locks for a remote node.
 func (client *peerRESTClient) GetLocks() (locks GetLocksResp, err error) {
@@ -329,6 +362,37 @@ func (client *peerRESTClient) SetBucketPolicy(bucket string, bucketPolicy *polic
 	return nil
 }
 
+// RemoveBucketLifecycle - Remove bucket lifecycle configuration on the peer node
+func (client *peerRESTClient) RemoveBucketLifecycle(bucket string) error {
+	values := make(url.Values)
+	values.Set(peerRESTBucket, bucket)
+	respBody, err := client.call(peerRESTMethodBucketLifecycleRemove, values, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// SetBucketLifecycle - Set bucket lifecycle configuration on the peer node
+func (client *peerRESTClient) SetBucketLifecycle(bucket string, bucketLifecycle *lifecycle.Lifecycle) error {
+	values := make(url.Values)
+	values.Set(peerRESTBucket, bucket)
+
+	var reader bytes.Buffer
+	err := gob.NewEncoder(&reader).Encode(bucketLifecycle)
+	if err != nil {
+		return err
+	}
+
+	respBody, err := client.call(peerRESTMethodBucketLifecycleSet, values, &reader, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 // PutBucketNotification - Put bucket notification on the peer node.
 func (client *peerRESTClient) PutBucketNotification(bucket string, rulesMap event.RulesMap) error {
 	values := make(url.Values)
@@ -374,6 +438,22 @@ func (client *peerRESTClient) LoadPolicy(policyName string) (err error) {
 	return nil
 }
 
+// LoadPolicyMapping - reload a specific policy mapping
+func (client *peerRESTClient) LoadPolicyMapping(userOrGroup string, isGroup bool) error {
+	values := make(url.Values)
+	values.Set(peerRESTUserOrGroup, userOrGroup)
+	if isGroup {
+		values.Set(peerRESTIsGroup, "")
+	}
+
+	respBody, err := client.call(peerRESTMethodLoadPolicyMapping, values, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 // DeleteUser - delete a specific user.
 func (client *peerRESTClient) DeleteUser(accessKey string) (err error) {
 	values := make(url.Values)
@@ -411,6 +491,18 @@ func (client *peerRESTClient) LoadUsers() (err error) {
 	return nil
 }
 
+// LoadGroup - send load group command to peers.
+func (client *peerRESTClient) LoadGroup(group string) error {
+	values := make(url.Values)
+	values.Set(peerRESTGroup, group)
+	respBody, err := client.call(peerRESTMethodLoadGroup, values, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 // SignalService - sends signal to peer nodes.
 func (client *peerRESTClient) SignalService(sig serviceSignal) error {
 	values := make(url.Values)
@@ -435,9 +527,36 @@ func (client *peerRESTClient) BackgroundHealStatus() (madmin.BgHealState, error)
 	return state, err
 }
 
-func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan struct{}, trcAll bool) {
+// BgLifecycleOpsStatus describes the status
+// of the background lifecycle operations
+type BgLifecycleOpsStatus struct {
+	LastActivity time.Time
+}
+
+// BgOpsStatus describes the status of all operations performed
+// in background such as auto-healing and lifecycle.
+// Notice: We need to increase peer REST API version when adding
+// new fields to this struct.
+type BgOpsStatus struct {
+	LifecycleOps BgLifecycleOpsStatus
+}
+
+func (client *peerRESTClient) BackgroundOpsStatus() (BgOpsStatus, error) {
+	respBody, err := client.call(peerRESTMethodBackgroundOpsStatus, nil, nil, -1)
+	if err != nil {
+		return BgOpsStatus{}, err
+	}
+	defer http.DrainBody(respBody)
+
+	state := BgOpsStatus{}
+	err = gob.NewDecoder(respBody).Decode(&state)
+	return state, err
+}
+
+func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan struct{}, trcAll, trcErr bool) {
 	values := make(url.Values)
 	values.Set(peerRESTTraceAll, strconv.FormatBool(trcAll))
+	values.Set(peerRESTTraceErr, strconv.FormatBool(trcErr))
 
 	// To cancel the REST request in case doneCh gets closed.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -466,19 +585,21 @@ func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan stru
 		if err = dec.Decode(&info); err != nil {
 			return
 		}
-		select {
-		case traceCh <- info:
-		default:
-			// Do not block on slow receivers.
+		if len(info.NodeName) > 0 {
+			select {
+			case traceCh <- info:
+			default:
+				// Do not block on slow receivers.
+			}
 		}
 	}
 }
 
 // Trace - send http trace request to peer nodes
-func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh chan struct{}, trcAll bool) {
+func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh chan struct{}, trcAll, trcErr bool) {
 	go func() {
 		for {
-			client.doTrace(traceCh, doneCh, trcAll)
+			client.doTrace(traceCh, doneCh, trcAll, trcErr)
 			select {
 			case <-doneCh:
 				return

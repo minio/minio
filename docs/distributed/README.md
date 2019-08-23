@@ -67,7 +67,6 @@ __NOTE:__ `{1...n}` shown have 3 dots! Using only 2 dots `{1..32}` will be inter
 To test this setup, access the MinIO server via browser or [`mc`](https://docs.min.io/docs/minio-client-quickstart-guide).
 
 ## Explore Further
-- [MinIO Large Bucket Support Guide](https://docs.min.io/docs/minio-large-bucket-support-quickstart-guide)
 - [MinIO Erasure Code QuickStart Guide](https://docs.min.io/docs/minio-erasure-code-quickstart-guide)
 - [Use `mc` with MinIO Server](https://docs.min.io/docs/minio-client-quickstart-guide)
 - [Use `aws-cli` with MinIO Server](https://docs.min.io/docs/aws-cli-with-minio)

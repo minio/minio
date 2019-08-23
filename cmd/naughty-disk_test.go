@@ -195,3 +195,10 @@ func (d *naughtyDisk) ReadAll(volume string, path string) (buf []byte, err error
 	}
 	return d.disk.ReadAll(volume, path)
 }
+
+func (d *naughtyDisk) VerifyFile(volume, path string, empty bool, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
+	if err := d.calcError(); err != nil {
+		return err
+	}
+	return d.disk.VerifyFile(volume, path, empty, algo, sum, shardSize)
+}

@@ -111,7 +111,7 @@ EXAMPLES:
 
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               azureBackend,
-		Usage:              "Microsoft Azure Blob Storage.",
+		Usage:              "Microsoft Azure Blob Storage",
 		Action:             azureGatewayMain,
 		CustomHelpTemplate: azureGatewayTemplate,
 		HideHelpCommand:    true,
@@ -431,7 +431,7 @@ func checkAzureUploadID(ctx context.Context, uploadID string) (err error) {
 
 // parses partID from part metadata file name
 func parseAzurePart(metaPartFileName, prefix string) (partID int, err error) {
-	partStr := strings.TrimPrefix(metaPartFileName, prefix+"/")
+	partStr := strings.TrimPrefix(metaPartFileName, prefix+minio.SlashSeparator)
 	if partID, err = strconv.Atoi(partStr); err != nil || partID <= 0 {
 		err = fmt.Errorf("invalid part number in block id '%s'", string(partID))
 		return

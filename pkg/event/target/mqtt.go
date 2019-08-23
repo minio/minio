@@ -48,7 +48,7 @@ type MQTTArgs struct {
 	KeepAlive            time.Duration  `json:"keepAliveInterval"`
 	RootCAs              *x509.CertPool `json:"-"`
 	QueueDir             string         `json:"queueDir"`
-	QueueLimit           uint16         `json:"queueLimit"`
+	QueueLimit           uint64         `json:"queueLimit"`
 }
 
 // Validate MQTTArgs fields
@@ -139,7 +139,7 @@ func (target *MQTTTarget) Send(eventKey string) error {
 	return target.store.Del(eventKey)
 }
 
-// Save - saves the events to the store if questore is configured, which will be replayed when the mqtt connection is active.
+// Save - saves the events to the store if queuestore is configured, which will be replayed when the mqtt connection is active.
 func (target *MQTTTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)

@@ -22,7 +22,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -37,6 +36,23 @@ type OpaArgs struct {
 
 // Validate - validate opa configuration params.
 func (a *OpaArgs) Validate() error {
+	req, err := http.NewRequest("POST", a.URL.String(), bytes.NewReader([]byte("")))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if a.AuthToken != "" {
+		req.Header.Set("Authorization", a.AuthToken)
+	}
+
+	client := &http.Client{Transport: a.Transport}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer a.CloseRespFn(resp.Body)
+
 	return nil
 }
 
@@ -46,27 +62,14 @@ func (a *OpaArgs) UnmarshalJSON(data []byte) error {
 	type subOpaArgs OpaArgs
 	var so subOpaArgs
 
-	if opaURL, ok := os.LookupEnv("MINIO_IAM_OPA_URL"); ok {
-		u, err := xnet.ParseURL(opaURL)
-		if err != nil {
-			return err
-		}
-		so.URL = u
-		so.AuthToken = os.Getenv("MINIO_IAM_OPA_AUTHTOKEN")
-	} else {
-		if err := json.Unmarshal(data, &so); err != nil {
-			return err
-		}
+	if err := json.Unmarshal(data, &so); err != nil {
+		return err
 	}
 
 	oa := OpaArgs(so)
 	if oa.URL == nil || oa.URL.String() == "" {
 		*a = oa
 		return nil
-	}
-
-	if err := oa.Validate(); err != nil {
-		return err
 	}
 
 	*a = oa
@@ -92,9 +95,9 @@ func NewOpa(args OpaArgs) *Opa {
 }
 
 // IsAllowed - checks given policy args is allowed to continue the REST API.
-func (o *Opa) IsAllowed(args Args) bool {
+func (o *Opa) IsAllowed(args Args) (bool, error) {
 	if o == nil {
-		return false
+		return false, nil
 	}
 
 	// OPA input
@@ -103,12 +106,12 @@ func (o *Opa) IsAllowed(args Args) bool {
 
 	inputBytes, err := json.Marshal(body)
 	if err != nil {
-		return false
+		return false, err
 	}
 
 	req, err := http.NewRequest("POST", o.args.URL.String(), bytes.NewReader(inputBytes))
 	if err != nil {
-		return false
+		return false, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -118,14 +121,14 @@ func (o *Opa) IsAllowed(args Args) bool {
 
 	resp, err := o.client.Do(req)
 	if err != nil {
-		return false
+		return false, err
 	}
 	defer o.args.CloseRespFn(resp.Body)
 
 	// Read the body to be saved later.
 	opaRespBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return false
+		return false, err
 	}
 
 	// Handle large OPA responses when OPA URL is of
@@ -149,9 +152,9 @@ func (o *Opa) IsAllowed(args Args) bool {
 		respBody.Seek(0, 0)
 		var resultAllow opaResultAllow
 		if err = json.NewDecoder(respBody).Decode(&resultAllow); err != nil {
-			return false
+			return false, err
 		}
-		return resultAllow.Result.Allow
+		return resultAllow.Result.Allow, nil
 	}
-	return result.Result
+	return result.Result, nil
 }

@@ -106,6 +106,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	logger.Disable = true
 
 	// Validate if we have access, secret set through environment.
+	globalGatewayName = gw.Name()
 	gatewayName := gw.Name()
 	if ctx.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
@@ -158,7 +159,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		registerSTSRouter(router)
 	}
 
-	enableConfigOps := globalEtcdClient != nil && gatewayName == "nas"
+	enableConfigOps := gatewayName == "nas"
 	enableIAMOps := globalEtcdClient != nil
 
 	// Enable IAM admin APIs if etcd is enabled, if not just enable basic
@@ -236,6 +237,10 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 		// Load globalServerConfig from etcd
 		logger.LogIf(context.Background(), globalConfigSys.Init(newObject))
+
+		// Start watching disk for reloading config, this
+		// is only enabled for "NAS" gateway.
+		globalConfigSys.WatchConfigNASDisk(newObject)
 	}
 
 	// Load logger subsystem
@@ -249,7 +254,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	if len(cacheConfig.Drives) > 0 {
 		var err error
 		// initialize the new disk cache objects.
-		globalCacheObjectAPI, err = newServerCacheObjects(cacheConfig)
+		globalCacheObjectAPI, err = newServerCacheObjects(context.Background(), cacheConfig)
 		logger.FatalIf(err, "Unable to initialize disk caching")
 	}
 
@@ -269,25 +274,19 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Initialize policy system.
 	go globalPolicySys.Init(newObject)
 
+	// Create new lifecycle system
+	globalLifecycleSys = NewLifecycleSys()
+
 	// Create new notification system.
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
-	if globalEtcdClient != nil && newObject.IsNotificationSupported() {
+	if enableConfigOps && newObject.IsNotificationSupported() {
 		logger.LogIf(context.Background(), globalNotificationSys.Init(newObject))
 	}
 
-	// Encryption support checks in gateway mode.
-	{
-
-		if (globalAutoEncryption || GlobalKMS != nil) && !newObject.IsEncryptionSupported() {
-			logger.Fatal(errInvalidArgument,
-				"Encryption support is requested but (%s) gateway does not support encryption", gw.Name())
-		}
-
-		if GlobalGatewaySSE.IsSet() && GlobalKMS == nil {
-			logger.Fatal(uiErrInvalidGWSSEEnvValue(nil).Msg("MINIO_GATEWAY_SSE set but KMS is not configured"),
-				"Unable to start gateway with SSE")
-		}
-	}
+	// Verify if object layer supports
+	// - encryption
+	// - compression
+	verifyObjectLayerFeatures("gateway "+gatewayName, newObject)
 
 	// Once endpoints are finalized, initialize the new object api.
 	globalObjLayerMutex.Lock()

@@ -79,6 +79,20 @@ func replayEvents(store Store, doneCh <-chan struct{}) <-chan string {
 	return eventKeyCh
 }
 
+// IsConnRefusedErr - To check fot "connection refused" error.
+func IsConnRefusedErr(err error) bool {
+	if opErr, ok := err.(*net.OpError); ok {
+		if sysErr, ok := opErr.Err.(*os.SyscallError); ok {
+			if errno, ok := sysErr.Err.(syscall.Errno); ok {
+				if errno == syscall.ECONNREFUSED {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // isConnResetErr - Checks for connection reset errors.
 func isConnResetErr(err error) bool {
 	if opErr, ok := err.(*net.OpError); ok {

@@ -18,20 +18,39 @@ package logger
 
 import (
 	"net/http"
+	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger/message/audit"
 )
 
 // ResponseWriter - is a wrapper to trap the http response status code.
 type ResponseWriter struct {
 	http.ResponseWriter
-	statusCode int
+	statusCode      int
+	startTime       time.Time
+	timeToFirstByte time.Duration
 }
 
 // NewResponseWriter - returns a wrapped response writer to trap
 // http status codes for auditiing purposes.
 func NewResponseWriter(w http.ResponseWriter) *ResponseWriter {
-	return &ResponseWriter{w, http.StatusOK}
+	return &ResponseWriter{
+		ResponseWriter: w,
+		statusCode:     http.StatusOK,
+		startTime:      time.Now().UTC(),
+	}
+}
+
+func (lrw *ResponseWriter) Write(p []byte) (int, error) {
+	n, err := lrw.ResponseWriter.Write(p)
+	if err != nil {
+		return n, err
+	}
+	if lrw.timeToFirstByte == 0 {
+		lrw.timeToFirstByte = time.Now().UTC().Sub(lrw.startTime)
+	}
+	return n, err
 }
 
 // WriteHeader - writes http status code
@@ -57,12 +76,29 @@ func AddAuditTarget(t Target) {
 // AuditLog - logs audit logs to all audit targets.
 func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[string]interface{}) {
 	var statusCode int
+	var timeToResponse time.Duration
+	var timeToFirstByte time.Duration
 	lrw, ok := w.(*ResponseWriter)
 	if ok {
 		statusCode = lrw.statusCode
+		timeToResponse = time.Now().UTC().Sub(lrw.startTime)
+		timeToFirstByte = lrw.timeToFirstByte
 	}
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object := vars["object"]
+
 	// Send audit logs only to http targets.
 	for _, t := range AuditTargets {
-		_ = t.Send(audit.ToEntry(w, r, api, statusCode, reqClaims, globalDeploymentID))
+		entry := audit.ToEntry(w, r, reqClaims, globalDeploymentID)
+		entry.API.Name = api
+		entry.API.Bucket = bucket
+		entry.API.Object = object
+		entry.API.Status = http.StatusText(statusCode)
+		entry.API.StatusCode = statusCode
+		entry.API.TimeToFirstByte = timeToFirstByte.String()
+		entry.API.TimeToResponse = timeToResponse.String()
+		_ = t.Send(entry)
 	}
 }

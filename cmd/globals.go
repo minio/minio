@@ -83,6 +83,11 @@ const (
 	// GlobalMultipartCleanupInterval - Cleanup interval when the stale multipart cleanup is initiated.
 	GlobalMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
 
+	// GlobalServiceExecutionInterval - Executes the Lifecycle events.
+	GlobalServiceExecutionInterval = time.Hour * 24 // 24 hrs.
+
+	// Refresh interval to update in-memory bucket lifecycle cache.
+	globalRefreshBucketLifecycleInterval = 5 * time.Minute
 	// Refresh interval to update in-memory iam config cache.
 	globalRefreshIAMInterval = 5 * time.Minute
 
@@ -112,6 +117,9 @@ var (
 
 	// Indicates if the running minio is in gateway mode.
 	globalIsGateway = false
+
+	// Name of gateway server, e.g S3, GCS, Azure, etc
+	globalGatewayName = ""
 
 	// This flag is set to 'true' by default
 	globalIsBrowserEnabled = true
@@ -147,6 +155,8 @@ var (
 	globalNotificationSys *NotificationSys
 	globalPolicySys       *PolicySys
 	globalIAMSys          *IAMSys
+
+	globalLifecycleSys *LifecycleSys
 
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool
@@ -211,7 +221,10 @@ var (
 	globalCacheExpiry = 90
 	// Max allowed disk cache percentage
 	globalCacheMaxUse = 80
-
+	// Disk cache KMS Key
+	globalCacheKMSKeyID string
+	// Initialized KMS configuration for disk cache
+	globalCacheKMS crypto.KMS
 	// Allocated etcd endpoint for config and bucket DNS.
 	globalEtcdClient *etcd.Client
 

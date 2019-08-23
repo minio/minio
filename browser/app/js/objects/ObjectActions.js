@@ -67,14 +67,14 @@ export class ObjectActions extends React.Component {
             className="fiad-action"
             onClick={this.shareObject.bind(this)}
           >
-            <i className="fa fa-share-alt" />
+            <i className="fas fa-share-alt" />
           </a>
           <a
             href=""
             className="fiad-action"
             onClick={this.showDeleteConfirmModal.bind(this)}
           >
-            <i className="fa fa-trash" />
+            <i className="fas fa-trash-alt" />
           </a>
         </Dropdown.Menu>
         {(showShareObjectModal && shareObjectName === object.name) &&

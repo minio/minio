@@ -19,8 +19,12 @@ package net
 import (
 	"encoding/json"
 	"errors"
+	"net"
+	"net/http"
 	"net/url"
 	"path"
+	"strings"
+	"time"
 )
 
 // URL - improved JSON friendly url.URL.
@@ -78,6 +82,27 @@ func (u *URL) UnmarshalJSON(data []byte) (err error) {
 	return nil
 }
 
+// DialHTTP - dials the url to check the connection.
+func (u URL) DialHTTP() error {
+	var client = &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: 2 * time.Second,
+			}).DialContext,
+		},
+	}
+	req, err := http.NewRequest("POST", u.String(), nil)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
+}
+
 // ParseURL - parses string into URL.
 func ParseURL(s string) (u *URL, err error) {
 	var uu *url.URL
@@ -98,6 +123,11 @@ func ParseURL(s string) (u *URL, err error) {
 	// `/` into `\` ie `/foo` becomes `\foo`
 	if uu.Path != "" {
 		uu.Path = path.Clean(uu.Path)
+	}
+
+	// path.Clean removes the trailing '/' and converts '//' to '/'.
+	if strings.HasSuffix(s, "/") && !strings.HasSuffix(uu.Path, "/") {
+		uu.Path += "/"
 	}
 
 	v := URL(*uu)

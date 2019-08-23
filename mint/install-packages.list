@@ -1,0 +1,17 @@
+git
+python3-pip
+nodejs
+ruby
+ruby-dev
+ruby-bundler
+php
+php7.0-curl
+php-xml
+default-jre
+default-jdk
+ant
+dirmngr
+dotnet-sdk-2.1
+ca-certificates-mono
+nuget
+libunwind8

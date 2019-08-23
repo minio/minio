@@ -72,6 +72,9 @@ var errVolumeAccessDenied = errors.New("volume access denied")
 // errFileAccessDenied - cannot access file, insufficient permissions.
 var errFileAccessDenied = errors.New("file access denied")
 
+// errFileUnexpectedSize - file has an unexpected size
+var errFileUnexpectedSize = errors.New("file has unexpected size")
+
 // errFileParentIsFile - cannot have overlapping objects, parent is already a file.
 var errFileParentIsFile = errors.New("parent is a file")
 
@@ -91,18 +94,17 @@ var errLessData = errors.New("less data available than what was requested")
 // errMoreData = returned when more data was sent by the caller than what it was supposed to.
 var errMoreData = errors.New("more data was sent than what was advertised")
 
-// hashMisMatchError - represents a bit-rot hash verification failure
-// error.
-type hashMismatchError struct {
-	expected string
-	computed string
+// HashMismatchError represents a bit-rot hash verification failure error.
+type HashMismatchError struct {
+	Expected string
+	Computed string
 }
 
-// error method for the hashMismatchError
-func (h hashMismatchError) Error() string {
+// Error method for the hashMismatchError
+func (h HashMismatchError) Error() string {
 	return fmt.Sprintf(
 		"Bitrot verification mismatch - expected %v, received %v",
-		h.expected, h.computed)
+		h.Expected, h.Computed)
 }
 
 // Collection of basic errors.

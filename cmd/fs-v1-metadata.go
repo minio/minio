@@ -30,7 +30,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/mimedb"
-	"github.com/tidwall/gjson"
+	"github.com/valyala/fastjson"
 )
 
 // FS format, and object metadata.
@@ -141,7 +141,7 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 		m.Meta["content-type"] = mimedb.TypeByExtension(pathutil.Ext(object))
 	}
 
-	if hasSuffix(object, slashSeparator) {
+	if hasSuffix(object, SlashSeparator) {
 		m.Meta["etag"] = emptyETag // For directories etag is d41d8cd98f00b204e9800998ecf8427e
 		m.Meta["content-type"] = "application/octet-stream"
 	}
@@ -203,43 +203,36 @@ func (m *fsMetaV1) WriteTo(lk *lock.LockedFile) (n int64, err error) {
 	return fi.Size(), nil
 }
 
-func parseFSVersion(fsMetaBuf []byte) string {
-	return gjson.GetBytes(fsMetaBuf, "version").String()
+func parseFSVersion(v *fastjson.Value) string {
+	return string(v.GetStringBytes("version"))
 }
 
-func parseFSMetaMap(fsMetaBuf []byte) map[string]string {
-	// Get xlMetaV1.Meta map.
-	metaMapResult := gjson.GetBytes(fsMetaBuf, "meta").Map()
+func parseFSMetaMap(v *fastjson.Value) map[string]string {
 	metaMap := make(map[string]string)
-	for key, valResult := range metaMapResult {
-		metaMap[key] = valResult.String()
-	}
+	// Get fsMetaV1.Meta map.
+	v.GetObject("meta").Visit(func(k []byte, kv *fastjson.Value) {
+		metaMap[string(k)] = string(kv.GetStringBytes())
+	})
 	return metaMap
 }
 
-func parseFSPartsArray(fsMetaBuf []byte) []ObjectPartInfo {
+func parseFSPartsArray(v *fastjson.Value) []ObjectPartInfo {
 	// Get xlMetaV1.Parts array
 	var partsArray []ObjectPartInfo
-
-	partsArrayResult := gjson.GetBytes(fsMetaBuf, "parts")
-	partsArrayResult.ForEach(func(key, part gjson.Result) bool {
-		partJSON := part.String()
-		number := gjson.Get(partJSON, "number").Int()
-		name := gjson.Get(partJSON, "name").String()
-		etag := gjson.Get(partJSON, "etag").String()
-		size := gjson.Get(partJSON, "size").Int()
-		actualSize := gjson.Get(partJSON, "actualSize").Int()
+	for _, result := range v.GetArray("parts") {
 		partsArray = append(partsArray, ObjectPartInfo{
-			Number:     int(number),
-			Name:       name,
-			ETag:       etag,
-			Size:       size,
-			ActualSize: int64(actualSize),
+			Number:     result.GetInt("number"),
+			Name:       string(result.GetStringBytes("name")),
+			ETag:       string(result.GetStringBytes("etag")),
+			Size:       result.GetInt64("size"),
+			ActualSize: result.GetInt64("actualSize"),
 		})
-		return true
-	})
+	}
 	return partsArray
 }
+
+// fs.json parser pool
+var fsParserPool fastjson.ParserPool
 
 func (m *fsMetaV1) ReadFrom(ctx context.Context, lk *lock.LockedFile) (n int64, err error) {
 	var fsMetaBuf []byte
@@ -260,8 +253,17 @@ func (m *fsMetaV1) ReadFrom(ctx context.Context, lk *lock.LockedFile) (n int64, 
 		return 0, io.EOF
 	}
 
+	parser := fsParserPool.Get()
+	defer fsParserPool.Put(parser)
+
+	var v *fastjson.Value
+	v, err = parser.ParseBytes(fsMetaBuf)
+	if err != nil {
+		return 0, err
+	}
+
 	// obtain version.
-	m.Version = parseFSVersion(fsMetaBuf)
+	m.Version = parseFSVersion(v)
 
 	// Verify if the format is valid, return corrupted format
 	// for unrecognized formats.
@@ -272,10 +274,10 @@ func (m *fsMetaV1) ReadFrom(ctx context.Context, lk *lock.LockedFile) (n int64, 
 	}
 
 	// obtain parts information
-	m.Parts = parseFSPartsArray(fsMetaBuf)
+	m.Parts = parseFSPartsArray(v)
 
 	// obtain metadata.
-	m.Meta = parseFSMetaMap(fsMetaBuf)
+	m.Meta = parseFSMetaMap(v)
 
 	// Success.
 	return int64(len(fsMetaBuf)), nil

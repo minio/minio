@@ -120,7 +120,7 @@ func getScope(t time.Time, region string) string {
 		region,
 		string(serviceS3),
 		"aws4_request",
-	}, "/")
+	}, SlashSeparator)
 	return scope
 }
 
@@ -248,7 +248,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	query.Set(xhttp.AmzDate, t.Format(iso8601Format))
 	query.Set(xhttp.AmzExpires, strconv.Itoa(expireSeconds))
 	query.Set(xhttp.AmzSignedHeaders, getSignedHeaders(extractedSignedHeaders))
-	query.Set(xhttp.AmzCredential, cred.AccessKey+"/"+pSignValues.Credential.getScope())
+	query.Set(xhttp.AmzCredential, cred.AccessKey+SlashSeparator+pSignValues.Credential.getScope())
 
 	// Save other headers available in the request parameters.
 	for k, v := range req.URL.Query() {

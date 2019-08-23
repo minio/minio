@@ -51,11 +51,20 @@ func TestMasterKeyKMS(t *testing.T) {
 			t.Errorf("Test %d: KMS failed to unseal the generated key: %v", i, err)
 		}
 		if err == nil && test.ShouldFail {
-			t.Errorf("Test %d: KMS unsealed the generated successfully but should have failed", i)
+			t.Errorf("Test %d: KMS unsealed the generated key successfully but should have failed", i)
 		}
 		if !test.ShouldFail && !bytes.Equal(key[:], unsealedKey[:]) {
 			t.Errorf("Test %d: The generated and unsealed key differ", i)
 		}
+
+		rotatedKey, err := kms.UpdateKey(test.UnsealKeyID, sealedKey, test.UnsealContext)
+		if err == nil && test.ShouldFail {
+			t.Errorf("Test %d: KMS updated the generated key successfully but should have failed", i)
+		}
+		if !test.ShouldFail && !bytes.Equal(rotatedKey, sealedKey[:]) {
+			t.Errorf("Test %d: The updated and sealed key differ", i)
+		}
+
 	}
 }
 

@@ -15,9 +15,6 @@
 # limitations under the License.
 #
 
-export MINIO_USERNAME=${MINIO_USERNAME:-"minio"}
-export MINIO_GROUPNAME=${MINIO_GROUPNAME:-"minio"}
-
 # If command starts with an option, prepend minio.
 if [ "${1}" != "minio" ]; then
     if [ -n "${1}" ]; then
@@ -42,37 +39,35 @@ docker_secrets_env() {
     fi
 }
 
-## Create UID/GID based on available environment variables.
-docker_set_uid_gid() {
-    addgroup -S "$MINIO_GROUPNAME" >/dev/null 2>&1 && \
-        adduser -S -G "$MINIO_GROUPNAME" "$MINIO_USERNAME" >/dev/null 2>&1
+## Set SSE_MASTER_KEY from docker secrets if provided
+docker_sse_encryption_env() {
+    SSE_MASTER_KEY_FILE="/run/secrets/$MINIO_SSE_MASTER_KEY_FILE"
+
+    if [ -f "$SSE_MASTER_KEY_FILE" ]; then
+        MINIO_SSE_MASTER_KEY="$(cat "$SSE_MASTER_KEY_FILE")"
+        export MINIO_SSE_MASTER_KEY
+
+    fi
 }
 
-# su-exec to requested user, if user cannot be requested
-# existing user is used automatically.
+# su-exec to requested user, if service cannot run exec will fail.
 docker_switch_user() {
-    owner=$(check-user "$@")
-    if [ "${owner}" != "${MINIO_USERNAME}:${MINIO_GROUPNAME}" ]; then
-        ## Print the message only if we are not using non-default username:groupname.
-        if [ "${MINIO_USERNAME}:${MINIO_GROUPNAME}" != "minio:minio" ]; then
-            echo "Requested username/group ${MINIO_USERNAME}:${MINIO_GROUPNAME} cannot be used"
-            echo "Found existing data with user ${owner}, we will continue and use ${owner} instead."
-            return
-        fi
+    if [ ! -z "${MINIO_USERNAME}" ] && [ ! -z "${MINIO_GROUPNAME}" ]; then
+        addgroup -S "$MINIO_GROUPNAME" >/dev/null 2>&1 && \
+            adduser -S -G "$MINIO_GROUPNAME" "$MINIO_USERNAME" >/dev/null 2>&1
+
+        exec su-exec "${MINIO_USERNAME}:${MINIO_GROUPNAME}" "$@"
+    else
+        # fallback
+        exec "$@"
     fi
-    # check if su-exec is allowed, if yes proceed proceed.
-    if su-exec "${owner}" "/bin/ls" >/dev/null 2>&1; then
-        exec su-exec "${owner}" "$@"
-    fi
-    # fallback
-    exec "$@"
 }
 
 ## Set access env from secrets if necessary.
 docker_secrets_env
 
-## User Input UID and GID
-docker_set_uid_gid
+## Set sse encryption from secrets if necessary.
+docker_sse_encryption_env
 
 ## Switch to user if applicable.
 docker_switch_user "$@"

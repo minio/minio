@@ -47,9 +47,9 @@ export const ObjectsHeader = ({
           className={classNames({
             "fesli-sort": true,
             "fesli-sort--active": sortedByName,
-            fa: true,
-            "fa-sort-alpha-desc": sortedByName && sortOrder === SORT_ORDER_DESC,
-            "fa-sort-alpha-asc": sortedByName && sortOrder === SORT_ORDER_ASC
+            fas: true,
+            "fa-sort-alpha-down-alt": sortedByName && sortOrder === SORT_ORDER_DESC,
+            "fa-sort-alpha-down": sortedByName && sortOrder === SORT_ORDER_ASC
           })}
         />
       </div>
@@ -64,10 +64,10 @@ export const ObjectsHeader = ({
           className={classNames({
             "fesli-sort": true,
             "fesli-sort--active": sortedBySize,
-            fa: true,
-            "fa-sort-amount-desc":
+            fas: true,
+            "fa-sort-amount-down":
               sortedBySize && sortOrder === SORT_ORDER_DESC,
-            "fa-sort-amount-asc": sortedBySize && sortOrder === SORT_ORDER_ASC
+            "fa-sort-amount-down-alt": sortedBySize && sortOrder === SORT_ORDER_ASC
           })}
         />
       </div>
@@ -82,10 +82,10 @@ export const ObjectsHeader = ({
           className={classNames({
             "fesli-sort": true,
             "fesli-sort--active": sortedByLastModified,
-            fa: true,
-            "fa-sort-numeric-desc":
+            fas: true,
+            "fa-sort-numeric-down-alt":
               sortedByLastModified && sortOrder === SORT_ORDER_DESC,
-            "fa-sort-numeric-asc":
+            "fa-sort-numeric-down":
               sortedByLastModified && sortOrder === SORT_ORDER_ASC
           })}
         />
