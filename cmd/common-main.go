@@ -359,6 +359,14 @@ func handleCommonEnvVars() {
 			globalCacheMaxUse = maxUse
 		}
 	}
+
+	var err error
+	if cacheEncKey := os.Getenv("MINIO_CACHE_ENCRYPTION_MASTER_KEY"); cacheEncKey != "" {
+		globalCacheKMSKeyID, globalCacheKMS, err = parseKMSMasterKey(cacheEncKey)
+		if err != nil {
+			logger.Fatal(uiErrInvalidCacheEncryptionKey(err), "Invalid cache encryption master key")
+		}
+	}
 	// In place update is true by default if the MINIO_UPDATE is not set
 	// or is not set to 'off', if MINIO_UPDATE is set to 'off' then
 	// in-place update is off.

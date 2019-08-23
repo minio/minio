@@ -71,6 +71,12 @@ var (
 		"MINIO_CACHE_MAXUSE: Valid cache max-use value between 0-100",
 	)
 
+	uiErrInvalidCacheEncryptionKey = newUIErrFn(
+		"Invalid cache encryption master key value",
+		"Please check the passed value",
+		"MINIO_CACHE_ENCRYPTION_MASTER_KEY: For more information, please refer to https://docs.min.io/docs/minio-disk-cache-guide",
+	)
+
 	uiErrInvalidCredentials = newUIErrFn(
 		"Invalid credentials",
 		"Please provide correct credentials",
