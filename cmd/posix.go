@@ -47,7 +47,7 @@ const (
 	diskMinFreeSpace  = 900 * humanize.MiByte // Min 900MiB free space.
 	diskMinTotalSpace = diskMinFreeSpace      // Min 900MiB total space.
 	maxAllowedIOError = 5
-	readBlockSize     = humanize.KiByte * 32 // Default read block size 32KiB.
+	readBlockSize     = 4 * humanize.MiByte // Default read block size 4MiB.
 )
 
 // isValidVolname verifies a volname name in accordance with object
@@ -1230,7 +1230,7 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 	bufp := s.pool.Get().(*[]byte)
 	defer s.pool.Put(bufp)
 
-	written, err := xioutil.CopyAligned(w, r, *bufp)
+	written, err := xioutil.CopyAligned(w, r, *bufp, fileSize)
 	if err != nil {
 		return err
 	}
