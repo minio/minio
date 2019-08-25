@@ -29,6 +29,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -446,10 +447,25 @@ func isNetworkOrHostDown(err error) bool {
 	// or a non-temporary error.
 	e, ok := err.(net.Error)
 	if ok {
-		return e.Timeout()
+		urlErr, ok := e.(*url.Error)
+		if ok {
+			switch urlErr.Err.(type) {
+			case *net.DNSError, *net.OpError, net.UnknownNetworkError:
+				return true
+			}
+		}
+		if e.Timeout() {
+			return true
+		}
 	}
+	ok = false
 	// Fallback to other mechanisms.
-	if strings.Contains(err.Error(), "i/o timeout") {
+	if strings.Contains(err.Error(), "Connection closed by foreign host") {
+		ok = true
+	} else if strings.Contains(err.Error(), "TLS handshake timeout") {
+		// If error is - tlsHandshakeTimeoutError.
+		ok = true
+	} else if strings.Contains(err.Error(), "i/o timeout") {
 		// If error is - tcp timeoutError.
 		ok = true
 	} else if strings.Contains(err.Error(), "connection timed out") {
