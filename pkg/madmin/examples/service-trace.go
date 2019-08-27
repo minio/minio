@@ -43,7 +43,7 @@ func main() {
 	// in the minio cluster.
 	allTrace := false
 	errTrace := false
-	traceCh := madmClnt.Trace(allTrace, errTrace, doneCh)
+	traceCh := madmClnt.ServiceTrace(allTrace, errTrace, doneCh)
 	for traceInfo := range traceCh {
 		if traceInfo.Err != nil {
 			fmt.Println(traceInfo.Err)

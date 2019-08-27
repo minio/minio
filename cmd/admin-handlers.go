@@ -21,7 +21,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -66,106 +66,121 @@ const (
 	mgmtForceStop                = "forceStop"
 )
 
-var (
-	// This struct literal represents the Admin API version that
-	// the server uses.
-	adminAPIVersionInfo = madmin.AdminAPIVersionInfo{
-		Version: "1",
-	}
-)
-
-// VersionHandler - GET /minio/admin/version
-// -----------
-// Returns Administration API version
-func (a adminAPIHandlers) VersionHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "Version")
-
-	objectAPI := validateAdminReq(ctx, w, r)
-	if objectAPI == nil {
-		return
-	}
-
-	jsonBytes, err := json.Marshal(adminAPIVersionInfo)
+func updateServer() (us madmin.ServiceUpdateStatus, err error) {
+	minioMode := getMinioMode()
+	updateMsg, sha256Hex, _, latestReleaseTime, err := getUpdateInfo(updateTimeout, minioMode)
 	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
+		return us, err
 	}
-
-	writeSuccessResponseJSON(w, jsonBytes)
+	if updateMsg == "" {
+		us.CurrentVersion = Version
+		us.UpdatedVersion = Version
+		return us, nil
+	}
+	if err = doUpdate(sha256Hex, minioMode, latestReleaseTime, true); err != nil {
+		return us, err
+	}
+	us.CurrentVersion = Version
+	us.UpdatedVersion = latestReleaseTime.Format(minioReleaseTagTimeLayout)
+	return us, nil
 }
 
-// ServiceStatusHandler - GET /minio/admin/v1/service
+// ServiceActionHandler - POST /minio/admin/v1/service
+// Body: {"action": <action>}
 // ----------
-// Returns server version and uptime.
-func (a adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ServiceStatus")
+// restarts/updates/stops minio server gracefully. In a distributed setup,
+// restarts/updates/stops all the servers in the cluster. Also asks for
+// server version and uptime.
+func (a adminAPIHandlers) ServiceActionHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ServiceAction")
+
+	vars := mux.Vars(r)
+	action := vars["action"]
 
 	objectAPI := validateAdminReq(ctx, w, r)
 	if objectAPI == nil {
-		return
-	}
-
-	// Fetch server version
-	serverVersion := madmin.ServerVersion{
-		Version:  Version,
-		CommitID: CommitID,
-	}
-
-	// Fetch uptimes from all peers and pick the latest.
-	uptime := getPeerUptimes(globalNotificationSys.ServerInfo(ctx))
-
-	// Create API response
-	serverStatus := madmin.ServiceStatus{
-		ServerVersion: serverVersion,
-		Uptime:        uptime,
-	}
-
-	// Marshal API response
-	jsonBytes, err := json.Marshal(serverStatus)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	// Reply with storage information (across nodes in a
-	// distributed setup) as json.
-	writeSuccessResponseJSON(w, jsonBytes)
-}
-
-// ServiceStopNRestartHandler - POST /minio/admin/v1/service
-// Body: {"action": <restart-action>}
-// ----------
-// Restarts/Stops minio server gracefully. In a distributed setup,
-// restarts all the servers in the cluster.
-func (a adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ServiceStopNRestart")
-
-	objectAPI := validateAdminReq(ctx, w, r)
-	if objectAPI == nil {
-		return
-	}
-
-	var sa madmin.ServiceAction
-	err := json.NewDecoder(r.Body).Decode(&sa)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrRequestBodyParse), r.URL)
 		return
 	}
 
 	var serviceSig serviceSignal
-	switch sa.Action {
-	case madmin.ServiceActionValueRestart:
+	switch madmin.ServiceAction(action) {
+	case madmin.ServiceActionRestart:
 		serviceSig = serviceRestart
-	case madmin.ServiceActionValueStop:
+	case madmin.ServiceActionStop:
 		serviceSig = serviceStop
+	case madmin.ServiceActionUpdate:
+		if globalInplaceUpdateDisabled {
+			// if MINIO_UPDATE=off - inplace update is disabled, mostly
+			// in containers.
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+			return
+		}
+		// update, updates the server and restarts them.
+		serviceSig = serviceUpdate | serviceRestart
+	case madmin.ServiceActionStatus:
+		serviceSig = serviceStatus
 	default:
+		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action))
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
-		logger.LogIf(ctx, errors.New("Invalid service action received"))
 		return
 	}
 
-	// Reply to the client before restarting minio server.
-	writeSuccessResponseHeadersOnly(w)
+	if serviceSig&serviceUpdate == serviceUpdate {
+		for _, nerr := range globalNotificationSys.SignalService(serviceSig) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+
+		updateStatus, err := updateServer()
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(updateStatus)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		writeSuccessResponseJSON(w, jsonBytes)
+
+		if updateStatus.CurrentVersion != updateStatus.UpdatedVersion {
+			// We did upgrade - restart all services.
+			globalServiceSignalCh <- serviceSig
+		}
+		return
+	}
+
+	if serviceSig == serviceStatus {
+		// Fetch server version
+		serverVersion := madmin.ServerVersion{
+			Version:  Version,
+			CommitID: CommitID,
+		}
+
+		// Fetch uptimes from all peers and pick the latest.
+		uptime := getPeerUptimes(globalNotificationSys.ServerInfo(ctx))
+
+		// Create API response
+		serverStatus := madmin.ServiceStatus{
+			ServerVersion: serverVersion,
+			Uptime:        uptime,
+		}
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(serverStatus)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		writeSuccessResponseJSON(w, jsonBytes)
+		return
+	}
 
 	// Notify all other MinIO peers signal service.
 	for _, nerr := range globalNotificationSys.SignalService(serviceSig) {
@@ -174,6 +189,9 @@ func (a adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWriter, r *h
 			logger.LogIf(ctx, nerr.Err)
 		}
 	}
+
+	// Reply to the client before restarting, stopping MinIO server.
+	writeSuccessResponseHeadersOnly(w)
 
 	globalServiceSignalCh <- serviceSig
 }
@@ -989,6 +1007,24 @@ func (a adminAPIHandlers) GetConfigKeysHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseJSON(w, []byte(econfigData))
 }
 
+// AdminError - is a generic error for all admin APIs.
+type AdminError struct {
+	Code       string
+	Message    string
+	StatusCode int
+}
+
+func (ae AdminError) Error() string {
+	return ae.Message
+}
+
+// Admin API errors
+const (
+	AdminUpdateUnexpectedFailure = "XMinioAdminUpdateUnexpectedFailure"
+	AdminUpdateURLNotReachable   = "XMinioAdminUpdateURLNotReachable"
+	AdminUpdateApplyFailure      = "XMinioAdminUpdateApplyFailure"
+)
+
 // toAdminAPIErrCode - converts errXLWriteQuorum error to admin API
 // specific error.
 func toAdminAPIErrCode(ctx context.Context, err error) APIErrorCode {
@@ -1001,7 +1037,21 @@ func toAdminAPIErrCode(ctx context.Context, err error) APIErrorCode {
 }
 
 func toAdminAPIErr(ctx context.Context, err error) APIError {
-	return errorCodes.ToAPIErr(toAdminAPIErrCode(ctx, err))
+	if err == nil {
+		return noError
+	}
+	apiErr := errorCodes.ToAPIErr(toAdminAPIErrCode(ctx, err))
+	if apiErr.Code == "InternalError" {
+		switch e := err.(type) {
+		case AdminError:
+			apiErr = APIError{
+				Code:           e.Code,
+				Description:    e.Message,
+				HTTPStatusCode: e.StatusCode,
+			}
+		}
+	}
+	return apiErr
 }
 
 // RemoveUser - DELETE /minio/admin/v1/remove-user?accessKey=<access_key>

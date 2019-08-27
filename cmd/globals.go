@@ -339,18 +339,6 @@ var (
 		}
 		return fmt.Sprintf
 	}()
-	colorGreenBold = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgGreen, color.Bold).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
-	colorRedBold = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgRed, color.Bold).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
 )
 
 // Returns minio global information, as a key value map.

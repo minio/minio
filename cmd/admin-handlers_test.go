@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -344,41 +344,6 @@ func initTestXLObjLayer() (ObjectLayer, []string, error) {
 	return objLayer, xlDirs, nil
 }
 
-func TestAdminVersionHandler(t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
-	if err != nil {
-		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
-	}
-	defer adminTestBed.TearDown()
-
-	req, err := newTestRequest("GET", "/minio/admin/version", 0, nil)
-	if err != nil {
-		t.Fatalf("Failed to construct request - %v", err)
-	}
-	cred := globalServerConfig.GetCredential()
-	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-	if err != nil {
-		t.Fatalf("Failed to sign request - %v", err)
-	}
-
-	rec := httptest.NewRecorder()
-	adminTestBed.router.ServeHTTP(rec, req)
-	if http.StatusOK != rec.Code {
-		t.Errorf("Unexpected status code - got %d but expected %d",
-			rec.Code, http.StatusOK)
-	}
-
-	var result madmin.AdminAPIVersionInfo
-	err = json.NewDecoder(rec.Body).Decode(&result)
-	if err != nil {
-		t.Errorf("json parse err: %v", err)
-	}
-
-	if result != adminAPIVersionInfo {
-		t.Errorf("unexpected version: %v", result)
-	}
-}
-
 // cmdType - Represents different service subcomands like status, stop
 // and restart.
 type cmdType int
@@ -387,51 +352,7 @@ const (
 	statusCmd cmdType = iota
 	restartCmd
 	stopCmd
-	setCreds
 )
-
-// String - String representation for cmdType
-func (c cmdType) String() string {
-	switch c {
-	case statusCmd:
-		return "status"
-	case restartCmd:
-		return "restart"
-	case stopCmd:
-		return "stop"
-	case setCreds:
-		return "set-credentials"
-	}
-	return ""
-}
-
-// apiMethod - Returns the HTTP method corresponding to the admin REST
-// API for a given cmdType value.
-func (c cmdType) apiMethod() string {
-	switch c {
-	case statusCmd:
-		return "GET"
-	case restartCmd:
-		return "POST"
-	case stopCmd:
-		return "POST"
-	case setCreds:
-		return "PUT"
-	}
-	return "GET"
-}
-
-// apiEndpoint - Return endpoint for each admin REST API mapped to a
-// command here.
-func (c cmdType) apiEndpoint() string {
-	switch c {
-	case statusCmd, restartCmd, stopCmd:
-		return "/minio/admin/v1/service"
-	case setCreds:
-		return "/minio/admin/v1/config/credential"
-	}
-	return ""
-}
 
 // toServiceSignal - Helper function that translates a given cmdType
 // value to its corresponding serviceSignal value.
@@ -447,14 +368,16 @@ func (c cmdType) toServiceSignal() serviceSignal {
 	return serviceStatus
 }
 
-func (c cmdType) toServiceActionValue() madmin.ServiceActionValue {
+func (c cmdType) toServiceAction() madmin.ServiceAction {
 	switch c {
 	case restartCmd:
-		return madmin.ServiceActionValueRestart
+		return madmin.ServiceActionRestart
 	case stopCmd:
-		return madmin.ServiceActionValueStop
+		return madmin.ServiceActionStop
+	case statusCmd:
+		return madmin.ServiceActionStatus
 	}
-	return madmin.ServiceActionValueStop
+	return madmin.ServiceActionStatus
 }
 
 // testServiceSignalReceiver - Helper function that simulates a
@@ -469,18 +392,14 @@ func testServiceSignalReceiver(cmd cmdType, t *testing.T) {
 
 // getServiceCmdRequest - Constructs a management REST API request for service
 // subcommands for a given cmdType value.
-func getServiceCmdRequest(cmd cmdType, cred auth.Credentials, body []byte) (*http.Request, error) {
-	req, err := newTestRequest(cmd.apiMethod(), cmd.apiEndpoint(), 0, nil)
+func getServiceCmdRequest(cmd cmdType, cred auth.Credentials) (*http.Request, error) {
+	queryVal := url.Values{}
+	queryVal.Set("action", string(cmd.toServiceAction()))
+	resource := "/minio/admin/v1/service?" + queryVal.Encode()
+	req, err := newTestRequest(http.MethodPost, resource, 0, nil)
 	if err != nil {
 		return nil, err
 	}
-
-	// Set body
-	req.Body = ioutil.NopCloser(bytes.NewReader(body))
-	req.ContentLength = int64(len(body))
-
-	// Set sha-sum header
-	req.Header.Set("X-Amz-Content-Sha256", getSHA256Hash(body))
 
 	// management REST API uses signature V4 for authentication.
 	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
@@ -517,13 +436,7 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	}
 	credentials := globalServerConfig.GetCredential()
 
-	body, err := json.Marshal(madmin.ServiceAction{
-		Action: cmd.toServiceActionValue()})
-	if err != nil {
-		t.Fatalf("JSONify error: %v", err)
-	}
-
-	req, err := getServiceCmdRequest(cmd, credentials, body)
+	req, err := getServiceCmdRequest(cmd, credentials)
 	if err != nil {
 		t.Fatalf("Failed to build service status request %v", err)
 	}
@@ -531,6 +444,11 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	rec := httptest.NewRecorder()
 	adminTestBed.router.ServeHTTP(rec, req)
 
+	if rec.Code != http.StatusOK {
+		resp, _ := ioutil.ReadAll(rec.Body)
+		t.Errorf("Expected to receive %d status code but received %d. Body (%s)",
+			http.StatusOK, rec.Code, string(resp))
+	}
 	if cmd == statusCmd {
 		expectedInfo := madmin.ServiceStatus{
 			ServerVersion: madmin.ServerVersion{Version: Version, CommitID: CommitID},
@@ -542,12 +460,6 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 		if expectedInfo.ServerVersion != receivedInfo.ServerVersion {
 			t.Errorf("Expected storage info and received storage info differ, %v %v", expectedInfo, receivedInfo)
 		}
-	}
-
-	if rec.Code != http.StatusOK {
-		resp, _ := ioutil.ReadAll(rec.Body)
-		t.Errorf("Expected to receive %d status code but received %d. Body (%s)",
-			http.StatusOK, rec.Code, string(resp))
 	}
 
 	// Wait until testServiceSignalReceiver() called in a goroutine quits.
