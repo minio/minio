@@ -26,10 +26,8 @@ import (
 type serviceSignal int
 
 const (
-	serviceStatus  serviceSignal = iota // Gets status about the service.
-	serviceRestart                      // Restarts the service.
+	serviceRestart serviceSignal = iota // Restarts the server.
 	serviceStop                         // Stops the server.
-	serviceUpdate                       // Updates the server.
 	// Add new service requests here.
 )
 

@@ -42,8 +42,10 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 	/// Service operations
 
-	// Get status, update, restart and stop MinIO service.
+	// Restart and stop MinIO service.
 	adminV1Router.Methods(http.MethodPost).Path("/service").HandlerFunc(httpTraceAll(adminAPI.ServiceActionHandler)).Queries("action", "{action:.*}")
+	// Update MinIO servers.
+	adminV1Router.Methods(http.MethodPost).Path("/update").HandlerFunc(httpTraceAll(adminAPI.ServerUpdateHandler)).Queries("updateURL", "{updateURL:.*}")
 
 	// Info operations
 	adminV1Router.Methods(http.MethodGet).Path("/info").HandlerFunc(httpTraceAll(adminAPI.ServerInfoHandler))

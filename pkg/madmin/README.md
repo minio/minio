@@ -31,25 +31,25 @@ func main() {
     }
 
     // Fetch service status.
-    st, err := mdmClnt.ServiceStatus()
+    st, err := mdmClnt.ServerInfo()
     if err != nil {
         fmt.Println(err)
         return
     }
-    fmt.Printf("%#v\n", st)
+	for _, peerInfo := range serversInfo {
+		log.Printf("Node: %s, Info: %v\n", peerInfo.Addr, peerInfo.Data)
+	}
 }
 
 ```
 
-| Service operations                  | Info operations                             | Healing operations | Config operations                 | Top operations          | IAM operations                        | Misc                                              |
-|:------------------------------------|:--------------------------------------------|:-------------------|:----------------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|
-| [`ServiceStatus`](#ServiceStatus)   | [`ServerInfo`](#ServerInfo)                 | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig)         | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   |
-| [`ServiceRestart`](#ServiceRestart) | [`ServerCPULoadInfo`](#ServerCPULoadInfo)   |                    | [`SetConfig`](#SetConfig)         |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |
-| [`ServiceStop`](#ServiceStop)       | [`ServerMemUsageInfo`](#ServerMemUsageInfo) |                    | [`GetConfigKeys`](#GetConfigKeys) |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |
-| [`ServiceUpdate`](#ServiceUpdate)   |                                             |                    | [`SetConfigKeys`](#SetConfigKeys) |                         | [`AddCannedPolicy`](#AddCannedPolicy) |                                                   |
-| [`ServiceTrace`](#ServiceTrace)     |                                             |                    |                                   |                         |                                       |                                                   |
-
-
+| Service operations                  | Info operations                                 | Healing operations | Config operations                 | Top operations          | IAM operations                        | Misc                                              |
+|:------------------------------------|:------------------------------------------------|:-------------------|:----------------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|
+| [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                     | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig)         | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   |
+| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)       |                    | [`SetConfig`](#SetConfig)         |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |
+|                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)     |                    | [`GetConfigKeys`](#GetConfigKeys) |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |
+| [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) |                    | [`SetConfigKeys`](#SetConfigKeys) |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |
+    
 ## 1. Constructor
 <a name="MinIO"></a>
 
@@ -124,23 +124,6 @@ Sends a service action stop command to MinIO server.
    log.Println("Success")
 ```
 
-<a name="ServiceUpdate"></a>
-### ServiceUpdate() (ServiceUpdateStatus, error)
-Sends a service action update command to MinIO server, to update MinIO server to latest release.
-
- __Example__
-
-```go
-   // To update the service, update and restarts all the servers in the cluster.
-   us, err := madmClnt.ServiceUpdate()
-   if err != nil {
-       log.Fatalln(err)
-   }
-   if us.CurrentVersion != us.UpdatedVersion {
-       log.Printf("Updated server version from %s to %s successfully", us.CurrentVersion, us.UpdatedVersion)
-   }
-```
-
 <a name="ServiceTrace"></a>
 ### ServiceTrace(allTrace bool, doneCh <-chan struct{}) <-chan TraceInfo
 Enable HTTP request tracing on all nodes in a MinIO cluster
@@ -158,7 +141,6 @@ __Example__
         fmt.Println(traceInfo.String())
     }
 ```
-
 
 ## 3. Info operations
 
@@ -515,6 +497,24 @@ __Example__
 ```
 
 ## 9. Misc operations
+
+<a name="ServerUpdate"></a>
+### ServerUpdate(updateURL string) (ServerUpdateStatus, error)
+Sends a update command to MinIO server, to update MinIO server to latest release. In distributed setup it updates all servers atomically.
+
+ __Example__
+
+```go
+   // Updates all servers and restarts all the servers in the cluster.
+   // optionally takes an updateURL, which is used to update the binary.
+   us, err := madmClnt.ServerUpdate(updateURL)
+   if err != nil {
+       log.Fatalln(err)
+   }
+   if us.CurrentVersion != us.UpdatedVersion {
+       log.Printf("Updated server version from %s to %s successfully", us.CurrentVersion, us.UpdatedVersion)
+   }
+```
 
 <a name="StartProfiling"></a>
 ### StartProfiling(profiler string) error

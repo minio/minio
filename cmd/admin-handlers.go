@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018, 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,10 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -66,18 +69,27 @@ const (
 	mgmtForceStop                = "forceStop"
 )
 
-func updateServer() (us madmin.ServiceUpdateStatus, err error) {
+func updateServer(updateURL, sha256Hex string, latestReleaseTime time.Time) (us madmin.ServerUpdateStatus, err error) {
 	minioMode := getMinioMode()
-	updateMsg, sha256Hex, _, latestReleaseTime, err := getUpdateInfo(updateTimeout, minioMode)
-	if err != nil {
-		return us, err
+	// No inputs provided we should try to update using the default URL.
+	if updateURL == "" && sha256Hex == "" && latestReleaseTime.IsZero() {
+		var updateMsg string
+		updateMsg, sha256Hex, _, latestReleaseTime, err = getUpdateInfo(updateTimeout, minioMode)
+		if err != nil {
+			return us, err
+		}
+		if updateMsg == "" {
+			us.CurrentVersion = Version
+			us.UpdatedVersion = Version
+			return us, nil
+		}
+		if runtime.GOOS == "windows" {
+			updateURL = minioReleaseURL + "minio.exe"
+		} else {
+			updateURL = minioReleaseURL + "minio"
+		}
 	}
-	if updateMsg == "" {
-		us.CurrentVersion = Version
-		us.UpdatedVersion = Version
-		return us, nil
-	}
-	if err = doUpdate(sha256Hex, minioMode, latestReleaseTime, true); err != nil {
+	if err = doUpdate(updateURL, sha256Hex, minioMode); err != nil {
 		return us, err
 	}
 	us.CurrentVersion = Version
@@ -85,12 +97,88 @@ func updateServer() (us madmin.ServiceUpdateStatus, err error) {
 	return us, nil
 }
 
-// ServiceActionHandler - POST /minio/admin/v1/service
-// Body: {"action": <action>}
+// ServerUpdateHandler - POST /minio/admin/v1/update?updateURL={updateURL}
 // ----------
-// restarts/updates/stops minio server gracefully. In a distributed setup,
-// restarts/updates/stops all the servers in the cluster. Also asks for
-// server version and uptime.
+// updates all minio servers and restarts them gracefully.
+func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ServerUpdate")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	if globalInplaceUpdateDisabled {
+		// if MINIO_UPDATE=off - inplace update is disabled, mostly
+		// in containers.
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	updateURL := vars[peerRESTUpdateURL]
+	mode := getMinioMode()
+	var sha256Hex string
+	var latestReleaseTime time.Time
+	if updateURL != "" {
+		u, err := url.Parse(updateURL)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		content, err := downloadReleaseURL(updateURL, updateTimeout, mode)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		sha256Hex, latestReleaseTime, err = parseReleaseData(content)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		if runtime.GOOS == "windows" {
+			u.Path = path.Dir(u.Path) + "minio.exe"
+		} else {
+			u.Path = path.Dir(u.Path) + "minio"
+		}
+
+		updateURL = u.String()
+	}
+
+	for _, nerr := range globalNotificationSys.ServerUpdate(updateURL, sha256Hex, latestReleaseTime) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+
+	updateStatus, err := updateServer(updateURL, sha256Hex, latestReleaseTime)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// Marshal API response
+	jsonBytes, err := json.Marshal(updateStatus)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, jsonBytes)
+
+	if updateStatus.CurrentVersion != updateStatus.UpdatedVersion {
+		// We did upgrade - restart all services.
+		globalServiceSignalCh <- serviceRestart
+	}
+}
+
+// ServiceActionHandler - POST /minio/admin/v1/service?action={action}
+// ----------
+// restarts/stops minio server gracefully. In a distributed setup,
 func (a adminAPIHandlers) ServiceActionHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ServiceAction")
 
@@ -108,77 +196,9 @@ func (a adminAPIHandlers) ServiceActionHandler(w http.ResponseWriter, r *http.Re
 		serviceSig = serviceRestart
 	case madmin.ServiceActionStop:
 		serviceSig = serviceStop
-	case madmin.ServiceActionUpdate:
-		if globalInplaceUpdateDisabled {
-			// if MINIO_UPDATE=off - inplace update is disabled, mostly
-			// in containers.
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-			return
-		}
-		// update, updates the server and restarts them.
-		serviceSig = serviceUpdate | serviceRestart
-	case madmin.ServiceActionStatus:
-		serviceSig = serviceStatus
 	default:
 		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action))
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
-		return
-	}
-
-	if serviceSig&serviceUpdate == serviceUpdate {
-		for _, nerr := range globalNotificationSys.SignalService(serviceSig) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
-			}
-		}
-
-		updateStatus, err := updateServer()
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		// Marshal API response
-		jsonBytes, err := json.Marshal(updateStatus)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		writeSuccessResponseJSON(w, jsonBytes)
-
-		if updateStatus.CurrentVersion != updateStatus.UpdatedVersion {
-			// We did upgrade - restart all services.
-			globalServiceSignalCh <- serviceSig
-		}
-		return
-	}
-
-	if serviceSig == serviceStatus {
-		// Fetch server version
-		serverVersion := madmin.ServerVersion{
-			Version:  Version,
-			CommitID: CommitID,
-		}
-
-		// Fetch uptimes from all peers and pick the latest.
-		uptime := getPeerUptimes(globalNotificationSys.ServerInfo(ctx))
-
-		// Create API response
-		serverStatus := madmin.ServiceStatus{
-			ServerVersion: serverVersion,
-			Uptime:        uptime,
-		}
-
-		// Marshal API response
-		jsonBytes, err := json.Marshal(serverStatus)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		writeSuccessResponseJSON(w, jsonBytes)
 		return
 	}
 

@@ -503,6 +503,24 @@ func (client *peerRESTClient) LoadGroup(group string) error {
 	return nil
 }
 
+// ServerUpdate - sends server update message to remote peers.
+func (client *peerRESTClient) ServerUpdate(updateURL, sha256Hex string, latestReleaseTime time.Time) error {
+	values := make(url.Values)
+	values.Set(peerRESTUpdateURL, updateURL)
+	values.Set(peerRESTSha256Hex, sha256Hex)
+	if !latestReleaseTime.IsZero() {
+		values.Set(peerRESTLatestRelease, latestReleaseTime.Format(time.RFC3339))
+	} else {
+		values.Set(peerRESTLatestRelease, "")
+	}
+	respBody, err := client.call(peerRESTMethodServerUpdate, values, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 // SignalService - sends signal to peer nodes.
 func (client *peerRESTClient) SignalService(sig serviceSignal) error {
 	values := make(url.Values)
