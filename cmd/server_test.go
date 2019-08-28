@@ -87,7 +87,6 @@ func runAllTests(suite *TestSuiteCommon, c *check) {
 	suite.TestObjectGetAnonymous(c)
 	suite.TestObjectGet(c)
 	suite.TestMultipleObjects(c)
-	suite.TestNotImplemented(c)
 	suite.TestHeader(c)
 	suite.TestPutBucket(c)
 	suite.TestCopyObject(c)
@@ -994,20 +993,6 @@ func (s *TestSuiteCommon) TestMultipleObjects(c *check) {
 	responseBody, err = ioutil.ReadAll(response.Body)
 	c.Assert(err, nil)
 	c.Assert(true, bytes.Equal(responseBody, []byte("hello three")))
-}
-
-// TestNotImplemented - validates if object policy is implemented, should return 'NotImplemented'.
-func (s *TestSuiteCommon) TestNotImplemented(c *check) {
-	// Generate a random bucket name.
-	bucketName := getRandomBucketName()
-	request, err := newTestSignedRequest("GET", s.endPoint+SlashSeparator+bucketName+"/object?policy",
-		0, nil, s.accessKey, s.secretKey, s.signer)
-	c.Assert(err, nil)
-
-	client := http.Client{Transport: s.transport}
-	response, err := client.Do(request)
-	c.Assert(err, nil)
-	c.Assert(response.StatusCode, http.StatusNotImplemented)
 }
 
 // TestHeader - Validates the error response for an attempt to fetch non-existent object.
