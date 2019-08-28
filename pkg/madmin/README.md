@@ -244,7 +244,7 @@ Fetches information for all cluster nodes, such as server properties, storage in
 <a name="ServerDrivesPerfInfo"></a>
 ### ServerDrivesPerfInfo() ([]ServerDrivesPerfInfo, error)
 
-Fetches drive performance information for all cluster nodes. Returned value is in Bytes/s.
+Fetches drive performance information for all cluster nodes.
 
 | Param           | Type               | Description                                                        |
 |-----------------|--------------------|--------------------------------------------------------------------|
@@ -262,7 +262,7 @@ Fetches drive performance information for all cluster nodes. Returned value is i
 <a name="ServerCPULoadInfo"></a>
 ### ServerCPULoadInfo() ([]ServerCPULoadInfo, error)
 
-Fetches CPU utilization for all cluster nodes. Returned value is in Bytes.
+Fetches CPU utilization for all cluster nodes.
 
 | Param          | Type       | Description                                                         |
 |----------------|------------|---------------------------------------------------------------------|
@@ -280,7 +280,7 @@ Fetches CPU utilization for all cluster nodes. Returned value is in Bytes.
 <a name="ServerMemUsageInfo"></a>
 ### ServerMemUsageInfo() ([]ServerMemUsageInfo, error)
 
-Fetches Mem utilization for all cluster nodes. Returned value is in Bytes.
+Fetches Mem utilization for all cluster nodes.
 
 | Param           | Type        | Description                                                         |
 |-----------------|-------------|---------------------------------------------------------------------|
