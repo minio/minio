@@ -67,7 +67,7 @@ func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int)
 			myNode = len(clnts)
 
 			receiver := &lockRESTServer{
-				ll: localLocker{
+				ll: &localLocker{
 					serverAddr:      endpoint.Host,
 					serviceEndpoint: lockServicePath,
 					lockMap:         make(map[string][]lockRequesterInfo),
@@ -75,7 +75,7 @@ func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int)
 			}
 
 			globalLockServer = receiver
-			locker = &(receiver.ll)
+			locker = receiver.ll
 		} else {
 			host, err := xnet.ParseHost(endpoint.Host)
 			logger.FatalIf(err, "Unable to parse Lock RPC Host")

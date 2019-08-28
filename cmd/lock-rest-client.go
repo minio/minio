@@ -43,6 +43,20 @@ type lockRESTClient struct {
 	timer      *time.Timer
 }
 
+func toLockError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	switch err.Error() {
+	case errLockConflict.Error():
+		return errLockConflict
+	case errLockNotExpired.Error():
+		return errLockNotExpired
+	}
+	return err
+}
+
 // ServerAddr - dsync.NetLocker interface compatible method.
 func (client *lockRESTClient) ServerAddr() string {
 	return client.serverURL.Host
@@ -88,7 +102,6 @@ func (client *lockRESTClient) markHostDown() {
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *lockRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-
 	if !client.isHostUp() {
 		return nil, errors.New("Lock rest server node is down")
 	}
@@ -98,7 +111,6 @@ func (client *lockRESTClient) call(method string, values url.Values, body io.Rea
 	}
 
 	respBody, err = client.restClient.Call(method, values, body, length)
-
 	if err == nil {
 		return respBody, nil
 	}
@@ -107,7 +119,7 @@ func (client *lockRESTClient) call(method string, values url.Values, body io.Rea
 		client.markHostDown()
 	}
 
-	return nil, err
+	return nil, toLockError(err)
 }
 
 // Stringer provides a canonicalized representation of node.
@@ -138,7 +150,14 @@ func (client *lockRESTClient) restCall(call string, args dsync.LockArgs) (reply 
 
 	respBody, err := client.call(call, values, nil, -1)
 	defer http.DrainBody(respBody)
-	return err == nil, err
+	switch err {
+	case nil:
+		return true, nil
+	case errLockConflict, errLockNotExpired:
+		return false, nil
+	default:
+		return false, err
+	}
 }
 
 // RLock calls read lock REST API.
