@@ -349,8 +349,7 @@ func initTestXLObjLayer() (ObjectLayer, []string, error) {
 type cmdType int
 
 const (
-	statusCmd cmdType = iota
-	restartCmd
+	restartCmd cmdType = iota
 	stopCmd
 )
 
@@ -358,14 +357,12 @@ const (
 // value to its corresponding serviceSignal value.
 func (c cmdType) toServiceSignal() serviceSignal {
 	switch c {
-	case statusCmd:
-		return serviceStatus
 	case restartCmd:
 		return serviceRestart
 	case stopCmd:
 		return serviceStop
 	}
-	return serviceStatus
+	return serviceRestart
 }
 
 func (c cmdType) toServiceAction() madmin.ServiceAction {
@@ -374,10 +371,8 @@ func (c cmdType) toServiceAction() madmin.ServiceAction {
 		return madmin.ServiceActionRestart
 	case stopCmd:
 		return madmin.ServiceActionStop
-	case statusCmd:
-		return madmin.ServiceActionStatus
 	}
-	return madmin.ServiceActionStatus
+	return madmin.ServiceActionRestart
 }
 
 // testServiceSignalReceiver - Helper function that simulates a
@@ -449,26 +444,9 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 		t.Errorf("Expected to receive %d status code but received %d. Body (%s)",
 			http.StatusOK, rec.Code, string(resp))
 	}
-	if cmd == statusCmd {
-		expectedInfo := madmin.ServiceStatus{
-			ServerVersion: madmin.ServerVersion{Version: Version, CommitID: CommitID},
-		}
-		receivedInfo := madmin.ServiceStatus{}
-		if jsonErr := json.Unmarshal(rec.Body.Bytes(), &receivedInfo); jsonErr != nil {
-			t.Errorf("Failed to unmarshal StorageInfo - %v", jsonErr)
-		}
-		if expectedInfo.ServerVersion != receivedInfo.ServerVersion {
-			t.Errorf("Expected storage info and received storage info differ, %v %v", expectedInfo, receivedInfo)
-		}
-	}
 
 	// Wait until testServiceSignalReceiver() called in a goroutine quits.
 	wg.Wait()
-}
-
-// Test for service status management REST API.
-func TestServiceStatusHandler(t *testing.T) {
-	testServicesCmdHandler(statusCmd, t)
 }
 
 // Test for service restart management REST API.

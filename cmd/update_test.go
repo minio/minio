@@ -285,6 +285,7 @@ func TestParseReleaseData(t *testing.T) {
 		{"more minio.RELEASE.fields", time.Time{}, "", fmt.Errorf(`Unknown release tag format. parsing time "fields" as "2006-01-02T15-04-05Z": cannot parse "fields" as "2006"`)},
 		{"more minio.RELEASE.2016-10-07T01-16-39Z", releaseTime, "more", nil},
 		{"fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z\n", releaseTime, "fbe246edbd382902db9a4035df7dce8cb441357d", nil},
+		{"fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z.customer-hotfix\n", releaseTime, "fbe246edbd382902db9a4035df7dce8cb441357d", nil},
 	}
 
 	for i, testCase := range testCases {

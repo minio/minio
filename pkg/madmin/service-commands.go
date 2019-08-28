@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,39 +23,9 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"time"
 
 	trace "github.com/minio/minio/pkg/trace"
 )
-
-// ServerVersion - server version
-type ServerVersion struct {
-	Version  string `json:"version"`
-	CommitID string `json:"commitID"`
-}
-
-// ServiceUpdateStatus - contains the response of service update API
-type ServiceUpdateStatus struct {
-	CurrentVersion string `json:"currentVersion"`
-	UpdatedVersion string `json:"updatedVersion"`
-}
-
-// ServiceStatus - contains the response of service status API
-type ServiceStatus struct {
-	ServerVersion ServerVersion `json:"serverVersion"`
-	Uptime        time.Duration `json:"uptime"`
-}
-
-// ServiceStatus - Returns current server uptime and current
-// running version of MinIO server.
-func (adm *AdminClient) ServiceStatus() (ss ServiceStatus, err error) {
-	respBytes, err := adm.serviceCallAction(ServiceActionStatus)
-	if err != nil {
-		return ss, err
-	}
-	err = json.Unmarshal(respBytes, &ss)
-	return ss, err
-}
 
 // ServiceRestart - restarts the MinIO cluster
 func (adm *AdminClient) ServiceRestart() error {
@@ -69,28 +39,14 @@ func (adm *AdminClient) ServiceStop() error {
 	return err
 }
 
-// ServiceUpdate - updates and restarts the MinIO cluster to latest version.
-func (adm *AdminClient) ServiceUpdate() (us ServiceUpdateStatus, err error) {
-	respBytes, err := adm.serviceCallAction(ServiceActionUpdate)
-	if err != nil {
-		return us, err
-	}
-	err = json.Unmarshal(respBytes, &us)
-	return us, err
-}
-
 // ServiceAction - type to restrict service-action values
 type ServiceAction string
 
 const (
-	// ServiceActionStatus represents status action
-	ServiceActionStatus ServiceAction = "status"
 	// ServiceActionRestart represents restart action
-	ServiceActionRestart = "restart"
+	ServiceActionRestart ServiceAction = "restart"
 	// ServiceActionStop represents stop action
 	ServiceActionStop = "stop"
-	// ServiceActionUpdate represents update action
-	ServiceActionUpdate = "update"
 )
 
 // serviceCallAction - call service restart/update/stop API.

@@ -77,11 +77,14 @@ func releaseTimeToReleaseTag(releaseTime time.Time) string {
 
 // releaseTagToReleaseTime - reverse of `releaseTimeToReleaseTag()`
 func releaseTagToReleaseTime(releaseTag string) (releaseTime time.Time, err error) {
-	tagTimePart := strings.TrimPrefix(releaseTag, "RELEASE.")
-	if tagTimePart == releaseTag {
+	fields := strings.Split(releaseTag, ".")
+	if len(fields) < 2 || len(fields) > 3 {
 		return releaseTime, fmt.Errorf("%s is not a valid release tag", releaseTag)
 	}
-	return time.Parse(minioReleaseTagTimeLayout, tagTimePart)
+	if fields[0] != "RELEASE" {
+		return releaseTime, fmt.Errorf("%s is not a valid release tag", releaseTag)
+	}
+	return time.Parse(minioReleaseTagTimeLayout, fields[1])
 }
 
 // getModTime - get the file modification time of `path`
@@ -343,10 +346,20 @@ func DownloadReleaseData(timeout time.Duration, mode string) (data string, err e
 //
 // The expected format is a single line with two words like:
 //
-// fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z
+// fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z.<hotfix_optional>
 //
 // The second word must be `minio.` appended to a standard release tag.
 func parseReleaseData(data string) (sha256Hex string, releaseTime time.Time, err error) {
+	defer func() {
+		if err != nil {
+			err = AdminError{
+				Code:       AdminUpdateUnexpectedFailure,
+				Message:    err.Error(),
+				StatusCode: http.StatusInternalServerError,
+			}
+		}
+	}()
+
 	fields := strings.Fields(data)
 	if len(fields) != 2 {
 		err = fmt.Errorf("Unknown release data `%s`", data)
@@ -356,17 +369,18 @@ func parseReleaseData(data string) (sha256Hex string, releaseTime time.Time, err
 	sha256Hex = fields[0]
 	releaseInfo := fields[1]
 
-	fields = strings.SplitN(releaseInfo, ".", 2)
-	if len(fields) != 2 {
+	// Split release of style minio.RELEASE.2019-08-21T19-40-07Z.<hotfix>
+	nfields := strings.SplitN(releaseInfo, ".", 2)
+	if len(nfields) != 2 {
 		err = fmt.Errorf("Unknown release information `%s`", releaseInfo)
 		return sha256Hex, releaseTime, err
 	}
-	if fields[0] != "minio" {
+	if nfields[0] != "minio" {
 		err = fmt.Errorf("Unknown release `%s`", releaseInfo)
 		return sha256Hex, releaseTime, err
 	}
 
-	releaseTime, err = releaseTagToReleaseTime(fields[1])
+	releaseTime, err = releaseTagToReleaseTime(nfields[1])
 	if err != nil {
 		err = fmt.Errorf("Unknown release tag format. %s", err)
 	}
@@ -460,15 +474,19 @@ func getUpdateInfo(timeout time.Duration, mode string) (updateMsg string, sha256
 	return prepareUpdateMessage(downloadURL, older), sha256Hex, currentReleaseTime, latestReleaseTime, nil
 }
 
-func doUpdate(sha256Hex string, mode string, latestReleaseTime time.Time, ok bool) (err error) {
+func doUpdate(updateURL, sha256Hex, mode string) (err error) {
 	var sha256Sum []byte
 	sha256Sum, err = hex.DecodeString(sha256Hex)
 	if err != nil {
-		return err
+		return AdminError{
+			Code:       AdminUpdateUnexpectedFailure,
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		}
 	}
 
 	clnt := &http.Client{Transport: getUpdateTransport(30 * time.Second)}
-	req, err := http.NewRequest(http.MethodGet, getDownloadURL(releaseTimeToReleaseTag(latestReleaseTime)), nil)
+	req, err := http.NewRequest(http.MethodGet, updateURL, nil)
 	if err != nil {
 		return AdminError{
 			Code:       AdminUpdateUnexpectedFailure,

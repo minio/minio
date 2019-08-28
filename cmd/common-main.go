@@ -67,7 +67,7 @@ func checkUpdate(mode string) {
 		if globalInplaceUpdateDisabled {
 			logger.StartupMessage(updateMsg)
 		} else {
-			logger.StartupMessage(prepareUpdateMessage("Run `minio update`", latestReleaseTime.Sub(currentReleaseTime)))
+			logger.StartupMessage(prepareUpdateMessage("Run `mc admin update`", latestReleaseTime.Sub(currentReleaseTime)))
 		}
 	}
 }
