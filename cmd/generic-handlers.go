@@ -776,7 +776,6 @@ func addCustomHeaders(h http.Handler) http.Handler {
 func (s customHeaderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Set custom headers such as x-amz-request-id for each request.
 	w.Header().Set(xhttp.AmzRequestID, mustGetRequestID(UTCNow()))
-	s.handler.ServeHTTP(logger.NewResponseWriter(w), r)
 }
 
 type securityHeaderHandler struct {

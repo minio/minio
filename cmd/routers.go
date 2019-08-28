@@ -86,6 +86,8 @@ var globalHandlers = []HandlerFunc{
 	// filters HTTP headers which are treated as metadata and are reserved
 	// for internal use only.
 	filterReservedMetadata,
+	// Add http trace hdrs Handler
+	httpTraceHdrsHandler,
 	// Add new handlers here.
 }
 

@@ -336,6 +336,23 @@ func httpTraceAll(f http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+type traceHandler struct {
+	handler http.Handler
+}
+
+func (t traceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !globalHTTPTrace.HasSubscribers() {
+		t.handler.ServeHTTP(logger.NewResponseWriter(w), r)
+		return
+	}
+	trace := Trace(t.handler.ServeHTTP, false, logger.NewResponseWriter(w), r)
+	globalHTTPTrace.Publish(trace)
+}
+
+func httpTraceHdrsHandler(h http.Handler) http.Handler {
+	return traceHandler{h}
+}
+
 // Log only the headers.
 func httpTraceHdrs(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
