@@ -25,13 +25,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/tidwall/gjson"
 )
 
 var (
@@ -647,6 +650,152 @@ func TestToAdminAPIErrCode(t *testing.T) {
 		if actualErr != test.expectedAPIErr {
 			t.Errorf("Test %d: Expected %v but received %v",
 				i+1, test.expectedAPIErr, actualErr)
+		}
+	}
+}
+
+func TestTopLockEntries(t *testing.T) {
+	t1 := UTCNow()
+	t2 := UTCNow().Add(10 * time.Second)
+	peerLocks := []*PeerLocks{
+		{
+			Addr: "1",
+			Locks: map[string][]lockRequesterInfo{
+				"1": {
+					{false, "node2", "ep2", "2", t2, t2, ""},
+					{true, "node1", "ep1", "1", t1, t1, ""},
+				},
+				"2": {
+					{false, "node2", "ep2", "2", t2, t2, ""},
+					{true, "node1", "ep1", "1", t1, t1, ""},
+				},
+			},
+		},
+		{
+			Addr: "2",
+			Locks: map[string][]lockRequesterInfo{
+				"1": {
+					{false, "node2", "ep2", "2", t2, t2, ""},
+					{true, "node1", "ep1", "1", t1, t1, ""},
+				},
+				"2": {
+					{false, "node2", "ep2", "2", t2, t2, ""},
+					{true, "node1", "ep1", "1", t1, t1, ""},
+				},
+			},
+		},
+	}
+	les := topLockEntries(peerLocks)
+	if len(les) != 2 {
+		t.Fatalf("Did not get 2 results")
+	}
+	if les[0].Timestamp.After(les[1].Timestamp) {
+		t.Fatalf("Got wrong sorted value")
+	}
+}
+
+func TestExtractHealInitParams(t *testing.T) {
+	mkParams := func(clientToken string, forceStart, forceStop bool) url.Values {
+		v := url.Values{}
+		if clientToken != "" {
+			v.Add(string(mgmtClientToken), clientToken)
+		}
+		if forceStart {
+			v.Add(string(mgmtForceStart), "")
+		}
+		if forceStop {
+			v.Add(string(mgmtForceStop), "")
+		}
+		return v
+	}
+	qParmsArr := []url.Values{
+		// Invalid cases
+		mkParams("", true, true),
+		mkParams("111", true, true),
+		mkParams("111", true, false),
+		mkParams("111", false, true),
+		// Valid cases follow
+		mkParams("", true, false),
+		mkParams("", false, true),
+		mkParams("", false, false),
+		mkParams("111", false, false),
+	}
+	varsArr := []map[string]string{
+		// Invalid cases
+		{string(mgmtPrefix): "objprefix"},
+		// Valid cases
+		{},
+		{string(mgmtBucket): "bucket"},
+		{string(mgmtBucket): "bucket", string(mgmtPrefix): "objprefix"},
+	}
+
+	// Body is always valid - we do not test JSON decoding.
+	body := `{"recursive": false, "dryRun": true, "remove": false, "scanMode": 0}`
+
+	// Test all combinations!
+	for pIdx, parms := range qParmsArr {
+		for vIdx, vars := range varsArr {
+			_, err := extractHealInitParams(vars, parms, bytes.NewBuffer([]byte(body)))
+			isErrCase := false
+			if pIdx < 4 || vIdx < 1 {
+				isErrCase = true
+			}
+
+			if err != ErrNone && !isErrCase {
+				t.Errorf("Got unexpected error: %v %v %v", pIdx, vIdx, err)
+			} else if err == ErrNone && isErrCase {
+				t.Errorf("Got no error but expected one: %v %v", pIdx, vIdx)
+			}
+		}
+	}
+
+}
+
+func TestNormalizeJSONKey(t *testing.T) {
+	cases := []struct {
+		input         string
+		correctResult string
+	}{
+		{"notify.webhook.1", "notify.webhook.:1"},
+		{"notify.webhook.ok", "notify.webhook.ok"},
+		{"notify.webhook.1.2", "notify.webhook.:1.:2"},
+		{"abc", "abc"},
+	}
+	for i, tcase := range cases {
+		res := normalizeJSONKey(tcase.input)
+		if res != tcase.correctResult {
+			t.Errorf("Case %d: failed to match", i)
+		}
+	}
+}
+
+func TestConvertValueType(t *testing.T) {
+	cases := []struct {
+		elem          []byte
+		jt            gjson.Type
+		correctResult interface{}
+		isError       bool
+	}{
+		{[]byte(""), gjson.Null, nil, false},
+		{[]byte("t"), gjson.False, true, false},
+		{[]byte("f"), gjson.False, false, false},
+		{[]byte(`{"a": 1}`), gjson.JSON, map[string]interface{}{"a": float64(1)}, false},
+		{[]byte(`abc`), gjson.String, "abc", false},
+		{[]byte(`1`), gjson.Number, float64(1), false},
+		{[]byte(`a1`), gjson.Number, nil, true},
+		{[]byte(`{"A": `), gjson.JSON, nil, true},
+		{[]byte(`2`), gjson.False, nil, true},
+	}
+	for i, tc := range cases {
+		res, err := convertValueType(tc.elem, tc.jt)
+		if err != nil {
+			if !tc.isError {
+				t.Errorf("Case %d: got an error when none was expected", i)
+			}
+		} else if err == nil && tc.isError {
+			t.Errorf("Case %d: got no error though we expected one", i)
+		} else if !reflect.DeepEqual(res, tc.correctResult) {
+			t.Errorf("Case %d: result mismatch - got %#v", i, res)
 		}
 	}
 }
