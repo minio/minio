@@ -2,7 +2,7 @@ version: '3.7'
 
 services:
   minio1:
-    image: minio/minio:RELEASE.2019-08-21T19-40-07Z
+    image: minio/minio:RELEASE.2019-08-29T00-25-01Z
     hostname: minio1
     volumes:
       - minio1-data:/export
@@ -34,7 +34,7 @@ services:
       start_period: 3m
 
   minio2:
-    image: minio/minio:RELEASE.2019-08-21T19-40-07Z
+    image: minio/minio:RELEASE.2019-08-29T00-25-01Z
     hostname: minio2
     volumes:
       - minio2-data:/export
@@ -66,7 +66,7 @@ services:
       start_period: 3m
 
   minio3:
-    image: minio/minio:RELEASE.2019-08-21T19-40-07Z
+    image: minio/minio:RELEASE.2019-08-29T00-25-01Z
     hostname: minio3
     volumes:
       - minio3-data:/export
@@ -98,7 +98,7 @@ services:
       start_period: 3m
 
   minio4:
-    image: minio/minio:RELEASE.2019-08-21T19-40-07Z
+    image: minio/minio:RELEASE.2019-08-29T00-25-01Z
     hostname: minio4
     volumes:
       - minio4-data:/export
