@@ -7,13 +7,14 @@ services:
   minio1:
     image: minio/minio:RELEASE.2019-08-29T00-25-01Z
     volumes:
-      - data1:/data
+      - data1-1:/data1
+      - data1-2:/data2
     ports:
       - "9001:9000"
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio123
-    command: server http://minio1/data http://minio2/data http://minio3/data http://minio4/data 
+    command: server http://minio{1...4}/data{1...2}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://minio1:9000/minio/health/live"]
       interval: 1m30s
@@ -24,13 +25,14 @@ services:
   minio2:
     image: minio/minio:RELEASE.2019-08-29T00-25-01Z
     volumes:
-      - data2:/data
+      - data2-1:/data1
+      - data2-2:/data2
     ports:
       - "9002:9000"
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio123
-    command: server http://minio1/data http://minio2/data http://minio3/data http://minio4/data 
+    command: server http://minio{1...4}/data{1...2}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://minio2:9000/minio/health/live"]
       interval: 1m30s
@@ -41,13 +43,14 @@ services:
   minio3:
     image: minio/minio:RELEASE.2019-08-29T00-25-01Z
     volumes:
-      - data3:/data
+      - data3-1:/data1
+      - data3-2:/data2
     ports:
       - "9003:9000"
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio123
-    command: server http://minio1/data http://minio2/data http://minio3/data http://minio4/data 
+    command: server http://minio{1...4}/data{1...2}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://minio3:9000/minio/health/live"]
       interval: 1m30s
@@ -58,13 +61,14 @@ services:
   minio4:
     image: minio/minio:RELEASE.2019-08-29T00-25-01Z
     volumes:
-      - data4:/data
+      - data4-1:/data1
+      - data4-2:/data2
     ports:
       - "9004:9000"
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio123
-    command: server http://minio1/data http://minio2/data http://minio3/data http://minio4/data 
+    command: server http://minio{1...4}/data{1...2}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://minio4:9000/minio/health/live"]
       interval: 1m30s
@@ -75,8 +79,12 @@ services:
 ## By default this config uses default local driver,
 ## For custom volumes replace with volume driver configuration.
 volumes:
-  data1:
-  data2:
-  data3:
-  data4:
+  data1-1:
+  data1-2:
+  data2-1:
+  data2-2:
+  data3-1:
+  data3-2:
+  data4-1:
+  data4-2:
 

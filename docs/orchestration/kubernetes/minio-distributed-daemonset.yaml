@@ -34,10 +34,7 @@ spec:
         # Unfortunately you must manually define each server. Perhaps autodiscovery via DNS can be implemented in the future.
         args:
         - server
-        - http://hostname1:9000/data/minio
-        - http://hostname2:9000/data/minio
-        - http://hostname3:9000/data/minio
-        - http://hostname4:9000/data/minio
+        - http://hostname{1...4}/data/minio
         ports:
         - containerPort: 9000
         volumeMounts:

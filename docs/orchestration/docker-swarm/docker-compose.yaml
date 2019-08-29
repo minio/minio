@@ -25,7 +25,7 @@ services:
       placement:
         constraints:
           - node.labels.minio1==true
-    command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
+    command: server http://minio{1...4}/export
     healthcheck:
       test: ["CMD", "curl", "-f", "http://minio1:9000/minio/health/live"]
       interval: 1m30s
@@ -57,7 +57,7 @@ services:
       placement:
         constraints:
           - node.labels.minio2==true
-    command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
+    command: server http://minio{1...4}/export
     healthcheck:
       test: ["CMD", "curl", "-f", "http://minio2:9000/minio/health/live"]
       interval: 1m30s
@@ -89,7 +89,7 @@ services:
       placement:
         constraints:
           - node.labels.minio3==true
-    command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
+    command: server http://minio{1...4}/export
     healthcheck:
       test: ["CMD", "curl", "-f", "http://minio3:9000/minio/health/live"]
       interval: 1m30s
@@ -121,7 +121,7 @@ services:
       placement:
         constraints:
           - node.labels.minio4==true
-    command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
+    command: server http://minio{1...4}/export
     healthcheck:
       test: ["CMD", "curl", "-f", "http://minio4:9000/minio/health/live"]
       interval: 1m30s
