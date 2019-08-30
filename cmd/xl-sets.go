@@ -1251,35 +1251,29 @@ fi
 */
 
 func formatsToDrivesInfo(endpoints EndpointList, formats []*formatXLV3, sErrs []error) (beforeDrives []madmin.DriveInfo) {
+	beforeDrives = make([]madmin.DriveInfo, len(endpoints))
 	// Existing formats are available (i.e. ok), so save it in
 	// result, also populate disks to be healed.
 	for i, format := range formats {
 		drive := endpoints.GetString(i)
+		var state = madmin.DriveStateCorrupt
 		switch {
 		case format != nil:
-			beforeDrives = append(beforeDrives, madmin.DriveInfo{
-				UUID:     format.XL.This,
-				Endpoint: drive,
-				State:    madmin.DriveStateOk,
-			})
+			state = madmin.DriveStateOk
 		case sErrs[i] == errUnformattedDisk:
-			beforeDrives = append(beforeDrives, madmin.DriveInfo{
-				UUID:     "",
-				Endpoint: drive,
-				State:    madmin.DriveStateMissing,
-			})
+			state = madmin.DriveStateMissing
 		case sErrs[i] == errDiskNotFound:
-			beforeDrives = append(beforeDrives, madmin.DriveInfo{
-				UUID:     "",
-				Endpoint: drive,
-				State:    madmin.DriveStateOffline,
-			})
-		default:
-			beforeDrives = append(beforeDrives, madmin.DriveInfo{
-				UUID:     "",
-				Endpoint: drive,
-				State:    madmin.DriveStateCorrupt,
-			})
+			state = madmin.DriveStateOffline
+		}
+		beforeDrives[i] = madmin.DriveInfo{
+			UUID: func() string {
+				if format != nil {
+					return format.XL.This
+				}
+				return ""
+			}(),
+			Endpoint: drive,
+			State:    state,
 		}
 	}
 
