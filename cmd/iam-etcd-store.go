@@ -213,7 +213,7 @@ func (ies *IAMEtcdStore) migrateToV1() error {
 		case errConfigNotFound:
 			// Need to migrate to V1.
 		default:
-			return errors.New("corrupt IAM format file")
+			return err
 		}
 	} else {
 		if iamFmt.Version >= iamFormatVersion1 {
