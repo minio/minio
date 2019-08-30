@@ -418,7 +418,7 @@ func (s *peerRESTServer) CPULoadInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	ctx := newContext(r, w, "CPULoadInfo")
-	info := localEndpointsCPULoad(globalEndpoints, r)
+	info := getLocalCPULoad(globalEndpoints, r)
 
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
@@ -432,7 +432,7 @@ func (s *peerRESTServer) DrivePerfInfoHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	ctx := newContext(r, w, "DrivePerfInfo")
-	info := localEndpointsDrivePerf(globalEndpoints, r)
+	info := getLocalDrivesPerf(globalEndpoints, r)
 
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
@@ -445,7 +445,7 @@ func (s *peerRESTServer) MemUsageInfoHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	ctx := newContext(r, w, "MemUsageInfo")
-	info := localEndpointsMemUsage(globalEndpoints, r)
+	info := getLocalMemUsage(globalEndpoints, r)
 
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
