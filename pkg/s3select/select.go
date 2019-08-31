@@ -17,11 +17,15 @@
 package s3select
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/xml"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/minio/minio/pkg/s3select/csv"
 	"github.com/minio/minio/pkg/s3select/json"
@@ -52,6 +56,20 @@ const (
 const (
 	maxRecordSize = 1 << 20 // 1 MiB
 )
+
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Buffer)
+	},
+}
+
+var bufioWriterPool = sync.Pool{
+	New: func() interface{} {
+		// ioutil.Discard is just used to create the writer. Actual destination
+		// writer is set later by Reset() before using it.
+		return bufio.NewWriter(ioutil.Discard)
+	},
+}
 
 // UnmarshalXML - decodes XML data.
 func (c *CompressionType) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
@@ -306,22 +324,36 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 	panic(fmt.Errorf("unknown input format '%v'", s3Select.Input.format))
 }
 
-func (s3Select *S3Select) marshal(record sql.Record) ([]byte, error) {
+func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
 	switch s3Select.Output.format {
 	case csvFormat:
-		data, err := record.MarshalCSV([]rune(s3Select.Output.CSVArgs.FieldDelimiter)[0])
+		// Use bufio Writer to prevent csv.Writer from allocating a new buffer.
+		bufioWriter := bufioWriterPool.Get().(*bufio.Writer)
+		defer func() {
+			bufioWriter.Reset(ioutil.Discard)
+			bufioWriterPool.Put(bufioWriter)
+		}()
+
+		bufioWriter.Reset(buf)
+		err := record.WriteCSV(bufioWriter, []rune(s3Select.Output.CSVArgs.FieldDelimiter)[0])
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		return append(data, []byte(s3Select.Output.CSVArgs.RecordDelimiter)...), nil
+		buf.Truncate(buf.Len() - 1)
+		buf.WriteString(s3Select.Output.CSVArgs.RecordDelimiter)
+
+		return nil
 	case jsonFormat:
-		data, err := record.MarshalJSON()
+		err := record.WriteJSON(buf)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		return append(data, []byte(s3Select.Output.JSONArgs.RecordDelimiter)...), nil
+		buf.Truncate(buf.Len() - 1)
+		buf.WriteString(s3Select.Output.JSONArgs.RecordDelimiter)
+
+		return nil
 	}
 
 	panic(fmt.Errorf("unknown output format '%v'", s3Select.Output.format))
@@ -338,24 +370,29 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 	var inputRecord sql.Record
 	var outputRecord sql.Record
 	var err error
-	var data []byte
 	sendRecord := func() bool {
 		if outputRecord == nil {
 			return true
 		}
 
-		if data, err = s3Select.marshal(outputRecord); err != nil {
+		buf := bufPool.Get().(*bytes.Buffer)
+		buf.Reset()
+
+		if err = s3Select.marshal(buf, outputRecord); err != nil {
+			bufPool.Put(buf)
 			return false
 		}
 
-		if len(data) > maxRecordSize {
+		if buf.Len() > maxRecordSize {
 			writer.FinishWithError("OverMaxRecordSize", "The length of a record in the input or result is greater than maxCharsPerRecord of 1 MB.")
+			bufPool.Put(buf)
 			return false
 		}
 
-		if err = writer.SendRecord(data); err != nil {
+		if err = writer.SendRecord(buf); err != nil {
 			// FIXME: log this error.
 			err = nil
+			bufPool.Put(buf)
 			return false
 		}
 
