@@ -279,6 +279,23 @@ func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]st
 	switch {
 	default:
 		return nil, errObjectTampered
+	case crypto.S3.IsEncrypted(metadata) && isCacheEncrypted(metadata):
+		if globalCacheKMS == nil {
+			return nil, errKMSNotConfigured
+		}
+		keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(metadata)
+		if err != nil {
+			return nil, err
+		}
+		extKey, err := globalCacheKMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
+		if err != nil {
+			return nil, err
+		}
+		var objectKey crypto.ObjectKey
+		if err = objectKey.Unseal(extKey, sealedKey, crypto.S3.String(), bucket, object); err != nil {
+			return nil, err
+		}
+		return objectKey[:], nil
 	case crypto.S3.IsEncrypted(metadata):
 		if GlobalKMS == nil {
 			return nil, errKMSNotConfigured

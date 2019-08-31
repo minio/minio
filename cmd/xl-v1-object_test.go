@@ -180,7 +180,7 @@ func TestXLDeleteObjectsXLSet(t *testing.T) {
 		switch statErr.(type) {
 		case ObjectNotFound:
 		default:
-			t.Fatalf("Object %s is not removed", test.bucket+"/"+test.object)
+			t.Fatalf("Object %s is not removed", test.bucket+SlashSeparator+test.object)
 		}
 	}
 }

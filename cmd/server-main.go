@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2015-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -237,13 +237,7 @@ func serverMain(ctx *cli.Context) {
 
 	if !globalCLIContext.Quiet {
 		// Check for new updates from dl.min.io.
-		mode := globalMinioModeFS
-		if globalIsDistXL {
-			mode = globalMinioModeDistXL
-		} else if globalIsXL {
-			mode = globalMinioModeXL
-		}
-		checkUpdate(mode)
+		checkUpdate(getMinioMode())
 	}
 
 	// FIXME: This code should be removed in future releases and we should have mandatory
@@ -346,7 +340,7 @@ func serverMain(ctx *cli.Context) {
 	var cacheConfig = globalServerConfig.GetCacheConfig()
 	if len(cacheConfig.Drives) > 0 {
 		// initialize the new disk cache objects.
-		globalCacheObjectAPI, err = newServerCacheObjects(cacheConfig)
+		globalCacheObjectAPI, err = newServerCacheObjects(context.Background(), cacheConfig)
 		logger.FatalIf(err, "Unable to initialize disk caching")
 	}
 
@@ -377,13 +371,15 @@ func serverMain(ctx *cli.Context) {
 
 	// Initialize notification system.
 	if err = globalNotificationSys.Init(newObject); err != nil {
-		logger.LogIf(context.Background(), err)
+		logger.Fatal(err, "Unable to initialize notification system")
 	}
 
 	// Verify if object layer supports
 	// - encryption
 	// - compression
 	verifyObjectLayerFeatures("server", newObject)
+
+	initDailyLifecycle()
 
 	if globalIsXL {
 		initBackgroundHealing()

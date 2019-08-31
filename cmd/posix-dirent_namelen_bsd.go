@@ -1,3 +1,5 @@
+// +build darwin freebsd openbsd netbsd
+
 /*
  * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
@@ -14,20 +16,10 @@
  * limitations under the License.
  */
 
-package lifecycle
+package cmd
 
-// Action - policy action.
-// Refer https://docs.aws.amazon.com/IAM/latest/UserGuide/list_amazons3.html
-// for more information about available actions.
-type Action string
+import "syscall"
 
-const (
-	// PutBucketLifecycleAction - PutBucketLifecycle Rest API action.
-	PutBucketLifecycleAction = "s3:PutBucketLifecycle"
-
-	// GetBucketLifecycleAction - GetBucketLifecycle Rest API action.
-	GetBucketLifecycleAction = "s3:GetBucketLifecycle"
-
-	// DeleteBucketLifecycleAction - DeleteBucketLifecycleAction Rest API action.
-	DeleteBucketLifecycleAction = "s3:DeleteBucketLifecycle"
-)
+func direntNamlen(dirent *syscall.Dirent) (uint64, error) {
+	return uint64(dirent.Namlen), nil
+}

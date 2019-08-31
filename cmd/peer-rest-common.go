@@ -16,24 +16,30 @@
 
 package cmd
 
-const peerRESTVersion = "v2"
+const peerRESTVersion = "v4"
 const peerRESTPath = minioReservedBucketPath + "/peer/" + peerRESTVersion
 
 const (
+	peerRESTMethodNetReadPerfInfo          = "netreadperfinfo"
+	peerRESTMethodCollectNetPerfInfo       = "collectnetperfinfo"
 	peerRESTMethodServerInfo               = "serverinfo"
 	peerRESTMethodCPULoadInfo              = "cpuloadinfo"
 	peerRESTMethodMemUsageInfo             = "memusageinfo"
 	peerRESTMethodDrivePerfInfo            = "driveperfinfo"
 	peerRESTMethodDeleteBucket             = "deletebucket"
+	peerRESTMethodServerUpdate             = "serverupdate"
 	peerRESTMethodSignalService            = "signalservice"
 	peerRESTMethodBackgroundHealStatus     = "backgroundhealstatus"
+	peerRESTMethodBackgroundOpsStatus      = "backgroundopsstatus"
 	peerRESTMethodGetLocks                 = "getlocks"
 	peerRESTMethodBucketPolicyRemove       = "removebucketpolicy"
 	peerRESTMethodLoadUser                 = "loaduser"
 	peerRESTMethodDeleteUser               = "deleteuser"
 	peerRESTMethodLoadPolicy               = "loadpolicy"
+	peerRESTMethodLoadPolicyMapping        = "loadpolicymapping"
 	peerRESTMethodDeletePolicy             = "deletepolicy"
 	peerRESTMethodLoadUsers                = "loadusers"
+	peerRESTMethodLoadGroup                = "loadgroup"
 	peerRESTMethodStartProfiling           = "startprofiling"
 	peerRESTMethodDownloadProfilingData    = "downloadprofilingdata"
 	peerRESTMethodBucketPolicySet          = "setbucketpolicy"
@@ -48,13 +54,20 @@ const (
 )
 
 const (
-	peerRESTBucket   = "bucket"
-	peerRESTUser     = "user"
-	peerRESTUserTemp = "user-temp"
-	peerRESTPolicy   = "policy"
-	peerRESTSignal   = "signal"
-	peerRESTProfiler = "profiler"
-	peerRESTDryRun   = "dry-run"
-	peerRESTTraceAll = "all"
-	peerRESTTraceErr = "err"
+	peerRESTNetPerfSize   = "netperfsize"
+	peerRESTBucket        = "bucket"
+	peerRESTUser          = "user"
+	peerRESTGroup         = "group"
+	peerRESTUserTemp      = "user-temp"
+	peerRESTPolicy        = "policy"
+	peerRESTUserOrGroup   = "user-or-group"
+	peerRESTIsGroup       = "is-group"
+	peerRESTUpdateURL     = "updateURL"
+	peerRESTSha256Hex     = "sha256Hex"
+	peerRESTLatestRelease = "latestReleaseTime"
+	peerRESTSignal        = "signal"
+	peerRESTProfiler      = "profiler"
+	peerRESTDryRun        = "dry-run"
+	peerRESTTraceAll      = "all"
+	peerRESTTraceErr      = "err"
 )

@@ -340,7 +340,7 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
-		result, err = obj.ListObjects(context.Background(), "bucket", "this/is/", "", "/", 10)
+		result, err = obj.ListObjects(context.Background(), "bucket", "this/is/", "", SlashSeparator, 10)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -354,7 +354,7 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 	// check delimited results with delimiter without prefix.
 	{
-		result, err = obj.ListObjects(context.Background(), "bucket", "", "", "/", 1000)
+		result, err = obj.ListObjects(context.Background(), "bucket", "", "", SlashSeparator, 1000)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}

@@ -482,7 +482,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 
 			expectedContent: encodeResponse(getAPIErrorResponse(ctx,
 				getAPIError(ErrNoSuchKey),
-				"/"+bucketName+"/"+". ./. ./etc", "", "")),
+				SlashSeparator+bucketName+SlashSeparator+". ./. ./etc", "", "")),
 			expectedRespStatus: http.StatusNotFound,
 		},
 		// Test case - 9.
@@ -496,7 +496,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 
 			expectedContent: encodeResponse(getAPIErrorResponse(ctx,
 				getAPIError(ErrInvalidObjectName),
-				"/"+bucketName+"/"+". ./../etc", "", "")),
+				SlashSeparator+bucketName+SlashSeparator+". ./../etc", "", "")),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 10.
@@ -1593,7 +1593,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{
 			bucketName:         bucketName,
 			uploadID:           uploadID,
-			copySourceHeader:   url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader:   url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusOK,
@@ -1604,7 +1604,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{
 			bucketName:       bucketName,
 			uploadID:         uploadID,
-			copySourceHeader: url.QueryEscape("/"),
+			copySourceHeader: url.QueryEscape(SlashSeparator),
 			accessKey:        credentials.AccessKey,
 			secretKey:        credentials.SecretKey,
 
@@ -1617,7 +1617,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{
 			bucketName:       bucketName,
 			uploadID:         uploadID,
-			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + testObject),
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + testObject),
 			accessKey:        credentials.AccessKey,
 			secretKey:        credentials.SecretKey,
 
@@ -1629,7 +1629,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{
 			bucketName:       bucketName,
 			uploadID:         uploadID,
-			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			copySourceRange:  "bytes=500-4096",
 			accessKey:        credentials.AccessKey,
 			secretKey:        credentials.SecretKey,
@@ -1642,7 +1642,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{
 			bucketName:       bucketName,
 			uploadID:         uploadID,
-			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			copySourceRange:  "bytes=6145-",
 			accessKey:        credentials.AccessKey,
 			secretKey:        credentials.SecretKey,
@@ -1655,7 +1655,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{
 			bucketName:       bucketName,
 			uploadID:         uploadID,
-			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			copySourceRange:  "bytes=0-6144",
 			accessKey:        credentials.AccessKey,
 			secretKey:        credentials.SecretKey,
@@ -1683,7 +1683,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{
 			bucketName:       bucketName,
 			uploadID:         uploadID,
-			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + "non-existent-object"),
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + "non-existent-object"),
 			accessKey:        credentials.AccessKey,
 			secretKey:        credentials.SecretKey,
 
@@ -1697,7 +1697,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{
 			bucketName:       "non-existent-destination-bucket",
 			uploadID:         uploadID,
-			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			accessKey:        credentials.AccessKey,
 			secretKey:        credentials.SecretKey,
 
@@ -1709,7 +1709,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{
 			bucketName:       bucketName,
 			uploadID:         uploadID,
-			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			accessKey:        "Invalid-AccessID",
 			secretKey:        credentials.SecretKey,
 
@@ -1721,7 +1721,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{
 			bucketName:       bucketName,
 			uploadID:         "-1",
-			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			accessKey:        credentials.AccessKey,
 			secretKey:        credentials.SecretKey,
 
@@ -1732,7 +1732,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{
 			bucketName:         bucketName,
 			uploadID:           uploadID,
-			copySourceHeader:   url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader:   url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			invalidPartNumber:  true,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
@@ -1743,7 +1743,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{
 			bucketName:         bucketName,
 			uploadID:           uploadID,
-			copySourceHeader:   url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader:   url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			maximumPartNumber:  true,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
@@ -1753,7 +1753,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{
 			bucketName:         bucketName,
 			uploadID:           uploadID,
-			copySourceHeader:   url.QueryEscape("/"+bucketName+"/"+objectName) + "?versionId=null",
+			copySourceHeader:   url.QueryEscape(SlashSeparator+bucketName+SlashSeparator+objectName) + "?versionId=null",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusOK,
@@ -1762,7 +1762,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{
 			bucketName:         bucketName,
 			uploadID:           uploadID,
-			copySourceHeader:   url.QueryEscape("/"+bucketName+"/"+objectName) + "?versionId=17",
+			copySourceHeader:   url.QueryEscape(SlashSeparator+bucketName+SlashSeparator+objectName) + "?versionId=17",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusNotFound,
@@ -1771,7 +1771,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{
 			bucketName:          bucketName,
 			uploadID:            uploadID,
-			copySourceHeader:    url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader:    url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			copySourceVersionID: "null",
 			accessKey:           credentials.AccessKey,
 			secretKey:           credentials.SecretKey,
@@ -1781,7 +1781,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{
 			bucketName:          bucketName,
 			uploadID:            uploadID,
-			copySourceHeader:    url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader:    url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			copySourceVersionID: "17",
 			accessKey:           credentials.AccessKey,
 			secretKey:           credentials.SecretKey,
@@ -1852,7 +1852,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 	// Below is how CopyObjectPartHandler is registered.
 	// bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(api.CopyObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
 	// Its necessary to set the "X-Amz-Copy-Source" header for the request to be accepted by the handler.
-	nilReq.Header.Set("X-Amz-Copy-Source", url.QueryEscape("/"+nilBucket+"/"+nilObject))
+	nilReq.Header.Set("X-Amz-Copy-Source", url.QueryEscape(SlashSeparator+nilBucket+SlashSeparator+nilObject))
 
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
@@ -1947,7 +1947,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:       bucketName,
 			newObjectName:    "newObject1",
-			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			accessKey:        credentials.AccessKey,
 			secretKey:        credentials.SecretKey,
 			metadata: map[string]string{
@@ -1961,7 +1961,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:       bucketName,
 			newObjectName:    "newObject1",
-			copySourceHeader: url.QueryEscape("/"),
+			copySourceHeader: url.QueryEscape(SlashSeparator),
 			accessKey:        credentials.AccessKey,
 			secretKey:        credentials.SecretKey,
 
@@ -1973,7 +1973,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:       bucketName,
 			newObjectName:    objectName,
-			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			accessKey:        credentials.AccessKey,
 			secretKey:        credentials.SecretKey,
 
@@ -1986,7 +1986,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:       bucketName,
 			newObjectName:    objectName,
-			copySourceHeader: url.QueryEscape(bucketName + "/" + objectName),
+			copySourceHeader: url.QueryEscape(bucketName + SlashSeparator + objectName),
 			accessKey:        credentials.AccessKey,
 			secretKey:        credentials.SecretKey,
 
@@ -1999,7 +1999,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:       bucketName,
 			newObjectName:    objectName,
-			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			metadata: map[string]string{
 				"Content-Type": "application/json",
 			},
@@ -2015,7 +2015,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:       bucketName,
 			newObjectName:    "newObject1",
-			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			metadata: map[string]string{
 				"Content-Type": "application/json",
 			},
@@ -2032,7 +2032,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:       bucketName,
 			newObjectName:    objectName,
-			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			metadata: map[string]string{
 				"Content-Type": "application/json",
 			},
@@ -2050,7 +2050,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:       bucketName,
 			newObjectName:    objectName,
-			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + "non-existent-object"),
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + "non-existent-object"),
 			accessKey:        credentials.AccessKey,
 			secretKey:        credentials.SecretKey,
 
@@ -2064,7 +2064,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:       "non-existent-destination-bucket",
 			newObjectName:    objectName,
-			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			accessKey:        credentials.AccessKey,
 			secretKey:        credentials.SecretKey,
 
@@ -2076,7 +2076,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:       bucketName,
 			newObjectName:    objectName,
-			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			accessKey:        "Invalid-AccessID",
 			secretKey:        credentials.SecretKey,
 
@@ -2086,7 +2086,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:         bucketName,
 			newObjectName:      "newObject1",
-			copySourceHeader:   url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader:   url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			copyModifiedHeader: "Mon, 02 Jan 2006 15:04:05 GMT",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
@@ -2096,7 +2096,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:         bucketName,
 			newObjectName:      "newObject1",
-			copySourceHeader:   url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader:   url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			copyModifiedHeader: "Mon, 02 Jan 2217 15:04:05 GMT",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
@@ -2106,7 +2106,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:         bucketName,
 			newObjectName:      "newObject1",
-			copySourceHeader:   url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader:   url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			copyModifiedHeader: "Mon, 02 Jan 2217 15:04:05 +00:00",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
@@ -2116,7 +2116,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:           bucketName,
 			newObjectName:        "newObject1",
-			copySourceHeader:     url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader:     url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			copyUnmodifiedHeader: "Mon, 02 Jan 2217 15:04:05 GMT",
 			accessKey:            credentials.AccessKey,
 			secretKey:            credentials.SecretKey,
@@ -2126,7 +2126,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:           bucketName,
 			newObjectName:        "newObject1",
-			copySourceHeader:     url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader:     url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			copyUnmodifiedHeader: "Mon, 02 Jan 2007 15:04:05 GMT",
 			accessKey:            credentials.AccessKey,
 			secretKey:            credentials.SecretKey,
@@ -2136,7 +2136,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:           bucketName,
 			newObjectName:        "newObject1",
-			copySourceHeader:     url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader:     url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			copyUnmodifiedHeader: "Mon, 02 Jan 2007 15:04:05 +00:00",
 			accessKey:            credentials.AccessKey,
 			secretKey:            credentials.SecretKey,
@@ -2146,7 +2146,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:         bucketName,
 			newObjectName:      "newObject1",
-			copySourceHeader:   url.QueryEscape("/"+bucketName+"/"+objectName) + "?versionId=null",
+			copySourceHeader:   url.QueryEscape(SlashSeparator+bucketName+SlashSeparator+objectName) + "?versionId=null",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusOK,
@@ -2155,7 +2155,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:         bucketName,
 			newObjectName:      "newObject1",
-			copySourceHeader:   url.QueryEscape("/"+bucketName+"/"+objectName) + "?versionId=17",
+			copySourceHeader:   url.QueryEscape(SlashSeparator+bucketName+SlashSeparator+objectName) + "?versionId=17",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusNotFound,
@@ -2164,7 +2164,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:          bucketName,
 			newObjectName:       "newObject1",
-			copySourceHeader:    url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader:    url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			copySourceVersionID: "null",
 			accessKey:           credentials.AccessKey,
 			secretKey:           credentials.SecretKey,
@@ -2174,7 +2174,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:          bucketName,
 			newObjectName:       "newObject1",
-			copySourceHeader:    url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceHeader:    url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			copySourceVersionID: "17",
 			accessKey:           credentials.AccessKey,
 			secretKey:           credentials.SecretKey,
@@ -2307,7 +2307,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	// Below is how CopyObjectHandler is registered.
 	// bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?")
 	// Its necessary to set the "X-Amz-Copy-Source" header for the request to be accepted by the handler.
-	nilReq.Header.Set("X-Amz-Copy-Source", url.QueryEscape("/"+nilBucket+"/"+nilObject))
+	nilReq.Header.Set("X-Amz-Copy-Source", url.QueryEscape(SlashSeparator+nilBucket+SlashSeparator+nilObject))
 	if err != nil {
 		t.Errorf("MinIO %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}

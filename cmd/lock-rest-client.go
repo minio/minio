@@ -17,10 +17,8 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/gob"
 	"errors"
 	"io"
 	"sync"
@@ -43,6 +41,20 @@ type lockRESTClient struct {
 	serverURL  *url.URL
 	connected  bool
 	timer      *time.Timer
+}
+
+func toLockError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	switch err.Error() {
+	case errLockConflict.Error():
+		return errLockConflict
+	case errLockNotExpired.Error():
+		return errLockNotExpired
+	}
+	return err
 }
 
 // ServerAddr - dsync.NetLocker interface compatible method.
@@ -90,7 +102,6 @@ func (client *lockRESTClient) markHostDown() {
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *lockRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-
 	if !client.isHostUp() {
 		return nil, errors.New("Lock rest server node is down")
 	}
@@ -100,7 +111,6 @@ func (client *lockRESTClient) call(method string, values url.Values, body io.Rea
 	}
 
 	respBody, err = client.restClient.Call(method, values, body, length)
-
 	if err == nil {
 		return respBody, nil
 	}
@@ -109,7 +119,7 @@ func (client *lockRESTClient) call(method string, values url.Values, body io.Rea
 		client.markHostDown()
 	}
 
-	return nil, err
+	return nil, toLockError(err)
 }
 
 // Stringer provides a canonicalized representation of node.
@@ -131,32 +141,23 @@ func (client *lockRESTClient) Close() error {
 
 // restCall makes a call to the lock REST server.
 func (client *lockRESTClient) restCall(call string, args dsync.LockArgs) (reply bool, err error) {
+	values := url.Values{}
+	values.Set(lockRESTUID, args.UID)
+	values.Set(lockRESTSource, args.Source)
+	values.Set(lockRESTResource, args.Resource)
+	values.Set(lockRESTServerAddr, args.ServerAddr)
+	values.Set(lockRESTServerEndpoint, args.ServiceEndpoint)
 
-	reader := bytes.NewBuffer(make([]byte, 0, 2048))
-	err = gob.NewEncoder(reader).Encode(args)
-	if err != nil {
-		return false, err
-	}
-	respBody, err := client.call(call, nil, reader, -1)
-	if err != nil {
-		return false, err
-	}
-
-	var resp lockResponse
+	respBody, err := client.call(call, values, nil, -1)
 	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&resp)
-
-	if err != nil || !resp.Success {
-		reqInfo := &logger.ReqInfo{}
-		reqInfo.AppendTags("resource", args.Resource)
-		reqInfo.AppendTags("serveraddress", args.ServerAddr)
-		reqInfo.AppendTags("serviceendpoint", args.ServiceEndpoint)
-		reqInfo.AppendTags("source", args.Source)
-		reqInfo.AppendTags("uid", args.UID)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
+	switch err {
+	case nil:
+		return true, nil
+	case errLockConflict, errLockNotExpired:
+		return false, nil
+	default:
+		return false, err
 	}
-	return resp.Success, err
 }
 
 // RLock calls read lock REST API.

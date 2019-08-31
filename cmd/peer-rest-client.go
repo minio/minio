@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"encoding/gob"
 	"io"
+	"math/rand"
 	"net/url"
 	"strconv"
 	"time"
@@ -106,6 +107,37 @@ func (client *peerRESTClient) Close() error {
 
 // GetLocksResp stores various info from the client for each lock that is requested.
 type GetLocksResp map[string][]lockRequesterInfo
+
+// NetReadPerfInfo - fetch network read performance information for a remote node.
+func (client *peerRESTClient) NetReadPerfInfo(size int64) (info ServerNetReadPerfInfo, err error) {
+	params := make(url.Values)
+	params.Set(peerRESTNetPerfSize, strconv.FormatInt(size, 10))
+	respBody, err := client.call(
+		peerRESTMethodNetReadPerfInfo,
+		params,
+		rand.New(rand.NewSource(time.Now().UnixNano())),
+		size,
+	)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
+// CollectNetPerfInfo - collect network performance information of other peers.
+func (client *peerRESTClient) CollectNetPerfInfo(size int64) (info []ServerNetReadPerfInfo, err error) {
+	params := make(url.Values)
+	params.Set(peerRESTNetPerfSize, strconv.FormatInt(size, 10))
+	respBody, err := client.call(peerRESTMethodCollectNetPerfInfo, params, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
 
 // GetLocks - fetch older locks for a remote node.
 func (client *peerRESTClient) GetLocks() (locks GetLocksResp, err error) {
@@ -406,6 +438,22 @@ func (client *peerRESTClient) LoadPolicy(policyName string) (err error) {
 	return nil
 }
 
+// LoadPolicyMapping - reload a specific policy mapping
+func (client *peerRESTClient) LoadPolicyMapping(userOrGroup string, isGroup bool) error {
+	values := make(url.Values)
+	values.Set(peerRESTUserOrGroup, userOrGroup)
+	if isGroup {
+		values.Set(peerRESTIsGroup, "")
+	}
+
+	respBody, err := client.call(peerRESTMethodLoadPolicyMapping, values, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 // DeleteUser - delete a specific user.
 func (client *peerRESTClient) DeleteUser(accessKey string) (err error) {
 	values := make(url.Values)
@@ -443,10 +491,40 @@ func (client *peerRESTClient) LoadUsers() (err error) {
 	return nil
 }
 
+// LoadGroup - send load group command to peers.
+func (client *peerRESTClient) LoadGroup(group string) error {
+	values := make(url.Values)
+	values.Set(peerRESTGroup, group)
+	respBody, err := client.call(peerRESTMethodLoadGroup, values, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// ServerUpdate - sends server update message to remote peers.
+func (client *peerRESTClient) ServerUpdate(updateURL, sha256Hex string, latestReleaseTime time.Time) error {
+	values := make(url.Values)
+	values.Set(peerRESTUpdateURL, updateURL)
+	values.Set(peerRESTSha256Hex, sha256Hex)
+	if !latestReleaseTime.IsZero() {
+		values.Set(peerRESTLatestRelease, latestReleaseTime.Format(time.RFC3339))
+	} else {
+		values.Set(peerRESTLatestRelease, "")
+	}
+	respBody, err := client.call(peerRESTMethodServerUpdate, values, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 // SignalService - sends signal to peer nodes.
 func (client *peerRESTClient) SignalService(sig serviceSignal) error {
 	values := make(url.Values)
-	values.Set(peerRESTSignal, string(sig))
+	values.Set(peerRESTSignal, strconv.Itoa(int(sig)))
 	respBody, err := client.call(peerRESTMethodSignalService, values, nil, -1)
 	if err != nil {
 		return err
@@ -463,6 +541,32 @@ func (client *peerRESTClient) BackgroundHealStatus() (madmin.BgHealState, error)
 	defer http.DrainBody(respBody)
 
 	state := madmin.BgHealState{}
+	err = gob.NewDecoder(respBody).Decode(&state)
+	return state, err
+}
+
+// BgLifecycleOpsStatus describes the status
+// of the background lifecycle operations
+type BgLifecycleOpsStatus struct {
+	LastActivity time.Time
+}
+
+// BgOpsStatus describes the status of all operations performed
+// in background such as auto-healing and lifecycle.
+// Notice: We need to increase peer REST API version when adding
+// new fields to this struct.
+type BgOpsStatus struct {
+	LifecycleOps BgLifecycleOpsStatus
+}
+
+func (client *peerRESTClient) BackgroundOpsStatus() (BgOpsStatus, error) {
+	respBody, err := client.call(peerRESTMethodBackgroundOpsStatus, nil, nil, -1)
+	if err != nil {
+		return BgOpsStatus{}, err
+	}
+	defer http.DrainBody(respBody)
+
+	state := BgOpsStatus{}
 	err = gob.NewDecoder(respBody).Decode(&state)
 	return state, err
 }

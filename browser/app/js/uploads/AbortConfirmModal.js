@@ -33,12 +33,12 @@ export class AbortConfirmModal extends React.Component {
       "abort-upload": true
     })
     let okIcon = classNames({
-      fa: true,
+      fas: true,
       "fa-times": true
     })
     let cancelIcon = classNames({
-      fa: true,
-      "fa-cloud-upload": true
+      fas: true,
+      "fa-cloud-upload-alt": true
     })
 
     return (
@@ -46,7 +46,7 @@ export class AbortConfirmModal extends React.Component {
         show={true}
         baseClass={baseClass}
         text="Abort uploads in progress?"
-        icon="fa fa-info-circle mci-amber"
+        icon="fas fa-info-circle mci-amber"
         sub="This cannot be undone!"
         okText="Abort"
         okIcon={okIcon}

@@ -63,7 +63,7 @@ func formatXLMigrateLocalEndpoints(endpoints EndpointList) error {
 				if os.IsNotExist(err) {
 					return nil
 				}
-				return err
+				return fmt.Errorf("unable to access (%s) %s", formatPath, err)
 			}
 			return formatXLMigrate(epPath)
 		}, index)
@@ -92,11 +92,13 @@ func formatXLCleanupTmpLocalEndpoints(endpoints EndpointList) error {
 				if os.IsNotExist(err) {
 					return nil
 				}
-				return err
+				return fmt.Errorf("unable to access (%s) %s", formatPath, err)
 			}
 			if _, err := os.Stat(pathJoin(epPath, minioMetaTmpBucket+"-old")); err != nil {
 				if !os.IsNotExist(err) {
-					return err
+					return fmt.Errorf("unable to access (%s) %s",
+						pathJoin(epPath, minioMetaTmpBucket+"-old"),
+						err)
 				}
 			}
 
@@ -110,15 +112,24 @@ func formatXLCleanupTmpLocalEndpoints(endpoints EndpointList) error {
 			//
 			// In this example, `33a58b40-aecc-4c9f-a22f-ff17bfa33b62` directory contains
 			// temporary objects from one of the previous runs of minio server.
+			tmpOld := pathJoin(epPath, minioMetaTmpBucket+"-old", mustGetUUID())
 			if err := renameAll(pathJoin(epPath, minioMetaTmpBucket),
-				pathJoin(epPath, minioMetaTmpBucket+"-old", mustGetUUID())); err != nil {
-				return err
+				tmpOld); err != nil && err != errFileNotFound {
+				return fmt.Errorf("unable to rename (%s -> %s) %s",
+					pathJoin(epPath, minioMetaTmpBucket),
+					tmpOld,
+					err)
 			}
 
 			// Removal of tmp-old folder is backgrounded completely.
 			go removeAll(pathJoin(epPath, minioMetaTmpBucket+"-old"))
 
-			return mkdirAll(pathJoin(epPath, minioMetaTmpBucket), 0777)
+			if err := mkdirAll(pathJoin(epPath, minioMetaTmpBucket), 0777); err != nil {
+				return fmt.Errorf("unable to create (%s) %s",
+					pathJoin(epPath, minioMetaTmpBucket),
+					err)
+			}
+			return nil
 		}, index)
 	}
 	for _, err := range g.Wait() {

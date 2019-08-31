@@ -47,7 +47,7 @@ const (
 	diskMinFreeSpace  = 900 * humanize.MiByte // Min 900MiB free space.
 	diskMinTotalSpace = diskMinFreeSpace      // Min 900MiB total space.
 	maxAllowedIOError = 5
-	readBlockSize     = humanize.KiByte * 32 // Default read block size 32KiB.
+	readBlockSize     = 4 * humanize.MiByte // Default read block size 4MiB.
 )
 
 // isValidVolname verifies a volname name in accordance with object
@@ -95,7 +95,7 @@ func checkPathLength(pathName string) error {
 	}
 
 	// Check each path segment length is > 255
-	for len(pathName) > 0 && pathName != "." && pathName != "/" {
+	for len(pathName) > 0 && pathName != "." && pathName != SlashSeparator {
 		dir, file := slashpath.Dir(pathName), slashpath.Base(pathName)
 
 		if len(file) > 255 {
@@ -558,7 +558,7 @@ func listVols(dirPath string) ([]VolInfo, error) {
 	}
 	var volsInfo []VolInfo
 	for _, entry := range entries {
-		if !hasSuffix(entry, slashSeparator) || !isValidVolname(slashpath.Clean(entry)) {
+		if !hasSuffix(entry, SlashSeparator) || !isValidVolname(slashpath.Clean(entry)) {
 			// Skip if entry is neither a directory not a valid volume name.
 			continue
 		}
@@ -718,7 +718,7 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 				return
 			}
 			var fi FileInfo
-			if hasSuffix(walkResult.entry, slashSeparator) {
+			if hasSuffix(walkResult.entry, SlashSeparator) {
 				fi = FileInfo{
 					Volume: volume,
 					Name:   walkResult.entry,
@@ -743,7 +743,7 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 }
 
 // ListDir - return all the entries at the given directory path.
-// If an entry is a directory it will be returned with a trailing "/".
+// If an entry is a directory it will be returned with a trailing SlashSeparator.
 func (s *posix) ListDir(volume, dirPath string, count int, leafFile string) (entries []string, err error) {
 	defer func() {
 		if err == errFaultyDisk {
@@ -786,7 +786,7 @@ func (s *posix) ListDir(volume, dirPath string, count int, leafFile string) (ent
 	if leafFile != "" {
 		for i, entry := range entries {
 			if _, serr := os.Stat(pathJoin(dirPath, entry, leafFile)); serr == nil {
-				entries[i] = strings.TrimSuffix(entry, slashSeparator)
+				entries[i] = strings.TrimSuffix(entry, SlashSeparator)
 			}
 		}
 	}
@@ -1230,7 +1230,7 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 	bufp := s.pool.Get().(*[]byte)
 	defer s.pool.Put(bufp)
 
-	written, err := xioutil.CopyAligned(w, r, *bufp)
+	written, err := xioutil.CopyAligned(w, r, *bufp, fileSize)
 	if err != nil {
 		return err
 	}
@@ -1390,7 +1390,7 @@ func deleteFile(basePath, deletePath string) error {
 
 	// Trailing slash is removed when found to ensure
 	// slashpath.Dir() to work as intended.
-	deletePath = strings.TrimSuffix(deletePath, slashSeparator)
+	deletePath = strings.TrimSuffix(deletePath, SlashSeparator)
 	deletePath = slashpath.Dir(deletePath)
 
 	// Delete parent directory. Errors for parent directories shouldn't trickle down.
@@ -1430,7 +1430,7 @@ func (s *posix) DeleteFile(volume, path string) (err error) {
 		return err
 	}
 
-	// Following code is needed so that we retain "/" suffix if any in
+	// Following code is needed so that we retain SlashSeparator suffix if any in
 	// path argument.
 	filePath := pathJoin(volumeDir, path)
 	if err = checkPathLength((filePath)); err != nil {
@@ -1492,8 +1492,8 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		}
 	}
 
-	srcIsDir := hasSuffix(srcPath, slashSeparator)
-	dstIsDir := hasSuffix(dstPath, slashSeparator)
+	srcIsDir := hasSuffix(srcPath, SlashSeparator)
+	dstIsDir := hasSuffix(dstPath, SlashSeparator)
 	// Either src and dst have to be directories or files, else return error.
 	if !(srcIsDir && dstIsDir || !srcIsDir && !dstIsDir) {
 		return errFileAccessDenied

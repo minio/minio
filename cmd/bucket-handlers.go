@@ -22,6 +22,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -38,6 +39,7 @@ import (
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -50,15 +52,27 @@ import (
 // -- If yes, check if the IP of entry matches local IP. This means entry is for this instance.
 // -- If IP of the entry doesn't match, this means entry is for another instance. Log an error to console.
 func initFederatorBackend(objLayer ObjectLayer) {
+	// Get buckets in the backend
 	b, err := objLayer.ListBuckets(context.Background())
 	if err != nil {
 		logger.LogIf(context.Background(), err)
 		return
 	}
 
+	// Get buckets in the DNS
+	dnsBuckets, err := globalDNSConfig.List()
+	if err != nil && err != dns.ErrNoEntriesFound {
+		logger.LogIf(context.Background(), err)
+		return
+	}
+
+	bucketSet := set.NewStringSet()
+
+	// Add buckets that are not registered with the DNS
 	g := errgroup.WithNErrs(len(b))
 	for index := range b {
 		index := index
+		bucketSet.Add(b[index].Name)
 		g.Go(func() error {
 			r, gerr := globalDNSConfig.Get(b[index].Name)
 			if gerr != nil {
@@ -78,7 +92,38 @@ func initFederatorBackend(objLayer ObjectLayer) {
 	for _, err := range g.Wait() {
 		if err != nil {
 			logger.LogIf(context.Background(), err)
-			return
+		}
+	}
+
+	g = errgroup.WithNErrs(len(dnsBuckets))
+	// Remove buckets that are in DNS for this server, but aren't local
+	for index := range dnsBuckets {
+		index := index
+
+		g.Go(func() error {
+			// This is a local bucket that exists, so we can continue
+			if bucketSet.Contains(dnsBuckets[index].Key) {
+				return nil
+			}
+
+			// This is not for our server, so we can continue
+			hostPort := net.JoinHostPort(dnsBuckets[index].Host, fmt.Sprintf("%d", dnsBuckets[index].Port))
+			if globalDomainIPs.Intersection(set.CreateStringSet(hostPort)).IsEmpty() {
+				return nil
+			}
+
+			// We go to here, so we know the bucket no longer exists, but is registered in DNS to this server
+			if err := globalDNSConfig.DeleteRecord(dnsBuckets[index]); err != nil {
+				return fmt.Errorf("Failed to remove DNS entry for %s due to %v", dnsBuckets[index].Key, err)
+			}
+
+			return nil
+		}, index)
+	}
+
+	for _, err := range g.Wait() {
+		if err != nil {
+			logger.LogIf(context.Background(), err)
 		}
 	}
 }
@@ -106,9 +151,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 	}
 
 	getBucketInfo := objectAPI.GetBucketInfo
-	if api.CacheAPI() != nil {
-		getBucketInfo = api.CacheAPI().GetBucketInfo
-	}
+
 	if _, err := getBucketInfo(ctx, bucket); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -203,11 +246,9 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	}
 
 	listBuckets := objectAPI.ListBuckets
-	if api.CacheAPI() != nil {
-		listBuckets = api.CacheAPI().ListBuckets
-	}
 
-	if s3Error := checkRequestAuthType(ctx, r, policy.ListAllMyBucketsAction, "", ""); s3Error != ErrNone {
+	accessKey, owner, s3Error := checkRequestAuthTypeToAccessKey(ctx, r, policy.ListAllMyBucketsAction, "", "")
+	if s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -241,8 +282,32 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		}
 	}
 
+	// Set prefix value for "s3:prefix" policy conditionals.
+	r.Header.Set("prefix", "")
+
+	// Set delimiter value for "s3:delimiter" policy conditionals.
+	r.Header.Set("delimiter", SlashSeparator)
+
+	// err will be nil here as we already called this function
+	// earlier in this request.
+	claims, _ := getClaimsFromToken(r)
+	var newBucketsInfo []BucketInfo
+	for _, bucketInfo := range bucketsInfo {
+		if globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     accessKey,
+			Action:          iampolicy.ListBucketAction,
+			BucketName:      bucketInfo.Name,
+			ConditionValues: getConditionValues(r, "", accessKey),
+			IsOwner:         owner,
+			ObjectName:      "",
+			Claims:          claims,
+		}) {
+			newBucketsInfo = append(newBucketsInfo, bucketInfo)
+		}
+	}
+
 	// Generate response.
-	response := generateListBucketsResponse(bucketsInfo)
+	response := generateListBucketsResponse(newBucketsInfo)
 	encodedSuccessResponse := encodeResponse(response)
 
 	// Write response.
@@ -650,7 +715,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 	if objectAPI.IsEncryptionSupported() {
-		if hasServerSideEncryptionHeader(formValues) && !hasSuffix(object, slashSeparator) { // handle SSE-C and SSE-S3 requests
+		if hasServerSideEncryptionHeader(formValues) && !hasSuffix(object, SlashSeparator) { // handle SSE-C and SSE-S3 requests
 			var reader io.Reader
 			var key []byte
 			if crypto.SSEC.IsRequested(formValues) {
@@ -747,9 +812,7 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	getBucketInfo := objectAPI.GetBucketInfo
-	if api.CacheAPI() != nil {
-		getBucketInfo = api.CacheAPI().GetBucketInfo
-	}
+
 	if _, err := getBucketInfo(ctx, bucket); err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
@@ -779,9 +842,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	}
 
 	deleteBucket := objectAPI.DeleteBucket
-	if api.CacheAPI() != nil {
-		deleteBucket = api.CacheAPI().DeleteBucket
-	}
+
 	// Attempt to delete bucket.
 	if err := deleteBucket(ctx, bucket); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))

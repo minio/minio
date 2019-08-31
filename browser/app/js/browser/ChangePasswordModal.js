@@ -165,7 +165,7 @@ export class ChangePasswordModal extends React.Component {
                 })
               }}
               className={
-                "toggle-password fa fa-eye " +
+                "toggle-password fas fa-eye " +
                 (this.state.currentSecretKeyVisible ? "toggled" : "")
               }
             />
@@ -211,7 +211,7 @@ export class ChangePasswordModal extends React.Component {
                 })
               }}
               className={
-                "toggle-password fa fa-eye " +
+                "toggle-password fas fa-eye " +
                 (this.state.newSecretKeyVisible ? "toggled" : "")
               }
             />

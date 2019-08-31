@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/gob"
 	"errors"
 	"math/rand"
 	"net/http"
@@ -43,7 +42,7 @@ const (
 
 // To abstract a node over network.
 type lockRESTServer struct {
-	ll localLocker
+	ll *localLocker
 }
 
 func (l *lockRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
@@ -60,6 +59,16 @@ func (l *lockRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
+func getLockArgs(r *http.Request) dsync.LockArgs {
+	return dsync.LockArgs{
+		UID:             r.URL.Query().Get(lockRESTUID),
+		Source:          r.URL.Query().Get(lockRESTSource),
+		Resource:        r.URL.Query().Get(lockRESTResource),
+		ServerAddr:      r.URL.Query().Get(lockRESTServerAddr),
+		ServiceEndpoint: r.URL.Query().Get(lockRESTServerEndpoint),
+	}
+}
+
 // LockHandler - Acquires a lock.
 func (l *lockRESTServer) LockHandler(w http.ResponseWriter, r *http.Request) {
 	if !l.IsValid(w, r) {
@@ -67,28 +76,14 @@ func (l *lockRESTServer) LockHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := newContext(r, w, "Lock")
-
-	var lockArgs dsync.LockArgs
-	if r.ContentLength < 0 {
-		l.writeErrorResponse(w, errInvalidArgument)
-		return
+	success, err := l.ll.Lock(getLockArgs(r))
+	if err == nil && !success {
+		err = errLockConflict
 	}
-
-	err := gob.NewDecoder(r.Body).Decode(&lockArgs)
 	if err != nil {
 		l.writeErrorResponse(w, err)
 		return
 	}
-
-	success, err := l.ll.Lock(lockArgs)
-	if err != nil {
-		l.writeErrorResponse(w, err)
-		return
-	}
-	resp := lockResponse{Success: success}
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(resp))
-	w.(http.Flusher).Flush()
 }
 
 // UnlockHandler - releases the acquired lock.
@@ -98,28 +93,13 @@ func (l *lockRESTServer) UnlockHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := newContext(r, w, "Unlock")
-
-	var lockArgs dsync.LockArgs
-	if r.ContentLength < 0 {
-		l.writeErrorResponse(w, errInvalidArgument)
-		return
-	}
-
-	err := gob.NewDecoder(r.Body).Decode(&lockArgs)
+	_, err := l.ll.Unlock(getLockArgs(r))
+	// Ignore the Unlock() "reply" return value because if err == nil, "reply" is always true
+	// Consequently, if err != nil, reply is always false
 	if err != nil {
 		l.writeErrorResponse(w, err)
 		return
 	}
-
-	success, err := l.ll.Unlock(lockArgs)
-	if err != nil {
-		l.writeErrorResponse(w, err)
-		return
-	}
-	resp := lockResponse{Success: success}
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(resp))
-	w.(http.Flusher).Flush()
 }
 
 // LockHandler - Acquires an RLock.
@@ -129,27 +109,14 @@ func (l *lockRESTServer) RLockHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := newContext(r, w, "RLock")
-	var lockArgs dsync.LockArgs
-	if r.ContentLength < 0 {
-		l.writeErrorResponse(w, errInvalidArgument)
-		return
+	success, err := l.ll.RLock(getLockArgs(r))
+	if err == nil && !success {
+		err = errLockConflict
 	}
-
-	err := gob.NewDecoder(r.Body).Decode(&lockArgs)
 	if err != nil {
 		l.writeErrorResponse(w, err)
 		return
 	}
-
-	success, err := l.ll.RLock(lockArgs)
-	if err != nil {
-		l.writeErrorResponse(w, err)
-		return
-	}
-	resp := lockResponse{Success: success}
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(resp))
-	w.(http.Flusher).Flush()
 }
 
 // RUnlockHandler - releases the acquired read lock.
@@ -159,27 +126,13 @@ func (l *lockRESTServer) RUnlockHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	ctx := newContext(r, w, "RUnlock")
-	var lockArgs dsync.LockArgs
-	if r.ContentLength < 0 {
-		l.writeErrorResponse(w, errInvalidArgument)
-		return
-	}
-
-	err := gob.NewDecoder(r.Body).Decode(&lockArgs)
+	// Ignore the RUnlock() "reply" return value because if err == nil, "reply" is always true.
+	// Consequently, if err != nil, reply is always false
+	_, err := l.ll.RUnlock(getLockArgs(r))
 	if err != nil {
 		l.writeErrorResponse(w, err)
 		return
 	}
-
-	success, err := l.ll.RUnlock(lockArgs)
-	if err != nil {
-		l.writeErrorResponse(w, err)
-		return
-	}
-	resp := lockResponse{Success: success}
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(resp))
-	w.(http.Flusher).Flush()
 }
 
 // ForceUnlockHandler - force releases the acquired lock.
@@ -189,28 +142,12 @@ func (l *lockRESTServer) ForceUnlockHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	ctx := newContext(r, w, "ForceUnlock")
-
-	var lockArgs dsync.LockArgs
-	if r.ContentLength < 0 {
-		l.writeErrorResponse(w, errInvalidArgument)
-		return
-	}
-
-	err := gob.NewDecoder(r.Body).Decode(&lockArgs)
-	if err != nil {
+	// Ignore the ForceUnlock() "reply" return value because if err == nil, "reply" is always true
+	// Consequently, if err != nil, reply is always false
+	if _, err := l.ll.ForceUnlock(getLockArgs(r)); err != nil {
 		l.writeErrorResponse(w, err)
 		return
 	}
-
-	success, err := l.ll.ForceUnlock(lockArgs)
-	if err != nil {
-		l.writeErrorResponse(w, err)
-		return
-	}
-	resp := lockResponse{Success: success}
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(resp))
-	w.(http.Flusher).Flush()
 }
 
 // ExpiredHandler - query expired lock status.
@@ -220,20 +157,8 @@ func (l *lockRESTServer) ExpiredHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	ctx := newContext(r, w, "Expired")
+	lockArgs := getLockArgs(r)
 
-	var lockArgs dsync.LockArgs
-	if r.ContentLength < 0 {
-		l.writeErrorResponse(w, errInvalidArgument)
-		return
-	}
-
-	err := gob.NewDecoder(r.Body).Decode(&lockArgs)
-	if err != nil {
-		l.writeErrorResponse(w, err)
-		return
-	}
-	success := true
 	l.ll.mutex.Lock()
 	defer l.ll.mutex.Unlock()
 	// Lock found, proceed to verify if belongs to given uid.
@@ -241,16 +166,11 @@ func (l *lockRESTServer) ExpiredHandler(w http.ResponseWriter, r *http.Request) 
 		// Check whether uid is still active
 		for _, entry := range lri {
 			if entry.UID == lockArgs.UID {
-				success = false // When uid found, lock is still active so return not expired.
-				break
+				l.writeErrorResponse(w, errLockNotExpired)
+				return
 			}
 		}
 	}
-	// When we get here lock is no longer active due to either dsync.LockArgs.Resource
-	// being absent from map or uid not found for given dsync.LockArgs.Resource
-	resp := lockResponse{Success: success}
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(resp))
-	w.(http.Flusher).Flush()
 }
 
 // lockMaintenance loops over locks that have been active for some time and checks back
@@ -281,10 +201,14 @@ func (l *lockRESTServer) lockMaintenance(interval time.Duration) {
 		}
 
 		// Call back to original server verify whether the lock is still active (based on name & uid)
-		expired, _ := c.Expired(dsync.LockArgs{
+		expired, err := c.Expired(dsync.LockArgs{
 			UID:      nlrip.lri.UID,
 			Resource: nlrip.name,
 		})
+
+		if err != nil {
+			continue
+		}
 
 		// For successful response, verify if lock was indeed active or stale.
 		if expired {
@@ -323,12 +247,14 @@ func startLockMaintenance(lkSrv *lockRESTServer) {
 // registerLockRESTHandlers - register lock rest router.
 func registerLockRESTHandlers(router *mux.Router) {
 	subrouter := router.PathPrefix(lockRESTPath).Subrouter()
-	subrouter.Methods(http.MethodPost).Path("/" + lockRESTMethodLock).HandlerFunc(httpTraceHdrs(globalLockServer.LockHandler))
-	subrouter.Methods(http.MethodPost).Path("/" + lockRESTMethodRLock).HandlerFunc(httpTraceHdrs(globalLockServer.RLockHandler))
-	subrouter.Methods(http.MethodPost).Path("/" + lockRESTMethodUnlock).HandlerFunc(httpTraceHdrs(globalLockServer.UnlockHandler))
-	subrouter.Methods(http.MethodPost).Path("/" + lockRESTMethodRUnlock).HandlerFunc(httpTraceHdrs(globalLockServer.RUnlockHandler))
-	subrouter.Methods(http.MethodPost).Path("/" + lockRESTMethodForceUnlock).HandlerFunc(httpTraceHdrs(globalLockServer.ForceUnlockHandler))
-	subrouter.Methods(http.MethodPost).Path("/" + lockRESTMethodExpired).HandlerFunc(httpTraceAll(globalLockServer.ExpiredHandler))
+	queries := restQueries(lockRESTUID, lockRESTSource, lockRESTResource, lockRESTServerAddr, lockRESTServerEndpoint)
+	subrouter.Methods(http.MethodPost).Path(SlashSeparator + lockRESTMethodLock).HandlerFunc(httpTraceHdrs(globalLockServer.LockHandler)).Queries(queries...)
+	subrouter.Methods(http.MethodPost).Path(SlashSeparator + lockRESTMethodRLock).HandlerFunc(httpTraceHdrs(globalLockServer.RLockHandler)).Queries(queries...)
+	subrouter.Methods(http.MethodPost).Path(SlashSeparator + lockRESTMethodUnlock).HandlerFunc(httpTraceHdrs(globalLockServer.UnlockHandler)).Queries(queries...)
+	subrouter.Methods(http.MethodPost).Path(SlashSeparator + lockRESTMethodRUnlock).HandlerFunc(httpTraceHdrs(globalLockServer.RUnlockHandler)).Queries(queries...)
+	subrouter.Methods(http.MethodPost).Path(SlashSeparator + lockRESTMethodForceUnlock).HandlerFunc(httpTraceHdrs(globalLockServer.ForceUnlockHandler)).Queries(queries...)
+	subrouter.Methods(http.MethodPost).Path(SlashSeparator + lockRESTMethodExpired).HandlerFunc(httpTraceAll(globalLockServer.ExpiredHandler)).Queries(queries...)
+
 	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(notFoundHandler))
 
 	// Start lock maintenance from all lock servers.

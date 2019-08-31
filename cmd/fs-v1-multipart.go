@@ -30,6 +30,7 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 	mioutil "github.com/minio/minio/pkg/ioutil"
+	"github.com/valyala/fastjson"
 )
 
 // Returns EXPORT/.minio.sys/multipart/SHA256/UPLOADID
@@ -163,7 +164,7 @@ func (fs *FSObjects) ListMultipartUploads(ctx context.Context, bucket, object, k
 		}
 		uploads = append(uploads, MultipartInfo{
 			Object:    object,
-			UploadID:  strings.TrimSuffix(uploadID, slashSeparator),
+			UploadID:  strings.TrimSuffix(uploadID, SlashSeparator),
 			Initiated: fi.ModTime(),
 		})
 	}
@@ -456,7 +457,8 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 	}
 	for i, part := range result.Parts {
 		var stat os.FileInfo
-		stat, err = fsStatFile(ctx, pathJoin(uploadIDDir, fs.encodePartFile(part.PartNumber, part.ETag, part.ActualSize)))
+		stat, err = fsStatFile(ctx, pathJoin(uploadIDDir,
+			fs.encodePartFile(part.PartNumber, part.ETag, part.ActualSize)))
 		if err != nil {
 			return result, toObjectErr(err)
 		}
@@ -470,7 +472,16 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 		return result, err
 	}
 
-	result.UserDefined = parseFSMetaMap(fsMetaBytes)
+	parser := fsParserPool.Get()
+	defer fsParserPool.Put(parser)
+
+	var v *fastjson.Value
+	v, err = parser.ParseBytes(fsMetaBytes)
+	if err != nil {
+		return result, err
+	}
+
+	result.UserDefined = parseFSMetaMap(v)
 	return result, nil
 }
 

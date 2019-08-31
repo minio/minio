@@ -71,6 +71,12 @@ docker volume prune
 ```
 This will remove all the volumes not associated with any container.
 
+## 5. Accessing MinIO services
+
+The services are exposed, by default, on the internal overlay network by their services names (minio1, minio2, ...).
+The docker-compose.yml file also exposes the MinIO services behind a single alias on the minio_distributed network.
+
+Services in the Swarm which are attached to that network can interact with the host "minio-cluster" instead of individual services' hostnames.  This provides a simple way to loosely load balance across all the MinIO services in the Swarm as well as simplifies configuration and management.
 
 ### Notes
 

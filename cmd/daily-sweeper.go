@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -48,15 +49,14 @@ func copyDailySweepListeners() []chan string {
 	return listenersCopy
 }
 
+var sweepTimeout = newDynamicTimeout(60*time.Second, time.Second)
+
 // sweepRound will list all objects, having read quorum or not and
 // feeds to all listeners, such as the background healing
 func sweepRound(ctx context.Context, objAPI ObjectLayer) error {
-	zeroDuration := time.Millisecond
-	zeroDynamicTimeout := newDynamicTimeout(zeroDuration, zeroDuration)
-
 	// General lock so we avoid parallel daily sweep by different instances.
 	sweepLock := globalNSMutex.NewNSLock(ctx, "system", "daily-sweep")
-	if err := sweepLock.GetLock(zeroDynamicTimeout); err != nil {
+	if err := sweepLock.GetLock(sweepTimeout); err != nil {
 		return err
 	}
 	defer sweepLock.Unlock()
@@ -76,6 +76,17 @@ func sweepRound(ctx context.Context, objAPI ObjectLayer) error {
 
 		marker := ""
 		for {
+			if globalHTTPServer != nil {
+				// Wait at max 10 minute for an inprogress request before proceeding to heal
+				waitCount := 600
+				// Any requests in progress, delay the heal.
+				for (globalHTTPServer.GetRequestCount() >= int32(globalXLSetCount*globalXLSetDriveCount)) &&
+					waitCount > 0 {
+					waitCount--
+					time.Sleep(1 * time.Second)
+				}
+			}
+
 			res, err := objAPI.ListObjectsHeal(ctx, bucket.Name, "", marker, "", 1000)
 			if err != nil {
 				continue
@@ -118,6 +129,9 @@ func dailySweeper() {
 		}
 		break
 	}
+
+	// Start with random sleep time, so as to avoid "synchronous checks" between servers
+	time.Sleep(time.Duration(rand.Float64() * float64(time.Hour)))
 
 	// Perform a sweep round each month
 	for {

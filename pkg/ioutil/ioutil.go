@@ -173,7 +173,7 @@ const directioAlignSize = 4096
 // used with DIRECT I/O based file descriptor and it is expected that
 // input writer *os.File not a generic io.Writer. Make sure to have
 // the file opened for writes with syscall.O_DIRECT flag.
-func CopyAligned(w *os.File, r io.Reader, alignedBuf []byte) (int64, error) {
+func CopyAligned(w *os.File, r io.Reader, alignedBuf []byte, totalSize int64) (int64, error) {
 	// Writes remaining bytes in the buffer.
 	writeUnaligned := func(w *os.File, buf []byte) (remainingWritten int, err error) {
 		var n int
@@ -205,47 +205,45 @@ func CopyAligned(w *os.File, r io.Reader, alignedBuf []byte) (int64, error) {
 	}
 
 	var written int64
-	var err error
 	for {
-		nr, er := r.Read(alignedBuf)
-		if nr == len(alignedBuf) {
-			// Buffer read is aligned with input buffer, proceed to write.
-			nw, ew := w.Write(alignedBuf)
-			if nw > 0 {
-				written += int64(nw)
-			}
-			if ew != nil {
-				err = ew
-				break
-			}
-			if nr != nw {
-				err = io.ErrShortWrite
-				break
-			}
-		} else if nr > 0 {
-			// Buffer read is not aligned with input buffer, proceed to write
-			// whatever possible as aligned and turn off direct I/O.
-			nw, ew := writeUnaligned(w, alignedBuf[:nr])
-			if nw > 0 {
-				written += int64(nw)
-			}
-			if ew != nil {
-				err = ew
-				break
-			}
-			if nr != nw {
-				err = io.ErrShortWrite
-				break
+		buf := alignedBuf
+		if totalSize != -1 {
+			remaining := totalSize - written
+			if remaining < int64(len(buf)) {
+				buf = buf[:remaining]
 			}
 		}
-		// For any read errors break out and return error.
-		if er != nil {
-			if er != io.EOF {
-				err = er
+		nr, err := io.ReadFull(r, buf)
+		eof := err == io.EOF || err == io.ErrUnexpectedEOF
+		if err != nil && !eof {
+			return written, err
+		}
+		buf = buf[:nr]
+		var nw int
+		if len(buf)%directioAlignSize == 0 {
+			// buf is aligned for directio write()
+			nw, err = w.Write(buf)
+		} else {
+			// buf is not aligned, hence use writeUnaligned()
+			nw, err = writeUnaligned(w, buf)
+		}
+		if nw > 0 {
+			written += int64(nw)
+		}
+		if err != nil {
+			return written, err
+		}
+		if nw != len(buf) {
+			return written, io.ErrShortWrite
+		}
+
+		if totalSize != -1 {
+			if written == totalSize {
+				return written, nil
 			}
-			break
+		}
+		if eof {
+			return written, nil
 		}
 	}
-
-	return written, err
 }

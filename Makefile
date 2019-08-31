@@ -72,7 +72,6 @@ coverage: build
 build: checks
 	@echo "Building minio binary to './minio'"
 	@GOPROXY=https://proxy.golang.org GO111MODULE=on GOFLAGS="" CGO_ENABLED=0 go build -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio 1>/dev/null
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on GOFLAGS="" CGO_ENABLED=0 go build -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/dockerscripts/healthcheck $(PWD)/dockerscripts/healthcheck.go 1>/dev/null
 
 docker: build
 	@docker build -t $(TAG) . -f Dockerfile.dev

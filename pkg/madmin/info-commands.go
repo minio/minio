@@ -19,14 +19,22 @@ package madmin
 
 import (
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mem"
+)
+
+const (
+	// DefaultNetPerfSize - default payload size used for network performance.
+	DefaultNetPerfSize = 100 * humanize.MiByte
 )
 
 // BackendType - represents different backend types.
@@ -275,6 +283,55 @@ func (adm *AdminClient) ServerMemUsageInfo() ([]ServerMemUsageInfo, error) {
 
 	// Unmarshal the server's json response
 	var info []ServerMemUsageInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(respBytes, &info)
+	if err != nil {
+		return nil, err
+	}
+
+	return info, nil
+}
+
+// NetPerfInfo network performance information.
+type NetPerfInfo struct {
+	Addr     string        `json:"addr"`
+	ReadPerf time.Duration `json:"readPerf"`
+	Error    string        `json:"error,omitempty"`
+}
+
+// NetPerfInfo - Returns network performance information of all cluster nodes.
+func (adm *AdminClient) NetPerfInfo(size int) (map[string][]NetPerfInfo, error) {
+	v := url.Values{}
+	v.Set("perfType", "net")
+	if size > 0 {
+		v.Set("size", strconv.Itoa(size))
+	}
+	resp, err := adm.executeMethod("GET", requestData{
+		relPath:     "/v1/performance",
+		queryValues: v,
+	})
+
+	defer closeResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode == http.StatusMethodNotAllowed {
+		return nil, errors.New("NetPerfInfo is meant for multi-node MinIO deployments")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	info := map[string][]NetPerfInfo{}
 
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {

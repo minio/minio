@@ -337,7 +337,6 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	defer gr.Close()
-
 	objInfo := gr.ObjInfo
 
 	if objectAPI.IsEncryptionSupported() {
@@ -379,7 +378,6 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		statusCodeWritten = true
 		w.WriteHeader(http.StatusPartialContent)
 	}
-
 	// Write object content to response body
 	if _, err = io.Copy(httpWriter, gr); err != nil {
 		if !httpWriter.HasWritten() && !statusCodeWritten { // write error response only if no data or headers has been written to client yet
@@ -603,8 +601,21 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 	return core, nil
 }
 
+// Check if the destination bucket is on a remote site, this code only gets executed
+// when federation is enabled, ie when globalDNSConfig is non 'nil'.
+//
+// This function is similar to isRemoteCallRequired but specifically for COPY object API
+// if destination and source are same we do not need to check for destnation bucket
+// to exist locally.
+func isRemoteCopyRequired(ctx context.Context, srcBucket, dstBucket string, objAPI ObjectLayer) bool {
+	if srcBucket == dstBucket {
+		return false
+	}
+	return isRemoteCallRequired(ctx, dstBucket, objAPI)
+}
+
 // Check if the bucket is on a remote site, this code only gets executed when federation is enabled.
-var isRemoteCallRequired = func(ctx context.Context, bucket string, objAPI ObjectLayer) bool {
+func isRemoteCallRequired(ctx context.Context, bucket string, objAPI ObjectLayer) bool {
 	if globalDNSConfig == nil {
 		return false
 	}
@@ -787,23 +798,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			return
 		}
 		length = actualSize
-	}
-
-	// Check if the destination bucket is on a remote site, this code only gets executed
-	// when federation is enabled, ie when globalDNSConfig is non 'nil'.
-	//
-	// This function is similar to isRemoteCallRequired but specifically for COPY object API
-	// if destination and source are same we do not need to check for destnation bucket
-	// to exist locally.
-	var isRemoteCopyRequired = func(ctx context.Context, srcBucket, dstBucket string, objAPI ObjectLayer) bool {
-		if globalDNSConfig == nil {
-			return false
-		}
-		if srcBucket == dstBucket {
-			return false
-		}
-		_, err := objAPI.GetBucketInfo(ctx, dstBucket)
-		return err == toObjectErr(errVolumeNotFound, dstBucket)
 	}
 
 	var compressMetadata map[string]string
@@ -1069,7 +1063,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	r.Body = &detectDisconnect{r.Body, r.Context().Done()}
 
 	// X-Amz-Copy-Source shouldn't be set for this call.
-	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
+	if _, ok := r.Header[xhttp.AmzCopySource]; ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopySource), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1092,7 +1086,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	size := r.ContentLength
 	rAuthType := getRequestAuthType(r)
 	if rAuthType == authTypeStreamingSigned {
-		if sizeStr, ok := r.Header["X-Amz-Decoded-Content-Length"]; ok {
+		if sizeStr, ok := r.Header[xhttp.AmzDecodedContentLength]; ok {
 			if sizeStr[0] == "" {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL, guessIsBrowserReq(r))
 				return
@@ -1233,7 +1227,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	var objectEncryptionKey []byte
 	if objectAPI.IsEncryptionSupported() {
-		if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(object, slashSeparator) { // handle SSE requests
+		if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(object, SlashSeparator) { // handle SSE requests
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -1252,10 +1246,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Ensure that metadata does not contain sensitive information
 	crypto.RemoveSensitiveEntries(metadata)
-
-	if api.CacheAPI() != nil && !hasServerSideEncryptionHeader(r.Header) {
-		putObject = api.CacheAPI().PutObject
-	}
 
 	// Create the object..
 	objInfo, err := putObject(ctx, bucket, object, pReader, opts)
@@ -1408,9 +1398,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		return
 	}
 	newMultipartUpload := objectAPI.NewMultipartUpload
-	if api.CacheAPI() != nil && !hasServerSideEncryptionHeader(r.Header) {
-		newMultipartUpload = api.CacheAPI().NewMultipartUpload
-	}
+
 	uploadID, err := newMultipartUpload(ctx, bucket, object, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -1596,6 +1584,36 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	/// maximum copy size for multipart objects in a single operation
 	if isMaxAllowedPartSize(length) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrEntityTooLarge), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) {
+		var dstRecords []dns.SrvRecord
+		dstRecords, err = globalDNSConfig.Get(dstBucket)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		// Send PutObject request to appropriate instance (in federated deployment)
+		client, rerr := getRemoteInstanceClient(r, getHostFromSrv(dstRecords))
+		if rerr != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		partInfo, err := client.PutObjectPart(dstBucket, dstObject, uploadID, partID,
+			srcInfo.Reader, srcInfo.Size, "", "", dstOpts.ServerSideEncryption)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		response := generateCopyObjectPartResponse(partInfo.ETag, partInfo.LastModified)
+		encodedSuccessResponse := encodeResponse(response)
+
+		// Write success response.
+		writeSuccessResponseXML(w, encodedSuccessResponse)
 		return
 	}
 
@@ -1939,9 +1957,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 
 	putObjectPart := objectAPI.PutObjectPart
-	if api.CacheAPI() != nil && !isEncrypted {
-		putObjectPart = api.CacheAPI().PutObjectPart
-	}
+
 	partInfo, err := putObjectPart(ctx, bucket, object, uploadID, partID, pReader, opts)
 	if err != nil {
 		// Verify if the underlying error is signature mismatch.
@@ -1974,9 +1990,6 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 		return
 	}
 	abortMultipartUpload := objectAPI.AbortMultipartUpload
-	if api.CacheAPI() != nil {
-		abortMultipartUpload = api.CacheAPI().AbortMultipartUpload
-	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.AbortMultipartUploadAction, bucket, object); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
@@ -2257,9 +2270,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	completeMultiPartUpload := objectAPI.CompleteMultipartUpload
-	if api.CacheAPI() != nil {
-		completeMultiPartUpload = api.CacheAPI().CompleteMultipartUpload
-	}
 
 	// This code is specifically to handle the requirements for slow
 	// complete multipart upload operations on FS mode.

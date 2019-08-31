@@ -1,4 +1,4 @@
-// +build darwin dragonfly freebsd linux nacl netbsd openbsd
+// +build linux,!appengine darwin freebsd netbsd openbsd
 
 /*
  * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
@@ -19,93 +19,56 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
-	"runtime"
-	"sync"
 	"syscall"
 	"unsafe"
 )
 
-const (
-	// readDirentBufSize for syscall.ReadDirent() to hold multiple
-	// directory entries in one buffer. golang source uses 4096 as
-	// buffer size whereas we want 64 times larger to save lots of
-	// entries to avoid multiple syscall.ReadDirent() call.
-	readDirentBufSize = 4096 * 64
-)
+// The buffer must be at least a block long.
+// refer https://github.com/golang/go/issues/24015
+const blockSize = 8 << 10
 
-// actual length of the byte array from the c - world.
-func clen(n []byte) int {
-	for i := 0; i < len(n); i++ {
-		if n[i] == 0 {
-			return i
-		}
+// unexpectedFileMode is a sentinel (and bogus) os.FileMode
+// value used to represent a syscall.DT_UNKNOWN Dirent.Type.
+const unexpectedFileMode os.FileMode = os.ModeNamedPipe | os.ModeSocket | os.ModeDevice
+
+func parseDirEnt(buf []byte) (consumed int, name string, typ os.FileMode, err error) {
+	// golang.org/issue/15653
+	dirent := (*syscall.Dirent)(unsafe.Pointer(&buf[0]))
+	if v := unsafe.Offsetof(dirent.Reclen) + unsafe.Sizeof(dirent.Reclen); uintptr(len(buf)) < v {
+		return consumed, name, typ, fmt.Errorf("buf size of %d smaller than dirent header size %d", len(buf), v)
 	}
-	return len(n)
-}
-
-// parseDirents - inspired from
-// https://golang.org/src/syscall/syscall_<os>.go
-func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
-	bufidx := 0
-	for bufidx < len(buf) {
-		dirent := (*syscall.Dirent)(unsafe.Pointer(&buf[bufidx]))
-		// On non-Linux operating systems for rec length of zero means
-		// we have reached EOF break out.
-		if runtime.GOOS != "linux" && dirent.Reclen == 0 {
-			break
-		}
-		bufidx += int(dirent.Reclen)
-		// Skip if they are absent in directory.
-		if isEmptyDirent(dirent) {
-			continue
-		}
-		bytes := (*[10000]byte)(unsafe.Pointer(&dirent.Name[0]))
-		var name = string(bytes[0:clen(bytes[:])])
-		// Reserved names skip them.
-		if name == "." || name == ".." {
-			continue
-		}
-
-		switch dirent.Type {
-		case syscall.DT_DIR:
-			entries = append(entries, name+slashSeparator)
-		case syscall.DT_REG:
-			entries = append(entries, name)
-		case syscall.DT_LNK, syscall.DT_UNKNOWN:
-			// If its symbolic link, follow the link using os.Stat()
-
-			// On Linux XFS does not implement d_type for on disk
-			// format << v5. Fall back to OsStat().
-			var fi os.FileInfo
-			fi, err = os.Stat(pathJoin(dirPath, name))
-			if err != nil {
-				// If file does not exist, we continue and skip it.
-				// Could happen if it was deleted in the middle while
-				// this list was being performed.
-				if os.IsNotExist(err) {
-					continue
-				}
-				return nil, err
-			}
-			if fi.IsDir() {
-				entries = append(entries, name+slashSeparator)
-			} else if fi.Mode().IsRegular() {
-				entries = append(entries, name)
-			}
-		default:
-			// Skip entries which are not file or directory.
-			continue
-		}
+	if len(buf) < int(dirent.Reclen) {
+		return consumed, name, typ, fmt.Errorf("buf size %d < record length %d", len(buf), dirent.Reclen)
 	}
-	return entries, nil
-}
+	consumed = int(dirent.Reclen)
+	if direntInode(dirent) == 0 { // File absent in directory.
+		return
+	}
+	switch dirent.Type {
+	case syscall.DT_REG:
+		typ = 0
+	case syscall.DT_DIR:
+		typ = os.ModeDir
+	case syscall.DT_LNK:
+		typ = os.ModeSymlink
+	default:
+		// Skip all other file types. Revisit if/when this code needs
+		// to handle such files, MinIO is only interested in
+		// files and directories.
+		typ = unexpectedFileMode
+		return
+	}
 
-var readDirBufPool = sync.Pool{
-	New: func() interface{} {
-		b := make([]byte, readDirentBufSize)
-		return &b
-	},
+	nameBuf := (*[unsafe.Sizeof(dirent.Name)]byte)(unsafe.Pointer(&dirent.Name[0]))
+	nameLen, err := direntNamlen(dirent)
+	if err != nil {
+		return consumed, name, typ, err
+	}
+
+	name = string(nameBuf[:nameLen])
+	return consumed, name, typ, nil
 }
 
 // Return all the entries at the directory dirPath.
@@ -116,11 +79,7 @@ func readDir(dirPath string) (entries []string, err error) {
 // Return count entries at the directory dirPath and all entries
 // if count is set to -1
 func readDirN(dirPath string, count int) (entries []string, err error) {
-	bufp := readDirBufPool.Get().(*[]byte)
-	buf := *bufp
-	defer readDirBufPool.Put(bufp)
-
-	d, err := os.Open(dirPath)
+	fd, err := syscall.Open(dirPath, 0, 0)
 	if err != nil {
 		if os.IsNotExist(err) || isSysErrNotDir(err) {
 			return nil, errFileNotFound
@@ -130,36 +89,54 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 		}
 		return nil, err
 	}
-	defer d.Close()
+	defer syscall.Close(fd)
 
-	fd := int(d.Fd())
+	buf := make([]byte, blockSize) // stack-allocated; doesn't escape
+	boff := 0                      // starting read position in buf
+	nbuf := 0                      // end valid data in buf
 
-	remaining := count
-	done := false
-
-	for !done {
-		nbuf, err := syscall.ReadDirent(fd, buf)
+	for count != 0 {
+		if boff >= nbuf {
+			boff = 0
+			nbuf, err = syscall.ReadDirent(fd, buf)
+			if err != nil {
+				if isSysErrNotDir(err) {
+					return nil, errFileNotFound
+				}
+				return nil, err
+			}
+			if nbuf <= 0 {
+				break
+			}
+		}
+		consumed, name, typ, err := parseDirEnt(buf[boff:nbuf])
 		if err != nil {
-			if isSysErrNotDir(err) {
-				return nil, errFileNotFound
-			}
 			return nil, err
 		}
-		if nbuf <= 0 {
-			break
+		boff += consumed
+		if name == "" || name == "." || name == ".." {
+			continue
 		}
-		var tmpEntries []string
-		if tmpEntries, err = parseDirents(dirPath, buf[:nbuf]); err != nil {
-			return nil, err
-		}
-		if count > 0 {
-			if remaining <= len(tmpEntries) {
-				tmpEntries = tmpEntries[:remaining]
-				done = true
+		// Fallback for filesystems (like old XFS) that don't
+		// support Dirent.Type and have DT_UNKNOWN (0) there
+		// instead.
+		if typ == unexpectedFileMode || typ&os.ModeSymlink == os.ModeSymlink {
+			fi, err := os.Stat(pathJoin(dirPath, name))
+			if err != nil {
+				// It got deleted in the meantime.
+				if os.IsNotExist(err) {
+					continue
+				}
+				return nil, err
 			}
-			remaining -= len(tmpEntries)
+			typ = fi.Mode() & os.ModeType
 		}
-		entries = append(entries, tmpEntries...)
+		if typ.IsRegular() {
+			entries = append(entries, name)
+		} else if typ.IsDir() {
+			entries = append(entries, name+SlashSeparator)
+		}
+		count--
 	}
 	return
 }

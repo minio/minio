@@ -148,7 +148,7 @@ func TestURL2BucketObjectName(t *testing.T) {
 		// Test case 2 where url only has separator.
 		{
 			u: &url.URL{
-				Path: "/",
+				Path: SlashSeparator,
 			},
 			bucket: "",
 			object: "",
@@ -478,4 +478,47 @@ func TestQueries(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestLCP(t *testing.T) {
+	var testCases = []struct {
+		prefixes     []string
+		commonPrefix string
+	}{
+		{[]string{"", ""}, ""},
+		{[]string{"a", "b"}, ""},
+		{[]string{"a", "a"}, "a"},
+		{[]string{"a/", "a/"}, "a/"},
+		{[]string{"abcd/", ""}, ""},
+		{[]string{"abcd/foo/", "abcd/bar/"}, "abcd/"},
+		{[]string{"abcd/foo/bar/", "abcd/foo/bar/zoo"}, "abcd/foo/bar/"},
+	}
+
+	for i, test := range testCases {
+		foundPrefix := lcp(test.prefixes)
+		if foundPrefix != test.commonPrefix {
+			t.Fatalf("Test %d: Common prefix found: `%v`, expected: `%v`", i+1, foundPrefix, test.commonPrefix)
+		}
+	}
+}
+
+func TestGetMinioMode(t *testing.T) {
+	testMinioMode := func(expected string) {
+		if mode := getMinioMode(); mode != expected {
+			t.Fatalf("Expected %s got %s", expected, mode)
+		}
+	}
+	globalIsDistXL = true
+	testMinioMode(globalMinioModeDistXL)
+
+	globalIsDistXL = false
+	globalIsXL = true
+	testMinioMode(globalMinioModeXL)
+
+	globalIsDistXL, globalIsXL = false, false
+	testMinioMode(globalMinioModeFS)
+
+	globalIsGateway, globalGatewayName = true, "azure"
+	testMinioMode(globalMinioModeGatewayPrefix + globalGatewayName)
+
 }

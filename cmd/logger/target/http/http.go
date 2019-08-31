@@ -37,7 +37,9 @@ type Target struct {
 
 	// HTTP(s) endpoint
 	endpoint string
-	client   gohttp.Client
+	// User-Agent to be set on each log request sent to the `endpoint`
+	userAgent string
+	client    gohttp.Client
 }
 
 func (h *Target) startHTTPLogger() {
@@ -56,6 +58,10 @@ func (h *Target) startHTTPLogger() {
 			}
 			req.Header.Set(xhttp.ContentType, "application/json")
 
+			// Set user-agent to indicate MinIO release
+			// version to the configured log endpoint
+			req.Header.Set("User-Agent", h.userAgent)
+
 			resp, err := h.client.Do(req)
 			if err != nil {
 				continue
@@ -69,9 +75,10 @@ func (h *Target) startHTTPLogger() {
 
 // New initializes a new logger target which
 // sends log over http to the specified endpoint
-func New(endpoint string, transport *gohttp.Transport) *Target {
+func New(endpoint, userAgent string, transport *gohttp.Transport) *Target {
 	h := Target{
-		endpoint: endpoint,
+		endpoint:  endpoint,
+		userAgent: userAgent,
 		client: gohttp.Client{
 			Transport: transport,
 		},

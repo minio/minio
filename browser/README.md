@@ -13,7 +13,7 @@ nvm install stable
 
 ### Install `go-bindata` and `go-bindata-assetfs`
 
-If you do not have a working Golang environment, please follow [Install Golang](https://docs.min.io/docs/how-to-install-golang)
+If you do not have a working Golang environment, please follow [Install Golang](https://golang.org/doc/install)
 
 ```sh
 go get github.com/go-bindata/go-bindata/go-bindata

@@ -27,7 +27,7 @@ import (
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/tidwall/gjson"
+	"github.com/valyala/fastjson"
 )
 
 var (
@@ -138,81 +138,98 @@ func (m gwMetaV1) ObjectToPartOffset(ctx context.Context, offset int64) (partInd
 }
 
 // parses gateway metadata stat info from metadata json
-func parseGWStat(gwMetaBuf []byte) (si minio.StatInfo, e error) {
+func parseGWStat(v *fastjson.Value) (si minio.StatInfo, err error) {
 	// obtain stat info.
-	stat := minio.StatInfo{}
-	// fetching modTime.
-	modTime, err := time.Parse(time.RFC3339, gjson.GetBytes(gwMetaBuf, "stat.modTime").String())
+	st := v.GetObject("stat")
+	var mb []byte
+	mb, err = st.Get("modTime").StringBytes()
 	if err != nil {
 		return si, err
 	}
-	stat.ModTime = modTime
+	// fetching modTime.
+	si.ModTime, err = time.Parse(time.RFC3339, string(mb))
+	if err != nil {
+		return si, err
+	}
 	// obtain Stat.Size .
-	stat.Size = gjson.GetBytes(gwMetaBuf, "stat.size").Int()
-	return stat, nil
+	si.Size, err = st.Get("size").Int64()
+	if err != nil {
+		return si, err
+	}
+	return si, nil
 }
 
 // parses gateway metadata version from metadata json
-func parseGWVersion(gwMetaBuf []byte) string {
-	return gjson.GetBytes(gwMetaBuf, "version").String()
+func parseGWVersion(v *fastjson.Value) string {
+	return string(v.GetStringBytes("version"))
 }
 
 // parses gateway ETag from metadata json
-func parseGWETag(gwMetaBuf []byte) string {
-	return gjson.GetBytes(gwMetaBuf, "etag").String()
+func parseGWETag(v *fastjson.Value) string {
+	return string(v.GetStringBytes("etag"))
 }
 
 // parses gateway metadata format from metadata json
-func parseGWFormat(gwMetaBuf []byte) string {
-	return gjson.GetBytes(gwMetaBuf, "format").String()
+func parseGWFormat(v *fastjson.Value) string {
+	return string(v.GetStringBytes("format"))
 }
 
 // parses gateway metadata json to get list of ObjectPartInfo
-func parseGWParts(gwMetaBuf []byte) []minio.ObjectPartInfo {
+func parseGWParts(v *fastjson.Value) []minio.ObjectPartInfo {
 	// Parse the GW Parts.
-	partsResult := gjson.GetBytes(gwMetaBuf, "parts").Array()
+	partsResult := v.GetArray("parts")
 	partInfo := make([]minio.ObjectPartInfo, len(partsResult))
 	for i, p := range partsResult {
-		info := minio.ObjectPartInfo{}
-		info.Number = int(p.Get("number").Int())
-		info.Name = p.Get("name").String()
-		info.ETag = p.Get("etag").String()
-		info.Size = p.Get("size").Int()
-		partInfo[i] = info
+		partInfo[i] = minio.ObjectPartInfo{
+			Number: p.GetInt("number"),
+			Name:   string(p.GetStringBytes("name")),
+			ETag:   string(p.GetStringBytes("etag")),
+			Size:   p.GetInt64("size"),
+		}
 	}
 	return partInfo
 }
 
 // parses gateway metadata json to get the metadata map
-func parseGWMetaMap(gwMetaBuf []byte) map[string]string {
-	// Get gwMetaV1.Meta map.
-	metaMapResult := gjson.GetBytes(gwMetaBuf, "meta").Map()
+func parseGWMetaMap(v *fastjson.Value) map[string]string {
 	metaMap := make(map[string]string)
-	for key, valResult := range metaMapResult {
-		metaMap[key] = valResult.String()
-	}
+	// Get gwMetaV1.Meta map.
+	v.GetObject("meta").Visit(func(k []byte, kv *fastjson.Value) {
+		metaMap[string(k)] = string(kv.GetStringBytes())
+	})
 	return metaMap
 }
 
-// Constructs GWMetaV1 using `gjson` lib to retrieve each field.
-func gwMetaUnmarshalJSON(ctx context.Context, gwMetaBuf []byte) (gwMeta gwMetaV1, e error) {
+var gwParserPool fastjson.ParserPool
+
+// Constructs GWMetaV1 using `fastjson` lib to retrieve each field.
+func gwMetaUnmarshalJSON(ctx context.Context, gwMetaBuf []byte) (gwMeta gwMetaV1, err error) {
+	parser := gwParserPool.Get()
+	defer gwParserPool.Put(parser)
+
+	var v *fastjson.Value
+	v, err = parser.ParseBytes(gwMetaBuf)
+	if err != nil {
+		return gwMeta, err
+	}
+
 	// obtain version.
-	gwMeta.Version = parseGWVersion(gwMetaBuf)
+	gwMeta.Version = parseGWVersion(v)
 	// obtain format.
-	gwMeta.Format = parseGWFormat(gwMetaBuf)
+	gwMeta.Format = parseGWFormat(v)
 	// Parse gwMetaV1.Stat .
-	stat, err := parseGWStat(gwMetaBuf)
+	stat, err := parseGWStat(v)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return gwMeta, err
 	}
-	gwMeta.ETag = parseGWETag(gwMetaBuf)
+	gwMeta.ETag = parseGWETag(v)
 	gwMeta.Stat = stat
 
 	// Parse the GW Parts.
-	gwMeta.Parts = parseGWParts(gwMetaBuf)
+	gwMeta.Parts = parseGWParts(v)
 	// parse gwMetaV1.
-	gwMeta.Meta = parseGWMetaMap(gwMetaBuf)
+	gwMeta.Meta = parseGWMetaMap(v)
 
 	return gwMeta, nil
 }

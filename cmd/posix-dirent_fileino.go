@@ -1,7 +1,7 @@
-// +build openbsd netbsd freebsd dragonfly
+// +build freebsd openbsd netbsd
 
 /*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ package cmd
 
 import "syscall"
 
-// True if dirent is absent in directory.
-func isEmptyDirent(dirent *syscall.Dirent) bool {
-	return dirent.Fileno == 0
+func direntInode(dirent *syscall.Dirent) uint64 {
+	return uint64(dirent.Fileno)
 }

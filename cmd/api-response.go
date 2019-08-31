@@ -44,6 +44,45 @@ type LocationResponse struct {
 	Location string   `xml:",chardata"`
 }
 
+// ListVersionsResponse - format for list bucket versions response.
+type ListVersionsResponse struct {
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListVersionsResult" json:"-"`
+
+	Name      string
+	Prefix    string
+	KeyMarker string
+
+	// When response is truncated (the IsTruncated element value in the response
+	// is true), you can use the key name in this field as marker in the subsequent
+	// request to get next set of objects. Server lists objects in alphabetical
+	// order Note: This element is returned only if you have delimiter request parameter
+	// specified. If response does not include the NextMaker and it is truncated,
+	// you can use the value of the last Key in the response as the marker in the
+	// subsequent request to get the next set of object keys.
+	NextKeyMarker string `xml:"NextKeyMarker,omitempty"`
+
+	// When the number of responses exceeds the value of MaxKeys,
+	// NextVersionIdMarker specifies the first object version not
+	// returned that satisfies the search criteria. Use this value
+	// for the version-id-marker request parameter in a subsequent request.
+	NextVersionIDMarker string `xml:"NextVersionIdMarker"`
+
+	// Marks the last version of the Key returned in a truncated response.
+	VersionIDMarker string `xml:"VersionIdMarker"`
+
+	MaxKeys   int
+	Delimiter string
+	// A flag that indicates whether or not ListObjects returned all of the results
+	// that satisfied the search criteria.
+	IsTruncated bool
+
+	CommonPrefixes []CommonPrefix
+	Versions       []ObjectVersion
+
+	// Encoding type used to encode object keys in the response.
+	EncodingType string `xml:"EncodingType,omitempty"`
+}
+
 // ListObjectsResponse - format for list objects response.
 type ListObjectsResponse struct {
 	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListBucketResult" json:"-"`
@@ -191,6 +230,14 @@ type Bucket struct {
 	CreationDate string // time string of format "2006-01-02T15:04:05.000Z"
 }
 
+// ObjectVersion container for object version metadata
+type ObjectVersion struct {
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ Version" json:"-"`
+	Object
+	VersionID string `xml:"VersionId"`
+	IsLatest  bool
+}
+
 // Object container for object metadata
 type Object struct {
 	Key          string
@@ -293,14 +340,14 @@ func getObjectLocation(r *http.Request, domains []string, bucket, object string)
 	}
 	u := &url.URL{
 		Host:   r.Host,
-		Path:   path.Join(slashSeparator, bucket, object),
+		Path:   path.Join(SlashSeparator, bucket, object),
 		Scheme: proto,
 	}
 	// If domain is set then we need to use bucket DNS style.
 	for _, domain := range domains {
 		if strings.Contains(r.Host, domain) {
 			u.Host = bucket + "." + r.Host
-			u.Path = path.Join(slashSeparator, object)
+			u.Path = path.Join(SlashSeparator, object)
 			break
 		}
 	}
@@ -325,6 +372,52 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 	data.Owner = owner
 	data.Buckets.Buckets = listbuckets
 
+	return data
+}
+
+// generates an ListBucketVersions response for the said bucket with other enumerated options.
+func generateListVersionsResponse(bucket, prefix, marker, delimiter, encodingType string, maxKeys int, resp ListObjectsInfo) ListVersionsResponse {
+	var versions []ObjectVersion
+	var prefixes []CommonPrefix
+	var owner = Owner{}
+	var data = ListVersionsResponse{}
+
+	owner.ID = globalMinioDefaultOwnerID
+	for _, object := range resp.Objects {
+		var content = ObjectVersion{}
+		if object.Name == "" {
+			continue
+		}
+		content.Key = s3EncodeName(object.Name, encodingType)
+		content.LastModified = object.ModTime.UTC().Format(timeFormatAMZLong)
+		if object.ETag != "" {
+			content.ETag = "\"" + object.ETag + "\""
+		}
+		content.Size = object.Size
+		content.StorageClass = object.StorageClass
+		content.Owner = owner
+		content.VersionID = "null"
+		content.IsLatest = true
+		versions = append(versions, content)
+	}
+	data.Name = bucket
+	data.Versions = versions
+
+	data.EncodingType = encodingType
+	data.Prefix = s3EncodeName(prefix, encodingType)
+	data.KeyMarker = s3EncodeName(marker, encodingType)
+	data.Delimiter = s3EncodeName(delimiter, encodingType)
+	data.MaxKeys = maxKeys
+
+	data.NextKeyMarker = s3EncodeName(resp.NextMarker, encodingType)
+	data.IsTruncated = resp.IsTruncated
+
+	for _, prefix := range resp.Prefixes {
+		var prefixItem = CommonPrefix{}
+		prefixItem.Prefix = s3EncodeName(prefix, encodingType)
+		prefixes = append(prefixes, prefixItem)
+	}
+	data.CommonPrefixes = prefixes
 	return data
 }
 
