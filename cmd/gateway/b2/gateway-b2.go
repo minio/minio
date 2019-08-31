@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 	"net/http"
 
 	"strings"
@@ -460,13 +459,24 @@ func (l *b2Objects) GetObjectInfo(ctx context.Context, bucket string, object str
 	if err != nil {
 		return objInfo, err
 	}
-	f, err := bkt.DownloadFileByName(l.ctx, object, 0, 1)
+
+	f, _, err := bkt.ListFileNames(l.ctx, 1, object, "", "")
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return objInfo, b2ToObjectError(err, bucket, object)
 	}
-	f.Close()
-	fi, err := bkt.File(f.ID, object).GetFileInfo(l.ctx)
+
+	if len(f) != 1 {
+		err := minio.ObjectNotFound{
+			Bucket: bucket,
+			Object: object,
+		}
+
+		logger.LogIf(ctx, err)
+		return objInfo, err
+	}
+
+	fi, err := bkt.File(f[0].ID, object).GetFileInfo(l.ctx)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return objInfo, b2ToObjectError(err, bucket, object)
@@ -474,7 +484,7 @@ func (l *b2Objects) GetObjectInfo(ctx context.Context, bucket string, object str
 	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
-		ETag:        minio.ToS3ETag(f.ID),
+		ETag:        minio.ToS3ETag(f[0].ID),
 		Size:        fi.Size,
 		ModTime:     fi.Timestamp,
 		ContentType: fi.ContentType,
@@ -595,14 +605,24 @@ func (l *b2Objects) DeleteObject(ctx context.Context, bucket string, object stri
 	if err != nil {
 		return err
 	}
-	reader, err := bkt.DownloadFileByName(l.ctx, object, 0, 1)
+
+	f, _, err := bkt.ListFileNames(l.ctx, 1, object, "", "")
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return b2ToObjectError(err, bucket, object)
 	}
-	io.Copy(ioutil.Discard, reader)
-	reader.Close()
-	err = bkt.File(reader.ID, object).DeleteFileVersion(l.ctx)
+
+	if len(f) != 1 {
+		err := minio.ObjectNotFound{
+			Bucket: bucket,
+			Object: object,
+		}
+
+		logger.LogIf(ctx, err)
+		return err
+	}
+
+	err = bkt.File(f[0].ID, object).DeleteFileVersion(l.ctx)
 	logger.LogIf(ctx, err)
 	return b2ToObjectError(err, bucket, object)
 }
