@@ -376,8 +376,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 			}
 		}
 
-		storage := objectAPI.StorageInfo(ctx)
-		if !(storage.Backend.Type == BackendFS || storage.Backend.Type == BackendErasure) {
+		if !globalIsDistXL {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 			return
 		}
