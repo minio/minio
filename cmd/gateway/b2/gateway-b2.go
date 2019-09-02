@@ -466,14 +466,13 @@ func (l *b2Objects) GetObjectInfo(ctx context.Context, bucket string, object str
 		return objInfo, b2ToObjectError(err, bucket, object)
 	}
 
-	if len(f) != 1 {
-		err := minio.ObjectNotFound{
+	// B2's list will return the next item in the bucket if the object doesn't
+	// exist so we neeed to perform a name check too
+	if len(f) != 1 && f[0].Name != object {
+		return objInfo, minio.ObjectNotFound{
 			Bucket: bucket,
 			Object: object,
 		}
-
-		logger.LogIf(ctx, err)
-		return objInfo, err
 	}
 
 	fi, err := bkt.File(f[0].ID, object).GetFileInfo(l.ctx)
@@ -612,15 +611,29 @@ func (l *b2Objects) DeleteObject(ctx context.Context, bucket string, object stri
 		return b2ToObjectError(err, bucket, object)
 	}
 
-	if len(f) != 1 {
-		err := minio.ObjectNotFound{
+	// B2's list will return the next item in the bucket if the object doesn't
+	// exist so we need to perform a name check too
+	if len(f) != 1 && f[0].Name != object {
+		return minio.ObjectNotFound{
 			Bucket: bucket,
 			Object: object,
 		}
-
-		logger.LogIf(ctx, err)
-		return err
 	}
+
+	for {
+		// B2's versions stick around for 24 hours (even in unversioned mode), by iterating
+		// through all the versions on delete we better simulate S3 behaviour
+		v, _, _, err := bkt.ListFileVersions(l.ctx, 1, object, "", "", "")
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return b2ToObjectError(err, bucket, object)
+		}
+
+		if len(v) != 1 && f[0].Name != object {
+			break
+		}
+	}
+
 
 	err = bkt.File(f[0].ID, object).DeleteFileVersion(l.ctx)
 	logger.LogIf(ctx, err)
