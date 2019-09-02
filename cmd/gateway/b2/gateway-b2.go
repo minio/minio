@@ -468,7 +468,8 @@ func (l *b2Objects) GetObjectInfo(ctx context.Context, bucket string, object str
 
 	// B2's list will return the next item in the bucket if the object doesn't
 	// exist so we neeed to perform a name check too
-	if len(f) != 1 && f[0].Name != object {
+
+	if len(f) != 1 || (len(f) == 1 && f[0].Name != object) {
 		return objInfo, minio.ObjectNotFound{
 			Bucket: bucket,
 			Object: object,
@@ -613,7 +614,7 @@ func (l *b2Objects) DeleteObject(ctx context.Context, bucket string, object stri
 
 	// B2's list will return the next item in the bucket if the object doesn't
 	// exist so we need to perform a name check too
-	if len(f) != 1 && f[0].Name != object {
+	if len(f) != 1 || (len(f) == 1 && f[0].Name != object) {
 		return minio.ObjectNotFound{
 			Bucket: bucket,
 			Object: object,
@@ -629,15 +630,16 @@ func (l *b2Objects) DeleteObject(ctx context.Context, bucket string, object stri
 			return b2ToObjectError(err, bucket, object)
 		}
 
-		if len(v) != 1 && f[0].Name != object {
-			break
+		if len(v) != 1 || (len(v) == 1 && v[0].Name != object) {
+			return nil
+		}
+
+		err = bkt.File(v[0].ID, object).DeleteFileVersion(l.ctx)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return b2ToObjectError(err, bucket, object)
 		}
 	}
-
-
-	err = bkt.File(f[0].ID, object).DeleteFileVersion(l.ctx)
-	logger.LogIf(ctx, err)
-	return b2ToObjectError(err, bucket, object)
 }
 
 func (l *b2Objects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
