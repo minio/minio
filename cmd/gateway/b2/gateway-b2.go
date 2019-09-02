@@ -468,7 +468,6 @@ func (l *b2Objects) GetObjectInfo(ctx context.Context, bucket string, object str
 
 	// B2's list will return the next item in the bucket if the object doesn't
 	// exist so we neeed to perform a name check too
-
 	if len(f) != 1 || (len(f) == 1 && f[0].Name != object) {
 		return objInfo, minio.ObjectNotFound{
 			Bucket: bucket,
