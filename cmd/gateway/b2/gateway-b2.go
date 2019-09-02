@@ -608,12 +608,8 @@ func (l *b2Objects) DeleteObject(ctx context.Context, bucket string, object stri
 	// If we hide the file we'll conform to B2's versioning policy, it also
 	// saves an additional call to check if the file exists first
 	_, err = bkt.HideFile(l.ctx, object)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return b2ToObjectError(err, bucket, object)
-	}
-
-	return nil
+	logger.LogIf(ctx, err)
+	return b2ToObjectError(err, bucket, object)
 }
 
 func (l *b2Objects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
