@@ -159,6 +159,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		registerSTSRouter(router)
 	}
 
+	// initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
+
 	enableConfigOps := gatewayName == "nas"
 	enableIAMOps := globalEtcdClient != nil
 
