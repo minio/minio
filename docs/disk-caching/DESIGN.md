@@ -40,7 +40,12 @@ Disk caching caches objects for **downloaded** objects i.e
 - Bitrot protection is added to cached content and verified when object is served from cache.
 - When an object is deleted, corresponding entry in cache if any is deleted as well.
 - Cache continues to work for read-only operations such as GET, HEAD when backend is offline.
-- Cache-Control and Expires headers can be used to control how long objects stay in the cache
+- Cache-Control and Expires headers can be used to control how long objects stay in the cache. ETag of cached objects are not validated with backend until expiry time as per the Cache-Control or Expires header is met.
+- To ensure security guarantees, encrypted objects are normally not cached. However, if you wish to encrypt cached content on disk, you can set MINIO_CACHE_ENCRYPTION_MASTER_KEY environment variable to set a cache KMS
+master key to automatically encrypt all cached content.
+
+  Note that cache KMS master key is not recommended for use in production deployments. If the MinIO server/gateway machine is ever compromised, the cache KMS master key must also be treated as compromised.
+  Support for external KMS to manage cache KMS keys is on the roadmap,and would be ideal for production use cases.
 
 > NOTE: Expiration happens automatically based on the configured interval as explained above, frequently accessed objects stay alive in cache for a significantly longer time.
 
@@ -51,5 +56,3 @@ Upon restart of minio server after a running minio process is killed or crashes,
 - Bucket policies are not cached, so anonymous operations are not supported when backend is offline.
 - Objects are distributed using deterministic hashing among the list of configured cache drives. If one or more drives go offline, or cache drive configuration is altered in any way, performance may degrade to a linear lookup time depending on the number of disks in cache.
 
-## TODO
-- Encrypt cached objects automatically with a cache encryption master key

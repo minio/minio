@@ -99,26 +99,28 @@ func benchmarkSelect(b *testing.B, count int, query string) {
 </SelectObjectContentRequest>
 `)
 
-	s3Select, err := NewS3Select(bytes.NewReader(requestXML))
-	if err != nil {
-		b.Fatal(err)
-	}
-
 	csvData := genSampleCSVData(count)
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
-		if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
-			return ioutil.NopCloser(bytes.NewReader(csvData)), nil
-		}); err != nil {
-			b.Fatal(err)
-		}
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			s3Select, err := NewS3Select(bytes.NewReader(requestXML))
+			if err != nil {
+				b.Fatal(err)
+			}
 
-		s3Select.Evaluate(&nullResponseWriter{})
-		s3Select.Close()
-	}
+			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
+				return ioutil.NopCloser(bytes.NewReader(csvData)), nil
+			}); err != nil {
+				b.Fatal(err)
+			}
+
+			s3Select.Evaluate(&nullResponseWriter{})
+			s3Select.Close()
+		}
+	})
 }
 
 func benchmarkSelectAll(b *testing.B, count int) {

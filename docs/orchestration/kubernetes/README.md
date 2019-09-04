@@ -207,10 +207,7 @@ Specifically the hostpath:
 
 And the list of hosts:
 ```yaml
-        - http://hostname1:9000/data/minio
-        - http://hostname2:9000/data/minio
-        - http://hostname3:9000/data/minio
-        - http://hostname4:9000/data/minio
+        - http://hostname{1...4}/data/minio
 ```
 
 Once deployed, tag the defined host with the `minio-server=true` label:

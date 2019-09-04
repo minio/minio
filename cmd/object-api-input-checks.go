@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
@@ -36,7 +37,7 @@ func checkDelObjArgs(ctx context.Context, bucket, object string) error {
 // Checks bucket and object name validity, returns nil if both are valid.
 func checkBucketAndObjectNames(ctx context.Context, bucket, object string) error {
 	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
+	if !isMinioMetaBucketName(bucket) && s3utils.CheckValidBucketName(bucket) != nil {
 		logger.LogIf(ctx, BucketNameInvalid{Bucket: bucket})
 		return BucketNameInvalid{Bucket: bucket}
 	}

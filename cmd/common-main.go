@@ -31,7 +31,6 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/logger/target/console"
 	"github.com/minio/minio/cmd/logger/target/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dns"
@@ -67,7 +66,7 @@ func checkUpdate(mode string) {
 		if globalInplaceUpdateDisabled {
 			logger.StartupMessage(updateMsg)
 		} else {
-			logger.StartupMessage(prepareUpdateMessage("Run `minio update`", latestReleaseTime.Sub(currentReleaseTime)))
+			logger.StartupMessage(prepareUpdateMessage("Run `mc admin update`", latestReleaseTime.Sub(currentReleaseTime)))
 		}
 	}
 }
@@ -97,7 +96,7 @@ func loadLoggers() {
 
 	if globalServerConfig.Logger.Console.Enabled {
 		// Enable console logging
-		logger.AddTarget(console.New())
+		logger.AddTarget(globalConsoleSys.Console())
 	}
 
 }
@@ -357,6 +356,14 @@ func handleCommonEnvVars() {
 		// maxUse should be a valid percentage.
 		if maxUse > 0 && maxUse <= 100 {
 			globalCacheMaxUse = maxUse
+		}
+	}
+
+	var err error
+	if cacheEncKey := os.Getenv("MINIO_CACHE_ENCRYPTION_MASTER_KEY"); cacheEncKey != "" {
+		globalCacheKMSKeyID, globalCacheKMS, err = parseKMSMasterKey(cacheEncKey)
+		if err != nil {
+			logger.Fatal(uiErrInvalidCacheEncryptionKey(err), "Invalid cache encryption master key")
 		}
 	}
 	// In place update is true by default if the MINIO_UPDATE is not set

@@ -1319,17 +1319,6 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 
 			info := gr.ObjInfo
 
-			length = info.Size
-			if objectAPI.IsEncryptionSupported() {
-				if _, err = DecryptObjectInfo(&info, r.Header); err != nil {
-					writeWebErrorResponse(w, err)
-					return err
-				}
-				if crypto.IsEncrypted(info.UserDefined) {
-					length, _ = info.DecryptedSize()
-				}
-			}
-			length = info.Size
 			var actualSize int64
 			if info.IsCompressed() {
 				// Read the decompressed size from the meta.json.
@@ -1348,21 +1337,16 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				writeWebErrorResponse(w, errUnexpected)
 				return err
 			}
-			var startOffset int64
 			var writer io.Writer
 
 			if info.IsCompressed() {
-				// The decompress metrics are set.
-				snappyStartOffset := 0
-				snappyLength := actualSize
-
 				// Open a pipe for compression
 				// Where compressWriter is actually passed to the getObject
 				decompressReader, compressWriter := io.Pipe()
 				snappyReader := snappy.NewReader(decompressReader)
 
 				// The limit is set to the actual size.
-				responseWriter := ioutil.LimitedWriter(zipWriter, int64(snappyStartOffset), snappyLength)
+				responseWriter := ioutil.LimitedWriter(zipWriter, 0, actualSize)
 				wg.Add(1) //For closures.
 				go func() {
 					defer wg.Done()
@@ -1376,17 +1360,6 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				writer = compressWriter
 			} else {
 				writer = zipWriter
-			}
-			if objectAPI.IsEncryptionSupported() && crypto.S3.IsEncrypted(info.UserDefined) {
-				// Response writer should be limited early on for decryption upto required length,
-				// additionally also skipping mod(offset)64KiB boundaries.
-				writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
-				writer, _, length, err = DecryptBlocksRequest(writer, r,
-					args.BucketName, objectName, startOffset, length, info, false)
-				if err != nil {
-					writeWebErrorResponse(w, err)
-					return err
-				}
 			}
 			httpWriter := ioutil.WriteOnClose(writer)
 
@@ -1975,6 +1948,8 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 		return getAPIError(ErrStorageFull)
 	case BucketNotFound:
 		return getAPIError(ErrNoSuchBucket)
+	case BucketNotEmpty:
+		return getAPIError(ErrBucketNotEmpty)
 	case BucketExists:
 		return getAPIError(ErrBucketAlreadyOwnedByYou)
 	case BucketNameInvalid:

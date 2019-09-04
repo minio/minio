@@ -266,7 +266,6 @@ func (c *cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 			return cachedObjInfo, nil
 		}
 	}
-
 	objInfo, err := getObjectInfoFn(ctx, bucket, object, opts)
 	if err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
@@ -449,6 +448,7 @@ func checkAtimeSupport(dir string) (err error) {
 }
 func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
 	logger.StartupMessage(colorBlue("Cache migration initiated ...."))
+
 	var wg = &sync.WaitGroup{}
 	errs := make([]error, len(c.cache))
 	for i, dc := range c.cache {

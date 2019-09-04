@@ -23,12 +23,11 @@ import (
 )
 
 // Type of service signals currently supported.
-type serviceSignal string
+type serviceSignal int
 
 const (
-	serviceStatus  serviceSignal = "serviceStatus"  // Gets status about the service.
-	serviceRestart               = "serviceRestart" // Restarts the service.
-	serviceStop                  = "serviceStop"    // Stops the server.
+	serviceRestart serviceSignal = iota // Restarts the server.
+	serviceStop                         // Stops the server.
 	// Add new service requests here.
 )
 

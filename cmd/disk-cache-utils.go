@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"encoding/hex"
 	"io"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -124,7 +126,7 @@ func backendDownError(err error) bool {
 
 // IsCacheable returns if the object should be saved in the cache.
 func (o ObjectInfo) IsCacheable() bool {
-	return !crypto.IsEncrypted(o.UserDefined)
+	return !crypto.IsEncrypted(o.UserDefined) || globalCacheKMS != nil
 }
 
 // reads file cached on disk from offset upto length
@@ -144,6 +146,10 @@ func readCacheFileStream(filePath string, offset, length int64) (io.ReadCloser, 
 	st, err := fr.Stat()
 	if err != nil {
 		err = osErrToFSFileErr(err)
+		return nil, err
+	}
+
+	if err = os.Chtimes(filePath, time.Now(), st.ModTime()); err != nil {
 		return nil, err
 	}
 
@@ -167,4 +173,48 @@ func readCacheFileStream(filePath string, offset, length int64) (io.ReadCloser, 
 		io.Reader
 		io.Closer
 	}{Reader: io.LimitReader(fr, length), Closer: fr}, nil
+}
+
+func isCacheEncrypted(meta map[string]string) bool {
+	_, ok := meta[SSECacheEncrypted]
+	return ok
+}
+
+// decryptCacheObjectETag tries to decrypt the ETag saved in encrypted format using the cache KMS
+func decryptCacheObjectETag(info *ObjectInfo) error {
+	// Directories are never encrypted.
+	if info.IsDir {
+		return nil
+	}
+	encrypted := crypto.S3.IsEncrypted(info.UserDefined) && isCacheEncrypted(info.UserDefined)
+
+	switch {
+	case encrypted:
+		if globalCacheKMS == nil {
+			return errKMSNotConfigured
+		}
+		keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(info.UserDefined)
+
+		if err != nil {
+			return err
+		}
+		extKey, err := globalCacheKMS.UnsealKey(keyID, kmsKey, crypto.Context{info.Bucket: path.Join(info.Bucket, info.Name)})
+		if err != nil {
+			return err
+		}
+		var objectKey crypto.ObjectKey
+		if err = objectKey.Unseal(extKey, sealedKey, crypto.S3.String(), info.Bucket, info.Name); err != nil {
+			return err
+		}
+		etagStr := tryDecryptETag(objectKey[:], info.ETag, false)
+		// backend ETag was hex encoded before encrypting, so hex decode to get actual ETag
+		etag, err := hex.DecodeString(etagStr)
+		if err != nil {
+			return err
+		}
+		info.ETag = string(etag)
+		return nil
+	}
+
+	return nil
 }

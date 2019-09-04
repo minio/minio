@@ -64,7 +64,6 @@ func testGetObjectInfo(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}{
 		// Test cases with invalid bucket names ( Test number 1-4 ).
 		{".test", "", ObjectInfo{}, BucketNameInvalid{Bucket: ".test"}, false},
-		{"Test", "", ObjectInfo{}, BucketNameInvalid{Bucket: "Test"}, false},
 		{"---", "", ObjectInfo{}, BucketNameInvalid{Bucket: "---"}, false},
 		{"ad", "", ObjectInfo{}, BucketNameInvalid{Bucket: "ad"}, false},
 		// Test cases with valid but non-existing bucket names (Test number 5-6).

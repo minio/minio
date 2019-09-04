@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"sort"
+	"sync"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
@@ -70,24 +71,39 @@ func (d byDiskTotal) Less(i, j int) bool {
 // getDisksInfo - fetch disks info across all other storage API.
 func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks int, offlineDisks int) {
 	disksInfo = make([]DiskInfo, len(disks))
+	errs := make([]error, len(disks))
+	var wg sync.WaitGroup
 	for i, storageDisk := range disks {
 		if storageDisk == nil {
 			// Storage disk is empty, perhaps ignored disk or not available.
+			errs[i] = errDiskNotFound
+			continue
+		}
+		wg.Add(1)
+		go func(id int, sDisk StorageAPI) {
+			defer wg.Done()
+			info, err := sDisk.DiskInfo()
+			if err != nil {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("disk", sDisk.String())
+				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				logger.LogIf(ctx, err)
+				if IsErr(err, baseErrs...) {
+					errs[id] = err
+					return
+				}
+			}
+			disksInfo[id] = info
+		}(i, storageDisk)
+	}
+	// Wait for the routines.
+	wg.Wait()
+
+	for _, err := range errs {
+		if err != nil {
 			offlineDisks++
 			continue
 		}
-		info, err := storageDisk.DiskInfo()
-		if err != nil {
-			ctx := context.Background()
-			logger.GetReqInfo(ctx).AppendTags("disk", storageDisk.String())
-			logger.LogIf(ctx, err)
-			if IsErr(err, baseErrs...) {
-				offlineDisks++
-				continue
-			}
-		}
 		onlineDisks++
-		disksInfo[i] = info
 	}
 
 	// Success.
