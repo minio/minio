@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -40,6 +41,7 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
+	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/cpu"
@@ -1881,4 +1883,86 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 			return
 		}
 	}
+}
+
+// KMSKeyStatusHandler - GET /minio/admin/v1/kms/key/status?key-id=<master-key-id>
+func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "KMSKeyStatusHandler")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	if GlobalKMS == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
+		return
+	}
+
+	keyID := r.URL.Query().Get("key-id")
+	if keyID == "" {
+		keyID = globalKMSKeyID
+	}
+	var response = madmin.KMSKeyStatus{
+		KeyID: keyID,
+	}
+
+	kmsContext := crypto.Context{"MinIO admin API": "KMSKeyStatusHandler"} // Context for a test key operation
+	// 1. Generate a new key using the KMS.
+	key, sealedKey, err := GlobalKMS.GenerateKey(keyID, kmsContext)
+	if err != nil {
+		response.EncryptionErr = err.Error()
+		resp, err := json.Marshal(response)
+		if err != nil {
+			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
+			return
+		}
+		writeSuccessResponseJSON(w, resp)
+		return
+	}
+
+	// 2. Check whether we can update / re-wrap the sealed key.
+	sealedKey, err = GlobalKMS.UpdateKey(keyID, sealedKey, kmsContext)
+	if err != nil {
+		response.UpdateErr = err.Error()
+		resp, err := json.Marshal(response)
+		if err != nil {
+			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
+			return
+		}
+		writeSuccessResponseJSON(w, resp)
+		return
+	}
+
+	// 3. Verify that we can indeed decrypt the (encrypted) key
+	decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
+	if err != nil {
+		response.DecryptionErr = err.Error()
+		resp, err := json.Marshal(response)
+		if err != nil {
+			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
+			return
+		}
+		writeSuccessResponseJSON(w, resp)
+		return
+	}
+
+	// 4. Compare generated key with decrypted key
+	if subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1 {
+		response.DecryptionErr = "The generated and the decrypted data key do not match"
+		resp, err := json.Marshal(response)
+		if err != nil {
+			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
+			return
+		}
+		writeSuccessResponseJSON(w, resp)
+		return
+	}
+
+	resp, err := json.Marshal(response)
+	if err != nil {
+		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
+		return
+	}
+	writeSuccessResponseJSON(w, resp)
 }
