@@ -657,9 +657,10 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	// Handle policy if it is set.
 	if len(policyBytes) > 0 {
+
 		postPolicyForm, err := parsePostPolicyForm(string(policyBytes))
 		if err != nil {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL, guessIsBrowserReq(r))
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPostPolicyConditionInvalidFormat), r.URL, guessIsBrowserReq(r))
 			return
 		}
 

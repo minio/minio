@@ -315,6 +315,7 @@ const (
 	ErrAdminProfilerNotEnabled
 	ErrInvalidDecompressedSize
 	ErrAddUserInvalidArgument
+	ErrPostPolicyConditionInvalidFormat
 )
 
 type errorCodeMap map[APIErrorCode]APIError
@@ -1495,6 +1496,11 @@ var errorCodes = errorCodeMap{
 		Code:           "XMinioInvalidIAMCredentials",
 		Description:    "User is not allowed to be same as admin access key",
 		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrPostPolicyConditionInvalidFormat: {
+		Code:           "PostPolicyInvalidKeyName",
+		Description:    "Invalid according to Policy: Policy Condition failed",
+		HTTPStatusCode: http.StatusForbidden,
 	},
 	// Add your error structure here.
 }
