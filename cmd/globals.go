@@ -174,6 +174,10 @@ var (
 	// registered listeners
 	globalHTTPTrace = pubsub.New()
 
+	// global console system to send console logs to
+	// registered listeners
+	globalConsoleSys *HTTPConsoleLoggerSys
+
 	globalEndpoints EndpointList
 
 	// Global server's network statistics

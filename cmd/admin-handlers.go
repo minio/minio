@@ -1817,3 +1817,68 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+
+// The handler sends console logs to the connected HTTP client.
+func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ConsoleLog")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+	node := r.URL.Query().Get("node")
+	// limit buffered console entries if client requested it.
+	limitStr := r.URL.Query().Get("limit")
+	limitLines, err := strconv.Atoi(limitStr)
+	if err != nil {
+		limitLines = 10
+	}
+	// Avoid reusing tcp connection if read timeout is hit
+	// This is needed to make r.Context().Done() work as
+	// expected in case of read timeout
+	w.Header().Add("Connection", "close")
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+	logCh := make(chan interface{}, 4000)
+
+	remoteHosts := getRemoteHosts(globalEndpoints)
+	peers, err := getRestClients(remoteHosts)
+	if err != nil {
+		return
+	}
+
+	globalConsoleSys.Subscribe(logCh, doneCh, node, limitLines, nil)
+
+	for _, peer := range peers {
+		if node == "" || strings.ToLower(peer.host.Name) == strings.ToLower(node) {
+			peer.ConsoleLog(logCh, doneCh)
+		}
+	}
+
+	enc := json.NewEncoder(w)
+
+	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	defer keepAliveTicker.Stop()
+
+	for {
+		select {
+		case entry := <-logCh:
+			log := entry.(madmin.LogInfo)
+			if log.SendLog(node) {
+				if err := enc.Encode(log); err != nil {
+					return
+				}
+				w.(http.Flusher).Flush()
+			}
+		case <-keepAliveTicker.C:
+			if _, err := w.Write([]byte(" ")); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-GlobalServiceDoneCh:
+			return
+		}
+	}
+}
