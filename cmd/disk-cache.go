@@ -237,7 +237,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		pipeWriter.CloseWithError(putErr)
 	}()
 	cleanupBackend := func() { bkReader.Close() }
-	cleanupPipe := func() { pipeReader.Close() }
+	cleanupPipe := func() { pipeWriter.Close() }
 	return NewGetObjectReaderFromReader(teeReader, bkReader.ObjInfo, opts.CheckCopyPrecondFn, cleanupBackend, cleanupPipe)
 }
 
