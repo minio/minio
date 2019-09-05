@@ -30,6 +30,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lifecycle"
@@ -38,7 +39,6 @@ import (
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/mountinfo"
 	"github.com/minio/minio/pkg/policy"
-	"github.com/valyala/fastjson"
 )
 
 // Default etag is used for pre-existing objects.
@@ -1093,22 +1093,19 @@ func (fs *FSObjects) getObjectETag(ctx context.Context, bucket, entry string, lo
 		return "", toObjectErr(err, bucket, entry)
 	}
 
-	parser := fsParserPool.Get()
-	defer fsParserPool.Put(parser)
-
-	var v *fastjson.Value
-	v, err = parser.ParseBytes(fsMetaBuf)
-	if err != nil {
-		return "", toObjectErr(err, bucket, entry)
+	var fsMeta fsMetaV1
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err = json.Unmarshal(fsMetaBuf, &fsMeta); err != nil {
+		return "", err
 	}
 
 	// Check if FS metadata is valid, if not return error.
-	if !isFSMetaValid(parseFSVersion(v)) {
+	if !isFSMetaValid(fsMeta.Version) {
 		logger.LogIf(ctx, errCorruptedFormat)
 		return "", toObjectErr(errCorruptedFormat, bucket, entry)
 	}
 
-	return extractETag(parseFSMetaMap(v)), nil
+	return extractETag(fsMeta.Meta), nil
 }
 
 // ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool

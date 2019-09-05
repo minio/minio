@@ -17,11 +17,11 @@
 package json
 
 import (
-	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/bcicen/jstream"
@@ -77,8 +77,8 @@ func (r *Record) Set(name string, value *sql.Value) error {
 	return nil
 }
 
-// MarshalCSV - encodes to CSV data.
-func (r *Record) MarshalCSV(fieldDelimiter rune) ([]byte, error) {
+// WriteCSV - encodes to CSV data.
+func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune) error {
 	var csvRecord []string
 	for _, kv := range r.KVS {
 		var columnValue string
@@ -90,24 +90,22 @@ func (r *Record) MarshalCSV(fieldDelimiter rune) ([]byte, error) {
 		case RawJSON:
 			columnValue = string([]byte(val))
 		default:
-			return nil, errors.New("Cannot marshal unhandled type")
+			return errors.New("Cannot marshal unhandled type")
 		}
 		csvRecord = append(csvRecord, columnValue)
 	}
 
-	buf := new(bytes.Buffer)
-	w := csv.NewWriter(buf)
+	w := csv.NewWriter(writer)
 	w.Comma = fieldDelimiter
 	if err := w.Write(csvRecord); err != nil {
-		return nil, err
+		return err
 	}
 	w.Flush()
 	if err := w.Error(); err != nil {
-		return nil, err
+		return err
 	}
 
-	data := buf.Bytes()
-	return data[:len(data)-1], nil
+	return nil
 }
 
 // Raw - returns the underlying representation.
@@ -115,9 +113,9 @@ func (r *Record) Raw() (sql.SelectObjectFormat, interface{}) {
 	return r.SelectFormat, r.KVS
 }
 
-// MarshalJSON - encodes to JSON data.
-func (r *Record) MarshalJSON() ([]byte, error) {
-	return json.Marshal(r.KVS)
+// WriteJSON - encodes to JSON data.
+func (r *Record) WriteJSON(writer io.Writer) error {
+	return json.NewEncoder(writer).Encode(r.KVS)
 }
 
 // Replace the underlying buffer of json data.

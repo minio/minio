@@ -82,10 +82,11 @@ func (rr *recordReader) Read(p []byte) (n int, err error) {
 
 // Reader - CSV record reader for S3Select.
 type Reader struct {
-	args        *ReaderArgs
-	readCloser  io.ReadCloser
-	csvReader   *csv.Reader
-	columnNames []string
+	args         *ReaderArgs
+	readCloser   io.ReadCloser
+	csvReader    *csv.Reader
+	columnNames  []string
+	nameIndexMap map[string]int64
 }
 
 // Read - reads single record.
@@ -99,23 +100,24 @@ func (r *Reader) Read() (sql.Record, error) {
 		return nil, err
 	}
 
-	columnNames := r.columnNames
-	if columnNames == nil {
-		columnNames = make([]string, len(csvRecord))
+	if r.columnNames == nil {
+		r.columnNames = make([]string, len(csvRecord))
 		for i := range csvRecord {
-			columnNames[i] = fmt.Sprintf("_%v", i+1)
+			r.columnNames[i] = fmt.Sprintf("_%v", i+1)
 		}
 	}
 
-	nameIndexMap := make(map[string]int64)
-	for i := range columnNames {
-		nameIndexMap[columnNames[i]] = int64(i)
+	if r.nameIndexMap == nil {
+		r.nameIndexMap = make(map[string]int64)
+		for i := range r.columnNames {
+			r.nameIndexMap[r.columnNames[i]] = int64(i)
+		}
 	}
 
 	return &Record{
-		columnNames:  columnNames,
+		columnNames:  r.columnNames,
 		csvRecord:    csvRecord,
-		nameIndexMap: nameIndexMap,
+		nameIndexMap: r.nameIndexMap,
 	}, nil
 }
 

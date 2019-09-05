@@ -358,7 +358,7 @@ func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{})
 
 	err = target.db.Ping()
 	if err != nil {
-		if target.store == nil || !IsConnRefusedErr(err) {
+		if target.store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
 			return nil, err
 		}
 	} else {

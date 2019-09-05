@@ -22,6 +22,7 @@ import (
 	"os"
 	"runtime"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -54,7 +55,12 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 	objLayer := newObjectLayerFn()
 	// Service not initialized yet
 	if objLayer == nil {
-		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+		// Respond with 200 OK while server initializes to ensure a distributed cluster
+		// is able to start on orchestration platforms like Docker Swarm.
+		// Refer https://github.com/minio/minio/issues/8140 for more details.
+		// Make sure to add server not initialized status in header
+		w.Header().Set(xhttp.MinIOServerStatus, "Server-not-initialized")
+		writeSuccessResponseHeadersOnly(w)
 		return
 	}
 

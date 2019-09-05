@@ -17,11 +17,11 @@
 package csv
 
 import (
-	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/bcicen/jstream"
 	"github.com/minio/minio/pkg/s3select/sql"
@@ -61,30 +61,28 @@ func (r *Record) Set(name string, value *sql.Value) error {
 	return nil
 }
 
-// MarshalCSV - encodes to CSV data.
-func (r *Record) MarshalCSV(fieldDelimiter rune) ([]byte, error) {
-	buf := new(bytes.Buffer)
-	w := csv.NewWriter(buf)
+// WriteCSV - encodes to CSV data.
+func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune) error {
+	w := csv.NewWriter(writer)
 	w.Comma = fieldDelimiter
 	if err := w.Write(r.csvRecord); err != nil {
-		return nil, err
+		return err
 	}
 	w.Flush()
 	if err := w.Error(); err != nil {
-		return nil, err
+		return err
 	}
 
-	data := buf.Bytes()
-	return data[:len(data)-1], nil
+	return nil
 }
 
-// MarshalJSON - encodes to JSON data.
-func (r *Record) MarshalJSON() ([]byte, error) {
+// WriteJSON - encodes to JSON data.
+func (r *Record) WriteJSON(writer io.Writer) error {
 	var kvs jstream.KVS = make([]jstream.KV, len(r.columnNames))
 	for i := 0; i < len(r.columnNames); i++ {
 		kvs[i] = jstream.KV{Key: r.columnNames[i], Value: r.csvRecord[i]}
 	}
-	return json.Marshal(kvs)
+	return json.NewEncoder(writer).Encode(kvs)
 }
 
 // Raw - returns the underlying data with format info.

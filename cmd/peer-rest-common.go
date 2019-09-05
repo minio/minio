@@ -51,6 +51,7 @@ const (
 	peerRESTMethodTrace                    = "trace"
 	peerRESTMethodBucketLifecycleSet       = "setbucketlifecycle"
 	peerRESTMethodBucketLifecycleRemove    = "removebucketlifecycle"
+	peerRESTMethodLog                      = "log"
 )
 
 const (

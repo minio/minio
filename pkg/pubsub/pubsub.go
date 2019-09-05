@@ -40,7 +40,7 @@ func (ps *PubSub) Publish(item interface{}) {
 	defer ps.RUnlock()
 
 	for _, sub := range ps.subs {
-		if sub.filter(item) {
+		if sub.filter == nil || sub.filter(item) {
 			select {
 			case sub.ch <- item:
 			default:

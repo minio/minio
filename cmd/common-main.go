@@ -31,7 +31,6 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/logger/target/console"
 	"github.com/minio/minio/cmd/logger/target/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dns"
@@ -97,7 +96,7 @@ func loadLoggers() {
 
 	if globalServerConfig.Logger.Console.Enabled {
 		// Enable console logging
-		logger.AddTarget(console.New())
+		logger.AddTarget(globalConsoleSys.Console())
 	}
 
 }
