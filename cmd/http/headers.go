@@ -78,4 +78,7 @@ const (
 
 	// Deployment id.
 	MinioDeploymentID = "x-minio-deployment-id"
+
+	// Server-Status
+	MinIOServerStatus = "x-minio-server-status"
 )
