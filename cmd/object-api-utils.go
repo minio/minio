@@ -33,7 +33,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	snappy "github.com/klauspost/compress/s2"
+	"github.com/klauspost/compress/s2"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -413,7 +413,7 @@ func getPartFile(entries []string, partNumber int, etag string) string {
 	return ""
 }
 
-// Returs the compressed offset which should be skipped.
+// Returns the compressed offset which should be skipped.
 func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (int64, int64) {
 	var compressedOffset int64
 	var skipLength int64
@@ -575,7 +575,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 			if err != nil {
 				return nil, 0, 0, err
 			}
-			// Incase of range based queries on multiparts, the offset and length are reduced.
+			// In case of range based queries on multiparts, the offset and length are reduced.
 			off, decOff = getCompressedOffsets(oi, off)
 			decLength = length
 			length = oi.Size - off
@@ -602,10 +602,13 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 				}
 			}
 			// Decompression reader.
-			snappyReader := snappy.NewReader(inputReader)
-			// Apply the skipLen and limit on the
-			// decompressed stream
-			decReader := io.LimitReader(ioutil.NewSkipReader(snappyReader, decOff), decLength)
+			s2Reader := s2.NewReader(inputReader)
+			// Apply the skipLen and limit on the decompressed stream.
+			err = s2Reader.Skip(decOff)
+			if err != nil {
+				return nil, err
+			}
+			decReader := io.LimitReader(s2Reader, decLength)
 			oi.Size = decLength
 
 			// Assemble the GetObjectReader
@@ -760,24 +763,24 @@ func CleanMinioInternalMetadataKeys(metadata map[string]string) map[string]strin
 	return newMeta
 }
 
-// snappyCompressReader compresses data as it reads
+// s2CompressReader compresses data as it reads
 // from the underlying io.Reader.
-type snappyCompressReader struct {
+type s2CompressReader struct {
 	r      io.Reader
-	w      *snappy.Writer
+	w      *s2.Writer
 	closed bool
 	buf    bytes.Buffer
 }
 
-func newSnappyCompressReader(r io.Reader) *snappyCompressReader {
-	cr := &snappyCompressReader{r: r}
-	cr.w = snappy.NewWriter(&cr.buf)
+func newS2CompressReader(r io.Reader) *s2CompressReader {
+	cr := &s2CompressReader{r: r}
+	cr.w = s2.NewWriter(&cr.buf)
 	return cr
 }
 
-func (cr *snappyCompressReader) Read(p []byte) (int, error) {
+func (cr *s2CompressReader) Read(p []byte) (int, error) {
 	if cr.closed {
-		// if snappy writer is closed r has been completely read,
+		// if s2 writer is closed r has been completely read,
 		// return any remaining data in buf.
 		return cr.buf.Read(p)
 	}

@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"archive/zip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -32,10 +31,11 @@ import (
 	"sync"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
-	snappy "github.com/klauspost/compress/s2"
+	"github.com/klauspost/compress/s2"
+	"github.com/klauspost/compress/zip"
 	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio-go/v6/pkg/set"
@@ -995,7 +995,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
 		// Storing the compression metadata.
-		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
+		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
 
 		actualReader, err := hash.NewReader(reader, size, "", "", actualSize, globalCLIContext.StrictS3Compat)
@@ -1006,7 +1006,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 		// Set compression metrics.
 		size = -1 // Since compressed size is un-predictable.
-		reader = newSnappyCompressReader(actualReader)
+		reader = newS2CompressReader(actualReader)
 		hashReader, err = hash.NewReader(reader, size, "", "", actualSize, globalCLIContext.StrictS3Compat)
 		if err != nil {
 			writeWebErrorResponse(w, err)
@@ -1349,22 +1349,18 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			var writer io.Writer
 
 			if info.IsCompressed() {
-				// The decompress metrics are set.
-				snappyStartOffset := 0
-				snappyLength := actualSize
-
 				// Open a pipe for compression
 				// Where compressWriter is actually passed to the getObject
 				decompressReader, compressWriter := io.Pipe()
-				snappyReader := snappy.NewReader(decompressReader)
+				s2Reader := s2.NewReader(decompressReader)
 
 				// The limit is set to the actual size.
-				responseWriter := ioutil.LimitedWriter(zipWriter, int64(snappyStartOffset), snappyLength)
+				responseWriter := ioutil.LimitedWriter(zipWriter, 0, actualSize)
 				wg.Add(1) //For closures.
 				go func() {
 					defer wg.Done()
 					// Finally, writes to the client.
-					_, perr := io.Copy(responseWriter, snappyReader)
+					_, perr := io.Copy(responseWriter, s2Reader)
 
 					// Close the compressWriter if the data is read already.
 					// Closing the pipe, releases the writer passed to the getObject.

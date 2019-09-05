@@ -23,7 +23,7 @@ import (
 	"reflect"
 	"testing"
 
-	snappy "github.com/klauspost/compress/s2"
+	"github.com/klauspost/compress/s2"
 )
 
 // Tests validate bucket name.
@@ -301,7 +301,7 @@ func TestIsCompressed(t *testing.T) {
 	}{
 		{
 			objInfo: ObjectInfo{
-				UserDefined: map[string]string{"X-Minio-Internal-compression": "klauspost/compress/LZ77",
+				UserDefined: map[string]string{"X-Minio-Internal-compression": "klauspost/compress/s2",
 					"content-type": "application/octet-stream",
 					"etag":         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
 			},
@@ -309,7 +309,7 @@ func TestIsCompressed(t *testing.T) {
 		},
 		{
 			objInfo: ObjectInfo{
-				UserDefined: map[string]string{"X-Minio-Internal-XYZ": "klauspost/compress/LZ77",
+				UserDefined: map[string]string{"X-Minio-Internal-XYZ": "klauspost/compress/s2",
 					"content-type": "application/octet-stream",
 					"etag":         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
 			},
@@ -422,7 +422,7 @@ func TestGetActualSize(t *testing.T) {
 	}{
 		{
 			objInfo: ObjectInfo{
-				UserDefined: map[string]string{"X-Minio-Internal-compression": "klauspost/compress/LZ77",
+				UserDefined: map[string]string{"X-Minio-Internal-compression": "klauspost/compress/s2",
 					"X-Minio-Internal-actual-size": "100000001",
 					"content-type":                 "application/octet-stream",
 					"etag":                         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
@@ -441,7 +441,7 @@ func TestGetActualSize(t *testing.T) {
 		},
 		{
 			objInfo: ObjectInfo{
-				UserDefined: map[string]string{"X-Minio-Internal-compression": "klauspost/compress/LZ77",
+				UserDefined: map[string]string{"X-Minio-Internal-compression": "klauspost/compress/s2",
 					"X-Minio-Internal-actual-size": "841",
 					"content-type":                 "application/octet-stream",
 					"etag":                         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
@@ -451,7 +451,7 @@ func TestGetActualSize(t *testing.T) {
 		},
 		{
 			objInfo: ObjectInfo{
-				UserDefined: map[string]string{"X-Minio-Internal-compression": "klauspost/compress/LZ77",
+				UserDefined: map[string]string{"X-Minio-Internal-compression": "klauspost/compress/s2",
 					"content-type": "application/octet-stream",
 					"etag":         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
 				Parts: []ObjectPartInfo{},
@@ -540,7 +540,7 @@ func TestGetCompressedOffsets(t *testing.T) {
 	}
 }
 
-func TestSnappyCompressReader(t *testing.T) {
+func TestS2CompressReader(t *testing.T) {
 	tests := []struct {
 		name string
 		data []byte
@@ -554,7 +554,7 @@ func TestSnappyCompressReader(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := make([]byte, 100) // make small buffer to ensure multiple reads are required for large case
 
-			r := newSnappyCompressReader(bytes.NewReader(tt.data))
+			r := newS2CompressReader(bytes.NewReader(tt.data))
 
 			var rdrBuf bytes.Buffer
 			_, err := io.CopyBuffer(&rdrBuf, r, buf)
@@ -563,7 +563,7 @@ func TestSnappyCompressReader(t *testing.T) {
 			}
 
 			var stdBuf bytes.Buffer
-			w := snappy.NewWriter(&stdBuf)
+			w := s2.NewWriter(&stdBuf)
 			_, err = io.CopyBuffer(w, bytes.NewReader(tt.data), buf)
 			if err != nil {
 				t.Fatal(err)
@@ -582,7 +582,7 @@ func TestSnappyCompressReader(t *testing.T) {
 			}
 
 			var decBuf bytes.Buffer
-			decRdr := snappy.NewReader(&rdrBuf)
+			decRdr := s2.NewReader(&rdrBuf)
 			_, err = io.Copy(&decBuf, decRdr)
 			if err != nil {
 				t.Fatal(err)
