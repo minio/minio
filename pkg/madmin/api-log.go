@@ -21,31 +21,39 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
-	trace "github.com/minio/minio/pkg/trace"
+	"github.com/minio/minio/cmd/logger/message/log"
 )
 
-// TraceInfo holds http trace
-type TraceInfo struct {
-	Trace trace.Info
-	Err   error `json:"-"`
+// LogInfo holds console log messages
+type LogInfo struct {
+	log.Entry
+	NodeName string `json:"node"`
+	Err      error  `json:"-"`
 }
 
-// Trace - listen on http trace notifications.
-func (adm AdminClient) Trace(allTrace, errTrace bool, doneCh <-chan struct{}) <-chan TraceInfo {
-	traceInfoCh := make(chan TraceInfo)
+// SendLog returns true if log pertains to node specified in args.
+func (l LogInfo) SendLog(node string) bool {
+	return node == "" || strings.ToLower(node) == strings.ToLower(l.NodeName)
+}
+
+// GetLogs - listen on console log messages.
+func (adm AdminClient) GetLogs(node string, lineCnt int, doneCh <-chan struct{}) <-chan LogInfo {
+	logCh := make(chan LogInfo, 1)
+
 	// Only success, start a routine to start reading line by line.
-	go func(traceInfoCh chan<- TraceInfo) {
-		defer close(traceInfoCh)
+	go func(logCh chan<- LogInfo) {
+		defer close(logCh)
+		urlValues := make(url.Values)
+		urlValues.Set("node", node)
+		urlValues.Set("limit", strconv.Itoa(lineCnt))
 		for {
-			urlValues := make(url.Values)
-			urlValues.Set("all", strconv.FormatBool(allTrace))
-			urlValues.Set("err", strconv.FormatBool(errTrace))
 			reqData := requestData{
-				relPath:     "/v1/trace",
+				relPath:     "/v1/log",
 				queryValues: urlValues,
 			}
-			// Execute GET to call trace handler
+			// Execute GET to call log handler
 			resp, err := adm.executeMethod("GET", reqData)
 			if err != nil {
 				closeResponse(resp)
@@ -53,25 +61,25 @@ func (adm AdminClient) Trace(allTrace, errTrace bool, doneCh <-chan struct{}) <-
 			}
 
 			if resp.StatusCode != http.StatusOK {
-				traceInfoCh <- TraceInfo{Err: httpRespToErrorResponse(resp)}
+				logCh <- LogInfo{Err: httpRespToErrorResponse(resp)}
 				return
 			}
-
 			dec := json.NewDecoder(resp.Body)
 			for {
-				var info trace.Info
+				var info LogInfo
 				if err = dec.Decode(&info); err != nil {
 					break
 				}
 				select {
 				case <-doneCh:
 					return
-				case traceInfoCh <- TraceInfo{Trace: info}:
+				case logCh <- info:
 				}
 			}
-		}
-	}(traceInfoCh)
 
-	// Returns the trace info channel, for caller to start reading from.
-	return traceInfoCh
+		}
+	}(logCh)
+
+	// Returns the log info channel, for caller to start reading from.
+	return logCh
 }

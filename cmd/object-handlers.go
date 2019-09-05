@@ -1205,6 +1205,11 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+	getObjectInfo := objectAPI.GetObjectInfo
+	if api.CacheAPI() != nil {
+		getObjectInfo = api.CacheAPI().GetObjectInfo
+		putObject = api.CacheAPI().PutObject
+	}
 
 	rawReader := hashReader
 	pReader := NewPutObjReader(rawReader, nil, nil)
@@ -1219,7 +1224,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Deny if WORM is enabled
 	if globalWORMEnabled {
-		if _, err = objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
+		if _, err = getObjectInfo(ctx, bucket, object, opts); err == nil {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
 			return
 		}

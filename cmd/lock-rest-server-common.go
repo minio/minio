@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"path"
 	"time"
 )
@@ -52,6 +53,9 @@ type nameLockRequesterInfoPair struct {
 	name string
 	lri  lockRequesterInfo
 }
+
+var errLockConflict = errors.New("lock conflict")
+var errLockNotExpired = errors.New("lock not expired")
 
 // Similar to removeEntry but only removes an entry only if the lock entry exists in map.
 func (l *localLocker) removeEntryIfExists(nlrip nameLockRequesterInfoPair) {

@@ -33,6 +33,7 @@ require (
 	github.com/gorilla/handlers v1.4.0
 	github.com/gorilla/mux v1.7.0
 	github.com/gorilla/rpc v1.2.0+incompatible
+	github.com/gorilla/websocket v1.4.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.9.0 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.1 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
@@ -92,8 +93,8 @@ require (
 	go.etcd.io/bbolt v1.3.3 // indirect
 	go.uber.org/atomic v1.3.2
 	golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586
-	golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7 // indirect
-	golang.org/x/sys v0.0.0-20190813064441-fde4db37ae7a
+	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297 // indirect
+	golang.org/x/sys v0.0.0-20190826190057-c7b8b68b1456
 	google.golang.org/api v0.4.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
 	gopkg.in/olivere/elastic.v5 v5.0.80

@@ -487,7 +487,6 @@ var notimplementedBucketResourceNames = map[string]bool{
 // List of not implemented object queries
 var notimplementedObjectResourceNames = map[string]bool{
 	"acl":     true,
-	"policy":  true,
 	"restore": true,
 	"tagging": true,
 	"torrent": true,
@@ -697,6 +696,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 			f.fwd.ServeHTTP(w, r)
 			return
 		}
+		f.handler.ServeHTTP(w, r)
 		return
 	}
 

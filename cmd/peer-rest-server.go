@@ -24,7 +24,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -33,6 +32,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/lifecycle"
+	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
 	trace "github.com/minio/minio/pkg/trace"
@@ -65,46 +65,6 @@ func getServerInfo() (*ServerInfoData, error) {
 			Region:       globalServerConfig.GetRegion(),
 		},
 	}, nil
-}
-
-// uptimes - used to sort uptimes in chronological order.
-type uptimes []time.Duration
-
-func (ts uptimes) Len() int {
-	return len(ts)
-}
-
-func (ts uptimes) Less(i, j int) bool {
-	return ts[i] < ts[j]
-}
-
-func (ts uptimes) Swap(i, j int) {
-	ts[i], ts[j] = ts[j], ts[i]
-}
-
-// getPeerUptimes - returns the uptime.
-func getPeerUptimes(serverInfo []ServerInfo) time.Duration {
-	// In a single node Erasure or FS backend setup the uptime of
-	// the setup is the uptime of the single minio server
-	// instance.
-	if !globalIsDistXL {
-		return UTCNow().Sub(globalBootTime)
-	}
-
-	var times []time.Duration
-
-	for _, info := range serverInfo {
-		if info.Error != "" {
-			continue
-		}
-		times = append(times, info.Data.Properties.Uptime)
-	}
-
-	// Sort uptimes in chronological order.
-	sort.Sort(uptimes(times))
-
-	// Return the latest time as the uptime.
-	return times[0]
 }
 
 // NetReadPerfInfoHandler - returns network read performance information.
@@ -809,6 +769,35 @@ func (s *peerRESTServer) ListenBucketNotificationHandler(w http.ResponseWriter, 
 	w.(http.Flusher).Flush()
 }
 
+// ServerUpdateHandler - updates the current server.
+func (s *peerRESTServer) ServerUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	vars := mux.Vars(r)
+	updateURL := vars[peerRESTUpdateURL]
+	sha256Hex := vars[peerRESTSha256Hex]
+	var latestReleaseTime time.Time
+	var err error
+	if latestRelease := vars[peerRESTLatestRelease]; latestRelease != "" {
+		latestReleaseTime, err = time.Parse(latestRelease, time.RFC3339)
+		if err != nil {
+			s.writeErrorResponse(w, err)
+			return
+		}
+	}
+	us, err := updateServer(updateURL, sha256Hex, latestReleaseTime)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	if us.CurrentVersion != us.UpdatedVersion {
+		globalServiceSignalCh <- serviceRestart
+	}
+}
+
 var errUnsupportedSignal = fmt.Errorf("unsupported signal: only restart and stop signals are supported")
 
 // SignalServiceHandler - signal service handler.
@@ -824,10 +813,17 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 		s.writeErrorResponse(w, errors.New("signal name is missing"))
 		return
 	}
-	signal := serviceSignal(signalString)
+	si, err := strconv.Atoi(signalString)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	signal := serviceSignal(si)
 	defer w.(http.Flusher).Flush()
 	switch signal {
-	case serviceRestart, serviceStop:
+	case serviceRestart:
+		globalServiceSignalCh <- signal
+	case serviceStop:
 		globalServiceSignalCh <- signal
 	default:
 		s.writeErrorResponse(w, errUnsupportedSignal)
@@ -908,6 +904,38 @@ func (s *peerRESTServer) BackgroundOpsStatusHandler(w http.ResponseWriter, r *ht
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(state))
 }
 
+// ConsoleLogHandler sends console logs of this node back to peer rest client
+func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	w.Header().Set("Connection", "close")
+	w.WriteHeader(http.StatusOK)
+	w.(http.Flusher).Flush()
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	ch := make(chan interface{}, 2000)
+	globalConsoleSys.Subscribe(ch, doneCh, "", 0, nil)
+
+	enc := gob.NewEncoder(w)
+	for {
+		select {
+		case entry := <-ch:
+			log := entry.(madmin.LogInfo)
+			if err := enc.Encode(log); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-r.Context().Done():
+			return
+		}
+	}
+}
+
 func (s *peerRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusForbidden)
 	w.Write([]byte(err.Error()))
@@ -926,8 +954,8 @@ func (s *peerRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
 func registerPeerRESTHandlers(router *mux.Router) {
 	server := &peerRESTServer{}
 	subrouter := router.PathPrefix(peerRESTPath).Subrouter()
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodNetReadPerfInfo).HandlerFunc(httpTraceHdrs(server.NetReadPerfInfoHandler))
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodCollectNetPerfInfo).HandlerFunc(httpTraceHdrs(server.CollectNetPerfInfoHandler))
+	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodNetReadPerfInfo).HandlerFunc(httpTraceHdrs(server.NetReadPerfInfoHandler)).Queries(restQueries(peerRESTNetPerfSize)...)
+	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodCollectNetPerfInfo).HandlerFunc(httpTraceHdrs(server.CollectNetPerfInfoHandler)).Queries(restQueries(peerRESTNetPerfSize)...)
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodGetLocks).HandlerFunc(httpTraceHdrs(server.GetLocksHandler))
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodServerInfo).HandlerFunc(httpTraceHdrs(server.ServerInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodCPULoadInfo).HandlerFunc(httpTraceHdrs(server.CPULoadInfoHandler))
@@ -935,11 +963,12 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodDrivePerfInfo).HandlerFunc(httpTraceHdrs(server.DrivePerfInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodDeleteBucket).HandlerFunc(httpTraceHdrs(server.DeleteBucketHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodSignalService).HandlerFunc(httpTraceHdrs(server.SignalServiceHandler)).Queries(restQueries(peerRESTSignal)...)
+	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodServerUpdate).HandlerFunc(httpTraceHdrs(server.ServerUpdateHandler)).Queries(restQueries(peerRESTUpdateURL, peerRESTSha256Hex, peerRESTLatestRelease)...)
 
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodBucketPolicyRemove).HandlerFunc(httpTraceAll(server.RemoveBucketPolicyHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodBucketPolicySet).HandlerFunc(httpTraceHdrs(server.SetBucketPolicyHandler)).Queries(restQueries(peerRESTBucket)...)
 
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodDeletePolicy).HandlerFunc(httpTraceAll(server.LoadPolicyHandler)).Queries(restQueries(peerRESTPolicy)...)
+	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodDeletePolicy).HandlerFunc(httpTraceAll(server.DeletePolicyHandler)).Queries(restQueries(peerRESTPolicy)...)
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodLoadPolicy).HandlerFunc(httpTraceAll(server.LoadPolicyHandler)).Queries(restQueries(peerRESTPolicy)...)
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodLoadPolicyMapping).HandlerFunc(httpTraceAll(server.LoadPolicyMappingHandler)).Queries(restQueries(peerRESTUserOrGroup)...)
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodDeleteUser).HandlerFunc(httpTraceAll(server.LoadUserHandler)).Queries(restQueries(peerRESTUser)...)
@@ -962,6 +991,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodTrace).HandlerFunc(server.TraceHandler)
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodBackgroundHealStatus).HandlerFunc(server.BackgroundHealStatusHandler)
+	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodLog).HandlerFunc(server.ConsoleLogHandler)
 
 	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(notFoundHandler))
 }

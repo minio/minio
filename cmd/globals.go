@@ -174,6 +174,10 @@ var (
 	// registered listeners
 	globalHTTPTrace = pubsub.New()
 
+	// global console system to send console logs to
+	// registered listeners
+	globalConsoleSys *HTTPConsoleLoggerSys
+
 	globalEndpoints EndpointList
 
 	// Global server's network statistics
@@ -336,18 +340,6 @@ var (
 	colorBlack = func() func(format string, a ...interface{}) string {
 		if isTerminal() {
 			return color.New(color.FgBlack).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
-	colorGreenBold = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgGreen, color.Bold).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
-	colorRedBold = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgRed, color.Bold).SprintfFunc()
 		}
 		return fmt.Sprintf
 	}()
