@@ -24,10 +24,10 @@ import (
 	"net/http"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/valyala/fastjson"
 )
 
 var (
@@ -137,101 +137,11 @@ func (m gwMetaV1) ObjectToPartOffset(ctx context.Context, offset int64) (partInd
 	return 0, 0, minio.InvalidRange{}
 }
 
-// parses gateway metadata stat info from metadata json
-func parseGWStat(v *fastjson.Value) (si minio.StatInfo, err error) {
-	// obtain stat info.
-	st := v.GetObject("stat")
-	var mb []byte
-	mb, err = st.Get("modTime").StringBytes()
-	if err != nil {
-		return si, err
-	}
-	// fetching modTime.
-	si.ModTime, err = time.Parse(time.RFC3339, string(mb))
-	if err != nil {
-		return si, err
-	}
-	// obtain Stat.Size .
-	si.Size, err = st.Get("size").Int64()
-	if err != nil {
-		return si, err
-	}
-	return si, nil
-}
-
-// parses gateway metadata version from metadata json
-func parseGWVersion(v *fastjson.Value) string {
-	return string(v.GetStringBytes("version"))
-}
-
-// parses gateway ETag from metadata json
-func parseGWETag(v *fastjson.Value) string {
-	return string(v.GetStringBytes("etag"))
-}
-
-// parses gateway metadata format from metadata json
-func parseGWFormat(v *fastjson.Value) string {
-	return string(v.GetStringBytes("format"))
-}
-
-// parses gateway metadata json to get list of ObjectPartInfo
-func parseGWParts(v *fastjson.Value) []minio.ObjectPartInfo {
-	// Parse the GW Parts.
-	partsResult := v.GetArray("parts")
-	partInfo := make([]minio.ObjectPartInfo, len(partsResult))
-	for i, p := range partsResult {
-		partInfo[i] = minio.ObjectPartInfo{
-			Number: p.GetInt("number"),
-			Name:   string(p.GetStringBytes("name")),
-			ETag:   string(p.GetStringBytes("etag")),
-			Size:   p.GetInt64("size"),
-		}
-	}
-	return partInfo
-}
-
-// parses gateway metadata json to get the metadata map
-func parseGWMetaMap(v *fastjson.Value) map[string]string {
-	metaMap := make(map[string]string)
-	// Get gwMetaV1.Meta map.
-	v.GetObject("meta").Visit(func(k []byte, kv *fastjson.Value) {
-		metaMap[string(k)] = string(kv.GetStringBytes())
-	})
-	return metaMap
-}
-
-var gwParserPool fastjson.ParserPool
-
-// Constructs GWMetaV1 using `fastjson` lib to retrieve each field.
+// Constructs GWMetaV1 using `jsoniter` lib to retrieve each field.
 func gwMetaUnmarshalJSON(ctx context.Context, gwMetaBuf []byte) (gwMeta gwMetaV1, err error) {
-	parser := gwParserPool.Get()
-	defer gwParserPool.Put(parser)
-
-	var v *fastjson.Value
-	v, err = parser.ParseBytes(gwMetaBuf)
-	if err != nil {
-		return gwMeta, err
-	}
-
-	// obtain version.
-	gwMeta.Version = parseGWVersion(v)
-	// obtain format.
-	gwMeta.Format = parseGWFormat(v)
-	// Parse gwMetaV1.Stat .
-	stat, err := parseGWStat(v)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return gwMeta, err
-	}
-	gwMeta.ETag = parseGWETag(v)
-	gwMeta.Stat = stat
-
-	// Parse the GW Parts.
-	gwMeta.Parts = parseGWParts(v)
-	// parse gwMetaV1.
-	gwMeta.Meta = parseGWMetaMap(v)
-
-	return gwMeta, nil
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	err = json.Unmarshal(gwMetaBuf, &gwMeta)
+	return gwMeta, err
 }
 
 // readGWMeta reads `dare.meta` and returns back GW metadata structure.

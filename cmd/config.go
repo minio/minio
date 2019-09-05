@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"path"
 	"runtime"
 	"strings"
@@ -136,18 +137,23 @@ func (sys *ConfigSys) Init(objAPI ObjectLayer) error {
 	//    of the object layer.
 	//  - Write quorum not met when upgrading configuration
 	//    version is needed.
-	for range newRetryTimerSimple(doneCh) {
-		if err := initConfig(objAPI); err != nil {
-			if strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-				strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-				logger.Info("Waiting for configuration to be initialized..")
-				continue
+	retryTimerCh := newRetryTimerSimple(doneCh)
+	for {
+		select {
+		case <-retryTimerCh:
+			if err := initConfig(objAPI); err != nil {
+				if strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
+					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
+					logger.Info("Waiting for configuration to be initialized..")
+					continue
+				}
+				return err
 			}
-			return err
+			return nil
+		case <-globalOSSignalCh:
+			return fmt.Errorf("Initializing config sub-system gracefully stopped")
 		}
-		break
 	}
-	return nil
 }
 
 // NewConfigSys - creates new config system object.
