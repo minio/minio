@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -31,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/klauspost/compress/zip"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"

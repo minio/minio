@@ -1,6 +1,6 @@
 # Compression Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-MinIO server allows streaming compression to ensure efficient disk space usage. Compression happens inflight, i.e objects are compressed before being written to disk(s). MinIO uses [`klauspost/compress`](https://github.com/klauspost/compress/tree/master/s2) streaming compression due to its stability and performance.
+MinIO server allows streaming compression to ensure efficient disk space usage. Compression happens inflight, i.e objects are compressed before being written to disk(s). MinIO uses [`klauspost/compress/s2`](https://github.com/klauspost/compress/tree/master/s2) streaming compression due to its stability and performance.
 
 ## Get Started
 
