@@ -1854,7 +1854,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 	globalConsoleSys.Subscribe(logCh, doneCh, node, limitLines, nil)
 
 	for _, peer := range peers {
-		if node == "" || strings.ToLower(peer.host.Name) == strings.ToLower(node) {
+		if node == "" || strings.EqualFold(peer.host.Name, node) {
 			peer.ConsoleLog(logCh, doneCh)
 		}
 	}
