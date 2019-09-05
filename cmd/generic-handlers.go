@@ -696,6 +696,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 			f.fwd.ServeHTTP(w, r)
 			return
 		}
+		f.handler.ServeHTTP(w, r)
 		return
 	}
 

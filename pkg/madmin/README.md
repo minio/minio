@@ -42,14 +42,13 @@ func main() {
 }
 
 ```
-
-| Service operations                  | Info operations                                 | Healing operations | Config operations                 | Top operations          | IAM operations                        | Misc                                              |
-|:------------------------------------|:------------------------------------------------|:-------------------|:----------------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|
-| [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                     | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig)         | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   |
-| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)       |                    | [`SetConfig`](#SetConfig)         |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |
-|                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)     |                    | [`GetConfigKeys`](#GetConfigKeys) |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |
-| [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) |                    | [`SetConfigKeys`](#SetConfigKeys) |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |
-|                                     | [`NetPerfInfo`](#NetPerfInfo)                   |                    |                                   |                         |                                       |                                                   |
+| Service operations                  | Info operations                                 | Healing operations | Config operations                 | Top operations          | IAM operations                        | Misc                                              | KMS                               |
+|:------------------------------------|:------------------------------------------------|:-------------------|:----------------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|:----------------------------------|
+| [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                     | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig)         | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   | [`GetKeyStatus`](#GetKeyStatus)   | 
+| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)       |                    | [`SetConfig`](#SetConfig)         |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |                                   |
+|                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)     |                    | [`GetConfigKeys`](#GetConfigKeys) |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                   |
+| [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) |                    | [`SetConfigKeys`](#SetConfigKeys) |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                   |
+|                                     | [`NetPerfInfo`](#NetPerfInfo)                   |                    |                                   |                         |                                       |                                                   |                                   |
     
 ## 1. Constructor
 <a name="MinIO"></a>
@@ -579,4 +578,31 @@ __Example__
     }
 
     log.Println("Profiling data successfully downloaded.")
+```
+
+## 11. KMS
+
+<a name="GetKeyStatus"></a> 
+### GetKeyStatus(keyID string) (*KMSKeyStatus, error)
+Requests status information about one particular KMS master key
+from a MinIO server. The keyID is optional and the server will
+use the default master key (configured via `MINIO_SSE_VAULT_KEY_NAME`
+or `MINIO_SSE_MASTER_KEY`) if the keyID is empty.
+
+__Example__
+
+``` go
+    keyInfo, err := madmClnt.GetKeyStatus("my-minio-key")
+    if err != nil {
+       log.Fatalln(err)
+    }
+    if keyInfo.EncryptionErr != "" {
+       log.Fatalf("Failed to perform encryption operation using '%s': %v\n", keyInfo.KeyID, keyInfo.EncryptionErr)
+    }
+    if keyInfo.UpdateErr != "" {
+       log.Fatalf("Failed to perform key re-wrap operation using '%s': %v\n", keyInfo.KeyID, keyInfo.UpdateErr)
+    }
+    if keyInfo.DecryptionErr != "" {
+       log.Fatalf("Failed to perform decryption operation using '%s': %v\n", keyInfo.KeyID, keyInfo.DecryptionErr)
+    }
 ```
