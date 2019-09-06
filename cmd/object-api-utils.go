@@ -34,6 +34,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/klauspost/compress/s2"
+	"github.com/klauspost/readahead"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -608,7 +609,18 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 			if err != nil {
 				return nil, err
 			}
+
 			decReader := io.LimitReader(s2Reader, decLength)
+			if decLength > 100<<20 {
+				// On big files, read 4x1MB ahead
+				rah, err := readahead.NewReaderSize(decReader, 5, 1<<20)
+				if err == nil {
+					decReader = rah
+					cFns = append(cFns, func() {
+						rah.Close()
+					})
+				}
+			}
 			oi.Size = decLength
 
 			// Assemble the GetObjectReader
