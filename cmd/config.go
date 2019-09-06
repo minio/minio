@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/quick"
 )
 
@@ -40,7 +41,7 @@ const (
 	minioConfigBackupFile = minioConfigFile + ".backup"
 )
 
-func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config *serverConfig) error {
+func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config *serverConfig, prevCred auth.Credentials) error {
 	if err := quick.CheckData(config); err != nil {
 		return err
 	}
@@ -50,12 +51,14 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config *serverCon
 		return err
 	}
 
+	newCred := globalServerConfig.GetCredential()
+
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 	// Create a backup of the current config
-	oldData, err := readConfig(ctx, objAPI, configFile)
+	oldData, err := readConfigWithCreds(ctx, objAPI, configFile, prevCred)
 	if err == nil {
 		backupConfigFile := path.Join(minioConfigPrefix, minioConfigBackupFile)
-		if err = saveConfig(ctx, objAPI, backupConfigFile, oldData); err != nil {
+		if err = saveConfigWithCreds(ctx, objAPI, backupConfigFile, oldData, newCred); err != nil {
 			return err
 		}
 	} else {
@@ -65,7 +68,7 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config *serverCon
 	}
 
 	// Save the new config in the std config path
-	return saveConfig(ctx, objAPI, configFile, data)
+	return saveConfigWithCreds(ctx, objAPI, configFile, data, newCred)
 }
 
 func readServerConfig(ctx context.Context, objAPI ObjectLayer) (*serverConfig, error) {
@@ -184,6 +187,13 @@ func initConfig(objAPI ObjectLayer) error {
 
 	// Migrates backend '<export_path>/.minio.sys/config/config.json' to latest version.
 	if err := migrateMinioSysConfig(objAPI); err != nil {
+		return err
+	}
+
+	secretKey := globalServerConfig.GetCredential().SecretKey
+
+	// Migrates backend config and encrypts it.
+	if err := migrateMinioSysConfigAndEncrypt(objAPI, secretKey); err != nil {
 		return err
 	}
 

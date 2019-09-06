@@ -58,7 +58,7 @@ spelling:
 check: test
 test: verifiers build
 	@echo "Running unit tests"
-	@GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./... 1>/dev/null
+	GO111MODULE=on CGO_ENABLED=0 go test -v -tags kqueue ./... 1>/dev/null
 
 verify: build
 	@echo "Verifying build"

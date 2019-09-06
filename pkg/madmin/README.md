@@ -42,13 +42,13 @@ func main() {
 }
 
 ```
-| Service operations                  | Info operations                                 | Healing operations | Config operations                 | Top operations          | IAM operations                        | Misc                                              | KMS                               |
-|:------------------------------------|:------------------------------------------------|:-------------------|:----------------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|:----------------------------------|
-| [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                     | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig)         | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   | [`GetKeyStatus`](#GetKeyStatus)   | 
-| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)       |                    | [`SetConfig`](#SetConfig)         |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |                                   |
-|                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)     |                    | [`GetConfigKeys`](#GetConfigKeys) |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                   |
-| [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) |                    | [`SetConfigKeys`](#SetConfigKeys) |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                   |
-|                                     | [`NetPerfInfo`](#NetPerfInfo)                   |                    |                                   |                         |                                       |                                                   |                                   |
+| Service operations                  | Info operations                                 | Healing operations | Config operations         | Top operations          | IAM operations                        | Misc                                              | KMS                             |
+|:------------------------------------|:------------------------------------------------|:-------------------|:--------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|:--------------------------------|
+| [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                     | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig) | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   | [`GetKeyStatus`](#GetKeyStatus) |
+| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)       |                    | [`SetConfig`](#SetConfig) |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |                                 |
+|                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)     |                    |                           |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
+| [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) |                    |                           |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                 |
+|                                     | [`NetPerfInfo`](#NetPerfInfo)                   |                    |                           |                         |                                       |                                                   |                                 |
     
 ## 1. Constructor
 <a name="MinIO"></a>
@@ -388,45 +388,6 @@ __Example__
         log.Fatalf("failed due to: %v", err)
     }
     log.Println("SetConfig was successful")
-```
-
-<a name="GetConfigKeys"></a>
-### GetConfigKeys(keys []string) ([]byte, error)
-Get a json document which contains a set of keys and their values from config.json.
-
-__Example__
-
-``` go
-    configBytes, err := madmClnt.GetConfigKeys([]string{"version", "notify.amqp.1"})
-    if err != nil {
-        log.Fatalf("failed due to: %v", err)
-    }
-
-    // Pretty-print config received as json.
-    var buf bytes.Buffer
-    err = json.Indent(buf, configBytes, "", "\t")
-    if err != nil {
-        log.Fatalf("failed due to: %v", err)
-    }
-
-    log.Println("config received successfully: ", string(buf.Bytes()))
-```
-
-
-<a name="SetConfigKeys"></a>
-### SetConfigKeys(params map[string]string) error
-Set a set of keys and values for MinIO server or distributed setup and restart the MinIO
-server for the new configuration changes to take effect.
-
-__Example__
-
-``` go
-    err := madmClnt.SetConfigKeys(map[string]string{"notify.webhook.1": "{\"enable\": true, \"endpoint\": \"http://example.com/api\"}"})
-    if err != nil {
-        log.Fatalf("failed due to: %v", err)
-    }
-
-    log.Println("New configuration successfully set")
 ```
 
 ## 7. Top operations

@@ -2470,7 +2470,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 		// Initialize the server config, if no config exists.
 		return newSrvConfig(objAPI)
 	}
-	return saveServerConfig(context.Background(), objAPI, config)
+	return saveServerConfig(context.Background(), objAPI, config, config.GetCredential())
 }
 
 // Migrates '.minio.sys/config.json' to v33.
@@ -2480,6 +2480,9 @@ func migrateMinioSysConfig(objAPI ObjectLayer) error {
 	// Check if the config version is latest, if not migrate.
 	ok, _, err := checkConfigVersion(objAPI, configFile, serverConfigVersion)
 	if err != nil {
+		if err == errConfigNotFound {
+			return newSrvConfig(objAPI)
+		}
 		return err
 	}
 	if ok {
@@ -2514,6 +2517,41 @@ func migrateMinioSysConfig(objAPI ObjectLayer) error {
 		return err
 	}
 	return migrateV32ToV33MinioSys(objAPI)
+}
+
+func migrateMinioSysConfigAndEncrypt(objAPI ObjectLayer, secretKey string) error {
+	configFile := path.Join(minioConfigPrefix, minioConfigFile)
+
+	encrypted, err := checkIsConfigEncrypted(objAPI, configFile)
+	if err != nil {
+		if err == errConfigNotFound {
+			return newSrvConfig(objAPI)
+		}
+		return err
+	}
+	if encrypted {
+		return nil
+	}
+
+	// Construct path to config.json for the given bucket.
+	transactionConfigFile := configFile + ".transaction"
+
+	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
+	// and configFile, take a transaction lock to avoid data race between readConfig()
+	// and saveConfig().
+	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigFile)
+	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
+	defer objLock.Unlock()
+
+	data, err := readConfig(context.Background(), objAPI, configFile)
+	if err != nil {
+		return err
+	}
+
+	defer logger.Info("Migrating plain-text config.json to encrypted config.json")
+	return saveConfig(context.Background(), objAPI, configFile, data)
 }
 
 func checkConfigVersion(objAPI ObjectLayer, configFile string, version string) (bool, []byte, error) {

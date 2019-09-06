@@ -593,7 +593,7 @@ func newSrvConfig(objAPI ObjectLayer) error {
 	globalServerConfigMu.Unlock()
 
 	// Save config into file.
-	return saveServerConfig(context.Background(), objAPI, globalServerConfig)
+	return saveServerConfig(context.Background(), objAPI, globalServerConfig, globalServerConfig.GetCredential())
 }
 
 // getValidConfig - returns valid server configuration

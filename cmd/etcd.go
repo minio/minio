@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	etcd "github.com/coreos/etcd/clientv3"
+	"github.com/minio/minio/cmd/crypto"
 )
 
 var errEtcdUnreachable = errors.New("etcd is unreachable, please check your endpoints")
@@ -41,6 +42,16 @@ func etcdErrToErr(err error, etcdEndpoints []string) error {
 func saveKeyEtcd(ctx context.Context, client *etcd.Client, key string, data []byte) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
 	defer cancel()
+
+	secretKey := globalServerConfig.GetCredential().SecretKey
+	if secretKey != "" {
+		var err error
+		data, err = crypto.EncryptData(secretKey, data)
+		if err != nil {
+			return etcdErrToErr(err, client.Endpoints())
+		}
+	}
+
 	_, err := client.Put(timeoutCtx, key, string(data))
 	return etcdErrToErr(err, client.Endpoints())
 }
@@ -65,6 +76,10 @@ func readKeyEtcd(ctx context.Context, client *etcd.Client, key string) ([]byte, 
 	}
 	for _, ev := range resp.Kvs {
 		if string(ev.Key) == key {
+			if crypto.IsEncryptedData(ev.Value) {
+				secretKey := globalServerConfig.GetCredential().SecretKey
+				return crypto.DecryptData(secretKey, ev.Value)
+			}
 			return ev.Value, nil
 		}
 	}

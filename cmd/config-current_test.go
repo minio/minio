@@ -52,7 +52,8 @@ func TestServerConfig(t *testing.T) {
 		t.Errorf("Expecting version %s found %s", globalServerConfig.GetVersion(), serverConfigVersion)
 	}
 
-	if err := saveServerConfig(context.Background(), objLayer, globalServerConfig); err != nil {
+	err = saveServerConfig(context.Background(), objLayer, globalServerConfig, globalServerConfig.GetCredential())
+	if err != nil {
 		t.Fatalf("Unable to save updated config file %s", err)
 	}
 

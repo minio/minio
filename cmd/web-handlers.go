@@ -796,7 +796,7 @@ type SetAuthReply struct {
 
 // SetAuth - Set accessKey and secretKey credentials.
 func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthReply) error {
-	ctx := newWebContext(r, args, "webSetAuth")
+	ctx := newWebContext(r, args, "WebSetAuth")
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
@@ -831,7 +831,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		prevCred = globalServerConfig.SetCredential(creds)
 
 		// Persist updated credentials.
-		if err = saveServerConfig(ctx, newObjectLayerFn(), globalServerConfig); err != nil {
+		if err = saveServerConfig(ctx, newObjectLayerFn(), globalServerConfig, prevCred); err != nil {
 			// Save the current creds when failed to update.
 			globalServerConfig.SetCredential(prevCred)
 			logger.LogIf(ctx, err)

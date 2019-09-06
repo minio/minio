@@ -541,7 +541,7 @@ func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 	globalServerConfig.SetRegion(bucketLocation)
 
 	// Save config.
-	return saveServerConfig(context.Background(), obj, globalServerConfig)
+	return saveServerConfig(context.Background(), obj, globalServerConfig, globalServerConfig.GetCredential())
 }
 
 // Deleting the temporary backend and stopping the server.
@@ -1990,6 +1990,15 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 		t.Fatal("Unexpected error", err)
 	}
 
+	globalIAMSys = NewIAMSys()
+	globalIAMSys.Init(objLayer)
+
+	globalNotificationSys = NewNotificationSys(globalServerConfig, mustGetNewEndpointList(fsDir))
+	globalNotificationSys.Init(objLayer)
+
+	globalPolicySys = NewPolicySys()
+	globalPolicySys.Init(objLayer)
+
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, FSTestStr, t)
 
@@ -1997,6 +2006,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
+
 	// Executing the object layer tests for XL.
 	objTest(objLayer, XLTestStr, t)
 	defer removeRoots(append(fsDirs, fsDir))
@@ -2015,6 +2025,15 @@ func ExecObjectLayerTestWithDirs(t TestErrHandler, objTest objTestTypeWithDirs) 
 	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
 		t.Fatal("Unexpected error", err)
 	}
+
+	globalIAMSys = NewIAMSys()
+	globalIAMSys.Init(objLayer)
+
+	globalNotificationSys = NewNotificationSys(globalServerConfig, mustGetNewEndpointList(fsDirs...))
+	globalNotificationSys.Init(objLayer)
+
+	globalPolicySys = NewPolicySys()
+	globalPolicySys.Init(objLayer)
 
 	// Executing the object layer tests for XL.
 	objTest(objLayer, XLTestStr, fsDirs, t)

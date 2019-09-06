@@ -21,13 +21,40 @@ import (
 	"context"
 	"errors"
 
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/hash"
 )
 
 var errConfigNotFound = errors.New("config file not found")
 
+func checkIsConfigEncrypted(objAPI ObjectLayer, configFile string) (bool, error) {
+	var buffer bytes.Buffer
+	// Read entire content by setting size to -1
+	if err := objAPI.GetObject(context.Background(), minioMetaBucket, configFile, 0, -1, &buffer, "", ObjectOptions{}); err != nil {
+		// Treat object not found as config not found.
+		if isErrObjectNotFound(err) {
+			return false, errConfigNotFound
+		}
+
+		logger.GetReqInfo(context.Background()).AppendTags("configFile", configFile)
+		logger.LogIf(context.Background(), err)
+		return false, err
+	}
+
+	// Return config not found on empty content.
+	if buffer.Len() == 0 {
+		return false, errConfigNotFound
+	}
+	return crypto.IsEncryptedData(buffer.Bytes()), nil
+}
+
 func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]byte, error) {
+	return readConfigWithCreds(ctx, objAPI, configFile, globalServerConfig.GetCredential())
+}
+
+func readConfigWithCreds(ctx context.Context, objAPI ObjectLayer, configFile string, cred auth.Credentials) ([]byte, error) {
 	var buffer bytes.Buffer
 	// Read entire content by setting size to -1
 	if err := objAPI.GetObject(ctx, minioMetaBucket, configFile, 0, -1, &buffer, "", ObjectOptions{}); err != nil {
@@ -46,6 +73,9 @@ func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]b
 		return nil, errConfigNotFound
 	}
 
+	if crypto.IsEncryptedData(buffer.Bytes()) {
+		return crypto.DecryptData(cred.SecretKey, buffer.Bytes())
+	}
 	return buffer.Bytes(), nil
 }
 
@@ -54,6 +84,18 @@ func deleteConfig(ctx context.Context, objAPI ObjectLayer, configFile string) er
 }
 
 func saveConfig(ctx context.Context, objAPI ObjectLayer, configFile string, data []byte) error {
+	return saveConfigWithCreds(ctx, objAPI, configFile, data, globalServerConfig.GetCredential())
+}
+
+func saveConfigWithCreds(ctx context.Context, objAPI ObjectLayer, configFile string, data []byte, cred auth.Credentials) error {
+	if cred.SecretKey != "" {
+		var err error
+		data, err = crypto.EncryptData(cred.SecretKey, data)
+		if err != nil {
+			return err
+		}
+	}
+
 	hashReader, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), "", getSHA256Hash(data), int64(len(data)), globalCLIContext.StrictS3Compat)
 	if err != nil {
 		return err
