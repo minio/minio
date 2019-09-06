@@ -763,55 +763,28 @@ func CleanMinioInternalMetadataKeys(metadata map[string]string) map[string]strin
 	return newMeta
 }
 
-// s2CompressReader compresses data as it reads
-// from the underlying io.Reader.
-type s2CompressReader struct {
-	r      io.Reader
-	w      *s2.Writer
-	closed bool
-	buf    bytes.Buffer
-}
-
-func newS2CompressReader(r io.Reader) *s2CompressReader {
-	cr := &s2CompressReader{r: r}
-	cr.w = s2.NewWriter(&cr.buf)
-	return cr
-}
-
-func (cr *s2CompressReader) Read(p []byte) (int, error) {
-	if cr.closed {
-		// if s2 writer is closed r has been completely read,
-		// return any remaining data in buf.
-		return cr.buf.Read(p)
-	}
-
-	// read from original using p as buffer
-	nr, readErr := cr.r.Read(p)
-
-	// write read bytes to snappy writer
-	nw, err := cr.w.Write(p[:nr])
-	if err != nil {
-		return 0, err
-	}
-	if nw != nr {
-		return 0, io.ErrShortWrite
-	}
-
-	// if last of data from reader, close snappy writer to flush
-	if readErr == io.EOF {
-		err := cr.w.Close()
-		cr.closed = true
+// newS2CompressReader will read data from r, compress it and return the compressed data as a Reader.
+func newS2CompressReader(r io.Reader) io.Reader {
+	pr, pw := io.Pipe()
+	comp := s2.NewWriter(pw)
+	// Copy input to compressor
+	go func() {
+		_, err := io.Copy(comp, r)
 		if err != nil {
-			return 0, err
+			comp.Close()
+			pr.CloseWithError(err)
+			return
 		}
-	}
-
-	// read compressed bytes out of buf
-	n, err := cr.buf.Read(p)
-	if readErr != io.EOF && (err == nil || err == io.EOF) {
-		err = readErr
-	}
-	return n, err
+		// Close the stream.
+		err = comp.Close()
+		if err != nil {
+			pr.CloseWithError(err)
+			return
+		}
+		// Everything ok, do regular close.
+		pr.Close()
+	}()
+	return pr
 }
 
 // Returns error if the cancelCh has been closed (indicating that S3 client has disconnected)
