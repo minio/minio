@@ -1006,7 +1006,9 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 		// Set compression metrics.
 		size = -1 // Since compressed size is un-predictable.
-		reader = newS2CompressReader(actualReader)
+		s2c := newS2CompressReader(actualReader)
+		defer s2c.Close()
+		reader = s2c
 		hashReader, err = hash.NewReader(reader, size, "", "", actualSize, globalCLIContext.StrictS3Compat)
 		if err != nil {
 			writeWebErrorResponse(w, err)

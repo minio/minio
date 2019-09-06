@@ -555,6 +555,7 @@ func TestS2CompressReader(t *testing.T) {
 			buf := make([]byte, 100) // make small buffer to ensure multiple reads are required for large case
 
 			r := newS2CompressReader(bytes.NewReader(tt.data))
+			defer r.Close()
 
 			var rdrBuf bytes.Buffer
 			_, err := io.CopyBuffer(&rdrBuf, r, buf)

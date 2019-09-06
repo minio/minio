@@ -764,7 +764,8 @@ func CleanMinioInternalMetadataKeys(metadata map[string]string) map[string]strin
 }
 
 // newS2CompressReader will read data from r, compress it and return the compressed data as a Reader.
-func newS2CompressReader(r io.Reader) io.Reader {
+// Use Close to ensure resources are released on incomplete streams.
+func newS2CompressReader(r io.Reader) io.ReadCloser {
 	pr, pw := io.Pipe()
 	comp := s2.NewWriter(pw)
 	// Copy input to compressor
@@ -772,17 +773,17 @@ func newS2CompressReader(r io.Reader) io.Reader {
 		_, err := io.Copy(comp, r)
 		if err != nil {
 			comp.Close()
-			pr.CloseWithError(err)
+			pw.CloseWithError(err)
 			return
 		}
 		// Close the stream.
 		err = comp.Close()
 		if err != nil {
-			pr.CloseWithError(err)
+			pw.CloseWithError(err)
 			return
 		}
 		// Everything ok, do regular close.
-		pr.Close()
+		pw.Close()
 	}()
 	return pr
 }

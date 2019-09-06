@@ -813,7 +813,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// avoid copying them in target object.
 		crypto.RemoveInternalEntries(srcInfo.UserDefined)
 
-		reader = newS2CompressReader(gr)
+		s2c := newS2CompressReader(gr)
+		defer s2c.Close()
+		reader = s2c
 		length = -1
 	} else {
 		// Remove the metadata for remote calls.
@@ -1194,7 +1196,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 
 		// Set compression metrics.
-		reader = newS2CompressReader(actualReader)
+		s2c := newS2CompressReader(actualReader)
+		defer s2c.Close()
+		reader = s2c
 		size = -1   // Since compressed size is un-predictable.
 		md5hex = "" // Do not try to verify the content.
 		sha256hex = ""
@@ -1637,7 +1641,9 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	isCompressed := compressPart
 	// Compress only if the compression is enabled during initial multipart.
 	if isCompressed {
-		reader = newS2CompressReader(gr)
+		s2c := newS2CompressReader(gr)
+		defer s2c.Close()
+		reader = s2c
 		length = -1
 	} else {
 		reader = gr
@@ -1877,7 +1883,9 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 
 		// Set compression metrics.
-		reader = newS2CompressReader(actualReader)
+		s2c := newS2CompressReader(actualReader)
+		defer s2c.Close()
+		reader = s2c
 		size = -1   // Since compressed size is un-predictable.
 		md5hex = "" // Do not try to verify the content.
 		sha256hex = ""
