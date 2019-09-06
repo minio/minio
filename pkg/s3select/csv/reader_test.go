@@ -17,6 +17,7 @@
 package csv
 
 import (
+	"bytes"
 	"io"
 	"io/ioutil"
 	"strings"
@@ -39,6 +40,7 @@ func TestRead(t *testing.T) {
 	for i, c := range cases {
 		var err error
 		var record sql.Record
+		var result bytes.Buffer
 
 		r, _ := NewReader(ioutil.NopCloser(strings.NewReader(c.content)), &ReaderArgs{
 			FileHeaderInfo:             none,
@@ -51,22 +53,22 @@ func TestRead(t *testing.T) {
 			unmarshaled:                true,
 		})
 
-		result := ""
 		for {
 			record, err = r.Read()
 			if err != nil {
 				break
 			}
-			s, _ := record.MarshalCSV([]rune(c.fieldDelimiter)[0])
-			result += string(s) + c.recordDelimiter
+			record.WriteCSV(&result, []rune(c.fieldDelimiter)[0])
+			result.Truncate(result.Len() - 1)
+			result.WriteString(c.recordDelimiter)
 		}
 		r.Close()
 		if err != io.EOF {
 			t.Fatalf("Case %d failed with %s", i, err)
 		}
 
-		if result != c.content {
-			t.Errorf("Case %d failed: expected %v result %v", i, c.content, result)
+		if result.String() != c.content {
+			t.Errorf("Case %d failed: expected %v result %v", i, c.content, result.String())
 		}
 	}
 }

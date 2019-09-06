@@ -78,8 +78,6 @@ func handleSignals() {
 			exit(stopProcess())
 		case signal := <-globalServiceSignalCh:
 			switch signal {
-			case serviceStatus:
-				// Ignore this at the moment.
 			case serviceRestart:
 				logger.Info("Restarting on service signal")
 				stop := stopProcess()

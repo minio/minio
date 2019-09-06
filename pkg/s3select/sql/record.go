@@ -16,7 +16,11 @@
 
 package sql
 
-import "github.com/bcicen/jstream"
+import (
+	"io"
+
+	"github.com/bcicen/jstream"
+)
 
 // SelectObjectFormat specifies the format of the underlying data
 type SelectObjectFormat int
@@ -36,8 +40,8 @@ const (
 type Record interface {
 	Get(name string) (*Value, error)
 	Set(name string, value *Value) error
-	MarshalCSV(fieldDelimiter rune) ([]byte, error)
-	MarshalJSON() ([]byte, error)
+	WriteCSV(writer io.Writer, fieldDelimiter rune) error
+	WriteJSON(writer io.Writer) error
 
 	// Returns underlying representation
 	Raw() (SelectObjectFormat, interface{})

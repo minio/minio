@@ -289,6 +289,8 @@ func serverMain(ctx *cli.Context) {
 		globalSweepHealState = initHealState()
 	}
 
+	// initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
 	// Configure server.
 	var handler http.Handler
 	handler, err = configureServerHandler(globalEndpoints)

@@ -863,7 +863,7 @@ function test_aws_s3_sync() {
 
     # if make bucket succeeds sync all the files in a directory
     if [ $rv -eq 0 ]; then
-        function="${AWS} s3 sync $MINT_DATA_DIR s3://${bucket_name}/"
+        function="${AWS} s3 sync --no-progress $MINT_DATA_DIR s3://${bucket_name}/"
         test_function=${function}
         out=$($function 2>&1)
         rv=$?

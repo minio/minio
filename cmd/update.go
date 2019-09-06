@@ -23,6 +23,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,44 +31,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
 	"github.com/inconshreveable/go-update"
-	"github.com/minio/cli"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	_ "github.com/minio/sha256-simd" // Needed for sha256 hash verifier.
 )
-
-// Check for new software updates.
-var updateCmd = cli.Command{
-	Name:   "update",
-	Usage:  "update minio to latest release",
-	Action: mainUpdate,
-	Flags: []cli.Flag{
-		cli.BoolFlag{
-			Name:  "quiet",
-			Usage: "disable any update prompt message",
-		},
-	},
-	CustomHelpTemplate: `Name:
-   {{.HelpName}} - {{.Usage}}
-
-USAGE:
-   {{.HelpName}}{{if .VisibleFlags}} [FLAGS]{{end}}
-{{if .VisibleFlags}}
-FLAGS:
-  {{range .VisibleFlags}}{{.}}
-  {{end}}{{end}}
-EXIT STATUS:
-   0 - You are already running the most recent version.
-   1 - New update was applied successfully.
-  -1 - Error in getting update information.
-
-EXAMPLES:
-   1. Check and update minio:
-      {{.Prompt}} {{.HelpName}}
-`,
-}
 
 const (
 	minioReleaseTagTimeLayout = "2006-01-02T15-04-05Z"
@@ -109,11 +77,14 @@ func releaseTimeToReleaseTag(releaseTime time.Time) string {
 
 // releaseTagToReleaseTime - reverse of `releaseTimeToReleaseTag()`
 func releaseTagToReleaseTime(releaseTag string) (releaseTime time.Time, err error) {
-	tagTimePart := strings.TrimPrefix(releaseTag, "RELEASE.")
-	if tagTimePart == releaseTag {
+	fields := strings.Split(releaseTag, ".")
+	if len(fields) < 2 || len(fields) > 3 {
 		return releaseTime, fmt.Errorf("%s is not a valid release tag", releaseTag)
 	}
-	return time.Parse(minioReleaseTagTimeLayout, tagTimePart)
+	if fields[0] != "RELEASE" {
+		return releaseTime, fmt.Errorf("%s is not a valid release tag", releaseTag)
+	}
+	return time.Parse(minioReleaseTagTimeLayout, fields[1])
 }
 
 // getModTime - get the file modification time of `path`
@@ -298,38 +269,58 @@ func getUserAgent(mode string) string {
 }
 
 func downloadReleaseURL(releaseChecksumURL string, timeout time.Duration, mode string) (content string, err error) {
-	req, err := http.NewRequest("GET", releaseChecksumURL, nil)
+	req, err := http.NewRequest(http.MethodGet, releaseChecksumURL, nil)
 	if err != nil {
-		return content, err
+		return content, AdminError{
+			Code:       AdminUpdateUnexpectedFailure,
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		}
 	}
 	req.Header.Set("User-Agent", getUserAgent(mode))
 
-	client := &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			// need to close connection after usage.
-			DisableKeepAlives: true,
-		},
-	}
-
+	client := &http.Client{Transport: getUpdateTransport(timeout)}
 	resp, err := client.Do(req)
 	if err != nil {
-		return content, err
+		if isNetworkOrHostDown(err) {
+			return content, AdminError{
+				Code:       AdminUpdateURLNotReachable,
+				Message:    err.Error(),
+				StatusCode: http.StatusServiceUnavailable,
+			}
+		}
+		return content, AdminError{
+			Code:       AdminUpdateUnexpectedFailure,
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		}
 	}
 	if resp == nil {
-		return content, fmt.Errorf("No response from server to download URL %s", releaseChecksumURL)
+		return content, AdminError{
+			Code:       AdminUpdateUnexpectedFailure,
+			Message:    fmt.Sprintf("No response from server to download URL %s", releaseChecksumURL),
+			StatusCode: http.StatusInternalServerError,
+		}
 	}
 	defer xhttp.DrainBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return content, fmt.Errorf("Error downloading URL %s. Response: %v", releaseChecksumURL, resp.Status)
+		return content, AdminError{
+			Code:       AdminUpdateUnexpectedFailure,
+			Message:    fmt.Sprintf("Error downloading URL %s. Response: %v", releaseChecksumURL, resp.Status),
+			StatusCode: resp.StatusCode,
+		}
 	}
 	contentBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return content, fmt.Errorf("Error reading response. %s", err)
+		return content, AdminError{
+			Code:       AdminUpdateUnexpectedFailure,
+			Message:    fmt.Sprintf("Error reading response. %s", err),
+			StatusCode: http.StatusInternalServerError,
+		}
 	}
 
-	return string(contentBytes), err
+	return string(contentBytes), nil
 }
 
 // DownloadReleaseData - downloads release data from minio official server.
@@ -338,6 +329,7 @@ func DownloadReleaseData(timeout time.Duration, mode string) (data string, err e
 	if runtime.GOOS == globalWindowsOSName {
 		releaseURLs = minioReleaseWindowsInfoURLs
 	}
+
 	return func() (data string, err error) {
 		for _, url := range releaseURLs {
 			data, err = downloadReleaseURL(url, timeout, mode)
@@ -345,7 +337,7 @@ func DownloadReleaseData(timeout time.Duration, mode string) (data string, err e
 				return data, nil
 			}
 		}
-		return data, fmt.Errorf("Failed to fetch release URL - last error: %s", err)
+		return data, err
 	}()
 }
 
@@ -354,10 +346,20 @@ func DownloadReleaseData(timeout time.Duration, mode string) (data string, err e
 //
 // The expected format is a single line with two words like:
 //
-// fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z
+// fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z.<hotfix_optional>
 //
 // The second word must be `minio.` appended to a standard release tag.
 func parseReleaseData(data string) (sha256Hex string, releaseTime time.Time, err error) {
+	defer func() {
+		if err != nil {
+			err = AdminError{
+				Code:       AdminUpdateUnexpectedFailure,
+				Message:    err.Error(),
+				StatusCode: http.StatusInternalServerError,
+			}
+		}
+	}()
+
 	fields := strings.Fields(data)
 	if len(fields) != 2 {
 		err = fmt.Errorf("Unknown release data `%s`", data)
@@ -367,22 +369,44 @@ func parseReleaseData(data string) (sha256Hex string, releaseTime time.Time, err
 	sha256Hex = fields[0]
 	releaseInfo := fields[1]
 
-	fields = strings.SplitN(releaseInfo, ".", 2)
-	if len(fields) != 2 {
+	// Split release of style minio.RELEASE.2019-08-21T19-40-07Z.<hotfix>
+	nfields := strings.SplitN(releaseInfo, ".", 2)
+	if len(nfields) != 2 {
 		err = fmt.Errorf("Unknown release information `%s`", releaseInfo)
 		return sha256Hex, releaseTime, err
 	}
-	if fields[0] != "minio" {
+	if nfields[0] != "minio" {
 		err = fmt.Errorf("Unknown release `%s`", releaseInfo)
 		return sha256Hex, releaseTime, err
 	}
 
-	releaseTime, err = releaseTagToReleaseTime(fields[1])
+	releaseTime, err = releaseTagToReleaseTime(nfields[1])
 	if err != nil {
 		err = fmt.Errorf("Unknown release tag format. %s", err)
 	}
 
 	return sha256Hex, releaseTime, err
+}
+
+const updateTimeout = 10 * time.Second
+
+func getUpdateTransport(timeout time.Duration) http.RoundTripper {
+	var updateTransport http.RoundTripper = &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			dialer := &net.Dialer{
+				Timeout:   timeout,
+				KeepAlive: timeout,
+				DualStack: true,
+			}
+			return dialer.DialContext(ctx, network, addr)
+		},
+		IdleConnTimeout:       timeout,
+		TLSHandshakeTimeout:   timeout,
+		ExpectContinueTimeout: timeout,
+		DisableCompression:    true,
+	}
+	return updateTransport
 }
 
 func getLatestReleaseTime(timeout time.Duration, mode string) (sha256Hex string, releaseTime time.Time, err error) {
@@ -450,21 +474,43 @@ func getUpdateInfo(timeout time.Duration, mode string) (updateMsg string, sha256
 	return prepareUpdateMessage(downloadURL, older), sha256Hex, currentReleaseTime, latestReleaseTime, nil
 }
 
-func doUpdate(sha256Hex string, latestReleaseTime time.Time, ok bool) (updateStatusMsg string, err error) {
-	if !ok {
-		updateStatusMsg = colorRedBold("MinIO update to version RELEASE.%s canceled.",
-			latestReleaseTime.Format(minioReleaseTagTimeLayout))
-		return updateStatusMsg, nil
-	}
+func doUpdate(updateURL, sha256Hex, mode string) (err error) {
 	var sha256Sum []byte
 	sha256Sum, err = hex.DecodeString(sha256Hex)
 	if err != nil {
-		return updateStatusMsg, err
+		return AdminError{
+			Code:       AdminUpdateUnexpectedFailure,
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		}
 	}
 
-	resp, err := http.Get(getDownloadURL(releaseTimeToReleaseTag(latestReleaseTime)))
+	clnt := &http.Client{Transport: getUpdateTransport(30 * time.Second)}
+	req, err := http.NewRequest(http.MethodGet, updateURL, nil)
 	if err != nil {
-		return updateStatusMsg, err
+		return AdminError{
+			Code:       AdminUpdateUnexpectedFailure,
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+
+	req.Header.Set("User-Agent", getUserAgent(mode))
+
+	resp, err := clnt.Do(req)
+	if err != nil {
+		if isNetworkOrHostDown(err) {
+			return AdminError{
+				Code:       AdminUpdateURLNotReachable,
+				Message:    err.Error(),
+				StatusCode: http.StatusServiceUnavailable,
+			}
+		}
+		return AdminError{
+			Code:       AdminUpdateUnexpectedFailure,
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		}
 	}
 	defer xhttp.DrainBody(resp.Body)
 
@@ -475,73 +521,19 @@ func doUpdate(sha256Hex string, latestReleaseTime time.Time, ok bool) (updateSta
 			Checksum: sha256Sum,
 		},
 	); err != nil {
-		return updateStatusMsg, err
-	}
-
-	return colorGreenBold("MinIO updated to version RELEASE.%s successfully.",
-		latestReleaseTime.Format(minioReleaseTagTimeLayout)), nil
-}
-
-// Confirm continues prompting until the input is boolean-ish.
-func confirm(prompt string, args ...interface{}) bool {
-	for {
-		var s string
-		fmt.Fprintf(color.Output, prompt+": ", args...)
-		fmt.Scanln(&s)
-		switch s {
-		case "Yes", "yes", "y", "Y":
-			return true
-		case "No", "no", "n", "N":
-			return false
+		if os.IsPermission(err) {
+			return AdminError{
+				Code:       AdminUpdateApplyFailure,
+				Message:    err.Error(),
+				StatusCode: http.StatusForbidden,
+			}
+		}
+		return AdminError{
+			Code:       AdminUpdateApplyFailure,
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
 		}
 	}
-}
 
-func shouldUpdate(quiet bool, sha256Hex string, latestReleaseTime time.Time) (ok bool) {
-	ok = true
-	if !quiet {
-		ok = confirm(colorGreenBold("Update to RELEASE.%s ? [%s]", latestReleaseTime.Format(minioReleaseTagTimeLayout), "y/n"))
-	}
-	return ok
-}
-
-func mainUpdate(ctx *cli.Context) {
-	if len(ctx.Args()) != 0 {
-		cli.ShowCommandHelpAndExit(ctx, "update", -1)
-	}
-
-	handleCommonEnvVars()
-
-	quiet := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
-	if quiet {
-		logger.EnableQuiet()
-	}
-
-	minioMode := ""
-	updateMsg, sha256Hex, _, latestReleaseTime, err := getUpdateInfo(10*time.Second, minioMode)
-	if err != nil {
-		logger.Info(err.Error())
-		os.Exit(-1)
-	}
-
-	// Nothing to update running the latest release.
-	if updateMsg == "" {
-		logger.Info(colorGreenBold("You are already running the most recent version of ‘minio’."))
-		os.Exit(0)
-	}
-
-	logger.Info(updateMsg)
-	// if the in-place update is disabled then we shouldn't ask the
-	// user to update the binaries.
-	if strings.Contains(updateMsg, minioReleaseURL) && !globalInplaceUpdateDisabled {
-		var updateStatusMsg string
-		updateStatusMsg, err = doUpdate(sha256Hex, latestReleaseTime, shouldUpdate(quiet, sha256Hex, latestReleaseTime))
-		if err != nil {
-			logger.Info(colorRedBold("Unable to update ‘minio’."))
-			logger.Info(err.Error())
-			os.Exit(-1)
-		}
-		logger.Info(updateStatusMsg)
-		os.Exit(1)
-	}
+	return nil
 }

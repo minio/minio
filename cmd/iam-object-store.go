@@ -127,8 +127,8 @@ func (iamOS *IAMObjectStore) migrateUsersConfigToV1(isSTS bool) error {
 		identityPath := pathJoin(basePrefix, user, iamIdentityFile)
 		var cred auth.Credentials
 		if err := iamOS.loadIAMConfig(&cred, identityPath); err != nil {
-			switch err.(type) {
-			case ObjectNotFound:
+			switch err {
+			case errConfigNotFound:
 				// This should not happen.
 			default:
 				// File may be corrupt or network error
@@ -169,7 +169,7 @@ func (iamOS *IAMObjectStore) migrateToV1() error {
 		case errConfigNotFound:
 			// Need to migrate to V1.
 		default:
-			return errors.New("corrupt IAM format file")
+			return err
 		}
 	} else {
 		if iamFmt.Version >= iamFormatVersion1 {

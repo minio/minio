@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,13 +25,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/tidwall/gjson"
 )
 
 var (
@@ -344,117 +347,35 @@ func initTestXLObjLayer() (ObjectLayer, []string, error) {
 	return objLayer, xlDirs, nil
 }
 
-func TestAdminVersionHandler(t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
-	if err != nil {
-		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
-	}
-	defer adminTestBed.TearDown()
-
-	req, err := newTestRequest("GET", "/minio/admin/version", 0, nil)
-	if err != nil {
-		t.Fatalf("Failed to construct request - %v", err)
-	}
-	cred := globalServerConfig.GetCredential()
-	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-	if err != nil {
-		t.Fatalf("Failed to sign request - %v", err)
-	}
-
-	rec := httptest.NewRecorder()
-	adminTestBed.router.ServeHTTP(rec, req)
-	if http.StatusOK != rec.Code {
-		t.Errorf("Unexpected status code - got %d but expected %d",
-			rec.Code, http.StatusOK)
-	}
-
-	var result madmin.AdminAPIVersionInfo
-	err = json.NewDecoder(rec.Body).Decode(&result)
-	if err != nil {
-		t.Errorf("json parse err: %v", err)
-	}
-
-	if result != adminAPIVersionInfo {
-		t.Errorf("unexpected version: %v", result)
-	}
-}
-
 // cmdType - Represents different service subcomands like status, stop
 // and restart.
 type cmdType int
 
 const (
-	statusCmd cmdType = iota
-	restartCmd
+	restartCmd cmdType = iota
 	stopCmd
-	setCreds
 )
-
-// String - String representation for cmdType
-func (c cmdType) String() string {
-	switch c {
-	case statusCmd:
-		return "status"
-	case restartCmd:
-		return "restart"
-	case stopCmd:
-		return "stop"
-	case setCreds:
-		return "set-credentials"
-	}
-	return ""
-}
-
-// apiMethod - Returns the HTTP method corresponding to the admin REST
-// API for a given cmdType value.
-func (c cmdType) apiMethod() string {
-	switch c {
-	case statusCmd:
-		return "GET"
-	case restartCmd:
-		return "POST"
-	case stopCmd:
-		return "POST"
-	case setCreds:
-		return "PUT"
-	}
-	return "GET"
-}
-
-// apiEndpoint - Return endpoint for each admin REST API mapped to a
-// command here.
-func (c cmdType) apiEndpoint() string {
-	switch c {
-	case statusCmd, restartCmd, stopCmd:
-		return "/minio/admin/v1/service"
-	case setCreds:
-		return "/minio/admin/v1/config/credential"
-	}
-	return ""
-}
 
 // toServiceSignal - Helper function that translates a given cmdType
 // value to its corresponding serviceSignal value.
 func (c cmdType) toServiceSignal() serviceSignal {
 	switch c {
-	case statusCmd:
-		return serviceStatus
 	case restartCmd:
 		return serviceRestart
 	case stopCmd:
 		return serviceStop
 	}
-	return serviceStatus
+	return serviceRestart
 }
 
-func (c cmdType) toServiceActionValue() madmin.ServiceActionValue {
+func (c cmdType) toServiceAction() madmin.ServiceAction {
 	switch c {
 	case restartCmd:
-		return madmin.ServiceActionValueRestart
+		return madmin.ServiceActionRestart
 	case stopCmd:
-		return madmin.ServiceActionValueStop
+		return madmin.ServiceActionStop
 	}
-	return madmin.ServiceActionValueStop
+	return madmin.ServiceActionRestart
 }
 
 // testServiceSignalReceiver - Helper function that simulates a
@@ -469,18 +390,14 @@ func testServiceSignalReceiver(cmd cmdType, t *testing.T) {
 
 // getServiceCmdRequest - Constructs a management REST API request for service
 // subcommands for a given cmdType value.
-func getServiceCmdRequest(cmd cmdType, cred auth.Credentials, body []byte) (*http.Request, error) {
-	req, err := newTestRequest(cmd.apiMethod(), cmd.apiEndpoint(), 0, nil)
+func getServiceCmdRequest(cmd cmdType, cred auth.Credentials) (*http.Request, error) {
+	queryVal := url.Values{}
+	queryVal.Set("action", string(cmd.toServiceAction()))
+	resource := "/minio/admin/v1/service?" + queryVal.Encode()
+	req, err := newTestRequest(http.MethodPost, resource, 0, nil)
 	if err != nil {
 		return nil, err
 	}
-
-	// Set body
-	req.Body = ioutil.NopCloser(bytes.NewReader(body))
-	req.ContentLength = int64(len(body))
-
-	// Set sha-sum header
-	req.Header.Set("X-Amz-Content-Sha256", getSHA256Hash(body))
 
 	// management REST API uses signature V4 for authentication.
 	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
@@ -517,32 +434,13 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	}
 	credentials := globalServerConfig.GetCredential()
 
-	body, err := json.Marshal(madmin.ServiceAction{
-		Action: cmd.toServiceActionValue()})
-	if err != nil {
-		t.Fatalf("JSONify error: %v", err)
-	}
-
-	req, err := getServiceCmdRequest(cmd, credentials, body)
+	req, err := getServiceCmdRequest(cmd, credentials)
 	if err != nil {
 		t.Fatalf("Failed to build service status request %v", err)
 	}
 
 	rec := httptest.NewRecorder()
 	adminTestBed.router.ServeHTTP(rec, req)
-
-	if cmd == statusCmd {
-		expectedInfo := madmin.ServiceStatus{
-			ServerVersion: madmin.ServerVersion{Version: Version, CommitID: CommitID},
-		}
-		receivedInfo := madmin.ServiceStatus{}
-		if jsonErr := json.Unmarshal(rec.Body.Bytes(), &receivedInfo); jsonErr != nil {
-			t.Errorf("Failed to unmarshal StorageInfo - %v", jsonErr)
-		}
-		if expectedInfo.ServerVersion != receivedInfo.ServerVersion {
-			t.Errorf("Expected storage info and received storage info differ, %v %v", expectedInfo, receivedInfo)
-		}
-	}
 
 	if rec.Code != http.StatusOK {
 		resp, _ := ioutil.ReadAll(rec.Body)
@@ -552,11 +450,6 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 
 	// Wait until testServiceSignalReceiver() called in a goroutine quits.
 	wg.Wait()
-}
-
-// Test for service status management REST API.
-func TestServiceStatusHandler(t *testing.T) {
-	testServicesCmdHandler(statusCmd, t)
 }
 
 // Test for service restart management REST API.
@@ -757,6 +650,152 @@ func TestToAdminAPIErrCode(t *testing.T) {
 		if actualErr != test.expectedAPIErr {
 			t.Errorf("Test %d: Expected %v but received %v",
 				i+1, test.expectedAPIErr, actualErr)
+		}
+	}
+}
+
+func TestTopLockEntries(t *testing.T) {
+	t1 := UTCNow()
+	t2 := UTCNow().Add(10 * time.Second)
+	peerLocks := []*PeerLocks{
+		{
+			Addr: "1",
+			Locks: map[string][]lockRequesterInfo{
+				"1": {
+					{false, "node2", "ep2", "2", t2, t2, ""},
+					{true, "node1", "ep1", "1", t1, t1, ""},
+				},
+				"2": {
+					{false, "node2", "ep2", "2", t2, t2, ""},
+					{true, "node1", "ep1", "1", t1, t1, ""},
+				},
+			},
+		},
+		{
+			Addr: "2",
+			Locks: map[string][]lockRequesterInfo{
+				"1": {
+					{false, "node2", "ep2", "2", t2, t2, ""},
+					{true, "node1", "ep1", "1", t1, t1, ""},
+				},
+				"2": {
+					{false, "node2", "ep2", "2", t2, t2, ""},
+					{true, "node1", "ep1", "1", t1, t1, ""},
+				},
+			},
+		},
+	}
+	les := topLockEntries(peerLocks)
+	if len(les) != 2 {
+		t.Fatalf("Did not get 2 results")
+	}
+	if les[0].Timestamp.After(les[1].Timestamp) {
+		t.Fatalf("Got wrong sorted value")
+	}
+}
+
+func TestExtractHealInitParams(t *testing.T) {
+	mkParams := func(clientToken string, forceStart, forceStop bool) url.Values {
+		v := url.Values{}
+		if clientToken != "" {
+			v.Add(string(mgmtClientToken), clientToken)
+		}
+		if forceStart {
+			v.Add(string(mgmtForceStart), "")
+		}
+		if forceStop {
+			v.Add(string(mgmtForceStop), "")
+		}
+		return v
+	}
+	qParmsArr := []url.Values{
+		// Invalid cases
+		mkParams("", true, true),
+		mkParams("111", true, true),
+		mkParams("111", true, false),
+		mkParams("111", false, true),
+		// Valid cases follow
+		mkParams("", true, false),
+		mkParams("", false, true),
+		mkParams("", false, false),
+		mkParams("111", false, false),
+	}
+	varsArr := []map[string]string{
+		// Invalid cases
+		{string(mgmtPrefix): "objprefix"},
+		// Valid cases
+		{},
+		{string(mgmtBucket): "bucket"},
+		{string(mgmtBucket): "bucket", string(mgmtPrefix): "objprefix"},
+	}
+
+	// Body is always valid - we do not test JSON decoding.
+	body := `{"recursive": false, "dryRun": true, "remove": false, "scanMode": 0}`
+
+	// Test all combinations!
+	for pIdx, parms := range qParmsArr {
+		for vIdx, vars := range varsArr {
+			_, err := extractHealInitParams(vars, parms, bytes.NewBuffer([]byte(body)))
+			isErrCase := false
+			if pIdx < 4 || vIdx < 1 {
+				isErrCase = true
+			}
+
+			if err != ErrNone && !isErrCase {
+				t.Errorf("Got unexpected error: %v %v %v", pIdx, vIdx, err)
+			} else if err == ErrNone && isErrCase {
+				t.Errorf("Got no error but expected one: %v %v", pIdx, vIdx)
+			}
+		}
+	}
+
+}
+
+func TestNormalizeJSONKey(t *testing.T) {
+	cases := []struct {
+		input         string
+		correctResult string
+	}{
+		{"notify.webhook.1", "notify.webhook.:1"},
+		{"notify.webhook.ok", "notify.webhook.ok"},
+		{"notify.webhook.1.2", "notify.webhook.:1.:2"},
+		{"abc", "abc"},
+	}
+	for i, tcase := range cases {
+		res := normalizeJSONKey(tcase.input)
+		if res != tcase.correctResult {
+			t.Errorf("Case %d: failed to match", i)
+		}
+	}
+}
+
+func TestConvertValueType(t *testing.T) {
+	cases := []struct {
+		elem          []byte
+		jt            gjson.Type
+		correctResult interface{}
+		isError       bool
+	}{
+		{[]byte(""), gjson.Null, nil, false},
+		{[]byte("t"), gjson.False, true, false},
+		{[]byte("f"), gjson.False, false, false},
+		{[]byte(`{"a": 1}`), gjson.JSON, map[string]interface{}{"a": float64(1)}, false},
+		{[]byte(`abc`), gjson.String, "abc", false},
+		{[]byte(`1`), gjson.Number, float64(1), false},
+		{[]byte(`a1`), gjson.Number, nil, true},
+		{[]byte(`{"A": `), gjson.JSON, nil, true},
+		{[]byte(`2`), gjson.False, nil, true},
+	}
+	for i, tc := range cases {
+		res, err := convertValueType(tc.elem, tc.jt)
+		if err != nil {
+			if !tc.isError {
+				t.Errorf("Case %d: got an error when none was expected", i)
+			}
+		} else if err == nil && tc.isError {
+			t.Errorf("Case %d: got no error though we expected one", i)
+		} else if !reflect.DeepEqual(res, tc.correctResult) {
+			t.Errorf("Case %d: result mismatch - got %#v", i, res)
 		}
 	}
 }

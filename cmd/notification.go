@@ -405,6 +405,21 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 	return profilingDataFound
 }
 
+// ServerUpdate - updates remote peers.
+func (sys *NotificationSys) ServerUpdate(updateURL, sha256Hex string, latestReleaseTime time.Time) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(context.Background(), func() error {
+			return client.ServerUpdate(updateURL, sha256Hex, latestReleaseTime)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
 // SignalService - calls signal service RPC call on all peers.
 func (sys *NotificationSys) SignalService(sig serviceSignal) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))

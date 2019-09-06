@@ -20,34 +20,41 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
 )
 
 func main() {
-	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY are
+	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY and my-bucketname are
 	// dummy values, please replace them with original values.
 
-	// API requests are secure (HTTPS) if secure=true and insecure (HTTPS) otherwise.
+	// API requests are secure (HTTPS) if secure=true and insecure (HTTP) otherwise.
 	// New returns an MinIO Admin client object.
 	madmClnt, err := madmin.New("your-minio.example.com:9000", "YOUR-ACCESSKEYID", "YOUR-SECRETACCESSKEY", true)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	doneCh := make(chan struct{})
-	defer close(doneCh)
 
-	// Start listening on all http trace activity from all servers
-	// in the minio cluster.
-	allTrace := false
-	errTrace := false
-	traceCh := madmClnt.Trace(allTrace, errTrace, doneCh)
-	for traceInfo := range traceCh {
-		if traceInfo.Err != nil {
-			fmt.Println(traceInfo.Err)
-		}
-		fmt.Println(traceInfo)
+	status, err := madmClnt.GetKeyStatus("") // empty string refers to the default master key
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	log.Printf("Key: %s\n", status.KeyID)
+	if status.EncryptionErr == "" {
+		log.Println("\t • Encryption ✔")
+	} else {
+		log.Printf("\t • Encryption failed: %s\n", status.EncryptionErr)
+	}
+	if status.UpdateErr == "" {
+		log.Println("\t • Re-wrap ✔")
+	} else {
+		log.Printf("\t • Re-wrap failed: %s\n", status.UpdateErr)
+	}
+	if status.DecryptionErr == "" {
+		log.Println("\t • Decryption ✔")
+	} else {
+		log.Printf("\t •  Decryption failed: %s\n", status.DecryptionErr)
 	}
 }
