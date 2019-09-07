@@ -97,6 +97,7 @@ func BenchmarkReaderBasic(b *testing.B) {
 	defer r.Close()
 	b.ReportAllocs()
 	b.ResetTimer()
+	b.SetBytes(int64(len(f)))
 	var record sql.Record
 	for i := 0; i < b.N; i++ {
 		r, err = NewReader(ioutil.NopCloser(bytes.NewBuffer(f)), &args)
@@ -137,6 +138,7 @@ func BenchmarkReaderReplace(b *testing.B) {
 	defer r.Close()
 	b.ReportAllocs()
 	b.ResetTimer()
+	b.SetBytes(int64(len(f)))
 	var record sql.Record
 	for i := 0; i < b.N; i++ {
 		r, err = NewReader(ioutil.NopCloser(bytes.NewBuffer(f)), &args)
@@ -177,6 +179,7 @@ func BenchmarkReaderReplaceTwo(b *testing.B) {
 	defer r.Close()
 	b.ReportAllocs()
 	b.ResetTimer()
+	b.SetBytes(int64(len(f)))
 	var record sql.Record
 	for i := 0; i < b.N; i++ {
 		r, err = NewReader(ioutil.NopCloser(bytes.NewBuffer(f)), &args)
