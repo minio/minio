@@ -69,7 +69,7 @@ func (r *Reader) Close() error {
 	// Close the input.
 	// Potentially racy if the stream decoder is still reading.
 	err := r.readCloser.Close()
-	for _ = range r.valueCh {
+	for range r.valueCh {
 		// Drain values so we don't leak a goroutine.
 		// Since we have closed the input, it should fail rather quickly.
 	}
