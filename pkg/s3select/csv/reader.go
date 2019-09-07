@@ -194,7 +194,9 @@ func NewReader(readCloser io.ReadCloser, args *ReaderArgs) (*Reader, error) {
 	}
 
 	if args.FileHeaderInfo == use {
-		r.columnNames = record
+		// Copy column names since records will be reused.
+		columns := append(make([]string, 0, len(record)), record...)
+		r.columnNames = columns
 	}
 
 	return r, nil
