@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -54,7 +55,7 @@ func TestRead(t *testing.T) {
 		})
 
 		for {
-			record, err = r.Read()
+			record, err = r.Read(record)
 			if err != nil {
 				break
 			}
@@ -70,5 +71,125 @@ func TestRead(t *testing.T) {
 		if result.String() != c.content {
 			t.Errorf("Case %d failed: expected %v result %v", i, c.content, result.String())
 		}
+	}
+}
+
+func BenchmarkReaderBasic(b *testing.B) {
+	const dataDir = "testdata"
+	args := ReaderArgs{
+		FileHeaderInfo:             use,
+		RecordDelimiter:            "\n",
+		FieldDelimiter:             ",",
+		QuoteCharacter:             defaultQuoteCharacter,
+		QuoteEscapeCharacter:       defaultQuoteEscapeCharacter,
+		CommentCharacter:           defaultCommentCharacter,
+		AllowQuotedRecordDelimiter: true,
+		unmarshaled:                true,
+	}
+	f, err := ioutil.ReadFile(filepath.Join(dataDir, "nyc-taxi-data-100k.csv"))
+	if err != nil {
+		b.Fatal(err)
+	}
+	r, err := NewReader(ioutil.NopCloser(bytes.NewBuffer(f)), &args)
+	if err != nil {
+		b.Fatalf("Reading init failed with %s", err)
+	}
+	defer r.Close()
+	b.ReportAllocs()
+	b.ResetTimer()
+	var record sql.Record
+	for i := 0; i < b.N; i++ {
+		r, err = NewReader(ioutil.NopCloser(bytes.NewBuffer(f)), &args)
+		if err != nil {
+			b.Fatalf("Reading init failed with %s", err)
+		}
+
+		for err == nil {
+			record, err = r.Read(record)
+			if err != nil && err != io.EOF {
+				b.Fatalf("Reading failed with %s", err)
+			}
+		}
+		r.Close()
+	}
+}
+
+func BenchmarkReaderReplace(b *testing.B) {
+	const dataDir = "testdata"
+	args := ReaderArgs{
+		FileHeaderInfo:             use,
+		RecordDelimiter:            "^",
+		FieldDelimiter:             ",",
+		QuoteCharacter:             defaultQuoteCharacter,
+		QuoteEscapeCharacter:       defaultQuoteEscapeCharacter,
+		CommentCharacter:           defaultCommentCharacter,
+		AllowQuotedRecordDelimiter: true,
+		unmarshaled:                true,
+	}
+	f, err := ioutil.ReadFile(filepath.Join(dataDir, "nyc-taxi-data-100k-single-delim.csv"))
+	if err != nil {
+		b.Fatal(err)
+	}
+	r, err := NewReader(ioutil.NopCloser(bytes.NewBuffer(f)), &args)
+	if err != nil {
+		b.Fatalf("Reading init failed with %s", err)
+	}
+	defer r.Close()
+	b.ReportAllocs()
+	b.ResetTimer()
+	var record sql.Record
+	for i := 0; i < b.N; i++ {
+		r, err = NewReader(ioutil.NopCloser(bytes.NewBuffer(f)), &args)
+		if err != nil {
+			b.Fatalf("Reading init failed with %s", err)
+		}
+
+		for err == nil {
+			record, err = r.Read(record)
+			if err != nil && err != io.EOF {
+				b.Fatalf("Reading failed with %s", err)
+			}
+		}
+		r.Close()
+	}
+}
+
+func BenchmarkReaderReplaceTwo(b *testing.B) {
+	const dataDir = "testdata"
+	args := ReaderArgs{
+		FileHeaderInfo:             use,
+		RecordDelimiter:            "^Y",
+		FieldDelimiter:             ",",
+		QuoteCharacter:             defaultQuoteCharacter,
+		QuoteEscapeCharacter:       defaultQuoteEscapeCharacter,
+		CommentCharacter:           defaultCommentCharacter,
+		AllowQuotedRecordDelimiter: true,
+		unmarshaled:                true,
+	}
+	f, err := ioutil.ReadFile(filepath.Join(dataDir, "nyc-taxi-data-100k-multi-delim.csv"))
+	if err != nil {
+		b.Fatal(err)
+	}
+	r, err := NewReader(ioutil.NopCloser(bytes.NewBuffer(f)), &args)
+	if err != nil {
+		b.Fatalf("Reading init failed with %s", err)
+	}
+	defer r.Close()
+	b.ReportAllocs()
+	b.ResetTimer()
+	var record sql.Record
+	for i := 0; i < b.N; i++ {
+		r, err = NewReader(ioutil.NopCloser(bytes.NewBuffer(f)), &args)
+		if err != nil {
+			b.Fatalf("Reading init failed with %s", err)
+		}
+
+		for err == nil {
+			record, err = r.Read(record)
+			if err != nil && err != io.EOF {
+				b.Fatalf("Reading failed with %s", err)
+			}
+		}
+		r.Close()
 	}
 }

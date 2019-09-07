@@ -34,7 +34,9 @@ import (
 )
 
 type recordReader interface {
-	Read() (sql.Record, error)
+	// Read a record.
+	// dst is optional but will be used if valid.
+	Read(dst sql.Record) (sql.Record, error)
 	Close() error
 }
 
@@ -399,6 +401,7 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 		return true
 	}
 
+	var rec sql.Record
 	for {
 		if s3Select.statement.LimitReached() {
 			if err = writer.Finish(s3Select.getProgress()); err != nil {
@@ -408,7 +411,7 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 			break
 		}
 
-		if inputRecord, err = s3Select.recordReader.Read(); err != nil {
+		if rec, err = s3Select.recordReader.Read(rec); err != nil {
 			if err != io.EOF {
 				break
 			}
@@ -431,7 +434,7 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 			break
 		}
 
-		if inputRecord, err = s3Select.statement.EvalFrom(s3Select.Input.format, inputRecord); err != nil {
+		if inputRecord, err = s3Select.statement.EvalFrom(s3Select.Input.format, rec); err != nil {
 			break
 		}
 

@@ -25,8 +25,10 @@ import (
 	"github.com/minio/minio/pkg/s3select/sql"
 )
 
+// recordReader will convert records to always have newline records.
 type recordReader struct {
-	reader          io.Reader
+	reader io.Reader
+	// recordDelimiter can be up to 2 characters.
 	recordDelimiter []byte
 	oneByte         []byte
 	useOneByte      bool
@@ -46,24 +48,38 @@ func (rr *recordReader) Read(p []byte) (n int, err error) {
 		return 0, err
 	}
 
+	// Do nothing if record-delimiter is already newline.
 	if string(rr.recordDelimiter) == "\n" {
 		return n, nil
 	}
 
-	for {
-		i := bytes.Index(p, rr.recordDelimiter)
+	// Change record delimiters to newline.
+	if len(rr.recordDelimiter) == 1 {
+		for idx := 0; idx < len(p); {
+			i := bytes.Index(p[idx:], rr.recordDelimiter)
+			if i < 0 {
+				break
+			}
+			idx += i
+			p[idx] = '\n'
+		}
+		return n, nil
+	}
+
+	// 2 characters...
+	for idx := 0; idx < len(p); {
+		i := bytes.Index(p[idx:], rr.recordDelimiter)
 		if i < 0 {
 			break
 		}
+		idx += i
 
-		p[i] = '\n'
-		if len(rr.recordDelimiter) > 1 {
-			p = append(p[:i+1], p[i+len(rr.recordDelimiter):]...)
-			n--
-		}
+		p[idx] = '\n'
+		p = append(p[:idx+1], p[idx+2:]...)
+		n--
 	}
 
-	if len(rr.recordDelimiter) == 1 || p[n-1] != rr.recordDelimiter[0] {
+	if p[n-1] != rr.recordDelimiter[0] {
 		return n, nil
 	}
 
@@ -90,7 +106,8 @@ type Reader struct {
 }
 
 // Read - reads single record.
-func (r *Reader) Read() (sql.Record, error) {
+// Once Read is called the previous record should no longer be referenced.
+func (r *Reader) Read(dst sql.Record) (sql.Record, error) {
 	csvRecord, err := r.csvReader.Read()
 	if err != nil {
 		if err != io.EOF {
@@ -100,6 +117,7 @@ func (r *Reader) Read() (sql.Record, error) {
 		return nil, err
 	}
 
+	// If no column names are set, use _(index)
 	if r.columnNames == nil {
 		r.columnNames = make([]string, len(csvRecord))
 		for i := range csvRecord {
@@ -107,21 +125,25 @@ func (r *Reader) Read() (sql.Record, error) {
 		}
 	}
 
+	// If no index max, add that.
 	if r.nameIndexMap == nil {
 		r.nameIndexMap = make(map[string]int64)
 		for i := range r.columnNames {
 			r.nameIndexMap[r.columnNames[i]] = int64(i)
 		}
 	}
+	dstRec, ok := dst.(*Record)
+	if !ok {
+		dstRec = &Record{}
+	}
+	dstRec.columnNames = r.columnNames
+	dstRec.csvRecord = csvRecord
+	dstRec.nameIndexMap = r.nameIndexMap
 
-	return &Record{
-		columnNames:  r.columnNames,
-		csvRecord:    csvRecord,
-		nameIndexMap: r.nameIndexMap,
-	}, nil
+	return dstRec, nil
 }
 
-// Close - closes underlaying reader.
+// Close - closes underlying reader.
 func (r *Reader) Close() error {
 	return r.readCloser.Close()
 }
@@ -132,31 +154,37 @@ func NewReader(readCloser io.ReadCloser, args *ReaderArgs) (*Reader, error) {
 		panic(fmt.Errorf("empty args passed %v", args))
 	}
 
-	csvReader := csv.NewReader(&recordReader{
-		reader:          readCloser,
-		recordDelimiter: []byte(args.RecordDelimiter),
-		oneByte:         []byte{0},
-	})
-	csvReader.Comma = []rune(args.FieldDelimiter)[0]
-	csvReader.Comment = []rune(args.CommentCharacter)[0]
-	csvReader.FieldsPerRecord = -1
-	// If LazyQuotes is true, a quote may appear in an unquoted field and a
-	// non-doubled quote may appear in a quoted field.
-	csvReader.LazyQuotes = true
-	// We do not trim leading space to keep consistent with s3.
-	csvReader.TrimLeadingSpace = false
-
+	// Assume args are validated by ReaderArgs.UnmarshalXML()
 	r := &Reader{
 		args:       args,
 		readCloser: readCloser,
-		csvReader:  csvReader,
 	}
+	if args.RecordDelimiter == "\n" {
+		// No translation needed.
+		r.csvReader = csv.NewReader(readCloser)
+	} else {
+		r.csvReader = csv.NewReader(&recordReader{
+			reader:          readCloser,
+			recordDelimiter: []byte(args.RecordDelimiter),
+			oneByte:         make([]byte, len(args.RecordDelimiter)-1),
+		})
+	}
+	r.csvReader.Comma = []rune(args.FieldDelimiter)[0]
+	r.csvReader.Comment = []rune(args.CommentCharacter)[0]
+	r.csvReader.FieldsPerRecord = -1
+	// If LazyQuotes is true, a quote may appear in an unquoted field and a
+	// non-doubled quote may appear in a quoted field.
+	r.csvReader.LazyQuotes = true
+	// We do not trim leading space to keep consistent with s3.
+	r.csvReader.TrimLeadingSpace = false
+	r.csvReader.ReuseRecord = true
 
 	if args.FileHeaderInfo == none {
 		return r, nil
 	}
 
-	record, err := csvReader.Read()
+	// Read column names
+	record, err := r.csvReader.Read()
 	if err != nil {
 		if err != io.EOF {
 			return nil, errCSVParsingError(err)
