@@ -1,6 +1,6 @@
 module github.com/minio/minio
 
-go 1.12
+go 1.13
 
 require (
 	cloud.google.com/go v0.37.2
@@ -102,5 +102,3 @@ replace github.com/eapache/queue => github.com/eapache/queue v1.1.0
 replace github.com/mattn/go-runewidth => github.com/mattn/go-runewidth v0.0.4
 
 replace github.com/mitchellh/mapstructure => github.com/mitchellh/mapstructure v1.1.2
-
-replace git.apache.org/thrift.git => github.com/apache/thrift v0.12.0
