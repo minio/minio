@@ -34,6 +34,7 @@ import (
 	"github.com/inconshreveable/go-update"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	xnet "github.com/minio/minio/pkg/net"
 	_ "github.com/minio/sha256-simd" // Needed for sha256 hash verifier.
 )
 
@@ -282,7 +283,7 @@ func downloadReleaseURL(releaseChecksumURL string, timeout time.Duration, mode s
 	client := &http.Client{Transport: getUpdateTransport(timeout)}
 	resp, err := client.Do(req)
 	if err != nil {
-		if isNetworkOrHostDown(err) {
+		if xnet.IsNetworkOrHostDown(err) {
 			return content, AdminError{
 				Code:       AdminUpdateURLNotReachable,
 				Message:    err.Error(),
@@ -499,7 +500,7 @@ func doUpdate(updateURL, sha256Hex, mode string) (err error) {
 
 	resp, err := clnt.Do(req)
 	if err != nil {
-		if isNetworkOrHostDown(err) {
+		if xnet.IsNetworkOrHostDown(err) {
 			return AdminError{
 				Code:       AdminUpdateURLNotReachable,
 				Message:    err.Error(),
