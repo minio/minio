@@ -23,5 +23,5 @@ fi
 
 test_run_dir="$MINT_RUN_CORE_DIR/minio-go"
 (git clone https://github.com/minio/minio-go && cd minio-go && git checkout --quiet "tags/$MINIO_GO_VERSION")
-GOPROXY=https://proxy.golang.org GO111MODULE=on CGO_ENABLED=0 go build -o "$test_run_dir/minio-go" "minio-go/functional_tests.go"
+GO111MODULE=on CGO_ENABLED=0 go build -o "$test_run_dir/minio-go" "minio-go/functional_tests.go"
 rm -rf minio-go
