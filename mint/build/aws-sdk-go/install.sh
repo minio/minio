@@ -16,4 +16,4 @@
 #
 
 test_run_dir="$MINT_RUN_CORE_DIR/aws-sdk-go"
-GOPROXY=https://proxy.golang.org GO111MODULE=on go build -o "$test_run_dir/aws-sdk-go" "$test_run_dir/quick-tests.go"
+GO111MODULE=on go build -o "$test_run_dir/aws-sdk-go" "$test_run_dir/quick-tests.go"
