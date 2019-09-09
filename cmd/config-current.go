@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -302,6 +302,12 @@ func (s *serverConfig) loadFromEnvs() {
 		logger.FatalIf(opaArgs.Validate(), "Unable to reach MINIO_IAM_OPA_URL %s", opaURL)
 		s.Policy.OPA.URL = opaArgs.URL
 		s.Policy.OPA.AuthToken = opaArgs.AuthToken
+	}
+
+	var err error
+	s.LDAPServerConfig, err = newLDAPConfigFromEnv()
+	if err != nil {
+		logger.FatalIf(err, "Unable to parse LDAP configuration from env")
 	}
 }
 

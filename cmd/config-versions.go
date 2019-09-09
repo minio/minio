@@ -926,4 +926,6 @@ type serverConfigV33 struct {
 
 		// Add new external policy enforcements here.
 	} `json:"policy"`
+
+	LDAPServerConfig ldapServerConfig `json:"ldapserverconfig"`
 }

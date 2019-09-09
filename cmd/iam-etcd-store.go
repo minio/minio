@@ -415,23 +415,35 @@ func (ies *IAMEtcdStore) loadAll(sys *IAMSys, objectAPI ObjectLayer) error {
 	iamUserPolicyMap := make(map[string]MappedPolicy)
 	iamGroupPolicyMap := make(map[string]MappedPolicy)
 
+	isMinIOUsersSys := false
+	sys.RLock()
+	if sys.usersSysType == MinIOUsersSysType {
+		isMinIOUsersSys = true
+	}
+	sys.RUnlock()
+
 	if err := ies.loadPolicyDocs(iamPolicyDocsMap); err != nil {
 		return err
 	}
-	if err := ies.loadUsers(false, iamUsersMap); err != nil {
-		return err
-	}
-	// load STS temp users into the same map
+
+	// load STS temp users
 	if err := ies.loadUsers(true, iamUsersMap); err != nil {
 		return err
 	}
-	if err := ies.loadGroups(iamGroupsMap); err != nil {
-		return err
+
+	if isMinIOUsersSys {
+		// load long term users
+		if err := ies.loadUsers(false, iamUsersMap); err != nil {
+			return err
+		}
+		if err := ies.loadGroups(iamGroupsMap); err != nil {
+			return err
+		}
+		if err := ies.loadMappedPolicies(false, false, iamUserPolicyMap); err != nil {
+			return err
+		}
 	}
 
-	if err := ies.loadMappedPolicies(false, false, iamUserPolicyMap); err != nil {
-		return err
-	}
 	// load STS policy mappings into the same map
 	if err := ies.loadMappedPolicies(true, false, iamUserPolicyMap); err != nil {
 		return err
