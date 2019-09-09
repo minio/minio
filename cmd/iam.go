@@ -484,7 +484,7 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 	defer sys.Unlock()
 
 	if sys.usersSysType != MinIOUsersSysType {
-		return errIAMActionNotPossible
+		return errIAMActionNotAllowed
 	}
 
 	// It is ok to ignore deletion error on the mapped policy
@@ -555,7 +555,7 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 	defer sys.RUnlock()
 
 	if sys.usersSysType != MinIOUsersSysType {
-		return nil, errIAMActionNotPossible
+		return nil, errIAMActionNotAllowed
 	}
 
 	for k, v := range sys.iamUsersMap {
@@ -612,7 +612,7 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 	defer sys.Unlock()
 
 	if sys.usersSysType != MinIOUsersSysType {
-		return errIAMActionNotPossible
+		return errIAMActionNotAllowed
 	}
 
 	cred, ok := sys.iamUsersMap[accessKey]
@@ -650,7 +650,7 @@ func (sys *IAMSys) SetUser(accessKey string, uinfo madmin.UserInfo) error {
 	defer sys.Unlock()
 
 	if sys.usersSysType != MinIOUsersSysType {
-		return errIAMActionNotPossible
+		return errIAMActionNotAllowed
 	}
 
 	if err := sys.store.saveUserIdentity(accessKey, false, u); err != nil {
@@ -676,7 +676,7 @@ func (sys *IAMSys) SetUserSecretKey(accessKey string, secretKey string) error {
 	defer sys.Unlock()
 
 	if sys.usersSysType != MinIOUsersSysType {
-		return errIAMActionNotPossible
+		return errIAMActionNotAllowed
 	}
 
 	cred, ok := sys.iamUsersMap[accessKey]
@@ -719,7 +719,7 @@ func (sys *IAMSys) AddUsersToGroup(group string, members []string) error {
 	defer sys.Unlock()
 
 	if sys.usersSysType != MinIOUsersSysType {
-		return errIAMActionNotPossible
+		return errIAMActionNotAllowed
 	}
 
 	// Validate that all members exist.
@@ -777,7 +777,7 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 	defer sys.Unlock()
 
 	if sys.usersSysType != MinIOUsersSysType {
-		return errIAMActionNotPossible
+		return errIAMActionNotAllowed
 	}
 
 	// Validate that all members exist.
@@ -854,7 +854,7 @@ func (sys *IAMSys) SetGroupStatus(group string, enabled bool) error {
 	defer sys.Unlock()
 
 	if sys.usersSysType != MinIOUsersSysType {
-		return errIAMActionNotPossible
+		return errIAMActionNotAllowed
 	}
 
 	if group == "" {
@@ -921,7 +921,7 @@ func (sys *IAMSys) ListGroups() (r []string, err error) {
 	defer sys.RUnlock()
 
 	if sys.usersSysType != MinIOUsersSysType {
-		return nil, errIAMActionNotPossible
+		return nil, errIAMActionNotAllowed
 	}
 
 	for k := range sys.iamGroupsMap {
