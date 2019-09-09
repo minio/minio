@@ -53,23 +53,11 @@ func IsErrIgnored(err error, ignoredErrs ...error) bool {
 // IsErr returns whether given error is exact error.
 func IsErr(err error, errs ...error) bool {
 	for _, exactErr := range errs {
-		if err == exactErr {
+		if errors.Is(err, exactErr) {
 			return true
 		}
 	}
 	return false
-}
-
-// make a copy of http.Header
-func cloneHeader(h http.Header) http.Header {
-	h2 := make(http.Header, len(h))
-	for k, vv := range h {
-		vv2 := make([]string, len(vv))
-		copy(vv2, vv)
-		h2[k] = vv2
-
-	}
-	return h2
 }
 
 func request2BucketObjectName(r *http.Request) (bucketName, objectName string) {
@@ -289,7 +277,7 @@ var globalProfiler minioProfiler
 
 // dump the request into a string in JSON format.
 func dumpRequest(r *http.Request) string {
-	header := cloneHeader(r.Header)
+	header := r.Header.Clone()
 	header.Set("Host", r.Host)
 	// Replace all '%' to '%%' so that printer format parser
 	// to ignore URL encoded values.

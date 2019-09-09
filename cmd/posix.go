@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"io"
 	"io/ioutil"
 	"os"
@@ -845,17 +846,11 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 			return nil, errFileNotFound
 		} else if os.IsPermission(err) {
 			return nil, errFileAccessDenied
-		} else if pathErr, ok := err.(*os.PathError); ok {
-			switch pathErr.Err {
-			case syscall.ENOTDIR, syscall.EISDIR:
-				return nil, errFileNotFound
-			default:
-				if isSysErrHandleInvalid(pathErr.Err) {
-					// This case is special and needs to be handled for windows.
-					return nil, errFileNotFound
-				}
-			}
-			return nil, pathErr
+		} else if errors.Is(err, syscall.ENOTDIR) || errors.Is(err, syscall.EISDIR) {
+			return nil, errFileNotFound
+		} else if isSysErrHandleInvalid(err) {
+			// This case is special and needs to be handled for windows.
+			return nil, errFileNotFound
 		} else if isSysErrIO(err) {
 			return nil, errFaultyDisk
 		}
