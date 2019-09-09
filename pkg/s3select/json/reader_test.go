@@ -28,12 +28,12 @@ import (
 )
 
 func TestNewReader(t *testing.T) {
-	files, err := ioutil.ReadDir("data")
+	files, err := ioutil.ReadDir("testdata")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, file := range files {
-		f, err := os.Open(filepath.Join("data", file.Name()))
+		f, err := os.Open(filepath.Join("testdata", file.Name()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,13 +53,13 @@ func TestNewReader(t *testing.T) {
 }
 
 func BenchmarkReader(b *testing.B) {
-	files, err := ioutil.ReadDir("data")
+	files, err := ioutil.ReadDir("testdata")
 	if err != nil {
 		b.Fatal(err)
 	}
 	for _, file := range files {
 		b.Run(file.Name(), func(b *testing.B) {
-			f, err := ioutil.ReadFile(filepath.Join("data", file.Name()))
+			f, err := ioutil.ReadFile(filepath.Join("testdata", file.Name()))
 			if err != nil {
 				b.Fatal(err)
 			}
