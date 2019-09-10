@@ -18,6 +18,7 @@ package csv
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -53,7 +54,7 @@ func TestRead(t *testing.T) {
 			QuoteCharacter:             defaultQuoteCharacter,
 			QuoteEscapeCharacter:       defaultQuoteEscapeCharacter,
 			CommentCharacter:           defaultCommentCharacter,
-			AllowQuotedRecordDelimiter: true,
+			AllowQuotedRecordDelimiter: false,
 			unmarshaled:                true,
 		})
 
@@ -227,7 +228,7 @@ func TestReadExtended(t *testing.T) {
 				QuoteCharacter:             defaultQuoteCharacter,
 				QuoteEscapeCharacter:       defaultQuoteEscapeCharacter,
 				CommentCharacter:           defaultCommentCharacter,
-				AllowQuotedRecordDelimiter: true,
+				AllowQuotedRecordDelimiter: false,
 				unmarshaled:                true,
 			}
 			if !c.header {
@@ -266,8 +267,201 @@ func TestReadExtended(t *testing.T) {
 	}
 }
 
+type errReader struct {
+	err error
+}
+
+func (e errReader) Read(p []byte) (n int, err error) {
+	return 0, e.err
+}
+
+func TestReadFailures(t *testing.T) {
+	customErr := errors.New("unable to read file :(")
+	cases := []struct {
+		file            string
+		recordDelimiter string
+		fieldDelimiter  string
+		sendErr         error
+		header          bool
+		wantColumns     []string
+		wantFields      string
+		wantErr         error
+	}{
+		{
+			file:            "truncated-records.csv",
+			recordDelimiter: "^Y",
+			fieldDelimiter:  ",",
+			header:          true,
+			wantColumns:     []string{"trip_id", "vendor_id", "pickup_datetime", "dropoff_datetime", "store_and_fwd_flag", "rate_code_id", "pickup_longitude", "pickup_latitude", "dropoff_longitude", "dropoff_latitude", "passenger_count", "trip_distance", "fare_amount", "extra", "mta_tax", "tip_amount", "tolls_amount", "ehail_fee", "improvement_surcharge", "total_amount", "payment_type", "trip_type", "pickup", "dropoff", "cab_type", "precipitation", "snow_depth", "snowfall", "max_temp", "min_temp", "wind", "pickup_nyct2010_gid", "pickup_ctlabel", "pickup_borocode", "pickup_boroname", "pickup_ct2010", "pickup_boroct2010", "pickup_cdeligibil", "pickup_ntacode", "pickup_ntaname", "pickup_puma", "dropoff_nyct2010_gid", "dropoff_ctlabel", "dropoff_borocode", "dropoff_boroname", "dropoff_ct2010", "dropoff_boroct2010", "dropoff_cdeligibil", "dropoff_ntacode", "dropoff_ntaname", "dropoff_puma"},
+			wantFields: `3389224,2,2014-03-26 00:26:15,2014-03-26 00:28:38,N,1,-73.950431823730469,40.792251586914063,-73.938949584960937,40.794425964355469,1,0.84,4.5,0.5,0.5,1,0,,,6.5,1,1,75,74,green,0.00,0.0,0.0,36,24,11.86,1267,168,1,Manhattan,016800,1016800,E,MN33,East Harlem South,3804,1828,180,1,Manhattan,018000,1018000,E,MN34,East Harlem North,3804
+3389225,2,2014-03-31 09:42:15,2014-03-31 10:01:17,N,1,-73.950340270996094,40.792228698730469,-73.941970825195313,40.842235565185547,1,4.47,17.5,0,0.5,0,0,,,18,2,1,75,244,green,0.16,0.0,0.0,56,36,8.28,1267,168,1,Manhattan,016800,1016800,E,MN33,East Harlem South,3804,911,251,1,Manhattan,025100
+`,
+			wantErr: io.EOF,
+		},
+		{
+			file:            "truncated-records.csv",
+			recordDelimiter: "^Y",
+			fieldDelimiter:  ",",
+			sendErr:         customErr,
+			header:          true,
+			wantColumns:     []string{"trip_id", "vendor_id", "pickup_datetime", "dropoff_datetime", "store_and_fwd_flag", "rate_code_id", "pickup_longitude", "pickup_latitude", "dropoff_longitude", "dropoff_latitude", "passenger_count", "trip_distance", "fare_amount", "extra", "mta_tax", "tip_amount", "tolls_amount", "ehail_fee", "improvement_surcharge", "total_amount", "payment_type", "trip_type", "pickup", "dropoff", "cab_type", "precipitation", "snow_depth", "snowfall", "max_temp", "min_temp", "wind", "pickup_nyct2010_gid", "pickup_ctlabel", "pickup_borocode", "pickup_boroname", "pickup_ct2010", "pickup_boroct2010", "pickup_cdeligibil", "pickup_ntacode", "pickup_ntaname", "pickup_puma", "dropoff_nyct2010_gid", "dropoff_ctlabel", "dropoff_borocode", "dropoff_boroname", "dropoff_ct2010", "dropoff_boroct2010", "dropoff_cdeligibil", "dropoff_ntacode", "dropoff_ntaname", "dropoff_puma"},
+			wantFields:      ``,
+			wantErr:         customErr,
+		},
+		{
+			// This works since LazyQuotes is true:
+			file:            "invalid-badbarequote.csv",
+			recordDelimiter: "\n",
+			fieldDelimiter:  ",",
+			sendErr:         nil,
+			header:          true,
+			wantColumns:     []string{"header1", "header2", "header3"},
+			wantFields:      "ok1,ok2,ok3\n" + `"a ""word""",b` + "\n",
+			wantErr:         io.EOF,
+		},
+		{
+			// This works since LazyQuotes is true:
+			file:            "invalid-baddoubleq.csv",
+			recordDelimiter: "\n",
+			fieldDelimiter:  ",",
+			sendErr:         nil,
+			header:          true,
+			wantColumns:     []string{"header1", "header2", "header3"},
+			wantFields:      "ok1,ok2,ok3\n" + `"a""""b",c` + "\n",
+			wantErr:         io.EOF,
+		},
+		{
+			// This works since LazyQuotes is true:
+			file:            "invalid-badextraq.csv",
+			recordDelimiter: "\n",
+			fieldDelimiter:  ",",
+			sendErr:         nil,
+			header:          true,
+			wantColumns:     []string{"header1", "header2", "header3"},
+			wantFields:      "ok1,ok2,ok3\n" + `a word,"b"""` + "\n",
+			wantErr:         io.EOF,
+		},
+		{
+			// This works since LazyQuotes is true:
+			file:            "invalid-badstartline.csv",
+			recordDelimiter: "\n",
+			fieldDelimiter:  ",",
+			sendErr:         nil,
+			header:          true,
+			wantColumns:     []string{"header1", "header2", "header3"},
+			wantFields:      "ok1,ok2,ok3\n" + `a,"b` + "\n" + `c""d,e` + "\n\"\n",
+			wantErr:         io.EOF,
+		},
+		{
+			// This works since LazyQuotes is true:
+			file:            "invalid-badstartline2.csv",
+			recordDelimiter: "\n",
+			fieldDelimiter:  ",",
+			sendErr:         nil,
+			header:          true,
+			wantColumns:     []string{"header1", "header2", "header3"},
+			wantFields:      "ok1,ok2,ok3\n" + `a,b` + "\n" + `"d` + "\n\ne\"\n",
+			wantErr:         io.EOF,
+		},
+		{
+			// This works since LazyQuotes is true:
+			file:            "invalid-badtrailingq.csv",
+			recordDelimiter: "\n",
+			fieldDelimiter:  ",",
+			sendErr:         nil,
+			header:          true,
+			wantColumns:     []string{"header1", "header2", "header3"},
+			wantFields:      "ok1,ok2,ok3\n" + `a word,"b"""` + "\n",
+			wantErr:         io.EOF,
+		},
+		{
+			// This works since LazyQuotes is true:
+			file:            "invalid-crlfquoted.csv",
+			recordDelimiter: "\n",
+			fieldDelimiter:  ",",
+			sendErr:         nil,
+			header:          true,
+			wantColumns:     []string{"header1", "header2", "header3"},
+			wantFields:      "ok1,ok2,ok3\n" + `"foo""bar"` + "\n",
+			wantErr:         io.EOF,
+		},
+		{
+			// This works since LazyQuotes is true:
+			file:            "invalid-csv.csv",
+			recordDelimiter: "\n",
+			fieldDelimiter:  ",",
+			sendErr:         nil,
+			header:          true,
+			wantColumns:     []string{"header1", "header2", "header3"},
+			wantFields:      "ok1,ok2,ok3\n" + `"a""""b",c` + "\n",
+			wantErr:         io.EOF,
+		},
+		{
+			// This works since LazyQuotes is true, but output is very weird.
+			file:            "invalid-oddquote.csv",
+			recordDelimiter: "\n",
+			fieldDelimiter:  ",",
+			sendErr:         nil,
+			header:          true,
+			wantColumns:     []string{"header1", "header2", "header3"},
+			wantFields:      "ok1,ok2,ok3\n" + `""""""",b,c` + "\n\"\n",
+			wantErr:         io.EOF,
+		},
+	}
+
+	for i, c := range cases {
+		t.Run(c.file, func(t *testing.T) {
+
+			var err error
+			var record sql.Record
+			var result bytes.Buffer
+			input := openTestFile(t, c.file)
+			args := ReaderArgs{
+				FileHeaderInfo:             use,
+				RecordDelimiter:            c.recordDelimiter,
+				FieldDelimiter:             c.fieldDelimiter,
+				QuoteCharacter:             defaultQuoteCharacter,
+				QuoteEscapeCharacter:       defaultQuoteEscapeCharacter,
+				CommentCharacter:           defaultCommentCharacter,
+				AllowQuotedRecordDelimiter: false,
+				unmarshaled:                true,
+			}
+			if !c.header {
+				args.FileHeaderInfo = none
+			}
+			inr := io.Reader(bytes.NewReader(input))
+			if c.sendErr != nil {
+				inr = io.MultiReader(inr, errReader{c.sendErr})
+			}
+			r, _ := NewReader(ioutil.NopCloser(inr), &args)
+			fields := 0
+			for {
+				record, err = r.Read(record)
+				if err != nil {
+					break
+				}
+				// Write with fixed delimiters, newlines.
+				err := record.WriteCSV(&result, ',')
+				if err != nil {
+					t.Error(err)
+				}
+				fields++
+			}
+			r.Close()
+			if err != c.wantErr {
+				t.Fatalf("Case %d failed with %s", i, err)
+			}
+			if !reflect.DeepEqual(r.columnNames, c.wantColumns) {
+				t.Errorf("Case %d failed: expected \n%#v, got result \n%#v", i, c.wantColumns, r.columnNames)
+			}
+			if result.String() != c.wantFields {
+				t.Errorf("Case %d failed: expected \n%v\nGot result \n%v", i, c.wantFields, result.String())
+			}
+		})
+	}
+}
+
 func BenchmarkReaderBasic(b *testing.B) {
-	const dataDir = "testdata"
 	args := ReaderArgs{
 		FileHeaderInfo:             use,
 		RecordDelimiter:            "\n",
@@ -275,7 +469,7 @@ func BenchmarkReaderBasic(b *testing.B) {
 		QuoteCharacter:             defaultQuoteCharacter,
 		QuoteEscapeCharacter:       defaultQuoteEscapeCharacter,
 		CommentCharacter:           defaultCommentCharacter,
-		AllowQuotedRecordDelimiter: true,
+		AllowQuotedRecordDelimiter: false,
 		unmarshaled:                true,
 	}
 	f := openTestFile(b, "nyc-taxi-data-100k.csv")
@@ -304,7 +498,6 @@ func BenchmarkReaderBasic(b *testing.B) {
 }
 
 func BenchmarkReaderHuge(b *testing.B) {
-	const dataDir = "testdata"
 	args := ReaderArgs{
 		FileHeaderInfo:             use,
 		RecordDelimiter:            "\n",
@@ -312,7 +505,7 @@ func BenchmarkReaderHuge(b *testing.B) {
 		QuoteCharacter:             defaultQuoteCharacter,
 		QuoteEscapeCharacter:       defaultQuoteEscapeCharacter,
 		CommentCharacter:           defaultCommentCharacter,
-		AllowQuotedRecordDelimiter: true,
+		AllowQuotedRecordDelimiter: false,
 		unmarshaled:                true,
 	}
 	for n := 0; n < 11; n++ {
@@ -351,7 +544,6 @@ func BenchmarkReaderHuge(b *testing.B) {
 }
 
 func BenchmarkReaderReplace(b *testing.B) {
-	const dataDir = "testdata"
 	args := ReaderArgs{
 		FileHeaderInfo:             use,
 		RecordDelimiter:            "^",
@@ -359,7 +551,7 @@ func BenchmarkReaderReplace(b *testing.B) {
 		QuoteCharacter:             defaultQuoteCharacter,
 		QuoteEscapeCharacter:       defaultQuoteEscapeCharacter,
 		CommentCharacter:           defaultCommentCharacter,
-		AllowQuotedRecordDelimiter: true,
+		AllowQuotedRecordDelimiter: false,
 		unmarshaled:                true,
 	}
 	f := openTestFile(b, "nyc-taxi-data-100k-single-delim.csv")
@@ -389,7 +581,6 @@ func BenchmarkReaderReplace(b *testing.B) {
 }
 
 func BenchmarkReaderReplaceTwo(b *testing.B) {
-	const dataDir = "testdata"
 	args := ReaderArgs{
 		FileHeaderInfo:             use,
 		RecordDelimiter:            "^Y",
@@ -397,7 +588,7 @@ func BenchmarkReaderReplaceTwo(b *testing.B) {
 		QuoteCharacter:             defaultQuoteCharacter,
 		QuoteEscapeCharacter:       defaultQuoteEscapeCharacter,
 		CommentCharacter:           defaultCommentCharacter,
-		AllowQuotedRecordDelimiter: true,
+		AllowQuotedRecordDelimiter: false,
 		unmarshaled:                true,
 	}
 	f := openTestFile(b, "nyc-taxi-data-100k-multi-delim.csv")

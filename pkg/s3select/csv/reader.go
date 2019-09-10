@@ -139,7 +139,7 @@ const csvSplitSize = 128 << 10
 
 // startReaders will head the header if needed and spin up a parser
 // and a number of workers based on GOMAXPROCS.
-// If an error is returned no goruotines have been started and r.err will have been set.
+// If an error is returned no goroutines have been started and r.err will have been set.
 func (r *Reader) startReaders(in io.Reader, newReader func(io.Reader) *csv.Reader) error {
 	if r.args.FileHeaderInfo != none {
 		// Read column names
