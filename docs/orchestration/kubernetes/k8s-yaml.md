@@ -87,7 +87,7 @@ You can update an existing MinIO deployment to use a newer MinIO release. To do 
 kubectl set image deployment/minio-deployment minio=<replace-with-new-minio-image>
 ```
 
-Kubernetes will restart the deployment to update the image. You will get a message as shown below, on successful update:
+Kubernetes will restart the deployment to update the image. You will get a message similar to the one shown below, on successful update:
 
 ```
 deployment "minio-deployment" image updated
