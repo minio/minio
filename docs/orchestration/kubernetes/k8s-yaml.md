@@ -136,7 +136,7 @@ service "minio" created
 
 ### Create MinIO Statefulset
 
-A StatefulSet provides a deterministic name and a unique identity to each pod, making it easy to deploy stateful distributed applications. To launch distributed MinIO you need to pass drive locations as parameters to the minio server command. Then, you’ll need to run the same command on all the participating pods. StatefulSets offer a perfect way to handle this requirement. Create the Statefulset using the following command
+A StatefulSet provides a deterministic name and a unique identity to each pod, making it easy to deploy stateful distributed applications. To launch distributed MinIO you need to pass drive locations as parameters to the minio server command. Then, you’ll need to run the same command on all the participating pods. StatefulSets offer a perfect way to handle this requirement. Create the Statefulset using the following command:
 
 ```sh
 $ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-distributed-statefulset.yaml?raw=true
