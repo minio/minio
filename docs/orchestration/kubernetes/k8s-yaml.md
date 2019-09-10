@@ -276,7 +276,7 @@ deployment "minio-deployment" created
 
 ### Create MinIO LoadBalancer Service
 
-Now that you have a MinIO deployment running, you may either want to access it internally (within the cluster) or expose it as a Service onto an external (outside of your cluster, maybe public internet) IP address, depending on your use case. You can achieve this using Services. There are 3 major service types — default type is ClusterIP, which exposes a service to connection from inside the cluster. NodePort and LoadBalancer are two types that expose services to external traffic. Create the MinIO service using the following command
+Now that you have a MinIO deployment running, you may either access it internally (within the cluster) or expose it as a Service onto an external (outside of your cluster, for example via public internet) IP address, depending on your use case. You can achieve this using Services. There are 3 major service types — default type is ClusterIP, which exposes a service to connection from inside the cluster. NodePort and LoadBalancer are two types that expose services to external traffic. Create the MinIO service using the following command
 
 ```sh
 kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-gcs-gateway-service.yaml?raw=true
