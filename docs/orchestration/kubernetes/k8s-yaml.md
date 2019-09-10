@@ -266,7 +266,7 @@ kubectl create secret generic gcs-credentials --from-file=/path/to/gcloud/creden
 
 A deployment encapsulates replica sets and pods — so, if a pod goes down, replication controller makes sure another pod comes up automatically. This way you won’t need to bother about pod failures and will have a stable MinIO service available.
 
-MinIO Gateway uses GCS as its storage backend and need to use a GCP `projectid` to identify your credentials. Update the section `gcp_project_id` with your
+MinIO Gateway uses GCS as its storage backend and needs to use a GCP `projectid` to identify your credentials. Update the section `gcp_project_id` with your
 GCS project ID. Create the Deployment using the following command
 
 ```sh
