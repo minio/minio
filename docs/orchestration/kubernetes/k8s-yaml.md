@@ -71,7 +71,7 @@ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/
 service "minio-service" created
 ```
 
-The `LoadBalancer` service takes couple of minutes to launch. To check if the service was created successfully, run the command
+The `LoadBalancer` service takes couple of minutes to launch. To check if the service was created successfully, run the following command:
 
 ```sh
 kubectl get svc minio-service
