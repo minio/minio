@@ -137,7 +137,7 @@ func (r *Reader) nextSplit(skip int, dst []byte) ([]byte, error) {
 // 128KB appears to be a very reasonable default.
 const csvSplitSize = 128 << 10
 
-// startReaders will head the header if needed and spin up a parser
+// startReaders will read the header if needed and spin up a parser
 // and a number of workers based on GOMAXPROCS.
 // If an error is returned no goroutines have been started and r.err will have been set.
 func (r *Reader) startReaders(in io.Reader, newReader func(io.Reader) *csv.Reader) error {
