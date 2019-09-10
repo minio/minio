@@ -41,7 +41,7 @@ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/
 
 ### Create Persistent Volume Claim
 
-MinIO needs persistent storage to store objects. If there is no persistent storage, the data stored in MinIO instance will be stored in the container file system and will be wiped off as soon as the container restarts.
+MinIO needs persistent storage to store objects. If there is no persistent storage, the data stored in MinIO instance will be stored in the container file system and will be destroyed as soon as the container restarts.
 
 Create a persistent volume claim (PVC) to request storage for the MinIO instance. Kubernetes looks out for PVs matching the PVC request in the cluster and binds it to the PVC automatically. Create the PersistentVolumeClaim 
 
