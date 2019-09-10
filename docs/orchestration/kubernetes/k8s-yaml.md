@@ -20,7 +20,7 @@ To run this example, you need Kubernetes version >=1.4 cluster installed and run
 
 ## MinIO Standalone Server Deployment
 
-The following section describes the process to deploy standalone [MinIO](https://min.io/) server on Kubernetes. The deployment uses the [official MinIO Docker image](https://hub.docker.com/r/minio/minio/~/dockerfile/) from Docker Hub.
+The following section describes the process to deploy standalone MinIO server on Kubernetes. The deployment uses the [official MinIO Docker image](https://hub.docker.com/r/minio/minio/) from Docker Hub.
 
 This section uses following core components of Kubernetes:
 
@@ -174,11 +174,14 @@ On successful update, you should see the output below
 statefulset "minio" patched
 ```
 
-Then delete all the pods in your StatefulSet one by one as shown below. Kubernetes will restart those pods for you, using the new image.
+Then delete all the pods in your StatefulSet one by one using the command shown below.
 
 ```sh
 kubectl delete minio-0
 ```
+
+As you delete each pod, Kubernetes will restart that pod for you, using the new image. Once all the pods are restarted, your upgrade process is
+complete.
 
 ### Resource cleanup
 
@@ -219,7 +222,7 @@ kubectl label node hostname4  -l minio-server=true
 
 ## MinIO GCS Gateway Deployment
 
-The following section describes the process to deploy [MinIO](https://min.io/) GCS Gateway on Kubernetes. The deployment uses the [official MinIO Docker image](https://hub.docker.com/r/minio/minio/~/dockerfile/) from Docker Hub.
+The following section describes the process to deploy MinIO GCS Gateway on Kubernetes. The deployment uses the [official MinIO Docker image](https://hub.docker.com/r/minio/minio/) from Docker Hub.
 
 This section uses following core components of Kubernetes:
 
