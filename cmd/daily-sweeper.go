@@ -91,6 +91,7 @@ func sweepRound(ctx context.Context, objAPI ObjectLayer) error {
 			if err != nil {
 				continue
 			}
+
 			for _, obj := range res.Objects {
 				for _, l := range copyDailySweepListeners() {
 					l <- pathJoin(bucket.Name, obj.Name)
@@ -133,7 +134,6 @@ func dailySweeper() {
 	// Start with random sleep time, so as to avoid "synchronous checks" between servers
 	time.Sleep(time.Duration(rand.Float64() * float64(time.Hour)))
 
-	// Perform a sweep round each month
 	for {
 		if time.Since(lastSweepTime) < 30*24*time.Hour {
 			time.Sleep(time.Hour)
@@ -147,13 +147,12 @@ func dailySweeper() {
 			// instance doing the sweep round
 			case OperationTimedOut:
 				lastSweepTime = time.Now()
-			default:
-				logger.LogIf(ctx, err)
-				time.Sleep(time.Minute)
 				continue
 			}
-		} else {
-			lastSweepTime = time.Now()
+			logger.LogIf(ctx, err)
+			time.Sleep(time.Minute)
+			continue
 		}
+		lastSweepTime = time.Now()
 	}
 }

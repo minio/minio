@@ -87,6 +87,7 @@ require (
 	golang.org/x/sys v0.0.0-20190904154756-749cb33beabd
 	google.golang.org/api v0.4.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
+	gopkg.in/ldap.v3 v3.0.3
 	gopkg.in/olivere/elastic.v5 v5.0.80
 	gopkg.in/yaml.v2 v2.2.2
 )
