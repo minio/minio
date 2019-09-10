@@ -38,7 +38,7 @@ require (
 	github.com/hashicorp/vault v1.1.0
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/json-iterator/go v1.1.7
-	github.com/klauspost/compress v1.5.0 // indirect
+	github.com/klauspost/compress v1.5.0
 	github.com/klauspost/cpuid v1.2.1 // indirect
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.0

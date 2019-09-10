@@ -17,105 +17,60 @@
 package csv
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/csv"
 	"fmt"
 	"io"
+	"runtime"
+	"sync"
 
 	"github.com/minio/minio/pkg/s3select/sql"
 )
-
-// recordReader will convert records to always have newline records.
-type recordReader struct {
-	reader io.Reader
-	// recordDelimiter can be up to 2 characters.
-	recordDelimiter []byte
-	oneByte         []byte
-	useOneByte      bool
-}
-
-func (rr *recordReader) Read(p []byte) (n int, err error) {
-	if rr.useOneByte {
-		p[0] = rr.oneByte[0]
-		rr.useOneByte = false
-		n, err = rr.reader.Read(p[1:])
-		n++
-	} else {
-		n, err = rr.reader.Read(p)
-	}
-
-	if err != nil {
-		return 0, err
-	}
-
-	// Do nothing if record-delimiter is already newline.
-	if string(rr.recordDelimiter) == "\n" {
-		return n, nil
-	}
-
-	// Change record delimiters to newline.
-	if len(rr.recordDelimiter) == 1 {
-		for idx := 0; idx < len(p); {
-			i := bytes.Index(p[idx:], rr.recordDelimiter)
-			if i < 0 {
-				break
-			}
-			idx += i
-			p[idx] = '\n'
-		}
-		return n, nil
-	}
-
-	// 2 characters...
-	for idx := 0; idx < len(p); {
-		i := bytes.Index(p[idx:], rr.recordDelimiter)
-		if i < 0 {
-			break
-		}
-		idx += i
-
-		p[idx] = '\n'
-		p = append(p[:idx+1], p[idx+2:]...)
-		n--
-	}
-
-	if p[n-1] != rr.recordDelimiter[0] {
-		return n, nil
-	}
-
-	if _, err = rr.reader.Read(rr.oneByte); err != nil {
-		return 0, err
-	}
-
-	if rr.oneByte[0] == rr.recordDelimiter[1] {
-		p[n-1] = '\n'
-		return n, nil
-	}
-
-	rr.useOneByte = true
-	return n, nil
-}
 
 // Reader - CSV record reader for S3Select.
 type Reader struct {
 	args         *ReaderArgs
 	readCloser   io.ReadCloser
-	csvReader    *csv.Reader
+	buf          *bufio.Reader
 	columnNames  []string
 	nameIndexMap map[string]int64
+	current      [][]string
+	recordsRead  int
+	input        chan *queueItem
+	queue        chan *queueItem
+	err          error
+	parserErr    chan error
+	bufferPool   sync.Pool
+	csvDstPool   sync.Pool
+	close        chan struct{}
+}
+
+type queueItem struct {
+	input []byte
+	dst   chan [][]string
+	err   error
 }
 
 // Read - reads single record.
 // Once Read is called the previous record should no longer be referenced.
 func (r *Reader) Read(dst sql.Record) (sql.Record, error) {
-	csvRecord, err := r.csvReader.Read()
-	if err != nil {
-		if err != io.EOF {
-			return nil, errCSVParsingError(err)
+	for len(r.current) <= r.recordsRead {
+		if r.err != nil {
+			return nil, r.err
 		}
-
-		return nil, err
+		item, ok := <-r.queue
+		if !ok {
+			r.err = io.EOF
+			return nil, r.err
+		}
+		r.csvDstPool.Put(r.current)
+		r.current = <-item.dst
+		r.err = item.err
+		r.recordsRead = 0
 	}
+	csvRecord := r.current[r.recordsRead]
+	r.recordsRead++
 
 	// If no column names are set, use _(index)
 	if r.columnNames == nil {
@@ -145,7 +100,154 @@ func (r *Reader) Read(dst sql.Record) (sql.Record, error) {
 
 // Close - closes underlying reader.
 func (r *Reader) Close() error {
+	if r.close != nil {
+		close(r.close)
+		r.close = nil
+	}
 	return r.readCloser.Close()
+}
+
+// nextSplit will attempt to skip a number of bytes and
+// return the buffer until the next newline occurs.
+// The last block will be sent along with an io.EOF.
+func (r *Reader) nextSplit(skip int, dst []byte) ([]byte, error) {
+	if cap(dst) < skip {
+		dst = make([]byte, 0, skip+1024)
+	}
+	dst = dst[:skip]
+	if skip > 0 {
+		n, err := io.ReadFull(r.buf, dst)
+		if err != nil && err != io.ErrUnexpectedEOF {
+			// If an EOF happens after reading some but not all the bytes,
+			// ReadFull returns ErrUnexpectedEOF.
+			return nil, err
+		}
+		dst = dst[:n]
+	}
+	// Read until next line.
+	in, err := r.buf.ReadBytes('\n')
+	dst = append(dst, in...)
+	return dst, err
+}
+
+func (r *Reader) startReaders(in io.Reader, newReader func(io.Reader) *csv.Reader) error {
+	if r.args.FileHeaderInfo != none {
+		// Read column names
+		// Get one line.
+		b, err := r.nextSplit(0, nil)
+		if err != nil {
+			r.err = err
+			return err
+		}
+		reader := newReader(bytes.NewReader(b))
+		record, err := reader.Read()
+		if err != nil {
+			r.err = err
+			if err != io.EOF {
+				r.err = errCSVParsingError(err)
+				return errCSVParsingError(err)
+			}
+			return err
+		}
+
+		if r.args.FileHeaderInfo == use {
+			// Copy column names since records will be reused.
+			columns := append(make([]string, 0, len(record)), record...)
+			r.columnNames = columns
+		}
+	}
+	const splitSize = 128 << 10
+
+	r.bufferPool.New = func() interface{} {
+		return make([]byte, splitSize+1024)
+	}
+
+	// Create queue
+	r.queue = make(chan *queueItem, runtime.GOMAXPROCS(0))
+	r.input = make(chan *queueItem, runtime.GOMAXPROCS(0))
+
+	// Start splitter
+	go func() {
+		defer close(r.input)
+		defer close(r.queue)
+		var read int
+		var blocks int
+		for {
+			next, err := r.nextSplit(splitSize, r.bufferPool.Get().([]byte))
+			q := queueItem{
+				input: next,
+				dst:   make(chan [][]string, 1),
+				err:   err,
+			}
+			read += len(next)
+			blocks++
+			select {
+			case <-r.close:
+				return
+			case r.queue <- &q:
+			}
+
+			select {
+			case <-r.close:
+				return
+			case r.input <- &q:
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	// Start parsers
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+		go func() {
+			for in := range r.input {
+				if len(in.input) == 0 {
+					in.dst <- nil
+					continue
+				}
+				dst, ok := r.csvDstPool.Get().([][]string)
+				if !ok {
+					dst = make([][]string, 0, 1000)
+				}
+
+				cr := newReader(bytes.NewBuffer(in.input))
+				all := dst[:0]
+				err := func() error {
+					for {
+						record, err := cr.Read()
+						if err == io.EOF {
+							return nil
+						}
+						if err != nil {
+							return errCSVParsingError(err)
+						}
+						var recDst []string
+						if len(dst) > len(all) {
+							recDst = dst[len(all)]
+						}
+						if cap(recDst) < len(record) {
+							recDst = make([]string, len(record))
+						}
+						recDst = recDst[:len(record)]
+						for i := range record {
+							recDst[i] = record[i]
+						}
+						all = append(all, recDst)
+					}
+				}()
+				if err != nil {
+					in.err = err
+				}
+				// We don't need the input any more.
+				r.bufferPool.Put(in.input)
+				in.input = nil
+				in.dst <- all
+			}
+		}()
+	}
+	return nil
+
 }
 
 // NewReader - creates new CSV reader using readCloser.
@@ -153,51 +255,36 @@ func NewReader(readCloser io.ReadCloser, args *ReaderArgs) (*Reader, error) {
 	if args == nil || args.IsEmpty() {
 		panic(fmt.Errorf("empty args passed %v", args))
 	}
-
-	// Assume args are validated by ReaderArgs.UnmarshalXML()
-	r := &Reader{
-		args:       args,
-		readCloser: readCloser,
-	}
-	if args.RecordDelimiter == "\n" {
-		// No translation needed.
-		r.csvReader = csv.NewReader(readCloser)
-	} else {
-		r.csvReader = csv.NewReader(&recordReader{
+	csvIn := io.Reader(readCloser)
+	if args.RecordDelimiter != "\n" {
+		csvIn = &recordReader{
 			reader:          readCloser,
 			recordDelimiter: []byte(args.RecordDelimiter),
 			oneByte:         make([]byte, len(args.RecordDelimiter)-1),
-		})
-	}
-	r.csvReader.Comma = []rune(args.FieldDelimiter)[0]
-	r.csvReader.Comment = []rune(args.CommentCharacter)[0]
-	r.csvReader.FieldsPerRecord = -1
-	// If LazyQuotes is true, a quote may appear in an unquoted field and a
-	// non-doubled quote may appear in a quoted field.
-	r.csvReader.LazyQuotes = true
-	// We do not trim leading space to keep consistent with s3.
-	r.csvReader.TrimLeadingSpace = false
-	r.csvReader.ReuseRecord = true
-
-	if args.FileHeaderInfo == none {
-		return r, nil
-	}
-
-	// Read column names
-	record, err := r.csvReader.Read()
-	if err != nil {
-		if err != io.EOF {
-			return nil, errCSVParsingError(err)
 		}
-
-		return nil, err
 	}
 
-	if args.FileHeaderInfo == use {
-		// Copy column names since records will be reused.
-		columns := append(make([]string, 0, len(record)), record...)
-		r.columnNames = columns
+	r := &Reader{
+		args:       args,
+		buf:        bufio.NewReaderSize(csvIn, 1<<20),
+		readCloser: readCloser,
+		close:      make(chan struct{}),
 	}
 
-	return r, nil
+	// Assume args are validated by ReaderArgs.UnmarshalXML()
+	newCsvReader := func(r io.Reader) *csv.Reader {
+		ret := csv.NewReader(r)
+		ret.Comma = []rune(args.FieldDelimiter)[0]
+		ret.Comment = []rune(args.CommentCharacter)[0]
+		ret.FieldsPerRecord = -1
+		// If LazyQuotes is true, a quote may appear in an unquoted field and a
+		// non-doubled quote may appear in a quoted field.
+		ret.LazyQuotes = true
+		// We do not trim leading space to keep consistent with s3.
+		ret.TrimLeadingSpace = false
+		ret.ReuseRecord = true
+		return ret
+	}
+
+	return r, r.startReaders(csvIn, newCsvReader)
 }
