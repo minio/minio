@@ -62,7 +62,7 @@ deployment "minio-deployment" created
 
 ### Create MinIO Service
 
-Now that you have a MinIO deployment running, you may either want to access it internally (within the cluster) or expose it as a Service onto an external (outside of your cluster, maybe public internet) IP address, depending on your use case. You can achieve this using Services. There are 3 major service types — default type is ClusterIP, which exposes a service to connection from inside the cluster. NodePort and LoadBalancer are two types that expose services to external traffic.
+Now that you have a MinIO deployment running, you may either access it internally (within the cluster) or expose it as a Service onto an external (outside of your cluster, for example public internet) IP address, depending on your use case. You can achieve this using Services. There are 3 major service types — the default type is ClusterIP, which exposes a service to connection from inside the cluster. NodePort and LoadBalancer are two types that expose services to external traffic.
 
 In this example, we expose the MinIO Deployment by creating a LoadBalancer service. Create the MinIO service using the following command
 
