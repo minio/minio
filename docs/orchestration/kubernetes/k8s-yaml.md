@@ -53,7 +53,7 @@ persistentvolumeclaim "minio-pv-claim" created
 
 ### Create MinIO Deployment
 
-A deployment encapsulates replica sets and pods. If a pod goes down, replication controller makes sure another pod comes up automatically. This way you won’t need to bother about pod failures and will have a stable MinIO service available. Create the Deployment using the following command
+A deployment encapsulates replica sets and pods. If a pod goes down, the replication controller makes sure another pod comes up automatically. This way, you won’t need to bother about pod failures and will have a stable MinIO service available. Create the Deployment using the following command:
 
 ```sh
 kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-standalone-deployment.yaml?raw=true
