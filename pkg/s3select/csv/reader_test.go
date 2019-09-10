@@ -315,7 +315,7 @@ func BenchmarkReaderHuge(b *testing.B) {
 		AllowQuotedRecordDelimiter: true,
 		unmarshaled:                true,
 	}
-	for n := 0; n < 10; n++ {
+	for n := 0; n < 11; n++ {
 		f := openTestFile(b, "nyc-taxi-data-100k.csv")
 		want := 309
 		for i := 0; i < n; i++ {

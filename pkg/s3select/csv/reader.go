@@ -31,34 +31,36 @@ import (
 // Reader - CSV record reader for S3Select.
 type Reader struct {
 	args         *ReaderArgs
-	readCloser   io.ReadCloser
-	buf          *bufio.Reader
-	columnNames  []string
-	nameIndexMap map[string]int64
-	current      [][]string
-	recordsRead  int
-	input        chan *queueItem
-	queue        chan *queueItem
-	err          error
-	parserErr    chan error
-	bufferPool   sync.Pool
-	csvDstPool   sync.Pool
-	close        chan struct{}
+	readCloser   io.ReadCloser    // raw input
+	buf          *bufio.Reader    // input to the splitter
+	columnNames  []string         // names of columns
+	nameIndexMap map[string]int64 // name to column index
+	current      [][]string       // current block of results to be returned
+	recordsRead  int              // number of records read in current slice
+	input        chan *queueItem  // input for workers
+	queue        chan *queueItem  // output from workers in order
+	err          error            // global error state, only touched by Reader.Read
+	bufferPool   sync.Pool        // pool of []byte objects for input
+	csvDstPool   sync.Pool        // pool of [][]string used for output
+	close        chan struct{}    // used for shutting down the splitter before end of stream
 }
 
+// queueItem is an item in the queue.
 type queueItem struct {
-	input []byte
-	dst   chan [][]string
-	err   error
+	input []byte          // raw input sent to the worker
+	dst   chan [][]string // result of block decode
+	err   error           // any error encountered will be set here
 }
 
 // Read - reads single record.
 // Once Read is called the previous record should no longer be referenced.
 func (r *Reader) Read(dst sql.Record) (sql.Record, error) {
+	// If we have have any records left, return these before any error.
 	for len(r.current) <= r.recordsRead {
 		if r.err != nil {
 			return nil, r.err
 		}
+		// Move to next block
 		item, ok := <-r.queue
 		if !ok {
 			r.err = io.EOF
@@ -130,6 +132,14 @@ func (r *Reader) nextSplit(skip int, dst []byte) ([]byte, error) {
 	return dst, err
 }
 
+// csvSplitSize is the size of each block.
+// Blocks will read this much and find the first following newline.
+// 128KB appears to be a very reasonable default.
+const csvSplitSize = 128 << 10
+
+// startReaders will head the header if needed and spin up a parser
+// and a number of workers based on GOMAXPROCS.
+// If an error is returned no goruotines have been started and r.err will have been set.
 func (r *Reader) startReaders(in io.Reader, newReader func(io.Reader) *csv.Reader) error {
 	if r.args.FileHeaderInfo != none {
 		// Read column names
@@ -156,10 +166,9 @@ func (r *Reader) startReaders(in io.Reader, newReader func(io.Reader) *csv.Reade
 			r.columnNames = columns
 		}
 	}
-	const splitSize = 128 << 10
 
 	r.bufferPool.New = func() interface{} {
-		return make([]byte, splitSize+1024)
+		return make([]byte, csvSplitSize+1024)
 	}
 
 	// Create queue
@@ -170,17 +179,13 @@ func (r *Reader) startReaders(in io.Reader, newReader func(io.Reader) *csv.Reade
 	go func() {
 		defer close(r.input)
 		defer close(r.queue)
-		var read int
-		var blocks int
 		for {
-			next, err := r.nextSplit(splitSize, r.bufferPool.Get().([]byte))
+			next, err := r.nextSplit(csvSplitSize, r.bufferPool.Get().([]byte))
 			q := queueItem{
 				input: next,
 				dst:   make(chan [][]string, 1),
 				err:   err,
 			}
-			read += len(next)
-			blocks++
 			select {
 			case <-r.close:
 				return
@@ -193,6 +198,7 @@ func (r *Reader) startReaders(in io.Reader, newReader func(io.Reader) *csv.Reade
 			case r.input <- &q:
 			}
 			if err != nil {
+				// Exit on any error.
 				return
 			}
 		}
@@ -214,6 +220,7 @@ func (r *Reader) startReaders(in io.Reader, newReader func(io.Reader) *csv.Reade
 				cr := newReader(bytes.NewBuffer(in.input))
 				all := dst[:0]
 				err := func() error {
+					// Read all records until EOF or another error.
 					for {
 						record, err := cr.Read()
 						if err == io.EOF {
@@ -257,7 +264,7 @@ func NewReader(readCloser io.ReadCloser, args *ReaderArgs) (*Reader, error) {
 	}
 	csvIn := io.Reader(readCloser)
 	if args.RecordDelimiter != "\n" {
-		csvIn = &recordReader{
+		csvIn = &recordTransform{
 			reader:          readCloser,
 			recordDelimiter: []byte(args.RecordDelimiter),
 			oneByte:         make([]byte, len(args.RecordDelimiter)-1),
@@ -266,7 +273,7 @@ func NewReader(readCloser io.ReadCloser, args *ReaderArgs) (*Reader, error) {
 
 	r := &Reader{
 		args:       args,
-		buf:        bufio.NewReaderSize(csvIn, 1<<20),
+		buf:        bufio.NewReaderSize(csvIn, csvSplitSize*2),
 		readCloser: readCloser,
 		close:      make(chan struct{}),
 	}
