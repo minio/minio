@@ -41,7 +41,7 @@ func (rr *recordTransform) Read(p []byte) (n int, err error) {
 	}
 
 	if err != nil {
-		return 0, err
+		return n, err
 	}
 
 	// Do nothing if record-delimiter is already newline.
@@ -80,7 +80,7 @@ func (rr *recordTransform) Read(p []byte) (n int, err error) {
 	}
 
 	if _, err = rr.reader.Read(rr.oneByte); err != nil {
-		return 0, err
+		return n, err
 	}
 
 	if rr.oneByte[0] == rr.recordDelimiter[1] {

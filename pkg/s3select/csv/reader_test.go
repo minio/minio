@@ -407,6 +407,17 @@ func TestReadFailures(t *testing.T) {
 			wantFields:      "ok1,ok2,ok3\n" + `""""""",b,c` + "\n\"\n",
 			wantErr:         io.EOF,
 		},
+		{
+			// Test when file ends with a half separator
+			file:            "endswithhalfsep.csv",
+			recordDelimiter: "%!",
+			fieldDelimiter:  ",",
+			sendErr:         nil,
+			header:          false,
+			wantColumns:     []string{"_1", "_2", "_3"},
+			wantFields:      "a,b,c\na2,b2,c2%\n",
+			wantErr:         io.EOF,
+		},
 	}
 
 	for i, c := range cases {
