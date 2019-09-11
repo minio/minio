@@ -276,7 +276,7 @@ func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}) (*RedisTa
 
 	_, pingErr := conn.Do("PING")
 	if pingErr != nil {
-		if target.store == nil || !IsConnRefusedErr(pingErr) {
+		if target.store == nil || !(IsConnRefusedErr(pingErr) || IsConnResetErr(pingErr)) {
 			return nil, pingErr
 		}
 	} else {

@@ -35,7 +35,7 @@ type LogInfo struct {
 
 // SendLog returns true if log pertains to node specified in args.
 func (l LogInfo) SendLog(node string) bool {
-	return node == "" || strings.ToLower(node) == strings.ToLower(l.NodeName)
+	return node == "" || strings.EqualFold(node, l.NodeName)
 }
 
 // GetLogs - listen on console log messages.

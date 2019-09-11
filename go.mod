@@ -11,16 +11,13 @@ require (
 	github.com/alecthomas/participle v0.2.1
 	github.com/aliyun/aliyun-oss-go-sdk v0.0.0-20190307165228-86c17b95fcd5
 	github.com/aws/aws-sdk-go v1.20.21
-	github.com/baiyubin/aliyun-sts-go-sdk v0.0.0-20180326062324-cfa1a18b161f // indirect
 	github.com/bcicen/jstream v0.0.0-20190220045926-16c1f8af81c2
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coredns/coredns v1.4.0
 	github.com/coreos/bbolt v1.3.3 // indirect
 	github.com/coreos/etcd v3.3.12+incompatible
-	github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/djherbis/atime v1.0.0
-	github.com/dnaeon/go-vcr v1.0.1 // indirect
 	github.com/dustin/go-humanize v1.0.0
 	github.com/eapache/go-resiliency v1.2.0 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.1.2-0.20190322152051-20337d8c3947
@@ -36,9 +33,6 @@ require (
 	github.com/gorilla/websocket v1.4.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.9.0 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.1 // indirect
-	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
-	github.com/hashicorp/golang-lru v0.5.1 // indirect
-	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hashicorp/raft v1.1.0 // indirect
 	github.com/hashicorp/vault v1.1.0
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
@@ -49,7 +43,6 @@ require (
 	github.com/klauspost/reedsolomon v1.9.1
 	github.com/kurin/blazer v0.5.4-0.20190613185654-cf2f27cc0be3
 	github.com/lib/pq v1.0.0
-	github.com/marstr/guid v1.1.0 // indirect
 	github.com/mattn/go-isatty v0.0.7
 	github.com/miekg/dns v1.1.8
 	github.com/minio/cli v1.21.0
@@ -65,7 +58,6 @@ require (
 	github.com/minio/sha256-simd v0.1.0
 	github.com/minio/sio v0.2.0
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/nats-io/gnatsd v1.4.1 // indirect
 	github.com/nats-io/go-nats-streaming v0.4.4 // indirect
 	github.com/nats-io/nats-server v1.4.1 // indirect
 	github.com/nats-io/nats-streaming-server v0.14.2 // indirect
@@ -79,13 +71,10 @@ require (
 	github.com/rcrowley/go-metrics v0.0.0-20190704165056-9c2d0518ed81 // indirect
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.6.0
-	github.com/ryanuber/go-glob v1.0.0 // indirect
-	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.4.2
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e
 	github.com/streadway/amqp v0.0.0-20190402114354-16ed540749f6
 	github.com/tidwall/gjson v1.2.1
-	github.com/tidwall/match v1.0.1 // indirect
 	github.com/tidwall/pretty v1.0.0 // indirect
 	github.com/tidwall/sjson v1.0.4
 	github.com/valyala/fastjson v1.4.1

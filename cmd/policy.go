@@ -163,20 +163,25 @@ func (sys *PolicySys) Init(objAPI ObjectLayer) error {
 	// the following reasons:
 	//  - Read quorum is lost just after the initialization
 	//    of the object layer.
-	for range newRetryTimerSimple(doneCh) {
-		// Load PolicySys once during boot.
-		if err := sys.refresh(objAPI); err != nil {
-			if err == errDiskNotFound ||
-				strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-				strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-				logger.Info("Waiting for policy subsystem to be initialized..")
-				continue
+	retryTimerCh := newRetryTimerSimple(doneCh)
+	for {
+		select {
+		case <-retryTimerCh:
+			// Load PolicySys once during boot.
+			if err := sys.refresh(objAPI); err != nil {
+				if err == errDiskNotFound ||
+					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
+					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
+					logger.Info("Waiting for policy subsystem to be initialized..")
+					continue
+				}
+				return err
 			}
-			return err
+			return nil
+		case <-globalOSSignalCh:
+			return fmt.Errorf("Initializing Policy sub-system gracefully stopped")
 		}
-		break
 	}
-	return nil
 }
 
 // NewPolicySys - creates new policy system.

@@ -27,10 +27,10 @@ import (
 	pathutil "path"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/mimedb"
-	"github.com/valyala/fastjson"
 )
 
 // FS format, and object metadata.
@@ -203,37 +203,6 @@ func (m *fsMetaV1) WriteTo(lk *lock.LockedFile) (n int64, err error) {
 	return fi.Size(), nil
 }
 
-func parseFSVersion(v *fastjson.Value) string {
-	return string(v.GetStringBytes("version"))
-}
-
-func parseFSMetaMap(v *fastjson.Value) map[string]string {
-	metaMap := make(map[string]string)
-	// Get fsMetaV1.Meta map.
-	v.GetObject("meta").Visit(func(k []byte, kv *fastjson.Value) {
-		metaMap[string(k)] = string(kv.GetStringBytes())
-	})
-	return metaMap
-}
-
-func parseFSPartsArray(v *fastjson.Value) []ObjectPartInfo {
-	// Get xlMetaV1.Parts array
-	var partsArray []ObjectPartInfo
-	for _, result := range v.GetArray("parts") {
-		partsArray = append(partsArray, ObjectPartInfo{
-			Number:     result.GetInt("number"),
-			Name:       string(result.GetStringBytes("name")),
-			ETag:       string(result.GetStringBytes("etag")),
-			Size:       result.GetInt64("size"),
-			ActualSize: result.GetInt64("actualSize"),
-		})
-	}
-	return partsArray
-}
-
-// fs.json parser pool
-var fsParserPool fastjson.ParserPool
-
 func (m *fsMetaV1) ReadFrom(ctx context.Context, lk *lock.LockedFile) (n int64, err error) {
 	var fsMetaBuf []byte
 	fi, err := lk.Stat()
@@ -253,17 +222,10 @@ func (m *fsMetaV1) ReadFrom(ctx context.Context, lk *lock.LockedFile) (n int64, 
 		return 0, io.EOF
 	}
 
-	parser := fsParserPool.Get()
-	defer fsParserPool.Put(parser)
-
-	var v *fastjson.Value
-	v, err = parser.ParseBytes(fsMetaBuf)
-	if err != nil {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err = json.Unmarshal(fsMetaBuf, m); err != nil {
 		return 0, err
 	}
-
-	// obtain version.
-	m.Version = parseFSVersion(v)
 
 	// Verify if the format is valid, return corrupted format
 	// for unrecognized formats.
@@ -272,12 +234,6 @@ func (m *fsMetaV1) ReadFrom(ctx context.Context, lk *lock.LockedFile) (n int64, 
 		logger.LogIf(ctx, errCorruptedFormat)
 		return 0, errCorruptedFormat
 	}
-
-	// obtain parts information
-	m.Parts = parseFSPartsArray(v)
-
-	// obtain metadata.
-	m.Meta = parseFSMetaMap(v)
 
 	// Success.
 	return int64(len(fsMetaBuf)), nil
