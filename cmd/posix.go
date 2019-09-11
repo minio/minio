@@ -1541,7 +1541,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 	return nil
 }
 
-func (s *posix) VerifyFile(volume, path string, empty bool, algo BitrotAlgorithm, sum []byte, shardSize int64) (err error) {
+func (s *posix) VerifyFile(volume, path string, fileSize int64, algo BitrotAlgorithm, sum []byte, shardSize int64) (err error) {
 	defer func() {
 		if err == errFaultyDisk {
 			atomic.AddInt32(&s.ioErrCount, 1)
@@ -1617,7 +1617,9 @@ func (s *posix) VerifyFile(volume, path string, empty bool, algo BitrotAlgorithm
 		return err
 	}
 
-	if empty && fi.Size() != 0 || !empty && fi.Size() == 0 {
+	// Calculate the size of the bitrot file and compare
+	// it with the actual file size.
+	if fi.Size() != bitrotShardFileSize(fileSize, shardSize, algo) {
 		return errFileUnexpectedSize
 	}
 
