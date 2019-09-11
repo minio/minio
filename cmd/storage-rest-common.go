@@ -16,7 +16,7 @@
 
 package cmd
 
-const storageRESTVersion = "v9" // compressed internode traffic
+const storageRESTVersion = "v10"
 const storageRESTPath = minioReservedBucketPath + "/storage/" + storageRESTVersion + SlashSeparator
 
 const (
@@ -52,7 +52,7 @@ const (
 	storageRESTDstPath    = "destination-path"
 	storageRESTOffset     = "offset"
 	storageRESTLength     = "length"
-	storageRESTEmpty      = "empty"
+	storageRESTShardSize  = "shard-size"
 	storageRESTCount      = "count"
 	storageRESTMarkerPath = "marker"
 	storageRESTLeafFile   = "leaf-file"

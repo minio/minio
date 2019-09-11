@@ -155,3 +155,11 @@ func bitrotWriterSum(w io.Writer) []byte {
 	}
 	return nil
 }
+
+// Returns the size of the file with bitrot protection
+func bitrotShardFileSize(size int64, shardSize int64, algo BitrotAlgorithm) int64 {
+	if algo != HighwayHash256S {
+		return size
+	}
+	return ceilFrac(size, shardSize)*int64(algo.New().Size()) + size
+}
