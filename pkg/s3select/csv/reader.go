@@ -43,6 +43,7 @@ type Reader struct {
 	bufferPool   sync.Pool        // pool of []byte objects for input
 	csvDstPool   sync.Pool        // pool of [][]string used for output
 	close        chan struct{}    // used for shutting down the splitter before end of stream
+	readerWg     sync.WaitGroup   // used to keep track of async reader.
 }
 
 // queueItem is an item in the queue.
@@ -106,6 +107,7 @@ func (r *Reader) Close() error {
 	if r.close != nil {
 		close(r.close)
 		r.close = nil
+		r.readerWg.Wait()
 	}
 	return r.readCloser.Close()
 }
@@ -175,11 +177,13 @@ func (r *Reader) startReaders(in io.Reader, newReader func(io.Reader) *csv.Reade
 	// Create queue
 	r.queue = make(chan *queueItem, runtime.GOMAXPROCS(0))
 	r.input = make(chan *queueItem, runtime.GOMAXPROCS(0))
+	r.readerWg.Add(1)
 
 	// Start splitter
 	go func() {
 		defer close(r.input)
 		defer close(r.queue)
+		defer r.readerWg.Done()
 		for {
 			next, err := r.nextSplit(csvSplitSize, r.bufferPool.Get().([]byte))
 			q := queueItem{
