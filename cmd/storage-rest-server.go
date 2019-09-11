@@ -346,8 +346,8 @@ func (s *storageRESTServer) ReadFileHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	sw := s2.NewWriter(w)
-	_, err = sw.Write(buf)
-	err = sw.Close()
+	sw.Write(buf)
+	sw.Close()
 }
 
 // ReadFileHandler - read section of a file.
