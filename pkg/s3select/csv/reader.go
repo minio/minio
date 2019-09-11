@@ -129,9 +129,12 @@ func (r *Reader) nextSplit(skip int, dst []byte) ([]byte, error) {
 		if err != nil && err != io.ErrUnexpectedEOF {
 			// If an EOF happens after reading some but not all the bytes,
 			// ReadFull returns ErrUnexpectedEOF.
-			return nil, err
+			return dst[:n], err
 		}
 		dst = dst[:n]
+		if err == io.ErrUnexpectedEOF {
+			return dst, io.EOF
+		}
 	}
 	// Read until next line.
 	in, err := r.buf.ReadBytes('\n')
