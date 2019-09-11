@@ -22,7 +22,6 @@ SERVER_REGION=${SERVER_REGION:-us-east-1}
 ENABLE_HTTPS=${ENABLE_HTTPS:-0}
 ENABLE_VIRTUAL_STYLE=${ENABLE_VIRTUAL_STYLE:-0}
 GO111MODULE=on
-GOPROXY=https://proxy.golang.org
 
 if [ -z "$SERVER_ENDPOINT" ]; then
     SERVER_ENDPOINT="play.minio.io:9000"
@@ -138,7 +137,6 @@ function main()
     export SERVER_REGION
     export ENABLE_VIRTUAL_STYLE
     export GO111MODULE
-    export GOPROXY
 
     echo "Running with"
     echo "SERVER_ENDPOINT:      $SERVER_ENDPOINT"

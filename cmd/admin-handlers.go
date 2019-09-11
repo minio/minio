@@ -1260,7 +1260,12 @@ func (a adminAPIHandlers) ListGroups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	groups := globalIAMSys.ListGroups()
+	groups, err := globalIAMSys.ListGroups()
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
 	body, err := json.Marshal(groups)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)

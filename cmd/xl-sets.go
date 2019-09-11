@@ -823,7 +823,7 @@ func (f *FileInfoCh) Push(fi FileInfo) {
 
 // Calculate least entry across multiple FileInfo channels, additionally
 // returns a boolean to indicate if the caller needs to call again.
-func leastEntry(entriesCh []FileInfoCh, readQuorum int) (FileInfo, bool) {
+func leastEntry(entriesCh []FileInfoCh, totalDrives int, heal bool) (FileInfo, bool) {
 	var entriesValid = make([]bool, len(entriesCh))
 	var entries = make([]FileInfo, len(entriesCh))
 	for i := range entriesCh {
@@ -879,27 +879,30 @@ func leastEntry(entriesCh []FileInfoCh, readQuorum int) (FileInfo, bool) {
 		entriesCh[i].Push(entries[i])
 	}
 
-	if readQuorum < 0 {
-		return lentry, isTruncated
-	}
-
 	quorum := lentry.Quorum
 	if quorum == 0 {
-		quorum = readQuorum
+		quorum = totalDrives / 2
 	}
 
-	if leastEntryCount >= quorum {
-		return lentry, isTruncated
+	if heal {
+		// When healing is enabled, we should
+		// list only objects which need healing.
+		if leastEntryCount != totalDrives {
+			return lentry, isTruncated
+		}
+	} else {
+		if leastEntryCount >= quorum {
+			return lentry, isTruncated
+		}
 	}
-
-	return leastEntry(entriesCh, readQuorum)
+	return leastEntry(entriesCh, totalDrives, heal)
 }
 
 // mergeEntriesCh - merges FileInfo channel to entries upto maxKeys.
-func mergeEntriesCh(entriesCh []FileInfoCh, maxKeys int, readQuorum int) (entries FilesInfo) {
+func mergeEntriesCh(entriesCh []FileInfoCh, maxKeys int, totalDrives int, heal bool) (entries FilesInfo) {
 	var i = 0
 	for {
-		fi, valid := leastEntry(entriesCh, readQuorum)
+		fi, valid := leastEntry(entriesCh, totalDrives, heal)
 		if !valid {
 			break
 		}
@@ -948,7 +951,6 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 	recursive := true
 	entryChs := s.startMergeWalks(context.Background(), bucket, prefix, "", recursive, endWalkCh)
 
-	readQuorum := s.drivesPerSet / 2
 	var objInfos []ObjectInfo
 	var eof bool
 	var prevPrefix string
@@ -957,7 +959,7 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 		if len(objInfos) == maxKeys {
 			break
 		}
-		result, ok := leastEntry(entryChs, readQuorum)
+		result, ok := leastEntry(entryChs, s.drivesPerSet, false)
 		if !ok {
 			eof = true
 			break
@@ -1087,12 +1089,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 		entryChs = s.startMergeWalks(context.Background(), bucket, prefix, marker, recursive, endWalkCh)
 	}
 
-	readQuorum := s.drivesPerSet / 2
-	if heal {
-		readQuorum = -1
-	}
-
-	entries := mergeEntriesCh(entryChs, maxKeys, readQuorum)
+	entries := mergeEntriesCh(entryChs, maxKeys, s.drivesPerSet, heal)
 	if len(entries.Files) == 0 {
 		return loi, nil
 	}
