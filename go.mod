@@ -1,6 +1,6 @@
 module github.com/minio/minio
 
-go 1.12
+go 1.13
 
 require (
 	cloud.google.com/go v0.37.2
@@ -36,6 +36,7 @@ require (
 	github.com/hashicorp/raft v1.1.0 // indirect
 	github.com/hashicorp/vault v1.1.0
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
+	github.com/json-iterator/go v1.1.7
 	github.com/klauspost/compress v1.8.3
 	github.com/klauspost/cpuid v1.2.1 // indirect
 	github.com/klauspost/pgzip v1.2.1
@@ -77,7 +78,6 @@ require (
 	github.com/tidwall/gjson v1.2.1
 	github.com/tidwall/pretty v1.0.0 // indirect
 	github.com/tidwall/sjson v1.0.4
-	github.com/valyala/fastjson v1.4.1
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	go.etcd.io/bbolt v1.3.3 // indirect
 	go.uber.org/atomic v1.3.2
@@ -88,9 +88,19 @@ require (
 	golang.org/x/tools v0.0.0-20190911174233-4f2ddba30aff // indirect
 	google.golang.org/api v0.4.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
+	gopkg.in/ldap.v3 v3.0.3
 	gopkg.in/olivere/elastic.v5 v5.0.80
 	gopkg.in/yaml.v2 v2.2.2
 )
 
 // Added for go1.13 migration https://github.com/golang/go/issues/32805
 replace github.com/gorilla/rpc v1.2.0+incompatible => github.com/gorilla/rpc v1.2.0
+
+// Allow this for offline builds
+replace github.com/eapache/go-xerial-snappy => github.com/eapache/go-xerial-snappy v0.0.0-20180814174437-776d5712da21
+
+replace github.com/eapache/queue => github.com/eapache/queue v1.1.0
+
+replace github.com/mattn/go-runewidth => github.com/mattn/go-runewidth v0.0.4
+
+replace github.com/mitchellh/mapstructure => github.com/mitchellh/mapstructure v1.1.2
