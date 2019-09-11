@@ -109,6 +109,10 @@ func (r *Reader) Close() error {
 		r.close = nil
 		r.readerWg.Wait()
 	}
+	r.recordsRead = len(r.current)
+	if r.err == nil {
+		r.err = io.EOF
+	}
 	return r.readCloser.Close()
 }
 
