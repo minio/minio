@@ -612,7 +612,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 
 			decReader := io.LimitReader(s2Reader, decLength)
 			if decLength > 100<<20 {
-				// On big files, read 4x1MB ahead
+				// On big files, read 5x1MB ahead
 				rah, err := readahead.NewReaderSize(decReader, 5, 1<<20)
 				if err == nil {
 					decReader = rah
