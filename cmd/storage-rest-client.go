@@ -446,9 +446,8 @@ func (client *storageRESTClient) VerifyFile(volume, path string, size int64, alg
 	values.Set(storageRESTBitrotAlgo, algo.String())
 	values.Set(storageRESTLength, strconv.FormatInt(size, 10))
 	values.Set(storageRESTShardSize, strconv.Itoa(int(shardSize)))
-	if len(sum) != 0 {
-		values.Set(storageRESTBitrotHash, hex.EncodeToString(sum))
-	}
+	values.Set(storageRESTBitrotHash, hex.EncodeToString(sum))
+
 	respBody, err := client.call(storageRESTMethodVerifyFile, values, nil, -1)
 	defer http.DrainBody(respBody)
 	if err != nil {
