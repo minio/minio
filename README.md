@@ -5,7 +5,7 @@ MinIO is an object storage server released under Apache License v2.0. It is comp
 
 MinIO server is light enough to be bundled with the application stack, similar to NodeJS, Redis and MySQL.
 
-[1]: MinIO in its default mode is faster and does not calculate MD5Sum unless passed by client. This may lead to incompatibility with few S3 clients like s3ql that heavily depend on MD5Sum. For full compatibility with Amazon S3 API, start MinIO with `--compat` option.
+[1] MinIO in its default mode is faster and does not calculate MD5Sum unless passed by client. This may lead to incompatibility with some S3 clients like s3ql that heavily depend on MD5Sum. For such applications start MinIO with `--compat` option.
 ```sh
 minio --compat server /data
 ```
@@ -161,6 +161,22 @@ MinIO Server comes with an embedded web based object browser. Point your web bro
 When deployed on a single drive, MinIO server lets clients access any pre-existing data in the data directory. For example, if MinIO is started with the command  `minio server /mnt/data`, any pre-existing data in the `/mnt/data` directory would be accessible to the clients.
 
 The above statement is also valid for all gateway backends.
+
+## Upgrading MinIO
+MinIO server supports rolling upgrades, i.e. you can update one MinIO instance at a time in a distributed cluster. This allows upgrades with no downtime. Upgrades can be done manually by replacing the binary with the latest release and restarting all servers in a rolling fashion. However, we recommend all our users to use [`mc admin update`](https://docs.min.io/docs/minio-admin-complete-guide.html#update) from the client. This will update all the nodes in the cluster and restart them, as shown in the following command from the MinIO client (mc):
+
+```
+mc admin update <minio alias, e.g., myminio>
+```
+
+**Important things to remember during upgrades**:
+
+- `mc admin update` will only work if the user running MinIO has write access to the parent directory where the binary is located, for example if the current binary is at `/usr/local/bin/minio`, you would need write access to `/usr/local/bin`.
+- In the case of federated setups `mc admin update` should be run against each cluster individually. Avoid updating `mc` until all clusters have been updated.
+- If you are updating the server it is always recommended (unless explicitly mentioned in MinIO server release notes), to update `mc` once all the servers have been upgraded using `mc update`.
+- `mc admin update` is disabled in docker/container environments, container environments provide their own mechanisms for updating running containers.
+- If you are using Vault as KMS with MinIO, ensure you have followed the Vault upgrade procedure outlined here: https://www.vaultproject.io/docs/upgrading/index.html
+- If you are using etcd with MinIO for the federation, ensure you have followed the etcd upgrade procedure outlined here: https://github.com/etcd-io/etcd/blob/master/Documentation/upgrades/upgrading-etcd.md
 
 ## Explore Further
 - [MinIO Erasure Code QuickStart Guide](https://docs.min.io/docs/minio-erasure-code-quickstart-guide)
