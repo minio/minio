@@ -503,28 +503,35 @@ func (ies *IAMEtcdStore) deleteGroupInfo(name string) error {
 
 func (ies *IAMEtcdStore) watch(sys *IAMSys) {
 	watchEtcd := func() {
-		// Refresh IAMSys with etcd watch.
 		for {
+		outerLoop:
+			// Refresh IAMSys with etcd watch.
 			watchCh := ies.client.Watch(context.Background(),
 				iamConfigPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
-			select {
-			case <-GlobalServiceDoneCh:
-				return
-			case watchResp, ok := <-watchCh:
-				if !ok {
-					time.Sleep(1 * time.Second)
-					continue
-				}
-				if err := watchResp.Err(); err != nil {
-					logger.LogIf(context.Background(), err)
-					// log and retry.
-					time.Sleep(1 * time.Second)
-					continue
-				}
-				for _, event := range watchResp.Events {
-					sys.Lock()
-					ies.reloadFromEvent(sys, event)
-					sys.Unlock()
+			for {
+				select {
+				case <-GlobalServiceDoneCh:
+					return
+				case watchResp, ok := <-watchCh:
+					if !ok {
+						time.Sleep(1 * time.Second)
+						// Upon an error on watch channel
+						// re-init the watch channel.
+						goto outerLoop
+					}
+					if err := watchResp.Err(); err != nil {
+						logger.LogIf(context.Background(), err)
+						// log and retry.
+						time.Sleep(1 * time.Second)
+						// Upon an error on watch channel
+						// re-init the watch channel.
+						goto outerLoop
+					}
+					for _, event := range watchResp.Events {
+						sys.Lock()
+						ies.reloadFromEvent(sys, event)
+						sys.Unlock()
+					}
 				}
 			}
 		}

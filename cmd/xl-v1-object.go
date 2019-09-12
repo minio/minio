@@ -33,7 +33,7 @@ var objectOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied)
 
 // putObjectDir hints the bottom layer to create a new directory.
 func (xl xlObjects) putObjectDir(ctx context.Context, bucket, object string, writeQuorum int) error {
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 
 	errs := make([]error, len(xl.getDisks()))
 	// Prepare object creation in all disks
@@ -335,7 +335,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 
 // getObjectInfoDir - This getObjectInfo is specific to object directory lookup.
 func (xl xlObjects) getObjectInfoDir(ctx context.Context, bucket, object string) (oi ObjectInfo, err error) {
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 
 	errs := make([]error, len(xl.getDisks()))
 	// Prepare object creation in a all disks
@@ -423,7 +423,7 @@ func (xl xlObjects) getObjectInfo(ctx context.Context, bucket, object string) (o
 }
 
 func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, errs []error) {
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	// Undo rename object on disks where RenameFile succeeded.
 
 	// If srcEntry/dstEntry are objects then add a trailing slash to copy
@@ -453,7 +453,7 @@ func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry str
 // the respective underlying storage layer representations.
 func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, writeQuorum int, ignoredErr []error) ([]StorageAPI, error) {
 	// Initialize sync waitgroup.
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 
 	// Initialize list of errors.
 	var errs = make([]error, len(disks))
@@ -737,7 +737,7 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string, wri
 	}
 
 	// Initialize sync waitgroup.
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 
 	// Initialize list of errors.
 	var dErrs = make([]error, len(disks))

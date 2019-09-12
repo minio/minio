@@ -18,6 +18,7 @@ package hdfs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -280,7 +281,7 @@ func hdfsToObjectErr(ctx context.Context, err error, params ...string) error {
 			return minio.PrefixAccessDenied{Bucket: bucket, Object: object}
 		}
 		return minio.BucketAlreadyOwnedByYou{Bucket: bucket}
-	case isSysErrNotEmpty(err):
+	case errors.Is(err, syscall.ENOTEMPTY):
 		if object != "" {
 			return minio.PrefixAccessDenied{Bucket: bucket, Object: object}
 		}
@@ -387,20 +388,6 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), getObjectInfo, getObjectInfo)
 }
 
-// Check if the given error corresponds to ENOTEMPTY for unix
-// and ERROR_DIR_NOT_EMPTY for windows (directory not empty).
-func isSysErrNotEmpty(err error) bool {
-	if err == syscall.ENOTEMPTY {
-		return true
-	}
-	if pathErr, ok := err.(*os.PathError); ok {
-		if pathErr.Err == syscall.ENOTEMPTY {
-			return true
-		}
-	}
-	return false
-}
-
 // deleteObject deletes a file path if its empty. If it's successfully deleted,
 // it will recursively move up the tree, deleting empty parent directories
 // until it finds one with files in it. Returns nil for a non-empty directory.
@@ -411,16 +398,13 @@ func (n *hdfsObjects) deleteObject(basePath, deletePath string) error {
 
 	// Attempt to remove path.
 	if err := n.clnt.Remove(deletePath); err != nil {
-		switch {
-		case err == syscall.ENOTEMPTY:
-		case isSysErrNotEmpty(err):
+		if errors.Is(err, syscall.ENOTEMPTY) {
 			// Ignore errors if the directory is not empty. The server relies on
 			// this functionality, and sometimes uses recursion that should not
 			// error on parent directories.
 			return nil
-		default:
-			return err
 		}
+		return err
 	}
 
 	// Trailing slash is removed when found to ensure

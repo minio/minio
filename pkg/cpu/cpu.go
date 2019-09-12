@@ -100,7 +100,7 @@ func GetHistoricLoad() Load {
 // for the process currently
 func GetLoad() Load {
 	vals := make(chan time.Duration, 3)
-	wg := sync.WaitGroup{}
+	var wg sync.WaitGroup
 	for i := 0; i < cpuLoadSampleSize; i++ {
 		cpuCounter, err := newCounter()
 		if err != nil {
