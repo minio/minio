@@ -43,7 +43,7 @@ func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location
 	}
 
 	// Initialize sync waitgroup.
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 
 	// Initialize list of errors.
 	var dErrs = make([]error, len(xl.getDisks()))
@@ -82,7 +82,7 @@ func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location
 
 func (xl xlObjects) undoDeleteBucket(bucket string) {
 	// Initialize sync waitgroup.
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	// Undo previous make bucket entry on all underlying storage disks.
 	for index, disk := range xl.getDisks() {
 		if disk == nil {
@@ -103,7 +103,7 @@ func (xl xlObjects) undoDeleteBucket(bucket string) {
 // undo make bucket operation upon quorum failure.
 func undoMakeBucket(storageDisks []StorageAPI, bucket string) {
 	// Initialize sync waitgroup.
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	// Undo previous make bucket entry on all underlying storage disks.
 	for index, disk := range storageDisks {
 		if disk == nil {
@@ -245,7 +245,7 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 	defer bucketLock.Unlock()
 
 	// Collect if all disks report volume not found.
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	var dErrs = make([]error, len(xl.getDisks()))
 
 	// Remove a volume entry on all underlying storage disks.

@@ -451,7 +451,7 @@ func renameXLMetadata(ctx context.Context, disks []StorageAPI, srcBucket, srcEnt
 
 // writeUniqueXLMetadata - writes unique `xl.json` content for each disk in order.
 func writeUniqueXLMetadata(ctx context.Context, disks []StorageAPI, bucket, prefix string, xlMetas []xlMetaV1, quorum int) ([]StorageAPI, error) {
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	var mErrs = make([]error, len(disks))
 
 	// Start writing `xl.json` to all disks in parallel.
@@ -461,58 +461,22 @@ func writeUniqueXLMetadata(ctx context.Context, disks []StorageAPI, bucket, pref
 			continue
 		}
 		wg.Add(1)
+
+		// Pick one xlMeta for a disk at index.
+		xlMetas[index].Erasure.Index = index + 1
+
 		// Write `xl.json` in a routine.
-		go func(index int, disk StorageAPI) {
+		go func(index int, disk StorageAPI, xlMeta xlMetaV1) {
 			defer wg.Done()
 
-			// Pick one xlMeta for a disk at index.
-			xlMetas[index].Erasure.Index = index + 1
-
 			// Write unique `xl.json` for a disk at index.
-			err := writeXLMetadata(ctx, disk, bucket, prefix, xlMetas[index])
-			if err != nil {
-				mErrs[index] = err
-			}
-		}(index, disk)
+			mErrs[index] = writeXLMetadata(ctx, disk, bucket, prefix, xlMeta)
+		}(index, disk, xlMetas[index])
 	}
 
 	// Wait for all the routines.
 	wg.Wait()
 
 	err := reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, quorum)
-	return evalDisks(disks, mErrs), err
-}
-
-// writeSameXLMetadata - write `xl.json` on all disks in order.
-func writeSameXLMetadata(ctx context.Context, disks []StorageAPI, bucket, prefix string, xlMeta xlMetaV1, writeQuorum int) ([]StorageAPI, error) {
-	var wg = &sync.WaitGroup{}
-	var mErrs = make([]error, len(disks))
-
-	// Start writing `xl.json` to all disks in parallel.
-	for index, disk := range disks {
-		if disk == nil {
-			mErrs[index] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-		// Write `xl.json` in a routine.
-		go func(index int, disk StorageAPI, metadata xlMetaV1) {
-			defer wg.Done()
-
-			// Save the disk order index.
-			metadata.Erasure.Index = index + 1
-
-			// Write xl metadata.
-			err := writeXLMetadata(ctx, disk, bucket, prefix, metadata)
-			if err != nil {
-				mErrs[index] = err
-			}
-		}(index, disk, xlMeta)
-	}
-
-	// Wait for all the routines.
-	wg.Wait()
-
-	err := reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, writeQuorum)
 	return evalDisks(disks, mErrs), err
 }

@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -522,10 +523,19 @@ func doUpdate(updateURL, sha256Hex, mode string) (err error) {
 			Checksum: sha256Sum,
 		},
 	); err != nil {
-		if os.IsPermission(err) {
+		if rerr := update.RollbackError(err); rerr != nil {
 			return AdminError{
 				Code:       AdminUpdateApplyFailure,
-				Message:    err.Error(),
+				Message:    fmt.Sprintf("Failed to rollback from bad update: %v", rerr),
+				StatusCode: http.StatusInternalServerError,
+			}
+		}
+		var pathErr *os.PathError
+		if errors.As(err, &pathErr) {
+			return AdminError{
+				Code: AdminUpdateApplyFailure,
+				Message: fmt.Sprintf("Unable to update the binary at %s: %v",
+					filepath.Dir(pathErr.Path), pathErr.Err),
 				StatusCode: http.StatusForbidden,
 			}
 		}

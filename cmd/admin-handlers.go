@@ -45,7 +45,6 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/cpu"
-	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/handlers"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
@@ -318,15 +317,6 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
-// ServerDrivesPerfInfo holds information about address, performance
-// of all drives on one server. It also reports any errors if encountered
-// while trying to reach this server.
-type ServerDrivesPerfInfo struct {
-	Addr  string             `json:"addr"`
-	Error string             `json:"error,omitempty"`
-	Perf  []disk.Performance `json:"perf"`
-}
-
 // ServerCPULoadInfo holds informantion about cpu utilization
 // of one minio node. It also reports any errors if encountered
 // while trying to reach this server.
@@ -406,16 +396,25 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		writeSuccessResponseJSON(w, jsonBytes)
 
 	case "drive":
-		info := objectAPI.StorageInfo(ctx)
-		if !(info.Backend.Type == BackendFS || info.Backend.Type == BackendErasure) {
+		// Drive Perf is only implemented for Erasure coded backends
+		if !globalIsXL {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 			return
 		}
+
+		var size int64 = madmin.DefaultDrivePerfSize
+		if sizeStr, found := vars["size"]; found {
+			var err error
+			if size, err = strconv.ParseInt(sizeStr, 10, 64); err != nil || size <= 0 {
+				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
+				return
+			}
+		}
 		// Get drive performance details from local server's drive(s)
-		dp := localEndpointsDrivePerf(globalEndpoints, r)
+		dp := getLocalDrivesPerf(globalEndpoints, size, r)
 
 		// Notify all other MinIO peers to report drive performance numbers
-		dps := globalNotificationSys.DrivePerfInfo()
+		dps := globalNotificationSys.DrivePerfInfo(size)
 		dps = append(dps, dp)
 
 		// Marshal API response
@@ -430,7 +429,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		writeSuccessResponseJSON(w, jsonBytes)
 	case "cpu":
 		// Get CPU load details from local server's cpu(s)
-		cpu := localEndpointsCPULoad(globalEndpoints, r)
+		cpu := getLocalCPULoad(globalEndpoints, r)
 		// Notify all other MinIO peers to report cpu load numbers
 		cpus := globalNotificationSys.CPULoadInfo()
 		cpus = append(cpus, cpu)
@@ -447,7 +446,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		writeSuccessResponseJSON(w, jsonBytes)
 	case "mem":
 		// Get mem usage details from local server(s)
-		m := localEndpointsMemUsage(globalEndpoints, r)
+		m := getLocalMemUsage(globalEndpoints, r)
 		// Notify all other MinIO peers to report mem usage numbers
 		mems := globalNotificationSys.MemUsageInfo()
 		mems = append(mems, m)
