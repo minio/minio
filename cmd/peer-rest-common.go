@@ -52,6 +52,7 @@ const (
 	peerRESTMethodBucketLifecycleSet       = "setbucketlifecycle"
 	peerRESTMethodBucketLifecycleRemove    = "removebucketlifecycle"
 	peerRESTMethodLog                      = "log"
+	peerRESTSensorTemp                     = "sensortemp"
 )
 
 const (

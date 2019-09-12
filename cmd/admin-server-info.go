@@ -25,6 +25,7 @@ import (
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mem"
+	"github.com/shirou/gopsutil/host"
 )
 
 // getLocalMemUsage - returns ServerMemUsageInfo for only the
@@ -109,5 +110,36 @@ func getLocalDrivesPerf(endpoints EndpointList, size int64, r *http.Request) mad
 	return madmin.ServerDrivesPerfInfo{
 		Addr: addr,
 		Perf: dps,
+	}
+}
+
+// getEndpointsSensorTemp - returns ServerSensorTempInfo only for the
+// local endpoints from given list of endpoints
+func getEndpointsSensorTemp(endpoints EndpointList, r *http.Request) madmin.ServerSensorTemp {
+	var temps []host.TemperatureStat
+	seenHosts := set.NewStringSet()
+	for _, endpoint := range endpoints {
+		if seenHosts.Contains(endpoint.Host) {
+			continue
+		}
+		// Only proceed for local endpoints
+		if endpoint.IsLocal {
+			temp, err := host.SensorsTemperatures()
+			if err != nil {
+				return madmin.ServerSensorTemp{
+					Error: err.Error(),
+				}
+			}
+			temps = append(temps, temp...)
+		}
+	}
+	addr := r.Host
+	if globalIsDistXL {
+		addr = GetLocalPeer(endpoints)
+	}
+
+	return madmin.ServerSensorTemp{
+		Addr:        addr,
+		Temperature: temps,
 	}
 }

@@ -727,3 +727,14 @@ func newPeerRESTClient(peer *xnet.Host) (*peerRESTClient, error) {
 
 	return &peerRESTClient{host: peer, restClient: restClient, connected: true}, nil
 }
+
+// SensorTemp - fetch CPU hardware information for a remote node.
+func (client *peerRESTClient) SensorTemperature() (info madmin.ServerSensorTemp, err error) {
+	respBody, err := client.call(peerRESTSensorTemp, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}

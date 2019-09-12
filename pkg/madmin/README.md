@@ -49,7 +49,8 @@ func main() {
 |                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)     |                    |                           |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
 | [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) |                    |                           |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                 |
 |                                     | [`NetPerfInfo`](#NetPerfInfo)                   |                    |                           |                         |                                       |                                                   |                                 |
-
+|                                     | [`SensorTemp`](#SensorTemp)                     |                    |                           |                         |                                       |                                                   |                                 |
+   
 ## 1. Constructor
 <a name="MinIO"></a>
 
@@ -285,6 +286,17 @@ Fetches network performance of all cluster nodes using given sized payload. Retu
 | `Addr`     | _string_         | Address of the server the following information is retrieved from. |
 | `Error`    | _string_         | Errors (if any) encountered while reaching this node               |
 | `ReadPerf` | _time.Duration_  | Network read performance of the server                             |
+
+<a name="SensorTemp"></a>
+### SensorTemp() ([]ServerSensorTemp, error)
+
+Fetches the sensor temperature. Returned value is a slice of ServerSensorTemp.
+
+| Param      | Type                     | Description                                                        |
+|------------|--------------------------|--------------------------------------------------------------------|
+| `Addr`     | _string_                 | Address of the server the following information is retrieved from. |
+| `Error`    | _string_                 | Errors (if any) encountered while reaching this node               |
+| `Temp`     | _host.TemperatureStat _  | Network read performance of the server                             |
 
 ## 5. Heal operations
 

@@ -1309,3 +1309,29 @@ func RemoveListener(objAPI ObjectLayer, bucketName string, targetID event.Target
 
 	return saveConfig(ctx, objAPI, configFile, data)
 }
+
+// SensorTemperature - Sensor temp
+func (sys *NotificationSys) SensorTemperature() []madmin.ServerSensorTemp {
+	reply := make([]madmin.ServerSensorTemp, len(sys.peerClients))
+	var wg sync.WaitGroup
+	for i, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(client *peerRESTClient, idx int) {
+			defer wg.Done()
+			sensorTemp, err := client.SensorTemperature()
+			if err != nil {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", client.host.String())
+				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				logger.LogIf(ctx, err)
+				sensorTemp.Addr = client.host.String()
+				sensorTemp.Error = err.Error()
+			}
+			reply[idx] = sensorTemp
+		}(client, i)
+	}
+	wg.Wait()
+	return reply
+}

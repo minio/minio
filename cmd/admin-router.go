@@ -50,6 +50,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 	// Info operations
 	adminV1Router.Methods(http.MethodGet).Path("/info").HandlerFunc(httpTraceAll(adminAPI.ServerInfoHandler))
 
+	// Harware Info operations
+	adminV1Router.Methods(http.MethodGet).Path("/hardware").HandlerFunc(httpTraceAll(adminAPI.ServerHardwareInfoHandler)).Queries("hwType", "{hwType:.*}")
+
 	if globalIsDistXL || globalIsXL {
 		/// Heal operations
 

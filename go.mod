@@ -59,6 +59,7 @@ require (
 	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.6.0
+	github.com/shirou/gopsutil v2.18.12+incompatible
 	github.com/sirupsen/logrus v1.4.2
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e
 	github.com/streadway/amqp v0.0.0-20190402114354-16ed540749f6
@@ -72,6 +73,7 @@ require (
 	gopkg.in/Shopify/sarama.v1 v1.20.0
 	gopkg.in/ldap.v3 v3.0.3
 	gopkg.in/olivere/elastic.v5 v5.0.80
+	gopkg.in/xmlpath.v2 v2.0.0-20150820204837-860cbeca3ebc
 	gopkg.in/yaml.v2 v2.2.2
 )
 

@@ -1768,3 +1768,42 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	}
 	writeSuccessResponseJSON(w, resp)
 }
+
+// ServerHardwareInfoHandler - GET /minio/admin/v1/hardwareinfo?Type={hwType}
+// ----------
+// Get all hardware information based on input type
+// Supported types = sensor
+func (a adminAPIHandlers) ServerHardwareInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "HardwareInfo")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	hardware := vars["hwType"]
+
+	switch madmin.HardwareType(hardware) {
+	case madmin.Sensor:
+		// sensor temperature from local server
+		temp := getEndpointsSensorTemp(globalEndpoints, r)
+		// Notify all other MinIO peers to report cpu hardware
+		temps := globalNotificationSys.SensorTemperature()
+		temps = append(temps, temp)
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(temps)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		// Reply with cpu hardware information (across nodes in a
+		// distributed setup) as json.
+		writeSuccessResponseJSON(w, jsonBytes)
+
+	default:
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+	}
+}
