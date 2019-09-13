@@ -251,7 +251,7 @@ func (v Value) CSVString() string {
 	case time.Time:
 		return FormatSQLTimestamp(x)
 	case []byte:
-		return fmt.Sprintf(string(x))
+		return string(x)
 	default:
 		return "CSV serialization not implemented for this type"
 	}
