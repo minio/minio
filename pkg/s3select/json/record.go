@@ -51,6 +51,24 @@ func (r *Record) Get(name string) (*sql.Value, error) {
 	return nil, errors.New("not implemented here")
 }
 
+// Reset the record.
+func (r *Record) Reset() {
+	if len(r.KVS) > 0 {
+		r.KVS = r.KVS[:0]
+	}
+}
+
+// CopyFrom will copy all records from the incoming and append them to the existing records.
+// The source record must be of a similar type.
+func (r *Record) CopyFrom(record sql.Record) error {
+	other, ok := record.(*Record)
+	if !ok {
+		return fmt.Errorf("unexpected record type, expected %T, got %T", r, record)
+	}
+	r.KVS = append(r.KVS, other.KVS...)
+	return nil
+}
+
 // Set - sets the value for a column name.
 func (r *Record) Set(name string, value *sql.Value) error {
 	var v interface{}

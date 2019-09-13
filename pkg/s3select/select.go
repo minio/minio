@@ -386,18 +386,18 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 		buf.Reset()
 
 		for _, outputRecord := range outputQueue {
-			if outputRecord != nil {
-				before := buf.Len()
-				if err = s3Select.marshal(buf, outputRecord); err != nil {
-					bufPool.Put(buf)
-					return false
-				}
-				if buf.Len()-before > maxRecordSize {
-					writer.FinishWithError("OverMaxRecordSize", "The length of a record in the input or result is greater than maxCharsPerRecord of 1 MB.")
-					bufPool.Put(buf)
-					return false
-				}
-
+			if outputRecord == nil {
+				continue
+			}
+			before := buf.Len()
+			if err = s3Select.marshal(buf, outputRecord); err != nil {
+				bufPool.Put(buf)
+				return false
+			}
+			if buf.Len()-before > maxRecordSize {
+				writer.FinishWithError("OverMaxRecordSize", "The length of a record in the input or result is greater than maxCharsPerRecord of 1 MB.")
+				bufPool.Put(buf)
+				return false
 			}
 		}
 
@@ -461,12 +461,13 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 			if t := outputQueue[len(outputQueue)-1]; t != nil {
 				// If the output record is already set, we reuse it.
 				outputRecord = t
+				outputRecord.Reset()
 			} else {
 				// Create new one
 				outputRecord = s3Select.outputRecord()
 				outputQueue[len(outputQueue)-1] = outputRecord
 			}
-			if outputRecord, err = s3Select.statement.Eval(inputRecord, outputRecord); err != nil {
+			if err = s3Select.statement.Eval(inputRecord, outputRecord); err != nil {
 				break
 			}
 			if outputRecord == nil {
