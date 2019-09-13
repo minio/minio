@@ -33,7 +33,7 @@ type Reader struct {
 }
 
 // Read - reads single record.
-func (r *Reader) Read() (sql.Record, error) {
+func (r *Reader) Read(dst sql.Record) (sql.Record, error) {
 	v, ok := <-r.valueCh
 	if !ok {
 		if err := r.decoder.Err(); err != nil {
@@ -55,15 +55,25 @@ func (r *Reader) Read() (sql.Record, error) {
 		kvs = jstream.KVS{jstream.KV{Key: "_1", Value: v.Value}}
 	}
 
-	return &Record{
-		KVS:          kvs,
-		SelectFormat: sql.SelectFmtJSON,
-	}, nil
+	dstRec, ok := dst.(*Record)
+	if !ok {
+		dstRec = &Record{}
+	}
+	dstRec.KVS = kvs
+	dstRec.SelectFormat = sql.SelectFmtJSON
+	return dstRec, nil
 }
 
-// Close - closes underlaying reader.
+// Close - closes underlying reader.
 func (r *Reader) Close() error {
-	return r.readCloser.Close()
+	// Close the input.
+	// Potentially racy if the stream decoder is still reading.
+	err := r.readCloser.Close()
+	for range r.valueCh {
+		// Drain values so we don't leak a goroutine.
+		// Since we have closed the input, it should fail rather quickly.
+	}
+	return err
 }
 
 // NewReader - creates new JSON reader using readCloser.

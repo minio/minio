@@ -106,3 +106,4 @@ For a more detailed SELECT SQL reference, please see [here](https://docs.aws.ama
 - Large numbers (outside of the signed 64-bit range) are not yet supported.
 - The Date [functions](https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-date.html) `DATE_ADD`, `DATE_DIFF`, `EXTRACT` and `UTCNOW` along with type conversion using `CAST` to the `TIMESTAMP` data type are currently supported.
 - AWS S3's [reserved keywords](https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-keyword-list.html) list is not yet respected.
+- CSV input fields (even quoted) cannot contain newlines even if `RecordDelimiter` is something else.
