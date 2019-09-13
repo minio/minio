@@ -238,12 +238,11 @@ func (e *In) evalInNode(r Record, arg *Value) (*Value, error) {
 		// FIXME: type inference?
 
 		// Types must match.
-		if arg.vType != eltVal.vType {
+		if !arg.SameTypeAs(*eltVal) {
 			// match failed.
 			continue
 		}
-
-		if arg.value == eltVal.value {
+		if arg.Equals(*eltVal) {
 			result = true
 			break
 		}
