@@ -77,11 +77,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		adminV1Router.Methods(http.MethodGet).Path("/config").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigHandler))
 		// Set config
 		adminV1Router.Methods(http.MethodPut).Path("/config").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigHandler))
-
-		// Get config keys/values
-		adminV1Router.Methods(http.MethodGet).Path("/config-keys").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigKeysHandler))
-		// Set config keys/values
-		adminV1Router.Methods(http.MethodPut).Path("/config-keys").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigKeysHandler))
 	}
 
 	if enableIAMOps {
