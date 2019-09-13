@@ -341,6 +341,9 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
+		if v.TLS.Enable {
+			v.TLS.RootCAs = globalRootCAs
+		}
 		t, err := target.NewKafkaTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("kafka(%s): %s", k, err.Error())
@@ -352,6 +355,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
+		v.RootCAs = globalRootCAs
 		t, err := target.NewMQTTTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("mqtt(%s): %s", k, err.Error())
@@ -690,6 +694,9 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.Kafka {
 		if args.Enable {
+			if args.TLS.Enable {
+				args.TLS.RootCAs = globalRootCAs
+			}
 			newTarget, err := target.NewKafkaTarget(id, args, GlobalServiceDoneCh)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
