@@ -59,7 +59,8 @@ const (
 
 var bufPool = sync.Pool{
 	New: func() interface{} {
-		return new(bytes.Buffer)
+		// make a buffer with a reasonable capacity.
+		return bytes.NewBuffer(make([]byte, 0, maxRecordSize))
 	},
 }
 
