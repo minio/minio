@@ -141,3 +141,65 @@ func TestValue_Equals(t *testing.T) {
 		})
 	}
 }
+
+func TestValue_CSVString(t *testing.T) {
+	type fields struct {
+		value interface{}
+	}
+	type test struct {
+		name    string
+		want    string
+		wantAlt string
+	}
+
+	tests := []test{
+		{
+			name:    valueBuilders[0]().String(),
+			want:    "",
+			wantAlt: "",
+		},
+		{
+			name:    valueBuilders[1]().String(),
+			want:    "true",
+			wantAlt: "false",
+		},
+		{
+			name:    valueBuilders[2]().String(),
+			want:    "byte contents",
+			wantAlt: "",
+		},
+		{
+			name:    valueBuilders[3]().String(),
+			want:    "3.141592653589793",
+			wantAlt: "0",
+		},
+		{
+			name:    valueBuilders[4]().String(),
+			want:    "4919",
+			wantAlt: "0",
+		},
+		{
+			name:    valueBuilders[5]().String(),
+			want:    "2006-01-02T15:04:05Z",
+			wantAlt: "0001T",
+		},
+		{
+			name:    valueBuilders[6]().String(),
+			want:    "string contents",
+			wantAlt: "",
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := valueBuilders[i]()
+			vAlt := altValueBuilders[i]()
+			if got := v.CSVString(); got != tt.want {
+				t.Errorf("CSVString() = %v, want %v", got, tt.want)
+			}
+			if got := vAlt.CSVString(); got != tt.wantAlt {
+				t.Errorf("CSVString() = %v, want %v", got, tt.wantAlt)
+			}
+		})
+	}
+}
