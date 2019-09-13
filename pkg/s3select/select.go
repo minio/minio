@@ -383,17 +383,18 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 
 		for _, outputRecord := range outputQueue {
 			if outputRecord != nil {
+				before := buf.Len()
 				if err = s3Select.marshal(buf, outputRecord); err != nil {
 					bufPool.Put(buf)
 					return false
 				}
-			}
-		}
+				if buf.Len()-before > maxRecordSize {
+					writer.FinishWithError("OverMaxRecordSize", "The length of a record in the input or result is greater than maxCharsPerRecord of 1 MB.")
+					bufPool.Put(buf)
+					return false
+				}
 
-		if buf.Len() > maxRecordSize*len(outputQueue) {
-			writer.FinishWithError("OverMaxRecordSize", "The length of a record in the input or result is greater than maxCharsPerRecord of 1 MB.")
-			bufPool.Put(buf)
-			return false
+			}
 		}
 
 		if err = writer.SendRecord(buf); err != nil {
