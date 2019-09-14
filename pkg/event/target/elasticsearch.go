@@ -83,11 +83,8 @@ func (target *ElasticsearchTarget) Save(eventData event.Event) error {
 		return target.store.Put(eventData)
 	}
 	if dErr := target.args.URL.DialHTTP(); dErr != nil {
-		if urlErr, ok := dErr.(*url.Error); ok {
-			// To treat "connection refused" errors as errNotConnected.
-			if IsConnRefusedErr(urlErr.Err) {
-				return errNotConnected
-			}
+		if xnet.IsNetworkOrHostDown(dErr) {
+			return errNotConnected
 		}
 		return dErr
 	}
@@ -157,11 +154,8 @@ func (target *ElasticsearchTarget) Send(eventKey string) error {
 	}
 
 	if dErr := target.args.URL.DialHTTP(); dErr != nil {
-		if urlErr, ok := dErr.(*url.Error); ok {
-			// To treat "connection refused" errors as errNotConnected.
-			if IsConnRefusedErr(urlErr.Err) {
-				return errNotConnected
-			}
+		if xnet.IsNetworkOrHostDown(dErr) {
+			return errNotConnected
 		}
 		return dErr
 	}

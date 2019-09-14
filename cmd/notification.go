@@ -808,19 +808,24 @@ func (sys *NotificationSys) Init(objAPI ObjectLayer) error {
 	// the following reasons:
 	//  - Read quorum is lost just after the initialization
 	//    of the object layer.
-	for range newRetryTimerSimple(doneCh) {
-		if err := sys.refresh(objAPI); err != nil {
-			if err == errDiskNotFound ||
-				strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-				strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-				logger.Info("Waiting for notification subsystem to be initialized..")
-				continue
+	retryTimerCh := newRetryTimerSimple(doneCh)
+	for {
+		select {
+		case <-retryTimerCh:
+			if err := sys.refresh(objAPI); err != nil {
+				if err == errDiskNotFound ||
+					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
+					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
+					logger.Info("Waiting for notification subsystem to be initialized..")
+					continue
+				}
+				return err
 			}
-			return err
+			return nil
+		case <-globalOSSignalCh:
+			return fmt.Errorf("Initializing Notification sub-system gracefully stopped")
 		}
-		break
 	}
-	return nil
 }
 
 // AddRulesMap - adds rules map for bucket name.
@@ -972,8 +977,8 @@ func (sys *NotificationSys) CollectNetPerfInfo(size int64) map[string][]ServerNe
 }
 
 // DrivePerfInfo - Drive speed (read and write) information
-func (sys *NotificationSys) DrivePerfInfo() []ServerDrivesPerfInfo {
-	reply := make([]ServerDrivesPerfInfo, len(sys.peerClients))
+func (sys *NotificationSys) DrivePerfInfo(size int64) []madmin.ServerDrivesPerfInfo {
+	reply := make([]madmin.ServerDrivesPerfInfo, len(sys.peerClients))
 	var wg sync.WaitGroup
 	for i, client := range sys.peerClients {
 		if client == nil {
@@ -982,7 +987,7 @@ func (sys *NotificationSys) DrivePerfInfo() []ServerDrivesPerfInfo {
 		wg.Add(1)
 		go func(client *peerRESTClient, idx int) {
 			defer wg.Done()
-			di, err := client.DrivePerfInfo()
+			di, err := client.DrivePerfInfo(size)
 			if err != nil {
 				reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", client.host.String())
 				ctx := logger.SetReqInfo(context.Background(), reqInfo)

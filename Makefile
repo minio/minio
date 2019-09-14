@@ -2,11 +2,8 @@ PWD := $(shell pwd)
 GOPATH := $(shell go env GOPATH)
 LDFLAGS := $(shell go run buildscripts/gen-ldflags.go)
 
+GOARCH := $(shell go env GOARCH)
 GOOS := $(shell go env GOOS)
-GOOSALT ?= 'linux'
-ifeq ($(GOOS),'darwin')
-  GOOSALT = 'mac'
-endif
 
 TAG ?= $(USER)
 BUILD_LDFLAGS := '$(LDFLAGS)'
@@ -19,9 +16,9 @@ checks:
 
 getdeps:
 	@mkdir -p ${GOPATH}/bin
-	@which golint 1>/dev/null || (echo "Installing golint" && go get -u golang.org/x/lint/golint)
-	@which staticcheck 1>/dev/null || (echo "Installing staticcheck" && wget --quiet -O ${GOPATH}/bin/staticcheck https://github.com/dominikh/go-tools/releases/download/2019.1/staticcheck_${GOOS}_amd64 && chmod +x ${GOPATH}/bin/staticcheck)
-	@which misspell 1>/dev/null || (echo "Installing misspell" && wget --quiet https://github.com/client9/misspell/releases/download/v0.3.4/misspell_0.3.4_${GOOSALT}_64bit.tar.gz && tar xf misspell_0.3.4_${GOOSALT}_64bit.tar.gz && mv misspell ${GOPATH}/bin/misspell && chmod +x ${GOPATH}/bin/misspell && rm -f misspell_0.3.4_${GOOSALT}_64bit.tar.gz)
+	@which golint 1>/dev/null || (echo "Installing golint" && GO111MODULE=off go get -u golang.org/x/lint/golint)
+	@which staticcheck 1>/dev/null || (echo "Installing staticcheck" && wget --quiet https://github.com/dominikh/go-tools/releases/download/2019.2.3/staticcheck_${GOOS}_${GOARCH}.tar.gz && tar xf staticcheck_${GOOS}_${GOARCH}.tar.gz && mv staticcheck/staticcheck ${GOPATH}/bin/staticcheck && chmod +x ${GOPATH}/bin/staticcheck && rm -f staticcheck_${GOOS}_${GOARCH}.tar.gz && rm -rf staticcheck)
+	@which misspell 1>/dev/null || (echo "Installing misspell" && GO111MODULE=off go get -u github.com/client9/misspell/cmd/misspell)
 
 crosscompile:
 	@(env bash $(PWD)/buildscripts/cross-compile.sh)
@@ -29,36 +26,37 @@ crosscompile:
 verifiers: getdeps vet fmt lint staticcheck spelling
 
 vet:
-	@echo "Running $@"
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on go vet github.com/minio/minio/...
+	@echo "Running $@ check"
+	@GO111MODULE=on go vet github.com/minio/minio/...
 
 fmt:
-	@echo "Running $@"
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on gofmt -d cmd/
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on gofmt -d pkg/
+	@echo "Running $@ check"
+	@GO111MODULE=on gofmt -d cmd/
+	@GO111MODULE=on gofmt -d pkg/
 
 lint:
-	@echo "Running $@"
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on ${GOPATH}/bin/golint -set_exit_status github.com/minio/minio/cmd/...
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on ${GOPATH}/bin/golint -set_exit_status github.com/minio/minio/pkg/...
+	@echo "Running $@ check"
+	@GO111MODULE=on ${GOPATH}/bin/golint -set_exit_status github.com/minio/minio/cmd/...
+	@GO111MODULE=on ${GOPATH}/bin/golint -set_exit_status github.com/minio/minio/pkg/...
 
 staticcheck:
-	@echo "Running $@"
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on ${GOPATH}/bin/staticcheck github.com/minio/minio/cmd/...
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on ${GOPATH}/bin/staticcheck github.com/minio/minio/pkg/...
+	@echo "Running $@ check"
+	@GO111MODULE=on ${GOPATH}/bin/staticcheck github.com/minio/minio/cmd/...
+	@GO111MODULE=on ${GOPATH}/bin/staticcheck github.com/minio/minio/pkg/...
 
 spelling:
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find cmd/`
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find pkg/`
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find docs/`
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find buildscripts/`
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find dockerscripts/`
+	@echo "Running $@ check"
+	@GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find cmd/`
+	@GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find pkg/`
+	@GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find docs/`
+	@GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find buildscripts/`
+	@GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find dockerscripts/`
 
 # Builds minio, runs the verifiers then runs the tests.
 check: test
 test: verifiers build
 	@echo "Running unit tests"
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./... 1>/dev/null
+	@GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./... 1>/dev/null
 
 verify: build
 	@echo "Verifying build"
@@ -71,7 +69,7 @@ coverage: build
 # Builds minio locally.
 build: checks
 	@echo "Building minio binary to './minio'"
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on GOFLAGS="" CGO_ENABLED=0 go build -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio 1>/dev/null
+	@GO111MODULE=on CGO_ENABLED=0 go build -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio 1>/dev/null
 
 docker: build
 	@docker build -t $(TAG) . -f Dockerfile.dev

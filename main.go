@@ -1,4 +1,4 @@
-// +build go1.12
+// +build go1.13
 
 /*
  * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.

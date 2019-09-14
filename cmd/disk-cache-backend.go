@@ -333,6 +333,28 @@ func (c *diskCache) saveMetadata(ctx context.Context, bucket, object string, met
 	return err
 }
 
+// updates ETag in cache metadata file to the backend ETag.
+func (c *diskCache) updateETag(ctx context.Context, bucket, object string, etag string) error {
+	metaPath := path.Join(getCacheSHADir(c.dir, bucket, object), cacheMetaJSONFile)
+	f, err := os.OpenFile(metaPath, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	meta := &cacheMeta{Version: cacheMetaVersion}
+	if err := jsonLoad(f, meta); err != nil {
+		return err
+	}
+	meta.Meta["etag"] = etag
+	jsonData, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(jsonData)
+	return err
+}
+
 // Backend metadata could have changed through server side copy - reset cache metadata if that is the case
 func (c *diskCache) updateMetadataIfChanged(ctx context.Context, bucket, object string, bkObjectInfo, cacheObjInfo ObjectInfo) error {
 
@@ -396,18 +418,19 @@ func (c *diskCache) bitrotWriteToCache(ctx context.Context, cachePath string, re
 	bufp := c.pool.Get().(*[]byte)
 	defer c.pool.Put(bufp)
 
+	var n int
 	for {
-		n, err := io.ReadFull(reader, *bufp)
-		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF && err != io.ErrClosedPipe {
+		n, err = io.ReadFull(reader, *bufp)
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 			return 0, err
 		}
-		eof := err == io.EOF || err == io.ErrUnexpectedEOF || err == io.ErrClosedPipe
+		eof := err == io.EOF || err == io.ErrUnexpectedEOF
 		if n == 0 && size != 0 {
 			// Reached EOF, nothing more to be done.
 			break
 		}
 		h.Reset()
-		if _, err := h.Write((*bufp)[:n]); err != nil {
+		if _, err = h.Write((*bufp)[:n]); err != nil {
 			return 0, err
 		}
 		hashBytes := h.Sum(nil)
@@ -500,7 +523,9 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 	if err != nil {
 		return err
 	}
-
+	if actualSize != uint64(n) {
+		return IncompleteBody{}
+	}
 	return c.saveMetadata(ctx, bucket, object, metadata, n)
 }
 

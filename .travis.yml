@@ -26,8 +26,7 @@ matrix:
         - ARCH=x86_64
         - CGO_ENABLED=0
         - GO111MODULE=on
-        - GOPROXY=https://proxy.golang.org
-      go: 1.12.x
+      go: 1.13.x
       script:
         - make
         - diff -au <(gofmt -s -d cmd) <(printf "")
@@ -45,8 +44,7 @@ matrix:
         - ARCH=x86_64
         - CGO_ENABLED=0
         - GO111MODULE=on
-        - GOPROXY=https://proxy.golang.org
-      go: 1.12.x
+      go: 1.13.x
       script:
         - go build --ldflags="$(go run buildscripts/gen-ldflags.go)" -o %GOPATH%\bin\minio.exe
         - bash buildscripts/go-coverage.sh

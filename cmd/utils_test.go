@@ -30,30 +30,6 @@ import (
 	"testing"
 )
 
-// Tests http.Header clone.
-func TestCloneHeader(t *testing.T) {
-	headers := []http.Header{
-		{
-			"Content-Type":   {"text/html; charset=UTF-8"},
-			"Content-Length": {"0"},
-		},
-		{
-			"Content-Length": {"0", "1", "2"},
-		},
-		{
-			"Expires":          {"-1"},
-			"Content-Length":   {"0"},
-			"Content-Encoding": {"gzip"},
-		},
-	}
-	for i, header := range headers {
-		clonedHeader := cloneHeader(header)
-		if !reflect.DeepEqual(header, clonedHeader) {
-			t.Errorf("Test %d failed", i+1)
-		}
-	}
-}
-
 // Tests maximum object size.
 func TestMaxObjectSize(t *testing.T) {
 	sizes := []struct {

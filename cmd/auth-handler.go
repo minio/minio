@@ -203,6 +203,12 @@ func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
 	}
 
 	if globalPolicyOPA == nil {
+		// If OPA is not set and if ldap claim key is set,
+		// allow the claim.
+		if _, ok := claims[ldapUser]; ok {
+			return claims, nil
+		}
+
 		// If OPA is not set, session token should
 		// have a policy and its mandatory, reject
 		// requests without policy claim.

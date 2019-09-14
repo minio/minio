@@ -36,7 +36,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	st, err := madmClnt.ServerDrivesPerfInfo()
+	st, err := madmClnt.ServerDrivesPerfInfo(madmin.DefaultDrivePerfSize)
 	if err != nil {
 		log.Fatalln(err)
 	}
