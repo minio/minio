@@ -1049,7 +1049,7 @@ mc cp myphoto.jpg myminio/images
 kafkacat -b localhost:9092 -t bucketevents
 {
     "EventName": "s3:ObjectCreated:Put",
-    "Key": "demo-bucket/demo_file.jpg",
+    "Key": "images/myphoto.jpg",
     "Records": [
         {
             "eventVersion": "2.0",
@@ -1074,15 +1074,15 @@ kafkacat -b localhost:9092 -t bucketevents
                 "s3SchemaVersion": "1.0",
                 "configurationId": "Config",
                 "bucket": {
-                    "name": "demo-bucket",
+                    "name": "images",
                     "ownerIdentity": {
                         "principalId": "AKIAIOSFODNN7EXAMPLE"
                     },
-                    "arn": "arn:aws:s3:::dev-vcf-bucket"
+                    "arn": "arn:aws:s3:::images"
                 },
                 "object": {
-                    "key": "demo_file.jpg",
-                    "size": 12345,
+                    "key": "myphoto.jpg",
+                    "size": 6474,
                     "eTag": "430f89010c77aa34fc8760696da62d08-1",
                     "contentType": "image/jpeg",
                     "userMetadata": {
