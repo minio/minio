@@ -241,13 +241,16 @@ func (v Value) CSVString() string {
 	case nil:
 		return ""
 	case bool:
-		return fmt.Sprint(x)
+		if x {
+			return "true"
+		}
+		return "false"
 	case string:
 		return x
 	case int64:
-		return fmt.Sprint(x)
+		return strconv.FormatInt(x, 10)
 	case float64:
-		return fmt.Sprint(x)
+		return strconv.FormatFloat(x, 'g', -1, 64)
 	case time.Time:
 		return FormatSQLTimestamp(x)
 	case []byte:
