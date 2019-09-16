@@ -103,6 +103,9 @@ type JSONPathElement struct {
 type JSONPath struct {
 	BaseKey  *Identifier        `parser:" @@"`
 	PathExpr []*JSONPathElement `parser:"(@@)*"`
+
+	// Cached values:
+	pathString string
 }
 
 // AliasedExpression is an expression that can be optionally named

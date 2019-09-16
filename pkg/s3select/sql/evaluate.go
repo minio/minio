@@ -317,9 +317,11 @@ func (e *UnaryTerm) evalNode(r Record) (*Value, error) {
 func (e *JSONPath) evalNode(r Record) (*Value, error) {
 	// Strip the table name from the keypath.
 	keypath := e.String()
-	ps := strings.SplitN(keypath, ".", 2)
-	if len(ps) == 2 {
-		keypath = ps[1]
+	if strings.Contains(keypath, ".") {
+		ps := strings.SplitN(keypath, ".", 2)
+		if len(ps) == 2 {
+			keypath = ps[1]
+		}
 	}
 	objFmt, rawVal := r.Raw()
 	switch objFmt {
