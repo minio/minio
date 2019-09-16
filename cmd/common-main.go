@@ -64,9 +64,9 @@ func checkUpdate(mode string) {
 			return
 		}
 		if globalInplaceUpdateDisabled {
-			logger.StartupMessage(updateMsg)
+			logStartupMessage(updateMsg)
 		} else {
-			logger.StartupMessage(prepareUpdateMessage("Run `mc admin update`", latestReleaseTime.Sub(currentReleaseTime)))
+			logStartupMessage(prepareUpdateMessage("Run `mc admin update`", latestReleaseTime.Sub(currentReleaseTime)))
 		}
 	}
 }
@@ -437,4 +437,9 @@ func handleCommonEnvVars() {
 			globalCompressMimeTypes = contenttypes
 		}
 	}
+}
+
+func logStartupMessage(msg string, data ...interface{}) {
+	globalConsoleSys.Send(msg)
+	logger.StartupMessage(msg, data...)
 }

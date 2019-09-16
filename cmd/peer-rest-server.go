@@ -32,7 +32,6 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/lifecycle"
-	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
 	trace "github.com/minio/minio/pkg/trace"
@@ -940,8 +939,7 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 	for {
 		select {
 		case entry := <-ch:
-			log := entry.(madmin.LogInfo)
-			if err := enc.Encode(log); err != nil {
+			if err := enc.Encode(entry); err != nil {
 				return
 			}
 			w.(http.Flusher).Flush()
