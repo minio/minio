@@ -17,26 +17,30 @@
 package json
 
 import (
+	"bytes"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/minio/minio/pkg/s3select/sql"
 )
 
 func TestNewReader(t *testing.T) {
-	files, err := ioutil.ReadDir("data")
+	files, err := ioutil.ReadDir("testdata")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, file := range files {
-		f, err := os.Open(filepath.Join("data", file.Name()))
+		f, err := os.Open(filepath.Join("testdata", file.Name()))
 		if err != nil {
 			t.Fatal(err)
 		}
 		r := NewReader(f, &ReaderArgs{})
+		var record sql.Record
 		for {
-			_, err = r.Read()
+			record, err = r.Read(record)
 			if err != nil {
 				break
 			}
@@ -45,5 +49,37 @@ func TestNewReader(t *testing.T) {
 		if err != io.EOF {
 			t.Fatalf("Reading failed with %s, %s", err, file.Name())
 		}
+	}
+}
+
+func BenchmarkReader(b *testing.B) {
+	files, err := ioutil.ReadDir("testdata")
+	if err != nil {
+		b.Fatal(err)
+	}
+	for _, file := range files {
+		b.Run(file.Name(), func(b *testing.B) {
+			f, err := ioutil.ReadFile(filepath.Join("testdata", file.Name()))
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.SetBytes(int64(len(f)))
+			b.ReportAllocs()
+			b.ResetTimer()
+			var record sql.Record
+			for i := 0; i < b.N; i++ {
+				r := NewReader(ioutil.NopCloser(bytes.NewBuffer(f)), &ReaderArgs{})
+				for {
+					record, err = r.Read(record)
+					if err != nil {
+						break
+					}
+				}
+				r.Close()
+				if err != io.EOF {
+					b.Fatalf("Reading failed with %s, %s", err, file.Name())
+				}
+			}
+		})
 	}
 }

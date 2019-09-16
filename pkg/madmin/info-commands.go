@@ -35,6 +35,8 @@ import (
 const (
 	// DefaultNetPerfSize - default payload size used for network performance.
 	DefaultNetPerfSize = 100 * humanize.MiByte
+	// DefaultDrivePerfSize - default file size for testing drive performance
+	DefaultDrivePerfSize = 100 * humanize.MiByte
 )
 
 // BackendType - represents different backend types.
@@ -172,12 +174,16 @@ type ServerDrivesPerfInfo struct {
 	Addr  string             `json:"addr"`
 	Error string             `json:"error,omitempty"`
 	Perf  []disk.Performance `json:"perf"`
+	Size  int64              `json:"size,omitempty"`
 }
 
 // ServerDrivesPerfInfo - Returns drive's read and write performance information
-func (adm *AdminClient) ServerDrivesPerfInfo() ([]ServerDrivesPerfInfo, error) {
+func (adm *AdminClient) ServerDrivesPerfInfo(size int64) ([]ServerDrivesPerfInfo, error) {
 	v := url.Values{}
 	v.Set("perfType", string("drive"))
+
+	v.Set("size", strconv.FormatInt(size, 10))
+
 	resp, err := adm.executeMethod("GET", requestData{
 		relPath:     "/v1/performance",
 		queryValues: v,

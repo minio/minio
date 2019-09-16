@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -27,6 +26,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/minio/sha256-simd"
 
 	"github.com/minio/minio/cmd/logger"
 )

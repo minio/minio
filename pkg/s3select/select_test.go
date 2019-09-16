@@ -18,6 +18,7 @@ package s3select
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -108,26 +109,29 @@ func TestCSVInput(t *testing.T) {
 2.5,baz,true
 `)
 
-	for _, testCase := range testTable {
-		s3Select, err := NewS3Select(bytes.NewReader(testCase.requestXML))
-		if err != nil {
-			t.Fatal(err)
-		}
+	for i, testCase := range testTable {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			s3Select, err := NewS3Select(bytes.NewReader(testCase.requestXML))
+			if err != nil {
+				t.Fatal(err)
+			}
 
-		if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
-			return ioutil.NopCloser(bytes.NewReader(csvData)), nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
+				return ioutil.NopCloser(bytes.NewReader(csvData)), nil
+			}); err != nil {
+				t.Fatal(err)
+			}
 
-		w := &testResponseWriter{}
-		s3Select.Evaluate(w)
-		s3Select.Close()
+			w := &testResponseWriter{}
+			s3Select.Evaluate(w)
+			s3Select.Close()
 
-		if !reflect.DeepEqual(w.response, testCase.expectedResult) {
-			t.Fatalf("received response does not match with expected reply")
-		}
+			if !reflect.DeepEqual(w.response, testCase.expectedResult) {
+				t.Errorf("received response does not match with expected reply\ngot: %#v\nwant:%#v", w.response, testCase.expectedResult)
+			}
+		})
 	}
+
 }
 
 func TestJSONInput(t *testing.T) {
@@ -191,26 +195,27 @@ func TestJSONInput(t *testing.T) {
 {"three":true,"two":"baz","one":2.5}
 `)
 
-	for _, testCase := range testTable {
+	for i, testCase := range testTable {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			s3Select, err := NewS3Select(bytes.NewReader(testCase.requestXML))
+			if err != nil {
+				t.Fatal(err)
+			}
 
-		s3Select, err := NewS3Select(bytes.NewReader(testCase.requestXML))
-		if err != nil {
-			t.Fatal(err)
-		}
+			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
+				return ioutil.NopCloser(bytes.NewReader(jsonData)), nil
+			}); err != nil {
+				t.Fatal(err)
+			}
 
-		if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
-			return ioutil.NopCloser(bytes.NewReader(jsonData)), nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+			w := &testResponseWriter{}
+			s3Select.Evaluate(w)
+			s3Select.Close()
 
-		w := &testResponseWriter{}
-		s3Select.Evaluate(w)
-		s3Select.Close()
-
-		if !reflect.DeepEqual(w.response, testCase.expectedResult) {
-			t.Fatalf("received response does not match with expected reply")
-		}
+			if !reflect.DeepEqual(w.response, testCase.expectedResult) {
+				t.Errorf("received response does not match with expected reply\ngot: %s\nwant:%s", string(w.response), string(testCase.expectedResult))
+			}
+		})
 	}
 }
 
@@ -268,45 +273,47 @@ func TestParquetInput(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range testTable {
-		getReader := func(offset int64, length int64) (io.ReadCloser, error) {
-			testdataFile := "testdata.parquet"
-			file, err := os.Open(testdataFile)
+	for i, testCase := range testTable {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			getReader := func(offset int64, length int64) (io.ReadCloser, error) {
+				testdataFile := "testdata.parquet"
+				file, err := os.Open(testdataFile)
+				if err != nil {
+					return nil, err
+				}
+
+				fi, err := file.Stat()
+				if err != nil {
+					return nil, err
+				}
+
+				if offset < 0 {
+					offset = fi.Size() + offset
+				}
+
+				if _, err = file.Seek(offset, os.SEEK_SET); err != nil {
+					return nil, err
+				}
+
+				return file, nil
+			}
+
+			s3Select, err := NewS3Select(bytes.NewReader(testCase.requestXML))
 			if err != nil {
-				return nil, err
+				t.Fatal(err)
 			}
 
-			fi, err := file.Stat()
-			if err != nil {
-				return nil, err
+			if err = s3Select.Open(getReader); err != nil {
+				t.Fatal(err)
 			}
 
-			if offset < 0 {
-				offset = fi.Size() + offset
+			w := &testResponseWriter{}
+			s3Select.Evaluate(w)
+			s3Select.Close()
+
+			if !reflect.DeepEqual(w.response, testCase.expectedResult) {
+				t.Errorf("received response does not match with expected reply\ngot: %#v\nwant:%#v", w.response, testCase.expectedResult)
 			}
-
-			if _, err = file.Seek(offset, os.SEEK_SET); err != nil {
-				return nil, err
-			}
-
-			return file, nil
-		}
-
-		s3Select, err := NewS3Select(bytes.NewReader(testCase.requestXML))
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if err = s3Select.Open(getReader); err != nil {
-			t.Fatal(err)
-		}
-
-		w := &testResponseWriter{}
-		s3Select.Evaluate(w)
-		s3Select.Close()
-
-		if !reflect.DeepEqual(w.response, testCase.expectedResult) {
-			t.Fatalf("received response does not match with expected reply")
-		}
+		})
 	}
 }

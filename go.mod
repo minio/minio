@@ -29,6 +29,7 @@ require (
 	github.com/hashicorp/vault v1.1.0
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/json-iterator/go v1.1.7
+	github.com/klauspost/compress v1.5.0
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.0
 	github.com/klauspost/reedsolomon v1.9.1
@@ -65,8 +66,8 @@ require (
 	github.com/tidwall/sjson v1.0.4
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	go.uber.org/atomic v1.3.2
-	golang.org/x/crypto v0.0.0-20190829043050-9756ffdc2472
-	golang.org/x/sys v0.0.0-20190904154756-749cb33beabd
+	golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586
+	golang.org/x/sys v0.0.0-20190826190057-c7b8b68b1456
 	google.golang.org/api v0.4.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
 	gopkg.in/ldap.v3 v3.0.3

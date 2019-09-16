@@ -134,3 +134,43 @@ func ParseURL(s string) (u *URL, err error) {
 	u = &v
 	return u, nil
 }
+
+// IsNetworkOrHostDown - if there was a network error or if the host is down.
+func IsNetworkOrHostDown(err error) bool {
+	if err == nil {
+		return false
+	}
+	// We need to figure if the error either a timeout
+	// or a non-temporary error.
+	e, ok := err.(net.Error)
+	if ok {
+		urlErr, ok := e.(*url.Error)
+		if ok {
+			switch urlErr.Err.(type) {
+			case *net.DNSError, *net.OpError, net.UnknownNetworkError:
+				return true
+			}
+		}
+		if e.Timeout() {
+			return true
+		}
+	}
+	ok = false
+	// Fallback to other mechanisms.
+	if strings.Contains(err.Error(), "Connection closed by foreign host") {
+		ok = true
+	} else if strings.Contains(err.Error(), "TLS handshake timeout") {
+		// If error is - tlsHandshakeTimeoutError.
+		ok = true
+	} else if strings.Contains(err.Error(), "i/o timeout") {
+		// If error is - tcp timeoutError.
+		ok = true
+	} else if strings.Contains(err.Error(), "connection timed out") {
+		// If err is a net.Dial timeout.
+		ok = true
+	} else if strings.Contains(strings.ToLower(err.Error()), "503 service unavailable") {
+		// Denial errors
+		ok = true
+	}
+	return ok
+}

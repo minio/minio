@@ -27,7 +27,7 @@ import (
 	"github.com/minio/minio/pkg/s3select/sql"
 )
 
-// Record - is CSV record.
+// Record - is a CSV record.
 type Record struct {
 	columnNames  []string
 	csvRecord    []string
