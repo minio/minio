@@ -106,8 +106,8 @@ func (r *Reader) Read(dst sql.Record) (sql.Record, error) {
 func (r *Reader) Close() error {
 	if r.close != nil {
 		close(r.close)
-		r.close = nil
 		r.readerWg.Wait()
+		r.close = nil
 	}
 	r.recordsRead = len(r.current)
 	if r.err == nil {
