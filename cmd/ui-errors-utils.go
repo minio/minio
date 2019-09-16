@@ -17,9 +17,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"syscall"
 )
@@ -80,27 +80,15 @@ func errorToUIErr(err error) uiErr {
 	}
 
 	// Show a generic message for known golang errors
-	switch e := err.(type) {
-	case *net.OpError:
-		if e.Op == "listen" {
-			if oe, ok := e.Err.(*os.SyscallError); ok {
-				if oe.Err == syscall.EADDRINUSE {
-					return uiErrPortAlreadyInUse(e).Msg("Specified port '" + e.Addr.String() + "' is already in use")
-				} else if oe.Err == syscall.EACCES {
-					return uiErrPortAccess(e).Msg("Insufficient permissions to use specified port '" + e.Addr.String() + "'")
-				}
-			}
-		}
-	case *os.PathError:
-		if os.IsPermission(e) {
-			return uiErrNoPermissionsToAccessDirFiles(e).Msg("Insufficient permissions to access path, `" + e.Path + "`")
-		}
-	}
-
-	switch err {
-	case io.ErrUnexpectedEOF:
+	if errors.Is(err, syscall.EADDRINUSE) {
+		return uiErrPortAlreadyInUse(err).Msg("Specified port is already in use")
+	} else if errors.Is(err, syscall.EACCES) {
+		return uiErrPortAccess(err).Msg("Insufficient permissions to use specified port")
+	} else if os.IsPermission(err) {
+		return uiErrNoPermissionsToAccessDirFiles(err).Msg("Insufficient permissions to access path")
+	} else if errors.Is(err, io.ErrUnexpectedEOF) {
 		return uiErrUnexpectedDataContent(err)
-	default:
+	} else {
 		// Failed to identify what type of error this, return a simple UI error
 		return uiErr{msg: err.Error()}
 	}

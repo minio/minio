@@ -449,7 +449,7 @@ func checkAtimeSupport(dir string) (err error) {
 func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
 	logger.StartupMessage(colorBlue("Cache migration initiated ...."))
 
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	errs := make([]error, len(c.cache))
 	for i, dc := range c.cache {
 		if dc == nil {

@@ -17,12 +17,9 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"crypto/subtle"
-	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -38,14 +35,11 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
-	"github.com/tidwall/gjson"
-	"github.com/tidwall/sjson"
 
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/cpu"
-	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/handlers"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
@@ -318,15 +312,6 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
-// ServerDrivesPerfInfo holds information about address, performance
-// of all drives on one server. It also reports any errors if encountered
-// while trying to reach this server.
-type ServerDrivesPerfInfo struct {
-	Addr  string             `json:"addr"`
-	Error string             `json:"error,omitempty"`
-	Perf  []disk.Performance `json:"perf"`
-}
-
 // ServerCPULoadInfo holds informantion about cpu utilization
 // of one minio node. It also reports any errors if encountered
 // while trying to reach this server.
@@ -406,16 +391,25 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		writeSuccessResponseJSON(w, jsonBytes)
 
 	case "drive":
-		info := objectAPI.StorageInfo(ctx)
-		if !(info.Backend.Type == BackendFS || info.Backend.Type == BackendErasure) {
+		// Drive Perf is only implemented for Erasure coded backends
+		if !globalIsXL {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 			return
 		}
+
+		var size int64 = madmin.DefaultDrivePerfSize
+		if sizeStr, found := vars["size"]; found {
+			var err error
+			if size, err = strconv.ParseInt(sizeStr, 10, 64); err != nil || size <= 0 {
+				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
+				return
+			}
+		}
 		// Get drive performance details from local server's drive(s)
-		dp := localEndpointsDrivePerf(globalEndpoints, r)
+		dp := getLocalDrivesPerf(globalEndpoints, size, r)
 
 		// Notify all other MinIO peers to report drive performance numbers
-		dps := globalNotificationSys.DrivePerfInfo()
+		dps := globalNotificationSys.DrivePerfInfo(size)
 		dps = append(dps, dp)
 
 		// Marshal API response
@@ -430,7 +424,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		writeSuccessResponseJSON(w, jsonBytes)
 	case "cpu":
 		// Get CPU load details from local server's cpu(s)
-		cpu := localEndpointsCPULoad(globalEndpoints, r)
+		cpu := getLocalCPULoad(globalEndpoints, r)
 		// Notify all other MinIO peers to report cpu load numbers
 		cpus := globalNotificationSys.CPULoadInfo()
 		cpus = append(cpus, cpu)
@@ -447,7 +441,7 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 		writeSuccessResponseJSON(w, jsonBytes)
 	case "mem":
 		// Get mem usage details from local server(s)
-		m := localEndpointsMemUsage(globalEndpoints, r)
+		m := getLocalMemUsage(globalEndpoints, r)
 		// Notify all other MinIO peers to report mem usage numbers
 		mems := globalNotificationSys.MemUsageInfo()
 		mems = append(mems, m)
@@ -953,25 +947,6 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 	writeSuccessResponseJSON(w, econfigData)
 }
 
-// Disable tidwall json array notation in JSON key path so
-// users can set json with a key as a number.
-// In tidwall json, notify.webhook.0 = val means { "notify" : { "webhook" : [val] }}
-// In MinIO, notify.webhook.0 = val means { "notify" : { "webhook" : {"0" : val}}}
-func normalizeJSONKey(input string) (key string) {
-	subKeys := strings.Split(input, ".")
-	for i, k := range subKeys {
-		if i > 0 {
-			key += "."
-		}
-		if _, err := strconv.Atoi(k); err == nil {
-			key += ":" + k
-		} else {
-			key += k
-		}
-	}
-	return
-}
-
 func validateAdminReq(ctx context.Context, w http.ResponseWriter, r *http.Request) ObjectLayer {
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
@@ -988,60 +963,6 @@ func validateAdminReq(ctx context.Context, w http.ResponseWriter, r *http.Reques
 	}
 
 	return objectAPI
-}
-
-// GetConfigHandler - GET /minio/admin/v1/config-keys
-// Get some keys in config.json of this minio setup.
-func (a adminAPIHandlers) GetConfigKeysHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetConfigKeysHandler")
-
-	objectAPI := validateAdminReq(ctx, w, r)
-	if objectAPI == nil {
-		return
-	}
-
-	var keys []string
-	queries := r.URL.Query()
-
-	for k := range queries {
-		keys = append(keys, k)
-	}
-
-	config, err := readServerConfig(ctx, objectAPI)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	configData, err := json.Marshal(config)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	configStr := string(configData)
-	newConfigStr := `{}`
-
-	for _, key := range keys {
-		// sjson.Set does not return an error if key is empty
-		// we should check by ourselves here
-		if key == "" {
-			continue
-		}
-		val := gjson.Get(configStr, key)
-		if j, ierr := sjson.Set(newConfigStr, normalizeJSONKey(key), val.Value()); ierr == nil {
-			newConfigStr = j
-		}
-	}
-
-	password := config.GetCredential().SecretKey
-	econfigData, err := madmin.EncryptData(password, []byte(newConfigStr))
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	writeSuccessResponseJSON(w, []byte(econfigData))
 }
 
 // AdminError - is a generic error for all admin APIs.
@@ -1622,130 +1543,6 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Reply to the client before restarting minio server.
-	writeSuccessResponseHeadersOnly(w)
-}
-
-func convertValueType(elem []byte, jsonType gjson.Type) (interface{}, error) {
-	str := string(elem)
-	switch jsonType {
-	case gjson.False, gjson.True:
-		return strconv.ParseBool(str)
-	case gjson.JSON:
-		if gjson.Valid(str) {
-			return gjson.Parse(str).Value(), nil
-		}
-		return nil, errors.New("invalid json")
-	case gjson.String:
-		return str, nil
-	case gjson.Number:
-		return strconv.ParseFloat(str, 64)
-	default:
-		return nil, nil
-	}
-}
-
-// SetConfigKeysHandler - PUT /minio/admin/v1/config-keys
-func (a adminAPIHandlers) SetConfigKeysHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SetConfigKeysHandler")
-
-	objectAPI := validateAdminReq(ctx, w, r)
-	if objectAPI == nil {
-		return
-	}
-
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-		return
-	}
-
-	// Load config
-	configStruct, err := readServerConfig(ctx, objectAPI)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	// Convert config to json bytes
-	configBytes, err := json.Marshal(configStruct)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	configStr := string(configBytes)
-
-	queries := r.URL.Query()
-	password := globalServerConfig.GetCredential().SecretKey
-
-	// Set key values in the JSON config
-	for k := range queries {
-		// Decode encrypted data associated to the current key
-		encryptedElem, dErr := base64.StdEncoding.DecodeString(queries.Get(k))
-		if dErr != nil {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("key", k)
-			ctx = logger.SetReqInfo(ctx, reqInfo)
-			logger.LogIf(ctx, dErr)
-			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), dErr.Error(), r.URL)
-			return
-		}
-
-		elem, dErr := madmin.DecryptData(password, bytes.NewBuffer([]byte(encryptedElem)))
-		if dErr != nil {
-			logger.LogIf(ctx, dErr)
-			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), dErr.Error(), r.URL)
-			return
-		}
-
-		// Calculate the type of the current key from the
-		// original config json
-		jsonFieldType := gjson.Get(configStr, k).Type
-		// Convert passed value to json filed type
-		val, cErr := convertValueType(elem, jsonFieldType)
-		if cErr != nil {
-			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), cErr.Error(), r.URL)
-			return
-		}
-		// Set the key/value in the new json document
-		if s, sErr := sjson.Set(configStr, normalizeJSONKey(k), val); sErr == nil {
-			configStr = s
-		}
-	}
-
-	configBytes = []byte(configStr)
-
-	// Validate config
-	var config serverConfig
-	if err = json.Unmarshal(configBytes, &config); err != nil {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
-		return
-	}
-
-	if err = config.Validate(); err != nil {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
-		return
-	}
-
-	if err = config.TestNotificationTargets(); err != nil {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
-		return
-	}
-
-	// If credentials for the server are provided via environment,
-	// then credentials in the provided configuration must match.
-	if globalIsEnvCreds {
-		if !globalServerConfig.GetCredential().Equal(config.Credential) {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminCredentialsMismatch), r.URL)
-			return
-		}
-	}
-
-	if err = saveServerConfig(ctx, objectAPI, &config); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	// Send success response
 	writeSuccessResponseHeadersOnly(w)
 }
 

@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -34,7 +33,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/madmin"
-	"github.com/tidwall/gjson"
 )
 
 var (
@@ -749,53 +747,4 @@ func TestExtractHealInitParams(t *testing.T) {
 		}
 	}
 
-}
-
-func TestNormalizeJSONKey(t *testing.T) {
-	cases := []struct {
-		input         string
-		correctResult string
-	}{
-		{"notify.webhook.1", "notify.webhook.:1"},
-		{"notify.webhook.ok", "notify.webhook.ok"},
-		{"notify.webhook.1.2", "notify.webhook.:1.:2"},
-		{"abc", "abc"},
-	}
-	for i, tcase := range cases {
-		res := normalizeJSONKey(tcase.input)
-		if res != tcase.correctResult {
-			t.Errorf("Case %d: failed to match", i)
-		}
-	}
-}
-
-func TestConvertValueType(t *testing.T) {
-	cases := []struct {
-		elem          []byte
-		jt            gjson.Type
-		correctResult interface{}
-		isError       bool
-	}{
-		{[]byte(""), gjson.Null, nil, false},
-		{[]byte("t"), gjson.False, true, false},
-		{[]byte("f"), gjson.False, false, false},
-		{[]byte(`{"a": 1}`), gjson.JSON, map[string]interface{}{"a": float64(1)}, false},
-		{[]byte(`abc`), gjson.String, "abc", false},
-		{[]byte(`1`), gjson.Number, float64(1), false},
-		{[]byte(`a1`), gjson.Number, nil, true},
-		{[]byte(`{"A": `), gjson.JSON, nil, true},
-		{[]byte(`2`), gjson.False, nil, true},
-	}
-	for i, tc := range cases {
-		res, err := convertValueType(tc.elem, tc.jt)
-		if err != nil {
-			if !tc.isError {
-				t.Errorf("Case %d: got an error when none was expected", i)
-			}
-		} else if err == nil && tc.isError {
-			t.Errorf("Case %d: got no error though we expected one", i)
-		} else if !reflect.DeepEqual(res, tc.correctResult) {
-			t.Errorf("Case %d: result mismatch - got %#v", i, res)
-		}
-	}
 }

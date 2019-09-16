@@ -174,14 +174,8 @@ func readXLMeta(ctx context.Context, disk StorageAPI, bucket string, object stri
 	if len(xlMetaBuf) == 0 {
 		return xlMetaV1{}, errFileNotFound
 	}
-	xlMeta, err = xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
-	if err != nil {
-		logger.GetReqInfo(ctx).AppendTags("disk", disk.String())
-		logger.LogIf(ctx, err)
-		return xlMetaV1{}, err
-	}
-	// Return structured `xl.json`.
-	return xlMeta, nil
+	logger.GetReqInfo(ctx).AppendTags("disk", disk.String())
+	return xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
 }
 
 // Reads all `xl.json` metadata as a xlMetaV1 slice.
@@ -189,7 +183,7 @@ func readXLMeta(ctx context.Context, disk StorageAPI, bucket string, object stri
 func readAllXLMetadata(ctx context.Context, disks []StorageAPI, bucket, object string) ([]xlMetaV1, []error) {
 	errs := make([]error, len(disks))
 	metadataArray := make([]xlMetaV1, len(disks))
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	// Read `xl.json` parallelly across disks.
 	for index, disk := range disks {
 		if disk == nil {
@@ -200,12 +194,7 @@ func readAllXLMetadata(ctx context.Context, disks []StorageAPI, bucket, object s
 		// Read `xl.json` in routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			var err error
-			metadataArray[index], err = readXLMeta(ctx, disk, bucket, object)
-			if err != nil {
-				errs[index] = err
-				return
-			}
+			metadataArray[index], errs[index] = readXLMeta(ctx, disk, bucket, object)
 		}(index, disk)
 	}
 
