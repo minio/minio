@@ -17,14 +17,12 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"path"
 	"strconv"
@@ -282,27 +280,13 @@ func (s *storageRESTServer) ReadAllHandler(w http.ResponseWriter, r *http.Reques
 	volume := vars[storageRESTVolume]
 	filePath := vars[storageRESTFilePath]
 
-	in, err := s.storage.ReadFileStream(volume, filePath, 0, math.MaxInt64)
+	buf, err := s.storage.ReadAll(volume, filePath)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
-	defer in.Close()
-
-	// Compress into buffer.
-	var buf bytes.Buffer
-	sw := s2.NewWriter(&buf)
-	_, err = io.Copy(sw, in)
-	if err2 := sw.Close(); err != nil || err2 != nil {
-		if err == nil {
-			err = err2
-		}
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	w.Header().Set(xhttp.ContentLength, strconv.Itoa(buf.Len()))
-	w.Write(buf.Bytes())
+	w.Header().Set(xhttp.ContentLength, strconv.Itoa(len(buf)))
+	w.Write(buf)
 	w.(http.Flusher).Flush()
 }
 
@@ -345,9 +329,9 @@ func (s *storageRESTServer) ReadFileHandler(w http.ResponseWriter, r *http.Reque
 		s.writeErrorResponse(w, err)
 		return
 	}
-	sw := s2.NewWriter(w)
-	sw.Write(buf)
-	sw.Close()
+	w.Header().Set(xhttp.ContentLength, strconv.Itoa(len(buf)))
+	w.Write(buf)
+	w.(http.Flusher).Flush()
 }
 
 // ReadFileHandler - read section of a file.
