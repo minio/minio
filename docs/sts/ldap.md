@@ -49,7 +49,7 @@ LDAP is configured via the following environment variables:
 
 | Variable                                     | Required?                 | Purpose                                             |
 |----------------------------------------------|---------------------------|-----------------------------------------------------|
-| **MINIO_IDENTITY_LDAP_SERVER_ADDR**               | **YES**                   | LDAP server address                                 |
+| **MINIO_IDENTITY_LDAP_SERVER_ADDR**          | **YES**                   | LDAP server address                                 |
 | **MINIO_IDENTITY_LDAP_USERNAME_FORMAT**      | **YES**                   | Format of full username DN                          |
 | **MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN** | **NO**                    | Base DN in LDAP hierarchy to use in search requests |
 | **MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER**  | **NO**                    | Search filter to find groups of a user              |
@@ -90,3 +90,50 @@ The **MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER** and
 **MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN** environment variables
 support substitution of the *username* and *usernamedn* variables
 only.
+
+## Notes on configuring with Microsoft Active Directory (AD)
+
+The LDAP STS API also works with Microsoft AD and can be configured in a manner
+similar to the above. The following are some notes on determining the values of
+the configuration parameters described above.
+
+Once LDAP over TLS is enabled on AD, test access to LDAP works by running a
+sample search query with the `ldapsearch` utility from
+[OpenLDAP](https://openldap.org/):
+
+```shell
+$ ldapsearch -H ldaps://my.ldap-active-dir-server.com -D "username@minioad.local" -x -w 'secretpassword' -b "dc=minioad,dc=local"
+...
+
+# John, Users, minioad.local
+dn: CN=John,CN=Users,DC=minioad,DC=local
+...
+
+# hpc, Users, minioad.local
+dn: CN=hpc,CN=Users,DC=minioad,DC=local
+objectClass: top
+objectClass: group
+cn: hpc
+...
+member: CN=John,CN=Users,DC=minioad,DC=local
+...
+```
+
+The lines with "..." represent skipped content not shown here from brevity.
+
+Based on the output above, we see that the username format variable looks like
+`cn=${username},cn=users,dc=minioad,dc=local`.
+
+The group search filter looks like
+`(&(objectclass=group)(member=${usernamedn}))` and the group name attribute is
+clearly `cn`.
+
+Thus the key configuration parameters look like:
+
+```
+MINIO_IDENTITY_LDAP_SERVER_ADDR='ldaps://my.ldap-active-dir-server.com:636'
+MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn=${username},cn=users,dc=minioad,dc=local'
+MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local'
+MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(member=${usernamedn}))'
+MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE='cn'
+```
