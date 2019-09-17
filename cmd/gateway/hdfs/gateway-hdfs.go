@@ -507,12 +507,34 @@ func (n *hdfsObjects) GetObject(ctx context.Context, bucket, key string, startOf
 	return hdfsToObjectErr(ctx, err, bucket, key)
 }
 
+func (n *hdfsObjects) isObjectDir(ctx context.Context, bucket, object string) bool {
+	f, err := n.clnt.Open(minio.PathJoin(hdfsSeparator, bucket, object))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+		logger.LogIf(ctx, err)
+		return false
+	}
+	defer f.Close()
+	fis, err := f.Readdir(1)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return false
+	}
+	return len(fis) == 0
+}
+
 // GetObjectInfo reads object info and replies back ObjectInfo.
 func (n *hdfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	_, err = n.clnt.Stat(minio.PathJoin(hdfsSeparator, bucket))
 	if err != nil {
 		return objInfo, hdfsToObjectErr(ctx, err, bucket)
 	}
+	if strings.HasSuffix(object, hdfsSeparator) && !n.isObjectDir(ctx, bucket, object) {
+		return objInfo, hdfsToObjectErr(ctx, os.ErrNotExist, bucket, object)
+	}
+
 	fi, err := n.clnt.Stat(minio.PathJoin(hdfsSeparator, bucket, object))
 	if err != nil {
 		return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
@@ -536,7 +558,7 @@ func (n *hdfsObjects) PutObject(ctx context.Context, bucket string, object strin
 	name := minio.PathJoin(hdfsSeparator, bucket, object)
 
 	// If its a directory create a prefix {
-	if strings.HasSuffix(object, hdfsSeparator) {
+	if strings.HasSuffix(object, hdfsSeparator) && r.Size() == 0 {
 		if err = n.clnt.MkdirAll(name, os.FileMode(0755)); err != nil {
 			n.deleteObject(minio.PathJoin(hdfsSeparator, bucket), name)
 			return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
