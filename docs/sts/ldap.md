@@ -93,7 +93,7 @@ only.
 ## Notes on configuring with Microsoft Active Directory (AD)
 
 The LDAP STS API also works with Microsoft AD and can be configured in a manner
-similar to the above. The following are some notes on determining the values of
+as above. The following are some notes on determining the values of
 the configuration parameters described above.
 
 Once LDAP over TLS is enabled on AD, test access to LDAP works by running a
