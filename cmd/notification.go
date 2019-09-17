@@ -977,8 +977,8 @@ func (sys *NotificationSys) CollectNetPerfInfo(size int64) map[string][]ServerNe
 }
 
 // DrivePerfInfo - Drive speed (read and write) information
-func (sys *NotificationSys) DrivePerfInfo() []ServerDrivesPerfInfo {
-	reply := make([]ServerDrivesPerfInfo, len(sys.peerClients))
+func (sys *NotificationSys) DrivePerfInfo(size int64) []madmin.ServerDrivesPerfInfo {
+	reply := make([]madmin.ServerDrivesPerfInfo, len(sys.peerClients))
 	var wg sync.WaitGroup
 	for i, client := range sys.peerClients {
 		if client == nil {
@@ -987,7 +987,7 @@ func (sys *NotificationSys) DrivePerfInfo() []ServerDrivesPerfInfo {
 		wg.Add(1)
 		go func(client *peerRESTClient, idx int) {
 			defer wg.Done()
-			di, err := client.DrivePerfInfo()
+			di, err := client.DrivePerfInfo(size)
 			if err != nil {
 				reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", client.host.String())
 				ctx := logger.SetReqInfo(context.Background(), reqInfo)

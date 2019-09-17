@@ -24,6 +24,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
+	xnet "github.com/minio/minio/pkg/net"
 
 	minio "github.com/minio/minio-go/v6"
 )
@@ -299,7 +300,7 @@ func ErrorRespToObjectError(err error, params ...string) error {
 		object = params[1]
 	}
 
-	if isNetworkOrHostDown(err) {
+	if xnet.IsNetworkOrHostDown(err) {
 		return BackendDown{}
 	}
 

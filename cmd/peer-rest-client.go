@@ -173,8 +173,10 @@ func (client *peerRESTClient) CPULoadInfo() (info ServerCPULoadInfo, err error) 
 }
 
 // DrivePerfInfo - fetch Drive performance information for a remote node.
-func (client *peerRESTClient) DrivePerfInfo() (info ServerDrivesPerfInfo, err error) {
-	respBody, err := client.call(peerRESTMethodDrivePerfInfo, nil, nil, -1)
+func (client *peerRESTClient) DrivePerfInfo(size int64) (info madmin.ServerDrivesPerfInfo, err error) {
+	params := make(url.Values)
+	params.Set(peerRESTDrivePerfSize, strconv.FormatInt(size, 10))
+	respBody, err := client.call(peerRESTMethodDrivePerfInfo, params, nil, -1)
 	if err != nil {
 		return
 	}

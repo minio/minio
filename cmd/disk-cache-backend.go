@@ -333,28 +333,6 @@ func (c *diskCache) saveMetadata(ctx context.Context, bucket, object string, met
 	return err
 }
 
-// updates ETag in cache metadata file to the backend ETag.
-func (c *diskCache) updateETag(ctx context.Context, bucket, object string, etag string) error {
-	metaPath := path.Join(getCacheSHADir(c.dir, bucket, object), cacheMetaJSONFile)
-	f, err := os.OpenFile(metaPath, os.O_RDWR, 0)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	meta := &cacheMeta{Version: cacheMetaVersion}
-	if err := jsonLoad(f, meta); err != nil {
-		return err
-	}
-	meta.Meta["etag"] = etag
-	jsonData, err := json.Marshal(meta)
-	if err != nil {
-		return err
-	}
-	_, err = f.Write(jsonData)
-	return err
-}
-
 // Backend metadata could have changed through server side copy - reset cache metadata if that is the case
 func (c *diskCache) updateMetadataIfChanged(ctx context.Context, bucket, object string, bkObjectInfo, cacheObjInfo ObjectInfo) error {
 
@@ -418,7 +396,7 @@ func (c *diskCache) bitrotWriteToCache(ctx context.Context, cachePath string, re
 	bufp := c.pool.Get().(*[]byte)
 	defer c.pool.Put(bufp)
 
-	var n int
+	var n, n2 int
 	for {
 		n, err = io.ReadFull(reader, *bufp)
 		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
@@ -437,10 +415,10 @@ func (c *diskCache) bitrotWriteToCache(ctx context.Context, cachePath string, re
 		if _, err = f.Write(hashBytes); err != nil {
 			return 0, err
 		}
-		if _, err = f.Write((*bufp)[:n]); err != nil {
+		if n2, err = f.Write((*bufp)[:n]); err != nil {
 			return 0, err
 		}
-		bytesWritten += int64(n)
+		bytesWritten += int64(n2)
 		if eof {
 			break
 		}
@@ -521,9 +499,11 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 		c.setOnline(false)
 	}
 	if err != nil {
+		removeAll(cachePath)
 		return err
 	}
 	if actualSize != uint64(n) {
+		removeAll(cachePath)
 		return IncompleteBody{}
 	}
 	return c.saveMetadata(ctx, bucket, object, metadata, n)
@@ -648,7 +628,11 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 	filePath := path.Join(cacheObjPath, cacheDataFile)
 	pr, pw := io.Pipe()
 	go func() {
-		pw.CloseWithError(c.bitrotReadFromCache(ctx, filePath, off, length, pw))
+		err := c.bitrotReadFromCache(ctx, filePath, off, length, pw)
+		if err != nil {
+			removeAll(cacheObjPath)
+		}
+		pw.CloseWithError(err)
 	}()
 	// Cleanup function to cause the go routine above to exit, in
 	// case of incomplete read.

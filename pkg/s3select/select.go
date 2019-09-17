@@ -34,7 +34,9 @@ import (
 )
 
 type recordReader interface {
-	Read() (sql.Record, error)
+	// Read a record.
+	// dst is optional but will be used if valid.
+	Read(dst sql.Record) (sql.Record, error)
 	Close() error
 }
 
@@ -59,7 +61,8 @@ const (
 
 var bufPool = sync.Pool{
 	New: func() interface{} {
-		return new(bytes.Buffer)
+		// make a buffer with a reasonable capacity.
+		return bytes.NewBuffer(make([]byte, 0, maxRecordSize))
 	},
 }
 
@@ -339,7 +342,10 @@ func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
 		if err != nil {
 			return err
 		}
-
+		err = bufioWriter.Flush()
+		if err != nil {
+			return err
+		}
 		buf.Truncate(buf.Len() - 1)
 		buf.WriteString(s3Select.Output.CSVArgs.RecordDelimiter)
 
@@ -368,25 +374,33 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 	writer := newMessageWriter(w, getProgressFunc)
 
 	var inputRecord sql.Record
-	var outputRecord sql.Record
+	var outputQueue []sql.Record
+
+	// Create queue based on the type.
+	if s3Select.statement.IsAggregated() {
+		outputQueue = make([]sql.Record, 0, 1)
+	} else {
+		outputQueue = make([]sql.Record, 0, 100)
+	}
 	var err error
 	sendRecord := func() bool {
-		if outputRecord == nil {
-			return true
-		}
-
 		buf := bufPool.Get().(*bytes.Buffer)
 		buf.Reset()
 
-		if err = s3Select.marshal(buf, outputRecord); err != nil {
-			bufPool.Put(buf)
-			return false
-		}
-
-		if buf.Len() > maxRecordSize {
-			writer.FinishWithError("OverMaxRecordSize", "The length of a record in the input or result is greater than maxCharsPerRecord of 1 MB.")
-			bufPool.Put(buf)
-			return false
+		for _, outputRecord := range outputQueue {
+			if outputRecord == nil {
+				continue
+			}
+			before := buf.Len()
+			if err = s3Select.marshal(buf, outputRecord); err != nil {
+				bufPool.Put(buf)
+				return false
+			}
+			if buf.Len()-before > maxRecordSize {
+				writer.FinishWithError("OverMaxRecordSize", "The length of a record in the input or result is greater than maxCharsPerRecord of 1 MB.")
+				bufPool.Put(buf)
+				return false
+			}
 		}
 
 		if err = writer.SendRecord(buf); err != nil {
@@ -395,10 +409,11 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 			bufPool.Put(buf)
 			return false
 		}
-
+		outputQueue = outputQueue[:0]
 		return true
 	}
 
+	var rec sql.Record
 	for {
 		if s3Select.statement.LimitReached() {
 			if err = writer.Finish(s3Select.getProgress()); err != nil {
@@ -408,20 +423,21 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 			break
 		}
 
-		if inputRecord, err = s3Select.recordReader.Read(); err != nil {
+		if rec, err = s3Select.recordReader.Read(rec); err != nil {
 			if err != io.EOF {
 				break
 			}
 
 			if s3Select.statement.IsAggregated() {
-				outputRecord = s3Select.outputRecord()
+				outputRecord := s3Select.outputRecord()
 				if err = s3Select.statement.AggregateResult(outputRecord); err != nil {
 					break
 				}
+				outputQueue = append(outputQueue, outputRecord)
+			}
 
-				if !sendRecord() {
-					break
-				}
+			if !sendRecord() {
+				break
 			}
 
 			if err = writer.Finish(s3Select.getProgress()); err != nil {
@@ -431,7 +447,7 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 			break
 		}
 
-		if inputRecord, err = s3Select.statement.EvalFrom(s3Select.Input.format, inputRecord); err != nil {
+		if inputRecord, err = s3Select.statement.EvalFrom(s3Select.Input.format, rec); err != nil {
 			break
 		}
 
@@ -440,9 +456,34 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 				break
 			}
 		} else {
-			outputRecord = s3Select.outputRecord()
-			if outputRecord, err = s3Select.statement.Eval(inputRecord, outputRecord); err != nil {
-				break
+			var outputRecord sql.Record
+			// We will attempt to reuse the records in the table.
+			// The type of these should not change.
+			// The queue should always have at least one entry left for this to work.
+			outputQueue = outputQueue[:len(outputQueue)+1]
+			if t := outputQueue[len(outputQueue)-1]; t != nil {
+				// If the output record is already set, we reuse it.
+				outputRecord = t
+				outputRecord.Reset()
+			} else {
+				// Create new one
+				outputRecord = s3Select.outputRecord()
+				outputQueue[len(outputQueue)-1] = outputRecord
+			}
+			var ok bool
+			ok, err = s3Select.statement.Eval(inputRecord, outputRecord)
+			if !ok || err != nil {
+				// This should not be written.
+				// Remove it from the queue.
+				outputQueue = outputQueue[:len(outputQueue)-1]
+				if err != nil {
+					break
+				}
+				continue
+			}
+
+			if len(outputQueue) < cap(outputQueue) {
+				continue
 			}
 
 			if !sendRecord() {

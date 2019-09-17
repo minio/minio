@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/handlers"
 	trace "github.com/minio/minio/pkg/trace"
 )
 
@@ -200,7 +201,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 		Method:   r.Method,
 		Path:     r.URL.Path,
 		RawQuery: r.URL.RawQuery,
-		Client:   r.RemoteAddr,
+		Client:   handlers.GetSourceIP(r),
 		Headers:  reqHeaders,
 		Body:     reqBodyRecorder.Data(),
 	}
