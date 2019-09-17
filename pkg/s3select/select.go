@@ -470,13 +470,15 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 				outputRecord = s3Select.outputRecord()
 				outputQueue[len(outputQueue)-1] = outputRecord
 			}
-			if err = s3Select.statement.Eval(inputRecord, outputRecord); err != nil {
-				break
-			}
-			if outputRecord == nil {
+			var ok bool
+			ok, err = s3Select.statement.Eval(inputRecord, outputRecord)
+			if !ok || err != nil {
 				// This should not be written.
 				// Remove it from the queue.
 				outputQueue = outputQueue[:len(outputQueue)-1]
+				if err != nil {
+					break
+				}
 				continue
 			}
 

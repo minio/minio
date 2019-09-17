@@ -19,6 +19,7 @@ package sql
 import (
 	"fmt"
 	"math"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -215,6 +216,472 @@ func TestValue_CSVString(t *testing.T) {
 			}
 			if got := vAlt.CSVString(); got != tt.wantAlt {
 				t.Errorf("CSVString() = %v, want %v", got, tt.wantAlt)
+			}
+		})
+	}
+}
+
+func TestValue_bytesToInt(t *testing.T) {
+	type fields struct {
+		value interface{}
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   int64
+		wantOK bool
+	}{
+		{
+			name: "zero",
+			fields: fields{
+				value: []byte("0"),
+			},
+			want:   0,
+			wantOK: true,
+		},
+		{
+			name: "minuszero",
+			fields: fields{
+				value: []byte("-0"),
+			},
+			want:   0,
+			wantOK: true,
+		},
+		{
+			name: "one",
+			fields: fields{
+				value: []byte("1"),
+			},
+			want:   1,
+			wantOK: true,
+		},
+		{
+			name: "minusone",
+			fields: fields{
+				value: []byte("-1"),
+			},
+			want:   -1,
+			wantOK: true,
+		},
+		{
+			name: "plusone",
+			fields: fields{
+				value: []byte("+1"),
+			},
+			want:   1,
+			wantOK: true,
+		},
+		{
+			name: "max",
+			fields: fields{
+				value: []byte(strconv.FormatInt(math.MaxInt64, 10)),
+			},
+			want:   math.MaxInt64,
+			wantOK: true,
+		},
+		{
+			name: "min",
+			fields: fields{
+				value: []byte(strconv.FormatInt(math.MinInt64, 10)),
+			},
+			want:   math.MinInt64,
+			wantOK: true,
+		},
+		{
+			name: "max-overflow",
+			fields: fields{
+				value: []byte("9223372036854775808"),
+			},
+			// Seems to be what strconv.ParseInt returns
+			want:   math.MaxInt64,
+			wantOK: false,
+		},
+		{
+			name: "min-underflow",
+			fields: fields{
+				value: []byte("-9223372036854775809"),
+			},
+			// Seems to be what strconv.ParseInt returns
+			want:   math.MinInt64,
+			wantOK: false,
+		},
+		{
+			name: "zerospace",
+			fields: fields{
+				value: []byte(" 0"),
+			},
+			want:   0,
+			wantOK: true,
+		},
+		{
+			name: "onespace",
+			fields: fields{
+				value: []byte("1 "),
+			},
+			want:   1,
+			wantOK: true,
+		},
+		{
+			name: "minusonespace",
+			fields: fields{
+				value: []byte(" -1 "),
+			},
+			want:   -1,
+			wantOK: true,
+		},
+		{
+			name: "plusonespace",
+			fields: fields{
+				value: []byte("\t+1\t"),
+			},
+			want:   1,
+			wantOK: true,
+		},
+		{
+			name: "scientific",
+			fields: fields{
+				value: []byte("3e5"),
+			},
+			want:   0,
+			wantOK: false,
+		},
+		{
+			// No support for prefixes
+			name: "hex",
+			fields: fields{
+				value: []byte("0xff"),
+			},
+			want:   0,
+			wantOK: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := &Value{
+				value: tt.fields.value,
+			}
+			got, got1 := v.bytesToInt()
+			if got != tt.want {
+				t.Errorf("bytesToInt() got = %v, want %v", got, tt.want)
+			}
+			if got1 != tt.wantOK {
+				t.Errorf("bytesToInt() got1 = %v, want %v", got1, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestValue_bytesToFloat(t *testing.T) {
+	type fields struct {
+		value interface{}
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   float64
+		wantOK bool
+	}{
+		// Copied from TestValue_bytesToInt.
+		{
+			name: "zero",
+			fields: fields{
+				value: []byte("0"),
+			},
+			want:   0,
+			wantOK: true,
+		},
+		{
+			name: "minuszero",
+			fields: fields{
+				value: []byte("-0"),
+			},
+			want:   0,
+			wantOK: true,
+		},
+		{
+			name: "one",
+			fields: fields{
+				value: []byte("1"),
+			},
+			want:   1,
+			wantOK: true,
+		},
+		{
+			name: "minusone",
+			fields: fields{
+				value: []byte("-1"),
+			},
+			want:   -1,
+			wantOK: true,
+		},
+		{
+			name: "plusone",
+			fields: fields{
+				value: []byte("+1"),
+			},
+			want:   1,
+			wantOK: true,
+		},
+		{
+			name: "maxint",
+			fields: fields{
+				value: []byte(strconv.FormatInt(math.MaxInt64, 10)),
+			},
+			want:   math.MaxInt64,
+			wantOK: true,
+		},
+		{
+			name: "minint",
+			fields: fields{
+				value: []byte(strconv.FormatInt(math.MinInt64, 10)),
+			},
+			want:   math.MinInt64,
+			wantOK: true,
+		},
+		{
+			name: "max-overflow-int",
+			fields: fields{
+				value: []byte("9223372036854775808"),
+			},
+			// Seems to be what strconv.ParseInt returns
+			want:   math.MaxInt64,
+			wantOK: true,
+		},
+		{
+			name: "min-underflow-int",
+			fields: fields{
+				value: []byte("-9223372036854775809"),
+			},
+			// Seems to be what strconv.ParseInt returns
+			want:   math.MinInt64,
+			wantOK: true,
+		},
+		{
+			name: "max",
+			fields: fields{
+				value: []byte(strconv.FormatFloat(math.MaxFloat64, 'g', -1, 64)),
+			},
+			want:   math.MaxFloat64,
+			wantOK: true,
+		},
+		{
+			name: "min",
+			fields: fields{
+				value: []byte(strconv.FormatFloat(-math.MaxFloat64, 'g', -1, 64)),
+			},
+			want:   -math.MaxFloat64,
+			wantOK: true,
+		},
+		{
+			name: "max-overflow",
+			fields: fields{
+				value: []byte("1.797693134862315708145274237317043567981e+309"),
+			},
+			// Seems to be what strconv.ParseInt returns
+			want:   math.Inf(1),
+			wantOK: false,
+		},
+		{
+			name: "min-underflow",
+			fields: fields{
+				value: []byte("-1.797693134862315708145274237317043567981e+309"),
+			},
+			// Seems to be what strconv.ParseInt returns
+			want:   math.Inf(-1),
+			wantOK: false,
+		},
+		{
+			name: "smallest-pos",
+			fields: fields{
+				value: []byte(strconv.FormatFloat(math.SmallestNonzeroFloat64, 'g', -1, 64)),
+			},
+			want:   math.SmallestNonzeroFloat64,
+			wantOK: true,
+		},
+		{
+			name: "smallest-pos",
+			fields: fields{
+				value: []byte(strconv.FormatFloat(-math.SmallestNonzeroFloat64, 'g', -1, 64)),
+			},
+			want:   -math.SmallestNonzeroFloat64,
+			wantOK: true,
+		},
+		{
+			name: "zerospace",
+			fields: fields{
+				value: []byte(" 0"),
+			},
+			want:   0,
+			wantOK: true,
+		},
+		{
+			name: "onespace",
+			fields: fields{
+				value: []byte("1 "),
+			},
+			want:   1,
+			wantOK: true,
+		},
+		{
+			name: "minusonespace",
+			fields: fields{
+				value: []byte(" -1 "),
+			},
+			want:   -1,
+			wantOK: true,
+		},
+		{
+			name: "plusonespace",
+			fields: fields{
+				value: []byte("\t+1\t"),
+			},
+			want:   1,
+			wantOK: true,
+		},
+		{
+			name: "scientific",
+			fields: fields{
+				value: []byte("3e5"),
+			},
+			want:   300000,
+			wantOK: true,
+		},
+		{
+			// No support for prefixes
+			name: "hex",
+			fields: fields{
+				value: []byte("0xff"),
+			},
+			want:   0,
+			wantOK: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := Value{
+				value: tt.fields.value,
+			}
+			got, got1 := v.bytesToFloat()
+			if got != tt.want {
+				t.Errorf("bytesToFloat() got = %v, want %v", got, tt.want)
+			}
+			if got1 != tt.wantOK {
+				t.Errorf("bytesToFloat() got1 = %v, want %v", got1, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestValue_bytesToBool(t *testing.T) {
+	type fields struct {
+		value interface{}
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		wantVal bool
+		wantOk  bool
+	}{
+		{
+			name: "true",
+			fields: fields{
+				value: []byte("true"),
+			},
+			wantVal: true,
+			wantOk:  true,
+		},
+		{
+			name: "false",
+			fields: fields{
+				value: []byte("false"),
+			},
+			wantVal: false,
+			wantOk:  true,
+		},
+		{
+			name: "t",
+			fields: fields{
+				value: []byte("t"),
+			},
+			wantVal: true,
+			wantOk:  true,
+		},
+		{
+			name: "f",
+			fields: fields{
+				value: []byte("f"),
+			},
+			wantVal: false,
+			wantOk:  true,
+		},
+		{
+			name: "1",
+			fields: fields{
+				value: []byte("1"),
+			},
+			wantVal: true,
+			wantOk:  true,
+		},
+		{
+			name: "0",
+			fields: fields{
+				value: []byte("0"),
+			},
+			wantVal: false,
+			wantOk:  true,
+		},
+		{
+			name: "truespace",
+			fields: fields{
+				value: []byte(" true "),
+			},
+			wantVal: true,
+			wantOk:  true,
+		},
+		{
+			name: "truetabs",
+			fields: fields{
+				value: []byte("\ttrue\t"),
+			},
+			wantVal: true,
+			wantOk:  true,
+		},
+		{
+			name: "TRUE",
+			fields: fields{
+				value: []byte("TRUE"),
+			},
+			wantVal: true,
+			wantOk:  true,
+		},
+		{
+			name: "FALSE",
+			fields: fields{
+				value: []byte("FALSE"),
+			},
+			wantVal: false,
+			wantOk:  true,
+		},
+		{
+			name: "invalid",
+			fields: fields{
+				value: []byte("no"),
+			},
+			wantVal: false,
+			wantOk:  false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := Value{
+				value: tt.fields.value,
+			}
+			gotVal, gotOk := v.bytesToBool()
+			if gotVal != tt.wantVal {
+				t.Errorf("bytesToBool() gotVal = %v, want %v", gotVal, tt.wantVal)
+			}
+			if gotOk != tt.wantOk {
+				t.Errorf("bytesToBool() gotOk = %v, want %v", gotOk, tt.wantOk)
 			}
 		})
 	}
