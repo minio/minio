@@ -2,6 +2,10 @@
 
 MinIO server allows streaming compression to ensure efficient disk space usage. Compression happens inflight, i.e objects are compressed before being written to disk(s). MinIO uses [`klauspost/compress/s2`](https://github.com/klauspost/compress/tree/master/s2) streaming compression due to its stability and performance.
 
+This algorithm is specifically optimized for machine generated content. Write throughput is typically at least 300MB/s per CPU core. Decompression speed is typically at least 1GB/s.
+This means that in cases where raw IO is below these numbers compression will not only reduce disk usage but also help increase system throughput.
+Typically enabling compression on spinning disk systems will increase speed when the content can be compressed.
+
 ## Get Started
 
 ### 1. Prerequisites
@@ -15,12 +19,15 @@ Compression can be enabled by updating the `compress` config settings for MinIO 
 ```json
 "compress": {
         "enabled": true,
-        "extensions": [".txt",".log",".csv", ".json"],
-        "mime-types": ["text/csv","text/plain","application/json"]
+        "extensions": [".txt",".log",".csv", ".json", ".tar"],
+        "mime-types": ["text/*","application/json","application/xml"]
 }
 ```
 
+Having compression enabled and no extensions or mime types will attempt to compress anything that isn't explicitly known to be already compressed content. 
+
 Since text, log, csv, json files are highly compressible, These extensions/mime-types are included by default for compression.
+Incompressible content will be skipped with quite low CPU usage, so 
 
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio cluster in json format, and save it locally.
 

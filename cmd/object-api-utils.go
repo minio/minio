@@ -365,29 +365,34 @@ func isCompressible(header http.Header, object string) bool {
 func excludeForCompression(header http.Header, object string) bool {
 	objStr := object
 	contentType := header.Get(xhttp.ContentType)
-	if globalIsCompressionEnabled {
-		// We strictly disable compression for standard extensions/content-types (`compressed`).
-		if hasStringSuffixInSlice(objStr, standardExcludeCompressExtensions) || hasPattern(standardExcludeCompressContentTypes, contentType) {
-			return true
-		}
-		// Filter compression includes.
-		if len(globalCompressExtensions) > 0 || len(globalCompressMimeTypes) > 0 {
-			extensions := globalCompressExtensions
-			mimeTypes := globalCompressMimeTypes
-			if hasStringSuffixInSlice(objStr, extensions) || hasPattern(mimeTypes, contentType) {
-				return false
-			}
-			return true
-		}
+	if !globalIsCompressionEnabled {
+		return true
+	}
+
+	// We strictly disable compression for standard extensions/content-types (`compressed`).
+	if hasStringSuffixInSlice(objStr, standardExcludeCompressExtensions) || hasPattern(standardExcludeCompressContentTypes, contentType) {
+		return true
+	}
+
+	// Filter compression includes.
+	if len(globalCompressExtensions) == 0 || len(globalCompressMimeTypes) == 0 {
+		return false
+	}
+
+	extensions := globalCompressExtensions
+	mimeTypes := globalCompressMimeTypes
+	if hasStringSuffixInSlice(objStr, extensions) || hasPattern(mimeTypes, contentType) {
 		return false
 	}
 	return true
 }
 
 // Utility which returns if a string is present in the list.
+// Comparison is case insensitive.
 func hasStringSuffixInSlice(str string, list []string) bool {
+	str = strings.ToLower(str)
 	for _, v := range list {
-		if strings.HasSuffix(str, v) {
+		if strings.HasSuffix(str, strings.ToLower(v)) {
 			return true
 		}
 	}

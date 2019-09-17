@@ -367,6 +367,13 @@ func TestExcludeForCompression(t *testing.T) {
 			},
 			result: false,
 		},
+		{
+			object: "object",
+			header: http.Header{
+				"Content-Type": []string{"text/something"},
+			},
+			result: false,
+		},
 	}
 	for i, test := range testCases {
 		globalIsCompressionEnabled = true
