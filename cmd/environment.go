@@ -74,6 +74,10 @@ const (
 	// vault namespace. The vault namespace is used if the enterprise
 	// version of Hashicorp Vault is used.
 	EnvVaultNamespace = "MINIO_SSE_VAULT_NAMESPACE"
+
+	// EnvVaultKeyStore is the environment variable used to specify
+	// the path to the vault K/V key store.
+	EnvVaultKeyStore = "MINIO_SSE_VAULT_KEY_STORE"
 )
 
 // Environment provides functions for accessing environment
@@ -122,12 +126,13 @@ func (env environment) LookupKMSConfig(config crypto.KMSConfig) (err error) {
 	config.Vault.Auth.AppRole.Secret = env.Get(EnvVaultAppSecretID, config.Vault.Auth.AppRole.Secret)
 	config.Vault.Key.Name = env.Get(EnvVaultKeyName, config.Vault.Key.Name)
 	config.Vault.Namespace = env.Get(EnvVaultNamespace, config.Vault.Namespace)
+	config.Vault.KeyStorePath = env.Get(EnvVaultKeyStore, config.Vault.KeyStorePath)
 	keyVersion := env.Get(EnvVaultKeyVersion, strconv.Itoa(config.Vault.Key.Version))
 	config.Vault.Key.Version, err = strconv.Atoi(keyVersion)
 	if err != nil {
 		return fmt.Errorf("Invalid ENV variable: Unable to parse %s value (`%s`)", EnvVaultKeyVersion, keyVersion)
 	}
-	if err = config.Vault.Verify(); err != nil {
+	if err = config.Vault.VerifyKMS(); err != nil {
 		return err
 	}
 
@@ -142,11 +147,20 @@ func (env environment) LookupKMSConfig(config crypto.KMSConfig) (err error) {
 		}
 	}
 	if !config.Vault.IsEmpty() {
-		GlobalKMS, err = crypto.NewVault(config.Vault)
-		if err != nil {
-			return err
+		switch {
+		case config.Vault.Key.Name != "":
+			GlobalKMS, err = crypto.NewVaultKMS(config.Vault)
+			if err != nil {
+				return err
+			}
+			globalKMSKeyID = config.Vault.Key.Name
+		case config.Vault.KeyStorePath != "":
+			GlobalKeyStore, err = crypto.NewVaultKeyStore(config.Vault)
+			if err != nil {
+				return err
+			}
+		default:
 		}
-		globalKMSKeyID = config.Vault.Key.Name
 	}
 
 	autoEncryption, err := ParseBoolFlag(env.Get(EnvAutoEncryption, "off"))
@@ -154,7 +168,7 @@ func (env environment) LookupKMSConfig(config crypto.KMSConfig) (err error) {
 		return err
 	}
 	globalAutoEncryption = bool(autoEncryption)
-	if globalAutoEncryption && GlobalKMS == nil { // auto-encryption enabled but no KMS
+	if globalAutoEncryption && (GlobalKMS == nil && GlobalKeyStore == nil) { // auto-encryption enabled but no KMS
 		return errors.New("Invalid KMS configuration: auto-encryption is enabled but no valid KMS configuration is present")
 	}
 	return nil

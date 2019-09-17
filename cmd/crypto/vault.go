@@ -51,11 +51,12 @@ type VaultAppRole struct {
 
 // VaultConfig represents vault configuration.
 type VaultConfig struct {
-	Endpoint  string    `json:"endpoint"` // The vault API endpoint as URL
-	CAPath    string    `json:"-"`        // The path to PEM-encoded certificate files used for mTLS. Currently not used in config file.
-	Auth      VaultAuth `json:"auth"`     // The vault authentication configuration
-	Key       VaultKey  `json:"key-id"`   // The named key used for key-generation / decryption.
-	Namespace string    `json:"-"`        // The vault namespace of enterprise vault instances
+	Endpoint     string    `json:"endpoint"` // The vault API endpoint as URL
+	CAPath       string    `json:"-"`        // The path to PEM-encoded certificate files used for mTLS. Currently not used in config file.
+	Auth         VaultAuth `json:"auth"`     // The vault authentication configuration
+	Key          VaultKey  `json:"key-id"`   // The named key used for key-generation / decryption.
+	Namespace    string    `json:"-"`        // The vault namespace of enterprise vault instances
+	KeyStorePath string    `json:"-"`
 }
 
 // vaultService represents a connection to a vault KMS.
@@ -66,7 +67,8 @@ type vaultService struct {
 	leaseDuration time.Duration
 }
 
-var _ KMS = (*vaultService)(nil) // compiler check that *vaultService implements KMS
+var _ KMS = (*vaultService)(nil)      // compiler check that *vaultService implements KMS
+var _ KeyStore = (*vaultService)(nil) // compiler check that *vaultService implements KeyStore
 
 // empty/default vault configuration used to check whether a particular is empty.
 var emptyVaultConfig = VaultConfig{}
@@ -75,12 +77,15 @@ var emptyVaultConfig = VaultConfig{}
 // empty configuration.
 func (v *VaultConfig) IsEmpty() bool { return *v == emptyVaultConfig }
 
-// Verify returns a nil error if the vault configuration
-// is valid. A valid configuration is either empty or
-// contains valid non-default values.
-func (v *VaultConfig) Verify() (err error) {
+// VerifyKMS returns a nil error if the vault configuration
+// is valid KMS configuration. A valid configuration is either
+// empty or contains valid non-default values.
+func (v *VaultConfig) VerifyKMS() (err error) {
 	if v.IsEmpty() {
 		return // an empty configuration is valid
+	}
+	if v.KeyStorePath != "" {
+		return errors.New("crypto: the key store path must not be present when using a KMS with master keys")
 	}
 	switch {
 	case v.Endpoint == "":
@@ -99,17 +104,71 @@ func (v *VaultConfig) Verify() (err error) {
 	return
 }
 
-// NewVault initializes Hashicorp Vault KMS by authenticating
+// VerifyKeyStore returns a nil error if the vault configuration
+// is a valid KeyStore configuration. A valid configuration is either
+// empty or contains valid non-default values.
+func (v *VaultConfig) VerifyKeyStore() (err error) {
+	if v.IsEmpty() {
+		return // an empty configuration is valid
+	}
+	if v.Key.Name != "" {
+		return errors.New("crypto: the master key name  must not be present when using the key store")
+	}
+	switch {
+	case v.Endpoint == "":
+		err = errors.New("crypto: missing hashicorp vault endpoint")
+	case strings.ToLower(v.Auth.Type) != "approle":
+		err = fmt.Errorf("crypto: invalid hashicorp vault authentication type: %s is not supported", v.Auth.Type)
+	case v.Auth.AppRole.ID == "":
+		err = errors.New("crypto: missing hashicorp vault AppRole ID")
+	case v.Auth.AppRole.Secret == "":
+		err = errors.New("crypto: missing hashicorp vault AppSecret ID")
+	case v.KeyStorePath == "":
+		err = errors.New("crypto: missing hashicorp vault K/V path")
+	}
+	return
+}
+
+// NewVaultKMS initializes Hashicorp Vault KMS by authenticating
 // to Vault with the credentials in config and gets a client
-// token for future api calls.
-func NewVault(config VaultConfig) (KMS, error) {
+// token for future API calls.
+func NewVaultKMS(config VaultConfig) (KMS, error) {
 	if config.IsEmpty() {
 		return nil, errors.New("crypto: the hashicorp vault configuration must not be empty")
 	}
-	if err := config.Verify(); err != nil {
+	if err := config.VerifyKMS(); err != nil {
 		return nil, err
 	}
 
+	vaultCfg := vault.Config{Address: config.Endpoint}
+	if err := vaultCfg.ConfigureTLS(&vault.TLSConfig{CAPath: config.CAPath}); err != nil {
+		return nil, err
+	}
+	client, err := vault.NewClient(&vaultCfg)
+	if err != nil {
+		return nil, err
+	}
+	if config.Namespace != "" {
+		client.SetNamespace(config.Namespace)
+	}
+	v := &vaultService{client: client, config: &config}
+	if err := v.authenticate(); err != nil {
+		return nil, err
+	}
+	v.renewToken()
+	return v, nil
+}
+
+// NewVaultKeyStore initializes Hashicorp Vault K/V by authenticating
+// to Vault with the credentials in config and gets a client
+// token for future API calls.
+func NewVaultKeyStore(config VaultConfig) (KeyStore, error) {
+	if config.IsEmpty() {
+		return nil, errors.New("crypto: the hashicorp vault configuration must not be empty")
+	}
+	if err := config.VerifyKeyStore(); err != nil {
+		return nil, err
+	}
 	vaultCfg := vault.Config{Address: config.Endpoint}
 	if err := vaultCfg.ConfigureTLS(&vault.TLSConfig{CAPath: config.CAPath}); err != nil {
 		return nil, err
@@ -276,4 +335,43 @@ func (v *vaultService) UpdateKey(keyID string, sealedKey []byte, ctx Context) (r
 	}
 	rotatedKey = []byte(ciphertext.(string))
 	return rotatedKey, nil
+}
+
+// Load fetches the 256 bit key from the Vault K/V
+// that has been stored at the given path. It returns
+// an error if fetching the key fails or if there is
+// no key under the path.
+func (v *vaultService) Load(path string) (key [32]byte, err error) {
+	secret, err := v.client.Logical().Read(fmt.Sprintf("/%s/%s", v.config.KeyStorePath, path))
+	if err != nil {
+		return ObjectKey{}, err
+	}
+	base64Key := secret.Data["key"].(string)
+	decodedKey, err := base64.StdEncoding.DecodeString(base64Key)
+	if err != nil {
+		return key, err
+	}
+	if len(decodedKey) != len(key) {
+		return key, fmt.Errorf("crypto: KeyStore key has invalid size of %d bytes", len(decodedKey))
+	}
+	copy(key[:], decodedKey)
+	return key, nil
+}
+
+// Store stores a 256 bit key at the Vault K/V
+// under the given path. It returns an error if
+// storing the key fails.
+func (v *vaultService) Store(path string, key [32]byte) error {
+	payload := map[string]interface{}{
+		"key": base64.StdEncoding.EncodeToString(key[:]),
+	}
+	_, err := v.client.Logical().Write(fmt.Sprintf("/%s/%s", v.config.KeyStorePath, path), payload)
+	return err
+}
+
+// Delete deletes the key stored under the given
+// path.
+func (v *vaultService) Delete(path string) error {
+	_, err := v.client.Logical().Delete(fmt.Sprintf("/%s/%s", v.config.KeyStorePath, path))
+	return err
 }

@@ -240,11 +240,19 @@ var (
 	// Usage check interval value.
 	globalUsageCheckInterval = globalDefaultUsageCheckInterval
 
-	// KMS key id
+	// KMS master key ID used to encrypt arriving objects.
 	globalKMSKeyID string
 
-	// GlobalKMS initialized KMS configuration
+	// GlobalKMS is the KMS to perform en/decryption
+	// operation. A deployment can either use a KMS
+	// or a KeyStore but not both at the same time.
 	GlobalKMS crypto.KMS
+
+	// GlobalKeyStore is the K/V store used to
+	// store encryption keys. A deployment can
+	// either use a KMS or a KeyStore but not both
+	// at the same time.
+	GlobalKeyStore crypto.KeyStore
 
 	// Auto-Encryption, if enabled, turns any non-SSE-C request
 	// into an SSE-S3 request. If enabled a valid, non-empty KMS
