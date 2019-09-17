@@ -92,7 +92,7 @@ only.
 
 ## Notes on configuring with Microsoft Active Directory (AD)
 
-The LDAP STS API also works with Microsoft AD and can be configured in a manner
+The LDAP STS API also works with Microsoft AD and can be configured
 as above. The following are some notes on determining the values of
 the configuration parameters described above.
 
