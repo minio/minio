@@ -346,6 +346,9 @@ func serverMain(ctx *cli.Context) {
 		logger.Fatal(err, "Unable to initialize policy system")
 	}
 
+	if globalIsDiskCacheEnabled {
+		logger.StartupMessage(colorRed(colorBold("Disk caching is allowed only for gateway deployments")))
+	}
 	// Create new lifecycle system.
 	globalLifecycleSys = NewLifecycleSys()
 
