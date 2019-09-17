@@ -173,7 +173,7 @@ func nullif(v1, v2 *Value) (res *Value, err error) {
 		return v1, nil
 	}
 
-	if v1.vType != v2.vType {
+	if v1.SameTypeAs(*v2) {
 		return v1, nil
 	}
 
@@ -456,27 +456,24 @@ func intCast(v *Value) (int64, error) {
 		return 0, false
 	}
 
-	switch v.vType {
-	case typeFloat:
+	switch x := v.value.(type) {
+	case float64:
 		// Truncate fractional part
-		return int64(v.value.(float64)), nil
-	case typeInt:
-		return v.value.(int64), nil
-	case typeString:
+		return int64(x), nil
+	case int64:
+		return x, nil
+	case string:
 		// Parse as number, truncate floating point if
 		// needed.
-		s, _ := v.ToString()
-		res, ok := strToInt(s)
+		res, ok := strToInt(x)
 		if !ok {
 			return 0, errCastFailure("could not parse as int")
 		}
 		return res, nil
-	case typeBytes:
+	case []byte:
 		// Parse as number, truncate floating point if
 		// needed.
-		b, _ := v.ToBytes()
-		s := string(b)
-		res, ok := strToInt(s)
+		res, ok := strToInt(string(x))
 		if !ok {
 			return 0, errCastFailure("could not parse as int")
 		}
@@ -488,20 +485,19 @@ func intCast(v *Value) (int64, error) {
 }
 
 func floatCast(v *Value) (float64, error) {
-	switch v.vType {
-	case typeFloat:
-		return v.value.(float64), nil
-	case typeInt:
-		return float64(v.value.(int64)), nil
-	case typeString:
-		f, err := strconv.ParseFloat(v.value.(string), 64)
+	switch x := v.value.(type) {
+	case float64:
+		return x, nil
+	case int:
+		return float64(x), nil
+	case string:
+		f, err := strconv.ParseFloat(x, 64)
 		if err != nil {
 			return 0, errCastFailure("could not parse as float")
 		}
 		return f, nil
-	case typeBytes:
-		b, _ := v.ToBytes()
-		f, err := strconv.ParseFloat(string(b), 64)
+	case []byte:
+		f, err := strconv.ParseFloat(string(x), 64)
 		if err != nil {
 			return 0, errCastFailure("could not parse as float")
 		}
@@ -512,41 +508,33 @@ func floatCast(v *Value) (float64, error) {
 }
 
 func stringCast(v *Value) (string, error) {
-	switch v.vType {
-	case typeFloat:
-		f, _ := v.ToFloat()
-		return fmt.Sprintf("%v", f), nil
-	case typeInt:
-		i, _ := v.ToInt()
-		return fmt.Sprintf("%v", i), nil
-	case typeString:
-		s, _ := v.ToString()
-		return s, nil
-	case typeBytes:
-		b, _ := v.ToBytes()
-		return string(b), nil
-	case typeBool:
-		b, _ := v.ToBool()
-		return fmt.Sprintf("%v", b), nil
-	case typeNull:
+	switch x := v.value.(type) {
+	case float64:
+		return fmt.Sprintf("%v", x), nil
+	case int64:
+		return fmt.Sprintf("%v", x), nil
+	case string:
+		return x, nil
+	case []byte:
+		return string(x), nil
+	case bool:
+		return fmt.Sprintf("%v", x), nil
+	case nil:
 		// FIXME: verify this case is correct
-		return fmt.Sprintf("NULL"), nil
+		return "NULL", nil
 	}
 	// This does not happen
-	return "", nil
+	return "", errCastFailure(fmt.Sprintf("cannot cast %v to string type", v.GetTypeString()))
 }
 
 func timestampCast(v *Value) (t time.Time, _ error) {
-	switch v.vType {
-	case typeString:
-		s, _ := v.ToString()
-		return parseSQLTimestamp(s)
-	case typeBytes:
-		b, _ := v.ToBytes()
-		return parseSQLTimestamp(string(b))
-	case typeTimestamp:
-		t, _ = v.ToTimestamp()
-		return t, nil
+	switch x := v.value.(type) {
+	case string:
+		return parseSQLTimestamp(x)
+	case []byte:
+		return parseSQLTimestamp(string(x))
+	case time.Time:
+		return x, nil
 	default:
 		return t, errCastFailure(fmt.Sprintf("cannot cast %v to Timestamp type", v.GetTypeString()))
 	}
@@ -563,16 +551,13 @@ func boolCast(v *Value) (b bool, _ error) {
 			return false, errCastFailure("cannot cast to Bool")
 		}
 	}
-	switch v.vType {
-	case typeBool:
-		b, _ := v.ToBool()
-		return b, nil
-	case typeString:
-		s, _ := v.ToString()
-		return sToB(strings.ToLower(s))
-	case typeBytes:
-		b, _ := v.ToBytes()
-		return sToB(strings.ToLower(string(b)))
+	switch x := v.value.(type) {
+	case bool:
+		return x, nil
+	case string:
+		return sToB(strings.ToLower(x))
+	case []byte:
+		return sToB(strings.ToLower(string(x)))
 	default:
 		return false, errCastFailure("cannot cast %v to Bool")
 	}

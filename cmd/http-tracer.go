@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/handlers"
 	trace "github.com/minio/minio/pkg/trace"
 )
 
@@ -175,7 +176,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	name := getOpName(runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name())
 
 	// Setup a http request body recorder
-	reqHeaders := cloneHeader(r.Header)
+	reqHeaders := r.Header.Clone()
 	reqHeaders.Set("Content-Length", strconv.Itoa(int(r.ContentLength)))
 	reqHeaders.Set("Host", r.Host)
 	for _, enc := range r.TransferEncoding {
@@ -200,7 +201,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 		Method:   r.Method,
 		Path:     r.URL.Path,
 		RawQuery: r.URL.RawQuery,
-		Client:   r.RemoteAddr,
+		Client:   handlers.GetSourceIP(r),
 		Headers:  reqHeaders,
 		Body:     reqBodyRecorder.Data(),
 	}
@@ -211,7 +212,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 
 	rs := trace.ResponseInfo{
 		Time:       time.Now().UTC(),
-		Headers:    cloneHeader(respBodyRecorder.Header()),
+		Headers:    respBodyRecorder.Header().Clone(),
 		StatusCode: respBodyRecorder.statusCode,
 		Body:       respBodyRecorder.Body(),
 	}

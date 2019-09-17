@@ -29,7 +29,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -53,23 +52,11 @@ func IsErrIgnored(err error, ignoredErrs ...error) bool {
 // IsErr returns whether given error is exact error.
 func IsErr(err error, errs ...error) bool {
 	for _, exactErr := range errs {
-		if err == exactErr {
+		if errors.Is(err, exactErr) {
 			return true
 		}
 	}
 	return false
-}
-
-// make a copy of http.Header
-func cloneHeader(h http.Header) http.Header {
-	h2 := make(http.Header, len(h))
-	for k, vv := range h {
-		vv2 := make([]string, len(vv))
-		copy(vv2, vv)
-		h2[k] = vv2
-
-	}
-	return h2
 }
 
 func request2BucketObjectName(r *http.Request) (bucketName, objectName string) {
@@ -289,7 +276,7 @@ var globalProfiler minioProfiler
 
 // dump the request into a string in JSON format.
 func dumpRequest(r *http.Request) string {
-	header := cloneHeader(r.Header)
+	header := r.Header.Clone()
 	header.Set("Host", r.Host)
 	// Replace all '%' to '%%' so that printer format parser
 	// to ignore URL encoded values.
@@ -436,43 +423,6 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 		ObjectName:   object,
 	}
 	return logger.SetReqInfo(r.Context(), reqInfo)
-}
-
-// isNetworkOrHostDown - if there was a network error or if the host is down.
-func isNetworkOrHostDown(err error) bool {
-	if err == nil {
-		return false
-	}
-	// We need to figure if the error either a timeout
-	// or a non-temporary error.
-	e, ok := err.(net.Error)
-	if ok {
-		urlErr, ok := e.(*url.Error)
-		if ok {
-			switch urlErr.Err.(type) {
-			case *net.DNSError, *net.OpError, net.UnknownNetworkError:
-				return true
-			}
-		}
-		if e.Timeout() {
-			return true
-		}
-	}
-	ok = false
-	// Fallback to other mechanisms.
-	if strings.Contains(err.Error(), "Connection closed by foreign host") {
-		ok = true
-	} else if strings.Contains(err.Error(), "TLS handshake timeout") {
-		// If error is - tlsHandshakeTimeoutError.
-		ok = true
-	} else if strings.Contains(err.Error(), "i/o timeout") {
-		// If error is - tcp timeoutError.
-		ok = true
-	} else if strings.Contains(err.Error(), "connection timed out") {
-		// If err is a net.Dial timeout.
-		ok = true
-	}
-	return ok
 }
 
 // Used for registering with rest handlers (have a look at registerStorageRESTHandlers for usage example)

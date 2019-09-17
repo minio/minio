@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -34,28 +35,6 @@ var (
 	errCmpInvalidBoolOperator = errors.New("invalid comparison operator for boolean arguments")
 )
 
-// vType represents the concrete type of a `Value`
-type vType int
-
-// Valid values for Type
-const (
-	typeNull vType = iota + 1
-	typeBool
-	typeString
-
-	// 64-bit signed integer
-	typeInt
-
-	// 64-bit floating point
-	typeFloat
-
-	// timestamp type
-	typeTimestamp
-
-	// This type refers to untyped values, e.g. as read from CSV
-	typeBytes
-)
-
 // Value represents a value of restricted type reduced from an
 // expression represented by an ASTNode. Only one of the fields is
 // non-nil.
@@ -65,43 +44,42 @@ const (
 // used.
 type Value struct {
 	value interface{}
-	vType vType
 }
 
 // GetTypeString returns a string representation for vType
-func (v *Value) GetTypeString() string {
-	switch v.vType {
-	case typeNull:
+func (v Value) GetTypeString() string {
+	switch v.value.(type) {
+	case nil:
 		return "NULL"
-	case typeBool:
+	case bool:
 		return "BOOL"
-	case typeString:
+	case string:
 		return "STRING"
-	case typeInt:
+	case int64:
 		return "INT"
-	case typeFloat:
+	case float64:
 		return "FLOAT"
-	case typeTimestamp:
+	case time.Time:
 		return "TIMESTAMP"
-	case typeBytes:
+	case []byte:
 		return "BYTES"
 	}
 	return "--"
 }
 
 // Repr returns a string representation of value.
-func (v *Value) Repr() string {
-	switch v.vType {
-	case typeNull:
+func (v Value) Repr() string {
+	switch x := v.value.(type) {
+	case nil:
 		return ":NULL"
-	case typeBool, typeInt, typeFloat:
+	case bool, int64, float64:
 		return fmt.Sprintf("%v:%s", v.value, v.GetTypeString())
-	case typeTimestamp:
-		return fmt.Sprintf("%s:TIMESTAMP", v.value.(time.Time))
-	case typeString:
-		return fmt.Sprintf("\"%s\":%s", v.value.(string), v.GetTypeString())
-	case typeBytes:
-		return fmt.Sprintf("\"%s\":BYTES", string(v.value.([]byte)))
+	case time.Time:
+		return fmt.Sprintf("%s:TIMESTAMP", x)
+	case string:
+		return fmt.Sprintf("\"%s\":%s", x, v.GetTypeString())
+	case []byte:
+		return fmt.Sprintf("\"%s\":BYTES", string(x))
 	default:
 		return fmt.Sprintf("%v:INVALID", v.value)
 	}
@@ -109,154 +87,174 @@ func (v *Value) Repr() string {
 
 // FromFloat creates a Value from a number
 func FromFloat(f float64) *Value {
-	return &Value{value: f, vType: typeFloat}
+	return &Value{value: f}
 }
 
 // FromInt creates a Value from an int
 func FromInt(f int64) *Value {
-	return &Value{value: f, vType: typeInt}
+	return &Value{value: f}
 }
 
 // FromString creates a Value from a string
 func FromString(str string) *Value {
-	return &Value{value: str, vType: typeString}
+	return &Value{value: str}
 }
 
 // FromBool creates a Value from a bool
 func FromBool(b bool) *Value {
-	return &Value{value: b, vType: typeBool}
+	return &Value{value: b}
 }
 
 // FromTimestamp creates a Value from a timestamp
 func FromTimestamp(t time.Time) *Value {
-	return &Value{value: t, vType: typeTimestamp}
+	return &Value{value: t}
 }
 
 // FromNull creates a Value with Null value
 func FromNull() *Value {
-	return &Value{vType: typeNull}
+	return &Value{value: nil}
 }
 
 // FromBytes creates a Value from a []byte
 func FromBytes(b []byte) *Value {
-	return &Value{value: b, vType: typeBytes}
+	return &Value{value: b}
 }
 
 // ToFloat works for int and float values
-func (v *Value) ToFloat() (val float64, ok bool) {
-	switch v.vType {
-	case typeFloat:
-		val, ok = v.value.(float64)
-	case typeInt:
-		var i int64
-		i, ok = v.value.(int64)
-		val = float64(i)
-	default:
+func (v Value) ToFloat() (val float64, ok bool) {
+	switch x := v.value.(type) {
+	case float64:
+		return x, true
+	case int64:
+		return float64(x), true
 	}
-	return
+	return 0, false
 }
 
 // ToInt converts value to int.
-func (v *Value) ToInt() (val int64, ok bool) {
-	switch v.vType {
-	case typeInt:
-		val, ok = v.value.(int64)
-	default:
-	}
+func (v Value) ToInt() (val int64, ok bool) {
+	val, ok = v.value.(int64)
 	return
 }
 
 // ToString converts value to string.
-func (v *Value) ToString() (val string, ok bool) {
-	switch v.vType {
-	case typeString:
-		val, ok = v.value.(string)
-	default:
-	}
+func (v Value) ToString() (val string, ok bool) {
+	val, ok = v.value.(string)
 	return
+}
+
+// Equals returns whether the values strictly match.
+// Both type and value must match.
+func (v Value) Equals(b Value) (ok bool) {
+	if !v.SameTypeAs(b) {
+		return false
+	}
+	return reflect.DeepEqual(v.value, b.value)
+}
+
+// SameTypeAs return whether the two types are strictly the same.
+func (v Value) SameTypeAs(b Value) (ok bool) {
+	switch v.value.(type) {
+	case bool:
+		_, ok = b.value.(bool)
+	case string:
+		_, ok = b.value.(string)
+	case int64:
+		_, ok = b.value.(int64)
+	case float64:
+		_, ok = b.value.(float64)
+	case time.Time:
+		_, ok = b.value.(time.Time)
+	case []byte:
+		_, ok = b.value.([]byte)
+	default:
+		ok = reflect.TypeOf(v.value) == reflect.TypeOf(b.value)
+	}
+	return ok
 }
 
 // ToBool returns the bool value; second return value refers to if the bool
 // conversion succeeded.
-func (v *Value) ToBool() (val bool, ok bool) {
-	switch v.vType {
-	case typeBool:
-		return v.value.(bool), true
-	}
-	return false, false
+func (v Value) ToBool() (val bool, ok bool) {
+	val, ok = v.value.(bool)
+	return
 }
 
 // ToTimestamp returns the timestamp value if present.
-func (v *Value) ToTimestamp() (t time.Time, ok bool) {
-	switch v.vType {
-	case typeTimestamp:
-		return v.value.(time.Time), true
-	}
-	return t, false
+func (v Value) ToTimestamp() (t time.Time, ok bool) {
+	t, ok = v.value.(time.Time)
+	return
 }
 
 // ToBytes converts Value to byte-slice.
-func (v *Value) ToBytes() ([]byte, bool) {
-	switch v.vType {
-	case typeBytes:
-		return v.value.([]byte), true
-	}
-	return nil, false
+func (v Value) ToBytes() (val []byte, ok bool) {
+	val, ok = v.value.([]byte)
+	return
 }
 
 // IsNull - checks if value is missing.
-func (v *Value) IsNull() bool {
-	return v.vType == typeNull
+func (v Value) IsNull() bool {
+	switch v.value.(type) {
+	case nil:
+		return true
+	}
+	return false
 }
 
-func (v *Value) isNumeric() bool {
-	return v.vType == typeInt || v.vType == typeFloat
+func (v Value) isNumeric() bool {
+	switch v.value.(type) {
+	case int64, float64:
+		return true
+	}
+	return false
 }
 
 // setters used internally to mutate values
 
 func (v *Value) setInt(i int64) {
-	v.vType = typeInt
 	v.value = i
 }
 
 func (v *Value) setFloat(f float64) {
-	v.vType = typeFloat
 	v.value = f
 }
 
 func (v *Value) setString(s string) {
-	v.vType = typeString
 	v.value = s
 }
 
 func (v *Value) setBool(b bool) {
-	v.vType = typeBool
 	v.value = b
 }
 
 func (v *Value) setTimestamp(t time.Time) {
-	v.vType = typeTimestamp
 	v.value = t
 }
 
+func (v Value) String() string {
+	return fmt.Sprintf("%#v", v.value)
+}
+
 // CSVString - convert to string for CSV serialization
-func (v *Value) CSVString() string {
-	switch v.vType {
-	case typeNull:
+func (v Value) CSVString() string {
+	switch x := v.value.(type) {
+	case nil:
 		return ""
-	case typeBool:
-		return fmt.Sprintf("%v", v.value.(bool))
-	case typeString:
-		return v.value.(string)
-	case typeInt:
-		return fmt.Sprintf("%v", v.value.(int64))
-	case typeFloat:
-		return fmt.Sprintf("%v", v.value.(float64))
-	case typeTimestamp:
-		return FormatSQLTimestamp(v.value.(time.Time))
-	case typeBytes:
-		return fmt.Sprintf("%v", string(v.value.([]byte)))
+	case bool:
+		if x {
+			return "true"
+		}
+		return "false"
+	case string:
+		return x
+	case int64:
+		return strconv.FormatInt(x, 10)
+	case float64:
+		return strconv.FormatFloat(x, 'g', -1, 64)
+	case time.Time:
+		return FormatSQLTimestamp(x)
+	case []byte:
+		return string(x)
 	default:
 		return "CSV serialization not implemented for this type"
 	}
@@ -273,11 +271,11 @@ func floatToValue(f float64) *Value {
 
 // negate negates a numeric value
 func (v *Value) negate() {
-	switch v.vType {
-	case typeFloat:
-		v.value = -(v.value.(float64))
-	case typeInt:
-		v.value = -(v.value.(int64))
+	switch x := v.value.(type) {
+	case float64:
+		v.value = -x
+	case int64:
+		v.value = -x
 	}
 }
 
@@ -411,25 +409,25 @@ func inferTypesForCmp(a *Value, b *Value) error {
 	case okA && !okB:
 		// Here a has `a` is untyped, but `b` has a fixed
 		// type.
-		switch b.vType {
-		case typeString:
+		switch b.value.(type) {
+		case string:
 			s := a.bytesToString()
 			a.setString(s)
 
-		case typeInt, typeFloat:
+		case int64, float64:
 			if iA, ok := a.bytesToInt(); ok {
 				a.setInt(iA)
 			} else if fA, ok := a.bytesToFloat(); ok {
 				a.setFloat(fA)
 			} else {
-				return fmt.Errorf("Could not convert %s to a number", string(a.value.([]byte)))
+				return fmt.Errorf("Could not convert %s to a number", a.String())
 			}
 
-		case typeBool:
+		case bool:
 			if bA, ok := a.bytesToBool(); ok {
 				a.setBool(bA)
 			} else {
-				return fmt.Errorf("Could not convert %s to a boolean", string(a.value.([]byte)))
+				return fmt.Errorf("Could not convert %s to a boolean", a.String())
 			}
 
 		default:

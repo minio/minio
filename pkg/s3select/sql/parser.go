@@ -99,10 +99,14 @@ type JSONPathElement struct {
 	ArrayWildcard  bool       `parser:"| @\"[*]\""`            // [*] form
 }
 
-// JSONPath represents a keypath
+// JSONPath represents a keypath.
+// Instances should be treated idempotent and not change once created.
 type JSONPath struct {
 	BaseKey  *Identifier        `parser:" @@"`
 	PathExpr []*JSONPathElement `parser:"(@@)*"`
+
+	// Cached values:
+	pathString string
 }
 
 // AliasedExpression is an expression that can be optionally named

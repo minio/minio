@@ -325,7 +325,7 @@ func quorumUnformattedDisks(errs []error) bool {
 // loadFormatXLAll - load all format config from all input disks in parallel.
 func loadFormatXLAll(storageDisks []StorageAPI) ([]*formatXLV3, []error) {
 	// Initialize sync waitgroup.
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 
 	// Initialize list of errors.
 	var sErrs = make([]error, len(storageDisks))
@@ -652,7 +652,7 @@ func formatXLV3Check(reference *formatXLV3, format *formatXLV3) error {
 func saveFormatXLAll(ctx context.Context, storageDisks []StorageAPI, formats []*formatXLV3) error {
 	var errs = make([]error, len(storageDisks))
 
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 
 	// Write `format.json` to all disks.
 	for index, disk := range storageDisks {
@@ -812,7 +812,7 @@ func initFormatXLMetaVolume(storageDisks []StorageAPI, formats []*formatXLV3) er
 	// This happens for the first time, but keep this here since this
 	// is the only place where it can be made expensive optimizing all
 	// other calls. Create minio meta volume, if it doesn't exist yet.
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 
 	// Initialize errs to collect errors inside go-routine.
 	var errs = make([]error, len(storageDisks))

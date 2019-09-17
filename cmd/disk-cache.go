@@ -14,7 +14,6 @@ import (
 
 	"github.com/djherbis/atime"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/wildcard"
 )
 
@@ -449,7 +448,7 @@ func checkAtimeSupport(dir string) (err error) {
 func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
 	logger.StartupMessage(colorBlue("Cache migration initiated ...."))
 
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	errs := make([]error, len(c.cache))
 	for i, dc := range c.cache {
 		if dc == nil {
@@ -489,7 +488,6 @@ func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
 // PutObject - caches the uploaded object for single Put operations
 func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	putObjectFn := c.PutObjectFn
-	data := r.rawReader
 	dcache, err := c.getCacheToLoc(ctx, bucket, object)
 	if err != nil {
 		// disk cache could not be located,execute backend call.
@@ -513,52 +511,24 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 		dcache.Delete(ctx, bucket, object)
 		return putObjectFn(ctx, bucket, object, r, opts)
 	}
-	// Initialize pipe to stream data to backend
-	pipeReader, pipeWriter := io.Pipe()
-	hashReader, err := hash.NewReader(pipeReader, size, "", "", data.ActualSize(), globalCLIContext.StrictS3Compat)
-	if err != nil {
-		return ObjectInfo{}, err
-	}
-	// Initialize pipe to stream data to cache
-	rPipe, wPipe := io.Pipe()
 
-	oinfoCh := make(chan ObjectInfo)
-	errCh := make(chan error)
-	go func() {
-		oinfo, perr := putObjectFn(ctx, bucket, object, NewPutObjReader(hashReader, nil, nil), opts)
-		if perr != nil {
-			pipeWriter.CloseWithError(perr)
-			wPipe.CloseWithError(perr)
-			close(oinfoCh)
-			errCh <- perr
-			return
-		}
-		close(errCh)
-		oinfoCh <- oinfo
-	}()
-	// get a namespace lock on cache until cache is filled.
-	cLock := c.nsMutex.NewNSLock(ctx, bucket, object)
-	if err := cLock.GetLock(globalObjectTimeout); err != nil {
-		return ObjectInfo{}, err
-	}
-	defer cLock.Unlock()
-	go func() {
-		if err = dcache.Put(ctx, bucket, object, rPipe, data.Size(), opts); err != nil {
-			wPipe.CloseWithError(err)
-			return
-		}
-	}()
+	objInfo, err = putObjectFn(ctx, bucket, object, r, opts)
 
-	mwriter := io.MultiWriter(pipeWriter, wPipe)
-	_, err = io.Copy(mwriter, data)
-	if err != nil {
-		err = <-errCh
-		return objInfo, err
+	if err == nil {
+		go func() {
+			// fill cache in the background
+			bReader, bErr := c.GetObjectNInfoFn(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{})
+			if bErr != nil {
+				return
+			}
+			defer bReader.Close()
+			oi, err := c.stat(ctx, dcache, bucket, object)
+			// avoid cache overwrite if another background routine filled cache
+			if err != nil || oi.ETag != bReader.ObjInfo.ETag {
+				c.put(ctx, dcache, bucket, object, bReader, bReader.ObjInfo.Size, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)})
+			}
+		}()
 	}
-	pipeWriter.Close()
-	wPipe.Close()
-	objInfo = <-oinfoCh
-	dcache.updateETag(ctx, bucket, object, objInfo.ETag)
 
 	return objInfo, err
 

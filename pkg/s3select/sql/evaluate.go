@@ -238,12 +238,11 @@ func (e *In) evalInNode(r Record, arg *Value) (*Value, error) {
 		// FIXME: type inference?
 
 		// Types must match.
-		if arg.vType != eltVal.vType {
+		if !arg.SameTypeAs(*eltVal) {
 			// match failed.
 			continue
 		}
-
-		if arg.value == eltVal.value {
+		if arg.Equals(*eltVal) {
 			result = true
 			break
 		}
@@ -318,9 +317,11 @@ func (e *UnaryTerm) evalNode(r Record) (*Value, error) {
 func (e *JSONPath) evalNode(r Record) (*Value, error) {
 	// Strip the table name from the keypath.
 	keypath := e.String()
-	ps := strings.SplitN(keypath, ".", 2)
-	if len(ps) == 2 {
-		keypath = ps[1]
+	if strings.Contains(keypath, ".") {
+		ps := strings.SplitN(keypath, ".", 2)
+		if len(ps) == 2 {
+			keypath = ps[1]
+		}
 	}
 	objFmt, rawVal := r.Raw()
 	switch objFmt {

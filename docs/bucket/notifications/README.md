@@ -1047,7 +1047,59 @@ mc cp myphoto.jpg myminio/images
 
 ```
 kafkacat -b localhost:9092 -t bucketevents
-{"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jpg","Records":[{"eventVersion":"2.0","eventSource":"aws:s3","awsRegion":"","eventTime":"2017-01-31T10:01:51Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"88QR09S7IOT4X1IBAQ9B"},"requestParameters":{"sourceIPAddress":"192.173.5.2:57904"},"responseElements":{"x-amz-request-id":"149ED2FD25589220","x-minio-origin-endpoint":"http://192.173.5.2:9000"},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"88QR09S7IOT4X1IBAQ9B"},"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg","size":541596,"eTag":"04451d05b4faf4d62f3d538156115e2a","sequencer":"149ED2FD25589220"}}}],"level":"info","msg":"","time":"2017-01-31T15:31:51+05:30"}
+{
+    "EventName": "s3:ObjectCreated:Put",
+    "Key": "images/myphoto.jpg",
+    "Records": [
+        {
+            "eventVersion": "2.0",
+            "eventSource": "minio:s3",
+            "awsRegion": "",
+            "eventTime": "2019-09-10T17:41:54Z",
+            "eventName": "s3:ObjectCreated:Put",
+            "userIdentity": {
+                "principalId": "AKIAIOSFODNN7EXAMPLE"
+            },
+            "requestParameters": {
+                "accessKey": "AKIAIOSFODNN7EXAMPLE",
+                "region": "",
+                "sourceIPAddress": "192.168.56.192"
+            },
+            "responseElements": {
+                "x-amz-request-id": "15C3249451E12784",
+                "x-minio-deployment-id": "751a8ba6-acb2-42f6-a297-4cdf1cf1fa4f",
+                "x-minio-origin-endpoint": "http://192.168.97.83:9000"
+            },
+            "s3": {
+                "s3SchemaVersion": "1.0",
+                "configurationId": "Config",
+                "bucket": {
+                    "name": "images",
+                    "ownerIdentity": {
+                        "principalId": "AKIAIOSFODNN7EXAMPLE"
+                    },
+                    "arn": "arn:aws:s3:::images"
+                },
+                "object": {
+                    "key": "myphoto.jpg",
+                    "size": 6474,
+                    "eTag": "430f89010c77aa34fc8760696da62d08-1",
+                    "contentType": "image/jpeg",
+                    "userMetadata": {
+                        "content-type": "image/jpeg"
+                    },
+                    "versionId": "1",
+                    "sequencer": "15C32494527B46C5"
+                }
+            },
+            "source": {
+                "host": "192.168.56.192",
+                "port": "",
+                "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:69.0) Gecko/20100101 Firefox/69.0"
+            }
+        }
+    ]
+}
 ```
 
 <a name="webhooks"></a>
