@@ -24,10 +24,20 @@ Compression can be enabled by updating the `compress` config settings for MinIO 
 }
 ```
 
-Having compression enabled and no extensions or mime types will attempt to compress anything that isn't explicitly known to be already compressed content. 
-
 Since text, log, csv, json files are highly compressible, These extensions/mime-types are included by default for compression.
-Incompressible content will be skipped with quite low CPU usage, so 
+
+Having compression enabled and no extensions or mime types will attempt to compress anything that isn't explicitly known to be already compressed content. 
+Settings for enabling compression on all content, except for types listed below:
+
+```json
+"compress": {
+        "enabled": true,
+        "extensions": [],
+        "mime-types": []
+}
+```
+
+Incompressible content will be skipped with quite low CPU usage and storage overhead, typically at several GB/s.
 
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio cluster in json format, and save it locally.
 
@@ -75,6 +85,8 @@ export MINIO_COMPRESS_MIMETYPES="application/pdf"
       | `application/x-bz2` |
       | `application/x-compress` |
       | `application/x-xz` |
+
+All files with these extensions and mime types are excluded from compression, even if compression is enabled for all types.
 
 - MinIO does not support encryption with compression because compression and encryption together potentially enables room for side channel attacks like [`CRIME and BREACH`](https://blog.minio.io/c-e-compression-encryption-cb6b7f04a369)
 
