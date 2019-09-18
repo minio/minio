@@ -111,6 +111,7 @@ func getLocalDrivesPerf(endpoints EndpointList, size int64, r *http.Request) mad
 	return madmin.ServerDrivesPerfInfo{
 		Addr: addr,
 		Perf: dps,
+		Size: size,
 	}
 }
 

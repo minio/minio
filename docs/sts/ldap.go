@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"log"
 
-	miniogo "github.com/minio/minio-go"
-	cr "github.com/minio/minio-go/pkg/credentials"
+	miniogo "github.com/minio/minio-go/v6"
+	cr "github.com/minio/minio-go/v6/pkg/credentials"
 )
 
 var (
@@ -35,25 +35,29 @@ var (
 )
 
 func main() {
+	// The credentials package in minio-go provides an interface to call the
+	// LDAP STS API.
 
-	// If client machine is configured as a Kerberos client, just
-	// pass nil instead of `getKrbConfig()` below.
+	// Initialize LDAP credentials
 	li, err := cr.NewLDAPIdentity(stsEndpoint, ldapUsername, ldapPassword)
 	if err != nil {
 		log.Fatalf("INIT Err: %v", err)
 	}
 
+	// Generate temporary STS credentials
 	v, err := li.Get()
 	if err != nil {
 		log.Fatalf("GET Err: %v", err)
 	}
 	fmt.Printf("%#v\n", v)
 
+	// Use generated credentials to authenticate with MinIO server
 	minioClient, err := miniogo.NewWithCredentials("localhost:9000", li, false, "")
 	if err != nil {
 		log.Fatalln(err)
 	}
 
+	// Use minIO Client object normally like the regular client.
 	fmt.Println("Calling list buckets with temp creds:")
 	b, err := minioClient.ListBuckets()
 	if err != nil {
