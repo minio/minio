@@ -514,7 +514,7 @@ func inferTypeForArithOp(a *Value) error {
 		return nil
 	}
 
-	err := fmt.Errorf("Could not convert %s to a number", string(a.value.([]byte)))
+	err := fmt.Errorf("Could not convert %q to a number", string(a.value.([]byte)))
 	return errInvalidDataType(err)
 }
 
@@ -522,29 +522,29 @@ func inferTypeForArithOp(a *Value) error {
 
 // Converts untyped value into int. The bool return implies success -
 // it returns false only if there is a conversion failure.
-func (v *Value) bytesToInt() (int64, bool) {
+func (v Value) bytesToInt() (int64, bool) {
 	bytes, _ := v.ToBytes()
-	i, err := strconv.ParseInt(string(bytes), 10, 64)
+	i, err := strconv.ParseInt(strings.TrimSpace(string(bytes)), 10, 64)
 	return i, err == nil
 }
 
 // Converts untyped value into float. The bool return implies success
 // - it returns false only if there is a conversion failure.
-func (v *Value) bytesToFloat() (float64, bool) {
+func (v Value) bytesToFloat() (float64, bool) {
 	bytes, _ := v.ToBytes()
-	i, err := strconv.ParseFloat(string(bytes), 64)
+	i, err := strconv.ParseFloat(strings.TrimSpace(string(bytes)), 64)
 	return i, err == nil
 }
 
 // Converts untyped value into bool. The second bool return implies
 // success - it returns false in case of a conversion failure.
-func (v *Value) bytesToBool() (val bool, ok bool) {
+func (v Value) bytesToBool() (val bool, ok bool) {
 	bytes, _ := v.ToBytes()
 	ok = true
-	switch strings.ToLower(string(bytes)) {
-	case "t", "true":
+	switch strings.ToLower(strings.TrimSpace(string(bytes))) {
+	case "t", "true", "1":
 		val = true
-	case "f", "false":
+	case "f", "false", "0":
 		val = false
 	default:
 		ok = false
@@ -552,8 +552,8 @@ func (v *Value) bytesToBool() (val bool, ok bool) {
 	return val, ok
 }
 
-// bytesToString - never fails
-func (v *Value) bytesToString() string {
+// bytesToString - never fails, but returns empty string if value is not bytes.
+func (v Value) bytesToString() string {
 	bytes, _ := v.ToBytes()
 	return string(bytes)
 }
