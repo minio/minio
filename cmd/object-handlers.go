@@ -26,6 +26,7 @@ import (
 	goioutil "io/ioutil"
 	"net/http"
 	"net/url"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -2405,5 +2406,14 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		}
 		// Ignore delete object errors while replying to client, since we are suppposed to reply only 204.
 	}
+
+	// The delete succeeded - now try to delete the secret key if present.
+	if api.CacheAPI() == nil && objectAPI.IsEncryptionSupported() && GlobalKeyStore != nil {
+		if err := GlobalKeyStore.Delete(path.Join(bucket, object)); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+	}
+
 	writeSuccessNoContent(w)
 }

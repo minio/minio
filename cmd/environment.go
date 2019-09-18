@@ -80,6 +80,11 @@ const (
 	EnvVaultKeyStore = "MINIO_SSE_VAULT_KEY_STORE"
 )
 
+// KeyStoreFeature is a feature flag that disables
+// the key store feature. Remove it as soon as we
+// officially support a key store.
+const KeyStoreFeature = false
+
 // Environment provides functions for accessing environment
 // variables.
 var Environment = environment{}
@@ -154,7 +159,7 @@ func (env environment) LookupKMSConfig(config crypto.KMSConfig) (err error) {
 				return err
 			}
 			globalKMSKeyID = config.Vault.Key.Name
-		case config.Vault.KeyStorePath != "":
+		case config.Vault.KeyStorePath != "" && KeyStoreFeature:
 			GlobalKeyStore, err = crypto.NewVaultKeyStore(config.Vault)
 			if err != nil {
 				return err

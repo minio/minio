@@ -423,18 +423,34 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	var deleteErrors []DeleteError
 	for index, errCode := range dErrs {
 		object := deleteObjects.Objects[index]
-		// Success deleted objects are collected separately.
-		if errCode == ErrNone || errCode == ErrNoSuchKey {
-			deletedObjects = append(deletedObjects, object)
+
+		if errCode != ErrNone && errCode != ErrNoSuchKey {
+			apiErr := getAPIError(errCode)
+			// Error during delete should be collected separately.
+			deleteErrors = append(deleteErrors, DeleteError{
+				Code:    apiErr.Code,
+				Message: apiErr.Description,
+				Key:     object.ObjectName,
+			})
 			continue
 		}
-		apiErr := getAPIError(errCode)
-		// Error during delete should be collected separately.
-		deleteErrors = append(deleteErrors, DeleteError{
-			Code:    apiErr.Code,
-			Message: apiErr.Description,
-			Key:     object.ObjectName,
-		})
+
+		// The delete operation succeeded - now try to delete the secret key if present.
+		if api.CacheAPI() == nil && objectAPI.IsEncryptionSupported() && GlobalKeyStore != nil {
+			if err = GlobalKeyStore.Delete(path.Join(bucket, object.ObjectName)); err != nil {
+				apiErr := getAPIError(errCode)
+				// Error during delete should be collected separately.
+				deleteErrors = append(deleteErrors, DeleteError{
+					Code:    apiErr.Code,
+					Message: apiErr.Description,
+					Key:     object.ObjectName,
+				})
+				continue
+			}
+		}
+
+		// Success deleted objects are collected separately.
+		deletedObjects = append(deletedObjects, object)
 	}
 
 	// Generate response

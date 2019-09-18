@@ -74,12 +74,31 @@ func (s3) String() string { return "SSE-S3" }
 // UnsealObjectKey extracts and decrypts the sealed object key
 // from the metadata using KMS and returns the decrypted object
 // key.
-func (sse s3) UnsealObjectKey(kms KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
+func (sse s3) UnsealObjectKeyWithKMS(kms KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
 	keyID, kmsKey, sealedKey, err := sse.ParseMetadata(metadata)
 	if err != nil {
 		return
 	}
 	unsealKey, err := kms.UnsealKey(keyID, kmsKey, Context{bucket: path.Join(bucket, object)})
+	if err != nil {
+		return
+	}
+	err = key.Unseal(unsealKey, sealedKey, sse.String(), bucket, object)
+	return
+}
+
+// UnsealObjectKeyWithKeyStore extracts and decrypts the sealed object key
+// from the metadata using the KeyStore and returns the decrypted object
+// key.
+func (sse s3) UnsealObjectKeyWithKeyStore(store KeyStore, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
+	keyID, kmsKey, sealedKey, err := sse.ParseMetadata(metadata)
+	if err != nil {
+		return
+	}
+	if keyID != "" || len(kmsKey) != 0 {
+		return key, Error{"The object seems to be encrypted using a KMS master key but no KMS is available"}
+	}
+	unsealKey, err := store.Load(path.Join(bucket, object))
 	if err != nil {
 		return
 	}

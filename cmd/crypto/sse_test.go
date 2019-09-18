@@ -219,7 +219,7 @@ var s3UnsealObjectKeyTests = []struct {
 
 func TestS3UnsealObjectKey(t *testing.T) {
 	for i, test := range s3UnsealObjectKeyTests {
-		if _, err := S3.UnsealObjectKey(test.KMS, test.Metadata, test.Bucket, test.Object); err != test.ExpectedErr {
+		if _, err := S3.UnsealObjectKeyWithKMS(test.KMS, test.Metadata, test.Bucket, test.Object); err != test.ExpectedErr {
 			t.Errorf("Test %d: got: %v - want: %v", i, err, test.ExpectedErr)
 		}
 	}
