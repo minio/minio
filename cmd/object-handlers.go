@@ -707,6 +707,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidMetadataDirective), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	// This request header needs to be set prior to setting ObjectOptions
 	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
@@ -733,11 +734,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
-
-	// Deny if WORM is enabled. If operation is key rotation of SSE-S3 encrypted object
-	// allow the operation
-	if globalWORMEnabled && !(cpSrcDstSame && crypto.S3.IsRequested(r.Header)) {
-		if _, err = objectAPI.GetObjectInfo(ctx, dstBucket, dstObject, dstOpts); err == nil {
+	if globalWORMEnabled { // Deny if WORM is enabled.
+		if _, err := objectAPI.GetObjectInfo(ctx, dstBucket, dstObject, dstOpts); err == nil {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
 			return
 		}
@@ -775,11 +773,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Deny if WORM is enabled, and it is not a SSE-S3 -> SSE-S3 key rotation or if metadata replacement is requested.
-	if globalWORMEnabled && cpSrcDstSame && (!crypto.S3.IsEncrypted(srcInfo.UserDefined) || isMetadataReplace(r.Header)) {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
-		return
-	}
 	// We have to copy metadata only if source and destination are same.
 	// this changes for encryption which can be observed below.
 	if cpSrcDstSame {
@@ -866,13 +859,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// - the object is encrypted using SSE-S3 and the SSE-S3 header is present
 		// than execute a key rotation.
 		var keyRotation bool
-		if cpSrcDstSame && ((sseCopyC && sseC) || (sseS3 && sseCopyS3)) {
-			if sseCopyC && sseC {
-				oldKey, err = ParseSSECopyCustomerRequest(r.Header, srcInfo.UserDefined)
-				if err != nil {
-					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-					return
-				}
+		if cpSrcDstSame && (sseCopyC && sseC) {
+			oldKey, err = ParseSSECopyCustomerRequest(r.Header, srcInfo.UserDefined)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				return
 			}
 
 			for k, v := range srcInfo.UserDefined {

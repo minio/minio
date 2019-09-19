@@ -158,12 +158,11 @@ component that performs key sealing/unsealing operations to build a key hierarch
 
 #### Key rotation - Basic Operation
 
-The MinIO server supports key rotation for SSE-S3 encrypted objects. Therefore, an S3 client 
-must perform a S3 COPY operation where the copy source and destination are equal and the SSE-S3 HTTP 
-header is set. The minio server decrypts the OEK using the current encrypted data key and the
-master key ID of the object metadata. If this succeeds, the server requests a new data key
-from the KMS using the master key ID of the **current MinIO KMS configuration** and re-wraps the
-*OEK* with a new *KEK* derived from the new data key / EK:
+The MinIO server supports key rotation for SSE-S3 encrypted objects. The minio server decrypts 
+the OEK using the current encrypted data key and the master key ID of the object metadata. If
+this succeeds, the server requests a new data key from the KMS using the master key ID of
+the **current MinIO KMS configuration** and re-wraps the *OEK* with a new *KEK* derived from
+the new data key / EK:
 
 ```
               object metadata                                         KMS
@@ -203,21 +202,10 @@ from the KMS using the master key ID of the **current MinIO KMS configuration** 
  ```
 <center>Figure 3 - KMS data key rotation</center>
 
-#### Key rotation - Extensions
-
-The basic SSE-S3 key rotation operation can be used to build more powerful key management 
-operations. The following options are possible to perform manually but do not have fully 
-functional API's at this time.
-
-1. **Master key migration**: The [SSE-S3 key rotation](#Key-rotation---Basic-Operation) can be performed
-                             on multiple/all objects to move them from one to another master key.
-2. **Secure object erasure**: The [SSE-S3 key rotation](#Key-rotation---Basic-Operation) can be applied
-                              to one/multiple objects with a randomly generated master key which is
-                              not stored at the KMS. That leads to an encrypted data key which can
-                              never be decrypted anymore.
-3. **Periodical key migration**: The [SSE-S3 key rotation](#Key-rotation---Basic-Operation) can be 
-                                 invoked after a certain time period to migrate one or more objects
-                                 from one master key to another.
+Only the root/admin user can perform an SSE-S3 key rotation using the Admin-API via [mc](https://github.com/minio/mc).
+For more details about how to perform key management operations using the CLI refer to
+[mc admin guide](https://github.com/minio/mc/blob/master/docs/minio-admin-complete-guide.md)
+or run `mc admin kms key`. 
 
 #### Secure Erasure and Locking
 
