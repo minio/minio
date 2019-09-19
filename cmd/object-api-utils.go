@@ -57,6 +57,12 @@ const (
 	minioMetaTmpBucket = minioMetaBucket + "/tmp"
 	// DNS separator (period), used for bucket name validation.
 	dnsDelimiter = "."
+	// On compressed files bigger than this;
+	compReadAheadSize = 100 << 20
+	// Read this many buffers ahead.
+	compReadAheadBuffers = 5
+	// Size of each buffer.
+	compReadAheadBufSize = 1 << 20
 )
 
 // isMinioBucket returns true if given bucket is a MinIO internal
@@ -616,9 +622,9 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 			}
 
 			decReader := io.LimitReader(s2Reader, decLength)
-			if decLength > 100<<20 {
-				// On big files, read 5x1MB ahead
-				rah, err := readahead.NewReaderSize(decReader, 5, 1<<20)
+			if decLength > compReadAheadSize {
+
+				rah, err := readahead.NewReaderSize(decReader, compReadAheadBuffers, compReadAheadBufSize)
 				if err == nil {
 					decReader = rah
 					cFns = append(cFns, func() {
