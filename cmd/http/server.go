@@ -20,7 +20,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"net/http"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,13 +29,6 @@ import (
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/pkg/certs"
 )
-
-func init() {
-	// Opt-in to TLS 1.3. See: https://golang.org/pkg/crypto/tls
-	// In future Go versions TLS 1.3 probably gets enabled by default.
-	// So, we can remove this line as soon as this is the case.
-	os.Setenv("GODEBUG", os.Getenv("GODEBUG")+",tls13=1")
-}
 
 const (
 	serverShutdownPoll = 500 * time.Millisecond
