@@ -18,6 +18,7 @@ package target
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"net"
@@ -40,6 +41,7 @@ type KafkaArgs struct {
 	QueueLimit uint64      `json:"queueLimit"`
 	TLS        struct {
 		Enable     bool               `json:"enable"`
+		RootCAs    *x509.CertPool     `json:"-"`
 		SkipVerify bool               `json:"skipVerify"`
 		ClientAuth tls.ClientAuthType `json:"clientAuth"`
 	} `json:"tls"`
@@ -198,7 +200,9 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}) (*KafkaTa
 
 	config.Net.TLS.Enable = args.TLS.Enable
 	tlsConfig := &tls.Config{
-		ClientAuth: args.TLS.ClientAuth,
+		ClientAuth:         args.TLS.ClientAuth,
+		InsecureSkipVerify: args.TLS.SkipVerify,
+		RootCAs:            args.TLS.RootCAs,
 	}
 	config.Net.TLS.Config = tlsConfig
 
