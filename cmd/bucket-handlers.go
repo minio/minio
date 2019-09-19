@@ -557,8 +557,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
-	if !api.EncryptionEnabled() && hasServerSideEncryptionHeader(r.Header) {
+	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -715,7 +714,11 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 	if objectAPI.IsEncryptionSupported() {
-		if hasServerSideEncryptionHeader(formValues) && !hasSuffix(object, SlashSeparator) { // handle SSE-C and SSE-S3 requests
+		if crypto.IsRequested(formValues) && !hasSuffix(object, SlashSeparator) { // handle SSE requests
+			if crypto.SSECopy.IsRequested(r.Header) {
+				writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL, guessIsBrowserReq(r))
+				return
+			}
 			var reader io.Reader
 			var key []byte
 			if crypto.SSEC.IsRequested(formValues) {
