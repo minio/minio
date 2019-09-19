@@ -173,7 +173,7 @@ var decryptRequestTests = []struct {
 			crypto.SSECKeyMD5:    "7PpPLAK26ONlVUGOWlusfg==",
 		},
 		metadata: map[string]string{
-			crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256,
+			crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm,
 			crypto.SSEIV:            "7nQqotA8xgrPx6QK7Ap3GCfjKitqJSrGP7xzgErSJlw=",
 			crypto.SSECSealedKey:    "EAAfAAAAAAD7v1hQq3PFRUHsItalxmrJqrOq6FwnbXNarxOOpb8jTWONPPKyM3Gfjkjyj6NCf+aB/VpHCLCTBA==",
 		},
@@ -188,7 +188,7 @@ var decryptRequestTests = []struct {
 			crypto.SSECKeyMD5:    "7PpPLAK26ONlVUGOWlusfg==",
 		},
 		metadata: map[string]string{
-			crypto.SSESealAlgorithm: SSESealAlgorithmDareV2HmacSha256,
+			crypto.SSESealAlgorithm: crypto.SealAlgorithm,
 			crypto.SSEIV:            "qEqmsONcorqlcZXJxaw32H04eyXyXwUgjHzlhkaIYrU=",
 			crypto.SSECSealedKey:    "IAAfAIM14ugTGcM/dIrn4iQMrkl1sjKyeBQ8FBEvRebYj8vWvxG+0cJRpC6NXRU1wJN50JaUOATjO7kz0wZ2mA==",
 		},
@@ -218,7 +218,7 @@ var decryptRequestTests = []struct {
 			crypto.SSECKeyMD5:    "bY4wkxQejw9mUJfo72k53A==",
 		},
 		metadata: map[string]string{
-			crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256,
+			crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm,
 			crypto.SSEIV:            "RrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
 			crypto.SSECSealedKey:    "SY5E9AvI2tI7/nUrUAssIGE32Hcs4rR9z/CUuPqu5N4=",
 		},
@@ -233,7 +233,7 @@ var decryptRequestTests = []struct {
 			crypto.SSECKeyMD5:    "bY4wkxQejw9mUJfo72k53A==",
 		},
 		metadata: map[string]string{
-			crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256,
+			crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm,
 			crypto.SSEIV:            "XAm0dRrJsEsyPb1UuFNezv1bl9ehxuYsgUVC/MUctE2k=",
 			crypto.SSECSealedKey:    "SY5E9AvI2tI7/nUrUAssIGE32Hds4rR9z/CUuPqu5N4=",
 		},
@@ -248,7 +248,7 @@ var decryptRequestTests = []struct {
 			crypto.SSECKeyMD5:    "7PpPLAK26ONlVUGOWlusfg==",
 		},
 		metadata: map[string]string{
-			crypto.SSESealAlgorithm: SSESealAlgorithmDareV2HmacSha256,
+			crypto.SSESealAlgorithm: crypto.SealAlgorithm,
 			crypto.SSEIV:            "qEqmsONcorqlcZXJxaw32H04eyXyXwUgjHzlhkaIYrU=",
 			crypto.SSECSealedKey:    "IAAfAIM14ugTGcM/dIrn4iQMrkl1sjKyeBQ8FBEvRebYj8vWvxG+0cJRpC6NXRU1wJN50JaUOATjO7kz0wZ2mA==",
 		},
@@ -298,12 +298,12 @@ var decryptObjectInfoTests = []struct {
 		expErr:  nil,
 	},
 	{
-		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256}},
+		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm}},
 		headers: http.Header{crypto.SSECAlgorithm: []string{crypto.SSEAlgorithmAES256}},
 		expErr:  nil,
 	},
 	{
-		info:    ObjectInfo{Size: 0, UserDefined: map[string]string{crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256}},
+		info:    ObjectInfo{Size: 0, UserDefined: map[string]string{crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm}},
 		headers: http.Header{crypto.SSECAlgorithm: []string{crypto.SSEAlgorithmAES256}},
 		expErr:  nil,
 	},
@@ -318,7 +318,7 @@ var decryptObjectInfoTests = []struct {
 		expErr:  errInvalidEncryptionParameters,
 	},
 	{
-		info:    ObjectInfo{Size: 31, UserDefined: map[string]string{crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256}},
+		info:    ObjectInfo{Size: 31, UserDefined: map[string]string{crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm}},
 		headers: http.Header{crypto.SSECAlgorithm: []string{crypto.SSEAlgorithmAES256}},
 		expErr:  errObjectTampered,
 	},
@@ -408,7 +408,7 @@ func TestGetDecryptedRange(t *testing.T) {
 		}
 		udMap = func(isMulti bool) map[string]string {
 			m := map[string]string{
-				crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256,
+				crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm,
 				crypto.SSEMultipart:     "1",
 			}
 			if !isMulti {
