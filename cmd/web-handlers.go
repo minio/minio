@@ -34,7 +34,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
-	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/compress/zip"
 	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
@@ -1334,37 +1333,10 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				UncompressedSize64: uint64(length),
 				UncompressedSize:   uint32(length),
 			}
-			zipWriter, err := archive.CreateHeader(header)
+			writer, err := archive.CreateHeader(header)
 			if err != nil {
 				writeWebErrorResponse(w, errUnexpected)
 				return err
-			}
-			var writer io.Writer
-
-			if comp, err := info.IsCompressedOK(); comp {
-				if err != nil {
-					return err
-				}
-				// Open a pipe for compression
-				// Where compressWriter is actually passed to the getObject
-				decompressReader, compressWriter := io.Pipe()
-				s2Reader := s2.NewReader(decompressReader)
-
-				// The limit is set to the actual size.
-				responseWriter := ioutil.LimitedWriter(zipWriter, 0, actualSize)
-				wg.Add(1) //For closures.
-				go func() {
-					defer wg.Done()
-					// Finally, writes to the client.
-					_, perr := io.Copy(responseWriter, s2Reader)
-
-					// Close the compressWriter if the data is read already.
-					// Closing the pipe, releases the writer passed to the getObject.
-					compressWriter.CloseWithError(perr)
-				}()
-				writer = compressWriter
-			} else {
-				writer = zipWriter
 			}
 			httpWriter := ioutil.WriteOnClose(writer)
 
