@@ -63,12 +63,6 @@ const (
 
 )
 
-// hasServerSideEncryptionHeader returns true if the given HTTP header
-// contains server-side-encryption.
-func hasServerSideEncryptionHeader(header http.Header) bool {
-	return crypto.S3.IsRequested(header) || crypto.SSEC.IsRequested(header)
-}
-
 // isEncryptedMultipart returns true if the current object is
 // uploaded by the user using multipart mechanism:
 // initiate new multipart, upload part, complete upload
