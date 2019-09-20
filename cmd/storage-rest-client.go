@@ -281,10 +281,7 @@ func (client *storageRESTClient) ReadFileStream(volume, path string, offset, len
 	if err != nil {
 		return nil, err
 	}
-	return struct {
-		io.Reader
-		io.Closer
-	}{Reader: respBody, Closer: respBody}, nil
+	return respBody, nil
 }
 
 // ReadFile - reads section of a file.

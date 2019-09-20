@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/klauspost/compress/s2"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 )
@@ -360,9 +359,11 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 	}
 	defer rc.Close()
 
-	sw := s2.NewWriter(w)
-	io.Copy(sw, rc)
-	sw.Close()
+	w.Header().Set(xhttp.ContentLength, strconv.Itoa(length))
+
+	io.Copy(w, rc)
+	w.(http.Flusher).Flush()
+
 }
 
 // readMetadata func provides the function types for reading leaf metadata.
