@@ -5,7 +5,9 @@ LDFLAGS := $(shell go run buildscripts/gen-ldflags.go)
 GOARCH := $(shell go env GOARCH)
 GOOS := $(shell go env GOOS)
 
-TAG ?= $(USER)
+VERSION ?= $(shell git describe --tags)
+TAG ?= "minio/minio:$(VERSION)"
+
 BUILD_LDFLAGS := '$(LDFLAGS)'
 
 all: build
