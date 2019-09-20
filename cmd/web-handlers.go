@@ -1341,7 +1341,10 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			}
 			var writer io.Writer
 
-			if info.IsCompressed() {
+			if comp, err := info.IsCompressedOK(); comp {
+				if err != nil {
+					return err
+				}
 				// Open a pipe for compression
 				// Where compressWriter is actually passed to the getObject
 				decompressReader, compressWriter := io.Pipe()

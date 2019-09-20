@@ -21,9 +21,11 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/klauspost/compress/s2"
+	"github.com/minio/minio/cmd/crypto"
 )
 
 // Tests validate bucket name.
@@ -298,14 +300,43 @@ func TestIsCompressed(t *testing.T) {
 	testCases := []struct {
 		objInfo ObjectInfo
 		result  bool
+		err     bool
 	}{
 		{
 			objInfo: ObjectInfo{
-				UserDefined: map[string]string{"X-Minio-Internal-compression": "klauspost/compress/s2",
+				UserDefined: map[string]string{"X-Minio-Internal-compression": compressionAlgorithmV1,
 					"content-type": "application/octet-stream",
 					"etag":         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
 			},
 			result: true,
+		},
+		{
+			objInfo: ObjectInfo{
+				UserDefined: map[string]string{"X-Minio-Internal-compression": compressionAlgorithmV2,
+					"content-type": "application/octet-stream",
+					"etag":         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
+			},
+			result: true,
+		},
+		{
+			objInfo: ObjectInfo{
+				UserDefined: map[string]string{"X-Minio-Internal-compression": "unknown/compression/type",
+					"content-type": "application/octet-stream",
+					"etag":         "b3ff3ef3789147152fbfbc50efba4bfd-2"},
+			},
+			result: true,
+			err:    true,
+		},
+		{
+			objInfo: ObjectInfo{
+				UserDefined: map[string]string{"X-Minio-Internal-compression": compressionAlgorithmV2,
+					"content-type": "application/octet-stream",
+					"etag":         "b3ff3ef3789147152fbfbc50efba4bfd-2",
+					crypto.SSEIV:   "yes",
+				},
+			},
+			result: true,
+			err:    true,
 		},
 		{
 			objInfo: ObjectInfo{
@@ -324,11 +355,21 @@ func TestIsCompressed(t *testing.T) {
 		},
 	}
 	for i, test := range testCases {
-		got := test.objInfo.IsCompressed()
-		if got != test.result {
-			t.Errorf("Test %d - expected %v but received %v",
-				i+1, test.result, got)
-		}
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			got := test.objInfo.IsCompressed()
+			if got != test.result {
+				t.Errorf("IsCompressed: Expected %v but received %v",
+					test.result, got)
+			}
+			got, gErr := test.objInfo.IsCompressedOK()
+			if got != test.result {
+				t.Errorf("IsCompressedOK: Expected %v but received %v",
+					test.result, got)
+			}
+			if gErr != nil != test.err {
+				t.Errorf("IsCompressedOK: want error: %t, got error: %v", test.err, gErr)
+			}
+		})
 	}
 }
 

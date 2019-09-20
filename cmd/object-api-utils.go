@@ -344,6 +344,22 @@ func (o ObjectInfo) IsCompressed() bool {
 	return ok
 }
 
+// IsCompressedOK returns whether the object is compressed and can be decompressed.
+func (o ObjectInfo) IsCompressedOK() (bool, error) {
+	scheme, ok := o.UserDefined[ReservedMetadataPrefix+"compression"]
+	if !ok {
+		return false, nil
+	}
+	if crypto.IsEncrypted(o.UserDefined) {
+		return true, fmt.Errorf("compression %q and encryption enabled on same object", scheme)
+	}
+	switch scheme {
+	case compressionAlgorithmV1, compressionAlgorithmV2:
+		return true, nil
+	}
+	return true, fmt.Errorf("unknown compression scheme: %s", scheme)
+}
+
 // GetActualSize - read the decompressed size from the meta json.
 func (o ObjectInfo) GetActualSize() int64 {
 	metadata := o.UserDefined
@@ -506,7 +522,10 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 	}()
 
 	isEncrypted := crypto.IsEncrypted(oi.UserDefined)
-	isCompressed := oi.IsCompressed()
+	isCompressed, err := oi.IsCompressedOK()
+	if err != nil {
+		return nil, 0, 0, err
+	}
 	var skipLen int64
 	// Calculate range to read (different for
 	// e.g. encrypted/compressed objects)
@@ -623,7 +642,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 
 			decReader := io.LimitReader(s2Reader, decLength)
 			if decLength > compReadAheadSize {
-
 				rah, err := readahead.NewReaderSize(decReader, compReadAheadBuffers, compReadAheadBufSize)
 				if err == nil {
 					decReader = rah

@@ -60,6 +60,7 @@ var supportedHeadGetReqParams = map[string]string{
 }
 
 const (
+	compressionAlgorithmV1 = "golang/snappy/LZ77"
 	compressionAlgorithmV2 = "klauspost/compress/s2"
 )
 
