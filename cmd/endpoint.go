@@ -260,7 +260,7 @@ func (endpoints EndpointList) UpdateIsLocal() error {
 						reqInfo := (&logger.ReqInfo{}).AppendTags("host", endpoints[i].HostName)
 						reqInfo.AppendTags("elapsedTime", humanize.RelTime(startTime, startTime.Add(timeElapsed), "elapsed", ""))
 						ctx := logger.SetReqInfo(context.Background(), reqInfo)
-						logger.LogIf(ctx, err)
+						logger.LogIf(ctx, err, logger.Application)
 					}
 				} else {
 					resolvedList[i] = true

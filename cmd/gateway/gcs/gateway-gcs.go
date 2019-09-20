@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 	"math"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 
@@ -158,14 +159,14 @@ EXAMPLES:
 // Handler for 'minio gateway gcs' command line.
 func gcsGatewayMain(ctx *cli.Context) {
 	projectID := ctx.Args().First()
-	if projectID == "" && env.Get("GOOGLE_APPLICATION_CREDENTIALS", "") == "" {
-		logger.LogIf(context.Background(), errGCSProjectIDNotFound)
+	if projectID == "" && os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
+		logger.LogIf(context.Background(), errGCSProjectIDNotFound, logger.Application)
 		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
 	}
 	if projectID != "" && !isValidGCSProjectIDFormat(projectID) {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("projectID", ctx.Args().First())
 		contxt := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(contxt, errGCSInvalidProjectID)
+		logger.LogIf(contxt, errGCSInvalidProjectID, logger.Application)
 		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
 	}
 
@@ -762,7 +763,7 @@ func (l *gcsGateway) GetObject(ctx context.Context, bucket string, key string, s
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(ctx); err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, err, logger.Application)
 		return gcsToObjectError(err, bucket)
 	}
 
@@ -775,7 +776,7 @@ func (l *gcsGateway) GetObject(ctx context.Context, bucket string, key string, s
 
 	r, err := object.NewRangeReader(ctx, startOffset, length)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, err, logger.Application)
 		return gcsToObjectError(err, bucket, key)
 	}
 	defer r.Close()
@@ -873,7 +874,7 @@ func (l *gcsGateway) GetObjectInfo(ctx context.Context, bucket string, object st
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(ctx); err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, err, logger.Application)
 		return minio.ObjectInfo{}, gcsToObjectError(err, bucket)
 	}
 
@@ -893,7 +894,7 @@ func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, r
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(ctx); err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, err, logger.Application)
 		return minio.ObjectInfo{}, gcsToObjectError(err, bucket)
 	}
 

@@ -66,7 +66,7 @@ func (sys *HTTPConsoleLoggerSys) HasLogListeners() bool {
 }
 
 // Subscribe starts console logging for this node.
-func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh chan struct{}, node string, last int, filter func(entry interface{}) bool) {
+func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh chan struct{}, node string, last int, logKind string, filter func(entry interface{}) bool) {
 	// Enable console logging for remote client even if local console logging is disabled in the config.
 	if !globalServerConfig.Logger.Console.Enabled && !sys.pubsub.HasSubscribers() {
 		logger.AddTarget(globalConsoleSys.Console())
@@ -83,7 +83,7 @@ func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh chan s
 	lastN = make([]madmin.LogInfo, last)
 	sys.logBufLk.RLock()
 	sys.logBuf.Do(func(p interface{}) {
-		if p != nil && (p.(madmin.LogInfo)).SendLog(node) {
+		if p != nil && (p.(madmin.LogInfo)).SendLog(node, logKind) {
 			lastN[cnt%last] = p.(madmin.LogInfo)
 			cnt++
 		}
@@ -119,7 +119,7 @@ func (sys *HTTPConsoleLoggerSys) Console() *HTTPConsoleLoggerSys {
 
 // Send log message 'e' to console and publish to console
 // log pubsub system
-func (sys *HTTPConsoleLoggerSys) Send(e interface{}) error {
+func (sys *HTTPConsoleLoggerSys) Send(e interface{}, logKind string) error {
 	var lg madmin.LogInfo
 	switch e := e.(type) {
 	case log.Entry:
@@ -136,7 +136,7 @@ func (sys *HTTPConsoleLoggerSys) Send(e interface{}) error {
 	sys.logBufLk.Unlock()
 
 	if globalServerConfig.Logger.Console.Enabled {
-		return sys.console.Send(e)
+		return sys.console.Send(e, string(logger.All))
 	}
 	return nil
 }

@@ -254,7 +254,7 @@ func handleCommonEnvVars() {
 
 func logStartupMessage(msg string, data ...interface{}) {
 	if globalConsoleSys != nil {
-		globalConsoleSys.Send(msg)
+		globalConsoleSys.Send(msg, string(logger.All))
 	}
 	logger.StartupMessage(msg, data...)
 }

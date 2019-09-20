@@ -76,7 +76,7 @@ type AMQPTarget struct {
 	conn       *amqp.Connection
 	connMutex  sync.Mutex
 	store      Store
-	loggerOnce func(ctx context.Context, err error, id interface{})
+	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 }
 
 // ID - returns TargetID.
@@ -215,7 +215,7 @@ func (target *AMQPTarget) Close() error {
 }
 
 // NewAMQPTarget - creates new AMQP target.
-func NewAMQPTarget(id string, args AMQPArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{})) (*AMQPTarget, error) {
+func NewAMQPTarget(id string, args AMQPArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})) (*AMQPTarget, error) {
 	var conn *amqp.Connection
 	var err error
 

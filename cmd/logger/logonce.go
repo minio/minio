@@ -30,7 +30,7 @@ type logOnceType struct {
 }
 
 // One log message per error.
-func (l *logOnceType) logOnceIf(ctx context.Context, err error, id interface{}) {
+func (l *logOnceType) logOnceIf(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
 	if err == nil {
 		return
 	}
@@ -49,7 +49,7 @@ func (l *logOnceType) logOnceIf(ctx context.Context, err error, id interface{}) 
 	l.Unlock()
 
 	if shouldLog {
-		LogIf(ctx, err)
+		LogIf(ctx, err, errKind...)
 	}
 }
 
@@ -76,6 +76,6 @@ var logOnce = newLogOnceType()
 // LogOnceIf - Logs notification errors - once per error.
 // id is a unique identifier for related log messages, refer to cmd/notification.go
 // on how it is used.
-func LogOnceIf(ctx context.Context, err error, id interface{}) {
-	logOnce.logOnceIf(ctx, err, id)
+func LogOnceIf(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
+	logOnce.logOnceIf(ctx, err, id, errKind...)
 }

@@ -206,7 +206,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 
 	// Start offset cannot be negative.
 	if startOffset < 0 {
-		logger.LogIf(ctx, errUnexpected)
+		logger.LogIf(ctx, errUnexpected, logger.Application)
 		return errUnexpected
 	}
 
@@ -258,7 +258,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 
 	// Reply back invalid range if the input offset and length fall out of range.
 	if startOffset > xlMeta.Stat.Size || startOffset+length > xlMeta.Stat.Size {
-		logger.LogIf(ctx, InvalidRange{startOffset, length, xlMeta.Stat.Size})
+		logger.LogIf(ctx, InvalidRange{startOffset, length, xlMeta.Stat.Size}, logger.Application)
 		return InvalidRange{startOffset, length, xlMeta.Stat.Size}
 	}
 
@@ -570,7 +570,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 
 	// Validate input data size and it can never be less than zero.
 	if data.Size() < -1 {
-		logger.LogIf(ctx, errInvalidArgument)
+		logger.LogIf(ctx, errInvalidArgument, logger.Application)
 		return ObjectInfo{}, toObjectErr(errInvalidArgument)
 	}
 
@@ -636,7 +636,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// Should return IncompleteBody{} error when reader has fewer bytes
 	// than specified in request header.
 	if n < data.Size() {
-		logger.LogIf(ctx, IncompleteBody{})
+		logger.LogIf(ctx, IncompleteBody{}, logger.Application)
 		return ObjectInfo{}, IncompleteBody{}
 	}
 

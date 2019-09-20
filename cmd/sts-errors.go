@@ -37,7 +37,14 @@ func writeSTSErrorResponse(ctx context.Context, w http.ResponseWriter, errCode S
 	if errCtxt != nil {
 		stsErrorResponse.Error.Message = fmt.Sprintf("%v", errCtxt)
 	}
-	logger.LogIf(ctx, errCtxt)
+	logKind := logger.All
+	switch errCode {
+	case ErrSTSInternalError, ErrSTSNotInitialized:
+		logKind = logger.Minio
+	default:
+		logKind = logger.Application
+	}
+	logger.LogIf(ctx, errCtxt, logKind)
 	encodedErrorResponse := encodeResponse(stsErrorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
 }
