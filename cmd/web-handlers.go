@@ -28,7 +28,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -1235,7 +1234,6 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebDownloadZip")
 	defer logger.AuditLog(w, r, "WebDownloadZip", mustGetClaimsFromToken(r))
 
-	var wg sync.WaitGroup
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		writeWebErrorResponse(w, errServerNotInitialized)
@@ -1347,10 +1345,6 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			// Write object content to response body
 			if _, err = io.Copy(httpWriter, gr); err != nil {
 				httpWriter.Close()
-				if info.IsCompressed() {
-					// Wait for decompression go-routine to retire.
-					wg.Wait()
-				}
 				if !httpWriter.HasWritten() { // write error response only if no data or headers has been written to client yet
 					writeWebErrorResponse(w, err)
 				}
@@ -1362,10 +1356,6 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 					writeWebErrorResponse(w, err)
 					return err
 				}
-			}
-			if info.IsCompressed() {
-				// Wait for decompression go-routine to retire.
-				wg.Wait()
 			}
 
 			// Notify object accessed via a GET request.
