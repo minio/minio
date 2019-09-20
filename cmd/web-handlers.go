@@ -1333,6 +1333,10 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				UncompressedSize64: uint64(length),
 				UncompressedSize:   uint32(length),
 			}
+			if hasStringSuffixInSlice(gr.ObjInfo.Name, standardExcludeCompressExtensions) || hasPattern(standardExcludeCompressContentTypes, gr.ObjInfo.ContentType) {
+				// We strictly disable compression for standard extensions/content-types.
+				header.Method = zip.Store
+			}
 			writer, err := archive.CreateHeader(header)
 			if err != nil {
 				writeWebErrorResponse(w, errUnexpected)
