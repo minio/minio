@@ -155,6 +155,9 @@ func (target *WebhookTarget) Send(eventKey string) error {
 	}
 
 	if err := target.send(eventData); err != nil {
+		if xnet.IsNetworkOrHostDown(err) {
+			return errNotConnected
+		}
 		return err
 	}
 

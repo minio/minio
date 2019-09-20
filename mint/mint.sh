@@ -15,7 +15,7 @@
 #  limitations under the License.
 #
 
-CONTAINER_ID=$(awk -F / '{ print substr($NF, 1, 12) }' /proc/1/cpuset)
+CONTAINER_ID=$(grep -o -e '[0-f]\{12,\}' /proc/1/cpuset | awk '{print substr($1, 1, 12)}')
 MINT_DATA_DIR=${MINT_DATA_DIR:-/mint/data}
 MINT_MODE=${MINT_MODE:-core}
 SERVER_REGION=${SERVER_REGION:-us-east-1}

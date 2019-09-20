@@ -20,7 +20,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"net/http"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,13 +30,6 @@ import (
 	"github.com/minio/minio/pkg/certs"
 )
 
-func init() {
-	// Opt-in to TLS 1.3. See: https://golang.org/pkg/crypto/tls
-	// In future Go versions TLS 1.3 probably gets enabled by default.
-	// So, we can remove this line as soon as this is the case.
-	os.Setenv("GODEBUG", os.Getenv("GODEBUG")+",tls13=1")
-}
-
 const (
 	serverShutdownPoll = 500 * time.Millisecond
 
@@ -47,12 +39,6 @@ const (
 	// DefaultTCPKeepAliveTimeout - default TCP keep alive timeout for accepted connection.
 	DefaultTCPKeepAliveTimeout = 30 * time.Second
 
-	// DefaultReadTimeout - default timout to read data from accepted connection.
-	DefaultReadTimeout = 5 * time.Minute
-
-	// DefaultWriteTimeout - default timout to write data to accepted connection.
-	DefaultWriteTimeout = 5 * time.Minute
-
 	// DefaultMaxHeaderBytes - default maximum HTTP header size in bytes.
 	DefaultMaxHeaderBytes = 1 * humanize.MiByte
 )
@@ -61,8 +47,6 @@ const (
 type Server struct {
 	http.Server
 	Addrs                  []string      // addresses on which the server listens for new connection.
-	ReadTimeout            time.Duration // timeout used for net.Conn.Read() deadlines.
-	WriteTimeout           time.Duration // timeout used for net.Conn.Write() deadlines.
 	ShutdownTimeout        time.Duration // timeout used for graceful server shutdown.
 	TCPKeepAliveTimeout    time.Duration // timeout used for underneath TCP connection.
 	UpdateBytesReadFunc    func(int)     // function to be called to update bytes read in bufConn.
@@ -85,8 +69,6 @@ func (srv *Server) Start() (err error) {
 	if srv.TLSConfig != nil {
 		tlsConfig = srv.TLSConfig.Clone()
 	}
-	readTimeout := srv.ReadTimeout
-	writeTimeout := srv.WriteTimeout
 	handler := srv.Handler // if srv.Handler holds non-synced state -> possible data race
 
 	addrs := set.CreateStringSet(srv.Addrs...).ToSlice() // copy and remove duplicates
@@ -97,8 +79,6 @@ func (srv *Server) Start() (err error) {
 	listener, err = newHTTPListener(
 		addrs,
 		tcpKeepAliveTimeout,
-		readTimeout,
-		writeTimeout,
 		srv.UpdateBytesReadFunc,
 		srv.UpdateBytesWrittenFunc,
 	)
@@ -221,8 +201,6 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 	}
 	httpServer.Handler = handler
 	httpServer.TLSConfig = tlsConfig
-	httpServer.ReadTimeout = DefaultReadTimeout
-	httpServer.WriteTimeout = DefaultWriteTimeout
 	httpServer.MaxHeaderBytes = DefaultMaxHeaderBytes
 
 	return httpServer
