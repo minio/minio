@@ -2,7 +2,7 @@ version: '3.7'
 
 services:
   minio1:
-    image: minio/minio:RELEASE.2019-08-29T00-25-01Z
+    image: minio/minio:RELEASE.2019-09-18T21-55-05Z
     hostname: minio1
     volumes:
       - minio1-data:/export
@@ -25,16 +25,15 @@ services:
       placement:
         constraints:
           - node.labels.minio1==true
-    command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
+    command: server http://minio{1...4}/export
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://minio1:9000/minio/health/live"]
-      interval: 1m30s
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
       timeout: 20s
       retries: 3
-      start_period: 3m
 
   minio2:
-    image: minio/minio:RELEASE.2019-08-29T00-25-01Z
+    image: minio/minio:RELEASE.2019-09-18T21-55-05Z
     hostname: minio2
     volumes:
       - minio2-data:/export
@@ -57,16 +56,15 @@ services:
       placement:
         constraints:
           - node.labels.minio2==true
-    command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
+    command: server http://minio{1...4}/export
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://minio2:9000/minio/health/live"]
-      interval: 1m30s
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
       timeout: 20s
       retries: 3
-      start_period: 3m
 
   minio3:
-    image: minio/minio:RELEASE.2019-08-29T00-25-01Z
+    image: minio/minio:RELEASE.2019-09-18T21-55-05Z
     hostname: minio3
     volumes:
       - minio3-data:/export
@@ -89,16 +87,15 @@ services:
       placement:
         constraints:
           - node.labels.minio3==true
-    command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
+    command: server http://minio{1...4}/export
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://minio3:9000/minio/health/live"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 1m30s
       timeout: 20s
       retries: 3
-      start_period: 3m
 
   minio4:
-    image: minio/minio:RELEASE.2019-08-29T00-25-01Z
+    image: minio/minio:RELEASE.2019-09-18T21-55-05Z
     hostname: minio4
     volumes:
       - minio4-data:/export
@@ -121,13 +118,12 @@ services:
       placement:
         constraints:
           - node.labels.minio4==true
-    command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
+    command: server http://minio{1...4}/export
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://minio4:9000/minio/health/live"]
-      interval: 1m30s
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
       timeout: 20s
       retries: 3
-      start_period: 3m
 
 volumes:
   minio1-data:

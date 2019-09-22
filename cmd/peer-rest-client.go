@@ -173,8 +173,10 @@ func (client *peerRESTClient) CPULoadInfo() (info ServerCPULoadInfo, err error) 
 }
 
 // DrivePerfInfo - fetch Drive performance information for a remote node.
-func (client *peerRESTClient) DrivePerfInfo() (info ServerDrivesPerfInfo, err error) {
-	respBody, err := client.call(peerRESTMethodDrivePerfInfo, nil, nil, -1)
+func (client *peerRESTClient) DrivePerfInfo(size int64) (info madmin.ServerDrivesPerfInfo, err error) {
+	params := make(url.Values)
+	params.Set(peerRESTDrivePerfSize, strconv.FormatInt(size, 10))
+	respBody, err := client.call(peerRESTMethodDrivePerfInfo, params, nil, -1)
 	if err != nil {
 		return
 	}
@@ -624,6 +626,48 @@ func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh chan struct
 			default:
 				// There was error in the REST request, retry after sometime as probably the peer is down.
 				time.Sleep(5 * time.Second)
+			}
+		}
+	}()
+}
+
+// ConsoleLog - sends request to peer nodes to get console logs
+func (client *peerRESTClient) ConsoleLog(logCh chan interface{}, doneCh chan struct{}) {
+	go func() {
+		for {
+			// get cancellation context to properly unsubscribe peers
+			ctx, cancel := context.WithCancel(context.Background())
+			respBody, err := client.callWithContext(ctx, peerRESTMethodLog, nil, nil, -1)
+			if err != nil {
+				// Retry the failed request.
+				time.Sleep(5 * time.Second)
+			} else {
+				dec := gob.NewDecoder(respBody)
+
+				go func() {
+					<-doneCh
+					cancel()
+				}()
+
+				for {
+					var log madmin.LogInfo
+					if err = dec.Decode(&log); err != nil {
+						break
+					}
+					select {
+					case logCh <- log:
+					default:
+					}
+				}
+			}
+
+			select {
+			case <-doneCh:
+				cancel()
+				http.DrainBody(respBody)
+				return
+			default:
+				// There was error in the REST request, retry.
 			}
 		}
 	}()

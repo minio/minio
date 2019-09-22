@@ -51,10 +51,12 @@ const (
 	peerRESTMethodTrace                    = "trace"
 	peerRESTMethodBucketLifecycleSet       = "setbucketlifecycle"
 	peerRESTMethodBucketLifecycleRemove    = "removebucketlifecycle"
+	peerRESTMethodLog                      = "log"
 )
 
 const (
 	peerRESTNetPerfSize   = "netperfsize"
+	peerRESTDrivePerfSize = "driveperfsize"
 	peerRESTBucket        = "bucket"
 	peerRESTUser          = "user"
 	peerRESTGroup         = "group"

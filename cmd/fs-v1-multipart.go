@@ -28,9 +28,9 @@ import (
 	"strings"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
 	mioutil "github.com/minio/minio/pkg/ioutil"
-	"github.com/valyala/fastjson"
 )
 
 // Returns EXPORT/.minio.sys/multipart/SHA256/UPLOADID
@@ -472,16 +472,13 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 		return result, err
 	}
 
-	parser := fsParserPool.Get()
-	defer fsParserPool.Put(parser)
-
-	var v *fastjson.Value
-	v, err = parser.ParseBytes(fsMetaBytes)
-	if err != nil {
+	var fsMeta fsMetaV1
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err = json.Unmarshal(fsMetaBytes, &fsMeta); err != nil {
 		return result, err
 	}
 
-	result.UserDefined = parseFSMetaMap(v)
+	result.UserDefined = fsMeta.Meta
 	return result, nil
 }
 

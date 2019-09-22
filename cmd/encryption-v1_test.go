@@ -28,86 +28,6 @@ import (
 	"github.com/minio/sio"
 )
 
-var hasServerSideEncryptionHeaderTests = []struct {
-	headers    map[string]string
-	sseRequest bool
-}{
-	{headers: map[string]string{crypto.SSECAlgorithm: "AES256", crypto.SSECKey: "key", crypto.SSECKeyMD5: "md5"}, sseRequest: true},                             // 0
-	{headers: map[string]string{crypto.SSECAlgorithm: "AES256"}, sseRequest: true},                                                                              // 1
-	{headers: map[string]string{crypto.SSECKey: "key"}, sseRequest: true},                                                                                       // 2
-	{headers: map[string]string{crypto.SSECKeyMD5: "md5"}, sseRequest: true},                                                                                    // 3
-	{headers: map[string]string{}, sseRequest: false},                                                                                                           // 4
-	{headers: map[string]string{crypto.SSECopyAlgorithm + " ": "AES256", " " + crypto.SSECopyKey: "key", crypto.SSECopyKeyMD5 + " ": "md5"}, sseRequest: false}, // 5
-	{headers: map[string]string{crypto.SSECopyAlgorithm: "", crypto.SSECopyKey: "", crypto.SSECopyKeyMD5: ""}, sseRequest: false},                               // 6
-	{headers: map[string]string{crypto.SSEHeader: ""}, sseRequest: true},                                                                                        // 7
-}
-
-func TestHasServerSideEncryptionHeader(t *testing.T) {
-	for i, test := range hasServerSideEncryptionHeaderTests {
-		headers := http.Header{}
-		for k, v := range test.headers {
-			headers.Set(k, v)
-		}
-		if hasServerSideEncryptionHeader(headers) != test.sseRequest {
-			t.Errorf("Test %d: Expected hasServerSideEncryptionHeader to return %v", i, test.sseRequest)
-		}
-	}
-}
-
-var hasSSECopyCustomerHeaderTests = []struct {
-	headers    map[string]string
-	sseRequest bool
-}{
-	{headers: map[string]string{crypto.SSECopyAlgorithm: "AES256", crypto.SSECopyKey: "key", crypto.SSECopyKeyMD5: "md5"}, sseRequest: true},                    // 0
-	{headers: map[string]string{crypto.SSECopyAlgorithm: "AES256"}, sseRequest: true},                                                                           // 1
-	{headers: map[string]string{crypto.SSECopyKey: "key"}, sseRequest: true},                                                                                    // 2
-	{headers: map[string]string{crypto.SSECopyKeyMD5: "md5"}, sseRequest: true},                                                                                 // 3
-	{headers: map[string]string{}, sseRequest: false},                                                                                                           // 4
-	{headers: map[string]string{crypto.SSECopyAlgorithm + " ": "AES256", " " + crypto.SSECopyKey: "key", crypto.SSECopyKeyMD5 + " ": "md5"}, sseRequest: false}, // 5
-	{headers: map[string]string{crypto.SSECopyAlgorithm: "", crypto.SSECopyKey: "", crypto.SSECopyKeyMD5: ""}, sseRequest: true},                                // 6
-	{headers: map[string]string{crypto.SSEHeader: ""}, sseRequest: false},                                                                                       // 7
-
-}
-
-func TestIsSSECopyCustomerRequest(t *testing.T) {
-	for i, test := range hasSSECopyCustomerHeaderTests {
-		headers := http.Header{}
-		for k, v := range test.headers {
-			headers.Set(k, v)
-		}
-		if crypto.SSECopy.IsRequested(headers) != test.sseRequest {
-			t.Errorf("Test %d: Expected crypto.SSECopy.IsRequested to return %v", i, test.sseRequest)
-		}
-	}
-}
-
-var hasSSECustomerHeaderTests = []struct {
-	headers    map[string]string
-	sseRequest bool
-}{
-	{headers: map[string]string{crypto.SSECAlgorithm: "AES256", crypto.SSECKey: "key", crypto.SSECKeyMD5: "md5"}, sseRequest: true},                    // 0
-	{headers: map[string]string{crypto.SSECAlgorithm: "AES256"}, sseRequest: true},                                                                     // 1
-	{headers: map[string]string{crypto.SSECKey: "key"}, sseRequest: true},                                                                              // 2
-	{headers: map[string]string{crypto.SSECKeyMD5: "md5"}, sseRequest: true},                                                                           // 3
-	{headers: map[string]string{}, sseRequest: false},                                                                                                  // 4
-	{headers: map[string]string{crypto.SSECAlgorithm + " ": "AES256", " " + crypto.SSECKey: "key", crypto.SSECKeyMD5 + " ": "md5"}, sseRequest: false}, // 5
-	{headers: map[string]string{crypto.SSECAlgorithm: "", crypto.SSECKey: "", crypto.SSECKeyMD5: ""}, sseRequest: true},                                // 6
-	{headers: map[string]string{crypto.SSEHeader: ""}, sseRequest: false},                                                                              // 7
-
-}
-
-func TestHasSSECustomerHeader(t *testing.T) {
-	for i, test := range hasSSECustomerHeaderTests {
-		headers := http.Header{}
-		for k, v := range test.headers {
-			headers.Set(k, v)
-		}
-		if crypto.SSEC.IsRequested(headers) != test.sseRequest {
-			t.Errorf("Test %d: Expected hasSSECustomerHeader to return %v", i, test.sseRequest)
-		}
-	}
-}
-
 var encryptRequestTests = []struct {
 	header   map[string]string
 	metadata map[string]string
@@ -173,7 +93,7 @@ var decryptRequestTests = []struct {
 			crypto.SSECKeyMD5:    "7PpPLAK26ONlVUGOWlusfg==",
 		},
 		metadata: map[string]string{
-			crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256,
+			crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm,
 			crypto.SSEIV:            "7nQqotA8xgrPx6QK7Ap3GCfjKitqJSrGP7xzgErSJlw=",
 			crypto.SSECSealedKey:    "EAAfAAAAAAD7v1hQq3PFRUHsItalxmrJqrOq6FwnbXNarxOOpb8jTWONPPKyM3Gfjkjyj6NCf+aB/VpHCLCTBA==",
 		},
@@ -188,7 +108,7 @@ var decryptRequestTests = []struct {
 			crypto.SSECKeyMD5:    "7PpPLAK26ONlVUGOWlusfg==",
 		},
 		metadata: map[string]string{
-			crypto.SSESealAlgorithm: SSESealAlgorithmDareV2HmacSha256,
+			crypto.SSESealAlgorithm: crypto.SealAlgorithm,
 			crypto.SSEIV:            "qEqmsONcorqlcZXJxaw32H04eyXyXwUgjHzlhkaIYrU=",
 			crypto.SSECSealedKey:    "IAAfAIM14ugTGcM/dIrn4iQMrkl1sjKyeBQ8FBEvRebYj8vWvxG+0cJRpC6NXRU1wJN50JaUOATjO7kz0wZ2mA==",
 		},
@@ -218,7 +138,7 @@ var decryptRequestTests = []struct {
 			crypto.SSECKeyMD5:    "bY4wkxQejw9mUJfo72k53A==",
 		},
 		metadata: map[string]string{
-			crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256,
+			crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm,
 			crypto.SSEIV:            "RrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
 			crypto.SSECSealedKey:    "SY5E9AvI2tI7/nUrUAssIGE32Hcs4rR9z/CUuPqu5N4=",
 		},
@@ -233,7 +153,7 @@ var decryptRequestTests = []struct {
 			crypto.SSECKeyMD5:    "bY4wkxQejw9mUJfo72k53A==",
 		},
 		metadata: map[string]string{
-			crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256,
+			crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm,
 			crypto.SSEIV:            "XAm0dRrJsEsyPb1UuFNezv1bl9ehxuYsgUVC/MUctE2k=",
 			crypto.SSECSealedKey:    "SY5E9AvI2tI7/nUrUAssIGE32Hds4rR9z/CUuPqu5N4=",
 		},
@@ -248,7 +168,7 @@ var decryptRequestTests = []struct {
 			crypto.SSECKeyMD5:    "7PpPLAK26ONlVUGOWlusfg==",
 		},
 		metadata: map[string]string{
-			crypto.SSESealAlgorithm: SSESealAlgorithmDareV2HmacSha256,
+			crypto.SSESealAlgorithm: crypto.SealAlgorithm,
 			crypto.SSEIV:            "qEqmsONcorqlcZXJxaw32H04eyXyXwUgjHzlhkaIYrU=",
 			crypto.SSECSealedKey:    "IAAfAIM14ugTGcM/dIrn4iQMrkl1sjKyeBQ8FBEvRebYj8vWvxG+0cJRpC6NXRU1wJN50JaUOATjO7kz0wZ2mA==",
 		},
@@ -298,12 +218,12 @@ var decryptObjectInfoTests = []struct {
 		expErr:  nil,
 	},
 	{
-		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256}},
+		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm}},
 		headers: http.Header{crypto.SSECAlgorithm: []string{crypto.SSEAlgorithmAES256}},
 		expErr:  nil,
 	},
 	{
-		info:    ObjectInfo{Size: 0, UserDefined: map[string]string{crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256}},
+		info:    ObjectInfo{Size: 0, UserDefined: map[string]string{crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm}},
 		headers: http.Header{crypto.SSECAlgorithm: []string{crypto.SSEAlgorithmAES256}},
 		expErr:  nil,
 	},
@@ -318,7 +238,7 @@ var decryptObjectInfoTests = []struct {
 		expErr:  errInvalidEncryptionParameters,
 	},
 	{
-		info:    ObjectInfo{Size: 31, UserDefined: map[string]string{crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256}},
+		info:    ObjectInfo{Size: 31, UserDefined: map[string]string{crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm}},
 		headers: http.Header{crypto.SSECAlgorithm: []string{crypto.SSEAlgorithmAES256}},
 		expErr:  errObjectTampered,
 	},
@@ -408,7 +328,7 @@ func TestGetDecryptedRange(t *testing.T) {
 		}
 		udMap = func(isMulti bool) map[string]string {
 			m := map[string]string{
-				crypto.SSESealAlgorithm: SSESealAlgorithmDareSha256,
+				crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm,
 				crypto.SSEMultipart:     "1",
 			}
 			if !isMulti {

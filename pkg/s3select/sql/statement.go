@@ -219,11 +219,12 @@ func (e *SelectStatement) AggregateRow(input Record) error {
 
 // Eval - evaluates the Select statement for the given record. It
 // applies only to non-aggregation queries.
-func (e *SelectStatement) Eval(input, output Record) (Record, error) {
+// The function returns whether the statement passed the WHERE clause and should be outputted.
+func (e *SelectStatement) Eval(input, output Record) (bool, error) {
 	ok, err := e.isPassingWhereClause(input)
 	if err != nil || !ok {
 		// Either error or row did not pass where clause
-		return nil, err
+		return false, err
 	}
 
 	if e.selectAST.Expression.All {
@@ -234,14 +235,13 @@ func (e *SelectStatement) Eval(input, output Record) (Record, error) {
 		if e.limitValue > -1 {
 			e.outputCount++
 		}
-
-		return input, nil
+		return true, output.CopyFrom(input)
 	}
 
 	for i, expr := range e.selectAST.Expression.Expressions {
 		v, err := expr.evalNode(input)
 		if err != nil {
-			return nil, err
+			return false, err
 		}
 
 		// Pick output column names
@@ -259,7 +259,7 @@ func (e *SelectStatement) Eval(input, output Record) (Record, error) {
 		e.outputCount++
 	}
 
-	return output, nil
+	return true, nil
 }
 
 // LimitReached - returns true if the number of records output has

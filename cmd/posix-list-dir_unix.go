@@ -58,7 +58,6 @@ func parseDirEnt(buf []byte) (consumed int, name string, typ os.FileMode, err er
 		// to handle such files, MinIO is only interested in
 		// files and directories.
 		typ = unexpectedFileMode
-		return
 	}
 
 	nameBuf := (*[unsafe.Sizeof(dirent.Name)]byte)(unsafe.Pointer(&dirent.Name[0]))

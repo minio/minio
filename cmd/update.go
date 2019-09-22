@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -34,6 +35,7 @@ import (
 	"github.com/inconshreveable/go-update"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	xnet "github.com/minio/minio/pkg/net"
 	_ "github.com/minio/sha256-simd" // Needed for sha256 hash verifier.
 )
 
@@ -282,7 +284,7 @@ func downloadReleaseURL(releaseChecksumURL string, timeout time.Duration, mode s
 	client := &http.Client{Transport: getUpdateTransport(timeout)}
 	resp, err := client.Do(req)
 	if err != nil {
-		if isNetworkOrHostDown(err) {
+		if xnet.IsNetworkOrHostDown(err) {
 			return content, AdminError{
 				Code:       AdminUpdateURLNotReachable,
 				Message:    err.Error(),
@@ -499,7 +501,7 @@ func doUpdate(updateURL, sha256Hex, mode string) (err error) {
 
 	resp, err := clnt.Do(req)
 	if err != nil {
-		if isNetworkOrHostDown(err) {
+		if xnet.IsNetworkOrHostDown(err) {
 			return AdminError{
 				Code:       AdminUpdateURLNotReachable,
 				Message:    err.Error(),
@@ -521,10 +523,19 @@ func doUpdate(updateURL, sha256Hex, mode string) (err error) {
 			Checksum: sha256Sum,
 		},
 	); err != nil {
-		if os.IsPermission(err) {
+		if rerr := update.RollbackError(err); rerr != nil {
 			return AdminError{
 				Code:       AdminUpdateApplyFailure,
-				Message:    err.Error(),
+				Message:    fmt.Sprintf("Failed to rollback from bad update: %v", rerr),
+				StatusCode: http.StatusInternalServerError,
+			}
+		}
+		var pathErr *os.PathError
+		if errors.As(err, &pathErr) {
+			return AdminError{
+				Code: AdminUpdateApplyFailure,
+				Message: fmt.Sprintf("Unable to update the binary at %s: %v",
+					filepath.Dir(pathErr.Path), pathErr.Err),
 				StatusCode: http.StatusForbidden,
 			}
 		}

@@ -351,7 +351,7 @@ func NewMySQLTarget(id string, args MySQLArgs, doneCh <-chan struct{}) (*MySQLTa
 
 	err = target.db.Ping()
 	if err != nil {
-		if target.store == nil || !IsConnRefusedErr(err) {
+		if target.store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
 			return nil, err
 		}
 	} else {

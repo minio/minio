@@ -93,8 +93,12 @@ func IsConnRefusedErr(err error) bool {
 	return false
 }
 
-// isConnResetErr - Checks for connection reset errors.
-func isConnResetErr(err error) bool {
+// IsConnResetErr - Checks for connection reset errors.
+func IsConnResetErr(err error) bool {
+	if strings.Contains(err.Error(), "connection reset by peer") {
+		return true
+	}
+	// incase if error message is wrapped.
 	if opErr, ok := err.(*net.OpError); ok {
 		if syscallErr, ok := opErr.Err.(*os.SyscallError); ok {
 			if syscallErr.Err == syscall.ECONNRESET {
@@ -117,7 +121,7 @@ func sendEvents(target event.Target, eventKeyCh <-chan string, doneCh <-chan str
 				break
 			}
 
-			if err != errNotConnected && !isConnResetErr(err) {
+			if err != errNotConnected && !IsConnResetErr(err) {
 				panic(fmt.Errorf("target.Send() failed with '%v'", err))
 			}
 

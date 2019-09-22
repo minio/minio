@@ -56,7 +56,7 @@ func (err *s3Error) Error() string {
 func errMalformedXML(err error) *s3Error {
 	return &s3Error{
 		code:       "MalformedXML",
-		message:    "The XML provided was not well-formed or did not validate against our published schema. Check the service documentation and try again.",
+		message:    "The XML provided was not well-formed or did not validate against our published schema. Check the service documentation and try again: " + err.Error(),
 		statusCode: 400,
 		cause:      err,
 	}

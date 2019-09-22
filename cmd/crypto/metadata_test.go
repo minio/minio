@@ -130,7 +130,7 @@ var s3ParseMetadataTests = []struct {
 	}, // 2
 	{
 		ExpectedErr: Error{"The object metadata is missing the internal KMS key-ID for SSE-S3"},
-		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: "", S3SealedKey: ""}, DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
+		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: "", S3SealedKey: "", S3KMSSealedKey: "IAAF0b=="}, DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 3
 	{
 		ExpectedErr: Error{"The object metadata is missing the internal sealed KMS data key for SSE-S3"},
@@ -287,7 +287,9 @@ var s3CreateMetadataTests = []struct {
 	SealedDataKey []byte
 	SealedKey     SealedKey
 }{
-	{KeyID: "", SealedDataKey: make([]byte, 48), SealedKey: SealedKey{Algorithm: SealAlgorithm}},
+
+	{KeyID: "", SealedDataKey: nil, SealedKey: SealedKey{Algorithm: SealAlgorithm}},
+	{KeyID: "my-minio-key", SealedDataKey: make([]byte, 48), SealedKey: SealedKey{Algorithm: SealAlgorithm}},
 	{KeyID: "cafebabe", SealedDataKey: make([]byte, 48), SealedKey: SealedKey{Algorithm: SealAlgorithm}},
 	{KeyID: "deadbeef", SealedDataKey: make([]byte, 32), SealedKey: SealedKey{IV: [32]byte{0xf7}, Key: [64]byte{0xea}, Algorithm: SealAlgorithm}},
 }

@@ -101,6 +101,7 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks int, of
 	for _, err := range errs {
 		if err != nil {
 			offlineDisks++
+			continue
 		}
 		onlineDisks++
 	}

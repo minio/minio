@@ -25,12 +25,15 @@ import (
 
 // String - returns the JSONPath representation
 func (e *JSONPath) String() string {
-	parts := make([]string, len(e.PathExpr)+1)
-	parts[0] = e.BaseKey.String()
-	for i, pe := range e.PathExpr {
-		parts[i+1] = pe.String()
+	if len(e.pathString) == 0 {
+		parts := make([]string, len(e.PathExpr)+1)
+		parts[0] = e.BaseKey.String()
+		for i, pe := range e.PathExpr {
+			parts[i+1] = pe.String()
+		}
+		e.pathString = strings.Join(parts, "")
 	}
-	return strings.Join(parts, "")
+	return e.pathString
 }
 
 func (e *JSONPathElement) String() string {
@@ -94,9 +97,12 @@ func getLastKeypathComponent(e *Expression) (string, bool) {
 	if n > 0 && jpath.PathExpr[n-1].Key == nil {
 		return "", false
 	}
-
-	ps := strings.Split(jpath.String(), ".")
-	return ps[len(ps)-1], true
+	ps := jpath.String()
+	if idx := strings.LastIndex(ps, "."); idx >= 0 {
+		// Get last part of path string.
+		ps = ps[idx+1:]
+	}
+	return ps, true
 }
 
 // HasKeypath returns if the from clause has a key path -

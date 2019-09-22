@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/auth"
@@ -649,4 +650,101 @@ func TestToAdminAPIErrCode(t *testing.T) {
 				i+1, test.expectedAPIErr, actualErr)
 		}
 	}
+}
+
+func TestTopLockEntries(t *testing.T) {
+	t1 := UTCNow()
+	t2 := UTCNow().Add(10 * time.Second)
+	peerLocks := []*PeerLocks{
+		{
+			Addr: "1",
+			Locks: map[string][]lockRequesterInfo{
+				"1": {
+					{false, "node2", "ep2", "2", t2, t2, ""},
+					{true, "node1", "ep1", "1", t1, t1, ""},
+				},
+				"2": {
+					{false, "node2", "ep2", "2", t2, t2, ""},
+					{true, "node1", "ep1", "1", t1, t1, ""},
+				},
+			},
+		},
+		{
+			Addr: "2",
+			Locks: map[string][]lockRequesterInfo{
+				"1": {
+					{false, "node2", "ep2", "2", t2, t2, ""},
+					{true, "node1", "ep1", "1", t1, t1, ""},
+				},
+				"2": {
+					{false, "node2", "ep2", "2", t2, t2, ""},
+					{true, "node1", "ep1", "1", t1, t1, ""},
+				},
+			},
+		},
+	}
+	les := topLockEntries(peerLocks)
+	if len(les) != 2 {
+		t.Fatalf("Did not get 2 results")
+	}
+	if les[0].Timestamp.After(les[1].Timestamp) {
+		t.Fatalf("Got wrong sorted value")
+	}
+}
+
+func TestExtractHealInitParams(t *testing.T) {
+	mkParams := func(clientToken string, forceStart, forceStop bool) url.Values {
+		v := url.Values{}
+		if clientToken != "" {
+			v.Add(string(mgmtClientToken), clientToken)
+		}
+		if forceStart {
+			v.Add(string(mgmtForceStart), "")
+		}
+		if forceStop {
+			v.Add(string(mgmtForceStop), "")
+		}
+		return v
+	}
+	qParmsArr := []url.Values{
+		// Invalid cases
+		mkParams("", true, true),
+		mkParams("111", true, true),
+		mkParams("111", true, false),
+		mkParams("111", false, true),
+		// Valid cases follow
+		mkParams("", true, false),
+		mkParams("", false, true),
+		mkParams("", false, false),
+		mkParams("111", false, false),
+	}
+	varsArr := []map[string]string{
+		// Invalid cases
+		{string(mgmtPrefix): "objprefix"},
+		// Valid cases
+		{},
+		{string(mgmtBucket): "bucket"},
+		{string(mgmtBucket): "bucket", string(mgmtPrefix): "objprefix"},
+	}
+
+	// Body is always valid - we do not test JSON decoding.
+	body := `{"recursive": false, "dryRun": true, "remove": false, "scanMode": 0}`
+
+	// Test all combinations!
+	for pIdx, parms := range qParmsArr {
+		for vIdx, vars := range varsArr {
+			_, err := extractHealInitParams(vars, parms, bytes.NewBuffer([]byte(body)))
+			isErrCase := false
+			if pIdx < 4 || vIdx < 1 {
+				isErrCase = true
+			}
+
+			if err != ErrNone && !isErrCase {
+				t.Errorf("Got unexpected error: %v %v %v", pIdx, vIdx, err)
+			} else if err == ErrNone && isErrCase {
+				t.Errorf("Got no error but expected one: %v %v", pIdx, vIdx)
+			}
+		}
+	}
+
 }

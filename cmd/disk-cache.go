@@ -35,6 +35,7 @@ type CacheObjectLayer interface {
 	GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	DeleteObject(ctx context.Context, bucket, object string) error
 	DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error)
+	PutObject(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	// Storage operations.
 	StorageInfo(ctx context.Context) CacheStorageInfo
 }
@@ -58,6 +59,7 @@ type cacheObjects struct {
 	GetObjectInfoFn  func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	DeleteObjectFn   func(ctx context.Context, bucket, object string) error
 	DeleteObjectsFn  func(ctx context.Context, bucket string, objects []string) ([]error, error)
+	PutObjectFn      func(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 }
 
 func (c *cacheObjects) delete(ctx context.Context, dcache *diskCache, bucket, object string) (err error) {
@@ -231,13 +233,13 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	pipeReader, pipeWriter := io.Pipe()
 	teeReader := io.TeeReader(bkReader, pipeWriter)
 	go func() {
-		putErr := dcache.Put(ctx, bucket, object, io.LimitReader(pipeReader, bkReader.ObjInfo.Size), bkReader.ObjInfo.Size, ObjectOptions{UserDefined: getMetadata(bkReader.ObjInfo)})
+		putErr := c.put(ctx, dcache, bucket, object, io.LimitReader(pipeReader, bkReader.ObjInfo.Size), bkReader.ObjInfo.Size, ObjectOptions{UserDefined: getMetadata(bkReader.ObjInfo)})
 		// close the write end of the pipe, so the error gets
 		// propagated to getObjReader
 		pipeWriter.CloseWithError(putErr)
 	}()
 	cleanupBackend := func() { bkReader.Close() }
-	cleanupPipe := func() { pipeReader.Close() }
+	cleanupPipe := func() { pipeWriter.Close() }
 	return NewGetObjectReaderFromReader(teeReader, bkReader.ObjInfo, opts.CheckCopyPrecondFn, cleanupBackend, cleanupPipe)
 }
 
@@ -446,7 +448,7 @@ func checkAtimeSupport(dir string) (err error) {
 func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
 	logger.StartupMessage(colorBlue("Cache migration initiated ...."))
 
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	errs := make([]error, len(c.cache))
 	for i, dc := range c.cache {
 		if dc == nil {
@@ -483,6 +485,55 @@ func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
 	logger.StartupMessage(colorBlue("Cache migration completed successfully."))
 }
 
+// PutObject - caches the uploaded object for single Put operations
+func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	putObjectFn := c.PutObjectFn
+	dcache, err := c.getCacheToLoc(ctx, bucket, object)
+	if err != nil {
+		// disk cache could not be located,execute backend call.
+		return putObjectFn(ctx, bucket, object, r, opts)
+	}
+	size := r.Size()
+	if c.skipCache() {
+		return putObjectFn(ctx, bucket, object, r, opts)
+	}
+
+	// fetch from backend if there is no space on cache drive
+	if !dcache.diskAvailable(size) {
+		return putObjectFn(ctx, bucket, object, r, opts)
+	}
+	if opts.ServerSideEncryption != nil {
+		return putObjectFn(ctx, bucket, object, r, opts)
+	}
+	// fetch from backend if cache exclude pattern or cache-control
+	// directive set to exclude
+	if c.isCacheExclude(bucket, object) {
+		dcache.Delete(ctx, bucket, object)
+		return putObjectFn(ctx, bucket, object, r, opts)
+	}
+
+	objInfo, err = putObjectFn(ctx, bucket, object, r, opts)
+
+	if err == nil {
+		go func() {
+			// fill cache in the background
+			bReader, bErr := c.GetObjectNInfoFn(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{})
+			if bErr != nil {
+				return
+			}
+			defer bReader.Close()
+			oi, err := c.stat(ctx, dcache, bucket, object)
+			// avoid cache overwrite if another background routine filled cache
+			if err != nil || oi.ETag != bReader.ObjInfo.ETag {
+				c.put(ctx, dcache, bucket, object, bReader, bReader.ObjInfo.Size, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)})
+			}
+		}()
+	}
+
+	return objInfo, err
+
+}
+
 // Returns cacheObjects for use by Server.
 func newServerCacheObjects(ctx context.Context, config CacheConfig) (CacheObjectLayer, error) {
 	// list of disk caches for cache "drives" specified in config.json or MINIO_CACHE_DRIVES env var.
@@ -512,6 +563,9 @@ func newServerCacheObjects(ctx context.Context, config CacheConfig) (CacheObject
 				errs[idx] = newObjectLayerFn().DeleteObject(ctx, bucket, object)
 			}
 			return errs, nil
+		},
+		PutObjectFn: func(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+			return newObjectLayerFn().PutObject(ctx, bucket, object, data, opts)
 		},
 	}
 	if migrateSw {

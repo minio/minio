@@ -396,28 +396,29 @@ func (c *diskCache) bitrotWriteToCache(ctx context.Context, cachePath string, re
 	bufp := c.pool.Get().(*[]byte)
 	defer c.pool.Put(bufp)
 
+	var n, n2 int
 	for {
-		n, err := io.ReadFull(reader, *bufp)
-		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF && err != io.ErrClosedPipe {
+		n, err = io.ReadFull(reader, *bufp)
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 			return 0, err
 		}
-		eof := err == io.EOF || err == io.ErrUnexpectedEOF || err == io.ErrClosedPipe
+		eof := err == io.EOF || err == io.ErrUnexpectedEOF
 		if n == 0 && size != 0 {
 			// Reached EOF, nothing more to be done.
 			break
 		}
 		h.Reset()
-		if _, err := h.Write((*bufp)[:n]); err != nil {
+		if _, err = h.Write((*bufp)[:n]); err != nil {
 			return 0, err
 		}
 		hashBytes := h.Sum(nil)
 		if _, err = f.Write(hashBytes); err != nil {
 			return 0, err
 		}
-		if _, err = f.Write((*bufp)[:n]); err != nil {
+		if n2, err = f.Write((*bufp)[:n]); err != nil {
 			return 0, err
 		}
-		bytesWritten += int64(n)
+		bytesWritten += int64(n2)
 		if eof {
 			break
 		}
@@ -498,9 +499,13 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 		c.setOnline(false)
 	}
 	if err != nil {
+		removeAll(cachePath)
 		return err
 	}
-
+	if actualSize != uint64(n) {
+		removeAll(cachePath)
+		return IncompleteBody{}
+	}
 	return c.saveMetadata(ctx, bucket, object, metadata, n)
 }
 
@@ -623,7 +628,11 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 	filePath := path.Join(cacheObjPath, cacheDataFile)
 	pr, pw := io.Pipe()
 	go func() {
-		pw.CloseWithError(c.bitrotReadFromCache(ctx, filePath, off, length, pw))
+		err := c.bitrotReadFromCache(ctx, filePath, off, length, pw)
+		if err != nil {
+			removeAll(cacheObjPath)
+		}
+		pw.CloseWithError(err)
 	}()
 	// Cleanup function to cause the go routine above to exit, in
 	// case of incomplete read.

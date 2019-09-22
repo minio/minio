@@ -87,11 +87,8 @@ func (target *WebhookTarget) Save(eventData event.Event) error {
 		return pErr
 	}
 	if dErr := u.DialHTTP(); dErr != nil {
-		if urlErr, ok := dErr.(*url.Error); ok {
-			// To treat "connection refused" errors as errNotConnected.
-			if IsConnRefusedErr(urlErr.Err) {
-				return errNotConnected
-			}
+		if xnet.IsNetworkOrHostDown(dErr) {
+			return errNotConnected
 		}
 		return dErr
 	}
@@ -136,17 +133,13 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 
 // Send - reads an event from store and sends it to webhook.
 func (target *WebhookTarget) Send(eventKey string) error {
-
 	u, pErr := xnet.ParseURL(target.args.Endpoint.String())
 	if pErr != nil {
 		return pErr
 	}
 	if dErr := u.DialHTTP(); dErr != nil {
-		if urlErr, ok := dErr.(*url.Error); ok {
-			// To treat "connection refused" errors as errNotConnected.
-			if IsConnRefusedErr(urlErr.Err) {
-				return errNotConnected
-			}
+		if xnet.IsNetworkOrHostDown(dErr) {
+			return errNotConnected
 		}
 		return dErr
 	}
@@ -162,6 +155,9 @@ func (target *WebhookTarget) Send(eventKey string) error {
 	}
 
 	if err := target.send(eventData); err != nil {
+		if xnet.IsNetworkOrHostDown(err) {
+			return errNotConnected
+		}
 		return err
 	}
 

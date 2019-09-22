@@ -1932,17 +1932,17 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 		t.Fatalf("Initialization of API handler tests failed: <ERROR> %s", err)
 	}
 
-	globalIAMSys = NewIAMSys()
-	globalIAMSys.Init(objLayer)
-
-	globalPolicySys = NewPolicySys()
-	globalPolicySys.Init(objLayer)
-
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
 	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
+
+	globalIAMSys = NewIAMSys()
+	globalIAMSys.Init(objLayer)
+
+	globalPolicySys = NewPolicySys()
+	globalPolicySys.Init(objLayer)
 
 	credentials := globalServerConfig.GetCredential()
 

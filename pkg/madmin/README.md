@@ -42,14 +42,14 @@ func main() {
 }
 
 ```
+| Service operations                  | Info operations                                 | Healing operations | Config operations         | Top operations          | IAM operations                        | Misc                                              | KMS                             |
+|:------------------------------------|:------------------------------------------------|:-------------------|:--------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|:--------------------------------|
+| [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                     | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig) | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   | [`GetKeyStatus`](#GetKeyStatus) |
+| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)       |                    | [`SetConfig`](#SetConfig) |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |                                 |
+|                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)     |                    |                           |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
+| [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) |                    |                           |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                 |
+|                                     | [`NetPerfInfo`](#NetPerfInfo)                   |                    |                           |                         |                                       |                                                   |                                 |
 
-| Service operations                  | Info operations                                 | Healing operations | Config operations                 | Top operations          | IAM operations                        | Misc                                              |
-|:------------------------------------|:------------------------------------------------|:-------------------|:----------------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|
-| [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                     | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig)         | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   |
-| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)       |                    | [`SetConfig`](#SetConfig)         |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |
-|                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)     |                    | [`GetConfigKeys`](#GetConfigKeys) |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |
-| [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) |                    | [`SetConfigKeys`](#SetConfigKeys) |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |
-    
 ## 1. Constructor
 <a name="MinIO"></a>
 
@@ -257,7 +257,7 @@ Fetches CPU utilization for all cluster nodes.
 | `cpu.Load.Avg`   | _float64_ | The average utilization of the CPU measured in a 200ms interval |
 | `cpu.Load.Min`   | _float64_ | The minimum utilization of the CPU measured in a 200ms interval |
 | `cpu.Load.Max`   | _float64_ | The maximum utilization of the CPU measured in a 200ms interval |
-| `cpu.Load.Error` | _string_  | Error (if any) encountered while accesing the CPU info          |
+| `cpu.Load.Error` | _string_  | Error (if any) encountered while accessing the CPU info         |
 
 <a name="ServerMemUsageInfo"></a>
 ### ServerMemUsageInfo() ([]ServerMemUsageInfo, error)
@@ -273,7 +273,18 @@ Fetches Mem utilization for all cluster nodes.
 | Param             | Type     | Description                                            |
 |-------------------|----------|--------------------------------------------------------|
 | `mem.Usage.Mem`   | _uint64_ | The total number of bytes obtained from the OS         |
-| `mem.Usage.Error` | _string_ | Error (if any) encountered while accesing the CPU info |
+| `mem.Usage.Error` | _string_ | Error (if any) encountered while accessing the CPU info |
+
+<a name="NetPerfInfo"></a>
+### NetPerfInfo(int size) (map[string][]NetPerfInfo, error)
+
+Fetches network performance of all cluster nodes using given sized payload. Returned value is a map containing each node indexed list of performance of other nodes.
+
+| Param      | Type             | Description                                                        |
+|------------|------------------|--------------------------------------------------------------------|
+| `Addr`     | _string_         | Address of the server the following information is retrieved from. |
+| `Error`    | _string_         | Errors (if any) encountered while reaching this node               |
+| `ReadPerf` | _time.Duration_  | Network read performance of the server                             |
 
 ## 5. Heal operations
 
@@ -377,45 +388,6 @@ __Example__
         log.Fatalf("failed due to: %v", err)
     }
     log.Println("SetConfig was successful")
-```
-
-<a name="GetConfigKeys"></a>
-### GetConfigKeys(keys []string) ([]byte, error)
-Get a json document which contains a set of keys and their values from config.json.
-
-__Example__
-
-``` go
-    configBytes, err := madmClnt.GetConfigKeys([]string{"version", "notify.amqp.1"})
-    if err != nil {
-        log.Fatalf("failed due to: %v", err)
-    }
-
-    // Pretty-print config received as json.
-    var buf bytes.Buffer
-    err = json.Indent(buf, configBytes, "", "\t")
-    if err != nil {
-        log.Fatalf("failed due to: %v", err)
-    }
-
-    log.Println("config received successfully: ", string(buf.Bytes()))
-```
-
-
-<a name="SetConfigKeys"></a>
-### SetConfigKeys(params map[string]string) error
-Set a set of keys and values for MinIO server or distributed setup and restart the MinIO
-server for the new configuration changes to take effect.
-
-__Example__
-
-``` go
-    err := madmClnt.SetConfigKeys(map[string]string{"notify.webhook.1": "{\"enable\": true, \"endpoint\": \"http://example.com/api\"}"})
-    if err != nil {
-        log.Fatalf("failed due to: %v", err)
-    }
-
-    log.Println("New configuration successfully set")
 ```
 
 ## 7. Top operations
@@ -567,4 +539,31 @@ __Example__
     }
 
     log.Println("Profiling data successfully downloaded.")
+```
+
+## 11. KMS
+
+<a name="GetKeyStatus"></a>
+### GetKeyStatus(keyID string) (*KMSKeyStatus, error)
+Requests status information about one particular KMS master key
+from a MinIO server. The keyID is optional and the server will
+use the default master key (configured via `MINIO_SSE_VAULT_KEY_NAME`
+or `MINIO_SSE_MASTER_KEY`) if the keyID is empty.
+
+__Example__
+
+``` go
+    keyInfo, err := madmClnt.GetKeyStatus("my-minio-key")
+    if err != nil {
+       log.Fatalln(err)
+    }
+    if keyInfo.EncryptionErr != "" {
+       log.Fatalf("Failed to perform encryption operation using '%s': %v\n", keyInfo.KeyID, keyInfo.EncryptionErr)
+    }
+    if keyInfo.UpdateErr != "" {
+       log.Fatalf("Failed to perform key re-wrap operation using '%s': %v\n", keyInfo.KeyID, keyInfo.UpdateErr)
+    }
+    if keyInfo.DecryptionErr != "" {
+       log.Fatalf("Failed to perform decryption operation using '%s': %v\n", keyInfo.KeyID, keyInfo.DecryptionErr)
+    }
 ```

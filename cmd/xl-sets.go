@@ -821,13 +821,16 @@ func (f *FileInfoCh) Push(fi FileInfo) {
 	f.Valid = true
 }
 
-// Calculate least entry across multiple FileInfo channels, additionally
-// returns a boolean to indicate if the caller needs to call again.
-func leastEntry(entriesCh []FileInfoCh, readQuorum int) (FileInfo, bool) {
-	var entriesValid = make([]bool, len(entriesCh))
-	var entries = make([]FileInfo, len(entriesCh))
-	for i := range entriesCh {
-		entries[i], entriesValid[i] = entriesCh[i].Pop()
+// Calculate least entry across multiple FileInfo channels,
+// returns the least common entry and the total number of times
+// we found this entry. Additionally also returns a boolean
+// to indicate if the caller needs to call this function
+// again to list the next entry. It is callers responsibility
+// if the caller wishes to list N entries to call leastEntry
+// N times until this boolean is 'false'.
+func leastEntry(entryChs []FileInfoCh, entries []FileInfo, entriesValid []bool) (FileInfo, int, bool) {
+	for i := range entryChs {
+		entries[i], entriesValid[i] = entryChs[i].Pop()
 	}
 
 	var isTruncated = false
@@ -856,9 +859,9 @@ func leastEntry(entriesCh []FileInfoCh, readQuorum int) (FileInfo, bool) {
 	}
 
 	// We haven't been able to find any least entry,
-	// this would mean that we don't have valid.
+	// this would mean that we don't have valid entry.
 	if !found {
-		return lentry, isTruncated
+		return lentry, 0, isTruncated
 	}
 
 	leastEntryCount := 0
@@ -876,48 +879,74 @@ func leastEntry(entriesCh []FileInfoCh, readQuorum int) (FileInfo, bool) {
 
 		// Push all entries which are lexically higher
 		// and will be returned later in Pop()
-		entriesCh[i].Push(entries[i])
+		entryChs[i].Push(entries[i])
 	}
 
-	if readQuorum < 0 {
-		return lentry, isTruncated
-	}
-
-	quorum := lentry.Quorum
-	if quorum == 0 {
-		quorum = readQuorum
-	}
-
-	if leastEntryCount >= quorum {
-		return lentry, isTruncated
-	}
-
-	return leastEntry(entriesCh, readQuorum)
+	return lentry, leastEntryCount, isTruncated
 }
 
 // mergeEntriesCh - merges FileInfo channel to entries upto maxKeys.
-func mergeEntriesCh(entriesCh []FileInfoCh, maxKeys int, readQuorum int) (entries FilesInfo) {
+func mergeEntriesCh(entryChs []FileInfoCh, maxKeys int, totalDrives int, heal bool) (entries FilesInfo) {
 	var i = 0
+	entriesInfos := make([]FileInfo, len(entryChs))
+	entriesValid := make([]bool, len(entryChs))
 	for {
-		fi, valid := leastEntry(entriesCh, readQuorum)
+		fi, quorumCount, valid := leastEntry(entryChs, entriesInfos, entriesValid)
 		if !valid {
+			// We have reached EOF across all entryChs, break the loop.
 			break
 		}
-		if i == maxKeys {
-			entries.IsTruncated = true
-			// Re-insert the last entry so it can be
-			// listed in the next listing iteration.
-			for j := range entriesCh {
-				if !entriesCh[j].Valid {
-					entriesCh[j].Push(fi)
-				}
+
+		rquorum := fi.Quorum
+		// Quorum is zero for all directories.
+		if rquorum == 0 {
+			// Choose N/2 quoroum for directory entries.
+			rquorum = totalDrives / 2
+		}
+
+		if heal {
+			// When healing is enabled, we should
+			// list only objects which need healing.
+			if quorumCount == totalDrives {
+				// Skip good entries.
+				continue
 			}
-			break
+		} else {
+			// Regular listing, we skip entries not in quorum.
+			if quorumCount < rquorum {
+				// Skip entries which do not have quorum.
+				continue
+			}
 		}
 		entries.Files = append(entries.Files, fi)
 		i++
+		if i == maxKeys {
+			entries.IsTruncated = isTruncated(entryChs, entriesInfos, entriesValid)
+			break
+		}
 	}
 	return entries
+}
+
+func isTruncated(entryChs []FileInfoCh, entries []FileInfo, entriesValid []bool) bool {
+	for i := range entryChs {
+		entries[i], entriesValid[i] = entryChs[i].Pop()
+	}
+
+	var isTruncated = false
+	for _, valid := range entriesValid {
+		if !valid {
+			continue
+		}
+		isTruncated = true
+		break
+	}
+	for i := range entryChs {
+		if entriesValid[i] {
+			entryChs[i].Push(entries[i])
+		}
+	}
+	return isTruncated
 }
 
 // Starts a walk channel across all disks and returns a slice.
@@ -948,19 +977,29 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 	recursive := true
 	entryChs := s.startMergeWalks(context.Background(), bucket, prefix, "", recursive, endWalkCh)
 
-	readQuorum := s.drivesPerSet / 2
 	var objInfos []ObjectInfo
 	var eof bool
 	var prevPrefix string
 
+	entriesValid := make([]bool, len(entryChs))
+	entries := make([]FileInfo, len(entryChs))
 	for {
 		if len(objInfos) == maxKeys {
 			break
 		}
-		result, ok := leastEntry(entryChs, readQuorum)
+		result, quorumCount, ok := leastEntry(entryChs, entries, entriesValid)
 		if !ok {
 			eof = true
 			break
+		}
+		rquorum := result.Quorum
+		// Quorum is zero for all directories.
+		if rquorum == 0 {
+			// Choose N/2 quorum for directory entries.
+			rquorum = s.drivesPerSet / 2
+		}
+		if quorumCount < rquorum {
+			continue
 		}
 
 		var objInfo ObjectInfo
@@ -1087,12 +1126,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 		entryChs = s.startMergeWalks(context.Background(), bucket, prefix, marker, recursive, endWalkCh)
 	}
 
-	readQuorum := s.drivesPerSet / 2
-	if heal {
-		readQuorum = -1
-	}
-
-	entries := mergeEntriesCh(entryChs, maxKeys, readQuorum)
+	entries := mergeEntriesCh(entryChs, maxKeys, s.drivesPerSet, heal)
 	if len(entries.Files) == 0 {
 		return loi, nil
 	}
@@ -1251,35 +1285,29 @@ fi
 */
 
 func formatsToDrivesInfo(endpoints EndpointList, formats []*formatXLV3, sErrs []error) (beforeDrives []madmin.DriveInfo) {
+	beforeDrives = make([]madmin.DriveInfo, len(endpoints))
 	// Existing formats are available (i.e. ok), so save it in
 	// result, also populate disks to be healed.
 	for i, format := range formats {
 		drive := endpoints.GetString(i)
+		var state = madmin.DriveStateCorrupt
 		switch {
 		case format != nil:
-			beforeDrives = append(beforeDrives, madmin.DriveInfo{
-				UUID:     format.XL.This,
-				Endpoint: drive,
-				State:    madmin.DriveStateOk,
-			})
+			state = madmin.DriveStateOk
 		case sErrs[i] == errUnformattedDisk:
-			beforeDrives = append(beforeDrives, madmin.DriveInfo{
-				UUID:     "",
-				Endpoint: drive,
-				State:    madmin.DriveStateMissing,
-			})
+			state = madmin.DriveStateMissing
 		case sErrs[i] == errDiskNotFound:
-			beforeDrives = append(beforeDrives, madmin.DriveInfo{
-				UUID:     "",
-				Endpoint: drive,
-				State:    madmin.DriveStateOffline,
-			})
-		default:
-			beforeDrives = append(beforeDrives, madmin.DriveInfo{
-				UUID:     "",
-				Endpoint: drive,
-				State:    madmin.DriveStateCorrupt,
-			})
+			state = madmin.DriveStateOffline
+		}
+		beforeDrives[i] = madmin.DriveInfo{
+			UUID: func() string {
+				if format != nil {
+					return format.XL.This
+				}
+				return ""
+			}(),
+			Endpoint: drive,
+			State:    state,
 		}
 	}
 

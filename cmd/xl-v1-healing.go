@@ -57,7 +57,7 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 	dryRun bool) (res madmin.HealResultItem, err error) {
 
 	// Initialize sync waitgroup.
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 
 	// Initialize list of errors.
 	var dErrs = make([]error, len(storageDisks))

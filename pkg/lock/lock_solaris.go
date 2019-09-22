@@ -19,7 +19,6 @@
 package lock
 
 import (
-	"fmt"
 	"os"
 	"syscall"
 )
@@ -39,7 +38,11 @@ func lockedOpenFile(path string, flag int, perm os.FileMode, rlockType int) (*Lo
 	case syscall.O_RDWR | syscall.O_CREAT:
 		lockType = syscall.F_WRLCK
 	default:
-		return nil, fmt.Errorf("Unsupported flag (%d)", flag)
+		return nil, &os.PathError{
+			Op:   "open",
+			Path: path,
+			Err:  syscall.EINVAL,
+		}
 	}
 
 	var lock = syscall.Flock_t{

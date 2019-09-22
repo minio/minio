@@ -127,8 +127,8 @@ func (iamOS *IAMObjectStore) migrateUsersConfigToV1(isSTS bool) error {
 		identityPath := pathJoin(basePrefix, user, iamIdentityFile)
 		var cred auth.Credentials
 		if err := iamOS.loadIAMConfig(&cred, identityPath); err != nil {
-			switch err.(type) {
-			case ObjectNotFound:
+			switch err {
+			case errConfigNotFound:
 				// This should not happen.
 			default:
 				// File may be corrupt or network error
@@ -169,7 +169,7 @@ func (iamOS *IAMObjectStore) migrateToV1() error {
 		case errConfigNotFound:
 			// Need to migrate to V1.
 		default:
-			return errors.New("corrupt IAM format file")
+			return err
 		}
 	} else {
 		if iamFmt.Version >= iamFormatVersion1 {
@@ -429,24 +429,33 @@ func (iamOS *IAMObjectStore) loadAll(sys *IAMSys, objectAPI ObjectLayer) error {
 	iamUserPolicyMap := make(map[string]MappedPolicy)
 	iamGroupPolicyMap := make(map[string]MappedPolicy)
 
+	isMinIOUsersSys := false
+	sys.RLock()
+	if sys.usersSysType == MinIOUsersSysType {
+		isMinIOUsersSys = true
+	}
+	sys.RUnlock()
+
 	if err := iamOS.loadPolicyDocs(iamPolicyDocsMap); err != nil {
 		return err
 	}
-	if err := iamOS.loadUsers(false, iamUsersMap); err != nil {
-		return err
-	}
-	// load STS temp users into the same map
+	// load STS temp users
 	if err := iamOS.loadUsers(true, iamUsersMap); err != nil {
 		return err
 	}
-	if err := iamOS.loadGroups(iamGroupsMap); err != nil {
-		return err
-	}
+	if isMinIOUsersSys {
+		if err := iamOS.loadUsers(false, iamUsersMap); err != nil {
+			return err
+		}
+		if err := iamOS.loadGroups(iamGroupsMap); err != nil {
+			return err
+		}
 
-	if err := iamOS.loadMappedPolicies(false, false, iamUserPolicyMap); err != nil {
-		return err
+		if err := iamOS.loadMappedPolicies(false, false, iamUserPolicyMap); err != nil {
+			return err
+		}
 	}
-	// load STS policy mappings into the same map
+	// load STS policy mappings
 	if err := iamOS.loadMappedPolicies(true, false, iamUserPolicyMap); err != nil {
 		return err
 	}
