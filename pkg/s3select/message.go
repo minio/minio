@@ -417,7 +417,7 @@ func newMessageWriter(w http.ResponseWriter, getProgressFunc func() (bytesScanne
 		getProgressFunc: getProgressFunc,
 
 		payloadBuffer: make([]byte, bufLength),
-		payloadCh:     make(chan *bytes.Buffer),
+		payloadCh:     make(chan *bytes.Buffer, 1),
 
 		errCh:  make(chan []byte),
 		doneCh: make(chan struct{}),

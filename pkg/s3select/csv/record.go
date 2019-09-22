@@ -61,6 +61,33 @@ func (r *Record) Set(name string, value *sql.Value) error {
 	return nil
 }
 
+// Reset data in record.
+func (r *Record) Reset() {
+	if len(r.columnNames) > 0 {
+		r.columnNames = r.columnNames[:0]
+	}
+	if len(r.csvRecord) > 0 {
+		r.csvRecord = r.csvRecord[:0]
+	}
+	for k := range r.nameIndexMap {
+		delete(r.nameIndexMap, k)
+	}
+}
+
+// CopyFrom will copy all records from the incoming and append them to the existing records.
+// The source record must be of a similar type.
+// Note that the lookup index is not copied.
+func (r *Record) CopyFrom(record sql.Record) error {
+	other, ok := record.(*Record)
+	if !ok {
+		return fmt.Errorf("unexpected record type, expected %T, got %T", r, record)
+	}
+	//before := len(r.csvRecord)
+	r.columnNames = append(r.columnNames, other.columnNames...)
+	r.csvRecord = append(r.csvRecord, other.csvRecord...)
+	return nil
+}
+
 // WriteCSV - encodes to CSV data.
 func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune) error {
 	w := csv.NewWriter(writer)
