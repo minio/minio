@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -303,6 +303,12 @@ func (s *serverConfig) loadFromEnvs() {
 		s.Policy.OPA.URL = opaArgs.URL
 		s.Policy.OPA.AuthToken = opaArgs.AuthToken
 	}
+
+	var err error
+	s.LDAPServerConfig, err = newLDAPConfigFromEnv()
+	if err != nil {
+		logger.FatalIf(err, "Unable to parse LDAP configuration from env")
+	}
 }
 
 // TestNotificationTargets tries to establish connections to all notification
@@ -335,6 +341,9 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
+		if v.TLS.Enable {
+			v.TLS.RootCAs = globalRootCAs
+		}
 		t, err := target.NewKafkaTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("kafka(%s): %s", k, err.Error())
@@ -346,6 +355,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
+		v.RootCAs = globalRootCAs
 		t, err := target.NewMQTTTarget(k, v, GlobalServiceDoneCh)
 		if err != nil {
 			return fmt.Errorf("mqtt(%s): %s", k, err.Error())
@@ -684,6 +694,9 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.Kafka {
 		if args.Enable {
+			if args.TLS.Enable {
+				args.TLS.RootCAs = globalRootCAs
+			}
 			newTarget, err := target.NewKafkaTarget(id, args, GlobalServiceDoneCh)
 			if err != nil {
 				logger.LogIf(context.Background(), err)

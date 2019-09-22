@@ -257,9 +257,6 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 	}
 
 	deleteBucket := objectAPI.DeleteBucket
-	if web.CacheAPI() != nil {
-		deleteBucket = web.CacheAPI().DeleteBucket
-	}
 
 	if err := deleteBucket(ctx, args.BucketName); err != nil {
 		return toJSONError(ctx, err, args.BucketName)
@@ -302,9 +299,6 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		return toJSONError(ctx, errServerNotInitialized)
 	}
 	listBuckets := objectAPI.ListBuckets
-	if web.CacheAPI() != nil {
-		listBuckets = web.CacheAPI().ListBuckets
-	}
 
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
@@ -407,9 +401,6 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	}
 
 	listObjects := objectAPI.ListObjects
-	if web.CacheAPI() != nil {
-		listObjects = web.CacheAPI().ListObjects
-	}
 
 	if isRemoteCallRequired(ctx, args.BucketName, objectAPI) {
 		sr, err := globalDNSConfig.Get(args.BucketName)
@@ -600,9 +591,6 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		return toJSONError(ctx, errServerNotInitialized)
 	}
 	listObjects := objectAPI.ListObjects
-	if web.CacheAPI() != nil {
-		listObjects = web.CacheAPI().ListObjects
-	}
 
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
@@ -1034,7 +1022,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if objectAPI.IsEncryptionSupported() {
-		if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(object, SlashSeparator) { // handle SSE requests
+		if crypto.IsRequested(r.Header) && !hasSuffix(object, SlashSeparator) { // handle SSE requests
 			rawReader := hashReader
 			var objectEncryptionKey []byte
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
@@ -1065,10 +1053,11 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	putObject := objectAPI.PutObject
-	if !hasServerSideEncryptionHeader(r.Header) && web.CacheAPI() != nil {
+	if web.CacheAPI() != nil {
 		putObject = web.CacheAPI().PutObject
 	}
-	objInfo, err := putObject(ctx, bucket, object, pReader, opts)
+
+	objInfo, err := putObject(context.Background(), bucket, object, pReader, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -1307,43 +1296,29 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 		writeWebErrorResponse(w, errInvalidBucketName)
 		return
 	}
+	getObjectNInfo := objectAPI.GetObjectNInfo
+	if web.CacheAPI() != nil {
+		getObjectNInfo = web.CacheAPI().GetObjectNInfo
+	}
 
-	getObject := objectAPI.GetObject
-	if web.CacheAPI() != nil {
-		getObject = web.CacheAPI().GetObject
-	}
 	listObjects := objectAPI.ListObjects
-	if web.CacheAPI() != nil {
-		listObjects = web.CacheAPI().ListObjects
-	}
 
 	archive := zip.NewWriter(w)
 	defer archive.Close()
 
-	getObjectInfo := objectAPI.GetObjectInfo
-	if web.CacheAPI() != nil {
-		getObjectInfo = web.CacheAPI().GetObjectInfo
-	}
-	opts := ObjectOptions{}
 	var length int64
 	for _, object := range args.Objects {
 		// Writes compressed object file to the response.
 		zipit := func(objectName string) error {
-			info, err := getObjectInfo(ctx, args.BucketName, objectName, opts)
+			var opts ObjectOptions
+			gr, err := getObjectNInfo(ctx, args.BucketName, objectName, nil, r.Header, readLock, opts)
 			if err != nil {
 				return err
 			}
-			length = info.Size
-			if objectAPI.IsEncryptionSupported() {
-				if _, err = DecryptObjectInfo(&info, r.Header); err != nil {
-					writeWebErrorResponse(w, err)
-					return err
-				}
-				if crypto.IsEncrypted(info.UserDefined) {
-					length, _ = info.DecryptedSize()
-				}
-			}
-			length = info.Size
+			defer gr.Close()
+
+			info := gr.ObjInfo
+
 			var actualSize int64
 			if info.IsCompressed() {
 				// Read the decompressed size from the meta.json.
@@ -1362,21 +1337,16 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				writeWebErrorResponse(w, errUnexpected)
 				return err
 			}
-			var startOffset int64
 			var writer io.Writer
 
 			if info.IsCompressed() {
-				// The decompress metrics are set.
-				snappyStartOffset := 0
-				snappyLength := actualSize
-
 				// Open a pipe for compression
 				// Where compressWriter is actually passed to the getObject
 				decompressReader, compressWriter := io.Pipe()
 				snappyReader := snappy.NewReader(decompressReader)
 
 				// The limit is set to the actual size.
-				responseWriter := ioutil.LimitedWriter(zipWriter, int64(snappyStartOffset), snappyLength)
+				responseWriter := ioutil.LimitedWriter(zipWriter, 0, actualSize)
 				wg.Add(1) //For closures.
 				go func() {
 					defer wg.Done()
@@ -1391,26 +1361,21 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			} else {
 				writer = zipWriter
 			}
-			if objectAPI.IsEncryptionSupported() && crypto.S3.IsEncrypted(info.UserDefined) {
-				// Response writer should be limited early on for decryption upto required length,
-				// additionally also skipping mod(offset)64KiB boundaries.
-				writer = ioutil.LimitedWriter(writer, startOffset%(64*1024), length)
-				writer, startOffset, length, err = DecryptBlocksRequest(writer, r,
-					args.BucketName, objectName, startOffset, length, info, false)
-				if err != nil {
-					writeWebErrorResponse(w, err)
-					return err
-				}
-			}
 			httpWriter := ioutil.WriteOnClose(writer)
-			if err = getObject(ctx, args.BucketName, objectName, startOffset, length, httpWriter, "", opts); err != nil {
+
+			// Write object content to response body
+			if _, err = io.Copy(httpWriter, gr); err != nil {
 				httpWriter.Close()
 				if info.IsCompressed() {
 					// Wait for decompression go-routine to retire.
 					wg.Wait()
 				}
+				if !httpWriter.HasWritten() { // write error response only if no data or headers has been written to client yet
+					writeWebErrorResponse(w, err)
+				}
 				return err
 			}
+
 			if err = httpWriter.Close(); err != nil {
 				if !httpWriter.HasWritten() { // write error response only if no data has been written to client yet
 					writeWebErrorResponse(w, err)
@@ -1983,6 +1948,8 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 		return getAPIError(ErrStorageFull)
 	case BucketNotFound:
 		return getAPIError(ErrNoSuchBucket)
+	case BucketNotEmpty:
+		return getAPIError(ErrBucketNotEmpty)
 	case BucketExists:
 		return getAPIError(ErrBucketAlreadyOwnedByYou)
 	case BucketNameInvalid:

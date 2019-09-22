@@ -8,6 +8,13 @@
     background-color: transparent;
 }
 
+.form-control--path {
+    color: @link-color;
+    padding: 5px 5px 6px 0;
+    font-size: 16px;
+    .placeholder(@text-muted-color)
+}
+
 select.form-control {
     -webkit-appearance: none;
     -moz-appearance: none;
@@ -153,7 +160,7 @@ select.form-control {
     }
     &:after {
         content: "\f05a";
-        font-family: FontAwesome;
+        font-family: 'Font Awesome 5 Free';
         position: absolute;
         top: 17px;
         right: 9px;
@@ -165,6 +172,7 @@ select.form-control {
 .ig-search {
     &:before {
         font-family: @font-family-icon;
+        font-weight: 900;
         content: '\f002';
         font-size: 15px;
         position: absolute;

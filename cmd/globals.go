@@ -118,6 +118,9 @@ var (
 	// Indicates if the running minio is in gateway mode.
 	globalIsGateway = false
 
+	// Name of gateway server, e.g S3, GCS, Azure, etc
+	globalGatewayName = ""
+
 	// This flag is set to 'true' by default
 	globalIsBrowserEnabled = true
 
@@ -171,6 +174,10 @@ var (
 	// registered listeners
 	globalHTTPTrace = pubsub.New()
 
+	// global console system to send console logs to
+	// registered listeners
+	globalConsoleSys *HTTPConsoleLoggerSys
+
 	globalEndpoints EndpointList
 
 	// Global server's network statistics
@@ -218,7 +225,10 @@ var (
 	globalCacheExpiry = 90
 	// Max allowed disk cache percentage
 	globalCacheMaxUse = 80
-
+	// Disk cache KMS Key
+	globalCacheKMSKeyID string
+	// Initialized KMS configuration for disk cache
+	globalCacheKMS crypto.KMS
 	// Allocated etcd endpoint for config and bucket DNS.
 	globalEtcdClient *etcd.Client
 
@@ -330,18 +340,6 @@ var (
 	colorBlack = func() func(format string, a ...interface{}) string {
 		if isTerminal() {
 			return color.New(color.FgBlack).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
-	colorGreenBold = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgGreen, color.Bold).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
-	colorRedBold = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgRed, color.Bold).SprintfFunc()
 		}
 		return fmt.Sprintf
 	}()

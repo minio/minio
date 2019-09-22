@@ -20,6 +20,29 @@ import (
 	"testing"
 )
 
+func TestIsRequested(t *testing.T) {
+	for i, test := range kmsIsRequestedTests {
+		if got := IsRequested(test.Header) && S3KMS.IsRequested(test.Header); got != test.Expected {
+			t.Errorf("SSE-KMS: Test %d: Wanted %v but got %v", i, test.Expected, got)
+		}
+	}
+	for i, test := range s3IsRequestedTests {
+		if got := IsRequested(test.Header) && S3.IsRequested(test.Header); got != test.Expected {
+			t.Errorf("SSE-S3: Test %d: Wanted %v but got %v", i, test.Expected, got)
+		}
+	}
+	for i, test := range ssecIsRequestedTests {
+		if got := IsRequested(test.Header) && SSEC.IsRequested(test.Header); got != test.Expected {
+			t.Errorf("SSE-C: Test %d: Wanted %v but got %v", i, test.Expected, got)
+		}
+	}
+	for i, test := range ssecCopyIsRequestedTests {
+		if got := IsRequested(test.Header) && SSECopy.IsRequested(test.Header); got != test.Expected {
+			t.Errorf("SSE-C: Test %d: Wanted %v but got %v", i, test.Expected, got)
+		}
+	}
+}
+
 var kmsIsRequestedTests = []struct {
 	Header   http.Header
 	Expected bool

@@ -53,12 +53,22 @@ func TestRedirectLocation(t *testing.T) {
 			location: minioReservedBucketPath + "/login",
 		},
 		{
-			// 5. When urlPath is '/favicon.ico'
-			urlPath:  "/favicon.ico",
-			location: minioReservedBucketPath + "/favicon.ico",
+			// 5. When urlPath is '/favicon-16x16.png'
+			urlPath:  "/favicon-16x16.png",
+			location: minioReservedBucketPath + "/favicon-16x16.png",
 		},
 		{
-			// 6. When urlPath is '/unknown'
+			// 6. When urlPath is '/favicon-16x16.png'
+			urlPath:  "/favicon-32x32.png",
+			location: minioReservedBucketPath + "/favicon-32x32.png",
+		},
+		{
+			// 7. When urlPath is '/favicon-96x96.png'
+			urlPath:  "/favicon-96x96.png",
+			location: minioReservedBucketPath + "/favicon-96x96.png",
+		},
+		{
+			// 8. When urlPath is '/unknown'
 			urlPath:  "/unknown",
 			location: "",
 		},
@@ -175,7 +185,7 @@ var containsReservedMetadataTests = []struct {
 		shouldFail: true,
 	},
 	{
-		header:     http.Header{crypto.SSESealAlgorithm: []string{SSESealAlgorithmDareSha256}},
+		header:     http.Header{crypto.SSESealAlgorithm: []string{crypto.InsecureSealAlgorithm}},
 		shouldFail: true,
 	},
 	{

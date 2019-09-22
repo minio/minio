@@ -1,7 +1,7 @@
 // +build ignore
 
 /*
- * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,35 +20,41 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
 )
 
 func main() {
-	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY are
+	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY and my-bucketname are
 	// dummy values, please replace them with original values.
 
-	// API requests are secure (HTTPS) if secure=true and insecure (HTTPS) otherwise.
+	// API requests are secure (HTTPS) if secure=true and insecure (HTTP) otherwise.
 	// New returns an MinIO Admin client object.
 	madmClnt, err := madmin.New("your-minio.example.com:9000", "YOUR-ACCESSKEYID", "YOUR-SECRETACCESSKEY", true)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	configBytes, err := madmClnt.GetConfigKeys([]string{"notify.amqp.1", "version"})
+	status, err := madmClnt.GetKeyStatus("") // empty string refers to the default master key
 	if err != nil {
-		log.Fatalf("failed due to: %v", err)
+		log.Fatalln(err)
 	}
 
-	// Pretty-print config received as json.
-	var buf bytes.Buffer
-	err = json.Indent(&buf, configBytes, "", "\t")
-	if err != nil {
-		log.Fatalf("failed due to: %v", err)
+	log.Printf("Key: %s\n", status.KeyID)
+	if status.EncryptionErr == "" {
+		log.Println("\t • Encryption ✔")
+	} else {
+		log.Printf("\t • Encryption failed: %s\n", status.EncryptionErr)
 	}
-
-	log.Println("config received successfully: ", string(buf.Bytes()))
+	if status.UpdateErr == "" {
+		log.Println("\t • Re-wrap ✔")
+	} else {
+		log.Printf("\t • Re-wrap failed: %s\n", status.UpdateErr)
+	}
+	if status.DecryptionErr == "" {
+		log.Println("\t • Decryption ✔")
+	} else {
+		log.Printf("\t •  Decryption failed: %s\n", status.DecryptionErr)
+	}
 }

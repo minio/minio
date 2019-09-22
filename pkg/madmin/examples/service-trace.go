@@ -30,7 +30,7 @@ func main() {
 	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY are
 	// dummy values, please replace them with original values.
 
-	// API requests are secure (HTTPS) if secure=true and insecure (HTTPS) otherwise.
+	// API requests are secure (HTTPS) if secure=true and insecure (HTTP) otherwise.
 	// New returns an MinIO Admin client object.
 	madmClnt, err := madmin.New("your-minio.example.com:9000", "YOUR-ACCESSKEYID", "YOUR-SECRETACCESSKEY", true)
 	if err != nil {
@@ -43,7 +43,7 @@ func main() {
 	// in the minio cluster.
 	allTrace := false
 	errTrace := false
-	traceCh := madmClnt.Trace(allTrace, errTrace, doneCh)
+	traceCh := madmClnt.ServiceTrace(allTrace, errTrace, doneCh)
 	for traceInfo := range traceCh {
 		if traceInfo.Err != nil {
 			fmt.Println(traceInfo.Err)

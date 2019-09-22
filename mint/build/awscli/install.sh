@@ -15,6 +15,6 @@
 #  limitations under the License.
 #
 
-AWS_CLI_VERSION="1.11.112"
+AWS_CLI_VERSION="1.11.177"
 
 python -m pip install awscli==$AWS_CLI_VERSION

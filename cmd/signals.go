@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2015-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,13 +26,13 @@ import (
 
 func handleSignals() {
 	// Custom exit function
-	exit := func(state bool) {
+	exit := func(success bool) {
 		// If global profiler is set stop before we exit.
 		if globalProfiler != nil {
 			globalProfiler.Stop()
 		}
 
-		if state {
+		if success {
 			os.Exit(0)
 		}
 
@@ -66,20 +66,18 @@ func handleSignals() {
 	for {
 		select {
 		case err := <-globalHTTPServerErrorCh:
-			logger.LogIf(context.Background(), err)
-			var oerr error
 			if objAPI := newObjectLayerFn(); objAPI != nil {
-				oerr = objAPI.Shutdown(context.Background())
+				objAPI.Shutdown(context.Background())
 			}
-
-			exit(err == nil && oerr == nil)
+			if err != nil {
+				logger.Fatal(err, "Unable to start MinIO server")
+			}
+			exit(true)
 		case osSignal := <-globalOSSignalCh:
 			logger.Info("Exiting on signal: %s", strings.ToUpper(osSignal.String()))
 			exit(stopProcess())
 		case signal := <-globalServiceSignalCh:
 			switch signal {
-			case serviceStatus:
-				// Ignore this at the moment.
 			case serviceRestart:
 				logger.Info("Restarting on service signal")
 				stop := stopProcess()

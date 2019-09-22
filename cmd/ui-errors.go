@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,13 +32,13 @@ var (
 	uiErrInvalidDomainValue = newUIErrFn(
 		"Invalid domain value",
 		"Please check the passed value",
-		"Domain can only accept DNS compatible values.",
+		"Domain can only accept DNS compatible values",
 	)
 
 	uiErrInvalidErasureSetSize = newUIErrFn(
 		"Invalid erasure set size",
 		"Please check the passed value",
-		"Erasure set can only accept any of [4, 6, 8, 10, 12, 14, 16] values.",
+		"Erasure set can only accept any of [4, 6, 8, 10, 12, 14, 16] values",
 	)
 
 	uiErrInvalidWormValue = newUIErrFn(
@@ -62,32 +62,38 @@ var (
 	uiErrInvalidCacheExpiryValue = newUIErrFn(
 		"Invalid cache expiry value",
 		"Please check the passed value",
-		"MINIO_CACHE_EXPIRY: Valid cache expiry duration is in days.",
+		"MINIO_CACHE_EXPIRY: Valid cache expiry duration is in days",
 	)
 
 	uiErrInvalidCacheMaxUse = newUIErrFn(
 		"Invalid cache max-use value",
 		"Please check the passed value",
-		"MINIO_CACHE_MAXUSE: Valid cache max-use value between 0-100.",
+		"MINIO_CACHE_MAXUSE: Valid cache max-use value between 0-100",
+	)
+
+	uiErrInvalidCacheEncryptionKey = newUIErrFn(
+		"Invalid cache encryption master key value",
+		"Please check the passed value",
+		"MINIO_CACHE_ENCRYPTION_MASTER_KEY: For more information, please refer to https://docs.min.io/docs/minio-disk-cache-guide",
 	)
 
 	uiErrInvalidCredentials = newUIErrFn(
 		"Invalid credentials",
 		"Please provide correct credentials",
 		`Access key length should be between minimum 3 characters in length.
-Secret key should be in between 8 and 40 characters.`,
+Secret key should be in between 8 and 40 characters`,
 	)
 
 	uiErrEnvCredentialsMissingGateway = newUIErrFn(
 		"Credentials missing",
 		"Please set your credentials in the environment",
-		`In Gateway mode, access and secret keys should be specified via environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY respectively.`,
+		`In Gateway mode, access and secret keys should be specified via environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY respectively`,
 	)
 
 	uiErrEnvCredentialsMissingDistributed = newUIErrFn(
 		"Credentials missing",
 		"Please set your credentials in the environment",
-		`In distributed server mode, access and secret keys should be specified via environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY respectively.`,
+		`In distributed server mode, access and secret keys should be specified via environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY respectively`,
 	)
 
 	uiErrInvalidErasureEndpoints = newUIErrFn(
@@ -105,9 +111,9 @@ Secret key should be in between 8 and 40 characters.`,
 	uiErrStorageClassValue = newUIErrFn(
 		"Invalid storage class value",
 		"Please check the value",
-		`MINIO_STORAGE_CLASS_STANDARD: Format "EC:<Default_Parity_Standard_Class>" (e.g. "EC:3"). This sets the number of parity disks for MinIO server in Standard mode. Objects are stored in Standard mode, if storage class is not defined in Put request.
-MINIO_STORAGE_CLASS_RRS: Format "EC:<Default_Parity_Reduced_Redundancy_Class>" (e.g. "EC:3"). This sets the number of parity disks for MinIO server in Reduced Redundancy mode. Objects are stored in Reduced Redundancy mode, if Put request specifies RRS storage class.
-Refer to the link https://github.com/minio/minio/tree/master/docs/erasure/storage-class for more information.`,
+		`MINIO_STORAGE_CLASS_STANDARD: Format "EC:<Default_Parity_Standard_Class>" (e.g. "EC:3"). This sets the number of parity disks for MinIO server in Standard mode. Objects are stored in Standard mode, if storage class is not defined in Put request
+MINIO_STORAGE_CLASS_RRS: Format "EC:<Default_Parity_Reduced_Redundancy_Class>" (e.g. "EC:3"). This sets the number of parity disks for MinIO server in Reduced Redundancy mode. Objects are stored in Reduced Redundancy mode, if Put request specifies RRS storage class
+Refer to the link https://github.com/minio/minio/tree/master/docs/erasure/storage-class for more information`,
 	)
 
 	uiErrUnexpectedBackendVersion = newUIErrFn(
@@ -128,7 +134,7 @@ Refer to the link https://github.com/minio/minio/tree/master/docs/erasure/storag
 	uiErrInvalidFSEndpoint = newUIErrFn(
 		"Invalid endpoint for standalone FS mode",
 		"Please check the FS endpoint",
-		`FS mode requires only one writable disk path.
+		`FS mode requires only one writable disk path
 Example 1:
    $ minio server /data/minio/`,
 	)
@@ -136,13 +142,19 @@ Example 1:
 	uiErrUnableToWriteInBackend = newUIErrFn(
 		"Unable to write to the backend",
 		"Please ensure MinIO binary has write permissions for the backend",
-		"",
+		`Verify if MinIO binary is running as the same user who has write permissions for the backend`,
 	)
 
 	uiErrPortAlreadyInUse = newUIErrFn(
 		"Port is already in use",
 		"Please ensure no other program uses the same address/port",
 		"",
+	)
+
+	uiErrPortAccess = newUIErrFn(
+		"Unable to use specified port",
+		"Please ensure MinIO binary has 'cap_net_bind_service=+ep' permissions",
+		`Use 'sudo setcap cap_net_bind_service=+ep /path/to/minio' to provide sufficient permissions`,
 	)
 
 	uiErrNoPermissionsToAccessDirFiles = newUIErrFn(
@@ -154,7 +166,7 @@ Example 1:
 	uiErrSSLUnexpectedError = newUIErrFn(
 		"Invalid TLS certificate",
 		"Please check the content of your certificate data",
-		`Only PEM (x.509) format is accepted as valid public & private certificates.`,
+		`Only PEM (x.509) format is accepted as valid public & private certificates`,
 	)
 
 	uiErrSSLUnexpectedData = newUIErrFn(
@@ -171,8 +183,8 @@ Example 1:
 
 	uiErrNoCertsAndHTTPSEndpoints = newUIErrFn(
 		"HTTPS specified in endpoints, but no TLS certificate is found on the local machine",
-		"Please add a certificate or switch to HTTP.",
-		"Refer to https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls for information about how to load a TLS certificate in your server.",
+		"Please add TLS certificate or use HTTP endpoints only",
+		"Refer to https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls for information about how to load a TLS certificate in your server",
 	)
 
 	uiErrCertsAndHTTPEndpoints = newUIErrFn(

@@ -99,26 +99,29 @@ func benchmarkSelect(b *testing.B, count int, query string) {
 </SelectObjectContentRequest>
 `)
 
-	s3Select, err := NewS3Select(bytes.NewReader(requestXML))
-	if err != nil {
-		b.Fatal(err)
-	}
-
 	csvData := genSampleCSVData(count)
 
 	b.ResetTimer()
 	b.ReportAllocs()
+	b.SetBytes(int64(count))
 
-	for i := 0; i < b.N; i++ {
-		if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
-			return ioutil.NopCloser(bytes.NewReader(csvData)), nil
-		}); err != nil {
-			b.Fatal(err)
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			s3Select, err := NewS3Select(bytes.NewReader(requestXML))
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
+				return ioutil.NopCloser(bytes.NewReader(csvData)), nil
+			}); err != nil {
+				b.Fatal(err)
+			}
+
+			s3Select.Evaluate(&nullResponseWriter{})
+			s3Select.Close()
 		}
-
-		s3Select.Evaluate(&nullResponseWriter{})
-		s3Select.Close()
-	}
+	})
 }
 
 func benchmarkSelectAll(b *testing.B, count int) {
@@ -143,6 +146,30 @@ func BenchmarkSelectAll_2M(b *testing.B) {
 // BenchmarkSelectAll_10M - benchmark * function with 10m records.
 func BenchmarkSelectAll_10M(b *testing.B) {
 	benchmarkSelectAll(b, 10*humanize.MiByte)
+}
+
+func benchmarkSingleCol(b *testing.B, count int) {
+	benchmarkSelect(b, count, "select id from S3Object")
+}
+
+// BenchmarkSingleRow_100K - benchmark SELECT column function with 100k records.
+func BenchmarkSingleCol_100K(b *testing.B) {
+	benchmarkSingleCol(b, 1e5)
+}
+
+// BenchmarkSelectAll_1M - benchmark * function with 1m records.
+func BenchmarkSingleCol_1M(b *testing.B) {
+	benchmarkSingleCol(b, 1e6)
+}
+
+// BenchmarkSelectAll_2M - benchmark * function with 2m records.
+func BenchmarkSingleCol_2M(b *testing.B) {
+	benchmarkSingleCol(b, 2e6)
+}
+
+// BenchmarkSelectAll_10M - benchmark * function with 10m records.
+func BenchmarkSingleCol_10M(b *testing.B) {
+	benchmarkSingleCol(b, 1e7)
 }
 
 func benchmarkAggregateCount(b *testing.B, count int) {

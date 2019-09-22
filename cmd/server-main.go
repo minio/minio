@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2015-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,14 +120,7 @@ EXAMPLES:
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
      {{.Prompt}} {{.HelpName}} http://node{1...32}.example.com/mnt/export/{1...32}
 
-  6. Start minio server with edge caching enabled.
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*;*.png"
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXPIRY{{.AssignmentOperator}}40
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_MAXUSE{{.AssignmentOperator}}80
-     {{.Prompt}} {{.HelpName}} /home/shared
-
-  7. Start minio server with KMS enabled.
+  6. Start minio server with KMS enabled.
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SSE_VAULT_APPROLE_ID{{.AssignmentOperator}}9b56cc08-8258-45d5-24a3-679876769126
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SSE_VAULT_APPROLE_SECRET{{.AssignmentOperator}}4e30c52f-13e4-a6f5-0763-d50e8cb4321f
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SSE_VAULT_ENDPOINT{{.AssignmentOperator}}https://vault-endpoint-ip:8200
@@ -237,13 +230,7 @@ func serverMain(ctx *cli.Context) {
 
 	if !globalCLIContext.Quiet {
 		// Check for new updates from dl.min.io.
-		mode := globalMinioModeFS
-		if globalIsDistXL {
-			mode = globalMinioModeDistXL
-		} else if globalIsXL {
-			mode = globalMinioModeXL
-		}
-		checkUpdate(mode)
+		checkUpdate(getMinioMode())
 	}
 
 	// FIXME: This code should be removed in future releases and we should have mandatory
@@ -295,6 +282,8 @@ func serverMain(ctx *cli.Context) {
 		globalSweepHealState = initHealState()
 	}
 
+	// initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
 	// Configure server.
 	var handler http.Handler
 	handler, err = configureServerHandler(globalEndpoints)
@@ -343,13 +332,6 @@ func serverMain(ctx *cli.Context) {
 	// Load logger subsystem
 	loadLoggers()
 
-	var cacheConfig = globalServerConfig.GetCacheConfig()
-	if len(cacheConfig.Drives) > 0 {
-		// initialize the new disk cache objects.
-		globalCacheObjectAPI, err = newServerCacheObjects(cacheConfig)
-		logger.FatalIf(err, "Unable to initialize disk caching")
-	}
-
 	// Create new IAM system.
 	globalIAMSys = NewIAMSys()
 	if err = globalIAMSys.Init(newObject); err != nil {
@@ -364,6 +346,9 @@ func serverMain(ctx *cli.Context) {
 		logger.Fatal(err, "Unable to initialize policy system")
 	}
 
+	if globalIsDiskCacheEnabled {
+		logger.StartupMessage(colorRed(colorBold("Disk caching is allowed only for gateway deployments")))
+	}
 	// Create new lifecycle system.
 	globalLifecycleSys = NewLifecycleSys()
 
@@ -377,7 +362,7 @@ func serverMain(ctx *cli.Context) {
 
 	// Initialize notification system.
 	if err = globalNotificationSys.Init(newObject); err != nil {
-		logger.LogIf(context.Background(), err)
+		logger.Fatal(err, "Unable to initialize notification system")
 	}
 
 	// Verify if object layer supports

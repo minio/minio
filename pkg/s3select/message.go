@@ -242,7 +242,7 @@ type messageWriter struct {
 
 	payloadBuffer      []byte
 	payloadBufferIndex int
-	payloadCh          chan []byte
+	payloadCh          chan *bytes.Buffer
 
 	finBytesScanned, finBytesProcessed int64
 
@@ -308,10 +308,10 @@ func (writer *messageWriter) start() {
 				}
 				writer.write(endMessage)
 			} else {
-				for len(payload) > 0 {
-					copiedLen := copy(writer.payloadBuffer[writer.payloadBufferIndex:], payload)
+				for payload.Len() > 0 {
+					copiedLen := copy(writer.payloadBuffer[writer.payloadBufferIndex:], payload.Bytes())
 					writer.payloadBufferIndex += copiedLen
-					payload = payload[copiedLen:]
+					payload.Next(copiedLen)
 
 					// If buffer is filled, flush it now!
 					freeSpace := bufLength - writer.payloadBufferIndex
@@ -322,6 +322,8 @@ func (writer *messageWriter) start() {
 						}
 					}
 				}
+
+				bufPool.Put(payload)
 			}
 
 		case <-recordStagingTicker.C:
@@ -349,10 +351,16 @@ func (writer *messageWriter) start() {
 	if progressTicker != nil {
 		progressTicker.Stop()
 	}
+
+	// Whatever drain the payloadCh to prevent from memory leaking.
+	for len(writer.payloadCh) > 0 {
+		payload := <-writer.payloadCh
+		bufPool.Put(payload)
+	}
 }
 
 // Sends a single whole record.
-func (writer *messageWriter) SendRecord(payload []byte) error {
+func (writer *messageWriter) SendRecord(payload *bytes.Buffer) error {
 	select {
 	case writer.payloadCh <- payload:
 		return nil
@@ -409,7 +417,7 @@ func newMessageWriter(w http.ResponseWriter, getProgressFunc func() (bytesScanne
 		getProgressFunc: getProgressFunc,
 
 		payloadBuffer: make([]byte, bufLength),
-		payloadCh:     make(chan []byte),
+		payloadCh:     make(chan *bytes.Buffer, 1),
 
 		errCh:  make(chan []byte),
 		doneCh: make(chan struct{}),

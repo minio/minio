@@ -520,12 +520,12 @@ func (s *storageRESTServer) VerifyFile(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	volume := vars[storageRESTVolume]
 	filePath := vars[storageRESTFilePath]
-	empty, err := strconv.ParseBool(vars[storageRESTEmpty])
+	size, err := strconv.ParseInt(vars[storageRESTLength], 10, 0)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
-	shardSize, err := strconv.Atoi(vars[storageRESTLength])
+	shardSize, err := strconv.Atoi(vars[storageRESTShardSize])
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -547,7 +547,7 @@ func (s *storageRESTServer) VerifyFile(w http.ResponseWriter, r *http.Request) {
 	algo := BitrotAlgorithmFromString(algoStr)
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
 	doneCh := sendWhiteSpaceVerifyFile(w)
-	err = s.storage.VerifyFile(volume, filePath, empty, algo, hash, int64(shardSize))
+	err = s.storage.VerifyFile(volume, filePath, size, algo, hash, int64(shardSize))
 	<-doneCh
 	gob.NewEncoder(w).Encode(VerifyFileResp{err})
 }
@@ -600,7 +600,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodRenameFile).HandlerFunc(httpTraceHdrs(server.RenameFileHandler)).
 			Queries(restQueries(storageRESTSrcVolume, storageRESTSrcPath, storageRESTDstVolume, storageRESTDstPath)...)
 		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodVerifyFile).HandlerFunc(httpTraceHdrs(server.VerifyFile)).
-			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTBitrotAlgo, storageRESTLength)...)
+			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTBitrotAlgo, storageRESTBitrotHash, storageRESTLength, storageRESTShardSize)...)
 		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodGetInstanceID).HandlerFunc(httpTraceAll(server.GetInstanceID))
 	}
 

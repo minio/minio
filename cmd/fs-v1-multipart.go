@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
 	mioutil "github.com/minio/minio/pkg/ioutil"
 )
@@ -456,7 +457,8 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 	}
 	for i, part := range result.Parts {
 		var stat os.FileInfo
-		stat, err = fsStatFile(ctx, pathJoin(uploadIDDir, fs.encodePartFile(part.PartNumber, part.ETag, part.ActualSize)))
+		stat, err = fsStatFile(ctx, pathJoin(uploadIDDir,
+			fs.encodePartFile(part.PartNumber, part.ETag, part.ActualSize)))
 		if err != nil {
 			return result, toObjectErr(err)
 		}
@@ -470,7 +472,13 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 		return result, err
 	}
 
-	result.UserDefined = parseFSMetaMap(fsMetaBytes)
+	var fsMeta fsMetaV1
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err = json.Unmarshal(fsMetaBytes, &fsMeta); err != nil {
+		return result, err
+	}
+
+	result.UserDefined = fsMeta.Meta
 	return result, nil
 }
 

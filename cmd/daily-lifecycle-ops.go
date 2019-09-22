@@ -103,14 +103,12 @@ func startDailyLifecycle() {
 	}
 }
 
+var lifecycleTimeout = newDynamicTimeout(60*time.Second, time.Second)
+
 func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
-
-	zeroDuration := time.Millisecond
-	zeroDynamicTimeout := newDynamicTimeout(zeroDuration, zeroDuration)
-
 	// Lock to avoid concurrent lifecycle ops from other nodes
 	sweepLock := globalNSMutex.NewNSLock(ctx, "system", "daily-lifecycle-ops")
-	if err := sweepLock.GetLock(zeroDynamicTimeout); err != nil {
+	if err := sweepLock.GetLock(lifecycleTimeout); err != nil {
 		return err
 	}
 	defer sweepLock.Unlock()
@@ -141,22 +139,24 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 			if err != nil {
 				continue
 			}
+			var objects []string
 			for _, obj := range res.Objects {
 				// Find the action that need to be executed
 				action := l.ComputeAction(obj.Name, obj.ModTime)
 				switch action {
 				case lifecycle.DeleteAction:
-					objAPI.DeleteObject(ctx, bucket.Name, obj.Name)
+					objects = append(objects, obj.Name)
 				default:
-					// Nothing
-
+					// Do nothing, for now.
 				}
 			}
+			// Deletes a list of objects.
+			objAPI.DeleteObjects(ctx, bucket.Name, objects)
 			if !res.IsTruncated {
+				// We are done here, proceed to next bucket.
 				break
-			} else {
-				marker = res.NextMarker
 			}
+			marker = res.NextMarker
 		}
 	}
 

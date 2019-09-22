@@ -38,17 +38,14 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 	adminRouter := router.PathPrefix(adminAPIPathPrefix).Subrouter()
 
 	// Version handler
-	adminRouter.Methods(http.MethodGet).Path("/version").HandlerFunc(httpTraceAll(adminAPI.VersionHandler))
-
 	adminV1Router := adminRouter.PathPrefix("/v1").Subrouter()
 
 	/// Service operations
 
-	// Service status
-	adminV1Router.Methods(http.MethodGet).Path("/service").HandlerFunc(httpTraceAll(adminAPI.ServiceStatusHandler))
-
-	// Service restart and stop - TODO
-	adminV1Router.Methods(http.MethodPost).Path("/service").HandlerFunc(httpTraceAll(adminAPI.ServiceStopNRestartHandler))
+	// Restart and stop MinIO service.
+	adminV1Router.Methods(http.MethodPost).Path("/service").HandlerFunc(httpTraceAll(adminAPI.ServiceActionHandler)).Queries("action", "{action:.*}")
+	// Update MinIO servers.
+	adminV1Router.Methods(http.MethodPost).Path("/update").HandlerFunc(httpTraceAll(adminAPI.ServerUpdateHandler)).Queries("updateURL", "{updateURL:.*}")
 
 	// Info operations
 	adminV1Router.Methods(http.MethodGet).Path("/info").HandlerFunc(httpTraceAll(adminAPI.ServerInfoHandler))
@@ -80,11 +77,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		adminV1Router.Methods(http.MethodGet).Path("/config").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigHandler))
 		// Set config
 		adminV1Router.Methods(http.MethodPut).Path("/config").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigHandler))
-
-		// Get config keys/values
-		adminV1Router.Methods(http.MethodGet).Path("/config-keys").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigKeysHandler))
-		// Set config keys/values
-		adminV1Router.Methods(http.MethodPut).Path("/config-keys").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigKeysHandler))
 	}
 
 	if enableIAMOps {
@@ -96,19 +88,25 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 		// Add user IAM
 		adminV1Router.Methods(http.MethodPut).Path("/add-user").HandlerFunc(httpTraceHdrs(adminAPI.AddUser)).Queries("accessKey", "{accessKey:.*}")
-		adminV1Router.Methods(http.MethodPut).Path("/set-user-policy").HandlerFunc(httpTraceHdrs(adminAPI.SetUserPolicy)).
-			Queries("accessKey", "{accessKey:.*}").Queries("name", "{name:.*}")
 		adminV1Router.Methods(http.MethodPut).Path("/set-user-status").HandlerFunc(httpTraceHdrs(adminAPI.SetUserStatus)).
 			Queries("accessKey", "{accessKey:.*}").Queries("status", "{status:.*}")
 
 		// Remove policy IAM
 		adminV1Router.Methods(http.MethodDelete).Path("/remove-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.RemoveCannedPolicy)).Queries("name", "{name:.*}")
 
+		// Set user or group policy
+		adminV1Router.Methods(http.MethodPut).Path("/set-user-or-group-policy").
+			HandlerFunc(httpTraceHdrs(adminAPI.SetPolicyForUserOrGroup)).
+			Queries("policyName", "{policyName:.*}", "userOrGroup", "{userOrGroup:.*}", "isGroup", "{isGroup:true|false}")
+
 		// Remove user IAM
 		adminV1Router.Methods(http.MethodDelete).Path("/remove-user").HandlerFunc(httpTraceHdrs(adminAPI.RemoveUser)).Queries("accessKey", "{accessKey:.*}")
 
 		// List users
 		adminV1Router.Methods(http.MethodGet).Path("/list-users").HandlerFunc(httpTraceHdrs(adminAPI.ListUsers))
+
+		// User info
+		adminV1Router.Methods(http.MethodGet).Path("/user-info").HandlerFunc(httpTraceHdrs(adminAPI.GetUserInfo)).Queries("accessKey", "{accessKey:.*}")
 
 		// Add/Remove members from group
 		adminV1Router.Methods(http.MethodPut).Path("/update-group-members").HandlerFunc(httpTraceHdrs(adminAPI.UpdateGroupMembers))
@@ -132,6 +130,14 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 	// HTTP Trace
 	adminV1Router.Methods(http.MethodGet).Path("/trace").HandlerFunc(adminAPI.TraceHandler)
+
+	// Console Logs
+	adminV1Router.Methods(http.MethodGet).Path("/log").HandlerFunc(httpTraceAll(adminAPI.ConsoleLogHandler))
+
+	// -- KMS APIs --
+	//
+	adminV1Router.Methods(http.MethodGet).Path("/kms/key/status").HandlerFunc(httpTraceAll(adminAPI.KMSKeyStatusHandler))
+
 	// If none of the routes match, return error.
 	adminV1Router.NotFoundHandler = http.HandlerFunc(httpTraceHdrs(notFoundHandlerJSON))
 }

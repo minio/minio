@@ -182,7 +182,7 @@ func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}) (*NSQTarget, 
 
 	if err := target.producer.Ping(); err != nil {
 		// To treat "connection refused" errors as errNotConnected.
-		if target.store == nil || !IsConnRefusedErr(err) {
+		if target.store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
 			return nil, err
 		}
 	}

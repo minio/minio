@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,9 @@ import (
 	"hash/crc32"
 	"path"
 	"sync"
-	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/tidwall/gjson"
 )
 
 // Returns number of errors that occurred the most (incl. nil) and the
@@ -117,59 +115,11 @@ func hashOrder(key string, cardinality int) []int {
 	return nums
 }
 
-func parseXLStat(xlMetaBuf []byte) (si statInfo, e error) {
-	// obtain stat info.
-	stat := statInfo{}
-	// fetching modTime.
-	modTime, err := time.Parse(time.RFC3339, gjson.GetBytes(xlMetaBuf, "stat.modTime").String())
-	if err != nil {
-		return si, err
-	}
-	stat.ModTime = modTime
-	// obtain Stat.Size .
-	stat.Size = gjson.GetBytes(xlMetaBuf, "stat.size").Int()
-	return stat, nil
-}
-
-func parseXLVersion(xlMetaBuf []byte) string {
-	return gjson.GetBytes(xlMetaBuf, "version").String()
-}
-
-func parseXLFormat(xlMetaBuf []byte) string {
-	return gjson.GetBytes(xlMetaBuf, "format").String()
-}
-
-func parseXLParts(xlMetaBuf []byte) []ObjectPartInfo {
-	// Parse the XL Parts.
-	partsResult := gjson.GetBytes(xlMetaBuf, "parts").Array()
-	partInfo := make([]ObjectPartInfo, len(partsResult))
-	for i, p := range partsResult {
-		info := ObjectPartInfo{}
-		info.Number = int(p.Get("number").Int())
-		info.Name = p.Get("name").String()
-		info.ETag = p.Get("etag").String()
-		info.Size = p.Get("size").Int()
-		info.ActualSize = p.Get("actualSize").Int()
-		partInfo[i] = info
-	}
-	return partInfo
-}
-
-func parseXLMetaMap(xlMetaBuf []byte) map[string]string {
-	// Get xlMetaV1.Meta map.
-	metaMapResult := gjson.GetBytes(xlMetaBuf, "meta").Map()
-	metaMap := make(map[string]string)
-	for key, valResult := range metaMapResult {
-		metaMap[key] = valResult.String()
-	}
-	return metaMap
-}
-
-// Constructs XLMetaV1 using `gjson` lib to retrieve each field.
-func xlMetaV1UnmarshalJSON(ctx context.Context, xlMetaBuf []byte) (xlMeta xlMetaV1, e error) {
+// Constructs xlMetaV1 using `jsoniter` lib.
+func xlMetaV1UnmarshalJSON(ctx context.Context, xlMetaBuf []byte) (xlMeta xlMetaV1, err error) {
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	e = json.Unmarshal(xlMetaBuf, &xlMeta)
-	return xlMeta, e
+	err = json.Unmarshal(xlMetaBuf, &xlMeta)
+	return xlMeta, err
 }
 
 // read xl.json from the given disk, parse and return xlV1MetaV1.Parts.
@@ -181,15 +131,18 @@ func readXLMetaParts(ctx context.Context, disk StorageAPI, bucket string, object
 		return nil, nil, err
 	}
 
-	// obtain xlMetaV1{}.Partsusing `github.com/tidwall/gjson`.
-	xlMetaParts := parseXLParts(xlMetaBuf)
-	xlMetaMap := parseXLMetaMap(xlMetaBuf)
+	var xlMeta xlMetaV1
+	xlMeta, err = xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	return xlMetaParts, xlMetaMap, nil
+	return xlMeta.Parts, xlMeta.Meta, nil
 }
 
-// read xl.json from the given disk and parse xlV1Meta.Stat and xlV1Meta.Meta using gjson.
-func readXLMetaStat(ctx context.Context, disk StorageAPI, bucket string, object string) (si statInfo, mp map[string]string, e error) {
+// read xl.json from the given disk and parse xlV1Meta.Stat and xlV1Meta.Meta using jsoniter.
+func readXLMetaStat(ctx context.Context, disk StorageAPI, bucket string, object string) (si statInfo,
+	mp map[string]string, e error) {
 	// Reads entire `xl.json`.
 	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
 	if err != nil {
@@ -197,31 +150,14 @@ func readXLMetaStat(ctx context.Context, disk StorageAPI, bucket string, object 
 		return si, nil, err
 	}
 
-	// obtain version.
-	xlVersion := parseXLVersion(xlMetaBuf)
-
-	// obtain format.
-	xlFormat := parseXLFormat(xlMetaBuf)
-
-	// Validate if the xl.json we read is sane, return corrupted format.
-	if !isXLMetaFormatValid(xlVersion, xlFormat) {
-		// For version mismatchs and unrecognized format, return corrupted format.
-		logger.LogIf(ctx, errCorruptedFormat)
-		return si, nil, errCorruptedFormat
-	}
-
-	// obtain xlMetaV1{}.Meta using `github.com/tidwall/gjson`.
-	xlMetaMap := parseXLMetaMap(xlMetaBuf)
-
-	// obtain xlMetaV1{}.Stat using `github.com/tidwall/gjson`.
-	xlStat, err := parseXLStat(xlMetaBuf)
+	var xlMeta xlMetaV1
+	xlMeta, err = xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
 	if err != nil {
-		logger.LogIf(ctx, err)
-		return si, nil, err
+		return si, mp, err
 	}
 
 	// Return structured `xl.json`.
-	return xlStat, xlMetaMap, nil
+	return xlMeta.Stat, xlMeta.Meta, nil
 }
 
 // readXLMeta reads `xl.json` and returns back XL metadata structure.
@@ -238,15 +174,8 @@ func readXLMeta(ctx context.Context, disk StorageAPI, bucket string, object stri
 	if len(xlMetaBuf) == 0 {
 		return xlMetaV1{}, errFileNotFound
 	}
-	// obtain xlMetaV1{} using `github.com/tidwall/gjson`.
-	xlMeta, err = xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
-	if err != nil {
-		logger.GetReqInfo(ctx).AppendTags("disk", disk.String())
-		logger.LogIf(ctx, err)
-		return xlMetaV1{}, err
-	}
-	// Return structured `xl.json`.
-	return xlMeta, nil
+	logger.GetReqInfo(ctx).AppendTags("disk", disk.String())
+	return xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
 }
 
 // Reads all `xl.json` metadata as a xlMetaV1 slice.
@@ -254,7 +183,7 @@ func readXLMeta(ctx context.Context, disk StorageAPI, bucket string, object stri
 func readAllXLMetadata(ctx context.Context, disks []StorageAPI, bucket, object string) ([]xlMetaV1, []error) {
 	errs := make([]error, len(disks))
 	metadataArray := make([]xlMetaV1, len(disks))
-	var wg = &sync.WaitGroup{}
+	var wg sync.WaitGroup
 	// Read `xl.json` parallelly across disks.
 	for index, disk := range disks {
 		if disk == nil {
@@ -265,12 +194,7 @@ func readAllXLMetadata(ctx context.Context, disks []StorageAPI, bucket, object s
 		// Read `xl.json` in routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			var err error
-			metadataArray[index], err = readXLMeta(ctx, disk, bucket, object)
-			if err != nil {
-				errs[index] = err
-				return
-			}
+			metadataArray[index], errs[index] = readXLMeta(ctx, disk, bucket, object)
 		}(index, disk)
 	}
 

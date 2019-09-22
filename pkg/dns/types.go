@@ -62,4 +62,5 @@ type Config interface {
 	List() ([]SrvRecord, error)
 	Get(key string) ([]SrvRecord, error)
 	Delete(key string) error
+	DeleteRecord(record SrvRecord) error
 }

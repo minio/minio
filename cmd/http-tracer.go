@@ -29,6 +29,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/handlers"
 	trace "github.com/minio/minio/pkg/trace"
 )
 
@@ -126,7 +128,7 @@ func (r *recordResponseWriter) Write(p []byte) (n int, err error) {
 		r.writeHeaders(&r.headers, http.StatusOK, r.ResponseWriter.Header())
 		r.headersLogged = true
 	}
-	if (r.statusCode != http.StatusOK && r.statusCode != http.StatusPartialContent && r.statusCode != 0) || r.logBody {
+	if r.statusCode >= http.StatusBadRequest || r.logBody {
 		// Always logging error responses.
 		r.body.Write(p)
 	}
@@ -146,7 +148,7 @@ func (r *recordResponseWriter) Flush() {
 func (r *recordResponseWriter) Body() []byte {
 	// If there was an error response or body logging is enabled
 	// then we return the body contents
-	if r.statusCode >= 400 || r.logBody {
+	if r.statusCode >= http.StatusBadRequest || r.logBody {
 		return r.body.Bytes()
 	}
 	// ... otherwise we return the <BODY> place holder
@@ -174,7 +176,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	name := getOpName(runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name())
 
 	// Setup a http request body recorder
-	reqHeaders := cloneHeader(r.Header)
+	reqHeaders := r.Header.Clone()
 	reqHeaders.Set("Content-Length", strconv.Itoa(int(r.ContentLength)))
 	reqHeaders.Set("Host", r.Host)
 	for _, enc := range r.TransferEncoding {
@@ -199,18 +201,18 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 		Method:   r.Method,
 		Path:     r.URL.Path,
 		RawQuery: r.URL.RawQuery,
-		Client:   r.RemoteAddr,
+		Client:   handlers.GetSourceIP(r),
 		Headers:  reqHeaders,
 		Body:     reqBodyRecorder.Data(),
 	}
 
 	// Setup a http response body recorder
 	respBodyRecorder := &recordResponseWriter{ResponseWriter: w, logBody: logBody}
-	f(respBodyRecorder, r)
+	f(logger.NewResponseWriter(respBodyRecorder), r)
 
 	rs := trace.ResponseInfo{
 		Time:       time.Now().UTC(),
-		Headers:    cloneHeader(respBodyRecorder.Header()),
+		Headers:    respBodyRecorder.Header().Clone(),
 		StatusCode: respBodyRecorder.statusCode,
 		Body:       respBodyRecorder.Body(),
 	}
@@ -222,6 +224,10 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	t.ReqInfo = rq
 	t.RespInfo = rs
 
-	t.CallStats = trace.CallStats{Latency: rs.Time.Sub(rq.Time), InputBytes: reqBodyRecorder.Size(), OutputBytes: respBodyRecorder.Size()}
+	t.CallStats = trace.CallStats{
+		Latency:     rs.Time.Sub(rq.Time),
+		InputBytes:  reqBodyRecorder.Size(),
+		OutputBytes: respBodyRecorder.Size(),
+	}
 	return t
 }

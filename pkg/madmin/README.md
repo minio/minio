@@ -3,7 +3,7 @@ The MinIO Admin Golang Client SDK provides APIs to manage MinIO services.
 
 This quickstart guide will show you how to install the MinIO Admin client SDK, connect to MinIO admin service, and provide a walkthrough of a simple file uploader.
 
-This document assumes that you have a working [Golang setup](https://docs.min.io/docs/how-to-install-golang).
+This document assumes that you have a working [Golang setup](https://golang.org/doc/install).
 
 ## Initialize MinIO Admin Client object.
 
@@ -31,23 +31,24 @@ func main() {
     }
 
     // Fetch service status.
-    st, err := mdmClnt.ServiceStatus()
+    st, err := mdmClnt.ServerInfo()
     if err != nil {
         fmt.Println(err)
         return
     }
-    fmt.Printf("%#v\n", st)
+	for _, peerInfo := range serversInfo {
+		log.Printf("Node: %s, Info: %v\n", peerInfo.Addr, peerInfo.Data)
+	}
 }
 
 ```
-
-| Service operations                        | Info operations                             | Healing operations | Config operations                 | Top operations          | IAM operations                        | Misc                                              |
-|:------------------------------------------|:--------------------------------------------|:-------------------|:----------------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|
-| [`ServiceStatus`](#ServiceStatus)         | [`ServerInfo`](#ServerInfo)                 | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig)         | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   |
-| [`ServiceSendAction`](#ServiceSendAction) | [`ServerCPULoadInfo`](#ServerCPULoadInfo)   |                    | [`SetConfig`](#SetConfig)         |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |
-| [`Trace`](#Trace)                                          | [`ServerMemUsageInfo`](#ServerMemUsageInfo) |                    | [`GetConfigKeys`](#GetConfigKeys) |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |
-|                                           |                                             |                    | [`SetConfigKeys`](#SetConfigKeys) |                         | [`AddCannedPolicy`](#AddCannedPolicy) |                                                   |
-
+| Service operations                  | Info operations                                 | Healing operations | Config operations         | Top operations          | IAM operations                        | Misc                                              | KMS                             |
+|:------------------------------------|:------------------------------------------------|:-------------------|:--------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|:--------------------------------|
+| [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                     | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig) | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   | [`GetKeyStatus`](#GetKeyStatus) |
+| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)       |                    | [`SetConfig`](#SetConfig) |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |                                 |
+|                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)     |                    |                           |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
+| [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) |                    |                           |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                 |
+|                                     | [`NetPerfInfo`](#NetPerfInfo)                   |                    |                           |                         |                                       |                                                   |                                 |
 
 ## 1. Constructor
 <a name="MinIO"></a>
@@ -64,25 +65,7 @@ __Parameters__
 | `secretAccessKey` | _string_ | Secret key for the object storage endpoint.               |
 | `ssl`             | _bool_   | Set this value to 'true' to enable secure (HTTPS) access. |
 
-## 2. Admin API Version
-
-<a name="VersionInfo"></a>
-### VersionInfo() (AdminAPIVersionInfo, error)
-Fetch server's supported Administrative API version.
-
- __Example__
-
-``` go
-
-	info, err := madmClnt.VersionInfo()
-	if err != nil {
-		log.Fatalln(err)
-	}
-	log.Printf("%s\n", info.Version)
-
-```
-
-## 3. Service operations
+## 2. Service operations
 
 <a name="ServiceStatus"></a>
 ### ServiceStatus() (ServiceStatusMetadata, error)
@@ -111,25 +94,55 @@ Fetch service status, replies disk space used, backend type and total disks offl
 
  ```
 
-<a name="ServiceSendAction"></a>
-### ServiceSendAction(act ServiceActionValue) (error)
-Sends a service action command to service - possible actions are restarting and stopping the server.
+<a name="ServiceRestart"></a>
+### ServiceRestart() error
+Sends a service action restart command to MinIO server.
 
  __Example__
 
+```go
+   // To restart the service, restarts all servers in the cluster.
+   err := madmClnt.ServiceRestart()
+   if err != nil {
+       log.Fatalln(err)
+   }
+   log.Println("Success")
+```
 
- ```go
-        // to restart
-	st, err := madmClnt.ServiceSendAction(ServiceActionValueRestart)
-        // or to stop
-        // st, err := madmClnt.ServiceSendAction(ServiceActionValueStop)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	log.Printf("Success")
- ```
+<a name="ServiceStop"></a>
+### ServiceStop() error
+Sends a service action stop command to MinIO server.
 
-## 4. Info operations
+ __Example__
+
+```go
+   // To stop the service, stops all servers in the cluster.
+   err := madmClnt.ServiceStop()
+   if err != nil {
+       log.Fatalln(err)
+   }
+   log.Println("Success")
+```
+
+<a name="ServiceTrace"></a>
+### ServiceTrace(allTrace bool, doneCh <-chan struct{}) <-chan TraceInfo
+Enable HTTP request tracing on all nodes in a MinIO cluster
+
+__Example__
+
+``` go
+    doneCh := make(chan struct{})
+    defer close(doneCh)
+    // listen to all trace including internal API calls
+    allTrace := true
+    // Start listening on all trace activity.
+    traceCh := madmClnt.ServiceTrace(allTrace, doneCh)
+    for traceInfo := range traceCh {
+        fmt.Println(traceInfo.String())
+    }
+```
+
+## 3. Info operations
 
 <a name="ServerInfo"></a>
 ### ServerInfo() ([]ServerInfo, error)
@@ -213,7 +226,7 @@ Fetches information for all cluster nodes, such as server properties, storage in
 <a name="ServerDrivesPerfInfo"></a>
 ### ServerDrivesPerfInfo() ([]ServerDrivesPerfInfo, error)
 
-Fetches drive performance information for all cluster nodes. Returned value is in Bytes/s.
+Fetches drive performance information for all cluster nodes.
 
 | Param           | Type               | Description                                                        |
 |-----------------|--------------------|--------------------------------------------------------------------|
@@ -231,7 +244,7 @@ Fetches drive performance information for all cluster nodes. Returned value is i
 <a name="ServerCPULoadInfo"></a>
 ### ServerCPULoadInfo() ([]ServerCPULoadInfo, error)
 
-Fetches CPU utilization for all cluster nodes. Returned value is in Bytes.
+Fetches CPU utilization for all cluster nodes.
 
 | Param          | Type       | Description                                                         |
 |----------------|------------|---------------------------------------------------------------------|
@@ -244,12 +257,12 @@ Fetches CPU utilization for all cluster nodes. Returned value is in Bytes.
 | `cpu.Load.Avg`   | _float64_ | The average utilization of the CPU measured in a 200ms interval |
 | `cpu.Load.Min`   | _float64_ | The minimum utilization of the CPU measured in a 200ms interval |
 | `cpu.Load.Max`   | _float64_ | The maximum utilization of the CPU measured in a 200ms interval |
-| `cpu.Load.Error` | _string_  | Error (if any) encountered while accesing the CPU info          |
+| `cpu.Load.Error` | _string_  | Error (if any) encountered while accessing the CPU info         |
 
 <a name="ServerMemUsageInfo"></a>
 ### ServerMemUsageInfo() ([]ServerMemUsageInfo, error)
 
-Fetches Mem utilization for all cluster nodes. Returned value is in Bytes.
+Fetches Mem utilization for all cluster nodes.
 
 | Param           | Type        | Description                                                         |
 |-----------------|-------------|---------------------------------------------------------------------|
@@ -260,9 +273,20 @@ Fetches Mem utilization for all cluster nodes. Returned value is in Bytes.
 | Param             | Type     | Description                                            |
 |-------------------|----------|--------------------------------------------------------|
 | `mem.Usage.Mem`   | _uint64_ | The total number of bytes obtained from the OS         |
-| `mem.Usage.Error` | _string_ | Error (if any) encountered while accesing the CPU info |
+| `mem.Usage.Error` | _string_ | Error (if any) encountered while accessing the CPU info |
 
-## 6. Heal operations
+<a name="NetPerfInfo"></a>
+### NetPerfInfo(int size) (map[string][]NetPerfInfo, error)
+
+Fetches network performance of all cluster nodes using given sized payload. Returned value is a map containing each node indexed list of performance of other nodes.
+
+| Param      | Type             | Description                                                        |
+|------------|------------------|--------------------------------------------------------------------|
+| `Addr`     | _string_         | Address of the server the following information is retrieved from. |
+| `Error`    | _string_         | Errors (if any) encountered while reaching this node               |
+| `ReadPerf` | _time.Duration_  | Network read performance of the server                             |
+
+## 5. Heal operations
 
 <a name="Heal"></a>
 ### Heal(bucket, prefix string, healOpts HealOpts, clientToken string, forceStart bool, forceStop bool) (start HealStartSuccess, status HealTaskStatus, err error)
@@ -327,7 +351,7 @@ __Example__
 | `DiskInfo.AvailableOn` | _[]int_        | List of disks on which the healed entity is present and healthy |
 | `DiskInfo.HealedOn`    | _[]int_        | List of disks on which the healed entity was restored           |
 
-## 7. Config operations
+## 6. Config operations
 
 <a name="GetConfig"></a>
 ### GetConfig() ([]byte, error)
@@ -366,46 +390,7 @@ __Example__
     log.Println("SetConfig was successful")
 ```
 
-<a name="GetConfigKeys"></a>
-### GetConfigKeys(keys []string) ([]byte, error)
-Get a json document which contains a set of keys and their values from config.json.
-
-__Example__
-
-``` go
-    configBytes, err := madmClnt.GetConfigKeys([]string{"version", "notify.amqp.1"})
-    if err != nil {
-        log.Fatalf("failed due to: %v", err)
-    }
-
-    // Pretty-print config received as json.
-    var buf bytes.Buffer
-    err = json.Indent(buf, configBytes, "", "\t")
-    if err != nil {
-        log.Fatalf("failed due to: %v", err)
-    }
-
-    log.Println("config received successfully: ", string(buf.Bytes()))
-```
-
-
-<a name="SetConfigKeys"></a>
-### SetConfigKeys(params map[string]string) error
-Set a set of keys and values for MinIO server or distributed setup and restart the MinIO
-server for the new configuration changes to take effect.
-
-__Example__
-
-``` go
-    err := madmClnt.SetConfigKeys(map[string]string{"notify.webhook.1": "{\"enable\": true, \"endpoint\": \"http://example.com/api\"}"})
-    if err != nil {
-        log.Fatalf("failed due to: %v", err)
-    }
-
-    log.Println("New configuration successfully set")
-```
-
-## 8. Top operations
+## 7. Top operations
 
 <a name="TopLocks"></a>
 ### TopLocks() (LockEntries, error)
@@ -427,7 +412,7 @@ __Example__
     log.Println("TopLocks received successfully: ", string(out))
 ```
 
-## 9. IAM operations
+## 8. IAM operations
 
 <a name="AddCannedPolicy"></a>
 ### AddCannedPolicy(policyName string, policy string) error
@@ -483,7 +468,25 @@ __Example__
     }
 ```
 
-## 10. Misc operations
+## 9. Misc operations
+
+<a name="ServerUpdate"></a>
+### ServerUpdate(updateURL string) (ServerUpdateStatus, error)
+Sends a update command to MinIO server, to update MinIO server to latest release. In distributed setup it updates all servers atomically.
+
+ __Example__
+
+```go
+   // Updates all servers and restarts all the servers in the cluster.
+   // optionally takes an updateURL, which is used to update the binary.
+   us, err := madmClnt.ServerUpdate(updateURL)
+   if err != nil {
+       log.Fatalln(err)
+   }
+   if us.CurrentVersion != us.UpdatedVersion {
+       log.Printf("Updated server version from %s to %s successfully", us.CurrentVersion, us.UpdatedVersion)
+   }
+```
 
 <a name="StartProfiling"></a>
 ### StartProfiling(profiler string) error
@@ -538,21 +541,29 @@ __Example__
     log.Println("Profiling data successfully downloaded.")
 ```
 
-<a name="Trace"></a>
-### Trace(allTrace bool,doneCh <-chan struct{}) <-chan TraceInfo
-Enable HTTP request tracing on all nodes in a MinIO cluster
+## 11. KMS
+
+<a name="GetKeyStatus"></a>
+### GetKeyStatus(keyID string) (*KMSKeyStatus, error)
+Requests status information about one particular KMS master key
+from a MinIO server. The keyID is optional and the server will
+use the default master key (configured via `MINIO_SSE_VAULT_KEY_NAME`
+or `MINIO_SSE_MASTER_KEY`) if the keyID is empty.
 
 __Example__
 
 ``` go
-    doneCh := make(chan struct{})
-    defer close(doneCh)
-    // listen to all trace including internal API calls
-    allTrace := true
-    // Start listening on all trace activity.
-    traceCh := madmClnt.Trace(allTrace,doneCh)
-    for traceInfo := range traceCh {
-        fmt.Println(traceInfo.String())
+    keyInfo, err := madmClnt.GetKeyStatus("my-minio-key")
+    if err != nil {
+       log.Fatalln(err)
     }
-    log.Println("Success")
+    if keyInfo.EncryptionErr != "" {
+       log.Fatalf("Failed to perform encryption operation using '%s': %v\n", keyInfo.KeyID, keyInfo.EncryptionErr)
+    }
+    if keyInfo.UpdateErr != "" {
+       log.Fatalf("Failed to perform key re-wrap operation using '%s': %v\n", keyInfo.KeyID, keyInfo.UpdateErr)
+    }
+    if keyInfo.DecryptionErr != "" {
+       log.Fatalf("Failed to perform decryption operation using '%s': %v\n", keyInfo.KeyID, keyInfo.DecryptionErr)
+    }
 ```

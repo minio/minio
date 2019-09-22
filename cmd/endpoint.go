@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2017-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -34,9 +33,6 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/cpu"
-	"github.com/minio/minio/pkg/disk"
-	"github.com/minio/minio/pkg/mem"
 	"github.com/minio/minio/pkg/mountinfo"
 )
 
@@ -285,89 +281,6 @@ func (endpoints EndpointList) UpdateIsLocal() error {
 
 	return nil
 
-}
-
-// localEndpointsMemUsage - returns ServerMemUsageInfo for only the
-// local endpoints from given list of endpoints
-func localEndpointsMemUsage(endpoints EndpointList, r *http.Request) ServerMemUsageInfo {
-	var memUsages []mem.Usage
-	var historicUsages []mem.Usage
-	scratchSpace := map[string]bool{}
-	for _, endpoint := range endpoints {
-		// Only proceed for local endpoints
-		if endpoint.IsLocal {
-			if _, ok := scratchSpace[endpoint.Host]; ok {
-				continue
-			}
-			memUsages = append(memUsages, mem.GetUsage())
-			historicUsages = append(historicUsages, mem.GetHistoricUsage())
-			scratchSpace[endpoint.Host] = true
-		}
-	}
-	addr := r.Host
-	if globalIsDistXL {
-		addr = GetLocalPeer(endpoints)
-	}
-	return ServerMemUsageInfo{
-		Addr:          addr,
-		Usage:         memUsages,
-		HistoricUsage: historicUsages,
-	}
-}
-
-// localEndpointsCPULoad - returns ServerCPULoadInfo for only the
-// local endpoints from given list of endpoints
-func localEndpointsCPULoad(endpoints EndpointList, r *http.Request) ServerCPULoadInfo {
-	var cpuLoads []cpu.Load
-	var historicLoads []cpu.Load
-	scratchSpace := map[string]bool{}
-	for _, endpoint := range endpoints {
-		// Only proceed for local endpoints
-		if endpoint.IsLocal {
-			if _, ok := scratchSpace[endpoint.Host]; ok {
-				continue
-			}
-			cpuLoads = append(cpuLoads, cpu.GetLoad())
-			historicLoads = append(historicLoads, cpu.GetHistoricLoad())
-			scratchSpace[endpoint.Host] = true
-		}
-	}
-	addr := r.Host
-	if globalIsDistXL {
-		addr = GetLocalPeer(endpoints)
-	}
-	return ServerCPULoadInfo{
-		Addr:         addr,
-		Load:         cpuLoads,
-		HistoricLoad: historicLoads,
-	}
-}
-
-// localEndpointsDrivePerf - returns ServerDrivesPerfInfo for only the
-// local endpoints from given list of endpoints
-func localEndpointsDrivePerf(endpoints EndpointList, r *http.Request) ServerDrivesPerfInfo {
-	var dps []disk.Performance
-	for _, endpoint := range endpoints {
-		// Only proceed for local endpoints
-		if endpoint.IsLocal {
-			if _, err := os.Stat(endpoint.Path); err != nil {
-				// Since this drive is not available, add relevant details and proceed
-				dps = append(dps, disk.Performance{Path: endpoint.Path, Error: err.Error()})
-				continue
-			}
-			dp := disk.GetPerformance(pathJoin(endpoint.Path, minioMetaTmpBucket, mustGetUUID()))
-			dp.Path = endpoint.Path
-			dps = append(dps, dp)
-		}
-	}
-	addr := r.Host
-	if globalIsDistXL {
-		addr = GetLocalPeer(endpoints)
-	}
-	return ServerDrivesPerfInfo{
-		Addr: addr,
-		Perf: dps,
-	}
 }
 
 // NewEndpointList - returns new endpoint list based on input args.

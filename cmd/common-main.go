@@ -31,7 +31,6 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/logger/target/console"
 	"github.com/minio/minio/cmd/logger/target/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/dns"
@@ -61,38 +60,43 @@ func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
 func checkUpdate(mode string) {
 	// Its OK to ignore any errors during doUpdate() here.
 	if updateMsg, _, currentReleaseTime, latestReleaseTime, err := getUpdateInfo(2*time.Second, mode); err == nil {
+		if updateMsg == "" {
+			return
+		}
 		if globalInplaceUpdateDisabled {
 			logger.StartupMessage(updateMsg)
 		} else {
-			logger.StartupMessage(prepareUpdateMessage("Run `minio update`", latestReleaseTime.Sub(currentReleaseTime)))
+			logger.StartupMessage(prepareUpdateMessage("Run `mc admin update`", latestReleaseTime.Sub(currentReleaseTime)))
 		}
 	}
 }
 
 // Load logger targets based on user's configuration
 func loadLoggers() {
+	loggerUserAgent := getUserAgent(getMinioMode())
+
 	auditEndpoint, ok := os.LookupEnv("MINIO_AUDIT_LOGGER_HTTP_ENDPOINT")
 	if ok {
 		// Enable audit HTTP logging through ENV.
-		logger.AddAuditTarget(http.New(auditEndpoint, NewCustomHTTPTransport()))
+		logger.AddAuditTarget(http.New(auditEndpoint, loggerUserAgent, NewCustomHTTPTransport()))
 	}
 
 	loggerEndpoint, ok := os.LookupEnv("MINIO_LOGGER_HTTP_ENDPOINT")
 	if ok {
 		// Enable HTTP logging through ENV.
-		logger.AddTarget(http.New(loggerEndpoint, NewCustomHTTPTransport()))
+		logger.AddTarget(http.New(loggerEndpoint, loggerUserAgent, NewCustomHTTPTransport()))
 	} else {
 		for _, l := range globalServerConfig.Logger.HTTP {
 			if l.Enabled {
 				// Enable http logging
-				logger.AddTarget(http.New(l.Endpoint, NewCustomHTTPTransport()))
+				logger.AddTarget(http.New(l.Endpoint, loggerUserAgent, NewCustomHTTPTransport()))
 			}
 		}
 	}
 
 	if globalServerConfig.Logger.Console.Enabled {
 		// Enable console logging
-		logger.AddTarget(console.New())
+		logger.AddTarget(globalConsoleSys.Console())
 	}
 
 }
@@ -352,6 +356,14 @@ func handleCommonEnvVars() {
 		// maxUse should be a valid percentage.
 		if maxUse > 0 && maxUse <= 100 {
 			globalCacheMaxUse = maxUse
+		}
+	}
+
+	var err error
+	if cacheEncKey := os.Getenv("MINIO_CACHE_ENCRYPTION_MASTER_KEY"); cacheEncKey != "" {
+		globalCacheKMSKeyID, globalCacheKMS, err = parseKMSMasterKey(cacheEncKey)
+		if err != nil {
+			logger.Fatal(uiErrInvalidCacheEncryptionKey(err), "Invalid cache encryption master key")
 		}
 	}
 	// In place update is true by default if the MINIO_UPDATE is not set

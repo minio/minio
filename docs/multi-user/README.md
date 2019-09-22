@@ -39,15 +39,35 @@ Create new canned policy by name `getonly` using `getonly.json` policy file.
 mc admin policy add myminio getonly getonly.json
 ```
 
-Create a new user `newuser` on MinIO use `mc admin user`, specify `getonly` canned policy for this `newuser`.
+Create a new user `newuser` on MinIO use `mc admin user`.
 ```
-mc admin user add myminio newuser newuser123 getonly
+mc admin user add myminio newuser newuser123
 ```
 
-### 3. Disable user
+Once the user is successfully created you can now apply the `getonly` policy for this user.
+```
+mc admin policy set myminio getonly user=newuser
+```
+
+### 3. Create a new group
+```
+mc admin group add myminio newgroup newuser
+```
+
+Once the group is successfully created you can now apply the `getonly` policy for this group.
+```
+mc admin policy set myminio getonly group=newgroup
+```
+
+### 4. Disable user
 Disable user `newuser`.
 ```
 mc admin user disable myminio newuser
+```
+
+Disable group `newgroup`.
+```
+mc admin group disable myminio newgroup
 ```
 
 ### 4. Remove user
@@ -56,19 +76,39 @@ Remove the user `newuser`.
 mc admin user remove myminio newuser
 ```
 
-### 5. Change user policy
-Change the policy for user `newuser` to `putonly` canned policy.
+Remove the user `newuser` from a group.
 ```
-mc admin user set-policy myminio newuser putonly
+mc admin group remove myminio newgroup newuser
 ```
 
-### 5. List all users
+Remove the group `newgroup`.
+```
+mc admin group remove myminio newgroup
+```
+
+### 5. Change user or group policy
+Change the policy for user `newuser` to `putonly` canned policy.
+```
+mc admin policy set myminio putonly user=newuser
+```
+
+Change the policy for group `newgroup` to `putonly` canned policy.
+```
+mc admin policy set myminio putonly group=newgroup
+```
+
+### 6. List all users or groups
 List all enabled and disabled users.
 ```
 mc admin user list myminio
 ```
 
-### 6. Configure `mc`
+List all enabled or disabled groups.
+```
+mc admin group list myminio
+```
+
+### 7. Configure `mc`
 ```
 mc config host add myminio-newuser http://localhost:9000 newuser newuser123 --api s3v4
 mc cat myminio-newuser/my-bucketname/my-objectname

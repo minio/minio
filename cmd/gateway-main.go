@@ -106,6 +106,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	logger.Disable = true
 
 	// Validate if we have access, secret set through environment.
+	globalGatewayName = gw.Name()
 	gatewayName := gw.Name()
 	if ctx.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
@@ -157,6 +158,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// Enable STS router if etcd is enabled.
 		registerSTSRouter(router)
 	}
+
+	// initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
 
 	enableConfigOps := gatewayName == "nas"
 	enableIAMOps := globalEtcdClient != nil
@@ -253,7 +257,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	if len(cacheConfig.Drives) > 0 {
 		var err error
 		// initialize the new disk cache objects.
-		globalCacheObjectAPI, err = newServerCacheObjects(cacheConfig)
+		globalCacheObjectAPI, err = newServerCacheObjects(context.Background(), cacheConfig)
 		logger.FatalIf(err, "Unable to initialize disk caching")
 	}
 

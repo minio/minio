@@ -105,3 +105,32 @@ func (adm *AdminClient) AddCannedPolicy(policyName, policy string) error {
 
 	return nil
 }
+
+// SetPolicy - sets the policy for a user or a group.
+func (adm *AdminClient) SetPolicy(policyName, entityName string, isGroup bool) error {
+	queryValues := url.Values{}
+	queryValues.Set("policyName", policyName)
+	queryValues.Set("userOrGroup", entityName)
+	groupStr := "false"
+	if isGroup {
+		groupStr = "true"
+	}
+	queryValues.Set("isGroup", groupStr)
+
+	reqData := requestData{
+		relPath:     "/v1/set-user-or-group-policy",
+		queryValues: queryValues,
+	}
+
+	// Execute PUT on /minio/admin/v1/set-user-or-group-policy to set policy.
+	resp, err := adm.executeMethod("PUT", reqData)
+	defer closeResponse(resp)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return httpRespToErrorResponse(resp)
+	}
+	return nil
+}

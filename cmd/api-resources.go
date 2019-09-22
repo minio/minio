@@ -42,6 +42,27 @@ func getListObjectsV1Args(values url.Values) (prefix, marker, delimiter string, 
 	return
 }
 
+func getListBucketObjectVersionsArgs(values url.Values) (prefix, marker, delimiter string, maxkeys int, encodingType, versionIDMarker string, errCode APIErrorCode) {
+	errCode = ErrNone
+
+	if values.Get("max-keys") != "" {
+		var err error
+		if maxkeys, err = strconv.Atoi(values.Get("max-keys")); err != nil {
+			errCode = ErrInvalidMaxKeys
+			return
+		}
+	} else {
+		maxkeys = maxObjectList
+	}
+
+	prefix = values.Get("prefix")
+	marker = values.Get("key-marker")
+	delimiter = values.Get("delimiter")
+	encodingType = values.Get("encoding-type")
+	versionIDMarker = values.Get("version-id-marker")
+	return
+}
+
 // Parse bucket url queries for ListObjects V2.
 func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimiter string, fetchOwner bool, maxkeys int, encodingType string, errCode APIErrorCode) {
 	errCode = ErrNone
