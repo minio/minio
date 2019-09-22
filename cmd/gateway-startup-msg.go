@@ -20,8 +20,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
-	"github.com/minio/minio/cmd/logger"
 )
 
 // Prints the formatted startup message.
@@ -57,15 +55,15 @@ func printGatewayCommonMsg(apiEndpoints []string) {
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
 
 	// Colorize the message and print.
-	logger.StartupMessage(colorBlue("Endpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
+	logStartupMessage(colorBlue("Endpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
 	if isTerminal() && !globalCLIContext.Anonymous {
-		logger.StartupMessage(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKey)))
-		logger.StartupMessage(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretKey)))
+		logStartupMessage(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKey)))
+		logStartupMessage(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretKey)))
 	}
 	printEventNotifiers()
 
 	if globalIsBrowserEnabled {
-		logger.StartupMessage(colorBlue("\nBrowser Access:"))
-		logger.StartupMessage(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 3), apiEndpointStr))
+		logStartupMessage(colorBlue("\nBrowser Access:"))
+		logStartupMessage(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 3), apiEndpointStr))
 	}
 }
