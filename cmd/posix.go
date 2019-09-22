@@ -329,6 +329,10 @@ func (s *posix) DiskInfo() (info DiskInfo, err error) {
 		return info, errFaultyDisk
 	}
 
+	if err := s.checkDiskFound(); err != nil {
+		return info, err
+	}
+
 	di, err := getDiskInfo(s.diskPath)
 	if err != nil {
 		return info, err
