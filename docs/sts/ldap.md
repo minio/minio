@@ -136,3 +136,95 @@ MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local'
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(member=${usernamedn}))'
 MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE='cn'
 ```
+
+### API Request Parameters
+#### LDAPUsername
+Is AD/LDAP username to login. Application must ask user for this value to successfully obtain rotating access credentials from AssumeRoleWithLDAPIdentity.
+
+| Params               | Value                                          |
+| :--                  | :--                                            |
+| *Type*               | *String*                                       |
+| *Length Constraints* | *Minimum length of 2. Maximum length of 2048.* |
+| *Required*           | *Yes*                                          |
+
+
+#### LDAPPassword
+Is AD/LDAP username password to login. Application must ask user for this value to successfully obtain rotating access credentials from AssumeRoleWithLDAPIdentity.
+
+| Params               | Value                                          |
+| :--                  | :--                                            |
+| *Type*               | *String*                                       |
+| *Length Constraints* | *Minimum length of 4. Maximum length of 2048.* |
+| *Required*           | *Yes*                                          |
+
+#### Version
+Indicates STS API version information, the only supported value is '2011-06-15'.  This value is borrowed from AWS STS API documentation for compatibility reasons.
+
+| Params     | Value    |
+| :--        | :--      |
+| *Type*     | *String* |
+| *Required* | *Yes*    |
+
+#### Policy
+An IAM policy in JSON format that you want to use as an inline session policy. This parameter is optional. Passing policies to this operation returns new temporary credentials. The resulting session's permissions are the intersection of the canned policy name and the policy set here. You cannot use this policy to grant more permissions than those allowed by the canned policy name being assumed.
+
+| Params        | Value                                          |
+| :--           | :--                                            |
+| *Type*        | *String*                                       |
+| *Valid Range* | *Minimum length of 1. Maximum length of 2048.* |
+| *Required*    | *No*                                           |
+
+#### Response Elements
+XML response for this API is similar to [AWS STS AssumeRoleWithWebIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html#API_AssumeRoleWithWebIdentity_ResponseElements)
+
+#### Errors
+XML error response for this API is similar to [AWS STS AssumeRoleWithWebIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html#API_AssumeRoleWithWebIdentity_Errors)
+
+#### Sample Request
+```
+http://minio.cluster:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=foouser&LDAPPassword=foouserpassword&Version=2011-06-15
+```
+
+#### Sample Response
+```
+<?xml version="1.0" encoding="UTF-8"?>
+<AssumeRoleWithLDAPIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+  <AssumeRoleWithLDAPIdentityResult>
+    <AssumedRoleUser>
+      <Arn/>
+      <AssumeRoleId/>
+    </AssumedRoleUser>
+    <Credentials>
+      <AccessKeyId>Y4RJU1RNFGK48LGO9I2S</AccessKeyId>
+      <SecretAccessKey>sYLRKS1Z7hSjluf6gEbb9066hnx315wHTiACPAjg</SecretAccessKey>
+      <Expiration>2019-08-08T20:26:12Z</Expiration>
+      <SessionToken>eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NLZXkiOiJZNFJKVTFSTkZHSzQ4TEdPOUkyUyIsImF1ZCI6IlBvRWdYUDZ1Vk80NUlzRU5SbmdEWGo1QXU1WWEiLCJhenAiOiJQb0VnWFA2dVZPNDVJc0VOUm5nRFhqNUF1NVlhIiwiZXhwIjoxNTQxODExMDcxLCJpYXQiOjE1NDE4MDc0NzEsImlzcyI6Imh0dHBzOi8vbG9jYWxob3N0Ojk0NDMvb2F1dGgyL3Rva2VuIiwianRpIjoiYTBiMjc2MjktZWUxYS00M2JmLTg3MzktZjMzNzRhNGNkYmMwIn0.ewHqKVFTaP-j_kgZrcOEKroNUjk10GEp8bqQjxBbYVovV0nHO985VnRESFbcT6XMDDKHZiWqN2vi_ETX_u3Q-w</SessionToken>
+    </Credentials>
+  </AssumeRoleWithLDAPIdentity>
+  <ResponseMetadata/>
+</AssumeRoleWithLDAPIdentityResponse>
+```
+
+#### Testing
+```
+$ export MINIO_ACCESS_KEY=minio
+$ export MINIO_SECRET_KEY=minio123
+$ export MINIO_IDENTITY_LDAP_SERVER_ADDR='ldaps://my.ldap-active-dir-server.com:636'
+$ export MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn=${username},cn=users,dc=minioad,dc=local'
+$ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local'
+$ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(member=${usernamedn}))'
+$ export MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE='cn'
+$ minio server ~/test
+```
+
+```
+$ go run ldap.go -u foouser -p foopassword
+
+##### Credentials
+{
+        "accessKey": "NUIBORZYTV2HG2BMRSXR",
+        "secretKey": "qQlP5O7CFPc5m5IXf1vYhuVTFj7BRVJqh0FqZ86S",
+        "expiration": "2018-08-21T17:10:29-07:00",
+        "sessionToken": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NLZXkiOiJOVUlCT1JaWVRWMkhHMkJNUlNYUiIsImF1ZCI6IlBvRWdYUDZ1Vk80NUlzRU5SbmdEWGo1QXU1WWEiLCJhenAiOiJQb0VnWFA2dVZPNDVJc0VOUm5nRFhqNUF1NVlhIiwiZXhwIjoxNTM0ODk2NjI5LCJpYXQiOjE1MzQ4OTMwMjksImlzcyI6Imh0dHBzOi8vbG9jYWxob3N0Ojk0NDMvb2F1dGgyL3Rva2VuIiwianRpIjoiNjY2OTZjZTctN2U1Ny00ZjU5LWI0MWQtM2E1YTMzZGZiNjA4In0.eJONnVaSVHypiXKEARSMnSKgr-2mlC2Sr4fEGJitLcJF_at3LeNdTHv0_oHsv6ZZA3zueVGgFlVXMlREgr9LXA"
+}
+```
