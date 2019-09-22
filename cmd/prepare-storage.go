@@ -172,11 +172,13 @@ var errXLV3ThisEmpty = fmt.Errorf("XL format version 3 has This field empty")
 // time. additionally make sure to close all the disks used in this attempt.
 func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints EndpointList, setCount, drivesPerSet int) (*formatXLV3, error) {
 	// Initialize all storage disks
-	storageDisks, err := initStorageDisks(endpoints)
-	if err != nil {
-		return nil, err
-	}
+	storageDisks, errs := initStorageDisksWithErrors(endpoints)
 	defer closeStorageDisks(storageDisks)
+	for i, err := range errs {
+		if err != nil && err != errDiskNotFound {
+			return nil, fmt.Errorf("Disk %s: %w", endpoints[i], err)
+		}
+	}
 
 	// Attempt to load all `format.json` from all disks.
 	formatConfigs, sErrs := loadFormatXLAll(storageDisks)
@@ -203,7 +205,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints EndpointLi
 	// most part unless one of the formats is not consistent
 	// with expected XL format. For example if a user is
 	// trying to pool FS backend into an XL set.
-	if err = checkFormatXLValues(formatConfigs); err != nil {
+	if err := checkFormatXLValues(formatConfigs); err != nil {
 		return nil, err
 	}
 
@@ -236,7 +238,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints EndpointLi
 	// This migration failed to capture '.This' field properly which indicates
 	// the disk UUID association. Below function is called to handle and fix
 	// this regression, for more info refer https://github.com/minio/minio/issues/5667
-	if err = fixFormatXLV3(storageDisks, endpoints, formatConfigs); err != nil {
+	if err := fixFormatXLV3(storageDisks, endpoints, formatConfigs); err != nil {
 		return nil, err
 	}
 

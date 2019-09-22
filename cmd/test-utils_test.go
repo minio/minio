@@ -1615,9 +1615,11 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 		return nil, err
 	}
 
-	storageDisks, err := initStorageDisks(endpoints)
-	if err != nil {
-		return nil, err
+	storageDisks, errs := initStorageDisksWithErrors(endpoints)
+	for _, err = range errs {
+		if err != nil && err != errDiskNotFound {
+			return nil, err
+		}
 	}
 
 	// Initialize list pool.
