@@ -1723,6 +1723,12 @@ func toAPIError(ctx context.Context, err error) APIError {
 		// their internal error types. This code is only
 		// useful with gateway implementations.
 		switch e := err.(type) {
+		case crypto.Error:
+			apiErr = APIError{
+				Code:           "XKMSInternalError",
+				Description:    e.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
 		case minio.ErrorResponse:
 			apiErr = APIError{
 				Code:           e.Code,
