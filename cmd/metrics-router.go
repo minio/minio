@@ -28,5 +28,5 @@ const (
 func registerMetricsRouter(router *mux.Router) {
 	// metrics router
 	metricsRouter := router.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
-	metricsRouter.Handle(prometheusMetricsPath, metricsHandler())
+	metricsRouter.Handle(prometheusMetricsPath, AuthMiddleware(metricsHandler()))
 }
