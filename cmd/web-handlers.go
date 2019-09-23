@@ -1022,7 +1022,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if objectAPI.IsEncryptionSupported() {
-		if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(object, SlashSeparator) { // handle SSE requests
+		if crypto.IsRequested(r.Header) && !hasSuffix(object, SlashSeparator) { // handle SSE requests
 			rawReader := hashReader
 			var objectEncryptionKey []byte
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)

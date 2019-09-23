@@ -19,9 +19,9 @@ import "errors"
 // Error is the generic type for any error happening during decrypting
 // an object. It indicates that the object itself or its metadata was
 // modified accidentally or maliciously.
-type Error struct{ msg string }
+type Error string
 
-func (e Error) Error() string { return e.msg }
+func (e Error) Error() string { return string(e) }
 
 var (
 	// ErrInvalidEncryptionMethod indicates that the specified SSE encryption method
@@ -56,14 +56,14 @@ var (
 	ErrIncompatibleEncryptionMethod = errors.New("Server side encryption specified with both SSE-C and SSE-S3 headers")
 )
 
-var (
-	errMissingInternalIV            = Error{"The object metadata is missing the internal encryption IV"}
-	errMissingInternalSealAlgorithm = Error{"The object metadata is missing the internal seal algorithm"}
+const (
+	errMissingInternalIV            Error = "The object metadata is missing the internal encryption IV"
+	errMissingInternalSealAlgorithm Error = "The object metadata is missing the internal seal algorithm"
 
-	errInvalidInternalIV            = Error{"The internal encryption IV is malformed"}
-	errInvalidInternalSealAlgorithm = Error{"The internal seal algorithm is invalid and not supported"}
+	errInvalidInternalIV            Error = "The internal encryption IV is malformed"
+	errInvalidInternalSealAlgorithm Error = "The internal seal algorithm is invalid and not supported"
 
-	errMissingUpdatedKey = Error{"The key update returned no error but also no sealed key"}
+	errMissingUpdatedKey Error = "The key update returned no error but also no sealed key"
 )
 
 var (

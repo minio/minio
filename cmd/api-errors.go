@@ -315,6 +315,7 @@ const (
 	ErrAdminProfilerNotEnabled
 	ErrInvalidDecompressedSize
 	ErrAddUserInvalidArgument
+	ErrPostPolicyConditionInvalidFormat
 )
 
 type errorCodeMap map[APIErrorCode]APIError
@@ -1496,6 +1497,11 @@ var errorCodes = errorCodeMap{
 		Description:    "User is not allowed to be same as admin access key",
 		HTTPStatusCode: http.StatusConflict,
 	},
+	ErrPostPolicyConditionInvalidFormat: {
+		Code:           "PostPolicyInvalidKeyName",
+		Description:    "Invalid according to Policy: Policy Condition failed",
+		HTTPStatusCode: http.StatusForbidden,
+	},
 	// Add your error structure here.
 }
 
@@ -1723,6 +1729,12 @@ func toAPIError(ctx context.Context, err error) APIError {
 		// their internal error types. This code is only
 		// useful with gateway implementations.
 		switch e := err.(type) {
+		case crypto.Error:
+			apiErr = APIError{
+				Code:           "XKMSInternalError",
+				Description:    e.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
 		case minio.ErrorResponse:
 			apiErr = APIError{
 				Code:           e.Code,

@@ -77,14 +77,6 @@ func TestNewServer(t *testing.T) {
 			t.Fatalf("Case %v: server.TCPKeepAliveTimeout: expected: %v, got: %v", (i + 1), DefaultTCPKeepAliveTimeout, server.TCPKeepAliveTimeout)
 		}
 
-		if server.ReadTimeout != DefaultReadTimeout {
-			t.Fatalf("Case %v: server.ReadTimeout: expected: %v, got: %v", (i + 1), DefaultReadTimeout, server.ReadTimeout)
-		}
-
-		if server.WriteTimeout != DefaultWriteTimeout {
-			t.Fatalf("Case %v: server.WriteTimeout: expected: %v, got: %v", (i + 1), DefaultWriteTimeout, server.WriteTimeout)
-		}
-
 		if server.MaxHeaderBytes != DefaultMaxHeaderBytes {
 			t.Fatalf("Case %v: server.MaxHeaderBytes: expected: %v, got: %v", (i + 1), DefaultMaxHeaderBytes, server.MaxHeaderBytes)
 		}
