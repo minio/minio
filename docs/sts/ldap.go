@@ -18,6 +18,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 
@@ -27,14 +28,26 @@ import (
 
 var (
 	// LDAP integrated Minio endpoint
-	stsEndpoint = "http://localhost:9000"
+	stsEndpoint string
 
 	// LDAP credentials
-	ldapUsername = "ldapuser"
-	ldapPassword = "ldapsecret"
+	ldapUsername string
+	ldapPassword string
 )
 
+func init() {
+	flag.StringVar(&stsEndpoint, "sts-ep", "http://localhost:9000", "STS endpoint")
+	flag.StringVar(&ldapUsername, "u", "", "AD/LDAP Username")
+	flag.StringVar(&ldapPassword, "p", "", "AD/LDAP Password")
+}
+
 func main() {
+	flag.Parse()
+	if ldapUsername == "" || ldapPassword == "" {
+		flag.PrintDefaults()
+		return
+	}
+
 	// The credentials package in minio-go provides an interface to call the
 	// LDAP STS API.
 
