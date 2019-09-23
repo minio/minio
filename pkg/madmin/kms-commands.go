@@ -18,6 +18,8 @@ package madmin
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 )
@@ -59,4 +61,69 @@ type KMSKeyStatus struct {
 	EncryptionErr string `json:"encryption-error,omitempty"` // An empty error == success
 	UpdateErr     string `json:"update-error,omitempty"`     // An empty error == success
 	DecryptionErr string `json:"decryption-error,omitempty"` // An empty error == success
+}
+
+// RotateKeys performs a KMS key rotation operation.
+// On success the server returns a list of KMSRotateResponses
+// encoded as JSON values.
+func (adm *AdminClient) RotateKeys(bucket, prefix string, recursive bool, oldKeyID, newKeyID string, dryRun bool) (io.ReadCloser, error) {
+	reqBody, err := json.Marshal(KMSRotateKeyRequest{
+		Bucket:    bucket,
+		Prefix:    prefix,
+		Recursive: recursive,
+		OldKeyID:  oldKeyID,
+		NewKeyID:  newKeyID,
+		DryRun:    dryRun,
+	})
+	if err != nil {
+		return nil, err
+	}
+	reqData := requestData{
+		relPath: "/v1/kms/key/rotate",
+		content: reqBody,
+	}
+
+	resp, err := adm.executeMethod(http.MethodPost, reqData)
+	if err != nil {
+		closeResponse(resp)
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+	return resp.Body, nil
+}
+
+// KMSRotateKeyRequest represents the request arguments for
+// rotating the encryption keys of objects encrypted with a
+// particular master key ID.
+// If the KeyID is empty the server will use the currently configured
+// default master key. If the bucket is empty the server will lookup
+// all buckets (ListBucket API), first. An non-empty prefix causes the
+// list operation to only show entries that match this prefix. The same
+// is true for the KeyID.
+type KMSRotateKeyRequest struct {
+	Bucket    string `json:"bucket,omitempty"`     // If empty and recursive == true, operration applies to all buckets
+	Prefix    string `json:"prefix,omitempty"`     // The object prefix
+	OldKeyID  string `json:"old-key-id,omitempty"` // Only apply rotation on an object if its master key == OldKeyID
+	NewKeyID  string `json:"new-key-id,omitempty"` // The new master key ID
+	Recursive bool   `json:"recursive,omitempty"`  // Perform key rotation recursively
+	DryRun    bool   `json:"dry-run,omitempty"`    // If true, perform key rotation but do not persist any changes
+}
+
+// KMSRotateKeyResponse represents the key rotation for one object
+// at the S3 server. The server will answer a KMSRotateKeysReqeuest with a list
+// (separated by new-line) of KMSRotateKeyResponses (encoded as JSON).
+type KMSRotateKeyResponse struct {
+	Bucket   string `json:"bucket"`
+	Object   string `json:"object"`
+	OldKeyID string `json:"old-key-id"`
+	NewKeyID string `json:"new-key-id"`
+}
+
+// JSON returns the JSON representation of a KMSRotateKeyResponse
+// as string.
+func (r *KMSRotateKeyResponse) JSON() string {
+	const fmtStr = `{"bucket":"%s","object":"%s","old-key-id":"%s","new-key-id":"%s"}`
+	return fmt.Sprintf(fmtStr, r.Bucket, r.Object, r.OldKeyID, r.NewKeyID)
 }

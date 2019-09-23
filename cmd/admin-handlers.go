@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
@@ -1767,4 +1768,118 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeSuccessResponseJSON(w, resp)
+}
+
+// KMSRotateKeysHandler - POST /minio/admin/v1/kms/key/rotate
+func (a adminAPIHandlers) KMSRotateKeysHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "KMSRotateKeysHandler")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	if GlobalKMS == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
+		return
+	}
+
+	var req madmin.KMSRotateKeyRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// If the bucket is empty and listing is not recursive the listing is
+	// always empty (only objects are encrypted).
+	if req.Bucket == "" && !req.Recursive {
+		writeSuccessResponseHeadersOnly(w)
+		return
+	}
+
+	// Return early if old == new master key ID.
+	// In the future we may use KMS.UpdateKey instead.
+	if req.OldKeyID == req.NewKeyID {
+		writeSuccessResponseHeadersOnly(w)
+		return
+	}
+
+	// Either check whether the requested bucket exists or
+	// of (no bucket is specified) list all buckets.
+	var bucketNames []string
+	if req.Bucket != "" {
+		if _, err := objectAPI.GetBucketInfo(ctx, req.Bucket); err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		bucketNames = []string{req.Bucket}
+	} else {
+		bucketInfo, err := objectAPI.ListBuckets(ctx)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		bucketNames = make([]string, len(bucketInfo))
+		for i, b := range bucketInfo {
+			bucketNames[i] = b.Name
+		}
+	}
+
+	for _, bucket := range bucketNames {
+		var err error
+		var objectListing ListObjectsV2Info
+		for {
+			objectListing, err = objectAPI.ListObjectsV2(ctx, bucket, req.Prefix, objectListing.NextContinuationToken, "", 1000, false, objectListing.ContinuationToken)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			for _, object := range objectListing.Objects {
+				if !req.Recursive && strings.Contains(object.Name, "/") {
+					continue
+				}
+				if crypto.IsEncrypted(object.UserDefined) && crypto.S3.IsEncrypted(object.UserDefined) {
+					keyID := object.UserDefined[crypto.S3KMSKeyID]
+					if req.OldKeyID != keyID {
+						continue
+					}
+
+					objectKey, err := crypto.S3.UnsealObjectKey(GlobalKMS, object.UserDefined, bucket, object.Name)
+					if err != nil {
+						writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+						return
+					}
+					newKey, newEncKey, err := GlobalKMS.GenerateKey(req.NewKeyID, crypto.Context{bucket: path.Join(bucket, object.Name)})
+					if err != nil {
+						writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+						return
+					}
+					sealedKey := objectKey.Seal(newKey, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object.Name)
+					object.UserDefined = crypto.S3.CreateMetadata(object.UserDefined, req.NewKeyID, newEncKey, sealedKey)
+					object.metadataOnly = true
+					if !req.DryRun {
+						object, err = objectAPI.CopyObject(ctx, bucket, object.Name, bucket, object.Name, object, ObjectOptions{}, ObjectOptions{})
+						if err != nil {
+							writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+							return
+						}
+
+					}
+					rotateResponse := madmin.KMSRotateKeyResponse{
+						Bucket:   bucket,
+						Object:   object.Name,
+						OldKeyID: keyID,
+						NewKeyID: object.UserDefined[crypto.S3KMSKeyID],
+					}
+					if _, err = fmt.Fprintln(w, rotateResponse.JSON()); err != nil {
+						writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+						return
+					}
+				}
+			}
+			if !objectListing.IsTruncated {
+				break
+			}
+		}
+	}
 }

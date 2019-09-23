@@ -137,6 +137,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 	// -- KMS APIs --
 	//
 	adminV1Router.Methods(http.MethodGet).Path("/kms/key/status").HandlerFunc(httpTraceAll(adminAPI.KMSKeyStatusHandler))
+	adminV1Router.Methods(http.MethodPost).Path("/kms/key/rotate").HandlerFunc(httpTraceAll(adminAPI.KMSRotateKeysHandler))
 
 	// If none of the routes match, return error.
 	adminV1Router.NotFoundHandler = http.HandlerFunc(httpTraceHdrs(notFoundHandlerJSON))
