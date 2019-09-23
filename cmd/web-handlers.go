@@ -1316,12 +1316,15 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			defer gr.Close()
 
 			info := gr.ObjInfo
-
+			if info.IsCompressed() {
+				// For reporting, set the file size to the uncompressed size.
+				info.Size = info.GetActualSize()
+			}
 			header := &zip.FileHeader{
 				Name:   strings.TrimPrefix(objectName, args.Prefix),
 				Method: zip.Deflate,
 			}
-			if hasStringSuffixInSlice(gr.ObjInfo.Name, standardExcludeCompressExtensions) || hasPattern(standardExcludeCompressContentTypes, gr.ObjInfo.ContentType) {
+			if hasStringSuffixInSlice(info.Name, standardExcludeCompressExtensions) || hasPattern(standardExcludeCompressContentTypes, info.ContentType) {
 				// We strictly disable compression for standard extensions/content-types.
 				header.Method = zip.Store
 			}
