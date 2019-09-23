@@ -221,7 +221,7 @@ func guessIsMetricsReq(req *http.Request) bool {
 		return false
 	}
 	aType := getRequestAuthType(req)
-	return aType == authTypeAnonymous &&
+	return (aType == authTypeAnonymous || aType == authTypeJWT) &&
 		req.URL.Path == minioReservedBucketPath+prometheusMetricsPath
 }
 

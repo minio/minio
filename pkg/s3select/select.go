@@ -416,6 +416,9 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 	var rec sql.Record
 	for {
 		if s3Select.statement.LimitReached() {
+			if !sendRecord() {
+				break
+			}
 			if err = writer.Finish(s3Select.getProgress()); err != nil {
 				// FIXME: log this error.
 				err = nil

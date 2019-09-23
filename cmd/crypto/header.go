@@ -83,6 +83,13 @@ func RemoveSensitiveHeaders(h http.Header) {
 	h.Del(SSECopyKey)
 }
 
+// IsRequested returns true if the HTTP headers indicates
+// that any form server-side encryption (SSE-C, SSE-S3 or SSE-KMS)
+// is requested.
+func IsRequested(h http.Header) bool {
+	return S3.IsRequested(h) || SSEC.IsRequested(h) || SSECopy.IsRequested(h) || S3KMS.IsRequested(h)
+}
+
 // S3 represents AWS SSE-S3. It provides functionality to handle
 // SSE-S3 requests.
 var S3 = s3{}
