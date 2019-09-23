@@ -20,6 +20,11 @@ package main
 import (
 	"fmt"
 	"log"
+        "bufio"
+        "os"
+        "strings"
+
+        "golang.org/x/crypto/ssh/terminal"
 
 	miniogo "github.com/minio/minio-go/v6"
 	cr "github.com/minio/minio-go/v6/pkg/credentials"
@@ -29,15 +34,25 @@ var (
 	// LDAP integrated Minio endpoint
 	stsEndpoint = "http://localhost:9000"
 
-	// LDAP credentials
-	ldapUsername = "ldapuser"
-	ldapPassword = "ldapsecret"
 )
 
 func main() {
 	// The credentials package in minio-go provides an interface to call the
 	// LDAP STS API.
+	
+	// read LDAP authenication from the terminal
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("Enter LDAP Username: ")
+	username,_ := reader.ReadString('\n')
+	ldapUsername = strings.TrimSpace(username)
 
+	fmt.Print("LDAP Password: ")
+	bytePassword, err := terminal.ReadPassword(0)
+        if err != nil {
+                log.Fatalf("Need LDAP password from stdin", err)
+        }
+        ldapPassword = string(bytePassword)	
+	
 	// Initialize LDAP credentials
 	li, err := cr.NewLDAPIdentity(stsEndpoint, ldapUsername, ldapPassword)
 	if err != nil {
