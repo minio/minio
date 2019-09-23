@@ -1305,7 +1305,6 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	archive := zip.NewWriter(w)
 	defer archive.Close()
 
-	var length int64
 	for _, object := range args.Objects {
 		// Writes compressed object file to the response.
 		zipit := func(objectName string) error {
@@ -1318,18 +1317,9 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 
 			info := gr.ObjInfo
 
-			var actualSize int64
-			if info.IsCompressed() {
-				// Read the decompressed size from the meta.json.
-				actualSize = info.GetActualSize()
-				// Set the info.Size to the actualSize.
-				info.Size = actualSize
-			}
 			header := &zip.FileHeader{
-				Name:               strings.TrimPrefix(objectName, args.Prefix),
-				Method:             zip.Deflate,
-				UncompressedSize64: uint64(length),
-				UncompressedSize:   uint32(length),
+				Name:   strings.TrimPrefix(objectName, args.Prefix),
+				Method: zip.Deflate,
 			}
 			if hasStringSuffixInSlice(gr.ObjInfo.Name, standardExcludeCompressExtensions) || hasPattern(standardExcludeCompressContentTypes, gr.ObjInfo.ContentType) {
 				// We strictly disable compression for standard extensions/content-types.
