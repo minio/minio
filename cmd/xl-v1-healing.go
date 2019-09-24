@@ -68,7 +68,17 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 
 	// Make a volume entry on all underlying storage disks.
 	for index, disk := range storageDisks {
+		// Check if the disk is formatted to
+		// avoid writing in it otherwise.
+		diskNotFound := false
 		if disk == nil {
+			diskNotFound = true
+		} else {
+			if _, dErr := disk.StatVol(pathJoin(minioMetaBucket, formatConfigFile)); dErr != nil {
+				diskNotFound = true
+			}
+		}
+		if diskNotFound {
 			dErrs[index] = errDiskNotFound
 			beforeState[index] = madmin.DriveStateOffline
 			afterState[index] = madmin.DriveStateOffline
