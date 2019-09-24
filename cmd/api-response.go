@@ -498,8 +498,8 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 	data.Delimiter = s3EncodeName(delimiter, encodingType)
 	data.Prefix = s3EncodeName(prefix, encodingType)
 	data.MaxKeys = maxKeys
-	data.ContinuationToken = token
-	data.NextContinuationToken = nextToken
+	data.ContinuationToken = s3EncodeName(token, encodingType)
+	data.NextContinuationToken = s3EncodeName(nextToken, encodingType)
 	data.IsTruncated = isTruncated
 	for _, prefix := range prefixes {
 		var prefixItem = CommonPrefix{}
