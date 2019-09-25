@@ -70,7 +70,7 @@ Disable group `newgroup`.
 mc admin group disable myminio newgroup
 ```
 
-### 4. Remove user
+### 5. Remove user
 Remove the user `newuser`.
 ```
 mc admin user remove myminio newuser
@@ -86,7 +86,7 @@ Remove the group `newgroup`.
 mc admin group remove myminio newgroup
 ```
 
-### 5. Change user or group policy
+### 6. Change user or group policy
 Change the policy for user `newuser` to `putonly` canned policy.
 ```
 mc admin policy set myminio putonly user=newuser
@@ -97,7 +97,7 @@ Change the policy for group `newgroup` to `putonly` canned policy.
 mc admin policy set myminio putonly group=newgroup
 ```
 
-### 6. List all users or groups
+### 7. List all users or groups
 List all enabled and disabled users.
 ```
 mc admin user list myminio
@@ -108,7 +108,7 @@ List all enabled or disabled groups.
 mc admin group list myminio
 ```
 
-### 7. Configure `mc`
+### 8. Configure `mc`
 ```
 mc config host add myminio-newuser http://localhost:9000 newuser newuser123 --api s3v4
 mc cat myminio-newuser/my-bucketname/my-objectname
