@@ -20,9 +20,6 @@ package cmd
 const (
 	// Format config file carries backend format specific details.
 	formatConfigFile = "format.json"
-
-	// Format config tmp file carries backend format.
-	formatConfigFileTmp = "format.json.tmp"
 )
 
 const (

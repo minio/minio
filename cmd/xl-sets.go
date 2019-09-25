@@ -1492,7 +1492,7 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 		}
 	}
 
-	if !hasAnyErrorsUnformatted(sErrs) {
+	if countErrs(sErrs, errUnformattedDisk) == 0 {
 		// No unformatted disks found disks are either offline
 		// or online, no healing is required.
 		return res, errNoHealRequired
