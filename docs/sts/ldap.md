@@ -137,7 +137,10 @@ MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(member=${username
 MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE='cn'
 ```
 
-### API Request Parameters
+## STS API Parameters
+
+### Request Parameters
+
 #### LDAPUsername
 Is AD/LDAP username to login. Application must ask user for this value to successfully obtain rotating access credentials from AssumeRoleWithLDAPIdentity.
 
@@ -174,18 +177,18 @@ An IAM policy in JSON format that you want to use as an inline session policy. T
 | *Valid Range* | *Minimum length of 1. Maximum length of 2048.* |
 | *Required*    | *No*                                           |
 
-#### Response Elements
+### Response Elements
 XML response for this API is similar to [AWS STS AssumeRoleWithWebIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html#API_AssumeRoleWithWebIdentity_ResponseElements)
 
-#### Errors
+### Errors
 XML error response for this API is similar to [AWS STS AssumeRoleWithWebIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html#API_AssumeRoleWithWebIdentity_Errors)
 
-#### Sample Request
+### Sample Request
 ```
 http://minio.cluster:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=foouser&LDAPPassword=foouserpassword&Version=2011-06-15
 ```
 
-#### Sample Response
+### Sample Response
 ```
 <?xml version="1.0" encoding="UTF-8"?>
 <AssumeRoleWithLDAPIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
@@ -205,7 +208,7 @@ http://minio.cluster:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=foouser
 </AssumeRoleWithLDAPIdentityResponse>
 ```
 
-#### Testing
+### Testing
 ```
 $ export MINIO_ACCESS_KEY=minio
 $ export MINIO_SECRET_KEY=minio123
@@ -228,3 +231,35 @@ $ go run ldap.go -u foouser -p foopassword
         "sessionToken": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NLZXkiOiJOVUlCT1JaWVRWMkhHMkJNUlNYUiIsImF1ZCI6IlBvRWdYUDZ1Vk80NUlzRU5SbmdEWGo1QXU1WWEiLCJhenAiOiJQb0VnWFA2dVZPNDVJc0VOUm5nRFhqNUF1NVlhIiwiZXhwIjoxNTM0ODk2NjI5LCJpYXQiOjE1MzQ4OTMwMjksImlzcyI6Imh0dHBzOi8vbG9jYWxob3N0Ojk0NDMvb2F1dGgyL3Rva2VuIiwianRpIjoiNjY2OTZjZTctN2U1Ny00ZjU5LWI0MWQtM2E1YTMzZGZiNjA4In0.eJONnVaSVHypiXKEARSMnSKgr-2mlC2Sr4fEGJitLcJF_at3LeNdTHv0_oHsv6ZZA3zueVGgFlVXMlREgr9LXA"
 }
 ```
+
+## Managing User/Group Access Policy
+
+Access policies may be configured on a group or on a user directly. Access
+policies are first defined on the MinIO server using IAM policy JSON syntax. The
+`mc` tool is used to issue the necessary commands.
+
+**Note that by default no policy is set on a user**. Thus even if they
+successfully authenticate with AD/LDAP credentials, they have no access to
+object storage as the default access policy is to deny all access.
+
+To define a new policy, you can use the [AWS policy
+generator](https://awspolicygen.s3.amazonaws.com/policygen.html). Copy the
+policy into a text file `mypolicy.json` and issue the command like so:
+
+```shell
+mc admin policy add myminio mypolicy mypolicy.json
+```
+
+To assign the policy to a user or group, use:
+
+```shell
+mc admin policy set myminio mypolicy user=james
+
+mc admin policy set myminio mypolicy group=bigdatausers
+```
+
+**Please note that when AD/LDAP is configured, MinIO will not support long term
+users defined internally.** Only AD/LDAP users are allowed. In addition to this,
+the server will not support operations on users or groups using `mc admin user`
+or `mc admin group` commands. This is because users and groups are defined
+externally in AD/LDAP.
