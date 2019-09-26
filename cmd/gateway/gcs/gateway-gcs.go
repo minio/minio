@@ -331,7 +331,7 @@ func gcsToObjectError(err error, params ...string) error {
 }
 
 // gcsProjectIDRegex defines a valid gcs project id format
-var gcsProjectIDRegex = regexp.MustCompile("^[a-z][a-z0-9-]{5,29}$")
+var gcsProjectIDRegex = regexp.MustCompile(`^(?:(?:[-a-z0-9]{1,63}\.)*(?:[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?):)?(?:[0-9]{1,19}|(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?))$`)
 
 // isValidGCSProjectIDFormat - checks if a given project id format is valid or not.
 // Project IDs must start with a lowercase letter and can have lowercase ASCII letters,
