@@ -1329,6 +1329,25 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// InfoCannedPolicy - GET /minio/admin/v1/info-canned-policy?name={policyName}
+func (a adminAPIHandlers) InfoCannedPolicy(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "InfoCannedPolicy")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	data, err := globalIAMSys.InfoPolicy(mux.Vars(r)["name"])
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	w.Write(data)
+	w.(http.Flusher).Flush()
+}
+
 // ListCannedPolicies - GET /minio/admin/v1/list-canned-policies
 func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListCannedPolicies")
