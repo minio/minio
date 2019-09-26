@@ -71,17 +71,6 @@ func (r *Record) Clone(dst sql.Record) sql.Record {
 	return other
 }
 
-// CopyFrom will copy all records from the incoming and append them to the existing records.
-// The source record must be of a similar type.
-func (r *Record) CopyFrom(record sql.Record) error {
-	other, ok := record.(*Record)
-	if !ok {
-		return fmt.Errorf("unexpected record type, expected %T, got %T", r, record)
-	}
-	r.KVS = append(r.KVS, other.KVS...)
-	return nil
-}
-
 // Set - sets the value for a column name.
 func (r *Record) Set(name string, value *sql.Value) error {
 	var v interface{}
