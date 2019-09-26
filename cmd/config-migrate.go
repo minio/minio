@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -66,6 +67,9 @@ func migrateConfig() error {
 	version, err := GetVersion(getConfigFile())
 	if err != nil {
 		if os.IsNotExist(err) {
+			return nil
+		}
+		if errors.Is(err, os.ErrPermission) {
 			return nil
 		}
 		return err
