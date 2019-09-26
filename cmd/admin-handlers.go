@@ -334,9 +334,9 @@ type ServerMemUsageInfo struct {
 
 // ServerNetReadPerfInfo network read performance information.
 type ServerNetReadPerfInfo struct {
-	Addr     string        `json:"addr"`
-	ReadPerf time.Duration `json:"readPerf"`
-	Error    string        `json:"error,omitempty"`
+	Addr           string `json:"addr"`
+	ReadThroughput uint64 `json:"readThroughput"`
+	Error          string `json:"error,omitempty"`
 }
 
 // PerfInfoHandler - GET /minio/admin/v1/performance?perfType={perfType}
