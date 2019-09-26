@@ -17,6 +17,7 @@
 package target
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -25,6 +26,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 )
 
@@ -122,7 +124,7 @@ func sendEvents(target event.Target, eventKeyCh <-chan string, doneCh <-chan str
 			}
 
 			if err != errNotConnected && !IsConnResetErr(err) {
-				panic(fmt.Errorf("target.Send() failed with '%v'", err))
+				logger.LogIf(context.Background(), fmt.Errorf("Sending event failed with '%v'", err))
 			}
 
 			retryTimer.Reset(retryInterval)

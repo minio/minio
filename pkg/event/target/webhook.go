@@ -125,7 +125,7 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 	_ = resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("sending event failed with %v", resp.Status)
+		return fmt.Errorf("Unexpected response code %v", resp.Status)
 	}
 
 	return nil
