@@ -191,17 +191,14 @@ func shouldHealObjectOnDisk(xlErr, dataErr error, meta xlMetaV1, quorumModTime t
 		return true
 	}
 	if xlErr == nil {
-		// If xl.json was read fine but there is some problem with the part.N files.
-		if dataErr == errFileNotFound {
+		// If xl.json was read fine but there may be problem with the part.N files.
+		if IsErr(dataErr, []error{
+			errFileNotFound,
+			errFileCorrupt,
+		}...) {
 			return true
 		}
-		if dataErr == errFileUnexpectedSize {
-			return true
-		}
-		if _, ok := dataErr.(HashMismatchError); ok {
-			return true
-		}
-		if quorumModTime != meta.Stat.ModTime {
+		if !quorumModTime.Equal(meta.Stat.ModTime) {
 			return true
 		}
 	}
