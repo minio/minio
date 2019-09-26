@@ -99,7 +99,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Uncommend this to use MinIO API operations by initializing minio
+	// Uncomment this to use MinIO API operations by initializing minio
 	// client with obtained credentials.
 
 	opts := &minio.Options{

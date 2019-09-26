@@ -33,9 +33,10 @@ type Info struct {
 
 // CallStats records request stats
 type CallStats struct {
-	InputBytes  int           `json:"inputbytes"`
-	OutputBytes int           `json:"outputbytes"`
-	Latency     time.Duration `json:"latency"`
+	InputBytes      int           `json:"inputbytes"`
+	OutputBytes     int           `json:"outputbytes"`
+	Latency         time.Duration `json:"latency"`
+	TimeToFirstByte time.Duration `json:"timetofirstbyte"`
 }
 
 // RequestInfo represents trace of http request

@@ -339,6 +339,10 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	if len(sessionPolicyStr) > 0 {
+		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
+	}
+
 	secret := globalServerConfig.GetCredential().SecretKey
 	cred, err := auth.GetNewCredentialsWithMetadata(m, secret)
 	if err != nil {
@@ -359,10 +363,6 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	var subFromToken string
 	if v, ok := m["sub"]; ok {
 		subFromToken, _ = v.(string)
-	}
-
-	if len(sessionPolicyStr) > 0 {
-		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
 	// Set the newly generated credentials.
@@ -461,6 +461,29 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		return
 	}
 
+	sessionPolicyStr := r.Form.Get("Policy")
+	// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
+	// The plain text that you use for both inline and managed session
+	// policies shouldn't exceed 2048 characters.
+	if len(sessionPolicyStr) > 2048 {
+		writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+		return
+	}
+
+	if len(sessionPolicyStr) > 0 {
+		sessionPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
+		if err != nil {
+			writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+			return
+		}
+
+		// Version in policy must not be empty
+		if sessionPolicy.Version == "" {
+			writeSTSErrorResponse(w, stsErrCodes.ToSTSErr(ErrSTSInvalidParameterValue))
+			return
+		}
+	}
+
 	ldapConn, err := globalServerConfig.LDAPServerConfig.Connect()
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("LDAP server connection failure: %v", err))
@@ -522,6 +545,10 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		"exp":        UTCNow().Add(expiryDur).Unix(),
 		"ldapUser":   ldapUsername,
 		"ldapGroups": groups,
+	}
+
+	if len(sessionPolicyStr) > 0 {
+		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
 	secret := globalServerConfig.GetCredential().SecretKey

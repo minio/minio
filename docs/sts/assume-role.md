@@ -6,7 +6,18 @@ Returns a set of temporary security credentials that you can use to access MinIO
 
 The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to MinIO API operations. The policy applied to these temporary credentials is inherited from the MinIO user credentials. By default, the temporary security credentials created by AssumeRole last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration to 12 hours.
 
-### Request Parameters
+### API Request Parameters
+#### Version
+Indicates STS API version information, the only supported value is '2011-06-15'. This value is borrowed from AWS STS API documentation for compatibility reasons.
+
+| Params     | Value    |
+| :--        | :--      |
+| *Type*     | *String* |
+| *Required* | *Yes*    |
+
+#### AUTHPARAMS
+Indicates STS API Authorization information. If you are familiar with AWS Signature V4 Authorization header, this STS API supports signature V4 authorization as mentioned [here](https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html)
+
 #### DurationSeconds
 The duration, in seconds. The value can range from 900 seconds (15 minutes) up to 12 hours. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds.
 
@@ -24,17 +35,6 @@ An IAM policy in JSON format that you want to use as an inline session policy. T
 | *Type*        | *String*                                       |
 | *Valid Range* | *Minimum length of 1. Maximum length of 2048.* |
 | *Required*    | *No*                                           |
-
-#### Version
-Indicates STS API version information, the only supported value is '2011-06-15'. This value is borrowed from AWS STS API documentation for compatibility reasons.
-
-| Params     | Value    |
-| :--        | :--      |
-| *Type*     | *String* |
-| *Required* | *Yes*    |
-
-#### AUTHPARAMS
-Indicates STS API Authorization information. If you are familiar with AWS Signature V4 Authorization header, this STS API supports signature V4 authorization as mentioned [here](https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html)
 
 #### Response Elements
 XML response for this API is similar to [AWS STS AssumeRole](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html#API_AssumeRole_ResponseElements)
