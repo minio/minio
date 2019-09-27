@@ -32,7 +32,6 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/lifecycle"
-	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
 	trace "github.com/minio/minio/pkg/trace"
@@ -107,9 +106,10 @@ func (s *peerRESTServer) NetReadPerfInfoHandler(w http.ResponseWriter, r *http.R
 		addr = GetLocalPeer(globalEndpoints)
 	}
 
+	d := end.Sub(start)
 	info := ServerNetReadPerfInfo{
-		Addr:     addr,
-		ReadPerf: end.Sub(start),
+		Addr:           addr,
+		ReadThroughput: uint64(int64(time.Second) * size / int64(d)),
 	}
 
 	ctx := newContext(r, w, "NetReadPerfInfo")
@@ -954,8 +954,7 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 	for {
 		select {
 		case entry := <-ch:
-			log := entry.(madmin.LogInfo)
-			if err := enc.Encode(log); err != nil {
+			if err := enc.Encode(entry); err != nil {
 				return
 			}
 			w.(http.Flusher).Flush()

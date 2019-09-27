@@ -29,8 +29,9 @@ import (
 // LogInfo holds console log messages
 type LogInfo struct {
 	log.Entry
-	NodeName string `json:"node"`
-	Err      error  `json:"-"`
+	ConsoleMsg string
+	NodeName   string `json:"node"`
+	Err        error  `json:"-"`
 }
 
 // SendLog returns true if log pertains to node specified in args.

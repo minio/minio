@@ -113,9 +113,14 @@ func (sys *HTTPConsoleLoggerSys) Console() *HTTPConsoleLoggerSys {
 // Send log message 'e' to console and publish to console
 // log pubsub system
 func (sys *HTTPConsoleLoggerSys) Send(e interface{}) error {
-	lg := madmin.LogInfo{}
-	lg.Entry = e.(log.Entry)
-	lg.NodeName = sys.nodeName
+	var lg madmin.LogInfo
+	switch e := e.(type) {
+	case log.Entry:
+		lg = madmin.LogInfo{Entry: e, NodeName: sys.nodeName}
+	case string:
+		lg = madmin.LogInfo{ConsoleMsg: e, NodeName: sys.nodeName}
+	}
+
 	sys.pubsub.Publish(lg)
 	// add log to ring buffer
 	sys.logBuf.Value = lg

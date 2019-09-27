@@ -61,6 +61,7 @@ var supportedHeadGetReqParams = map[string]string{
 
 const (
 	compressionAlgorithmV1 = "golang/snappy/LZ77"
+	compressionAlgorithmV2 = "klauspost/compress/s2"
 )
 
 // setHeadGetRespHeaders - set any requested parameters as response headers.
@@ -92,7 +93,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if !api.EncryptionEnabled() && hasServerSideEncryptionHeader(r.Header) {
+	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -251,7 +252,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if !api.EncryptionEnabled() && hasServerSideEncryptionHeader(r.Header) {
+	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -422,7 +423,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrBadRequest))
 		return
 	}
-	if !api.EncryptionEnabled() && hasServerSideEncryptionHeader(r.Header) {
+	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -646,7 +647,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
-	if !api.EncryptionEnabled() && (hasServerSideEncryptionHeader(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
+	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -707,6 +708,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidMetadataDirective), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	// This request header needs to be set prior to setting ObjectOptions
 	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
@@ -733,11 +735,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
-
-	// Deny if WORM is enabled. If operation is key rotation of SSE-S3 encrypted object
-	// allow the operation
-	if globalWORMEnabled && !(cpSrcDstSame && crypto.S3.IsRequested(r.Header)) {
-		if _, err = objectAPI.GetObjectInfo(ctx, dstBucket, dstObject, dstOpts); err == nil {
+	if globalWORMEnabled { // Deny if WORM is enabled.
+		if _, err := objectAPI.GetObjectInfo(ctx, dstBucket, dstObject, dstOpts); err == nil {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
 			return
 		}
@@ -775,11 +774,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Deny if WORM is enabled, and it is not a SSE-S3 -> SSE-S3 key rotation or if metadata replacement is requested.
-	if globalWORMEnabled && cpSrcDstSame && (!crypto.S3.IsEncrypted(srcInfo.UserDefined) || isMetadataReplace(r.Header)) {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
-		return
-	}
 	// We have to copy metadata only if source and destination are same.
 	// this changes for encryption which can be observed below.
 	if cpSrcDstSame {
@@ -807,13 +801,15 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if isCompressed {
 		compressMetadata = make(map[string]string, 2)
 		// Preserving the compression metadata.
-		compressMetadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
+		compressMetadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		compressMetadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
 		// Remove all source encrypted related metadata to
 		// avoid copying them in target object.
 		crypto.RemoveInternalEntries(srcInfo.UserDefined)
 
-		reader = newSnappyCompressReader(gr)
+		s2c := newS2CompressReader(gr)
+		defer s2c.Close()
+		reader = s2c
 		length = -1
 	} else {
 		// Remove the metadata for remote calls.
@@ -866,13 +862,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// - the object is encrypted using SSE-S3 and the SSE-S3 header is present
 		// than execute a key rotation.
 		var keyRotation bool
-		if cpSrcDstSame && ((sseCopyC && sseC) || (sseS3 && sseCopyS3)) {
-			if sseCopyC && sseC {
-				oldKey, err = ParseSSECopyCustomerRequest(r.Header, srcInfo.UserDefined)
-				if err != nil {
-					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-					return
-				}
+		if cpSrcDstSame && (sseCopyC && sseC) {
+			oldKey, err = ParseSSECopyCustomerRequest(r.Header, srcInfo.UserDefined)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				return
 			}
 
 			for k, v := range srcInfo.UserDefined {
@@ -1051,7 +1045,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
-	if !api.EncryptionEnabled() && hasServerSideEncryptionHeader(r.Header) {
+	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1184,7 +1178,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
 		// Storing the compression metadata.
-		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
+		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
 
 		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize, globalCLIContext.StrictS3Compat)
@@ -1194,7 +1188,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 
 		// Set compression metrics.
-		reader = newSnappyCompressReader(actualReader)
+		s2c := newS2CompressReader(actualReader)
+		defer s2c.Close()
+		reader = s2c
 		size = -1   // Since compressed size is un-predictable.
 		md5hex = "" // Do not try to verify the content.
 		sha256hex = ""
@@ -1232,7 +1228,11 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	var objectEncryptionKey []byte
 	if objectAPI.IsEncryptionSupported() {
-		if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(object, SlashSeparator) { // handle SSE requests
+		if crypto.IsRequested(r.Header) && !hasSuffix(object, SlashSeparator) { // handle SSE requests
+			if crypto.SSECopy.IsRequested(r.Header) {
+				writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL, guessIsBrowserReq(r))
+				return
+			}
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -1264,7 +1264,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		if !strings.HasSuffix(objInfo.ETag, "-1") {
 			etag = objInfo.ETag + "-1"
 		}
-	} else if hasServerSideEncryptionHeader(r.Header) {
+	} else if crypto.IsRequested(r.Header) {
 		etag = getDecryptedETag(r.Header, objInfo, false)
 	}
 	w.Header()[xhttp.ETag] = []string{"\"" + etag + "\""}
@@ -1318,7 +1318,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
-	if !api.EncryptionEnabled() && hasServerSideEncryptionHeader(r.Header) {
+	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1365,7 +1365,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	var encMetadata = map[string]string{}
 
 	if objectAPI.IsEncryptionSupported() {
-		if hasServerSideEncryptionHeader(r.Header) {
+		if crypto.IsRequested(r.Header) {
 			if err = setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
@@ -1394,7 +1394,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) {
 		// Storing the compression metadata.
-		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
+		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 	}
 
 	opts, err = putOpts(ctx, r, bucket, object, metadata)
@@ -1432,7 +1432,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
-	if !api.EncryptionEnabled() && (hasServerSideEncryptionHeader(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
+	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1637,7 +1637,9 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	isCompressed := compressPart
 	// Compress only if the compression is enabled during initial multipart.
 	if isCompressed {
-		reader = newSnappyCompressReader(gr)
+		s2c := newS2CompressReader(gr)
+		defer s2c.Close()
+		reader = s2c
 		length = -1
 	} else {
 		reader = gr
@@ -1747,7 +1749,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
 	}
-	if !api.EncryptionEnabled() && hasServerSideEncryptionHeader(r.Header) {
+	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1877,7 +1879,9 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 
 		// Set compression metrics.
-		reader = newSnappyCompressReader(actualReader)
+		s2c := newS2CompressReader(actualReader)
+		defer s2c.Close()
+		reader = s2c
 		size = -1   // Since compressed size is un-predictable.
 		md5hex = "" // Do not try to verify the content.
 		sha256hex = ""

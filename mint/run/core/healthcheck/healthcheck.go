@@ -28,6 +28,7 @@ import (
 	"os"
 	"time"
 
+	jwtgo "github.com/dgrijalva/jwt-go"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -99,7 +100,7 @@ func testLivenessEndpoint(endpoint string) {
 	}
 
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: u.Scheme == "https"},
 	}
 	client := &http.Client{Transport: tr, Timeout: timeout}
 	resp, err := client.Get(u.String())
@@ -109,7 +110,7 @@ func testLivenessEndpoint(endpoint string) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		// Status not 200 OK
-		failureLog(function, nil, startTime, "", "GET /minio/health/live returned non OK status", err).Fatal()
+		failureLog(function, nil, startTime, "", fmt.Sprintf("GET /minio/health/live returned %s", resp.Status), err).Fatal()
 	}
 
 	defer resp.Body.Close()
@@ -127,7 +128,7 @@ func testReadinessEndpoint(endpoint string) {
 	}
 
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: u.Scheme == "https"},
 	}
 	client := &http.Client{Transport: tr, Timeout: timeout}
 	resp, err := client.Get(u.String())
@@ -144,6 +145,10 @@ func testReadinessEndpoint(endpoint string) {
 	defer successLogger(function, nil, startTime).Info()
 }
 
+const (
+	defaultPrometheusJWTExpiry = 100 * 365 * 24 * time.Hour
+)
+
 func testPrometheusEndpoint(endpoint string) {
 	startTime := time.Now()
 	function := "testPrometheusEndpoint"
@@ -154,15 +159,34 @@ func testPrometheusEndpoint(endpoint string) {
 		failureLog(function, nil, startTime, "", "URL Parsing for Healthcheck Prometheus handler failed", err).Fatal()
 	}
 
+	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.StandardClaims{
+		ExpiresAt: time.Now().UTC().Add(defaultPrometheusJWTExpiry).Unix(),
+		Subject:   os.Getenv("ACCESS_KEY"),
+		Issuer:    "prometheus",
+	})
+
+	token, err := jwt.SignedString([]byte(os.Getenv("SECRET_KEY")))
+	if err != nil {
+		failureLog(function, nil, startTime, "", "jwt generation failed", err).Fatal()
+	}
+
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: u.Scheme == "https"},
 	}
 	client := &http.Client{Transport: tr, Timeout: timeout}
-	resp, err := client.Get(u.String())
+
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		failureLog(function, nil, startTime, "", "Initializing GET request to Prometheus endpoint failed", err).Fatal()
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	resp, err := client.Do(req)
 	if err != nil {
 		// GET request errored
 		failureLog(function, nil, startTime, "", "GET request to Prometheus endpoint failed", err).Fatal()
 	}
+
 	if resp.StatusCode != http.StatusOK {
 		// Status not 200 OK
 		failureLog(function, nil, startTime, "", "GET /minio/prometheus/metrics returned non OK status", err).Fatal()

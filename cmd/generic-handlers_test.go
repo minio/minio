@@ -185,7 +185,7 @@ var containsReservedMetadataTests = []struct {
 		shouldFail: true,
 	},
 	{
-		header:     http.Header{crypto.SSESealAlgorithm: []string{SSESealAlgorithmDareSha256}},
+		header:     http.Header{crypto.SSESealAlgorithm: []string{crypto.InsecureSealAlgorithm}},
 		shouldFail: true,
 	},
 	{

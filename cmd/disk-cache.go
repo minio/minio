@@ -446,7 +446,7 @@ func checkAtimeSupport(dir string) (err error) {
 	return
 }
 func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
-	logger.StartupMessage(colorBlue("Cache migration initiated ...."))
+	logStartupMessage(colorBlue("Cache migration initiated ...."))
 
 	var wg sync.WaitGroup
 	errs := make([]error, len(c.cache))
@@ -482,7 +482,7 @@ func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
 	c.migMutex.Lock()
 	defer c.migMutex.Unlock()
 	c.migrating = false
-	logger.StartupMessage(colorBlue("Cache migration completed successfully."))
+	logStartupMessage(colorBlue("Cache migration completed successfully."))
 }
 
 // PutObject - caches the uploaded object for single Put operations
