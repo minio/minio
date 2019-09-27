@@ -61,6 +61,7 @@ var supportedHeadGetReqParams = map[string]string{
 
 const (
 	compressionAlgorithmV1 = "golang/snappy/LZ77"
+	compressionAlgorithmV2 = "klauspost/compress/s2"
 )
 
 // setHeadGetRespHeaders - set any requested parameters as response headers.
@@ -800,13 +801,15 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if isCompressed {
 		compressMetadata = make(map[string]string, 2)
 		// Preserving the compression metadata.
-		compressMetadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
+		compressMetadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		compressMetadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
 		// Remove all source encrypted related metadata to
 		// avoid copying them in target object.
 		crypto.RemoveInternalEntries(srcInfo.UserDefined)
 
-		reader = newSnappyCompressReader(gr)
+		s2c := newS2CompressReader(gr)
+		defer s2c.Close()
+		reader = s2c
 		length = -1
 	} else {
 		// Remove the metadata for remote calls.
@@ -1175,7 +1178,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
 		// Storing the compression metadata.
-		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
+		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
 
 		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize, globalCLIContext.StrictS3Compat)
@@ -1185,7 +1188,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 
 		// Set compression metrics.
-		reader = newSnappyCompressReader(actualReader)
+		s2c := newS2CompressReader(actualReader)
+		defer s2c.Close()
+		reader = s2c
 		size = -1   // Since compressed size is un-predictable.
 		md5hex = "" // Do not try to verify the content.
 		sha256hex = ""
@@ -1389,7 +1394,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) {
 		// Storing the compression metadata.
-		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV1
+		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 	}
 
 	opts, err = putOpts(ctx, r, bucket, object, metadata)
@@ -1632,7 +1637,9 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	isCompressed := compressPart
 	// Compress only if the compression is enabled during initial multipart.
 	if isCompressed {
-		reader = newSnappyCompressReader(gr)
+		s2c := newS2CompressReader(gr)
+		defer s2c.Close()
+		reader = s2c
 		length = -1
 	} else {
 		reader = gr
@@ -1872,7 +1879,9 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 
 		// Set compression metrics.
-		reader = newSnappyCompressReader(actualReader)
+		s2c := newS2CompressReader(actualReader)
+		defer s2c.Close()
+		reader = s2c
 		size = -1   // Since compressed size is un-predictable.
 		md5hex = "" // Do not try to verify the content.
 		sha256hex = ""

@@ -251,18 +251,18 @@ var (
 	// configuration must be present.
 	globalAutoEncryption bool
 
-	// Is compression include extensions/content-types set.
+	// Is compression include extensions/content-types set?
 	globalIsEnvCompression bool
 
-	// Is compression enabeld.
+	// Is compression enabled?
 	globalIsCompressionEnabled = false
 
 	// Include-list for compression.
-	globalCompressExtensions = []string{".txt", ".log", ".csv", ".json"}
-	globalCompressMimeTypes  = []string{"text/csv", "text/plain", "application/json"}
+	globalCompressExtensions = []string{".txt", ".log", ".csv", ".json", ".tar", ".xml", ".bin"}
+	globalCompressMimeTypes  = []string{"text/*", "application/json", "application/xml"}
 
 	// Some standard object extensions which we strictly dis-allow for compression.
-	standardExcludeCompressExtensions = []string{".gz", ".bz2", ".rar", ".zip", ".7z"}
+	standardExcludeCompressExtensions = []string{".gz", ".bz2", ".rar", ".zip", ".7z", ".xz", ".mp4", ".mkv", ".mov"}
 
 	// Some standard content-types which we strictly dis-allow for compression.
 	standardExcludeCompressContentTypes = []string{"video/*", "audio/*", "application/zip", "application/x-gzip", "application/x-zip-compressed", " application/x-compress", "application/x-spoon"}

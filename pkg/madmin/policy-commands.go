@@ -24,6 +24,31 @@ import (
 	"net/url"
 )
 
+// InfoCannedPolicy - expand canned policy into JSON structure.
+func (adm *AdminClient) InfoCannedPolicy(policyName string) ([]byte, error) {
+	queryValues := url.Values{}
+	queryValues.Set("name", policyName)
+
+	reqData := requestData{
+		relPath:     "/v1/info-canned-policy",
+		queryValues: queryValues,
+	}
+
+	// Execute GET on /minio/admin/v1/info-canned-policy
+	resp, err := adm.executeMethod("GET", reqData)
+
+	defer closeResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+
+	return ioutil.ReadAll(resp.Body)
+}
+
 // ListCannedPolicies - list all configured canned policies.
 func (adm *AdminClient) ListCannedPolicies() (map[string][]byte, error) {
 	reqData := requestData{

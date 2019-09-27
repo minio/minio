@@ -334,9 +334,9 @@ type ServerMemUsageInfo struct {
 
 // ServerNetReadPerfInfo network read performance information.
 type ServerNetReadPerfInfo struct {
-	Addr     string        `json:"addr"`
-	ReadPerf time.Duration `json:"readPerf"`
-	Error    string        `json:"error,omitempty"`
+	Addr           string `json:"addr"`
+	ReadThroughput uint64 `json:"readThroughput"`
+	Error          string `json:"error,omitempty"`
 }
 
 // PerfInfoHandler - GET /minio/admin/v1/performance?perfType={perfType}
@@ -1327,6 +1327,25 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 			logger.LogIf(ctx, nerr.Err)
 		}
 	}
+}
+
+// InfoCannedPolicy - GET /minio/admin/v1/info-canned-policy?name={policyName}
+func (a adminAPIHandlers) InfoCannedPolicy(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "InfoCannedPolicy")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	data, err := globalIAMSys.InfoPolicy(mux.Vars(r)["name"])
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	w.Write(data)
+	w.(http.Flusher).Flush()
 }
 
 // ListCannedPolicies - GET /minio/admin/v1/list-canned-policies
