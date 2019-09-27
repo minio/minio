@@ -375,7 +375,6 @@ func (client *storageRESTClient) DeleteFileBulk(volume string, paths []string) (
 	if len(paths) == 0 {
 		return errs, err
 	}
-	errs = make([]error, len(paths))
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	for _, path := range paths {
@@ -388,14 +387,13 @@ func (client *storageRESTClient) DeleteFileBulk(volume string, paths []string) (
 		return nil, err
 	}
 
-	bulkErrs := bulkErrorsResponse{}
-	gob.NewDecoder(respBody).Decode(&bulkErrs)
-	if err != nil {
+	dErrResp := &DeleteFileBulkErrsResp{}
+	if err = gob.NewDecoder(respBody).Decode(dErrResp); err != nil {
 		return nil, err
 	}
 
-	for i, dErr := range bulkErrs.Errs {
-		errs[i] = toStorageErr(dErr)
+	for _, dErr := range dErrResp.Errs {
+		errs = append(errs, toStorageErr(dErr))
 	}
 
 	return errs, nil
