@@ -19,6 +19,7 @@ package sql
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/bcicen/jstream"
@@ -229,23 +230,44 @@ func (e *Like) evalLikeNode(r Record, arg *Value) (*Value, error) {
 
 func (e *In) evalInNode(r Record, arg *Value) (*Value, error) {
 	result := false
+
+	// If array compare each element.
+	if arr, ok := arg.ToArray(); ok {
+		for _, element := range arr {
+			// If we have an array we are on the wrong level.
+			if element.IsArray() {
+				continue
+			}
+			// Does content match?
+			found, err := e.evalInNode(r, &element)
+			if err != nil {
+				return nil, err
+			}
+			if result, ok := found.ToBool(); result && ok {
+				return FromBool(result), nil
+			}
+		}
+		return FromBool(false), nil
+	}
+
 	for _, elt := range e.Expressions {
 		eltVal, err := elt.evalNode(r)
 		if err != nil {
 			return nil, err
 		}
 
-		// FIXME: type inference?
-
-		// Types must match.
-		if !arg.SameTypeAs(*eltVal) {
-			// match failed.
-			continue
-		}
 		if arg.Equals(*eltVal) {
 			result = true
 			break
 		}
+		// Try as numbers
+		a, aOK := arg.ToFloat()
+		b, bOK := eltVal.ToFloat()
+		if aOK && bOK && a == b {
+			result = true
+			break
+		}
+		// FIXME: more type inference?
 	}
 	return FromBool(result), nil
 }
@@ -338,29 +360,45 @@ func (e *JSONPath) evalNode(r Record) (*Value, error) {
 			return nil, err
 		}
 
-		switch rval := result.(type) {
-		case string:
-			return FromString(rval), nil
-		case float64:
-			return FromFloat(rval), nil
-		case int64:
-			return FromInt(rval), nil
-		case bool:
-			return FromBool(rval), nil
-		case jstream.KVS, []interface{}:
-			bs, err := json.Marshal(result)
-			if err != nil {
-				return nil, err
-			}
-			return FromBytes(bs), nil
-		case nil:
-			return FromNull(), nil
-		default:
-			return nil, errors.New("Unhandled value type")
-		}
+		return jsonToValue(result)
 	default:
 		return r.Get(keypath)
 	}
+}
+
+// jsonToValue will convert the json value to an internal value.
+func jsonToValue(result interface{}) (*Value, error) {
+	switch rval := result.(type) {
+	case string:
+		return FromString(rval), nil
+	case float64:
+		return FromFloat(rval), nil
+	case int64:
+		return FromInt(rval), nil
+	case bool:
+		return FromBool(rval), nil
+	case jstream.KVS:
+		bs, err := json.Marshal(result)
+		if err != nil {
+			return nil, err
+		}
+		return FromBytes(bs), nil
+	case []interface{}:
+		dst := make([]Value, len(rval))
+		for i := range rval {
+			v, err := jsonToValue(rval[i])
+			if err != nil {
+				return nil, err
+			}
+			dst[i] = *v
+		}
+		return FromArray(dst), nil
+	case []Value:
+		return FromArray(rval), nil
+	case nil:
+		return FromNull(), nil
+	}
+	return nil, fmt.Errorf("Unhandled value type: %T", result)
 }
 
 func (e *PrimaryTerm) evalNode(r Record) (res *Value, err error) {
