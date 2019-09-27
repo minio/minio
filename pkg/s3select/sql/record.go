@@ -43,9 +43,8 @@ type Record interface {
 	WriteCSV(writer io.Writer, fieldDelimiter rune) error
 	WriteJSON(writer io.Writer) error
 
-	// CopyFrom will copy all records from the incoming and append them to the existing records.
-	// The source record must be of a similar type as destination.
-	CopyFrom(src Record) error
+	// Clone the record and if possible use the destination provided.
+	Clone(dst Record) Record
 	Reset()
 
 	// Returns underlying representation
