@@ -47,6 +47,7 @@ type Value struct {
 	value interface{}
 }
 
+// MarshalJSON provides json marshalling of values.
 func (v Value) MarshalJSON() ([]byte, error) {
 	if b, ok := v.ToBytes(); ok {
 		return b, nil
@@ -141,7 +142,7 @@ func FromBytes(b []byte) *Value {
 	return &Value{value: b}
 }
 
-// FromInt creates a Value from an int
+// FromArray creates a Value from an array of values.
 func FromArray(a []Value) *Value {
 	return &Value{value: a}
 }
