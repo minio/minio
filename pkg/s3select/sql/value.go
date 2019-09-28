@@ -221,7 +221,7 @@ func (v Value) ToBytes() (val []byte, ok bool) {
 	return
 }
 
-// ToArray returns the value if is a slice of values.
+// ToArray returns the value if it is a slice of values.
 func (v Value) ToArray() (val []Value, ok bool) {
 	val, ok = v.value.([]Value)
 	return
