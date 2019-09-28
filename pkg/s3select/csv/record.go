@@ -74,18 +74,21 @@ func (r *Record) Reset() {
 	}
 }
 
-// CopyFrom will copy all records from the incoming and append them to the existing records.
-// The source record must be of a similar type.
-// Note that the lookup index is not copied.
-func (r *Record) CopyFrom(record sql.Record) error {
-	other, ok := record.(*Record)
+// Clone the record.
+func (r *Record) Clone(dst sql.Record) sql.Record {
+	other, ok := dst.(*Record)
 	if !ok {
-		return fmt.Errorf("unexpected record type, expected %T, got %T", r, record)
+		other = &Record{}
 	}
-	//before := len(r.csvRecord)
-	r.columnNames = append(r.columnNames, other.columnNames...)
-	r.csvRecord = append(r.csvRecord, other.csvRecord...)
-	return nil
+	if len(other.columnNames) > 0 {
+		other.columnNames = other.columnNames[:0]
+	}
+	if len(other.csvRecord) > 0 {
+		other.csvRecord = other.csvRecord[:0]
+	}
+	other.columnNames = append(other.columnNames, r.columnNames...)
+	other.csvRecord = append(other.csvRecord, r.csvRecord...)
+	return other
 }
 
 // WriteCSV - encodes to CSV data.

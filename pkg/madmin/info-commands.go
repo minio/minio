@@ -305,9 +305,9 @@ func (adm *AdminClient) ServerMemUsageInfo() ([]ServerMemUsageInfo, error) {
 
 // NetPerfInfo network performance information.
 type NetPerfInfo struct {
-	Addr     string        `json:"addr"`
-	ReadPerf time.Duration `json:"readPerf"`
-	Error    string        `json:"error,omitempty"`
+	Addr           string `json:"addr"`
+	ReadThroughput uint64 `json:"readThroughput"`
+	Error          string `json:"error,omitempty"`
 }
 
 // NetPerfInfo - Returns network performance information of all cluster nodes.

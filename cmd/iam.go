@@ -429,6 +429,23 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 	return err
 }
 
+// InfoPolicy - expands the canned policy into its JSON structure.
+func (sys *IAMSys) InfoPolicy(policyName string) ([]byte, error) {
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return nil, errServerNotInitialized
+	}
+
+	sys.RLock()
+	defer sys.RUnlock()
+
+	v, ok := sys.iamPolicyDocsMap[policyName]
+	if !ok {
+		return nil, errNoSuchPolicy
+	}
+	return json.Marshal(v)
+}
+
 // ListPolicies - lists all canned policies.
 func (sys *IAMSys) ListPolicies() (map[string][]byte, error) {
 	objectAPI := newObjectLayerFn()
@@ -581,6 +598,7 @@ func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
 	if sys.usersSysType != MinIOUsersSysType {
 		return madmin.UserInfo{
 			PolicyName: sys.iamUserPolicyMap[name].Policy,
+			MemberOf:   sys.iamUserGroupMemberships[name].ToSlice(),
 		}, nil
 	}
 
@@ -892,15 +910,15 @@ func (sys *IAMSys) GetGroupDescription(group string) (gd madmin.GroupDesc, err e
 		policy = ps[0]
 	}
 
-	sys.RLock()
-	defer sys.RUnlock()
-
 	if sys.usersSysType != MinIOUsersSysType {
 		return madmin.GroupDesc{
 			Name:   group,
 			Policy: policy,
 		}, nil
 	}
+
+	sys.RLock()
+	defer sys.RUnlock()
 
 	gi, ok := sys.iamGroupsMap[group]
 	if !ok {

@@ -358,10 +358,12 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 		return
 	}
 	defer rc.Close()
+
 	w.Header().Set(xhttp.ContentLength, strconv.Itoa(length))
 
 	io.Copy(w, rc)
 	w.(http.Flusher).Flush()
+
 }
 
 // readMetadata func provides the function types for reading leaf metadata.

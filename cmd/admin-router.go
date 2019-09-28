@@ -91,6 +91,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		adminV1Router.Methods(http.MethodPut).Path("/set-user-status").HandlerFunc(httpTraceHdrs(adminAPI.SetUserStatus)).
 			Queries("accessKey", "{accessKey:.*}").Queries("status", "{status:.*}")
 
+		// Info policy IAM
+		adminV1Router.Methods(http.MethodGet).Path("/info-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.InfoCannedPolicy)).Queries("name", "{name:.*}")
+
 		// Remove policy IAM
 		adminV1Router.Methods(http.MethodDelete).Path("/remove-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.RemoveCannedPolicy)).Queries("name", "{name:.*}")
 

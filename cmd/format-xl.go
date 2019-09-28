@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -291,16 +292,6 @@ func formatXLMigrateV2ToV3(export string) error {
 	return ioutil.WriteFile(formatPath, b, 0644)
 }
 
-// Returns true, if one of the errors is non-nil and is Unformatted disk.
-func hasAnyErrorsUnformatted(errs []error) bool {
-	for _, err := range errs {
-		if err != nil && err == errUnformattedDisk {
-			return true
-		}
-	}
-	return false
-}
-
 // countErrs - count a specific error.
 func countErrs(errs []error, err error) int {
 	var i = 0
@@ -367,16 +358,18 @@ func saveFormatXL(disk StorageAPI, format interface{}) error {
 		return err
 	}
 
+	tmpFormatJSON := mustGetUUID() + ".json"
+
 	// Purge any existing temporary file, okay to ignore errors here.
-	defer disk.DeleteFile(minioMetaBucket, formatConfigFileTmp)
+	defer disk.DeleteFile(minioMetaBucket, tmpFormatJSON)
 
 	// Append file `format.json.tmp`.
-	if err = disk.AppendFile(minioMetaBucket, formatConfigFileTmp, formatBytes); err != nil {
+	if err = disk.WriteAll(minioMetaBucket, tmpFormatJSON, bytes.NewReader(formatBytes)); err != nil {
 		return err
 	}
 
-	// Rename file `format.json.tmp` --> `format.json`.
-	return disk.RenameFile(minioMetaBucket, formatConfigFileTmp, minioMetaBucket, formatConfigFile)
+	// Rename file `uuid.json` --> `format.json`.
+	return disk.RenameFile(minioMetaBucket, tmpFormatJSON, minioMetaBucket, formatConfigFile)
 }
 
 var ignoredHiddenDirectories = []string{
@@ -684,34 +677,22 @@ func closeStorageDisks(storageDisks []StorageAPI) {
 	}
 }
 
-// Initialize storage disks based on input arguments.
-func initStorageDisks(endpoints EndpointList) ([]StorageAPI, error) {
+// Initialize storage disks for each endpoint.
+// Errors are returned for each endpoint with matching index.
+func initStorageDisksWithErrors(endpoints EndpointList) ([]StorageAPI, []error) {
 	// Bootstrap disks.
 	storageDisks := make([]StorageAPI, len(endpoints))
+	errs := make([]error, len(endpoints))
+	var wg sync.WaitGroup
 	for index, endpoint := range endpoints {
-		storage, err := newStorageAPI(endpoint)
-		if err != nil && err != errDiskNotFound {
-			return nil, err
-		}
-		storageDisks[index] = storage
+		wg.Add(1)
+		go func(index int, endpoint Endpoint) {
+			defer wg.Done()
+			storageDisks[index], errs[index] = newStorageAPI(endpoint)
+		}(index, endpoint)
 	}
-	return storageDisks, nil
-}
-
-// Runs through the faulty disks and record their errors.
-func initDisksWithErrors(endpoints EndpointList) ([]StorageAPI, []error) {
-	storageDisks := make([]StorageAPI, len(endpoints))
-	var dErrs = make([]error, len(storageDisks))
-	for index, endpoint := range endpoints {
-		storage, err := newStorageAPI(endpoint)
-		if err != nil {
-			logger.LogIf(context.Background(), err)
-			dErrs[index] = err
-			continue
-		}
-		storageDisks[index] = storage
-	}
-	return storageDisks, dErrs
+	wg.Wait()
+	return storageDisks, errs
 }
 
 // formatXLV3ThisEmpty - find out if '.This' field is empty

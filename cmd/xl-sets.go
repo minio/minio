@@ -339,7 +339,7 @@ func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 		storageInfo.Backend.Sets[i] = make([]madmin.DriveInfo, s.drivesPerSet)
 	}
 
-	storageDisks, dErrs := initDisksWithErrors(s.endpoints)
+	storageDisks, dErrs := initStorageDisksWithErrors(s.endpoints)
 	defer closeStorageDisks(storageDisks)
 
 	formats, sErrs := loadFormatXLAll(storageDisks)
@@ -1324,9 +1324,11 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 	}
 	defer formatLock.RUnlock()
 
-	storageDisks, err := initStorageDisks(s.endpoints)
-	if err != nil {
-		return err
+	storageDisks, errs := initStorageDisksWithErrors(s.endpoints)
+	for i, err := range errs {
+		if err != nil && err != errDiskNotFound {
+			return fmt.Errorf("Disk %s: %w", s.endpoints[i], err)
+		}
 	}
 	defer func(storageDisks []StorageAPI) {
 		if err != nil {
@@ -1445,9 +1447,11 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 	}
 	defer formatLock.Unlock()
 
-	storageDisks, err := initStorageDisks(s.endpoints)
-	if err != nil {
-		return madmin.HealResultItem{}, err
+	storageDisks, errs := initStorageDisksWithErrors(s.endpoints)
+	for i, derr := range errs {
+		if derr != nil && derr != errDiskNotFound {
+			return madmin.HealResultItem{}, fmt.Errorf("Disk %s: %w", s.endpoints[i], derr)
+		}
 	}
 
 	defer func(storageDisks []StorageAPI) {
@@ -1492,7 +1496,7 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 		}
 	}
 
-	if !hasAnyErrorsUnformatted(sErrs) {
+	if countErrs(sErrs, errUnformattedDisk) == 0 {
 		// No unformatted disks found disks are either offline
 		// or online, no healing is required.
 		return res, errNoHealRequired

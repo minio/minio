@@ -1,6 +1,10 @@
 # Compression Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-MinIO server allows streaming compression to ensure efficient disk space usage. Compression happens inflight, i.e objects are compressed before being written to disk(s). MinIO uses [`golang/snappy`](https://github.com/golang/snappy) streaming compression due to its stability and performance.
+MinIO server allows streaming compression to ensure efficient disk space usage. Compression happens inflight, i.e objects are compressed before being written to disk(s). MinIO uses [`klauspost/compress/s2`](https://github.com/klauspost/compress/tree/master/s2) streaming compression due to its stability and performance.
+
+This algorithm is specifically optimized for machine generated content. Write throughput is typically at least 300MB/s per CPU core. Decompression speed is typically at least 1GB/s.
+This means that in cases where raw IO is below these numbers compression will not only reduce disk usage but also help increase system throughput.
+Typically enabling compression on spinning disk systems will increase speed when the content can be compressed.
 
 ## Get Started
 
@@ -15,12 +19,25 @@ Compression can be enabled by updating the `compress` config settings for MinIO 
 ```json
 "compress": {
         "enabled": true,
-        "extensions": [".txt",".log",".csv", ".json"],
-        "mime-types": ["text/csv","text/plain","application/json"]
+        "extensions": [".txt",".log",".csv", ".json", ".tar"],
+        "mime-types": ["text/*","application/json","application/xml"]
 }
 ```
 
 Since text, log, csv, json files are highly compressible, These extensions/mime-types are included by default for compression.
+
+Having compression enabled and no extensions or mime types will attempt to compress anything that isn't explicitly known to be already compressed content. 
+Settings for enabling compression on all content, except for types listed below:
+
+```json
+"compress": {
+        "enabled": true,
+        "extensions": [],
+        "mime-types": []
+}
+```
+
+Incompressible content will be skipped with quite low CPU usage and storage overhead, typically at several GB/s.
 
 To update the configuration, use `mc admin config get` command to get the current configuration file for the minio cluster in json format, and save it locally.
 
@@ -68,6 +85,8 @@ export MINIO_COMPRESS_MIMETYPES="application/pdf"
       | `application/x-bz2` |
       | `application/x-compress` |
       | `application/x-xz` |
+
+All files with these extensions and mime types are excluded from compression, even if compression is enabled for all types.
 
 - MinIO does not support encryption with compression because compression and encryption together potentially enables room for side channel attacks like [`CRIME and BREACH`](https://blog.minio.io/c-e-compression-encryption-cb6b7f04a369)
 

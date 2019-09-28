@@ -473,9 +473,8 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 				outputRecord = s3Select.outputRecord()
 				outputQueue[len(outputQueue)-1] = outputRecord
 			}
-			var ok bool
-			ok, err = s3Select.statement.Eval(inputRecord, outputRecord)
-			if !ok || err != nil {
+			outputRecord, err = s3Select.statement.Eval(inputRecord, outputRecord)
+			if outputRecord == nil || err != nil {
 				// This should not be written.
 				// Remove it from the queue.
 				outputQueue = outputQueue[:len(outputQueue)-1]
@@ -485,6 +484,7 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 				continue
 			}
 
+			outputQueue[len(outputQueue)-1] = outputRecord
 			if len(outputQueue) < cap(outputQueue) {
 				continue
 			}

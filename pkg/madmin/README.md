@@ -280,11 +280,11 @@ Fetches Mem utilization for all cluster nodes.
 
 Fetches network performance of all cluster nodes using given sized payload. Returned value is a map containing each node indexed list of performance of other nodes.
 
-| Param      | Type             | Description                                                        |
-|------------|------------------|--------------------------------------------------------------------|
-| `Addr`     | _string_         | Address of the server the following information is retrieved from. |
-| `Error`    | _string_         | Errors (if any) encountered while reaching this node               |
-| `ReadPerf` | _time.Duration_  | Network read performance of the server                             |
+| Param            | Type      | Description                                                        |
+|------------------|-----------|--------------------------------------------------------------------|
+| `Addr`           | _string_  | Address of the server the following information is retrieved from. |
+| `Error`          | _string_  | Errors (if any) encountered while reaching this node               |
+| `ReadThroughput` | _uint64_  | Network read throughput of the server in bytes per second          |
 
 ## 5. Heal operations
 

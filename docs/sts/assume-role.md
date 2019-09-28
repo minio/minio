@@ -1,4 +1,22 @@
-## AssumeRole [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+# AssumeRole [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+
+**Table of Contents**
+
+- [Introduction](#introduction)
+- [API Request Parameters](#api-request-parameters)
+    - [Version](#version)
+    - [AUTHPARAMS](#authparams)
+    - [DurationSeconds](#durationseconds)
+    - [Policy](#policy)
+    - [Response Elements](#response-elements)
+    - [Errors](#errors)
+- [Sample Request](#sample-request)
+- [Sample Response](#sample-response)
+- [Testing](#testing)
+
+
+## Introduction
+
 Returns a set of temporary security credentials that you can use to access MinIO resources. AssumeRole requires authorization credentials for an existing user on MinIO. The advantages of this API are
 
 - To be able to reliably use S3 multipart APIs feature of the SDKs without re-inventing the wheel of pre-signing the each URL in multipart API. This is very tedious to implement with all the scenarios of fault tolerance that's already implemented by the client SDK. The general client SDKs don't support multipart with presigned URLs.
@@ -6,8 +24,8 @@ Returns a set of temporary security credentials that you can use to access MinIO
 
 The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to MinIO API operations. The policy applied to these temporary credentials is inherited from the MinIO user credentials. By default, the temporary security credentials created by AssumeRole last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration to 12 hours.
 
-### API Request Parameters
-#### Version
+## API Request Parameters
+### Version
 Indicates STS API version information, the only supported value is '2011-06-15'. This value is borrowed from AWS STS API documentation for compatibility reasons.
 
 | Params     | Value    |
@@ -15,10 +33,10 @@ Indicates STS API version information, the only supported value is '2011-06-15'.
 | *Type*     | *String* |
 | *Required* | *Yes*    |
 
-#### AUTHPARAMS
+### AUTHPARAMS
 Indicates STS API Authorization information. If you are familiar with AWS Signature V4 Authorization header, this STS API supports signature V4 authorization as mentioned [here](https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html)
 
-#### DurationSeconds
+### DurationSeconds
 The duration, in seconds. The value can range from 900 seconds (15 minutes) up to 12 hours. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds.
 
 | Params        | Value                                           |
@@ -27,7 +45,7 @@ The duration, in seconds. The value can range from 900 seconds (15 minutes) up t
 | *Valid Range* | *Minimum value of 900. Maximum value of 43200.* |
 | *Required*    | *No*                                            |
 
-#### Policy
+### Policy
 An IAM policy in JSON format that you want to use as an inline session policy. This parameter is optional. Passing policies to this operation returns new temporary credentials. The resulting session's permissions are the intersection of the canned policy name and the policy set here. You cannot use this policy to grant more permissions than those allowed by the canned policy name being assumed.
 
 | Params        | Value                                          |
@@ -36,18 +54,18 @@ An IAM policy in JSON format that you want to use as an inline session policy. T
 | *Valid Range* | *Minimum length of 1. Maximum length of 2048.* |
 | *Required*    | *No*                                           |
 
-#### Response Elements
+### Response Elements
 XML response for this API is similar to [AWS STS AssumeRole](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html#API_AssumeRole_ResponseElements)
 
-#### Errors
+### Errors
 XML error response for this API is similar to [AWS STS AssumeRole](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html#API_AssumeRole_Errors)
 
-#### Sample Request
+## Sample Request
 ```
 http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Policy={"Version":"2012-10-17","Statement":[{"Sid":"Stmt1","Effect":"Allow","Action":"s3:*","Resource":"arn:aws:s3:::*"}]}&AUTHPARAMS
 ```
 
-#### Sample Response
+## Sample Response
 ```
 <?xml version="1.0" encoding="UTF-8"?>
 <AssumeRoleResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
@@ -69,7 +87,7 @@ http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Pol
 </AssumeRoleResponse>
 ```
 
-#### Testing
+## Testing
 ```
 $ export MINIO_ACCESS_KEY=minio
 $ export MINIO_SECRET_KEY=minio123

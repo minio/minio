@@ -85,9 +85,11 @@ func TestFixFormatV3(t *testing.T) {
 	}
 	endpoints := mustGetNewEndpointList(xlDirs...)
 
-	storageDisks, err := initStorageDisks(endpoints)
-	if err != nil {
-		t.Fatal(err)
+	storageDisks, errs := initStorageDisksWithErrors(endpoints)
+	for _, err := range errs {
+		if err != nil && err != errDiskNotFound {
+			t.Fatal(err)
+		}
 	}
 
 	format := newFormatXLV3(1, 8)
@@ -565,4 +567,37 @@ func TestNewFormatSets(t *testing.T) {
 			}
 		}
 	}
+}
+
+func BenchmarkInitStorageDisks256(b *testing.B) {
+	benchmarkInitStorageDisksN(b, 256)
+}
+
+func BenchmarkInitStorageDisks1024(b *testing.B) {
+	benchmarkInitStorageDisksN(b, 1024)
+}
+
+func BenchmarkInitStorageDisks2048(b *testing.B) {
+	benchmarkInitStorageDisksN(b, 2048)
+}
+
+func BenchmarkInitStorageDisksMax(b *testing.B) {
+	benchmarkInitStorageDisksN(b, 32*204)
+}
+
+func benchmarkInitStorageDisksN(b *testing.B, nDisks int) {
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	fsDirs, err := getRandomDisks(nDisks)
+	if err != nil {
+		b.Fatal(err)
+	}
+	endpoints := mustGetNewEndpointList(fsDirs...)
+	b.RunParallel(func(pb *testing.PB) {
+		endpoints := endpoints
+		for pb.Next() {
+			initStorageDisksWithErrors(endpoints)
+		}
+	})
 }

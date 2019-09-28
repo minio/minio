@@ -106,9 +106,10 @@ func (s *peerRESTServer) NetReadPerfInfoHandler(w http.ResponseWriter, r *http.R
 		addr = GetLocalPeer(globalEndpoints)
 	}
 
+	d := end.Sub(start)
 	info := ServerNetReadPerfInfo{
-		Addr:     addr,
-		ReadPerf: end.Sub(start),
+		Addr:           addr,
+		ReadThroughput: uint64(int64(time.Second) * size / int64(d)),
 	}
 
 	ctx := newContext(r, w, "NetReadPerfInfo")

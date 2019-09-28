@@ -20,16 +20,14 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
+	"encoding/gob"
+	"encoding/hex"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/url"
 	"path"
 	"strconv"
-
-	"encoding/gob"
-	"encoding/hex"
-
-	"fmt"
 	"strings"
 
 	"github.com/minio/minio/cmd/http"
