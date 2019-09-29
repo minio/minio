@@ -770,11 +770,8 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 	return nil
 }
 
-func (sys *NotificationSys) refresh(objAPI ObjectLayer) error {
-	buckets, err := objAPI.ListBuckets(context.Background())
-	if err != nil {
-		return err
-	}
+// Loads notification policies for all buckets into NotificationSys.
+func (sys *NotificationSys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
 		ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{BucketName: bucket.Name})
 		config, err := readNotificationConfig(ctx, objAPI, bucket.Name)
@@ -796,9 +793,14 @@ func (sys *NotificationSys) refresh(objAPI ObjectLayer) error {
 }
 
 // Init - initializes notification system from notification.xml and listener.json of all buckets.
-func (sys *NotificationSys) Init(objAPI ObjectLayer) error {
+func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errInvalidArgument
+	}
+
+	// In gateway mode, notifications are not supported.
+	if globalIsGateway {
+		return nil
 	}
 
 	doneCh := make(chan struct{})
@@ -812,7 +814,7 @@ func (sys *NotificationSys) Init(objAPI ObjectLayer) error {
 	for {
 		select {
 		case <-retryTimerCh:
-			if err := sys.refresh(objAPI); err != nil {
+			if err := sys.load(buckets, objAPI); err != nil {
 				if err == errDiskNotFound ||
 					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
 					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
