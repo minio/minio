@@ -30,8 +30,8 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
+	"github.com/minio/minio/pkg/iam/openid"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/iam/validator"
 	xnet "github.com/minio/minio/pkg/net"
 )
 
@@ -571,7 +571,7 @@ func (s *serverConfig) loadToCachedConfigs() {
 			"Unable to populate public key from JWKS URL %s", s.OpenID.JWKS.URL)
 	}
 
-	globalIAMValidators = getAuthValidators(s)
+	globalIAMValidators = getOpenIDValidators(s)
 
 	if s.Policy.OPA.URL != nil && s.Policy.OPA.URL.String() != "" {
 		opaArgs := iampolicy.OpaArgs{
@@ -638,15 +638,15 @@ func loadConfig(objAPI ObjectLayer) error {
 	return nil
 }
 
-// getAuthValidators - returns ValidatorList which contains
+// getOpenIDValidators - returns ValidatorList which contains
 // enabled providers in server config.
 // A new authentication provider is added like below
-// * Add a new provider in pkg/iam/validator package.
-func getAuthValidators(config *serverConfig) *validator.Validators {
-	validators := validator.NewValidators()
+// * Add a new provider in pkg/iam/openid package.
+func getOpenIDValidators(config *serverConfig) *openid.Validators {
+	validators := openid.NewValidators()
 
 	if config.OpenID.JWKS.URL != nil {
-		validators.Add(validator.NewJWT(config.OpenID.JWKS))
+		validators.Add(openid.NewJWT(config.OpenID.JWKS))
 	}
 
 	return validators

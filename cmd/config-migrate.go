@@ -29,8 +29,8 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
+	"github.com/minio/minio/pkg/iam/openid"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/iam/validator"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/quick"
 )
@@ -2654,7 +2654,7 @@ func migrateV30ToV31MinioSys(objAPI ObjectLayer) error {
 	}
 
 	cfg.Version = "31"
-	cfg.OpenID.JWKS = validator.JWKSArgs{
+	cfg.OpenID.JWKS = openid.JWKSArgs{
 		URL: &xnet.URL{},
 	}
 	cfg.Policy.OPA = iampolicy.OpaArgs{

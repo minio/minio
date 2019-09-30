@@ -17,9 +17,10 @@
 package cmd
 
 import (
-	"github.com/minio/minio/cmd/crypto"
 	"net/http"
 	"testing"
+
+	"github.com/minio/minio/cmd/crypto"
 )
 
 // TestSkipContentSha256Cksum - Test validate the logic which decides whether
