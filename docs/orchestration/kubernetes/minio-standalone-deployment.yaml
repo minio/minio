@@ -1,9 +1,12 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   # This name uniquely identifies the Deployment
   name: minio
 spec:
+  selector:
+    matchLabels:
+      app: minio # has to match .spec.template.metadata.labels
   strategy:
     # Specifies the strategy used to replace old Pods by new ones
     # Refer: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
