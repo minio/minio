@@ -47,7 +47,7 @@ type Value struct {
 	value interface{}
 }
 
-// MarshalJSON provides json marshalling of values.
+// MarshalJSON provides json marshaling of values.
 func (v Value) MarshalJSON() ([]byte, error) {
 	if b, ok := v.ToBytes(); ok {
 		return b, nil
