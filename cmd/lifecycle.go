@@ -125,7 +125,8 @@ func (sys *LifecycleSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
 		return errServerNotInitialized
 	}
 
-	// In gateway mode, lifecycle is not supported.
+	// In gateway mode, we always fetch the bucket lifecycle configuration from the gateway backend.
+	// So, this is a no-op for gateway servers.
 	if globalIsGateway {
 		return nil
 	}
