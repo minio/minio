@@ -16,8 +16,10 @@
 
 package cmd
 
-const storageRESTVersion = "v9"
-const storageRESTPath = minioReservedBucketPath + "/storage/" + storageRESTVersion + SlashSeparator
+const (
+	storageRESTVersion = "v9"
+	storageRESTPath    = minioReservedBucketPath + "/storage/" + storageRESTVersion + SlashSeparator
+)
 
 const (
 	storageRESTMethodDiskInfo  = "diskinfo"

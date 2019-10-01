@@ -141,8 +141,8 @@ func (s *storageRESTServer) ListVolsHandler(w http.ResponseWriter, r *http.Reque
 		s.writeErrorResponse(w, err)
 		return
 	}
-	defer w.(http.Flusher).Flush()
 	gob.NewEncoder(w).Encode(&infos)
+	w.(http.Flusher).Flush()
 }
 
 // StatVolHandler - stat a volume.
@@ -157,8 +157,8 @@ func (s *storageRESTServer) StatVolHandler(w http.ResponseWriter, r *http.Reques
 		s.writeErrorResponse(w, err)
 		return
 	}
-	defer w.(http.Flusher).Flush()
 	gob.NewEncoder(w).Encode(info)
+	w.(http.Flusher).Flush()
 }
 
 // DeleteVolumeHandler - delete a volume.
@@ -250,8 +250,8 @@ func (s *storageRESTServer) StatFileHandler(w http.ResponseWriter, r *http.Reque
 		s.writeErrorResponse(w, err)
 		return
 	}
-	defer w.(http.Flusher).Flush()
 	gob.NewEncoder(w).Encode(info)
+	w.(http.Flusher).Flush()
 }
 
 // ReadAllHandler - read all the contents of a file.
@@ -393,12 +393,13 @@ func (s *storageRESTServer) WalkHandler(w http.ResponseWriter, r *http.Request) 
 		s.writeErrorResponse(w, err)
 		return
 	}
-	defer w.(http.Flusher).Flush()
 
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
 	encoder := gob.NewEncoder(w)
 	for fi := range fch {
 		encoder.Encode(&fi)
 	}
+	w.(http.Flusher).Flush()
 }
 
 // ListDirHandler - list a directory.
@@ -420,8 +421,8 @@ func (s *storageRESTServer) ListDirHandler(w http.ResponseWriter, r *http.Reques
 		s.writeErrorResponse(w, err)
 		return
 	}
-	defer w.(http.Flusher).Flush()
 	gob.NewEncoder(w).Encode(&entries)
+	w.(http.Flusher).Flush()
 }
 
 // DeleteFileHandler - delete a file.
@@ -551,12 +552,17 @@ func (s *storageRESTServer) VerifyFile(w http.ResponseWriter, r *http.Request) {
 		s.writeErrorResponse(w, errInvalidArgument)
 		return
 	}
-	algo := BitrotAlgorithmFromString(algoStr)
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	encoder := gob.NewEncoder(w)
 	doneCh := sendWhiteSpaceVerifyFile(w)
-	err = s.storage.VerifyFile(volume, filePath, size, algo, hash, int64(shardSize))
+	err = s.storage.VerifyFile(volume, filePath, size, BitrotAlgorithmFromString(algoStr), hash, int64(shardSize))
 	<-doneCh
-	gob.NewEncoder(w).Encode(VerifyFileResp{err})
+	vresp := &VerifyFileResp{}
+	if err != nil {
+		vresp.Err = VerifyFileError(err.Error())
+	}
+	encoder.Encode(vresp)
+	w.(http.Flusher).Flush()
 }
 
 // registerStorageRPCRouter - register storage rpc router.

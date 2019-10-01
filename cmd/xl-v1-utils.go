@@ -174,7 +174,6 @@ func readXLMeta(ctx context.Context, disk StorageAPI, bucket string, object stri
 	if len(xlMetaBuf) == 0 {
 		return xlMetaV1{}, errFileNotFound
 	}
-	logger.GetReqInfo(ctx).AppendTags("disk", disk.String())
 	return xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
 }
 

@@ -36,7 +36,7 @@ import (
 func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterUIError(fmtError)
-	gob.Register(HashMismatchError{})
+	gob.Register(VerifyFileError(""))
 	gob.Register(DeleteFileError(""))
 }
 
