@@ -49,22 +49,6 @@ func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error)
 	w.(http.Flusher).Flush()
 }
 
-type bulkErrorsResponse struct {
-	Errs []error `json:"errors"`
-}
-
-func (s *storageRESTServer) writeErrorsResponse(w http.ResponseWriter, errs []error) {
-	resp := bulkErrorsResponse{Errs: make([]error, len(errs))}
-	for idx, err := range errs {
-		if err == nil {
-			continue
-		}
-		resp.Errs[idx] = err
-	}
-	gob.NewEncoder(w).Encode(resp)
-	w.(http.Flusher).Flush()
-}
-
 // DefaultSkewTime - skew time is 15 minutes between minio peers.
 const DefaultSkewTime = 15 * time.Minute
 
@@ -455,6 +439,19 @@ func (s *storageRESTServer) DeleteFileHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// DeleteFileBulkErrsResp - collection of deleteFile errors
+// for bulk deletes
+type DeleteFileBulkErrsResp struct {
+	Errs []error
+}
+
+// DeleteFileError - error captured per delete operation
+type DeleteFileError string
+
+func (d DeleteFileError) Error() string {
+	return string(d)
+}
+
 // DeleteFileBulkHandler - delete a file.
 func (s *storageRESTServer) DeleteFileBulkHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -470,7 +467,15 @@ func (s *storageRESTServer) DeleteFileBulkHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	s.writeErrorsResponse(w, errs)
+	derrsResp := &DeleteFileBulkErrsResp{Errs: make([]error, len(errs))}
+	for idx, err := range errs {
+		if err != nil {
+			derrsResp.Errs[idx] = DeleteFileError(err.Error())
+		}
+	}
+
+	gob.NewEncoder(w).Encode(derrsResp)
+	w.(http.Flusher).Flush()
 }
 
 // RenameFileHandler - rename a file.
