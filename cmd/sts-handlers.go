@@ -27,8 +27,8 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/iam/openid"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/iam/validator"
 	"github.com/minio/minio/pkg/wildcard"
 	ldap "gopkg.in/ldap.v3"
 )
@@ -181,7 +181,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	m := make(map[string]interface{})
-	m["exp"], err = validator.GetDefaultExpiration(r.Form.Get("DurationSeconds"))
+	m["exp"], err = openid.GetDefaultExpiration(r.Form.Get("DurationSeconds"))
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 		return
@@ -282,7 +282,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	m, err := v.Validate(token, r.Form.Get("DurationSeconds"))
 	if err != nil {
 		switch err {
-		case validator.ErrTokenExpired:
+		case openid.ErrTokenExpired:
 			switch action {
 			case clientGrants:
 				writeSTSErrorResponse(ctx, w, ErrSTSClientGrantsExpiredToken, err)
@@ -290,7 +290,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 				writeSTSErrorResponse(ctx, w, ErrSTSWebIdentityExpiredToken, err)
 			}
 			return
-		case validator.ErrInvalidDuration:
+		case openid.ErrInvalidDuration:
 			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 			return
 		}

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package validator
+package openid
 
 import (
 	"crypto"
