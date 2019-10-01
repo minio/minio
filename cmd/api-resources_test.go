@@ -34,7 +34,7 @@ func TestListObjectsV2Resources(t *testing.T) {
 		{
 			values: url.Values{
 				"prefix":             []string{"photos/"},
-				"continuation-token": []string{"token"},
+				"continuation-token": []string{"dG9rZW4="},
 				"start-after":        []string{"start-after"},
 				"delimiter":          []string{SlashSeparator},
 				"fetch-owner":        []string{"true"},
@@ -53,7 +53,7 @@ func TestListObjectsV2Resources(t *testing.T) {
 		{
 			values: url.Values{
 				"prefix":             []string{"photos/"},
-				"continuation-token": []string{"token"},
+				"continuation-token": []string{"dG9rZW4="},
 				"start-after":        []string{"start-after"},
 				"delimiter":          []string{SlashSeparator},
 				"fetch-owner":        []string{"true"},
