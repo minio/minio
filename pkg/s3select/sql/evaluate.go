@@ -228,48 +228,73 @@ func (e *Like) evalLikeNode(r Record, arg *Value) (*Value, error) {
 	return FromBool(matchResult), nil
 }
 
-func (e *In) evalInNode(r Record, arg *Value) (*Value, error) {
-	result := false
+func (e *ListExpr) evalNode(r Record) (*Value, error) {
+	res := make([]Value, len(e.Elements))
+	if len(e.Elements) == 1 {
+		// If length 1, treat as single value.
+		return e.Elements[0].evalNode(r)
+	}
+	for i, elt := range e.Elements {
+		v, err := elt.evalNode(r)
+		if err != nil {
+			return nil, err
+		}
+		res[i] = *v
+	}
+	return FromArray(res), nil
+}
 
-	// If array compare each element.
-	if arr, ok := arg.ToArray(); ok {
+func (e *In) evalInNode(r Record, lhs *Value) (*Value, error) {
+	// Compare two values in terms of in-ness.
+	var cmp func(a, b Value) bool
+	cmp = func(a, b Value) bool {
+		if a.Equals(b) {
+			return true
+		}
+
+		// If elements, compare each.
+		aA, aOK := a.ToArray()
+		bA, bOK := b.ToArray()
+		if aOK && bOK {
+			if len(aA) != len(bA) {
+				return false
+			}
+			for i := range aA {
+				if !cmp(aA[i], bA[i]) {
+					return false
+				}
+			}
+			return true
+		}
+		// Try as numbers
+		aF, aOK := a.ToFloat()
+		bF, bOK := b.ToFloat()
+
+		// FIXME: more type inference?
+		return aOK && bOK && aF == bF
+	}
+
+	var rhs Value
+	if elt := e.ListExpression; elt != nil {
+		eltVal, err := elt.evalNode(r)
+		if err != nil {
+			return nil, err
+		}
+		rhs = *eltVal
+	}
+
+	// If RHS is array compare each element.
+	if arr, ok := rhs.ToArray(); ok {
 		for _, element := range arr {
 			// If we have an array we are on the wrong level.
-			if element.IsArray() {
-				continue
-			}
-			// Does content match?
-			found, err := e.evalInNode(r, &element)
-			if err != nil {
-				return nil, err
-			}
-			if result, ok := found.ToBool(); result && ok {
-				return FromBool(result), nil
+			if cmp(element, *lhs) {
+				return FromBool(true), nil
 			}
 		}
 		return FromBool(false), nil
 	}
 
-	for _, elt := range e.Expressions {
-		eltVal, err := elt.evalNode(r)
-		if err != nil {
-			return nil, err
-		}
-
-		if arg.Equals(*eltVal) {
-			result = true
-			break
-		}
-		// Try as numbers
-		a, aOK := arg.ToFloat()
-		b, bOK := eltVal.ToFloat()
-		if aOK && bOK && a == b {
-			result = true
-			break
-		}
-		// FIXME: more type inference?
-	}
-	return FromBool(result), nil
+	return FromBool(cmp(rhs, *lhs)), nil
 }
 
 func (e *Operand) evalNode(r Record) (*Value, error) {
@@ -355,7 +380,7 @@ func (e *JSONPath) evalNode(r Record) (*Value, error) {
 			pathExpr = []*JSONPathElement{{Key: &ObjectKey{ID: e.BaseKey}}}
 		}
 
-		result, err := jsonpathEval(pathExpr, rowVal)
+		result, _, err := jsonpathEval(pathExpr, rowVal)
 		if err != nil {
 			return nil, err
 		}
@@ -407,6 +432,8 @@ func (e *PrimaryTerm) evalNode(r Record) (res *Value, err error) {
 		return e.Value.evalNode(r)
 	case e.JPathExpr != nil:
 		return e.JPathExpr.evalNode(r)
+	case e.ListExpr != nil:
+		return e.ListExpr.evalNode(r)
 	case e.SubExpression != nil:
 		return e.SubExpression.evalNode(r)
 	case e.FuncCall != nil:

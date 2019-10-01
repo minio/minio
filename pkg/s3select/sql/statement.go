@@ -133,7 +133,7 @@ func (e *SelectStatement) EvalFrom(format string, input Record) (Record, error) 
 			}
 
 			jsonRec := rawVal.(jstream.KVS)
-			txedRec, err := jsonpathEval(e.selectAST.From.Table.PathExpr[1:], jsonRec)
+			txedRec, _, err := jsonpathEval(e.selectAST.From.Table.PathExpr[1:], jsonRec)
 			if err != nil {
 				return nil, err
 			}

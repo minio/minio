@@ -362,6 +362,13 @@ func (v *Value) compareOp(op string, a *Value) (res bool, err error) {
 		return boolCompare(op, v.IsNull(), a.IsNull())
 	}
 
+	// Check array values
+	aArr, aOK := a.ToArray()
+	vArr, vOK := v.ToArray()
+	if aOK && vOK {
+		return arrayCompare(op, aArr, vArr)
+	}
+
 	isNumeric := v.isNumeric() && a.isNumeric()
 	if isNumeric {
 		intV, ok1i := v.ToInt()
@@ -771,6 +778,32 @@ func boolCompare(op string, left, right bool) (bool, error) {
 		return left == right, nil
 	case opIneq:
 		return left != right, nil
+	default:
+		return false, errCmpInvalidBoolOperator
+	}
+}
+
+func arrayCompare(op string, left, right []Value) (bool, error) {
+	switch op {
+	case opEq:
+		if len(left) != len(right) {
+			return false, nil
+		}
+		for i, l := range left {
+			eq, err := l.compareOp(op, &right[i])
+			if !eq || err != nil {
+				return eq, err
+			}
+		}
+		return true, nil
+	case opIneq:
+		for i, l := range left {
+			eq, err := l.compareOp(op, &right[i])
+			if eq || err != nil {
+				return eq, err
+			}
+		}
+		return false, nil
 	default:
 		return false, errCmpInvalidBoolOperator
 	}
