@@ -96,6 +96,7 @@ func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimit
 		decodedToken, err := base64.StdEncoding.DecodeString(token)
 		if err != nil {
 			errCode = ErrIncorrectContinuationToken
+			return
 		}
 		token = string(decodedToken)
 	}
