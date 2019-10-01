@@ -1126,6 +1126,9 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 	if _, err = file.Seek(offset, io.SeekStart); err != nil {
 		return nil, err
 	}
+	if length == -1 {
+		length = st.Size()
+	}
 
 	r := struct {
 		io.Reader

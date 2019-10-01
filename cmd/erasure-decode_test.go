@@ -268,8 +268,7 @@ func TestErasureDecodeRandomOffsetLength(t *testing.T) {
 			if disk == OfflineDisk {
 				continue
 			}
-			tillOffset := erasure.ShardFileTillOffset(offset, readLen, length)
-			bitrotReaders[index] = newStreamingBitrotReader(disk, "testbucket", "object", tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
+			bitrotReaders[index] = newStreamingBitrotReader(disk, "testbucket", "object", DefaultBitrotAlgorithm, erasure.ShardSize())
 		}
 		err = erasure.Decode(context.Background(), buf, bitrotReaders, offset, readLen, length)
 		closeBitrotReaders(bitrotReaders)
@@ -330,8 +329,7 @@ func benchmarkErasureDecode(data, parity, dataDown, parityDown int, size int64, 
 			if writers[index] == nil {
 				continue
 			}
-			tillOffset := erasure.ShardFileTillOffset(0, size, size)
-			bitrotReaders[index] = newStreamingBitrotReader(disk, "testbucket", "object", tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
+			bitrotReaders[index] = newStreamingBitrotReader(disk, "testbucket", "object", DefaultBitrotAlgorithm, erasure.ShardSize())
 		}
 		if err = erasure.Decode(context.Background(), bytes.NewBuffer(content[:0]), bitrotReaders, 0, size, size); err != nil {
 			panic(err)

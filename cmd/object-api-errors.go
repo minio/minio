@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io"
 	"path"
+
+	"github.com/minio/minio/cmd/ecc"
 )
 
 // Converts underlying storage error. Convenience function written to
@@ -99,7 +101,7 @@ func toObjectErr(err error, params ...string) error {
 				Object: params[1],
 			}
 		}
-	case errXLReadQuorum:
+	case errXLReadQuorum, ecc.ErrReadQuorum:
 		err = InsufficientReadQuorum{}
 	case errXLWriteQuorum:
 		err = InsufficientWriteQuorum{}

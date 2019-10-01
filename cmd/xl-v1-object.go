@@ -24,6 +24,7 @@ import (
 	"path"
 	"sync"
 
+	"github.com/minio/minio/cmd/ecc"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/mimedb"
 )
@@ -167,17 +168,33 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 	if nErr != nil {
 		return nil, nErr
 	}
+	reader, err := xl.getObject(ctx, bucket, object, off, length, "", opts)
+	if err != nil {
+		nsUnlocker()
+		return nil, toObjectErr(err, bucket, object)
+	}
 
-	pr, pw := io.Pipe()
-	go func() {
-		err := xl.getObject(ctx, bucket, object, off, length, pw, "", opts)
-		pw.CloseWithError(err)
-	}()
-	// Cleanup function to cause the go routine above to exit, in
-	// case of incomplete read.
-	pipeCloser := func() { pr.Close() }
+	return fn(reader, h, opts.CheckCopyPrecondFn, func() { reader.Close() })
+}
 
-	return fn(pr, h, opts.CheckCopyPrecondFn, pipeCloser)
+// TODO(aead): getObjectReader is a temporial solution
+// that implements io.Reader and io.Closer and closes
+// all erasure decoders.
+type getObjectReader struct {
+	src      io.Reader
+	decoders []io.Reader
+}
+
+func (r *getObjectReader) Read(p []byte) (int, error) { return r.src.Read(p) }
+func (r *getObjectReader) Close() error {
+	for _, decoder := range r.decoders {
+		if closer, ok := decoder.(io.Closer); ok {
+			if err := closer.Close(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // GetObject - reads an object erasured coded across multiple
@@ -185,6 +202,7 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 // which are synonymous with HTTP Range requests.
 //
 // startOffset indicates the starting read location of the object.
+
 // length indicates the total length of the object.
 func (xl xlObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
 	// Lock the object before reading.
@@ -193,26 +211,13 @@ func (xl xlObjects) GetObject(ctx context.Context, bucket, object string, startO
 		return err
 	}
 	defer objectLock.RUnlock()
-	return xl.getObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
-}
-
-// getObject wrapper for xl GetObject
-func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
 
 	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
-		return err
+		return toObjectErr(err, bucket, object)
 	}
 
-	// Start offset cannot be negative.
-	if startOffset < 0 {
-		logger.LogIf(ctx, errUnexpected)
-		return errUnexpected
-	}
-
-	// Writer cannot be nil.
-	if writer == nil {
-		logger.LogIf(ctx, errUnexpected)
-		return errUnexpected
+	if writer == nil { // Writer must not be nil.
+		return toObjectErr(errUnexpected, bucket, object)
 	}
 
 	// If its a directory request, we return an empty body.
@@ -222,17 +227,43 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 		return toObjectErr(err, bucket, object)
 	}
 
+	reader, err := xl.getObject(ctx, bucket, object, startOffset, length, etag, opts)
+	if err != nil {
+		return err
+	}
+
+	// TODO(aead): This is a temporal solution.
+	// Actually we should return the reader and
+	// let the HTTP handler layer doing the copy.
+	if _, err := io.Copy(writer, reader); err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+	return nil
+}
+
+// getObject wrapper for xl GetObject
+func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startOffset int64, length int64, etag string, opts ObjectOptions) (io.ReadCloser, error) {
+	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
+		return nil, err
+	}
+
+	// Start offset cannot be negative.
+	if startOffset < 0 {
+		logger.LogIf(ctx, errUnexpected)
+		return nil, errUnexpected
+	}
+
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
 
 	// get Quorum for this object
 	readQuorum, _, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
 	if err != nil {
-		return toObjectErr(err, bucket, object)
+		return nil, toObjectErr(err, bucket, object)
 	}
 
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
-		return toObjectErr(reducedErr, bucket, object)
+		return nil, toObjectErr(reducedErr, bucket, object)
 	}
 
 	// List all online disks.
@@ -241,7 +272,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 	// Pick latest valid metadata.
 	xlMeta, err := pickValidXLMeta(ctx, metaArr, modTime, readQuorum)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Reorder online disks based on erasure distribution order.
@@ -258,13 +289,13 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 	// Reply back invalid range if the input offset and length fall out of range.
 	if startOffset > xlMeta.Stat.Size || startOffset+length > xlMeta.Stat.Size {
 		logger.LogIf(ctx, InvalidRange{startOffset, length, xlMeta.Stat.Size})
-		return InvalidRange{startOffset, length, xlMeta.Stat.Size}
+		return nil, InvalidRange{startOffset, length, xlMeta.Stat.Size}
 	}
 
 	// Get start part index and offset.
 	partIndex, partOffset, err := xlMeta.ObjectToPartOffset(ctx, startOffset)
 	if err != nil {
-		return InvalidRange{startOffset, length, xlMeta.Stat.Size}
+		return nil, InvalidRange{startOffset, length, xlMeta.Stat.Size}
 	}
 
 	// Calculate endOffset according to length
@@ -276,15 +307,16 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 	// Get last part index to read given length.
 	lastPartIndex, _, err := xlMeta.ObjectToPartOffset(ctx, endOffset)
 	if err != nil {
-		return InvalidRange{startOffset, length, xlMeta.Stat.Size}
+		return nil, InvalidRange{startOffset, length, xlMeta.Stat.Size}
 	}
 
-	var totalBytesRead int64
 	erasure, err := NewErasure(ctx, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xlMeta.Erasure.BlockSize)
 	if err != nil {
-		return toObjectErr(err, bucket, object)
+		return nil, toObjectErr(err, bucket, object)
 	}
 
+	var decoders []io.Reader
+	var totalBytesRead int64
 	for ; partIndex <= lastPartIndex; partIndex++ {
 		if length == totalBytesRead {
 			break
@@ -309,28 +341,22 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 			checksumInfo := metaArr[index].Erasure.GetChecksumInfo(partName)
 			readers[index] = newBitrotReader(disk, bucket, pathJoin(object, partName), tillOffset, checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
 		}
-		err := erasure.Decode(ctx, writer, readers, partOffset, partLength, partSize)
-		// Note: we should not be defer'ing the following closeBitrotReaders() call as we are inside a for loop i.e if we use defer, we would accumulate a lot of open files by the time
-		// we return from this function.
-		closeBitrotReaders(readers)
+		joinedReader := ecc.JoinReaders(readers, partOffset)
+		reader, err := ecc.NewDecoder(joinedReader, erasure.encoder, int(xlMeta.Erasure.BlockSize), xlMeta.Erasure.ParityBlocks)
 		if err != nil {
-			return toObjectErr(err, bucket, object)
+			return nil, toObjectErr(err, bucket, object)
 		}
-		for i, r := range readers {
-			if r == nil {
-				onlineDisks[i] = OfflineDisk
-			}
-		}
-		// Track total bytes read from disk and written to the client.
-		totalBytesRead += partLength
+		decoders = append(decoders, io.LimitReader(reader, partLength))
 
 		// partOffset will be valid only for the first part, hence reset it to 0 for
 		// the remaining parts.
 		partOffset = 0
 	} // End of read all parts loop.
 
-	// Return success.
-	return nil
+	return &getObjectReader{
+		src:      io.MultiReader(decoders...),
+		decoders: decoders,
+	}, nil
 }
 
 // getObjectInfoDir - This getObjectInfo is specific to object directory lookup.
