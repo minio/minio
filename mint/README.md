@@ -15,6 +15,7 @@ Mint is a testing framework for Minio object server, available as a docker image
 - minio-dotnet
 - s3cmd
 - worm
+- s3select
 
 ## Running Mint
 
