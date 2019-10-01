@@ -27,14 +27,17 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
+	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/pkg/env"
 )
 
 func init() {
 	logger.Init(GOPATH, GOROOT)
-	logger.RegisterUIError(fmtError)
+	logger.RegisterError(config.FmtError)
 }
 
 var (
@@ -141,7 +144,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Validate if we have access, secret set through environment.
 	if !globalIsEnvCreds {
-		logger.Fatal(uiErrEnvCredentialsMissingGateway(nil), "Unable to start gateway")
+		logger.Fatal(config.ErrEnvCredentialsMissingGateway(nil), "Unable to start gateway")
 	}
 
 	// Set system resources to maximum.
@@ -250,7 +253,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	loadLoggers()
 
 	// This is only to uniquely identify each gateway deployments.
-	globalDeploymentID = os.Getenv("MINIO_GATEWAY_DEPLOYMENT_ID")
+	globalDeploymentID = env.Get("MINIO_GATEWAY_DEPLOYMENT_ID", mustGetUUID())
 	logger.SetDeploymentID(globalDeploymentID)
 
 	var cacheConfig = globalServerConfig.GetCacheConfig()
@@ -298,7 +301,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 		// Print a warning message if gateway is not ready for production before the startup banner.
 		if !gw.Production() {
-			logStartupMessage(colorYellow("               *** Warning: Not Ready for Production ***"))
+			logStartupMessage(color.Yellow("               *** Warning: Not Ready for Production ***"))
 		}
 
 		// Print gateway startup message.

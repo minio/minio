@@ -27,6 +27,7 @@ import (
 	"syscall"
 
 	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -334,7 +335,7 @@ func sameLocalAddrs(addr1, addr2 string) (bool, error) {
 func CheckLocalServerAddr(serverAddr string) error {
 	host, port, err := net.SplitHostPort(serverAddr)
 	if err != nil {
-		return uiErrInvalidAddressFlag(err)
+		return config.ErrInvalidAddressFlag(err)
 	}
 
 	// Strip off IPv6 zone information.
@@ -345,9 +346,9 @@ func CheckLocalServerAddr(serverAddr string) error {
 	// Check whether port is a valid port number.
 	p, err := strconv.Atoi(port)
 	if err != nil {
-		return uiErrInvalidAddressFlag(err).Msg("invalid port number")
+		return config.ErrInvalidAddressFlag(err).Msg("invalid port number")
 	} else if p < 1 || p > 65535 {
-		return uiErrInvalidAddressFlag(nil).Msg("port number must be between 1 to 65535")
+		return config.ErrInvalidAddressFlag(nil).Msg("port number must be between 1 to 65535")
 	}
 
 	// 0.0.0.0 is a wildcard address and refers to local network
@@ -359,7 +360,7 @@ func CheckLocalServerAddr(serverAddr string) error {
 			return err
 		}
 		if !isLocalHost {
-			return uiErrInvalidAddressFlag(nil).Msg("host in server address should be this server")
+			return config.ErrInvalidAddressFlag(nil).Msg("host in server address should be this server")
 		}
 	}
 

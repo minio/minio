@@ -28,14 +28,17 @@ import (
 
 	"github.com/minio/cli"
 	"github.com/minio/dsync/v2"
+	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/pkg/env"
 )
 
 func init() {
 	logger.Init(GOPATH, GOROOT)
-	logger.RegisterUIError(fmtError)
+	logger.RegisterError(config.FmtError)
 	gob.Register(VerifyFileError(""))
 	gob.Register(DeleteFileError(""))
 }
@@ -133,7 +136,7 @@ EXAMPLES:
 // Checks if endpoints are either available through environment
 // or command line, returns false if both fails.
 func endpointsPresent(ctx *cli.Context) bool {
-	_, ok := os.LookupEnv("MINIO_ENDPOINTS")
+	_, ok := env.Lookup("MINIO_ENDPOINTS")
 	if !ok {
 		ok = ctx.Args().Present()
 	}
@@ -150,12 +153,12 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	var err error
 
 	if len(ctx.Args()) > serverCommandLineArgsMax {
-		uErr := uiErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("Invalid total number of endpoints (%d) passed, supported upto 32 unique arguments",
+		uErr := config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("Invalid total number of endpoints (%d) passed, supported upto 32 unique arguments",
 			len(ctx.Args())))
 		logger.FatalIf(uErr, "Unable to validate passed endpoints")
 	}
 
-	endpoints := strings.Fields(os.Getenv("MINIO_ENDPOINTS"))
+	endpoints := strings.Fields(env.Get("MINIO_ENDPOINTS", ""))
 	if len(endpoints) > 0 {
 		globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLSetDriveCount, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
 	} else {
@@ -184,7 +187,7 @@ func serverHandleEnvVars() {
 	// Handle common environment variables.
 	handleCommonEnvVars()
 
-	if serverRegion := os.Getenv("MINIO_REGION"); serverRegion != "" {
+	if serverRegion := env.Get("MINIO_REGION", ""); serverRegion != "" {
 		// region Envs are set globally.
 		globalIsEnvRegion = true
 		globalServerRegion = serverRegion
@@ -222,10 +225,10 @@ func serverMain(ctx *cli.Context) {
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistXL {
 		if globalEndpoints.IsHTTPS() && !globalIsSSL {
-			logger.Fatal(uiErrNoCertsAndHTTPSEndpoints(nil), "Unable to start the server")
+			logger.Fatal(config.ErrNoCertsAndHTTPSEndpoints(nil), "Unable to start the server")
 		}
 		if !globalEndpoints.IsHTTPS() && globalIsSSL {
-			logger.Fatal(uiErrCertsAndHTTPEndpoints(nil), "Unable to start the server")
+			logger.Fatal(config.ErrCertsAndHTTPEndpoints(nil), "Unable to start the server")
 		}
 	}
 
@@ -235,7 +238,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	if globalIsDiskCacheEnabled {
-		logger.StartupMessage(colorRed(colorBold("Disk caching is allowed only for gateway deployments")))
+		logger.StartupMessage(color.Red(color.Bold("Disk caching is allowed only for gateway deployments")))
 	}
 
 	// FIXME: This code should be removed in future releases and we should have mandatory
@@ -245,14 +248,14 @@ func serverMain(ctx *cli.Context) {
 		// Check for backward compatibility and newer style.
 		if !globalIsEnvCreds && globalIsDistXL {
 			// Try to load old config file if any, for backward compatibility.
-			var config = &serverConfig{}
-			if _, err = Load(getConfigFile(), config); err == nil {
-				globalActiveCred = config.Credential
+			var cfg = &serverConfig{}
+			if _, err = Load(getConfigFile(), cfg); err == nil {
+				globalActiveCred = cfg.Credential
 			}
 
 			if os.IsNotExist(err) {
-				if _, err = Load(getConfigFile()+".deprecated", config); err == nil {
-					globalActiveCred = config.Credential
+				if _, err = Load(getConfigFile()+".deprecated", cfg); err == nil {
+					globalActiveCred = cfg.Credential
 				}
 			}
 
@@ -262,7 +265,8 @@ func serverMain(ctx *cli.Context) {
 				logger.Info(`Supplying credentials from your 'config.json' is **DEPRECATED**, Access key and Secret key in distributed server mode is expected to be specified with environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY. This approach will become mandatory in future releases, please migrate to this approach soon.`)
 			} else {
 				// Credential is not available anywhere by both means, we cannot start distributed setup anymore, fail eagerly.
-				logger.Fatal(uiErrEnvCredentialsMissingDistributed(nil), "Unable to initialize the server in distributed mode")
+				logger.Fatal(config.ErrEnvCredentialsMissingDistributed(nil),
+					"Unable to initialize the server in distributed mode")
 			}
 		}
 	}
@@ -293,7 +297,7 @@ func serverMain(ctx *cli.Context) {
 	var handler http.Handler
 	handler, err = configureServerHandler(globalEndpoints)
 	if err != nil {
-		logger.Fatal(uiErrUnexpectedError(err), "Unable to configure one of server's RPC services")
+		logger.Fatal(config.ErrUnexpectedError(err), "Unable to configure one of server's RPC services")
 	}
 
 	var getCert certs.GetCertificateFunc

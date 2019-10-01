@@ -24,6 +24,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	xldap "github.com/minio/minio/cmd/config/ldap"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -263,12 +264,12 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	ctx = newContext(r, w, action)
 	defer logger.AuditLog(w, r, action, nil)
 
-	if globalIAMValidators == nil {
+	if globalOpenIDValidators == nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSNotInitialized, errServerNotInitialized)
 		return
 	}
 
-	v, err := globalIAMValidators.Get("jwt")
+	v, err := globalOpenIDValidators.Get("jwt")
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 		return
@@ -471,10 +472,10 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		return
 	}
 
-	usernameSubs := newSubstituter("username", ldapUsername)
+	usernameSubs, _ := xldap.NewSubstituter("username", ldapUsername)
 	// We ignore error below as we already validated the username
 	// format string at startup.
-	usernameDN, _ := usernameSubs.substitute(globalServerConfig.LDAPServerConfig.UsernameFormat)
+	usernameDN, _ := usernameSubs.Substitute(globalServerConfig.LDAPServerConfig.UsernameFormat)
 	// Bind with user credentials to validate the password
 	err = ldapConn.Bind(usernameDN, ldapPassword)
 	if err != nil {
@@ -486,14 +487,14 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	if globalServerConfig.LDAPServerConfig.GroupSearchFilter != "" {
 		// Verified user credentials. Now we find the groups they are
 		// a member of.
-		searchSubs := newSubstituter(
+		searchSubs, _ := xldap.NewSubstituter(
 			"username", ldapUsername,
 			"usernamedn", usernameDN,
 		)
 		// We ignore error below as we already validated the search string
 		// at startup.
-		groupSearchFilter, _ := searchSubs.substitute(globalServerConfig.LDAPServerConfig.GroupSearchFilter)
-		baseDN, _ := searchSubs.substitute(globalServerConfig.LDAPServerConfig.GroupSearchBaseDN)
+		groupSearchFilter, _ := searchSubs.Substitute(globalServerConfig.LDAPServerConfig.GroupSearchFilter)
+		baseDN, _ := searchSubs.Substitute(globalServerConfig.LDAPServerConfig.GroupSearchBaseDN)
 		searchRequest := ldap.NewSearchRequest(
 			baseDN,
 			ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
@@ -513,7 +514,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 			groups = append(groups, entry.Attributes[0].Values...)
 		}
 	}
-	expiryDur := globalServerConfig.LDAPServerConfig.stsExpiryDuration
+	expiryDur := globalServerConfig.LDAPServerConfig.GetExpiryDuration()
 	m := map[string]interface{}{
 		"exp":        UTCNow().Add(expiryDur).Unix(),
 		"ldapUser":   ldapUsername,

@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/minio/minio/pkg/color"
 )
 
 // Tests if we generate storage info.
@@ -53,8 +55,8 @@ func TestCertificateExpiryInfo(t *testing.T) {
 		},
 	}
 
-	expectedMsg := colorBlue("\nCertificate expiry info:\n") +
-		colorBold(fmt.Sprintf("#1 Test cert will expire on %s\n", expiredDate))
+	expectedMsg := color.Blue("\nCertificate expiry info:\n") +
+		color.Bold(fmt.Sprintf("#1 Test cert will expire on %s\n", expiredDate))
 
 	// When
 	msg := getCertificateChainMsg(fakeCerts)

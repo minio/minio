@@ -20,14 +20,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"sync"
 
+	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/config/cache"
+	"github.com/minio/minio/cmd/config/compress"
+	xldap "github.com/minio/minio/cmd/config/ldap"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
 	"github.com/minio/minio/pkg/iam/openid"
@@ -134,18 +138,10 @@ func (s *serverConfig) GetWorm() bool {
 	return bool(s.Worm)
 }
 
-// SetCacheConfig sets the current cache config
-func (s *serverConfig) SetCacheConfig(drives, exclude []string, expiry int, maxuse int) {
-	s.Cache.Drives = drives
-	s.Cache.Exclude = exclude
-	s.Cache.Expiry = expiry
-	s.Cache.MaxUse = maxuse
-}
-
 // GetCacheConfig gets the current cache config
-func (s *serverConfig) GetCacheConfig() CacheConfig {
+func (s *serverConfig) GetCacheConfig() cache.Config {
 	if globalIsDiskCacheEnabled {
-		return CacheConfig{
+		return cache.Config{
 			Drives:  globalCacheDrives,
 			Exclude: globalCacheExcludes,
 			Expiry:  globalCacheExpiry,
@@ -153,7 +149,7 @@ func (s *serverConfig) GetCacheConfig() CacheConfig {
 		}
 	}
 	if s == nil {
-		return CacheConfig{}
+		return cache.Config{}
 	}
 	return s.Cache
 }
@@ -246,7 +242,7 @@ func (s *serverConfig) SetCompressionConfig(extensions []string, mimeTypes []str
 }
 
 // GetCompressionConfig gets the current compression config
-func (s *serverConfig) GetCompressionConfig() compressionConfig {
+func (s *serverConfig) GetCompressionConfig() compress.Config {
 	return s.Compression
 }
 
@@ -268,19 +264,39 @@ func (s *serverConfig) loadFromEnvs() {
 		s.SetStorageClass(globalStandardStorageClass, globalRRStorageClass)
 	}
 
-	if globalIsDiskCacheEnabled {
-		s.SetCacheConfig(globalCacheDrives, globalCacheExcludes, globalCacheExpiry, globalCacheMaxUse)
+	var err error
+	s.Cache, err = cache.LookupConfig(s.Cache)
+	if err != nil {
+		logger.FatalIf(err, "Unable to setup cache")
 	}
 
-	if err := Environment.LookupKMSConfig(s.KMS); err != nil {
-		logger.FatalIf(err, "Unable to setup the KMS")
+	if len(s.Cache.Drives) > 0 {
+		globalIsDiskCacheEnabled = true
+		globalCacheDrives = s.Cache.Drives
+		globalCacheExcludes = s.Cache.Exclude
+		globalCacheExpiry = s.Cache.Expiry
+		globalCacheMaxUse = s.Cache.MaxUse
+
+		var err error
+		if cacheEncKey := env.Get(cache.EnvCacheEncryptionMasterKey, ""); cacheEncKey != "" {
+			globalCacheKMSKeyID, globalCacheKMS, err = parseKMSMasterKey(cacheEncKey)
+			if err != nil {
+				logger.FatalIf(config.ErrInvalidCacheEncryptionKey(err),
+					"Unable to setup encryption cache")
+			}
+		}
 	}
 
-	if globalIsEnvCompression {
-		s.SetCompressionConfig(globalCompressExtensions, globalCompressMimeTypes)
+	if err = LookupKMSConfig(s.KMS); err != nil {
+		logger.FatalIf(err, "Unable to setup KMS")
 	}
 
-	if jwksURL, ok := os.LookupEnv("MINIO_IAM_JWKS_URL"); ok {
+	s.Compression, err = compress.LookupConfig(s.Compression)
+	if err != nil {
+		logger.FatalIf(err, "Unable to setup Compression")
+	}
+
+	if jwksURL, ok := env.Lookup("MINIO_IAM_JWKS_URL"); ok {
 		u, err := xnet.ParseURL(jwksURL)
 		if err != nil {
 			logger.FatalIf(err, "Unable to parse MINIO_IAM_JWKS_URL %s", jwksURL)
@@ -288,14 +304,14 @@ func (s *serverConfig) loadFromEnvs() {
 		s.OpenID.JWKS.URL = u
 	}
 
-	if opaURL, ok := os.LookupEnv("MINIO_IAM_OPA_URL"); ok {
+	if opaURL, ok := env.Lookup("MINIO_IAM_OPA_URL"); ok {
 		u, err := xnet.ParseURL(opaURL)
 		if err != nil {
 			logger.FatalIf(err, "Unable to parse MINIO_IAM_OPA_URL %s", opaURL)
 		}
 		opaArgs := iampolicy.OpaArgs{
 			URL:         u,
-			AuthToken:   os.Getenv("MINIO_IAM_OPA_AUTHTOKEN"),
+			AuthToken:   env.Get("MINIO_IAM_OPA_AUTHTOKEN", ""),
 			Transport:   NewCustomHTTPTransport(),
 			CloseRespFn: xhttp.DrainBody,
 		}
@@ -304,8 +320,7 @@ func (s *serverConfig) loadFromEnvs() {
 		s.Policy.OPA.AuthToken = opaArgs.AuthToken
 	}
 
-	var err error
-	s.LDAPServerConfig, err = newLDAPConfigFromEnv(globalRootCAs)
+	s.LDAPServerConfig, err = xldap.Lookup(s.LDAPServerConfig, globalRootCAs)
 	if err != nil {
 		logger.FatalIf(err, "Unable to parse LDAP configuration from env")
 	}
@@ -484,7 +499,7 @@ func newServerConfig() *serverConfig {
 			Standard: storageClass{},
 			RRS:      storageClass{},
 		},
-		Cache: CacheConfig{
+		Cache: cache.Config{
 			Drives:  []string{},
 			Exclude: []string{},
 			Expiry:  globalCacheExpiry,
@@ -492,7 +507,7 @@ func newServerConfig() *serverConfig {
 		},
 		KMS:    crypto.KMSConfig{},
 		Notify: notifier{},
-		Compression: compressionConfig{
+		Compression: compress.Config{
 			Enabled:    false,
 			Extensions: globalCompressExtensions,
 			MimeTypes:  globalCompressMimeTypes,
@@ -555,7 +570,7 @@ func (s *serverConfig) loadToCachedConfigs() {
 		globalCacheExpiry = cacheConf.Expiry
 		globalCacheMaxUse = cacheConf.MaxUse
 	}
-	if err := Environment.LookupKMSConfig(s.KMS); err != nil {
+	if err := LookupKMSConfig(s.KMS); err != nil {
 		logger.FatalIf(err, "Unable to setup the KMS %s", s.KMS.Vault.Endpoint)
 	}
 
@@ -571,7 +586,7 @@ func (s *serverConfig) loadToCachedConfigs() {
 			"Unable to populate public key from JWKS URL %s", s.OpenID.JWKS.URL)
 	}
 
-	globalIAMValidators = getOpenIDValidators(s)
+	globalOpenIDValidators = getOpenIDValidators(s)
 
 	if s.Policy.OPA.URL != nil && s.Policy.OPA.URL.String() != "" {
 		opaArgs := iampolicy.OpaArgs{
@@ -621,7 +636,7 @@ func getValidConfig(objAPI ObjectLayer) (*serverConfig, error) {
 func loadConfig(objAPI ObjectLayer) error {
 	srvCfg, err := getValidConfig(objAPI)
 	if err != nil {
-		return uiErrInvalidConfig(nil).Msg(err.Error())
+		return config.ErrInvalidConfig(nil).Msg(err.Error())
 	}
 
 	// Override any values from ENVs.
