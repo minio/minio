@@ -68,6 +68,12 @@ func TestJSONQueries(t *testing.T) {
 			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","wahtever"]}`,
 		},
 		{
+			name:  "simple-in-array",
+			query: `SELECT * from s3object s WHERE s.id IN (1,3)`,
+			wantResult: `{"id":1,"title":"Second Record","desc":"another text","synonyms":["some","synonym","value"]}
+{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
 			name:       "select-in-array-single",
 			query:      `SELECT synonyms from s3object s WHERE 'bar' IN s.synonyms[*] `,
 			wantResult: `{"synonyms":["foo","bar","wahtever"]}`,
