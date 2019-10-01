@@ -181,17 +181,15 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 // that implements io.Reader and io.Closer and closes
 // all erasure decoders.
 type getObjectReader struct {
-	src      io.Reader
-	decoders []io.Reader
+	src     io.Reader
+	closers []io.Closer
 }
 
 func (r *getObjectReader) Read(p []byte) (int, error) { return r.src.Read(p) }
 func (r *getObjectReader) Close() error {
-	for _, decoder := range r.decoders {
-		if closer, ok := decoder.(io.Closer); ok {
-			if err := closer.Close(); err != nil {
-				return err
-			}
+	for _, closer := range r.closers {
+		if err := closer.Close(); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -202,6 +200,7 @@ func (r *getObjectReader) Close() error {
 // which are synonymous with HTTP Range requests.
 //
 // startOffset indicates the starting read location of the object.
+
 // length indicates the total length of the object.
 func (xl xlObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
 	// Lock the object before reading.
@@ -314,7 +313,13 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 		return nil, toObjectErr(err, bucket, object)
 	}
 
+	reedSolomon, err := ecc.NewReedSolomon(xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, int(xlMeta.Erasure.BlockSize))
+	if err != nil {
+		return nil, toObjectErr(err, bucket, object)
+	}
+
 	var decoders []io.Reader
+	var closers []io.Closer
 	var totalBytesRead int64
 	for ; partIndex <= lastPartIndex; partIndex++ {
 		if length == totalBytesRead {
@@ -341,20 +346,24 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 			readers[index] = newBitrotReader(disk, bucket, pathJoin(object, partName), tillOffset, checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
 		}
 		joinedReader := ecc.JoinReaders(readers, partOffset)
-		reader, err := ecc.NewDecoder(joinedReader, erasure.encoder, int(xlMeta.Erasure.BlockSize), xlMeta.Erasure.ParityBlocks)
+		reader, err := ecc.NewDecoder(joinedReader, reedSolomon)
 		if err != nil {
 			return nil, toObjectErr(err, bucket, object)
 		}
+		reader.Skip(int(partOffset) % reedSolomon.ShardSize())
 		decoders = append(decoders, io.LimitReader(reader, partLength))
+		closers = append(closers, reader)
 
 		// partOffset will be valid only for the first part, hence reset it to 0 for
 		// the remaining parts.
 		partOffset = 0
+
+		totalBytesRead += partLength
 	} // End of read all parts loop.
 
 	return &getObjectReader{
-		src:      io.MultiReader(decoders...),
-		decoders: decoders,
+		src:     io.MultiReader(decoders...),
+		closers: closers,
 	}, nil
 }
 

@@ -17,6 +17,7 @@
 package ecc
 
 import (
+	"fmt"
 	"io"
 )
 
@@ -43,7 +44,7 @@ const (
 	// The MinIO server may has failed to fetch the metadata (XL.json)
 	// from certain data sources before. Such data sources are marked as
 	// offline by an io.ReaderAt that is nil.
-	errOffline errorType = "ecc: dat source is marked as offline"
+	errOffline errorType = "ecc: data source is marked as offline"
 )
 
 // JoinReaders combines a set of data sources. It implements reading
@@ -118,7 +119,6 @@ func (r *JoinedReaders) Read(b *Buffer) error {
 	for i := range b.shards {
 		b.shards[i] = b.shards[i][:0]
 	}
-
 	return r.join(b, next, results)
 }
 
@@ -175,7 +175,7 @@ func (r *JoinedReaders) join(b *Buffer, next int, results chan readResult) error
 		// have encountered more the `N = parity` errors
 		// we won't be able to reconstruct the data - so
 		// we return ErrReadQuorum).
-		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		if err != nil && err != io.EOF {
 			r.err[i] = err
 			if next == len(b.shards) || countErrors(r.err) > len(b.parity) {
 				r.rErr = ErrReadQuorum
@@ -185,7 +185,7 @@ func (r *JoinedReaders) join(b *Buffer, next int, results chan readResult) error
 			continue
 		}
 
-		if err == io.EOF || err == io.ErrUnexpectedEOF {
+		if err == io.EOF {
 			nEOFs++
 		}
 		b.shards[i] = b.shards[i][:nn]
@@ -253,17 +253,30 @@ func (r *JoinedReaders) respawn(b *Buffer, next int, results chan<- readResult) 
 	for next < len(b.shards) {
 		if r.err[next] == nil { // Invariant: r.err[next] == nil => r.src[next] != nil
 			go readFrom(r.src[next], next, r.offset, b.shards[next], results)
-			return next+1
-			break
+			return next + 1
 		}
 		next++
 	}
 	return next
 }
 
+// handlePanic tries to recover from a panic.
+// If a panic occurs it sends the an error to
+// the receiver of the results channel.
+func handlePanic(id int, results chan<- readResult) {
+	if err := recover(); err != nil {
+		results <- readResult{
+			ID:  id,
+			N:   0,
+			Err: fmt.Errorf("ecc: panic occured while reading from the %d-th source: %v", id, err),
+		}
+	}
+}
+
 // readFrom reads from the src at the given offset into the
 // shard buffer and writes the result to the channel.
 func readFrom(src io.ReaderAt, id int, offset int64, shard []byte, results chan<- readResult) {
+	defer handlePanic(id, results)
 	nn, err := src.ReadAt(shard[:cap(shard)], offset)
 	results <- readResult{ID: id, N: nn, Err: err}
 }

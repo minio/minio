@@ -16,6 +16,8 @@
 
 package ecc
 
+import "io"
+
 // The Buffer implementation below is tightly coupled to
 // the JoinedReaders implementation in this package.
 
@@ -27,7 +29,6 @@ type Buffer struct {
 	data   [][]byte // view of shards containing actual data
 	parity [][]byte // view of shards containing parity data
 
-	buffer []byte
 	offset int
 }
 
@@ -73,95 +74,116 @@ func (b *Buffer) IsDataMissing() bool {
 
 // Empty marks the buffer as empty such that
 // IsEmpty() returns true.
-func (b *Buffer) Empty() *Buffer {
-	b.offset = 0
-	b.data = b.data[:0]
-	return b
+func (b *Buffer) Empty() { b.data = b.data[:0] }
+
+// Remaining returns the number of bytes
+// of the remaining (actual data). Therefore,
+// it returns how many bytes can be copied
+// from the buffer.
+func (b *Buffer) Remaining() int {
+	var s int
+	offset := b.offset
+	for i := range b.data {
+		if offset > 0 {
+			s += len(b.data[i]) - offset
+			offset = 0
+		} else {
+			s += len(b.data[i])
+		}
+	}
+	return s
 }
 
 // IsEmpty returns true if the buffer does not
 // hold any actual data. In particular, copying
 // an empty buffer to a slice (using CopyTo)
 // copies no data.
-func (b *Buffer) IsEmpty() bool { return b.offset == 0 && len(b.data) == 0 }
+func (b *Buffer) IsEmpty() bool { return len(b.data) == 0 }
 
 // Reset resets the buffer to its initial state.
-// In particular, the buffer is not empty.
-func (b *Buffer) Reset() *Buffer {
+// In particular, a reseted buffer is not empty.
+func (b *Buffer) Reset() {
 	for i := range b.shards {
 		b.shards[i] = b.shards[i][:cap(b.shards[i])]
 	}
 	b.data = b.shards[:len(b.shards)-len(b.parity)]
 	b.parity = b.shards[len(b.data):]
 
-	b.buffer = nil
 	b.offset = 0
-	return b
 }
 
-// Skip skips the next n (actual data) bytes held
-// by the buffer. If n is greater than the number
-// of remaining data bytes held by the buffer, Skip
-// will only skip as many (actual data) bytes as
-// available. In particular, trying to skip n > 0
-// bytes on an empty buffer is a NOP.
-func (b *Buffer) Skip(n int) *Buffer {
+// Skip skips the next n (actual data) bytes hold
+// by the buffer and returns the number of skipped
+// bytes.
+//
+// If n is greater than the number of remaining
+// data bytes hold by the buffer, Skip will only
+// skip as many (actual data) bytes as available.
+// In particular, trying to skip n > 0 bytes on
+// an empty buffer is a NOP.
+func (b *Buffer) Skip(n int) int {
 	if n <= 0 || b.IsEmpty() {
-		return b
+		return 0
 	}
+
+	nn := n
 	if b.offset > 0 {
-		remaining := len(b.buffer) - b.offset
+		remaining := len(b.data[0]) - b.offset
 		if n < remaining {
 			b.offset += n
-			return b
+			return n
 		}
-		n -= remaining
+
 		b.offset = 0
+		n -= remaining
+		if len(b.data) > 0 {
+			b.data = b.data[1:]
+		}
 	}
 
-	for len(b.data) > 0 {
-		b.buffer = b.data[0]
-		b.data = b.data[1:]
-		if n < len(b.buffer) {
+	for n > 0 && len(b.data) > 0 {
+		if n < len(b.data[0]) {
 			b.offset += n
-			return b
+			return nn
 		}
-		n -= len(b.buffer)
+		n -= len(b.data[0])
+		b.data = b.data[1:]
 	}
-	return b
+	return nn - n
 }
 
-// CopyTo tries to copy len(p) (actual data)
-// bytes into p. It returns the number of bytes
-// copied to p. If the buffer holds less than
-// len(p) (actual data) bytes it copies as
-// many bytes as it holds until the buffer is
+// Read tries to copy len(p) (actual data) bytes
+// into p and behaves as specified by the io.Reader
+// interface. If it returns io.EOF the buffer is
 // empty.
-func (b *Buffer) CopyTo(p []byte) int {
-	var n int
+func (b *Buffer) Read(p []byte) (n int, err error) {
 	if b.offset > 0 {
-		n = copy(p, b.buffer[b.offset:])
+		n = copy(p, b.data[0][b.offset:])
 		if n == len(p) {
 			b.offset += n
-			return n
+			return n, nil
 		}
 		b.offset = 0
 		p = p[n:]
+
+		if len(b.data) > 0 {
+			b.data = b.data[1:]
+		}
 	}
 
-	for len(b.data) > 0 {
-		b.buffer = b.data[0]
-		b.data = b.data[1:]
-
-		nn := copy(p, b.buffer)
+	for len(p) > 0 && len(b.data) > 0 {
+		nn := copy(p, b.data[0])
 		n += nn
-		if nn == len(p) {
-			if nn != len(b.buffer) {
-				b.offset = nn
-			}
-			return n
+		if nn < len(b.data[0]) {
+			b.offset = nn
+			return n, nil
 		}
+		b.data = b.data[1:]
 		p = p[nn:]
 	}
-	return n
+
+	if len(b.data) == 0 {
+		err = io.EOF
+	}
+	return n, err
 }

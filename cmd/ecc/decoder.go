@@ -20,16 +20,58 @@ import (
 	"github.com/klauspost/reedsolomon"
 )
 
+// ReedSolomon implements reed-solomon erasure
+// en/decoding.
+type ReedSolomon struct {
+	reedsolomon.Encoder
+
+	nData, nParity, blockSize int
+}
+
+// NewReedSolomon returns a new reed-solomon erasure
+// en/decoder for the given number of data and parity
+// shards. It also expects the size of the data blocks
+// which must be en/decoded.
+func NewReedSolomon(nData, nParity, blockSize int) (*ReedSolomon, error) {
+	reedSolomon := &ReedSolomon{
+		nData:     nData,
+		nParity:   nParity,
+		blockSize: blockSize,
+	}
+
+	shardSize := reedSolomon.ShardSize()
+	enc, err := reedsolomon.New(nData, nParity, reedsolomon.WithAutoGoroutines(shardSize))
+	if err != nil {
+		return nil, err
+	}
+	reedSolomon.Encoder = enc
+	return reedSolomon, nil
+}
+
+// DataShards returns the number of data shards.
+func (r *ReedSolomon) DataShards() int { return r.nData }
+
+// ParityShards returns the number of parity shards.
+func (r *ReedSolomon) ParityShards() int { return r.nParity }
+
+// BlockSize returns how large a continious (actual) data
+// block must be.
+func (r *ReedSolomon) BlockSize() int { return r.blockSize }
+
+// ShardSize returns the size of each shard for the
+// given block size.
+func (r *ReedSolomon) ShardSize() int { return (r.BlockSize() + r.DataShards() - 1) / r.DataShards() }
+
 // Decoder implements reedsolomon erasure decoding of
 // a continuous data stream. Whenever some content data
 // is missing, it tries to reconstruct it on the fly.
 type Decoder struct {
 	src    *JoinedReaders
-	ecc    reedsolomon.Encoder
+	enc    *ReedSolomon
 	buffer *Buffer
-	err    error
 
-	firstRead bool
+	skip int
+	err  error
 }
 
 // NewDecoder returns a new Decoder that reads from a set
@@ -47,21 +89,23 @@ type Decoder struct {
 // of shards = the number of data sources = data shards + parity
 // shards. The Decoder can recover data only if at most n = parity
 // shards of all shards are missing.
-func NewDecoder(src *JoinedReaders, enc reedsolomon.Encoder, blockSize, parity int) (*Decoder, error) {
+func NewDecoder(src *JoinedReaders, enc *ReedSolomon) (*Decoder, error) {
 	// Split the buffer into data and parity shards.
 	// Using a buffer with a capacity of 2*blockSize
 	// is a small optimization to avoid reallocations
 	// during spliting.
 	// TODO(aead): measure impact
-	shards, err := enc.Split(make([]byte, blockSize, 2*blockSize))
+	shards, err := enc.Split(make([]byte, enc.BlockSize(), 2*enc.BlockSize()))
 	if err != nil {
 		return nil, err
 	}
 
+	buffer := NewBuffer(shards, enc.ParityShards())
+	buffer.Empty()
 	return &Decoder{
 		src:    src,
-		ecc:    enc,
-		buffer: NewBuffer(shards, parity).Empty(),
+		enc:    enc,
+		buffer: buffer,
 	}, nil
 }
 
@@ -80,7 +124,8 @@ func (d *Decoder) Read(p []byte) (int, error) {
 	// and only copy if we have read at least once from
 	// src.
 	if !d.buffer.IsEmpty() {
-		return d.buffer.CopyTo(p), nil
+		n, _ := d.buffer.Read(p)
+		return n, nil
 	}
 
 	// The JoinedReaders will reset the buffer before
@@ -94,14 +139,24 @@ func (d *Decoder) Read(p []byte) (int, error) {
 	// data shards are missing. If a parity shard is missing we
 	// don't care.
 	if d.buffer.IsDataMissing() {
-		if err := d.ecc.ReconstructData(d.buffer.shards); err != nil {
+		if err := d.enc.ReconstructData(d.buffer.shards); err != nil {
 			d.err = err
 			return 0, err
 		}
 	}
-	return d.buffer.CopyTo(p), nil
+
+	if d.skip > 0 {
+		n := d.buffer.Skip(d.skip)
+		d.skip -= n
+	}
+	n, _ := d.buffer.Read(p)
+	return n, nil
 }
 
 // Close closes all underlying data sources and behaves
 // as specified by the io.Closer interface.
 func (d *Decoder) Close() error { return d.src.Close() }
+
+// Skip marks the next n (actual data) bytes as
+// to be skipped and not returned during reading.
+func (d *Decoder) Skip(n int) { d.skip += n }

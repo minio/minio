@@ -99,12 +99,13 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 	var err error
 	if b.rc == nil {
 		// For the first ReadAt() call we need to open the stream for reading.
-		streamOffset := (offset / b.shardSize) * (int64(b.hash.Size()) + offset)
+		streamOffset := (offset / b.shardSize) * (int64(b.hash.Size()) + b.shardSize)
 		b.rc, _, err = b.disk.ReadFileStream(b.volume, b.path, streamOffset, -1)
 		if err != nil {
 			return 0, err
 		}
 	}
+
 	_, err = io.ReadFull(b.rc, b.stored)
 	if err != nil {
 		if err == io.ErrUnexpectedEOF {
@@ -116,6 +117,9 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 	n, err := io.ReadFull(b.rc, buf)
 	if err != nil && err != io.ErrUnexpectedEOF {
 		return 0, err
+	}
+	if err == io.ErrUnexpectedEOF {
+		err = io.EOF
 	}
 
 	b.hash.Reset()

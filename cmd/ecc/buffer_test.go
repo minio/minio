@@ -255,14 +255,14 @@ func TestCopyTo(t *testing.T) {
 			}
 
 			buffer := NewBuffer(src, test.Parity)
-			if n := buffer.CopyTo(dst[:1]); n != 1 {
-				t.Fatalf("Copied the wrong number of bytes: got %d - want %d", n, 1)
+			if n, err := buffer.Read(dst[:1]); err != nil || n != 1 {
+				t.Fatalf("Copied the wrong number of bytes: got %d - want %d: %v", n, 1, err)
 			}
-			if n := buffer.CopyTo(dst[1 : len(dst)/2]); n != (len(dst)/2 - 1) {
-				t.Fatalf("Copied the wrong number of bytes: got %d - want %d", n, (len(dst)/2 - 1))
+			if n, err := buffer.Read(dst[1 : len(dst)/2]); n != (len(dst)/2 - 1) {
+				t.Fatalf("Copied the wrong number of bytes: got %d - want %d: %v", n, (len(dst)/2 - 1), err)
 			}
-			if n := buffer.CopyTo(dst[len(dst)/2:]); n != (len(dst) - len(dst)/2) {
-				t.Fatalf("Copied the wrong number of bytes: got %d - want %d", n, (len(dst) - len(dst)/2))
+			if n, err := buffer.Read(dst[len(dst)/2:]); n != (len(dst) - len(dst)/2) {
+				t.Fatalf("Copied the wrong number of bytes: got %d - want %d: %v", n, (len(dst) - len(dst)/2), err)
 			}
 			if !buffer.IsEmpty() {
 				t.Fatal("Buffer is not empty after copying")
