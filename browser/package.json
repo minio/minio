@@ -60,8 +60,9 @@
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^5.10.0",
-    "bootstrap": "^3.3.6",
+    "bootstrap": "^3.4.1",
     "classnames": "^2.2.3",
+    "core-js": "^3.2.1",
     "expect": "^1.20.2",
     "glob-all": "^3.1.0",
     "history": "^4.7.2",
