@@ -17,14 +17,29 @@
 import React from "react"
 import { connect } from "react-redux"
 import { Scrollbars } from "react-custom-scrollbars"
+import InfiniteScroll from "react-infinite-scroller"
 import * as actionsBuckets from "./actions"
-import { getVisibleBuckets } from "./selectors"
+import { getFilteredBuckets } from "./selectors"
 import BucketContainer from "./BucketContainer"
 import web from "../web"
 import history from "../history"
 import { pathSlice } from "../utils"
 
 export class BucketList extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = {
+      page: 1
+    }
+    this.loadNextPage = this.loadNextPage.bind(this)
+  }
+  componentDidUpdate(prevProps) {
+    if (this.props.filter !== prevProps.filter) {
+      this.setState({
+        page: 1
+      })
+    }
+  }
   componentWillMount() {
     const { fetchBuckets, setBucketList, selectBucket } = this.props
     if (web.LoggedIn()) {
@@ -39,18 +54,33 @@ export class BucketList extends React.Component {
       }
     }
   }
+  loadNextPage() {
+    this.setState({
+      page: this.state.page + 1
+    })
+  }
   render() {
-    const { visibleBuckets } = this.props
+    const { filteredBuckets } = this.props
+    const visibleBuckets = filteredBuckets.slice(0, this.state.page * 100)
     return (
       <div className="fesl-inner">
         <Scrollbars
           renderTrackVertical={props => <div className="scrollbar-vertical" />}
         >
-          <ul>
-            {visibleBuckets.map(bucket => (
-              <BucketContainer key={bucket} bucket={bucket} />
-            ))}
-          </ul>
+          <InfiniteScroll
+            pageStart={0}
+            loadMore={this.loadNextPage}
+            hasMore={filteredBuckets.length > visibleBuckets.length}
+            useWindow={false}
+            element="div"
+            initialLoad={false}
+          >
+            <ul>
+              {visibleBuckets.map(bucket => (
+                <BucketContainer key={bucket} bucket={bucket} />
+              ))}
+            </ul>
+          </InfiniteScroll>
         </Scrollbars>
       </div>
     )
@@ -59,7 +89,8 @@ export class BucketList extends React.Component {
 
 const mapStateToProps = state => {
   return {
-    visibleBuckets: getVisibleBuckets(state)
+    filteredBuckets: getFilteredBuckets(state),
+    filter: state.buckets.filter
   }
 }
 

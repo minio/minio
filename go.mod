@@ -4,7 +4,7 @@ go 1.13
 
 require (
 	cloud.google.com/go v0.37.2
-	github.com/Azure/azure-sdk-for-go v27.0.0+incompatible
+	github.com/Azure/azure-sdk-for-go v33.4.0+incompatible
 	github.com/Azure/go-autorest v11.7.0+incompatible
 	github.com/alecthomas/participle v0.2.1
 	github.com/aliyun/aliyun-oss-go-sdk v0.0.0-20190307165228-86c17b95fcd5
@@ -31,7 +31,7 @@ require (
 	github.com/klauspost/compress v1.8.3
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.0
-	github.com/klauspost/reedsolomon v1.9.1
+	github.com/klauspost/reedsolomon v1.9.3
 	github.com/kurin/blazer v0.5.4-0.20190613185654-cf2f27cc0be3
 	github.com/lib/pq v1.0.0
 	github.com/mattn/go-isatty v0.0.7

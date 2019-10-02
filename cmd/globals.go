@@ -33,8 +33,8 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/dns"
+	"github.com/minio/minio/pkg/iam/openid"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/iam/validator"
 	"github.com/minio/minio/pkg/pubsub"
 )
 
@@ -58,6 +58,7 @@ const (
 	globalMinioDefaultStorageClass = "STANDARD"
 	globalWindowsOSName            = "windows"
 	globalNetBSDOSName             = "netbsd"
+	globalMacOSName                = "darwin"
 	globalMinioModeFS              = "mode-server-fs"
 	globalMinioModeXL              = "mode-server-xl"
 	globalMinioModeDistXL          = "mode-server-distributed-xl"
@@ -268,7 +269,7 @@ var (
 	standardExcludeCompressContentTypes = []string{"video/*", "audio/*", "application/zip", "application/x-gzip", "application/x-zip-compressed", " application/x-compress", "application/x-spoon"}
 
 	// Authorization validators list.
-	globalIAMValidators *validator.Validators
+	globalIAMValidators *openid.Validators
 
 	// OPA policy system.
 	globalPolicyOPA *iampolicy.Opa

@@ -22,13 +22,11 @@ import (
 	"crypto/tls"
 	"encoding/gob"
 	"encoding/hex"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/url"
 	"path"
 	"strconv"
-	"strings"
 
 	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/rest"
@@ -61,12 +59,10 @@ func toStorageErr(err error) error {
 	}
 
 	switch err.Error() {
-	case io.EOF.Error():
-		return io.EOF
-	case io.ErrUnexpectedEOF.Error():
-		return io.ErrUnexpectedEOF
-	case errFileUnexpectedSize.Error():
-		return errFileUnexpectedSize
+	case errFaultyDisk.Error():
+		return errFaultyDisk
+	case errFileCorrupt.Error():
+		return errFileCorrupt
 	case errUnexpected.Error():
 		return errUnexpected
 	case errDiskFull.Error():
@@ -99,15 +95,10 @@ func toStorageErr(err error) error {
 		return errRPCAPIVersionUnsupported
 	case errServerTimeMismatch.Error():
 		return errServerTimeMismatch
-	}
-	if strings.Contains(err.Error(), "Bitrot verification mismatch") {
-		var expected string
-		var received string
-		fmt.Sscanf(err.Error(), "Bitrot verification mismatch - expected %s received %s", &expected, &received)
-		// Go's Sscanf %s scans "," that comes after the expected hash, hence remove it. Providing "," in the format string does not help.
-		expected = strings.TrimSuffix(expected, ",")
-		bitrotErr := HashMismatchError{expected, received}
-		return bitrotErr
+	case io.EOF.Error():
+		return io.EOF
+	case io.ErrUnexpectedEOF.Error():
+		return io.ErrUnexpectedEOF
 	}
 	return err
 }
@@ -375,7 +366,6 @@ func (client *storageRESTClient) DeleteFileBulk(volume string, paths []string) (
 	if len(paths) == 0 {
 		return errs, err
 	}
-	errs = make([]error, len(paths))
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	for _, path := range paths {
@@ -388,14 +378,13 @@ func (client *storageRESTClient) DeleteFileBulk(volume string, paths []string) (
 		return nil, err
 	}
 
-	bulkErrs := bulkErrorsResponse{}
-	gob.NewDecoder(respBody).Decode(&bulkErrs)
-	if err != nil {
+	dErrResp := &DeleteFileBulkErrsResp{}
+	if err = gob.NewDecoder(respBody).Decode(dErrResp); err != nil {
 		return nil, err
 	}
 
-	for i, dErr := range bulkErrs.Errs {
-		errs[i] = toStorageErr(dErr)
+	for _, dErr := range dErrResp.Errs {
+		errs = append(errs, toStorageErr(dErr))
 	}
 
 	return errs, nil
@@ -463,8 +452,7 @@ func (client *storageRESTClient) VerifyFile(volume, path string, size int64, alg
 		}
 	}
 	verifyResp := &VerifyFileResp{}
-	err = gob.NewDecoder(reader).Decode(verifyResp)
-	if err != nil {
+	if err = gob.NewDecoder(reader).Decode(verifyResp); err != nil {
 		return err
 	}
 	return toStorageErr(verifyResp.Err)

@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -977,7 +976,7 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 	}
 
 	if !bytes.Equal(h.Sum(nil), verifier.sum) {
-		return 0, HashMismatchError{hex.EncodeToString(verifier.sum), hex.EncodeToString(h.Sum(nil))}
+		return 0, errFileCorrupt
 	}
 
 	return int64(len(buffer)), nil
@@ -1418,11 +1417,14 @@ func (s *posix) DeleteFile(volume, path string) (err error) {
 	if err != nil {
 		return err
 	}
+
 	// Stat a volume entry.
 	_, err = os.Stat((volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
+		} else if os.IsPermission(err) {
+			return errVolumeAccessDenied
 		} else if isSysErrIO(err) {
 			return errFaultyDisk
 		}
@@ -1564,11 +1566,16 @@ func (s *posix) VerifyFile(volume, path string, fileSize int64, algo BitrotAlgor
 	if err != nil {
 		return err
 	}
+
 	// Stat a volume entry.
 	_, err = os.Stat(volumeDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
+		} else if isSysErrIO(err) {
+			return errFaultyDisk
+		} else if os.IsPermission(err) {
+			return errVolumeAccessDenied
 		}
 		return err
 	}
@@ -1582,18 +1589,7 @@ func (s *posix) VerifyFile(volume, path string, fileSize int64, algo BitrotAlgor
 	// Open the file for reading.
 	file, err := os.Open(filePath)
 	if err != nil {
-		switch {
-		case os.IsNotExist(err):
-			return errFileNotFound
-		case os.IsPermission(err):
-			return errFileAccessDenied
-		case isSysErrNotDir(err):
-			return errFileAccessDenied
-		case isSysErrIO(err):
-			return errFaultyDisk
-		default:
-			return err
-		}
+		return osErrToFSFileErr(err)
 	}
 
 	// Close the file descriptor.
@@ -1605,10 +1601,11 @@ func (s *posix) VerifyFile(volume, path string, fileSize int64, algo BitrotAlgor
 
 		h := algo.New()
 		if _, err = io.CopyBuffer(h, file, *bufp); err != nil {
-			return err
+			// Premature failure in reading the object,file is corrupt.
+			return errFileCorrupt
 		}
 		if !bytes.Equal(h.Sum(nil), sum) {
-			return HashMismatchError{hex.EncodeToString(sum), hex.EncodeToString(h.Sum(nil))}
+			return errFileCorrupt
 		}
 		return nil
 	}
@@ -1618,23 +1615,28 @@ func (s *posix) VerifyFile(volume, path string, fileSize int64, algo BitrotAlgor
 	hashBuf := make([]byte, h.Size())
 	fi, err := file.Stat()
 	if err != nil {
+		// Unable to stat on the file, return an expected error
+		// for healing code to fix this file.
 		return err
 	}
 
+	size := fi.Size()
+
 	// Calculate the size of the bitrot file and compare
 	// it with the actual file size.
-	if fi.Size() != bitrotShardFileSize(fileSize, shardSize, algo) {
-		return errFileUnexpectedSize
+	if size != bitrotShardFileSize(fileSize, shardSize, algo) {
+		return errFileCorrupt
 	}
 
-	size := fi.Size()
+	var n int
 	for {
 		if size == 0 {
 			return nil
 		}
 		h.Reset()
-		n, err := file.Read(hashBuf)
+		n, err = file.Read(hashBuf)
 		if err != nil {
+			// Read's failed for object with right size, file is corrupt.
 			return err
 		}
 		size -= int64(n)
@@ -1643,12 +1645,13 @@ func (s *posix) VerifyFile(volume, path string, fileSize int64, algo BitrotAlgor
 		}
 		n, err = file.Read(buf)
 		if err != nil {
+			// Read's failed for object with right size, at different offsets.
 			return err
 		}
 		size -= int64(n)
 		h.Write(buf)
 		if !bytes.Equal(h.Sum(nil), hashBuf) {
-			return HashMismatchError{hex.EncodeToString(hashBuf), hex.EncodeToString(h.Sum(nil))}
+			return errFileCorrupt
 		}
 	}
 }

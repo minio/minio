@@ -216,8 +216,8 @@ func TestCheckPortAvailability(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		// On MS Windows, skip checking error case due to https://github.com/golang/go/issues/7598
-		if runtime.GOOS == globalWindowsOSName && testCase.expectedErr != nil {
+		// On MS Windows and Mac, skip checking error case due to https://github.com/golang/go/issues/7598
+		if (runtime.GOOS == globalWindowsOSName || runtime.GOOS == globalMacOSName) && testCase.expectedErr != nil {
 			continue
 		}
 

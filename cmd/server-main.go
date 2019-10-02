@@ -36,7 +36,8 @@ import (
 func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterUIError(fmtError)
-	gob.Register(HashMismatchError{})
+	gob.Register(VerifyFileError(""))
+	gob.Register(DeleteFileError(""))
 }
 
 // ServerFlags - server command specific flags
@@ -233,6 +234,10 @@ func serverMain(ctx *cli.Context) {
 		checkUpdate(getMinioMode())
 	}
 
+	if globalIsDiskCacheEnabled {
+		logger.StartupMessage(colorRed(colorBold("Disk caching is allowed only for gateway deployments")))
+	}
+
 	// FIXME: This code should be removed in future releases and we should have mandatory
 	// check for ENVs credentials under distributed setup. Until all users migrate we
 	// are intentionally providing backward compatibility.
@@ -338,22 +343,24 @@ func serverMain(ctx *cli.Context) {
 		logger.Fatal(err, "Unable to initialize IAM system")
 	}
 
+	buckets, err := newObject.ListBuckets(context.Background())
+	if err != nil {
+		logger.Fatal(err, "Unable to list buckets on your backend")
+	}
+
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()
 
 	// Initialize policy system.
-	if err = globalPolicySys.Init(newObject); err != nil {
+	if err = globalPolicySys.Init(buckets, newObject); err != nil {
 		logger.Fatal(err, "Unable to initialize policy system")
 	}
 
-	if globalIsDiskCacheEnabled {
-		logger.StartupMessage(colorRed(colorBold("Disk caching is allowed only for gateway deployments")))
-	}
 	// Create new lifecycle system.
 	globalLifecycleSys = NewLifecycleSys()
 
 	// Initialize lifecycle system.
-	if err = globalLifecycleSys.Init(newObject); err != nil {
+	if err = globalLifecycleSys.Init(buckets, newObject); err != nil {
 		logger.Fatal(err, "Unable to initialize lifecycle system")
 	}
 
@@ -361,7 +368,7 @@ func serverMain(ctx *cli.Context) {
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
 
 	// Initialize notification system.
-	if err = globalNotificationSys.Init(newObject); err != nil {
+	if err = globalNotificationSys.Init(buckets, newObject); err != nil {
 		logger.Fatal(err, "Unable to initialize notification system")
 	}
 

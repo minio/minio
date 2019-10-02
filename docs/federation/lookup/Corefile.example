@@ -7,5 +7,5 @@
   prometheus
   cache 160 mydomain.com
   loadbalance
-  proxy . /etc/resolv.conf
+  forward . /etc/resolv.conf
 }

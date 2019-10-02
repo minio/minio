@@ -68,7 +68,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	obj, _, err := initObjectLayer(mustGetNewEndpointList(fsDirs...))
+	objLayer, _, err := initObjectLayer(mustGetNewEndpointList(fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,21 +78,21 @@ func TestHealObjectCorrupted(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 	var opts ObjectOptions
 
-	err = obj.MakeBucketWithLocation(context.Background(), bucket, "")
+	err = objLayer.MakeBucketWithLocation(context.Background(), bucket, "")
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
 
 	// Create an object with multiple parts uploaded in decreasing
 	// part number.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, object, opts)
+	uploadID, err := objLayer.NewMultipartUpload(context.Background(), bucket, object, opts)
 	if err != nil {
 		t.Fatalf("Failed to create a multipart upload - %v", err)
 	}
 
 	var uploadedParts []CompletePart
 	for _, partID := range []int{2, 1} {
-		pInfo, err1 := obj.PutObjectPart(context.Background(), bucket, object, uploadID, partID, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
+		pInfo, err1 := objLayer.PutObjectPart(context.Background(), bucket, object, uploadID, partID, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
 		if err1 != nil {
 			t.Fatalf("Failed to upload a part - %v", err1)
 		}
@@ -102,20 +102,20 @@ func TestHealObjectCorrupted(t *testing.T) {
 		})
 	}
 
-	_, err = obj.CompleteMultipartUpload(context.Background(), bucket, object, uploadID, uploadedParts, ObjectOptions{})
+	_, err = objLayer.CompleteMultipartUpload(context.Background(), bucket, object, uploadID, uploadedParts, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Failed to complete multipart upload - %v", err)
 	}
 
 	// Test 1: Remove the object backend files from the first disk.
-	xl := obj.(*xlObjects)
+	xl := objLayer.(*xlObjects)
 	firstDisk := xl.storageDisks[0]
 	err = firstDisk.DeleteFile(bucket, filepath.Join(object, xlMetaJSONFile))
 	if err != nil {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
 
-	_, err = obj.HealObject(context.Background(), bucket, object, false, false, madmin.HealNormalScan)
+	_, err = objLayer.HealObject(context.Background(), bucket, object, false, false, madmin.HealNormalScan)
 	if err != nil {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
@@ -132,13 +132,13 @@ func TestHealObjectCorrupted(t *testing.T) {
 	}
 	err = firstDisk.DeleteFile(bucket, filepath.Join(object, "part.1"))
 	if err != nil {
-		t.Errorf("Failure during part.1 removal - %v", err)
+		t.Errorf("Failure during deleting part.1 - %v", err)
 	}
-	err = firstDisk.AppendFile(bucket, filepath.Join(object, "part.1"), []byte{})
+	err = firstDisk.WriteAll(bucket, filepath.Join(object, "part.1"), bytes.NewReader([]byte{}))
 	if err != nil {
 		t.Errorf("Failure during creating part.1 - %v", err)
 	}
-	_, err = obj.HealObject(context.Background(), bucket, object, false, true, madmin.HealDeepScan)
+	_, err = objLayer.HealObject(context.Background(), bucket, object, false, true, madmin.HealDeepScan)
 	if err != nil {
 		t.Errorf("Expected nil but received %v", err)
 	}
@@ -150,7 +150,33 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Errorf("part.1 file size is not the same before and after heal")
 	}
 
-	// Test 3: checks if HealObject returns an error when xl.json is not found
+	// Test 3: Heal when part.1 is correct in size but corrupted
+	partSt1, err = firstDisk.StatFile(bucket, filepath.Join(object, "part.1"))
+	if err != nil {
+		t.Errorf("Expected part.1 file to be present but stat failed - %v", err)
+	}
+	err = firstDisk.DeleteFile(bucket, filepath.Join(object, "part.1"))
+	if err != nil {
+		t.Errorf("Failure during deleting part.1 - %v", err)
+	}
+	bdata := bytes.Repeat([]byte("b"), int(partSt1.Size))
+	err = firstDisk.WriteAll(bucket, filepath.Join(object, "part.1"), bytes.NewReader(bdata))
+	if err != nil {
+		t.Errorf("Failure during creating part.1 - %v", err)
+	}
+	_, err = objLayer.HealObject(context.Background(), bucket, object, false, true, madmin.HealDeepScan)
+	if err != nil {
+		t.Errorf("Expected nil but received %v", err)
+	}
+	partSt2, err = firstDisk.StatFile(bucket, filepath.Join(object, "part.1"))
+	if err != nil {
+		t.Errorf("Expected from part.1 file to be present but stat failed - %v", err)
+	}
+	if partSt1.Size != partSt2.Size {
+		t.Errorf("part.1 file size is not the same before and after heal")
+	}
+
+	// Test 4: checks if HealObject returns an error when xl.json is not found
 	// in more than read quorum number of disks, to create a corrupted situation.
 
 	for i := 0; i <= len(xl.storageDisks)/2; i++ {
@@ -158,13 +184,13 @@ func TestHealObjectCorrupted(t *testing.T) {
 	}
 
 	// Try healing now, expect to receive errDiskNotFound.
-	_, err = obj.HealObject(context.Background(), bucket, object, false, true, madmin.HealDeepScan)
+	_, err = objLayer.HealObject(context.Background(), bucket, object, false, true, madmin.HealDeepScan)
 	if err != nil {
 		t.Errorf("Expected nil but received %v", err)
 	}
 
 	// since majority of xl.jsons are not available, object should be successfully deleted.
-	_, err = obj.GetObjectInfo(context.Background(), bucket, object, ObjectOptions{})
+	_, err = objLayer.GetObjectInfo(context.Background(), bucket, object, ObjectOptions{})
 	if _, ok := err.(ObjectNotFound); !ok {
 		t.Errorf("Expect %v but received %v", ObjectNotFound{Bucket: bucket, Object: object}, err)
 	}

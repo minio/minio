@@ -49,22 +49,6 @@ func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error)
 	w.(http.Flusher).Flush()
 }
 
-type bulkErrorsResponse struct {
-	Errs []error `json:"errors"`
-}
-
-func (s *storageRESTServer) writeErrorsResponse(w http.ResponseWriter, errs []error) {
-	resp := bulkErrorsResponse{Errs: make([]error, len(errs))}
-	for idx, err := range errs {
-		if err == nil {
-			continue
-		}
-		resp.Errs[idx] = err
-	}
-	gob.NewEncoder(w).Encode(resp)
-	w.(http.Flusher).Flush()
-}
-
 // DefaultSkewTime - skew time is 15 minutes between minio peers.
 const DefaultSkewTime = 15 * time.Minute
 
@@ -157,8 +141,8 @@ func (s *storageRESTServer) ListVolsHandler(w http.ResponseWriter, r *http.Reque
 		s.writeErrorResponse(w, err)
 		return
 	}
-	defer w.(http.Flusher).Flush()
 	gob.NewEncoder(w).Encode(&infos)
+	w.(http.Flusher).Flush()
 }
 
 // StatVolHandler - stat a volume.
@@ -173,8 +157,8 @@ func (s *storageRESTServer) StatVolHandler(w http.ResponseWriter, r *http.Reques
 		s.writeErrorResponse(w, err)
 		return
 	}
-	defer w.(http.Flusher).Flush()
 	gob.NewEncoder(w).Encode(info)
+	w.(http.Flusher).Flush()
 }
 
 // DeleteVolumeHandler - delete a volume.
@@ -266,8 +250,8 @@ func (s *storageRESTServer) StatFileHandler(w http.ResponseWriter, r *http.Reque
 		s.writeErrorResponse(w, err)
 		return
 	}
-	defer w.(http.Flusher).Flush()
 	gob.NewEncoder(w).Encode(info)
+	w.(http.Flusher).Flush()
 }
 
 // ReadAllHandler - read all the contents of a file.
@@ -409,12 +393,13 @@ func (s *storageRESTServer) WalkHandler(w http.ResponseWriter, r *http.Request) 
 		s.writeErrorResponse(w, err)
 		return
 	}
-	defer w.(http.Flusher).Flush()
 
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
 	encoder := gob.NewEncoder(w)
 	for fi := range fch {
 		encoder.Encode(&fi)
 	}
+	w.(http.Flusher).Flush()
 }
 
 // ListDirHandler - list a directory.
@@ -436,8 +421,8 @@ func (s *storageRESTServer) ListDirHandler(w http.ResponseWriter, r *http.Reques
 		s.writeErrorResponse(w, err)
 		return
 	}
-	defer w.(http.Flusher).Flush()
 	gob.NewEncoder(w).Encode(&entries)
+	w.(http.Flusher).Flush()
 }
 
 // DeleteFileHandler - delete a file.
@@ -455,6 +440,19 @@ func (s *storageRESTServer) DeleteFileHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// DeleteFileBulkErrsResp - collection of deleteFile errors
+// for bulk deletes
+type DeleteFileBulkErrsResp struct {
+	Errs []error
+}
+
+// DeleteFileError - error captured per delete operation
+type DeleteFileError string
+
+func (d DeleteFileError) Error() string {
+	return string(d)
+}
+
 // DeleteFileBulkHandler - delete a file.
 func (s *storageRESTServer) DeleteFileBulkHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -470,7 +468,15 @@ func (s *storageRESTServer) DeleteFileBulkHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	s.writeErrorsResponse(w, errs)
+	derrsResp := &DeleteFileBulkErrsResp{Errs: make([]error, len(errs))}
+	for idx, err := range errs {
+		if err != nil {
+			derrsResp.Errs[idx] = DeleteFileError(err.Error())
+		}
+	}
+
+	gob.NewEncoder(w).Encode(derrsResp)
+	w.(http.Flusher).Flush()
 }
 
 // RenameFileHandler - rename a file.
@@ -546,12 +552,17 @@ func (s *storageRESTServer) VerifyFile(w http.ResponseWriter, r *http.Request) {
 		s.writeErrorResponse(w, errInvalidArgument)
 		return
 	}
-	algo := BitrotAlgorithmFromString(algoStr)
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	encoder := gob.NewEncoder(w)
 	doneCh := sendWhiteSpaceVerifyFile(w)
-	err = s.storage.VerifyFile(volume, filePath, size, algo, hash, int64(shardSize))
+	err = s.storage.VerifyFile(volume, filePath, size, BitrotAlgorithmFromString(algoStr), hash, int64(shardSize))
 	<-doneCh
-	gob.NewEncoder(w).Encode(VerifyFileResp{err})
+	vresp := &VerifyFileResp{}
+	if err != nil {
+		vresp.Err = VerifyFileError(err.Error())
+	}
+	encoder.Encode(vresp)
+	w.(http.Flusher).Flush()
 }
 
 // registerStorageRPCRouter - register storage rpc router.
