@@ -132,9 +132,9 @@ func (d *naughtyDisk) ReadFile(volume string, path string, offset int64, buf []b
 	return d.disk.ReadFile(volume, path, offset, buf, verifier)
 }
 
-func (d *naughtyDisk) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
+func (d *naughtyDisk) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, int64, error) {
 	if err := d.calcError(); err != nil {
-		return nil, err
+		return nil, length, err
 	}
 	return d.disk.ReadFileStream(volume, path, offset, length)
 }

@@ -36,8 +36,8 @@ func (a badDisk) AppendFile(volume string, path string, buf []byte) error {
 	return errFaultyDisk
 }
 
-func (a badDisk) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
-	return nil, errFaultyDisk
+func (a badDisk) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, int64, error) {
+	return nil, -1, errFaultyDisk
 }
 
 func (a badDisk) CreateFile(volume, path string, size int64, reader io.Reader) error {

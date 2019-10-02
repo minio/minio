@@ -1052,7 +1052,7 @@ func (s *posix) openFile(volume, path string, mode int) (f *os.File, err error) 
 }
 
 // ReadFileStream - Returns the read stream of the file.
-func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
+func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, int64, error) {
 	var err error
 	defer func() {
 		if err == errFaultyDisk {
@@ -1061,36 +1061,36 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 	}()
 
 	if offset < 0 {
-		return nil, errInvalidArgument
+		return nil, length, errInvalidArgument
 	}
 
 	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return nil, errFaultyDisk
+		return nil, length, errFaultyDisk
 	}
 
 	if err = s.checkDiskFound(); err != nil {
-		return nil, err
+		return nil, length, err
 	}
 
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
-		return nil, err
+		return nil, length, err
 	}
 	// Stat a volume entry.
 	_, err = os.Stat((volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errVolumeNotFound
+			return nil, length, errVolumeNotFound
 		} else if isSysErrIO(err) {
-			return nil, errFaultyDisk
+			return nil, length, errFaultyDisk
 		}
-		return nil, err
+		return nil, length, err
 	}
 
 	// Validate effective path length before reading.
 	filePath := pathJoin(volumeDir, path)
 	if err = checkPathLength((filePath)); err != nil {
-		return nil, err
+		return nil, length, err
 	}
 
 	// Open the file for reading.
@@ -1098,33 +1098,33 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 	if err != nil {
 		switch {
 		case os.IsNotExist(err):
-			return nil, errFileNotFound
+			return nil, length, errFileNotFound
 		case os.IsPermission(err):
-			return nil, errFileAccessDenied
+			return nil, length, errFileAccessDenied
 		case isSysErrNotDir(err):
-			return nil, errFileAccessDenied
+			return nil, length, errFileAccessDenied
 		case isSysErrIO(err):
-			return nil, errFaultyDisk
+			return nil, length, errFaultyDisk
 		case isSysErrTooManyFiles(err):
-			return nil, errTooManyOpenFiles
+			return nil, length, errTooManyOpenFiles
 		default:
-			return nil, err
+			return nil, length, err
 		}
 	}
 
 	st, err := file.Stat()
 	if err != nil {
-		return nil, err
+		return nil, length, err
 	}
 
 	// Verify it is a regular file, otherwise subsequent Seek is
 	// undefined.
 	if !st.Mode().IsRegular() {
-		return nil, errIsNotRegular
+		return nil, length, errIsNotRegular
 	}
 
 	if _, err = file.Seek(offset, io.SeekStart); err != nil {
-		return nil, err
+		return nil, length, err
 	}
 	if length == -1 {
 		length = st.Size()
@@ -1135,7 +1135,7 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 		io.Closer
 	}{Reader: io.LimitReader(file, length), Closer: file}
 
-	return readahead.NewReadCloser(r), nil
+	return readahead.NewReadCloser(r), length, nil
 }
 
 // CreateFile - creates the file.

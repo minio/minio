@@ -47,7 +47,7 @@ type StorageAPI interface {
 	ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error)
 	AppendFile(volume string, path string, buf []byte) (err error)
 	CreateFile(volume, path string, size int64, reader io.Reader) error
-	ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error)
+	ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, int64, error)
 	RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error
 	StatFile(volume string, path string) (file FileInfo, err error)
 	DeleteFile(volume string, path string) (err error)

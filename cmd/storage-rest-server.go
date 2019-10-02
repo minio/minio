@@ -336,14 +336,14 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	rc, err := s.storage.ReadFileStream(volume, filePath, int64(offset), int64(length))
+	rc, fileLen, err := s.storage.ReadFileStream(volume, filePath, int64(offset), int64(length))
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 	defer rc.Close()
 
-	w.Header().Set(xhttp.ContentLength, strconv.Itoa(length))
+	w.Header().Set(xhttp.ContentLength, strconv.FormatInt(fileLen, 10))
 
 	io.Copy(w, rc)
 	w.(http.Flusher).Flush()

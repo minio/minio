@@ -262,7 +262,7 @@ func (client *storageRESTClient) ReadAll(volume, path string) ([]byte, error) {
 }
 
 // ReadFileStream - returns a reader for the requested file.
-func (client *storageRESTClient) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
+func (client *storageRESTClient) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, int64, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
@@ -270,9 +270,9 @@ func (client *storageRESTClient) ReadFileStream(volume, path string, offset, len
 	values.Set(storageRESTLength, strconv.Itoa(int(length)))
 	respBody, err := client.call(storageRESTMethodReadFileStream, values, nil, -1)
 	if err != nil {
-		return nil, err
+		return nil, length, err
 	}
-	return respBody, nil
+	return respBody, length, nil
 }
 
 // ReadFile - reads section of a file.

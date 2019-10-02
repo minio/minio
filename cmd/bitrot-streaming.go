@@ -100,7 +100,7 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 	if b.rc == nil {
 		// For the first ReadAt() call we need to open the stream for reading.
 		streamOffset := (offset / b.shardSize) * (int64(b.hash.Size()) + offset)
-		b.rc, err = b.disk.ReadFileStream(b.volume, b.path, streamOffset, -1)
+		b.rc, _, err = b.disk.ReadFileStream(b.volume, b.path, streamOffset, -1)
 		if err != nil {
 			return 0, err
 		}
