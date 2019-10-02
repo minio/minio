@@ -693,6 +693,20 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 	}
 	healCtx := logger.SetReqInfo(context.Background(), newReqInfo)
 
+	// Acquire read lock on format.json
+	formatLock := globalNSMutex.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
+	if err = formatLock.GetRLock(globalHealingTimeout); err != nil {
+		return madmin.HealResultItem{}, err
+	}
+	defer formatLock.RUnlock()
+
+	// Write lock the object before healing.
+	objectLock := xl.nsMutex.NewNSLock(ctx, bucket, object)
+	if lerr := objectLock.GetLock(globalHealingTimeout); lerr != nil {
+		return madmin.HealResultItem{}, lerr
+	}
+	defer objectLock.Unlock()
+
 	// Healing directories handle it separately.
 	if hasSuffix(object, SlashSeparator) {
 		return xl.healObjectDir(healCtx, bucket, object, dryRun)
@@ -720,13 +734,6 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 	if err != nil {
 		return defaultHealResult(xlMetaV1{}, storageDisks, errs, bucket, object), toObjectErr(err, bucket, object)
 	}
-
-	// Lock the object before healing.
-	objectLock := xl.nsMutex.NewNSLock(ctx, bucket, object)
-	if lerr := objectLock.GetRLock(globalHealingTimeout); lerr != nil {
-		return defaultHealResult(latestXLMeta, storageDisks, errs, bucket, object), lerr
-	}
-	defer objectLock.RUnlock()
 
 	errCount := 0
 	for _, err := range errs {

@@ -1447,7 +1447,7 @@ func markRootDisksAsDown(storageDisks []StorageAPI) {
 // coded data in it.
 func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealResultItem, err error) {
 	// Acquire lock on format.json
-	formatLock := s.getHashedSet(formatConfigFile).nsMutex.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
+	formatLock := globalNSMutex.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
 	if err = formatLock.GetLock(globalHealingTimeout); err != nil {
 		return madmin.HealResultItem{}, err
 	}
@@ -1602,6 +1602,13 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 
 // HealBucket - heals inconsistent buckets and bucket metadata on all sets.
 func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (result madmin.HealResultItem, err error) {
+	// Acquire reading lock on format.json
+	formatLock := globalNSMutex.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
+	if err = formatLock.GetRLock(globalHealingTimeout); err != nil {
+		return result, err
+	}
+	defer formatLock.RUnlock()
+
 	bucketLock := globalNSMutex.NewNSLock(ctx, bucket, "")
 	if err := bucketLock.GetLock(globalHealingTimeout); err != nil {
 		return result, err
