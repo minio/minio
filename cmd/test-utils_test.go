@@ -359,14 +359,19 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalIAMSys = NewIAMSys()
 	globalIAMSys.Init(objLayer)
 
+	buckets, err := objLayer.ListBuckets(context.Background())
+	if err != nil {
+		t.Fatalf("Unable to list buckets on backend %s", err)
+	}
+
 	globalPolicySys = NewPolicySys()
-	globalPolicySys.Init(objLayer)
+	globalPolicySys.Init(buckets, objLayer)
 
 	globalNotificationSys = NewNotificationSys(globalServerConfig, testServer.Disks)
-	globalNotificationSys.Init(objLayer)
+	globalNotificationSys.Init(buckets, objLayer)
 
 	globalLifecycleSys = NewLifecycleSys()
-	globalLifecycleSys.Init(objLayer)
+	globalLifecycleSys.Init(buckets, objLayer)
 
 	return testServer
 }
@@ -1943,8 +1948,13 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	globalIAMSys = NewIAMSys()
 	globalIAMSys.Init(objLayer)
 
+	buckets, err := objLayer.ListBuckets(context.Background())
+	if err != nil {
+		t.Fatalf("Unable to list buckets on backend %s", err)
+	}
+
 	globalPolicySys = NewPolicySys()
-	globalPolicySys.Init(objLayer)
+	globalPolicySys.Init(buckets, objLayer)
 
 	credentials := globalServerConfig.GetCredential()
 

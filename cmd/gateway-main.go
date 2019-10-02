@@ -274,17 +274,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()
 
-	// Initialize policy system.
-	go globalPolicySys.Init(newObject)
-
-	// Create new lifecycle system
+	// Create new lifecycle system.
 	globalLifecycleSys = NewLifecycleSys()
 
 	// Create new notification system.
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
-	if enableConfigOps && newObject.IsNotificationSupported() {
-		logger.LogIf(context.Background(), globalNotificationSys.Init(newObject))
-	}
 
 	// Verify if object layer supports
 	// - encryption
