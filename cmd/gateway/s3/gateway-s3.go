@@ -442,7 +442,7 @@ func (l *s3Objects) GetObject(ctx context.Context, bucket string, key string, st
 			return minio.ErrorRespToObjectError(err, bucket, key)
 		}
 	}
-	object, _, err := l.Client.GetObject(bucket, key, opts)
+	object, _, _, err := l.Client.GetObject(bucket, key, opts)
 	if err != nil {
 		return minio.ErrorRespToObjectError(err, bucket, key)
 	}

@@ -305,7 +305,7 @@ func (s *serverConfig) loadFromEnvs() {
 	}
 
 	var err error
-	s.LDAPServerConfig, err = newLDAPConfigFromEnv()
+	s.LDAPServerConfig, err = newLDAPConfigFromEnv(globalRootCAs)
 	if err != nil {
 		logger.FatalIf(err, "Unable to parse LDAP configuration from env")
 	}
