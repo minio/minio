@@ -23,12 +23,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"reflect"
-	"sync"
 
 	"encoding/hex"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/sync/errgroup"
 	sha256 "github.com/minio/sha256-simd"
 )
 
@@ -315,40 +315,30 @@ func quorumUnformattedDisks(errs []error) bool {
 
 // loadFormatXLAll - load all format config from all input disks in parallel.
 func loadFormatXLAll(storageDisks []StorageAPI) ([]*formatXLV3, []error) {
-	// Initialize sync waitgroup.
-	var wg sync.WaitGroup
-
 	// Initialize list of errors.
-	var sErrs = make([]error, len(storageDisks))
+	g := errgroup.WithNErrs(len(storageDisks))
 
 	// Initialize format configs.
 	var formats = make([]*formatXLV3, len(storageDisks))
 
 	// Load format from each disk in parallel
-	for index, disk := range storageDisks {
-		if disk == nil {
-			sErrs[index] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-		// Launch go-routine per disk.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-
-			format, lErr := loadFormatXL(disk)
-			if lErr != nil {
-				sErrs[index] = lErr
-				return
+	for index := range storageDisks {
+		index := index
+		g.Go(func() error {
+			if storageDisks[index] == nil {
+				return errDiskNotFound
+			}
+			format, err := loadFormatXL(storageDisks[index])
+			if err != nil {
+				return err
 			}
 			formats[index] = format
-		}(index, disk)
+			return nil
+		}, index)
 	}
 
-	// Wait for all go-routines to finish.
-	wg.Wait()
-
-	// Return all formats and nil
-	return formats, sErrs
+	// Return all formats and errors if any.
+	return formats, g.Wait()
 }
 
 func saveFormatXL(disk StorageAPI, format interface{}) error {
@@ -643,28 +633,22 @@ func formatXLV3Check(reference *formatXLV3, format *formatXLV3) error {
 
 // saveFormatXLAll - populates `format.json` on disks in its order.
 func saveFormatXLAll(ctx context.Context, storageDisks []StorageAPI, formats []*formatXLV3) error {
-	var errs = make([]error, len(storageDisks))
-
-	var wg sync.WaitGroup
+	g := errgroup.WithNErrs(len(storageDisks))
 
 	// Write `format.json` to all disks.
-	for index, disk := range storageDisks {
-		if formats[index] == nil || disk == nil {
-			errs[index] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-		go func(index int, disk StorageAPI, format *formatXLV3) {
-			defer wg.Done()
-			errs[index] = saveFormatXL(disk, format)
-		}(index, disk, formats[index])
+	for index := range storageDisks {
+		index := index
+		g.Go(func() error {
+			if formats[index] == nil || storageDisks[index] == nil {
+				return errDiskNotFound
+			}
+			return saveFormatXL(storageDisks[index], formats[index])
+		}, index)
 	}
 
-	// Wait for the routines to finish.
-	wg.Wait()
-
 	writeQuorum := len(storageDisks)/2 + 1
-	return reduceWriteQuorumErrs(ctx, errs, nil, writeQuorum)
+	// Wait for the routines to finish.
+	return reduceWriteQuorumErrs(ctx, g.Wait(), nil, writeQuorum)
 }
 
 // relinquishes the underlying connection for all storage disks.
@@ -682,17 +666,19 @@ func closeStorageDisks(storageDisks []StorageAPI) {
 func initStorageDisksWithErrors(endpoints EndpointList) ([]StorageAPI, []error) {
 	// Bootstrap disks.
 	storageDisks := make([]StorageAPI, len(endpoints))
-	errs := make([]error, len(endpoints))
-	var wg sync.WaitGroup
-	for index, endpoint := range endpoints {
-		wg.Add(1)
-		go func(index int, endpoint Endpoint) {
-			defer wg.Done()
-			storageDisks[index], errs[index] = newStorageAPI(endpoint)
-		}(index, endpoint)
+	g := errgroup.WithNErrs(len(endpoints))
+	for index := range endpoints {
+		index := index
+		g.Go(func() error {
+			storageDisk, err := newStorageAPI(endpoints[index])
+			if err != nil {
+				return err
+			}
+			storageDisks[index] = storageDisk
+			return nil
+		}, index)
 	}
-	wg.Wait()
-	return storageDisks, errs
+	return storageDisks, g.Wait()
 }
 
 // formatXLV3ThisEmpty - find out if '.This' field is empty
@@ -793,31 +779,24 @@ func initFormatXLMetaVolume(storageDisks []StorageAPI, formats []*formatXLV3) er
 	// This happens for the first time, but keep this here since this
 	// is the only place where it can be made expensive optimizing all
 	// other calls. Create minio meta volume, if it doesn't exist yet.
-	var wg sync.WaitGroup
 
 	// Initialize errs to collect errors inside go-routine.
-	var errs = make([]error, len(storageDisks))
+	g := errgroup.WithNErrs(len(storageDisks))
 
 	// Initialize all disks in parallel.
-	for index, disk := range storageDisks {
-		if formats[index] == nil || disk == nil {
-			// Ignore create meta volume on disks which are not found.
-			continue
-		}
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			// Indicate this wait group is done.
-			defer wg.Done()
-
-			errs[index] = makeFormatXLMetaVolumes(disk)
-		}(index, disk)
+	for index := range storageDisks {
+		index := index
+		g.Go(func() error {
+			if formats[index] == nil || storageDisks[index] == nil {
+				// Ignore create meta volume on disks which are not found.
+				return nil
+			}
+			return makeFormatXLMetaVolumes(storageDisks[index])
+		}, index)
 	}
 
-	// Wait for all cleanup to finish.
-	wg.Wait()
-
 	// Return upon first error.
-	for _, err := range errs {
+	for _, err := range g.Wait() {
 		if err == nil {
 			continue
 		}

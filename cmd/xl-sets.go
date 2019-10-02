@@ -306,19 +306,21 @@ func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesP
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
 func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 	var storageInfo StorageInfo
-	var wg sync.WaitGroup
 
 	storageInfos := make([]StorageInfo, len(s.sets))
 	storageInfo.Backend.Type = BackendErasure
-	for index, set := range s.sets {
-		wg.Add(1)
-		go func(id int, set *xlObjects) {
-			defer wg.Done()
-			storageInfos[id] = set.StorageInfo(ctx)
-		}(index, set)
+
+	g := errgroup.WithNErrs(len(s.sets))
+	for index := range s.sets {
+		index := index
+		g.Go(func() error {
+			storageInfos[index] = s.sets[index].StorageInfo(ctx)
+			return nil
+		}, index)
 	}
+
 	// Wait for the go routines.
-	wg.Wait()
+	g.Wait()
 
 	for _, lstorageInfo := range storageInfos {
 		storageInfo.Used += lstorageInfo.Used
@@ -458,11 +460,12 @@ func undoMakeBucketSets(bucket string, sets []*xlObjects, errs []error) {
 	// Undo previous make bucket entry on all underlying sets.
 	for index := range sets {
 		index := index
-		if errs[index] == nil {
-			g.Go(func() error {
+		g.Go(func() error {
+			if errs[index] == nil {
 				return sets[index].DeleteBucket(context.Background(), bucket)
-			}, index)
-		}
+			}
+			return nil
+		}, index)
 	}
 
 	// Wait for all delete bucket to finish.
@@ -618,11 +621,12 @@ func undoDeleteBucketSets(bucket string, sets []*xlObjects, errs []error) {
 	// Undo previous delete bucket on all underlying sets.
 	for index := range sets {
 		index := index
-		if errs[index] == nil {
-			g.Go(func() error {
+		g.Go(func() error {
+			if errs[index] == nil {
 				return sets[index].MakeBucketWithLocation(context.Background(), bucket, "")
-			}, index)
-		}
+			}
+			return nil
+		}, index)
 	}
 
 	g.Wait()
@@ -742,19 +746,24 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 func listDirSetsFactory(ctx context.Context, sets ...*xlObjects) ListDirFunc {
 	listDirInternal := func(bucket, prefixDir, prefixEntry string, disks []StorageAPI) (mergedEntries []string) {
 		var diskEntries = make([][]string, len(disks))
-		var wg sync.WaitGroup
+		g := errgroup.WithNErrs(len(disks))
 		for index, disk := range disks {
 			if disk == nil {
 				continue
 			}
-			wg.Add(1)
-			go func(index int, disk StorageAPI) {
-				defer wg.Done()
-				diskEntries[index], _ = disk.ListDir(bucket, prefixDir, -1, xlMetaJSONFile)
-			}(index, disk)
+			index := index
+			g.Go(func() error {
+				var err error
+				diskEntries[index], err = disks[index].ListDir(bucket, prefixDir, -1, xlMetaJSONFile)
+				return err
+			}, index)
 		}
 
-		wg.Wait()
+		for _, err := range g.Wait() {
+			if err != nil {
+				logger.LogIf(ctx, err)
+			}
+		}
 
 		// Find elements in entries which are not in mergedEntries
 		for _, entries := range diskEntries {
@@ -1405,21 +1414,21 @@ func isTestSetup(infos []DiskInfo, errs []error) bool {
 
 func getAllDiskInfos(storageDisks []StorageAPI) ([]DiskInfo, []error) {
 	infos := make([]DiskInfo, len(storageDisks))
-	errs := make([]error, len(storageDisks))
-	var wg sync.WaitGroup
-	for i := range storageDisks {
-		if storageDisks[i] == nil {
-			errs[i] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			infos[i], errs[i] = storageDisks[i].DiskInfo()
-		}(i)
+	g := errgroup.WithNErrs(len(storageDisks))
+	for index := range storageDisks {
+		index := index
+		g.Go(func() error {
+			var err error
+			if storageDisks[index] != nil {
+				infos[index], err = storageDisks[index].DiskInfo()
+			} else {
+				// Disk not found.
+				err = errDiskNotFound
+			}
+			return err
+		}, index)
 	}
-	wg.Wait()
-	return infos, errs
+	return infos, g.Wait()
 }
 
 // Mark root disks as down so as not to heal them.

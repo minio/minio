@@ -16,6 +16,7 @@ import (
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/pkg/sync/errgroup"
 	"github.com/minio/minio/pkg/wildcard"
 )
 
@@ -450,36 +451,32 @@ func checkAtimeSupport(dir string) (err error) {
 func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
 	logStartupMessage(color.Blue("Cache migration initiated ...."))
 
-	var wg sync.WaitGroup
-	errs := make([]error, len(c.cache))
-	for i, dc := range c.cache {
+	g := errgroup.WithNErrs(len(c.cache))
+	for index, dc := range c.cache {
 		if dc == nil {
 			continue
 		}
-		wg.Add(1)
-		// start migration from V1 to V2
-		go func(ctx context.Context, dc *diskCache, errs []error, idx int) {
-			defer wg.Done()
-			if err := migrateOldCache(ctx, dc); err != nil {
-				errs[idx] = err
-				logger.LogIf(ctx, err)
-				return
-			}
-			// start purge routine after migration completes.
-			go dc.purge()
-		}(ctx, dc, errs, i)
+		index := index
+		g.Go(func() error {
+			// start migration from V1 to V2
+			return migrateOldCache(ctx, c.cache[index])
+		}, index)
 	}
-	wg.Wait()
 
 	errCnt := 0
-	for _, err := range errs {
+	for index, err := range g.Wait() {
 		if err != nil {
 			errCnt++
+			logger.LogIf(ctx, err)
+			continue
 		}
+		go c.cache[index].purge()
 	}
+
 	if errCnt > 0 {
 		return
 	}
+
 	// update migration status
 	c.migMutex.Lock()
 	defer c.migMutex.Unlock()
