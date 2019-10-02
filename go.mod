@@ -44,7 +44,7 @@ require (
 	github.com/minio/lsync v1.0.1
 	github.com/minio/mc v0.0.0-20190924013003-643835013047
 	github.com/minio/minio-go v0.0.0-20190327203652-5325257a208f
-	github.com/minio/minio-go/v6 v6.0.37
+	github.com/minio/minio-go/v6 v6.0.38
 	github.com/minio/parquet-go v0.0.0-20190318185229-9d767baf1679
 	github.com/minio/sha256-simd v0.1.1
 	github.com/minio/sio v0.2.0
