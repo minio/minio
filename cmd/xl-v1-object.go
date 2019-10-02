@@ -202,7 +202,6 @@ func (r *getObjectReader) Close() error {
 // which are synonymous with HTTP Range requests.
 //
 // startOffset indicates the starting read location of the object.
-
 // length indicates the total length of the object.
 func (xl xlObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
 	// Lock the object before reading.

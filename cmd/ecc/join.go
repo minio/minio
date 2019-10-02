@@ -82,7 +82,7 @@ type JoinedReaders struct {
 // Let d be the number of data shards. Read spawns
 // d go routines - each tries to read one complete
 // shard from its data source. Whenever a go routine
-// completes but returns an error this data source
+// completes but returns an error, this data source
 // is considered unavailable and another go routine
 // is spawned. This new go routine tries to read from
 // the next data source. If no more data sources are
@@ -144,7 +144,7 @@ func (r *JoinedReaders) spawn(b *Buffer) (results chan readResult, next int, err
 		}
 		next++
 	}
-	// If we could not spwan a single go routine we should return an error
+	// If we could not spawn a single go routine we should return an error
 	// (or panic) since a join would block forever since the results channel
 	// would never receive a result. However, that error should never happen
 	// since there should be at least 1 (actually `len(b.data)`) non-nil data
@@ -208,7 +208,7 @@ func (r *JoinedReaders) join(b *Buffer, next int, results chan readResult) error
 	}
 
 	// If every read returns err == io.ErrUnexpected
-	// then we should not spwan go routines on the next
+	// then we should not spawn go routines on the next
 	// Read(b *Buffer) call. There won't be more data to
 	// read. However, n != 0 => so we only return io.EOF
 	// on the next Read call, not this time.
@@ -253,7 +253,7 @@ func (r *JoinedReaders) respawn(b *Buffer, next int, results chan<- readResult) 
 	for next < len(b.shards) {
 		if r.err[next] == nil { // Invariant: r.err[next] == nil => r.src[next] != nil
 			go readFrom(r.src[next], next, r.offset, b.shards[next], results)
-			next++
+			return next+1
 			break
 		}
 		next++

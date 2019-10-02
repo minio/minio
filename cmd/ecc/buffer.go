@@ -86,7 +86,7 @@ func (b *Buffer) Empty() *Buffer {
 func (b *Buffer) IsEmpty() bool { return b.offset == 0 && len(b.data) == 0 }
 
 // Reset resets the buffer to its initial state.
-// In particular, a reseted buffer is not empty.
+// In particular, the buffer is not empty.
 func (b *Buffer) Reset() *Buffer {
 	for i := range b.shards {
 		b.shards[i] = b.shards[i][:cap(b.shards[i])]
@@ -99,9 +99,9 @@ func (b *Buffer) Reset() *Buffer {
 	return b
 }
 
-// Skip skips the next n (actual data) bytes hold
+// Skip skips the next n (actual data) bytes held
 // by the buffer. If n is greater than the number
-// of remaining data bytes hold by the buffer, Skip
+// of remaining data bytes held by the buffer, Skip
 // will only skip as many (actual data) bytes as
 // available. In particular, trying to skip n > 0
 // bytes on an empty buffer is a NOP.
