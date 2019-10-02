@@ -47,7 +47,7 @@ func (ls *LiteralString) Capture(values []string) error {
 	return nil
 }
 
-// LiteralString is a type for parsed SQL string literals
+// LiteralList is a type for parsed SQL lists literals
 type LiteralList []string
 
 // Capture interface used by participle
@@ -147,6 +147,7 @@ type Expression struct {
 	And []*AndCondition `parser:"@@ ( \"OR\" @@ )*"`
 }
 
+// ListExpr represents a literal list with elements as expressions.
 type ListExpr struct {
 	Elements []*Expression `parser:"\"(\" @@ ( \",\" @@ )* \")\""`
 }
