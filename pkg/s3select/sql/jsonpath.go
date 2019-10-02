@@ -97,9 +97,7 @@ func jsonpathEval(p []*JSONPathElement, v interface{}) (r interface{}, flat bool
 			if flatten {
 				// Flatten if array.
 				if arr, ok := rval.([]interface{}); ok {
-					for _, v := range arr {
-						result = append(result, v)
-					}
+					result = append(result, arr...)
 					continue
 				}
 			}
