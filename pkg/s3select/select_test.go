@@ -52,7 +52,7 @@ func (w *testResponseWriter) Flush() {
 }
 
 func TestJSONQueries(t *testing.T) {
-	input := `{"id": 0,"title": "Test Record","desc": "Some text","synonyms": ["foo", "bar", "wahtever"]}
+	input := `{"id": 0,"title": "Test Record","desc": "Some text","synonyms": ["foo", "bar", "whatever"]}
 	{"id": 1,"title": "Second Record","desc": "another text","synonyms": ["some", "synonym", "value"]}
 	{"id": 2,"title": "Second Record","desc": "another text","numbers": [2, 3.0, 4]}
 	{"id": 3,"title": "Second Record","desc": "another text","nested": [[2, 3.0, 4], [7, 8.5, 9]]}`
@@ -65,7 +65,7 @@ func TestJSONQueries(t *testing.T) {
 		{
 			name:       "select-in-array-full",
 			query:      `SELECT * from s3object s WHERE 'bar' IN s.synonyms[*]`,
-			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","wahtever"]}`,
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}`,
 		},
 		{
 			name:  "simple-in-array",
@@ -76,17 +76,17 @@ func TestJSONQueries(t *testing.T) {
 		{
 			name:       "select-in-array-single",
 			query:      `SELECT synonyms from s3object s WHERE 'bar' IN s.synonyms[*] `,
-			wantResult: `{"synonyms":["foo","bar","wahtever"]}`,
+			wantResult: `{"synonyms":["foo","bar","whatever"]}`,
 		},
 		{
 			name:       "donatello-1",
 			query:      `SELECT * from s3object s WHERE 'bar' in s.synonyms`,
-			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","wahtever"]}`,
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}`,
 		},
 		{
 			name:       "donatello-2",
 			query:      `SELECT * from s3object s WHERE 'bar' in s.synonyms[*]`,
-			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","wahtever"]}`,
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}`,
 		},
 		{
 			name:       "donatello-3",
@@ -151,7 +151,7 @@ func TestJSONQueries(t *testing.T) {
 		{
 			name:  "not-equal-result",
 			query: `SELECT * from s3object s WHERE s.nested[1][0] != 7`,
-			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","wahtever"]}
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}
 {"id":1,"title":"Second Record","desc":"another text","synonyms":["some","synonym","value"]}
 {"id":2,"title":"Second Record","desc":"another text","numbers":[2,3,4]}`,
 		},
@@ -168,7 +168,7 @@ func TestJSONQueries(t *testing.T) {
 		{
 			name:  "indexed-list-match-not-equals",
 			query: `SELECT * from s3object s WHERE (7,8.5,9) != s.nested[1]`,
-			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","wahtever"]}
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}
 {"id":1,"title":"Second Record","desc":"another text","synonyms":["some","synonym","value"]}
 {"id":2,"title":"Second Record","desc":"another text","numbers":[2,3,4]}`,
 		},
@@ -186,7 +186,7 @@ func TestJSONQueries(t *testing.T) {
 			name: "select-output-field-as-csv",
 			requestXML: []byte(`<?xml version="1.0" encoding="UTF-8"?>
 <SelectObjectContentRequest>
-    <Expression>SELECT s.synonyms from s3object s WHERE 'wahtever' IN s.synonyms</Expression>
+    <Expression>SELECT s.synonyms from s3object s WHERE 'whatever' IN s.synonyms</Expression>
     <ExpressionType>SQL</ExpressionType>
     <InputSerialization>
         <CompressionType>NONE</CompressionType>
@@ -202,7 +202,7 @@ func TestJSONQueries(t *testing.T) {
         <Enabled>FALSE</Enabled>
     </RequestProgress>
 </SelectObjectContentRequest>`),
-			wantResult: `"[""foo"",""bar"",""wahtever""]"`,
+			wantResult: `"[""foo"",""bar"",""whatever""]"`,
 		},
 	}
 
