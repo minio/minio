@@ -1056,6 +1056,29 @@ func (sys *NotificationSys) CPULoadInfo() []ServerCPULoadInfo {
 	return reply
 }
 
+// CPUInfo - CPU Hardware info
+func (sys *NotificationSys) CPUInfo() []madmin.ServerCPUHardwareInfo {
+	reply := make([]madmin.ServerCPUHardwareInfo, len(sys.peerClients))
+	var wg sync.WaitGroup
+	for i, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(client *peerRESTClient, idx int) {
+			defer wg.Done()
+			cpui, err := client.CPUInfo()
+			if err != nil {
+				cpui.Addr = client.host.String()
+				cpui.Error = err.Error()
+			}
+			reply[idx] = cpui
+		}(client, i)
+	}
+	wg.Wait()
+	return reply
+}
+
 // NewNotificationSys - creates new notification system object.
 func NewNotificationSys(config *serverConfig, endpoints EndpointList) *NotificationSys {
 	targetList := getNotificationTargets(config)

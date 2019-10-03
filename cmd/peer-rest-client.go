@@ -172,6 +172,17 @@ func (client *peerRESTClient) CPULoadInfo() (info ServerCPULoadInfo, err error) 
 	return info, err
 }
 
+// CpuInfo - fetch CPU hardware information for a remote node.
+func (client *peerRESTClient) CPUInfo() (info madmin.ServerCPUHardwareInfo, err error) {
+	respBody, err := client.call(peerRESTMethodHardwareCPUInfo, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
 // DrivePerfInfo - fetch Drive performance information for a remote node.
 func (client *peerRESTClient) DrivePerfInfo(size int64) (info madmin.ServerDrivesPerfInfo, err error) {
 	params := make(url.Values)
