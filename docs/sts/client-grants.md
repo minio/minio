@@ -1,12 +1,29 @@
-## AssumeRoleWithClientGrants [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+# AssumeRoleWithClientGrants [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+
+**Table of Contents**
+
+- [Introduction](#introduction)
+- [API Request Parameters](#api-request-parameters)
+    - [Token](#token)
+    - [Version](#version)
+    - [DurationSeconds](#durationseconds)
+    - [Policy](#policy)
+    - [Response Elements](#response-elements)
+    - [Errors](#errors)
+- [Sample Request](#sample-request)
+- [Sample Response](#sample-response)
+- [Testing](#testing)
+
+## Introduction
+
 Returns a set of temporary security credentials for applications/clients who have been authenticated through client credential grants provided by identity provider. Example providers include WSO2, KeyCloak etc.
 
 Calling AssumeRoleWithClientGrants does not require the use of MinIO default credentials. Therefore, client application can be distributed that requests temporary security credentials without including MinIO default credentials. Instead, the identity of the caller is validated by using a JWT access token from the identity provider. The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to MinIO API operations.
 
 By default, the temporary security credentials created by AssumeRoleWithClientGrants last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration to 12 hours.
 
-### API Request Parameters
-#### Token
+## API Request Parameters
+### Token
 The OAuth 2.0 access token that is provided by the identity provider. Application must get this token by authenticating the application using client credential grants before the application makes an AssumeRoleWithClientGrants call.
 
 | Params               | Value                                          |
@@ -15,7 +32,7 @@ The OAuth 2.0 access token that is provided by the identity provider. Applicatio
 | *Length Constraints* | *Minimum length of 4. Maximum length of 2048.* |
 | *Required*           | *Yes*                                          |
 
-#### Version
+### Version
 Indicates STS API version information, the only supported value is '2011-06-15'.  This value is borrowed from AWS STS API documentation for compatibility reasons.
 
 | Params     | Value    |
@@ -23,7 +40,7 @@ Indicates STS API version information, the only supported value is '2011-06-15'.
 | *Type*     | *String* |
 | *Required* | *Yes*    |
 
-#### DurationSeconds
+### DurationSeconds
 The duration, in seconds. The value can range from 900 seconds (15 minutes) up to 12 hours. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds.
 
 | Params        | Value                                           |
@@ -32,7 +49,7 @@ The duration, in seconds. The value can range from 900 seconds (15 minutes) up t
 | *Valid Range* | *Minimum value of 900. Maximum value of 43200.* |
 | *Required*    | *No*                                            |
 
-#### Policy
+### Policy
 An IAM policy in JSON format that you want to use as an inline session policy. This parameter is optional. Passing policies to this operation returns new temporary credentials. The resulting session's permissions are the intersection of the canned policy name and the policy set here. You cannot use this policy to grant more permissions than those allowed by the canned policy name being assumed.
 
 | Params        | Value                                          |
@@ -41,18 +58,18 @@ An IAM policy in JSON format that you want to use as an inline session policy. T
 | *Valid Range* | *Minimum length of 1. Maximum length of 2048.* |
 | *Required*    | *No*                                           |
 
-#### Response Elements
+### Response Elements
 XML response for this API is similar to [AWS STS AssumeRoleWithWebIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html#API_AssumeRoleWithWebIdentity_ResponseElements)
 
-#### Errors
+### Errors
 XML error response for this API is similar to [AWS STS AssumeRoleWithWebIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html#API_AssumeRoleWithWebIdentity_Errors)
 
-#### Sample Request
+## Sample Request
 ```
 http://minio.cluster:9000?Action=AssumeRoleWithClientGrants&DurationSeconds=3600&Token=eyJ4NXQiOiJOVEF4Wm1NeE5ETXlaRGczTVRVMVpHTTBNekV6T0RKaFpXSTRORE5sWkRVMU9HRmtOakZpTVEiLCJraWQiOiJOVEF4Wm1NeE5ETXlaRGczTVRVMVpHTTBNekV6T0RKaFpXSTRORE5sWkRVMU9HRmtOakZpTVEiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiJQb0VnWFA2dVZPNDVJc0VOUm5nRFhqNUF1NVlhIiwiYXpwIjoiUG9FZ1hQNnVWTzQ1SXNFTlJuZ0RYajVBdTVZYSIsImlzcyI6Imh0dHBzOlwvXC9sb2NhbGhvc3Q6OTQ0M1wvb2F1dGgyXC90b2tlbiIsImV4cCI6MTU0MTgwOTU4MiwiaWF0IjoxNTQxODA1OTgyLCJqdGkiOiI2Y2YyMGIwZS1lNGZmLTQzZmQtYTdiYS1kYTc3YTE3YzM2MzYifQ.Jm29jPliRvrK6Os34nSK3rhzIYLFjE__zdVGNng3uGKXGKzP3We_i6NPnhA0szJXMOKglXzUF1UgSz8MctbaxFS8XDusQPVe4LkB_45hwBm6TmBxzui911nt-1RbBLN_jZIlvl2lPrbTUH5hSn9kEkph6seWanTNQpz9tNEoVa6R_OX3kpJqxe8tLQUWw453A1JTwFNhdHa6-f1K8_Q_eEZ_4gOYINQ9t_fhTibdbkXZkJQFLop-Jwoybi9s4nwQU_dATocgcufq5eCeNItQeleT-23lGxIz0X7CiJrJynYLdd-ER0F77SumqEb5iCxhxuf4H7dovwd1kAmyKzLxpw&Version=2011-06-15
 ```
 
-#### Sample Response
+## Sample Response
 ```
 <?xml version="1.0" encoding="UTF-8"?>
 <AssumeRoleWithClientGrantsResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
@@ -72,7 +89,7 @@ http://minio.cluster:9000?Action=AssumeRoleWithClientGrants&DurationSeconds=3600
 </AssumeRoleWithClientGrantsResponse>
 ```
 
-#### Testing
+## Testing
 ```
 $ export MINIO_ACCESS_KEY=minio
 $ export MINIO_SECRET_KEY=minio123

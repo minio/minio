@@ -250,6 +250,8 @@ func parsePreSignV4(query url.Values, region string, stype serviceType) (psv pre
 //            SignedHeaders=signedHeaders, Signature=signature
 //
 func parseSignV4(v4Auth string, region string, stype serviceType) (sv signValues, aec APIErrorCode) {
+	// credElement is fetched first to skip replacing the space in access key.
+	credElement := strings.TrimPrefix(strings.Split(strings.TrimSpace(v4Auth), ",")[0], signV4Algorithm)
 	// Replace all spaced strings, some clients can send spaced
 	// parameters and some won't. So we pro-actively remove any spaces
 	// to make parsing easier.
@@ -275,7 +277,7 @@ func parseSignV4(v4Auth string, region string, stype serviceType) (sv signValues
 
 	var err APIErrorCode
 	// Save credentail values.
-	signV4Values.Credential, err = parseCredentialHeader(authFields[0], region, stype)
+	signV4Values.Credential, err = parseCredentialHeader(strings.TrimSpace(credElement), region, stype)
 	if err != ErrNone {
 		return sv, err
 	}

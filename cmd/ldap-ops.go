@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"log"
@@ -40,8 +41,9 @@ type ldapServerConfig struct {
 	ServerAddr string `json:"serverAddr"`
 
 	// STS credentials expiry duration
-	STSExpiryDuration string        `json:"stsExpiryDuration"`
-	stsExpiryDuration time.Duration // contains converted value
+	STSExpiryDuration string         `json:"stsExpiryDuration"`
+	stsExpiryDuration time.Duration  // contains converted value
+	rootCAs           *x509.CertPool // contains custom CAs for ldaps server.
 
 	// Skips TLS verification (for testing, not
 	// recommended in production).
@@ -61,22 +63,22 @@ func (l *ldapServerConfig) Connect() (ldapConn *ldap.Conn, err error) {
 		return
 	}
 	if l.SkipTLSVerify {
-		ldapConn, err = ldap.DialTLS("tcp", l.ServerAddr, &tls.Config{InsecureSkipVerify: true})
+		ldapConn, err = ldap.DialTLS("tcp", l.ServerAddr, &tls.Config{RootCAs: l.rootCAs, InsecureSkipVerify: true})
 	} else {
-		ldapConn, err = ldap.DialTLS("tcp", l.ServerAddr, &tls.Config{})
+		ldapConn, err = ldap.DialTLS("tcp", l.ServerAddr, &tls.Config{RootCAs: l.rootCAs})
 	}
 	return
 }
 
 // newLDAPConfigFromEnv loads configuration from the environment
-func newLDAPConfigFromEnv() (l ldapServerConfig, err error) {
+func newLDAPConfigFromEnv(rootCAs *x509.CertPool) (l ldapServerConfig, err error) {
 	if ldapServer, ok := os.LookupEnv("MINIO_IDENTITY_LDAP_SERVER_ADDR"); ok {
-		l.IsEnabled = true
+		l.IsEnabled = ok
 		l.ServerAddr = ldapServer
 
-		if v := os.Getenv("MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY"); v == "true" {
-			l.SkipTLSVerify = true
-		}
+		// Save root CAs
+		l.rootCAs = rootCAs
+		l.SkipTLSVerify = os.Getenv("MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY") == "true"
 
 		if v := os.Getenv("MINIO_IDENTITY_LDAP_STS_EXPIRY"); v != "" {
 			expDur, err := time.ParseDuration(v)

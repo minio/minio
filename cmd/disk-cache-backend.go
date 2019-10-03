@@ -584,7 +584,8 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 		hashBytes := h.Sum(nil)
 
 		if !bytes.Equal(hashBytes, checksumHash) {
-			err = HashMismatchError{hex.EncodeToString(checksumHash), hex.EncodeToString(hashBytes)}
+			err = fmt.Errorf("hashes do not match expected %s, got %s",
+				hex.EncodeToString(checksumHash), hex.EncodeToString(hashBytes))
 			logger.LogIf(context.Background(), err)
 			return err
 		}

@@ -17,16 +17,27 @@
 package cmd
 
 import (
+	"context"
 	"encoding/xml"
+	"fmt"
 	"net/http"
 
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/cmd/logger"
 )
 
 // writeSTSErrorRespone writes error headers
-func writeSTSErrorResponse(w http.ResponseWriter, err STSError) {
+func writeSTSErrorResponse(ctx context.Context, w http.ResponseWriter, errCode STSErrorCode, errCtxt error) {
+	err := stsErrCodes.ToSTSErr(errCode)
 	// Generate error response.
-	stsErrorResponse := getSTSErrorResponse(err, w.Header().Get(xhttp.AmzRequestID))
+	stsErrorResponse := STSErrorResponse{}
+	stsErrorResponse.Error.Code = err.Code
+	stsErrorResponse.RequestID = w.Header().Get(xhttp.AmzRequestID)
+	stsErrorResponse.Error.Message = err.Description
+	if errCtxt != nil {
+		stsErrorResponse.Error.Message = fmt.Sprintf("%v", errCtxt)
+	}
+	logger.LogIf(ctx, errCtxt)
 	encodedErrorResponse := encodeResponse(stsErrorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
 }

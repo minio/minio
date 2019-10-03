@@ -385,6 +385,21 @@ func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	writeErrorResponse(context.Background(), w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
 }
 
+// If the API version does not match with current version.
+func versionMismatchHandler(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	switch {
+	case strings.HasPrefix(path, minioReservedBucketPath+"/peer/"):
+		writeVersionMismatchResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidAPIVersion), r.URL, false)
+	case strings.HasPrefix(path, minioReservedBucketPath+"/storage/"):
+		writeVersionMismatchResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidAPIVersion), r.URL, false)
+	case strings.HasPrefix(path, minioReservedBucketPath+"/lock/"):
+		writeVersionMismatchResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidAPIVersion), r.URL, false)
+	default:
+		writeVersionMismatchResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidAPIVersion), r.URL, true)
+	}
+}
+
 // gets host name for current node
 func getHostName(r *http.Request) (hostName string) {
 	if globalIsDistXL {

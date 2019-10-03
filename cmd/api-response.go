@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/xml"
 	"net/http"
 	"net/url"
@@ -498,8 +499,8 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 	data.Delimiter = s3EncodeName(delimiter, encodingType)
 	data.Prefix = s3EncodeName(prefix, encodingType)
 	data.MaxKeys = maxKeys
-	data.ContinuationToken = s3EncodeName(token, encodingType)
-	data.NextContinuationToken = s3EncodeName(nextToken, encodingType)
+	data.ContinuationToken = base64.StdEncoding.EncodeToString([]byte(token))
+	data.NextContinuationToken = base64.StdEncoding.EncodeToString([]byte(nextToken))
 	data.IsTruncated = isTruncated
 	for _, prefix := range prefixes {
 		var prefixItem = CommonPrefix{}
@@ -700,6 +701,17 @@ func writeErrorResponseJSON(ctx context.Context, w http.ResponseWriter, err APIE
 	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path, w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
+}
+
+// writeVersionMismatchResponse - writes custom error responses for version mismatches.
+func writeVersionMismatchResponse(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL, isJSON bool) {
+	if isJSON {
+		// Generate error response.
+		errorResponse := getAPIErrorResponse(ctx, err, reqURL.String(), w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
+		writeResponse(w, err.HTTPStatusCode, encodeResponseJSON(errorResponse), mimeJSON)
+	} else {
+		writeResponse(w, err.HTTPStatusCode, []byte(err.Description), mimeNone)
+	}
 }
 
 // writeCustomErrorResponseJSON - similar to writeErrorResponseJSON,

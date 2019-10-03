@@ -1306,7 +1306,8 @@ func NewIAMSys() *IAMSys {
 	// The default users system
 	var utype UsersSysType
 	switch {
-	case globalServerConfig.LDAPServerConfig.ServerAddr != "":
+	case globalServerConfig != nil &&
+		globalServerConfig.LDAPServerConfig.ServerAddr != "":
 		utype = LDAPUsersSysType
 	default:
 		utype = MinIOUsersSysType

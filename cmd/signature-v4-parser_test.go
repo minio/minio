@@ -462,6 +462,36 @@ func TestParseSignV4(t *testing.T) {
 			},
 			expectedErrCode: ErrNone,
 		},
+		// Test case - 8.
+		{
+			inputV4AuthStr: signV4Algorithm +
+				strings.Join([]string{
+					// generating a valid credential.
+					generateCredentialStr(
+						"access key",
+						sampleTimeStr,
+						"us-west-1",
+						"s3",
+						"aws4_request"),
+					// valid SignedHeader.
+					"SignedHeaders=host;x-amz-content-sha256;x-amz-date",
+					// valid Signature field.
+					// a valid signature is of form "Signature="
+					"Signature=abcd",
+				}, ","),
+			expectedAuthField: signValues{
+				Credential: generateCredentials(
+					t,
+					"access key",
+					sampleTimeStr,
+					"us-west-1",
+					"s3",
+					"aws4_request"),
+				SignedHeaders: []string{"host", "x-amz-content-sha256", "x-amz-date"},
+				Signature:     "abcd",
+			},
+			expectedErrCode: ErrNone,
+		},
 	}
 
 	for i, testCase := range testCases {

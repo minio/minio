@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -185,8 +184,12 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 				checksumInfo := erasureInfo.GetChecksumInfo(part.Name)
 				err = onlineDisk.VerifyFile(bucket, pathJoin(object, part.Name), erasure.ShardFileSize(part.Size), checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
 				if err != nil {
-					isCorrupt := strings.HasPrefix(err.Error(), "Bitrot verification mismatch - expected ")
-					if !isCorrupt && err != errFileNotFound && err != errVolumeNotFound && err != errFileUnexpectedSize {
+					if !IsErr(err, []error{
+						errFileNotFound,
+						errVolumeNotFound,
+						errFileCorrupt,
+					}...) {
+						logger.GetReqInfo(ctx).AppendTags("disk", onlineDisk.String())
 						logger.LogIf(ctx, err)
 					}
 					dataErrs[i] = err

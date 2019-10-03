@@ -294,11 +294,16 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	globalIAMSys = NewIAMSys()
 	globalIAMSys.Init(objLayer)
 
+	buckets, err := objLayer.ListBuckets(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
 	globalPolicySys = NewPolicySys()
-	globalPolicySys.Init(objLayer)
+	globalPolicySys.Init(buckets, objLayer)
 
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
-	globalNotificationSys.Init(objLayer)
+	globalNotificationSys.Init(buckets, objLayer)
 
 	// Setup admin mgmt REST API handlers.
 	adminRouter := mux.NewRouter()

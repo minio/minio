@@ -1022,5 +1022,5 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodBackgroundHealStatus).HandlerFunc(server.BackgroundHealStatusHandler)
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodLog).HandlerFunc(server.ConsoleLogHandler)
 
-	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(notFoundHandler))
+	router.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(versionMismatchHandler))
 }

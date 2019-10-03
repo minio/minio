@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -194,19 +193,6 @@ func isHostIP(ipAddress string) bool {
 // Note: The check method tries to listen on given port and closes it.
 // It is possible to have a disconnected client in this tiny window of time.
 func checkPortAvailability(host, port string) (err error) {
-	// Return true if err is "address already in use" error.
-	isAddrInUseErr := func(err error) (b bool) {
-		if opErr, ok := err.(*net.OpError); ok {
-			if sysErr, ok := opErr.Err.(*os.SyscallError); ok {
-				if errno, ok := sysErr.Err.(syscall.Errno); ok {
-					b = (errno == syscall.EADDRINUSE)
-				}
-			}
-		}
-
-		return b
-	}
-
 	network := []string{"tcp", "tcp4", "tcp6"}
 	for _, n := range network {
 		l, err := net.Listen(n, net.JoinHostPort(host, port))
@@ -216,7 +202,7 @@ func checkPortAvailability(host, port string) (err error) {
 			if err = l.Close(); err != nil {
 				return err
 			}
-		} else if isAddrInUseErr(err) {
+		} else if errors.Is(err, syscall.EADDRINUSE) {
 			// As we got EADDRINUSE error, the port is in use by other process.
 			// Return the error.
 			return err
