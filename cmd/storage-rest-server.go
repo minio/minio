@@ -34,14 +34,11 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
-var errConnectionStale = errors.New("connection stale, REST client/server instance-id mismatch")
+var errDiskStale = errors.New("disk stale")
 
 // To abstract a disk over network.
 type storageRESTServer struct {
 	storage *posix
-	// Used to detect reboot of servers so that peers revalidate format.json as
-	// different disk might be available on the same mount point after reboot.
-	instanceID string
 }
 
 func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
@@ -85,24 +82,20 @@ func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool
 		s.writeErrorResponse(w, err)
 		return false
 	}
-	instanceID := r.URL.Query().Get(storageRESTInstanceID)
-	if instanceID != s.instanceID {
-		// This will cause the peer to revalidate format.json using a new storage-rest-client instance.
-		s.writeErrorResponse(w, errConnectionStale)
-		return false
+	diskID := r.URL.Query().Get(storageRESTDiskID)
+	if diskID == "" {
+		// Request sent empty disk-id, we allow the request
+		// as the peer might be coming up and trying to read format.json
+		// or create format.json
+		return true
 	}
-	return true
-}
-
-// GetInstanceID - returns the instance ID of the server.
-func (s *storageRESTServer) GetInstanceID(w http.ResponseWriter, r *http.Request) {
-	if err := storageServerRequestValidate(r); err != nil {
-		s.writeErrorResponse(w, err)
-		return
+	storedDiskID, err := s.storage.getDiskID()
+	if err == nil && diskID == storedDiskID {
+		// If format.json is available and request sent the right disk-id, we allow the request
+		return true
 	}
-	w.Header().Set(xhttp.ContentLength, strconv.Itoa(len(s.instanceID)))
-	w.Write([]byte(s.instanceID))
-	w.(http.Flusher).Flush()
+	s.writeErrorResponse(w, errDiskStale)
+	return false
 }
 
 // DiskInfoHandler - returns disk info.
@@ -578,7 +571,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 				"Unable to initialize posix backend")
 		}
 
-		server := &storageRESTServer{storage, mustGetUUID()}
+		server := &storageRESTServer{storage: storage}
 
 		subrouter := router.PathPrefix(path.Join(storageRESTPath, endpoint.Path)).Subrouter()
 
@@ -616,7 +609,6 @@ func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 			Queries(restQueries(storageRESTSrcVolume, storageRESTSrcPath, storageRESTDstVolume, storageRESTDstPath)...)
 		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodVerifyFile).HandlerFunc(httpTraceHdrs(server.VerifyFile)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTBitrotAlgo, storageRESTBitrotHash, storageRESTLength, storageRESTShardSize)...)
-		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodGetInstanceID).HandlerFunc(httpTraceAll(server.GetInstanceID))
 	}
 
 	router.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(versionMismatchHandler))

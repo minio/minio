@@ -38,9 +38,6 @@ func isNetworkError(err error) bool {
 	if err == nil {
 		return false
 	}
-	if err.Error() == errConnectionStale.Error() {
-		return true
-	}
 	if nerr, ok := err.(*rest.NetworkError); ok {
 		return xnet.IsNetworkOrHostDown(nerr.Err)
 	}
@@ -100,6 +97,8 @@ func toStorageErr(err error) error {
 		return io.EOF
 	case io.ErrUnexpectedEOF.Error():
 		return io.ErrUnexpectedEOF
+	case errDiskStale.Error():
+		return errDiskNotFound
 	}
 	return err
 }
@@ -110,7 +109,7 @@ type storageRESTClient struct {
 	restClient *rest.Client
 	connected  int32
 	lastError  error
-	instanceID string // REST server's instanceID which is sent with every request for validation.
+	diskID     string
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is makred disconnected
@@ -123,13 +122,13 @@ func (client *storageRESTClient) call(method string, values url.Values, body io.
 	if values == nil {
 		values = make(url.Values)
 	}
-	values.Set(storageRESTInstanceID, client.instanceID)
+	values.Set(storageRESTDiskID, client.diskID)
 	respBody, err = client.restClient.Call(method, values, body, length)
 	if err == nil {
 		return respBody, nil
 	}
 	client.lastError = err
-	if isNetworkError(err) {
+	if isNetworkError(err) || err.Error() == errDiskStale.Error() {
 		atomic.StoreInt32(&client.connected, 0)
 	}
 
@@ -149,6 +148,10 @@ func (client *storageRESTClient) IsOnline() bool {
 // LastError - returns the network error if any.
 func (client *storageRESTClient) LastError() error {
 	return client.lastError
+}
+
+func (client *storageRESTClient) SetDiskID(id string) {
+	client.diskID = id
 }
 
 // DiskInfo - fetch disk information for a remote disk.
@@ -403,30 +406,6 @@ func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPa
 	return err
 }
 
-// Gets peer storage server's instanceID - to be used with every REST call for validation.
-func (client *storageRESTClient) getInstanceID() (err error) {
-	// getInstanceID() does not use storageRESTClient.call()
-	// function so we need to update lastError field here.
-	defer func() {
-		if err != nil {
-			client.lastError = err
-		}
-	}()
-
-	respBody, err := client.restClient.Call(storageRESTMethodGetInstanceID, nil, nil, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	instanceIDBuf := make([]byte, 64)
-	n, err := io.ReadFull(respBody, instanceIDBuf)
-	if err != io.EOF && err != io.ErrUnexpectedEOF {
-		return err
-	}
-	client.instanceID = string(instanceIDBuf[:n])
-	return nil
-}
-
 func (client *storageRESTClient) VerifyFile(volume, path string, size int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
@@ -498,10 +477,5 @@ func newStorageRESTClient(endpoint Endpoint) (*storageRESTClient, error) {
 		return nil, err
 	}
 	client := &storageRESTClient{endpoint: endpoint, restClient: restClient, connected: 1}
-	if client.getInstanceID() == nil {
-		client.connected = 1
-	} else {
-		client.connected = 0
-	}
 	return client, nil
 }

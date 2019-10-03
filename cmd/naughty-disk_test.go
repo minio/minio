@@ -77,6 +77,9 @@ func (d *naughtyDisk) calcError() (err error) {
 	return nil
 }
 
+func (d *naughtyDisk) SetDiskID(id string) {
+}
+
 func (d *naughtyDisk) DiskInfo() (info DiskInfo, err error) {
 	if err := d.calcError(); err != nil {
 		return info, err
