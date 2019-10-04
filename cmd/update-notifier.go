@@ -25,6 +25,7 @@ import (
 
 	"github.com/cheggaaa/pb"
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/pkg/color"
 )
 
 // prepareUpdateMessage - prepares the update message, only if a
@@ -54,8 +55,8 @@ func colorizeUpdateMessage(updateString string, newerThan string) string {
 	line2Length := len(fmt.Sprintf(msgLine2Fmt, updateString))
 
 	// Populate lines with color coding.
-	line1InColor := fmt.Sprintf(msgLine1Fmt, colorYellowBold(newerThan))
-	line2InColor := fmt.Sprintf(msgLine2Fmt, colorCyanBold(updateString))
+	line1InColor := fmt.Sprintf(msgLine1Fmt, color.YellowBold(newerThan))
+	line2InColor := fmt.Sprintf(msgLine2Fmt, color.CyanBold(updateString))
 
 	// calculate the rectangular box size.
 	maxContentWidth := int(math.Max(float64(line1Length), float64(line2Length)))
@@ -89,10 +90,10 @@ func colorizeUpdateMessage(updateString string, newerThan string) string {
 	}
 
 	lines := []string{
-		colorYellowBold(topLeftChar + strings.Repeat(horizBarChar, maxContentWidth) + topRightChar),
+		color.YellowBold(topLeftChar + strings.Repeat(horizBarChar, maxContentWidth) + topRightChar),
 		vertBarChar + line1InColor + strings.Repeat(" ", maxContentWidth-line1Length) + vertBarChar,
 		vertBarChar + line2InColor + strings.Repeat(" ", maxContentWidth-line2Length) + vertBarChar,
-		colorYellowBold(bottomLeftChar + strings.Repeat(horizBarChar, maxContentWidth) + bottomRightChar),
+		color.YellowBold(bottomLeftChar + strings.Repeat(horizBarChar, maxContentWidth) + bottomRightChar),
 	}
 	return "\n" + strings.Join(lines, "\n") + "\n"
 }

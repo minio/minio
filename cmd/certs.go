@@ -24,9 +24,10 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"io/ioutil"
-	"os"
 
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/minio/pkg/env"
 )
 
 // TLSPrivateKeyPassword is the environment variable which contains the password used
@@ -49,19 +50,19 @@ func parsePublicCertFile(certFile string) (x509Certs []*x509.Certificate, err er
 	for len(current) > 0 {
 		var pemBlock *pem.Block
 		if pemBlock, current = pem.Decode(current); pemBlock == nil {
-			return nil, uiErrSSLUnexpectedData(nil).Msg("Could not read PEM block from file %s", certFile)
+			return nil, config.ErrSSLUnexpectedData(nil).Msg("Could not read PEM block from file %s", certFile)
 		}
 
 		var x509Cert *x509.Certificate
 		if x509Cert, err = x509.ParseCertificate(pemBlock.Bytes); err != nil {
-			return nil, uiErrSSLUnexpectedData(err)
+			return nil, config.ErrSSLUnexpectedData(err)
 		}
 
 		x509Certs = append(x509Certs, x509Cert)
 	}
 
 	if len(x509Certs) == 0 {
-		return nil, uiErrSSLUnexpectedData(nil).Msg("Empty public certificate file %s", certFile)
+		return nil, config.ErrSSLUnexpectedData(nil).Msg("Empty public certificate file %s", certFile)
 	}
 
 	return x509Certs, nil
@@ -105,37 +106,38 @@ func getRootCAs(certsCAsDir string) (*x509.CertPool, error) {
 func loadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
 	certPEMBlock, err := ioutil.ReadFile(certFile)
 	if err != nil {
-		return tls.Certificate{}, uiErrSSLUnexpectedError(err)
+		return tls.Certificate{}, config.ErrSSLUnexpectedError(err)
 	}
 	keyPEMBlock, err := ioutil.ReadFile(keyFile)
 	if err != nil {
-		return tls.Certificate{}, uiErrSSLUnexpectedError(err)
+		return tls.Certificate{}, config.ErrSSLUnexpectedError(err)
 	}
 	key, rest := pem.Decode(keyPEMBlock)
 	if len(rest) > 0 {
-		return tls.Certificate{}, uiErrSSLUnexpectedData(nil).Msg("The private key contains additional data")
+		return tls.Certificate{}, config.ErrSSLUnexpectedData(nil).Msg("The private key contains additional data")
 	}
 	if x509.IsEncryptedPEMBlock(key) {
-		password, ok := os.LookupEnv(TLSPrivateKeyPassword)
+		password, ok := env.Lookup(TLSPrivateKeyPassword)
 		if !ok {
-			return tls.Certificate{}, uiErrSSLNoPassword(nil)
+			return tls.Certificate{}, config.ErrSSLNoPassword(nil)
 		}
 		decryptedKey, decErr := x509.DecryptPEMBlock(key, []byte(password))
 		if decErr != nil {
-			return tls.Certificate{}, uiErrSSLWrongPassword(decErr)
+			return tls.Certificate{}, config.ErrSSLWrongPassword(decErr)
 		}
 		keyPEMBlock = pem.EncodeToMemory(&pem.Block{Type: key.Type, Bytes: decryptedKey})
 	}
 	cert, err := tls.X509KeyPair(certPEMBlock, keyPEMBlock)
 	if err != nil {
-		return tls.Certificate{}, uiErrSSLUnexpectedData(nil).Msg(err.Error())
+		return tls.Certificate{}, config.ErrSSLUnexpectedData(nil).Msg(err.Error())
 	}
 	// Ensure that the private key is not a P-384 or P-521 EC key.
 	// The Go TLS stack does not provide constant-time implementations of P-384 and P-521.
 	if priv, ok := cert.PrivateKey.(crypto.Signer); ok {
 		if pub, ok := priv.Public().(*ecdsa.PublicKey); ok {
-			if name := pub.Params().Name; name == "P-384" || name == "P-521" { // unfortunately there is no cleaner way to check
-				return tls.Certificate{}, uiErrSSLUnexpectedData(nil).Msg("tls: the ECDSA curve '%s' is not supported", name)
+			if name := pub.Params().Name; name == "P-384" || name == "P-521" {
+				// unfortunately there is no cleaner way to check
+				return tls.Certificate{}, config.ErrSSLUnexpectedData(nil).Msg("tls: the ECDSA curve '%s' is not supported", name)
 			}
 		}
 	}

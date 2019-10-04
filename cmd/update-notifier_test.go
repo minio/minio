@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/minio/minio/pkg/color"
 )
 
 // Tests update notifier string builder.
@@ -68,8 +70,8 @@ func TestPrepareUpdateMessage(t *testing.T) {
 
 	for i, testCase := range testCases {
 		output := prepareUpdateMessage(testCase.dlURL, testCase.older)
-		line1 := fmt.Sprintf("%s %s", plainMsg, colorYellowBold(testCase.expectedSubStr))
-		line2 := fmt.Sprintf("Update: %s", colorCyanBold(testCase.dlURL))
+		line1 := fmt.Sprintf("%s %s", plainMsg, color.YellowBold(testCase.expectedSubStr))
+		line2 := fmt.Sprintf("Update: %s", color.CyanBold(testCase.dlURL))
 		// Uncomment below to see message appearance:
 		// fmt.Println(output)
 		switch {

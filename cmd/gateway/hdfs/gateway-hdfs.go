@@ -41,6 +41,7 @@ import (
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
 )
 
@@ -126,32 +127,24 @@ func (g *HDFS) Name() string {
 }
 
 func getKerberosClient() (*krb.Client, error) {
-	configPath := os.Getenv("KRB5_CONFIG")
-	if configPath == "" {
-		configPath = "/etc/krb5.conf"
-	}
-
-	cfg, err := config.Load(configPath)
+	cfg, err := config.Load(env.Get("KRB5_CONFIG", "/etc/krb5.conf"))
 	if err != nil {
 		return nil, err
 	}
 
-	// Determine the ccache location from the environment,
-	// falling back to the default location.
-	ccachePath := os.Getenv("KRB5CCNAME")
+	u, err := user.Current()
+	if err != nil {
+		return nil, err
+	}
+
+	// Determine the ccache location from the environment, falling back to the default location.
+	ccachePath := env.Get("KRB5CCNAME", fmt.Sprintf("/tmp/krb5cc_%s", u.Uid))
 	if strings.Contains(ccachePath, ":") {
 		if strings.HasPrefix(ccachePath, "FILE:") {
 			ccachePath = strings.TrimPrefix(ccachePath, "FILE:")
 		} else {
 			return nil, fmt.Errorf("unable to use kerberos ccache: %s", ccachePath)
 		}
-	} else if ccachePath == "" {
-		u, err := user.Current()
-		if err != nil {
-			return nil, err
-		}
-
-		ccachePath = fmt.Sprintf("/tmp/krb5cc_%s", u.Uid)
 	}
 
 	ccache, err := credentials.LoadCCache(ccachePath)
@@ -192,20 +185,18 @@ func (g *HDFS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error
 		opts.Addresses = addresses
 	}
 
+	u, err := user.Current()
+	if err != nil {
+		return nil, fmt.Errorf("Unable to lookup local user: %s", err)
+	}
+
 	if opts.KerberosClient != nil {
 		opts.KerberosClient, err = getKerberosClient()
 		if err != nil {
 			return nil, fmt.Errorf("Unable to initialize kerberos client: %s", err)
 		}
 	} else {
-		opts.User = os.Getenv("HADOOP_USER_NAME")
-		if opts.User == "" {
-			u, err := user.Current()
-			if err != nil {
-				return nil, fmt.Errorf("Unable to lookup local user: %s", err)
-			}
-			opts.User = u.Username
-		}
+		opts.User = env.Get("HADOOP_USER_NAME", u.Username)
 	}
 
 	clnt, err := hdfs.NewClient(opts)

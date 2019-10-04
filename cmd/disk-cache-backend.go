@@ -47,8 +47,6 @@ const (
 	cacheDataFile     = "part.1"
 	cacheMetaVersion  = "1.0.0"
 
-	cacheEnvDelimiter = ";"
-
 	// SSECacheEncrypted is the metadata key indicating that the object
 	// is a cache entry encrypted with cache KMS master key in globalCacheKMS.
 	SSECacheEncrypted = "X-Minio-Internal-Encrypted-Cache"

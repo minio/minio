@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package cache
 
 import (
 	"reflect"
@@ -35,7 +35,7 @@ func TestParseCacheDrives(t *testing.T) {
 		{"bucket1/*;*.png;images/trip/barcelona/*", []string{}, false},
 		{"bucket1", []string{}, false},
 	}
-	if runtime.GOOS == globalWindowsOSName {
+	if runtime.GOOS == "windows" {
 		testCases = append(testCases, struct {
 			driveStr         string
 			expectedPatterns []string

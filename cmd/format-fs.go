@@ -24,6 +24,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
 )
@@ -153,7 +154,7 @@ func formatFSMigrate(ctx context.Context, wlk *lock.LockedFile, fsPath string) e
 		return err
 	}
 	if version != formatFSVersionV2 {
-		return uiErrUnexpectedBackendVersion(fmt.Errorf(`%s file: expected FS version: %s, found FS version: %s`, formatConfigFile, formatFSVersionV2, version))
+		return config.ErrUnexpectedBackendVersion(fmt.Errorf(`%s file: expected FS version: %s, found FS version: %s`, formatConfigFile, formatFSVersionV2, version))
 	}
 	return nil
 }
