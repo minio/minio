@@ -22,6 +22,7 @@ import (
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
 	xldap "github.com/minio/minio/cmd/config/ldap"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event/target"
@@ -572,7 +573,7 @@ type serverConfigV22 struct {
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
@@ -592,7 +593,7 @@ type serverConfigV23 struct {
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
 	Cache cache.Config `json:"cache"`
@@ -616,7 +617,7 @@ type serverConfigV24 struct {
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
 	Cache cache.Config `json:"cache"`
@@ -643,7 +644,7 @@ type serverConfigV25 struct {
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
 	Cache cache.Config `json:"cache"`
@@ -667,7 +668,7 @@ type serverConfigV26 struct {
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
 	Cache cache.Config `json:"cache"`
@@ -708,7 +709,7 @@ type serverConfigV27 struct {
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
 	Cache cache.Config `json:"cache"`
@@ -736,7 +737,7 @@ type serverConfigV28 struct {
 	Worm       BoolFlag         `json:"worm"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
 	Cache cache.Config `json:"cache"`
@@ -765,7 +766,7 @@ type serverConfigV30 struct {
 	Worm       BoolFlag         `json:"worm"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
 	Cache cache.Config `json:"cache"`
@@ -793,7 +794,7 @@ type serverConfigV31 struct {
 	Worm       BoolFlag         `json:"worm"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
 	Cache cache.Config `json:"cache"`
@@ -848,7 +849,7 @@ type serverConfigV32 struct {
 	Worm       BoolFlag         `json:"worm"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
 	Cache cache.Config `json:"cache"`
@@ -892,7 +893,7 @@ type serverConfigV33 struct {
 	Worm       BoolFlag         `json:"worm"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
 	Cache cache.Config `json:"cache"`

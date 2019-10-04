@@ -27,9 +27,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/sha256-simd"
-
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/sha256-simd"
 )
 
 const erasureAlgorithmKlauspost = "klauspost/reedsolomon/vandermonde"
@@ -252,7 +252,7 @@ func (m xlMetaV1) ToObjectInfo(bucket, object string) ObjectInfo {
 	objInfo.Parts = m.Parts
 
 	// Update storage class
-	if sc, ok := m.Meta[amzStorageClass]; ok {
+	if sc, ok := m.Meta[xhttp.AmzStorageClass]; ok {
 		objInfo.StorageClass = sc
 	} else {
 		objInfo.StorageClass = globalMinioDefaultStorageClass
@@ -480,4 +480,20 @@ func writeUniqueXLMetadata(ctx context.Context, disks []StorageAPI, bucket, pref
 
 	err := reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, quorum)
 	return evalDisks(disks, mErrs), err
+}
+
+// Returns per object readQuorum and writeQuorum
+// readQuorum is the min required disks to read data.
+// writeQuorum is the min required disks to write data.
+func objectQuorumFromMeta(ctx context.Context, xl xlObjects, partsMetaData []xlMetaV1, errs []error) (objectReadQuorum, objectWriteQuorum int, err error) {
+	// get the latest updated Metadata and a count of all the latest updated xlMeta(s)
+	latestXLMeta, err := getLatestXLMeta(ctx, partsMetaData, errs)
+
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Since all the valid erasure code meta updated at the same time are equivalent, pass dataBlocks
+	// from latestXLMeta to get the quorum
+	return latestXLMeta.Erasure.DataBlocks, latestXLMeta.Erasure.DataBlocks + 1, nil
 }

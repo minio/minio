@@ -22,6 +22,7 @@ import (
 	"path"
 	"testing"
 
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event/target"
 )
@@ -279,8 +280,22 @@ func TestConfigDiff(t *testing.T) {
 		{&serverConfig{Region: "us-east-1"}, &serverConfig{Region: "us-west-1"}, "Region configuration differs"},
 		// 4
 		{
-			&serverConfig{StorageClass: storageClassConfig{storageClass{"1", 8}, storageClass{"2", 6}}},
-			&serverConfig{StorageClass: storageClassConfig{storageClass{"1", 8}, storageClass{"2", 4}}},
+			&serverConfig{StorageClass: storageclass.Config{
+				Standard: storageclass.StorageClass{
+					Parity: 8,
+				},
+				RRS: storageclass.StorageClass{
+					Parity: 6,
+				},
+			}},
+			&serverConfig{StorageClass: storageclass.Config{
+				Standard: storageclass.StorageClass{
+					Parity: 8,
+				},
+				RRS: storageclass.StorageClass{
+					Parity: 4,
+				},
+			}},
 			"StorageClass configuration differs",
 		},
 		// 5

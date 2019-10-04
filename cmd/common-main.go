@@ -20,7 +20,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"net"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -317,36 +316,6 @@ func handleCommonEnvVars() {
 	// or is not set to 'off', if MINIO_UPDATE is set to 'off' then
 	// in-place update is off.
 	globalInplaceUpdateDisabled = strings.EqualFold(env.Get("MINIO_UPDATE", "off"), "off")
-
-	// Validate and store the storage class env variables only for XL/Dist XL setups
-	if globalIsXL {
-		var err error
-
-		// Check for environment variables and parse into storageClass struct
-		if ssc := os.Getenv(standardStorageClassEnv); ssc != "" {
-			globalStandardStorageClass, err = parseStorageClass(ssc)
-			logger.FatalIf(err, "Invalid value set in environment variable %s", standardStorageClassEnv)
-		}
-
-		if rrsc := os.Getenv(reducedRedundancyStorageClassEnv); rrsc != "" {
-			globalRRStorageClass, err = parseStorageClass(rrsc)
-			logger.FatalIf(err, "Invalid value set in environment variable %s", reducedRedundancyStorageClassEnv)
-		}
-
-		// Validation is done after parsing both the storage classes. This is needed because we need one
-		// storage class value to deduce the correct value of the other storage class.
-		if globalRRStorageClass.Scheme != "" {
-			err = validateParity(globalStandardStorageClass.Parity, globalRRStorageClass.Parity)
-			logger.FatalIf(err, "Invalid value set in environment variable %s", reducedRedundancyStorageClassEnv)
-			globalIsStorageClass = true
-		}
-
-		if globalStandardStorageClass.Scheme != "" {
-			err = validateParity(globalStandardStorageClass.Parity, globalRRStorageClass.Parity)
-			logger.FatalIf(err, "Invalid value set in environment variable %s", standardStorageClassEnv)
-			globalIsStorageClass = true
-		}
-	}
 
 	// Get WORM environment variable.
 	if worm := env.Get("MINIO_WORM", "off"); worm != "" {

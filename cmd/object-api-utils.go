@@ -36,6 +36,7 @@ import (
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -239,8 +240,8 @@ func cleanMetadata(metadata map[string]string) map[string]string {
 // Filter X-Amz-Storage-Class field only if it is set to STANDARD.
 // This is done since AWS S3 doesn't return STANDARD Storage class as response header.
 func removeStandardStorageClass(metadata map[string]string) map[string]string {
-	if metadata[amzStorageClass] == standardStorageClass {
-		delete(metadata, amzStorageClass)
+	if metadata[xhttp.AmzStorageClass] == storageclass.STANDARD {
+		delete(metadata, xhttp.AmzStorageClass)
 	}
 	return metadata
 }

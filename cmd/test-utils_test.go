@@ -468,12 +468,6 @@ func resetGlobalIsEnvs() {
 	globalIsEnvWORM = false
 	globalIsEnvBrowser = false
 	globalIsEnvRegion = false
-	globalIsStorageClass = false
-}
-
-func resetGlobalStorageEnvs() {
-	globalStandardStorageClass = storageClass{}
-	globalRRStorageClass = storageClass{}
 }
 
 // reset global heal state
@@ -523,8 +517,6 @@ func resetTestGlobals() {
 	resetGlobalIsXL()
 	// Reset global isEnvCreds flag.
 	resetGlobalIsEnvs()
-	// Reset global storage class flags
-	resetGlobalStorageEnvs()
 	// Reset global heal state
 	resetGlobalHealState()
 	//Reset global disk cache flags
