@@ -35,7 +35,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	st, err := madmClnt.ServerCPUHardwareInfo()
+	st, err := madmClnt.ServerNetworkHardwareInfo()
 	if err != nil {
 		log.Fatalln(err)
 	}
