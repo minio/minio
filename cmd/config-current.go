@@ -254,7 +254,7 @@ func (s *serverConfig) lookupConfigs() {
 	if globalIsXL {
 		s.StorageClass, err = storageclass.LookupConfig(s.StorageClass, globalXLSetDriveCount)
 		if err != nil {
-			logger.FatalIf(err, "Unable to storage classes")
+			logger.FatalIf(err, "Unable to initialize storage class config")
 		}
 	}
 
