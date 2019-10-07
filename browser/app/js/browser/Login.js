@@ -122,7 +122,6 @@ export class Login extends React.Component {
               type="password"
               spellCheck="false"
               required="required"
-              autoComplete="new-password"
             />
             <button className="lw-btn" type="submit">
               <i className="fas fa-sign-in-alt" />
