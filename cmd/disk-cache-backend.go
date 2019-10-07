@@ -35,6 +35,7 @@ import (
 
 	"github.com/djherbis/atime"
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/sio"
@@ -86,7 +87,7 @@ func (m *cacheMeta) ToObjectInfo(bucket, object string) (o ObjectInfo) {
 	o.ETag = extractETag(m.Meta)
 	o.ContentType = m.Meta["content-type"]
 	o.ContentEncoding = m.Meta["content-encoding"]
-	if storageClass, ok := m.Meta[amzStorageClass]; ok {
+	if storageClass, ok := m.Meta[xhttp.AmzStorageClass]; ok {
 		o.StorageClass = storageClass
 	} else {
 		o.StorageClass = globalMinioDefaultStorageClass

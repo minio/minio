@@ -24,6 +24,7 @@ import (
 	"path"
 	"sync"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/mimedb"
 )
@@ -524,8 +525,15 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		opts.UserDefined = make(map[string]string)
 	}
 
+	storageDisks := xl.getDisks()
+
 	// Get parity and data drive count based on storage class metadata
-	dataDrives, parityDrives := getRedundancyCount(opts.UserDefined[amzStorageClass], len(xl.getDisks()))
+	scfg := globalServerConfig.GetStorageClass()
+	parityDrives := scfg.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
+	if parityDrives == 0 {
+		parityDrives = len(storageDisks) / 2
+	}
+	dataDrives := len(storageDisks) - parityDrives
 
 	// we now know the number of blocks this object needs for data and parity.
 	// writeQuorum is dataBlocks + 1
@@ -553,7 +561,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 
 		// Rename the successfully written temporary object to final location. Ignore errFileAccessDenied
 		// error because it means that the target object dir exists and we want to be close to S3 specification.
-		if _, err = rename(ctx, xl.getDisks(), minioMetaTmpBucket, tempObj, bucket, object, true, writeQuorum, []error{errFileAccessDenied}); err != nil {
+		if _, err = rename(ctx, storageDisks, minioMetaTmpBucket, tempObj, bucket, object, true, writeQuorum, []error{errFileAccessDenied}); err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 
@@ -584,7 +592,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	}
 
 	// Order disks according to erasure distribution
-	onlineDisks := shuffleDisks(xl.getDisks(), xlMeta.Erasure.Distribution)
+	onlineDisks := shuffleDisks(storageDisks, xlMeta.Erasure.Distribution)
 
 	erasure, err := NewErasure(ctx, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xlMeta.Erasure.BlockSize)
 	if err != nil {

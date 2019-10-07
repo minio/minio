@@ -65,14 +65,14 @@ var supportedHeaders = []string{
 	"content-language",
 	"content-encoding",
 	"content-disposition",
-	amzStorageClass,
+	xhttp.AmzStorageClass,
 	"expires",
 	// Add more supported headers here.
 }
 
 // isMetadataDirectiveValid - check if metadata-directive is valid.
 func isMetadataDirectiveValid(h http.Header) bool {
-	_, ok := h[http.CanonicalHeaderKey("X-Amz-Metadata-Directive")]
+	_, ok := h[http.CanonicalHeaderKey(xhttp.AmzMetadataDirective)]
 	if ok {
 		// Check atleast set metadata-directive is valid.
 		return (isMetadataCopy(h) || isMetadataReplace(h))
@@ -84,12 +84,12 @@ func isMetadataDirectiveValid(h http.Header) bool {
 
 // Check if the metadata COPY is requested.
 func isMetadataCopy(h http.Header) bool {
-	return h.Get("X-Amz-Metadata-Directive") == "COPY"
+	return h.Get(xhttp.AmzMetadataDirective) == "COPY"
 }
 
 // Check if the metadata REPLACE is requested.
 func isMetadataReplace(h http.Header) bool {
-	return h.Get("X-Amz-Metadata-Directive") == "REPLACE"
+	return h.Get(xhttp.AmzMetadataDirective) == "REPLACE"
 }
 
 // Splits an incoming path into bucket and object components.

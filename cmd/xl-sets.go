@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/cmd/config/storageclass"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/lifecycle"
@@ -326,13 +328,17 @@ func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 		storageInfo.Backend.OfflineDisks += lstorageInfo.Backend.OfflineDisks
 	}
 
-	scData, scParity := getRedundancyCount(standardStorageClass, s.drivesPerSet)
-	storageInfo.Backend.StandardSCData = scData
+	scfg := globalServerConfig.GetStorageClass()
+	scParity := scfg.GetParityForSC(storageclass.STANDARD)
+	if scParity == 0 {
+		scParity = s.drivesPerSet / 2
+	}
+	storageInfo.Backend.StandardSCData = s.drivesPerSet - scParity
 	storageInfo.Backend.StandardSCParity = scParity
 
-	rrSCData, rrSCparity := getRedundancyCount(reducedRedundancyStorageClass, s.drivesPerSet)
-	storageInfo.Backend.RRSCData = rrSCData
-	storageInfo.Backend.RRSCParity = rrSCparity
+	rrSCParity := scfg.GetParityForSC(storageclass.RRS)
+	storageInfo.Backend.RRSCData = s.drivesPerSet - rrSCParity
+	storageInfo.Backend.RRSCParity = rrSCParity
 
 	storageInfo.Backend.Sets = make([][]madmin.DriveInfo, s.setCount)
 	for i := range storageInfo.Backend.Sets {
@@ -1028,7 +1034,7 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 			objInfo.UserDefined = cleanMetadata(result.Metadata)
 
 			// Update storage class
-			if sc, ok := result.Metadata[amzStorageClass]; ok {
+			if sc, ok := result.Metadata[xhttp.AmzStorageClass]; ok {
 				objInfo.StorageClass = sc
 			} else {
 				objInfo.StorageClass = globalMinioDefaultStorageClass
@@ -1171,7 +1177,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 			objInfo.UserDefined = cleanMetadata(entry.Metadata)
 
 			// Update storage class
-			if sc, ok := entry.Metadata[amzStorageClass]; ok {
+			if sc, ok := entry.Metadata[xhttp.AmzStorageClass]; ok {
 				objInfo.StorageClass = sc
 			} else {
 				objInfo.StorageClass = globalMinioDefaultStorageClass

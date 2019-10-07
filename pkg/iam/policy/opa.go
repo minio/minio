@@ -23,7 +23,14 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
+)
+
+// Env IAM OPA URL
+const (
+	EnvIAMOPAURL       = "MINIO_IAM_OPA_URL"
+	EnvIAMOPAAuthToken = "MINIO_IAM_OPA_AUTHTOKEN"
 )
 
 // OpaArgs opa general purpose policy engine configuration.
@@ -82,10 +89,36 @@ type Opa struct {
 	client *http.Client
 }
 
+// LookupConfig lookup Opa from config, override with any ENVs.
+func LookupConfig(args OpaArgs, transport *http.Transport, closeRespFn func(io.ReadCloser)) (OpaArgs, error) {
+	var urlStr string
+	if args.URL != nil {
+		urlStr = args.URL.String()
+	}
+	opaURL := env.Get(EnvIAMOPAURL, urlStr)
+	if opaURL == "" {
+		return args, nil
+	}
+	u, err := xnet.ParseURL(opaURL)
+	if err != nil {
+		return args, err
+	}
+	args = OpaArgs{
+		URL:         u,
+		AuthToken:   env.Get(EnvIAMOPAAuthToken, ""),
+		Transport:   transport,
+		CloseRespFn: closeRespFn,
+	}
+	if err = args.Validate(); err != nil {
+		return args, err
+	}
+	return args, nil
+}
+
 // NewOpa - initializes opa policy engine connector.
 func NewOpa(args OpaArgs) *Opa {
 	// No opa args.
-	if args.URL == nil && args.AuthToken == "" {
+	if args.URL == nil || args.URL.Scheme == "" && args.AuthToken == "" {
 		return nil
 	}
 	return &Opa{

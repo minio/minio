@@ -198,14 +198,6 @@ var (
 	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)         // default timeout for general ops
 	globalHealingTimeout   = newDynamicTimeout(30*time.Minute /*1*/, 30*time.Minute)           // timeout for healing related ops
 
-	// Storage classes
-	// Set to indicate if storage class is set up
-	globalIsStorageClass bool
-	// Set to store reduced redundancy storage class
-	globalRRStorageClass storageClass
-	// Set to store standard storage class
-	globalStandardStorageClass storageClass
-
 	globalIsEnvWORM bool
 	// Is worm enabled
 	globalWORMEnabled bool
@@ -248,9 +240,6 @@ var (
 	// into an SSE-S3 request. If enabled a valid, non-empty KMS
 	// configuration must be present.
 	globalAutoEncryption bool
-
-	// Is compression include extensions/content-types set?
-	globalIsEnvCompression bool
 
 	// Is compression enabled?
 	globalIsCompressionEnabled = false

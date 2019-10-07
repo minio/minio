@@ -212,10 +212,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		srvCfg := newServerConfig()
 
 		// Override any values from ENVs.
-		srvCfg.loadFromEnvs()
-
-		// Load values to cached global values.
-		srvCfg.loadToCachedConfigs()
+		srvCfg.lookupConfigs()
 
 		// hold the mutex lock before a new config is assigned.
 		globalServerConfigMu.Lock()

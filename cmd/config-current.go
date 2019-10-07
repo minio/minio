@@ -27,6 +27,7 @@ import (
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
 	xldap "github.com/minio/minio/cmd/config/ldap"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -36,7 +37,6 @@ import (
 	"github.com/minio/minio/pkg/event/target"
 	"github.com/minio/minio/pkg/iam/openid"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Steps to move from version N to version N+1
@@ -82,6 +82,10 @@ func (s *serverConfig) GetRegion() string {
 
 // SetCredential sets new credential and returns the previous credential.
 func (s *serverConfig) SetCredential(creds auth.Credentials) (prevCred auth.Credentials) {
+	if s == nil {
+		return creds
+	}
+
 	if creds.IsValid() && globalActiveCred.IsValid() {
 		globalActiveCred = creds
 	}
@@ -110,21 +114,13 @@ func (s *serverConfig) SetWorm(b bool) {
 	s.Worm = BoolFlag(b)
 }
 
-func (s *serverConfig) SetStorageClass(standardClass, rrsClass storageClass) {
-	s.StorageClass.Standard = standardClass
-	s.StorageClass.RRS = rrsClass
-}
-
 // GetStorageClass reads storage class fields from current config.
 // It returns the standard and reduced redundancy storage class struct
-func (s *serverConfig) GetStorageClass() (storageClass, storageClass) {
-	if globalIsStorageClass {
-		return globalStandardStorageClass, globalRRStorageClass
-	}
+func (s *serverConfig) GetStorageClass() storageclass.Config {
 	if s == nil {
-		return storageClass{}, storageClass{}
+		return storageclass.Config{}
 	}
-	return s.StorageClass.Standard, s.StorageClass.RRS
+	return s.StorageClass
 }
 
 // GetWorm get current credentials.
@@ -234,37 +230,34 @@ func (s *serverConfig) Validate() error {
 	return nil
 }
 
-// SetCompressionConfig sets the current compression config
-func (s *serverConfig) SetCompressionConfig(extensions []string, mimeTypes []string) {
-	s.Compression.Extensions = extensions
-	s.Compression.MimeTypes = mimeTypes
-	s.Compression.Enabled = globalIsCompressionEnabled
-}
-
-// GetCompressionConfig gets the current compression config
-func (s *serverConfig) GetCompressionConfig() compress.Config {
-	return s.Compression
-}
-
-func (s *serverConfig) loadFromEnvs() {
+func (s *serverConfig) lookupConfigs() {
 	// If env is set override the credentials from config file.
 	if globalIsEnvCreds {
 		s.SetCredential(globalActiveCred)
+	} else {
+		globalActiveCred = s.GetCredential()
 	}
 
 	if globalIsEnvWORM {
 		s.SetWorm(globalWORMEnabled)
+	} else {
+		globalWORMEnabled = s.GetWorm()
 	}
 
 	if globalIsEnvRegion {
 		s.SetRegion(globalServerRegion)
-	}
-
-	if globalIsStorageClass {
-		s.SetStorageClass(globalStandardStorageClass, globalRRStorageClass)
+	} else {
+		globalServerRegion = s.GetRegion()
 	}
 
 	var err error
+	if globalIsXL {
+		s.StorageClass, err = storageclass.LookupConfig(s.StorageClass, globalXLSetDriveCount)
+		if err != nil {
+			logger.FatalIf(err, "Unable to initialize storage class config")
+		}
+	}
+
 	s.Cache, err = cache.LookupConfig(s.Cache)
 	if err != nil {
 		logger.FatalIf(err, "Unable to setup cache")
@@ -277,7 +270,6 @@ func (s *serverConfig) loadFromEnvs() {
 		globalCacheExpiry = s.Cache.Expiry
 		globalCacheMaxUse = s.Cache.MaxUse
 
-		var err error
 		if cacheEncKey := env.Get(cache.EnvCacheEncryptionMasterKey, ""); cacheEncKey != "" {
 			globalCacheKMSKeyID, globalCacheKMS, err = parseKMSMasterKey(cacheEncKey)
 			if err != nil {
@@ -296,29 +288,24 @@ func (s *serverConfig) loadFromEnvs() {
 		logger.FatalIf(err, "Unable to setup Compression")
 	}
 
-	if jwksURL, ok := env.Lookup("MINIO_IAM_JWKS_URL"); ok {
-		u, err := xnet.ParseURL(jwksURL)
-		if err != nil {
-			logger.FatalIf(err, "Unable to parse MINIO_IAM_JWKS_URL %s", jwksURL)
-		}
-		s.OpenID.JWKS.URL = u
+	if s.Compression.Enabled {
+		globalIsCompressionEnabled = s.Compression.Enabled
+		globalCompressExtensions = s.Compression.Extensions
+		globalCompressMimeTypes = s.Compression.MimeTypes
 	}
 
-	if opaURL, ok := env.Lookup("MINIO_IAM_OPA_URL"); ok {
-		u, err := xnet.ParseURL(opaURL)
-		if err != nil {
-			logger.FatalIf(err, "Unable to parse MINIO_IAM_OPA_URL %s", opaURL)
-		}
-		opaArgs := iampolicy.OpaArgs{
-			URL:         u,
-			AuthToken:   env.Get("MINIO_IAM_OPA_AUTHTOKEN", ""),
-			Transport:   NewCustomHTTPTransport(),
-			CloseRespFn: xhttp.DrainBody,
-		}
-		logger.FatalIf(opaArgs.Validate(), "Unable to reach MINIO_IAM_OPA_URL %s", opaURL)
-		s.Policy.OPA.URL = opaArgs.URL
-		s.Policy.OPA.AuthToken = opaArgs.AuthToken
+	s.OpenID.JWKS, err = openid.LookupConfig(s.OpenID.JWKS, NewCustomHTTPTransport(), xhttp.DrainBody)
+	if err != nil {
+		logger.FatalIf(err, "Unable to initialize OpenID")
 	}
+
+	s.Policy.OPA, err = iampolicy.LookupConfig(s.Policy.OPA, NewCustomHTTPTransport(), xhttp.DrainBody)
+	if err != nil {
+		logger.FatalIf(err, "Unable to initialize OPA")
+	}
+
+	globalOpenIDValidators = getOpenIDValidators(s)
+	globalPolicyOPA = iampolicy.NewOpa(s.Policy.OPA)
 
 	s.LDAPServerConfig, err = xldap.Lookup(s.LDAPServerConfig, globalRootCAs)
 	if err != nil {
@@ -334,7 +321,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewAMQPTarget(k, v, GlobalServiceDoneCh)
+		t, err := target.NewAMQPTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
 		if err != nil {
 			return fmt.Errorf("amqp(%s): %s", k, err.Error())
 		}
@@ -426,7 +413,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewRedisTarget(k, v, GlobalServiceDoneCh)
+		t, err := target.NewRedisTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
 		if err != nil {
 			return fmt.Errorf("redis(%s): %s", k, err.Error())
 		}
@@ -495,9 +482,9 @@ func newServerConfig() *serverConfig {
 		Version:    serverConfigVersion,
 		Credential: cred,
 		Region:     globalMinioDefaultRegion,
-		StorageClass: storageClassConfig{
-			Standard: storageClass{},
-			RRS:      storageClass{},
+		StorageClass: storageclass.Config{
+			Standard: storageclass.StorageClass{},
+			RRS:      storageclass.StorageClass{},
 		},
 		Cache: cache.Config{
 			Drives:  []string{},
@@ -550,56 +537,6 @@ func newServerConfig() *serverConfig {
 	return srvCfg
 }
 
-func (s *serverConfig) loadToCachedConfigs() {
-	if !globalIsEnvCreds {
-		globalActiveCred = s.GetCredential()
-	}
-	if !globalIsEnvWORM {
-		globalWORMEnabled = s.GetWorm()
-	}
-	if !globalIsEnvRegion {
-		globalServerRegion = s.GetRegion()
-	}
-	if !globalIsStorageClass {
-		globalStandardStorageClass, globalRRStorageClass = s.GetStorageClass()
-	}
-	if !globalIsDiskCacheEnabled {
-		cacheConf := s.GetCacheConfig()
-		globalCacheDrives = cacheConf.Drives
-		globalCacheExcludes = cacheConf.Exclude
-		globalCacheExpiry = cacheConf.Expiry
-		globalCacheMaxUse = cacheConf.MaxUse
-	}
-	if err := LookupKMSConfig(s.KMS); err != nil {
-		logger.FatalIf(err, "Unable to setup the KMS %s", s.KMS.Vault.Endpoint)
-	}
-
-	if !globalIsCompressionEnabled {
-		compressionConf := s.GetCompressionConfig()
-		globalCompressExtensions = compressionConf.Extensions
-		globalCompressMimeTypes = compressionConf.MimeTypes
-		globalIsCompressionEnabled = compressionConf.Enabled
-	}
-
-	if s.OpenID.JWKS.URL != nil && s.OpenID.JWKS.URL.String() != "" {
-		logger.FatalIf(s.OpenID.JWKS.PopulatePublicKey(),
-			"Unable to populate public key from JWKS URL %s", s.OpenID.JWKS.URL)
-	}
-
-	globalOpenIDValidators = getOpenIDValidators(s)
-
-	if s.Policy.OPA.URL != nil && s.Policy.OPA.URL.String() != "" {
-		opaArgs := iampolicy.OpaArgs{
-			URL:         s.Policy.OPA.URL,
-			AuthToken:   s.Policy.OPA.AuthToken,
-			Transport:   NewCustomHTTPTransport(),
-			CloseRespFn: xhttp.DrainBody,
-		}
-		logger.FatalIf(opaArgs.Validate(), "Unable to reach OPA URL %s", s.Policy.OPA.URL)
-		globalPolicyOPA = iampolicy.NewOpa(opaArgs)
-	}
-}
-
 // newSrvConfig - initialize a new server config, saves env parameters if
 // found, otherwise use default parameters
 func newSrvConfig(objAPI ObjectLayer) error {
@@ -607,10 +544,7 @@ func newSrvConfig(objAPI ObjectLayer) error {
 	srvCfg := newServerConfig()
 
 	// Override any values from ENVs.
-	srvCfg.loadFromEnvs()
-
-	// Load values to cached global values.
-	srvCfg.loadToCachedConfigs()
+	srvCfg.lookupConfigs()
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
@@ -640,10 +574,7 @@ func loadConfig(objAPI ObjectLayer) error {
 	}
 
 	// Override any values from ENVs.
-	srvCfg.loadFromEnvs()
-
-	// Load values to cached global values.
-	srvCfg.loadToCachedConfigs()
+	srvCfg.lookupConfigs()
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
@@ -679,7 +610,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 	}
 	for id, args := range config.Notify.AMQP {
 		if args.Enable {
-			newTarget, err := target.NewAMQPTarget(id, args, GlobalServiceDoneCh)
+			newTarget, err := target.NewAMQPTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
@@ -797,7 +728,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.Redis {
 		if args.Enable {
-			newTarget, err := target.NewRedisTarget(id, args, GlobalServiceDoneCh)
+			newTarget, err := target.NewRedisTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
