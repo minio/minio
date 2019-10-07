@@ -1722,7 +1722,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 
 	keyID := r.URL.Query().Get("key-id")
 	if keyID == "" {
-		keyID = globalKMSKeyID
+		keyID = GlobalKMS.KeyID()
 	}
 	var response = madmin.KMSKeyStatus{
 		KeyID: keyID,

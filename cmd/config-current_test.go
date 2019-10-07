@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/minio/minio/cmd/config/storageclass"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event/target"
 )
@@ -60,79 +61,6 @@ func TestServerConfig(t *testing.T) {
 	// Initialize server config.
 	if err := loadConfig(objLayer); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
-	}
-}
-
-func TestServerConfigWithEnvs(t *testing.T) {
-
-	os.Setenv("MINIO_BROWSER", "off")
-	defer os.Unsetenv("MINIO_BROWSER")
-
-	os.Setenv("MINIO_WORM", "on")
-	defer os.Unsetenv("MINIO_WORM")
-
-	os.Setenv("MINIO_ACCESS_KEY", "minio")
-	defer os.Unsetenv("MINIO_ACCESS_KEY")
-
-	os.Setenv("MINIO_SECRET_KEY", "minio123")
-	defer os.Unsetenv("MINIO_SECRET_KEY")
-
-	os.Setenv("MINIO_REGION", "us-west-1")
-	defer os.Unsetenv("MINIO_REGION")
-
-	os.Setenv("MINIO_DOMAIN", "domain.com")
-	defer os.Unsetenv("MINIO_DOMAIN")
-
-	defer resetGlobalIsEnvs()
-
-	objLayer, fsDir, err := prepareFS()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(fsDir)
-
-	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = objLayer
-	globalObjLayerMutex.Unlock()
-
-	serverHandleEnvVars()
-
-	// Init config
-	initConfig(objLayer)
-
-	// Check if serverConfig has browser disabled
-	if globalIsBrowserEnabled {
-		t.Error("Expected browser to be disabled but it is not")
-	}
-
-	// Check if serverConfig returns WORM config from the env
-	if !globalServerConfig.GetWorm() {
-		t.Error("Expected WORM to be enabled but it is not")
-	}
-
-	// Check if serverConfig has region from the environment
-	if globalServerConfig.GetRegion() != "us-west-1" {
-		t.Errorf("Expected region to be \"us-west-1\", found %v", globalServerConfig.GetRegion())
-	}
-
-	// Check if serverConfig has credentials from the environment
-	cred := globalServerConfig.GetCredential()
-
-	if cred.AccessKey != "minio" {
-		t.Errorf("Expected access key to be `minio`, found %s", cred.AccessKey)
-	}
-
-	if cred.SecretKey != "minio123" {
-		t.Errorf("Expected access key to be `minio123`, found %s", cred.SecretKey)
-	}
-
-	// Check if serverConfig has the correct domain
-	if globalDomainNames[0] != "domain.com" {
-		t.Errorf("Expected Domain to be `domain.com`, found " + globalDomainNames[0])
 	}
 }
 
@@ -360,13 +288,13 @@ func TestConfigDiff(t *testing.T) {
 		},
 		// 15
 		{
-			&serverConfig{Logger: loggerConfig{
-				Console: loggerConsole{Enabled: true},
-				HTTP:    map[string]loggerHTTP{"1": {Endpoint: "http://address1"}},
+			&serverConfig{Logger: logger.Config{
+				Console: logger.Console{Enabled: false},
+				HTTP:    map[string]logger.HTTP{"1": {Endpoint: "http://address1"}},
 			}},
-			&serverConfig{Logger: loggerConfig{
-				Console: loggerConsole{Enabled: true},
-				HTTP:    map[string]loggerHTTP{"1": {Endpoint: "http://address2"}},
+			&serverConfig{Logger: logger.Config{
+				Console: logger.Console{Enabled: false},
+				HTTP:    map[string]logger.HTTP{"1": {Endpoint: "http://address2"}},
 			}},
 			"Logger configuration differs",
 		},

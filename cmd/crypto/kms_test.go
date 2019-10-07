@@ -40,8 +40,9 @@ var masterKeyKMSTests = []struct {
 }
 
 func TestMasterKeyKMS(t *testing.T) {
-	kms := NewKMS([32]byte{})
 	for i, test := range masterKeyKMSTests {
+		kms := NewMasterKey(test.GenKeyID, [32]byte{})
+
 		key, sealedKey, err := kms.GenerateKey(test.GenKeyID, test.GenContext)
 		if err != nil {
 			t.Errorf("Test %d: KMS failed to generate key: %v", i, err)

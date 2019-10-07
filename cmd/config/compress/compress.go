@@ -34,9 +34,9 @@ type Config struct {
 
 // Compression environment variables
 const (
-	EnvMinioCompress           = "MINIO_COMPRESS"
-	EnvMinioCompressExtensions = "MINIO_COMPRESS_EXTENSIONS"
-	EnvMinioCompressMimeTypes  = "MINIO_COMPRESS_MIMETYPES"
+	EnvCompress           = "MINIO_COMPRESS"
+	EnvCompressExtensions = "MINIO_COMPRESS_EXTENSIONS"
+	EnvCompressMimeTypes  = "MINIO_COMPRESS_MIMETYPES"
 )
 
 // Parses the given compression exclude list `extensions` or `content-types`.
@@ -51,23 +51,22 @@ func parseCompressIncludes(includes []string) ([]string, error) {
 
 // LookupConfig - lookup compression config.
 func LookupConfig(cfg Config) (Config, error) {
-	const compressEnvDelimiter = ","
-	if compress := env.Get(EnvMinioCompress, strconv.FormatBool(cfg.Enabled)); compress != "" {
+	if compress := env.Get(EnvCompress, strconv.FormatBool(cfg.Enabled)); compress != "" {
 		cfg.Enabled = strings.EqualFold(compress, "true")
 	}
 
-	compressExtensions := env.Get(EnvMinioCompressExtensions, strings.Join(cfg.Extensions, ","))
-	compressMimeTypes := env.Get(EnvMinioCompressMimeTypes, strings.Join(cfg.MimeTypes, ","))
+	compressExtensions := env.Get(EnvCompressExtensions, strings.Join(cfg.Extensions, ","))
+	compressMimeTypes := env.Get(EnvCompressMimeTypes, strings.Join(cfg.MimeTypes, ","))
 	if compressExtensions != "" || compressMimeTypes != "" {
 		if compressExtensions != "" {
-			extensions, err := parseCompressIncludes(strings.Split(compressExtensions, compressEnvDelimiter))
+			extensions, err := parseCompressIncludes(strings.Split(compressExtensions, config.ValueSeparator))
 			if err != nil {
 				return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESS_EXTENSIONS value (`%s`)", err, extensions)
 			}
 			cfg.Extensions = extensions
 		}
 		if compressMimeTypes != "" {
-			contenttypes, err := parseCompressIncludes(strings.Split(compressMimeTypes, compressEnvDelimiter))
+			contenttypes, err := parseCompressIncludes(strings.Split(compressMimeTypes, config.ValueSeparator))
 			if err != nil {
 				return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESS_MIMETYPES value (`%s`)", err, contenttypes)
 			}

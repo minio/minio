@@ -136,7 +136,7 @@ EXAMPLES:
 // Checks if endpoints are either available through environment
 // or command line, returns false if both fails.
 func endpointsPresent(ctx *cli.Context) bool {
-	_, ok := env.Lookup("MINIO_ENDPOINTS")
+	_, ok := env.Lookup(config.EnvEndpoints)
 	if !ok {
 		ok = ctx.Args().Present()
 	}
@@ -158,7 +158,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 		logger.FatalIf(uErr, "Unable to validate passed endpoints")
 	}
 
-	endpoints := strings.Fields(env.Get("MINIO_ENDPOINTS", ""))
+	endpoints := strings.Fields(env.Get(config.EnvEndpoints, ""))
 	if len(endpoints) > 0 {
 		globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLSetDriveCount, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
 	} else {
@@ -216,7 +216,7 @@ func serverMain(ctx *cli.Context) {
 	logger.FatalIf(err, "Unable to load the TLS configuration")
 
 	// Check and load Root CAs.
-	globalRootCAs, err = getRootCAs(globalCertsCADir.Get())
+	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
 	// Handle all server environment vars.
@@ -291,8 +291,9 @@ func serverMain(ctx *cli.Context) {
 		globalSweepHealState = initHealState()
 	}
 
-	// initialize globalConsoleSys system
+	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
+
 	// Configure server.
 	var handler http.Handler
 	handler, err = configureServerHandler(globalEndpoints)
@@ -337,9 +338,6 @@ func serverMain(ctx *cli.Context) {
 	if err = globalConfigSys.Init(newObject); err != nil {
 		logger.Fatal(err, "Unable to initialize config system")
 	}
-
-	// Load logger subsystem
-	loadLoggers()
 
 	// Create new IAM system.
 	globalIAMSys = NewIAMSys()

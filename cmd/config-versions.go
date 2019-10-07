@@ -19,11 +19,13 @@ package cmd
 import (
 	"sync"
 
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
 	xldap "github.com/minio/minio/cmd/config/ldap"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event/target"
 	"github.com/minio/minio/pkg/iam/openid"
@@ -404,7 +406,7 @@ type serverConfigV14 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggerV7 `json:"logger"`
@@ -421,7 +423,7 @@ type serverConfigV15 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggerV7 `json:"logger"`
@@ -459,7 +461,7 @@ type serverConfigV16 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggers `json:"logger"`
@@ -478,7 +480,7 @@ type serverConfigV17 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggers `json:"logger"`
@@ -497,7 +499,7 @@ type serverConfigV18 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggers `json:"logger"`
@@ -515,7 +517,7 @@ type serverConfigV19 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggers `json:"logger"`
@@ -533,7 +535,7 @@ type serverConfigV20 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 	Domain     string           `json:"domain"`
 
 	// Additional error logging configuration.
@@ -551,7 +553,7 @@ type serverConfigV21 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 	Domain     string           `json:"domain"`
 
 	// Notification queue configuration.
@@ -569,7 +571,7 @@ type serverConfigV22 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
@@ -589,7 +591,7 @@ type serverConfigV23 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
@@ -613,7 +615,7 @@ type serverConfigV24 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
@@ -639,8 +641,8 @@ type serverConfigV25 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
-	Worm       BoolFlag         `json:"worm"`
+	Browser    config.BoolFlag  `json:"browser"`
+	Worm       config.BoolFlag  `json:"worm"`
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
@@ -663,8 +665,8 @@ type serverConfigV26 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
-	Worm       BoolFlag         `json:"worm"`
+	Browser    config.BoolFlag  `json:"browser"`
+	Worm       config.BoolFlag  `json:"worm"`
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
@@ -675,20 +677,6 @@ type serverConfigV26 struct {
 
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
-}
-
-type loggerConsole struct {
-	Enabled bool `json:"enabled"`
-}
-
-type loggerHTTP struct {
-	Enabled  bool   `json:"enabled"`
-	Endpoint string `json:"endpoint"`
-}
-
-type loggerConfig struct {
-	Console loggerConsole         `json:"console"`
-	HTTP    map[string]loggerHTTP `json:"http"`
 }
 
 // serverConfigV27 is just like version '26', stores additionally
@@ -704,8 +692,8 @@ type serverConfigV27 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
-	Worm       BoolFlag         `json:"worm"`
+	Browser    config.BoolFlag  `json:"browser"`
+	Worm       config.BoolFlag  `json:"worm"`
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
@@ -718,7 +706,7 @@ type serverConfigV27 struct {
 	Notify notifierV3 `json:"notify"`
 
 	// Logger configuration
-	Logger loggerConfig `json:"logger"`
+	Logger logger.Config `json:"logger"`
 }
 
 // serverConfigV28 is just like version '27', additionally
@@ -734,7 +722,7 @@ type serverConfigV28 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Worm       BoolFlag         `json:"worm"`
+	Worm       config.BoolFlag  `json:"worm"`
 
 	// Storage class configuration
 	StorageClass storageclass.Config `json:"storageclass"`
@@ -749,7 +737,7 @@ type serverConfigV28 struct {
 	Notify notifierV3 `json:"notify"`
 
 	// Logger configuration
-	Logger loggerConfig `json:"logger"`
+	Logger logger.Config `json:"logger"`
 }
 
 // serverConfigV29 is just like version '28'.
@@ -763,7 +751,7 @@ type serverConfigV30 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Worm       BoolFlag         `json:"worm"`
+	Worm       config.BoolFlag  `json:"worm"`
 
 	// Storage class configuration
 	StorageClass storageclass.Config `json:"storageclass"`
@@ -778,7 +766,7 @@ type serverConfigV30 struct {
 	Notify notifierV3 `json:"notify"`
 
 	// Logger configuration
-	Logger loggerConfig `json:"logger"`
+	Logger logger.Config `json:"logger"`
 
 	// Compression configuration
 	Compression compress.Config `json:"compress"`
@@ -791,7 +779,7 @@ type serverConfigV31 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Worm       BoolFlag         `json:"worm"`
+	Worm       config.BoolFlag  `json:"worm"`
 
 	// Storage class configuration
 	StorageClass storageclass.Config `json:"storageclass"`
@@ -806,7 +794,7 @@ type serverConfigV31 struct {
 	Notify notifierV3 `json:"notify"`
 
 	// Logger configuration
-	Logger loggerConfig `json:"logger"`
+	Logger logger.Config `json:"logger"`
 
 	// Compression configuration
 	Compression compress.Config `json:"compress"`
@@ -846,7 +834,7 @@ type serverConfigV32 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Worm       BoolFlag         `json:"worm"`
+	Worm       config.BoolFlag  `json:"worm"`
 
 	// Storage class configuration
 	StorageClass storageclass.Config `json:"storageclass"`
@@ -861,7 +849,7 @@ type serverConfigV32 struct {
 	Notify notifier `json:"notify"`
 
 	// Logger configuration
-	Logger loggerConfig `json:"logger"`
+	Logger logger.Config `json:"logger"`
 
 	// Compression configuration
 	Compression compress.Config `json:"compress"`
@@ -890,7 +878,7 @@ type serverConfigV33 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Worm       BoolFlag         `json:"worm"`
+	Worm       config.BoolFlag  `json:"worm"`
 
 	// Storage class configuration
 	StorageClass storageclass.Config `json:"storageclass"`
@@ -905,7 +893,7 @@ type serverConfigV33 struct {
 	Notify notifier `json:"notify"`
 
 	// Logger configuration
-	Logger loggerConfig `json:"logger"`
+	Logger logger.Config `json:"logger"`
 
 	// Compression configuration
 	Compression compress.Config `json:"compress"`

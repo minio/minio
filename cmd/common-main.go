@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2017-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,24 +17,23 @@
 package cmd
 
 import (
-	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"net"
 	"path/filepath"
 	"strings"
 	"time"
 
-	etcd "github.com/coreos/etcd/clientv3"
 	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/config/etcd"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/logger/target/http"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/env"
-	xnet "github.com/minio/minio/pkg/net"
 )
 
 func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
@@ -69,36 +68,6 @@ func checkUpdate(mode string) {
 			logStartupMessage(prepareUpdateMessage("Run `mc admin update`", latestReleaseTime.Sub(currentReleaseTime)))
 		}
 	}
-}
-
-// Load logger targets based on user's configuration
-func loadLoggers() {
-	loggerUserAgent := getUserAgent(getMinioMode())
-
-	auditEndpoint, ok := env.Lookup("MINIO_AUDIT_LOGGER_HTTP_ENDPOINT")
-	if ok {
-		// Enable audit HTTP logging through ENV.
-		logger.AddAuditTarget(http.New(auditEndpoint, loggerUserAgent, NewCustomHTTPTransport()))
-	}
-
-	loggerEndpoint, ok := env.Lookup("MINIO_LOGGER_HTTP_ENDPOINT")
-	if ok {
-		// Enable HTTP logging through ENV.
-		logger.AddTarget(http.New(loggerEndpoint, loggerUserAgent, NewCustomHTTPTransport()))
-	} else {
-		for _, l := range globalServerConfig.Logger.HTTP {
-			if l.Enabled {
-				// Enable http logging
-				logger.AddTarget(http.New(l.Endpoint, loggerUserAgent, NewCustomHTTPTransport()))
-			}
-		}
-	}
-
-	if globalServerConfig.Logger.Console.Enabled {
-		// Enable console logging
-		logger.AddTarget(globalConsoleSys.Console())
-	}
-
 }
 
 func newConfigDirFromCtx(ctx *cli.Context, option string, getDefaultDir func() string) (*ConfigDir, bool) {
@@ -190,15 +159,8 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 }
 
 func handleCommonEnvVars() {
-	// Start profiler if env is set.
-	if profiler := env.Get("_MINIO_PROFILER", ""); profiler != "" {
-		var err error
-		globalProfiler, err = startProfiler(profiler, "")
-		logger.FatalIf(err, "Unable to setup a profiler")
-	}
-
-	accessKey := env.Get("MINIO_ACCESS_KEY", "")
-	secretKey := env.Get("MINIO_SECRET_KEY", "")
+	accessKey := env.Get(config.EnvAccessKey, "")
+	secretKey := env.Get(config.EnvSecretKey, "")
 	if accessKey != "" && secretKey != "" {
 		cred, err := auth.CreateCredentials(accessKey, secretKey)
 		if err != nil {
@@ -211,8 +173,8 @@ func handleCommonEnvVars() {
 		globalActiveCred = cred
 	}
 
-	if browser := env.Get("MINIO_BROWSER", "on"); browser != "" {
-		browserFlag, err := ParseBoolFlag(browser)
+	if browser := env.Get(config.EnvBrowser, "on"); browser != "" {
+		browserFlag, err := config.ParseBoolFlag(browser)
 		if err != nil {
 			logger.Fatal(config.ErrInvalidBrowserValue(nil).Msg("Unknown value `%s`", browser), "Invalid MINIO_BROWSER value in environment variable")
 		}
@@ -223,57 +185,15 @@ func handleCommonEnvVars() {
 		globalIsBrowserEnabled = bool(browserFlag)
 	}
 
-	etcdEndpointsEnv, ok := env.Lookup("MINIO_ETCD_ENDPOINTS")
-	if ok {
-		etcdEndpoints := strings.Split(etcdEndpointsEnv, ",")
-
-		var etcdSecure bool
-		for _, endpoint := range etcdEndpoints {
-			u, err := xnet.ParseURL(endpoint)
-			if err != nil {
-				logger.FatalIf(err, "Unable to initialize etcd with %s", etcdEndpoints)
-			}
-			// If one of the endpoint is https, we will use https directly.
-			etcdSecure = etcdSecure || u.Scheme == "https"
-		}
-
-		var err error
-		if etcdSecure {
-			// This is only to support client side certificate authentication
-			// https://coreos.com/etcd/docs/latest/op-guide/security.html
-			etcdClientCertFile, ok1 := env.Lookup("MINIO_ETCD_CLIENT_CERT")
-			etcdClientCertKey, ok2 := env.Lookup("MINIO_ETCD_CLIENT_CERT_KEY")
-			var getClientCertificate func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
-			if ok1 && ok2 {
-				getClientCertificate = func(unused *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-					cert, terr := tls.LoadX509KeyPair(etcdClientCertFile, etcdClientCertKey)
-					return &cert, terr
-				}
-			}
-
-			globalEtcdClient, err = etcd.New(etcd.Config{
-				Endpoints:         etcdEndpoints,
-				DialTimeout:       defaultDialTimeout,
-				DialKeepAliveTime: defaultDialKeepAlive,
-				TLS: &tls.Config{
-					RootCAs:              globalRootCAs,
-					GetClientCertificate: getClientCertificate,
-				},
-			})
-		} else {
-			globalEtcdClient, err = etcd.New(etcd.Config{
-				Endpoints:         etcdEndpoints,
-				DialTimeout:       defaultDialTimeout,
-				DialKeepAliveTime: defaultDialKeepAlive,
-			})
-		}
-		logger.FatalIf(err, "Unable to initialize etcd with %s", etcdEndpoints)
+	var err error
+	globalEtcdClient, err = etcd.New(globalRootCAs)
+	if err != nil {
+		logger.FatalIf(err, "Unable to initialize etcd config")
 	}
 
-	v, ok := env.Lookup("MINIO_DOMAIN")
-	if ok {
-		for _, domainName := range strings.Split(v, ",") {
-			if _, ok = dns2.IsDomainName(domainName); !ok {
+	for _, domainName := range strings.Split(env.Get(config.EnvDomain, ""), ",") {
+		if domainName != "" {
+			if _, ok := dns2.IsDomainName(domainName); !ok {
 				logger.Fatal(config.ErrInvalidDomainValue(nil).Msg("Unknown value `%s`", domainName),
 					"Invalid MINIO_DOMAIN value in environment variable")
 			}
@@ -281,7 +201,7 @@ func handleCommonEnvVars() {
 		}
 	}
 
-	minioEndpointsEnv, ok := env.Lookup("MINIO_PUBLIC_IPS")
+	minioEndpointsEnv, ok := env.Lookup(config.EnvPublicIPs)
 	if ok {
 		minioEndpoints := strings.Split(minioEndpointsEnv, ",")
 		var domainIPs = set.NewStringSet()
@@ -315,11 +235,11 @@ func handleCommonEnvVars() {
 	// In place update is true by default if the MINIO_UPDATE is not set
 	// or is not set to 'off', if MINIO_UPDATE is set to 'off' then
 	// in-place update is off.
-	globalInplaceUpdateDisabled = strings.EqualFold(env.Get("MINIO_UPDATE", "off"), "off")
+	globalInplaceUpdateDisabled = strings.EqualFold(env.Get(config.EnvUpdate, "off"), "off")
 
 	// Get WORM environment variable.
-	if worm := env.Get("MINIO_WORM", "off"); worm != "" {
-		wormFlag, err := ParseBoolFlag(worm)
+	if worm := env.Get(config.EnvWorm, "off"); worm != "" {
+		wormFlag, err := config.ParseBoolFlag(worm)
 		if err != nil {
 			logger.Fatal(config.ErrInvalidWormValue(nil).Msg("Unknown value `%s`", worm), "Invalid MINIO_WORM value in environment variable")
 		}
@@ -337,4 +257,22 @@ func logStartupMessage(msg string, data ...interface{}) {
 		globalConsoleSys.Send(msg)
 	}
 	logger.StartupMessage(msg, data...)
+}
+
+func getTLSConfig() (x509Certs []*x509.Certificate, c *certs.Certs, secureConn bool, err error) {
+	if !(isFile(getPublicCertFile()) && isFile(getPrivateKeyFile())) {
+		return nil, nil, false, nil
+	}
+
+	if x509Certs, err = config.ParsePublicCertFile(getPublicCertFile()); err != nil {
+		return nil, nil, false, err
+	}
+
+	c, err = certs.New(getPublicCertFile(), getPrivateKeyFile(), config.LoadX509KeyPair)
+	if err != nil {
+		return nil, nil, false, err
+	}
+
+	secureConn = true
+	return x509Certs, c, secureConn, nil
 }

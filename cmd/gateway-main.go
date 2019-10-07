@@ -133,7 +133,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	logger.FatalIf(err, "Invalid TLS certificate file")
 
 	// Check and load Root CAs.
-	globalRootCAs, err = getRootCAs(globalCertsCADir.Get())
+	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
 	// Handle common env vars.
@@ -162,7 +162,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		registerSTSRouter(router)
 	}
 
-	// initialize globalConsoleSys system
+	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
 
 	enableConfigOps := gatewayName == "nas"
@@ -245,9 +245,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// is only enabled for "NAS" gateway.
 		globalConfigSys.WatchConfigNASDisk(newObject)
 	}
-
-	// Load logger subsystem
-	loadLoggers()
 
 	// This is only to uniquely identify each gateway deployments.
 	globalDeploymentID = env.Get("MINIO_GATEWAY_DEPLOYMENT_ID", mustGetUUID())

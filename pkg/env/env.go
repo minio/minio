@@ -1,6 +1,9 @@
 package env
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 // Get retrieves the value of the environment variable named
 // by the key. If the variable is present in the environment the
@@ -19,3 +22,13 @@ func Get(key, defaultValue string) string {
 // Otherwise the returned value will be empty and the boolean will
 // be false.
 func Lookup(key string) (string, bool) { return os.LookupEnv(key) }
+
+// List all envs with a given prefix.
+func List(prefix string) (envs []string) {
+	for _, env := range os.Environ() {
+		if strings.HasPrefix(env, prefix) {
+			envs = append(envs, env)
+		}
+	}
+	return envs
+}

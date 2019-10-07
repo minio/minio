@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/minio/minio/cmd/config"
@@ -31,6 +32,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/cmd/logger/target/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/event"
@@ -111,7 +113,7 @@ func (s *serverConfig) GetCredential() auth.Credentials {
 // SetWorm set if worm is enabled.
 func (s *serverConfig) SetWorm(b bool) {
 	// Set the new value.
-	s.Worm = BoolFlag(b)
+	s.Worm = config.BoolFlag(b)
 }
 
 // GetStorageClass reads storage class fields from current config.
@@ -271,7 +273,7 @@ func (s *serverConfig) lookupConfigs() {
 		globalCacheMaxUse = s.Cache.MaxUse
 
 		if cacheEncKey := env.Get(cache.EnvCacheEncryptionMasterKey, ""); cacheEncKey != "" {
-			globalCacheKMSKeyID, globalCacheKMS, err = parseKMSMasterKey(cacheEncKey)
+			globalCacheKMS, err = crypto.ParseMasterKey(cacheEncKey)
 			if err != nil {
 				logger.FatalIf(config.ErrInvalidCacheEncryptionKey(err),
 					"Unable to setup encryption cache")
@@ -279,8 +281,19 @@ func (s *serverConfig) lookupConfigs() {
 		}
 	}
 
-	if err = LookupKMSConfig(s.KMS); err != nil {
-		logger.FatalIf(err, "Unable to setup KMS")
+	s.KMS, err = crypto.LookupConfig(s.KMS)
+	if err != nil {
+		logger.FatalIf(err, "Unable to setup KMS config")
+	}
+
+	GlobalKMS, err = crypto.NewKMS(s.KMS)
+	if err != nil {
+		logger.FatalIf(err, "Unable to setup KMS with current KMS config")
+	}
+
+	globalAutoEncryption = strings.EqualFold(env.Get(crypto.EnvAutoEncryption, "off"), "on")
+	if globalAutoEncryption && GlobalKMS == nil {
+		logger.FatalIf(errors.New("Invalid KMS configuration: auto-encryption is enabled but no valid KMS configuration is present"), "")
 	}
 
 	s.Compression, err = compress.LookupConfig(s.Compression)
@@ -311,6 +324,34 @@ func (s *serverConfig) lookupConfigs() {
 	if err != nil {
 		logger.FatalIf(err, "Unable to parse LDAP configuration from env")
 	}
+
+	// Load logger targets based on user's configuration
+	loggerUserAgent := getUserAgent(getMinioMode())
+
+	s.Logger, err = logger.LookupConfig(s.Logger)
+	if err != nil {
+		logger.FatalIf(err, "Unable to initialize logger")
+	}
+
+	for _, l := range s.Logger.HTTP {
+		if l.Enabled {
+			// Enable http logging
+			logger.AddTarget(http.New(l.Endpoint, loggerUserAgent, NewCustomHTTPTransport()))
+		}
+	}
+
+	for _, l := range s.Logger.Audit {
+		if l.Enabled {
+			// Enable http audit logging
+			logger.AddAuditTarget(http.New(l.Endpoint, loggerUserAgent, NewCustomHTTPTransport()))
+		}
+	}
+
+	if s.Logger.Console.Enabled {
+		// Enable console logging
+		logger.AddTarget(globalConsoleSys.Console())
+	}
+
 }
 
 // TestNotificationTargets tries to establish connections to all notification
@@ -531,8 +572,8 @@ func newServerConfig() *serverConfig {
 	// Console logging is on by default
 	srvCfg.Logger.Console.Enabled = true
 	// Create an example of HTTP logger
-	srvCfg.Logger.HTTP = make(map[string]loggerHTTP)
-	srvCfg.Logger.HTTP["target1"] = loggerHTTP{Endpoint: "https://username:password@example.com/api"}
+	srvCfg.Logger.HTTP = make(map[string]logger.HTTP)
+	srvCfg.Logger.HTTP["target1"] = logger.HTTP{Endpoint: "https://username:password@example.com/api"}
 
 	return srvCfg
 }

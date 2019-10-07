@@ -191,7 +191,7 @@ var s3UnsealObjectKeyTests = []struct {
 	ExpectedErr error
 }{
 	{ // 0 - Valid KMS key-ID and valid metadata entries for bucket/object
-		KMS:    NewKMS([32]byte{}),
+		KMS:    NewMasterKey("my-minio-key", [32]byte{}),
 		Bucket: "bucket",
 		Object: "object",
 		Metadata: map[string]string{
@@ -204,7 +204,7 @@ var s3UnsealObjectKeyTests = []struct {
 		ExpectedErr: nil,
 	},
 	{ // 1 - Valid KMS key-ID for invalid metadata entries for bucket/object
-		KMS:    NewKMS([32]byte{}),
+		KMS:    NewMasterKey("my-minio-key", [32]byte{}),
 		Bucket: "bucket",
 		Object: "object",
 		Metadata: map[string]string{
