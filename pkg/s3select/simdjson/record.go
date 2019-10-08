@@ -43,7 +43,8 @@ func (r *Record) Get(name string) (*sql.Value, error) {
 	if len(r.rootFields) == 0 {
 		r.indexFields()
 	}
-
+	// FIXME:
+	return nil, nil
 }
 
 func (r *Record) indexFields() {
@@ -68,10 +69,12 @@ func (r *Record) Clone(dst sql.Record) sql.Record {
 	if !ok {
 		other = &Record{}
 	}
-	if len(other.KVS) > 0 {
-		other.KVS = other.KVS[:0]
-	}
-	other.KVS = append(other.KVS, r.KVS...)
+	/*
+		if len(other.KVS) > 0 {
+			other.KVS = other.KVS[:0]
+		}
+		other.KVS = append(other.KVS, r.KVS...)
+	*/
 	return other
 }
 
@@ -91,42 +94,44 @@ func (r *Record) Set(name string, value *sql.Value) error {
 	} else if value.IsNull() {
 		v = nil
 	} else if b, ok := value.ToBytes(); ok {
-		v = RawJSON(b)
-	} else if arr, ok := value.ToArray(); ok {
-		v = arr
+		v = b
+		//} else if arr, ok := value.ToArray(); ok {
+		//	v = arr
 	} else {
 		return fmt.Errorf("unsupported sql value %v and type %v", value, value.GetTypeString())
 	}
 
 	name = strings.Replace(name, "*", "__ALL__", -1)
-	r.KVS = append(r.KVS, jstream.KV{Key: name, Value: v})
+	_ = v
+	//r.KVS = append(r.KVS, jstream.KV{Key: name, Value: v})
 	return nil
 }
 
 // WriteCSV - encodes to CSV data.
 func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune) error {
 	var csvRecord []string
-	for _, kv := range r.KVS {
-		var columnValue string
-		switch val := kv.Value.(type) {
-		case bool, float64, int64, string:
-			columnValue = fmt.Sprintf("%v", val)
-		case nil:
-			columnValue = ""
-		case RawJSON:
-			columnValue = string([]byte(val))
-		case []interface{}:
-			b, err := json.Marshal(val)
-			if err != nil {
-				return err
+	/*
+		for _, kv := range r.KVS {
+			var columnValue string
+			switch val := kv.Value.(type) {
+			case bool, float64, int64, string:
+				columnValue = fmt.Sprintf("%v", val)
+			case nil:
+				columnValue = ""
+			case RawJSON:
+				columnValue = string([]byte(val))
+			case []interface{}:
+				b, err := json.Marshal(val)
+				if err != nil {
+					return err
+				}
+				columnValue = string(b)
+			default:
+				return fmt.Errorf("Cannot marshal unhandled type: %T", kv.Value)
 			}
-			columnValue = string(b)
-		default:
-			return fmt.Errorf("Cannot marshal unhandled type: %T", kv.Value)
+			csvRecord = append(csvRecord, columnValue)
 		}
-		csvRecord = append(csvRecord, columnValue)
-	}
-
+	*/
 	w := csv.NewWriter(writer)
 	w.Comma = fieldDelimiter
 	if err := w.Write(csvRecord); err != nil {
@@ -142,24 +147,26 @@ func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune) error {
 
 // Raw - returns the underlying representation.
 func (r *Record) Raw() (sql.SelectObjectFormat, interface{}) {
-	return r.SelectFormat, r.KVS
+	// FIXME:
+	return r.SelectFormat, nil
 }
 
 // WriteJSON - encodes to JSON data.
 func (r *Record) WriteJSON(writer io.Writer) error {
-	return json.NewEncoder(writer).Encode(r.KVS)
+	// FIXME:
+	return json.NewEncoder(writer).Encode(nil)
 }
 
 // Replace the underlying buffer of json data.
 func (r *Record) Replace(k jstream.KVS) error {
-	r.KVS = k
+	// FIXME:
 	return nil
 }
 
 // NewRecord - creates new empty JSON record.
 func NewRecord(f sql.SelectObjectFormat) *Record {
 	return &Record{
-		KVS:          jstream.KVS{},
+		//KVS:          jstream.KVS{},
 		SelectFormat: f,
 	}
 }

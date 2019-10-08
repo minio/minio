@@ -25,7 +25,9 @@ type Iter struct {
 
 	// offset of the next entry to be decoded
 	off int
-	// Next tag
+	// current value
+	cur uint64
+	// current tag
 	t Tag
 }
 
@@ -46,7 +48,7 @@ func LoadTape(tape, strings io.Reader) (*ParsedJson, error) {
 	for i := range dst.Tape {
 		dst.Tape[i] = binary.LittleEndian.Uint64(b[i*8 : i*8+8])
 	}
-	// Read strings
+	// Read stringbuf
 	b, err = ioutil.ReadAll(strings)
 	if err != nil {
 		return nil, err
@@ -81,10 +83,11 @@ func (i *Iter) Next() Type {
 	if i.off >= len(i.tape.Tape) {
 		return TypeNone
 	}
-	tag := Tag(i.tape.Tape[i.off] >> 56)
-	i.t = tag
+	v := i.tape.Tape[i.off]
+	i.cur = v & JSONVALUEMASK
+	i.t = Tag(v >> 56)
 	i.off++
-	return TagToType[tag]
+	return TagToType[i.t]
 }
 
 func (i *Iter) PeekNext() Type {
@@ -208,8 +211,7 @@ func (i *Iter) String() (string, error) {
 	if i.t != TagString {
 		return "", errors.New("value is not string")
 	}
-	i.off++
-	return i.tape.StringAt(uint64(i.t))
+	return i.tape.StringAt(i.cur)
 }
 
 // Bool() returns the bool value.
@@ -271,12 +273,13 @@ func (i *Iter) Object(dst *Object) (*Object, error) {
 	if i.t != TagObjectStart {
 		return nil, errors.New("next item is not object")
 	}
-	v := i.tape.Tape[i.off]
-	end := v & JSONVALUEMASK
+	end := i.cur
+	if end < uint64(i.off) {
+		return nil, errors.New("corrupt input: object ends at index before start")
+	}
 	if uint64(len(i.tape.Tape)) < end {
 		return nil, errors.New("corrupt input: object extended beyond tape")
 	}
-	i.off++
 	if dst == nil {
 		dst = &Object{
 			nameIdx: make(map[string]int),
@@ -299,12 +302,10 @@ func (i *Iter) Array(dst *Array) (*Array, error) {
 	if i.t != TagArrayStart {
 		return nil, errors.New("next item is not object")
 	}
-	v := i.tape.Tape[i.off]
-	end := v & JSONVALUEMASK
+	end := i.cur
 	if uint64(len(i.tape.Tape)) < end {
 		return nil, errors.New("corrupt input: object extended beyond tape")
 	}
-	i.off++
 	if dst == nil {
 		dst = &Array{}
 	}
@@ -341,6 +342,9 @@ func (o *Object) Map(dst map[string]interface{}) (map[string]interface{}, error)
 // NextElement sets dst to the next element and returns the name.
 // TypeNone with nil error will be returned if there are no more elements.
 func (o *Object) NextElement(dst *Iter) (name string, t Type, err error) {
+	if o.off == len(o.tape.Tape) {
+		return "", TypeNone, nil
+	}
 	// Next must be string or end of object
 	v := o.tape.Tape[o.off]
 
@@ -504,9 +508,6 @@ func (pj *ParsedJson) annotate_previousloc(saved_loc uint64, val uint64) {
 // Tag indicates the data type of a tape entry
 type Tag uint8
 
-// Type is a JSON value type.
-type Type uint8
-
 const (
 	TagString      = Tag('"')
 	TagInteger     = Tag('l')
@@ -521,7 +522,12 @@ const (
 	TagArrayEnd    = Tag(']')
 	TagRoot        = Tag('r')
 	TagEnd         = Tag(0)
+)
 
+// Type is a JSON value type.
+type Type uint8
+
+const (
 	TypeNone Type = iota
 	TypeNull
 	TypeString
@@ -576,7 +582,7 @@ func (pj *ParsedJson) dump_raw_tape() bool {
 	for ; tapeidx < howmany; tapeidx++ {
 		tape_val = pj.Tape[tapeidx]
 		fmt.Printf("%d : ", tapeidx)
-		ntype := Type(tape_val >> 56)
+		ntype := Tag(tape_val >> 56)
 		payload := tape_val & JSONVALUEMASK
 		switch ntype {
 		case TagString: // we have a string

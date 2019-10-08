@@ -34,32 +34,32 @@ type Reader struct {
 
 // Read - reads single record.
 func (r *Reader) Read(dst sql.Record) (sql.Record, error) {
-	v, ok := <-r.valueCh
-	if !ok {
-		if err := r.decoder.Err(); err != nil {
-			return nil, errJSONParsingError(err)
+	/*
+		v, ok := <-r.valueCh
+		if !ok {
+			if err := r.decoder.Err(); err != nil {
+				return nil, errJSONParsingError(err)
+			}
+			return nil, io.EOF
 		}
-		return nil, io.EOF
-	}
-
-	var kvs jstream.KVS
-	if v.ValueType == jstream.Object {
-		// This is a JSON object type (that preserves key
-		// order)
-		kvs = v.Value.(jstream.KVS)
-	} else {
-		// To be AWS S3 compatible Select for JSON needs to
-		// output non-object JSON as single column value
-		// i.e. a map with `_1` as key and value as the
-		// non-object.
-		kvs = jstream.KVS{jstream.KV{Key: "_1", Value: v.Value}}
-	}
-
+			var kvs jstream.KVS
+			if v.ValueType == jstream.Object {
+				// This is a JSON object type (that preserves key
+				// order)
+				kvs = v.Value.(jstream.KVS)
+			} else {
+				// To be AWS S3 compatible Select for JSON needs to
+				// output non-object JSON as single column value
+				// i.e. a map with `_1` as key and value as the
+				// non-object.
+				kvs = jstream.KVS{jstream.KV{Key: "_1", Value: v.Value}}
+			}
+	*/
 	dstRec, ok := dst.(*Record)
 	if !ok {
 		dstRec = &Record{}
 	}
-	dstRec.KVS = kvs
+	//dstRec.KVS = kvs
 	dstRec.SelectFormat = sql.SelectFmtJSON
 	return dstRec, nil
 }
