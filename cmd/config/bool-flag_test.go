@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2017-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package config
 
 import (
 	"errors"
