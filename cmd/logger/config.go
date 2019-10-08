@@ -51,6 +51,30 @@ const (
 	defaultTarget = "_"
 )
 
+// NewConfig - initialize new logger config.
+func NewConfig() Config {
+	cfg := Config{
+		// Console logging is on by default
+		Console: Console{
+			Enabled: true,
+		},
+		HTTP:  make(map[string]HTTP),
+		Audit: make(map[string]HTTP),
+	}
+
+	// Create an example HTTP logger
+	cfg.HTTP[defaultTarget] = HTTP{
+		Endpoint: "https://username:password@example.com/api",
+	}
+
+	// Create an example Audit logger
+	cfg.Audit[defaultTarget] = HTTP{
+		Endpoint: "https://username:password@example.com/api/audit",
+	}
+
+	return cfg
+}
+
 // LookupConfig - lookup logger config, override with ENVs if set.
 func LookupConfig(cfg Config) (Config, error) {
 	envs := env.List(EnvLoggerHTTPEndpoint)

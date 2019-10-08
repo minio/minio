@@ -205,9 +205,9 @@ func LookupConfig(cfg Config, drivesPerSet int) (Config, error) {
 		if err != nil {
 			return cfg, err
 		}
-		if cfg.Standard.Parity == 0 {
-			cfg.Standard.Parity = drivesPerSet / 2
-		}
+	}
+	if cfg.Standard.Parity == 0 {
+		cfg.Standard.Parity = drivesPerSet / 2
 	}
 
 	if rrsc := env.Get(RRSEnv, cfg.RRS.String()); rrsc != "" {
@@ -215,9 +215,9 @@ func LookupConfig(cfg Config, drivesPerSet int) (Config, error) {
 		if err != nil {
 			return cfg, err
 		}
-		if cfg.RRS.Parity == 0 {
-			cfg.RRS.Parity = defaultRRSParity
-		}
+	}
+	if cfg.RRS.Parity == 0 {
+		cfg.RRS.Parity = defaultRRSParity
 	}
 
 	// Validation is done after parsing both the storage classes. This is needed because we need one

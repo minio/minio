@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"sync/atomic"
 
 	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/rest"
@@ -107,7 +108,7 @@ func toStorageErr(err error) error {
 type storageRESTClient struct {
 	endpoint   Endpoint
 	restClient *rest.Client
-	connected  bool
+	connected  int32
 	lastError  error
 	instanceID string // REST server's instanceID which is sent with every request for validation.
 }
@@ -116,7 +117,7 @@ type storageRESTClient struct {
 // permanently. The only way to restore the storage connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *storageRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-	if !client.connected {
+	if !client.IsOnline() {
 		return nil, errDiskNotFound
 	}
 	if values == nil {
@@ -129,7 +130,7 @@ func (client *storageRESTClient) call(method string, values url.Values, body io.
 	}
 	client.lastError = err
 	if isNetworkError(err) {
-		client.connected = false
+		atomic.StoreInt32(&client.connected, 0)
 	}
 
 	return nil, toStorageErr(err)
@@ -142,7 +143,7 @@ func (client *storageRESTClient) String() string {
 
 // IsOnline - returns whether RPC client failed to connect or not.
 func (client *storageRESTClient) IsOnline() bool {
-	return client.connected
+	return atomic.LoadInt32(&client.connected) == 1
 }
 
 // LastError - returns the network error if any.
@@ -460,7 +461,7 @@ func (client *storageRESTClient) VerifyFile(volume, path string, size int64, alg
 
 // Close - marks the client as closed.
 func (client *storageRESTClient) Close() error {
-	client.connected = false
+	atomic.StoreInt32(&client.connected, 0)
 	client.restClient.Close()
 	return nil
 }
@@ -496,7 +497,11 @@ func newStorageRESTClient(endpoint Endpoint) (*storageRESTClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	client := &storageRESTClient{endpoint: endpoint, restClient: restClient, connected: true}
-	client.connected = client.getInstanceID() == nil
+	client := &storageRESTClient{endpoint: endpoint, restClient: restClient, connected: 1}
+	if client.getInstanceID() == nil {
+		client.connected = 1
+	} else {
+		client.connected = 0
+	}
 	return client, nil
 }
