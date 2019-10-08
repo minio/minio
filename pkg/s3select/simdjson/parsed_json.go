@@ -6,6 +6,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"math"
 	"unsafe"
 )
 
@@ -24,6 +27,32 @@ type Iter struct {
 	off int
 	// Next tag
 	t Tag
+}
+
+// LoadTape will load the input from the supplied readers.
+func LoadTape(tape, strings io.Reader) (*ParsedJson, error) {
+	b, err := ioutil.ReadAll(tape)
+	if err != nil {
+		return nil, err
+	}
+	if len(b)&7 != 0 {
+		return nil, errors.New("unexpected tape length, should be modulo 8 bytes")
+	}
+	dst := ParsedJson{
+		Tape:    make([]uint64, len(b)/8),
+		Strings: nil,
+	}
+	// Read tape
+	for i := range dst.Tape {
+		dst.Tape[i] = binary.LittleEndian.Uint64(b[i*8 : i*8+8])
+	}
+	// Read strings
+	b, err = ioutil.ReadAll(strings)
+	if err != nil {
+		return nil, err
+	}
+	dst.Strings = b
+	return &dst, nil
 }
 
 func (pj *ParsedJson) Iter() Iter {
@@ -46,16 +75,184 @@ func (pj *ParsedJson) StringAt(offset uint64) (string, error) {
 	return string(pj.Strings[offset+4 : offset+4+length-1]), nil
 }
 
+// Next will read the type of the next element
+// and queues up the value.
 func (i *Iter) Next() Type {
 	if i.off >= len(i.tape.Tape) {
 		return TypeNone
 	}
-	tag := Tag(i.tape.Tape[0] >> 56)
-	switch tag {
-
-	}
+	tag := Tag(i.tape.Tape[i.off] >> 56)
 	i.t = tag
+	i.off++
 	return TagToType[tag]
+}
+
+func (i *Iter) PeekNext() Type {
+	if i.off >= len(i.tape.Tape) {
+		return TypeNone
+	}
+	return TagToType[Tag(i.tape.Tape[i.off]>>56)]
+}
+
+// Float returns the float value of the next element.
+// Integers are automatically converted to float.
+func (i *Iter) Float() (float64, error) {
+	switch i.t {
+	case TagFloat:
+		if i.off >= len(i.tape.Tape) {
+			return 0, errors.New("corrupt input: expected float, but no more values on tape")
+		}
+		v := math.Float64frombits(i.tape.Tape[i.off])
+		i.off++
+		return v, nil
+	case TagInteger:
+		if i.off >= len(i.tape.Tape) {
+			return 0, errors.New("corrupt input: expected integer, but no more values on tape")
+		}
+		v := int64(i.tape.Tape[i.off])
+		i.off++
+		return float64(v), nil
+	case TagUint:
+		if i.off >= len(i.tape.Tape) {
+			return 0, errors.New("corrupt input: expected integer, but no more values on tape")
+		}
+		v := i.tape.Tape[i.off]
+		i.off++
+		return float64(v), nil
+	default:
+		return 0, fmt.Errorf("unable to convert type %v to float", i.t)
+	}
+}
+
+// Float returns the float value of the next element.
+// Integers are automatically converted to float.
+func (i *Iter) Int() (int64, error) {
+	switch i.t {
+	case TagFloat:
+		if i.off >= len(i.tape.Tape) {
+			return 0, errors.New("corrupt input: expected float, but no more values on tape")
+		}
+		v := math.Float64frombits(i.tape.Tape[i.off])
+		i.off++
+		if v > math.MaxInt64 {
+			return 0, errors.New("float value overflows int64")
+		}
+		if v < math.MinInt64 {
+			return 0, errors.New("float value underflows int64")
+		}
+		return int64(v), nil
+	case TagInteger:
+		if i.off >= len(i.tape.Tape) {
+			return 0, errors.New("corrupt input: expected integer, but no more values on tape")
+		}
+		v := int64(i.tape.Tape[i.off])
+		i.off++
+		return v, nil
+	case TagUint:
+		if i.off >= len(i.tape.Tape) {
+			return 0, errors.New("corrupt input: expected integer, but no more values on tape")
+		}
+		v := i.tape.Tape[i.off]
+		i.off++
+		if v > math.MaxInt64 {
+			return 0, errors.New("unsigned integer value overflows int64")
+		}
+		return int64(v), nil
+	default:
+		return 0, fmt.Errorf("unable to convert type %v to float", i.t)
+	}
+}
+
+// Float returns the float value of the next element.
+// Integers are automatically converted to float.
+func (i *Iter) Uint() (uint64, error) {
+	switch i.t {
+	case TagFloat:
+		if i.off >= len(i.tape.Tape) {
+			return 0, errors.New("corrupt input: expected float, but no more values on tape")
+		}
+		v := math.Float64frombits(i.tape.Tape[i.off])
+		i.off++
+		if v > math.MaxUint64 {
+			return 0, errors.New("float value overflows uint64")
+		}
+		if v < 0 {
+			return 0, errors.New("float value is negative. cannot convert to uint")
+		}
+		return uint64(v), nil
+	case TagInteger:
+		if i.off >= len(i.tape.Tape) {
+			return 0, errors.New("corrupt input: expected integer, but no more values on tape")
+		}
+		v := int64(i.tape.Tape[i.off])
+		if v < 0 {
+			return 0, errors.New("integer value is negative. cannot convert to uint")
+		}
+
+		i.off++
+		return uint64(v), nil
+	case TagUint:
+		if i.off >= len(i.tape.Tape) {
+			return 0, errors.New("corrupt input: expected integer, but no more values on tape")
+		}
+		v := i.tape.Tape[i.off]
+		i.off++
+		return v, nil
+	default:
+		return 0, fmt.Errorf("unable to convert type %v to float", i.t)
+	}
+}
+
+// String() returns a string value.
+func (i *Iter) String() (string, error) {
+	if i.t != TagString {
+		return "", errors.New("value is not string")
+	}
+	i.off++
+	return i.tape.StringAt(uint64(i.t))
+}
+
+// Bool() returns the bool value.
+func (i *Iter) Bool() (bool, error) {
+	switch i.t {
+	case TagBoolTrue:
+		return true, nil
+	case TagBoolFalse:
+		return false, nil
+	}
+	return false, fmt.Errorf("value is not bool, but %v", i.t)
+}
+
+// Interface returns the value as an interface.
+func (i *Iter) Interface() (interface{}, error) {
+	switch i.t.Type() {
+	case TypeUint:
+		return i.Uint()
+	case TypeInt:
+		return i.Int()
+	case TypeFloat:
+		return i.Float()
+	case TypeNull:
+		return nil, nil
+	case TypeArray:
+		arr, err := i.Array(nil)
+		if err != nil {
+			return nil, err
+		}
+		return arr.Interface()
+	case TypeString:
+		return i.String()
+	case TypeObject:
+		obj, err := i.Object(nil)
+		if err != nil {
+			return nil, err
+		}
+		return obj.Map(nil)
+	case TypeBool:
+		return i.t == TagBoolTrue, nil
+	default:
+	}
+	return nil, fmt.Errorf("unknown tag type: %v", i.t)
 }
 
 type Object struct {
@@ -68,7 +265,9 @@ type Object struct {
 	nameIdx map[string]int
 }
 
-func (i *Iter) Object() (*Object, error) {
+// Object will return the next element as an object.
+// An optional destination can be given.
+func (i *Iter) Object(dst *Object) (*Object, error) {
 	if i.t != TagObjectStart {
 		return nil, errors.New("next item is not object")
 	}
@@ -78,16 +277,70 @@ func (i *Iter) Object() (*Object, error) {
 		return nil, errors.New("corrupt input: object extended beyond tape")
 	}
 	i.off++
-	o := Object{
-		tape:    ParsedJson{Tape: i.tape.Tape[:end], Strings: i.tape.Strings},
-		off:     i.off,
-		nameIdx: nil,
+	if dst == nil {
+		dst = &Object{
+			nameIdx: make(map[string]int),
+		}
+	} else {
+		for k := range dst.nameIdx {
+			delete(dst.nameIdx, k)
+		}
 	}
+	dst.tape.Tape = i.tape.Tape[:end]
+	dst.tape.Strings = i.tape.Strings
+	dst.off = i.off
 
-	return &o, nil
+	return dst, nil
 }
 
-func (o *Object) NextElement() (name string, t Type, err error) {
+// Object will return the next element as an object.
+// An optional destination can be given.
+func (i *Iter) Array(dst *Array) (*Array, error) {
+	if i.t != TagArrayStart {
+		return nil, errors.New("next item is not object")
+	}
+	v := i.tape.Tape[i.off]
+	end := v & JSONVALUEMASK
+	if uint64(len(i.tape.Tape)) < end {
+		return nil, errors.New("corrupt input: object extended beyond tape")
+	}
+	i.off++
+	if dst == nil {
+		dst = &Array{}
+	}
+	dst.tape.Tape = i.tape.Tape[:end]
+	dst.tape.Strings = i.tape.Strings
+	dst.off = i.off
+
+	return dst, nil
+}
+
+// Map will unmarshal into a map[string]interface{}
+func (o *Object) Map(dst map[string]interface{}) (map[string]interface{}, error) {
+	if dst == nil {
+		dst = make(map[string]interface{})
+	}
+	var tmp Iter
+	for {
+		name, t, err := o.NextElement(&tmp)
+		if err != nil {
+			return nil, err
+		}
+		if t == TypeNone {
+			// Done
+			break
+		}
+		dst[name], err = tmp.Interface()
+		if err != nil {
+			return nil, fmt.Errorf("parsing element %q: %w", name, err)
+		}
+	}
+	return dst, nil
+}
+
+// NextElement sets dst to the next element and returns the name.
+// TypeNone with nil error will be returned if there are no more elements.
+func (o *Object) NextElement(dst *Iter) (name string, t Type, err error) {
 	// Next must be string or end of object
 	v := o.tape.Tape[o.off]
 
@@ -107,19 +360,113 @@ func (o *Object) NextElement() (name string, t Type, err error) {
 		return "", TypeNone, fmt.Errorf("object: unexpected tag %v", tag)
 	}
 	v = o.tape.Tape[o.off]
+	o.nameIdx[name] = o.off
 	tag = Tag(v >> 56)
 	return name, TagToType[tag], nil
 }
 
 type Array struct {
-	p         ParsedJson
+	tape      ParsedJson
 	off       int
 	Len       int
 	FirstType Type
 }
 
-func (a *Array) AsFloat() ([]float64, error) {
+func (a *Array) Interface() ([]interface{}, error) {
+	// FIXME:
+	return nil, nil
+}
 
+// AsFloat returns the array values as float.
+// Integers are automatically converted to float.
+func (a *Array) AsFloat() ([]float64, error) {
+	// Estimate length
+	lenEst := (len(a.tape.Tape) - a.off - 1) / 2
+	if lenEst < 0 {
+		lenEst = 0
+	}
+	dst := make([]float64, 0, lenEst)
+
+readArray:
+	for {
+		tag := Tag(a.tape.Tape[a.off] >> 56)
+		a.off++
+		switch tag {
+		case TagFloat:
+			if len(a.tape.Tape) <= a.off {
+				return nil, errors.New("corrupt input: expected float, but no more values")
+			}
+			dst = append(dst, math.Float64frombits(a.tape.Tape[a.off]))
+		case TagInteger:
+			if len(a.tape.Tape) <= a.off {
+				return nil, errors.New("corrupt input: expected integer, but no more values")
+			}
+			dst = append(dst, float64(int64(a.tape.Tape[a.off])))
+		case TagUint:
+			if len(a.tape.Tape) <= a.off {
+				return nil, errors.New("corrupt input: expected integer, but no more values")
+			}
+			dst = append(dst, float64(a.tape.Tape[a.off]))
+		case TagArrayEnd:
+			break readArray
+		default:
+			return nil, fmt.Errorf("unable to convert type %v to float", tag)
+		}
+		a.off++
+	}
+	return dst, nil
+}
+
+// AsFloat returns the array values as float.
+// Integers are automatically converted to float.
+func (a *Array) AsInteger() ([]int64, error) {
+	// Estimate length
+	lenEst := (len(a.tape.Tape) - a.off - 1) / 2
+	if lenEst < 0 {
+		lenEst = 0
+	}
+	dst := make([]int64, 0, lenEst)
+readArray:
+	for {
+		tag := Tag(a.tape.Tape[a.off] >> 56)
+		a.off++
+		switch tag {
+		case TagFloat:
+			if len(a.tape.Tape) <= a.off {
+				return nil, errors.New("corrupt input: expected float, but no more values")
+			}
+			val := math.Float64frombits(a.tape.Tape[a.off])
+			if val > math.MaxInt64 {
+				return nil, errors.New("float value overflows int64")
+			}
+			if val < math.MinInt64 {
+				return nil, errors.New("float value underflows int64")
+			}
+			dst = append(dst, int64(val))
+		case TagInteger:
+			if len(a.tape.Tape) <= a.off {
+				return nil, errors.New("corrupt input: expected integer, but no more values")
+			}
+			dst = append(dst, int64(a.tape.Tape[a.off]))
+		case TagUint:
+			if len(a.tape.Tape) <= a.off {
+				return nil, errors.New("corrupt input: expected integer, but no more values")
+			}
+
+			val := a.tape.Tape[a.off]
+			if val > math.MaxInt64 {
+				return nil, errors.New("unsigned integer value overflows int64")
+			}
+
+			dst = append(dst)
+		case TagArrayEnd:
+			break readArray
+		default:
+			return nil, fmt.Errorf("unable to convert type %v to integer", tag)
+		}
+		a.off++
+	}
+	return dst, nil
 }
 
 func (pj *ParsedJson) loadFile(tape, stringBuf string) (*ParsedJson, error) {
@@ -163,6 +510,7 @@ type Type uint8
 const (
 	TagString      = Tag('"')
 	TagInteger     = Tag('l')
+	TagUint        = Tag('u')
 	TagFloat       = Tag('d')
 	TagNull        = Tag('n')
 	TagBoolTrue    = Tag('t')
@@ -177,7 +525,8 @@ const (
 	TypeNone Type = iota
 	TypeNull
 	TypeString
-	TypeInteger
+	TypeInt
+	TypeUint
 	TypeFloat
 	TypeBool
 	TypeObject
@@ -189,13 +538,18 @@ const (
 // All non-existing tags returns TypeNone.
 var TagToType = [256]Type{
 	TagString:      TypeString,
-	TagInteger:     TypeInteger,
+	TagInteger:     TypeInt,
+	TagUint:        TypeUint,
 	TagFloat:       TypeFloat,
 	TagNull:        TypeNull,
 	TagBoolTrue:    TypeBool,
 	TagBoolFalse:   TypeBool,
 	TagObjectStart: TypeObject,
 	TagArrayStart:  TypeArray,
+}
+
+func (t Tag) Type() Type {
+	return TagToType[t]
 }
 
 func (pj *ParsedJson) dump_raw_tape() bool {
