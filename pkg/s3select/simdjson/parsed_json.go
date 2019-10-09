@@ -190,7 +190,7 @@ func (i *Iter) MarshalJSONBuffer(dst []byte) ([]byte, error) {
 			}
 			i.Next()
 		}
-		//fmt.Println(string(i.t))
+
 		switch i.t {
 		case TagRoot:
 			// Move into root.
@@ -440,8 +440,14 @@ func (i *Iter) Bool() (bool, error) {
 }
 
 // Interface returns the value as an interface.
+// Objects are returned as map[string]interface{}.
+// Arrays are returned as []interface{}.
+// Float values are returned as float64.
+// Integer values are returned as int64 or uint64.
+// String values are returned as string.
+// Boolean values are returned as bool.
+// Null values are returned as nil.
 func (i *Iter) Interface() (interface{}, error) {
-	//fmt.Println("interface type:", i.t.Type())
 	switch i.t.Type() {
 	case TypeUint:
 		return i.Uint()
@@ -534,6 +540,7 @@ func (i *Iter) Array(dst *Array) (*Array, error) {
 }
 
 // Map will unmarshal into a map[string]interface{}
+// See Iter.Interface() for a reference on value types.
 func (o *Object) Map(dst map[string]interface{}) (map[string]interface{}, error) {
 	if dst == nil {
 		dst = make(map[string]interface{})
@@ -701,7 +708,6 @@ func (o *Object) NextElement(dst *Iter) (name string, t Type, err error) {
 type Array struct {
 	tape ParsedJson
 	off  int
-	Len  int
 }
 
 // Iter returns the array as an iterator.
@@ -714,6 +720,12 @@ func (a *Array) Iter() Iter {
 		off:  a.off,
 	}
 	return i
+}
+
+// FirstType will return the type of the first element.
+// If there are no elements, TypeNone is returned.
+func (a *Array) FirstType() Type {
+	return a.Iter().PeekNext()
 }
 
 // MarshalJSON will marshal the entire remaining scope of the iterator.
@@ -752,6 +764,8 @@ func (a *Array) MarshalJSONBuffer(dst []byte) ([]byte, error) {
 	return dst, nil
 }
 
+// Array returns the array as a slice of interfaces.
+// See Iter.Interface() for a reference on value types.
 func (a *Array) Interface() ([]interface{}, error) {
 	// Estimate length. Assume one value per element.
 	lenEst := (len(a.tape.Tape) - a.off - 1) / 2
