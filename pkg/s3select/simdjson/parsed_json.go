@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
+	"strconv"
 	"unsafe"
 )
 
@@ -64,16 +65,21 @@ func (pj *ParsedJson) Iter() Iter {
 }
 
 func (pj *ParsedJson) StringAt(offset uint64) (string, error) {
+	b, err := pj.StringByteAt(offset)
+	return string(b), err
+}
+
+func (pj *ParsedJson) StringByteAt(offset uint64) ([]byte, error) {
 	offset &= JSONVALUEMASK
 	// There must be at least 4 byte length and one 0 byte.
 	if offset+5 > uint64(len(pj.Strings)) {
-		return "", errors.New("string offset outside valid area")
+		return nil, errors.New("string offset outside valid area")
 	}
 	length := uint64(binary.LittleEndian.Uint32(pj.Strings[offset : offset+4]))
 	if offset+length > uint64(len(pj.Strings)) {
-		return "", errors.New("string offset+length outside valid area")
+		return nil, errors.New("string offset+length outside valid area")
 	}
-	return string(pj.Strings[offset+4 : offset+4+length]), nil
+	return pj.Strings[offset+4 : offset+4+length], nil
 }
 
 // Next will read the type of the next element
@@ -137,6 +143,146 @@ func (i *Iter) PeekNext() Type {
 		return TypeNone
 	}
 	return TagToType[Tag(i.tape.Tape[i.off]>>56)]
+}
+
+// PeekNextTag will return the tag at the current offset.
+// Will return TagEnd if at end of iterator.
+func (i *Iter) PeekNextTag() Tag {
+	if i.off >= len(i.tape.Tape) {
+		return TagEnd
+	}
+	return Tag(i.tape.Tape[i.off] >> 56)
+}
+
+// MarshalJSON will marshal the entire remaining scope of the iterator.
+func (i *Iter) MarshalJSON() ([]byte, error) {
+	return i.MarshalJSONBuffer(nil)
+}
+
+// MarshalJSONBuffer will marshal the entire remaining scope of the iterator.
+// An optional buffer can be provided for fewer allocations.
+// Output will be appended to the destination.
+func (i *Iter) MarshalJSONBuffer(dst []byte) ([]byte, error) {
+	var tmpBuf []byte
+
+	// Pre-allocate for 100 deep.
+	var stackTmp [100]uint8
+	// We have a stackNone on top of the stack
+	stack := stackTmp[:1]
+	const (
+		stackNone = iota
+		stackArray
+		stackObject
+	)
+
+	for {
+		// Write key names.
+		if stack[len(stack)-1] == stackObject && i.t != TagObjectEnd {
+			sb, err := i.StringBytes()
+			if err != nil {
+				return nil, fmt.Errorf("expected key within object: %w", err)
+			}
+			tmpBuf = escapeBytes(tmpBuf, sb)
+			dst = append(dst, '"')
+			dst = append(dst, tmpBuf...)
+			dst = append(dst, '"', ':')
+			if i.PeekNextTag() == TagEnd {
+				return nil, fmt.Errorf("unexpected end of tape within object")
+			}
+			i.Next()
+		}
+		//fmt.Println(string(i.t))
+		switch i.t {
+		case TagRoot:
+			// Move into root.
+			var err error
+			i, err = i.Root()
+			if err != nil {
+				return nil, err
+			}
+		case TagString:
+			sb, err := i.StringBytes()
+			if err != nil {
+				return nil, err
+			}
+			tmpBuf = escapeBytes(tmpBuf, sb)
+			dst = append(dst, '"')
+			dst = append(dst, tmpBuf...)
+			dst = append(dst, '"')
+		case TagInteger:
+			v, err := i.Int()
+			if err != nil {
+				return nil, err
+			}
+			dst = append(dst, []byte(strconv.FormatInt(v, 10))...)
+		case TagUint:
+			v, err := i.Uint()
+			if err != nil {
+				return nil, err
+			}
+			dst = append(dst, []byte(strconv.FormatUint(v, 10))...)
+		case TagFloat:
+			v, err := i.Float()
+			if err != nil {
+				return nil, err
+			}
+			dst = append(dst, []byte(strconv.FormatFloat(v, 'g', -1, 64))...)
+		case TagNull:
+			dst = append(dst, []byte("null")...)
+		case TagBoolTrue:
+			dst = append(dst, []byte("true")...)
+		case TagBoolFalse:
+			dst = append(dst, []byte("false")...)
+		case TagObjectStart:
+			dst = append(dst, '{')
+			stack = append(stack, stackObject)
+			// We should not emit commas.
+			i.Next()
+			continue
+		case TagObjectEnd:
+			dst = append(dst, '}')
+			if stack[len(stack)-1] != stackObject {
+				return dst, errors.New("end of object with no object on stack")
+			}
+			stack = stack[:len(stack)-1]
+		case TagArrayStart:
+			dst = append(dst, '[')
+			stack = append(stack, stackArray)
+			i.Next()
+			continue
+		case TagArrayEnd:
+			dst = append(dst, ']')
+			if stack[len(stack)-1] != stackArray {
+				return nil, errors.New("end of object with no array on stack")
+			}
+			stack = stack[:len(stack)-1]
+		}
+
+		if i.PeekNextTag() == TagEnd {
+			break
+		}
+		i.Next()
+
+		// Output object separators, etc.
+		switch stack[len(stack)-1] {
+		case stackArray:
+			switch i.t {
+			case TagArrayEnd:
+			default:
+				dst = append(dst, ',')
+			}
+		case stackObject:
+			switch i.t {
+			case TagObjectEnd:
+			default:
+				dst = append(dst, ',')
+			}
+		}
+	}
+	if len(stack) > 1 {
+		return nil, fmt.Errorf("objects or arrays not closed. left on stack: %v", stack[1:])
+	}
+	return dst, nil
 }
 
 // Float returns the float value of the next element.
@@ -257,6 +403,15 @@ func (i *Iter) String() (string, error) {
 }
 
 // String() returns a string value.
+func (i *Iter) StringBytes() ([]byte, error) {
+	if i.t != TagString {
+		return nil, errors.New("value is not string")
+	}
+	return i.tape.StringByteAt(i.cur)
+}
+
+// Root() returns the object embedded in root as an iterator.
+// The iterator is moved to the first element after the root object.
 func (i *Iter) Root() (*Iter, error) {
 	if i.t != TagRoot {
 		return nil, errors.New("value is not string")
@@ -267,6 +422,7 @@ func (i *Iter) Root() (*Iter, error) {
 	dst := Iter{}
 	dst = *i
 	dst.tape.Tape = dst.tape.Tape[:i.cur]
+	i.off = int(i.cur)
 	return &dst, nil
 }
 
@@ -327,8 +483,6 @@ type Object struct {
 
 	// offset of the next entry to be decoded
 	off int
-
-	nameIdx map[string]int
 }
 
 // Object will return the next element as an object.
@@ -346,13 +500,7 @@ func (i *Iter) Object(dst *Object) (*Object, error) {
 		return nil, errors.New("corrupt input: object extended beyond tape")
 	}
 	if dst == nil {
-		dst = &Object{
-			nameIdx: make(map[string]int),
-		}
-	} else {
-		for k := range dst.nameIdx {
-			delete(dst.nameIdx, k)
-		}
+		dst = &Object{}
 	}
 	dst.tape.Tape = i.tape.Tape[:end]
 	dst.tape.Strings = i.tape.Strings
@@ -408,6 +556,52 @@ func (o *Object) Map(dst map[string]interface{}) (map[string]interface{}, error)
 	return dst, nil
 }
 
+type Element struct {
+	Name string
+	Type Type
+	Iter Iter
+}
+
+type Elements struct {
+	Elements []Element
+	Index    map[string]int
+}
+
+// Parse will return all elements and iterators for each.
+// An optional destination can be given.
+// The Object will be consumed.
+func (o *Object) Parse(dst *Elements) (*Elements, error) {
+	if dst == nil {
+		dst = &Elements{
+			Elements: make([]Element, 0, 5),
+			Index:    make(map[string]int, 5),
+		}
+	} else {
+		dst.Elements = dst.Elements[:0]
+		for k := range dst.Index {
+			delete(dst.Index, k)
+		}
+	}
+	var tmp Iter
+	for {
+		name, t, err := o.NextElement(&tmp)
+		if err != nil {
+			return nil, err
+		}
+		if t == TypeNone {
+			// Done
+			break
+		}
+		dst.Index[name] = len(dst.Elements)
+		dst.Elements = append(dst.Elements, Element{
+			Name: name,
+			Type: t,
+			Iter: tmp,
+		})
+	}
+	return dst, nil
+}
+
 // NextElement sets dst to the next element and returns the name.
 // TypeNone with nil error will be returned if there are no more elements.
 func (o *Object) NextElement(dst *Iter) (name string, t Type, err error) {
@@ -416,10 +610,9 @@ func (o *Object) NextElement(dst *Iter) (name string, t Type, err error) {
 	}
 	// Next must be string or end of object
 	v := o.tape.Tape[o.off]
-
-	// Read name:
 	switch Tag(v >> 56) {
 	case TagString:
+		// Read name:
 		name, err = o.tape.StringAt(v)
 		if err != nil {
 			return "", TypeNone, fmt.Errorf("parsing object element name: %w", err)
@@ -430,7 +623,6 @@ func (o *Object) NextElement(dst *Iter) (name string, t Type, err error) {
 	default:
 		return "", TypeNone, fmt.Errorf("object: unexpected tag %v", string(v>>56))
 	}
-	o.nameIdx[name] = o.off
 
 	// Read element type
 	v = o.tape.Tape[o.off]
@@ -465,13 +657,13 @@ func (o *Object) NextElement(dst *Iter) (name string, t Type, err error) {
 }
 
 type Array struct {
-	tape      ParsedJson
-	off       int
-	Len       int
-	FirstType Type
+	tape ParsedJson
+	off  int
+	Len  int
 }
 
 // Iter returns the array as an iterator.
+// This can be used for parsing mixed content arrays.
 // The first value is ready with a call to Next.
 // Calling after last element should have TypeNone.
 func (a *Array) Iter() Iter {
@@ -483,8 +675,8 @@ func (a *Array) Iter() Iter {
 }
 
 func (a *Array) Interface() ([]interface{}, error) {
-	// Estimate minimum length
-	lenEst := len(a.tape.Tape) - a.off - 1
+	// Estimate length. Assume one value per element.
+	lenEst := (len(a.tape.Tape) - a.off - 1) / 2
 	if lenEst < 0 {
 		lenEst = 0
 	}
@@ -794,40 +986,48 @@ func Float64toUint64(f float64) uint64 {
 }
 
 func print_with_escapes(src []byte) string {
+	return string(escapeBytes(nil, src))
+}
 
-	result := make([]byte, 0, len(src))
+func escapeBytes(dst, src []byte) []byte {
+	if cap(dst) < len(src) {
+		dst = make([]byte, 0, len(src)+len(src)>>4)
+	}
+	dst = dst[:0]
 
 	for _, s := range src {
 		switch s {
 		case '\b':
-			result = append(result, []byte{'\\', 'b'}...)
+			dst = append(dst, '\\', 'b')
 
 		case '\f':
-			result = append(result, []byte{'\\', 'f'}...)
+			dst = append(dst, '\\', 'f')
 
 		case '\n':
-			result = append(result, []byte{'\\', 'n'}...)
+			dst = append(dst, '\\', 'n')
 
 		case '\r':
-			result = append(result, []byte{'\\', 'r'}...)
+			dst = append(dst, '\\', 'r')
 
 		case '"':
-			result = append(result, []byte{'\\', '"'}...)
+			dst = append(dst, '\\', '"')
 
 		case '\t':
-			result = append(result, []byte{'\\', 't'}...)
+			dst = append(dst, '\\', 't')
 
 		case '\\':
-			result = append(result, []byte{'\\', '\\'}...)
+			dst = append(dst, '\\', '\\')
 
 		default:
 			if s <= 0x1f {
-				result = append(result, []byte(fmt.Sprintf("%04x", s))...)
+				dst = append(dst, '\\', 'u', '0', '0', valToHex[s>>4], valToHex[s&0xf])
 			} else {
-				result = append(result, s)
+				dst = append(dst, s)
 			}
 		}
 	}
 
-	return string(result)
+	return dst
 }
+
+var valToHex = [16]byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'}
