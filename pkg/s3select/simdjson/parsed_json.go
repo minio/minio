@@ -25,8 +25,10 @@ type Iter struct {
 
 	// offset of the next entry to be decoded
 	off int
-	// current value
+
+	// current value, exclude tag in top bits
 	cur uint64
+
 	// current tag
 	t Tag
 }
@@ -71,10 +73,7 @@ func (pj *ParsedJson) StringAt(offset uint64) (string, error) {
 	if offset+length > uint64(len(pj.Strings)) {
 		return "", errors.New("string offset+length outside valid area")
 	}
-	if length <= 0 {
-		return "", errors.New("string length was 0")
-	}
-	return string(pj.Strings[offset+4 : offset+4+length-1]), nil
+	return string(pj.Strings[offset+4 : offset+4+length]), nil
 }
 
 // Next will read the type of the next element
@@ -88,6 +87,49 @@ func (i *Iter) Next() Type {
 	i.t = Tag(v >> 56)
 	i.off++
 	return TagToType[i.t]
+}
+
+// NextIter will read the type of the next element
+// and return an iterator only containing the object.
+// The iterator 'i' is forwarded to the next value,
+// meaning next call will return next object at this level.
+// If dst and i are the same, both will contain the value inside.
+func (i *Iter) NextIter(dst *Iter) (Type, error) {
+	if i.off == len(i.tape.Tape) {
+		return TypeNone, nil
+	}
+	if i.off > len(i.tape.Tape) {
+		return TypeNone, errors.New("offset bigger than tape")
+	}
+	v := i.tape.Tape[i.off]
+	i.cur = v & JSONVALUEMASK
+	i.t = Tag(v >> 56)
+	i.off++
+	typ := TagToType[i.t]
+
+	// copy i.
+	if i != dst {
+		*dst = *i
+	}
+	switch typ {
+	case TypeRoot, TypeObject, TypeArray:
+		if i.cur > uint64(len(i.tape.Tape)) {
+			return TypeNone, errors.New("root element extends beyond tape")
+		}
+		dst.tape.Tape = dst.tape.Tape[:dst.cur]
+	case TypeBool, TypeNull, TypeNone, TypeString:
+		dst.tape.Tape = dst.tape.Tape[:dst.off]
+	case TypeInt, TypeUint, TypeFloat:
+		if i.off >= len(i.tape.Tape) {
+			return TypeNone, errors.New("expected element value not on")
+		}
+		dst.tape.Tape = dst.tape.Tape[:dst.off+1]
+	}
+	if i != dst {
+		// Forward i if different.
+		i.off = len(dst.tape.Tape)
+	}
+	return typ, nil
 }
 
 func (i *Iter) PeekNext() Type {
@@ -214,6 +256,20 @@ func (i *Iter) String() (string, error) {
 	return i.tape.StringAt(i.cur)
 }
 
+// String() returns a string value.
+func (i *Iter) Root() (*Iter, error) {
+	if i.t != TagRoot {
+		return nil, errors.New("value is not string")
+	}
+	if i.cur > uint64(len(i.tape.Tape)) {
+		return nil, errors.New("root element extends beyond tape")
+	}
+	dst := Iter{}
+	dst = *i
+	dst.tape.Tape = dst.tape.Tape[:i.cur]
+	return &dst, nil
+}
+
 // Bool() returns the bool value.
 func (i *Iter) Bool() (bool, error) {
 	switch i.t {
@@ -227,6 +283,7 @@ func (i *Iter) Bool() (bool, error) {
 
 // Interface returns the value as an interface.
 func (i *Iter) Interface() (interface{}, error) {
+	//fmt.Println("interface type:", i.t.Type())
 	switch i.t.Type() {
 	case TypeUint:
 		return i.Uint()
@@ -252,6 +309,13 @@ func (i *Iter) Interface() (interface{}, error) {
 		return obj.Map(nil)
 	case TypeBool:
 		return i.t == TagBoolTrue, nil
+	case TypeRoot:
+		// Skip root
+		obj, err := i.Root()
+		if err != nil {
+			return nil, err
+		}
+		return obj.Interface()
 	default:
 	}
 	return nil, fmt.Errorf("unknown tag type: %v", i.t)
@@ -269,6 +333,7 @@ type Object struct {
 
 // Object will return the next element as an object.
 // An optional destination can be given.
+// 'i' is forwarded to the end of the object.
 func (i *Iter) Object(dst *Object) (*Object, error) {
 	if i.t != TagObjectStart {
 		return nil, errors.New("next item is not object")
@@ -292,6 +357,7 @@ func (i *Iter) Object(dst *Object) (*Object, error) {
 	dst.tape.Tape = i.tape.Tape[:end]
 	dst.tape.Strings = i.tape.Strings
 	dst.off = i.off
+	i.off = int(end)
 
 	return dst, nil
 }
@@ -312,6 +378,7 @@ func (i *Iter) Array(dst *Array) (*Array, error) {
 	dst.tape.Tape = i.tape.Tape[:end]
 	dst.tape.Strings = i.tape.Strings
 	dst.off = i.off
+	i.off = int(end)
 
 	return dst, nil
 }
@@ -327,11 +394,13 @@ func (o *Object) Map(dst map[string]interface{}) (map[string]interface{}, error)
 		if err != nil {
 			return nil, err
 		}
+		//fmt.Println("Map name:", name, "type:", t)
 		if t == TypeNone {
 			// Done
 			break
 		}
 		dst[name], err = tmp.Interface()
+		//fmt.Println("value:", dst[name], "err:", err)
 		if err != nil {
 			return nil, fmt.Errorf("parsing element %q: %w", name, err)
 		}
@@ -342,16 +411,14 @@ func (o *Object) Map(dst map[string]interface{}) (map[string]interface{}, error)
 // NextElement sets dst to the next element and returns the name.
 // TypeNone with nil error will be returned if there are no more elements.
 func (o *Object) NextElement(dst *Iter) (name string, t Type, err error) {
-	if o.off == len(o.tape.Tape) {
+	if o.off >= len(o.tape.Tape) {
 		return "", TypeNone, nil
 	}
 	// Next must be string or end of object
 	v := o.tape.Tape[o.off]
 
 	// Read name:
-	tag := Tag(v >> 56)
-
-	switch tag {
+	switch Tag(v >> 56) {
 	case TagString:
 		name, err = o.tape.StringAt(v)
 		if err != nil {
@@ -361,12 +428,40 @@ func (o *Object) NextElement(dst *Iter) (name string, t Type, err error) {
 	case TagObjectEnd:
 		return "", TypeNone, nil
 	default:
-		return "", TypeNone, fmt.Errorf("object: unexpected tag %v", tag)
+		return "", TypeNone, fmt.Errorf("object: unexpected tag %v", string(v>>56))
 	}
-	v = o.tape.Tape[o.off]
 	o.nameIdx[name] = o.off
-	tag = Tag(v >> 56)
-	return name, TagToType[tag], nil
+
+	// Read element type
+	v = o.tape.Tape[o.off]
+	// Move to value (if any)
+	o.off++
+
+	// Set dst
+	dst.cur = v & JSONVALUEMASK
+	dst.t = Tag(v >> 56)
+	dst.off = o.off
+	dst.tape = o.tape
+
+	// Queue first element in dst.
+	switch dst.t.Type() {
+	case TypeRoot, TypeObject, TypeArray:
+		if dst.cur > uint64(len(o.tape.Tape)) {
+			return "", TypeNone, errors.New("element extends beyond tape")
+		}
+		dst.tape.Tape = dst.tape.Tape[:dst.cur]
+	case TypeBool, TypeNull, TypeNone, TypeString:
+		dst.tape.Tape = dst.tape.Tape[:dst.off]
+	case TypeInt, TypeUint, TypeFloat:
+		if dst.off >= len(dst.tape.Tape) {
+			return "", TypeNone, errors.New("expected element value not on")
+		}
+		dst.tape.Tape = dst.tape.Tape[:dst.off+1]
+	}
+
+	// Skip to next element
+	o.off = len(dst.tape.Tape)
+	return name, TagToType[dst.t], nil
 }
 
 type Array struct {
@@ -376,9 +471,33 @@ type Array struct {
 	FirstType Type
 }
 
+// Iter returns the array as an iterator.
+// The first value is ready with a call to Next.
+// Calling after last element should have TypeNone.
+func (a *Array) Iter() Iter {
+	i := Iter{
+		tape: a.tape,
+		off:  a.off,
+	}
+	return i
+}
+
 func (a *Array) Interface() ([]interface{}, error) {
-	// FIXME:
-	return nil, nil
+	// Estimate minimum length
+	lenEst := len(a.tape.Tape) - a.off - 1
+	if lenEst < 0 {
+		lenEst = 0
+	}
+	dst := make([]interface{}, 0, lenEst)
+	i := a.Iter()
+	for i.Next() != TypeNone {
+		elem, err := i.Interface()
+		if err != nil {
+			return nil, err
+		}
+		dst = append(dst, elem)
+	}
+	return dst, nil
 }
 
 // AsFloat returns the array values as float.
@@ -473,11 +592,6 @@ readArray:
 	return dst, nil
 }
 
-func (pj *ParsedJson) loadFile(tape, stringBuf string) (*ParsedJson, error) {
-	//tape := io.ReadFull()
-	return nil, nil
-}
-
 func (pj *ParsedJson) Reset() {
 	pj.Tape = pj.Tape[:0]
 	pj.Strings = pj.Strings[:0]
@@ -537,7 +651,34 @@ const (
 	TypeBool
 	TypeObject
 	TypeArray
+	TypeRoot
 )
+
+func (t Type) String() string {
+	switch t {
+	case TypeNone:
+		return "(no type)"
+	case TypeNull:
+		return "null"
+	case TypeString:
+		return "string"
+	case TypeInt:
+		return "int"
+	case TypeUint:
+		return "uint"
+	case TypeFloat:
+		return "float"
+	case TypeBool:
+		return "bool"
+	case TypeObject:
+		return "object"
+	case TypeArray:
+		return "array"
+	case TypeRoot:
+		return "root"
+	}
+	return "(invalid)"
+}
 
 // TagToType converts a tag to type.
 // For arrays and objects only the start tag will return types.
@@ -552,6 +693,7 @@ var TagToType = [256]Type{
 	TagBoolFalse:   TypeBool,
 	TagObjectStart: TypeObject,
 	TagArrayStart:  TypeArray,
+	TagRoot:        TypeRoot,
 }
 
 func (t Tag) Type() Type {
