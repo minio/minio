@@ -30,7 +30,7 @@ func TestLockRESTlient(t *testing.T) {
 		t.Fatalf("unexpected error %v", err)
 	}
 	lkClient := newlockRESTClient(host)
-	if lkClient.connected == false {
+	if lkClient.connected == 0 {
 		t.Fatalf("unexpected error. connection failed")
 	}
 

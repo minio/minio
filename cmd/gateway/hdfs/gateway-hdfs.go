@@ -509,10 +509,11 @@ func (n *hdfsObjects) isObjectDir(ctx context.Context, bucket, object string) bo
 	}
 	defer f.Close()
 	fis, err := f.Readdir(1)
-	if err != nil {
+	if err != nil && err != io.EOF {
 		logger.LogIf(ctx, err)
 		return false
 	}
+	// Readdir returns an io.EOF when len(fis) == 0.
 	return len(fis) == 0
 }
 
