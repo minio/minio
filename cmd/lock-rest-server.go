@@ -196,7 +196,7 @@ func (l *lockRESTServer) lockMaintenance(interval time.Duration) {
 			continue
 		}
 		c := newlockRESTClient(host)
-		if !c.connected {
+		if !c.IsOnline() {
 			continue
 		}
 

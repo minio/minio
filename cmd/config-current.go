@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 
@@ -28,6 +27,7 @@ import (
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
 	xldap "github.com/minio/minio/cmd/config/ldap"
+	"github.com/minio/minio/cmd/config/notify"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -465,56 +465,6 @@ func (s *serverConfig) TestNotificationTargets() error {
 	return nil
 }
 
-// Returns the string describing a difference with the given
-// configuration object. If the given configuration object is
-// identical, an empty string is returned.
-func (s *serverConfig) ConfigDiff(t *serverConfig) string {
-	switch {
-	case t == nil:
-		return "Given configuration is empty"
-	case s.Credential != t.Credential:
-		return "Credential configuration differs"
-	case s.Region != t.Region:
-		return "Region configuration differs"
-	case s.StorageClass != t.StorageClass:
-		return "StorageClass configuration differs"
-	case !reflect.DeepEqual(s.Cache, t.Cache):
-		return "Cache configuration differs"
-	case !reflect.DeepEqual(s.Compression, t.Compression):
-		return "Compression configuration differs"
-	case !reflect.DeepEqual(s.Notify.AMQP, t.Notify.AMQP):
-		return "AMQP Notification configuration differs"
-	case !reflect.DeepEqual(s.Notify.NATS, t.Notify.NATS):
-		return "NATS Notification configuration differs"
-	case !reflect.DeepEqual(s.Notify.NSQ, t.Notify.NSQ):
-		return "NSQ Notification configuration differs"
-	case !reflect.DeepEqual(s.Notify.Elasticsearch, t.Notify.Elasticsearch):
-		return "ElasticSearch Notification configuration differs"
-	case !reflect.DeepEqual(s.Notify.Redis, t.Notify.Redis):
-		return "Redis Notification configuration differs"
-	case !reflect.DeepEqual(s.Notify.PostgreSQL, t.Notify.PostgreSQL):
-		return "PostgreSQL Notification configuration differs"
-	case !reflect.DeepEqual(s.Notify.Kafka, t.Notify.Kafka):
-		return "Kafka Notification configuration differs"
-	case !reflect.DeepEqual(s.Notify.Webhook, t.Notify.Webhook):
-		return "Webhook Notification configuration differs"
-	case !reflect.DeepEqual(s.Notify.MySQL, t.Notify.MySQL):
-		return "MySQL Notification configuration differs"
-	case !reflect.DeepEqual(s.Notify.MQTT, t.Notify.MQTT):
-		return "MQTT Notification configuration differs"
-	case !reflect.DeepEqual(s.Logger, t.Logger):
-		return "Logger configuration differs"
-	case !reflect.DeepEqual(s.KMS, t.KMS):
-		return "KMS configuration differs"
-	case reflect.DeepEqual(s, t):
-		return ""
-	default:
-		// This case will not happen unless this comparison
-		// function has become stale.
-		return "Configuration differs"
-	}
-}
-
 func newServerConfig() *serverConfig {
 	cred, err := auth.GetNewCredentials()
 	logger.FatalIf(err, "")
@@ -534,46 +484,14 @@ func newServerConfig() *serverConfig {
 			MaxUse:  globalCacheMaxUse,
 		},
 		KMS:    crypto.KMSConfig{},
-		Notify: notifier{},
+		Notify: notify.NewConfig(),
 		Compression: compress.Config{
 			Enabled:    false,
 			Extensions: globalCompressExtensions,
 			MimeTypes:  globalCompressMimeTypes,
 		},
+		Logger: logger.NewConfig(),
 	}
-
-	// Make sure to initialize notification configs.
-	srvCfg.Notify.AMQP = make(map[string]target.AMQPArgs)
-	srvCfg.Notify.AMQP["1"] = target.AMQPArgs{}
-	srvCfg.Notify.MQTT = make(map[string]target.MQTTArgs)
-	srvCfg.Notify.MQTT["1"] = target.MQTTArgs{}
-	srvCfg.Notify.Elasticsearch = make(map[string]target.ElasticsearchArgs)
-	srvCfg.Notify.Elasticsearch["1"] = target.ElasticsearchArgs{}
-	srvCfg.Notify.Redis = make(map[string]target.RedisArgs)
-	srvCfg.Notify.Redis["1"] = target.RedisArgs{}
-	srvCfg.Notify.NATS = make(map[string]target.NATSArgs)
-	srvCfg.Notify.NATS["1"] = target.NATSArgs{}
-	srvCfg.Notify.NSQ = make(map[string]target.NSQArgs)
-	srvCfg.Notify.NSQ["1"] = target.NSQArgs{}
-	srvCfg.Notify.PostgreSQL = make(map[string]target.PostgreSQLArgs)
-	srvCfg.Notify.PostgreSQL["1"] = target.PostgreSQLArgs{}
-	srvCfg.Notify.MySQL = make(map[string]target.MySQLArgs)
-	srvCfg.Notify.MySQL["1"] = target.MySQLArgs{}
-	srvCfg.Notify.Kafka = make(map[string]target.KafkaArgs)
-	srvCfg.Notify.Kafka["1"] = target.KafkaArgs{}
-	srvCfg.Notify.Webhook = make(map[string]target.WebhookArgs)
-	srvCfg.Notify.Webhook["1"] = target.WebhookArgs{}
-
-	srvCfg.Cache.Drives = make([]string, 0)
-	srvCfg.Cache.Exclude = make([]string, 0)
-	srvCfg.Cache.Expiry = globalCacheExpiry
-	srvCfg.Cache.MaxUse = globalCacheMaxUse
-
-	// Console logging is on by default
-	srvCfg.Logger.Console.Enabled = true
-	// Create an example of HTTP logger
-	srvCfg.Logger.HTTP = make(map[string]logger.HTTP)
-	srvCfg.Logger.HTTP["target1"] = logger.HTTP{Endpoint: "https://username:password@example.com/api"}
 
 	return srvCfg
 }

@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"net/url"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/minio/cmd/http"
@@ -42,14 +43,12 @@ import (
 type peerRESTClient struct {
 	host       *xnet.Host
 	restClient *rest.Client
-	connected  bool
+	connected  int32
 }
 
 // Reconnect to a peer rest server.
 func (client *peerRESTClient) reConnect() error {
-	// correct (intelligent) retry logic will be
-	// implemented in subsequent PRs.
-	client.connected = true
+	atomic.StoreInt32(&client.connected, 1)
 	return nil
 }
 
@@ -64,7 +63,7 @@ func (client *peerRESTClient) call(method string, values url.Values, body io.Rea
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *peerRESTClient) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-	if !client.connected {
+	if !client.IsOnline() {
 		err := client.reConnect()
 		logger.LogIf(ctx, err)
 		if err != nil {
@@ -82,7 +81,7 @@ func (client *peerRESTClient) callWithContext(ctx context.Context, method string
 	}
 
 	if isNetworkError(err) {
-		client.connected = false
+		atomic.StoreInt32(&client.connected, 0)
 	}
 
 	return nil, err
@@ -95,12 +94,12 @@ func (client *peerRESTClient) String() string {
 
 // IsOnline - returns whether RPC client failed to connect or not.
 func (client *peerRESTClient) IsOnline() bool {
-	return client.connected
+	return atomic.LoadInt32(&client.connected) == 1
 }
 
 // Close - marks the client as closed.
 func (client *peerRESTClient) Close() error {
-	client.connected = false
+	atomic.StoreInt32(&client.connected, 0)
 	client.restClient.Close()
 	return nil
 }
@@ -733,8 +732,8 @@ func newPeerRESTClient(peer *xnet.Host) (*peerRESTClient, error) {
 	restClient, err := rest.NewClient(serverURL, tlsConfig, rest.DefaultRESTTimeout, newAuthToken)
 
 	if err != nil {
-		return &peerRESTClient{host: peer, restClient: restClient, connected: false}, err
+		return &peerRESTClient{host: peer, restClient: restClient, connected: 0}, err
 	}
 
-	return &peerRESTClient{host: peer, restClient: restClient, connected: true}, nil
+	return &peerRESTClient{host: peer, restClient: restClient, connected: 1}, nil
 }

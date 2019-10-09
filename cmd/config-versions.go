@@ -23,6 +23,7 @@ import (
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
 	xldap "github.com/minio/minio/cmd/config/ldap"
+	"github.com/minio/minio/cmd/config/notify"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
@@ -271,7 +272,7 @@ type serverConfigV7 struct {
 	Notify notifierV1 `json:"notify"`
 }
 
-// serverConfigV8 server configuration version '8'. Adds NATS notifier
+// serverConfigV8 server configuration version '8'. Adds NATS notify.Config
 // configuration.
 type serverConfigV8 struct {
 	Version string `json:"version"`
@@ -288,7 +289,7 @@ type serverConfigV8 struct {
 }
 
 // serverConfigV9 server configuration version '9'. Adds PostgreSQL
-// notifier configuration.
+// notify.Config configuration.
 type serverConfigV9 struct {
 	Version string `json:"version"`
 
@@ -562,9 +563,6 @@ type serverConfigV21 struct {
 
 // serverConfigV22 is just like version '21' with added support
 // for StorageClass.
-//
-// IMPORTANT NOTE: When updating this struct make sure that
-// serverConfig.ConfigDiff() is updated as necessary.
 type serverConfigV22 struct {
 	Version string `json:"version"`
 
@@ -582,9 +580,6 @@ type serverConfigV22 struct {
 }
 
 // serverConfigV23 is just like version '22' with addition of cache field.
-//
-// IMPORTANT NOTE: When updating this struct make sure that
-// serverConfig.ConfigDiff() is updated as necessary.
 type serverConfigV23 struct {
 	Version string `json:"version"`
 
@@ -606,9 +601,6 @@ type serverConfigV23 struct {
 
 // serverConfigV24 is just like version '23', we had to revert
 // the changes which were made in 6fb06045028b7a57c37c60a612c8e50735279ab4
-//
-// IMPORTANT NOTE: When updating this struct make sure that
-// serverConfig.ConfigDiff() is updated as necessary.
 type serverConfigV24 struct {
 	Version string `json:"version"`
 
@@ -630,9 +622,6 @@ type serverConfigV24 struct {
 
 // serverConfigV25 is just like version '24', stores additionally
 // worm variable.
-//
-// IMPORTANT NOTE: When updating this struct make sure that
-// serverConfig.ConfigDiff() is updated as necessary.
 type serverConfigV25 struct {
 	quick.Config `json:"-"` // ignore interfaces
 
@@ -681,9 +670,6 @@ type serverConfigV26 struct {
 
 // serverConfigV27 is just like version '26', stores additionally
 // the logger field
-//
-// IMPORTANT NOTE: When updating this struct make sure that
-// serverConfig.ConfigDiff() is updated as necessary.
 type serverConfigV27 struct {
 	quick.Config `json:"-"` // ignore interfaces
 
@@ -711,9 +697,6 @@ type serverConfigV27 struct {
 
 // serverConfigV28 is just like version '27', additionally
 // storing KMS config
-//
-// IMPORTANT NOTE: When updating this struct make sure that
-// serverConfig.ConfigDiff() is updated as necessary.
 type serverConfigV28 struct {
 	quick.Config `json:"-"` // ignore interfaces
 
@@ -814,19 +797,6 @@ type serverConfigV31 struct {
 	} `json:"policy"`
 }
 
-type notifier struct {
-	AMQP          map[string]target.AMQPArgs          `json:"amqp"`
-	Elasticsearch map[string]target.ElasticsearchArgs `json:"elasticsearch"`
-	Kafka         map[string]target.KafkaArgs         `json:"kafka"`
-	MQTT          map[string]target.MQTTArgs          `json:"mqtt"`
-	MySQL         map[string]target.MySQLArgs         `json:"mysql"`
-	NATS          map[string]target.NATSArgs          `json:"nats"`
-	NSQ           map[string]target.NSQArgs           `json:"nsq"`
-	PostgreSQL    map[string]target.PostgreSQLArgs    `json:"postgresql"`
-	Redis         map[string]target.RedisArgs         `json:"redis"`
-	Webhook       map[string]target.WebhookArgs       `json:"webhook"`
-}
-
 // serverConfigV32 is just like version '31' with added nsq notifer.
 type serverConfigV32 struct {
 	Version string `json:"version"`
@@ -846,7 +816,7 @@ type serverConfigV32 struct {
 	KMS crypto.KMSConfig `json:"kms"`
 
 	// Notification queue configuration.
-	Notify notifier `json:"notify"`
+	Notify notify.Config `json:"notify"`
 
 	// Logger configuration
 	Logger logger.Config `json:"logger"`
@@ -890,7 +860,7 @@ type serverConfigV33 struct {
 	KMS crypto.KMSConfig `json:"kms"`
 
 	// Notification queue configuration.
-	Notify notifier `json:"notify"`
+	Notify notify.Config `json:"notify"`
 
 	// Logger configuration
 	Logger logger.Config `json:"logger"`
