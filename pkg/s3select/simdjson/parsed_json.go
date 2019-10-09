@@ -182,9 +182,8 @@ func (i *Iter) MarshalJSONBuffer(dst []byte) ([]byte, error) {
 			if err != nil {
 				return nil, fmt.Errorf("expected key within object: %w", err)
 			}
-			tmpBuf = escapeBytes(tmpBuf, sb)
 			dst = append(dst, '"')
-			dst = append(dst, tmpBuf...)
+			dst = escapeBytes(dst, sb)
 			dst = append(dst, '"', ':')
 			if i.PeekNextTag() == TagEnd {
 				return nil, fmt.Errorf("unexpected end of tape within object")
@@ -205,28 +204,31 @@ func (i *Iter) MarshalJSONBuffer(dst []byte) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			tmpBuf = escapeBytes(tmpBuf, sb)
 			dst = append(dst, '"')
-			dst = append(dst, tmpBuf...)
+			dst = escapeBytes(dst, sb)
 			dst = append(dst, '"')
+			tmpBuf = tmpBuf[:0]
 		case TagInteger:
 			v, err := i.Int()
 			if err != nil {
 				return nil, err
 			}
-			dst = append(dst, []byte(strconv.FormatInt(v, 10))...)
+			dst = strconv.AppendInt(dst, v, 10)
 		case TagUint:
 			v, err := i.Uint()
 			if err != nil {
 				return nil, err
 			}
-			dst = append(dst, []byte(strconv.FormatUint(v, 10))...)
+			dst = strconv.AppendUint(dst, v, 10)
 		case TagFloat:
 			v, err := i.Float()
 			if err != nil {
 				return nil, err
 			}
-			dst = append(dst, []byte(strconv.FormatFloat(v, 'g', -1, 64))...)
+			dst, err = appendFloat(dst, v)
+			if err != nil {
+				return nil, err
+			}
 		case TagNull:
 			dst = append(dst, []byte("null")...)
 		case TagBoolTrue:
@@ -542,13 +544,11 @@ func (o *Object) Map(dst map[string]interface{}) (map[string]interface{}, error)
 		if err != nil {
 			return nil, err
 		}
-		//fmt.Println("Map name:", name, "type:", t)
 		if t == TypeNone {
 			// Done
 			break
 		}
 		dst[name], err = tmp.Interface()
-		//fmt.Println("value:", dst[name], "err:", err)
 		if err != nil {
 			return nil, fmt.Errorf("parsing element %q: %w", name, err)
 		}
@@ -556,15 +556,57 @@ func (o *Object) Map(dst map[string]interface{}) (map[string]interface{}, error)
 	return dst, nil
 }
 
+// Element represents an element in an object.
 type Element struct {
 	Name string
 	Type Type
 	Iter Iter
 }
 
+// Elements contains all elements in an object
+// kept in original order.
+// And index contains lookup for object keys.
 type Elements struct {
 	Elements []Element
 	Index    map[string]int
+}
+
+// Lookup a key in elements and return the element.
+// Returns nil if key doesn't exist.
+// Keys are case sensitive.
+func (e Elements) Lookup(key string) *Element {
+	idx, ok := e.Index[key]
+	if !ok {
+		return nil
+	}
+	return &e.Elements[idx]
+}
+
+// MarshalJSON will marshal the entire remaining scope of the iterator.
+func (e Elements) MarshalJSON() ([]byte, error) {
+	return e.MarshalJSONBuffer(nil)
+}
+
+// MarshalJSONBuffer will marshal all elements.
+// An optional buffer can be provided for fewer allocations.
+// Output will be appended to the destination.
+func (e Elements) MarshalJSONBuffer(dst []byte) ([]byte, error) {
+	dst = append(dst, '{')
+	for i, elem := range e.Elements {
+		dst = append(dst, '"')
+		dst = escapeBytes(dst, []byte(elem.Name))
+		dst = append(dst, '"', ':')
+		var err error
+		dst, err = elem.Iter.MarshalJSONBuffer(dst)
+		if err != nil {
+			return nil, err
+		}
+		if i < len(e.Elements)-1 {
+			dst = append(dst, ',')
+		}
+	}
+	dst = append(dst, '}')
+	return dst, nil
 }
 
 // Parse will return all elements and iterators for each.
@@ -672,6 +714,42 @@ func (a *Array) Iter() Iter {
 		off:  a.off,
 	}
 	return i
+}
+
+// MarshalJSON will marshal the entire remaining scope of the iterator.
+func (a *Array) MarshalJSON() ([]byte, error) {
+	return a.MarshalJSONBuffer(nil)
+}
+
+// MarshalJSONBuffer will marshal all elements.
+// An optional buffer can be provided for fewer allocations.
+// Output will be appended to the destination.
+func (a *Array) MarshalJSONBuffer(dst []byte) ([]byte, error) {
+	dst = append(dst, '[')
+	i := a.Iter()
+	var elem Iter
+	for {
+		t, err := i.NextIter(&elem)
+		if err != nil {
+			return nil, err
+		}
+		if t == TypeNone {
+			break
+		}
+		dst, err = elem.MarshalJSONBuffer(dst)
+		if err != nil {
+			return nil, err
+		}
+		if i.PeekNextTag() == TagArrayEnd {
+			break
+		}
+		dst = append(dst, ',')
+	}
+	if i.PeekNextTag() != TagArrayEnd {
+		return nil, errors.New("expected TagArrayEnd as final tag in array")
+	}
+	dst = append(dst, ']')
+	return dst, nil
 }
 
 func (a *Array) Interface() ([]interface{}, error) {
@@ -782,6 +860,37 @@ readArray:
 		a.off++
 	}
 	return dst, nil
+}
+
+// AsString returns the array values as a slice of strings.
+// No conversion is done.
+func (a *Array) AsString() ([]string, error) {
+	// Estimate length
+	lenEst := len(a.tape.Tape) - a.off - 1
+	if lenEst < 0 {
+		lenEst = 0
+	}
+	dst := make([]string, 0, lenEst)
+	i := a.Iter()
+	var elem Iter
+	for {
+		t, err := i.NextIter(&elem)
+		if err != nil {
+			return nil, err
+		}
+		switch t {
+		case TypeNone:
+			return dst, nil
+		case TypeString:
+			s, err := elem.String()
+			if err != nil {
+
+			}
+			dst = append(dst, s)
+		default:
+			return nil, fmt.Errorf("element in array is not string, but %v", t)
+		}
+	}
 }
 
 func (pj *ParsedJson) Reset() {
@@ -986,15 +1095,12 @@ func Float64toUint64(f float64) uint64 {
 }
 
 func print_with_escapes(src []byte) string {
-	return string(escapeBytes(nil, src))
+	return string(escapeBytes(make([]byte, 0, len(src)+len(src)>>4), src))
 }
 
+// escapeBytes will escape JSON bytes.
+// Output is appended to dst.
 func escapeBytes(dst, src []byte) []byte {
-	if cap(dst) < len(src) {
-		dst = make([]byte, 0, len(src)+len(src)>>4)
-	}
-	dst = dst[:0]
-
 	for _, s := range src {
 		switch s {
 		case '\b':
@@ -1031,3 +1137,32 @@ func escapeBytes(dst, src []byte) []byte {
 }
 
 var valToHex = [16]byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'}
+
+func appendFloat(dst []byte, f float64) ([]byte, error) {
+	if math.IsInf(f, 0) || math.IsNaN(f) {
+		return nil, errors.New("INF or NaN number found")
+	}
+
+	// Convert as if by ES6 number to string conversion.
+	// This matches most other JSON generators.
+	// See golang.org/issue/6384 and golang.org/issue/14135.
+	// Like fmt %g, but the exponent cutoffs are different
+	// and exponents themselves are not padded to two digits.
+	abs := math.Abs(f)
+	fmt := byte('f')
+	if abs != 0 {
+		if abs < 1e-6 || abs >= 1e21 {
+			fmt = 'e'
+		}
+	}
+	dst = strconv.AppendFloat(dst, f, fmt, -1, 64)
+	if fmt == 'e' {
+		// clean up e-09 to e-9
+		n := len(dst)
+		if n >= 4 && dst[n-4] == 'e' && dst[n-3] == '-' && dst[n-2] == '0' {
+			dst[n-2] = dst[n-1]
+			dst = dst[:n-1]
+		}
+	}
+	return dst, nil
+}

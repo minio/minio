@@ -85,13 +85,24 @@ func TestLoadTape(t *testing.T) {
 			ref := loadCompressed(t, tt.ref)
 
 			var refMap map[string]interface{}
+			var refJSON []byte
 			err := json.Unmarshal(ref, &refMap)
-			if err != nil {
-				t.Fatal(err)
-			}
-			refJSON, err := json.MarshalIndent(refMap, "", "  ")
-			if err != nil {
-				t.Fatal(err)
+			if err == nil {
+				refJSON, err = json.MarshalIndent(refMap, "", "  ")
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				// Probably an array.
+				var refArray []interface{}
+				err := json.Unmarshal(ref, &refArray)
+				if err != nil {
+					t.Fatal(err)
+				}
+				refJSON, err = json.MarshalIndent(refArray, "", "  ")
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			pj, err := LoadTape(bytes.NewBuffer(tap), bytes.NewBuffer(sb))
 			if err != nil {
@@ -114,6 +125,25 @@ func TestLoadTape(t *testing.T) {
 					return
 				case TypeRoot:
 					i = next
+				case TypeArray:
+					arr, err := next.Array(nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					got, err := arr.Interface()
+					if err != nil {
+						t.Fatal(err)
+					}
+					b, err := json.MarshalIndent(got, "", "  ")
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !bytes.Equal(b, refJSON) {
+						_ = ioutil.WriteFile(filepath.Join("testdata", tt.ref+".want"), refJSON, os.ModePerm)
+						_ = ioutil.WriteFile(filepath.Join("testdata", tt.ref+".got"), b, os.ModePerm)
+						t.Error("Content mismatch. Output dumped to testdata.")
+					}
+
 				case TypeObject:
 					obj, err := next.Object(nil)
 					if err != nil {
@@ -160,6 +190,37 @@ func BenchmarkIter_MarshalJSONBuffer(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				cpy := iter
 				output, err = cpy.MarshalJSONBuffer(output[:0])
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkGoMarshalJSON(b *testing.B) {
+	for _, tt := range testCases {
+		b.Run(tt.ref, func(b *testing.B) {
+			ref := loadCompressed(b, tt.ref)
+			var m interface{}
+			m = map[string]interface{}{}
+			err := json.Unmarshal(ref, &m)
+			if err != nil {
+				m = []interface{}{}
+				err := json.Unmarshal(ref, &m)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+			output, err := json.Marshal(m)
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.SetBytes(int64(len(output)))
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				output, err = json.Marshal(m)
 				if err != nil {
 					b.Fatal(err)
 				}
