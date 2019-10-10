@@ -276,7 +276,11 @@ func serverMain(ctx *cli.Context) {
 
 	// Set nodes for dsync for distributed setup.
 	if globalIsDistXL {
-		globalDsync, err = dsync.New(newDsyncNodes(globalEndpoints))
+		clnts, myNode, err := newDsyncNodes(globalEndpoints)
+		if err != nil {
+			logger.Fatal(err, "Unable to initialize distributed locking on %s", globalEndpoints)
+		}
+		globalDsync, err = dsync.New(clnts, myNode)
 		if err != nil {
 			logger.Fatal(err, "Unable to initialize distributed locking on %s", globalEndpoints)
 		}
