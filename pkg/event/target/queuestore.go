@@ -115,8 +115,8 @@ func (store *QueueStore) Put(e event.Event) error {
 
 // Get - gets a event from the store.
 func (store *QueueStore) Get(key string) (event.Event, error) {
-	store.RLock()
-	defer store.RUnlock()
+	store.Lock() // A Write lock is required since we eventl. delete an entry
+	defer store.Unlock()
 
 	var event event.Event
 
