@@ -53,8 +53,9 @@ type RWLocker interface {
 
 // Initialize distributed locking only in case of distributed setup.
 // Returns lock clients and the node index for the current server.
-func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int) {
+func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int, err error) {
 	myNode = -1
+
 	seenHosts := set.NewStringSet()
 	for _, endpoint := range endpoints {
 		if seenHosts.Contains(endpoint.Host) {
@@ -66,26 +67,27 @@ func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int)
 		if endpoint.IsLocal {
 			myNode = len(clnts)
 
-			receiver := &lockRESTServer{
+			globalLockServer = &lockRESTServer{
 				ll: &localLocker{
 					serverAddr:      endpoint.Host,
 					serviceEndpoint: lockServicePath,
 					lockMap:         make(map[string][]lockRequesterInfo),
 				},
 			}
-
-			globalLockServer = receiver
-			locker = receiver.ll
+			locker = globalLockServer.ll
 		} else {
-			host, err := xnet.ParseHost(endpoint.Host)
-			logger.FatalIf(err, "Unable to parse Lock RPC Host")
+			var host *xnet.Host
+			host, err = xnet.ParseHost(endpoint.Host)
 			locker = newlockRESTClient(host)
 		}
 
 		clnts = append(clnts, locker)
 	}
 
-	return clnts, myNode
+	if myNode == -1 {
+		return clnts, myNode, errors.New("no endpoint pointing to the local machine is found")
+	}
+	return clnts, myNode, err
 }
 
 // newNSLock - return a new name space lock map.

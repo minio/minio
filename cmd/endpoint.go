@@ -227,7 +227,7 @@ func (endpoints EndpointList) UpdateIsLocal() error {
 	keepAliveTicker := time.NewTicker(retryInterval * time.Second)
 	defer keepAliveTicker.Stop()
 	for {
-		// Break if the local endpoint is found already. Or all the endpoints are resolved.
+		// Break if the local endpoint is found already Or all the endpoints are resolved.
 		if foundLocal || (epsResolved == len(endpoints)) {
 			break
 		}
@@ -240,13 +240,13 @@ func (endpoints EndpointList) UpdateIsLocal() error {
 		default:
 			for i, resolved := range resolvedList {
 				if resolved {
+					// Continue if host is already resolved.
 					continue
 				}
 
 				// return err if not Docker or Kubernetes
-				// We use IsDocker() method to check for Docker Swarm environment
-				// as there is no reliable way to clearly identify Swarm from
-				// Docker environment.
+				// We use IsDocker() to check for Docker environment
+				// We use IsKubernetes() to check for Kubernetes environment
 				isLocal, err := isLocalHost(endpoints[i].HostName)
 				if err != nil {
 					if !IsDocker() && !IsKubernetes() {
@@ -256,8 +256,7 @@ func (endpoints EndpointList) UpdateIsLocal() error {
 					timeElapsed := time.Since(startTime)
 					// log error only if more than 1s elapsed
 					if timeElapsed > time.Second {
-						// log the message to console about the host not being
-						// resolveable.
+						// Log the message to console about the host not being resolveable.
 						reqInfo := (&logger.ReqInfo{}).AppendTags("host", endpoints[i].HostName)
 						reqInfo.AppendTags("elapsedTime", humanize.RelTime(startTime, startTime.Add(timeElapsed), "elapsed", ""))
 						ctx := logger.SetReqInfo(context.Background(), reqInfo)
@@ -274,15 +273,33 @@ func (endpoints EndpointList) UpdateIsLocal() error {
 			}
 
 			// Wait for the tick, if the there exist a local endpoint in discovery.
-			// Non docker/kubernetes environment does not need to wait.
-			if !foundLocal && (IsDocker() && IsKubernetes()) {
+			// Non docker/kubernetes environment we do not need to wait.
+			if !foundLocal && (IsDocker() || IsKubernetes()) {
 				<-keepAliveTicker.C
 			}
 		}
 	}
 
+	// On Kubernetes/Docker setups DNS resolves inappropriately sometimes
+	// where there are situations same endpoints with multiple disks
+	// come online indicating either one of them is local and some
+	// of them are not local. This situation can never happen and
+	// its only a possibility in orchestrated deployments with dynamic
+	// DNS. Following code ensures that we treat if one of the endpoint
+	// says its local for a given host - it is true for all endpoints
+	// for the same host. Following code ensures that this assumption
+	// is true and it works in all scenarios and it is safe to assume
+	// for a given host.
+	endpointLocalMap := make(map[string]bool)
+	for _, ep := range endpoints {
+		if ep.IsLocal {
+			endpointLocalMap[ep.Host] = ep.IsLocal
+		}
+	}
+	for i := range endpoints {
+		endpoints[i].IsLocal = endpointLocalMap[endpoints[i].Host]
+	}
 	return nil
-
 }
 
 // NewEndpointList - returns new endpoint list based on input args.
