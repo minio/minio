@@ -107,6 +107,13 @@ func (e *Condition) analyze(s *Select) (result qProp) {
 	return
 }
 
+func (e *ListExpr) analyze(s *Select) (result qProp) {
+	for _, ac := range e.Elements {
+		result.combine(ac.analyze(s))
+	}
+	return
+}
+
 func (e *ConditionOperand) analyze(s *Select) (result qProp) {
 	if e.ConditionRHS == nil {
 		result = e.Operand.analyze(s)
@@ -125,9 +132,7 @@ func (e *ConditionRHS) analyze(s *Select) (result qProp) {
 		result.combine(e.Between.Start.analyze(s))
 		result.combine(e.Between.End.analyze(s))
 	case e.In != nil:
-		for _, elt := range e.In.Expressions {
-			result.combine(elt.analyze(s))
-		}
+		result.combine(e.In.ListExpression.analyze(s))
 	case e.Like != nil:
 		result.combine(e.Like.Pattern.analyze(s))
 		if e.Like.EscapeChar != nil {
@@ -178,6 +183,9 @@ func (e *PrimaryTerm) analyze(s *Select) (result qProp) {
 			}
 		}
 		result = qProp{isRowFunc: true}
+
+	case e.ListExpr != nil:
+		result = e.ListExpr.analyze(s)
 
 	case e.SubExpression != nil:
 		result = e.SubExpression.analyze(s)

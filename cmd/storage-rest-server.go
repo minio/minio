@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 )
@@ -573,7 +574,8 @@ func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 		}
 		storage, err := newPosix(endpoint.Path)
 		if err != nil {
-			logger.Fatal(uiErrUnableToWriteInBackend(err), "Unable to initialize posix backend")
+			logger.Fatal(config.ErrUnableToWriteInBackend(err),
+				"Unable to initialize posix backend")
 		}
 
 		server := &storageRESTServer{storage, mustGetUUID()}
@@ -617,5 +619,5 @@ func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodGetInstanceID).HandlerFunc(httpTraceAll(server.GetInstanceID))
 	}
 
-	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(notFoundHandler))
+	router.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(versionMismatchHandler))
 }

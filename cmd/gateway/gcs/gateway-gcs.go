@@ -30,7 +30,6 @@ import (
 	"path"
 	"strconv"
 
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -41,6 +40,7 @@ import (
 	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/policy/condition"
 
@@ -158,7 +158,7 @@ EXAMPLES:
 // Handler for 'minio gateway gcs' command line.
 func gcsGatewayMain(ctx *cli.Context) {
 	projectID := ctx.Args().First()
-	if projectID == "" && os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
+	if projectID == "" && env.Get("GOOGLE_APPLICATION_CREDENTIALS", "") == "" {
 		logger.LogIf(context.Background(), errGCSProjectIDNotFound)
 		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
 	}
@@ -190,7 +190,7 @@ func (g *GCS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	if g.projectID == "" {
 		// If project ID is not provided on command line, we figure it out
 		// from the credentials.json file.
-		g.projectID, err = gcsParseProjectID(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+		g.projectID, err = gcsParseProjectID(env.Get("GOOGLE_APPLICATION_CREDENTIALS", ""))
 		if err != nil {
 			return nil, err
 		}

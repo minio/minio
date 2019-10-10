@@ -18,37 +18,41 @@ package openid
 
 import (
 	"crypto"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
+	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
 )
 
 // JWKSArgs - RSA authentication target arguments
 type JWKSArgs struct {
-	URL        *xnet.URL `json:"url"`
-	publicKeys map[string]crypto.PublicKey
+	URL         *xnet.URL `json:"url"`
+	publicKeys  map[string]crypto.PublicKey
+	transport   *http.Transport
+	closeRespFn func(io.ReadCloser)
 }
 
 // PopulatePublicKey - populates a new publickey from the JWKS URL.
 func (r *JWKSArgs) PopulatePublicKey() error {
-	insecureClient := &http.Client{Transport: newCustomHTTPTransport(true)}
-	client := &http.Client{Transport: newCustomHTTPTransport(false)}
+	if r.URL == nil {
+		return nil
+	}
+	client := &http.Client{}
+	if r.transport != nil {
+		client.Transport = r.transport
+	}
 	resp, err := client.Get(r.URL.String())
 	if err != nil {
-		resp, err = insecureClient.Get(r.URL.String())
-		if err != nil {
-			return err
-		}
+		return err
 	}
-	defer resp.Body.Close()
+	defer r.closeRespFn(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return errors.New(resp.Status)
 	}
@@ -133,27 +137,6 @@ func GetDefaultExpiration(dsecs string) (time.Duration, error) {
 	return defaultExpiryDuration, nil
 }
 
-// newCustomHTTPTransport returns a new http configuration
-// used while communicating with the cloud backends.
-// This sets the value for MaxIdleConnsPerHost from 2 (go default)
-// to 100.
-func newCustomHTTPTransport(insecure bool) *http.Transport {
-	return &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		MaxIdleConns:          1024,
-		MaxIdleConnsPerHost:   1024,
-		IdleConnTimeout:       30 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig:       &tls.Config{InsecureSkipVerify: insecure},
-		DisableCompression:    true,
-	}
-}
-
 // Validate - validates the access token.
 func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 	jp := new(jwtgo.Parser)
@@ -209,6 +192,34 @@ func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 // ID returns the provider name and authentication type.
 func (p *JWT) ID() ID {
 	return "jwt"
+}
+
+// JWKS url
+const (
+	EnvIAMJWKSURL = "MINIO_IAM_JWKS_URL"
+)
+
+// LookupConfig lookup jwks from config, override with any ENVs.
+func LookupConfig(args JWKSArgs, transport *http.Transport, closeRespFn func(io.ReadCloser)) (JWKSArgs, error) {
+	var urlStr string
+	if args.URL != nil {
+		urlStr = args.URL.String()
+	}
+
+	jwksURL := env.Get(EnvIAMJWKSURL, urlStr)
+	if jwksURL == "" {
+		return args, nil
+	}
+
+	u, err := xnet.ParseURL(jwksURL)
+	if err != nil {
+		return args, err
+	}
+	args.URL = u
+	if err := args.PopulatePublicKey(); err != nil {
+		return args, err
+	}
+	return args, nil
 }
 
 // NewJWT - initialize new jwt authenticator.

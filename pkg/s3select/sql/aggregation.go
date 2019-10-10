@@ -163,6 +163,16 @@ func (e *Expression) aggregateRow(r Record) error {
 	return nil
 }
 
+func (e *ListExpr) aggregateRow(r Record) error {
+	for _, ex := range e.Elements {
+		err := ex.aggregateRow(r)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (e *AndCondition) aggregateRow(r Record) error {
 	for _, ex := range e.Condition {
 		err := ex.aggregateRow(r)
@@ -200,11 +210,10 @@ func (e *ConditionOperand) aggregateRow(r Record) error {
 		}
 		return e.ConditionRHS.Between.End.aggregateRow(r)
 	case e.ConditionRHS.In != nil:
-		for _, elt := range e.ConditionRHS.In.Expressions {
-			err = elt.aggregateRow(r)
-			if err != nil {
-				return err
-			}
+		elt := e.ConditionRHS.In.ListExpression
+		err = elt.aggregateRow(r)
+		if err != nil {
+			return err
 		}
 		return nil
 	case e.ConditionRHS.Like != nil:
@@ -255,6 +264,8 @@ func (e *UnaryTerm) aggregateRow(r Record) error {
 
 func (e *PrimaryTerm) aggregateRow(r Record) error {
 	switch {
+	case e.ListExpr != nil:
+		return e.ListExpr.aggregateRow(r)
 	case e.SubExpression != nil:
 		return e.SubExpression.aggregateRow(r)
 	case e.FuncCall != nil:

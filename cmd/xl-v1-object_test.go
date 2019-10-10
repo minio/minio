@@ -28,6 +28,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -186,8 +187,6 @@ func TestXLDeleteObjectsXLSet(t *testing.T) {
 }
 
 func TestXLDeleteObjectDiskNotFound(t *testing.T) {
-	// Reset global storage class flags
-	resetGlobalStorageEnvs()
 	// Create an instance of xl backend.
 	obj, fsDirs, err := prepareXL16()
 	if err != nil {
@@ -442,5 +441,161 @@ func TestHealing(t *testing.T) {
 	_, err = xl.storageDisks[0].StatVol(bucket)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestObjectQuorumFromMeta(t *testing.T) {
+	ExecObjectLayerTestWithDirs(t, testObjectQuorumFromMeta)
+}
+
+func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []string, t TestErrHandler) {
+	bucket := getRandomBucketName()
+
+	var opts ObjectOptions
+	// make data with more than one part
+	partCount := 3
+	data := bytes.Repeat([]byte("a"), int(globalPutPartSize)*partCount)
+	xl := obj.(*xlObjects)
+	xlDisks := xl.storageDisks
+
+	err := obj.MakeBucketWithLocation(context.Background(), bucket, globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatalf("Failed to make a bucket %v", err)
+	}
+
+	// Object for test case 1 - No StorageClass defined, no MetaData in PutObject
+	object1 := "object1"
+	_, err = obj.PutObject(context.Background(), bucket, object1, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
+	if err != nil {
+		t.Fatalf("Failed to putObject %v", err)
+	}
+
+	parts1, errs1 := readAllXLMetadata(context.Background(), xlDisks, bucket, object1)
+
+	// Object for test case 2 - No StorageClass defined, MetaData in PutObject requesting RRS Class
+	object2 := "object2"
+	metadata2 := make(map[string]string)
+	metadata2["x-amz-storage-class"] = storageclass.RRS
+	_, err = obj.PutObject(context.Background(), bucket, object2, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{UserDefined: metadata2})
+	if err != nil {
+		t.Fatalf("Failed to putObject %v", err)
+	}
+
+	parts2, errs2 := readAllXLMetadata(context.Background(), xlDisks, bucket, object2)
+
+	// Object for test case 3 - No StorageClass defined, MetaData in PutObject requesting Standard Storage Class
+	object3 := "object3"
+	metadata3 := make(map[string]string)
+	metadata3["x-amz-storage-class"] = storageclass.STANDARD
+	_, err = obj.PutObject(context.Background(), bucket, object3, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{UserDefined: metadata3})
+	if err != nil {
+		t.Fatalf("Failed to putObject %v", err)
+	}
+
+	parts3, errs3 := readAllXLMetadata(context.Background(), xlDisks, bucket, object3)
+
+	// Object for test case 4 - Standard StorageClass defined as Parity 6, MetaData in PutObject requesting Standard Storage Class
+	object4 := "object4"
+	metadata4 := make(map[string]string)
+	metadata4["x-amz-storage-class"] = storageclass.STANDARD
+	globalServerConfig.StorageClass = storageclass.Config{
+		Standard: storageclass.StorageClass{
+			Parity: 6,
+		},
+	}
+
+	_, err = obj.PutObject(context.Background(), bucket, object4, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{UserDefined: metadata4})
+	if err != nil {
+		t.Fatalf("Failed to putObject %v", err)
+	}
+
+	parts4, errs4 := readAllXLMetadata(context.Background(), xlDisks, bucket, object4)
+
+	// Object for test case 5 - RRS StorageClass defined as Parity 2, MetaData in PutObject requesting RRS Class
+	// Reset global storage class flags
+	object5 := "object5"
+	metadata5 := make(map[string]string)
+	metadata5["x-amz-storage-class"] = storageclass.RRS
+	globalServerConfig.StorageClass = storageclass.Config{
+		RRS: storageclass.StorageClass{
+			Parity: 2,
+		},
+	}
+
+	_, err = obj.PutObject(context.Background(), bucket, object5, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{UserDefined: metadata5})
+	if err != nil {
+		t.Fatalf("Failed to putObject %v", err)
+	}
+
+	parts5, errs5 := readAllXLMetadata(context.Background(), xlDisks, bucket, object5)
+
+	// Object for test case 6 - RRS StorageClass defined as Parity 2, MetaData in PutObject requesting Standard Storage Class
+	object6 := "object6"
+	metadata6 := make(map[string]string)
+	metadata6["x-amz-storage-class"] = storageclass.STANDARD
+	globalServerConfig.StorageClass = storageclass.Config{
+		RRS: storageclass.StorageClass{
+			Parity: 2,
+		},
+	}
+
+	_, err = obj.PutObject(context.Background(), bucket, object6, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{UserDefined: metadata6})
+	if err != nil {
+		t.Fatalf("Failed to putObject %v", err)
+	}
+
+	parts6, errs6 := readAllXLMetadata(context.Background(), xlDisks, bucket, object6)
+
+	// Object for test case 7 - Standard StorageClass defined as Parity 5, MetaData in PutObject requesting RRS Class
+	// Reset global storage class flags
+	object7 := "object7"
+	metadata7 := make(map[string]string)
+	metadata7["x-amz-storage-class"] = storageclass.RRS
+	globalServerConfig.StorageClass = storageclass.Config{
+		Standard: storageclass.StorageClass{
+			Parity: 5,
+		},
+	}
+
+	_, err = obj.PutObject(context.Background(), bucket, object7, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{UserDefined: metadata7})
+	if err != nil {
+		t.Fatalf("Failed to putObject %v", err)
+	}
+
+	parts7, errs7 := readAllXLMetadata(context.Background(), xlDisks, bucket, object7)
+
+	tests := []struct {
+		parts               []xlMetaV1
+		errs                []error
+		expectedReadQuorum  int
+		expectedWriteQuorum int
+		expectedError       error
+	}{
+		{parts1, errs1, 8, 9, nil},
+		{parts2, errs2, 14, 15, nil},
+		{parts3, errs3, 8, 9, nil},
+		{parts4, errs4, 10, 11, nil},
+		{parts5, errs5, 14, 15, nil},
+		{parts6, errs6, 8, 9, nil},
+		{parts7, errs7, 14, 15, nil},
+	}
+	for i, tt := range tests {
+		actualReadQuorum, actualWriteQuorum, err := objectQuorumFromMeta(context.Background(), *xl, tt.parts, tt.errs)
+		if tt.expectedError != nil && err == nil {
+			t.Errorf("Test %d, Expected %s, got %s", i+1, tt.expectedError, err)
+			return
+		}
+		if tt.expectedError == nil && err != nil {
+			t.Errorf("Test %d, Expected %s, got %s", i+1, tt.expectedError, err)
+			return
+		}
+		if tt.expectedReadQuorum != actualReadQuorum {
+			t.Errorf("Test %d, Expected Read Quorum %d, got %d", i+1, tt.expectedReadQuorum, actualReadQuorum)
+			return
+		}
+		if tt.expectedWriteQuorum != actualWriteQuorum {
+			t.Errorf("Test %d, Expected Write Quorum %d, got %d", i+1, tt.expectedWriteQuorum, actualWriteQuorum)
+			return
+		}
 	}
 }

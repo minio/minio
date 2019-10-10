@@ -144,9 +144,6 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 		available = available + di.Free
 	}
 
-	_, sscParity := getRedundancyCount(standardStorageClass, len(disks))
-	_, rrscparity := getRedundancyCount(reducedRedundancyStorageClass, len(disks))
-
 	storageInfo := StorageInfo{
 		Used:      used,
 		Total:     total,
@@ -156,9 +153,6 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 	storageInfo.Backend.Type = BackendErasure
 	storageInfo.Backend.OnlineDisks = onlineDisks
 	storageInfo.Backend.OfflineDisks = offlineDisks
-
-	storageInfo.Backend.StandardSCParity = sscParity
-	storageInfo.Backend.RRSCParity = rrscparity
 
 	return storageInfo
 }

@@ -196,7 +196,7 @@ func (l *lockRESTServer) lockMaintenance(interval time.Duration) {
 			continue
 		}
 		c := newlockRESTClient(host)
-		if !c.connected {
+		if !c.IsOnline() {
 			continue
 		}
 
@@ -255,7 +255,7 @@ func registerLockRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + lockRESTMethodForceUnlock).HandlerFunc(httpTraceHdrs(globalLockServer.ForceUnlockHandler)).Queries(queries...)
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + lockRESTMethodExpired).HandlerFunc(httpTraceAll(globalLockServer.ExpiredHandler)).Queries(queries...)
 
-	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(notFoundHandler))
+	router.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(versionMismatchHandler))
 
 	// Start lock maintenance from all lock servers.
 	go startLockMaintenance(globalLockServer)

@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/mimedb"
 )
@@ -188,7 +189,13 @@ func (xl xlObjects) ListMultipartUploads(ctx context.Context, bucket, object, ke
 // operation(s) on the object.
 func (xl xlObjects) newMultipartUpload(ctx context.Context, bucket string, object string, meta map[string]string) (string, error) {
 
-	dataBlocks, parityBlocks := getRedundancyCount(meta[amzStorageClass], len(xl.getDisks()))
+	onlineDisks := xl.getDisks()
+	scfg := globalServerConfig.GetStorageClass()
+	parityBlocks := scfg.GetParityForSC(meta[xhttp.AmzStorageClass])
+	if parityBlocks == 0 {
+		parityBlocks = len(onlineDisks) / 2
+	}
+	dataBlocks := len(onlineDisks) - parityBlocks
 
 	xlMeta := newXLMetaV1(object, dataBlocks, parityBlocks)
 
@@ -212,7 +219,6 @@ func (xl xlObjects) newMultipartUpload(ctx context.Context, bucket string, objec
 	// success.
 	defer xl.deleteObject(ctx, minioMetaTmpBucket, tempUploadIDPath, writeQuorum, false)
 
-	onlineDisks := xl.getDisks()
 	var partsMetadata = make([]xlMetaV1, len(onlineDisks))
 	for i := range onlineDisks {
 		partsMetadata[i] = xlMeta

@@ -32,6 +32,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/lock"
@@ -116,7 +117,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		if err == errMinDiskSize {
 			return nil, err
 		}
-		return nil, uiErrUnableToWriteInBackend(err)
+		return nil, config.ErrUnableToWriteInBackend(err)
 	}
 
 	// Assign a new UUID for FS minio mode. Each server instance

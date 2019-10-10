@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package cache
 
 import (
 	"encoding/json"
@@ -22,11 +22,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/ellipses"
 )
 
-// CacheConfig represents cache config settings
-type CacheConfig struct {
+// Config represents cache config settings
+type Config struct {
 	Drives  []string `json:"drives"`
 	Expiry  int      `json:"expiry"`
 	MaxUse  int      `json:"maxuse"`
@@ -35,8 +36,8 @@ type CacheConfig struct {
 
 // UnmarshalJSON - implements JSON unmarshal interface for unmarshalling
 // json entries for CacheConfig.
-func (cfg *CacheConfig) UnmarshalJSON(data []byte) (err error) {
-	type Alias CacheConfig
+func (cfg *Config) UnmarshalJSON(data []byte) (err error) {
+	type Alias Config
 	var _cfg = &struct {
 		*Alias
 	}{
@@ -83,7 +84,7 @@ func parseCacheDrives(drives []string) ([]string, error) {
 
 	for _, d := range endpoints {
 		if !filepath.IsAbs(d) {
-			return nil, uiErrInvalidCacheDrivesValue(nil).Msg("cache dir should be absolute path: %s", d)
+			return nil, config.ErrInvalidCacheDrivesValue(nil).Msg("cache dir should be absolute path: %s", d)
 		}
 	}
 	return endpoints, nil
@@ -93,7 +94,7 @@ func parseCacheDrives(drives []string) ([]string, error) {
 func parseCacheDrivePaths(arg string) (ep []string, err error) {
 	patterns, perr := ellipses.FindEllipsesPatterns(arg)
 	if perr != nil {
-		return []string{}, uiErrInvalidCacheDrivesValue(nil).Msg(perr.Error())
+		return []string{}, config.ErrInvalidCacheDrivesValue(nil).Msg(perr.Error())
 	}
 
 	for _, lbls := range patterns.Expand() {
@@ -107,10 +108,10 @@ func parseCacheDrivePaths(arg string) (ep []string, err error) {
 func parseCacheExcludes(excludes []string) ([]string, error) {
 	for _, e := range excludes {
 		if len(e) == 0 {
-			return nil, uiErrInvalidCacheExcludesValue(nil).Msg("cache exclude path (%s) cannot be empty", e)
+			return nil, config.ErrInvalidCacheExcludesValue(nil).Msg("cache exclude path (%s) cannot be empty", e)
 		}
-		if hasPrefix(e, SlashSeparator) {
-			return nil, uiErrInvalidCacheExcludesValue(nil).Msg("cache exclude pattern (%s) cannot start with / as prefix", e)
+		if strings.HasPrefix(e, "/") {
+			return nil, config.ErrInvalidCacheExcludesValue(nil).Msg("cache exclude pattern (%s) cannot start with / as prefix", e)
 		}
 	}
 	return excludes, nil

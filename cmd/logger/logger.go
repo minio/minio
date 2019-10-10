@@ -139,9 +139,9 @@ func IsQuiet() bool {
 	return quietFlag
 }
 
-// RegisterUIError registers the specified rendering function. This latter
+// RegisterError registers the specified rendering function. This latter
 // will be called for a pretty rendering of fatal errors.
-func RegisterUIError(f func(string, error, bool) string) {
+func RegisterError(f func(string, error, bool) string) {
 	errorFmtFunc = f
 }
 

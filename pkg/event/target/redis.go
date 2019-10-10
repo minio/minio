@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/gomodule/redigo/redis"
-	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -95,11 +94,12 @@ func (r RedisArgs) validateFormat(c redis.Conn) error {
 
 // RedisTarget - Redis target.
 type RedisTarget struct {
-	id        event.TargetID
-	args      RedisArgs
-	pool      *redis.Pool
-	store     Store
-	firstPing bool
+	id         event.TargetID
+	args       RedisArgs
+	pool       *redis.Pool
+	store      Store
+	firstPing  bool
+	loggerOnce func(ctx context.Context, err error, id interface{})
 }
 
 // ID - returns target ID.
@@ -115,7 +115,7 @@ func (target *RedisTarget) Save(eventData event.Event) error {
 	conn := target.pool.Get()
 	defer func() {
 		cErr := conn.Close()
-		logger.LogOnceIf(context.Background(), cErr, target.ID())
+		target.loggerOnce(context.Background(), cErr, target.ID())
 	}()
 	_, pingErr := conn.Do("PING")
 	if pingErr != nil {
@@ -132,7 +132,7 @@ func (target *RedisTarget) send(eventData event.Event) error {
 	conn := target.pool.Get()
 	defer func() {
 		cErr := conn.Close()
-		logger.LogOnceIf(context.Background(), cErr, target.ID())
+		target.loggerOnce(context.Background(), cErr, target.ID())
 	}()
 
 	if target.args.Format == event.NamespaceFormat {
@@ -175,7 +175,7 @@ func (target *RedisTarget) Send(eventKey string) error {
 	conn := target.pool.Get()
 	defer func() {
 		cErr := conn.Close()
-		logger.LogOnceIf(context.Background(), cErr, target.ID())
+		target.loggerOnce(context.Background(), cErr, target.ID())
 	}()
 	_, pingErr := conn.Do("PING")
 	if pingErr != nil {
@@ -222,7 +222,7 @@ func (target *RedisTarget) Close() error {
 }
 
 // NewRedisTarget - creates new Redis target.
-func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}) (*RedisTarget, error) {
+func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{})) (*RedisTarget, error) {
 	pool := &redis.Pool{
 		MaxIdle:     3,
 		IdleTimeout: 2 * 60 * time.Second,
@@ -239,7 +239,7 @@ func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}) (*RedisTa
 			if _, err = conn.Do("AUTH", args.Password); err != nil {
 				cErr := conn.Close()
 				targetID := event.TargetID{ID: id, Name: "redis"}
-				logger.LogOnceIf(context.Background(), cErr, targetID.String())
+				loggerOnce(context.Background(), cErr, targetID)
 				return nil, err
 			}
 
@@ -262,16 +262,17 @@ func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}) (*RedisTa
 	}
 
 	target := &RedisTarget{
-		id:    event.TargetID{ID: id, Name: "redis"},
-		args:  args,
-		pool:  pool,
-		store: store,
+		id:         event.TargetID{ID: id, Name: "redis"},
+		args:       args,
+		pool:       pool,
+		store:      store,
+		loggerOnce: loggerOnce,
 	}
 
 	conn := target.pool.Get()
 	defer func() {
 		cErr := conn.Close()
-		logger.LogOnceIf(context.Background(), cErr, target.ID())
+		target.loggerOnce(context.Background(), cErr, target.ID())
 	}()
 
 	_, pingErr := conn.Do("PING")
