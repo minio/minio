@@ -285,63 +285,36 @@ func (s *storageRESTServer) ReadFileHandler(w http.ResponseWriter, r *http.Reque
 		s.writeErrorResponse(w, err)
 		return
 	}
-	if offset < 0 || length < 0 {
-		s.writeErrorResponse(w, errInvalidArgument)
-		return
-	}
+
 	var verifier *BitrotVerifier
-	if vars[storageRESTBitrotAlgo] != "" {
-		hashStr := vars[storageRESTBitrotHash]
-		var hash []byte
-		hash, err = hex.DecodeString(hashStr)
+	if algorithm := vars[storageRESTBitrotAlgo]; algorithm != "" {
+		hash, err := hex.DecodeString(vars[storageRESTBitrotHash])
 		if err != nil {
 			s.writeErrorResponse(w, err)
 			return
 		}
-		verifier = NewBitrotVerifier(BitrotAlgorithmFromString(vars[storageRESTBitrotAlgo]), hash)
+		shardSize, err := strconv.Atoi(vars[storageRESTShardSize])
+		if err != nil {
+			s.writeErrorResponse(w, err)
+			return
+		}
+		verifier = NewBitrotVerifier(BitrotAlgorithmFromString(algorithm), hash, int64(shardSize))
 	}
-	buf := make([]byte, length)
-	_, err = s.storage.ReadFile(volume, filePath, int64(offset), buf, verifier)
+	content, err := s.storage.ReadFile(volume, filePath, int64(offset), int64(length), verifier)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
-	w.Header().Set(xhttp.ContentLength, strconv.Itoa(len(buf)))
-	w.Write(buf)
-	w.(http.Flusher).Flush()
-}
-
-// ReadFileHandler - read section of a file.
-func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-	vars := mux.Vars(r)
-	volume := vars[storageRESTVolume]
-	filePath := vars[storageRESTFilePath]
-	offset, err := strconv.Atoi(vars[storageRESTOffset])
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-	length, err := strconv.Atoi(vars[storageRESTLength])
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	rc, err := s.storage.ReadFileStream(volume, filePath, int64(offset), int64(length))
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-	defer rc.Close()
+	defer content.Close()
 
 	w.Header().Set(xhttp.ContentLength, strconv.Itoa(length))
-
-	io.Copy(w, rc)
-	w.(http.Flusher).Flush()
-
+	if _, err := content.WriteTo(w); err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }
 
 // readMetadata func provides the function types for reading leaf metadata.
@@ -593,9 +566,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpoints EndpointList) {
 		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodReadAll).HandlerFunc(httpTraceHdrs(server.ReadAllHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodReadFile).HandlerFunc(httpTraceHdrs(server.ReadFileHandler)).
-			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTOffset, storageRESTLength, storageRESTBitrotAlgo, storageRESTBitrotHash)...)
-		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodReadFileStream).HandlerFunc(httpTraceHdrs(server.ReadFileStreamHandler)).
-			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTOffset, storageRESTLength)...)
+			Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTOffset, storageRESTLength, storageRESTShardSize, storageRESTBitrotAlgo, storageRESTBitrotHash)...)
 		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodListDir).HandlerFunc(httpTraceHdrs(server.ListDirHandler)).
 			Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTCount, storageRESTLeafFile)...)
 		subrouter.Methods(http.MethodPost).Path(SlashSeparator + storageRESTMethodWalk).HandlerFunc(httpTraceHdrs(server.WalkHandler)).

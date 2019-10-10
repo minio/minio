@@ -339,19 +339,18 @@ func testStorageAPIReadFile(t *testing.T, storage StorageAPI) {
 		volumeName     string
 		objectName     string
 		offset         int64
+		length         int64
 		expectedResult []byte
 		expectErr      bool
 	}{
-		{"foo", "myobject", 0, []byte("foo"), false},
-		{"foo", "myobject", 1, []byte("oo"), false},
+		{"foo", "myobject", 0, 3, []byte("foo"), false},
+		{"foo", "myobject", 1, 2, []byte("oo"), false},
 		// file not found error.
-		{"foo", "yourobject", 0, nil, true},
+		{"foo", "yourobject", 0, 3, nil, true},
 	}
 
-	result := make([]byte, 100)
 	for i, testCase := range testCases {
-		result = result[testCase.offset:3]
-		_, err := storage.ReadFile(testCase.volumeName, testCase.objectName, testCase.offset, result, nil)
+		r, err := storage.ReadFile(testCase.volumeName, testCase.objectName, testCase.offset, testCase.length, nil)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -359,6 +358,10 @@ func testStorageAPIReadFile(t *testing.T, storage StorageAPI) {
 		}
 
 		if !testCase.expectErr {
+			result, err := ioutil.ReadAll(r)
+			if err != nil {
+				t.Fatalf("case %v: error: %v", i+1, err)
+			}
 			if !reflect.DeepEqual(result, testCase.expectedResult) {
 				t.Fatalf("case %v: result: expected: %v, got: %v", i+1, string(testCase.expectedResult), string(result))
 			}

@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/ecc"
 )
 
 type badDisk struct{ StorageAPI }
@@ -36,7 +37,7 @@ func (a badDisk) AppendFile(volume string, path string, buf []byte) error {
 	return errFaultyDisk
 }
 
-func (a badDisk) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
+func (a badDisk) ReadFile(volume, path string, offset, length int64, verifier *BitrotVerifier) (ecc.Verifier, error) {
 	return nil, errFaultyDisk
 }
 

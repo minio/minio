@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"io"
+
+	"github.com/minio/minio/cmd/ecc"
 )
 
 // StorageAPI interface.
@@ -45,10 +47,9 @@ type StorageAPI interface {
 
 	// File operations.
 	ListDir(volume, dirPath string, count int, leafFile string) ([]string, error)
-	ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error)
+	ReadFile(volume string, path string, offset, length int64, verifier *BitrotVerifier) (ecc.Verifier, error)
 	AppendFile(volume string, path string, buf []byte) (err error)
 	CreateFile(volume, path string, size int64, reader io.Reader) error
-	ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error)
 	RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error
 	StatFile(volume string, path string) (file FileInfo, err error)
 	DeleteFile(volume string, path string) (err error)
@@ -60,24 +61,6 @@ type StorageAPI interface {
 
 	// Read all.
 	ReadAll(volume string, path string) (buf []byte, err error)
-}
-
-// storageReader is an io.Reader view of a disk
-type storageReader struct {
-	storage      StorageAPI
-	volume, path string
-	offset       int64
-}
-
-func (r *storageReader) Read(p []byte) (n int, err error) {
-	nn, err := r.storage.ReadFile(r.volume, r.path, r.offset, p, nil)
-	r.offset += nn
-	n = int(nn)
-
-	if err == io.ErrUnexpectedEOF && nn > 0 {
-		err = io.EOF
-	}
-	return
 }
 
 // storageWriter is a io.Writer view of a disk.
@@ -98,10 +81,4 @@ func (w *storageWriter) Write(p []byte) (n int, err error) {
 // at the given disk, volume and path.
 func StorageWriter(storage StorageAPI, volume, path string) io.Writer {
 	return &storageWriter{storage, volume, path}
-}
-
-// StorageReader returns a new io.Reader which reads data to the file
-// at the given disk, volume, path and offset.
-func StorageReader(storage StorageAPI, volume, path string, offset int64) io.Reader {
-	return &storageReader{storage, volume, path, offset}
 }

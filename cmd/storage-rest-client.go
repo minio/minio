@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"sync/atomic"
 
+	"github.com/minio/minio/cmd/ecc"
 	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/rest"
 	xnet "github.com/minio/minio/pkg/net"
@@ -265,41 +266,27 @@ func (client *storageRESTClient) ReadAll(volume, path string) ([]byte, error) {
 	return ioutil.ReadAll(respBody)
 }
 
-// ReadFileStream - returns a reader for the requested file.
-func (client *storageRESTClient) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
+// ReadFile - reads section of a file.
+func (client *storageRESTClient) ReadFile(volume, path string, offset, length int64, verifier *BitrotVerifier) (ecc.Verifier, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTOffset, strconv.Itoa(int(offset)))
 	values.Set(storageRESTLength, strconv.Itoa(int(length)))
-	respBody, err := client.call(storageRESTMethodReadFileStream, values, nil, -1)
-	if err != nil {
-		return nil, err
-	}
-	return respBody, nil
-}
-
-// ReadFile - reads section of a file.
-func (client *storageRESTClient) ReadFile(volume, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (int64, error) {
-	values := make(url.Values)
-	values.Set(storageRESTVolume, volume)
-	values.Set(storageRESTFilePath, path)
-	values.Set(storageRESTOffset, strconv.Itoa(int(offset)))
-	values.Set(storageRESTLength, strconv.Itoa(len(buffer)))
 	if verifier != nil {
 		values.Set(storageRESTBitrotAlgo, verifier.algorithm.String())
 		values.Set(storageRESTBitrotHash, hex.EncodeToString(verifier.sum))
+		values.Set(storageRESTShardSize, strconv.Itoa(int(verifier.shardSize)))
 	} else {
 		values.Set(storageRESTBitrotAlgo, "")
 		values.Set(storageRESTBitrotHash, "")
+		values.Set(storageRESTShardSize, "0")
 	}
 	respBody, err := client.call(storageRESTMethodReadFile, values, nil, -1)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	defer http.DrainBody(respBody)
-	n, err := io.ReadFull(respBody, buffer)
-	return int64(n), err
+	return ecc.NOPVerifier(respBody), nil
 }
 
 func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive bool, leafFile string,

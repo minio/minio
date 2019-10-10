@@ -29,6 +29,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/minio/minio/cmd/ecc"
 	"github.com/minio/minio/pkg/disk"
 )
 
@@ -1143,7 +1144,7 @@ func TestPosixReadFile(t *testing.T) {
 
 	// Create all files needed during testing.
 	appendFiles := testCases[:4]
-	v := NewBitrotVerifier(SHA256, getSHA256Sum([]byte("hello, world")))
+	v := NewBitrotVerifier(SHA256, getSHA256Sum([]byte("hello, world")), 2*(1<<20)+512*1024)
 	// Create test files for further reading.
 	for i, appendFile := range appendFiles {
 		err = posixStorage.AppendFile(volume, appendFile.fileName, []byte("hello, world"))
@@ -1153,19 +1154,22 @@ func TestPosixReadFile(t *testing.T) {
 	}
 
 	{
-		buf := make([]byte, 5)
 		// Test for negative offset.
-		if _, err = posixStorage.ReadFile(volume, "myobject", -1, buf, v); err == nil {
+		if _, err = posixStorage.ReadFile(volume, "myobject", -1, 100, v); err == nil {
 			t.Fatalf("expected: error, got: <nil>")
 		}
 	}
 
 	// Following block validates all ReadFile test cases.
 	for i, testCase := range testCases {
-		var n int64
+		var n int
+		var verifier ecc.Verifier
 		// Common read buffer.
 		var buf = make([]byte, testCase.bufSize)
-		n, err = posixStorage.ReadFile(testCase.volume, testCase.fileName, testCase.offset, buf, v)
+		verifier, err = posixStorage.ReadFile(testCase.volume, testCase.fileName, testCase.offset, int64(testCase.bufSize), v)
+		if err == nil {
+			n, err = io.ReadFull(verifier, buf)
+		}
 		if err != nil && testCase.expectedErr != nil {
 			// Validate if the type string of the errors are an exact match.
 			if err.Error() != testCase.expectedErr.Error() {
@@ -1196,9 +1200,6 @@ func TestPosixReadFile(t *testing.T) {
 				if !bytes.Equal(testCase.expectedBuf, buf[:n]) {
 					t.Errorf("Case: %d %#v, expected: \"%s\", got: \"%s\"", i+1, testCase, string(testCase.expectedBuf), string(buf[:n]))
 				}
-				if n > int64(len(buf)) {
-					t.Errorf("Case: %d %#v, expected: %d, got: %d", i+1, testCase, testCase.bufSize, n)
-				}
 			}
 		}
 		// ReadFile has returned success, but our expected error is non 'nil'.
@@ -1210,7 +1211,7 @@ func TestPosixReadFile(t *testing.T) {
 			if !bytes.Equal(testCase.expectedBuf, buf) {
 				t.Errorf("Case: %d %#v, expected: \"%s\", got: \"%s\"", i+1, testCase, string(testCase.expectedBuf), string(buf[:testCase.bufSize]))
 			}
-			if n != int64(testCase.bufSize) {
+			if n != testCase.bufSize {
 				t.Errorf("Case: %d %#v, expected: %d, got: %d", i+1, testCase, testCase.bufSize, n)
 			}
 		}
@@ -1237,8 +1238,7 @@ func TestPosixReadFile(t *testing.T) {
 		}
 
 		// Common read buffer.
-		var buf = make([]byte, 10)
-		if _, err = posixPermStorage.ReadFile("mybucket", "myobject", 0, buf, v); err != errFileAccessDenied {
+		if _, err = posixPermStorage.ReadFile("mybucket", "myobject", 0, 10, v); err != errFileAccessDenied {
 			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
@@ -1250,8 +1250,7 @@ func TestPosixReadFile(t *testing.T) {
 		// setting the io error count from as specified in the test case.
 		posixType.storage.ioErrCount = int32(6)
 		// Common read buffer.
-		var buf = make([]byte, 10)
-		_, err = posixType.ReadFile("abc", "yes", 0, buf, nil)
+		_, err = posixType.ReadFile("abc", "yes", 0, 10, nil)
 		if err != errFaultyDisk {
 			t.Fatalf("Expected \"Faulty Disk\", got: \"%s\"", err)
 		}
@@ -1267,22 +1266,22 @@ var posixReadFileWithVerifyTests = []struct {
 	algorithm BitrotAlgorithm
 	expError  error
 }{
-	{file: "myobject", offset: 0, length: 100, algorithm: SHA256, expError: nil},                // 0
-	{file: "myobject", offset: 25, length: 74, algorithm: SHA256, expError: nil},                // 1
-	{file: "myobject", offset: 29, length: 70, algorithm: SHA256, expError: nil},                // 2
-	{file: "myobject", offset: 100, length: 0, algorithm: SHA256, expError: nil},                // 3
-	{file: "myobject", offset: 1, length: 120, algorithm: SHA256, expError: errFileCorrupt},     // 4
-	{file: "myobject", offset: 3, length: 1100, algorithm: SHA256, expError: nil},               // 5
-	{file: "myobject", offset: 2, length: 100, algorithm: SHA256, expError: errFileCorrupt},     // 6
-	{file: "myobject", offset: 1000, length: 1001, algorithm: SHA256, expError: nil},            // 7
-	{file: "myobject", offset: 0, length: 100, algorithm: BLAKE2b512, expError: errFileCorrupt}, // 8
-	{file: "myobject", offset: 25, length: 74, algorithm: BLAKE2b512, expError: nil},            // 9
-	{file: "myobject", offset: 29, length: 70, algorithm: BLAKE2b512, expError: errFileCorrupt}, // 10
-	{file: "myobject", offset: 100, length: 0, algorithm: BLAKE2b512, expError: nil},            // 11
-	{file: "myobject", offset: 1, length: 120, algorithm: BLAKE2b512, expError: nil},            // 12
-	{file: "myobject", offset: 3, length: 1100, algorithm: BLAKE2b512, expError: nil},           // 13
-	{file: "myobject", offset: 2, length: 100, algorithm: BLAKE2b512, expError: nil},            // 14
-	{file: "myobject", offset: 1000, length: 1001, algorithm: BLAKE2b512, expError: nil},        // 15
+	{file: "myobject", offset: 0, length: 100, algorithm: SHA256, expError: nil},                        // 0
+	{file: "myobject", offset: 25, length: 74, algorithm: SHA256, expError: nil},                        // 1
+	{file: "myobject", offset: 29, length: 70, algorithm: SHA256, expError: nil},                        // 2
+	{file: "myobject", offset: 100, length: 0, algorithm: SHA256, expError: nil},                        // 3
+	{file: "myobject", offset: 1, length: 120, algorithm: SHA256, expError: ecc.ErrContentMismatch},     // 4
+	{file: "myobject", offset: 3, length: 1100, algorithm: SHA256, expError: nil},                       // 5
+	{file: "myobject", offset: 2, length: 100, algorithm: SHA256, expError: ecc.ErrContentMismatch},     // 6
+	{file: "myobject", offset: 1000, length: 1001, algorithm: SHA256, expError: nil},                    // 7
+	{file: "myobject", offset: 0, length: 100, algorithm: BLAKE2b512, expError: ecc.ErrContentMismatch}, // 8
+	{file: "myobject", offset: 25, length: 74, algorithm: BLAKE2b512, expError: nil},                    // 9
+	{file: "myobject", offset: 29, length: 70, algorithm: BLAKE2b512, expError: ecc.ErrContentMismatch}, // 10
+	{file: "myobject", offset: 100, length: 0, algorithm: BLAKE2b512, expError: nil},                    // 11
+	{file: "myobject", offset: 1, length: 120, algorithm: BLAKE2b512, expError: nil},                    // 12
+	{file: "myobject", offset: 3, length: 1100, algorithm: BLAKE2b512, expError: nil},                   // 13
+	{file: "myobject", offset: 2, length: 100, algorithm: BLAKE2b512, expError: nil},                    // 14
+	{file: "myobject", offset: 1000, length: 1001, algorithm: BLAKE2b512, expError: nil},                // 15
 }
 
 // TestPosixReadFile with bitrot verification - tests the posix level
@@ -1317,13 +1316,16 @@ func TestPosixReadFileWithVerify(t *testing.T) {
 			h.Write([]byte{0})
 		}
 
+		var n int
 		buffer := make([]byte, test.length)
-		n, err := posixStorage.ReadFile(volume, test.file, int64(test.offset), buffer, NewBitrotVerifier(test.algorithm, h.Sum(nil)))
-
+		verifier, err := posixStorage.ReadFile(volume, test.file, int64(test.offset), int64(test.length), NewBitrotVerifier(test.algorithm, h.Sum(nil), -1))
+		if err == nil {
+			n, err = io.ReadFull(verifier, buffer)
+		}
 		switch {
 		case err == nil && test.expError != nil:
 			t.Errorf("Test %d: Expected error %v but got none.", i, test.expError)
-		case err == nil && n != int64(test.length):
+		case err == nil && n != test.length:
 			t.Errorf("Test %d: %d bytes were expected, but %d were written", i, test.length, n)
 		case err == nil && !bytes.Equal(data[test.offset:test.offset+test.length], buffer):
 			t.Errorf("Test %d: Expected bytes: %v, but got: %v", i, data[test.offset:test.offset+test.length], buffer)

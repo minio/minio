@@ -36,7 +36,7 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/klauspost/readahead"
+	"github.com/minio/minio/cmd/ecc"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
 	xioutil "github.com/minio/minio/pkg/ioutil"
@@ -64,6 +64,18 @@ func isValidVolname(volname string) bool {
 	}
 
 	return true
+}
+
+type posixReader struct {
+	io.Reader
+	io.Closer
+}
+
+func newPosixReader(f *os.File, n int64) *posixReader {
+	return &posixReader{
+		Reader: io.LimitReader(f, n),
+		Closer: f,
+	}
 }
 
 // posix - implements StorageAPI interface.
@@ -860,42 +872,41 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 //
 // Additionally ReadFile also starts reading from an offset. ReadFile
 // semantics are same as io.ReadFull.
-func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (int64, error) {
-	var n int
-	var err error
+func (s *posix) ReadFile(volume, path string, offset, length int64, verifier *BitrotVerifier) (v ecc.Verifier, err error) {
+	if offset < 0 {
+		return nil, errInvalidArgument
+	}
+
 	defer func() {
 		if err == errFaultyDisk {
 			atomic.AddInt32(&s.ioErrCount, 1)
 		}
 	}()
 
-	if offset < 0 {
-		return 0, errInvalidArgument
-	}
-
 	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return 0, errFaultyDisk
+		return nil, errFaultyDisk
 	}
 
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
+
 	// Stat a volume entry.
 	_, err = os.Stat((volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return 0, errVolumeNotFound
+			err = errVolumeNotFound
 		} else if isSysErrIO(err) {
-			return 0, errFaultyDisk
+			err = errFaultyDisk
 		}
-		return 0, err
+		return nil, err
 	}
 
 	// Validate effective path length before reading.
 	filePath := pathJoin(volumeDir, path)
 	if err = checkPathLength((filePath)); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	// Open the file for reading.
@@ -903,64 +914,57 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 	if err != nil {
 		switch {
 		case os.IsNotExist(err):
-			return 0, errFileNotFound
+			err = errFileNotFound
 		case os.IsPermission(err):
-			return 0, errFileAccessDenied
+			err = errFileAccessDenied
 		case isSysErrNotDir(err):
-			return 0, errFileAccessDenied
+			err = errFileAccessDenied
 		case isSysErrIO(err):
-			return 0, errFaultyDisk
+			err = errFaultyDisk
 		case isSysErrTooManyFiles(err):
-			return 0, errTooManyOpenFiles
-		default:
-			return 0, err
+			err = errTooManyOpenFiles
 		}
+		return nil, err
 	}
-
-	// Close the file descriptor.
-	defer file.Close()
 
 	st, err := file.Stat()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	// Verify it is a regular file, otherwise subsequent Seek is
 	// undefined.
 	if !st.Mode().IsRegular() {
-		return 0, errIsNotRegular
+		return nil, errIsNotRegular
 	}
 
 	if verifier == nil {
-		n, err = file.ReadAt(buffer, offset)
-		return int64(n), err
+		if offset > 0 {
+			if _, err = file.Seek(offset, io.SeekStart); err != nil {
+				return nil, err
+			}
+		}
+		return ecc.NOPVerifier(newPosixReader(file, length)), nil
+	}
+
+	if verifier.algorithm == HighwayHash256S {
+		if offset > 0 {
+			if _, err = file.Seek(offset, io.SeekStart); err != nil {
+				return nil, err
+			}
+		}
+		return ecc.NOPVerifier(newPosixReader(file, length)), nil
 	}
 
 	bufp := s.pool.Get().(*[]byte)
 	defer s.pool.Put(bufp)
-
-	h := verifier.algorithm.New()
-	if _, err = io.CopyBuffer(h, io.LimitReader(file, offset), *bufp); err != nil {
-		return 0, err
+	if err = ecc.Verify(file, *bufp, verifier.algorithm.New(), verifier.sum); err != nil {
+		return nil, err
 	}
-
-	if n, err = io.ReadFull(file, buffer); err != nil {
-		return int64(n), err
+	if _, err = file.Seek(offset, io.SeekStart); err != nil {
+		return nil, err
 	}
-
-	if _, err = h.Write(buffer); err != nil {
-		return 0, err
-	}
-
-	if _, err = io.CopyBuffer(h, file, *bufp); err != nil {
-		return 0, err
-	}
-
-	if !bytes.Equal(h.Sum(nil), verifier.sum) {
-		return 0, errFileCorrupt
-	}
-
-	return int64(len(buffer)), nil
+	return ecc.NOPVerifier(newPosixReader(file, length)), nil
 }
 
 func (s *posix) openFile(volume, path string, mode int) (f *os.File, err error) {
@@ -1026,86 +1030,6 @@ func (s *posix) openFile(volume, path string, mode int) (f *os.File, err error) 
 	}
 
 	return w, nil
-}
-
-// ReadFileStream - Returns the read stream of the file.
-func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
-	var err error
-	defer func() {
-		if err == errFaultyDisk {
-			atomic.AddInt32(&s.ioErrCount, 1)
-		}
-	}()
-
-	if offset < 0 {
-		return nil, errInvalidArgument
-	}
-
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return nil, errFaultyDisk
-	}
-
-	volumeDir, err := s.getVolDir(volume)
-	if err != nil {
-		return nil, err
-	}
-	// Stat a volume entry.
-	_, err = os.Stat((volumeDir))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return nil, errFaultyDisk
-		}
-		return nil, err
-	}
-
-	// Validate effective path length before reading.
-	filePath := pathJoin(volumeDir, path)
-	if err = checkPathLength((filePath)); err != nil {
-		return nil, err
-	}
-
-	// Open the file for reading.
-	file, err := os.Open((filePath))
-	if err != nil {
-		switch {
-		case os.IsNotExist(err):
-			return nil, errFileNotFound
-		case os.IsPermission(err):
-			return nil, errFileAccessDenied
-		case isSysErrNotDir(err):
-			return nil, errFileAccessDenied
-		case isSysErrIO(err):
-			return nil, errFaultyDisk
-		case isSysErrTooManyFiles(err):
-			return nil, errTooManyOpenFiles
-		default:
-			return nil, err
-		}
-	}
-
-	st, err := file.Stat()
-	if err != nil {
-		return nil, err
-	}
-
-	// Verify it is a regular file, otherwise subsequent Seek is
-	// undefined.
-	if !st.Mode().IsRegular() {
-		return nil, errIsNotRegular
-	}
-
-	if _, err = file.Seek(offset, io.SeekStart); err != nil {
-		return nil, err
-	}
-
-	r := struct {
-		io.Reader
-		io.Closer
-	}{Reader: io.LimitReader(file, length), Closer: file}
-
-	return readahead.NewReadCloser(r), nil
 }
 
 // CreateFile - creates the file.

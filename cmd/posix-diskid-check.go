@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"io"
+
+	"github.com/minio/minio/cmd/ecc"
 )
 
 // Detects change in underlying disk.
@@ -112,11 +114,11 @@ func (p *posixDiskIDCheck) ListDir(volume, dirPath string, count int, leafFile s
 	return p.storage.ListDir(volume, dirPath, count, leafFile)
 }
 
-func (p *posixDiskIDCheck) ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
+func (p *posixDiskIDCheck) ReadFile(volume string, path string, offset, length int64, verifier *BitrotVerifier) (ecc.Verifier, error) {
 	if p.isDiskStale() {
-		return 0, errDiskNotFound
+		return nil, errDiskNotFound
 	}
-	return p.storage.ReadFile(volume, path, offset, buf, verifier)
+	return p.storage.ReadFile(volume, path, offset, length, verifier)
 }
 
 func (p *posixDiskIDCheck) AppendFile(volume string, path string, buf []byte) (err error) {
@@ -131,13 +133,6 @@ func (p *posixDiskIDCheck) CreateFile(volume, path string, size int64, reader io
 		return errDiskNotFound
 	}
 	return p.storage.CreateFile(volume, path, size, reader)
-}
-
-func (p *posixDiskIDCheck) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
-	if p.isDiskStale() {
-		return nil, errDiskNotFound
-	}
-	return p.storage.ReadFileStream(volume, path, offset, length)
 }
 
 func (p *posixDiskIDCheck) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {

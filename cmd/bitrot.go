@@ -94,14 +94,15 @@ func (a BitrotAlgorithm) String() string {
 }
 
 // NewBitrotVerifier returns a new BitrotVerifier implementing the given algorithm.
-func NewBitrotVerifier(algorithm BitrotAlgorithm, checksum []byte) *BitrotVerifier {
-	return &BitrotVerifier{algorithm, checksum}
+func NewBitrotVerifier(algorithm BitrotAlgorithm, checksum []byte, shardSize int64) *BitrotVerifier {
+	return &BitrotVerifier{algorithm, checksum, shardSize}
 }
 
 // BitrotVerifier can be used to verify protected data.
 type BitrotVerifier struct {
 	algorithm BitrotAlgorithm
 	sum       []byte
+	shardSize int64
 }
 
 // BitrotAlgorithmFromString returns a bitrot algorithm from the given string representation.
@@ -127,7 +128,7 @@ func newBitrotReader(disk StorageAPI, bucket string, filePath string, tillOffset
 	if algo == HighwayHash256S {
 		return newStreamingBitrotReader(disk, bucket, filePath, tillOffset, algo, shardSize)
 	}
-	return newWholeBitrotReader(disk, bucket, filePath, algo, tillOffset, sum)
+	return newWholeBitrotReader(disk, bucket, filePath, algo, tillOffset, sum, shardSize)
 }
 
 // Close all the readers.
