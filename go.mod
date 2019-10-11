@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go v0.37.2
 	github.com/Azure/azure-sdk-for-go v33.4.0+incompatible
 	github.com/Azure/go-autorest v11.7.0+incompatible
+	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/alecthomas/participle v0.2.1
 	github.com/aliyun/aliyun-oss-go-sdk v0.0.0-20190307165228-86c17b95fcd5
 	github.com/aws/aws-sdk-go v1.20.21
@@ -20,6 +21,7 @@ require (
 	github.com/elazarl/go-bindata-assetfs v1.0.0
 	github.com/fatih/color v1.7.0
 	github.com/fatih/structs v1.1.0
+	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/gorilla/handlers v1.4.0
