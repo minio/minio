@@ -68,17 +68,20 @@ const (
 
 // NATSArgs - NATS target arguments.
 type NATSArgs struct {
-	Enable       bool      `json:"enable"`
-	Address      xnet.Host `json:"address"`
-	Subject      string    `json:"subject"`
-	Username     string    `json:"username"`
-	Password     string    `json:"password"`
-	Token        string    `json:"token"`
-	Secure       bool      `json:"secure"`
-	PingInterval int64     `json:"pingInterval"`
-	QueueDir     string    `json:"queueDir"`
-	QueueLimit   uint64    `json:"queueLimit"`
-	Streaming    struct {
+	Enable        bool      `json:"enable"`
+	Address       xnet.Host `json:"address"`
+	Subject       string    `json:"subject"`
+	Username      string    `json:"username"`
+	Password      string    `json:"password"`
+	Token         string    `json:"token"`
+	Secure        bool      `json:"secure"`
+	CertAuthority string    `json:"certAuthority"`
+	ClientCert    string    `json:"clientCert"`
+	ClientKey     string    `json:"clientKey"`
+	PingInterval  int64     `json:"pingInterval"`
+	QueueDir      string    `json:"queueDir"`
+	QueueLimit    uint64    `json:"queueLimit"`
+	Streaming     struct {
 		Enable             bool   `json:"enable"`
 		ClusterID          string `json:"clusterID"`
 		Async              bool   `json:"async"`
@@ -98,6 +101,10 @@ func (n NATSArgs) Validate() error {
 
 	if n.Subject == "" {
 		return errors.New("empty subject")
+	}
+
+	if n.ClientCert != "" && n.ClientKey == "" || n.ClientCert == "" && n.ClientKey != "" {
+		return errors.New("cert and key must be specified as a pair")
 	}
 
 	if n.Streaming.Enable {
@@ -120,13 +127,23 @@ func (n NATSArgs) Validate() error {
 
 // To obtain a nats connection from args.
 func (n NATSArgs) connectNats() (*nats.Conn, error) {
-	options := nats.DefaultOptions
-	options.Url = "nats://" + n.Address.String()
-	options.User = n.Username
-	options.Password = n.Password
-	options.Token = n.Token
-	options.Secure = n.Secure
-	return options.Connect()
+	connOpts := []nats.Option{nats.Name("Minio Notification")}
+	if n.Username != "" && n.Password != "" {
+		connOpts = append(connOpts, nats.UserInfo(n.Username, n.Password))
+	}
+	if n.Token != "" {
+		connOpts = append(connOpts, nats.Token(n.Token))
+	}
+	if n.Secure {
+		connOpts = append(connOpts, nats.Secure(nil))
+	}
+	if n.CertAuthority != "" {
+		connOpts = append(connOpts, nats.RootCAs(n.CertAuthority))
+	}
+	if n.ClientCert != "" && n.ClientKey != "" {
+		connOpts = append(connOpts, nats.ClientCert(n.ClientCert, n.ClientKey))
+	}
+	return nats.Connect(n.Address.String(), connOpts...)
 }
 
 // To obtain a streaming connection from args.
