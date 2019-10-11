@@ -124,6 +124,8 @@ func getLocalCPUInfo(endpoints EndpointList, r *http.Request) madmin.ServerCPUHa
 		if seenHosts.Contains(endpoint.Host) {
 			continue
 		}
+		// Add to the list of visited hosts
+		seenHosts.Add(endpoint.Host)
 		// Only proceed for local endpoints
 		if endpoint.IsLocal {
 			cpuHardware, err := cpuhw.Info()
