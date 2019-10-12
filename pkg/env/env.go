@@ -27,7 +27,10 @@ func Lookup(key string) (string, bool) { return os.LookupEnv(key) }
 func List(prefix string) (envs []string) {
 	for _, env := range os.Environ() {
 		if strings.HasPrefix(env, prefix) {
-			envs = append(envs, env)
+			values := strings.SplitN(env, "=", 2)
+			if len(values) == 2 {
+				envs = append(envs, values[0])
+			}
 		}
 	}
 	return envs

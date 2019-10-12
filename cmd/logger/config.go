@@ -77,32 +77,32 @@ func NewConfig() Config {
 
 // LookupConfig - lookup logger config, override with ENVs if set.
 func LookupConfig(cfg Config) (Config, error) {
+	if cfg.HTTP == nil {
+		cfg.HTTP = make(map[string]HTTP)
+	}
+	if cfg.Audit == nil {
+		cfg.Audit = make(map[string]HTTP)
+	}
 	envs := env.List(EnvLoggerHTTPEndpoint)
-	for _, e := range envs {
-		target := strings.TrimPrefix(e, EnvLoggerHTTPEndpoint)
-		if target == "" {
+	for _, k := range envs {
+		target := strings.TrimPrefix(k, EnvLoggerHTTPEndpoint+defaultTarget)
+		if target == EnvLoggerHTTPEndpoint {
 			target = defaultTarget
 		}
-		_, ok := cfg.HTTP[target]
-		if ok {
-			cfg.HTTP[target] = HTTP{
-				Enabled:  true,
-				Endpoint: env.Get(e, cfg.HTTP[target].Endpoint),
-			}
+		cfg.HTTP[target] = HTTP{
+			Enabled:  true,
+			Endpoint: env.Get(k, cfg.HTTP[target].Endpoint),
 		}
 	}
 	aenvs := env.List(EnvAuditLoggerHTTPEndpoint)
-	for _, e := range aenvs {
-		target := strings.TrimPrefix(e, EnvAuditLoggerHTTPEndpoint)
-		if target == "" {
+	for _, k := range aenvs {
+		target := strings.TrimPrefix(k, EnvAuditLoggerHTTPEndpoint+defaultTarget)
+		if target == EnvAuditLoggerHTTPEndpoint {
 			target = defaultTarget
 		}
-		_, ok := cfg.Audit[target]
-		if ok {
-			cfg.Audit[target] = HTTP{
-				Enabled:  true,
-				Endpoint: env.Get(e, cfg.Audit[target].Endpoint),
-			}
+		cfg.Audit[target] = HTTP{
+			Enabled:  true,
+			Endpoint: env.Get(k, cfg.Audit[target].Endpoint),
 		}
 	}
 
