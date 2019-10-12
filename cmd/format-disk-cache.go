@@ -138,12 +138,12 @@ func initFormatCache(ctx context.Context, drives []string) (formats []*formatCac
 		}
 		if !os.IsNotExist(err) {
 			logger.GetReqInfo(ctx).AppendTags("drive", drive)
-			logger.LogIf(ctx, err)
+			logger.LogIf(ctx, err, logger.Application)
 			return nil, err
 		}
 		if err = os.Mkdir(drive, 0777); err != nil {
 			logger.GetReqInfo(ctx).AppendTags("drive", drive)
-			logger.LogIf(ctx, err)
+			logger.LogIf(ctx, err, logger.Application)
 			return nil, err
 		}
 	}

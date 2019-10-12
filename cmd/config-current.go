@@ -336,14 +336,14 @@ func (s *serverConfig) lookupConfigs() {
 	for _, l := range s.Logger.HTTP {
 		if l.Enabled {
 			// Enable http logging
-			logger.AddTarget(http.New(l.Endpoint, loggerUserAgent, NewCustomHTTPTransport()))
+			logger.AddTarget(http.New(l.Endpoint, loggerUserAgent, string(logger.All), NewCustomHTTPTransport()))
 		}
 	}
 
 	for _, l := range s.Logger.Audit {
 		if l.Enabled {
 			// Enable http audit logging
-			logger.AddAuditTarget(http.New(l.Endpoint, loggerUserAgent, NewCustomHTTPTransport()))
+			logger.AddAuditTarget(http.New(l.Endpoint, loggerUserAgent, string(logger.All), NewCustomHTTPTransport()))
 		}
 	}
 

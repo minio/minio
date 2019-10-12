@@ -948,7 +948,7 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 	defer close(doneCh)
 
 	ch := make(chan interface{}, 2000)
-	globalConsoleSys.Subscribe(ch, doneCh, "", 0, nil)
+	globalConsoleSys.Subscribe(ch, doneCh, "", 0, string(logger.All), nil)
 
 	enc := gob.NewEncoder(w)
 	for {
