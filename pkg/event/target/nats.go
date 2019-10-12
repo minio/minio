@@ -234,7 +234,7 @@ func (target *NATSTarget) Close() (err error) {
 }
 
 // NewNATSTarget - creates new NATS target.
-func NewNATSTarget(id string, args NATSArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{})) (*NATSTarget, error) {
+func NewNATSTarget(id string, args NATSArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*NATSTarget, error) {
 	var natsConn *nats.Conn
 	var stanConn stan.Conn
 

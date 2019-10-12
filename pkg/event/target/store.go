@@ -45,7 +45,7 @@ type Store interface {
 }
 
 // replayEvents - Reads the events from the store and replays.
-func replayEvents(store Store, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}), id event.TargetID) <-chan string {
+func replayEvents(store Store, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), id event.TargetID) <-chan string {
 	eventKeyCh := make(chan string)
 
 	go func() {
@@ -97,7 +97,7 @@ func IsConnResetErr(err error) bool {
 }
 
 // sendEvents - Reads events from the store and re-plays.
-func sendEvents(target event.Target, eventKeyCh <-chan string, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{})) {
+func sendEvents(target event.Target, eventKeyCh <-chan string, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) {
 	retryTicker := time.NewTicker(retryInterval)
 	defer retryTicker.Stop()
 

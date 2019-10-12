@@ -150,7 +150,7 @@ func (target *NSQTarget) Close() (err error) {
 }
 
 // NewNSQTarget - creates new NSQ target.
-func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{})) (*NSQTarget, error) {
+func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*NSQTarget, error) {
 	config := nsq.NewConfig()
 	if args.TLS.Enable {
 		config.TlsV1 = true

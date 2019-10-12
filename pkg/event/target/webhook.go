@@ -172,7 +172,7 @@ func (target *WebhookTarget) Close() error {
 }
 
 // NewWebhookTarget - creates new Webhook target.
-func NewWebhookTarget(id string, args WebhookArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{})) *WebhookTarget {
+func NewWebhookTarget(id string, args WebhookArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) *WebhookTarget {
 
 	var store Store
 

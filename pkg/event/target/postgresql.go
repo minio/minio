@@ -313,7 +313,7 @@ func (target *PostgreSQLTarget) executeStmts() error {
 }
 
 // NewPostgreSQLTarget - creates new PostgreSQL target.
-func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{})) (*PostgreSQLTarget, error) {
+func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*PostgreSQLTarget, error) {
 	var firstPing bool
 
 	params := []string{args.ConnectionString}

@@ -88,7 +88,7 @@ type MQTTTarget struct {
 	args       MQTTArgs
 	client     mqtt.Client
 	store      Store
-	loggerOnce func(ctx context.Context, err error, id interface{})
+	loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})
 }
 
 // ID - returns target ID.
@@ -162,7 +162,7 @@ func (target *MQTTTarget) Close() error {
 }
 
 // NewMQTTTarget - creates new MQTT target.
-func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{})) (*MQTTTarget, error) {
+func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*MQTTTarget, error) {
 	options := mqtt.NewClientOptions().
 		SetClientID("").
 		SetCleanSession(true).

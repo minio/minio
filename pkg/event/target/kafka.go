@@ -192,7 +192,7 @@ func (k KafkaArgs) pingBrokers() bool {
 }
 
 // NewKafkaTarget - creates new Kafka target with auth credentials.
-func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{})) (*KafkaTarget, error) {
+func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*KafkaTarget, error) {
 	config := sarama.NewConfig()
 
 	config.Net.SASL.User = args.SASL.User

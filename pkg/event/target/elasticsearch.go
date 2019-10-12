@@ -221,7 +221,7 @@ func newClient(args ElasticsearchArgs) (*elastic.Client, error) {
 }
 
 // NewElasticsearchTarget - creates new Elasticsearch target.
-func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{})) (*ElasticsearchTarget, error) {
+func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*ElasticsearchTarget, error) {
 	var client *elastic.Client
 	var err error
 

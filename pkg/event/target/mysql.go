@@ -312,7 +312,7 @@ func (target *MySQLTarget) executeStmts() error {
 }
 
 // NewMySQLTarget - creates new MySQL target.
-func NewMySQLTarget(id string, args MySQLArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{})) (*MySQLTarget, error) {
+func NewMySQLTarget(id string, args MySQLArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*MySQLTarget, error) {
 	var firstPing bool
 	if args.DSN == "" {
 		config := mysql.Config{
