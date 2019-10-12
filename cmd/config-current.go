@@ -373,7 +373,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewElasticsearchTarget(k, v, GlobalServiceDoneCh)
+		t, err := target.NewElasticsearchTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
 		if err != nil {
 			return fmt.Errorf("elasticsearch(%s): %s", k, err.Error())
 		}
@@ -387,7 +387,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if v.TLS.Enable {
 			v.TLS.RootCAs = globalRootCAs
 		}
-		t, err := target.NewKafkaTarget(k, v, GlobalServiceDoneCh)
+		t, err := target.NewKafkaTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
 		if err != nil {
 			return fmt.Errorf("kafka(%s): %s", k, err.Error())
 		}
@@ -399,7 +399,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 			continue
 		}
 		v.RootCAs = globalRootCAs
-		t, err := target.NewMQTTTarget(k, v, GlobalServiceDoneCh)
+		t, err := target.NewMQTTTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
 		if err != nil {
 			return fmt.Errorf("mqtt(%s): %s", k, err.Error())
 		}
@@ -410,7 +410,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewMySQLTarget(k, v, GlobalServiceDoneCh)
+		t, err := target.NewMySQLTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
 		if err != nil {
 			return fmt.Errorf("mysql(%s): %s", k, err.Error())
 		}
@@ -421,7 +421,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewNATSTarget(k, v, GlobalServiceDoneCh)
+		t, err := target.NewNATSTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
 		if err != nil {
 			return fmt.Errorf("nats(%s): %s", k, err.Error())
 		}
@@ -432,7 +432,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewNSQTarget(k, v, GlobalServiceDoneCh)
+		t, err := target.NewNSQTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
 		if err != nil {
 			return fmt.Errorf("nsq(%s): %s", k, err.Error())
 		}
@@ -443,7 +443,7 @@ func (s *serverConfig) TestNotificationTargets() error {
 		if !v.Enable {
 			continue
 		}
-		t, err := target.NewPostgreSQLTarget(k, v, GlobalServiceDoneCh)
+		t, err := target.NewPostgreSQLTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
 		if err != nil {
 			return fmt.Errorf("postgreSQL(%s): %s", k, err.Error())
 		}
@@ -583,7 +583,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.Elasticsearch {
 		if args.Enable {
-			newTarget, err := target.NewElasticsearchTarget(id, args, GlobalServiceDoneCh)
+			newTarget, err := target.NewElasticsearchTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
@@ -602,7 +602,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 			if args.TLS.Enable {
 				args.TLS.RootCAs = globalRootCAs
 			}
-			newTarget, err := target.NewKafkaTarget(id, args, GlobalServiceDoneCh)
+			newTarget, err := target.NewKafkaTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
@@ -617,7 +617,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 	for id, args := range config.Notify.MQTT {
 		if args.Enable {
 			args.RootCAs = globalRootCAs
-			newTarget, err := target.NewMQTTTarget(id, args, GlobalServiceDoneCh)
+			newTarget, err := target.NewMQTTTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
@@ -631,7 +631,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.MySQL {
 		if args.Enable {
-			newTarget, err := target.NewMySQLTarget(id, args, GlobalServiceDoneCh)
+			newTarget, err := target.NewMySQLTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
@@ -645,7 +645,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.NATS {
 		if args.Enable {
-			newTarget, err := target.NewNATSTarget(id, args, GlobalServiceDoneCh)
+			newTarget, err := target.NewNATSTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
@@ -659,7 +659,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.NSQ {
 		if args.Enable {
-			newTarget, err := target.NewNSQTarget(id, args, GlobalServiceDoneCh)
+			newTarget, err := target.NewNSQTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
@@ -673,7 +673,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 
 	for id, args := range config.Notify.PostgreSQL {
 		if args.Enable {
-			newTarget, err := target.NewPostgreSQLTarget(id, args, GlobalServiceDoneCh)
+			newTarget, err := target.NewPostgreSQLTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
 			if err != nil {
 				logger.LogIf(context.Background(), err)
 				continue
@@ -702,7 +702,7 @@ func getNotificationTargets(config *serverConfig) *event.TargetList {
 	for id, args := range config.Notify.Webhook {
 		if args.Enable {
 			args.RootCAs = globalRootCAs
-			newTarget := target.NewWebhookTarget(id, args, GlobalServiceDoneCh)
+			newTarget := target.NewWebhookTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
 			if err := targetList.Add(newTarget); err != nil {
 				logger.LogIf(context.Background(), err)
 				continue

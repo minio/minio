@@ -17,10 +17,9 @@
 package target
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"net"
-	"os"
 	"strings"
 	"syscall"
 	"time"
@@ -40,35 +39,39 @@ var errLimitExceeded = errors.New("the maximum store limit reached")
 type Store interface {
 	Put(event event.Event) error
 	Get(key string) (event.Event, error)
-	List() []string
+	List() ([]string, error)
 	Del(key string) error
 	Open() error
 }
 
 // replayEvents - Reads the events from the store and replays.
-func replayEvents(store Store, doneCh <-chan struct{}) <-chan string {
-	var names []string
+func replayEvents(store Store, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}), id event.TargetID) <-chan string {
 	eventKeyCh := make(chan string)
 
 	go func() {
-		retryTimer := time.NewTimer(retryInterval)
-		defer retryTimer.Stop()
+		retryTicker := time.NewTicker(retryInterval)
+		defer retryTicker.Stop()
 		defer close(eventKeyCh)
 		for {
-			names = store.List()
-			for _, name := range names {
-				select {
-				case eventKeyCh <- strings.TrimSuffix(name, eventExt):
-					// Get next key.
-				case <-doneCh:
-					return
+			names, err := store.List()
+			if err == nil {
+				for _, name := range names {
+					select {
+					case eventKeyCh <- strings.TrimSuffix(name, eventExt):
+						// Get next key.
+					case <-doneCh:
+						return
+					}
 				}
 			}
 
 			if len(names) < 2 {
-				retryTimer.Reset(retryInterval)
 				select {
-				case <-retryTimer.C:
+				case <-retryTicker.C:
+					if err != nil {
+						loggerOnce(context.Background(),
+							fmt.Errorf("store.List() failed '%v'", err), id)
+					}
 				case <-doneCh:
 					return
 				}
@@ -81,16 +84,7 @@ func replayEvents(store Store, doneCh <-chan struct{}) <-chan string {
 
 // IsConnRefusedErr - To check fot "connection refused" error.
 func IsConnRefusedErr(err error) bool {
-	if opErr, ok := err.(*net.OpError); ok {
-		if sysErr, ok := opErr.Err.(*os.SyscallError); ok {
-			if errno, ok := sysErr.Err.(syscall.Errno); ok {
-				if errno == syscall.ECONNREFUSED {
-					return true
-				}
-			}
-		}
-	}
-	return false
+	return errors.Is(err, syscall.ECONNREFUSED)
 }
 
 // IsConnResetErr - Checks for connection reset errors.
@@ -99,20 +93,13 @@ func IsConnResetErr(err error) bool {
 		return true
 	}
 	// incase if error message is wrapped.
-	if opErr, ok := err.(*net.OpError); ok {
-		if syscallErr, ok := opErr.Err.(*os.SyscallError); ok {
-			if syscallErr.Err == syscall.ECONNRESET {
-				return true
-			}
-		}
-	}
-	return false
+	return errors.Is(err, syscall.ECONNRESET)
 }
 
 // sendEvents - Reads events from the store and re-plays.
-func sendEvents(target event.Target, eventKeyCh <-chan string, doneCh <-chan struct{}) {
-	retryTimer := time.NewTimer(retryInterval)
-	defer retryTimer.Stop()
+func sendEvents(target event.Target, eventKeyCh <-chan string, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{})) {
+	retryTicker := time.NewTicker(retryInterval)
+	defer retryTicker.Stop()
 
 	send := func(eventKey string) bool {
 		for {
@@ -122,12 +109,14 @@ func sendEvents(target event.Target, eventKeyCh <-chan string, doneCh <-chan str
 			}
 
 			if err != errNotConnected && !IsConnResetErr(err) {
-				panic(fmt.Errorf("target.Send() failed with '%v'", err))
+				loggerOnce(context.Background(),
+					fmt.Errorf("target.Send() failed with '%v'", err),
+					target.ID())
+				continue
 			}
 
-			retryTimer.Reset(retryInterval)
 			select {
-			case <-retryTimer.C:
+			case <-retryTicker.C:
 			case <-doneCh:
 				return false
 			}
