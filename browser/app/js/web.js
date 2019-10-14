@@ -75,6 +75,16 @@ class Web {
   GetToken() {
     return storage.getItem('token')
   }
+  GetDiscoveryDoc() {
+    return this.makeCall("GetDiscoveryDoc")
+  }
+  LoginSTS(args) {
+    return this.makeCall('LoginSTS', args)
+      .then(res => {
+        storage.setItem('token', `${res.token}`)
+        return res
+      })
+  }
   ServerInfo() {
     return this.makeCall('ServerInfo')
   }

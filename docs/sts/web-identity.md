@@ -14,6 +14,7 @@
 - [Sample Response](#sample-response)
 - [Testing](#testing)
 - [Authorization Flow](#authorization-flow)
+- [MinIO Browser](#minio-browser)
 
 ## Introduction
 
@@ -92,18 +93,11 @@ http://minio.cluster:9000?Action=AssumeRoleWithWebIdentity&DurationSeconds=3600&
 ```
 $ export MINIO_ACCESS_KEY=minio
 $ export MINIO_SECRET_KEY=minio123
-$ export MINIO_IAM_JWKS_URL=https://www.googleapis.com/oauth2/v3/certs
+$ export MINIO_IDENTITY_OPENID_CONFIG_URL=https://accounts.google.com/.well-known/openid-configuration
 $ minio server /mnt/export
 
-$ mc admin config get myminio
-...
-{
-  "openid": {
-    "jwks": {
-      "url": "https://www.googleapis.com/oauth2/v3/certs"
-     }
-   }
-}
+$ mc admin config get myminio identity_openid
+identity_openid config_url="https://accounts.google.com/.well-known/openid-configuration" state="on"
 ```
 
 Testing with an example
@@ -121,3 +115,25 @@ $ go run web-identity.go -cid 204367807228-ok7601k6gj1pgge7m09h7d79co8p35xx.apps
 - Using the access token the callback handler further talks to Google OAuth2 Token URL to obtain an JWT id_token.
 - Once obtained the JWT id_token is further sent to STS endpoint i.e MinIO to retrive temporary credentials.
 - Temporary credentials are displayed on the browser upon successful retrieval.
+
+
+## MinIO Browser
+To support WebIdentity login on MinIO Browser
+
+1. Set openid configuration and restart MinIO
+  ```
+  mc admin config set myminio identity_openid jwks_url="<JWKS_URL>" config_url="<CONFIG_URL>"
+  
+  mc admin service restart myminio
+  ```
+  Sample URLs for Keycloak are
+  `config_url` - `http://localhost:8080/auth/realms/demo/.well-known/openid-configuration`,
+  `jwks_url` - `http://localhost:8080/auth/realms/demo/protocol/openid-connect/certs`
+
+  JWT token returned by the Identity Provider should include a custom claim for the policy, this is required to create a STS user in MinIO. The name of the custom claim could be either `policy` or `<NAMESPACE_PREFIX>policy`.
+  If there is no namespace then `policy_claim_prefix` can be ingored. For example if the custom claim name is `https://min.io/policy` then, `policy_claim_prefix` should be set as `https://min.io/`
+
+2. Open MinIO Browser and click `Log in with OpenID`
+3. Enter the `Client ID` obtained from Identity Provider and press ENTER
+4. The user will be redirected to the Identity Provider login page
+5. Upon successful login on Identity Provider page the user will be automatically logged into MinIO Browser

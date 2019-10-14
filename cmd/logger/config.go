@@ -19,6 +19,7 @@ package logger
 import (
 	"strings"
 
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/env"
 )
 
@@ -29,8 +30,9 @@ type Console struct {
 
 // HTTP logger target
 type HTTP struct {
-	Enabled  bool   `json:"enabled"`
-	Endpoint string `json:"endpoint"`
+	Enabled   bool   `json:"enabled"`
+	Endpoint  string `json:"endpoint"`
+	AuthToken string `json:"authToken"`
 }
 
 // Config console and http logger targets
@@ -42,13 +44,30 @@ type Config struct {
 
 // HTTP endpoint logger
 const (
-	EnvLoggerHTTPEndpoint      = "MINIO_LOGGER_HTTP_ENDPOINT"
-	EnvAuditLoggerHTTPEndpoint = "MINIO_AUDIT_LOGGER_HTTP_ENDPOINT"
+	Endpoint  = "endpoint"
+	AuthToken = "auth_token"
+
+	EnvLoggerHTTPEndpoint  = "MINIO_LOGGER_HTTP_ENDPOINT"
+	EnvLoggerHTTPAuthToken = "MINIO_LOGGER_HTTP_AUTH_TOKEN"
+
+	EnvLoggerHTTPAuditEndpoint  = "MINIO_LOGGER_HTTP_AUDIT_ENDPOINT"
+	EnvLoggerHTTPAuditAuthToken = "MINIO_LOGGER_HTTP_AUDIT_AUTH_TOKEN"
 )
 
-// Default target name when no targets are found
-const (
-	defaultTarget = "_"
+// Default KVS for loggerHTTP and loggerAuditHTTP
+var (
+	DefaultKVS = config.KVS{
+		config.State:   config.StateOff,
+		config.Comment: "This is a default HTTP logging configuration",
+		Endpoint:       "",
+		AuthToken:      "",
+	}
+	DefaultAuditKVS = config.KVS{
+		config.State:   config.StateOff,
+		config.Comment: "This is a default HTTP Audit logging configuration",
+		Endpoint:       "",
+		AuthToken:      "",
+	}
 )
 
 // NewConfig - initialize new logger config.
@@ -63,12 +82,12 @@ func NewConfig() Config {
 	}
 
 	// Create an example HTTP logger
-	cfg.HTTP[defaultTarget] = HTTP{
+	cfg.HTTP[config.Default] = HTTP{
 		Endpoint: "https://username:password@example.com/api",
 	}
 
 	// Create an example Audit logger
-	cfg.Audit[defaultTarget] = HTTP{
+	cfg.Audit[config.Default] = HTTP{
 		Endpoint: "https://username:password@example.com/api/audit",
 	}
 
@@ -76,33 +95,148 @@ func NewConfig() Config {
 }
 
 // LookupConfig - lookup logger config, override with ENVs if set.
-func LookupConfig(cfg Config) (Config, error) {
-	if cfg.HTTP == nil {
-		cfg.HTTP = make(map[string]HTTP)
-	}
-	if cfg.Audit == nil {
-		cfg.Audit = make(map[string]HTTP)
-	}
+func LookupConfig(scfg config.Config) (Config, error) {
+	cfg := NewConfig()
+
 	envs := env.List(EnvLoggerHTTPEndpoint)
+	var loggerTargets []string
 	for _, k := range envs {
-		target := strings.TrimPrefix(k, EnvLoggerHTTPEndpoint+defaultTarget)
+		target := strings.TrimPrefix(k, EnvLoggerHTTPEndpoint+config.Default)
 		if target == EnvLoggerHTTPEndpoint {
-			target = defaultTarget
+			target = config.Default
+		}
+		loggerTargets = append(loggerTargets, target)
+	}
+
+	var loggerAuditTargets []string
+	envs = env.List(EnvLoggerHTTPAuditEndpoint)
+	for _, k := range envs {
+		target := strings.TrimPrefix(k, EnvLoggerHTTPAuditEndpoint+config.Default)
+		if target == EnvLoggerHTTPAuditEndpoint {
+			target = config.Default
+		}
+		loggerAuditTargets = append(loggerAuditTargets, target)
+	}
+
+	// List legacy ENVs if any.
+	envs = env.List(EnvAuditLoggerHTTPEndpoint)
+	for _, k := range envs {
+		target := strings.TrimPrefix(k, EnvAuditLoggerHTTPEndpoint+config.Default)
+		if target == EnvAuditLoggerHTTPEndpoint {
+			target = config.Default
+		}
+		loggerAuditTargets = append(loggerAuditTargets, target)
+	}
+
+	for starget, kv := range scfg[config.LoggerHTTPSubSys] {
+		subSysTarget := config.LoggerHTTPSubSys
+		if starget != config.Default {
+			subSysTarget = config.LoggerHTTPSubSys + ":" + starget
+		}
+		if err := config.CheckValidKeys(subSysTarget, kv, DefaultKVS); err != nil {
+			return cfg, err
+		}
+
+		enabled, err := config.ParseBool(kv.Get(config.State))
+		if err != nil {
+			return cfg, err
+		}
+		if !enabled {
+			continue
+		}
+
+		endpointEnv := EnvLoggerHTTPEndpoint
+		if starget != config.Default {
+			endpointEnv = EnvLoggerHTTPEndpoint + config.Default + starget
+		}
+		authTokenEnv := EnvLoggerHTTPAuthToken
+		if starget != config.Default {
+			authTokenEnv = EnvLoggerHTTPAuthToken + config.Default + starget
+		}
+		cfg.HTTP[starget] = HTTP{
+			Enabled:   true,
+			Endpoint:  env.Get(endpointEnv, kv.Get(Endpoint)),
+			AuthToken: env.Get(authTokenEnv, kv.Get(AuthToken)),
+		}
+	}
+
+	for starget, kv := range scfg[config.LoggerHTTPAuditSubSys] {
+		subSysTarget := config.LoggerHTTPAuditSubSys
+		if starget != config.Default {
+			subSysTarget = config.LoggerHTTPAuditSubSys + config.SubSystemSeparator + starget
+		}
+		if err := config.CheckValidKeys(subSysTarget, kv, DefaultAuditKVS); err != nil {
+			return cfg, err
+		}
+
+		enabled, err := config.ParseBool(kv.Get(config.State))
+		if err != nil {
+			return cfg, err
+		}
+		if !enabled {
+			continue
+		}
+
+		endpointEnv := EnvLoggerHTTPAuditEndpoint
+		if starget != config.Default {
+			endpointEnv = EnvLoggerHTTPAuditEndpoint + config.Default + starget
+		}
+		legacyEndpointEnv := EnvAuditLoggerHTTPEndpoint
+		if starget != config.Default {
+			legacyEndpointEnv = EnvAuditLoggerHTTPEndpoint + config.Default + starget
+		}
+		endpoint := env.Get(legacyEndpointEnv, "")
+		if endpoint == "" {
+			endpoint = env.Get(endpointEnv, kv.Get(Endpoint))
+		}
+		authTokenEnv := EnvLoggerHTTPAuditAuthToken
+		if starget != config.Default {
+			authTokenEnv = EnvLoggerHTTPAuditAuthToken + config.Default + starget
+		}
+		cfg.HTTP[starget] = HTTP{
+			Enabled:   true,
+			Endpoint:  endpoint,
+			AuthToken: env.Get(authTokenEnv, kv.Get(AuthToken)),
+		}
+	}
+
+	for _, target := range loggerTargets {
+		endpointEnv := EnvLoggerHTTPEndpoint
+		if target != config.Default {
+			endpointEnv = EnvLoggerHTTPEndpoint + config.Default + target
+		}
+		authTokenEnv := EnvLoggerHTTPAuthToken
+		if target != config.Default {
+			authTokenEnv = EnvLoggerHTTPAuthToken + config.Default + target
 		}
 		cfg.HTTP[target] = HTTP{
-			Enabled:  true,
-			Endpoint: env.Get(k, cfg.HTTP[target].Endpoint),
+			Enabled:   true,
+			Endpoint:  env.Get(endpointEnv, ""),
+			AuthToken: env.Get(authTokenEnv, ""),
 		}
 	}
-	aenvs := env.List(EnvAuditLoggerHTTPEndpoint)
-	for _, k := range aenvs {
-		target := strings.TrimPrefix(k, EnvAuditLoggerHTTPEndpoint+defaultTarget)
-		if target == EnvAuditLoggerHTTPEndpoint {
-			target = defaultTarget
+
+	for _, target := range loggerAuditTargets {
+		endpointEnv := EnvLoggerHTTPAuditEndpoint
+		if target != config.Default {
+			endpointEnv = EnvLoggerHTTPAuditEndpoint + config.Default + target
 		}
-		cfg.Audit[target] = HTTP{
-			Enabled:  true,
-			Endpoint: env.Get(k, cfg.Audit[target].Endpoint),
+		legacyEndpointEnv := EnvAuditLoggerHTTPEndpoint
+		if target != config.Default {
+			legacyEndpointEnv = EnvAuditLoggerHTTPEndpoint + config.Default + target
+		}
+		endpoint := env.Get(legacyEndpointEnv, "")
+		if endpoint == "" {
+			endpoint = env.Get(endpointEnv, "")
+		}
+		authTokenEnv := EnvLoggerHTTPAuditAuthToken
+		if target != config.Default {
+			authTokenEnv = EnvLoggerHTTPAuditAuthToken + config.Default + target
+		}
+		cfg.HTTP[target] = HTTP{
+			Enabled:   true,
+			Endpoint:  endpoint,
+			AuthToken: env.Get(authTokenEnv, ""),
 		}
 	}
 

@@ -28,9 +28,11 @@ import (
 
 // Config represents cache config settings
 type Config struct {
+	Enabled bool     `json:"-"`
 	Drives  []string `json:"drives"`
 	Expiry  int      `json:"expiry"`
 	MaxUse  int      `json:"maxuse"`
+	Quota   int      `json:"quota"`
 	Exclude []string `json:"exclude"`
 }
 
@@ -53,6 +55,10 @@ func (cfg *Config) UnmarshalJSON(data []byte) (err error) {
 
 	if _cfg.MaxUse < 0 {
 		return errors.New("config max use value should not be null or negative")
+	}
+
+	if _cfg.Quota < 0 {
+		return errors.New("config quota value should not be null or negative")
 	}
 
 	if _, err = parseCacheDrives(_cfg.Drives); err != nil {

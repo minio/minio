@@ -76,7 +76,6 @@ describe("common reducer", () => {
         type: actionsCommon.SET_SERVER_INFO,
         serverInfo: {
           version: "test",
-          memory: "test",
           platform: "test",
           runtime: "test",
           info: "test"
@@ -84,7 +83,6 @@ describe("common reducer", () => {
       }).serverInfo
     ).toEqual({
       version: "test",
-      memory: "test",
       platform: "test",
       runtime: "test",
       info: "test"

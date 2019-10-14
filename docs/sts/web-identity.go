@@ -78,6 +78,7 @@ var (
 	tokenEndpoint string
 	clientID      string
 	clientSecret  string
+	port					int
 )
 
 func init() {
@@ -86,6 +87,7 @@ func init() {
 	flag.StringVar(&tokenEndpoint, "token-ep", googleOAuth2.Endpoint.TokenURL, "Token endpoint")
 	flag.StringVar(&clientID, "cid", "", "Client ID")
 	flag.StringVar(&clientSecret, "csec", "", "Client secret")
+	flag.IntVar(&port, "port", 8080, "Port")
 }
 
 func main() {
@@ -104,7 +106,7 @@ func main() {
 			AuthURL:  authEndpoint,
 			TokenURL: tokenEndpoint,
 		},
-		RedirectURL: "http://localhost:8080/oauth2/callback",
+		RedirectURL: fmt.Sprintf("http://localhost:%v/oauth2/callback", port),
 		Scopes:      []string{"openid", "profile", "email"},
 	}
 
@@ -140,7 +142,7 @@ func main() {
 			}
 			u.RawQuery = v.Encode()
 
-			req, err := http.NewRequest("POST", u.String(), nil)
+			req, err := http.NewRequest(http.MethodPost, u.String(), nil)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -173,6 +175,7 @@ func main() {
 		}
 	})
 
-	log.Printf("listening on http://%s/", "localhost:8080")
-	log.Fatal(http.ListenAndServe("localhost:8080", nil))
+	address := fmt.Sprintf("localhost:%v", port)
+	log.Printf("listening on http://%s/", address)
+	log.Fatal(http.ListenAndServe(address, nil))
 }

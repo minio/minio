@@ -24,11 +24,11 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	xldap "github.com/minio/minio/cmd/config/ldap"
+	xldap "github.com/minio/minio/cmd/config/identity/ldap"
+	"github.com/minio/minio/cmd/config/identity/openid"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/iam/openid"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/wildcard"
 	ldap "gopkg.in/ldap.v3"
@@ -102,12 +102,12 @@ func checkAssumeRoleAuth(ctx context.Context, r *http.Request) (user auth.Creden
 	default:
 		return user, ErrSTSAccessDenied
 	case authTypeSigned:
-		s3Err := isReqAuthenticated(ctx, r, globalServerConfig.GetRegion(), serviceSTS)
+		s3Err := isReqAuthenticated(ctx, r, globalServerRegion, serviceSTS)
 		if STSErrorCode(s3Err) != ErrSTSNone {
 			return user, STSErrorCode(s3Err)
 		}
 		var owner bool
-		user, owner, s3Err = getReqAccessKeyV4(r, globalServerConfig.GetRegion(), serviceSTS)
+		user, owner, s3Err = getReqAccessKeyV4(r, globalServerRegion, serviceSTS)
 		if STSErrorCode(s3Err) != ErrSTSNone {
 			return user, STSErrorCode(s3Err)
 		}
@@ -202,13 +202,13 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	// This policy is the policy associated with the user
 	// requesting for temporary credentials. The temporary
 	// credentials will inherit the same policy requirements.
-	m[iampolicy.PolicyName] = policyName
+	m[iamPolicyName()] = policyName
 
 	if len(sessionPolicyStr) > 0 {
 		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
-	secret := globalServerConfig.GetCredential().SecretKey
+	secret := globalActiveCred.SecretKey
 	cred, err := auth.GetNewCredentialsWithMetadata(m, secret)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
@@ -326,7 +326,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
-	secret := globalServerConfig.GetCredential().SecretKey
+	secret := globalActiveCred.SecretKey
 	cred, err := auth.GetNewCredentialsWithMetadata(m, secret)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
@@ -338,7 +338,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	// be set and configured on your identity provider as part of
 	// JWT custom claims.
 	var policyName string
-	if v, ok := m[iampolicy.PolicyName]; ok {
+	if v, ok := m[iamPolicyName()]; ok {
 		policyName, _ = v.(string)
 	}
 
@@ -462,7 +462,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		}
 	}
 
-	ldapConn, err := globalServerConfig.LDAPServerConfig.Connect()
+	ldapConn, err := globalLDAPConfig.Connect()
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, fmt.Errorf("LDAP server connection failure: %v", err))
 		return
@@ -475,16 +475,16 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	usernameSubs, _ := xldap.NewSubstituter("username", ldapUsername)
 	// We ignore error below as we already validated the username
 	// format string at startup.
-	usernameDN, _ := usernameSubs.Substitute(globalServerConfig.LDAPServerConfig.UsernameFormat)
+	usernameDN, _ := usernameSubs.Substitute(globalLDAPConfig.UsernameFormat)
 	// Bind with user credentials to validate the password
-	err = ldapConn.Bind(usernameDN, ldapPassword)
-	if err != nil {
-		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, fmt.Errorf("LDAP authentication failure: %v", err))
+	if err = ldapConn.Bind(usernameDN, ldapPassword); err != nil {
+		err = fmt.Errorf("LDAP authentication failure: %v", err)
+		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 		return
 	}
 
 	groups := []string{}
-	if globalServerConfig.LDAPServerConfig.GroupSearchFilter != "" {
+	if globalLDAPConfig.GroupSearchFilter != "" {
 		// Verified user credentials. Now we find the groups they are
 		// a member of.
 		searchSubs, _ := xldap.NewSubstituter(
@@ -493,13 +493,13 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		)
 		// We ignore error below as we already validated the search string
 		// at startup.
-		groupSearchFilter, _ := searchSubs.Substitute(globalServerConfig.LDAPServerConfig.GroupSearchFilter)
-		baseDN, _ := searchSubs.Substitute(globalServerConfig.LDAPServerConfig.GroupSearchBaseDN)
+		groupSearchFilter, _ := searchSubs.Substitute(globalLDAPConfig.GroupSearchFilter)
+		baseDN, _ := searchSubs.Substitute(globalLDAPConfig.GroupSearchBaseDN)
 		searchRequest := ldap.NewSearchRequest(
 			baseDN,
 			ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 			groupSearchFilter,
-			[]string{globalServerConfig.LDAPServerConfig.GroupNameAttribute},
+			[]string{globalLDAPConfig.GroupNameAttribute},
 			nil,
 		)
 
@@ -514,7 +514,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 			groups = append(groups, entry.Attributes[0].Values...)
 		}
 	}
-	expiryDur := globalServerConfig.LDAPServerConfig.GetExpiryDuration()
+	expiryDur := globalLDAPConfig.GetExpiryDuration()
 	m := map[string]interface{}{
 		"exp":        UTCNow().Add(expiryDur).Unix(),
 		"ldapUser":   ldapUsername,
@@ -525,7 +525,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
-	secret := globalServerConfig.GetCredential().SecretKey
+	secret := globalActiveCred.SecretKey
 	cred, err := auth.GetNewCredentialsWithMetadata(m, secret)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)

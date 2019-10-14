@@ -40,15 +40,33 @@ var (
 		}
 		return fmt.Sprintf
 	}()
+	Green = func() func(a ...interface{}) string {
+		if IsTerminal() {
+			return color.New(color.FgGreen).SprintFunc()
+		}
+		return fmt.Sprint
+	}()
+	GreenBold = func() func(a ...interface{}) string {
+		if IsTerminal() {
+			return color.New(color.FgGreen, color.Bold).SprintFunc()
+		}
+		return fmt.Sprint
+	}()
 	CyanBold = func() func(a ...interface{}) string {
 		if IsTerminal() {
-			color.New(color.FgCyan, color.Bold).SprintFunc()
+			return color.New(color.FgCyan, color.Bold).SprintFunc()
 		}
 		return fmt.Sprint
 	}()
 	YellowBold = func() func(format string, a ...interface{}) string {
 		if IsTerminal() {
 			return color.New(color.FgYellow, color.Bold).SprintfFunc()
+		}
+		return fmt.Sprintf
+	}()
+	BlueBold = func() func(format string, a ...interface{}) string {
+		if IsTerminal() {
+			return color.New(color.FgBlue, color.Bold).SprintfFunc()
 		}
 		return fmt.Sprintf
 	}()

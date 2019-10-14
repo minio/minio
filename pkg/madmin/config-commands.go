@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2017-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,18 +19,14 @@ package madmin
 
 import (
 	"bytes"
-	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
-
-	"github.com/minio/minio/pkg/quick"
 )
 
 // GetConfig - returns the config.json of a minio setup, incoming data is encrypted.
 func (adm *AdminClient) GetConfig() ([]byte, error) {
 	// Execute GET on /minio/admin/v2/config to get config of a setup.
-	resp, err := adm.executeMethod("GET",
+	resp, err := adm.executeMethod(http.MethodGet,
 		requestData{relPath: adminAPIPrefix + "/config"})
 	defer closeResponse(resp)
 	if err != nil {
@@ -40,7 +36,6 @@ func (adm *AdminClient) GetConfig() ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, httpRespToErrorResponse(resp)
 	}
-	defer closeResponse(resp)
 
 	return DecryptData(adm.secretAccessKey, resp.Body)
 }
@@ -59,26 +54,6 @@ func (adm *AdminClient) SetConfig(config io.Reader) (err error) {
 		return err
 	}
 	configBytes := configBuf[:n]
-
-	type configVersion struct {
-		Version string `json:"version,omitempty"`
-	}
-	var cfg configVersion
-
-	// Check if read data is in json format
-	if err = json.Unmarshal(configBytes, &cfg); err != nil {
-		return errors.New("Invalid JSON format: " + err.Error())
-	}
-
-	// Check if the provided json file has "version" key set
-	if cfg.Version == "" {
-		return errors.New("Missing or unset \"version\" key in json file")
-	}
-	// Validate there are no duplicate keys in the JSON
-	if err = quick.CheckDuplicateKeys(string(configBytes)); err != nil {
-		return errors.New("Duplicate key in json file: " + err.Error())
-	}
-
 	econfigBytes, err := EncryptData(adm.secretAccessKey, configBytes)
 	if err != nil {
 		return err
@@ -90,7 +65,7 @@ func (adm *AdminClient) SetConfig(config io.Reader) (err error) {
 	}
 
 	// Execute PUT on /minio/admin/v2/config to set config.
-	resp, err := adm.executeMethod("PUT", reqData)
+	resp, err := adm.executeMethod(http.MethodPut, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {

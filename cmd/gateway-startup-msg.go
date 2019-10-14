@@ -52,7 +52,7 @@ func printGatewayStartupMessage(apiEndPoints []string, backendType string) {
 // Prints common server startup message. Prints credential, region and browser access.
 func printGatewayCommonMsg(apiEndpoints []string) {
 	// Get saved credentials.
-	cred := globalServerConfig.GetCredential()
+	cred := globalActiveCred
 
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
 
@@ -64,7 +64,7 @@ func printGatewayCommonMsg(apiEndpoints []string) {
 	}
 	printEventNotifiers()
 
-	if globalIsBrowserEnabled {
+	if globalBrowserEnabled {
 		logStartupMessage(color.Blue("\nBrowser Access:"))
 		logStartupMessage(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 3), apiEndpointStr))
 	}

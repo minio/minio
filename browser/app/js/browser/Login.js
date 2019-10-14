@@ -22,14 +22,18 @@ import Alert from "../alert/Alert"
 import * as actionsAlert from "../alert/actions"
 import InputGroup from "./InputGroup"
 import web from "../web"
-import { Redirect } from "react-router-dom"
+import { Redirect, Link } from "react-router-dom"
+import qs from "query-string"
+import storage from "local-storage-fallback"
+import history from "../history"
 
 export class Login extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
       accessKey: "",
-      secretKey: ""
+      secretKey: "",
+      discoveryDoc: {}
     }
   }
 
@@ -83,6 +87,14 @@ export class Login extends React.Component {
     document.body.classList.add("is-guest")
   }
 
+  componentDidMount() {
+    web.GetDiscoveryDoc().then(({ DiscoveryDoc }) => {
+      this.setState({
+        discoveryDoc: DiscoveryDoc
+      })
+    })
+  }
+
   componentWillUnmount() {
     document.body.classList.remove("is-guest")
   }
@@ -127,6 +139,15 @@ export class Login extends React.Component {
               <i className="fas fa-sign-in-alt" />
             </button>
           </form>
+          {this.state.discoveryDoc &&
+            this.state.discoveryDoc.authorization_endpoint && (
+            <div className="openid-login">
+              <div className="or">or</div>
+              <a href={"/login/openid"} className="btn openid-btn">
+                Log in with OpenID
+              </a>
+            </div>
+          )}
         </div>
         <div className="l-footer">
           <a className="lf-logo" href="">

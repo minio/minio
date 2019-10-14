@@ -81,6 +81,32 @@ const (
 	mysqlInsertRow = `INSERT INTO %s (event_time, event_data) VALUES (?, ?);`
 )
 
+// MySQL related constants
+const (
+	MySQLFormat     = "format"
+	MySQLDSNString  = "dsn_string"
+	MySQLTable      = "table"
+	MySQLHost       = "host"
+	MySQLPort       = "port"
+	MySQLUsername   = "username"
+	MySQLPassword   = "password"
+	MySQLDatabase   = "database"
+	MySQLQueueLimit = "queue_limit"
+	MySQLQueueDir   = "queue_dir"
+
+	EnvMySQLState      = "MINIO_NOTIFY_MYSQL_STATE"
+	EnvMySQLFormat     = "MINIO_NOTIFY_MYSQL_FORMAT"
+	EnvMySQLDSNString  = "MINIO_NOTIFY_MYSQL_DSN_STRING"
+	EnvMySQLTable      = "MINIO_NOTIFY_MYSQL_TABLE"
+	EnvMySQLHost       = "MINIO_NOTIFY_MYSQL_HOST"
+	EnvMySQLPort       = "MINIO_NOTIFY_MYSQL_PORT"
+	EnvMySQLUsername   = "MINIO_NOTIFY_MYSQL_USERNAME"
+	EnvMySQLPassword   = "MINIO_NOTIFY_MYSQL_PASSWORD"
+	EnvMySQLDatabase   = "MINIO_NOTIFY_MYSQL_DATABASE"
+	EnvMySQLQueueLimit = "MINIO_NOTIFY_MYSQL_QUEUE_LIMIT"
+	EnvMySQLQueueDir   = "MINIO_NOTIFY_MYSQL_QUEUE_DIR"
+)
+
 // MySQLArgs - MySQL target arguments.
 type MySQLArgs struct {
 	Enable     bool     `json:"enable"`

@@ -69,7 +69,7 @@ func TestParseCacheDrives(t *testing.T) {
 		}{"/home/drive{1..3}", []string{}, false})
 	}
 	for i, testCase := range testCases {
-		drives, err := parseCacheDrives(strings.Split(testCase.driveStr, cacheEnvDelimiter))
+		drives, err := parseCacheDrives(strings.Split(testCase.driveStr, cacheDelimiter))
 		if err != nil && testCase.success {
 			t.Errorf("Test %d: Expected success but failed instead %s", i+1, err)
 		}
@@ -98,7 +98,7 @@ func TestParseCacheExclude(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		excludes, err := parseCacheExcludes(strings.Split(testCase.excludeStr, cacheEnvDelimiter))
+		excludes, err := parseCacheExcludes(strings.Split(testCase.excludeStr, cacheDelimiter))
 		if err != nil && testCase.success {
 			t.Errorf("Test %d: Expected success but failed instead %s", i+1, err)
 		}

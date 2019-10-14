@@ -61,7 +61,7 @@ func getServerInfo() (*ServerInfoData, error) {
 			CommitID:     CommitID,
 			DeploymentID: globalDeploymentID,
 			SQSARN:       globalNotificationSys.GetARNList(),
-			Region:       globalServerConfig.GetRegion(),
+			Region:       globalServerRegion,
 		},
 	}, nil
 }

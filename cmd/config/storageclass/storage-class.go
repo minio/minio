@@ -36,6 +36,11 @@ const (
 
 // Standard constats for config info storage class
 const (
+	ClassStandard = "standard"
+	ClassRRS      = "rrs"
+
+	// Env to on/off storage class settings.
+	EnvStorageClass = "MINIO_STORAGE_CLASS_STATE"
 	// Reduced redundancy storage class environment variable
 	RRSEnv = "MINIO_STORAGE_CLASS_RRS"
 	// Standard storage class environment variable
@@ -49,6 +54,16 @@ const (
 
 	// Default RRS parity is always minimum parity.
 	defaultRRSParity = minParityDisks
+)
+
+// DefaultKVS - default storage class config
+var (
+	DefaultKVS = config.KVS{
+		config.State:   config.StateOff,
+		config.Comment: "This is a default StorageClass configuration, only applicable in erasure coded setups",
+		ClassStandard:  "",
+		ClassRRS:       "EC:2",
+	}
 )
 
 // StorageClass - holds storage class information
@@ -196,11 +211,25 @@ func (sCfg Config) GetParityForSC(sc string) (parity int) {
 }
 
 // LookupConfig - lookup storage class config and override with valid environment settings if any.
-func LookupConfig(cfg Config, drivesPerSet int) (Config, error) {
-	var err error
+func LookupConfig(kvs config.KVS, drivesPerSet int) (cfg Config, err error) {
+	cfg = Config{}
+	cfg.Standard.Parity = drivesPerSet / 2
+	cfg.RRS.Parity = defaultRRSParity
+
+	if err = config.CheckValidKeys(config.StorageClassSubSys, kvs, DefaultKVS); err != nil {
+		return cfg, err
+	}
+
+	stateBool, err := config.ParseBool(env.Get(EnvStorageClass, kvs.Get(config.State)))
+	if err != nil {
+		return cfg, err
+	}
+	if !stateBool {
+		return cfg, nil
+	}
 
 	// Check for environment variables and parse into storageClass struct
-	if ssc := env.Get(StandardEnv, cfg.Standard.String()); ssc != "" {
+	if ssc := env.Get(StandardEnv, kvs.Get(ClassStandard)); ssc != "" {
 		cfg.Standard, err = parseStorageClass(ssc)
 		if err != nil {
 			return cfg, err
@@ -210,7 +239,7 @@ func LookupConfig(cfg Config, drivesPerSet int) (Config, error) {
 		cfg.Standard.Parity = drivesPerSet / 2
 	}
 
-	if rrsc := env.Get(RRSEnv, cfg.RRS.String()); rrsc != "" {
+	if rrsc := env.Get(RRSEnv, kvs.Get(ClassRRS)); rrsc != "" {
 		cfg.RRS, err = parseStorageClass(rrsc)
 		if err != nil {
 			return cfg, err

@@ -12,7 +12,7 @@ MinIO supports two different KMS concepts:
    by enabling or disabling the corresponding master keys on demand.
 
 - Direct KMS master keys:
-   MinIO can also be configured to directly use a master key specified by the environment variable `MINIO_SSE_MASTER_KEY` or with a docker secret key.
+   MinIO can also be configured to directly use a master key specified by the environment variable `MINIO_KMS_MASTER_KEY` or with a docker secret key.
    Direct master keys are useful if the storage backend is not on the same machine as the MinIO server, e.g.,
    if network drives or MinIO gateway is used and an external KMS would cause too much management overhead.
 
@@ -174,27 +174,28 @@ The AppRole ID, AppRole Secret Id, Vault endpoint and Vault key name can now be 
 You'll need the Vault endpoint, AppRole ID, AppRole SecretID and encryption key-ring name defined in step 2.1.2
 
 ```
-export MINIO_SSE_VAULT_APPROLE_ID=8c03926c-6c51-7a1d-cf7d-62e48ab8d6d7
-export MINIO_SSE_VAULT_APPROLE_SECRET=edd8738c-6efe-c226-74f9-ef5b66e119d7
-export MINIO_SSE_VAULT_ENDPOINT=http://vault-endpoint-ip:8200
-export MINIO_SSE_VAULT_KEY_NAME=my-minio-key
-export MINIO_SSE_VAULT_AUTH_TYPE=approle
+export MINIO_KMS_VAULT_STATE=on
+export MINIO_KMS_VAULT_APPROLE_ID=8c03926c-6c51-7a1d-cf7d-62e48ab8d6d7
+export MINIO_KMS_VAULT_APPROLE_SECRET=edd8738c-6efe-c226-74f9-ef5b66e119d7
+export MINIO_KMS_VAULT_ENDPOINT=http://vault-endpoint-ip:8200
+export MINIO_KMS_VAULT_KEY_NAME=my-minio-key
+export MINIO_KMS_VAULT_AUTH_TYPE=approle
 minio server ~/export
 ```
 
-Optionally, set `MINIO_SSE_VAULT_CAPATH` to a directory of PEM-encoded CA cert files to use mTLS for client-server authentication.
+Optionally, set `MINIO_KMS_VAULT_CAPATH` to a directory of PEM-encoded CA cert files to use mTLS for client-server authentication.
 
 ```
-export MINIO_SSE_VAULT_CAPATH=/home/user/custom-certs
+export MINIO_KMS_VAULT_CAPATH=/home/user/custom-certs
 ```
 
-An additional option is to set `MINIO_SSE_VAULT_NAMESPACE` if AppRole and Transit Secrets engine have been scoped to Vault Namespace
+An additional option is to set `MINIO_KMS_VAULT_NAMESPACE` if AppRole and Transit Secrets engine have been scoped to Vault Namespace
 
 ```
-export MINIO_SSE_VAULT_NAMESPACE=ns1
+export MINIO_KMS_VAULT_NAMESPACE=ns1
 ```
 
-Note: If [Vault Namespaces](https://learn.hashicorp.com/vault/operations/namespaces) are in use, MINIO_SSE_VAULT_NAMESPACE variable needs to be set before setting approle and transit secrets engine.
+Note: If [Vault Namespaces](https://learn.hashicorp.com/vault/operations/namespaces) are in use, MINIO_KMS_VAULT_VAULT_NAMESPACE variable needs to be set before setting approle and transit secrets engine.
 
 MinIO gateway to S3 supports encryption. Three encryption modes are possible - encryption can be set to ``pass-through`` to backend, ``single encryption`` (at the gateway) or ``double encryption`` (single encryption at gateway and pass through to backend). This can be specified by setting MINIO_GATEWAY_SSE and KMS environment variables set in Step 2.1.2.
 
@@ -205,11 +206,12 @@ and "c" for sse-c encryption. More than one encryption option can be set, delimi
 
 ```sh
 export MINIO_GATEWAY_SSE="s3;c"
-export MINIO_SSE_VAULT_APPROLE_ID=9b56cc08-8258-45d5-24a3-679876769126
-export MINIO_SSE_VAULT_APPROLE_SECRET=4e30c52f-13e4-a6f5-0763-d50e8cb4321f
-export MINIO_SSE_VAULT_ENDPOINT=https://vault-endpoint-ip:8200
-export MINIO_SSE_VAULT_KEY_NAME=my-minio-key
-export MINIO_SSE_VAULT_AUTH_TYPE=approle
+export MINIO_KMS_VAULT_STATE=on
+export MINIO_KMS_VAULT_APPROLE_ID=9b56cc08-8258-45d5-24a3-679876769126
+export MINIO_KMS_VAULT_APPROLE_SECRET=4e30c52f-13e4-a6f5-0763-d50e8cb4321f
+export MINIO_KMS_VAULT_ENDPOINT=https://vault-endpoint-ip:8200
+export MINIO_KMS_VAULT_KEY_NAME=my-minio-key
+export MINIO_KMS_VAULT_AUTH_TYPE=approle
 minio gateway s3
 ```
 
@@ -221,7 +223,7 @@ A KMS master key consists of a master-key ID (CMK) and the 256 bit master key en
 A KMS master key can be specified directly using:
 
 ```
-export MINIO_SSE_MASTER_KEY=my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574
+export MINIO_KMS_MASTER_KEY=my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574
 ```
 
 Please use your own master key. A random master key can be generated using e.g. this command on Linux/Mac/BSD* systems:
@@ -235,16 +237,15 @@ head -c 32 /dev/urandom | xxd -c 32 -ps
 Alternatively, you may pass a master key as a [Docker secret](https://docs.docker.com/engine/swarm/secrets/).
 
 ```bash
-echo "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574" | docker secret create sse_master_key
+echo "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574" | docker secret create kms_master_key
 ```
 
 Obviously, do not use this demo key for anything real!
 
-To use another secret name, follow the instructions above and replace sse_master_key with your custom names (e.g. my_sse_master_key).
-Then, set the MINIO_SSE_MASTER_KEY_FILE environment variable to your secret name:
+To use another secret name, follow the instructions above and replace kms_master_key with your custom names (e.g. my_kms_master_key). Then, set the MINIO_KMS_MASTER_KEY_FILE environment variable to your secret name:
 
 ```bash
-export MINIO_SSE_MASTER_KEY_FILE=my_sse_master_key
+export MINIO_KMS_MASTER_KEY_FILE=my_kms_master_key
 ```
 
 ### 3. Test your setup
@@ -262,7 +263,7 @@ plaintext - for example if sensitive data is stored on public cloud storage.
 To enable auto-encryption set the environment variable to `on`:
 
 ```
-export MINIO_SSE_AUTO_ENCRYPTION=on
+export MINIO_KMS_AUTO_ENCRYPTION=on
 ```
 
 To verify auto-encryption, use the `mc` command:

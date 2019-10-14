@@ -31,6 +31,7 @@ import (
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
@@ -94,10 +95,10 @@ ENVIRONMENT VARIABLES:
      MINIO_ETCD_ENDPOINTS: To enable bucket DNS requests, set this value to list of etcd endpoints delimited by ",".
 
    KMS:
-     MINIO_SSE_VAULT_ENDPOINT: To enable Vault as KMS,set this value to Vault endpoint.
-     MINIO_SSE_VAULT_APPROLE_ID: To enable Vault as KMS,set this value to Vault AppRole ID.
-     MINIO_SSE_VAULT_APPROLE_SECRET: To enable Vault as KMS,set this value to Vault AppRole Secret ID.
-     MINIO_SSE_VAULT_KEY_NAME: To enable Vault as KMS,set this value to Vault encryption key-ring name.
+     MINIO_KMS_VAULT_ENDPOINT: To enable Vault as KMS,set this value to Vault endpoint.
+     MINIO_KMS_VAULT_APPROLE_ID: To enable Vault as KMS,set this value to Vault AppRole ID.
+     MINIO_KMS_VAULT_APPROLE_SECRET: To enable Vault as KMS,set this value to Vault AppRole Secret ID.
+     MINIO_KMS_VAULT_KEY_NAME: To enable Vault as KMS,set this value to Vault encryption key-ring name.
 
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
@@ -119,10 +120,10 @@ EXAMPLES:
      {{.Prompt}} {{.HelpName}} http://node{1...32}.example.com/mnt/export/{1...32}
 
   6. Start minio server with KMS enabled.
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SSE_VAULT_APPROLE_ID{{.AssignmentOperator}}9b56cc08-8258-45d5-24a3-679876769126
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SSE_VAULT_APPROLE_SECRET{{.AssignmentOperator}}4e30c52f-13e4-a6f5-0763-d50e8cb4321f
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SSE_VAULT_ENDPOINT{{.AssignmentOperator}}https://vault-endpoint-ip:8200
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SSE_VAULT_KEY_NAME{{.AssignmentOperator}}my-minio-key
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_KMS_VAULT_APPROLE_ID{{.AssignmentOperator}}9b56cc08-8258-45d5-24a3-679876769126
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_KMS_VAULT_APPROLE_SECRET{{.AssignmentOperator}}4e30c52f-13e4-a6f5-0763-d50e8cb4321f
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_KMS_VAULT_ENDPOINT{{.AssignmentOperator}}https://vault-endpoint-ip:8200
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_KMS_VAULT_KEY_NAME{{.AssignmentOperator}}my-minio-key
      {{.Prompt}} {{.HelpName}} /home/shared
 `,
 }
@@ -181,12 +182,16 @@ func serverHandleEnvVars() {
 	// Handle common environment variables.
 	handleCommonEnvVars()
 
-	if serverRegion := env.Get("MINIO_REGION", ""); serverRegion != "" {
-		// region Envs are set globally.
-		globalIsEnvRegion = true
-		globalServerRegion = serverRegion
+	accessKey := env.Get(config.EnvAccessKey, "")
+	secretKey := env.Get(config.EnvSecretKey, "")
+	if accessKey != "" && secretKey != "" {
+		cred, err := auth.CreateCredentials(accessKey, secretKey)
+		if err != nil {
+			logger.Fatal(config.ErrInvalidCredentials(err),
+				"Unable to validate credentials inherited from the shell environment")
+		}
+		globalActiveCred = cred
 	}
-
 }
 
 // serverMain handler called for 'minio server' command.
@@ -231,38 +236,9 @@ func serverMain(ctx *cli.Context) {
 		checkUpdate(getMinioMode())
 	}
 
-	if globalIsDiskCacheEnabled {
-		logger.StartupMessage(color.Red(color.Bold("Disk caching is allowed only for gateway deployments")))
-	}
-
-	// FIXME: This code should be removed in future releases and we should have mandatory
-	// check for ENVs credentials under distributed setup. Until all users migrate we
-	// are intentionally providing backward compatibility.
-	{
-		// Check for backward compatibility and newer style.
-		if !globalIsEnvCreds && globalIsDistXL {
-			// Try to load old config file if any, for backward compatibility.
-			var cfg = &serverConfig{}
-			if _, err = Load(getConfigFile(), cfg); err == nil {
-				globalActiveCred = cfg.Credential
-			}
-
-			if os.IsNotExist(err) {
-				if _, err = Load(getConfigFile()+".deprecated", cfg); err == nil {
-					globalActiveCred = cfg.Credential
-				}
-			}
-
-			if globalActiveCred.IsValid() {
-				// Credential is valid don't throw an error instead print a message regarding deprecation of 'config.json'
-				// based model and proceed to use it for now in distributed setup.
-				logger.Info(`Supplying credentials from your 'config.json' is **DEPRECATED**, Access key and Secret key in distributed server mode is expected to be specified with environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY. This approach will become mandatory in future releases, please migrate to this approach soon.`)
-			} else {
-				// Credential is not available anywhere by both means, we cannot start distributed setup anymore, fail eagerly.
-				logger.Fatal(config.ErrEnvCredentialsMissingDistributed(nil),
-					"Unable to initialize the server in distributed mode")
-			}
-		}
+	if !globalActiveCred.IsValid() && globalIsDistXL {
+		logger.Fatal(config.ErrEnvCredentialsMissingDistributed(nil),
+			"Unable to initialize the server in distributed mode")
 	}
 
 	// Set system resources to maximum.
@@ -335,6 +311,14 @@ func serverMain(ctx *cli.Context) {
 		logger.Fatal(err, "Unable to initialize config system")
 	}
 
+	if globalCacheConfig.Enabled {
+		logger.StartupMessage(color.Red(color.Bold("Disk caching is recommended only for gateway deployments")))
+
+		// initialize the new disk cache objects.
+		globalCacheObjectAPI, err = newServerCacheObjects(context.Background(), globalCacheConfig)
+		logger.FatalIf(err, "Unable to initialize disk caching")
+	}
+
 	// Create new IAM system.
 	globalIAMSys = NewIAMSys()
 	if err = globalIAMSys.Init(newObject); err != nil {
@@ -389,6 +373,11 @@ func serverMain(ctx *cli.Context) {
 
 	// Prints the formatted startup message once object layer is initialized.
 	printStartupMessage(getAPIEndpoints())
+
+	if globalActiveCred.Equal(auth.DefaultCredentials) {
+		msg := fmt.Sprintf("Detected default credentials '%s', please change the credentials immediately using 'MINIO_ACCESS_KEY' and 'MINIO_SECRET_KEY'", globalActiveCred)
+		logger.StartupMessage(color.Red(color.Bold(msg)))
+	}
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = UTCNow()

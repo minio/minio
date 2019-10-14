@@ -93,25 +93,15 @@ http://minio.cluster:9000?Action=AssumeRoleWithClientGrants&DurationSeconds=3600
 ```
 $ export MINIO_ACCESS_KEY=minio
 $ export MINIO_SECRET_KEY=minio123
-$ export MINIO_IAM_JWKS_URL=https://localhost:9443/oauth2/jwks
-$ export MINIO_IAM_OPA_URL=http://localhost:8181/v1/data/httpapi/authz
+$ export MINIO_IDENTITY_OPENID_CONFIG_URL=https://localhost:9443/oauth2/oidcdiscovery/.well-known/openid-configuration
+$ export MINIO_POLICY_OPA_URL=http://localhost:8181/v1/data/httpapi/authz
 $ minio server /mnt/export
 
-$ mc admin config get myminio
-...
-{
-  "openid": {
-    "jwks": {
-      "url": "https://localhost:9443/oauth2/jwks"
-     }
-   }
-  "policy": {
-    "opa": {
-      "url": "http://localhost:8181/v1/data/httpapi/authz",
-      "authToken": ""
-    }
-  }
-}
+$ mc admin config get myminio identity_openid
+identity_openid config_url="https://localhost:9443/oauth2/oidcdiscovery/.well-known/openid-configuration" state="on"
+
+$ mc admin config get myminio policy_opa
+policy_opa auth_token="" state="on" url="http://localhost:8181/v1/data/httpapi/authz"
 ```
 
 Testing with an example

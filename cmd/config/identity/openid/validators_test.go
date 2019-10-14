@@ -92,9 +92,9 @@ func TestValidators(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = vrs.Add(NewJWT(JWKSArgs{
-		URL: u,
-	})); err != nil {
+	cfg := Config{}
+	cfg.JWKS.URL = u
+	if err = vrs.Add(NewJWT(cfg)); err != nil {
 		t.Fatal(err)
 	}
 

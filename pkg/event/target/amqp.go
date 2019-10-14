@@ -49,6 +49,43 @@ type AMQPArgs struct {
 	QueueLimit   uint64   `json:"queueLimit"`
 }
 
+// AMQP input constants.
+const (
+	AmqpQueueDir   = "queue_dir"
+	AmqpQueueLimit = "queue_limit"
+
+	AmqpURL               = "url"
+	AmqpExchange          = "exchange"
+	AmqpRoutingKey        = "routing_key"
+	AmqpExchangeType      = "exchange_type"
+	AmqpDeliveryMode      = "delivery_mode"
+	AmqpMandatory         = "mandatory"
+	AmqpImmediate         = "immediate"
+	AmqpDurable           = "durable"
+	AmqpInternal          = "internal"
+	AmqpNoWait            = "no_wait"
+	AmqpAutoDeleted       = "auto_deleted"
+	AmqpArguments         = "arguments"
+	AmqpPublishingHeaders = "publishing_headers"
+
+	EnvAMQPState             = "MINIO_NOTIFY_AMQP_STATE"
+	EnvAMQPURL               = "MINIO_NOTIFY_AMQP_URL"
+	EnvAMQPExchange          = "MINIO_NOTIFY_AMQP_EXCHANGE"
+	EnvAMQPRoutingKey        = "MINIO_NOTIFY_AMQP_ROUTING_KEY"
+	EnvAMQPExchangeType      = "MINIO_NOTIFY_AMQP_EXCHANGE_TYPE"
+	EnvAMQPDeliveryMode      = "MINIO_NOTIFY_AMQP_DELIVERY_MODE"
+	EnvAMQPMandatory         = "MINIO_NOTIFY_AMQP_MANDATORY"
+	EnvAMQPImmediate         = "MINIO_NOTIFY_AMQP_IMMEDIATE"
+	EnvAMQPDurable           = "MINIO_NOTIFY_AMQP_DURABLE"
+	EnvAMQPInternal          = "MINIO_NOTIFY_AMQP_INTERNAL"
+	EnvAMQPNoWait            = "MINIO_NOTIFY_AMQP_NO_WAIT"
+	EnvAMQPAutoDeleted       = "MINIO_NOTIFY_AMQP_AUTO_DELETED"
+	EnvAMQPArguments         = "MINIO_NOTIFY_AMQP_ARGUMENTS"
+	EnvAMQPPublishingHeaders = "MINIO_NOTIFY_AMQP_PUBLISHING_HEADERS"
+	EnvAMQPQueueDir          = "MINIO_NOTIFY_AMQP_QUEUE_DIR"
+	EnvAMQPQueueLimit        = "MINIO_NOTIFY_AMQP_QUEUE_LIMIT"
+)
+
 // Validate AMQP arguments
 func (a *AMQPArgs) Validate() error {
 	if !a.Enable {

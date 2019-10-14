@@ -273,7 +273,7 @@ func mustNewRequest(method string, urlStr string, contentLength int64, body io.R
 // is signed with AWS Signature V4, fails if not able to do so.
 func mustNewSignedRequest(method string, urlStr string, contentLength int64, body io.ReadSeeker, t *testing.T) *http.Request {
 	req := mustNewRequest(method, urlStr, contentLength, body, t)
-	cred := globalServerConfig.GetCredential()
+	cred := globalActiveCred
 	if err := signRequestV4(req, cred.AccessKey, cred.SecretKey); err != nil {
 		t.Fatalf("Unable to inititalized new signed http request %s", err)
 	}
@@ -284,7 +284,7 @@ func mustNewSignedRequest(method string, urlStr string, contentLength int64, bod
 // is signed with AWS Signature V2, fails if not able to do so.
 func mustNewSignedV2Request(method string, urlStr string, contentLength int64, body io.ReadSeeker, t *testing.T) *http.Request {
 	req := mustNewRequest(method, urlStr, contentLength, body, t)
-	cred := globalServerConfig.GetCredential()
+	cred := globalActiveCred
 	if err := signRequestV2(req, cred.AccessKey, cred.SecretKey); err != nil {
 		t.Fatalf("Unable to inititalized new signed http request %s", err)
 	}
@@ -295,7 +295,7 @@ func mustNewSignedV2Request(method string, urlStr string, contentLength int64, b
 // is presigned with AWS Signature V2, fails if not able to do so.
 func mustNewPresignedV2Request(method string, urlStr string, contentLength int64, body io.ReadSeeker, t *testing.T) *http.Request {
 	req := mustNewRequest(method, urlStr, contentLength, body, t)
-	cred := globalServerConfig.GetCredential()
+	cred := globalActiveCred
 	if err := preSignV2(req, cred.AccessKey, cred.SecretKey, time.Now().Add(10*time.Minute).Unix()); err != nil {
 		t.Fatalf("Unable to inititalized new signed http request %s", err)
 	}
@@ -306,7 +306,7 @@ func mustNewPresignedV2Request(method string, urlStr string, contentLength int64
 // is presigned with AWS Signature V4, fails if not able to do so.
 func mustNewPresignedRequest(method string, urlStr string, contentLength int64, body io.ReadSeeker, t *testing.T) *http.Request {
 	req := mustNewRequest(method, urlStr, contentLength, body, t)
-	cred := globalServerConfig.GetCredential()
+	cred := globalActiveCred
 	if err := preSignV4(req, cred.AccessKey, cred.SecretKey, time.Now().Add(10*time.Minute).Unix()); err != nil {
 		t.Fatalf("Unable to inititalized new signed http request %s", err)
 	}
@@ -316,7 +316,7 @@ func mustNewPresignedRequest(method string, urlStr string, contentLength int64, 
 func mustNewSignedShortMD5Request(method string, urlStr string, contentLength int64, body io.ReadSeeker, t *testing.T) *http.Request {
 	req := mustNewRequest(method, urlStr, contentLength, body, t)
 	req.Header.Set("Content-Md5", "invalid-digest")
-	cred := globalServerConfig.GetCredential()
+	cred := globalActiveCred
 	if err := signRequestV4(req, cred.AccessKey, cred.SecretKey); err != nil {
 		t.Fatalf("Unable to initialized new signed http request %s", err)
 	}
@@ -326,17 +326,18 @@ func mustNewSignedShortMD5Request(method string, urlStr string, contentLength in
 func mustNewSignedEmptyMD5Request(method string, urlStr string, contentLength int64, body io.ReadSeeker, t *testing.T) *http.Request {
 	req := mustNewRequest(method, urlStr, contentLength, body, t)
 	req.Header.Set("Content-Md5", "")
-	cred := globalServerConfig.GetCredential()
+	cred := globalActiveCred
 	if err := signRequestV4(req, cred.AccessKey, cred.SecretKey); err != nil {
 		t.Fatalf("Unable to initialized new signed http request %s", err)
 	}
 	return req
 }
 
-func mustNewSignedBadMD5Request(method string, urlStr string, contentLength int64, body io.ReadSeeker, t *testing.T) *http.Request {
+func mustNewSignedBadMD5Request(method string, urlStr string, contentLength int64,
+	body io.ReadSeeker, t *testing.T) *http.Request {
 	req := mustNewRequest(method, urlStr, contentLength, body, t)
 	req.Header.Set("Content-Md5", "YWFhYWFhYWFhYWFhYWFhCg==")
-	cred := globalServerConfig.GetCredential()
+	cred := globalActiveCred
 	if err := signRequestV4(req, cred.AccessKey, cred.SecretKey); err != nil {
 		t.Fatalf("Unable to initialized new signed http request %s", err)
 	}
@@ -359,7 +360,7 @@ func TestIsReqAuthenticated(t *testing.T) {
 		t.Fatalf("unable create credential, %s", err)
 	}
 
-	globalServerConfig.SetCredential(creds)
+	globalActiveCred = creds
 
 	// List of test cases for validating http request authentication.
 	testCases := []struct {
@@ -381,7 +382,7 @@ func TestIsReqAuthenticated(t *testing.T) {
 	ctx := context.Background()
 	// Validates all testcases.
 	for i, testCase := range testCases {
-		s3Error := isReqAuthenticated(ctx, testCase.req, globalServerConfig.GetRegion(), serviceS3)
+		s3Error := isReqAuthenticated(ctx, testCase.req, globalServerRegion, serviceS3)
 		if s3Error != testCase.s3Error {
 			if _, err := ioutil.ReadAll(testCase.req.Body); toAPIErrorCode(ctx, err) != testCase.s3Error {
 				t.Fatalf("Test %d: Unexpected S3 error: want %d - got %d (got after reading request %s)", i, testCase.s3Error, s3Error, toAPIError(ctx, err).Code)
@@ -405,7 +406,7 @@ func TestCheckAdminRequestAuthType(t *testing.T) {
 		t.Fatalf("unable create credential, %s", err)
 	}
 
-	globalServerConfig.SetCredential(creds)
+	globalActiveCred = creds
 	testCases := []struct {
 		Request *http.Request
 		ErrCode APIErrorCode
@@ -418,7 +419,7 @@ func TestCheckAdminRequestAuthType(t *testing.T) {
 	}
 	ctx := context.Background()
 	for i, testCase := range testCases {
-		if s3Error := checkAdminRequestAuthType(ctx, testCase.Request, globalServerConfig.GetRegion()); s3Error != testCase.ErrCode {
+		if s3Error := checkAdminRequestAuthType(ctx, testCase.Request, globalServerRegion); s3Error != testCase.ErrCode {
 			t.Errorf("Test %d: Unexpected s3error returned wanted %d, got %d", i, testCase.ErrCode, s3Error)
 		}
 	}

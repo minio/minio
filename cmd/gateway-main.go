@@ -142,11 +142,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Handle gateway specific env
 	handleGatewayEnvVars()
 
-	// Validate if we have access, secret set through environment.
-	if !globalIsEnvCreds {
-		logger.Fatal(config.ErrEnvCredentialsMissingGateway(nil), "Unable to start gateway")
-	}
-
 	// Set system resources to maximum.
 	logger.LogIf(context.Background(), setMaxResources())
 
@@ -179,7 +174,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	registerMetricsRouter(router)
 
 	// Register web router when its enabled.
-	if globalIsBrowserEnabled {
+	if globalBrowserEnabled {
 		logger.FatalIf(registerWebRouter(router), "Unable to configure web browser")
 	}
 
@@ -202,15 +197,16 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
 
-	// !!! Do not move this block !!!
-	// For all gateways, the config needs to be loaded from env
-	// prior to initializing the gateway layer
-	{
+	if !enableConfigOps {
+		// TODO: We need to move this code with globalConfigSys.Init()
+		// for now keep it here such that "s3" gateway layer initializes
+		// itself properly when KMS is set.
+
 		// Initialize server config.
 		srvCfg := newServerConfig()
 
 		// Override any values from ENVs.
-		srvCfg.lookupConfigs()
+		lookupConfigs(srvCfg)
 
 		// hold the mutex lock before a new config is assigned.
 		globalServerConfigMu.Lock()
@@ -218,7 +214,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		globalServerConfigMu.Unlock()
 	}
 
-	newObject, err := gw.NewGatewayLayer(globalServerConfig.GetCredential())
+	newObject, err := gw.NewGatewayLayer(globalActiveCred)
 	if err != nil {
 		// Stop watching for any certificate changes.
 		globalTLSCerts.Stop()
@@ -248,11 +244,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalDeploymentID = env.Get("MINIO_GATEWAY_DEPLOYMENT_ID", mustGetUUID())
 	logger.SetDeploymentID(globalDeploymentID)
 
-	var cacheConfig = globalServerConfig.GetCacheConfig()
-	if len(cacheConfig.Drives) > 0 {
-		var err error
+	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.
-		globalCacheObjectAPI, err = newServerCacheObjects(context.Background(), cacheConfig)
+		globalCacheObjectAPI, err = newServerCacheObjects(context.Background(), globalCacheConfig)
 		logger.FatalIf(err, "Unable to initialize disk caching")
 	}
 

@@ -22,15 +22,15 @@ import (
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
-	xldap "github.com/minio/minio/cmd/config/ldap"
+	xldap "github.com/minio/minio/cmd/config/identity/ldap"
+	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/config/notify"
+	"github.com/minio/minio/cmd/config/policy/opa"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/iam/openid"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/quick"
 )
 
@@ -783,15 +783,12 @@ type serverConfigV31 struct {
 	Compression compress.Config `json:"compress"`
 
 	// OpenID configuration
-	OpenID struct {
-		// JWKS validator config.
-		JWKS openid.JWKSArgs `json:"jwks"`
-	} `json:"openid"`
+	OpenID openid.Config `json:"openid"`
 
 	// External policy enforcements.
 	Policy struct {
 		// OPA configuration.
-		OPA iampolicy.OpaArgs `json:"opa"`
+		OPA opa.Args `json:"opa"`
 
 		// Add new external policy enforcements here.
 	} `json:"policy"`
@@ -825,15 +822,12 @@ type serverConfigV32 struct {
 	Compression compress.Config `json:"compress"`
 
 	// OpenID configuration
-	OpenID struct {
-		// JWKS validator config.
-		JWKS openid.JWKSArgs `json:"jwks"`
-	} `json:"openid"`
+	OpenID openid.Config `json:"openid"`
 
 	// External policy enforcements.
 	Policy struct {
 		// OPA configuration.
-		OPA iampolicy.OpaArgs `json:"opa"`
+		OPA opa.Args `json:"opa"`
 
 		// Add new external policy enforcements here.
 	} `json:"policy"`
@@ -869,15 +863,12 @@ type serverConfigV33 struct {
 	Compression compress.Config `json:"compress"`
 
 	// OpenID configuration
-	OpenID struct {
-		// JWKS validator config.
-		JWKS openid.JWKSArgs `json:"jwks"`
-	} `json:"openid"`
+	OpenID openid.Config `json:"openid"`
 
 	// External policy enforcements.
 	Policy struct {
 		// OPA configuration.
-		OPA iampolicy.OpaArgs `json:"opa"`
+		OPA opa.Args `json:"opa"`
 
 		// Add new external policy enforcements here.
 	} `json:"policy"`

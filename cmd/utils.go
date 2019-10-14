@@ -38,6 +38,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
@@ -486,4 +487,8 @@ func getMinioMode() string {
 		mode = globalMinioModeGatewayPrefix + globalGatewayName
 	}
 	return mode
+}
+
+func iamPolicyName() string {
+	return globalOpenIDConfig.ClaimPrefix + iampolicy.PolicyName
 }

@@ -48,12 +48,12 @@ minio server /data
 #### 区域（Region）
 |参数|类型|描述|
 |:---|:---|:---|
-|``region``| _string_ | `region`描述的是服务器的物理位置，默认是`us-east-1`（美国东区1）,这也是亚马逊S3的默认区域。你可以通过`MINIO_REGION` 环境变量进行修改。如果不了解这块，建议不要随意修改|
+|``region``| _string_ | `region`描述的是服务器的物理位置，默认是`us-east-1`（美国东区1）,这也是亚马逊S3的默认区域。你可以通过`MINIO_REGION_NAME` 环境变量进行修改。如果不了解这块，建议不要随意修改|
 
 示例:
 
 ```sh
-export MINIO_REGION="中国华北一区"
+export MINIO_REGION_NAME="中国华北一区"
 minio server /data
 ```
 

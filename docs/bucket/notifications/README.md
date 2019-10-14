@@ -32,59 +32,40 @@ Install RabbitMQ from [here](https://www.rabbitmq.com/).
 
 ### Step 1: Add AMQP endpoint to MinIO
 
-The MinIO server configuration file is stored on the backend in json format. The AMQP configuration is located in the `amqp` key under the `notify` top-level key. Create a configuration key-value pair here for your AMQP instance. The key is a name for your AMQP endpoint, and the value is a collection of key-value parameters described in the table below.
+The AMQP configuration is located under the sub-system `notify_amqp` top-level key. Create a configuration key-value pair here for your AMQP instance. The key is a name for your AMQP endpoint, and the value is a collection of key-value parameters described in the table below.
 
-| Parameter      | Type     | Description                                                                      |
-| :------------- | :------- | :------------------------------------------------------------------------------- |
-| `enable`       | _bool_   | (Required) Is this server endpoint configuration active/enabled?                 |
-| `url`          | _string_ | (Required) AMQP server endpoint, e.g. `amqp://myuser:mypassword@localhost:5672`  |
-| `exchange`     | _string_ | Name of the exchange.                                                            |
-| `routingKey`   | _string_ | Routing key for publishing.                                                      |
-| `exchangeType` | _string_ | Kind of exchange.                                                                |
-| `deliveryMode` | _uint8_  | Delivery mode for publishing. 0 or 1 - transient; 2 - persistent.                |
-| `mandatory`    | _bool_   | Publishing related bool.                                                         |
-| `immediate`    | _bool_   | Publishing related bool.                                                         |
-| `durable`      | _bool_   | Exchange declaration related bool.                                               |
-| `internal`     | _bool_   | Exchange declaration related bool.                                               |
-| `noWait`       | _bool_   | Exchange declaration related bool.                                               |
-| `autoDeleted`  | _bool_   | Exchange declaration related bool.                                               |
-| `queueDir`     | _string_ | Persistent store for events when AMQP broker is offline                          |
-| `queueLimit`   | _int_    | Set the maximum event limit for the persistent store. The default limit is 10000 |
+| Parameter       | Description                                                                      |
+| :-------------  | :------------------------------------------------------------------------------- |
+| `state`         | (Required) Is this server endpoint configuration active/enabled?                 |
+| `url`           | (Required) AMQP server endpoint, e.g. `amqp://myuser:mypassword@localhost:5672`  |
+| `exchange`      | Name of the exchange.                                                            |
+| `routing_key`   | Routing key for publishing.                                                      |
+| `exchange_type` | Kind of exchange.                                                                |
+| `delivery_mode` | Delivery mode for publishing. 0 or 1 - transient; 2 - persistent.                |
+| `mandatory`     | Publishing related bool.                                                         |
+| `immediate`     | Publishing related bool.                                                         |
+| `durable`       | Exchange declaration related bool.                                               |
+| `internal`      | Exchange declaration related bool.                                               |
+| `no_wait`       | Exchange declaration related bool.                                               |
+| `auto_deleted`  | Exchange declaration related bool.                                               |
+| `queue_dir`     | Persistent store for events when AMQP broker is offline                          |
+| `queue_limit`   | Set the maximum event limit for the persistent store. The default limit is 10000 |
+
+MinIO supports persistent event store. The persistent store will backup events when the AMQP broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
+
+To update the configuration, use `mc admin config get notify_amqp` command to get the current configuration for `notify_amqp`.
+
+```sh
+$ mc admin config get myminio/ notify_amqp
+notify_amqp:1 delivery_mode="0" exchange_type="" no_wait="off" queue_dir="" queue_limit="0" state="off" url="" auto_deleted="off" durable="off" exchange="" internal="off" mandatory="off" routing_key=""
+```
+
+Use `mc admin config set` command to update the configuration for the deployment.Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:amqp` at start-up if there were no errors.
 
 An example configuration for RabbitMQ is shown below:
 
-```json
-"amqp": {
-    "1": {
-        "enable": true,
-        "url": "amqp://myuser:mypassword@localhost:5672",
-        "exchange": "bucketevents",
-        "routingKey": "bucketlogs",
-        "exchangeType": "fanout",
-        "deliveryMode": 0,
-        "mandatory": false,
-        "immediate": false,
-        "durable": false,
-        "internal": false,
-        "noWait": false,
-        "autoDeleted": false,
-        "queueDir": "",
-        "queueLimit": 0
-    }
-}
-```
-MinIO supports persistent event store. The persistent store will backup events when the AMQP broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
-
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
-
 ```sh
-$ mc admin config get myminio/ > /tmp/myconfig
-```
-
-After updating the AMQP configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:amqp` at start-up if there were no errors.
-
-```sh
-$ mc admin config set myminio < /tmp/myconfig
+$ mc admin config set myminio/ notify_amqp:1 exchange="bucketevents" exchange_type="fanout" mandatory="false" no_wait="false" state="on" url="amqp://myuser:mypassword@localhost:5672" auto_deleted="false" delivery_mode="0" durable="false" internal="false" routing_key="bucketlogs"
 ```
 
 MinIO supports all the exchanges available in [RabbitMQ](https://www.rabbitmq.com/). For this setup, we are using `fanout` exchange.
@@ -97,7 +78,7 @@ We will enable bucket event notification to trigger whenever a JPEG image is upl
 
 ```
 mc mb myminio/images
-mc event add  myminio/images arn:minio:sqs::1:amqp --suffix .jpg
+mc event add myminio/images arn:minio:sqs::1:amqp --suffix .jpg
 mc event list myminio/images
 arn:minio:sqs::1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
@@ -162,48 +143,33 @@ Install an MQTT Broker from [here](https://mosquitto.org/).
 
 ### Step 1: Add MQTT endpoint to MinIO
 
-The MinIO server configuration file is stored on the backend in json format. The MQTT configuration is located in the `mqtt` key under the `notify` top-level key. Create a configuration key-value pair here for your MQTT instance. The key is a name for your MQTT endpoint, and the value is a collection of key-value parameters described in the table below.
+The MQTT configuration is located as `notify_mqtt` key. Create a configuration key-value pair here for your MQTT instance. The key is a name for your MQTT endpoint, and the value is a collection of key-value parameters described in the table below.
 
-| Parameter    | Type     | Description                                                                      |
-| :----------- | :------- | :------------------------------------------------------------------------------- |
-| `enable`     | _bool_   | (Required) Is this server endpoint configuration active/enabled?                 |
-| `broker`     | _string_ | (Required) MQTT server endpoint, e.g. `tcp://localhost:1883`                     |
-| `topic`      | _string_ | (Required) Name of the MQTT topic to publish on, e.g. `minio`                    |
-| `qos`        | _int_    | Set the Quality of Service Level                                                 |
-| `username`   | _string_ | Username to connect to the MQTT server (if required)                             |
-| `password`   | _string_ | Password to connect to the MQTT server (if required)                             |
-| `queueDir`   | _string_ | Persistent store for events when MQTT broker is offline                          |
-| `queueLimit` | _int_    | Set the maximum event limit for the persistent store. The default limit is 10000 |
+| Parameter     | Description                                                                      |
+| :-----------  | :------------------------------------------------------------------------------- |
+| `state`       | (Required) Is this server endpoint configuration active/enabled?                 |
+| `broker`      | (Required) MQTT server endpoint, e.g. `tcp://localhost:1883`                     |
+| `topic`       | (Required) Name of the MQTT topic to publish on, e.g. `minio`                    |
+| `qos`         | Set the Quality of Service Level                                                 |
+| `username`    | Username to connect to the MQTT server (if required)                             |
+| `password`    | Password to connect to the MQTT server (if required)                             |
+| `queue_dir`   | Persistent store for events when MQTT broker is offline                          |
+| `queue_limit` | Set the maximum event limit for the persistent store. The default limit is 10000 |
 
-An example configuration for MQTT is shown below:
 
-```json
-"mqtt": {
-    "1": {
-        "enable": true,
-        "broker": "tcp://localhost:1883",
-        "topic": "minio",
-        "qos": 1,
-        "username": "",
-        "password": "",
-        "queueDir": "",
-        "queueLimit": 0
-    }
-}
-```
+MinIO supports persistent event store. The persistent store will backup events when the MQTT broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
 
-MinIO supports persistent event store. The persistent store will backup events when the MQTT broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
-
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+To update the configuration, use `mc admin config get` command to get the current configuration.
 
 ```sh
-$ mc admin config get myminio/ > /tmp/myconfig
+$ mc admin config get myminio/ notify_mqtt
+notify_mqtt:1 broker="" password="" queue_dir="" queue_limit="0" reconnect_interval="0s" state="off" keep_alive_interval="0s" qos="0" topic="" username=""
 ```
 
-After updating the MQTT configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:mqtt` at start-up if there were no errors.
+Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:mqtt` at start-up if there were no errors.
 
 ```sh
-$ mc admin config set myminio < /tmp/myconfig
+$ mc admin config set myminio notify_mqtt:1 broker="tcp://localhost:1883" password="" queue_dir="" queue_limit="0" reconnect_interval="0s" state="on" keep_alive_interval="0s" qos="1" topic="minio" username=""
 ```
 
 MinIO supports any MQTT server that supports MQTT 3.1 or 3.1.1 and can connect to them over TCP, TLS, or a Websocket connection using `tcp://`, `tls://`, or `ws://` respectively as the scheme for the broker url. See the [Go Client](http://www.eclipse.org/paho/clients/golang/) documentation for more information.
@@ -289,46 +255,34 @@ MinIO requires a 5.x series version of Elasticsearch. This is the latest major r
 
 ### Step 2: Add Elasticsearch endpoint to MinIO
 
-The MinIO server configuration file is stored on the backend in json format. The Elasticsearch configuration is located in the `elasticsearch` key under the `notify` top-level key. Create a configuration key-value pair here for your Elasticsearch instance. The key is a name for your Elasticsearch endpoint, and the value is a collection of key-value parameters described in the table below.
+The Elasticsearch configuration is located in the `notify_elasticsearch` key. Create a configuration key-value pair here for your Elasticsearch instance. The key is a name for your Elasticsearch endpoint, and the value is a collection of key-value parameters described in the table below.
 
-| Parameter    | Type     | Description                                                                                                                                                                                   |
-| :----------- | :------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enable`     | _bool_   | (Required) Is this server endpoint configuration active/enabled?                                                                                                                              |
-| `format`     | _string_ | (Required) Either `namespace` or `access`.                                                                                                                                                    |
-| `url`        | _string_ | (Required) The Elasticsearch server's address, with optional authentication info. For example: `http://localhost:9200` or with authentication info `http://elastic:MagicWord@127.0.0.1:9200`. |
-| `index`      | _string_ | (Required) The name of an Elasticsearch index in which MinIO will store documents.                                                                                                            |
-| `queueDir`   | _string_ | Persistent store for events when Elasticsearch broker is offline                                                                                                                              |
-| `queueLimit` | _int_    | Set the maximum event limit for the persistent store. The default limit is 10000                                                                                                              |
+| Parameter     | Description                                                                        |
+| :-----------  | :-------------------------------------------------------------------------------   |
+| `state`       | (Required) Is this server endpoint configuration active/enabled?                   |
+| `format`      | (Required) Either `namespace` or `access`.                                         |
+| `url`         | (Required) The Elasticsearch server's address, with optional authentication info.  |
+| `index`       | (Required) The name of an Elasticsearch index in which MinIO will store documents. |
+| `queue_dir`   | Persistent store for events when Elasticsearch broker is offline                   |
+| `queue_limit` | Set the maximum event limit for the persistent store. The default limit is 10000   |
 
-An example of Elasticsearch configuration is as follows:
+For example: `http://localhost:9200` or with authentication info `http://elastic:MagicWord@127.0.0.1:9200`.
 
-```json
-"elasticsearch": {
-    "1": {
-        "enable": true,
-        "format": "namespace",
-        "url": "http://127.0.0.1:9200",
-        "index": "minio_events",
-        "queueDir": "",
-        "queueLimit": 0
-    }
-},
-```
-
-MinIO supports persistent event store. The persistent store will backup events when the Elasticsearch broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
+MinIO supports persistent event store. The persistent store will backup events when the Elasticsearch broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
 
 If Elasticsearch has authentication enabled, the credentials can be supplied to MinIO via the `url` parameter formatted as `PROTO://USERNAME:PASSWORD@ELASTICSEARCH_HOST:PORT`.
 
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+To update the configuration, use `mc admin config get` command to get the current configuration.
 
 ```sh
-$ mc admin config get myminio/ > /tmp/myconfig
+$ mc admin config get myminio/ notify_elasticsearch
+notify_elasticsearch:1 queue_limit="0" state="off" url="" format="namespace" index="" queue_dir=""
 ```
 
-After updating the Elasticsearch configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:elasticsearch` at start-up if there were no errors.
+Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:elasticsearch` at start-up if there were no errors.
 
 ```sh
-$ mc admin config set myminio < /tmp/myconfig
+$ mc admin config set myminio notify_elasticsearch:1 queue_limit="0" state="on" url="http://127.0.0.1:9200" format="namespace" index="minio_events" queue_dir=""
 ```
 
 Note that, you can add as many Elasticsearch server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the Elasticsearch instance and an object of per-server configuration parameters.
@@ -448,42 +402,28 @@ The steps below show how to use this notification target in `namespace` and `acc
 
 The MinIO server configuration file is stored on the backend in json format.The Redis configuration is located in the `redis` key under the `notify` top-level key. Create a configuration key-value pair here for your Redis instance. The key is a name for your Redis endpoint, and the value is a collection of key-value parameters described in the table below.
 
-| Parameter  | Type     | Description                                                                                                                                             |
-| :--------- | :------- | :------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `enable`   | _bool_   | (Required) Is this server endpoint configuration active/enabled?                                                                                        |
-| `format`   | _string_ | (Required) Either `namespace` or `access`.                                                                                                              |
-| `address`  | _string_ | (Required) The Redis server's address. For example: `localhost:6379`.                                                                                   |
-| `password` | _string_ | (Optional) The Redis server's password.                                                                                                                 |
-| `key`      | _string_ | (Required) The name of the redis key under which events are stored. A hash is used in case of `namespace` format and a list in case of `access` format. |
+| Parameter  | Description                                                                                                                                             |
+| :--------- | :------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `state`   | (Required) Is this server endpoint configuration active/enabled?                                                                                        |
+| `format`   | (Required) Either `namespace` or `access`.                                                                                                              |
+| `address`  | (Required) The Redis server's address. For example: `localhost:6379`.                                                                                   |
+| `password` | (Optional) The Redis server's password.                                                                                                                 |
+| `key`      | (Required) The name of the redis key under which events are stored. A hash is used in case of `namespace` format and a list in case of `access` format. |
+|            |                                                                                                                                                         |
 
-An example of Redis configuration is as follows:
+MinIO supports persistent event store. The persistent store will backup events when the Redis broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
 
-```json
-"redis": {
-    "1": {
-        "enable": true,
-        "format": "namespace",
-        "address": "127.0.0.1:6379",
-        "password": "yoursecret",
-        "key": "bucketevents",
-        "queueDir": "",
-        "queueLimit": 0
-    }
-}
-```
-
-MinIO supports persistent event store. The persistent store will backup events when the Redis broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
-
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+To update the configuration, use `mc admin config get` command to get the current configuration.
 
 ```sh
-$ mc admin config get myminio/ > /tmp/myconfig
+$ mc admin config get myminio/ notify_redis
+notify_redis:1 address="" format="namespace" key="" password="" queue_dir="" queue_limit="0" state="off"
 ```
 
-After updating the Redis configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:redis` at start-up if there were no errors.
+Use `mc admin config set` command to update the configuration for the deployment.Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:redis` at start-up if there were no errors.
 
 ```sh
-$ mc admin config set myminio < /tmp/myconfig
+$ mc admin config set myminio/ notify_redis:1 address="127.0.0.1:6379" format="namespace" key="bucketevents" password="yoursecret" queue_dir="" queue_limit="0" state="on"
 ```
 
 Note that, you can add as many Redis server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the Redis instance and an object of per-server configuration parameters.
@@ -498,7 +438,7 @@ With the `mc` tool, the configuration is very simple to add. Let us say that the
 
 ```
 mc mb myminio/images
-mc event add  myminio/images arn:minio:sqs::1:redis --suffix .jpg
+mc event add myminio/images arn:minio:sqs::1:redis --suffix .jpg
 mc event list myminio/images
 arn:minio:sqs::1:redis s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
@@ -540,71 +480,24 @@ Install NATS from [here](http://nats.io/).
 
 ### Step 1: Add NATS endpoint to MinIO
 
-The NATS configuration block in `config.json` is as follows:
+MinIO supports persistent event store. The persistent store will backup events when the NATS broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
 
-```
-"nats": {
-    "1": {
-        "enable": true,
-        "address": "0.0.0.0:4222",
-        "subject": "bucketevents",
-        "username": "yourusername",
-        "password": "yoursecret",
-        "token": "",
-        "secure": false,
-        "pingInterval": 0,
-        "queueDir": "",
-        "queueLimit": 0,
-        "streaming": {
-            "enable": false,
-            "clusterID": "",
-            "async": false,
-            "maxPubAcksInflight": 0
-        }
-    }
-},
-```
-
-MinIO supports persistent event store. The persistent store will backup events when the NATS broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
-
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment.
 
 ```sh
-$ mc admin config get myminio/ > /tmp/myconfig
+$ mc admin config get myminio/ notify_nats
+notify_nats:1 password="yoursecret" streaming_max_pub_acks_in_flight="10" subject="" address="0.0.0.0:4222" state="on" token="" username="yourusername" ping_interval="0" queue_limit="0" secure="off" streaming_async="on" queue_dir="" streaming_cluster_id="test-cluster" streaming_enable="on"
 ```
 
-After updating the NATS configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart MinIO server to reflect config changes. `bucketevents` is the subject used by NATS in this example.
+Use `mc admin config set` command to update the configuration for the deployment.Restart MinIO server to reflect config changes. `bucketevents` is the subject used by NATS in this example.
 
 ```sh
-$ mc admin config set myminio < /tmp/myconfig
+$ mc admin config set myminio notify_nats:1 password="yoursecret" streaming_max_pub_acks_in_flight="10" subject="" address="0.0.0.0:4222" state="on" token="" username="yourusername" ping_interval="0" queue_limit="0" secure="off" streaming_async="on" queue_dir="" streaming_cluster_id="test-cluster" streaming_enable="on"
 ```
 
 MinIO server also supports [NATS Streaming mode](http://nats.io/documentation/streaming/nats-streaming-intro/) that offers additional functionality like `At-least-once-delivery`, and `Publisher rate limiting`. To configure MinIO server to send notifications to NATS Streaming server, update the MinIO server configuration file as follows:
 
-```
-"nats": {
-    "1": {
-        "enable": true,
-        "address": "0.0.0.0:4222",
-        "subject": "bucketevents",
-        "username": "yourusername",
-        "password": "yoursecret",
-        "token": "",
-        "secure": false,
-        "pingInterval": 0,
-        "queueDir": "",
-        "queueLimit": 0,
-        "streaming": {
-            "enable": true,
-            "clusterID": "test-cluster",
-            "async": true,
-            "maxPubAcksInflight": 10
-        }
-    }
-},
-```
-
-Read more about sections `clusterID`, `clientID` on [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). Section `maxPubAcksInflight` is explained [here](https://github.com/nats-io/stan.go#publisher-rate-limiting).
+Read more about sections `cluster_id`, `client_id` on [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). Section `maxPubAcksInflight` is explained [here](https://github.com/nats-io/stan.go#publisher-rate-limiting).
 
 ### Step 2: Enable bucket notification using MinIO client
 
@@ -612,7 +505,7 @@ We will enable bucket event notification to trigger whenever a JPEG image is upl
 
 ```
 mc mb myminio/images
-mc event add  myminio/images arn:minio:sqs::1:nats --suffix .jpg
+mc event add myminio/images arn:minio:sqs::1:nats --suffix .jpg
 mc event list myminio/images
 arn:minio:sqs::1:nats s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
@@ -767,53 +660,35 @@ MinIO requires PostgreSQL version 9.5 or above. MinIO uses the [`INSERT ON CONFL
 
 ### Step 2: Add PostgreSQL endpoint to MinIO
 
-The MinIO server configuration file is stored on the backend in json format. The PostgreSQL configuration is located in the `postgresql` key under the `notify` top-level key. Create a configuration key-value pair here for your PostgreSQL instance. The key is a name for your PostgreSQL endpoint, and the value is a collection of key-value parameters described in the table below.
+The PostgreSQL configuration is located in the `notify_postgresql` key. Create a configuration key-value pair here for your PostgreSQL instance. The key is a name for your PostgreSQL endpoint, and the value is a collection of key-value parameters described in the table below.
 
-| Parameter          | Type     | Description                                                                                                                                                                          |
-| :----------------- | :------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enable`           | _bool_   | (Required) Is this server endpoint configuration active/enabled?                                                                                                                     |
-| `format`           | _string_ | (Required) Either `namespace` or `access`.                                                                                                                                           |
-| `connectionString` | _string_ | (Optional) [Connection string parameters](https://godoc.org/github.com/lib/pq#hdr-Connection_String_Parameters) for the PostgreSQL server. Can be used to set `sslmode` for example. |
-| `table`            | _string_ | (Required) Table name in which events will be stored/updated. If the table does not exist, the MinIO server creates it at start-up.                                                  |
-| `host`             | _string_ | (Optional) Host name of the PostgreSQL server. Defaults to `localhost`. IPv6 host should be enclosed with `[` and `]`                                                                |
-| `port`             | _string_ | (Optional) Port on which to connect to PostgreSQL server. Defaults to `5432`.                                                                                                        |
-| `user`             | _string_ | (Optional) Database user name. Defaults to user running the server process.                                                                                                          |
-| `password`         | _string_ | (Optional) Database password.                                                                                                                                                        |
-| `database`         | _string_ | (Optional) Database name.                                                                                                                                                            |
+| Parameter           | Description                                                                                                                                                                          |
+| :-----------------  | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `state`             | (Required) Is this server endpoint configuration active/enabled?                                                                                                                     |
+| `format`            | (Required) Either `namespace` or `access`.                                                                                                                                           |
+| `connection_string` | (Optional) [Connection string parameters](https://godoc.org/github.com/lib/pq#hdr-Connection_String_Parameters) for the PostgreSQL server. Can be used to set `sslmode` for example. |
+| `table`             | (Required) Table name in which events will be stored/updated. If the table does not exist, the MinIO server creates it at start-up.                                                  |
+| `host`              | (Optional) Host name of the PostgreSQL server. Defaults to `localhost`. IPv6 host should be enclosed with `[` and `]`                                                                |
+| `port`              | (Optional) Port on which to connect to PostgreSQL server. Defaults to `5432`.                                                                                                        |
+| `user`              | (Optional) Database user name. Defaults to user running the server process.                                                                                                          |
+| `password`          | (Optional) Database password.                                                                                                                                                        |
+| `database`          | (Optional) Database name.                                                                                                                                                            |
+|                     |                                                                                                                                                                                     |
 
-An example of PostgreSQL configuration is as follows:
-
-```
-"postgresql": {
-    "1": {
-        "enable": true,
-        "format": "namespace",
-        "connectionString": "sslmode=disable",
-        "table": "bucketevents",
-        "host": "127.0.0.1",
-        "port": "5432",
-        "user": "postgres",
-        "password": "password",
-        "database": "minio_events",
-        "queueDir": "",
-        "queueLimit": 0
-    }
-}
-```
-
-MinIO supports persistent event store. The persistent store will backup events when the PostgreSQL connection goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
+MinIO supports persistent event store. The persistent store will backup events when the PostgreSQL connection goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
 
 Note that for illustration here, we have disabled SSL. In the interest of security, for production this is not recommended.
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+To update the configuration, use `mc admin config get` command to get the current configuration.
 
 ```sh
-$ mc admin config get myminio/ > /tmp/myconfig
+$ mc admin config get myminio notify_postgres
+notify_postgres:1 password="" port="" queue_dir="" connection_string="" host="" queue_limit="0" state="off" table="" username="" database="" format="namespace"
 ```
 
-After updating the Postgres configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:postgresql` at start-up if there were no errors.
+Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:postgresql` at start-up if there were no errors.
 
 ```sh
-$ mc admin config set myminio < /tmp/myconfig
+$ mc admin config set myminio notify_postgres:1 password="password" port="5432" queue_dir="" connection_string="sslmode=disable" host="127.0.0.1" queue_limit="0" state="on" table="bucketevents" username="postgres" database="minio_events" format="namespace"
 ```
 
 Note that, you can add as many PostgreSQL server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the PostgreSQL instance and an object of per-server configuration parameters.
@@ -877,53 +752,32 @@ MinIO requires MySQL version 5.7.8 or above. MinIO uses the [JSON](https://dev.m
 
 ### Step 2: Add MySQL server endpoint configuration to MinIO
 
-The MinIO server configuration file is stored on the backend in json format. The MySQL configuration is located in the `mysql` key under the `notify` top-level key. Create a configuration key-value pair here for your MySQL instance. The key is a name for your MySQL endpoint, and the value is a collection of key-value parameters described in the table below.
+The MySQL configuration is located in the `notify_mysql` key. Create a configuration key-value pair here for your MySQL instance. The key is a name for your MySQL endpoint, and the value is a collection of key-value parameters described in the table below.
 
-| Parameter   | Type     | Description                                                                                                                                                                                                                                                             |
-| :---------- | :------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enable`    | _bool_   | (Required) Is this server endpoint configuration active/enabled?                                                                                                                                                                                                        |
-| `format`    | _string_ | (Required) Either `namespace` or `access`.                                                                                                                                                                                                                              |
-| `dsnString` | _string_ | (Optional) [Data-Source-Name connection string](https://github.com/go-sql-driver/mysql#dsn-data-source-name) for the MySQL server. If not specified, the connection information specified by the `host`, `port`, `user`, `password` and `database` parameters are used. |
-| `table`     | _string_ | (Required) Table name in which events will be stored/updated. If the table does not exist, the MinIO server creates it at start-up.                                                                                                                                     |
-| `host`      | _string_ | Host name of the MySQL server (used only if `dsnString` is empty).                                                                                                                                                                                                      |
-| `port`      | _string_ | Port on which to connect to the MySQL server (used only if `dsnString` is empty).                                                                                                                                                                                       |
-| `user`      | _string_ | Database user-name (used only if `dsnString` is empty).                                                                                                                                                                                                                 |
-| `password`  | _string_ | Database password (used only if `dsnString` is empty).                                                                                                                                                                                                                  |
-| `database`  | _string_ | Database name (used only if `dsnString` is empty).                                                                                                                                                                                                                      |
+| Parameter    | Description   |                                                                                             | :----------  | :-------------- |                                                                                           | `state`      | (Required) Is this server endpoint configuration active/enabled? |
+| `format`     | (Required) Either `namespace` or `access`. |                                                                | `dsn_string` | (Optional) [Data-Source-Name connection string](https://github.com/go-sql-driver/mysql#dsn-data-source-name) for the MySQL server. |
+| `table`      | (Required) Table name in which events will be stored/updated. If the table does not exist, the MinIO server creates it at start-up. |
+| `host`       | Host name of the MySQL server (used only if `dsnString` is empty). |
+| `port`       | Port on which to connect to the MySQL server (used only if `dsn_string` is empty). |
+| `user`       | Database user-name (used only if `dsnString` is empty). |
+| `password`   | Database password (used only if `dsnString` is empty).  |
+| `database`   | Database name (used only if `dsnString` is empty). |
 
-An example of MySQL configuration is as follows:
+`dns_string` is optional, if not specified, the connection information specified by the `host`, `port`, `user`, `password` and `database` parameters are used.
 
-```json
-"mysql": {
-       "1": {
-           "enable": true,
-           "dsnString": "",
-           "format": "namespace",
-           "table": "minio_images",
-           "host": "172.17.0.1",
-           "port": "3306",
-           "user": "root",
-           "password": "password",
-           "database": "miniodb",
-           "queueDir": "",
-           "queueLimit": 0
-       }
-}
-```
+MinIO supports persistent event store. The persistent store will backup events when the MySQL connection goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
 
-
-MinIO supports persistent event store. The persistent store will backup events when the MySQL connection goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
-
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+To update the configuration, use `mc admin config get` command to get the current configuration.
 
 ```sh
-$ mc admin config get myminio/ > /tmp/myconfig
+$ mc admin config get myminio/ notify_mysql
+notify_mysql:1 table="" database="" format="namespace" password="" port="" queue_dir="" queue_limit="0" state="off" username="" dsn_string="" host=""
 ```
 
-After updating the MySQL configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:mysql` at start-up if there were no errors.
+Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:mysql` at start-up if there were no errors.
 
 ```sh
-$ mc admin config set myminio < /tmp/myconfig
+$ mc admin config set myminio notify_mysql:1 table="minio_images" database="miniodb" format="namespace" password="" port="3306" queue_dir="" queue_limit="0" state="on" username="root" dsn_string="" host="172.17.0.1"
 ```
 
 Note that, you can add as many MySQL server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the MySQL instance and an object of per-server configuration parameters.
@@ -980,42 +834,19 @@ MinIO requires Kafka version 0.10 or 0.9. Internally MinIO uses the [Shopify/sar
 
 ### Step 2: Add Kafka endpoint to MinIO
 
-The MinIO server configuration file is stored on the backend in json format. Update the kafka configuration block in `config.json` as follows:
+MinIO supports persistent event store. The persistent store will backup events when the kafka broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
 
-```
-"kafka": {
-    "1": {
-        "enable": true,
-        "brokers": ["localhost:9092"],
-        "topic": "bucketevents",
-        "queueDir": "",
-        "queueLimit": 0,
-        "tls": {
-            "enable": false,
-            "skipVerify": false,
-            "clientAuth": 0
-        },
-        "sasl": {
-            "enable": false,
-            "username": "",
-            "password": ""
-        }
-    }
-}
-```
-
-MinIO supports persistent event store. The persistent store will backup events when the kafka broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
-
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+To update the configuration, use `mc admin config get` command to get the current configuration.
 
 ```sh
-$ mc admin config get myminio/ > /tmp/myconfig
+$ mc admin config get myminio/ notify_kafka
+notify_kafka:1 tls_skip_verify="off" state="off" queue_dir="" queue_limit="0" sasl_enable="off" sasl_password="" sasl_username="" tls_client_auth="0" tls_enable="off" brokers="" topic=""
 ```
 
-After updating the Kafka configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:kafka` at start-up if there were no errors.`bucketevents` is the topic used by kafka in this example.
+Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:kafka` at start-up if there were no errors.`bucketevents` is the topic used by kafka in this example.
 
 ```sh
-$ mc admin config set myminio < /tmp/myconfig
+$ mc admin config set myminio notify_kafka:1 tls_skip_verify="off" state="on" queue_dir="" queue_limit="0" sasl_enable="off" sasl_password="" sasl_username="" tls_client_auth="0" tls_enable="off" brokers="localhost:9092,localhost:9093" topic="bucketevents"
 ```
 
 ### Step 3: Enable bucket notification using MinIO client
@@ -1110,30 +941,19 @@ kafkacat -b localhost:9092 -t bucketevents
 
 ### Step 1: Add Webhook endpoint to MinIO
 
-The MinIO server configuration file is stored on the backend in json format. Update the Webhook configuration block in `config.json` as follows
+MinIO supports persistent event store. The persistent store will backup events when the webhook goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
 
-```
-"webhook": {
-  "1": {
-    "enable": true,
-    "endpoint": "http://localhost:3000/",
-    "queueDir": "",
-    "queueLimit": 0
-}
-```
-
-MinIO supports persistent event store. The persistent store will backup events when the webhook goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
-
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio deployment in json format, and save it locally.
+To update the configuration, use `mc admin config get` command to get the current configuration.
 
 ```sh
-$ mc admin config get myminio/ > /tmp/myconfig
+$ mc admin config get myminio/ notify_webhook
+notify_webhook:1 queue_limit="0" state="off" endpoint="" queue_dir=""
 ```
 
-After updating the webhook configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Here the endpoint is the server listening for webhook notifications. Save the file and restart the MinIO server for changes to take effect. Note that the endpoint needs to be live and reachable when you restart your MinIO server.
+Use `mc admin config set` command to update the configuration for the deployment. Here the endpoint is the server listening for webhook notifications. Save the settings and restart the MinIO server for changes to take effect. Note that the endpoint needs to be live and reachable when you restart your MinIO server.
 
 ```sh
-$ mc admin config set myminio < /tmp/myconfig
+$ mc admin config set myminio notify_webhook:1 queue_limit="0" state="on" endpoint="http://localhost:3000" queue_dir=""
 ```
 
 ### Step 2: Enable bucket notification using MinIO client
@@ -1200,39 +1020,19 @@ docker run --rm -p 4150-4151:4150-4151 nsqio/nsq /nsqd
 
 ### Step 1: Add NSQ endpoint to MinIO
 
-The MinIO server configuration file is stored on the backend in json format. The NSQ configuration is located in the `nsq` key under the `notify` top-level key. Create a configuration key-value pair here for your NSQ instance. The key is a name for your NSQ endpoint, and the value is a collection of key-value parameters.
+MinIO supports persistent event store. The persistent store will backup events when the NSQ broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
 
-An example configuration for NSQ is shown below:
-
-```json
-"nsq": {
-    "1": {
-        "enable": true,
-        "nsqdAddress": "127.0.0.1:4150",
-        "topic": "minio",
-        "tls": {
-            "enable": false,
-            "skipVerify": true
-        },
-        "queueDir": "",
-        "queueLimit": 0
-    }
-}
-
-MinIO supports persistent event store. The persistent store will backup events when the NSQ broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queueDir` field and the maximum limit of events in the queueDir in `queueLimit` field. For eg, the `queueDir` can be `/home/events` and `queueLimit` can be `1000`. By default, the `queueLimit` is set to 10000.
-
-```
-
-To update the configuration, use `mc admin config get` command to get the current configuration file for the MinIO deployment in json format, and save it locally.
+To update the configuration, use `mc admin config get` command to get the current configuration for `notify_nsq`.
 
 ```sh
-$ mc admin config get myminio/ > /tmp/myconfig
+$ mc admin config get myminio/ notify_nsq
+notify_nsq:1 nsqd_address="" queue_dir="" queue_limit="0" state="off" tls_enable="off" tls_skip_verify="off" topic=""
 ```
 
-After updating the NSQ configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the deployment.Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:nsq` at start-up if there were no errors.
+Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:nsq` at start-up if there were no errors.
 
 ```sh
-$ mc admin config set myminio < /tmp/myconfig
+$ mc admin config set myminio notify_nsq:1 nsqd_address="127.0.0.1:4150" queue_dir="" queue_limit="0" state="on" tls_enable="off" tls_skip_verify="on" topic="minio"
 ```
 
 Note that, you can add as many NSQ daemon endpoint configurations as needed by providing an identifier (like "1" in the example above) for the NSQ instance and an object of per-server configuration parameters.
@@ -1267,5 +1067,3 @@ You should receive the following event notification via NSQ once the upload comp
 ```
 {"EventName":"s3:ObjectCreated:Put","Key":"images/gopher.jpg","Records":[{"eventVersion":"2.0","eventSource":"minio:s3","awsRegion":"","eventTime":"2018-10-31T09:31:11Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"21EJ9HYV110O8NVX2VMS"},"requestParameters":{"sourceIPAddress":"10.1.1.1"},"responseElements":{"x-amz-request-id":"1562A792DAA53426","x-minio-origin-endpoint":"http://10.0.3.1:9000"},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"21EJ9HYV110O8NVX2VMS"},"arn":"arn:aws:s3:::images"},"object":{"key":"gopher.jpg","size":162023,"eTag":"5337769ffa594e742408ad3f30713cd7","contentType":"image/jpeg","userMetadata":{"content-type":"image/jpeg"},"versionId":"1","sequencer":"1562A792DAA53426"}},"source":{"host":"","port":"","userAgent":"MinIO (linux; amd64) minio-go/v6.0.8 mc/DEVELOPMENT.GOGET"}}]}
 ```
-
-_NOTE_ If you are running [distributed MinIO](https://docs.min.io/docs/distributed-minio-quickstart-guide), modify `~/.minio/config.json` on all the nodes with your bucket event notification backend configuration.

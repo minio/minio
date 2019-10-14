@@ -19,21 +19,24 @@ import { shallow, mount } from "enzyme"
 import { Login } from "../Login"
 import web from "../../web"
 
-jest.mock('../../web', () => ({
+jest.mock("../../web", () => ({
   Login: jest.fn(() => {
     return Promise.resolve({ token: "test", uiVersion: "2018-02-01T01:17:47Z" })
   }),
-  LoggedIn: jest.fn()
+  LoggedIn: jest.fn(),
+  GetDiscoveryDoc: jest.fn(() => {
+    return Promise.resolve({ DiscoveryDoc: {"authorization_endpoint": "test"} })
+  })
 }))
 
 describe("Login", () => {
   const dispatchMock = jest.fn()
   const showAlertMock = jest.fn()
   const clearAlertMock = jest.fn()
-  
+
   it("should render without crashing", () => {
-    shallow(<Login 
-      dispatch={dispatchMock} 
+    shallow(<Login
+      dispatch={dispatchMock}
       alert={{ show: false, type: "danger"}}
       showAlert={showAlertMock}
       clearAlert={clearAlertMock}
@@ -42,8 +45,8 @@ describe("Login", () => {
 
   it("should initially have the is-guest class", () => {
     const wrapper = shallow(
-      <Login 
-        dispatch={dispatchMock} 
+      <Login
+        dispatch={dispatchMock}
         alert={{ show: false, type: "danger"}}
         showAlert={showAlertMock}
         clearAlert={clearAlertMock}
@@ -55,8 +58,8 @@ describe("Login", () => {
 
   it("should throw an alert if the keys are empty in login form", () => {
     const wrapper = mount(
-      <Login 
-        dispatch={dispatchMock} 
+      <Login
+        dispatch={dispatchMock}
         alert={{ show: false, type: "danger"}}
         showAlert={showAlertMock}
         clearAlert={clearAlertMock}
@@ -85,8 +88,8 @@ describe("Login", () => {
 
   it("should call web.Login with correct arguments if both keys are entered", () => {
     const wrapper = mount(
-      <Login 
-        dispatch={dispatchMock} 
+      <Login
+        dispatch={dispatchMock}
         alert={{ show: false, type: "danger"}}
         showAlert={showAlertMock}
         clearAlert={clearAlertMock}
@@ -98,7 +101,7 @@ describe("Login", () => {
     })
     wrapper.find("form").simulate("submit")
     expect(web.Login).toHaveBeenCalledWith({
-      "username": "accessKey", 
+      "username": "accessKey",
       "password": "secretKey"
     })
   })

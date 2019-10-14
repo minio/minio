@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/klauspost/compress/s2"
+	"github.com/minio/minio/cmd/config/compress"
 	"github.com/minio/minio/cmd/crypto"
 )
 
@@ -417,9 +418,9 @@ func TestExcludeForCompression(t *testing.T) {
 		},
 	}
 	for i, test := range testCases {
-		globalIsCompressionEnabled = true
-		got := excludeForCompression(test.header, test.object)
-		globalIsCompressionEnabled = false
+		got := excludeForCompression(test.header, test.object, compress.Config{
+			Enabled: true,
+		})
 		if got != test.result {
 			t.Errorf("Test %d - expected %v but received %v",
 				i+1, test.result, got)

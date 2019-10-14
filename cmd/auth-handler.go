@@ -179,7 +179,7 @@ func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
 		// hijacking the policies. We need to make sure that this is
 		// based an admin credential such that token cannot be decoded
 		// on the client side and is treated like an opaque value.
-		return []byte(globalServerConfig.GetCredential().SecretKey), nil
+		return []byte(globalActiveCred.SecretKey), nil
 	}
 	p := &jwtgo.Parser{
 		ValidMethods: []string{
@@ -212,7 +212,7 @@ func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
 		// If OPA is not set, session token should
 		// have a policy and its mandatory, reject
 		// requests without policy claim.
-		p, pok := claims[iampolicy.PolicyName]
+		p, pok := claims[iamPolicyName()]
 		if !pok {
 			return nil, errAuthentication
 		}
@@ -286,7 +286,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 		}
 		cred, owner, s3Err = getReqAccessKeyV2(r)
 	case authTypeSigned, authTypePresigned:
-		region := globalServerConfig.GetRegion()
+		region := globalServerRegion
 		switch action {
 		case policy.GetBucketLocationAction, policy.ListAllMyBucketsAction:
 			region = ""
@@ -485,7 +485,7 @@ func isPutAllowed(atype authType, bucketName, objectName string, r *http.Request
 	case authTypeSignedV2, authTypePresignedV2:
 		cred, owner, s3Err = getReqAccessKeyV2(r)
 	case authTypeStreamingSigned, authTypePresigned, authTypeSigned:
-		region := globalServerConfig.GetRegion()
+		region := globalServerRegion
 		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
 	}
 	if s3Err != ErrNone {

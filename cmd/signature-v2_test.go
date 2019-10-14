@@ -52,8 +52,8 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 	now := UTCNow()
 
 	var (
-		accessKey = globalServerConfig.GetCredential().AccessKey
-		secretKey = globalServerConfig.GetCredential().SecretKey
+		accessKey = globalActiveCred.AccessKey
+		secretKey = globalActiveCred.SecretKey
 	)
 	testCases := []struct {
 		queryParams map[string]string
@@ -169,7 +169,7 @@ func TestValidateV2AuthHeader(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	accessID := globalServerConfig.GetCredential().AccessKey
+	accessID := globalActiveCred.AccessKey
 	testCases := []struct {
 		authString    string
 		expectedError APIErrorCode
@@ -248,7 +248,7 @@ func TestDoesPolicySignatureV2Match(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	creds := globalServerConfig.GetCredential()
+	creds := globalActiveCred
 	policy := "policy"
 	testCases := []struct {
 		accessKey string

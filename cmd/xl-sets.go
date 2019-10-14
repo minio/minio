@@ -330,15 +330,14 @@ func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
 	}
 
-	scfg := globalServerConfig.GetStorageClass()
-	scParity := scfg.GetParityForSC(storageclass.STANDARD)
+	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
 	if scParity == 0 {
 		scParity = s.drivesPerSet / 2
 	}
 	storageInfo.Backend.StandardSCData = s.drivesPerSet - scParity
 	storageInfo.Backend.StandardSCParity = scParity
 
-	rrSCParity := scfg.GetParityForSC(storageclass.RRS)
+	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)
 	storageInfo.Backend.RRSCData = s.drivesPerSet - rrSCParity
 	storageInfo.Backend.RRSCParity = rrSCParity
 

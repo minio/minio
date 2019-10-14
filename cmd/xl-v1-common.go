@@ -58,9 +58,8 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 
 	g := errgroup.WithNErrs(len(storageDisks))
 
-	for i := range storageDisks {
-		// Initialize a new index variable before passing to the goroutine
-		index := i
+	for index := range storageDisks {
+		index := index
 		g.Go(func() error {
 			if storageDisks[index] == nil {
 				return errDiskNotFound
@@ -74,7 +73,7 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 				return errCorruptedFormat
 			}
 			return nil
-		}, i)
+		}, index)
 	}
 
 	// NOTE: Observe we are not trying to read `xl.json` and figure out the actual

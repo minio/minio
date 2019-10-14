@@ -31,6 +31,8 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zip"
+	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/config/notify"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
@@ -53,7 +55,7 @@ type NotificationSys struct {
 // GetARNList - returns available ARNs.
 func (sys *NotificationSys) GetARNList() []string {
 	arns := []string{}
-	region := globalServerConfig.GetRegion()
+	region := globalServerRegion
 	for _, targetID := range sys.targetList.List() {
 		// httpclient target is part of ListenBucketNotification
 		// which doesn't need to be listed as part of the ARN list
@@ -1096,8 +1098,12 @@ func (sys *NotificationSys) NetworkInfo() []madmin.ServerNetworkHardwareInfo {
 }
 
 // NewNotificationSys - creates new notification system object.
-func NewNotificationSys(config *serverConfig, endpoints EndpointList) *NotificationSys {
-	targetList := getNotificationTargets(config)
+func NewNotificationSys(cfg config.Config, endpoints EndpointList) *NotificationSys {
+	targetList, err := notify.GetNotificationTargets(cfg, GlobalServiceDoneCh, globalRootCAs)
+	if err != nil {
+		logger.FatalIf(err, "Unable to start notification sub system")
+	}
+
 	remoteHosts := getRemoteHosts(endpoints)
 	remoteClients := getRestClients(remoteHosts)
 
@@ -1232,7 +1238,7 @@ func readNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucketName 
 		return nil, err
 	}
 
-	config, err := event.ParseConfig(bytes.NewReader(configData), globalServerConfig.GetRegion(), globalNotificationSys.targetList)
+	config, err := event.ParseConfig(bytes.NewReader(configData), globalServerRegion, globalNotificationSys.targetList)
 	logger.LogIf(ctx, err)
 	return config, err
 }

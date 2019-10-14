@@ -123,7 +123,7 @@ func isValidRegion(reqRegion string, confRegion string) bool {
 // also returns if the access key is owner/admin.
 func checkKeyValid(accessKey string) (auth.Credentials, bool, APIErrorCode) {
 	var owner = true
-	var cred = globalServerConfig.GetCredential()
+	var cred = globalActiveCred
 	if cred.AccessKey != accessKey {
 		if globalIAMSys == nil {
 			return cred, false, ErrInvalidAccessKeyID

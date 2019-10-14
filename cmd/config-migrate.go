@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,14 +23,21 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
+	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/config/cache"
+	"github.com/minio/minio/cmd/config/compress"
+	xldap "github.com/minio/minio/cmd/config/identity/ldap"
+	"github.com/minio/minio/cmd/config/identity/openid"
+	"github.com/minio/minio/cmd/config/notify"
+	"github.com/minio/minio/cmd/config/policy/opa"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/iam/openid"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/quick"
 )
@@ -221,7 +228,7 @@ func migrateConfig() error {
 			return err
 		}
 		fallthrough
-	case serverConfigVersion:
+	case "33":
 		// No migration needed. this always points to current version.
 		err = nil
 	}
@@ -1991,7 +1998,7 @@ func migrateV22ToV23() error {
 	// Init cache config.For future migration, Cache config needs to be copied over from previous version.
 	srvConfig.Cache.Drives = []string{}
 	srvConfig.Cache.Exclude = []string{}
-	srvConfig.Cache.Expiry = globalCacheExpiry
+	srvConfig.Cache.Expiry = 90
 
 	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv22.Version, srvConfig.Version, err)
@@ -2341,7 +2348,7 @@ func migrateV25ToV26() error {
 	srvConfig.Cache.Expiry = cv25.Cache.Expiry
 
 	// Add predefined value to new server config.
-	srvConfig.Cache.MaxUse = globalCacheMaxUse
+	srvConfig.Cache.MaxUse = 80
 
 	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv25.Version, srvConfig.Version, err)
@@ -2456,7 +2463,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 		getConfigFile() + ".deprecated",
 		configFile,
 	}
-	var config = &serverConfig{}
+	var config = &serverConfigV27{}
 	for _, cfgFile := range configFiles {
 		if _, err = Load(cfgFile, config); err != nil {
 			if !os.IsNotExist(err) && !os.IsPermission(err) {
@@ -2473,7 +2480,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 		// Initialize the server config, if no config exists.
 		return newSrvConfig(objAPI)
 	}
-	return saveServerConfig(context.Background(), objAPI, config)
+	return saveServerConfig(context.Background(), objAPI, config, nil)
 }
 
 // Migrates '.minio.sys/config.json' to v33.
@@ -2481,7 +2488,7 @@ func migrateMinioSysConfig(objAPI ObjectLayer) error {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 
 	// Check if the config version is latest, if not migrate.
-	ok, _, err := checkConfigVersion(objAPI, configFile, serverConfigVersion)
+	ok, _, err := checkConfigVersion(objAPI, configFile, "33")
 	if err != nil {
 		return err
 	}
@@ -2622,8 +2629,8 @@ func migrateV29ToV30MinioSys(objAPI ObjectLayer) error {
 	cfg.Version = "30"
 	// Init compression config.For future migration, Compression config needs to be copied over from previous version.
 	cfg.Compression.Enabled = false
-	cfg.Compression.Extensions = globalCompressExtensions
-	cfg.Compression.MimeTypes = globalCompressMimeTypes
+	cfg.Compression.Extensions = strings.Split(compress.DefaultExtensions, config.ValueSeparator)
+	cfg.Compression.MimeTypes = strings.Split(compress.DefaultMimeTypes, config.ValueSeparator)
 
 	data, err = json.Marshal(cfg)
 	if err != nil {
@@ -2657,10 +2664,10 @@ func migrateV30ToV31MinioSys(objAPI ObjectLayer) error {
 	}
 
 	cfg.Version = "31"
-	cfg.OpenID.JWKS = openid.JWKSArgs{
-		URL: &xnet.URL{},
-	}
-	cfg.Policy.OPA = iampolicy.OpaArgs{
+	cfg.OpenID = openid.Config{}
+	cfg.OpenID.JWKS.URL = &xnet.URL{}
+
+	cfg.Policy.OPA = opa.Args{
 		URL:       &xnet.URL{},
 		AuthToken: "",
 	}
@@ -2743,5 +2750,96 @@ func migrateV32ToV33MinioSys(objAPI ObjectLayer) error {
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, "32", "33")
+	return nil
+}
+
+func migrateMinioSysConfigToKV(objAPI ObjectLayer) error {
+	configFile := path.Join(minioConfigPrefix, minioConfigFile)
+
+	// Check if the config version is latest, if not migrate.
+	ok, data, err := checkConfigVersion(objAPI, configFile, "33")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+
+	cfg := &serverConfigV33{}
+	if err = json.Unmarshal(data, cfg); err != nil {
+		return err
+	}
+
+	newCfg := newServerConfig()
+
+	config.SetCredentials(newCfg, cfg.Credential)
+	config.SetRegion(newCfg, cfg.Region)
+	config.SetWorm(newCfg, bool(cfg.Worm))
+
+	storageclass.SetStorageClass(newCfg, cfg.StorageClass)
+
+	for k, loggerArgs := range cfg.Logger.HTTP {
+		logger.SetLoggerHTTP(newCfg, k, loggerArgs)
+	}
+	for k, auditArgs := range cfg.Logger.Audit {
+		logger.SetLoggerHTTPAudit(newCfg, k, auditArgs)
+	}
+
+	crypto.SetKMSConfig(newCfg, cfg.KMS)
+	xldap.SetIdentityLDAP(newCfg, cfg.LDAPServerConfig)
+	openid.SetIdentityOpenID(newCfg, cfg.OpenID)
+	opa.SetPolicyOPAConfig(newCfg, cfg.Policy.OPA)
+	cache.SetCacheConfig(newCfg, cfg.Cache)
+	compress.SetCompressionConfig(newCfg, cfg.Compression)
+
+	for k, args := range cfg.Notify.AMQP {
+		notify.SetNotifyAMQP(newCfg, k, args)
+	}
+	for k, args := range cfg.Notify.Elasticsearch {
+		notify.SetNotifyES(newCfg, k, args)
+	}
+	for k, args := range cfg.Notify.Kafka {
+		notify.SetNotifyKafka(newCfg, k, args)
+	}
+	for k, args := range cfg.Notify.MQTT {
+		notify.SetNotifyMQTT(newCfg, k, args)
+	}
+	for k, args := range cfg.Notify.MySQL {
+		notify.SetNotifyMySQL(newCfg, k, args)
+	}
+	for k, args := range cfg.Notify.NATS {
+		notify.SetNotifyNATS(newCfg, k, args)
+	}
+	for k, args := range cfg.Notify.NSQ {
+		notify.SetNotifyNSQ(newCfg, k, args)
+	}
+	for k, args := range cfg.Notify.PostgreSQL {
+		notify.SetNotifyPostgres(newCfg, k, args)
+	}
+	for k, args := range cfg.Notify.Redis {
+		notify.SetNotifyRedis(newCfg, k, args)
+	}
+	for k, args := range cfg.Notify.Webhook {
+		notify.SetNotifyWebhook(newCfg, k, args)
+	}
+
+	// Construct path to config.json for the given bucket.
+	transactionConfigFile := configFile + ".transaction"
+
+	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
+	// and configFile, take a transaction lock to avoid data race between readConfig()
+	// and saveConfig().
+	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigFile)
+	if err = objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
+	defer objLock.Unlock()
+
+	if err = saveServerConfig(context.Background(), objAPI, newCfg, cfg); err != nil {
+		return err
+	}
+
+	logger.Info("Configuration file %s migrated from version '%s' to new KV format successfully.",
+		configFile, "33")
 	return nil
 }

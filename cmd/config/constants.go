@@ -23,13 +23,17 @@ const (
 
 // Top level common ENVs
 const (
-	EnvAccessKey = "MINIO_ACCESS_KEY"
-	EnvSecretKey = "MINIO_SECRET_KEY"
-	EnvBrowser   = "MINIO_BROWSER"
-	EnvDomain    = "MINIO_DOMAIN"
-	EnvPublicIPs = "MINIO_PUBLIC_IPS"
-	EnvEndpoints = "MINIO_ENDPOINTS"
+	EnvAccessKey  = "MINIO_ACCESS_KEY"
+	EnvSecretKey  = "MINIO_SECRET_KEY"
+	EnvBrowser    = "MINIO_BROWSER"
+	EnvDomain     = "MINIO_DOMAIN"
+	EnvRegionName = "MINIO_REGION_NAME"
+	EnvPublicIPs  = "MINIO_PUBLIC_IPS"
+	EnvEndpoints  = "MINIO_ENDPOINTS"
 
-	EnvUpdate = "MINIO_UPDATE"
-	EnvWorm   = "MINIO_WORM"
+	EnvUpdate    = "MINIO_UPDATE"
+	EnvWormState = "MINIO_WORM_STATE"
+
+	EnvWorm   = "MINIO_WORM"   // legacy
+	EnvRegion = "MINIO_REGION" // legacy
 )

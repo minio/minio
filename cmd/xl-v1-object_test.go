@@ -498,7 +498,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	object4 := "object4"
 	metadata4 := make(map[string]string)
 	metadata4["x-amz-storage-class"] = storageclass.STANDARD
-	globalServerConfig.StorageClass = storageclass.Config{
+	globalStorageClass = storageclass.Config{
 		Standard: storageclass.StorageClass{
 			Parity: 6,
 		},
@@ -516,7 +516,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	object5 := "object5"
 	metadata5 := make(map[string]string)
 	metadata5["x-amz-storage-class"] = storageclass.RRS
-	globalServerConfig.StorageClass = storageclass.Config{
+	globalStorageClass = storageclass.Config{
 		RRS: storageclass.StorageClass{
 			Parity: 2,
 		},
@@ -533,7 +533,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	object6 := "object6"
 	metadata6 := make(map[string]string)
 	metadata6["x-amz-storage-class"] = storageclass.STANDARD
-	globalServerConfig.StorageClass = storageclass.Config{
+	globalStorageClass = storageclass.Config{
 		RRS: storageclass.StorageClass{
 			Parity: 2,
 		},
@@ -551,7 +551,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	object7 := "object7"
 	metadata7 := make(map[string]string)
 	metadata7["x-amz-storage-class"] = storageclass.RRS
-	globalServerConfig.StorageClass = storageclass.Config{
+	globalStorageClass = storageclass.Config{
 		Standard: storageclass.StorageClass{
 			Parity: 5,
 		},
