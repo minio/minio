@@ -161,44 +161,58 @@ func isAuthTokenValid(token string) bool {
 	return err == nil
 }
 
-func webTokenAuthenticate(token string) (jwtgo.StandardClaims, bool, error) {
+func webTokenAuthenticate(token string) (standardClaims, bool, error) {
 	var claims = jwtgo.StandardClaims{}
 	if token == "" {
-		return claims, false, errNoAuthToken
+		return standardClaims{claims}, false, errNoAuthToken
 	}
 
 	jwtToken, err := parseJWTWithClaims(token, &claims)
 	if err != nil {
-		return claims, false, err
+		return standardClaims{claims}, false, err
 	}
 	if !jwtToken.Valid {
-		return claims, false, errAuthentication
+		return standardClaims{claims}, false, errAuthentication
 	}
 	owner := claims.Subject == globalServerConfig.GetCredential().AccessKey
-	return claims, owner, nil
+	return standardClaims{claims}, owner, nil
+}
+
+// jwt standardClaims
+type standardClaims struct {
+	jwtgo.StandardClaims
+}
+
+func (s standardClaims) Map() map[string]interface{} {
+	m := make(map[string]interface{})
+	m["sub"] = s.Subject
+	m["iss"] = s.Issuer
+	m["aud"] = s.Audience
+	m["jti"] = s.Id
+	return m
 }
 
 // Check if the request is authenticated.
 // Returns nil if the request is authenticated. errNoAuthToken if token missing.
 // Returns errAuthentication for all other errors.
-func webRequestAuthenticate(req *http.Request) (jwtgo.StandardClaims, bool, error) {
+func webRequestAuthenticate(req *http.Request) (standardClaims, bool, error) {
 	var claims = jwtgo.StandardClaims{}
 	tokStr, err := jwtreq.AuthorizationHeaderExtractor.ExtractToken(req)
 	if err != nil {
 		if err == jwtreq.ErrNoTokenInRequest {
-			return claims, false, errNoAuthToken
+			return standardClaims{claims}, false, errNoAuthToken
 		}
-		return claims, false, err
+		return standardClaims{claims}, false, err
 	}
 	jwtToken, err := parseJWTWithClaims(tokStr, &claims)
 	if err != nil {
-		return claims, false, err
+		return standardClaims{claims}, false, err
 	}
 	if !jwtToken.Valid {
-		return claims, false, errAuthentication
+		return standardClaims{claims}, false, errAuthentication
 	}
 	owner := claims.Subject == globalServerConfig.GetCredential().AccessKey
-	return claims, owner, nil
+	return standardClaims{claims}, owner, nil
 }
 
 func newAuthToken() string {

@@ -296,7 +296,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 			AccountName:     accessKey,
 			Action:          iampolicy.ListBucketAction,
 			BucketName:      bucketInfo.Name,
-			ConditionValues: getConditionValues(r, "", accessKey),
+			ConditionValues: getConditionValues(r, "", accessKey, claims),
 			IsOwner:         owner,
 			ObjectName:      "",
 			Claims:          claims,
