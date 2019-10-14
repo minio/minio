@@ -68,7 +68,7 @@ func (sys *HTTPConsoleLoggerSys) HasLogListeners() bool {
 // Subscribe starts console logging for this node.
 func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh chan struct{}, node string, last int, logKind string, filter func(entry interface{}) bool) {
 	// Enable console logging for remote client even if local console logging is disabled in the config.
-	if !globalServerConfig.Logger.Console.Enabled && !sys.pubsub.HasSubscribers() {
+	if !sys.pubsub.HasSubscribers() {
 		logger.AddTarget(globalConsoleSys.Console())
 	}
 
@@ -135,8 +135,5 @@ func (sys *HTTPConsoleLoggerSys) Send(e interface{}, logKind string) error {
 	sys.logBuf = sys.logBuf.Next()
 	sys.logBufLk.Unlock()
 
-	if globalServerConfig.Logger.Console.Enabled {
-		return sys.console.Send(e, string(logger.All))
-	}
-	return nil
+	return sys.console.Send(e, string(logger.All))
 }

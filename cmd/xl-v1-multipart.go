@@ -190,8 +190,7 @@ func (xl xlObjects) ListMultipartUploads(ctx context.Context, bucket, object, ke
 func (xl xlObjects) newMultipartUpload(ctx context.Context, bucket string, object string, meta map[string]string) (string, error) {
 
 	onlineDisks := xl.getDisks()
-	scfg := globalServerConfig.GetStorageClass()
-	parityBlocks := scfg.GetParityForSC(meta[xhttp.AmzStorageClass])
+	parityBlocks := globalStorageClass.GetParityForSC(meta[xhttp.AmzStorageClass])
 	if parityBlocks == 0 {
 		parityBlocks = len(onlineDisks) / 2
 	}

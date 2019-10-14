@@ -113,7 +113,7 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 	registerMetricsRouter(router)
 
 	// Register web router when its enabled.
-	if globalIsBrowserEnabled {
+	if globalBrowserEnabled {
 		if err := registerWebRouter(router); err != nil {
 			return nil, err
 		}

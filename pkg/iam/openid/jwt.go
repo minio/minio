@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -191,21 +192,23 @@ func (p *JWT) ID() ID {
 	return "jwt"
 }
 
-// JWKS url
+// OpenID keys and envs.
 const (
-	EnvIAMJWKSURL = "MINIO_IAM_JWKS_URL"
+	JwksURL = "jwks_url"
+
+	EnvIdentityOpenID = "MINIO_IDENTITY_OPENID_JWKS_URL"
 )
 
 // LookupConfig lookup jwks from config, override with any ENVs.
-func LookupConfig(args JWKSArgs, transport *http.Transport, closeRespFn func(io.ReadCloser)) (JWKSArgs, error) {
-	var urlStr string
-	if args.URL != nil {
-		urlStr = args.URL.String()
-	}
+func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.ReadCloser)) (JWKSArgs, error) {
+	args := JWKSArgs{}
 
-	jwksURL := env.Get(EnvIAMJWKSURL, urlStr)
+	jwksURL := env.Get(EnvIamJwksURL, "")
 	if jwksURL == "" {
-		return args, nil
+		jwksURL = env.Get(EnvIdentityOpenID, kv.Get(JwksURL))
+		if jwksURL == "" {
+			return args, nil
+		}
 	}
 
 	u, err := xnet.ParseURL(jwksURL)

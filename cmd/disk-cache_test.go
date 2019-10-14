@@ -28,7 +28,7 @@ import (
 
 // Initialize cache objects.
 func initCacheObjects(disk string, cacheMaxUse int) (*diskCache, error) {
-	return newdiskCache(disk, globalCacheExpiry, cacheMaxUse)
+	return newDiskCache(disk, 80, cacheMaxUse)
 }
 
 // inits diskCache struct for nDisks
@@ -109,7 +109,7 @@ func TestGetCacheMaxUse(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		d, err := initDiskCaches(fsDirs, globalCacheMaxUse, t)
+		d, err := initDiskCaches(fsDirs, 80, t)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -258,7 +258,7 @@ func TestDiskCacheMaxUse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := initDiskCaches(fsDirs, globalCacheMaxUse, t)
+	d, err := initDiskCaches(fsDirs, 80, t)
 	if err != nil {
 		t.Fatal(err)
 	}

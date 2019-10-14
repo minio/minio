@@ -56,7 +56,7 @@ func authenticateJWTUsers(accessKey, secretKey string, expiry time.Duration) (st
 		return "", err
 	}
 
-	serverCred := globalServerConfig.GetCredential()
+	serverCred := globalActiveCred
 	if serverCred.AccessKey != passedCredential.AccessKey {
 		var ok bool
 		serverCred, ok = globalIAMSys.GetUser(accessKey)
@@ -82,7 +82,7 @@ func authenticateJWTAdmin(accessKey, secretKey string, expiry time.Duration) (st
 		return "", err
 	}
 
-	serverCred := globalServerConfig.GetCredential()
+	serverCred := globalActiveCred
 
 	if serverCred.AccessKey != passedCredential.AccessKey {
 		return "", errInvalidAccessKeyID
@@ -122,8 +122,8 @@ func webTokenCallback(jwtToken *jwtgo.Token) (interface{}, error) {
 	}
 
 	if claims, ok := jwtToken.Claims.(*jwtgo.StandardClaims); ok {
-		if claims.Subject == globalServerConfig.GetCredential().AccessKey {
-			return []byte(globalServerConfig.GetCredential().SecretKey), nil
+		if claims.Subject == globalActiveCred.AccessKey {
+			return []byte(globalActiveCred.SecretKey), nil
 		}
 		if globalIAMSys == nil {
 			return nil, errInvalidAccessKeyID
@@ -174,7 +174,7 @@ func webTokenAuthenticate(token string) (jwtgo.StandardClaims, bool, error) {
 	if !jwtToken.Valid {
 		return claims, false, errAuthentication
 	}
-	owner := claims.Subject == globalServerConfig.GetCredential().AccessKey
+	owner := claims.Subject == globalActiveCred.AccessKey
 	return claims, owner, nil
 }
 
@@ -197,12 +197,12 @@ func webRequestAuthenticate(req *http.Request) (jwtgo.StandardClaims, bool, erro
 	if !jwtToken.Valid {
 		return claims, false, errAuthentication
 	}
-	owner := claims.Subject == globalServerConfig.GetCredential().AccessKey
+	owner := claims.Subject == globalActiveCred.AccessKey
 	return claims, owner, nil
 }
 
 func newAuthToken() string {
-	cred := globalServerConfig.GetCredential()
+	cred := globalActiveCred
 	token, err := authenticateNode(cred.AccessKey, cred.SecretKey)
 	logger.CriticalIf(context.Background(), err)
 	return token

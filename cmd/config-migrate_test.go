@@ -208,24 +208,22 @@ func TestServerConfigMigrateV2toV33(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
+	if err := migrateMinioSysConfigToKV(objLayer); err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
 	// Initialize server config and check again if everything is fine
 	if err := loadConfig(objLayer); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 
-	// Check the version number in the upgraded config file
-	expectedVersion := serverConfigVersion
-	if globalServerConfig.Version != expectedVersion {
-		t.Fatalf("Expect version "+expectedVersion+", found: %v", globalServerConfig.Version)
-	}
-
 	// Check if accessKey and secretKey are not altered during migration
-	if globalServerConfig.Credential.AccessKey != accessKey {
-		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, globalServerConfig.Credential.AccessKey)
+	if globalActiveCred.AccessKey != accessKey {
+		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, globalActiveCred.AccessKey)
 	}
 
-	if globalServerConfig.Credential.SecretKey != secretKey {
-		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, globalServerConfig.Credential.SecretKey)
+	if globalActiveCred.SecretKey != secretKey {
+		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, globalActiveCred.SecretKey)
 	}
 }
 

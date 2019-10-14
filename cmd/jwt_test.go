@@ -38,7 +38,8 @@ func testAuthenticate(authType string, t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error getting new credentials: %s", err)
 	}
-	globalServerConfig.SetCredential(cred)
+
+	globalActiveCred = cred
 
 	// Define test cases.
 	testCases := []struct {
@@ -105,7 +106,7 @@ func TestWebRequestAuthenticate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	creds := globalServerConfig.GetCredential()
+	creds := globalActiveCred
 	token, err := getTokenString(creds.AccessKey, creds.SecretKey)
 	if err != nil {
 		t.Fatalf("unable get token %s", err)
@@ -159,7 +160,7 @@ func BenchmarkAuthenticateNode(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	creds := globalServerConfig.GetCredential()
+	creds := globalActiveCred
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
@@ -177,7 +178,7 @@ func BenchmarkAuthenticateWeb(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	creds := globalServerConfig.GetCredential()
+	creds := globalActiveCred
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {

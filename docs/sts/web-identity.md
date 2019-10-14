@@ -92,18 +92,11 @@ http://minio.cluster:9000?Action=AssumeRoleWithWebIdentity&DurationSeconds=3600&
 ```
 $ export MINIO_ACCESS_KEY=minio
 $ export MINIO_SECRET_KEY=minio123
-$ export MINIO_IAM_JWKS_URL=https://www.googleapis.com/oauth2/v3/certs
+$ export MINIO_IDENTITY_OPENID_JWKS_URL=https://www.googleapis.com/oauth2/v3/certs
 $ minio server /mnt/export
 
-$ mc admin config get myminio
-...
-{
-  "openid": {
-    "jwks": {
-      "url": "https://www.googleapis.com/oauth2/v3/certs"
-     }
-   }
-}
+$ mc admin config get myminio identity_openid
+identity_openid jwks_url="https://www.googleapis.com/oauth2/v3/certs" state="on"
 ```
 
 Testing with an example

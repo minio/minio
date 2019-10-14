@@ -167,6 +167,13 @@ func (q *Queue) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 
 // Validate - checks whether queue has valid values or not.
 func (q Queue) Validate(region string, targetList *TargetList) error {
+	if q.ARN.region == "" {
+		if !targetList.Exists(q.ARN.TargetID) {
+			return &ErrARNNotFound{q.ARN}
+		}
+		return nil
+	}
+
 	if region != "" && q.ARN.region != region {
 		return &ErrUnknownRegion{q.ARN.region}
 	}

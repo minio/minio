@@ -17,7 +17,6 @@
 package config
 
 import (
-	"errors"
 	"testing"
 )
 
@@ -68,33 +67,29 @@ func TestBoolFlagUnmarshalJSON(t *testing.T) {
 	testCases := []struct {
 		data           []byte
 		expectedResult BoolFlag
-		expectedErr    error
+		expectedErr    bool
 	}{
-		{[]byte(`{}`), BoolFlag(false), errors.New("json: cannot unmarshal object into Go value of type string")},
-		{[]byte(`["on"]`), BoolFlag(false), errors.New("json: cannot unmarshal array into Go value of type string")},
-		{[]byte(`"junk"`), BoolFlag(false), errors.New("invalid value ‘junk’ for BoolFlag")},
-		{[]byte(`"true"`), BoolFlag(false), errors.New("invalid value ‘true’ for BoolFlag")},
-		{[]byte(`"false"`), BoolFlag(false), errors.New("invalid value ‘false’ for BoolFlag")},
-		{[]byte(`"ON"`), BoolFlag(false), errors.New("invalid value ‘ON’ for BoolFlag")},
-		{[]byte(`"OFF"`), BoolFlag(false), errors.New("invalid value ‘OFF’ for BoolFlag")},
-		{[]byte(`""`), BoolFlag(true), nil},
-		{[]byte(`"on"`), BoolFlag(true), nil},
-		{[]byte(`"off"`), BoolFlag(false), nil},
+		{[]byte(`{}`), BoolFlag(false), true},
+		{[]byte(`["on"]`), BoolFlag(false), true},
+		{[]byte(`"junk"`), BoolFlag(false), true},
+		{[]byte(`""`), BoolFlag(true), false},
+		{[]byte(`"on"`), BoolFlag(true), false},
+		{[]byte(`"off"`), BoolFlag(false), false},
+		{[]byte(`"true"`), BoolFlag(true), false},
+		{[]byte(`"false"`), BoolFlag(false), false},
+		{[]byte(`"ON"`), BoolFlag(true), false},
+		{[]byte(`"OFF"`), BoolFlag(false), false},
 	}
 
 	for _, testCase := range testCases {
 		var flag BoolFlag
 		err := (&flag).UnmarshalJSON(testCase.data)
-		if testCase.expectedErr == nil {
-			if err != nil {
-				t.Fatalf("error: expected = <nil>, got = %v", err)
-			}
-		} else if err == nil {
-			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
-		} else if testCase.expectedErr.Error() != err.Error() {
-			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
+		if !testCase.expectedErr && err != nil {
+			t.Fatalf("error: expected = <nil>, got = %v", err)
 		}
-
+		if testCase.expectedErr && err == nil {
+			t.Fatalf("error: expected error, got = <nil>")
+		}
 		if err == nil && testCase.expectedResult != flag {
 			t.Fatalf("result: expected: %v, got: %v", testCase.expectedResult, flag)
 		}
@@ -106,30 +101,26 @@ func TestParseBoolFlag(t *testing.T) {
 	testCases := []struct {
 		flagStr        string
 		expectedResult BoolFlag
-		expectedErr    error
+		expectedErr    bool
 	}{
-		{"", BoolFlag(false), errors.New("invalid value ‘’ for BoolFlag")},
-		{"junk", BoolFlag(false), errors.New("invalid value ‘junk’ for BoolFlag")},
-		{"true", BoolFlag(false), errors.New("invalid value ‘true’ for BoolFlag")},
-		{"false", BoolFlag(false), errors.New("invalid value ‘false’ for BoolFlag")},
-		{"ON", BoolFlag(false), errors.New("invalid value ‘ON’ for BoolFlag")},
-		{"OFF", BoolFlag(false), errors.New("invalid value ‘OFF’ for BoolFlag")},
-		{"on", BoolFlag(true), nil},
-		{"off", BoolFlag(false), nil},
+		{"", BoolFlag(false), true},
+		{"junk", BoolFlag(false), true},
+		{"true", BoolFlag(true), false},
+		{"false", BoolFlag(false), false},
+		{"ON", BoolFlag(true), false},
+		{"OFF", BoolFlag(false), false},
+		{"on", BoolFlag(true), false},
+		{"off", BoolFlag(false), false},
 	}
 
 	for _, testCase := range testCases {
 		bf, err := ParseBoolFlag(testCase.flagStr)
-		if testCase.expectedErr == nil {
-			if err != nil {
-				t.Fatalf("error: expected = <nil>, got = %v", err)
-			}
-		} else if err == nil {
-			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
-		} else if testCase.expectedErr.Error() != err.Error() {
-			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
+		if !testCase.expectedErr && err != nil {
+			t.Fatalf("error: expected = <nil>, got = %v", err)
 		}
-
+		if testCase.expectedErr && err == nil {
+			t.Fatalf("error: expected error, got = <nil>")
+		}
 		if err == nil && testCase.expectedResult != bf {
 			t.Fatalf("result: expected: %v, got: %v", testCase.expectedResult, bf)
 		}
