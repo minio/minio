@@ -71,8 +71,8 @@ func initFederatorBackend(objLayer ObjectLayer) {
 	// Add buckets that are not registered with the DNS
 	g := errgroup.WithNErrs(len(b))
 	for index := range b {
-		index := index
 		bucketSet.Add(b[index].Name)
+		index := index
 		g.Go(func() error {
 			r, gerr := globalDNSConfig.Get(b[index].Name)
 			if gerr != nil {
@@ -99,7 +99,6 @@ func initFederatorBackend(objLayer ObjectLayer) {
 	// Remove buckets that are in DNS for this server, but aren't local
 	for index := range dnsBuckets {
 		index := index
-
 		g.Go(func() error {
 			// This is a local bucket that exists, so we can continue
 			if bucketSet.Contains(dnsBuckets[index].Key) {

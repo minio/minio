@@ -21,10 +21,10 @@ import (
 	"errors"
 	"hash/crc32"
 	"path"
-	"sync"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
 // Returns number of errors that occurred the most (incl. nil) and the
@@ -180,28 +180,23 @@ func readXLMeta(ctx context.Context, disk StorageAPI, bucket string, object stri
 // Reads all `xl.json` metadata as a xlMetaV1 slice.
 // Returns error slice indicating the failed metadata reads.
 func readAllXLMetadata(ctx context.Context, disks []StorageAPI, bucket, object string) ([]xlMetaV1, []error) {
-	errs := make([]error, len(disks))
 	metadataArray := make([]xlMetaV1, len(disks))
-	var wg sync.WaitGroup
+
+	g := errgroup.WithNErrs(len(disks))
 	// Read `xl.json` parallelly across disks.
-	for index, disk := range disks {
-		if disk == nil {
-			errs[index] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-		// Read `xl.json` in routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			metadataArray[index], errs[index] = readXLMeta(ctx, disk, bucket, object)
-		}(index, disk)
+	for index := range disks {
+		index := index
+		g.Go(func() (err error) {
+			if disks[index] == nil {
+				return errDiskNotFound
+			}
+			metadataArray[index], err = readXLMeta(ctx, disks[index], bucket, object)
+			return err
+		}, index)
 	}
 
-	// Wait for all the routines to finish.
-	wg.Wait()
-
 	// Return all the metadata.
-	return metadataArray, errs
+	return metadataArray, g.Wait()
 }
 
 // Return shuffled partsMetadata depending on distribution.

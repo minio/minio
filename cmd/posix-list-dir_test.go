@@ -129,8 +129,8 @@ func setupTestReadDirGeneric(t *testing.T) (testResults []result) {
 
 // Test to read non-empty directory with symlinks.
 func setupTestReadDirSymlink(t *testing.T) (testResults []result) {
-	if runtime.GOOS != "Windows" {
-		t.Log("symlinks not available on windows")
+	if runtime.GOOS == globalWindowsOSName {
+		t.Skip("symlinks not available on windows")
 		return nil
 	}
 	dir := mustSetupDir(t)
