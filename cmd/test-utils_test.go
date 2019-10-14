@@ -327,7 +327,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 
 	// Test Server needs to start before formatting of disks.
 	// Get credential.
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	testServer.Obj = objLayer
 	for _, disk := range disks {
@@ -463,13 +463,6 @@ func resetGlobalIsXL() {
 	globalIsXL = false
 }
 
-func resetGlobalIsEnvs() {
-	globalIsEnvCreds = false
-	globalIsEnvWORM = false
-	globalIsEnvBrowser = false
-	globalIsEnvRegion = false
-}
-
 // reset global heal state
 func resetGlobalHealState() {
 	if globalAllHealState == nil {
@@ -515,8 +508,6 @@ func resetTestGlobals() {
 	resetGlobalEndpoints()
 	// Reset global isXL flag.
 	resetGlobalIsXL()
-	// Reset global isEnvCreds flag.
-	resetGlobalIsEnvs()
 	// Reset global heal state
 	resetGlobalHealState()
 	//Reset global disk cache flags
@@ -537,7 +528,12 @@ func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 		return err
 	}
 
-	globalServerConfig.Logger.Console.Enabled = false
+	logger.Disable = true
+
+	globalActiveCred = auth.Credentials{
+		AccessKey: auth.DefaultAccessKey,
+		SecretKey: auth.DefaultSecretKey,
+	}
 
 	// Set a default region.
 	globalServerConfig.SetRegion(bucketLocation)
@@ -772,7 +768,7 @@ func newTestStreamingRequest(method, urlStr string, dataLength, chunkSize int64,
 func assembleStreamingChunks(req *http.Request, body io.ReadSeeker, chunkSize int64,
 	secretKey, signature string, currTime time.Time) (*http.Request, error) {
 
-	regionStr := globalServerConfig.GetRegion()
+	regionStr := globalServerRegion
 	var stream []byte
 	var buffer []byte
 	body.Seek(0, 0)
@@ -880,7 +876,7 @@ func preSignV4(req *http.Request, accessKeyID, secretAccessKey string, expires i
 		return errors.New("Presign cannot be generated without access and secret keys")
 	}
 
-	region := globalServerConfig.GetRegion()
+	region := globalServerRegion
 	date := UTCNow()
 	scope := getScope(date, region)
 	credential := fmt.Sprintf("%s/%s", accessKeyID, scope)
@@ -1008,7 +1004,7 @@ func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 	}
 	sort.Strings(headers)
 
-	region := globalServerConfig.GetRegion()
+	region := globalServerRegion
 
 	// Get canonical headers.
 	var buf bytes.Buffer
@@ -1953,7 +1949,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	globalPolicySys = NewPolicySys()
 	globalPolicySys.Init(buckets, objLayer)
 
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	// Executing the object layer tests for single node setup.
 	objAPITest(objLayer, FSTestStr, bucketFS, fsAPIRouter, credentials, t)
@@ -1998,6 +1994,17 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
 		t.Fatal("Unexpected error", err)
 	}
+
+	globalIAMSys = NewIAMSys()
+	globalIAMSys.Init(objLayer)
+
+	buckets, err := objLayer.ListBuckets(context.Background())
+	if err != nil {
+		t.Fatalf("Unable to list buckets on backend %s", err)
+	}
+
+	globalPolicySys = NewPolicySys()
+	globalPolicySys.Init(buckets, objLayer)
 
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, FSTestStr, t)

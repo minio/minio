@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/env"
 	ldap "gopkg.in/ldap.v3"
 )
@@ -85,19 +86,20 @@ func (l Config) GetExpiryDuration() time.Duration {
 }
 
 // Lookup - initializes LDAP config, overrides config, if any ENV values are set.
-func Lookup(cfg Config, rootCAs *x509.CertPool) (l Config, err error) {
-	if cfg.ServerAddr == "" && cfg.IsEnabled {
-		return l, errors.New("ldap server cannot initialize with empty LDAP server")
+func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
+	l = Config{}
+	if kvs.Get(config.State) != config.StateOn {
+		return l, nil
 	}
 	l.RootCAs = rootCAs
-	ldapServer := env.Get(EnvServerAddr, cfg.ServerAddr)
+	ldapServer := env.Get(EnvServerAddr, kvs.Get(ServerAddr))
 	if ldapServer == "" {
 		return l, nil
 	}
 	l.IsEnabled = true
 	l.ServerAddr = ldapServer
 	l.stsExpiryDuration = defaultLDAPExpiry
-	if v := env.Get(EnvSTSExpiry, cfg.STSExpiryDuration); v != "" {
+	if v := env.Get(EnvSTSExpiry, kvs.Get(STSExpiry)); v != "" {
 		expDur, err := time.ParseDuration(v)
 		if err != nil {
 			return l, errors.New("LDAP expiry time err:" + err.Error())
@@ -109,20 +111,20 @@ func Lookup(cfg Config, rootCAs *x509.CertPool) (l Config, err error) {
 		l.stsExpiryDuration = expDur
 	}
 
-	if v := env.Get(EnvUsernameFormat, cfg.UsernameFormat); v != "" {
+	if v := env.Get(EnvUsernameFormat, kvs.Get(UsernameFormat)); v != "" {
 		subs, err := NewSubstituter("username", "test")
 		if err != nil {
 			return l, err
 		}
 		if _, err := subs.Substitute(v); err != nil {
-			return l, fmt.Errorf("Only username may be substituted in the username format: %s", err)
+			return l, err
 		}
 		l.UsernameFormat = v
 	}
 
-	grpSearchFilter := env.Get(EnvGroupSearchFilter, cfg.GroupSearchFilter)
-	grpSearchNameAttr := env.Get(EnvGroupNameAttribute, cfg.GroupNameAttribute)
-	grpSearchBaseDN := env.Get(EnvGroupSearchBaseDN, cfg.GroupSearchBaseDN)
+	grpSearchFilter := env.Get(EnvGroupSearchFilter, kvs.Get(GroupSearchFilter))
+	grpSearchNameAttr := env.Get(EnvGroupNameAttribute, kvs.Get(GroupNameAttribute))
+	grpSearchBaseDN := env.Get(EnvGroupSearchBaseDN, kvs.Get(GroupSearchBaseDN))
 
 	// Either all group params must be set or none must be set.
 	allNotSet := grpSearchFilter == "" && grpSearchNameAttr == "" && grpSearchBaseDN == ""

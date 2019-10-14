@@ -92,7 +92,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 		}
 	}
 
-	config.SetRegion(globalServerConfig.GetRegion())
+	config.SetRegion(globalServerRegion)
 
 	// If xml namespace is empty, set a default value before returning.
 	if config.XMLNS == "" {
@@ -147,7 +147,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	}
 
 	var config *event.Config
-	config, err = event.ParseConfig(io.LimitReader(r.Body, r.ContentLength), globalServerConfig.GetRegion(), globalNotificationSys.targetList)
+	config, err = event.ParseConfig(io.LimitReader(r.Body, r.ContentLength), globalServerRegion, globalNotificationSys.targetList)
 	if err != nil {
 		apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
 		if event.IsEventError(err) {

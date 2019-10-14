@@ -36,6 +36,9 @@ const (
 
 // Standard constats for config info storage class
 const (
+	ClassStandard = "standard"
+	ClassRRS      = "rrs"
+
 	// Reduced redundancy storage class environment variable
 	RRSEnv = "MINIO_STORAGE_CLASS_RRS"
 	// Standard storage class environment variable
@@ -196,11 +199,17 @@ func (sCfg Config) GetParityForSC(sc string) (parity int) {
 }
 
 // LookupConfig - lookup storage class config and override with valid environment settings if any.
-func LookupConfig(cfg Config, drivesPerSet int) (Config, error) {
-	var err error
+func LookupConfig(kvs config.KVS, drivesPerSet int) (cfg Config, err error) {
+	cfg = Config{}
+	cfg.Standard.Parity = drivesPerSet / 2
+	cfg.RRS.Parity = defaultRRSParity
+
+	if kvs.Get(config.State) != config.StateOn {
+		return cfg, nil
+	}
 
 	// Check for environment variables and parse into storageClass struct
-	if ssc := env.Get(StandardEnv, cfg.Standard.String()); ssc != "" {
+	if ssc := env.Get(StandardEnv, kvs.Get(ClassStandard)); ssc != "" {
 		cfg.Standard, err = parseStorageClass(ssc)
 		if err != nil {
 			return cfg, err
@@ -210,7 +219,7 @@ func LookupConfig(cfg Config, drivesPerSet int) (Config, error) {
 		cfg.Standard.Parity = drivesPerSet / 2
 	}
 
-	if rrsc := env.Get(RRSEnv, cfg.RRS.String()); rrsc != "" {
+	if rrsc := env.Get(RRSEnv, kvs.Get(ClassRRS)); rrsc != "" {
 		cfg.RRS, err = parseStorageClass(rrsc)
 		if err != nil {
 			return cfg, err

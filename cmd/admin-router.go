@@ -75,6 +75,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 	/// Config operations
 	if enableConfigOps {
+		adminV1Router.Methods(http.MethodGet).Path("/get-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigKVHandler)).Queries("key", "{key:.*}")
+		adminV1Router.Methods(http.MethodPut).Path("/set-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigKVHandler))
+		adminV1Router.Methods(http.MethodDelete).Path("/del-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.DelConfigKVHandler))
 		// Get config
 		adminV1Router.Methods(http.MethodGet).Path("/config").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigHandler))
 		// Set config

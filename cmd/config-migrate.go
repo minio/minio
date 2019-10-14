@@ -24,6 +24,12 @@ import (
 	"path"
 	"path/filepath"
 
+	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/config/cache"
+	"github.com/minio/minio/cmd/config/compress"
+	xldap "github.com/minio/minio/cmd/config/ldap"
+	"github.com/minio/minio/cmd/config/notify"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -221,7 +227,7 @@ func migrateConfig() error {
 			return err
 		}
 		fallthrough
-	case serverConfigVersion:
+	case "33":
 		// No migration needed. this always points to current version.
 		err = nil
 	}
@@ -1991,7 +1997,7 @@ func migrateV22ToV23() error {
 	// Init cache config.For future migration, Cache config needs to be copied over from previous version.
 	srvConfig.Cache.Drives = []string{}
 	srvConfig.Cache.Exclude = []string{}
-	srvConfig.Cache.Expiry = globalCacheExpiry
+	srvConfig.Cache.Expiry = 90
 
 	if err = Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv22.Version, srvConfig.Version, err)
@@ -2341,7 +2347,7 @@ func migrateV25ToV26() error {
 	srvConfig.Cache.Expiry = cv25.Cache.Expiry
 
 	// Add predefined value to new server config.
-	srvConfig.Cache.MaxUse = globalCacheMaxUse
+	srvConfig.Cache.MaxUse = 80
 
 	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv25.Version, srvConfig.Version, err)
@@ -2456,7 +2462,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 		getConfigFile() + ".deprecated",
 		configFile,
 	}
-	var config = &serverConfig{}
+	var config = &serverConfigV27{}
 	for _, cfgFile := range configFiles {
 		if _, err = Load(cfgFile, config); err != nil {
 			if !os.IsNotExist(err) && !os.IsPermission(err) {
@@ -2481,7 +2487,7 @@ func migrateMinioSysConfig(objAPI ObjectLayer) error {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 
 	// Check if the config version is latest, if not migrate.
-	ok, _, err := checkConfigVersion(objAPI, configFile, serverConfigVersion)
+	ok, _, err := checkConfigVersion(objAPI, configFile, "33")
 	if err != nil {
 		return err
 	}
@@ -2744,4 +2750,180 @@ func migrateV32ToV33MinioSys(objAPI ObjectLayer) error {
 
 	logger.Info(configMigrateMSGTemplate, configFile, "32", "33")
 	return nil
+}
+
+func migrateMinioSysConfigToKV(objAPI ObjectLayer) error {
+	configFile := path.Join(minioConfigPrefix, minioConfigFile)
+
+	// Check if the config version is latest, if not migrate.
+	ok, data, err := checkConfigVersion(objAPI, configFile, "33")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+
+	cfg := &serverConfigV33{}
+	if err = json.Unmarshal(data, cfg); err != nil {
+		return err
+	}
+
+	globalActiveCred = cfg.Credential
+
+	newCfg := newServerConfig()
+	newCfg.SetRegion(cfg.Region)
+	newCfg.SetWorm(bool(cfg.Worm))
+	storageclass.SetStorageClass(config.Config(newCfg), cfg.StorageClass)
+
+	for k, loggerArgs := range cfg.Logger.HTTP {
+		logger.SetLoggerHTTP(config.Config(newCfg), k, loggerArgs)
+	}
+	for k, auditArgs := range cfg.Logger.Audit {
+		logger.SetLoggerHTTPAudit(config.Config(newCfg), k, auditArgs)
+	}
+
+	crypto.SetKMSConfig(config.Config(newCfg), cfg.KMS)
+
+	newCfg.SetIdentityLDAP(cfg.LDAPServerConfig)
+	newCfg.SetIdentityOpenID(cfg.OpenID.JWKS)
+	newCfg.SetPolicyOPAConfig(cfg.Policy.OPA)
+
+	cache.SetCacheConfig(config.Config(newCfg), cfg.Cache)
+	compress.SetCompressionConfig(config.Config(newCfg), cfg.Compression)
+
+	for k, args := range cfg.Notify.AMQP {
+		notify.SetNotifyAMQP(config.Config(newCfg), k, args)
+	}
+	for k, args := range cfg.Notify.Elasticsearch {
+		notify.SetNotifyES(config.Config(newCfg), k, args)
+	}
+	for k, args := range cfg.Notify.Kafka {
+		notify.SetNotifyKafka(config.Config(newCfg), k, args)
+	}
+	for k, args := range cfg.Notify.MQTT {
+		notify.SetNotifyMQTT(config.Config(newCfg), k, args)
+	}
+	for k, args := range cfg.Notify.MySQL {
+		notify.SetNotifyMySQL(config.Config(newCfg), k, args)
+	}
+	for k, args := range cfg.Notify.NATS {
+		notify.SetNotifyNATS(config.Config(newCfg), k, args)
+	}
+	for k, args := range cfg.Notify.NSQ {
+		notify.SetNotifyNSQ(config.Config(newCfg), k, args)
+	}
+	for k, args := range cfg.Notify.PostgreSQL {
+		notify.SetNotifyPostgres(config.Config(newCfg), k, args)
+	}
+	for k, args := range cfg.Notify.Redis {
+		notify.SetNotifyRedis(config.Config(newCfg), k, args)
+	}
+	for k, args := range cfg.Notify.Webhook {
+		notify.SetNotifyWebhook(config.Config(newCfg), k, args)
+	}
+
+	// Construct path to config.json for the given bucket.
+	transactionConfigFile := configFile + ".transaction"
+
+	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
+	// and configFile, take a transaction lock to avoid data race between readConfig()
+	// and saveConfig().
+	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigFile)
+	if err = objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
+	defer objLock.Unlock()
+
+	if err = saveServerConfig(context.Background(), objAPI, newCfg); err != nil {
+		return err
+	}
+
+	logger.Info("Configuration file %s migrated from version '%s' to new KV format successfully.",
+		configFile, "33")
+	return nil
+}
+
+//// One time migration code section
+
+// One time migration code needed, for migrating from older config to new for server Region.
+func (s serverConfig) SetRegion(name string) {
+	s[config.RegionSubSys][config.Default] = config.KVS{
+		config.RegionName: name,
+	}
+}
+
+// One time migration code needed, for migrating from older config to new for Worm mode.
+func (s serverConfig) SetWorm(b bool) {
+	// Set the new value.
+	s[config.WormSubSys][config.Default] = config.KVS{
+		config.State: func() string {
+			if b {
+				return config.StateOn
+			}
+			return config.StateOff
+		}(),
+	}
+}
+
+// One time migration code needed, for migrating from older config to new for PolicyOPAConfig.
+func (s serverConfig) SetPolicyOPAConfig(opaArgs iampolicy.OpaArgs) {
+	s[config.PolicyOPASubSys][config.Default] = config.KVS{
+		config.State: func() string {
+			if opaArgs.URL == nil {
+				return config.StateOff
+			}
+			if opaArgs.URL.String() == "" {
+				return config.StateOff
+			}
+			return config.StateOn
+		}(),
+		iampolicy.OpaURL: func() string {
+			if opaArgs.URL != nil {
+				return opaArgs.URL.String()
+			}
+			return ""
+		}(),
+		iampolicy.OpaAuthToken: opaArgs.AuthToken,
+	}
+}
+
+// One time migration code needed, for migrating from older config to new for LDAPConfig.
+func (s serverConfig) SetIdentityLDAP(ldapArgs xldap.Config) {
+	s[config.IdentityLDAPSubSys][config.Default] = config.KVS{
+		config.State: func() string {
+			if !ldapArgs.IsEnabled {
+				return config.StateOff
+			}
+			return config.StateOn
+		}(),
+		xldap.ServerAddr:         ldapArgs.ServerAddr,
+		xldap.STSExpiry:          ldapArgs.STSExpiryDuration,
+		xldap.UsernameFormat:     ldapArgs.UsernameFormat,
+		xldap.GroupSearchFilter:  ldapArgs.GroupSearchFilter,
+		xldap.GroupNameAttribute: ldapArgs.GroupNameAttribute,
+		xldap.GroupSearchBaseDN:  ldapArgs.GroupSearchBaseDN,
+	}
+}
+
+// One time migration code needed, for migrating from older config to new for OpenIDConfig.
+func (s serverConfig) SetIdentityOpenID(openidArgs openid.JWKSArgs) {
+	s[config.IdentityOpenIDSubSys][config.Default] = config.KVS{
+		config.State: func() string {
+			if openidArgs.URL == nil {
+				return config.StateOff
+			}
+			if openidArgs.URL.String() == "" {
+				return config.StateOff
+			}
+			return config.StateOn
+		}(),
+
+		openid.JwksURL: func() string {
+			if openidArgs.URL != nil {
+				return openidArgs.URL.String()
+			}
+			return ""
+		}(),
+	}
 }

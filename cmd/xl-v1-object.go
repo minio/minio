@@ -521,8 +521,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	storageDisks := xl.getDisks()
 
 	// Get parity and data drive count based on storage class metadata
-	scfg := globalServerConfig.GetStorageClass()
-	parityDrives := scfg.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
+	parityDrives := globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
 	if parityDrives == 0 {
 		parityDrives = len(storageDisks) / 2
 	}

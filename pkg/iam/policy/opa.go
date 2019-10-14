@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,14 +23,18 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Env IAM OPA URL
 const (
-	EnvIAMOPAURL       = "MINIO_IAM_OPA_URL"
-	EnvIAMOPAAuthToken = "MINIO_IAM_OPA_AUTHTOKEN"
+	OpaURL       = "url"
+	OpaAuthToken = "auth_token"
+
+	EnvPolicyOpaURL       = "MINIO_POLICY_OPA_URL"
+	EnvPolicyOpaAuthToken = "MINIO_POLICY_OPA_AUTH_TOKEN"
 )
 
 // OpaArgs opa general purpose policy engine configuration.
@@ -43,7 +47,7 @@ type OpaArgs struct {
 
 // Validate - validate opa configuration params.
 func (a *OpaArgs) Validate() error {
-	req, err := http.NewRequest("POST", a.URL.String(), bytes.NewReader([]byte("")))
+	req, err := http.NewRequest(http.MethodPost, a.URL.String(), bytes.NewReader([]byte("")))
 	if err != nil {
 		return err
 	}
@@ -90,22 +94,28 @@ type Opa struct {
 }
 
 // LookupConfig lookup Opa from config, override with any ENVs.
-func LookupConfig(args OpaArgs, transport *http.Transport, closeRespFn func(io.ReadCloser)) (OpaArgs, error) {
-	var urlStr string
-	if args.URL != nil {
-		urlStr = args.URL.String()
-	}
-	opaURL := env.Get(EnvIAMOPAURL, urlStr)
+func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.ReadCloser)) (OpaArgs, error) {
+	args := OpaArgs{}
+
+	opaURL := env.Get(EnvIamOpaURL, "")
 	if opaURL == "" {
-		return args, nil
+		opaURL = env.Get(EnvPolicyOpaURL, kv.Get(OpaURL))
+		if opaURL == "" {
+			return args, nil
+		}
 	}
+	authToken := env.Get(EnvIamOpaAuthToken, "")
+	if authToken == "" {
+		authToken = env.Get(EnvPolicyOpaAuthToken, kv.Get(OpaAuthToken))
+	}
+
 	u, err := xnet.ParseURL(opaURL)
 	if err != nil {
 		return args, err
 	}
 	args = OpaArgs{
 		URL:         u,
-		AuthToken:   env.Get(EnvIAMOPAAuthToken, ""),
+		AuthToken:   authToken,
 		Transport:   transport,
 		CloseRespFn: closeRespFn,
 	}
@@ -142,7 +152,7 @@ func (o *Opa) IsAllowed(args Args) (bool, error) {
 		return false, err
 	}
 
-	req, err := http.NewRequest("POST", o.args.URL.String(), bytes.NewReader(inputBytes))
+	req, err := http.NewRequest(http.MethodPost, o.args.URL.String(), bytes.NewReader(inputBytes))
 	if err != nil {
 		return false, err
 	}

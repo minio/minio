@@ -23,6 +23,7 @@ import (
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/hash"
 	xnet "github.com/minio/minio/pkg/net"
@@ -381,4 +382,13 @@ func handleGatewayEnvVars() {
 			logger.Fatal(err, "Unable to parse MINIO_GATEWAY_SSE value (`%s`)", gwsseVal)
 		}
 	}
+
+	accessKey := env.Get(config.EnvAccessKey, "")
+	secretKey := env.Get(config.EnvSecretKey, "")
+	cred, err := auth.CreateCredentials(accessKey, secretKey)
+	if err != nil {
+		logger.Fatal(config.ErrInvalidCredentials(err),
+			"Unable to validate credentials inherited from the shell environment")
+	}
+	globalActiveCred = cred
 }

@@ -142,11 +142,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Handle gateway specific env
 	handleGatewayEnvVars()
 
-	// Validate if we have access, secret set through environment.
-	if !globalIsEnvCreds {
-		logger.Fatal(config.ErrEnvCredentialsMissingGateway(nil), "Unable to start gateway")
-	}
-
 	// Set system resources to maximum.
 	logger.LogIf(context.Background(), setMaxResources())
 
@@ -179,7 +174,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	registerMetricsRouter(router)
 
 	// Register web router when its enabled.
-	if globalIsBrowserEnabled {
+	if globalBrowserEnabled {
 		logger.FatalIf(registerWebRouter(router), "Unable to configure web browser")
 	}
 
@@ -220,7 +215,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		globalServerConfigMu.Unlock()
 	}
 
-	newObject, err := gw.NewGatewayLayer(globalServerConfig.GetCredential())
+	newObject, err := gw.NewGatewayLayer(globalActiveCred)
 	if err != nil {
 		// Stop watching for any certificate changes.
 		globalTLSCerts.Stop()
@@ -250,11 +245,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalDeploymentID = env.Get("MINIO_GATEWAY_DEPLOYMENT_ID", mustGetUUID())
 	logger.SetDeploymentID(globalDeploymentID)
 
-	var cacheConfig = globalServerConfig.GetCacheConfig()
-	if len(cacheConfig.Drives) > 0 {
-		var err error
+	if globalIsDiskCacheEnabled {
 		// initialize the new disk cache objects.
-		globalCacheObjectAPI, err = newServerCacheObjects(context.Background(), cacheConfig)
+		globalCacheObjectAPI, err = newServerCacheObjects(context.Background(), globalCacheConfig)
 		logger.FatalIf(err, "Unable to initialize disk caching")
 	}
 

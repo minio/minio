@@ -74,7 +74,7 @@ type ServerInfoRep struct {
 
 // ServerInfo - get server info.
 func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, reply *ServerInfoRep) error {
-	ctx := newWebContext(r, args, "webServerInfo")
+	ctx := newWebContext(r, args, "WebServerInfo")
 	_, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
@@ -99,12 +99,7 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 	reply.MinioVersion = Version
 	reply.MinioGlobalInfo = getGlobalInfo()
 
-	// if etcd is set, disallow changing credentials through UI for owner
-	if globalEtcdClient != nil {
-		reply.MinioGlobalInfo["isEnvCreds"] = true
-	}
-
-	// Check if the user is IAM user
+	// Check if the user is IAM user.
 	reply.MinioUserInfo = map[string]interface{}{
 		"isIAMUser": !owner,
 	}
@@ -124,7 +119,7 @@ type StorageInfoRep struct {
 
 // StorageInfo - web call to gather storage usage statistics.
 func (web *webAPIHandlers) StorageInfo(r *http.Request, args *WebGenericArgs, reply *StorageInfoRep) error {
-	ctx := newWebContext(r, args, "webStorageInfo")
+	ctx := newWebContext(r, args, "WebStorageInfo")
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)
@@ -145,7 +140,7 @@ type MakeBucketArgs struct {
 
 // MakeBucket - creates a new bucket.
 func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *WebGenericRep) error {
-	ctx := newWebContext(r, args, "webMakeBucket")
+	ctx := newWebContext(r, args, "WebMakeBucket")
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)
@@ -175,7 +170,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		if _, err := globalDNSConfig.Get(args.BucketName); err != nil {
 			if err == dns.ErrNoEntriesFound {
 				// Proceed to creating a bucket.
-				if err = objectAPI.MakeBucketWithLocation(ctx, args.BucketName, globalServerConfig.GetRegion()); err != nil {
+				if err = objectAPI.MakeBucketWithLocation(ctx, args.BucketName, globalServerRegion); err != nil {
 					return toJSONError(ctx, err)
 				}
 				if err = globalDNSConfig.Put(args.BucketName); err != nil {
@@ -191,7 +186,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return toJSONError(ctx, errBucketAlreadyExists)
 	}
 
-	if err := objectAPI.MakeBucketWithLocation(ctx, args.BucketName, globalServerConfig.GetRegion()); err != nil {
+	if err := objectAPI.MakeBucketWithLocation(ctx, args.BucketName, globalServerRegion); err != nil {
 		return toJSONError(ctx, err, args.BucketName)
 	}
 
@@ -206,7 +201,7 @@ type RemoveBucketArgs struct {
 
 // DeleteBucket - removes a bucket, must be empty.
 func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs, reply *WebGenericRep) error {
-	ctx := newWebContext(r, args, "webDeleteBucket")
+	ctx := newWebContext(r, args, "WebDeleteBucket")
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)
@@ -291,7 +286,7 @@ type WebBucketInfo struct {
 
 // ListBuckets - list buckets api.
 func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, reply *ListBucketsRep) error {
-	ctx := newWebContext(r, args, "webListBuckets")
+	ctx := newWebContext(r, args, "WebListBuckets")
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)
@@ -391,7 +386,7 @@ type WebObjectInfo struct {
 
 // ListObjects - list objects api.
 func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, reply *ListObjectsRep) error {
-	ctx := newWebContext(r, args, "webListObjects")
+	ctx := newWebContext(r, args, "WebListObjects")
 	reply.UIVersion = browser.UIVersion
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -583,7 +578,7 @@ type RemoveObjectArgs struct {
 
 // RemoveObject - removes an object, or all the objects at a given prefix.
 func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *WebGenericRep) error {
-	ctx := newWebContext(r, args, "webRemoveObject")
+	ctx := newWebContext(r, args, "WebRemoveObject")
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)
@@ -740,7 +735,7 @@ type LoginRep struct {
 
 // Login - user login handler.
 func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
-	ctx := newWebContext(r, args, "webLogin")
+	ctx := newWebContext(r, args, "WebLogin")
 	token, err := authenticateWeb(args.Username, args.Password)
 	if err != nil {
 		return toJSONError(ctx, err)
@@ -759,7 +754,7 @@ type GenerateAuthReply struct {
 }
 
 func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, reply *GenerateAuthReply) error {
-	ctx := newWebContext(r, args, "webGenerateAuth")
+	ctx := newWebContext(r, args, "WebGenerateAuth")
 	_, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
@@ -794,7 +789,7 @@ type SetAuthReply struct {
 
 // SetAuth - Set accessKey and secretKey credentials.
 func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthReply) error {
-	ctx := newWebContext(r, args, "webSetAuth")
+	ctx := newWebContext(r, args, "WebSetAuth")
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
@@ -806,68 +801,35 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 
 	if owner {
-		if globalIsEnvCreds || globalEtcdClient != nil {
-			return toJSONError(ctx, errChangeCredNotAllowed)
-		}
+		// Owner is not allowed to change credentials through browser.
+		return toJSONError(ctx, errChangeCredNotAllowed)
+	}
 
-		// get Current creds and verify
-		prevCred := globalServerConfig.GetCredential()
-		if prevCred.AccessKey != args.CurrentAccessKey || prevCred.SecretKey != args.CurrentSecretKey {
-			return errIncorrectCreds
-		}
+	// for IAM users, access key cannot be updated
+	// claims.Subject is used instead of accesskey from args
+	prevCred, ok := globalIAMSys.GetUser(claims.Subject)
+	if !ok {
+		return errInvalidAccessKeyID
+	}
 
-		creds, err := auth.CreateCredentials(args.NewAccessKey, args.NewSecretKey)
-		if err != nil {
-			return toJSONError(ctx, err)
-		}
+	// Throw error when wrong secret key is provided
+	if prevCred.SecretKey != args.CurrentSecretKey {
+		return errIncorrectCreds
+	}
 
-		// Acquire lock before updating global configuration.
-		globalServerConfigMu.Lock()
-		defer globalServerConfigMu.Unlock()
+	creds, err := auth.CreateCredentials(claims.Subject, args.NewSecretKey)
+	if err != nil {
+		return toJSONError(ctx, err)
+	}
 
-		// Update credentials in memory
-		prevCred = globalServerConfig.SetCredential(creds)
+	err = globalIAMSys.SetUserSecretKey(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		return toJSONError(ctx, err)
+	}
 
-		// Persist updated credentials.
-		if err = saveServerConfig(ctx, newObjectLayerFn(), globalServerConfig); err != nil {
-			// Save the current creds when failed to update.
-			globalServerConfig.SetCredential(prevCred)
-			logger.LogIf(ctx, err)
-			return toJSONError(ctx, err)
-		}
-
-		reply.Token, err = authenticateWeb(args.NewAccessKey, args.NewSecretKey)
-		if err != nil {
-			return toJSONError(ctx, err)
-		}
-	} else {
-		// for IAM users, access key cannot be updated
-		// claims.Subject is used instead of accesskey from args
-		prevCred, ok := globalIAMSys.GetUser(claims.Subject)
-		if !ok {
-			return errInvalidAccessKeyID
-		}
-
-		// Throw error when wrong secret key is provided
-		if prevCred.SecretKey != args.CurrentSecretKey {
-			return errIncorrectCreds
-		}
-
-		creds, err := auth.CreateCredentials(claims.Subject, args.NewSecretKey)
-		if err != nil {
-			return toJSONError(ctx, err)
-		}
-
-		err = globalIAMSys.SetUserSecretKey(creds.AccessKey, creds.SecretKey)
-		if err != nil {
-			return toJSONError(ctx, err)
-		}
-
-		reply.Token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
-		if err != nil {
-			return toJSONError(ctx, err)
-		}
-
+	reply.Token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		return toJSONError(ctx, err)
 	}
 
 	reply.UIVersion = browser.UIVersion
@@ -883,13 +845,13 @@ type URLTokenReply struct {
 
 // CreateURLToken creates a URL token (short-lived) for GET requests.
 func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs, reply *URLTokenReply) error {
-	ctx := newWebContext(r, args, "webCreateURLToken")
+	ctx := newWebContext(r, args, "WebCreateURLToken")
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
 	}
 
-	creds := globalServerConfig.GetCredential()
+	creds := globalActiveCred
 	if !owner {
 		var ok bool
 		creds, ok = globalIAMSys.GetUser(claims.Subject)
@@ -1410,7 +1372,7 @@ type GetBucketPolicyRep struct {
 
 // GetBucketPolicy - get bucket policy for the requested prefix.
 func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolicyArgs, reply *GetBucketPolicyRep) error {
-	ctx := newWebContext(r, args, "webGetBucketPolicy")
+	ctx := newWebContext(r, args, "WebGetBucketPolicy")
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)
@@ -1595,7 +1557,7 @@ type SetBucketPolicyWebArgs struct {
 
 // SetBucketPolicy - set bucket policy.
 func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolicyWebArgs, reply *WebGenericRep) error {
-	ctx := newWebContext(r, args, "webSetBucketPolicy")
+	ctx := newWebContext(r, args, "WebSetBucketPolicy")
 	objectAPI := web.ObjectAPI()
 	reply.UIVersion = browser.UIVersion
 
@@ -1747,7 +1709,7 @@ type PresignedGetRep struct {
 
 // PresignedGET - returns presigned-Get url.
 func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs, reply *PresignedGetRep) error {
-	ctx := newWebContext(r, args, "webPresignedGet")
+	ctx := newWebContext(r, args, "WebPresignedGet")
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
@@ -1760,10 +1722,10 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 			return toJSONError(ctx, errInvalidAccessKeyID)
 		}
 	} else {
-		creds = globalServerConfig.GetCredential()
+		creds = globalActiveCred
 	}
 
-	region := globalServerConfig.GetRegion()
+	region := globalServerRegion
 	if args.BucketName == "" || args.ObjectName == "" {
 		return &json2.Error{
 			Message: "Bucket and Object are mandatory arguments.",

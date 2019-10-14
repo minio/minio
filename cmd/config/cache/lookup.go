@@ -26,10 +26,17 @@ import (
 
 // Cache ENVs
 const (
+	Drives  = "drives"
+	Exclude = "exclude"
+	Expiry  = "expiry"
+	MaxUse  = "maxuse"
+	Quota   = "quota"
+
 	EnvCacheDrives              = "MINIO_CACHE_DRIVES"
 	EnvCacheExclude             = "MINIO_CACHE_EXCLUDE"
 	EnvCacheExpiry              = "MINIO_CACHE_EXPIRY"
 	EnvCacheMaxUse              = "MINIO_CACHE_MAXUSE"
+	EnvCacheQuota               = "MINIO_CACHE_QUOTA"
 	EnvCacheEncryptionMasterKey = "MINIO_CACHE_ENCRYPTION_MASTER_KEY"
 )
 
@@ -39,8 +46,16 @@ const (
 
 // LookupConfig - extracts cache configuration provided by environment
 // variables and merge them with provided CacheConfiguration.
-func LookupConfig(cfg Config) (Config, error) {
-	if drives := env.Get(EnvCacheDrives, strings.Join(cfg.Drives, ",")); drives != "" {
+func LookupConfig(kvs config.KVS) (Config, error) {
+	if kvs.Get(config.State) != config.StateOn {
+		return Config{}, nil
+	}
+	if len(kvs.Get(Drives)) == 0 {
+		return Config{}, nil
+	}
+
+	cfg := Config{}
+	if drives := env.Get(EnvCacheDrives, kvs.Get(Drives)); drives != "" {
 		driveList, err := parseCacheDrives(strings.Split(drives, cacheEnvDelimiter))
 		if err != nil {
 			return cfg, err
@@ -48,7 +63,7 @@ func LookupConfig(cfg Config) (Config, error) {
 		cfg.Drives = driveList
 	}
 
-	if excludes := env.Get(EnvCacheExclude, strings.Join(cfg.Exclude, ",")); excludes != "" {
+	if excludes := env.Get(EnvCacheExclude, kvs.Get(Exclude)); excludes != "" {
 		excludeList, err := parseCacheExcludes(strings.Split(excludes, cacheEnvDelimiter))
 		if err != nil {
 			return cfg, err
@@ -56,7 +71,7 @@ func LookupConfig(cfg Config) (Config, error) {
 		cfg.Exclude = excludeList
 	}
 
-	if expiryStr := env.Get(EnvCacheExpiry, strconv.Itoa(cfg.Expiry)); expiryStr != "" {
+	if expiryStr := env.Get(EnvCacheExpiry, kvs.Get(Expiry)); expiryStr != "" {
 		expiry, err := strconv.Atoi(expiryStr)
 		if err != nil {
 			return cfg, config.ErrInvalidCacheExpiryValue(err)
@@ -64,14 +79,27 @@ func LookupConfig(cfg Config) (Config, error) {
 		cfg.Expiry = expiry
 	}
 
-	if maxUseStr := env.Get(EnvCacheMaxUse, strconv.Itoa(cfg.MaxUse)); maxUseStr != "" {
+	if maxUseStr := env.Get(EnvCacheMaxUse, kvs.Get(MaxUse)); maxUseStr != "" {
 		maxUse, err := strconv.Atoi(maxUseStr)
 		if err != nil {
-			return cfg, config.ErrInvalidCacheMaxUse(err)
+			return cfg, config.ErrInvalidCacheQuota(err)
 		}
 		// maxUse should be a valid percentage.
 		if maxUse > 0 && maxUse <= 100 {
 			cfg.MaxUse = maxUse
+			cfg.Quota = maxUse
+		}
+	}
+
+	if quotaStr := env.Get(EnvCacheQuota, kvs.Get(Quota)); quotaStr != "" {
+		quota, err := strconv.Atoi(quotaStr)
+		if err != nil {
+			return cfg, config.ErrInvalidCacheQuota(err)
+		}
+		// quota should be a valid percentage.
+		if quota > 0 && quota <= 100 {
+			cfg.Quota = quota
+			cfg.MaxUse = quota
 		}
 	}
 

@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2017-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,18 +19,93 @@ package madmin
 
 import (
 	"bytes"
-	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
-
-	"github.com/minio/minio/pkg/quick"
+	"net/url"
 )
+
+// DelConfigKV - set key value config to server.
+func (adm *AdminClient) DelConfigKV(k string) (err error) {
+	econfigBytes, err := EncryptData(adm.secretAccessKey, []byte(k))
+	if err != nil {
+		return err
+	}
+
+	reqData := requestData{
+		relPath: "/v1/del-config-kv",
+		content: econfigBytes,
+	}
+
+	// Execute DELETE on /minio/admin/v1/del-config-kv to delete config key.
+	resp, err := adm.executeMethod(http.MethodDelete, reqData)
+
+	defer closeResponse(resp)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return httpRespToErrorResponse(resp)
+	}
+
+	return nil
+}
+
+// SetConfigKV - set key value config to server.
+func (adm *AdminClient) SetConfigKV(kv string) (err error) {
+	econfigBytes, err := EncryptData(adm.secretAccessKey, []byte(kv))
+	if err != nil {
+		return err
+	}
+
+	reqData := requestData{
+		relPath: "/v1/set-config-kv",
+		content: econfigBytes,
+	}
+
+	// Execute PUT on /minio/admin/v1/set-config-kv to set config key/value.
+	resp, err := adm.executeMethod(http.MethodPut, reqData)
+
+	defer closeResponse(resp)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return httpRespToErrorResponse(resp)
+	}
+
+	return nil
+}
+
+// GetConfigKV - returns the key, value of the requested key, incoming data is encrypted.
+func (adm *AdminClient) GetConfigKV(key string) ([]byte, error) {
+	v := url.Values{}
+	v.Set("key", key)
+
+	// Execute GET on /minio/admin/v1/get-config-kv?key={key} to get value of key.
+	resp, err := adm.executeMethod(http.MethodGet,
+		requestData{
+			relPath:     "/v1/get-config-kv",
+			queryValues: v,
+		})
+	defer closeResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+	defer closeResponse(resp)
+
+	return DecryptData(adm.secretAccessKey, resp.Body)
+}
 
 // GetConfig - returns the config.json of a minio setup, incoming data is encrypted.
 func (adm *AdminClient) GetConfig() ([]byte, error) {
 	// Execute GET on /minio/admin/v1/config to get config of a setup.
-	resp, err := adm.executeMethod("GET",
+	resp, err := adm.executeMethod(http.MethodGet,
 		requestData{relPath: "/v1/config"})
 	defer closeResponse(resp)
 	if err != nil {
@@ -59,26 +134,6 @@ func (adm *AdminClient) SetConfig(config io.Reader) (err error) {
 		return err
 	}
 	configBytes := configBuf[:n]
-
-	type configVersion struct {
-		Version string `json:"version,omitempty"`
-	}
-	var cfg configVersion
-
-	// Check if read data is in json format
-	if err = json.Unmarshal(configBytes, &cfg); err != nil {
-		return errors.New("Invalid JSON format: " + err.Error())
-	}
-
-	// Check if the provided json file has "version" key set
-	if cfg.Version == "" {
-		return errors.New("Missing or unset \"version\" key in json file")
-	}
-	// Validate there are no duplicate keys in the JSON
-	if err = quick.CheckDuplicateKeys(string(configBytes)); err != nil {
-		return errors.New("Duplicate key in json file: " + err.Error())
-	}
-
 	econfigBytes, err := EncryptData(adm.secretAccessKey, configBytes)
 	if err != nil {
 		return err
@@ -90,7 +145,7 @@ func (adm *AdminClient) SetConfig(config io.Reader) (err error) {
 	}
 
 	// Execute PUT on /minio/admin/v1/config to set config.
-	resp, err := adm.executeMethod("PUT", reqData)
+	resp, err := adm.executeMethod(http.MethodPut, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {

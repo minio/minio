@@ -16,47 +16,27 @@ Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quicksta
 
 Compression can be enabled by updating the `compress` config settings for MinIO server config. Config `compress` settings take extensions and mime-types to be compressed.
 
-```json
-"compress": {
-        "enabled": true,
-        "extensions": [".txt",".log",".csv", ".json", ".tar"],
-        "mime-types": ["text/*","application/json","application/xml"]
-}
+```
+$ mc admin config get myminio compression
+compression extensions=".txt,.log,.csv,.json,.tar,.xml,.bin" mime_types="text/*,application/json,application/xml" state="off"```
+
+Default config includes most common highly compressible content extensions and mime-types.
+
+```
+$ mc admin config set myminio compression extensions=".pdf" mime_types="application/pdf" state="on"
 ```
 
-Since text, log, csv, json files are highly compressible, These extensions/mime-types are included by default for compression.
-
-Having compression enabled and no extensions or mime types will attempt to compress anything that isn't explicitly known to be already compressed content. 
-Settings for enabling compression on all content, except for types listed below:
-
-```json
-"compress": {
-        "enabled": true,
-        "extensions": [],
-        "mime-types": []
-}
+To enable compression for all content, except for types listed below:
 ```
-
-Incompressible content will be skipped with quite low CPU usage and storage overhead, typically at several GB/s.
-
-To update the configuration, use `mc admin config get` command to get the current configuration file for the minio cluster in json format, and save it locally.
-
-```sh
-$ mc admin config get myminio/ > /tmp/myconfig
-```
-
-After updating the compression configuration in /tmp/myconfig , use `mc admin config set` command to update the configuration for the cluster. Restart the MinIO server to put the changes into effect.
-
-```sh
-$ mc admin config set myminio < /tmp/myconfig
+~ mc admin config set myminio compression extensions="" mime_types="" state="on"
 ```
 
 The compression settings may also be set through environment variables. When set, environment variables override the defined `compress` config settings in the server config.
 
 ```bash
-export MINIO_COMPRESS="true"
+export MINIO_COMPRESS="on"
 export MINIO_COMPRESS_EXTENSIONS=".pdf,.doc"
-export MINIO_COMPRESS_MIMETYPES="application/pdf"
+export MINIO_COMPRESS_MIME_TYPES="application/pdf"
 ```
 
 ### 3. Note

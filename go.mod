@@ -38,13 +38,13 @@ require (
 	github.com/lib/pq v1.0.0
 	github.com/mattn/go-isatty v0.0.7
 	github.com/miekg/dns v1.1.8
-	github.com/minio/cli v1.21.0
+	github.com/minio/cli v1.22.0
 	github.com/minio/dsync/v2 v2.0.0
 	github.com/minio/gokrb5/v7 v7.2.5
 	github.com/minio/hdfs/v3 v3.0.1
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/lsync v1.0.1
-	github.com/minio/mc v0.0.0-20190924013003-643835013047
+	github.com/minio/mc v0.0.0-20191012041914-735aa139b19c
 	github.com/minio/minio-go v0.0.0-20190327203652-5325257a208f
 	github.com/minio/minio-go/v6 v6.0.39
 	github.com/minio/parquet-go v0.0.0-20190318185229-9d767baf1679
@@ -65,15 +65,12 @@ require (
 	github.com/sirupsen/logrus v1.4.2
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e
 	github.com/streadway/amqp v0.0.0-20190402114354-16ed540749f6
-	github.com/tidwall/gjson v1.2.1
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	go.uber.org/atomic v1.3.2
 	golang.org/x/crypto v0.0.0-20190923035154-9ee001bba392
-	golang.org/x/net v0.0.0-20190923162816-aa69164e4478 // indirect
 	golang.org/x/sys v0.0.0-20190922100055-0a153f010e69
 	google.golang.org/api v0.4.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
-	gopkg.in/ini.v1 v1.48.0 // indirect
 	gopkg.in/ldap.v3 v3.0.3
 	gopkg.in/olivere/elastic.v5 v5.0.80
 	gopkg.in/yaml.v2 v2.2.2

@@ -69,7 +69,7 @@ var resourceList = []string{
 }
 
 func doesPolicySignatureV2Match(formValues http.Header) APIErrorCode {
-	cred := globalServerConfig.GetCredential()
+	cred := globalActiveCred
 	accessKey := formValues.Get(xhttp.AmzAccessKeyID)
 	cred, _, s3Err := checkKeyValid(accessKey)
 	if s3Err != ErrNone {
@@ -102,7 +102,7 @@ func unescapeQueries(encodedQuery string) (unescapedQueries []string, err error)
 // returns ErrNone if matches. S3 errors otherwise.
 func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	// Access credentials.
-	cred := globalServerConfig.GetCredential()
+	cred := globalActiveCred
 
 	// r.RequestURI will have raw encoded URI as sent by the client.
 	tokens := strings.SplitN(r.RequestURI, "?", 2)

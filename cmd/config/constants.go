@@ -27,6 +27,7 @@ const (
 	EnvSecretKey = "MINIO_SECRET_KEY"
 	EnvBrowser   = "MINIO_BROWSER"
 	EnvDomain    = "MINIO_DOMAIN"
+	EnvRegion    = "MINIO_REGION"
 	EnvPublicIPs = "MINIO_PUBLIC_IPS"
 	EnvEndpoints = "MINIO_ENDPOINTS"
 

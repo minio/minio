@@ -68,6 +68,12 @@ func IsSecretKeyValid(secretKey string) bool {
 	return len(secretKey) >= secretKeyMinLen
 }
 
+// Default access and secret keys.
+const (
+	DefaultAccessKey = "minioadmin"
+	DefaultSecretKey = "minioadmin"
+)
+
 // Credentials holds access and secret keys.
 type Credentials struct {
 	AccessKey    string    `xml:"AccessKeyId" json:"accessKey,omitempty"`

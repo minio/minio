@@ -140,7 +140,7 @@ func main() {
 			}
 			u.RawQuery = v.Encode()
 
-			req, err := http.NewRequest("POST", u.String(), nil)
+			req, err := http.NewRequest(http.MethodPost, u.String(), nil)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
