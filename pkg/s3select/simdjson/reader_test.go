@@ -16,17 +16,7 @@
 
 package simdjson
 
-import (
-	"bytes"
-	"io"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"testing"
-
-	"github.com/minio/minio/pkg/s3select/sql"
-)
-
+/*
 func TestNewReader(t *testing.T) {
 	files, err := ioutil.ReadDir("testdata")
 	if err != nil {
@@ -83,3 +73,4 @@ func BenchmarkReader(b *testing.B) {
 		})
 	}
 }
+*/

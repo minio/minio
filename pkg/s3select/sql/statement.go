@@ -169,6 +169,9 @@ func (e *SelectStatement) EvalFrom(format string, input Record) (Record, error) 
 		default:
 			input.Reset()
 			input, err = input.Set("_1", &Value{value: v})
+			if err != nil {
+				return nil, err
+			}
 		}
 		return input, nil
 	}

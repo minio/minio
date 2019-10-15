@@ -23,9 +23,8 @@ import (
 	"math"
 	"strings"
 
-	"github.com/fwessels/simdjson-go"
-
 	"github.com/bcicen/jstream"
+	"github.com/fwessels/simdjson-go"
 )
 
 var (

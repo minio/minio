@@ -2,7 +2,7 @@ package simdjson
 
 import (
 	"bytes"
-	"encoding/json"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -63,21 +63,11 @@ func TestLoadTape(t *testing.T) {
 	for _, tt := range testCases {
 
 		t.Run(tt.name, func(t *testing.T) {
-			tap, sb, ref := loadCompressed(t, tt.name)
+			tap, sb, _ := loadCompressed(t, tt.name)
 
-			var tmp interface{} = map[string]interface{}{}
-			if tt.array {
-				tmp = []interface{}{}
-			}
-			var refJSON []byte
-			err := json.Unmarshal(ref, &tmp)
-			if err != nil {
-				t.Fatal(err)
-			}
-			refJSON, err = json.MarshalIndent(tmp, "", "  ")
-			if err != nil {
-				t.Fatal(err)
-			}
+			var err error
+			dst := make(chan simdjson.Elements, 100)
+			dec := NewElementReader(dst, &err, &ReaderArgs{unmarshaled: true, ContentType: "json"})
 			pj, err := simdjson.LoadTape(bytes.NewBuffer(tap), bytes.NewBuffer(sb))
 			if err != nil {
 				t.Fatal(err)
@@ -93,6 +83,7 @@ func TestLoadTape(t *testing.T) {
 			}
 			//_ = ioutil.WriteFile(filepath.Join("testdata", tt.name+".json"), b, os.ModePerm)
 
+		parser:
 			for {
 				var next simdjson.Iter
 				typ, err := i.NextIter(&next)
@@ -101,48 +92,43 @@ func TestLoadTape(t *testing.T) {
 				}
 				switch typ {
 				case simdjson.TypeNone:
-					return
+					close(dst)
+					break parser
 				case simdjson.TypeRoot:
-					i = next
-				case simdjson.TypeArray:
-					arr, err := next.Array(nil)
+					obj, err := next.Root()
 					if err != nil {
 						t.Fatal(err)
 					}
-					got, err := arr.Interface()
-					if err != nil {
-						t.Fatal(err)
-					}
-					b, err := json.MarshalIndent(got, "", "  ")
-					if err != nil {
-						t.Fatal(err)
-					}
-					if !bytes.Equal(b, refJSON) {
-						_ = ioutil.WriteFile(filepath.Join("testdata", tt.name+".want"), refJSON, os.ModePerm)
-						_ = ioutil.WriteFile(filepath.Join("testdata", tt.name+".got"), b, os.ModePerm)
-						t.Error("Content mismatch. Output dumped to testdata.")
+					if typ := obj.Next(); typ != simdjson.TypeObject {
+						t.Fatal("Unexpected type:", typ.String())
 					}
 
-				case simdjson.TypeObject:
-					obj, err := next.Object(nil)
+					o, err := obj.Object(nil)
 					if err != nil {
 						t.Fatal(err)
 					}
-					got, err := obj.Map(nil)
+					elems, err := o.Parse(nil)
 					if err != nil {
 						t.Fatal(err)
 					}
-					b, err := json.MarshalIndent(got, "", "  ")
-					if err != nil {
-						t.Fatal(err)
-					}
-					if !bytes.Equal(b, refJSON) {
-						_ = ioutil.WriteFile(filepath.Join("testdata", tt.name+".want"), refJSON, os.ModePerm)
-						_ = ioutil.WriteFile(filepath.Join("testdata", tt.name+".got"), b, os.ModePerm)
-						t.Error("Content mismatch. Output dumped to testdata.")
-					}
+					b, err := elems.MarshalJSON()
+					t.Log(string(b))
+					dst <- *elems
+				default:
+					t.Fatal("unexpected type:", typ.String())
 				}
 			}
+			for {
+				rec, err := dec.Read(nil)
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					continue
+				}
+				t.Log(rec.WriteCSV(os.Stdout, ','))
+			}
+
 		})
 	}
 }

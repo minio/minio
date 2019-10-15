@@ -153,7 +153,7 @@ func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune) error {
 	for _, element := range r.rootFields.Elements {
 		var columnValue string
 		switch element.Type {
-		case simdjson.TypeNull, simdjson.TypeFloat, simdjson.TypeUint, simdjson.TypeInt, simdjson.TypeBool:
+		case simdjson.TypeNull, simdjson.TypeFloat, simdjson.TypeUint, simdjson.TypeInt, simdjson.TypeBool, simdjson.TypeString:
 			val, err := element.Iter.StringCvt()
 			if err != nil {
 				return err
@@ -166,7 +166,7 @@ func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune) error {
 			}
 			columnValue = string(b)
 		default:
-			return fmt.Errorf("cannot marshal unhandled type: %T", element.Type)
+			return fmt.Errorf("cannot marshal unhandled type: %s", element.Type.String())
 		}
 		csvRecord = append(csvRecord, columnValue)
 	}

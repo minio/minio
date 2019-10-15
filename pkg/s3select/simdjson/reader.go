@@ -19,47 +19,35 @@ package simdjson
 import (
 	"io"
 
-	"github.com/minio/minio/pkg/s3select/sql"
+	"github.com/fwessels/simdjson-go"
 
-	"github.com/bcicen/jstream"
+	"github.com/minio/minio/pkg/s3select/sql"
 )
 
 // Reader - JSON record reader for S3Select.
 type Reader struct {
-	args       *ReaderArgs
-	decoded    chan chan sql.Record
+	args    *ReaderArgs
+	decoded chan simdjson.Elements
+
+	// err will only be returned after decoded has been closed.
+	err        *error
 	readCloser io.ReadCloser
 }
 
 // Read - reads single record.
 func (r *Reader) Read(dst sql.Record) (sql.Record, error) {
-	/*
-		v, ok := <-r.valueCh
-		if !ok {
-			if err := r.decoder.Err(); err != nil {
-				return nil, errJSONParsingError(err)
-			}
-			return nil, io.EOF
+	v, ok := <-r.decoded
+	if !ok {
+		if r.err != nil && *r.err != nil {
+			return nil, errJSONParsingError(*r.err)
 		}
-			var kvs jstream.KVS
-			if v.ValueType == jstream.Object {
-				// This is a JSON object type (that preserves key
-				// order)
-				kvs = v.Value.(jstream.KVS)
-			} else {
-				// To be AWS S3 compatible Select for JSON needs to
-				// output non-object JSON as single column value
-				// i.e. a map with `_1` as key and value as the
-				// non-object.
-				kvs = jstream.KVS{jstream.KV{Key: "_1", Value: v.Value}}
-			}
-	*/
+		return nil, io.EOF
+	}
 	dstRec, ok := dst.(*Record)
 	if !ok {
 		dstRec = &Record{}
 	}
-	//dstRec.KVS = kvs
-	dstRec.SelectFormat = sql.SelectFmtSIMDJSON
+	dstRec.rootFields = v
 	return dstRec, nil
 }
 
@@ -67,21 +55,31 @@ func (r *Reader) Read(dst sql.Record) (sql.Record, error) {
 func (r *Reader) Close() error {
 	// Close the input.
 	// Potentially racy if the stream decoder is still reading.
-	err := r.readCloser.Close()
-	for range r.valueCh {
+	if r.readCloser != nil {
+		r.readCloser.Close()
+	}
+	for range r.decoded {
 		// Drain values so we don't leak a goroutine.
 		// Since we have closed the input, it should fail rather quickly.
 	}
-	return err
+	return nil
 }
 
 // NewReader - creates new JSON reader using readCloser.
 func NewReader(readCloser io.ReadCloser, args *ReaderArgs) *Reader {
-	d := jstream.NewDecoder(readCloser, 0).ObjectAsKVS()
+	// TODO: Add simdjson input when available
 	return &Reader{
 		args:       args,
-		decoder:    d,
-		valueCh:    d.Stream(),
 		readCloser: readCloser,
+	}
+}
+
+// NewElementReader - creates new JSON reader using readCloser.
+func NewElementReader(ch chan simdjson.Elements, err *error, args *ReaderArgs) *Reader {
+	return &Reader{
+		args:       args,
+		decoded:    ch,
+		err:        err,
+		readCloser: nil,
 	}
 }
