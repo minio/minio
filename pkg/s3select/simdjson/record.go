@@ -18,49 +18,79 @@ package simdjson
 
 import (
 	"encoding/csv"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"strings"
 
-	"github.com/bcicen/jstream"
+	"github.com/fwessels/simdjson-go"
+
 	"github.com/minio/minio/pkg/s3select/sql"
 )
 
 // Record - is JSON record.
 type Record struct {
-	// Used in Set(), Marshal*()
-	j ParsedJson
-
 	// field name to Tape index lookup
-	rootFields map[string]int
-
-	SelectFormat sql.SelectObjectFormat
+	rootFields simdjson.Elements
 }
 
 // Get - gets the value for a column name.
 func (r *Record) Get(name string) (*sql.Value, error) {
-	if len(r.rootFields) == 0 {
-		r.indexFields()
+	elem := r.rootFields.Lookup(name)
+	if elem == nil {
+		return nil, nil
 	}
-	// FIXME:
-	return nil, nil
+	return iterToValue(elem.Iter)
 }
 
-func (r *Record) indexFields() {
-	i := 0
-	for i < len(r.j.Tape) {
-
+func iterToValue(iter simdjson.Iter) (*sql.Value, error) {
+	switch iter.Type() {
+	case simdjson.TypeString:
+		v, err := iter.String()
+		if err != nil {
+			return nil, err
+		}
+		return sql.FromString(v), nil
+	case simdjson.TypeFloat:
+		v, err := iter.Float()
+		if err != nil {
+			return nil, err
+		}
+		return sql.FromFloat(v), nil
+	case simdjson.TypeInt:
+		v, err := iter.Int()
+		if err != nil {
+			return nil, err
+		}
+		return sql.FromInt(v), nil
+	case simdjson.TypeUint:
+		v, err := iter.Int()
+		if err != nil {
+			// Can't fit into int, convert to float.
+			v, err := iter.Float()
+			return sql.FromFloat(v), err
+		}
+		return sql.FromInt(v), nil
+	case simdjson.TypeBool:
+		v, err := iter.Bool()
+		if err != nil {
+			return nil, err
+		}
+		return sql.FromBool(v), nil
+	case simdjson.TypeNull:
+		return sql.FromNull(), nil
+	case simdjson.TypeObject, simdjson.TypeArray:
+		b, err := iter.MarshalJSON()
+		return sql.FromBytes(b), err
 	}
-	r.rootFields["indexed___"] = -1
+	return nil, fmt.Errorf("unknown JSON type: %s", iter.Type().String())
 }
 
 // Reset the record.
 func (r *Record) Reset() {
-	for k := range r.rootFields {
-		delete(r.rootFields, k)
+	for k := range r.rootFields.Index {
+		delete(r.rootFields.Index, k)
 	}
-	r.j.Reset()
+	r.rootFields.Elements = r.rootFields.Elements[:0]
 }
 
 // Clone the record and if possible use the destination provided.
@@ -69,69 +99,47 @@ func (r *Record) Clone(dst sql.Record) sql.Record {
 	if !ok {
 		other = &Record{}
 	}
-	/*
-		if len(other.KVS) > 0 {
-			other.KVS = other.KVS[:0]
-		}
-		other.KVS = append(other.KVS, r.KVS...)
-	*/
+	if len(other.rootFields.Elements) > 0 {
+		other.rootFields.Elements = other.rootFields.Elements[:0]
+	}
+	other.rootFields.Elements = append(other.rootFields.Elements, r.rootFields.Elements...)
+	for k := range other.rootFields.Index {
+		delete(other.rootFields.Index, k)
+	}
+	for k, v := range r.rootFields.Index {
+		other.rootFields.Index[k] = v
+	}
 	return other
 }
 
 // Set - sets the value for a column name.
 func (r *Record) Set(name string, value *sql.Value) error {
-	var v interface{}
-	if b, ok := value.ToBool(); ok {
-		v = b
-	} else if f, ok := value.ToFloat(); ok {
-		v = f
-	} else if i, ok := value.ToInt(); ok {
-		v = i
-	} else if t, ok := value.ToTimestamp(); ok {
-		v = sql.FormatSQLTimestamp(t)
-	} else if s, ok := value.ToString(); ok {
-		v = s
-	} else if value.IsNull() {
-		v = nil
-	} else if b, ok := value.ToBytes(); ok {
-		v = b
-		//} else if arr, ok := value.ToArray(); ok {
-		//	v = arr
-	} else {
-		return fmt.Errorf("unsupported sql value %v and type %v", value, value.GetTypeString())
-	}
-
-	name = strings.Replace(name, "*", "__ALL__", -1)
-	_ = v
-	//r.KVS = append(r.KVS, jstream.KV{Key: name, Value: v})
-	return nil
+	return errors.New("cannot set internal data in simd json record")
 }
 
 // WriteCSV - encodes to CSV data.
 func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune) error {
-	var csvRecord []string
-	/*
-		for _, kv := range r.KVS {
-			var columnValue string
-			switch val := kv.Value.(type) {
-			case bool, float64, int64, string:
-				columnValue = fmt.Sprintf("%v", val)
-			case nil:
-				columnValue = ""
-			case RawJSON:
-				columnValue = string([]byte(val))
-			case []interface{}:
-				b, err := json.Marshal(val)
-				if err != nil {
-					return err
-				}
-				columnValue = string(b)
-			default:
-				return fmt.Errorf("Cannot marshal unhandled type: %T", kv.Value)
+	csvRecord := make([]string, 0, len(r.rootFields.Elements))
+	for _, element := range r.rootFields.Elements {
+		var columnValue string
+		switch element.Type {
+		case simdjson.TypeNull, simdjson.TypeFloat, simdjson.TypeUint, simdjson.TypeInt, simdjson.TypeBool:
+			val, err := element.Iter.StringCvt()
+			if err != nil {
+				return err
 			}
-			csvRecord = append(csvRecord, columnValue)
+			columnValue = val
+		case simdjson.TypeObject, simdjson.TypeArray:
+			b, err := element.Iter.MarshalJSON()
+			if err != nil {
+				return err
+			}
+			columnValue = string(b)
+		default:
+			return fmt.Errorf("cannot marshal unhandled type: %T", element.Type)
 		}
-	*/
+		csvRecord = append(csvRecord, columnValue)
+	}
 	w := csv.NewWriter(writer)
 	w.Comma = fieldDelimiter
 	if err := w.Write(csvRecord); err != nil {
@@ -147,26 +155,42 @@ func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune) error {
 
 // Raw - returns the underlying representation.
 func (r *Record) Raw() (sql.SelectObjectFormat, interface{}) {
-	// FIXME:
-	return r.SelectFormat, nil
+	return sql.SelectFmtSIMDJSON, r.rootFields
 }
 
 // WriteJSON - encodes to JSON data.
 func (r *Record) WriteJSON(writer io.Writer) error {
-	// FIXME:
-	return json.NewEncoder(writer).Encode(nil)
+	b, err := r.rootFields.MarshalJSON()
+	if err != nil {
+		return err
+	}
+	n, err := writer.Write(b)
+	if err != nil {
+		return err
+	}
+	if n != len(b) {
+		return io.ErrShortWrite
+	}
+	return nil
 }
 
 // Replace the underlying buffer of json data.
-func (r *Record) Replace(k jstream.KVS) error {
-	// FIXME:
+func (r *Record) Replace(k interface{}) error {
+	v, ok := k.(simdjson.Elements)
+	if !ok {
+		return fmt.Errorf("cannot replace internal data in simd json record with type %T", k)
+	}
+	r.rootFields = v
 	return nil
 }
 
 // NewRecord - creates new empty JSON record.
-func NewRecord(f sql.SelectObjectFormat) *Record {
+func NewRecord(f sql.SelectObjectFormat, obj simdjson.Object) *Record {
+	elems, err := obj.Parse(nil)
+	if err != nil {
+		return nil
+	}
 	return &Record{
-		//KVS:          jstream.KVS{},
-		SelectFormat: f,
+		rootFields: *elems,
 	}
 }

@@ -19,7 +19,10 @@ package sql
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"strings"
+
+	"github.com/fwessels/simdjson-go"
 
 	"github.com/bcicen/jstream"
 )
@@ -323,11 +326,9 @@ func (e *JSONPath) evalNode(r Record) (*Value, error) {
 			keypath = ps[1]
 		}
 	}
-	objFmt, rawVal := r.Raw()
-	switch objFmt {
-	case SelectFmtJSON, SelectFmtParquet:
-		rowVal := rawVal.(jstream.KVS)
-
+	_, rawVal := r.Raw()
+	switch rowVal := rawVal.(type) {
+	case jstream.KVS, simdjson.Elements:
 		pathExpr := e.PathExpr
 		if len(pathExpr) == 0 {
 			pathExpr = []*JSONPathElement{{Key: &ObjectKey{ID: e.BaseKey}}}
@@ -345,10 +346,27 @@ func (e *JSONPath) evalNode(r Record) (*Value, error) {
 			return FromFloat(rval), nil
 		case int64:
 			return FromInt(rval), nil
+		case uint64:
+			if rval <= math.MaxInt64 {
+				return FromInt(int64(rval)), nil
+			}
+			return FromFloat(float64(rval)), nil
 		case bool:
 			return FromBool(rval), nil
 		case jstream.KVS, []interface{}:
 			bs, err := json.Marshal(result)
+			if err != nil {
+				return nil, err
+			}
+			return FromBytes(bs), nil
+		case simdjson.Element:
+			bs, err := rval.Iter.MarshalJSON()
+			if err != nil {
+				return nil, err
+			}
+			return FromBytes(bs), nil
+		case simdjson.Array:
+			bs, err := rval.MarshalJSON()
 			if err != nil {
 				return nil, err
 			}

@@ -139,8 +139,12 @@ func (r *Record) WriteJSON(writer io.Writer) error {
 }
 
 // Replace the underlying buffer of json data.
-func (r *Record) Replace(k jstream.KVS) error {
-	r.KVS = k
+func (r *Record) Replace(k interface{}) error {
+	v, ok := k.(jstream.KVS)
+	if !ok {
+		return fmt.Errorf("cannot replace internal data in json record with type %T", k)
+	}
+	r.KVS = v
 	return nil
 }
 

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/fwessels/simdjson-go"
+
 	"github.com/klauspost/compress/zstd"
 )
 
@@ -15,12 +17,12 @@ type tester interface {
 	Fatal(args ...interface{})
 }
 
-func loadCompressed(t tester, file string) []byte {
+func loadCompressed(t tester, file string) (tape, sb, ref []byte) {
 	dec, err := zstd.NewReader(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tap, err := ioutil.ReadFile(filepath.Join("testdata", file))
+	tap, err := ioutil.ReadFile(filepath.Join("testdata", file+".tape.zst"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,104 +30,81 @@ func loadCompressed(t tester, file string) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return tap
+	sb, err = ioutil.ReadFile(filepath.Join("testdata", file+".stringbuf.zst"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sb, err = dec.DecodeAll(sb, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, err = ioutil.ReadFile(filepath.Join("testdata", file+".json.zst"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, err = dec.DecodeAll(ref, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return tap, sb, ref
 }
 
 var testCases = []struct {
-	ref, tape, stringbuf string
+	name  string
+	array bool
 }{
 	{
-		ref:       "apache_builds.json.zst",
-		tape:      "apache_builds.tape.zst",
-		stringbuf: "apache_builds.stringbuf.zst",
-	},
-	{
-		ref:       "citm_catalog.json.zst",
-		tape:      "citm_catalog.tape.zst",
-		stringbuf: "citm_catalog.stringbuf.zst",
-	},
-	{
-		ref:       "github_events.json.zst",
-		tape:      "github_events.tape.zst",
-		stringbuf: "github_events.stringbuf.zst",
-	},
-	{
-		ref:       "gsoc-2018.json.zst",
-		tape:      "gsoc-2018.tape.zst",
-		stringbuf: "gsoc-2018.stringbuf.zst",
-	},
-	{
-		ref:       "instruments.json.zst",
-		tape:      "instruments.tape.zst",
-		stringbuf: "instruments.stringbuf.zst",
-	},
-	{
-		ref:       "numbers.json.zst",
-		tape:      "numbers.tape.zst",
-		stringbuf: "numbers.stringbuf.zst",
-	},
-	{
-		ref:       "random.json.zst",
-		tape:      "random.tape.zst",
-		stringbuf: "random.stringbuf.zst",
-	},
-	{
-		ref:       "update-center.json.zst",
-		tape:      "update-center.tape.zst",
-		stringbuf: "update-center.stringbuf.zst",
+		name: "parking-citations-10",
 	},
 }
 
 func TestLoadTape(t *testing.T) {
 	for _, tt := range testCases {
 
-		t.Run(tt.ref, func(t *testing.T) {
-			tap := loadCompressed(t, tt.tape)
-			sb := loadCompressed(t, tt.stringbuf)
-			ref := loadCompressed(t, tt.ref)
+		t.Run(tt.name, func(t *testing.T) {
+			tap, sb, ref := loadCompressed(t, tt.name)
 
-			var refMap map[string]interface{}
-			var refJSON []byte
-			err := json.Unmarshal(ref, &refMap)
-			if err == nil {
-				refJSON, err = json.MarshalIndent(refMap, "", "  ")
-				if err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				// Probably an array.
-				var refArray []interface{}
-				err := json.Unmarshal(ref, &refArray)
-				if err != nil {
-					t.Fatal(err)
-				}
-				refJSON, err = json.MarshalIndent(refArray, "", "  ")
-				if err != nil {
-					t.Fatal(err)
-				}
+			var tmp interface{} = map[string]interface{}{}
+			if tt.array {
+				tmp = []interface{}{}
 			}
-			pj, err := LoadTape(bytes.NewBuffer(tap), bytes.NewBuffer(sb))
+			var refJSON []byte
+			err := json.Unmarshal(ref, &tmp)
+			if err != nil {
+				t.Fatal(err)
+			}
+			refJSON, err = json.MarshalIndent(tmp, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			pj, err := simdjson.LoadTape(bytes.NewBuffer(tap), bytes.NewBuffer(sb))
 			if err != nil {
 				t.Fatal(err)
 			}
 			i := pj.Iter()
 			cpy := i
 			b, err := cpy.MarshalJSON()
-			t.Log(string(b), err)
-			_ = ioutil.WriteFile(filepath.Join("testdata", tt.ref+".json"), b, os.ModePerm)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if false {
+				t.Log(string(b))
+			}
+			//_ = ioutil.WriteFile(filepath.Join("testdata", tt.name+".json"), b, os.ModePerm)
 
 			for {
-				var next Iter
+				var next simdjson.Iter
 				typ, err := i.NextIter(&next)
 				if err != nil {
 					t.Fatal(err)
 				}
 				switch typ {
-				case TypeNone:
+				case simdjson.TypeNone:
 					return
-				case TypeRoot:
+				case simdjson.TypeRoot:
 					i = next
-				case TypeArray:
+				case simdjson.TypeArray:
 					arr, err := next.Array(nil)
 					if err != nil {
 						t.Fatal(err)
@@ -139,12 +118,12 @@ func TestLoadTape(t *testing.T) {
 						t.Fatal(err)
 					}
 					if !bytes.Equal(b, refJSON) {
-						_ = ioutil.WriteFile(filepath.Join("testdata", tt.ref+".want"), refJSON, os.ModePerm)
-						_ = ioutil.WriteFile(filepath.Join("testdata", tt.ref+".got"), b, os.ModePerm)
+						_ = ioutil.WriteFile(filepath.Join("testdata", tt.name+".want"), refJSON, os.ModePerm)
+						_ = ioutil.WriteFile(filepath.Join("testdata", tt.name+".got"), b, os.ModePerm)
 						t.Error("Content mismatch. Output dumped to testdata.")
 					}
 
-				case TypeObject:
+				case simdjson.TypeObject:
 					obj, err := next.Object(nil)
 					if err != nil {
 						t.Fatal(err)
@@ -158,71 +137,10 @@ func TestLoadTape(t *testing.T) {
 						t.Fatal(err)
 					}
 					if !bytes.Equal(b, refJSON) {
-						_ = ioutil.WriteFile(filepath.Join("testdata", tt.ref+".want"), refJSON, os.ModePerm)
-						_ = ioutil.WriteFile(filepath.Join("testdata", tt.ref+".got"), b, os.ModePerm)
+						_ = ioutil.WriteFile(filepath.Join("testdata", tt.name+".want"), refJSON, os.ModePerm)
+						_ = ioutil.WriteFile(filepath.Join("testdata", tt.name+".got"), b, os.ModePerm)
 						t.Error("Content mismatch. Output dumped to testdata.")
 					}
-				}
-			}
-		})
-	}
-}
-
-func BenchmarkIter_MarshalJSONBuffer(b *testing.B) {
-	for _, tt := range testCases {
-		b.Run(tt.ref, func(b *testing.B) {
-			tap := loadCompressed(b, tt.tape)
-			sb := loadCompressed(b, tt.stringbuf)
-
-			pj, err := LoadTape(bytes.NewBuffer(tap), bytes.NewBuffer(sb))
-			if err != nil {
-				b.Fatal(err)
-			}
-			iter := pj.Iter()
-			cpy := iter
-			output, err := cpy.MarshalJSON()
-			if err != nil {
-				b.Fatal(err)
-			}
-			b.SetBytes(int64(len(output)))
-			b.ReportAllocs()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				cpy := iter
-				output, err = cpy.MarshalJSONBuffer(output[:0])
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-		})
-	}
-}
-
-func BenchmarkGoMarshalJSON(b *testing.B) {
-	for _, tt := range testCases {
-		b.Run(tt.ref, func(b *testing.B) {
-			ref := loadCompressed(b, tt.ref)
-			var m interface{}
-			m = map[string]interface{}{}
-			err := json.Unmarshal(ref, &m)
-			if err != nil {
-				m = []interface{}{}
-				err := json.Unmarshal(ref, &m)
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-			output, err := json.Marshal(m)
-			if err != nil {
-				b.Fatal(err)
-			}
-			b.SetBytes(int64(len(output)))
-			b.ReportAllocs()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				output, err = json.Marshal(m)
-				if err != nil {
-					b.Fatal(err)
 				}
 			}
 		})

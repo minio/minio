@@ -27,8 +27,7 @@ import (
 // Reader - JSON record reader for S3Select.
 type Reader struct {
 	args       *ReaderArgs
-	decoder    *jstream.Decoder
-	valueCh    chan *jstream.MetaValue
+	decoded    chan chan sql.Record
 	readCloser io.ReadCloser
 }
 
@@ -60,7 +59,7 @@ func (r *Reader) Read(dst sql.Record) (sql.Record, error) {
 		dstRec = &Record{}
 	}
 	//dstRec.KVS = kvs
-	dstRec.SelectFormat = sql.SelectFmtJSON
+	dstRec.SelectFormat = sql.SelectFmtSIMDJSON
 	return dstRec, nil
 }
 

@@ -17,9 +17,10 @@
 package sql
 
 import (
+	"fmt"
 	"io"
 
-	"github.com/bcicen/jstream"
+	"github.com/fwessels/simdjson-go"
 )
 
 // SelectObjectFormat specifies the format of the underlying data
@@ -32,6 +33,8 @@ const (
 	SelectFmtCSV
 	// SelectFmtJSON - JSON format
 	SelectFmtJSON
+	// SelectFmtSIMDJSON - SIMD JSON format
+	SelectFmtSIMDJSON
 	// SelectFmtParquet - Parquet format
 	SelectFmtParquet
 )
@@ -51,5 +54,63 @@ type Record interface {
 	Raw() (SelectObjectFormat, interface{})
 
 	// Replaces the underlying data
-	Replace(k jstream.KVS) error
+	Replace(k interface{}) error
+}
+
+func IterToValue(iter simdjson.Iter) (interface{}, error) {
+	switch iter.Type() {
+	case simdjson.TypeString:
+		v, err := iter.String()
+		if err != nil {
+			return nil, err
+		}
+		return v, nil
+	case simdjson.TypeFloat:
+		v, err := iter.Float()
+		if err != nil {
+			return nil, err
+		}
+		return v, nil
+	case simdjson.TypeInt:
+		v, err := iter.Int()
+		if err != nil {
+			return nil, err
+		}
+		return v, nil
+	case simdjson.TypeUint:
+		v, err := iter.Int()
+		if err != nil {
+			// Can't fit into int, convert to float.
+			v, err := iter.Float()
+			return v, err
+		}
+		return v, nil
+	case simdjson.TypeBool:
+		v, err := iter.Bool()
+		if err != nil {
+			return nil, err
+		}
+		return v, nil
+	case simdjson.TypeObject:
+		obj, err := iter.Object(nil)
+		if err != nil {
+			return nil, err
+		}
+		elems, err := obj.Parse(nil)
+		if err != nil || elems == nil {
+			return nil, err
+		}
+		return *elems, err
+	case simdjson.TypeArray:
+		obj, err := iter.Array(nil)
+		if err != nil {
+			return nil, err
+		}
+		elems, err := obj.Interface()
+		if err != nil || elems == nil {
+			return nil, err
+		}
+		return FromArray(), err
+	}
+	return nil, fmt.Errorf("unknown JSON type: %s", iter.Type().String())
 }

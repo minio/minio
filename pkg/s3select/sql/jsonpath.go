@@ -19,6 +19,8 @@ package sql
 import (
 	"errors"
 
+	"github.com/fwessels/simdjson-go"
+
 	"github.com/bcicen/jstream"
 )
 
@@ -40,17 +42,26 @@ func jsonpathEval(p []*JSONPathElement, v interface{}) (r interface{}, err error
 	case p[0].Key != nil:
 		key := p[0].Key.keyString()
 
-		kvs, ok := v.(jstream.KVS)
-		if !ok {
+		switch kvs := v.(type) {
+		case jstream.KVS:
+			for _, kv := range kvs {
+				if kv.Key == key {
+					return jsonpathEval(p[1:], kv.Value)
+				}
+			}
+			// Key not found - return nil result
+			return nil, nil
+		case simdjson.Elements:
+			elem := kvs.Lookup(key)
+			if elem == nil {
+				// Key not found - return nil result
+				return nil, nil
+			}
+
+			return jsonpathEval(p[1:], elem)
+		default:
 			return nil, errKeyLookup
 		}
-		for _, kv := range kvs {
-			if kv.Key == key {
-				return jsonpathEval(p[1:], kv.Value)
-			}
-		}
-		// Key not found - return nil result
-		return nil, nil
 
 	case p[0].Index != nil:
 		idx := *p[0].Index

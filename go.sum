@@ -146,6 +146,8 @@ github.com/fortytw2/leaktest v1.2.0 h1:cj6GCiwJDH7l3tMHLjZDo0QqPtrXJiWSI9JgpeQKw
 github.com/fortytw2/leaktest v1.2.0/go.mod h1:jDsjWgpAGjm2CA7WthBh/CdZYEPF31XHquHwclZch5g=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/fullsailor/pkcs7 v0.0.0-20180613152042-8306686428a5/go.mod h1:KnogPXtdwXqoenmZCw6S+25EAm2MkxbG0deNDu4cbSA=
+github.com/fwessels/simdjson-go v0.0.0-20191011204349-5f59e9eb0619 h1:fm5n8sdX3ycGZlsvgUwEkOPbD5koboVaPZex+qpz5WQ=
+github.com/fwessels/simdjson-go v0.0.0-20191011204349-5f59e9eb0619/go.mod h1:ckxPl5WkPyb6tA8tRjpVihO9LdBp8CF1No8dIQeBqYo=
 github.com/gammazero/deque v0.0.0-20190130191400-2afb3858e9c7/go.mod h1:GeIq9qoE43YdGnDXURnmKTnGg15pQz4mYkXSTChbneI=
 github.com/gammazero/workerpool v0.0.0-20181230203049-86a96b5d5d92/go.mod h1:w9RqFVO2BM3xwWEcAB8Fwp0OviTBBEiRmSBDfbXnd3w=
 github.com/garyburd/redigo v1.6.0/go.mod h1:NR3MbYisc3/PwhQ00EMzDiPmrwpPxAn5GI05/YaO1SY=
