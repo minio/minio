@@ -144,11 +144,6 @@ func (a GatewayUnsupported) CopyObject(ctx context.Context, srcBucket string, sr
 	return objInfo, NotImplemented{}
 }
 
-// RefreshBucketPolicy refreshes cache policy with what's on disk.
-func (a GatewayUnsupported) RefreshBucketPolicy(ctx context.Context, bucket string) error {
-	return NotImplemented{}
-}
-
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
 func (a GatewayUnsupported) IsNotificationSupported() bool {
 	return false

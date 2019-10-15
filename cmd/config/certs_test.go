@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package config
 
 import (
 	"fmt"
@@ -176,7 +176,7 @@ M9ofSEt/bdRD
 	}
 
 	for _, testCase := range testCases {
-		certs, err := parsePublicCertFile(testCase.certFile)
+		certs, err := ParsePublicCertFile(testCase.certFile)
 
 		if testCase.expectedErr == nil {
 			if err != nil {
@@ -234,7 +234,7 @@ func TestGetRootCAs(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		_, err := getRootCAs(testCase.certCAsDir)
+		_, err := GetRootCAs(testCase.certCAsDir)
 
 		if testCase.expectedErr == nil {
 			if err != nil {
@@ -260,11 +260,11 @@ func TestLoadX509KeyPair(t *testing.T) {
 			t.Fatalf("Test %d: failed to create tmp certificate file: %v", i, err)
 		}
 
-		os.Unsetenv(TLSPrivateKeyPassword)
+		os.Unsetenv(EnvCertPassword)
 		if testCase.password != "" {
-			os.Setenv(TLSPrivateKeyPassword, testCase.password)
+			os.Setenv(EnvCertPassword, testCase.password)
 		}
-		_, err = loadX509KeyPair(certificate, privateKey)
+		_, err = LoadX509KeyPair(certificate, privateKey)
 		if err != nil && !testCase.shouldFail {
 			t.Errorf("Test %d: test should succeed but it failed: %v", i, err)
 		}

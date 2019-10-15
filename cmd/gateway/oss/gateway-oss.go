@@ -519,13 +519,13 @@ func (l *ossObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continua
 // length indicates the total length of the object.
 func ossGetObject(ctx context.Context, client *oss.Client, bucket, key string, startOffset, length int64, writer io.Writer, etag string) error {
 	if length < 0 && length != -1 {
-		logger.LogIf(ctx, fmt.Errorf("Invalid argument"))
+		logger.LogIf(ctx, fmt.Errorf("Invalid argument"), logger.Application)
 		return ossToObjectError(fmt.Errorf("Invalid argument"), bucket, key)
 	}
 
 	bkt, err := client.Bucket(bucket)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, err, logger.Application)
 		return ossToObjectError(err, bucket, key)
 	}
 

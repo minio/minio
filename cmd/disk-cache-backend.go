@@ -35,6 +35,7 @@ import (
 
 	"github.com/djherbis/atime"
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/sio"
@@ -46,8 +47,6 @@ const (
 	cacheMetaJSONFile = "cache.json"
 	cacheDataFile     = "part.1"
 	cacheMetaVersion  = "1.0.0"
-
-	cacheEnvDelimiter = ";"
 
 	// SSECacheEncrypted is the metadata key indicating that the object
 	// is a cache entry encrypted with cache KMS master key in globalCacheKMS.
@@ -88,7 +87,7 @@ func (m *cacheMeta) ToObjectInfo(bucket, object string) (o ObjectInfo) {
 	o.ETag = extractETag(m.Meta)
 	o.ContentType = m.Meta["content-type"]
 	o.ContentEncoding = m.Meta["content-encoding"]
-	if storageClass, ok := m.Meta[amzStorageClass]; ok {
+	if storageClass, ok := m.Meta[xhttp.AmzStorageClass]; ok {
 		o.StorageClass = storageClass
 	} else {
 		o.StorageClass = globalMinioDefaultStorageClass
@@ -443,14 +442,14 @@ func newCacheEncryptMetadata(bucket, object string, metadata map[string]string) 
 	if globalCacheKMS == nil {
 		return nil, errKMSNotConfigured
 	}
-	key, encKey, err := globalCacheKMS.GenerateKey(globalCacheKMSKeyID, crypto.Context{bucket: path.Join(bucket, object)})
+	key, encKey, err := globalCacheKMS.GenerateKey(globalCacheKMS.KeyID(), crypto.Context{bucket: path.Join(bucket, object)})
 	if err != nil {
 		return nil, err
 	}
 
 	objectKey := crypto.GenerateKey(key, rand.Reader)
 	sealedKey = objectKey.Seal(key, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
-	crypto.S3.CreateMetadata(metadata, globalCacheKMSKeyID, encKey, sealedKey)
+	crypto.S3.CreateMetadata(metadata, globalCacheKMS.KeyID(), encKey, sealedKey)
 
 	if etag, ok := metadata["etag"]; ok {
 		metadata["etag"] = hex.EncodeToString(objectKey.SealETag([]byte(etag)))
@@ -584,7 +583,8 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 		hashBytes := h.Sum(nil)
 
 		if !bytes.Equal(hashBytes, checksumHash) {
-			err = HashMismatchError{hex.EncodeToString(checksumHash), hex.EncodeToString(hashBytes)}
+			err = fmt.Errorf("hashes do not match expected %s, got %s",
+				hex.EncodeToString(checksumHash), hex.EncodeToString(hashBytes))
 			logger.LogIf(context.Background(), err)
 			return err
 		}

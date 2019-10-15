@@ -35,6 +35,7 @@ import (
 	"github.com/gorilla/mux"
 	miniogo "github.com/minio/minio-go/v6"
 	"github.com/minio/minio-go/v6/pkg/encrypt"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -328,7 +329,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 				return
 			}
 
-			logger.LogIf(ctx, err)
+			logger.LogIf(ctx, err, logger.Application)
 		}
 	}
 
@@ -1063,8 +1064,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Validate storage class metadata if present
-	if _, ok := r.Header[amzStorageClassCanonical]; ok {
-		if !isValidStorageClassMeta(r.Header.Get(amzStorageClassCanonical)) {
+	if sc := r.Header.Get(xhttp.AmzStorageClass); sc != "" {
+		if !storageclass.IsValid(sc) {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidStorageClass), r.URL, guessIsBrowserReq(r))
 			return
 		}
@@ -1355,8 +1356,8 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	}
 
 	// Validate storage class metadata if present
-	if _, ok := r.Header[amzStorageClassCanonical]; ok {
-		if !isValidStorageClassMeta(r.Header.Get(amzStorageClassCanonical)) {
+	if sc := r.Header.Get(xhttp.AmzStorageClass); sc != "" {
+		if !storageclass.IsValid(sc) {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidStorageClass), r.URL, guessIsBrowserReq(r))
 			return
 		}

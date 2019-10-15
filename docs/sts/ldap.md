@@ -47,10 +47,11 @@ LDAP is configured via the following environment variables:
 | **MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN** | **NO**                    | Base DN in AD/LDAP hierarchy to use in search requests |
 | **MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER**  | **NO**                    | Search filter to find groups of a user                 |
 | **MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE** | **NO**                    | Attribute of search results to use as group name       |
-| **MINIO_IDENTITY_LDAP_STS_EXPIRY_DURATION**  | **NO** (default: "1h")    | STS credentials validity duration                      |
-| **MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY**      | **NO** (default: "false") | Disable TLS certificate verification                   |
+| **MINIO_IDENTITY_LDAP_STS_EXPIRY**           | **NO** (default: "1h")    | STS credentials validity duration                      |
 
-Please note that MinIO will only access the AD/LDAP server over TLS. An example setup for development or experimentation:
+Please note that MinIO will only access the AD/LDAP server over TLS. If a self-signed certificate is being used, the certificate can be added to MinIO's certificates directory, so it can be trusted by the server.
+
+An example setup for development or experimentation:
 
 ``` shell
 export MINIO_IDENTITY_LDAP_SERVER_ADDR=myldapserver.com:636
@@ -58,8 +59,7 @@ export MINIO_IDENTITY_LDAP_USERNAME_FORMAT="uid=${username},cn=accounts,dc=mylda
 export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN="dc=myldapserver,dc=com"
 export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER="(&(objectclass=groupOfNames)(member=${usernamedn}))"
 export MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE="cn"
-export MINIO_IDENTITY_LDAP_STS_EXPIRY_DURATION=60
-export MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY=true
+export MINIO_IDENTITY_LDAP_STS_EXPIRY=60
 ```
 
 ### Variable substitution in AD/LDAP configuration strings
@@ -106,7 +106,7 @@ The group search filter looks like `(&(objectclass=group)(member=${usernamedn}))
 Thus the key configuration parameters look like:
 
 ```
-MINIO_IDENTITY_LDAP_SERVER_ADDR='ldaps://my.ldap-active-dir-server.com:636'
+MINIO_IDENTITY_LDAP_SERVER_ADDR='my.ldap-active-dir-server.com:636'
 MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn=${username},cn=users,dc=minioad,dc=local'
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local'
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(member=${usernamedn}))'
@@ -211,7 +211,7 @@ http://minio.cluster:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=foouser
 ```
 $ export MINIO_ACCESS_KEY=minio
 $ export MINIO_SECRET_KEY=minio123
-$ export MINIO_IDENTITY_LDAP_SERVER_ADDR='ldaps://my.ldap-active-dir-server.com:636'
+$ export MINIO_IDENTITY_LDAP_SERVER_ADDR='my.ldap-active-dir-server.com:636'
 $ export MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn=${username},cn=users,dc=minioad,dc=local'
 $ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local'
 $ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(member=${usernamedn}))'

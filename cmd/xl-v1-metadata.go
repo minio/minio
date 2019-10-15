@@ -24,12 +24,12 @@ import (
 	"net/http"
 	"path"
 	"sort"
-	"sync"
 	"time"
 
-	"github.com/minio/sha256-simd"
-
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/sha256-simd"
 )
 
 const erasureAlgorithmKlauspost = "klauspost/reedsolomon/vandermonde"
@@ -252,7 +252,7 @@ func (m xlMetaV1) ToObjectInfo(bucket, object string) ObjectInfo {
 	objInfo.Parts = m.Parts
 
 	// Update storage class
-	if sc, ok := m.Meta[amzStorageClass]; ok {
+	if sc, ok := m.Meta[xhttp.AmzStorageClass]; ok {
 		objInfo.StorageClass = sc
 	} else {
 		objInfo.StorageClass = globalMinioDefaultStorageClass
@@ -452,32 +452,40 @@ func renameXLMetadata(ctx context.Context, disks []StorageAPI, srcBucket, srcEnt
 
 // writeUniqueXLMetadata - writes unique `xl.json` content for each disk in order.
 func writeUniqueXLMetadata(ctx context.Context, disks []StorageAPI, bucket, prefix string, xlMetas []xlMetaV1, quorum int) ([]StorageAPI, error) {
-	var wg sync.WaitGroup
-	var mErrs = make([]error, len(disks))
+	g := errgroup.WithNErrs(len(disks))
 
 	// Start writing `xl.json` to all disks in parallel.
-	for index, disk := range disks {
-		if disk == nil {
-			mErrs[index] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-
-		// Pick one xlMeta for a disk at index.
-		xlMetas[index].Erasure.Index = index + 1
-
-		// Write `xl.json` in a routine.
-		go func(index int, disk StorageAPI, xlMeta xlMetaV1) {
-			defer wg.Done()
-
-			// Write unique `xl.json` for a disk at index.
-			mErrs[index] = writeXLMetadata(ctx, disk, bucket, prefix, xlMeta)
-		}(index, disk, xlMetas[index])
+	for index := range disks {
+		index := index
+		g.Go(func() error {
+			if disks[index] == nil {
+				return errDiskNotFound
+			}
+			// Pick one xlMeta for a disk at index.
+			xlMetas[index].Erasure.Index = index + 1
+			return writeXLMetadata(ctx, disks[index], bucket, prefix, xlMetas[index])
+		}, index)
 	}
 
 	// Wait for all the routines.
-	wg.Wait()
+	mErrs := g.Wait()
 
 	err := reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, quorum)
 	return evalDisks(disks, mErrs), err
+}
+
+// Returns per object readQuorum and writeQuorum
+// readQuorum is the min required disks to read data.
+// writeQuorum is the min required disks to write data.
+func objectQuorumFromMeta(ctx context.Context, xl xlObjects, partsMetaData []xlMetaV1, errs []error) (objectReadQuorum, objectWriteQuorum int, err error) {
+	// get the latest updated Metadata and a count of all the latest updated xlMeta(s)
+	latestXLMeta, err := getLatestXLMeta(ctx, partsMetaData, errs)
+
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Since all the valid erasure code meta updated at the same time are equivalent, pass dataBlocks
+	// from latestXLMeta to get the quorum
+	return latestXLMeta.Erasure.DataBlocks, latestXLMeta.Erasure.DataBlocks + 1, nil
 }

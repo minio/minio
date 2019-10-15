@@ -35,12 +35,14 @@ type LogInfo struct {
 }
 
 // SendLog returns true if log pertains to node specified in args.
-func (l LogInfo) SendLog(node string) bool {
-	return node == "" || strings.EqualFold(node, l.NodeName)
+func (l LogInfo) SendLog(node, logKind string) bool {
+	nodeFltr := (node == "" || strings.EqualFold(node, l.NodeName))
+	typeFltr := strings.EqualFold(logKind, "all") || strings.EqualFold(l.LogKind, logKind)
+	return nodeFltr && typeFltr
 }
 
 // GetLogs - listen on console log messages.
-func (adm AdminClient) GetLogs(node string, lineCnt int, doneCh <-chan struct{}) <-chan LogInfo {
+func (adm AdminClient) GetLogs(node string, lineCnt int, logKind string, doneCh <-chan struct{}) <-chan LogInfo {
 	logCh := make(chan LogInfo, 1)
 
 	// Only success, start a routine to start reading line by line.
@@ -49,6 +51,7 @@ func (adm AdminClient) GetLogs(node string, lineCnt int, doneCh <-chan struct{})
 		urlValues := make(url.Values)
 		urlValues.Set("node", node)
 		urlValues.Set("limit", strconv.Itoa(lineCnt))
+		urlValues.Set("logType", logKind)
 		for {
 			reqData := requestData{
 				relPath:     "/v1/log",

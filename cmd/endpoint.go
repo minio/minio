@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"os"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -32,7 +31,10 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/config/etcd"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/mountinfo"
 )
 
@@ -225,7 +227,7 @@ func (endpoints EndpointList) UpdateIsLocal() error {
 	keepAliveTicker := time.NewTicker(retryInterval * time.Second)
 	defer keepAliveTicker.Stop()
 	for {
-		// Break if the local endpoint is found already. Or all the endpoints are resolved.
+		// Break if the local endpoint is found already Or all the endpoints are resolved.
 		if foundLocal || (epsResolved == len(endpoints)) {
 			break
 		}
@@ -238,13 +240,13 @@ func (endpoints EndpointList) UpdateIsLocal() error {
 		default:
 			for i, resolved := range resolvedList {
 				if resolved {
+					// Continue if host is already resolved.
 					continue
 				}
 
 				// return err if not Docker or Kubernetes
-				// We use IsDocker() method to check for Docker Swarm environment
-				// as there is no reliable way to clearly identify Swarm from
-				// Docker environment.
+				// We use IsDocker() to check for Docker environment
+				// We use IsKubernetes() to check for Kubernetes environment
 				isLocal, err := isLocalHost(endpoints[i].HostName)
 				if err != nil {
 					if !IsDocker() && !IsKubernetes() {
@@ -254,12 +256,11 @@ func (endpoints EndpointList) UpdateIsLocal() error {
 					timeElapsed := time.Since(startTime)
 					// log error only if more than 1s elapsed
 					if timeElapsed > time.Second {
-						// log the message to console about the host not being
-						// resolveable.
+						// Log the message to console about the host not being resolveable.
 						reqInfo := (&logger.ReqInfo{}).AppendTags("host", endpoints[i].HostName)
 						reqInfo.AppendTags("elapsedTime", humanize.RelTime(startTime, startTime.Add(timeElapsed), "elapsed", ""))
 						ctx := logger.SetReqInfo(context.Background(), reqInfo)
-						logger.LogIf(ctx, err)
+						logger.LogIf(ctx, err, logger.Application)
 					}
 				} else {
 					resolvedList[i] = true
@@ -272,15 +273,33 @@ func (endpoints EndpointList) UpdateIsLocal() error {
 			}
 
 			// Wait for the tick, if the there exist a local endpoint in discovery.
-			// Non docker/kubernetes environment does not need to wait.
-			if !foundLocal && (IsDocker() && IsKubernetes()) {
+			// Non docker/kubernetes environment we do not need to wait.
+			if !foundLocal && (IsDocker() || IsKubernetes()) {
 				<-keepAliveTicker.C
 			}
 		}
 	}
 
+	// On Kubernetes/Docker setups DNS resolves inappropriately sometimes
+	// where there are situations same endpoints with multiple disks
+	// come online indicating either one of them is local and some
+	// of them are not local. This situation can never happen and
+	// its only a possibility in orchestrated deployments with dynamic
+	// DNS. Following code ensures that we treat if one of the endpoint
+	// says its local for a given host - it is true for all endpoints
+	// for the same host. Following code ensures that this assumption
+	// is true and it works in all scenarios and it is safe to assume
+	// for a given host.
+	endpointLocalMap := make(map[string]bool)
+	for _, ep := range endpoints {
+		if ep.IsLocal {
+			endpointLocalMap[ep.Host] = ep.IsLocal
+		}
+	}
+	for i := range endpoints {
+		endpoints[i].IsLocal = endpointLocalMap[endpoints[i].Host]
+	}
 	return nil
-
 }
 
 // NewEndpointList - returns new endpoint list based on input args.
@@ -377,14 +396,14 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 			return serverAddr, endpoints, setupType, err
 		}
 		if endpoint.Type() != PathEndpointType {
-			return serverAddr, endpoints, setupType, uiErrInvalidFSEndpoint(nil).Msg("use path style endpoint for FS setup")
+			return serverAddr, endpoints, setupType, config.ErrInvalidFSEndpoint(nil).Msg("use path style endpoint for FS setup")
 		}
 		endpoints = append(endpoints, endpoint)
 		setupType = FSSetupType
 
 		// Check for cross device mounts if any.
 		if err = checkCrossDeviceMounts(endpoints); err != nil {
-			return serverAddr, endpoints, setupType, uiErrInvalidFSEndpoint(nil).Msg(err.Error())
+			return serverAddr, endpoints, setupType, config.ErrInvalidFSEndpoint(nil).Msg(err.Error())
 		}
 		return serverAddr, endpoints, setupType, nil
 	}
@@ -395,12 +414,12 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 		var eps EndpointList
 		eps, err = NewEndpointList(iargs...)
 		if err != nil {
-			return serverAddr, endpoints, setupType, uiErrInvalidErasureEndpoints(nil).Msg(err.Error())
+			return serverAddr, endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
 		}
 
 		// Check for cross device mounts if any.
 		if err = checkCrossDeviceMounts(eps); err != nil {
-			return serverAddr, endpoints, setupType, uiErrInvalidErasureEndpoints(nil).Msg(err.Error())
+			return serverAddr, endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
 		}
 
 		for _, ep := range eps {
@@ -417,7 +436,7 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 	}
 
 	if err := endpoints.UpdateIsLocal(); err != nil {
-		return serverAddr, endpoints, setupType, uiErrInvalidErasureEndpoints(nil).Msg(err.Error())
+		return serverAddr, endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
 	}
 
 	// Here all endpoints are URL style.
@@ -445,7 +464,7 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 
 	// No local endpoint found.
 	if localEndpointCount == 0 {
-		return serverAddr, endpoints, setupType, uiErrInvalidErasureEndpoints(nil).Msg("no endpoint pointing to the local machine is found")
+		return serverAddr, endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg("no endpoint pointing to the local machine is found")
 	}
 
 	// Check whether same path is not used in endpoints of a host on different port.
@@ -461,7 +480,7 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 			if IPSet, ok := pathIPMap[endpoint.Path]; ok {
 				if !IPSet.Intersection(hostIPSet).IsEmpty() {
 					return serverAddr, endpoints, setupType,
-						uiErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("path '%s' can not be served by different port on same address", endpoint.Path))
+						config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("path '%s' can not be served by different port on same address", endpoint.Path))
 				}
 				pathIPMap[endpoint.Path] = IPSet.Union(hostIPSet)
 			} else {
@@ -479,7 +498,7 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 			}
 			if localPathSet.Contains(endpoint.Path) {
 				return serverAddr, endpoints, setupType,
-					uiErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("path '%s' cannot be served by different address on same server", endpoint.Path))
+					config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("path '%s' cannot be served by different address on same server", endpoint.Path))
 			}
 			localPathSet.Add(endpoint.Path)
 		}
@@ -490,10 +509,10 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 		if !localPortSet.Contains(serverAddrPort) {
 			if len(localPortSet) > 1 {
 				return serverAddr, endpoints, setupType,
-					uiErrInvalidErasureEndpoints(nil).Msg("port number in server address must match with one of the port in local endpoints")
+					config.ErrInvalidErasureEndpoints(nil).Msg("port number in server address must match with one of the port in local endpoints")
 			}
 			return serverAddr, endpoints, setupType,
-				uiErrInvalidErasureEndpoints(nil).Msg("server address and local endpoint have different ports")
+				config.ErrInvalidErasureEndpoints(nil).Msg("server address and local endpoint have different ports")
 		}
 	}
 
@@ -571,9 +590,9 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 		return serverAddr, endpoints, setupType, err
 	}
 
-	_, dok := os.LookupEnv("MINIO_DOMAIN")
-	_, eok := os.LookupEnv("MINIO_ETCD_ENDPOINTS")
-	_, iok := os.LookupEnv("MINIO_PUBLIC_IPS")
+	_, dok := env.Lookup(config.EnvDomain)
+	_, eok := env.Lookup(etcd.EnvEtcdEndpoints)
+	_, iok := env.Lookup(config.EnvPublicIPs)
 	if dok && eok && !iok {
 		updateDomainIPs(uniqueArgs)
 	}

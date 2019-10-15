@@ -18,12 +18,13 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
 	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/ellipses"
+	"github.com/minio/minio/pkg/env"
 )
 
 // This file implements and supports ellipses pattern for
@@ -77,13 +78,13 @@ func getSetIndexes(args []string, totalSizes []uint64) (setIndexes [][]uint64, e
 	}
 
 	var customSetDriveCount uint64
-	if v := os.Getenv("MINIO_ERASURE_SET_DRIVE_COUNT"); v != "" {
+	if v := env.Get("MINIO_ERASURE_SET_DRIVE_COUNT", ""); v != "" {
 		customSetDriveCount, err = strconv.ParseUint(v, 10, 64)
 		if err != nil {
-			return nil, uiErrInvalidErasureSetSize(err)
+			return nil, config.ErrInvalidErasureSetSize(err)
 		}
 		if !isValidSetSize(customSetDriveCount) {
-			return nil, uiErrInvalidErasureSetSize(nil)
+			return nil, config.ErrInvalidErasureSetSize(nil)
 		}
 	}
 
@@ -91,7 +92,7 @@ func getSetIndexes(args []string, totalSizes []uint64) (setIndexes [][]uint64, e
 	for _, totalSize := range totalSizes {
 		// Check if totalSize has minimum range upto setSize
 		if totalSize < setSizes[0] || totalSize < customSetDriveCount {
-			return nil, uiErrInvalidNumberOfErasureEndpoints(nil)
+			return nil, config.ErrInvalidNumberOfErasureEndpoints(nil)
 		}
 	}
 
@@ -125,17 +126,17 @@ func getSetIndexes(args []string, totalSizes []uint64) (setIndexes [][]uint64, e
 	if customSetDriveCount > 0 {
 		msg := fmt.Sprintf("Invalid set drive count, leads to non-uniform distribution for the given number of disks. Possible values for custom set count are %d", possibleSetCounts(setSize))
 		if customSetDriveCount > setSize {
-			return nil, uiErrInvalidErasureSetSize(nil).Msg(msg)
+			return nil, config.ErrInvalidErasureSetSize(nil).Msg(msg)
 		}
 		if setSize%customSetDriveCount != 0 {
-			return nil, uiErrInvalidErasureSetSize(nil).Msg(msg)
+			return nil, config.ErrInvalidErasureSetSize(nil).Msg(msg)
 		}
 		setSize = customSetDriveCount
 	}
 
 	// Check whether setSize is with the supported range.
 	if !isValidSetSize(setSize) {
-		return nil, uiErrInvalidNumberOfErasureEndpoints(nil)
+		return nil, config.ErrInvalidNumberOfErasureEndpoints(nil)
 	}
 
 	for i := range totalSizes {
@@ -198,14 +199,14 @@ func parseEndpointSet(args ...string) (ep endpointSet, err error) {
 	for i, arg := range args {
 		patterns, perr := ellipses.FindEllipsesPatterns(arg)
 		if perr != nil {
-			return endpointSet{}, uiErrInvalidErasureEndpoints(nil).Msg(perr.Error())
+			return endpointSet{}, config.ErrInvalidErasureEndpoints(nil).Msg(perr.Error())
 		}
 		argPatterns[i] = patterns
 	}
 
 	ep.setIndexes, err = getSetIndexes(args, getTotalSizes(argPatterns))
 	if err != nil {
-		return endpointSet{}, uiErrInvalidErasureEndpoints(nil).Msg(err.Error())
+		return endpointSet{}, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
 	}
 
 	ep.argPatterns = argPatterns
@@ -254,7 +255,7 @@ func GetAllSets(args ...string) ([][]string, error) {
 	for _, sargs := range setArgs {
 		for _, arg := range sargs {
 			if uniqueArgs.Contains(arg) {
-				return nil, uiErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("Input args (%s) has duplicate ellipses", args))
+				return nil, config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("Input args (%s) has duplicate ellipses", args))
 			}
 			uniqueArgs.Add(arg)
 		}

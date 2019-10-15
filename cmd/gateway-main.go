@@ -27,14 +27,17 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
+	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/pkg/env"
 )
 
 func init() {
 	logger.Init(GOPATH, GOROOT)
-	logger.RegisterUIError(fmtError)
+	logger.RegisterError(config.FmtError)
 }
 
 var (
@@ -130,7 +133,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	logger.FatalIf(err, "Invalid TLS certificate file")
 
 	// Check and load Root CAs.
-	globalRootCAs, err = getRootCAs(globalCertsCADir.Get())
+	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
 	// Handle common env vars.
@@ -141,7 +144,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Validate if we have access, secret set through environment.
 	if !globalIsEnvCreds {
-		logger.Fatal(uiErrEnvCredentialsMissingGateway(nil), "Unable to start gateway")
+		logger.Fatal(config.ErrEnvCredentialsMissingGateway(nil), "Unable to start gateway")
 	}
 
 	// Set system resources to maximum.
@@ -159,7 +162,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		registerSTSRouter(router)
 	}
 
-	// initialize globalConsoleSys system
+	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
 
 	enableConfigOps := gatewayName == "nas"
@@ -209,10 +212,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		srvCfg := newServerConfig()
 
 		// Override any values from ENVs.
-		srvCfg.loadFromEnvs()
-
-		// Load values to cached global values.
-		srvCfg.loadToCachedConfigs()
+		srvCfg.lookupConfigs()
 
 		// hold the mutex lock before a new config is assigned.
 		globalServerConfigMu.Lock()
@@ -246,11 +246,8 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		globalConfigSys.WatchConfigNASDisk(newObject)
 	}
 
-	// Load logger subsystem
-	loadLoggers()
-
 	// This is only to uniquely identify each gateway deployments.
-	globalDeploymentID = os.Getenv("MINIO_GATEWAY_DEPLOYMENT_ID")
+	globalDeploymentID = env.Get("MINIO_GATEWAY_DEPLOYMENT_ID", mustGetUUID())
 	logger.SetDeploymentID(globalDeploymentID)
 
 	var cacheConfig = globalServerConfig.GetCacheConfig()
@@ -274,17 +271,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Create new policy system.
 	globalPolicySys = NewPolicySys()
 
-	// Initialize policy system.
-	go globalPolicySys.Init(newObject)
-
-	// Create new lifecycle system
+	// Create new lifecycle system.
 	globalLifecycleSys = NewLifecycleSys()
 
 	// Create new notification system.
 	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
-	if enableConfigOps && newObject.IsNotificationSupported() {
-		logger.LogIf(context.Background(), globalNotificationSys.Init(newObject))
-	}
 
 	// Verify if object layer supports
 	// - encryption
@@ -304,7 +295,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 		// Print a warning message if gateway is not ready for production before the startup banner.
 		if !gw.Production() {
-			logStartupMessage(colorYellow("               *** Warning: Not Ready for Production ***"))
+			logStartupMessage(color.Yellow("               *** Warning: Not Ready for Production ***"))
 		}
 
 		// Print gateway startup message.

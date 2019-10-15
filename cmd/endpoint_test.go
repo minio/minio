@@ -350,27 +350,29 @@ func TestCreateEndpoints(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		serverAddr, endpoints, setupType, err := CreateEndpoints(testCase.serverAddr, testCase.args...)
-
-		if err == nil {
-			if testCase.expectedErr != nil {
-				t.Fatalf("Test (%d) error: expected = %v, got = <nil>", i+1, testCase.expectedErr)
-			} else {
-				if serverAddr != testCase.expectedServerAddr {
-					t.Fatalf("Test (%d) serverAddr: expected = %v, got = %v", i+1, testCase.expectedServerAddr, serverAddr)
+		testCase := testCase
+		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
+			serverAddr, endpoints, setupType, err := CreateEndpoints(testCase.serverAddr, testCase.args...)
+			if err == nil {
+				if testCase.expectedErr != nil {
+					t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
+				} else {
+					if serverAddr != testCase.expectedServerAddr {
+						t.Fatalf("serverAddr: expected = %v, got = %v", testCase.expectedServerAddr, serverAddr)
+					}
+					if !reflect.DeepEqual(endpoints, testCase.expectedEndpoints) {
+						t.Fatalf("endpoints: expected = %v, got = %v", testCase.expectedEndpoints, endpoints)
+					}
+					if setupType != testCase.expectedSetupType {
+						t.Fatalf("setupType: expected = %v, got = %v", testCase.expectedSetupType, setupType)
+					}
 				}
-				if !reflect.DeepEqual(endpoints, testCase.expectedEndpoints) {
-					t.Fatalf("Test (%d) endpoints: expected = %v, got = %v", i+1, testCase.expectedEndpoints, endpoints)
-				}
-				if setupType != testCase.expectedSetupType {
-					t.Fatalf("Test (%d) setupType: expected = %v, got = %v", i+1, testCase.expectedSetupType, setupType)
-				}
+			} else if testCase.expectedErr == nil {
+				t.Fatalf("error: expected = <nil>, got = %v", err)
+			} else if err.Error() != testCase.expectedErr.Error() {
+				t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
 			}
-		} else if testCase.expectedErr == nil {
-			t.Fatalf("Test (%d) error: expected = <nil>, got = %v", i+1, err)
-		} else if err.Error() != testCase.expectedErr.Error() {
-			t.Fatalf("Test (%d) error: expected = %v, got = %v", i+1, testCase.expectedErr, err)
-		}
+		})
 	}
 }
 

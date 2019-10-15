@@ -19,12 +19,12 @@ package cmd
 import (
 	"context"
 	"sort"
-	"sync"
 
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
 // list all errors that can be ignore in a bucket operation.
@@ -42,83 +42,71 @@ func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
-	// Initialize sync waitgroup.
-	var wg sync.WaitGroup
+	storageDisks := xl.getDisks()
 
-	// Initialize list of errors.
-	var dErrs = make([]error, len(xl.getDisks()))
+	g := errgroup.WithNErrs(len(storageDisks))
 
 	// Make a volume entry on all underlying storage disks.
-	for index, disk := range xl.getDisks() {
-		if disk == nil {
-			dErrs[index] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-		// Make a volume inside a go-routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			err := disk.MakeVol(bucket)
-			if err != nil {
-				if err != errVolumeExists {
-					logger.LogIf(ctx, err)
+	for index := range storageDisks {
+		index := index
+		g.Go(func() error {
+			if storageDisks[index] != nil {
+				if err := storageDisks[index].MakeVol(bucket); err != nil {
+					if err != errVolumeExists {
+						logger.LogIf(ctx, err)
+					}
+					return err
 				}
-				dErrs[index] = err
+				return nil
 			}
-		}(index, disk)
+			return errDiskNotFound
+		}, index)
 	}
 
-	// Wait for all make vol to finish.
-	wg.Wait()
-
-	writeQuorum := len(xl.getDisks())/2 + 1
-	err := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, writeQuorum)
+	writeQuorum := len(storageDisks)/2 + 1
+	err := reduceWriteQuorumErrs(ctx, g.Wait(), bucketOpIgnoredErrs, writeQuorum)
 	if err == errXLWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
-		undoMakeBucket(xl.getDisks(), bucket)
+		undoMakeBucket(storageDisks, bucket)
 	}
 	return toObjectErr(err, bucket)
 }
 
-func (xl xlObjects) undoDeleteBucket(bucket string) {
-	// Initialize sync waitgroup.
-	var wg sync.WaitGroup
+func undoDeleteBucket(storageDisks []StorageAPI, bucket string) {
+	g := errgroup.WithNErrs(len(storageDisks))
 	// Undo previous make bucket entry on all underlying storage disks.
-	for index, disk := range xl.getDisks() {
-		if disk == nil {
+	for index := range storageDisks {
+		if storageDisks[index] == nil {
 			continue
 		}
-		wg.Add(1)
-		// Delete a bucket inside a go-routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			_ = disk.MakeVol(bucket)
-		}(index, disk)
+		index := index
+		g.Go(func() error {
+			_ = storageDisks[index].MakeVol(bucket)
+			return nil
+		}, index)
 	}
 
 	// Wait for all make vol to finish.
-	wg.Wait()
+	g.Wait()
 }
 
 // undo make bucket operation upon quorum failure.
 func undoMakeBucket(storageDisks []StorageAPI, bucket string) {
-	// Initialize sync waitgroup.
-	var wg sync.WaitGroup
+	g := errgroup.WithNErrs(len(storageDisks))
 	// Undo previous make bucket entry on all underlying storage disks.
-	for index, disk := range storageDisks {
-		if disk == nil {
+	for index := range storageDisks {
+		if storageDisks[index] == nil {
 			continue
 		}
-		wg.Add(1)
-		// Delete a bucket inside a go-routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			_ = disk.DeleteVol(bucket)
-		}(index, disk)
+		index := index
+		g.Go(func() error {
+			_ = storageDisks[index].DeleteVol(bucket)
+			return nil
+		}, index)
 	}
 
 	// Wait for all make vol to finish.
-	wg.Wait()
+	g.Wait()
 }
 
 // getBucketInfo - returns the BucketInfo from one of the load balanced disks.
@@ -245,42 +233,34 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 	defer bucketLock.Unlock()
 
 	// Collect if all disks report volume not found.
-	var wg sync.WaitGroup
-	var dErrs = make([]error, len(xl.getDisks()))
-
-	// Remove a volume entry on all underlying storage disks.
 	storageDisks := xl.getDisks()
-	for index, disk := range storageDisks {
-		if disk == nil {
-			dErrs[index] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-		// Delete volume inside a go-routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			// Attempt to delete bucket.
-			err := disk.DeleteVol(bucket)
-			if err != nil {
-				dErrs[index] = err
-				return
-			}
 
-			// Cleanup all the previously incomplete multiparts.
-			err = cleanupDir(ctx, disk, minioMetaMultipartBucket, bucket)
-			if err != nil && err != errVolumeNotFound {
-				dErrs[index] = err
+	g := errgroup.WithNErrs(len(storageDisks))
+
+	for index := range storageDisks {
+		index := index
+		g.Go(func() error {
+			if storageDisks[index] != nil {
+				if err := storageDisks[index].DeleteVol(bucket); err != nil {
+					return err
+				}
+				err := cleanupDir(ctx, storageDisks[index], minioMetaMultipartBucket, bucket)
+				if err != nil && err != errVolumeNotFound {
+					return err
+				}
+				return nil
 			}
-		}(index, disk)
+			return errDiskNotFound
+		}, index)
 	}
 
 	// Wait for all the delete vols to finish.
-	wg.Wait()
+	dErrs := g.Wait()
 
-	writeQuorum := len(xl.getDisks())/2 + 1
+	writeQuorum := len(storageDisks)/2 + 1
 	err := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, writeQuorum)
 	if err == errXLWriteQuorum {
-		xl.undoDeleteBucket(bucket)
+		undoDeleteBucket(storageDisks, bucket)
 	}
 	if err != nil {
 		return toObjectErr(err, bucket)

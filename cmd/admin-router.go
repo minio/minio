@@ -49,6 +49,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 	// Info operations
 	adminV1Router.Methods(http.MethodGet).Path("/info").HandlerFunc(httpTraceAll(adminAPI.ServerInfoHandler))
+	// Harware Info operations
+	adminV1Router.Methods(http.MethodGet).Path("/hardware").HandlerFunc(httpTraceAll(adminAPI.ServerHardwareInfoHandler)).Queries("hwType", "{hwType:.*}")
 
 	if globalIsDistXL || globalIsXL {
 		/// Heal operations
@@ -142,5 +144,5 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 	adminV1Router.Methods(http.MethodGet).Path("/kms/key/status").HandlerFunc(httpTraceAll(adminAPI.KMSKeyStatusHandler))
 
 	// If none of the routes match, return error.
-	adminV1Router.NotFoundHandler = http.HandlerFunc(httpTraceHdrs(notFoundHandlerJSON))
+	adminV1Router.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(versionMismatchHandler))
 }

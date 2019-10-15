@@ -18,23 +18,20 @@ package cmd
 
 import (
 	"crypto/x509"
-	"fmt"
 	"os"
 	"time"
 
-	isatty "github.com/mattn/go-isatty"
 	"github.com/minio/minio-go/v6/pkg/set"
 
 	etcd "github.com/coreos/etcd/clientv3"
 	humanize "github.com/dustin/go-humanize"
-	"github.com/fatih/color"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/dns"
+	"github.com/minio/minio/pkg/iam/openid"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/iam/validator"
 	"github.com/minio/minio/pkg/pubsub"
 )
 
@@ -58,6 +55,7 @@ const (
 	globalMinioDefaultStorageClass = "STANDARD"
 	globalWindowsOSName            = "windows"
 	globalNetBSDOSName             = "netbsd"
+	globalMacOSName                = "darwin"
 	globalMinioModeFS              = "mode-server-fs"
 	globalMinioModeXL              = "mode-server-xl"
 	globalMinioModeDistXL          = "mode-server-distributed-xl"
@@ -200,14 +198,6 @@ var (
 	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)         // default timeout for general ops
 	globalHealingTimeout   = newDynamicTimeout(30*time.Minute /*1*/, 30*time.Minute)           // timeout for healing related ops
 
-	// Storage classes
-	// Set to indicate if storage class is set up
-	globalIsStorageClass bool
-	// Set to store reduced redundancy storage class
-	globalRRStorageClass storageClass
-	// Set to store standard storage class
-	globalStandardStorageClass storageClass
-
 	globalIsEnvWORM bool
 	// Is worm enabled
 	globalWORMEnabled bool
@@ -225,8 +215,6 @@ var (
 	globalCacheExpiry = 90
 	// Max allowed disk cache percentage
 	globalCacheMaxUse = 80
-	// Disk cache KMS Key
-	globalCacheKMSKeyID string
 	// Initialized KMS configuration for disk cache
 	globalCacheKMS crypto.KMS
 	// Allocated etcd endpoint for config and bucket DNS.
@@ -240,9 +228,6 @@ var (
 	// Usage check interval value.
 	globalUsageCheckInterval = globalDefaultUsageCheckInterval
 
-	// KMS key id
-	globalKMSKeyID string
-
 	// GlobalKMS initialized KMS configuration
 	GlobalKMS crypto.KMS
 
@@ -250,9 +235,6 @@ var (
 	// into an SSE-S3 request. If enabled a valid, non-empty KMS
 	// configuration must be present.
 	globalAutoEncryption bool
-
-	// Is compression include extensions/content-types set?
-	globalIsEnvCompression bool
 
 	// Is compression enabled?
 	globalIsCompressionEnabled = false
@@ -268,7 +250,7 @@ var (
 	standardExcludeCompressContentTypes = []string{"video/*", "audio/*", "application/zip", "application/x-gzip", "application/x-zip-compressed", " application/x-compress", "application/x-spoon"}
 
 	// Authorization validators list.
-	globalIAMValidators *validator.Validators
+	globalOpenIDValidators *openid.Validators
 
 	// OPA policy system.
 	globalPolicyOPA *iampolicy.Opa
@@ -285,64 +267,6 @@ var (
 	globalSweepHealState    *allHealState
 
 	// Add new variable global values here.
-)
-
-// global colors.
-var (
-	// Check if we stderr, stdout are dumb terminals, we do not apply
-	// ansi coloring on dumb terminals.
-	isTerminal = func() bool {
-		return isatty.IsTerminal(os.Stdout.Fd()) && isatty.IsTerminal(os.Stderr.Fd())
-	}
-
-	colorBold = func() func(a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.Bold).SprintFunc()
-		}
-		return fmt.Sprint
-	}()
-	colorRed = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgRed).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
-	colorBlue = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgBlue).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
-	colorYellow = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgYellow).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
-	colorCyanBold = func() func(a ...interface{}) string {
-		if isTerminal() {
-			color.New(color.FgCyan, color.Bold).SprintFunc()
-		}
-		return fmt.Sprint
-	}()
-	colorYellowBold = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgYellow, color.Bold).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
-	colorBgYellow = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.BgYellow).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
-	colorBlack = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgBlack).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
 )
 
 // Returns minio global information, as a key value map.

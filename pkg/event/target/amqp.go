@@ -26,7 +26,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/streadway/amqp"
@@ -72,11 +71,12 @@ func (a *AMQPArgs) Validate() error {
 
 // AMQPTarget - AMQP target
 type AMQPTarget struct {
-	id        event.TargetID
-	args      AMQPArgs
-	conn      *amqp.Connection
-	connMutex sync.Mutex
-	store     Store
+	id         event.TargetID
+	args       AMQPArgs
+	conn       *amqp.Connection
+	connMutex  sync.Mutex
+	store      Store
+	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 }
 
 // ID - returns TargetID.
@@ -174,7 +174,7 @@ func (target *AMQPTarget) Save(eventData event.Event) error {
 	}
 	defer func() {
 		cErr := ch.Close()
-		logger.LogOnceIf(context.Background(), cErr, target.ID())
+		target.loggerOnce(context.Background(), cErr, target.ID())
 	}()
 
 	return target.send(eventData, ch)
@@ -188,7 +188,7 @@ func (target *AMQPTarget) Send(eventKey string) error {
 	}
 	defer func() {
 		cErr := ch.Close()
-		logger.LogOnceIf(context.Background(), cErr, target.ID())
+		target.loggerOnce(context.Background(), cErr, target.ID())
 	}()
 
 	eventData, eErr := target.store.Get(eventKey)
@@ -215,7 +215,7 @@ func (target *AMQPTarget) Close() error {
 }
 
 // NewAMQPTarget - creates new AMQP target.
-func NewAMQPTarget(id string, args AMQPArgs, doneCh <-chan struct{}) (*AMQPTarget, error) {
+func NewAMQPTarget(id string, args AMQPArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})) (*AMQPTarget, error) {
 	var conn *amqp.Connection
 	var err error
 
@@ -237,17 +237,19 @@ func NewAMQPTarget(id string, args AMQPArgs, doneCh <-chan struct{}) (*AMQPTarge
 	}
 
 	target := &AMQPTarget{
-		id:    event.TargetID{ID: id, Name: "amqp"},
-		args:  args,
-		conn:  conn,
-		store: store,
+		id:         event.TargetID{ID: id, Name: "amqp"},
+		args:       args,
+		conn:       conn,
+		store:      store,
+		loggerOnce: loggerOnce,
 	}
 
 	if target.store != nil {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh)
+		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
+
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh)
+		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
 	}
 
 	return target, nil

@@ -32,6 +32,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/lock"
@@ -116,7 +117,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		if err == errMinDiskSize {
 			return nil, err
 		}
-		return nil, uiErrUnableToWriteInBackend(err)
+		return nil, config.ErrUnableToWriteInBackend(err)
 	}
 
 	// Assign a new UUID for FS minio mode. Each server instance
@@ -547,7 +548,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	// Check if range is valid
 	if off > size || off+length > size {
 		err = InvalidRange{off, length, size}
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, err, logger.Application)
 		closeFn()
 		rwPoolUnlocker()
 		nsUnlocker()
@@ -586,13 +587,13 @@ func (fs *FSObjects) getObject(ctx context.Context, bucket, object string, offse
 
 	// Offset cannot be negative.
 	if offset < 0 {
-		logger.LogIf(ctx, errUnexpected)
+		logger.LogIf(ctx, errUnexpected, logger.Application)
 		return toObjectErr(errUnexpected, bucket, object)
 	}
 
 	// Writer cannot be nil.
 	if writer == nil {
-		logger.LogIf(ctx, errUnexpected)
+		logger.LogIf(ctx, errUnexpected, logger.Application)
 		return toObjectErr(errUnexpected, bucket, object)
 	}
 
@@ -621,7 +622,7 @@ func (fs *FSObjects) getObject(ctx context.Context, bucket, object string, offse
 			return toObjectErr(perr, bucket, object)
 		}
 		if objEtag != etag {
-			logger.LogIf(ctx, InvalidETag{})
+			logger.LogIf(ctx, InvalidETag{}, logger.Application)
 			return toObjectErr(InvalidETag{}, bucket, object)
 		}
 	}
@@ -647,7 +648,7 @@ func (fs *FSObjects) getObject(ctx context.Context, bucket, object string, offse
 	// Reply back invalid range if the input offset and length fall out of range.
 	if offset > size || offset+length > size {
 		err = InvalidRange{offset, length, size}
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, err, logger.Application)
 		return err
 	}
 
@@ -863,7 +864,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 
 	// Validate input data size and it can never be less than zero.
 	if data.Size() < -1 {
-		logger.LogIf(ctx, errInvalidArgument)
+		logger.LogIf(ctx, errInvalidArgument, logger.Application)
 		return ObjectInfo{}, errInvalidArgument
 	}
 

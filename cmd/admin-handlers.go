@@ -194,7 +194,7 @@ func (a adminAPIHandlers) ServiceActionHandler(w http.ResponseWriter, r *http.Re
 	case madmin.ServiceActionStop:
 		serviceSig = serviceStop
 	default:
-		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action))
+		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action), logger.Application)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
 		return
 	}
@@ -705,7 +705,7 @@ func extractHealInitParams(vars map[string]string, qParms url.Values, r io.Reade
 	if hip.clientToken == "" {
 		jerr := json.NewDecoder(r).Decode(&hip.hs)
 		if jerr != nil {
-			logger.LogIf(context.Background(), jerr)
+			logger.LogIf(context.Background(), jerr, logger.Application)
 			err = ErrRequestBodyParse
 			return
 		}
@@ -1517,7 +1517,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	password := globalServerConfig.GetCredential().SecretKey
 	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, err, logger.Application)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
 		return
 	}
@@ -1525,7 +1525,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	// Validate JSON provided in the request body: check the
 	// client has not sent JSON objects with duplicate keys.
 	if err = quick.CheckDuplicateKeys(string(configBytes)); err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, err, logger.Application)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
 		return
 	}
@@ -1656,6 +1656,13 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		limitLines = 10
 	}
+
+	logKind := r.URL.Query().Get("logType")
+	if logKind == "" {
+		logKind = string(logger.All)
+	}
+	logKind = strings.ToUpper(logKind)
+
 	// Avoid reusing tcp connection if read timeout is hit
 	// This is needed to make r.Context().Done() work as
 	// expected in case of read timeout
@@ -1672,7 +1679,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	globalConsoleSys.Subscribe(logCh, doneCh, node, limitLines, nil)
+	globalConsoleSys.Subscribe(logCh, doneCh, node, limitLines, logKind, nil)
 
 	for _, peer := range peers {
 		if node == "" || strings.EqualFold(peer.host.Name, node) {
@@ -1689,7 +1696,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 		select {
 		case entry := <-logCh:
 			log := entry.(madmin.LogInfo)
-			if log.SendLog(node) {
+			if log.SendLog(node, logKind) {
 				if err := enc.Encode(log); err != nil {
 					return
 				}
@@ -1722,7 +1729,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 
 	keyID := r.URL.Query().Get("key-id")
 	if keyID == "" {
-		keyID = globalKMSKeyID
+		keyID = GlobalKMS.KeyID()
 	}
 	var response = madmin.KMSKeyStatus{
 		KeyID: keyID,
@@ -1786,4 +1793,43 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeSuccessResponseJSON(w, resp)
+}
+
+// ServerHardwareInfoHandler - GET /minio/admin/v1/hardwareinfo?Type={hwType}
+// ----------
+// Get all hardware information based on input type
+// Supported types = cpu
+func (a adminAPIHandlers) ServerHardwareInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "HardwareInfo")
+
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	hardware := vars[madmin.HARDWARE]
+
+	switch madmin.HardwareType(hardware) {
+	case madmin.CPU:
+		// Get CPU hardware details from local server's cpu(s)
+		cpu := getLocalCPUInfo(globalEndpoints, r)
+		// Notify all other MinIO peers to report cpu hardware
+		cpus := globalNotificationSys.CPUInfo()
+		cpus = append(cpus, cpu)
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(cpus)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		// Reply with cpu hardware information (across nodes in a
+		// distributed setup) as json.
+		writeSuccessResponseJSON(w, jsonBytes)
+
+	default:
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+	}
 }

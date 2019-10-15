@@ -65,14 +65,14 @@ var supportedHeaders = []string{
 	"content-language",
 	"content-encoding",
 	"content-disposition",
-	amzStorageClass,
+	xhttp.AmzStorageClass,
 	"expires",
 	// Add more supported headers here.
 }
 
 // isMetadataDirectiveValid - check if metadata-directive is valid.
 func isMetadataDirectiveValid(h http.Header) bool {
-	_, ok := h[http.CanonicalHeaderKey("X-Amz-Metadata-Directive")]
+	_, ok := h[http.CanonicalHeaderKey(xhttp.AmzMetadataDirective)]
 	if ok {
 		// Check atleast set metadata-directive is valid.
 		return (isMetadataCopy(h) || isMetadataReplace(h))
@@ -84,12 +84,12 @@ func isMetadataDirectiveValid(h http.Header) bool {
 
 // Check if the metadata COPY is requested.
 func isMetadataCopy(h http.Header) bool {
-	return h.Get("X-Amz-Metadata-Directive") == "COPY"
+	return h.Get(xhttp.AmzMetadataDirective) == "COPY"
 }
 
 // Check if the metadata REPLACE is requested.
 func isMetadataReplace(h http.Header) bool {
-	return h.Get("X-Amz-Metadata-Directive") == "REPLACE"
+	return h.Get(xhttp.AmzMetadataDirective) == "REPLACE"
 }
 
 // Splits an incoming path into bucket and object components.
@@ -383,6 +383,21 @@ func notFoundHandlerJSON(w http.ResponseWriter, r *http.Request) {
 // If none of the http routes match respond with MethodNotAllowed
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	writeErrorResponse(context.Background(), w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
+}
+
+// If the API version does not match with current version.
+func versionMismatchHandler(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	switch {
+	case strings.HasPrefix(path, minioReservedBucketPath+"/peer/"):
+		writeVersionMismatchResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidAPIVersion), r.URL, false)
+	case strings.HasPrefix(path, minioReservedBucketPath+"/storage/"):
+		writeVersionMismatchResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidAPIVersion), r.URL, false)
+	case strings.HasPrefix(path, minioReservedBucketPath+"/lock/"):
+		writeVersionMismatchResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidAPIVersion), r.URL, false)
+	default:
+		writeVersionMismatchResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidAPIVersion), r.URL, true)
+	}
 }
 
 // gets host name for current node

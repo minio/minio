@@ -83,7 +83,7 @@ func TestJsonpathEval(t *testing.T) {
 
 		for j, rec := range recs {
 			// fmt.Println(rec)
-			r, err := jsonpathEval(jp.PathExpr, rec)
+			r, _, err := jsonpathEval(jp.PathExpr, rec)
 			if err != nil {
 				t.Errorf("Error: %d %d %v", i, j, err)
 			}

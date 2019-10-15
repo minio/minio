@@ -359,14 +359,19 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalIAMSys = NewIAMSys()
 	globalIAMSys.Init(objLayer)
 
+	buckets, err := objLayer.ListBuckets(context.Background())
+	if err != nil {
+		t.Fatalf("Unable to list buckets on backend %s", err)
+	}
+
 	globalPolicySys = NewPolicySys()
-	globalPolicySys.Init(objLayer)
+	globalPolicySys.Init(buckets, objLayer)
 
 	globalNotificationSys = NewNotificationSys(globalServerConfig, testServer.Disks)
-	globalNotificationSys.Init(objLayer)
+	globalNotificationSys.Init(buckets, objLayer)
 
 	globalLifecycleSys = NewLifecycleSys()
-	globalLifecycleSys.Init(objLayer)
+	globalLifecycleSys.Init(buckets, objLayer)
 
 	return testServer
 }
@@ -463,12 +468,6 @@ func resetGlobalIsEnvs() {
 	globalIsEnvWORM = false
 	globalIsEnvBrowser = false
 	globalIsEnvRegion = false
-	globalIsStorageClass = false
-}
-
-func resetGlobalStorageEnvs() {
-	globalStandardStorageClass = storageClass{}
-	globalRRStorageClass = storageClass{}
 }
 
 // reset global heal state
@@ -518,8 +517,6 @@ func resetTestGlobals() {
 	resetGlobalIsXL()
 	// Reset global isEnvCreds flag.
 	resetGlobalIsEnvs()
-	// Reset global storage class flags
-	resetGlobalStorageEnvs()
 	// Reset global heal state
 	resetGlobalHealState()
 	//Reset global disk cache flags
@@ -532,10 +529,15 @@ func resetTestGlobals() {
 
 // Configure the server for the test run.
 func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
+	// Initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
+
 	// Initialize server config.
 	if err = newSrvConfig(obj); err != nil {
 		return err
 	}
+
+	globalServerConfig.Logger.Console.Enabled = false
 
 	// Set a default region.
 	globalServerConfig.SetRegion(bucketLocation)
@@ -1615,9 +1617,11 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 		return nil, err
 	}
 
-	storageDisks, err := initStorageDisks(endpoints)
-	if err != nil {
-		return nil, err
+	storageDisks, errs := initStorageDisksWithErrors(endpoints)
+	for _, err = range errs {
+		if err != nil && err != errDiskNotFound {
+			return nil, err
+		}
 	}
 
 	// Initialize list pool.
@@ -1941,8 +1945,13 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	globalIAMSys = NewIAMSys()
 	globalIAMSys.Init(objLayer)
 
+	buckets, err := objLayer.ListBuckets(context.Background())
+	if err != nil {
+		t.Fatalf("Unable to list buckets on backend %s", err)
+	}
+
 	globalPolicySys = NewPolicySys()
-	globalPolicySys.Init(objLayer)
+	globalPolicySys.Init(buckets, objLayer)
 
 	credentials := globalServerConfig.GetCredential()
 

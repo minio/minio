@@ -142,7 +142,7 @@ func checkAdminRequestAuthType(ctx context.Context, r *http.Request, region stri
 	if s3Err != ErrNone {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("requestHeaders", dumpRequest(r))
 		ctx := logger.SetReqInfo(ctx, reqInfo)
-		logger.LogIf(ctx, errors.New(getAPIError(s3Err).Description))
+		logger.LogIf(ctx, errors.New(getAPIError(s3Err).Description), logger.Application)
 	}
 	return s3Err
 }
@@ -235,7 +235,7 @@ func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
 		if err != nil {
 			// Base64 decoding fails, we should log to indicate
 			// something is malforming the request sent by client.
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(context.Background(), err, logger.Application)
 			return nil, errAuthentication
 		}
 		claims[iampolicy.SessionPolicyName] = string(spBytes)
@@ -312,7 +312,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 		// To extract region from XML in request body, get copy of request body.
 		payload, err := ioutil.ReadAll(io.LimitReader(r.Body, maxLocationConstraintSize))
 		if err != nil {
-			logger.LogIf(ctx, err)
+			logger.LogIf(ctx, err, logger.Application)
 			return accessKey, owner, ErrMalformedXML
 		}
 

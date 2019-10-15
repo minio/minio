@@ -13,7 +13,10 @@ import (
 	"time"
 
 	"github.com/djherbis/atime"
+	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/pkg/sync/errgroup"
 	"github.com/minio/minio/pkg/wildcard"
 )
 
@@ -389,7 +392,7 @@ func (c *cacheObjects) hashIndex(bucket, object string) int {
 
 // newCache initializes the cacheFSObjects for the "drives" specified in config.json
 // or the global env overrides.
-func newCache(config CacheConfig) ([]*diskCache, bool, error) {
+func newCache(config cache.Config) ([]*diskCache, bool, error) {
 	var caches []*diskCache
 	ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{})
 	formats, migrating, err := loadAndValidateCacheFormat(ctx, config.Drives)
@@ -446,43 +449,39 @@ func checkAtimeSupport(dir string) (err error) {
 	return
 }
 func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
-	logStartupMessage(colorBlue("Cache migration initiated ...."))
+	logStartupMessage(color.Blue("Cache migration initiated ...."))
 
-	var wg sync.WaitGroup
-	errs := make([]error, len(c.cache))
-	for i, dc := range c.cache {
+	g := errgroup.WithNErrs(len(c.cache))
+	for index, dc := range c.cache {
 		if dc == nil {
 			continue
 		}
-		wg.Add(1)
-		// start migration from V1 to V2
-		go func(ctx context.Context, dc *diskCache, errs []error, idx int) {
-			defer wg.Done()
-			if err := migrateOldCache(ctx, dc); err != nil {
-				errs[idx] = err
-				logger.LogIf(ctx, err)
-				return
-			}
-			// start purge routine after migration completes.
-			go dc.purge()
-		}(ctx, dc, errs, i)
+		index := index
+		g.Go(func() error {
+			// start migration from V1 to V2
+			return migrateOldCache(ctx, c.cache[index])
+		}, index)
 	}
-	wg.Wait()
 
 	errCnt := 0
-	for _, err := range errs {
+	for index, err := range g.Wait() {
 		if err != nil {
 			errCnt++
+			logger.LogIf(ctx, err)
+			continue
 		}
+		go c.cache[index].purge()
 	}
+
 	if errCnt > 0 {
 		return
 	}
+
 	// update migration status
 	c.migMutex.Lock()
 	defer c.migMutex.Unlock()
 	c.migrating = false
-	logStartupMessage(colorBlue("Cache migration completed successfully."))
+	logStartupMessage(color.Blue("Cache migration completed successfully."))
 }
 
 // PutObject - caches the uploaded object for single Put operations
@@ -535,7 +534,7 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 }
 
 // Returns cacheObjects for use by Server.
-func newServerCacheObjects(ctx context.Context, config CacheConfig) (CacheObjectLayer, error) {
+func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjectLayer, error) {
 	// list of disk caches for cache "drives" specified in config.json or MINIO_CACHE_DRIVES env var.
 	cache, migrateSw, err := newCache(config)
 	if err != nil {

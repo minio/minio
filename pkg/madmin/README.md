@@ -42,13 +42,14 @@ func main() {
 }
 
 ```
-| Service operations                  | Info operations                                 | Healing operations | Config operations         | Top operations          | IAM operations                        | Misc                                              | KMS                             |
-|:------------------------------------|:------------------------------------------------|:-------------------|:--------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|:--------------------------------|
-| [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                     | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig) | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   | [`GetKeyStatus`](#GetKeyStatus) |
-| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)       |                    | [`SetConfig`](#SetConfig) |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |                                 |
-|                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)     |                    |                           |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
-| [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) |                    |                           |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                 |
-|                                     | [`NetPerfInfo`](#NetPerfInfo)                   |                    |                           |                         |                                       |                                                   |                                 |
+| Service operations                  | Info operations                                    | Healing operations | Config operations         | Top operations          | IAM operations                        | Misc                                              | KMS                             |
+|:------------------------------------|:---------------------------------------------------|:-------------------|:--------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|:--------------------------------|
+| [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                        | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig) | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   | [`GetKeyStatus`](#GetKeyStatus) |
+| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)          |                    | [`SetConfig`](#SetConfig) |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |                                 |
+|                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)        |                    |                           |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
+| [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo)    |                    |                           |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                 |
+|                                     | [`NetPerfInfo`](#NetPerfInfo)                      |                    |                           |                         |                                       |                                                   |                                 |
+|                                     | [`ServerCPUHardwareInfo`](#ServerCPUHardwareInfo)  |                    |                           |                         |                                       |                                                   |                                 |
 
 ## 1. Constructor
 <a name="MinIO"></a>
@@ -285,6 +286,33 @@ Fetches network performance of all cluster nodes using given sized payload. Retu
 | `Addr`           | _string_  | Address of the server the following information is retrieved from. |
 | `Error`          | _string_  | Errors (if any) encountered while reaching this node               |
 | `ReadThroughput` | _uint64_  | Network read throughput of the server in bytes per second          |
+
+<a name="ServerCPUHardwareInfo"></a>
+### ServerCPUHardwareInfo() ([]ServerCPUHardwareInfo, error)
+
+Fetches hardware information of CPU.
+
+| Param             | Type                | Description                                                         |
+|-------------------|---------------------|---------------------------------------------------------------------|
+| `hwi.Addr`        |      _string_       | Address of the server the following information  is retrieved from. |
+| `hwi.Error`       |      _string_       | Errors (if any) encountered while reaching this node                |
+| `hwi.CPUInfo`     | _[]cpu.InfoStat_    | The CPU hardware info.                                              |
+
+| Param                      | Type     | Description                                            |
+|----------------------------|----------|--------------------------------------------------------|
+| `CPUInfo.CPU`              | _int32_  | CPU                                                    |
+| `CPUInfo.VendorID`         | _string_ | Vendor Id                                              |
+| `CPUInfo.Family`           | _string_ | CPU Family                                             |
+| `CPUInfo.Model`            | _string_ | Model                                                  |
+| `CPUInfo.Stepping`         | _int32_  | Stepping                                               |
+| `CPUInfo.PhysicalId`       | _string_ | Physical Id                                            |
+| `CPUInfo.CoreId`           | _string_ | Core Id                                                |
+| `CPUInfo.Cores`            | _int32_  | Cores                                                  |
+| `CPUInfo.ModelName`        | _string_ | Model Name                                             |
+| `CPUInfo.Mhz`              | _float64_| Mhz                                                    |
+| `CPUInfo.CacheZSize`       | _int32_  | cache sizes                                            |
+| `CPUInfo.Flags`            |_[]string_| Flags                                                  |
+| `CPUInfo.Microcode`        | _string_ | Micro codes                                            |
 
 ## 5. Heal operations
 

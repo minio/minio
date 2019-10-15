@@ -25,6 +25,8 @@ import (
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mem"
+
+	cpuhw "github.com/shirou/gopsutil/cpu"
 )
 
 // getLocalMemUsage - returns ServerMemUsageInfo for only the
@@ -110,5 +112,38 @@ func getLocalDrivesPerf(endpoints EndpointList, size int64, r *http.Request) mad
 		Addr: addr,
 		Perf: dps,
 		Size: size,
+	}
+}
+
+// getLocalCPUInfo - returns ServerCPUHardwareInfo only for the
+// local endpoints from given list of endpoints
+func getLocalCPUInfo(endpoints EndpointList, r *http.Request) madmin.ServerCPUHardwareInfo {
+	var cpuHardwares []cpuhw.InfoStat
+	seenHosts := set.NewStringSet()
+	for _, endpoint := range endpoints {
+		if seenHosts.Contains(endpoint.Host) {
+			continue
+		}
+		// Add to the list of visited hosts
+		seenHosts.Add(endpoint.Host)
+		// Only proceed for local endpoints
+		if endpoint.IsLocal {
+			cpuHardware, err := cpuhw.Info()
+			if err != nil {
+				return madmin.ServerCPUHardwareInfo{
+					Error: err.Error(),
+				}
+			}
+			cpuHardwares = append(cpuHardwares, cpuHardware...)
+		}
+	}
+	addr := r.Host
+	if globalIsDistXL {
+		addr = GetLocalPeer(endpoints)
+	}
+
+	return madmin.ServerCPUHardwareInfo{
+		Addr:    addr,
+		CPUInfo: cpuHardwares,
 	}
 }
