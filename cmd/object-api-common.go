@@ -147,7 +147,7 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 }
 
 // Cleanup objects in bulk and recursively: each object will have a list of sub-files to delete in the backend
-func cleanupObjectsBulk(ctx context.Context, storage StorageAPI, volume string, objsPaths []string, errs []error) ([]error, error) {
+func cleanupObjectsBulk(storage StorageAPI, volume string, objsPaths []string, errs []error) ([]error, error) {
 	// The list of files in disk to delete
 	var filesToDelete []string
 	// Map files to delete to the passed objsPaths
@@ -236,7 +236,7 @@ func removeListenerConfig(ctx context.Context, objAPI ObjectLayer, bucket string
 	return objAPI.DeleteObject(ctx, minioMetaBucket, lcPath)
 }
 
-func listObjectsNonSlash(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {
+func listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {
 	endWalkCh := make(chan struct{})
 	defer close(endWalkCh)
 	recursive := true
@@ -321,7 +321,7 @@ func listObjectsNonSlash(ctx context.Context, obj ObjectLayer, bucket, prefix, m
 
 func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {
 	if delimiter != SlashSeparator && delimiter != "" {
-		return listObjectsNonSlash(ctx, obj, bucket, prefix, marker, delimiter, maxKeys, tpool, listDir, getObjInfo, getObjectInfoDirs...)
+		return listObjectsNonSlash(ctx, bucket, prefix, marker, delimiter, maxKeys, tpool, listDir, getObjInfo, getObjectInfoDirs...)
 	}
 
 	if err := checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, obj); err != nil {

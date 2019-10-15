@@ -160,7 +160,7 @@ func formatFSMigrate(ctx context.Context, wlk *lock.LockedFile, fsPath string) e
 }
 
 // Creates a new format.json if unformatted.
-func createFormatFS(ctx context.Context, fsFormatPath string) error {
+func createFormatFS(fsFormatPath string) error {
 	// Attempt a write lock on formatConfigFile `format.json`
 	// file stored in minioMetaBucket(.minio.sys) directory.
 	lk, err := lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR|os.O_CREATE, 0600)
@@ -215,7 +215,7 @@ func initFormatFS(ctx context.Context, fsPath string) (rlk *lock.RLockedFile, er
 				rlk.Close()
 			}
 			// Fresh disk - create format.json
-			err = createFormatFS(ctx, fsFormatPath)
+			err = createFormatFS(fsFormatPath)
 			if err == lock.ErrAlreadyLocked {
 				// Lock already present, sleep and attempt again.
 				// Can happen in a rare situation when a parallel minio process

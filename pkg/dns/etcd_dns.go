@@ -39,7 +39,7 @@ var ErrNoEntriesFound = errors.New("No entries found for this key")
 const etcdPathSeparator = "/"
 
 // create a new coredns service record for the bucket.
-func newCoreDNSMsg(bucket, ip string, port int, ttl uint32) ([]byte, error) {
+func newCoreDNSMsg(ip string, port int, ttl uint32) ([]byte, error) {
 	return json.Marshal(&SrvRecord{
 		Host:         ip,
 		Port:         port,
@@ -156,7 +156,7 @@ func (c *coreDNS) list(key string) ([]SrvRecord, error) {
 // Adds DNS entries into etcd endpoint in CoreDNS etcd message format.
 func (c *coreDNS) Put(bucket string) error {
 	for ip := range c.domainIPs {
-		bucketMsg, err := newCoreDNSMsg(bucket, ip, c.domainPort, defaultTTL)
+		bucketMsg, err := newCoreDNSMsg(ip, c.domainPort, defaultTTL)
 		if err != nil {
 			return err
 		}

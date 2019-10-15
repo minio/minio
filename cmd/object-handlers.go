@@ -2132,7 +2132,7 @@ func (w *whiteSpaceWriter) WriteHeader(statusCode int) {
 // we do background append as and when the parts arrive and completeMultiPartUpload
 // is quick. Only in a rare case where parts would be out of order will
 // FS:completeMultiPartUpload() take a longer time.
-func sendWhiteSpace(ctx context.Context, w http.ResponseWriter) <-chan bool {
+func sendWhiteSpace(w http.ResponseWriter) <-chan bool {
 	doneCh := make(chan bool)
 	go func() {
 		ticker := time.NewTicker(time.Second * 10)
@@ -2302,7 +2302,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
 	w = &whiteSpaceWriter{ResponseWriter: w, Flusher: w.(http.Flusher)}
-	completeDoneCh := sendWhiteSpace(ctx, w)
+	completeDoneCh := sendWhiteSpace(w)
 	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, completeParts, opts)
 	// Stop writing white spaces to the client. Note that close(doneCh) style is not used as it
 	// can cause white space to be written after we send XML response in a race condition.

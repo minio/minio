@@ -806,7 +806,7 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 			opErrs[index] = errDiskNotFound
 			continue
 		}
-		delObjErrs[index], opErrs[index] = cleanupObjectsBulk(ctx, disk, minioMetaTmpBucket, tmpObjs, errs)
+		delObjErrs[index], opErrs[index] = cleanupObjectsBulk(disk, minioMetaTmpBucket, tmpObjs, errs)
 		if opErrs[index] == errVolumeNotFound {
 			opErrs[index] = nil
 		}
@@ -940,7 +940,6 @@ func (xl xlObjects) DeleteObjects(ctx context.Context, bucket string, objects []
 			// Avoid to increase the index if object
 			// name is found to be duplicated.
 			start = i
-			end = i
 		} else {
 			i++
 		}

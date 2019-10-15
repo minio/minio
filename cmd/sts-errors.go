@@ -143,13 +143,3 @@ var stsErrCodes = stsErrorCodeMap{
 		HTTPStatusCode: http.StatusInternalServerError,
 	},
 }
-
-// getSTSErrorResponse gets in standard error and
-// provides a encodable populated response values
-func getSTSErrorResponse(err STSError, requestID string) STSErrorResponse {
-	errRsp := STSErrorResponse{}
-	errRsp.Error.Code = err.Code
-	errRsp.Error.Message = err.Description
-	errRsp.RequestID = requestID
-	return errRsp
-}

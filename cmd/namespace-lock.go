@@ -169,7 +169,7 @@ func (n *nsLockMap) lock(ctx context.Context, volume, path string, lockSource, o
 }
 
 // Unlock the namespace resource.
-func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
+func (n *nsLockMap) unlock(volume, path string, readLock bool) {
 	param := nsParam{volume, path}
 	n.lockMapMutex.RLock()
 	nsLk, found := n.lockMap[param]
@@ -207,7 +207,7 @@ func (n *nsLockMap) Lock(volume, path, opsID string, timeout time.Duration) (loc
 // Unlock - unlocks any previously acquired write locks.
 func (n *nsLockMap) Unlock(volume, path, opsID string) {
 	readLock := false
-	n.unlock(volume, path, opsID, readLock)
+	n.unlock(volume, path, readLock)
 }
 
 // RLock - locks any previously acquired read locks.
@@ -221,7 +221,7 @@ func (n *nsLockMap) RLock(volume, path, opsID string, timeout time.Duration) (lo
 // RUnlock - unlocks any previously acquired read locks.
 func (n *nsLockMap) RUnlock(volume, path, opsID string) {
 	readLock := true
-	n.unlock(volume, path, opsID, readLock)
+	n.unlock(volume, path, readLock)
 }
 
 // ForceUnlock - forcefully unlock a lock based on name.
@@ -325,7 +325,7 @@ func (li *localLockInstance) GetLock(timeout *dynamicTimeout) (timedOutErr error
 // Unlock - block until write lock is released.
 func (li *localLockInstance) Unlock() {
 	readLock := false
-	li.ns.unlock(li.volume, li.path, li.opsID, readLock)
+	li.ns.unlock(li.volume, li.path, readLock)
 }
 
 // RLock - block until read lock is taken or timeout has occurred.
@@ -344,7 +344,7 @@ func (li *localLockInstance) GetRLock(timeout *dynamicTimeout) (timedOutErr erro
 // RUnlock - block until read lock is released.
 func (li *localLockInstance) RUnlock() {
 	readLock := true
-	li.ns.unlock(li.volume, li.path, li.opsID, readLock)
+	li.ns.unlock(li.volume, li.path, readLock)
 }
 
 func getSource() string {

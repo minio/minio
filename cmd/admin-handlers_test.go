@@ -331,7 +331,7 @@ func initTestXLObjLayer() (ObjectLayer, []string, error) {
 		return nil, nil, err
 	}
 	endpoints := mustGetNewEndpointList(xlDirs...)
-	format, err := waitForFormatXL(context.Background(), true, endpoints, 1, 16)
+	format, err := waitForFormatXL(true, endpoints, 1, 16)
 	if err != nil {
 		removeRoots(xlDirs)
 		return nil, nil, err

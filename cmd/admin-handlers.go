@@ -1606,10 +1606,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	// Use buffered channel to take care of burst sends or slow w.Write()
 	traceCh := make(chan interface{}, 4000)
 
-	peers, err := getRestClients(getRemoteHosts(globalEndpoints))
-	if err != nil {
-		return
-	}
+	peers := getRestClients(getRemoteHosts(globalEndpoints))
 
 	globalHTTPTrace.Subscribe(traceCh, doneCh, func(entry interface{}) bool {
 		return mustTrace(entry, trcAll, trcErr)
@@ -1674,10 +1671,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 	logCh := make(chan interface{}, 4000)
 
 	remoteHosts := getRemoteHosts(globalEndpoints)
-	peers, err := getRestClients(remoteHosts)
-	if err != nil {
-		return
-	}
+	peers := getRestClients(remoteHosts)
 
 	globalConsoleSys.Subscribe(logCh, doneCh, node, limitLines, logKind, nil)
 

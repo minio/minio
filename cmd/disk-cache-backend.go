@@ -222,7 +222,7 @@ func (c *diskCache) purge() {
 					continue
 				}
 
-				objInfo, err := c.statCache(ctx, pathJoin(c.dir, obj.Name()))
+				objInfo, err := c.statCache(pathJoin(c.dir, obj.Name()))
 				if err != nil {
 					// delete any partially filled cache entry left behind.
 					removeAll(pathJoin(c.dir, obj.Name()))
@@ -274,7 +274,7 @@ func (c *diskCache) IsOnline() bool {
 // Stat returns ObjectInfo from disk cache
 func (c *diskCache) Stat(ctx context.Context, bucket, object string) (oi ObjectInfo, err error) {
 	cacheObjPath := getCacheSHADir(c.dir, bucket, object)
-	oi, err = c.statCache(ctx, cacheObjPath)
+	oi, err = c.statCache(cacheObjPath)
 	if err != nil {
 		return
 	}
@@ -288,7 +288,7 @@ func (c *diskCache) Stat(ctx context.Context, bucket, object string) (oi ObjectI
 }
 
 // statCache is a convenience function for purge() to get ObjectInfo for cached object
-func (c *diskCache) statCache(ctx context.Context, cacheObjPath string) (oi ObjectInfo, e error) {
+func (c *diskCache) statCache(cacheObjPath string) (oi ObjectInfo, e error) {
 	// Stat the file to get file size.
 	metaPath := path.Join(cacheObjPath, cacheMetaJSONFile)
 	f, err := os.Open(metaPath)
@@ -365,13 +365,9 @@ func getCacheSHADir(dir, bucket, object string) string {
 }
 
 // Cache data to disk with bitrot checksum added for each block of 1MB
-func (c *diskCache) bitrotWriteToCache(ctx context.Context, cachePath string, reader io.Reader, size uint64) (int64, error) {
+func (c *diskCache) bitrotWriteToCache(cachePath string, reader io.Reader, size uint64) (int64, error) {
 	if err := os.MkdirAll(cachePath, 0777); err != nil {
 		return 0, err
-	}
-	bufSize := uint64(readSizeV1)
-	if size > 0 && bufSize > size {
-		bufSize = size
 	}
 	filePath := path.Join(cachePath, cacheDataFile)
 
@@ -474,11 +470,6 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 	if err := os.MkdirAll(cachePath, 0777); err != nil {
 		return err
 	}
-	bufSize := int64(readSizeV1)
-	if size > 0 && bufSize > size {
-		bufSize = size
-	}
-
 	var metadata = make(map[string]string)
 	for k, v := range opts.UserDefined {
 		metadata[k] = v
@@ -493,7 +484,7 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 		}
 		actualSize, _ = sio.EncryptedSize(uint64(size))
 	}
-	n, err := c.bitrotWriteToCache(ctx, cachePath, reader, actualSize)
+	n, err := c.bitrotWriteToCache(cachePath, reader, actualSize)
 	if IsErr(err, baseErrs...) {
 		c.setOnline(false)
 	}

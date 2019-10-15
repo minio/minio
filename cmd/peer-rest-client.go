@@ -47,9 +47,8 @@ type peerRESTClient struct {
 }
 
 // Reconnect to a peer rest server.
-func (client *peerRESTClient) reConnect() error {
+func (client *peerRESTClient) reConnect() {
 	atomic.StoreInt32(&client.connected, 1)
-	return nil
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
@@ -64,11 +63,7 @@ func (client *peerRESTClient) call(method string, values url.Values, body io.Rea
 // after verifying format.json
 func (client *peerRESTClient) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
 	if !client.IsOnline() {
-		err := client.reConnect()
-		logger.LogIf(ctx, err)
-		if err != nil {
-			return nil, err
-		}
+		client.reConnect()
 	}
 
 	if values == nil {
@@ -694,7 +689,7 @@ func getRemoteHosts(endpoints EndpointList) []*xnet.Host {
 	return remoteHosts
 }
 
-func getRestClients(peerHosts []*xnet.Host) ([]*peerRESTClient, error) {
+func getRestClients(peerHosts []*xnet.Host) []*peerRESTClient {
 	restClients := make([]*peerRESTClient, len(peerHosts))
 	for i, host := range peerHosts {
 		client, err := newPeerRESTClient(host)
@@ -704,7 +699,7 @@ func getRestClients(peerHosts []*xnet.Host) ([]*peerRESTClient, error) {
 		restClients[i] = client
 	}
 
-	return restClients, nil
+	return restClients
 }
 
 // Returns a peer rest client.
