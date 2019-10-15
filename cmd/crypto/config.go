@@ -25,21 +25,9 @@ import (
 
 // KMSConfig has the KMS config for hashicorp vault
 type KMSConfig struct {
-	AutoEncryption bool            `json:"-"`
-	Local          MasterKeyConfig `json:"local"`
-	Vault          VaultConfig     `json:"vault"`
+	AutoEncryption bool        `json:"-"`
+	Vault          VaultConfig `json:"vault"`
 }
-
-// MasterKeyConfig captures local master key info.
-type MasterKeyConfig struct {
-	Key string `json:"key"`
-}
-
-// KMS local master key constants
-const (
-	KMSLocalMasterKey      = "master_key"
-	KMSLocalAutoEncryption = "auto_encryption"
-)
 
 // KMS Vault constants.
 const (
@@ -125,8 +113,11 @@ func LookupConfig(kvs config.KVS) (KMSConfig, error) {
 	if !kmsCfg.Vault.IsEmpty() {
 		return kmsCfg, nil
 	}
+	if !kmsCfg.AutoEncryption {
+		kmsCfg.AutoEncryption = env.Get(EnvKMSAutoEncryption, config.StateOff) == config.StateOn
+	}
 	if kvs.Get(config.State) != config.StateOn {
-		return KMSConfig{}, nil
+		return kmsCfg, nil
 	}
 	vcfg := VaultConfig{}
 	// Lookup Hashicorp-Vault configuration & overwrite config entry if ENV var is present
@@ -142,19 +133,16 @@ func LookupConfig(kvs config.KVS) (KMSConfig, error) {
 	if keyVersion != "" {
 		vcfg.Key.Version, err = strconv.Atoi(keyVersion)
 		if err != nil {
-			return KMSConfig{}, fmt.Errorf("Invalid ENV variable: Unable to parse %s value (`%s`)",
-				EnvKMSVaultKeyVersion, keyVersion)
+			return kmsCfg, fmt.Errorf("Unable to parse VaultKeyVersion value (`%s`)", keyVersion)
 		}
 	}
 
 	if err = vcfg.Verify(); err != nil {
-		return KMSConfig{}, err
+		return kmsCfg, err
 	}
 
-	return KMSConfig{
-		AutoEncryption: env.Get(EnvKMSAutoEncryption, config.StateOff) == config.StateOn,
-		Vault:          vcfg,
-	}, nil
+	kmsCfg.Vault = vcfg
+	return kmsCfg, nil
 }
 
 // NewKMS - initialize a new KMS.

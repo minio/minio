@@ -100,6 +100,9 @@ func (s serverConfig) lookupConfigs() {
 		logger.FatalIf(err, "Unable to setup KMS with current KMS config")
 	}
 
+	// Enable auto-encryption if enabled
+	globalAutoEncryption = kmsCfg.AutoEncryption
+
 	compCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
 	if err != nil {
 		logger.FatalIf(err, "Unable to setup Compression")
@@ -111,7 +114,7 @@ func (s serverConfig) lookupConfigs() {
 		globalCompressMimeTypes = compCfg.MimeTypes
 	}
 
-	openidCfg, err := openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
+	globalOpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
 		NewCustomHTTPTransport(), xhttp.DrainBody)
 	if err != nil {
 		logger.FatalIf(err, "Unable to initialize OpenID")
@@ -123,7 +126,7 @@ func (s serverConfig) lookupConfigs() {
 		logger.FatalIf(err, "Unable to initialize OPA")
 	}
 
-	globalOpenIDValidators = getOpenIDValidators(openidCfg)
+	globalOpenIDValidators = getOpenIDValidators(globalOpenIDConfig)
 	globalPolicyOPA = iampolicy.NewOpa(opaCfg)
 
 	globalLDAPConfig, err = xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
@@ -213,11 +216,11 @@ func loadConfig(objAPI ObjectLayer) error {
 // enabled providers in server config.
 // A new authentication provider is added like below
 // * Add a new provider in pkg/iam/openid package.
-func getOpenIDValidators(args openid.JWKSArgs) *openid.Validators {
+func getOpenIDValidators(cfg openid.Config) *openid.Validators {
 	validators := openid.NewValidators()
 
-	if args.URL != nil {
-		validators.Add(openid.NewJWT(args))
+	if cfg.JWKS.URL != nil {
+		validators.Add(openid.NewJWT(cfg))
 	}
 
 	return validators

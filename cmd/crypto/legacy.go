@@ -99,7 +99,7 @@ func SetKMSConfig(s config.Config, cfg KMSConfig) {
 // environment variables and merge them with the provided KMS configuration.
 // The merging follows the following rules:
 //
-// 1. A valid value provided as environment variable is higher prioritized
+// 1. A valid value provided as environment variable has higher priority
 // than the provided configuration and overwrites the value from the
 // configuration file.
 //
@@ -107,10 +107,13 @@ func SetKMSConfig(s config.Config, cfg KMSConfig) {
 // file. So it is never made a persistent setting.
 //
 // It sets the global KMS configuration according to the merged configuration
-// on succes.
+// on success.
 func lookupConfigLegacy(kvs config.KVS) (KMSConfig, error) {
+	cfg := KMSConfig{
+		AutoEncryption: env.Get(EnvAutoEncryptionLegacy, config.StateOff) == config.StateOn,
+	}
 	if kvs.Get(config.State) != config.StateOn {
-		return KMSConfig{}, nil
+		return cfg, nil
 	}
 	var err error
 	vcfg := VaultConfig{}
@@ -127,17 +130,15 @@ func lookupConfigLegacy(kvs config.KVS) (KMSConfig, error) {
 	if keyVersion != "" {
 		vcfg.Key.Version, err = strconv.Atoi(keyVersion)
 		if err != nil {
-			return KMSConfig{}, fmt.Errorf("Invalid ENV variable: Unable to parse %s value (`%s`)",
+			return cfg, fmt.Errorf("Invalid ENV variable: Unable to parse %s value (`%s`)",
 				EnvVaultKeyVersion, keyVersion)
 		}
 	}
 
 	if err = vcfg.Verify(); err != nil {
-		return KMSConfig{}, err
+		return cfg, err
 	}
 
-	return KMSConfig{
-		AutoEncryption: env.Get(EnvAutoEncryptionLegacy, config.StateOff) == config.StateOn,
-		Vault:          vcfg,
-	}, nil
+	cfg.Vault = vcfg
+	return cfg, nil
 }

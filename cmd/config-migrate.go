@@ -2663,9 +2663,9 @@ func migrateV30ToV31MinioSys(objAPI ObjectLayer) error {
 	}
 
 	cfg.Version = "31"
-	cfg.OpenID.JWKS = openid.JWKSArgs{
-		URL: &xnet.URL{},
-	}
+	cfg.OpenID = openid.Config{}
+	cfg.OpenID.JWKS.URL = &xnet.URL{}
+
 	cfg.Policy.OPA = iampolicy.OpaArgs{
 		URL:       &xnet.URL{},
 		AuthToken: "",
@@ -2784,9 +2784,9 @@ func migrateMinioSysConfigToKV(objAPI ObjectLayer) error {
 	}
 
 	crypto.SetKMSConfig(config.Config(newCfg), cfg.KMS)
+	xldap.SetIdentityLDAP(config.Config(newCfg), cfg.LDAPServerConfig)
 
-	newCfg.SetIdentityLDAP(cfg.LDAPServerConfig)
-	newCfg.SetIdentityOpenID(cfg.OpenID.JWKS)
+	newCfg.SetIdentityOpenID(cfg.OpenID)
 	newCfg.SetPolicyOPAConfig(cfg.Policy.OPA)
 
 	cache.SetCacheConfig(config.Config(newCfg), cfg.Cache)
@@ -2888,42 +2888,25 @@ func (s serverConfig) SetPolicyOPAConfig(opaArgs iampolicy.OpaArgs) {
 	}
 }
 
-// One time migration code needed, for migrating from older config to new for LDAPConfig.
-func (s serverConfig) SetIdentityLDAP(ldapArgs xldap.Config) {
-	s[config.IdentityLDAPSubSys][config.Default] = config.KVS{
-		config.State: func() string {
-			if !ldapArgs.IsEnabled {
-				return config.StateOff
-			}
-			return config.StateOn
-		}(),
-		xldap.ServerAddr:         ldapArgs.ServerAddr,
-		xldap.STSExpiry:          ldapArgs.STSExpiryDuration,
-		xldap.UsernameFormat:     ldapArgs.UsernameFormat,
-		xldap.GroupSearchFilter:  ldapArgs.GroupSearchFilter,
-		xldap.GroupNameAttribute: ldapArgs.GroupNameAttribute,
-		xldap.GroupSearchBaseDN:  ldapArgs.GroupSearchBaseDN,
-	}
-}
-
 // One time migration code needed, for migrating from older config to new for OpenIDConfig.
-func (s serverConfig) SetIdentityOpenID(openidArgs openid.JWKSArgs) {
+func (s serverConfig) SetIdentityOpenID(cfg openid.Config) {
 	s[config.IdentityOpenIDSubSys][config.Default] = config.KVS{
 		config.State: func() string {
-			if openidArgs.URL == nil {
+			if cfg.JWKS.URL == nil {
 				return config.StateOff
 			}
-			if openidArgs.URL.String() == "" {
+			if cfg.JWKS.URL.String() == "" {
 				return config.StateOff
 			}
 			return config.StateOn
 		}(),
-
 		openid.JwksURL: func() string {
-			if openidArgs.URL != nil {
-				return openidArgs.URL.String()
+			if cfg.JWKS.URL != nil {
+				return cfg.JWKS.URL.String()
 			}
 			return ""
 		}(),
+		openid.ConfigURL:   "",
+		openid.ClaimPrefix: "",
 	}
 }

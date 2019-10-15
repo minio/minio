@@ -754,11 +754,11 @@ func TestWebCreateURLToken(t *testing.T) {
 
 func getTokenString(accessKey, secretKey string) (string, error) {
 	utcNow := UTCNow()
-	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.StandardClaims{
-		ExpiresAt: utcNow.Add(defaultJWTExpiry).Unix(),
-		IssuedAt:  utcNow.Unix(),
-		Subject:   accessKey,
-	})
+	mapClaims := jwtgo.MapClaims{}
+	mapClaims["exp"] = utcNow.Add(defaultJWTExpiry).Unix()
+	mapClaims["sub"] = accessKey
+	mapClaims["accessKey"] = accessKey
+	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, mapClaims)
 	return token.SignedString([]byte(secretKey))
 }
 

@@ -32,24 +32,33 @@ import (
 	xnet "github.com/minio/minio/pkg/net"
 )
 
-// JWKSArgs - RSA authentication target arguments
-type JWKSArgs struct {
-	URL         *xnet.URL `json:"url"`
-	publicKeys  map[string]crypto.PublicKey
-	transport   *http.Transport
-	closeRespFn func(io.ReadCloser)
+// Config - OpenID Config
+// RSA authentication target arguments
+type Config struct {
+	JWKS struct {
+		URL *xnet.URL `json:"url"`
+	} `json:"jwks"`
+	URL          *xnet.URL `json:"url,omitempty"`
+	ClaimPrefix  string    `json:"claimPrefix,omitempty"`
+	DiscoveryDoc DiscoveryDoc
+	publicKeys   map[string]crypto.PublicKey
+	transport    *http.Transport
+	closeRespFn  func(io.ReadCloser)
 }
 
 // PopulatePublicKey - populates a new publickey from the JWKS URL.
-func (r *JWKSArgs) PopulatePublicKey() error {
-	if r.URL == nil {
+func (r *Config) PopulatePublicKey() error {
+	if r.JWKS.URL == nil || r.JWKS.URL.String() == "" {
 		return nil
 	}
-	client := &http.Client{}
+	transport := http.DefaultTransport
 	if r.transport != nil {
-		client.Transport = r.transport
+		transport = r.transport
 	}
-	resp, err := client.Get(r.URL.String())
+	client := &http.Client{
+		Transport: transport,
+	}
+	resp, err := client.Get(r.JWKS.URL.String())
 	if err != nil {
 		return err
 	}
@@ -74,17 +83,17 @@ func (r *JWKSArgs) PopulatePublicKey() error {
 }
 
 // UnmarshalJSON - decodes JSON data.
-func (r *JWKSArgs) UnmarshalJSON(data []byte) error {
+func (r *Config) UnmarshalJSON(data []byte) error {
 	// subtype to avoid recursive call to UnmarshalJSON()
-	type subJWKSArgs JWKSArgs
-	var sr subJWKSArgs
+	type subConfig Config
+	var sr subConfig
 
 	if err := json.Unmarshal(data, &sr); err != nil {
 		return err
 	}
 
-	ar := JWKSArgs(sr)
-	if ar.URL == nil || ar.URL.String() == "" {
+	ar := Config(sr)
+	if ar.JWKS.URL == nil || ar.JWKS.URL.String() == "" {
 		*r = ar
 		return nil
 	}
@@ -95,7 +104,7 @@ func (r *JWKSArgs) UnmarshalJSON(data []byte) error {
 
 // JWT - rs client grants provider details.
 type JWT struct {
-	args JWKSArgs
+	Config
 }
 
 func expToInt64(expI interface{}) (expAt int64, err error) {
@@ -145,13 +154,13 @@ func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 		if !ok {
 			return nil, fmt.Errorf("Invalid kid value %v", jwtToken.Header["kid"])
 		}
-		return p.args.publicKeys[kid], nil
+		return p.publicKeys[kid], nil
 	}
 
 	var claims jwtgo.MapClaims
 	jwtToken, err := jp.ParseWithClaims(token, &claims, keyFuncCallback)
 	if err != nil {
-		if err = p.args.PopulatePublicKey(); err != nil {
+		if err = p.PopulatePublicKey(); err != nil {
 			return nil, err
 		}
 		jwtToken, err = jwtgo.ParseWithClaims(token, &claims, keyFuncCallback)
@@ -194,45 +203,99 @@ func (p *JWT) ID() ID {
 
 // OpenID keys and envs.
 const (
-	JwksURL = "jwks_url"
+	JwksURL     = "jwks_url"
+	ConfigURL   = "config_url"
+	ClaimPrefix = "claim_prefix"
 
-	EnvIdentityOpenID = "MINIO_IDENTITY_OPENID_JWKS_URL"
+	EnvIdentityOpenIDJWKSURL     = "MINIO_IDENTITY_OPENID_JWKS_URL"
+	EnvIdentityOpenIDURL         = "MINIO_IDENTITY_OPENID_CONFIG_URL"
+	EnvIdentityOpenIDClaimPrefix = "MINIO_IDENTITY_OPENID_CLAIM_PREFIX"
 )
 
-// LookupConfig lookup jwks from config, override with any ENVs.
-func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.ReadCloser)) (JWKSArgs, error) {
-	args := JWKSArgs{}
+// DiscoveryDoc - parses the output from openid-configuration
+// for example https://accounts.google.com/.well-known/openid-configuration
+type DiscoveryDoc struct {
+	Issuer                           string   `json:"issuer"`
+	AuthEndpoint                     string   `json:"authorization_endpoint"`
+	TokenEndpoint                    string   `json:"token_endpoint"`
+	UserInfoEndpoint                 string   `json:"userinfo_endpoint"`
+	RevocationEndpoint               string   `json:"revocation_endpoint"`
+	JwksURI                          string   `json:"jwks_uri"`
+	ResponseTypesSupported           []string `json:"response_types_supported"`
+	SubjectTypesSupported            []string `json:"subject_types_supported"`
+	IDTokenSigningAlgValuesSupported []string `json:"id_token_signing_alg_values_supported"`
+	ScopesSupported                  []string `json:"scopes_supported"`
+	TokenEndpointAuthMethods         []string `json:"token_endpoint_auth_methods_supported"`
+	ClaimsSupported                  []string `json:"claims_supported"`
+	CodeChallengeMethodsSupported    []string `json:"code_challenge_methods_supported"`
+}
 
-	jwksURL := env.Get(EnvIamJwksURL, "")
-	if jwksURL == "" {
-		jwksURL = env.Get(EnvIdentityOpenID, kv.Get(JwksURL))
-		if jwksURL == "" {
-			return args, nil
-		}
-	}
-
-	u, err := xnet.ParseURL(jwksURL)
+func parseDiscoveryDoc(u *xnet.URL, transport *http.Transport, closeRespFn func(io.ReadCloser)) (DiscoveryDoc, error) {
+	d := DiscoveryDoc{}
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
 	if err != nil {
-		return args, err
+		return d, err
 	}
+	clnt := http.Client{
+		Transport: transport,
+	}
+	resp, err := clnt.Do(req)
+	if err != nil {
+		return d, err
+	}
+	defer closeRespFn(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return d, err
+	}
+	dec := json.NewDecoder(resp.Body)
+	if err = dec.Decode(&d); err != nil {
+		return d, err
+	}
+	return d, nil
+}
 
-	args = JWKSArgs{
-		URL:         u,
+// LookupConfig lookup jwks from config, override with any ENVs.
+func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.ReadCloser)) (c Config, err error) {
+	c = Config{
+		ClaimPrefix: env.Get(EnvIdentityOpenIDClaimPrefix, kv.Get(ClaimPrefix)),
 		publicKeys:  make(map[string]crypto.PublicKey),
 		transport:   transport,
 		closeRespFn: closeRespFn,
 	}
 
-	if err = args.PopulatePublicKey(); err != nil {
-		return args, err
+	jwksURL := env.Get(EnvIamJwksURL, "") // Legacy
+	if jwksURL == "" {
+		jwksURL = env.Get(EnvIdentityOpenIDJWKSURL, kv.Get(JwksURL))
 	}
 
-	return args, nil
+	configURL := env.Get(EnvIdentityOpenIDURL, kv.Get(ConfigURL))
+	if configURL != "" {
+		c.URL, err = xnet.ParseURL(configURL)
+		if err != nil {
+			return c, err
+		}
+		c.DiscoveryDoc, err = parseDiscoveryDoc(c.URL, transport, closeRespFn)
+		if err != nil {
+			return c, err
+		}
+	}
+	if jwksURL == "" {
+		// Fallback to discovery document jwksURL
+		jwksURL = c.DiscoveryDoc.JwksURI
+	}
+	if jwksURL != "" {
+		c.JWKS.URL, err = xnet.ParseURL(jwksURL)
+		if err != nil {
+			return c, err
+		}
+		if err = c.PopulatePublicKey(); err != nil {
+			return c, err
+		}
+	}
+	return c, nil
 }
 
 // NewJWT - initialize new jwt authenticator.
-func NewJWT(args JWKSArgs) *JWT {
-	return &JWT{
-		args: args,
-	}
+func NewJWT(c Config) *JWT {
+	return &JWT{c}
 }

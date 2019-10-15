@@ -93,10 +93,16 @@ export class ChangePasswordModal extends React.Component {
       return false
     }
 
+    // Password change is not allowed for temporary users(STS)
+    if(serverInfo.userInfo.isTempUser) {
+      return false
+    }
+
     // Password change is only allowed for regular users
     if (!serverInfo.userInfo.isIAMUser) {
       return false
     }
+
     return true
   }
 

@@ -193,7 +193,7 @@ func getReqAccessCred(r *http.Request, region string) (cred auth.Credentials) {
 		if owner {
 			return globalActiveCred
 		}
-		cred, _ = globalIAMSys.GetUser(claims.Subject)
+		cred, _ = globalIAMSys.GetUser(claims.AccessKey())
 	}
 	return cred
 }

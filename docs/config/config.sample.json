@@ -49,7 +49,9 @@
         "_": {
             "comment": "",
             "state": "off",
-            "jwks_url": ""
+            "jwks_url": "",
+            "config_url": "",
+            "policy_claim_prefix": ""
         }
     },
     "kms_vault": {

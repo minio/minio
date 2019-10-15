@@ -107,3 +107,13 @@ export const getRandomSecretKey = () => {
   const base64Str = btoa(binStr)
   return base64Str.replace(/\//g, "+").substr(0, 40)
 }
+
+export const getRandomString = length => {
+  var text = ""
+  var possible =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+  for (var i = 0; i < length; i++) {
+    text += possible.charAt(Math.floor(Math.random() * possible.length))
+  }
+  return text
+}

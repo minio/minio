@@ -19,6 +19,8 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -46,6 +48,7 @@ import (
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/iam/openid"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/policy"
@@ -75,7 +78,7 @@ type ServerInfoRep struct {
 // ServerInfo - get server info.
 func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, reply *ServerInfoRep) error {
 	ctx := newWebContext(r, args, "WebServerInfo")
-	_, owner, authErr := webRequestAuthenticate(r)
+	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
 	}
@@ -102,6 +105,13 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 	// Check if the user is IAM user.
 	reply.MinioUserInfo = map[string]interface{}{
 		"isIAMUser": !owner,
+	}
+
+	if !owner {
+		creds, ok := globalIAMSys.GetUser(claims.AccessKey())
+		if ok && creds.SessionToken != "" {
+			reply.MinioUserInfo["isTempUser"] = true
+		}
 	}
 
 	reply.MinioMemory = mem
@@ -152,11 +162,12 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 
 	// For authenticated users apply IAM policy.
 	if !globalIAMSys.IsAllowed(iampolicy.Args{
-		AccountName:     claims.Subject,
+		AccountName:     claims.AccessKey(),
 		Action:          iampolicy.CreateBucketAction,
 		BucketName:      args.BucketName,
-		ConditionValues: getConditionValues(r, "", claims.Subject),
+		ConditionValues: getConditionValues(r, "", claims.AccessKey()),
 		IsOwner:         owner,
+		Claims:          claims.Map(),
 	}) {
 		return toJSONError(ctx, errAccessDenied)
 	}
@@ -213,11 +224,12 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 
 	// For authenticated users apply IAM policy.
 	if !globalIAMSys.IsAllowed(iampolicy.Args{
-		AccountName:     claims.Subject,
+		AccountName:     claims.AccessKey(),
 		Action:          iampolicy.DeleteBucketAction,
 		BucketName:      args.BucketName,
-		ConditionValues: getConditionValues(r, "", claims.Subject),
+		ConditionValues: getConditionValues(r, "", claims.AccessKey()),
 		IsOwner:         owner,
+		Claims:          claims.Map(),
 	}) {
 		return toJSONError(ctx, errAccessDenied)
 	}
@@ -317,12 +329,13 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 			}
 
 			if globalIAMSys.IsAllowed(iampolicy.Args{
-				AccountName:     claims.Subject,
+				AccountName:     claims.AccessKey(),
 				Action:          iampolicy.ListBucketAction,
 				BucketName:      dnsRecord.Key,
-				ConditionValues: getConditionValues(r, "", claims.Subject),
+				ConditionValues: getConditionValues(r, "", claims.AccessKey()),
 				IsOwner:         owner,
 				ObjectName:      "",
+				Claims:          claims.Map(),
 			}) {
 				reply.Buckets = append(reply.Buckets, WebBucketInfo{
 					Name:         dnsRecord.Key,
@@ -339,12 +352,13 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		}
 		for _, bucket := range buckets {
 			if globalIAMSys.IsAllowed(iampolicy.Args{
-				AccountName:     claims.Subject,
+				AccountName:     claims.AccessKey(),
 				Action:          iampolicy.ListBucketAction,
 				BucketName:      bucket.Name,
-				ConditionValues: getConditionValues(r, "", claims.Subject),
+				ConditionValues: getConditionValues(r, "", claims.AccessKey()),
 				IsOwner:         owner,
 				ObjectName:      "",
+				Claims:          claims.Map(),
 			}) {
 				reply.Buckets = append(reply.Buckets, WebBucketInfo{
 					Name:         bucket.Name,
@@ -490,20 +504,22 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		r.Header.Set("delimiter", SlashSeparator)
 
 		readable := globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.Subject,
+			AccountName:     claims.AccessKey(),
 			Action:          iampolicy.ListBucketAction,
 			BucketName:      args.BucketName,
-			ConditionValues: getConditionValues(r, "", claims.Subject),
+			ConditionValues: getConditionValues(r, "", claims.AccessKey()),
 			IsOwner:         owner,
+			Claims:          claims.Map(),
 		})
 
 		writable := globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.Subject,
+			AccountName:     claims.AccessKey(),
 			Action:          iampolicy.PutObjectAction,
 			BucketName:      args.BucketName,
-			ConditionValues: getConditionValues(r, "", claims.Subject),
+			ConditionValues: getConditionValues(r, "", claims.AccessKey()),
 			IsOwner:         owner,
 			ObjectName:      args.Prefix + SlashSeparator,
+			Claims:          claims.Map(),
 		})
 
 		reply.Writable = writable
@@ -664,12 +680,13 @@ next:
 			// been checked.
 			if authErr != errNoAuthToken {
 				if !globalIAMSys.IsAllowed(iampolicy.Args{
-					AccountName:     claims.Subject,
+					AccountName:     claims.AccessKey(),
 					Action:          iampolicy.DeleteObjectAction,
 					BucketName:      args.BucketName,
-					ConditionValues: getConditionValues(r, "", claims.Subject),
+					ConditionValues: getConditionValues(r, "", claims.AccessKey()),
 					IsOwner:         owner,
 					ObjectName:      objectName,
+					Claims:          claims.Map(),
 				}) {
 					return toJSONError(ctx, errAccessDenied)
 				}
@@ -682,12 +699,13 @@ next:
 		}
 
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.Subject,
+			AccountName:     claims.AccessKey(),
 			Action:          iampolicy.DeleteObjectAction,
 			BucketName:      args.BucketName,
-			ConditionValues: getConditionValues(r, "", claims.Subject),
+			ConditionValues: getConditionValues(r, "", claims.AccessKey()),
 			IsOwner:         owner,
 			ObjectName:      objectName,
+			Claims:          claims.Map(),
 		}) {
 			return toJSONError(ctx, errAccessDenied)
 		}
@@ -806,8 +824,8 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 
 	// for IAM users, access key cannot be updated
-	// claims.Subject is used instead of accesskey from args
-	prevCred, ok := globalIAMSys.GetUser(claims.Subject)
+	// claims.AccessKey() is used instead of accesskey from args
+	prevCred, ok := globalIAMSys.GetUser(claims.AccessKey())
 	if !ok {
 		return errInvalidAccessKeyID
 	}
@@ -817,7 +835,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return errIncorrectCreds
 	}
 
-	creds, err := auth.CreateCredentials(claims.Subject, args.NewSecretKey)
+	creds, err := auth.CreateCredentials(claims.AccessKey(), args.NewSecretKey)
 	if err != nil {
 		return toJSONError(ctx, err)
 	}
@@ -854,7 +872,7 @@ func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs,
 	creds := globalActiveCred
 	if !owner {
 		var ok bool
-		creds, ok = globalIAMSys.GetUser(claims.Subject)
+		creds, ok = globalIAMSys.GetUser(claims.AccessKey())
 		if !ok {
 			return toJSONError(ctx, errInvalidAccessKeyID)
 		}
@@ -908,12 +926,13 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// For authenticated users apply IAM policy.
 	if authErr == nil {
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.Subject,
+			AccountName:     claims.AccessKey(),
 			Action:          iampolicy.PutObjectAction,
 			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, "", claims.Subject),
+			ConditionValues: getConditionValues(r, "", claims.AccessKey()),
 			IsOwner:         owner,
 			ObjectName:      object,
+			Claims:          claims.Map(),
 		}) {
 			writeWebErrorResponse(w, errAuthentication)
 			return
@@ -1088,12 +1107,13 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	// For authenticated users apply IAM policy.
 	if authErr == nil {
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.Subject,
+			AccountName:     claims.AccessKey(),
 			Action:          iampolicy.GetObjectAction,
 			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, "", claims.Subject),
+			ConditionValues: getConditionValues(r, "", claims.AccessKey()),
 			IsOwner:         owner,
 			ObjectName:      object,
+			Claims:          claims.Map(),
 		}) {
 			writeWebErrorResponse(w, errAuthentication)
 			return
@@ -1239,12 +1259,13 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	if authErr == nil {
 		for _, object := range args.Objects {
 			if !globalIAMSys.IsAllowed(iampolicy.Args{
-				AccountName:     claims.Subject,
+				AccountName:     claims.AccessKey(),
 				Action:          iampolicy.GetObjectAction,
 				BucketName:      args.BucketName,
-				ConditionValues: getConditionValues(r, "", claims.Subject),
+				ConditionValues: getConditionValues(r, "", claims.AccessKey()),
 				IsOwner:         owner,
 				ObjectName:      pathJoin(args.Prefix, object),
+				Claims:          claims.Map(),
 			}) {
 				writeWebErrorResponse(w, errAuthentication)
 				return
@@ -1385,11 +1406,12 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 
 	// For authenticated users apply IAM policy.
 	if !globalIAMSys.IsAllowed(iampolicy.Args{
-		AccountName:     claims.Subject,
+		AccountName:     claims.AccessKey(),
 		Action:          iampolicy.GetBucketPolicyAction,
 		BucketName:      args.BucketName,
-		ConditionValues: getConditionValues(r, "", claims.Subject),
+		ConditionValues: getConditionValues(r, "", claims.AccessKey()),
 		IsOwner:         owner,
+		Claims:          claims.Map(),
 	}) {
 		return toJSONError(ctx, errAccessDenied)
 	}
@@ -1482,11 +1504,12 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 
 	// For authenticated users apply IAM policy.
 	if !globalIAMSys.IsAllowed(iampolicy.Args{
-		AccountName:     claims.Subject,
+		AccountName:     claims.AccessKey(),
 		Action:          iampolicy.GetBucketPolicyAction,
 		BucketName:      args.BucketName,
-		ConditionValues: getConditionValues(r, "", claims.Subject),
+		ConditionValues: getConditionValues(r, "", claims.AccessKey()),
 		IsOwner:         owner,
+		Claims:          claims.Map(),
 	}) {
 		return toJSONError(ctx, errAccessDenied)
 	}
@@ -1572,11 +1595,12 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 
 	// For authenticated users apply IAM policy.
 	if !globalIAMSys.IsAllowed(iampolicy.Args{
-		AccountName:     claims.Subject,
+		AccountName:     claims.AccessKey(),
 		Action:          iampolicy.PutBucketPolicyAction,
 		BucketName:      args.BucketName,
-		ConditionValues: getConditionValues(r, "", claims.Subject),
+		ConditionValues: getConditionValues(r, "", claims.AccessKey()),
 		IsOwner:         owner,
+		Claims:          claims.Map(),
 	}) {
 		return toJSONError(ctx, errAccessDenied)
 	}
@@ -1717,7 +1741,7 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 	var creds auth.Credentials
 	if !owner {
 		var ok bool
-		creds, ok = globalIAMSys.GetUser(claims.Subject)
+		creds, ok = globalIAMSys.GetUser(claims.AccessKey())
 		if !ok {
 			return toJSONError(ctx, errInvalidAccessKeyID)
 		}
@@ -1776,6 +1800,79 @@ func presignedGet(host, bucket, object string, expiry int64, creds auth.Credenti
 
 	// Construct the final presigned URL.
 	return host + s3utils.EncodePath(path) + "?" + queryStr + "&" + xhttp.AmzSignature + "=" + signature
+}
+
+// DiscoveryDocResp - OpenID discovery document reply.
+type DiscoveryDocResp struct {
+	DiscoveryDoc openid.DiscoveryDoc
+	UIVersion    string `json:"uiVersion"`
+}
+
+// GetDiscoveryDoc - returns parsed value of OpenID discovery document
+func (web *webAPIHandlers) GetDiscoveryDoc(r *http.Request, args *WebGenericArgs, reply *DiscoveryDocResp) error {
+	reply.DiscoveryDoc = globalOpenIDConfig.DiscoveryDoc
+	reply.UIVersion = browser.UIVersion
+	return nil
+}
+
+// LoginSTSArgs - login arguments.
+type LoginSTSArgs struct {
+	Token string `json:"token" form:"token"`
+}
+
+// LoginSTSRep - login reply.
+type LoginSTSRep struct {
+	Token     string `json:"token"`
+	UIVersion string `json:"uiVersion"`
+}
+
+// LoginSTS - STS user login handler.
+func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *LoginRep) error {
+	ctx := newWebContext(r, args, "WebLoginSTS")
+
+	v := url.Values{}
+	v.Set("Action", webIdentity)
+	v.Set("WebIdentityToken", args.Token)
+	v.Set("Version", stsAPIVersion)
+
+	scheme := "http"
+	if globalIsSSL {
+		scheme = "https"
+	}
+
+	u := &url.URL{
+		Scheme: scheme,
+		Host:   r.Host,
+	}
+
+	u.RawQuery = v.Encode()
+
+	req, err := http.NewRequest(http.MethodPost, u.String(), nil)
+	if err != nil {
+		return toJSONError(ctx, err)
+	}
+
+	clnt := &http.Client{
+		Transport: NewCustomHTTPTransport(),
+	}
+
+	resp, err := clnt.Do(req)
+	if err != nil {
+		return toJSONError(ctx, err)
+	}
+	defer xhttp.DrainBody(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return toJSONError(ctx, errors.New(resp.Status))
+	}
+
+	a := AssumeRoleWithWebIdentityResponse{}
+	if err = xml.NewDecoder(resp.Body).Decode(&a); err != nil {
+		return toJSONError(ctx, err)
+	}
+
+	reply.Token = a.Result.Credentials.SessionToken
+	reply.UIVersion = browser.UIVersion
+	return nil
 }
 
 // toJSONError converts regular errors into more user friendly

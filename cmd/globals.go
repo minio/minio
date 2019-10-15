@@ -150,6 +150,7 @@ var (
 
 	globalStorageClass storageclass.Config
 	globalLDAPConfig   xldap.Config
+	globalOpenIDConfig openid.Config
 
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool

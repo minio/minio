@@ -1500,9 +1500,9 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 	}
 }
 
-// SetConfigKVHandler - DELETE /minio/admin/v1/del-config-kv
+// DelConfigKVHandler - DELETE /minio/admin/v1/del-config-kv
 func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SetConfigKVHandler")
+	ctx := newContext(r, w, "DelConfigKVHandler")
 
 	objectAPI := validateAdminReq(ctx, w, r)
 	if objectAPI == nil {

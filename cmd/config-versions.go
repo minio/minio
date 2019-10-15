@@ -783,10 +783,7 @@ type serverConfigV31 struct {
 	Compression compress.Config `json:"compress"`
 
 	// OpenID configuration
-	OpenID struct {
-		// JWKS validator config.
-		JWKS openid.JWKSArgs `json:"jwks"`
-	} `json:"openid"`
+	OpenID openid.Config `json:"openid"`
 
 	// External policy enforcements.
 	Policy struct {
@@ -825,10 +822,7 @@ type serverConfigV32 struct {
 	Compression compress.Config `json:"compress"`
 
 	// OpenID configuration
-	OpenID struct {
-		// JWKS validator config.
-		JWKS openid.JWKSArgs `json:"jwks"`
-	} `json:"openid"`
+	OpenID openid.Config `json:"openid"`
 
 	// External policy enforcements.
 	Policy struct {
@@ -869,10 +863,7 @@ type serverConfigV33 struct {
 	Compression compress.Config `json:"compress"`
 
 	// OpenID configuration
-	OpenID struct {
-		// JWKS validator config.
-		JWKS openid.JWKSArgs `json:"jwks"`
-	} `json:"openid"`
+	OpenID openid.Config `json:"openid"`
 
 	// External policy enforcements.
 	Policy struct {
