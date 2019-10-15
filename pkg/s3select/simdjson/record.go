@@ -18,12 +18,12 @@ package simdjson
 
 import (
 	"encoding/csv"
-	"errors"
 	"fmt"
 	"io"
 
+	"github.com/bcicen/jstream"
 	"github.com/fwessels/simdjson-go"
-
+	"github.com/minio/minio/pkg/s3select/json"
 	"github.com/minio/minio/pkg/s3select/sql"
 )
 
@@ -112,9 +112,39 @@ func (r *Record) Clone(dst sql.Record) sql.Record {
 	return other
 }
 
+// CloneTo clones the record to a json Record.
+// Values are only unmashaled on object level.
+func (r *Record) CloneTo(dst *json.Record) (sql.Record, error) {
+	if dst == nil {
+		dst = &json.Record{SelectFormat: sql.SelectFmtJSON}
+	}
+	dst.Reset()
+	if cap(dst.KVS) < len(r.rootFields.Elements) {
+		dst.KVS = make(jstream.KVS, 0, len(r.rootFields.Elements))
+	}
+	for _, elem := range r.rootFields.Elements {
+		v, err := sql.IterToValue(elem.Iter)
+		if err != nil {
+			v, err = elem.Iter.Interface()
+			if err != nil {
+				panic(err)
+			}
+		}
+		dst.KVS = append(dst.KVS, jstream.KV{
+			Key:   elem.Name,
+			Value: v,
+		})
+	}
+	return dst, nil
+}
+
 // Set - sets the value for a column name.
-func (r *Record) Set(name string, value *sql.Value) error {
-	return errors.New("cannot set internal data in simd json record")
+func (r *Record) Set(name string, value *sql.Value) (sql.Record, error) {
+	dst, err := r.CloneTo(nil)
+	if err != nil {
+		return nil, err
+	}
+	return dst.Set(name, value)
 }
 
 // WriteCSV - encodes to CSV data.

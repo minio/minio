@@ -72,7 +72,7 @@ func (r *Record) Clone(dst sql.Record) sql.Record {
 }
 
 // Set - sets the value for a column name.
-func (r *Record) Set(name string, value *sql.Value) error {
+func (r *Record) Set(name string, value *sql.Value) (sql.Record, error) {
 	var v interface{}
 	if b, ok := value.ToBool(); ok {
 		v = b
@@ -91,12 +91,12 @@ func (r *Record) Set(name string, value *sql.Value) error {
 	} else if arr, ok := value.ToArray(); ok {
 		v = arr
 	} else {
-		return fmt.Errorf("unsupported sql value %v and type %v", value, value.GetTypeString())
+		return nil, fmt.Errorf("unsupported sql value %v and type %v", value, value.GetTypeString())
 	}
 
 	name = strings.Replace(name, "*", "__ALL__", -1)
 	r.KVS = append(r.KVS, jstream.KV{Key: name, Value: v})
-	return nil
+	return r, nil
 }
 
 // WriteCSV - encodes to CSV data.

@@ -430,12 +430,6 @@ func jsonToValue(result interface{}) (*Value, error) {
 			return nil, err
 		}
 		return FromBytes(bs), nil
-	case simdjson.Array:
-		bs, err := rval.MarshalJSON()
-		if err != nil {
-			return nil, err
-		}
-		return FromBytes(bs), nil
 	case []Value:
 		return FromArray(rval), nil
 	case nil:

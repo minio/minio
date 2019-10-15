@@ -42,7 +42,10 @@ const (
 // Record - is a type containing columns and their values.
 type Record interface {
 	Get(name string) (*Value, error)
-	Set(name string, value *Value) error
+
+	// Set a value.
+	// Can return a different record type.
+	Set(name string, value *Value) (Record, error)
 	WriteCSV(writer io.Writer, fieldDelimiter rune) error
 	WriteJSON(writer io.Writer) error
 
@@ -57,6 +60,9 @@ type Record interface {
 	Replace(k interface{}) error
 }
 
+// IterToValue converts a simdjson Iter to its underlying value.
+// Objects are returned as simdjson.Elements.
+// Arrays are returned as []interface{} with parsed values.
 func IterToValue(iter simdjson.Iter) (interface{}, error) {
 	switch iter.Type() {
 	case simdjson.TypeString:
@@ -102,15 +108,28 @@ func IterToValue(iter simdjson.Iter) (interface{}, error) {
 		}
 		return *elems, err
 	case simdjson.TypeArray:
-		obj, err := iter.Array(nil)
+		arr, err := iter.Array(nil)
 		if err != nil {
 			return nil, err
 		}
-		elems, err := obj.Interface()
-		if err != nil || elems == nil {
-			return nil, err
+		iter := arr.Iter()
+		var dst []interface{}
+		var next simdjson.Iter
+		for {
+			typ, err := iter.NextIter(&next)
+			if err != nil {
+				return nil, err
+			}
+			if typ == simdjson.TypeNone {
+				break
+			}
+			v, err := IterToValue(next)
+			if err != nil {
+				return nil, err
+			}
+			dst = append(dst, v)
 		}
-		return FromArray(), err
+		return dst, err
 	}
 	return nil, fmt.Errorf("unknown JSON type: %s", iter.Type().String())
 }
