@@ -18,6 +18,7 @@ package s3select
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -27,7 +28,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/minio/minio-go/v6"
+	"github.com/fwessels/simdjson-go"
+	minio "github.com/minio/minio-go/v6"
 )
 
 type testResponseWriter struct {
@@ -56,6 +58,10 @@ func TestJSONQueries(t *testing.T) {
 	{"id": 1,"title": "Second Record","desc": "another text","synonyms": ["some", "synonym", "value"]}
 	{"id": 2,"title": "Second Record","desc": "another text","numbers": [2, 3.0, 4]}
 	{"id": 3,"title": "Second Record","desc": "another text","nested": [[2, 3.0, 4], [7, 8.5, 9]]}`
+
+	inputTape, _ := base64.StdEncoding.DecodeString(`EQAAAAAAAHIQAAAAAAAAewAAAAAAAAAiAAAAAAAAAGwAAAAAAAAAAAcAAAAAAAAiEQAAAAAAACIhAAAAAAAAIioAAAAAAAAiOAAAAAAAACIPAAAAAAAAW0UAAAAAAAAiTQAAAAAAACJVAAAAAAAAIgoAAAAAAABdAQAAAAAAAH0AAAAAAAAAciIAAAAAAAByIQAAAAAAAHtiAAAAAAAAIgAAAAAAAABsAQAAAAAAAABpAAAAAAAAInMAAAAAAAAihQAAAAAAACKOAAAAAAAAIp8AAAAAAAAiIAAAAAAAAFusAAAAAAAAIrUAAAAAAAAiwQAAAAAAACIbAAAAAAAAXRIAAAAAAAB9EQAAAAAAAHI2AAAAAAAAcjUAAAAAAAB7ywAAAAAAACIAAAAAAAAAbAIAAAAAAAAA0gAAAAAAACLcAAAAAAAAIu0AAAAAAAAi9gAAAAAAACIHAQAAAAAAIjQAAAAAAABbAAAAAAAAAGwCAAAAAAAAAAAAAAAAAABkAAAAAAAACEAAAAAAAAAAbAQAAAAAAAAALAAAAAAAAF0jAAAAAAAAfSIAAAAAAAByVAAAAAAAAHJTAAAAAAAAexMBAAAAAAAiAAAAAAAAAGwDAAAAAAAAABoBAAAAAAAiJAEAAAAAACI2AQAAAAAAIj8BAAAAAAAiUAEAAAAAACJSAAAAAAAAW0kAAAAAAABbAAAAAAAAAGwCAAAAAAAAAAAAAAAAAABkAAAAAAAACEAAAAAAAAAAbAQAAAAAAAAAQQAAAAAAAF1RAAAAAAAAWwAAAAAAAABsBwAAAAAAAAAAAAAAAAAAZAAAAAAAACFAAAAAAAAAAGwJAAAAAAAAAEkAAAAAAABdQAAAAAAAAF03AAAAAAAAfTYAAAAAAABy`)
+	inputSB, _ := base64.StdEncoding.DecodeString(`AgAAAGlkAAUAAAB0aXRsZQALAAAAVGVzdCBSZWNvcmQABAAAAGRlc2MACQAAAFNvbWUgdGV4dAAIAAAAc3lub255bXMAAwAAAGZvbwADAAAAYmFyAAgAAAB3aGF0ZXZlcgACAAAAaWQABQAAAHRpdGxlAA0AAABTZWNvbmQgUmVjb3JkAAQAAABkZXNjAAwAAABhbm90aGVyIHRleHQACAAAAHN5bm9ueW1zAAQAAABzb21lAAcAAABzeW5vbnltAAUAAAB2YWx1ZQACAAAAaWQABQAAAHRpdGxlAAwAAABUaGlyZCBSZWNvcmQABAAAAGRlc2MADAAAAGFub3RoZXIgdGV4dAAHAAAAbnVtYmVycwACAAAAaWQABQAAAHRpdGxlAA0AAABGb3VydGggUmVjb3JkAAQAAABkZXNjAAwAAABhbm90aGVyIHRleHQABgAAAG5lc3RlZAA=`)
+
 	var testTable = []struct {
 		name       string
 		query      string
@@ -225,6 +231,11 @@ func TestJSONQueries(t *testing.T) {
     </RequestProgress>
 </SelectObjectContentRequest>`
 
+	testTape, err := simdjson.LoadTape(bytes.NewBuffer(inputTape), bytes.NewBuffer(inputSB))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	for _, testCase := range testTable {
 		t.Run(testCase.name, func(t *testing.T) {
 			testReq := testCase.requestXML
@@ -245,6 +256,47 @@ func TestJSONQueries(t *testing.T) {
 			w := &testResponseWriter{}
 			s3Select.Evaluate(w)
 			s3Select.Close()
+			resp := http.Response{
+				StatusCode:    http.StatusOK,
+				Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
+				ContentLength: int64(len(w.response)),
+			}
+			res, err := minio.NewSelectResults(&resp, "testbucket")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			got, err := ioutil.ReadAll(res)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			gotS := strings.TrimSpace(string(got))
+			if !reflect.DeepEqual(gotS, testCase.wantResult) {
+				t.Errorf("received response does not match with expected reply. Query: %s\ngot: %s\nwant:%s", testCase.query, gotS, testCase.wantResult)
+			}
+		})
+		t.Run("tape-"+testCase.name, func(t *testing.T) {
+			testReq := testCase.requestXML
+			if len(testReq) == 0 {
+				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
+			}
+			s3Select, err := NewS3Select(bytes.NewReader(testReq))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err = s3Select.OpenTape(*testTape); err != nil {
+				t.Fatal(err)
+			}
+
+			w := &testResponseWriter{}
+			s3Select.Evaluate(w)
+			err = s3Select.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			resp := http.Response{
 				StatusCode:    http.StatusOK,
 				Body:          ioutil.NopCloser(bytes.NewReader(w.response)),

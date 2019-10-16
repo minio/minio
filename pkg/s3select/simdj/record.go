@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package simdjson
+package simdj
 
 import (
 	"encoding/csv"
@@ -106,6 +106,10 @@ func (r *Record) Clone(dst sql.Record) sql.Record {
 	for k := range other.rootFields.Index {
 		delete(other.rootFields.Index, k)
 	}
+	if other.rootFields.Index == nil {
+		other.rootFields.Index = make(map[string]int, len(r.rootFields.Index))
+	}
+
 	for k, v := range r.rootFields.Index {
 		other.rootFields.Index[k] = v
 	}

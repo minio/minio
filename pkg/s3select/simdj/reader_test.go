@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package simdjson
+package simdj
 
 /*
 func TestNewReader(t *testing.T) {

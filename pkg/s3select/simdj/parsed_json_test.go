@@ -1,4 +1,4 @@
-package simdjson
+package simdj
 
 import (
 	"bytes"
@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/fwessels/simdjson-go"
-
 	"github.com/klauspost/compress/zstd"
 )
 

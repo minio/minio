@@ -27,9 +27,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/fwessels/simdjson-go"
 	"github.com/minio/minio/pkg/s3select/csv"
 	"github.com/minio/minio/pkg/s3select/json"
 	"github.com/minio/minio/pkg/s3select/parquet"
+	"github.com/minio/minio/pkg/s3select/simdj"
 	"github.com/minio/minio/pkg/s3select/sql"
 )
 
@@ -327,6 +329,21 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 	panic(fmt.Errorf("unknown input format '%v'", s3Select.Input.format))
 }
 
+// Open - opens S3 object by using callback for SQL selection query.
+// Currently CSV, JSON and Apache Parquet formats are supported.
+func (s3Select *S3Select) OpenTape(pj simdjson.ParsedJson) error {
+	switch s3Select.Input.format {
+	case jsonFormat:
+		s3Select.progressReader = &progressReader{}
+
+		s3Select.recordReader = simdj.NewTapeReader(pj, &s3Select.Input.JSONArgs)
+		return nil
+	default:
+	}
+
+	return fmt.Errorf("unknown input format '%v'", s3Select.Input.format)
+}
+
 func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
 	switch s3Select.Output.format {
 	case csvFormat:
@@ -355,8 +372,10 @@ func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
 		if err != nil {
 			return err
 		}
-
-		buf.Truncate(buf.Len() - 1)
+		// Trim trailing newline from non-simd output
+		if buf.Bytes()[buf.Len()-1] == '\n' {
+			buf.Truncate(buf.Len() - 1)
+		}
 		buf.WriteString(s3Select.Output.JSONArgs.RecordDelimiter)
 
 		return nil
