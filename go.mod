@@ -21,7 +21,7 @@ require (
 	github.com/elazarl/go-bindata-assetfs v1.0.0
 	github.com/fatih/color v1.7.0
 	github.com/fatih/structs v1.1.0
-	github.com/fwessels/simdjson-go v0.0.0-20191011204349-5f59e9eb0619
+	github.com/fwessels/simdjson-go v0.0.0-20191016155256-b90b3c2ae1c9
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gomodule/redigo v2.0.0+incompatible
