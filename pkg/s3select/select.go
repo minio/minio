@@ -329,16 +329,33 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 	panic(fmt.Errorf("unknown input format '%v'", s3Select.Input.format))
 }
 
-// Open - opens S3 object by using callback for SQL selection query.
-// Currently CSV, JSON and Apache Parquet formats are supported.
-func (s3Select *S3Select) OpenTape(pj simdjson.ParsedJson) error {
+// OpenTape - opens S3 object and accepts parsed simdjson input.
+// An optional progressReader can be given to output progress.
+func (s3Select *S3Select) OpenTape(pj simdjson.ParsedJson, pr *progressReader) error {
+	if pr == nil {
+		pr = &progressReader{}
+	}
 	switch s3Select.Input.format {
 	case jsonFormat:
-		s3Select.progressReader = &progressReader{}
-
+		s3Select.progressReader = pr
 		s3Select.recordReader = simdj.NewTapeReader(pj, &s3Select.Input.JSONArgs)
 		return nil
-	default:
+	}
+
+	return fmt.Errorf("unknown input format '%v'", s3Select.Input.format)
+}
+
+// OpenTapeCh - opens S3 object and accepts a channel that supplies parsed simdjson input.
+// An optional progressReader can be given to output progress.
+func (s3Select *S3Select) OpenTapeCh(pj chan simdjson.ParsedJson, pr *progressReader) error {
+	if pr == nil {
+		pr = &progressReader{}
+	}
+	switch s3Select.Input.format {
+	case jsonFormat:
+		s3Select.progressReader = pr
+		s3Select.recordReader = simdj.NewTapeReaderChan(pj, &s3Select.Input.JSONArgs)
+		return nil
 	}
 
 	return fmt.Errorf("unknown input format '%v'", s3Select.Input.format)

@@ -286,7 +286,7 @@ func TestJSONQueries(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err = s3Select.OpenTape(*testTape); err != nil {
+			if err = s3Select.OpenTape(*testTape, nil); err != nil {
 				t.Fatal(err)
 			}
 
