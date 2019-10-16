@@ -384,7 +384,7 @@ func migrateCacheData(ctx context.Context, c *diskCache, bucket, object, oldfile
 		actualSize, _ = sio.EncryptedSize(uint64(st.Size()))
 	}
 
-	_, err = c.bitrotWriteToCache(ctx, destDir, reader, uint64(actualSize))
+	_, err = c.bitrotWriteToCache(destDir, reader, uint64(actualSize))
 	return err
 }
 

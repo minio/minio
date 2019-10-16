@@ -87,7 +87,7 @@ func (store *QueueStore) Open() error {
 }
 
 // write - writes event to the directory.
-func (store *QueueStore) write(directory string, key string, e event.Event) error {
+func (store *QueueStore) write(key string, e event.Event) error {
 
 	// Marshalls the event.
 	eventData, err := json.Marshal(e)
@@ -117,7 +117,7 @@ func (store *QueueStore) Put(e event.Event) error {
 	if err != nil {
 		return err
 	}
-	return store.write(store.directory, key, e)
+	return store.write(key, e)
 }
 
 // Get - gets a event from the store.

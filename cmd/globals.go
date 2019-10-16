@@ -84,8 +84,6 @@ const (
 	// GlobalServiceExecutionInterval - Executes the Lifecycle events.
 	GlobalServiceExecutionInterval = time.Hour * 24 // 24 hrs.
 
-	// Refresh interval to update in-memory bucket lifecycle cache.
-	globalRefreshBucketLifecycleInterval = 5 * time.Minute
 	// Refresh interval to update in-memory iam config cache.
 	globalRefreshIAMInterval = 5 * time.Minute
 

@@ -607,9 +607,7 @@ func (h *healSequence) healItemsFromSourceCh() error {
 }
 
 func (h *healSequence) healFromSourceCh() {
-	if err := h.healItemsFromSourceCh(); err != nil {
-		h.traverseAndHealDoneCh <- err
-	}
+	h.healItemsFromSourceCh()
 	close(h.traverseAndHealDoneCh)
 }
 

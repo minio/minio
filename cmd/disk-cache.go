@@ -112,7 +112,7 @@ func (c *cacheObjects) DeleteObject(ctx context.Context, bucket, object string) 
 		return
 	}
 
-	dcache, cerr := c.getCacheLoc(ctx, bucket, object)
+	dcache, cerr := c.getCacheLoc(bucket, object)
 	if cerr != nil {
 		return
 	}
@@ -339,7 +339,7 @@ func (c *cacheObjects) isCacheExclude(bucket, object string) bool {
 // choose a cache deterministically based on hash of bucket,object. The hash index is treated as
 // a hint. In the event that the cache drive at hash index is offline, treat the list of cache drives
 // as a circular buffer and walk through them starting at hash index until an online drive is found.
-func (c *cacheObjects) getCacheLoc(ctx context.Context, bucket, object string) (*diskCache, error) {
+func (c *cacheObjects) getCacheLoc(bucket, object string) (*diskCache, error) {
 	index := c.hashIndex(bucket, object)
 	numDisks := len(c.cache)
 	for k := 0; k < numDisks; k++ {

@@ -1076,10 +1076,7 @@ func (sys *NotificationSys) CPUInfo() []madmin.ServerCPUHardwareInfo {
 func NewNotificationSys(config *serverConfig, endpoints EndpointList) *NotificationSys {
 	targetList := getNotificationTargets(config)
 	remoteHosts := getRemoteHosts(endpoints)
-	remoteClients, err := getRestClients(remoteHosts)
-	if err != nil {
-		logger.FatalIf(err, "Unable to start notification sub system")
-	}
+	remoteClients := getRestClients(remoteHosts)
 
 	// bucketRulesMap/bucketRemoteTargetRulesMap are initialized by NotificationSys.Init()
 	return &NotificationSys{

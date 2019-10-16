@@ -252,11 +252,11 @@ func handleCommonEnvVars() {
 
 }
 
-func logStartupMessage(msg string, data ...interface{}) {
+func logStartupMessage(msg string) {
 	if globalConsoleSys != nil {
 		globalConsoleSys.Send(msg, string(logger.All))
 	}
-	logger.StartupMessage(msg, data...)
+	logger.StartupMessage(msg)
 }
 
 func getTLSConfig() (x509Certs []*x509.Certificate, c *certs.Certs, secureConn bool, err error) {

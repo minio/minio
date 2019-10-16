@@ -119,7 +119,6 @@ func ParseHost(s string) (*Host, error) {
 			return nil, err
 		}
 		host = s
-		portStr = ""
 	} else {
 		if port, err = ParsePort(portStr); err != nil {
 			return nil, err
