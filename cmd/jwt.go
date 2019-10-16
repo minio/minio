@@ -133,7 +133,10 @@ func webTokenCallback(jwtToken *jwtgo.Token) (interface{}, error) {
 		claims := *claimsPtr
 		accessKey, ok := claims["accessKey"].(string)
 		if !ok {
-			return nil, errInvalidAccessKeyID
+			accessKey, ok = claims["sub"].(string)
+			if !ok {
+				return nil, errInvalidAccessKeyID
+			}
 		}
 		if accessKey == globalActiveCred.AccessKey {
 			return []byte(globalActiveCred.SecretKey), nil
@@ -196,7 +199,10 @@ func webTokenAuthenticate(token string) (mapClaims, bool, error) {
 	}
 	accessKey, ok := claims["accessKey"].(string)
 	if !ok {
-		return mapClaims{claims}, false, errAuthentication
+		accessKey, ok = claims["sub"].(string)
+		if !ok {
+			return mapClaims{claims}, false, errAuthentication
+		}
 	}
 	owner := accessKey == globalActiveCred.AccessKey
 	return mapClaims{claims}, owner, nil
@@ -211,7 +217,10 @@ func (m mapClaims) Map() map[string]interface{} {
 }
 
 func (m mapClaims) AccessKey() string {
-	claimSub, _ := m.MapClaims["accessKey"].(string)
+	claimSub, ok := m.MapClaims["accessKey"].(string)
+	if !ok {
+		claimSub, _ = m.MapClaims["sub"].(string)
+	}
 	return claimSub
 }
 
@@ -236,7 +245,10 @@ func webRequestAuthenticate(req *http.Request) (mapClaims, bool, error) {
 	}
 	accessKey, ok := claims["accessKey"].(string)
 	if !ok {
-		return mapClaims{claims}, false, errAuthentication
+		accessKey, ok = claims["sub"].(string)
+		if !ok {
+			return mapClaims{claims}, false, errAuthentication
+		}
 	}
 	owner := accessKey == globalActiveCred.AccessKey
 	return mapClaims{claims}, owner, nil
