@@ -10,8 +10,8 @@ Keycloak is an open source Identity and Access Management solution aimed at mode
 ## 2. Configure Keycloak
 
 - Go to Users -> Click on the user -> Attribute, add a new attribute `Key` is `policy`, `Value` is name of the policy in minio (ex: `readwrite`). Click Add and then Save.
-- Go to Clients -> Click on `account` -> Settings, set `Valid Redirect URIs` to `*` and Save.
-- Go to Clients -> Client on `account` -> Mappers -> Create, `Mapper Type` is `User Attribute`, `User Attribute` is `policy`, `Token Claim Name` is `policy`, `Claim JSON Type` is `string`, then Save.
+- Go to Clients -> Click on `account` -> Settings, set `Valid Redirect URIs` to `*`, expand `Advanced Settings` and set `Access Token Lifespan` to `1 Hours`, then Save.
+- Go to Clients -> Client on `account` -> Mappers -> Create, `Name` can be any text, `Mapper Type` is `User Attribute`, `User Attribute` is `policy`, `Token Claim Name` is `policy`, `Claim JSON Type` is `string`, then Save.
 - Open http://localhost:8080/auth/realms/demo/.well-known/openid-configuration and see if it has `authorization_endpoint` and `jwks_uri`
 
 ## 3. Configure MinIO
