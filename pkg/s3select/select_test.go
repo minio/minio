@@ -29,7 +29,7 @@ import (
 	"testing"
 
 	"github.com/fwessels/simdjson-go"
-	minio "github.com/minio/minio-go/v6"
+	"github.com/minio/minio-go/v6"
 )
 
 type testResponseWriter struct {

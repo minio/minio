@@ -363,7 +363,9 @@ func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
 		if err != nil {
 			return err
 		}
-		buf.Truncate(buf.Len() - 1)
+		if buf.Bytes()[buf.Len()-1] == '\n' {
+			buf.Truncate(buf.Len() - 1)
+		}
 		buf.WriteString(s3Select.Output.CSVArgs.RecordDelimiter)
 
 		return nil

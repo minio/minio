@@ -22,6 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"strconv"
 	"strings"
 
 	"github.com/bcicen/jstream"
@@ -105,7 +107,11 @@ func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune) error {
 	for _, kv := range r.KVS {
 		var columnValue string
 		switch val := kv.Value.(type) {
-		case bool, float64, int64, string:
+		case float64:
+			columnValue = jsonFloat(val)
+		case string:
+			columnValue = val
+		case bool, int64:
 			columnValue = fmt.Sprintf("%v", val)
 		case nil:
 			columnValue = ""
@@ -162,4 +168,33 @@ func NewRecord(f sql.SelectObjectFormat) *Record {
 		KVS:          jstream.KVS{},
 		SelectFormat: f,
 	}
+}
+
+// jsonFloat converts a float to string similar to Go stdlib formats json floats.
+func jsonFloat(f float64) string {
+	var tmp [32]byte
+	dst := tmp[:0]
+
+	// Convert as if by ES6 number to string conversion.
+	// This matches most other JSON generators.
+	// See golang.org/issue/6384 and golang.org/issue/14135.
+	// Like fmt %g, but the exponent cutoffs are different
+	// and exponents themselves are not padded to two digits.
+	abs := math.Abs(f)
+	fmt := byte('f')
+	if abs != 0 {
+		if abs < 1e-6 || abs >= 1e21 {
+			fmt = 'e'
+		}
+	}
+	dst = strconv.AppendFloat(dst, f, fmt, -1, 64)
+	if fmt == 'e' {
+		// clean up e-09 to e-9
+		n := len(dst)
+		if n >= 4 && dst[n-4] == 'e' && dst[n-3] == '-' && dst[n-2] == '0' {
+			dst[n-2] = dst[n-1]
+			dst = dst[:n-1]
+		}
+	}
+	return string(dst)
 }

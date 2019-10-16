@@ -16,61 +16,168 @@
 
 package simdj
 
-/*
-func TestNewReader(t *testing.T) {
-	files, err := ioutil.ReadDir("testdata")
+import (
+	"bytes"
+	"io"
+	"io/ioutil"
+	"path/filepath"
+	"testing"
+
+	"github.com/fwessels/simdjson-go"
+	"github.com/klauspost/compress/zstd"
+	"github.com/minio/minio/pkg/s3select/json"
+)
+
+type tester interface {
+	Fatal(args ...interface{})
+}
+
+func loadCompressed(t tester, file string) (tape, sb, ref []byte) {
+	dec, err := zstd.NewReader(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, file := range files {
-		f, err := os.Open(filepath.Join("testdata", file.Name()))
-		if err != nil {
-			t.Fatal(err)
-		}
-		r := NewReader(f, &ReaderArgs{})
-		var record sql.Record
-		for {
-			record, err = r.Read(record)
-			if err != nil {
-				break
-			}
-		}
-		r.Close()
-		if err != io.EOF {
-			t.Fatalf("Reading failed with %s, %s", err, file.Name())
-		}
+	tap, err := ioutil.ReadFile(filepath.Join("testdata", file+".tape.zst"))
+	if err != nil {
+		t.Fatal(err)
 	}
+	tap, err = dec.DecodeAll(tap, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sb, err = ioutil.ReadFile(filepath.Join("testdata", file+".stringbuf.zst"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sb, err = dec.DecodeAll(sb, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, err = ioutil.ReadFile(filepath.Join("testdata", file+".json.zst"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, err = dec.DecodeAll(ref, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return tap, sb, ref
 }
 
-func BenchmarkReader(b *testing.B) {
-	files, err := ioutil.ReadDir("testdata")
-	if err != nil {
-		b.Fatal(err)
-	}
-	for _, file := range files {
-		b.Run(file.Name(), func(b *testing.B) {
-			f, err := ioutil.ReadFile(filepath.Join("testdata", file.Name()))
+var testCases = []struct {
+	name  string
+	array bool
+}{
+	{
+		name: "parking-citations-10",
+	},
+}
+
+func TestLoadTape(t *testing.T) {
+	for _, tt := range testCases {
+
+		t.Run(tt.name, func(t *testing.T) {
+			tap, sb, ref := loadCompressed(t, tt.name)
+
+			var err error
+			dst := make(chan simdjson.Elements, 100)
+			dec := NewElementReader(dst, &err, &json.ReaderArgs{ContentType: "json"})
+			pj, err := simdjson.LoadTape(bytes.NewBuffer(tap), bytes.NewBuffer(sb))
 			if err != nil {
-				b.Fatal(err)
+				t.Fatal(err)
 			}
-			b.SetBytes(int64(len(f)))
-			b.ReportAllocs()
-			b.ResetTimer()
-			var record sql.Record
-			for i := 0; i < b.N; i++ {
-				r := NewReader(ioutil.NopCloser(bytes.NewBuffer(f)), &ReaderArgs{})
-				for {
-					record, err = r.Read(record)
+			i := pj.Iter()
+			cpy := i
+			b, err := cpy.MarshalJSON()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if false {
+				t.Log(string(b))
+			}
+			//_ = ioutil.WriteFile(filepath.Join("testdata", tt.name+".json"), b, os.ModePerm)
+
+		parser:
+			for {
+				var next simdjson.Iter
+				typ, err := i.NextIter(&next)
+				if err != nil {
+					t.Fatal(err)
+				}
+				switch typ {
+				case simdjson.TypeNone:
+					close(dst)
+					break parser
+				case simdjson.TypeRoot:
+					obj, err := next.Root()
 					if err != nil {
-						break
+						t.Fatal(err)
 					}
-				}
-				r.Close()
-				if err != io.EOF {
-					b.Fatalf("Reading failed with %s, %s", err, file.Name())
+					if typ := obj.Next(); typ != simdjson.TypeObject {
+						t.Fatal("Unexpected type:", typ.String())
+					}
+
+					o, err := obj.Object(nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					elems, err := o.Parse(nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					dst <- *elems
+				default:
+					t.Fatal("unexpected type:", typ.String())
 				}
 			}
+			refDec := json.NewReader(ioutil.NopCloser(bytes.NewBuffer(ref)), &json.ReaderArgs{ContentType: "json"})
+
+			for {
+				rec, err := dec.Read(nil)
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					t.Error(err)
+				}
+				want, err := refDec.Read(nil)
+				if err != nil {
+					t.Error(err)
+				}
+				var gotB, wantB bytes.Buffer
+				err = rec.WriteCSV(&gotB, ',')
+				if err != nil {
+					t.Error(err)
+				}
+				err = want.WriteCSV(&wantB, ',')
+				if err != nil {
+					t.Error(err)
+				}
+
+				if !bytes.Equal(gotB.Bytes(), wantB.Bytes()) {
+					t.Errorf("CSV output mismatch.\nwant: %s(%x)\ngot:  %s(%x)", wantB.String(), wantB.Bytes(), gotB.String(), gotB.Bytes())
+				}
+				gotB.Reset()
+				wantB.Reset()
+
+				err = rec.WriteJSON(&gotB)
+				if err != nil {
+					t.Error(err)
+				}
+				err = want.WriteJSON(&wantB)
+				if err != nil {
+					t.Error(err)
+				}
+				// truncate newline from 'want'
+				wantB.Truncate(wantB.Len() - 1)
+				if !bytes.Equal(gotB.Bytes(), wantB.Bytes()) {
+					t.Errorf("JSON output mismatch.\nwant: %s\ngot:  %s", wantB.String(), gotB.String())
+				}
+
+			}
+
 		})
 	}
 }
-*/
