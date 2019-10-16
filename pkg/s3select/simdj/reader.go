@@ -21,10 +21,8 @@ import (
 	"io"
 	"sync"
 
-	"github.com/minio/minio/pkg/s3select/json"
-
 	"github.com/fwessels/simdjson-go"
-
+	"github.com/minio/minio/pkg/s3select/json"
 	"github.com/minio/minio/pkg/s3select/sql"
 )
 
@@ -75,6 +73,11 @@ func (r *Reader) Close() error {
 	return nil
 }
 
+// startReader will start a reader that accepts input from r.input.
+// Input should be root -> object input. Each root indicates a record.
+// If r.input is closed, it is assumed that no more input will come.
+// When this function returns r.readerWg will be decremented and r.decoded will be closed.
+// On errors, r.err will be set. This should only be accessed after r.decoded has been closed.
 func (r *Reader) startReader() {
 	defer r.readerWg.Done()
 	defer close(r.decoded)
