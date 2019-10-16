@@ -77,6 +77,8 @@ func init() {
 	// Set system resources to maximum.
 	setMaxResources()
 
+	logger.Disable = true
+
 	// Uncomment the following line to see trace logs during unit tests.
 	// logger.AddTarget(console.New())
 }
@@ -536,8 +538,6 @@ func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 	if err = newSrvConfig(obj); err != nil {
 		return err
 	}
-
-	globalServerConfig.Logger.Console.Enabled = false
 
 	// Set a default region.
 	globalServerConfig.SetRegion(bucketLocation)
