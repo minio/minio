@@ -777,6 +777,12 @@ func (fs *FSObjects) cleanupStaleMultipartUploads(ctx context.Context, cleanupIn
 				if err != nil {
 					continue
 				}
+
+				// Remove the trailing slash separator
+				for i := range uploadIDs {
+					uploadIDs[i] = strings.TrimSuffix(uploadIDs[i], SlashSeparator)
+				}
+
 				for _, uploadID := range uploadIDs {
 					fi, err := fsStatDir(ctx, pathJoin(fs.fsPath, minioMetaMultipartBucket, entry, uploadID))
 					if err != nil {
@@ -787,6 +793,15 @@ func (fs *FSObjects) cleanupStaleMultipartUploads(ctx context.Context, cleanupIn
 						// It is safe to ignore any directory not empty error (in case there were multiple uploadIDs on the same object)
 						fsRemoveDir(ctx, pathJoin(fs.fsPath, minioMetaMultipartBucket, entry))
 
+						// Remove uploadID from the append file map and its corresponding temporary file
+						fs.appendFileMapMu.Lock()
+						bgAppend, ok := fs.appendFileMap[uploadID]
+						if ok {
+							err := fsRemoveFile(ctx, bgAppend.filePath)
+							logger.LogIf(ctx, err)
+							delete(fs.appendFileMap, uploadID)
+						}
+						fs.appendFileMapMu.Unlock()
 					}
 				}
 			}
