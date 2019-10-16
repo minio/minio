@@ -131,5 +131,5 @@ func IterToValue(iter simdjson.Iter) (interface{}, error) {
 		}
 		return dst, err
 	}
-	return nil, fmt.Errorf("unknown JSON type: %s", iter.Type().String())
+	return nil, fmt.Errorf("IterToValue: unknown JSON type: %s", iter.Type().String())
 }

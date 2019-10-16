@@ -82,7 +82,7 @@ func iterToValue(iter simdjson.Iter) (*sql.Value, error) {
 		b, err := iter.MarshalJSON()
 		return sql.FromBytes(b), err
 	}
-	return nil, fmt.Errorf("unknown JSON type: %s", iter.Type().String())
+	return nil, fmt.Errorf("iterToValue: unknown JSON type: %s", iter.Type().String())
 }
 
 // Reset the record.
