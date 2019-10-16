@@ -134,7 +134,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			if globalPolicySys.IsAllowed(policy.Args{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
-				ConditionValues: getConditionValues(r, "", ""),
+				ConditionValues: getConditionValues(r, "", "", nil),
 				IsOwner:         false,
 			}) {
 				_, err = getObjectInfo(ctx, bucket, object, opts)
@@ -293,7 +293,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			if globalPolicySys.IsAllowed(policy.Args{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
-				ConditionValues: getConditionValues(r, "", ""),
+				ConditionValues: getConditionValues(r, "", "", nil),
 				IsOwner:         false,
 			}) {
 				getObjectInfo := objectAPI.GetObjectInfo
@@ -466,7 +466,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 			if globalPolicySys.IsAllowed(policy.Args{
 				Action:          policy.ListBucketAction,
 				BucketName:      bucket,
-				ConditionValues: getConditionValues(r, "", ""),
+				ConditionValues: getConditionValues(r, "", "", nil),
 				IsOwner:         false,
 			}) {
 				_, err = getObjectInfo(ctx, bucket, object, opts)

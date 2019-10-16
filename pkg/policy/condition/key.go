@@ -85,6 +85,18 @@ const (
 
 	// AWSUsername - user friendly name, in MinIO this value is same as your user Access Key.
 	AWSUsername Key = "aws:username"
+
+	// JWTSub - JWT subject claim substitution.
+	JWTSub Key = "jwt:sub"
+
+	// JWTIss issuer claim substitution.
+	JWTIss Key = "jwt:iss"
+
+	// JWTAud audience claim substitution.
+	JWTAud Key = "jwt:aud"
+
+	// JWTJti JWT unique identifier claim substitution.
+	JWTJti Key = "jwt:jti"
 )
 
 // AllSupportedKeys - is list of all all supported keys.
@@ -107,6 +119,10 @@ var AllSupportedKeys = []Key{
 	AWSPrincipalType,
 	AWSUserID,
 	AWSUsername,
+	JWTSub,
+	JWTIss,
+	JWTAud,
+	JWTJti,
 	// Add new supported condition keys.
 }
 
@@ -121,6 +137,10 @@ var CommonKeys = []Key{
 	AWSPrincipalType,
 	AWSUserID,
 	AWSUsername,
+	JWTSub,
+	JWTIss,
+	JWTAud,
+	JWTJti,
 }
 
 func substFuncFromValues(values map[string][]string) func(string) string {
@@ -166,8 +186,9 @@ func (key Key) Name() string {
 
 	if strings.HasPrefix(keyString, "aws:") {
 		return strings.TrimPrefix(keyString, "aws:")
+	} else if strings.HasPrefix(keyString, "jwt:") {
+		return strings.TrimPrefix(keyString, "jwt:")
 	}
-
 	return strings.TrimPrefix(keyString, "s3:")
 }
 
