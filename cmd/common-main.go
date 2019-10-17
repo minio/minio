@@ -235,7 +235,7 @@ func handleCommonEnvVars() {
 	// In place update is true by default if the MINIO_UPDATE is not set
 	// or is not set to 'off', if MINIO_UPDATE is set to 'off' then
 	// in-place update is off.
-	globalInplaceUpdateDisabled = strings.EqualFold(env.Get(config.EnvUpdate, "off"), "off")
+	globalInplaceUpdateDisabled = strings.EqualFold(env.Get(config.EnvUpdate, "on"), "off")
 
 	// Get WORM environment variable.
 	if worm := env.Get(config.EnvWorm, "off"); worm != "" {
