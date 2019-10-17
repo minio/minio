@@ -58,12 +58,13 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 
 	g := errgroup.WithNErrs(len(storageDisks))
 
-	for index, disk := range storageDisks {
-		if disk == nil {
-			continue
-		}
-		index := index
+	for i := range storageDisks {
+		// Initialize a new index variable before passing to the goroutine
+		index := i
 		g.Go(func() error {
+			if storageDisks[index] == nil {
+				return errDiskNotFound
+			}
 			// Check if 'prefix' is an object on this 'disk', else continue the check the next disk
 			fi, err := storageDisks[index].StatFile(bucket, pathJoin(prefix, xlMetaJSONFile))
 			if err != nil {
@@ -73,7 +74,7 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 				return errCorruptedFormat
 			}
 			return nil
-		}, index)
+		}, i)
 	}
 
 	// NOTE: Observe we are not trying to read `xl.json` and figure out the actual
