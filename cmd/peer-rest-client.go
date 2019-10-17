@@ -166,9 +166,20 @@ func (client *peerRESTClient) CPULoadInfo() (info ServerCPULoadInfo, err error) 
 	return info, err
 }
 
-// CpuInfo - fetch CPU hardware information for a remote node.
+// CPUInfo - fetch CPU hardware information for a remote node.
 func (client *peerRESTClient) CPUInfo() (info madmin.ServerCPUHardwareInfo, err error) {
 	respBody, err := client.call(peerRESTMethodHardwareCPUInfo, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
+// NetworkInfo - fetch network hardware information for a remote node.
+func (client *peerRESTClient) NetworkInfo() (info madmin.ServerNetworkHardwareInfo, err error) {
+	respBody, err := client.call(peerRESTMethodHardwareNetworkInfo, nil, nil, -1)
 	if err != nil {
 		return
 	}

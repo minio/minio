@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"net"
 	"net/http"
 	"os"
 
@@ -145,5 +146,38 @@ func getLocalCPUInfo(endpoints EndpointList, r *http.Request) madmin.ServerCPUHa
 	return madmin.ServerCPUHardwareInfo{
 		Addr:    addr,
 		CPUInfo: cpuHardwares,
+	}
+}
+
+// getLocalNetworkInfo - returns ServerNetworkHardwareInfo only for the
+// local endpoints from given list of endpoints
+func getLocalNetworkInfo(endpoints EndpointList, r *http.Request) madmin.ServerNetworkHardwareInfo {
+	var networkHardwares []net.Interface
+	seenHosts := set.NewStringSet()
+	for _, endpoint := range endpoints {
+		if seenHosts.Contains(endpoint.Host) {
+			continue
+		}
+		// Add to the list of visited hosts
+		seenHosts.Add(endpoint.Host)
+		// Only proceed for local endpoints
+		if endpoint.IsLocal {
+			networkHardware, err := net.Interfaces()
+			if err != nil {
+				return madmin.ServerNetworkHardwareInfo{
+					Error: err.Error(),
+				}
+			}
+			networkHardwares = append(networkHardwares, networkHardware...)
+		}
+	}
+	addr := r.Host
+	if globalIsDistXL {
+		addr = GetLocalPeer(endpoints)
+	}
+
+	return madmin.ServerNetworkHardwareInfo{
+		Addr:        addr,
+		NetworkInfo: networkHardwares,
 	}
 }

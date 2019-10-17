@@ -438,6 +438,20 @@ func (s *peerRESTServer) CPUInfoHandler(w http.ResponseWriter, r *http.Request) 
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
 
+// NetworkInfoHandler - returns Network Hardware info.
+func (s *peerRESTServer) NetworkInfoHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	ctx := newContext(r, w, "NetworkInfo")
+	info := getLocalNetworkInfo(globalEndpoints, r)
+
+	defer w.(http.Flusher).Flush()
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+}
+
 // DrivePerfInfoHandler - returns Drive Performance info.
 func (s *peerRESTServer) DrivePerfInfoHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -990,6 +1004,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodMemUsageInfo).HandlerFunc(httpTraceHdrs(server.MemUsageInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodDrivePerfInfo).HandlerFunc(httpTraceHdrs(server.DrivePerfInfoHandler)).Queries(restQueries(peerRESTDrivePerfSize)...)
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodHardwareCPUInfo).HandlerFunc(httpTraceHdrs(server.CPUInfoHandler))
+	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodHardwareNetworkInfo).HandlerFunc(httpTraceHdrs(server.NetworkInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodDeleteBucket).HandlerFunc(httpTraceHdrs(server.DeleteBucketHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodSignalService).HandlerFunc(httpTraceHdrs(server.SignalServiceHandler)).Queries(restQueries(peerRESTSignal)...)
 	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodServerUpdate).HandlerFunc(httpTraceHdrs(server.ServerUpdateHandler)).Queries(restQueries(peerRESTUpdateURL, peerRESTSha256Hex, peerRESTLatestRelease)...)

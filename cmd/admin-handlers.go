@@ -1823,6 +1823,24 @@ func (a adminAPIHandlers) ServerHardwareInfoHandler(w http.ResponseWriter, r *ht
 		// distributed setup) as json.
 		writeSuccessResponseJSON(w, jsonBytes)
 
+	case madmin.NETWORK:
+		// Get Network hardware details from local server's network(s)
+		network := getLocalNetworkInfo(globalEndpoints, r)
+		// Notify all other MinIO peers to report network hardware
+		networks := globalNotificationSys.NetworkInfo()
+		networks = append(networks, network)
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(networks)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		// Reply with cpu network information (across nodes in a
+		// distributed setup) as json.
+		writeSuccessResponseJSON(w, jsonBytes)
+
 	default:
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 	}

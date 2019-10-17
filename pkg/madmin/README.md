@@ -42,14 +42,15 @@ func main() {
 }
 
 ```
-| Service operations                  | Info operations                                    | Healing operations | Config operations         | Top operations          | IAM operations                        | Misc                                              | KMS                             |
-|:------------------------------------|:---------------------------------------------------|:-------------------|:--------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|:--------------------------------|
-| [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                        | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig) | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   | [`GetKeyStatus`](#GetKeyStatus) |
-| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)          |                    | [`SetConfig`](#SetConfig) |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |                                 |
-|                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)        |                    |                           |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
-| [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo)    |                    |                           |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                 |
-|                                     | [`NetPerfInfo`](#NetPerfInfo)                      |                    |                           |                         |                                       |                                                   |                                 |
-|                                     | [`ServerCPUHardwareInfo`](#ServerCPUHardwareInfo)  |                    |                           |                         |                                       |                                                   |                                 |
+| Service operations                  | Info operations                                             | Healing operations | Config operations         | Top operations          | IAM operations                        | Misc                                              | KMS                             |
+|:------------------------------------|:------------------------------------------------------------|:-------------------|:--------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|:--------------------------------|
+| [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                                 | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig) | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   | [`GetKeyStatus`](#GetKeyStatus) |
+| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)                   |                    | [`SetConfig`](#SetConfig) |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |                                 |
+|                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)                 |                    |                           |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
+| [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo)             |                    |                           |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                 |
+|                                     | [`NetPerfInfo`](#NetPerfInfo)                               |                    |                           |                         |                                       |                                                   |                                 |
+|                                     | [`ServerCPUHardwareInfo`](#ServerCPUHardwareInfo)           |                    |                           |                         |                                       |                                                   |                                 |
+|                                     | [`ServerNetworkHardwareInfo`](#ServerNetworkHardwareInfo)   |                    |                           |                         |                                       |                                                   |                                 |
 
 ## 1. Constructor
 <a name="MinIO"></a>
@@ -313,6 +314,25 @@ Fetches hardware information of CPU.
 | `CPUInfo.CacheZSize`       | _int32_  | cache sizes                                            |
 | `CPUInfo.Flags`            |_[]string_| Flags                                                  |
 | `CPUInfo.Microcode`        | _string_ | Micro codes                                            |
+
+<a name="ServerNetworkHardwareInfo"></a>
+### ServerNetworkHardwareInfo() ([]ServerNetworkHardwareInfo, error)
+
+Fetches hardware information of CPU.
+
+| Param             | Type                | Description                                                         |
+|-------------------|---------------------|---------------------------------------------------------------------|
+| `hwi.Addr`        |      _string_       | Address of the server the following information  is retrieved from. |
+| `hwi.Error`       |      _string_       | Errors (if any) encountered while reaching this node                |
+| `hwi.NetworkInfo` | _[]net.Interface_   | The network hardware info                                           |
+
+| Param                      | Type     | Description                                               |
+|----------------------------|----------|-----------------------------------------------------------|
+| `NetworkInfo.Index`        | _int32_  | positive integer that starts at one, zero is never used.  |
+| `NetworkInfo.MTU`          | _int32_  | maximum transmission unit                                 |
+| `NetworkInfo.Name`         | _string_ | e.g., "en0", "lo0", "eth0.100"                            |
+| `NetworkInfo.HardwareAddr` | _[]byte_ | IEEE MAC-48, EUI-48 and EUI-64 form                       |
+| `NetworkInfo.Flags`        | _uint32_ | e.g., FlagUp, FlagLoopback, FlagMulticast                 |
 
 ## 5. Heal operations
 
