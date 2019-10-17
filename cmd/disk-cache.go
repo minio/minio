@@ -16,6 +16,7 @@ import (
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/pkg/sync/errgroup"
 	"github.com/minio/minio/pkg/wildcard"
 )
 
@@ -111,7 +112,7 @@ func (c *cacheObjects) DeleteObject(ctx context.Context, bucket, object string) 
 		return
 	}
 
-	dcache, cerr := c.getCacheLoc(ctx, bucket, object)
+	dcache, cerr := c.getCacheLoc(bucket, object)
 	if cerr != nil {
 		return
 	}
@@ -338,7 +339,7 @@ func (c *cacheObjects) isCacheExclude(bucket, object string) bool {
 // choose a cache deterministically based on hash of bucket,object. The hash index is treated as
 // a hint. In the event that the cache drive at hash index is offline, treat the list of cache drives
 // as a circular buffer and walk through them starting at hash index until an online drive is found.
-func (c *cacheObjects) getCacheLoc(ctx context.Context, bucket, object string) (*diskCache, error) {
+func (c *cacheObjects) getCacheLoc(bucket, object string) (*diskCache, error) {
 	index := c.hashIndex(bucket, object)
 	numDisks := len(c.cache)
 	for k := 0; k < numDisks; k++ {
@@ -450,36 +451,32 @@ func checkAtimeSupport(dir string) (err error) {
 func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
 	logStartupMessage(color.Blue("Cache migration initiated ...."))
 
-	var wg sync.WaitGroup
-	errs := make([]error, len(c.cache))
-	for i, dc := range c.cache {
+	g := errgroup.WithNErrs(len(c.cache))
+	for index, dc := range c.cache {
 		if dc == nil {
 			continue
 		}
-		wg.Add(1)
-		// start migration from V1 to V2
-		go func(ctx context.Context, dc *diskCache, errs []error, idx int) {
-			defer wg.Done()
-			if err := migrateOldCache(ctx, dc); err != nil {
-				errs[idx] = err
-				logger.LogIf(ctx, err)
-				return
-			}
-			// start purge routine after migration completes.
-			go dc.purge()
-		}(ctx, dc, errs, i)
+		index := index
+		g.Go(func() error {
+			// start migration from V1 to V2
+			return migrateOldCache(ctx, c.cache[index])
+		}, index)
 	}
-	wg.Wait()
 
 	errCnt := 0
-	for _, err := range errs {
+	for index, err := range g.Wait() {
 		if err != nil {
 			errCnt++
+			logger.LogIf(ctx, err)
+			continue
 		}
+		go c.cache[index].purge()
 	}
+
 	if errCnt > 0 {
 		return
 	}
+
 	// update migration status
 	c.migMutex.Lock()
 	defer c.migMutex.Unlock()

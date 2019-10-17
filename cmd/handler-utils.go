@@ -375,11 +375,6 @@ func getResource(path string, host string, domains []string) (string, error) {
 	return path, nil
 }
 
-// If none of the http routes match respond with MethodNotAllowed, in JSON
-func notFoundHandlerJSON(w http.ResponseWriter, r *http.Request) {
-	writeErrorResponseJSON(context.Background(), w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-}
-
 // If none of the http routes match respond with MethodNotAllowed
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	writeErrorResponse(context.Background(), w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))

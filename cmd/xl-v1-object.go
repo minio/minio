@@ -22,11 +22,11 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"sync"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/mimedb"
+	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
 // list all errors which can be ignored in object operations.
@@ -34,25 +34,26 @@ var objectOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied)
 
 // putObjectDir hints the bottom layer to create a new directory.
 func (xl xlObjects) putObjectDir(ctx context.Context, bucket, object string, writeQuorum int) error {
-	var wg sync.WaitGroup
+	storageDisks := xl.getDisks()
 
-	errs := make([]error, len(xl.getDisks()))
+	g := errgroup.WithNErrs(len(storageDisks))
+
 	// Prepare object creation in all disks
-	for index, disk := range xl.getDisks() {
-		if disk == nil {
+	for index := range storageDisks {
+		if storageDisks[index] == nil {
 			continue
 		}
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			if err := disk.MakeVol(pathJoin(bucket, object)); err != nil && err != errVolumeExists {
-				errs[index] = err
+		index := index
+		g.Go(func() error {
+			err := storageDisks[index].MakeVol(pathJoin(bucket, object))
+			if err != nil && err != errVolumeExists {
+				return err
 			}
-		}(index, disk)
+			return nil
+		}, index)
 	}
-	wg.Wait()
 
-	return reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
+	return reduceWriteQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, writeQuorum)
 }
 
 /// Object Operations
@@ -206,7 +207,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 
 	// Start offset cannot be negative.
 	if startOffset < 0 {
-		logger.LogIf(ctx, errUnexpected)
+		logger.LogIf(ctx, errUnexpected, logger.Application)
 		return errUnexpected
 	}
 
@@ -258,7 +259,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 
 	// Reply back invalid range if the input offset and length fall out of range.
 	if startOffset > xlMeta.Stat.Size || startOffset+length > xlMeta.Stat.Size {
-		logger.LogIf(ctx, InvalidRange{startOffset, length, xlMeta.Stat.Size})
+		logger.LogIf(ctx, InvalidRange{startOffset, length, xlMeta.Stat.Size}, logger.Application)
 		return InvalidRange{startOffset, length, xlMeta.Stat.Size}
 	}
 
@@ -335,36 +336,34 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 }
 
 // getObjectInfoDir - This getObjectInfo is specific to object directory lookup.
-func (xl xlObjects) getObjectInfoDir(ctx context.Context, bucket, object string) (oi ObjectInfo, err error) {
-	var wg sync.WaitGroup
+func (xl xlObjects) getObjectInfoDir(ctx context.Context, bucket, object string) (ObjectInfo, error) {
+	storageDisks := xl.getDisks()
 
-	errs := make([]error, len(xl.getDisks()))
+	g := errgroup.WithNErrs(len(storageDisks))
+
 	// Prepare object creation in a all disks
-	for index, disk := range xl.getDisks() {
+	for index, disk := range storageDisks {
 		if disk == nil {
 			continue
 		}
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
+		index := index
+		g.Go(func() error {
 			// Check if 'prefix' is an object on this 'disk'.
-			entries, err := disk.ListDir(bucket, object, 1, "")
+			entries, err := storageDisks[index].ListDir(bucket, object, 1, "")
 			if err != nil {
-				errs[index] = err
-				return
+				return err
 			}
 			if len(entries) > 0 {
 				// Not a directory if not empty.
-				errs[index] = errFileNotFound
-				return
+				return errFileNotFound
 			}
-		}(index, disk)
+			return nil
+		}, index)
 	}
 
-	wg.Wait()
-
-	readQuorum := len(xl.getDisks()) / 2
-	return dirObjectInfo(bucket, object, 0, map[string]string{}), reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum)
+	readQuorum := len(storageDisks) / 2
+	err := reduceReadQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, readQuorum)
+	return dirObjectInfo(bucket, object, 0, map[string]string{}), err
 }
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
@@ -424,7 +423,6 @@ func (xl xlObjects) getObjectInfo(ctx context.Context, bucket, object string) (o
 }
 
 func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, errs []error) {
-	var wg sync.WaitGroup
 	// Undo rename object on disks where RenameFile succeeded.
 
 	// If srcEntry/dstEntry are objects then add a trailing slash to copy
@@ -433,56 +431,51 @@ func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry str
 		srcEntry = retainSlash(srcEntry)
 		dstEntry = retainSlash(dstEntry)
 	}
+	g := errgroup.WithNErrs(len(disks))
 	for index, disk := range disks {
 		if disk == nil {
 			continue
 		}
-		// Undo rename object in parallel.
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			if errs[index] != nil {
-				return
+		index := index
+		g.Go(func() error {
+			if errs[index] == nil {
+				_ = disks[index].RenameFile(dstBucket, dstEntry, srcBucket, srcEntry)
 			}
-			_ = disk.RenameFile(dstBucket, dstEntry, srcBucket, srcEntry)
-		}(index, disk)
+			return nil
+		}, index)
 	}
-	wg.Wait()
+	g.Wait()
 }
 
 // rename - common function that renamePart and renameObject use to rename
 // the respective underlying storage layer representations.
 func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, writeQuorum int, ignoredErr []error) ([]StorageAPI, error) {
-	// Initialize sync waitgroup.
-	var wg sync.WaitGroup
-
-	// Initialize list of errors.
-	var errs = make([]error, len(disks))
 
 	if isDir {
 		dstEntry = retainSlash(dstEntry)
 		srcEntry = retainSlash(srcEntry)
 	}
 
+	g := errgroup.WithNErrs(len(disks))
+
 	// Rename file on all underlying storage disks.
-	for index, disk := range disks {
-		if disk == nil {
-			errs[index] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			if err := disk.RenameFile(srcBucket, srcEntry, dstBucket, dstEntry); err != nil {
+	for index := range disks {
+		index := index
+		g.Go(func() error {
+			if disks[index] == nil {
+				return errDiskNotFound
+			}
+			if err := disks[index].RenameFile(srcBucket, srcEntry, dstBucket, dstEntry); err != nil {
 				if !IsErrIgnored(err, ignoredErr...) {
-					errs[index] = err
+					return err
 				}
 			}
-		}(index, disk)
+			return nil
+		}, index)
 	}
 
 	// Wait for all renames to finish.
-	wg.Wait()
+	errs := g.Wait()
 
 	// We can safely allow RenameFile errors up to len(xl.getDisks()) - writeQuorum
 	// otherwise return failure. Cleanup successful renames.
@@ -570,7 +563,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 
 	// Validate input data size and it can never be less than zero.
 	if data.Size() < -1 {
-		logger.LogIf(ctx, errInvalidArgument)
+		logger.LogIf(ctx, errInvalidArgument, logger.Application)
 		return ObjectInfo{}, toObjectErr(errInvalidArgument)
 	}
 
@@ -636,7 +629,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// Should return IncompleteBody{} error when reader has fewer bytes
 	// than specified in request header.
 	if n < data.Size() {
-		logger.LogIf(ctx, IncompleteBody{})
+		logger.LogIf(ctx, IncompleteBody{}, logger.Application)
 		return ObjectInfo{}, IncompleteBody{}
 	}
 
@@ -744,39 +737,31 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string, wri
 		}
 	}
 
-	// Initialize sync waitgroup.
-	var wg sync.WaitGroup
+	g := errgroup.WithNErrs(len(disks))
 
-	// Initialize list of errors.
-	var dErrs = make([]error, len(disks))
-
-	for index, disk := range disks {
-		if disk == nil {
-			dErrs[index] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-		go func(index int, disk StorageAPI, isDir bool) {
-			defer wg.Done()
-			var e error
+	for index := range disks {
+		index := index
+		g.Go(func() error {
+			if disks[index] == nil {
+				return errDiskNotFound
+			}
+			var err error
 			if isDir {
 				// DeleteFile() simply tries to remove a directory
 				// and will succeed only if that directory is empty.
-				e = disk.DeleteFile(minioMetaTmpBucket, tmpObj)
+				err = disks[index].DeleteFile(minioMetaTmpBucket, tmpObj)
 			} else {
-				e = cleanupDir(ctx, disk, minioMetaTmpBucket, tmpObj)
+				err = cleanupDir(ctx, disks[index], minioMetaTmpBucket, tmpObj)
 			}
-			if e != nil && e != errVolumeNotFound {
-				dErrs[index] = e
+			if err != nil && err != errVolumeNotFound {
+				return err
 			}
-		}(index, disk, isDir)
+			return nil
+		}, index)
 	}
 
-	// Wait for all routines to finish.
-	wg.Wait()
-
 	// return errors if any during deletion
-	return reduceWriteQuorumErrs(ctx, dErrs, objectOpIgnoredErrs, writeQuorum)
+	return reduceWriteQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, writeQuorum)
 }
 
 // deleteObject - wrapper for delete object, deletes an object from
@@ -821,7 +806,7 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 			opErrs[index] = errDiskNotFound
 			continue
 		}
-		delObjErrs[index], opErrs[index] = cleanupObjectsBulk(ctx, disk, minioMetaTmpBucket, tmpObjs, errs)
+		delObjErrs[index], opErrs[index] = cleanupObjectsBulk(disk, minioMetaTmpBucket, tmpObjs, errs)
 		if opErrs[index] == errVolumeNotFound {
 			opErrs[index] = nil
 		}
@@ -955,7 +940,6 @@ func (xl xlObjects) DeleteObjects(ctx context.Context, bucket string, objects []
 			// Avoid to increase the index if object
 			// name is found to be duplicated.
 			start = i
-			end = i
 		} else {
 			i++
 		}

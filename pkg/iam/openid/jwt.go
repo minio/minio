@@ -62,14 +62,11 @@ func (r *JWKSArgs) PopulatePublicKey() error {
 		return err
 	}
 
-	r.publicKeys = make(map[string]crypto.PublicKey)
 	for _, key := range jwk.Keys {
-		var publicKey crypto.PublicKey
-		publicKey, err = key.DecodePublicKey()
+		r.publicKeys[key.Kid], err = key.DecodePublicKey()
 		if err != nil {
 			return err
 		}
-		r.publicKeys[key.Kid] = publicKey
 	}
 
 	return nil
@@ -215,10 +212,18 @@ func LookupConfig(args JWKSArgs, transport *http.Transport, closeRespFn func(io.
 	if err != nil {
 		return args, err
 	}
-	args.URL = u
-	if err := args.PopulatePublicKey(); err != nil {
+
+	args = JWKSArgs{
+		URL:         u,
+		publicKeys:  make(map[string]crypto.PublicKey),
+		transport:   transport,
+		closeRespFn: closeRespFn,
+	}
+
+	if err = args.PopulatePublicKey(); err != nil {
 		return args, err
 	}
+
 	return args, nil
 }
 

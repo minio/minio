@@ -20,11 +20,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
 func (xl xlObjects) ReloadFormat(ctx context.Context, dryRun bool) error {
@@ -57,40 +57,31 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 	dryRun bool) (res madmin.HealResultItem, err error) {
 
 	// Initialize sync waitgroup.
-	var wg sync.WaitGroup
-
-	// Initialize list of errors.
-	var dErrs = make([]error, len(storageDisks))
+	g := errgroup.WithNErrs(len(storageDisks))
 
 	// Disk states slices
 	beforeState := make([]string, len(storageDisks))
 	afterState := make([]string, len(storageDisks))
 
 	// Make a volume entry on all underlying storage disks.
-	for index, disk := range storageDisks {
-		if disk == nil {
-			dErrs[index] = errDiskNotFound
-			beforeState[index] = madmin.DriveStateOffline
-			afterState[index] = madmin.DriveStateOffline
-			continue
-		}
-		wg.Add(1)
-
-		// Make a volume inside a go-routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			if _, serr := disk.StatVol(bucket); serr != nil {
+	for index := range storageDisks {
+		index := index
+		g.Go(func() error {
+			if storageDisks[index] == nil {
+				beforeState[index] = madmin.DriveStateOffline
+				afterState[index] = madmin.DriveStateOffline
+				return errDiskNotFound
+			}
+			if _, serr := storageDisks[index].StatVol(bucket); serr != nil {
 				if serr == errDiskNotFound {
 					beforeState[index] = madmin.DriveStateOffline
 					afterState[index] = madmin.DriveStateOffline
-					dErrs[index] = serr
-					return
+					return serr
 				}
 				if serr != errVolumeNotFound {
 					beforeState[index] = madmin.DriveStateCorrupt
 					afterState[index] = madmin.DriveStateCorrupt
-					dErrs[index] = serr
-					return
+					return serr
 				}
 
 				beforeState[index] = madmin.DriveStateMissing
@@ -98,23 +89,22 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 
 				// mutate only if not a dry-run
 				if dryRun {
-					return
+					return nil
 				}
 
-				makeErr := disk.MakeVol(bucket)
-				dErrs[index] = makeErr
+				makeErr := storageDisks[index].MakeVol(bucket)
 				if makeErr == nil {
 					afterState[index] = madmin.DriveStateOk
 				}
-				return
+				return makeErr
 			}
 			beforeState[index] = madmin.DriveStateOk
 			afterState[index] = madmin.DriveStateOk
-		}(index, disk)
+			return nil
+		}, index)
 	}
 
-	// Wait for all make vol to finish.
-	wg.Wait()
+	errs := g.Wait()
 
 	// Initialize heal result info
 	res = madmin.HealResultItem{
@@ -122,13 +112,13 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 		Bucket:    bucket,
 		DiskCount: len(storageDisks),
 	}
-	for i, before := range beforeState {
+	for i := range beforeState {
 		if storageDisks[i] != nil {
 			drive := storageDisks[i].String()
 			res.Before.Drives = append(res.Before.Drives, madmin.HealDriveInfo{
 				UUID:     "",
 				Endpoint: drive,
-				State:    before,
+				State:    beforeState[i],
 			})
 			res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
 				UUID:     "",
@@ -138,7 +128,7 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 		}
 	}
 
-	reducedErr := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, writeQuorum)
+	reducedErr := reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, writeQuorum)
 	if reducedErr == errXLWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
 		undoMakeBucket(storageDisks, bucket)
@@ -597,29 +587,25 @@ func defaultHealResult(latestXLMeta xlMetaV1, storageDisks []StorageAPI, errs []
 
 // Stat all directories.
 func statAllDirs(ctx context.Context, storageDisks []StorageAPI, bucket, prefix string) []error {
-	var errs = make([]error, len(storageDisks))
-	var wg sync.WaitGroup
+	g := errgroup.WithNErrs(len(storageDisks))
 	for index, disk := range storageDisks {
 		if disk == nil {
 			continue
 		}
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			entries, err := disk.ListDir(bucket, prefix, 1, "")
+		index := index
+		g.Go(func() error {
+			entries, err := storageDisks[index].ListDir(bucket, prefix, 1, "")
 			if err != nil {
-				errs[index] = err
-				return
+				return err
 			}
 			if len(entries) > 0 {
-				errs[index] = errVolumeNotEmpty
-				return
+				return errVolumeNotEmpty
 			}
-		}(index, disk)
+			return nil
+		}, index)
 	}
 
-	wg.Wait()
-	return errs
+	return g.Wait()
 }
 
 // ObjectDir is considered dangling/corrupted if any only

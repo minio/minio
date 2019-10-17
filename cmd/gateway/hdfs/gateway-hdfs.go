@@ -362,7 +362,6 @@ func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 				entries = append(entries, fi.Name())
 			}
 		}
-		fis = nil
 		return minio.FilterMatchingPrefix(entries, prefixEntry)
 	}
 

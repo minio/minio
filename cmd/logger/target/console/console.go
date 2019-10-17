@@ -32,7 +32,7 @@ import (
 type Target struct{}
 
 // Send log message 'e' to console
-func (c *Target) Send(e interface{}) error {
+func (c *Target) Send(e interface{}, logKind string) error {
 	entry, ok := e.(log.Entry)
 	if !ok {
 		return fmt.Errorf("Uexpected log entry structure %#v", e)

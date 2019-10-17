@@ -278,7 +278,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints EndpointLi
 }
 
 // Format disks before initialization of object layer.
-func waitForFormatXL(ctx context.Context, firstDisk bool, endpoints EndpointList, setCount, disksPerSet int) (format *formatXLV3, err error) {
+func waitForFormatXL(firstDisk bool, endpoints EndpointList, setCount, disksPerSet int) (format *formatXLV3, err error) {
 	if len(endpoints) == 0 || setCount == 0 || disksPerSet == 0 {
 		return nil, errInvalidArgument
 	}

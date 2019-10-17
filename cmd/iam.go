@@ -678,7 +678,7 @@ func (sys *IAMSys) SetUser(accessKey string, uinfo madmin.UserInfo) error {
 
 	// Set policy if specified.
 	if uinfo.PolicyName != "" {
-		return sys.policyDBSet(objectAPI, accessKey, uinfo.PolicyName, false, false)
+		return sys.policyDBSet(accessKey, uinfo.PolicyName, false, false)
 	}
 	return nil
 }
@@ -962,12 +962,12 @@ func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
 
 	// isSTS is always false when called via PolicyDBSet as policy
 	// is never set by an external API call for STS users.
-	return sys.policyDBSet(objectAPI, name, policy, false, isGroup)
+	return sys.policyDBSet(name, policy, false, isGroup)
 }
 
 // policyDBSet - sets a policy for user in the policy db. Assumes that
 // caller has sys.Lock().
-func (sys *IAMSys) policyDBSet(objectAPI ObjectLayer, name, policy string, isSTS, isGroup bool) error {
+func (sys *IAMSys) policyDBSet(name, policy string, isSTS, isGroup bool) error {
 	if name == "" || policy == "" {
 		return errInvalidArgument
 	}

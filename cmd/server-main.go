@@ -82,12 +82,6 @@ ENVIRONMENT VARIABLES:
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
-  CACHE:
-     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
-     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
-     MINIO_CACHE_EXPIRY: Cache expiry duration in days.
-     MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
-
   DOMAIN:
      MINIO_DOMAIN: To enable virtual-host-style requests, set this value to MinIO host domain name.
 
@@ -414,7 +408,7 @@ func newObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err error) {
 		return NewFSObjectLayer(endpoints[0].Path)
 	}
 
-	format, err := waitForFormatXL(context.Background(), endpoints[0].IsLocal, endpoints, globalXLSetCount, globalXLSetDriveCount)
+	format, err := waitForFormatXL(endpoints[0].IsLocal, endpoints, globalXLSetCount, globalXLSetDriveCount)
 	if err != nil {
 		return nil, err
 	}

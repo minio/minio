@@ -99,7 +99,7 @@ type RedisTarget struct {
 	pool       *redis.Pool
 	store      Store
 	firstPing  bool
-	loggerOnce func(ctx context.Context, err error, id interface{})
+	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 }
 
 // ID - returns target ID.
@@ -222,7 +222,7 @@ func (target *RedisTarget) Close() error {
 }
 
 // NewRedisTarget - creates new Redis target.
-func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{})) (*RedisTarget, error) {
+func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})) (*RedisTarget, error) {
 	pool := &redis.Pool{
 		MaxIdle:     3,
 		IdleTimeout: 2 * 60 * time.Second,
@@ -289,9 +289,9 @@ func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}, loggerOnc
 
 	if target.store != nil {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh)
+		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh)
+		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
 	}
 
 	return target, nil

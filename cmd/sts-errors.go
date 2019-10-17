@@ -37,7 +37,14 @@ func writeSTSErrorResponse(ctx context.Context, w http.ResponseWriter, errCode S
 	if errCtxt != nil {
 		stsErrorResponse.Error.Message = fmt.Sprintf("%v", errCtxt)
 	}
-	logger.LogIf(ctx, errCtxt)
+	logKind := logger.All
+	switch errCode {
+	case ErrSTSInternalError, ErrSTSNotInitialized:
+		logKind = logger.Minio
+	default:
+		logKind = logger.Application
+	}
+	logger.LogIf(ctx, errCtxt, logKind)
 	encodedErrorResponse := encodeResponse(stsErrorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
 }
@@ -135,14 +142,4 @@ var stsErrCodes = stsErrorCodeMap{
 		Description:    "We encountered an internal error generating credentials, please try again.",
 		HTTPStatusCode: http.StatusInternalServerError,
 	},
-}
-
-// getSTSErrorResponse gets in standard error and
-// provides a encodable populated response values
-func getSTSErrorResponse(err STSError, requestID string) STSErrorResponse {
-	errRsp := STSErrorResponse{}
-	errRsp.Error.Code = err.Code
-	errRsp.Error.Message = err.Description
-	errRsp.RequestID = requestID
-	return errRsp
 }

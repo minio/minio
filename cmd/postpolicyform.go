@@ -240,7 +240,7 @@ func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) erro
 	}
 
 	// Flag to indicate if all policies conditions are satisfied
-	condPassed := true
+	var condPassed bool
 
 	// Iterate over policy conditions and check them against received form fields
 	for _, policy := range postPolicyForm.Conditions.Policies {

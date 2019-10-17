@@ -150,7 +150,7 @@ const csvSplitSize = 128 << 10
 // startReaders will read the header if needed and spin up a parser
 // and a number of workers based on GOMAXPROCS.
 // If an error is returned no goroutines have been started and r.err will have been set.
-func (r *Reader) startReaders(in io.Reader, newReader func(io.Reader) *csv.Reader) error {
+func (r *Reader) startReaders(newReader func(io.Reader) *csv.Reader) error {
 	if r.args.FileHeaderInfo != none {
 		// Read column names
 		// Get one line.
@@ -304,5 +304,5 @@ func NewReader(readCloser io.ReadCloser, args *ReaderArgs) (*Reader, error) {
 		return ret
 	}
 
-	return r, r.startReaders(csvIn, newCsvReader)
+	return r, r.startReaders(newCsvReader)
 }

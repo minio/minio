@@ -167,7 +167,7 @@ func NewPolicySys() *PolicySys {
 	}
 }
 
-func getConditionValues(request *http.Request, locationConstraint string, username string) map[string][]string {
+func getConditionValues(request *http.Request, locationConstraint string, username string, claims map[string]interface{}) map[string][]string {
 	currTime := UTCNow()
 	principalType := func() string {
 		if username != "" {
@@ -207,6 +207,13 @@ func getConditionValues(request *http.Request, locationConstraint string, userna
 		args["LocationConstraint"] = []string{locationConstraint}
 	}
 
+	// JWT specific values
+	for k, v := range claims {
+		vStr, ok := v.(string)
+		if ok {
+			args[k] = []string{vStr}
+		}
+	}
 	return args
 }
 

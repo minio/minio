@@ -186,6 +186,7 @@
 		"http": {
 			"target1": {
 				"enabled": false,
+				"type": "minio",
 				"endpoint": "https://username:password@example.com/api"
 			}
 		}
