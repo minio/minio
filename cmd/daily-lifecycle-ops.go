@@ -135,6 +135,17 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 		// List all objects and calculate lifecycle action based on object name & object modtime
 		marker := ""
 		for {
+			if globalHTTPServer != nil {
+				// Wait at max 2 seconds for an inprogress request before proceeding to lifecycle
+				waitCount := 2
+				// Any requests in progress, delay the lifecycle.
+				for (globalHTTPServer.GetRequestCount() >= int32(globalXLSetCount*globalXLSetDriveCount)) &&
+					waitCount > 0 {
+					waitCount--
+					time.Sleep(1 * time.Second)
+				}
+			}
+
 			res, err := objAPI.ListObjects(ctx, bucket.Name, commonPrefix, marker, "", 1000)
 			if err != nil {
 				continue
