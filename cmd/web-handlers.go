@@ -540,6 +540,12 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 				if err != nil {
 					return toJSONError(ctx, err)
 				}
+			} else if lo.Objects[i].IsCompressed() {
+				var actualSize int64 = lo.Objects[i].GetActualSize()
+				if actualSize < 0 {
+					return toJSONError(ctx, errInvalidDecompressedSize)
+				}
+				lo.Objects[i].Size = actualSize
 			}
 		}
 
