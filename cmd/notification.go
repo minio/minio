@@ -1191,6 +1191,15 @@ func (args eventArgs) ToEvent() event.Event {
 func sendEvent(args eventArgs) {
 
 	// remove sensitive encryption entries in metadata.
+	switch {
+	case crypto.IsEncrypted(args.Object.UserDefined):
+		if totalObjectSize, err := args.Object.DecryptedSize(); err == nil {
+			args.Object.Size = totalObjectSize
+		}
+	case args.Object.IsCompressed():
+		args.Object.Size = args.Object.GetActualSize()
+	}
+
 	crypto.RemoveSensitiveEntries(args.Object.UserDefined)
 	crypto.RemoveInternalEntries(args.Object.UserDefined)
 
