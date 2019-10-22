@@ -583,8 +583,9 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 		if _, err := io.Copy(writer, bytes.NewReader((*bufp)[blockOffset:blockOffset+blockLength])); err != nil {
 			if err != io.ErrClosedPipe {
 				logger.LogIf(ctx, err)
+				return err
 			}
-			return err
+			eof = true
 		}
 		if eof {
 			break
