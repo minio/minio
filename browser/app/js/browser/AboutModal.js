@@ -19,7 +19,7 @@ import { Modal } from "react-bootstrap"
 import logo from "../../img/logo.svg"
 
 export const AboutModal = ({ serverInfo, hideAbout }) => {
-  const { version, memory, platform, runtime } = serverInfo
+  const { version, platform, runtime } = serverInfo
   return (
     <Modal
       className="modal-about modal-dark"
@@ -41,10 +41,6 @@ export const AboutModal = ({ serverInfo, hideAbout }) => {
             <li>
               <div>Version</div>
               <small>{version}</small>
-            </li>
-            <li>
-              <div>Memory</div>
-              <small>{memory}</small>
             </li>
             <li>
               <div>Platform</div>

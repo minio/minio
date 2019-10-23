@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package iampolicy
+package opa
 
 import (
 	"bytes"
@@ -23,18 +23,33 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/env"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	xnet "github.com/minio/minio/pkg/net"
 )
 
 // Env IAM OPA URL
 const (
-	EnvIAMOPAURL       = "MINIO_IAM_OPA_URL"
-	EnvIAMOPAAuthToken = "MINIO_IAM_OPA_AUTHTOKEN"
+	URL       = "url"
+	AuthToken = "auth_token"
+
+	EnvPolicyOpaURL       = "MINIO_POLICY_OPA_URL"
+	EnvPolicyOpaAuthToken = "MINIO_POLICY_OPA_AUTH_TOKEN"
 )
 
-// OpaArgs opa general purpose policy engine configuration.
-type OpaArgs struct {
+// DefaultKVS - default config for OPA config
+var (
+	DefaultKVS = config.KVS{
+		config.State:   config.StateOff,
+		config.Comment: "This is a default OPA configuration",
+		URL:            "",
+		AuthToken:      "",
+	}
+)
+
+// Args opa general purpose policy engine configuration.
+type Args struct {
 	URL         *xnet.URL             `json:"url"`
 	AuthToken   string                `json:"authToken"`
 	Transport   http.RoundTripper     `json:"-"`
@@ -42,8 +57,8 @@ type OpaArgs struct {
 }
 
 // Validate - validate opa configuration params.
-func (a *OpaArgs) Validate() error {
-	req, err := http.NewRequest("POST", a.URL.String(), bytes.NewReader([]byte("")))
+func (a *Args) Validate() error {
+	req, err := http.NewRequest(http.MethodPost, a.URL.String(), bytes.NewReader([]byte("")))
 	if err != nil {
 		return err
 	}
@@ -64,16 +79,16 @@ func (a *OpaArgs) Validate() error {
 }
 
 // UnmarshalJSON - decodes JSON data.
-func (a *OpaArgs) UnmarshalJSON(data []byte) error {
+func (a *Args) UnmarshalJSON(data []byte) error {
 	// subtype to avoid recursive call to UnmarshalJSON()
-	type subOpaArgs OpaArgs
-	var so subOpaArgs
+	type subArgs Args
+	var so subArgs
 
 	if err := json.Unmarshal(data, &so); err != nil {
 		return err
 	}
 
-	oa := OpaArgs(so)
+	oa := Args(so)
 	if oa.URL == nil || oa.URL.String() == "" {
 		*a = oa
 		return nil
@@ -85,27 +100,37 @@ func (a *OpaArgs) UnmarshalJSON(data []byte) error {
 
 // Opa - implements opa policy agent calls.
 type Opa struct {
-	args   OpaArgs
+	args   Args
 	client *http.Client
 }
 
 // LookupConfig lookup Opa from config, override with any ENVs.
-func LookupConfig(args OpaArgs, transport *http.Transport, closeRespFn func(io.ReadCloser)) (OpaArgs, error) {
-	var urlStr string
-	if args.URL != nil {
-		urlStr = args.URL.String()
+func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.ReadCloser)) (Args, error) {
+	args := Args{}
+
+	if err := config.CheckValidKeys(config.PolicyOPASubSys, kv, DefaultKVS); err != nil {
+		return args, err
 	}
-	opaURL := env.Get(EnvIAMOPAURL, urlStr)
+
+	opaURL := env.Get(EnvIamOpaURL, "")
 	if opaURL == "" {
-		return args, nil
+		opaURL = env.Get(EnvPolicyOpaURL, kv.Get(URL))
+		if opaURL == "" {
+			return args, nil
+		}
 	}
+	authToken := env.Get(EnvIamOpaAuthToken, "")
+	if authToken == "" {
+		authToken = env.Get(EnvPolicyOpaAuthToken, kv.Get(AuthToken))
+	}
+
 	u, err := xnet.ParseURL(opaURL)
 	if err != nil {
 		return args, err
 	}
-	args = OpaArgs{
+	args = Args{
 		URL:         u,
-		AuthToken:   env.Get(EnvIAMOPAAuthToken, ""),
+		AuthToken:   authToken,
 		Transport:   transport,
 		CloseRespFn: closeRespFn,
 	}
@@ -115,8 +140,8 @@ func LookupConfig(args OpaArgs, transport *http.Transport, closeRespFn func(io.R
 	return args, nil
 }
 
-// NewOpa - initializes opa policy engine connector.
-func NewOpa(args OpaArgs) *Opa {
+// New - initializes opa policy engine connector.
+func New(args Args) *Opa {
 	// No opa args.
 	if args.URL == nil || args.URL.Scheme == "" && args.AuthToken == "" {
 		return nil
@@ -128,7 +153,7 @@ func NewOpa(args OpaArgs) *Opa {
 }
 
 // IsAllowed - checks given policy args is allowed to continue the REST API.
-func (o *Opa) IsAllowed(args Args) (bool, error) {
+func (o *Opa) IsAllowed(args iampolicy.Args) (bool, error) {
 	if o == nil {
 		return false, nil
 	}
@@ -142,7 +167,7 @@ func (o *Opa) IsAllowed(args Args) (bool, error) {
 		return false, err
 	}
 
-	req, err := http.NewRequest("POST", o.args.URL.String(), bytes.NewReader(inputBytes))
+	req, err := http.NewRequest(http.MethodPost, o.args.URL.String(), bytes.NewReader(inputBytes))
 	if err != nil {
 		return false, err
 	}

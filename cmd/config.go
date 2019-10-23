@@ -23,43 +23,103 @@ import (
 	"fmt"
 	"path"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/quick"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 const (
 	minioConfigPrefix = "config"
 
+	// Captures all the previous SetKV operations and allows rollback.
+	minioConfigHistoryPrefix = minioConfigPrefix + "/history"
+
 	// MinIO configuration file.
 	minioConfigFile = "config.json"
 
-	// MinIO backup file
+	// MinIO configuration backup file
 	minioConfigBackupFile = minioConfigFile + ".backup"
 )
 
-func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config *serverConfig) error {
-	if err := quick.CheckData(config); err != nil {
-		return err
-	}
+func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer) ([]madmin.ConfigHistoryEntry, error) {
+	var configHistory []madmin.ConfigHistoryEntry
 
-	data, err := json.MarshalIndent(config, "", "\t")
+	// List all kvs
+	marker := ""
+	for {
+		res, err := objAPI.ListObjects(ctx, minioMetaBucket, minioConfigHistoryPrefix, marker, "", 1000)
+		if err != nil {
+			return nil, err
+		}
+		for _, obj := range res.Objects {
+			configHistory = append(configHistory, madmin.ConfigHistoryEntry{
+				RestoreID:  path.Base(obj.Name),
+				CreateTime: obj.ModTime, // ModTime is createTime for config history entries.
+			})
+		}
+		if !res.IsTruncated {
+			// We are done here
+			break
+		}
+		marker = res.NextMarker
+	}
+	sort.Slice(configHistory, func(i, j int) bool {
+		return configHistory[i].CreateTime.Before(configHistory[j].CreateTime)
+	})
+	return configHistory, nil
+}
+
+func delServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV string) error {
+	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV)
+	return objAPI.DeleteObject(ctx, minioMetaBucket, historyFile)
+}
+
+func readServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV string) ([]byte, error) {
+	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV)
+	return readConfig(ctx, objAPI, historyFile)
+}
+
+func saveServerConfigHistory(ctx context.Context, objAPI ObjectLayer, kv []byte) error {
+	uuidKV := mustGetUUID() + ".kv"
+	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV)
+
+	// Save the new config KV settings into the history path.
+	return saveConfig(ctx, objAPI, historyFile, kv)
+}
+
+func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config interface{}, oldConfig interface{}) error {
+	data, err := json.Marshal(config)
 	if err != nil {
 		return err
 	}
 
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 	// Create a backup of the current config
-	oldData, err := readConfig(ctx, objAPI, configFile)
-	if err == nil {
-		backupConfigFile := path.Join(minioConfigPrefix, minioConfigBackupFile)
-		if err = saveConfig(ctx, objAPI, backupConfigFile, oldData); err != nil {
+	backupConfigFile := path.Join(minioConfigPrefix, minioConfigBackupFile)
+
+	var oldData []byte
+	var freshConfig bool
+	if oldConfig == nil {
+		oldData, err = readConfig(ctx, objAPI, configFile)
+		if err != nil && err != errConfigNotFound {
 			return err
 		}
+		// Current config not found, so nothing to backup.
+		freshConfig = true
 	} else {
-		if err != errConfigNotFound {
+		oldData, err = json.Marshal(oldConfig)
+		if err != nil {
+			return err
+		}
+	}
+
+	// No need to take backups for fresh setups.
+	if !freshConfig {
+		if err = saveConfig(ctx, objAPI, backupConfigFile, oldData); err != nil {
 			return err
 		}
 	}
@@ -68,7 +128,7 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config *serverCon
 	return saveConfig(ctx, objAPI, configFile, data)
 }
 
-func readServerConfig(ctx context.Context, objAPI ObjectLayer) (*serverConfig, error) {
+func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, error) {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
@@ -79,16 +139,8 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (*serverConfig, e
 		configData = bytes.Replace(configData, []byte("\r\n"), []byte("\n"), -1)
 	}
 
-	if err = quick.CheckDuplicateKeys(string(configData)); err != nil {
-		return nil, err
-	}
-
-	var config = &serverConfig{}
-	if err = json.Unmarshal(configData, config); err != nil {
-		return nil, err
-	}
-
-	if err = quick.CheckData(config); err != nil {
+	var config = config.New()
+	if err = json.Unmarshal(configData, &config); err != nil {
 		return nil, err
 	}
 
@@ -184,6 +236,12 @@ func initConfig(objAPI ObjectLayer) error {
 
 	// Migrates backend '<export_path>/.minio.sys/config/config.json' to latest version.
 	if err := migrateMinioSysConfig(objAPI); err != nil {
+		return err
+	}
+
+	// Migrates backend '<export_path>/.minio.sys/config/config.json' to
+	// latest config format.
+	if err := migrateMinioSysConfigToKV(objAPI); err != nil {
 		return err
 	}
 

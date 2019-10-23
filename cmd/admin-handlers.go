@@ -36,6 +36,7 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -45,7 +46,6 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mem"
 	xnet "github.com/minio/minio/pkg/net"
-	"github.com/minio/minio/pkg/quick"
 	trace "github.com/minio/minio/pkg/trace"
 )
 
@@ -286,7 +286,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 				CommitID:     CommitID,
 				DeploymentID: globalDeploymentID,
 				SQSARN:       globalNotificationSys.GetARNList(),
-				Region:       globalServerConfig.GetRegion(),
+				Region:       globalServerRegion,
 			},
 		},
 	})
@@ -931,38 +931,6 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 	w.(http.Flusher).Flush()
 }
 
-// GetConfigHandler - GET /minio/admin/v1/config
-// Get config.json of this minio setup.
-func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetConfigHandler")
-
-	objectAPI := validateAdminReq(ctx, w, r)
-	if objectAPI == nil {
-		return
-	}
-
-	config, err := readServerConfig(ctx, objectAPI)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	configData, err := json.MarshalIndent(config, "", "\t")
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	password := config.GetCredential().SecretKey
-	econfigData, err := madmin.EncryptData(password, configData)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	writeSuccessResponseJSON(w, econfigData)
-}
-
 func validateAdminReq(ctx context.Context, w http.ResponseWriter, r *http.Request) ObjectLayer {
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
@@ -1017,6 +985,12 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 	apiErr := errorCodes.ToAPIErr(toAdminAPIErrCode(ctx, err))
 	if apiErr.Code == "InternalError" {
 		switch e := err.(type) {
+		case config.Error:
+			apiErr = APIError{
+				Code:           "XMinioConfigError",
+				Description:    e.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
 		case AdminError:
 			apiErr = APIError{
 				Code:           e.Code,
@@ -1081,7 +1055,7 @@ func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	password := globalServerConfig.GetCredential().SecretKey
+	password := globalActiveCred.SecretKey
 	econfigData, err := madmin.EncryptData(password, data)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -1267,7 +1241,7 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 	status := vars["status"]
 
 	// Custom IAM policies not allowed for admin user.
-	if accessKey == globalServerConfig.GetCredential().AccessKey {
+	if accessKey == globalActiveCred.AccessKey {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
 	}
@@ -1305,7 +1279,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	accessKey := vars["accessKey"]
 
 	// Custom IAM policies not allowed for admin user.
-	if accessKey == globalServerConfig.GetCredential().AccessKey {
+	if accessKey == globalActiveCred.AccessKey {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAddUserInvalidArgument), r.URL)
 		return
 	}
@@ -1316,7 +1290,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	password := globalServerConfig.GetCredential().SecretKey
+	password := globalActiveCred.SecretKey
 	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -1507,78 +1481,6 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 			logger.LogIf(ctx, nerr.Err)
 		}
 	}
-}
-
-// SetConfigHandler - PUT /minio/admin/v1/config
-func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SetConfigHandler")
-
-	objectAPI := validateAdminReq(ctx, w, r)
-	if objectAPI == nil {
-		return
-	}
-
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-		return
-	}
-
-	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
-		// More than maxConfigSize bytes were available
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigTooLarge), r.URL)
-		return
-	}
-
-	password := globalServerConfig.GetCredential().SecretKey
-	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
-	if err != nil {
-		logger.LogIf(ctx, err, logger.Application)
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
-		return
-	}
-
-	// Validate JSON provided in the request body: check the
-	// client has not sent JSON objects with duplicate keys.
-	if err = quick.CheckDuplicateKeys(string(configBytes)); err != nil {
-		logger.LogIf(ctx, err, logger.Application)
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
-		return
-	}
-
-	var config serverConfig
-	if err = json.Unmarshal(configBytes, &config); err != nil {
-		logger.LogIf(ctx, err)
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
-		return
-	}
-
-	// If credentials for the server are provided via environment,
-	// then credentials in the provided configuration must match.
-	if globalIsEnvCreds {
-		if !globalServerConfig.GetCredential().Equal(config.Credential) {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminCredentialsMismatch), r.URL)
-			return
-		}
-	}
-
-	if err = config.Validate(); err != nil {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
-		return
-	}
-
-	if err = config.TestNotificationTargets(); err != nil {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
-		return
-	}
-
-	if err = saveServerConfig(ctx, objectAPI, &config); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	// Reply to the client before restarting minio server.
-	writeSuccessResponseHeadersOnly(w)
 }
 
 // Returns true if the trace.Info should be traced,

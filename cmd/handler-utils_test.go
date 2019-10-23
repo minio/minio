@@ -26,6 +26,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/minio/minio/cmd/config"
 )
 
 // Tests validate bucket LocationConstraint.
@@ -81,7 +83,7 @@ func TestIsValidLocationContraint(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		globalServerConfig.SetRegion(testCase.serverConfigRegion)
+		config.SetRegion(globalServerConfig, testCase.serverConfigRegion)
 		_, actualCode := parseLocationConstraint(testCase.request)
 		if testCase.expectedCode != actualCode {
 			t.Errorf("Test %d: Expected the APIErrCode to be %d, but instead found %d", i+1, testCase.expectedCode, actualCode)

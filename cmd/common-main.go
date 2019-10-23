@@ -30,7 +30,6 @@ import (
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/etcd"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/env"
@@ -49,7 +48,7 @@ func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
 		}
 	}
 
-	if globalIsCompressionEnabled && !objAPI.IsCompressionSupported() {
+	if globalCompressConfig.Enabled && !objAPI.IsCompressionSupported() {
 		logger.Fatal(errInvalidArgument,
 			"Compression support is requested but '%s' does not support compression", name)
 	}
@@ -159,33 +158,12 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 }
 
 func handleCommonEnvVars() {
-	accessKey := env.Get(config.EnvAccessKey, "")
-	secretKey := env.Get(config.EnvSecretKey, "")
-	if accessKey != "" && secretKey != "" {
-		cred, err := auth.CreateCredentials(accessKey, secretKey)
-		if err != nil {
-			logger.Fatal(config.ErrInvalidCredentials(err), "Unable to validate credentials inherited from the shell environment")
-		}
-		cred.Expiration = timeSentinel
-
-		// credential Envs are set globally.
-		globalIsEnvCreds = true
-		globalActiveCred = cred
-	}
-
-	if browser := env.Get(config.EnvBrowser, "on"); browser != "" {
-		browserFlag, err := config.ParseBoolFlag(browser)
-		if err != nil {
-			logger.Fatal(config.ErrInvalidBrowserValue(nil).Msg("Unknown value `%s`", browser), "Invalid MINIO_BROWSER value in environment variable")
-		}
-
-		// browser Envs are set globally, this does not represent
-		// if browser is turned off or on.
-		globalIsEnvBrowser = true
-		globalIsBrowserEnabled = bool(browserFlag)
-	}
-
 	var err error
+	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, "on"))
+	if err != nil {
+		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
+	}
+
 	globalEtcdClient, err = etcd.New(globalRootCAs)
 	if err != nil {
 		logger.FatalIf(err, "Unable to initialize etcd config")
@@ -235,21 +213,7 @@ func handleCommonEnvVars() {
 	// In place update is true by default if the MINIO_UPDATE is not set
 	// or is not set to 'off', if MINIO_UPDATE is set to 'off' then
 	// in-place update is off.
-	globalInplaceUpdateDisabled = strings.EqualFold(env.Get(config.EnvUpdate, "on"), "off")
-
-	// Get WORM environment variable.
-	if worm := env.Get(config.EnvWorm, "off"); worm != "" {
-		wormFlag, err := config.ParseBoolFlag(worm)
-		if err != nil {
-			logger.Fatal(config.ErrInvalidWormValue(nil).Msg("Unknown value `%s`", worm), "Invalid MINIO_WORM value in environment variable")
-		}
-
-		// worm Envs are set globally, this does not represent
-		// if worm is turned off or on.
-		globalIsEnvWORM = true
-		globalWORMEnabled = bool(wormFlag)
-	}
-
+	globalInplaceUpdateDisabled = strings.EqualFold(env.Get(config.EnvUpdate, config.StateOn), config.StateOff)
 }
 
 func logStartupMessage(msg string) {

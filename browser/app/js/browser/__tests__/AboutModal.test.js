@@ -21,7 +21,6 @@ import { AboutModal } from "../AboutModal"
 describe("AboutModal", () => {
   const serverInfo = {
     version: "test",
-    memory: "test",
     platform: "test",
     runtime: "test"
   }

@@ -18,7 +18,6 @@ package compress
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/minio/minio/cmd/config"
@@ -34,30 +33,62 @@ type Config struct {
 
 // Compression environment variables
 const (
-	EnvCompress           = "MINIO_COMPRESS"
+	Extensions = "extensions"
+	MimeTypes  = "mime_types"
+
+	EnvCompressState      = "MINIO_COMPRESS_STATE"
 	EnvCompressExtensions = "MINIO_COMPRESS_EXTENSIONS"
-	EnvCompressMimeTypes  = "MINIO_COMPRESS_MIMETYPES"
+	EnvCompressMimeTypes  = "MINIO_COMPRESS_MIME_TYPES"
+
+	// Include-list for compression.
+	DefaultExtensions = ".txt,.log,.csv,.json,.tar,.xml,.bin"
+	DefaultMimeTypes  = "text/*,application/json,application/xml"
+)
+
+// DefaultKVS - default KV config for compression settings
+var (
+	DefaultKVS = config.KVS{
+		config.State:   config.StateOff,
+		config.Comment: "This is a default compression configuration",
+		Extensions:     DefaultExtensions,
+		MimeTypes:      DefaultMimeTypes,
+	}
 )
 
 // Parses the given compression exclude list `extensions` or `content-types`.
 func parseCompressIncludes(includes []string) ([]string, error) {
 	for _, e := range includes {
 		if len(e) == 0 {
-			return nil, config.ErrInvalidCompressionIncludesValue(nil).Msg("extension/mime-type (%s) cannot be empty", e)
+			return nil, config.ErrInvalidCompressionIncludesValue(nil).Msg("extension/mime-type cannot be empty")
 		}
 	}
 	return includes, nil
 }
 
 // LookupConfig - lookup compression config.
-func LookupConfig(cfg Config) (Config, error) {
-	if compress := env.Get(EnvCompress, strconv.FormatBool(cfg.Enabled)); compress != "" {
-		cfg.Enabled = strings.EqualFold(compress, "true")
+func LookupConfig(kvs config.KVS) (Config, error) {
+	var err error
+	cfg := Config{}
+	if err = config.CheckValidKeys(config.CompressionSubSys, kvs, DefaultKVS); err != nil {
+		return cfg, err
 	}
 
-	compressExtensions := env.Get(EnvCompressExtensions, strings.Join(cfg.Extensions, ","))
-	compressMimeTypes := env.Get(EnvCompressMimeTypes, strings.Join(cfg.MimeTypes, ","))
-	if compressExtensions != "" || compressMimeTypes != "" {
+	compress := env.Get(EnvCompress, "")
+	if compress == "" {
+		compress = env.Get(EnvCompressState, kvs.Get(config.State))
+	}
+	cfg.Enabled, err = config.ParseBool(compress)
+	if err != nil {
+		return cfg, err
+	}
+	if !cfg.Enabled {
+		return cfg, nil
+	}
+
+	compressExtensions := env.Get(EnvCompressExtensions, kvs.Get(Extensions))
+	compressMimeTypes := env.Get(EnvCompressMimeTypes, kvs.Get(MimeTypes))
+	compressMimeTypesLegacy := env.Get(EnvCompressMimeTypesLegacy, kvs.Get(MimeTypes))
+	if compressExtensions != "" || compressMimeTypes != "" || compressMimeTypesLegacy != "" {
 		if compressExtensions != "" {
 			extensions, err := parseCompressIncludes(strings.Split(compressExtensions, config.ValueSeparator))
 			if err != nil {
@@ -66,11 +97,19 @@ func LookupConfig(cfg Config) (Config, error) {
 			cfg.Extensions = extensions
 		}
 		if compressMimeTypes != "" {
-			contenttypes, err := parseCompressIncludes(strings.Split(compressMimeTypes, config.ValueSeparator))
+			mimeTypes, err := parseCompressIncludes(strings.Split(compressMimeTypes, config.ValueSeparator))
 			if err != nil {
-				return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESS_MIMETYPES value (`%s`)", err, contenttypes)
+				return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESS_MIME_TYPES value (`%s`)", err, mimeTypes)
 			}
-			cfg.MimeTypes = contenttypes
+			cfg.MimeTypes = mimeTypes
+		}
+		if compressMimeTypesLegacy != "" {
+			mimeTypes, err := parseCompressIncludes(strings.Split(compressMimeTypesLegacy,
+				config.ValueSeparator))
+			if err != nil {
+				return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESS_MIME_TYPES value (`%s`)", err, mimeTypes)
+			}
+			cfg.MimeTypes = mimeTypes
 		}
 	}
 

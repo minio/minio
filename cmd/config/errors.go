@@ -63,13 +63,13 @@ var (
 	ErrInvalidCacheExpiryValue = newErrFn(
 		"Invalid cache expiry value",
 		"Please check the passed value",
-		"MINIO_CACHE_EXPIRY: Valid cache expiry duration is in days",
+		"MINIO_CACHE_EXPIRY: Valid cache expiry duration must be in days",
 	)
 
-	ErrInvalidCacheMaxUse = newErrFn(
-		"Invalid cache max-use value",
+	ErrInvalidCacheQuota = newErrFn(
+		"Invalid cache quota value",
 		"Please check the passed value",
-		"MINIO_CACHE_MAXUSE: Valid cache max-use value between 0-100",
+		"MINIO_CACHE_QUOTA: Valid cache quota value must be between 0-100",
 	)
 
 	ErrInvalidCacheEncryptionKey = newErrFn(
@@ -215,7 +215,7 @@ Example 1:
 	ErrInvalidCompressionIncludesValue = newErrFn(
 		"Invalid compression include value",
 		"Please check the passed value",
-		"Compress extensions/mime-types are delimited by `,`. For eg, MINIO_COMPRESS_ATTR=\"A,B,C\"",
+		"Compress extensions/mime-types are delimited by `,`. For eg, MINIO_COMPRESS_MIME_TYPES=\"A,B,C\"",
 	)
 
 	ErrInvalidGWSSEValue = newErrFn(

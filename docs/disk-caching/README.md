@@ -18,10 +18,11 @@ Disk caching can be enabled by setting the `cache` environment variables for Min
 Following example uses `/mnt/drive1`, `/mnt/drive2` ,`/mnt/cache1` ... `/mnt/cache3` for caching, with expiry up to 90 days while excluding all objects under bucket `mybucket` and all objects with '.pdf' as extension while starting a s3 gateway setup. Cache max usage is restricted to 80% of disk capacity in this example.
 
 ```bash
+export MINIO_CACHE="on"
 export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/cache{1...3}"
 export MINIO_CACHE_EXPIRY=90
 export MINIO_CACHE_EXCLUDE="*.pdf;mybucket/*"
-export MINIO_CACHE_MAXUSE=80
+export MINIO_CACHE_QUOTA=80
 minio gateway s3
 ```
 

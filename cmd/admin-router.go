@@ -74,6 +74,17 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		Queries("profilerType", "{profilerType:.*}")
 	adminRouter.Methods(http.MethodGet).Path("/profiling/download").HandlerFunc(httpTraceAll(adminAPI.DownloadProfilingHandler))
 
+	// Config KV operations.
+	if enableConfigOps {
+		adminRouter.Methods(http.MethodGet).Path("/get-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigKVHandler)).Queries("key", "{key:.*}")
+		adminRouter.Methods(http.MethodPut).Path("/set-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigKVHandler))
+		adminRouter.Methods(http.MethodDelete).Path("/del-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.DelConfigKVHandler))
+		adminRouter.Methods(http.MethodGet).Path("/help-config-kv").HandlerFunc(httpTraceAll(adminAPI.HelpConfigKVHandler)).Queries("subSys", "{subSys:.*}", "key", "{key:.*}")
+		adminRouter.Methods(http.MethodGet).Path("/list-config-history-kv").HandlerFunc(httpTraceAll(adminAPI.ListConfigHistoryKVHandler))
+		adminRouter.Methods(http.MethodDelete).Path("/clear-config-history-kv").HandlerFunc(httpTraceHdrs(adminAPI.ClearConfigHistoryKVHandler)).Queries("restoreId", "{restoreId:.*}")
+		adminRouter.Methods(http.MethodPut).Path("/restore-config-history-kv").HandlerFunc(httpTraceHdrs(adminAPI.RestoreConfigHistoryKVHandler)).Queries("restoreId", "{restoreId:.*}")
+	}
+
 	/// Config operations
 	if enableConfigOps {
 		// Get config

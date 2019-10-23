@@ -82,6 +82,32 @@ const (
 	psqlInsertRow = `INSERT INTO %s (event_time, event_data) VALUES ($1, $2);`
 )
 
+// Postgres constants
+const (
+	PostgresFormat           = "format"
+	PostgresConnectionString = "connection_string"
+	PostgresTable            = "table"
+	PostgresHost             = "host"
+	PostgresPort             = "port"
+	PostgresUsername         = "username"
+	PostgresPassword         = "password"
+	PostgresDatabase         = "database"
+	PostgresQueueDir         = "queue_dir"
+	PostgresQueueLimit       = "queue_limit"
+
+	EnvPostgresState            = "MINIO_NOTIFY_POSTGRES_STATE"
+	EnvPostgresFormat           = "MINIO_NOTIFY_POSTGRES_FORMAT"
+	EnvPostgresConnectionString = "MINIO_NOTIFY_POSTGRES_CONNECTION_STRING"
+	EnvPostgresTable            = "MINIO_NOTIFY_POSTGRES_TABLE"
+	EnvPostgresHost             = "MINIO_NOTIFY_POSTGRES_HOST"
+	EnvPostgresPort             = "MINIO_NOTIFY_POSTGRES_PORT"
+	EnvPostgresUsername         = "MINIO_NOTIFY_POSTGRES_USERNAME"
+	EnvPostgresPassword         = "MINIO_NOTIFY_POSTGRES_PASSWORD"
+	EnvPostgresDatabase         = "MINIO_NOTIFY_POSTGRES_DATABASE"
+	EnvPostgresQueueDir         = "MINIO_NOTIFY_POSTGRES_QUEUE_DIR"
+	EnvPostgresQueueLimit       = "MINIO_NOTIFY_POSTGRES_QUEUE_LIMIT"
+)
+
 // PostgreSQLArgs - PostgreSQL target arguments.
 type PostgreSQLArgs struct {
 	Enable           bool      `json:"enable"`

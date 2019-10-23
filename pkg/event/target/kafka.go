@@ -33,6 +33,32 @@ import (
 	sarama "gopkg.in/Shopify/sarama.v1"
 )
 
+// MQTT input constants
+const (
+	KafkaBrokers       = "brokers"
+	KafkaTopic         = "topic"
+	KafkaQueueDir      = "queue_dir"
+	KafkaQueueLimit    = "queue_limit"
+	KafkaTLSEnable     = "tls_enable"
+	KafkaTLSSkipVerify = "tls_skip_verify"
+	KafkaTLSClientAuth = "tls_client_auth"
+	KafkaSASLEnable    = "sasl_enable"
+	KafkaSASLUsername  = "sasl_username"
+	KafkaSASLPassword  = "sasl_password"
+
+	EnvKafkaState         = "MINIO_NOTIFY_KAFKA_STATE"
+	EnvKafkaBrokers       = "MINIO_NOTIFY_KAFKA_BROKERS"
+	EnvKafkaTopic         = "MINIO_NOTIFY_KAFKA_TOPIC"
+	EnvKafkaQueueDir      = "MINIO_NOTIFY_KAFKA_QUEUE_DIR"
+	EnvKafkaQueueLimit    = "MINIO_NOTIFY_KAFKA_QUEUE_LIMIT"
+	EnvKafkaTLSEnable     = "MINIO_NOTIFY_KAFKA_TLS_ENABLE"
+	EnvKafkaTLSSkipVerify = "MINIO_NOTIFY_KAFKA_TLS_SKIP_VERIFY"
+	EnvKafkaTLSClientAuth = "MINIO_NOTIFY_KAFKA_TLS_CLIENT_AUTH"
+	EnvKafkaSASLEnable    = "MINIO_NOTIFY_KAFKA_SASL_ENABLE"
+	EnvKafkaSASLUsername  = "MINIO_NOTIFY_KAFKA_SASL_USERNAME"
+	EnvKafkaSASLPassword  = "MINIO_NOTIFY_KAFKA_SASL_PASSWORD"
+)
+
 // KafkaArgs - Kafka target arguments.
 type KafkaArgs struct {
 	Enable     bool        `json:"enable"`

@@ -25,13 +25,17 @@ import (
 
 	etcd "github.com/coreos/etcd/clientv3"
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/config/cache"
+	"github.com/minio/minio/cmd/config/compress"
+	xldap "github.com/minio/minio/cmd/config/identity/ldap"
+	"github.com/minio/minio/cmd/config/identity/openid"
+	"github.com/minio/minio/cmd/config/policy/opa"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/dns"
-	"github.com/minio/minio/pkg/iam/openid"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/pubsub"
 )
 
@@ -118,16 +122,7 @@ var (
 	globalGatewayName = ""
 
 	// This flag is set to 'true' by default
-	globalIsBrowserEnabled = true
-
-	// This flag is set to 'true' when MINIO_BROWSER env is set.
-	globalIsEnvBrowser = false
-
-	// Set to true if credentials were passed from env, default is false.
-	globalIsEnvCreds = false
-
-	// This flag is set to 'true' when MINIO_REGION env is set.
-	globalIsEnvRegion = false
+	globalBrowserEnabled = true
 
 	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
 	globalInplaceUpdateDisabled = false
@@ -153,6 +148,10 @@ var (
 	globalIAMSys          *IAMSys
 
 	globalLifecycleSys *LifecycleSys
+
+	globalStorageClass storageclass.Config
+	globalLDAPConfig   xldap.Config
+	globalOpenIDConfig openid.Config
 
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool
@@ -196,25 +195,15 @@ var (
 	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)         // default timeout for general ops
 	globalHealingTimeout   = newDynamicTimeout(30*time.Minute /*1*/, 30*time.Minute)           // timeout for healing related ops
 
-	globalIsEnvWORM bool
 	// Is worm enabled
 	globalWORMEnabled bool
 
-	// Is Disk Caching set up
-	globalIsDiskCacheEnabled bool
-
 	// Disk cache drives
-	globalCacheDrives []string
+	globalCacheConfig cache.Config
 
-	// Disk cache excludes
-	globalCacheExcludes []string
-
-	// Disk cache expiry
-	globalCacheExpiry = 90
-	// Max allowed disk cache percentage
-	globalCacheMaxUse = 80
 	// Initialized KMS configuration for disk cache
 	globalCacheKMS crypto.KMS
+
 	// Allocated etcd endpoint for config and bucket DNS.
 	globalEtcdClient *etcd.Client
 
@@ -235,11 +224,7 @@ var (
 	globalAutoEncryption bool
 
 	// Is compression enabled?
-	globalIsCompressionEnabled = false
-
-	// Include-list for compression.
-	globalCompressExtensions = []string{".txt", ".log", ".csv", ".json", ".tar", ".xml", ".bin"}
-	globalCompressMimeTypes  = []string{"text/*", "application/json", "application/xml"}
+	globalCompressConfig compress.Config
 
 	// Some standard object extensions which we strictly dis-allow for compression.
 	standardExcludeCompressExtensions = []string{".gz", ".bz2", ".rar", ".zip", ".7z", ".xz", ".mp4", ".mkv", ".mov"}
@@ -251,7 +236,7 @@ var (
 	globalOpenIDValidators *openid.Validators
 
 	// OPA policy system.
-	globalPolicyOPA *iampolicy.Opa
+	globalPolicyOPA *opa.Opa
 
 	// Deployment ID - unique per deployment
 	globalDeploymentID string
@@ -272,15 +257,8 @@ var (
 // list. Feel free to add new relevant fields.
 func getGlobalInfo() (globalInfo map[string]interface{}) {
 	globalInfo = map[string]interface{}{
-		"isDistXL":         globalIsDistXL,
-		"isXL":             globalIsXL,
-		"isBrowserEnabled": globalIsBrowserEnabled,
-		"isWorm":           globalWORMEnabled,
-		"isEnvBrowser":     globalIsEnvBrowser,
-		"isEnvCreds":       globalIsEnvCreds,
-		"isEnvRegion":      globalIsEnvRegion,
-		"isSSL":            globalIsSSL,
-		"serverRegion":     globalServerRegion,
+		"isWorm":       globalWORMEnabled,
+		"serverRegion": globalServerRegion,
 		// Add more relevant global settings here.
 	}
 

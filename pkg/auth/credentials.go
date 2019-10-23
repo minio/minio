@@ -68,6 +68,20 @@ func IsSecretKeyValid(secretKey string) bool {
 	return len(secretKey) >= secretKeyMinLen
 }
 
+// Default access and secret keys.
+const (
+	DefaultAccessKey = "minioadmin"
+	DefaultSecretKey = "minioadmin"
+)
+
+// Default access credentials
+var (
+	DefaultCredentials = Credentials{
+		AccessKey: DefaultAccessKey,
+		SecretKey: DefaultSecretKey,
+	}
+)
+
 // Credentials holds access and secret keys.
 type Credentials struct {
 	AccessKey    string    `xml:"AccessKeyId" json:"accessKey,omitempty"`
@@ -75,6 +89,22 @@ type Credentials struct {
 	Expiration   time.Time `xml:"Expiration" json:"expiration,omitempty"`
 	SessionToken string    `xml:"SessionToken" json:"sessionToken,omitempty"`
 	Status       string    `xml:"-" json:"status,omitempty"`
+}
+
+func (cred Credentials) String() string {
+	var s strings.Builder
+	s.WriteString(cred.AccessKey)
+	s.WriteString(":")
+	s.WriteString(cred.SecretKey)
+	if cred.SessionToken != "" {
+		s.WriteString("\n")
+		s.WriteString(cred.SessionToken)
+	}
+	if !cred.Expiration.IsZero() && cred.Expiration != timeSentinel {
+		s.WriteString("\n")
+		s.WriteString(cred.Expiration.String())
+	}
+	return s.String()
 }
 
 // IsExpired - returns whether Credential is expired or not.
@@ -89,10 +119,10 @@ func (cred Credentials) IsExpired() bool {
 // IsValid - returns whether credential is valid or not.
 func (cred Credentials) IsValid() bool {
 	// Verify credentials if its enabled or not set.
-	if cred.Status == "enabled" || cred.Status == "" {
-		return IsAccessKeyValid(cred.AccessKey) && IsSecretKeyValid(cred.SecretKey) && !cred.IsExpired()
+	if cred.Status == "off" {
+		return false
 	}
-	return false
+	return IsAccessKeyValid(cred.AccessKey) && IsSecretKeyValid(cred.SecretKey) && !cred.IsExpired()
 }
 
 // Equal - returns whether two credentials are equal or not.
@@ -156,7 +186,7 @@ func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string)
 		return cred, err
 	}
 	cred.SecretKey = strings.Replace(string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen]), "/", "+", -1)
-	cred.Status = "enabled"
+	cred.Status = "on"
 
 	expiry, err := expToInt64(m["exp"])
 	if err != nil {
@@ -196,6 +226,6 @@ func CreateCredentials(accessKey, secretKey string) (cred Credentials, err error
 	cred.AccessKey = accessKey
 	cred.SecretKey = secretKey
 	cred.Expiration = timeSentinel
-	cred.Status = "enabled"
+	cred.Status = "on"
 	return cred, nil
 }

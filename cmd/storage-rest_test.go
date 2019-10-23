@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/config"
 	xnet "github.com/minio/minio/pkg/net"
 )
 
@@ -488,7 +489,7 @@ func testStorageAPIRenameFile(t *testing.T, storage StorageAPI) {
 	}
 }
 
-func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRESTClient, *serverConfig, string) {
+func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRESTClient, config.Config, string) {
 	endpointPath, err := ioutil.TempDir("", ".TestStorageREST.")
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)

@@ -196,7 +196,7 @@ func guessIsBrowserReq(req *http.Request) bool {
 		return false
 	}
 	aType := getRequestAuthType(req)
-	return strings.Contains(req.Header.Get("User-Agent"), "Mozilla") && globalIsBrowserEnabled &&
+	return strings.Contains(req.Header.Get("User-Agent"), "Mozilla") && globalBrowserEnabled &&
 		(aType == authTypeJWT || aType == authTypeAnonymous)
 }
 

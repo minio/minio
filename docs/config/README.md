@@ -1,4 +1,4 @@
-# MinIO Server Config Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
+# MinIO Server Config Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
 ## Configuration Directory
 
@@ -19,119 +19,76 @@ TLS certificates by default are stored under ``${HOME}/.minio/certs`` directory.
 Following is the directory structure for MinIO server with TLS certificates.
 
 ```sh
-$ tree ~/.minio
+$ mc tree --files ~/.minio
 /home/user1/.minio
-├── certs
-│   ├── CAs
-│   ├── private.key
-│   └── public.crt
+└─ certs
+   ├─ CAs
+   ├─ private.key
+   └─ public.crt
 ```
 
 You can provide a custom certs directory using `--certs-dir` command line option.
 
-### Accessing configuration file
-
-All configuration changes can be made using [`mc admin config` get/set commands](https://github.com/minio/mc/blob/master/docs/minio-admin-complete-guide.md). Following sections provide brief explanation of fields and how to customize them. A complete example of `config.json` is available [here](https://raw.githubusercontent.com/minio/minio/master/docs/config/config.sample.json)
-
-#### Editing configuration file fields
-
-##### Get current configuration for MinIO deployment
-
-```sh
-$ mc admin config get myminio/ > /tmp/myconfig
-```
-
-##### Set current configuration for MinIO deployment
-
-```sh
-$ mc admin config set myminio < /tmp/myconfig
-```
-
-The `mc admin` config API will evolve soon to be able to configure specific fields using get/set commands.
-
-#### Version
-
-|Field|Type|Description|
-|:---|:---|:---|
-|``version``|_string_| `version` determines the configuration file format. Any older version will automatically be migrated to the latest version upon startup. [DO NOT EDIT THIS FIELD MANUALLY]|
-
-#### Credential
-
-|Field|Type|Description|
-|:---|:---|:---|
-|``credential``| | Auth credential for object storage and web access.|
-|``credential.accessKey`` | _string_ | Access key of minimum 3 characters in length. You may override this field with `MINIO_ACCESS_KEY` environment variable.|
-|``credential.secretKey`` | _string_ | Secret key of minimum 8 characters in length. You may override this field with `MINIO_SECRET_KEY` environment variable.|
-
-> NOTE: In distributed setup it is mandatory to use environment variables `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` for credentials.
-
-Example:
-
-```sh
-export MINIO_ACCESS_KEY=admin
-export MINIO_SECRET_KEY=password
-minio server /data
-```
-
 #### Region
-
-|Field|Type|Description|
-|:---|:---|:---|
-|``region``| _string_ | `region` describes the physical location of the server. By default it is blank. You may override this field with `MINIO_REGION` environment variable. If you are unsure leave it unset.|
+| Field                     | Type     | Description                                                                                                                                                                             |
+|:--------------------------|:---------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ``region name=my_region`` | _string_ | `region` describes the physical location of the server. By default it is blank. You may override this field with `MINIO_REGION_NAME` environment variable. If you are unsure leave it unset. |
 
 Example:
 
 ```sh
-export MINIO_REGION="my_region"
+export MINIO_REGION_NAME="my_region"
 minio server /data
 ```
 
 #### Worm
 
-|Field|Type|Description|
-|:---|:---|:---|
-|``worm``| _string_ | Enable this to turn on Write-Once-Read-Many. By default it is set to `off`. You may override this field with ``MINIO_WORM`` environment variable.|
+| Field                  | Type     | Description                                                                                                                                       |
+|:-----------------------|:---------|:--------------------------------------------------------------------------------------------------------------------------------------------------|
+| ``worm state=on`` | _string_ | Enable this to turn on Write-Once-Read-Many. By default it is set to `off`. You may override this field with ``MINIO_WORM`` environment variable. |
 
 Example:
 
 ```sh
-export MINIO_WORM=on
+export MINIO_WORM_STATE=on
 minio server /data
 ```
 
 ### Storage Class
 
-|Field|Type|Description|
-|:---|:---|:---|
-|``storageclass``| | Set storage class for configurable data and parity, as per object basis.|
-|``storageclass.standard`` | _string_ | Value for standard storage class. It should be in the format `EC:Parity`, for example to set 4 disk parity for standard storage class objects, set this field to `EC:4`.|
-|``storageclass.rrs`` | _string_ |  Value for reduced redundancy storage class. It should be in the format `EC:Parity`, for example to set 3 disk parity for reduced redundancy storage class objects, set this field to `EC:3`.|
+| Field                          | Type     | Description                                                                                                                                                                                  |
+|:-------------------------------|:---------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ``storageclass``               |          | Set storage class for configurable data and parity, as per object basis.                                                                                                                     |
+| ``storageclass standard=EC:4`` | _string_ | Value for standard storage class. It should be in the format `EC:Parity`, for example to set 4 disk parity for standard storage class objects, set this field to `EC:4`.                     |
+| ``storageclass rrs=EC:2``      | _string_ | Value for reduced redundancy storage class. It should be in the format `EC:Parity`, for example to set 3 disk parity for reduced redundancy storage class objects, set this field to `EC:3`. |
 
 By default, parity for objects with standard storage class is set to `N/2`, and parity for objects with reduced redundancy storage class objects is set to `2`. Read more about storage class support in MinIO server [here](https://github.com/minio/minio/blob/master/docs/erasure/storage-class/README.md).
 
 ### Cache
-
-|Field|Type|Description|
-|:---|:---|:---|
-|``drives``| _[]string_ | List of mounted file system drives with [`atime`](http://kerolasa.github.io/filetimes.html) support enabled|
-|``exclude`` | _[]string_ | List of wildcard patterns for prefixes to exclude from cache |
-|``expiry`` | _int_ | Days to cache expiry |
-|``maxuse`` | _int_ | Percentage of disk available to cache |
+| Field                                                        | Type       | Description                                                                                                 |
+|:-------------------------------------------------------------|:-----------|:------------------------------------------------------------------------------------------------------------|
+| ``cache drives="/mnt/drive1;/mnt/drive2;/mnt/cache{1...3}"`` | _[]string_ | List of mounted file system drives with [`atime`](http://kerolasa.github.io/filetimes.html) support enabled |
+| ``cache exclude="*.pdf;mybucket/*"``                         | _[]string_ | List of wildcard patterns for prefixes to exclude from cache                                                |
+| ``cache expiry=90``                                          | _int_      | Days to cache expiry                                                                                        |
+| ``cache quota=70``                                           | _int_      | Percentage of disk available to cache                                                                       |
+|                                                              |            |                                                                                                             |
 
 #### Notify
 
-|Field|Type|Description|
-|:---|:---|:---|
-|``notify``| |Notify enables bucket notification events for lambda computing via the following targets.|
-|``notify.amqp``| |[Configure to publish MinIO events via AMQP target.](https://docs.min.io/docs/minio-bucket-notification-guide#AMQP)|
-|``notify.nats``| |[Configure to publish MinIO events via NATS target.](https://docs.min.io/docs/minio-bucket-notification-guide#NATS)|
-|``notify.elasticsearch``| |[Configure to publish MinIO events via Elasticsearch target.](https://docs.min.io/docs/minio-bucket-notification-guide#Elasticsearch)|
-|``notify.redis``| |[Configure to publish MinIO events via Redis target.](https://docs.min.io/docs/minio-bucket-notification-guide#Redis)|
-|``notify.postgresql``| |[Configure to publish MinIO events via PostgreSQL target.](https://docs.min.io/docs/minio-bucket-notification-guide#PostgreSQL)|
-|``notify.kafka``| |[Configure to publish MinIO events via Apache Kafka target.](https://docs.min.io/docs/minio-bucket-notification-guide#apache-kafka)|
-|``notify.webhook``| |[Configure to publish MinIO events via Webhooks target.](https://docs.min.io/docs/minio-bucket-notification-guide#webhooks)|
-|``notify.mysql``| |[Configure to publish MinIO events via MySql target.](https://docs.min.io/docs/minio-bucket-notification-guide#MySQL)|
-|``notify.mqtt``| |[Configure to publish MinIO events via MQTT target.](https://docs.min.io/docs/minio-bucket-notification-guide#MQTT)|
+| Field                    | Type | Description                                                                                                                           |
+|:-------------------------|:-----|:--------------------------------------------------------------------------------------------------------------------------------------|
+| ``notify_amqp``          |      | [Configure to publish MinIO events via AMQP target.](https://docs.min.io/docs/minio-bucket-notification-guide#AMQP)                   |
+| ``notify_nats``          |      | [Configure to publish MinIO events via NATS target.](https://docs.min.io/docs/minio-bucket-notification-guide#NATS)                   |
+| ``notify_elasticsearch`` |      | [Configure to publish MinIO events via Elasticsearch target.](https://docs.min.io/docs/minio-bucket-notification-guide#Elasticsearch) |
+| ``notify_redis``         |      | [Configure to publish MinIO events via Redis target.](https://docs.min.io/docs/minio-bucket-notification-guide#Redis)                 |
+| ``notify_postgresql``    |      | [Configure to publish MinIO events via PostgreSQL target.](https://docs.min.io/docs/minio-bucket-notification-guide#PostgreSQL)       |
+| ``notify_kafka``         |      | [Configure to publish MinIO events via Apache Kafka target.](https://docs.min.io/docs/minio-bucket-notification-guide#apache-kafka)   |
+| ``notify_webhook``       |      | [Configure to publish MinIO events via Webhooks target.](https://docs.min.io/docs/minio-bucket-notification-guide#webhooks)           |
+| ``notify_mysql``         |      | [Configure to publish MinIO events via MySql target.](https://docs.min.io/docs/minio-bucket-notification-guide#MySQL)                 |
+| ``notify_mqtt``          |      | [Configure to publish MinIO events via MQTT target.](https://docs.min.io/docs/minio-bucket-notification-guide#MQTT)                   |
+
+### Accessing configuration file
+All configuration changes can be made using [`mc admin config` get/set commands](https://github.com/minio/mc/blob/master/docs/minio-admin-complete-guide.md). Following sections provide brief explanation of fields and how to customize them. A complete example of `config.json` is available [here](https://raw.githubusercontent.com/minio/minio/master/docs/config/config.sample.json)
 
 ## Environment only settings
 
@@ -162,95 +119,6 @@ export MINIO_DOMAIN=sub1.mydomain.com,sub2.mydomain.com
 minio server /data
 ```
 
-### HTTP Trace
-HTTP tracing can be enabled by using [`mc admin trace`](https://github.com/minio/mc/blob/master/docs/minio-admin-complete-guide.md#command-trace---display-minio-server-http-trace) command.
-
-Example:
-```sh
-minio server /data
-```
-
-Default trace is succinct only to indicate the API operations being called and the HTTP response status.
-```sh
-mc admin trace myminio
-17:21:45.729309964 objectAPIHandlers.GetBucketLocation localhost:9000/vk-photos/?location= 	200 OK
-17:21:45.738167329 objectAPIHandlers.HeadBucket localhost:9000/vk-photos/ 	200 OK
-17:21:45.747676811 objectAPIHandlers.ListObjectsV1 localhost:9000/vk-photos/?delimiter=%2F&max-keys=1000&prefix= 	200 OK
-```
-
-To trace entire HTTP request
-```sh
-mc admin trace --verbose myminio
-127.0.0.1 [REQUEST objectAPIHandlers.GetBucketLocation] [17:23:21.404025835]
-127.0.0.1 GET /yyy/?location=
-127.0.0.1 Host: localhost:9000
-127.0.0.1 Content-Length: 0
-127.0.0.1 User-Agent: MinIO (linux; amd64) minio-go/v6.0.29 mc/2019-06-15T10:29:41Z
-127.0.0.1 X-Amz-Content-Sha256: UNSIGNED-PAYLOAD
-127.0.0.1 X-Amz-Date: 20190619T172321Z
-127.0.0.1 Authorization: AWS4-HMAC-SHA256 Credential=Q3AM3UQ867SPQQA43P2F/20190619/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=8e53d8574db3424aa00dd73637575512b250c923edcad3cbf58a727305205709
-127.0.0.1
-127.0.0.1 [RESPONSE] [17:23:21.404780651]
-127.0.0.1 200 OK
-127.0.0.1 X-Amz-Request-Id: 15A9A965FF7A7546
-127.0.0.1 X-Minio-Deployment-Id: 41e39f4a-3b66-415b-9ddf-025d76a58668
-127.0.0.1 X-Xss-Protection: 1; mode=block
-127.0.0.1 Accept-Ranges: bytes
-127.0.0.1 Server: MinIO/DEVELOPMENT.2019-06-18T17-17-02Z
-127.0.0.1 Content-Type: application/xml
-127.0.0.1 Vary: Origin
-127.0.0.1 X-Amz-Bucket-Region: us-east-1
-127.0.0.1 Content-Length: 137
-127.0.0.1 Content-Security-Policy: block-all-mixed-content
-127.0.0.1 <?xml version="1.0" encoding="UTF-8"?>
-<LocationConstraint xmlns="http://s3.amazonaws.com/doc/2006-03-01/">us-east-1</LocationConstraint>127.0.0.1
-127.0.0.1 [REQUEST objectAPIHandlers.HeadBucket] [17:23:21.412985428]
-127.0.0.1 HEAD /yyy/
-127.0.0.1 Host: localhost:9000
-127.0.0.1 User-Agent: MinIO (linux; amd64) minio-go/v6.0.29 mc/2019-06-15T10:29:41Z
-127.0.0.1 X-Amz-Content-Sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-127.0.0.1 X-Amz-Date: 20190619T172321Z
-127.0.0.1 Authorization: AWS4-HMAC-SHA256 Credential=Q3AM3UQ867SPQQA43P2F/20190619/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=e0a02a62d39994d0206586f01dd2ab3a4aea74e60da9ff4d427629f705c62c02
-127.0.0.1 Content-Length: 0
-127.0.0.1
-127.0.0.1 [RESPONSE] [17:23:21.413457159]
-127.0.0.1 200 OK
-127.0.0.1 Vary: Origin
-127.0.0.1 Accept-Ranges: bytes
-127.0.0.1 Content-Length: 0
-127.0.0.1 X-Amz-Bucket-Region: us-east-1
-127.0.0.1 X-Amz-Request-Id: 15A9A9660005982D
-127.0.0.1 X-Minio-Deployment-Id: 41e39f4a-3b66-415b-9ddf-025d76a58668
-127.0.0.1 X-Xss-Protection: 1; mode=block
-127.0.0.1 Content-Security-Policy: block-all-mixed-content
-127.0.0.1 Server: MinIO/DEVELOPMENT.2019-06-18T17-17-02Z
-127.0.0.1
-127.0.0.1 [REQUEST objectAPIHandlers.ListObjectsV1] [17:23:21.423153668]
-127.0.0.1 GET /yyy/?delimiter=%2F&max-keys=1000&prefix=
-127.0.0.1 Host: localhost:9000
-127.0.0.1 Content-Length: 0
-127.0.0.1 User-Agent: MinIO (linux; amd64) minio-go/v6.0.29 mc/2019-06-15T10:29:41Z
-127.0.0.1 X-Amz-Content-Sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-127.0.0.1 X-Amz-Date: 20190619T172321Z
-127.0.0.1 Authorization: AWS4-HMAC-SHA256 Credential=Q3AM3UQ867SPQQA43P2F/20190619/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=46ee3d2fc5085432b94bc3205076abd8166ffa3e35c639f84e9684c7c6a181c9
-127.0.0.1
-127.0.0.1 [RESPONSE] [17:23:21.424260967]
-127.0.0.1 200 OK
-127.0.0.1 Content-Security-Policy: block-all-mixed-content
-127.0.0.1 Content-Type: application/xml
-127.0.0.1 Server: MinIO/DEVELOPMENT.2019-06-18T17-17-02Z
-127.0.0.1 X-Amz-Bucket-Region: us-east-1
-127.0.0.1 X-Minio-Deployment-Id: 41e39f4a-3b66-415b-9ddf-025d76a58668
-127.0.0.1 Accept-Ranges: bytes
-127.0.0.1 Content-Length: 253
-127.0.0.1 Vary: Origin
-127.0.0.1 X-Amz-Request-Id: 15A9A966009F94A6
-127.0.0.1 X-Xss-Protection: 1; mode=block
-127.0.0.1 <?xml version="1.0" encoding="UTF-8"?>
-<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Name>yyy</Name><Prefix></Prefix><Marker></Marker><MaxKeys>1000</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated></ListBucketResult>
-```
-
 ## Explore Further
-
 * [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide)
 * [Configure MinIO Server with TLS](https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls)

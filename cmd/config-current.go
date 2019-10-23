@@ -18,260 +18,113 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
+	"text/tabwriter"
 
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
-	xldap "github.com/minio/minio/cmd/config/ldap"
+	xldap "github.com/minio/minio/cmd/config/identity/ldap"
+	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/config/notify"
+	"github.com/minio/minio/cmd/config/policy/opa"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/target/http"
-	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
-	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/iam/openid"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
 )
-
-// Steps to move from version N to version N+1
-// 1. Add new struct serverConfigVN+1 in config-versions.go
-// 2. Set serverConfigVersion to "N+1"
-// 3. Set serverConfig to serverConfigVN+1
-// 4. Add new migration function (ex. func migrateVNToVN+1()) in config-migrate.go
-// 5. Call migrateVNToVN+1() from migrateConfig() in config-migrate.go
-// 6. Make changes in config-current_test.go for any test change
-
-// Config version
-const serverConfigVersion = "33"
-
-type serverConfig = serverConfigV33
 
 var (
 	// globalServerConfig server config.
-	globalServerConfig   *serverConfig
+	globalServerConfig   config.Config
 	globalServerConfigMu sync.RWMutex
 )
 
-// GetVersion get current config version.
-func (s *serverConfig) GetVersion() string {
-	return s.Version
-}
-
-// SetRegion set a new region.
-func (s *serverConfig) SetRegion(region string) {
-	// Save new region.
-	s.Region = region
-}
-
-// GetRegion get current region.
-func (s *serverConfig) GetRegion() string {
-	if globalIsEnvRegion {
-		return globalServerRegion
+func validateConfig(s config.Config) error {
+	if _, err := config.LookupCreds(s[config.CredentialsSubSys][config.Default]); err != nil {
+		return err
 	}
-	if s == nil {
-		return ""
+	if _, err := config.LookupRegion(s[config.RegionSubSys][config.Default]); err != nil {
+		return err
 	}
-	return s.Region
-}
-
-// SetCredential sets new credential and returns the previous credential.
-func (s *serverConfig) SetCredential(creds auth.Credentials) (prevCred auth.Credentials) {
-	if s == nil {
-		return creds
+	if _, err := config.LookupWorm(s[config.WormSubSys][config.Default]); err != nil {
+		return err
 	}
-
-	if creds.IsValid() && globalActiveCred.IsValid() {
-		globalActiveCred = creds
-	}
-
-	// Save previous credential.
-	prevCred = s.Credential
-
-	// Set updated credential.
-	s.Credential = creds
-
-	// Return previous credential.
-	return prevCred
-}
-
-// GetCredentials get current credentials.
-func (s *serverConfig) GetCredential() auth.Credentials {
-	if globalActiveCred.IsValid() {
-		return globalActiveCred
-	}
-	return s.Credential
-}
-
-// SetWorm set if worm is enabled.
-func (s *serverConfig) SetWorm(b bool) {
-	// Set the new value.
-	s.Worm = config.BoolFlag(b)
-}
-
-// GetStorageClass reads storage class fields from current config.
-// It returns the standard and reduced redundancy storage class struct
-func (s *serverConfig) GetStorageClass() storageclass.Config {
-	if s == nil {
-		return storageclass.Config{}
-	}
-	return s.StorageClass
-}
-
-// GetWorm get current credentials.
-func (s *serverConfig) GetWorm() bool {
-	if globalIsEnvWORM {
-		return globalWORMEnabled
-	}
-	if s == nil {
-		return false
-	}
-	return bool(s.Worm)
-}
-
-// GetCacheConfig gets the current cache config
-func (s *serverConfig) GetCacheConfig() cache.Config {
-	if globalIsDiskCacheEnabled {
-		return cache.Config{
-			Drives:  globalCacheDrives,
-			Exclude: globalCacheExcludes,
-			Expiry:  globalCacheExpiry,
-			MaxUse:  globalCacheMaxUse,
-		}
-	}
-	if s == nil {
-		return cache.Config{}
-	}
-	return s.Cache
-}
-
-func (s *serverConfig) Validate() error {
-	if s == nil {
-		return nil
-	}
-	if s.Version != serverConfigVersion {
-		return fmt.Errorf("configuration version mismatch. Expected: ‘%s’, Got: ‘%s’", serverConfigVersion, s.Version)
-	}
-
-	// Validate credential fields only when
-	// they are not set via the environment
-	// Error out if global is env credential is not set and config has invalid credential
-	if !globalIsEnvCreds && !s.Credential.IsValid() {
-		return errors.New("invalid credential in config file")
-	}
-
-	// Region: nothing to validate
-	// Worm, Cache and StorageClass values are already validated during json unmarshal
-	for _, v := range s.Notify.AMQP {
-		if err := v.Validate(); err != nil {
-			return fmt.Errorf("amqp: %s", err)
-		}
-	}
-
-	for _, v := range s.Notify.Elasticsearch {
-		if err := v.Validate(); err != nil {
-			return fmt.Errorf("elasticsearch: %s", err)
-		}
-	}
-
-	for _, v := range s.Notify.Kafka {
-		if err := v.Validate(); err != nil {
-			return fmt.Errorf("kafka: %s", err)
-		}
-	}
-
-	for _, v := range s.Notify.MQTT {
-		if err := v.Validate(); err != nil {
-			return fmt.Errorf("mqtt: %s", err)
-		}
-	}
-
-	for _, v := range s.Notify.MySQL {
-		if err := v.Validate(); err != nil {
-			return fmt.Errorf("mysql: %s", err)
-		}
-	}
-
-	for _, v := range s.Notify.NATS {
-		if err := v.Validate(); err != nil {
-			return fmt.Errorf("nats: %s", err)
-		}
-	}
-
-	for _, v := range s.Notify.NSQ {
-		if err := v.Validate(); err != nil {
-			return fmt.Errorf("nsq: %s", err)
-		}
-	}
-
-	for _, v := range s.Notify.PostgreSQL {
-		if err := v.Validate(); err != nil {
-			return fmt.Errorf("postgreSQL: %s", err)
-		}
-	}
-
-	for _, v := range s.Notify.Redis {
-		if err := v.Validate(); err != nil {
-			return fmt.Errorf("redis: %s", err)
-		}
-	}
-
-	for _, v := range s.Notify.Webhook {
-		if err := v.Validate(); err != nil {
-			return fmt.Errorf("webhook: %s", err)
-		}
-	}
-
-	return nil
-}
-
-func (s *serverConfig) lookupConfigs() {
-	// If env is set override the credentials from config file.
-	if globalIsEnvCreds {
-		s.SetCredential(globalActiveCred)
-	} else {
-		globalActiveCred = s.GetCredential()
-	}
-
-	if globalIsEnvWORM {
-		s.SetWorm(globalWORMEnabled)
-	} else {
-		globalWORMEnabled = s.GetWorm()
-	}
-
-	if globalIsEnvRegion {
-		s.SetRegion(globalServerRegion)
-	} else {
-		globalServerRegion = s.GetRegion()
-	}
-
-	var err error
 	if globalIsXL {
-		s.StorageClass, err = storageclass.LookupConfig(s.StorageClass, globalXLSetDriveCount)
+		if _, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default],
+			globalXLSetDriveCount); err != nil {
+			return err
+		}
+	}
+	if _, err := cache.LookupConfig(s[config.CacheSubSys][config.Default]); err != nil {
+		return err
+	}
+	if _, err := crypto.LookupConfig(s[config.KmsVaultSubSys][config.Default]); err != nil {
+		return err
+	}
+	if _, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default]); err != nil {
+		return err
+	}
+	if _, err := openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
+		NewCustomHTTPTransport(), xhttp.DrainBody); err != nil {
+		return err
+	}
+	if _, err := xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
+		globalRootCAs); err != nil {
+		return err
+	}
+	if _, err := opa.LookupConfig(s[config.PolicyOPASubSys][config.Default],
+		NewCustomHTTPTransport(), xhttp.DrainBody); err != nil {
+		return err
+	}
+	if _, err := logger.LookupConfig(s); err != nil {
+		return err
+	}
+	return notify.TestNotificationTargets(s, GlobalServiceDoneCh, globalRootCAs)
+}
+
+func lookupConfigs(s config.Config) {
+	var err error
+
+	if !globalActiveCred.IsValid() {
+		// Env doesn't seem to be set, we fallback to lookup
+		// creds from the config.
+		globalActiveCred, err = config.LookupCreds(s[config.CredentialsSubSys][config.Default])
+		if err != nil {
+			logger.Fatal(err, "Invalid credentials configuration")
+		}
+	}
+
+	globalServerRegion, err = config.LookupRegion(s[config.RegionSubSys][config.Default])
+	if err != nil {
+		logger.Fatal(err, "Invalid region configuration")
+	}
+
+	globalWORMEnabled, err = config.LookupWorm(s[config.WormSubSys][config.Default])
+	if err != nil {
+		logger.Fatal(config.ErrInvalidWormValue(err),
+			"Invalid worm configuration")
+	}
+
+	if globalIsXL {
+		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default],
+			globalXLSetDriveCount)
 		if err != nil {
 			logger.FatalIf(err, "Unable to initialize storage class config")
 		}
 	}
 
-	s.Cache, err = cache.LookupConfig(s.Cache)
+	globalCacheConfig, err = cache.LookupConfig(s[config.CacheSubSys][config.Default])
 	if err != nil {
 		logger.FatalIf(err, "Unable to setup cache")
 	}
 
-	if len(s.Cache.Drives) > 0 {
-		globalIsDiskCacheEnabled = true
-		globalCacheDrives = s.Cache.Drives
-		globalCacheExcludes = s.Cache.Exclude
-		globalCacheExpiry = s.Cache.Expiry
-		globalCacheMaxUse = s.Cache.MaxUse
-
+	if globalCacheConfig.Enabled {
 		if cacheEncKey := env.Get(cache.EnvCacheEncryptionMasterKey, ""); cacheEncKey != "" {
 			globalCacheKMS, err = crypto.ParseMasterKey(cacheEncKey)
 			if err != nil {
@@ -281,218 +134,163 @@ func (s *serverConfig) lookupConfigs() {
 		}
 	}
 
-	s.KMS, err = crypto.LookupConfig(s.KMS)
+	kmsCfg, err := crypto.LookupConfig(s[config.KmsVaultSubSys][config.Default])
 	if err != nil {
 		logger.FatalIf(err, "Unable to setup KMS config")
 	}
 
-	GlobalKMS, err = crypto.NewKMS(s.KMS)
+	GlobalKMS, err = crypto.NewKMS(kmsCfg)
 	if err != nil {
 		logger.FatalIf(err, "Unable to setup KMS with current KMS config")
 	}
 
-	globalAutoEncryption = strings.EqualFold(env.Get(crypto.EnvAutoEncryption, "off"), "on")
-	if globalAutoEncryption && GlobalKMS == nil {
-		logger.FatalIf(errors.New("Invalid KMS configuration: auto-encryption is enabled but no valid KMS configuration is present"), "")
-	}
+	// Enable auto-encryption if enabled
+	globalAutoEncryption = kmsCfg.AutoEncryption
 
-	s.Compression, err = compress.LookupConfig(s.Compression)
+	globalCompressConfig, err = compress.LookupConfig(s[config.CompressionSubSys][config.Default])
 	if err != nil {
 		logger.FatalIf(err, "Unable to setup Compression")
 	}
 
-	if s.Compression.Enabled {
-		globalIsCompressionEnabled = s.Compression.Enabled
-		globalCompressExtensions = s.Compression.Extensions
-		globalCompressMimeTypes = s.Compression.MimeTypes
-	}
-
-	s.OpenID.JWKS, err = openid.LookupConfig(s.OpenID.JWKS, NewCustomHTTPTransport(), xhttp.DrainBody)
+	globalOpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
+		NewCustomHTTPTransport(), xhttp.DrainBody)
 	if err != nil {
 		logger.FatalIf(err, "Unable to initialize OpenID")
 	}
 
-	s.Policy.OPA, err = iampolicy.LookupConfig(s.Policy.OPA, NewCustomHTTPTransport(), xhttp.DrainBody)
+	opaCfg, err := opa.LookupConfig(s[config.PolicyOPASubSys][config.Default],
+		NewCustomHTTPTransport(), xhttp.DrainBody)
 	if err != nil {
 		logger.FatalIf(err, "Unable to initialize OPA")
 	}
 
-	globalOpenIDValidators = getOpenIDValidators(s)
-	globalPolicyOPA = iampolicy.NewOpa(s.Policy.OPA)
+	globalOpenIDValidators = getOpenIDValidators(globalOpenIDConfig)
+	globalPolicyOPA = opa.New(opaCfg)
 
-	s.LDAPServerConfig, err = xldap.Lookup(s.LDAPServerConfig, globalRootCAs)
+	globalLDAPConfig, err = xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
+		globalRootCAs)
 	if err != nil {
-		logger.FatalIf(err, "Unable to parse LDAP configuration from env")
+		logger.FatalIf(err, "Unable to parse LDAP configuration")
 	}
 
 	// Load logger targets based on user's configuration
 	loggerUserAgent := getUserAgent(getMinioMode())
 
-	s.Logger, err = logger.LookupConfig(s.Logger)
+	loggerCfg, err := logger.LookupConfig(s)
 	if err != nil {
 		logger.FatalIf(err, "Unable to initialize logger")
 	}
 
-	for _, l := range s.Logger.HTTP {
+	for _, l := range loggerCfg.HTTP {
 		if l.Enabled {
 			// Enable http logging
 			logger.AddTarget(http.New(l.Endpoint, loggerUserAgent, string(logger.All), NewCustomHTTPTransport()))
 		}
 	}
 
-	for _, l := range s.Logger.Audit {
+	for _, l := range loggerCfg.Audit {
 		if l.Enabled {
 			// Enable http audit logging
 			logger.AddAuditTarget(http.New(l.Endpoint, loggerUserAgent, string(logger.All), NewCustomHTTPTransport()))
 		}
 	}
 
-	if s.Logger.Console.Enabled {
-		// Enable console logging
-		logger.AddTarget(globalConsoleSys.Console())
-	}
-
+	// Enable console logging
+	logger.AddTarget(globalConsoleSys.Console())
 }
 
-// TestNotificationTargets tries to establish connections to all notification
-// targets when enabled. This is a good way to make sure all configurations
-// set by the user can work.
-func (s *serverConfig) TestNotificationTargets() error {
-	for k, v := range s.Notify.AMQP {
-		if !v.Enable {
-			continue
-		}
-		t, err := target.NewAMQPTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
-		if err != nil {
-			return fmt.Errorf("amqp(%s): %s", k, err.Error())
-		}
-		t.Close()
-	}
-
-	for k, v := range s.Notify.Elasticsearch {
-		if !v.Enable {
-			continue
-		}
-		t, err := target.NewElasticsearchTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
-		if err != nil {
-			return fmt.Errorf("elasticsearch(%s): %s", k, err.Error())
-		}
-		t.Close()
-	}
-
-	for k, v := range s.Notify.Kafka {
-		if !v.Enable {
-			continue
-		}
-		if v.TLS.Enable {
-			v.TLS.RootCAs = globalRootCAs
-		}
-		t, err := target.NewKafkaTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
-		if err != nil {
-			return fmt.Errorf("kafka(%s): %s", k, err.Error())
-		}
-		t.Close()
-	}
-
-	for k, v := range s.Notify.MQTT {
-		if !v.Enable {
-			continue
-		}
-		v.RootCAs = globalRootCAs
-		t, err := target.NewMQTTTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
-		if err != nil {
-			return fmt.Errorf("mqtt(%s): %s", k, err.Error())
-		}
-		t.Close()
-	}
-
-	for k, v := range s.Notify.MySQL {
-		if !v.Enable {
-			continue
-		}
-		t, err := target.NewMySQLTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
-		if err != nil {
-			return fmt.Errorf("mysql(%s): %s", k, err.Error())
-		}
-		t.Close()
-	}
-
-	for k, v := range s.Notify.NATS {
-		if !v.Enable {
-			continue
-		}
-		t, err := target.NewNATSTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
-		if err != nil {
-			return fmt.Errorf("nats(%s): %s", k, err.Error())
-		}
-		t.Close()
-	}
-
-	for k, v := range s.Notify.NSQ {
-		if !v.Enable {
-			continue
-		}
-		t, err := target.NewNSQTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
-		if err != nil {
-			return fmt.Errorf("nsq(%s): %s", k, err.Error())
-		}
-		t.Close()
-	}
-
-	for k, v := range s.Notify.PostgreSQL {
-		if !v.Enable {
-			continue
-		}
-		t, err := target.NewPostgreSQLTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
-		if err != nil {
-			return fmt.Errorf("postgreSQL(%s): %s", k, err.Error())
-		}
-		t.Close()
-	}
-
-	for k, v := range s.Notify.Redis {
-		if !v.Enable {
-			continue
-		}
-		t, err := target.NewRedisTarget(k, v, GlobalServiceDoneCh, logger.LogOnceIf)
-		if err != nil {
-			return fmt.Errorf("redis(%s): %s", k, err.Error())
-		}
-		t.Close()
-
-	}
-
-	return nil
+var helpMap = map[string]config.HelpKV{
+	config.RegionSubSys:          config.RegionHelp,
+	config.WormSubSys:            config.WormHelp,
+	config.CacheSubSys:           cache.Help,
+	config.CompressionSubSys:     compress.Help,
+	config.StorageClassSubSys:    storageclass.Help,
+	config.IdentityOpenIDSubSys:  openid.Help,
+	config.IdentityLDAPSubSys:    xldap.Help,
+	config.PolicyOPASubSys:       opa.Help,
+	config.KmsVaultSubSys:        crypto.Help,
+	config.LoggerHTTPSubSys:      logger.Help,
+	config.LoggerHTTPAuditSubSys: logger.HelpAudit,
+	config.NotifyAMQPSubSys:      notify.HelpAMQP,
+	config.NotifyKafkaSubSys:     notify.HelpKafka,
+	config.NotifyMQTTSubSys:      notify.HelpMQTT,
+	config.NotifyNATSSubSys:      notify.HelpNATS,
+	config.NotifyNSQSubSys:       notify.HelpNSQ,
+	config.NotifyMySQLSubSys:     notify.HelpMySQL,
+	config.NotifyPostgresSubSys:  notify.HelpPostgres,
+	config.NotifyRedisSubSys:     notify.HelpRedis,
+	config.NotifyWebhookSubSys:   notify.HelpWebhook,
+	config.NotifyESSubSys:        notify.HelpES,
 }
 
-func newServerConfig() *serverConfig {
-	cred, err := auth.GetNewCredentials()
-	logger.FatalIf(err, "")
-
-	srvCfg := &serverConfig{
-		Version:    serverConfigVersion,
-		Credential: cred,
-		Region:     globalMinioDefaultRegion,
-		StorageClass: storageclass.Config{
-			Standard: storageclass.StorageClass{},
-			RRS:      storageclass.StorageClass{},
-		},
-		Cache: cache.Config{
-			Drives:  []string{},
-			Exclude: []string{},
-			Expiry:  globalCacheExpiry,
-			MaxUse:  globalCacheMaxUse,
-		},
-		KMS:    crypto.KMSConfig{},
-		Notify: notify.NewConfig(),
-		Compression: compress.Config{
-			Enabled:    false,
-			Extensions: globalCompressExtensions,
-			MimeTypes:  globalCompressMimeTypes,
-		},
-		Logger: logger.NewConfig(),
+// GetHelp - returns help for sub-sys, a key for a sub-system or all the help.
+func GetHelp(subSys, key string) (io.Reader, error) {
+	if len(subSys) == 0 {
+		return nil, config.Error("no help available for empty sub-system inputs")
+	}
+	help, ok := helpMap[subSys]
+	if !ok {
+		return nil, config.Error(fmt.Sprintf("unknown sub-system %s", subSys))
+	}
+	if key != "" {
+		value, ok := help[key]
+		if !ok {
+			return nil, config.Error(fmt.Sprintf("unknown key %s for sub-system %s", key, subSys))
+		}
+		return strings.NewReader(value), nil
 	}
 
+	var s strings.Builder
+	w := tabwriter.NewWriter(&s, 1, 8, 2, ' ', 0)
+	if err := config.HelpTemplate.Execute(w, help); err != nil {
+		return nil, config.Error(err.Error())
+	}
+	w.Flush()
+	return strings.NewReader(s.String()), nil
+}
+
+func configDefaultKVS() map[string]config.KVS {
+	m := make(map[string]config.KVS)
+	for k, tgt := range newServerConfig() {
+		m[k] = tgt[config.Default]
+	}
+	return m
+}
+
+func newServerConfig() config.Config {
+	srvCfg := config.New()
+	for k := range srvCfg {
+		// Initialize with default KVS
+		switch k {
+		case config.CacheSubSys:
+			srvCfg[k][config.Default] = cache.DefaultKVS
+		case config.CompressionSubSys:
+			srvCfg[k][config.Default] = compress.DefaultKVS
+		case config.StorageClassSubSys:
+			srvCfg[k][config.Default] = storageclass.DefaultKVS
+		case config.IdentityLDAPSubSys:
+			srvCfg[k][config.Default] = xldap.DefaultKVS
+		case config.IdentityOpenIDSubSys:
+			srvCfg[k][config.Default] = openid.DefaultKVS
+		case config.PolicyOPASubSys:
+			srvCfg[k][config.Default] = opa.DefaultKVS
+		case config.WormSubSys:
+			srvCfg[k][config.Default] = config.DefaultWormKVS
+		case config.RegionSubSys:
+			srvCfg[k][config.Default] = config.DefaultRegionKVS
+		case config.CredentialsSubSys:
+			srvCfg[k][config.Default] = config.DefaultCredentialKVS
+		case config.KmsVaultSubSys:
+			srvCfg[k][config.Default] = crypto.DefaultKVS
+		case config.LoggerHTTPSubSys:
+			srvCfg[k][config.Default] = logger.DefaultKVS
+		case config.LoggerHTTPAuditSubSys:
+			srvCfg[k][config.Default] = logger.DefaultAuditKVS
+		}
+	}
+	for k, v := range notify.DefaultNotificationKVS {
+		srvCfg[k][config.Default] = v
+	}
 	return srvCfg
 }
 
@@ -503,7 +301,7 @@ func newSrvConfig(objAPI ObjectLayer) error {
 	srvCfg := newServerConfig()
 
 	// Override any values from ENVs.
-	srvCfg.lookupConfigs()
+	lookupConfigs(srvCfg)
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
@@ -511,17 +309,17 @@ func newSrvConfig(objAPI ObjectLayer) error {
 	globalServerConfigMu.Unlock()
 
 	// Save config into file.
-	return saveServerConfig(context.Background(), objAPI, globalServerConfig)
+	return saveServerConfig(context.Background(), objAPI, globalServerConfig, nil)
 }
 
 // getValidConfig - returns valid server configuration
-func getValidConfig(objAPI ObjectLayer) (*serverConfig, error) {
+func getValidConfig(objAPI ObjectLayer) (config.Config, error) {
 	srvCfg, err := readServerConfig(context.Background(), objAPI)
 	if err != nil {
 		return nil, err
 	}
 
-	return srvCfg, srvCfg.Validate()
+	return srvCfg, nil
 }
 
 // loadConfig - loads a new config from disk, overrides params from env
@@ -529,11 +327,11 @@ func getValidConfig(objAPI ObjectLayer) (*serverConfig, error) {
 func loadConfig(objAPI ObjectLayer) error {
 	srvCfg, err := getValidConfig(objAPI)
 	if err != nil {
-		return config.ErrInvalidConfig(nil).Msg(err.Error())
+		return config.ErrInvalidConfig(err)
 	}
 
 	// Override any values from ENVs.
-	srvCfg.lookupConfigs()
+	lookupConfigs(srvCfg)
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
@@ -547,168 +345,12 @@ func loadConfig(objAPI ObjectLayer) error {
 // enabled providers in server config.
 // A new authentication provider is added like below
 // * Add a new provider in pkg/iam/openid package.
-func getOpenIDValidators(config *serverConfig) *openid.Validators {
+func getOpenIDValidators(cfg openid.Config) *openid.Validators {
 	validators := openid.NewValidators()
 
-	if config.OpenID.JWKS.URL != nil {
-		validators.Add(openid.NewJWT(config.OpenID.JWKS))
+	if cfg.JWKS.URL != nil {
+		validators.Add(openid.NewJWT(cfg))
 	}
 
 	return validators
-}
-
-// getNotificationTargets - returns TargetList which contains enabled targets in serverConfig.
-// A new notification target is added like below
-// * Add a new target in pkg/event/target package.
-// * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
-// * Handle the configuration in this function to create/add into TargetList.
-func getNotificationTargets(config *serverConfig) *event.TargetList {
-	targetList := event.NewTargetList()
-	if config == nil {
-		return targetList
-	}
-	for id, args := range config.Notify.AMQP {
-		if args.Enable {
-			newTarget, err := target.NewAMQPTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
-			if err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-		}
-	}
-
-	for id, args := range config.Notify.Elasticsearch {
-		if args.Enable {
-			newTarget, err := target.NewElasticsearchTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
-			if err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-
-			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-
-			}
-		}
-	}
-
-	for id, args := range config.Notify.Kafka {
-		if args.Enable {
-			if args.TLS.Enable {
-				args.TLS.RootCAs = globalRootCAs
-			}
-			newTarget, err := target.NewKafkaTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
-			if err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-		}
-	}
-
-	for id, args := range config.Notify.MQTT {
-		if args.Enable {
-			args.RootCAs = globalRootCAs
-			newTarget, err := target.NewMQTTTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
-			if err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-		}
-	}
-
-	for id, args := range config.Notify.MySQL {
-		if args.Enable {
-			newTarget, err := target.NewMySQLTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
-			if err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-		}
-	}
-
-	for id, args := range config.Notify.NATS {
-		if args.Enable {
-			newTarget, err := target.NewNATSTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
-			if err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-		}
-	}
-
-	for id, args := range config.Notify.NSQ {
-		if args.Enable {
-			newTarget, err := target.NewNSQTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
-			if err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-		}
-	}
-
-	for id, args := range config.Notify.PostgreSQL {
-		if args.Enable {
-			newTarget, err := target.NewPostgreSQLTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
-			if err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-		}
-	}
-
-	for id, args := range config.Notify.Redis {
-		if args.Enable {
-			newTarget, err := target.NewRedisTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
-			if err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-			if err = targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-		}
-	}
-
-	for id, args := range config.Notify.Webhook {
-		if args.Enable {
-			args.RootCAs = globalRootCAs
-			newTarget := target.NewWebhookTarget(id, args, GlobalServiceDoneCh, logger.LogOnceIf)
-			if err := targetList.Add(newTarget); err != nil {
-				logger.LogIf(context.Background(), err)
-				continue
-			}
-		}
-	}
-
-	return targetList
 }

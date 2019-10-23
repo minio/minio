@@ -409,7 +409,12 @@ func newCache(config cache.Config) ([]*diskCache, bool, error) {
 			return nil, false, errors.New("Atime support required for disk caching")
 		}
 
-		cache, err := newdiskCache(dir, config.Expiry, config.MaxUse)
+		quota := config.MaxUse
+		if quota == 0 {
+			quota = config.Quota
+		}
+
+		cache, err := newDiskCache(dir, config.Expiry, quota)
 		if err != nil {
 			return nil, false, err
 		}

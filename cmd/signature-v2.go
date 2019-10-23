@@ -69,7 +69,7 @@ var resourceList = []string{
 }
 
 func doesPolicySignatureV2Match(formValues http.Header) APIErrorCode {
-	cred := globalServerConfig.GetCredential()
+	cred := globalActiveCred
 	accessKey := formValues.Get(xhttp.AmzAccessKeyID)
 	cred, _, s3Err := checkKeyValid(accessKey)
 	if s3Err != ErrNone {

@@ -31,6 +31,22 @@ import (
 	"gopkg.in/olivere/elastic.v5"
 )
 
+// Elastic constants
+const (
+	ElasticFormat     = "format"
+	ElasticURL        = "url"
+	ElasticIndex      = "index"
+	ElasticQueueDir   = "queue_dir"
+	ElasticQueueLimit = "queue_limit"
+
+	EnvElasticState      = "MINIO_NOTIFY_ELASTICSEARCH_STATE"
+	EnvElasticFormat     = "MINIO_NOTIFY_ELASTICSEARCH_FORMAT"
+	EnvElasticURL        = "MINIO_NOTIFY_ELASTICSEARCH_URL"
+	EnvElasticIndex      = "MINIO_NOTIFY_ELASTICSEARCH_INDEX"
+	EnvElasticQueueDir   = "MINIO_NOTIFY_ELASTICSEARCH_QUEUE_DIR"
+	EnvElasticQueueLimit = "MINIO_NOTIFY_ELASTICSEARCH_QUEUE_LIMIT"
+)
+
 // ElasticsearchArgs - Elasticsearch target arguments.
 type ElasticsearchArgs struct {
 	Enable     bool     `json:"enable"`

@@ -58,10 +58,10 @@ func TestJWT(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	jwt := NewJWT(JWKSArgs{
-		URL:        u1,
-		publicKeys: keys,
-	})
+	cfg := Config{}
+	cfg.JWKS.URL = u1
+	cfg.publicKeys = keys
+	jwt := NewJWT(cfg)
 	if jwt.ID() != "jwt" {
 		t.Fatalf("Uexpected id %s for the validator", jwt.ID())
 	}

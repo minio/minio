@@ -62,12 +62,14 @@ Default value for `REDUCED_REDUNDANCY` storage class is `2`.
 
 The format to set storage class environment variables is as follows
 
+`MINIO_STORAGE_CLASS_STATE=on`
 `MINIO_STORAGE_CLASS_STANDARD=EC:parity`
 `MINIO_STORAGE_CLASS_RRS=EC:parity`
 
 For example, set `MINIO_STORAGE_CLASS_RRS` parity 2 and `MINIO_STORAGE_CLASS_STANDARD` parity 3
 
 ```sh
+export MINIO_STORAGE_CLASS_STATE=on
 export MINIO_STORAGE_CLASS_STANDARD=EC:3
 export MINIO_STORAGE_CLASS_RRS=EC:2
 ```
@@ -77,7 +79,7 @@ more details.
 
 *Note*
 
-- If `STANDARD` storage class is set via environment variables or `mc admin config` get/set commands, and `x-amz-storage-class` is not present in request metadata, MinIO server will 
+- If `STANDARD` storage class is set via environment variables or `mc admin config` get/set commands, and `x-amz-storage-class` is not present in request metadata, MinIO server will
 apply `STANDARD` storage class to the object. This means the data and parity disks will be used as set in `STANDARD` storage class.
 
 - If storage class is not defined before starting MinIO server, and subsequent PutObject metadata field has `x-amz-storage-class` present

@@ -1125,7 +1125,7 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 		return combinedPolicy.IsAllowed(args)
 	}
 
-	pname, ok := args.Claims[iampolicy.PolicyName]
+	pname, ok := args.Claims[iamPolicyName()]
 	if !ok {
 		// When claims are set, it should have a "policy" field.
 		return false
@@ -1199,14 +1199,14 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 		return ok
 	}
 
-	// With claims set, we should do STS related checks and validation.
-	if len(args.Claims) > 0 {
-		return sys.IsAllowedSTS(args)
-	}
-
 	// Policies don't apply to the owner.
 	if args.IsOwner {
 		return true
+	}
+
+	// With claims set, we should do STS related checks and validation.
+	if _, ok := args.Claims["aud"]; ok {
+		return sys.IsAllowedSTS(args)
 	}
 
 	policies, err := sys.PolicyDBGet(args.AccountName, false)
@@ -1306,8 +1306,7 @@ func NewIAMSys() *IAMSys {
 	// The default users system
 	var utype UsersSysType
 	switch {
-	case globalServerConfig != nil &&
-		globalServerConfig.LDAPServerConfig.ServerAddr != "":
+	case globalLDAPConfig.Enabled:
 		utype = LDAPUsersSysType
 	default:
 		utype = MinIOUsersSysType

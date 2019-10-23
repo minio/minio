@@ -95,6 +95,40 @@
     }
 }
 
+.openid-login {
+    margin-top: 30px;
+}
+
+.openid-btn {
+    display: inline-block;
+    margin-top: 30px;
+    border-width: 1px;
+    border-style: solid;
+    opacity: 0.6;
+    font-size: 14px;
+    &:hover {
+        color: @link-color;
+        opacity: 1;
+    }
+}
+
+.or {
+    display:flex;
+    justify-content:center;
+    align-items: center;
+    color:grey;
+  }
+  
+.or:after,
+.or:before {
+    content: "";
+    display: block;
+    background: grey;
+    width: 10px;
+    height: 1px;
+    margin: 0 10px;
+}
+
 /*------------------------------
     Chrome autofill fix
 -------------------------------*/

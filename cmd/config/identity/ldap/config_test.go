@@ -17,7 +17,6 @@
 package ldap
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -36,6 +35,29 @@ func TestSubstituter(t *testing.T) {
 		},
 		{
 			KV:               []string{"username", "john"},
+			SubstitutableStr: "uid={username},cn=users,dc=example,dc=com",
+			SubstitutedStr:   "uid=john,cn=users,dc=example,dc=com",
+			ErrExpected:      false,
+		},
+		{
+			KV:               []string{"username", "john"},
+			SubstitutableStr: "(&(objectclass=group)(member=${username}))",
+			SubstitutedStr:   "(&(objectclass=group)(member=john))",
+			ErrExpected:      false,
+		},
+		{
+			KV:               []string{"username", "john"},
+			SubstitutableStr: "(&(objectclass=group)(member={username}))",
+			SubstitutedStr:   "(&(objectclass=group)(member=john))",
+			ErrExpected:      false,
+		},
+		{
+			KV:               []string{"username", "john"},
+			SubstitutableStr: "uid=${{username}},cn=users,dc=example,dc=com",
+			ErrExpected:      true,
+		},
+		{
+			KV:               []string{"username", "john"},
 			SubstitutableStr: "uid=${usernamedn},cn=users,dc=example,dc=com",
 			ErrExpected:      true,
 		},
@@ -46,9 +68,9 @@ func TestSubstituter(t *testing.T) {
 		},
 	}
 
-	for i, test := range tests {
+	for _, test := range tests {
 		test := test
-		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
+		t.Run(test.SubstitutableStr, func(t *testing.T) {
 			subber, err := NewSubstituter(test.KV...)
 			if err != nil && !test.ErrExpected {
 				t.Errorf("Unexpected failure %s", err)

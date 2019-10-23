@@ -51,7 +51,6 @@ export const fetchServerInfo = () => {
     return web.ServerInfo().then(res => {
       const serverInfo = {
         version: res.MinioVersion,
-        memory: res.MinioMemory,
         platform: res.MinioPlatform,
         runtime: res.MinioRuntime,
         info: res.MinioGlobalInfo,

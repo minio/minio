@@ -47,7 +47,7 @@ func parseLocationConstraint(r *http.Request) (location string, s3Error APIError
 	} // else for both err as nil or io.EOF
 	location = locationConstraint.Location
 	if location == "" {
-		location = globalServerConfig.GetRegion()
+		location = globalServerRegion
 	}
 	return location, ErrNone
 }
@@ -55,7 +55,7 @@ func parseLocationConstraint(r *http.Request) (location string, s3Error APIError
 // Validates input location is same as configured region
 // of MinIO server.
 func isValidLocation(location string) bool {
-	return globalServerConfig.GetRegion() == "" || globalServerConfig.GetRegion() == location
+	return globalServerRegion == "" || globalServerRegion == location
 }
 
 // Supported headers that needs to be extracted.
@@ -191,9 +191,9 @@ func getReqAccessCred(r *http.Request, region string) (cred auth.Credentials) {
 	if cred.AccessKey == "" {
 		claims, owner, _ := webRequestAuthenticate(r)
 		if owner {
-			return globalServerConfig.GetCredential()
+			return globalActiveCred
 		}
-		cred, _ = globalIAMSys.GetUser(claims.Subject)
+		cred, _ = globalIAMSys.GetUser(claims.AccessKey())
 	}
 	return cred
 }
@@ -204,7 +204,7 @@ func extractReqParams(r *http.Request) map[string]string {
 		return nil
 	}
 
-	region := globalServerConfig.GetRegion()
+	region := globalServerRegion
 	cred := getReqAccessCred(r, region)
 
 	// Success.

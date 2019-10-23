@@ -36,6 +36,7 @@ import (
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
+	"github.com/minio/minio/cmd/config/compress"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -378,17 +379,17 @@ func (o ObjectInfo) GetActualSize() int64 {
 // Using compression and encryption together enables room for side channel attacks.
 // Eliminate non-compressible objects by extensions/content-types.
 func isCompressible(header http.Header, object string) bool {
-	if crypto.IsRequested(header) || excludeForCompression(header, object) {
+	if crypto.IsRequested(header) || excludeForCompression(header, object, globalCompressConfig) {
 		return false
 	}
 	return true
 }
 
 // Eliminate the non-compressible objects.
-func excludeForCompression(header http.Header, object string) bool {
+func excludeForCompression(header http.Header, object string, cfg compress.Config) bool {
 	objStr := object
 	contentType := header.Get(xhttp.ContentType)
-	if !globalIsCompressionEnabled {
+	if !cfg.Enabled {
 		return true
 	}
 
@@ -398,12 +399,12 @@ func excludeForCompression(header http.Header, object string) bool {
 	}
 
 	// Filter compression includes.
-	if len(globalCompressExtensions) == 0 || len(globalCompressMimeTypes) == 0 {
+	if len(cfg.Extensions) == 0 || len(cfg.MimeTypes) == 0 {
 		return false
 	}
 
-	extensions := globalCompressExtensions
-	mimeTypes := globalCompressMimeTypes
+	extensions := cfg.Extensions
+	mimeTypes := cfg.MimeTypes
 	if hasStringSuffixInSlice(objStr, extensions) || hasPattern(mimeTypes, contentType) {
 		return false
 	}

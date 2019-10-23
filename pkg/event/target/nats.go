@@ -30,6 +30,42 @@ import (
 	"github.com/nats-io/stan.go"
 )
 
+// NATS related constants
+const (
+	NATSAddress      = "address"
+	NATSSubject      = "subject"
+	NATSUsername     = "username"
+	NATSPassword     = "password"
+	NATSToken        = "token"
+	NATSSecure       = "secure"
+	NATSPingInterval = "ping_interval"
+	NATSQueueDir     = "queue_dir"
+	NATSQueueLimit   = "queue_limit"
+
+	// Streaming constants
+	NATSStreamingEnable             = "streaming_enable"
+	NATSStreamingClusterID          = "streaming_cluster_id"
+	NATSStreamingAsync              = "streaming_async"
+	NATSStreamingMaxPubAcksInFlight = "streaming_max_pub_acks_in_flight"
+
+	EnvNATSState        = "MINIO_NOTIFY_NATS_STATE"
+	EnvNATSAddress      = "MINIO_NOTIFY_NATS_ADDRESS"
+	EnvNATSSubject      = "MINIO_NOTIFY_NATS_SUBJECT"
+	EnvNATSUsername     = "MINIO_NOTIFY_NATS_USERNAME"
+	EnvNATSPassword     = "MINIO_NOTIFY_NATS_PASSWORD"
+	EnvNATSToken        = "MINIO_NOTIFY_NATS_TOKEN"
+	EnvNATSSecure       = "MINIO_NOTIFY_NATS_SECURE"
+	EnvNATSPingInterval = "MINIO_NOTIFY_NATS_PING_INTERVAL"
+	EnvNATSQueueDir     = "MINIO_NOTIFY_NATS_QUEUE_DIR"
+	EnvNATSQueueLimit   = "MINIO_NOTIFY_NATS_QUEUE_LIMIT"
+
+	// Streaming constants
+	EnvNATSStreamingEnable             = "MINIO_NOTIFY_NATS_STREAMING_ENABLE"
+	EnvNATSStreamingClusterID          = "MINIO_NOTIFY_NATS_STREAMING_CLUSTER_ID"
+	EnvNATSStreamingAsync              = "MINIO_NOTIFY_NATS_STREAMING_ASYNC"
+	EnvNATSStreamingMaxPubAcksInFlight = "MINIO_NOTIFY_NATS_STREAMING_MAX_PUB_ACKS_IN_FLIGHT"
+)
+
 // NATSArgs - NATS target arguments.
 type NATSArgs struct {
 	Enable       bool      `json:"enable"`

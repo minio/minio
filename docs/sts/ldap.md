@@ -40,26 +40,31 @@ MinIO can be configured to find the groups of a user from AD/LDAP by specifying 
 
 LDAP is configured via the following environment variables:
 
-| Variable                                     | Required?                 | Purpose                                                |
-|----------------------------------------------|---------------------------|--------------------------------------------------------|
-| **MINIO_IDENTITY_LDAP_SERVER_ADDR**          | **YES**                   | AD/LDAP server address                                 |
-| **MINIO_IDENTITY_LDAP_USERNAME_FORMAT**      | **YES**                   | Format of full username DN                             |
-| **MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN** | **NO**                    | Base DN in AD/LDAP hierarchy to use in search requests |
-| **MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER**  | **NO**                    | Search filter to find groups of a user                 |
-| **MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE** | **NO**                    | Attribute of search results to use as group name       |
-| **MINIO_IDENTITY_LDAP_STS_EXPIRY**           | **NO** (default: "1h")    | STS credentials validity duration                      |
+| Variable                                     | Required?               | Purpose                                                                 |
+|----------------------------------------------|-------------------------|-------------------------------------------------------------------------|
+| **MINIO_IDENTITY_LDAP_STATE**                | **YES**                 | Enable or disable ldap identity                                         |
+| **MINIO_IDENTITY_LDAP_SERVER_ADDR**          | **YES**                 | AD/LDAP server address                                                  |
+| **MINIO_IDENTITY_LDAP_USERNAME_FORMAT**      | **YES**                 | Format of full username DN                                              |
+| **MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN** | **NO**                  | Base DN in AD/LDAP hierarchy to use in search requests                  |
+| **MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER**  | **NO**                  | Search filter to find groups of a user                                  |
+| **MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE** | **NO**                  | Attribute of search results to use as group name                        |
+| **MINIO_IDENTITY_LDAP_STS_EXPIRY**           | **NO** (default: "1h")  | STS credentials validity duration                                       |
+| **MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY**      | **NO** (default: "off") | Set this to 'on', to disable client verification of server certificates |
+
 
 Please note that MinIO will only access the AD/LDAP server over TLS. If a self-signed certificate is being used, the certificate can be added to MinIO's certificates directory, so it can be trusted by the server.
 
 An example setup for development or experimentation:
 
 ``` shell
+export MINIO_IDENTITY_LDAP_STATE="on"
 export MINIO_IDENTITY_LDAP_SERVER_ADDR=myldapserver.com:636
-export MINIO_IDENTITY_LDAP_USERNAME_FORMAT="uid=${username},cn=accounts,dc=myldapserver,dc=com"
+export MINIO_IDENTITY_LDAP_USERNAME_FORMAT="uid={username},cn=accounts,dc=myldapserver,dc=com"
 export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN="dc=myldapserver,dc=com"
-export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER="(&(objectclass=groupOfNames)(member=${usernamedn}))"
+export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER="(&(objectclass=groupOfNames)(member={usernamedn})$)"
 export MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE="cn"
-export MINIO_IDENTITY_LDAP_STS_EXPIRY=60
+export MINIO_IDENTITY_LDAP_STS_EXPIRY=60h
+export MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY="on"
 ```
 
 ### Variable substitution in AD/LDAP configuration strings
@@ -99,18 +104,20 @@ member: CN=John,CN=Users,DC=minioad,DC=local
 ...
 ```
 
-The lines with "..." represent skipped content not shown here from brevity. Based on the output above, we see that the username format variable looks like `cn=${username},cn=users,dc=minioad,dc=local`.
+The lines with "..." represent skipped content not shown here from brevity. Based on the output above, we see that the username format variable looks like `cn={username},cn=users,dc=minioad,dc=local`.
 
-The group search filter looks like `(&(objectclass=group)(member=${usernamedn}))` and the group name attribute is clearly `cn`.
+The group search filter looks like `(&(objectclass=group)(member={usernamedn}))` and the group name attribute is clearly `cn`.
 
 Thus the key configuration parameters look like:
 
 ```
+MINIO_IDENTITY_LDAP_STATE="on"
 MINIO_IDENTITY_LDAP_SERVER_ADDR='my.ldap-active-dir-server.com:636'
-MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn=${username},cn=users,dc=minioad,dc=local'
+MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn={username},cn=users,dc=minioad,dc=local'
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local'
-MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(member=${usernamedn}))'
+MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(member={usernamedn}))'
 MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE='cn'
+MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY="on"
 ```
 
 ## Managing User/Group Access Policy
@@ -211,10 +218,11 @@ http://minio.cluster:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=foouser
 ```
 $ export MINIO_ACCESS_KEY=minio
 $ export MINIO_SECRET_KEY=minio123
+$ export MINIO_IDENTITY_LDAP_STATE="on"
 $ export MINIO_IDENTITY_LDAP_SERVER_ADDR='my.ldap-active-dir-server.com:636'
-$ export MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn=${username},cn=users,dc=minioad,dc=local'
+$ export MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn={username},cn=users,dc=minioad,dc=local'
 $ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local'
-$ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(member=${usernamedn}))'
+$ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(member={usernamedn}))'
 $ export MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE='cn'
 $ minio server ~/test
 ```
@@ -230,4 +238,3 @@ $ go run ldap.go -u foouser -p foopassword
         "sessionToken": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NLZXkiOiJOVUlCT1JaWVRWMkhHMkJNUlNYUiIsImF1ZCI6IlBvRWdYUDZ1Vk80NUlzRU5SbmdEWGo1QXU1WWEiLCJhenAiOiJQb0VnWFA2dVZPNDVJc0VOUm5nRFhqNUF1NVlhIiwiZXhwIjoxNTM0ODk2NjI5LCJpYXQiOjE1MzQ4OTMwMjksImlzcyI6Imh0dHBzOi8vbG9jYWxob3N0Ojk0NDMvb2F1dGgyL3Rva2VuIiwianRpIjoiNjY2OTZjZTctN2U1Ny00ZjU5LWI0MWQtM2E1YTMzZGZiNjA4In0.eJONnVaSVHypiXKEARSMnSKgr-2mlC2Sr4fEGJitLcJF_at3LeNdTHv0_oHsv6ZZA3zueVGgFlVXMlREgr9LXA"
 }
 ```
-

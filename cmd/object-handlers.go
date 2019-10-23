@@ -592,7 +592,7 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 // Returns a minio-go Client configured to access remote host described by destDNSRecord
 // Applicable only in a federated deployment
 var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core, error) {
-	cred := getReqAccessCred(r, globalServerConfig.GetRegion())
+	cred := getReqAccessCred(r, globalServerRegion)
 	// In a federated deployment, all the instances share config files
 	// and hence expected to have same credentials.
 	core, err := miniogo.NewCore(host, cred.AccessKey, cred.SecretKey, globalIsSSL)
@@ -1161,7 +1161,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 
 	case authTypePresigned, authTypeSigned:
-		if s3Err = reqSignatureV4Verify(r, globalServerConfig.GetRegion(), serviceS3); s3Err != ErrNone {
+		if s3Err = reqSignatureV4Verify(r, globalServerRegion, serviceS3); s3Err != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
 			return
 		}
@@ -1840,7 +1840,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			return
 		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error = reqSignatureV4Verify(r, globalServerConfig.GetRegion(), serviceS3); s3Error != ErrNone {
+		if s3Error = reqSignatureV4Verify(r, globalServerRegion, serviceS3); s3Error != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 			return
 		}

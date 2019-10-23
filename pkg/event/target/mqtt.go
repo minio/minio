@@ -38,6 +38,30 @@ const (
 	storePrefix       = "minio"
 )
 
+// MQTT input constants
+const (
+	MqttBroker            = "broker"
+	MqttTopic             = "topic"
+	MqttQoS               = "qos"
+	MqttUsername          = "username"
+	MqttPassword          = "password"
+	MqttReconnectInterval = "reconnect_interval"
+	MqttKeepAliveInterval = "keep_alive_interval"
+	MqttQueueDir          = "queue_dir"
+	MqttQueueLimit        = "queue_limit"
+
+	EnvMQTTState             = "MINIO_NOTIFY_MQTT_STATE"
+	EnvMQTTBroker            = "MINIO_NOTIFY_MQTT_BROKER"
+	EnvMQTTTopic             = "MINIO_NOTIFY_MQTT_TOPIC"
+	EnvMQTTQoS               = "MINIO_NOTIFY_MQTT_QOS"
+	EnvMQTTUsername          = "MINIO_NOTIFY_MQTT_USERNAME"
+	EnvMQTTPassword          = "MINIO_NOTIFY_MQTT_PASSWORD"
+	EnvMQTTReconnectInterval = "MINIO_NOTIFY_MQTT_RECONNECT_INTERVAL"
+	EnvMQTTKeepAliveInterval = "MINIO_NOTIFY_MQTT_KEEP_ALIVE_INTERVAL"
+	EnvMQTTQueueDir          = "MINIO_NOTIFY_MQTT_QUEUE_DIR"
+	EnvMQTTQueueLimit        = "MINIO_NOTIFY_MQTT_QUEUE_LIMIT"
+)
+
 // MQTTArgs - MQTT target arguments.
 type MQTTArgs struct {
 	Enable               bool           `json:"enable"`
