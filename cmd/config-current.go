@@ -92,8 +92,7 @@ func lookupConfigs(s config.Config) {
 	var err error
 
 	if !globalActiveCred.IsValid() {
-		// Env doesn't seem to be set, we fallback to lookup
-		// creds from the config.
+		// Env doesn't seem to be set, we fallback to lookup creds from the config.
 		globalActiveCred, err = config.LookupCreds(s[config.CredentialsSubSys][config.Default])
 		if err != nil {
 			logger.Fatal(err, "Invalid credentials configuration")

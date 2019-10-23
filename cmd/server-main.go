@@ -191,7 +191,9 @@ func serverHandleEnvVars() {
 				"Unable to validate credentials inherited from the shell environment")
 		}
 		globalActiveCred = cred
+		globalConfigEncrypted = true
 	}
+
 }
 
 // serverMain handler called for 'minio server' command.
@@ -302,6 +304,14 @@ func serverMain(ctx *cli.Context) {
 
 	// Re-enable logging
 	logger.Disable = false
+
+	// Migrate all backend configs to encrypted backend, also handles rotation as well.
+	logger.FatalIf(handleEncryptedConfigBackend(newObject, true),
+		"Unable to migrate config, iam, policies to an encrypted backend")
+
+	// ****  WARNING ****
+	// Migrating to encrypted backend should happen before initialization of any
+	// sub-systems, make sure that we do not move the above codeblock elsewhere.
 
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()

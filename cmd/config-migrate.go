@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -38,6 +39,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
+	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/quick"
 )
@@ -2532,6 +2534,13 @@ func checkConfigVersion(objAPI ObjectLayer, configFile string, version string) (
 		return false, nil, err
 	}
 
+	if globalConfigEncrypted {
+		data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+		if err != nil {
+			return false, nil, err
+		}
+	}
+
 	var versionConfig struct {
 		Version string `json:"version"`
 	}
@@ -2563,12 +2572,7 @@ func migrateV27ToV28MinioSys(objAPI ObjectLayer) error {
 	cfg.Version = "28"
 	cfg.KMS = crypto.KMSConfig{}
 
-	data, err = json.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-
-	if err = saveConfig(context.Background(), objAPI, configFile, data); err != nil {
+	if err = saveServerConfig(context.Background(), objAPI, cfg, nil); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘27’ to ‘28’. %v", err)
 	}
 
@@ -2595,12 +2599,7 @@ func migrateV28ToV29MinioSys(objAPI ObjectLayer) error {
 	}
 
 	cfg.Version = "29"
-	data, err = json.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-
-	if err = saveConfig(context.Background(), objAPI, configFile, data); err != nil {
+	if err = saveServerConfig(context.Background(), objAPI, cfg, nil); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘28’ to ‘29’. %v", err)
 	}
 
@@ -2632,12 +2631,7 @@ func migrateV29ToV30MinioSys(objAPI ObjectLayer) error {
 	cfg.Compression.Extensions = strings.Split(compress.DefaultExtensions, config.ValueSeparator)
 	cfg.Compression.MimeTypes = strings.Split(compress.DefaultMimeTypes, config.ValueSeparator)
 
-	data, err = json.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-
-	if err = saveConfig(context.Background(), objAPI, configFile, data); err != nil {
+	if err = saveServerConfig(context.Background(), objAPI, cfg, nil); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘29’ to ‘30’. %v", err)
 	}
 
@@ -2672,12 +2666,7 @@ func migrateV30ToV31MinioSys(objAPI ObjectLayer) error {
 		AuthToken: "",
 	}
 
-	data, err = json.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-
-	if err = saveConfig(context.Background(), objAPI, configFile, data); err != nil {
+	if err = saveServerConfig(context.Background(), objAPI, cfg, nil); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘30’ to ‘31’. %v", err)
 	}
 
@@ -2707,12 +2696,7 @@ func migrateV31ToV32MinioSys(objAPI ObjectLayer) error {
 	cfg.Notify.NSQ = make(map[string]target.NSQArgs)
 	cfg.Notify.NSQ["1"] = target.NSQArgs{}
 
-	data, err = json.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-
-	if err = saveConfig(context.Background(), objAPI, configFile, data); err != nil {
+	if err = saveServerConfig(context.Background(), objAPI, cfg, nil); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘31’ to ‘32’. %v", err)
 	}
 
@@ -2740,12 +2724,7 @@ func migrateV32ToV33MinioSys(objAPI ObjectLayer) error {
 
 	cfg.Version = "33"
 
-	data, err = json.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-
-	if err = saveConfig(context.Background(), objAPI, configFile, data); err != nil {
+	if err = saveServerConfig(context.Background(), objAPI, cfg, nil); err != nil {
 		return fmt.Errorf("Failed to migrate config from  32  to  33 . %v", err)
 	}
 

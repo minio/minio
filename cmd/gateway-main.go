@@ -228,6 +228,16 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		initFederatorBackend(newObject)
 	}
 
+	// Migrate all backend configs to encrypted backend, also handles rotation as well.
+	// For "nas" gateway we need to specially handle the backend migration as well.
+	// Internally code handles migrating etcd if enabled automatically.
+	logger.FatalIf(handleEncryptedConfigBackend(newObject, enableConfigOps),
+		"Unable to migrate config, iam, policies to an encrypted backend")
+
+	// ****  WARNING ****
+	// Migrating to encrypted backend should happen before initialization of any
+	// sub-systems, make sure that we do not move the above codeblock elsewhere.
+
 	if enableConfigOps {
 		// Create a new config system.
 		globalConfigSys = NewConfigSys()

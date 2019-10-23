@@ -157,7 +157,7 @@ MinIO Server comes with an embedded web based object browser. Point your web bro
 ## Pre-existing data
 When deployed on a single drive, MinIO server lets clients access any pre-existing data in the data directory. For example, if MinIO is started with the command  `minio server /mnt/data`, any pre-existing data in the `/mnt/data` directory would be accessible to the clients.
 
-The above statement is also valid for all gateway backends.
+The above statement is also valid for all gateway backends, except `s3` gateway with encryption settings read more [here](https://github.com/minio/minio/blob/master/docs/gateway/s3.md#run-minio-gateway-with-double-encryption)
 
 ## Upgrading MinIO
 MinIO server supports rolling upgrades, i.e. you can update one MinIO instance at a time in a distributed cluster. This allows upgrades with no downtime. Upgrades can be done manually by replacing the binary with the latest release and restarting all servers in a rolling fashion. However, we recommend all our users to use [`mc admin update`](https://docs.min.io/docs/minio-admin-complete-guide.html#update) from the client. This will update all the nodes in the cluster and restart them, as shown in the following command from the MinIO client (mc):

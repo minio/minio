@@ -184,7 +184,11 @@ var (
 	// Time when object layer was initialized on start up.
 	globalBootTime time.Time
 
-	globalActiveCred  auth.Credentials
+	globalActiveCred auth.Credentials
+
+	// Indicates if config is to be encrypted
+	globalConfigEncrypted bool
+
 	globalPublicCerts []*x509.Certificate
 
 	globalDomainNames []string      // Root domains for virtual host style requests

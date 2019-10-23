@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -80,12 +79,27 @@ func delServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV stri
 
 func readServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV string) ([]byte, error) {
 	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV)
-	return readConfig(ctx, objAPI, historyFile)
+	data, err := readConfig(ctx, objAPI, historyFile)
+	if err != nil {
+		return nil, err
+	}
+	if globalConfigEncrypted {
+		data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+	}
+	return data, err
 }
 
 func saveServerConfigHistory(ctx context.Context, objAPI ObjectLayer, kv []byte) error {
 	uuidKV := mustGetUUID() + ".kv"
 	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV)
+
+	var err error
+	if globalConfigEncrypted {
+		kv, err = madmin.EncryptData(globalActiveCred.String(), kv)
+		if err != nil {
+			return err
+		}
+	}
 
 	// Save the new config KV settings into the history path.
 	return saveConfig(ctx, objAPI, historyFile, kv)
@@ -108,18 +122,35 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config interface{
 		if err != nil && err != errConfigNotFound {
 			return err
 		}
-		// Current config not found, so nothing to backup.
-		freshConfig = true
+		if err == errConfigNotFound {
+			// Current config not found, so nothing to backup.
+			freshConfig = true
+		}
+		// Do not need to decrypt oldData since we are going to
+		// save it anyway if freshConfig is false.
 	} else {
 		oldData, err = json.Marshal(oldConfig)
 		if err != nil {
 			return err
+		}
+		if globalConfigEncrypted {
+			oldData, err = madmin.EncryptData(globalActiveCred.String(), oldData)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	// No need to take backups for fresh setups.
 	if !freshConfig {
 		if err = saveConfig(ctx, objAPI, backupConfigFile, oldData); err != nil {
+			return err
+		}
+	}
+
+	if globalConfigEncrypted {
+		data, err = madmin.EncryptData(globalActiveCred.String(), data)
+		if err != nil {
 			return err
 		}
 	}
@@ -135,8 +166,11 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 		return nil, err
 	}
 
-	if runtime.GOOS == "windows" {
-		configData = bytes.Replace(configData, []byte("\r\n"), []byte("\n"), -1)
+	if globalConfigEncrypted {
+		configData, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(configData))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var config = config.New()

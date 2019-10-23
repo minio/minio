@@ -526,6 +526,8 @@ func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 		SecretKey: auth.DefaultSecretKey,
 	}
 
+	globalConfigEncrypted = true
+
 	// Set a default region.
 	config.SetRegion(globalServerConfig, bucketLocation)
 

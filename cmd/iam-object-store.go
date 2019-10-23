@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -27,6 +28,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // IAMObjectStore implements IAMStorageAPI
@@ -215,6 +217,12 @@ func (iamOS *IAMObjectStore) saveIAMConfig(item interface{}, path string) error 
 	if err != nil {
 		return err
 	}
+	if globalConfigEncrypted {
+		data, err = madmin.EncryptData(globalActiveCred.String(), data)
+		if err != nil {
+			return err
+		}
+	}
 	return saveConfig(context.Background(), objectAPI, path, data)
 }
 
@@ -223,6 +231,12 @@ func (iamOS *IAMObjectStore) loadIAMConfig(item interface{}, path string) error 
 	data, err := readConfig(context.Background(), objectAPI, path)
 	if err != nil {
 		return err
+	}
+	if globalConfigEncrypted {
+		data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+		if err != nil {
+			return err
+		}
 	}
 	return json.Unmarshal(data, item)
 }
