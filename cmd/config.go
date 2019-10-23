@@ -17,12 +17,10 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"path"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -80,7 +78,11 @@ func delServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV stri
 
 func readServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV string) ([]byte, error) {
 	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV)
-	return readConfig(ctx, objAPI, historyFile)
+	data, err := readConfig(ctx, objAPI, historyFile)
+	if err != nil {
+		return nil, err
+	}
+	return data, err
 }
 
 func saveServerConfigHistory(ctx context.Context, objAPI ObjectLayer, kv []byte) error {
@@ -108,8 +110,12 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config interface{
 		if err != nil && err != errConfigNotFound {
 			return err
 		}
-		// Current config not found, so nothing to backup.
-		freshConfig = true
+		if err == errConfigNotFound {
+			// Current config not found, so nothing to backup.
+			freshConfig = true
+		}
+		// Do not need to decrypt oldData since we are going to
+		// save it anyway if freshConfig is false.
 	} else {
 		oldData, err = json.Marshal(oldConfig)
 		if err != nil {
@@ -133,10 +139,6 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
 		return nil, err
-	}
-
-	if runtime.GOOS == "windows" {
-		configData = bytes.Replace(configData, []byte("\r\n"), []byte("\n"), -1)
 	}
 
 	var config = config.New()

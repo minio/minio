@@ -25,7 +25,7 @@ var verifyVaultConfigTests = []struct {
 }{
 	{
 		ShouldFail: false, // 0
-		Config:     VaultConfig{},
+		Config:     emptyVaultConfig,
 	},
 	{
 		ShouldFail: true,

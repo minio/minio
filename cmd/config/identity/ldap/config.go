@@ -117,10 +117,12 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 	if err != nil {
 		return l, err
 	}
-	if !stateBool {
-		return l, nil
-	}
 	ldapServer := env.Get(EnvServerAddr, kvs.Get(ServerAddr))
+	if stateBool {
+		if ldapServer == "" {
+			return l, config.Error("'serveraddr' cannot be empty if you wish to enable AD/LDAP support")
+		}
+	}
 	if ldapServer == "" {
 		return l, nil
 	}

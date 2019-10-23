@@ -192,6 +192,7 @@ func serverHandleEnvVars() {
 		}
 		globalActiveCred = cred
 	}
+
 }
 
 // serverMain handler called for 'minio server' command.

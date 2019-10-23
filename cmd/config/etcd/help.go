@@ -14,22 +14,18 @@
  * limitations under the License.
  */
 
-package config
+package etcd
 
-// HelpKV - implements help messages for keys
-// with value as description of the keys.
-type HelpKV map[string]string
+import "github.com/minio/minio/cmd/config"
 
-// Region and Worm help is documented in default config
+// etcd config documented in default config
 var (
-	RegionHelp = HelpKV{
-		RegionName: `Region name of this deployment, eg: "us-west-2"`,
-		State:      "Indicates if config region is honored or ignored",
-		Comment:    "A comment to describe the region setting",
-	}
-
-	WormHelp = HelpKV{
-		State:   `Indicates if worm is "on" or "off"`,
-		Comment: "A comment to describe the worm state",
+	Help = config.HelpKV{
+		Endpoints:      `(required) Comma separated list of etcd endpoints eg: "http://localhost:2379"`,
+		CoreDNSPath:    `(optional) CoreDNS etcd path location to populate DNS srv records eg: "/skydns"`,
+		ClientCert:     `(optional) Etcd client cert for mTLS authentication`,
+		ClientCertKey:  `(optional) Etcd client cert key for mTLS authentication`,
+		config.State:   "Indicates if etcd config is on or off",
+		config.Comment: "A comment to describe the etcd settings",
 	}
 )

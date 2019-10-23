@@ -184,7 +184,8 @@ var (
 	// Time when object layer was initialized on start up.
 	globalBootTime time.Time
 
-	globalActiveCred  auth.Credentials
+	globalActiveCred auth.Credentials
+
 	globalPublicCerts []*x509.Certificate
 
 	globalDomainNames []string      // Root domains for virtual host style requests

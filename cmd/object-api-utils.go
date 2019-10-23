@@ -328,7 +328,7 @@ func isMinioReservedBucket(bucketName string) bool {
 func getHostsSlice(records []dns.SrvRecord) []string {
 	var hosts []string
 	for _, r := range records {
-		hosts = append(hosts, net.JoinHostPort(r.Host, fmt.Sprintf("%d", r.Port)))
+		hosts = append(hosts, net.JoinHostPort(r.Host, r.Port))
 	}
 	return hosts
 }
@@ -337,7 +337,7 @@ func getHostsSlice(records []dns.SrvRecord) []string {
 func getHostFromSrv(records []dns.SrvRecord) string {
 	rand.Seed(time.Now().Unix())
 	srvRecord := records[rand.Intn(len(records))]
-	return net.JoinHostPort(srvRecord.Host, fmt.Sprintf("%d", srvRecord.Port))
+	return net.JoinHostPort(srvRecord.Host, srvRecord.Port)
 }
 
 // IsCompressed returns true if the object is marked as compressed.

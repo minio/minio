@@ -224,8 +224,13 @@ func LookupConfig(kvs config.KVS, drivesPerSet int) (cfg Config, err error) {
 	if err != nil {
 		return cfg, err
 	}
-	if !stateBool {
-		return cfg, nil
+	if stateBool {
+		if ssc := env.Get(StandardEnv, kvs.Get(ClassStandard)); ssc == "" {
+			return cfg, config.Error("'standard' key cannot be empty if you wish to enable storage class")
+		}
+		if rrsc := env.Get(RRSEnv, kvs.Get(ClassRRS)); rrsc == "" {
+			return cfg, config.Error("'rrs' key cannot be empty if you wish to enable storage class")
+		}
 	}
 
 	// Check for environment variables and parse into storageClass struct

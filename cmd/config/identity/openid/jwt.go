@@ -207,6 +207,7 @@ const (
 	ConfigURL   = "config_url"
 	ClaimPrefix = "claim_prefix"
 
+	EnvIdentityOpenIDState       = "MINIO_IDENTITY_OPENID_STATE"
 	EnvIdentityOpenIDJWKSURL     = "MINIO_IDENTITY_OPENID_JWKS_URL"
 	EnvIdentityOpenIDURL         = "MINIO_IDENTITY_OPENID_CONFIG_URL"
 	EnvIdentityOpenIDClaimPrefix = "MINIO_IDENTITY_OPENID_CLAIM_PREFIX"
@@ -271,19 +272,9 @@ func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.
 		return c, err
 	}
 
-	stateBool, err := config.ParseBool(kv.Get(config.State))
+	stateBool, err := config.ParseBool(env.Get(EnvIdentityOpenIDState, kv.Get(config.State)))
 	if err != nil {
 		return c, err
-	}
-	if !stateBool {
-		return c, nil
-	}
-
-	c = Config{
-		ClaimPrefix: env.Get(EnvIdentityOpenIDClaimPrefix, kv.Get(ClaimPrefix)),
-		publicKeys:  make(map[string]crypto.PublicKey),
-		transport:   transport,
-		closeRespFn: closeRespFn,
 	}
 
 	jwksURL := env.Get(EnvIamJwksURL, "") // Legacy
@@ -306,14 +297,30 @@ func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.
 		// Fallback to discovery document jwksURL
 		jwksURL = c.DiscoveryDoc.JwksURI
 	}
-	if jwksURL != "" {
-		c.JWKS.URL, err = xnet.ParseURL(jwksURL)
-		if err != nil {
-			return c, err
+
+	if stateBool {
+		// This check is needed to ensure that empty Jwks urls are not allowed.
+		if jwksURL == "" {
+			return c, config.Error("'config_url' must be set to a proper OpenID discovery document URL")
 		}
-		if err = c.PopulatePublicKey(); err != nil {
-			return c, err
-		}
+	}
+	if jwksURL == "" {
+		return c, nil
+	}
+
+	c = Config{
+		ClaimPrefix: env.Get(EnvIdentityOpenIDClaimPrefix, kv.Get(ClaimPrefix)),
+		publicKeys:  make(map[string]crypto.PublicKey),
+		transport:   transport,
+		closeRespFn: closeRespFn,
+	}
+
+	c.JWKS.URL, err = xnet.ParseURL(jwksURL)
+	if err != nil {
+		return c, err
+	}
+	if err = c.PopulatePublicKey(); err != nil {
+		return c, err
 	}
 	return c, nil
 }

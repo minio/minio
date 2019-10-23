@@ -19,14 +19,13 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
 	"sync"
-	"text/tabwriter"
 
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
+	"github.com/minio/minio/cmd/config/etcd"
 	xldap "github.com/minio/minio/cmd/config/identity/ldap"
 	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/config/notify"
@@ -36,6 +35,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/target/http"
+	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/env"
 )
 
@@ -60,6 +60,9 @@ func validateConfig(s config.Config) error {
 			globalXLSetDriveCount); err != nil {
 			return err
 		}
+	}
+	if _, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs); err != nil {
+		return err
 	}
 	if _, err := cache.LookupConfig(s[config.CacheSubSys][config.Default]); err != nil {
 		return err
@@ -92,11 +95,32 @@ func lookupConfigs(s config.Config) {
 	var err error
 
 	if !globalActiveCred.IsValid() {
-		// Env doesn't seem to be set, we fallback to lookup
-		// creds from the config.
+		// Env doesn't seem to be set, we fallback to lookup creds from the config.
 		globalActiveCred, err = config.LookupCreds(s[config.CredentialsSubSys][config.Default])
 		if err != nil {
 			logger.Fatal(err, "Invalid credentials configuration")
+		}
+	}
+
+	etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
+	if err != nil {
+		logger.Fatal(err, "Unable to initialize etcd config")
+	}
+
+	globalEtcdClient, err = etcd.New(etcdCfg)
+	if err != nil {
+		logger.Fatal(err, "Unable to initialize etcd config")
+	}
+
+	if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
+		globalDNSConfig, err = dns.NewCoreDNS(globalEtcdClient,
+			dns.DomainNames(globalDomainNames),
+			dns.DomainIPs(globalDomainIPs),
+			dns.DomainPort(globalMinioPort),
+			dns.CoreDNSPath(etcdCfg.CoreDNSPath),
+		)
+		if err != nil {
+			logger.Fatal(err, "Unable to initialize DNS config for %s.", globalDomainNames)
 		}
 	}
 
@@ -202,6 +226,7 @@ func lookupConfigs(s config.Config) {
 var helpMap = map[string]config.HelpKV{
 	config.RegionSubSys:          config.RegionHelp,
 	config.WormSubSys:            config.WormHelp,
+	config.EtcdSubSys:            etcd.Help,
 	config.CacheSubSys:           cache.Help,
 	config.CompressionSubSys:     compress.Help,
 	config.StorageClassSubSys:    storageclass.Help,
@@ -224,29 +249,42 @@ var helpMap = map[string]config.HelpKV{
 }
 
 // GetHelp - returns help for sub-sys, a key for a sub-system or all the help.
-func GetHelp(subSys, key string) (io.Reader, error) {
+func GetHelp(subSys, key string, envOnly bool) (config.HelpKV, error) {
 	if len(subSys) == 0 {
 		return nil, config.Error("no help available for empty sub-system inputs")
 	}
-	help, ok := helpMap[subSys]
-	if !ok {
+	subSystemValue := strings.SplitN(subSys, config.SubSystemSeparator, 2)
+	if len(subSystemValue) == 0 {
+		return nil, config.Error(fmt.Sprintf("invalid number of arguments %s", subSys))
+	}
+
+	if !config.SubSystems.Contains(subSystemValue[0]) {
 		return nil, config.Error(fmt.Sprintf("unknown sub-system %s", subSys))
 	}
+
+	help := helpMap[subSystemValue[0]]
 	if key != "" {
 		value, ok := help[key]
 		if !ok {
 			return nil, config.Error(fmt.Sprintf("unknown key %s for sub-system %s", key, subSys))
 		}
-		return strings.NewReader(value), nil
+		help = config.HelpKV{
+			key: value,
+		}
 	}
 
-	var s strings.Builder
-	w := tabwriter.NewWriter(&s, 1, 8, 2, ' ', 0)
-	if err := config.HelpTemplate.Execute(w, help); err != nil {
-		return nil, config.Error(err.Error())
+	envHelp := config.HelpKV{}
+	if envOnly {
+		for k, v := range help {
+			envK := config.EnvPrefix + strings.Join([]string{
+				strings.ToTitle(subSys), strings.ToTitle(k),
+			}, config.EnvWordDelimiter)
+			envHelp[envK] = v
+		}
+		help = envHelp
 	}
-	w.Flush()
-	return strings.NewReader(s.String()), nil
+
+	return help, nil
 }
 
 func configDefaultKVS() map[string]config.KVS {
@@ -262,6 +300,8 @@ func newServerConfig() config.Config {
 	for k := range srvCfg {
 		// Initialize with default KVS
 		switch k {
+		case config.EtcdSubSys:
+			srvCfg[k][config.Default] = etcd.DefaultKVS
 		case config.CacheSubSys:
 			srvCfg[k][config.Default] = cache.DefaultKVS
 		case config.CompressionSubSys:
@@ -312,22 +352,29 @@ func newSrvConfig(objAPI ObjectLayer) error {
 	return saveServerConfig(context.Background(), objAPI, globalServerConfig, nil)
 }
 
-// getValidConfig - returns valid server configuration
 func getValidConfig(objAPI ObjectLayer) (config.Config, error) {
 	srvCfg, err := readServerConfig(context.Background(), objAPI)
 	if err != nil {
 		return nil, err
 	}
-
+	defaultKVS := configDefaultKVS()
+	for _, k := range config.SubSystems.ToSlice() {
+		_, ok := srvCfg[k][config.Default]
+		if !ok {
+			// Populate default configs for any new
+			// sub-systems added automatically.
+			srvCfg[k][config.Default] = defaultKVS[k]
+		}
+	}
 	return srvCfg, nil
 }
 
-// loadConfig - loads a new config from disk, overrides params from env
-// if found and valid
+// loadConfig - loads a new config from disk, overrides params
+// from env if found and valid
 func loadConfig(objAPI ObjectLayer) error {
 	srvCfg, err := getValidConfig(objAPI)
 	if err != nil {
-		return config.ErrInvalidConfig(err)
+		return err
 	}
 
 	// Override any values from ENVs.

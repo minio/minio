@@ -38,7 +38,7 @@ func SetCompressionConfig(s config.Config, cfg Config) {
 			return config.StateOff
 		}(),
 		config.Comment: "Settings for Compression, after migrating config",
-		Extensions:     strings.Join(cfg.Extensions, ","),
-		MimeTypes:      strings.Join(cfg.MimeTypes, ","),
+		Extensions:     strings.Join(cfg.Extensions, config.ValueSeparator),
+		MimeTypes:      strings.Join(cfg.MimeTypes, config.ValueSeparator),
 	}
 }

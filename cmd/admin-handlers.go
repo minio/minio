@@ -982,22 +982,23 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 	if err == nil {
 		return noError
 	}
-	apiErr := errorCodes.ToAPIErr(toAdminAPIErrCode(ctx, err))
-	if apiErr.Code == "InternalError" {
-		switch e := err.(type) {
-		case config.Error:
-			apiErr = APIError{
-				Code:           "XMinioConfigError",
-				Description:    e.Error(),
-				HTTPStatusCode: http.StatusBadRequest,
-			}
-		case AdminError:
-			apiErr = APIError{
-				Code:           e.Code,
-				Description:    e.Message,
-				HTTPStatusCode: e.StatusCode,
-			}
+
+	var apiErr APIError
+	switch e := err.(type) {
+	case config.Error:
+		apiErr = APIError{
+			Code:           "XMinioConfigError",
+			Description:    e.Error(),
+			HTTPStatusCode: http.StatusBadRequest,
 		}
+	case AdminError:
+		apiErr = APIError{
+			Code:           e.Code,
+			Description:    e.Message,
+			HTTPStatusCode: e.StatusCode,
+		}
+	default:
+		apiErr = errorCodes.ToAPIErr(toAdminAPIErrCode(ctx, err))
 	}
 	return apiErr
 }
