@@ -322,11 +322,12 @@ func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 	g.Wait()
 
 	for _, lstorageInfo := range storageInfos {
-		storageInfo.Used += lstorageInfo.Used
-		storageInfo.Total += lstorageInfo.Total
-		storageInfo.Available += lstorageInfo.Available
-		storageInfo.Backend.OnlineDisks += lstorageInfo.Backend.OnlineDisks
-		storageInfo.Backend.OfflineDisks += lstorageInfo.Backend.OfflineDisks
+		storageInfo.Used = append(storageInfo.Used, lstorageInfo.Used...)
+		storageInfo.Total = append(storageInfo.Total, lstorageInfo.Total...)
+		storageInfo.Available = append(storageInfo.Available, lstorageInfo.Available...)
+		storageInfo.MountPaths = append(storageInfo.MountPaths, lstorageInfo.MountPaths...)
+		storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks.Merge(lstorageInfo.Backend.OnlineDisks)
+		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
 	}
 
 	scfg := globalServerConfig.GetStorageClass()

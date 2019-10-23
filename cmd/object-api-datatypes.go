@@ -39,11 +39,13 @@ const (
 
 // StorageInfo - represents total capacity of underlying storage.
 type StorageInfo struct {
-	Used uint64 // Used total used per tenant.
+	Used []uint64 // Used total used per disk.
 
-	Total uint64 // Total disk space.
+	Total []uint64 // Total disk space per disk.
 
-	Available uint64 // Total disk space available.
+	Available []uint64 // Total disk space available per disk.
+
+	MountPaths []string // Disk mountpoints
 
 	// Backend type.
 	Backend struct {
@@ -51,12 +53,12 @@ type StorageInfo struct {
 		Type BackendType
 
 		// Following fields are only meaningful if BackendType is Erasure.
-		OnlineDisks      int // Online disks during server startup.
-		OfflineDisks     int // Offline disks during server startup.
-		StandardSCData   int // Data disks for currently configured Standard storage class.
-		StandardSCParity int // Parity disks for currently configured Standard storage class.
-		RRSCData         int // Data disks for currently configured Reduced Redundancy storage class.
-		RRSCParity       int // Parity disks for currently configured Reduced Redundancy storage class.
+		OnlineDisks      madmin.BackendDisks // Online disks during server startup.
+		OfflineDisks     madmin.BackendDisks // Offline disks during server startup.
+		StandardSCData   int                 // Data disks for currently configured Standard storage class.
+		StandardSCParity int                 // Parity disks for currently configured Standard storage class.
+		RRSCData         int                 // Data disks for currently configured Reduced Redundancy storage class.
+		RRSCParity       int                 // Parity disks for currently configured Reduced Redundancy storage class.
 
 		// List of all disk status, this is only meaningful if BackendType is Erasure.
 		Sets [][]madmin.DriveInfo

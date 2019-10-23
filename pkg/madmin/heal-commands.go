@@ -208,7 +208,7 @@ func (adm *AdminClient) Heal(bucket, prefix string, healOpts HealOpts,
 		return healStart, healTaskStatus, err
 	}
 
-	path := fmt.Sprintf("/v1/heal/%s", bucket)
+	path := fmt.Sprintf(adminAPIPrefix+"/heal/%s", bucket)
 	if bucket != "" && prefix != "" {
 		path += "/" + prefix
 	}
@@ -280,7 +280,7 @@ type BgHealState struct {
 // current server or cluster.
 func (adm *AdminClient) BackgroundHealStatus() (BgHealState, error) {
 	// Execute POST request to background heal status api
-	resp, err := adm.executeMethod("POST", requestData{relPath: "/v1/background-heal/status"})
+	resp, err := adm.executeMethod("POST", requestData{relPath: adminAPIPrefix + "/background-heal/status"})
 	if err != nil {
 		return BgHealState{}, err
 	}

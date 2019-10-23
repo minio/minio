@@ -17,9 +17,7 @@
 package cmd
 
 import (
-	"bufio"
 	"context"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -515,34 +513,6 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
-// httpResponseRecorder wraps http.ResponseWriter
-// to record some useful http response data.
-type httpResponseRecorder struct {
-	http.ResponseWriter
-	respStatusCode int
-}
-
-// Wraps ResponseWriter's Write()
-func (rww *httpResponseRecorder) Write(b []byte) (int, error) {
-	return rww.ResponseWriter.Write(b)
-}
-
-// Wraps ResponseWriter's Flush()
-func (rww *httpResponseRecorder) Flush() {
-	rww.ResponseWriter.(http.Flusher).Flush()
-}
-
-// Wraps ResponseWriter's WriteHeader() and record
-// the response status code
-func (rww *httpResponseRecorder) WriteHeader(httpCode int) {
-	rww.respStatusCode = httpCode
-	rww.ResponseWriter.WriteHeader(httpCode)
-}
-
-func (rww *httpResponseRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	return rww.ResponseWriter.(http.Hijacker).Hijack()
-}
-
 // httpStatsHandler definition: gather HTTP statistics
 type httpStatsHandler struct {
 	handler http.Handler
@@ -554,26 +524,13 @@ func setHTTPStatsHandler(h http.Handler) http.Handler {
 }
 
 func (h httpStatsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Wraps w to record http response information
-	ww := &httpResponseRecorder{ResponseWriter: w}
-
-	// Time start before the call is about to start.
-	tBefore := UTCNow()
-
+	isS3Request := !strings.HasPrefix(r.URL.Path, minioReservedBucketPath)
+	// record s3 connection stats.
+	recordRequest := &recordTrafficRequest{ReadCloser: r.Body, isS3Request: isS3Request}
+	r.Body = recordRequest
+	recordResponse := &recordTrafficResponse{w, isS3Request}
 	// Execute the request
-	h.handler.ServeHTTP(ww, r)
-
-	// Time after call has completed.
-	tAfter := UTCNow()
-
-	// Time duration in secs since the call started.
-	//
-	// We don't need to do nanosecond precision in this
-	// simply for the fact that it is not human readable.
-	durationSecs := tAfter.Sub(tBefore).Seconds()
-
-	// Update http statistics
-	globalHTTPStats.updateStats(r, ww, durationSecs)
+	h.handler.ServeHTTP(recordResponse, r)
 }
 
 // requestValidityHandler validates all the incoming paths for

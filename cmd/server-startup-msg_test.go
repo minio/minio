@@ -27,14 +27,15 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // Tests if we generate storage info.
 func TestStorageInfoMsg(t *testing.T) {
 	infoStorage := StorageInfo{}
 	infoStorage.Backend.Type = BackendErasure
-	infoStorage.Backend.OnlineDisks = 7
-	infoStorage.Backend.OfflineDisks = 1
+	infoStorage.Backend.OnlineDisks = madmin.BackendDisks{"127.0.0.1:9000": 4, "127.0.0.1:9001": 3}
+	infoStorage.Backend.OfflineDisks = madmin.BackendDisks{"127.0.0.1:9000": 0, "127.0.0.1:9001": 1}
 
 	if msg := getStorageInfoMsg(infoStorage); !strings.Contains(msg, "7 Online, 1 Offline") {
 		t.Fatal("Unexpected storage info message, found:", msg)

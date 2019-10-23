@@ -26,6 +26,7 @@ export class StorageInfo extends React.Component {
   }
   render() {
     const { used } = this.props.storageInfo
+    var totalUsed = used.reduce((v1, v2) => v1 + v2, 0)
     return (
       <div className="feh-used">
         <div className="fehu-chart">
@@ -34,7 +35,7 @@ export class StorageInfo extends React.Component {
         <ul>
           <li>
             <span>Used: </span>
-            {humanize.filesize(used)}
+            {humanize.filesize(totalUsed)}
           </li>
         </ul>
       </div>
@@ -54,4 +55,7 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(StorageInfo)
+export default connect(
+  mapStateToProps,
+  mapDispatchToProps
+)(StorageInfo)

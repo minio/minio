@@ -38,7 +38,7 @@ func (adm *AdminClient) ServerUpdate(updateURL string) (us ServerUpdateStatus, e
 
 	// Request API to Restart server
 	resp, err := adm.executeMethod("POST", requestData{
-		relPath:     "/v1/update",
+		relPath:     adminAPIPrefix + "/update",
 		queryValues: queryValues,
 	})
 	defer closeResponse(resp)

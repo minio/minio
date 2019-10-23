@@ -104,32 +104,75 @@ Here `prometheus.yml` is the name of configuration file. You can now see MinIO m
 
 MinIO server exposes the following metrics on `/minio/prometheus/metrics` endpoint. All of these can be accessed via Prometheus dashboard. The full list of exposed metrics along with their definition is available in the demo server at https://play.min.io:9000/minio/prometheus/metrics
 
+These are the new set of metrics which will be in effect after `RELEASE.2019-10-16*`. Some of the key changes in this update are listed below.
+    - Metrics are bound the respective nodes and is not cluster-wide. Each and every node in a cluster will expose its own metrics.
+    - Additional metrics to cover the s3 and internode traffic statistics were added.
+    - Metrics that records the http statistics and latencies are labeled to their respective APIs (putobject,getobject etc).
+    - Disk usage metrics are distributed and labeled to the respective disk paths.
+
+For more details, please check the `Migration guide for the new set of metrics`
+
+The list of metrics and its definition are as follows. (NOTE: instance here is one MinIO node)
+
+> NOTES:
+    > 1. Instance here is one MinIO node.
+    > 2. `s3 requests` exclude internode requests.
+
+
 - standard go runtime metrics prefixed by `go_`
 - process level metrics prefixed with `process_`
 - prometheus scrap metrics prefixed with `promhttp_`
 
-- `minio_disk_storage_used_bytes` : Total byte count of disk storage used by current MinIO server instance
-- `minio_http_requests_duration_seconds_bucket` : Cumulative counters for all the request types (HEAD/GET/PUT/POST/DELETE) in different time brackets
-- `minio_http_requests_duration_seconds_count` : Count of current number of observations i.e. total HTTP requests (HEAD/GET/PUT/POST/DELETE)
-- `minio_http_requests_duration_seconds_sum` : Current aggregate time spent servicing all HTTP requests (HEAD/GET/PUT/POST/DELETE) in seconds
-- `minio_network_received_bytes_total` : Total number of bytes received by current MinIO server instance
-- `minio_network_sent_bytes_total` : Total number of bytes sent by current MinIO server instance
-- `minio_offline_disks` : Total number of offline disks for current MinIO server instance
-- `minio_total_disks` : Total number of disks for current MinIO server instance
-- `minio_disk_storage_available_bytes` : Current storage space available to MinIO server in bytes
-- `minio_disk_storage_total_bytes` : Total storage space available to MinIO server in bytes
-- `process_start_time_seconds` : Start time of MinIO server since unix epoc hin seconds
+- `disk_storage_used` : Disk space used by the disk.
+- `disk_storage_available`: Available disk space left on the disk.
+- `disk_storage_total`: Total disk space on the disk.
+- `disks_offline`: Total number of offline disks in current MinIO instance.
+- `disks_total`: Total number of disks in current MinIO instance.
+- `s3_requests_total`: Total number of s3 requests in current MinIO instance.
+- `s3_errors_total`: Total number of errors in s3 requests in current MinIO instance.
+- `s3_requests_current`: Total number of active s3 requests in current MinIO instance.
+- `internode_rx_bytes_total`: Total number of internode bytes received by current MinIO server instance.
+- `internode_tx_bytes_total`: Total number of bytes sent to the other nodes by current MinIO server instance.
+- `s3_rx_bytes_total`: Total number of s3 bytes received by current MinIO server instance.
+- `s3_tx_bytes_total`: Total number of s3 bytes sent by current MinIO server instance.
+- `minio_version_info`: Current MinIO version with commit-id.
+- `s3_ttfb_seconds`: Histogram that holds the latency information of the requests.
 
-If you're running MinIO gateway, disk/storage information is not exposed. Only following metrics are available
 
-- `minio_http_requests_duration_seconds_bucket` : Cumulative counters for all the request types (HEAD/GET/PUT/POST/DELETE) in different time brackets
-- `minio_http_requests_duration_seconds_count` : Count of current number of observations i.e. total HTTP requests (HEAD/GET/PUT/POST/DELETE)
-- `minio_http_requests_duration_seconds_sum` : Current aggregate time spent servicing all HTTP requests (HEAD/GET/PUT/POST/DELETE) in seconds
-- `minio_network_received_bytes_total` : Total number of bytes received by current MinIO server instance
-- `minio_network_sent_bytes_total` : Total number of bytes sent by current MinIO server instance
-- `process_start_time_seconds` : Start time of MinIO server since unix epoch in seconds
+## Migration guide for the new set of metrics
 
-For MinIO instances with [`caching`](https://github.com/minio/minio/tree/master/docs/disk-caching) enabled, these additional metrics are available.
+This migration guide applies for older releases or any releases before `RELEASE.2019-10-23*`
 
-- `minio_disk_cache_storage_bytes` : Total byte count of cache capacity available for current MinIO server instance
-- `minio_disk_cache_storage_free_bytes` : Total byte count of free cache available for current MinIO server instance
+### MinIO disk level metrics - `disk_*`
+
+The migrations include
+
+    - `minio_total_disks` to `disks_total`
+    - `minio_offline_disks` to `disks_offline`
+
+### MinIO disk level metrics - `disk_storage_*`
+
+These metrics have one label.
+
+    - `disk`: Holds the disk path
+
+The migrations include
+
+    - `minio_disk_storage_used_bytes` to `disk_storage_used`
+    - `minio_disk_storage_available_bytes` to `disk_storage_available`
+    - `minio_disk_storage_total_bytes` to `disk_storage_total`
+
+### MinIO network level metrics
+
+These metrics are detailed to cover the s3 and internode network statistics.
+
+The migrations include
+
+    - `minio_network_sent_bytes_total` to `s3_tx_bytes_total` and `internode_tx_bytes_total`
+    - `minio_network_received_bytes_total` to `s3_rx_bytes_total` and `internode_rx_bytes_total`
+
+Some of the additional metrics added were
+
+    - `s3_requests_total`
+    - `s3_errors_total`
+    - `s3_ttfb_seconds`

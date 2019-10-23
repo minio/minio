@@ -46,15 +46,13 @@ const (
 // Server - extended http.Server supports multiple addresses to serve and enhanced connection handling.
 type Server struct {
 	http.Server
-	Addrs                  []string      // addresses on which the server listens for new connection.
-	ShutdownTimeout        time.Duration // timeout used for graceful server shutdown.
-	TCPKeepAliveTimeout    time.Duration // timeout used for underneath TCP connection.
-	UpdateBytesReadFunc    func(int)     // function to be called to update bytes read in bufConn.
-	UpdateBytesWrittenFunc func(int)     // function to be called to update bytes written in bufConn.
-	listenerMutex          sync.Mutex    // to guard 'listener' field.
-	listener               *httpListener // HTTP listener for all 'Addrs' field.
-	inShutdown             uint32        // indicates whether the server is in shutdown or not
-	requestCount           int32         // counter holds no. of request in progress.
+	Addrs               []string      // addresses on which the server listens for new connection.
+	ShutdownTimeout     time.Duration // timeout used for graceful server shutdown.
+	TCPKeepAliveTimeout time.Duration // timeout used for underneath TCP connection.
+	listenerMutex       sync.Mutex    // to guard 'listener' field.
+	listener            *httpListener // HTTP listener for all 'Addrs' field.
+	inShutdown          uint32        // indicates whether the server is in shutdown or not
+	requestCount        int32         // counter holds no. of request in progress.
 }
 
 // GetRequestCount - returns number of request in progress.
@@ -79,8 +77,6 @@ func (srv *Server) Start() (err error) {
 	listener, err = newHTTPListener(
 		addrs,
 		tcpKeepAliveTimeout,
-		srv.UpdateBytesReadFunc,
-		srv.UpdateBytesWrittenFunc,
 	)
 	if err != nil {
 		return err

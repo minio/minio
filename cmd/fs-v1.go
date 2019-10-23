@@ -252,10 +252,12 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
 	if !fs.diskMount {
 		used = atomic.LoadUint64(&fs.totalUsed)
 	}
+	localPeer := GetLocalPeer(globalEndpoints)
 	storageInfo := StorageInfo{
-		Used:      used,
-		Total:     di.Total,
-		Available: di.Free,
+		Used:       []uint64{used},
+		Total:      []uint64{di.Total},
+		Available:  []uint64{di.Free},
+		MountPaths: []string{localPeer + fs.fsPath},
 	}
 	storageInfo.Backend.Type = BackendFS
 	return storageInfo

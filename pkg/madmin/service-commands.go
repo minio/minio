@@ -53,7 +53,7 @@ func (adm *AdminClient) serviceCallAction(action ServiceAction) error {
 
 	// Request API to Restart server
 	resp, err := adm.executeMethod("POST", requestData{
-		relPath:     "/v1/service",
+		relPath:     adminAPIPrefix + "/service",
 		queryValues: queryValues,
 	})
 	defer closeResponse(resp)
@@ -85,7 +85,7 @@ func (adm AdminClient) ServiceTrace(allTrace, errTrace bool, doneCh <-chan struc
 			urlValues.Set("all", strconv.FormatBool(allTrace))
 			urlValues.Set("err", strconv.FormatBool(errTrace))
 			reqData := requestData{
-				relPath:     "/v1/trace",
+				relPath:     adminAPIPrefix + "/trace",
 				queryValues: urlValues,
 			}
 			// Execute GET to call trace handler

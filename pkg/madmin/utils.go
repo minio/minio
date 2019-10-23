@@ -30,6 +30,12 @@ import (
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 )
 
+const (
+	// AdminAPIVersion - admin api version used in the request.
+	AdminAPIVersion = "v2"
+	adminAPIPrefix  = "/" + AdminAPIVersion
+)
+
 // sum256 calculate sha256 sum for an input byte array.
 func sum256(data []byte) []byte {
 	hash := sha256.New()

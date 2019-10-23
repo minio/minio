@@ -229,37 +229,30 @@ type ServerConnStats struct {
 	TotalInputBytes  uint64 `json:"transferred"`
 	TotalOutputBytes uint64 `json:"received"`
 	Throughput       uint64 `json:"throughput,omitempty"`
+	S3InputBytes     uint64 `json:"transferredS3"`
+	S3OutputBytes    uint64 `json:"receivedS3"`
 }
 
-// ServerHTTPMethodStats holds total number of HTTP operations from/to the server,
+// ServerHTTPAPIStats holds total number of HTTP operations from/to the server,
 // including the average duration the call was spent.
-type ServerHTTPMethodStats struct {
-	Count       uint64 `json:"count"`
-	AvgDuration string `json:"avgDuration"`
+type ServerHTTPAPIStats struct {
+	APIStats map[string]int `json:"apiStats"`
 }
 
 // ServerHTTPStats holds all type of http operations performed to/from the server
 // including their average execution time.
 type ServerHTTPStats struct {
-	TotalHEADStats     ServerHTTPMethodStats `json:"totalHEADs"`
-	SuccessHEADStats   ServerHTTPMethodStats `json:"successHEADs"`
-	TotalGETStats      ServerHTTPMethodStats `json:"totalGETs"`
-	SuccessGETStats    ServerHTTPMethodStats `json:"successGETs"`
-	TotalPUTStats      ServerHTTPMethodStats `json:"totalPUTs"`
-	SuccessPUTStats    ServerHTTPMethodStats `json:"successPUTs"`
-	TotalPOSTStats     ServerHTTPMethodStats `json:"totalPOSTs"`
-	SuccessPOSTStats   ServerHTTPMethodStats `json:"successPOSTs"`
-	TotalDELETEStats   ServerHTTPMethodStats `json:"totalDELETEs"`
-	SuccessDELETEStats ServerHTTPMethodStats `json:"successDELETEs"`
+	CurrentS3Requests ServerHTTPAPIStats `json:"currentS3Requests"`
+	TotalS3Requests   ServerHTTPAPIStats `json:"totalS3Requests"`
+	TotalS3Errors     ServerHTTPAPIStats `json:"totalS3Errors"`
 }
 
 // ServerInfoData holds storage, connections and other
 // information of a given server.
 type ServerInfoData struct {
-	StorageInfo StorageInfo      `json:"storage"`
-	ConnStats   ServerConnStats  `json:"network"`
-	HTTPStats   ServerHTTPStats  `json:"http"`
-	Properties  ServerProperties `json:"server"`
+	ConnStats  ServerConnStats  `json:"network"`
+	HTTPStats  ServerHTTPStats  `json:"http"`
+	Properties ServerProperties `json:"server"`
 }
 
 // ServerInfo holds server information result of one node
@@ -274,7 +267,6 @@ type ServerInfo struct {
 // Get server information
 func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ServerInfo")
-
 	objectAPI := validateAdminReq(ctx, w, r)
 	if objectAPI == nil {
 		return
@@ -286,9 +278,8 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	serverInfo = append(serverInfo, ServerInfo{
 		Addr: getHostName(r),
 		Data: &ServerInfoData{
-			StorageInfo: objectAPI.StorageInfo(ctx),
-			ConnStats:   globalConnStats.toServerConnStats(),
-			HTTPStats:   globalHTTPStats.toServerHTTPStats(),
+			ConnStats: globalConnStats.toServerConnStats(),
+			HTTPStats: globalHTTPStats.toServerHTTPStats(),
 			Properties: ServerProperties{
 				Uptime:       UTCNow().Sub(globalBootTime),
 				Version:      Version,
@@ -310,6 +301,31 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	// Reply with storage information (across nodes in a
 	// distributed setup) as json.
 	writeSuccessResponseJSON(w, jsonBytes)
+}
+
+// ServerInfoHandler - GET /minio/admin/v1/storageinfo
+// ----------
+// Get server information
+func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "StorageInfo")
+	objectAPI := validateAdminReq(ctx, w, r)
+	if objectAPI == nil {
+		return
+	}
+
+	storageInfo := objectAPI.StorageInfo(ctx)
+
+	// Marshal API response
+	jsonBytes, err := json.Marshal(storageInfo)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// Reply with storage information (across nodes in a
+	// distributed setup) as json.
+	writeSuccessResponseJSON(w, jsonBytes)
+
 }
 
 // ServerCPULoadInfo holds informantion about cpu utilization
@@ -814,7 +830,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 
 	// find number of disks in the setup
 	info := objectAPI.StorageInfo(ctx)
-	numDisks := info.Backend.OfflineDisks + info.Backend.OnlineDisks
+	numDisks := info.Backend.OfflineDisks.Sum() + info.Backend.OnlineDisks.Sum()
 
 	healPath := pathJoin(hip.bucket, hip.objPrefix)
 	if hip.clientToken == "" && !hip.forceStart && !hip.forceStop {

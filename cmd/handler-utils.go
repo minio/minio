@@ -348,6 +348,39 @@ func httpTraceHdrs(f http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		isS3Request := !strings.HasPrefix(r.URL.Path, minioReservedBucketPath)
+		apiStatsWriter := &recordAPIStats{w, UTCNow(), false, 0, isS3Request}
+
+		// Time start before the call is about to start.
+		tBefore := UTCNow()
+
+		if isS3Request {
+			globalHTTPStats.currentS3Requests.Inc(api)
+		}
+		// Execute the request
+		f.ServeHTTP(apiStatsWriter, r)
+
+		if isS3Request {
+			globalHTTPStats.currentS3Requests.Dec(api)
+		}
+
+		// Firstbyte read.
+		tAfter := apiStatsWriter.TTFB
+
+		// Time duration in secs since the call started.
+		//
+		// We don't need to do nanosecond precision in this
+		// simply for the fact that it is not human readable.
+		durationSecs := tAfter.Sub(tBefore).Seconds()
+
+		// Update http statistics
+		globalHTTPStats.updateStats(api, r, apiStatsWriter, durationSecs)
+	}
+}
+
 // Returns "/bucketName/objectName" for path-style or virtual-host-style requests.
 func getResource(path string, host string, domains []string) (string, error) {
 	if len(domains) == 0 {

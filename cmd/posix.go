@@ -309,10 +309,11 @@ func (s *posix) IsOnline() bool {
 // DiskInfo is an extended type which returns current
 // disk usage per path.
 type DiskInfo struct {
-	Total    uint64
-	Free     uint64
-	Used     uint64
-	RootDisk bool
+	Total        uint64
+	Free         uint64
+	Used         uint64
+	RootDisk     bool
+	RelativePath string
 }
 
 // DiskInfo provides current information about disk space usage,
@@ -346,12 +347,14 @@ func (s *posix) DiskInfo() (info DiskInfo, err error) {
 	if err != nil {
 		return info, err
 	}
+	localPeer := GetLocalPeer(globalEndpoints)
 
 	return DiskInfo{
-		Total:    di.Total,
-		Free:     di.Free,
-		Used:     used,
-		RootDisk: rootDisk,
+		Total:        di.Total,
+		Free:         di.Free,
+		Used:         used,
+		RootDisk:     rootDisk,
+		RelativePath: localPeer + s.diskPath,
 	}, nil
 }
 

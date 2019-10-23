@@ -305,8 +305,6 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	globalHTTPServer = xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{handler}, getCert)
-	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
-	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
 	go func() {
 		globalHTTPServerErrorCh <- globalHTTPServer.Start()
 	}()

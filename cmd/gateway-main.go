@@ -196,8 +196,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	}
 
 	globalHTTPServer = xhttp.NewServer([]string{globalCLIContext.Addr}, criticalErrorHandler{registerHandlers(router, globalHandlers...)}, getCert)
-	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
-	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
 	go func() {
 		globalHTTPServerErrorCh <- globalHTTPServer.Start()
 	}()
