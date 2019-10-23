@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -31,6 +32,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 var defaultContextTimeout = 30 * time.Second
@@ -109,6 +111,12 @@ func (ies *IAMEtcdStore) saveIAMConfig(item interface{}, path string) error {
 	if err != nil {
 		return err
 	}
+	if globalConfigEncrypted {
+		data, err = madmin.EncryptData(globalActiveCred.String(), data)
+		if err != nil {
+			return err
+		}
+	}
 	return saveKeyEtcd(ies.getContext(), ies.client, path, data)
 }
 
@@ -116,6 +124,13 @@ func (ies *IAMEtcdStore) loadIAMConfig(item interface{}, path string) error {
 	pdata, err := readKeyEtcd(ies.getContext(), ies.client, path)
 	if err != nil {
 		return err
+	}
+
+	if globalConfigEncrypted {
+		pdata, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(pdata))
+		if err != nil {
+			return err
+		}
 	}
 
 	return json.Unmarshal(pdata, item)

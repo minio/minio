@@ -523,12 +523,12 @@ func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 		return err
 	}
 
-	logger.Disable = true
-
 	globalActiveCred = auth.Credentials{
 		AccessKey: auth.DefaultAccessKey,
 		SecretKey: auth.DefaultSecretKey,
 	}
+
+	globalConfigEncrypted = true
 
 	// Set a default region.
 	config.SetRegion(globalServerConfig, bucketLocation)

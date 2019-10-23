@@ -76,6 +76,10 @@ func EncryptData(password string, data []byte) ([]byte, error) {
 	return ciphertext.Bytes(), nil
 }
 
+// ErrMaliciousData indicates that the stream cannot be
+// decrypted by provided credentials.
+var ErrMaliciousData = sio.NotAuthentic
+
 // DecryptData decrypts the data with the key derived
 // from the salt (part of data) and the password using
 // the PBKDF used in EncryptData. DecryptData returns
@@ -116,7 +120,14 @@ func DecryptData(password string, data io.Reader) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ioutil.ReadAll(stream.DecryptReader(data, nonce[:], nil))
+
+	enBytes, err := ioutil.ReadAll(stream.DecryptReader(data, nonce[:], nil))
+	if err != nil {
+		if err == sio.NotAuthentic {
+			return enBytes, ErrMaliciousData
+		}
+	}
+	return enBytes, err
 }
 
 const (

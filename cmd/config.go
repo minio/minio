@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -82,12 +83,25 @@ func readServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV str
 	if err != nil {
 		return nil, err
 	}
+
+	if globalConfigEncrypted {
+		data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+	}
+
 	return data, err
 }
 
 func saveServerConfigHistory(ctx context.Context, objAPI ObjectLayer, kv []byte) error {
 	uuidKV := mustGetUUID() + ".kv"
 	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV)
+
+	var err error
+	if globalConfigEncrypted {
+		kv, err = madmin.EncryptData(globalActiveCred.String(), kv)
+		if err != nil {
+			return err
+		}
+	}
 
 	// Save the new config KV settings into the history path.
 	return saveConfig(ctx, objAPI, historyFile, kv)
@@ -121,11 +135,24 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config interface{
 		if err != nil {
 			return err
 		}
+		if globalConfigEncrypted {
+			oldData, err = madmin.EncryptData(globalActiveCred.String(), oldData)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	// No need to take backups for fresh setups.
 	if !freshConfig {
 		if err = saveConfig(ctx, objAPI, backupConfigFile, oldData); err != nil {
+			return err
+		}
+	}
+
+	if globalConfigEncrypted {
+		data, err = madmin.EncryptData(globalActiveCred.String(), data)
+		if err != nil {
 			return err
 		}
 	}
@@ -139,6 +166,16 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
 		return nil, err
+	}
+
+	if globalConfigEncrypted {
+		configData, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(configData))
+		if err != nil {
+			if err == madmin.ErrMaliciousData {
+				return nil, config.ErrInvalidCredentialsBackendEncrypted(nil)
+			}
+			return nil, err
+		}
 	}
 
 	var config = config.New()
