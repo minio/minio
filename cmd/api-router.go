@@ -89,7 +89,7 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 
 		/// Bucket operations
 		// GetBucketLocation
-		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getobjectlocation", httpTraceAll(api.GetBucketLocationHandler))).Queries("location", "")
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketlocation", httpTraceAll(api.GetBucketLocationHandler))).Queries("location", "")
 		// GetBucketPolicy
 		bucket.Methods("GET").HandlerFunc(collectAPIStats("getbucketpolicy", httpTraceAll(api.GetBucketPolicyHandler))).Queries("policy", "")
 		// GetBucketLifecycle
