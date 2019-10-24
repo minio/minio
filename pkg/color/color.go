@@ -1,8 +1,25 @@
+/*
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package color
 
 import (
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/fatih/color"
 	"github.com/mattn/go-isatty"
@@ -101,3 +118,21 @@ var (
 		return fmt.Sprintf
 	}()
 )
+
+var privateMutex sync.Mutex
+
+// SetColorOff disables coloring for the entire session.
+func SetColorOff() {
+	privateMutex.Lock()
+	defer privateMutex.Unlock()
+	if !color.NoColor {
+		color.NoColor = true
+	}
+}
+
+// SetColorOn enables coloring for the entire session.
+func SetColorOn() {
+	privateMutex.Lock()
+	defer privateMutex.Unlock()
+	color.NoColor = false
+}

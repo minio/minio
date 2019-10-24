@@ -168,40 +168,63 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	_, noColor := r.URL.Query()["noColor"]
+	if noColor {
+		color.SetColorOff()
+		defer color.SetColorOn()
+	}
+	_, jsonMode := r.URL.Query()["json"]
+
 	vars := mux.Vars(r)
-	var body strings.Builder
-	if vars["key"] != "" {
-		kvs, err := globalServerConfig.GetKVS(vars["key"])
+	var buf = &bytes.Buffer{}
+	key := vars["key"]
+	if key != "" {
+		kvs, err := globalServerConfig.GetKVS(key)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
-		for k, kv := range kvs {
-			c, ok := kv[config.Comment]
-			if ok {
-				// For multiple comments split it correctly.
-				for _, c1 := range strings.Split(c, config.KvNewline) {
-					if c1 == "" {
-						continue
-					}
-					body.WriteString(color.YellowBold(config.KvComment))
-					body.WriteString(config.KvSpaceSeparator)
-					body.WriteString(color.BlueBold(strings.TrimSpace(c1)))
-					body.WriteString(config.KvNewline)
-				}
+		if jsonMode {
+			if err = json.NewEncoder(buf).Encode(kvs); err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
 			}
-			body.WriteString(color.CyanBold(k))
-			body.WriteString(config.KvSpaceSeparator)
-			body.WriteString(kv.String())
-			if len(kvs) > 1 {
-				body.WriteString(config.KvNewline)
+		} else {
+			for k, kv := range kvs {
+				c, ok := kv[config.Comment]
+				if ok {
+					// For multiple comments split it correctly.
+					for _, c1 := range strings.Split(c, config.KvNewline) {
+						if c1 == "" {
+							continue
+						}
+						buf.WriteString(color.YellowBold(config.KvComment))
+						buf.WriteString(config.KvSpaceSeparator)
+						buf.WriteString(color.BlueBold(strings.TrimSpace(c1)))
+						buf.WriteString(config.KvNewline)
+					}
+				}
+				buf.WriteString(color.CyanBold(k))
+				buf.WriteString(config.KvSpaceSeparator)
+				buf.WriteString(kv.String())
+				if len(kvs) > 1 {
+					buf.WriteString(config.KvNewline)
+				}
 			}
 		}
 	} else {
-		body.WriteString(globalServerConfig.String())
+		if jsonMode {
+			if err := json.NewEncoder(buf).Encode(globalServerConfig); err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+		} else {
+			buf.WriteString(globalServerConfig.String())
+		}
 	}
+
 	password := globalActiveCred.SecretKey
-	econfigData, err := madmin.EncryptData(password, []byte(body.String()))
+	econfigData, err := madmin.EncryptData(password, buf.Bytes())
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -340,8 +363,15 @@ func (a adminAPIHandlers) HelpConfigKVHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	vars := mux.Vars(r)
+
 	subSys := vars["subSys"]
 	key := vars["key"]
+
+	_, noColor := r.URL.Query()["noColor"]
+	if noColor {
+		color.SetColorOff()
+		defer color.SetColorOn()
+	}
 
 	rd, err := GetHelp(subSys, key)
 	if err != nil {

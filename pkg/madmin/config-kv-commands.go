@@ -77,9 +77,15 @@ func (adm *AdminClient) SetConfigKV(kv string) (err error) {
 }
 
 // GetConfigKV - returns the key, value of the requested key, incoming data is encrypted.
-func (adm *AdminClient) GetConfigKV(key string) ([]byte, error) {
+func (adm *AdminClient) GetConfigKV(key string, jsonMode bool, noColor bool) ([]byte, error) {
 	v := url.Values{}
 	v.Set("key", key)
+	if jsonMode {
+		v.Set("json", "")
+	}
+	if noColor {
+		v.Set("noColor", "")
+	}
 
 	// Execute GET on /minio/admin/v2/get-config-kv?key={key} to get value of key.
 	resp, err := adm.executeMethod(http.MethodGet,
