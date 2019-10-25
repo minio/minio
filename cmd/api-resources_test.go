@@ -64,7 +64,7 @@ func TestListObjectsV2Resources(t *testing.T) {
 			startAfter:   "start-after",
 			delimiter:    SlashSeparator,
 			fetchOwner:   true,
-			maxKeys:      1000,
+			maxKeys:      maxObjectList,
 			encodingType: "gzip",
 			errCode:      ErrNone,
 		},
@@ -150,7 +150,7 @@ func TestListObjectsV1Resources(t *testing.T) {
 			prefix:       "photos/",
 			marker:       "test",
 			delimiter:    SlashSeparator,
-			maxKeys:      1000,
+			maxKeys:      maxObjectList,
 			encodingType: "gzip",
 		},
 	}

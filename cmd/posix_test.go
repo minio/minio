@@ -1231,14 +1231,14 @@ func TestPosixReadFile(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		posixStorage, err = newPosix(permDeniedDir)
+		posixPermStorage, err := newPosix(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize posix, %s", err)
 		}
 
 		// Common read buffer.
 		var buf = make([]byte, 10)
-		if _, err = posixStorage.ReadFile("mybucket", "myobject", 0, buf, v); err != errFileAccessDenied {
+		if _, err = posixPermStorage.ReadFile("mybucket", "myobject", 0, buf, v); err != errFileAccessDenied {
 			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
@@ -1256,7 +1256,7 @@ func TestPosixReadFile(t *testing.T) {
 			t.Fatalf("Expected \"Faulty Disk\", got: \"%s\"", err)
 		}
 	} else {
-		t.Fatalf("Expected the StorageAPI to be of type *posix")
+		t.Fatalf("Expected the StorageAPI to be of type *posixDiskIDCheck")
 	}
 }
 
