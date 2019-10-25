@@ -28,7 +28,6 @@ import (
 
 	"github.com/minio/minio/cmd/config/storageclass"
 	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/madmin"
@@ -41,11 +40,12 @@ type setsStorageAPI [][]StorageAPI
 
 func (s setsStorageAPI) Close() error {
 	for i := 0; i < len(s); i++ {
-		for _, disk := range s[i] {
+		for j, disk := range s[i] {
 			if disk == nil {
 				continue
 			}
 			disk.Close()
+			s[i][j] = nil
 		}
 	}
 	return nil
@@ -147,29 +147,6 @@ func findDiskIndex(refFormat, format *formatXLV3) (int, int, error) {
 	return -1, -1, fmt.Errorf("diskID: %s not found", format.XL.This)
 }
 
-// Re initializes all disks based on the reference format, this function is
-// only used by HealFormat and ReloadFormat calls.
-func (s *xlSets) reInitDisks(refFormat *formatXLV3, storageDisks []StorageAPI, formats []*formatXLV3) [][]StorageAPI {
-	xlDisks := make([][]StorageAPI, s.setCount)
-	for i := 0; i < len(refFormat.XL.Sets); i++ {
-		xlDisks[i] = make([]StorageAPI, s.drivesPerSet)
-	}
-	for k := range storageDisks {
-		if storageDisks[k] == nil || formats[k] == nil {
-			continue
-		}
-		i, j, err := findDiskIndex(refFormat, formats[k])
-		if err != nil {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("storageDisk", storageDisks[i].String())
-			ctx := logger.SetReqInfo(context.Background(), reqInfo)
-			logger.LogIf(ctx, err)
-			continue
-		}
-		xlDisks[i][j] = storageDisks[k]
-	}
-	return xlDisks
-}
-
 // connectDisksWithQuorum is same as connectDisks but waits
 // for quorum number of formatted disks to be online in
 // any given sets.
@@ -192,6 +169,7 @@ func (s *xlSets) connectDisksWithQuorum() {
 				printEndpointError(endpoint, err)
 				continue
 			}
+			disk.SetDiskID(format.XL.This)
 			s.xlDisks[i][j] = disk
 			onlineDisks++
 		}
@@ -220,6 +198,7 @@ func (s *xlSets) connectDisks() {
 			printEndpointError(endpoint, err)
 			continue
 		}
+		disk.SetDiskID(format.XL.This)
 		s.xlDisksMu.Lock()
 		s.xlDisks[i][j] = disk
 		s.xlDisksMu.Unlock()
@@ -1306,15 +1285,9 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 	// Replace the new format.
 	s.format = refFormat
 
-	s.xlDisksMu.Lock()
-	{
-		// Close all existing disks.
-		s.xlDisks.Close()
-
-		// Re initialize disks, after saving the new reference format.
-		s.xlDisks = s.reInitDisks(refFormat, storageDisks, formats)
-	}
-	s.xlDisksMu.Unlock()
+	// Close all existing disks and reconnect all the disks.
+	s.xlDisks.Close()
+	s.connectDisks()
 
 	// Restart monitoring loop to monitor reformatted disks again.
 	go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)
@@ -1519,15 +1492,9 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 		// Replace with new reference format.
 		s.format = refFormat
 
-		s.xlDisksMu.Lock()
-		{
-			// Disconnect/relinquish all existing disks.
-			s.xlDisks.Close()
-
-			// Re initialize disks, after saving the new reference format.
-			s.xlDisks = s.reInitDisks(refFormat, storageDisks, tmpNewFormats)
-		}
-		s.xlDisksMu.Unlock()
+		// Disconnect/relinquish all existing disks and reconnect the disks.
+		s.xlDisks.Close()
+		s.connectDisks()
 
 		// Restart our monitoring loop to start monitoring newly formatted disks.
 		go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)

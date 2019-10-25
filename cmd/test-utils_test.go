@@ -1599,7 +1599,7 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 		return NewFSObjectLayer(endpoints[0].Path)
 	}
 
-	_, err = waitForFormatXL(endpoints[0].IsLocal, endpoints, 1, 16)
+	format, err := waitForFormatXL(endpoints[0].IsLocal, endpoints, 1, 16)
 	if err != nil {
 		return nil, err
 	}
@@ -1609,6 +1609,10 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 		if err != nil && err != errDiskNotFound {
 			return nil, err
 		}
+	}
+
+	for i, disk := range storageDisks {
+		disk.SetDiskID(format.XL.Sets[0][i])
 	}
 
 	// Initialize list pool.
