@@ -130,7 +130,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 		Headers:  reqHeaders,
 		Body:     reqBodyRecorder.Data(),
 	}
-	rw, _ := w.(*logger.ResponseWriter)
+	rw := logger.NewResponseWriter(w)
 	rw.LogBody = logBody
 	f(rw, r)
 
