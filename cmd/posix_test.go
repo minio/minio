@@ -1231,14 +1231,14 @@ func TestPosixReadFile(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		posixStorage, err = newPosix(permDeniedDir)
+		deniedPosixStorage, err := newPosix(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize posix, %s", err)
 		}
 
 		// Common read buffer.
 		var buf = make([]byte, 10)
-		if _, err = posixStorage.ReadFile("mybucket", "myobject", 0, buf, v); err != errFileAccessDenied {
+		if _, err = deniedPosixStorage.ReadFile("mybucket", "myobject", 0, buf, v); err != errFileAccessDenied {
 			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
