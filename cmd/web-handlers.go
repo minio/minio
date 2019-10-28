@@ -418,7 +418,8 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		nextMarker := ""
 		// Fetch all the objects
 		for {
-			result, err := core.ListObjects(args.BucketName, args.Prefix, nextMarker, SlashSeparator, 1000)
+			result, err := core.ListObjects(args.BucketName, args.Prefix, nextMarker, SlashSeparator,
+				maxObjectList)
 			if err != nil {
 				return toJSONError(ctx, err, args.BucketName)
 			}
@@ -532,7 +533,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	nextMarker := ""
 	// Fetch all the objects
 	for {
-		lo, err := listObjects(ctx, args.BucketName, args.Prefix, nextMarker, SlashSeparator, 1000)
+		lo, err := listObjects(ctx, args.BucketName, args.Prefix, nextMarker, SlashSeparator, maxObjectList)
 		if err != nil {
 			return &json2.Error{Message: err.Error()}
 		}
@@ -711,7 +712,7 @@ next:
 		marker := ""
 		for {
 			var lo ListObjectsInfo
-			lo, err = listObjects(ctx, args.BucketName, objectName, marker, "", 1000)
+			lo, err = listObjects(ctx, args.BucketName, objectName, marker, "", maxObjectList)
 			if err != nil {
 				break next
 			}
@@ -1363,7 +1364,8 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 		// date to the response writer.
 		marker := ""
 		for {
-			lo, err := listObjects(ctx, args.BucketName, pathJoin(args.Prefix, object), marker, "", 1000)
+			lo, err := listObjects(ctx, args.BucketName, pathJoin(args.Prefix, object), marker, "",
+				maxObjectList)
 			if err != nil {
 				return
 			}
