@@ -35,4 +35,15 @@ describe("StorageInfo", () => {
     )
     expect(fetchStorageInfo).toHaveBeenCalled()
   })
+
+  it("should not render anything if used is null", () => {
+    const fetchStorageInfo = jest.fn()
+    const wrapper = shallow(
+      <StorageInfo
+        storageInfo={{ used: null }}
+        fetchStorageInfo={fetchStorageInfo}
+      />
+    )
+    expect(wrapper.text()).toBe("")
+  })
 })
