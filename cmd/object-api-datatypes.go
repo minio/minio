@@ -224,8 +224,8 @@ type ListObjectsInfo struct {
 	// you can use the key name in this field as marker in the subsequent
 	// request to get next set of objects.
 	//
-	// NOTE: AWS S3 returned NextMarker only if you have delimiter request parameter specified,
-	//       MinIO always returned NextMarker.
+	// NOTE: AWS S3 returns NextMarker only if you have delimiter request parameter specified,
+	//       MinIO always returns NextMarker.
 	NextMarker string
 
 	// List of objects info for this request.
