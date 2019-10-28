@@ -26,7 +26,13 @@ export class StorageInfo extends React.Component {
   }
   render() {
     const { used } = this.props.storageInfo
-    var totalUsed = used.reduce((v1, v2) => v1 + v2, 0)
+
+    if (!used) {
+      return <noscript />
+    }
+
+    const totalUsed = used.reduce((v1, v2) => v1 + v2, 0)
+
     return (
       <div className="feh-used">
         <div className="fehu-chart">
