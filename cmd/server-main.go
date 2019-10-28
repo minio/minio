@@ -262,7 +262,7 @@ func serverMain(ctx *cli.Context) {
 	if globalIsXL {
 		// Init global heal state
 		globalAllHealState = initHealState()
-		globalSweepHealState = initHealState()
+		globalBackgroundHealState = initHealState()
 	}
 
 	// Initialize globalConsoleSys system
@@ -363,8 +363,8 @@ func serverMain(ctx *cli.Context) {
 
 	if globalIsXL {
 		initBackgroundHealing()
-		initDailyHeal()
-		initDailySweeper()
+		initLocalDisksAutoHeal()
+		initGlobalHeal()
 	}
 
 	globalObjLayerMutex.Lock()

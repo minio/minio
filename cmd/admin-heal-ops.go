@@ -53,6 +53,10 @@ const (
 	// time-duration to keep heal sequence state after it
 	// completes.
 	keepHealSeqStateDuration = time.Minute * 10
+
+	// nopHeal is a no operating healing action to
+	// wait for the current healing operation to finish
+	nopHeal = ""
 )
 
 var (
@@ -548,7 +552,7 @@ func (h *healSequence) queueHealTask(path string, healType madmin.HealItemType) 
 	var respCh = make(chan healResult)
 	defer close(respCh)
 	// Send heal request
-	globalBackgroundHealing.queueHealTask(healTask{path: path, responseCh: respCh, opts: h.settings})
+	globalBackgroundHealRoutine.queueHealTask(healTask{path: path, responseCh: respCh, opts: h.settings})
 	// Wait for answer and push result to the client
 	res := <-respCh
 	if !h.reportProgress {
@@ -587,6 +591,8 @@ func (h *healSequence) healItemsFromSourceCh() error {
 
 		var itemType madmin.HealItemType
 		switch {
+		case path == nopHeal:
+			continue
 		case path == SlashSeparator:
 			itemType = madmin.HealItemMetadata
 		case !strings.Contains(path, SlashSeparator):
