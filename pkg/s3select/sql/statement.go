@@ -56,6 +56,21 @@ func ParseSelectStatement(s string) (stmt SelectStatement, err error) {
 		err = errQueryParseFailure(err)
 		return
 	}
+
+	// Check if select is "SELECT s.* from S3Object s"
+	if !selectAST.Expression.All &&
+		len(selectAST.Expression.Expressions) == 1 &&
+		len(selectAST.Expression.Expressions[0].Expression.And) == 1 &&
+		len(selectAST.Expression.Expressions[0].Expression.And[0].Condition) == 1 &&
+		selectAST.Expression.Expressions[0].Expression.And[0].Condition[0].Operand != nil &&
+		selectAST.Expression.Expressions[0].Expression.And[0].Condition[0].Operand.Operand.Left != nil &&
+		selectAST.Expression.Expressions[0].Expression.And[0].Condition[0].Operand.Operand.Left.Left != nil &&
+		selectAST.Expression.Expressions[0].Expression.And[0].Condition[0].Operand.Operand.Left.Left.Primary != nil &&
+		selectAST.Expression.Expressions[0].Expression.And[0].Condition[0].Operand.Operand.Left.Left.Primary.JPathExpr != nil {
+		if selectAST.Expression.Expressions[0].Expression.And[0].Condition[0].Operand.Operand.Left.Left.Primary.JPathExpr.String() == selectAST.From.As+".*" {
+			selectAST.Expression.All = true
+		}
+	}
 	stmt.selectAST = &selectAST
 
 	// Check the parsed limit value
