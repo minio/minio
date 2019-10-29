@@ -60,7 +60,7 @@ require (
 	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.6.0
-	github.com/secure-io/sio-go v0.2.0
+	github.com/secure-io/sio-go v0.3.0
 	github.com/shirou/gopsutil v2.18.12+incompatible
 	github.com/sirupsen/logrus v1.4.2
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e

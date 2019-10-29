@@ -19,17 +19,13 @@ package madmin
 
 import (
 	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"errors"
 	"io"
 	"io/ioutil"
 
 	"github.com/secure-io/sio-go"
+	"github.com/secure-io/sio-go/sioutil"
 	"golang.org/x/crypto/argon2"
-	"golang.org/x/crypto/chacha20poly1305"
-	"golang.org/x/sys/cpu"
 )
 
 // EncryptData encrypts the data with an unique key
@@ -39,26 +35,27 @@ import (
 //    salt | AEAD ID | nonce | encrypted data
 //     32      1         8      ~ len(data)
 func EncryptData(password string, data []byte) ([]byte, error) {
-	salt := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
-		return nil, err
-	}
+	salt := sioutil.MustRandom(32)
 
 	// Derive an unique 256 bit key from the password and the random salt.
 	key := argon2.IDKey([]byte(password), salt, 1, 64*1024, 4, 32)
 
-	// Create a new AEAD instance - either AES-GCM if the CPU provides
-	// an AES hardware implementation or ChaCha20-Poly1305 otherwise.
-	id, cipher, err := newAEAD(key)
+	var (
+		id     byte
+		err    error
+		stream *sio.Stream
+	)
+	if sioutil.NativeAES() { // Only use AES-GCM if we can use an optimized implementation
+		id = aesGcm
+		stream, err = sio.AES_256_GCM.Stream(key)
+	} else {
+		id = c20p1305
+		stream, err = sio.ChaCha20Poly1305.Stream(key)
+	}
 	if err != nil {
 		return nil, err
 	}
-	stream := sio.NewStream(cipher, sio.BufSize)
-
-	nonce := make([]byte, stream.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
-	}
+	nonce := sioutil.MustRandom(stream.NonceSize())
 
 	// ciphertext = salt || AEAD ID | nonce | encrypted data
 	cLen := int64(len(salt)+1+len(nonce)+len(data)) + stream.Overhead(int64(len(data)))
@@ -104,11 +101,21 @@ func DecryptData(password string, data io.Reader) ([]byte, error) {
 	}
 
 	key := argon2.IDKey([]byte(password), salt[:], 1, 64*1024, 4, 32)
-	cipher, err := parseAEAD(id[0], key)
+	var (
+		err    error
+		stream *sio.Stream
+	)
+	switch id[0] {
+	case aesGcm:
+		stream, err = sio.AES_256_GCM.Stream(key)
+	case c20p1305:
+		stream, err = sio.ChaCha20Poly1305.Stream(key)
+	default:
+		err = errors.New("madmin: invalid AEAD algorithm ID")
+	}
 	if err != nil {
 		return nil, err
 	}
-	stream := sio.NewStream(cipher, sio.BufSize)
 	return ioutil.ReadAll(stream.DecryptReader(data, nonce[:], nil))
 }
 
@@ -116,40 +123,3 @@ const (
 	aesGcm   = 0x00
 	c20p1305 = 0x01
 )
-
-// newAEAD creates a new AEAD instance from the given key.
-// If the CPU provides an AES hardware implementation it
-// returns an AES-GCM instance. Otherwise it returns a
-// ChaCha20-Poly1305 instance.
-//
-// newAEAD also returns a byte as algorithm ID indicating
-// which AEAD scheme it has selected.
-func newAEAD(key []byte) (byte, cipher.AEAD, error) {
-	if (cpu.X86.HasAES && cpu.X86.HasPCLMULQDQ) || cpu.S390X.HasAES || cpu.PPC64.IsPOWER8 || cpu.ARM64.HasAES {
-		block, err := aes.NewCipher(key)
-		if err != nil {
-			return 0, nil, err
-		}
-		c, err := cipher.NewGCM(block)
-		return aesGcm, c, err
-	}
-	c, err := chacha20poly1305.New(key)
-	return c20p1305, c, err
-}
-
-// parseAEAD creates a new AEAD instance from the id and key.
-// The id must be either 0 (AES-GCM) or 1 (ChaCha20-Poly1305).
-func parseAEAD(id byte, key []byte) (cipher.AEAD, error) {
-	switch id {
-	case aesGcm:
-		block, err := aes.NewCipher(key)
-		if err != nil {
-			return nil, err
-		}
-		return cipher.NewGCM(block)
-	case c20p1305:
-		return chacha20poly1305.New(key)
-	default:
-		return nil, errors.New("madmin: invalid AEAD algorithm ID")
-	}
-}
