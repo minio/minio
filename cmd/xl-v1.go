@@ -39,6 +39,14 @@ const (
 // OfflineDisk represents an unavailable disk.
 var OfflineDisk StorageAPI // zero value is nil
 
+// partialUpload is a successful upload of an object
+// but not written in all disks (having quorum)
+type partialUpload struct {
+	bucket    string
+	object    string
+	failedSet int
+}
+
 // xlObjects - Implements XL object layer.
 type xlObjects struct {
 	// getDisks returns list of storageAPIs.
@@ -55,6 +63,8 @@ type xlObjects struct {
 
 	// TODO: ListObjects pool management, should be removed in future.
 	listPool *TreeWalkPool
+
+	mrfUploadCh chan partialUpload
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
