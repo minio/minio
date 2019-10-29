@@ -244,6 +244,9 @@ func (iamOS *IAMObjectStore) loadPolicyDoc(policy string, m map[string]iampolicy
 	var p iampolicy.Policy
 	err := iamOS.loadIAMConfig(&p, getPolicyDocPath(policy))
 	if err != nil {
+		if err == errConfigNotFound {
+			return errNoSuchPolicy
+		}
 		return err
 	}
 	m[policy] = p
@@ -281,6 +284,9 @@ func (iamOS *IAMObjectStore) loadUser(user string, isSTS bool, m map[string]auth
 	var u UserIdentity
 	err := iamOS.loadIAMConfig(&u, getUserIdentityPath(user, isSTS))
 	if err != nil {
+		if err == errConfigNotFound {
+			return errNoSuchUser
+		}
 		return err
 	}
 
@@ -333,6 +339,9 @@ func (iamOS *IAMObjectStore) loadGroup(group string, m map[string]GroupInfo) err
 	var g GroupInfo
 	err := iamOS.loadIAMConfig(&g, getGroupInfoPath(group))
 	if err != nil {
+		if err == errConfigNotFound {
+			return errNoSuchGroup
+		}
 		return err
 	}
 	m[group] = g
@@ -372,6 +381,9 @@ func (iamOS *IAMObjectStore) loadMappedPolicy(name string, isSTS, isGroup bool,
 	var p MappedPolicy
 	err := iamOS.loadIAMConfig(&p, getMappedPolicyPath(name, isSTS, isGroup))
 	if err != nil {
+		if err == errConfigNotFound {
+			return errNoSuchPolicy
+		}
 		return err
 	}
 	m[name] = p
@@ -497,19 +509,35 @@ func (iamOS *IAMObjectStore) saveGroupInfo(name string, gi GroupInfo) error {
 }
 
 func (iamOS *IAMObjectStore) deletePolicyDoc(name string) error {
-	return iamOS.deleteIAMConfig(getPolicyDocPath(name))
+	err := iamOS.deleteIAMConfig(getPolicyDocPath(name))
+	if err == errConfigNotFound {
+		err = errNoSuchPolicy
+	}
+	return err
 }
 
 func (iamOS *IAMObjectStore) deleteMappedPolicy(name string, isSTS, isGroup bool) error {
-	return iamOS.deleteIAMConfig(getMappedPolicyPath(name, isSTS, isGroup))
+	err := iamOS.deleteIAMConfig(getMappedPolicyPath(name, isSTS, isGroup))
+	if err == errConfigNotFound {
+		err = errNoSuchPolicy
+	}
+	return err
 }
 
 func (iamOS *IAMObjectStore) deleteUserIdentity(name string, isSTS bool) error {
-	return iamOS.deleteIAMConfig(getUserIdentityPath(name, isSTS))
+	err := iamOS.deleteIAMConfig(getUserIdentityPath(name, isSTS))
+	if err == errConfigNotFound {
+		err = errNoSuchUser
+	}
+	return err
 }
 
 func (iamOS *IAMObjectStore) deleteGroupInfo(name string) error {
-	return iamOS.deleteIAMConfig(getGroupInfoPath(name))
+	err := iamOS.deleteIAMConfig(getGroupInfoPath(name))
+	if err == errConfigNotFound {
+		err = errNoSuchGroup
+	}
+	return err
 }
 
 // helper type for listIAMConfigItems
