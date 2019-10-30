@@ -166,6 +166,16 @@ func TestJSONQueries(t *testing.T) {
 			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
 		},
 		{
+			name:       "indexed-list-match-equals-s-star",
+			query:      `SELECT s.* from s3object s WHERE (7,8.5,9) = s.nested[1]`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "indexed-list-match-equals-s-index",
+			query:      `SELECT s.nested[1], s.nested[0] from s3object s WHERE (7,8.5,9) = s.nested[1]`,
+			wantResult: `{"_1":[7,8.5,9],"_2":[2,3,4]}`,
+		},
+		{
 			name:  "indexed-list-match-not-equals",
 			query: `SELECT * from s3object s WHERE (7,8.5,9) != s.nested[1]`,
 			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}
