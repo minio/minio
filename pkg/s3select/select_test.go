@@ -173,6 +173,22 @@ func TestJSONQueries(t *testing.T) {
 {"id":2,"title":"Second Record","desc":"another text","numbers":[2,3,4]}`,
 		},
 		{
+			name:       "indexed-list-square-bracket",
+			query:      `SELECT * from s3object s WHERE [7,8.5,9] = s.nested[1]`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "indexed-list-square-bracket",
+			query:      `SELECT * from s3object s WHERE [7,8.5,9] IN s.nested`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:  "indexed-list-square-bracket",
+			query: `SELECT * from s3object s WHERE id IN [3,2]`,
+			wantResult: `{"id":2,"title":"Second Record","desc":"another text","numbers":[2,3,4]}
+{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
 			name:       "index-wildcard-in",
 			query:      `SELECT * from s3object s WHERE (8.5) IN s.nested[1][*]`,
 			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,

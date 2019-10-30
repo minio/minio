@@ -149,7 +149,7 @@ type Expression struct {
 
 // ListExpr represents a literal list with elements as expressions.
 type ListExpr struct {
-	Elements []*Expression `parser:"\"(\" @@ ( \",\" @@ )* \")\""`
+	Elements []*Expression `parser:"\"(\" @@ ( \",\" @@ )* \")\" | \"[\" @@ ( \",\" @@ )* \"]\""`
 }
 
 // AndCondition represents logical conjunction of clauses
