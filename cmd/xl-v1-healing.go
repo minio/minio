@@ -679,6 +679,14 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 	}
 	healCtx := logger.SetReqInfo(context.Background(), newReqInfo)
 
+	// Lock the object before healing. Use read lock since healing
+	// will only regenerate parts & xl.json of outdated disks.
+	objectLock := xl.nsMutex.NewNSLock(ctx, bucket, object)
+	if lerr := objectLock.GetRLock(globalHealingTimeout); lerr != nil {
+		return madmin.HealResultItem{}, lerr
+	}
+	defer objectLock.RUnlock()
+
 	// Healing directories handle it separately.
 	if hasSuffix(object, SlashSeparator) {
 		return xl.healObjectDir(healCtx, bucket, object, dryRun)
@@ -706,13 +714,6 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 	if err != nil {
 		return defaultHealResult(xlMetaV1{}, storageDisks, errs, bucket, object), toObjectErr(err, bucket, object)
 	}
-
-	// Lock the object before healing.
-	objectLock := xl.nsMutex.NewNSLock(ctx, bucket, object)
-	if lerr := objectLock.GetRLock(globalHealingTimeout); lerr != nil {
-		return defaultHealResult(latestXLMeta, storageDisks, errs, bucket, object), lerr
-	}
-	defer objectLock.RUnlock()
 
 	errCount := 0
 	for _, err := range errs {
