@@ -128,7 +128,7 @@ func (api objectAPIHandlers) ListBucketObjectVersionsHandler(w http.ResponseWrit
 
 // ListObjectsV2Handler - GET Bucket (List Objects) Version 2.
 // --------------------------
-// This implementation of the GET operation returns some or all (up to 1000)
+// This implementation of the GET operation returns some or all (up to 10000)
 // of the objects in a bucket. You can use the request parameters as selection
 // criteria to return a subset of the objects in a bucket.
 //
@@ -210,7 +210,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 
 // ListObjectsV1Handler - GET Bucket (List Objects) Version 1.
 // --------------------------
-// This implementation of the GET operation returns some or all (up to 1000)
+// This implementation of the GET operation returns some or all (up to 10000)
 // of the objects in a bucket. You can use the request parameters as selection
 // criteria to return a subset of the objects in a bucket.
 //

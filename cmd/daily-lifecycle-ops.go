@@ -135,7 +135,7 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 		// List all objects and calculate lifecycle action based on object name & object modtime
 		marker := ""
 		for {
-			res, err := objAPI.ListObjects(ctx, bucket.Name, commonPrefix, marker, "", 1000)
+			res, err := objAPI.ListObjects(ctx, bucket.Name, commonPrefix, marker, "", maxObjectList)
 			if err != nil {
 				continue
 			}

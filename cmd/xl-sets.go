@@ -1620,7 +1620,7 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObj
 			}
 		}
 
-		res, err := s.ListObjectsHeal(ctx, bucket, prefix, marker, "", 1000)
+		res, err := s.ListObjectsHeal(ctx, bucket, prefix, marker, "", maxObjectList)
 		if err != nil {
 			continue
 		}

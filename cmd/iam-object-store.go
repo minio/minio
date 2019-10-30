@@ -568,7 +568,7 @@ func listIAMConfigItems(objectAPI ObjectLayer, pathPrefix string, dirs bool,
 		marker := ""
 		for {
 			lo, err := objectAPI.ListObjects(context.Background(),
-				minioMetaBucket, pathPrefix, marker, SlashSeparator, 1000)
+				minioMetaBucket, pathPrefix, marker, SlashSeparator, maxObjectList)
 			if err != nil {
 				select {
 				case ch <- itemOrErr{Err: err}:

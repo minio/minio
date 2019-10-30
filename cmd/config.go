@@ -49,7 +49,7 @@ func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer) ([]madmin.
 	// List all kvs
 	marker := ""
 	for {
-		res, err := objAPI.ListObjects(ctx, minioMetaBucket, minioConfigHistoryPrefix, marker, "", 1000)
+		res, err := objAPI.ListObjects(ctx, minioMetaBucket, minioConfigHistoryPrefix, marker, "", maxObjectList)
 		if err != nil {
 			return nil, err
 		}
