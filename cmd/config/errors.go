@@ -18,12 +18,6 @@ package config
 
 // UI errors
 var (
-	ErrInvalidConfig = newErrFn(
-		"Invalid value found in the configuration file",
-		"Please ensure a valid value in the configuration file",
-		"For more details, refer to https://docs.min.io/docs/minio-server-configuration-guide",
-	)
-
 	ErrInvalidBrowserValue = newErrFn(
 		"Invalid browser value",
 		"Please check the passed value",

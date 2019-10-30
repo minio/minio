@@ -117,6 +117,7 @@ func (ies *IAMEtcdStore) loadIAMConfig(item interface{}, path string) error {
 	if err != nil {
 		return err
 	}
+
 	return json.Unmarshal(pdata, item)
 }
 

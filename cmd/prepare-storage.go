@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -27,11 +28,14 @@ import (
 )
 
 var printEndpointError = func() func(Endpoint, error) {
+	var mutex sync.Mutex
 	printOnce := make(map[Endpoint]map[string]bool)
 
 	return func(endpoint Endpoint, err error) {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("endpoint", endpoint.String())
 		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		mutex.Lock()
+		defer mutex.Unlock()
 		m, ok := printOnce[endpoint]
 		if !ok {
 			m = make(map[string]bool)

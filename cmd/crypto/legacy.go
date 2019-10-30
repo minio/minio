@@ -122,7 +122,10 @@ func lookupConfigLegacy(kvs config.KVS) (KMSConfig, error) {
 	cfg := KMSConfig{
 		AutoEncryption: autoBool,
 	}
-	stateBool, err := config.ParseBool(kvs.Get(config.State))
+	// Assume default as "on" for legacy config since we didn't have a _STATE
+	// flag to turn it off, but we should honor it nonetheless to turn it off
+	// if the vault endpoint is down and there is no way to start the server.
+	stateBool, err := config.ParseBool(env.Get(EnvKMSVaultState, config.StateOn))
 	if err != nil {
 		return cfg, err
 	}

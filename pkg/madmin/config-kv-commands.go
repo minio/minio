@@ -18,8 +18,11 @@
 package madmin
 
 import (
+	"bufio"
+	"encoding/base64"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 // DelConfigKV - delete key from server config.
@@ -51,7 +54,32 @@ func (adm *AdminClient) DelConfigKV(k string) (err error) {
 
 // SetConfigKV - set key value config to server.
 func (adm *AdminClient) SetConfigKV(kv string) (err error) {
-	econfigBytes, err := EncryptData(adm.secretAccessKey, []byte(kv))
+	bio := bufio.NewScanner(strings.NewReader(kv))
+	var s strings.Builder
+	var comment string
+	for bio.Scan() {
+		if bio.Text() == "" {
+			continue
+		}
+		if strings.HasPrefix(bio.Text(), KvComment) {
+			// Join multiple comments for each newline, separated by "\n"
+			comments := []string{comment, strings.TrimPrefix(bio.Text(), KvComment)}
+			comment = strings.Join(comments, KvNewline)
+			continue
+		}
+		s.WriteString(bio.Text())
+		if comment != "" {
+			s.WriteString(KvSpaceSeparator)
+			s.WriteString(commentKey)
+			s.WriteString(KvSeparator)
+			s.WriteString(KvDoubleQuote)
+			s.WriteString(base64.RawStdEncoding.EncodeToString([]byte(comment)))
+			s.WriteString(KvDoubleQuote)
+		}
+		comment = ""
+	}
+
+	econfigBytes, err := EncryptData(adm.secretAccessKey, []byte(s.String()))
 	if err != nil {
 		return err
 	}
@@ -77,7 +105,7 @@ func (adm *AdminClient) SetConfigKV(kv string) (err error) {
 }
 
 // GetConfigKV - returns the key, value of the requested key, incoming data is encrypted.
-func (adm *AdminClient) GetConfigKV(key string) ([]byte, error) {
+func (adm *AdminClient) GetConfigKV(key string) (Targets, error) {
 	v := url.Values{}
 	v.Set("key", key)
 
@@ -92,9 +120,16 @@ func (adm *AdminClient) GetConfigKV(key string) ([]byte, error) {
 		return nil, err
 	}
 
+	defer closeResponse(resp)
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, httpRespToErrorResponse(resp)
 	}
 
-	return DecryptData(adm.secretAccessKey, resp.Body)
+	data, err := DecryptData(adm.secretAccessKey, resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return parseSubSysTarget(data)
 }

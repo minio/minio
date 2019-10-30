@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -39,7 +38,7 @@ var ErrNoEntriesFound = errors.New("No entries found for this key")
 const etcdPathSeparator = "/"
 
 // create a new coredns service record for the bucket.
-func newCoreDNSMsg(ip string, port int, ttl uint32) ([]byte, error) {
+func newCoreDNSMsg(ip string, port string, ttl uint32) ([]byte, error) {
 	return json.Marshal(&SrvRecord{
 		Host:         ip,
 		Port:         port,
@@ -48,11 +47,11 @@ func newCoreDNSMsg(ip string, port int, ttl uint32) ([]byte, error) {
 	})
 }
 
-// Retrieves list of DNS entries for the domain.
-func (c *coreDNS) List() ([]SrvRecord, error) {
+// List - Retrieves list of DNS entries for the domain.
+func (c *CoreDNS) List() ([]SrvRecord, error) {
 	var srvRecords []SrvRecord
 	for _, domainName := range c.domainNames {
-		key := msg.Path(fmt.Sprintf("%s.", domainName), defaultPrefixPath)
+		key := msg.Path(fmt.Sprintf("%s.", domainName), c.prefixPath)
 		records, err := c.list(key)
 		if err != nil {
 			return nil, err
@@ -67,11 +66,11 @@ func (c *coreDNS) List() ([]SrvRecord, error) {
 	return srvRecords, nil
 }
 
-// Retrieves DNS records for a bucket.
-func (c *coreDNS) Get(bucket string) ([]SrvRecord, error) {
+// Get - Retrieves DNS records for a bucket.
+func (c *CoreDNS) Get(bucket string) ([]SrvRecord, error) {
 	var srvRecords []SrvRecord
 	for _, domainName := range c.domainNames {
-		key := msg.Path(fmt.Sprintf("%s.%s.", bucket, domainName), defaultPrefixPath)
+		key := msg.Path(fmt.Sprintf("%s.%s.", bucket, domainName), c.prefixPath)
 		records, err := c.list(key)
 		if err != nil {
 			return nil, err
@@ -105,7 +104,7 @@ func msgUnPath(s string) string {
 
 // Retrieves list of entries under the key passed.
 // Note that this method fetches entries upto only two levels deep.
-func (c *coreDNS) list(key string) ([]SrvRecord, error) {
+func (c *CoreDNS) list(key string) ([]SrvRecord, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 	r, err := c.etcdClient.Get(ctx, key, etcd.WithPrefix())
 	defer cancel()
@@ -153,15 +152,15 @@ func (c *coreDNS) list(key string) ([]SrvRecord, error) {
 	return srvRecords, nil
 }
 
-// Adds DNS entries into etcd endpoint in CoreDNS etcd message format.
-func (c *coreDNS) Put(bucket string) error {
+// Put - Adds DNS entries into etcd endpoint in CoreDNS etcd message format.
+func (c *CoreDNS) Put(bucket string) error {
 	for ip := range c.domainIPs {
 		bucketMsg, err := newCoreDNSMsg(ip, c.domainPort, defaultTTL)
 		if err != nil {
 			return err
 		}
 		for _, domainName := range c.domainNames {
-			key := msg.Path(fmt.Sprintf("%s.%s", bucket, domainName), defaultPrefixPath)
+			key := msg.Path(fmt.Sprintf("%s.%s", bucket, domainName), c.prefixPath)
 			key = key + etcdPathSeparator + ip
 			ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 			_, err = c.etcdClient.Put(ctx, key, string(bucketMsg))
@@ -177,10 +176,10 @@ func (c *coreDNS) Put(bucket string) error {
 	return nil
 }
 
-// Removes DNS entries added in Put().
-func (c *coreDNS) Delete(bucket string) error {
+// Delete - Removes DNS entries added in Put().
+func (c *CoreDNS) Delete(bucket string) error {
 	for _, domainName := range c.domainNames {
-		key := msg.Path(fmt.Sprintf("%s.%s.", bucket, domainName), defaultPrefixPath)
+		key := msg.Path(fmt.Sprintf("%s.%s.", bucket, domainName), c.prefixPath)
 		srvRecords, err := c.list(key)
 		if err != nil {
 			return err
@@ -197,10 +196,10 @@ func (c *coreDNS) Delete(bucket string) error {
 	return nil
 }
 
-// Removes a specific DNS entry
-func (c *coreDNS) DeleteRecord(record SrvRecord) error {
+// DeleteRecord - Removes a specific DNS entry
+func (c *CoreDNS) DeleteRecord(record SrvRecord) error {
 	for _, domainName := range c.domainNames {
-		key := msg.Path(fmt.Sprintf("%s.%s.", record.Key, domainName), defaultPrefixPath)
+		key := msg.Path(fmt.Sprintf("%s.%s.", record.Key, domainName), c.prefixPath)
 
 		dctx, dcancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 		if _, err := c.etcdClient.Delete(dctx, key+etcdPathSeparator+record.Host); err != nil {
@@ -213,26 +212,71 @@ func (c *coreDNS) DeleteRecord(record SrvRecord) error {
 }
 
 // CoreDNS - represents dns config for coredns server.
-type coreDNS struct {
+type CoreDNS struct {
 	domainNames []string
 	domainIPs   set.StringSet
-	domainPort  int
+	domainPort  string
+	prefixPath  string
 	etcdClient  *etcd.Client
 }
 
+// Option - functional options pattern style
+type Option func(*CoreDNS)
+
+// DomainNames set a list of domain names used by this CoreDNS
+// client setting, note this will fail if set to empty when
+// constructor initializes.
+func DomainNames(domainNames []string) Option {
+	return func(args *CoreDNS) {
+		args.domainNames = domainNames
+	}
+}
+
+// DomainIPs set a list of custom domain IPs, note this will
+// fail if set to empty when constructor initializes.
+func DomainIPs(domainIPs set.StringSet) Option {
+	return func(args *CoreDNS) {
+		args.domainIPs = domainIPs
+	}
+}
+
+// DomainPort - is a string version of server port
+func DomainPort(domainPort string) Option {
+	return func(args *CoreDNS) {
+		args.domainPort = domainPort
+	}
+}
+
+// CoreDNSPath - custom prefix on etcd to populate DNS
+// service records, optional and can be empty.
+// if empty then c.prefixPath is used i.e "/skydns"
+func CoreDNSPath(prefix string) Option {
+	return func(args *CoreDNS) {
+		args.prefixPath = prefix
+	}
+}
+
 // NewCoreDNS - initialize a new coreDNS set/unset values.
-func NewCoreDNS(domainNames []string, domainIPs set.StringSet, domainPort string, etcdClient *etcd.Client) (Config, error) {
-	if len(domainNames) == 0 || domainIPs.IsEmpty() {
+func NewCoreDNS(etcdClient *etcd.Client, setters ...Option) (Config, error) {
+	if etcdClient == nil {
 		return nil, errors.New("invalid argument")
 	}
 
-	port, err := strconv.Atoi(domainPort)
-	if err != nil {
-		return nil, err
+	args := &CoreDNS{
+		etcdClient: etcdClient,
+		prefixPath: defaultPrefixPath,
+	}
+
+	for _, setter := range setters {
+		setter(args)
+	}
+
+	if len(args.domainNames) == 0 || args.domainIPs.IsEmpty() {
+		return nil, errors.New("invalid argument")
 	}
 
 	// strip ports off of domainIPs
-	domainIPsWithoutPorts := domainIPs.ApplyFunc(func(ip string) string {
+	domainIPsWithoutPorts := args.domainIPs.ApplyFunc(func(ip string) string {
 		host, _, err := net.SplitHostPort(ip)
 		if err != nil {
 			if strings.Contains(err.Error(), "missing port in address") {
@@ -241,11 +285,7 @@ func NewCoreDNS(domainNames []string, domainIPs set.StringSet, domainPort string
 		}
 		return host
 	})
+	args.domainIPs = domainIPsWithoutPorts
 
-	return &coreDNS{
-		domainNames: domainNames,
-		domainIPs:   domainIPsWithoutPorts,
-		domainPort:  port,
-		etcdClient:  etcdClient,
-	}, nil
+	return args, nil
 }

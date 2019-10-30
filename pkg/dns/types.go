@@ -29,7 +29,7 @@ const (
 // SrvRecord - represents a DNS service record
 type SrvRecord struct {
 	Host     string `json:"host,omitempty"`
-	Port     int    `json:"port,omitempty"`
+	Port     string `json:"port,omitempty"`
 	Priority int    `json:"priority,omitempty"`
 	Weight   int    `json:"weight,omitempty"`
 	Text     string `json:"text,omitempty"`

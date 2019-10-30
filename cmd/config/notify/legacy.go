@@ -27,7 +27,7 @@ func SetNotifyKafka(s config.Config, kName string, cfg target.KafkaArgs) error {
 			for _, broker := range cfg.Brokers {
 				brokers = append(brokers, broker.String())
 			}
-			return strings.Join(brokers, ",")
+			return strings.Join(brokers, config.ValueSeparator)
 		}(),
 		config.Comment:            "Settings for Kafka notification, after migrating config",
 		target.KafkaTopic:         cfg.Topic,

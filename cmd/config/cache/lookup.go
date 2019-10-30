@@ -75,11 +75,13 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 	if err != nil {
 		return cfg, err
 	}
-	if !stateBool {
-		return cfg, nil
-	}
 
 	drives := env.Get(EnvCacheDrives, kvs.Get(Drives))
+	if stateBool {
+		if len(drives) == 0 {
+			return cfg, config.Error("'drives' key cannot be empty if you wish to enable caching")
+		}
+	}
 	if len(drives) == 0 {
 		return cfg, nil
 	}

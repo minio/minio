@@ -12,6 +12,8 @@ Additionally `--config-dir` is now a legacy option which will is scheduled for r
 minio server /data
 ```
 
+MinIO also encrypts all the config, IAM and policies content with admin credentials.
+
 ### Certificate Directory
 
 TLS certificates by default are stored under ``${HOME}/.minio/certs`` directory. You need to place certificates here to enable `HTTPS` based access. Read more about [How to secure access to MinIO server with TLS](https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls).
@@ -28,6 +30,15 @@ $ mc tree --files ~/.minio
 ```
 
 You can provide a custom certs directory using `--certs-dir` command line option.
+
+#### Credentials
+On MinIO admin credentials or root credentials are only allowed to be changed using ENVs `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`.
+
+```
+export MINIO_ACCESS_KEY=minio
+export MINIO_SECRET_KEY=minio13
+minio server /data
+```
 
 #### Region
 | Field                     | Type     | Description                                                                                                                                                                             |

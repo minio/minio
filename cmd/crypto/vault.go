@@ -69,7 +69,11 @@ type vaultService struct {
 var _ KMS = (*vaultService)(nil) // compiler check that *vaultService implements KMS
 
 // empty/default vault configuration used to check whether a particular is empty.
-var emptyVaultConfig = VaultConfig{}
+var emptyVaultConfig = VaultConfig{
+	Auth: VaultAuth{
+		Type: "approle",
+	},
+}
 
 // IsEmpty returns true if the vault config struct is an
 // empty configuration.

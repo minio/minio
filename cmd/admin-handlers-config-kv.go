@@ -22,12 +22,10 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -68,6 +66,9 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	oldCfg := cfg.Clone()
 	scanner := bufio.NewScanner(bytes.NewReader(kvBytes))
 	for scanner.Scan() {
+		if scanner.Text() == "" {
+			continue
+		}
 		if err = cfg.DelKVS(scanner.Text()); err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
@@ -121,20 +122,14 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	defaultKVS := configDefaultKVS()
 	oldCfg := cfg.Clone()
 	scanner := bufio.NewScanner(bytes.NewReader(kvBytes))
-	var comment string
 	for scanner.Scan() {
-		if strings.HasPrefix(scanner.Text(), config.KvComment) {
-			// Join multiple comments for each newline, separated by ","
-			comments := []string{comment, strings.TrimPrefix(scanner.Text(), config.KvComment)}
-			comment = strings.Join(comments, config.KvNewline)
+		if scanner.Text() == "" {
 			continue
 		}
-		if err = cfg.SetKVS(scanner.Text(), comment, defaultKVS); err != nil {
+		if err = cfg.SetKVS(scanner.Text(), defaultKVS); err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
-		// Empty the comment for the next sub-system
-		comment = ""
 	}
 	if err = scanner.Err(); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -169,39 +164,28 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	vars := mux.Vars(r)
-	var body strings.Builder
-	if vars["key"] != "" {
-		kvs, err := globalServerConfig.GetKVS(vars["key"])
+	var buf = &bytes.Buffer{}
+	key := vars["key"]
+	if key != "" {
+		kvs, err := globalServerConfig.GetKVS(key)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
 		for k, kv := range kvs {
-			c, ok := kv[config.Comment]
-			if ok {
-				// For multiple comments split it correctly.
-				for _, c1 := range strings.Split(c, config.KvNewline) {
-					if c1 == "" {
-						continue
-					}
-					body.WriteString(color.YellowBold(config.KvComment))
-					body.WriteString(config.KvSpaceSeparator)
-					body.WriteString(color.BlueBold(strings.TrimSpace(c1)))
-					body.WriteString(config.KvNewline)
-				}
-			}
-			body.WriteString(color.CyanBold(k))
-			body.WriteString(config.KvSpaceSeparator)
-			body.WriteString(kv.String())
+			buf.WriteString(k)
+			buf.WriteString(config.KvSpaceSeparator)
+			buf.WriteString(kv.String())
 			if len(kvs) > 1 {
-				body.WriteString(config.KvNewline)
+				buf.WriteString(config.KvNewline)
 			}
 		}
 	} else {
-		body.WriteString(globalServerConfig.String())
+		buf.WriteString(globalServerConfig.String())
 	}
+
 	password := globalActiveCred.SecretKey
-	econfigData, err := madmin.EncryptData(password, []byte(body.String()))
+	econfigData, err := madmin.EncryptData(password, buf.Bytes())
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -275,18 +259,14 @@ func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r
 	defaultKVS := configDefaultKVS()
 	oldCfg := cfg.Clone()
 	scanner := bufio.NewScanner(bytes.NewReader(kvBytes))
-	var comment string
 	for scanner.Scan() {
-		if strings.HasPrefix(scanner.Text(), config.KvComment) {
-			// Join multiple comments for each newline, separated by "\n"
-			comment = strings.Join([]string{comment, scanner.Text()}, config.KvNewline)
+		if scanner.Text() == "" {
 			continue
 		}
-		if err = cfg.SetKVS(scanner.Text(), comment, defaultKVS); err != nil {
+		if err = cfg.SetKVS(scanner.Text(), defaultKVS); err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
-		comment = ""
 	}
 	if err = scanner.Err(); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -340,20 +320,23 @@ func (a adminAPIHandlers) HelpConfigKVHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	vars := mux.Vars(r)
+
 	subSys := vars["subSys"]
 	key := vars["key"]
 
-	rd, err := GetHelp(subSys, key)
+	_, envOnly := r.URL.Query()["env"]
+
+	rd, err := GetHelp(subSys, key, envOnly)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	io.Copy(w, rd)
+	json.NewEncoder(w).Encode(rd)
 	w.(http.Flusher).Flush()
 }
 
-// SetConfigHandler - PUT /minio/admin/v1/config
+// SetConfigHandler - PUT /minio/admin/v2/config
 func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetConfigHandler")
 
@@ -403,7 +386,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	writeSuccessResponseHeadersOnly(w)
 }
 
-// GetConfigHandler - GET /minio/admin/v1/config
+// GetConfigHandler - GET /minio/admin/v2/config
 // Get config.json of this minio setup.
 func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetConfigHandler")

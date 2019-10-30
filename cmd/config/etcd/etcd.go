@@ -36,61 +36,100 @@ const (
 
 // etcd environment values
 const (
+	Endpoints     = "endpoints"
+	CoreDNSPath   = "coredns_path"
+	ClientCert    = "client_cert"
+	ClientCertKey = "client_cert_key"
+
+	EnvEtcdState         = "MINIO_ETCD_STATE"
 	EnvEtcdEndpoints     = "MINIO_ETCD_ENDPOINTS"
+	EnvEtcdCoreDNSPath   = "MINIO_ETCD_COREDNS_PATH"
 	EnvEtcdClientCert    = "MINIO_ETCD_CLIENT_CERT"
 	EnvEtcdClientCertKey = "MINIO_ETCD_CLIENT_CERT_KEY"
 )
 
-// New - Initialize new etcd client
-func New(rootCAs *x509.CertPool) (*clientv3.Client, error) {
-	envEndpoints := env.Get(EnvEtcdEndpoints, "")
-	if envEndpoints == "" {
-		// etcd is not configured, nothing to do.
+// DefaultKVS - default KV settings for etcd.
+var (
+	DefaultKVS = config.KVS{
+		config.State:   config.StateOff,
+		config.Comment: "This is a default etcd configuration",
+		Endpoints:      "",
+		CoreDNSPath:    "/skydns",
+		ClientCert:     "",
+		ClientCertKey:  "",
+	}
+)
+
+// Config - server etcd config.
+type Config struct {
+	Enabled     bool   `json:"enabled"`
+	CoreDNSPath string `json:"coreDNSPath"`
+	clientv3.Config
+}
+
+// New - initialize new etcd client.
+func New(cfg Config) (*clientv3.Client, error) {
+	if !cfg.Enabled {
 		return nil, nil
 	}
+	return clientv3.New(cfg.Config)
+}
 
-	etcdEndpoints := strings.Split(envEndpoints, config.ValueSeparator)
+// LookupConfig - Initialize new etcd config.
+func LookupConfig(kv config.KVS, rootCAs *x509.CertPool) (Config, error) {
+	cfg := Config{}
+	if err := config.CheckValidKeys(config.EtcdSubSys, kv, DefaultKVS); err != nil {
+		return cfg, err
+	}
+
+	stateBool, err := config.ParseBool(env.Get(EnvEtcdState, kv.Get(config.State)))
+	if err != nil {
+		return cfg, err
+	}
+
+	endpoints := env.Get(EnvEtcdEndpoints, kv.Get(Endpoints))
+	if stateBool && len(endpoints) == 0 {
+		return cfg, config.Error("'endpoints' key cannot be empty if you wish to enable etcd")
+	}
+
+	if len(endpoints) == 0 {
+		return cfg, nil
+	}
+
+	cfg.Enabled = true
+	etcdEndpoints := strings.Split(endpoints, config.ValueSeparator)
 
 	var etcdSecure bool
 	for _, endpoint := range etcdEndpoints {
+		if endpoint == "" {
+			continue
+		}
 		u, err := xnet.ParseURL(endpoint)
 		if err != nil {
-			return nil, err
+			return cfg, err
 		}
 		// If one of the endpoint is https, we will use https directly.
 		etcdSecure = etcdSecure || u.Scheme == "https"
 	}
 
-	var err error
-	var etcdClnt *clientv3.Client
+	cfg.DialTimeout = defaultDialTimeout
+	cfg.DialKeepAliveTime = defaultDialKeepAlive
+	cfg.Endpoints = etcdEndpoints
+	cfg.CoreDNSPath = env.Get(EnvEtcdCoreDNSPath, kv.Get(CoreDNSPath))
 	if etcdSecure {
+		cfg.TLS = &tls.Config{
+			RootCAs: rootCAs,
+		}
 		// This is only to support client side certificate authentication
 		// https://coreos.com/etcd/docs/latest/op-guide/security.html
-		etcdClientCertFile, ok1 := env.Lookup(EnvEtcdClientCert)
-		etcdClientCertKey, ok2 := env.Lookup(EnvEtcdClientCertKey)
-		var getClientCertificate func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
-		if ok1 && ok2 {
-			getClientCertificate = func(unused *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-				cert, terr := tls.LoadX509KeyPair(etcdClientCertFile, etcdClientCertKey)
-				return &cert, terr
+		etcdClientCertFile := env.Get(EnvEtcdClientCert, kv.Get(ClientCert))
+		etcdClientCertKey := env.Get(EnvEtcdClientCertKey, kv.Get(ClientCertKey))
+		if etcdClientCertFile != "" && etcdClientCertKey != "" {
+			cfg.TLS.GetClientCertificate = func(unused *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+				cert, err := tls.LoadX509KeyPair(etcdClientCertFile, etcdClientCertKey)
+				return &cert, err
 			}
 		}
-
-		etcdClnt, err = clientv3.New(clientv3.Config{
-			Endpoints:         etcdEndpoints,
-			DialTimeout:       defaultDialTimeout,
-			DialKeepAliveTime: defaultDialKeepAlive,
-			TLS: &tls.Config{
-				RootCAs:              rootCAs,
-				GetClientCertificate: getClientCertificate,
-			},
-		})
-	} else {
-		etcdClnt, err = clientv3.New(clientv3.Config{
-			Endpoints:         etcdEndpoints,
-			DialTimeout:       defaultDialTimeout,
-			DialKeepAliveTime: defaultDialKeepAlive,
-		})
 	}
-	return etcdClnt, err
+	return cfg, nil
 }
