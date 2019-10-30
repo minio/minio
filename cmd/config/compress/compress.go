@@ -56,10 +56,14 @@ var (
 )
 
 // Parses the given compression exclude list `extensions` or `content-types`.
-func parseCompressIncludes(includes []string) ([]string, error) {
+func parseCompressIncludes(include string) ([]string, error) {
+	includes := strings.Split(include, config.ValueSeparator)
 	for _, e := range includes {
 		if len(e) == 0 {
 			return nil, config.ErrInvalidCompressionIncludesValue(nil).Msg("extension/mime-type cannot be empty")
+		}
+		if e == "/" {
+			return nil, config.ErrInvalidCompressionIncludesValue(nil).Msg("extension/mime-type cannot be '/'")
 		}
 	}
 	return includes, nil
@@ -90,22 +94,21 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 	compressMimeTypesLegacy := env.Get(EnvCompressMimeTypesLegacy, kvs.Get(MimeTypes))
 	if compressExtensions != "" || compressMimeTypes != "" || compressMimeTypesLegacy != "" {
 		if compressExtensions != "" {
-			extensions, err := parseCompressIncludes(strings.Split(compressExtensions, config.ValueSeparator))
+			extensions, err := parseCompressIncludes(compressExtensions)
 			if err != nil {
 				return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESS_EXTENSIONS value (`%s`)", err, extensions)
 			}
 			cfg.Extensions = extensions
 		}
 		if compressMimeTypes != "" {
-			mimeTypes, err := parseCompressIncludes(strings.Split(compressMimeTypes, config.ValueSeparator))
+			mimeTypes, err := parseCompressIncludes(compressMimeTypes)
 			if err != nil {
 				return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESS_MIME_TYPES value (`%s`)", err, mimeTypes)
 			}
 			cfg.MimeTypes = mimeTypes
 		}
 		if compressMimeTypesLegacy != "" {
-			mimeTypes, err := parseCompressIncludes(strings.Split(compressMimeTypesLegacy,
-				config.ValueSeparator))
+			mimeTypes, err := parseCompressIncludes(compressMimeTypesLegacy)
 			if err != nil {
 				return cfg, fmt.Errorf("%s: Invalid MINIO_COMPRESS_MIME_TYPES value (`%s`)", err, mimeTypes)
 			}

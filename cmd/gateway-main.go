@@ -206,7 +206,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		srvCfg := newServerConfig()
 
 		// Override any values from ENVs.
-		lookupConfigs(srvCfg)
+		if err := lookupConfigs(srvCfg); err != nil {
+			logger.FatalIf(err, "Unable to initialize server config")
+		}
 
 		// hold the mutex lock before a new config is assigned.
 		globalServerConfigMu.Lock()
@@ -232,7 +234,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// Create a new config system.
 		globalConfigSys = NewConfigSys()
 
-		// Load globalServerConfig from etcd
+		// Load globalServerConfig from disk
 		logger.LogIf(context.Background(), globalConfigSys.Init(newObject))
 
 		// Start watching disk for reloading config, this
@@ -267,7 +269,10 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalLifecycleSys = NewLifecycleSys()
 
 	// Create new notification system.
-	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
+	globalNotificationSys, err = NewNotificationSys(globalServerConfig, globalEndpoints)
+	if err != nil {
+		logger.FatalIf(err, "Unable to initialize notification system")
+	}
 
 	// Verify if object layer supports
 	// - encryption

@@ -98,7 +98,7 @@ func (target *WebhookTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	u, pErr := xnet.ParseURL(target.args.Endpoint.String())
+	u, pErr := xnet.ParseHTTPURL(target.args.Endpoint.String())
 	if pErr != nil {
 		return pErr
 	}
@@ -153,7 +153,7 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 
 // Send - reads an event from store and sends it to webhook.
 func (target *WebhookTarget) Send(eventKey string) error {
-	u, pErr := xnet.ParseURL(target.args.Endpoint.String())
+	u, pErr := xnet.ParseHTTPURL(target.args.Endpoint.String())
 	if pErr != nil {
 		return pErr
 	}

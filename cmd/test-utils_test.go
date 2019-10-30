@@ -370,7 +370,11 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalPolicySys = NewPolicySys()
 	globalPolicySys.Init(buckets, objLayer)
 
-	globalNotificationSys = NewNotificationSys(globalServerConfig, testServer.Disks)
+	globalNotificationSys, err = NewNotificationSys(globalServerConfig, testServer.Disks)
+	if err != nil {
+		t.Fatalf("Unable to initialize notification system %s", err)
+	}
+
 	globalNotificationSys.Init(buckets, objLayer)
 
 	globalLifecycleSys = NewLifecycleSys()
@@ -1636,7 +1640,10 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 	globalIAMSys.Init(xl)
 
 	globalPolicySys = NewPolicySys()
-	globalNotificationSys = NewNotificationSys(globalServerConfig, endpoints)
+	globalNotificationSys, err = NewNotificationSys(globalServerConfig, endpoints)
+	if err != nil {
+		return xl, err
+	}
 
 	return xl, nil
 }
@@ -2168,8 +2175,18 @@ func registerAPIFunctions(muxRouter *mux.Router, objLayer ObjectLayer, apiFuncti
 	// to underlying cache layer to manage object layer operation and disk caching
 	// operation
 	api := objectAPIHandlers{
-		ObjectAPI:         newObjectLayerFn,
-		CacheAPI:          newCacheObjectsFn,
+		ObjectAPI: func() ObjectLayer {
+			if !globalSafeMode {
+				return globalObjectAPI
+			}
+			return nil
+		},
+		CacheAPI: func() CacheObjectLayer {
+			if !globalSafeMode {
+				return globalCacheObjectAPI
+			}
+			return nil
+		},
 		EncryptionEnabled: func() bool { return true },
 	}
 

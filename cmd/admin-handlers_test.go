@@ -90,7 +90,11 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	globalPolicySys = NewPolicySys()
 	globalPolicySys.Init(buckets, objLayer)
 
-	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
+	globalNotificationSys, err = NewNotificationSys(globalServerConfig, globalEndpoints)
+	if err != nil {
+		return nil, err
+	}
+
 	globalNotificationSys.Init(buckets, objLayer)
 
 	// Setup admin mgmt REST API handlers.

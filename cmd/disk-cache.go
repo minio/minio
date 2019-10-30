@@ -553,23 +553,23 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 		migrating: migrateSw,
 		migMutex:  sync.Mutex{},
 		GetObjectInfoFn: func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
-			return newObjectLayerFn().GetObjectInfo(ctx, bucket, object, opts)
+			return globalObjectAPI.GetObjectInfo(ctx, bucket, object, opts)
 		},
 		GetObjectNInfoFn: func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
-			return newObjectLayerFn().GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+			return globalObjectAPI.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 		},
 		DeleteObjectFn: func(ctx context.Context, bucket, object string) error {
-			return newObjectLayerFn().DeleteObject(ctx, bucket, object)
+			return globalObjectAPI.DeleteObject(ctx, bucket, object)
 		},
 		DeleteObjectsFn: func(ctx context.Context, bucket string, objects []string) ([]error, error) {
 			errs := make([]error, len(objects))
 			for idx, object := range objects {
-				errs[idx] = newObjectLayerFn().DeleteObject(ctx, bucket, object)
+				errs[idx] = globalObjectAPI.DeleteObject(ctx, bucket, object)
 			}
 			return errs, nil
 		},
 		PutObjectFn: func(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-			return newObjectLayerFn().PutObject(ctx, bucket, object, data, opts)
+			return globalObjectAPI.PutObject(ctx, bucket, object, data, opts)
 		},
 	}
 	if migrateSw {

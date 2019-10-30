@@ -660,7 +660,7 @@ func (h *healSequence) traverseAndHeal() {
 func (h *healSequence) healMinioSysMeta(metaPrefix string) func() error {
 	return func() error {
 		// Get current object layer instance.
-		objectAPI := newObjectLayerFn()
+		objectAPI := globalObjectAPI
 		if objectAPI == nil {
 			return errServerNotInitialized
 		}
@@ -692,7 +692,7 @@ func (h *healSequence) healDiskFormat() error {
 	}
 
 	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
+	objectAPI := globalObjectAPI
 	if objectAPI == nil {
 		return errServerNotInitialized
 	}
@@ -712,7 +712,7 @@ func (h *healSequence) healBuckets() error {
 	}
 
 	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
+	objectAPI := globalObjectAPI
 	if objectAPI == nil {
 		return errServerNotInitialized
 	}
@@ -734,7 +734,7 @@ func (h *healSequence) healBuckets() error {
 // healBucket - traverses and heals given bucket
 func (h *healSequence) healBucket(bucket string) error {
 	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
+	objectAPI := globalObjectAPI
 	if objectAPI == nil {
 		return errServerNotInitialized
 	}
@@ -771,7 +771,7 @@ func (h *healSequence) healObject(bucket, object string) error {
 	}
 
 	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
+	objectAPI := globalObjectAPI
 	if objectAPI == nil {
 		return errServerNotInitialized
 	}

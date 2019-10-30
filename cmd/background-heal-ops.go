@@ -107,7 +107,7 @@ func startBackgroundHealing() {
 
 	var objAPI ObjectLayer
 	for {
-		objAPI = newObjectLayerFn()
+		objAPI = globalObjectAPI
 		if objAPI == nil {
 			time.Sleep(time.Second)
 			continue
@@ -135,7 +135,7 @@ func initBackgroundHealing() {
 // failure error occurred.
 func bgHealDiskFormat(ctx context.Context, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
+	objectAPI := globalObjectAPI
 	if objectAPI == nil {
 		return madmin.HealResultItem{}, errServerNotInitialized
 	}
@@ -165,7 +165,7 @@ func bgHealDiskFormat(ctx context.Context, opts madmin.HealOpts) (madmin.HealRes
 // bghealBucket - traverses and heals given bucket
 func bgHealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
+	objectAPI := globalObjectAPI
 	if objectAPI == nil {
 		return madmin.HealResultItem{}, errServerNotInitialized
 	}
@@ -176,7 +176,7 @@ func bgHealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (mad
 // bgHealObject - heal the given object and record result
 func bgHealObject(ctx context.Context, bucket, object string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
+	objectAPI := globalObjectAPI
 	if objectAPI == nil {
 		return madmin.HealResultItem{}, errServerNotInitialized
 	}

@@ -30,11 +30,15 @@ func TestParseCacheDrives(t *testing.T) {
 		expectedPatterns []string
 		success          bool
 	}{
-		// valid input
+		// Invalid input
 
 		{"bucket1/*;*.png;images/trip/barcelona/*", []string{}, false},
 		{"bucket1", []string{}, false},
+		{";;;", []string{}, false},
+		{",;,;,;", []string{}, false},
 	}
+
+	// Valid inputs
 	if runtime.GOOS == "windows" {
 		testCases = append(testCases, struct {
 			driveStr         string
@@ -91,8 +95,12 @@ func TestParseCacheExclude(t *testing.T) {
 		expectedPatterns []string
 		success          bool
 	}{
-		// valid input
+		// Invalid input
 		{"/home/drive1;/home/drive2;/home/drive3", []string{}, false},
+		{"/", []string{}, false},
+		{";;;", []string{}, false},
+
+		// valid input
 		{"bucket1/*;*.png;images/trip/barcelona/*", []string{"bucket1/*", "*.png", "images/trip/barcelona/*"}, true},
 		{"bucket1", []string{"bucket1"}, true},
 	}

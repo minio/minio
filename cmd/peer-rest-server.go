@@ -46,8 +46,8 @@ func getServerInfo() (*ServerInfoData, error) {
 		return nil, errServerNotInitialized
 	}
 
-	objLayer := newObjectLayerFn()
-	if objLayer == nil {
+	objLayer := globalObjectAPI
+	if objLayer == nil || globalSafeMode {
 		return nil, errServerNotInitialized
 	}
 
@@ -166,7 +166,7 @@ func (s *peerRESTServer) DeletePolicyHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	objAPI := newObjectLayerFn()
+	objAPI := globalObjectAPI
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -194,7 +194,7 @@ func (s *peerRESTServer) LoadPolicyHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	objAPI := newObjectLayerFn()
+	objAPI := globalObjectAPI
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -222,7 +222,7 @@ func (s *peerRESTServer) LoadPolicyMappingHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	objAPI := newObjectLayerFn()
+	objAPI := globalObjectAPI
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -251,7 +251,7 @@ func (s *peerRESTServer) DeleteUserHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	objAPI := newObjectLayerFn()
+	objAPI := globalObjectAPI
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -279,7 +279,7 @@ func (s *peerRESTServer) LoadUserHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	objAPI := newObjectLayerFn()
+	objAPI := globalObjectAPI
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -329,7 +329,7 @@ func (s *peerRESTServer) LoadGroupHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	objAPI := newObjectLayerFn()
+	objAPI := globalObjectAPI
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -539,7 +539,7 @@ func (s *peerRESTServer) ReloadFormatHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	objAPI := newObjectLayerFn()
+	objAPI := globalObjectAPI
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return

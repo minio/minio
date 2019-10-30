@@ -36,7 +36,7 @@ func monitorLocalDisksAndHeal() {
 	// Wait until the object layer is ready
 	var objAPI ObjectLayer
 	for {
-		objAPI = newObjectLayerFn()
+		objAPI = globalObjectAPI
 		if objAPI == nil {
 			time.Sleep(time.Second)
 			continue

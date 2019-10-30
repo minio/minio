@@ -19,6 +19,7 @@ package etcd
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"strings"
 	"time"
 
@@ -75,6 +76,25 @@ func New(cfg Config) (*clientv3.Client, error) {
 	return clientv3.New(cfg.Config)
 }
 
+func parseEndpoints(endpoints string) ([]string, bool, error) {
+	etcdEndpoints := strings.Split(endpoints, config.ValueSeparator)
+
+	var etcdSecure bool
+	for _, endpoint := range etcdEndpoints {
+		u, err := xnet.ParseHTTPURL(endpoint)
+		if err != nil {
+			return nil, false, err
+		}
+		if etcdSecure && u.Scheme == "http" {
+			return nil, false, fmt.Errorf("all endpoints should be https or http: %s", endpoint)
+		}
+		// If one of the endpoint is https, we will use https directly.
+		etcdSecure = etcdSecure || u.Scheme == "https"
+	}
+
+	return etcdEndpoints, etcdSecure, nil
+}
+
 // LookupConfig - Initialize new etcd config.
 func LookupConfig(kv config.KVS, rootCAs *x509.CertPool) (Config, error) {
 	cfg := Config{}
@@ -96,22 +116,12 @@ func LookupConfig(kv config.KVS, rootCAs *x509.CertPool) (Config, error) {
 		return cfg, nil
 	}
 
-	cfg.Enabled = true
-	etcdEndpoints := strings.Split(endpoints, config.ValueSeparator)
-
-	var etcdSecure bool
-	for _, endpoint := range etcdEndpoints {
-		if endpoint == "" {
-			continue
-		}
-		u, err := xnet.ParseURL(endpoint)
-		if err != nil {
-			return cfg, err
-		}
-		// If one of the endpoint is https, we will use https directly.
-		etcdSecure = etcdSecure || u.Scheme == "https"
+	etcdEndpoints, etcdSecure, err := parseEndpoints(endpoints)
+	if err != nil {
+		return cfg, err
 	}
 
+	cfg.Enabled = true
 	cfg.DialTimeout = defaultDialTimeout
 	cfg.DialKeepAliveTime = defaultDialKeepAlive
 	cfg.Endpoints = etcdEndpoints

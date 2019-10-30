@@ -29,6 +29,12 @@ import (
 // Error config error type
 type Error string
 
+// Errorf - formats according to a format specifier and returns
+// the string as a value that satisfies error of type config.Error
+func Errorf(format string, a ...interface{}) error {
+	return Error(fmt.Sprintf(format, a...))
+}
+
 func (e Error) Error() string {
 	return string(e)
 }
@@ -402,10 +408,6 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 		if len(kv) == 1 && prevK != "" {
 			kvs[prevK] = strings.Join([]string{kvs[prevK], sanitizeValue(kv[0])}, KvSpaceSeparator)
 			continue
-		}
-		if len(kv[1]) == 0 {
-			err := fmt.Sprintf("value for key '%s' cannot be empty", kv[0])
-			return Error(err)
 		}
 		prevK = kv[0]
 		kvs[kv[0]] = sanitizeValue(kv[1])

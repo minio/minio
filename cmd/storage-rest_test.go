@@ -498,7 +498,7 @@ func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRES
 	router := mux.NewRouter()
 	httpServer := httptest.NewServer(router)
 
-	url, err := xnet.ParseURL(httpServer.URL)
+	url, err := xnet.ParseHTTPURL(httpServer.URL)
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}

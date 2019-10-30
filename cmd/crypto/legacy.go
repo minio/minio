@@ -22,6 +22,7 @@ import (
 
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/env"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 const (
@@ -119,9 +120,16 @@ func lookupConfigLegacy(kvs config.KVS) (KMSConfig, error) {
 	if err != nil {
 		return KMSConfig{}, err
 	}
+
 	cfg := KMSConfig{
 		AutoEncryption: autoBool,
+		Vault: VaultConfig{
+			Auth: VaultAuth{
+				Type: "approle",
+			},
+		},
 	}
+
 	// Assume default as "on" for legacy config since we didn't have a _STATE
 	// flag to turn it off, but we should honor it nonetheless to turn it off
 	// if the vault endpoint is down and there is no way to start the server.
@@ -132,29 +140,37 @@ func lookupConfigLegacy(kvs config.KVS) (KMSConfig, error) {
 	if !stateBool {
 		return cfg, nil
 	}
-	vcfg := VaultConfig{}
-	// Lookup Hashicorp-Vault configuration & overwrite config entry if ENV var is present
-	vcfg.Endpoint = env.Get(EnvVaultEndpoint, kvs.Get(KMSVaultEndpoint))
-	vcfg.CAPath = env.Get(EnvVaultCAPath, kvs.Get(KMSVaultCAPath))
-	vcfg.Auth.Type = env.Get(EnvVaultAuthType, kvs.Get(KMSVaultAuthType))
-	vcfg.Auth.AppRole.ID = env.Get(EnvVaultAppRoleID, kvs.Get(KMSVaultAppRoleID))
-	vcfg.Auth.AppRole.Secret = env.Get(EnvVaultAppSecretID, kvs.Get(KMSVaultAppRoleSecret))
-	vcfg.Key.Name = env.Get(EnvVaultKeyName, kvs.Get(KMSVaultKeyName))
-	vcfg.Namespace = env.Get(EnvVaultNamespace, kvs.Get(KMSVaultNamespace))
+
+	endpointStr := env.Get(EnvKMSVaultEndpoint, kvs.Get(KMSVaultEndpoint))
+	if endpointStr != "" {
+		// Lookup Hashicorp-Vault configuration & overwrite config entry if ENV var is present
+		endpoint, err := xnet.ParseHTTPURL(endpointStr)
+		if err != nil {
+			return cfg, err
+		}
+		endpointStr = endpoint.String()
+	}
+
+	cfg.Vault.Endpoint = endpointStr
+	cfg.Vault.CAPath = env.Get(EnvVaultCAPath, kvs.Get(KMSVaultCAPath))
+	cfg.Vault.Auth.Type = env.Get(EnvVaultAuthType, kvs.Get(KMSVaultAuthType))
+	cfg.Vault.Auth.AppRole.ID = env.Get(EnvVaultAppRoleID, kvs.Get(KMSVaultAppRoleID))
+	cfg.Vault.Auth.AppRole.Secret = env.Get(EnvVaultAppSecretID, kvs.Get(KMSVaultAppRoleSecret))
+	cfg.Vault.Key.Name = env.Get(EnvVaultKeyName, kvs.Get(KMSVaultKeyName))
+	cfg.Vault.Namespace = env.Get(EnvVaultNamespace, kvs.Get(KMSVaultNamespace))
 	keyVersion := env.Get(EnvVaultKeyVersion, kvs.Get(KMSVaultKeyVersion))
 
 	if keyVersion != "" {
-		vcfg.Key.Version, err = strconv.Atoi(keyVersion)
+		cfg.Vault.Key.Version, err = strconv.Atoi(keyVersion)
 		if err != nil {
 			return cfg, fmt.Errorf("Invalid ENV variable: Unable to parse %s value (`%s`)",
 				EnvVaultKeyVersion, keyVersion)
 		}
 	}
 
-	if err = vcfg.Verify(); err != nil {
+	if err = cfg.Vault.Verify(); err != nil {
 		return cfg, err
 	}
 
-	cfg.Vault = vcfg
 	return cfg, nil
 }

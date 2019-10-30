@@ -37,8 +37,18 @@ type objectAPIHandlers struct {
 func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) {
 	// Initialize API.
 	api := objectAPIHandlers{
-		ObjectAPI: newObjectLayerFn,
-		CacheAPI:  newCacheObjectsFn,
+		ObjectAPI: func() ObjectLayer {
+			if !globalSafeMode {
+				return globalObjectAPI
+			}
+			return nil
+		},
+		CacheAPI: func() CacheObjectLayer {
+			if !globalSafeMode {
+				return globalCacheObjectAPI
+			}
+			return nil
+		},
 		EncryptionEnabled: func() bool {
 			return encryptionEnabled
 		},

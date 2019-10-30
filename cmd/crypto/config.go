@@ -21,6 +21,7 @@ import (
 
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/env"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // KMSConfig has the KMS config for hashicorp vault
@@ -148,9 +149,21 @@ func LookupConfig(kvs config.KVS) (KMSConfig, error) {
 	if !stateBool {
 		return kmsCfg, nil
 	}
-	vcfg := VaultConfig{}
-	// Lookup Hashicorp-Vault configuration & overwrite config entry if ENV var is present
-	vcfg.Endpoint = env.Get(EnvKMSVaultEndpoint, kvs.Get(KMSVaultEndpoint))
+	vcfg := VaultConfig{
+		Auth: VaultAuth{
+			Type: "approle",
+		},
+	}
+	endpointStr := env.Get(EnvKMSVaultEndpoint, kvs.Get(KMSVaultEndpoint))
+	if endpointStr != "" {
+		// Lookup Hashicorp-Vault configuration & overwrite config entry if ENV var is present
+		endpoint, err := xnet.ParseHTTPURL(endpointStr)
+		if err != nil {
+			return kmsCfg, err
+		}
+		endpointStr = endpoint.String()
+	}
+	vcfg.Endpoint = endpointStr
 	vcfg.CAPath = env.Get(EnvKMSVaultCAPath, kvs.Get(KMSVaultCAPath))
 	vcfg.Auth.Type = env.Get(EnvKMSVaultAuthType, kvs.Get(KMSVaultAuthType))
 	vcfg.Auth.AppRole.ID = env.Get(EnvKMSVaultAppRoleID, kvs.Get(KMSVaultAppRoleID))
@@ -177,7 +190,7 @@ func LookupConfig(kvs config.KVS) (KMSConfig, error) {
 // NewKMS - initialize a new KMS.
 func NewKMS(cfg KMSConfig) (kms KMS, err error) {
 	// Lookup KMS master keys - only available through ENV.
-	if masterKeyLegacy, ok := env.Lookup(EnvKMSMasterKeyLegacy); ok {
+	if masterKeyLegacy := env.Get(EnvKMSMasterKeyLegacy, ""); len(masterKeyLegacy) != 0 {
 		if !cfg.Vault.IsEmpty() { // Vault and KMS master key provided
 			return kms, errors.New("Ambiguous KMS configuration: vault configuration and a master key are provided at the same time")
 		}
@@ -185,7 +198,7 @@ func NewKMS(cfg KMSConfig) (kms KMS, err error) {
 		if err != nil {
 			return kms, err
 		}
-	} else if masterKey, ok := env.Lookup(EnvKMSMasterKey); ok {
+	} else if masterKey := env.Get(EnvKMSMasterKey, ""); len(masterKey) != 0 {
 		if !cfg.Vault.IsEmpty() { // Vault and KMS master key provided
 			return kms, errors.New("Ambiguous KMS configuration: vault configuration and a master key are provided at the same time")
 		}

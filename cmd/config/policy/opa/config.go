@@ -124,7 +124,7 @@ func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.
 		authToken = env.Get(EnvPolicyOpaAuthToken, kv.Get(AuthToken))
 	}
 
-	u, err := xnet.ParseURL(opaURL)
+	u, err := xnet.ParseHTTPURL(opaURL)
 	if err != nil {
 		return args, err
 	}

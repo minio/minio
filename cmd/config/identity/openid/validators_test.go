@@ -87,7 +87,7 @@ func TestValidators(t *testing.T) {
 		t.Fatalf("Unexpected number of vids %v", vids)
 	}
 
-	u, err := xnet.ParseURL(ts.URL)
+	u, err := xnet.ParseHTTPURL(ts.URL)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -933,7 +933,7 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 
 func validateAdminReq(ctx context.Context, w http.ResponseWriter, r *http.Request) ObjectLayer {
 	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
+	objectAPI := globalObjectAPI
 	if objectAPI == nil || globalNotificationSys == nil || globalIAMSys == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return nil

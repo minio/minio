@@ -50,12 +50,11 @@ func printStartupMessage(apiEndPoints []string) {
 
 	strippedAPIEndpoints := stripStandardPorts(apiEndPoints)
 	// If cache layer is enabled, print cache capacity.
-	cacheObjectAPI := newCacheObjectsFn()
-	if cacheObjectAPI != nil {
-		printCacheStorageInfo(cacheObjectAPI.StorageInfo(context.Background()))
+	if globalCacheObjectAPI != nil {
+		printCacheStorageInfo(globalCacheObjectAPI.StorageInfo(context.Background()))
 	}
 	// Object layer is initialized then print StorageInfo.
-	objAPI := newObjectLayerFn()
+	objAPI := globalObjectAPI
 	if objAPI != nil {
 		printStorageInfo(objAPI.StorageInfo(context.Background()))
 	}
@@ -97,7 +96,7 @@ func stripStandardPorts(apiEndpoints []string) (newAPIEndpoints []string) {
 	newAPIEndpoints = make([]string, len(apiEndpoints))
 	// Check all API endpoints for standard ports and strip them.
 	for i, apiEndpoint := range apiEndpoints {
-		u, err := xnet.ParseURL(apiEndpoint)
+		u, err := xnet.ParseHTTPURL(apiEndpoint)
 		if err != nil {
 			newAPIEndpoints[i] = apiEndpoint
 			continue

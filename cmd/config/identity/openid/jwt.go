@@ -284,7 +284,7 @@ func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.
 
 	configURL := env.Get(EnvIdentityOpenIDURL, kv.Get(ConfigURL))
 	if configURL != "" {
-		c.URL, err = xnet.ParseURL(configURL)
+		c.URL, err = xnet.ParseHTTPURL(configURL)
 		if err != nil {
 			return c, err
 		}
@@ -315,7 +315,7 @@ func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.
 		closeRespFn: closeRespFn,
 	}
 
-	c.JWKS.URL, err = xnet.ParseURL(jwksURL)
+	c.JWKS.URL, err = xnet.ParseHTTPURL(jwksURL)
 	if err != nil {
 		return c, err
 	}
