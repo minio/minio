@@ -1098,10 +1098,10 @@ func (sys *NotificationSys) NetworkInfo() []madmin.ServerNetworkHardwareInfo {
 }
 
 // NewNotificationSys - creates new notification system object.
-func NewNotificationSys(cfg config.Config, endpoints EndpointList) *NotificationSys {
+func NewNotificationSys(cfg config.Config, endpoints EndpointList) (*NotificationSys, error) {
 	targetList, err := notify.GetNotificationTargets(cfg, GlobalServiceDoneCh, globalRootCAs)
 	if err != nil {
-		logger.FatalIf(err, "Unable to start notification sub system")
+		return nil, config.Errorf("Unable to start notification sub system: %s", err)
 	}
 
 	remoteHosts := getRemoteHosts(endpoints)
@@ -1113,7 +1113,7 @@ func NewNotificationSys(cfg config.Config, endpoints EndpointList) *Notification
 		bucketRulesMap:             make(map[string]event.RulesMap),
 		bucketRemoteTargetRulesMap: make(map[string]map[event.TargetID]event.RulesMap),
 		peerClients:                remoteClients,
-	}
+	}, nil
 }
 
 type eventArgs struct {

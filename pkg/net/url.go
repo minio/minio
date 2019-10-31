@@ -19,6 +19,7 @@ package net
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -101,6 +102,21 @@ func (u URL) DialHTTP() error {
 	}
 	resp.Body.Close()
 	return nil
+}
+
+// ParseHTTPURL - parses a string into HTTP URL, string is
+// expected to be of form http:// or https://
+func ParseHTTPURL(s string) (u *URL, err error) {
+	u, err = ParseURL(s)
+	if err != nil {
+		return nil, err
+	}
+	switch u.Scheme {
+	default:
+		return nil, fmt.Errorf("unexpected scheme found %s", u.Scheme)
+	case "http", "https":
+		return u, nil
+	}
 }
 
 // ParseURL - parses string into URL.

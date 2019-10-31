@@ -22,17 +22,6 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func newObjectLayerFn() (layer ObjectLayer) {
-	globalObjLayerMutex.RLock()
-	layer = globalObjectAPI
-	globalObjLayerMutex.RUnlock()
-	return
-}
-
-func newCacheObjectsFn() CacheObjectLayer {
-	return globalCacheObjectAPI
-}
-
 // Composed function registering routers for only distributed XL setup.
 func registerDistXLRouters(router *mux.Router, endpoints EndpointList) {
 	// Register storage rpc router only if its a distributed setup.

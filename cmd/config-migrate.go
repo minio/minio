@@ -445,7 +445,7 @@ func migrateV5ToV6() error {
 
 	if cv5.Logger.ElasticSearch.URL != "" {
 		var url *xnet.URL
-		url, err = xnet.ParseURL(cv5.Logger.ElasticSearch.URL)
+		url, err = xnet.ParseHTTPURL(cv5.Logger.ElasticSearch.URL)
 		if err != nil {
 			return err
 		}

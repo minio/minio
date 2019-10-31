@@ -131,11 +131,8 @@ EXAMPLES:
 // Checks if endpoints are either available through environment
 // or command line, returns false if both fails.
 func endpointsPresent(ctx *cli.Context) bool {
-	_, ok := env.Lookup(config.EnvEndpoints)
-	if !ok {
-		ok = ctx.Args().Present()
-	}
-	return ok
+	endpoints := env.Get(config.EnvEndpoints, strings.Join(ctx.Args(), config.ValueSeparator))
+	return len(endpoints) != 0
 }
 
 func serverHandleCmdArgs(ctx *cli.Context) {
@@ -193,6 +190,55 @@ func serverHandleEnvVars() {
 		globalActiveCred = cred
 	}
 
+}
+
+func initAllSubsystems(newObject ObjectLayer) {
+	// Create a new config system.
+	globalConfigSys = NewConfigSys()
+
+	// Initialize config system.
+	if err := globalConfigSys.Init(newObject); err != nil {
+		logger.Fatal(err, "Unable to initialize config system")
+	}
+
+	// Create new IAM system.
+	globalIAMSys = NewIAMSys()
+
+	if err := globalIAMSys.Init(newObject); err != nil {
+		logger.Fatal(err, "Unable to initialize IAM system")
+	}
+
+	buckets, err := newObject.ListBuckets(context.Background())
+	if err != nil {
+		logger.Fatal(err, "Unable to list buckets")
+	}
+
+	// Create new notification system and initialize notification targets
+	globalNotificationSys, err = NewNotificationSys(globalServerConfig, globalEndpoints)
+	if err != nil {
+		logger.Fatal(err, "Unable to initialize notification targets")
+	}
+
+	// Initialize notification system.
+	if err = globalNotificationSys.Init(buckets, newObject); err != nil {
+		logger.Fatal(err, "Unable to initialize notification system")
+	}
+
+	// Create new policy system.
+	globalPolicySys = NewPolicySys()
+
+	// Initialize policy system.
+	if err = globalPolicySys.Init(buckets, newObject); err != nil {
+		logger.Fatal(err, "Unable to initialize policy system")
+	}
+
+	// Create new lifecycle system.
+	globalLifecycleSys = NewLifecycleSys()
+
+	// Initialize lifecycle system.
+	if err = globalLifecycleSys.Init(buckets, newObject); err != nil {
+		logger.Fatal(err, "Unable to initialize lifecycle system")
+	}
 }
 
 // serverMain handler called for 'minio server' command.
@@ -304,13 +350,8 @@ func serverMain(ctx *cli.Context) {
 	// Re-enable logging
 	logger.Disable = false
 
-	// Create a new config system.
-	globalConfigSys = NewConfigSys()
-
-	// Initialize config system.
-	if err = globalConfigSys.Init(newObject); err != nil {
-		logger.Fatal(err, "Unable to initialize config system")
-	}
+	// Validate and initialize all subsystems.
+	initAllSubsystems(newObject)
 
 	if globalCacheConfig.Enabled {
 		logger.StartupMessage(color.Red(color.Bold("Disk caching is recommended only for gateway deployments")))
@@ -320,46 +361,6 @@ func serverMain(ctx *cli.Context) {
 		logger.FatalIf(err, "Unable to initialize disk caching")
 	}
 
-	// Create new IAM system.
-	globalIAMSys = NewIAMSys()
-	if err = globalIAMSys.Init(newObject); err != nil {
-		logger.Fatal(err, "Unable to initialize IAM system")
-	}
-
-	buckets, err := newObject.ListBuckets(context.Background())
-	if err != nil {
-		logger.Fatal(err, "Unable to list buckets on your backend")
-	}
-
-	// Create new policy system.
-	globalPolicySys = NewPolicySys()
-
-	// Initialize policy system.
-	if err = globalPolicySys.Init(buckets, newObject); err != nil {
-		logger.Fatal(err, "Unable to initialize policy system")
-	}
-
-	// Create new lifecycle system.
-	globalLifecycleSys = NewLifecycleSys()
-
-	// Initialize lifecycle system.
-	if err = globalLifecycleSys.Init(buckets, newObject); err != nil {
-		logger.Fatal(err, "Unable to initialize lifecycle system")
-	}
-
-	// Create new notification system.
-	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
-
-	// Initialize notification system.
-	if err = globalNotificationSys.Init(buckets, newObject); err != nil {
-		logger.Fatal(err, "Unable to initialize notification system")
-	}
-
-	// Verify if object layer supports
-	// - encryption
-	// - compression
-	verifyObjectLayerFeatures("server", newObject)
-
 	initDailyLifecycle()
 
 	if globalIsXL {
@@ -368,9 +369,7 @@ func serverMain(ctx *cli.Context) {
 		initGlobalHeal()
 	}
 
-	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject
-	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
 	printStartupMessage(getAPIEndpoints())

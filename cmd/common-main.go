@@ -162,8 +162,9 @@ func handleCommonEnvVars() {
 		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
 	}
 
-	for _, domainName := range strings.Split(env.Get(config.EnvDomain, ""), config.ValueSeparator) {
-		if domainName != "" {
+	domains := env.Get(config.EnvDomain, "")
+	if len(domains) != 0 {
+		for _, domainName := range strings.Split(domains, config.ValueSeparator) {
 			if _, ok := dns2.IsDomainName(domainName); !ok {
 				logger.Fatal(config.ErrInvalidDomainValue(nil).Msg("Unknown value `%s`", domainName),
 					"Invalid MINIO_DOMAIN value in environment variable")
@@ -172,9 +173,9 @@ func handleCommonEnvVars() {
 		}
 	}
 
-	minioEndpointsEnv, ok := env.Lookup(config.EnvPublicIPs)
-	if ok {
-		minioEndpoints := strings.Split(minioEndpointsEnv, config.ValueSeparator)
+	publicIPs := env.Get(config.EnvPublicIPs, "")
+	if len(publicIPs) != 0 {
+		minioEndpoints := strings.Split(publicIPs, config.ValueSeparator)
 		var domainIPs = set.NewStringSet()
 		for _, endpoint := range minioEndpoints {
 			if net.ParseIP(endpoint) == nil {

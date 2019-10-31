@@ -19,6 +19,7 @@ package cmd
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -29,11 +30,29 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 )
 
+func validateAdminReqConfigKV(ctx context.Context, w http.ResponseWriter, r *http.Request) ObjectLayer {
+	// Get current object layer instance.
+	objectAPI := globalObjectAPI
+	if objectAPI == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return nil
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkAdminRequestAuthType(ctx, r, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
+		return nil
+	}
+
+	return objectAPI
+}
+
 // DelConfigKVHandler - DELETE /minio/admin/v2/del-config-kv
 func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DelConfigKVHandler")
 
-	objectAPI := validateAdminReq(ctx, w, r)
+	objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
 		return
 	}
@@ -66,6 +85,7 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	oldCfg := cfg.Clone()
 	scanner := bufio.NewScanner(bytes.NewReader(kvBytes))
 	for scanner.Scan() {
+		// Skip any empty lines
 		if scanner.Text() == "" {
 			continue
 		}
@@ -89,7 +109,7 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetConfigKVHandler")
 
-	objectAPI := validateAdminReq(ctx, w, r)
+	objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
 		return
 	}
@@ -123,6 +143,7 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	oldCfg := cfg.Clone()
 	scanner := bufio.NewScanner(bytes.NewReader(kvBytes))
 	for scanner.Scan() {
+		// Skip any empty lines
 		if scanner.Text() == "" {
 			continue
 		}
@@ -158,8 +179,14 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetConfigKVHandler")
 
-	objectAPI := validateAdminReq(ctx, w, r)
+	objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
+		return
+	}
+
+	cfg, err := getValidConfig(objectAPI)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -167,7 +194,7 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	var buf = &bytes.Buffer{}
 	key := vars["key"]
 	if key != "" {
-		kvs, err := globalServerConfig.GetKVS(key)
+		kvs, err := cfg.GetKVS(key)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
@@ -181,7 +208,7 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 			}
 		}
 	} else {
-		buf.WriteString(globalServerConfig.String())
+		buf.WriteString(cfg.String())
 	}
 
 	password := globalActiveCred.SecretKey
@@ -197,7 +224,7 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) ClearConfigHistoryKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ClearConfigHistoryKVHandler")
 
-	objectAPI := validateAdminReq(ctx, w, r)
+	objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
 		return
 	}
@@ -232,7 +259,7 @@ func (a adminAPIHandlers) ClearConfigHistoryKVHandler(w http.ResponseWriter, r *
 func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "RestoreConfigHistoryKVHandler")
 
-	objectAPI := validateAdminReq(ctx, w, r)
+	objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
 		return
 	}
@@ -260,6 +287,7 @@ func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r
 	oldCfg := cfg.Clone()
 	scanner := bufio.NewScanner(bytes.NewReader(kvBytes))
 	for scanner.Scan() {
+		// Skip any empty lines
 		if scanner.Text() == "" {
 			continue
 		}
@@ -290,7 +318,7 @@ func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r
 func (a adminAPIHandlers) ListConfigHistoryKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListConfigHistoryKVHandler")
 
-	objectAPI := validateAdminReq(ctx, w, r)
+	objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
 		return
 	}
@@ -314,7 +342,7 @@ func (a adminAPIHandlers) ListConfigHistoryKVHandler(w http.ResponseWriter, r *h
 func (a adminAPIHandlers) HelpConfigKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HelpConfigKVHandler")
 
-	objectAPI := validateAdminReq(ctx, w, r)
+	objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
 		return
 	}
@@ -340,7 +368,7 @@ func (a adminAPIHandlers) HelpConfigKVHandler(w http.ResponseWriter, r *http.Req
 func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetConfigHandler")
 
-	objectAPI := validateAdminReq(ctx, w, r)
+	objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
 		return
 	}
@@ -391,7 +419,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetConfigHandler")
 
-	objectAPI := validateAdminReq(ctx, w, r)
+	objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
 		return
 	}

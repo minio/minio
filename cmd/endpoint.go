@@ -32,7 +32,6 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/etcd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/mountinfo"
@@ -590,10 +589,8 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 		return serverAddr, endpoints, setupType, err
 	}
 
-	_, dok := env.Lookup(config.EnvDomain)
-	_, eok := env.Lookup(etcd.EnvEtcdEndpoints)
-	_, iok := env.Lookup(config.EnvPublicIPs)
-	if dok && eok && !iok {
+	publicIPs := env.Get(config.EnvPublicIPs, "")
+	if len(publicIPs) == 0 {
 		updateDomainIPs(uniqueArgs)
 	}
 

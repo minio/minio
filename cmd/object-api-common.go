@@ -44,7 +44,7 @@ const (
 // Global object layer mutex, used for safely updating object layer.
 var globalObjLayerMutex *sync.RWMutex
 
-// Global object layer, only accessed by newObjectLayerFn().
+// Global object layer, only accessed by globalObjectAPI.
 var globalObjectAPI ObjectLayer
 
 //Global cacheObjects, only accessed by newCacheObjectsFn().

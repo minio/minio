@@ -53,7 +53,7 @@ func TestJWT(t *testing.T) {
 		}
 	}
 
-	u1, err := xnet.ParseURL("http://localhost:8443")
+	u1, err := xnet.ParseHTTPURL("http://localhost:8443")
 	if err != nil {
 		t.Fatal(err)
 	}

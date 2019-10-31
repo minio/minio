@@ -374,15 +374,6 @@ func parseGatewaySSE(s string) (gatewaySSE, error) {
 
 // handle gateway env vars
 func handleGatewayEnvVars() {
-	gwsseVal, ok := env.Lookup("MINIO_GATEWAY_SSE")
-	if ok {
-		var err error
-		GlobalGatewaySSE, err = parseGatewaySSE(gwsseVal)
-		if err != nil {
-			logger.Fatal(err, "Unable to parse MINIO_GATEWAY_SSE value (`%s`)", gwsseVal)
-		}
-	}
-
 	accessKey := env.Get(config.EnvAccessKey, "")
 	secretKey := env.Get(config.EnvSecretKey, "")
 	cred, err := auth.CreateCredentials(accessKey, secretKey)
@@ -391,4 +382,13 @@ func handleGatewayEnvVars() {
 			"Unable to validate credentials inherited from the shell environment")
 	}
 	globalActiveCred = cred
+
+	gwsseVal := env.Get("MINIO_GATEWAY_SSE", "")
+	if len(gwsseVal) != 0 {
+		var err error
+		GlobalGatewaySSE, err = parseGatewaySSE(gwsseVal)
+		if err != nil {
+			logger.Fatal(err, "Unable to parse MINIO_GATEWAY_SSE value (`%s`)", gwsseVal)
+		}
+	}
 }
