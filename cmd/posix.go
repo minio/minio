@@ -321,10 +321,14 @@ type DiskInfo struct {
 // total free inodes and underlying filesystem.
 func (s *posix) DiskInfo() (info DiskInfo, err error) {
 	defer func() {
-		if err == errFaultyDisk {
+		if s != nil && err == errFaultyDisk {
 			atomic.AddInt32(&s.ioErrCount, 1)
 		}
 	}()
+
+	if s == nil {
+		return info, errFaultyDisk
+	}
 
 	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return info, errFaultyDisk
@@ -344,7 +348,11 @@ func (s *posix) DiskInfo() (info DiskInfo, err error) {
 	if err != nil {
 		return info, err
 	}
-	localPeer := GetLocalPeer(globalEndpoints)
+
+	localPeer := ""
+	if globalIsDistXL {
+		localPeer = GetLocalPeer(globalEndpoints)
+	}
 
 	return DiskInfo{
 		Total:        di.Total,
