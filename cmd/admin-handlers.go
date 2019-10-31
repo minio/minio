@@ -1761,6 +1761,6 @@ func (a adminAPIHandlers) ServerHardwareInfoHandler(w http.ResponseWriter, r *ht
 		writeSuccessResponseJSON(w, jsonBytes)
 
 	default:
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
 	}
 }
