@@ -169,7 +169,7 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 						Object: ObjectInfo{
 							Name: objects[i],
 						},
-						Host: "[ILM-EXPIRY]",
+						Host: "Internal: [ILM-EXPIRY]",
 					})
 				}
 			}
