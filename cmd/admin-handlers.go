@@ -1791,7 +1791,7 @@ func (a adminAPIHandlers) KMSListKeysHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Either check whether the requested bucket exists or
-	// of (no bucket is specified) list all buckets.
+ 	// if (no bucket is specified) list all buckets.
 	var bucketNames []string
 	if req.Bucket != "" {
 		if _, err := objectAPI.GetBucketInfo(ctx, req.Bucket); err != nil {
