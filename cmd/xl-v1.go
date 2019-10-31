@@ -99,6 +99,10 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 
 	getPeerAddress := func(diskPath string) (string, error) {
 		hostPort := strings.Split(diskPath, SlashSeparator)[0]
+		// Host will be empty for xl/fs disk paths.
+		if hostPort == "" {
+			return "", nil
+		}
 		thisAddr, err := xnet.ParseHost(hostPort)
 		if err != nil {
 			return "", err
@@ -111,6 +115,7 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 	// Wait for the routines.
 	for i, err := range g.Wait() {
 		peerAddr, pErr := getPeerAddress(disksInfo[i].RelativePath)
+
 		if pErr != nil {
 			continue
 		}
@@ -122,6 +127,7 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 		}
 		if err != nil {
 			offlineDisks[peerAddr]++
+			continue
 		}
 		onlineDisks[peerAddr]++
 	}
