@@ -227,7 +227,8 @@ func (n *hdfsObjects) StorageInfo(ctx context.Context) minio.StorageInfo {
 	}
 	sinfo := minio.StorageInfo{}
 	sinfo.Used = []uint64{fsInfo.Used}
-	sinfo.Backend.Type = minio.Unknown
+	sinfo.Backend.Type = minio.BackendGateway
+	sinfo.Backend.GatewayOnline = true
 	return sinfo
 }
 

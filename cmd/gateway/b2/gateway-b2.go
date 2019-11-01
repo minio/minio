@@ -123,7 +123,10 @@ func (g *B2) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 	return &b2Objects{
 		creds:    creds,
 		b2Client: client,
-		ctx:      ctx,
+		httpClient: &http.Client{
+			Transport: minio.NewCustomHTTPTransport(),
+		},
+		ctx: ctx,
 	}, nil
 }
 
@@ -135,10 +138,11 @@ func (g *B2) Production() bool {
 // b2Object implements gateway for MinIO and BackBlaze B2 compatible object storage servers.
 type b2Objects struct {
 	minio.GatewayUnsupported
-	mu       sync.Mutex
-	creds    auth.Credentials
-	b2Client *b2.B2
-	ctx      context.Context
+	mu         sync.Mutex
+	creds      auth.Credentials
+	b2Client   *b2.B2
+	httpClient *http.Client
+	ctx        context.Context
 }
 
 // Convert B2 errors to minio object layer errors.
@@ -225,12 +229,13 @@ func b2MsgCodeToObjectError(code int, msgCode string, msg string, params ...stri
 // Shutdown saves any gateway metadata to disk
 // if necessary and reload upon next restart.
 func (l *b2Objects) Shutdown(ctx context.Context) error {
-	// TODO
 	return nil
 }
 
 // StorageInfo is not relevant to B2 backend.
 func (l *b2Objects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
+	si.Backend.Type = minio.BackendGateway
+	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.httpClient, "https://api.backblazeb2.com/b2api/v1")
 	return si
 }
 

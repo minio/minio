@@ -59,18 +59,15 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		// is able to start on orchestration platforms like Docker Swarm.
 		// Refer https://github.com/minio/minio/issues/8140 for more details.
 		// Make sure to add server not initialized status in header
-		w.Header().Set(xhttp.MinIOServerStatus, "Server-not-initialized")
+		w.Header().Set(xhttp.MinIOServerStatus, "server-not-initialized")
 		writeSuccessResponseHeadersOnly(w)
 		return
 	}
 
 	if !globalIsXL && !globalIsDistXL {
 		s := objLayer.StorageInfo(ctx)
-		// Gateways don't provide disk info.
-		if s.Backend.Type == Unknown {
-			// ListBuckets to confirm gateway backend is up
-			if _, err := objLayer.ListBuckets(ctx); err != nil {
-				logger.LogOnceIf(ctx, err, struct{}{})
+		if s.Backend.Type == BackendGateway {
+			if !s.Backend.GatewayOnline {
 				writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
 				return
 			}
