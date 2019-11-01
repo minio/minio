@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -38,6 +39,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
+	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/quick"
 )
@@ -2442,12 +2444,13 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 		}
 	}()
 
-	transactionConfigFile := configFile + ".transaction"
+	// Construct path to config/transaction.lock for locking
+	transactionConfigPrefix := minioConfigPrefix + "/transaction.lock"
 
 	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
 	// and configFile, take a transaction lock to avoid data race between readConfig()
 	// and saveConfig().
-	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigFile)
+	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigPrefix)
 	if err = objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
@@ -2496,13 +2499,13 @@ func migrateMinioSysConfig(objAPI ObjectLayer) error {
 		return nil
 	}
 
-	// Construct path to config.json for the given bucket.
-	transactionConfigFile := configFile + ".transaction"
+	// Construct path to config/transaction.lock for locking
+	transactionConfigPrefix := minioConfigPrefix + "/transaction.lock"
 
 	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
 	// and configFile, take a transaction lock to avoid data race between readConfig()
 	// and saveConfig().
-	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigFile)
+	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigPrefix)
 	if err := objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
@@ -2530,6 +2533,16 @@ func checkConfigVersion(objAPI ObjectLayer, configFile string, version string) (
 	data, err := readConfig(context.Background(), objAPI, configFile)
 	if err != nil {
 		return false, nil, err
+	}
+
+	if globalConfigEncrypted {
+		data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+		if err != nil {
+			if err == madmin.ErrMaliciousData {
+				return false, nil, config.ErrInvalidCredentialsBackendEncrypted(nil)
+			}
+			return false, nil, err
+		}
 	}
 
 	var versionConfig struct {
@@ -2793,13 +2806,13 @@ func migrateMinioSysConfigToKV(objAPI ObjectLayer) error {
 		notify.SetNotifyWebhook(newCfg, k, args)
 	}
 
-	// Construct path to config.json for the given bucket.
-	transactionConfigFile := configFile + ".transaction"
+	// Construct path to config/transaction.lock for locking
+	transactionConfigPrefix := minioConfigPrefix + "/transaction.lock"
 
 	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
 	// and configFile, take a transaction lock to avoid data race between readConfig()
 	// and saveConfig().
-	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigFile)
+	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigPrefix)
 	if err = objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}

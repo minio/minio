@@ -72,6 +72,24 @@ var (
 		"MINIO_CACHE_ENCRYPTION_MASTER_KEY: For more information, please refer to https://docs.min.io/docs/minio-disk-cache-guide",
 	)
 
+	ErrInvalidRotatingCredentialsBackendEncrypted = newErrFn(
+		"Invalid rotating credentials",
+		"Please set correct rotating credentials in the environment for decryption",
+		`Detected encrypted config backend, correct old access and secret keys should be specified via environment variables MINIO_ACCESS_KEY_OLD and MINIO_SECRET_KEY_OLD to be able to re-encrypt the MinIO config, user IAM and policies with new credentials`,
+	)
+
+	ErrInvalidCredentialsBackendEncrypted = newErrFn(
+		"Invalid credentials",
+		"Please set correct credentials in the environment for decryption",
+		`Detected encrypted config backend, correct access and secret keys should be specified via environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY to be able to decrypt the MinIO config, user IAM and policies`,
+	)
+
+	ErrMissingCredentialsBackendEncrypted = newErrFn(
+		"Credentials missing",
+		"Please set your credentials in the environment",
+		`Detected encrypted config backend, access and secret keys should be specified via environment variables MINIO_ACCESS_KEY and MINIO_SECRET_KEY to be able to decrypt the MinIO config, user IAM and policies`,
+	)
+
 	ErrInvalidCredentials = newErrFn(
 		"Invalid credentials",
 		"Please provide correct credentials",

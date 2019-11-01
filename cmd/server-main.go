@@ -178,18 +178,6 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 func serverHandleEnvVars() {
 	// Handle common environment variables.
 	handleCommonEnvVars()
-
-	accessKey := env.Get(config.EnvAccessKey, "")
-	secretKey := env.Get(config.EnvSecretKey, "")
-	if accessKey != "" && secretKey != "" {
-		cred, err := auth.CreateCredentials(accessKey, secretKey)
-		if err != nil {
-			logger.Fatal(config.ErrInvalidCredentials(err),
-				"Unable to validate credentials inherited from the shell environment")
-		}
-		globalActiveCred = cred
-	}
-
 }
 
 func initAllSubsystems(newObject ObjectLayer) {
@@ -350,8 +338,24 @@ func serverMain(ctx *cli.Context) {
 	// Re-enable logging
 	logger.Disable = false
 
+	// Migrate all backend configs to encrypted backend, also handles rotation as well.
+	logger.FatalIf(handleEncryptedConfigBackend(newObject, true),
+		"Unable to handle encrypted backend for config, iam and policies")
+
+	// ****  WARNING ****
+	// Migrating to encrypted backend should happen before initialization of any
+	// sub-systems, make sure that we do not move the above codeblock elsewhere.
+
 	// Validate and initialize all subsystems.
 	initAllSubsystems(newObject)
+
+	if globalEtcdClient != nil {
+		// ****  WARNING ****
+		// Migrating to encrypted backend on etcd should happen before initialization of
+		// IAM sub-systems, make sure that we do not move the above codeblock elsewhere.
+		logger.FatalIf(migrateIAMConfigsEtcdToEncrypted(globalEtcdClient),
+			"Unable to handle encrypted backend for iam and policies")
+	}
 
 	if globalCacheConfig.Enabled {
 		logger.StartupMessage(color.Red(color.Bold("Disk caching is recommended only for gateway deployments")))

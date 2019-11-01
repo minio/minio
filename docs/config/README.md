@@ -32,13 +32,29 @@ $ mc tree --files ~/.minio
 You can provide a custom certs directory using `--certs-dir` command line option.
 
 #### Credentials
-On MinIO admin credentials or root credentials are only allowed to be changed using ENVs `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`.
+On MinIO admin credentials or root credentials are only allowed to be changed using ENVs namely `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`. Using the combination of these two values MinIO encrypts the config stored at the backend.
 
 ```
 export MINIO_ACCESS_KEY=minio
 export MINIO_SECRET_KEY=minio13
 minio server /data
 ```
+
+##### Rotating encryption with new credentials
+
+Additionally if you wish to change the admin credentials, then MinIO will automatically detect this and re-encrypt with new credentials as shown below. For one time only special ENVs as shown below needs to be set for rotating the encryption config.
+
+> Old ENVs are never remembered in memory and are destroyed right after they are used to migrate your existing content with new credentials. You are safe to remove them after the server as successfully started, by restarting the services once again.
+
+```
+export MINIO_ACCESS_KEY=newminio
+export MINIO_SECRET_KEY=newminio123
+export MINIO_ACCESS_KEY_OLD=minio
+export MINIO_SECRET_KEY_OLD=minio123
+minio server /data
+```
+
+Once the migration is complete and server has started successfully remove `MINIO_ACCESS_KEY_OLD` and `MINIO_SECRET_KEY_OLD` environment variables, restart the server.
 
 #### Region
 | Field                     | Type     | Description                                                                                                                                                                             |

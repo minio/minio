@@ -136,11 +136,8 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
-	// Handle common env vars.
-	handleCommonEnvVars()
-
 	// Handle gateway specific env
-	handleGatewayEnvVars()
+	gatewayHandleEnvVars()
 
 	// Set system resources to maximum.
 	logger.LogIf(context.Background(), setMaxResources())
@@ -230,6 +227,16 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		initFederatorBackend(newObject)
 	}
 
+	// Migrate all backend configs to encrypted backend, also handles rotation as well.
+	// For "nas" gateway we need to specially handle the backend migration as well.
+	// Internally code handles migrating etcd if enabled automatically.
+	logger.FatalIf(handleEncryptedConfigBackend(newObject, enableConfigOps),
+		"Unable to handle encrypted backend for config, iam and policies")
+
+	// ****  WARNING ****
+	// Migrating to encrypted backend should happen before initialization of any
+	// sub-systems, make sure that we do not move the above codeblock elsewhere.
+
 	if enableConfigOps {
 		// Create a new config system.
 		globalConfigSys = NewConfigSys()
@@ -245,6 +252,14 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// This is only to uniquely identify each gateway deployments.
 	globalDeploymentID = env.Get("MINIO_GATEWAY_DEPLOYMENT_ID", mustGetUUID())
 	logger.SetDeploymentID(globalDeploymentID)
+
+	if globalEtcdClient != nil {
+		// ****  WARNING ****
+		// Migrating to encrypted backend on etcd should happen before initialization of
+		// IAM sub-systems, make sure that we do not move the above codeblock elsewhere.
+		logger.FatalIf(migrateIAMConfigsEtcdToEncrypted(globalEtcdClient),
+			"Unable to handle encrypted backend for iam and policies")
+	}
 
 	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.
