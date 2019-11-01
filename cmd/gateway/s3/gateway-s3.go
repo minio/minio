@@ -261,7 +261,11 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 
 	s := s3Objects{
 		Client: clnt,
+		HTTPClient: &http.Client{
+			Transport: minio.NewCustomHTTPTransport(),
+		},
 	}
+
 	// Enables single encryption of KMS is configured.
 	if minio.GlobalKMS != nil {
 		encS := s3EncObjects{s}
@@ -283,7 +287,8 @@ func (g *S3) Production() bool {
 // s3Objects implements gateway for MinIO and S3 compatible object storage servers.
 type s3Objects struct {
 	minio.GatewayUnsupported
-	Client *miniogo.Core
+	Client     *miniogo.Core
+	HTTPClient *http.Client
 }
 
 // Shutdown saves any gateway metadata to disk
@@ -294,6 +299,8 @@ func (l *s3Objects) Shutdown(ctx context.Context) error {
 
 // StorageInfo is not relevant to S3 backend.
 func (l *s3Objects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
+	si.Backend.Type = minio.BackendGateway
+	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.HTTPClient, l.Client.EndpointURL().String())
 	return si
 }
 

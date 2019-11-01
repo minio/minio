@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -284,6 +286,28 @@ func ToMinioClientCompleteParts(parts []CompletePart) []minio.CompletePart {
 		mparts[i] = ToMinioClientCompletePart(part)
 	}
 	return mparts
+}
+
+// IsBackendOnline - verifies if the backend is reachable
+// by performing a GET request on the URL. returns 'true'
+// if backend is reachable.
+func IsBackendOnline(ctx context.Context, clnt *http.Client, urlStr string) bool {
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
+	// never follow redirects
+	clnt.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
+	if err != nil {
+		return false
+	}
+	if _, err = clnt.Do(req); err != nil {
+		return !xnet.IsNetworkOrHostDown(err)
+	}
+	return true
 }
 
 // ErrorRespToObjectError converts MinIO errors to minio object layer errors.

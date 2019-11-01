@@ -34,6 +34,8 @@ const (
 	BackendFS
 	// Multi disk BackendErasure (single, distributed) backend.
 	BackendErasure
+	// Gateway backend.
+	BackendGateway
 	// Add your own backend.
 )
 
@@ -49,8 +51,11 @@ type StorageInfo struct {
 
 	// Backend type.
 	Backend struct {
-		// Represents various backend types, currently on FS and Erasure.
+		// Represents various backend types, currently on FS, Erasure and Gateway
 		Type BackendType
+
+		// Following fields are only meaningful if BackendType is Gateway.
+		GatewayOnline bool
 
 		// Following fields are only meaningful if BackendType is Erasure.
 		OnlineDisks      madmin.BackendDisks // Online disks during server startup.

@@ -145,7 +145,9 @@ func (g *OSS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	if err != nil {
 		return nil, err
 	}
-
+	client.HTTPClient = &http.Client{
+		Transport: minio.NewCustomHTTPTransport(),
+	}
 	return &ossObjects{
 		Client: client,
 	}, nil
@@ -341,7 +343,9 @@ func (l *ossObjects) Shutdown(ctx context.Context) error {
 
 // StorageInfo is not relevant to OSS backend.
 func (l *ossObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
-	return
+	si.Backend.Type = minio.BackendGateway
+	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.Client.HTTPClient, l.Client.Config.Endpoint)
+	return si
 }
 
 // ossIsValidBucketName verifies whether a bucket name is valid.

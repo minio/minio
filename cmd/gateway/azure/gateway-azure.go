@@ -185,7 +185,9 @@ func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 	c.HTTPClient = &http.Client{Transport: minio.NewCustomHTTPTransport()}
 
 	return &azureObjects{
-		client: c.GetBlobService(),
+		endpoint:   fmt.Sprintf("https://%s.blob.core.windows.net", creds.AccessKey),
+		httpClient: c.HTTPClient,
+		client:     c.GetBlobService(),
 	}, nil
 }
 
@@ -343,7 +345,9 @@ func azurePropertiesToS3Meta(meta storage.BlobMetadata, props storage.BlobProper
 // azureObjects - Implements Object layer for Azure blob storage.
 type azureObjects struct {
 	minio.GatewayUnsupported
-	client storage.BlobStorageClient // Azure sdk client
+	endpoint   string
+	httpClient *http.Client
+	client     storage.BlobStorageClient // Azure sdk client
 }
 
 // Convert azure errors to minio object layer errors.
@@ -447,6 +451,8 @@ func (a *azureObjects) Shutdown(ctx context.Context) error {
 
 // StorageInfo - Not relevant to Azure backend.
 func (a *azureObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
+	si.Backend.Type = minio.BackendGateway
+	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, a.httpClient, a.endpoint)
 	return si
 }
 
