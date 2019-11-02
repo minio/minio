@@ -693,19 +693,24 @@ func getRemoteHosts(endpoints EndpointList) []*xnet.Host {
 	var remoteHosts []*xnet.Host
 	for _, hostStr := range GetRemotePeers(endpoints) {
 		host, err := xnet.ParseHost(hostStr)
-		logger.FatalIf(err, "Unable to parse peer Host")
+		if err != nil {
+			logger.LogIf(context.Background(), err)
+			continue
+		}
 		remoteHosts = append(remoteHosts, host)
 	}
 
 	return remoteHosts
 }
 
-func getRestClients(peerHosts []*xnet.Host) []*peerRESTClient {
+func getRestClients(endpoints EndpointList) []*peerRESTClient {
+	peerHosts := getRemoteHosts(endpoints)
 	restClients := make([]*peerRESTClient, len(peerHosts))
 	for i, host := range peerHosts {
 		client, err := newPeerRESTClient(host)
 		if err != nil {
 			logger.LogIf(context.Background(), err)
+			continue
 		}
 		restClients[i] = client
 	}

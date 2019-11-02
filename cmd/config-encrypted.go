@@ -19,9 +19,11 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"os"
 	"strings"
 
 	etcd "github.com/coreos/etcd/clientv3"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -97,6 +99,8 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 		if err != nil {
 			return err
 		}
+		os.Unsetenv(config.EnvAccessKeyOld)
+		os.Unsetenv(config.EnvSecretKeyOld)
 	}
 
 	// Migrating Config backend needs a retry mechanism for
@@ -124,7 +128,8 @@ const (
 )
 
 var (
-	backendEncryptedFileValue = []byte("encrypted")
+	backendEncryptedMigrationIncomplete = []byte("incomplete")
+	backendEncryptedMigrationComplete   = []byte("encrypted")
 )
 
 func checkBackendEtcdEncrypted(ctx context.Context, client *etcd.Client) (bool, error) {
@@ -132,7 +137,7 @@ func checkBackendEtcdEncrypted(ctx context.Context, client *etcd.Client) (bool, 
 	if err != nil && err != errConfigNotFound {
 		return false, err
 	}
-	return err == nil && bytes.Equal(data, backendEncryptedFileValue), nil
+	return err == nil && bytes.Equal(data, backendEncryptedMigrationComplete), nil
 }
 
 func checkBackendEncrypted(objAPI ObjectLayer) (bool, error) {
@@ -140,7 +145,7 @@ func checkBackendEncrypted(objAPI ObjectLayer) (bool, error) {
 	if err != nil && err != errConfigNotFound {
 		return false, err
 	}
-	return err == nil && bytes.Equal(data, backendEncryptedFileValue), nil
+	return err == nil && bytes.Equal(data, backendEncryptedMigrationComplete), nil
 }
 
 func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
@@ -178,6 +183,9 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 		if err != nil {
 			return err
 		}
+		// Once we have obtained the rotating creds
+		os.Unsetenv(config.EnvAccessKeyOld)
+		os.Unsetenv(config.EnvSecretKeyOld)
 	}
 
 	if encrypted {
@@ -191,18 +199,21 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 		if activeCredOld.Equal(globalActiveCred) {
 			return nil
 		}
-	}
 
-	if !activeCredOld.IsValid() {
-		logger.Info("Attempting a one time encrypt of all IAM users and policies on etcd")
+		logger.Info("Attempting rotation of encrypted IAM users and policies on etcd with newly supplied credentials")
 	} else {
-		logger.Info("Attempting a rotation of encrypted IAM users and policies on etcd with newly supplied credentials")
+		logger.Info("Attempting encryption of all IAM users and policies on etcd")
 	}
 
 	r, err := client.Get(ctx, minioConfigPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
 	if err != nil {
 		return err
 	}
+
+	if err = saveKeyEtcd(ctx, client, backendEncryptedFile, backendEncryptedMigrationIncomplete); err != nil {
+		return err
+	}
+
 	for _, kv := range r.Kvs {
 		var (
 			cdata    []byte
@@ -217,18 +228,32 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 			}
 			return err
 		}
+
+		var data []byte
 		// Is rotating of creds requested?
 		if activeCredOld.IsValid() {
-			cdata, err = madmin.DecryptData(activeCredOld.String(), bytes.NewReader(cdata))
+			data, err = madmin.DecryptData(activeCredOld.String(), bytes.NewReader(cdata))
 			if err != nil {
 				if err == madmin.ErrMaliciousData {
-					return config.ErrInvalidRotatingCredentialsBackendEncrypted(nil)
+					data, err = madmin.DecryptData(globalActiveCred.String(),
+						bytes.NewReader(cdata))
+					if err != nil {
+						return config.ErrInvalidRotatingCredentialsBackendEncrypted(nil)
+					}
+				} else {
+					return err
 				}
-				return err
 			}
 		}
 
-		cencdata, err = madmin.EncryptData(globalActiveCred.String(), cdata)
+		// Attempt to unmarshal JSON content
+		var dummy map[string]interface{}
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		if err = json.Unmarshal(data, &dummy); err != nil {
+			return err
+		}
+
+		cencdata, err = madmin.EncryptData(globalActiveCred.String(), data)
 		if err != nil {
 			return err
 		}
@@ -237,7 +262,10 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 			return err
 		}
 	}
-	return saveKeyEtcd(ctx, client, backendEncryptedFile, backendEncryptedFileValue)
+	if encrypted && globalActiveCred.IsValid() {
+		logger.Info("Rotation complete, please make sure to unset MINIO_ACCESS_KEY_OLD and MINIO_SECRET_KEY_OLD envs")
+	}
+	return saveKeyEtcd(ctx, client, backendEncryptedFile, backendEncryptedMigrationComplete)
 }
 
 func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Credentials, encrypted bool) error {
@@ -252,12 +280,14 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Crede
 		if activeCredOld.Equal(globalActiveCred) {
 			return nil
 		}
+		logger.Info("Attempting rotation of encrypted config, IAM users and policies on MinIO with newly supplied credentials")
+	} else {
+		logger.Info("Attempting encryption of all config, IAM users and policies on MinIO backend")
 	}
 
-	if !activeCredOld.IsValid() {
-		logger.Info("Attempting a one time encrypt of all config, IAM users and policies on MinIO backend")
-	} else {
-		logger.Info("Attempting a rotation of encrypted config, IAM users and policies on MinIO with newly supplied credentials")
+	err := saveConfig(context.Background(), objAPI, backendEncryptedFile, backendEncryptedMigrationIncomplete)
+	if err != nil {
+		return err
 	}
 
 	var marker string
@@ -277,18 +307,31 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Crede
 				return err
 			}
 
+			var data []byte
 			// Is rotating of creds requested?
 			if activeCredOld.IsValid() {
-				cdata, err = madmin.DecryptData(activeCredOld.String(), bytes.NewReader(cdata))
+				data, err = madmin.DecryptData(activeCredOld.String(), bytes.NewReader(cdata))
 				if err != nil {
 					if err == madmin.ErrMaliciousData {
-						return config.ErrInvalidRotatingCredentialsBackendEncrypted(nil)
+						data, err = madmin.DecryptData(globalActiveCred.String(),
+							bytes.NewReader(cdata))
+						if err != nil {
+							return config.ErrInvalidRotatingCredentialsBackendEncrypted(nil)
+						}
+					} else {
+						return err
 					}
-					return err
 				}
 			}
 
-			cencdata, err = madmin.EncryptData(globalActiveCred.String(), cdata)
+			// Attempt to unmarshal JSON content
+			var dummy map[string]interface{}
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
+			if err = json.Unmarshal(data, &dummy); err != nil {
+				return err
+			}
+
+			cencdata, err = madmin.EncryptData(globalActiveCred.String(), data)
 			if err != nil {
 				return err
 			}
@@ -305,5 +348,9 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Crede
 		marker = res.NextMarker
 	}
 
-	return saveConfig(context.Background(), objAPI, backendEncryptedFile, backendEncryptedFileValue)
+	if encrypted && globalActiveCred.IsValid() {
+		logger.Info("Rotation complete, please make sure to unset MINIO_ACCESS_KEY_OLD and MINIO_SECRET_KEY_OLD envs")
+	}
+
+	return saveConfig(context.Background(), objAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
 }

@@ -28,8 +28,9 @@ import (
 func printGatewayStartupMessage(apiEndPoints []string, backendType string) {
 	strippedAPIEndpoints := stripStandardPorts(apiEndPoints)
 	// If cache layer is enabled, print cache capacity.
-	if globalCacheObjectAPI != nil {
-		printCacheStorageInfo(globalCacheObjectAPI.StorageInfo(context.Background()))
+	cacheAPI := newCachedObjectLayerFn()
+	if cacheAPI != nil {
+		printCacheStorageInfo(cacheAPI.StorageInfo(context.Background()))
 	}
 	// Prints credential.
 	printGatewayCommonMsg(strippedAPIEndpoints)

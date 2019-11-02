@@ -23,6 +23,31 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 )
 
+func newObjectLayerWithoutSafeModeFn() ObjectLayer {
+	globalObjLayerMutex.Lock()
+	defer globalObjLayerMutex.Unlock()
+	return globalObjectAPI
+}
+
+func newObjectLayerFn() ObjectLayer {
+	globalObjLayerMutex.Lock()
+	defer globalObjLayerMutex.Unlock()
+	if globalSafeMode {
+		return nil
+	}
+	return globalObjectAPI
+}
+
+func newCachedObjectLayerFn() CacheObjectLayer {
+	globalObjLayerMutex.Lock()
+	defer globalObjLayerMutex.Unlock()
+
+	if globalSafeMode {
+		return nil
+	}
+	return globalCacheObjectAPI
+}
+
 // objectAPIHandler implements and provides http handlers for S3 API.
 type objectAPIHandlers struct {
 	ObjectAPI func() ObjectLayer
@@ -37,18 +62,8 @@ type objectAPIHandlers struct {
 func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) {
 	// Initialize API.
 	api := objectAPIHandlers{
-		ObjectAPI: func() ObjectLayer {
-			if !globalSafeMode {
-				return globalObjectAPI
-			}
-			return nil
-		},
-		CacheAPI: func() CacheObjectLayer {
-			if !globalSafeMode {
-				return globalCacheObjectAPI
-			}
-			return nil
-		},
+		ObjectAPI: newObjectLayerFn,
+		CacheAPI:  newCachedObjectLayerFn,
 		EncryptionEnabled: func() bool {
 			return encryptionEnabled
 		},

@@ -52,9 +52,9 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "LivenessCheckHandler")
 
-	objLayer := globalObjectAPI
+	objLayer := newObjectLayerFn()
 	// Service not initialized yet
-	if objLayer == nil || globalSafeMode {
+	if objLayer == nil {
 		// Respond with 200 OK while server initializes to ensure a distributed cluster
 		// is able to start on orchestration platforms like Docker Swarm.
 		// Refer https://github.com/minio/minio/issues/8140 for more details.

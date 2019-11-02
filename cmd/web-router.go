@@ -62,18 +62,8 @@ const specialAssets = "index_bundle.*.js|loader.css|logo.svg|firefox.png|safari.
 func registerWebRouter(router *mux.Router) error {
 	// Initialize Web.
 	web := &webAPIHandlers{
-		ObjectAPI: func() ObjectLayer {
-			if !globalSafeMode {
-				return globalObjectAPI
-			}
-			return nil
-		},
-		CacheAPI: func() CacheObjectLayer {
-			if !globalSafeMode {
-				return globalCacheObjectAPI
-			}
-			return nil
-		},
+		ObjectAPI: newObjectLayerFn,
+		CacheAPI:  newCachedObjectLayerFn,
 	}
 
 	// Initialize a new json2 codec.

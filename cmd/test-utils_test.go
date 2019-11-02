@@ -370,11 +370,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalPolicySys = NewPolicySys()
 	globalPolicySys.Init(buckets, objLayer)
 
-	globalNotificationSys, err = NewNotificationSys(globalServerConfig, testServer.Disks)
-	if err != nil {
-		t.Fatalf("Unable to initialize notification system %s", err)
-	}
-
+	globalNotificationSys = NewNotificationSys(testServer.Disks)
 	globalNotificationSys.Init(buckets, objLayer)
 
 	globalLifecycleSys = NewLifecycleSys()
@@ -1640,10 +1636,10 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 	globalIAMSys.Init(xl)
 
 	globalPolicySys = NewPolicySys()
-	globalNotificationSys, err = NewNotificationSys(globalServerConfig, endpoints)
-	if err != nil {
-		return xl, err
-	}
+	globalPolicySys.Init(nil, xl)
+
+	globalNotificationSys = NewNotificationSys(endpoints)
+	globalNotificationSys.Init(nil, xl)
 
 	return xl, nil
 }

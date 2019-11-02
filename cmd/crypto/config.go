@@ -17,6 +17,7 @@ package crypto
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 
 	"github.com/minio/minio/cmd/config"
@@ -112,6 +113,12 @@ const (
 	EnvKMSVaultNamespace = "MINIO_KMS_VAULT_NAMESPACE"
 )
 
+var defaultCfg = VaultConfig{
+	Auth: VaultAuth{
+		Type: "approle",
+	},
+}
+
 // LookupConfig extracts the KMS configuration provided by environment
 // variables and merge them with the provided KMS configuration. The
 // merging follows the following rules:
@@ -139,7 +146,7 @@ func LookupConfig(kvs config.KVS) (KMSConfig, error) {
 			return kmsCfg, err
 		}
 	}
-	if !kmsCfg.Vault.IsEmpty() {
+	if kmsCfg.Vault.Enabled {
 		return kmsCfg, nil
 	}
 	stateBool, err := config.ParseBool(env.Get(EnvKMSVaultState, kvs.Get(config.State)))
@@ -166,23 +173,30 @@ func LookupConfig(kvs config.KVS) (KMSConfig, error) {
 	vcfg.Endpoint = endpointStr
 	vcfg.CAPath = env.Get(EnvKMSVaultCAPath, kvs.Get(KMSVaultCAPath))
 	vcfg.Auth.Type = env.Get(EnvKMSVaultAuthType, kvs.Get(KMSVaultAuthType))
+	if vcfg.Auth.Type == "" {
+		vcfg.Auth.Type = "approle"
+	}
 	vcfg.Auth.AppRole.ID = env.Get(EnvKMSVaultAppRoleID, kvs.Get(KMSVaultAppRoleID))
 	vcfg.Auth.AppRole.Secret = env.Get(EnvKMSVaultAppSecretID, kvs.Get(KMSVaultAppRoleSecret))
 	vcfg.Key.Name = env.Get(EnvKMSVaultKeyName, kvs.Get(KMSVaultKeyName))
 	vcfg.Namespace = env.Get(EnvKMSVaultNamespace, kvs.Get(KMSVaultNamespace))
-	keyVersion := env.Get(EnvKMSVaultKeyVersion, kvs.Get(KMSVaultKeyVersion))
-
-	if keyVersion != "" {
+	if keyVersion := env.Get(EnvKMSVaultKeyVersion, kvs.Get(KMSVaultKeyVersion)); keyVersion != "" {
 		vcfg.Key.Version, err = strconv.Atoi(keyVersion)
 		if err != nil {
 			return kmsCfg, fmt.Errorf("Unable to parse VaultKeyVersion value (`%s`)", keyVersion)
 		}
 	}
 
+	if reflect.DeepEqual(vcfg, defaultCfg) {
+		return kmsCfg, nil
+	}
+
+	// Verify all the proper settings.
 	if err = vcfg.Verify(); err != nil {
 		return kmsCfg, err
 	}
 
+	vcfg.Enabled = true
 	kmsCfg.Vault = vcfg
 	return kmsCfg, nil
 }
@@ -191,7 +205,7 @@ func LookupConfig(kvs config.KVS) (KMSConfig, error) {
 func NewKMS(cfg KMSConfig) (kms KMS, err error) {
 	// Lookup KMS master keys - only available through ENV.
 	if masterKeyLegacy := env.Get(EnvKMSMasterKeyLegacy, ""); len(masterKeyLegacy) != 0 {
-		if !cfg.Vault.IsEmpty() { // Vault and KMS master key provided
+		if cfg.Vault.Enabled { // Vault and KMS master key provided
 			return kms, errors.New("Ambiguous KMS configuration: vault configuration and a master key are provided at the same time")
 		}
 		kms, err = ParseMasterKey(masterKeyLegacy)
@@ -199,15 +213,14 @@ func NewKMS(cfg KMSConfig) (kms KMS, err error) {
 			return kms, err
 		}
 	} else if masterKey := env.Get(EnvKMSMasterKey, ""); len(masterKey) != 0 {
-		if !cfg.Vault.IsEmpty() { // Vault and KMS master key provided
+		if cfg.Vault.Enabled { // Vault and KMS master key provided
 			return kms, errors.New("Ambiguous KMS configuration: vault configuration and a master key are provided at the same time")
 		}
 		kms, err = ParseMasterKey(masterKey)
 		if err != nil {
 			return kms, err
 		}
-	}
-	if !cfg.Vault.IsEmpty() {
+	} else if cfg.Vault.Enabled {
 		kms, err = NewVault(cfg.Vault)
 		if err != nil {
 			return kms, err

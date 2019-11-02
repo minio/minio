@@ -18,11 +18,11 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"hash/crc32"
 	"path"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -117,7 +117,6 @@ func hashOrder(key string, cardinality int) []int {
 
 // Constructs xlMetaV1 using `jsoniter` lib.
 func xlMetaV1UnmarshalJSON(ctx context.Context, xlMetaBuf []byte) (xlMeta xlMetaV1, err error) {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err = json.Unmarshal(xlMetaBuf, &xlMeta)
 	return xlMeta, err
 }

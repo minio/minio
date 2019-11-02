@@ -42,12 +42,8 @@ type peerRESTServer struct {
 }
 
 func getServerInfo() (*ServerInfoData, error) {
-	if globalBootTime.IsZero() {
-		return nil, errServerNotInitialized
-	}
-
-	objLayer := globalObjectAPI
-	if objLayer == nil || globalSafeMode {
+	objLayer := newObjectLayerWithoutSafeModeFn()
+	if objLayer == nil {
 		return nil, errServerNotInitialized
 	}
 
@@ -166,7 +162,7 @@ func (s *peerRESTServer) DeletePolicyHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	objAPI := globalObjectAPI
+	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -194,7 +190,7 @@ func (s *peerRESTServer) LoadPolicyHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	objAPI := globalObjectAPI
+	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -222,7 +218,7 @@ func (s *peerRESTServer) LoadPolicyMappingHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	objAPI := globalObjectAPI
+	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -251,7 +247,7 @@ func (s *peerRESTServer) DeleteUserHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	objAPI := globalObjectAPI
+	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -279,7 +275,7 @@ func (s *peerRESTServer) LoadUserHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	objAPI := globalObjectAPI
+	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -329,7 +325,7 @@ func (s *peerRESTServer) LoadGroupHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	objAPI := globalObjectAPI
+	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -539,7 +535,7 @@ func (s *peerRESTServer) ReloadFormatHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	objAPI := globalObjectAPI
+	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return

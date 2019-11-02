@@ -51,11 +51,8 @@ import (
 // -- If no, make an entry
 // -- If yes, check if the IP of entry matches local IP. This means entry is for this instance.
 // -- If IP of the entry doesn't match, this means entry is for another instance. Log an error to console.
-func initFederatorBackend(objLayer ObjectLayer) {
-	// Get buckets in the backend
-	b, err := objLayer.ListBuckets(context.Background())
-	if err != nil {
-		logger.LogIf(context.Background(), err)
+func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
+	if len(buckets) == 0 {
 		return
 	}
 
@@ -69,21 +66,21 @@ func initFederatorBackend(objLayer ObjectLayer) {
 	bucketSet := set.NewStringSet()
 
 	// Add buckets that are not registered with the DNS
-	g := errgroup.WithNErrs(len(b))
-	for index := range b {
-		bucketSet.Add(b[index].Name)
+	g := errgroup.WithNErrs(len(buckets))
+	for index := range buckets {
+		bucketSet.Add(buckets[index].Name)
 		index := index
 		g.Go(func() error {
-			r, gerr := globalDNSConfig.Get(b[index].Name)
+			r, gerr := globalDNSConfig.Get(buckets[index].Name)
 			if gerr != nil {
 				if gerr == dns.ErrNoEntriesFound {
-					return globalDNSConfig.Put(b[index].Name)
+					return globalDNSConfig.Put(buckets[index].Name)
 				}
 				return gerr
 			}
 			if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
 				// There is already an entry for this bucket, with all IP addresses different. This indicates a bucket name collision. Log an error and continue.
-				return fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket. Use one of these IP addresses %v to access the bucket", b[index].Name, globalDomainIPs.ToSlice())
+				return fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket. Use one of these IP addresses %v to access the bucket", buckets[index].Name, globalDomainIPs.ToSlice())
 			}
 			return nil
 		}, index)

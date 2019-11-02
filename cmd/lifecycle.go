@@ -59,7 +59,7 @@ func (sys *LifecycleSys) Get(bucketName string) (lifecycle lifecycle.Lifecycle, 
 	if globalIsGateway {
 		// When gateway is enabled, no cached value
 		// is used to validate life cycle policies.
-		objAPI := globalObjectAPI
+		objAPI := newObjectLayerWithoutSafeModeFn()
 		if objAPI == nil {
 			return
 		}

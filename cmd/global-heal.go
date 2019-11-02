@@ -156,7 +156,7 @@ func execLeaderTasks(sets *xlSets) {
 func startGlobalHeal() {
 	var objAPI ObjectLayer
 	for {
-		objAPI = globalObjectAPI
+		objAPI = newObjectLayerWithoutSafeModeFn()
 		if objAPI == nil {
 			time.Sleep(time.Second)
 			continue

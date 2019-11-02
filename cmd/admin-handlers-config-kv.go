@@ -33,7 +33,7 @@ import (
 
 func validateAdminReqConfigKV(ctx context.Context, w http.ResponseWriter, r *http.Request) ObjectLayer {
 	// Get current object layer instance.
-	objectAPI := globalObjectAPI
+	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return nil
@@ -136,8 +136,15 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	}
 	cfg, err := readServerConfig(ctx, objectAPI)
 	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
+		// Config not found for some reason, allow things to continue
+		// by initializing a new fresh config in safe mode.
+		if err == errConfigNotFound && globalSafeMode {
+			cfg = newServerConfig()
+			err = nil
+		} else {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
 	}
 
 	defaultKVS := configDefaultKVS()
@@ -174,6 +181,9 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+
+	// Make sure to write backend is encrypted
+	saveConfig(context.Background(), objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
 }
 
 // GetConfigKVHandler - GET /minio/admin/v2/get-config-kv?key={key}
@@ -280,8 +290,15 @@ func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r
 
 	cfg, err := readServerConfig(ctx, objectAPI)
 	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
+		// Config not found for some reason, allow things to continue
+		// by initializing a new fresh config in safe mode.
+		if err == errConfigNotFound && globalSafeMode {
+			cfg = newServerConfig()
+			err = nil
+		} else {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
 	}
 
 	defaultKVS := configDefaultKVS()
@@ -424,6 +441,9 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+
+	// Make sure to write backend is encrypted
+	saveConfig(context.Background(), objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
 
 	// Reply to the client before restarting minio server.
 	writeSuccessResponseHeadersOnly(w)

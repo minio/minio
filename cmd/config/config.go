@@ -386,11 +386,6 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 		return Error(fmt.Sprintf("invalid number of arguments %s", s))
 	}
 
-	if subSystemValue[0] == CredentialsSubSys {
-		return Error(fmt.Sprintf("changing '%s' sub-system values is not allowed, use ENVs instead",
-			subSystemValue[0]))
-	}
-
 	if !SubSystems.Contains(subSystemValue[0]) {
 		return Error(fmt.Sprintf("unknown sub-system %s", s))
 	}
