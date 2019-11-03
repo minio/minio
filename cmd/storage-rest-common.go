@@ -17,30 +17,31 @@
 package cmd
 
 const (
-	storageRESTVersion = "v10"
-	storageRESTPath    = minioReservedBucketPath + "/storage/" + storageRESTVersion + SlashSeparator
+	storageRESTVersion       = "v10"
+	storageRESTVersionPrefix = SlashSeparator + "v10"
+	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
 
 const (
-	storageRESTMethodDiskInfo  = "diskinfo"
-	storageRESTMethodMakeVol   = "makevol"
-	storageRESTMethodStatVol   = "statvol"
-	storageRESTMethodDeleteVol = "deletevol"
-	storageRESTMethodListVols  = "listvols"
+	storageRESTMethodDiskInfo  = "/diskinfo"
+	storageRESTMethodMakeVol   = "/makevol"
+	storageRESTMethodStatVol   = "/statvol"
+	storageRESTMethodDeleteVol = "/deletevol"
+	storageRESTMethodListVols  = "/listvols"
 
-	storageRESTMethodAppendFile     = "appendfile"
-	storageRESTMethodCreateFile     = "createfile"
-	storageRESTMethodWriteAll       = "writeall"
-	storageRESTMethodStatFile       = "statfile"
-	storageRESTMethodReadAll        = "readall"
-	storageRESTMethodReadFile       = "readfile"
-	storageRESTMethodReadFileStream = "readfilestream"
-	storageRESTMethodListDir        = "listdir"
-	storageRESTMethodWalk           = "walk"
-	storageRESTMethodDeleteFile     = "deletefile"
-	storageRESTMethodDeleteFileBulk = "deletefilebulk"
-	storageRESTMethodRenameFile     = "renamefile"
-	storageRESTMethodVerifyFile     = "verifyfile"
+	storageRESTMethodAppendFile     = "/appendfile"
+	storageRESTMethodCreateFile     = "/createfile"
+	storageRESTMethodWriteAll       = "/writeall"
+	storageRESTMethodStatFile       = "/statfile"
+	storageRESTMethodReadAll        = "/readall"
+	storageRESTMethodReadFile       = "/readfile"
+	storageRESTMethodReadFileStream = "/readfilestream"
+	storageRESTMethodListDir        = "/listdir"
+	storageRESTMethodWalk           = "/walk"
+	storageRESTMethodDeleteFile     = "/deletefile"
+	storageRESTMethodDeleteFileBulk = "/deletefilebulk"
+	storageRESTMethodRenameFile     = "/renamefile"
+	storageRESTMethodVerifyFile     = "/verifyfile"
 )
 
 const (

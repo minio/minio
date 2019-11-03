@@ -41,6 +41,20 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 	var encrypted bool
 	var err error
 
+	// Construct path to config/transaction.lock for locking
+	transactionConfigPrefix := minioConfigPrefix + "/transaction.lock"
+
+	// Make sure to hold lock for entire migration to avoid
+	// such that only one server should migrate the entire config
+	// at a given time, this big transaction lock ensures this
+	// appropriately. This is also true for rotation of encrypted
+	// content.
+	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigPrefix)
+	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
+	defer objLock.Unlock()
+
 	// Migrating Config backend needs a retry mechanism for
 	// the following reasons:
 	//  - Read quorum is lost just after the initialization
@@ -48,8 +62,7 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 	for range newRetryTimerSimple(doneCh) {
 		if encrypted, err = checkBackendEncrypted(objAPI); err != nil {
 			if err == errDiskNotFound ||
-				strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-				strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
+				strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) {
 				logger.Info("Waiting for config backend to be encrypted..")
 				continue
 			}
@@ -246,18 +259,6 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Crede
 	} else {
 		logger.Info("Attempting a rotation of encrypted config, IAM users and policies on MinIO with newly supplied credentials")
 	}
-
-	// Construct path to config/transaction.lock for locking
-	transactionConfigPrefix := minioConfigPrefix + "/transaction.lock"
-
-	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
-	// and configFile, take a transaction lock to avoid data race between readConfig()
-	// and saveConfig().
-	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigPrefix)
-	if err := objLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer objLock.Unlock()
 
 	var marker string
 	for {

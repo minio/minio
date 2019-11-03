@@ -141,7 +141,6 @@ const (
 	ErrInvalidPrefixMarker
 	ErrBadRequest
 	ErrKeyTooLongError
-	ErrInvalidAPIVersion
 	// Add new error codes here.
 
 	// SSE-S3 related API errors
@@ -1502,11 +1501,6 @@ var errorCodes = errorCodeMap{
 		Code:           "PostPolicyInvalidKeyName",
 		Description:    "Invalid according to Policy: Policy Condition failed",
 		HTTPStatusCode: http.StatusForbidden,
-	},
-	ErrInvalidAPIVersion: {
-		Code:           "ErrInvalidAPIVersion",
-		Description:    "Invalid version found in the request",
-		HTTPStatusCode: http.StatusNotFound,
 	},
 	// Add your error structure here.
 }

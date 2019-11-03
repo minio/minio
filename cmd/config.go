@@ -233,7 +233,8 @@ func (sys *ConfigSys) Init(objAPI ObjectLayer) error {
 		select {
 		case <-retryTimerCh:
 			if err := initConfig(objAPI); err != nil {
-				if strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
+				if err == errDiskNotFound ||
+					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
 					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
 					logger.Info("Waiting for configuration to be initialized..")
 					continue
@@ -263,6 +264,19 @@ func initConfig(objAPI ObjectLayer) error {
 			return err
 		}
 	}
+
+	// Construct path to config/transaction.lock for locking
+	transactionConfigPrefix := minioConfigPrefix + "/transaction.lock"
+
+	// Hold lock only by one server and let that server alone migrate
+	// all the config as necessary, this is to ensure that
+	// redundant locks are not held for each migration - this allows
+	// for a more predictable behavior while debugging.
+	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigPrefix)
+	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
+	defer objLock.Unlock()
 
 	// Migrates ${HOME}/.minio/config.json or config.json.deprecated
 	// to '<export_path>/.minio.sys/config/config.json'

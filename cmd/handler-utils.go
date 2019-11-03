@@ -19,18 +19,21 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // Parses location constraint from the incoming reader.
@@ -408,23 +411,61 @@ func getResource(path string, host string, domains []string) (string, error) {
 	return path, nil
 }
 
-// If none of the http routes match respond with MethodNotAllowed
-func notFoundHandler(w http.ResponseWriter, r *http.Request) {
-	writeErrorResponse(context.Background(), w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
+var regexVersion = regexp.MustCompile(`(\w\d+)`)
+
+func extractAPIVersion(r *http.Request) string {
+	return regexVersion.FindString(r.URL.Path)
 }
 
-// If the API version does not match with current version.
-func versionMismatchHandler(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Path
+// If none of the http routes match respond with appropriate errors
+func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
+	version := extractAPIVersion(r)
 	switch {
-	case strings.HasPrefix(path, minioReservedBucketPath+"/peer/"):
-		writeVersionMismatchResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidAPIVersion), r.URL, false)
-	case strings.HasPrefix(path, minioReservedBucketPath+"/storage/"):
-		writeVersionMismatchResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidAPIVersion), r.URL, false)
-	case strings.HasPrefix(path, minioReservedBucketPath+"/lock/"):
-		writeVersionMismatchResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidAPIVersion), r.URL, false)
+	case strings.HasPrefix(r.URL.Path, peerRESTPrefix):
+		desc := fmt.Sprintf("Expected 'peer' API version '%s', instead found '%s', please upgrade the servers",
+			peerRESTVersion, version)
+		writeErrorResponseString(r.Context(), w, APIError{
+			Code:           "XMinioPeerVersionMismatch",
+			Description:    desc,
+			HTTPStatusCode: http.StatusBadRequest,
+		}, r.URL)
+	case strings.HasPrefix(r.URL.Path, storageRESTPrefix):
+		desc := fmt.Sprintf("Expected 'storage' API version '%s', instead found '%s', please upgrade the servers",
+			storageRESTVersion, version)
+		writeErrorResponseString(r.Context(), w, APIError{
+			Code:           "XMinioStorageVersionMismatch",
+			Description:    desc,
+			HTTPStatusCode: http.StatusBadRequest,
+		}, r.URL)
+	case strings.HasPrefix(r.URL.Path, lockRESTPrefix):
+		desc := fmt.Sprintf("Expected 'lock' API version '%s', instead found '%s', please upgrade the servers",
+			lockRESTVersion, version)
+		writeErrorResponseString(r.Context(), w, APIError{
+			Code:           "XMinioLockVersionMismatch",
+			Description:    desc,
+			HTTPStatusCode: http.StatusBadRequest,
+		}, r.URL)
+	case strings.HasPrefix(r.URL.Path, adminPathPrefix):
+		var desc string
+		if version == "v1" {
+			desc = fmt.Sprintf("Server expects client requests with 'admin' API version '%s', found '%s', please upgrade the client to latest releases", madmin.AdminAPIVersion, version)
+		} else if version == madmin.AdminAPIVersion {
+			desc = fmt.Sprintf("This 'admin' API is not supported by server in '%s'", getMinioMode())
+		} else {
+			desc = fmt.Sprintf("Unexpected client 'admin' API version found '%s', expected '%s', please downgrade the client to older releases", version, madmin.AdminAPIVersion)
+		}
+		writeErrorResponseJSON(r.Context(), w, APIError{
+			Code:           "XMinioAdminVersionMismatch",
+			Description:    desc,
+			HTTPStatusCode: http.StatusBadRequest,
+		}, r.URL)
 	default:
-		writeVersionMismatchResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidAPIVersion), r.URL, true)
+		desc := fmt.Sprintf("Unknown API request at %s", r.URL.Path)
+		writeErrorResponse(r.Context(), w, APIError{
+			Code:           "XMinioUnknownAPIRequest",
+			Description:    desc,
+			HTTPStatusCode: http.StatusBadRequest,
+		}, r.URL, guessIsBrowserReq(r))
 	}
 }
 

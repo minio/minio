@@ -70,7 +70,7 @@ func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int,
 			globalLockServer = &lockRESTServer{
 				ll: &localLocker{
 					serverAddr:      endpoint.Host,
-					serviceEndpoint: lockServicePath,
+					serviceEndpoint: lockRESTPrefix,
 					lockMap:         make(map[string][]lockRequesterInfo),
 				},
 			}
