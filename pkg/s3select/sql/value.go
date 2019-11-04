@@ -342,7 +342,7 @@ const (
 
 // InferBytesType will attempt to infer the data type of bytes.
 // Will fail if value type is not bytes or it would result in invalid utf8.
-// ORDER: int, float, bool, JSON, timestamp, string
+// ORDER: int, float, bool, JSON (object or array), timestamp, string
 // If the content is valid JSON, the type will still be bytes.
 func (v *Value) InferBytesType() (err error) {
 	b, ok := v.ToBytes()
@@ -351,29 +351,26 @@ func (v *Value) InferBytesType() (err error) {
 	}
 
 	// Check for numeric inference
-	iA, okAi := v.bytesToInt()
-	if okAi {
-		v.setInt(iA)
+	if x, ok := v.bytesToInt(); ok {
+		v.setInt(x)
+		return nil
+	}
+	if x, ok := v.bytesToFloat(); ok {
+		v.setFloat(x)
+		return nil
+	}
+	if x, ok := v.bytesToBool(); ok {
+		v.setBool(x)
 		return nil
 	}
 
-	fA, okAf := v.bytesToFloat()
-	if okAf {
-		v.setFloat(fA)
+	asString := strings.TrimSpace(v.bytesToString())
+	if len(b) > 0 &&
+		(strings.HasPrefix(asString, "{") || strings.HasPrefix(asString, "[")) {
 		return nil
 	}
 
-	bA, okAb := v.bytesToBool()
-	if okAb {
-		v.setBool(bA)
-		return nil
-	}
-
-	if json.Valid(b) {
-		return nil
-	}
-
-	if t, err := parseSQLTimestamp(v.bytesToString()); err == nil {
+	if t, err := parseSQLTimestamp(asString); err == nil {
 		v.setTimestamp(t)
 		return nil
 	}
@@ -381,8 +378,7 @@ func (v *Value) InferBytesType() (err error) {
 		return errors.New("value is not valid utf-8")
 	}
 	// Fallback to string
-	sA := v.bytesToString()
-	v.setString(sA)
+	v.setString(asString)
 	return
 }
 
