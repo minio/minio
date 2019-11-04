@@ -272,3 +272,14 @@ func NewKeySet(keys ...Key) KeySet {
 
 	return set
 }
+
+// AllSupportedAdminKeys - is list of all admin supported keys.
+var AllSupportedAdminKeys = []Key{
+	AWSReferer,
+	AWSSourceIP,
+	AWSUserAgent,
+	AWSSecureTransport,
+	AWSCurrentTime,
+	AWSEpochTime,
+	// Add new supported condition keys.
+}
