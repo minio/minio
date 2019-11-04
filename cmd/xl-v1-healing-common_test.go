@@ -216,7 +216,7 @@ func TestListOnlineDisks(t *testing.T) {
 				// appears in outDatedDisks.
 				tamperedIndex = index
 				filePath := pathJoin(xlDisks[index].String(), bucket, object, "part.1")
-				f, err := os.OpenFile(filePath, os.O_WRONLY, 0)
+				f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_SYNC, 0)
 				if err != nil {
 					t.Fatalf("Failed to open %s: %s\n", filePath, err)
 				}
@@ -319,7 +319,7 @@ func TestDisksWithAllParts(t *testing.T) {
 		for _, info := range partsMetadata[diskIndex].Erasure.Checksums {
 			if info.Name == partName {
 				filePath := pathJoin(xlDisks[diskIndex].String(), bucket, object, partName)
-				f, err := os.OpenFile(filePath, os.O_WRONLY, 0)
+				f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_SYNC, 0)
 				if err != nil {
 					t.Fatalf("Failed to open %s: %s\n", filePath, err)
 				}

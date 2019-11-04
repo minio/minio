@@ -30,9 +30,6 @@ import (
 )
 
 const (
-	// Lock rpc server endpoint.
-	lockServiceSubPath = "/lock"
-
 	// Lock maintenance interval.
 	lockMaintenanceInterval = 1 * time.Minute
 
@@ -246,16 +243,18 @@ func startLockMaintenance(lkSrv *lockRESTServer) {
 
 // registerLockRESTHandlers - register lock rest router.
 func registerLockRESTHandlers(router *mux.Router) {
-	subrouter := router.PathPrefix(lockRESTPath).Subrouter()
+	subrouter := router.PathPrefix(lockRESTPrefix).Subrouter()
 	queries := restQueries(lockRESTUID, lockRESTSource, lockRESTResource, lockRESTServerAddr, lockRESTServerEndpoint)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + lockRESTMethodLock).HandlerFunc(httpTraceHdrs(globalLockServer.LockHandler)).Queries(queries...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + lockRESTMethodRLock).HandlerFunc(httpTraceHdrs(globalLockServer.RLockHandler)).Queries(queries...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + lockRESTMethodUnlock).HandlerFunc(httpTraceHdrs(globalLockServer.UnlockHandler)).Queries(queries...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + lockRESTMethodRUnlock).HandlerFunc(httpTraceHdrs(globalLockServer.RUnlockHandler)).Queries(queries...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + lockRESTMethodForceUnlock).HandlerFunc(httpTraceHdrs(globalLockServer.ForceUnlockHandler)).Queries(queries...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + lockRESTMethodExpired).HandlerFunc(httpTraceAll(globalLockServer.ExpiredHandler)).Queries(queries...)
+	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodLock).HandlerFunc(httpTraceHdrs(globalLockServer.LockHandler)).Queries(queries...)
+	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRLock).HandlerFunc(httpTraceHdrs(globalLockServer.RLockHandler)).Queries(queries...)
+	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodUnlock).HandlerFunc(httpTraceHdrs(globalLockServer.UnlockHandler)).Queries(queries...)
+	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRUnlock).HandlerFunc(httpTraceHdrs(globalLockServer.RUnlockHandler)).Queries(queries...)
+	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodForceUnlock).HandlerFunc(httpTraceHdrs(globalLockServer.ForceUnlockHandler)).Queries(queries...)
+	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodExpired).HandlerFunc(httpTraceAll(globalLockServer.ExpiredHandler)).Queries(queries...)
 
-	router.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(versionMismatchHandler))
+	// If none of the routes match add default error handler routes
+	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
+	router.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
 
 	// Start lock maintenance from all lock servers.
 	go startLockMaintenance(globalLockServer)

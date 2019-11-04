@@ -460,7 +460,7 @@ func newStorageRESTClient(endpoint Endpoint) (*storageRESTClient, error) {
 	serverURL := &url.URL{
 		Scheme: scheme,
 		Host:   endpoint.Host,
-		Path:   path.Join(storageRESTPath, endpoint.Path),
+		Path:   path.Join(storageRESTPrefix, endpoint.Path, storageRESTVersion),
 	}
 
 	var tlsConfig *tls.Config

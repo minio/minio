@@ -244,6 +244,9 @@ func serverMain(ctx *cli.Context) {
 	// Handle all server command args.
 	serverHandleCmdArgs(ctx)
 
+	// Handle all server environment vars.
+	serverHandleEnvVars()
+
 	// Check and load TLS certificates.
 	var err error
 	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig()
@@ -252,9 +255,6 @@ func serverMain(ctx *cli.Context) {
 	// Check and load Root CAs.
 	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
-
-	// Handle all server environment vars.
-	serverHandleEnvVars()
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistXL {

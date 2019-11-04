@@ -18,22 +18,23 @@ package cmd
 
 import (
 	"errors"
-	"path"
 	"time"
 )
 
-const lockRESTVersion = "v2"
-const lockRESTPath = minioReservedBucketPath + "/lock/" + lockRESTVersion
-
-var lockServicePath = path.Join(minioReservedBucketPath, lockServiceSubPath)
+const (
+	lockRESTVersion       = "v2"
+	lockRESTVersionPrefix = SlashSeparator + "v2"
+	lockRESTPrefix        = minioReservedBucketPath + "/lock"
+	lockRESTPath          = lockRESTPrefix + lockRESTVersionPrefix
+)
 
 const (
-	lockRESTMethodLock        = "lock"
-	lockRESTMethodRLock       = "rlock"
-	lockRESTMethodUnlock      = "unlock"
-	lockRESTMethodRUnlock     = "runlock"
-	lockRESTMethodForceUnlock = "forceunlock"
-	lockRESTMethodExpired     = "expired"
+	lockRESTMethodLock        = "/lock"
+	lockRESTMethodRLock       = "/rlock"
+	lockRESTMethodUnlock      = "/unlock"
+	lockRESTMethodRUnlock     = "/runlock"
+	lockRESTMethodForceUnlock = "/forceunlock"
+	lockRESTMethodExpired     = "/expired"
 
 	// Unique ID of lock/unlock request.
 	lockRESTUID = "uid"

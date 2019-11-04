@@ -1887,7 +1887,7 @@ func TestPosixVerifyFile(t *testing.T) {
 
 	// 4) Streaming bitrot check on corrupted file
 	filePath := pathJoin(posixStorage.String(), volName, fileName)
-	f, err := os.OpenFile(filePath, os.O_WRONLY, 0644)
+	f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_SYNC, 0644)
 	if err != nil {
 		t.Fatal(err)
 	}

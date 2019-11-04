@@ -54,13 +54,12 @@ type Client struct {
 
 // URL query separator constants
 const (
-	resourceSep = "/"
-	querySep    = "?"
+	querySep = "?"
 )
 
 // CallWithContext - make a REST call with context.
 func (c *Client) CallWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
-	req, err := http.NewRequest(http.MethodPost, c.url.String()+resourceSep+method+querySep+values.Encode(), body)
+	req, err := http.NewRequest(http.MethodPost, c.url.String()+method+querySep+values.Encode(), body)
 	if err != nil {
 		return nil, &NetworkError{err}
 	}

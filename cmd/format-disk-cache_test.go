@@ -36,7 +36,7 @@ func TestDiskCacheFormat(t *testing.T) {
 	}
 	// Do the basic sanity checks to check if initFormatCache() did its job.
 	cacheFormatPath := pathJoin(fsDirs[0], minioMetaBucket, formatConfigFile)
-	f, err := os.OpenFile(cacheFormatPath, os.O_RDWR, 0)
+	f, err := os.OpenFile(cacheFormatPath, os.O_RDWR|os.O_SYNC, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

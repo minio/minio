@@ -530,12 +530,6 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Method only allowed in Distributed XL mode.
-	if !globalIsDistXL {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-		return
-	}
-
 	peerLocks := globalNotificationSys.GetLocks(ctx)
 	// Once we have received all the locks currently used from peers
 	// add the local peer locks list as well.
