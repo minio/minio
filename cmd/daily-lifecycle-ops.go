@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/lifecycle"
 )
 
@@ -150,8 +151,29 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 					// Do nothing, for now.
 				}
 			}
+
 			// Deletes a list of objects.
-			objAPI.DeleteObjects(ctx, bucket.Name, objects)
+			deleteErrs, err := objAPI.DeleteObjects(ctx, bucket.Name, objects)
+			if err != nil {
+				logger.LogIf(ctx, err)
+			} else {
+				for i := range deleteErrs {
+					if deleteErrs[i] != nil {
+						logger.LogIf(ctx, deleteErrs[i])
+						continue
+					}
+					// Notify object deleted event.
+					sendEvent(eventArgs{
+						EventName:  event.ObjectRemovedDelete,
+						BucketName: bucket.Name,
+						Object: ObjectInfo{
+							Name: objects[i],
+						},
+						Host: "Internal: [ILM-EXPIRY]",
+					})
+				}
+			}
+
 			if !res.IsTruncated {
 				// We are done here, proceed to next bucket.
 				break
