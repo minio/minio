@@ -81,7 +81,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		adminRouter.Methods(http.MethodPut).Path(adminAPIVersionPrefix + "/set-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigKVHandler))
 		adminRouter.Methods(http.MethodDelete).Path(adminAPIVersionPrefix + "/del-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.DelConfigKVHandler))
 		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix+"/help-config-kv").HandlerFunc(httpTraceAll(adminAPI.HelpConfigKVHandler)).Queries("subSys", "{subSys:.*}", "key", "{key:.*}")
-		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/list-config-history-kv").HandlerFunc(httpTraceAll(adminAPI.ListConfigHistoryKVHandler))
+		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix+"/list-config-history-kv").HandlerFunc(httpTraceAll(adminAPI.ListConfigHistoryKVHandler)).Queries("count", "{count:[0-9]+}")
 		adminRouter.Methods(http.MethodDelete).Path(adminAPIVersionPrefix+"/clear-config-history-kv").HandlerFunc(httpTraceHdrs(adminAPI.ClearConfigHistoryKVHandler)).Queries("restoreId", "{restoreId:.*}")
 		adminRouter.Methods(http.MethodPut).Path(adminAPIVersionPrefix+"/restore-config-history-kv").HandlerFunc(httpTraceHdrs(adminAPI.RestoreConfigHistoryKVHandler)).Queries("restoreId", "{restoreId:.*}")
 	}

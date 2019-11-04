@@ -34,6 +34,8 @@ import (
 const (
 	minioConfigPrefix = "config"
 
+	kvPrefix = ".kv"
+
 	// Captures all the previous SetKV operations and allows rollback.
 	minioConfigHistoryPrefix = minioConfigPrefix + "/history"
 
@@ -44,7 +46,9 @@ const (
 	minioConfigBackupFile = minioConfigFile + ".backup"
 )
 
-func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer) ([]madmin.ConfigHistoryEntry, error) {
+func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer, withData bool, count int) (
+	[]madmin.ConfigHistoryEntry, error) {
+
 	var configHistory []madmin.ConfigHistoryEntry
 
 	// List all kvs
@@ -55,10 +59,28 @@ func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer) ([]madmin.
 			return nil, err
 		}
 		for _, obj := range res.Objects {
-			configHistory = append(configHistory, madmin.ConfigHistoryEntry{
-				RestoreID:  path.Base(obj.Name),
+			cfgEntry := madmin.ConfigHistoryEntry{
+				RestoreID:  strings.TrimSuffix(path.Base(obj.Name), kvPrefix),
 				CreateTime: obj.ModTime, // ModTime is createTime for config history entries.
-			})
+			}
+			if withData {
+				data, err := readConfig(ctx, objAPI, obj.Name)
+				if err != nil {
+					return nil, err
+				}
+				if globalConfigEncrypted {
+					data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+					if err != nil {
+						return nil, err
+					}
+				}
+				cfgEntry.Data = string(data)
+			}
+			configHistory = append(configHistory, cfgEntry)
+			count--
+			if count == 0 {
+				break
+			}
 		}
 		if !res.IsTruncated {
 			// We are done here
@@ -73,12 +95,12 @@ func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer) ([]madmin.
 }
 
 func delServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV string) error {
-	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV)
+	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV+kvPrefix)
 	return objAPI.DeleteObject(ctx, minioMetaBucket, historyFile)
 }
 
 func readServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV string) ([]byte, error) {
-	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV)
+	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV+kvPrefix)
 	data, err := readConfig(ctx, objAPI, historyFile)
 	if err != nil {
 		return nil, err
@@ -92,7 +114,7 @@ func readServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV str
 }
 
 func saveServerConfigHistory(ctx context.Context, objAPI ObjectLayer, kv []byte) error {
-	uuidKV := mustGetUUID() + ".kv"
+	uuidKV := mustGetUUID() + kvPrefix
 	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV)
 
 	var err error

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 )
 
@@ -80,14 +81,27 @@ func (adm *AdminClient) RestoreConfigHistoryKV(restoreID string) (err error) {
 type ConfigHistoryEntry struct {
 	RestoreID  string    `json:"restoreId"`
 	CreateTime time.Time `json:"createTime"`
+	Data       string    `json:"data"`
+}
+
+// CreateTimeFormatted is used to print formatted time for CreateTime.
+func (ch ConfigHistoryEntry) CreateTimeFormatted() string {
+	return ch.CreateTime.Format(http.TimeFormat)
 }
 
 // ListConfigHistoryKV - lists a slice of ConfigHistoryEntries sorted by createTime.
-func (adm *AdminClient) ListConfigHistoryKV() ([]ConfigHistoryEntry, error) {
+func (adm *AdminClient) ListConfigHistoryKV(count int) ([]ConfigHistoryEntry, error) {
+	if count == 0 {
+		count = 10
+	}
+	v := url.Values{}
+	v.Set("count", strconv.Itoa(count))
+
 	// Execute GET on /minio/admin/v2/list-config-history-kv
 	resp, err := adm.executeMethod(http.MethodGet,
 		requestData{
-			relPath: adminAPIPrefix + "/list-config-history-kv",
+			relPath:     adminAPIPrefix + "/list-config-history-kv",
+			queryValues: v,
 		})
 	defer closeResponse(resp)
 	if err != nil {
@@ -97,11 +111,15 @@ func (adm *AdminClient) ListConfigHistoryKV() ([]ConfigHistoryEntry, error) {
 		return nil, httpRespToErrorResponse(resp)
 	}
 
+	data, err := DecryptData(adm.secretAccessKey, resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
 	var chEntries []ConfigHistoryEntry
-	d := json.NewDecoder(resp.Body)
-	d.DisallowUnknownFields()
-	if err = d.Decode(&chEntries); err != nil {
+	if err = json.Unmarshal(data, &chEntries); err != nil {
 		return chEntries, err
 	}
+
 	return chEntries, nil
 }

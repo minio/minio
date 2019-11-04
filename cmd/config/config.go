@@ -24,6 +24,7 @@ import (
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // Error config error type
@@ -41,7 +42,7 @@ func (e Error) Error() string {
 
 // Default keys
 const (
-	Default = `_`
+	Default = madmin.Default
 	State   = "state"
 	Comment = "comment"
 
@@ -133,13 +134,13 @@ var SubSystemsSingleTargets = set.CreateStringSet([]string{
 
 // Constant separators
 const (
-	SubSystemSeparator = `:`
-	KvSeparator        = `=`
-	KvSpaceSeparator   = ` `
-	KvComment          = `#`
-	KvNewline          = "\n"
-	KvDoubleQuote      = `"`
-	KvSingleQuote      = `'`
+	SubSystemSeparator = madmin.SubSystemSeparator
+	KvSeparator        = madmin.KvSeparator
+	KvSpaceSeparator   = madmin.KvSpaceSeparator
+	KvComment          = madmin.KvComment
+	KvNewline          = madmin.KvNewline
+	KvDoubleQuote      = madmin.KvDoubleQuote
+	KvSingleQuote      = madmin.KvSingleQuote
 
 	// Env prefix used for all envs in MinIO
 	EnvPrefix        = "MINIO_"
