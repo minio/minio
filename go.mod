@@ -32,7 +32,7 @@ require (
 	github.com/json-iterator/go v1.1.7
 	github.com/klauspost/compress v1.8.3
 	github.com/klauspost/pgzip v1.2.1
-	github.com/klauspost/readahead v1.3.0
+	github.com/klauspost/readahead v1.3.1
 	github.com/klauspost/reedsolomon v1.9.3
 	github.com/kurin/blazer v0.5.4-0.20190613185654-cf2f27cc0be3
 	github.com/lib/pq v1.0.0

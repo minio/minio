@@ -33,22 +33,43 @@ func TestNewReader(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, file := range files {
-		f, err := os.Open(filepath.Join("testdata", file.Name()))
-		if err != nil {
-			t.Fatal(err)
-		}
-		r := NewReader(f, &ReaderArgs{})
-		var record sql.Record
-		for {
-			record, err = r.Read(record)
+		t.Run(file.Name(), func(t *testing.T) {
+			f, err := os.Open(filepath.Join("testdata", file.Name()))
 			if err != nil {
-				break
+				t.Fatal(err)
 			}
-		}
-		r.Close()
-		if err != io.EOF {
-			t.Fatalf("Reading failed with %s, %s", err, file.Name())
-		}
+			r := NewReader(f, &ReaderArgs{})
+			var record sql.Record
+			for {
+				record, err = r.Read(record)
+				if err != nil {
+					break
+				}
+			}
+			r.Close()
+			if err != io.EOF {
+				t.Fatalf("Reading failed with %s, %s", err, file.Name())
+			}
+		})
+
+		t.Run(file.Name()+"-close", func(t *testing.T) {
+			f, err := os.Open(filepath.Join("testdata", file.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := NewReader(f, &ReaderArgs{})
+			r.Close()
+			var record sql.Record
+			for {
+				record, err = r.Read(record)
+				if err != nil {
+					break
+				}
+			}
+			if err != io.EOF {
+				t.Fatalf("Reading failed with %s, %s", err, file.Name())
+			}
+		})
 	}
 }
 
