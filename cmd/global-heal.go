@@ -154,17 +154,7 @@ func execLeaderTasks(sets *xlSets) {
 }
 
 func startGlobalHeal() {
-	var objAPI ObjectLayer
-	for {
-		objAPI = globalObjectAPI
-		if objAPI == nil {
-			time.Sleep(time.Second)
-			continue
-		}
-		break
-	}
-
-	sets, ok := objAPI.(*xlSets)
+	sets, ok := globalObjectAPI.(*xlSets)
 	if !ok {
 		return
 	}

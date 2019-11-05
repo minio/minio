@@ -33,18 +33,7 @@ func initLocalDisksAutoHeal() {
 //  1. Only the concerned erasure set will be listed and healed
 //  2. Only the node hosting the disk is responsible to perform the heal
 func monitorLocalDisksAndHeal() {
-	// Wait until the object layer is ready
-	var objAPI ObjectLayer
-	for {
-		objAPI = globalObjectAPI
-		if objAPI == nil {
-			time.Sleep(time.Second)
-			continue
-		}
-		break
-	}
-
-	sets, ok := objAPI.(*xlSets)
+	sets, ok := globalObjectAPI.(*xlSets)
 	if !ok {
 		return
 	}

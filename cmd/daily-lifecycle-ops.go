@@ -51,18 +51,7 @@ func initDailyLifecycle() {
 }
 
 func startDailyLifecycle() {
-	var objAPI ObjectLayer
 	var ctx = context.Background()
-
-	// Wait until the object API is ready
-	for {
-		objAPI = globalObjectAPI
-		if objAPI == nil {
-			time.Sleep(time.Second)
-			continue
-		}
-		break
-	}
 
 	// Calculate the time of the last lifecycle operation in all peers node of the cluster
 	computeLastLifecycleActivity := func(status []BgOpsStatus) time.Time {
@@ -89,7 +78,7 @@ func startDailyLifecycle() {
 		}
 
 		// Perform one lifecycle operation
-		err := lifecycleRound(ctx, objAPI)
+		err := lifecycleRound(ctx)
 		switch err.(type) {
 		// Unable to hold a lock means there is another
 		// instance doing the lifecycle round round
@@ -106,7 +95,7 @@ func startDailyLifecycle() {
 
 var lifecycleTimeout = newDynamicTimeout(60*time.Second, time.Second)
 
-func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
+func lifecycleRound(ctx context.Context) error {
 	// Lock to avoid concurrent lifecycle ops from other nodes
 	sweepLock := globalNSMutex.NewNSLock(ctx, "system", "daily-lifecycle-ops")
 	if err := sweepLock.GetLock(lifecycleTimeout); err != nil {
@@ -114,7 +103,7 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 	}
 	defer sweepLock.Unlock()
 
-	buckets, err := objAPI.ListBuckets(ctx)
+	buckets, err := globalObjectAPI.ListBuckets(ctx)
 	if err != nil {
 		return err
 	}
@@ -136,7 +125,7 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 		// List all objects and calculate lifecycle action based on object name & object modtime
 		marker := ""
 		for {
-			res, err := objAPI.ListObjects(ctx, bucket.Name, commonPrefix, marker, "", maxObjectList)
+			res, err := globalObjectAPI.ListObjects(ctx, bucket.Name, commonPrefix, marker, "", maxObjectList)
 			if err != nil {
 				continue
 			}
@@ -153,7 +142,7 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 			}
 
 			// Deletes a list of objects.
-			deleteErrs, err := objAPI.DeleteObjects(ctx, bucket.Name, objects)
+			deleteErrs, err := globalObjectAPI.DeleteObjects(ctx, bucket.Name, objects)
 			if err != nil {
 				logger.LogIf(ctx, err)
 			} else {

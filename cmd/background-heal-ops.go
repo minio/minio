@@ -105,23 +105,13 @@ func initHealRoutine() *healRoutine {
 func startBackgroundHealing() {
 	ctx := context.Background()
 
-	var objAPI ObjectLayer
-	for {
-		objAPI = globalObjectAPI
-		if objAPI == nil {
-			time.Sleep(time.Second)
-			continue
-		}
-		break
-	}
-
 	// Run the background healer
 	globalBackgroundHealRoutine = initHealRoutine()
 	go globalBackgroundHealRoutine.run()
 
 	// Launch the background healer sequence to track
 	// background healing operations
-	info := objAPI.StorageInfo(ctx)
+	info := globalObjectAPI.StorageInfo(ctx)
 	numDisks := info.Backend.OnlineDisks.Sum() + info.Backend.OfflineDisks.Sum()
 	nh := newBgHealSequence(numDisks)
 	globalBackgroundHealState.LaunchNewHealSequence(nh)

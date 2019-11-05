@@ -365,6 +365,8 @@ func serverMain(ctx *cli.Context) {
 		logger.FatalIf(err, "Unable to initialize disk caching")
 	}
 
+	globalObjectAPI = newObject
+
 	initDailyLifecycle()
 
 	if globalIsXL {
@@ -372,8 +374,6 @@ func serverMain(ctx *cli.Context) {
 		initLocalDisksAutoHeal()
 		initGlobalHeal()
 	}
-
-	globalObjectAPI = newObject
 
 	// Prints the formatted startup message once object layer is initialized.
 	printStartupMessage(getAPIEndpoints())
