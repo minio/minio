@@ -88,11 +88,11 @@ const (
 	KvSeparator        = `=`
 	KvSpaceSeparator   = ` `
 	KvComment          = `#`
+	KvNewline          = "\n"
 	KvDoubleQuote      = `"`
 	KvSingleQuote      = `'`
 
-	KvNewline = "\n"
-	Default   = `_`
+	Default = `_`
 )
 
 // This function is needed, to trim off single or double quotes, creeping into the values.
@@ -140,8 +140,8 @@ func convertTargets(s string, targets Targets) error {
 	return nil
 }
 
-// parseSubSysTarget - parse sub-system target
-func parseSubSysTarget(buf []byte) (Targets, error) {
+// ParseSubSysTarget - parse sub-system target
+func ParseSubSysTarget(buf []byte) (Targets, error) {
 	targets := make(map[string]map[string]KVS)
 	bio := bufio.NewScanner(bytes.NewReader(buf))
 	for bio.Scan() {

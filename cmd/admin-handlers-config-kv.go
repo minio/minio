@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/config"
@@ -236,7 +237,7 @@ func (a adminAPIHandlers) ClearConfigHistoryKVHandler(w http.ResponseWriter, r *
 		return
 	}
 	if restoreID == "all" {
-		chEntries, err := listServerConfigHistory(ctx, objectAPI)
+		chEntries, err := listServerConfigHistory(ctx, objectAPI, false, -1)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
@@ -323,7 +324,14 @@ func (a adminAPIHandlers) ListConfigHistoryKVHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	chEntries, err := listServerConfigHistory(ctx, objectAPI)
+	vars := mux.Vars(r)
+	count, err := strconv.Atoi(vars["count"])
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	chEntries, err := listServerConfigHistory(ctx, objectAPI, true, count)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -335,7 +343,14 @@ func (a adminAPIHandlers) ListConfigHistoryKVHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	writeSuccessResponseJSON(w, data)
+	password := globalActiveCred.SecretKey
+	econfigData, err := madmin.EncryptData(password, data)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, econfigData)
 }
 
 // HelpConfigKVHandler - GET /minio/admin/v2/help-config-kv?subSys={subSys}&key={key}

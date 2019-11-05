@@ -76,6 +76,7 @@ func (adm *AdminClient) SetConfigKV(kv string) (err error) {
 			s.WriteString(base64.RawStdEncoding.EncodeToString([]byte(comment)))
 			s.WriteString(KvDoubleQuote)
 		}
+		s.WriteString(KvNewline)
 		comment = ""
 	}
 
@@ -131,5 +132,5 @@ func (adm *AdminClient) GetConfigKV(key string) (Targets, error) {
 		return nil, err
 	}
 
-	return parseSubSysTarget(data)
+	return ParseSubSysTarget(data)
 }
