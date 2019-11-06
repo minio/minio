@@ -51,6 +51,10 @@ import (
 const (
 	// MinIO meta bucket.
 	minioMetaBucket = ".minio.sys"
+	// Background ops meta prefix
+	backgroundOpsMetaPrefix = "background-ops"
+	// MinIO Stats meta prefix.
+	minioMetaBackgroundOpsBucket = minioMetaBucket + SlashSeparator + backgroundOpsMetaPrefix
 	// Multipart meta prefix.
 	mpartMetaPrefix = "multipart"
 	// MinIO Multipart meta prefix.
@@ -72,7 +76,8 @@ const (
 func isMinioMetaBucketName(bucket string) bool {
 	return bucket == minioMetaBucket ||
 		bucket == minioMetaMultipartBucket ||
-		bucket == minioMetaTmpBucket
+		bucket == minioMetaTmpBucket ||
+		bucket == minioMetaBackgroundOpsBucket
 }
 
 // IsValidBucketName verifies that a bucket name is in accordance with

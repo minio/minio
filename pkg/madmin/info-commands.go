@@ -140,6 +140,63 @@ func (adm *AdminClient) StorageInfo() (StorageInfo, error) {
 	return storageInfo, nil
 }
 
+type objectHistogramInterval struct {
+	name       string
+	start, end int64
+}
+
+// ObjectsHistogramIntervals contains the list of intervals
+// of an histogram analysis of objects sizes.
+var ObjectsHistogramIntervals = []objectHistogramInterval{
+	{"LESS_THAN_1024_B", -1, 1024 - 1},
+	{"BETWEEN_1024_B_AND_1_MB", 1024, 1024*1024 - 1},
+	{"BETWEEN_1_MB_AND_10_MB", 1024 * 1024, 1024*1024*10 - 1},
+	{"BETWEEN_10_MB_AND_64_MB", 1024 * 1024 * 10, 1024*1024*64 - 1},
+	{"BETWEEN_64_MB_AND_128_MB", 1024 * 1024 * 64, 1024*1024*128 - 1},
+	{"BETWEEN_128_MB_AND_512_MB", 1024 * 1024 * 128, 1024*1024*512 - 1},
+	{"GREATER_THAN_512_MB", 1024 * 1024 * 512, -1},
+}
+
+// DataUsageInfo represents data usage of an Object API
+type DataUsageInfo struct {
+	LastUpdate            time.Time
+	ObjectsCount          uint64
+	ObjectsTotalSize      uint64
+	ObjectsSizesHistogram map[string]uint64
+
+	BucketsCount uint64
+	BucketsSizes map[string]uint64
+}
+
+// DataUsageInfo - returns data usage of the current object API
+func (adm *AdminClient) DataUsageInfo() (DataUsageInfo, error) {
+	resp, err := adm.executeMethod("GET", requestData{relPath: adminAPIPrefix + "/datausageinfo"})
+	defer closeResponse(resp)
+	if err != nil {
+		return DataUsageInfo{}, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return DataUsageInfo{}, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var dataUsageInfo DataUsageInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return DataUsageInfo{}, err
+	}
+
+	err = json.Unmarshal(respBytes, &dataUsageInfo)
+	if err != nil {
+		return DataUsageInfo{}, err
+	}
+
+	return dataUsageInfo, nil
+}
+
 // ServerDrivesPerfInfo holds informantion about address and write speed of
 // all drives in a single server node
 type ServerDrivesPerfInfo struct {

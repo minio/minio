@@ -223,6 +223,8 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 		// Assign globalDeploymentID on first run for the
 		// minio server managing the first disk
 		globalDeploymentID = format.ID
+	} else {
+		initFormatXLMetaVolume(storageDisks)
 	}
 
 	// Return error when quorum unformatted disks - indicating we are

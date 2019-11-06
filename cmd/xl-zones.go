@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -209,6 +210,72 @@ func (z *xlZones) StorageInfo(ctx context.Context) StorageInfo {
 	storageInfo.Backend.RRSCParity = storageInfos[0].Backend.RRSCParity
 
 	return storageInfo
+}
+
+func (z *xlZones) crawlAndGetDataUsage(ctx context.Context) DataUsageInfo {
+	// Calculate the aggregated data usage, meaning accumulate data usage of all zones.
+	var aggregatedDataUsageInfo = DataUsageInfo{
+		ObjectsSizesHistogram: make(map[string]uint64),
+		BucketsSizes:          make(map[string]uint64),
+	}
+
+	addUpUsageInfo := func(dataUsageInfo DataUsageInfo) {
+		aggregatedDataUsageInfo.ObjectsCount += dataUsageInfo.ObjectsCount
+		aggregatedDataUsageInfo.ObjectsTotalSize += dataUsageInfo.ObjectsTotalSize
+		if aggregatedDataUsageInfo.BucketsCount < dataUsageInfo.BucketsCount {
+			aggregatedDataUsageInfo.BucketsCount = dataUsageInfo.BucketsCount
+		}
+		for k, v := range dataUsageInfo.ObjectsSizesHistogram {
+			aggregatedDataUsageInfo.ObjectsSizesHistogram[k] += v
+		}
+		for k, v := range dataUsageInfo.BucketsSizes {
+			aggregatedDataUsageInfo.BucketsSizes[k] += v
+		}
+	}
+
+	for _, z := range z.zones {
+		for _, xl := range z.sets {
+			var randomDisks []StorageAPI
+			for _, d := range xl.getLoadBalancedDisks() {
+				if d == nil || !d.IsOnline() {
+					continue
+				}
+				if len(randomDisks) > 3 {
+					break
+				}
+				randomDisks = append(randomDisks, d)
+			}
+
+			var dataUsageResult = make([]DataUsageInfo, len(randomDisks))
+
+			var wg sync.WaitGroup
+			for i := 0; i < len(randomDisks); i++ {
+				wg.Add(1)
+				go func(index int, disk StorageAPI) {
+					defer wg.Done()
+					var err error
+					dataUsageResult[index], err = disk.CrawlAndGetDataUsage()
+					if err != nil {
+						logger.LogIf(ctx, err)
+					}
+				}(i, randomDisks[i])
+			}
+			wg.Wait()
+
+			var reliableDataUsageResult DataUsageInfo
+			for i := 0; i < len(dataUsageResult); i++ {
+				if dataUsageResult[i].ObjectsCount > reliableDataUsageResult.ObjectsCount {
+					reliableDataUsageResult = dataUsageResult[i]
+				}
+			}
+
+			addUpUsageInfo(reliableDataUsageResult)
+		}
+	}
+
+	aggregatedDataUsageInfo.LastUpdate = UTCNow()
+	return aggregatedDataUsageInfo
+
 }
 
 // This function is used to undo a successful MakeBucket operation.

@@ -147,6 +147,17 @@ func (client *storageRESTClient) IsOnline() bool {
 	return atomic.LoadInt32(&client.connected) == 1
 }
 
+func (client *storageRESTClient) CrawlAndGetDataUsage() (DataUsageInfo, error) {
+	respBody, err := client.call(storageRESTMethodCrawlAndGetDataUsage, nil, nil, -1)
+	if err != nil {
+		return DataUsageInfo{}, err
+	}
+	defer http.DrainBody(respBody)
+	var usageInfo DataUsageInfo
+	err = gob.NewDecoder(respBody).Decode(&usageInfo)
+	return usageInfo, err
+}
+
 // LastError - returns the network error if any.
 func (client *storageRESTClient) LastError() error {
 	return client.lastError

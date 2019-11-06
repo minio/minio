@@ -80,6 +80,10 @@ func (d *naughtyDisk) calcError() (err error) {
 func (d *naughtyDisk) SetDiskID(id string) {
 }
 
+func (d *naughtyDisk) CrawlAndGetDataUsage() (info DataUsageInfo, err error) {
+	return d.disk.CrawlAndGetDataUsage()
+}
+
 func (d *naughtyDisk) DiskInfo() (info DiskInfo, err error) {
 	if err := d.calcError(); err != nil {
 		return info, err

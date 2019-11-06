@@ -437,6 +437,7 @@ func serverMain(ctx *cli.Context) {
 		globalObjLayerMutex.Unlock()
 	}
 
+	initDataUsageStats()
 	initDailyLifecycle()
 
 	if globalIsXL {

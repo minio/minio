@@ -95,6 +95,9 @@ type posix struct {
 	stopUsageCh chan struct{}
 
 	sync.RWMutex
+
+	dataUsageInProgress   bool
+	dataUsageInProgressMu sync.RWMutex
 }
 
 // checkPathLength - returns error if given path name length more than 255
@@ -319,6 +322,70 @@ func (s *posix) Close() error {
 
 func (s *posix) IsOnline() bool {
 	return true
+}
+
+// Update the data usage info while recursively walking in bucketName/prefix
+func (s *posix) walkDataUsageInfo(info *DataUsageInfo, bucketName, prefix string) {
+	entries, err := s.ListDir(bucketName, prefix, -1, xlMetaJSONFile)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if strings.HasSuffix(entry, "/") {
+			s.walkDataUsageInfo(info, bucketName, pathJoin(prefix, entry))
+		} else {
+			info.ObjectsCount++
+			meta, err := readXLMeta(context.Background(), s, bucketName, pathJoin(prefix, entry))
+			if err != nil {
+				continue
+			}
+			info.ObjectsTotalSize += uint64(meta.Stat.Size)
+			info.BucketsSizes[bucketName] += uint64(meta.Stat.Size)
+			info.ObjectsSizesHistogram[objSizeToHistoInterval(uint64(meta.Stat.Size))]++
+		}
+	}
+}
+
+func (s *posix) CrawlAndGetDataUsage() (DataUsageInfo, error) {
+	// Check if there is a refresh routine in
+	// progress to quit if this is the case.
+	s.dataUsageInProgressMu.Lock()
+	if s.dataUsageInProgress {
+		s.dataUsageInProgressMu.Unlock()
+		return DataUsageInfo{}, nil
+	}
+
+	s.dataUsageInProgress = true
+	s.dataUsageInProgressMu.Unlock()
+
+	volsInfo, err := s.ListVols()
+	if err != nil {
+		return DataUsageInfo{}, err
+	}
+
+	var dataUsageInfo = DataUsageInfo{
+		BucketsSizes:          make(map[string]uint64),
+		ObjectsSizesHistogram: make(map[string]uint64),
+	}
+
+	for _, vol := range volsInfo {
+		// Skip if this is .minio.sys or a weird bucket name
+		if isReservedOrInvalidBucket(vol.Name, false) {
+			continue
+		}
+		dataUsageInfo.BucketsCount++
+		s.walkDataUsageInfo(&dataUsageInfo, vol.Name, "")
+	}
+
+	// Update data usage information timestamp
+	dataUsageInfo.LastUpdate = UTCNow()
+
+	// Attach the newly computed data usage to the current posix
+	s.dataUsageInProgressMu.Lock()
+	s.dataUsageInProgress = false
+	s.dataUsageInProgressMu.Unlock()
+
+	return dataUsageInfo, nil
 }
 
 // DiskInfo is an extended type which returns current

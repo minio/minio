@@ -100,6 +100,11 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 		return err
 	}
 
+	metaStatsPath := pathJoin(fsPath, minioMetaBackgroundOpsBucket, fsUUID)
+	if err := os.MkdirAll(metaStatsPath, 0777); err != nil {
+		return err
+	}
+
 	metaMultipartPath := pathJoin(fsPath, minioMetaMultipartBucket)
 	return os.MkdirAll(metaMultipartPath, 0777)
 
@@ -266,6 +271,58 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
 	}
 	storageInfo.Backend.Type = BackendFS
 	return storageInfo
+}
+
+// Update the data usage while walking recursively through the given bucket/prefix
+func (fs *FSObjects) walkDataUsageInfo(ctx context.Context, info *DataUsageInfo, bucket, prefix string) {
+	entries, err := readDir(pathJoin(fs.fsPath, bucket, prefix))
+	if err != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		if strings.HasSuffix(entry, "/") {
+			fs.walkDataUsageInfo(ctx, info, bucket, pathJoin(prefix, entry))
+		} else {
+			info.ObjectsCount++
+
+			// Stat the file to get file size.
+			fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, prefix, entry))
+			if err != nil {
+				continue
+			}
+			size := uint64(fi.Size())
+			info.ObjectsTotalSize += size
+			info.BucketsSizes[bucket] += size
+			info.ObjectsSizesHistogram[objSizeToHistoInterval(size)]++
+		}
+	}
+}
+
+// crawlAndGetDataUsageInfo returns data usage stats of the current FS deployment
+func (fs *FSObjects) crawlAndGetDataUsageInfo(ctx context.Context) DataUsageInfo {
+	buckets, err := readDir(fs.fsPath)
+	if err != nil {
+		return DataUsageInfo{}
+	}
+
+	var info = DataUsageInfo{
+		BucketsCount:          uint64(len(buckets)),
+		BucketsSizes:          make(map[string]uint64),
+		ObjectsSizesHistogram: make(map[string]uint64),
+	}
+
+	for _, bucket := range buckets {
+		bucket = strings.TrimSuffix(bucket, "/")
+		// Ignore all reserved bucket names and invalid bucket names.
+		if isReservedOrInvalidBucket(bucket, false) {
+			continue
+		}
+		fs.walkDataUsageInfo(ctx, &info, bucket, "")
+	}
+
+	info.LastUpdate = UTCNow()
+	return info
 }
 
 /// Bucket operations
