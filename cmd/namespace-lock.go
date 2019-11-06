@@ -27,21 +27,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/minio/dsync/v2"
 	"github.com/minio/lsync"
-	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
-	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/pkg/dsync"
 )
 
-// Global name space lock.
-var globalNSMutex *nsLockMap
-
-// Global lock server one per server.
-var globalLockServer *lockRESTServer
-
-// Instance of dsync for distributed clients.
-var globalDsync *dsync.Dsync
+// local lock servers
+var globalLockServers = make(map[Endpoint]*localLocker)
 
 // RWLocker - locker interface to introduce GetRLock, RUnlock.
 type RWLocker interface {
@@ -49,45 +41,6 @@ type RWLocker interface {
 	Unlock()
 	GetRLock(timeout *dynamicTimeout) (timedOutErr error)
 	RUnlock()
-}
-
-// Initialize distributed locking only in case of distributed setup.
-// Returns lock clients and the node index for the current server.
-func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int, err error) {
-	myNode = -1
-
-	seenHosts := set.NewStringSet()
-	for _, endpoint := range endpoints {
-		if seenHosts.Contains(endpoint.Host) {
-			continue
-		}
-		seenHosts.Add(endpoint.Host)
-
-		var locker dsync.NetLocker
-		if endpoint.IsLocal {
-			myNode = len(clnts)
-
-			globalLockServer = &lockRESTServer{
-				ll: &localLocker{
-					serverAddr:      endpoint.Host,
-					serviceEndpoint: lockRESTPrefix,
-					lockMap:         make(map[string][]lockRequesterInfo),
-				},
-			}
-			locker = globalLockServer.ll
-		} else {
-			var host *xnet.Host
-			host, err = xnet.ParseHost(endpoint.Host)
-			locker = newlockRESTClient(host)
-		}
-
-		clnts = append(clnts, locker)
-	}
-
-	if myNode == -1 {
-		return clnts, myNode, errors.New("no endpoint pointing to the local machine is found")
-	}
-	return clnts, myNode, err
 }
 
 // newNSLock - return a new name space lock map.
@@ -100,11 +53,6 @@ func newNSLock(isDistXL bool) *nsLockMap {
 	}
 	nsMutex.lockMap = make(map[nsParam]*nsLock)
 	return &nsMutex
-}
-
-// initNSLock - initialize name space lock map.
-func initNSLock(isDistXL bool) {
-	globalNSMutex = newNSLock(isDistXL)
 }
 
 // nsParam - carries name space resource.
@@ -224,32 +172,6 @@ func (n *nsLockMap) RUnlock(volume, path, opsID string) {
 	n.unlock(volume, path, readLock)
 }
 
-// ForceUnlock - forcefully unlock a lock based on name.
-func (n *nsLockMap) ForceUnlock(volume, path string) {
-	n.lockMapMutex.Lock()
-	defer n.lockMapMutex.Unlock()
-
-	// Clarification on operation:
-	// - In case of FS or XL we call ForceUnlock on the local globalNSMutex
-	//   (since there is only a single server) which will cause the 'stuck'
-	//   mutex to be removed from the map. Existing operations for this
-	//   will continue to be blocked (and timeout). New operations on this
-	//   resource will use a new mutex and proceed normally.
-	//
-	// - In case of Distributed setup (using dsync), there is no need to call
-	//   ForceUnlock on the server where the lock was acquired and is presumably
-	//   'stuck'. Instead dsync.ForceUnlock() will release the underlying locks
-	//   that participated in granting the lock. Any pending dsync locks that
-	//   are blocking can now proceed as normal and any new locks will also
-	//   participate normally.
-	if n.isDistXL { // For distributed mode, broadcast ForceUnlock message.
-		dsync.NewDRWMutex(context.Background(), pathJoin(volume, path), globalDsync).ForceUnlock()
-	}
-
-	// Remove lock from the map.
-	delete(n.lockMap, nsParam{volume, path})
-}
-
 // dsync's distributed lock instance.
 type distLockInstance struct {
 	rwMutex             *dsync.DRWMutex
@@ -301,10 +223,14 @@ type localLockInstance struct {
 // NewNSLock - returns a lock instance for a given volume and
 // path. The returned lockInstance object encapsulates the nsLockMap,
 // volume, path and operation ID.
-func (n *nsLockMap) NewNSLock(ctx context.Context, volume, path string) RWLocker {
+func (n *nsLockMap) NewNSLock(ctx context.Context, lockers []dsync.NetLocker, volume, path string) RWLocker {
 	opsID := mustGetUUID()
 	if n.isDistXL {
-		return &distLockInstance{dsync.NewDRWMutex(ctx, pathJoin(volume, path), globalDsync), volume, path, opsID}
+		sync, err := dsync.New(lockers)
+		if err != nil {
+			logger.CriticalIf(ctx, err)
+		}
+		return &distLockInstance{dsync.NewDRWMutex(ctx, pathJoin(volume, path), sync), volume, path, opsID}
 	}
 	return &localLockInstance{ctx, n, volume, path, opsID}
 }

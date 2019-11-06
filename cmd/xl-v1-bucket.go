@@ -140,11 +140,6 @@ func (xl xlObjects) getBucketInfo(ctx context.Context, bucketName string) (bucke
 
 // GetBucketInfo - returns BucketInfo for a bucket.
 func (xl xlObjects) GetBucketInfo(ctx context.Context, bucket string) (bi BucketInfo, e error) {
-	bucketLock := xl.nsMutex.NewNSLock(ctx, bucket, "")
-	if e := bucketLock.GetRLock(globalObjectTimeout); e != nil {
-		return bi, e
-	}
-	defer bucketLock.RUnlock()
 	bucketInfo, err := xl.getBucketInfo(ctx, bucket)
 	if err != nil {
 		return bi, toObjectErr(err, bucket)
@@ -226,12 +221,6 @@ func deleteDanglingBucket(ctx context.Context, storageDisks []StorageAPI, dErrs 
 
 // DeleteBucket - deletes a bucket.
 func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
-	bucketLock := xl.nsMutex.NewNSLock(ctx, bucket, "")
-	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
-		return err
-	}
-	defer bucketLock.Unlock()
-
 	// Collect if all disks report volume not found.
 	storageDisks := xl.getDisks()
 

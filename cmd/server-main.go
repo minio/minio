@@ -27,7 +27,6 @@ import (
 	"syscall"
 
 	"github.com/minio/cli"
-	"github.com/minio/dsync/v2"
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -143,12 +142,6 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	var setupType SetupType
 	var err error
-
-	if len(ctx.Args()) > serverCommandLineArgsMax {
-		uErr := config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("Invalid total number of endpoints (%d) passed, supported upto 32 unique arguments",
-			len(ctx.Args())))
-		logger.FatalIf(uErr, "Unable to validate passed endpoints")
-	}
 
 	endpoints := strings.Fields(env.Get(config.EnvEndpoints, ""))
 	if len(endpoints) > 0 {
@@ -328,21 +321,6 @@ func serverMain(ctx *cli.Context) {
 
 	// Set system resources to maximum.
 	logger.LogIf(context.Background(), setMaxResources())
-
-	// Set nodes for dsync for distributed setup.
-	if globalIsDistXL {
-		clnts, myNode, err := newDsyncNodes(globalEndpoints)
-		if err != nil {
-			logger.Fatal(err, "Unable to initialize distributed locking on %s", globalEndpoints)
-		}
-		globalDsync, err = dsync.New(clnts, myNode)
-		if err != nil {
-			logger.Fatal(err, "Unable to initialize distributed locking on %s", globalEndpoints)
-		}
-	}
-
-	// Initialize name space lock.
-	initNSLock(globalIsDistXL)
 
 	if globalIsXL {
 		// Init global heal state

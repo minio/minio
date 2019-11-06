@@ -31,7 +31,7 @@ func registerDistXLRouters(router *mux.Router, endpoints EndpointList) {
 	registerPeerRESTHandlers(router)
 
 	// Register distributed namespace lock.
-	registerLockRESTHandlers(router)
+	registerLockRESTHandlers(router, endpoints)
 
 }
 

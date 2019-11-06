@@ -294,7 +294,7 @@ func initConfig(objAPI ObjectLayer) error {
 	// all the config as necessary, this is to ensure that
 	// redundant locks are not held for each migration - this allows
 	// for a more predictable behavior while debugging.
-	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigPrefix)
+	objLock := objAPI.NewNSLock(context.Background(), minioMetaBucket, transactionConfigPrefix)
 	if err := objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}

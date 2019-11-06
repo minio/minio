@@ -577,12 +577,6 @@ func CreateEndpoints(serverAddr string, args ...[]string) (string, EndpointList,
 		uniqueArgs.Add(endpoint.Host)
 	}
 
-	// Error out if we have more than serverCommandLineArgsMax unique servers.
-	if len(uniqueArgs.ToSlice()) > serverCommandLineArgsMax {
-		err := fmt.Errorf("Unsupported number of endpoints (%s), total number of servers cannot be more than %d", endpoints, serverCommandLineArgsMax)
-		return serverAddr, endpoints, setupType, err
-	}
-
 	// Error out if we have less than 2 unique servers.
 	if len(uniqueArgs.ToSlice()) < 2 && setupType == DistXLSetupType {
 		err := fmt.Errorf("Unsupported number of endpoints (%s), minimum number of servers cannot be less than 2 in distributed setup", endpoints)

@@ -52,7 +52,7 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 	// at a given time, this big transaction lock ensures this
 	// appropriately. This is also true for rotation of encrypted
 	// content.
-	objLock := globalNSMutex.NewNSLock(context.Background(), minioMetaBucket, transactionConfigPrefix)
+	objLock := objAPI.NewNSLock(context.Background(), minioMetaBucket, transactionConfigPrefix)
 	if err := objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}

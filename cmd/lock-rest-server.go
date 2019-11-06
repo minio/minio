@@ -17,16 +17,13 @@
 package cmd
 
 import (
-	"context"
 	"errors"
-	"math/rand"
 	"net/http"
+	"path"
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/dsync/v2"
-	"github.com/minio/minio/cmd/logger"
-	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/pkg/dsync"
 )
 
 const (
@@ -58,11 +55,9 @@ func (l *lockRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
 
 func getLockArgs(r *http.Request) dsync.LockArgs {
 	return dsync.LockArgs{
-		UID:             r.URL.Query().Get(lockRESTUID),
-		Source:          r.URL.Query().Get(lockRESTSource),
-		Resource:        r.URL.Query().Get(lockRESTResource),
-		ServerAddr:      r.URL.Query().Get(lockRESTServerAddr),
-		ServiceEndpoint: r.URL.Query().Get(lockRESTServerEndpoint),
+		UID:      r.URL.Query().Get(lockRESTUID),
+		Source:   r.URL.Query().Get(lockRESTSource),
+		Resource: r.URL.Query().Get(lockRESTResource),
 	}
 }
 
@@ -132,130 +127,28 @@ func (l *lockRESTServer) RUnlockHandler(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// ForceUnlockHandler - force releases the acquired lock.
-func (l *lockRESTServer) ForceUnlockHandler(w http.ResponseWriter, r *http.Request) {
-	if !l.IsValid(w, r) {
-		l.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	// Ignore the ForceUnlock() "reply" return value because if err == nil, "reply" is always true
-	// Consequently, if err != nil, reply is always false
-	if _, err := l.ll.ForceUnlock(getLockArgs(r)); err != nil {
-		l.writeErrorResponse(w, err)
-		return
-	}
-}
-
-// ExpiredHandler - query expired lock status.
-func (l *lockRESTServer) ExpiredHandler(w http.ResponseWriter, r *http.Request) {
-	if !l.IsValid(w, r) {
-		l.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	lockArgs := getLockArgs(r)
-
-	l.ll.mutex.Lock()
-	defer l.ll.mutex.Unlock()
-	// Lock found, proceed to verify if belongs to given uid.
-	if lri, ok := l.ll.lockMap[lockArgs.Resource]; ok {
-		// Check whether uid is still active
-		for _, entry := range lri {
-			if entry.UID == lockArgs.UID {
-				l.writeErrorResponse(w, errLockNotExpired)
-				return
-			}
-		}
-	}
-}
-
-// lockMaintenance loops over locks that have been active for some time and checks back
-// with the original server whether it is still alive or not
-//
-// Following logic inside ignores the errors generated for Dsync.Active operation.
-// - server at client down
-// - some network error (and server is up normally)
-//
-// We will ignore the error, and we will retry later to get a resolve on this lock
-func (l *lockRESTServer) lockMaintenance(interval time.Duration) {
-	l.ll.mutex.Lock()
-	// Get list of long lived locks to check for staleness.
-	nlripLongLived := getLongLivedLocks(l.ll.lockMap, interval)
-	l.ll.mutex.Unlock()
-
-	// Validate if long lived locks are indeed clean.
-	for _, nlrip := range nlripLongLived {
-		// Initialize client based on the long live locks.
-		host, err := xnet.ParseHost(nlrip.lri.Node)
-		if err != nil {
-			logger.LogIf(context.Background(), err)
-			continue
-		}
-		c := newlockRESTClient(host)
-		if !c.IsOnline() {
-			continue
-		}
-
-		// Call back to original server verify whether the lock is still active (based on name & uid)
-		expired, err := c.Expired(dsync.LockArgs{
-			UID:      nlrip.lri.UID,
-			Resource: nlrip.name,
-		})
-
-		if err != nil {
-			continue
-		}
-
-		// For successful response, verify if lock was indeed active or stale.
-		if expired {
-			// The lock is no longer active at server that originated
-			// the lock, attempt to remove the lock.
-			l.ll.mutex.Lock()
-			l.ll.removeEntryIfExists(nlrip) // Purge the stale entry if it exists.
-			l.ll.mutex.Unlock()
-		}
-
-		// Close the connection regardless of the call response.
-		c.Close()
-	}
-}
-
-// Start lock maintenance from all lock servers.
-func startLockMaintenance(lkSrv *lockRESTServer) {
-	// Initialize a new ticker with a minute between each ticks.
-	ticker := time.NewTicker(lockMaintenanceInterval)
-	// Stop the timer upon service closure and cleanup the go-routine.
-	defer ticker.Stop()
-
-	// Start with random sleep time, so as to avoid "synchronous checks" between servers
-	time.Sleep(time.Duration(rand.Float64() * float64(lockMaintenanceInterval)))
-	for {
-		// Verifies every minute for locks held more than 2 minutes.
-		select {
-		case <-GlobalServiceDoneCh:
-			return
-		case <-ticker.C:
-			lkSrv.lockMaintenance(lockValidityCheckInterval)
-		}
-	}
-}
-
 // registerLockRESTHandlers - register lock rest router.
-func registerLockRESTHandlers(router *mux.Router) {
-	subrouter := router.PathPrefix(lockRESTPrefix).Subrouter()
-	queries := restQueries(lockRESTUID, lockRESTSource, lockRESTResource, lockRESTServerAddr, lockRESTServerEndpoint)
-	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodLock).HandlerFunc(httpTraceHdrs(globalLockServer.LockHandler)).Queries(queries...)
-	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRLock).HandlerFunc(httpTraceHdrs(globalLockServer.RLockHandler)).Queries(queries...)
-	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodUnlock).HandlerFunc(httpTraceHdrs(globalLockServer.UnlockHandler)).Queries(queries...)
-	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRUnlock).HandlerFunc(httpTraceHdrs(globalLockServer.RUnlockHandler)).Queries(queries...)
-	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodForceUnlock).HandlerFunc(httpTraceHdrs(globalLockServer.ForceUnlockHandler)).Queries(queries...)
-	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodExpired).HandlerFunc(httpTraceAll(globalLockServer.ExpiredHandler)).Queries(queries...)
+func registerLockRESTHandlers(router *mux.Router, endpoints EndpointList) {
+	queries := restQueries(lockRESTUID, lockRESTSource, lockRESTResource)
+	for _, endpoint := range endpoints {
+		if !endpoint.IsLocal {
+			continue
+		}
+
+		lockServer := &lockRESTServer{
+			ll: newLocker(endpoint),
+		}
+
+		subrouter := router.PathPrefix(path.Join(lockRESTPrefix, endpoint.Path)).Subrouter()
+		subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodLock).HandlerFunc(httpTraceHdrs(lockServer.LockHandler)).Queries(queries...)
+		subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRLock).HandlerFunc(httpTraceHdrs(lockServer.RLockHandler)).Queries(queries...)
+		subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodUnlock).HandlerFunc(httpTraceHdrs(lockServer.UnlockHandler)).Queries(queries...)
+		subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRUnlock).HandlerFunc(httpTraceHdrs(lockServer.RUnlockHandler)).Queries(queries...)
+
+		globalLockServers[endpoint] = lockServer.ll
+	}
 
 	// If none of the routes match add default error handler routes
 	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
 	router.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
-
-	// Start lock maintenance from all lock servers.
-	go startLockMaintenance(globalLockServer)
 }

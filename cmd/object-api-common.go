@@ -106,7 +106,7 @@ func newStorageAPI(endpoint Endpoint) (storage StorageAPI, err error) {
 		return &posixDiskIDCheck{storage: storage}, nil
 	}
 
-	return newStorageRESTClient(endpoint)
+	return newStorageRESTClient(endpoint), nil
 }
 
 // Cleanup a directory recursively.

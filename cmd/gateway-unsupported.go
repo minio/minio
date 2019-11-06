@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lifecycle"
@@ -27,6 +28,12 @@ import (
 
 // GatewayUnsupported list of unsupported call stubs for gateway.
 type GatewayUnsupported struct{}
+
+// NewNSLock is a dummy stub for gateway.
+func (a GatewayUnsupported) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
+	logger.CriticalIf(ctx, errors.New("not implemented"))
+	return nil
+}
 
 // ListMultipartUploads lists all multipart uploads.
 func (a GatewayUnsupported) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi ListMultipartsInfo, err error) {

@@ -1,3 +1,19 @@
+/*
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package cmd
 
 import (
@@ -49,8 +65,6 @@ type cacheObjects struct {
 	cache []*diskCache
 	// file path patterns to exclude from cache
 	exclude []string
-	// to manage cache namespace locks
-	nsMutex *nsLockMap
 
 	// if true migration is in progress from v1 to v2
 	migrating bool
@@ -58,6 +72,7 @@ type cacheObjects struct {
 	migMutex sync.Mutex
 
 	// Object functions pointing to the corresponding functions of backend implementation.
+	NewNSLockFn      func(ctx context.Context, bucket, object string) RWLocker
 	GetObjectNInfoFn func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error)
 	GetObjectInfoFn  func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	DeleteObjectFn   func(ctx context.Context, bucket, object string) error
@@ -66,7 +81,7 @@ type cacheObjects struct {
 }
 
 func (c *cacheObjects) delete(ctx context.Context, dcache *diskCache, bucket, object string) (err error) {
-	cLock := c.nsMutex.NewNSLock(ctx, bucket, object)
+	cLock := c.NewNSLockFn(ctx, bucket, object)
 	if err := cLock.GetLock(globalObjectTimeout); err != nil {
 		return err
 	}
@@ -75,7 +90,7 @@ func (c *cacheObjects) delete(ctx context.Context, dcache *diskCache, bucket, ob
 }
 
 func (c *cacheObjects) put(ctx context.Context, dcache *diskCache, bucket, object string, data io.Reader, size int64, opts ObjectOptions) error {
-	cLock := c.nsMutex.NewNSLock(ctx, bucket, object)
+	cLock := c.NewNSLockFn(ctx, bucket, object)
 	if err := cLock.GetLock(globalObjectTimeout); err != nil {
 		return err
 	}
@@ -84,7 +99,7 @@ func (c *cacheObjects) put(ctx context.Context, dcache *diskCache, bucket, objec
 }
 
 func (c *cacheObjects) get(ctx context.Context, dcache *diskCache, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error) {
-	cLock := c.nsMutex.NewNSLock(ctx, bucket, object)
+	cLock := c.NewNSLockFn(ctx, bucket, object)
 	if err := cLock.GetRLock(globalObjectTimeout); err != nil {
 		return nil, err
 	}
@@ -94,7 +109,7 @@ func (c *cacheObjects) get(ctx context.Context, dcache *diskCache, bucket, objec
 }
 
 func (c *cacheObjects) stat(ctx context.Context, dcache *diskCache, bucket, object string) (oi ObjectInfo, err error) {
-	cLock := c.nsMutex.NewNSLock(ctx, bucket, object)
+	cLock := c.NewNSLockFn(ctx, bucket, object)
 	if err := cLock.GetRLock(globalObjectTimeout); err != nil {
 		return oi, err
 	}
@@ -549,9 +564,11 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 	c := &cacheObjects{
 		cache:     cache,
 		exclude:   config.Exclude,
-		nsMutex:   newNSLock(false),
 		migrating: migrateSw,
 		migMutex:  sync.Mutex{},
+		NewNSLockFn: func(ctx context.Context, bucket, object string) RWLocker {
+			return globalObjectAPI.NewNSLock(ctx, bucket, object)
+		},
 		GetObjectInfoFn: func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 			return newObjectLayerFn().GetObjectInfo(ctx, bucket, object, opts)
 		},

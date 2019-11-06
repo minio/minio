@@ -27,7 +27,6 @@ import (
 	"net/url"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/auth"
@@ -67,10 +66,6 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	// Set globalIsXL to indicate that the setup uses an erasure
 	// code backend.
 	globalIsXL = true
-
-	// initialize NSLock.
-	isDistXL := false
-	initNSLock(isDistXL)
 
 	// Init global heal state
 	if globalIsXL {
@@ -342,46 +337,6 @@ func TestToAdminAPIErrCode(t *testing.T) {
 			t.Errorf("Test %d: Expected %v but received %v",
 				i+1, test.expectedAPIErr, actualErr)
 		}
-	}
-}
-
-func TestTopLockEntries(t *testing.T) {
-	t1 := UTCNow()
-	t2 := UTCNow().Add(10 * time.Second)
-	peerLocks := []*PeerLocks{
-		{
-			Addr: "1",
-			Locks: map[string][]lockRequesterInfo{
-				"1": {
-					{false, "node2", "ep2", "2", t2, t2, ""},
-					{true, "node1", "ep1", "1", t1, t1, ""},
-				},
-				"2": {
-					{false, "node2", "ep2", "2", t2, t2, ""},
-					{true, "node1", "ep1", "1", t1, t1, ""},
-				},
-			},
-		},
-		{
-			Addr: "2",
-			Locks: map[string][]lockRequesterInfo{
-				"1": {
-					{false, "node2", "ep2", "2", t2, t2, ""},
-					{true, "node1", "ep1", "1", t1, t1, ""},
-				},
-				"2": {
-					{false, "node2", "ep2", "2", t2, t2, ""},
-					{true, "node1", "ep1", "1", t1, t1, ""},
-				},
-			},
-		},
-	}
-	les := topLockEntries(peerLocks)
-	if len(les) != 2 {
-		t.Fatalf("Did not get 2 results")
-	}
-	if les[0].Timestamp.After(les[1].Timestamp) {
-		t.Fatalf("Got wrong sorted value")
 	}
 }
 

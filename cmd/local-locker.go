@@ -17,22 +17,21 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/minio/dsync/v2"
+	"github.com/minio/minio/pkg/dsync"
 )
 
 // lockRequesterInfo stores various info from the client for each lock that is requested.
 type lockRequesterInfo struct {
-	Writer          bool      // Bool whether write or read lock.
-	Node            string    // Network address of client claiming lock.
-	ServiceEndpoint string    // RPC path of client claiming lock.
-	UID             string    // UID to uniquely identify request of client.
-	Timestamp       time.Time // Timestamp set at the time of initialization.
-	TimeLastCheck   time.Time // Timestamp for last check of validity of lock.
-	Source          string    // Contains line, function and filename reqesting the lock.
+	Writer        bool      // Bool whether write or read lock.
+	UID           string    // UID to uniquely identify request of client.
+	Timestamp     time.Time // Timestamp set at the time of initialization.
+	TimeLastCheck time.Time // Timestamp for last check of validity of lock.
+	Source        string    // Contains line, function and filename reqesting the lock.
 }
 
 // isWriteLock returns whether the lock is a write or read lock.
@@ -40,20 +39,41 @@ func isWriteLock(lri []lockRequesterInfo) bool {
 	return len(lri) == 1 && lri[0].Writer
 }
 
+type errorLocker struct{}
+
+func (d *errorLocker) String() string {
+	return ""
+}
+
+func (d *errorLocker) Lock(args dsync.LockArgs) (reply bool, err error) {
+	return false, errors.New("unable to lock")
+}
+
+func (d *errorLocker) Unlock(args dsync.LockArgs) (reply bool, err error) {
+	return false, errors.New("unable to unlock")
+}
+
+func (d *errorLocker) RLock(args dsync.LockArgs) (reply bool, err error) {
+	return false, errors.New("unable to rlock")
+}
+
+func (d *errorLocker) RUnlock(args dsync.LockArgs) (reply bool, err error) {
+	return false, errors.New("unable to runlock")
+}
+
+func (d *errorLocker) Close() error {
+	return nil
+}
+
 // localLocker implements Dsync.NetLocker
 type localLocker struct {
-	mutex           sync.Mutex
-	serviceEndpoint string
-	serverAddr      string
-	lockMap         map[string][]lockRequesterInfo
+	mutex    sync.Mutex
+	endpoint Endpoint
+	lockMap  map[string][]lockRequesterInfo
 }
 
-func (l *localLocker) ServerAddr() string {
-	return l.serverAddr
-}
-
-func (l *localLocker) ServiceEndpoint() string {
-	return l.serviceEndpoint
+func (l *localLocker) String() string {
+	return l.endpoint.String()
 }
 
 func (l *localLocker) Lock(args dsync.LockArgs) (reply bool, err error) {
@@ -63,13 +83,11 @@ func (l *localLocker) Lock(args dsync.LockArgs) (reply bool, err error) {
 	if !isLockTaken { // No locks held on the given name, so claim write lock
 		l.lockMap[args.Resource] = []lockRequesterInfo{
 			{
-				Writer:          true,
-				Node:            args.ServerAddr,
-				ServiceEndpoint: args.ServiceEndpoint,
-				Source:          args.Source,
-				UID:             args.UID,
-				Timestamp:       UTCNow(),
-				TimeLastCheck:   UTCNow(),
+				Writer:        true,
+				Source:        args.Source,
+				UID:           args.UID,
+				Timestamp:     UTCNow(),
+				TimeLastCheck: UTCNow(),
 			},
 		}
 	}
@@ -96,17 +114,38 @@ func (l *localLocker) Unlock(args dsync.LockArgs) (reply bool, err error) {
 
 }
 
+// removeEntry based on the uid of the lock message, removes a single entry from the
+// lockRequesterInfo array or the whole array from the map (in case of a write lock
+// or last read lock)
+func (l *localLocker) removeEntry(name, uid string, lri *[]lockRequesterInfo) bool {
+	// Find correct entry to remove based on uid.
+	for index, entry := range *lri {
+		if entry.UID == uid {
+			if len(*lri) == 1 {
+				// Remove the write lock.
+				delete(l.lockMap, name)
+			} else {
+				// Remove the appropriate read lock.
+				*lri = append((*lri)[:index], (*lri)[index+1:]...)
+				l.lockMap[name] = *lri
+			}
+			return true
+		}
+	}
+
+	// None found return false, perhaps entry removed in previous run.
+	return false
+}
+
 func (l *localLocker) RLock(args dsync.LockArgs) (reply bool, err error) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	lrInfo := lockRequesterInfo{
-		Writer:          false,
-		Node:            args.ServerAddr,
-		ServiceEndpoint: args.ServiceEndpoint,
-		Source:          args.Source,
-		UID:             args.UID,
-		Timestamp:       UTCNow(),
-		TimeLastCheck:   UTCNow(),
+		Writer:        false,
+		Source:        args.Source,
+		UID:           args.UID,
+		Timestamp:     UTCNow(),
+		TimeLastCheck: UTCNow(),
 	}
 	if lri, ok := l.lockMap[args.Resource]; ok {
 		if reply = !isWriteLock(lri); reply {
@@ -139,18 +178,6 @@ func (l *localLocker) RUnlock(args dsync.LockArgs) (reply bool, err error) {
 	return reply, nil
 }
 
-func (l *localLocker) ForceUnlock(args dsync.LockArgs) (reply bool, err error) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-	if len(args.UID) != 0 {
-		return false, fmt.Errorf("ForceUnlock called with non-empty UID: %s", args.UID)
-	}
-	// Only clear lock when it is taken
-	// Remove the lock (irrespective of write or read lock)
-	delete(l.lockMap, args.Resource)
-	return true, nil
-}
-
 func (l *localLocker) DupLockMap() map[string][]lockRequesterInfo {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
@@ -160,4 +187,15 @@ func (l *localLocker) DupLockMap() map[string][]lockRequesterInfo {
 		lockCopy[k] = append(lockCopy[k], v...)
 	}
 	return lockCopy
+}
+
+func (l *localLocker) Close() error {
+	return nil
+}
+
+func newLocker(endpoint Endpoint) *localLocker {
+	return &localLocker{
+		endpoint: endpoint,
+		lockMap:  make(map[string][]lockRequesterInfo),
+	}
 }

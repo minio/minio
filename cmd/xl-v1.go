@@ -23,6 +23,7 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
+	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -39,11 +40,14 @@ var OfflineDisk StorageAPI // zero value is nil
 
 // xlObjects - Implements XL object layer.
 type xlObjects struct {
-	// name space mutex for object layer.
-	nsMutex *nsLockMap
-
 	// getDisks returns list of storageAPIs.
 	getDisks func() []StorageAPI
+
+	// getLockers returns list of remote and local lockers.
+	getLockers func() []dsync.NetLocker
+
+	// Locker mutex map.
+	nsMutex *nsLockMap
 
 	// Byte pools used for temporary i/o buffers.
 	bp *bpool.BytePoolCap
@@ -55,10 +59,16 @@ type xlObjects struct {
 	listPool *TreeWalkPool
 }
 
+// NewNSLock - initialize a new namespace RWLocker instance.
+func (xl xlObjects) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
+	return xl.nsMutex.NewNSLock(ctx, xl.getLockers(), bucket, object)
+}
+
 // Shutdown function for object storage interface.
 func (xl xlObjects) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.
 	closeStorageDisks(xl.getDisks())
+	closeLockers(xl.getLockers())
 	return nil
 }
 

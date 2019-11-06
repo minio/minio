@@ -268,14 +268,18 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints EndpointLi
 	}
 
 	if format.ID == "" {
-		if err = formatXLFixDeploymentID(context.Background(), endpoints, storageDisks, format); err != nil {
+		// Not a first disk, wait until first disk fixes deploymentID
+		if !firstDisk {
+			return nil, errNotFirstDisk
+		}
+		if err = formatXLFixDeploymentID(endpoints, storageDisks, format); err != nil {
 			return nil, err
 		}
 	}
 
 	globalDeploymentID = format.ID
 
-	if err = formatXLFixLocalDeploymentID(context.Background(), endpoints, storageDisks, format); err != nil {
+	if err = formatXLFixLocalDeploymentID(endpoints, storageDisks, format); err != nil {
 		return nil, err
 	}
 	return format, nil
