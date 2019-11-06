@@ -1637,7 +1637,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		}
 		var policyStr string
 		// Use the abstracted API instead of core, such that
-		// NoSuchBucketPolicy errors are automatically handled.
+		// NoSuchLifecycleConfiguration errors are automatically handled.
 		policyStr, err = core.Client.GetBucketPolicy(args.BucketName)
 		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)

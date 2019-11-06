@@ -1449,7 +1449,7 @@ func (l *gcsGateway) GetBucketPolicy(ctx context.Context, bucket string) (*polic
 		actionSet.Add(policy.PutObjectAction)
 	}
 
-	// Return NoSuchBucketPolicy error, when policy is not set
+	// Return NoSuchLifecycleConfiguration error, when policy is not set
 	if len(actionSet) == 0 {
 		return nil, gcsToObjectError(minio.BucketPolicyNotFound{}, bucket)
 	}

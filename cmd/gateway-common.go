@@ -341,7 +341,7 @@ func ErrorRespToObjectError(err error, params ...string) error {
 		err = BucketAlreadyOwnedByYou{}
 	case "BucketNotEmpty":
 		err = BucketNotEmpty{}
-	case "NoSuchBucketPolicy":
+	case "NoSuchLifecycleConfiguration":
 		err = BucketPolicyNotFound{}
 	case "NoSuchBucketLifecycle":
 		err = BucketLifecycleNotFound{}

@@ -55,7 +55,7 @@ func TestS3ToObjectError(t *testing.T) {
 			expectedErr: minio.InvalidPart{},
 		},
 		{
-			inputErr:    errResponse("NoSuchBucketPolicy"),
+			inputErr:    errResponse("NoSuchLifecycleConfiguration"),
 			expectedErr: minio.BucketPolicyNotFound{},
 		},
 		{
