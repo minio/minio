@@ -1587,9 +1587,14 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	}
 
 	// Set faulty disks to XL backend
-	xl := obj.(*xlObjects)
-	for i, d := range xl.storageDisks {
-		xl.storageDisks[i] = newNaughtyDisk(d, nil, errFaultyDisk)
+	z := obj.(*xlZones)
+	xl := z.zones[0].sets[0]
+	xlDisks := xl.getDisks()
+	xl.getDisks = func() []StorageAPI {
+		for i, d := range xlDisks {
+			xlDisks[i] = newNaughtyDisk(d, nil, errFaultyDisk)
+		}
+		return xlDisks
 	}
 
 	// Initialize web rpc endpoint.

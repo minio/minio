@@ -383,12 +383,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		deleteObjectsFn = api.CacheAPI().DeleteObjects
 	}
 
-	type delObj struct {
-		origIndex int
-		name      string
-	}
-
-	var objectsToDelete []delObj
+	var objectsToDelete = map[string]int{}
 	var dErrs = make([]APIErrorCode, len(deleteObjects.Objects))
 
 	for index, object := range deleteObjects.Objects {
@@ -400,13 +395,16 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			continue
 		}
 
-		objectsToDelete = append(objectsToDelete, delObj{index, object.ObjectName})
+		// Avoid duplicate objects, we use map to filter them out.
+		if _, ok := objectsToDelete[object.ObjectName]; !ok {
+			objectsToDelete[object.ObjectName] = index
+		}
 	}
 
-	toNames := func(input []delObj) (output []string) {
+	toNames := func(input map[string]int) (output []string) {
 		output = make([]string, len(input))
-		for i := range input {
-			output[i] = input[i].name
+		for name, index := range input {
+			output[index] = name
 		}
 		return
 	}
@@ -417,8 +415,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
-	for i, obj := range objectsToDelete {
-		dErrs[obj.origIndex] = toAPIErrorCode(ctx, errs[i])
+	for _, index := range objectsToDelete {
+		dErrs[index] = toAPIErrorCode(ctx, errs[index])
 	}
 
 	// Collect deleted objects and errors if any.

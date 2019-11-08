@@ -80,16 +80,6 @@ func getLocalBackgroundHealStatus() madmin.BgHealState {
 
 // healErasureSet lists and heals all objects in a specific erasure set
 func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects) error {
-	// Hold a lock for healing the erasure set
-	zeroDuration := time.Millisecond
-	zeroDynamicTimeout := newDynamicTimeout(zeroDuration, zeroDuration)
-	erasureSetHealLock := xlObj.nsMutex.NewNSLock(ctx, xlObj.getLockers(),
-		"system", fmt.Sprintf("erasure-set-heal-%d", setIndex))
-	if err := erasureSetHealLock.GetLock(zeroDynamicTimeout); err != nil {
-		return err
-	}
-	defer erasureSetHealLock.Unlock()
-
 	buckets, err := xlObj.ListBuckets(ctx)
 	if err != nil {
 		return err
@@ -123,11 +113,11 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects) error {
 }
 
 // Healing leader will take the charge of healing all erasure sets
-func execLeaderTasks(sets *xlSets) {
+func execLeaderTasks(z *xlZones) {
 	ctx := context.Background()
 
 	// Hold a lock so only one server performs auto-healing
-	leaderLock := sets.NewNSLock(ctx, minioMetaBucket, "leader")
+	leaderLock := z.NewNSLock(ctx, minioMetaBucket, "leader")
 	for {
 		err := leaderLock.GetLock(leaderLockTimeout)
 		if err == nil {
@@ -136,18 +126,30 @@ func execLeaderTasks(sets *xlSets) {
 		time.Sleep(leaderTick)
 	}
 
+	// Hold a lock for healing the erasure set
+	zeroDuration := time.Millisecond
+	zeroDynamicTimeout := newDynamicTimeout(zeroDuration, zeroDuration)
+
 	lastScanTime := time.Now() // So that we don't heal immediately, but after one month.
 	for {
 		if time.Since(lastScanTime) < healInterval {
 			time.Sleep(healTick)
 			continue
 		}
-		// Heal set by set
-		for i, set := range sets.sets {
-			err := healErasureSet(ctx, i, set)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				continue
+		for _, zone := range z.zones {
+			// Heal set by set
+			for i, set := range zone.sets {
+				setLock := z.zones[0].NewNSLock(ctx, "system", fmt.Sprintf("erasure-set-heal-%d", i))
+				if err := setLock.GetLock(zeroDynamicTimeout); err != nil {
+					logger.LogIf(ctx, err)
+					continue
+				}
+				if err := healErasureSet(ctx, i, set); err != nil {
+					setLock.Unlock()
+					logger.LogIf(ctx, err)
+					continue
+				}
+				setLock.Unlock()
 			}
 		}
 		lastScanTime = time.Now()
@@ -165,12 +167,12 @@ func startGlobalHeal() {
 		break
 	}
 
-	sets, ok := objAPI.(*xlSets)
+	zones, ok := objAPI.(*xlZones)
 	if !ok {
 		return
 	}
 
-	execLeaderTasks(sets)
+	execLeaderTasks(zones)
 }
 
 func initGlobalHeal() {

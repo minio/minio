@@ -31,8 +31,7 @@ func TestNewObjectLayer(t *testing.T) {
 	}
 	defer removeRoots(disks)
 
-	endpoints := mustGetNewEndpointList(disks...)
-	obj, err := newObjectLayer(endpoints)
+	obj, err := newObjectLayer(mustGetZoneEndpoints(disks...))
 	if err != nil {
 		t.Fatal("Unexpected object layer initialization error", err)
 	}
@@ -51,16 +50,12 @@ func TestNewObjectLayer(t *testing.T) {
 	}
 	defer removeRoots(disks)
 
-	globalXLSetCount = 1
-	globalXLSetDriveCount = 16
-
-	endpoints = mustGetNewEndpointList(disks...)
-	obj, err = newObjectLayer(endpoints)
+	obj, err = newObjectLayer(mustGetZoneEndpoints(disks...))
 	if err != nil {
 		t.Fatal("Unexpected object layer initialization error", err)
 	}
 
-	_, ok = obj.(*xlSets)
+	_, ok = obj.(*xlZones)
 	if !ok {
 		t.Fatal("Unexpected object layer detected", reflect.TypeOf(obj))
 	}

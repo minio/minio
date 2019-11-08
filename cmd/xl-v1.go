@@ -52,16 +52,13 @@ type xlObjects struct {
 	// Byte pools used for temporary i/o buffers.
 	bp *bpool.BytePoolCap
 
-	// TODO: Deprecated only kept here for tests, should be removed in future.
-	storageDisks []StorageAPI
-
 	// TODO: ListObjects pool management, should be removed in future.
 	listPool *TreeWalkPool
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
 func (xl xlObjects) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
-	return xl.nsMutex.NewNSLock(ctx, xl.getLockers(), bucket, object)
+	return xl.nsMutex.NewNSLock(ctx, xl.getLockers, bucket, object)
 }
 
 // Shutdown function for object storage interface.

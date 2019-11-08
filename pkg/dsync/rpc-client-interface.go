@@ -56,4 +56,7 @@ type NetLocker interface {
 
 	// Close closes any underlying connection to the service endpoint
 	Close() error
+
+	// Is the underlying connection online? (is always true for any local lockers)
+	IsOnline() bool
 }

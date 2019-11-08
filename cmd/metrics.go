@@ -90,11 +90,13 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	storageAPIs := []StorageAPI{}
-	for _, endpoint := range globalEndpoints {
-		if endpoint.IsLocal {
-			// Construct storageAPIs.
-			sAPI, _ := newStorageAPI(endpoint)
-			storageAPIs = append(storageAPIs, sAPI)
+	for _, ep := range globalEndpoints {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				// Construct storageAPIs.
+				sAPI, _ := newStorageAPI(endpoint)
+				storageAPIs = append(storageAPIs, sAPI)
+			}
 		}
 	}
 

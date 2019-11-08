@@ -223,14 +223,12 @@ type localLockInstance struct {
 // NewNSLock - returns a lock instance for a given volume and
 // path. The returned lockInstance object encapsulates the nsLockMap,
 // volume, path and operation ID.
-func (n *nsLockMap) NewNSLock(ctx context.Context, lockers []dsync.NetLocker, volume, path string) RWLocker {
+func (n *nsLockMap) NewNSLock(ctx context.Context, lockersFn func() []dsync.NetLocker, volume, path string) RWLocker {
 	opsID := mustGetUUID()
 	if n.isDistXL {
-		sync, err := dsync.New(lockers)
-		if err != nil {
-			logger.CriticalIf(ctx, err)
-		}
-		return &distLockInstance{dsync.NewDRWMutex(ctx, pathJoin(volume, path), sync), volume, path, opsID}
+		return &distLockInstance{dsync.NewDRWMutex(ctx, pathJoin(volume, path), &dsync.Dsync{
+			GetLockersFn: lockersFn,
+		}), volume, path, opsID}
 	}
 	return &localLockInstance{ctx, n, volume, path, opsID}
 }

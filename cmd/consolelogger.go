@@ -44,8 +44,8 @@ type HTTPConsoleLoggerSys struct {
 
 // NewConsoleLogger - creates new HTTPConsoleLoggerSys with all nodes subscribed to
 // the console logging pub sub system
-func NewConsoleLogger(ctx context.Context, endpoints EndpointList) *HTTPConsoleLoggerSys {
-	host, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
+func NewConsoleLogger(ctx context.Context, endpointZones EndpointZones) *HTTPConsoleLoggerSys {
+	host, err := xnet.ParseHost(GetLocalPeer(endpointZones))
 	if err != nil {
 		logger.FatalIf(err, "Unable to start console logging subsystem")
 	}

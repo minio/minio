@@ -77,26 +77,26 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// For FS and Erasure backend, check if local disks are up.
-	var totalLocalDisks int
 	var erroredDisks int
-	for _, endpoint := range globalEndpoints {
-		// Check only if local disks are accessible, we do not have
-		// to reach to rest of the other servers in a distributed setup.
-		if endpoint.IsLocal {
-			totalLocalDisks++
+	for _, ep := range globalEndpoints {
+		for _, endpoint := range ep.Endpoints {
+			// Check only if local disks are accessible, we do not have
+			// to reach to rest of the other servers in a distributed setup.
+			if !endpoint.IsLocal {
+				continue
+			}
 			// Attempt a stat to backend, any error resulting
 			// from this Stat() operation is considered as backend
 			// is not available, count them as errors.
-			if _, err := os.Stat(endpoint.Path); err != nil {
+			if _, err := os.Stat(endpoint.Path); err != nil && os.IsNotExist(err) {
 				logger.LogIf(ctx, err)
 				erroredDisks++
 			}
 		}
 	}
 
-	// If all exported local disks have errored, we simply let kubernetes
-	// take us down.
-	if totalLocalDisks == erroredDisks {
+	// Any errored disks, we let orchestrators take us down.
+	if erroredDisks > 0 {
 		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
 		return
 	}

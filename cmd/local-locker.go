@@ -65,6 +65,10 @@ func (d *errorLocker) Close() error {
 	return nil
 }
 
+func (d *errorLocker) IsOnline() bool {
+	return false
+}
+
 // localLocker implements Dsync.NetLocker
 type localLocker struct {
 	mutex    sync.Mutex
@@ -191,6 +195,11 @@ func (l *localLocker) DupLockMap() map[string][]lockRequesterInfo {
 
 func (l *localLocker) Close() error {
 	return nil
+}
+
+// Local locker is always online.
+func (l *localLocker) IsOnline() bool {
+	return true
 }
 
 func newLocker(endpoint Endpoint) *localLocker {

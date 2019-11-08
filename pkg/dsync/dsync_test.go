@@ -78,10 +78,8 @@ func TestMain(m *testing.M) {
 		clnts = append(clnts, newClient(nodes[i], rpcPaths[i]))
 	}
 
-	var err error
-	ds, err = New(clnts)
-	if err != nil {
-		log.Fatalf("set nodes failed with %v", err)
+	ds = &Dsync{
+		GetLockersFn: func() []NetLocker { return clnts },
 	}
 
 	startRPCServers(nodes)
@@ -256,11 +254,10 @@ func TestMutex(t *testing.T) {
 
 func BenchmarkMutexUncontended(b *testing.B) {
 	type PaddedMutex struct {
-		DRWMutex
-		pad [128]uint8
+		*DRWMutex
 	}
 	b.RunParallel(func(pb *testing.PB) {
-		var mu PaddedMutex
+		var mu = PaddedMutex{NewDRWMutex(context.Background(), "", ds)}
 		for pb.Next() {
 			mu.Lock(id, source)
 			mu.Unlock()

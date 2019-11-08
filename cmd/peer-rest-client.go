@@ -708,9 +708,9 @@ func (client *peerRESTClient) ConsoleLog(logCh chan interface{}, doneCh chan str
 	}()
 }
 
-func getRemoteHosts(endpoints EndpointList) []*xnet.Host {
+func getRemoteHosts(endpointZones EndpointZones) []*xnet.Host {
 	var remoteHosts []*xnet.Host
-	for _, hostStr := range GetRemotePeers(endpoints) {
+	for _, hostStr := range GetRemotePeers(endpointZones) {
 		host, err := xnet.ParseHost(hostStr)
 		if err != nil {
 			logger.LogIf(context.Background(), err)
@@ -722,7 +722,7 @@ func getRemoteHosts(endpoints EndpointList) []*xnet.Host {
 	return remoteHosts
 }
 
-func getRestClients(endpoints EndpointList) []*peerRESTClient {
+func getRestClients(endpoints EndpointZones) []*peerRESTClient {
 	peerHosts := getRemoteHosts(endpoints)
 	restClients := make([]*peerRESTClient, len(peerHosts))
 	for i, host := range peerHosts {

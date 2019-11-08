@@ -125,7 +125,9 @@ func TestXLDeleteObjectsXLSet(t *testing.T) {
 		for _, dir := range fsDirs {
 			defer os.RemoveAll(dir)
 		}
-		objs = append(objs, obj.(*xlObjects))
+		z := obj.(*xlZones)
+		xl := z.zones[0].sets[0]
+		objs = append(objs, xl)
 	}
 
 	xlSets := &xlSets{sets: objs, distributionAlgo: "CRCMOD"}
@@ -192,8 +194,11 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Cleanup backend directories
+	defer removeRoots(fsDirs)
 
-	xl := obj.(*xlObjects)
+	z := obj.(*xlZones)
+	xl := z.zones[0].sets[0]
 
 	// Create "bucket"
 	err = obj.MakeBucketWithLocation(context.Background(), "bucket", "")
@@ -211,8 +216,12 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	}
 	// for a 16 disk setup, quorum is 9. To simulate disks not found yet
 	// quorum is available, we remove disks leaving quorum disks behind.
-	for i := range xl.storageDisks[:7] {
-		xl.storageDisks[i] = newNaughtyDisk(xl.storageDisks[i], nil, errFaultyDisk)
+	xlDisks := xl.getDisks()
+	xl.getDisks = func() []StorageAPI {
+		for i := range xlDisks[:7] {
+			xlDisks[i] = newNaughtyDisk(xlDisks[i], nil, errFaultyDisk)
+		}
+		return xlDisks
 	}
 	err = obj.DeleteObject(context.Background(), bucket, object)
 	if err != nil {
@@ -226,15 +235,17 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	}
 
 	// Remove one more disk to 'lose' quorum, by setting it to nil.
-	xl.storageDisks[7] = nil
-	xl.storageDisks[8] = nil
+	xlDisks = xl.getDisks()
+	xl.getDisks = func() []StorageAPI {
+		xlDisks[7] = nil
+		xlDisks[8] = nil
+		return xlDisks
+	}
 	err = obj.DeleteObject(context.Background(), bucket, object)
 	// since majority of disks are not available, metaquorum is not achieved and hence errXLReadQuorum error
 	if err != toObjectErr(errXLReadQuorum, bucket, object) {
 		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errXLReadQuorum, bucket, object), err)
 	}
-	// Cleanup backend directories
-	removeRoots(fsDirs)
 }
 
 func TestGetObjectNoQuorum(t *testing.T) {
@@ -243,8 +254,11 @@ func TestGetObjectNoQuorum(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Cleanup backend directories.
+	defer removeRoots(fsDirs)
 
-	xl := obj.(*xlObjects)
+	z := obj.(*xlZones)
+	xl := z.zones[0].sets[0]
 
 	// Create "bucket"
 	err = obj.MakeBucketWithLocation(context.Background(), "bucket", "")
@@ -270,13 +284,17 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		for i := 0; i <= f; i++ {
 			diskErrors[i] = nil
 		}
-		for i := range xl.storageDisks[:9] {
-			switch diskType := xl.storageDisks[i].(type) {
+		xlDisks := xl.getDisks()
+		for i := range xlDisks[:9] {
+			switch diskType := xlDisks[i].(type) {
 			case *naughtyDisk:
-				xl.storageDisks[i] = newNaughtyDisk(diskType.disk, diskErrors, errFaultyDisk)
+				xlDisks[i] = newNaughtyDisk(diskType.disk, diskErrors, errFaultyDisk)
 			default:
-				xl.storageDisks[i] = newNaughtyDisk(xl.storageDisks[i], diskErrors, errFaultyDisk)
+				xlDisks[i] = newNaughtyDisk(xlDisks[i], diskErrors, errFaultyDisk)
 			}
+		}
+		xl.getDisks = func() []StorageAPI {
+			return xlDisks
 		}
 		// Fetch object from store.
 		err = xl.GetObject(context.Background(), bucket, object, 0, int64(len("abcd")), ioutil.Discard, "", opts)
@@ -284,8 +302,6 @@ func TestGetObjectNoQuorum(t *testing.T) {
 			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
 		}
 	}
-	// Cleanup backend directories.
-	removeRoots(fsDirs)
 }
 
 func TestPutObjectNoQuorum(t *testing.T) {
@@ -295,7 +311,11 @@ func TestPutObjectNoQuorum(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xl := obj.(*xlObjects)
+	// Cleanup backend directories.
+	defer removeRoots(fsDirs)
+
+	z := obj.(*xlZones)
+	xl := z.zones[0].sets[0]
 
 	// Create "bucket"
 	err = obj.MakeBucketWithLocation(context.Background(), "bucket", "")
@@ -321,13 +341,17 @@ func TestPutObjectNoQuorum(t *testing.T) {
 		for i := 0; i <= f; i++ {
 			diskErrors[i] = nil
 		}
-		for i := range xl.storageDisks[:9] {
-			switch diskType := xl.storageDisks[i].(type) {
+		xlDisks := xl.getDisks()
+		for i := range xlDisks[:9] {
+			switch diskType := xlDisks[i].(type) {
 			case *naughtyDisk:
-				xl.storageDisks[i] = newNaughtyDisk(diskType.disk, diskErrors, errFaultyDisk)
+				xlDisks[i] = newNaughtyDisk(diskType.disk, diskErrors, errFaultyDisk)
 			default:
-				xl.storageDisks[i] = newNaughtyDisk(xl.storageDisks[i], diskErrors, errFaultyDisk)
+				xlDisks[i] = newNaughtyDisk(xlDisks[i], diskErrors, errFaultyDisk)
 			}
+		}
+		xl.getDisks = func() []StorageAPI {
+			return xlDisks
 		}
 		// Upload new content to same object "object"
 		_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
@@ -335,8 +359,6 @@ func TestPutObjectNoQuorum(t *testing.T) {
 			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
 		}
 	}
-	// Cleanup backend directories.
-	removeRoots(fsDirs)
 }
 
 // Tests both object and bucket healing.
@@ -346,7 +368,9 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer removeRoots(fsDirs)
-	xl := obj.(*xlObjects)
+
+	z := obj.(*xlZones)
+	xl := z.zones[0].sets[0]
 
 	// Create "bucket"
 	err = obj.MakeBucketWithLocation(context.Background(), "bucket", "")
@@ -369,7 +393,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	disk := xl.storageDisks[0]
+	disk := xl.getDisks()[0]
 	xlMetaPreHeal, err := readXLMeta(context.Background(), disk, bucket, object)
 	if err != nil {
 		t.Fatal(err)
@@ -438,7 +462,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Stat the bucket to make sure that it was created.
-	_, err = xl.storageDisks[0].StatVol(bucket)
+	_, err = xl.getDisks()[0].StatVol(bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -454,9 +478,11 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	var opts ObjectOptions
 	// make data with more than one part
 	partCount := 3
-	data := bytes.Repeat([]byte("a"), int(globalPutPartSize)*partCount)
-	xl := obj.(*xlObjects)
-	xlDisks := xl.storageDisks
+	data := bytes.Repeat([]byte("a"), 6*1024*1024*partCount)
+
+	z := obj.(*xlZones)
+	xl := z.zones[0].sets[0]
+	xlDisks := xl.getDisks()
 
 	err := obj.MakeBucketWithLocation(context.Background(), bucket, globalMinioDefaultRegion)
 	if err != nil {

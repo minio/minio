@@ -76,7 +76,9 @@ func testXLReadStat(obj ObjectLayer, instanceType string, disks []string, t *tes
 		}
 	}
 
-	_, _, err = obj.(*xlObjects).readXLMetaStat(context.Background(), bucketName, objectName)
+	z := obj.(*xlZones)
+	xl := z.zones[0].sets[0]
+	_, _, err = xl.readXLMetaStat(context.Background(), bucketName, objectName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +87,7 @@ func testXLReadStat(obj ObjectLayer, instanceType string, disks []string, t *tes
 	removeDiskN(disks, 7)
 
 	// Removing disk shouldn't affect reading object info.
-	_, _, err = obj.(*xlObjects).readXLMetaStat(context.Background(), bucketName, objectName)
+	_, _, err = xl.readXLMetaStat(context.Background(), bucketName, objectName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +96,7 @@ func testXLReadStat(obj ObjectLayer, instanceType string, disks []string, t *tes
 		os.RemoveAll(path.Join(disk, bucketName))
 	}
 
-	_, _, err = obj.(*xlObjects).readXLMetaStat(context.Background(), bucketName, objectName)
+	_, _, err = xl.readXLMetaStat(context.Background(), bucketName, objectName)
 	if err != errVolumeNotFound {
 		t.Fatal(err)
 	}
@@ -159,9 +161,11 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 		}
 	}
 
-	uploadIDPath := obj.(*xlObjects).getUploadIDDir(bucketNames[0], objectNames[0], uploadIDs[0])
+	z := obj.(*xlZones)
+	xl := z.zones[0].sets[0]
+	uploadIDPath := xl.getUploadIDDir(bucketNames[0], objectNames[0], uploadIDs[0])
 
-	_, _, err = obj.(*xlObjects).readXLMetaParts(context.Background(), minioMetaMultipartBucket, uploadIDPath)
+	_, _, err = xl.readXLMetaParts(context.Background(), minioMetaMultipartBucket, uploadIDPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,17 +174,17 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 	removeDiskN(disks, 7)
 
 	// Removing disk shouldn't affect reading object parts info.
-	_, _, err = obj.(*xlObjects).readXLMetaParts(context.Background(), minioMetaMultipartBucket, uploadIDPath)
+	_, _, err = xl.readXLMetaParts(context.Background(), minioMetaMultipartBucket, uploadIDPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for _, disk := range disks {
 		os.RemoveAll(path.Join(disk, bucketNames[0]))
-		os.RemoveAll(path.Join(disk, minioMetaMultipartBucket, obj.(*xlObjects).getMultipartSHADir(bucketNames[0], objectNames[0])))
+		os.RemoveAll(path.Join(disk, minioMetaMultipartBucket, xl.getMultipartSHADir(bucketNames[0], objectNames[0])))
 	}
 
-	_, _, err = obj.(*xlObjects).readXLMetaParts(context.Background(), minioMetaMultipartBucket, uploadIDPath)
+	_, _, err = xl.readXLMetaParts(context.Background(), minioMetaMultipartBucket, uploadIDPath)
 	if err != errFileNotFound {
 		t.Fatal(err)
 	}

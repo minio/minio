@@ -1,5 +1,5 @@
 # Distributed Server Design Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
-This document explains the design approach, advanced use cases and limits of the MinIO distributed server.
+This document explains the design approach and advanced use cases of the MinIO distributed server.
 
 ## Command-line
 ```
@@ -127,10 +127,6 @@ Distributed erasure coded configuration with rack level redundancy 32 sets in to
 minio server http://rack{1...4}-host{1...8}.example.net/export{1...16}
 ```
 
-Distributed erasure coded configuration with no rack level redundancy but redundancy with in the rack we split the arguments, 32 sets in total, 16 disks per set.
-```
-minio server http://rack1-host{1...8}.example.net/export{1...16} http://rack2-host{1...8}.example.net/export{1...16} http://rack3-host{1...8}.example.net/export{1...16} http://rack4-host{1...8}.example.net/export{1...16}
-```
 ## Backend `format.json` changes
 
 `format.json` has new fields
@@ -208,8 +204,3 @@ type formatXLV2 struct {
         } `json:"xl"`
 }
 ```
-
-## Limits
-
-- Minimum of 4 disks are needed for any erasure coded configuration.
-- Maximum of 32 distinct nodes are supported in distributed configuration.

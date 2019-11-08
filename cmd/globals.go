@@ -103,9 +103,6 @@ var globalCLIContext = struct {
 }{}
 
 var (
-	// Indicates the total number of erasure coded sets configured.
-	globalXLSetCount int
-
 	// Indicates set drive count.
 	globalXLSetDriveCount int
 
@@ -129,9 +126,6 @@ var (
 
 	// This flag is set to 'us-east-1' by default
 	globalServerRegion = globalMinioDefaultRegion
-
-	// Maximum size of internal objects parts
-	globalPutPartSize = int64(64 * 1024 * 1024)
 
 	// MinIO local server address (in `host:port` format)
 	globalMinioAddr = ""
@@ -173,7 +167,7 @@ var (
 	// registered listeners
 	globalConsoleSys *HTTPConsoleLoggerSys
 
-	globalEndpoints EndpointList
+	globalEndpoints EndpointZones
 
 	// Global server's network statistics
 	globalConnStats = newConnStats()

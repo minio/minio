@@ -287,19 +287,6 @@ func initConfig(objAPI ObjectLayer) error {
 		}
 	}
 
-	// Construct path to config/transaction.lock for locking
-	transactionConfigPrefix := minioConfigPrefix + "/transaction.lock"
-
-	// Hold lock only by one server and let that server alone migrate
-	// all the config as necessary, this is to ensure that
-	// redundant locks are not held for each migration - this allows
-	// for a more predictable behavior while debugging.
-	objLock := objAPI.NewNSLock(context.Background(), minioMetaBucket, transactionConfigPrefix)
-	if err := objLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer objLock.Unlock()
-
 	// Migrates ${HOME}/.minio/config.json or config.json.deprecated
 	// to '<export_path>/.minio.sys/config/config.json'
 	// ignore if the file doesn't exist.

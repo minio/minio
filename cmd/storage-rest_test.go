@@ -513,7 +513,9 @@ func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRES
 		t.Fatalf("UpdateIsLocal failed %v", err)
 	}
 
-	registerStorageRESTHandlers(router, EndpointList{endpoint})
+	registerStorageRESTHandlers(router, []ZoneEndpoints{{
+		Endpoints: Endpoints{endpoint},
+	}})
 	restClient := newStorageRESTClient(endpoint)
 	prevGlobalServerConfig := globalServerConfig
 	globalServerConfig = newServerConfig()

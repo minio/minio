@@ -65,7 +65,7 @@ func (h *healRoutine) run() {
 				// Wait at max 10 minute for an inprogress request before proceeding to heal
 				waitCount := 600
 				// Any requests in progress, delay the heal.
-				for (globalHTTPServer.GetRequestCount() >= int32(globalXLSetCount*globalXLSetDriveCount)) &&
+				for (globalHTTPServer.GetRequestCount() >= int32(globalEndpoints.Nodes())) &&
 					waitCount > 0 {
 					waitCount--
 					time.Sleep(1 * time.Second)
