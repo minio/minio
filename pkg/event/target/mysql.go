@@ -185,15 +185,24 @@ func (target *MySQLTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - Return true if target is up and active
+func (target *MySQLTarget) IsActive() (bool, error) {
+	if err := target.db.Ping(); err != nil {
+		if IsConnErr(err) {
+			return false, errNotConnected
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 // Save - saves the events to the store which will be replayed when the SQL connection is active.
 func (target *MySQLTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	if err := target.db.Ping(); err != nil {
-		if IsConnErr(err) {
-			return errNotConnected
-		}
+	_, err := target.IsActive()
+	if err != nil {
 		return err
 	}
 	return target.send(eventData)
@@ -244,10 +253,8 @@ func (target *MySQLTarget) send(eventData event.Event) error {
 // Send - reads an event from store and sends it to MySQL.
 func (target *MySQLTarget) Send(eventKey string) error {
 
-	if err := target.db.Ping(); err != nil {
-		if IsConnErr(err) {
-			return errNotConnected
-		}
+	_, err := target.IsActive()
+	if err != nil {
 		return err
 	}
 

@@ -31,6 +31,7 @@ require (
 	github.com/gorilla/rpc v1.2.0+incompatible
 	github.com/hashicorp/vault v1.1.0
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
+	github.com/jaypipes/ghw v0.0.0-20191127001044-ec22d585eab2
 	github.com/json-iterator/go v1.1.7
 	github.com/klauspost/compress v1.8.3
 	github.com/klauspost/pgzip v1.2.1

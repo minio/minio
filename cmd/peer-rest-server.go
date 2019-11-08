@@ -374,24 +374,6 @@ func (s *peerRESTServer) StartProfilingHandler(w http.ResponseWriter, r *http.Re
 	w.(http.Flusher).Flush()
 }
 
-// ServerInfoHandler - returns server info.
-func (s *peerRESTServer) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx := newContext(r, w, "ServerInfo")
-	info, err := getServerInfo()
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	defer w.(http.Flusher).Flush()
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
-}
-
 // DownloadProflingDataHandler - returns proflied data.
 func (s *peerRESTServer) DownloadProflingDataHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -447,6 +429,20 @@ func (s *peerRESTServer) NetworkInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	ctx := newContext(r, w, "NetworkInfo")
 	info := getLocalNetworkInfo(globalEndpoints, r)
+
+	defer w.(http.Flusher).Flush()
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+}
+
+// ServerInfoHandler - returns Server Info
+func (s *peerRESTServer) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	ctx := newContext(r, w, "ServerInfo")
+	info := getLocalServerProperty(globalEndpoints, r)
 
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))

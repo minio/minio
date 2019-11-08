@@ -100,6 +100,18 @@ func (target *NSQTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - Return true if target is up and active
+func (target *NSQTarget) IsActive() (bool, error) {
+	if err := target.producer.Ping(); err != nil {
+		// To treat "connection refused" errors as errNotConnected.
+		if IsConnRefusedErr(err) {
+			return false, errNotConnected
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 // Save - saves the events to the store which will be replayed when the nsq connection is active.
 func (target *NSQTarget) Save(eventData event.Event) error {
 	if target.store != nil {

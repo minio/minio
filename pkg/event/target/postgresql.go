@@ -183,6 +183,17 @@ func (target *PostgreSQLTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - Return true if target is up and active
+func (target *PostgreSQLTarget) IsActive() (bool, error) {
+	if err := target.db.Ping(); err != nil {
+		if IsConnErr(err) {
+			return false, errNotConnected
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 // Save - saves the events to the store if questore is configured, which will be replayed when the PostgreSQL connection is active.
 func (target *PostgreSQLTarget) Save(eventData event.Event) error {
 	if target.store != nil {

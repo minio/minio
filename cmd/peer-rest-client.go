@@ -145,7 +145,7 @@ func (client *peerRESTClient) GetLocks() (locks GetLocksResp, err error) {
 }
 
 // ServerInfo - fetch server information for a remote node.
-func (client *peerRESTClient) ServerInfo() (info ServerInfoData, err error) {
+func (client *peerRESTClient) ServerInfo() (info madmin.ServerProperties, err error) {
 	respBody, err := client.call(peerRESTMethodServerInfo, nil, nil, -1)
 	if err != nil {
 		return

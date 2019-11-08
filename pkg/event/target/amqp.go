@@ -121,6 +121,18 @@ func (target *AMQPTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - Return true if target is up and active
+func (target *AMQPTarget) IsActive() (bool, error) {
+	ch, err := target.channel()
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		ch.Close()
+	}()
+	return true, nil
+}
+
 func (target *AMQPTarget) channel() (*amqp.Channel, error) {
 	var err error
 	var conn *amqp.Connection
