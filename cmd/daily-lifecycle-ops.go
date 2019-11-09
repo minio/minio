@@ -56,7 +56,7 @@ func startDailyLifecycle() {
 
 	// Wait until the object API is ready
 	for {
-		objAPI = globalObjectAPI
+		objAPI = newObjectLayerWithoutSafeModeFn()
 		if objAPI == nil {
 			time.Sleep(time.Second)
 			continue

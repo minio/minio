@@ -54,7 +54,9 @@ export MINIO_SECRET_KEY_OLD=minio123
 minio server /data
 ```
 
-Once the migration is complete and server has started successfully remove `MINIO_ACCESS_KEY_OLD` and `MINIO_SECRET_KEY_OLD` environment variables, restart the server.
+Once the migration is complete, server will automatically unset the `MINIO_ACCESS_KEY_OLD` and `MINIO_SECRET_KEY_OLD` with in the process namespace.
+
+> **NOTE: Make sure to remove `MINIO_ACCESS_KEY_OLD` and `MINIO_SECRET_KEY_OLD` in scripts or service files before next service restarts of the server to avoid double encryption of your existing contents.**
 
 #### Region
 | Field                     | Type     | Description                                                                                                                                                                             |

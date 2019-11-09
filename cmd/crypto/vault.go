@@ -51,6 +51,7 @@ type VaultAppRole struct {
 
 // VaultConfig represents vault configuration.
 type VaultConfig struct {
+	Enabled   bool      `json:"-"`
 	Endpoint  string    `json:"endpoint"` // The vault API endpoint as URL
 	CAPath    string    `json:"-"`        // The path to PEM-encoded certificate files used for mTLS. Currently not used in config file.
 	Auth      VaultAuth `json:"auth"`     // The vault authentication configuration
@@ -68,24 +69,10 @@ type vaultService struct {
 
 var _ KMS = (*vaultService)(nil) // compiler check that *vaultService implements KMS
 
-// empty/default vault configuration used to check whether a particular is empty.
-var emptyVaultConfig = VaultConfig{
-	Auth: VaultAuth{
-		Type: "approle",
-	},
-}
-
-// IsEmpty returns true if the vault config struct is an
-// empty configuration.
-func (v *VaultConfig) IsEmpty() bool { return *v == emptyVaultConfig }
-
 // Verify returns a nil error if the vault configuration
 // is valid. A valid configuration is either empty or
 // contains valid non-default values.
 func (v *VaultConfig) Verify() (err error) {
-	if v.IsEmpty() {
-		return // an empty configuration is valid
-	}
 	switch {
 	case v.Endpoint == "":
 		err = errors.New("crypto: missing hashicorp vault endpoint")
@@ -107,8 +94,8 @@ func (v *VaultConfig) Verify() (err error) {
 // to Vault with the credentials in config and gets a client
 // token for future api calls.
 func NewVault(config VaultConfig) (KMS, error) {
-	if config.IsEmpty() {
-		return nil, errors.New("crypto: the hashicorp vault configuration must not be empty")
+	if !config.Enabled {
+		return nil, nil
 	}
 	if err := config.Verify(); err != nil {
 		return nil, err

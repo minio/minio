@@ -48,51 +48,84 @@ func validateConfig(s config.Config) error {
 	// Disable merging env values with config for validation.
 	env.SetEnvOff()
 
-	// Enable env values upon return.
+	// Enable env values to validate KMS.
 	defer env.SetEnvOn()
 
 	if _, err := config.LookupCreds(s[config.CredentialsSubSys][config.Default]); err != nil {
 		return err
 	}
+
 	if _, err := config.LookupRegion(s[config.RegionSubSys][config.Default]); err != nil {
 		return err
 	}
+
 	if _, err := config.LookupWorm(s[config.WormSubSys][config.Default]); err != nil {
 		return err
 	}
+
 	if globalIsXL {
 		if _, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default],
 			globalXLSetDriveCount); err != nil {
 			return err
 		}
 	}
-	if _, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs); err != nil {
-		return err
-	}
+
 	if _, err := cache.LookupConfig(s[config.CacheSubSys][config.Default]); err != nil {
 		return err
 	}
-	if _, err := crypto.LookupConfig(s[config.KmsVaultSubSys][config.Default]); err != nil {
-		return err
-	}
+
 	if _, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default]); err != nil {
 		return err
 	}
+
+	{
+		etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
+		if err != nil {
+			return err
+		}
+		if etcdCfg.Enabled {
+			etcdClnt, err := etcd.New(etcdCfg)
+			if err != nil {
+				return err
+			}
+			etcdClnt.Close()
+		}
+	}
+	{
+		kmsCfg, err := crypto.LookupConfig(s[config.KmsVaultSubSys][config.Default])
+		if err != nil {
+			return err
+		}
+		if kmsCfg.Vault.Enabled {
+			// Set env to enable master key validation.
+			// this is needed only for KMS.
+			env.SetEnvOn()
+
+			if _, err = crypto.NewKMS(kmsCfg); err != nil {
+				return err
+			}
+		}
+	}
+
 	if _, err := openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
 		NewCustomHTTPTransport(), xhttp.DrainBody); err != nil {
 		return err
 	}
+
 	if _, err := xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
 		globalRootCAs); err != nil {
 		return err
 	}
+
 	if _, err := opa.LookupConfig(s[config.PolicyOPASubSys][config.Default],
 		NewCustomHTTPTransport(), xhttp.DrainBody); err != nil {
 		return err
 	}
+
 	if _, err := logger.LookupConfig(s); err != nil {
 		return err
 	}
+
 	return notify.TestNotificationTargets(s, GlobalServiceDoneCh, globalRootCAs)
 }
 

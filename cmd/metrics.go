@@ -83,9 +83,9 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 	minioVersionInfo.WithLabelValues(Version, CommitID).Set(float64(1.0))
 
 	// Fetch disk space info
-	objLayer := globalObjectAPI
+	objLayer := newObjectLayerFn()
 	// Service not initialized yet
-	if objLayer == nil || globalSafeMode {
+	if objLayer == nil {
 		return
 	}
 

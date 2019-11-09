@@ -31,7 +31,7 @@ import (
 
 const (
 	// Default values used while communicating with etcd.
-	defaultDialTimeout   = 30 * time.Second
+	defaultDialTimeout   = 5 * time.Second
 	defaultDialKeepAlive = 30 * time.Second
 )
 
@@ -112,7 +112,7 @@ func LookupConfig(kv config.KVS, rootCAs *x509.CertPool) (Config, error) {
 		return cfg, config.Error("'endpoints' key cannot be empty if you wish to enable etcd")
 	}
 
-	if len(endpoints) == 0 {
+	if len(endpoints) == 0 && !stateBool {
 		return cfg, nil
 	}
 

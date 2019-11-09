@@ -839,12 +839,12 @@ func (xl xlObjects) AbortMultipartUpload(ctx context.Context, bucket, object, up
 	// get Quorum for this object
 	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
 	if err != nil {
-		return toObjectErr(err, bucket, object)
+		return toObjectErr(err, bucket, object, uploadID)
 	}
 
 	// Cleanup all uploaded parts.
 	if err = xl.deleteObject(ctx, minioMetaMultipartBucket, uploadIDPath, writeQuorum, false); err != nil {
-		return toObjectErr(err, bucket, object)
+		return toObjectErr(err, bucket, object, uploadID)
 	}
 
 	// Successfully purged.
