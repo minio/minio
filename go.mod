@@ -3,9 +3,9 @@ module github.com/minio/minio
 go 1.13
 
 require (
-	cloud.google.com/go v0.37.2
+	cloud.google.com/go v0.39.0
 	github.com/Azure/azure-sdk-for-go v33.4.0+incompatible
-	github.com/Azure/go-autorest v11.7.0+incompatible
+	github.com/Azure/go-autorest v11.7.1+incompatible
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/alecthomas/participle v0.2.1
 	github.com/aliyun/aliyun-oss-go-sdk v0.0.0-20190307165228-86c17b95fcd5
@@ -27,7 +27,7 @@ require (
 	github.com/gorilla/handlers v1.4.0
 	github.com/gorilla/mux v1.7.0
 	github.com/gorilla/rpc v1.2.0+incompatible
-	github.com/hashicorp/vault v1.1.0
+	github.com/hashicorp/vault/api v1.0.5-0.20190730042357-746c0b111519
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/json-iterator/go v1.1.7
 	github.com/klauspost/compress v1.8.3
@@ -35,7 +35,7 @@ require (
 	github.com/klauspost/readahead v1.3.1
 	github.com/klauspost/reedsolomon v1.9.3
 	github.com/kurin/blazer v0.5.4-0.20190613185654-cf2f27cc0be3
-	github.com/lib/pq v1.0.0
+	github.com/lib/pq v1.1.1
 	github.com/miekg/dns v1.1.8
 	github.com/minio/cli v1.22.0
 	github.com/minio/dsync/v2 v2.0.0
@@ -63,12 +63,12 @@ require (
 	github.com/shirou/gopsutil v2.18.12+incompatible
 	github.com/sirupsen/logrus v1.4.2
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e
-	github.com/streadway/amqp v0.0.0-20190402114354-16ed540749f6
+	github.com/streadway/amqp v0.0.0-20190404075320-75d898a42a94
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	go.uber.org/atomic v1.3.2
 	golang.org/x/crypto v0.0.0-20190923035154-9ee001bba392
 	golang.org/x/sys v0.0.0-20190922100055-0a153f010e69
-	google.golang.org/api v0.4.0
+	google.golang.org/api v0.5.0
 	gopkg.in/Shopify/sarama.v1 v1.20.0
 	gopkg.in/ldap.v3 v3.0.3
 	gopkg.in/olivere/elastic.v5 v5.0.80
@@ -86,3 +86,6 @@ replace github.com/eapache/queue => github.com/eapache/queue v1.1.0
 replace github.com/mattn/go-runewidth => github.com/mattn/go-runewidth v0.0.4
 
 replace github.com/mitchellh/mapstructure => github.com/mitchellh/mapstructure v1.1.2
+
+// Version 1.2.0 adds support for go modules
+replace github.com/hashicorp/vault => github.com/hashicorp/vault v1.2.0
