@@ -19,11 +19,12 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	etcd "github.com/coreos/etcd/clientv3"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -260,11 +261,8 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 			data = cdata
 		}
 
-		// Attempt to unmarshal JSON content
-		var dummy map[string]interface{}
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		if err = json.Unmarshal(data, &dummy); err != nil {
-			return err
+		if !utf8.Valid(data) {
+			return errors.New("config data not in plain-text form")
 		}
 
 		cencdata, err = madmin.EncryptData(globalActiveCred.String(), data)
@@ -335,11 +333,8 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Crede
 				data = cdata
 			}
 
-			// Attempt to unmarshal JSON content
-			var dummy map[string]interface{}
-			var json = jsoniter.ConfigCompatibleWithStandardLibrary
-			if err = json.Unmarshal(data, &dummy); err != nil {
-				return err
+			if !utf8.Valid(data) {
+				return errors.New("config data not in plain-text form")
 			}
 
 			cencdata, err = madmin.EncryptData(globalActiveCred.String(), data)
