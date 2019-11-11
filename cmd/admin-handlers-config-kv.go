@@ -195,10 +195,14 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	cfg, err := getValidConfig(objectAPI)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
+	cfg := globalServerConfig
+	if globalSafeMode {
+		var err error
+		cfg, err = getValidConfig(objectAPI)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
 	}
 
 	vars := mux.Vars(r)
