@@ -282,6 +282,13 @@ func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.
 		jwksURL = env.Get(EnvIdentityOpenIDJWKSURL, kv.Get(JwksURL))
 	}
 
+	c = Config{
+		ClaimPrefix: env.Get(EnvIdentityOpenIDClaimPrefix, kv.Get(ClaimPrefix)),
+		publicKeys:  make(map[string]crypto.PublicKey),
+		transport:   transport,
+		closeRespFn: closeRespFn,
+	}
+
 	configURL := env.Get(EnvIdentityOpenIDURL, kv.Get(ConfigURL))
 	if configURL != "" {
 		c.URL, err = xnet.ParseHTTPURL(configURL)
@@ -306,13 +313,6 @@ func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.
 	}
 	if jwksURL == "" {
 		return c, nil
-	}
-
-	c = Config{
-		ClaimPrefix: env.Get(EnvIdentityOpenIDClaimPrefix, kv.Get(ClaimPrefix)),
-		publicKeys:  make(map[string]crypto.PublicKey),
-		transport:   transport,
-		closeRespFn: closeRespFn,
 	}
 
 	c.JWKS.URL, err = xnet.ParseHTTPURL(jwksURL)
