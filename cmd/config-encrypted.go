@@ -91,16 +91,9 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 		}
 	}
 
-	accessKeyOld := env.Get(config.EnvAccessKeyOld, "")
-	secretKeyOld := env.Get(config.EnvSecretKeyOld, "")
-	var activeCredOld auth.Credentials
-	if accessKeyOld != "" && secretKeyOld != "" {
-		activeCredOld, err = auth.CreateCredentials(accessKeyOld, secretKeyOld)
-		if err != nil {
-			return err
-		}
-		os.Unsetenv(config.EnvAccessKeyOld)
-		os.Unsetenv(config.EnvSecretKeyOld)
+	activeCredOld, err := getOldCreds()
+	if err != nil {
+		return err
 	}
 
 	// Migrating Config backend needs a retry mechanism for
@@ -148,6 +141,38 @@ func checkBackendEncrypted(objAPI ObjectLayer) (bool, error) {
 	return err == nil && bytes.Equal(data, backendEncryptedMigrationComplete), nil
 }
 
+// decryptData - decrypts input data with more that one credentials,
+func decryptData(edata []byte, creds ...auth.Credentials) ([]byte, error) {
+	var err error
+	var data []byte
+	for _, cred := range creds {
+		data, err = madmin.DecryptData(cred.String(), bytes.NewReader(edata))
+		if err != nil {
+			if err == madmin.ErrMaliciousData {
+				continue
+			}
+			return nil, err
+		}
+		break
+	}
+	return data, err
+}
+
+func getOldCreds() (activeCredOld auth.Credentials, err error) {
+	accessKeyOld := env.Get(config.EnvAccessKeyOld, "")
+	secretKeyOld := env.Get(config.EnvSecretKeyOld, "")
+	if accessKeyOld != "" && secretKeyOld != "" {
+		activeCredOld, err = auth.CreateCredentials(accessKeyOld, secretKeyOld)
+		if err != nil {
+			return activeCredOld, err
+		}
+		// Once we have obtained the rotating creds
+		os.Unsetenv(config.EnvAccessKeyOld)
+		os.Unsetenv(config.EnvSecretKeyOld)
+	}
+	return activeCredOld, nil
+}
+
 func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 	defer cancel()
@@ -175,17 +200,9 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 		}
 	}
 
-	accessKeyOld := env.Get(config.EnvAccessKeyOld, "")
-	secretKeyOld := env.Get(config.EnvSecretKeyOld, "")
-	var activeCredOld auth.Credentials
-	if accessKeyOld != "" && secretKeyOld != "" {
-		activeCredOld, err = auth.CreateCredentials(accessKeyOld, secretKeyOld)
-		if err != nil {
-			return err
-		}
-		// Once we have obtained the rotating creds
-		os.Unsetenv(config.EnvAccessKeyOld)
-		os.Unsetenv(config.EnvSecretKeyOld)
+	activeCredOld, err := getOldCreds()
+	if err != nil {
+		return err
 	}
 
 	if encrypted {
@@ -232,18 +249,15 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 		var data []byte
 		// Is rotating of creds requested?
 		if activeCredOld.IsValid() {
-			data, err = madmin.DecryptData(activeCredOld.String(), bytes.NewReader(cdata))
+			data, err = decryptData(cdata, activeCredOld, globalActiveCred)
 			if err != nil {
 				if err == madmin.ErrMaliciousData {
-					data, err = madmin.DecryptData(globalActiveCred.String(),
-						bytes.NewReader(cdata))
-					if err != nil {
-						return config.ErrInvalidRotatingCredentialsBackendEncrypted(nil)
-					}
-				} else {
-					return err
+					return config.ErrInvalidRotatingCredentialsBackendEncrypted(nil)
 				}
+				return err
 			}
+		} else {
+			data = cdata
 		}
 
 		// Attempt to unmarshal JSON content
@@ -310,18 +324,15 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Crede
 			var data []byte
 			// Is rotating of creds requested?
 			if activeCredOld.IsValid() {
-				data, err = madmin.DecryptData(activeCredOld.String(), bytes.NewReader(cdata))
+				data, err = decryptData(cdata, activeCredOld, globalActiveCred)
 				if err != nil {
 					if err == madmin.ErrMaliciousData {
-						data, err = madmin.DecryptData(globalActiveCred.String(),
-							bytes.NewReader(cdata))
-						if err != nil {
-							return config.ErrInvalidRotatingCredentialsBackendEncrypted(nil)
-						}
-					} else {
-						return err
+						return config.ErrInvalidRotatingCredentialsBackendEncrypted(nil)
 					}
+					return err
 				}
+			} else {
+				data = cdata
 			}
 
 			// Attempt to unmarshal JSON content

@@ -200,6 +200,10 @@ func newAllSubsystems() {
 func initSafeModeInit(buckets []BucketInfo) (err error) {
 	defer func() {
 		if err != nil {
+			switch err.(type) {
+			case config.Err:
+				return
+			}
 			// Enable logger
 			logger.Disable = false
 
@@ -246,25 +250,25 @@ func initSafeModeInit(buckets []BucketInfo) (err error) {
 func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) {
 	// Initialize config system.
 	if err = globalConfigSys.Init(newObject); err != nil {
-		return fmt.Errorf("Unable to initialize config system: %v", err)
+		return fmt.Errorf("Unable to initialize config system: %w", err)
 	}
 
 	if err = globalNotificationSys.AddNotificationTargetsFromConfig(globalServerConfig); err != nil {
-		return fmt.Errorf("Unable to initialize notification target(s) from config: %v", err)
+		return fmt.Errorf("Unable to initialize notification target(s) from config: %w", err)
 	}
 
 	if err = globalIAMSys.Init(newObject); err != nil {
-		return fmt.Errorf("Unable to initialize IAM system: %v", err)
+		return fmt.Errorf("Unable to initialize IAM system: %w", err)
 	}
 
 	// Initialize notification system.
 	if err = globalNotificationSys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize notification system: %v", err)
+		return fmt.Errorf("Unable to initialize notification system: %w", err)
 	}
 
 	// Initialize policy system.
 	if err = globalPolicySys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize policy system; %v", err)
+		return fmt.Errorf("Unable to initialize policy system; %w", err)
 	}
 
 	// Initialize lifecycle system.

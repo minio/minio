@@ -131,7 +131,7 @@ func LookupConfig(scfg config.Config) (Config, error) {
 	for starget, kv := range scfg[config.LoggerHTTPSubSys] {
 		subSysTarget := config.LoggerHTTPSubSys
 		if starget != config.Default {
-			subSysTarget = config.LoggerHTTPSubSys + ":" + starget
+			subSysTarget = config.LoggerHTTPSubSys + config.SubSystemSeparator + starget
 		}
 		if err := config.CheckValidKeys(subSysTarget, kv, DefaultKVS); err != nil {
 			return cfg, err
@@ -233,7 +233,7 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		if target != config.Default {
 			authTokenEnv = EnvLoggerHTTPAuditAuthToken + config.Default + target
 		}
-		cfg.HTTP[target] = HTTP{
+		cfg.Audit[target] = HTTP{
 			Enabled:   true,
 			Endpoint:  endpoint,
 			AuthToken: env.Get(authTokenEnv, ""),
