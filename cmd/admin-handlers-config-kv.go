@@ -183,7 +183,9 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Make sure to write backend is encrypted
-	saveConfig(context.Background(), objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
+	if globalConfigEncrypted {
+		saveConfig(context.Background(), objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
+	}
 }
 
 // GetConfigKVHandler - GET /minio/admin/v2/get-config-kv?key={key}
@@ -447,7 +449,9 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Make sure to write backend is encrypted
-	saveConfig(context.Background(), objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
+	if globalConfigEncrypted {
+		saveConfig(context.Background(), objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
+	}
 
 	// Reply to the client before restarting minio server.
 	writeSuccessResponseHeadersOnly(w)

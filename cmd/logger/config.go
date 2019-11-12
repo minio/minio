@@ -193,7 +193,7 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		if starget != config.Default {
 			authTokenEnv = EnvLoggerHTTPAuditAuthToken + config.Default + starget
 		}
-		cfg.HTTP[starget] = HTTP{
+		cfg.Audit[starget] = HTTP{
 			Enabled:   true,
 			Endpoint:  endpoint,
 			AuthToken: env.Get(authTokenEnv, kv.Get(AuthToken)),
