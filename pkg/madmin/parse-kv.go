@@ -37,10 +37,23 @@ const (
 	commentKey = "comment"
 )
 
+// Count - returns total numbers of target
+func (t Targets) Count() int {
+	var count int
+	for _, targetKV := range t {
+		for range targetKV {
+			count++
+		}
+	}
+	return count
+}
+
 func (t Targets) String() string {
 	var s strings.Builder
+	count := t.Count()
 	for subSys, targetKV := range t {
 		for target, kv := range targetKV {
+			count--
 			c := kv[commentKey]
 			data, err := base64.RawStdEncoding.DecodeString(c)
 			if err == nil {
@@ -73,7 +86,7 @@ func (t Targets) String() string {
 				s.WriteString(KvDoubleQuote)
 				s.WriteString(KvSpaceSeparator)
 			}
-			if len(t) > 1 {
+			if (len(t) > 1 || len(targetKV) > 1) && count > 0 {
 				s.WriteString(KvNewline)
 				s.WriteString(KvNewline)
 			}
@@ -121,7 +134,7 @@ func convertTargets(s string, targets Targets) error {
 			kvs[prevK] = strings.Join([]string{kvs[prevK], sanitizeValue(kv[0])}, KvSpaceSeparator)
 			continue
 		}
-		if len(kv[1]) == 0 {
+		if len(kv) == 1 {
 			return fmt.Errorf("value for key '%s' cannot be empty", kv[0])
 		}
 		prevK = kv[0]

@@ -147,6 +147,25 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Set when gateway is enabled
 	globalIsGateway = true
 
+	enableConfigOps := gatewayName == "nas"
+
+	// TODO: We need to move this code with globalConfigSys.Init()
+	// for now keep it here such that "s3" gateway layer initializes
+	// itself properly when KMS is set.
+
+	// Initialize server config.
+	srvCfg := newServerConfig()
+
+	// Override any values from ENVs.
+	if err := lookupConfigs(srvCfg); err != nil {
+		logger.FatalIf(err, "Unable to initialize server config")
+	}
+
+	// hold the mutex lock before a new config is assigned.
+	globalServerConfigMu.Lock()
+	globalServerConfig = srvCfg
+	globalServerConfigMu.Unlock()
+
 	router := mux.NewRouter().SkipClean(true)
 
 	if globalEtcdClient != nil {
@@ -156,8 +175,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
-
-	enableConfigOps := gatewayName == "nas"
 	enableIAMOps := globalEtcdClient != nil
 
 	// Enable IAM admin APIs if etcd is enabled, if not just enable basic
@@ -187,31 +204,13 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	globalHTTPServer = xhttp.NewServer([]string{globalCLIContext.Addr}, criticalErrorHandler{registerHandlers(router, globalHandlers...)}, getCert)
+	globalHTTPServer = xhttp.NewServer([]string{globalCLIContext.Addr},
+		criticalErrorHandler{registerHandlers(router, globalHandlers...)}, getCert)
 	go func() {
 		globalHTTPServerErrorCh <- globalHTTPServer.Start()
 	}()
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
-
-	if !enableConfigOps {
-		// TODO: We need to move this code with globalConfigSys.Init()
-		// for now keep it here such that "s3" gateway layer initializes
-		// itself properly when KMS is set.
-
-		// Initialize server config.
-		srvCfg := newServerConfig()
-
-		// Override any values from ENVs.
-		if err := lookupConfigs(srvCfg); err != nil {
-			logger.FatalIf(err, "Unable to initialize server config")
-		}
-
-		// hold the mutex lock before a new config is assigned.
-		globalServerConfigMu.Lock()
-		globalServerConfig = srvCfg
-		globalServerConfigMu.Unlock()
-	}
 
 	newObject, err := gw.NewGatewayLayer(globalActiveCred)
 	if err != nil {
@@ -252,7 +251,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// ****  WARNING ****
 	// Migrating to encrypted backend should happen before initialization of any
 	// sub-systems, make sure that we do not move the above codeblock elsewhere.
-
 	if enableConfigOps {
 		logger.FatalIf(globalConfigSys.Init(newObject), "Unable to initialize config system")
 

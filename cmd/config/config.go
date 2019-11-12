@@ -405,6 +405,9 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 			kvs[prevK] = strings.Join([]string{kvs[prevK], sanitizeValue(kv[0])}, KvSpaceSeparator)
 			continue
 		}
+		if len(kv) == 1 {
+			return Error(fmt.Sprintf("key '%s', cannot have empty value", kv[0]))
+		}
 		prevK = kv[0]
 		kvs[kv[0]] = sanitizeValue(kv[1])
 	}

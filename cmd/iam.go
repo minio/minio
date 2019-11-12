@@ -578,7 +578,12 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 	for k, v := range sys.iamUsersMap {
 		users[k] = madmin.UserInfo{
 			PolicyName: sys.iamUserPolicyMap[k].Policy,
-			Status:     madmin.AccountStatus(v.Status),
+			Status: func() madmin.AccountStatus {
+				if v.IsValid() {
+					return madmin.AccountEnabled
+				}
+				return madmin.AccountDisabled
+			}(),
 		}
 	}
 
@@ -609,8 +614,13 @@ func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
 
 	u = madmin.UserInfo{
 		PolicyName: sys.iamUserPolicyMap[name].Policy,
-		Status:     madmin.AccountStatus(creds.Status),
-		MemberOf:   sys.iamUserGroupMemberships[name].ToSlice(),
+		Status: func() madmin.AccountStatus {
+			if creds.IsValid() {
+				return madmin.AccountEnabled
+			}
+			return madmin.AccountDisabled
+		}(),
+		MemberOf: sys.iamUserGroupMemberships[name].ToSlice(),
 	}
 	return u, nil
 }
