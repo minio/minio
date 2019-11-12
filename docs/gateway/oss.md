@@ -1,4 +1,7 @@
 # MinIO OSS Gateway [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+
+DEPRECATED: THE GATEWAY SUPPORT OF OSS IS NO LONGER MAINTAINED AND MAY NO LONGER WORK AS EXPECTED.
+
 MinIO Gateway adds Amazon S3 compatibility to Alibaba Cloud Object Storage Service (OSS).
 
 ## Run MinIO Gateway for OSS.
