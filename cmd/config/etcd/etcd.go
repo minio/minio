@@ -95,6 +95,39 @@ func parseEndpoints(endpoints string) ([]string, bool, error) {
 	return etcdEndpoints, etcdSecure, nil
 }
 
+func lookupLegacyConfig(rootCAs *x509.CertPool) (Config, error) {
+	cfg := Config{}
+	endpoints := env.Get(EnvEtcdEndpoints, "")
+	if endpoints == "" {
+		return cfg, nil
+	}
+	etcdEndpoints, etcdSecure, err := parseEndpoints(endpoints)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.Enabled = true
+	cfg.DialTimeout = defaultDialTimeout
+	cfg.DialKeepAliveTime = defaultDialKeepAlive
+	cfg.Endpoints = etcdEndpoints
+	cfg.CoreDNSPath = "/skydns"
+	if etcdSecure {
+		cfg.TLS = &tls.Config{
+			RootCAs: rootCAs,
+		}
+		// This is only to support client side certificate authentication
+		// https://coreos.com/etcd/docs/latest/op-guide/security.html
+		etcdClientCertFile := env.Get(EnvEtcdClientCert, "")
+		etcdClientCertKey := env.Get(EnvEtcdClientCertKey, "")
+		if etcdClientCertFile != "" && etcdClientCertKey != "" {
+			cfg.TLS.GetClientCertificate = func(unused *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+				cert, err := tls.LoadX509KeyPair(etcdClientCertFile, etcdClientCertKey)
+				return &cert, err
+			}
+		}
+	}
+	return cfg, nil
+}
+
 // LookupConfig - Initialize new etcd config.
 func LookupConfig(kv config.KVS, rootCAs *x509.CertPool) (Config, error) {
 	cfg := Config{}
@@ -102,18 +135,35 @@ func LookupConfig(kv config.KVS, rootCAs *x509.CertPool) (Config, error) {
 		return cfg, err
 	}
 
-	stateBool, err := config.ParseBool(env.Get(EnvEtcdState, kv.Get(config.State)))
+	stateBool, err := config.ParseBool(env.Get(EnvEtcdState, config.StateOn))
 	if err != nil {
 		return cfg, err
 	}
 
-	endpoints := env.Get(EnvEtcdEndpoints, kv.Get(Endpoints))
-	if stateBool && len(endpoints) == 0 {
-		return cfg, config.Error("'endpoints' key cannot be empty if you wish to enable etcd")
+	if stateBool {
+		// By default state is 'on' to honor legacy config.
+		cfg, err = lookupLegacyConfig(rootCAs)
+		if err != nil {
+			return cfg, err
+		}
+		// If old legacy config is enabled honor it.
+		if cfg.Enabled {
+			return cfg, nil
+		}
 	}
 
-	if len(endpoints) == 0 && !stateBool {
+	stateBool, err = config.ParseBool(env.Get(EnvEtcdState, kv.Get(config.State)))
+	if err != nil {
+		return cfg, err
+	}
+
+	if !stateBool {
 		return cfg, nil
+	}
+
+	endpoints := env.Get(EnvEtcdEndpoints, kv.Get(Endpoints))
+	if endpoints == "" {
+		return cfg, config.Error("'endpoints' key cannot be empty to enable etcd")
 	}
 
 	etcdEndpoints, etcdSecure, err := parseEndpoints(endpoints)

@@ -235,15 +235,6 @@ func initSafeModeInit(buckets []BucketInfo) (err error) {
 		return err
 	}
 
-	if globalEtcdClient != nil {
-		// ****  WARNING ****
-		// Migrating to encrypted backend on etcd should happen before initialization of
-		// IAM sub-systems, make sure that we do not move the above codeblock elsewhere.
-		if err = migrateIAMConfigsEtcdToEncrypted(globalEtcdClient); err != nil {
-			return fmt.Errorf("Unable to handle encrypted backend for iam and policies: %v", err)
-		}
-	}
-
 	return nil
 }
 
@@ -255,6 +246,15 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 
 	if err = globalNotificationSys.AddNotificationTargetsFromConfig(globalServerConfig); err != nil {
 		return fmt.Errorf("Unable to initialize notification target(s) from config: %w", err)
+	}
+
+	if globalEtcdClient != nil {
+		// ****  WARNING ****
+		// Migrating to encrypted backend on etcd should happen before initialization of
+		// IAM sub-systems, make sure that we do not move the above codeblock elsewhere.
+		if err = migrateIAMConfigsEtcdToEncrypted(globalEtcdClient); err != nil {
+			return fmt.Errorf("Unable to handle encrypted backend for iam and policies: %v", err)
+		}
 	}
 
 	if err = globalIAMSys.Init(newObject); err != nil {
