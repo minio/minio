@@ -653,8 +653,10 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 
 	if xl.isObject(bucket, object) {
 		// Deny if WORM is enabled
-		if globalWORMEnabled {
-			return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
+		if retention, isWORMBucket := isWORMEnabled(bucket); isWORMBucket {
+			if oi, err := xl.getObjectInfo(ctx, bucket, object); err == nil && retention.Retain(oi.ModTime) {
+				return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
+			}
 		}
 
 		// Rename if an object already exists to temporary location.

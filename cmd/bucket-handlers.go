@@ -44,6 +44,13 @@ import (
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
+const (
+	getBucketVersioningResponse = `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"/>`
+	objectLockConfig            = "object-lock.xml"
+	objectLockEnabledConfigFile = "object-lock-enabled.json"
+	objectLockEnabledConfig     = `{"x-amz-bucket-object-lock-enabled":true}`
+)
+
 // Check if there are buckets on server without corresponding entry in etcd backend and
 // make entries. Here is the general flow
 // - Range over all the available buckets
@@ -364,7 +371,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	}
 
 	// Deny if WORM is enabled
-	if globalWORMEnabled {
+	if _, isWORMBucket := isWORMEnabled(bucket); isWORMBucket {
 		// Not required to check whether given objects exist or not, because
 		// DeleteMultipleObject is always successful irrespective of object existence.
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
@@ -473,6 +480,16 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
+	objectLockEnabled := false
+	if _, found := r.Header[http.CanonicalHeaderKey("x-amz-bucket-object-lock-enabled")]; found {
+		if r.Header.Get("x-amz-bucket-object-lock-enabled") != "true" {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		objectLockEnabled = true
+	}
+
 	if s3Error := checkRequestAuthType(ctx, r, policy.CreateBucketAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
@@ -500,6 +517,15 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 					return
 				}
+
+				if objectLockEnabled {
+					configFile := path.Join(bucketConfigPrefix, bucket, objectLockEnabledConfigFile)
+					if err = saveConfig(ctx, objectAPI, configFile, []byte(objectLockEnabledConfig)); err != nil {
+						writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+						return
+					}
+				}
+
 				if err = globalDNSConfig.Put(bucket); err != nil {
 					objectAPI.DeleteBucket(ctx, bucket)
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -526,6 +552,14 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
+	}
+
+	if objectLockEnabled {
+		configFile := path.Join(bucketConfigPrefix, bucket, objectLockEnabledConfigFile)
+		if err = saveConfig(ctx, objectAPI, configFile, []byte(objectLockEnabledConfig)); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
 	}
 
 	// Make sure to add Location information here only for bucket
@@ -858,6 +892,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
+	globalBucketRetentionConfig.Delete(bucket)
 	globalNotificationSys.RemoveNotification(bucket)
 	globalPolicySys.Remove(bucket)
 	globalNotificationSys.DeleteBucket(ctx, bucket)
@@ -866,4 +901,182 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 
 	// Write success response.
 	writeSuccessNoContent(w)
+}
+
+// PutBucketVersioningHandler - PUT Bucket Versioning.
+// ----------
+// No-op. Available for API compatibility.
+func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "PutBucketVersioning")
+
+	defer logger.AuditLog(w, r, "PutBucketVersioning", mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	getBucketInfo := objectAPI.GetBucketInfo
+	if _, err := getBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Write success response.
+	writeSuccessResponseHeadersOnly(w)
+}
+
+// GetBucketVersioningHandler - GET Bucket Versioning.
+// ----------
+// No-op. Available for API compatibility.
+func (api objectAPIHandlers) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetBucketVersioning")
+
+	defer logger.AuditLog(w, r, "GetBucketVersioning", mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	getBucketInfo := objectAPI.GetBucketInfo
+	if _, err := getBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Write success response.
+	writeSuccessResponseXML(w, []byte(getBucketVersioningResponse))
+}
+
+// PutBucketObjectLockConfigHandler - PUT Bucket object lock configuration.
+// ----------
+// Places an Object Lock configuration on the specified bucket. The rule
+// specified in the Object Lock configuration will be applied by default
+// to every new object placed in the specified bucket.
+func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "PutBucketObjectLockConfig")
+
+	defer logger.AuditLog(w, r, "PutBucketObjectLockConfig", mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	config, err := parseObjectLockConfig(r.Body)
+	if err != nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedXML), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	configFile := path.Join(bucketConfigPrefix, bucket, objectLockEnabledConfigFile)
+	configData, err := readConfig(ctx, objectAPI, configFile)
+	if err != nil {
+		aerr := toAPIError(ctx, err)
+		if err == errConfigNotFound {
+			aerr = errorCodes.ToAPIErr(ErrMethodNotAllowed)
+		}
+		writeErrorResponse(ctx, w, aerr, r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if string(configData) != objectLockEnabledConfig {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if config.Rule != nil {
+		data, err := xml.Marshal(config)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		configFile := path.Join(bucketConfigPrefix, bucket, objectLockConfig)
+		if err = saveConfig(ctx, objectAPI, configFile, data); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		retention := config.ToRetention()
+		globalBucketRetentionConfig.Set(bucket, retention)
+		globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, retention)
+	} else {
+		globalBucketRetentionConfig.Delete(bucket)
+	}
+
+	// Write success response.
+	writeSuccessResponseHeadersOnly(w)
+}
+
+// GetBucketObjectLockConfigHandler - GET Bucket object lock configuration.
+// ----------
+// Gets the Object Lock configuration for a bucket. The rule specified in
+// the Object Lock configuration will be applied by default to every new
+// object placed in the specified bucket.
+func (api objectAPIHandlers) GetBucketObjectLockConfigHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetBucketObjectLockConfig")
+
+	defer logger.AuditLog(w, r, "GetBucketObjectLockConfig", mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	configFile := path.Join(bucketConfigPrefix, bucket, objectLockEnabledConfigFile)
+	configData, err := readConfig(ctx, objectAPI, configFile)
+	if err != nil {
+		aerr := toAPIError(ctx, err)
+		if err == errConfigNotFound {
+			aerr = errorCodes.ToAPIErr(ErrMethodNotAllowed)
+		}
+		writeErrorResponse(ctx, w, aerr, r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if string(configData) != objectLockEnabledConfig {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	configFile = path.Join(bucketConfigPrefix, bucket, objectLockConfig)
+	configData, err = readConfig(ctx, objectAPI, configFile)
+	if err != nil {
+		if err != errConfigNotFound {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		if configData, err = xml.Marshal(newObjectLockConfig()); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+	}
+
+	// Write success response.
+	writeSuccessResponseXML(w, configData)
 }
