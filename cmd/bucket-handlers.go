@@ -103,7 +103,7 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 			}
 
 			// This is not for our server, so we can continue
-			hostPort := net.JoinHostPort(dnsBuckets[index].Host, dnsBuckets[index].Port)
+			hostPort := net.JoinHostPort(dnsBuckets[index].Host, string(dnsBuckets[index].Port))
 			if globalDomainIPs.Intersection(set.CreateStringSet(hostPort)).IsEmpty() {
 				return nil
 			}

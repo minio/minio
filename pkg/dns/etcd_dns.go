@@ -41,7 +41,7 @@ const etcdPathSeparator = "/"
 func newCoreDNSMsg(ip string, port string, ttl uint32) ([]byte, error) {
 	return json.Marshal(&SrvRecord{
 		Host:         ip,
-		Port:         port,
+		Port:         json.Number(port),
 		TTL:          ttl,
 		CreationDate: time.Now().UTC(),
 	})
