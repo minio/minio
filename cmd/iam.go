@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
@@ -651,7 +652,12 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 	uinfo := newUserIdentity(auth.Credentials{
 		AccessKey: accessKey,
 		SecretKey: cred.SecretKey,
-		Status:    string(status),
+		Status: func() string {
+			if status == madmin.AccountEnabled {
+				return config.StateOn
+			}
+			return config.StateOff
+		}(),
 	})
 	if err := sys.store.saveUserIdentity(accessKey, false, uinfo); err != nil {
 		return err

@@ -129,9 +129,9 @@ func lookupLegacyConfig(rootCAs *x509.CertPool) (Config, error) {
 }
 
 // LookupConfig - Initialize new etcd config.
-func LookupConfig(kv config.KVS, rootCAs *x509.CertPool) (Config, error) {
+func LookupConfig(kvs config.KVS, rootCAs *x509.CertPool) (Config, error) {
 	cfg := Config{}
-	if err := config.CheckValidKeys(config.EtcdSubSys, kv, DefaultKVS); err != nil {
+	if err := config.CheckValidKeys(config.EtcdSubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
 
@@ -152,8 +152,11 @@ func LookupConfig(kv config.KVS, rootCAs *x509.CertPool) (Config, error) {
 		}
 	}
 
-	stateBool, err = config.ParseBool(env.Get(EnvEtcdState, kv.Get(config.State)))
+	stateBool, err = config.ParseBool(env.Get(EnvEtcdState, kvs.Get(config.State)))
 	if err != nil {
+		if kvs.Empty() {
+			return cfg, nil
+		}
 		return cfg, err
 	}
 
@@ -161,7 +164,7 @@ func LookupConfig(kv config.KVS, rootCAs *x509.CertPool) (Config, error) {
 		return cfg, nil
 	}
 
-	endpoints := env.Get(EnvEtcdEndpoints, kv.Get(Endpoints))
+	endpoints := env.Get(EnvEtcdEndpoints, kvs.Get(Endpoints))
 	if endpoints == "" {
 		return cfg, config.Error("'endpoints' key cannot be empty to enable etcd")
 	}
@@ -175,15 +178,15 @@ func LookupConfig(kv config.KVS, rootCAs *x509.CertPool) (Config, error) {
 	cfg.DialTimeout = defaultDialTimeout
 	cfg.DialKeepAliveTime = defaultDialKeepAlive
 	cfg.Endpoints = etcdEndpoints
-	cfg.CoreDNSPath = env.Get(EnvEtcdCoreDNSPath, kv.Get(CoreDNSPath))
+	cfg.CoreDNSPath = env.Get(EnvEtcdCoreDNSPath, kvs.Get(CoreDNSPath))
 	if etcdSecure {
 		cfg.TLS = &tls.Config{
 			RootCAs: rootCAs,
 		}
 		// This is only to support client side certificate authentication
 		// https://coreos.com/etcd/docs/latest/op-guide/security.html
-		etcdClientCertFile := env.Get(EnvEtcdClientCert, kv.Get(ClientCert))
-		etcdClientCertKey := env.Get(EnvEtcdClientCertKey, kv.Get(ClientCertKey))
+		etcdClientCertFile := env.Get(EnvEtcdClientCert, kvs.Get(ClientCert))
+		etcdClientCertKey := env.Get(EnvEtcdClientCertKey, kvs.Get(ClientCertKey))
 		if etcdClientCertFile != "" && etcdClientCertKey != "" {
 			cfg.TLS.GetClientCertificate = func(unused *tls.CertificateRequestInfo) (*tls.Certificate, error) {
 				cert, err := tls.LoadX509KeyPair(etcdClientCertFile, etcdClientCertKey)

@@ -57,19 +57,19 @@ const (
 
 // Top level config constants.
 const (
-	CredentialsSubSys     = "credentials"
-	PolicyOPASubSys       = "policy_opa"
-	IdentityOpenIDSubSys  = "identity_openid"
-	IdentityLDAPSubSys    = "identity_ldap"
-	WormSubSys            = "worm"
-	CacheSubSys           = "cache"
-	RegionSubSys          = "region"
-	EtcdSubSys            = "etcd"
-	StorageClassSubSys    = "storageclass"
-	CompressionSubSys     = "compression"
-	KmsVaultSubSys        = "kms_vault"
-	LoggerHTTPSubSys      = "logger_http"
-	LoggerHTTPAuditSubSys = "logger_http_audit"
+	CredentialsSubSys    = "credentials"
+	PolicyOPASubSys      = "policy_opa"
+	IdentityOpenIDSubSys = "identity_openid"
+	IdentityLDAPSubSys   = "identity_ldap"
+	WormSubSys           = "worm"
+	CacheSubSys          = "cache"
+	RegionSubSys         = "region"
+	EtcdSubSys           = "etcd"
+	StorageClassSubSys   = "storageclass"
+	CompressionSubSys    = "compression"
+	KmsVaultSubSys       = "kms_vault"
+	LoggerWebhookSubSys  = "logger_webhook"
+	AuditWebhookSubSys   = "audit_webhook"
 
 	// Add new constants here if you add new fields to config.
 )
@@ -100,8 +100,8 @@ var SubSystems = set.CreateStringSet([]string{
 	StorageClassSubSys,
 	CompressionSubSys,
 	KmsVaultSubSys,
-	LoggerHTTPSubSys,
-	LoggerHTTPAuditSubSys,
+	LoggerWebhookSubSys,
+	AuditWebhookSubSys,
 	PolicyOPASubSys,
 	IdentityLDAPSubSys,
 	IdentityOpenIDSubSys,
@@ -137,7 +137,7 @@ const (
 	SubSystemSeparator = madmin.SubSystemSeparator
 	KvSeparator        = madmin.KvSeparator
 	KvSpaceSeparator   = madmin.KvSpaceSeparator
-	KvComment          = madmin.KvComment
+	KvComment          = `#`
 	KvNewline          = madmin.KvNewline
 	KvDoubleQuote      = madmin.KvDoubleQuote
 	KvSingleQuote      = madmin.KvSingleQuote
@@ -151,9 +151,18 @@ const (
 // to operate on list of key values.
 type KVS map[string]string
 
+// Empty - return if kv is empty
+func (kvs KVS) Empty() bool {
+	return len(kvs) == 0
+}
+
 func (kvs KVS) String() string {
 	var s strings.Builder
 	for k, v := range kvs {
+		// Do not need to print if state is on
+		if k == State && v == StateOn {
+			continue
+		}
 		s.WriteString(k)
 		s.WriteString(KvSeparator)
 		s.WriteString(KvDoubleQuote)
@@ -215,8 +224,13 @@ func LookupCreds(kv KVS) (auth.Credentials, error) {
 	if err := CheckValidKeys(CredentialsSubSys, kv, DefaultCredentialKVS); err != nil {
 		return auth.Credentials{}, err
 	}
-	return auth.CreateCredentials(env.Get(EnvAccessKey, kv.Get(AccessKey)),
-		env.Get(EnvSecretKey, kv.Get(SecretKey)))
+	accessKey := env.Get(EnvAccessKey, kv.Get(AccessKey))
+	secretKey := env.Get(EnvSecretKey, kv.Get(SecretKey))
+	if accessKey == "" && secretKey == "" {
+		accessKey = auth.DefaultAccessKey
+		secretKey = auth.DefaultSecretKey
+	}
+	return auth.CreateCredentials(accessKey, secretKey)
 }
 
 // LookupRegion - get current region.
@@ -348,7 +362,8 @@ func (c Config) DelKVS(s string) error {
 		delete(c[subSystemValue[0]], subSystemValue[1])
 		return nil
 	}
-	return Error(fmt.Sprintf("default config for '%s' sub-system cannot be removed", s))
+	delete(c[subSystemValue[0]], Default)
+	return nil
 }
 
 // This function is needed, to trim off single or double quotes, creeping into the values.
@@ -373,7 +388,7 @@ func (c Config) Clone() Config {
 }
 
 // SetKVS - set specific key values per sub-system.
-func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
+func (c Config) SetKVS(s string) error {
 	if len(s) == 0 {
 		return Error("input arguments cannot be empty")
 	}
@@ -418,9 +433,7 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 	}
 	_, ok := c[subSystemValue[0]][tgt]
 	if !ok {
-		c[subSystemValue[0]][tgt] = defaultKVS[subSystemValue[0]]
-		comment := fmt.Sprintf("Settings for sub-system target %s:%s", subSystemValue[0], tgt)
-		c[subSystemValue[0]][tgt][Comment] = comment
+		c[subSystemValue[0]][tgt] = KVS{}
 	}
 
 	for k, v := range kvs {

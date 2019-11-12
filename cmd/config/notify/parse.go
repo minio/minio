@@ -347,8 +347,8 @@ var (
 		target.KafkaSASLUsername:  "",
 		target.KafkaSASLPassword:  "",
 		target.KafkaTLSClientAuth: "0",
-		target.KafkaSASLEnable:    config.StateOff,
-		target.KafkaTLSEnable:     config.StateOff,
+		target.KafkaSASL:          config.StateOff,
+		target.KafkaTLS:           config.StateOff,
 		target.KafkaTLSSkipVerify: config.StateOff,
 		target.KafkaQueueLimit:    "0",
 		target.KafkaQueueDir:      "",
@@ -427,7 +427,7 @@ func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs
 			QueueLimit: queueLimit,
 		}
 
-		tlsEnableEnv := target.EnvKafkaTLSEnable
+		tlsEnableEnv := target.EnvKafkaTLS
 		if k != config.Default {
 			tlsEnableEnv = tlsEnableEnv + config.Default + k
 		}
@@ -435,7 +435,7 @@ func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs
 		if k != config.Default {
 			tlsSkipVerifyEnv = tlsSkipVerifyEnv + config.Default + k
 		}
-		kafkaArgs.TLS.Enable = env.Get(tlsEnableEnv, kv.Get(target.KafkaTLSEnable)) == config.StateOn
+		kafkaArgs.TLS.Enable = env.Get(tlsEnableEnv, kv.Get(target.KafkaTLS)) == config.StateOn
 		kafkaArgs.TLS.SkipVerify = env.Get(tlsSkipVerifyEnv, kv.Get(target.KafkaTLSSkipVerify)) == config.StateOn
 		kafkaArgs.TLS.ClientAuth = tls.ClientAuthType(clientAuth)
 
@@ -451,7 +451,7 @@ func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs
 		if k != config.Default {
 			saslPasswordEnv = saslPasswordEnv + config.Default + k
 		}
-		kafkaArgs.SASL.Enable = env.Get(saslEnableEnv, kv.Get(target.KafkaSASLEnable)) == config.StateOn
+		kafkaArgs.SASL.Enable = env.Get(saslEnableEnv, kv.Get(target.KafkaSASL)) == config.StateOn
 		kafkaArgs.SASL.User = env.Get(saslUsernameEnv, kv.Get(target.KafkaSASLUsername))
 		kafkaArgs.SASL.Password = env.Get(saslPasswordEnv, kv.Get(target.KafkaSASLPassword))
 
@@ -711,7 +711,7 @@ var (
 		target.NATSPingInterval:                "0",
 		target.NATSQueueLimit:                  "0",
 		target.NATSQueueDir:                    "",
-		target.NATSStreamingEnable:             config.StateOff,
+		target.NATSStreaming:                   config.StateOff,
 		target.NATSStreamingAsync:              config.StateOff,
 		target.NATSStreamingMaxPubAcksInFlight: "0",
 		target.NATSStreamingClusterID:          "",
@@ -808,12 +808,12 @@ func GetNotifyNATS(natsKVS map[string]config.KVS) (map[string]target.NATSArgs, e
 			QueueLimit:   queueLimit,
 		}
 
-		streamingEnableEnv := target.EnvNATSStreamingEnable
+		streamingEnableEnv := target.EnvNATSStreaming
 		if k != config.Default {
 			streamingEnableEnv = streamingEnableEnv + config.Default + k
 		}
 
-		streamingEnabled := env.Get(streamingEnableEnv, kv.Get(target.NATSStreamingEnable)) == config.StateOn
+		streamingEnabled := env.Get(streamingEnableEnv, kv.Get(target.NATSStreaming)) == config.StateOn
 		if streamingEnabled {
 			asyncEnv := target.EnvNATSStreamingAsync
 			if k != config.Default {
@@ -854,7 +854,7 @@ var (
 		config.Comment:          "Default settings for NSQ notification",
 		target.NSQAddress:       "",
 		target.NSQTopic:         "",
-		target.NSQTLSEnable:     config.StateOff,
+		target.NSQTLS:           config.StateOff,
 		target.NSQTLSSkipVerify: config.StateOff,
 		target.NSQQueueLimit:    "0",
 		target.NSQQueueDir:      "",
@@ -886,7 +886,7 @@ func GetNotifyNSQ(nsqKVS map[string]config.KVS) (map[string]target.NSQArgs, erro
 		if err != nil {
 			return nil, err
 		}
-		tlsEnableEnv := target.EnvNSQTLSEnable
+		tlsEnableEnv := target.EnvNSQTLS
 		if k != config.Default {
 			tlsEnableEnv = tlsEnableEnv + config.Default + k
 		}
@@ -920,7 +920,7 @@ func GetNotifyNSQ(nsqKVS map[string]config.KVS) (map[string]target.NSQArgs, erro
 			QueueDir:    env.Get(queueDirEnv, kv.Get(target.NSQQueueDir)),
 			QueueLimit:  queueLimit,
 		}
-		nsqArgs.TLS.Enable = env.Get(tlsEnableEnv, kv.Get(target.NSQTLSEnable)) == config.StateOn
+		nsqArgs.TLS.Enable = env.Get(tlsEnableEnv, kv.Get(target.NSQTLS)) == config.StateOn
 		nsqArgs.TLS.SkipVerify = env.Get(tlsSkipVerifyEnv, kv.Get(target.NSQTLSSkipVerify)) == config.StateOn
 
 		if err = nsqArgs.Validate(); err != nil {

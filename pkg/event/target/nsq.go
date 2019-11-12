@@ -35,7 +35,7 @@ import (
 const (
 	NSQAddress       = "nsqd_address"
 	NSQTopic         = "topic"
-	NSQTLSEnable     = "tls_enable"
+	NSQTLS           = "tls"
 	NSQTLSSkipVerify = "tls_skip_verify"
 	NSQQueueDir      = "queue_dir"
 	NSQQueueLimit    = "queue_limit"
@@ -43,7 +43,7 @@ const (
 	EnvNSQState         = "MINIO_NOTIFY_NSQ"
 	EnvNSQAddress       = "MINIO_NOTIFY_NSQ_NSQD_ADDRESS"
 	EnvNSQTopic         = "MINIO_NOTIFY_NSQ_TOPIC"
-	EnvNSQTLSEnable     = "MINIO_NOTIFY_NSQ_TLS_ENABLE"
+	EnvNSQTLS           = "MINIO_NOTIFY_NSQ_TLS"
 	EnvNSQTLSSkipVerify = "MINIO_NOTIFY_NSQ_TLS_SKIP_VERIFY"
 	EnvNSQQueueDir      = "MINIO_NOTIFY_NSQ_QUEUE_DIR"
 	EnvNSQQueueLimit    = "MINIO_NOTIFY_NSQ_QUEUE_LIMIT"

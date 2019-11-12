@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -193,8 +194,8 @@ func newAllSubsystems() {
 func initSafeModeInit(buckets []BucketInfo) (err error) {
 	defer func() {
 		if err != nil {
-			switch err.(type) {
-			case config.Err:
+			var cerr config.Err
+			if errors.As(err, &cerr) {
 				return
 			}
 			// Enable logger
@@ -377,7 +378,7 @@ func serverMain(ctx *cli.Context) {
 		initFederatorBackend(buckets, newObject)
 	}
 
-	initSafeModeInit(buckets)
+	logger.FatalIf(initSafeModeInit(buckets), "Unable to initialize server")
 
 	if globalCacheConfig.Enabled {
 		msg := color.RedBold("Disk caching is disabled in 'server' mode, 'caching' is only supported in gateway deployments")

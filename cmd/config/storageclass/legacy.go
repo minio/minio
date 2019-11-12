@@ -22,15 +22,14 @@ import (
 
 // SetStorageClass - One time migration code needed, for migrating from older config to new for StorageClass.
 func SetStorageClass(s config.Config, cfg Config) {
+	if len(cfg.Standard.String()) == 0 && len(cfg.RRS.String()) == 0 {
+		// Do not enable storage-class if no settings found.
+		return
+	}
 	s[config.StorageClassSubSys][config.Default] = config.KVS{
-		ClassStandard: cfg.Standard.String(),
-		ClassRRS:      cfg.RRS.String(),
-		config.State: func() string {
-			if len(cfg.Standard.String()) > 0 || len(cfg.RRS.String()) > 0 {
-				return config.StateOn
-			}
-			return config.StateOff
-		}(),
+		ClassStandard:  cfg.Standard.String(),
+		ClassRRS:       cfg.RRS.String(),
+		config.State:   config.StateOn,
 		config.Comment: "Settings for StorageClass, after migrating config",
 	}
 }

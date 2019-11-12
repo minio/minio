@@ -25,24 +25,15 @@ const (
 
 // SetIdentityOpenID - One time migration code needed, for migrating from older config to new for OpenIDConfig.
 func SetIdentityOpenID(s config.Config, cfg Config) {
+	if cfg.JWKS.URL == nil || cfg.JWKS.URL.String() == "" {
+		// No need to save not-enabled settings in new config.
+		return
+	}
 	s[config.IdentityOpenIDSubSys][config.Default] = config.KVS{
-		config.State: func() string {
-			if cfg.JWKS.URL == nil {
-				return config.StateOff
-			}
-			if cfg.JWKS.URL.String() == "" {
-				return config.StateOff
-			}
-			return config.StateOn
-		}(),
+		config.State:   config.StateOn,
 		config.Comment: "Settings for OpenID, after migrating config",
-		JwksURL: func() string {
-			if cfg.JWKS.URL != nil {
-				return cfg.JWKS.URL.String()
-			}
-			return ""
-		}(),
-		ConfigURL:   "",
-		ClaimPrefix: "",
+		JwksURL:        cfg.JWKS.URL.String(),
+		ConfigURL:      "",
+		ClaimPrefix:    "",
 	}
 }

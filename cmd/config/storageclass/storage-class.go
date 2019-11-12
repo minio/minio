@@ -222,6 +222,9 @@ func LookupConfig(kvs config.KVS, drivesPerSet int) (cfg Config, err error) {
 
 	stateBool, err := config.ParseBool(env.Get(EnvStorageClass, kvs.Get(config.State)))
 	if err != nil {
+		if kvs.Empty() {
+			return cfg, nil
+		}
 		return cfg, err
 	}
 	ssc := env.Get(StandardEnv, kvs.Get(ClassStandard))

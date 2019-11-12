@@ -42,14 +42,13 @@ func SetRegion(c Config, name string) {
 
 // SetWorm - One time migration code needed, for migrating from older config to new for Worm mode.
 func SetWorm(c Config, b bool) {
+	if !b {
+		// We don't save disabled configs
+		return
+	}
 	// Set the new value.
 	c[WormSubSys][Default] = KVS{
-		State: func() string {
-			if b {
-				return StateOn
-			}
-			return StateOff
-		}(),
+		State:   StateOn,
 		Comment: "Settings for WORM, after migrating config",
 	}
 }

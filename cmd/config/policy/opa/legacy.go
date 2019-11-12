@@ -28,23 +28,14 @@ const (
 
 // SetPolicyOPAConfig - One time migration code needed, for migrating from older config to new for PolicyOPAConfig.
 func SetPolicyOPAConfig(s config.Config, opaArgs Args) {
+	if opaArgs.URL == nil || opaArgs.URL.String() == "" {
+		// Do not enable if opaArgs was empty.
+		return
+	}
 	s[config.PolicyOPASubSys][config.Default] = config.KVS{
-		config.State: func() string {
-			if opaArgs.URL == nil {
-				return config.StateOff
-			}
-			if opaArgs.URL.String() == "" {
-				return config.StateOff
-			}
-			return config.StateOn
-		}(),
+		config.State:   config.StateOn,
 		config.Comment: "Settings for OPA, after migrating config",
-		URL: func() string {
-			if opaArgs.URL != nil {
-				return opaArgs.URL.String()
-			}
-			return ""
-		}(),
-		AuthToken: opaArgs.AuthToken,
+		URL:            opaArgs.URL.String(),
+		AuthToken:      opaArgs.AuthToken,
 	}
 }

@@ -261,28 +261,28 @@ func lookupConfigs(s config.Config) (err error) {
 }
 
 var helpMap = map[string]config.HelpKV{
-	config.RegionSubSys:          config.RegionHelp,
-	config.WormSubSys:            config.WormHelp,
-	config.EtcdSubSys:            etcd.Help,
-	config.CacheSubSys:           cache.Help,
-	config.CompressionSubSys:     compress.Help,
-	config.StorageClassSubSys:    storageclass.Help,
-	config.IdentityOpenIDSubSys:  openid.Help,
-	config.IdentityLDAPSubSys:    xldap.Help,
-	config.PolicyOPASubSys:       opa.Help,
-	config.KmsVaultSubSys:        crypto.Help,
-	config.LoggerHTTPSubSys:      logger.Help,
-	config.LoggerHTTPAuditSubSys: logger.HelpAudit,
-	config.NotifyAMQPSubSys:      notify.HelpAMQP,
-	config.NotifyKafkaSubSys:     notify.HelpKafka,
-	config.NotifyMQTTSubSys:      notify.HelpMQTT,
-	config.NotifyNATSSubSys:      notify.HelpNATS,
-	config.NotifyNSQSubSys:       notify.HelpNSQ,
-	config.NotifyMySQLSubSys:     notify.HelpMySQL,
-	config.NotifyPostgresSubSys:  notify.HelpPostgres,
-	config.NotifyRedisSubSys:     notify.HelpRedis,
-	config.NotifyWebhookSubSys:   notify.HelpWebhook,
-	config.NotifyESSubSys:        notify.HelpES,
+	config.RegionSubSys:         config.RegionHelp,
+	config.WormSubSys:           config.WormHelp,
+	config.EtcdSubSys:           etcd.Help,
+	config.CacheSubSys:          cache.Help,
+	config.CompressionSubSys:    compress.Help,
+	config.StorageClassSubSys:   storageclass.Help,
+	config.IdentityOpenIDSubSys: openid.Help,
+	config.IdentityLDAPSubSys:   xldap.Help,
+	config.PolicyOPASubSys:      opa.Help,
+	config.KmsVaultSubSys:       crypto.Help,
+	config.LoggerWebhookSubSys:  logger.Help,
+	config.AuditWebhookSubSys:   logger.HelpAudit,
+	config.NotifyAMQPSubSys:     notify.HelpAMQP,
+	config.NotifyKafkaSubSys:    notify.HelpKafka,
+	config.NotifyMQTTSubSys:     notify.HelpMQTT,
+	config.NotifyNATSSubSys:     notify.HelpNATS,
+	config.NotifyNSQSubSys:      notify.HelpNSQ,
+	config.NotifyMySQLSubSys:    notify.HelpMySQL,
+	config.NotifyPostgresSubSys: notify.HelpPostgres,
+	config.NotifyRedisSubSys:    notify.HelpRedis,
+	config.NotifyWebhookSubSys:  notify.HelpWebhook,
+	config.NotifyESSubSys:       notify.HelpES,
 }
 
 // GetHelp - returns help for sub-sys, a key for a sub-system or all the help.
@@ -324,51 +324,8 @@ func GetHelp(subSys, key string, envOnly bool) (config.HelpKV, error) {
 	return help, nil
 }
 
-func configDefaultKVS() map[string]config.KVS {
-	m := make(map[string]config.KVS)
-	for k, tgt := range newServerConfig() {
-		m[k] = tgt[config.Default]
-	}
-	return m
-}
-
 func newServerConfig() config.Config {
-	srvCfg := config.New()
-	for k := range srvCfg {
-		// Initialize with default KVS
-		switch k {
-		case config.EtcdSubSys:
-			srvCfg[k][config.Default] = etcd.DefaultKVS
-		case config.CacheSubSys:
-			srvCfg[k][config.Default] = cache.DefaultKVS
-		case config.CompressionSubSys:
-			srvCfg[k][config.Default] = compress.DefaultKVS
-		case config.StorageClassSubSys:
-			srvCfg[k][config.Default] = storageclass.DefaultKVS
-		case config.IdentityLDAPSubSys:
-			srvCfg[k][config.Default] = xldap.DefaultKVS
-		case config.IdentityOpenIDSubSys:
-			srvCfg[k][config.Default] = openid.DefaultKVS
-		case config.PolicyOPASubSys:
-			srvCfg[k][config.Default] = opa.DefaultKVS
-		case config.WormSubSys:
-			srvCfg[k][config.Default] = config.DefaultWormKVS
-		case config.RegionSubSys:
-			srvCfg[k][config.Default] = config.DefaultRegionKVS
-		case config.CredentialsSubSys:
-			srvCfg[k][config.Default] = config.DefaultCredentialKVS
-		case config.KmsVaultSubSys:
-			srvCfg[k][config.Default] = crypto.DefaultKVS
-		case config.LoggerHTTPSubSys:
-			srvCfg[k][config.Default] = logger.DefaultKVS
-		case config.LoggerHTTPAuditSubSys:
-			srvCfg[k][config.Default] = logger.DefaultAuditKVS
-		}
-	}
-	for k, v := range notify.DefaultNotificationKVS {
-		srvCfg[k][config.Default] = v
-	}
-	return srvCfg
+	return config.New()
 }
 
 // newSrvConfig - initialize a new server config, saves env parameters if
@@ -392,20 +349,7 @@ func newSrvConfig(objAPI ObjectLayer) error {
 }
 
 func getValidConfig(objAPI ObjectLayer) (config.Config, error) {
-	srvCfg, err := readServerConfig(context.Background(), objAPI)
-	if err != nil {
-		return nil, err
-	}
-	defaultKVS := configDefaultKVS()
-	for _, k := range config.SubSystems.ToSlice() {
-		_, ok := srvCfg[k][config.Default]
-		if !ok {
-			// Populate default configs for any new
-			// sub-systems added automatically.
-			srvCfg[k][config.Default] = defaultKVS[k]
-		}
-	}
-	return srvCfg, nil
+	return readServerConfig(context.Background(), objAPI)
 }
 
 // loadConfig - loads a new config from disk, overrides params

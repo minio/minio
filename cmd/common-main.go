@@ -204,10 +204,8 @@ func handleCommonEnvVars() {
 	// in-place update is off.
 	globalInplaceUpdateDisabled = strings.EqualFold(env.Get(config.EnvUpdate, config.StateOn), config.StateOff)
 
-	accessKey := env.Get(config.EnvAccessKey, "")
-	secretKey := env.Get(config.EnvSecretKey, "")
-	if accessKey != "" && secretKey != "" {
-		cred, err := auth.CreateCredentials(accessKey, secretKey)
+	if env.IsSet(config.EnvAccessKey) || env.IsSet(config.EnvSecretKey) {
+		cred, err := auth.CreateCredentials(env.Get(config.EnvAccessKey, ""), env.Get(config.EnvSecretKey, ""))
 		if err != nil {
 			logger.Fatal(config.ErrInvalidCredentials(err),
 				"Unable to validate credentials inherited from the shell environment")

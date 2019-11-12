@@ -11,17 +11,16 @@ import (
 
 // SetNotifyKafka - helper for config migration from older config.
 func SetNotifyKafka(s config.Config, kName string, cfg target.KafkaArgs) error {
+	if !cfg.Enable {
+		return nil
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
 
 	s[config.NotifyKafkaSubSys][kName] = config.KVS{
-		config.State: func() string {
-			if cfg.Enable {
-				return config.StateOn
-			}
-			return config.StateOff
-		}(),
+		config.State: config.StateOn,
 		target.KafkaBrokers: func() string {
 			var brokers []string
 			for _, broker := range cfg.Brokers {
@@ -33,10 +32,10 @@ func SetNotifyKafka(s config.Config, kName string, cfg target.KafkaArgs) error {
 		target.KafkaTopic:         cfg.Topic,
 		target.KafkaQueueDir:      cfg.QueueDir,
 		target.KafkaQueueLimit:    strconv.Itoa(int(cfg.QueueLimit)),
-		target.KafkaTLSEnable:     config.FormatBool(cfg.TLS.Enable),
+		target.KafkaTLS:           config.FormatBool(cfg.TLS.Enable),
 		target.KafkaTLSSkipVerify: config.FormatBool(cfg.TLS.SkipVerify),
 		target.KafkaTLSClientAuth: strconv.Itoa(int(cfg.TLS.ClientAuth)),
-		target.KafkaSASLEnable:    config.FormatBool(cfg.SASL.Enable),
+		target.KafkaSASL:          config.FormatBool(cfg.SASL.Enable),
 		target.KafkaSASLUsername:  cfg.SASL.User,
 		target.KafkaSASLPassword:  cfg.SASL.Password,
 	}
@@ -45,17 +44,16 @@ func SetNotifyKafka(s config.Config, kName string, cfg target.KafkaArgs) error {
 
 // SetNotifyAMQP - helper for config migration from older config.
 func SetNotifyAMQP(s config.Config, amqpName string, cfg target.AMQPArgs) error {
+	if !cfg.Enable {
+		return nil
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
 
 	s[config.NotifyAMQPSubSys][amqpName] = config.KVS{
-		config.State: func() string {
-			if cfg.Enable {
-				return config.StateOn
-			}
-			return config.StateOff
-		}(),
+		config.State:            config.StateOn,
 		config.Comment:          "Settings for AMQP notification, after migrating config",
 		target.AmqpURL:          cfg.URL.String(),
 		target.AmqpExchange:     cfg.Exchange,
@@ -76,17 +74,16 @@ func SetNotifyAMQP(s config.Config, amqpName string, cfg target.AMQPArgs) error 
 
 // SetNotifyES - helper for config migration from older config.
 func SetNotifyES(s config.Config, esName string, cfg target.ElasticsearchArgs) error {
+	if !cfg.Enable {
+		return nil
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
 
 	s[config.NotifyESSubSys][esName] = config.KVS{
-		config.State: func() string {
-			if cfg.Enable {
-				return config.StateOn
-			}
-			return config.StateOff
-		}(),
+		config.State:             config.StateOn,
 		config.Comment:           "Settings for Elasticsearch notification, after migrating config",
 		target.ElasticFormat:     cfg.Format,
 		target.ElasticURL:        cfg.URL.String(),
@@ -100,17 +97,16 @@ func SetNotifyES(s config.Config, esName string, cfg target.ElasticsearchArgs) e
 
 // SetNotifyRedis - helper for config migration from older config.
 func SetNotifyRedis(s config.Config, redisName string, cfg target.RedisArgs) error {
+	if !cfg.Enable {
+		return nil
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
 
 	s[config.NotifyRedisSubSys][redisName] = config.KVS{
-		config.State: func() string {
-			if cfg.Enable {
-				return config.StateOn
-			}
-			return config.StateOff
-		}(),
+		config.State:           config.StateOn,
 		config.Comment:         "Settings for Redis notification, after migrating config",
 		target.RedisFormat:     cfg.Format,
 		target.RedisAddress:    cfg.Addr.String(),
@@ -125,17 +121,16 @@ func SetNotifyRedis(s config.Config, redisName string, cfg target.RedisArgs) err
 
 // SetNotifyWebhook - helper for config migration from older config.
 func SetNotifyWebhook(s config.Config, whName string, cfg target.WebhookArgs) error {
+	if !cfg.Enable {
+		return nil
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
 
 	s[config.NotifyWebhookSubSys][whName] = config.KVS{
-		config.State: func() string {
-			if cfg.Enable {
-				return config.StateOn
-			}
-			return config.StateOff
-		}(),
+		config.State:             config.StateOn,
 		config.Comment:           "Settings for Webhook notification, after migrating config",
 		target.WebhookEndpoint:   cfg.Endpoint.String(),
 		target.WebhookAuthToken:  cfg.AuthToken,
@@ -148,17 +143,16 @@ func SetNotifyWebhook(s config.Config, whName string, cfg target.WebhookArgs) er
 
 // SetNotifyPostgres - helper for config migration from older config.
 func SetNotifyPostgres(s config.Config, psqName string, cfg target.PostgreSQLArgs) error {
+	if !cfg.Enable {
+		return nil
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
 
 	s[config.NotifyPostgresSubSys][psqName] = config.KVS{
-		config.State: func() string {
-			if cfg.Enable {
-				return config.StateOn
-			}
-			return config.StateOff
-		}(),
+		config.State:                    config.StateOn,
 		config.Comment:                  "Settings for Postgres notification, after migrating config",
 		target.PostgresFormat:           cfg.Format,
 		target.PostgresConnectionString: cfg.ConnectionString,
@@ -177,21 +171,20 @@ func SetNotifyPostgres(s config.Config, psqName string, cfg target.PostgreSQLArg
 
 // SetNotifyNSQ - helper for config migration from older config.
 func SetNotifyNSQ(s config.Config, nsqName string, cfg target.NSQArgs) error {
+	if !cfg.Enable {
+		return nil
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
 
 	s[config.NotifyNSQSubSys][nsqName] = config.KVS{
-		config.State: func() string {
-			if cfg.Enable {
-				return config.StateOn
-			}
-			return config.StateOff
-		}(),
+		config.State:            config.StateOn,
 		config.Comment:          "Settings for NSQ notification, after migrating config",
 		target.NSQAddress:       cfg.NSQDAddress.String(),
 		target.NSQTopic:         cfg.Topic,
-		target.NSQTLSEnable:     config.FormatBool(cfg.TLS.Enable),
+		target.NSQTLS:           config.FormatBool(cfg.TLS.Enable),
 		target.NSQTLSSkipVerify: config.FormatBool(cfg.TLS.SkipVerify),
 		target.NSQQueueDir:      cfg.QueueDir,
 		target.NSQQueueLimit:    strconv.Itoa(int(cfg.QueueLimit)),
@@ -202,17 +195,16 @@ func SetNotifyNSQ(s config.Config, nsqName string, cfg target.NSQArgs) error {
 
 // SetNotifyNATS - helper for config migration from older config.
 func SetNotifyNATS(s config.Config, natsName string, cfg target.NATSArgs) error {
+	if !cfg.Enable {
+		return nil
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
 
 	s[config.NotifyNATSSubSys][natsName] = config.KVS{
-		config.State: func() string {
-			if cfg.Enable {
-				return config.StateOn
-			}
-			return config.StateOff
-		}(),
+		config.State:            config.StateOn,
 		config.Comment:          "Settings for NATS notification, after migrating config",
 		target.NATSAddress:      cfg.Address.String(),
 		target.NATSSubject:      cfg.Subject,
@@ -223,7 +215,7 @@ func SetNotifyNATS(s config.Config, natsName string, cfg target.NATSArgs) error 
 		target.NATSPingInterval: strconv.FormatInt(cfg.PingInterval, 10),
 		target.NATSQueueDir:     cfg.QueueDir,
 		target.NATSQueueLimit:   strconv.Itoa(int(cfg.QueueLimit)),
-		target.NATSStreamingEnable: func() string {
+		target.NATSStreaming: func() string {
 			if cfg.Streaming.Enable {
 				return config.StateOn
 			}
@@ -239,17 +231,16 @@ func SetNotifyNATS(s config.Config, natsName string, cfg target.NATSArgs) error 
 
 // SetNotifyMySQL - helper for config migration from older config.
 func SetNotifyMySQL(s config.Config, sqlName string, cfg target.MySQLArgs) error {
+	if !cfg.Enable {
+		return nil
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
 
 	s[config.NotifyMySQLSubSys][sqlName] = config.KVS{
-		config.State: func() string {
-			if cfg.Enable {
-				return config.StateOn
-			}
-			return config.StateOff
-		}(),
+		config.State:           config.StateOn,
 		config.Comment:         "Settings for MySQL notification, after migrating config",
 		target.MySQLFormat:     cfg.Format,
 		target.MySQLDSNString:  cfg.DSN,
@@ -268,17 +259,16 @@ func SetNotifyMySQL(s config.Config, sqlName string, cfg target.MySQLArgs) error
 
 // SetNotifyMQTT - helper for config migration from older config.
 func SetNotifyMQTT(s config.Config, mqttName string, cfg target.MQTTArgs) error {
+	if !cfg.Enable {
+		return nil
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
 
 	s[config.NotifyMQTTSubSys][mqttName] = config.KVS{
-		config.State: func() string {
-			if cfg.Enable {
-				return config.StateOn
-			}
-			return config.StateOff
-		}(),
+		config.State:                 config.StateOn,
 		config.Comment:               "Settings for MQTT notification, after migrating config",
 		target.MqttBroker:            cfg.Broker.String(),
 		target.MqttTopic:             cfg.Topic,

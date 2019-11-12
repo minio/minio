@@ -267,29 +267,32 @@ var (
 )
 
 // LookupConfig lookup jwks from config, override with any ENVs.
-func LookupConfig(kv config.KVS, transport *http.Transport, closeRespFn func(io.ReadCloser)) (c Config, err error) {
-	if err = config.CheckValidKeys(config.IdentityOpenIDSubSys, kv, DefaultKVS); err != nil {
+func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io.ReadCloser)) (c Config, err error) {
+	if err = config.CheckValidKeys(config.IdentityOpenIDSubSys, kvs, DefaultKVS); err != nil {
 		return c, err
 	}
 
-	stateBool, err := config.ParseBool(env.Get(EnvIdentityOpenIDState, kv.Get(config.State)))
+	stateBool, err := config.ParseBool(env.Get(EnvIdentityOpenIDState, kvs.Get(config.State)))
 	if err != nil {
+		if kvs.Empty() {
+			return c, nil
+		}
 		return c, err
 	}
 
 	jwksURL := env.Get(EnvIamJwksURL, "") // Legacy
 	if jwksURL == "" {
-		jwksURL = env.Get(EnvIdentityOpenIDJWKSURL, kv.Get(JwksURL))
+		jwksURL = env.Get(EnvIdentityOpenIDJWKSURL, kvs.Get(JwksURL))
 	}
 
 	c = Config{
-		ClaimPrefix: env.Get(EnvIdentityOpenIDClaimPrefix, kv.Get(ClaimPrefix)),
+		ClaimPrefix: env.Get(EnvIdentityOpenIDClaimPrefix, kvs.Get(ClaimPrefix)),
 		publicKeys:  make(map[string]crypto.PublicKey),
 		transport:   transport,
 		closeRespFn: closeRespFn,
 	}
 
-	configURL := env.Get(EnvIdentityOpenIDURL, kv.Get(ConfigURL))
+	configURL := env.Get(EnvIdentityOpenIDURL, kvs.Get(ConfigURL))
 	if configURL != "" {
 		c.URL, err = xnet.ParseHTTPURL(configURL)
 		if err != nil {

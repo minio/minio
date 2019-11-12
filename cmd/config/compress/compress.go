@@ -83,6 +83,10 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 	}
 	cfg.Enabled, err = config.ParseBool(compress)
 	if err != nil {
+		// Parsing failures happen due to empty KVS, ignore it.
+		if kvs.Empty() {
+			return cfg, nil
+		}
 		return cfg, err
 	}
 	if !cfg.Enabled {
