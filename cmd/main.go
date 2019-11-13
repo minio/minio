@@ -25,6 +25,7 @@ import (
 	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/trie"
 	"github.com/minio/minio/pkg/words"
+	"github.com/pkg/profile"
 )
 
 // GlobalFlags - global flags for minio.
@@ -54,6 +55,36 @@ var GlobalFlags = []cli.Flag{
 	cli.BoolFlag{
 		Name:  "compat",
 		Usage: "trade off performance for S3 compatibility",
+	},
+	cli.StringFlag{
+		Name:   "cpuprofile",
+		Value:  "",
+		Usage:  "Write a local CPU profile to the specified file before exiting.",
+		Hidden: true,
+	},
+	cli.StringFlag{
+		Name:   "memprofile",
+		Value:  "",
+		Usage:  "Write an local allocation profile to the file after all tests have passed.",
+		Hidden: true,
+	},
+	cli.StringFlag{
+		Name:   "blockprofile",
+		Value:  "",
+		Usage:  "Write a local goroutine blocking profile to the specified file when all tests are complete.",
+		Hidden: true,
+	},
+	cli.StringFlag{
+		Name:   "mutexprofile",
+		Value:  "",
+		Usage:  "Write a mutex contention profile to the specified file when all tests are complete.",
+		Hidden: true,
+	},
+	cli.StringFlag{
+		Name:   "trace",
+		Value:  "",
+		Usage:  "Write an local execution trace to the specified file before exiting.",
+		Hidden: true,
 	},
 }
 
@@ -86,6 +117,7 @@ func newApp(name string) *cli.App {
 
 	// registerCommand registers a cli command.
 	registerCommand := func(command cli.Command) {
+		addProfiler(&command)
 		commands = append(commands, command)
 		commandsTree.Insert(command.Name)
 	}
@@ -150,6 +182,49 @@ func newApp(name string) *cli.App {
 	}
 
 	return app
+}
+
+func addProfiler(app *cli.Command) {
+	bf := app.Before
+	app.Before = func(ctx *cli.Context) error {
+		if bf != nil {
+			err := bf(ctx)
+			if err != nil {
+				return err
+			}
+		}
+		var after []func()
+		if s := ctx.String("cpuprofile"); s != "" {
+			after = append(after, profile.Start(profile.CPUProfile, profile.ProfilePath(s)).Stop)
+		}
+		if s := ctx.String("memprofile"); s != "" {
+			after = append(after, profile.Start(profile.MemProfile, profile.ProfilePath(s)).Stop)
+		}
+		if s := ctx.String("blockprofile"); s != "" {
+			after = append(after, profile.Start(profile.BlockProfile, profile.ProfilePath(s)).Stop)
+		}
+		if s := ctx.String("mutexprofile"); s != "" {
+			after = append(after, profile.Start(profile.MutexProfile, profile.ProfilePath(s)).Stop)
+		}
+		if s := ctx.String("trace"); s != "" {
+			after = append(after, profile.Start(profile.TraceProfile, profile.ProfilePath(s)).Stop)
+		}
+		if len(after) == 0 {
+			return nil
+		}
+		x := app.After
+		app.After = func(ctx *cli.Context) error {
+			err := x(ctx)
+			if err != nil {
+				return err
+			}
+			for _, fn := range after {
+				fn()
+			}
+			return nil
+		}
+		return nil
+	}
 }
 
 // Main main for minio server.
