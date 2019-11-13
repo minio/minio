@@ -1,7 +1,7 @@
 // +build ignore
 
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,8 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -34,6 +34,8 @@ import (
 	"golang.org/x/oauth2"
 	googleOAuth2 "golang.org/x/oauth2/google"
 
+	"github.com/minio/minio-go/v6"
+	"github.com/minio/minio-go/v6/pkg/credentials"
 	"github.com/minio/minio/pkg/auth"
 )
 
@@ -78,7 +80,7 @@ var (
 	tokenEndpoint string
 	clientID      string
 	clientSecret  string
-	port					int
+	port          int
 )
 
 func init() {
@@ -122,56 +124,52 @@ func main() {
 			return
 		}
 
-		oauth2Token, err := config.Exchange(ctx, r.URL.Query().Get("code"))
+		getWebTokenExpiry := func() (*credentials.WebIdentityToken, error) {
+			oauth2Token, err := config.Exchange(ctx, r.URL.Query().Get("code"))
+			if err != nil {
+				return nil, err
+			}
+			if !oauth2Token.Valid() {
+				return nil, errors.New("invalid token")
+			}
+
+			return &credentials.WebIdentityToken{
+				Token:  oauth2Token.Extra("id_token").(string),
+				Expiry: int(oauth2Token.Expiry.Sub(time.Now().UTC()).Seconds()),
+			}, nil
+		}
+		sts, err := credentials.NewSTSWebIdentity(stsEndpoint, getWebTokenExpiry)
 		if err != nil {
-			http.Error(w, "Failed to exchange token: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		if oauth2Token.Valid() {
-			v := url.Values{}
-			v.Set("Action", "AssumeRoleWithWebIdentity")
-			v.Set("WebIdentityToken", fmt.Sprintf("%s", oauth2Token.Extra("id_token")))
-			v.Set("DurationSeconds", fmt.Sprintf("%d", int64(oauth2Token.Expiry.Sub(time.Now().UTC()).Seconds())))
-			v.Set("Version", "2011-06-15")
+		// Uncomment this to use MinIO API operations by initializing minio
+		// client with obtained credentials.
 
-			u, err := url.Parse("http://localhost:9000")
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			u.RawQuery = v.Encode()
+		opts := &minio.Options{
+			Creds:        sts,
+			BucketLookup: minio.BucketLookupAuto,
+		}
 
-			req, err := http.NewRequest(http.MethodPost, u.String(), nil)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
+		u, err := url.Parse(stsEndpoint)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
-				http.Error(w, resp.Status, resp.StatusCode)
-				return
-			}
-
-			a := AssumeRoleWithWebIdentityResponse{}
-			if err = xml.NewDecoder(resp.Body).Decode(&a); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-
-			w.Write([]byte("##### Credentials\n"))
-			c, err := json.MarshalIndent(a.Result.Credentials, "", "\t")
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Write(c)
+		clnt, err := minio.NewWithOptions(u.Host, opts)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		buckets, err := clnt.ListBuckets()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		for _, bucket := range buckets {
+			log.Println(bucket)
 		}
 	})
 
