@@ -58,7 +58,7 @@ const (
 	peerRESTMethodLog                       = "/log"
 	peerRESTMethodHardwareCPUInfo           = "/cpuhardwareinfo"
 	peerRESTMethodHardwareNetworkInfo       = "/networkhardwareinfo"
-	peerRESTMethodPutBucketObjectLockConfig = "putbucketobjectlockconfig"
+	peerRESTMethodPutBucketObjectLockConfig = "/putbucketobjectlockconfig"
 )
 
 const (
