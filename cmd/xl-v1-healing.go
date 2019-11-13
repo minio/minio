@@ -681,7 +681,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 
 	// Lock the object before healing. Use read lock since healing
 	// will only regenerate parts & xl.json of outdated disks.
-	objectLock := xl.nsMutex.NewNSLock(ctx, bucket, object)
+	objectLock := xl.nsMutex.NewNSLock(ctx, xl.getLockers(), bucket, object)
 	if lerr := objectLock.GetRLock(globalHealingTimeout); lerr != nil {
 		return madmin.HealResultItem{}, lerr
 	}

@@ -471,15 +471,7 @@ func formatXLGetDeploymentID(refFormat *formatXLV3, formats []*formatXLV3) (stri
 }
 
 // formatXLFixDeploymentID - Add deployment id if it is not present.
-func formatXLFixDeploymentID(ctx context.Context, endpoints EndpointList, storageDisks []StorageAPI, refFormat *formatXLV3) (err error) {
-	// Acquire lock on format.json
-	mutex := newNSLock(globalIsDistXL)
-	formatLock := mutex.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
-	if err = formatLock.GetLock(globalHealingTimeout); err != nil {
-		return err
-	}
-	defer formatLock.Unlock()
-
+func formatXLFixDeploymentID(endpoints EndpointList, storageDisks []StorageAPI, refFormat *formatXLV3) (err error) {
 	// Attempt to load all `format.json` from all disks.
 	var sErrs []error
 	formats, sErrs := loadFormatXLAll(storageDisks)
@@ -518,12 +510,12 @@ func formatXLFixDeploymentID(ctx context.Context, endpoints EndpointList, storag
 	}
 	// Deployment ID needs to be set on all the disks.
 	// Save `format.json` across all disks.
-	return saveFormatXLAll(ctx, storageDisks, formats)
+	return saveFormatXLAll(context.Background(), storageDisks, formats)
 
 }
 
 // Update only the valid local disks which have not been updated before.
-func formatXLFixLocalDeploymentID(ctx context.Context, endpoints EndpointList, storageDisks []StorageAPI, refFormat *formatXLV3) error {
+func formatXLFixLocalDeploymentID(endpoints EndpointList, storageDisks []StorageAPI, refFormat *formatXLV3) error {
 	// If this server was down when the deploymentID was updated
 	// then we make sure that we update the local disks with the deploymentID.
 	for index, storageDisk := range storageDisks {
@@ -542,7 +534,7 @@ func formatXLFixLocalDeploymentID(ctx context.Context, endpoints EndpointList, s
 			}
 			format.ID = refFormat.ID
 			if err := saveFormatXL(storageDisk, format); err != nil {
-				logger.LogIf(ctx, err)
+				logger.LogIf(context.Background(), err)
 				return fmt.Errorf("Unable to save format.json, %s", err)
 			}
 		}

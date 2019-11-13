@@ -38,7 +38,6 @@ require (
 	github.com/lib/pq v1.0.0
 	github.com/miekg/dns v1.1.8
 	github.com/minio/cli v1.22.0
-	github.com/minio/dsync/v2 v2.0.0
 	github.com/minio/gokrb5/v7 v7.2.5
 	github.com/minio/hdfs/v3 v3.0.1
 	github.com/minio/highwayhash v1.0.0

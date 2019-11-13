@@ -83,7 +83,8 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects) error {
 	// Hold a lock for healing the erasure set
 	zeroDuration := time.Millisecond
 	zeroDynamicTimeout := newDynamicTimeout(zeroDuration, zeroDuration)
-	erasureSetHealLock := globalNSMutex.NewNSLock(ctx, "system", fmt.Sprintf("erasure-set-heal-%d", setIndex))
+	erasureSetHealLock := xlObj.nsMutex.NewNSLock(ctx, xlObj.getLockers(),
+		"system", fmt.Sprintf("erasure-set-heal-%d", setIndex))
 	if err := erasureSetHealLock.GetLock(zeroDynamicTimeout); err != nil {
 		return err
 	}
@@ -126,7 +127,7 @@ func execLeaderTasks(sets *xlSets) {
 	ctx := context.Background()
 
 	// Hold a lock so only one server performs auto-healing
-	leaderLock := globalNSMutex.NewNSLock(ctx, minioMetaBucket, "leader")
+	leaderLock := sets.NewNSLock(ctx, minioMetaBucket, "leader")
 	for {
 		err := leaderLock.GetLock(leaderLockTimeout)
 		if err == nil {

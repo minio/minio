@@ -46,7 +46,7 @@ matrix:
       go: 1.13.x
       script:
         - go build --ldflags="$(go run buildscripts/gen-ldflags.go)" -o %GOPATH%\bin\minio.exe
-        - go test -v --timeout 20m ./...
+        - for d in $(go list ./... | grep -v browser); do go test -v --timeout 20m "$d"; done
 
 before_script:
   # Add an IPv6 config - see the corresponding Travis issue

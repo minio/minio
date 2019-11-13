@@ -18,11 +18,9 @@ package rest
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -102,32 +100,11 @@ func (c *Client) Close() {
 	}
 }
 
-func newCustomDialContext(timeout time.Duration) func(ctx context.Context, network, addr string) (net.Conn, error) {
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		dialer := &net.Dialer{
-			Timeout:   timeout,
-			KeepAlive: timeout,
-			DualStack: true,
-		}
-
-		return dialer.DialContext(ctx, network, addr)
-	}
-}
-
 // NewClient - returns new REST client.
-func NewClient(url *url.URL, tlsConfig *tls.Config, timeout time.Duration, newAuthToken func() string) (*Client, error) {
+func NewClient(url *url.URL, newCustomTransport func() *http.Transport, newAuthToken func() string) (*Client, error) {
 	// Transport is exactly same as Go default in https://golang.org/pkg/net/http/#RoundTripper
 	// except custom DialContext and TLSClientConfig.
-	tr := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           newCustomDialContext(timeout),
-		MaxIdleConnsPerHost:   256,
-		IdleConnTimeout:       60 * time.Second,
-		TLSHandshakeTimeout:   30 * time.Second,
-		ExpectContinueTimeout: 10 * time.Second,
-		TLSClientConfig:       tlsConfig,
-		DisableCompression:    true,
-	}
+	tr := newCustomTransport()
 	return &Client{
 		httpClient:          &http.Client{Transport: tr},
 		httpIdleConnsCloser: tr.CloseIdleConnections,

@@ -48,6 +48,9 @@ const (
 
 // ObjectLayer implements primitives for object API layer.
 type ObjectLayer interface {
+	// Locking operations on object.
+	NewNSLock(ctx context.Context, bucket string, object string) RWLocker
+
 	// Storage operations.
 	Shutdown(context.Context) error
 	StorageInfo(context.Context) StorageInfo

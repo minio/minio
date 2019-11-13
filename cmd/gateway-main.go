@@ -142,8 +142,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Set system resources to maximum.
 	logger.LogIf(context.Background(), setMaxResources())
 
-	initNSLock(false) // Enable local namespace lock.
-
 	// Set when gateway is enabled
 	globalIsGateway = true
 

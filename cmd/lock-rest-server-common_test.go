@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"sync"
 	"testing"
-	"time"
 )
 
 // Helper function to create a lock server for testing
@@ -36,9 +35,8 @@ func createLockTestServer(t *testing.T) (string, *lockRESTServer, string) {
 
 	locker := &lockRESTServer{
 		ll: &localLocker{
-			mutex:           sync.Mutex{},
-			serviceEndpoint: "rpc-path",
-			lockMap:         make(map[string][]lockRequesterInfo),
+			mutex:   sync.Mutex{},
+			lockMap: make(map[string][]lockRequesterInfo),
 		},
 	}
 	creds := globalActiveCred
@@ -49,63 +47,22 @@ func createLockTestServer(t *testing.T) (string, *lockRESTServer, string) {
 	return fsDir, locker, token
 }
 
-// Test function to remove lock entries from map only in case they still exist based on name & uid combination
-func TestLockRpcServerRemoveEntryIfExists(t *testing.T) {
-	testPath, locker, _ := createLockTestServer(t)
-	defer os.RemoveAll(testPath)
-
-	lri := lockRequesterInfo{
-		Writer:          false,
-		Node:            "host",
-		ServiceEndpoint: "rpc-path",
-		UID:             "0123-4567",
-		Timestamp:       UTCNow(),
-		TimeLastCheck:   UTCNow(),
-	}
-	nlrip := nameLockRequesterInfoPair{name: "name", lri: lri}
-
-	// first test by simulating item has already been deleted
-	locker.ll.removeEntryIfExists(nlrip)
-	{
-		gotLri := locker.ll.lockMap["name"]
-		expectedLri := []lockRequesterInfo(nil)
-		if !reflect.DeepEqual(expectedLri, gotLri) {
-			t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
-		}
-	}
-
-	// then test normal deletion
-	locker.ll.lockMap["name"] = []lockRequesterInfo{lri} // add item
-	locker.ll.removeEntryIfExists(nlrip)
-	{
-		gotLri := locker.ll.lockMap["name"]
-		expectedLri := []lockRequesterInfo(nil)
-		if !reflect.DeepEqual(expectedLri, gotLri) {
-			t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
-		}
-	}
-}
-
 // Test function to remove lock entries from map based on name & uid combination
 func TestLockRpcServerRemoveEntry(t *testing.T) {
 	testPath, locker, _ := createLockTestServer(t)
 	defer os.RemoveAll(testPath)
 
 	lockRequesterInfo1 := lockRequesterInfo{
-		Writer:          true,
-		Node:            "host",
-		ServiceEndpoint: "rpc-path",
-		UID:             "0123-4567",
-		Timestamp:       UTCNow(),
-		TimeLastCheck:   UTCNow(),
+		Writer:        true,
+		UID:           "0123-4567",
+		Timestamp:     UTCNow(),
+		TimeLastCheck: UTCNow(),
 	}
 	lockRequesterInfo2 := lockRequesterInfo{
-		Writer:          true,
-		Node:            "host",
-		ServiceEndpoint: "rpc-path",
-		UID:             "89ab-cdef",
-		Timestamp:       UTCNow(),
-		TimeLastCheck:   UTCNow(),
+		Writer:        true,
+		UID:           "89ab-cdef",
+		Timestamp:     UTCNow(),
+		TimeLastCheck: UTCNow(),
 	}
 
 	locker.ll.lockMap["name"] = []lockRequesterInfo{
@@ -137,67 +94,6 @@ func TestLockRpcServerRemoveEntry(t *testing.T) {
 		expectedLri := []lockRequesterInfo(nil)
 		if !reflect.DeepEqual(expectedLri, gotLri) {
 			t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
-		}
-	}
-}
-
-// Tests function returning long lived locks.
-func TestLockRpcServerGetLongLivedLocks(t *testing.T) {
-	ut := UTCNow()
-	// Collection of test cases for verifying returning valid long lived locks.
-	testCases := []struct {
-		lockMap      map[string][]lockRequesterInfo
-		lockInterval time.Duration
-		expectedNSLR []nameLockRequesterInfoPair
-	}{
-		// Testcase - 1 validates long lived locks, returns empty list.
-		{
-			lockMap: map[string][]lockRequesterInfo{
-				"test": {{
-					Writer:          true,
-					Node:            "10.1.10.21",
-					ServiceEndpoint: "/lock/mnt/disk1",
-					UID:             "10000112",
-					Timestamp:       ut,
-					TimeLastCheck:   ut,
-				}},
-			},
-			lockInterval: 1 * time.Minute,
-			expectedNSLR: []nameLockRequesterInfoPair{},
-		},
-		// Testcase - 2 validates long lived locks, returns at least one list.
-		{
-			lockMap: map[string][]lockRequesterInfo{
-				"test": {{
-					Writer:          true,
-					Node:            "10.1.10.21",
-					ServiceEndpoint: "/lock/mnt/disk1",
-					UID:             "10000112",
-					Timestamp:       ut,
-					TimeLastCheck:   ut.Add(-2 * time.Minute),
-				}},
-			},
-			lockInterval: 1 * time.Minute,
-			expectedNSLR: []nameLockRequesterInfoPair{
-				{
-					name: "test",
-					lri: lockRequesterInfo{
-						Writer:          true,
-						Node:            "10.1.10.21",
-						ServiceEndpoint: "/lock/mnt/disk1",
-						UID:             "10000112",
-						Timestamp:       ut,
-						TimeLastCheck:   ut.Add(-2 * time.Minute),
-					},
-				},
-			},
-		},
-	}
-	// Validates all test cases here.
-	for i, testCase := range testCases {
-		nsLR := getLongLivedLocks(testCase.lockMap, testCase.lockInterval)
-		if !reflect.DeepEqual(testCase.expectedNSLR, nsLR) {
-			t.Errorf("Test %d: Expected %#v, got %#v", i+1, testCase.expectedNSLR, nsLR)
 		}
 	}
 }

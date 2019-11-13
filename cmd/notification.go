@@ -466,7 +466,6 @@ func (sys *NotificationSys) ServerInfo(ctx context.Context) []ServerInfo {
 
 // GetLocks - makes GetLocks RPC call on all peers.
 func (sys *NotificationSys) GetLocks(ctx context.Context) []*PeerLocks {
-
 	locksResp := make([]*PeerLocks, len(sys.peerClients))
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
@@ -703,7 +702,7 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
 	// and configFile, take a transaction lock to avoid data race between readConfig()
 	// and saveConfig().
-	objLock := globalNSMutex.NewNSLock(ctx, minioMetaBucket, transactionConfigFile)
+	objLock := objAPI.NewNSLock(ctx, minioMetaBucket, transactionConfigFile)
 	if err := objLock.GetRLock(globalOperationTimeout); err != nil {
 		return err
 	}
@@ -1344,7 +1343,7 @@ func SaveListener(objAPI ObjectLayer, bucketName string, eventNames []event.Name
 	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
 	// and configFile, take a transaction lock to avoid data race between readConfig()
 	// and saveConfig().
-	objLock := globalNSMutex.NewNSLock(ctx, minioMetaBucket, transactionConfigFile)
+	objLock := objAPI.NewNSLock(ctx, minioMetaBucket, transactionConfigFile)
 	if err := objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
@@ -1395,7 +1394,7 @@ func RemoveListener(objAPI ObjectLayer, bucketName string, targetID event.Target
 	// As object layer's GetObject() and PutObject() take respective lock on minioMetaBucket
 	// and configFile, take a transaction lock to avoid data race between readConfig()
 	// and saveConfig().
-	objLock := globalNSMutex.NewNSLock(ctx, minioMetaBucket, transactionConfigFile)
+	objLock := objAPI.NewNSLock(ctx, minioMetaBucket, transactionConfigFile)
 	if err := objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}

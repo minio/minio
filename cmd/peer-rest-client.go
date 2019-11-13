@@ -100,7 +100,7 @@ func (client *peerRESTClient) Close() error {
 }
 
 // GetLocksResp stores various info from the client for each lock that is requested.
-type GetLocksResp map[string][]lockRequesterInfo
+type GetLocksResp []map[string][]lockRequesterInfo
 
 // NetReadPerfInfo - fetch network read performance information for a remote node.
 func (client *peerRESTClient) NetReadPerfInfo(size int64) (info ServerNetReadPerfInfo, err error) {
@@ -759,10 +759,10 @@ func newPeerRESTClient(peer *xnet.Host) (*peerRESTClient, error) {
 		}
 	}
 
-	restClient, err := rest.NewClient(serverURL, tlsConfig, rest.DefaultRESTTimeout, newAuthToken)
-
+	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout, rest.DefaultRESTTimeout)
+	restClient, err := rest.NewClient(serverURL, trFn, newAuthToken)
 	if err != nil {
-		return &peerRESTClient{host: peer, restClient: restClient, connected: 0}, err
+		return nil, err
 	}
 
 	return &peerRESTClient{host: peer, restClient: restClient, connected: 1}, nil

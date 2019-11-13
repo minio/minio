@@ -30,11 +30,6 @@ import (
 // This file implements and supports ellipses pattern for
 // `minio server` command line arguments.
 
-// Maximum number of unique args supported on the command line.
-const (
-	serverCommandLineArgsMax = 32
-)
-
 // Endpoint set represents parsed ellipses values, also provides
 // methods to get the sets of endpoints.
 type endpointSet struct {

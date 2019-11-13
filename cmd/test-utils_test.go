@@ -60,6 +60,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bpool"
+	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/policy"
 )
@@ -68,9 +69,6 @@ import (
 func init() {
 	// Set as non-distributed.
 	globalIsDistXL = false
-
-	// Initialize name space lock.
-	initNSLock(globalIsDistXL)
 
 	// Disable printing console messages during tests.
 	color.Output = ioutil.Discard
@@ -451,13 +449,6 @@ func resetGlobalConfig() {
 	globalServerConfigMu.Unlock()
 }
 
-// reset global NSLock.
-func resetGlobalNSLock() {
-	if globalNSMutex != nil {
-		globalNSMutex = nil
-	}
-}
-
 func resetGlobalEndpoints() {
 	globalEndpoints = EndpointList{}
 }
@@ -497,8 +488,6 @@ func resetTestGlobals() {
 	resetGlobalConfigPath()
 	// Reset Global server config.
 	resetGlobalConfig()
-	// Reset global NSLock.
-	resetGlobalNSLock()
 	// Reset global endpoints.
 	resetGlobalEndpoints()
 	// Reset global isXL flag.
@@ -1629,6 +1618,9 @@ func newTestObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err erro
 	xl.getDisks = func() []StorageAPI {
 		return xl.storageDisks
 	}
+	xl.getLockers = func() []dsync.NetLocker {
+		return nil
+	}
 
 	globalConfigSys = NewConfigSys()
 
@@ -1917,9 +1909,6 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	// reset globals.
 	// this is to make sure that the tests are not affected by modified value.
 	resetTestGlobals()
-
-	// initialize NSLock.
-	initNSLock(false)
 
 	objLayer, fsDir, err := prepareFS()
 	if err != nil {
