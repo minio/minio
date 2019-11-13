@@ -350,27 +350,24 @@ func formatFSFixDeploymentID(fsFormatPath string) error {
 			logger.Info("Another minio process(es) might be holding a lock to the file %s. Please kill that minio process(es) (elapsed %s)\n", fsFormatPath, getElapsedTime())
 			continue
 		}
-		if err != nil {
-			break
-		}
-
-		if err = jsonLoad(wlk, format); err != nil {
-			break
-		}
-
-		// Check if format needs to be updated
-		if format.ID != "" {
-			err = nil
-			break
-		}
-
-		format.ID = mustGetUUID()
-		if err = jsonSave(wlk, format); err != nil {
-			break
-		}
+		break
 	}
-	if wlk != nil {
-		wlk.Close()
+	if err != nil {
+		return err
 	}
-	return err
+
+	defer wlk.Close()
+
+	if err = jsonLoad(wlk, format); err != nil {
+		return err
+	}
+
+	// Check if format needs to be updated
+	if format.ID != "" {
+		return nil
+	}
+
+	// Set new UUID to the format and save it
+	format.ID = mustGetUUID()
+	return jsonSave(wlk, format)
 }
