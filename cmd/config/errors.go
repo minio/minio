@@ -93,8 +93,7 @@ var (
 	ErrInvalidCredentials = newErrFn(
 		"Invalid credentials",
 		"Please provide correct credentials",
-		`Access key length should be between minimum 3 characters in length.
-Secret key should be in between 8 and 40 characters`,
+		`Access key length should be at least 3, and secret key length at least 8 characters`,
 	)
 
 	ErrEnvCredentialsMissingGateway = newErrFn(
