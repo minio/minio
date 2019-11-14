@@ -19,6 +19,7 @@ package config
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/minio/minio-go/pkg/set"
@@ -233,6 +234,8 @@ func LookupCreds(kv KVS) (auth.Credentials, error) {
 	return auth.CreateCredentials(accessKey, secretKey)
 }
 
+var validRegionRegex = regexp.MustCompile("^[a-zA-Z][a-zA-Z0-9-_-]+$")
+
 // LookupRegion - get current region.
 func LookupRegion(kv KVS) (string, error) {
 	if err := CheckValidKeys(RegionSubSys, kv, DefaultRegionKVS); err != nil {
@@ -242,7 +245,14 @@ func LookupRegion(kv KVS) (string, error) {
 	if region == "" {
 		region = env.Get(EnvRegionName, kv.Get(RegionName))
 	}
-	return region, nil
+	if region != "" {
+		if validRegionRegex.MatchString(region) {
+			return region, nil
+		}
+		return "", Errorf("region '%s' is invalid, expected simple characters such as [us-east-1, myregion...]",
+			region)
+	}
+	return "", nil
 }
 
 // CheckValidKeys - checks if inputs KVS has the necessary keys,
@@ -299,9 +309,8 @@ func (c Config) GetKVS(s string) (map[string]KVS, error) {
 	}
 	found := SubSystems.Contains(subSystemValue[0])
 	if !found {
-		// Check for sub-prefix only if the input value
-		// is only a single value, this rejects invalid
-		// inputs if any.
+		// Check for sub-prefix only if the input value is only a
+		// single value, this rejects invalid inputs if any.
 		found = !SubSystems.FuncMatch(strings.HasPrefix, subSystemValue[0]).IsEmpty() && len(subSystemValue) == 1
 	}
 	if !found {
@@ -431,17 +440,20 @@ func (c Config) SetKVS(s string) error {
 	if len(subSystemValue) == 2 {
 		tgt = subSystemValue[1]
 	}
+
 	_, ok := c[subSystemValue[0]][tgt]
 	if !ok {
 		c[subSystemValue[0]][tgt] = KVS{}
 	}
 
 	for k, v := range kvs {
-		if len(subSystemValue) == 2 {
-			c[subSystemValue[0]][subSystemValue[1]][k] = v
-		} else {
-			c[subSystemValue[0]][Default][k] = v
-		}
+		c[subSystemValue[0]][tgt][k] = v
+	}
+
+	_, ok = c[subSystemValue[0]][tgt][State]
+	if !ok {
+		// implicit state "on" if not specified.
+		c[subSystemValue[0]][tgt][State] = StateOn
 	}
 
 	return nil

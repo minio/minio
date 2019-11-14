@@ -145,6 +145,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Set when gateway is enabled
 	globalIsGateway = true
 
+	// Initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
+
 	enableConfigOps := gatewayName == "nas"
 
 	// TODO: We need to move this code with globalConfigSys.Init()
@@ -171,8 +174,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		registerSTSRouter(router)
 	}
 
-	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
 	enableIAMOps := globalEtcdClient != nil
 
 	// Enable IAM admin APIs if etcd is enabled, if not just enable basic
