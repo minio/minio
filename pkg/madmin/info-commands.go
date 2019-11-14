@@ -98,6 +98,9 @@ func (d1 BackendDisks) Sum() (sum int) {
 
 // Merge - Reduces two endpoint-disk maps.
 func (d1 BackendDisks) Merge(d2 BackendDisks) BackendDisks {
+	if len(d2) == 0 {
+		d2 = make(BackendDisks)
+	}
 	for i1, v1 := range d1 {
 		if v2, ok := d2[i1]; ok {
 			d2[i1] = v2 + v1
