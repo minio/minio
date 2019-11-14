@@ -204,17 +204,20 @@ func SetNotifyNATS(s config.Config, natsName string, cfg target.NATSArgs) error 
 	}
 
 	s[config.NotifyNATSSubSys][natsName] = config.KVS{
-		config.State:            config.StateOn,
-		config.Comment:          "Settings for NATS notification, after migrating config",
-		target.NATSAddress:      cfg.Address.String(),
-		target.NATSSubject:      cfg.Subject,
-		target.NATSUsername:     cfg.Username,
-		target.NATSPassword:     cfg.Password,
-		target.NATSToken:        cfg.Token,
-		target.NATSSecure:       config.FormatBool(cfg.Secure),
-		target.NATSPingInterval: strconv.FormatInt(cfg.PingInterval, 10),
-		target.NATSQueueDir:     cfg.QueueDir,
-		target.NATSQueueLimit:   strconv.Itoa(int(cfg.QueueLimit)),
+		config.State:             config.StateOn,
+		config.Comment:           "Settings for NATS notification, after migrating config",
+		target.NATSAddress:       cfg.Address.String(),
+		target.NATSSubject:       cfg.Subject,
+		target.NATSUsername:      cfg.Username,
+		target.NATSPassword:      cfg.Password,
+		target.NATSToken:         cfg.Token,
+		target.NATSCertAuthority: cfg.CertAuthority,
+		target.NATSClientCert:    cfg.ClientCert,
+		target.NATSClientKey:     cfg.ClientKey,
+		target.NATSSecure:        config.FormatBool(cfg.Secure),
+		target.NATSPingInterval:  strconv.FormatInt(cfg.PingInterval, 10),
+		target.NATSQueueDir:      cfg.QueueDir,
+		target.NATSQueueLimit:    strconv.Itoa(int(cfg.QueueLimit)),
 		target.NATSStreaming: func() string {
 			if cfg.Streaming.Enable {
 				return config.StateOn
