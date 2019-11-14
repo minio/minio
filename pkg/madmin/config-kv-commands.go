@@ -55,16 +55,6 @@ func (adm *AdminClient) SetConfigKV(kv string) (err error) {
 	if err != nil {
 		return err
 	}
-	for subSys, targetKV := range targets {
-		for target := range targetKV {
-			_, ok := targets[subSys][target][stateKey]
-			if !ok {
-				// If client asked for state preserve.
-				// otherwise implicitly add state to "on"
-				targets[subSys][target][stateKey] = stateOn
-			}
-		}
-	}
 	econfigBytes, err := EncryptData(adm.secretAccessKey, []byte(targets.String()))
 	if err != nil {
 		return err

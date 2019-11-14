@@ -23,6 +23,13 @@ import "github.com/minio/minio/pkg/auth"
 
 // SetCredentials - One time migration code needed, for migrating from older config to new for server credentials.
 func SetCredentials(c Config, cred auth.Credentials) {
+	creds, err := auth.CreateCredentials(cred.AccessKey, cred.SecretKey)
+	if err != nil {
+		return
+	}
+	if !creds.IsValid() {
+		return
+	}
 	c[CredentialsSubSys][Default] = KVS{
 		State:     StateOn,
 		Comment:   "Settings for credentials, after migrating config",
@@ -33,6 +40,9 @@ func SetCredentials(c Config, cred auth.Credentials) {
 
 // SetRegion - One time migration code needed, for migrating from older config to new for server Region.
 func SetRegion(c Config, name string) {
+	if name == "" {
+		return
+	}
 	c[RegionSubSys][Default] = KVS{
 		RegionName: name,
 		State:      StateOn,
