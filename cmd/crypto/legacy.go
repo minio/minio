@@ -79,6 +79,9 @@ const (
 
 // SetKMSConfig helper to migrate from older KMSConfig to new KV.
 func SetKMSConfig(s config.Config, cfg KMSConfig) {
+	if cfg.Vault.Endpoint == "" {
+		return
+	}
 	s[config.KmsVaultSubSys][config.Default] = config.KVS{
 		KMSVaultEndpoint: cfg.Vault.Endpoint,
 		KMSVaultCAPath:   cfg.Vault.CAPath,
@@ -93,13 +96,8 @@ func SetKMSConfig(s config.Config, cfg KMSConfig) {
 		KMSVaultKeyName:       cfg.Vault.Key.Name,
 		KMSVaultKeyVersion:    strconv.Itoa(cfg.Vault.Key.Version),
 		KMSVaultNamespace:     cfg.Vault.Namespace,
-		config.State: func() string {
-			if cfg.Vault.Endpoint != "" {
-				return config.StateOn
-			}
-			return config.StateOff
-		}(),
-		config.Comment: "Settings for KMS Vault, after migrating config",
+		config.State:          config.StateOn,
+		config.Comment:        "Settings for KMS Vault, after migrating config",
 	}
 }
 

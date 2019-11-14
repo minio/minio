@@ -73,6 +73,10 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 	// Check if cache is explicitly disabled
 	stateBool, err := config.ParseBool(env.Get(EnvCacheState, kvs.Get(config.State)))
 	if err != nil {
+		// Parsing failures happen due to empty KVS, ignore it.
+		if kvs.Empty() {
+			return cfg, nil
+		}
 		return cfg, err
 	}
 

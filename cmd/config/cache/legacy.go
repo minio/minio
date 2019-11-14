@@ -25,16 +25,15 @@ import (
 
 // SetCacheConfig - One time migration code needed, for migrating from older config to new for Cache.
 func SetCacheConfig(s config.Config, cfg Config) {
+	if len(cfg.Drives) == 0 {
+		// Do not save cache if no settings available.
+		return
+	}
 	s[config.CacheSubSys][config.Default] = DefaultKVS
 	s[config.CacheSubSys][config.Default][Drives] = strings.Join(cfg.Drives, cacheDelimiter)
 	s[config.CacheSubSys][config.Default][Exclude] = strings.Join(cfg.Exclude, cacheDelimiter)
 	s[config.CacheSubSys][config.Default][Expiry] = fmt.Sprintf("%d", cfg.Expiry)
 	s[config.CacheSubSys][config.Default][Quota] = fmt.Sprintf("%d", cfg.MaxUse)
-	s[config.CacheSubSys][config.Default][config.State] = func() string {
-		if len(cfg.Drives) > 0 {
-			return config.StateOn
-		}
-		return config.StateOff
-	}()
+	s[config.CacheSubSys][config.Default][config.State] = config.StateOn
 	s[config.CacheSubSys][config.Default][config.Comment] = "Settings for Cache, after migrating config"
 }

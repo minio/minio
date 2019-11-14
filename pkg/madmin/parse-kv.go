@@ -20,11 +20,9 @@ package madmin
 import (
 	"bufio"
 	"bytes"
-	"encoding/base64"
 	"fmt"
 	"strings"
-
-	"github.com/minio/minio/pkg/color"
+	"unicode"
 )
 
 // KVS each sub-system key, value
@@ -34,8 +32,34 @@ type KVS map[string]string
 type Targets map[string]map[string]KVS
 
 const (
+	stateKey   = "state"
 	commentKey = "comment"
+
+	stateOn  = "on"
+	stateOff = "off"
 )
+
+func (kvs KVS) String() string {
+	var s strings.Builder
+	for k, v := range kvs {
+		// Do not need to print if state is on
+		if k == stateKey && v == stateOn {
+			continue
+		}
+		s.WriteString(k)
+		s.WriteString(KvSeparator)
+		spc := hasSpace(v)
+		if spc {
+			s.WriteString(KvDoubleQuote)
+		}
+		s.WriteString(v)
+		if spc {
+			s.WriteString(KvDoubleQuote)
+		}
+		s.WriteString(KvSpaceSeparator)
+	}
+	return s.String()
+}
 
 // Count - returns total numbers of target
 func (t Targets) Count() int {
@@ -48,44 +72,28 @@ func (t Targets) Count() int {
 	return count
 }
 
+func hasSpace(s string) bool {
+	for _, r := range s {
+		if unicode.IsSpace(r) {
+			return true
+		}
+	}
+	return false
+}
+
 func (t Targets) String() string {
 	var s strings.Builder
 	count := t.Count()
 	for subSys, targetKV := range t {
 		for target, kv := range targetKV {
 			count--
-			c := kv[commentKey]
-			data, err := base64.RawStdEncoding.DecodeString(c)
-			if err == nil {
-				c = string(data)
-			}
-			for _, c1 := range strings.Split(c, KvNewline) {
-				if c1 == "" {
-					continue
-				}
-				s.WriteString(color.YellowBold(KvComment))
-				s.WriteString(KvSpaceSeparator)
-				s.WriteString(color.BlueBold(strings.TrimSpace(c1)))
-				s.WriteString(KvNewline)
-			}
 			s.WriteString(subSys)
 			if target != Default {
 				s.WriteString(SubSystemSeparator)
 				s.WriteString(target)
 			}
 			s.WriteString(KvSpaceSeparator)
-			for k, v := range kv {
-				// Comment is already printed, do not print it here.
-				if k == commentKey {
-					continue
-				}
-				s.WriteString(k)
-				s.WriteString(KvSeparator)
-				s.WriteString(KvDoubleQuote)
-				s.WriteString(v)
-				s.WriteString(KvDoubleQuote)
-				s.WriteString(KvSpaceSeparator)
-			}
+			s.WriteString(kv.String())
 			if (len(t) > 1 || len(targetKV) > 1) && count > 0 {
 				s.WriteString(KvNewline)
 				s.WriteString(KvNewline)
@@ -100,7 +108,6 @@ const (
 	SubSystemSeparator = `:`
 	KvSeparator        = `=`
 	KvSpaceSeparator   = ` `
-	KvComment          = `#`
 	KvNewline          = "\n"
 	KvDoubleQuote      = `"`
 	KvSingleQuote      = `'`

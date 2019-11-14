@@ -199,6 +199,10 @@ func printServerCommonMsg(apiEndpoints []string) {
 
 // Prints bucket notification configurations.
 func printEventNotifiers() {
+	if globalNotificationSys == nil {
+		return
+	}
+
 	arns := globalNotificationSys.GetARNList()
 	if len(arns) == 0 {
 		return

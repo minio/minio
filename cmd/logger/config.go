@@ -47,11 +47,11 @@ const (
 	Endpoint  = "endpoint"
 	AuthToken = "auth_token"
 
-	EnvLoggerHTTPEndpoint  = "MINIO_LOGGER_HTTP_ENDPOINT"
-	EnvLoggerHTTPAuthToken = "MINIO_LOGGER_HTTP_AUTH_TOKEN"
+	EnvLoggerWebhookEndpoint  = "MINIO_LOGGER_WEBHOOK_ENDPOINT"
+	EnvLoggerWebhookAuthToken = "MINIO_LOGGER_WEBHOOK_AUTH_TOKEN"
 
-	EnvLoggerHTTPAuditEndpoint  = "MINIO_LOGGER_HTTP_AUDIT_ENDPOINT"
-	EnvLoggerHTTPAuditAuthToken = "MINIO_LOGGER_HTTP_AUDIT_AUTH_TOKEN"
+	EnvAuditWebhookEndpoint  = "MINIO_AUDIT_WEBHOOK_ENDPOINT"
+	EnvAuditWebhookAuthToken = "MINIO_AUDIT_WEBHOOK_AUTH_TOKEN"
 )
 
 // Default KVS for loggerHTTP and loggerAuditHTTP
@@ -98,21 +98,21 @@ func NewConfig() Config {
 func LookupConfig(scfg config.Config) (Config, error) {
 	cfg := NewConfig()
 
-	envs := env.List(EnvLoggerHTTPEndpoint)
+	envs := env.List(EnvLoggerWebhookEndpoint)
 	var loggerTargets []string
 	for _, k := range envs {
-		target := strings.TrimPrefix(k, EnvLoggerHTTPEndpoint+config.Default)
-		if target == EnvLoggerHTTPEndpoint {
+		target := strings.TrimPrefix(k, EnvLoggerWebhookEndpoint+config.Default)
+		if target == EnvLoggerWebhookEndpoint {
 			target = config.Default
 		}
 		loggerTargets = append(loggerTargets, target)
 	}
 
 	var loggerAuditTargets []string
-	envs = env.List(EnvLoggerHTTPAuditEndpoint)
+	envs = env.List(EnvAuditWebhookEndpoint)
 	for _, k := range envs {
-		target := strings.TrimPrefix(k, EnvLoggerHTTPAuditEndpoint+config.Default)
-		if target == EnvLoggerHTTPAuditEndpoint {
+		target := strings.TrimPrefix(k, EnvAuditWebhookEndpoint+config.Default)
+		if target == EnvAuditWebhookEndpoint {
 			target = config.Default
 		}
 		loggerAuditTargets = append(loggerAuditTargets, target)
@@ -128,10 +128,10 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		loggerAuditTargets = append(loggerAuditTargets, target)
 	}
 
-	for starget, kv := range scfg[config.LoggerHTTPSubSys] {
-		subSysTarget := config.LoggerHTTPSubSys
+	for starget, kv := range scfg[config.LoggerWebhookSubSys] {
+		subSysTarget := config.LoggerWebhookSubSys
 		if starget != config.Default {
-			subSysTarget = config.LoggerHTTPSubSys + config.SubSystemSeparator + starget
+			subSysTarget = config.LoggerWebhookSubSys + config.SubSystemSeparator + starget
 		}
 		if err := config.CheckValidKeys(subSysTarget, kv, DefaultKVS); err != nil {
 			return cfg, err
@@ -145,13 +145,13 @@ func LookupConfig(scfg config.Config) (Config, error) {
 			continue
 		}
 
-		endpointEnv := EnvLoggerHTTPEndpoint
+		endpointEnv := EnvLoggerWebhookEndpoint
 		if starget != config.Default {
-			endpointEnv = EnvLoggerHTTPEndpoint + config.Default + starget
+			endpointEnv = EnvLoggerWebhookEndpoint + config.Default + starget
 		}
-		authTokenEnv := EnvLoggerHTTPAuthToken
+		authTokenEnv := EnvLoggerWebhookAuthToken
 		if starget != config.Default {
-			authTokenEnv = EnvLoggerHTTPAuthToken + config.Default + starget
+			authTokenEnv = EnvLoggerWebhookAuthToken + config.Default + starget
 		}
 		cfg.HTTP[starget] = HTTP{
 			Enabled:   true,
@@ -160,10 +160,10 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		}
 	}
 
-	for starget, kv := range scfg[config.LoggerHTTPAuditSubSys] {
-		subSysTarget := config.LoggerHTTPAuditSubSys
+	for starget, kv := range scfg[config.AuditWebhookSubSys] {
+		subSysTarget := config.AuditWebhookSubSys
 		if starget != config.Default {
-			subSysTarget = config.LoggerHTTPAuditSubSys + config.SubSystemSeparator + starget
+			subSysTarget = config.AuditWebhookSubSys + config.SubSystemSeparator + starget
 		}
 		if err := config.CheckValidKeys(subSysTarget, kv, DefaultAuditKVS); err != nil {
 			return cfg, err
@@ -177,9 +177,9 @@ func LookupConfig(scfg config.Config) (Config, error) {
 			continue
 		}
 
-		endpointEnv := EnvLoggerHTTPAuditEndpoint
+		endpointEnv := EnvAuditWebhookEndpoint
 		if starget != config.Default {
-			endpointEnv = EnvLoggerHTTPAuditEndpoint + config.Default + starget
+			endpointEnv = EnvAuditWebhookEndpoint + config.Default + starget
 		}
 		legacyEndpointEnv := EnvAuditLoggerHTTPEndpoint
 		if starget != config.Default {
@@ -189,9 +189,9 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		if endpoint == "" {
 			endpoint = env.Get(endpointEnv, kv.Get(Endpoint))
 		}
-		authTokenEnv := EnvLoggerHTTPAuditAuthToken
+		authTokenEnv := EnvAuditWebhookAuthToken
 		if starget != config.Default {
-			authTokenEnv = EnvLoggerHTTPAuditAuthToken + config.Default + starget
+			authTokenEnv = EnvAuditWebhookAuthToken + config.Default + starget
 		}
 		cfg.Audit[starget] = HTTP{
 			Enabled:   true,
@@ -201,13 +201,13 @@ func LookupConfig(scfg config.Config) (Config, error) {
 	}
 
 	for _, target := range loggerTargets {
-		endpointEnv := EnvLoggerHTTPEndpoint
+		endpointEnv := EnvLoggerWebhookEndpoint
 		if target != config.Default {
-			endpointEnv = EnvLoggerHTTPEndpoint + config.Default + target
+			endpointEnv = EnvLoggerWebhookEndpoint + config.Default + target
 		}
-		authTokenEnv := EnvLoggerHTTPAuthToken
+		authTokenEnv := EnvLoggerWebhookAuthToken
 		if target != config.Default {
-			authTokenEnv = EnvLoggerHTTPAuthToken + config.Default + target
+			authTokenEnv = EnvLoggerWebhookAuthToken + config.Default + target
 		}
 		cfg.HTTP[target] = HTTP{
 			Enabled:   true,
@@ -217,9 +217,9 @@ func LookupConfig(scfg config.Config) (Config, error) {
 	}
 
 	for _, target := range loggerAuditTargets {
-		endpointEnv := EnvLoggerHTTPAuditEndpoint
+		endpointEnv := EnvLoggerWebhookEndpoint
 		if target != config.Default {
-			endpointEnv = EnvLoggerHTTPAuditEndpoint + config.Default + target
+			endpointEnv = EnvLoggerWebhookEndpoint + config.Default + target
 		}
 		legacyEndpointEnv := EnvAuditLoggerHTTPEndpoint
 		if target != config.Default {
@@ -229,9 +229,9 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		if endpoint == "" {
 			endpoint = env.Get(endpointEnv, "")
 		}
-		authTokenEnv := EnvLoggerHTTPAuditAuthToken
+		authTokenEnv := EnvLoggerWebhookAuthToken
 		if target != config.Default {
-			authTokenEnv = EnvLoggerHTTPAuditAuthToken + config.Default + target
+			authTokenEnv = EnvLoggerWebhookAuthToken + config.Default + target
 		}
 		cfg.Audit[target] = HTTP{
 			Enabled:   true,

@@ -18,11 +18,8 @@
 package madmin
 
 import (
-	"bufio"
-	"encoding/base64"
 	"net/http"
 	"net/url"
-	"strings"
 )
 
 // DelConfigKV - delete key from server config.
@@ -54,33 +51,21 @@ func (adm *AdminClient) DelConfigKV(k string) (err error) {
 
 // SetConfigKV - set key value config to server.
 func (adm *AdminClient) SetConfigKV(kv string) (err error) {
-	bio := bufio.NewScanner(strings.NewReader(kv))
-	var s strings.Builder
-	var comment string
-	for bio.Scan() {
-		if bio.Text() == "" {
-			continue
-		}
-		if strings.HasPrefix(bio.Text(), KvComment) {
-			// Join multiple comments for each newline, separated by "\n"
-			comments := []string{comment, strings.TrimPrefix(bio.Text(), KvComment)}
-			comment = strings.Join(comments, KvNewline)
-			continue
-		}
-		s.WriteString(bio.Text())
-		if comment != "" {
-			s.WriteString(KvSpaceSeparator)
-			s.WriteString(commentKey)
-			s.WriteString(KvSeparator)
-			s.WriteString(KvDoubleQuote)
-			s.WriteString(base64.RawStdEncoding.EncodeToString([]byte(comment)))
-			s.WriteString(KvDoubleQuote)
-		}
-		s.WriteString(KvNewline)
-		comment = ""
+	targets, err := ParseSubSysTarget([]byte(kv))
+	if err != nil {
+		return err
 	}
-
-	econfigBytes, err := EncryptData(adm.secretAccessKey, []byte(s.String()))
+	for subSys, targetKV := range targets {
+		for target := range targetKV {
+			_, ok := targets[subSys][target][stateKey]
+			if !ok {
+				// If client asked for state preserve.
+				// otherwise implicitly add state to "on"
+				targets[subSys][target][stateKey] = stateOn
+			}
+		}
+	}
+	econfigBytes, err := EncryptData(adm.secretAccessKey, []byte(targets.String()))
 	if err != nil {
 		return err
 	}

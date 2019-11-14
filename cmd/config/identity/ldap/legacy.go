@@ -20,13 +20,12 @@ import "github.com/minio/minio/cmd/config"
 
 // SetIdentityLDAP - One time migration code needed, for migrating from older config to new for LDAPConfig.
 func SetIdentityLDAP(s config.Config, ldapArgs Config) {
+	if !ldapArgs.Enabled {
+		// ldap not enabled no need to preserve it in new settings.
+		return
+	}
 	s[config.IdentityLDAPSubSys][config.Default] = config.KVS{
-		config.State: func() string {
-			if !ldapArgs.Enabled {
-				return config.StateOff
-			}
-			return config.StateOn
-		}(),
+		config.State:       config.StateOn,
 		config.Comment:     "Settings for LDAP, after migrating config",
 		ServerAddr:         ldapArgs.ServerAddr,
 		STSExpiry:          ldapArgs.STSExpiryDuration,

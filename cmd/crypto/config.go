@@ -149,8 +149,12 @@ func LookupConfig(kvs config.KVS) (KMSConfig, error) {
 	if kmsCfg.Vault.Enabled {
 		return kmsCfg, nil
 	}
+
 	stateBool, err := config.ParseBool(env.Get(EnvKMSVaultState, kvs.Get(config.State)))
 	if err != nil {
+		if kvs.Empty() {
+			return kmsCfg, nil
+		}
 		return kmsCfg, err
 	}
 	if !stateBool {

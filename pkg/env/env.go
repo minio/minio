@@ -27,6 +27,12 @@ func SetEnvOn() {
 	envOff = false
 }
 
+// IsSet returns if the given env key is set.
+func IsSet(key string) bool {
+	_, ok := os.LookupEnv(key)
+	return ok
+}
+
 // Get retrieves the value of the environment variable named
 // by the key. If the variable is present in the environment the
 // value (which may be empty) is returned. Otherwise it returns

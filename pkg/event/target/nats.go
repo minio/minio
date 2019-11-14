@@ -43,7 +43,7 @@ const (
 	NATSQueueLimit   = "queue_limit"
 
 	// Streaming constants
-	NATSStreamingEnable             = "streaming_enable"
+	NATSStreaming                   = "streaming"
 	NATSStreamingClusterID          = "streaming_cluster_id"
 	NATSStreamingAsync              = "streaming_async"
 	NATSStreamingMaxPubAcksInFlight = "streaming_max_pub_acks_in_flight"
@@ -60,7 +60,7 @@ const (
 	EnvNATSQueueLimit   = "MINIO_NOTIFY_NATS_QUEUE_LIMIT"
 
 	// Streaming constants
-	EnvNATSStreamingEnable             = "MINIO_NOTIFY_NATS_STREAMING_ENABLE"
+	EnvNATSStreaming                   = "MINIO_NOTIFY_NATS_STREAMING"
 	EnvNATSStreamingClusterID          = "MINIO_NOTIFY_NATS_STREAMING_CLUSTER_ID"
 	EnvNATSStreamingAsync              = "MINIO_NOTIFY_NATS_STREAMING_ASYNC"
 	EnvNATSStreamingMaxPubAcksInFlight = "MINIO_NOTIFY_NATS_STREAMING_MAX_PUB_ACKS_IN_FLIGHT"

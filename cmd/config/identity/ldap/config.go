@@ -115,6 +115,9 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 	}
 	stateBool, err := config.ParseBool(env.Get(EnvLDAPState, kvs.Get(config.State)))
 	if err != nil {
+		if kvs.Empty() {
+			return l, nil
+		}
 		return l, err
 	}
 	ldapServer := env.Get(EnvServerAddr, kvs.Get(ServerAddr))
