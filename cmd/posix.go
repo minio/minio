@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"io"
@@ -49,6 +50,13 @@ const (
 	diskMinTotalSpace = diskMinFreeSpace      // Min 900MiB total space.
 	maxAllowedIOError = 5
 	readBlockSize     = 4 * humanize.MiByte // Default read block size 4MiB.
+
+	// On regular files bigger than this;
+	readAheadSize = 16 << 20
+	// Read this many buffers ahead.
+	readAheadBuffers = 4
+	// Size of each buffer.
+	readAheadBufSize = 1 << 20
 )
 
 // isValidVolname verifies a volname name in accordance with object
@@ -1112,8 +1120,13 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 		io.Reader
 		io.Closer
 	}{Reader: io.LimitReader(file, length), Closer: file}
+	if length >= readAheadSize {
+		return readahead.NewReadCloserSize(r, readAheadBuffers, readAheadBufSize)
+	}
 
-	return readahead.NewReadCloser(r), nil
+	// Just add a small 64k buffer.
+	r.Reader = bufio.NewReaderSize(r.Reader, 64<<10)
+	return r, nil
 }
 
 // CreateFile - creates the file.
