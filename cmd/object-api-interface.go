@@ -30,6 +30,9 @@ import (
 // CheckCopyPreconditionFn returns true if copy precondition check failed.
 type CheckCopyPreconditionFn func(o ObjectInfo, encETag string) bool
 
+// GetObjectInfoFn is the signature of GetObjectInfo function.
+type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
+
 // ObjectOptions represents object options for ObjectLayer operations
 type ObjectOptions struct {
 	ServerSideEncryption encrypt.ServerSide

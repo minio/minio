@@ -510,7 +510,7 @@ func (s *peerRESTServer) DeleteBucketHandler(w http.ResponseWriter, r *http.Requ
 
 	globalNotificationSys.RemoveNotification(bucketName)
 	globalPolicySys.Remove(bucketName)
-	globalBucketRetentionConfig.Delete(bucketName)
+	globalBucketObjectLockConfig.Delete(bucketName)
 
 	w.(http.Flusher).Flush()
 }
@@ -787,7 +787,7 @@ func (s *peerRESTServer) PutBucketObjectLockConfigHandler(w http.ResponseWriter,
 		return
 	}
 
-	globalBucketRetentionConfig.Set(bucketName, retention)
+	globalBucketObjectLockConfig.Set(bucketName, retention)
 	w.(http.Flusher).Flush()
 }
 

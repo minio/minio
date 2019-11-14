@@ -57,10 +57,14 @@ const (
 	AmzCopySourceIfNoneMatch = "x-amz-copy-source-if-none-match"
 	AmzCopySourceIfMatch     = "x-amz-copy-source-if-match"
 
-	AmzCopySource          = "X-Amz-Copy-Source"
-	AmzCopySourceVersionID = "X-Amz-Copy-Source-Version-Id"
-	AmzCopySourceRange     = "X-Amz-Copy-Source-Range"
-	AmzMetadataDirective   = "X-Amz-Metadata-Directive"
+	AmzCopySource                 = "X-Amz-Copy-Source"
+	AmzCopySourceVersionID        = "X-Amz-Copy-Source-Version-Id"
+	AmzCopySourceRange            = "X-Amz-Copy-Source-Range"
+	AmzMetadataDirective          = "X-Amz-Metadata-Directive"
+	AmzObjectLockMode             = "X-Amz-Object-Lock-Mode"
+	AmzObjectLockRetainUntilDate  = "X-Amz-Object-Lock-Retain-Until-Date"
+	AmzObjectLockLegalHold        = "X-Amz-Object-Lock-Legal-Hold"
+	AmzObjectLockBypassGovernance = "X-Amz-Bypass-Governance-Retention"
 
 	// Signature V4 related contants.
 	AmzContentSha256        = "X-Amz-Content-Sha256"

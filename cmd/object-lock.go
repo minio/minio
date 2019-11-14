@@ -17,11 +17,17 @@
 package cmd
 
 import (
+	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
+
+	xhttp "github.com/minio/minio/cmd/http"
 )
 
 // RetentionMode - object retention mode.
@@ -33,6 +39,30 @@ const (
 
 	// Compliance - compliance mode.
 	Compliance RetentionMode = "COMPLIANCE"
+
+	// Invalid - invalid retention mode.
+	Invalid RetentionMode = "Invalid"
+)
+
+func parseRetentionMode(modeStr string) (mode RetentionMode) {
+	switch strings.ToUpper(modeStr) {
+	case "GOVERNANCE":
+		mode = Governance
+	case "COMPLIANCE":
+		mode = Compliance
+	default:
+		mode = Invalid
+	}
+	return mode
+}
+
+var (
+	errMalformedBucketObjectConfig = errors.New("Invalid bucket object lock config")
+	errInvalidRetentionDate        = errors.New("Date must be provided in ISO 8601 format")
+	errPastObjectLockRetainDate    = errors.New("the retain until date must be in the future")
+	errUnknownWORMModeDirective    = errors.New("unknown WORM mode directive")
+	errObjectLockMissingContentMD5 = errors.New("Content-MD5 HTTP header is required for Put Object requests with Object Lock parameters")
+	errObjectLockInvalidHeaders    = errors.New("x-amz-object-lock-retain-until-date and x-amz-object-lock-mode must both be supplied")
 )
 
 // Retention - bucket level retention configuration.
@@ -51,37 +81,36 @@ func (r Retention) Retain(created time.Time) bool {
 	return globalWORMEnabled || created.Add(r.Validity).After(time.Now())
 }
 
-// BucketRetentionConfig - map of bucket and retention configuration.
-type BucketRetentionConfig struct {
+// BucketObjectLockConfig - map of bucket and retention configuration.
+type BucketObjectLockConfig struct {
 	sync.RWMutex
 	retentionMap map[string]Retention
 }
 
 // Set - set retention configuration.
-func (config *BucketRetentionConfig) Set(bucketName string, retention Retention) {
+func (config *BucketObjectLockConfig) Set(bucketName string, retention Retention) {
 	config.Lock()
 	config.retentionMap[bucketName] = retention
 	config.Unlock()
 }
 
 // Get - Get retention configuration.
-func (config *BucketRetentionConfig) Get(bucketName string) (r Retention, ok bool) {
+func (config *BucketObjectLockConfig) Get(bucketName string) (r Retention, ok bool) {
 	config.RLock()
 	defer config.RUnlock()
-
 	r, ok = config.retentionMap[bucketName]
 	return r, ok
 }
 
 // Delete - delete retention configuration.
-func (config *BucketRetentionConfig) Delete(bucketName string) {
+func (config *BucketObjectLockConfig) Delete(bucketName string) {
 	config.Lock()
 	delete(config.retentionMap, bucketName)
 	config.Unlock()
 }
 
-func newBucketRetentionConfig() *BucketRetentionConfig {
-	return &BucketRetentionConfig{
+func newBucketObjectLockConfig() *BucketObjectLockConfig {
+	return &BucketObjectLockConfig{
 		retentionMap: map[string]Retention{},
 	}
 }
@@ -130,12 +159,12 @@ func (dr *DefaultRetention) UnmarshalXML(d *xml.Decoder, start xml.StartElement)
 			return fmt.Errorf("Default retention period must be a positive integer value for 'Days'")
 		}
 		if *retention.Days > maximumRetentionDays {
-			return fmt.Errorf("Default retention period too large for 'Days' %w", *retention.Days)
+			return fmt.Errorf("Default retention period too large for 'Days' %d", *retention.Days)
 		}
 	} else if *retention.Years == 0 {
 		return fmt.Errorf("Default retention period must be a positive integer value for 'Years'")
 	} else if *retention.Years > maximumRetentionYears {
-		return fmt.Errorf("Default retention period too large for 'Years' %w", *retention.Years)
+		return fmt.Errorf("Default retention period too large for 'Years' %d", *retention.Years)
 	}
 
 	*dr = DefaultRetention(retention)
@@ -200,4 +229,254 @@ func newObjectLockConfig() *ObjectLockConfig {
 	return &ObjectLockConfig{
 		ObjectLockEnabled: "Enabled",
 	}
+}
+
+// RetentionDate is a embedded type containing time.Time to unmarshal
+// Date in Retention
+type RetentionDate struct {
+	time.Time
+}
+
+// UnmarshalXML parses date from Expiration and validates date format
+func (rDate *RetentionDate) UnmarshalXML(d *xml.Decoder, startElement xml.StartElement) error {
+	var dateStr string
+	err := d.DecodeElement(&dateStr, &startElement)
+	if err != nil {
+		return err
+	}
+	// While AWS documentation mentions that the date specified
+	// must be present in ISO 8601 format, in reality they allow
+	// users to provide RFC 3339 compliant dates.
+	retDate, err := time.Parse(time.RFC3339, dateStr)
+	if err != nil {
+		return errInvalidRetentionDate
+	}
+
+	*rDate = RetentionDate{retDate}
+	return nil
+}
+
+// MarshalXML encodes expiration date if it is non-zero and encodes
+// empty string otherwise
+func (rDate *RetentionDate) MarshalXML(e *xml.Encoder, startElement xml.StartElement) error {
+	if *rDate == (RetentionDate{time.Time{}}) {
+		return nil
+	}
+	return e.EncodeElement(rDate.Format(time.RFC3339), startElement)
+}
+
+// ObjectRetention specified in
+// https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObjectRetention.html
+type ObjectRetention struct {
+	XMLNS           string        `xml:"xmlns,attr,omitempty"`
+	XMLName         xml.Name      `xml:"Retention"`
+	Mode            RetentionMode `xml:"Mode,omitempty"`
+	RetainUntilDate RetentionDate `xml:"RetainUntilDate,omitempty"`
+}
+
+func parseObjectRetention(reader io.Reader) (*ObjectRetention, error) {
+	ret := ObjectRetention{}
+	if err := xml.NewDecoder(reader).Decode(&ret); err != nil {
+		return nil, err
+	}
+	if ret.Mode != Compliance && ret.Mode != Governance {
+		return &ret, errUnknownWORMModeDirective
+	}
+	if ret.RetainUntilDate.Before(time.Now()) {
+		return &ret, errPastObjectLockRetainDate
+	}
+	return &ret, nil
+}
+
+func isObjectLockRetentionRequested(h http.Header) bool {
+	if _, ok := h[xhttp.AmzObjectLockMode]; ok {
+		return true
+	}
+	if _, ok := h[xhttp.AmzObjectLockRetainUntilDate]; ok {
+		return true
+	}
+	return false
+}
+
+func isObjectLockLegalHoldRequested(h http.Header) bool {
+	_, ok := h[xhttp.AmzObjectLockLegalHold]
+	return ok
+}
+
+func isObjectLockGovernanceBypassSet(h http.Header) bool {
+	v, ok := h[xhttp.AmzObjectLockBypassGovernance]
+	if !ok {
+		return false
+	}
+	val := strings.Join(v, "")
+	return strings.ToLower(val) == "true"
+}
+
+func isObjectLockRequested(h http.Header) bool {
+	return isObjectLockLegalHoldRequested(h) || isObjectLockRetentionRequested(h)
+}
+
+func parseObjectLockRetentionHeaders(h http.Header) (rmode RetentionMode, r RetentionDate, err error) {
+	retMode, ok := h[xhttp.AmzObjectLockMode]
+	if ok {
+		rmode = parseRetentionMode(strings.Join(retMode, ""))
+		if rmode == Invalid {
+			return rmode, r, errUnknownWORMModeDirective
+		}
+	}
+	var retDate time.Time
+	dateStr, ok := h[xhttp.AmzObjectLockRetainUntilDate]
+	if ok {
+		// While AWS documentation mentions that the date specified
+		// must be present in ISO 8601 format, in reality they allow
+		// users to provide RFC 3339 compliant dates.
+		retDate, err = time.Parse(time.RFC3339, strings.Join(dateStr, ""))
+		if err != nil {
+			return rmode, r, errInvalidRetentionDate
+		}
+		if retDate.Before(time.Now()) {
+			return rmode, r, errPastObjectLockRetainDate
+		}
+	}
+	if len(retMode) == 0 || len(dateStr) == 0 {
+		return rmode, r, errObjectLockInvalidHeaders
+	}
+	return rmode, RetentionDate{retDate}, nil
+
+}
+
+func getObjectRetentionMeta(meta map[string]string) ObjectRetention {
+	var mode RetentionMode
+	var retainTill RetentionDate
+	if modeStr, ok := meta[strings.ToLower(xhttp.AmzObjectLockMode)]; ok {
+		mode = parseRetentionMode(modeStr)
+	}
+	if tillStr, ok := meta[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)]; ok {
+		if t, e := time.Parse(time.RFC3339, tillStr); e == nil {
+			retainTill = RetentionDate{t.UTC()}
+		}
+	}
+	return ObjectRetention{Mode: mode, RetainUntilDate: retainTill}
+}
+
+// checkGovernanceBypassAllowed enforces whether an existing object under governance can be overwritten
+// with governance bypass headers set in the request.
+// Objects under site wide WORM or those in "Compliance" mode can never be overwritten.
+// For objects in "Governance" mode, overwrite is allowed if a) object retention date is past OR
+// governance bypass headers are set and user has governance bypass permissions.
+func checkGovernanceBypassAllowed(ctx context.Context, r *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn, govBypassPerm APIErrorCode) (oi ObjectInfo, s3Err APIErrorCode) {
+	var err error
+	var opts ObjectOptions
+	opts, err = getOpts(ctx, r, bucket, object)
+	if err != nil {
+		return oi, toAPIErrorCode(ctx, err)
+	}
+	oi, err = getObjectInfoFn(ctx, bucket, object, opts)
+	if err != nil {
+		// ignore case where object no longer exists
+		if toAPIError(ctx, err).Code == "NoSuchKey" {
+			return oi, ErrNone
+		}
+		return oi, toAPIErrorCode(ctx, err)
+	}
+	ret := getObjectRetentionMeta(oi.UserDefined)
+	if globalWORMEnabled || ret.Mode == Compliance {
+		return oi, ErrObjectLocked
+	}
+	// Here bucket does not support object lock
+	if ret.Mode == Invalid && isObjectLockGovernanceBypassSet(r.Header) {
+		return oi, ErrInvalidBucketObjectLockConfiguration
+	}
+	if ret.Mode == Compliance {
+		return oi, ErrObjectLocked
+	}
+	if ret.Mode == Governance {
+		if !isObjectLockGovernanceBypassSet(r.Header) {
+			if ret.RetainUntilDate.After(UTCNow()) {
+				return oi, ErrObjectLocked
+			}
+			return oi, ErrNone
+		}
+		if govBypassPerm != ErrNone {
+			return oi, ErrAccessDenied
+		}
+	}
+	return oi, ErrNone
+}
+
+// checkPutObjectRetentionAllowed enforces object retention policy for requests with WORM headers
+// See https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lock-managing.html for the spec.
+// For non-existing objects with object retention headers set, this method returns ErrNone if bucket has
+// locking enabled and user has requisite permissions (s3:PutObjectRetention)
+// If object exists on object store, if retention mode is "Compliance" or site wide WORM enabled -this method
+// returns an error. For objects in "Governance" mode, overwrite is allowed if the retention date has expired.
+func checkPutObjectRetentionAllowed(ctx context.Context, r *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn, retentionPermErr APIErrorCode) (RetentionMode, RetentionDate, APIErrorCode) {
+	var mode RetentionMode
+	var retainDate RetentionDate
+	retention, isWORMBucket := isWORMEnabled(bucket)
+
+	retentionRequested := isObjectLockRequested(r.Header)
+
+	var objExists bool
+	opts, err := getOpts(ctx, r, bucket, object)
+	if err != nil {
+		return mode, retainDate, toAPIErrorCode(ctx, err)
+	}
+	if objInfo, err := getObjectInfoFn(ctx, bucket, object, opts); err == nil {
+		objExists = true
+		r := getObjectRetentionMeta(objInfo.UserDefined)
+		if globalWORMEnabled || r.Mode == Compliance {
+			return mode, retainDate, ErrObjectLocked
+		}
+		mode = r.Mode
+		retainDate = r.RetainUntilDate
+	}
+	if retentionRequested {
+		if !isWORMBucket {
+			return mode, retainDate, ErrInvalidBucketObjectLockConfiguration
+		}
+		rMode, rDate, err := parseObjectLockRetentionHeaders(r.Header)
+		if err != nil {
+			return mode, retainDate, toAPIErrorCode(ctx, err)
+		}
+		// AWS S3 just creates a new version of object when an object is being overwritten.
+		if objExists && retainDate.After(UTCNow()) {
+			return mode, retainDate, ErrObjectLocked
+		}
+		if rMode == Invalid {
+			return mode, retainDate, toAPIErrorCode(ctx, errObjectLockInvalidHeaders)
+		}
+		if retentionPermErr != ErrNone {
+			return mode, retainDate, retentionPermErr
+		}
+		return rMode, rDate, ErrNone
+	}
+	if !retentionRequested && isWORMBucket && !retention.IsEmpty() {
+		if retentionPermErr != ErrNone {
+			return mode, retainDate, retentionPermErr
+		}
+		// AWS S3 just creates a new version of object when an object is being overwritten.
+		if objExists && retainDate.After(UTCNow()) {
+			return mode, retainDate, ErrObjectLocked
+		}
+		// inherit retention from bucket configuration
+		return retention.Mode, RetentionDate{UTCNow().Add(retention.Validity)}, ErrNone
+	}
+	return mode, retainDate, ErrNone
+}
+
+// filter object lock metadata if s3:GetObjectRetention permission is denied or if isCopy flag set.
+func filterObjectLockMetadata(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string, isCopy bool, getRetPerms APIErrorCode) map[string]string {
+	ret := getObjectRetentionMeta(metadata)
+	if ret.Mode == Invalid || isCopy {
+		delete(metadata, xhttp.AmzObjectLockMode)
+		delete(metadata, xhttp.AmzObjectLockRetainUntilDate)
+		return metadata
+	}
+	if getRetPerms == ErrNone {
+		return metadata
+	}
+	delete(metadata, xhttp.AmzObjectLockMode)
+	delete(metadata, xhttp.AmzObjectLockRetainUntilDate)
+	return metadata
 }
