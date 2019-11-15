@@ -1215,10 +1215,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
-
+	getObjectInfo := objectAPI.GetObjectInfo
+	if api.CacheAPI() != nil {
+		getObjectInfo = api.CacheAPI().GetObjectInfo
+		putObject = api.CacheAPI().PutObject
+	}
 	// Deny if WORM is enabled
 	if retention, isWORMBucket := isWORMEnabled(bucket); isWORMBucket {
-		if oi, err := objectAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil && retention.Retain(oi.ModTime) {
+		if oi, err := getObjectInfo(ctx, bucket, object, opts); err == nil && retention.Retain(oi.ModTime) {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
 			return
 		}
