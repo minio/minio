@@ -145,6 +145,9 @@ var (
 		target.NATSStreamingClusterID:          "Unique ID for the NATS streaming cluster",
 		target.NATSQueueLimit:                  "Enable persistent event store queue limit, defaults to '10000'",
 		target.NATSQueueDir:                    "Local directory where events are stored eg: '/home/events'",
+		target.NATSCertAuthority:               "Certificate chain of the target NATS server if self signed certs were used",
+		target.NATSClientCert:                  "TLS Cert used to authenticate against NATS configured to require client certificates",
+		target.NATSClientKey:                   "TLS Key used to authenticate against NATS configured to require client certificates",
 	}
 
 	HelpNSQ = config.HelpKV{

@@ -707,6 +707,9 @@ var (
 		target.NATSUsername:                    "",
 		target.NATSPassword:                    "",
 		target.NATSToken:                       "",
+		target.NATSCertAuthority:               "",
+		target.NATSClientCert:                  "",
+		target.NATSClientKey:                   "",
 		target.NATSSecure:                      config.StateOff,
 		target.NATSPingInterval:                "0",
 		target.NATSQueueLimit:                  "0",
@@ -795,17 +798,35 @@ func GetNotifyNATS(natsKVS map[string]config.KVS) (map[string]target.NATSArgs, e
 			queueDirEnv = queueDirEnv + config.Default + k
 		}
 
+		certAuthorityEnv := target.EnvNATSCertAuthority
+		if k != config.Default {
+			certAuthorityEnv = certAuthorityEnv + config.Default + k
+		}
+
+		clientCertEnv := target.EnvNATSClientCert
+		if k != config.Default {
+			clientCertEnv = clientCertEnv + config.Default + k
+		}
+
+		clientKeyEnv := target.EnvNATSClientKey
+		if k != config.Default {
+			clientKeyEnv = clientKeyEnv + config.Default + k
+		}
+
 		natsArgs := target.NATSArgs{
-			Enable:       true,
-			Address:      *address,
-			Subject:      env.Get(subjectEnv, kv.Get(target.NATSSubject)),
-			Username:     env.Get(usernameEnv, kv.Get(target.NATSUsername)),
-			Password:     env.Get(passwordEnv, kv.Get(target.NATSPassword)),
-			Token:        env.Get(tokenEnv, kv.Get(target.NATSToken)),
-			Secure:       env.Get(secureEnv, kv.Get(target.NATSSecure)) == config.StateOn,
-			PingInterval: pingInterval,
-			QueueDir:     env.Get(queueDirEnv, kv.Get(target.NATSQueueDir)),
-			QueueLimit:   queueLimit,
+			Enable:        true,
+			Address:       *address,
+			Subject:       env.Get(subjectEnv, kv.Get(target.NATSSubject)),
+			Username:      env.Get(usernameEnv, kv.Get(target.NATSUsername)),
+			Password:      env.Get(passwordEnv, kv.Get(target.NATSPassword)),
+			CertAuthority: env.Get(certAuthorityEnv, kv.Get(target.NATSCertAuthority)),
+			ClientCert:    env.Get(clientCertEnv, kv.Get(target.NATSClientCert)),
+			ClientKey:     env.Get(clientKeyEnv, kv.Get(target.NATSClientKey)),
+			Token:         env.Get(tokenEnv, kv.Get(target.NATSToken)),
+			Secure:        env.Get(secureEnv, kv.Get(target.NATSSecure)) == config.StateOn,
+			PingInterval:  pingInterval,
+			QueueDir:      env.Get(queueDirEnv, kv.Get(target.NATSQueueDir)),
+			QueueLimit:    queueLimit,
 		}
 
 		streamingEnableEnv := target.EnvNATSStreaming
