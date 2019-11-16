@@ -28,7 +28,6 @@ func SetNotifyKafka(s config.Config, kName string, cfg target.KafkaArgs) error {
 			}
 			return strings.Join(brokers, config.ValueSeparator)
 		}(),
-		config.Comment:            "Settings for Kafka notification, after migrating config",
 		target.KafkaTopic:         cfg.Topic,
 		target.KafkaQueueDir:      cfg.QueueDir,
 		target.KafkaQueueLimit:    strconv.Itoa(int(cfg.QueueLimit)),
@@ -54,7 +53,6 @@ func SetNotifyAMQP(s config.Config, amqpName string, cfg target.AMQPArgs) error 
 
 	s[config.NotifyAMQPSubSys][amqpName] = config.KVS{
 		config.State:            config.StateOn,
-		config.Comment:          "Settings for AMQP notification, after migrating config",
 		target.AmqpURL:          cfg.URL.String(),
 		target.AmqpExchange:     cfg.Exchange,
 		target.AmqpRoutingKey:   cfg.RoutingKey,
@@ -84,7 +82,6 @@ func SetNotifyES(s config.Config, esName string, cfg target.ElasticsearchArgs) e
 
 	s[config.NotifyESSubSys][esName] = config.KVS{
 		config.State:             config.StateOn,
-		config.Comment:           "Settings for Elasticsearch notification, after migrating config",
 		target.ElasticFormat:     cfg.Format,
 		target.ElasticURL:        cfg.URL.String(),
 		target.ElasticIndex:      cfg.Index,
@@ -107,7 +104,6 @@ func SetNotifyRedis(s config.Config, redisName string, cfg target.RedisArgs) err
 
 	s[config.NotifyRedisSubSys][redisName] = config.KVS{
 		config.State:           config.StateOn,
-		config.Comment:         "Settings for Redis notification, after migrating config",
 		target.RedisFormat:     cfg.Format,
 		target.RedisAddress:    cfg.Addr.String(),
 		target.RedisPassword:   cfg.Password,
@@ -131,7 +127,6 @@ func SetNotifyWebhook(s config.Config, whName string, cfg target.WebhookArgs) er
 
 	s[config.NotifyWebhookSubSys][whName] = config.KVS{
 		config.State:             config.StateOn,
-		config.Comment:           "Settings for Webhook notification, after migrating config",
 		target.WebhookEndpoint:   cfg.Endpoint.String(),
 		target.WebhookAuthToken:  cfg.AuthToken,
 		target.WebhookQueueDir:   cfg.QueueDir,
@@ -153,7 +148,6 @@ func SetNotifyPostgres(s config.Config, psqName string, cfg target.PostgreSQLArg
 
 	s[config.NotifyPostgresSubSys][psqName] = config.KVS{
 		config.State:                    config.StateOn,
-		config.Comment:                  "Settings for Postgres notification, after migrating config",
 		target.PostgresFormat:           cfg.Format,
 		target.PostgresConnectionString: cfg.ConnectionString,
 		target.PostgresTable:            cfg.Table,
@@ -181,7 +175,6 @@ func SetNotifyNSQ(s config.Config, nsqName string, cfg target.NSQArgs) error {
 
 	s[config.NotifyNSQSubSys][nsqName] = config.KVS{
 		config.State:            config.StateOn,
-		config.Comment:          "Settings for NSQ notification, after migrating config",
 		target.NSQAddress:       cfg.NSQDAddress.String(),
 		target.NSQTopic:         cfg.Topic,
 		target.NSQTLS:           config.FormatBool(cfg.TLS.Enable),
@@ -205,7 +198,6 @@ func SetNotifyNATS(s config.Config, natsName string, cfg target.NATSArgs) error 
 
 	s[config.NotifyNATSSubSys][natsName] = config.KVS{
 		config.State:             config.StateOn,
-		config.Comment:           "Settings for NATS notification, after migrating config",
 		target.NATSAddress:       cfg.Address.String(),
 		target.NATSSubject:       cfg.Subject,
 		target.NATSUsername:      cfg.Username,
@@ -244,7 +236,6 @@ func SetNotifyMySQL(s config.Config, sqlName string, cfg target.MySQLArgs) error
 
 	s[config.NotifyMySQLSubSys][sqlName] = config.KVS{
 		config.State:           config.StateOn,
-		config.Comment:         "Settings for MySQL notification, after migrating config",
 		target.MySQLFormat:     cfg.Format,
 		target.MySQLDSNString:  cfg.DSN,
 		target.MySQLTable:      cfg.Table,
@@ -272,7 +263,6 @@ func SetNotifyMQTT(s config.Config, mqttName string, cfg target.MQTTArgs) error 
 
 	s[config.NotifyMQTTSubSys][mqttName] = config.KVS{
 		config.State:                 config.StateOn,
-		config.Comment:               "Settings for MQTT notification, after migrating config",
 		target.MqttBroker:            cfg.Broker.String(),
 		target.MqttTopic:             cfg.Topic,
 		target.MqttQoS:               fmt.Sprintf("%d", cfg.QoS),

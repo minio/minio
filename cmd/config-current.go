@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -288,7 +289,11 @@ var helpMap = map[string]config.HelpKV{
 // GetHelp - returns help for sub-sys, a key for a sub-system or all the help.
 func GetHelp(subSys, key string, envOnly bool) (config.HelpKV, error) {
 	if len(subSys) == 0 {
-		return nil, config.Error("no help available for empty sub-system inputs")
+		help := config.HelpKV{}
+		for _, subSys := range config.SubSystems.ToSlice() {
+			help[subSys] = fmt.Sprintf("Specify sub-sys '%s' to get further help", subSys)
+		}
+		return help, nil
 	}
 	subSystemValue := strings.SplitN(subSys, config.SubSystemSeparator, 2)
 	if len(subSystemValue) == 0 {
