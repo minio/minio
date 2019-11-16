@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -261,7 +260,112 @@ func lookupConfigs(s config.Config) (err error) {
 	return nil
 }
 
-var helpMap = map[string]config.HelpKV{
+// Captures help for each sub-system
+var helpSubSys = config.HelpKVS{
+	config.HelpKV{
+		Key:         config.RegionSubSys,
+		Description: "Configure to describe the physical location of the server",
+	},
+	config.HelpKV{
+		Key:         config.WormSubSys,
+		Description: "Configure to enable WORM mode, turns-off any overwrites and deletes of content",
+	},
+	config.HelpKV{
+		Key:         config.StorageClassSubSys,
+		Description: "Configure to control data and parity per object",
+	},
+	config.HelpKV{
+		Key:         config.CacheSubSys,
+		Description: "Configure to enable edge caching",
+	},
+	config.HelpKV{
+		Key:         config.CompressionSubSys,
+		Description: "Configure to enable streaming on disk compression",
+	},
+	config.HelpKV{
+		Key:         config.EtcdSubSys,
+		Description: "Configure to enable 'etcd' configuration",
+	},
+	config.HelpKV{
+		Key:         config.IdentityOpenIDSubSys,
+		Description: "Configure to enable OpenID SSO support",
+	},
+	config.HelpKV{
+		Key:         config.IdentityLDAPSubSys,
+		Description: "Configure to enable LDAP SSO support",
+	},
+	config.HelpKV{
+		Key:         config.PolicyOPASubSys,
+		Description: "Configure to enable external OPA policy support",
+	},
+	config.HelpKV{
+		Key:         config.KmsVaultSubSys,
+		Description: "Configure to enable Vault based external KMS",
+	},
+	config.HelpKV{
+		Key:             config.LoggerWebhookSubSys,
+		Description:     "Configure to enable Webhook based logger",
+		MultipleTargets: true,
+	},
+	config.HelpKV{
+		Key:             config.AuditWebhookSubSys,
+		Description:     "Configure to enable Webhook based audit logger",
+		MultipleTargets: true,
+	},
+
+	config.HelpKV{
+		Key:             config.NotifyWebhookSubSys,
+		Description:     "Configure to publish events to Webhook target",
+		MultipleTargets: true,
+	},
+	config.HelpKV{
+		Key:             config.NotifyAMQPSubSys,
+		Description:     "Configure to publish events to AMQP target",
+		MultipleTargets: true,
+	},
+	config.HelpKV{
+		Key:             config.NotifyKafkaSubSys,
+		Description:     "Configure to publish events to Kafka target",
+		MultipleTargets: true,
+	},
+	config.HelpKV{
+		Key:             config.NotifyMQTTSubSys,
+		Description:     "Configure to publish events to MQTT target",
+		MultipleTargets: true,
+	},
+	config.HelpKV{
+		Key:             config.NotifyNATSSubSys,
+		Description:     "Configure to publish events to NATS target",
+		MultipleTargets: true,
+	},
+	config.HelpKV{
+		Key:             config.NotifyNSQSubSys,
+		Description:     "Configure to publish events to NSQ target",
+		MultipleTargets: true,
+	},
+	config.HelpKV{
+		Key:             config.NotifyMySQLSubSys,
+		Description:     "Configure to publish events to MySQL target",
+		MultipleTargets: true,
+	},
+	config.HelpKV{
+		Key:             config.NotifyPostgresSubSys,
+		Description:     "Configure to publish events to Postgres target",
+		MultipleTargets: true,
+	},
+	config.HelpKV{
+		Key:             config.NotifyRedisSubSys,
+		Description:     "Configure to publish events to Redis target",
+		MultipleTargets: true,
+	},
+	config.HelpKV{
+		Key:             config.NotifyESSubSys,
+		Description:     "Configure to publish events to Elasticsearch target",
+		MultipleTargets: true,
+	},
+}
+
+var helpMap = map[string]config.HelpKVS{
 	config.RegionSubSys:         config.RegionHelp,
 	config.WormSubSys:           config.WormHelp,
 	config.EtcdSubSys:           etcd.Help,
@@ -286,47 +390,66 @@ var helpMap = map[string]config.HelpKV{
 	config.NotifyESSubSys:       notify.HelpES,
 }
 
+// Help - return sub-system level help
+type Help struct {
+	SubSys          string         `json:"subSys"`
+	Description     string         `json:"description"`
+	MultipleTargets bool           `json:"multipleTargets"`
+	KeysHelp        config.HelpKVS `json:"keysHelp"`
+}
+
 // GetHelp - returns help for sub-sys, a key for a sub-system or all the help.
-func GetHelp(subSys, key string, envOnly bool) (config.HelpKV, error) {
+func GetHelp(subSys, key string, envOnly bool) (Help, error) {
 	if len(subSys) == 0 {
-		help := config.HelpKV{}
-		for _, subSys := range config.SubSystems.ToSlice() {
-			help[subSys] = fmt.Sprintf("Specify sub-sys '%s' to get further help", subSys)
-		}
-		return help, nil
+		return Help{KeysHelp: helpSubSys}, nil
 	}
 	subSystemValue := strings.SplitN(subSys, config.SubSystemSeparator, 2)
 	if len(subSystemValue) == 0 {
-		return nil, config.Errorf("invalid number of arguments %s", subSys)
+		return Help{}, config.Errorf("invalid number of arguments %s", subSys)
 	}
 
 	if !config.SubSystems.Contains(subSystemValue[0]) {
-		return nil, config.Errorf("unknown sub-system %s", subSys)
+		return Help{}, config.Errorf("unknown sub-system %s", subSys)
 	}
 
-	help := helpMap[subSystemValue[0]]
+	h := helpMap[subSystemValue[0]]
 	if key != "" {
-		value, ok := help[key]
+		value, ok := h.Lookup(key)
 		if !ok {
-			return nil, config.Errorf("unknown key %s for sub-system %s", key, subSys)
+			return Help{}, config.Errorf("unknown key %s for sub-system %s", key, subSys)
 		}
-		help = config.HelpKV{
-			key: value,
-		}
+		h = config.HelpKVS{value}
 	}
 
-	envHelp := config.HelpKV{}
+	subSys = subSystemValue[0]
+
+	envHelp := config.HelpKVS{}
 	if envOnly {
-		for k, v := range help {
+		for _, hkv := range h {
 			envK := config.EnvPrefix + strings.Join([]string{
-				strings.ToTitle(subSys), strings.ToTitle(k),
+				strings.ToTitle(subSys), strings.ToTitle(hkv.Key),
 			}, config.EnvWordDelimiter)
-			envHelp[envK] = v
+			envHelp = append(envHelp, config.HelpKV{
+				Key:         envK,
+				Description: hkv.Description,
+				Optional:    hkv.Optional,
+				Type:        hkv.Type,
+			})
 		}
-		help = envHelp
+		h = envHelp
 	}
 
-	return help, nil
+	subSysHelp, ok := helpSubSys.Lookup(subSys)
+	if !ok {
+		return Help{}, config.Errorf("unknown sub-system %s", subSys)
+	}
+
+	return Help{
+		SubSys:          subSys,
+		Description:     subSysHelp.Description,
+		MultipleTargets: subSysHelp.MultipleTargets,
+		KeysHelp:        h,
+	}, nil
 }
 
 func newServerConfig() config.Config {
