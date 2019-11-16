@@ -71,6 +71,9 @@ type cacheObjects struct {
 	// mutex to protect migration bool
 	migMutex sync.Mutex
 
+	// nsMutex namespace lock
+	nsMutex *nsLockMap
+
 	// Object functions pointing to the corresponding functions of backend implementation.
 	NewNSLockFn      func(ctx context.Context, bucket, object string) RWLocker
 	GetObjectNInfoFn func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error)
@@ -566,9 +569,7 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 		exclude:   config.Exclude,
 		migrating: migrateSw,
 		migMutex:  sync.Mutex{},
-		NewNSLockFn: func(ctx context.Context, bucket, object string) RWLocker {
-			return globalObjectAPI.NewNSLock(ctx, bucket, object)
-		},
+		nsMutex:   newNSLock(false),
 		GetObjectInfoFn: func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 			return newObjectLayerFn().GetObjectInfo(ctx, bucket, object, opts)
 		},
@@ -589,6 +590,10 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 			return newObjectLayerFn().PutObject(ctx, bucket, object, data, opts)
 		},
 	}
+	c.NewNSLockFn = func(ctx context.Context, bucket, object string) RWLocker {
+		return c.nsMutex.NewNSLock(ctx, nil, bucket, object)
+	}
+
 	if migrateSw {
 		go c.migrateCacheFromV1toV2(ctx)
 	}

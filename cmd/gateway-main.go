@@ -291,6 +291,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// - compression
 	verifyObjectLayerFeatures("gateway "+gatewayName, newObject)
 
+	// Disable safe mode operation, after all initialization is over.
+	globalObjLayerMutex.Lock()
+	globalSafeMode = false
+	globalObjLayerMutex.Unlock()
+
 	// Prints the formatted startup message once object layer is initialized.
 	if !globalCLIContext.Quiet {
 		mode := globalMinioModeGatewayPrefix + gatewayName
@@ -305,11 +310,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// Print gateway startup message.
 		printGatewayStartupMessage(getAPIEndpoints(), gatewayName)
 	}
-
-	// Disable safe mode operation, after all initialization is over.
-	globalObjLayerMutex.Lock()
-	globalSafeMode = false
-	globalObjLayerMutex.Unlock()
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = UTCNow()
