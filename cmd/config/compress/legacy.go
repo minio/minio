@@ -35,9 +35,8 @@ func SetCompressionConfig(s config.Config, cfg Config) {
 		return
 	}
 	s[config.CompressionSubSys][config.Default] = config.KVS{
-		config.State:   config.StateOn,
-		config.Comment: "Settings for Compression, after migrating config",
-		Extensions:     strings.Join(cfg.Extensions, config.ValueSeparator),
-		MimeTypes:      strings.Join(cfg.MimeTypes, config.ValueSeparator),
+		config.State: config.StateOn,
+		Extensions:   strings.Join(cfg.Extensions, config.ValueSeparator),
+		MimeTypes:    strings.Join(cfg.MimeTypes, config.ValueSeparator),
 	}
 }

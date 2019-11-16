@@ -97,7 +97,6 @@ func SetKMSConfig(s config.Config, cfg KMSConfig) {
 		KMSVaultKeyVersion:    strconv.Itoa(cfg.Vault.Key.Version),
 		KMSVaultNamespace:     cfg.Vault.Namespace,
 		config.State:          config.StateOn,
-		config.Comment:        "Settings for KMS Vault, after migrating config",
 	}
 }
 

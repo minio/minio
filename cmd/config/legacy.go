@@ -32,7 +32,6 @@ func SetCredentials(c Config, cred auth.Credentials) {
 	}
 	c[CredentialsSubSys][Default] = KVS{
 		State:     StateOn,
-		Comment:   "Settings for credentials, after migrating config",
 		AccessKey: cred.AccessKey,
 		SecretKey: cred.SecretKey,
 	}
@@ -46,7 +45,6 @@ func SetRegion(c Config, name string) {
 	c[RegionSubSys][Default] = KVS{
 		RegionName: name,
 		State:      StateOn,
-		Comment:    "Settings for Region, after migrating config",
 	}
 }
 
@@ -58,7 +56,6 @@ func SetWorm(c Config, b bool) {
 	}
 	// Set the new value.
 	c[WormSubSys][Default] = KVS{
-		State:   StateOn,
-		Comment: "Settings for WORM, after migrating config",
+		State: StateOn,
 	}
 }

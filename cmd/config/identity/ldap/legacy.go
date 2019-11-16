@@ -26,7 +26,6 @@ func SetIdentityLDAP(s config.Config, ldapArgs Config) {
 	}
 	s[config.IdentityLDAPSubSys][config.Default] = config.KVS{
 		config.State:       config.StateOn,
-		config.Comment:     "Settings for LDAP, after migrating config",
 		ServerAddr:         ldapArgs.ServerAddr,
 		STSExpiry:          ldapArgs.STSExpiryDuration,
 		UsernameFormat:     ldapArgs.UsernameFormat,

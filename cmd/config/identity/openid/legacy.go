@@ -30,10 +30,9 @@ func SetIdentityOpenID(s config.Config, cfg Config) {
 		return
 	}
 	s[config.IdentityOpenIDSubSys][config.Default] = config.KVS{
-		config.State:   config.StateOn,
-		config.Comment: "Settings for OpenID, after migrating config",
-		JwksURL:        cfg.JWKS.URL.String(),
-		ConfigURL:      "",
-		ClaimPrefix:    "",
+		config.State: config.StateOn,
+		JwksURL:      cfg.JWKS.URL.String(),
+		ConfigURL:    "",
+		ClaimPrefix:  "",
 	}
 }

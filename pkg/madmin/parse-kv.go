@@ -46,6 +46,9 @@ func (kvs KVS) String() string {
 		if k == stateKey && v == stateOn {
 			continue
 		}
+		if k == commentKey && v == "" {
+			continue
+		}
 		s.WriteString(k)
 		s.WriteString(KvSeparator)
 		spc := hasSpace(v)
@@ -95,7 +98,6 @@ func (t Targets) String() string {
 			s.WriteString(KvSpaceSeparator)
 			s.WriteString(kv.String())
 			if (len(t) > 1 || len(targetKV) > 1) && count > 0 {
-				s.WriteString(KvNewline)
 				s.WriteString(KvNewline)
 			}
 		}

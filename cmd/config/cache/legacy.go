@@ -35,5 +35,4 @@ func SetCacheConfig(s config.Config, cfg Config) {
 	s[config.CacheSubSys][config.Default][Expiry] = fmt.Sprintf("%d", cfg.Expiry)
 	s[config.CacheSubSys][config.Default][Quota] = fmt.Sprintf("%d", cfg.MaxUse)
 	s[config.CacheSubSys][config.Default][config.State] = config.StateOn
-	s[config.CacheSubSys][config.Default][config.Comment] = "Settings for Cache, after migrating config"
 }

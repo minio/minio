@@ -30,10 +30,9 @@ func SetLoggerHTTPAudit(scfg config.Config, k string, args HTTP) {
 		return
 	}
 	scfg[config.AuditWebhookSubSys][k] = config.KVS{
-		config.State:   config.StateOn,
-		config.Comment: "Settings for Webhook Audit logging, after migrating config",
-		Endpoint:       args.Endpoint,
-		AuthToken:      args.AuthToken,
+		config.State: config.StateOn,
+		Endpoint:     args.Endpoint,
+		AuthToken:    args.AuthToken,
 	}
 }
 
@@ -45,9 +44,8 @@ func SetLoggerHTTP(scfg config.Config, k string, args HTTP) {
 	}
 
 	scfg[config.LoggerWebhookSubSys][k] = config.KVS{
-		config.State:   config.StateOn,
-		config.Comment: "Settings for Webhook logging, after migrating config",
-		Endpoint:       args.Endpoint,
-		AuthToken:      args.AuthToken,
+		config.State: config.StateOn,
+		Endpoint:     args.Endpoint,
+		AuthToken:    args.AuthToken,
 	}
 }
