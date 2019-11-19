@@ -145,7 +145,7 @@ func (action Action) IsValid() bool {
 
 // MarshalJSON - encodes Action to JSON data.
 func (action Action) MarshalJSON() ([]byte, error) {
-	if action.IsValid() {
+	if action.IsValid() || AdminAction(action).IsValid() {
 		return json.Marshal(string(action))
 	}
 
@@ -171,6 +171,10 @@ func (action *Action) UnmarshalJSON(data []byte) error {
 }
 
 func parseAction(s string) (Action, error) {
+	adminAction, err := parseAdminAction(s)
+	if err == nil {
+		return Action(adminAction), nil
+	}
 	action := Action(s)
 
 	if action.IsValid() {

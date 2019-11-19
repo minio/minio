@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/auth"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 )
 
 // Test get request auth type.
@@ -419,7 +420,7 @@ func TestCheckAdminRequestAuthType(t *testing.T) {
 	}
 	ctx := context.Background()
 	for i, testCase := range testCases {
-		if s3Error := checkAdminRequestAuthType(ctx, testCase.Request, globalServerRegion); s3Error != testCase.ErrCode {
+		if _, s3Error := checkAdminRequestAuthType(ctx, testCase.Request, iampolicy.AllAdminActions, globalServerRegion); s3Error != testCase.ErrCode {
 			t.Errorf("Test %d: Unexpected s3error returned wanted %d, got %d", i, testCase.ErrCode, s3Error)
 		}
 	}

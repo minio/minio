@@ -29,6 +29,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -41,7 +42,7 @@ func validateAdminReqConfigKV(ctx context.Context, w http.ResponseWriter, r *htt
 	}
 
 	// Validate request signature.
-	adminAPIErr := checkAdminRequestAuthType(ctx, r, "")
+	_, adminAPIErr := checkAdminRequestAuthType(ctx, r, iampolicy.ConfigUpdateAdminAction, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return nil

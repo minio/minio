@@ -25,33 +25,37 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 )
 
-func validateAdminUsersReq(ctx context.Context, w http.ResponseWriter, r *http.Request) ObjectLayer {
+func validateAdminUsersReq(ctx context.Context, w http.ResponseWriter, r *http.Request, action iampolicy.AdminAction) (ObjectLayer, auth.Credentials) {
+	var cred auth.Credentials
+	var adminAPIErr APIErrorCode
+
 	// Get current object layer instance.
 	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil || globalNotificationSys == nil || globalIAMSys == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return nil
+		return nil, cred
 	}
 
 	// Validate request signature.
-	adminAPIErr := checkAdminRequestAuthType(ctx, r, "")
+	cred, adminAPIErr = checkAdminRequestAuthType(ctx, r, action, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
-		return nil
+		return nil, cred
 	}
 
-	return objectAPI
+	return objectAPI, cred
 }
 
 // RemoveUser - DELETE /minio/admin/v2/remove-user?accessKey=<access_key>
 func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "RemoveUser")
 
-	objectAPI := validateAdminUsersReq(ctx, w, r)
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.DeleteUserAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -83,7 +87,7 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListUsers")
 
-	objectAPI := validateAdminUsersReq(ctx, w, r)
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.ListUsersAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -114,7 +118,7 @@ func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetUserInfo")
 
-	objectAPI := validateAdminUsersReq(ctx, w, r)
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.GetUserAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -141,7 +145,7 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "UpdateGroupMembers")
 
-	objectAPI := validateAdminUsersReq(ctx, w, r)
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.AddUserToGroupAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -184,7 +188,7 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) GetGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetGroup")
 
-	objectAPI := validateAdminUsersReq(ctx, w, r)
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.GetGroupAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -211,7 +215,7 @@ func (a adminAPIHandlers) GetGroup(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) ListGroups(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListGroups")
 
-	objectAPI := validateAdminUsersReq(ctx, w, r)
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.ListGroupsAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -235,7 +239,7 @@ func (a adminAPIHandlers) ListGroups(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetGroupStatus")
 
-	objectAPI := validateAdminUsersReq(ctx, w, r)
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.EnableGroupAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -270,7 +274,7 @@ func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request)
 func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetUserStatus")
 
-	objectAPI := validateAdminUsersReq(ctx, w, r)
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.EnableUserAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -309,7 +313,7 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AddUser")
 
-	objectAPI := validateAdminUsersReq(ctx, w, r)
+	objectAPI, cred := validateAdminUsersReq(ctx, w, r, iampolicy.CreateUserAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -335,7 +339,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	password := globalActiveCred.SecretKey
+	password := cred.SecretKey
 	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -368,7 +372,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) InfoCannedPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "InfoCannedPolicy")
 
-	objectAPI := validateAdminUsersReq(ctx, w, r)
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.GetPolicyAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -387,7 +391,7 @@ func (a adminAPIHandlers) InfoCannedPolicy(w http.ResponseWriter, r *http.Reques
 func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListCannedPolicies")
 
-	objectAPI := validateAdminUsersReq(ctx, w, r)
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.ListUserPoliciesAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -410,7 +414,7 @@ func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "RemoveCannedPolicy")
 
-	objectAPI := validateAdminUsersReq(ctx, w, r)
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.DeletePolicyAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -442,7 +446,7 @@ func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AddCannedPolicy")
 
-	objectAPI := validateAdminUsersReq(ctx, w, r)
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.CreatePolicyAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -498,7 +502,7 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetPolicyForUserOrGroup")
 
-	objectAPI := validateAdminUsersReq(ctx, w, r)
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.AttachPolicyAdminAction)
 	if objectAPI == nil {
 		return
 	}
