@@ -20,16 +20,60 @@ import "github.com/minio/minio/cmd/config"
 
 // Help template for KMS vault
 var (
-	Help = config.HelpKV{
-		KMSVaultEndpoint:      `Points to Vault API endpoint eg: "http://vault-endpoint-ip:8200"`,
-		KMSVaultKeyName:       `Transit key name used in vault policy, must be unique name eg: "my-minio-key"`,
-		KMSVaultAuthType:      `Authentication type to Vault API endpoint eg: "approle"`,
-		KMSVaultAppRoleID:     `Unique role ID created for AppRole`,
-		KMSVaultAppRoleSecret: `Unique secret ID created for AppRole`,
-		KMSVaultNamespace:     `Only needed if AppRole engine is scoped to Vault Namespace eg: "ns1"`,
-		KMSVaultKeyVersion:    `Key version (optional)`,
-		KMSVaultCAPath:        `Path to PEM-encoded CA cert files to use mTLS authentication (optional) eg: "/home/user/custom-certs"`,
-		config.State:          "Indicates if KMS Vault is enabled or not",
-		config.Comment:        "A comment to describe the KMS Vault setting",
+	Help = config.HelpKVS{
+		config.HelpKV{
+			Key:         config.State,
+			Description: "Indicates if KMS Vault is enabled or not",
+			Type:        "on|off",
+		},
+		config.HelpKV{
+			Key:         KMSVaultEndpoint,
+			Description: `Points to Vault API endpoint eg: "http://vault-endpoint-ip:8200"`,
+			Type:        "url",
+		},
+		config.HelpKV{
+			Key:         KMSVaultKeyName,
+			Description: `Transit key name used in vault policy, must be unique name eg: "my-minio-key"`,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         KMSVaultAuthType,
+			Description: `Authentication type to Vault API endpoint eg: "approle"`,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         KMSVaultAppRoleID,
+			Description: `Unique role ID created for AppRole`,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         KMSVaultAppRoleSecret,
+			Description: `Unique secret ID created for AppRole`,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         KMSVaultNamespace,
+			Description: `Only needed if AppRole engine is scoped to Vault Namespace eg: "ns1"`,
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         KMSVaultKeyVersion,
+			Description: `KMS Vault key version`,
+			Optional:    true,
+			Type:        "number",
+		},
+		config.HelpKV{
+			Key:         KMSVaultCAPath,
+			Description: `Path to PEM-encoded CA cert files to use mTLS authentication (optional) eg: "/home/user/custom-certs"`,
+			Optional:    true,
+			Type:        "path",
+		},
+		config.HelpKV{
+			Key:         config.Comment,
+			Description: "A comment to describe the KMS Vault setting",
+			Optional:    true,
+			Type:        "sentence",
+		},
 	}
 )

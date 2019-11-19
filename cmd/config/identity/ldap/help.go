@@ -18,17 +18,59 @@ package ldap
 
 import "github.com/minio/minio/cmd/config"
 
-// Help template for Ldap identity feature.
+// Help template for LDAP identity feature.
 var (
-	Help = config.HelpKV{
-		ServerAddr:         `(Required) AD/LDAP server address eg: "myldapserver.com:636"`,
-		UsernameFormat:     `(Required) AD/LDAP format of full username DN eg: "uid={username},cn=accounts,dc=myldapserver,dc=com"`,
-		GroupSearchFilter:  `Search filter to find groups of a user (optional) eg: "(&(objectclass=groupOfNames)(member={usernamedn}))"`,
-		GroupNameAttribute: `Attribute of search results to use as group name (optional) eg: "cn"`,
-		GroupSearchBaseDN:  `Base DN in AD/LDAP hierarchy to use in search requests (optional) eg: "dc=myldapserver,dc=com"`,
-		STSExpiry:          `AD/LDAP STS credentials validity duration (optional) eg: "1h"`,
-		TLSSkipVerify:      "Set this to 'on', to disable client verification of server certificates",
-		config.State:       "(Required) Enable or disable LDAP/AD identity",
-		config.Comment:     "A comment to describe the LDAP/AD identity setting",
+	Help = config.HelpKVS{
+		config.HelpKV{
+			Key:         config.State,
+			Description: "Enable or disable LDAP/AD identity",
+			Type:        "on|off",
+		},
+		config.HelpKV{
+			Key:         ServerAddr,
+			Description: `AD/LDAP server address eg: "myldapserver.com:636"`,
+			Type:        "address",
+		},
+		config.HelpKV{
+			Key:         UsernameFormat,
+			Description: `AD/LDAP format of full username DN eg: "uid={username},cn=accounts,dc=myldapserver,dc=com"`,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         GroupSearchFilter,
+			Description: `Search filter to find groups of a user (optional) eg: "(&(objectclass=groupOfNames)(member={usernamedn}))"`,
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         GroupNameAttribute,
+			Description: `Attribute of search results to use as group name (optional) eg: "cn"`,
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         GroupSearchBaseDN,
+			Description: `Base DN in AD/LDAP hierarchy to use in search requests (optional) eg: "dc=myldapserver,dc=com"`,
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         STSExpiry,
+			Description: `AD/LDAP STS credentials validity duration eg: "1h"`,
+			Optional:    true,
+			Type:        "duration",
+		},
+		config.HelpKV{
+			Key:         TLSSkipVerify,
+			Description: "Set this to 'on', to disable client verification of server certificates",
+			Optional:    true,
+			Type:        "on|off",
+		},
+		config.HelpKV{
+			Key:         config.Comment,
+			Description: "A comment to describe the LDAP/AD identity setting",
+			Optional:    true,
+			Type:        "sentence",
+		},
 	}
 )

@@ -20,10 +20,28 @@ import "github.com/minio/minio/cmd/config"
 
 // Help template for OPA policy feature.
 var (
-	Help = config.HelpKV{
-		URL:            `Points to URL for OPA HTTP API endpoint. eg: "http://localhost:8181/v1/data/httpapi/authz/allow"`,
-		AuthToken:      "Authorization token for the OPA HTTP API endpoint (optional)",
-		config.State:   "Indicates if OPA policy is enabled or not",
-		config.Comment: "A comment to describe the OPA policy setting",
+	Help = config.HelpKVS{
+		config.HelpKV{
+			Key:         config.State,
+			Description: "Indicates if OPA policy is enabled or not",
+			Type:        "on|off",
+		},
+		config.HelpKV{
+			Key:         URL,
+			Description: `Points to URL for OPA HTTP API endpoint. eg: "http://localhost:8181/v1/data/httpapi/authz/allow"`,
+			Type:        "url",
+		},
+		config.HelpKV{
+			Key:         AuthToken,
+			Description: "Authorization token for the OPA HTTP API endpoint",
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         config.Comment,
+			Description: "A comment to describe the OPA policy setting",
+			Optional:    true,
+			Type:        "sentence",
+		},
 	}
 )

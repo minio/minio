@@ -18,18 +18,62 @@ package config
 
 // HelpKV - implements help messages for keys
 // with value as description of the keys.
-type HelpKV map[string]string
+type HelpKV struct {
+	Key         string `json:"key"`
+	Type        string `json:"type"`
+	Description string `json:"description"`
+	Optional    bool   `json:"optional"`
+
+	// Indicates if sub-sys supports multiple targets.
+	MultipleTargets bool `json:"multipleTargets"`
+}
+
+// HelpKVS - implement order of keys help messages.
+type HelpKVS []HelpKV
+
+// Lookup - lookup a key from help kvs.
+func (hkvs HelpKVS) Lookup(key string) (HelpKV, bool) {
+	for _, hkv := range hkvs {
+		if hkv.Key == key {
+			return hkv, true
+		}
+	}
+	return HelpKV{}, false
+}
 
 // Region and Worm help is documented in default config
 var (
-	RegionHelp = HelpKV{
-		RegionName: `Region name of this deployment, eg: "us-west-2"`,
-		State:      "Indicates if config region is honored or ignored",
-		Comment:    "A comment to describe the region setting",
+	RegionHelp = HelpKVS{
+		HelpKV{
+			Key:         State,
+			Type:        "on|off",
+			Description: "Indicates if config region is honored or ignored",
+		},
+		HelpKV{
+			Key:         RegionName,
+			Type:        "string",
+			Description: `Region name of this deployment, eg: "us-west-2"`,
+			Optional:    true,
+		},
+		HelpKV{
+			Key:         Comment,
+			Type:        "sentence",
+			Description: "A comment to describe the region setting",
+			Optional:    true,
+		},
 	}
 
-	WormHelp = HelpKV{
-		State:   `Indicates if worm is "on" or "off"`,
-		Comment: "A comment to describe the worm state",
+	WormHelp = HelpKVS{
+		HelpKV{
+			Key:         State,
+			Type:        "on|off",
+			Description: `Indicates if worm is "on" or "off"`,
+		},
+		HelpKV{
+			Key:         Comment,
+			Type:        "sentence",
+			Description: "A comment to describe the worm state",
+			Optional:    true,
+		},
 	}
 )

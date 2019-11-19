@@ -20,10 +20,29 @@ import "github.com/minio/minio/cmd/config"
 
 // Help template for compress feature.
 var (
-	Help = config.HelpKV{
-		Extensions:     `Comma separated file extensions to compress. eg: ".txt,.log,.csv"`,
-		MimeTypes:      `Comma separate wildcard mime-types to compress. eg: "text/*,application/json,application/xml"`,
-		config.State:   "Indicates if compression is enabled or not",
-		config.Comment: "A comment to describe the compression setting",
+	Help = config.HelpKVS{
+		config.HelpKV{
+			Key:         config.State,
+			Description: "Indicates if compression is enabled or not",
+			Type:        "on|off",
+		},
+		config.HelpKV{
+			Key:         Extensions,
+			Description: `Comma separated file extensions to compress eg: ".txt,.log,.csv"`,
+			Optional:    true,
+			Type:        "delimited-string",
+		},
+		config.HelpKV{
+			Key:         MimeTypes,
+			Description: `Comma separate wildcard mime-types to compress eg: "text/*,application/json,application/xml"`,
+			Optional:    true,
+			Type:        "delimited-string",
+		},
+		config.HelpKV{
+			Key:         config.Comment,
+			Description: "A comment to describe the compression setting",
+			Optional:    true,
+			Type:        "sentence",
+		},
 	}
 )

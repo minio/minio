@@ -20,17 +20,53 @@ import "github.com/minio/minio/cmd/config"
 
 // Help template for logger http and audit
 var (
-	Help = config.HelpKV{
-		Endpoint:       `HTTP logger endpoint eg: "http://localhost:8080/minio/logs/server"`,
-		AuthToken:      "Authorization token for logger endpoint",
-		config.State:   "Indicates if HTTP logger is enabled or not",
-		config.Comment: "A comment to describe the HTTP logger setting",
+	Help = config.HelpKVS{
+		config.HelpKV{
+			Key:         config.State,
+			Description: "Indicates if HTTP logger is enabled or not",
+			Type:        "on|off",
+		},
+		config.HelpKV{
+			Key:         Endpoint,
+			Description: `HTTP logger endpoint eg: "http://localhost:8080/minio/logs/server"`,
+			Type:        "url",
+		},
+		config.HelpKV{
+			Key:         AuthToken,
+			Description: "Authorization token for logger endpoint",
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         config.Comment,
+			Description: "A comment to describe the HTTP logger setting",
+			Optional:    true,
+			Type:        "sentence",
+		},
 	}
 
-	HelpAudit = config.HelpKV{
-		Endpoint:       `HTTP Audit logger endpoint eg: "http://localhost:8080/minio/logs/audit"`,
-		AuthToken:      "Authorization token for logger endpoint",
-		config.State:   "Indicates if HTTP Audit logger is enabled or not",
-		config.Comment: "A comment to describe the HTTP Audit logger setting",
+	HelpAudit = config.HelpKVS{
+		config.HelpKV{
+			Key:         config.State,
+			Description: "Indicates if HTTP Audit logger is enabled or not",
+			Type:        "on|off",
+		},
+		config.HelpKV{
+			Key:         Endpoint,
+			Description: `HTTP Audit logger endpoint eg: "http://localhost:8080/minio/logs/audit"`,
+			Type:        "url",
+		},
+		config.HelpKV{
+			Key:         AuthToken,
+			Description: "Authorization token for logger endpoint",
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         config.Comment,
+			Description: "A comment to describe the HTTP Audit logger setting",
+			Optional:    true,
+			Type:        "sentence",
+		},
 	}
 )

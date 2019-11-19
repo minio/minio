@@ -66,6 +66,12 @@ func TestSubstituter(t *testing.T) {
 			SubstitutableStr: "uid=${usernamedn},cn=users,dc=example,dc=com",
 			ErrExpected:      true,
 		},
+		{
+			KV:               []string{"username", "john"},
+			SubstitutableStr: "(&(objectclass=user)(sAMAccountName={username})(memberOf=CN=myorg,OU=Rialto,OU=Application Managed,OU=Groups,DC=amr,DC=corp,DC=myorg,DC=com))",
+			SubstitutedStr:   "(&(objectclass=user)(sAMAccountName=john)(memberOf=CN=myorg,OU=Rialto,OU=Application Managed,OU=Groups,DC=amr,DC=corp,DC=myorg,DC=com))",
+			ErrExpected:      false,
+		},
 	}
 
 	for _, test := range tests {

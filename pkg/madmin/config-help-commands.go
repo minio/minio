@@ -23,8 +23,29 @@ import (
 	"net/url"
 )
 
+// Help - return sub-system level help
+type Help struct {
+	SubSys          string  `json:"subSys"`
+	Description     string  `json:"description"`
+	MultipleTargets bool    `json:"multipleTargets"`
+	KeysHelp        HelpKVS `json:"keysHelp"`
+}
+
+// HelpKV - implements help messages for keys
+// with value as description of the keys.
+type HelpKV struct {
+	Key             string `json:"key"`
+	Description     string `json:"description"`
+	Optional        bool   `json:"optional"`
+	Type            string `json:"type"`
+	MultipleTargets bool   `json:"multipleTargets"`
+}
+
+// HelpKVS - implement order of keys help messages.
+type HelpKVS []HelpKV
+
 // HelpConfigKV - return help for a given sub-system.
-func (adm *AdminClient) HelpConfigKV(subSys, key string, envOnly bool) (map[string]string, error) {
+func (adm *AdminClient) HelpConfigKV(subSys, key string, envOnly bool) (Help, error) {
 	v := url.Values{}
 	v.Set("subSys", subSys)
 	v.Set("key", key)
@@ -40,18 +61,19 @@ func (adm *AdminClient) HelpConfigKV(subSys, key string, envOnly bool) (map[stri
 	// Execute GET on /minio/admin/v2/help-config-kv
 	resp, err := adm.executeMethod(http.MethodGet, reqData)
 	if err != nil {
-		return nil, err
+		return Help{}, err
 	}
 	defer closeResponse(resp)
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, httpRespToErrorResponse(resp)
+		return Help{}, httpRespToErrorResponse(resp)
 	}
 
-	var help = make(map[string]string)
+	var help = Help{}
 	d := json.NewDecoder(resp.Body)
+	d.DisallowUnknownFields()
 	if err = d.Decode(&help); err != nil {
-		return nil, err
+		return help, err
 	}
 
 	return help, nil
