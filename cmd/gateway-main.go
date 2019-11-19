@@ -220,6 +220,8 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(err, "Unable to initialize gateway backend")
 	}
 
+	newObject = NewGatewayLayerWithLocker(newObject)
+
 	// Re-enable logging
 	logger.Disable = false
 
