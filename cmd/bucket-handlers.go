@@ -1060,9 +1060,11 @@ func (api objectAPIHandlers) GetBucketObjectLockConfigHandler(w http.ResponseWri
 	configFile := path.Join(bucketConfigPrefix, bucket, bucketObjectLockEnabledConfigFile)
 	configData, err := readConfig(ctx, objectAPI, configFile)
 	if err != nil {
-		aerr := toAPIError(ctx, err)
+		var aerr APIError
 		if err == errConfigNotFound {
 			aerr = errorCodes.ToAPIErr(ErrMethodNotAllowed)
+		} else {
+			aerr = toAPIError(ctx, err)
 		}
 		writeErrorResponse(ctx, w, aerr, r.URL, guessIsBrowserReq(r))
 		return

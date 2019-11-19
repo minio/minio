@@ -239,6 +239,37 @@ type ObjectVersion struct {
 	IsLatest  bool
 }
 
+// StringMap is a map[string]string.
+type StringMap map[string]string
+
+// MarshalXML - StringMap marshals into XML.
+func (s StringMap) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+
+	tokens := []xml.Token{start}
+
+	for key, value := range s {
+		t := xml.StartElement{}
+		t.Name = xml.Name{
+			Space: "",
+			Local: key,
+		}
+		tokens = append(tokens, t, xml.CharData(value), xml.EndElement{Name: t.Name})
+	}
+
+	tokens = append(tokens, xml.EndElement{
+		Name: start.Name,
+	})
+
+	for _, t := range tokens {
+		if err := e.EncodeToken(t); err != nil {
+			return err
+		}
+	}
+
+	// flush to ensure tokens are written
+	return e.Flush()
+}
+
 // Object container for object metadata
 type Object struct {
 	Key          string
@@ -251,6 +282,9 @@ type Object struct {
 
 	// The class of storage used to store the object.
 	StorageClass string
+
+	// UserMetadata user-defined metadata
+	UserMetadata StringMap `xml:"UserMetadata,omitempty"`
 }
 
 // CopyObjectResponse container returns ETag and LastModified of the successfully copied object
@@ -466,7 +500,7 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingTy
 }
 
 // generates an ListObjectsV2 response for the said bucket with other enumerated options.
-func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter, delimiter, encodingType string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string) ListObjectsV2Response {
+func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter, delimiter, encodingType string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string, metadata bool) ListObjectsV2Response {
 	var contents []Object
 	var commonPrefixes []CommonPrefix
 	var owner = Owner{}
@@ -489,6 +523,17 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 		content.Size = object.Size
 		content.StorageClass = object.StorageClass
 		content.Owner = owner
+		if metadata {
+			content.UserMetadata = make(StringMap)
+			for k, v := range CleanMinioInternalMetadataKeys(object.UserDefined) {
+				if hasPrefix(k, ReservedMetadataPrefix) {
+					// Do not need to send any internal metadata
+					// values to client.
+					continue
+				}
+				content.UserMetadata[k] = v
+			}
+		}
 		contents = append(contents, content)
 	}
 	data.Name = bucket
