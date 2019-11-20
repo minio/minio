@@ -189,7 +189,7 @@ func prepareXLSets32() (ObjectLayer, []string, error) {
 
 	endpoints := append(endpoints1, endpoints2...)
 	fsDirs := append(fsDirs1, fsDirs2...)
-	format, err := waitForFormatXL(true, endpoints, 2, 16)
+	format, err := waitForFormatXL(true, endpoints, 2, 16, "")
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, nil, err
@@ -1585,13 +1585,17 @@ func newTestObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err
 		return NewFSObjectLayer(endpointZones[0].Endpoints[0].Path)
 	}
 
-	var formats []*formatXLV3
-	for _, ep := range endpointZones {
-		format, err := waitForFormatXL(ep.Endpoints[0].IsLocal, ep.Endpoints, ep.SetCount, ep.DrivesPerSet)
+	var formats = make([]*formatXLV3, len(endpointZones))
+	var deploymentID string
+	for i, ep := range endpointZones {
+		formats[i], err = waitForFormatXL(ep.Endpoints[0].IsLocal, ep.Endpoints,
+			ep.SetCount, ep.DrivesPerSet, deploymentID)
 		if err != nil {
 			return nil, err
 		}
-		formats = append(formats, format)
+		if deploymentID == "" {
+			deploymentID = formats[i].ID
+		}
 	}
 
 	zones, err := newXLZones(endpointZones, formats)

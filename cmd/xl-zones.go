@@ -1207,7 +1207,7 @@ func (z *xlZones) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResul
 	}
 	for _, zone := range z.zones {
 		result, err := zone.HealFormat(ctx, dryRun)
-		if err != nil {
+		if err != nil && err != errNoHealRequired {
 			logger.LogIf(ctx, err)
 			continue
 		}

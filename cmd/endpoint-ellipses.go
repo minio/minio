@@ -287,6 +287,7 @@ func createServerEndpoints(serverAddr string, args ...string) (EndpointZones, Se
 	if _, err := GetAllSets(args...); err != nil {
 		return nil, -1, err
 	}
+
 	for _, arg := range args {
 		setArgs, err := GetAllSets(arg)
 		if err != nil {

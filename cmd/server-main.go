@@ -208,7 +208,7 @@ func initSafeModeInit(buckets []BucketInfo) (err error) {
 		return err
 	}
 
-	defer func() {
+	defer func(objLock RWLocker) {
 		objLock.Unlock()
 
 		if err != nil {
@@ -226,7 +226,7 @@ func initSafeModeInit(buckets []BucketInfo) (err error) {
 			// not proceeding waiting for admin action.
 			handleSignals()
 		}
-	}()
+	}(objLock)
 
 	// Calls New() for all sub-systems.
 	newAllSubsystems()
@@ -437,13 +437,17 @@ func newObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err err
 		return NewFSObjectLayer(endpointZones[0].Endpoints[0].Path)
 	}
 
-	var formats []*formatXLV3
-	for _, ep := range endpointZones {
-		format, err := waitForFormatXL(ep.Endpoints[0].IsLocal, ep.Endpoints, ep.SetCount, ep.DrivesPerSet)
+	var formats = make([]*formatXLV3, len(endpointZones))
+	var deploymentID string
+	for i, ep := range endpointZones {
+		formats[i], err = waitForFormatXL(ep.Endpoints[0].IsLocal, ep.Endpoints,
+			ep.SetCount, ep.DrivesPerSet, deploymentID)
 		if err != nil {
 			return nil, err
 		}
-		formats = append(formats, format)
+		if deploymentID == "" {
+			deploymentID = formats[i].ID
+		}
 	}
 	return newXLZones(endpointZones, formats)
 }

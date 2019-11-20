@@ -718,7 +718,7 @@ func fixFormatXLV3(storageDisks []StorageAPI, endpoints Endpoints, formats []*fo
 }
 
 // initFormatXL - save XL format configuration on all disks.
-func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, disksPerSet int) (format *formatXLV3, err error) {
+func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, disksPerSet int, deploymentID string) (format *formatXLV3, err error) {
 	format = newFormatXLV3(setCount, disksPerSet)
 	formats := make([]*formatXLV3, len(storageDisks))
 
@@ -726,6 +726,9 @@ func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, disk
 		for j := 0; j < disksPerSet; j++ {
 			newFormat := *format
 			newFormat.XL.This = format.XL.Sets[i][j]
+			if deploymentID != "" {
+				newFormat.ID = deploymentID
+			}
 			formats[i*disksPerSet+j] = &newFormat
 		}
 	}
