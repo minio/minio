@@ -1211,10 +1211,10 @@ func (z *xlZones) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResul
 			logger.LogIf(ctx, err)
 			continue
 		}
-		r.DiskCount = result.DiskCount
-		r.SetCount = result.SetCount
-		r.Before.Drives = append(r.Before.Drives, r.Before.Drives...)
-		r.After.Drives = append(r.After.Drives, r.After.Drives...)
+		r.DiskCount += result.DiskCount
+		r.SetCount += result.SetCount
+		r.Before.Drives = append(r.Before.Drives, result.Before.Drives...)
+		r.After.Drives = append(r.After.Drives, result.After.Drives...)
 	}
 	return r, nil
 }
@@ -1234,10 +1234,10 @@ func (z *xlZones) HealBucket(ctx context.Context, bucket string, dryRun, remove 
 			}
 			return result, err
 		}
-		r.DiskCount = result.DiskCount
-		r.SetCount = result.SetCount
-		r.Before.Drives = append(r.Before.Drives, r.Before.Drives...)
-		r.After.Drives = append(r.After.Drives, r.After.Drives...)
+		r.DiskCount += result.DiskCount
+		r.SetCount += result.SetCount
+		r.Before.Drives = append(r.Before.Drives, result.Before.Drives...)
+		r.After.Drives = append(r.After.Drives, result.After.Drives...)
 	}
 	return r, nil
 }
