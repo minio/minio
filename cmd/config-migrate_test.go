@@ -220,12 +220,12 @@ func TestServerConfigMigrateV2toV33(t *testing.T) {
 	}
 
 	// Check if accessKey and secretKey are not altered during migration
-	caccessKey := globalServerConfig[config.CredentialsSubSys][config.Default][config.AccessKey]
+	caccessKey := globalServerConfig[config.CredentialsSubSys][config.Default].Get(config.AccessKey)
 	if caccessKey != accessKey {
 		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, caccessKey)
 	}
 
-	csecretKey := globalServerConfig[config.CredentialsSubSys][config.Default][config.SecretKey]
+	csecretKey := globalServerConfig[config.CredentialsSubSys][config.Default].Get(config.SecretKey)
 	if csecretKey != secretKey {
 		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, csecretKey)
 	}

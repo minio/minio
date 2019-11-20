@@ -340,18 +340,50 @@ func mergeTargets(cfgTargets map[string]config.KVS, envname string, defaultKVS c
 // DefaultKakfaKVS - default KV for kafka target
 var (
 	DefaultKafkaKVS = config.KVS{
-		config.State:              config.StateOff,
-		config.Comment:            "Default settings for Kafka notification",
-		target.KafkaTopic:         "",
-		target.KafkaBrokers:       "",
-		target.KafkaSASLUsername:  "",
-		target.KafkaSASLPassword:  "",
-		target.KafkaTLSClientAuth: "0",
-		target.KafkaSASL:          config.StateOff,
-		target.KafkaTLS:           config.StateOff,
-		target.KafkaTLSSkipVerify: config.StateOff,
-		target.KafkaQueueLimit:    "0",
-		target.KafkaQueueDir:      "",
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.KafkaTopic,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.KafkaBrokers,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.KafkaSASLUsername,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.KafkaSASLPassword,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.KafkaTLSClientAuth,
+			Value: "0",
+		},
+		config.KV{
+			Key:   target.KafkaSASL,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.KafkaTLS,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.KafkaTLSSkipVerify,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.KafkaQueueLimit,
+			Value: "0",
+		},
+		config.KV{
+			Key:   target.KafkaQueueDir,
+			Value: "",
+		},
 	}
 )
 
@@ -468,17 +500,46 @@ func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs
 // DefaultMQTTKVS - default MQTT config
 var (
 	DefaultMQTTKVS = config.KVS{
-		config.State:                 config.StateOff,
-		config.Comment:               "Default settings for MQTT notification",
-		target.MqttBroker:            "",
-		target.MqttTopic:             "",
-		target.MqttPassword:          "",
-		target.MqttUsername:          "",
-		target.MqttQoS:               "0",
-		target.MqttKeepAliveInterval: "0s",
-		target.MqttReconnectInterval: "0s",
-		target.MqttQueueDir:          "",
-		target.MqttQueueLimit:        "0",
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.MqttBroker,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.MqttTopic,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.MqttPassword,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.MqttUsername,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.MqttQoS,
+			Value: "0",
+		},
+		config.KV{
+			Key:   target.MqttKeepAliveInterval,
+			Value: "0s",
+		},
+		config.KV{
+			Key:   target.MqttReconnectInterval,
+			Value: "0s",
+		},
+		config.KV{
+			Key:   target.MqttQueueDir,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.MqttQueueLimit,
+			Value: "0",
+		},
 	}
 )
 
@@ -593,18 +654,50 @@ func GetNotifyMQTT(mqttKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[s
 // DefaultMySQLKVS - default KV for MySQL
 var (
 	DefaultMySQLKVS = config.KVS{
-		config.State:           config.StateOff,
-		config.Comment:         "Default settings for MySQL notification",
-		target.MySQLFormat:     formatNamespace,
-		target.MySQLHost:       "",
-		target.MySQLPort:       "",
-		target.MySQLUsername:   "",
-		target.MySQLPassword:   "",
-		target.MySQLDatabase:   "",
-		target.MySQLDSNString:  "",
-		target.MySQLTable:      "",
-		target.MySQLQueueLimit: "0",
-		target.MySQLQueueDir:   "",
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.MySQLFormat,
+			Value: formatNamespace,
+		},
+		config.KV{
+			Key:   target.MySQLHost,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.MySQLPort,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.MySQLUsername,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.MySQLPassword,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.MySQLDatabase,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.MySQLDSNString,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.MySQLTable,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.MySQLQueueDir,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.MySQLQueueLimit,
+			Value: "0",
+		},
 	}
 )
 
@@ -700,24 +793,74 @@ func GetNotifyMySQL(mysqlKVS map[string]config.KVS) (map[string]target.MySQLArgs
 // DefaultNATSKVS - NATS KV for nats config.
 var (
 	DefaultNATSKVS = config.KVS{
-		config.State:                           config.StateOff,
-		config.Comment:                         "Default settings for NATS notification",
-		target.NATSAddress:                     "",
-		target.NATSSubject:                     "",
-		target.NATSUsername:                    "",
-		target.NATSPassword:                    "",
-		target.NATSToken:                       "",
-		target.NATSCertAuthority:               "",
-		target.NATSClientCert:                  "",
-		target.NATSClientKey:                   "",
-		target.NATSSecure:                      config.StateOff,
-		target.NATSPingInterval:                "0",
-		target.NATSQueueLimit:                  "0",
-		target.NATSQueueDir:                    "",
-		target.NATSStreaming:                   config.StateOff,
-		target.NATSStreamingAsync:              config.StateOff,
-		target.NATSStreamingMaxPubAcksInFlight: "0",
-		target.NATSStreamingClusterID:          "",
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.NATSAddress,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.NATSSubject,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.NATSUsername,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.NATSPassword,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.NATSToken,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.NATSCertAuthority,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.NATSClientCert,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.NATSClientKey,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.NATSSecure,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.NATSPingInterval,
+			Value: "0",
+		},
+		config.KV{
+			Key:   target.NATSStreaming,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.NATSStreamingAsync,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.NATSStreamingMaxPubAcksInFlight,
+			Value: "0",
+		},
+		config.KV{
+			Key:   target.NATSStreamingClusterID,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.NATSQueueDir,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.NATSQueueLimit,
+			Value: "0",
+		},
 	}
 )
 
@@ -871,14 +1014,34 @@ func GetNotifyNATS(natsKVS map[string]config.KVS) (map[string]target.NATSArgs, e
 // DefaultNSQKVS - NSQ KV for config
 var (
 	DefaultNSQKVS = config.KVS{
-		config.State:            config.StateOff,
-		config.Comment:          "Default settings for NSQ notification",
-		target.NSQAddress:       "",
-		target.NSQTopic:         "",
-		target.NSQTLS:           config.StateOff,
-		target.NSQTLSSkipVerify: config.StateOff,
-		target.NSQQueueLimit:    "0",
-		target.NSQQueueDir:      "",
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.NSQAddress,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.NSQTopic,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.NSQTLS,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.NSQTLSSkipVerify,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.NSQQueueDir,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.NSQQueueLimit,
+			Value: "0",
+		},
 	}
 )
 
@@ -956,18 +1119,50 @@ func GetNotifyNSQ(nsqKVS map[string]config.KVS) (map[string]target.NSQArgs, erro
 // DefaultPostgresKVS - default Postgres KV for server config.
 var (
 	DefaultPostgresKVS = config.KVS{
-		config.State:                    config.StateOff,
-		config.Comment:                  "Default settings for Postgres notification",
-		target.PostgresFormat:           formatNamespace,
-		target.PostgresConnectionString: "",
-		target.PostgresTable:            "",
-		target.PostgresHost:             "",
-		target.PostgresPort:             "",
-		target.PostgresUsername:         "",
-		target.PostgresPassword:         "",
-		target.PostgresDatabase:         "",
-		target.PostgresQueueDir:         "",
-		target.PostgresQueueLimit:       "0",
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.PostgresFormat,
+			Value: formatNamespace,
+		},
+		config.KV{
+			Key:   target.PostgresConnectionString,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.PostgresTable,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.PostgresHost,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.PostgresPort,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.PostgresUsername,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.PostgresPassword,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.PostgresDatabase,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.PostgresQueueDir,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.PostgresQueueLimit,
+			Value: "0",
+		},
 	}
 )
 
@@ -1073,14 +1268,34 @@ func GetNotifyPostgres(postgresKVS map[string]config.KVS) (map[string]target.Pos
 // DefaultRedisKVS - default KV for redis config
 var (
 	DefaultRedisKVS = config.KVS{
-		config.State:           config.StateOff,
-		config.Comment:         "Default settings for Redis notification",
-		target.RedisFormat:     formatNamespace,
-		target.RedisAddress:    "",
-		target.RedisKey:        "",
-		target.RedisPassword:   "",
-		target.RedisQueueDir:   "",
-		target.RedisQueueLimit: "0",
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.RedisFormat,
+			Value: formatNamespace,
+		},
+		config.KV{
+			Key:   target.RedisAddress,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.RedisKey,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.RedisPassword,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.RedisQueueDir,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.RedisQueueLimit,
+			Value: "0",
+		},
 	}
 )
 
@@ -1153,12 +1368,26 @@ func GetNotifyRedis(redisKVS map[string]config.KVS) (map[string]target.RedisArgs
 // DefaultWebhookKVS - default KV for webhook config
 var (
 	DefaultWebhookKVS = config.KVS{
-		config.State:             config.StateOff,
-		config.Comment:           "Default settings for Webhook notification",
-		target.WebhookEndpoint:   "",
-		target.WebhookAuthToken:  "",
-		target.WebhookQueueLimit: "0",
-		target.WebhookQueueDir:   "",
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.WebhookEndpoint,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.WebhookAuthToken,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.WebhookQueueLimit,
+			Value: "0",
+		},
+		config.KV{
+			Key:   target.WebhookQueueDir,
+			Value: "",
+		},
 	}
 )
 
@@ -1221,13 +1450,30 @@ func GetNotifyWebhook(webhookKVS map[string]config.KVS, rootCAs *x509.CertPool) 
 // DefaultESKVS - default KV config for Elasticsearch target
 var (
 	DefaultESKVS = config.KVS{
-		config.State:             config.StateOff,
-		config.Comment:           "Default settings for Elasticsearch notification",
-		target.ElasticURL:        "",
-		target.ElasticFormat:     formatNamespace,
-		target.ElasticIndex:      "",
-		target.ElasticQueueDir:   "",
-		target.ElasticQueueLimit: "0",
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.ElasticURL,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.ElasticFormat,
+			Value: formatNamespace,
+		},
+		config.KV{
+			Key:   target.ElasticIndex,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.ElasticQueueDir,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.ElasticQueueLimit,
+			Value: "0",
+		},
 	}
 )
 
@@ -1301,20 +1547,58 @@ func GetNotifyES(esKVS map[string]config.KVS) (map[string]target.ElasticsearchAr
 // DefaultAMQPKVS - default KV for AMQP config
 var (
 	DefaultAMQPKVS = config.KVS{
-		config.State:            config.StateOff,
-		config.Comment:          "Default settings for AMQP notification",
-		target.AmqpURL:          "",
-		target.AmqpExchange:     "",
-		target.AmqpExchangeType: "",
-		target.AmqpRoutingKey:   "",
-		target.AmqpMandatory:    config.StateOff,
-		target.AmqpDurable:      config.StateOff,
-		target.AmqpNoWait:       config.StateOff,
-		target.AmqpInternal:     config.StateOff,
-		target.AmqpAutoDeleted:  config.StateOff,
-		target.AmqpDeliveryMode: "0",
-		target.AmqpQueueLimit:   "0",
-		target.AmqpQueueDir:     "",
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.AmqpURL,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.AmqpExchange,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.AmqpExchangeType,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.AmqpRoutingKey,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.AmqpMandatory,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.AmqpDurable,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.AmqpNoWait,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.AmqpInternal,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.AmqpAutoDeleted,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   target.AmqpDeliveryMode,
+			Value: "0",
+		},
+		config.KV{
+			Key:   target.AmqpQueueLimit,
+			Value: "0",
+		},
+		config.KV{
+			Key:   target.AmqpQueueDir,
+			Value: "",
+		},
 	}
 )
 

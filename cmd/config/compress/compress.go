@@ -48,10 +48,18 @@ const (
 // DefaultKVS - default KV config for compression settings
 var (
 	DefaultKVS = config.KVS{
-		config.State:   config.StateOff,
-		config.Comment: "This is a default compression configuration",
-		Extensions:     DefaultExtensions,
-		MimeTypes:      DefaultMimeTypes,
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   Extensions,
+			Value: DefaultExtensions,
+		},
+		config.KV{
+			Key:   MimeTypes,
+			Value: DefaultMimeTypes,
+		},
 	}
 )
 

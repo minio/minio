@@ -52,12 +52,26 @@ const (
 // DefaultKVS - default KV settings for etcd.
 var (
 	DefaultKVS = config.KVS{
-		config.State:   config.StateOff,
-		config.Comment: "This is a default etcd configuration",
-		Endpoints:      "",
-		CoreDNSPath:    "/skydns",
-		ClientCert:     "",
-		ClientCertKey:  "",
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   Endpoints,
+			Value: "",
+		},
+		config.KV{
+			Key:   CoreDNSPath,
+			Value: "/skydns",
+		},
+		config.KV{
+			Key:   ClientCert,
+			Value: "",
+		},
+		config.KV{
+			Key:   ClientCertKey,
+			Value: "",
+		},
 	}
 )
 

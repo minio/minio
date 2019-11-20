@@ -25,11 +25,6 @@ import (
 var (
 	HelpAMQP = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.State,
-			Description: "Is this server endpoint configuration active/enabled",
-			Type:        "on|off",
-		},
-		config.HelpKV{
 			Key:         target.AmqpURL,
 			Description: "AMQP server endpoint, e.g. `amqp://myuser:mypassword@localhost:5672`",
 			Type:        "url",
@@ -110,14 +105,9 @@ var (
 
 	HelpKafka = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.State,
-			Description: "Is this server endpoint configuration active/enabled",
-			Type:        "on|off",
-		},
-		config.HelpKV{
 			Key:         target.KafkaBrokers,
-			Description: "Command separated list of Kafka broker addresses",
-			Type:        "delimited-string",
+			Description: "Comma separated list of Kafka broker addresses",
+			Type:        "csv",
 		},
 		config.HelpKV{
 			Key:         target.KafkaTopic,
@@ -183,11 +173,6 @@ var (
 
 	HelpMQTT = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.State,
-			Description: "Is this server endpoint configuration active/enabled",
-			Type:        "on|off",
-		},
-		config.HelpKV{
 			Key:         target.MqttBroker,
 			Description: "MQTT server endpoint, e.g. `tcp://localhost:1883`",
 			Type:        "uri",
@@ -249,11 +234,6 @@ var (
 
 	HelpES = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.State,
-			Description: "Is this server endpoint configuration active/enabled",
-			Type:        "on|off",
-		},
-		config.HelpKV{
 			Key:         target.ElasticURL,
 			Description: "The Elasticsearch server's address, with optional authentication info",
 			Type:        "url",
@@ -290,11 +270,6 @@ var (
 
 	HelpWebhook = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.State,
-			Description: "Is this server endpoint configuration active/enabled",
-			Type:        "on|off",
-		},
-		config.HelpKV{
 			Key:         target.WebhookEndpoint,
 			Description: "Webhook server endpoint eg: http://localhost:8080/minio/events",
 			Type:        "url",
@@ -326,11 +301,6 @@ var (
 	}
 
 	HelpRedis = config.HelpKVS{
-		config.HelpKV{
-			Key:         config.State,
-			Description: "Is this server endpoint configuration active/enabled",
-			Type:        "on|off",
-		},
 		config.HelpKV{
 			Key:         target.RedisAddress,
 			Description: "The Redis server's address. For example: `localhost:6379`",
@@ -373,11 +343,6 @@ var (
 	}
 
 	HelpPostgres = config.HelpKVS{
-		config.HelpKV{
-			Key:         config.State,
-			Description: "Is this server endpoint configuration active/enabled",
-			Type:        "on|off",
-		},
 		config.HelpKV{
 			Key:         target.PostgresConnectionString,
 			Description: "Connection string parameters for the PostgreSQL server",
@@ -445,11 +410,6 @@ var (
 
 	HelpMySQL = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.State,
-			Description: "Is this server endpoint configuration active/enabled",
-			Type:        "on|off",
-		},
-		config.HelpKV{
 			Key:         target.MySQLDSNString,
 			Description: "Data-Source-Name connection string for the MySQL server",
 			Type:        "string",
@@ -515,11 +475,6 @@ var (
 	}
 
 	HelpNATS = config.HelpKVS{
-		config.HelpKV{
-			Key:         config.State,
-			Description: "Is this server endpoint configuration active/enabled",
-			Type:        "on|off",
-		},
 		config.HelpKV{
 			Key:         target.NATSAddress,
 			Description: "NATS server address eg: '0.0.0.0:4222'",
@@ -623,11 +578,6 @@ var (
 	}
 
 	HelpNSQ = config.HelpKVS{
-		config.HelpKV{
-			Key:         config.State,
-			Description: "Is this server endpoint configuration active/enabled",
-			Type:        "on|off",
-		},
 		config.HelpKV{
 			Key:         target.NSQAddress,
 			Description: "NSQ server address eg: '127.0.0.1:4150'",

@@ -57,16 +57,32 @@ const (
 // Default KVS for loggerHTTP and loggerAuditHTTP
 var (
 	DefaultKVS = config.KVS{
-		config.State:   config.StateOff,
-		config.Comment: "This is a default HTTP logging configuration",
-		Endpoint:       "",
-		AuthToken:      "",
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   Endpoint,
+			Value: "",
+		},
+		config.KV{
+			Key:   AuthToken,
+			Value: "",
+		},
 	}
 	DefaultAuditKVS = config.KVS{
-		config.State:   config.StateOff,
-		config.Comment: "This is a default HTTP Audit logging configuration",
-		Endpoint:       "",
-		AuthToken:      "",
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   Endpoint,
+			Value: "",
+		},
+		config.KV{
+			Key:   AuthToken,
+			Value: "",
+		},
 	}
 )
 

@@ -70,19 +70,6 @@ export MINIO_REGION_NAME="my_region"
 minio server /data
 ```
 
-#### Worm
-
-| Field                  | Type     | Description                                                                                                                                       |
-|:-----------------------|:---------|:--------------------------------------------------------------------------------------------------------------------------------------------------|
-| ``worm state=on`` | _string_ | Enable this to turn on Write-Once-Read-Many. By default it is set to `off`. You may override this field with ``MINIO_WORM`` environment variable. |
-
-Example:
-
-```sh
-export MINIO_WORM_STATE=on
-minio server /data
-```
-
 ### Storage Class
 
 | Field                          | Type     | Description                                                                                                                                                                                  |
@@ -96,8 +83,8 @@ By default, parity for objects with standard storage class is set to `N/2`, and 
 ### Cache
 | Field                                                        | Type       | Description                                                                                                 |
 |:-------------------------------------------------------------|:-----------|:------------------------------------------------------------------------------------------------------------|
-| ``cache drives="/mnt/drive1;/mnt/drive2;/mnt/cache{1...3}"`` | _[]string_ | List of mounted file system drives with [`atime`](http://kerolasa.github.io/filetimes.html) support enabled |
-| ``cache exclude="*.pdf;mybucket/*"``                         | _[]string_ | List of wildcard patterns for prefixes to exclude from cache                                                |
+| ``cache drives="/mnt/drive1,/mnt/drive2,/mnt/cache{1...3}"`` | _[]string_ | List of mounted file system drives with [`atime`](http://kerolasa.github.io/filetimes.html) support enabled |
+| ``cache exclude="*.pdf,mybucket/*"``                         | _[]string_ | List of wildcard patterns for prefixes to exclude from cache                                                |
 | ``cache expiry=90``                                          | _int_      | Days to cache expiry                                                                                        |
 | ``cache quota=70``                                           | _int_      | Percentage of disk available to cache                                                                       |
 |                                                              |            |                                                                                                             |
@@ -120,6 +107,16 @@ By default, parity for objects with standard storage class is set to `N/2`, and 
 All configuration changes can be made using [`mc admin config` get/set commands](https://github.com/minio/mc/blob/master/docs/minio-admin-complete-guide.md). Following sections provide brief explanation of fields and how to customize them. A complete example of `config.json` is available [here](https://raw.githubusercontent.com/minio/minio/master/docs/config/config.sample.json)
 
 ## Environment only settings
+
+#### Worm
+Enable this to turn on Write-Once-Read-Many. By default it is set to `off`. Set ``MINIO_WORM=on`` environment variable to enable WORM mode.
+
+Example:
+
+```sh
+export MINIO_WORM=on
+minio server /data
+```
 
 ### Browser
 

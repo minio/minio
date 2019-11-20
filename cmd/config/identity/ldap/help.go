@@ -22,11 +22,6 @@ import "github.com/minio/minio/cmd/config"
 var (
 	Help = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.State,
-			Description: "Enable or disable LDAP/AD identity",
-			Type:        "on|off",
-		},
-		config.HelpKV{
 			Key:         ServerAddr,
 			Description: `AD/LDAP server address eg: "myldapserver.com:636"`,
 			Type:        "address",

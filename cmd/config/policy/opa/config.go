@@ -41,10 +41,18 @@ const (
 // DefaultKVS - default config for OPA config
 var (
 	DefaultKVS = config.KVS{
-		config.State:   config.StateOff,
-		config.Comment: "This is a default OPA configuration",
-		URL:            "",
-		AuthToken:      "",
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   URL,
+			Value: "",
+		},
+		config.KV{
+			Key:   AuthToken,
+			Value: "",
+		},
 	}
 )
 

@@ -27,8 +27,17 @@ func SetStorageClass(s config.Config, cfg Config) {
 		return
 	}
 	s[config.StorageClassSubSys][config.Default] = config.KVS{
-		ClassStandard: cfg.Standard.String(),
-		ClassRRS:      cfg.RRS.String(),
-		config.State:  config.StateOn,
+		config.KV{
+			Key:   ClassStandard,
+			Value: cfg.Standard.String(),
+		},
+		config.KV{
+			Key:   ClassRRS,
+			Value: cfg.RRS.String(),
+		},
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOn,
+		},
 	}
 }

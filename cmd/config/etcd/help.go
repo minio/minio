@@ -22,14 +22,9 @@ import "github.com/minio/minio/cmd/config"
 var (
 	Help = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.State,
-			Description: "Indicates if etcd config is on or off",
-			Type:        "on|off",
-		},
-		config.HelpKV{
 			Key:         Endpoints,
 			Description: `Comma separated list of etcd endpoints eg: "http://localhost:2379"`,
-			Type:        "delimited-string",
+			Type:        "csv",
 		},
 		config.HelpKV{
 			Key:         CoreDNSPath,

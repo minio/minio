@@ -22,20 +22,15 @@ import "github.com/minio/minio/cmd/config"
 var (
 	Help = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.State,
-			Description: "Indicates if caching is enabled or not",
-			Type:        "on|off",
-		},
-		config.HelpKV{
 			Key:         Drives,
-			Description: `List of mounted drives or directories delimited by ";"`,
-			Type:        "delimited-string",
+			Description: `List of mounted drives or directories delimited by ","`,
+			Type:        "csv",
 		},
 		config.HelpKV{
 			Key:         Exclude,
-			Description: `List of wildcard based cache exclusion patterns delimited by ";"`,
+			Description: `List of wildcard based cache exclusion patterns delimited by ","`,
 			Optional:    true,
-			Type:        "delimited-string",
+			Type:        "csv",
 		},
 		config.HelpKV{
 			Key:         Expiry,

@@ -22,11 +22,6 @@ import "github.com/minio/minio/cmd/config"
 var (
 	Help = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.State,
-			Description: "Indicates if OpenID identity is enabled or not",
-			Type:        "on|off",
-		},
-		config.HelpKV{
 			Key:         ConfigURL,
 			Description: `OpenID discovery documented endpoint. eg: "https://accounts.google.com/.well-known/openid-configuration"`,
 			Type:        "url",

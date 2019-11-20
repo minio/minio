@@ -25,12 +25,33 @@ func SetIdentityLDAP(s config.Config, ldapArgs Config) {
 		return
 	}
 	s[config.IdentityLDAPSubSys][config.Default] = config.KVS{
-		config.State:       config.StateOn,
-		ServerAddr:         ldapArgs.ServerAddr,
-		STSExpiry:          ldapArgs.STSExpiryDuration,
-		UsernameFormat:     ldapArgs.UsernameFormat,
-		GroupSearchFilter:  ldapArgs.GroupSearchFilter,
-		GroupNameAttribute: ldapArgs.GroupNameAttribute,
-		GroupSearchBaseDN:  ldapArgs.GroupSearchBaseDN,
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOn,
+		},
+		config.KV{
+			Key:   ServerAddr,
+			Value: ldapArgs.ServerAddr,
+		},
+		config.KV{
+			Key:   STSExpiry,
+			Value: ldapArgs.STSExpiryDuration,
+		},
+		config.KV{
+			Key:   UsernameFormat,
+			Value: ldapArgs.UsernameFormat,
+		},
+		config.KV{
+			Key:   GroupSearchFilter,
+			Value: ldapArgs.GroupSearchFilter,
+		},
+		config.KV{
+			Key:   GroupNameAttribute,
+			Value: ldapArgs.GroupNameAttribute,
+		},
+		config.KV{
+			Key:   GroupSearchBaseDN,
+			Value: ldapArgs.GroupSearchBaseDN,
+		},
 	}
 }

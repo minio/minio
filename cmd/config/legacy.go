@@ -31,9 +31,18 @@ func SetCredentials(c Config, cred auth.Credentials) {
 		return
 	}
 	c[CredentialsSubSys][Default] = KVS{
-		State:     StateOn,
-		AccessKey: cred.AccessKey,
-		SecretKey: cred.SecretKey,
+		KV{
+			Key:   State,
+			Value: StateOn,
+		},
+		KV{
+			Key:   AccessKey,
+			Value: cred.AccessKey,
+		},
+		KV{
+			Key:   SecretKey,
+			Value: cred.SecretKey,
+		},
 	}
 }
 
@@ -43,19 +52,13 @@ func SetRegion(c Config, name string) {
 		return
 	}
 	c[RegionSubSys][Default] = KVS{
-		RegionName: name,
-		State:      StateOn,
-	}
-}
-
-// SetWorm - One time migration code needed, for migrating from older config to new for Worm mode.
-func SetWorm(c Config, b bool) {
-	if !b {
-		// We don't save disabled configs
-		return
-	}
-	// Set the new value.
-	c[WormSubSys][Default] = KVS{
-		State: StateOn,
+		KV{
+			Key:   RegionName,
+			Value: name,
+		},
+		KV{
+			Key:   State,
+			Value: StateOn,
+		},
 	}
 }

@@ -156,7 +156,7 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		if scanner.Text() == "" || strings.HasPrefix(scanner.Text(), config.KvComment) {
 			continue
 		}
-		if err = cfg.SetKVS(scanner.Text()); err != nil {
+		if err = cfg.SetKVS(scanner.Text(), defaultKVS()); err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
@@ -212,7 +212,7 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	var buf = &bytes.Buffer{}
 	key := vars["key"]
 	if key != "" {
-		kvs, err := cfg.GetKVS(key)
+		kvs, err := cfg.GetKVS(key, defaultKVS())
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
@@ -311,11 +311,12 @@ func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r
 	oldCfg := cfg.Clone()
 	scanner := bufio.NewScanner(bytes.NewReader(kvBytes))
 	for scanner.Scan() {
-		// Skip any empty lines
-		if scanner.Text() == "" {
+		// Skip any empty lines, or comment like characters
+		if scanner.Text() == "" || strings.HasPrefix(scanner.Text(), config.KvComment) {
 			continue
 		}
-		if err = cfg.SetKVS(scanner.Text()); err != nil {
+
+		if err = cfg.SetKVS(scanner.Text(), defaultKVS()); err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}

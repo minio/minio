@@ -22,11 +22,6 @@ import "github.com/minio/minio/cmd/config"
 var (
 	Help = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.State,
-			Description: "Indicates if HTTP logger is enabled or not",
-			Type:        "on|off",
-		},
-		config.HelpKV{
 			Key:         Endpoint,
 			Description: `HTTP logger endpoint eg: "http://localhost:8080/minio/logs/server"`,
 			Type:        "url",
@@ -46,11 +41,6 @@ var (
 	}
 
 	HelpAudit = config.HelpKVS{
-		config.HelpKV{
-			Key:         config.State,
-			Description: "Indicates if HTTP Audit logger is enabled or not",
-			Type:        "on|off",
-		},
 		config.HelpKV{
 			Key:         Endpoint,
 			Description: `HTTP Audit logger endpoint eg: "http://localhost:8080/minio/logs/audit"`,

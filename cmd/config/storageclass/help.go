@@ -22,11 +22,6 @@ import "github.com/minio/minio/cmd/config"
 var (
 	Help = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.State,
-			Description: "Indicates if storageclass is enabled or not",
-			Type:        "on|off",
-		},
-		config.HelpKV{
 			Key:         ClassRRS,
 			Description: `Set reduced redundancy storage class parity ratio. eg: "EC:2"`,
 			Optional:    true,

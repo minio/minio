@@ -9,8 +9,8 @@ minio gateway <name> -h
 ...
 ...
   CACHE:
-     MINIO_CACHE_DRIVES: List of mounted cache drives or directories delimited by ";"
-     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";"
+     MINIO_CACHE_DRIVES: List of mounted cache drives or directories delimited by ","
+     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ","
      MINIO_CACHE_EXPIRY: Cache expiry duration in days
      MINIO_CACHE_QUOTA: Maximum permitted usage of the cache in percentage (0-100).
 ...
@@ -19,8 +19,8 @@ minio gateway <name> -h
   7. Start MinIO gateway to s3 with edge caching enabled on '/mnt/drive1', '/mnt/drive2' and '/mnt/export1 ... /mnt/export24',
      exclude all objects under 'mybucket', exclude all objects with '.pdf' as extension
      with expiry up to 40 days.
-     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/export{1..24}"
-     $ export MINIO_CACHE_EXCLUDE="mybucket/*;*.pdf"
+     $ export MINIO_CACHE_DRIVES="/mnt/drive1,/mnt/drive2,/mnt/export{1..24}"
+     $ export MINIO_CACHE_EXCLUDE="mybucket/*,*.pdf"
      $ export MINIO_CACHE_EXPIRY=40
      $ export MINIO_CACHE_QUOTA=80
      $ minio gateway s3
