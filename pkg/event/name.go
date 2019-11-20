@@ -77,7 +77,7 @@ func (name Name) String() string {
 	case ObjectCreatedPut:
 		return "s3:ObjectCreated:Put"
 	case ObjectCreatedPutRetention:
-		return "s3:ObjectAccessed:PutRetention"
+		return "s3:ObjectCreated:PutRetention"
 	case ObjectRemovedAll:
 		return "s3:ObjectRemoved:*"
 	case ObjectRemovedDelete:
