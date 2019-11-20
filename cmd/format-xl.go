@@ -471,7 +471,7 @@ func formatXLGetDeploymentID(refFormat *formatXLV3, formats []*formatXLV3) (stri
 }
 
 // formatXLFixDeploymentID - Add deployment id if it is not present.
-func formatXLFixDeploymentID(endpoints EndpointList, storageDisks []StorageAPI, refFormat *formatXLV3) (err error) {
+func formatXLFixDeploymentID(endpoints Endpoints, storageDisks []StorageAPI, refFormat *formatXLV3) (err error) {
 	// Attempt to load all `format.json` from all disks.
 	var sErrs []error
 	formats, sErrs := loadFormatXLAll(storageDisks)
@@ -515,7 +515,7 @@ func formatXLFixDeploymentID(endpoints EndpointList, storageDisks []StorageAPI, 
 }
 
 // Update only the valid local disks which have not been updated before.
-func formatXLFixLocalDeploymentID(endpoints EndpointList, storageDisks []StorageAPI, refFormat *formatXLV3) error {
+func formatXLFixLocalDeploymentID(endpoints Endpoints, storageDisks []StorageAPI, refFormat *formatXLV3) error {
 	// If this server was down when the deploymentID was updated
 	// then we make sure that we update the local disks with the deploymentID.
 	for index, storageDisk := range storageDisks {
@@ -655,7 +655,7 @@ func closeStorageDisks(storageDisks []StorageAPI) {
 
 // Initialize storage disks for each endpoint.
 // Errors are returned for each endpoint with matching index.
-func initStorageDisksWithErrors(endpoints EndpointList) ([]StorageAPI, []error) {
+func initStorageDisksWithErrors(endpoints Endpoints) ([]StorageAPI, []error) {
 	// Bootstrap disks.
 	storageDisks := make([]StorageAPI, len(endpoints))
 	g := errgroup.WithNErrs(len(endpoints))
@@ -695,7 +695,7 @@ func formatXLV3ThisEmpty(formats []*formatXLV3) bool {
 }
 
 // fixFormatXLV3 - fix format XL configuration on all disks.
-func fixFormatXLV3(storageDisks []StorageAPI, endpoints EndpointList, formats []*formatXLV3) error {
+func fixFormatXLV3(storageDisks []StorageAPI, endpoints Endpoints, formats []*formatXLV3) error {
 	for i, format := range formats {
 		if format == nil || !endpoints[i].IsLocal {
 			continue

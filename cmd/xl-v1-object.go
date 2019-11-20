@@ -123,27 +123,7 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 // GetObjectNInfo - returns object info and an object
 // Read(Closer). When err != nil, the returned reader is always nil.
 func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
-	var nsUnlocker = func() {}
-
-	// Acquire lock
-	if lockType != noLock {
-		lock := xl.nsMutex.NewNSLock(ctx, xl.getLockers(), bucket, object)
-		switch lockType {
-		case writeLock:
-			if err = lock.GetLock(globalObjectTimeout); err != nil {
-				return nil, err
-			}
-			nsUnlocker = lock.Unlock
-		case readLock:
-			if err = lock.GetRLock(globalObjectTimeout); err != nil {
-				return nil, err
-			}
-			nsUnlocker = lock.RUnlock
-		}
-	}
-
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
-		nsUnlocker()
 		return nil, err
 	}
 
@@ -152,20 +132,18 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 	if hasSuffix(object, SlashSeparator) {
 		var objInfo ObjectInfo
 		if objInfo, err = xl.getObjectInfoDir(ctx, bucket, object); err != nil {
-			nsUnlocker()
 			return nil, toObjectErr(err, bucket, object)
 		}
-		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts.CheckCopyPrecondFn, nsUnlocker)
+		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts.CheckCopyPrecondFn)
 	}
 
 	var objInfo ObjectInfo
 	objInfo, err = xl.getObjectInfo(ctx, bucket, object)
 	if err != nil {
-		nsUnlocker()
 		return nil, toObjectErr(err, bucket, object)
 	}
 
-	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts.CheckCopyPrecondFn, nsUnlocker)
+	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts.CheckCopyPrecondFn)
 	if nErr != nil {
 		return nil, nErr
 	}
@@ -189,12 +167,6 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
 func (xl xlObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
-	// Lock the object before reading.
-	objectLock := xl.nsMutex.NewNSLock(ctx, xl.getLockers(), bucket, object)
-	if err := objectLock.GetRLock(globalObjectTimeout); err != nil {
-		return err
-	}
-	defer objectLock.RUnlock()
 	return xl.getObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
 }
 
@@ -368,13 +340,6 @@ func (xl xlObjects) getObjectInfoDir(ctx context.Context, bucket, object string)
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (oi ObjectInfo, e error) {
-	// Lock the object before reading.
-	objectLock := xl.nsMutex.NewNSLock(ctx, xl.getLockers(), bucket, object)
-	if err := objectLock.GetRLock(globalObjectTimeout); err != nil {
-		return oi, err
-	}
-	defer objectLock.RUnlock()
-
 	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
 		return oi, err
 	}
@@ -496,13 +461,6 @@ func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string,
 	if err = checkPutObjectArgs(ctx, bucket, object, xl, data.Size()); err != nil {
 		return ObjectInfo{}, err
 	}
-
-	// Lock the object.
-	objectLock := xl.nsMutex.NewNSLock(ctx, xl.getLockers(), bucket, object)
-	if err := objectLock.GetLock(globalObjectTimeout); err != nil {
-		return objInfo, err
-	}
-	defer objectLock.Unlock()
 
 	return xl.putObject(ctx, bucket, object, data, opts)
 }
@@ -844,20 +802,6 @@ func (xl xlObjects) deleteObjects(ctx context.Context, bucket string, objects []
 		errs[i] = checkDelObjArgs(ctx, bucket, object)
 	}
 
-	var objectLocks = make([]RWLocker, len(objects))
-
-	for i, object := range objects {
-		if errs[i] != nil {
-			continue
-		}
-		// Acquire a write lock before deleting the object.
-		objectLocks[i] = xl.nsMutex.NewNSLock(ctx, xl.getLockers(), bucket, object)
-		if errs[i] = objectLocks[i].GetLock(globalOperationTimeout); errs[i] != nil {
-			continue
-		}
-		defer objectLocks[i].Unlock()
-	}
-
 	for i, object := range objects {
 		isObjectDirs[i] = hasSuffix(object, SlashSeparator)
 	}
@@ -953,13 +897,6 @@ func (xl xlObjects) DeleteObjects(ctx context.Context, bucket string, objects []
 // any error as it is not necessary for the handler to reply back a
 // response to the client request.
 func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (err error) {
-	// Acquire a write lock before deleting the object.
-	objectLock := xl.nsMutex.NewNSLock(ctx, xl.getLockers(), bucket, object)
-	if perr := objectLock.GetLock(globalOperationTimeout); perr != nil {
-		return perr
-	}
-	defer objectLock.Unlock()
-
 	if err = checkDelObjArgs(ctx, bucket, object); err != nil {
 		return err
 	}

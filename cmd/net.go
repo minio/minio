@@ -120,10 +120,10 @@ func (n byLastOctetValue) Less(i, j int) bool {
 	// This case is needed when all ips in the list
 	// have same last octets, Following just ensures that
 	// 127.0.0.1 is moved to the end of the list.
-	if n[i].String() == "127.0.0.1" {
+	if n[i].IsLoopback() {
 		return false
 	}
-	if n[j].String() == "127.0.0.1" {
+	if n[j].IsLoopback() {
 		return true
 	}
 	return []byte(n[i].To4())[3] > []byte(n[j].To4())[3]
@@ -171,7 +171,8 @@ func getAPIEndpoints() (apiEndpoints []string) {
 	}
 
 	for _, ip := range ipList {
-		apiEndpoints = append(apiEndpoints, fmt.Sprintf("%s://%s", getURLScheme(globalIsSSL), net.JoinHostPort(ip, globalMinioPort)))
+		endpoint := fmt.Sprintf("%s://%s", getURLScheme(globalIsSSL), net.JoinHostPort(ip, globalMinioPort))
+		apiEndpoints = append(apiEndpoints, endpoint)
 	}
 
 	return apiEndpoints

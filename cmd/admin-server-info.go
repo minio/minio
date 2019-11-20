@@ -30,27 +30,28 @@ import (
 	cpuhw "github.com/shirou/gopsutil/cpu"
 )
 
-// getLocalMemUsage - returns ServerMemUsageInfo for only the
-// local endpoints from given list of endpoints
-func getLocalMemUsage(endpoints EndpointList, r *http.Request) ServerMemUsageInfo {
+// getLocalMemUsage - returns ServerMemUsageInfo for all zones, endpoints.
+func getLocalMemUsage(endpointZones EndpointZones, r *http.Request) ServerMemUsageInfo {
 	var memUsages []mem.Usage
 	var historicUsages []mem.Usage
 	seenHosts := set.NewStringSet()
-	for _, endpoint := range endpoints {
-		if seenHosts.Contains(endpoint.Host) {
-			continue
-		}
-		seenHosts.Add(endpoint.Host)
+	for _, ep := range endpointZones {
+		for _, endpoint := range ep.Endpoints {
+			if seenHosts.Contains(endpoint.Host) {
+				continue
+			}
+			seenHosts.Add(endpoint.Host)
 
-		// Only proceed for local endpoints
-		if endpoint.IsLocal {
-			memUsages = append(memUsages, mem.GetUsage())
-			historicUsages = append(historicUsages, mem.GetHistoricUsage())
+			// Only proceed for local endpoints
+			if endpoint.IsLocal {
+				memUsages = append(memUsages, mem.GetUsage())
+				historicUsages = append(historicUsages, mem.GetHistoricUsage())
+			}
 		}
 	}
 	addr := r.Host
 	if globalIsDistXL {
-		addr = GetLocalPeer(endpoints)
+		addr = GetLocalPeer(endpointZones)
 	}
 	return ServerMemUsageInfo{
 		Addr:          addr,
@@ -59,27 +60,28 @@ func getLocalMemUsage(endpoints EndpointList, r *http.Request) ServerMemUsageInf
 	}
 }
 
-// getLocalCPULoad - returns ServerCPULoadInfo for only the
-// local endpoints from given list of endpoints
-func getLocalCPULoad(endpoints EndpointList, r *http.Request) ServerCPULoadInfo {
+// getLocalCPULoad - returns ServerCPULoadInfo for all zones, endpoints.
+func getLocalCPULoad(endpointZones EndpointZones, r *http.Request) ServerCPULoadInfo {
 	var cpuLoads []cpu.Load
 	var historicLoads []cpu.Load
 	seenHosts := set.NewStringSet()
-	for _, endpoint := range endpoints {
-		if seenHosts.Contains(endpoint.Host) {
-			continue
-		}
-		seenHosts.Add(endpoint.Host)
+	for _, ep := range endpointZones {
+		for _, endpoint := range ep.Endpoints {
+			if seenHosts.Contains(endpoint.Host) {
+				continue
+			}
+			seenHosts.Add(endpoint.Host)
 
-		// Only proceed for local endpoints
-		if endpoint.IsLocal {
-			cpuLoads = append(cpuLoads, cpu.GetLoad())
-			historicLoads = append(historicLoads, cpu.GetHistoricLoad())
+			// Only proceed for local endpoints
+			if endpoint.IsLocal {
+				cpuLoads = append(cpuLoads, cpu.GetLoad())
+				historicLoads = append(historicLoads, cpu.GetHistoricLoad())
+			}
 		}
 	}
 	addr := r.Host
 	if globalIsDistXL {
-		addr = GetLocalPeer(endpoints)
+		addr = GetLocalPeer(endpointZones)
 	}
 	return ServerCPULoadInfo{
 		Addr:         addr,
@@ -88,26 +90,27 @@ func getLocalCPULoad(endpoints EndpointList, r *http.Request) ServerCPULoadInfo 
 	}
 }
 
-// getLocalDrivesPerf - returns ServerDrivesPerfInfo for only the
-// local endpoints from given list of endpoints
-func getLocalDrivesPerf(endpoints EndpointList, size int64, r *http.Request) madmin.ServerDrivesPerfInfo {
+// getLocalDrivesPerf - returns ServerDrivesPerfInfo for all zones, endpoints.
+func getLocalDrivesPerf(endpointZones EndpointZones, size int64, r *http.Request) madmin.ServerDrivesPerfInfo {
 	var dps []disk.Performance
-	for _, endpoint := range endpoints {
-		// Only proceed for local endpoints
-		if endpoint.IsLocal {
-			if _, err := os.Stat(endpoint.Path); err != nil {
-				// Since this drive is not available, add relevant details and proceed
-				dps = append(dps, disk.Performance{Path: endpoint.Path, Error: err.Error()})
-				continue
+	for _, ep := range endpointZones {
+		for _, endpoint := range ep.Endpoints {
+			// Only proceed for local endpoints
+			if endpoint.IsLocal {
+				if _, err := os.Stat(endpoint.Path); err != nil {
+					// Since this drive is not available, add relevant details and proceed
+					dps = append(dps, disk.Performance{Path: endpoint.Path, Error: err.Error()})
+					continue
+				}
+				dp := disk.GetPerformance(pathJoin(endpoint.Path, minioMetaTmpBucket, mustGetUUID()), size)
+				dp.Path = endpoint.Path
+				dps = append(dps, dp)
 			}
-			dp := disk.GetPerformance(pathJoin(endpoint.Path, minioMetaTmpBucket, mustGetUUID()), size)
-			dp.Path = endpoint.Path
-			dps = append(dps, dp)
 		}
 	}
 	addr := r.Host
 	if globalIsDistXL {
-		addr = GetLocalPeer(endpoints)
+		addr = GetLocalPeer(endpointZones)
 	}
 	return madmin.ServerDrivesPerfInfo{
 		Addr: addr,
@@ -116,31 +119,32 @@ func getLocalDrivesPerf(endpoints EndpointList, size int64, r *http.Request) mad
 	}
 }
 
-// getLocalCPUInfo - returns ServerCPUHardwareInfo only for the
-// local endpoints from given list of endpoints
-func getLocalCPUInfo(endpoints EndpointList, r *http.Request) madmin.ServerCPUHardwareInfo {
+// getLocalCPUInfo - returns ServerCPUHardwareInfo for all zones, endpoints.
+func getLocalCPUInfo(endpointZones EndpointZones, r *http.Request) madmin.ServerCPUHardwareInfo {
 	var cpuHardwares []cpuhw.InfoStat
 	seenHosts := set.NewStringSet()
-	for _, endpoint := range endpoints {
-		if seenHosts.Contains(endpoint.Host) {
-			continue
-		}
-		// Add to the list of visited hosts
-		seenHosts.Add(endpoint.Host)
-		// Only proceed for local endpoints
-		if endpoint.IsLocal {
-			cpuHardware, err := cpuhw.Info()
-			if err != nil {
-				return madmin.ServerCPUHardwareInfo{
-					Error: err.Error(),
-				}
+	for _, ep := range endpointZones {
+		for _, endpoint := range ep.Endpoints {
+			if seenHosts.Contains(endpoint.Host) {
+				continue
 			}
-			cpuHardwares = append(cpuHardwares, cpuHardware...)
+			// Add to the list of visited hosts
+			seenHosts.Add(endpoint.Host)
+			// Only proceed for local endpoints
+			if endpoint.IsLocal {
+				cpuHardware, err := cpuhw.Info()
+				if err != nil {
+					return madmin.ServerCPUHardwareInfo{
+						Error: err.Error(),
+					}
+				}
+				cpuHardwares = append(cpuHardwares, cpuHardware...)
+			}
 		}
 	}
 	addr := r.Host
 	if globalIsDistXL {
-		addr = GetLocalPeer(endpoints)
+		addr = GetLocalPeer(endpointZones)
 	}
 
 	return madmin.ServerCPUHardwareInfo{
@@ -149,31 +153,32 @@ func getLocalCPUInfo(endpoints EndpointList, r *http.Request) madmin.ServerCPUHa
 	}
 }
 
-// getLocalNetworkInfo - returns ServerNetworkHardwareInfo only for the
-// local endpoints from given list of endpoints
-func getLocalNetworkInfo(endpoints EndpointList, r *http.Request) madmin.ServerNetworkHardwareInfo {
+// getLocalNetworkInfo - returns ServerNetworkHardwareInfo for all zones, endpoints.
+func getLocalNetworkInfo(endpointZones EndpointZones, r *http.Request) madmin.ServerNetworkHardwareInfo {
 	var networkHardwares []net.Interface
 	seenHosts := set.NewStringSet()
-	for _, endpoint := range endpoints {
-		if seenHosts.Contains(endpoint.Host) {
-			continue
-		}
-		// Add to the list of visited hosts
-		seenHosts.Add(endpoint.Host)
-		// Only proceed for local endpoints
-		if endpoint.IsLocal {
-			networkHardware, err := net.Interfaces()
-			if err != nil {
-				return madmin.ServerNetworkHardwareInfo{
-					Error: err.Error(),
-				}
+	for _, ep := range endpointZones {
+		for _, endpoint := range ep.Endpoints {
+			if seenHosts.Contains(endpoint.Host) {
+				continue
 			}
-			networkHardwares = append(networkHardwares, networkHardware...)
+			// Add to the list of visited hosts
+			seenHosts.Add(endpoint.Host)
+			// Only proceed for local endpoints
+			if endpoint.IsLocal {
+				networkHardware, err := net.Interfaces()
+				if err != nil {
+					return madmin.ServerNetworkHardwareInfo{
+						Error: err.Error(),
+					}
+				}
+				networkHardwares = append(networkHardwares, networkHardware...)
+			}
 		}
 	}
 	addr := r.Host
 	if globalIsDistXL {
-		addr = GetLocalPeer(endpoints)
+		addr = GetLocalPeer(endpointZones)
 	}
 
 	return madmin.ServerNetworkHardwareInfo{

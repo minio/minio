@@ -123,7 +123,7 @@ func TestTreeWalk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create tmp directory: %s", err)
 	}
-	endpoints := mustGetNewEndpointList(fsDir)
+	endpoints := mustGetNewEndpoints(fsDir)
 	disk, err := newStorageAPI(endpoints[0])
 	if err != nil {
 		t.Fatalf("Unable to create StorageAPI: %s", err)
@@ -160,7 +160,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create tmp directory: %s", err)
 	}
-	endpoints := mustGetNewEndpointList(fsDir)
+	endpoints := mustGetNewEndpoints(fsDir)
 	disk, err := newStorageAPI(endpoints[0])
 	if err != nil {
 		t.Fatalf("Unable to create StorageAPI: %s", err)
@@ -235,13 +235,13 @@ func TestListDir(t *testing.T) {
 	}
 
 	// Create two StorageAPIs disk1 and disk2.
-	endpoints := mustGetNewEndpointList(fsDir1)
+	endpoints := mustGetNewEndpoints(fsDir1)
 	disk1, err := newStorageAPI(endpoints[0])
 	if err != nil {
 		t.Errorf("Unable to create StorageAPI: %s", err)
 	}
 
-	endpoints = mustGetNewEndpointList(fsDir2)
+	endpoints = mustGetNewEndpoints(fsDir2)
 	disk2, err := newStorageAPI(endpoints[0])
 	if err != nil {
 		t.Errorf("Unable to create StorageAPI: %s", err)
@@ -300,7 +300,7 @@ func TestRecursiveTreeWalk(t *testing.T) {
 		t.Fatalf("Unable to create tmp directory: %s", err)
 	}
 
-	endpoints := mustGetNewEndpointList(fsDir1)
+	endpoints := mustGetNewEndpoints(fsDir1)
 	disk1, err := newStorageAPI(endpoints[0])
 	if err != nil {
 		t.Fatalf("Unable to create StorageAPI: %s", err)
@@ -405,7 +405,7 @@ func TestSortedness(t *testing.T) {
 		t.Errorf("Unable to create tmp directory: %s", err)
 	}
 
-	endpoints := mustGetNewEndpointList(fsDir1)
+	endpoints := mustGetNewEndpoints(fsDir1)
 	disk1, err := newStorageAPI(endpoints[0])
 	if err != nil {
 		t.Fatalf("Unable to create StorageAPI: %s", err)
@@ -476,7 +476,7 @@ func TestTreeWalkIsEnd(t *testing.T) {
 		t.Errorf("Unable to create tmp directory: %s", err)
 	}
 
-	endpoints := mustGetNewEndpointList(fsDir1)
+	endpoints := mustGetNewEndpoints(fsDir1)
 	disk1, err := newStorageAPI(endpoints[0])
 	if err != nil {
 		t.Fatalf("Unable to create StorageAPI: %s", err)

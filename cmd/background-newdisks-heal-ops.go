@@ -44,7 +44,7 @@ func monitorLocalDisksAndHeal() {
 		break
 	}
 
-	sets, ok := objAPI.(*xlSets)
+	z, ok := objAPI.(*xlZones)
 	if !ok {
 		return
 	}
@@ -66,21 +66,24 @@ func monitorLocalDisksAndHeal() {
 	for {
 		time.Sleep(defaultMonitorNewDiskInterval)
 
-		localDisksToHeal := []Endpoint{}
-		for _, endpoint := range globalEndpoints {
-			if !endpoint.IsLocal {
+		localDisksInZoneHeal := make([]Endpoints, len(z.zones))
+		for i, ep := range globalEndpoints {
+			localDisksToHeal := Endpoints{}
+			for _, endpoint := range ep.Endpoints {
+				if !endpoint.IsLocal {
+					continue
+				}
+				// Try to connect to the current endpoint
+				// and reformat if the current disk is not formatted
+				_, _, err := connectEndpoint(endpoint)
+				if err == errUnformattedDisk {
+					localDisksToHeal = append(localDisksToHeal, endpoint)
+				}
+			}
+			if len(localDisksToHeal) == 0 {
 				continue
 			}
-			// Try to connect to the current endpoint
-			// and reformat if the current disk is not formatted
-			_, _, err := connectEndpoint(endpoint)
-			if err == errUnformattedDisk {
-				localDisksToHeal = append(localDisksToHeal, endpoint)
-			}
-		}
-
-		if len(localDisksToHeal) == 0 {
-			continue
+			localDisksInZoneHeal[i] = localDisksToHeal
 		}
 
 		// Reformat disks
@@ -88,31 +91,36 @@ func monitorLocalDisksAndHeal() {
 		// Ensure that reformatting disks is finished
 		bgSeq.sourceCh <- nopHeal
 
+		var erasureSetInZoneToHeal = make([][]int, len(localDisksInZoneHeal))
 		// Compute the list of erasure set to heal
-		var erasureSetToHeal []int
-		for _, endpoint := range localDisksToHeal {
-			// Load the new format of this passed endpoint
-			_, format, err := connectEndpoint(endpoint)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				continue
-			}
-			// Calculate the set index where the current endpoint belongs
-			setIndex, _, err := findDiskIndex(sets.format, format)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				continue
-			}
+		for i, localDisksToHeal := range localDisksInZoneHeal {
+			var erasureSetToHeal []int
+			for _, endpoint := range localDisksToHeal {
+				// Load the new format of this passed endpoint
+				_, format, err := connectEndpoint(endpoint)
+				if err != nil {
+					logger.LogIf(ctx, err)
+					continue
+				}
+				// Calculate the set index where the current endpoint belongs
+				setIndex, _, err := findDiskIndex(z.zones[i].format, format)
+				if err != nil {
+					logger.LogIf(ctx, err)
+					continue
+				}
 
-			erasureSetToHeal = append(erasureSetToHeal, setIndex)
+				erasureSetToHeal = append(erasureSetToHeal, setIndex)
+			}
+			erasureSetInZoneToHeal[i] = erasureSetToHeal
 		}
 
 		// Heal all erasure sets that need
-		for _, setIndex := range erasureSetToHeal {
-			xlObj := sets.sets[setIndex]
-			err := healErasureSet(ctx, setIndex, xlObj)
-			if err != nil {
-				logger.LogIf(ctx, err)
+		for i, erasureSetToHeal := range erasureSetInZoneToHeal {
+			for _, setIndex := range erasureSetToHeal {
+				err := healErasureSet(ctx, setIndex, z.zones[i].sets[setIndex])
+				if err != nil {
+					logger.LogIf(ctx, err)
+				}
 			}
 		}
 	}

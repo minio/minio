@@ -23,15 +23,15 @@ import (
 )
 
 // Composed function registering routers for only distributed XL setup.
-func registerDistXLRouters(router *mux.Router, endpoints EndpointList) {
+func registerDistXLRouters(router *mux.Router, endpointZones EndpointZones) {
 	// Register storage rpc router only if its a distributed setup.
-	registerStorageRESTHandlers(router, endpoints)
+	registerStorageRESTHandlers(router, endpointZones)
 
 	// Register peer REST router only if its a distributed setup.
 	registerPeerRESTHandlers(router)
 
 	// Register distributed namespace lock.
-	registerLockRESTHandlers(router, endpoints)
+	registerLockRESTHandlers(router, endpointZones)
 
 }
 
@@ -79,14 +79,14 @@ var globalHandlers = []HandlerFunc{
 }
 
 // configureServer handler returns final handler for the http server.
-func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
+func configureServerHandler(endpointZones EndpointZones) (http.Handler, error) {
 	// Initialize router. `SkipClean(true)` stops gorilla/mux from
 	// normalizing URL path minio/minio#3256
 	router := mux.NewRouter().SkipClean(true)
 
 	// Initialize distributed NS lock.
 	if globalIsDistXL {
-		registerDistXLRouters(router, endpoints)
+		registerDistXLRouters(router, endpointZones)
 	}
 
 	// Add STS router always.

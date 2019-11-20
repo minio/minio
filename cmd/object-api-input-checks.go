@@ -74,15 +74,6 @@ func checkListObjsArgs(ctx context.Context, bucket, prefix, marker, delimiter st
 			Object: prefix,
 		}
 	}
-	// Verify if delimiter is anything other than '/', which we do not support.
-	if delimiter != "" && delimiter != SlashSeparator {
-		logger.LogIf(ctx, UnsupportedDelimiter{
-			Delimiter: delimiter,
-		})
-		return UnsupportedDelimiter{
-			Delimiter: delimiter,
-		}
-	}
 	// Verify if marker has prefix.
 	if marker != "" && !hasPrefix(marker, prefix) {
 		logger.LogIf(ctx, InvalidMarkerPrefixCombination{

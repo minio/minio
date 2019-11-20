@@ -168,7 +168,8 @@ func TestListOnlineDisks(t *testing.T) {
 	bucket := "bucket"
 	object := "object"
 	data := bytes.Repeat([]byte("a"), 1024)
-	xlDisks := obj.(*xlObjects).storageDisks
+	z := obj.(*xlZones)
+	xlDisks := z.zones[0].sets[0].getDisks()
 	for i, test := range testCases {
 		// Prepare bucket/object backend for the tests below.
 
@@ -266,10 +267,10 @@ func TestDisksWithAllParts(t *testing.T) {
 	object := "object"
 	// make data with more than one part
 	partCount := 3
-	data := bytes.Repeat([]byte("a"), int(globalPutPartSize)*partCount)
-	xl := obj.(*xlObjects)
-	xlDisks := xl.storageDisks
-
+	data := bytes.Repeat([]byte("a"), 6*1024*1024*partCount)
+	z := obj.(*xlZones)
+	xl := z.zones[0].sets[0]
+	xlDisks := xl.getDisks()
 	err = obj.MakeBucketWithLocation(ctx, "bucket", "")
 	if err != nil {
 		t.Fatalf("Failed to make a bucket %v", err)
@@ -281,7 +282,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	}
 
 	_, errs := readAllXLMetadata(ctx, xlDisks, bucket, object)
-	readQuorum := len(xl.storageDisks) / 2
+	readQuorum := len(xlDisks) / 2
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
 		t.Fatalf("Failed to read xl meta data %v", reducedErr)
 	}

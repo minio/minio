@@ -55,18 +55,6 @@ func (s setsStorageAPI) Close() error {
 	return nil
 }
 
-func (s setsDsyncLockers) Close() error {
-	for i := 0; i < len(s); i++ {
-		for _, locker := range s[i] {
-			if locker == nil {
-				continue
-			}
-			locker.Close()
-		}
-	}
-	return nil
-}
-
 // xlSets implements ObjectLayer combining a static list of erasure coded
 // object sets. NOTE: There is no dynamic scaling allowed or intended in
 // current design.
@@ -89,7 +77,7 @@ type xlSets struct {
 	lockersMap map[Endpoint]dsync.NetLocker
 
 	// List of endpoints provided on the command line.
-	endpoints EndpointList
+	endpoints Endpoints
 
 	// Total number of sets and the number of disks per set.
 	setCount, drivesPerSet int
@@ -123,11 +111,10 @@ func (s *xlSets) isConnected(endpoint Endpoint) bool {
 			if s.xlDisks[i][j].String() != endpointStr {
 				continue
 			}
-			if s.xlDisks[i][j].IsOnline() {
-				return true
+			if !s.xlLockers[i][j].IsOnline() {
+				continue
 			}
-			s.xlLockers[i][j].Close()
-			return false
+			return s.xlDisks[i][j].IsOnline()
 		}
 	}
 	return false
@@ -282,8 +269,7 @@ func (s *xlSets) GetDisks(setIndex int) func() []StorageAPI {
 const defaultMonitorConnectEndpointInterval = time.Second * 10 // Set to 10 secs.
 
 // Initialize new set of erasure coded sets.
-func newXLSets(endpoints EndpointList, format *formatXLV3, setCount int, drivesPerSet int) (ObjectLayer, error) {
-
+func newXLSets(endpoints Endpoints, format *formatXLV3, setCount int, drivesPerSet int) (*xlSets, error) {
 	lockersMap := make(map[Endpoint]dsync.NetLocker)
 	for _, endpoint := range endpoints {
 		lockersMap[endpoint] = newLockAPI(endpoint)
@@ -464,13 +450,6 @@ func (s *xlSets) Shutdown(ctx context.Context) error {
 // even if one of the sets fail to create buckets, we proceed to undo a
 // successful operation.
 func (s *xlSets) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
-	set := s.getHashedSet(bucket)
-	bucketLock := set.nsMutex.NewNSLock(ctx, set.getLockers(), bucket, "")
-	if err := bucketLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer bucketLock.Unlock()
-
 	g := errgroup.WithNErrs(len(s.sets))
 
 	// Create buckets in parallel across all sets.
@@ -549,14 +528,7 @@ func (s *xlSets) getHashedSet(input string) (set *xlObjects) {
 
 // GetBucketInfo - returns bucket info from one of the erasure coded set.
 func (s *xlSets) GetBucketInfo(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error) {
-	set := s.getHashedSet(bucket)
-	bucketLock := set.nsMutex.NewNSLock(ctx, set.getLockers(), bucket, "")
-	if err = bucketLock.GetRLock(globalOperationTimeout); err != nil {
-		return bucketInfo, err
-	}
-	defer bucketLock.RUnlock()
-
-	return s.getHashedSet(bucket).GetBucketInfo(ctx, bucket)
+	return s.getHashedSet("").GetBucketInfo(ctx, bucket)
 }
 
 // ListObjectsV2 lists all objects in bucket filtered by prefix
@@ -635,13 +607,6 @@ func (s *xlSets) IsCompressionSupported() bool {
 // even if one of the sets fail to delete buckets, we proceed to
 // undo a successful operation.
 func (s *xlSets) DeleteBucket(ctx context.Context, bucket string) error {
-	set := s.getHashedSet(bucket)
-	bucketLock := set.nsMutex.NewNSLock(ctx, set.getLockers(), bucket, "")
-	if err := bucketLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer bucketLock.Unlock()
-
 	g := errgroup.WithNErrs(len(s.sets))
 
 	// Delete buckets in parallel across all sets.
@@ -729,7 +694,6 @@ func (s *xlSets) DeleteObject(ctx context.Context, bucket string, object string)
 // objects are group by set first, and then bulk delete is invoked
 // for each set, the error response of each delete will be returned
 func (s *xlSets) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
-
 	type delObj struct {
 		// Set index associated to this object
 		setIndex int
@@ -787,13 +751,6 @@ func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucke
 		return srcSet.CopyObject(ctx, srcBucket, srcObject, destBucket, destObject, srcInfo, srcOpts, dstOpts)
 	}
 
-	if !cpSrcDstSame {
-		objectDWLock := destSet.nsMutex.NewNSLock(ctx, destSet.getLockers(), destBucket, destObject)
-		if err := objectDWLock.GetLock(globalObjectTimeout); err != nil {
-			return objInfo, err
-		}
-		defer objectDWLock.Unlock()
-	}
 	putOpts := ObjectOptions{ServerSideEncryption: dstOpts.ServerSideEncryption, UserDefined: srcInfo.UserDefined}
 	return destSet.putObject(ctx, destBucket, destObject, srcInfo.PutObjReader, putOpts)
 }
@@ -1078,11 +1035,6 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 // walked and merged at this layer. Resulting value through the merge process sends
 // the data in lexically sorted order.
 func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, heal bool) (loi ListObjectsInfo, err error) {
-	if delimiter != SlashSeparator && delimiter != "" {
-		// "heal" option passed can be ignored as the heal-listing does not send non-standard delimiter.
-		return s.listObjectsNonSlash(ctx, bucket, prefix, marker, delimiter, maxKeys)
-	}
-
 	if err = checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
 		return loi, err
 	}
@@ -1112,6 +1064,11 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 	// Over flowing count - reset to maxObjectList.
 	if maxKeys < 0 || maxKeys > maxObjectList {
 		maxKeys = maxObjectList
+	}
+
+	if delimiter != SlashSeparator && delimiter != "" {
+		// "heal" option passed can be ignored as the heal-listing does not send non-standard delimiter.
+		return s.listObjectsNonSlash(ctx, bucket, prefix, marker, delimiter, maxKeys)
 	}
 
 	// Default is recursive, if delimiter is set then list non recursive.
@@ -1284,7 +1241,7 @@ else
 fi
 */
 
-func formatsToDrivesInfo(endpoints EndpointList, formats []*formatXLV3, sErrs []error) (beforeDrives []madmin.DriveInfo) {
+func formatsToDrivesInfo(endpoints Endpoints, formats []*formatXLV3, sErrs []error) (beforeDrives []madmin.DriveInfo) {
 	beforeDrives = make([]madmin.DriveInfo, len(endpoints))
 	// Existing formats are available (i.e. ok), so save it in
 	// result, also populate disks to be healed.
@@ -1317,14 +1274,6 @@ func formatsToDrivesInfo(endpoints EndpointList, formats []*formatXLV3, sErrs []
 // Reloads the format from the disk, usually called by a remote peer notifier while
 // healing in a distributed setup.
 func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
-	// Acquire lock on format.json
-	set := s.getHashedSet(formatConfigFile)
-	formatLock := set.nsMutex.NewNSLock(ctx, set.getLockers(), minioMetaBucket, formatConfigFile)
-	if err = formatLock.GetRLock(globalHealingTimeout); err != nil {
-		return err
-	}
-	defer formatLock.RUnlock()
-
 	storageDisks, errs := initStorageDisksWithErrors(s.endpoints)
 	for i, err := range errs {
 		if err != nil && err != errDiskNotFound {
@@ -1367,7 +1316,6 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 
 	// Close all existing disks, lockers and reconnect all the disks/lockers.
 	s.xlDisks.Close()
-	s.xlLockers.Close()
 	s.connectDisksAndLockers()
 
 	// Restart monitoring loop to monitor reformatted disks again.
@@ -1433,17 +1381,7 @@ func markRootDisksAsDown(storageDisks []StorageAPI) {
 }
 
 // HealFormat - heals missing `format.json` on fresh unformatted disks.
-// TODO: In future support corrupted disks missing format.json but has erasure
-// coded data in it.
 func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealResultItem, err error) {
-	// Acquire lock on format.json
-	set := s.getHashedSet(formatConfigFile)
-	formatLock := set.nsMutex.NewNSLock(ctx, set.getLockers(), minioMetaBucket, formatConfigFile)
-	if err = formatLock.GetLock(globalHealingTimeout); err != nil {
-		return madmin.HealResultItem{}, err
-	}
-	defer formatLock.Unlock()
-
 	storageDisks, errs := initStorageDisksWithErrors(s.endpoints)
 	for i, derr := range errs {
 		if derr != nil && derr != errDiskNotFound {
@@ -1576,7 +1514,6 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 
 		// Disconnect/relinquish all existing disks, lockers and reconnect the disks, lockers.
 		s.xlDisks.Close()
-		s.xlLockers.Close()
 		s.connectDisksAndLockers()
 
 		// Restart our monitoring loop to start monitoring newly formatted disks.
@@ -1588,13 +1525,6 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 
 // HealBucket - heals inconsistent buckets and bucket metadata on all sets.
 func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (result madmin.HealResultItem, err error) {
-	set := s.getHashedSet(bucket)
-	bucketLock := set.nsMutex.NewNSLock(ctx, set.getLockers(), bucket, "")
-	if err = bucketLock.GetLock(globalOperationTimeout); err != nil {
-		return result, err
-	}
-	defer bucketLock.Unlock()
-
 	// Initialize heal result info
 	result = madmin.HealResultItem{
 		Type:      madmin.HealItemBucket,
@@ -1697,7 +1627,7 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObj
 			// Wait at max 10 minute for an inprogress request before proceeding to heal
 			waitCount := 600
 			// Any requests in progress, delay the heal.
-			for (globalHTTPServer.GetRequestCount() >= int32(globalXLSetCount*globalXLSetDriveCount)) &&
+			for (globalHTTPServer.GetRequestCount() >= int32(s.setCount*s.drivesPerSet)) &&
 				waitCount > 0 {
 				waitCount--
 				time.Sleep(1 * time.Second)

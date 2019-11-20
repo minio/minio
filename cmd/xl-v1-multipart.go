@@ -262,13 +262,6 @@ func (xl xlObjects) NewMultipartUpload(ctx context.Context, bucket, object strin
 //
 // Implements S3 compatible Upload Part Copy API.
 func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (pi PartInfo, e error) {
-	// Hold read locks on source object only if we are
-	// going to read data from source object.
-	objectSRLock := xl.nsMutex.NewNSLock(ctx, xl.getLockers(), srcBucket, srcObject)
-	if err := objectSRLock.GetRLock(globalObjectTimeout); err != nil {
-		return pi, err
-	}
-	defer objectSRLock.RUnlock()
 
 	if err := checkNewMultipartArgs(ctx, srcBucket, srcObject, xl); err != nil {
 		return pi, err
@@ -303,17 +296,9 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	var partsMetadata []xlMetaV1
 	var errs []error
 	uploadIDPath := xl.getUploadIDDir(bucket, object, uploadID)
-	uploadIDLockPath := xl.getUploadIDLockPath(bucket, object, uploadID)
-
-	// pre-check upload id lock.
-	preUploadIDLock := xl.nsMutex.NewNSLock(ctx, xl.getLockers(), minioMetaMultipartBucket, uploadIDLockPath)
-	if err := preUploadIDLock.GetRLock(globalOperationTimeout); err != nil {
-		return pi, err
-	}
 
 	// Validates if upload ID exists.
 	if err := xl.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
-		preUploadIDLock.RUnlock()
 		return pi, toObjectErr(err, bucket, object, uploadID)
 	}
 
@@ -324,16 +309,13 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	// get Quorum for this object
 	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
 	if err != nil {
-		preUploadIDLock.RUnlock()
 		return pi, toObjectErr(err, bucket, object)
 	}
 
 	reducedErr := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
 	if reducedErr == errXLWriteQuorum {
-		preUploadIDLock.RUnlock()
 		return pi, toObjectErr(reducedErr, bucket, object)
 	}
-	preUploadIDLock.RUnlock()
 
 	// List all online disks.
 	onlineDisks, modTime := listOnlineDisks(xl.getDisks(), partsMetadata, errs)
@@ -402,13 +384,6 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 			onlineDisks[i] = nil
 		}
 	}
-
-	// post-upload check (write) lock
-	postUploadIDLock := xl.nsMutex.NewNSLock(ctx, xl.getLockers(), minioMetaMultipartBucket, uploadIDLockPath)
-	if err = postUploadIDLock.GetLock(globalOperationTimeout); err != nil {
-		return pi, err
-	}
-	defer postUploadIDLock.Unlock()
 
 	// Validates if upload ID exists.
 	if err := xl.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
@@ -497,16 +472,6 @@ func (xl xlObjects) ListObjectParts(ctx context.Context, bucket, object, uploadI
 	if err := checkListPartsArgs(ctx, bucket, object, xl); err != nil {
 		return result, err
 	}
-	// Hold lock so that there is no competing
-	// abort-multipart-upload or complete-multipart-upload.
-	uploadIDLock := xl.nsMutex.NewNSLock(ctx, xl.getLockers(),
-		minioMetaMultipartBucket,
-		xl.getUploadIDLockPath(bucket, object, uploadID))
-	if err := uploadIDLock.GetLock(globalListingTimeout); err != nil {
-		return result, err
-	}
-	defer uploadIDLock.Unlock()
-
 	if err := xl.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return result, toObjectErr(err, bucket, object, uploadID)
 	}
@@ -603,27 +568,6 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	if err := checkCompleteMultipartArgs(ctx, bucket, object, xl); err != nil {
 		return oi, err
 	}
-	// Hold write lock on the object.
-	destLock := xl.nsMutex.NewNSLock(ctx, xl.getLockers(), bucket, object)
-	if err := destLock.GetLock(globalObjectTimeout); err != nil {
-		return oi, err
-	}
-	defer destLock.Unlock()
-
-	uploadIDPath := xl.getUploadIDDir(bucket, object, uploadID)
-	uploadIDLockPath := xl.getUploadIDLockPath(bucket, object, uploadID)
-
-	// Hold lock so that
-	//
-	// 1) no one aborts this multipart upload
-	//
-	// 2) no one does a parallel complete-multipart-upload on this
-	// multipart upload
-	uploadIDLock := xl.nsMutex.NewNSLock(ctx, xl.getLockers(), minioMetaMultipartBucket, uploadIDLockPath)
-	if err := uploadIDLock.GetLock(globalOperationTimeout); err != nil {
-		return oi, err
-	}
-	defer uploadIDLock.Unlock()
 
 	if err := xl.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return oi, toObjectErr(err, bucket, object, uploadID)
@@ -637,6 +581,8 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5 := getCompleteMultipartMD5(parts)
+
+	uploadIDPath := xl.getUploadIDDir(bucket, object, uploadID)
 
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), minioMetaMultipartBucket, uploadIDPath)
@@ -820,21 +766,12 @@ func (xl xlObjects) AbortMultipartUpload(ctx context.Context, bucket, object, up
 	if err := checkAbortMultipartArgs(ctx, bucket, object, xl); err != nil {
 		return err
 	}
-	// Construct uploadIDPath.
-	uploadIDPath := xl.getUploadIDDir(bucket, object, uploadID)
-	uploadIDLockPath := xl.getUploadIDLockPath(bucket, object, uploadID)
-	// Hold lock so that there is no competing
-	// complete-multipart-upload or put-object-part.
-	uploadIDLock := xl.nsMutex.NewNSLock(ctx, xl.getLockers(), minioMetaMultipartBucket, uploadIDLockPath)
-	if err := uploadIDLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer uploadIDLock.Unlock()
-
 	// Validates if upload ID exists.
 	if err := xl.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return toObjectErr(err, bucket, object, uploadID)
 	}
+
+	uploadIDPath := xl.getUploadIDDir(bucket, object, uploadID)
 
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), minioMetaMultipartBucket, uploadIDPath)

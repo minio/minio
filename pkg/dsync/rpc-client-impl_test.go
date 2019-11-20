@@ -42,6 +42,14 @@ func newClient(addr, endpoint string) NetLocker {
 }
 
 // Close closes the underlying socket file descriptor.
+func (rpcClient *ReconnectRPCClient) IsOnline() bool {
+	rpcClient.mutex.Lock()
+	defer rpcClient.mutex.Unlock()
+	// If rpc client has not connected yet there is nothing to close.
+	return rpcClient.rpc != nil
+}
+
+// Close closes the underlying socket file descriptor.
 func (rpcClient *ReconnectRPCClient) Close() error {
 	rpcClient.mutex.Lock()
 	defer rpcClient.mutex.Unlock()

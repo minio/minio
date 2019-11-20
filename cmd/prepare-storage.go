@@ -53,7 +53,7 @@ var printEndpointError = func() func(Endpoint, error) {
 }()
 
 // Migrates backend format of local disks.
-func formatXLMigrateLocalEndpoints(endpoints EndpointList) error {
+func formatXLMigrateLocalEndpoints(endpoints Endpoints) error {
 	g := errgroup.WithNErrs(len(endpoints))
 	for index, endpoint := range endpoints {
 		if !endpoint.IsLocal {
@@ -81,7 +81,7 @@ func formatXLMigrateLocalEndpoints(endpoints EndpointList) error {
 }
 
 // Cleans up tmp directory of local disks.
-func formatXLCleanupTmpLocalEndpoints(endpoints EndpointList) error {
+func formatXLCleanupTmpLocalEndpoints(endpoints Endpoints) error {
 	g := errgroup.WithNErrs(len(endpoints))
 	for index, endpoint := range endpoints {
 		if !endpoint.IsLocal {
@@ -145,7 +145,7 @@ func formatXLCleanupTmpLocalEndpoints(endpoints EndpointList) error {
 }
 
 // validate reference format against list of XL formats.
-func validateXLFormats(format *formatXLV3, formats []*formatXLV3, endpoints EndpointList, setCount, drivesPerSet int) error {
+func validateXLFormats(format *formatXLV3, formats []*formatXLV3, endpoints Endpoints, setCount, drivesPerSet int) error {
 	for i := range formats {
 		if formats[i] == nil {
 			continue
@@ -174,7 +174,7 @@ var errXLV3ThisEmpty = fmt.Errorf("XL format version 3 has This field empty")
 // connect to list of endpoints and load all XL disk formats, validate the formats are correct
 // and are in quorum, if no formats are found attempt to initialize all of them for the first
 // time. additionally make sure to close all the disks used in this attempt.
-func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints EndpointList, setCount, drivesPerSet int) (*formatXLV3, error) {
+func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints, setCount, drivesPerSet int) (*formatXLV3, error) {
 	// Initialize all storage disks
 	storageDisks, errs := initStorageDisksWithErrors(endpoints)
 	defer closeStorageDisks(storageDisks)
@@ -286,7 +286,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints EndpointLi
 }
 
 // Format disks before initialization of object layer.
-func waitForFormatXL(firstDisk bool, endpoints EndpointList, setCount, disksPerSet int) (format *formatXLV3, err error) {
+func waitForFormatXL(firstDisk bool, endpoints Endpoints, setCount, disksPerSet int) (format *formatXLV3, err error) {
 	if len(endpoints) == 0 || setCount == 0 || disksPerSet == 0 {
 		return nil, errInvalidArgument
 	}

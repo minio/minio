@@ -35,7 +35,7 @@ func TestUndoMakeBucket(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Remove format.json on 16 disks.
-	obj, _, err := initObjectLayer(mustGetNewEndpointList(fsDirs...))
+	obj, _, err := initObjectLayer(mustGetZoneEndpoints(fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,8 +44,9 @@ func TestUndoMakeBucket(t *testing.T) {
 	if err = obj.MakeBucketWithLocation(context.Background(), bucketName, ""); err != nil {
 		t.Fatal(err)
 	}
-	xl := obj.(*xlObjects)
-	undoMakeBucket(xl.storageDisks, bucketName)
+	z := obj.(*xlZones)
+	xl := z.zones[0].sets[0]
+	undoMakeBucket(xl.getDisks(), bucketName)
 
 	// Validate if bucket was deleted properly.
 	_, err = obj.GetBucketInfo(context.Background(), bucketName)
@@ -68,7 +69,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	objLayer, _, err := initObjectLayer(mustGetNewEndpointList(fsDirs...))
+	objLayer, _, err := initObjectLayer(mustGetZoneEndpoints(fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,8 +109,9 @@ func TestHealObjectCorrupted(t *testing.T) {
 	}
 
 	// Test 1: Remove the object backend files from the first disk.
-	xl := objLayer.(*xlObjects)
-	firstDisk := xl.storageDisks[0]
+	z := objLayer.(*xlZones)
+	xl := z.zones[0].sets[0]
+	firstDisk := xl.getDisks()[0]
 	err = firstDisk.DeleteFile(bucket, filepath.Join(object, xlMetaJSONFile))
 	if err != nil {
 		t.Fatalf("Failed to delete a file - %v", err)
@@ -179,8 +181,8 @@ func TestHealObjectCorrupted(t *testing.T) {
 	// Test 4: checks if HealObject returns an error when xl.json is not found
 	// in more than read quorum number of disks, to create a corrupted situation.
 
-	for i := 0; i <= len(xl.storageDisks)/2; i++ {
-		xl.storageDisks[i].DeleteFile(bucket, filepath.Join(object, xlMetaJSONFile))
+	for i := 0; i <= len(xl.getDisks())/2; i++ {
+		xl.getDisks()[i].DeleteFile(bucket, filepath.Join(object, xlMetaJSONFile))
 	}
 
 	// Try healing now, expect to receive errDiskNotFound.
@@ -207,7 +209,7 @@ func TestHealObjectXL(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	obj, _, err := initObjectLayer(mustGetNewEndpointList(fsDirs...))
+	obj, _, err := initObjectLayer(mustGetZoneEndpoints(fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,8 +249,9 @@ func TestHealObjectXL(t *testing.T) {
 	}
 
 	// Remove the object backend files from the first disk.
-	xl := obj.(*xlObjects)
-	firstDisk := xl.storageDisks[0]
+	z := obj.(*xlZones)
+	xl := z.zones[0].sets[0]
+	firstDisk := xl.getDisks()[0]
 	err = firstDisk.DeleteFile(bucket, filepath.Join(object, xlMetaJSONFile))
 	if err != nil {
 		t.Fatalf("Failed to delete a file - %v", err)
@@ -264,9 +267,13 @@ func TestHealObjectXL(t *testing.T) {
 		t.Errorf("Expected xl.json file to be present but stat failed - %v", err)
 	}
 
-	// Nil more than half the disks, to remove write quorum.
-	for i := 0; i <= len(xl.storageDisks)/2; i++ {
-		xl.storageDisks[i] = nil
+	xlDisks := xl.getDisks()
+	xl.getDisks = func() []StorageAPI {
+		// Nil more than half the disks, to remove write quorum.
+		for i := 0; i <= len(xlDisks)/2; i++ {
+			xlDisks[i] = nil
+		}
+		return xlDisks
 	}
 
 	// Try healing now, expect to receive errDiskNotFound.
@@ -287,7 +294,7 @@ func TestHealEmptyDirectoryXL(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	obj, _, err := initObjectLayer(mustGetNewEndpointList(fsDirs...))
+	obj, _, err := initObjectLayer(mustGetZoneEndpoints(fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,14 +309,16 @@ func TestHealEmptyDirectoryXL(t *testing.T) {
 	}
 
 	// Upload an empty directory
-	_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte{}), 0, "", ""), opts)
+	_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t,
+		bytes.NewReader([]byte{}), 0, "", ""), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Remove the object backend files from the first disk.
-	xl := obj.(*xlObjects)
-	firstDisk := xl.storageDisks[0]
+	z := obj.(*xlZones)
+	xl := z.zones[0].sets[0]
+	firstDisk := xl.getDisks()[0]
 	err = firstDisk.DeleteFile(bucket, object)
 	if err != nil {
 		t.Fatalf("Failed to delete a file - %v", err)

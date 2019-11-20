@@ -146,12 +146,13 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	endpoints := strings.Fields(env.Get(config.EnvEndpoints, ""))
 	if len(endpoints) > 0 {
-		globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLSetDriveCount, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
+		globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
 	} else {
-		globalMinioAddr, globalEndpoints, setupType, globalXLSetCount, globalXLSetDriveCount, err = createServerEndpoints(globalCLIContext.Addr, ctx.Args()...)
+		globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, ctx.Args()...)
 	}
 	logger.FatalIf(err, "Invalid command line arguments")
 
+	globalMinioAddr = globalCLIContext.Addr
 	logger.LogIf(context.Background(), checkEndpointsSubOptimal(ctx, setupType, globalEndpoints))
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
@@ -192,7 +193,24 @@ func newAllSubsystems() {
 }
 
 func initSafeModeInit(buckets []BucketInfo) (err error) {
+	newObject := newObjectLayerWithoutSafeModeFn()
+
+	// Construct path to config/transaction.lock for locking
+	transactionConfigPrefix := minioConfigPrefix + "/transaction.lock"
+
+	// Make sure to hold lock for entire migration to avoid
+	// such that only one server should migrate the entire config
+	// at a given time, this big transaction lock ensures this
+	// appropriately. This is also true for rotation of encrypted
+	// content.
+	objLock := newObject.NewNSLock(context.Background(), minioMetaBucket, transactionConfigPrefix)
+	if err = objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
+
 	defer func() {
+		objLock.Unlock()
+
 		if err != nil {
 			var cerr config.Err
 			if errors.As(err, &cerr) {
@@ -209,8 +227,6 @@ func initSafeModeInit(buckets []BucketInfo) (err error) {
 			handleSignals()
 		}
 	}()
-
-	newObject := newObjectLayerWithoutSafeModeFn()
 
 	// Calls New() for all sub-systems.
 	newAllSubsystems()
@@ -302,10 +318,10 @@ func serverMain(ctx *cli.Context) {
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistXL {
-		if globalEndpoints.IsHTTPS() && !globalIsSSL {
+		if globalEndpoints.HTTPS() && !globalIsSSL {
 			logger.Fatal(config.ErrNoCertsAndHTTPSEndpoints(nil), "Unable to start the server")
 		}
-		if !globalEndpoints.IsHTTPS() && globalIsSSL {
+		if !globalEndpoints.HTTPS() && globalIsSSL {
 			logger.Fatal(config.ErrCertsAndHTTPEndpoints(nil), "Unable to start the server")
 		}
 	}
@@ -413,19 +429,21 @@ func serverMain(ctx *cli.Context) {
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
-func newObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err error) {
+func newObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err error) {
 	// For FS only, directly use the disk.
 
-	isFS := len(endpoints) == 1
-	if isFS {
+	if endpointZones.Nodes() == 1 {
 		// Initialize new FS object layer.
-		return NewFSObjectLayer(endpoints[0].Path)
+		return NewFSObjectLayer(endpointZones[0].Endpoints[0].Path)
 	}
 
-	format, err := waitForFormatXL(endpoints[0].IsLocal, endpoints, globalXLSetCount, globalXLSetDriveCount)
-	if err != nil {
-		return nil, err
+	var formats []*formatXLV3
+	for _, ep := range endpointZones {
+		format, err := waitForFormatXL(ep.Endpoints[0].IsLocal, ep.Endpoints, ep.SetCount, ep.DrivesPerSet)
+		if err != nil {
+			return nil, err
+		}
+		formats = append(formats, format)
 	}
-
-	return newXLSets(endpoints, format, len(format.XL.Sets), len(format.XL.Sets[0]))
+	return newXLZones(endpointZones, formats)
 }

@@ -61,7 +61,7 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	// Initialize boot time
 	globalBootTime = UTCNow()
 
-	globalEndpoints = mustGetNewEndpointList(xlDirs...)
+	globalEndpoints = mustGetZoneEndpoints(xlDirs...)
 
 	// Set globalIsXL to indicate that the setup uses an erasure
 	// code backend.
@@ -113,7 +113,7 @@ func initTestXLObjLayer() (ObjectLayer, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	endpoints := mustGetNewEndpointList(xlDirs...)
+	endpoints := mustGetNewEndpoints(xlDirs...)
 	format, err := waitForFormatXL(true, endpoints, 1, 16)
 	if err != nil {
 		removeRoots(xlDirs)
