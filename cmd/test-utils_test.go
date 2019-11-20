@@ -515,7 +515,7 @@ func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 	config.SetRegion(globalServerConfig, bucketLocation)
 
 	// Save config.
-	return saveServerConfig(context.Background(), obj, globalServerConfig, nil)
+	return saveServerConfig(context.Background(), obj, globalServerConfig)
 }
 
 // Deleting the temporary backend and stopping the server.
@@ -1585,20 +1585,7 @@ func newTestObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err
 		return NewFSObjectLayer(endpointZones[0].Endpoints[0].Path)
 	}
 
-	var formats = make([]*formatXLV3, len(endpointZones))
-	var deploymentID string
-	for i, ep := range endpointZones {
-		formats[i], err = waitForFormatXL(ep.Endpoints[0].IsLocal, ep.Endpoints,
-			ep.SetCount, ep.DrivesPerSet, deploymentID)
-		if err != nil {
-			return nil, err
-		}
-		if deploymentID == "" {
-			deploymentID = formats[i].ID
-		}
-	}
-
-	zones, err := newXLZones(endpointZones, formats)
+	z, err := newXLZones(endpointZones)
 	if err != nil {
 		return nil, err
 	}
@@ -1606,15 +1593,15 @@ func newTestObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err
 	globalConfigSys = NewConfigSys()
 
 	globalIAMSys = NewIAMSys()
-	globalIAMSys.Init(zones)
+	globalIAMSys.Init(z)
 
 	globalPolicySys = NewPolicySys()
-	globalPolicySys.Init(nil, zones)
+	globalPolicySys.Init(nil, z)
 
 	globalNotificationSys = NewNotificationSys(endpointZones)
-	globalNotificationSys.Init(nil, zones)
+	globalNotificationSys.Init(nil, z)
 
-	return zones, nil
+	return z, nil
 }
 
 // initObjectLayer - Instantiates object layer and returns it.

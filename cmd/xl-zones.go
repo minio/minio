@@ -50,15 +50,30 @@ func (z *xlZones) quickHealBuckets(ctx context.Context) {
 	}
 }
 
-// Initialize new zone of erasure codes.
-func newXLZones(endpointZones EndpointZones, formats []*formatXLV3) (ObjectLayer, error) {
-	z := &xlZones{}
+// Initialize new zone of erasure sets.
+func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
+	var (
+		deploymentID string
+		err          error
+
+		formats = make([]*formatXLV3, len(endpointZones))
+		z       = &xlZones{zones: make([]*xlSets, len(endpointZones))}
+	)
 	for i, ep := range endpointZones {
-		sets, err := newXLSets(ep.Endpoints, formats[i], ep.SetCount, ep.DrivesPerSet)
+		formats[i], err = waitForFormatXL(endpointZones.First(), ep.Endpoints,
+			ep.SetCount, ep.DrivesPerSet, deploymentID)
 		if err != nil {
 			return nil, err
 		}
-		z.zones = append(z.zones, sets)
+		if deploymentID == "" {
+			deploymentID = formats[i].ID
+		}
+	}
+	for i, ep := range endpointZones {
+		z.zones[i], err = newXLSets(ep.Endpoints, formats[i], ep.SetCount, ep.DrivesPerSet)
+		if err != nil {
+			return nil, err
+		}
 	}
 	z.quickHealBuckets(context.Background())
 	return z, nil

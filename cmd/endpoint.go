@@ -196,6 +196,11 @@ type ZoneEndpoints struct {
 // EndpointZones - list of list of endpoints
 type EndpointZones []ZoneEndpoints
 
+// First returns true if the first endpoint is local.
+func (l EndpointZones) First() bool {
+	return l[0].Endpoints[0].IsLocal
+}
+
 // HTTPS - returns true if secure for URLEndpointType.
 func (l EndpointZones) HTTPS() bool {
 	return l[0].Endpoints.HTTPS()

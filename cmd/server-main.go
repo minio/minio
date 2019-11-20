@@ -146,9 +146,9 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	endpoints := strings.Fields(env.Get(config.EnvEndpoints, ""))
 	if len(endpoints) > 0 {
-		globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
+		globalEndpoints, globalXLSetDriveCount, setupType, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
 	} else {
-		globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, ctx.Args()...)
+		globalEndpoints, globalXLSetDriveCount, setupType, err = createServerEndpoints(globalCLIContext.Addr, ctx.Args()...)
 	}
 	logger.FatalIf(err, "Invalid command line arguments")
 
@@ -437,17 +437,5 @@ func newObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err err
 		return NewFSObjectLayer(endpointZones[0].Endpoints[0].Path)
 	}
 
-	var formats = make([]*formatXLV3, len(endpointZones))
-	var deploymentID string
-	for i, ep := range endpointZones {
-		formats[i], err = waitForFormatXL(ep.Endpoints[0].IsLocal, ep.Endpoints,
-			ep.SetCount, ep.DrivesPerSet, deploymentID)
-		if err != nil {
-			return nil, err
-		}
-		if deploymentID == "" {
-			deploymentID = formats[i].ID
-		}
-	}
-	return newXLZones(endpointZones, formats)
+	return newXLZones(endpointZones)
 }

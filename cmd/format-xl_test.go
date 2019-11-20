@@ -96,9 +96,9 @@ func TestFixFormatV3(t *testing.T) {
 	formats := make([]*formatXLV3, 8)
 
 	for j := 0; j < 8; j++ {
-		newFormat := *format
+		newFormat := format.Clone()
 		newFormat.XL.This = format.XL.Sets[0][j]
-		formats[j] = &newFormat
+		formats[j] = newFormat
 	}
 
 	if err = initFormatXLMetaVolume(storageDisks, formats); err != nil {
@@ -130,9 +130,9 @@ func TestFormatXLEmpty(t *testing.T) {
 	formats := make([]*formatXLV3, 16)
 
 	for j := 0; j < 16; j++ {
-		newFormat := *format
+		newFormat := format.Clone()
 		newFormat.XL.This = format.XL.Sets[0][j]
-		formats[j] = &newFormat
+		formats[j] = newFormat
 	}
 
 	// empty format to indicate disk not found, but this
@@ -411,16 +411,16 @@ func TestCheckFormatXLValue(t *testing.T) {
 // Tests getFormatXLInQuorum()
 func TestGetFormatXLInQuorumCheck(t *testing.T) {
 	setCount := 2
-	disksPerSet := 16
+	drivesPerSet := 16
 
-	format := newFormatXLV3(setCount, disksPerSet)
+	format := newFormatXLV3(setCount, drivesPerSet)
 	formats := make([]*formatXLV3, 32)
 
 	for i := 0; i < setCount; i++ {
-		for j := 0; j < disksPerSet; j++ {
-			newFormat := *format
+		for j := 0; j < drivesPerSet; j++ {
+			newFormat := format.Clone()
 			newFormat.XL.This = format.XL.Sets[i][j]
-			formats[i*disksPerSet+j] = &newFormat
+			formats[i*drivesPerSet+j] = newFormat
 		}
 	}
 
@@ -477,16 +477,16 @@ func TestGetFormatXLInQuorumCheck(t *testing.T) {
 // Tests formatXLGetDeploymentID()
 func TestGetXLID(t *testing.T) {
 	setCount := 2
-	disksPerSet := 8
+	drivesPerSet := 8
 
-	format := newFormatXLV3(setCount, disksPerSet)
+	format := newFormatXLV3(setCount, drivesPerSet)
 	formats := make([]*formatXLV3, 16)
 
 	for i := 0; i < setCount; i++ {
-		for j := 0; j < disksPerSet; j++ {
-			newFormat := *format
+		for j := 0; j < drivesPerSet; j++ {
+			newFormat := format.Clone()
 			newFormat.XL.This = format.XL.Sets[i][j]
-			formats[i*disksPerSet+j] = &newFormat
+			formats[i*drivesPerSet+j] = newFormat
 		}
 	}
 
@@ -532,17 +532,17 @@ func TestGetXLID(t *testing.T) {
 // Initialize new format sets.
 func TestNewFormatSets(t *testing.T) {
 	setCount := 2
-	disksPerSet := 16
+	drivesPerSet := 16
 
-	format := newFormatXLV3(setCount, disksPerSet)
+	format := newFormatXLV3(setCount, drivesPerSet)
 	formats := make([]*formatXLV3, 32)
 	errs := make([]error, 32)
 
 	for i := 0; i < setCount; i++ {
-		for j := 0; j < disksPerSet; j++ {
-			newFormat := *format
+		for j := 0; j < drivesPerSet; j++ {
+			newFormat := format.Clone()
 			newFormat.XL.This = format.XL.Sets[i][j]
-			formats[i*disksPerSet+j] = &newFormat
+			formats[i*drivesPerSet+j] = newFormat
 		}
 	}
 
@@ -554,7 +554,7 @@ func TestNewFormatSets(t *testing.T) {
 	// 16th disk is unformatted.
 	errs[15] = errUnformattedDisk
 
-	newFormats := newHealFormatSets(quorumFormat, setCount, disksPerSet, formats, errs)
+	newFormats := newHealFormatSets(quorumFormat, setCount, drivesPerSet, formats, errs)
 	if newFormats == nil {
 		t.Fatal("Unexpected failure")
 	}

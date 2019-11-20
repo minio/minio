@@ -129,6 +129,33 @@ function start_minio_dist_erasure_sets()
     echo "${minio_pids[@]}"
 }
 
+function start_minio_zone_erasure_sets()
+{
+    declare -a minio_pids
+    export MINIO_ACCESS_KEY=$ACCESS_KEY
+    export MINIO_SECRET_KEY=$SECRET_KEY
+    "${MINIO[@]}" server --address=:9000 "http://127.0.0.1:9000${WORK_DIR}/zone-disk-sets{1...4}" >/dev/null 2>&1 &
+    current_pid=$!
+
+    sleep 10
+    kill -9 "${current_pid}"
+
+    "${MINIO[@]}" server --address=:9001 "http://127.0.0.1:9001${WORK_DIR}/zone-disk-sets{5...8}" >/dev/null 2>&1 &
+    current_pid=$!
+
+    sleep 10
+    kill -9 "${current_pid}"
+
+    "${MINIO[@]}" server --address=:9000 "http://127.0.0.1:9000${WORK_DIR}/zone-disk-sets{1...4}" "http://127.0.0.1:9001${WORK_DIR}/zone-disk-sets{5...8}" >"$WORK_DIR/zone-minio-9000.log" 2>&1 &
+    minio_pids[0]=$!
+
+    "${MINIO[@]}" server --address=:9001 "http://127.0.0.1:9000${WORK_DIR}/zone-disk-sets{1...4}" "http://127.0.0.1:9001${WORK_DIR}/zone-disk-sets{5...8}" >"$WORK_DIR/zone-minio-9001.log" 2>&1 &
+    minio_pids[1]=$!
+
+    sleep 10
+    echo "${minio_pids[@]}"
+}
+
 function start_minio_dist_erasure()
 {
     declare -a minio_pids
@@ -231,6 +258,32 @@ function run_test_dist_erasure_sets()
 
     for i in $(seq 0 9); do
         rm -f "$WORK_DIR/dist-minio-900$i.log"
+    done
+
+    return "$rv"
+}
+
+function run_test_zone_erasure_sets()
+{
+    minio_pids=( $(start_minio_zone_erasure_sets) )
+
+    (cd "$WORK_DIR" && "$FUNCTIONAL_TESTS")
+    rv=$?
+
+    for pid in "${minio_pids[@]}"; do
+        kill "$pid"
+    done
+    sleep 3
+
+    if [ "$rv" -ne 0 ]; then
+        for i in $(seq 0 1); do
+            echo "server$i log:"
+            cat "$WORK_DIR/zone-minio-900$i.log"
+        done
+    fi
+
+    for i in $(seq 0 1); do
+        rm -f "$WORK_DIR/zone-minio-900$i.log"
     done
 
     return "$rv"
@@ -353,6 +406,13 @@ function main()
 
     echo "Testing in Distributed Erasure setup as sets"
     if ! run_test_dist_erasure_sets; then
+        echo "FAILED"
+        purge "$WORK_DIR"
+        exit 1
+    fi
+
+    echo "Testing in Distributed Eraure expanded setup"
+    if ! run_test_zone_erasure_sets; then
         echo "FAILED"
         purge "$WORK_DIR"
         exit 1
