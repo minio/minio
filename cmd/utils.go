@@ -521,6 +521,5 @@ func isWORMEnabled(bucket string) (Retention, bool) {
 	if globalWORMEnabled {
 		return Retention{}, true
 	}
-
-	return globalBucketRetentionConfig.Get(bucket)
+	return globalBucketObjectLockConfig.Get(bucket)
 }

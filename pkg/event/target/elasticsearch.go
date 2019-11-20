@@ -146,7 +146,6 @@ func (target *ElasticsearchTarget) send(eventData event.Event) error {
 		} else {
 			err = update()
 		}
-
 		return err
 	}
 

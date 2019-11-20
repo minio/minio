@@ -357,7 +357,6 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 		}
 		return accessKey, owner, ErrAccessDenied
 	}
-
 	if globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
 		Action:          iampolicy.Action(action),
@@ -487,10 +486,10 @@ func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	writeErrorResponse(context.Background(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL, guessIsBrowserReq(r))
 }
 
-// isPutAllowed - check if PUT operation is allowed on the resource, this
+// isPutActionAllowed - check if PUT operation is allowed on the resource, this
 // call verifies bucket policies and IAM policies, supports multi user
 // checks etc.
-func isPutAllowed(atype authType, bucketName, objectName string, r *http.Request) (s3Err APIErrorCode) {
+func isPutActionAllowed(atype authType, bucketName, objectName string, r *http.Request, action iampolicy.Action) (s3Err APIErrorCode) {
 	var cred auth.Credentials
 	var owner bool
 	switch atype {
@@ -527,7 +526,7 @@ func isPutAllowed(atype authType, bucketName, objectName string, r *http.Request
 
 	if globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
-		Action:          policy.PutObjectAction,
+		Action:          action,
 		BucketName:      bucketName,
 		ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 		ObjectName:      objectName,

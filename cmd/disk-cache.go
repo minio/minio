@@ -527,6 +527,13 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 	if opts.ServerSideEncryption != nil {
 		return putObjectFn(ctx, bucket, object, r, opts)
 	}
+
+	// skip cache for objects with locks
+	objRetention := getObjectRetentionMeta(opts.UserDefined)
+	if objRetention.Mode == Governance || objRetention.Mode == Compliance {
+		return putObjectFn(ctx, bucket, object, r, opts)
+	}
+
 	// fetch from backend if cache exclude pattern or cache-control
 	// directive set to exclude
 	if c.isCacheExclude(bucket, object) {

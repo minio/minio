@@ -141,6 +141,12 @@ const (
 	ErrInvalidPrefixMarker
 	ErrBadRequest
 	ErrKeyTooLongError
+	ErrInvalidBucketObjectLockConfiguration
+	ErrObjectLocked
+	ErrInvalidRetentionDate
+	ErrPastObjectLockRetainDate
+	ErrUnknownWORMModeDirective
+	ErrObjectLockInvalidHeaders
 	// Add new error codes here.
 
 	// SSE-S3 related API errors
@@ -720,7 +726,36 @@ var errorCodes = errorCodeMap{
 		Description:    "Duration provided in the request is invalid.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-
+	ErrInvalidBucketObjectLockConfiguration: {
+		Code:           "InvalidRequest",
+		Description:    "Bucket is missing ObjectLockConfiguration",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrObjectLocked: {
+		Code:           "InvalidRequest",
+		Description:    "Object is WORM protected and cannot be overwritten",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidRetentionDate: {
+		Code:           "InvalidRequest",
+		Description:    "Date must be provided in ISO 8601 format",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrPastObjectLockRetainDate: {
+		Code:           "InvalidRequest",
+		Description:    "the retain until date must be in the future",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrUnknownWORMModeDirective: {
+		Code:           "InvalidRequest",
+		Description:    "unknown wormMode directive",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrObjectLockInvalidHeaders: {
+		Code:           "InvalidRequest",
+		Description:    "x-amz-object-lock-retain-until-date and x-amz-object-lock-mode must both be supplied",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	/// Bucket notification related errors.
 	ErrEventNotification: {
 		Code:           "InvalidArgument",
@@ -1569,6 +1604,14 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrOperationTimedOut
 	case errDiskNotFound:
 		apiErr = ErrSlowDown
+	case errInvalidRetentionDate:
+		apiErr = ErrInvalidRetentionDate
+	case errPastObjectLockRetainDate:
+		apiErr = ErrPastObjectLockRetainDate
+	case errUnknownWORMModeDirective:
+		apiErr = ErrUnknownWORMModeDirective
+	case errObjectLockInvalidHeaders:
+		apiErr = ErrObjectLockInvalidHeaders
 	}
 
 	// Compression errors

@@ -91,33 +91,57 @@ const (
 	// PutObjectAction - PutObject Rest API action.
 	PutObjectAction = "s3:PutObject"
 
+	// BypassGovernanceModeAction - bypass governance mode for DeleteObject Rest API action.
+	BypassGovernanceModeAction = "s3:BypassGovernanceMode"
+
+	// BypassGovernanceRetentionAction - bypass governance retention for PutObjectRetention, PutObject and DeleteObject Rest API action.
+	BypassGovernanceRetentionAction = "s3:BypassGovernanceRetention"
+
+	// PutObjectRetentionAction - PutObjectRetention Rest API action.
+	PutObjectRetentionAction = "s3:PutObjectRetention"
+
+	// GetObjectRetentionAction - GetObjectRetention, GetObject, HeadObject Rest API action.
+	GetObjectRetentionAction = "s3:GetObjectRetention"
+
+	// GetBucketObjectLockConfigurationAction - GetBucketObjectLockConfiguration Rest API action
+	GetBucketObjectLockConfigurationAction = "s3:GetBucketObjectLockConfiguration"
+
+	// PutBucketObjectLockConfigurationAction - PutBucketObjectLockConfiguration Rest API action
+	PutBucketObjectLockConfigurationAction = "s3:PutBucketObjectLockConfiguration"
+
 	// AllActions - all API actions
 	AllActions = "s3:*"
 )
 
 // List of all supported actions.
 var supportedActions = map[Action]struct{}{
-	AllActions:                       {},
-	AbortMultipartUploadAction:       {},
-	CreateBucketAction:               {},
-	DeleteBucketAction:               {},
-	DeleteBucketPolicyAction:         {},
-	DeleteObjectAction:               {},
-	GetBucketLocationAction:          {},
-	GetBucketNotificationAction:      {},
-	GetBucketPolicyAction:            {},
-	GetObjectAction:                  {},
-	HeadBucketAction:                 {},
-	ListAllMyBucketsAction:           {},
-	ListBucketAction:                 {},
-	ListBucketMultipartUploadsAction: {},
-	ListenBucketNotificationAction:   {},
-	ListMultipartUploadPartsAction:   {},
-	PutBucketNotificationAction:      {},
-	PutBucketPolicyAction:            {},
-	PutObjectAction:                  {},
-	GetBucketLifecycleAction:         {},
-	PutBucketLifecycleAction:         {},
+	AllActions:                             {},
+	AbortMultipartUploadAction:             {},
+	CreateBucketAction:                     {},
+	DeleteBucketAction:                     {},
+	DeleteBucketPolicyAction:               {},
+	DeleteObjectAction:                     {},
+	GetBucketLocationAction:                {},
+	GetBucketNotificationAction:            {},
+	GetBucketPolicyAction:                  {},
+	GetObjectAction:                        {},
+	HeadBucketAction:                       {},
+	ListAllMyBucketsAction:                 {},
+	ListBucketAction:                       {},
+	ListBucketMultipartUploadsAction:       {},
+	ListenBucketNotificationAction:         {},
+	ListMultipartUploadPartsAction:         {},
+	PutBucketNotificationAction:            {},
+	PutBucketPolicyAction:                  {},
+	PutObjectAction:                        {},
+	GetBucketLifecycleAction:               {},
+	PutBucketLifecycleAction:               {},
+	PutObjectRetentionAction:               {},
+	GetObjectRetentionAction:               {},
+	PutBucketObjectLockConfigurationAction: {},
+	GetBucketObjectLockConfigurationAction: {},
+	BypassGovernanceModeAction:             {},
+	BypassGovernanceRetentionAction:        {},
 }
 
 // isObjectAction - returns whether action is object type or not.
@@ -126,6 +150,10 @@ func (action Action) isObjectAction() bool {
 	case AbortMultipartUploadAction, DeleteObjectAction, GetObjectAction:
 		fallthrough
 	case ListMultipartUploadPartsAction, PutObjectAction, AllActions:
+		return true
+	case BypassGovernanceModeAction, BypassGovernanceRetentionAction:
+		return true
+	case PutObjectRetentionAction, GetObjectRetentionAction:
 		return true
 	}
 
@@ -238,4 +266,10 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 			condition.S3XAmzMetadataDirective,
 			condition.S3XAmzStorageClass,
 		}, condition.CommonKeys...)...),
+	PutObjectRetentionAction:               condition.NewKeySet(condition.CommonKeys...),
+	GetObjectRetentionAction:               condition.NewKeySet(condition.CommonKeys...),
+	BypassGovernanceModeAction:             condition.NewKeySet(condition.CommonKeys...),
+	BypassGovernanceRetentionAction:        condition.NewKeySet(condition.CommonKeys...),
+	GetBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
+	PutBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
 }
