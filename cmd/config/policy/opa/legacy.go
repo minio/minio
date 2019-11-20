@@ -33,8 +33,17 @@ func SetPolicyOPAConfig(s config.Config, opaArgs Args) {
 		return
 	}
 	s[config.PolicyOPASubSys][config.Default] = config.KVS{
-		config.State: config.StateOn,
-		URL:          opaArgs.URL.String(),
-		AuthToken:    opaArgs.AuthToken,
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOn,
+		},
+		config.KV{
+			Key:   URL,
+			Value: opaArgs.URL.String(),
+		},
+		config.KV{
+			Key:   AuthToken,
+			Value: opaArgs.AuthToken,
+		},
 	}
 }

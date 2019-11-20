@@ -59,10 +59,6 @@ func validateConfig(s config.Config) error {
 		return err
 	}
 
-	if _, err := config.LookupWorm(s[config.WormSubSys][config.Default]); err != nil {
-		return err
-	}
-
 	if globalIsXL {
 		if _, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default],
 			globalXLSetDriveCount); err != nil {
@@ -165,7 +161,7 @@ func lookupConfigs(s config.Config) (err error) {
 		return config.Errorf("Invalid region configuration: %s", err)
 	}
 
-	globalWORMEnabled, err = config.LookupWorm(s[config.WormSubSys][config.Default])
+	globalWORMEnabled, err = config.LookupWorm()
 	if err != nil {
 		return config.Errorf("Invalid worm configuration: %s", err)
 
@@ -260,15 +256,32 @@ func lookupConfigs(s config.Config) (err error) {
 	return nil
 }
 
+func defaultKVS() map[string]config.KVS {
+	var kvs = map[string]config.KVS{
+		config.EtcdSubSys:           etcd.DefaultKVS,
+		config.CacheSubSys:          cache.DefaultKVS,
+		config.CompressionSubSys:    compress.DefaultKVS,
+		config.StorageClassSubSys:   storageclass.DefaultKVS,
+		config.IdentityLDAPSubSys:   xldap.DefaultKVS,
+		config.IdentityOpenIDSubSys: openid.DefaultKVS,
+		config.PolicyOPASubSys:      opa.DefaultKVS,
+		config.RegionSubSys:         config.DefaultRegionKVS,
+		config.CredentialsSubSys:    config.DefaultCredentialKVS,
+		config.KmsVaultSubSys:       crypto.DefaultKVS,
+		config.LoggerWebhookSubSys:  logger.DefaultKVS,
+		config.AuditWebhookSubSys:   logger.DefaultAuditKVS,
+	}
+	for k, v := range notify.DefaultNotificationKVS {
+		kvs[k] = v
+	}
+	return kvs
+}
+
 // Captures help for each sub-system
 var helpSubSys = config.HelpKVS{
 	config.HelpKV{
 		Key:         config.RegionSubSys,
 		Description: "Configure to describe the physical location of the server",
-	},
-	config.HelpKV{
-		Key:         config.WormSubSys,
-		Description: "Configure to enable WORM mode, turns-off any overwrites and deletes of content",
 	},
 	config.HelpKV{
 		Key:         config.StorageClassSubSys,
@@ -367,7 +380,6 @@ var helpSubSys = config.HelpKVS{
 
 var helpMap = map[string]config.HelpKVS{
 	config.RegionSubSys:         config.RegionHelp,
-	config.WormSubSys:           config.WormHelp,
 	config.EtcdSubSys:           etcd.Help,
 	config.CacheSubSys:          cache.Help,
 	config.CompressionSubSys:    compress.Help,

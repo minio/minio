@@ -19,9 +19,9 @@ Following example uses `/mnt/drive1`, `/mnt/drive2` ,`/mnt/cache1` ... `/mnt/cac
 
 ```bash
 export MINIO_CACHE="on"
-export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/cache{1...3}"
+export MINIO_CACHE_DRIVES="/mnt/drive1,/mnt/drive2,/mnt/cache{1...3}"
 export MINIO_CACHE_EXPIRY=90
-export MINIO_CACHE_EXCLUDE="*.pdf;mybucket/*"
+export MINIO_CACHE_EXCLUDE="*.pdf,mybucket/*"
 export MINIO_CACHE_QUOTA=80
 minio gateway s3
 ```

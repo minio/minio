@@ -45,11 +45,6 @@ func (hkvs HelpKVS) Lookup(key string) (HelpKV, bool) {
 var (
 	RegionHelp = HelpKVS{
 		HelpKV{
-			Key:         State,
-			Type:        "on|off",
-			Description: "Indicates if config region is honored or ignored",
-		},
-		HelpKV{
 			Key:         RegionName,
 			Type:        "string",
 			Description: `Region name of this deployment, eg: "us-west-2"`,
@@ -59,20 +54,6 @@ var (
 			Key:         Comment,
 			Type:        "sentence",
 			Description: "A comment to describe the region setting",
-			Optional:    true,
-		},
-	}
-
-	WormHelp = HelpKVS{
-		HelpKV{
-			Key:         State,
-			Type:        "on|off",
-			Description: `Indicates if worm is "on" or "off"`,
-		},
-		HelpKV{
-			Key:         Comment,
-			Type:        "sentence",
-			Description: "A comment to describe the worm state",
 			Optional:    true,
 		},
 	}

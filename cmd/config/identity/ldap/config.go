@@ -78,15 +78,38 @@ const (
 // DefaultKVS - default config for LDAP config
 var (
 	DefaultKVS = config.KVS{
-		config.State:       config.StateOff,
-		config.Comment:     "This is a default LDAP configuration",
-		ServerAddr:         "",
-		STSExpiry:          "1h",
-		UsernameFormat:     "",
-		GroupSearchFilter:  "",
-		GroupNameAttribute: "",
-		GroupSearchBaseDN:  "",
-		TLSSkipVerify:      config.StateOff,
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   ServerAddr,
+			Value: "",
+		},
+		config.KV{
+			Key:   STSExpiry,
+			Value: "1h",
+		},
+		config.KV{
+			Key:   UsernameFormat,
+			Value: "",
+		},
+		config.KV{
+			Key:   GroupSearchFilter,
+			Value: "",
+		},
+		config.KV{
+			Key:   GroupNameAttribute,
+			Value: "",
+		},
+		config.KV{
+			Key:   GroupSearchBaseDN,
+			Value: "",
+		},
+		config.KV{
+			Key:   TLSSkipVerify,
+			Value: config.StateOff,
+		},
 	}
 )
 

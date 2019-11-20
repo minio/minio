@@ -22,11 +22,6 @@ import "github.com/minio/minio/cmd/config"
 var (
 	Help = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.State,
-			Description: "Indicates if KMS Vault is enabled or not",
-			Type:        "on|off",
-		},
-		config.HelpKV{
 			Key:         KMSVaultEndpoint,
 			Description: `Points to Vault API endpoint eg: "http://vault-endpoint-ip:8200"`,
 			Type:        "url",

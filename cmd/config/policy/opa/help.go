@@ -22,11 +22,6 @@ import "github.com/minio/minio/cmd/config"
 var (
 	Help = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.State,
-			Description: "Indicates if OPA policy is enabled or not",
-			Type:        "on|off",
-		},
-		config.HelpKV{
 			Key:         URL,
 			Description: `Points to URL for OPA HTTP API endpoint. eg: "http://localhost:8181/v1/data/httpapi/authz/allow"`,
 			Type:        "url",

@@ -46,16 +46,42 @@ const (
 // DefaultKVS - default KV crypto config
 var (
 	DefaultKVS = config.KVS{
-		config.State:          config.StateOff,
-		config.Comment:        "This is a default Vault configuration",
-		KMSVaultEndpoint:      "",
-		KMSVaultCAPath:        "",
-		KMSVaultKeyName:       "",
-		KMSVaultKeyVersion:    "",
-		KMSVaultNamespace:     "",
-		KMSVaultAuthType:      "approle",
-		KMSVaultAppRoleID:     "",
-		KMSVaultAppRoleSecret: "",
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   KMSVaultEndpoint,
+			Value: "",
+		},
+		config.KV{
+			Key:   KMSVaultKeyName,
+			Value: "",
+		},
+		config.KV{
+			Key:   KMSVaultAuthType,
+			Value: "approle",
+		},
+		config.KV{
+			Key:   KMSVaultAppRoleID,
+			Value: "",
+		},
+		config.KV{
+			Key:   KMSVaultAppRoleSecret,
+			Value: "",
+		},
+		config.KV{
+			Key:   KMSVaultCAPath,
+			Value: "",
+		},
+		config.KV{
+			Key:   KMSVaultKeyVersion,
+			Value: "",
+		},
+		config.KV{
+			Key:   KMSVaultNamespace,
+			Value: "",
+		},
 	}
 )
 

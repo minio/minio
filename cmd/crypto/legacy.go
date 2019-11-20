@@ -83,20 +83,47 @@ func SetKMSConfig(s config.Config, cfg KMSConfig) {
 		return
 	}
 	s[config.KmsVaultSubSys][config.Default] = config.KVS{
-		KMSVaultEndpoint: cfg.Vault.Endpoint,
-		KMSVaultCAPath:   cfg.Vault.CAPath,
-		KMSVaultAuthType: func() string {
-			if cfg.Vault.Auth.Type != "" {
-				return cfg.Vault.Auth.Type
-			}
-			return "approle"
-		}(),
-		KMSVaultAppRoleID:     cfg.Vault.Auth.AppRole.ID,
-		KMSVaultAppRoleSecret: cfg.Vault.Auth.AppRole.Secret,
-		KMSVaultKeyName:       cfg.Vault.Key.Name,
-		KMSVaultKeyVersion:    strconv.Itoa(cfg.Vault.Key.Version),
-		KMSVaultNamespace:     cfg.Vault.Namespace,
-		config.State:          config.StateOn,
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOn,
+		},
+		config.KV{
+			Key:   KMSVaultEndpoint,
+			Value: cfg.Vault.Endpoint,
+		},
+		config.KV{
+			Key:   KMSVaultCAPath,
+			Value: cfg.Vault.CAPath,
+		},
+		config.KV{
+			Key: KMSVaultAuthType,
+			Value: func() string {
+				if cfg.Vault.Auth.Type != "" {
+					return cfg.Vault.Auth.Type
+				}
+				return "approle"
+			}(),
+		},
+		config.KV{
+			Key:   KMSVaultAppRoleID,
+			Value: cfg.Vault.Auth.AppRole.ID,
+		},
+		config.KV{
+			Key:   KMSVaultAppRoleSecret,
+			Value: cfg.Vault.Auth.AppRole.Secret,
+		},
+		config.KV{
+			Key:   KMSVaultKeyName,
+			Value: cfg.Vault.Key.Name,
+		},
+		config.KV{
+			Key:   KMSVaultKeyVersion,
+			Value: strconv.Itoa(cfg.Vault.Key.Version),
+		},
+		config.KV{
+			Key:   KMSVaultNamespace,
+			Value: cfg.Vault.Namespace,
+		},
 	}
 }
 

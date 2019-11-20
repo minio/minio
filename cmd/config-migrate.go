@@ -2729,7 +2729,6 @@ func migrateMinioSysConfigToKV(objAPI ObjectLayer) error {
 
 	config.SetCredentials(newCfg, cfg.Credential)
 	config.SetRegion(newCfg, cfg.Region)
-	config.SetWorm(newCfg, bool(cfg.Worm))
 
 	storageclass.SetStorageClass(newCfg, cfg.StorageClass)
 

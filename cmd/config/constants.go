@@ -33,8 +33,7 @@ const (
 	EnvPublicIPs    = "MINIO_PUBLIC_IPS"
 	EnvEndpoints    = "MINIO_ENDPOINTS"
 
-	EnvUpdate    = "MINIO_UPDATE"
-	EnvWormState = "MINIO_WORM_STATE"
+	EnvUpdate = "MINIO_UPDATE"
 
 	EnvWorm   = "MINIO_WORM"   // legacy
 	EnvRegion = "MINIO_REGION" // legacy

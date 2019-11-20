@@ -258,11 +258,22 @@ func parseDiscoveryDoc(u *xnet.URL, transport *http.Transport, closeRespFn func(
 // DefaultKVS - default config for OpenID config
 var (
 	DefaultKVS = config.KVS{
-		config.State:   config.StateOff,
-		config.Comment: "This is a default OpenID configuration",
-		JwksURL:        "",
-		ConfigURL:      "",
-		ClaimPrefix:    "",
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   JwksURL,
+			Value: "",
+		},
+		config.KV{
+			Key:   ConfigURL,
+			Value: "",
+		},
+		config.KV{
+			Key:   ClaimPrefix,
+			Value: "",
+		},
 	}
 )
 

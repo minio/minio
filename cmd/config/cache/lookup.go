@@ -48,17 +48,31 @@ const (
 // DefaultKVS - default KV settings for caching.
 var (
 	DefaultKVS = config.KVS{
-		config.State:   config.StateOff,
-		config.Comment: "This is a default cache configuration, only applicable in gateway setups",
-		Drives:         "",
-		Exclude:        "",
-		Expiry:         DefaultExpiry,
-		Quota:          DefaultQuota,
+		config.KV{
+			Key:   config.State,
+			Value: config.StateOff,
+		},
+		config.KV{
+			Key:   Drives,
+			Value: "",
+		},
+		config.KV{
+			Key:   Exclude,
+			Value: "",
+		},
+		config.KV{
+			Key:   Expiry,
+			Value: DefaultExpiry,
+		},
+		config.KV{
+			Key:   Quota,
+			Value: DefaultQuota,
+		},
 	}
 )
 
 const (
-	cacheDelimiter = ";"
+	cacheDelimiter = ","
 )
 
 // LookupConfig - extracts cache configuration provided by environment
@@ -92,14 +106,20 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 
 	cfg.Drives, err = parseCacheDrives(strings.Split(drives, cacheDelimiter))
 	if err != nil {
-		return cfg, err
+		cfg.Drives, err = parseCacheDrives(strings.Split(drives, cacheDelimiterLegacy))
+		if err != nil {
+			return cfg, err
+		}
 	}
 
 	cfg.Enabled = true
 	if excludes := env.Get(EnvCacheExclude, kvs.Get(Exclude)); excludes != "" {
 		cfg.Exclude, err = parseCacheExcludes(strings.Split(excludes, cacheDelimiter))
 		if err != nil {
-			return cfg, err
+			cfg.Exclude, err = parseCacheExcludes(strings.Split(excludes, cacheDelimiterLegacy))
+			if err != nil {
+				return cfg, err
+			}
 		}
 	}
 
