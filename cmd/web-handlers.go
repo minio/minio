@@ -1909,12 +1909,14 @@ func presignedGet(host, bucket, object string, expiry int64, creds auth.Credenti
 type DiscoveryDocResp struct {
 	DiscoveryDoc openid.DiscoveryDoc
 	UIVersion    string `json:"uiVersion"`
+	ClientId     string `json:"clientId"`
 }
 
 // GetDiscoveryDoc - returns parsed value of OpenID discovery document
 func (web *webAPIHandlers) GetDiscoveryDoc(r *http.Request, args *WebGenericArgs, reply *DiscoveryDocResp) error {
 	if globalOpenIDConfig.DiscoveryDoc.AuthEndpoint != "" {
 		reply.DiscoveryDoc = globalOpenIDConfig.DiscoveryDoc
+		reply.ClientId = globalOpenIDConfig.ClientId
 	}
 	reply.UIVersion = browser.UIVersion
 	return nil

@@ -42,6 +42,7 @@ type Config struct {
 	URL          *xnet.URL `json:"url,omitempty"`
 	ClaimPrefix  string    `json:"claimPrefix,omitempty"`
 	DiscoveryDoc DiscoveryDoc
+	ClientId     string
 	publicKeys   map[string]crypto.PublicKey
 	transport    *http.Transport
 	closeRespFn  func(io.ReadCloser)
@@ -210,6 +211,7 @@ const (
 	ClaimPrefix = "claim_prefix"
 
 	EnvIdentityOpenIDState       = "MINIO_IDENTITY_OPENID_STATE"
+	EnvIdentityOpenIDClientId    = "MINIO_IDENTITY_OPENID_CLIENT_ID"
 	EnvIdentityOpenIDJWKSURL     = "MINIO_IDENTITY_OPENID_JWKS_URL"
 	EnvIdentityOpenIDURL         = "MINIO_IDENTITY_OPENID_CONFIG_URL"
 	EnvIdentityOpenIDClaimPrefix = "MINIO_IDENTITY_OPENID_CLAIM_PREFIX"
@@ -293,6 +295,8 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 		return c, err
 	}
 
+	openIDClientId := env.Get(EnvIdentityOpenIDClientId, "")
+
 	jwksURL := env.Get(EnvIamJwksURL, "") // Legacy
 	if jwksURL == "" {
 		jwksURL = env.Get(EnvIdentityOpenIDJWKSURL, kvs.Get(JwksURL))
@@ -301,6 +305,7 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 	c = Config{
 		ClaimPrefix: env.Get(EnvIdentityOpenIDClaimPrefix, kvs.Get(ClaimPrefix)),
 		publicKeys:  make(map[string]crypto.PublicKey),
+		ClientId:    openIDClientId,
 		transport:   transport,
 		closeRespFn: closeRespFn,
 	}
