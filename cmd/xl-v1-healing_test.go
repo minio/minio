@@ -185,10 +185,12 @@ func TestHealObjectCorrupted(t *testing.T) {
 		xl.getDisks()[i].DeleteFile(bucket, filepath.Join(object, xlMetaJSONFile))
 	}
 
-	// Try healing now, expect to receive errDiskNotFound.
+	// Try healing now, expect to receive errFileNotFound.
 	_, err = objLayer.HealObject(context.Background(), bucket, object, false, true, madmin.HealDeepScan)
 	if err != nil {
-		t.Errorf("Expected nil but received %v", err)
+		if _, ok := err.(ObjectNotFound); !ok {
+			t.Errorf("Expect %v but received %v", ObjectNotFound{Bucket: bucket, Object: object}, err)
+		}
 	}
 
 	// since majority of xl.jsons are not available, object should be successfully deleted.

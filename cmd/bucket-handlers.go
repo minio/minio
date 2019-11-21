@@ -564,6 +564,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 		globalBucketObjectLockConfig.Set(bucket, Retention{})
+		globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, Retention{})
 	}
 
 	// Make sure to add Location information here only for bucket
@@ -896,12 +897,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	globalBucketObjectLockConfig.Delete(bucket)
-	globalNotificationSys.RemoveNotification(bucket)
-	globalPolicySys.Remove(bucket)
 	globalNotificationSys.DeleteBucket(ctx, bucket)
-	globalLifecycleSys.Remove(bucket)
-	globalNotificationSys.RemoveBucketLifecycle(ctx, bucket)
 
 	// Write success response.
 	writeSuccessNoContent(w)
@@ -1026,8 +1022,8 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		globalBucketObjectLockConfig.Set(bucket, retention)
 		globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, retention)
 	} else {
-		globalBucketObjectLockConfig.Set(bucket, Retention{})
-		globalBucketObjectLockConfig.Delete(bucket)
+		globalBucketObjectLockConfig.Remove(bucket)
+		globalNotificationSys.RemoveBucketObjectLockConfig(ctx, bucket)
 	}
 
 	// Write success response.

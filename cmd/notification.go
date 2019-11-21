@@ -525,6 +525,11 @@ func (sys *NotificationSys) SetBucketPolicy(ctx context.Context, bucketName stri
 
 // DeleteBucket - calls DeleteBucket RPC call on all peers.
 func (sys *NotificationSys) DeleteBucket(ctx context.Context, bucketName string) {
+	globalNotificationSys.RemoveNotification(bucketName)
+	globalBucketObjectLockConfig.Remove(bucketName)
+	globalPolicySys.Remove(bucketName)
+	globalLifecycleSys.Remove(bucketName)
+
 	go func() {
 		ng := WithNPeers(len(sys.peerClients))
 		for idx, client := range sys.peerClients {
@@ -551,6 +556,23 @@ func (sys *NotificationSys) RemoveBucketPolicy(ctx context.Context, bucketName s
 			client := client
 			ng.Go(ctx, func() error {
 				return client.RemoveBucketPolicy(bucketName)
+			}, idx, *client.host)
+		}
+		ng.Wait()
+	}()
+}
+
+// RemoveBucketObjectLockConfig - calls RemoveBucketObjectLockConfig RPC call on all peers.
+func (sys *NotificationSys) RemoveBucketObjectLockConfig(ctx context.Context, bucketName string) {
+	go func() {
+		ng := WithNPeers(len(sys.peerClients))
+		for idx, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
+			client := client
+			ng.Go(ctx, func() error {
+				return client.RemoveBucketObjectLockConfig(bucketName)
 			}, idx, *client.host)
 		}
 		ng.Wait()
@@ -984,21 +1006,22 @@ func (sys *NotificationSys) Send(args eventArgs) []event.TargetIDErr {
 
 // PutBucketObjectLockConfig - put bucket object lock configuration to all peers.
 func (sys *NotificationSys) PutBucketObjectLockConfig(ctx context.Context, bucketName string, retention Retention) {
-	var wg sync.WaitGroup
-	for _, client := range sys.peerClients {
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
 		if client == nil {
 			continue
 		}
-		wg.Add(1)
-		go func(client *peerRESTClient) {
-			defer wg.Done()
-			if err := client.PutBucketObjectLockConfig(bucketName, retention); err != nil {
-				logger.GetReqInfo(ctx).AppendTags("remotePeer", client.host.Name)
-				logger.LogIf(ctx, err)
-			}
-		}(client)
+		index := index
+		g.Go(func() error {
+			return sys.peerClients[index].PutBucketObjectLockConfig(bucketName, retention)
+		}, index)
 	}
-	wg.Wait()
+	for i, err := range g.Wait() {
+		if err != nil {
+			logger.GetReqInfo(ctx).AppendTags("remotePeer", sys.peerClients[i].host.String())
+			logger.LogIf(ctx, err)
+		}
+	}
 }
 
 // NetReadPerfInfo - Network read performance information.
