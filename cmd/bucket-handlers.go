@@ -404,20 +404,24 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	toNames := func(input map[string]int) (output []string) {
 		output = make([]string, len(input))
-		for name, index := range input {
-			output[index] = name
+		idx := 0
+		for name := range input {
+			output[idx] = name
+			idx++
 		}
 		return
 	}
 
-	errs, err := deleteObjectsFn(ctx, bucket, toNames(objectsToDelete))
+	deleteList := toNames(objectsToDelete)
+	errs, err := deleteObjectsFn(ctx, bucket, deleteList)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	for _, index := range objectsToDelete {
-		dErrs[index] = toAPIErrorCode(ctx, errs[index])
+	for i, objName := range deleteList {
+		dIdx := objectsToDelete[objName]
+		dErrs[dIdx] = toAPIErrorCode(ctx, errs[i])
 	}
 
 	// Collect deleted objects and errors if any.
