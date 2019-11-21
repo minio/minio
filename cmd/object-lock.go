@@ -28,6 +28,8 @@ import (
 	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/env"
 )
 
 // RetentionMode - object retention mode.
@@ -65,6 +67,14 @@ var (
 	errObjectLockInvalidHeaders    = errors.New("x-amz-object-lock-retain-until-date and x-amz-object-lock-mode must both be supplied")
 )
 
+const (
+	ntpServerEnv = "MINIO_NTP_SERVER"
+)
+
+var (
+	ntpServer = env.Get(ntpServerEnv, "")
+)
+
 // Retention - bucket level retention configuration.
 type Retention struct {
 	Mode     RetentionMode
@@ -78,7 +88,13 @@ func (r Retention) IsEmpty() bool {
 
 // Retain - check whether given date is retainable by validity time.
 func (r Retention) Retain(created time.Time) bool {
-	return globalWORMEnabled || created.Add(r.Validity).After(time.Now())
+	t, err := UTCNowNTP()
+	if err != nil {
+		logger.LogIf(context.Background(), err)
+		// Retain
+		return true
+	}
+	return globalWORMEnabled || created.Add(r.Validity).After(t)
 }
 
 // BucketObjectLockConfig - map of bucket and retention configuration.
@@ -205,11 +221,19 @@ func (config *ObjectLockConfig) UnmarshalXML(d *xml.Decoder, start xml.StartElem
 func (config *ObjectLockConfig) ToRetention() (r Retention) {
 	if config.Rule != nil {
 		r.Mode = config.Rule.DefaultRetention.Mode
-		utcNow := time.Now().UTC()
+
+		t, err := UTCNowNTP()
+		if err != nil {
+			logger.LogIf(context.Background(), err)
+			// Do not change any configuration
+			// upon NTP failure.
+			return r
+		}
+
 		if config.Rule.DefaultRetention.Days != nil {
-			r.Validity = utcNow.AddDate(0, 0, int(*config.Rule.DefaultRetention.Days)).Sub(utcNow)
+			r.Validity = t.AddDate(0, 0, int(*config.Rule.DefaultRetention.Days)).Sub(t)
 		} else {
-			r.Validity = utcNow.AddDate(int(*config.Rule.DefaultRetention.Years), 0, 0).Sub(utcNow)
+			r.Validity = t.AddDate(int(*config.Rule.DefaultRetention.Years), 0, 0).Sub(t)
 		}
 	}
 
@@ -282,9 +306,17 @@ func parseObjectRetention(reader io.Reader) (*ObjectRetention, error) {
 	if ret.Mode != Compliance && ret.Mode != Governance {
 		return &ret, errUnknownWORMModeDirective
 	}
-	if ret.RetainUntilDate.Before(time.Now()) {
+
+	t, err := UTCNowNTP()
+	if err != nil {
+		logger.LogIf(context.Background(), err)
 		return &ret, errPastObjectLockRetainDate
 	}
+
+	if ret.RetainUntilDate.Before(t) {
+		return &ret, errPastObjectLockRetainDate
+	}
+
 	return &ret, nil
 }
 
@@ -334,7 +366,14 @@ func parseObjectLockRetentionHeaders(h http.Header) (rmode RetentionMode, r Rete
 		if err != nil {
 			return rmode, r, errInvalidRetentionDate
 		}
-		if retDate.Before(time.Now()) {
+
+		t, err := UTCNowNTP()
+		if err != nil {
+			logger.LogIf(context.Background(), err)
+			return rmode, r, errPastObjectLockRetainDate
+		}
+
+		if retDate.Before(t) {
 			return rmode, r, errPastObjectLockRetainDate
 		}
 	}
@@ -392,7 +431,12 @@ func checkGovernanceBypassAllowed(ctx context.Context, r *http.Request, bucket, 
 	}
 	if ret.Mode == Governance {
 		if !isObjectLockGovernanceBypassSet(r.Header) {
-			if ret.RetainUntilDate.After(UTCNow()) {
+			t, err := UTCNowNTP()
+			if err != nil {
+				logger.LogIf(ctx, err)
+				return oi, ErrObjectLocked
+			}
+			if ret.RetainUntilDate.After(t) {
 				return oi, ErrObjectLocked
 			}
 			return oi, ErrNone
@@ -440,7 +484,12 @@ func checkPutObjectRetentionAllowed(ctx context.Context, r *http.Request, bucket
 			return mode, retainDate, toAPIErrorCode(ctx, err)
 		}
 		// AWS S3 just creates a new version of object when an object is being overwritten.
-		if objExists && retainDate.After(UTCNow()) {
+		t, err := UTCNowNTP()
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return mode, retainDate, ErrObjectLocked
+		}
+		if objExists && retainDate.After(t) {
 			return mode, retainDate, ErrObjectLocked
 		}
 		if rMode == Invalid {
@@ -455,12 +504,17 @@ func checkPutObjectRetentionAllowed(ctx context.Context, r *http.Request, bucket
 		if retentionPermErr != ErrNone {
 			return mode, retainDate, retentionPermErr
 		}
+		t, err := UTCNowNTP()
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return mode, retainDate, ErrObjectLocked
+		}
 		// AWS S3 just creates a new version of object when an object is being overwritten.
-		if objExists && retainDate.After(UTCNow()) {
+		if objExists && retainDate.After(t) {
 			return mode, retainDate, ErrObjectLocked
 		}
 		// inherit retention from bucket configuration
-		return retention.Mode, RetentionDate{UTCNow().Add(retention.Validity)}, ErrNone
+		return retention.Mode, RetentionDate{t.Add(retention.Validity)}, ErrNone
 	}
 	return mode, retainDate, ErrNone
 }

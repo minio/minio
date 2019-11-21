@@ -35,6 +35,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/beevik/ntp"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
@@ -312,6 +313,17 @@ func isFile(path string) bool {
 // UTCNow - returns current UTC time.
 func UTCNow() time.Time {
 	return time.Now().UTC()
+}
+
+// UTCNowNTP - is similar in functionality to UTCNow()
+// but only used when we do not wish to rely on system
+// time.
+func UTCNowNTP() (time.Time, error) {
+	// ntp server is disabled
+	if ntpServer == "" {
+		return UTCNow(), nil
+	}
+	return ntp.Time(ntpServer)
 }
 
 // GenETag - generate UUID based ETag
