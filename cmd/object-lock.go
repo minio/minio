@@ -118,8 +118,8 @@ func (config *BucketObjectLockConfig) Get(bucketName string) (r Retention, ok bo
 	return r, ok
 }
 
-// Delete - delete retention configuration.
-func (config *BucketObjectLockConfig) Delete(bucketName string) {
+// Remove - removes retention configuration.
+func (config *BucketObjectLockConfig) Remove(bucketName string) {
 	config.Lock()
 	delete(config.retentionMap, bucketName)
 	config.Unlock()
@@ -414,6 +414,7 @@ func checkGovernanceBypassAllowed(ctx context.Context, r *http.Request, bucket, 
 	if err != nil {
 		// ignore case where object no longer exists
 		if toAPIError(ctx, err).Code == "NoSuchKey" {
+			oi.UserDefined = map[string]string{}
 			return oi, ErrNone
 		}
 		return oi, toAPIErrorCode(ctx, err)

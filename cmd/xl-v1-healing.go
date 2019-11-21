@@ -697,9 +697,10 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 			writeQuorum = len(xl.getDisks())/2 + 1
 		}
 		if !dryRun && remove {
-			err = xl.deleteObject(healCtx, bucket, object, writeQuorum, false)
+			xl.deleteObject(healCtx, bucket, object, writeQuorum, false)
 		}
-		return defaultHealResult(xlMetaV1{}, storageDisks, errs, bucket, object), err
+		err = reduceReadQuorumErrs(ctx, errs, nil, writeQuorum-1)
+		return defaultHealResult(xlMetaV1{}, storageDisks, errs, bucket, object), toObjectErr(err, bucket, object)
 	}
 
 	latestXLMeta, err := getLatestXLMeta(healCtx, partsMetadata, errs)
@@ -718,7 +719,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 		// Only if we get errors from all the disks we return error. Else we need to
 		// continue to return filled madmin.HealResultItem struct which includes info
 		// on what disks the file is available etc.
-		if reducedErr := reduceReadQuorumErrs(ctx, errs, nil, latestXLMeta.Erasure.DataBlocks); reducedErr != nil {
+		if err = reduceReadQuorumErrs(ctx, errs, nil, latestXLMeta.Erasure.DataBlocks); err != nil {
 			if m, ok := isObjectDangling(partsMetadata, errs, []error{}); ok {
 				writeQuorum := m.Erasure.DataBlocks + 1
 				if m.Erasure.DataBlocks == 0 {
@@ -728,7 +729,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 					xl.deleteObject(ctx, bucket, object, writeQuorum, false)
 				}
 			}
-			return defaultHealResult(latestXLMeta, storageDisks, errs, bucket, object), toObjectErr(reducedErr, bucket, object)
+			return defaultHealResult(latestXLMeta, storageDisks, errs, bucket, object), toObjectErr(err, bucket, object)
 		}
 	}
 
