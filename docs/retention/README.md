@@ -32,12 +32,17 @@ object locking and permissions required for object retention and governance bypa
 ### 3. Note
 
 - When global WORM is enabled by `MINIO_WORM` environment variable or `worm` field in configuration file supersedes bucket level WORM and `PUT object lock configuration` REST API is disabled.
-- global WORM and objects in `Compliance` mode can never be overwritten
+- In global WORM mode objects can never be overwritten
+- In `Compliance` mode, objects cannot be overwritten or deleted by anyone until retention period
+is expired. If user has requisite governance bypass permissions, an object's retention date can
+be extended in `Compliance` mode.
 - Currently `Governance` mode does not allow overwriting an existing object as versioning is not
-available in MinIO. To that extent `Governance` mode is similar to `Compliance`. However,
-if user has requisite `Governance` bypass permissions, an object in `Governance` mode can be overwritten.
+available in MinIO. However, if user has requisite `Governance` bypass permissions, an object in `Governance` mode can be overwritten.
 - Once object lock configuration is set to a bucket, new objects inherit the retention settings of the bucket object lock configuration (if set) or the retention headers set in the PUT request
 or set with PutObjectRetention API call
+
+- MINIO_NTP_SERVER environment variable can be set to remote NTP server endpoint if system time
+is not desired for setting retention dates.
 
 ## Explore Further
 

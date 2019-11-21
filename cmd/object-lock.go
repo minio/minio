@@ -403,7 +403,7 @@ func getObjectRetentionMeta(meta map[string]string) ObjectRetention {
 // Objects under site wide WORM or those in "Compliance" mode can never be overwritten.
 // For objects in "Governance" mode, overwrite is allowed if a) object retention date is past OR
 // governance bypass headers are set and user has governance bypass permissions.
-func checkGovernanceBypassAllowed(ctx context.Context, r *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn, govBypassPerm APIErrorCode) (oi ObjectInfo, s3Err APIErrorCode) {
+func checkGovernanceBypassAllowed(ctx context.Context, r *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn, govBypassPerm APIErrorCode, objRetention *ObjectRetention) (oi ObjectInfo, s3Err APIErrorCode) {
 	var err error
 	var opts ObjectOptions
 	opts, err = getOpts(ctx, r, bucket, object)
@@ -420,31 +420,39 @@ func checkGovernanceBypassAllowed(ctx context.Context, r *http.Request, bucket, 
 		return oi, toAPIErrorCode(ctx, err)
 	}
 	ret := getObjectRetentionMeta(oi.UserDefined)
-	if globalWORMEnabled || ret.Mode == Compliance {
+	if globalWORMEnabled {
 		return oi, ErrObjectLocked
+	}
+	if ret.Mode == Compliance {
+		// Compliance retention mode cannot be changed and retention period cannot be shortened as per
+		// https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lock-overview.html#object-lock-retention-modes
+		if objRetention != nil && (objRetention.Mode != Compliance || objRetention.RetainUntilDate.Before(ret.RetainUntilDate.Time)) {
+			return oi, ErrObjectLocked
+		}
 	}
 	// Here bucket does not support object lock
 	if ret.Mode == Invalid && isObjectLockGovernanceBypassSet(r.Header) {
 		return oi, ErrInvalidBucketObjectLockConfiguration
 	}
-	if ret.Mode == Compliance {
-		return oi, ErrObjectLocked
+
+	if !isObjectLockGovernanceBypassSet(r.Header) {
+		t, err := UTCNowNTP()
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return oi, ErrObjectLocked
+		}
+		if ret.RetainUntilDate.After(t) {
+			return oi, ErrObjectLocked
+		}
+		return oi, ErrNone
 	}
-	if ret.Mode == Governance {
-		if !isObjectLockGovernanceBypassSet(r.Header) {
-			t, err := UTCNowNTP()
-			if err != nil {
-				logger.LogIf(ctx, err)
-				return oi, ErrObjectLocked
-			}
-			if ret.RetainUntilDate.After(t) {
-				return oi, ErrObjectLocked
-			}
-			return oi, ErrNone
-		}
-		if govBypassPerm != ErrNone {
-			return oi, ErrAccessDenied
-		}
+	if govBypassPerm != ErrNone && ret.Mode != Compliance {
+		return oi, ErrAccessDenied
+	}
+	// No other operation other than PutObjectRentention can be performed
+	// on a object under Compliance, even with governance bypass permissions
+	if objRetention == nil && ret.Mode == Compliance {
+		return oi, ErrObjectLocked
 	}
 	return oi, ErrNone
 }
@@ -453,8 +461,9 @@ func checkGovernanceBypassAllowed(ctx context.Context, r *http.Request, bucket, 
 // See https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lock-managing.html for the spec.
 // For non-existing objects with object retention headers set, this method returns ErrNone if bucket has
 // locking enabled and user has requisite permissions (s3:PutObjectRetention)
-// If object exists on object store, if retention mode is "Compliance" or site wide WORM enabled -this method
+// If object exists on object store and site wide WORM enabled - this method
 // returns an error. For objects in "Governance" mode, overwrite is allowed if the retention date has expired.
+// For objects in "Compliance" mode, retention date cannot be shortened, and mode cannot be altered.
 func checkPutObjectRetentionAllowed(ctx context.Context, r *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn, retentionPermErr APIErrorCode) (RetentionMode, RetentionDate, APIErrorCode) {
 	var mode RetentionMode
 	var retainDate RetentionDate
