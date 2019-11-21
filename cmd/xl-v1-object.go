@@ -646,7 +646,8 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	}
 
 	// Rename the successfully written temporary object to final location.
-	if _, err = rename(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, true, writeQuorum, nil); err != nil {
+	_, err = rename(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, true, writeQuorum, nil)
+	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 

@@ -53,14 +53,17 @@ func TestCreateServerEndpoints(t *testing.T) {
 		{":9001", []string{"http://localhost:9001/export{01...64}"}, true},
 	}
 
-	for i, testCase := range testCases {
-		_, _, err := createServerEndpoints(testCase.serverAddr, testCase.args...)
-		if err != nil && testCase.success {
-			t.Errorf("Test %d: Expected success but failed instead %s", i+1, err)
-		}
-		if err == nil && !testCase.success {
-			t.Errorf("Test %d: Expected failure but passed instead", i+1)
-		}
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run("", func(t *testing.T) {
+			_, _, _, err := createServerEndpoints(testCase.serverAddr, testCase.args...)
+			if err != nil && testCase.success {
+				t.Errorf("Expected success but failed instead %s", err)
+			}
+			if err == nil && !testCase.success {
+				t.Errorf("Expected failure but passed instead")
+			}
+		})
 	}
 }
 

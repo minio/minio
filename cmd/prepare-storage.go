@@ -286,8 +286,8 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 }
 
 // Format disks before initialization of object layer.
-func waitForFormatXL(firstDisk bool, endpoints Endpoints, setCount, disksPerSet int, deploymentID string) (format *formatXLV3, err error) {
-	if len(endpoints) == 0 || setCount == 0 || disksPerSet == 0 {
+func waitForFormatXL(firstDisk bool, endpoints Endpoints, setCount, drivesPerSet int, deploymentID string) (format *formatXLV3, err error) {
+	if len(endpoints) == 0 || setCount == 0 || drivesPerSet == 0 {
 		return nil, errInvalidArgument
 	}
 
@@ -318,7 +318,7 @@ func waitForFormatXL(firstDisk bool, endpoints Endpoints, setCount, disksPerSet 
 	for {
 		select {
 		case retryCount := <-retryTimerCh:
-			format, err := connectLoadInitFormats(retryCount, firstDisk, endpoints, setCount, disksPerSet, deploymentID)
+			format, err := connectLoadInitFormats(retryCount, firstDisk, endpoints, setCount, drivesPerSet, deploymentID)
 			if err != nil {
 				switch err {
 				case errNotFirstDisk:

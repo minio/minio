@@ -28,8 +28,8 @@ func TestNameExpand(t *testing.T) {
 		name           Name
 		expectedResult []Name
 	}{
-		{ObjectAccessedAll, []Name{ObjectAccessedGet, ObjectAccessedHead}},
-		{ObjectCreatedAll, []Name{ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy, ObjectCreatedPost, ObjectCreatedPut}},
+		{ObjectAccessedAll, []Name{ObjectAccessedGet, ObjectAccessedHead, ObjectAccessedGetRetention}},
+		{ObjectCreatedAll, []Name{ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy, ObjectCreatedPost, ObjectCreatedPut, ObjectCreatedPutRetention}},
 		{ObjectRemovedAll, []Name{ObjectRemovedDelete}},
 		{ObjectAccessedHead, []Name{ObjectAccessedHead}},
 	}
@@ -38,7 +38,7 @@ func TestNameExpand(t *testing.T) {
 		result := testCase.name.Expand()
 
 		if !reflect.DeepEqual(result, testCase.expectedResult) {
-			t.Fatalf("test %v: result: expected: %v, got: %v", i+1, testCase.expectedResult, result)
+			t.Errorf("test %v: result: expected: %v, got: %v", i+1, testCase.expectedResult, result)
 		}
 	}
 }

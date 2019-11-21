@@ -49,7 +49,7 @@ func TestServerConfig(t *testing.T) {
 		t.Errorf("Expecting region `us-west-1` found %s", globalServerRegion)
 	}
 
-	if err := saveServerConfig(context.Background(), objLayer, globalServerConfig, nil); err != nil {
+	if err := saveServerConfig(context.Background(), objLayer, globalServerConfig); err != nil {
 		t.Fatalf("Unable to save updated config file %s", err)
 	}
 

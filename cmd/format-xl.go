@@ -124,6 +124,18 @@ type formatXLV3 struct {
 	} `json:"xl"`
 }
 
+func (f *formatXLV3) Clone() *formatXLV3 {
+	b, err := json.Marshal(f)
+	if err != nil {
+		panic(err)
+	}
+	var dst formatXLV3
+	if err = json.Unmarshal(b, &dst); err != nil {
+		panic(err)
+	}
+	return &dst
+}
+
 // Returns formatXL.XL.Version
 func newFormatXLV3(numSets int, setLen int) *formatXLV3 {
 	format := &formatXLV3{}
@@ -581,9 +593,9 @@ func getFormatXLInQuorum(formats []*formatXLV3) (*formatXLV3, error) {
 
 	for i, hash := range formatHashes {
 		if hash == maxHash {
-			format := *formats[i]
+			format := formats[i].Clone()
 			format.XL.This = ""
-			return &format, nil
+			return format, nil
 		}
 	}
 
@@ -591,7 +603,7 @@ func getFormatXLInQuorum(formats []*formatXLV3) (*formatXLV3, error) {
 }
 
 func formatXLV3Check(reference *formatXLV3, format *formatXLV3) error {
-	tmpFormat := *format
+	tmpFormat := format.Clone()
 	this := tmpFormat.XL.This
 	tmpFormat.XL.This = ""
 	if len(reference.XL.Sets) != len(format.XL.Sets) {
@@ -718,32 +730,32 @@ func fixFormatXLV3(storageDisks []StorageAPI, endpoints Endpoints, formats []*fo
 }
 
 // initFormatXL - save XL format configuration on all disks.
-func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, disksPerSet int, deploymentID string) (format *formatXLV3, err error) {
-	format = newFormatXLV3(setCount, disksPerSet)
+func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, drivesPerSet int, deploymentID string) (*formatXLV3, error) {
+	format := newFormatXLV3(setCount, drivesPerSet)
 	formats := make([]*formatXLV3, len(storageDisks))
 
 	for i := 0; i < setCount; i++ {
-		for j := 0; j < disksPerSet; j++ {
-			newFormat := *format
+		for j := 0; j < drivesPerSet; j++ {
+			newFormat := format.Clone()
 			newFormat.XL.This = format.XL.Sets[i][j]
 			if deploymentID != "" {
 				newFormat.ID = deploymentID
 			}
-			formats[i*disksPerSet+j] = &newFormat
+			formats[i*drivesPerSet+j] = newFormat
 		}
 	}
 
 	// Initialize meta volume, if volume already exists ignores it.
-	if err = initFormatXLMetaVolume(storageDisks, formats); err != nil {
+	if err := initFormatXLMetaVolume(storageDisks, formats); err != nil {
 		return format, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
 	}
 
 	// Save formats `format.json` across all disks.
-	if err = saveFormatXLAll(ctx, storageDisks, formats); err != nil {
+	if err := saveFormatXLAll(ctx, storageDisks, formats); err != nil {
 		return nil, err
 	}
 
-	return format, nil
+	return getFormatXLInQuorum(formats)
 }
 
 // Make XL backend meta volumes.
@@ -857,14 +869,14 @@ func markUUIDsOffline(refFormat *formatXLV3, formats []*formatXLV3) {
 }
 
 // Initialize a new set of set formats which will be written to all disks.
-func newHealFormatSets(refFormat *formatXLV3, setCount, disksPerSet int, formats []*formatXLV3, errs []error) [][]*formatXLV3 {
+func newHealFormatSets(refFormat *formatXLV3, setCount, drivesPerSet int, formats []*formatXLV3, errs []error) [][]*formatXLV3 {
 	newFormats := make([][]*formatXLV3, setCount)
 	for i := range refFormat.XL.Sets {
-		newFormats[i] = make([]*formatXLV3, disksPerSet)
+		newFormats[i] = make([]*formatXLV3, drivesPerSet)
 	}
 	for i := range refFormat.XL.Sets {
 		for j := range refFormat.XL.Sets[i] {
-			if errs[i*disksPerSet+j] == errUnformattedDisk || errs[i*disksPerSet+j] == nil {
+			if errs[i*drivesPerSet+j] == errUnformattedDisk || errs[i*drivesPerSet+j] == nil {
 				newFormats[i][j] = &formatXLV3{}
 				newFormats[i][j].Version = refFormat.Version
 				newFormats[i][j].ID = refFormat.ID
@@ -872,13 +884,13 @@ func newHealFormatSets(refFormat *formatXLV3, setCount, disksPerSet int, formats
 				newFormats[i][j].XL.Version = refFormat.XL.Version
 				newFormats[i][j].XL.DistributionAlgo = refFormat.XL.DistributionAlgo
 			}
-			if errs[i*disksPerSet+j] == errUnformattedDisk {
+			if errs[i*drivesPerSet+j] == errUnformattedDisk {
 				newFormats[i][j].XL.This = ""
 				newFormats[i][j].XL.Sets = nil
 				continue
 			}
-			if errs[i*disksPerSet+j] == nil {
-				newFormats[i][j].XL.This = formats[i*disksPerSet+j].XL.This
+			if errs[i*drivesPerSet+j] == nil {
+				newFormats[i][j].XL.This = formats[i*drivesPerSet+j].XL.This
 				newFormats[i][j].XL.Sets = nil
 			}
 		}

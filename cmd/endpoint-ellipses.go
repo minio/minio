@@ -257,61 +257,60 @@ func GetAllSets(args ...string) ([][]string, error) {
 
 // CreateServerEndpoints - validates and creates new endpoints from input args, supports
 // both ellipses and without ellipses transparently.
-func createServerEndpoints(serverAddr string, args ...string) (EndpointZones, SetupType, error) {
+func createServerEndpoints(serverAddr string, args ...string) (EndpointZones, int, SetupType, error) {
 	if len(args) == 0 {
-		return nil, -1, errInvalidArgument
+		return nil, -1, -1, errInvalidArgument
 	}
 
 	var endpointZones EndpointZones
 	var setupType SetupType
+	var drivesPerSet int
 	if !ellipses.HasEllipses(args...) {
 		setArgs, err := GetAllSets(args...)
 		if err != nil {
-			return nil, -1, err
+			return nil, -1, -1, err
 		}
 		endpointList, newSetupType, err := CreateEndpoints(serverAddr, setArgs...)
 		if err != nil {
-			return nil, -1, err
+			return nil, -1, -1, err
 		}
 		endpointZones = append(endpointZones, ZoneEndpoints{
 			SetCount:     len(setArgs),
 			DrivesPerSet: len(setArgs[0]),
 			Endpoints:    endpointList,
 		})
-		globalXLSetDriveCount = len(setArgs[0])
 		setupType = newSetupType
-		return endpointZones, setupType, nil
+		return endpointZones, len(setArgs[0]), setupType, nil
 	}
 
 	// Look for duplicate args.
 	if _, err := GetAllSets(args...); err != nil {
-		return nil, -1, err
+		return nil, -1, -1, err
 	}
 
 	for _, arg := range args {
 		setArgs, err := GetAllSets(arg)
 		if err != nil {
-			return nil, -1, err
+			return nil, -1, -1, err
 		}
 		endpointList, newSetupType, err := CreateEndpoints(serverAddr, setArgs...)
 		if err != nil {
-			return nil, -1, err
+			return nil, -1, -1, err
 		}
 		if setupType != 0 && setupType != newSetupType {
-			return nil, -1, fmt.Errorf("Mixed modes of operation %s and %s are not allowed",
+			return nil, -1, -1, fmt.Errorf("Mixed modes of operation %s and %s are not allowed",
 				setupType, newSetupType)
 		}
-		if globalXLSetDriveCount != 0 && globalXLSetDriveCount != len(setArgs[0]) {
-			return nil, -1, fmt.Errorf("All zones should have same drive per set ratio - expected %d, got %d",
-				globalXLSetDriveCount, len(setArgs[0]))
+		if drivesPerSet != 0 && drivesPerSet != len(setArgs[0]) {
+			return nil, -1, -1, fmt.Errorf("All zones should have same drive per set ratio - expected %d, got %d", drivesPerSet, len(setArgs[0]))
 		}
 		endpointZones = append(endpointZones, ZoneEndpoints{
 			SetCount:     len(setArgs),
 			DrivesPerSet: len(setArgs[0]),
 			Endpoints:    endpointList,
 		})
-		globalXLSetDriveCount = len(setArgs[0])
+		drivesPerSet = len(setArgs[0])
 		setupType = newSetupType
 	}
-	return endpointZones, setupType, nil
+	return endpointZones, drivesPerSet, setupType, nil
 }

@@ -85,7 +85,6 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	oldCfg := cfg.Clone()
 	scanner := bufio.NewScanner(bytes.NewReader(kvBytes))
 	for scanner.Scan() {
 		// Skip any empty lines
@@ -102,7 +101,7 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err = saveServerConfig(ctx, objectAPI, cfg, oldCfg); err != nil {
+	if err = saveServerConfig(ctx, objectAPI, cfg); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -149,7 +148,6 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	oldCfg := cfg.Clone()
 	scanner := bufio.NewScanner(bytes.NewReader(kvBytes))
 	for scanner.Scan() {
 		// Skip any empty lines, or comment like characters
@@ -172,7 +170,7 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Update the actual server config on disk.
-	if err = saveServerConfig(ctx, objectAPI, cfg, oldCfg); err != nil {
+	if err = saveServerConfig(ctx, objectAPI, cfg); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -308,7 +306,6 @@ func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r
 		}
 	}
 
-	oldCfg := cfg.Clone()
 	scanner := bufio.NewScanner(bytes.NewReader(kvBytes))
 	for scanner.Scan() {
 		// Skip any empty lines, or comment like characters
@@ -331,7 +328,7 @@ func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if err = saveServerConfig(ctx, objectAPI, cfg, oldCfg); err != nil {
+	if err = saveServerConfig(ctx, objectAPI, cfg); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -444,7 +441,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err = saveServerConfig(ctx, objectAPI, cfg, nil); err != nil {
+	if err = saveServerConfig(ctx, objectAPI, cfg); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
