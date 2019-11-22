@@ -875,6 +875,9 @@ func (a *azureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, des
 	if err != nil {
 		return objInfo, azureToObjectError(err, srcBucket, srcObject)
 	}
+
+	// StartCopyFromURL is an asynchronous operation so need to poll for completion,
+	// see https://docs.microsoft.com/en-us/rest/api/storageservices/copy-blob#remarks.
 	copyStatus := res.CopyStatus()
 	for copyStatus != azblob.CopyStatusSuccess {
 		destProps, err := destBlob.GetProperties(ctx, azblob.BlobAccessConditions{})
