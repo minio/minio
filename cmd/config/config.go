@@ -466,14 +466,10 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 		tgt = subSystemValue[1]
 	}
 
-	_, ok := c[subSys][tgt]
-	if !ok {
-		c[subSys][tgt] = KVS{}
-	} else {
-		c[subSys][tgt] = kvs
-	}
+	// Save client sent kvs
+	c[subSys][tgt] = kvs
 
-	_, ok = c[subSys][tgt].Lookup(State)
+	_, ok := c[subSys][tgt].Lookup(State)
 	if !ok {
 		// implicit state "on" if not specified.
 		c[subSys][tgt] = append(c[subSys][tgt], KV{
