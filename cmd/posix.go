@@ -386,18 +386,18 @@ func (s *posix) getVolDir(volume string) (string, error) {
 func (s *posix) getDiskID() (string, error) {
 	s.RLock()
 	diskID := s.diskID
+	fileInfo := s.formatFileInfo
 	s.RUnlock()
+
+	if fileInfo != nil && diskID != "" {
+		return diskID, nil
+	}
 
 	formatFile := pathJoin(s.diskPath, minioMetaBucket, formatConfigFile)
 	fi, err := os.Stat(formatFile)
 	if err != nil {
 		// If the disk is still not initialized.
 		return "", err
-	}
-
-	if xioutil.SameFile(fi, s.formatFileInfo) {
-		// If the file has not changed, just return the cached diskID information.
-		return diskID, nil
 	}
 
 	s.Lock()
