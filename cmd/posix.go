@@ -164,7 +164,7 @@ func getValidPath(path string) (string, error) {
 		return path, err
 	}
 	file.Close()
-	os.Remove(pathJoin(path, fn))
+	os.Remove(fn)
 
 	return path, nil
 }
