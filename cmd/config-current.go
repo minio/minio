@@ -36,6 +36,7 @@ import (
 	"github.com/minio/minio/cmd/logger/target/http"
 	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/env"
+	xetcd "github.com/minio/minio/pkg/etcd"
 )
 
 var (
@@ -149,7 +150,7 @@ func lookupConfigs(s config.Config) (err error) {
 			dns.DomainNames(globalDomainNames),
 			dns.DomainIPs(globalDomainIPs),
 			dns.DomainPort(globalMinioPort),
-			dns.CoreDNSPath(etcdCfg.CoreDNSPath),
+			dns.CoreDNSPath(xetcd.EtcdPath(etcdCfg.CoreDNSPath)),
 		)
 		if err != nil {
 			return config.Errorf("Unable to initialize DNS config for %s: %s", globalDomainNames, err)

@@ -29,6 +29,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
+	xetcd "github.com/minio/minio/pkg/etcd"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -209,7 +210,7 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 		logger.Info("Attempting encryption of all IAM users and policies on etcd")
 	}
 
-	r, err := client.Get(ctx, minioConfigPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+	r, err := client.Get(ctx, xetcd.EtcdPath(minioConfigPrefix), etcd.WithPrefix(), etcd.WithKeysOnly())
 	if err != nil {
 		return err
 	}

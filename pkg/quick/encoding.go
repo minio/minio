@@ -31,7 +31,8 @@ import (
 	"time"
 
 	etcd "github.com/coreos/etcd/clientv3"
-	yaml "gopkg.in/yaml.v2"
+	xetcd "github.com/minio/minio/pkg/etcd"
+	"gopkg.in/yaml.v2"
 )
 
 // ConfigEncoding is a generic interface which
@@ -139,7 +140,7 @@ func saveFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	_, err = clnt.Put(ctx, filename, string(dataBytes))
+	_, err = clnt.Put(ctx, xetcd.EtcdPath(filename), string(dataBytes))
 	if err == context.DeadlineExceeded {
 		return fmt.Errorf("etcd setup is unreachable, please check your endpoints %s", clnt.Endpoints())
 	} else if err != nil {
@@ -151,7 +152,7 @@ func saveFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error
 func loadFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	resp, err := clnt.Get(ctx, filename)
+	resp, err := clnt.Get(ctx, xetcd.EtcdPath(filename))
 	if err != nil {
 		if err == context.DeadlineExceeded {
 			return fmt.Errorf("etcd setup is unreachable, please check your endpoints %s", clnt.Endpoints())
@@ -163,7 +164,7 @@ func loadFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error
 	}
 
 	for _, ev := range resp.Kvs {
-		if string(ev.Key) == filename {
+		if string(ev.Key) == xetcd.EtcdPath(filename) {
 			fileData := ev.Value
 			if runtime.GOOS == "windows" {
 				fileData = bytes.Replace(fileData, []byte("\r\n"), []byte("\n"), -1)

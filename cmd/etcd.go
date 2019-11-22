@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	etcd "github.com/coreos/etcd/clientv3"
+	xetcd "github.com/minio/minio/pkg/etcd"
 )
 
 var errEtcdUnreachable = errors.New("etcd is unreachable, please check your endpoints")
@@ -41,7 +42,7 @@ func etcdErrToErr(err error, etcdEndpoints []string) error {
 func saveKeyEtcd(ctx context.Context, client *etcd.Client, key string, data []byte) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
 	defer cancel()
-	_, err := client.Put(timeoutCtx, key, string(data))
+	_, err := client.Put(timeoutCtx, xetcd.EtcdPath(key), string(data))
 	return etcdErrToErr(err, client.Endpoints())
 }
 
@@ -49,14 +50,15 @@ func deleteKeyEtcd(ctx context.Context, client *etcd.Client, key string) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
 	defer cancel()
 
-	_, err := client.Delete(timeoutCtx, key)
+	_, err := client.Delete(timeoutCtx, xetcd.EtcdPath(key))
 	return etcdErrToErr(err, client.Endpoints())
 }
 
 func readKeyEtcd(ctx context.Context, client *etcd.Client, key string) ([]byte, error) {
 	timeoutCtx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
 	defer cancel()
-	resp, err := client.Get(timeoutCtx, key)
+	keyPath := xetcd.EtcdPath(key)
+	resp, err := client.Get(timeoutCtx, keyPath)
 	if err != nil {
 		return nil, etcdErrToErr(err, client.Endpoints())
 	}
@@ -64,7 +66,7 @@ func readKeyEtcd(ctx context.Context, client *etcd.Client, key string) ([]byte, 
 		return nil, errConfigNotFound
 	}
 	for _, ev := range resp.Kvs {
-		if string(ev.Key) == key {
+		if string(ev.Key) == keyPath {
 			return ev.Value, nil
 		}
 	}

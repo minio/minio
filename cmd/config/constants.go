@@ -32,6 +32,7 @@ const (
 	EnvRegionName   = "MINIO_REGION_NAME"
 	EnvPublicIPs    = "MINIO_PUBLIC_IPS"
 	EnvEndpoints    = "MINIO_ENDPOINTS"
+	EnvEtcdPrefix   = "MINIO_ETCD_PREFIX"
 
 	EnvUpdate = "MINIO_UPDATE"
 

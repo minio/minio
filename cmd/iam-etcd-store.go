@@ -31,6 +31,7 @@ import (
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	xetcd "github.com/minio/minio/pkg/etcd"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -150,12 +151,12 @@ func (ies *IAMEtcdStore) migrateUsersConfigToV1(isSTS bool) error {
 	defer cancel()
 	ies.setContext(ctx)
 	defer ies.clearContext()
-	r, err := ies.client.Get(ctx, basePrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+	r, err := ies.client.Get(ctx, xetcd.EtcdPath(basePrefix), etcd.WithPrefix(), etcd.WithKeysOnly())
 	if err != nil {
 		return err
 	}
 
-	users := etcdKvsToSet(basePrefix, r.Kvs)
+	users := etcdKvsToSet(xetcd.EtcdPath(basePrefix), r.Kvs)
 	for _, user := range users.ToSlice() {
 		{
 			// 1. check if there is a policy file in the old loc.
@@ -283,12 +284,12 @@ func (ies *IAMEtcdStore) loadPolicyDocs(m map[string]iampolicy.Policy) error {
 	defer cancel()
 	ies.setContext(ctx)
 	defer ies.clearContext()
-	r, err := ies.client.Get(ctx, iamConfigPoliciesPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+	r, err := ies.client.Get(ctx, xetcd.EtcdPath(iamConfigPoliciesPrefix), etcd.WithPrefix(), etcd.WithKeysOnly())
 	if err != nil {
 		return err
 	}
 
-	policies := etcdKvsToSet(iamConfigPoliciesPrefix, r.Kvs)
+	policies := etcdKvsToSet(xetcd.EtcdPath(iamConfigPoliciesPrefix), r.Kvs)
 
 	// Reload config and policies for all policys.
 	for _, policyName := range policies.ToSlice() {
@@ -336,12 +337,12 @@ func (ies *IAMEtcdStore) loadUsers(isSTS bool, m map[string]auth.Credentials) er
 	defer cancel()
 	ies.setContext(ctx)
 	defer ies.clearContext()
-	r, err := ies.client.Get(ctx, basePrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+	r, err := ies.client.Get(ctx, xetcd.EtcdPath(basePrefix), etcd.WithPrefix(), etcd.WithKeysOnly())
 	if err != nil {
 		return err
 	}
 
-	users := etcdKvsToSet(basePrefix, r.Kvs)
+	users := etcdKvsToSet(xetcd.EtcdPath(basePrefix), r.Kvs)
 
 	// Reload config for all users.
 	for _, user := range users.ToSlice() {
@@ -371,12 +372,12 @@ func (ies *IAMEtcdStore) loadGroups(m map[string]GroupInfo) error {
 	defer cancel()
 	ies.setContext(ctx)
 	defer ies.clearContext()
-	r, err := ies.client.Get(ctx, iamConfigGroupsPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+	r, err := ies.client.Get(ctx, xetcd.EtcdPath(iamConfigGroupsPrefix), etcd.WithPrefix(), etcd.WithKeysOnly())
 	if err != nil {
 		return err
 	}
 
-	groups := etcdKvsToSet(iamConfigGroupsPrefix, r.Kvs)
+	groups := etcdKvsToSet(xetcd.EtcdPath(iamConfigGroupsPrefix), r.Kvs)
 
 	// Reload config for all groups.
 	for _, group := range groups.ToSlice() {
@@ -416,12 +417,12 @@ func (ies *IAMEtcdStore) loadMappedPolicies(isSTS, isGroup bool, m map[string]Ma
 	default:
 		basePrefix = iamConfigPolicyDBUsersPrefix
 	}
-	r, err := ies.client.Get(ctx, basePrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+	r, err := ies.client.Get(ctx, xetcd.EtcdPath(basePrefix), etcd.WithPrefix(), etcd.WithKeysOnly())
 	if err != nil {
 		return err
 	}
 
-	users := etcdKvsToSetPolicyDB(basePrefix, r.Kvs)
+	users := etcdKvsToSetPolicyDB(xetcd.EtcdPath(basePrefix), r.Kvs)
 
 	// Reload config and policies for all users.
 	for _, user := range users.ToSlice() {

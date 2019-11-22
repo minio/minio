@@ -32,6 +32,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/env"
+	xetcd "github.com/minio/minio/pkg/etcd"
 )
 
 func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
@@ -213,6 +214,8 @@ func handleCommonEnvVars() {
 		globalActiveCred = cred
 		globalConfigEncrypted = true
 	}
+
+	xetcd.GlobalEtcdPrefixPath = strings.TrimSuffix(env.Get(config.EnvEtcdPrefix, ""), SlashSeparator)
 }
 
 func logStartupMessage(msg string) {
