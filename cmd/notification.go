@@ -55,6 +55,9 @@ type NotificationSys struct {
 // GetARNList - returns available ARNs.
 func (sys *NotificationSys) GetARNList() []string {
 	arns := []string{}
+	if sys == nil {
+		return arns
+	}
 	region := globalServerRegion
 	for _, targetID := range sys.targetList.List() {
 		// httpclient target is part of ListenBucketNotification
@@ -439,8 +442,9 @@ func (sys *NotificationSys) ServerInfo(ctx context.Context) []ServerInfo {
 				info, err := sys.peerClients[index].ServerInfo()
 				if err != nil {
 					serverInfo[index].Error = err.Error()
+				} else {
+					serverInfo[index].Data = &info
 				}
-				serverInfo[index].Data = &info
 				// Last iteration log the error.
 				if i == 2 {
 					return err

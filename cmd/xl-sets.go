@@ -385,20 +385,17 @@ func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 
 	errs := combineStorageErrors(dErrs, sErrs)
 	drivesInfo := formatsToDrivesInfo(s.endpoints, formats, errs)
-	refFormat, err := getFormatXLInQuorum(formats)
-	if err != nil {
-		// Ignore errors here, since this call cannot do anything at
-		// this point. too many disks are down already.
-		return storageInfo
-	}
 
 	// fill all the available/online endpoints
-	for _, drive := range drivesInfo {
+	for k, drive := range drivesInfo {
 		if drive.UUID == "" {
 			continue
 		}
-		for i := range refFormat.XL.Sets {
-			for j, driveUUID := range refFormat.XL.Sets[i] {
+		if formats[k] == nil {
+			continue
+		}
+		for i := range formats[k].XL.Sets {
+			for j, driveUUID := range formats[k].XL.Sets[i] {
 				if driveUUID == drive.UUID {
 					storageInfo.Backend.Sets[i][j] = drive
 				}
