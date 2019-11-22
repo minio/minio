@@ -27,8 +27,13 @@ var (
 			Type:        "csv",
 		},
 		config.HelpKV{
+			Key:         PathPrefix,
+			Description: `Default etcd path prefix to populate all IAM assets eg: "customer/"`,
+			Type:        "path",
+		},
+		config.HelpKV{
 			Key:         CoreDNSPath,
-			Description: `CoreDNS etcd path location to populate DNS srv records eg: "/skydns"`,
+			Description: `Default etcd path location to populate bucket DNS srv records eg: "/skydns"`,
 			Optional:    true,
 			Type:        "path",
 		},

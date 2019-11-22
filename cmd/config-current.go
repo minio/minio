@@ -25,6 +25,8 @@ import (
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
 	"github.com/minio/minio/cmd/config/etcd"
+	xetcd "github.com/minio/minio/cmd/config/etcd"
+	"github.com/minio/minio/cmd/config/etcd/dns"
 	xldap "github.com/minio/minio/cmd/config/identity/ldap"
 	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/config/notify"
@@ -34,7 +36,6 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/target/http"
-	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/env"
 )
 
@@ -134,18 +135,18 @@ func lookupConfigs(s config.Config) (err error) {
 		}
 	}
 
-	etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
+	etcdCfg, err := xetcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
 	if err != nil {
 		return config.Errorf("Unable to initialize etcd config: %s", err)
 	}
 
-	globalEtcdClient, err = etcd.New(etcdCfg)
+	globalEtcdClient, err = xetcd.New(etcdCfg)
 	if err != nil {
 		return config.Errorf("Unable to initialize etcd config: %s", err)
 	}
 
 	if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
-		globalDNSConfig, err = dns.NewCoreDNS(globalEtcdClient,
+		globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
 			dns.DomainNames(globalDomainNames),
 			dns.DomainIPs(globalDomainIPs),
 			dns.DomainPort(globalMinioPort),
