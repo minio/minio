@@ -83,7 +83,7 @@ service minio start
 ```
 
 ## Install from Source
-Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://golang.org/doc/install). Minimum version required is [go1.12](https://golang.org/dl/#stable)
+Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://golang.org/doc/install). Minimum version required is [go1.13](https://golang.org/dl/#stable)
 
 ```sh
 GO111MODULE=on go get github.com/minio/minio
