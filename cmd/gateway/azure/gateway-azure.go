@@ -51,6 +51,8 @@ import (
 
 const (
 	azureBlockSize             = 100 * humanize.MiByte
+	azureUploadChunkSize       = 10 * humanize.MiByte
+	azureUploadConcurrency     = 1
 	azureS3MinPartSize         = 5 * humanize.MiByte
 	metadataObjectNameTemplate = minio.GatewayMinioSysTmp + "multipart/v1/%s.%x/azure.json"
 	azureBackend               = "azure"
@@ -164,7 +166,7 @@ func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 		Retry: azblob.RetryOptions{
 			// Azure SDK recommends to set a timeout of 60 seconds per MB of data a client expects to upload.
 			// See https://github.com/Azure/azure-storage-blob-go/blob/fc70003/azblob/zc_policy_retry.go#L39-L44 for more details.
-			TryTimeout: (azureBlockSize / humanize.MiByte) * 60 * time.Second,
+			TryTimeout: (azureUploadChunkSize / humanize.MiByte) * 60 * time.Second,
 		},
 		HTTPSender: pipeline.FactoryFunc(func(next pipeline.Policy, po *pipeline.PolicyOptions) pipeline.PolicyFunc {
 			return func(ctx context.Context, request pipeline.Request) (pipeline.Response, error) {
@@ -793,65 +795,29 @@ func (a *azureObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 // uses Azure equivalent CreateBlockBlobFromReader.
 func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	data := r.Reader
-	if data.Size() <= azureBlockSize/2 {
-		blobURL := a.client.NewContainerURL(bucket).NewBlockBlobURL(object)
-		metadata, properties, err := s3MetaToAzureProperties(ctx, opts.UserDefined)
-		if err != nil {
-			return objInfo, azureToObjectError(err, bucket, object)
+
+	if data.Size() > azureBlockSize/2 {
+		if len(opts.UserDefined) == 0 {
+			opts.UserDefined = map[string]string{}
 		}
-		body, err := ioutil.ReadAll(data)
-		if err != nil {
-			return objInfo, azureToObjectError(err, bucket, object)
-		}
-		_, err = blobURL.Upload(ctx, bytes.NewReader(body), properties, metadata, azblob.BlobAccessConditions{})
-		if err != nil {
-			return objInfo, azureToObjectError(err, bucket, object)
-		}
-		return a.GetObjectInfo(ctx, bucket, object, opts)
+
+		// Save md5sum for future processing on the object.
+		opts.UserDefined["x-amz-meta-md5sum"] = r.MD5CurrentHexString()
 	}
-
-	blob := a.client.NewContainerURL(bucket).NewBlockBlobURL(object)
-	var blocks []string
-	subPartSize, subPartNumber := int64(azureBlockSize), 1
-	for remainingSize := data.Size(); remainingSize >= 0; remainingSize -= subPartSize {
-		// Allow to create zero sized part.
-		if remainingSize == 0 && subPartNumber > 1 {
-			break
-		}
-
-		if remainingSize < subPartSize {
-			subPartSize = remainingSize
-		}
-
-		id := base64.StdEncoding.EncodeToString([]byte(minio.MustGetUUID()))
-		body, err := ioutil.ReadAll(io.LimitReader(data, subPartSize))
-		if err != nil {
-			return objInfo, azureToObjectError(err, bucket, object)
-		}
-		_, err = blob.StageBlock(ctx, id, bytes.NewReader(body), azblob.LeaseAccessConditions{}, nil)
-		if err != nil {
-			return objInfo, azureToObjectError(err, bucket, object)
-		}
-		blocks = append(blocks, id)
-		subPartNumber++
-	}
-
-	if len(opts.UserDefined) == 0 {
-		opts.UserDefined = map[string]string{}
-	}
-
-	// Save md5sum for future processing on the object.
-	opts.UserDefined["x-amz-meta-md5sum"] = r.MD5CurrentHexString()
 
 	metadata, properties, err := s3MetaToAzureProperties(ctx, opts.UserDefined)
 	if err != nil {
 		return objInfo, azureToObjectError(err, bucket, object)
 	}
 
-	if _, err = blob.CommitBlockList(ctx, blocks, properties, metadata, azblob.BlobAccessConditions{}); err != nil {
-		return objInfo, azureToObjectError(err, bucket, object)
-	}
+	blobURL := a.client.NewContainerURL(bucket).NewBlockBlobURL(object)
 
+	_, err = azblob.UploadStreamToBlockBlob(ctx, data, blobURL, azblob.UploadStreamToBlockBlobOptions{
+		BufferSize:      azureUploadChunkSize,
+		MaxBuffers:      azureUploadConcurrency,
+		BlobHTTPHeaders: properties,
+		Metadata:        metadata,
+	})
 	if err != nil {
 		return objInfo, azureToObjectError(err, bucket, object)
 	}
