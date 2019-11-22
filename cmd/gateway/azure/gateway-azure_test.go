@@ -28,6 +28,34 @@ import (
 	minio "github.com/minio/minio/cmd"
 )
 
+func TestParseStorageEndpoint(t *testing.T) {
+	testCases := []struct {
+		host        string
+		accountName string
+		expectedURL string
+		expectedErr error
+	}{
+		{
+			"", "myaccount", "https://myaccount.blob.core.windows.net", nil,
+		},
+		{
+			"myaccount.blob.core.usgovcloudapi.net", "myaccount", "https://myaccount.blob.core.usgovcloudapi.net", nil,
+		},
+		{
+			"http://localhost:10000", "myaccount", "http://localhost:10000/myaccount", nil,
+		},
+	}
+	for i, testCase := range testCases {
+		endpointURL, err := parseStorageEndpoint(testCase.host, testCase.accountName)
+		if err != testCase.expectedErr {
+			t.Errorf("Test %d: Expected error %s, got %s", i+1, testCase.expectedErr, err)
+		}
+		if endpointURL.String() != testCase.expectedURL {
+			t.Errorf("Test %d: Expected URL %s, got %s", i+1, testCase.expectedURL, endpointURL.String())
+		}
+	}
+}
+
 // Test canonical metadata.
 func TestS3MetaToAzureProperties(t *testing.T) {
 	headers := map[string]string{

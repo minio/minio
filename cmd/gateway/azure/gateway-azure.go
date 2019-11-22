@@ -147,36 +147,7 @@ func (g *Azure) Name() string {
 
 // NewGatewayLayer initializes azure blob storage client and returns AzureObjects.
 func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
-	var endpoint string
-
-	// Load the endpoint url if supplied by the user.
-	if g.host != "" {
-		host, secure, err := minio.ParseGatewayEndpoint(g.host)
-		if err != nil {
-			return nil, err
-		}
-
-		var protocol string
-		if secure {
-			protocol = "https"
-		} else {
-			protocol = "http"
-		}
-
-		// for containerized storage deployments like Azurite or IoT Edge Storage,
-		// account resolution isn't handled via a hostname prefix like
-		// `http://${account}.host/${path}` but instead via a route prefix like
-		// `http://host/${account}/${path}` so adjusting for that here
-		if !strings.HasPrefix(host, fmt.Sprintf("%s.", creds.AccessKey)) {
-			host = fmt.Sprintf("%s/%s", host, creds.AccessKey)
-		}
-
-		endpoint = fmt.Sprintf("%s://%s", protocol, host)
-	} else {
-		endpoint = fmt.Sprintf("https://%s.blob.core.windows.net", creds.AccessKey)
-	}
-
-	endpointURL, err := url.Parse(endpoint)
+	endpointURL, err := parseStorageEndpoint(g.host, creds.AccessKey)
 	if err != nil {
 		return nil, err
 	}
@@ -207,10 +178,43 @@ func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 	client := azblob.NewServiceURL(*endpointURL, pipeline)
 
 	return &azureObjects{
-		endpoint:   endpoint,
+		endpoint:   endpointURL.String(),
 		httpClient: httpClient,
 		client:     client,
 	}, nil
+}
+
+func parseStorageEndpoint(host string, accountName string) (*url.URL, error) {
+	var endpoint string
+
+	// Load the endpoint url if supplied by the user.
+	if host != "" {
+		host, secure, err := minio.ParseGatewayEndpoint(host)
+		if err != nil {
+			return nil, err
+		}
+
+		var protocol string
+		if secure {
+			protocol = "https"
+		} else {
+			protocol = "http"
+		}
+
+		// for containerized storage deployments like Azurite or IoT Edge Storage,
+		// account resolution isn't handled via a hostname prefix like
+		// `http://${account}.host/${path}` but instead via a route prefix like
+		// `http://host/${account}/${path}` so adjusting for that here
+		if !strings.HasPrefix(host, fmt.Sprintf("%s.", accountName)) {
+			host = fmt.Sprintf("%s/%s", host, accountName)
+		}
+
+		endpoint = fmt.Sprintf("%s://%s", protocol, host)
+	} else {
+		endpoint = fmt.Sprintf("https://%s.blob.core.windows.net", accountName)
+	}
+
+	return url.Parse(endpoint)
 }
 
 // Production - Azure gateway is production ready.
