@@ -24,15 +24,17 @@ import (
 
 // Composed function registering routers for only distributed XL setup.
 func registerDistXLRouters(router *mux.Router, endpointZones EndpointZones) {
-	// Register storage rpc router only if its a distributed setup.
+	// Register storage REST router only if its a distributed setup.
 	registerStorageRESTHandlers(router, endpointZones)
 
 	// Register peer REST router only if its a distributed setup.
 	registerPeerRESTHandlers(router)
 
-	// Register distributed namespace lock.
-	registerLockRESTHandlers(router, endpointZones)
+	// Register bootstrap REST router for distributed setups.
+	registerBootstrapRESTHandlers(router)
 
+	// Register distributed namespace lock routers.
+	registerLockRESTHandlers(router, endpointZones)
 }
 
 // List of some generic handlers which are applied for all incoming requests.
@@ -111,6 +113,10 @@ func configureServerHandler(endpointZones EndpointZones) (http.Handler, error) {
 	// Add API router, additionally all server mode support encryption
 	// but don't allow SSE-KMS.
 	registerAPIRouter(router, true, false)
+
+	// If none of the routes match add default error handler routes
+	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
+	router.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
 
 	// Register rest of the handlers.
 	return registerHandlers(router, globalHandlers...), nil

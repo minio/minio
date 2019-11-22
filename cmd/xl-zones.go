@@ -60,7 +60,7 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 		z       = &xlZones{zones: make([]*xlSets, len(endpointZones))}
 	)
 	for i, ep := range endpointZones {
-		formats[i], err = waitForFormatXL(endpointZones.First(), ep.Endpoints,
+		formats[i], err = waitForFormatXL(endpointZones.FirstLocal(), ep.Endpoints,
 			ep.SetCount, ep.DrivesPerSet, deploymentID)
 		if err != nil {
 			return nil, err
