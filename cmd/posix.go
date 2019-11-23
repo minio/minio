@@ -87,7 +87,8 @@ type posix struct {
 
 	diskID string
 
-	formatFileInfo os.FileInfo
+	formatFileInfo  os.FileInfo
+	formatLastCheck time.Time
 	// Disk usage metrics
 	stopUsageCh chan struct{}
 
@@ -387,12 +388,19 @@ func (s *posix) getDiskID() (string, error) {
 	s.RLock()
 	diskID := s.diskID
 	fileInfo := s.formatFileInfo
+	lastCheck := s.formatLastCheck
 	s.RUnlock()
 
-	if fileInfo != nil && diskID != "" {
+	if fileInfo != nil && diskID != "" && time.Now().Before(lastCheck.Add(time.Second)) {
 		return diskID, nil
 	}
 
+	s.Lock()
+	defer s.Unlock()
+	if !s.formatLastCheck.Equal(lastCheck) {
+		// Somebody else got the lock first.
+		return diskID, nil
+	}
 	formatFile := pathJoin(s.diskPath, minioMetaBucket, formatConfigFile)
 	fi, err := os.Stat(formatFile)
 	if err != nil {
@@ -400,8 +408,12 @@ func (s *posix) getDiskID() (string, error) {
 		return "", err
 	}
 
-	s.Lock()
-	defer s.Unlock()
+	if xioutil.SameFile(fi, fileInfo) {
+		// If the file has not changed, just return the cached diskID information.
+		s.formatLastCheck = time.Now()
+		return diskID, nil
+	}
+
 	b, err := ioutil.ReadFile(formatFile)
 	if err != nil {
 		return "", err
@@ -413,6 +425,7 @@ func (s *posix) getDiskID() (string, error) {
 	}
 	s.diskID = format.XL.This
 	s.formatFileInfo = fi
+	s.formatLastCheck = time.Now()
 	return s.diskID, nil
 }
 
