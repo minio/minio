@@ -710,7 +710,7 @@ next:
 					govBypassPerms = ErrNone
 				}
 			}
-			if _, err := checkGovernanceBypassAllowed(ctx, r, args.BucketName, objectName, getObjectInfo, govBypassPerms); err != ErrNone {
+			if _, err := enforceRetentionBypassForDelete(ctx, r, args.BucketName, objectName, getObjectInfo, govBypassPerms); err != ErrNone {
 				return toJSONError(ctx, errAccessDenied)
 			}
 			if err = deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, r); err != nil {
