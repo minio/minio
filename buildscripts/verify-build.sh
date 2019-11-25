@@ -134,17 +134,6 @@ function start_minio_zone_erasure_sets()
     declare -a minio_pids
     export MINIO_ACCESS_KEY=$ACCESS_KEY
     export MINIO_SECRET_KEY=$SECRET_KEY
-    "${MINIO[@]}" server --address=:9000 "http://127.0.0.1:9000${WORK_DIR}/zone-disk-sets{1...4}" >/dev/null 2>&1 &
-    current_pid=$!
-
-    sleep 10
-    kill -9 "${current_pid}"
-
-    "${MINIO[@]}" server --address=:9001 "http://127.0.0.1:9001${WORK_DIR}/zone-disk-sets{5...8}" >/dev/null 2>&1 &
-    current_pid=$!
-
-    sleep 10
-    kill -9 "${current_pid}"
 
     "${MINIO[@]}" server --address=:9000 "http://127.0.0.1:9000${WORK_DIR}/zone-disk-sets{1...4}" "http://127.0.0.1:9001${WORK_DIR}/zone-disk-sets{5...8}" >"$WORK_DIR/zone-minio-9000.log" 2>&1 &
     minio_pids[0]=$!
@@ -152,7 +141,7 @@ function start_minio_zone_erasure_sets()
     "${MINIO[@]}" server --address=:9001 "http://127.0.0.1:9000${WORK_DIR}/zone-disk-sets{1...4}" "http://127.0.0.1:9001${WORK_DIR}/zone-disk-sets{5...8}" >"$WORK_DIR/zone-minio-9001.log" 2>&1 &
     minio_pids[1]=$!
 
-    sleep 10
+    sleep 35
     echo "${minio_pids[@]}"
 }
 

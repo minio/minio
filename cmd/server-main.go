@@ -144,6 +144,10 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	var setupType SetupType
 	var err error
 
+	globalMinioAddr = globalCLIContext.Addr
+
+	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
+
 	endpoints := strings.Fields(env.Get(config.EnvEndpoints, ""))
 	if len(endpoints) > 0 {
 		globalEndpoints, globalXLSetDriveCount, setupType, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
@@ -152,10 +156,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	}
 	logger.FatalIf(err, "Invalid command line arguments")
 
-	globalMinioAddr = globalCLIContext.Addr
 	logger.LogIf(context.Background(), checkEndpointsSubOptimal(ctx, setupType, globalEndpoints))
-
-	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another

@@ -158,7 +158,6 @@ func stripStandardPorts(apiEndpoints []string) (newAPIEndpoints []string) {
 	for i, apiEndpoint := range apiEndpoints {
 		u, err := xnet.ParseHTTPURL(apiEndpoint)
 		if err != nil {
-			newAPIEndpoints[i] = apiEndpoint
 			continue
 		}
 		if globalMinioHost == "" && isNotIPv4(u.Host) {

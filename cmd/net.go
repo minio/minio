@@ -22,13 +22,13 @@ import (
 	"net"
 	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // IPv4 addresses of local host.
@@ -39,13 +39,11 @@ var localIP6 = mustGetLocalIP6()
 
 // mustSplitHostPort is a wrapper to net.SplitHostPort() where error is assumed to be a fatal.
 func mustSplitHostPort(hostPort string) (host, port string) {
-	host, port, err := net.SplitHostPort(hostPort)
-	// Strip off IPv6 zone information.
-	if i := strings.Index(host, "%"); i > -1 {
-		host = host[:i]
+	xh, err := xnet.ParseHost(hostPort)
+	if err != nil {
+		logger.FatalIf(err, "Unable to split host port %s", hostPort)
 	}
-	logger.FatalIf(err, "Unable to split host port %s", hostPort)
-	return host, port
+	return xh.Name, xh.Port.String()
 }
 
 // mustGetLocalIP4 returns IPv4 addresses of localhost.  It panics on error.
@@ -273,7 +271,7 @@ func extractHostPort(hostAddr string) (string, string, error) {
 // isLocalHost - checks if the given parameter
 // correspond to one of the local IP of the
 // current machine
-func isLocalHost(host string) (bool, error) {
+func isLocalHost(host string, port string, localPort string) (bool, error) {
 	hostIPs, err := getHostIP(host)
 	if err != nil {
 		return false, err
@@ -282,6 +280,9 @@ func isLocalHost(host string) (bool, error) {
 	// If intersection of two IP sets is not empty, then the host is localhost.
 	isLocalv4 := !localIP4.Intersection(hostIPs).IsEmpty()
 	isLocalv6 := !localIP6.Intersection(hostIPs).IsEmpty()
+	if port != "" {
+		return (isLocalv4 || isLocalv6) && (port == localPort), nil
+	}
 	return isLocalv4 || isLocalv6, nil
 }
 
@@ -307,7 +308,7 @@ func sameLocalAddrs(addr1, addr2 string) (bool, error) {
 		addr1Local = true
 	} else {
 		// Host not empty, check if it is local
-		if addr1Local, err = isLocalHost(host1); err != nil {
+		if addr1Local, err = isLocalHost(host1, port1, port1); err != nil {
 			return false, err
 		}
 	}
@@ -317,7 +318,7 @@ func sameLocalAddrs(addr1, addr2 string) (bool, error) {
 		addr2Local = true
 	} else {
 		// Host not empty, check if it is local
-		if addr2Local, err = isLocalHost(host2); err != nil {
+		if addr2Local, err = isLocalHost(host2, port2, port2); err != nil {
 			return false, err
 		}
 	}
@@ -334,33 +335,20 @@ func sameLocalAddrs(addr1, addr2 string) (bool, error) {
 
 // CheckLocalServerAddr - checks if serverAddr is valid and local host.
 func CheckLocalServerAddr(serverAddr string) error {
-	host, port, err := net.SplitHostPort(serverAddr)
+	host, err := xnet.ParseHost(serverAddr)
 	if err != nil {
 		return config.ErrInvalidAddressFlag(err)
-	}
-
-	// Strip off IPv6 zone information.
-	if i := strings.Index(host, "%"); i > -1 {
-		host = host[:i]
-	}
-
-	// Check whether port is a valid port number.
-	p, err := strconv.Atoi(port)
-	if err != nil {
-		return config.ErrInvalidAddressFlag(err).Msg("invalid port number")
-	} else if p < 1 || p > 65535 {
-		return config.ErrInvalidAddressFlag(nil).Msg("port number must be between 1 to 65535")
 	}
 
 	// 0.0.0.0 is a wildcard address and refers to local network
 	// addresses. I.e, 0.0.0.0:9000 like ":9000" refers to port
 	// 9000 on localhost.
-	if host != "" && host != net.IPv4zero.String() && host != net.IPv6zero.String() {
-		isLocalHost, err := isLocalHost(host)
+	if host.Name != "" && host.Name != net.IPv4zero.String() && host.Name != net.IPv6zero.String() {
+		localHost, err := isLocalHost(host.Name, host.Port.String(), host.Port.String())
 		if err != nil {
 			return err
 		}
-		if !isLocalHost {
+		if !localHost {
 			return config.ErrInvalidAddressFlag(nil).Msg("host in server address should be this server")
 		}
 	}

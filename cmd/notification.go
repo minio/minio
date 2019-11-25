@@ -742,9 +742,9 @@ func (sys *NotificationSys) initListeners(ctx context.Context, objAPI ObjectLaye
 	}
 
 	for _, args := range listenerList {
-		found, err := isLocalHost(args.Addr.Name)
+		found, err := isLocalHost(args.Addr.Name, args.Addr.Port.String(), args.Addr.Port.String())
 		if err != nil {
-			logger.GetReqInfo(ctx).AppendTags("host", args.Addr.Name)
+			logger.GetReqInfo(ctx).AppendTags("host", args.Addr.String())
 			logger.LogIf(ctx, err)
 			return err
 		}

@@ -490,6 +490,11 @@ func testStorageAPIRenameFile(t *testing.T, storage StorageAPI) {
 }
 
 func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRESTClient, config.Config, string) {
+	prevHost, prevPort := globalMinioHost, globalMinioPort
+	defer func() {
+		globalMinioHost, globalMinioPort = prevHost, prevPort
+	}()
+
 	endpointPath, err := ioutil.TempDir("", ".TestStorageREST.")
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
@@ -504,18 +509,21 @@ func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRES
 	}
 	url.Path = endpointPath
 
+	globalMinioHost, globalMinioPort = mustSplitHostPort(url.Host)
+
 	endpoint, err := NewEndpoint(url.String())
 	if err != nil {
 		t.Fatalf("NewEndpoint failed %v", endpoint)
 	}
 
-	if err := endpoint.UpdateIsLocal(); err != nil {
+	if err = endpoint.UpdateIsLocal(); err != nil {
 		t.Fatalf("UpdateIsLocal failed %v", err)
 	}
 
 	registerStorageRESTHandlers(router, []ZoneEndpoints{{
 		Endpoints: Endpoints{endpoint},
 	}})
+
 	restClient := newStorageRESTClient(endpoint)
 	prevGlobalServerConfig := globalServerConfig
 	globalServerConfig = newServerConfig()

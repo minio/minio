@@ -35,11 +35,9 @@ func TestMustSplitHostPort(t *testing.T) {
 	}{
 		{":54321", "", "54321"},
 		{"server:54321", "server", "54321"},
-		{":", "", ""},
 		{":0", "", "0"},
-		{":-10", "", "-10"},
-		{"server:100000000", "server", "100000000"},
-		{"server:https", "server", "https"},
+		{"server:https", "server", "443"},
+		{"server:http", "server", "80"},
 	}
 
 	for _, testCase := range testCases {
@@ -242,24 +240,27 @@ func TestCheckLocalServerAddr(t *testing.T) {
 		{":54321", nil},
 		{"localhost:54321", nil},
 		{"0.0.0.0:9000", nil},
-		{"", fmt.Errorf("missing port in address")},
-		{"localhost", fmt.Errorf("address localhost: missing port in address")},
+		{":0", nil},
+		{"localhost", nil},
+		{"", fmt.Errorf("invalid argument")},
 		{"example.org:54321", fmt.Errorf("host in server address should be this server")},
-		{":0", fmt.Errorf("port number must be between 1 to 65535")},
-		{":-10", fmt.Errorf("port number must be between 1 to 65535")},
+		{":-10", fmt.Errorf("port must be between 0 to 65535")},
 	}
 
 	for _, testCase := range testCases {
-		err := CheckLocalServerAddr(testCase.serverAddr)
-		if testCase.expectedErr == nil {
-			if err != nil {
-				t.Fatalf("error: expected = <nil>, got = %v", err)
+		testCase := testCase
+		t.Run("", func(t *testing.T) {
+			err := CheckLocalServerAddr(testCase.serverAddr)
+			if testCase.expectedErr == nil {
+				if err != nil {
+					t.Errorf("error: expected = <nil>, got = %v", err)
+				}
+			} else if err == nil {
+				t.Errorf("error: expected = %v, got = <nil>", testCase.expectedErr)
+			} else if testCase.expectedErr.Error() != err.Error() {
+				t.Errorf("error: expected = %v, got = %v", testCase.expectedErr, err)
 			}
-		} else if err == nil {
-			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
-		} else if testCase.expectedErr.Error() != err.Error() {
-			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
-		}
+		})
 	}
 }
 
@@ -318,23 +319,27 @@ func TestSameLocalAddrs(t *testing.T) {
 		{"http://8.8.8.8:9000", "http://localhost:9000", false, nil},
 	}
 
-	for i, testCase := range testCases {
-		sameAddr, err := sameLocalAddrs(testCase.addr1, testCase.addr2)
-		if testCase.expectedErr != nil && err == nil {
-			t.Fatalf("Test %d: should fail but succeeded", i+1)
-		}
-		if testCase.expectedErr == nil && err != nil {
-			t.Fatalf("Test %d: should succeed but failed with %v", i+1, err)
-		}
-		if err == nil {
-			if sameAddr != testCase.sameAddr {
-				t.Fatalf("Test %d: expected: %v, found: %v", i+1, testCase.sameAddr, sameAddr)
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run("", func(t *testing.T) {
+			sameAddr, err := sameLocalAddrs(testCase.addr1, testCase.addr2)
+			if testCase.expectedErr != nil && err == nil {
+				t.Errorf("should fail but succeeded")
 			}
-		} else {
-			if err.Error() != testCase.expectedErr.Error() {
-				t.Fatalf("Test %d: failed with different error, expected: '%v', found:'%v'.", i+1, testCase.expectedErr, err)
+			if testCase.expectedErr == nil && err != nil {
+				t.Errorf("should succeed but failed with %v", err)
 			}
-		}
+			if err == nil {
+				if sameAddr != testCase.sameAddr {
+					t.Errorf("expected: %v, found: %v", testCase.sameAddr, sameAddr)
+				}
+			} else {
+				if err.Error() != testCase.expectedErr.Error() {
+					t.Errorf("failed with different error, expected: '%v', found:'%v'.",
+						testCase.expectedErr, err)
+				}
+			}
+		})
 	}
 }
 func TestIsHostIP(t *testing.T) {
