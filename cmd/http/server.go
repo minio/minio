@@ -20,6 +20,8 @@ import (
 	"crypto/tls"
 	"errors"
 	"net/http"
+	"os"
+	"runtime/pprof"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -137,6 +139,8 @@ func (srv *Server) Shutdown() error {
 	for {
 		select {
 		case <-shutdownTimer.C:
+			// Print all running goroutines.
+			_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 			return errors.New("timed out. some connections are still active. doing abnormal shutdown")
 		case <-ticker.C:
 			if atomic.LoadInt32(&srv.requestCount) <= 0 {
