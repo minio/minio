@@ -50,9 +50,17 @@ import (
 )
 
 const (
+	// The defaultDialTimeout for communicating with the cloud backends is set
+	// to 30 seconds in utils.go; the Azure SDK recommends to set a timeout of 60
+	// seconds per MB of data a client expects to upload so we must transfer less
+	// than 0.5 MB per chunk to stay within the defaultDialTimeout tolerance.
+	// See https://github.com/Azure/azure-storage-blob-go/blob/fc70003/azblob/zc_policy_retry.go#L39-L44 for more details.
+	azureUploadChunkSize      = 0.25 * humanize.MiByte
+	azureSdkTimeout           = (azureUploadChunkSize / humanize.MiByte) * 60 * time.Second
+	azureUploadMaxMemoryUsage = 10 * humanize.MiByte
+	azureUploadConcurrency    = azureUploadMaxMemoryUsage / azureUploadChunkSize
+
 	azureBlockSize             = 100 * humanize.MiByte
-	azureUploadChunkSize       = 10 * humanize.MiByte
-	azureUploadConcurrency     = 1
 	azureS3MinPartSize         = 5 * humanize.MiByte
 	metadataObjectNameTemplate = minio.GatewayMinioSysTmp + "multipart/v1/%s.%x/azure.json"
 	azureBackend               = "azure"
@@ -164,9 +172,7 @@ func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 
 	pipeline := azblob.NewPipeline(credential, azblob.PipelineOptions{
 		Retry: azblob.RetryOptions{
-			// Azure SDK recommends to set a timeout of 60 seconds per MB of data a client expects to upload.
-			// See https://github.com/Azure/azure-storage-blob-go/blob/fc70003/azblob/zc_policy_retry.go#L39-L44 for more details.
-			TryTimeout: (azureUploadChunkSize / humanize.MiByte) * 60 * time.Second,
+			TryTimeout: azureSdkTimeout,
 		},
 		HTTPSender: pipeline.FactoryFunc(func(next pipeline.Policy, po *pipeline.PolicyOptions) pipeline.PolicyFunc {
 			return func(ctx context.Context, request pipeline.Request) (pipeline.Response, error) {
