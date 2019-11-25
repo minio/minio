@@ -969,12 +969,7 @@ func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, upload
 
 	partMetaV1 := newPartMetaV1(uploadID, partID)
 	subPartSize, subPartNumber := int64(azureBlockSize), 1
-	for remainingSize := data.Size(); remainingSize >= 0; remainingSize -= subPartSize {
-		// Allow to create zero sized part.
-		if remainingSize == 0 && subPartNumber > 1 {
-			break
-		}
-
+	for remainingSize := data.Size(); remainingSize > 0; remainingSize -= subPartSize {
 		if remainingSize < subPartSize {
 			subPartSize = remainingSize
 		}
