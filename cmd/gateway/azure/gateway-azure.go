@@ -536,7 +536,7 @@ func (a *azureObjects) GetBucketInfo(ctx context.Context, bucket string) (bi min
 	return bi, minio.BucketNotFound{Bucket: bucket}
 }
 
-// ListBuckets - Lists all azure containers, uses Azure equivalent ListContainers.
+// ListBuckets - Lists all azure containers, uses Azure equivalent `ServiceURL.ListContainersSegment`.
 func (a *azureObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInfo, err error) {
 	marker := azblob.Marker{}
 
@@ -560,7 +560,7 @@ func (a *azureObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketI
 	return buckets, nil
 }
 
-// DeleteBucket - delete a container on azure, uses Azure equivalent DeleteContainer.
+// DeleteBucket - delete a container on azure, uses Azure equivalent `ContainerURL.Delete`.
 func (a *azureObjects) DeleteBucket(ctx context.Context, bucket string) error {
 	containerURL := a.client.NewContainerURL(bucket)
 	_, err := containerURL.Delete(ctx, azblob.ContainerAccessConditions{})
@@ -568,7 +568,7 @@ func (a *azureObjects) DeleteBucket(ctx context.Context, bucket string) error {
 }
 
 // ListObjects - lists all blobs on azure with in a container filtered by prefix
-// and marker, uses Azure equivalent ListBlobs.
+// and marker, uses Azure equivalent `ContainerURL.ListBlobsHierarchySegment`.
 // To accommodate S3-compatible applications using
 // ListObjectsV1 to use object keys as markers to control the
 // listing of objects, we use the following encoding scheme to
@@ -749,7 +749,7 @@ func (a *azureObjects) GetObject(ctx context.Context, bucket, object string, sta
 }
 
 // GetObjectInfo - reads blob metadata properties and replies back minio.ObjectInfo,
-// uses zure equivalent GetBlobProperties.
+// uses Azure equivalent `BlobURL.GetProperties`.
 func (a *azureObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	blobURL := a.client.NewContainerURL(bucket).NewBlobURL(object)
 	blob, err := blobURL.GetProperties(ctx, azblob.BlobAccessConditions{})
@@ -792,7 +792,7 @@ func (a *azureObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 }
 
 // PutObject - Create a new blob with the incoming data,
-// uses Azure equivalent CreateBlockBlobFromReader.
+// uses Azure equivalent `UploadStreamToBlockBlob`.
 func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	data := r.Reader
 
@@ -826,7 +826,7 @@ func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *
 }
 
 // CopyObject - Copies a blob from source container to destination container.
-// Uses Azure equivalent CopyBlob API.
+// Uses Azure equivalent `BlobURL.StartCopyFromURL`.
 func (a *azureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo, "") {
 		return minio.ObjectInfo{}, minio.PreConditionFailed{}
@@ -871,7 +871,7 @@ func (a *azureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, des
 }
 
 // DeleteObject - Deletes a blob on azure container, uses Azure
-// equivalent DeleteBlob API.
+// equivalent `BlobURL.Delete`.
 func (a *azureObjects) DeleteObject(ctx context.Context, bucket, object string) error {
 	blob := a.client.NewContainerURL(bucket).NewBlobURL(object)
 	_, err := blob.Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
@@ -932,7 +932,7 @@ func (a *azureObjects) checkUploadIDExists(ctx context.Context, bucketName, obje
 	return err
 }
 
-// NewMultipartUpload - Use Azure equivalent CreateBlockBlob.
+// NewMultipartUpload - Use Azure equivalent `BlobURL.Upload`.
 func (a *azureObjects) NewMultipartUpload(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (uploadID string, err error) {
 	uploadID, err = getAzureUploadID()
 	if err != nil {
@@ -956,7 +956,7 @@ func (a *azureObjects) NewMultipartUpload(ctx context.Context, bucket, object st
 	return uploadID, nil
 }
 
-// PutObjectPart - Use Azure equivalent PutBlockWithLength.
+// PutObjectPart - Use Azure equivalent `BlobURL.StageBlock`.
 func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, r *minio.PutObjReader, opts minio.ObjectOptions) (info minio.PartInfo, err error) {
 	data := r.Reader
 	if err = a.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
@@ -1013,7 +1013,7 @@ func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, upload
 	return info, nil
 }
 
-// ListObjectParts - Use Azure equivalent GetBlockList.
+// ListObjectParts - Use Azure equivalent `ContainerURL.ListBlobsHierarchySegment`.
 func (a *azureObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker int, maxParts int, opts minio.ObjectOptions) (result minio.ListPartsInfo, err error) {
 	if err = a.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return result, err
@@ -1138,7 +1138,7 @@ func (a *azureObjects) AbortMultipartUpload(ctx context.Context, bucket, object,
 	return err
 }
 
-// CompleteMultipartUpload - Use Azure equivalent PutBlockList.
+// CompleteMultipartUpload - Use Azure equivalent `BlobURL.CommitBlockList`.
 func (a *azureObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []minio.CompletePart, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	metadataObject := getAzureMetadataObjectName(object, uploadID)
 	if err = a.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
