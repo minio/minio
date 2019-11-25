@@ -968,7 +968,7 @@ func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, upload
 	}
 
 	partMetaV1 := newPartMetaV1(uploadID, partID)
-	subPartSize, subPartNumber := int64(azureBlockSize), 1
+	subPartSize, subPartNumber := int64(azureUploadChunkSize), 1
 	for remainingSize := data.Size(); remainingSize > 0; remainingSize -= subPartSize {
 		if remainingSize < subPartSize {
 			subPartSize = remainingSize
