@@ -365,6 +365,13 @@ func serverMain(ctx *cli.Context) {
 		globalHTTPServerErrorCh <- globalHTTPServer.Start()
 	}()
 
+	if globalIsDistXL && globalEndpoints.FirstLocal() {
+		// Additionally in distributed setup validate
+		if err := verifyServerSystemConfig(globalEndpoints); err != nil {
+			logger.Fatal(err, "Unable to initialize distributed setup")
+		}
+	}
+
 	newObject, err := newObjectLayer(globalEndpoints)
 	logger.SetDeploymentID(globalDeploymentID)
 	if err != nil {

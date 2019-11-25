@@ -564,6 +564,7 @@ func GetNotifyMQTT(mqttKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[s
 		if k != config.Default {
 			brokerEnv = brokerEnv + config.Default + k
 		}
+
 		brokerURL, err := xnet.ParseURL(env.Get(brokerEnv, kv.Get(target.MqttBroker)))
 		if err != nil {
 			return nil, err

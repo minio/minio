@@ -196,8 +196,8 @@ type ZoneEndpoints struct {
 // EndpointZones - list of list of endpoints
 type EndpointZones []ZoneEndpoints
 
-// First returns true if the first endpoint is local.
-func (l EndpointZones) First() bool {
+// FirstLocal returns true if the first endpoint is local.
+func (l EndpointZones) FirstLocal() bool {
 	return l[0].Endpoints[0].IsLocal
 }
 

@@ -149,8 +149,4 @@ func registerLockRESTHandlers(router *mux.Router, endpointZones EndpointZones) {
 			globalLockServers[endpoint] = lockServer.ll
 		}
 	}
-
-	// If none of the routes match add default error handler routes
-	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
-	router.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
 }
