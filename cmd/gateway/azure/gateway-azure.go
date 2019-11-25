@@ -1029,8 +1029,10 @@ func (a *azureObjects) ListObjectParts(ctx context.Context, bucket, object, uplo
 	result.UploadID = uploadID
 	result.MaxParts = maxParts
 
+	azureListMarker := ""
+	marker := azblob.Marker{Val: &azureListMarker}
+
 	var parts []minio.PartInfo
-	var marker azblob.Marker
 	var delimiter string
 	maxKeys := maxPartsCount
 	if partNumberMarker == 0 {
