@@ -32,6 +32,7 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio/cmd/config/etcd"
 	"github.com/minio/minio/cmd/config/etcd/dns"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -256,9 +257,9 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// If etcd, dns federation configured list buckets from etcd.
+	// If etcd, dns federation configured list buckets from etcd (only in federation mode)
 	var bucketsInfo []BucketInfo
-	if globalDNSConfig != nil {
+	if globalDNSConfig != nil && globalEtcdMode == etcd.ModeFederation {
 		dnsBuckets, err := globalDNSConfig.List()
 		if err != nil && err != dns.ErrNoEntriesFound {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))

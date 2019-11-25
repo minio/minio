@@ -39,6 +39,7 @@ import (
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/browser"
+	"github.com/minio/minio/cmd/config/etcd"
 	"github.com/minio/minio/cmd/config/etcd/dns"
 	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/crypto"
@@ -262,7 +263,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 	globalPolicySys.Remove(args.BucketName)
 	globalNotificationSys.DeleteBucket(ctx, args.BucketName)
 
-	if globalDNSConfig != nil {
+	if globalDNSConfig != nil && globalEtcdMode == etcd.ModeFederation {
 		if err := globalDNSConfig.Delete(args.BucketName); err != nil {
 			// Deleting DNS entry failed, attempt to create the bucket again.
 			objectAPI.MakeBucketWithLocation(ctx, args.BucketName, "")
@@ -308,7 +309,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	r.Header.Set("delimiter", SlashSeparator)
 
 	// If etcd, dns federation configured list buckets from etcd.
-	if globalDNSConfig != nil {
+	if globalDNSConfig != nil && globalEtcdMode == etcd.ModeFederation {
 		dnsBuckets, err := globalDNSConfig.List()
 		if err != nil && err != dns.ErrNoEntriesFound {
 			return toJSONError(ctx, err)

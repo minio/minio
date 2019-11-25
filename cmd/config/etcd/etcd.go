@@ -36,14 +36,18 @@ const (
 	defaultDialKeepAlive = 30 * time.Second
 )
 
-// etcd environment values
+// etcd related fields
 const (
-	Endpoints     = "endpoints"
-	PathPrefix    = "path_prefix"
-	CoreDNSPath   = "coredns_path"
-	ClientCert    = "client_cert"
-	ClientCertKey = "client_cert_key"
+	Endpoints      = "endpoints"
+	PathPrefix     = "path_prefix"
+	CoreDNSPath    = "coredns_path"
+	ClientCert     = "client_cert"
+	ClientCertKey  = "client_cert_key"
+	Mode           = "mode"
+	ModeFederation = "federation"
+	ModeNamespace  = "namespace"
 
+	// etcd environment values
 	EnvEtcdState         = "MINIO_ETCD_STATE"
 	EnvEtcdEndpoints     = "MINIO_ETCD_ENDPOINTS"
 	EnvEtcdPathPrefix    = "MINIO_ETCD_PATH_PREFIX"
@@ -68,6 +72,10 @@ var (
 			Value: "",
 		},
 		config.KV{
+			Key:   Mode,
+			Value: ModeFederation,
+		},
+		config.KV{
 			Key:   CoreDNSPath,
 			Value: "/skydns",
 		},
@@ -87,6 +95,7 @@ type Config struct {
 	Enabled     bool   `json:"enabled"`
 	PathPrefix  string `json:"pathPrefix"`
 	CoreDNSPath string `json:"coreDNSPath"`
+	Mode        string `json:"mode"`
 	clientv3.Config
 }
 
@@ -122,6 +131,13 @@ func parseEndpoints(endpoints string) ([]string, bool, error) {
 	}
 
 	return etcdEndpoints, etcdSecure, nil
+}
+
+func parseMode(mode string) (string, error) {
+	if mode != ModeFederation && mode != ModeNamespace {
+		return "", fmt.Errorf("mode should be either %s or %s", ModeFederation, ModeNamespace)
+	}
+	return mode, nil
 }
 
 func lookupLegacyConfig(rootCAs *x509.CertPool) (Config, error) {
@@ -201,10 +217,16 @@ func LookupConfig(kvs config.KVS, rootCAs *x509.CertPool) (Config, error) {
 		return cfg, err
 	}
 
+	mode, err := parseMode(kvs.Get(Mode))
+	if err != nil {
+		return cfg, err
+	}
+
 	cfg.Enabled = true
 	cfg.DialTimeout = defaultDialTimeout
 	cfg.DialKeepAliveTime = defaultDialKeepAlive
 	cfg.Endpoints = etcdEndpoints
+	cfg.Mode = mode
 	cfg.CoreDNSPath = env.Get(EnvEtcdCoreDNSPath, kvs.Get(CoreDNSPath))
 	// Default path prefix for all keys on etcd, other than CoreDNSPath.
 	cfg.PathPrefix = env.Get(EnvEtcdPathPrefix, kvs.Get(PathPrefix))

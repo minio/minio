@@ -144,6 +144,8 @@ func lookupConfigs(s config.Config) (err error) {
 	if err != nil {
 		return config.Errorf("Unable to initialize etcd config: %s", err)
 	}
+	// Set globalEtcdMode based on the current config value
+	globalEtcdMode = etcdCfg.Mode
 
 	if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
 		globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,

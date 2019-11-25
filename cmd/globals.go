@@ -207,6 +207,9 @@ var (
 	// Allocated etcd endpoint for config and bucket DNS.
 	globalEtcdClient *etcd.Client
 
+	// Mode in which etcd should operate (federation or namespace)
+	globalEtcdMode string
+
 	// Allocated DNS config wrapper over etcd client.
 	globalDNSConfig *dns.CoreDNS
 

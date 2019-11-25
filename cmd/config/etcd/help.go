@@ -32,6 +32,12 @@ var (
 			Type:        "path",
 		},
 		config.HelpKV{
+			Key:         Mode,
+			Description: `Mode in which MinIO will use etcd. Can be "federation" or "namespace", defaults to "federation"`,
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
 			Key:         CoreDNSPath,
 			Description: `Default etcd path location to populate bucket DNS srv records eg: "/skydns"`,
 			Optional:    true,

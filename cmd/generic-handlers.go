@@ -25,6 +25,7 @@ import (
 	"github.com/minio/minio-go/v6/pkg/set"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/config/etcd"
 	"github.com/minio/minio/cmd/config/etcd/dns"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -617,7 +618,7 @@ type bucketForwardingHandler struct {
 }
 
 func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if globalDNSConfig == nil || len(globalDomainNames) == 0 ||
+	if globalDNSConfig == nil || len(globalDomainNames) == 0 || globalEtcdMode == etcd.ModeNamespace ||
 		guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
 		guessIsRPCReq(r) || guessIsLoginSTSReq(r) || isAdminReq(r) {
 		f.handler.ServeHTTP(w, r)
