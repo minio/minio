@@ -185,6 +185,8 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	if globalConfigEncrypted {
 		saveConfig(context.Background(), objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
 	}
+
+	writeSuccessResponseHeadersOnly(w)
 }
 
 // GetConfigKVHandler - GET /minio/admin/v2/get-config-kv?key={key}
@@ -422,17 +424,28 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	password := globalActiveCred.SecretKey
-	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
+	kvBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		logger.LogIf(ctx, err, logger.Application)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
 		return
 	}
 
-	var cfg config.Config
-	if err = json.Unmarshal(configBytes, &cfg); err != nil {
-		logger.LogIf(ctx, err)
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
+	cfg := newServerConfig()
+	scanner := bufio.NewScanner(bytes.NewReader(kvBytes))
+	for scanner.Scan() {
+		// Skip any empty lines, or comment like characters
+		if scanner.Text() == "" || strings.HasPrefix(scanner.Text(), config.KvComment) {
+			continue
+		}
+		if err = cfg.SetKVS(scanner.Text(), defaultKVS()); err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+
+	if err = scanner.Err(); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
@@ -441,7 +454,14 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Update the actual server config on disk.
 	if err = saveServerConfig(ctx, objectAPI, cfg); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// Write to the config input KV to history.
+	if err = saveServerConfigHistory(ctx, objectAPI, kvBytes); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -451,7 +471,6 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		saveConfig(context.Background(), objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
 	}
 
-	// Reply to the client before restarting minio server.
 	writeSuccessResponseHeadersOnly(w)
 }
 
@@ -471,14 +490,11 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	configData, err := json.MarshalIndent(config, "", "\t")
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+	var buf = &bytes.Buffer{}
+	buf.WriteString(config.String())
 
 	password := globalActiveCred.SecretKey
-	econfigData, err := madmin.EncryptData(password, configData)
+	econfigData, err := madmin.EncryptData(password, buf.Bytes())
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

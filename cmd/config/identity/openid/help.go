@@ -27,6 +27,12 @@ var (
 			Type:        "url",
 		},
 		config.HelpKV{
+			Key:         ClaimPrefix,
+			Description: `OpenID JWT claim namespace prefix. eg: "customer"`,
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
 			Key:         config.Comment,
 			Description: "A comment to describe the OpenID identity setting",
 			Optional:    true,

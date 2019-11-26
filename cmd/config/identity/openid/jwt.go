@@ -263,15 +263,15 @@ var (
 			Value: config.StateOff,
 		},
 		config.KV{
-			Key:   JwksURL,
-			Value: "",
-		},
-		config.KV{
 			Key:   ConfigURL,
 			Value: "",
 		},
 		config.KV{
 			Key:   ClaimPrefix,
+			Value: "",
+		},
+		config.KV{
+			Key:   JwksURL,
 			Value: "",
 		},
 	}
