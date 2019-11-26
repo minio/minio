@@ -126,12 +126,23 @@ func ParseURL(s string) (u *URL, err error) {
 		return nil, err
 	}
 
-	if uu.Host == "" {
+	if uu.Hostname() == "" {
 		if uu.Scheme != "" {
 			return nil, errors.New("scheme appears with empty host")
 		}
-	} else if _, err = ParseHost(uu.Host); err != nil {
-		return nil, err
+	} else {
+		portStr := uu.Port()
+		if portStr == "" {
+			switch uu.Scheme {
+			case "http":
+				portStr = "80"
+			case "https":
+				portStr = "443"
+			}
+		}
+		if _, err = ParseHost(net.JoinHostPort(uu.Hostname(), portStr)); err != nil {
+			return nil, err
+		}
 	}
 
 	// Clean path in the URL.

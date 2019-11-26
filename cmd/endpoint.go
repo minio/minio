@@ -80,14 +80,12 @@ func (endpoint Endpoint) HTTPS() bool {
 }
 
 // UpdateIsLocal - resolves the host and updates if it is local or not.
-func (endpoint *Endpoint) UpdateIsLocal() error {
+func (endpoint *Endpoint) UpdateIsLocal() (err error) {
 	if !endpoint.IsLocal {
-		isLocal, err := isLocalHost(endpoint.Hostname())
+		endpoint.IsLocal, err = isLocalHost(endpoint.Hostname(), endpoint.Port(), globalMinioPort)
 		if err != nil {
 			return err
 		}
-		endpoint.IsLocal = isLocal
-
 	}
 	return nil
 }
@@ -261,7 +259,7 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 				// return err if not Docker or Kubernetes
 				// We use IsDocker() to check for Docker environment
 				// We use IsKubernetes() to check for Kubernetes environment
-				isLocal, err := isLocalHost(endpoints[i].Hostname())
+				isLocal, err := isLocalHost(endpoints[i].Hostname(), endpoints[i].Port(), globalMinioPort)
 				if err != nil {
 					if !IsDocker() && !IsKubernetes() {
 						return err
@@ -447,6 +445,10 @@ func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, SetupType,
 		endpoints = append(endpoints, newEndpoints...)
 	}
 
+	if len(endpoints) == 0 {
+		return endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg("invalid number of endpoints")
+	}
+
 	// Return XL setup when all endpoints are path style.
 	if endpoints[0].Type() == PathEndpointType {
 		setupType = XLSetupType
@@ -520,33 +522,11 @@ func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, SetupType,
 				return endpoints, setupType,
 					config.ErrInvalidErasureEndpoints(nil).Msg("all local endpoints should not have different hostnames/ips")
 			}
-			endpointPaths := endpointPathSet.ToSlice()
-			endpoints, _ := NewEndpoints(endpointPaths...)
-			setupType = XLSetupType
-			return endpoints, setupType, nil
+			return endpoints, XLSetupType, nil
 		}
 
 		// Even though all endpoints are local, but those endpoints use different ports.
 		// This means it is DistXL setup.
-	} else {
-		// This is DistXL setup.
-		// Check whether local server address are not 127.x.x.x
-		for _, localHost := range localServerHostSet.ToSlice() {
-			ipList, err := getHostIP(localHost)
-			logger.FatalIf(err, "unexpected error when resolving host '%s'", localHost)
-
-			// Filter ipList by IPs those start with '127.' or '::1'
-			loopBackIPs := ipList.FuncMatch(func(ip string, matchString string) bool {
-				return net.ParseIP(ip).IsLoopback()
-			}, "")
-
-			// If loop back IP is found and ipList contains only loop back IPs, then error out.
-			if len(loopBackIPs) > 0 && len(loopBackIPs) == len(ipList) {
-				err = fmt.Errorf("'%s' resolves to loopback address is not allowed for distributed XL",
-					localHost)
-				return endpoints, setupType, err
-			}
-		}
 	}
 
 	// Add missing port in all endpoints.
