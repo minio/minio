@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/clientv3/namespace"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
@@ -38,12 +39,14 @@ const (
 // etcd environment values
 const (
 	Endpoints     = "endpoints"
+	PathPrefix    = "path_prefix"
 	CoreDNSPath   = "coredns_path"
 	ClientCert    = "client_cert"
 	ClientCertKey = "client_cert_key"
 
 	EnvEtcdState         = "MINIO_ETCD_STATE"
 	EnvEtcdEndpoints     = "MINIO_ETCD_ENDPOINTS"
+	EnvEtcdPathPrefix    = "MINIO_ETCD_PATH_PREFIX"
 	EnvEtcdCoreDNSPath   = "MINIO_ETCD_COREDNS_PATH"
 	EnvEtcdClientCert    = "MINIO_ETCD_CLIENT_CERT"
 	EnvEtcdClientCertKey = "MINIO_ETCD_CLIENT_CERT_KEY"
@@ -58,6 +61,10 @@ var (
 		},
 		config.KV{
 			Key:   Endpoints,
+			Value: "",
+		},
+		config.KV{
+			Key:   PathPrefix,
 			Value: "",
 		},
 		config.KV{
@@ -78,6 +85,7 @@ var (
 // Config - server etcd config.
 type Config struct {
 	Enabled     bool   `json:"enabled"`
+	PathPrefix  string `json:"pathPrefix"`
 	CoreDNSPath string `json:"coreDNSPath"`
 	clientv3.Config
 }
@@ -87,7 +95,14 @@ func New(cfg Config) (*clientv3.Client, error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}
-	return clientv3.New(cfg.Config)
+	cli, err := clientv3.New(cfg.Config)
+	if err != nil {
+		return nil, err
+	}
+	cli.KV = namespace.NewKV(cli.KV, cfg.PathPrefix)
+	cli.Watcher = namespace.NewWatcher(cli.Watcher, cfg.PathPrefix)
+	cli.Lease = namespace.NewLease(cli.Lease, cfg.PathPrefix)
+	return cli, nil
 }
 
 func parseEndpoints(endpoints string) ([]string, bool, error) {
@@ -123,7 +138,9 @@ func lookupLegacyConfig(rootCAs *x509.CertPool) (Config, error) {
 	cfg.DialTimeout = defaultDialTimeout
 	cfg.DialKeepAliveTime = defaultDialKeepAlive
 	cfg.Endpoints = etcdEndpoints
-	cfg.CoreDNSPath = "/skydns"
+	cfg.CoreDNSPath = env.Get(EnvEtcdCoreDNSPath, "/skydns")
+	// Default path prefix for all keys on etcd, other than CoreDNSPath.
+	cfg.PathPrefix = env.Get(EnvEtcdPathPrefix, "")
 	if etcdSecure {
 		cfg.TLS = &tls.Config{
 			RootCAs: rootCAs,
@@ -149,13 +166,9 @@ func LookupConfig(kvs config.KVS, rootCAs *x509.CertPool) (Config, error) {
 		return cfg, err
 	}
 
-	stateBool, err := config.ParseBool(env.Get(EnvEtcdState, config.StateOn))
-	if err != nil {
-		return cfg, err
-	}
-
-	if stateBool {
+	if env.Get(EnvEtcdEndpoints, "") != "" && env.Get(EnvEtcdState, "") == "" {
 		// By default state is 'on' to honor legacy config.
+		var err error
 		cfg, err = lookupLegacyConfig(rootCAs)
 		if err != nil {
 			return cfg, err
@@ -166,7 +179,7 @@ func LookupConfig(kvs config.KVS, rootCAs *x509.CertPool) (Config, error) {
 		}
 	}
 
-	stateBool, err = config.ParseBool(env.Get(EnvEtcdState, kvs.Get(config.State)))
+	stateBool, err := config.ParseBool(env.Get(EnvEtcdState, kvs.Get(config.State)))
 	if err != nil {
 		if kvs.Empty() {
 			return cfg, nil
@@ -193,6 +206,8 @@ func LookupConfig(kvs config.KVS, rootCAs *x509.CertPool) (Config, error) {
 	cfg.DialKeepAliveTime = defaultDialKeepAlive
 	cfg.Endpoints = etcdEndpoints
 	cfg.CoreDNSPath = env.Get(EnvEtcdCoreDNSPath, kvs.Get(CoreDNSPath))
+	// Default path prefix for all keys on etcd, other than CoreDNSPath.
+	cfg.PathPrefix = env.Get(EnvEtcdPathPrefix, kvs.Get(PathPrefix))
 	if etcdSecure {
 		cfg.TLS = &tls.Config{
 			RootCAs: rootCAs,

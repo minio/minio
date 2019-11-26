@@ -549,6 +549,7 @@ func (ies *IAMEtcdStore) watch(sys *IAMSys) {
 			// Refresh IAMSys with etcd watch.
 			watchCh := ies.client.Watch(context.Background(),
 				iamConfigPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+
 			for {
 				select {
 				case <-GlobalServiceDoneCh:

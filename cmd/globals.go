@@ -27,6 +27,7 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
+	"github.com/minio/minio/cmd/config/etcd/dns"
 	xldap "github.com/minio/minio/cmd/config/identity/ldap"
 	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/config/policy/opa"
@@ -35,7 +36,6 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
-	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/pubsub"
 )
 
@@ -208,7 +208,7 @@ var (
 	globalEtcdClient *etcd.Client
 
 	// Allocated DNS config wrapper over etcd client.
-	globalDNSConfig dns.Config
+	globalDNSConfig *dns.CoreDNS
 
 	// Default usage check interval value.
 	globalDefaultUsageCheckInterval = 12 * time.Hour // 12 hours

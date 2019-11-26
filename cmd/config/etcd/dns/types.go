@@ -55,13 +55,3 @@ type SrvRecord struct {
 	// Key carries the original key used during Put().
 	Key string `json:"-"`
 }
-
-// Config - represents dns put, get interface. This interface can be
-// used to implement various backends as needed.
-type Config interface {
-	Put(key string) error
-	List() ([]SrvRecord, error)
-	Get(key string) ([]SrvRecord, error)
-	Delete(key string) error
-	DeleteRecord(record SrvRecord) error
-}

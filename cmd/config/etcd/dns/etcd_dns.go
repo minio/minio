@@ -29,7 +29,7 @@ import (
 	"github.com/minio/minio-go/v6/pkg/set"
 
 	"github.com/coredns/coredns/plugin/etcd/msg"
-	etcd "github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/clientv3"
 )
 
 // ErrNoEntriesFound - Indicates no entries were found for the given key (directory)
@@ -106,7 +106,7 @@ func msgUnPath(s string) string {
 // Note that this method fetches entries upto only two levels deep.
 func (c *CoreDNS) list(key string) ([]SrvRecord, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-	r, err := c.etcdClient.Get(ctx, key, etcd.WithPrefix())
+	r, err := c.etcdClient.Get(ctx, key, clientv3.WithPrefix())
 	defer cancel()
 	if err != nil {
 		return nil, err
@@ -217,7 +217,7 @@ type CoreDNS struct {
 	domainIPs   set.StringSet
 	domainPort  string
 	prefixPath  string
-	etcdClient  *etcd.Client
+	etcdClient  *clientv3.Client
 }
 
 // Option - functional options pattern style
@@ -257,14 +257,14 @@ func CoreDNSPath(prefix string) Option {
 }
 
 // NewCoreDNS - initialize a new coreDNS set/unset values.
-func NewCoreDNS(etcdClient *etcd.Client, setters ...Option) (Config, error) {
-	if etcdClient == nil {
-		return nil, errors.New("invalid argument")
+func NewCoreDNS(cfg clientv3.Config, setters ...Option) (*CoreDNS, error) {
+	etcdClient, err := clientv3.New(cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	args := &CoreDNS{
 		etcdClient: etcdClient,
-		prefixPath: defaultPrefixPath,
 	}
 
 	for _, setter := range setters {
