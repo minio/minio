@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"flag"
@@ -32,7 +33,6 @@ import (
 	"time"
 
 	"golang.org/x/oauth2"
-	googleOAuth2 "golang.org/x/oauth2/google"
 
 	"github.com/minio/minio-go/v6"
 	"github.com/minio/minio-go/v6/pkg/credentials"
@@ -75,27 +75,75 @@ func randomState() string {
 }
 
 var (
-	stsEndpoint   string
-	authEndpoint  string
-	tokenEndpoint string
-	clientID      string
-	clientSecret  string
-	port          int
+	stsEndpoint    string
+	configEndpoint string
+	clientID       string
+	clientSec      string
+	port           int
 )
+
+// DiscoveryDoc - parses the output from openid-configuration
+// for example https://accounts.google.com/.well-known/openid-configuration
+type DiscoveryDoc struct {
+	Issuer                           string   `json:"issuer,omitempty"`
+	AuthEndpoint                     string   `json:"authorization_endpoint,omitempty"`
+	TokenEndpoint                    string   `json:"token_endpoint,omitempty"`
+	UserInfoEndpoint                 string   `json:"userinfo_endpoint,omitempty"`
+	RevocationEndpoint               string   `json:"revocation_endpoint,omitempty"`
+	JwksURI                          string   `json:"jwks_uri,omitempty"`
+	ResponseTypesSupported           []string `json:"response_types_supported,omitempty"`
+	SubjectTypesSupported            []string `json:"subject_types_supported,omitempty"`
+	IDTokenSigningAlgValuesSupported []string `json:"id_token_signing_alg_values_supported,omitempty"`
+	ScopesSupported                  []string `json:"scopes_supported,omitempty"`
+	TokenEndpointAuthMethods         []string `json:"token_endpoint_auth_methods_supported,omitempty"`
+	ClaimsSupported                  []string `json:"claims_supported,omitempty"`
+	CodeChallengeMethodsSupported    []string `json:"code_challenge_methods_supported,omitempty"`
+}
+
+func parseDiscoveryDoc(ustr string) (DiscoveryDoc, error) {
+	d := DiscoveryDoc{}
+	req, err := http.NewRequest(http.MethodGet, ustr, nil)
+	if err != nil {
+		return d, err
+	}
+	clnt := http.Client{
+		Transport: http.DefaultTransport,
+	}
+	resp, err := clnt.Do(req)
+	if err != nil {
+		return d, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return d, err
+	}
+	dec := json.NewDecoder(resp.Body)
+	if err = dec.Decode(&d); err != nil {
+		return d, err
+	}
+	return d, nil
+}
 
 func init() {
 	flag.StringVar(&stsEndpoint, "sts-ep", "http://localhost:9000", "STS endpoint")
-	flag.StringVar(&authEndpoint, "auth-ep", googleOAuth2.Endpoint.AuthURL, "Auth endpoint")
-	flag.StringVar(&tokenEndpoint, "token-ep", googleOAuth2.Endpoint.TokenURL, "Token endpoint")
+	flag.StringVar(&configEndpoint, "config-ep",
+		"https://accounts.google.com/.well-known/openid-configuration",
+		"OpenID discovery document endpoint")
 	flag.StringVar(&clientID, "cid", "", "Client ID")
-	flag.StringVar(&clientSecret, "csec", "", "Client secret")
+	flag.StringVar(&clientSec, "csec", "", "Client Secret")
 	flag.IntVar(&port, "port", 8080, "Port")
 }
 
 func main() {
 	flag.Parse()
-	if clientID == "" || clientSecret == "" {
+	if clientID == "" || clientSec == "" {
 		flag.PrintDefaults()
+		return
+	}
+
+	ddoc, err := parseDiscoveryDoc(configEndpoint)
+	if err != nil {
+		fmt.Println(err)
 		return
 	}
 
@@ -103,13 +151,13 @@ func main() {
 
 	config := oauth2.Config{
 		ClientID:     clientID,
-		ClientSecret: clientSecret,
+		ClientSecret: clientSec,
 		Endpoint: oauth2.Endpoint{
-			AuthURL:  authEndpoint,
-			TokenURL: tokenEndpoint,
+			AuthURL:  ddoc.AuthEndpoint,
+			TokenURL: ddoc.TokenEndpoint,
 		},
-		RedirectURL: fmt.Sprintf("http://localhost:%v/oauth2/callback", port),
-		Scopes:      []string{"openid", "profile", "email"},
+		RedirectURL: fmt.Sprintf("http://localhost:%d/oauth2/callback", port),
+		Scopes:      []string{"openid"},
 	}
 
 	state := randomState()
@@ -138,6 +186,7 @@ func main() {
 				Expiry: int(oauth2Token.Expiry.Sub(time.Now().UTC()).Seconds()),
 			}, nil
 		}
+
 		sts, err := credentials.NewSTSWebIdentity(stsEndpoint, getWebTokenExpiry)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)

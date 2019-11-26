@@ -22,7 +22,7 @@ import * as actionsAlert from "../alert/actions"
 import InputGroup from "./InputGroup"
 import web from "../web"
 import { Redirect, Link } from "react-router-dom"
-import { OpenIDLoginButton } from './OpenIDLoginButton'
+import OpenIDLoginButton from './OpenIDLoginButton'
 
 export class Login extends React.Component {
   constructor(props) {

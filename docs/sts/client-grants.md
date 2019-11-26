@@ -91,17 +91,19 @@ http://minio.cluster:9000?Action=AssumeRoleWithClientGrants&DurationSeconds=3600
 
 ## Testing
 ```
-$ export MINIO_ACCESS_KEY=minio
-$ export MINIO_SECRET_KEY=minio123
-$ export MINIO_IDENTITY_OPENID_CONFIG_URL=https://localhost:9443/oauth2/oidcdiscovery/.well-known/openid-configuration
-$ export MINIO_POLICY_OPA_URL=http://localhost:8181/v1/data/httpapi/authz
-$ minio server /mnt/export
+export MINIO_ACCESS_KEY=minio
+export MINIO_SECRET_KEY=minio123
+export MINIO_IDENTITY_OPENID_STATE="on"
+export MINIO_IDENTITY_OPENID_CONFIG_URL=https://localhost:9443/oauth2/oidcdiscovery/.well-known/openid-configuration
+export MINIO_IDENTITY_OPENID_CLIENT_ID="7a243d56-1081-11ea-b1b9-0bad8bed6ca0"
+export MINIO_POLICY_OPA_URL=http://localhost:8181/v1/data/httpapi/authz
+minio server /mnt/export
 
-$ mc admin config get myminio identity_openid
-identity_openid config_url="https://localhost:9443/oauth2/oidcdiscovery/.well-known/openid-configuration" state="on"
+mc admin config get myminio identity_openid
+identity_openid config_url="https://localhost:9443/oauth2/oidcdiscovery/.well-known/openid-configuration" 
 
-$ mc admin config get myminio policy_opa
-policy_opa auth_token="" state="on" url="http://localhost:8181/v1/data/httpapi/authz"
+mc admin config get myminio policy_opa
+policy_opa url="http://localhost:8181/v1/data/httpapi/authz" auth_token=
 ```
 
 Testing with an example

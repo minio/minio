@@ -8,24 +8,22 @@ Keycloak is an open source Identity and Access Management solution aimed at mode
 - Download and start Keycloak server by following the [installation guide](https://www.keycloak.org/docs/latest/getting_started/index.html) (finish upto section 3.4)
 
 ## 2. Configure Keycloak
-
+- Go to Clients -> Click on account -> Settings -> Enable `Implicit Flow`, then Save.
 - Go to Users -> Click on the user -> Attribute, add a new attribute `Key` is `policy`, `Value` is name of the policy in minio (ex: `readwrite`). Click Add and then Save.
 - Go to Clients -> Click on `account` -> Settings, set `Valid Redirect URIs` to `*`, expand `Advanced Settings` and set `Access Token Lifespan` to `1 Hours`, then Save.
 - Go to Clients -> Client on `account` -> Mappers -> Create, `Name` can be any text, `Mapper Type` is `User Attribute`, `User Attribute` is `policy`, `Token Claim Name` is `policy`, `Claim JSON Type` is `string`, then Save.
 - Open http://localhost:8080/auth/realms/demo/.well-known/openid-configuration and see if it has `authorization_endpoint` and `jwks_uri`
 
 ## 3. Configure MinIO
-
 ```
 $ export MINIO_ACCESS_KEY=minio
 $ export MINIO_SECRET_KEY=minio123
 $ minio server /mnt/export
 ```
 
-Set `identity_openid` config and restart MinIO
-
+Set `identity_openid` config with `config_url`, `client_id` and restart MinIO
 ```
-~ mc admin config set myminio identity_openid config_url="http://localhost:8080/auth/realms/demo/.well-known/openid-configuration" state="on"
+~ mc admin config set myminio identity_openid config_url="http://localhost:8080/auth/realms/demo/.well-known/openid-configuration" client_id="account"
 ```
 
 Once successfully set restart the MinIO instance.
@@ -34,11 +32,10 @@ mc admin service restart myminio
 ```
 
 ## 4. Using WebIdentiy API
-
-Client ID and Client Secret can be found by clicking any of the clients listed [here](http://localhost:8080/auth/admin/master/console/#/realms/demo/clients). If you have followed the above steps docs, the default Client ID will be `account` and Client Secret can be found under `Credentials` tab.
+Client ID can be found by clicking any of the clients listed [here](http://localhost:8080/auth/admin/master/console/#/realms/demo/clients). If you have followed the above steps docs, the default Client ID will be `account`.
 
 ```
-$ go run web-identity.go -cid account -csec e61cb282-745b-4113-bece-29b921c735f0 -auth-ep http://localhost:8080/auth/realms/demo/protocol/openid-connect/auth -token-ep http://localhost:8080/auth/realms/demo/protocol/openid-connect/token -port 8888
+$ go run docs/sts/web-identity.go -cid account -csec 072e7f00-4289-469c-9ab2-bbe843c7f5a8  -config-ep "http://localhost:8080/auth/realms/demo/.well-known/openid-configuration" -port 8888
 2018/12/26 17:49:36 listening on http://localhost:8888/
 ```
 

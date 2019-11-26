@@ -27,6 +27,12 @@ var (
 			Type:        "url",
 		},
 		config.HelpKV{
+			Key:         ClientID,
+			Description: `The client identifier of the authenticating party at the identity provider`,
+			Type:        "string",
+			Optional:    true,
+		},
+		config.HelpKV{
 			Key:         ClaimPrefix,
 			Description: `OpenID JWT claim namespace prefix. eg: "customer"`,
 			Optional:    true,
