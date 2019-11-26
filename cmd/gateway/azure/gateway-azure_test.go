@@ -185,51 +185,56 @@ func TestAzureToObjectError(t *testing.T) {
 // Add tests for azure to object error (internal).
 func TestAzureCodesToObjectError(t *testing.T) {
 	testCases := []struct {
+		originalErr       error
 		actualServiceCode string
 		actualStatusCode  int
 		expectedErr       error
 		bucket, object    string
 	}{
 		{
-
-			"ContainerAlreadyExists", 0,
+			nil, "ContainerAlreadyExists", 0,
 			minio.BucketExists{Bucket: "bucket"}, "bucket", "",
 		},
 		{
-
-			"InvalidResourceName", 0,
+			nil, "InvalidResourceName", 0,
 			minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
 		},
 		{
-
-			"RequestBodyTooLarge", 0,
+			nil, "RequestBodyTooLarge", 0,
 			minio.PartTooBig{}, "", "",
 		},
 		{
-
-			"InvalidMetadata", 0,
+			nil, "InvalidMetadata", 0,
 			minio.UnsupportedMetadata{}, "", "",
 		},
 		{
-			"", http.StatusNotFound,
+			nil, "", http.StatusNotFound,
 			minio.ObjectNotFound{
 				Bucket: "bucket",
 				Object: "object",
 			}, "bucket", "object",
 		},
 		{
-			"", http.StatusNotFound,
+			nil, "", http.StatusNotFound,
 			minio.BucketNotFound{Bucket: "bucket"}, "bucket", "",
 		},
 		{
-			"", http.StatusBadRequest,
+			nil, "", http.StatusBadRequest,
 			minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
+		},
+		{
+			fmt.Errorf("unhandled azure error"), "", http.StatusForbidden,
+			fmt.Errorf("unhandled azure error"), "", "",
 		},
 	}
 	for i, testCase := range testCases {
-		if err := azureCodesToObjectError(testCase.actualServiceCode, testCase.actualStatusCode, testCase.bucket, testCase.object); err != nil {
+		if err := azureCodesToObjectError(testCase.originalErr, testCase.actualServiceCode, testCase.actualStatusCode, testCase.bucket, testCase.object); err != nil {
 			if err.Error() != testCase.expectedErr.Error() {
 				t.Errorf("Test %d: Expected error %s, got %s", i+1, testCase.expectedErr, err)
+			}
+		} else {
+			if testCase.expectedErr != nil {
+				t.Errorf("Test %d expected an error but one was not produced", i+1)
 			}
 		}
 	}

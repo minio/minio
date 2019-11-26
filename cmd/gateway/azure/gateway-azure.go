@@ -406,12 +406,10 @@ func azureToObjectError(err error, params ...string) error {
 	serviceCode := string(azureErr.ServiceCode())
 	statusCode := azureErr.Response().StatusCode
 
-	return azureCodesToObjectError(serviceCode, statusCode, bucket, object)
+	return azureCodesToObjectError(err, serviceCode, statusCode, bucket, object)
 }
 
-func azureCodesToObjectError(serviceCode string, statusCode int, bucket string, object string) error {
-	var err error
-
+func azureCodesToObjectError(err error, serviceCode string, statusCode int, bucket string, object string) error {
 	switch serviceCode {
 	case "ContainerAlreadyExists":
 		err = minio.BucketExists{Bucket: bucket}
