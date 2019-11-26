@@ -31,6 +31,7 @@ const (
 	lockRESTMethodRLock   = "/rlock"
 	lockRESTMethodUnlock  = "/unlock"
 	lockRESTMethodRUnlock = "/runlock"
+	lockRESTMethodExpired = "/expired"
 
 	// Unique ID of lock/unlock request.
 	lockRESTUID = "uid"
@@ -41,4 +42,7 @@ const (
 	lockRESTResource = "resource"
 )
 
-var errLockConflict = errors.New("lock conflict")
+var (
+	errLockConflict   = errors.New("lock conflict")
+	errLockNotExpired = errors.New("lock not expired")
+)

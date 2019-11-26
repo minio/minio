@@ -51,6 +51,9 @@ type NetLocker interface {
 	// * an error on failure of unlock request operation.
 	Unlock(args LockArgs) (bool, error)
 
+	// Expired returns if current lock args has expired.
+	Expired(args LockArgs) (bool, error)
+
 	// Returns underlying endpoint of this lock client instance.
 	String() string
 

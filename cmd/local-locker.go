@@ -69,6 +69,10 @@ func (d *errorLocker) IsOnline() bool {
 	return false
 }
 
+func (d *errorLocker) Expired(args dsync.LockArgs) (reply bool, err error) {
+	return false, errors.New("unable to check for lock expiration")
+}
+
 // localLocker implements Dsync.NetLocker
 type localLocker struct {
 	mutex    sync.Mutex
@@ -200,6 +204,34 @@ func (l *localLocker) Close() error {
 // Local locker is always online.
 func (l *localLocker) IsOnline() bool {
 	return true
+}
+
+func (l *localLocker) Expired(args dsync.LockArgs) (expired bool, err error) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	// Lock found, proceed to verify if belongs to given uid.
+	if lri, ok := l.lockMap[args.Resource]; ok {
+		// Check whether uid is still active
+		for _, entry := range lri {
+			if entry.UID == args.UID {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
+}
+
+// Similar to removeEntry but only removes an entry only if the lock entry exists in map.
+// Caller must hold 'l.mutex' lock.
+func (l *localLocker) removeEntryIfExists(nlrip nameLockRequesterInfoPair) {
+	// Check if entry is still in map (could have been removed altogether by 'concurrent' (R)Unlock of last entry)
+	if lri, ok := l.lockMap[nlrip.name]; ok {
+		// Even if the entry exists, it may not be the same entry which was
+		// considered as expired, so we simply an attempt to remove it if its
+		// not possible there is nothing we need to do.
+		l.removeEntry(nlrip.name, nlrip.lri.UID, &lri)
+	}
 }
 
 func newLocker(endpoint Endpoint) *localLocker {
