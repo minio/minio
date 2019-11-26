@@ -18,7 +18,9 @@
 package config
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"regexp"
 	"strings"
 
@@ -145,6 +147,35 @@ const (
 	EnvWordDelimiter = `_`
 )
 
+// DefaultKVS - default kvs for all sub-systems
+var DefaultKVS map[string]KVS
+
+// RegisterDefaultKVS - this function saves input kvsMap
+// globally, this should be called only once preferably
+// during `init()`.
+func RegisterDefaultKVS(kvsMap map[string]KVS) {
+	DefaultKVS = map[string]KVS{}
+	for subSys, kvs := range kvsMap {
+		DefaultKVS[subSys] = kvs
+	}
+}
+
+// HelpSubSysMap - help for all individual KVS for each sub-systems
+// also carries a special empty sub-system which dumps
+// help for each sub-system key.
+var HelpSubSysMap map[string]HelpKVS
+
+// RegisterHelpSubSys - this function saves
+// input help KVS for each sub-system globally,
+// this function should be called only once
+// preferably in during `init()`.
+func RegisterHelpSubSys(helpKVSMap map[string]HelpKVS) {
+	HelpSubSysMap = map[string]HelpKVS{}
+	for subSys, hkvs := range helpKVSMap {
+		HelpSubSysMap[subSys] = hkvs
+	}
+}
+
 // KV - is a shorthand of each key value.
 type KV struct {
 	Key   string `json:"key"`
@@ -214,6 +245,81 @@ func (c Config) String() string {
 		}
 	}
 	return s.String()
+}
+
+// DelFrom - deletes all keys in the input reader.
+func (c Config) DelFrom(r io.Reader) error {
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		// Skip any empty lines, or comment like characters
+		if scanner.Text() == "" || strings.HasPrefix(scanner.Text(), KvComment) {
+			continue
+		}
+		if err := c.DelKVS(scanner.Text()); err != nil {
+			return err
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ReadFrom - implements io.ReaderFrom interface
+func (c Config) ReadFrom(r io.Reader) (int64, error) {
+	var n int
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		// Skip any empty lines, or comment like characters
+		if scanner.Text() == "" || strings.HasPrefix(scanner.Text(), KvComment) {
+			continue
+		}
+		if err := c.SetKVS(scanner.Text(), DefaultKVS); err != nil {
+			return 0, err
+		}
+		n += len(scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		return 0, err
+	}
+	return int64(n), nil
+}
+
+type configWriteTo struct {
+	Config
+	filterByKey string
+}
+
+// NewConfigWriteTo - returns a struct which
+// allows for serializing the config/kv struct
+// to a io.WriterTo
+func NewConfigWriteTo(cfg Config, key string) io.WriterTo {
+	return &configWriteTo{Config: cfg, filterByKey: key}
+}
+
+// WriteTo - implements io.WriterTo interface implementation for config.
+func (c *configWriteTo) WriteTo(w io.Writer) (int64, error) {
+	if c.filterByKey == "" {
+		n, err := w.Write([]byte(c.String()))
+		return int64(n), err
+	}
+	kvs, err := c.GetKVS(c.filterByKey, DefaultKVS)
+	if err != nil {
+		return 0, err
+	}
+	var n int
+	for k, kv := range kvs {
+		m1, _ := w.Write([]byte(k))
+		m2, _ := w.Write([]byte(KvSpaceSeparator))
+		m3, _ := w.Write([]byte(kv.String()))
+		if len(kvs) > 1 {
+			m4, _ := w.Write([]byte(KvNewline))
+			n += m1 + m2 + m3 + m4
+		} else {
+			n += m1 + m2 + m3
+		}
+	}
+	return int64(n), nil
 }
 
 // Default KV configs for worm and region

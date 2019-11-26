@@ -39,6 +39,154 @@ import (
 	"github.com/minio/minio/pkg/env"
 )
 
+func init() {
+	var kvs = map[string]config.KVS{
+		config.EtcdSubSys:           etcd.DefaultKVS,
+		config.CacheSubSys:          cache.DefaultKVS,
+		config.CompressionSubSys:    compress.DefaultKVS,
+		config.StorageClassSubSys:   storageclass.DefaultKVS,
+		config.IdentityLDAPSubSys:   xldap.DefaultKVS,
+		config.IdentityOpenIDSubSys: openid.DefaultKVS,
+		config.PolicyOPASubSys:      opa.DefaultKVS,
+		config.RegionSubSys:         config.DefaultRegionKVS,
+		config.CredentialsSubSys:    config.DefaultCredentialKVS,
+		config.KmsVaultSubSys:       crypto.DefaultKVS,
+		config.LoggerWebhookSubSys:  logger.DefaultKVS,
+		config.AuditWebhookSubSys:   logger.DefaultAuditKVS,
+	}
+	for k, v := range notify.DefaultNotificationKVS {
+		kvs[k] = v
+	}
+	config.RegisterDefaultKVS(kvs)
+
+	// Captures help for each sub-system
+	var helpSubSys = config.HelpKVS{
+		config.HelpKV{
+			Key:         config.RegionSubSys,
+			Description: "Configure to describe the physical location of the server",
+		},
+		config.HelpKV{
+			Key:         config.StorageClassSubSys,
+			Description: "Configure to control data and parity per object",
+		},
+		config.HelpKV{
+			Key:         config.CacheSubSys,
+			Description: "Configure to enable edge caching",
+		},
+		config.HelpKV{
+			Key:         config.CompressionSubSys,
+			Description: "Configure to enable streaming on disk compression",
+		},
+		config.HelpKV{
+			Key:         config.EtcdSubSys,
+			Description: "Configure to enable 'etcd' configuration",
+		},
+		config.HelpKV{
+			Key:         config.IdentityOpenIDSubSys,
+			Description: "Configure to enable OpenID SSO support",
+		},
+		config.HelpKV{
+			Key:         config.IdentityLDAPSubSys,
+			Description: "Configure to enable LDAP SSO support",
+		},
+		config.HelpKV{
+			Key:         config.PolicyOPASubSys,
+			Description: "Configure to enable external OPA policy support",
+		},
+		config.HelpKV{
+			Key:         config.KmsVaultSubSys,
+			Description: "Configure to enable Vault based external KMS",
+		},
+		config.HelpKV{
+			Key:             config.LoggerWebhookSubSys,
+			Description:     "Configure to enable Webhook based logger",
+			MultipleTargets: true,
+		},
+		config.HelpKV{
+			Key:             config.AuditWebhookSubSys,
+			Description:     "Configure to enable Webhook based audit logger",
+			MultipleTargets: true,
+		},
+		config.HelpKV{
+			Key:             config.NotifyWebhookSubSys,
+			Description:     "Configure to publish events to Webhook target",
+			MultipleTargets: true,
+		},
+		config.HelpKV{
+			Key:             config.NotifyAMQPSubSys,
+			Description:     "Configure to publish events to AMQP target",
+			MultipleTargets: true,
+		},
+		config.HelpKV{
+			Key:             config.NotifyKafkaSubSys,
+			Description:     "Configure to publish events to Kafka target",
+			MultipleTargets: true,
+		},
+		config.HelpKV{
+			Key:             config.NotifyMQTTSubSys,
+			Description:     "Configure to publish events to MQTT target",
+			MultipleTargets: true,
+		},
+		config.HelpKV{
+			Key:             config.NotifyNATSSubSys,
+			Description:     "Configure to publish events to NATS target",
+			MultipleTargets: true,
+		},
+		config.HelpKV{
+			Key:             config.NotifyNSQSubSys,
+			Description:     "Configure to publish events to NSQ target",
+			MultipleTargets: true,
+		},
+		config.HelpKV{
+			Key:             config.NotifyMySQLSubSys,
+			Description:     "Configure to publish events to MySQL target",
+			MultipleTargets: true,
+		},
+		config.HelpKV{
+			Key:             config.NotifyPostgresSubSys,
+			Description:     "Configure to publish events to Postgres target",
+			MultipleTargets: true,
+		},
+		config.HelpKV{
+			Key:             config.NotifyRedisSubSys,
+			Description:     "Configure to publish events to Redis target",
+			MultipleTargets: true,
+		},
+		config.HelpKV{
+			Key:             config.NotifyESSubSys,
+			Description:     "Configure to publish events to Elasticsearch target",
+			MultipleTargets: true,
+		},
+	}
+
+	var helpMap = map[string]config.HelpKVS{
+		"":                          helpSubSys, // Help for all sub-systems.
+		config.RegionSubSys:         config.RegionHelp,
+		config.EtcdSubSys:           etcd.Help,
+		config.CacheSubSys:          cache.Help,
+		config.CompressionSubSys:    compress.Help,
+		config.StorageClassSubSys:   storageclass.Help,
+		config.IdentityOpenIDSubSys: openid.Help,
+		config.IdentityLDAPSubSys:   xldap.Help,
+		config.PolicyOPASubSys:      opa.Help,
+		config.KmsVaultSubSys:       crypto.Help,
+		config.LoggerWebhookSubSys:  logger.Help,
+		config.AuditWebhookSubSys:   logger.HelpAudit,
+		config.NotifyAMQPSubSys:     notify.HelpAMQP,
+		config.NotifyKafkaSubSys:    notify.HelpKafka,
+		config.NotifyMQTTSubSys:     notify.HelpMQTT,
+		config.NotifyNATSSubSys:     notify.HelpNATS,
+		config.NotifyNSQSubSys:      notify.HelpNSQ,
+		config.NotifyMySQLSubSys:    notify.HelpMySQL,
+		config.NotifyPostgresSubSys: notify.HelpPostgres,
+		config.NotifyRedisSubSys:    notify.HelpRedis,
+		config.NotifyWebhookSubSys:  notify.HelpWebhook,
+		config.NotifyESSubSys:       notify.HelpES,
+	}
+
+	config.RegisterHelpSubSys(helpMap)
+}
+
 var (
 	// globalServerConfig server config.
 	globalServerConfig   config.Config
@@ -257,152 +405,6 @@ func lookupConfigs(s config.Config) (err error) {
 	return nil
 }
 
-func defaultKVS() map[string]config.KVS {
-	var kvs = map[string]config.KVS{
-		config.EtcdSubSys:           etcd.DefaultKVS,
-		config.CacheSubSys:          cache.DefaultKVS,
-		config.CompressionSubSys:    compress.DefaultKVS,
-		config.StorageClassSubSys:   storageclass.DefaultKVS,
-		config.IdentityLDAPSubSys:   xldap.DefaultKVS,
-		config.IdentityOpenIDSubSys: openid.DefaultKVS,
-		config.PolicyOPASubSys:      opa.DefaultKVS,
-		config.RegionSubSys:         config.DefaultRegionKVS,
-		config.CredentialsSubSys:    config.DefaultCredentialKVS,
-		config.KmsVaultSubSys:       crypto.DefaultKVS,
-		config.LoggerWebhookSubSys:  logger.DefaultKVS,
-		config.AuditWebhookSubSys:   logger.DefaultAuditKVS,
-	}
-	for k, v := range notify.DefaultNotificationKVS {
-		kvs[k] = v
-	}
-	return kvs
-}
-
-// Captures help for each sub-system
-var helpSubSys = config.HelpKVS{
-	config.HelpKV{
-		Key:         config.RegionSubSys,
-		Description: "Configure to describe the physical location of the server",
-	},
-	config.HelpKV{
-		Key:         config.StorageClassSubSys,
-		Description: "Configure to control data and parity per object",
-	},
-	config.HelpKV{
-		Key:         config.CacheSubSys,
-		Description: "Configure to enable edge caching",
-	},
-	config.HelpKV{
-		Key:         config.CompressionSubSys,
-		Description: "Configure to enable streaming on disk compression",
-	},
-	config.HelpKV{
-		Key:         config.EtcdSubSys,
-		Description: "Configure to enable 'etcd' configuration",
-	},
-	config.HelpKV{
-		Key:         config.IdentityOpenIDSubSys,
-		Description: "Configure to enable OpenID SSO support",
-	},
-	config.HelpKV{
-		Key:         config.IdentityLDAPSubSys,
-		Description: "Configure to enable LDAP SSO support",
-	},
-	config.HelpKV{
-		Key:         config.PolicyOPASubSys,
-		Description: "Configure to enable external OPA policy support",
-	},
-	config.HelpKV{
-		Key:         config.KmsVaultSubSys,
-		Description: "Configure to enable Vault based external KMS",
-	},
-	config.HelpKV{
-		Key:             config.LoggerWebhookSubSys,
-		Description:     "Configure to enable Webhook based logger",
-		MultipleTargets: true,
-	},
-	config.HelpKV{
-		Key:             config.AuditWebhookSubSys,
-		Description:     "Configure to enable Webhook based audit logger",
-		MultipleTargets: true,
-	},
-
-	config.HelpKV{
-		Key:             config.NotifyWebhookSubSys,
-		Description:     "Configure to publish events to Webhook target",
-		MultipleTargets: true,
-	},
-	config.HelpKV{
-		Key:             config.NotifyAMQPSubSys,
-		Description:     "Configure to publish events to AMQP target",
-		MultipleTargets: true,
-	},
-	config.HelpKV{
-		Key:             config.NotifyKafkaSubSys,
-		Description:     "Configure to publish events to Kafka target",
-		MultipleTargets: true,
-	},
-	config.HelpKV{
-		Key:             config.NotifyMQTTSubSys,
-		Description:     "Configure to publish events to MQTT target",
-		MultipleTargets: true,
-	},
-	config.HelpKV{
-		Key:             config.NotifyNATSSubSys,
-		Description:     "Configure to publish events to NATS target",
-		MultipleTargets: true,
-	},
-	config.HelpKV{
-		Key:             config.NotifyNSQSubSys,
-		Description:     "Configure to publish events to NSQ target",
-		MultipleTargets: true,
-	},
-	config.HelpKV{
-		Key:             config.NotifyMySQLSubSys,
-		Description:     "Configure to publish events to MySQL target",
-		MultipleTargets: true,
-	},
-	config.HelpKV{
-		Key:             config.NotifyPostgresSubSys,
-		Description:     "Configure to publish events to Postgres target",
-		MultipleTargets: true,
-	},
-	config.HelpKV{
-		Key:             config.NotifyRedisSubSys,
-		Description:     "Configure to publish events to Redis target",
-		MultipleTargets: true,
-	},
-	config.HelpKV{
-		Key:             config.NotifyESSubSys,
-		Description:     "Configure to publish events to Elasticsearch target",
-		MultipleTargets: true,
-	},
-}
-
-var helpMap = map[string]config.HelpKVS{
-	config.RegionSubSys:         config.RegionHelp,
-	config.EtcdSubSys:           etcd.Help,
-	config.CacheSubSys:          cache.Help,
-	config.CompressionSubSys:    compress.Help,
-	config.StorageClassSubSys:   storageclass.Help,
-	config.IdentityOpenIDSubSys: openid.Help,
-	config.IdentityLDAPSubSys:   xldap.Help,
-	config.PolicyOPASubSys:      opa.Help,
-	config.KmsVaultSubSys:       crypto.Help,
-	config.LoggerWebhookSubSys:  logger.Help,
-	config.AuditWebhookSubSys:   logger.HelpAudit,
-	config.NotifyAMQPSubSys:     notify.HelpAMQP,
-	config.NotifyKafkaSubSys:    notify.HelpKafka,
-	config.NotifyMQTTSubSys:     notify.HelpMQTT,
-	config.NotifyNATSSubSys:     notify.HelpNATS,
-	config.NotifyNSQSubSys:      notify.HelpNSQ,
-	config.NotifyMySQLSubSys:    notify.HelpMySQL,
-	config.NotifyPostgresSubSys: notify.HelpPostgres,
-	config.NotifyRedisSubSys:    notify.HelpRedis,
-	config.NotifyWebhookSubSys:  notify.HelpWebhook,
-	config.NotifyESSubSys:       notify.HelpES,
-}
-
 // Help - return sub-system level help
 type Help struct {
 	SubSys          string         `json:"subSys"`
@@ -414,18 +416,24 @@ type Help struct {
 // GetHelp - returns help for sub-sys, a key for a sub-system or all the help.
 func GetHelp(subSys, key string, envOnly bool) (Help, error) {
 	if len(subSys) == 0 {
-		return Help{KeysHelp: helpSubSys}, nil
+		return Help{KeysHelp: config.HelpSubSysMap[subSys]}, nil
 	}
 	subSystemValue := strings.SplitN(subSys, config.SubSystemSeparator, 2)
 	if len(subSystemValue) == 0 {
 		return Help{}, config.Errorf("invalid number of arguments %s", subSys)
 	}
 
-	if !config.SubSystems.Contains(subSystemValue[0]) {
+	subSys = subSystemValue[0]
+
+	subSysHelp, ok := config.HelpSubSysMap[""].Lookup(subSys)
+	if !ok {
 		return Help{}, config.Errorf("unknown sub-system %s", subSys)
 	}
 
-	h := helpMap[subSystemValue[0]]
+	h, ok := config.HelpSubSysMap[subSys]
+	if !ok {
+		return Help{}, config.Errorf("unknown sub-system %s", subSys)
+	}
 	if key != "" {
 		value, ok := h.Lookup(key)
 		if !ok {
@@ -433,8 +441,6 @@ func GetHelp(subSys, key string, envOnly bool) (Help, error) {
 		}
 		h = config.HelpKVS{value}
 	}
-
-	subSys = subSystemValue[0]
 
 	envHelp := config.HelpKVS{}
 	if envOnly {
@@ -450,11 +456,6 @@ func GetHelp(subSys, key string, envOnly bool) (Help, error) {
 			})
 		}
 		h = envHelp
-	}
-
-	subSysHelp, ok := helpSubSys.Lookup(subSys)
-	if !ok {
-		return Help{}, config.Errorf("unknown sub-system %s", subSys)
 	}
 
 	return Help{

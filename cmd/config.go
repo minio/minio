@@ -151,6 +151,11 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
+		// Config not found for some reason, allow things to continue
+		// by initializing a new fresh config in safe mode.
+		if err == errConfigNotFound && globalSafeMode {
+			return newServerConfig(), nil
+		}
 		return nil, err
 	}
 
