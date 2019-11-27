@@ -19,6 +19,7 @@ package http
 import (
 	"crypto/tls"
 	"errors"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"runtime/pprof"
@@ -139,8 +140,13 @@ func (srv *Server) Shutdown() error {
 	for {
 		select {
 		case <-shutdownTimer.C:
-			// Print all running goroutines.
-			_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+			// Write all running goroutines.
+			tmp, err := ioutil.TempFile("", "minio-goroutines-*.txt")
+			if err == nil {
+				_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+				tmp.Close()
+				return errors.New("timed out. some connections are still active. doing abnormal shutdown. goroutines written to %s" + tmp.Name())
+			}
 			return errors.New("timed out. some connections are still active. doing abnormal shutdown")
 		case <-ticker.C:
 			if atomic.LoadInt32(&srv.requestCount) <= 0 {
