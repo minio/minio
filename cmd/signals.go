@@ -49,8 +49,10 @@ func handleSignals() {
 		// Stop watching for any certificate changes.
 		globalTLSCerts.Stop()
 
-		err = globalHTTPServer.Shutdown()
-		logger.LogIf(context.Background(), err)
+		if httpServer := newHTTPServerFn(); httpServer != nil {
+			err = httpServer.Shutdown()
+			logger.LogIf(context.Background(), err)
+		}
 
 		// send signal to various go-routines that they need to quit.
 		close(GlobalServiceDoneCh)

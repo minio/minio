@@ -23,6 +23,12 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 )
 
+func newHTTPServerFn() *xhttp.Server {
+	globalObjLayerMutex.Lock()
+	defer globalObjLayerMutex.Unlock()
+	return globalHTTPServer
+}
+
 func newObjectLayerWithoutSafeModeFn() ObjectLayer {
 	globalObjLayerMutex.Lock()
 	defer globalObjLayerMutex.Unlock()

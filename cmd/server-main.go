@@ -361,10 +361,14 @@ func serverMain(ctx *cli.Context) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	globalHTTPServer = xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{handler}, getCert)
+	httpServer := xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{handler}, getCert)
 	go func() {
-		globalHTTPServerErrorCh <- globalHTTPServer.Start()
+		globalHTTPServerErrorCh <- httpServer.Start()
 	}()
+
+	globalObjLayerMutex.Lock()
+	globalHTTPServer = httpServer
+	globalObjLayerMutex.Unlock()
 
 	if globalIsDistXL && globalEndpoints.FirstLocal() {
 		// Additionally in distributed setup validate
