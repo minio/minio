@@ -19,6 +19,9 @@
 package mountinfo
 
 import (
+	"path/filepath"
+	"sync"
+
 	"golang.org/x/sys/windows"
 )
 
@@ -28,12 +31,20 @@ func CheckCrossDevice(paths []string) error {
 	return nil
 }
 
+// mountPointCache contains results of IsLikelyMountPoint
+var mountPointCache sync.Map
+
 // IsLikelyMountPoint determines if a directory is a mountpoint.
 func IsLikelyMountPoint(path string) bool {
+	path = filepath.Dir(path)
+	if v, ok := mountPointCache.Load(path); ok {
+		return v.(bool)
+	}
 	wpath, _ := windows.UTF16PtrFromString(path)
 	wvolume := make([]uint16, len(path)+1)
 
 	if err := windows.GetVolumePathName(wpath, &wvolume[0], uint32(len(wvolume))); err != nil {
+		mountPointCache.Store(path, false)
 		return false
 	}
 
@@ -42,7 +53,9 @@ func IsLikelyMountPoint(path string) bool {
 		// Recognize "fixed", "removable", "remote" and "ramdisk" drives as proper drives
 		// which can be treated as an actual mount-point, rest can be ignored.
 		// https://docs.microsoft.com/en-us/windows/desktop/api/fileapi/nf-fileapi-getdrivetypew
+		mountPointCache.Store(path, true)
 		return true
 	}
+	mountPointCache.Store(path, false)
 	return false
 }
