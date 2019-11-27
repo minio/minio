@@ -144,7 +144,7 @@ func (srv *Server) Shutdown() error {
 			if err == nil {
 				_ = pprof.Lookup("goroutine").WriteTo(tmp, 1)
 				tmp.Close()
-				return errors.New("timed out. some connections are still active. doing abnormal shutdown. goroutines written to %s" + tmp.Name())
+				return errors.New("timed out. some connections are still active. doing abnormal shutdown. goroutines written to " + tmp.Name())
 			}
 			return errors.New("timed out. some connections are still active. doing abnormal shutdown")
 		case <-ticker.C:
