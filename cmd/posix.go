@@ -396,12 +396,15 @@ func (s *posix) getDiskID() (string, error) {
 	lastCheck := s.formatLastCheck
 	s.RUnlock()
 
+	// check if we have a valid disk ID that is less than 1 second old.
 	if fileInfo != nil && diskID != "" && time.Now().Before(lastCheck.Add(time.Second)) {
 		return diskID, nil
 	}
 
 	s.Lock()
 	defer s.Unlock()
+
+	// If somebody else updated the disk ID and changed the time, return what they got.
 	if !s.formatLastCheck.Equal(lastCheck) {
 		// Somebody else got the lock first.
 		return diskID, nil
