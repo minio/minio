@@ -89,7 +89,8 @@ type posix struct {
 
 	diskID string
 
-	formatFileInfo os.FileInfo
+	formatFileInfo  os.FileInfo
+	formatLastCheck time.Time
 	// Disk usage metrics
 	stopUsageCh chan struct{}
 
@@ -391,8 +392,23 @@ func (s *posix) getVolDir(volume string) (string, error) {
 func (s *posix) getDiskID() (string, error) {
 	s.RLock()
 	diskID := s.diskID
+	fileInfo := s.formatFileInfo
+	lastCheck := s.formatLastCheck
 	s.RUnlock()
 
+	// check if we have a valid disk ID that is less than 1 second old.
+	if fileInfo != nil && diskID != "" && time.Now().Before(lastCheck.Add(time.Second)) {
+		return diskID, nil
+	}
+
+	s.Lock()
+	defer s.Unlock()
+
+	// If somebody else updated the disk ID and changed the time, return what they got.
+	if !s.formatLastCheck.Equal(lastCheck) {
+		// Somebody else got the lock first.
+		return diskID, nil
+	}
 	formatFile := pathJoin(s.diskPath, minioMetaBucket, formatConfigFile)
 	fi, err := os.Stat(formatFile)
 	if err != nil {
@@ -400,13 +416,12 @@ func (s *posix) getDiskID() (string, error) {
 		return "", err
 	}
 
-	if xioutil.SameFile(fi, s.formatFileInfo) {
+	if xioutil.SameFile(fi, fileInfo) {
 		// If the file has not changed, just return the cached diskID information.
+		s.formatLastCheck = time.Now()
 		return diskID, nil
 	}
 
-	s.Lock()
-	defer s.Unlock()
 	b, err := ioutil.ReadFile(formatFile)
 	if err != nil {
 		return "", err
@@ -418,6 +433,7 @@ func (s *posix) getDiskID() (string, error) {
 	}
 	s.diskID = format.XL.This
 	s.formatFileInfo = fi
+	s.formatLastCheck = time.Now()
 	return s.diskID, nil
 }
 
