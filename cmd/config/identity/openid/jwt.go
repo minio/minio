@@ -28,6 +28,7 @@ import (
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -107,41 +108,57 @@ type JWT struct {
 	Config
 }
 
-func expToInt64(expI interface{}) (expAt int64, err error) {
-	switch exp := expI.(type) {
-	case float64:
-		expAt = int64(exp)
-	case int64:
-		expAt = exp
-	case json.Number:
-		expAt, err = exp.Int64()
-		if err != nil {
-			return 0, err
-		}
-	default:
-		return 0, ErrInvalidDuration
-	}
-	return expAt, nil
-}
-
 // GetDefaultExpiration - returns the expiration seconds expected.
 func GetDefaultExpiration(dsecs string) (time.Duration, error) {
 	defaultExpiryDuration := time.Duration(60) * time.Minute // Defaults to 1hr.
 	if dsecs != "" {
 		expirySecs, err := strconv.ParseInt(dsecs, 10, 64)
 		if err != nil {
-			return 0, ErrInvalidDuration
+			return 0, auth.ErrInvalidDuration
 		}
 		// The duration, in seconds, of the role session.
 		// The value can range from 900 seconds (15 minutes)
 		// to 12 hours.
 		if expirySecs < 900 || expirySecs > 43200 {
-			return 0, ErrInvalidDuration
+			return 0, auth.ErrInvalidDuration
 		}
 
 		defaultExpiryDuration = time.Duration(expirySecs) * time.Second
 	}
 	return defaultExpiryDuration, nil
+}
+
+func updateClaimsExpiry(dsecs string, claims map[string]interface{}) error {
+	expStr := claims["exp"]
+	if expStr == "" {
+		return ErrTokenExpired
+	}
+
+	// No custom duration requested, the claims can be used as is.
+	if dsecs == "" {
+		return nil
+	}
+
+	expAt, err := auth.ExpToInt64(expStr)
+	if err != nil {
+		return err
+	}
+
+	defaultExpiryDuration, err := GetDefaultExpiration(dsecs)
+	if err != nil {
+		return err
+	}
+
+	// Verify if JWT expiry is lesser than default expiry duration,
+	// if that is the case then set the default expiration to be
+	// from the JWT expiry claim.
+	if time.Unix(expAt, 0).UTC().Sub(time.Now().UTC()) < defaultExpiryDuration {
+		defaultExpiryDuration = time.Unix(expAt, 0).UTC().Sub(time.Now().UTC())
+	} // else honor the specified expiry duration.
+
+	expiry := time.Now().UTC().Add(defaultExpiryDuration).Unix()
+	claims["exp"] = strconv.FormatInt(expiry, 10) // update with new expiry.
+	return nil
 }
 
 // Validate - validates the access token.
@@ -173,23 +190,8 @@ func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 		return nil, ErrTokenExpired
 	}
 
-	expAt, err := expToInt64(claims["exp"])
-	if err != nil {
+	if err = updateClaimsExpiry(dsecs, claims); err != nil {
 		return nil, err
-	}
-
-	defaultExpiryDuration, err := GetDefaultExpiration(dsecs)
-	if err != nil {
-		return nil, err
-	}
-
-	if time.Unix(expAt, 0).UTC().Sub(time.Now().UTC()) < defaultExpiryDuration {
-		defaultExpiryDuration = time.Unix(expAt, 0).UTC().Sub(time.Now().UTC())
-	}
-
-	expiry := time.Now().UTC().Add(defaultExpiryDuration).Unix()
-	if expAt < expiry {
-		claims["exp"] = strconv.FormatInt(expAt, 64)
 	}
 
 	return claims, nil

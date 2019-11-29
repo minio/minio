@@ -14,7 +14,7 @@
     - [Policy](#policy)
     - [Response Elements](#response-elements)
     - [Errors](#errors)
-- [Sample Request](#sample-request)
+- [Sample `POST` Request](#sample-post-request)
 - [Sample Response](#sample-response)
 - [Testing](#testing)
 
@@ -189,7 +189,7 @@ XML response for this API is similar to [AWS STS AssumeRoleWithWebIdentity](http
 ### Errors
 XML error response for this API is similar to [AWS STS AssumeRoleWithWebIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html#API_AssumeRoleWithWebIdentity_Errors)
 
-## Sample Request
+## Sample `POST` Request
 ```
 http://minio.cluster:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=foouser&LDAPPassword=foouserpassword&Version=2011-06-15
 ```

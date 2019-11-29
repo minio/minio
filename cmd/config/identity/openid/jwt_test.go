@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,42 @@ import (
 
 	xnet "github.com/minio/minio/pkg/net"
 )
+
+func TestUpdateClaimsExpiry(t *testing.T) {
+	testCases := []struct {
+		exp             interface{}
+		dsecs           string
+		expectedFailure bool
+	}{
+		{"", "", true},
+		{"-1", "0", true},
+		{"-1", "900", true},
+		{"1574812326", "900", false},
+		{1574812326, "900", false},
+		{int64(1574812326), "900", false},
+		{int(1574812326), "900", false},
+		{uint(1574812326), "900", false},
+		{uint64(1574812326), "900", false},
+		{json.Number("1574812326"), "900", false},
+		{1574812326.000, "900", false},
+		{time.Duration(3) * time.Minute, "900", false},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run("", func(t *testing.T) {
+			claims := map[string]interface{}{}
+			claims["exp"] = testCase.exp
+			err := updateClaimsExpiry(testCase.dsecs, claims)
+			if err != nil && !testCase.expectedFailure {
+				t.Errorf("Expected success, got failure %s", err)
+			}
+			if err == nil && testCase.expectedFailure {
+				t.Error("Expected failure, got success")
+			}
+		})
+	}
+}
 
 func TestJWT(t *testing.T) {
 	const jsonkey = `{"keys":

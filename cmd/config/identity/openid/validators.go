@@ -38,8 +38,7 @@ type Validator interface {
 
 // ErrTokenExpired - error token expired
 var (
-	ErrTokenExpired    = errors.New("token expired")
-	ErrInvalidDuration = errors.New("duration higher than token expiry")
+	ErrTokenExpired = errors.New("token expired")
 )
 
 // Validators - holds list of providers indexed by provider id.

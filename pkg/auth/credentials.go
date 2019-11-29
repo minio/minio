@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -136,25 +137,37 @@ func (cred Credentials) Equal(ccred Credentials) bool {
 
 var timeSentinel = time.Unix(0, 0).UTC()
 
-func expToInt64(expI interface{}) (expAt int64, err error) {
+// ErrInvalidDuration invalid token expiry
+var ErrInvalidDuration = errors.New("invalid token expiry")
+
+// ExpToInt64 - convert input interface value to int64.
+func ExpToInt64(expI interface{}) (expAt int64, err error) {
 	switch exp := expI.(type) {
+	case string:
+		expAt, err = strconv.ParseInt(exp, 10, 64)
 	case float64:
-		expAt = int64(exp)
+		expAt, err = int64(exp), nil
 	case int64:
-		expAt = exp
+		expAt, err = exp, nil
+	case int:
+		expAt, err = int64(exp), nil
+	case uint64:
+		expAt, err = int64(exp), nil
+	case uint:
+		expAt, err = int64(exp), nil
 	case json.Number:
 		expAt, err = exp.Int64()
-		if err != nil {
-			return 0, err
-		}
 	case time.Duration:
-		return time.Now().UTC().Add(exp).Unix(), nil
+		expAt, err = time.Now().UTC().Add(exp).Unix(), nil
 	case nil:
-		return 0, nil
+		expAt, err = 0, nil
 	default:
-		return 0, errors.New("invalid expiry value")
+		expAt, err = 0, ErrInvalidDuration
 	}
-	return expAt, nil
+	if expAt < 0 {
+		return 0, ErrInvalidDuration
+	}
+	return expAt, err
 }
 
 // GetNewCredentialsWithMetadata generates and returns new credential with expiry.
@@ -185,10 +198,11 @@ func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string)
 	if err != nil {
 		return cred, err
 	}
-	cred.SecretKey = strings.Replace(string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen]), "/", "+", -1)
+	cred.SecretKey = strings.Replace(string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen]),
+		"/", "+", -1)
 	cred.Status = "on"
 
-	expiry, err := expToInt64(m["exp"])
+	expiry, err := ExpToInt64(m["exp"])
 	if err != nil {
 		return cred, err
 	}
