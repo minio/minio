@@ -42,6 +42,7 @@ type Config struct {
 	URL          *xnet.URL `json:"url,omitempty"`
 	ClaimPrefix  string    `json:"claimPrefix,omitempty"`
 	DiscoveryDoc DiscoveryDoc
+	ClientID     string
 	publicKeys   map[string]crypto.PublicKey
 	transport    *http.Transport
 	closeRespFn  func(io.ReadCloser)
@@ -116,6 +117,7 @@ func GetDefaultExpiration(dsecs string) (time.Duration, error) {
 		if err != nil {
 			return 0, auth.ErrInvalidDuration
 		}
+
 		// The duration, in seconds, of the role session.
 		// The value can range from 900 seconds (15 minutes)
 		// to 12 hours.
@@ -208,8 +210,10 @@ const (
 	JwksURL     = "jwks_url"
 	ConfigURL   = "config_url"
 	ClaimPrefix = "claim_prefix"
+	ClientID    = "client_id"
 
 	EnvIdentityOpenIDState       = "MINIO_IDENTITY_OPENID_STATE"
+	EnvIdentityOpenIDClientID    = "MINIO_IDENTITY_OPENID_CLIENT_ID"
 	EnvIdentityOpenIDJWKSURL     = "MINIO_IDENTITY_OPENID_JWKS_URL"
 	EnvIdentityOpenIDURL         = "MINIO_IDENTITY_OPENID_CONFIG_URL"
 	EnvIdentityOpenIDClaimPrefix = "MINIO_IDENTITY_OPENID_CLAIM_PREFIX"
@@ -269,6 +273,10 @@ var (
 			Value: "",
 		},
 		config.KV{
+			Key:   ClientID,
+			Value: "",
+		},
+		config.KV{
 			Key:   ClaimPrefix,
 			Value: "",
 		},
@@ -301,6 +309,7 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 	c = Config{
 		ClaimPrefix: env.Get(EnvIdentityOpenIDClaimPrefix, kvs.Get(ClaimPrefix)),
 		publicKeys:  make(map[string]crypto.PublicKey),
+		ClientID:    env.Get(EnvIdentityOpenIDClientID, kvs.Get(ClientID)),
 		transport:   transport,
 		closeRespFn: closeRespFn,
 	}

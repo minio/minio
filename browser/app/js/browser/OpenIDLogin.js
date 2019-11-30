@@ -26,6 +26,7 @@ import qs from "query-string"
 import { getRandomString } from "../utils"
 import storage from "local-storage-fallback"
 import jwtDecode from "jwt-decode"
+import { buildOpenIDAuthURL, OPEN_ID_NONCE_KEY } from './utils'
 
 export class OpenIDLogin extends React.Component {
   constructor(props) {
@@ -58,20 +59,17 @@ export class OpenIDLogin extends React.Component {
 
     if (this.state.discoveryDoc && this.state.discoveryDoc.authorization_endpoint) {
       const redirectURI = window.location.href.split("#")[0]
-      var params = new URLSearchParams()
-      params.set("response_type", "id_token")
-      params.set("scope", "openid")
-      params.set("client_id", this.state.clientID)
-      params.set("redirect_uri", redirectURI)
 
       // Store nonce in localstorage to check again after the redirect
       const nonce = getRandomString(16)
-      params.set("nonce", nonce)
-      storage.setItem("openIDKey", nonce)
+      storage.setItem(OPEN_ID_NONCE_KEY, nonce)
 
-      const authURL = `${
-        this.state.discoveryDoc.authorization_endpoint
-      }?${params.toString()}`
+      const authURL = buildOpenIDAuthURL(
+        this.state.discoveryDoc.authorization_endpoint,
+        redirectURI,
+        this.state.clientID,
+        nonce
+      )
       window.location = authURL
     }
   }
@@ -99,13 +97,13 @@ export class OpenIDLogin extends React.Component {
     if (values.id_token) {
       // Check nonce on the token to prevent replay attacks
       const tokenJSON = jwtDecode(values.id_token)
-      if (storage.getItem("openIDKey") !== tokenJSON.nonce) {
+      if (storage.getItem(OPEN_ID_NONCE_KEY) !== tokenJSON.nonce) {
         this.props.showAlert("danger", "Invalid auth token")
         return
       }
 
       web.LoginSTS({ token: values.id_token }).then(() => {
-        storage.removeItem("openIDKey")
+        storage.removeItem(OPEN_ID_NONCE_KEY)
         this.forceUpdate()
         return
       })

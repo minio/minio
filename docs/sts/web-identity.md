@@ -91,13 +91,18 @@ http://minio.cluster:9000?Action=AssumeRoleWithWebIdentity&DurationSeconds=3600&
 
 ## Testing
 ```
-$ export MINIO_ACCESS_KEY=minio
-$ export MINIO_SECRET_KEY=minio123
-$ export MINIO_IDENTITY_OPENID_CONFIG_URL=https://accounts.google.com/.well-known/openid-configuration
-$ minio server /mnt/export
+export MINIO_ACCESS_KEY=minio
+export MINIO_SECRET_KEY=minio123
+export MINIO_IDENTITY_OPENID_STATE="on"
+export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
+export MINIO_IDENTITY_OPENID_CONFIG_URL=https://accounts.google.com/.well-known/openid-configuration
+minio server /mnt/export
+```
 
-$ mc admin config get myminio identity_openid
-identity_openid config_url="https://accounts.google.com/.well-known/openid-configuration" state="on"
+or using `mc`
+```
+mc admin config get myminio identity_openid
+identity_openid config_url=https://accounts.google.com/.well-known/openid-configuration client_id=843351d4-1080-11ea-aa20-271ecba3924a
 ```
 
 Testing with an example
@@ -120,20 +125,23 @@ $ go run web-identity.go -cid 204367807228-ok7601k6gj1pgge7m09h7d79co8p35xx.apps
 ## MinIO Browser
 To support WebIdentity login on MinIO Browser
 
-1. Set openid configuration and restart MinIO
-  ```
-  mc admin config set myminio identity_openid jwks_url="<JWKS_URL>" config_url="<CONFIG_URL>"
-  
-  mc admin service restart myminio
-  ```
-  Sample URLs for Keycloak are
-  `config_url` - `http://localhost:8080/auth/realms/demo/.well-known/openid-configuration`,
-  `jwks_url` - `http://localhost:8080/auth/realms/demo/protocol/openid-connect/certs`
+- Set openid configuration and restart MinIO
 
-  JWT token returned by the Identity Provider should include a custom claim for the policy, this is required to create a STS user in MinIO. The name of the custom claim could be either `policy` or `<NAMESPACE_PREFIX>policy`.
-  If there is no namespace then `policy_claim_prefix` can be ingored. For example if the custom claim name is `https://min.io/policy` then, `policy_claim_prefix` should be set as `https://min.io/`
+```
+mc admin config set myminio identity_openid config_url="<CONFIG_URL>" client_id="<client_identifier>"
+```
 
-2. Open MinIO Browser and click `Log in with OpenID`
-3. Enter the `Client ID` obtained from Identity Provider and press ENTER
-4. The user will be redirected to the Identity Provider login page
-5. Upon successful login on Identity Provider page the user will be automatically logged into MinIO Browser
+```
+mc admin service restart myminio
+```
+
+Sample URLs for Keycloak are
+
+`config_url` - `http://localhost:8080/auth/realms/demo/.well-known/openid-configuration`
+
+JWT token returned by the Identity Provider should include a custom claim for the policy, this is required to create a STS user in MinIO. The name of the custom claim could be either `policy` or `<NAMESPACE_PREFIX>policy`.  If there is no namespace then `claim_prefix` can be ingored. For example if the custom claim name is `https://min.io/policy` then, `claim_prefix` should be set as `https://min.io/`.
+
+- Open MinIO Browser and click `Log in with OpenID`
+- Enter the `Client ID` obtained from Identity Provider and press ENTER, if not you can set a `client_id` on server to avoid this step.
+- The user will be redirected to the Identity Provider login page
+- Upon successful login on Identity Provider page the user will be automatically logged into MinIO Browser
