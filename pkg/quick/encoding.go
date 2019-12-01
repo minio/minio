@@ -143,7 +143,7 @@ func saveFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error
 	if err == context.DeadlineExceeded {
 		return fmt.Errorf("etcd setup is unreachable, please check your endpoints %s", clnt.Endpoints())
 	} else if err != nil {
-		return fmt.Errorf("unexpected error %s returned by etcd setup, please check your endpoints %s", err, clnt.Endpoints())
+		return fmt.Errorf("unexpected error %w returned by etcd setup, please check your endpoints %s", err, clnt.Endpoints())
 	}
 	return nil
 }
@@ -156,7 +156,7 @@ func loadFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error
 		if err == context.DeadlineExceeded {
 			return fmt.Errorf("etcd setup is unreachable, please check your endpoints %s", clnt.Endpoints())
 		}
-		return fmt.Errorf("unexpected error %s returned by etcd setup, please check your endpoints %s", err, clnt.Endpoints())
+		return fmt.Errorf("unexpected error %w returned by etcd setup, please check your endpoints %s", err, clnt.Endpoints())
 	}
 	if resp.Count == 0 {
 		return os.ErrNotExist

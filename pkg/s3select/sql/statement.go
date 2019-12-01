@@ -84,7 +84,7 @@ func ParseSelectStatement(s string) (stmt SelectStatement, err error) {
 	if selectAST.Where != nil {
 		whereQProp := selectAST.Where.analyze(&selectAST)
 		if whereQProp.err != nil {
-			err = errQueryAnalysisFailure(fmt.Errorf("Where clause error: %v", whereQProp.err))
+			err = errQueryAnalysisFailure(fmt.Errorf("Where clause error: %w", whereQProp.err))
 			return
 		}
 
