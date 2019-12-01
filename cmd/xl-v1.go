@@ -200,3 +200,9 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 func (xl xlObjects) StorageInfo(ctx context.Context) StorageInfo {
 	return getStorageInfo(xl.getDisks())
 }
+
+// GetMetrics - no op
+func (xl xlObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
+	logger.LogIf(ctx, NotImplemented{})
+	return &Metrics{}, NotImplemented{}
+}

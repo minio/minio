@@ -37,7 +37,7 @@ func filterMatchingPrefix(entries []string, prefixEntry string) []string {
 		if start == end {
 			break
 		}
-		if hasPrefix(entries[start], prefixEntry) {
+		if HasPrefix(entries[start], prefixEntry) {
 			break
 		}
 		start++
@@ -46,7 +46,7 @@ func filterMatchingPrefix(entries []string, prefixEntry string) []string {
 		if start == end {
 			break
 		}
-		if hasPrefix(entries[end-1], prefixEntry) {
+		if HasPrefix(entries[end-1], prefixEntry) {
 			break
 		}
 		end--
@@ -95,7 +95,7 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 
 	for i, entry := range entries {
 		pentry := pathJoin(prefixDir, entry)
-		isDir := hasSuffix(pentry, SlashSeparator)
+		isDir := HasSuffix(pentry, SlashSeparator)
 
 		if i == 0 && markerDir == entry {
 			if !recursive {

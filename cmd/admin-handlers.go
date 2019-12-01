@@ -1028,7 +1028,7 @@ func mustTrace(entry interface{}, trcAll, errOnly bool) bool {
 	if !ok {
 		return false
 	}
-	trace := trcAll || !hasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator)
+	trace := trcAll || !HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator)
 	if errOnly {
 		return trace && trcInfo.RespInfo.StatusCode >= http.StatusBadRequest
 	}

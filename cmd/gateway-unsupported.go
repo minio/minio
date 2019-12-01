@@ -167,6 +167,12 @@ func (a GatewayUnsupported) CopyObject(ctx context.Context, srcBucket string, sr
 	return objInfo, NotImplemented{}
 }
 
+// GetMetrics - no op
+func (a GatewayUnsupported) GetMetrics(ctx context.Context) (*Metrics, error) {
+	logger.LogIf(ctx, NotImplemented{})
+	return &Metrics{}, NotImplemented{}
+}
+
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
 func (a GatewayUnsupported) IsNotificationSupported() bool {
 	return false

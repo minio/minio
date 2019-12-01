@@ -878,7 +878,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			}
 
 			for k, v := range srcInfo.UserDefined {
-				if hasPrefix(k, ReservedMetadataPrefix) {
+				if HasPrefix(k, ReservedMetadataPrefix) {
 					encMetadata[k] = v
 				}
 			}
@@ -1254,7 +1254,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	var objectEncryptionKey []byte
 	if objectAPI.IsEncryptionSupported() {
-		if crypto.IsRequested(r.Header) && !hasSuffix(object, SlashSeparator) { // handle SSE requests
+		if crypto.IsRequested(r.Header) && !HasSuffix(object, SlashSeparator) { // handle SSE requests
 			if crypto.SSECopy.IsRequested(r.Header) {
 				writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL, guessIsBrowserReq(r))
 				return

@@ -34,7 +34,7 @@ func walk(ctx context.Context, path string, usageFn usageFunc) error {
 		return err
 	}
 
-	if !hasSuffix(path, SlashSeparator) {
+	if !HasSuffix(path, SlashSeparator) {
 		return nil
 	}
 

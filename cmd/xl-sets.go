@@ -28,6 +28,7 @@ import (
 
 	"github.com/minio/minio/cmd/config/storageclass"
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/lifecycle"
@@ -1039,7 +1040,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 	// Marker is set validate pre-condition.
 	if marker != "" {
 		// Marker not common with prefix is not implemented. Send an empty response
-		if !hasPrefix(marker, prefix) {
+		if !HasPrefix(marker, prefix) {
 			return loi, nil
 		}
 	}
@@ -1092,7 +1093,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 
 	for _, entry := range entries.Files {
 		var objInfo ObjectInfo
-		if hasSuffix(entry.Name, SlashSeparator) {
+		if HasSuffix(entry.Name, SlashSeparator) {
 			if !recursive {
 				loi.Prefixes = append(loi.Prefixes, entry.Name)
 				continue
@@ -1654,4 +1655,10 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObj
 
 func (s *xlSets) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
 	return s.listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys, true)
+}
+
+// GetMetrics - no op
+func (s *xlSets) GetMetrics(ctx context.Context) (*Metrics, error) {
+	logger.LogIf(ctx, NotImplemented{})
+	return &Metrics{}, NotImplemented{}
 }

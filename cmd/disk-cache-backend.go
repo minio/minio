@@ -334,14 +334,14 @@ func (c *diskCache) updateMetadataIfChanged(ctx context.Context, bucket, object 
 	bkMeta := make(map[string]string)
 	cacheMeta := make(map[string]string)
 	for k, v := range bkObjectInfo.UserDefined {
-		if hasPrefix(k, ReservedMetadataPrefix) {
+		if HasPrefix(k, ReservedMetadataPrefix) {
 			// Do not need to send any internal metadata
 			continue
 		}
 		bkMeta[http.CanonicalHeaderKey(k)] = v
 	}
 	for k, v := range cacheObjInfo.UserDefined {
-		if hasPrefix(k, ReservedMetadataPrefix) {
+		if HasPrefix(k, ReservedMetadataPrefix) {
 			// Do not need to send any internal metadata
 			continue
 		}
@@ -602,7 +602,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 
 	var nsUnlocker = func() {}
 	// For a directory, we need to send an reader that returns no bytes.
-	if hasSuffix(object, SlashSeparator) {
+	if HasSuffix(object, SlashSeparator) {
 		// The lock taken above is released when
 		// objReader.Close() is called by the caller.
 		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts.CheckCopyPrecondFn, nsUnlocker)

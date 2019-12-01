@@ -145,7 +145,7 @@ func IsValidObjectName(object string) bool {
 	if len(object) == 0 {
 		return false
 	}
-	if hasSuffix(object, SlashSeparator) {
+	if HasSuffix(object, SlashSeparator) {
 		return false
 	}
 	return IsValidObjectPrefix(object)
@@ -177,7 +177,7 @@ func checkObjectNameForLengthAndSlash(bucket, object string) error {
 		}
 	}
 	// Check for slash as prefix in object name
-	if hasPrefix(object, SlashSeparator) {
+	if HasPrefix(object, SlashSeparator) {
 		return ObjectNamePrefixAsSlash{
 			Bucket: bucket,
 			Object: object,
@@ -198,7 +198,7 @@ func retainSlash(s string) string {
 func pathJoin(elem ...string) string {
 	trailingSlash := ""
 	if len(elem) > 0 {
-		if hasSuffix(elem[len(elem)-1], SlashSeparator) {
+		if HasSuffix(elem[len(elem)-1], SlashSeparator) {
 			trailingSlash = SlashSeparator
 		}
 	}
@@ -271,20 +271,20 @@ func extractETag(metadata map[string]string) string {
 	return etag
 }
 
-// Prefix matcher string matches prefix in a platform specific way.
+// HasPrefix - Prefix matcher string matches prefix in a platform specific way.
 // For example on windows since its case insensitive we are supposed
 // to do case insensitive checks.
-func hasPrefix(s string, prefix string) bool {
+func HasPrefix(s string, prefix string) bool {
 	if runtime.GOOS == globalWindowsOSName {
 		return strings.HasPrefix(strings.ToLower(s), strings.ToLower(prefix))
 	}
 	return strings.HasPrefix(s, prefix)
 }
 
-// Suffix matcher string matches suffix in a platform specific way.
+// HasSuffix - Suffix matcher string matches suffix in a platform specific way.
 // For example on windows since its case insensitive we are supposed
 // to do case insensitive checks.
-func hasSuffix(s string, suffix string) bool {
+func HasSuffix(s string, suffix string) bool {
 	if runtime.GOOS == globalWindowsOSName {
 		return strings.HasSuffix(strings.ToLower(s), strings.ToLower(suffix))
 	}

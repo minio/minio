@@ -514,7 +514,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, toObjectErr(err, bucket, object)
 	}
 	// For a directory, we need to send an reader that returns no bytes.
-	if hasSuffix(object, SlashSeparator) {
+	if HasSuffix(object, SlashSeparator) {
 		// The lock taken above is released when
 		// objReader.Close() is called by the caller.
 		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts.CheckCopyPrecondFn, nsUnlocker)
@@ -605,7 +605,7 @@ func (fs *FSObjects) getObject(ctx context.Context, bucket, object string, offse
 	}
 
 	// If its a directory request, we return an empty body.
-	if hasSuffix(object, SlashSeparator) {
+	if HasSuffix(object, SlashSeparator) {
 		_, err = writer.Write([]byte(""))
 		logger.LogIf(ctx, err)
 		return toObjectErr(err, bucket, object)
@@ -699,7 +699,7 @@ func (fs *FSObjects) defaultFsJSON(object string) fsMetaV1 {
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
 func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (oi ObjectInfo, e error) {
 	fsMeta := fsMetaV1{}
-	if hasSuffix(object, SlashSeparator) {
+	if HasSuffix(object, SlashSeparator) {
 		fi, err := fsStatDir(ctx, pathJoin(fs.fsPath, bucket, object))
 		if err != nil {
 			return oi, err
@@ -1165,6 +1165,12 @@ func (fs *FSObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) 
 func (fs *FSObjects) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return ListObjectsInfo{}, NotImplemented{}
+}
+
+// GetMetrics - no op
+func (fs *FSObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
+	logger.LogIf(ctx, NotImplemented{})
+	return &Metrics{}, NotImplemented{}
 }
 
 // SetBucketPolicy sets policy on bucket

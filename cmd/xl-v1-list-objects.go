@@ -87,7 +87,7 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 		}
 		entry := walkResult.entry
 		var objInfo ObjectInfo
-		if hasSuffix(entry, SlashSeparator) {
+		if HasSuffix(entry, SlashSeparator) {
 			// Object name needs to be full path.
 			objInfo.Bucket = bucket
 			objInfo.Name = entry
@@ -156,7 +156,7 @@ func (xl xlObjects) ListObjects(ctx context.Context, bucket, prefix, marker, del
 	// Marker is set validate pre-condition.
 	if marker != "" {
 		// Marker not common with prefix is not implemented.Send an empty response
-		if !hasPrefix(marker, prefix) {
+		if !HasPrefix(marker, prefix) {
 			return ListObjectsInfo{}, e
 		}
 	}
