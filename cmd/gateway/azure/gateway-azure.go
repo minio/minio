@@ -60,6 +60,7 @@ const (
 	azureUploadMaxMemoryUsage = 10 * humanize.MiByte
 	azureUploadConcurrency    = azureUploadMaxMemoryUsage / azureUploadChunkSize
 
+	azureDownloadRetryAttempts = 5
 	azureBlockSize             = 100 * humanize.MiByte
 	azureS3MinPartSize         = 5 * humanize.MiByte
 	metadataObjectNameTemplate = minio.GatewayMinioSysTmp + "multipart/v1/%s.%x/azure.json"
@@ -745,7 +746,7 @@ func (a *azureObjects) GetObject(ctx context.Context, bucket, object string, sta
 		return azureToObjectError(err, bucket, object)
 	}
 
-	rc := blob.Body(azblob.RetryReaderOptions{})
+	rc := blob.Body(azblob.RetryReaderOptions{MaxRetryRequests: azureDownloadRetryAttempts})
 
 	_, err = io.Copy(writer, rc)
 	rc.Close()
@@ -1071,7 +1072,7 @@ func (a *azureObjects) ListObjectParts(ctx context.Context, bucket, object, uplo
 		if err != nil {
 			return result, azureToObjectError(fmt.Errorf("Unexpected error"), bucket, object)
 		}
-		metadataReader := blob.Body(azblob.RetryReaderOptions{})
+		metadataReader := blob.Body(azblob.RetryReaderOptions{MaxRetryRequests: azureDownloadRetryAttempts})
 		if err = json.NewDecoder(metadataReader).Decode(&metadata); err != nil {
 			logger.LogIf(ctx, err)
 			return result, azureToObjectError(err, bucket, object)
@@ -1160,7 +1161,7 @@ func (a *azureObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 	}
 
 	var metadata azureMultipartMetadata
-	metadataReader := blob.Body(azblob.RetryReaderOptions{})
+	metadataReader := blob.Body(azblob.RetryReaderOptions{MaxRetryRequests: azureDownloadRetryAttempts})
 	if err = json.NewDecoder(metadataReader).Decode(&metadata); err != nil {
 		logger.LogIf(ctx, err)
 		return objInfo, azureToObjectError(err, bucket, metadataObject)
@@ -1178,7 +1179,7 @@ func (a *azureObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 			return objInfo, azureToObjectError(err, bucket, partMetadataObject)
 		}
 
-		partMetadataReader := pblob.Body(azblob.RetryReaderOptions{})
+		partMetadataReader := pblob.Body(azblob.RetryReaderOptions{MaxRetryRequests: azureDownloadRetryAttempts})
 		if err = json.NewDecoder(partMetadataReader).Decode(&partMetadata); err != nil {
 			logger.LogIf(ctx, err)
 			return objInfo, azureToObjectError(err, bucket, partMetadataObject)
