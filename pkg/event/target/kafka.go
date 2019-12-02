@@ -235,6 +235,10 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 
 	tlsConfig, err := saramatls.NewConfig(args.TLS.ClientTLSCert, args.TLS.ClientTLSKey)
 
+	if err != nil {
+		return nil, err
+	}
+
 	config.Net.TLS.Enable                    = args.TLS.Enable
 	config.Net.TLS.Config                    = tlsConfig
 	config.Net.TLS.Config.InsecureSkipVerify = args.TLS.SkipVerify
