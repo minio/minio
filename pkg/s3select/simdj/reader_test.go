@@ -101,7 +101,7 @@ func TestLoadTape(t *testing.T) {
 		parser:
 			for {
 				var next simdjson.Iter
-				typ, err := i.NextIter(&next)
+				typ, err := i.AdvanceIter(&next)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -110,11 +110,11 @@ func TestLoadTape(t *testing.T) {
 					close(dst)
 					break parser
 				case simdjson.TypeRoot:
-					obj, err := next.Root()
+					obj, err := next.Root(nil)
 					if err != nil {
 						t.Fatal(err)
 					}
-					if typ := obj.Next(); typ != simdjson.TypeObject {
+					if typ := obj.Advance(); typ != simdjson.TypeObject {
 						t.Fatal("Unexpected type:", typ.String())
 					}
 

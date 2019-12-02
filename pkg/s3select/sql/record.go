@@ -116,7 +116,7 @@ func IterToValue(iter simdjson.Iter) (interface{}, error) {
 		var dst []interface{}
 		var next simdjson.Iter
 		for {
-			typ, err := iter.NextIter(&next)
+			typ, err := iter.AdvanceIter(&next)
 			if err != nil {
 				return nil, err
 			}

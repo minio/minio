@@ -91,7 +91,7 @@ func (r *Reader) startReader() {
 		i := pj.Iter()
 		for {
 			var next simdjson.Iter
-			typ, err := i.NextIter(&next)
+			typ, err := i.AdvanceIter(&next)
 			if err != nil {
 				r.err = &err
 				return
@@ -100,12 +100,12 @@ func (r *Reader) startReader() {
 			case simdjson.TypeNone:
 				return
 			case simdjson.TypeRoot:
-				obj, err := next.Root()
+				obj, err := next.Root(nil)
 				if err != nil {
 					r.err = &err
 					return
 				}
-				if typ := obj.Next(); typ != simdjson.TypeObject {
+				if typ := obj.Advance(); typ != simdjson.TypeObject {
 					err = fmt.Errorf("unexpected json type below root :%v", typ)
 					r.err = &err
 					return

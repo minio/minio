@@ -158,6 +158,8 @@ github.com/fwessels/simdjson-go v0.0.0-20191011204349-5f59e9eb0619 h1:fm5n8sdX3y
 github.com/fwessels/simdjson-go v0.0.0-20191011204349-5f59e9eb0619/go.mod h1:ckxPl5WkPyb6tA8tRjpVihO9LdBp8CF1No8dIQeBqYo=
 github.com/fwessels/simdjson-go v0.0.0-20191016155256-b90b3c2ae1c9 h1:HaCUfUdBQW/f1ClzEZps03hRC+lS50S61D3reEz2/34=
 github.com/fwessels/simdjson-go v0.0.0-20191016155256-b90b3c2ae1c9/go.mod h1:ckxPl5WkPyb6tA8tRjpVihO9LdBp8CF1No8dIQeBqYo=
+github.com/fwessels/simdjson-go v0.0.0-20191127205001-62ebf2d455a9 h1:wb2C3zhTiZCxMqdckFCOBkAQSWsvhH95OKI8pwgPqCo=
+github.com/fwessels/simdjson-go v0.0.0-20191127205001-62ebf2d455a9/go.mod h1:ckxPl5WkPyb6tA8tRjpVihO9LdBp8CF1No8dIQeBqYo=
 github.com/gammazero/deque v0.0.0-20190130191400-2afb3858e9c7/go.mod h1:GeIq9qoE43YdGnDXURnmKTnGg15pQz4mYkXSTChbneI=
 github.com/gammazero/workerpool v0.0.0-20181230203049-86a96b5d5d92/go.mod h1:w9RqFVO2BM3xwWEcAB8Fwp0OviTBBEiRmSBDfbXnd3w=
 github.com/garyburd/redigo v1.6.0/go.mod h1:NR3MbYisc3/PwhQ00EMzDiPmrwpPxAn5GI05/YaO1SY=
