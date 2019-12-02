@@ -51,11 +51,7 @@ func (adm *AdminClient) DelConfigKV(k string) (err error) {
 
 // SetConfigKV - set key value config to server.
 func (adm *AdminClient) SetConfigKV(kv string) (err error) {
-	targets, err := ParseSubSysTarget([]byte(kv))
-	if err != nil {
-		return err
-	}
-	econfigBytes, err := EncryptData(adm.secretAccessKey, []byte(targets.String()))
+	econfigBytes, err := EncryptData(adm.secretAccessKey, []byte(kv))
 	if err != nil {
 		return err
 	}

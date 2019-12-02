@@ -22,14 +22,14 @@ import "github.com/minio/minio/cmd/config"
 var (
 	Help = config.HelpKVS{
 		config.HelpKV{
-			Key:         ClassRRS,
-			Description: `Set reduced redundancy storage class parity ratio. eg: "EC:2"`,
+			Key:         ClassStandard,
+			Description: `Set standard storage class parity ratio. eg: "EC:4"`,
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
-			Key:         ClassStandard,
-			Description: `Set standard storage class parity ratio. eg: "EC:4"`,
+			Key:         ClassRRS,
+			Description: `Set reduced redundancy storage class parity ratio. eg: "EC:2"`,
 			Optional:    true,
 			Type:        "string",
 		},
