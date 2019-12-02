@@ -32,23 +32,22 @@ import (
 
 	sarama "github.com/Shopify/sarama"
 	saramatls "github.com/Shopify/sarama/tools/tls"
-
 )
 
 // MQTT input constants
 const (
-	KafkaBrokers          = "brokers"
-	KafkaTopic            = "topic"
-	KafkaQueueDir         = "queue_dir"
-	KafkaQueueLimit       = "queue_limit"
-	KafkaTLS              = "tls"
-	KafkaTLSSkipVerify    = "tls_skip_verify"
-	KafkaTLSClientAuth    = "tls_client_auth"
-	KafkaSASL             = "sasl"
-	KafkaSASLUsername     = "sasl_username"
-	KafkaSASLPassword     = "sasl_password"
-	KafkaClientTLSCert    = "client_tls_cert"
-	KafkaClientTLSKey     = "client_tls_key"
+	KafkaBrokers       = "brokers"
+	KafkaTopic         = "topic"
+	KafkaQueueDir      = "queue_dir"
+	KafkaQueueLimit    = "queue_limit"
+	KafkaTLS           = "tls"
+	KafkaTLSSkipVerify = "tls_skip_verify"
+	KafkaTLSClientAuth = "tls_client_auth"
+	KafkaSASL          = "sasl"
+	KafkaSASLUsername  = "sasl_username"
+	KafkaSASLPassword  = "sasl_password"
+	KafkaClientTLSCert = "client_tls_cert"
+	KafkaClientTLSKey  = "client_tls_key"
 
 	EnvKafkaState         = "MINIO_NOTIFY_KAFKA_STATE"
 	EnvKafkaBrokers       = "MINIO_NOTIFY_KAFKA_BROKERS"
@@ -77,8 +76,8 @@ type KafkaArgs struct {
 		RootCAs       *x509.CertPool     `json:"-"`
 		SkipVerify    bool               `json:"skipVerify"`
 		ClientAuth    tls.ClientAuthType `json:"clientAuth"`
-		ClientTLSCert string             `json:"clientTLSCert"` 
-		ClientTLSKey  string             `json:"clientTLSKey"` 
+		ClientTLSCert string             `json:"clientTLSCert"`
+		ClientTLSKey  string             `json:"clientTLSKey"`
 	} `json:"tls"`
 	SASL struct {
 		Enable   bool   `json:"enable"`
@@ -239,11 +238,11 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 		return nil, err
 	}
 
-	config.Net.TLS.Enable                    = args.TLS.Enable
-	config.Net.TLS.Config                    = tlsConfig
+	config.Net.TLS.Enable = args.TLS.Enable
+	config.Net.TLS.Config = tlsConfig
 	config.Net.TLS.Config.InsecureSkipVerify = args.TLS.SkipVerify
-	config.Net.TLS.Config.ClientAuth         = args.TLS.ClientAuth
-	config.Net.TLS.Config.RootCAs            = args.TLS.RootCAs
+	config.Net.TLS.Config.ClientAuth = args.TLS.ClientAuth
+	config.Net.TLS.Config.RootCAs = args.TLS.RootCAs
 
 	config.Producer.RequiredAcks = sarama.WaitForAll
 	config.Producer.Retry.Max = 10
