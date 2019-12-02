@@ -1,0 +1,183 @@
+/*
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package simdj
+
+import (
+	"fmt"
+	"io"
+	"sync"
+
+	"github.com/fwessels/simdjson-go"
+	"github.com/minio/minio/pkg/s3select/json"
+	"github.com/minio/minio/pkg/s3select/sql"
+)
+
+// Reader - JSON record reader for S3Select.
+type Reader struct {
+	args    *json.ReaderArgs
+	input   chan simdjson.ParsedJson
+	decoded chan simdjson.Elements
+
+	// err will only be returned after decoded has been closed.
+	err        *error
+	readCloser io.ReadCloser
+
+	exitReader chan struct{}
+	readerWg   sync.WaitGroup
+}
+
+// Read - reads single record.
+func (r *Reader) Read(dst sql.Record) (sql.Record, error) {
+	v, ok := <-r.decoded
+	if !ok {
+		if r.err != nil && *r.err != nil {
+			return nil, errJSONParsingError(*r.err)
+		}
+		return nil, io.EOF
+	}
+	dstRec, ok := dst.(*Record)
+	if !ok {
+		dstRec = &Record{}
+	}
+	dstRec.rootFields = v
+	return dstRec, nil
+}
+
+// Close - closes underlying reader.
+func (r *Reader) Close() error {
+	// Close the input.
+	// Potentially racy if the stream decoder is still reading.
+	if r.readCloser != nil {
+		r.readCloser.Close()
+	}
+	if r.exitReader != nil {
+		close(r.exitReader)
+		r.readerWg.Wait()
+		r.exitReader = nil
+		r.input = nil
+	}
+	return nil
+}
+
+// startReader will start a reader that accepts input from r.input.
+// Input should be root -> object input. Each root indicates a record.
+// If r.input is closed, it is assumed that no more input will come.
+// When this function returns r.readerWg will be decremented and r.decoded will be closed.
+// On errors, r.err will be set. This should only be accessed after r.decoded has been closed.
+func (r *Reader) startReader() {
+	defer r.readerWg.Done()
+	defer close(r.decoded)
+	for {
+		var pj simdjson.ParsedJson
+		select {
+		case pj = <-r.input:
+		case <-r.exitReader:
+			return
+		}
+		i := pj.Iter()
+		for {
+			var next simdjson.Iter
+			typ, err := i.NextIter(&next)
+			if err != nil {
+				r.err = &err
+				return
+			}
+			switch typ {
+			case simdjson.TypeNone:
+				return
+			case simdjson.TypeRoot:
+				obj, err := next.Root()
+				if err != nil {
+					r.err = &err
+					return
+				}
+				if typ := obj.Next(); typ != simdjson.TypeObject {
+					err = fmt.Errorf("unexpected json type below root :%v", typ)
+					r.err = &err
+					return
+				}
+
+				o, err := obj.Object(nil)
+				if err != nil {
+					r.err = &err
+					return
+				}
+				elems, err := o.Parse(nil)
+				if err != nil {
+					r.err = &err
+					return
+				}
+				select {
+				case <-r.exitReader:
+					return
+				case r.decoded <- *elems:
+				}
+			default:
+				err = fmt.Errorf("unexpected root json type:%v", typ)
+				r.err = &err
+				return
+			}
+		}
+	}
+}
+
+// NewReader - creates new JSON reader using readCloser.
+func NewReader(readCloser io.ReadCloser, args *json.ReaderArgs) *Reader {
+	// TODO: Add simdjson input when available
+	return &Reader{
+		args:       args,
+		readCloser: readCloser,
+	}
+}
+
+// NewElementReader - creates new JSON reader using readCloser.
+func NewElementReader(ch chan simdjson.Elements, err *error, args *json.ReaderArgs) *Reader {
+	return &Reader{
+		args:       args,
+		decoded:    ch,
+		err:        err,
+		readCloser: nil,
+	}
+}
+
+// NewTapeReader will queue the parsed json for processing.
+func NewTapeReader(pj simdjson.ParsedJson, args *json.ReaderArgs) *Reader {
+	r := Reader{
+		args:       args,
+		decoded:    make(chan simdjson.Elements, 1000),
+		input:      make(chan simdjson.ParsedJson, 1),
+		exitReader: make(chan struct{}),
+	}
+	r.input <- pj
+	close(r.input)
+	r.readerWg.Add(1)
+	go r.startReader()
+	return &r
+}
+
+// NewTapeReaderChan will start a reader that will read input from the provided channel.
+func NewTapeReaderChan(pj chan simdjson.ParsedJson, args *json.ReaderArgs) *Reader {
+	r := Reader{
+		args:       args,
+		decoded:    make(chan simdjson.Elements, 1000),
+		input:      pj,
+		exitReader: make(chan struct{}),
+	}
+	r.readerWg.Add(1)
+	go r.startReader()
+	return &r
+}

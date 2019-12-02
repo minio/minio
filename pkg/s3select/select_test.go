@@ -18,6 +18,7 @@ package s3select
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -27,6 +28,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fwessels/simdjson-go"
 	"github.com/minio/minio-go/v6"
 )
 
@@ -56,6 +58,10 @@ func TestJSONQueries(t *testing.T) {
 	{"id": 1,"title": "Second Record","desc": "another text","synonyms": ["some", "synonym", "value"]}
 	{"id": 2,"title": "Second Record","desc": "another text","numbers": [2, 3.0, 4]}
 	{"id": 3,"title": "Second Record","desc": "another text","nested": [[2, 3.0, 4], [7, 8.5, 9]]}`
+
+	inputTape, _ := base64.StdEncoding.DecodeString(`EQAAAAAAAHIQAAAAAAAAewAAAAAAAAAiAAAAAAAAAGwAAAAAAAAAAAcAAAAAAAAiEQAAAAAAACIhAAAAAAAAIioAAAAAAAAiOAAAAAAAACIPAAAAAAAAW0UAAAAAAAAiTQAAAAAAACJVAAAAAAAAIgoAAAAAAABdAQAAAAAAAH0AAAAAAAAAciIAAAAAAAByIQAAAAAAAHtiAAAAAAAAIgAAAAAAAABsAQAAAAAAAABpAAAAAAAAInMAAAAAAAAihQAAAAAAACKOAAAAAAAAIp8AAAAAAAAiIAAAAAAAAFusAAAAAAAAIrUAAAAAAAAiwQAAAAAAACIbAAAAAAAAXRIAAAAAAAB9EQAAAAAAAHI2AAAAAAAAcjUAAAAAAAB7ywAAAAAAACIAAAAAAAAAbAIAAAAAAAAA0gAAAAAAACLcAAAAAAAAIu4AAAAAAAAi9wAAAAAAACIIAQAAAAAAIjQAAAAAAABbAAAAAAAAAGwCAAAAAAAAAAAAAAAAAABkAAAAAAAACEAAAAAAAAAAbAQAAAAAAAAALAAAAAAAAF0jAAAAAAAAfSIAAAAAAAByVAAAAAAAAHJTAAAAAAAAexQBAAAAAAAiAAAAAAAAAGwDAAAAAAAAABsBAAAAAAAiJQEAAAAAACI3AQAAAAAAIkABAAAAAAAiUQEAAAAAACJSAAAAAAAAW0kAAAAAAABbAAAAAAAAAGwCAAAAAAAAAAAAAAAAAABkAAAAAAAACEAAAAAAAAAAbAQAAAAAAAAAQQAAAAAAAF1RAAAAAAAAWwAAAAAAAABsBwAAAAAAAAAAAAAAAAAAZAAAAAAAACFAAAAAAAAAAGwJAAAAAAAAAEkAAAAAAABdQAAAAAAAAF03AAAAAAAAfTYAAAAAAABy`)
+	inputSB, _ := base64.StdEncoding.DecodeString(`AgAAAGlkAAUAAAB0aXRsZQALAAAAVGVzdCBSZWNvcmQABAAAAGRlc2MACQAAAFNvbWUgdGV4dAAIAAAAc3lub255bXMAAwAAAGZvbwADAAAAYmFyAAgAAAB3aGF0ZXZlcgACAAAAaWQABQAAAHRpdGxlAA0AAABTZWNvbmQgUmVjb3JkAAQAAABkZXNjAAwAAABhbm90aGVyIHRleHQACAAAAHN5bm9ueW1zAAQAAABzb21lAAcAAABzeW5vbnltAAUAAAB2YWx1ZQACAAAAaWQABQAAAHRpdGxlAA0AAABTZWNvbmQgUmVjb3JkAAQAAABkZXNjAAwAAABhbm90aGVyIHRleHQABwAAAG51bWJlcnMAAgAAAGlkAAUAAAB0aXRsZQANAAAAU2Vjb25kIFJlY29yZAAEAAAAZGVzYwAMAAAAYW5vdGhlciB0ZXh0AAYAAABuZXN0ZWQA`)
+
 	var testTable = []struct {
 		name       string
 		query      string
@@ -209,6 +215,11 @@ func TestJSONQueries(t *testing.T) {
 			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
 		},
 		{
+			name:       "index-wildcard-in",
+			query:      `SELECT * from s3object s WHERE title = 'Test Record'`,
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}`,
+		},
+		{
 			name: "select-output-field-as-csv",
 			requestXML: []byte(`<?xml version="1.0" encoding="UTF-8"?>
 <SelectObjectContentRequest>
@@ -245,6 +256,135 @@ func TestJSONQueries(t *testing.T) {
     <OutputSerialization>
         <JSON>
         </JSON>
+    </OutputSerialization>
+    <RequestProgress>
+        <Enabled>FALSE</Enabled>
+    </RequestProgress>
+</SelectObjectContentRequest>`
+
+	testTape, err := simdjson.LoadTape(bytes.NewBuffer(inputTape), bytes.NewBuffer(inputSB))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, testCase := range testTable {
+		t.Run(testCase.name, func(t *testing.T) {
+			testReq := testCase.requestXML
+			if len(testReq) == 0 {
+				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
+			}
+			s3Select, err := NewS3Select(bytes.NewReader(testReq))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
+				return ioutil.NopCloser(bytes.NewBufferString(input)), nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			w := &testResponseWriter{}
+			s3Select.Evaluate(w)
+			s3Select.Close()
+			resp := http.Response{
+				StatusCode:    http.StatusOK,
+				Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
+				ContentLength: int64(len(w.response)),
+			}
+			res, err := minio.NewSelectResults(&resp, "testbucket")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			got, err := ioutil.ReadAll(res)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			gotS := strings.TrimSpace(string(got))
+			if !reflect.DeepEqual(gotS, testCase.wantResult) {
+				t.Errorf("received response does not match with expected reply. Query: %s\ngot: %s\nwant:%s", testCase.query, gotS, testCase.wantResult)
+			}
+		})
+		t.Run("tape-"+testCase.name, func(t *testing.T) {
+			testReq := testCase.requestXML
+			if len(testReq) == 0 {
+				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
+			}
+			s3Select, err := NewS3Select(bytes.NewReader(testReq))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err = s3Select.OpenTape(*testTape, nil); err != nil {
+				t.Fatal(err)
+			}
+
+			w := &testResponseWriter{}
+			s3Select.Evaluate(w)
+			err = s3Select.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			resp := http.Response{
+				StatusCode:    http.StatusOK,
+				Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
+				ContentLength: int64(len(w.response)),
+			}
+			res, err := minio.NewSelectResults(&resp, "testbucket")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			got, err := ioutil.ReadAll(res)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			gotS := strings.TrimSpace(string(got))
+			if !reflect.DeepEqual(gotS, testCase.wantResult) {
+				t.Errorf("received response does not match with expected reply. Query: %s\ngot: %s\nwant:%s", testCase.query, gotS, testCase.wantResult)
+			}
+		})
+	}
+}
+
+func TestCSVQueries(t *testing.T) {
+	input := `index,ID,CaseNumber,Date,Day,Month,Year,Block,IUCR,PrimaryType,Description,LocationDescription,Arrest,Domestic,Beat,District,Ward,CommunityArea,FBI Code,XCoordinate,YCoordinate,UpdatedOn,Latitude,Longitude,Location
+2700763,7732229,,2010-05-26 00:00:00,26,May,2010,113XX S HALSTED ST,1150,,CREDIT CARD FRAUD,,False,False,2233,22.0,34.0,,11,,,,41.688043288,-87.6422444,"(41.688043288, -87.6422444)"`
+
+	var testTable = []struct {
+		name       string
+		query      string
+		requestXML []byte
+		wantResult string
+	}{
+		{
+			name:       "select-in-text-simple",
+			query:      `SELECT index FROM s3Object s WHERE "Month"='May'`,
+			wantResult: `2700763`,
+		},
+	}
+
+	defRequest := `<?xml version="1.0" encoding="UTF-8"?>
+<SelectObjectContentRequest>
+    <Expression>%s</Expression>
+    <ExpressionType>SQL</ExpressionType>
+    <InputSerialization>
+        <CompressionType>NONE</CompressionType>
+        <CSV>
+        	<FieldDelimiter>,</FieldDelimiter>
+        	<FileHeaderInfo>USE</FileHeaderInfo>
+        	<QuoteCharacter>"</QuoteCharacter>
+        	<QuoteEscapeCharacter>"</QuoteEscapeCharacter>
+        	<RecordDelimiter>\n</RecordDelimiter>
+        </CSV>
+    </InputSerialization>
+    <OutputSerialization>
+        <CSV>
+        </CSV>
     </OutputSerialization>
     <RequestProgress>
         <Enabled>FALSE</Enabled>

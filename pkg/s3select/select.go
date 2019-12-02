@@ -27,9 +27,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/fwessels/simdjson-go"
 	"github.com/minio/minio/pkg/s3select/csv"
 	"github.com/minio/minio/pkg/s3select/json"
 	"github.com/minio/minio/pkg/s3select/parquet"
+	"github.com/minio/minio/pkg/s3select/simdj"
 	"github.com/minio/minio/pkg/s3select/sql"
 )
 
@@ -327,6 +329,38 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 	panic(fmt.Errorf("unknown input format '%v'", s3Select.Input.format))
 }
 
+// OpenTape - opens S3 object and accepts parsed simdjson input.
+// An optional progressReader can be given to output progress.
+func (s3Select *S3Select) OpenTape(pj simdjson.ParsedJson, pr *progressReader) error {
+	if pr == nil {
+		pr = &progressReader{}
+	}
+	switch s3Select.Input.format {
+	case jsonFormat:
+		s3Select.progressReader = pr
+		s3Select.recordReader = simdj.NewTapeReader(pj, &s3Select.Input.JSONArgs)
+		return nil
+	}
+
+	return fmt.Errorf("unknown input format '%v'", s3Select.Input.format)
+}
+
+// OpenTapeCh - opens S3 object and accepts a channel that supplies parsed simdjson input.
+// An optional progressReader can be given to output progress.
+func (s3Select *S3Select) OpenTapeCh(pj chan simdjson.ParsedJson, pr *progressReader) error {
+	if pr == nil {
+		pr = &progressReader{}
+	}
+	switch s3Select.Input.format {
+	case jsonFormat:
+		s3Select.progressReader = pr
+		s3Select.recordReader = simdj.NewTapeReaderChan(pj, &s3Select.Input.JSONArgs)
+		return nil
+	}
+
+	return fmt.Errorf("unknown input format '%v'", s3Select.Input.format)
+}
+
 func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
 	switch s3Select.Output.format {
 	case csvFormat:
@@ -346,7 +380,9 @@ func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
 		if err != nil {
 			return err
 		}
-		buf.Truncate(buf.Len() - 1)
+		if buf.Bytes()[buf.Len()-1] == '\n' {
+			buf.Truncate(buf.Len() - 1)
+		}
 		buf.WriteString(s3Select.Output.CSVArgs.RecordDelimiter)
 
 		return nil
@@ -355,8 +391,10 @@ func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
 		if err != nil {
 			return err
 		}
-
-		buf.Truncate(buf.Len() - 1)
+		// Trim trailing newline from non-simd output
+		if buf.Bytes()[buf.Len()-1] == '\n' {
+			buf.Truncate(buf.Len() - 1)
+		}
 		buf.WriteString(s3Select.Output.JSONArgs.RecordDelimiter)
 
 		return nil

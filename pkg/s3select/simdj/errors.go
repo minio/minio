@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package simdjson
+package simdj
 
 type s3Error struct {
 	code       string
