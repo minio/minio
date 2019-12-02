@@ -164,6 +164,18 @@ var (
 			Type:        "number",
 		},
 		config.HelpKV{
+			Key:         target.KafkaClientTLSCert,
+			Description: "Set path to client certificate",
+			Optional:    true,
+			Type:        "path",
+		},
+		config.HelpKV{
+			Key:         target.KafkaClientTLSKey,
+			Description: "Set path to client key",
+			Optional:    true,
+			Type:        "path",
+		},
+		config.HelpKV{
 			Key:         config.Comment,
 			Description: config.DefaultComment,
 			Optional:    true,
