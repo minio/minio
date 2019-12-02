@@ -78,12 +78,12 @@ func TestLoadTape(t *testing.T) {
 	for _, tt := range testCases {
 
 		t.Run(tt.name, func(t *testing.T) {
-			tap, sb, ref := loadCompressed(t, tt.name)
+			_, _, ref := loadCompressed(t, tt.name)
 
 			var err error
 			dst := make(chan simdjson.Elements, 100)
 			dec := NewElementReader(dst, &err, &json.ReaderArgs{ContentType: "json"})
-			pj, err := simdjson.LoadTape(bytes.NewBuffer(tap), bytes.NewBuffer(sb))
+			pj, err := simdjson.ParseND(ref, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -115,6 +115,10 @@ func TestLoadTape(t *testing.T) {
 						t.Fatal(err)
 					}
 					if typ := obj.Advance(); typ != simdjson.TypeObject {
+						if typ == simdjson.TypeNone {
+							close(dst)
+							break parser
+						}
 						t.Fatal("Unexpected type:", typ.String())
 					}
 

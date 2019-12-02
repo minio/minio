@@ -434,7 +434,7 @@ func TestCSVQueries(t *testing.T) {
 	}
 }
 
-func TestCSVQueries(t *testing.T) {
+func TestCSVQueries2(t *testing.T) {
 	input := `id,time,num,num2,text
 1,2010-01-01T,7867786,4565.908123,"a text, with comma"
 2,2017-01-02T03:04Z,-5, 0.765111,

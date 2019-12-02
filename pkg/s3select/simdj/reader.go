@@ -137,11 +137,29 @@ func (r *Reader) startReader() {
 
 // NewReader - creates new JSON reader using readCloser.
 func NewReader(readCloser io.ReadCloser, args *json.ReaderArgs) *Reader {
-	// TODO: Add simdjson input when available
-	return &Reader{
+	r := Reader{
 		args:       args,
 		readCloser: readCloser,
+		decoded:    make(chan simdjson.Elements, 1000),
+		input:      make(chan simdjson.ParsedJson, 1),
+		exitReader: make(chan struct{}),
 	}
+	res := make(chan simdjson.Stream, 1)
+	simdjson.ParseNDStream(readCloser, res, nil)
+	go func() {
+		defer close(r.input)
+
+		for result := range res {
+			if result.Error != nil {
+				// FIXME: Error somehow
+				continue
+			}
+			r.input <- *result.Value
+		}
+	}()
+	r.readerWg.Add(1)
+	go r.startReader()
+	return &r
 }
 
 // NewElementReader - creates new JSON reader using readCloser.

@@ -28,6 +28,7 @@ import (
 	"sync"
 
 	"github.com/fwessels/simdjson-go"
+	"github.com/klauspost/cpuid"
 	"github.com/minio/minio/pkg/s3select/csv"
 	"github.com/minio/minio/pkg/s3select/json"
 	"github.com/minio/minio/pkg/s3select/parquet"
@@ -317,8 +318,11 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 			rc.Close()
 			return err
 		}
-
-		s3Select.recordReader = json.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
+		if cpuid.CPU.AVX2() {
+			s3Select.recordReader = simdj.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
+		} else {
+			s3Select.recordReader = json.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
+		}
 		return nil
 	case parquetFormat:
 		var err error
