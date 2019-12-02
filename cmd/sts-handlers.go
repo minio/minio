@@ -476,11 +476,11 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 
 	ldapConn, err := globalLDAPConfig.Connect()
 	if err != nil {
-		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, fmt.Errorf("LDAP server connection failure: %v", err))
+		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, fmt.Errorf("LDAP server connection failure: %w", err))
 		return
 	}
 	if ldapConn == nil {
-		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, fmt.Errorf("LDAP server not configured: %v", err))
+		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, fmt.Errorf("LDAP server not configured: %w", err))
 		return
 	}
 
@@ -490,7 +490,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	usernameDN, _ := usernameSubs.Substitute(globalLDAPConfig.UsernameFormat)
 	// Bind with user credentials to validate the password
 	if err = ldapConn.Bind(usernameDN, ldapPassword); err != nil {
-		err = fmt.Errorf("LDAP authentication failure: %v", err)
+		err = fmt.Errorf("LDAP authentication failure: %w", err)
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 		return
 	}
@@ -517,7 +517,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 
 		sr, err := ldapConn.Search(searchRequest)
 		if err != nil {
-			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, fmt.Errorf("LDAP search failure: %v", err))
+			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, fmt.Errorf("LDAP search failure: %w", err))
 			return
 		}
 		for _, entry := range sr.Entries {

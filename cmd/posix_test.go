@@ -1351,7 +1351,7 @@ func TestPosixFormatFileChange(t *testing.T) {
 	}
 
 	err = posixStorage.MakeVol(volume)
-	if err != errDiskNotFound {
+	if err != errVolumeExists {
 		t.Fatalf("MakeVol expected to fail with errDiskNotFound but failed with %s", err)
 	}
 }

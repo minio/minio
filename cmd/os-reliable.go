@@ -139,7 +139,7 @@ func renameAll(srcFilePath, dstFilePath string) (err error) {
 			// directory" error message. Handle this specifically here.
 			return errFileAccessDenied
 		case isSysErrCrossDevice(err):
-			return fmt.Errorf("%s (%s)->(%s)", errCrossDeviceLink, srcFilePath, dstFilePath)
+			return fmt.Errorf("%w (%s)->(%s)", errCrossDeviceLink, srcFilePath, dstFilePath)
 		case os.IsNotExist(err):
 			return errFileNotFound
 		case os.IsExist(err):
