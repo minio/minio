@@ -29,7 +29,7 @@ import (
 // Reader - JSON record reader for S3Select.
 type Reader struct {
 	args    *json.ReaderArgs
-	input   chan simdjson.ParsedJson
+	input   chan simdjson.Stream
 	decoded chan simdjson.Elements
 
 	// err will only be returned after decoded has been closed.
@@ -82,13 +82,20 @@ func (r *Reader) startReader() {
 	defer r.readerWg.Done()
 	defer close(r.decoded)
 	for {
-		var pj simdjson.ParsedJson
+		var in simdjson.Stream
 		select {
-		case pj = <-r.input:
+		case in = <-r.input:
 		case <-r.exitReader:
 			return
 		}
-		i := pj.Iter()
+		if in.Error != nil {
+			r.err = &in.Error
+			return
+		}
+		if in.Value == nil {
+			continue
+		}
+		i := in.Value.Iter()
 		for {
 			var next simdjson.Iter
 			typ, err := i.AdvanceIter(&next)
@@ -141,22 +148,9 @@ func NewReader(readCloser io.ReadCloser, args *json.ReaderArgs) *Reader {
 		args:       args,
 		readCloser: readCloser,
 		decoded:    make(chan simdjson.Elements, 1000),
-		input:      make(chan simdjson.ParsedJson, 1),
+		input:      make(chan simdjson.Stream, 1),
 		exitReader: make(chan struct{}),
 	}
-	res := make(chan simdjson.Stream, 1)
-	simdjson.ParseNDStream(readCloser, res, nil)
-	go func() {
-		defer close(r.input)
-
-		for result := range res {
-			if result.Error != nil {
-				// FIXME: Error somehow
-				continue
-			}
-			r.input <- *result.Value
-		}
-	}()
 	r.readerWg.Add(1)
 	go r.startReader()
 	return &r
@@ -177,10 +171,13 @@ func NewTapeReader(pj simdjson.ParsedJson, args *json.ReaderArgs) *Reader {
 	r := Reader{
 		args:       args,
 		decoded:    make(chan simdjson.Elements, 1000),
-		input:      make(chan simdjson.ParsedJson, 1),
+		input:      make(chan simdjson.Stream, 1),
 		exitReader: make(chan struct{}),
 	}
-	r.input <- pj
+	r.input <- simdjson.Stream{
+		Value: &pj,
+		Error: nil,
+	}
 	close(r.input)
 	r.readerWg.Add(1)
 	go r.startReader()
@@ -188,7 +185,7 @@ func NewTapeReader(pj simdjson.ParsedJson, args *json.ReaderArgs) *Reader {
 }
 
 // NewTapeReaderChan will start a reader that will read input from the provided channel.
-func NewTapeReaderChan(pj chan simdjson.ParsedJson, args *json.ReaderArgs) *Reader {
+func NewTapeReaderChan(pj chan simdjson.Stream, args *json.ReaderArgs) *Reader {
 	r := Reader{
 		args:       args,
 		decoded:    make(chan simdjson.Elements, 1000),

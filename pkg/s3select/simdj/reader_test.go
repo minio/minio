@@ -179,9 +179,7 @@ func TestLoadTape(t *testing.T) {
 				if !bytes.Equal(gotB.Bytes(), wantB.Bytes()) {
 					t.Errorf("JSON output mismatch.\nwant: %s\ngot:  %s", wantB.String(), gotB.String())
 				}
-
 			}
-
 		})
 	}
 }
