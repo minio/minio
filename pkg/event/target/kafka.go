@@ -30,21 +30,25 @@ import (
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 
-	sarama "gopkg.in/Shopify/sarama.v1"
+	sarama "github.com/Shopify/sarama"
+	saramatls "github.com/Shopify/sarama/tools/tls"
+
 )
 
 // MQTT input constants
 const (
-	KafkaBrokers       = "brokers"
-	KafkaTopic         = "topic"
-	KafkaQueueDir      = "queue_dir"
-	KafkaQueueLimit    = "queue_limit"
-	KafkaTLS           = "tls"
-	KafkaTLSSkipVerify = "tls_skip_verify"
-	KafkaTLSClientAuth = "tls_client_auth"
-	KafkaSASL          = "sasl"
-	KafkaSASLUsername  = "sasl_username"
-	KafkaSASLPassword  = "sasl_password"
+	KafkaBrokers          = "brokers"
+	KafkaTopic            = "topic"
+	KafkaQueueDir         = "queue_dir"
+	KafkaQueueLimit       = "queue_limit"
+	KafkaTLS              = "tls"
+	KafkaTLSSkipVerify    = "tls_skip_verify"
+	KafkaTLSClientAuth    = "tls_client_auth"
+	KafkaSASL             = "sasl"
+	KafkaSASLUsername     = "sasl_username"
+	KafkaSASLPassword     = "sasl_password"
+	KafkaClientTLSCert    = "client_tls_cert"
+	KafkaClientTLSKey     = "client_tls_key"
 
 	EnvKafkaState         = "MINIO_NOTIFY_KAFKA_STATE"
 	EnvKafkaBrokers       = "MINIO_NOTIFY_KAFKA_BROKERS"
@@ -57,6 +61,8 @@ const (
 	EnvKafkaSASLEnable    = "MINIO_NOTIFY_KAFKA_SASL"
 	EnvKafkaSASLUsername  = "MINIO_NOTIFY_KAFKA_SASL_USERNAME"
 	EnvKafkaSASLPassword  = "MINIO_NOTIFY_KAFKA_SASL_PASSWORD"
+	EnvKafkaClientTLSCert = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_CERT"
+	EnvKafkaClientTLSKey  = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_KEY"
 )
 
 // KafkaArgs - Kafka target arguments.
@@ -67,10 +73,12 @@ type KafkaArgs struct {
 	QueueDir   string      `json:"queueDir"`
 	QueueLimit uint64      `json:"queueLimit"`
 	TLS        struct {
-		Enable     bool               `json:"enable"`
-		RootCAs    *x509.CertPool     `json:"-"`
-		SkipVerify bool               `json:"skipVerify"`
-		ClientAuth tls.ClientAuthType `json:"clientAuth"`
+		Enable        bool               `json:"enable"`
+		RootCAs       *x509.CertPool     `json:"-"`
+		SkipVerify    bool               `json:"skipVerify"`
+		ClientAuth    tls.ClientAuthType `json:"clientAuth"`
+		ClientTLSCert string             `json:"clientTLSCert"` 
+		ClientTLSKey  string             `json:"clientTLSKey"` 
 	} `json:"tls"`
 	SASL struct {
 		Enable   bool   `json:"enable"`
@@ -225,13 +233,13 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 	config.Net.SASL.Password = args.SASL.Password
 	config.Net.SASL.Enable = args.SASL.Enable
 
-	config.Net.TLS.Enable = args.TLS.Enable
-	tlsConfig := &tls.Config{
-		ClientAuth:         args.TLS.ClientAuth,
-		InsecureSkipVerify: args.TLS.SkipVerify,
-		RootCAs:            args.TLS.RootCAs,
-	}
-	config.Net.TLS.Config = tlsConfig
+	tlsConfig, err := saramatls.NewConfig(args.TLS.ClientTLSCert, args.TLS.ClientTLSKey)
+
+	config.Net.TLS.Enable                    = args.TLS.Enable
+	config.Net.TLS.Config                    = tlsConfig
+	config.Net.TLS.Config.InsecureSkipVerify = args.TLS.SkipVerify
+	config.Net.TLS.Config.ClientAuth         = args.TLS.ClientAuth
+	config.Net.TLS.Config.RootCAs            = args.TLS.RootCAs
 
 	config.Producer.RequiredAcks = sarama.WaitForAll
 	config.Producer.Retry.Max = 10
