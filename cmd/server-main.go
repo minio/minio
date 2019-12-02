@@ -234,7 +234,7 @@ func initSafeModeInit(buckets []BucketInfo) (err error) {
 
 	// Migrate all backend configs to encrypted backend, also handles rotation as well.
 	if err = handleEncryptedConfigBackend(newObject, true); err != nil {
-		return fmt.Errorf("Unable to handle encrypted backend for config, iam and policies: %v", err)
+		return fmt.Errorf("Unable to handle encrypted backend for config, iam and policies: %w", err)
 	}
 
 	// ****  WARNING ****
@@ -264,7 +264,7 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 		// Migrating to encrypted backend on etcd should happen before initialization of
 		// IAM sub-systems, make sure that we do not move the above codeblock elsewhere.
 		if err = migrateIAMConfigsEtcdToEncrypted(globalEtcdClient); err != nil {
-			return fmt.Errorf("Unable to handle encrypted backend for iam and policies: %v", err)
+			return fmt.Errorf("Unable to handle encrypted backend for iam and policies: %w", err)
 		}
 	}
 
@@ -284,7 +284,7 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 
 	// Initialize lifecycle system.
 	if err = globalLifecycleSys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize lifecycle system: %v", err)
+		return fmt.Errorf("Unable to initialize lifecycle system: %w", err)
 	}
 
 	return nil

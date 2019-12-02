@@ -124,7 +124,7 @@ type diskCache struct {
 // Inits the disk cache dir if it is not initialized already.
 func newDiskCache(dir string, expiry int, quotaPct int) (*diskCache, error) {
 	if err := os.MkdirAll(dir, 0777); err != nil {
-		return nil, fmt.Errorf("Unable to initialize '%s' dir, %s", dir, err)
+		return nil, fmt.Errorf("Unable to initialize '%s' dir, %w", dir, err)
 	}
 	cache := diskCache{
 		dir:         dir,

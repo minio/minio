@@ -118,7 +118,7 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 		host, port, err = net.SplitHostPort(u.Host)
 		if err != nil {
 			if !strings.Contains(err.Error(), "missing port in address") {
-				return ep, fmt.Errorf("invalid URL endpoint format: %s", err)
+				return ep, fmt.Errorf("invalid URL endpoint format: %w", err)
 			}
 
 			host = u.Host
