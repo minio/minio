@@ -358,7 +358,7 @@ function main()
         exit 1
     fi
 
-    echo "Testing in Distributed Eraure expanded setup with ipv6"
+    echo "Testing in Distributed Erasure expanded setup with ipv6"
     if ! run_test_zone_erasure_sets_ipv6; then
         echo "FAILED"
         purge "$WORK_DIR"
