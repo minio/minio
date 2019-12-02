@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -31,6 +32,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 var defaultContextTimeout = 30 * time.Second
@@ -109,6 +111,12 @@ func (ies *IAMEtcdStore) saveIAMConfig(item interface{}, path string) error {
 	if err != nil {
 		return err
 	}
+	if globalConfigEncrypted {
+		data, err = madmin.EncryptData(globalActiveCred.String(), data)
+		if err != nil {
+			return err
+		}
+	}
 	return saveKeyEtcd(ies.getContext(), ies.client, path, data)
 }
 
@@ -117,6 +125,14 @@ func (ies *IAMEtcdStore) loadIAMConfig(item interface{}, path string) error {
 	if err != nil {
 		return err
 	}
+
+	if globalConfigEncrypted {
+		pdata, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(pdata))
+		if err != nil {
+			return err
+		}
+	}
+
 	return json.Unmarshal(pdata, item)
 }
 
@@ -288,6 +304,9 @@ func (ies *IAMEtcdStore) loadUser(user string, isSTS bool, m map[string]auth.Cre
 	var u UserIdentity
 	err := ies.loadIAMConfig(&u, getUserIdentityPath(user, isSTS))
 	if err != nil {
+		if err == errConfigNotFound {
+			return errNoSuchUser
+		}
 		return err
 	}
 
@@ -337,6 +356,9 @@ func (ies *IAMEtcdStore) loadGroup(group string, m map[string]GroupInfo) error {
 	var gi GroupInfo
 	err := ies.loadIAMConfig(&gi, getGroupInfoPath(group))
 	if err != nil {
+		if err == errConfigNotFound {
+			return errNoSuchGroup
+		}
 		return err
 	}
 	m[group] = gi
@@ -370,6 +392,9 @@ func (ies *IAMEtcdStore) loadMappedPolicy(name string, isSTS, isGroup bool, m ma
 	var p MappedPolicy
 	err := ies.loadIAMConfig(&p, getMappedPolicyPath(name, isSTS, isGroup))
 	if err != nil {
+		if err == errConfigNotFound {
+			return errNoSuchPolicy
+		}
 		return err
 	}
 	m[name] = p
@@ -486,19 +511,35 @@ func (ies *IAMEtcdStore) saveGroupInfo(name string, gi GroupInfo) error {
 }
 
 func (ies *IAMEtcdStore) deletePolicyDoc(name string) error {
-	return ies.deleteIAMConfig(getPolicyDocPath(name))
+	err := ies.deleteIAMConfig(getPolicyDocPath(name))
+	if err == errConfigNotFound {
+		err = errNoSuchPolicy
+	}
+	return err
 }
 
 func (ies *IAMEtcdStore) deleteMappedPolicy(name string, isSTS, isGroup bool) error {
-	return ies.deleteIAMConfig(getMappedPolicyPath(name, isSTS, isGroup))
+	err := ies.deleteIAMConfig(getMappedPolicyPath(name, isSTS, isGroup))
+	if err == errConfigNotFound {
+		err = errNoSuchPolicy
+	}
+	return err
 }
 
 func (ies *IAMEtcdStore) deleteUserIdentity(name string, isSTS bool) error {
-	return ies.deleteIAMConfig(getUserIdentityPath(name, isSTS))
+	err := ies.deleteIAMConfig(getUserIdentityPath(name, isSTS))
+	if err == errConfigNotFound {
+		err = errNoSuchUser
+	}
+	return err
 }
 
 func (ies *IAMEtcdStore) deleteGroupInfo(name string) error {
-	return ies.deleteIAMConfig(getGroupInfoPath(name))
+	err := ies.deleteIAMConfig(getGroupInfoPath(name))
+	if err == errConfigNotFound {
+		err = errNoSuchGroup
+	}
+	return err
 }
 
 func (ies *IAMEtcdStore) watch(sys *IAMSys) {
@@ -508,6 +549,7 @@ func (ies *IAMEtcdStore) watch(sys *IAMSys) {
 			// Refresh IAMSys with etcd watch.
 			watchCh := ies.client.Watch(context.Background(),
 				iamConfigPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+
 			for {
 				select {
 				case <-GlobalServiceDoneCh:

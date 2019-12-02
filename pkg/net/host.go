@@ -81,9 +81,12 @@ func (host *Host) UnmarshalJSON(data []byte) (err error) {
 
 // ParseHost - parses string into Host
 func ParseHost(s string) (*Host, error) {
+	if s == "" {
+		return nil, errors.New("invalid argument")
+	}
 	isValidHost := func(host string) bool {
 		if host == "" {
-			return false
+			return true
 		}
 
 		if ip := net.ParseIP(host); ip != nil {
@@ -119,7 +122,6 @@ func ParseHost(s string) (*Host, error) {
 			return nil, err
 		}
 		host = s
-		portStr = ""
 	} else {
 		if port, err = ParsePort(portStr); err != nil {
 			return nil, err

@@ -24,13 +24,13 @@ import (
 
 // GetKeyStatus requests status information about the key referenced by keyID
 // from the KMS connected to a MinIO by performing a Admin-API request.
-// It basically hits the `/minio/admin/v1/kms/key/status` API endpoint.
+// It basically hits the `/minio/admin/v2/kms/key/status` API endpoint.
 func (adm *AdminClient) GetKeyStatus(keyID string) (*KMSKeyStatus, error) {
-	// GET /minio/admin/v1/kms/key/status?key-id=<keyID>
+	// GET /minio/admin/v2/kms/key/status?key-id=<keyID>
 	qv := url.Values{}
 	qv.Set("key-id", keyID)
 	reqData := requestData{
-		relPath:     "/v1/kms/key/status",
+		relPath:     adminAPIPrefix + "/kms/key/status",
 		queryValues: qv,
 	}
 

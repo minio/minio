@@ -42,26 +42,22 @@ type peerRESTServer struct {
 }
 
 func getServerInfo() (*ServerInfoData, error) {
-	if globalBootTime.IsZero() {
-		return nil, errServerNotInitialized
-	}
-
-	objLayer := newObjectLayerFn()
+	objLayer := newObjectLayerWithoutSafeModeFn()
 	if objLayer == nil {
 		return nil, errServerNotInitialized
 	}
+
 	// Server info data.
 	return &ServerInfoData{
-		StorageInfo: objLayer.StorageInfo(context.Background()),
-		ConnStats:   globalConnStats.toServerConnStats(),
-		HTTPStats:   globalHTTPStats.toServerHTTPStats(),
+		ConnStats: globalConnStats.toServerConnStats(),
+		HTTPStats: globalHTTPStats.toServerHTTPStats(),
 		Properties: ServerProperties{
 			Uptime:       UTCNow().Sub(globalBootTime),
 			Version:      Version,
 			CommitID:     CommitID,
 			DeploymentID: globalDeploymentID,
 			SQSARN:       globalNotificationSys.GetARNList(),
-			Region:       globalServerConfig.GetRegion(),
+			Region:       globalServerRegion,
 		},
 	}, nil
 }
@@ -152,8 +148,12 @@ func (s *peerRESTServer) GetLocksHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	ctx := newContext(r, w, "GetLocks")
-	locks := globalLockServer.ll.DupLockMap()
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(locks))
+
+	var llockers []map[string][]lockRequesterInfo
+	for _, llocker := range globalLockServers {
+		llockers = append(llockers, llocker.DupLockMap())
+	}
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(llockers))
 
 	w.(http.Flusher).Flush()
 
@@ -166,7 +166,7 @@ func (s *peerRESTServer) DeletePolicyHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	objAPI := newObjectLayerFn()
+	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -194,7 +194,7 @@ func (s *peerRESTServer) LoadPolicyHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	objAPI := newObjectLayerFn()
+	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -222,7 +222,7 @@ func (s *peerRESTServer) LoadPolicyMappingHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	objAPI := newObjectLayerFn()
+	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -251,7 +251,7 @@ func (s *peerRESTServer) DeleteUserHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	objAPI := newObjectLayerFn()
+	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -279,7 +279,7 @@ func (s *peerRESTServer) LoadUserHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	objAPI := newObjectLayerFn()
+	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -329,7 +329,7 @@ func (s *peerRESTServer) LoadGroupHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	objAPI := newObjectLayerFn()
+	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -424,6 +424,34 @@ func (s *peerRESTServer) CPULoadInfoHandler(w http.ResponseWriter, r *http.Reque
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
 
+// CPUInfoHandler - returns CPU Hardware info.
+func (s *peerRESTServer) CPUInfoHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	ctx := newContext(r, w, "CPUInfo")
+	info := getLocalCPUInfo(globalEndpoints, r)
+
+	defer w.(http.Flusher).Flush()
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+}
+
+// NetworkInfoHandler - returns Network Hardware info.
+func (s *peerRESTServer) NetworkInfoHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	ctx := newContext(r, w, "NetworkInfo")
+	info := getLocalNetworkInfo(globalEndpoints, r)
+
+	defer w.(http.Flusher).Flush()
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+}
+
 // DrivePerfInfoHandler - returns Drive Performance info.
 func (s *peerRESTServer) DrivePerfInfoHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -482,6 +510,8 @@ func (s *peerRESTServer) DeleteBucketHandler(w http.ResponseWriter, r *http.Requ
 
 	globalNotificationSys.RemoveNotification(bucketName)
 	globalPolicySys.Remove(bucketName)
+	globalBucketObjectLockConfig.Remove(bucketName)
+	globalLifecycleSys.Remove(bucketName)
 
 	w.(http.Flusher).Flush()
 }
@@ -511,7 +541,7 @@ func (s *peerRESTServer) ReloadFormatHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	objAPI := newObjectLayerFn()
+	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
@@ -732,6 +762,54 @@ func (s *peerRESTServer) PutBucketNotificationHandler(w http.ResponseWriter, r *
 	w.(http.Flusher).Flush()
 }
 
+// RemoveBucketObjectLockConfigHandler - handles DELETE bucket object lock configuration.
+func (s *peerRESTServer) RemoveBucketObjectLockConfigHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucketName := vars[peerRESTBucket]
+	if bucketName == "" {
+		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
+		return
+	}
+
+	globalBucketObjectLockConfig.Remove(bucketName)
+	w.(http.Flusher).Flush()
+}
+
+// PutBucketObjectLockConfigHandler - handles PUT bucket object lock configuration.
+func (s *peerRESTServer) PutBucketObjectLockConfigHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucketName := vars[peerRESTBucket]
+	if bucketName == "" {
+		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
+		return
+	}
+
+	var retention Retention
+	if r.ContentLength < 0 {
+		s.writeErrorResponse(w, errInvalidArgument)
+		return
+	}
+
+	err := gob.NewDecoder(r.Body).Decode(&retention)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	globalBucketObjectLockConfig.Set(bucketName, retention)
+	w.(http.Flusher).Flush()
+}
+
 type listenBucketNotificationReq struct {
 	EventNames []event.Name   `json:"eventNames"`
 	Pattern    string         `json:"pattern"`
@@ -934,7 +1012,7 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 	defer close(doneCh)
 
 	ch := make(chan interface{}, 2000)
-	globalConsoleSys.Subscribe(ch, doneCh, "", 0, nil)
+	globalConsoleSys.Subscribe(ch, doneCh, "", 0, string(logger.All), nil)
 
 	enc := gob.NewEncoder(w)
 	for {
@@ -967,45 +1045,47 @@ func (s *peerRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
 // registerPeerRESTHandlers - register peer rest router.
 func registerPeerRESTHandlers(router *mux.Router) {
 	server := &peerRESTServer{}
-	subrouter := router.PathPrefix(peerRESTPath).Subrouter()
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodNetReadPerfInfo).HandlerFunc(httpTraceHdrs(server.NetReadPerfInfoHandler)).Queries(restQueries(peerRESTNetPerfSize)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodCollectNetPerfInfo).HandlerFunc(httpTraceHdrs(server.CollectNetPerfInfoHandler)).Queries(restQueries(peerRESTNetPerfSize)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodGetLocks).HandlerFunc(httpTraceHdrs(server.GetLocksHandler))
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodServerInfo).HandlerFunc(httpTraceHdrs(server.ServerInfoHandler))
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodCPULoadInfo).HandlerFunc(httpTraceHdrs(server.CPULoadInfoHandler))
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodMemUsageInfo).HandlerFunc(httpTraceHdrs(server.MemUsageInfoHandler))
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodDrivePerfInfo).HandlerFunc(httpTraceHdrs(server.DrivePerfInfoHandler)).Queries(restQueries(peerRESTDrivePerfSize)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodDeleteBucket).HandlerFunc(httpTraceHdrs(server.DeleteBucketHandler)).Queries(restQueries(peerRESTBucket)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodSignalService).HandlerFunc(httpTraceHdrs(server.SignalServiceHandler)).Queries(restQueries(peerRESTSignal)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodServerUpdate).HandlerFunc(httpTraceHdrs(server.ServerUpdateHandler)).Queries(restQueries(peerRESTUpdateURL, peerRESTSha256Hex, peerRESTLatestRelease)...)
+	subrouter := router.PathPrefix(peerRESTPrefix).Subrouter()
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodNetReadPerfInfo).HandlerFunc(httpTraceHdrs(server.NetReadPerfInfoHandler)).Queries(restQueries(peerRESTNetPerfSize)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodCollectNetPerfInfo).HandlerFunc(httpTraceHdrs(server.CollectNetPerfInfoHandler)).Queries(restQueries(peerRESTNetPerfSize)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLocks).HandlerFunc(httpTraceHdrs(server.GetLocksHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodServerInfo).HandlerFunc(httpTraceHdrs(server.ServerInfoHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodCPULoadInfo).HandlerFunc(httpTraceHdrs(server.CPULoadInfoHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodMemUsageInfo).HandlerFunc(httpTraceHdrs(server.MemUsageInfoHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDrivePerfInfo).HandlerFunc(httpTraceHdrs(server.DrivePerfInfoHandler)).Queries(restQueries(peerRESTDrivePerfSize)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodHardwareCPUInfo).HandlerFunc(httpTraceHdrs(server.CPUInfoHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodHardwareNetworkInfo).HandlerFunc(httpTraceHdrs(server.NetworkInfoHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDeleteBucket).HandlerFunc(httpTraceHdrs(server.DeleteBucketHandler)).Queries(restQueries(peerRESTBucket)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSignalService).HandlerFunc(httpTraceHdrs(server.SignalServiceHandler)).Queries(restQueries(peerRESTSignal)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodServerUpdate).HandlerFunc(httpTraceHdrs(server.ServerUpdateHandler)).Queries(restQueries(peerRESTUpdateURL, peerRESTSha256Hex, peerRESTLatestRelease)...)
 
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodBucketPolicyRemove).HandlerFunc(httpTraceAll(server.RemoveBucketPolicyHandler)).Queries(restQueries(peerRESTBucket)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodBucketPolicySet).HandlerFunc(httpTraceHdrs(server.SetBucketPolicyHandler)).Queries(restQueries(peerRESTBucket)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBucketPolicyRemove).HandlerFunc(httpTraceAll(server.RemoveBucketPolicyHandler)).Queries(restQueries(peerRESTBucket)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBucketPolicySet).HandlerFunc(httpTraceHdrs(server.SetBucketPolicyHandler)).Queries(restQueries(peerRESTBucket)...)
 
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodDeletePolicy).HandlerFunc(httpTraceAll(server.DeletePolicyHandler)).Queries(restQueries(peerRESTPolicy)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodLoadPolicy).HandlerFunc(httpTraceAll(server.LoadPolicyHandler)).Queries(restQueries(peerRESTPolicy)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodLoadPolicyMapping).HandlerFunc(httpTraceAll(server.LoadPolicyMappingHandler)).Queries(restQueries(peerRESTUserOrGroup)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodDeleteUser).HandlerFunc(httpTraceAll(server.LoadUserHandler)).Queries(restQueries(peerRESTUser)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodLoadUser).HandlerFunc(httpTraceAll(server.LoadUserHandler)).Queries(restQueries(peerRESTUser, peerRESTUserTemp)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodLoadUsers).HandlerFunc(httpTraceAll(server.LoadUsersHandler))
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodLoadGroup).HandlerFunc(httpTraceAll(server.LoadGroupHandler)).Queries(restQueries(peerRESTGroup)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDeletePolicy).HandlerFunc(httpTraceAll(server.DeletePolicyHandler)).Queries(restQueries(peerRESTPolicy)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadPolicy).HandlerFunc(httpTraceAll(server.LoadPolicyHandler)).Queries(restQueries(peerRESTPolicy)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadPolicyMapping).HandlerFunc(httpTraceAll(server.LoadPolicyMappingHandler)).Queries(restQueries(peerRESTUserOrGroup)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDeleteUser).HandlerFunc(httpTraceAll(server.LoadUserHandler)).Queries(restQueries(peerRESTUser)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadUser).HandlerFunc(httpTraceAll(server.LoadUserHandler)).Queries(restQueries(peerRESTUser, peerRESTUserTemp)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadUsers).HandlerFunc(httpTraceAll(server.LoadUsersHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadGroup).HandlerFunc(httpTraceAll(server.LoadGroupHandler)).Queries(restQueries(peerRESTGroup)...)
 
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodStartProfiling).HandlerFunc(httpTraceAll(server.StartProfilingHandler)).Queries(restQueries(peerRESTProfiler)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodDownloadProfilingData).HandlerFunc(httpTraceHdrs(server.DownloadProflingDataHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodStartProfiling).HandlerFunc(httpTraceAll(server.StartProfilingHandler)).Queries(restQueries(peerRESTProfiler)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDownloadProfilingData).HandlerFunc(httpTraceHdrs(server.DownloadProflingDataHandler))
 
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodTargetExists).HandlerFunc(httpTraceHdrs(server.TargetExistsHandler)).Queries(restQueries(peerRESTBucket)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodSendEvent).HandlerFunc(httpTraceHdrs(server.SendEventHandler)).Queries(restQueries(peerRESTBucket)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodBucketNotificationPut).HandlerFunc(httpTraceHdrs(server.PutBucketNotificationHandler)).Queries(restQueries(peerRESTBucket)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodBucketNotificationListen).HandlerFunc(httpTraceHdrs(server.ListenBucketNotificationHandler)).Queries(restQueries(peerRESTBucket)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodTargetExists).HandlerFunc(httpTraceHdrs(server.TargetExistsHandler)).Queries(restQueries(peerRESTBucket)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSendEvent).HandlerFunc(httpTraceHdrs(server.SendEventHandler)).Queries(restQueries(peerRESTBucket)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBucketNotificationPut).HandlerFunc(httpTraceHdrs(server.PutBucketNotificationHandler)).Queries(restQueries(peerRESTBucket)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBucketNotificationListen).HandlerFunc(httpTraceHdrs(server.ListenBucketNotificationHandler)).Queries(restQueries(peerRESTBucket)...)
 
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodReloadFormat).HandlerFunc(httpTraceHdrs(server.ReloadFormatHandler)).Queries(restQueries(peerRESTDryRun)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodBucketLifecycleSet).HandlerFunc(httpTraceHdrs(server.SetBucketLifecycleHandler)).Queries(restQueries(peerRESTBucket)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodBucketLifecycleRemove).HandlerFunc(httpTraceHdrs(server.RemoveBucketLifecycleHandler)).Queries(restQueries(peerRESTBucket)...)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodBackgroundOpsStatus).HandlerFunc(server.BackgroundOpsStatusHandler)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodReloadFormat).HandlerFunc(httpTraceHdrs(server.ReloadFormatHandler)).Queries(restQueries(peerRESTDryRun)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBucketLifecycleSet).HandlerFunc(httpTraceHdrs(server.SetBucketLifecycleHandler)).Queries(restQueries(peerRESTBucket)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBucketLifecycleRemove).HandlerFunc(httpTraceHdrs(server.RemoveBucketLifecycleHandler)).Queries(restQueries(peerRESTBucket)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBackgroundOpsStatus).HandlerFunc(server.BackgroundOpsStatusHandler)
 
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodTrace).HandlerFunc(server.TraceHandler)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodBackgroundHealStatus).HandlerFunc(server.BackgroundHealStatusHandler)
-	subrouter.Methods(http.MethodPost).Path(SlashSeparator + peerRESTMethodLog).HandlerFunc(server.ConsoleLogHandler)
-
-	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(notFoundHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodTrace).HandlerFunc(server.TraceHandler)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBackgroundHealStatus).HandlerFunc(server.BackgroundHealStatusHandler)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLog).HandlerFunc(server.ConsoleLogHandler)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodPutBucketObjectLockConfig).HandlerFunc(httpTraceHdrs(server.PutBucketObjectLockConfigHandler)).Queries(restQueries(peerRESTBucket)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBucketObjectLockConfigRemove).HandlerFunc(httpTraceHdrs(server.RemoveBucketObjectLockConfigHandler)).Queries(restQueries(peerRESTBucket)...)
 }

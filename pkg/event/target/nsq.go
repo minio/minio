@@ -17,6 +17,7 @@
 package target
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -28,6 +29,24 @@ import (
 
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
+)
+
+// NSQ constants
+const (
+	NSQAddress       = "nsqd_address"
+	NSQTopic         = "topic"
+	NSQTLS           = "tls"
+	NSQTLSSkipVerify = "tls_skip_verify"
+	NSQQueueDir      = "queue_dir"
+	NSQQueueLimit    = "queue_limit"
+
+	EnvNSQState         = "MINIO_NOTIFY_NSQ"
+	EnvNSQAddress       = "MINIO_NOTIFY_NSQ_NSQD_ADDRESS"
+	EnvNSQTopic         = "MINIO_NOTIFY_NSQ_TOPIC"
+	EnvNSQTLS           = "MINIO_NOTIFY_NSQ_TLS"
+	EnvNSQTLSSkipVerify = "MINIO_NOTIFY_NSQ_TLS_SKIP_VERIFY"
+	EnvNSQQueueDir      = "MINIO_NOTIFY_NSQ_QUEUE_DIR"
+	EnvNSQQueueLimit    = "MINIO_NOTIFY_NSQ_QUEUE_LIMIT"
 )
 
 // NSQArgs - NSQ target arguments.
@@ -149,7 +168,7 @@ func (target *NSQTarget) Close() (err error) {
 }
 
 // NewNSQTarget - creates new NSQ target.
-func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}) (*NSQTarget, error) {
+func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*NSQTarget, error) {
 	config := nsq.NewConfig()
 	if args.TLS.Enable {
 		config.TlsV1 = true
@@ -189,9 +208,9 @@ func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}) (*NSQTarget, 
 
 	if target.store != nil {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh)
+		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh)
+		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
 	}
 
 	return target, nil

@@ -19,11 +19,18 @@ package cmd
 import (
 	"sync"
 
+	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/config/cache"
+	"github.com/minio/minio/cmd/config/compress"
+	xldap "github.com/minio/minio/cmd/config/identity/ldap"
+	"github.com/minio/minio/cmd/config/identity/openid"
+	"github.com/minio/minio/cmd/config/notify"
+	"github.com/minio/minio/cmd/config/policy/opa"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event/target"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/iam/validator"
 	"github.com/minio/minio/pkg/quick"
 )
 
@@ -265,7 +272,7 @@ type serverConfigV7 struct {
 	Notify notifierV1 `json:"notify"`
 }
 
-// serverConfigV8 server configuration version '8'. Adds NATS notifier
+// serverConfigV8 server configuration version '8'. Adds NATS notify.Config
 // configuration.
 type serverConfigV8 struct {
 	Version string `json:"version"`
@@ -282,7 +289,7 @@ type serverConfigV8 struct {
 }
 
 // serverConfigV9 server configuration version '9'. Adds PostgreSQL
-// notifier configuration.
+// notify.Config configuration.
 type serverConfigV9 struct {
 	Version string `json:"version"`
 
@@ -400,7 +407,7 @@ type serverConfigV14 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggerV7 `json:"logger"`
@@ -417,7 +424,7 @@ type serverConfigV15 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggerV7 `json:"logger"`
@@ -455,7 +462,7 @@ type serverConfigV16 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggers `json:"logger"`
@@ -474,7 +481,7 @@ type serverConfigV17 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggers `json:"logger"`
@@ -493,7 +500,7 @@ type serverConfigV18 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggers `json:"logger"`
@@ -511,7 +518,7 @@ type serverConfigV19 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggers `json:"logger"`
@@ -529,7 +536,7 @@ type serverConfigV20 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 	Domain     string           `json:"domain"`
 
 	// Additional error logging configuration.
@@ -547,7 +554,7 @@ type serverConfigV21 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 	Domain     string           `json:"domain"`
 
 	// Notification queue configuration.
@@ -556,43 +563,37 @@ type serverConfigV21 struct {
 
 // serverConfigV22 is just like version '21' with added support
 // for StorageClass.
-//
-// IMPORTANT NOTE: When updating this struct make sure that
-// serverConfig.ConfigDiff() is updated as necessary.
 type serverConfigV22 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
 }
 
 // serverConfigV23 is just like version '22' with addition of cache field.
-//
-// IMPORTANT NOTE: When updating this struct make sure that
-// serverConfig.ConfigDiff() is updated as necessary.
 type serverConfigV23 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
-	Cache CacheConfig `json:"cache"`
+	Cache cache.Config `json:"cache"`
 
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
@@ -600,23 +601,20 @@ type serverConfigV23 struct {
 
 // serverConfigV24 is just like version '23', we had to revert
 // the changes which were made in 6fb06045028b7a57c37c60a612c8e50735279ab4
-//
-// IMPORTANT NOTE: When updating this struct make sure that
-// serverConfig.ConfigDiff() is updated as necessary.
 type serverConfigV24 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
+	Browser    config.BoolFlag  `json:"browser"`
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
-	Cache CacheConfig `json:"cache"`
+	Cache cache.Config `json:"cache"`
 
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
@@ -624,9 +622,6 @@ type serverConfigV24 struct {
 
 // serverConfigV25 is just like version '24', stores additionally
 // worm variable.
-//
-// IMPORTANT NOTE: When updating this struct make sure that
-// serverConfig.ConfigDiff() is updated as necessary.
 type serverConfigV25 struct {
 	quick.Config `json:"-"` // ignore interfaces
 
@@ -635,22 +630,22 @@ type serverConfigV25 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
-	Worm       BoolFlag         `json:"worm"`
+	Browser    config.BoolFlag  `json:"browser"`
+	Worm       config.BoolFlag  `json:"worm"`
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
-	Cache CacheConfig `json:"cache"`
+	Cache cache.Config `json:"cache"`
 
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
 }
 
 // serverConfigV26 is just like version '25', stores additionally
-// cache max use value in 'CacheConfig'.
+// cache max use value in 'cache.Config'.
 type serverConfigV26 struct {
 	quick.Config `json:"-"` // ignore interfaces
 
@@ -659,39 +654,22 @@ type serverConfigV26 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
-	Worm       BoolFlag         `json:"worm"`
+	Browser    config.BoolFlag  `json:"browser"`
+	Worm       config.BoolFlag  `json:"worm"`
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
-	Cache CacheConfig `json:"cache"`
+	Cache cache.Config `json:"cache"`
 
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
 }
 
-type loggerConsole struct {
-	Enabled bool `json:"enabled"`
-}
-
-type loggerHTTP struct {
-	Enabled  bool   `json:"enabled"`
-	Endpoint string `json:"endpoint"`
-}
-
-type loggerConfig struct {
-	Console loggerConsole         `json:"console"`
-	HTTP    map[string]loggerHTTP `json:"http"`
-}
-
 // serverConfigV27 is just like version '26', stores additionally
 // the logger field
-//
-// IMPORTANT NOTE: When updating this struct make sure that
-// serverConfig.ConfigDiff() is updated as necessary.
 type serverConfigV27 struct {
 	quick.Config `json:"-"` // ignore interfaces
 
@@ -700,28 +678,25 @@ type serverConfigV27 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Browser    BoolFlag         `json:"browser"`
-	Worm       BoolFlag         `json:"worm"`
+	Browser    config.BoolFlag  `json:"browser"`
+	Worm       config.BoolFlag  `json:"worm"`
 	Domain     string           `json:"domain"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
-	Cache CacheConfig `json:"cache"`
+	Cache cache.Config `json:"cache"`
 
 	// Notification queue configuration.
 	Notify notifierV3 `json:"notify"`
 
 	// Logger configuration
-	Logger loggerConfig `json:"logger"`
+	Logger logger.Config `json:"logger"`
 }
 
 // serverConfigV28 is just like version '27', additionally
 // storing KMS config
-//
-// IMPORTANT NOTE: When updating this struct make sure that
-// serverConfig.ConfigDiff() is updated as necessary.
 type serverConfigV28 struct {
 	quick.Config `json:"-"` // ignore interfaces
 
@@ -730,13 +705,13 @@ type serverConfigV28 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Worm       BoolFlag         `json:"worm"`
+	Worm       config.BoolFlag  `json:"worm"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
-	Cache CacheConfig `json:"cache"`
+	Cache cache.Config `json:"cache"`
 
 	// KMS configuration
 	KMS crypto.KMSConfig `json:"kms"`
@@ -745,18 +720,11 @@ type serverConfigV28 struct {
 	Notify notifierV3 `json:"notify"`
 
 	// Logger configuration
-	Logger loggerConfig `json:"logger"`
+	Logger logger.Config `json:"logger"`
 }
 
 // serverConfigV29 is just like version '28'.
 type serverConfigV29 serverConfigV28
-
-// compressionConfig represents the compression settings.
-type compressionConfig struct {
-	Enabled    bool     `json:"enabled"`
-	Extensions []string `json:"extensions"`
-	MimeTypes  []string `json:"mime-types"`
-}
 
 // serverConfigV30 is just like version '29', stores additionally
 // extensions and mimetypes fields for compression.
@@ -766,13 +734,13 @@ type serverConfigV30 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Worm       BoolFlag         `json:"worm"`
+	Worm       config.BoolFlag  `json:"worm"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
-	Cache CacheConfig `json:"cache"`
+	Cache cache.Config `json:"cache"`
 
 	// KMS configuration
 	KMS crypto.KMSConfig `json:"kms"`
@@ -781,10 +749,10 @@ type serverConfigV30 struct {
 	Notify notifierV3 `json:"notify"`
 
 	// Logger configuration
-	Logger loggerConfig `json:"logger"`
+	Logger logger.Config `json:"logger"`
 
 	// Compression configuration
-	Compression compressionConfig `json:"compress"`
+	Compression compress.Config `json:"compress"`
 }
 
 // serverConfigV31 is just like version '30', with OPA and OpenID configuration.
@@ -794,13 +762,13 @@ type serverConfigV31 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Worm       BoolFlag         `json:"worm"`
+	Worm       config.BoolFlag  `json:"worm"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
-	Cache CacheConfig `json:"cache"`
+	Cache cache.Config `json:"cache"`
 
 	// KMS configuration
 	KMS crypto.KMSConfig `json:"kms"`
@@ -809,37 +777,21 @@ type serverConfigV31 struct {
 	Notify notifierV3 `json:"notify"`
 
 	// Logger configuration
-	Logger loggerConfig `json:"logger"`
+	Logger logger.Config `json:"logger"`
 
 	// Compression configuration
-	Compression compressionConfig `json:"compress"`
+	Compression compress.Config `json:"compress"`
 
 	// OpenID configuration
-	OpenID struct {
-		// JWKS validator config.
-		JWKS validator.JWKSArgs `json:"jwks"`
-	} `json:"openid"`
+	OpenID openid.Config `json:"openid"`
 
 	// External policy enforcements.
 	Policy struct {
 		// OPA configuration.
-		OPA iampolicy.OpaArgs `json:"opa"`
+		OPA opa.Args `json:"opa"`
 
 		// Add new external policy enforcements here.
 	} `json:"policy"`
-}
-
-type notifier struct {
-	AMQP          map[string]target.AMQPArgs          `json:"amqp"`
-	Elasticsearch map[string]target.ElasticsearchArgs `json:"elasticsearch"`
-	Kafka         map[string]target.KafkaArgs         `json:"kafka"`
-	MQTT          map[string]target.MQTTArgs          `json:"mqtt"`
-	MySQL         map[string]target.MySQLArgs         `json:"mysql"`
-	NATS          map[string]target.NATSArgs          `json:"nats"`
-	NSQ           map[string]target.NSQArgs           `json:"nsq"`
-	PostgreSQL    map[string]target.PostgreSQLArgs    `json:"postgresql"`
-	Redis         map[string]target.RedisArgs         `json:"redis"`
-	Webhook       map[string]target.WebhookArgs       `json:"webhook"`
 }
 
 // serverConfigV32 is just like version '31' with added nsq notifer.
@@ -849,36 +801,33 @@ type serverConfigV32 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Worm       BoolFlag         `json:"worm"`
+	Worm       config.BoolFlag  `json:"worm"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
-	Cache CacheConfig `json:"cache"`
+	Cache cache.Config `json:"cache"`
 
 	// KMS configuration
 	KMS crypto.KMSConfig `json:"kms"`
 
 	// Notification queue configuration.
-	Notify notifier `json:"notify"`
+	Notify notify.Config `json:"notify"`
 
 	// Logger configuration
-	Logger loggerConfig `json:"logger"`
+	Logger logger.Config `json:"logger"`
 
 	// Compression configuration
-	Compression compressionConfig `json:"compress"`
+	Compression compress.Config `json:"compress"`
 
 	// OpenID configuration
-	OpenID struct {
-		// JWKS validator config.
-		JWKS validator.JWKSArgs `json:"jwks"`
-	} `json:"openid"`
+	OpenID openid.Config `json:"openid"`
 
 	// External policy enforcements.
 	Policy struct {
 		// OPA configuration.
-		OPA iampolicy.OpaArgs `json:"opa"`
+		OPA opa.Args `json:"opa"`
 
 		// Add new external policy enforcements here.
 	} `json:"policy"`
@@ -893,39 +842,36 @@ type serverConfigV33 struct {
 	// S3 API configuration.
 	Credential auth.Credentials `json:"credential"`
 	Region     string           `json:"region"`
-	Worm       BoolFlag         `json:"worm"`
+	Worm       config.BoolFlag  `json:"worm"`
 
 	// Storage class configuration
-	StorageClass storageClassConfig `json:"storageclass"`
+	StorageClass storageclass.Config `json:"storageclass"`
 
 	// Cache configuration
-	Cache CacheConfig `json:"cache"`
+	Cache cache.Config `json:"cache"`
 
 	// KMS configuration
 	KMS crypto.KMSConfig `json:"kms"`
 
 	// Notification queue configuration.
-	Notify notifier `json:"notify"`
+	Notify notify.Config `json:"notify"`
 
 	// Logger configuration
-	Logger loggerConfig `json:"logger"`
+	Logger logger.Config `json:"logger"`
 
 	// Compression configuration
-	Compression compressionConfig `json:"compress"`
+	Compression compress.Config `json:"compress"`
 
 	// OpenID configuration
-	OpenID struct {
-		// JWKS validator config.
-		JWKS validator.JWKSArgs `json:"jwks"`
-	} `json:"openid"`
+	OpenID openid.Config `json:"openid"`
 
 	// External policy enforcements.
 	Policy struct {
 		// OPA configuration.
-		OPA iampolicy.OpaArgs `json:"opa"`
+		OPA opa.Args `json:"opa"`
 
 		// Add new external policy enforcements here.
 	} `json:"policy"`
 
-	LDAPServerConfig ldapServerConfig `json:"ldapserverconfig"`
+	LDAPServerConfig xldap.Config `json:"ldapserverconfig"`
 }

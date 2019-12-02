@@ -51,7 +51,8 @@ func TestXLParentDirIsObject(t *testing.T) {
 		t.Fatalf("Unexpected object name returned got %s, expected %s", objInfo.Name, objectName)
 	}
 
-	fs := obj.(*xlObjects)
+	z := obj.(*xlZones)
+	xl := z.zones[0].sets[0]
 	testCases := []struct {
 		parentIsObject bool
 		objectName     string
@@ -86,7 +87,7 @@ func TestXLParentDirIsObject(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		gotValue := fs.parentDirIsObject(context.Background(), bucketName, testCase.objectName)
+		gotValue := xl.parentDirIsObject(context.Background(), bucketName, testCase.objectName)
 		if testCase.parentIsObject != gotValue {
 			t.Errorf("Test %d: Unexpected value returned got %t, expected %t", i+1, gotValue, testCase.parentIsObject)
 		}

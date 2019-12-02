@@ -67,12 +67,13 @@ ENVIRONMENT VARIABLES:
      MINIO_DOMAIN: To enable virtual-host-style requests, set this value to MinIO host domain name.
 
   CACHE:
-     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
-     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
+     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ",".
+     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ",".
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
-     MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
+     MINIO_CACHE_QUOTA: Maximum permitted usage of the cache in percentage (0-100).
 
   LOGGER:
+     MINIO_LOGGER_HTTP_STATE: Set this to "on" to enable HTTP logging target.
      MINIO_LOGGER_HTTP_ENDPOINT: HTTP endpoint URL to log all incoming requests.
 
 EXAMPLES:
@@ -89,16 +90,17 @@ EXAMPLES:
   3. Start minio gateway server for AWS S3 backend logging all requests to http endpoint.
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}Q3AM3UQ867SPQQA43P2F
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_LOGGER_HTTP_STATE{{.AssignmenOperator}}"on"
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_LOGGER_HTTP_ENDPOINT{{.AssignmentOperator}}"http://localhost:8000/"
      {{.Prompt}} {{.HelpName}} https://play.min.io:9000
 
   4. Start minio gateway server for AWS S3 backend with edge caching enabled.
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*;*.png"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1,/mnt/drive2,/mnt/drive3,/mnt/drive4"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*,*.png"
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXPIRY{{.AssignmentOperator}}40
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_MAXUSE{{.AssignmentOperator}}80
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}80
      {{.Prompt}} {{.HelpName}}
 
   4. Start minio gateway server for AWS S3 backend using AWS environment variables.
@@ -261,8 +263,12 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 
 	s := s3Objects{
 		Client: clnt,
+		HTTPClient: &http.Client{
+			Transport: minio.NewCustomHTTPTransport(),
+		},
 	}
-	// Enables single encyption of KMS is configured.
+
+	// Enables single encryption of KMS is configured.
 	if minio.GlobalKMS != nil {
 		encS := s3EncObjects{s}
 
@@ -283,7 +289,8 @@ func (g *S3) Production() bool {
 // s3Objects implements gateway for MinIO and S3 compatible object storage servers.
 type s3Objects struct {
 	minio.GatewayUnsupported
-	Client *miniogo.Core
+	Client     *miniogo.Core
+	HTTPClient *http.Client
 }
 
 // Shutdown saves any gateway metadata to disk
@@ -294,6 +301,8 @@ func (l *s3Objects) Shutdown(ctx context.Context) error {
 
 // StorageInfo is not relevant to S3 backend.
 func (l *s3Objects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
+	si.Backend.Type = minio.BackendGateway
+	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.HTTPClient, l.Client.EndpointURL().String())
 	return si
 }
 
@@ -442,7 +451,7 @@ func (l *s3Objects) GetObject(ctx context.Context, bucket string, key string, st
 			return minio.ErrorRespToObjectError(err, bucket, key)
 		}
 	}
-	object, _, err := l.Client.GetObject(bucket, key, opts)
+	object, _, _, err := l.Client.GetObject(bucket, key, opts)
 	if err != nil {
 		return minio.ErrorRespToObjectError(err, bucket, key)
 	}

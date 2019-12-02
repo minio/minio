@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/lifecycle"
 )
 
@@ -55,7 +56,7 @@ func startDailyLifecycle() {
 
 	// Wait until the object API is ready
 	for {
-		objAPI = newObjectLayerFn()
+		objAPI = newObjectLayerWithoutSafeModeFn()
 		if objAPI == nil {
 			time.Sleep(time.Second)
 			continue
@@ -107,7 +108,7 @@ var lifecycleTimeout = newDynamicTimeout(60*time.Second, time.Second)
 
 func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 	// Lock to avoid concurrent lifecycle ops from other nodes
-	sweepLock := globalNSMutex.NewNSLock(ctx, "system", "daily-lifecycle-ops")
+	sweepLock := objAPI.NewNSLock(ctx, "system", "daily-lifecycle-ops")
 	if err := sweepLock.GetLock(lifecycleTimeout); err != nil {
 		return err
 	}
@@ -135,7 +136,7 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 		// List all objects and calculate lifecycle action based on object name & object modtime
 		marker := ""
 		for {
-			res, err := objAPI.ListObjects(ctx, bucket.Name, commonPrefix, marker, "", 1000)
+			res, err := objAPI.ListObjects(ctx, bucket.Name, commonPrefix, marker, "", maxObjectList)
 			if err != nil {
 				continue
 			}
@@ -150,8 +151,29 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 					// Do nothing, for now.
 				}
 			}
+
 			// Deletes a list of objects.
-			objAPI.DeleteObjects(ctx, bucket.Name, objects)
+			deleteErrs, err := objAPI.DeleteObjects(ctx, bucket.Name, objects)
+			if err != nil {
+				logger.LogIf(ctx, err)
+			} else {
+				for i := range deleteErrs {
+					if deleteErrs[i] != nil {
+						logger.LogIf(ctx, deleteErrs[i])
+						continue
+					}
+					// Notify object deleted event.
+					sendEvent(eventArgs{
+						EventName:  event.ObjectRemovedDelete,
+						BucketName: bucket.Name,
+						Object: ObjectInfo{
+							Name: objects[i],
+						},
+						Host: "Internal: [ILM-EXPIRY]",
+					})
+				}
+			}
+
 			if !res.IsTruncated {
 				// We are done here, proceed to next bucket.
 				break

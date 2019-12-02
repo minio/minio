@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"net/url"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/minio/cmd/http"
@@ -42,15 +43,12 @@ import (
 type peerRESTClient struct {
 	host       *xnet.Host
 	restClient *rest.Client
-	connected  bool
+	connected  int32
 }
 
 // Reconnect to a peer rest server.
-func (client *peerRESTClient) reConnect() error {
-	// correct (intelligent) retry logic will be
-	// implemented in subsequent PRs.
-	client.connected = true
-	return nil
+func (client *peerRESTClient) reConnect() {
+	atomic.StoreInt32(&client.connected, 1)
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
@@ -64,12 +62,8 @@ func (client *peerRESTClient) call(method string, values url.Values, body io.Rea
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *peerRESTClient) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-	if !client.connected {
-		err := client.reConnect()
-		logger.LogIf(ctx, err)
-		if err != nil {
-			return nil, err
-		}
+	if !client.IsOnline() {
+		client.reConnect()
 	}
 
 	if values == nil {
@@ -82,7 +76,7 @@ func (client *peerRESTClient) callWithContext(ctx context.Context, method string
 	}
 
 	if isNetworkError(err) {
-		client.connected = false
+		atomic.StoreInt32(&client.connected, 0)
 	}
 
 	return nil, err
@@ -95,18 +89,18 @@ func (client *peerRESTClient) String() string {
 
 // IsOnline - returns whether RPC client failed to connect or not.
 func (client *peerRESTClient) IsOnline() bool {
-	return client.connected
+	return atomic.LoadInt32(&client.connected) == 1
 }
 
 // Close - marks the client as closed.
 func (client *peerRESTClient) Close() error {
-	client.connected = false
+	atomic.StoreInt32(&client.connected, 0)
 	client.restClient.Close()
 	return nil
 }
 
 // GetLocksResp stores various info from the client for each lock that is requested.
-type GetLocksResp map[string][]lockRequesterInfo
+type GetLocksResp []map[string][]lockRequesterInfo
 
 // NetReadPerfInfo - fetch network read performance information for a remote node.
 func (client *peerRESTClient) NetReadPerfInfo(size int64) (info ServerNetReadPerfInfo, err error) {
@@ -164,6 +158,28 @@ func (client *peerRESTClient) ServerInfo() (info ServerInfoData, err error) {
 // CPULoadInfo - fetch CPU information for a remote node.
 func (client *peerRESTClient) CPULoadInfo() (info ServerCPULoadInfo, err error) {
 	respBody, err := client.call(peerRESTMethodCPULoadInfo, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
+// CPUInfo - fetch CPU hardware information for a remote node.
+func (client *peerRESTClient) CPUInfo() (info madmin.ServerCPUHardwareInfo, err error) {
+	respBody, err := client.call(peerRESTMethodHardwareCPUInfo, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
+// NetworkInfo - fetch network hardware information for a remote node.
+func (client *peerRESTClient) NetworkInfo() (info madmin.ServerNetworkHardwareInfo, err error) {
+	respBody, err := client.call(peerRESTMethodHardwareNetworkInfo, nil, nil, -1)
 	if err != nil {
 		return
 	}
@@ -345,6 +361,18 @@ func (client *peerRESTClient) RemoveBucketPolicy(bucket string) error {
 	return nil
 }
 
+// RemoveBucketObjectLockConfig - Remove bucket object lock config on the peer node.
+func (client *peerRESTClient) RemoveBucketObjectLockConfig(bucket string) error {
+	values := make(url.Values)
+	values.Set(peerRESTBucket, bucket)
+	respBody, err := client.call(peerRESTMethodBucketObjectLockConfigRemove, values, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 // SetBucketPolicy - Set bucket policy on the peer node.
 func (client *peerRESTClient) SetBucketPolicy(bucket string, bucketPolicy *policy.Policy) error {
 	values := make(url.Values)
@@ -407,6 +435,25 @@ func (client *peerRESTClient) PutBucketNotification(bucket string, rulesMap even
 	}
 
 	respBody, err := client.call(peerRESTMethodBucketNotificationPut, values, &reader, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// PutBucketObjectLockConfig - PUT bucket object lock configuration.
+func (client *peerRESTClient) PutBucketObjectLockConfig(bucket string, retention Retention) error {
+	values := make(url.Values)
+	values.Set(peerRESTBucket, bucket)
+
+	var reader bytes.Buffer
+	err := gob.NewEncoder(&reader).Encode(&retention)
+	if err != nil {
+		return err
+	}
+
+	respBody, err := client.call(peerRESTMethodPutBucketObjectLockConfig, values, &reader, -1)
 	if err != nil {
 		return err
 	}
@@ -673,28 +720,33 @@ func (client *peerRESTClient) ConsoleLog(logCh chan interface{}, doneCh chan str
 	}()
 }
 
-func getRemoteHosts(endpoints EndpointList) []*xnet.Host {
+func getRemoteHosts(endpointZones EndpointZones) []*xnet.Host {
 	var remoteHosts []*xnet.Host
-	for _, hostStr := range GetRemotePeers(endpoints) {
+	for _, hostStr := range GetRemotePeers(endpointZones) {
 		host, err := xnet.ParseHost(hostStr)
-		logger.FatalIf(err, "Unable to parse peer Host")
+		if err != nil {
+			logger.LogIf(context.Background(), err)
+			continue
+		}
 		remoteHosts = append(remoteHosts, host)
 	}
 
 	return remoteHosts
 }
 
-func getRestClients(peerHosts []*xnet.Host) ([]*peerRESTClient, error) {
+func getRestClients(endpoints EndpointZones) []*peerRESTClient {
+	peerHosts := getRemoteHosts(endpoints)
 	restClients := make([]*peerRESTClient, len(peerHosts))
 	for i, host := range peerHosts {
 		client, err := newPeerRESTClient(host)
 		if err != nil {
 			logger.LogIf(context.Background(), err)
+			continue
 		}
 		restClients[i] = client
 	}
 
-	return restClients, nil
+	return restClients
 }
 
 // Returns a peer rest client.
@@ -719,11 +771,11 @@ func newPeerRESTClient(peer *xnet.Host) (*peerRESTClient, error) {
 		}
 	}
 
-	restClient, err := rest.NewClient(serverURL, tlsConfig, rest.DefaultRESTTimeout, newAuthToken)
-
+	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout, rest.DefaultRESTTimeout)
+	restClient, err := rest.NewClient(serverURL, trFn, newAuthToken)
 	if err != nil {
-		return &peerRESTClient{host: peer, restClient: restClient, connected: false}, err
+		return nil, err
 	}
 
-	return &peerRESTClient{host: peer, restClient: restClient, connected: true}, nil
+	return &peerRESTClient{host: peer, restClient: restClient, connected: 1}, nil
 }

@@ -38,6 +38,7 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	ioutilx "github.com/minio/minio/pkg/ioutil"
 )
@@ -1181,7 +1182,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 	invalidMD5Header := http.Header{}
 	invalidMD5Header.Set("Content-Md5", "42")
 	inalidStorageClassHeader := http.Header{}
-	inalidStorageClassHeader.Set(amzStorageClass, "INVALID")
+	inalidStorageClassHeader.Set(xhttp.AmzStorageClass, "INVALID")
 
 	addCustomHeaders := func(req *http.Request, customHeaders http.Header) {
 		for k, values := range customHeaders {

@@ -8,68 +8,52 @@ MinIO supports currently two target types
 - http
 
 ### Console Target
-Console target logs to `/dev/stderr` and is enabled by default. To turn-off console logging you would have to update your MinIO server configuration using `mc admin config set` command.
-
-Assuming `mc` is already [configured](https://docs.min.io/docs/minio-client-quickstart-guide.html)
-```
-mc admin config get myminio/ > /tmp/config
-```
-
-Edit the `/tmp/config` and toggle `console` field `enabled` from `true` to `false`.
-
-```json
-	"logger": {
-		"console": {
-			"enabled": false
-		}
-	},
-```
-
-Once changed, now you may set the changed config to server through following commands.
-```
-mc admin config set myminio/ < /tmp/config
-mc admin restart myminio/
-```
+Console target is on always and cannot be disabled.
 
 ### HTTP Target
 HTTP target logs to a generic HTTP endpoint in JSON format and is not enabled by default. To enable HTTP target logging you would have to update your MinIO server configuration using `mc admin config set` command.
 
 Assuming `mc` is already [configured](https://docs.min.io/docs/minio-client-quickstart-guide.html)
 ```
-mc admin config get myminio/ > /tmp/config
+mc admin config get myminio/ logger_webhook
+logger_webhook:target1 auth_token="" endpoint=""
 ```
 
-Edit the `/tmp/config` and toggle `http` field `enabled` from `false` to `true`.
-```json
-	"logger": {
-		"console": {
-			"enabled": false
-		},
-		"http": {
-			"1": {
-				"enabled": true,
-			    "endpoint": "http://endpoint:port/path"
-			}
-		}
-	},
 ```
+mc admin config set myminio logger_webhook:target1 auth_token="" endpoint="http://endpoint:port/path"
+mc admin service restart myminio
+```
+
 NOTE: `http://endpoint:port/path` is a placeholder value to indicate the URL format, please change this accordingly as per your configuration.
-
-Once changed, now you may set the changed config to server through following commands.
-```
-mc admin config set myminio/ < /tmp/config
-mc admin restart myminio/
-```
 
 MinIO also honors environment variable for HTTP target logging as shown below, this setting will override the endpoint settings in the MinIO server config.
 ```
-MINIO_LOGGER_HTTP_ENDPOINT=http://localhost:8080/minio/logs minio server /mnt/data
+export MINIO_LOGGER_WEBHOOK_STATE_target1="on"
+export MINIO_LOGGER_WEBHOOK_AUTH_TOKEN_target1="token"
+export MINIO_LOGGER_WEBHOOK_ENDPOINT_target1=http://localhost:8080/minio/logs
+minio server /mnt/data
 ```
 
 ## Audit Targets
-For audit logging MinIO supports only HTTP target type for now. Audit logging is currently only available through environment variable.
+Assuming `mc` is already [configured](https://docs.min.io/docs/minio-client-quickstart-guide.html)
 ```
-MINIO_AUDIT_LOGGER_HTTP_ENDPOINT=http://localhost:8080/minio/logs/audit minio server /mnt/data
+mc admin config get myminio/ audit_webhook
+audit_webhook:target1 auth_token="" endpoint=""
+```
+
+```
+mc admin config set myminio audit_webhook:target1 auth_token="" endpoint="http://endpoint:port/path"
+mc admin service restart myminio
+```
+
+NOTE: `http://endpoint:port/path` is a placeholder value to indicate the URL format, please change this accordingly as per your configuration.
+
+MinIO also honors environment variable for HTTP target Audit logging as shown below, this setting will override the endpoint settings in the MinIO server config.
+```
+export MINIO_AUDIT_WEBHOOK_STATE_target1="on"
+export MINIO_AUDIT_WEBHOOK_AUTH_TOKEN_target1="token"
+export MINIO_AUDIT_WEBHOOK_ENDPOINT_target1=http://localhost:8080/minio/logs
+minio server /mnt/data
 ```
 
 Setting this environment variable automatically enables audit logging to the HTTP target. The audit logging is in JSON format as described below.

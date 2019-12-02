@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -95,11 +94,20 @@ func newPosixTestSetup() (StorageAPI, string, error) {
 		return nil, "", err
 	}
 	// Initialize a new posix layer.
-	posixStorage, err := newPosix(diskPath)
+	storage, err := newPosix(diskPath)
 	if err != nil {
 		return nil, "", err
 	}
-	return posixStorage, diskPath, nil
+	err = storage.MakeVol(minioMetaBucket)
+	if err != nil {
+		return nil, "", err
+	}
+	// Create a sample format.json file
+	err = storage.WriteAll(minioMetaBucket, formatConfigFile, bytes.NewBufferString(`{"version":"1","format":"xl","id":"592a41c2-b7cc-4130-b883-c4b5cb15965b","xl":{"version":"3","this":"da017d62-70e3-45f1-8a1a-587707e69ad1","sets":[["e07285a6-8c73-4962-89c6-047fb939f803","33b8d431-482d-4376-b63c-626d229f0a29","cff6513a-4439-4dc1-bcaa-56c9e880c352","da017d62-70e3-45f1-8a1a-587707e69ad1","9c9f21d5-1f15-4737-bce6-835faa0d9626","0a59b346-1424-4fc2-9fa2-a2e80541d0c1","7924a3dc-b69a-4971-9a2e-014966d6aebb","4d2b8dd9-4e48-444b-bdca-c89194b26042"]],"distributionAlgo":"CRCMOD"}}`))
+	if err != nil {
+		return nil, "", err
+	}
+	return &posixDiskIDCheck{storage: storage, diskID: "da017d62-70e3-45f1-8a1a-587707e69ad1"}, diskPath, nil
 }
 
 // createPermDeniedFile - creates temporary directory and file with path '/mybucket/myobject'
@@ -304,9 +312,9 @@ func TestPosixReadAll(t *testing.T) {
 	}
 	// TestPosixing for faulty disk.
 	// Setting ioErrCount > maxAllowedIOError.
-	if posixType, ok := posixStorage.(*posix); ok {
+	if p, ok := posixStorage.(*posixDiskIDCheck); ok {
 		// setting the io error count from as specified in the test case.
-		posixType.ioErrCount = int32(6)
+		p.storage.ioErrCount = int32(6)
 	} else {
 		t.Errorf("Expected the StorageAPI to be of type *posix")
 	}
@@ -422,9 +430,9 @@ func TestPosixMakeVol(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if posixType, ok := posixStorage.(*posix); ok {
+		if p, ok := posixStorage.(*posixDiskIDCheck); ok {
 			// setting the io error count from as specified in the test case.
-			posixType.ioErrCount = int32(testCase.ioErrCount)
+			p.storage.ioErrCount = int32(testCase.ioErrCount)
 		} else {
 			t.Errorf("Expected the StorageAPI to be of type *posix")
 		}
@@ -536,11 +544,11 @@ func TestPosixDeleteVol(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if posixType, ok := posixStorage.(*posix); ok {
+		if posixDiskCheck, ok := posixStorage.(*posixDiskIDCheck); ok {
 			// setting the io error count from as specified in the test case.
-			posixType.ioErrCount = int32(testCase.ioErrCount)
+			posixDiskCheck.storage.ioErrCount = int32(testCase.ioErrCount)
 		} else {
-			t.Errorf("Expected the StorageAPI to be of type *posix")
+			t.Errorf("Expected the StorageAPI to be of type *posixDiskIDCheck")
 		}
 		if err = posixStorage.DeleteVol(testCase.volName); err != testCase.expectedErr {
 			t.Fatalf("TestPosix: %d, expected: %s, got: %s", i+1, testCase.expectedErr, err)
@@ -649,9 +657,9 @@ func TestPosixStatVol(t *testing.T) {
 	for i, testCase := range testCases {
 		var volInfo VolInfo
 		// setting ioErrCnt from the test case.
-		if posixType, ok := posixStorage.(*posix); ok {
+		if p, ok := posixStorage.(*posixDiskIDCheck); ok {
 			// setting the io error count from as specified in the test case.
-			posixType.ioErrCount = int32(testCase.ioErrCount)
+			p.storage.ioErrCount = int32(testCase.ioErrCount)
 		} else {
 			t.Errorf("Expected the StorageAPI to be of type *posix")
 		}
@@ -690,30 +698,42 @@ func TestPosixListVols(t *testing.T) {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
 
-	var volInfo []VolInfo
+	var volInfos []VolInfo
 	// TestPosix empty list vols.
-	if volInfo, err = posixStorage.ListVols(); err != nil {
+	if volInfos, err = posixStorage.ListVols(); err != nil {
 		t.Fatalf("expected: <nil>, got: %s", err)
-	} else if len(volInfo) != 0 {
-		t.Fatalf("expected: [], got: %s", volInfo)
+	} else if len(volInfos) != 1 {
+		t.Fatalf("expected: one entry, got: %s", volInfos)
 	}
 
 	// TestPosix non-empty list vols.
 	if err = posixStorage.MakeVol("success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
-	if volInfo, err = posixStorage.ListVols(); err != nil {
+
+	volInfos, err = posixStorage.ListVols()
+	if err != nil {
 		t.Fatalf("expected: <nil>, got: %s", err)
-	} else if len(volInfo) != 1 {
-		t.Fatalf("expected: 1, got: %d", len(volInfo))
-	} else if volInfo[0].Name != "success-vol" {
-		t.Errorf("expected: success-vol, got: %s", volInfo[0].Name)
 	}
+	if len(volInfos) != 2 {
+		t.Fatalf("expected: 2, got: %d", len(volInfos))
+	}
+	volFound := false
+	for _, info := range volInfos {
+		if info.Name == "success-vol" {
+			volFound = true
+			break
+		}
+	}
+	if !volFound {
+		t.Errorf("expected: success-vol to be created")
+	}
+
 	// setting ioErrCnt to be > maxAllowedIOError.
 	// should fail with errFaultyDisk.
-	if posixType, ok := posixStorage.(*posix); ok {
+	if p, ok := posixStorage.(*posixDiskIDCheck); ok {
 		// setting the io error count from as specified in the test case.
-		posixType.ioErrCount = int32(6)
+		p.storage.ioErrCount = int32(6)
 	} else {
 		t.Errorf("Expected the StorageAPI to be of type *posix")
 	}
@@ -724,9 +744,9 @@ func TestPosixListVols(t *testing.T) {
 	os.RemoveAll(path)
 	// Resetting the IO error.
 	// should fail with errDiskNotFound.
-	if posixType, ok := posixStorage.(*posix); ok {
+	if p, ok := posixStorage.(*posixDiskIDCheck); ok {
 		// setting the io error count from as specified in the test case.
-		posixType.ioErrCount = int32(0)
+		p.storage.ioErrCount = int32(0)
 	} else {
 		t.Errorf("Expected the StorageAPI to be of type *posix")
 	}
@@ -833,9 +853,9 @@ func TestPosixPosixListDir(t *testing.T) {
 	for i, testCase := range testCases {
 		var dirList []string
 		// setting ioErrCnt from the test case.
-		if posixType, ok := posixStorage.(*posix); ok {
+		if p, ok := posixStorage.(*posixDiskIDCheck); ok {
 			// setting the io error count from as specified in the test case.
-			posixType.ioErrCount = int32(testCase.ioErrCnt)
+			p.storage.ioErrCount = int32(testCase.ioErrCnt)
 		} else {
 			t.Errorf("Expected the StorageAPI to be of type *posix")
 		}
@@ -987,9 +1007,9 @@ func TestPosixDeleteFile(t *testing.T) {
 
 	for i, testCase := range testCases {
 		// setting ioErrCnt from the test case.
-		if posixType, ok := posixStorage.(*posix); ok {
+		if p, ok := posixStorage.(*posixDiskIDCheck); ok {
 			// setting the io error count from as specified in the test case.
-			posixType.ioErrCount = int32(testCase.ioErrCnt)
+			p.storage.ioErrCount = int32(testCase.ioErrCnt)
 		} else {
 			t.Errorf("Expected the StorageAPI to be of type *posix")
 		}
@@ -1211,14 +1231,14 @@ func TestPosixReadFile(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		posixStorage, err = newPosix(permDeniedDir)
+		posixPermStorage, err := newPosix(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize posix, %s", err)
 		}
 
 		// Common read buffer.
 		var buf = make([]byte, 10)
-		if _, err = posixStorage.ReadFile("mybucket", "myobject", 0, buf, v); err != errFileAccessDenied {
+		if _, err = posixPermStorage.ReadFile("mybucket", "myobject", 0, buf, v); err != errFileAccessDenied {
 			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
@@ -1226,9 +1246,9 @@ func TestPosixReadFile(t *testing.T) {
 	// TestPosixing for faulty disk.
 	// setting ioErrCnt to 6.
 	// should fail with errFaultyDisk.
-	if posixType, ok := posixStorage.(*posix); ok {
+	if posixType, ok := posixStorage.(*posixDiskIDCheck); ok {
 		// setting the io error count from as specified in the test case.
-		posixType.ioErrCount = int32(6)
+		posixType.storage.ioErrCount = int32(6)
 		// Common read buffer.
 		var buf = make([]byte, 10)
 		_, err = posixType.ReadFile("abc", "yes", 0, buf, nil)
@@ -1236,7 +1256,7 @@ func TestPosixReadFile(t *testing.T) {
 			t.Fatalf("Expected \"Faulty Disk\", got: \"%s\"", err)
 		}
 	} else {
-		t.Fatalf("Expected the StorageAPI to be of type *posix")
+		t.Fatalf("Expected the StorageAPI to be of type *posixDiskIDCheck")
 	}
 }
 
@@ -1247,22 +1267,22 @@ var posixReadFileWithVerifyTests = []struct {
 	algorithm BitrotAlgorithm
 	expError  error
 }{
-	{file: "myobject", offset: 0, length: 100, algorithm: SHA256, expError: nil},                     // 0
-	{file: "myobject", offset: 25, length: 74, algorithm: SHA256, expError: nil},                     // 1
-	{file: "myobject", offset: 29, length: 70, algorithm: SHA256, expError: nil},                     // 2
-	{file: "myobject", offset: 100, length: 0, algorithm: SHA256, expError: nil},                     // 3
-	{file: "myobject", offset: 1, length: 120, algorithm: SHA256, expError: HashMismatchError{}},     // 4
-	{file: "myobject", offset: 3, length: 1100, algorithm: SHA256, expError: nil},                    // 5
-	{file: "myobject", offset: 2, length: 100, algorithm: SHA256, expError: HashMismatchError{}},     // 6
-	{file: "myobject", offset: 1000, length: 1001, algorithm: SHA256, expError: nil},                 // 7
-	{file: "myobject", offset: 0, length: 100, algorithm: BLAKE2b512, expError: HashMismatchError{}}, // 8
-	{file: "myobject", offset: 25, length: 74, algorithm: BLAKE2b512, expError: nil},                 // 9
-	{file: "myobject", offset: 29, length: 70, algorithm: BLAKE2b512, expError: HashMismatchError{}}, // 10
-	{file: "myobject", offset: 100, length: 0, algorithm: BLAKE2b512, expError: nil},                 // 11
-	{file: "myobject", offset: 1, length: 120, algorithm: BLAKE2b512, expError: nil},                 // 12
-	{file: "myobject", offset: 3, length: 1100, algorithm: BLAKE2b512, expError: nil},                // 13
-	{file: "myobject", offset: 2, length: 100, algorithm: BLAKE2b512, expError: nil},                 // 14
-	{file: "myobject", offset: 1000, length: 1001, algorithm: BLAKE2b512, expError: nil},             // 15
+	{file: "myobject", offset: 0, length: 100, algorithm: SHA256, expError: nil},                // 0
+	{file: "myobject", offset: 25, length: 74, algorithm: SHA256, expError: nil},                // 1
+	{file: "myobject", offset: 29, length: 70, algorithm: SHA256, expError: nil},                // 2
+	{file: "myobject", offset: 100, length: 0, algorithm: SHA256, expError: nil},                // 3
+	{file: "myobject", offset: 1, length: 120, algorithm: SHA256, expError: errFileCorrupt},     // 4
+	{file: "myobject", offset: 3, length: 1100, algorithm: SHA256, expError: nil},               // 5
+	{file: "myobject", offset: 2, length: 100, algorithm: SHA256, expError: errFileCorrupt},     // 6
+	{file: "myobject", offset: 1000, length: 1001, algorithm: SHA256, expError: nil},            // 7
+	{file: "myobject", offset: 0, length: 100, algorithm: BLAKE2b512, expError: errFileCorrupt}, // 8
+	{file: "myobject", offset: 25, length: 74, algorithm: BLAKE2b512, expError: nil},            // 9
+	{file: "myobject", offset: 29, length: 70, algorithm: BLAKE2b512, expError: errFileCorrupt}, // 10
+	{file: "myobject", offset: 100, length: 0, algorithm: BLAKE2b512, expError: nil},            // 11
+	{file: "myobject", offset: 1, length: 120, algorithm: BLAKE2b512, expError: nil},            // 12
+	{file: "myobject", offset: 3, length: 1100, algorithm: BLAKE2b512, expError: nil},           // 13
+	{file: "myobject", offset: 2, length: 100, algorithm: BLAKE2b512, expError: nil},            // 14
+	{file: "myobject", offset: 1000, length: 1001, algorithm: BLAKE2b512, expError: nil},        // 15
 }
 
 // TestPosixReadFile with bitrot verification - tests the posix level
@@ -1294,9 +1314,7 @@ func TestPosixReadFileWithVerify(t *testing.T) {
 		h := test.algorithm.New()
 		h.Write(data)
 		if test.expError != nil {
-			expected := h.Sum(nil)
 			h.Write([]byte{0})
-			test.expError = HashMismatchError{hex.EncodeToString(h.Sum(nil)), hex.EncodeToString(expected)}
 		}
 
 		buffer := make([]byte, test.length)
@@ -1312,6 +1330,29 @@ func TestPosixReadFileWithVerify(t *testing.T) {
 		case err != nil && err != test.expError:
 			t.Errorf("Test %d: Expected error: %v, but got: %v", i, test.expError, err)
 		}
+	}
+}
+
+// TestPosixFormatFileChange - to test if changing the diskID makes the calls fail.
+func TestPosixFormatFileChange(t *testing.T) {
+	posixStorage, path, err := newPosixTestSetup()
+	if err != nil {
+		t.Fatalf("Unable to create posix test setup, %s", err)
+	}
+	defer os.RemoveAll(path)
+
+	if err = posixStorage.MakeVol(volume); err != nil {
+		t.Fatalf("MakeVol failed with %s", err)
+	}
+
+	// Change the format.json such that "this" is changed to "randomid".
+	if err = ioutil.WriteFile(pathJoin(posixStorage.String(), minioMetaBucket, formatConfigFile), []byte(`{"version":"1","format":"xl","id":"592a41c2-b7cc-4130-b883-c4b5cb15965b","xl":{"version":"3","this":"randomid","sets":[["e07285a6-8c73-4962-89c6-047fb939f803","33b8d431-482d-4376-b63c-626d229f0a29","cff6513a-4439-4dc1-bcaa-56c9e880c352","randomid","9c9f21d5-1f15-4737-bce6-835faa0d9626","0a59b346-1424-4fc2-9fa2-a2e80541d0c1","7924a3dc-b69a-4971-9a2e-014966d6aebb","4d2b8dd9-4e48-444b-bdca-c89194b26042"]],"distributionAlgo":"CRCMOD"}}`), 0644); err != nil {
+		t.Fatalf("ioutil.WriteFile failed with %s", err)
+	}
+
+	err = posixStorage.MakeVol(volume)
+	if err != errDiskNotFound {
+		t.Fatalf("MakeVol expected to fail with errDiskNotFound but failed with %s", err)
 	}
 }
 
@@ -1397,10 +1438,10 @@ func TestPosixAppendFile(t *testing.T) {
 
 	// setting ioErrCnt to 6.
 	// should fail with errFaultyDisk.
-	if posixType, ok := posixStorage.(*posix); ok {
+	if p, ok := posixStorage.(*posixDiskIDCheck); ok {
 		// setting the io error count from as specified in the test case.
-		posixType.ioErrCount = int32(6)
-		err = posixType.AppendFile("abc", "yes", []byte("hello, world"))
+		p.storage.ioErrCount = int32(6)
+		err = p.AppendFile("abc", "yes", []byte("hello, world"))
 		if err != errFaultyDisk {
 			t.Fatalf("Expected \"Faulty Disk\", got: \"%s\"", err)
 		}
@@ -1650,9 +1691,9 @@ func TestPosixRenameFile(t *testing.T) {
 
 	for i, testCase := range testCases {
 		// setting ioErrCnt from the test case.
-		if posixType, ok := posixStorage.(*posix); ok {
+		if p, ok := posixStorage.(*posixDiskIDCheck); ok {
 			// setting the io error count from as specified in the test case.
-			posixType.ioErrCount = int32(testCase.ioErrCnt)
+			p.storage.ioErrCount = int32(testCase.ioErrCnt)
 		} else {
 			t.Fatalf("Expected the StorageAPI to be of type *posix")
 		}
@@ -1751,9 +1792,9 @@ func TestPosixStatFile(t *testing.T) {
 
 	for i, testCase := range testCases {
 		// setting ioErrCnt from the test case.
-		if posixType, ok := posixStorage.(*posix); ok {
+		if p, ok := posixStorage.(*posixDiskIDCheck); ok {
 			// setting the io error count from as specified in the test case.
-			posixType.ioErrCount = int32(testCase.ioErrCnt)
+			p.storage.ioErrCount = int32(testCase.ioErrCnt)
 		} else {
 			t.Errorf("Expected the StorageAPI to be of type *posix")
 		}
@@ -1846,7 +1887,7 @@ func TestPosixVerifyFile(t *testing.T) {
 
 	// 4) Streaming bitrot check on corrupted file
 	filePath := pathJoin(posixStorage.String(), volName, fileName)
-	f, err := os.OpenFile(filePath, os.O_WRONLY, 0644)
+	f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_SYNC, 0644)
 	if err != nil {
 		t.Fatal(err)
 	}

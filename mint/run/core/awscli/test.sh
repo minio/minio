@@ -1380,6 +1380,56 @@ function test_serverside_encryption_error() {
     return $rv
 }
 
+# WORM bucket tests.
+function test_worm_bucket() {
+    # log start time
+    start_time=$(get_time)
+
+    function="make_bucket"
+    bucket_name=$(make_bucket)
+    rv=$?
+
+    # if make bucket succeeds set object lock configuration
+    if [ $rv -eq 0 ]; then
+        args=( s3api put-object-lock-configuration --bucket "${bucket_name}" --object-lock-configuration 'ObjectLockEnabled="Enabled",Rule={DefaultRetention={Mode="GOVERNANCE",Days=1}}' )
+        out=$("${AWS}" "${args[@]}" 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+
+    # if setting object lock configuration succeeds, upload a file first time
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key datafile-1-kB"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+
+    # second time upload of same file should fail due to WORM setting
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key datafile-1-kB"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        out="First time object upload failed"
+    fi
+
+    if [ $rv -ne 0 ]; then
+        log_success "$(get_duration "$start_time")" "${test_function}"
+        rv=0
+    else
+        # cleanup is not possible due to one day validity of object lock configurataion
+        log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+        rv=-1
+    fi
+
+    return $rv
+}
+
 # main handler for all the tests.
 main() {
     # Success tests
@@ -1404,7 +1454,8 @@ main() {
     # Error tests
     test_list_objects_error && \
     test_put_object_error && \
-    test_serverside_encryption_error
+    test_serverside_encryption_error && \
+    test_worm_bucket
     return $?
 }
 

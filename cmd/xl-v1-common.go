@@ -19,7 +19,8 @@ package cmd
 import (
 	"context"
 	"path"
-	"sync"
+
+	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
 // getLoadBalancedDisks - fetches load balanced (sufficiently randomized) disk slice.
@@ -53,35 +54,33 @@ func (xl xlObjects) parentDirIsObject(ctx context.Context, bucket, parent string
 // isObject - returns `true` if the prefix is an object i.e if
 // `xl.json` exists at the leaf, false otherwise.
 func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
-	var errs = make([]error, len(xl.getDisks()))
-	var wg sync.WaitGroup
-	for index, disk := range xl.getDisks() {
-		if disk == nil {
-			continue
-		}
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
+	storageDisks := xl.getDisks()
+
+	g := errgroup.WithNErrs(len(storageDisks))
+
+	for index := range storageDisks {
+		index := index
+		g.Go(func() error {
+			if storageDisks[index] == nil {
+				return errDiskNotFound
+			}
 			// Check if 'prefix' is an object on this 'disk', else continue the check the next disk
-			fi, err := disk.StatFile(bucket, path.Join(prefix, xlMetaJSONFile))
+			fi, err := storageDisks[index].StatFile(bucket, pathJoin(prefix, xlMetaJSONFile))
 			if err != nil {
-				errs[index] = err
-				return
+				return err
 			}
 			if fi.Size == 0 {
-				errs[index] = errCorruptedFormat
-				return
+				return errCorruptedFormat
 			}
-		}(index, disk)
+			return nil
+		}, index)
 	}
-
-	wg.Wait()
 
 	// NOTE: Observe we are not trying to read `xl.json` and figure out the actual
 	// quorum intentionally, but rely on the default case scenario. Actual quorum
 	// verification will happen by top layer by using getObjectInfo() and will be
 	// ignored if necessary.
-	readQuorum := len(xl.getDisks()) / 2
+	readQuorum := len(storageDisks) / 2
 
-	return reduceReadQuorumErrs(context.Background(), errs, objectOpIgnoredErrs, readQuorum) == nil
+	return reduceReadQuorumErrs(context.Background(), g.Wait(), objectOpIgnoredErrs, readQuorum) == nil
 }

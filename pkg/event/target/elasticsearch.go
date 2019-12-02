@@ -31,6 +31,22 @@ import (
 	"gopkg.in/olivere/elastic.v5"
 )
 
+// Elastic constants
+const (
+	ElasticFormat     = "format"
+	ElasticURL        = "url"
+	ElasticIndex      = "index"
+	ElasticQueueDir   = "queue_dir"
+	ElasticQueueLimit = "queue_limit"
+
+	EnvElasticState      = "MINIO_NOTIFY_ELASTICSEARCH_STATE"
+	EnvElasticFormat     = "MINIO_NOTIFY_ELASTICSEARCH_FORMAT"
+	EnvElasticURL        = "MINIO_NOTIFY_ELASTICSEARCH_URL"
+	EnvElasticIndex      = "MINIO_NOTIFY_ELASTICSEARCH_INDEX"
+	EnvElasticQueueDir   = "MINIO_NOTIFY_ELASTICSEARCH_QUEUE_DIR"
+	EnvElasticQueueLimit = "MINIO_NOTIFY_ELASTICSEARCH_QUEUE_LIMIT"
+)
+
 // ElasticsearchArgs - Elasticsearch target arguments.
 type ElasticsearchArgs struct {
 	Enable     bool     `json:"enable"`
@@ -130,7 +146,6 @@ func (target *ElasticsearchTarget) send(eventData event.Event) error {
 		} else {
 			err = update()
 		}
-
 		return err
 	}
 
@@ -221,7 +236,7 @@ func newClient(args ElasticsearchArgs) (*elastic.Client, error) {
 }
 
 // NewElasticsearchTarget - creates new Elasticsearch target.
-func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan struct{}) (*ElasticsearchTarget, error) {
+func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*ElasticsearchTarget, error) {
 	var client *elastic.Client
 	var err error
 
@@ -256,9 +271,9 @@ func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan str
 
 	if target.store != nil {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh)
+		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh)
+		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
 	}
 
 	return target, nil

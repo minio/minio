@@ -155,6 +155,6 @@ func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[
 		entry.API.StatusCode = statusCode
 		entry.API.TimeToFirstByte = timeToFirstByte.String()
 		entry.API.TimeToResponse = timeToResponse.String()
-		_ = t.Send(entry)
+		_ = t.Send(entry, string(All))
 	}
 }

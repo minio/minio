@@ -12,15 +12,9 @@ Distributed MinIO provides protection against multiple node/drive failures and [
 
 ### High availability
 
-A stand-alone MinIO server would go down if the server hosting the disks goes offline. In contrast, a distributed MinIO setup with _n_ disks will have your data safe as long as _n/2_ or more disks are online. You'll need a minimum of _(n/2 + 1)_ [Quorum](https://github.com/minio/dsync#lock-process) disks to create new objects though.
+A stand-alone MinIO server would go down if the server hosting the disks goes offline. In contrast, a distributed MinIO setup with _n_ disks will have your data safe as long as _n/2_ or more disks are online. You'll need a minimum of _(n/2 + 1)_ disks to create new objects.
 
 For example, an 16-node distributed MinIO setup with 16 disks per node would continue serving files, even if up to 8 servers are offline. But, you'll need at least 9 servers online to create new objects.
-
-### Limits
-
-As with MinIO in stand-alone mode, distributed MinIO has a per tenant limit of minimum of 2 and maximum of 32 servers. There are no limits on number of disks across these servers. If you need a multiple tenant setup, you can easily spin up multiple MinIO instances managed by orchestration tools like Kubernetes, Docker Swarm etc.
-
-Note that with distributed MinIO you can play around with the number of nodes and drives as long as the limits are adhered to. For example, you can have 2 nodes with 4 drives each, 4 nodes with 4 drives each, 8 nodes with 2 drives each, 32 servers with 64 drives each and so on.
 
 You can also use [storage classes](https://github.com/minio/minio/tree/master/docs/erasure/storage-class) to set custom data and parity distribution per object.
 
@@ -61,7 +55,18 @@ export MINIO_SECRET_KEY=<SECRET_KEY>
 minio server http://host{1...32}/export{1...32}
 ```
 
-__NOTE:__ `{1...n}` shown have 3 dots! Using only 2 dots `{1..32}` will be interpreted by your shell and won't be passed to minio server, affecting the erasure coding order, which may impact performance and high availability. __Always use ellipses syntax `{1...n}` (3 dots!) for optimal erasure-code distribution__
+> __NOTE:__ `{1...n}` shown have 3 dots! Using only 2 dots `{1..32}` will be interpreted by your shell and won't be passed to MinIO server, affecting the erasure coding order, which may impact performance and high availability. __Always use ellipses syntax `{1...n}` (3 dots!) for optimal erasure-code distribution__
+
+#### Expanding existing distributed setup
+MinIO supports expanding distributed erasure coded clusters by specifying new set of clusters on the command-line as shown below:
+
+```sh
+export MINIO_ACCESS_KEY=<ACCESS_KEY>
+export MINIO_SECRET_KEY=<SECRET_KEY>
+minio server http://host{1...32}/export{1...32} http://host{33...64}/export{1...32}
+```
+
+Now the server has expanded storage of *1024* more disks in total of *2048* disks, new object upload requests automatically start using the least used cluster. This expansion strategy works endlessly, so you can perpetually expand your clusters as needed.
 
 ## 3. Test your setup
 To test this setup, access the MinIO server via browser or [`mc`](https://docs.min.io/docs/minio-client-quickstart-guide).

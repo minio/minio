@@ -40,6 +40,7 @@ type API struct {
 type Entry struct {
 	DeploymentID string `json:"deploymentid,omitempty"`
 	Level        string `json:"level"`
+	LogKind      string `json:"errKind"`
 	Time         string `json:"time"`
 	API          *API   `json:"api,omitempty"`
 	RemoteHost   string `json:"remotehost,omitempty"`

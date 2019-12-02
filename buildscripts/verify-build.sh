@@ -125,7 +125,23 @@ function start_minio_dist_erasure_sets()
     "${MINIO[@]}" server --address=:9009 "http://127.0.0.1:9000${WORK_DIR}/dist-disk-sets1" "http://127.0.0.1:9001${WORK_DIR}/dist-disk-sets2" "http://127.0.0.1:9002${WORK_DIR}/dist-disk-sets3" "http://127.0.0.1:9003${WORK_DIR}/dist-disk-sets4" "http://127.0.0.1:9004${WORK_DIR}/dist-disk-sets5" "http://127.0.0.1:9005${WORK_DIR}/dist-disk-sets6" "http://127.0.0.1:9006${WORK_DIR}/dist-disk-sets7" "http://127.0.0.1:9007${WORK_DIR}/dist-disk-sets8" "http://127.0.0.1:9008${WORK_DIR}/dist-disk-sets9" "http://127.0.0.1:9009${WORK_DIR}/dist-disk-sets10" "http://127.0.0.1:9000${WORK_DIR}/dist-disk-sets11" "http://127.0.0.1:9001${WORK_DIR}/dist-disk-sets12" "http://127.0.0.1:9002${WORK_DIR}/dist-disk-sets13" "http://127.0.0.1:9003${WORK_DIR}/dist-disk-sets14" "http://127.0.0.1:9004${WORK_DIR}/dist-disk-sets15" "http://127.0.0.1:9005${WORK_DIR}/dist-disk-sets16" "http://127.0.0.1:9006${WORK_DIR}/dist-disk-sets17" "http://127.0.0.1:9007${WORK_DIR}/dist-disk-sets18" "http://127.0.0.1:9008${WORK_DIR}/dist-disk-sets19" "http://127.0.0.1:9009${WORK_DIR}/dist-disk-sets20" >"$WORK_DIR/dist-minio-9009.log" 2>&1 &
     minio_pids[9]=$!
 
-    sleep 30
+    sleep 35
+    echo "${minio_pids[@]}"
+}
+
+function start_minio_zone_erasure_sets()
+{
+    declare -a minio_pids
+    export MINIO_ACCESS_KEY=$ACCESS_KEY
+    export MINIO_SECRET_KEY=$SECRET_KEY
+
+    "${MINIO[@]}" server --address=:9000 "http://127.0.0.1:9000${WORK_DIR}/zone-disk-sets{1...4}" "http://127.0.0.1:9001${WORK_DIR}/zone-disk-sets{5...8}" >"$WORK_DIR/zone-minio-9000.log" 2>&1 &
+    minio_pids[0]=$!
+
+    "${MINIO[@]}" server --address=:9001 "http://127.0.0.1:9000${WORK_DIR}/zone-disk-sets{1...4}" "http://127.0.0.1:9001${WORK_DIR}/zone-disk-sets{5...8}" >"$WORK_DIR/zone-minio-9001.log" 2>&1 &
+    minio_pids[1]=$!
+
+    sleep 35
     echo "${minio_pids[@]}"
 }
 
@@ -143,7 +159,7 @@ function start_minio_dist_erasure()
     "${MINIO[@]}" server --address=:9003 "http://127.0.0.1:9000${WORK_DIR}/dist-disk1" "http://127.0.0.1:9001${WORK_DIR}/dist-disk2" "http://127.0.0.1:9002${WORK_DIR}/dist-disk3" "http://127.0.0.1:9003${WORK_DIR}/dist-disk4" >"$WORK_DIR/dist-minio-9003.log" 2>&1 &
     minio_pids[3]=$!
 
-    sleep 30
+    sleep 35
     echo "${minio_pids[@]}"
 }
 
@@ -231,6 +247,32 @@ function run_test_dist_erasure_sets()
 
     for i in $(seq 0 9); do
         rm -f "$WORK_DIR/dist-minio-900$i.log"
+    done
+
+    return "$rv"
+}
+
+function run_test_zone_erasure_sets()
+{
+    minio_pids=( $(start_minio_zone_erasure_sets) )
+
+    (cd "$WORK_DIR" && "$FUNCTIONAL_TESTS")
+    rv=$?
+
+    for pid in "${minio_pids[@]}"; do
+        kill "$pid"
+    done
+    sleep 3
+
+    if [ "$rv" -ne 0 ]; then
+        for i in $(seq 0 1); do
+            echo "server$i log:"
+            cat "$WORK_DIR/zone-minio-900$i.log"
+        done
+    fi
+
+    for i in $(seq 0 1); do
+        rm -f "$WORK_DIR/zone-minio-900$i.log"
     done
 
     return "$rv"
@@ -353,6 +395,13 @@ function main()
 
     echo "Testing in Distributed Erasure setup as sets"
     if ! run_test_dist_erasure_sets; then
+        echo "FAILED"
+        purge "$WORK_DIR"
+        exit 1
+    fi
+
+    echo "Testing in Distributed Eraure expanded setup"
+    if ! run_test_zone_erasure_sets; then
         echo "FAILED"
         purge "$WORK_DIR"
         exit 1

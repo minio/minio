@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lifecycle"
@@ -25,8 +26,30 @@ import (
 	"github.com/minio/minio/pkg/policy"
 )
 
+// GatewayLocker implements custom NeNSLock implementation
+type GatewayLocker struct {
+	ObjectLayer
+	nsMutex *nsLockMap
+}
+
+// NewNSLock - implements gateway level locker
+func (l *GatewayLocker) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
+	return l.nsMutex.NewNSLock(ctx, nil, bucket, object)
+}
+
+// NewGatewayLayerWithLocker - initialize gateway with locker.
+func NewGatewayLayerWithLocker(gwLayer ObjectLayer) ObjectLayer {
+	return &GatewayLocker{ObjectLayer: gwLayer, nsMutex: newNSLock(false)}
+}
+
 // GatewayUnsupported list of unsupported call stubs for gateway.
 type GatewayUnsupported struct{}
+
+// NewNSLock is a dummy stub for gateway.
+func (a GatewayUnsupported) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
+	logger.CriticalIf(ctx, errors.New("not implemented"))
+	return nil
+}
 
 // ListMultipartUploads lists all multipart uploads.
 func (a GatewayUnsupported) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi ListMultipartsInfo, err error) {
@@ -142,11 +165,6 @@ func (a GatewayUnsupported) HealObjects(ctx context.Context, bucket, prefix stri
 func (a GatewayUnsupported) CopyObject(ctx context.Context, srcBucket string, srcObject string, destBucket string, destObject string,
 	srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
 	return objInfo, NotImplemented{}
-}
-
-// RefreshBucketPolicy refreshes cache policy with what's on disk.
-func (a GatewayUnsupported) RefreshBucketPolicy(ctx context.Context, bucket string) error {
-	return NotImplemented{}
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.

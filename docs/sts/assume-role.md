@@ -10,7 +10,7 @@
     - [Policy](#policy)
     - [Response Elements](#response-elements)
     - [Errors](#errors)
-- [Sample Request](#sample-request)
+- [Sample `POST` Request](#sample-post-request)
 - [Sample Response](#sample-response)
 - [Testing](#testing)
 
@@ -60,7 +60,7 @@ XML response for this API is similar to [AWS STS AssumeRole](https://docs.aws.am
 ### Errors
 XML error response for this API is similar to [AWS STS AssumeRole](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html#API_AssumeRole_Errors)
 
-## Sample Request
+## Sample `POST` Request
 ```
 http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Policy={"Version":"2012-10-17","Statement":[{"Sid":"Stmt1","Effect":"Allow","Action":"s3:*","Resource":"arn:aws:s3:::*"}]}&AUTHPARAMS
 ```

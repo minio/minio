@@ -4,10 +4,10 @@
 
 |Item|Specification|
 |:---|:---|
-|Maximum number of servers per cluster| 32|
-|Maximum number of Federated clusters | Unlimited|
+|Maximum number of servers per cluster| no-limit|
+|Maximum number of federated clusters | no-limit|
 |Minimum number of servers| 02|
-|Maximum number of drives per server| Unlimited|
+|Maximum number of drives per server| no-limit|
 |Read quorum| N/2|
 |Write quorum| N/2+1|
 
@@ -39,7 +39,6 @@ We found the following APIs to be redundant or less useful outside of AWS S3. If
 
 - BucketACL (Use [bucket policies](https://docs.min.io/docs/minio-client-complete-guide#policy) instead)
 - BucketCORS (CORS enabled by default on all buckets for all HTTP verbs)
-- BucketLifecycle (Not required for MinIO erasure coded backend)
 - BucketReplication (Use [`mc mirror`](https://docs.min.io/docs/minio-client-complete-guide#mirror) instead)
 - BucketVersions, BucketVersioning (Use [`s3git`](https://github.com/s3git/s3git))
 - BucketWebsite (Use [`caddy`](https://github.com/mholt/caddy) or [`nginx`](https://www.nginx.com/resources/wiki/))

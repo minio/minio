@@ -72,10 +72,10 @@ ENVIRONMENT VARIABLES:
      MINIO_DOMAIN: To enable virtual-host-style requests, set this value to MinIO host domain name.
 
   CACHE:
-     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
-     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
+     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ",".
+     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ",".
      MINIO_CACHE_EXPIRY: Cache expiry duration in days.
-     MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
+     MINIO_CACHE_QUOTA: Maximum permitted usage of the cache in percentage (0-100).
 
 EXAMPLES:
   1. Start minio gateway server for Aliyun OSS backend.
@@ -91,10 +91,10 @@ EXAMPLES:
   3. Start minio gateway server for Aliyun OSS backend with edge caching enabled.
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*;*.png"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1,/mnt/drive2,/mnt/drive3,/mnt/drive4"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*,*.png"
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXPIRY{{.AssignmentOperator}}40
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_MAXUSE{{.AssignmentOperator}}80
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}80
      {{.Prompt}} {{.HelpName}}
 `
 
@@ -145,7 +145,9 @@ func (g *OSS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	if err != nil {
 		return nil, err
 	}
-
+	client.HTTPClient = &http.Client{
+		Transport: minio.NewCustomHTTPTransport(),
+	}
 	return &ossObjects{
 		Client: client,
 	}, nil
@@ -341,7 +343,9 @@ func (l *ossObjects) Shutdown(ctx context.Context) error {
 
 // StorageInfo is not relevant to OSS backend.
 func (l *ossObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
-	return
+	si.Backend.Type = minio.BackendGateway
+	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.Client.HTTPClient, l.Client.Config.Endpoint)
+	return si
 }
 
 // ossIsValidBucketName verifies whether a bucket name is valid.
@@ -519,13 +523,13 @@ func (l *ossObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continua
 // length indicates the total length of the object.
 func ossGetObject(ctx context.Context, client *oss.Client, bucket, key string, startOffset, length int64, writer io.Writer, etag string) error {
 	if length < 0 && length != -1 {
-		logger.LogIf(ctx, fmt.Errorf("Invalid argument"))
+		logger.LogIf(ctx, fmt.Errorf("Invalid argument"), logger.Application)
 		return ossToObjectError(fmt.Errorf("Invalid argument"), bucket, key)
 	}
 
 	bkt, err := client.Bucket(bucket)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, err, logger.Application)
 		return ossToObjectError(err, bucket, key)
 	}
 

@@ -31,11 +31,10 @@ matrix:
         - make
         - diff -au <(gofmt -s -d cmd) <(printf "")
         - diff -au <(gofmt -s -d pkg) <(printf "")
-        - for d in $(go list ./... | grep -v browser); do CGO_ENABLED=1 go test -v -race --timeout 15m "$d"; done
+        - for d in $(go list ./... | grep -v browser); do CGO_ENABLED=1 go test -v -race --timeout 20m "$d"; done
         - make verifiers
         - make crosscompile
         - make verify
-        - make coverage
         - cd browser && yarn && yarn test && cd ..
         - bash -c 'shopt -s globstar; shellcheck mint/**/*.sh'
 
@@ -47,7 +46,7 @@ matrix:
       go: 1.13.x
       script:
         - go build --ldflags="$(go run buildscripts/gen-ldflags.go)" -o %GOPATH%\bin\minio.exe
-        - bash buildscripts/go-coverage.sh
+        - for d in $(go list ./... | grep -v browser); do go test -v --timeout 20m "$d"; done
 
 before_script:
   # Add an IPv6 config - see the corresponding Travis issue

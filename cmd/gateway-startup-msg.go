@@ -20,15 +20,17 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/minio/minio/pkg/color"
 )
 
 // Prints the formatted startup message.
 func printGatewayStartupMessage(apiEndPoints []string, backendType string) {
 	strippedAPIEndpoints := stripStandardPorts(apiEndPoints)
 	// If cache layer is enabled, print cache capacity.
-	cacheObjectAPI := newCacheObjectsFn()
-	if cacheObjectAPI != nil {
-		printCacheStorageInfo(cacheObjectAPI.StorageInfo(context.Background()))
+	cacheAPI := newCachedObjectLayerFn()
+	if cacheAPI != nil {
+		printCacheStorageInfo(cacheAPI.StorageInfo(context.Background()))
 	}
 	// Prints credential.
 	printGatewayCommonMsg(strippedAPIEndpoints)
@@ -50,20 +52,20 @@ func printGatewayStartupMessage(apiEndPoints []string, backendType string) {
 // Prints common server startup message. Prints credential, region and browser access.
 func printGatewayCommonMsg(apiEndpoints []string) {
 	// Get saved credentials.
-	cred := globalServerConfig.GetCredential()
+	cred := globalActiveCred
 
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
 
 	// Colorize the message and print.
-	logStartupMessage(colorBlue("Endpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
-	if isTerminal() && !globalCLIContext.Anonymous {
-		logStartupMessage(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKey)))
-		logStartupMessage(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretKey)))
+	logStartupMessage(color.Blue("Endpoint: ") + color.Bold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
+	if color.IsTerminal() && !globalCLIContext.Anonymous {
+		logStartupMessage(color.Blue("AccessKey: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
+		logStartupMessage(color.Blue("SecretKey: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
 	}
 	printEventNotifiers()
 
-	if globalIsBrowserEnabled {
-		logStartupMessage(colorBlue("\nBrowser Access:"))
+	if globalBrowserEnabled {
+		logStartupMessage(color.Blue("\nBrowser Access:"))
 		logStartupMessage(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 3), apiEndpointStr))
 	}
 }

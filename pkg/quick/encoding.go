@@ -179,19 +179,12 @@ func loadFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error
 // decoder format according to the filename extension. If no
 // extension is provided, json will be selected by default.
 func loadFileConfig(filename string, v interface{}) error {
-	if _, err := os.Stat(filename); err != nil {
-		return err
-	}
 	fileData, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return err
 	}
 	if runtime.GOOS == "windows" {
 		fileData = []byte(strings.Replace(string(fileData), "\r\n", "\n", -1))
-	}
-
-	if err = checkDupJSONKeys(string(fileData)); err != nil {
-		return err
 	}
 
 	// Unmarshal file's content

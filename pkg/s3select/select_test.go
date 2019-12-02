@@ -24,7 +24,10 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/minio/minio-go/v6"
 )
 
 type testResponseWriter struct {
@@ -46,6 +49,364 @@ func (w *testResponseWriter) WriteHeader(statusCode int) {
 }
 
 func (w *testResponseWriter) Flush() {
+}
+
+func TestJSONQueries(t *testing.T) {
+	input := `{"id": 0,"title": "Test Record","desc": "Some text","synonyms": ["foo", "bar", "whatever"]}
+	{"id": 1,"title": "Second Record","desc": "another text","synonyms": ["some", "synonym", "value"]}
+	{"id": 2,"title": "Second Record","desc": "another text","numbers": [2, 3.0, 4]}
+	{"id": 3,"title": "Second Record","desc": "another text","nested": [[2, 3.0, 4], [7, 8.5, 9]]}`
+	var testTable = []struct {
+		name       string
+		query      string
+		requestXML []byte // override request XML
+		wantResult string
+	}{
+		{
+			name:       "select-in-array-full",
+			query:      `SELECT * from s3object s WHERE 'bar' IN s.synonyms[*]`,
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}`,
+		},
+		{
+			name:  "simple-in-array",
+			query: `SELECT * from s3object s WHERE s.id IN (1,3)`,
+			wantResult: `{"id":1,"title":"Second Record","desc":"another text","synonyms":["some","synonym","value"]}
+{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "select-in-array-single",
+			query:      `SELECT synonyms from s3object s WHERE 'bar' IN s.synonyms[*] `,
+			wantResult: `{"synonyms":["foo","bar","whatever"]}`,
+		},
+		{
+			name:       "donatello-1",
+			query:      `SELECT * from s3object s WHERE 'bar' in s.synonyms`,
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}`,
+		},
+		{
+			name:       "donatello-2",
+			query:      `SELECT * from s3object s WHERE 'bar' in s.synonyms[*]`,
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}`,
+		},
+		{
+			name:       "donatello-3",
+			query:      `SELECT * from s3object s WHERE 'value' IN s.synonyms[*]`,
+			wantResult: `{"id":1,"title":"Second Record","desc":"another text","synonyms":["some","synonym","value"]}`,
+		},
+		{
+			name:       "select-in-number",
+			query:      `SELECT * from s3object s WHERE 4 in s.numbers[*]`,
+			wantResult: `{"id":2,"title":"Second Record","desc":"another text","numbers":[2,3,4]}`,
+		},
+		{
+			name:       "select-in-number-float",
+			query:      `SELECT * from s3object s WHERE 3 in s.numbers[*]`,
+			wantResult: `{"id":2,"title":"Second Record","desc":"another text","numbers":[2,3,4]}`,
+		},
+		{
+			name:       "select-in-number-float-in-sql",
+			query:      `SELECT * from s3object s WHERE 3.0 in s.numbers[*]`,
+			wantResult: `{"id":2,"title":"Second Record","desc":"another text","numbers":[2,3,4]}`,
+		},
+		{
+			name:       "select-in-list-match",
+			query:      `SELECT * from s3object s WHERE (2,3,4) IN s.nested[*]`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "select-in-nested-float",
+			query:      `SELECT s.nested from s3object s WHERE 8.5 IN s.nested[*][*]`,
+			wantResult: `{"nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "select-in-combine-and",
+			query:      `SELECT s.nested from s3object s WHERE (8.5 IN s.nested[*][*]) AND (s.id > 0)`,
+			wantResult: `{"nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "select-in-combine-and-no",
+			query:      `SELECT s.nested from s3object s WHERE (8.5 IN s.nested[*][*]) AND (s.id = 0)`,
+			wantResult: ``,
+		},
+		{
+			name:       "select-in-nested-float-no-flat",
+			query:      `SELECT s.nested from s3object s WHERE 8.5 IN s.nested[*]`,
+			wantResult: ``,
+		},
+		{
+			name:       "select-empty-field-result",
+			query:      `SELECT * from s3object s WHERE s.nested[0][0] = 2`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "select-arrays-specific",
+			query:      `SELECT * from s3object s WHERE s.nested[1][0] = 7`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "wrong-index-no-result",
+			query:      `SELECT * from s3object s WHERE s.nested[0][0] = 7`,
+			wantResult: ``,
+		},
+		{
+			name:  "not-equal-result",
+			query: `SELECT * from s3object s WHERE s.nested[1][0] != 7`,
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}
+{"id":1,"title":"Second Record","desc":"another text","synonyms":["some","synonym","value"]}
+{"id":2,"title":"Second Record","desc":"another text","numbers":[2,3,4]}`,
+		},
+		{
+			name:       "indexed-list-match",
+			query:      `SELECT * from s3object s WHERE (7,8.5,9) IN s.nested[1]`,
+			wantResult: ``,
+		},
+		{
+			name:       "indexed-list-match-equals",
+			query:      `SELECT * from s3object s WHERE (7,8.5,9) = s.nested[1]`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "indexed-list-match-equals-s-star",
+			query:      `SELECT s.* from s3object s WHERE (7,8.5,9) = s.nested[1]`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "indexed-list-match-equals-s-index",
+			query:      `SELECT s.nested[1], s.nested[0] from s3object s WHERE (7,8.5,9) = s.nested[1]`,
+			wantResult: `{"_1":[7,8.5,9],"_2":[2,3,4]}`,
+		},
+		{
+			name:  "indexed-list-match-not-equals",
+			query: `SELECT * from s3object s WHERE (7,8.5,9) != s.nested[1]`,
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}
+{"id":1,"title":"Second Record","desc":"another text","synonyms":["some","synonym","value"]}
+{"id":2,"title":"Second Record","desc":"another text","numbers":[2,3,4]}`,
+		},
+		{
+			name:       "indexed-list-square-bracket",
+			query:      `SELECT * from s3object s WHERE [7,8.5,9] = s.nested[1]`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "indexed-list-square-bracket",
+			query:      `SELECT * from s3object s WHERE [7,8.5,9] IN s.nested`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:  "indexed-list-square-bracket",
+			query: `SELECT * from s3object s WHERE id IN [3,2]`,
+			wantResult: `{"id":2,"title":"Second Record","desc":"another text","numbers":[2,3,4]}
+{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "index-wildcard-in",
+			query:      `SELECT * from s3object s WHERE (8.5) IN s.nested[1][*]`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "index-wildcard-in",
+			query:      `SELECT * from s3object s WHERE (8.0+0.5) IN s.nested[1][*]`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name: "select-output-field-as-csv",
+			requestXML: []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<SelectObjectContentRequest>
+    <Expression>SELECT s.synonyms from s3object s WHERE 'whatever' IN s.synonyms</Expression>
+    <ExpressionType>SQL</ExpressionType>
+    <InputSerialization>
+        <CompressionType>NONE</CompressionType>
+        <JSON>
+            <Type>DOCUMENT</Type>
+        </JSON>
+    </InputSerialization>
+    <OutputSerialization>
+        <CSV>
+        </CSV>
+    </OutputSerialization>
+    <RequestProgress>
+        <Enabled>FALSE</Enabled>
+    </RequestProgress>
+</SelectObjectContentRequest>`),
+			wantResult: `"[""foo"",""bar"",""whatever""]"`,
+		},
+	}
+
+	defRequest := `<?xml version="1.0" encoding="UTF-8"?>
+<SelectObjectContentRequest>
+    <Expression>%s</Expression>
+    <ExpressionType>SQL</ExpressionType>
+    <InputSerialization>
+        <CompressionType>NONE</CompressionType>
+        <JSON>
+            <Type>DOCUMENT</Type>
+        </JSON>
+    </InputSerialization>
+    <OutputSerialization>
+        <JSON>
+        </JSON>
+    </OutputSerialization>
+    <RequestProgress>
+        <Enabled>FALSE</Enabled>
+    </RequestProgress>
+</SelectObjectContentRequest>`
+
+	for _, testCase := range testTable {
+		t.Run(testCase.name, func(t *testing.T) {
+			testReq := testCase.requestXML
+			if len(testReq) == 0 {
+				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
+			}
+			s3Select, err := NewS3Select(bytes.NewReader(testReq))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
+				return ioutil.NopCloser(bytes.NewBufferString(input)), nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			w := &testResponseWriter{}
+			s3Select.Evaluate(w)
+			s3Select.Close()
+			resp := http.Response{
+				StatusCode:    http.StatusOK,
+				Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
+				ContentLength: int64(len(w.response)),
+			}
+			res, err := minio.NewSelectResults(&resp, "testbucket")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			got, err := ioutil.ReadAll(res)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			gotS := strings.TrimSpace(string(got))
+			if !reflect.DeepEqual(gotS, testCase.wantResult) {
+				t.Errorf("received response does not match with expected reply. Query: %s\ngot: %s\nwant:%s", testCase.query, gotS, testCase.wantResult)
+			}
+		})
+	}
+}
+
+func TestCSVQueries(t *testing.T) {
+	input := `id,time,num,num2,text
+1,2010-01-01T,7867786,4565.908123,"a text, with comma"
+2,2017-01-02T03:04Z,-5, 0.765111,
+`
+	var testTable = []struct {
+		name       string
+		query      string
+		requestXML []byte // override request XML
+		wantResult string
+	}{
+		{
+			name:       "select-all",
+			query:      `SELECT * from s3object AS s WHERE id = '1'`,
+			wantResult: `{"id":"1","time":"2010-01-01T","num":"7867786","num2":"4565.908123","text":"a text, with comma"}`,
+		},
+		{
+			name:       "select-all-2",
+			query:      `SELECT * from s3object s WHERE id = 2`,
+			wantResult: `{"id":"2","time":"2017-01-02T03:04Z","num":"-5","num2":" 0.765111","text":""}`,
+		},
+		{
+			name:       "select-text-convert",
+			query:      `SELECT CAST(text AS STRING) AS text from s3object s WHERE id = 1`,
+			wantResult: `{"text":"a text, with comma"}`,
+		},
+		{
+			name:       "select-text-direct",
+			query:      `SELECT text from s3object s WHERE id = 1`,
+			wantResult: `{"text":"a text, with comma"}`,
+		},
+		{
+			name:       "select-time-direct",
+			query:      `SELECT time from s3object s WHERE id = 2`,
+			wantResult: `{"time":"2017-01-02T03:04Z"}`,
+		},
+		{
+			name:       "select-int-direct",
+			query:      `SELECT num from s3object s WHERE id = 2`,
+			wantResult: `{"num":"-5"}`,
+		},
+		{
+			name:       "select-float-direct",
+			query:      `SELECT num2 from s3object s WHERE id = 2`,
+			wantResult: `{"num2":" 0.765111"}`,
+		},
+		{
+			name:       "select-float-by-val",
+			query:      `SELECT num2 from s3object s WHERE num2 = 0.765111`,
+			wantResult: `{"num2":" 0.765111"}`,
+		},
+	}
+
+	defRequest := `<?xml version="1.0" encoding="UTF-8"?>
+<SelectObjectContentRequest>
+    <Expression>%s</Expression>
+    <ExpressionType>SQL</ExpressionType>
+    <InputSerialization>
+        <CompressionType>NONE</CompressionType>
+        <CSV>
+            <FileHeaderInfo>USE</FileHeaderInfo>
+        </CSV>
+    </InputSerialization>
+    <OutputSerialization>
+        <JSON>
+        </JSON>
+    </OutputSerialization>
+    <RequestProgress>
+        <Enabled>FALSE</Enabled>
+    </RequestProgress>
+</SelectObjectContentRequest>`
+
+	for _, testCase := range testTable {
+		t.Run(testCase.name, func(t *testing.T) {
+			testReq := testCase.requestXML
+			if len(testReq) == 0 {
+				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
+			}
+			s3Select, err := NewS3Select(bytes.NewReader(testReq))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
+				return ioutil.NopCloser(bytes.NewBufferString(input)), nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			w := &testResponseWriter{}
+			s3Select.Evaluate(w)
+			s3Select.Close()
+			resp := http.Response{
+				StatusCode:    http.StatusOK,
+				Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
+				ContentLength: int64(len(w.response)),
+			}
+			res, err := minio.NewSelectResults(&resp, "testbucket")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			got, err := ioutil.ReadAll(res)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			gotS := strings.TrimSpace(string(got))
+			if !reflect.DeepEqual(gotS, testCase.wantResult) {
+				t.Errorf("received response does not match with expected reply. Query: %s\ngot: %s\nwant:%s", testCase.query, gotS, testCase.wantResult)
+			}
+		})
+	}
 }
 
 func TestCSVInput(t *testing.T) {

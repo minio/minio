@@ -74,7 +74,8 @@ var exports = {
     proxy: {
       '/minio/webrpc': {
 	target: 'http://localhost:9000',
-	secure: false
+  secure: false,
+  headers: {'Host': "localhost:9000"}
       },
       '/minio/upload/*': {
 	target: 'http://localhost:9000',

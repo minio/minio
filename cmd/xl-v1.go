@@ -19,10 +19,14 @@ package cmd
 import (
 	"context"
 	"sort"
-	"sync"
+	"strings"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
+	"github.com/minio/minio/pkg/dsync"
+	"github.com/minio/minio/pkg/madmin"
+	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
 // XL constants.
@@ -36,26 +40,32 @@ var OfflineDisk StorageAPI // zero value is nil
 
 // xlObjects - Implements XL object layer.
 type xlObjects struct {
-	// name space mutex for object layer.
-	nsMutex *nsLockMap
-
 	// getDisks returns list of storageAPIs.
 	getDisks func() []StorageAPI
+
+	// getLockers returns list of remote and local lockers.
+	getLockers func() []dsync.NetLocker
+
+	// Locker mutex map.
+	nsMutex *nsLockMap
 
 	// Byte pools used for temporary i/o buffers.
 	bp *bpool.BytePoolCap
 
-	// TODO: Deprecated only kept here for tests, should be removed in future.
-	storageDisks []StorageAPI
-
 	// TODO: ListObjects pool management, should be removed in future.
 	listPool *TreeWalkPool
+}
+
+// NewNSLock - initialize a new namespace RWLocker instance.
+func (xl xlObjects) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
+	return xl.nsMutex.NewNSLock(ctx, xl.getLockers, bucket, object)
 }
 
 // Shutdown function for object storage interface.
 func (xl xlObjects) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.
 	closeStorageDisks(xl.getDisks())
+	closeLockers(xl.getLockers())
 	return nil
 }
 
@@ -69,41 +79,64 @@ func (d byDiskTotal) Less(i, j int) bool {
 }
 
 // getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks int, offlineDisks int) {
+func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlineDisks madmin.BackendDisks) {
 	disksInfo = make([]DiskInfo, len(disks))
-	errs := make([]error, len(disks))
-	var wg sync.WaitGroup
-	for i, storageDisk := range disks {
-		if storageDisk == nil {
-			// Storage disk is empty, perhaps ignored disk or not available.
-			errs[i] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-		go func(id int, sDisk StorageAPI) {
-			defer wg.Done()
-			info, err := sDisk.DiskInfo()
+
+	g := errgroup.WithNErrs(len(disks))
+	for index := range disks {
+		index := index
+		g.Go(func() error {
+			if disks[index] == nil {
+				// Storage disk is empty, perhaps ignored disk or not available.
+				return errDiskNotFound
+			}
+			info, err := disks[index].DiskInfo()
 			if err != nil {
-				reqInfo := (&logger.ReqInfo{}).AppendTags("disk", sDisk.String())
+				if IsErr(err, baseErrs...) {
+					return err
+				}
+				reqInfo := (&logger.ReqInfo{}).AppendTags("disk", disks[index].String())
 				ctx := logger.SetReqInfo(context.Background(), reqInfo)
 				logger.LogIf(ctx, err)
-				if IsErr(err, baseErrs...) {
-					errs[id] = err
-					return
-				}
 			}
-			disksInfo[id] = info
-		}(i, storageDisk)
+			disksInfo[index] = info
+			return nil
+		}, index)
 	}
-	// Wait for the routines.
-	wg.Wait()
 
-	for _, err := range errs {
+	getPeerAddress := func(diskPath string) (string, error) {
+		hostPort := strings.Split(diskPath, SlashSeparator)[0]
+		// Host will be empty for xl/fs disk paths.
+		if hostPort == "" {
+			return "", nil
+		}
+		thisAddr, err := xnet.ParseHost(hostPort)
 		if err != nil {
-			offlineDisks++
+			return "", err
+		}
+		return thisAddr.String(), nil
+	}
+
+	onlineDisks = make(madmin.BackendDisks)
+	offlineDisks = make(madmin.BackendDisks)
+	// Wait for the routines.
+	for i, err := range g.Wait() {
+		peerAddr, pErr := getPeerAddress(disksInfo[i].RelativePath)
+
+		if pErr != nil {
 			continue
 		}
-		onlineDisks++
+		if _, ok := offlineDisks[peerAddr]; !ok {
+			offlineDisks[peerAddr] = 0
+		}
+		if _, ok := onlineDisks[peerAddr]; !ok {
+			onlineDisks[peerAddr] = 0
+		}
+		if err != nil {
+			offlineDisks[peerAddr]++
+			continue
+		}
+		onlineDisks[peerAddr]++
 	}
 
 	// Success.
@@ -137,28 +170,28 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 	}
 
 	// Combine all disks to get total usage
-	var used, total, available uint64
-	for _, di := range validDisksInfo {
-		used = used + di.Used
-		total = total + di.Total
-		available = available + di.Free
+	usedList := make([]uint64, len(validDisksInfo))
+	totalList := make([]uint64, len(validDisksInfo))
+	availableList := make([]uint64, len(validDisksInfo))
+	mountPaths := make([]string, len(validDisksInfo))
+
+	for i, di := range validDisksInfo {
+		usedList[i] = di.Used
+		totalList[i] = di.Total
+		availableList[i] = di.Free
+		mountPaths[i] = di.RelativePath
 	}
 
-	_, sscParity := getRedundancyCount(standardStorageClass, len(disks))
-	_, rrscparity := getRedundancyCount(reducedRedundancyStorageClass, len(disks))
-
 	storageInfo := StorageInfo{
-		Used:      used,
-		Total:     total,
-		Available: available,
+		Used:       usedList,
+		Total:      totalList,
+		Available:  availableList,
+		MountPaths: mountPaths,
 	}
 
 	storageInfo.Backend.Type = BackendErasure
 	storageInfo.Backend.OnlineDisks = onlineDisks
 	storageInfo.Backend.OfflineDisks = offlineDisks
-
-	storageInfo.Backend.StandardSCParity = sscParity
-	storageInfo.Backend.RRSCParity = rrscparity
 
 	return storageInfo
 }

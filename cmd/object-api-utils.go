@@ -36,10 +36,12 @@ import (
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
+	"github.com/minio/minio/cmd/config/compress"
+	"github.com/minio/minio/cmd/config/etcd/dns"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/dns"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/wildcard"
@@ -239,8 +241,8 @@ func cleanMetadata(metadata map[string]string) map[string]string {
 // Filter X-Amz-Storage-Class field only if it is set to STANDARD.
 // This is done since AWS S3 doesn't return STANDARD Storage class as response header.
 func removeStandardStorageClass(metadata map[string]string) map[string]string {
-	if metadata[amzStorageClass] == standardStorageClass {
-		delete(metadata, amzStorageClass)
+	if metadata[xhttp.AmzStorageClass] == storageclass.STANDARD {
+		delete(metadata, xhttp.AmzStorageClass)
 	}
 	return metadata
 }
@@ -326,7 +328,7 @@ func isMinioReservedBucket(bucketName string) bool {
 func getHostsSlice(records []dns.SrvRecord) []string {
 	var hosts []string
 	for _, r := range records {
-		hosts = append(hosts, net.JoinHostPort(r.Host, fmt.Sprintf("%d", r.Port)))
+		hosts = append(hosts, net.JoinHostPort(r.Host, string(r.Port)))
 	}
 	return hosts
 }
@@ -335,7 +337,7 @@ func getHostsSlice(records []dns.SrvRecord) []string {
 func getHostFromSrv(records []dns.SrvRecord) string {
 	rand.Seed(time.Now().Unix())
 	srvRecord := records[rand.Intn(len(records))]
-	return net.JoinHostPort(srvRecord.Host, fmt.Sprintf("%d", srvRecord.Port))
+	return net.JoinHostPort(srvRecord.Host, string(srvRecord.Port))
 }
 
 // IsCompressed returns true if the object is marked as compressed.
@@ -377,17 +379,17 @@ func (o ObjectInfo) GetActualSize() int64 {
 // Using compression and encryption together enables room for side channel attacks.
 // Eliminate non-compressible objects by extensions/content-types.
 func isCompressible(header http.Header, object string) bool {
-	if crypto.IsRequested(header) || excludeForCompression(header, object) {
+	if crypto.IsRequested(header) || excludeForCompression(header, object, globalCompressConfig) {
 		return false
 	}
 	return true
 }
 
 // Eliminate the non-compressible objects.
-func excludeForCompression(header http.Header, object string) bool {
+func excludeForCompression(header http.Header, object string, cfg compress.Config) bool {
 	objStr := object
 	contentType := header.Get(xhttp.ContentType)
-	if !globalIsCompressionEnabled {
+	if !cfg.Enabled {
 		return true
 	}
 
@@ -397,12 +399,12 @@ func excludeForCompression(header http.Header, object string) bool {
 	}
 
 	// Filter compression includes.
-	if len(globalCompressExtensions) == 0 || len(globalCompressMimeTypes) == 0 {
+	if len(cfg.Extensions) == 0 || len(cfg.MimeTypes) == 0 {
 		return false
 	}
 
-	extensions := globalCompressExtensions
-	mimeTypes := globalCompressMimeTypes
+	extensions := cfg.Extensions
+	mimeTypes := cfg.MimeTypes
 	if hasStringSuffixInSlice(objStr, extensions) || hasPattern(mimeTypes, contentType) {
 		return false
 	}

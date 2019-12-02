@@ -30,10 +30,12 @@ var (
 	errWilcardObjectUsageInvalid = errors.New("Invalid usage of object wildcard")
 )
 
-func jsonpathEval(p []*JSONPathElement, v interface{}) (r interface{}, err error) {
+// jsonpathEval evaluates a JSON path and returns the value at the path.
+// If the value should be considered flat (from wildcards) any array returned should be considered individual values.
+func jsonpathEval(p []*JSONPathElement, v interface{}) (r interface{}, flat bool, err error) {
 	// fmt.Printf("JPATHexpr: %v jsonobj: %v\n\n", p, v)
 	if len(p) == 0 || v == nil {
-		return v, nil
+		return v, false, nil
 	}
 
 	switch {
@@ -42,7 +44,7 @@ func jsonpathEval(p []*JSONPathElement, v interface{}) (r interface{}, err error
 
 		kvs, ok := v.(jstream.KVS)
 		if !ok {
-			return nil, errKeyLookup
+			return nil, false, errKeyLookup
 		}
 		for _, kv := range kvs {
 			if kv.Key == key {
@@ -50,51 +52,58 @@ func jsonpathEval(p []*JSONPathElement, v interface{}) (r interface{}, err error
 			}
 		}
 		// Key not found - return nil result
-		return nil, nil
+		return nil, false, nil
 
 	case p[0].Index != nil:
 		idx := *p[0].Index
 
 		arr, ok := v.([]interface{})
 		if !ok {
-			return nil, errIndexLookup
+			return nil, false, errIndexLookup
 		}
 
 		if idx >= len(arr) {
-			return nil, nil
+			return nil, false, nil
 		}
 		return jsonpathEval(p[1:], arr[idx])
 
 	case p[0].ObjectWildcard:
 		kvs, ok := v.(jstream.KVS)
 		if !ok {
-			return nil, errWildcardObjectLookup
+			return nil, false, errWildcardObjectLookup
 		}
 
 		if len(p[1:]) > 0 {
-			return nil, errWilcardObjectUsageInvalid
+			return nil, false, errWilcardObjectUsageInvalid
 		}
 
-		return kvs, nil
+		return kvs, false, nil
 
 	case p[0].ArrayWildcard:
 		arr, ok := v.([]interface{})
 		if !ok {
-			return nil, errWildcardArrayLookup
+			return nil, false, errWildcardArrayLookup
 		}
 
 		// Lookup remainder of path in each array element and
 		// make result array.
 		var result []interface{}
 		for _, a := range arr {
-			rval, err := jsonpathEval(p[1:], a)
+			rval, flatten, err := jsonpathEval(p[1:], a)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 
+			if flatten {
+				// Flatten if array.
+				if arr, ok := rval.([]interface{}); ok {
+					result = append(result, arr...)
+					continue
+				}
+			}
 			result = append(result, rval)
 		}
-		return result, nil
+		return result, true, nil
 	}
 	panic("cannot reach here")
 }

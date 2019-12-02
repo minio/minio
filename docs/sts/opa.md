@@ -61,9 +61,9 @@ curl -X PUT --data-binary @putobject.rego \
 ```
 
 ### 4. Setup MinIO with OPA
-MinIO server expects environment variable for OPA http API url as `MINIO_IAM_OPA_URL`, this environment variable takes a single entry.
+MinIO server expects environment variable for OPA http API url as `MINIO_POLICY_OPA_URL`, this environment variable takes a single entry.
 ```
-export MINIO_IAM_OPA_URL=http://localhost:8181/v1/data/httpapi/authz/allow
+export MINIO_POLICY_OPA_URL=http://localhost:8181/v1/data/httpapi/authz/allow
 minio server /mnt/data
 ```
 

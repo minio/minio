@@ -69,7 +69,7 @@ var resourceList = []string{
 }
 
 func doesPolicySignatureV2Match(formValues http.Header) APIErrorCode {
-	cred := globalServerConfig.GetCredential()
+	cred := globalActiveCred
 	accessKey := formValues.Get(xhttp.AmzAccessKeyID)
 	cred, _, s3Err := checkKeyValid(accessKey)
 	if s3Err != ErrNone {
@@ -101,9 +101,6 @@ func unescapeQueries(encodedQuery string) (unescapedQueries []string, err error)
 //     - http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html#RESTAuthenticationQueryStringAuth
 // returns ErrNone if matches. S3 errors otherwise.
 func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
-	// Access credentials.
-	cred := globalServerConfig.GetCredential()
-
 	// r.RequestURI will have raw encoded URI as sent by the client.
 	tokens := strings.SplitN(r.RequestURI, "?", 2)
 	encodedResource := tokens[0]

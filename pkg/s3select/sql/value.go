@@ -17,6 +17,7 @@
 package sql
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -24,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 var (
@@ -46,6 +48,14 @@ type Value struct {
 	value interface{}
 }
 
+// MarshalJSON provides json marshaling of values.
+func (v Value) MarshalJSON() ([]byte, error) {
+	if b, ok := v.ToBytes(); ok {
+		return b, nil
+	}
+	return json.Marshal(v.value)
+}
+
 // GetTypeString returns a string representation for vType
 func (v Value) GetTypeString() string {
 	switch v.value.(type) {
@@ -63,6 +73,8 @@ func (v Value) GetTypeString() string {
 		return "TIMESTAMP"
 	case []byte:
 		return "BYTES"
+	case []Value:
+		return "ARRAY"
 	}
 	return "--"
 }
@@ -80,6 +92,17 @@ func (v Value) Repr() string {
 		return fmt.Sprintf("\"%s\":%s", x, v.GetTypeString())
 	case []byte:
 		return fmt.Sprintf("\"%s\":BYTES", string(x))
+	case []Value:
+		var s strings.Builder
+		s.WriteByte('[')
+		for i, v := range x {
+			s.WriteString(v.Repr())
+			if i < len(x)-1 {
+				s.WriteByte(',')
+			}
+		}
+		s.WriteString("]:ARRAY")
+		return s.String()
 	default:
 		return fmt.Sprintf("%v:INVALID", v.value)
 	}
@@ -120,6 +143,11 @@ func FromBytes(b []byte) *Value {
 	return &Value{value: b}
 }
 
+// FromArray creates a Value from an array of values.
+func FromArray(a []Value) *Value {
+	return &Value{value: a}
+}
+
 // ToFloat works for int and float values
 func (v Value) ToFloat() (val float64, ok bool) {
 	switch x := v.value.(type) {
@@ -131,13 +159,13 @@ func (v Value) ToFloat() (val float64, ok bool) {
 	return 0, false
 }
 
-// ToInt converts value to int.
+// ToInt returns the value if int.
 func (v Value) ToInt() (val int64, ok bool) {
 	val, ok = v.value.(int64)
 	return
 }
 
-// ToString converts value to string.
+// ToString returns the value if string.
 func (v Value) ToString() (val string, ok bool) {
 	val, ok = v.value.(string)
 	return
@@ -167,6 +195,8 @@ func (v Value) SameTypeAs(b Value) (ok bool) {
 		_, ok = b.value.(time.Time)
 	case []byte:
 		_, ok = b.value.([]byte)
+	case []Value:
+		_, ok = b.value.([]Value)
 	default:
 		ok = reflect.TypeOf(v.value) == reflect.TypeOf(b.value)
 	}
@@ -186,9 +216,15 @@ func (v Value) ToTimestamp() (t time.Time, ok bool) {
 	return
 }
 
-// ToBytes converts Value to byte-slice.
+// ToBytes returns the value if byte-slice.
 func (v Value) ToBytes() (val []byte, ok bool) {
 	val, ok = v.value.([]byte)
+	return
+}
+
+// ToArray returns the value if it is a slice of values.
+func (v Value) ToArray() (val []Value, ok bool) {
+	val, ok = v.value.([]Value)
 	return
 }
 
@@ -199,6 +235,12 @@ func (v Value) IsNull() bool {
 		return true
 	}
 	return false
+}
+
+// IsArray returns whether the value is an array.
+func (v Value) IsArray() (ok bool) {
+	_, ok = v.value.([]Value)
+	return ok
 }
 
 func (v Value) isNumeric() bool {
@@ -255,6 +297,10 @@ func (v Value) CSVString() string {
 		return FormatSQLTimestamp(x)
 	case []byte:
 		return string(x)
+	case []Value:
+		b, _ := json.Marshal(x)
+		return string(b)
+
 	default:
 		return "CSV serialization not implemented for this type"
 	}
@@ -294,6 +340,48 @@ const (
 	opIneq = "!="
 )
 
+// InferBytesType will attempt to infer the data type of bytes.
+// Will fail if value type is not bytes or it would result in invalid utf8.
+// ORDER: int, float, bool, JSON (object or array), timestamp, string
+// If the content is valid JSON, the type will still be bytes.
+func (v *Value) InferBytesType() (err error) {
+	b, ok := v.ToBytes()
+	if !ok {
+		return fmt.Errorf("InferByteType: Input is not bytes, but %v", v.GetTypeString())
+	}
+
+	// Check for numeric inference
+	if x, ok := v.bytesToInt(); ok {
+		v.setInt(x)
+		return nil
+	}
+	if x, ok := v.bytesToFloat(); ok {
+		v.setFloat(x)
+		return nil
+	}
+	if x, ok := v.bytesToBool(); ok {
+		v.setBool(x)
+		return nil
+	}
+
+	asString := strings.TrimSpace(v.bytesToString())
+	if len(b) > 0 &&
+		(strings.HasPrefix(asString, "{") || strings.HasPrefix(asString, "[")) {
+		return nil
+	}
+
+	if t, err := parseSQLTimestamp(asString); err == nil {
+		v.setTimestamp(t)
+		return nil
+	}
+	if !utf8.Valid(b) {
+		return errors.New("value is not valid utf-8")
+	}
+	// Fallback to string
+	v.setString(asString)
+	return
+}
+
 // When numeric types are compared, type promotions could happen. If
 // values do not have types (e.g. when reading from CSV), for
 // comparison operations, automatic type conversion happens by trying
@@ -309,6 +397,19 @@ func (v *Value) compareOp(op string, a *Value) (res bool, err error) {
 	err = inferTypesForCmp(v, a)
 	if err != nil {
 		return false, err
+	}
+
+	// Check if either is nil
+	if v.IsNull() || a.IsNull() {
+		// If one is, both must be.
+		return boolCompare(op, v.IsNull(), a.IsNull())
+	}
+
+	// Check array values
+	aArr, aOK := a.ToArray()
+	vArr, vOK := v.ToArray()
+	if aOK && vOK {
+		return arrayCompare(op, aArr, vArr)
 	}
 
 	isNumeric := v.isNumeric() && a.isNumeric()
@@ -720,6 +821,32 @@ func boolCompare(op string, left, right bool) (bool, error) {
 		return left == right, nil
 	case opIneq:
 		return left != right, nil
+	default:
+		return false, errCmpInvalidBoolOperator
+	}
+}
+
+func arrayCompare(op string, left, right []Value) (bool, error) {
+	switch op {
+	case opEq:
+		if len(left) != len(right) {
+			return false, nil
+		}
+		for i, l := range left {
+			eq, err := l.compareOp(op, &right[i])
+			if !eq || err != nil {
+				return eq, err
+			}
+		}
+		return true, nil
+	case opIneq:
+		for i, l := range left {
+			eq, err := l.compareOp(op, &right[i])
+			if eq || err != nil {
+				return eq, err
+			}
+		}
+		return false, nil
 	default:
 		return false, errCmpInvalidBoolOperator
 	}

@@ -80,13 +80,6 @@ export class ChangePasswordModal extends React.Component {
 
   generateAuth(e) {
     const { serverInfo } = this.props
-    // Generate random access key only for root user
-    if (!serverInfo.userInfo.isIAMUser) {
-      this.setState({
-        newAccessKey: getRandomAccessKey()
-      })
-    }
-
     this.setState({
       newSecretKey: getRandomSecretKey(),
       newSecretKeyVisible: true
@@ -100,10 +93,16 @@ export class ChangePasswordModal extends React.Component {
       return false
     }
 
-    // When credentials are set on ENV, password change not allowed for owner
-    if (serverInfo.info.isEnvCreds && !serverInfo.userInfo.isIAMUser) {
+    // Password change is not allowed for temporary users(STS)
+    if(serverInfo.userInfo.isTempUser) {
       return false
     }
+
+    // Password change is only allowed for regular users
+    if (!serverInfo.userInfo.isIAMUser) {
+      return false
+    }
+
     return true
   }
 
@@ -186,24 +185,6 @@ export class ChangePasswordModal extends React.Component {
           </div>
 
           <div className="has-toggle-password m-t-30">
-            {!serverInfo.userInfo.isIAMUser && (
-              <InputGroup
-                value={this.state.newAccessKey}
-                id="newAccessKey"
-                label={"New Access Key"}
-                name="newAccesskey"
-                type="text"
-                spellCheck="false"
-                required="required"
-                autoComplete="false"
-                align="ig-left"
-                onChange={e => {
-                  this.setState({ newAccessKey: e.target.value })
-                }}
-                readonly={serverInfo.userInfo.isIAMUser}
-              />
-            )}
-
             <i
               onClick={() => {
                 this.setState({

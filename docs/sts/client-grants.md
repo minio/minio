@@ -10,7 +10,7 @@
     - [Policy](#policy)
     - [Response Elements](#response-elements)
     - [Errors](#errors)
-- [Sample Request](#sample-request)
+- [Sample `POST` Request](#sample-post-request)
 - [Sample Response](#sample-response)
 - [Testing](#testing)
 
@@ -64,7 +64,7 @@ XML response for this API is similar to [AWS STS AssumeRoleWithWebIdentity](http
 ### Errors
 XML error response for this API is similar to [AWS STS AssumeRoleWithWebIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html#API_AssumeRoleWithWebIdentity_Errors)
 
-## Sample Request
+## Sample `POST` Request
 ```
 http://minio.cluster:9000?Action=AssumeRoleWithClientGrants&DurationSeconds=3600&Token=eyJ4NXQiOiJOVEF4Wm1NeE5ETXlaRGczTVRVMVpHTTBNekV6T0RKaFpXSTRORE5sWkRVMU9HRmtOakZpTVEiLCJraWQiOiJOVEF4Wm1NeE5ETXlaRGczTVRVMVpHTTBNekV6T0RKaFpXSTRORE5sWkRVMU9HRmtOakZpTVEiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiJQb0VnWFA2dVZPNDVJc0VOUm5nRFhqNUF1NVlhIiwiYXpwIjoiUG9FZ1hQNnVWTzQ1SXNFTlJuZ0RYajVBdTVZYSIsImlzcyI6Imh0dHBzOlwvXC9sb2NhbGhvc3Q6OTQ0M1wvb2F1dGgyXC90b2tlbiIsImV4cCI6MTU0MTgwOTU4MiwiaWF0IjoxNTQxODA1OTgyLCJqdGkiOiI2Y2YyMGIwZS1lNGZmLTQzZmQtYTdiYS1kYTc3YTE3YzM2MzYifQ.Jm29jPliRvrK6Os34nSK3rhzIYLFjE__zdVGNng3uGKXGKzP3We_i6NPnhA0szJXMOKglXzUF1UgSz8MctbaxFS8XDusQPVe4LkB_45hwBm6TmBxzui911nt-1RbBLN_jZIlvl2lPrbTUH5hSn9kEkph6seWanTNQpz9tNEoVa6R_OX3kpJqxe8tLQUWw453A1JTwFNhdHa6-f1K8_Q_eEZ_4gOYINQ9t_fhTibdbkXZkJQFLop-Jwoybi9s4nwQU_dATocgcufq5eCeNItQeleT-23lGxIz0X7CiJrJynYLdd-ER0F77SumqEb5iCxhxuf4H7dovwd1kAmyKzLxpw&Version=2011-06-15
 ```
@@ -91,27 +91,19 @@ http://minio.cluster:9000?Action=AssumeRoleWithClientGrants&DurationSeconds=3600
 
 ## Testing
 ```
-$ export MINIO_ACCESS_KEY=minio
-$ export MINIO_SECRET_KEY=minio123
-$ export MINIO_IAM_JWKS_URL=https://localhost:9443/oauth2/jwks
-$ export MINIO_IAM_OPA_URL=http://localhost:8181/v1/data/httpapi/authz
-$ minio server /mnt/export
+export MINIO_ACCESS_KEY=minio
+export MINIO_SECRET_KEY=minio123
+export MINIO_IDENTITY_OPENID_STATE="on"
+export MINIO_IDENTITY_OPENID_CONFIG_URL=https://localhost:9443/oauth2/oidcdiscovery/.well-known/openid-configuration
+export MINIO_IDENTITY_OPENID_CLIENT_ID="7a243d56-1081-11ea-b1b9-0bad8bed6ca0"
+export MINIO_POLICY_OPA_URL=http://localhost:8181/v1/data/httpapi/authz
+minio server /mnt/export
 
-$ mc admin config get myminio
-...
-{
-  "openid": {
-    "jwks": {
-      "url": "https://localhost:9443/oauth2/jwks"
-     }
-   }
-  "policy": {
-    "opa": {
-      "url": "http://localhost:8181/v1/data/httpapi/authz",
-      "authToken": ""
-    }
-  }
-}
+mc admin config get myminio identity_openid
+identity_openid config_url="https://localhost:9443/oauth2/oidcdiscovery/.well-known/openid-configuration" 
+
+mc admin config get myminio policy_opa
+policy_opa url="http://localhost:8181/v1/data/httpapi/authz" auth_token=
 ```
 
 Testing with an example

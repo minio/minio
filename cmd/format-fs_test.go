@@ -46,7 +46,7 @@ func TestFSFormatFS(t *testing.T) {
 	rlk.Close()
 
 	// Do the basic sanity checks to check if initFormatFS() did its job.
-	f, err := os.OpenFile(fsFormatPath, os.O_RDWR, 0)
+	f, err := os.OpenFile(fsFormatPath, os.O_RDWR|os.O_SYNC, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

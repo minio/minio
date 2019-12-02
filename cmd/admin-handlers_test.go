@@ -25,225 +25,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/madmin"
-)
-
-var (
-	configJSON = []byte(`{
-  "version": "33",
-  "credential": {
-    "accessKey": "minio",
-    "secretKey": "minio123"
-  },
-  "region": "us-east-1",
-  "worm": "off",
-  "storageclass": {
-    "standard": "",
-    "rrs": ""
-  },
-  "cache": {
-    "drives": [],
-    "expiry": 90,
-    "maxuse": 80,
-    "exclude": []
-  },
-  "kms": {
-    "vault": {
-      "endpoint": "",
-      "auth": {
-        "type": "",
-        "approle": {
-          "id": "",
-          "secret": ""
-        }
-      },
-      "key-id": {
-        "name": "",
-        "version": 0
-      }
-    }
-  },
-  "notify": {
-    "amqp": {
-      "1": {
-        "enable": false,
-        "url": "",
-        "exchange": "",
-        "routingKey": "",
-        "exchangeType": "",
-        "deliveryMode": 0,
-        "mandatory": false,
-        "immediate": false,
-        "durable": false,
-        "internal": false,
-        "noWait": false,
-        "autoDeleted": false,
-        "queueDir": "",
-        "queueLimit": 0
-      }
-    },
-    "elasticsearch": {
-      "1": {
-        "enable": false,
-        "format": "namespace",
-        "url": "",
-        "index": "",
-        "queueDir": "",
-        "queueLimit": 0
-      }
-    },
-    "kafka": {
-      "1": {
-        "enable": false,
-        "brokers": null,
-        "topic": "",
-        "queueDir": "",
-        "queueLimit": 0,
-        "tls": {
-          "enable": false,
-          "skipVerify": false,
-          "clientAuth": 0
-        },
-        "sasl": {
-          "enable": false,
-          "username": "",
-          "password": ""
-        }
-      }
-    },
-    "mqtt": {
-      "1": {
-        "enable": false,
-        "broker": "",
-        "topic": "",
-        "qos": 0,
-        "username": "",
-        "password": "",
-        "reconnectInterval": 0,
-	"keepAliveInterval": 0,
-	"queueDir": "",
-        "queueLimit": 0
-      }
-    },
-    "mysql": {
-      "1": {
-        "enable": false,
-        "format": "namespace",
-        "dsnString": "",
-        "table": "",
-        "host": "",
-        "port": "",
-        "user": "",
-        "password": "",
-        "database": "",
-        "queueDir": "",
-        "queueLimit": 0
-      }
-    },
-    "nats": {
-      "1": {
-        "enable": false,
-        "address": "",
-        "subject": "",
-        "username": "",
-        "password": "",
-        "token": "",
-        "secure": false,
-        "pingInterval": 0,
-        "queueDir": "",
-        "queueLimit": 0,
-        "streaming": {
-          "enable": false,
-          "clusterID": "",
-          "async": false,
-          "maxPubAcksInflight": 0
-        }
-      }
-	},
-    "nsq": {
-      "1": {
-        "enable": false,
-        "nsqdAddress": "",
-        "topic": "",
-        "tls": {
-			"enable": false,
-			"skipVerify": false
-		},
-        "queueDir": "",
-        "queueLimit": 0
-      }
-    },
-    "postgresql": {
-      "1": {
-        "enable": false,
-        "format": "namespace",
-        "connectionString": "",
-        "table": "",
-        "host": "",
-        "port": "",
-        "user": "",
-        "password": "",
-        "database": "",
-        "queueDir": "",
-        "queueLimit": 0
-      }
-    },
-    "redis": {
-      "1": {
-        "enable": false,
-        "format": "namespace",
-        "address": "",
-        "password": "",
-        "key": "",
-        "queueDir": "",
-        "queueLimit": 0
-      }
-    },
-    "webhook": {
-      "1": {
-        "enable": false,
-        "endpoint": "",
-        "queueDir": "",
-        "queueLimit": 0
-      }
-    }
-  },
-  "logger": {
-    "console": {
-      "enabled": true
-    },
-    "http": {
-      "1": {
-        "enabled": false,
-        "endpoint": "https://username:password@example.com/api"
-      }
-    }
-  },
-  "compress": {
-    "enabled": false,
-    "extensions":[".txt",".log",".csv",".json"],
-    "mime-types":["text/csv","text/plain","application/json"]
-  },
-  "openid": {
-    "jwks": {
-      "url": ""
-    }
-  },
-  "policy": {
-    "opa": {
-      "url": "",
-      "authToken": ""
-    }
-  }
-}
-`)
 )
 
 // adminXLTestBed - encapsulates subsystems that need to be setup for
@@ -274,15 +61,11 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	// Initialize boot time
 	globalBootTime = UTCNow()
 
-	globalEndpoints = mustGetNewEndpointList(xlDirs...)
+	globalEndpoints = mustGetZoneEndpoints(xlDirs...)
 
 	// Set globalIsXL to indicate that the setup uses an erasure
 	// code backend.
 	globalIsXL = true
-
-	// initialize NSLock.
-	isDistXL := false
-	initNSLock(isDistXL)
 
 	// Init global heal state
 	if globalIsXL {
@@ -294,11 +77,16 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	globalIAMSys = NewIAMSys()
 	globalIAMSys.Init(objLayer)
 
-	globalPolicySys = NewPolicySys()
-	globalPolicySys.Init(objLayer)
+	buckets, err := objLayer.ListBuckets(context.Background())
+	if err != nil {
+		return nil, err
+	}
 
-	globalNotificationSys = NewNotificationSys(globalServerConfig, globalEndpoints)
-	globalNotificationSys.Init(objLayer)
+	globalPolicySys = NewPolicySys()
+	globalPolicySys.Init(buckets, objLayer)
+
+	globalNotificationSys = NewNotificationSys(globalEndpoints)
+	globalNotificationSys.Init(buckets, objLayer)
 
 	// Setup admin mgmt REST API handlers.
 	adminRouter := mux.NewRouter()
@@ -325,8 +113,8 @@ func initTestXLObjLayer() (ObjectLayer, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	endpoints := mustGetNewEndpointList(xlDirs...)
-	format, err := waitForFormatXL(context.Background(), true, endpoints, 1, 16)
+	endpoints := mustGetNewEndpoints(xlDirs...)
+	format, err := waitForFormatXL(true, endpoints, 1, 16, "")
 	if err != nil {
 		removeRoots(xlDirs)
 		return nil, nil, err
@@ -391,7 +179,7 @@ func testServiceSignalReceiver(cmd cmdType, t *testing.T) {
 func getServiceCmdRequest(cmd cmdType, cred auth.Credentials) (*http.Request, error) {
 	queryVal := url.Values{}
 	queryVal.Set("action", string(cmd.toServiceAction()))
-	resource := "/minio/admin/v1/service?" + queryVal.Encode()
+	resource := adminPathPrefix + adminAPIVersionPrefix + "/service?" + queryVal.Encode()
 	req, err := newTestRequest(http.MethodPost, resource, 0, nil)
 	if err != nil {
 		return nil, err
@@ -430,7 +218,7 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 			testServiceSignalReceiver(cmd, t)
 		}()
 	}
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	req, err := getServiceCmdRequest(cmd, credentials)
 	if err != nil {
@@ -460,119 +248,19 @@ func buildAdminRequest(queryVal url.Values, method, path string,
 	contentLength int64, bodySeeker io.ReadSeeker) (*http.Request, error) {
 
 	req, err := newTestRequest(method,
-		"/minio/admin/v1"+path+"?"+queryVal.Encode(),
+		adminPathPrefix+adminAPIVersionPrefix+path+"?"+queryVal.Encode(),
 		contentLength, bodySeeker)
 	if err != nil {
 		return nil, err
 	}
 
-	cred := globalServerConfig.GetCredential()
+	cred := globalActiveCred
 	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
 	if err != nil {
 		return nil, err
 	}
 
 	return req, nil
-}
-
-// TestGetConfigHandler - test for GetConfigHandler.
-func TestGetConfigHandler(t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
-	if err != nil {
-		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
-	}
-	defer adminTestBed.TearDown()
-
-	// Initialize admin peers to make admin RPC calls.
-	globalMinioAddr = "127.0.0.1:9000"
-
-	// Prepare query params for get-config mgmt REST API.
-	queryVal := url.Values{}
-	queryVal.Set("config", "")
-
-	req, err := buildAdminRequest(queryVal, http.MethodGet, "/config", 0, nil)
-	if err != nil {
-		t.Fatalf("Failed to construct get-config object request - %v", err)
-	}
-
-	rec := httptest.NewRecorder()
-	adminTestBed.router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Errorf("Expected to succeed but failed with %d", rec.Code)
-	}
-
-}
-
-// TestSetConfigHandler - test for SetConfigHandler.
-func TestSetConfigHandler(t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
-	if err != nil {
-		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
-	}
-	defer adminTestBed.TearDown()
-
-	// Initialize admin peers to make admin RPC calls.
-	globalMinioAddr = "127.0.0.1:9000"
-
-	// Prepare query params for set-config mgmt REST API.
-	queryVal := url.Values{}
-	queryVal.Set("config", "")
-
-	password := globalServerConfig.GetCredential().SecretKey
-	econfigJSON, err := madmin.EncryptData(password, configJSON)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	req, err := buildAdminRequest(queryVal, http.MethodPut, "/config",
-		int64(len(econfigJSON)), bytes.NewReader(econfigJSON))
-	if err != nil {
-		t.Fatalf("Failed to construct set-config object request - %v", err)
-	}
-
-	rec := httptest.NewRecorder()
-	adminTestBed.router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Errorf("Expected to succeed but failed with %d, body: %s", rec.Code, rec.Body)
-	}
-
-	// Check that a very large config file returns an error.
-	{
-		// Make a large enough config string
-		invalidCfg := []byte(strings.Repeat("A", maxEConfigJSONSize+1))
-		req, err := buildAdminRequest(queryVal, http.MethodPut, "/config",
-			int64(len(invalidCfg)), bytes.NewReader(invalidCfg))
-		if err != nil {
-			t.Fatalf("Failed to construct set-config object request - %v", err)
-		}
-
-		rec := httptest.NewRecorder()
-		adminTestBed.router.ServeHTTP(rec, req)
-		respBody := rec.Body.String()
-		if rec.Code != http.StatusBadRequest ||
-			!strings.Contains(respBody, "Configuration data provided exceeds the allowed maximum of") {
-			t.Errorf("Got unexpected response code or body %d - %s", rec.Code, respBody)
-		}
-	}
-
-	// Check that a config with duplicate keys in an object return
-	// error.
-	{
-		invalidCfg := append(econfigJSON[:len(econfigJSON)-1], []byte(`, "version": "15"}`)...)
-		req, err := buildAdminRequest(queryVal, http.MethodPut, "/config",
-			int64(len(invalidCfg)), bytes.NewReader(invalidCfg))
-		if err != nil {
-			t.Fatalf("Failed to construct set-config object request - %v", err)
-		}
-
-		rec := httptest.NewRecorder()
-		adminTestBed.router.ServeHTTP(rec, req)
-		respBody := rec.Body.String()
-		if rec.Code != http.StatusBadRequest ||
-			!strings.Contains(respBody, "JSON configuration provided is of incorrect format") {
-			t.Errorf("Got unexpected response code or body %d - %s", rec.Code, respBody)
-		}
-	}
 }
 
 func TestAdminServerInfo(t *testing.T) {
@@ -649,46 +337,6 @@ func TestToAdminAPIErrCode(t *testing.T) {
 			t.Errorf("Test %d: Expected %v but received %v",
 				i+1, test.expectedAPIErr, actualErr)
 		}
-	}
-}
-
-func TestTopLockEntries(t *testing.T) {
-	t1 := UTCNow()
-	t2 := UTCNow().Add(10 * time.Second)
-	peerLocks := []*PeerLocks{
-		{
-			Addr: "1",
-			Locks: map[string][]lockRequesterInfo{
-				"1": {
-					{false, "node2", "ep2", "2", t2, t2, ""},
-					{true, "node1", "ep1", "1", t1, t1, ""},
-				},
-				"2": {
-					{false, "node2", "ep2", "2", t2, t2, ""},
-					{true, "node1", "ep1", "1", t1, t1, ""},
-				},
-			},
-		},
-		{
-			Addr: "2",
-			Locks: map[string][]lockRequesterInfo{
-				"1": {
-					{false, "node2", "ep2", "2", t2, t2, ""},
-					{true, "node1", "ep1", "1", t1, t1, ""},
-				},
-				"2": {
-					{false, "node2", "ep2", "2", t2, t2, ""},
-					{true, "node1", "ep1", "1", t1, t1, ""},
-				},
-			},
-		},
-	}
-	les := topLockEntries(peerLocks)
-	if len(les) != 2 {
-		t.Fatalf("Did not get 2 results")
-	}
-	if les[0].Timestamp.After(les[1].Timestamp) {
-		t.Fatalf("Got wrong sorted value")
 	}
 }
 

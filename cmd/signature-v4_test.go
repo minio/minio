@@ -37,7 +37,7 @@ func niceError(code APIErrorCode) string {
 func TestDoesPolicySignatureMatch(t *testing.T) {
 	credentialTemplate := "%s/%s/%s/s3/aws4_request"
 	now := UTCNow()
-	accessKey := globalServerConfig.GetCredential().AccessKey
+	accessKey := globalActiveCred.AccessKey
 
 	testCases := []struct {
 		form     http.Header
@@ -73,7 +73,7 @@ func TestDoesPolicySignatureMatch(t *testing.T) {
 				},
 				"X-Amz-Date": []string{now.Format(iso8601Format)},
 				"X-Amz-Signature": []string{
-					getSignature(getSigningKey(globalServerConfig.GetCredential().SecretKey, now,
+					getSignature(getSigningKey(globalActiveCred.SecretKey, now,
 						globalMinioDefaultRegion, serviceS3), "policy"),
 				},
 				"Policy": []string{"policy"},
@@ -106,8 +106,8 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 	now := UTCNow()
 	credentialTemplate := "%s/%s/%s/s3/aws4_request"
 
-	region := globalServerConfig.GetRegion()
-	accessKeyID := globalServerConfig.GetCredential().AccessKey
+	region := globalServerRegion
+	accessKeyID := globalActiveCred.AccessKey
 	testCases := []struct {
 		queryParams map[string]string
 		headers     map[string]string

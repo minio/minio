@@ -42,13 +42,16 @@ func main() {
 }
 
 ```
-| Service operations                  | Info operations                                 | Healing operations | Config operations         | Top operations          | IAM operations                        | Misc                                              | KMS                             |
-|:------------------------------------|:------------------------------------------------|:-------------------|:--------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|:--------------------------------|
-| [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                     | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig) | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   | [`GetKeyStatus`](#GetKeyStatus) |
-| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)       |                    | [`SetConfig`](#SetConfig) |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |                                 |
-|                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)     |                    |                           |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
-| [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo) |                    |                           |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                 |
-|                                     | [`NetPerfInfo`](#NetPerfInfo)                   |                    |                           |                         |                                       |                                                   |                                 |
+| Service operations                  | Info operations                                   | Healing operations | Config operations         | Top operations          | IAM operations                        | Misc                                              | KMS                             |
+|:------------------------------------|:--------------------------------------------------|:-------------------|:--------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|:--------------------------------|
+| [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                       | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig) | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   | [`GetKeyStatus`](#GetKeyStatus) |
+| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)         |                    | [`SetConfig`](#SetConfig) |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |                                 |
+|                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)       |                    |                           |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
+| [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo)   |                    |                           |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                 |
+|                                     | [`NetPerfInfo`](#NetPerfInfo)                     |                    |                           |                         |                                       |                                                   |                                 |
+|                                     | [`ServerCPUHardwareInfo`](#ServerCPUHardwareInfo) |                    |                           |                         |                                       |                                                   |                                 |
+|                                     | [`ServerNetworkHardwareInfo`](#ServerNetworkHardwareInfo)   |                    |                           |                         |                                       |                                                   |                                 |
+|                                     | [`StorageInfo`](#StorageInfo)                     |                    |                           |                         |                                       |                                                   |                                 |
 
 ## 1. Constructor
 <a name="MinIO"></a>
@@ -148,16 +151,12 @@ __Example__
 ### ServerInfo() ([]ServerInfo, error)
 Fetches information for all cluster nodes, such as server properties, storage information, network statistics, etc.
 
-| Param                           | Type               | Description                                                        |
-|---------------------------------|--------------------|--------------------------------------------------------------------|
-| `si.Addr`                       | _string_           | Address of the server the following information is retrieved from. |
-| `si.ConnStats`                  | _ServerConnStats_  | Connection statistics from the given server.                       |
-| `si.HTTPStats`                  | _ServerHTTPStats_  | HTTP connection statistics from the given server.                  |
-| `si.Properties`                 | _ServerProperties_ | Server properties such as region, notification targets.            |
-| `si.Data.StorageInfo.Used`      | _int64_            | Used disk space.                                                   |
-| `si.Data.StorageInfo.Total`     | _int64_            | Total disk space.                                                  |
-| `si.Data.StorageInfo.Available` | _int64_            | Available disk space.                                              |
-| `si.Data.StorageInfo.Backend`   | _struct{}_         | Represents backend type embedded structure.                        |
+| Param                            | Type               | Description                                                        |
+|----------------------------------|--------------------|--------------------------------------------------------------------|
+| `si.Addr`                        | _string_           | Address of the server the following information is retrieved from. |
+| `si.ConnStats`                   | _ServerConnStats_  | Connection statistics from the given server.                       |
+| `si.HTTPStats`                   | _ServerHTTPStats_  | HTTP connection statistics from the given server.                  |
+| `si.Properties`                  | _ServerProperties_ | Server properties such as region, notification targets.            |
 
 | Param                       | Type            | Description                                        |
 |-----------------------------|-----------------|----------------------------------------------------|
@@ -185,22 +184,10 @@ Fetches information for all cluster nodes, such as server properties, storage in
 | `ServerHTTPStats.TotalDELETEStats`   | _ServerHTTPMethodStats_ | Total statistics regarding DELETE operations            |
 | `ServerHTTPStats.SuccessDELETEStats` | _ServerHTTPMethodStats_ | Total statistics regarding successful DELETE operations |
 
-
 | Param                               | Type     | Description                                     |
 |-------------------------------------|----------|-------------------------------------------------|
 | `ServerHTTPMethodStats.Count`       | _uint64_ | Total number of operations.                     |
 | `ServerHTTPMethodStats.AvgDuration` | _string_ | Average duration of Count number of operations. |
-
-| Param                      | Type            | Description                                                                       |
-|----------------------------|-----------------|-----------------------------------------------------------------------------------|
-| `Backend.Type`             | _BackendType_   | Type of backend used by the server currently only FS or Erasure.                  |
-| `Backend.OnlineDisks`      | _int_           | Total number of disks online (only applies to Erasure backend), is empty for FS.  |
-| `Backend.OfflineDisks`     | _int_           | Total number of disks offline (only applies to Erasure backend), is empty for FS. |
-| `Backend.StandardSCData`   | _int_           | Data disks set for standard storage class, is empty for FS.                       |
-| `Backend.StandardSCParity` | _int_           | Parity disks set for standard storage class, is empty for FS.                     |
-| `Backend.RRSCData`         | _int_           | Data disks set for reduced redundancy storage class, is empty for FS.             |
-| `Backend.RRSCParity`       | _int_           | Parity disks set for reduced redundancy storage class, is empty for FS.           |
-| `Backend.Sets`             | _[][]DriveInfo_ | Represents topology of drives in erasure coded sets.                              |
 
 | Param                | Type     | Description                                           |
 |----------------------|----------|-------------------------------------------------------|
@@ -285,6 +272,89 @@ Fetches network performance of all cluster nodes using given sized payload. Retu
 | `Addr`           | _string_  | Address of the server the following information is retrieved from. |
 | `Error`          | _string_  | Errors (if any) encountered while reaching this node               |
 | `ReadThroughput` | _uint64_  | Network read throughput of the server in bytes per second          |
+
+
+<a name="ServerCPUHardwareInfo"></a>
+### ServerCPUHardwareInfo() ([]ServerCPUHardwareInfo, error)
+
+Fetches hardware information of CPU.
+
+| Param             | Type                | Description                                                         |
+|-------------------|---------------------|---------------------------------------------------------------------|
+| `hwi.Addr`        |      _string_       | Address of the server the following information  is retrieved from. |
+| `hwi.Error`       |      _string_       | Errors (if any) encountered while reaching this node                |
+| `hwi.CPUInfo`     | _[]cpu.InfoStat_    | The CPU hardware info.                                              |
+
+| Param                      | Type     | Description                                            |
+|----------------------------|----------|--------------------------------------------------------|
+| `CPUInfo.CPU`              | _int32_  | CPU                                                    |
+| `CPUInfo.VendorID`         | _string_ | Vendor Id                                              |
+| `CPUInfo.Family`           | _string_ | CPU Family                                             |
+| `CPUInfo.Model`            | _string_ | Model                                                  |
+| `CPUInfo.Stepping`         | _int32_  | Stepping                                               |
+| `CPUInfo.PhysicalId`       | _string_ | Physical Id                                            |
+| `CPUInfo.CoreId`           | _string_ | Core Id                                                |
+| `CPUInfo.Cores`            | _int32_  | Cores                                                  |
+| `CPUInfo.ModelName`        | _string_ | Model Name                                             |
+| `CPUInfo.Mhz`              | _float64_| Mhz                                                    |
+| `CPUInfo.CacheZSize`       | _int32_  | cache sizes                                            |
+| `CPUInfo.Flags`            |_[]string_| Flags                                                  |
+| `CPUInfo.Microcode`        | _string_ | Micro codes                                            |
+
+<a name="ServerNetworkHardwareInfo"></a>
+### ServerNetworkHardwareInfo() ([]ServerNetworkHardwareInfo, error)
+
+Fetches hardware information of CPU.
+
+| Param             | Type                | Description                                                         |
+|-------------------|---------------------|---------------------------------------------------------------------|
+| `hwi.Addr`        |      _string_       | Address of the server the following information  is retrieved from. |
+| `hwi.Error`       |      _string_       | Errors (if any) encountered while reaching this node                |
+| `hwi.NetworkInfo` | _[]net.Interface_   | The network hardware info                                           |
+
+| Param                      | Type     | Description                                               |
+|----------------------------|----------|-----------------------------------------------------------|
+| `NetworkInfo.Index`        | _int32_  | positive integer that starts at one, zero is never used.  |
+| `NetworkInfo.MTU`          | _int32_  | maximum transmission unit                                 |
+| `NetworkInfo.Name`         | _string_ | e.g., "en0", "lo0", "eth0.100"                            |
+| `NetworkInfo.HardwareAddr` | _[]byte_ | IEEE MAC-48, EUI-48 and EUI-64 form                       |
+| `NetworkInfo.Flags`        | _uint32_ | e.g., FlagUp, FlagLoopback, FlagMulticast                 |
+
+<a name="StorageInfo"></a>
+### StorageInfo() (StorageInfo, error)
+
+Fetches Storage information for all cluster nodes.
+
+| Param                   | Type       | Description                                 |
+|-------------------------|------------|---------------------------------------------|
+| `storageInfo.Used`      | _[]int64_  | Used disk spaces.                           |
+| `storageInfo.Total`     | _[]int64_  | Total disk spaces.                          |
+| `storageInfo.Available` | _[]int64_  | Available disk spaces.                      |
+| `StorageInfo.Backend`   | _struct{}_ | Represents backend type embedded structure. |
+
+| Param                      | Type            | Description                                                                                                              |
+|----------------------------|-----------------|--------------------------------------------------------------------------------------------------------------------------|
+| `Backend.Type`             | _BackendType_   | Type of backend used by the server currently only FS or Erasure.                                                         |
+| `Backend.OnlineDisks`      | _BackendDisks_  | Total number of disks online per node (only applies to Erasure backend) represented in map[string]int, is empty for FS.  |
+| `Backend.OfflineDisks`     | _BackendDisks_  | Total number of disks offline per node (only applies to Erasure backend) represented in map[string]int, is empty for FS. |
+| `Backend.StandardSCData`   | _int_           | Data disks set for standard storage class, is empty for FS.                                                              |
+| `Backend.StandardSCParity` | _int_           | Parity disks set for standard storage class, is empty for FS.                                                            |
+| `Backend.RRSCData`         | _int_           | Data disks set for reduced redundancy storage class, is empty for FS.                                                    |
+| `Backend.RRSCParity`       | _int_           | Parity disks set for reduced redundancy storage class, is empty for FS.                                                  |
+| `Backend.Sets`             | _[][]DriveInfo_ | Represents topology of drives in erasure coded sets.                                                                     |
+
+__Example__
+
+ ```go
+
+	storageInfo, err := madmClnt.StorageInfo()
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+    log.Println(storageInfo)
+
+ ```
 
 ## 5. Heal operations
 
@@ -547,8 +617,8 @@ __Example__
 ### GetKeyStatus(keyID string) (*KMSKeyStatus, error)
 Requests status information about one particular KMS master key
 from a MinIO server. The keyID is optional and the server will
-use the default master key (configured via `MINIO_SSE_VAULT_KEY_NAME`
-or `MINIO_SSE_MASTER_KEY`) if the keyID is empty.
+use the default master key (configured via `MINIO_KMS_VAULT_KEY_NAME`
+or `MINIO_KMS_MASTER_KEY`) if the keyID is empty.
 
 __Example__
 

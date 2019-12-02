@@ -87,7 +87,15 @@ func (r *Record) Set(name string, value *sql.Value) error {
 	} else if value.IsNull() {
 		v = nil
 	} else if b, ok := value.ToBytes(); ok {
-		v = RawJSON(b)
+		// This can either be raw json or a CSV value.
+		// Only treat objects and arrays as JSON.
+		if len(b) > 0 && (b[0] == '{' || b[0] == '[') {
+			v = RawJSON(b)
+		} else {
+			v = string(b)
+		}
+	} else if arr, ok := value.ToArray(); ok {
+		v = arr
 	} else {
 		return fmt.Errorf("unsupported sql value %v and type %v", value, value.GetTypeString())
 	}
@@ -109,8 +117,14 @@ func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune) error {
 			columnValue = ""
 		case RawJSON:
 			columnValue = string([]byte(val))
+		case []interface{}:
+			b, err := json.Marshal(val)
+			if err != nil {
+				return err
+			}
+			columnValue = string(b)
 		default:
-			return errors.New("Cannot marshal unhandled type")
+			return fmt.Errorf("Cannot marshal unhandled type: %T", kv.Value)
 		}
 		csvRecord = append(csvRecord, columnValue)
 	}

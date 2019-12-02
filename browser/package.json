@@ -60,8 +60,9 @@
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^5.10.0",
-    "bootstrap": "^3.3.6",
+    "bootstrap": "^3.4.1",
     "classnames": "^2.2.3",
+    "core-js": "^3.2.1",
     "expect": "^1.20.2",
     "glob-all": "^3.1.0",
     "history": "^4.7.2",
@@ -74,6 +75,7 @@
     "mime-db": "^1.25.0",
     "mime-types": "^2.1.13",
     "moment": "^2.24.0",
+    "query-string": "^6.8.2",
     "react": "^16.2.0",
     "react-addons-test-utils": "^0.14.8",
     "react-bootstrap": "^0.32.0",

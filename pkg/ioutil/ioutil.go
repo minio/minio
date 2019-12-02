@@ -160,6 +160,23 @@ func NewSkipReader(r io.Reader, n int64) io.Reader {
 	return &SkipReader{r, n}
 }
 
+// SameFile returns if the files are same.
+func SameFile(fi1, fi2 os.FileInfo) bool {
+	if !os.SameFile(fi1, fi2) {
+		return false
+	}
+	if !fi1.ModTime().Equal(fi2.ModTime()) {
+		return false
+	}
+	if fi1.Mode() != fi2.Mode() {
+		return false
+	}
+	if fi1.Size() != fi2.Size() {
+		return false
+	}
+	return true
+}
+
 // DirectIO alignment needs to be 4K. Defined here as
 // directio.AlignSize is defined as 0 in MacOS causing divide by 0 error.
 const directioAlignSize = 4096

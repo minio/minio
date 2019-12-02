@@ -19,7 +19,6 @@ package madmin
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -29,14 +28,12 @@ import (
 
 // ServiceRestart - restarts the MinIO cluster
 func (adm *AdminClient) ServiceRestart() error {
-	_, err := adm.serviceCallAction(ServiceActionRestart)
-	return err
+	return adm.serviceCallAction(ServiceActionRestart)
 }
 
 // ServiceStop - stops the MinIO cluster
 func (adm *AdminClient) ServiceStop() error {
-	_, err := adm.serviceCallAction(ServiceActionStop)
-	return err
+	return adm.serviceCallAction(ServiceActionStop)
 }
 
 // ServiceAction - type to restrict service-action values
@@ -50,25 +47,25 @@ const (
 )
 
 // serviceCallAction - call service restart/update/stop API.
-func (adm *AdminClient) serviceCallAction(action ServiceAction) ([]byte, error) {
+func (adm *AdminClient) serviceCallAction(action ServiceAction) error {
 	queryValues := url.Values{}
 	queryValues.Set("action", string(action))
 
 	// Request API to Restart server
 	resp, err := adm.executeMethod("POST", requestData{
-		relPath:     "/v1/service",
+		relPath:     adminAPIPrefix + "/service",
 		queryValues: queryValues,
 	})
 	defer closeResponse(resp)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, httpRespToErrorResponse(resp)
+		return httpRespToErrorResponse(resp)
 	}
 
-	return ioutil.ReadAll(resp.Body)
+	return nil
 }
 
 // ServiceTraceInfo holds http trace
@@ -88,7 +85,7 @@ func (adm AdminClient) ServiceTrace(allTrace, errTrace bool, doneCh <-chan struc
 			urlValues.Set("all", strconv.FormatBool(allTrace))
 			urlValues.Set("err", strconv.FormatBool(errTrace))
 			reqData := requestData{
-				relPath:     "/v1/trace",
+				relPath:     adminAPIPrefix + "/trace",
 				queryValues: urlValues,
 			}
 			// Execute GET to call trace handler

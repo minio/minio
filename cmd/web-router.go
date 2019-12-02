@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/elazarl/go-bindata-assetfs"
+	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	jsonrpc "github.com/gorilla/rpc/v2"
@@ -63,7 +63,7 @@ func registerWebRouter(router *mux.Router) error {
 	// Initialize Web.
 	web := &webAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
-		CacheAPI:  newCacheObjectsFn,
+		CacheAPI:  newCachedObjectLayerFn,
 	}
 
 	// Initialize a new json2 codec.

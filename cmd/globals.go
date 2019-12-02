@@ -18,23 +18,24 @@ package cmd
 
 import (
 	"crypto/x509"
-	"fmt"
 	"os"
 	"time"
 
-	isatty "github.com/mattn/go-isatty"
 	"github.com/minio/minio-go/v6/pkg/set"
 
 	etcd "github.com/coreos/etcd/clientv3"
 	humanize "github.com/dustin/go-humanize"
-	"github.com/fatih/color"
+	"github.com/minio/minio/cmd/config/cache"
+	"github.com/minio/minio/cmd/config/compress"
+	"github.com/minio/minio/cmd/config/etcd/dns"
+	xldap "github.com/minio/minio/cmd/config/identity/ldap"
+	"github.com/minio/minio/cmd/config/identity/openid"
+	"github.com/minio/minio/cmd/config/policy/opa"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
-	"github.com/minio/minio/pkg/dns"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/iam/validator"
 	"github.com/minio/minio/pkg/pubsub"
 )
 
@@ -58,6 +59,7 @@ const (
 	globalMinioDefaultStorageClass = "STANDARD"
 	globalWindowsOSName            = "windows"
 	globalNetBSDOSName             = "netbsd"
+	globalMacOSName                = "darwin"
 	globalMinioModeFS              = "mode-server-fs"
 	globalMinioModeXL              = "mode-server-xl"
 	globalMinioModeDistXL          = "mode-server-distributed-xl"
@@ -86,8 +88,6 @@ const (
 	// GlobalServiceExecutionInterval - Executes the Lifecycle events.
 	GlobalServiceExecutionInterval = time.Hour * 24 // 24 hrs.
 
-	// Refresh interval to update in-memory bucket lifecycle cache.
-	globalRefreshBucketLifecycleInterval = 5 * time.Minute
 	// Refresh interval to update in-memory iam config cache.
 	globalRefreshIAMInterval = 5 * time.Minute
 
@@ -103,9 +103,6 @@ var globalCLIContext = struct {
 }{}
 
 var (
-	// Indicates the total number of erasure coded sets configured.
-	globalXLSetCount int
-
 	// Indicates set drive count.
 	globalXLSetDriveCount int
 
@@ -122,25 +119,13 @@ var (
 	globalGatewayName = ""
 
 	// This flag is set to 'true' by default
-	globalIsBrowserEnabled = true
-
-	// This flag is set to 'true' when MINIO_BROWSER env is set.
-	globalIsEnvBrowser = false
-
-	// Set to true if credentials were passed from env, default is false.
-	globalIsEnvCreds = false
-
-	// This flag is set to 'true' when MINIO_REGION env is set.
-	globalIsEnvRegion = false
+	globalBrowserEnabled = true
 
 	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
 	globalInplaceUpdateDisabled = false
 
 	// This flag is set to 'us-east-1' by default
 	globalServerRegion = globalMinioDefaultRegion
-
-	// Maximum size of internal objects parts
-	globalPutPartSize = int64(64 * 1024 * 1024)
 
 	// MinIO local server address (in `host:port` format)
 	globalMinioAddr = ""
@@ -157,6 +142,10 @@ var (
 	globalIAMSys          *IAMSys
 
 	globalLifecycleSys *LifecycleSys
+
+	globalStorageClass storageclass.Config
+	globalLDAPConfig   xldap.Config
+	globalOpenIDConfig openid.Config
 
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool
@@ -178,7 +167,7 @@ var (
 	// registered listeners
 	globalConsoleSys *HTTPConsoleLoggerSys
 
-	globalEndpoints EndpointList
+	globalEndpoints EndpointZones
 
 	// Global server's network statistics
 	globalConnStats = newConnStats()
@@ -189,7 +178,11 @@ var (
 	// Time when object layer was initialized on start up.
 	globalBootTime time.Time
 
-	globalActiveCred  auth.Credentials
+	globalActiveCred auth.Credentials
+
+	// Indicates if config is to be encrypted
+	globalConfigEncrypted bool
+
 	globalPublicCerts []*x509.Certificate
 
 	globalDomainNames []string      // Root domains for virtual host style requests
@@ -200,48 +193,27 @@ var (
 	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)         // default timeout for general ops
 	globalHealingTimeout   = newDynamicTimeout(30*time.Minute /*1*/, 30*time.Minute)           // timeout for healing related ops
 
-	// Storage classes
-	// Set to indicate if storage class is set up
-	globalIsStorageClass bool
-	// Set to store reduced redundancy storage class
-	globalRRStorageClass storageClass
-	// Set to store standard storage class
-	globalStandardStorageClass storageClass
-
-	globalIsEnvWORM bool
 	// Is worm enabled
 	globalWORMEnabled bool
 
-	// Is Disk Caching set up
-	globalIsDiskCacheEnabled bool
+	globalBucketObjectLockConfig = newBucketObjectLockConfig()
 
 	// Disk cache drives
-	globalCacheDrives []string
+	globalCacheConfig cache.Config
 
-	// Disk cache excludes
-	globalCacheExcludes []string
-
-	// Disk cache expiry
-	globalCacheExpiry = 90
-	// Max allowed disk cache percentage
-	globalCacheMaxUse = 80
-	// Disk cache KMS Key
-	globalCacheKMSKeyID string
 	// Initialized KMS configuration for disk cache
 	globalCacheKMS crypto.KMS
+
 	// Allocated etcd endpoint for config and bucket DNS.
 	globalEtcdClient *etcd.Client
 
 	// Allocated DNS config wrapper over etcd client.
-	globalDNSConfig dns.Config
+	globalDNSConfig *dns.CoreDNS
 
 	// Default usage check interval value.
 	globalDefaultUsageCheckInterval = 12 * time.Hour // 12 hours
 	// Usage check interval value.
 	globalUsageCheckInterval = globalDefaultUsageCheckInterval
-
-	// KMS key id
-	globalKMSKeyID string
 
 	// GlobalKMS initialized KMS configuration
 	GlobalKMS crypto.KMS
@@ -251,15 +223,8 @@ var (
 	// configuration must be present.
 	globalAutoEncryption bool
 
-	// Is compression include extensions/content-types set?
-	globalIsEnvCompression bool
-
 	// Is compression enabled?
-	globalIsCompressionEnabled = false
-
-	// Include-list for compression.
-	globalCompressExtensions = []string{".txt", ".log", ".csv", ".json", ".tar", ".xml", ".bin"}
-	globalCompressMimeTypes  = []string{"text/*", "application/json", "application/xml"}
+	globalCompressConfig compress.Config
 
 	// Some standard object extensions which we strictly dis-allow for compression.
 	standardExcludeCompressExtensions = []string{".gz", ".bz2", ".rar", ".zip", ".7z", ".xz", ".mp4", ".mkv", ".mov"}
@@ -268,10 +233,10 @@ var (
 	standardExcludeCompressContentTypes = []string{"video/*", "audio/*", "application/zip", "application/x-gzip", "application/x-zip-compressed", " application/x-compress", "application/x-spoon"}
 
 	// Authorization validators list.
-	globalIAMValidators *validator.Validators
+	globalOpenIDValidators *openid.Validators
 
 	// OPA policy system.
-	globalPolicyOPA *iampolicy.Opa
+	globalPolicyOPA *opa.Opa
 
 	// Deployment ID - unique per deployment
 	globalDeploymentID string
@@ -279,70 +244,18 @@ var (
 	// GlobalGatewaySSE sse options
 	GlobalGatewaySSE gatewaySSE
 
+	globalAllHealState *allHealState
+
 	// The always present healing routine ready to heal objects
-	globalBackgroundHealing *healRoutine
-	globalAllHealState      *allHealState
-	globalSweepHealState    *allHealState
+	globalBackgroundHealRoutine *healRoutine
+	globalBackgroundHealState   *allHealState
+
+	// Only enabled when one of the sub-systems fail
+	// to initialize, this allows for administrators to
+	// fix the system.
+	globalSafeMode bool
 
 	// Add new variable global values here.
-)
-
-// global colors.
-var (
-	// Check if we stderr, stdout are dumb terminals, we do not apply
-	// ansi coloring on dumb terminals.
-	isTerminal = func() bool {
-		return isatty.IsTerminal(os.Stdout.Fd()) && isatty.IsTerminal(os.Stderr.Fd())
-	}
-
-	colorBold = func() func(a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.Bold).SprintFunc()
-		}
-		return fmt.Sprint
-	}()
-	colorRed = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgRed).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
-	colorBlue = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgBlue).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
-	colorYellow = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgYellow).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
-	colorCyanBold = func() func(a ...interface{}) string {
-		if isTerminal() {
-			color.New(color.FgCyan, color.Bold).SprintFunc()
-		}
-		return fmt.Sprint
-	}()
-	colorYellowBold = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgYellow, color.Bold).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
-	colorBgYellow = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.BgYellow).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
-	colorBlack = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgBlack).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
 )
 
 // Returns minio global information, as a key value map.
@@ -350,15 +263,8 @@ var (
 // list. Feel free to add new relevant fields.
 func getGlobalInfo() (globalInfo map[string]interface{}) {
 	globalInfo = map[string]interface{}{
-		"isDistXL":         globalIsDistXL,
-		"isXL":             globalIsXL,
-		"isBrowserEnabled": globalIsBrowserEnabled,
-		"isWorm":           globalWORMEnabled,
-		"isEnvBrowser":     globalIsEnvBrowser,
-		"isEnvCreds":       globalIsEnvCreds,
-		"isEnvRegion":      globalIsEnvRegion,
-		"isSSL":            globalIsSSL,
-		"serverRegion":     globalServerRegion,
+		"isWorm":       globalWORMEnabled,
+		"serverRegion": globalServerRegion,
 		// Add more relevant global settings here.
 	}
 

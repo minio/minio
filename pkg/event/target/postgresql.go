@@ -54,6 +54,7 @@
 package target
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -79,6 +80,32 @@ const (
 	psqlUpdateRow = `INSERT INTO %s (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;`
 	psqlDeleteRow = `DELETE FROM %s WHERE key = $1;`
 	psqlInsertRow = `INSERT INTO %s (event_time, event_data) VALUES ($1, $2);`
+)
+
+// Postgres constants
+const (
+	PostgresFormat           = "format"
+	PostgresConnectionString = "connection_string"
+	PostgresTable            = "table"
+	PostgresHost             = "host"
+	PostgresPort             = "port"
+	PostgresUsername         = "username"
+	PostgresPassword         = "password"
+	PostgresDatabase         = "database"
+	PostgresQueueDir         = "queue_dir"
+	PostgresQueueLimit       = "queue_limit"
+
+	EnvPostgresState            = "MINIO_NOTIFY_POSTGRES_STATE"
+	EnvPostgresFormat           = "MINIO_NOTIFY_POSTGRES_FORMAT"
+	EnvPostgresConnectionString = "MINIO_NOTIFY_POSTGRES_CONNECTION_STRING"
+	EnvPostgresTable            = "MINIO_NOTIFY_POSTGRES_TABLE"
+	EnvPostgresHost             = "MINIO_NOTIFY_POSTGRES_HOST"
+	EnvPostgresPort             = "MINIO_NOTIFY_POSTGRES_PORT"
+	EnvPostgresUsername         = "MINIO_NOTIFY_POSTGRES_USERNAME"
+	EnvPostgresPassword         = "MINIO_NOTIFY_POSTGRES_PASSWORD"
+	EnvPostgresDatabase         = "MINIO_NOTIFY_POSTGRES_DATABASE"
+	EnvPostgresQueueDir         = "MINIO_NOTIFY_POSTGRES_QUEUE_DIR"
+	EnvPostgresQueueLimit       = "MINIO_NOTIFY_POSTGRES_QUEUE_LIMIT"
 )
 
 // PostgreSQLArgs - PostgreSQL target arguments.
@@ -312,7 +339,7 @@ func (target *PostgreSQLTarget) executeStmts() error {
 }
 
 // NewPostgreSQLTarget - creates new PostgreSQL target.
-func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{}) (*PostgreSQLTarget, error) {
+func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*PostgreSQLTarget, error) {
 	var firstPing bool
 
 	params := []string{args.ConnectionString}
@@ -370,9 +397,9 @@ func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{})
 
 	if target.store != nil {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh)
+		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh)
+		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
 	}
 
 	return target, nil

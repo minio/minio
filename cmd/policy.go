@@ -27,7 +27,6 @@ import (
 	"sync"
 
 	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
-	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
@@ -38,24 +37,6 @@ import (
 type PolicySys struct {
 	sync.RWMutex
 	bucketPolicyMap map[string]policy.Policy
-}
-
-// removeDeletedBuckets - to handle a corner case where we have cached the policy for a deleted
-// bucket. i.e if we miss a delete-bucket notification we should delete the corresponding
-// bucket policy during sys.refresh()
-func (sys *PolicySys) removeDeletedBuckets(bucketInfos []BucketInfo) {
-	buckets := set.NewStringSet()
-	for _, info := range bucketInfos {
-		buckets.Add(info.Name)
-	}
-	sys.Lock()
-	defer sys.Unlock()
-
-	for bucket := range sys.bucketPolicyMap {
-		if !buckets.Contains(bucket) {
-			delete(sys.bucketPolicyMap, bucket)
-		}
-	}
 }
 
 // Set - sets policy to given bucket name.  If policy is empty, existing policy is removed.
@@ -110,13 +91,8 @@ func (sys *PolicySys) IsAllowed(args policy.Args) bool {
 	return args.IsOwner
 }
 
-// Refresh PolicySys.
-func (sys *PolicySys) refresh(objAPI ObjectLayer) error {
-	buckets, err := objAPI.ListBuckets(context.Background())
-	if err != nil {
-		return err
-	}
-	sys.removeDeletedBuckets(buckets)
+// Loads policies for all buckets into PolicySys.
+func (sys *PolicySys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
 		config, err := objAPI.GetBucketPolicy(context.Background(), bucket.Name)
 		if err != nil {
@@ -145,7 +121,7 @@ func (sys *PolicySys) refresh(objAPI ObjectLayer) error {
 }
 
 // Init - initializes policy system from policy.json of all buckets.
-func (sys *PolicySys) Init(objAPI ObjectLayer) error {
+func (sys *PolicySys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errInvalidArgument
 	}
@@ -168,7 +144,7 @@ func (sys *PolicySys) Init(objAPI ObjectLayer) error {
 		select {
 		case <-retryTimerCh:
 			// Load PolicySys once during boot.
-			if err := sys.refresh(objAPI); err != nil {
+			if err := sys.load(buckets, objAPI); err != nil {
 				if err == errDiskNotFound ||
 					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
 					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
@@ -191,7 +167,7 @@ func NewPolicySys() *PolicySys {
 	}
 }
 
-func getConditionValues(request *http.Request, locationConstraint string, username string) map[string][]string {
+func getConditionValues(request *http.Request, locationConstraint string, username string, claims map[string]interface{}) map[string][]string {
 	currTime := UTCNow()
 	principalType := func() string {
 		if username != "" {
@@ -231,6 +207,13 @@ func getConditionValues(request *http.Request, locationConstraint string, userna
 		args["LocationConstraint"] = []string{locationConstraint}
 	}
 
+	// JWT specific values
+	for k, v := range claims {
+		vStr, ok := v.(string)
+		if ok {
+			args[k] = []string{vStr}
+		}
+	}
 	return args
 }
 

@@ -35,6 +35,7 @@ import (
 
 	"github.com/djherbis/atime"
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/sio"
@@ -46,8 +47,6 @@ const (
 	cacheMetaJSONFile = "cache.json"
 	cacheDataFile     = "part.1"
 	cacheMetaVersion  = "1.0.0"
-
-	cacheEnvDelimiter = ";"
 
 	// SSECacheEncrypted is the metadata key indicating that the object
 	// is a cache entry encrypted with cache KMS master key in globalCacheKMS.
@@ -88,7 +87,7 @@ func (m *cacheMeta) ToObjectInfo(bucket, object string) (o ObjectInfo) {
 	o.ETag = extractETag(m.Meta)
 	o.ContentType = m.Meta["content-type"]
 	o.ContentEncoding = m.Meta["content-encoding"]
-	if storageClass, ok := m.Meta[amzStorageClass]; ok {
+	if storageClass, ok := m.Meta[xhttp.AmzStorageClass]; ok {
 		o.StorageClass = storageClass
 	} else {
 		o.StorageClass = globalMinioDefaultStorageClass
@@ -110,9 +109,9 @@ func (m *cacheMeta) ToObjectInfo(bucket, object string) (o ObjectInfo) {
 
 // represents disk cache struct
 type diskCache struct {
-	dir             string // caching directory
-	maxDiskUsagePct int    // max usage in %
-	expiry          int    // cache expiry in days
+	dir      string // caching directory
+	quotaPct int    // max usage in %
+	expiry   int    // cache expiry in days
 	// mark false if drive is offline
 	online bool
 	// mutex to protect updates to online variable
@@ -123,21 +122,17 @@ type diskCache struct {
 }
 
 // Inits the disk cache dir if it is not initialized already.
-func newdiskCache(dir string, expiry int, maxDiskUsagePct int) (*diskCache, error) {
+func newDiskCache(dir string, expiry int, quotaPct int) (*diskCache, error) {
 	if err := os.MkdirAll(dir, 0777); err != nil {
 		return nil, fmt.Errorf("Unable to initialize '%s' dir, %s", dir, err)
 	}
-
-	if expiry == 0 {
-		expiry = globalCacheExpiry
-	}
 	cache := diskCache{
-		dir:             dir,
-		expiry:          expiry,
-		maxDiskUsagePct: maxDiskUsagePct,
-		purgeChan:       make(chan struct{}),
-		online:          true,
-		onlineMutex:     &sync.RWMutex{},
+		dir:         dir,
+		expiry:      expiry,
+		quotaPct:    quotaPct,
+		purgeChan:   make(chan struct{}),
+		online:      true,
+		onlineMutex: &sync.RWMutex{},
 		pool: sync.Pool{
 			New: func() interface{} {
 				b := directio.AlignedBlock(int(cacheBlkSize))
@@ -153,7 +148,7 @@ func newdiskCache(dir string, expiry int, maxDiskUsagePct int) (*diskCache, erro
 // Ex. for a 100GB disk, if maxUsage is configured as 70% then cacheMaxDiskUsagePct is 70G
 // hence disk usage is low if the disk usage is less than 56G (because 80% of 70G is 56G)
 func (c *diskCache) diskUsageLow() bool {
-	minUsage := c.maxDiskUsagePct * 80 / 100
+	minUsage := c.quotaPct * 80 / 100
 	di, err := disk.GetInfo(c.dir)
 	if err != nil {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", c.dir)
@@ -176,7 +171,7 @@ func (c *diskCache) diskUsageHigh() bool {
 		return true
 	}
 	usedPercent := (di.Total - di.Free) * 100 / di.Total
-	return int(usedPercent) > c.maxDiskUsagePct
+	return int(usedPercent) > c.quotaPct
 }
 
 // Returns if size space can be allocated without exceeding
@@ -190,7 +185,7 @@ func (c *diskCache) diskAvailable(size int64) bool {
 		return false
 	}
 	usedPercent := (di.Total - (di.Free - uint64(size))) * 100 / di.Total
-	return int(usedPercent) < c.maxDiskUsagePct
+	return int(usedPercent) < c.quotaPct
 }
 
 // Purge cache entries that were not accessed.
@@ -223,7 +218,7 @@ func (c *diskCache) purge() {
 					continue
 				}
 
-				objInfo, err := c.statCache(ctx, pathJoin(c.dir, obj.Name()))
+				objInfo, err := c.statCache(pathJoin(c.dir, obj.Name()))
 				if err != nil {
 					// delete any partially filled cache entry left behind.
 					removeAll(pathJoin(c.dir, obj.Name()))
@@ -275,7 +270,7 @@ func (c *diskCache) IsOnline() bool {
 // Stat returns ObjectInfo from disk cache
 func (c *diskCache) Stat(ctx context.Context, bucket, object string) (oi ObjectInfo, err error) {
 	cacheObjPath := getCacheSHADir(c.dir, bucket, object)
-	oi, err = c.statCache(ctx, cacheObjPath)
+	oi, err = c.statCache(cacheObjPath)
 	if err != nil {
 		return
 	}
@@ -289,7 +284,7 @@ func (c *diskCache) Stat(ctx context.Context, bucket, object string) (oi ObjectI
 }
 
 // statCache is a convenience function for purge() to get ObjectInfo for cached object
-func (c *diskCache) statCache(ctx context.Context, cacheObjPath string) (oi ObjectInfo, e error) {
+func (c *diskCache) statCache(cacheObjPath string) (oi ObjectInfo, e error) {
 	// Stat the file to get file size.
 	metaPath := path.Join(cacheObjPath, cacheMetaJSONFile)
 	f, err := os.Open(metaPath)
@@ -366,13 +361,9 @@ func getCacheSHADir(dir, bucket, object string) string {
 }
 
 // Cache data to disk with bitrot checksum added for each block of 1MB
-func (c *diskCache) bitrotWriteToCache(ctx context.Context, cachePath string, reader io.Reader, size uint64) (int64, error) {
+func (c *diskCache) bitrotWriteToCache(cachePath string, reader io.Reader, size uint64) (int64, error) {
 	if err := os.MkdirAll(cachePath, 0777); err != nil {
 		return 0, err
-	}
-	bufSize := uint64(readSizeV1)
-	if size > 0 && bufSize > size {
-		bufSize = size
 	}
 	filePath := path.Join(cachePath, cacheDataFile)
 
@@ -443,14 +434,14 @@ func newCacheEncryptMetadata(bucket, object string, metadata map[string]string) 
 	if globalCacheKMS == nil {
 		return nil, errKMSNotConfigured
 	}
-	key, encKey, err := globalCacheKMS.GenerateKey(globalCacheKMSKeyID, crypto.Context{bucket: path.Join(bucket, object)})
+	key, encKey, err := globalCacheKMS.GenerateKey(globalCacheKMS.KeyID(), crypto.Context{bucket: path.Join(bucket, object)})
 	if err != nil {
 		return nil, err
 	}
 
 	objectKey := crypto.GenerateKey(key, rand.Reader)
 	sealedKey = objectKey.Seal(key, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
-	crypto.S3.CreateMetadata(metadata, globalCacheKMSKeyID, encKey, sealedKey)
+	crypto.S3.CreateMetadata(metadata, globalCacheKMS.KeyID(), encKey, sealedKey)
 
 	if etag, ok := metadata["etag"]; ok {
 		metadata["etag"] = hex.EncodeToString(objectKey.SealETag([]byte(etag)))
@@ -475,11 +466,6 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 	if err := os.MkdirAll(cachePath, 0777); err != nil {
 		return err
 	}
-	bufSize := int64(readSizeV1)
-	if size > 0 && bufSize > size {
-		bufSize = size
-	}
-
 	var metadata = make(map[string]string)
 	for k, v := range opts.UserDefined {
 		metadata[k] = v
@@ -494,7 +480,7 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 		}
 		actualSize, _ = sio.EncryptedSize(uint64(size))
 	}
-	n, err := c.bitrotWriteToCache(ctx, cachePath, reader, actualSize)
+	n, err := c.bitrotWriteToCache(cachePath, reader, actualSize)
 	if IsErr(err, baseErrs...) {
 		c.setOnline(false)
 	}
@@ -584,7 +570,8 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 		hashBytes := h.Sum(nil)
 
 		if !bytes.Equal(hashBytes, checksumHash) {
-			err = HashMismatchError{hex.EncodeToString(checksumHash), hex.EncodeToString(hashBytes)}
+			err = fmt.Errorf("hashes do not match expected %s, got %s",
+				hex.EncodeToString(checksumHash), hex.EncodeToString(hashBytes))
 			logger.LogIf(context.Background(), err)
 			return err
 		}
@@ -592,8 +579,9 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 		if _, err := io.Copy(writer, bytes.NewReader((*bufp)[blockOffset:blockOffset+blockLength])); err != nil {
 			if err != io.ErrClosedPipe {
 				logger.LogIf(ctx, err)
+				return err
 			}
-			return err
+			eof = true
 		}
 		if eof {
 			break

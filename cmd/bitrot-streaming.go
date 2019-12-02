@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"hash"
 	"io"
 
@@ -131,7 +132,8 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 	b.h.Write(buf)
 
 	if !bytes.Equal(b.h.Sum(nil), b.hashBytes) {
-		err = HashMismatchError{hex.EncodeToString(b.hashBytes), hex.EncodeToString(b.h.Sum(nil))}
+		err = fmt.Errorf("hashes do not match expected %s, got %s",
+			hex.EncodeToString(b.hashBytes), hex.EncodeToString(b.h.Sum(nil)))
 		logger.LogIf(context.Background(), err)
 		return 0, err
 	}

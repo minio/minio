@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,18 +19,19 @@ package cmd
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/gob"
 	"encoding/hex"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/url"
 	"path"
 	"strconv"
-	"strings"
+	"sync/atomic"
 
 	"github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -38,9 +39,6 @@ import (
 func isNetworkError(err error) bool {
 	if err == nil {
 		return false
-	}
-	if err.Error() == errConnectionStale.Error() {
-		return true
 	}
 	if nerr, ok := err.(*rest.NetworkError); ok {
 		return xnet.IsNetworkOrHostDown(nerr.Err)
@@ -61,12 +59,10 @@ func toStorageErr(err error) error {
 	}
 
 	switch err.Error() {
-	case io.EOF.Error():
-		return io.EOF
-	case io.ErrUnexpectedEOF.Error():
-		return io.ErrUnexpectedEOF
-	case errFileUnexpectedSize.Error():
-		return errFileUnexpectedSize
+	case errFaultyDisk.Error():
+		return errFaultyDisk
+	case errFileCorrupt.Error():
+		return errFileCorrupt
 	case errUnexpected.Error():
 		return errUnexpected
 	case errDiskFull.Error():
@@ -99,15 +95,12 @@ func toStorageErr(err error) error {
 		return errRPCAPIVersionUnsupported
 	case errServerTimeMismatch.Error():
 		return errServerTimeMismatch
-	}
-	if strings.Contains(err.Error(), "Bitrot verification mismatch") {
-		var expected string
-		var received string
-		fmt.Sscanf(err.Error(), "Bitrot verification mismatch - expected %s received %s", &expected, &received)
-		// Go's Sscanf %s scans "," that comes after the expected hash, hence remove it. Providing "," in the format string does not help.
-		expected = strings.TrimSuffix(expected, ",")
-		bitrotErr := HashMismatchError{expected, received}
-		return bitrotErr
+	case io.EOF.Error():
+		return io.EOF
+	case io.ErrUnexpectedEOF.Error():
+		return io.ErrUnexpectedEOF
+	case errDiskStale.Error():
+		return errDiskNotFound
 	}
 	return err
 }
@@ -116,29 +109,29 @@ func toStorageErr(err error) error {
 type storageRESTClient struct {
 	endpoint   Endpoint
 	restClient *rest.Client
-	connected  bool
+	connected  int32
 	lastError  error
-	instanceID string // REST server's instanceID which is sent with every request for validation.
+	diskID     string
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is makred disconnected
 // permanently. The only way to restore the storage connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *storageRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-	if !client.connected {
+	if !client.IsOnline() {
 		return nil, errDiskNotFound
 	}
 	if values == nil {
 		values = make(url.Values)
 	}
-	values.Set(storageRESTInstanceID, client.instanceID)
+	values.Set(storageRESTDiskID, client.diskID)
 	respBody, err = client.restClient.Call(method, values, body, length)
 	if err == nil {
 		return respBody, nil
 	}
 	client.lastError = err
-	if isNetworkError(err) {
-		client.connected = false
+	if isNetworkError(err) || err.Error() == errDiskStale.Error() {
+		atomic.StoreInt32(&client.connected, 0)
 	}
 
 	return nil, toStorageErr(err)
@@ -151,12 +144,16 @@ func (client *storageRESTClient) String() string {
 
 // IsOnline - returns whether RPC client failed to connect or not.
 func (client *storageRESTClient) IsOnline() bool {
-	return client.connected
+	return atomic.LoadInt32(&client.connected) == 1
 }
 
 // LastError - returns the network error if any.
 func (client *storageRESTClient) LastError() error {
 	return client.lastError
+}
+
+func (client *storageRESTClient) SetDiskID(id string) {
+	client.diskID = id
 }
 
 // DiskInfo - fetch disk information for a remote disk.
@@ -375,7 +372,6 @@ func (client *storageRESTClient) DeleteFileBulk(volume string, paths []string) (
 	if len(paths) == 0 {
 		return errs, err
 	}
-	errs = make([]error, len(paths))
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	for _, path := range paths {
@@ -388,14 +384,13 @@ func (client *storageRESTClient) DeleteFileBulk(volume string, paths []string) (
 		return nil, err
 	}
 
-	bulkErrs := bulkErrorsResponse{}
-	gob.NewDecoder(respBody).Decode(&bulkErrs)
-	if err != nil {
+	dErrResp := &DeleteFileBulkErrsResp{}
+	if err = gob.NewDecoder(respBody).Decode(dErrResp); err != nil {
 		return nil, err
 	}
 
-	for i, dErr := range bulkErrs.Errs {
-		errs[i] = toStorageErr(dErr)
+	for _, dErr := range dErrResp.Errs {
+		errs = append(errs, toStorageErr(dErr))
 	}
 
 	return errs, nil
@@ -411,30 +406,6 @@ func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPa
 	respBody, err := client.call(storageRESTMethodRenameFile, values, nil, -1)
 	defer http.DrainBody(respBody)
 	return err
-}
-
-// Gets peer storage server's instanceID - to be used with every REST call for validation.
-func (client *storageRESTClient) getInstanceID() (err error) {
-	// getInstanceID() does not use storageRESTClient.call()
-	// function so we need to update lastError field here.
-	defer func() {
-		if err != nil {
-			client.lastError = err
-		}
-	}()
-
-	respBody, err := client.restClient.Call(storageRESTMethodGetInstanceID, nil, nil, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	instanceIDBuf := make([]byte, 64)
-	n, err := io.ReadFull(respBody, instanceIDBuf)
-	if err != io.EOF && err != io.ErrUnexpectedEOF {
-		return err
-	}
-	client.instanceID = string(instanceIDBuf[:n])
-	return nil
 }
 
 func (client *storageRESTClient) VerifyFile(volume, path string, size int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
@@ -463,8 +434,7 @@ func (client *storageRESTClient) VerifyFile(volume, path string, size int64, alg
 		}
 	}
 	verifyResp := &VerifyFileResp{}
-	err = gob.NewDecoder(reader).Decode(verifyResp)
-	if err != nil {
+	if err = gob.NewDecoder(reader).Decode(verifyResp); err != nil {
 		return err
 	}
 	return toStorageErr(verifyResp.Err)
@@ -472,43 +442,33 @@ func (client *storageRESTClient) VerifyFile(volume, path string, size int64, alg
 
 // Close - marks the client as closed.
 func (client *storageRESTClient) Close() error {
-	client.connected = false
+	atomic.StoreInt32(&client.connected, 0)
 	client.restClient.Close()
 	return nil
 }
 
 // Returns a storage rest client.
-func newStorageRESTClient(endpoint Endpoint) (*storageRESTClient, error) {
-	host, err := xnet.ParseHost(endpoint.Host)
-	if err != nil {
-		return nil, err
-	}
-
-	scheme := "http"
-	if globalIsSSL {
-		scheme = "https"
-	}
-
+func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 	serverURL := &url.URL{
-		Scheme: scheme,
+		Scheme: endpoint.Scheme,
 		Host:   endpoint.Host,
-		Path:   path.Join(storageRESTPath, endpoint.Path),
+		Path:   path.Join(storageRESTPrefix, endpoint.Path, storageRESTVersion),
 	}
 
 	var tlsConfig *tls.Config
 	if globalIsSSL {
 		tlsConfig = &tls.Config{
-			ServerName: host.Name,
+			ServerName: endpoint.Hostname(),
 			RootCAs:    globalRootCAs,
 			NextProtos: []string{"http/1.1"}, // Force http1.1
 		}
 	}
 
-	restClient, err := rest.NewClient(serverURL, tlsConfig, rest.DefaultRESTTimeout, newAuthToken)
+	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout, rest.DefaultRESTTimeout)
+	restClient, err := rest.NewClient(serverURL, trFn, newAuthToken)
 	if err != nil {
-		return nil, err
+		logger.LogIf(context.Background(), err)
+		return &storageRESTClient{endpoint: endpoint, restClient: restClient, connected: 0}
 	}
-	client := &storageRESTClient{endpoint: endpoint, restClient: restClient, connected: true}
-	client.connected = client.getInstanceID() == nil
-	return client, nil
+	return &storageRESTClient{endpoint: endpoint, restClient: restClient, connected: 1}
 }

@@ -24,6 +24,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
 )
@@ -153,13 +154,13 @@ func formatFSMigrate(ctx context.Context, wlk *lock.LockedFile, fsPath string) e
 		return err
 	}
 	if version != formatFSVersionV2 {
-		return uiErrUnexpectedBackendVersion(fmt.Errorf(`%s file: expected FS version: %s, found FS version: %s`, formatConfigFile, formatFSVersionV2, version))
+		return config.ErrUnexpectedBackendVersion(fmt.Errorf(`%s file: expected FS version: %s, found FS version: %s`, formatConfigFile, formatFSVersionV2, version))
 	}
 	return nil
 }
 
 // Creates a new format.json if unformatted.
-func createFormatFS(ctx context.Context, fsFormatPath string) error {
+func createFormatFS(fsFormatPath string) error {
 	// Attempt a write lock on formatConfigFile `format.json`
 	// file stored in minioMetaBucket(.minio.sys) directory.
 	lk, err := lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR|os.O_CREATE, 0600)
@@ -214,7 +215,7 @@ func initFormatFS(ctx context.Context, fsPath string) (rlk *lock.RLockedFile, er
 				rlk.Close()
 			}
 			// Fresh disk - create format.json
-			err = createFormatFS(ctx, fsFormatPath)
+			err = createFormatFS(fsFormatPath)
 			if err == lock.ErrAlreadyLocked {
 				// Lock already present, sleep and attempt again.
 				// Can happen in a rare situation when a parallel minio process
@@ -349,27 +350,24 @@ func formatFSFixDeploymentID(fsFormatPath string) error {
 			logger.Info("Another minio process(es) might be holding a lock to the file %s. Please kill that minio process(es) (elapsed %s)\n", fsFormatPath, getElapsedTime())
 			continue
 		}
-		if err != nil {
-			break
-		}
-
-		if err = jsonLoad(wlk, format); err != nil {
-			break
-		}
-
-		// Check if format needs to be updated
-		if format.ID != "" {
-			err = nil
-			break
-		}
-
-		format.ID = mustGetUUID()
-		if err = jsonSave(wlk, format); err != nil {
-			break
-		}
+		break
 	}
-	if wlk != nil {
-		wlk.Close()
+	if err != nil {
+		return err
 	}
-	return err
+
+	defer wlk.Close()
+
+	if err = jsonLoad(wlk, format); err != nil {
+		return err
+	}
+
+	// Check if format needs to be updated
+	if format.ID != "" {
+		return nil
+	}
+
+	// Set new UUID to the format and save it
+	format.ID = mustGetUUID()
+	return jsonSave(wlk, format)
 }

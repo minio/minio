@@ -399,19 +399,19 @@ func TestShuffleDisks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objLayer, _, err := initObjectLayer(mustGetNewEndpointList(disks...))
+	objLayer, _, err := initObjectLayer(mustGetZoneEndpoints(disks...))
 	if err != nil {
 		removeRoots(disks)
 		t.Fatal(err)
 	}
 	defer removeRoots(disks)
-	xl := objLayer.(*xlObjects)
-	testShuffleDisks(t, xl)
+	z := objLayer.(*xlZones)
+	testShuffleDisks(t, z)
 }
 
 // Test shuffleDisks which returns shuffled slice of disks for their actual distribution.
-func testShuffleDisks(t *testing.T, xl *xlObjects) {
-	disks := xl.storageDisks
+func testShuffleDisks(t *testing.T, z *xlZones) {
+	disks := z.zones[0].GetDisks(0)()
 	distribution := []int{16, 14, 12, 10, 8, 6, 4, 2, 1, 3, 5, 7, 9, 11, 13, 15}
 	shuffledDisks := shuffleDisks(disks, distribution)
 	// From the "distribution" above you can notice that:
@@ -444,12 +444,12 @@ func TestEvalDisks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objLayer, _, err := initObjectLayer(mustGetNewEndpointList(disks...))
+	objLayer, _, err := initObjectLayer(mustGetZoneEndpoints(disks...))
 	if err != nil {
 		removeRoots(disks)
 		t.Fatal(err)
 	}
 	defer removeRoots(disks)
-	xl := objLayer.(*xlObjects)
-	testShuffleDisks(t, xl)
+	z := objLayer.(*xlZones)
+	testShuffleDisks(t, z)
 }

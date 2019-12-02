@@ -21,7 +21,6 @@ import { BrowserDropdown } from "../BrowserDropdown"
 describe("BrowserDropdown", () => {
   const serverInfo = {
     version: "test",
-    memory: "test",
     platform: "test",
     runtime: "test"
   }

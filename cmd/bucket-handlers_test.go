@@ -331,7 +331,7 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 			shouldPass:         false,
 		},
 		// Test case -3.
-		// Setting invalid delimiter, expecting the HTTP response status to be http.StatusNotImplemented.
+		// Delimiter unsupported, but response is empty.
 		{
 			bucket:             bucketName,
 			prefix:             "",
@@ -341,8 +341,8 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 			maxUploads:         "0",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			expectedRespStatus: http.StatusNotImplemented,
-			shouldPass:         false,
+			expectedRespStatus: http.StatusOK,
+			shouldPass:         true,
 		},
 		// Test case - 4.
 		// Setting Invalid prefix and marker combination.

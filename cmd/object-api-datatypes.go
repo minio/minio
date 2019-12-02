@@ -34,29 +34,36 @@ const (
 	BackendFS
 	// Multi disk BackendErasure (single, distributed) backend.
 	BackendErasure
+	// Gateway backend.
+	BackendGateway
 	// Add your own backend.
 )
 
 // StorageInfo - represents total capacity of underlying storage.
 type StorageInfo struct {
-	Used uint64 // Used total used per tenant.
+	Used []uint64 // Used total used per disk.
 
-	Total uint64 // Total disk space.
+	Total []uint64 // Total disk space per disk.
 
-	Available uint64 // Total disk space available.
+	Available []uint64 // Total disk space available per disk.
+
+	MountPaths []string // Disk mountpoints
 
 	// Backend type.
 	Backend struct {
-		// Represents various backend types, currently on FS and Erasure.
+		// Represents various backend types, currently on FS, Erasure and Gateway
 		Type BackendType
 
+		// Following fields are only meaningful if BackendType is Gateway.
+		GatewayOnline bool
+
 		// Following fields are only meaningful if BackendType is Erasure.
-		OnlineDisks      int // Online disks during server startup.
-		OfflineDisks     int // Offline disks during server startup.
-		StandardSCData   int // Data disks for currently configured Standard storage class.
-		StandardSCParity int // Parity disks for currently configured Standard storage class.
-		RRSCData         int // Data disks for currently configured Reduced Redundancy storage class.
-		RRSCParity       int // Parity disks for currently configured Reduced Redundancy storage class.
+		OnlineDisks      madmin.BackendDisks // Online disks during server startup.
+		OfflineDisks     madmin.BackendDisks // Offline disks during server startup.
+		StandardSCData   int                 // Data disks for currently configured Standard storage class.
+		StandardSCParity int                 // Parity disks for currently configured Standard storage class.
+		RRSCData         int                 // Data disks for currently configured Reduced Redundancy storage class.
+		RRSCParity       int                 // Parity disks for currently configured Reduced Redundancy storage class.
 
 		// List of all disk status, this is only meaningful if BackendType is Erasure.
 		Sets [][]madmin.DriveInfo
@@ -163,6 +170,16 @@ type ListPartsInfo struct {
 	EncodingType string // Not supported yet.
 }
 
+// Lookup - returns if uploadID is valid
+func (lm ListMultipartsInfo) Lookup(uploadID string) bool {
+	for _, upload := range lm.Uploads {
+		if upload.UploadID == uploadID {
+			return true
+		}
+	}
+	return false
+}
+
 // ListMultipartsInfo - represnets bucket resources for incomplete multipart uploads.
 type ListMultipartsInfo struct {
 	// Together with upload-id-marker, this parameter specifies the multipart upload
@@ -218,12 +235,12 @@ type ListObjectsInfo struct {
 	// by max keys.
 	IsTruncated bool
 
-	// When response is truncated (the IsTruncated element value in the response
-	// is true), you can use the key name in this field as marker in the subsequent
+	// When response is truncated (the IsTruncated element value in the response is true),
+	// you can use the key name in this field as marker in the subsequent
 	// request to get next set of objects.
 	//
-	// NOTE: This element is returned only if you have delimiter request parameter
-	// specified.
+	// NOTE: AWS S3 returns NextMarker only if you have delimiter request parameter specified,
+	//       MinIO always returns NextMarker.
 	NextMarker string
 
 	// List of objects info for this request.

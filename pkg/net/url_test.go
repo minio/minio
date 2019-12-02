@@ -133,6 +133,42 @@ func TestURLUnmarshalJSON(t *testing.T) {
 	}
 }
 
+func TestParseHTTPURL(t *testing.T) {
+	testCases := []struct {
+		s           string
+		expectedURL *URL
+		expectErr   bool
+	}{
+		{"http://play", &URL{Scheme: "http", Host: "play"}, false},
+		{"https://play.min.io:0", &URL{Scheme: "https", Host: "play.min.io:0"}, false},
+		{"https://147.75.201.93:9000/", &URL{Scheme: "https", Host: "147.75.201.93:9000", Path: "/"}, false},
+		{"https://s3.amazonaws.com/?location", &URL{Scheme: "https", Host: "s3.amazonaws.com", Path: "/", RawQuery: "location"}, false},
+		{"http://myminio:10000/mybucket//myobject/", &URL{Scheme: "http", Host: "myminio:10000", Path: "/mybucket/myobject/"}, false},
+		{"ftp://myftp.server:10000/myuser", nil, true},
+		{"https://my.server:10000000/myuser", nil, true},
+		{"myserver:1000", nil, true},
+		{"http://:1000/mybucket", nil, true},
+		{"https://147.75.201.93:90000/", nil, true},
+		{"http:/play", nil, true},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.s, func(t *testing.T) {
+			url, err := ParseHTTPURL(testCase.s)
+			expectErr := (err != nil)
+			if expectErr != testCase.expectErr {
+				t.Fatalf("error: expected: %v, got: %v", testCase.expectErr, expectErr)
+			}
+			if !testCase.expectErr {
+				if !reflect.DeepEqual(url, testCase.expectedURL) {
+					t.Fatalf("host: expected: %#v, got: %#v", testCase.expectedURL, url)
+				}
+			}
+		})
+	}
+}
+
 func TestParseURL(t *testing.T) {
 	testCases := []struct {
 		s           string

@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/base64"
 	"net/url"
 	"strconv"
 )
@@ -86,11 +87,19 @@ func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimit
 	}
 
 	prefix = values.Get("prefix")
-	token = values.Get("continuation-token")
 	startAfter = values.Get("start-after")
 	delimiter = values.Get("delimiter")
 	fetchOwner = values.Get("fetch-owner") == "true"
 	encodingType = values.Get("encoding-type")
+
+	if token = values.Get("continuation-token"); token != "" {
+		decodedToken, err := base64.StdEncoding.DecodeString(token)
+		if err != nil {
+			errCode = ErrIncorrectContinuationToken
+			return
+		}
+		token = string(decodedToken)
+	}
 	return
 }
 

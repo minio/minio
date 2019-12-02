@@ -35,6 +35,7 @@ import (
 	"github.com/inconshreveable/go-update"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
 	_ "github.com/minio/sha256-simd" // Needed for sha256 hash verifier.
 )
@@ -144,7 +145,7 @@ func IsDocker() bool {
 func IsDCOS() bool {
 	// http://mesos.apache.org/documentation/latest/docker-containerizer/
 	// Mesos docker containerizer sets this value
-	return os.Getenv("MESOS_CONTAINER_NAME") != ""
+	return env.Get("MESOS_CONTAINER_NAME", "") != ""
 }
 
 // IsKubernetes returns true if minio is running in kubernetes.
@@ -153,7 +154,7 @@ func IsKubernetes() bool {
 	// indeed running inside a kubernetes pod
 	// is KUBERNETES_SERVICE_HOST but in future
 	// we might need to enhance this.
-	return os.Getenv("KUBERNETES_SERVICE_HOST") != ""
+	return env.Get("KUBERNETES_SERVICE_HOST", "") != ""
 }
 
 // IsBOSH returns true if minio is deployed from a bosh package
@@ -247,7 +248,7 @@ func getUserAgent(mode string) string {
 	uaAppend(" MinIO/", ReleaseTag)
 	uaAppend(" MinIO/", CommitID)
 	if IsDCOS() {
-		universePkgVersion := os.Getenv("MARATHON_APP_LABEL_DCOS_PACKAGE_VERSION")
+		universePkgVersion := env.Get("MARATHON_APP_LABEL_DCOS_PACKAGE_VERSION", "")
 		// On DC/OS environment try to the get universe package version.
 		if universePkgVersion != "" {
 			uaAppend(" MinIO/universe-", universePkgVersion)
@@ -262,7 +263,7 @@ func getUserAgent(mode string) string {
 		}
 	}
 
-	pcfTileVersion := os.Getenv("MINIO_PCF_TILE_VERSION")
+	pcfTileVersion := env.Get("MINIO_PCF_TILE_VERSION", "")
 	if pcfTileVersion != "" {
 		uaAppend(" MinIO/pcf-tile-", pcfTileVersion)
 	}

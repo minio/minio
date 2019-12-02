@@ -15,7 +15,6 @@
 package crypto
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -24,16 +23,16 @@ var verifyVaultConfigTests = []struct {
 	ShouldFail bool
 }{
 	{
-		ShouldFail: false, // 0
-		Config:     VaultConfig{},
-	},
-	{
 		ShouldFail: true,
-		Config:     VaultConfig{Endpoint: "https://127.0.0.1:8080"},
+		Config: VaultConfig{
+			Endpoint: "https://127.0.0.1:8080",
+			Enabled:  true,
+		},
 	},
 	{
 		ShouldFail: true, // 1
 		Config: VaultConfig{
+			Enabled:  true,
 			Endpoint: "https://127.0.0.1:8080",
 			Auth:     VaultAuth{Type: "unsupported"},
 		},
@@ -41,6 +40,7 @@ var verifyVaultConfigTests = []struct {
 	{
 		ShouldFail: true, // 2
 		Config: VaultConfig{
+			Enabled:  true,
 			Endpoint: "https://127.0.0.1:8080",
 			Auth: VaultAuth{
 				Type:    "approle",
@@ -51,6 +51,7 @@ var verifyVaultConfigTests = []struct {
 	{
 		ShouldFail: true, // 3
 		Config: VaultConfig{
+			Enabled:  true,
 			Endpoint: "https://127.0.0.1:8080",
 			Auth: VaultAuth{
 				Type:    "approle",
@@ -61,6 +62,7 @@ var verifyVaultConfigTests = []struct {
 	{
 		ShouldFail: true, // 4
 		Config: VaultConfig{
+			Enabled:  true,
 			Endpoint: "https://127.0.0.1:8080",
 			Auth: VaultAuth{
 				Type:    "approle",
@@ -71,6 +73,7 @@ var verifyVaultConfigTests = []struct {
 	{
 		ShouldFail: true, // 5
 		Config: VaultConfig{
+			Enabled:  true,
 			Endpoint: "https://127.0.0.1:8080",
 			Auth: VaultAuth{
 				Type:    "approle",
@@ -82,9 +85,9 @@ var verifyVaultConfigTests = []struct {
 }
 
 func TestVerifyVaultConfig(t *testing.T) {
-	for i, test := range verifyVaultConfigTests {
+	for _, test := range verifyVaultConfigTests {
 		test := test
-		t.Run(fmt.Sprintf("Test-%d", i), func(t *testing.T) {
+		t.Run(test.Config.Endpoint, func(t *testing.T) {
 			err := test.Config.Verify()
 			if test.ShouldFail && err == nil {
 				t.Errorf("Verify should fail but returned 'err == nil'")

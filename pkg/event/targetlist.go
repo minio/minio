@@ -36,15 +36,17 @@ type TargetList struct {
 }
 
 // Add - adds unique target to target list.
-func (list *TargetList) Add(target Target) error {
+func (list *TargetList) Add(targets ...Target) error {
 	list.Lock()
 	defer list.Unlock()
 
-	if _, ok := list.targets[target.ID()]; ok {
-		return fmt.Errorf("target %v already exists", target.ID())
+	for _, target := range targets {
+		if _, ok := list.targets[target.ID()]; ok {
+			return fmt.Errorf("target %v already exists", target.ID())
+		}
+		list.targets[target.ID()] = target
 	}
 
-	list.targets[target.ID()] = target
 	return nil
 }
 
@@ -100,6 +102,19 @@ func (list *TargetList) Remove(targetids ...TargetID) <-chan TargetIDErr {
 	}()
 
 	return errCh
+}
+
+// Targets - list all targets
+func (list *TargetList) Targets() []Target {
+	list.RLock()
+	defer list.RUnlock()
+
+	targets := []Target{}
+	for _, tgt := range list.targets {
+		targets = append(targets, tgt)
+	}
+
+	return targets
 }
 
 // List - returns available target IDs.

@@ -19,6 +19,7 @@ package net
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -103,6 +104,21 @@ func (u URL) DialHTTP() error {
 	return nil
 }
 
+// ParseHTTPURL - parses a string into HTTP URL, string is
+// expected to be of form http:// or https://
+func ParseHTTPURL(s string) (u *URL, err error) {
+	u, err = ParseURL(s)
+	if err != nil {
+		return nil, err
+	}
+	switch u.Scheme {
+	default:
+		return nil, fmt.Errorf("unexpected scheme found %s", u.Scheme)
+	case "http", "https":
+		return u, nil
+	}
+}
+
 // ParseURL - parses string into URL.
 func ParseURL(s string) (u *URL, err error) {
 	var uu *url.URL
@@ -110,12 +126,23 @@ func ParseURL(s string) (u *URL, err error) {
 		return nil, err
 	}
 
-	if uu.Host == "" {
+	if uu.Hostname() == "" {
 		if uu.Scheme != "" {
 			return nil, errors.New("scheme appears with empty host")
 		}
-	} else if _, err = ParseHost(uu.Host); err != nil {
-		return nil, err
+	} else {
+		portStr := uu.Port()
+		if portStr == "" {
+			switch uu.Scheme {
+			case "http":
+				portStr = "80"
+			case "https":
+				portStr = "443"
+			}
+		}
+		if _, err = ParseHost(net.JoinHostPort(uu.Hostname(), portStr)); err != nil {
+			return nil, err
+		}
 	}
 
 	// Clean path in the URL.

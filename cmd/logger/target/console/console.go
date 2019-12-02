@@ -24,6 +24,7 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/message/log"
+	"github.com/minio/minio/pkg/color"
 )
 
 // Target implements loggerTarget to send log
@@ -31,7 +32,7 @@ import (
 type Target struct{}
 
 // Send log message 'e' to console
-func (c *Target) Send(e interface{}) error {
+func (c *Target) Send(e interface{}, logKind string) error {
 	entry, ok := e.(log.Entry)
 	if !ok {
 		return fmt.Errorf("Uexpected log entry structure %#v", e)
@@ -103,7 +104,7 @@ func (c *Target) Send(e interface{}) error {
 		tagString = "\n       " + tagString
 	}
 
-	var msg = logger.ColorFgRed(logger.ColorBold(entry.Trace.Message))
+	var msg = color.FgRed(color.Bold(entry.Trace.Message))
 	var output = fmt.Sprintf("\n%s\n%s%s%s%s%s%s\nError: %s%s\n%s",
 		apiString, timeString, deploymentID, requestID, remoteHost, host, userAgent,
 		msg, tagString, strings.Join(trace, "\n"))

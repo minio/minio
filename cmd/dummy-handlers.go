@@ -48,12 +48,6 @@ func (api objectAPIHandlers) GetBucketWebsiteHandler(w http.ResponseWriter, r *h
 	w.(http.Flusher).Flush()
 }
 
-// GetBucketVersioning - GET bucket versioning, a dummy api
-func (api objectAPIHandlers) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
-	writeSuccessResponseHeadersOnly(w)
-	w.(http.Flusher).Flush()
-}
-
 // GetBucketAccelerate  - GET bucket accelerate, a dummy api
 func (api objectAPIHandlers) GetBucketAccelerateHandler(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponseHeadersOnly(w)

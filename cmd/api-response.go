@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/xml"
 	"net/http"
 	"net/url"
@@ -33,9 +34,9 @@ import (
 
 const (
 	timeFormatAMZLong = "2006-01-02T15:04:05.000Z" // Reply date format with nanosecond precision.
-	maxObjectList     = 1000                       // Limit number of objects in a listObjectsResponse.
-	maxUploadsList    = 1000                       // Limit number of uploads in a listUploadsResponse.
-	maxPartsList      = 1000                       // Limit number of parts in a listPartsResponse.
+	maxObjectList     = 10000                      // Limit number of objects in a listObjectsResponse.
+	maxUploadsList    = 10000                      // Limit number of uploads in a listUploadsResponse.
+	maxPartsList      = 10000                      // Limit number of parts in a listPartsResponse.
 )
 
 // LocationResponse - format for location response.
@@ -238,6 +239,37 @@ type ObjectVersion struct {
 	IsLatest  bool
 }
 
+// StringMap is a map[string]string.
+type StringMap map[string]string
+
+// MarshalXML - StringMap marshals into XML.
+func (s StringMap) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+
+	tokens := []xml.Token{start}
+
+	for key, value := range s {
+		t := xml.StartElement{}
+		t.Name = xml.Name{
+			Space: "",
+			Local: key,
+		}
+		tokens = append(tokens, t, xml.CharData(value), xml.EndElement{Name: t.Name})
+	}
+
+	tokens = append(tokens, xml.EndElement{
+		Name: start.Name,
+	})
+
+	for _, t := range tokens {
+		if err := e.EncodeToken(t); err != nil {
+			return err
+		}
+	}
+
+	// flush to ensure tokens are written
+	return e.Flush()
+}
+
 // Object container for object metadata
 type Object struct {
 	Key          string
@@ -250,6 +282,9 @@ type Object struct {
 
 	// The class of storage used to store the object.
 	StorageClass string
+
+	// UserMetadata user-defined metadata
+	UserMetadata StringMap `xml:"UserMetadata,omitempty"`
 }
 
 // CopyObjectResponse container returns ETag and LastModified of the successfully copied object
@@ -465,7 +500,7 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingTy
 }
 
 // generates an ListObjectsV2 response for the said bucket with other enumerated options.
-func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter, delimiter, encodingType string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string) ListObjectsV2Response {
+func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter, delimiter, encodingType string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string, metadata bool) ListObjectsV2Response {
 	var contents []Object
 	var commonPrefixes []CommonPrefix
 	var owner = Owner{}
@@ -488,6 +523,17 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 		content.Size = object.Size
 		content.StorageClass = object.StorageClass
 		content.Owner = owner
+		if metadata {
+			content.UserMetadata = make(StringMap)
+			for k, v := range CleanMinioInternalMetadataKeys(object.UserDefined) {
+				if hasPrefix(k, ReservedMetadataPrefix) {
+					// Do not need to send any internal metadata
+					// values to client.
+					continue
+				}
+				content.UserMetadata[k] = v
+			}
+		}
 		contents = append(contents, content)
 	}
 	data.Name = bucket
@@ -498,8 +544,8 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 	data.Delimiter = s3EncodeName(delimiter, encodingType)
 	data.Prefix = s3EncodeName(prefix, encodingType)
 	data.MaxKeys = maxKeys
-	data.ContinuationToken = s3EncodeName(token, encodingType)
-	data.NextContinuationToken = s3EncodeName(nextToken, encodingType)
+	data.ContinuationToken = base64.StdEncoding.EncodeToString([]byte(token))
+	data.NextContinuationToken = base64.StdEncoding.EncodeToString([]byte(nextToken))
 	data.IsTruncated = isTruncated
 	for _, prefix := range prefixes {
 		var prefixItem = CommonPrefix{}
@@ -675,7 +721,7 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 	case "AccessDenied":
 		// The request is from browser and also if browser
 		// is enabled we need to redirect.
-		if browser && globalIsBrowserEnabled {
+		if browser && globalBrowserEnabled {
 			w.Header().Set(xhttp.Location, minioReservedBucketPath+reqURL.Path)
 			w.WriteHeader(http.StatusTemporaryRedirect)
 			return
@@ -693,6 +739,11 @@ func writeErrorResponseHeadersOnly(w http.ResponseWriter, err APIError) {
 	writeResponse(w, err.HTTPStatusCode, nil, mimeNone)
 }
 
+func writeErrorResponseString(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {
+	// Generate string error response.
+	writeResponse(w, err.HTTPStatusCode, []byte(err.Description), mimeNone)
+}
+
 // writeErrorResponseJSON - writes error response in JSON format;
 // useful for admin APIs.
 func writeErrorResponseJSON(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {
@@ -700,6 +751,17 @@ func writeErrorResponseJSON(ctx context.Context, w http.ResponseWriter, err APIE
 	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path, w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
+}
+
+// writeVersionMismatchResponse - writes custom error responses for version mismatches.
+func writeVersionMismatchResponse(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL, isJSON bool) {
+	if isJSON {
+		// Generate error response.
+		errorResponse := getAPIErrorResponse(ctx, err, reqURL.String(), w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
+		writeResponse(w, err.HTTPStatusCode, encodeResponseJSON(errorResponse), mimeJSON)
+	} else {
+		writeResponse(w, err.HTTPStatusCode, []byte(err.Description), mimeNone)
+	}
 }
 
 // writeCustomErrorResponseJSON - similar to writeErrorResponseJSON,
@@ -735,7 +797,7 @@ func writeCustomErrorResponseXML(ctx context.Context, w http.ResponseWriter, err
 	case "AccessDenied":
 		// The request is from browser and also if browser
 		// is enabled we need to redirect.
-		if browser && globalIsBrowserEnabled {
+		if browser && globalBrowserEnabled {
 			w.Header().Set(xhttp.Location, minioReservedBucketPath+reqURL.Path)
 			w.WriteHeader(http.StatusTemporaryRedirect)
 			return

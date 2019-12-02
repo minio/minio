@@ -17,7 +17,9 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
+	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -36,6 +38,7 @@ import (
 	"bytes"
 
 	humanize "github.com/dustin/go-humanize"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
@@ -49,6 +52,13 @@ const (
 	diskMinTotalSpace = diskMinFreeSpace      // Min 900MiB total space.
 	maxAllowedIOError = 5
 	readBlockSize     = 4 * humanize.MiByte // Default read block size 4MiB.
+
+	// On regular files bigger than this;
+	readAheadSize = 16 << 20
+	// Read this many buffers ahead.
+	readAheadBuffers = 4
+	// Size of each buffer.
+	readAheadBufSize = 1 << 20
 )
 
 // isValidVolname verifies a volname name in accordance with object
@@ -72,15 +82,19 @@ type posix struct {
 	totalUsed  uint64 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 	ioErrCount int32  // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 
-	diskPath  string
-	pool      sync.Pool
-	connected bool
+	diskPath string
+	pool     sync.Pool
 
 	diskMount bool // indicates if the path is an actual mount.
 
-	diskFileInfo os.FileInfo
+	diskID string
+
+	formatFileInfo  os.FileInfo
+	formatLastCheck time.Time
 	// Disk usage metrics
 	stopUsageCh chan struct{}
+
+	sync.RWMutex
 }
 
 // checkPathLength - returns error if given path name length more than 255
@@ -143,12 +157,15 @@ func getValidPath(path string) (string, error) {
 	}
 
 	// check if backend is writable.
-	file, err := os.Create(pathJoin(path, ".writable-check.tmp"))
+	var rnd [8]byte
+	_, _ = rand.Read(rnd[:])
+	fn := pathJoin(path, ".writable-check-"+hex.EncodeToString(rnd[:])+".tmp")
+	file, err := os.Create(fn)
 	if err != nil {
 		return path, err
 	}
-	defer os.Remove(pathJoin(path, ".writable-check.tmp"))
 	file.Close()
+	os.Remove(fn)
 
 	return path, nil
 }
@@ -183,22 +200,20 @@ func newPosix(path string) (*posix, error) {
 	if path, err = getValidPath(path); err != nil {
 		return nil, err
 	}
-	fi, err := os.Stat(path)
+	_, err = os.Stat(path)
 	if err != nil {
 		return nil, err
 	}
 	p := &posix{
-		connected: true,
-		diskPath:  path,
+		diskPath: path,
 		pool: sync.Pool{
 			New: func() interface{} {
 				b := directio.AlignedBlock(readBlockSize)
 				return &b
 			},
 		},
-		stopUsageCh:  make(chan struct{}),
-		diskFileInfo: fi,
-		diskMount:    mountinfo.IsLikelyMountPoint(path),
+		stopUsageCh: make(chan struct{}),
+		diskMount:   mountinfo.IsLikelyMountPoint(path),
 	}
 
 	if !p.diskMount {
@@ -299,38 +314,38 @@ func (s *posix) LastError() error {
 
 func (s *posix) Close() error {
 	close(s.stopUsageCh)
-	s.connected = false
 	return nil
 }
 
 func (s *posix) IsOnline() bool {
-	return s.connected
+	return true
 }
 
 // DiskInfo is an extended type which returns current
 // disk usage per path.
 type DiskInfo struct {
-	Total    uint64
-	Free     uint64
-	Used     uint64
-	RootDisk bool
+	Total        uint64
+	Free         uint64
+	Used         uint64
+	RootDisk     bool
+	RelativePath string
 }
 
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
 func (s *posix) DiskInfo() (info DiskInfo, err error) {
 	defer func() {
-		if err == errFaultyDisk {
+		if s != nil && err == errFaultyDisk {
 			atomic.AddInt32(&s.ioErrCount, 1)
 		}
 	}()
 
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
+	if s == nil {
 		return info, errFaultyDisk
 	}
 
-	if err := s.checkDiskFound(); err != nil {
-		return info, err
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
+		return info, errFaultyDisk
 	}
 
 	di, err := getDiskInfo(s.diskPath)
@@ -348,11 +363,17 @@ func (s *posix) DiskInfo() (info DiskInfo, err error) {
 		return info, err
 	}
 
+	localPeer := ""
+	if globalIsDistXL {
+		localPeer = GetLocalPeer(globalEndpoints)
+	}
+
 	return DiskInfo{
-		Total:    di.Total,
-		Free:     di.Free,
-		Used:     used,
-		RootDisk: rootDisk,
+		Total:        di.Total,
+		Free:         di.Free,
+		Used:         used,
+		RootDisk:     rootDisk,
+		RelativePath: localPeer + s.diskPath,
 	}, nil
 }
 
@@ -368,30 +389,52 @@ func (s *posix) getVolDir(volume string) (string, error) {
 	return volumeDir, nil
 }
 
-// checkDiskFound - validates if disk is available,
-// returns errDiskNotFound if not found.
-func (s *posix) checkDiskFound() (err error) {
-	if !s.IsOnline() {
-		return errDiskNotFound
+func (s *posix) getDiskID() (string, error) {
+	s.RLock()
+	diskID := s.diskID
+	fileInfo := s.formatFileInfo
+	lastCheck := s.formatLastCheck
+	s.RUnlock()
+
+	// check if we have a valid disk ID that is less than 1 second old.
+	if fileInfo != nil && diskID != "" && time.Now().Before(lastCheck.Add(time.Second)) {
+		return diskID, nil
 	}
-	fi, err := os.Stat(s.diskPath)
+
+	s.Lock()
+	defer s.Unlock()
+
+	// If somebody else updated the disk ID and changed the time, return what they got.
+	if !s.formatLastCheck.Equal(lastCheck) {
+		// Somebody else got the lock first.
+		return diskID, nil
+	}
+	formatFile := pathJoin(s.diskPath, minioMetaBucket, formatConfigFile)
+	fi, err := os.Stat(formatFile)
 	if err != nil {
-		switch {
-		case os.IsNotExist(err):
-			return errDiskNotFound
-		case isSysErrTooLong(err):
-			return errFileNameTooLong
-		case isSysErrIO(err):
-			return errFaultyDisk
-		default:
-			return err
-		}
+		// If the disk is still not initialized.
+		return "", err
 	}
-	if !os.SameFile(s.diskFileInfo, fi) {
-		s.connected = false
-		return errDiskNotFound
+
+	if xioutil.SameFile(fi, fileInfo) {
+		// If the file has not changed, just return the cached diskID information.
+		s.formatLastCheck = time.Now()
+		return diskID, nil
 	}
-	return nil
+
+	b, err := ioutil.ReadFile(formatFile)
+	if err != nil {
+		return "", err
+	}
+	format := &formatXLV3{}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err = json.Unmarshal(b, &format); err != nil {
+		return "", err
+	}
+	s.diskID = format.XL.This
+	s.formatFileInfo = fi
+	s.formatLastCheck = time.Now()
+	return s.diskID, nil
 }
 
 // diskUsage returns du information for the posix path, in a continuous routine.
@@ -477,6 +520,12 @@ func (s *posix) diskUsage(doneCh chan struct{}) {
 }
 
 // Make a volume entry.
+func (s *posix) SetDiskID(id string) {
+	// NO-OP for posix as it is handled either by posixDiskIDCheck{} for local disks or
+	// storage rest server for remote disks.
+}
+
+// Make a volume entry.
 func (s *posix) MakeVol(volume string) (err error) {
 	defer func() {
 		if err == errFaultyDisk {
@@ -486,10 +535,6 @@ func (s *posix) MakeVol(volume string) (err error) {
 
 	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return err
 	}
 
 	if !isValidVolname(volume) {
@@ -529,10 +574,6 @@ func (s *posix) ListVols() (volsInfo []VolInfo, err error) {
 
 	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return nil, errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return nil, err
 	}
 
 	volsInfo, err = listVols(s.diskPath)
@@ -600,10 +641,6 @@ func (s *posix) StatVol(volume string) (volInfo VolInfo, err error) {
 		return VolInfo{}, errFaultyDisk
 	}
 
-	if err = s.checkDiskFound(); err != nil {
-		return VolInfo{}, err
-	}
-
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -639,10 +676,6 @@ func (s *posix) DeleteVol(volume string) (err error) {
 
 	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return err
 	}
 
 	// Verify if volume is valid and it exists.
@@ -681,10 +714,6 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 
 	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return nil, errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return nil, err
 	}
 
 	// Verify if volume is valid and it exists.
@@ -760,10 +789,6 @@ func (s *posix) ListDir(volume, dirPath string, count int, leafFile string) (ent
 		return nil, errFaultyDisk
 	}
 
-	if err = s.checkDiskFound(); err != nil {
-		return nil, err
-	}
-
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -814,10 +839,6 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 
 	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return nil, errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return nil, err
 	}
 
 	volumeDir, err := s.getVolDir(volume)
@@ -891,10 +912,6 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 
 	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return 0, errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return 0, err
 	}
 
 	volumeDir, err := s.getVolDir(volume)
@@ -977,7 +994,7 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 	}
 
 	if !bytes.Equal(h.Sum(nil), verifier.sum) {
-		return 0, HashMismatchError{hex.EncodeToString(verifier.sum), hex.EncodeToString(h.Sum(nil))}
+		return 0, errFileCorrupt
 	}
 
 	return int64(len(buffer)), nil
@@ -992,10 +1009,6 @@ func (s *posix) openFile(volume, path string, mode int) (f *os.File, err error) 
 
 	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return nil, errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return nil, err
 	}
 
 	volumeDir, err := s.getVolDir(volume)
@@ -1069,10 +1082,6 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 		return nil, errFaultyDisk
 	}
 
-	if err = s.checkDiskFound(); err != nil {
-		return nil, err
-	}
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return nil, err
@@ -1132,8 +1141,13 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 		io.Reader
 		io.Closer
 	}{Reader: io.LimitReader(file, length), Closer: file}
+	if length >= readAheadSize {
+		return readahead.NewReadCloserSize(r, readAheadBuffers, readAheadBufSize)
+	}
 
-	return readahead.NewReadCloser(r), nil
+	// Just add a small 64k buffer.
+	r.Reader = bufio.NewReaderSize(r.Reader, 64<<10)
+	return r, nil
 }
 
 // CreateFile - creates the file.
@@ -1156,10 +1170,6 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 		if isSysErrIO(err) {
 			return errFaultyDisk
 		}
-		return err
-	}
-
-	if err = s.checkDiskFound(); err != nil {
 		return err
 	}
 
@@ -1310,10 +1320,6 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 		return FileInfo{}, errFaultyDisk
 	}
 
-	if err = s.checkDiskFound(); err != nil {
-		return FileInfo{}, err
-	}
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return FileInfo{}, err
@@ -1410,19 +1416,18 @@ func (s *posix) DeleteFile(volume, path string) (err error) {
 		return errFaultyDisk
 	}
 
-	if err = s.checkDiskFound(); err != nil {
-		return err
-	}
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
 	}
+
 	// Stat a volume entry.
 	_, err = os.Stat((volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
+		} else if os.IsPermission(err) {
+			return errVolumeAccessDenied
 		} else if isSysErrIO(err) {
 			return errFaultyDisk
 		}
@@ -1458,10 +1463,6 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 
 	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return err
 	}
 
 	srcVolumeDir, err := s.getVolDir(srcVolume)
@@ -1556,19 +1557,20 @@ func (s *posix) VerifyFile(volume, path string, fileSize int64, algo BitrotAlgor
 		return errFaultyDisk
 	}
 
-	if err = s.checkDiskFound(); err != nil {
-		return err
-	}
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
 	}
+
 	// Stat a volume entry.
 	_, err = os.Stat(volumeDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
+		} else if isSysErrIO(err) {
+			return errFaultyDisk
+		} else if os.IsPermission(err) {
+			return errVolumeAccessDenied
 		}
 		return err
 	}
@@ -1582,18 +1584,7 @@ func (s *posix) VerifyFile(volume, path string, fileSize int64, algo BitrotAlgor
 	// Open the file for reading.
 	file, err := os.Open(filePath)
 	if err != nil {
-		switch {
-		case os.IsNotExist(err):
-			return errFileNotFound
-		case os.IsPermission(err):
-			return errFileAccessDenied
-		case isSysErrNotDir(err):
-			return errFileAccessDenied
-		case isSysErrIO(err):
-			return errFaultyDisk
-		default:
-			return err
-		}
+		return osErrToFSFileErr(err)
 	}
 
 	// Close the file descriptor.
@@ -1605,10 +1596,11 @@ func (s *posix) VerifyFile(volume, path string, fileSize int64, algo BitrotAlgor
 
 		h := algo.New()
 		if _, err = io.CopyBuffer(h, file, *bufp); err != nil {
-			return err
+			// Premature failure in reading the object,file is corrupt.
+			return errFileCorrupt
 		}
 		if !bytes.Equal(h.Sum(nil), sum) {
-			return HashMismatchError{hex.EncodeToString(sum), hex.EncodeToString(h.Sum(nil))}
+			return errFileCorrupt
 		}
 		return nil
 	}
@@ -1618,23 +1610,28 @@ func (s *posix) VerifyFile(volume, path string, fileSize int64, algo BitrotAlgor
 	hashBuf := make([]byte, h.Size())
 	fi, err := file.Stat()
 	if err != nil {
+		// Unable to stat on the file, return an expected error
+		// for healing code to fix this file.
 		return err
 	}
 
+	size := fi.Size()
+
 	// Calculate the size of the bitrot file and compare
 	// it with the actual file size.
-	if fi.Size() != bitrotShardFileSize(fileSize, shardSize, algo) {
-		return errFileUnexpectedSize
+	if size != bitrotShardFileSize(fileSize, shardSize, algo) {
+		return errFileCorrupt
 	}
 
-	size := fi.Size()
+	var n int
 	for {
 		if size == 0 {
 			return nil
 		}
 		h.Reset()
-		n, err := file.Read(hashBuf)
+		n, err = file.Read(hashBuf)
 		if err != nil {
+			// Read's failed for object with right size, file is corrupt.
 			return err
 		}
 		size -= int64(n)
@@ -1643,12 +1640,13 @@ func (s *posix) VerifyFile(volume, path string, fileSize int64, algo BitrotAlgor
 		}
 		n, err = file.Read(buf)
 		if err != nil {
+			// Read's failed for object with right size, at different offsets.
 			return err
 		}
 		size -= int64(n)
 		h.Write(buf)
 		if !bytes.Equal(h.Sum(nil), hashBuf) {
-			return HashMismatchError{hex.EncodeToString(hashBuf), hex.EncodeToString(h.Sum(nil))}
+			return errFileCorrupt
 		}
 	}
 }

@@ -65,7 +65,7 @@ func (h *healRoutine) run() {
 				// Wait at max 10 minute for an inprogress request before proceeding to heal
 				waitCount := 600
 				// Any requests in progress, delay the heal.
-				for (globalHTTPServer.GetRequestCount() >= int32(globalXLSetCount*globalXLSetDriveCount)) &&
+				for (globalHTTPServer.GetRequestCount() >= int32(globalEndpoints.Nodes())) &&
 					waitCount > 0 {
 					waitCount--
 					time.Sleep(1 * time.Second)
@@ -83,7 +83,9 @@ func (h *healRoutine) run() {
 			case bucket != "" && object != "":
 				res, err = bgHealObject(ctx, bucket, object, task.opts)
 			}
-			task.responseCh <- healResult{result: res, err: err}
+			if task.responseCh != nil {
+				task.responseCh <- healResult{result: res, err: err}
+			}
 		case <-h.doneCh:
 			return
 		case <-GlobalServiceDoneCh:
@@ -100,18 +102,40 @@ func initHealRoutine() *healRoutine {
 
 }
 
-func initBackgroundHealing() {
-	healBg := initHealRoutine()
-	go healBg.run()
+func startBackgroundHealing() {
+	ctx := context.Background()
 
-	globalBackgroundHealing = healBg
+	var objAPI ObjectLayer
+	for {
+		objAPI = newObjectLayerWithoutSafeModeFn()
+		if objAPI == nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		break
+	}
+
+	// Run the background healer
+	globalBackgroundHealRoutine = initHealRoutine()
+	go globalBackgroundHealRoutine.run()
+
+	// Launch the background healer sequence to track
+	// background healing operations
+	info := objAPI.StorageInfo(ctx)
+	numDisks := info.Backend.OnlineDisks.Sum() + info.Backend.OfflineDisks.Sum()
+	nh := newBgHealSequence(numDisks)
+	globalBackgroundHealState.LaunchNewHealSequence(nh)
+}
+
+func initBackgroundHealing() {
+	go startBackgroundHealing()
 }
 
 // bgHealDiskFormat - heals format.json, return value indicates if a
 // failure error occurred.
 func bgHealDiskFormat(ctx context.Context, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
+	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil {
 		return madmin.HealResultItem{}, errServerNotInitialized
 	}
@@ -141,7 +165,7 @@ func bgHealDiskFormat(ctx context.Context, opts madmin.HealOpts) (madmin.HealRes
 // bghealBucket - traverses and heals given bucket
 func bgHealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
+	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil {
 		return madmin.HealResultItem{}, errServerNotInitialized
 	}
@@ -152,7 +176,7 @@ func bgHealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (mad
 // bgHealObject - heal the given object and record result
 func bgHealObject(ctx context.Context, bucket, object string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
+	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil {
 		return madmin.HealResultItem{}, errServerNotInitialized
 	}

@@ -20,127 +20,145 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 const (
-	adminAPIPathPrefix = "/minio/admin"
+	adminPathPrefix       = minioReservedBucketPath + "/admin"
+	adminAPIVersion       = madmin.AdminAPIVersion
+	adminAPIVersionPrefix = SlashSeparator + madmin.AdminAPIVersion
 )
 
 // adminAPIHandlers provides HTTP handlers for MinIO admin API.
-type adminAPIHandlers struct {
-}
+type adminAPIHandlers struct{}
 
 // registerAdminRouter - Add handler functions for each service REST API routes.
 func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool) {
 
 	adminAPI := adminAPIHandlers{}
 	// Admin router
-	adminRouter := router.PathPrefix(adminAPIPathPrefix).Subrouter()
-
-	// Version handler
-	adminV1Router := adminRouter.PathPrefix("/v1").Subrouter()
+	adminRouter := router.PathPrefix(adminPathPrefix).Subrouter()
 
 	/// Service operations
 
 	// Restart and stop MinIO service.
-	adminV1Router.Methods(http.MethodPost).Path("/service").HandlerFunc(httpTraceAll(adminAPI.ServiceActionHandler)).Queries("action", "{action:.*}")
+	adminRouter.Methods(http.MethodPost).Path(adminAPIVersionPrefix+"/service").HandlerFunc(httpTraceAll(adminAPI.ServiceActionHandler)).Queries("action", "{action:.*}")
 	// Update MinIO servers.
-	adminV1Router.Methods(http.MethodPost).Path("/update").HandlerFunc(httpTraceAll(adminAPI.ServerUpdateHandler)).Queries("updateURL", "{updateURL:.*}")
+	adminRouter.Methods(http.MethodPost).Path(adminAPIVersionPrefix+"/update").HandlerFunc(httpTraceAll(adminAPI.ServerUpdateHandler)).Queries("updateURL", "{updateURL:.*}")
 
 	// Info operations
-	adminV1Router.Methods(http.MethodGet).Path("/info").HandlerFunc(httpTraceAll(adminAPI.ServerInfoHandler))
+	adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/info").HandlerFunc(httpTraceAll(adminAPI.ServerInfoHandler))
+	// Harware Info operations
+	adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix+"/hardware").HandlerFunc(httpTraceAll(adminAPI.ServerHardwareInfoHandler)).Queries("hwType", "{hwType:.*}")
+
+	// StorageInfo operations
+	adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/storageinfo").HandlerFunc(httpTraceAll(adminAPI.StorageInfoHandler))
 
 	if globalIsDistXL || globalIsXL {
 		/// Heal operations
 
 		// Heal processing endpoint.
-		adminV1Router.Methods(http.MethodPost).Path("/heal/").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
-		adminV1Router.Methods(http.MethodPost).Path("/heal/{bucket}").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
-		adminV1Router.Methods(http.MethodPost).Path("/heal/{bucket}/{prefix:.*}").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
+		adminRouter.Methods(http.MethodPost).Path(adminAPIVersionPrefix + "/heal/").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
+		adminRouter.Methods(http.MethodPost).Path(adminAPIVersionPrefix + "/heal/{bucket}").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
+		adminRouter.Methods(http.MethodPost).Path(adminAPIVersionPrefix + "/heal/{bucket}/{prefix:.*}").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
 
-		adminV1Router.Methods(http.MethodPost).Path("/background-heal/status").HandlerFunc(httpTraceAll(adminAPI.BackgroundHealStatusHandler))
+		adminRouter.Methods(http.MethodPost).Path(adminAPIVersionPrefix + "/background-heal/status").HandlerFunc(httpTraceAll(adminAPI.BackgroundHealStatusHandler))
 
 		/// Health operations
 
 	}
 	// Performance command - return performance details based on input type
-	adminV1Router.Methods(http.MethodGet).Path("/performance").HandlerFunc(httpTraceAll(adminAPI.PerfInfoHandler)).Queries("perfType", "{perfType:.*}")
+	adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix+"/performance").HandlerFunc(httpTraceAll(adminAPI.PerfInfoHandler)).Queries("perfType", "{perfType:.*}")
 
 	// Profiling operations
-	adminV1Router.Methods(http.MethodPost).Path("/profiling/start").HandlerFunc(httpTraceAll(adminAPI.StartProfilingHandler)).
+	adminRouter.Methods(http.MethodPost).Path(adminAPIVersionPrefix+"/profiling/start").HandlerFunc(httpTraceAll(adminAPI.StartProfilingHandler)).
 		Queries("profilerType", "{profilerType:.*}")
-	adminV1Router.Methods(http.MethodGet).Path("/profiling/download").HandlerFunc(httpTraceAll(adminAPI.DownloadProfilingHandler))
+	adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/profiling/download").HandlerFunc(httpTraceAll(adminAPI.DownloadProfilingHandler))
+
+	// Config KV operations.
+	if enableConfigOps {
+		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix+"/get-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigKVHandler)).Queries("key", "{key:.*}")
+		adminRouter.Methods(http.MethodPut).Path(adminAPIVersionPrefix + "/set-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigKVHandler))
+		adminRouter.Methods(http.MethodDelete).Path(adminAPIVersionPrefix + "/del-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.DelConfigKVHandler))
+		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix+"/help-config-kv").HandlerFunc(httpTraceAll(adminAPI.HelpConfigKVHandler)).Queries("subSys", "{subSys:.*}", "key", "{key:.*}")
+		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix+"/list-config-history-kv").HandlerFunc(httpTraceAll(adminAPI.ListConfigHistoryKVHandler)).Queries("count", "{count:[0-9]+}")
+		adminRouter.Methods(http.MethodDelete).Path(adminAPIVersionPrefix+"/clear-config-history-kv").HandlerFunc(httpTraceHdrs(adminAPI.ClearConfigHistoryKVHandler)).Queries("restoreId", "{restoreId:.*}")
+		adminRouter.Methods(http.MethodPut).Path(adminAPIVersionPrefix+"/restore-config-history-kv").HandlerFunc(httpTraceHdrs(adminAPI.RestoreConfigHistoryKVHandler)).Queries("restoreId", "{restoreId:.*}")
+	}
 
 	/// Config operations
 	if enableConfigOps {
 		// Get config
-		adminV1Router.Methods(http.MethodGet).Path("/config").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigHandler))
+		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/config").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigHandler))
 		// Set config
-		adminV1Router.Methods(http.MethodPut).Path("/config").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigHandler))
+		adminRouter.Methods(http.MethodPut).Path(adminAPIVersionPrefix + "/config").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigHandler))
 	}
 
 	if enableIAMOps {
 		// -- IAM APIs --
 
 		// Add policy IAM
-		adminV1Router.Methods(http.MethodPut).Path("/add-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.AddCannedPolicy)).Queries("name",
+		adminRouter.Methods(http.MethodPut).Path(adminAPIVersionPrefix+"/add-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.AddCannedPolicy)).Queries("name",
 			"{name:.*}")
 
 		// Add user IAM
-		adminV1Router.Methods(http.MethodPut).Path("/add-user").HandlerFunc(httpTraceHdrs(adminAPI.AddUser)).Queries("accessKey", "{accessKey:.*}")
-		adminV1Router.Methods(http.MethodPut).Path("/set-user-status").HandlerFunc(httpTraceHdrs(adminAPI.SetUserStatus)).
+		adminRouter.Methods(http.MethodPut).Path(adminAPIVersionPrefix+"/add-user").HandlerFunc(httpTraceHdrs(adminAPI.AddUser)).Queries("accessKey", "{accessKey:.*}")
+		adminRouter.Methods(http.MethodPut).Path(adminAPIVersionPrefix+"/set-user-status").HandlerFunc(httpTraceHdrs(adminAPI.SetUserStatus)).
 			Queries("accessKey", "{accessKey:.*}").Queries("status", "{status:.*}")
 
 		// Info policy IAM
-		adminV1Router.Methods(http.MethodGet).Path("/info-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.InfoCannedPolicy)).Queries("name", "{name:.*}")
+		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix+"/info-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.InfoCannedPolicy)).Queries("name", "{name:.*}")
 
 		// Remove policy IAM
-		adminV1Router.Methods(http.MethodDelete).Path("/remove-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.RemoveCannedPolicy)).Queries("name", "{name:.*}")
+		adminRouter.Methods(http.MethodDelete).Path(adminAPIVersionPrefix+"/remove-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.RemoveCannedPolicy)).Queries("name", "{name:.*}")
 
 		// Set user or group policy
-		adminV1Router.Methods(http.MethodPut).Path("/set-user-or-group-policy").
+		adminRouter.Methods(http.MethodPut).Path(adminAPIVersionPrefix+"/set-user-or-group-policy").
 			HandlerFunc(httpTraceHdrs(adminAPI.SetPolicyForUserOrGroup)).
 			Queries("policyName", "{policyName:.*}", "userOrGroup", "{userOrGroup:.*}", "isGroup", "{isGroup:true|false}")
 
 		// Remove user IAM
-		adminV1Router.Methods(http.MethodDelete).Path("/remove-user").HandlerFunc(httpTraceHdrs(adminAPI.RemoveUser)).Queries("accessKey", "{accessKey:.*}")
+		adminRouter.Methods(http.MethodDelete).Path(adminAPIVersionPrefix+"/remove-user").HandlerFunc(httpTraceHdrs(adminAPI.RemoveUser)).Queries("accessKey", "{accessKey:.*}")
 
 		// List users
-		adminV1Router.Methods(http.MethodGet).Path("/list-users").HandlerFunc(httpTraceHdrs(adminAPI.ListUsers))
+		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/list-users").HandlerFunc(httpTraceHdrs(adminAPI.ListUsers))
 
 		// User info
-		adminV1Router.Methods(http.MethodGet).Path("/user-info").HandlerFunc(httpTraceHdrs(adminAPI.GetUserInfo)).Queries("accessKey", "{accessKey:.*}")
+		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix+"/user-info").HandlerFunc(httpTraceHdrs(adminAPI.GetUserInfo)).Queries("accessKey", "{accessKey:.*}")
 
 		// Add/Remove members from group
-		adminV1Router.Methods(http.MethodPut).Path("/update-group-members").HandlerFunc(httpTraceHdrs(adminAPI.UpdateGroupMembers))
+		adminRouter.Methods(http.MethodPut).Path(adminAPIVersionPrefix + "/update-group-members").HandlerFunc(httpTraceHdrs(adminAPI.UpdateGroupMembers))
 
 		// Get Group
-		adminV1Router.Methods(http.MethodGet).Path("/group").HandlerFunc(httpTraceHdrs(adminAPI.GetGroup)).Queries("group", "{group:.*}")
+		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix+"/group").HandlerFunc(httpTraceHdrs(adminAPI.GetGroup)).Queries("group", "{group:.*}")
 
 		// List Groups
-		adminV1Router.Methods(http.MethodGet).Path("/groups").HandlerFunc(httpTraceHdrs(adminAPI.ListGroups))
+		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/groups").HandlerFunc(httpTraceHdrs(adminAPI.ListGroups))
 
 		// Set Group Status
-		adminV1Router.Methods(http.MethodPut).Path("/set-group-status").HandlerFunc(httpTraceHdrs(adminAPI.SetGroupStatus)).Queries("group", "{group:.*}").Queries("status", "{status:.*}")
+		adminRouter.Methods(http.MethodPut).Path(adminAPIVersionPrefix+"/set-group-status").HandlerFunc(httpTraceHdrs(adminAPI.SetGroupStatus)).Queries("group", "{group:.*}").Queries("status", "{status:.*}")
 
 		// List policies
-		adminV1Router.Methods(http.MethodGet).Path("/list-canned-policies").HandlerFunc(httpTraceHdrs(adminAPI.ListCannedPolicies))
+		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/list-canned-policies").HandlerFunc(httpTraceHdrs(adminAPI.ListCannedPolicies))
 	}
 
 	// -- Top APIs --
 	// Top locks
-	adminV1Router.Methods(http.MethodGet).Path("/top/locks").HandlerFunc(httpTraceHdrs(adminAPI.TopLocksHandler))
+	if globalIsDistXL {
+		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/top/locks").HandlerFunc(httpTraceHdrs(adminAPI.TopLocksHandler))
+	}
 
 	// HTTP Trace
-	adminV1Router.Methods(http.MethodGet).Path("/trace").HandlerFunc(adminAPI.TraceHandler)
+	adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/trace").HandlerFunc(adminAPI.TraceHandler)
 
 	// Console Logs
-	adminV1Router.Methods(http.MethodGet).Path("/log").HandlerFunc(httpTraceAll(adminAPI.ConsoleLogHandler))
+	adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/log").HandlerFunc(httpTraceAll(adminAPI.ConsoleLogHandler))
 
 	// -- KMS APIs --
 	//
-	adminV1Router.Methods(http.MethodGet).Path("/kms/key/status").HandlerFunc(httpTraceAll(adminAPI.KMSKeyStatusHandler))
+	adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/kms/key/status").HandlerFunc(httpTraceAll(adminAPI.KMSKeyStatusHandler))
 
-	// If none of the routes match, return error.
-	adminV1Router.NotFoundHandler = http.HandlerFunc(httpTraceHdrs(notFoundHandlerJSON))
+	// If none of the routes match add default error handler routes
+	adminRouter.NotFoundHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
+	adminRouter.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
 }

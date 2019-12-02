@@ -55,7 +55,7 @@ func handleSignals() {
 		// send signal to various go-routines that they need to quit.
 		close(GlobalServiceDoneCh)
 
-		if objAPI := newObjectLayerFn(); objAPI != nil {
+		if objAPI := newObjectLayerWithoutSafeModeFn(); objAPI != nil {
 			oerr = objAPI.Shutdown(context.Background())
 			logger.LogIf(context.Background(), oerr)
 		}
@@ -66,7 +66,7 @@ func handleSignals() {
 	for {
 		select {
 		case err := <-globalHTTPServerErrorCh:
-			if objAPI := newObjectLayerFn(); objAPI != nil {
+			if objAPI := newObjectLayerWithoutSafeModeFn(); objAPI != nil {
 				objAPI.Shutdown(context.Background())
 			}
 			if err != nil {
