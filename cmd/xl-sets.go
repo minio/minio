@@ -1293,7 +1293,7 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 			// Look for acceptable heal errors, for any other
 			// errors we should simply quit and return.
 			if _, ok := formatHealErrors[sErr]; !ok {
-				return fmt.Errorf("Disk %s: %s", s.endpoints[index], sErr)
+				return fmt.Errorf("Disk %s: %w", s.endpoints[index], sErr)
 			}
 		}
 	}
@@ -1423,7 +1423,7 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 			// Look for acceptable heal errors, for any other
 			// errors we should simply quit and return.
 			if _, ok := formatHealErrors[sErr]; !ok {
-				return res, fmt.Errorf("Disk %s: %s", s.endpoints[index], sErr)
+				return res, fmt.Errorf("Disk %s: %w", s.endpoints[index], sErr)
 			}
 		}
 	}
@@ -1493,7 +1493,7 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 		// Initialize meta volume, if volume already exists ignores it, all disks which
 		// are not found are ignored as well.
 		if err = initFormatXLMetaVolume(storageDisks, tmpNewFormats); err != nil {
-			return madmin.HealResultItem{}, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
+			return madmin.HealResultItem{}, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %w", err)
 		}
 
 		// Save formats `format.json` across all disks.

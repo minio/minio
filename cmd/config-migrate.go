@@ -246,7 +246,7 @@ func purgeV1() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘1’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘1’. %w", err)
 	}
 	if cv1.Version != "1" {
 		return fmt.Errorf("unrecognized config version ‘%s’", cv1.Version)
@@ -267,7 +267,7 @@ func migrateV2ToV3() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘2’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘2’. %w", err)
 	}
 	if cv2.Version != "2" {
 		return nil
@@ -275,7 +275,7 @@ func migrateV2ToV3() error {
 
 	cred, err := auth.CreateCredentials(cv2.Credentials.AccessKey, cv2.Credentials.SecretKey)
 	if err != nil {
-		return fmt.Errorf("Invalid credential in V2 configuration file. %v", err)
+		return fmt.Errorf("Invalid credential in V2 configuration file. %w", err)
 	}
 
 	srvConfig := &configV3{}
@@ -308,7 +308,7 @@ func migrateV2ToV3() error {
 	srvConfig.Logger.Syslog = slogger
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv2.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv2.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv2.Version, srvConfig.Version)
@@ -326,7 +326,7 @@ func migrateV3ToV4() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘3’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘3’. %w", err)
 	}
 	if cv3.Version != "3" {
 		return nil
@@ -346,7 +346,7 @@ func migrateV3ToV4() error {
 	srvConfig.Logger.Syslog = cv3.Logger.Syslog
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv3.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv3.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv3.Version, srvConfig.Version)
@@ -364,7 +364,7 @@ func migrateV4ToV5() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘4’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘4’. %w", err)
 	}
 	if cv4.Version != "4" {
 		return nil
@@ -387,7 +387,7 @@ func migrateV4ToV5() error {
 	srvConfig.Logger.Redis.Enable = false
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv4.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv4.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv4.Version, srvConfig.Version)
@@ -405,7 +405,7 @@ func migrateV5ToV6() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘5’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘5’. %w", err)
 	}
 	if cv5.Version != "5" {
 		return nil
@@ -476,7 +476,7 @@ func migrateV5ToV6() error {
 	}
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv5.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv5.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv5.Version, srvConfig.Version)
@@ -494,7 +494,7 @@ func migrateV6ToV7() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘6’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘6’. %w", err)
 	}
 	if cv6.Version != "6" {
 		return nil
@@ -532,7 +532,7 @@ func migrateV6ToV7() error {
 	}
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv6.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv6.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv6.Version, srvConfig.Version)
@@ -550,7 +550,7 @@ func migrateV7ToV8() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘7’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘7’. %w", err)
 	}
 	if cv7.Version != "7" {
 		return nil
@@ -595,7 +595,7 @@ func migrateV7ToV8() error {
 	}
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv7.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv7.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv7.Version, srvConfig.Version)
@@ -612,7 +612,7 @@ func migrateV8ToV9() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘8’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘8’. %w", err)
 	}
 	if cv8.Version != "8" {
 		return nil
@@ -665,7 +665,7 @@ func migrateV8ToV9() error {
 	}
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv8.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv8.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv8.Version, srvConfig.Version)
@@ -682,7 +682,7 @@ func migrateV9ToV10() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘9’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘9’. %w", err)
 	}
 	if cv9.Version != "9" {
 		return nil
@@ -733,7 +733,7 @@ func migrateV9ToV10() error {
 	}
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv9.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv9.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv9.Version, srvConfig.Version)
@@ -750,7 +750,7 @@ func migrateV10ToV11() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘10’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘10’. %w", err)
 	}
 	if cv10.Version != "10" {
 		return nil
@@ -804,7 +804,7 @@ func migrateV10ToV11() error {
 	srvConfig.Notify.Kafka["1"] = target.KafkaArgs{}
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv10.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv10.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv10.Version, srvConfig.Version)
@@ -821,7 +821,7 @@ func migrateV11ToV12() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘11’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘11’. %w", err)
 	}
 	if cv11.Version != "11" {
 		return nil
@@ -902,7 +902,7 @@ func migrateV11ToV12() error {
 	}
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv11.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv11.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv11.Version, srvConfig.Version)
@@ -918,7 +918,7 @@ func migrateV12ToV13() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘12’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘12’. %w", err)
 	}
 	if cv12.Version != "12" {
 		return nil
@@ -982,7 +982,7 @@ func migrateV12ToV13() error {
 	srvConfig.Notify.Webhook["1"] = target.WebhookArgs{}
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv12.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv12.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv12.Version, srvConfig.Version)
@@ -998,7 +998,7 @@ func migrateV13ToV14() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘13’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘13’. %w", err)
 	}
 	if cv13.Version != "13" {
 		return nil
@@ -1067,7 +1067,7 @@ func migrateV13ToV14() error {
 	srvConfig.Browser = true
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv13.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv13.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv13.Version, srvConfig.Version)
@@ -1083,7 +1083,7 @@ func migrateV14ToV15() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘14’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘14’. %w", err)
 	}
 	if cv14.Version != "14" {
 		return nil
@@ -1156,7 +1156,7 @@ func migrateV14ToV15() error {
 	srvConfig.Browser = cv14.Browser
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv14.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv14.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv14.Version, srvConfig.Version)
@@ -1173,7 +1173,7 @@ func migrateV15ToV16() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘15’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘15’. %w", err)
 	}
 	if cv15.Version != "15" {
 		return nil
@@ -1246,7 +1246,7 @@ func migrateV15ToV16() error {
 	srvConfig.Browser = cv15.Browser
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv15.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv15.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv15.Version, srvConfig.Version)
@@ -1263,7 +1263,7 @@ func migrateV16ToV17() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘16’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘16’. %w", err)
 	}
 	if cv16.Version != "16" {
 		return nil
@@ -1367,7 +1367,7 @@ func migrateV16ToV17() error {
 	srvConfig.Browser = cv16.Browser
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv16.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv16.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv16.Version, srvConfig.Version)
@@ -1384,7 +1384,7 @@ func migrateV17ToV18() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘17’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘17’. %w", err)
 	}
 	if cv17.Version != "17" {
 		return nil
@@ -1471,7 +1471,7 @@ func migrateV17ToV18() error {
 	srvConfig.Browser = cv17.Browser
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv17.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv17.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv17.Version, srvConfig.Version)
@@ -1486,7 +1486,7 @@ func migrateV18ToV19() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘18’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘18’. %w", err)
 	}
 	if cv18.Version != "18" {
 		return nil
@@ -1577,7 +1577,7 @@ func migrateV18ToV19() error {
 	srvConfig.Browser = cv18.Browser
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv18.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv18.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv18.Version, srvConfig.Version)
@@ -1592,7 +1592,7 @@ func migrateV19ToV20() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘18’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘18’. %w", err)
 	}
 	if cv19.Version != "19" {
 		return nil
@@ -1682,7 +1682,7 @@ func migrateV19ToV20() error {
 	srvConfig.Browser = cv19.Browser
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv19.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv19.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv19.Version, srvConfig.Version)
@@ -1697,7 +1697,7 @@ func migrateV20ToV21() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘20’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘20’. %w", err)
 	}
 	if cv20.Version != "20" {
 		return nil
@@ -1786,7 +1786,7 @@ func migrateV20ToV21() error {
 	srvConfig.Domain = cv20.Domain
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv20.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv20.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv20.Version, srvConfig.Version)
@@ -1801,7 +1801,7 @@ func migrateV21ToV22() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘21’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘21’. %w", err)
 	}
 	if cv21.Version != "21" {
 		return nil
@@ -1890,7 +1890,7 @@ func migrateV21ToV22() error {
 	srvConfig.Domain = cv21.Domain
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv21.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv21.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv21.Version, srvConfig.Version)
@@ -1905,7 +1905,7 @@ func migrateV22ToV23() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘22’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘22’. %w", err)
 	}
 	if cv22.Version != "22" {
 		return nil
@@ -2003,7 +2003,7 @@ func migrateV22ToV23() error {
 	srvConfig.Cache.Expiry = 90
 
 	if err = Save(configFile, srvConfig); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv22.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv22.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv22.Version, srvConfig.Version)
@@ -2018,7 +2018,7 @@ func migrateV23ToV24() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘23’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘23’. %w", err)
 	}
 	if cv23.Version != "23" {
 		return nil
@@ -2116,7 +2116,7 @@ func migrateV23ToV24() error {
 	srvConfig.Cache.Expiry = cv23.Cache.Expiry
 
 	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv23.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv23.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv23.Version, srvConfig.Version)
@@ -2131,7 +2131,7 @@ func migrateV24ToV25() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘24’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘24’. %w", err)
 	}
 	if cv24.Version != "24" {
 		return nil
@@ -2234,7 +2234,7 @@ func migrateV24ToV25() error {
 	srvConfig.Cache.Expiry = cv24.Cache.Expiry
 
 	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv24.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv24.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv24.Version, srvConfig.Version)
@@ -2249,7 +2249,7 @@ func migrateV25ToV26() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config version ‘25’. %v", err)
+		return fmt.Errorf("Unable to load config version ‘25’. %w", err)
 	}
 	if cv25.Version != "25" {
 		return nil
@@ -2353,7 +2353,7 @@ func migrateV25ToV26() error {
 	srvConfig.Cache.MaxUse = 80
 
 	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv25.Version, srvConfig.Version, err)
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %w", cv25.Version, srvConfig.Version, err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, cv25.Version, srvConfig.Version)
@@ -2371,7 +2371,7 @@ func migrateV26ToV27() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config file. %v", err)
+		return fmt.Errorf("Unable to load config file. %w", err)
 	}
 
 	if srvConfig.Version != "26" {
@@ -2386,7 +2386,7 @@ func migrateV26ToV27() error {
 	srvConfig.Logger.HTTP["1"] = logger.HTTP{}
 
 	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘26’ to ‘27’. %v", err)
+		return fmt.Errorf("Failed to migrate config from ‘26’ to ‘27’. %w", err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, "26", "27")
@@ -2404,7 +2404,7 @@ func migrateV27ToV28() error {
 	if os.IsNotExist(err) || os.IsPermission(err) {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config file. %v", err)
+		return fmt.Errorf("Unable to load config file. %w", err)
 	}
 
 	if srvConfig.Version != "27" {
@@ -2414,7 +2414,7 @@ func migrateV27ToV28() error {
 	srvConfig.Version = "28"
 	srvConfig.KMS = crypto.KMSConfig{}
 	if err = quick.SaveConfig(srvConfig, configFile, globalEtcdClient); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘27’ to ‘28’. %v", err)
+		return fmt.Errorf("Failed to migrate config from ‘27’ to ‘28’. %w", err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, "27", "28")
@@ -2534,7 +2534,7 @@ func migrateV27ToV28MinioSys(objAPI ObjectLayer) error {
 	if err == errConfigNotFound {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config file. %v", err)
+		return fmt.Errorf("Unable to load config file. %w", err)
 	}
 	if !ok {
 		return nil
@@ -2549,7 +2549,7 @@ func migrateV27ToV28MinioSys(objAPI ObjectLayer) error {
 	cfg.KMS = crypto.KMSConfig{}
 
 	if err = saveServerConfig(context.Background(), objAPI, cfg); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘27’ to ‘28’. %v", err)
+		return fmt.Errorf("Failed to migrate config from ‘27’ to ‘28’. %w", err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, "27", "28")
@@ -2563,7 +2563,7 @@ func migrateV28ToV29MinioSys(objAPI ObjectLayer) error {
 	if err == errConfigNotFound {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config file. %v", err)
+		return fmt.Errorf("Unable to load config file. %w", err)
 	}
 	if !ok {
 		return nil
@@ -2576,7 +2576,7 @@ func migrateV28ToV29MinioSys(objAPI ObjectLayer) error {
 
 	cfg.Version = "29"
 	if err = saveServerConfig(context.Background(), objAPI, cfg); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘28’ to ‘29’. %v", err)
+		return fmt.Errorf("Failed to migrate config from ‘28’ to ‘29’. %w", err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, "28", "29")
@@ -2590,7 +2590,7 @@ func migrateV29ToV30MinioSys(objAPI ObjectLayer) error {
 	if err == errConfigNotFound {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config file. %v", err)
+		return fmt.Errorf("Unable to load config file. %w", err)
 	}
 	if !ok {
 		return nil
@@ -2608,7 +2608,7 @@ func migrateV29ToV30MinioSys(objAPI ObjectLayer) error {
 	cfg.Compression.MimeTypes = strings.Split(compress.DefaultMimeTypes, config.ValueSeparator)
 
 	if err = saveServerConfig(context.Background(), objAPI, cfg); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘29’ to ‘30’. %v", err)
+		return fmt.Errorf("Failed to migrate config from ‘29’ to ‘30’. %w", err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, "29", "30")
@@ -2622,7 +2622,7 @@ func migrateV30ToV31MinioSys(objAPI ObjectLayer) error {
 	if err == errConfigNotFound {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config file. %v", err)
+		return fmt.Errorf("Unable to load config file. %w", err)
 	}
 	if !ok {
 		return nil
@@ -2643,7 +2643,7 @@ func migrateV30ToV31MinioSys(objAPI ObjectLayer) error {
 	}
 
 	if err = saveServerConfig(context.Background(), objAPI, cfg); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘30’ to ‘31’. %v", err)
+		return fmt.Errorf("Failed to migrate config from ‘30’ to ‘31’. %w", err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, "30", "31")
@@ -2657,7 +2657,7 @@ func migrateV31ToV32MinioSys(objAPI ObjectLayer) error {
 	if err == errConfigNotFound {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config file. %v", err)
+		return fmt.Errorf("Unable to load config file. %w", err)
 	}
 	if !ok {
 		return nil
@@ -2673,7 +2673,7 @@ func migrateV31ToV32MinioSys(objAPI ObjectLayer) error {
 	cfg.Notify.NSQ["1"] = target.NSQArgs{}
 
 	if err = saveServerConfig(context.Background(), objAPI, cfg); err != nil {
-		return fmt.Errorf("Failed to migrate config from ‘31’ to ‘32’. %v", err)
+		return fmt.Errorf("Failed to migrate config from ‘31’ to ‘32’. %w", err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, "31", "32")
@@ -2687,7 +2687,7 @@ func migrateV32ToV33MinioSys(objAPI ObjectLayer) error {
 	if err == errConfigNotFound {
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Unable to load config file. %v", err)
+		return fmt.Errorf("Unable to load config file. %w", err)
 	}
 	if !ok {
 		return nil
@@ -2701,7 +2701,7 @@ func migrateV32ToV33MinioSys(objAPI ObjectLayer) error {
 	cfg.Version = "33"
 
 	if err = saveServerConfig(context.Background(), objAPI, cfg); err != nil {
-		return fmt.Errorf("Failed to migrate config from '32' to '33' . %v", err)
+		return fmt.Errorf("Failed to migrate config from '32' to '33' . %w", err)
 	}
 
 	logger.Info(configMigrateMSGTemplate, configFile, "32", "33")

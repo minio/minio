@@ -67,7 +67,7 @@ func formatXLMigrateLocalEndpoints(endpoints Endpoints) error {
 				if os.IsNotExist(err) {
 					return nil
 				}
-				return fmt.Errorf("unable to access (%s) %s", formatPath, err)
+				return fmt.Errorf("unable to access (%s) %w", formatPath, err)
 			}
 			return formatXLMigrate(epPath)
 		}, index)
@@ -96,11 +96,11 @@ func formatXLCleanupTmpLocalEndpoints(endpoints Endpoints) error {
 				if os.IsNotExist(err) {
 					return nil
 				}
-				return fmt.Errorf("unable to access (%s) %s", formatPath, err)
+				return fmt.Errorf("unable to access (%s) %w", formatPath, err)
 			}
 			if _, err := os.Stat(pathJoin(epPath, minioMetaTmpBucket+"-old")); err != nil {
 				if !os.IsNotExist(err) {
-					return fmt.Errorf("unable to access (%s) %s",
+					return fmt.Errorf("unable to access (%s) %w",
 						pathJoin(epPath, minioMetaTmpBucket+"-old"),
 						err)
 				}
@@ -119,7 +119,7 @@ func formatXLCleanupTmpLocalEndpoints(endpoints Endpoints) error {
 			tmpOld := pathJoin(epPath, minioMetaTmpBucket+"-old", mustGetUUID())
 			if err := renameAll(pathJoin(epPath, minioMetaTmpBucket),
 				tmpOld); err != nil && err != errFileNotFound {
-				return fmt.Errorf("unable to rename (%s -> %s) %s",
+				return fmt.Errorf("unable to rename (%s -> %s) %w",
 					pathJoin(epPath, minioMetaTmpBucket),
 					tmpOld,
 					err)
@@ -129,7 +129,7 @@ func formatXLCleanupTmpLocalEndpoints(endpoints Endpoints) error {
 			go removeAll(pathJoin(epPath, minioMetaTmpBucket+"-old"))
 
 			if err := mkdirAll(pathJoin(epPath, minioMetaTmpBucket), 0777); err != nil {
-				return fmt.Errorf("unable to create (%s) %s",
+				return fmt.Errorf("unable to create (%s) %w",
 					pathJoin(epPath, minioMetaTmpBucket),
 					err)
 			}
@@ -151,7 +151,7 @@ func validateXLFormats(format *formatXLV3, formats []*formatXLV3, endpoints Endp
 			continue
 		}
 		if err := formatXLV3Check(format, formats[i]); err != nil {
-			return fmt.Errorf("%s format error: %s", endpoints[i], err)
+			return fmt.Errorf("%s format error: %w", endpoints[i], err)
 		}
 	}
 	if len(format.XL.Sets) != setCount {
@@ -189,7 +189,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	// Check if we have
 	for i, sErr := range sErrs {
 		if _, ok := formatCriticalErrors[sErr]; ok {
-			return nil, fmt.Errorf("Disk %s: %s", endpoints[i], sErr)
+			return nil, fmt.Errorf("Disk %s: %w", endpoints[i], sErr)
 		}
 	}
 
