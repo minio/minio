@@ -19,7 +19,6 @@ package cache
 import (
 	"reflect"
 	"runtime"
-	"strings"
 	"testing"
 )
 
@@ -65,6 +64,11 @@ func TestParseCacheDrives(t *testing.T) {
 			driveStr         string
 			expectedPatterns []string
 			success          bool
+		}{"/home/drive1,/home/drive2,/home/drive3", []string{"/home/drive1", "/home/drive2", "/home/drive3"}, true})
+		testCases = append(testCases, struct {
+			driveStr         string
+			expectedPatterns []string
+			success          bool
 		}{"/home/drive{1...3}", []string{"/home/drive1", "/home/drive2", "/home/drive3"}, true})
 		testCases = append(testCases, struct {
 			driveStr         string
@@ -73,7 +77,7 @@ func TestParseCacheDrives(t *testing.T) {
 		}{"/home/drive{1..3}", []string{}, false})
 	}
 	for i, testCase := range testCases {
-		drives, err := parseCacheDrives(strings.Split(testCase.driveStr, cacheDelimiterLegacy))
+		drives, err := parseCacheDrives(testCase.driveStr)
 		if err != nil && testCase.success {
 			t.Errorf("Test %d: Expected success but failed instead %s", i+1, err)
 		}
@@ -102,11 +106,12 @@ func TestParseCacheExclude(t *testing.T) {
 
 		// valid input
 		{"bucket1/*;*.png;images/trip/barcelona/*", []string{"bucket1/*", "*.png", "images/trip/barcelona/*"}, true},
+		{"bucket1/*,*.png,images/trip/barcelona/*", []string{"bucket1/*", "*.png", "images/trip/barcelona/*"}, true},
 		{"bucket1", []string{"bucket1"}, true},
 	}
 
 	for i, testCase := range testCases {
-		excludes, err := parseCacheExcludes(strings.Split(testCase.excludeStr, cacheDelimiterLegacy))
+		excludes, err := parseCacheExcludes(testCase.excludeStr)
 		if err != nil && testCase.success {
 			t.Errorf("Test %d: Expected success but failed instead %s", i+1, err)
 		}
