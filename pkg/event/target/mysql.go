@@ -94,7 +94,7 @@ const (
 	MySQLQueueLimit = "queue_limit"
 	MySQLQueueDir   = "queue_dir"
 
-	EnvMySQLState      = "MINIO_NOTIFY_MYSQL_STATE"
+	EnvMySQLEnable     = "MINIO_NOTIFY_MYSQL_ENABLE"
 	EnvMySQLFormat     = "MINIO_NOTIFY_MYSQL_FORMAT"
 	EnvMySQLDSNString  = "MINIO_NOTIFY_MYSQL_DSN_STRING"
 	EnvMySQLTable      = "MINIO_NOTIFY_MYSQL_TABLE"

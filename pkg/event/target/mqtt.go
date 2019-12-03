@@ -50,7 +50,7 @@ const (
 	MqttQueueDir          = "queue_dir"
 	MqttQueueLimit        = "queue_limit"
 
-	EnvMQTTState             = "MINIO_NOTIFY_MQTT_STATE"
+	EnvMQTTEnable            = "MINIO_NOTIFY_MQTT_ENABLE"
 	EnvMQTTBroker            = "MINIO_NOTIFY_MQTT_BROKER"
 	EnvMQTTTopic             = "MINIO_NOTIFY_MQTT_TOPIC"
 	EnvMQTTQoS               = "MINIO_NOTIFY_MQTT_QOS"

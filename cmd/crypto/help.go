@@ -23,32 +23,32 @@ var (
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         KMSVaultEndpoint,
-			Description: `Points to Vault API endpoint eg: "http://vault-endpoint-ip:8200"`,
+			Description: `HashiCorp Vault API endpoint e.g. "http://vault-endpoint-ip:8200"`,
 			Type:        "url",
 		},
 		config.HelpKV{
 			Key:         KMSVaultKeyName,
-			Description: `Transit key name used in vault policy, must be unique name eg: "my-minio-key"`,
+			Description: `transit key name used in vault policy, must be unique name e.g. "my-minio-key"`,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         KMSVaultAuthType,
-			Description: `Authentication type to Vault API endpoint eg: "approle"`,
+			Description: `authentication type to Vault API endpoint e.g. "approle"`,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         KMSVaultAppRoleID,
-			Description: `Unique role ID created for AppRole`,
+			Description: `unique role ID created for AppRole`,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         KMSVaultAppRoleSecret,
-			Description: `Unique secret ID created for AppRole`,
+			Description: `unique secret ID created for AppRole`,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         KMSVaultNamespace,
-			Description: `Only needed if AppRole engine is scoped to Vault Namespace eg: "ns1"`,
+			Description: `only needed if AppRole engine is scoped to Vault Namespace e.g. "ns1"`,
 			Optional:    true,
 			Type:        "string",
 		},
@@ -60,13 +60,13 @@ var (
 		},
 		config.HelpKV{
 			Key:         KMSVaultCAPath,
-			Description: `Path to PEM-encoded CA cert files to use mTLS authentication (optional) eg: "/home/user/custom-certs"`,
+			Description: `path to PEM-encoded CA cert files to use mTLS authentication (optional) e.g. "/home/user/custom-certs"`,
 			Optional:    true,
 			Type:        "path",
 		},
 		config.HelpKV{
 			Key:         config.Comment,
-			Description: "A comment to describe the KMS Vault setting",
+			Description: config.DefaultComment,
 			Optional:    true,
 			Type:        "sentence",
 		},

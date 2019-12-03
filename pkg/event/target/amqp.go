@@ -68,7 +68,7 @@ const (
 	AmqpArguments         = "arguments"
 	AmqpPublishingHeaders = "publishing_headers"
 
-	EnvAMQPState             = "MINIO_NOTIFY_AMQP_STATE"
+	EnvAMQPEnable            = "MINIO_NOTIFY_AMQP_ENABLE"
 	EnvAMQPURL               = "MINIO_NOTIFY_AMQP_URL"
 	EnvAMQPExchange          = "MINIO_NOTIFY_AMQP_EXCHANGE"
 	EnvAMQPRoutingKey        = "MINIO_NOTIFY_AMQP_ROUTING_KEY"

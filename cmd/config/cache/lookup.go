@@ -32,7 +32,6 @@ const (
 	MaxUse  = "maxuse"
 	Quota   = "quota"
 
-	EnvCacheState               = "MINIO_CACHE_STATE"
 	EnvCacheDrives              = "MINIO_CACHE_DRIVES"
 	EnvCacheExclude             = "MINIO_CACHE_EXCLUDE"
 	EnvCacheExpiry              = "MINIO_CACHE_EXPIRY"
@@ -47,10 +46,6 @@ const (
 // DefaultKVS - default KV settings for caching.
 var (
 	DefaultKVS = config.KVS{
-		config.KV{
-			Key:   config.State,
-			Value: config.StateOff,
-		},
 		config.KV{
 			Key:   Drives,
 			Value: "",
@@ -74,6 +69,12 @@ const (
 	cacheDelimiter = ","
 )
 
+// Enabled returns if cache is enabled.
+func Enabled(kvs config.KVS) bool {
+	drives := kvs.Get(Drives)
+	return drives != ""
+}
+
 // LookupConfig - extracts cache configuration provided by environment
 // variables and merge them with provided CacheConfiguration.
 func LookupConfig(kvs config.KVS) (Config, error) {
@@ -84,28 +85,7 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 	}
 
 	drives := env.Get(EnvCacheDrives, kvs.Get(Drives))
-	if len(drives) > 0 {
-		// Drives is not-empty means user wishes to enable this explicitly, but
-		// check if ENV is set to false to disable caching.
-		stateBool, err := config.ParseBool(env.Get(EnvCacheState, config.StateOn))
-		if err != nil {
-			return cfg, err
-		}
-		if !stateBool {
-			return cfg, nil
-		}
-	} else {
-		// Check if cache is explicitly disabled
-		stateBool, err := config.ParseBool(env.Get(EnvCacheState, kvs.Get(config.State)))
-		if err != nil {
-			if kvs.Empty() {
-				return cfg, nil
-			}
-			return cfg, err
-		}
-		if stateBool {
-			return cfg, config.Error("'drives' key cannot be empty to enable caching")
-		}
+	if len(drives) == 0 {
 		return cfg, nil
 	}
 

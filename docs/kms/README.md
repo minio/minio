@@ -171,7 +171,6 @@ The AppRole ID, AppRole Secret Id, Vault endpoint and Vault key name can now be 
 You'll need the Vault endpoint, AppRole ID, AppRole SecretID and encryption key-ring name defined in step 2.1.2
 
 ```
-export MINIO_KMS_VAULT_STATE=on
 export MINIO_KMS_VAULT_APPROLE_ID=8c03926c-6c51-7a1d-cf7d-62e48ab8d6d7
 export MINIO_KMS_VAULT_APPROLE_SECRET=edd8738c-6efe-c226-74f9-ef5b66e119d7
 export MINIO_KMS_VAULT_ENDPOINT=http://vault-endpoint-ip:8200

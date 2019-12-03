@@ -32,10 +32,6 @@ func SetCredentials(c Config, cred auth.Credentials) {
 	}
 	c[CredentialsSubSys][Default] = KVS{
 		KV{
-			Key:   State,
-			Value: StateOn,
-		},
-		KV{
 			Key:   AccessKey,
 			Value: cred.AccessKey,
 		},
@@ -55,10 +51,6 @@ func SetRegion(c Config, name string) {
 		KV{
 			Key:   RegionName,
 			Value: name,
-		},
-		KV{
-			Key:   State,
-			Value: StateOn,
 		},
 	}
 }

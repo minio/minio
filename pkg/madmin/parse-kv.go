@@ -70,19 +70,19 @@ type Targets []Target
 
 // Standard config keys and values.
 const (
-	StateKey   = "state"
+	EnableKey  = "enable"
 	CommentKey = "comment"
 
-	// State values
-	StateOn  = "on"
-	StateOff = "off"
+	// Enable values
+	EnableOn  = "on"
+	EnableOff = "off"
 )
 
 func (kvs KVS) String() string {
 	var s strings.Builder
 	for _, kv := range kvs {
 		// Do not need to print state which is on.
-		if kv.Key == StateKey && kv.Value == StateOn {
+		if kv.Key == EnableKey && kv.Value == EnableOn {
 			continue
 		}
 		if kv.Key == CommentKey && kv.Value == "" {
@@ -90,7 +90,7 @@ func (kvs KVS) String() string {
 		}
 		s.WriteString(kv.Key)
 		s.WriteString(KvSeparator)
-		spc := hasSpace(kv.Value)
+		spc := HasSpace(kv.Value)
 		if spc {
 			s.WriteString(KvDoubleQuote)
 		}
@@ -108,7 +108,8 @@ func (t Targets) Count() int {
 	return len(t)
 }
 
-func hasSpace(s string) bool {
+// HasSpace - returns if given string has space.
+func HasSpace(s string) bool {
 	for _, r := range s {
 		if unicode.IsSpace(r) {
 			return true
@@ -159,10 +160,12 @@ func (t *Targets) AddTarget(s string) error {
 	if len(inputs) <= 1 {
 		return fmt.Errorf("invalid number of arguments '%s'", s)
 	}
+
 	subSystemValue := strings.SplitN(inputs[0], SubSystemSeparator, 2)
 	if len(subSystemValue) == 0 {
 		return fmt.Errorf("invalid number of arguments %s", s)
 	}
+
 	var kvs = KVS{}
 	var prevK string
 	for _, v := range strings.Fields(inputs[1]) {
@@ -187,11 +190,19 @@ func (t *Targets) AddTarget(s string) error {
 		})
 	}
 
+	for i := range *t {
+		if (*t)[i].SubSystem == inputs[0] {
+			(*t)[i] = Target{
+				SubSystem: inputs[0],
+				KVS:       kvs,
+			}
+			return nil
+		}
+	}
 	*t = append(*t, Target{
 		SubSystem: inputs[0],
 		KVS:       kvs,
 	})
-
 	return nil
 }
 
