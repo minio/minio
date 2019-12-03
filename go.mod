@@ -32,7 +32,8 @@ require (
 	github.com/hashicorp/vault v1.1.0
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/json-iterator/go v1.1.7
-	github.com/klauspost/compress v1.8.3
+	github.com/klauspost/compress v1.9.3
+	github.com/klauspost/cpuid v1.2.2
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.1
 	github.com/klauspost/reedsolomon v1.9.3
@@ -88,3 +89,5 @@ replace github.com/eapache/queue => github.com/eapache/queue v1.1.0
 replace github.com/mattn/go-runewidth => github.com/mattn/go-runewidth v0.0.4
 
 replace github.com/mitchellh/mapstructure => github.com/mitchellh/mapstructure v1.1.2
+
+replace github.com/fwessels/simdjson-go => ../../fwessels/simdjson-go

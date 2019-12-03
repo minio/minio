@@ -351,7 +351,7 @@ func (s3Select *S3Select) OpenTape(pj simdjson.ParsedJson, pr *progressReader) e
 
 // OpenTapeCh - opens S3 object and accepts a channel that supplies parsed simdjson input.
 // An optional progressReader can be given to output progress.
-func (s3Select *S3Select) OpenTapeCh(pj chan simdjson.ParsedJson, pr *progressReader) error {
+func (s3Select *S3Select) OpenTapeStream(pj chan simdjson.Stream, pr *progressReader) error {
 	if pr == nil {
 		pr = &progressReader{}
 	}

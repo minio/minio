@@ -148,9 +148,10 @@ func NewReader(readCloser io.ReadCloser, args *json.ReaderArgs) *Reader {
 		args:       args,
 		readCloser: readCloser,
 		decoded:    make(chan simdjson.Elements, 1000),
-		input:      make(chan simdjson.Stream, 1),
+		input:      make(chan simdjson.Stream, 2),
 		exitReader: make(chan struct{}),
 	}
+	simdjson.ParseNDStream(readCloser, r.input, nil)
 	r.readerWg.Add(1)
 	go r.startReader()
 	return &r
@@ -171,12 +172,16 @@ func NewTapeReader(pj simdjson.ParsedJson, args *json.ReaderArgs) *Reader {
 	r := Reader{
 		args:       args,
 		decoded:    make(chan simdjson.Elements, 1000),
-		input:      make(chan simdjson.Stream, 1),
+		input:      make(chan simdjson.Stream, 2),
 		exitReader: make(chan struct{}),
 	}
 	r.input <- simdjson.Stream{
 		Value: &pj,
 		Error: nil,
+	}
+	r.input <- simdjson.Stream{
+		Value: nil,
+		Error: io.EOF,
 	}
 	close(r.input)
 	r.readerWg.Add(1)

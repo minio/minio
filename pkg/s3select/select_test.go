@@ -18,17 +18,17 @@ package s3select
 
 import (
 	"bytes"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/fwessels/simdjson-go"
+	"github.com/klauspost/cpuid"
 	"github.com/minio/minio-go/v6"
 )
 
@@ -58,9 +58,6 @@ func TestJSONQueries(t *testing.T) {
 	{"id": 1,"title": "Second Record","desc": "another text","synonyms": ["some", "synonym", "value"]}
 	{"id": 2,"title": "Second Record","desc": "another text","numbers": [2, 3.0, 4]}
 	{"id": 3,"title": "Second Record","desc": "another text","nested": [[2, 3.0, 4], [7, 8.5, 9]]}`
-
-	inputTape, _ := base64.StdEncoding.DecodeString(`EQAAAAAAAHIQAAAAAAAAewAAAAAAAAAiAAAAAAAAAGwAAAAAAAAAAAcAAAAAAAAiEQAAAAAAACIhAAAAAAAAIioAAAAAAAAiOAAAAAAAACIPAAAAAAAAW0UAAAAAAAAiTQAAAAAAACJVAAAAAAAAIgoAAAAAAABdAQAAAAAAAH0AAAAAAAAAciIAAAAAAAByIQAAAAAAAHtiAAAAAAAAIgAAAAAAAABsAQAAAAAAAABpAAAAAAAAInMAAAAAAAAihQAAAAAAACKOAAAAAAAAIp8AAAAAAAAiIAAAAAAAAFusAAAAAAAAIrUAAAAAAAAiwQAAAAAAACIbAAAAAAAAXRIAAAAAAAB9EQAAAAAAAHI2AAAAAAAAcjUAAAAAAAB7ywAAAAAAACIAAAAAAAAAbAIAAAAAAAAA0gAAAAAAACLcAAAAAAAAIu4AAAAAAAAi9wAAAAAAACIIAQAAAAAAIjQAAAAAAABbAAAAAAAAAGwCAAAAAAAAAAAAAAAAAABkAAAAAAAACEAAAAAAAAAAbAQAAAAAAAAALAAAAAAAAF0jAAAAAAAAfSIAAAAAAAByVAAAAAAAAHJTAAAAAAAAexQBAAAAAAAiAAAAAAAAAGwDAAAAAAAAABsBAAAAAAAiJQEAAAAAACI3AQAAAAAAIkABAAAAAAAiUQEAAAAAACJSAAAAAAAAW0kAAAAAAABbAAAAAAAAAGwCAAAAAAAAAAAAAAAAAABkAAAAAAAACEAAAAAAAAAAbAQAAAAAAAAAQQAAAAAAAF1RAAAAAAAAWwAAAAAAAABsBwAAAAAAAAAAAAAAAAAAZAAAAAAAACFAAAAAAAAAAGwJAAAAAAAAAEkAAAAAAABdQAAAAAAAAF03AAAAAAAAfTYAAAAAAABy`)
-	inputSB, _ := base64.StdEncoding.DecodeString(`AgAAAGlkAAUAAAB0aXRsZQALAAAAVGVzdCBSZWNvcmQABAAAAGRlc2MACQAAAFNvbWUgdGV4dAAIAAAAc3lub255bXMAAwAAAGZvbwADAAAAYmFyAAgAAAB3aGF0ZXZlcgACAAAAaWQABQAAAHRpdGxlAA0AAABTZWNvbmQgUmVjb3JkAAQAAABkZXNjAAwAAABhbm90aGVyIHRleHQACAAAAHN5bm9ueW1zAAQAAABzb21lAAcAAABzeW5vbnltAAUAAAB2YWx1ZQACAAAAaWQABQAAAHRpdGxlAA0AAABTZWNvbmQgUmVjb3JkAAQAAABkZXNjAAwAAABhbm90aGVyIHRleHQABwAAAG51bWJlcnMAAgAAAGlkAAUAAAB0aXRsZQANAAAAU2Vjb25kIFJlY29yZAAEAAAAZGVzYwAMAAAAYW5vdGhlciB0ZXh0AAYAAABuZXN0ZWQA`)
 
 	var testTable = []struct {
 		name       string
@@ -262,13 +259,15 @@ func TestJSONQueries(t *testing.T) {
     </RequestProgress>
 </SelectObjectContentRequest>`
 
-	testTape, err := simdjson.LoadTape(bytes.NewBuffer(inputTape), bytes.NewBuffer(inputSB))
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	for _, testCase := range testTable {
 		t.Run(testCase.name, func(t *testing.T) {
+			// Hack cpuid to the CPU doesn't appear to support AVX2.
+			// Restore whatever happens.
+			defer func(f cpuid.Flags) {
+				cpuid.CPU.Features = f
+			}(cpuid.CPU.Features)
+			cpuid.CPU.Features &= math.MaxUint64 - cpuid.AVX2
+
 			testReq := testCase.requestXML
 			if len(testReq) == 0 {
 				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
@@ -307,7 +306,10 @@ func TestJSONQueries(t *testing.T) {
 				t.Errorf("received response does not match with expected reply. Query: %s\ngot: %s\nwant:%s", testCase.query, gotS, testCase.wantResult)
 			}
 		})
-		t.Run("tape-"+testCase.name, func(t *testing.T) {
+		t.Run("simd-"+testCase.name, func(t *testing.T) {
+			if !cpuid.CPU.AVX2() || !cpuid.CPU.Clmul() {
+				t.Skip("No CPU support")
+			}
 			testReq := testCase.requestXML
 			if len(testReq) == 0 {
 				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
@@ -317,17 +319,15 @@ func TestJSONQueries(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err = s3Select.OpenTape(*testTape, nil); err != nil {
+			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
+				return ioutil.NopCloser(bytes.NewBufferString(input)), nil
+			}); err != nil {
 				t.Fatal(err)
 			}
 
 			w := &testResponseWriter{}
 			s3Select.Evaluate(w)
-			err = s3Select.Close()
-			if err != nil {
-				t.Fatal(err)
-			}
-
+			s3Select.Close()
 			resp := http.Response{
 				StatusCode:    http.StatusOK,
 				Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
