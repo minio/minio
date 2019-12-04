@@ -445,7 +445,8 @@ func (v *Value) compareOp(op string, a *Value) (res bool, err error) {
 		return timestampCompare(op, timestampV, timestampA), nil
 	}
 
-	return false, errCmpMismatchedTypes
+	// Types cannot be compared, they do not match.
+	return false, nil
 }
 
 func inferTypesForCmp(a *Value, b *Value) error {
