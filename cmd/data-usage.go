@@ -98,70 +98,82 @@ func runDataUsageInfoForXLZones(ctx context.Context, zones *xlZones) {
 
 }
 
+func setCrawlAndGetDataUsage(ctx context.Context, xl *xlObjects) DataUsageInfo {
+	var randomDisks []StorageAPI
+	for _, d := range xl.getLoadBalancedDisks() {
+		if d == nil || !d.IsOnline() {
+			continue
+		}
+		if len(randomDisks) > 3 {
+			break
+		}
+		randomDisks = append(randomDisks, d)
+	}
+
+	var dataUsageResults = make([]DataUsageInfo, len(randomDisks))
+
+	var wg sync.WaitGroup
+	for i := 0; i < len(randomDisks); i++ {
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			var err error
+			dataUsageResults[index], err = disk.CrawlAndGetDataUsage()
+			if err != nil {
+				logger.LogIf(ctx, err)
+			}
+		}(i, randomDisks[i])
+	}
+	wg.Wait()
+
+	var dataUsageInfo DataUsageInfo
+	for i := 0; i < len(dataUsageResults); i++ {
+		if dataUsageResults[i].ObjectsCount > dataUsageInfo.ObjectsCount {
+			dataUsageInfo = dataUsageResults[i]
+		}
+	}
+
+	return dataUsageInfo
+}
+
 func zonesCrawlAndGetDataUsage(ctx context.Context, zones *xlZones) DataUsageInfo {
-	// Calculate the aggregated data usage, meaning
-	// accumulate data usage of all zones.
-	var aggregatedDataUsageInfo = DataUsageInfo{
-		ObjectsSizesHistogram: make(map[string]uint64),
-		BucketsSizes:          make(map[string]uint64),
-	}
+	var aggDataUsageInfo = struct {
+		sync.Mutex
+		DataUsageInfo
+	}{}
 
-	addUpUsageInfo := func(dataUsageInfo DataUsageInfo) {
-		aggregatedDataUsageInfo.ObjectsCount += dataUsageInfo.ObjectsCount
-		aggregatedDataUsageInfo.ObjectsTotalSize += dataUsageInfo.ObjectsTotalSize
-		if aggregatedDataUsageInfo.BucketsCount < dataUsageInfo.BucketsCount {
-			aggregatedDataUsageInfo.BucketsCount = dataUsageInfo.BucketsCount
-		}
-		for k, v := range dataUsageInfo.ObjectsSizesHistogram {
-			aggregatedDataUsageInfo.ObjectsSizesHistogram[k] += v
-		}
-		for k, v := range dataUsageInfo.BucketsSizes {
-			aggregatedDataUsageInfo.BucketsSizes[k] += v
-		}
-	}
+	aggDataUsageInfo.ObjectsSizesHistogram = make(map[string]uint64)
+	aggDataUsageInfo.BucketsSizes = make(map[string]uint64)
 
+	var wg sync.WaitGroup
 	for _, z := range zones.zones {
-		for _, xl := range z.sets {
-			var randomDisks []StorageAPI
-			for _, d := range xl.getLoadBalancedDisks() {
-				if d == nil || !d.IsOnline() {
-					continue
+		for _, xlObj := range z.sets {
+			wg.Add(1)
+			go func(xl *xlObjects) {
+				defer wg.Done()
+				info := setCrawlAndGetDataUsage(ctx, xl)
+
+				aggDataUsageInfo.Lock()
+				aggDataUsageInfo.ObjectsCount += info.ObjectsCount
+				aggDataUsageInfo.ObjectsTotalSize += info.ObjectsTotalSize
+				if aggDataUsageInfo.BucketsCount < info.BucketsCount {
+					aggDataUsageInfo.BucketsCount = info.BucketsCount
 				}
-				if len(randomDisks) > 3 {
-					break
+				for k, v := range info.ObjectsSizesHistogram {
+					aggDataUsageInfo.ObjectsSizesHistogram[k] += v
 				}
-				randomDisks = append(randomDisks, d)
-			}
-
-			var dataUsageResult = make([]DataUsageInfo, len(randomDisks))
-
-			var wg sync.WaitGroup
-			for i := 0; i < len(randomDisks); i++ {
-				wg.Add(1)
-				go func(index int, disk StorageAPI) {
-					defer wg.Done()
-					var err error
-					dataUsageResult[index], err = disk.CrawlAndGetDataUsage()
-					if err != nil {
-						logger.LogIf(ctx, err)
-					}
-				}(i, randomDisks[i])
-			}
-			wg.Wait()
-
-			var reliableDataUsageResult DataUsageInfo
-			for i := 0; i < len(dataUsageResult); i++ {
-				if dataUsageResult[i].ObjectsCount > reliableDataUsageResult.ObjectsCount {
-					reliableDataUsageResult = dataUsageResult[i]
+				for k, v := range info.BucketsSizes {
+					aggDataUsageInfo.BucketsSizes[k] += v
 				}
-			}
+				aggDataUsageInfo.Unlock()
 
-			addUpUsageInfo(reliableDataUsageResult)
+			}(xlObj)
 		}
 	}
+	wg.Wait()
 
-	aggregatedDataUsageInfo.LastUpdate = UTCNow()
-	return aggregatedDataUsageInfo
+	aggDataUsageInfo.LastUpdate = UTCNow()
+	return aggDataUsageInfo.DataUsageInfo
 }
 
 func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dataUsageInfo DataUsageInfo) error {
