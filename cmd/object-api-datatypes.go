@@ -92,15 +92,15 @@ var ObjectsHistogramIntervals = []objectHistogramInterval{
 // DataUsageInfo represents data usage stats of the underlying Object API
 type DataUsageInfo struct {
 	// The timestamp of when the data usage info is generated
-	LastUpdate time.Time
+	LastUpdate time.Time `json:"lastUpdate"`
 
-	ObjectsCount uint64
+	ObjectsCount uint64 `json:"objectsCount"`
 	// Objects total size
-	ObjectsTotalSize      uint64
-	ObjectsSizesHistogram map[string]uint64
+	ObjectsTotalSize      uint64            `json:"objectsTotalSize"`
+	ObjectsSizesHistogram map[string]uint64 `json:"objectsSizesHistogram"`
 
-	BucketsCount uint64
-	BucketsSizes map[string]uint64
+	BucketsCount uint64            `json:"bucketsCount"`
+	BucketsSizes map[string]uint64 `json:"bucketsSizes"`
 }
 
 // BucketInfo - represents bucket metadata.
