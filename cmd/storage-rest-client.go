@@ -149,12 +149,23 @@ func (client *storageRESTClient) IsOnline() bool {
 
 func (client *storageRESTClient) CrawlAndGetDataUsage() (DataUsageInfo, error) {
 	respBody, err := client.call(storageRESTMethodCrawlAndGetDataUsage, nil, nil, -1)
+	defer http.DrainBody(respBody)
 	if err != nil {
 		return DataUsageInfo{}, err
 	}
-	defer http.DrainBody(respBody)
+	reader := bufio.NewReader(respBody)
+	for {
+		b, err := reader.ReadByte()
+		if err != nil {
+			return DataUsageInfo{}, err
+		}
+		if b != ' ' {
+			reader.UnreadByte()
+			break
+		}
+	}
 	var usageInfo DataUsageInfo
-	err = gob.NewDecoder(respBody).Decode(&usageInfo)
+	err = gob.NewDecoder(reader).Decode(&usageInfo)
 	return usageInfo, err
 }
 
