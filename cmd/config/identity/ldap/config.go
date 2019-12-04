@@ -65,7 +65,6 @@ const (
 	GroupSearchBaseDN  = "group_search_base_dn"
 	TLSSkipVerify      = "tls_skip_verify"
 
-	EnvLDAPState          = "MINIO_IDENTITY_LDAP_STATE"
 	EnvServerAddr         = "MINIO_IDENTITY_LDAP_SERVER_ADDR"
 	EnvSTSExpiry          = "MINIO_IDENTITY_LDAP_STS_EXPIRY"
 	EnvTLSSkipVerify      = "MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY"
@@ -78,10 +77,6 @@ const (
 // DefaultKVS - default config for LDAP config
 var (
 	DefaultKVS = config.KVS{
-		config.KV{
-			Key:   config.State,
-			Value: config.StateOff,
-		},
 		config.KV{
 			Key:   ServerAddr,
 			Value: "",
@@ -108,7 +103,7 @@ var (
 		},
 		config.KV{
 			Key:   TLSSkipVerify,
-			Value: config.StateOff,
+			Value: config.EnableOff,
 		},
 	}
 )
@@ -130,25 +125,18 @@ func (l Config) GetExpiryDuration() time.Duration {
 	return l.stsExpiryDuration
 }
 
+// Enabled returns if jwks is enabled.
+func Enabled(kvs config.KVS) bool {
+	return kvs.Get(ServerAddr) != ""
+}
+
 // Lookup - initializes LDAP config, overrides config, if any ENV values are set.
 func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 	l = Config{}
 	if err = config.CheckValidKeys(config.IdentityLDAPSubSys, kvs, DefaultKVS); err != nil {
 		return l, err
 	}
-	stateBool, err := config.ParseBool(env.Get(EnvLDAPState, kvs.Get(config.State)))
-	if err != nil {
-		if kvs.Empty() {
-			return l, nil
-		}
-		return l, err
-	}
 	ldapServer := env.Get(EnvServerAddr, kvs.Get(ServerAddr))
-	if stateBool {
-		if ldapServer == "" {
-			return l, config.Error("'serveraddr' cannot be empty if you wish to enable AD/LDAP support")
-		}
-	}
 	if ldapServer == "" {
 		return l, nil
 	}

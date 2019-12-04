@@ -44,7 +44,7 @@ const (
 	WebhookQueueDir   = "queue_dir"
 	WebhookQueueLimit = "queue_limit"
 
-	EnvWebhookState      = "MINIO_NOTIFY_WEBHOOK_STATE"
+	EnvWebhookEnable     = "MINIO_NOTIFY_WEBHOOK_ENABLE"
 	EnvWebhookEndpoint   = "MINIO_NOTIFY_WEBHOOK_ENDPOINT"
 	EnvWebhookAuthToken  = "MINIO_NOTIFY_WEBHOOK_AUTH_TOKEN"
 	EnvWebhookQueueDir   = "MINIO_NOTIFY_WEBHOOK_QUEUE_DIR"

@@ -35,9 +35,5 @@ func SetStorageClass(s config.Config, cfg Config) {
 			Key:   ClassRRS,
 			Value: cfg.RRS.String(),
 		},
-		config.KV{
-			Key:   config.State,
-			Value: config.StateOn,
-		},
 	}
 }

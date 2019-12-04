@@ -28,7 +28,7 @@ NOTE: `http://endpoint:port/path` is a placeholder value to indicate the URL for
 
 MinIO also honors environment variable for HTTP target logging as shown below, this setting will override the endpoint settings in the MinIO server config.
 ```
-export MINIO_LOGGER_WEBHOOK_STATE_target1="on"
+export MINIO_LOGGER_WEBHOOK_ENABLE_target1="on"
 export MINIO_LOGGER_WEBHOOK_AUTH_TOKEN_target1="token"
 export MINIO_LOGGER_WEBHOOK_ENDPOINT_target1=http://localhost:8080/minio/logs
 minio server /mnt/data
@@ -50,7 +50,7 @@ NOTE: `http://endpoint:port/path` is a placeholder value to indicate the URL for
 
 MinIO also honors environment variable for HTTP target Audit logging as shown below, this setting will override the endpoint settings in the MinIO server config.
 ```
-export MINIO_AUDIT_WEBHOOK_STATE_target1="on"
+export MINIO_AUDIT_WEBHOOK_ENABLE_target1="on"
 export MINIO_AUDIT_WEBHOOK_AUTH_TOKEN_target1="token"
 export MINIO_AUDIT_WEBHOOK_ENDPOINT_target1=http://localhost:8080/minio/logs
 minio server /mnt/data

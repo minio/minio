@@ -84,10 +84,6 @@ func SetKMSConfig(s config.Config, cfg KMSConfig) {
 	}
 	s[config.KmsVaultSubSys][config.Default] = config.KVS{
 		config.KV{
-			Key:   config.State,
-			Value: config.StateOn,
-		},
-		config.KV{
 			Key:   KMSVaultEndpoint,
 			Value: cfg.Vault.Endpoint,
 		},
@@ -141,7 +137,7 @@ func SetKMSConfig(s config.Config, cfg KMSConfig) {
 // It sets the global KMS configuration according to the merged configuration
 // on success.
 func lookupConfigLegacy(kvs config.KVS) (KMSConfig, error) {
-	autoBool, err := config.ParseBool(env.Get(EnvAutoEncryptionLegacy, config.StateOff))
+	autoBool, err := config.ParseBool(env.Get(EnvAutoEncryptionLegacy, config.EnableOff))
 	if err != nil {
 		return KMSConfig{}, err
 	}
@@ -153,17 +149,6 @@ func lookupConfigLegacy(kvs config.KVS) (KMSConfig, error) {
 				Type: "approle",
 			},
 		},
-	}
-
-	// Assume default as "on" for legacy config since we didn't have a _STATE
-	// flag to turn it off, but we should honor it nonetheless to turn it off
-	// if the vault endpoint is down and there is no way to start the server.
-	stateBool, err := config.ParseBool(env.Get(EnvKMSVaultState, config.StateOn))
-	if err != nil {
-		return cfg, err
-	}
-	if !stateBool {
-		return cfg, nil
 	}
 
 	endpointStr := env.Get(EnvLegacyVaultEndpoint, "")

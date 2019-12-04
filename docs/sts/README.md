@@ -34,7 +34,6 @@ Make sure we have followed the previous step and configured each software indepe
 ```
 export MINIO_ACCESS_KEY=minio
 export MINIO_SECRET_KEY=minio123
-export MINIO_IDENTITY_OPENID_STATE="on"
 export MINIO_IDENTITY_OPENID_CONFIG_URL=https://localhost:9443/oauth2/oidcdiscovery/.well-known/openid-configuration
 export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
 minio server /mnt/data
@@ -48,7 +47,6 @@ Make sure we have followed the previous step and configured each software indepe
 ```
 export MINIO_ACCESS_KEY=aws_access_key
 export MINIO_SECRET_KEY=aws_secret_key
-export MINIO_IDENTITY_OPENID_STATE="on"
 export MINIO_IDENTITY_OPENID_CONFIG_URL=https://localhost:9443/oauth2/oidcdiscovery/.well-known/openid-configuration
 export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
 export MINIO_ETCD_ENDPOINTS=http://localhost:2379

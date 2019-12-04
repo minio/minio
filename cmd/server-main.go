@@ -156,7 +156,9 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	}
 	logger.FatalIf(err, "Invalid command line arguments")
 
-	logger.LogIf(context.Background(), checkEndpointsSubOptimal(ctx, setupType, globalEndpoints))
+	if err = checkEndpointsSubOptimal(ctx, setupType, globalEndpoints); err != nil {
+		logger.Info("Optimal endpoint check failed %s", err)
+	}
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
@@ -217,6 +219,17 @@ func initSafeModeInit(buckets []BucketInfo) (err error) {
 			if errors.As(err, &cerr) {
 				return
 			}
+
+			var cfgErr config.Error
+			if errors.As(err, &cfgErr) {
+				if cfgErr.Kind == config.ContinueKind {
+					// print the error and continue
+					logger.Info("Config validation failed '%s' the sub-system is turned-off and all other sub-systems", err)
+					err = nil
+					return
+				}
+			}
+
 			// Enable logger
 			logger.Disable = false
 
@@ -308,6 +321,9 @@ func serverMain(ctx *cli.Context) {
 	// Handle all server environment vars.
 	serverHandleEnvVars()
 
+	// Initialize all help
+	initHelp()
+
 	// Check and load TLS certificates.
 	var err error
 	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig()
@@ -338,7 +354,9 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	// Set system resources to maximum.
-	logger.LogIf(context.Background(), setMaxResources())
+	if err = setMaxResources(); err != nil {
+		logger.Info("Unable to set system resources to maximum %s", err)
+	}
 
 	if globalIsXL {
 		// Init global heal state
@@ -409,8 +427,14 @@ func serverMain(ctx *cli.Context) {
 	logger.FatalIf(initSafeModeInit(buckets), "Unable to initialize server")
 
 	if globalCacheConfig.Enabled {
-		msg := color.RedBold("Disk caching is disabled in 'server' mode, 'caching' is only supported in gateway deployments")
-		logger.StartupMessage(msg)
+		// initialize the new disk cache objects.
+		var cacheAPI CacheObjectLayer
+		cacheAPI, err = newServerCacheObjects(context.Background(), globalCacheConfig)
+		logger.FatalIf(err, "Unable to initialize disk caching")
+
+		globalObjLayerMutex.Lock()
+		globalCacheObjectAPI = cacheAPI
+		globalObjLayerMutex.Unlock()
 	}
 
 	initDailyLifecycle()

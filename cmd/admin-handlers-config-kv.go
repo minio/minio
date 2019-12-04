@@ -23,9 +23,17 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/config/cache"
+	"github.com/minio/minio/cmd/config/etcd"
+	xldap "github.com/minio/minio/cmd/config/identity/ldap"
+	"github.com/minio/minio/cmd/config/identity/openid"
+	"github.com/minio/minio/cmd/config/policy/opa"
+	"github.com/minio/minio/cmd/config/storageclass"
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
@@ -417,15 +425,45 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var buf = &bytes.Buffer{}
-	cw := config.NewConfigWriteTo(cfg, "")
-	if _, err = cw.WriteTo(buf); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
+	var s strings.Builder
+	hkvs := config.HelpSubSysMap[""]
+	for _, hkv := range hkvs {
+		v := cfg[hkv.Key]
+		for target, kv := range v {
+			off := kv.Get(config.Enable) == config.EnableOff
+			switch hkv.Key {
+			case config.EtcdSubSys:
+				off = !etcd.Enabled(kv)
+			case config.CacheSubSys:
+				off = !cache.Enabled(kv)
+			case config.StorageClassSubSys:
+				off = !storageclass.Enabled(kv)
+			case config.KmsVaultSubSys:
+				off = !crypto.Enabled(kv)
+			case config.PolicyOPASubSys:
+				off = !opa.Enabled(kv)
+			case config.IdentityOpenIDSubSys:
+				off = !openid.Enabled(kv)
+			case config.IdentityLDAPSubSys:
+				off = !xldap.Enabled(kv)
+			}
+			if off {
+				s.WriteString(config.KvComment)
+				s.WriteString(config.KvSpaceSeparator)
+			}
+			s.WriteString(hkv.Key)
+			if target != config.Default {
+				s.WriteString(config.SubSystemSeparator)
+				s.WriteString(target)
+			}
+			s.WriteString(config.KvSpaceSeparator)
+			s.WriteString(kv.String())
+			s.WriteString(config.KvNewline)
+		}
 	}
 
 	password := globalActiveCred.SecretKey
-	econfigData, err := madmin.EncryptData(password, buf.Bytes())
+	econfigData, err := madmin.EncryptData(password, []byte(s.String()))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

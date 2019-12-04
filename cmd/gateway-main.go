@@ -118,6 +118,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
 
+	// Initialize all help
+	initHelp()
+
 	// Get port to listen on from gateway address
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalCLIContext.Addr)
 
