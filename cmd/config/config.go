@@ -46,12 +46,12 @@ func (e Error) Error() string {
 // Default keys
 const (
 	Default = madmin.Default
-	State   = "state"
-	Comment = "comment"
+	State   = madmin.StateKey
+	Comment = madmin.CommentKey
 
 	// State values
-	StateOn  = "on"
-	StateOff = "off"
+	StateOn  = madmin.StateOn
+	StateOff = madmin.StateOff
 
 	RegionName = "name"
 	AccessKey  = "access_key"
@@ -137,7 +137,7 @@ const (
 	SubSystemSeparator = madmin.SubSystemSeparator
 	KvSeparator        = madmin.KvSeparator
 	KvSpaceSeparator   = madmin.KvSpaceSeparator
-	KvComment          = `#`
+	KvComment          = madmin.KvComment
 	KvNewline          = madmin.KvNewline
 	KvDoubleQuote      = madmin.KvDoubleQuote
 	KvSingleQuote      = madmin.KvSingleQuote
@@ -232,9 +232,11 @@ type Config map[string]map[string]KVS
 
 func (c Config) String() string {
 	var s strings.Builder
-	for k, v := range c {
+	hkvs := HelpSubSysMap[""]
+	for _, hkv := range hkvs {
+		v := c[hkv.Key]
 		for target, kv := range v {
-			s.WriteString(k)
+			s.WriteString(hkv.Key)
 			if target != Default {
 				s.WriteString(SubSystemSeparator)
 				s.WriteString(target)
@@ -252,10 +254,11 @@ func (c Config) DelFrom(r io.Reader) error {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		// Skip any empty lines, or comment like characters
-		if scanner.Text() == "" || strings.HasPrefix(scanner.Text(), KvComment) {
+		text := scanner.Text()
+		if text == "" || strings.HasPrefix(text, KvComment) {
 			continue
 		}
-		if err := c.DelKVS(scanner.Text()); err != nil {
+		if err := c.DelKVS(text); err != nil {
 			return err
 		}
 	}
@@ -271,13 +274,14 @@ func (c Config) ReadFrom(r io.Reader) (int64, error) {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		// Skip any empty lines, or comment like characters
-		if scanner.Text() == "" || strings.HasPrefix(scanner.Text(), KvComment) {
+		text := scanner.Text()
+		if text == "" || strings.HasPrefix(text, KvComment) {
 			continue
 		}
-		if err := c.SetKVS(scanner.Text(), DefaultKVS); err != nil {
+		if err := c.SetKVS(text, DefaultKVS); err != nil {
 			return 0, err
 		}
-		n += len(scanner.Text())
+		n += len(text)
 	}
 	if err := scanner.Err(); err != nil {
 		return 0, err
@@ -411,6 +415,7 @@ func New() Config {
 	srvCfg := make(Config)
 	for _, k := range SubSystems.ToSlice() {
 		srvCfg[k] = map[string]KVS{}
+		srvCfg[k][Default] = DefaultKVS[k]
 	}
 	return srvCfg
 }
@@ -502,12 +507,6 @@ func (c Config) DelKVS(s string) error {
 	return nil
 }
 
-// This function is needed, to trim off single or double quotes, creeping into the values.
-func sanitizeValue(v string) string {
-	v = strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(v), KvDoubleQuote), KvDoubleQuote)
-	return strings.TrimSuffix(strings.TrimPrefix(v, KvSingleQuote), KvSingleQuote)
-}
-
 // Clone - clones a config map entirely.
 func (c Config) Clone() Config {
 	cp := New()
@@ -551,8 +550,11 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 		}
 		if len(kv) == 1 && prevK != "" {
 			kvs = append(kvs, KV{
-				Key:   prevK,
-				Value: strings.Join([]string{kvs.Get(prevK), sanitizeValue(kv[0])}, KvSpaceSeparator),
+				Key: prevK,
+				Value: strings.Join([]string{
+					kvs.Get(prevK),
+					madmin.SanitizeValue(kv[0]),
+				}, KvSpaceSeparator),
 			})
 			continue
 		}
@@ -562,7 +564,7 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 		prevK = kv[0]
 		kvs = append(kvs, KV{
 			Key:   kv[0],
-			Value: sanitizeValue(kv[1]),
+			Value: madmin.SanitizeValue(kv[1]),
 		})
 	}
 
@@ -574,7 +576,6 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 
 	// Save client sent kvs
 	c[subSys][tgt] = kvs
-
 	_, ok := c[subSys][tgt].Lookup(State)
 	if !ok {
 		// implicit state "on" if not specified.

@@ -19,7 +19,6 @@ package cache
 import (
 	"errors"
 	"strconv"
-	"strings"
 
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/env"
@@ -84,42 +83,43 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 		return cfg, err
 	}
 
-	// Check if cache is explicitly disabled
-	stateBool, err := config.ParseBool(env.Get(EnvCacheState, kvs.Get(config.State)))
-	if err != nil {
-		// Parsing failures happen due to empty KVS, ignore it.
-		if kvs.Empty() {
-			return cfg, nil
-		}
-		return cfg, err
-	}
-
 	drives := env.Get(EnvCacheDrives, kvs.Get(Drives))
-	if stateBool {
-		if len(drives) == 0 {
-			return cfg, config.Error("'drives' key cannot be empty if you wish to enable caching")
-		}
-	}
-	if len(drives) == 0 {
-		return cfg, nil
-	}
-
-	cfg.Drives, err = parseCacheDrives(strings.Split(drives, cacheDelimiter))
-	if err != nil {
-		cfg.Drives, err = parseCacheDrives(strings.Split(drives, cacheDelimiterLegacy))
+	if len(drives) > 0 {
+		// Drives is not-empty means user wishes to enable this explicitly, but
+		// check if ENV is set to false to disable caching.
+		stateBool, err := config.ParseBool(env.Get(EnvCacheState, config.StateOn))
 		if err != nil {
 			return cfg, err
 		}
+		if !stateBool {
+			return cfg, nil
+		}
+	} else {
+		// Check if cache is explicitly disabled
+		stateBool, err := config.ParseBool(env.Get(EnvCacheState, kvs.Get(config.State)))
+		if err != nil {
+			if kvs.Empty() {
+				return cfg, nil
+			}
+			return cfg, err
+		}
+		if stateBool {
+			return cfg, config.Error("'drives' key cannot be empty to enable caching")
+		}
+		return cfg, nil
+	}
+
+	var err error
+	cfg.Drives, err = parseCacheDrives(drives)
+	if err != nil {
+		return cfg, err
 	}
 
 	cfg.Enabled = true
 	if excludes := env.Get(EnvCacheExclude, kvs.Get(Exclude)); excludes != "" {
-		cfg.Exclude, err = parseCacheExcludes(strings.Split(excludes, cacheDelimiter))
+		cfg.Exclude, err = parseCacheExcludes(excludes)
 		if err != nil {
-			cfg.Exclude, err = parseCacheExcludes(strings.Split(excludes, cacheDelimiterLegacy))
-			if err != nil {
-				return cfg, err
-			}
+			return cfg, err
 		}
 	}
 
