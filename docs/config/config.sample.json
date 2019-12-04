@@ -126,7 +126,9 @@
 			"tls_client_auth": "0",
 			"tls_enable": "off",
 			"tls_skip_verify": "off",
-			"topic": ""
+			"topic": "",
+			"client_tls_key": "",
+			"client_tls_cert": ""
 		},
 		"_": {
 			"brokers": "",
@@ -139,7 +141,9 @@
 			"tls_client_auth": "0",
 			"tls_enable": "off",
 			"tls_skip_verify": "off",
-			"topic": ""
+			"topic": "",
+			"client_tls_key": "",
+			"client_tls_cert": ""
 		}
 	},
 	"notify_mqtt": {

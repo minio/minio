@@ -40,10 +40,11 @@ const (
 	KafkaTopic         = "topic"
 	KafkaQueueDir      = "queue_dir"
 	KafkaQueueLimit    = "queue_limit"
-	KafkaTLS           = "tls"
+	KafkaTLS           = "tls_enable"
 	KafkaTLSSkipVerify = "tls_skip_verify"
 	KafkaTLSClientAuth = "tls_client_auth"
-	KafkaSASL          = "sasl"
+	KafkaTLSRootCA     = "tls_root_ca"
+	KafkaSASL          = "sasl_enable"
 	KafkaSASLUsername  = "sasl_username"
 	KafkaSASLPassword  = "sasl_password"
 	KafkaClientTLSCert = "client_tls_cert"
@@ -62,6 +63,7 @@ const (
 	EnvKafkaSASLPassword  = "MINIO_NOTIFY_KAFKA_SASL_PASSWORD"
 	EnvKafkaClientTLSCert = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_CERT"
 	EnvKafkaClientTLSKey  = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_KEY"
+	EnvKafkaTLSRootCA     = "MINIO_NOTIFY_KAFKA_TLS_ROOT_CA"
 )
 
 // KafkaArgs - Kafka target arguments.

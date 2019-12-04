@@ -43,6 +43,14 @@ func SetNotifyKafka(s config.Config, kName string, cfg target.KafkaArgs) error {
 			Value: cfg.QueueDir,
 		},
 		config.KV{
+			Key:   target.KafkaClientTLSCert,
+			Value: cfg.TLS.ClientTLSCert,
+		},
+		config.KV{
+			Key:   target.KafkaClientTLSKey,
+			Value: cfg.TLS.ClientTLSKey,
+		},
+		config.KV{
 			Key:   target.KafkaQueueLimit,
 			Value: strconv.Itoa(int(cfg.QueueLimit)),
 		},

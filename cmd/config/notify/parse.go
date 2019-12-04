@@ -361,6 +361,14 @@ var (
 			Value: "",
 		},
 		config.KV{
+			Key:   target.KafkaClientTLSCert,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.KafkaClientTLSKey,
+			Value: "",
+		},
+		config.KV{
 			Key:   target.KafkaTLSClientAuth,
 			Value: "0",
 		},
@@ -467,9 +475,23 @@ func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs
 		if k != config.Default {
 			tlsSkipVerifyEnv = tlsSkipVerifyEnv + config.Default + k
 		}
+
+		tlsClientTlsCertEnv := target.EnvKafkaClientTLSCert
+		if k != config.Default {
+			tlsClientTlsCertEnv = tlsClientTlsCertEnv + config.Default + k
+		}
+
+		tlsClientTlsKeyEnv := target.EnvKafkaClientTLSKey
+		if k != config.Default {
+			tlsClientTlsKeyEnv = tlsClientTlsKeyEnv + config.Default + k
+		}
+
 		kafkaArgs.TLS.Enable = env.Get(tlsEnableEnv, kv.Get(target.KafkaTLS)) == config.StateOn
 		kafkaArgs.TLS.SkipVerify = env.Get(tlsSkipVerifyEnv, kv.Get(target.KafkaTLSSkipVerify)) == config.StateOn
 		kafkaArgs.TLS.ClientAuth = tls.ClientAuthType(clientAuth)
+
+		kafkaArgs.TLS.ClientTLSCert = env.Get(tlsClientTlsCertEnv, kv.Get(target.KafkaClientTLSCert))
+		kafkaArgs.TLS.ClientTLSKey = env.Get(tlsClientTlsKeyEnv, kv.Get(target.KafkaClientTLSKey))
 
 		saslEnableEnv := target.EnvKafkaSASLEnable
 		if k != config.Default {
