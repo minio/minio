@@ -23,19 +23,19 @@ var (
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         Extensions,
-			Description: `Comma separated file extensions to compress eg: ".txt,.log,.csv"`,
+			Description: `comma separated file extensions e.g. ".txt,.log,.csv"`,
 			Optional:    true,
 			Type:        "csv",
 		},
 		config.HelpKV{
 			Key:         MimeTypes,
-			Description: `Comma separate wildcard mime-types to compress eg: "text/*,application/json,application/xml"`,
+			Description: `comma separated wildcard mime-types e.g. "text/*,application/json,application/xml"`,
 			Optional:    true,
 			Type:        "csv",
 		},
 		config.HelpKV{
 			Key:         config.Comment,
-			Description: "A comment to describe the compression setting",
+			Description: config.DefaultComment,
 			Optional:    true,
 			Type:        "sentence",
 		},

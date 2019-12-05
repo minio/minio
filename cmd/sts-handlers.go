@@ -484,6 +484,9 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		return
 	}
 
+	// Close ldap connection to avoid leaks.
+	defer ldapConn.Close()
+
 	usernameSubs, _ := xldap.NewSubstituter("username", ldapUsername)
 	// We ignore error below as we already validated the username
 	// format string at startup.

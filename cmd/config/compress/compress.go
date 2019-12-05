@@ -36,7 +36,7 @@ const (
 	Extensions = "extensions"
 	MimeTypes  = "mime_types"
 
-	EnvCompressState      = "MINIO_COMPRESS_STATE"
+	EnvCompressState      = "MINIO_COMPRESS_ENABLE"
 	EnvCompressExtensions = "MINIO_COMPRESS_EXTENSIONS"
 	EnvCompressMimeTypes  = "MINIO_COMPRESS_MIME_TYPES"
 
@@ -49,8 +49,8 @@ const (
 var (
 	DefaultKVS = config.KVS{
 		config.KV{
-			Key:   config.State,
-			Value: config.StateOff,
+			Key:   config.Enable,
+			Value: config.EnableOff,
 		},
 		config.KV{
 			Key:   Extensions,
@@ -87,7 +87,7 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 
 	compress := env.Get(EnvCompress, "")
 	if compress == "" {
-		compress = env.Get(EnvCompressState, kvs.Get(config.State))
+		compress = env.Get(EnvCompressState, kvs.Get(config.Enable))
 	}
 	cfg.Enabled, err = config.ParseBool(compress)
 	if err != nil {

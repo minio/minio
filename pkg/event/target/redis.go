@@ -41,7 +41,7 @@ const (
 	RedisQueueDir   = "queue_dir"
 	RedisQueueLimit = "queue_limit"
 
-	EnvRedisState      = "MINIO_NOTIFY_REDIS_STATE"
+	EnvRedisEnable     = "MINIO_NOTIFY_REDIS_ENABLE"
 	EnvRedisFormat     = "MINIO_NOTIFY_REDIS_FORMAT"
 	EnvRedisAddress    = "MINIO_NOTIFY_REDIS_ADDRESS"
 	EnvRedisPassword   = "MINIO_NOTIFY_REDIS_PASSWORD"

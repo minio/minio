@@ -42,10 +42,6 @@ const (
 var (
 	DefaultKVS = config.KVS{
 		config.KV{
-			Key:   config.State,
-			Value: config.StateOff,
-		},
-		config.KV{
 			Key:   URL,
 			Value: "",
 		},
@@ -110,6 +106,11 @@ func (a *Args) UnmarshalJSON(data []byte) error {
 type Opa struct {
 	args   Args
 	client *http.Client
+}
+
+// Enabled returns if opa is enabled.
+func Enabled(kvs config.KVS) bool {
+	return kvs.Get(URL) != ""
 }
 
 // LookupConfig lookup Opa from config, override with any ENVs.

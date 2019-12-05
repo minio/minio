@@ -76,6 +76,7 @@ func init() {
 
 	logger.Disable = true
 
+	initHelp()
 	// Uncomment the following line to see trace logs during unit tests.
 	// logger.AddTarget(console.New())
 }

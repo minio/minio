@@ -49,7 +49,7 @@ func getFormatStr(strLen int, padding int) string {
 func printStartupSafeModeMessage(apiEndpoints []string, err error) {
 	logStartupMessage(color.RedBold("Server startup failed with '%v'", err))
 	logStartupMessage(color.RedBold("Server switching to safe mode"))
-	logStartupMessage(color.RedBold("Please use 'mc admin' commands to fix this issue"))
+	logStartupMessage(color.RedBold("Please use 'mc admin config' commands fix this issue"))
 
 	// Object layer is initialized then print StorageInfo in safe mode.
 	objAPI := newObjectLayerWithoutSafeModeFn()
@@ -91,13 +91,13 @@ func printStartupSafeModeMessage(apiEndpoints []string, err error) {
 			mcMessage := fmt.Sprintf("> mc.exe config host add %s %s %s %s --api s3v4", alias,
 				endPoint, cred.AccessKey, cred.SecretKey)
 			logStartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
-			mcMessage = fmt.Sprintf("> mc.exe admin --help")
+			mcMessage = fmt.Sprintf("> mc.exe admin config --help")
 			logStartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 		} else {
 			mcMessage := fmt.Sprintf("$ mc config host add %s %s %s %s --api s3v4", alias,
 				endPoint, cred.AccessKey, cred.SecretKey)
 			logStartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
-			mcMessage = fmt.Sprintf("$ mc admin --help")
+			mcMessage = fmt.Sprintf("$ mc admin config --help")
 			logStartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 		}
 	}
