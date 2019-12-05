@@ -27,22 +27,21 @@ import (
 	"github.com/minio/minio/pkg/s3select/sql"
 )
 
-// Reader - CSV record reader for S3Select.
+// PReader - JSON record reader for S3Select.
+// Operates concurrently on line-delimited JSON.
 type PReader struct {
-	args         *ReaderArgs
-	readCloser   io.ReadCloser    // raw input
-	buf          *bufio.Reader    // input to the splitter
-	columnNames  []string         // names of columns
-	nameIndexMap map[string]int64 // name to column index
-	current      []jstream.KVS    // current block of results to be returned
-	recordsRead  int              // number of records read in current slice
-	input        chan *queueItem  // input for workers
-	queue        chan *queueItem  // output from workers in order
-	err          error            // global error state, only touched by Reader.Read
-	bufferPool   sync.Pool        // pool of []byte objects for input
-	kvDstPool    sync.Pool        // pool of []jstream.KV used for output
-	close        chan struct{}    // used for shutting down the splitter before end of stream
-	readerWg     sync.WaitGroup   // used to keep track of async reader.
+	args        *ReaderArgs
+	readCloser  io.ReadCloser   // raw input
+	buf         *bufio.Reader   // input to the splitter
+	current     []jstream.KVS   // current block of results to be returned
+	recordsRead int             // number of records read in current slice
+	input       chan *queueItem // input for workers
+	queue       chan *queueItem // output from workers in order
+	err         error           // global error state, only touched by Reader.Read
+	bufferPool  sync.Pool       // pool of []byte objects for input
+	kvDstPool   sync.Pool       // pool of []jstream.KV used for output
+	close       chan struct{}   // used for shutting down the splitter before end of stream
+	readerWg    sync.WaitGroup  // used to keep track of async reader.
 }
 
 // queueItem is an item in the queue.
@@ -214,7 +213,8 @@ func (r *PReader) startReaders() {
 	}
 }
 
-// NewPReader - creates new CSV reader using readCloser.
+// NewPReader - creates new parallel JSON reader using readCloser.
+// Should only be used for LINES types.
 func NewPReader(readCloser io.ReadCloser, args *ReaderArgs) *PReader {
 	r := &PReader{
 		args:       args,
