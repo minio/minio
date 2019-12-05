@@ -674,7 +674,23 @@ func TestCSVInput(t *testing.T) {
 			s3Select.Close()
 
 			if !reflect.DeepEqual(w.response, testCase.expectedResult) {
-				t.Errorf("received response does not match with expected reply\ngot: %#v\nwant:%#v", w.response, testCase.expectedResult)
+				resp := http.Response{
+					StatusCode:    http.StatusOK,
+					Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
+					ContentLength: int64(len(w.response)),
+				}
+				res, err := minio.NewSelectResults(&resp, "testbucket")
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				got, err := ioutil.ReadAll(res)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+
+				t.Errorf("received response does not match with expected reply\ngot: %#v\nwant:%#v\ndecoded:%s", w.response, testCase.expectedResult, string(got))
 			}
 		})
 	}
@@ -782,7 +798,23 @@ func TestJSONInput(t *testing.T) {
 			s3Select.Close()
 
 			if !reflect.DeepEqual(w.response, testCase.expectedResult) {
-				t.Errorf("received response does not match with expected reply\ngot: %#v\nwant:%#v", w.response, testCase.expectedResult)
+				resp := http.Response{
+					StatusCode:    http.StatusOK,
+					Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
+					ContentLength: int64(len(w.response)),
+				}
+				res, err := minio.NewSelectResults(&resp, "testbucket")
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				got, err := ioutil.ReadAll(res)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+
+				t.Errorf("received response does not match with expected reply\ngot: %#v\nwant:%#v\ndecoded:%s", w.response, testCase.expectedResult, string(got))
 			}
 		})
 	}
@@ -881,7 +913,23 @@ func TestParquetInput(t *testing.T) {
 			s3Select.Close()
 
 			if !reflect.DeepEqual(w.response, testCase.expectedResult) {
-				t.Errorf("received response does not match with expected reply\ngot: %#v\nwant:%#v", w.response, testCase.expectedResult)
+				resp := http.Response{
+					StatusCode:    http.StatusOK,
+					Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
+					ContentLength: int64(len(w.response)),
+				}
+				res, err := minio.NewSelectResults(&resp, "testbucket")
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				got, err := ioutil.ReadAll(res)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+
+				t.Errorf("received response does not match with expected reply\ngot: %#v\nwant:%#v\ndecoded:%s", w.response, testCase.expectedResult, string(got))
 			}
 		})
 	}

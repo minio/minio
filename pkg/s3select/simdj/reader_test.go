@@ -32,37 +32,22 @@ type tester interface {
 	Fatal(args ...interface{})
 }
 
-func loadCompressed(t tester, file string) (tape, sb, ref []byte) {
+func loadCompressed(t tester, file string) (js []byte) {
 	dec, err := zstd.NewReader(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tap, err := ioutil.ReadFile(filepath.Join("testdata", file+".tape.zst"))
+	defer dec.Close()
+	js, err = ioutil.ReadFile(filepath.Join("testdata", file+".json.zst"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	tap, err = dec.DecodeAll(tap, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sb, err = ioutil.ReadFile(filepath.Join("testdata", file+".stringbuf.zst"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	sb, err = dec.DecodeAll(sb, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ref, err = ioutil.ReadFile(filepath.Join("testdata", file+".json.zst"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ref, err = dec.DecodeAll(ref, nil)
+	js, err = dec.DecodeAll(js, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	return tap, sb, ref
+	return js
 }
 
 var testCases = []struct {
@@ -74,11 +59,11 @@ var testCases = []struct {
 	},
 }
 
-func TestLoadTape(t *testing.T) {
+func TestNDJSON(t *testing.T) {
 	for _, tt := range testCases {
 
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, ref := loadCompressed(t, tt.name)
+			ref := loadCompressed(t, tt.name)
 
 			var err error
 			dst := make(chan simdjson.Elements, 100)
