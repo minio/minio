@@ -274,9 +274,19 @@ func validateConfig(s config.Config) error {
 		return err
 	}
 
-	if _, err := xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
-		globalRootCAs); err != nil {
-		return err
+	{
+		cfg, err := xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
+			globalRootCAs)
+		if err != nil {
+			return err
+		}
+		if cfg.Enabled {
+			conn, cerr := cfg.Connect()
+			if cerr != nil {
+				return cerr
+			}
+			conn.Close()
+		}
 	}
 
 	if _, err := opa.LookupConfig(s[config.PolicyOPASubSys][config.Default],

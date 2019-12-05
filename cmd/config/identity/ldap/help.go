@@ -28,8 +28,20 @@ var (
 		},
 		config.HelpKV{
 			Key:         UsernameFormat,
-			Description: `username bind DNs e.g. "uid=%s,cn=accounts,dc=myldapserver,dc=com"`,
+			Description: `";" separated list of username bind DNs e.g. "uid=%s,cn=accounts,dc=myldapserver,dc=com"`,
+			Type:        "list",
+		},
+		config.HelpKV{
+			Key:         UsernameSearchFilter,
+			Description: `user search filter, for example "(cn=%s)" or "(sAMAccountName=%s)" or "(uid=%s)"`,
 			Type:        "string",
+			Optional:    true,
+		},
+		config.HelpKV{
+			Key:         UsernameSearchBaseDN,
+			Description: `";" separated list of username search DNs`,
+			Type:        "list",
+			Optional:    true,
 		},
 		config.HelpKV{
 			Key:         GroupSearchFilter,
@@ -45,9 +57,9 @@ var (
 		},
 		config.HelpKV{
 			Key:         GroupSearchBaseDN,
-			Description: `group search base DNs e.g. "dc=myldapserver,dc=com"`,
+			Description: `";" sepatated list of group search base DNs e.g. "dc=myldapserver,dc=com"`,
 			Optional:    true,
-			Type:        "string",
+			Type:        "list",
 		},
 		config.HelpKV{
 			Key:         STSExpiry,

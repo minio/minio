@@ -40,16 +40,23 @@ MinIO can be configured to find the groups of a user from AD/LDAP by specifying 
 
 LDAP is configured via the following environment variables:
 
-| Variable                                     | Required?               | Purpose                                                                 |
-|----------------------------------------------|-------------------------|-------------------------------------------------------------------------|
-| **MINIO_IDENTITY_LDAP_SERVER_ADDR**          | **YES**                 | AD/LDAP server address                                                  |
-| **MINIO_IDENTITY_LDAP_USERNAME_FORMAT**      | **YES**                 | Format of full username DN                                              |
-| **MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN** | **NO**                  | Base DN in AD/LDAP hierarchy to use in search requests                  |
-| **MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER**  | **NO**                  | Search filter to find groups of a user                                  |
-| **MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE** | **NO**                  | Attribute of search results to use as group name                        |
-| **MINIO_IDENTITY_LDAP_STS_EXPIRY**           | **NO** (default: "1h")  | STS credentials validity duration                                       |
-| **MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY**      | **NO** (default: "off") | Set this to 'on', to disable client verification of server certificates |
+```
+$ mc admin config set myminio/ identity_ldap  --env
+KEY:
+identity_ldap  enable LDAP SSO support
 
+ARGS:
+MINIO_IDENTITY_LDAP_SERVER_ADDR*             (address)   AD/LDAP server address e.g. "myldapserver.com:636"
+MINIO_IDENTITY_LDAP_USERNAME_FORMAT*         (list)      ";" separated list of username bind DNs e.g. "uid=%s,cn=accounts,dc=myldapserver,dc=com"
+MINIO_IDENTITY_LDAP_USERNAME_SEARCH_FILTER   (string)    user search filter, for example "(cn=%s)" or "(sAMAccountName=%s)" or "(uid=%s)"
+MINIO_IDENTITY_LDAP_USERNAME_SEARCH_BASE_DN  (list)      ";" separated list of username search DNs
+MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER      (string)    search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"
+MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE     (string)    search attribute for group name e.g. "cn"
+MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN     (list)      ";" sepatated list of group search base DNs e.g. "dc=myldapserver,dc=com"
+MINIO_IDENTITY_LDAP_STS_EXPIRY               (duration)  temporary credentials validity duration in s,m,h,d. Default is "1h"
+MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY          (on|off)    trust server TLS without verification, defaults to "on" (verify)
+MINIO_IDENTITY_LDAP_COMMENT                  (sentence)  optionally add a comment to this setting
+```
 
 Please note that MinIO will only access the AD/LDAP server over TLS. If a self-signed certificate is being used, the certificate can be added to MinIO's certificates directory, so it can be trusted by the server.
 
@@ -57,26 +64,17 @@ An example setup for development or experimentation:
 
 ``` shell
 export MINIO_IDENTITY_LDAP_SERVER_ADDR=myldapserver.com:636
-export MINIO_IDENTITY_LDAP_USERNAME_FORMAT="uid={username},cn=accounts,dc=myldapserver,dc=com"
+export MINIO_IDENTITY_LDAP_USERNAME_FORMAT="uid=%s,cn=accounts,dc=myldapserver,dc=com"
 export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN="dc=myldapserver,dc=com"
-export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER="(&(objectclass=groupOfNames)(member={usernamedn})$)"
-export MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE="cn"
+export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER="(&(objectclass=groupOfNames)(memberUid=%s)$)"
+export MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE=cn
 export MINIO_IDENTITY_LDAP_STS_EXPIRY=60h
-export MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY="on"
+export MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY=on
 ```
 
 ### Variable substitution in AD/LDAP configuration strings
 
-In the configuration values described above, some values support runtime substitutions. The substitution syntax is simply `${variable}` - this substring is replaced with the (string) value of `variable`. The following substitutions will be available:
-
-| Variable     | Example Runtime Value                          | Description                                                                                                                                  |
-|--------------|------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
-| *username*   | "james"                                        | The AD/LDAP username of a user.                                                                                                                 |
-| *usernamedn* | "uid=james,cn=accounts,dc=myldapserver,dc=com" | The AD/LDAP username DN of a user. This is constructed from the AD/LDAP user DN format string provided to the server and the actual AD/LDAP username. |
-
-The **MINIO_IDENTITY_LDAP_USERNAME_FORMAT** environment variable supports substitution of the *username* variable only.
-
-The **MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER** and **MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN** environment variables support substitution of the *username* and *usernamedn* variables only.
+`%s` is replaced with *username* automatically for construction bind_dn, search_filter and group_search_filter.
 
 ### Notes on configuring with Microsoft Active Directory (AD)
 
@@ -102,19 +100,19 @@ member: CN=John,CN=Users,DC=minioad,DC=local
 ...
 ```
 
-The lines with "..." represent skipped content not shown here from brevity. Based on the output above, we see that the username format variable looks like `cn={username},cn=users,dc=minioad,dc=local`.
+The lines with "..." represent skipped content not shown here from brevity. Based on the output above, we see that the username format variable looks like `cn=%s,cn=users,dc=minioad,dc=local`.
 
-The group search filter looks like `(&(objectclass=group)(member={usernamedn}))` and the group name attribute is clearly `cn`.
+The group search filter looks like `(&(objectclass=group)(memberUid=%s))` and the group name attribute is clearly `cn`.
 
 Thus the key configuration parameters look like:
 
 ```
 MINIO_IDENTITY_LDAP_SERVER_ADDR='my.ldap-active-dir-server.com:636'
-MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn={username},cn=users,dc=minioad,dc=local'
+MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn=%s,ou=Users,ou=BUS1,ou=LOB,dc=somedomain,dc=com'
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local'
-MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(member={usernamedn}))'
+MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(memberUid=%s))'
 MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE='cn'
-MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY="on"
+MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY=on
 ```
 
 ## Managing User/Group Access Policy
@@ -147,38 +145,38 @@ mc admin policy set myminio mypolicy group=bigdatausers
 ### LDAPUsername
 Is AD/LDAP username to login. Application must ask user for this value to successfully obtain rotating access credentials from AssumeRoleWithLDAPIdentity.
 
-| Params               | Value                                          |
-| :--                  | :--                                            |
-| *Type*               | *String*                                       |
-| *Length Constraints* | *Minimum length of 2. Maximum length of 2048.* |
-| *Required*           | *Yes*                                          |
+# Params               # Value                                          #
+# :--                  # :--                                            #
+# *Type*               # *String*                                       #
+# *Length Constraints* # *Minimum length of 2. Maximum length of 2048.* #
+# *Required*           # *Yes*                                          #
 
 
 ### LDAPPassword
 Is AD/LDAP username password to login. Application must ask user for this value to successfully obtain rotating access credentials from AssumeRoleWithLDAPIdentity.
 
-| Params               | Value                                          |
-| :--                  | :--                                            |
-| *Type*               | *String*                                       |
-| *Length Constraints* | *Minimum length of 4. Maximum length of 2048.* |
-| *Required*           | *Yes*                                          |
+# Params               # Value                                          #
+# :--                  # :--                                            #
+# *Type*               # *String*                                       #
+# *Length Constraints* # *Minimum length of 4. Maximum length of 2048.* #
+# *Required*           # *Yes*                                          #
 
 ### Version
 Indicates STS API version information, the only supported value is '2011-06-15'.  This value is borrowed from AWS STS API documentation for compatibility reasons.
 
-| Params     | Value    |
-| :--        | :--      |
-| *Type*     | *String* |
-| *Required* | *Yes*    |
+# Params     # Value    #
+# :--        # :--      #
+# *Type*     # *String* #
+# *Required* # *Yes*    #
 
 ### Policy
 An IAM policy in JSON format that you want to use as an inline session policy. This parameter is optional. Passing policies to this operation returns new temporary credentials. The resulting session's permissions are the intersection of the canned policy name and the policy set here. You cannot use this policy to grant more permissions than those allowed by the canned policy name being assumed.
 
-| Params        | Value                                          |
-| :--           | :--                                            |
-| *Type*        | *String*                                       |
-| *Valid Range* | *Minimum length of 1. Maximum length of 2048.* |
-| *Required*    | *No*                                           |
+# Params        # Value                                          #
+# :--           # :--                                            #
+# *Type*        # *String*                                       #
+# *Valid Range* # *Minimum length of 1. Maximum length of 2048.* #
+# *Required*    # *No*                                           #
 
 ### Response Elements
 XML response for this API is similar to [AWS STS AssumeRoleWithWebIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html#API_AssumeRoleWithWebIdentity_ResponseElements)
@@ -212,13 +210,15 @@ http://minio.cluster:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=foouser
 ```
 
 ## Testing
+
+With multiple OU heirarchies for users, and multiple group search base DN's.
 ```
 $ export MINIO_ACCESS_KEY=minio
 $ export MINIO_SECRET_KEY=minio123
 $ export MINIO_IDENTITY_LDAP_SERVER_ADDR='my.ldap-active-dir-server.com:636'
-$ export MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn={username},cn=users,dc=minioad,dc=local'
-$ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local'
-$ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(member={usernamedn}))'
+$ export MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn=%s,ou=Users,ou=BUS1,ou=LOB,dc=somedomain,dc=com;cn=%s,ou=Users,ou=BUS2,ou=LOB,dc=somedomain,dc=com'
+$ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local;dc=somedomain,dc=com'
+$ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(memberUid=%s))'
 $ export MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE='cn'
 $ minio server ~/test
 ```
