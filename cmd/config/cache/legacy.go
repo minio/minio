@@ -35,10 +35,6 @@ func SetCacheConfig(s config.Config, cfg Config) {
 	}
 	s[config.CacheSubSys][config.Default] = config.KVS{
 		config.KV{
-			Key:   config.State,
-			Value: config.StateOn,
-		},
-		config.KV{
 			Key:   Drives,
 			Value: strings.Join(cfg.Drives, cacheDelimiter),
 		},

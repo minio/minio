@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -39,12 +40,11 @@ import (
 	"github.com/minio/minio/pkg/env"
 )
 
-func init() {
+func initHelp() {
 	var kvs = map[string]config.KVS{
 		config.EtcdSubSys:           etcd.DefaultKVS,
 		config.CacheSubSys:          cache.DefaultKVS,
 		config.CompressionSubSys:    compress.DefaultKVS,
-		config.StorageClassSubSys:   storageclass.DefaultKVS,
 		config.IdentityLDAPSubSys:   xldap.DefaultKVS,
 		config.IdentityOpenIDSubSys: openid.DefaultKVS,
 		config.PolicyOPASubSys:      opa.DefaultKVS,
@@ -57,115 +57,123 @@ func init() {
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
 	}
+	if globalIsXL {
+		kvs[config.StorageClassSubSys] = storageclass.DefaultKVS
+	}
 	config.RegisterDefaultKVS(kvs)
 
 	// Captures help for each sub-system
 	var helpSubSys = config.HelpKVS{
 		config.HelpKV{
 			Key:         config.RegionSubSys,
-			Description: "Configure to describe the physical location of the server",
-		},
-		config.HelpKV{
-			Key:         config.StorageClassSubSys,
-			Description: "Configure to control data and parity per object",
+			Description: "label the location of the server",
 		},
 		config.HelpKV{
 			Key:         config.CacheSubSys,
-			Description: "Configure to enable edge caching",
+			Description: "add caching storage tier",
 		},
 		config.HelpKV{
 			Key:         config.CompressionSubSys,
-			Description: "Configure to enable streaming on disk compression",
+			Description: "enable server side compression of objects",
 		},
 		config.HelpKV{
 			Key:         config.EtcdSubSys,
-			Description: "Configure to enable 'etcd' configuration",
+			Description: "federate multiple clusters for IAM and Bucket DNS",
 		},
 		config.HelpKV{
 			Key:         config.IdentityOpenIDSubSys,
-			Description: "Configure to enable OpenID SSO support",
+			Description: "enable OpenID SSO support",
 		},
 		config.HelpKV{
 			Key:         config.IdentityLDAPSubSys,
-			Description: "Configure to enable LDAP SSO support",
+			Description: "enable LDAP SSO support",
 		},
 		config.HelpKV{
 			Key:         config.PolicyOPASubSys,
-			Description: "Configure to enable external OPA policy support",
+			Description: "enable external OPA for policy enforcement",
 		},
 		config.HelpKV{
 			Key:         config.KmsVaultSubSys,
-			Description: "Configure to enable Vault based external KMS",
+			Description: "enable external HashiCorp Vault for KMS",
 		},
 		config.HelpKV{
 			Key:             config.LoggerWebhookSubSys,
-			Description:     "Configure to enable Webhook based logger",
+			Description:     "send server logs to webhook endpoints",
 			MultipleTargets: true,
 		},
 		config.HelpKV{
 			Key:             config.AuditWebhookSubSys,
-			Description:     "Configure to enable Webhook based audit logger",
+			Description:     "send audit logs to webhook endpoints",
 			MultipleTargets: true,
 		},
 		config.HelpKV{
 			Key:             config.NotifyWebhookSubSys,
-			Description:     "Configure to publish events to Webhook target",
+			Description:     "publish bucket notifications to webhook endpoints",
 			MultipleTargets: true,
 		},
 		config.HelpKV{
 			Key:             config.NotifyAMQPSubSys,
-			Description:     "Configure to publish events to AMQP target",
+			Description:     "publish bucket notifications to AMQP endpoints",
 			MultipleTargets: true,
 		},
 		config.HelpKV{
 			Key:             config.NotifyKafkaSubSys,
-			Description:     "Configure to publish events to Kafka target",
+			Description:     "publish bucket notifications to Kafka endpoints",
 			MultipleTargets: true,
 		},
 		config.HelpKV{
 			Key:             config.NotifyMQTTSubSys,
-			Description:     "Configure to publish events to MQTT target",
+			Description:     "publish bucket notifications to MQTT endpoints",
 			MultipleTargets: true,
 		},
 		config.HelpKV{
 			Key:             config.NotifyNATSSubSys,
-			Description:     "Configure to publish events to NATS target",
+			Description:     "publish bucket notifications to NATS endpoints",
 			MultipleTargets: true,
 		},
 		config.HelpKV{
 			Key:             config.NotifyNSQSubSys,
-			Description:     "Configure to publish events to NSQ target",
+			Description:     "publish bucket notifications to NSQ endpoints",
 			MultipleTargets: true,
 		},
 		config.HelpKV{
 			Key:             config.NotifyMySQLSubSys,
-			Description:     "Configure to publish events to MySQL target",
+			Description:     "publish bucket notifications to MySQL endpoints",
 			MultipleTargets: true,
 		},
 		config.HelpKV{
 			Key:             config.NotifyPostgresSubSys,
-			Description:     "Configure to publish events to Postgres target",
+			Description:     "publish bucket notifications to Postgres endpoints",
 			MultipleTargets: true,
 		},
 		config.HelpKV{
 			Key:             config.NotifyRedisSubSys,
-			Description:     "Configure to publish events to Redis target",
+			Description:     "publish bucket notifications to Redis endpoints",
 			MultipleTargets: true,
 		},
 		config.HelpKV{
 			Key:             config.NotifyESSubSys,
-			Description:     "Configure to publish events to Elasticsearch target",
+			Description:     "publish bucket notifications to Elasticsearch endpoints",
 			MultipleTargets: true,
 		},
+	}
+
+	if globalIsXL {
+		helpSubSys = append(helpSubSys, config.HelpKV{})
+		copy(helpSubSys[2:], helpSubSys[1:])
+		helpSubSys[1] = config.HelpKV{
+			Key:         config.StorageClassSubSys,
+			Description: "define object level redundancy",
+		}
 	}
 
 	var helpMap = map[string]config.HelpKVS{
 		"":                          helpSubSys, // Help for all sub-systems.
 		config.RegionSubSys:         config.RegionHelp,
+		config.StorageClassSubSys:   storageclass.Help,
 		config.EtcdSubSys:           etcd.Help,
 		config.CacheSubSys:          cache.Help,
 		config.CompressionSubSys:    compress.Help,
-		config.StorageClassSubSys:   storageclass.Help,
 		config.IdentityOpenIDSubSys: openid.Help,
 		config.IdentityLDAPSubSys:   xldap.Help,
 		config.PolicyOPASubSys:      opa.Help,
@@ -249,6 +257,9 @@ func validateConfig(s config.Config) error {
 			if _, err = crypto.NewKMS(kmsCfg); err != nil {
 				return err
 			}
+
+			// Disable merging env values for the rest.
+			env.SetEnvOff()
 		}
 	}
 
@@ -279,18 +290,18 @@ func lookupConfigs(s config.Config) (err error) {
 		// Env doesn't seem to be set, we fallback to lookup creds from the config.
 		globalActiveCred, err = config.LookupCreds(s[config.CredentialsSubSys][config.Default])
 		if err != nil {
-			return config.Errorf("Invalid credentials configuration: %s", err)
+			return fmt.Errorf("Invalid credentials configuration: %w", err)
 		}
 	}
 
 	etcdCfg, err := xetcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
 	if err != nil {
-		return config.Errorf("Unable to initialize etcd config: %s", err)
+		return fmt.Errorf("Unable to initialize etcd config: %w", err)
 	}
 
 	globalEtcdClient, err = xetcd.New(etcdCfg)
 	if err != nil {
-		return config.Errorf("Unable to initialize etcd config: %s", err)
+		return fmt.Errorf("Unable to initialize etcd config: %w", err)
 	}
 
 	if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
@@ -301,51 +312,51 @@ func lookupConfigs(s config.Config) (err error) {
 			dns.CoreDNSPath(etcdCfg.CoreDNSPath),
 		)
 		if err != nil {
-			return config.Errorf("Unable to initialize DNS config for %s: %s", globalDomainNames, err)
+			return config.Errorf(config.SafeModeKind,
+				"Unable to initialize DNS config for %s: %s", globalDomainNames, err)
 		}
 	}
 
 	globalServerRegion, err = config.LookupRegion(s[config.RegionSubSys][config.Default])
 	if err != nil {
-		return config.Errorf("Invalid region configuration: %s", err)
+		return fmt.Errorf("Invalid region configuration: %w", err)
 	}
 
 	globalWORMEnabled, err = config.LookupWorm()
 	if err != nil {
-		return config.Errorf("Invalid worm configuration: %s", err)
-
+		return fmt.Errorf("Invalid worm configuration: %w", err)
 	}
 
 	if globalIsXL {
 		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default],
 			globalXLSetDriveCount)
 		if err != nil {
-			return config.Errorf("Unable to initialize storage class config: %s", err)
+			return fmt.Errorf("Unable to initialize storage class config: %w", err)
 		}
 	}
 
 	globalCacheConfig, err = cache.LookupConfig(s[config.CacheSubSys][config.Default])
 	if err != nil {
-		return config.Errorf("Unable to setup cache: %s", err)
+		return fmt.Errorf("Unable to setup cache: %w", err)
 	}
 
 	if globalCacheConfig.Enabled {
 		if cacheEncKey := env.Get(cache.EnvCacheEncryptionMasterKey, ""); cacheEncKey != "" {
 			globalCacheKMS, err = crypto.ParseMasterKey(cacheEncKey)
 			if err != nil {
-				return config.Errorf("Unable to setup encryption cache: %s", err)
+				return fmt.Errorf("Unable to setup encryption cache: %w", err)
 			}
 		}
 	}
 
 	kmsCfg, err := crypto.LookupConfig(s[config.KmsVaultSubSys][config.Default])
 	if err != nil {
-		return config.Errorf("Unable to setup KMS config: %s", err)
+		return fmt.Errorf("Unable to setup KMS config: %w", err)
 	}
 
 	GlobalKMS, err = crypto.NewKMS(kmsCfg)
 	if err != nil {
-		return config.Errorf("Unable to setup KMS with current KMS config: %s", err)
+		return fmt.Errorf("Unable to setup KMS with current KMS config: %w", err)
 	}
 
 	// Enable auto-encryption if enabled
@@ -353,19 +364,19 @@ func lookupConfigs(s config.Config) (err error) {
 
 	globalCompressConfig, err = compress.LookupConfig(s[config.CompressionSubSys][config.Default])
 	if err != nil {
-		return config.Errorf("Unable to setup Compression: %s", err)
+		return fmt.Errorf("Unable to setup Compression: %w", err)
 	}
 
 	globalOpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
 		NewCustomHTTPTransport(), xhttp.DrainBody)
 	if err != nil {
-		return config.Errorf("Unable to initialize OpenID: %s", err)
+		return fmt.Errorf("Unable to initialize OpenID: %w", err)
 	}
 
 	opaCfg, err := opa.LookupConfig(s[config.PolicyOPASubSys][config.Default],
 		NewCustomHTTPTransport(), xhttp.DrainBody)
 	if err != nil {
-		return config.Errorf("Unable to initialize OPA: %s", err)
+		return fmt.Errorf("Unable to initialize OPA: %w", err)
 	}
 
 	globalOpenIDValidators = getOpenIDValidators(globalOpenIDConfig)
@@ -374,7 +385,7 @@ func lookupConfigs(s config.Config) (err error) {
 	globalLDAPConfig, err = xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
 		globalRootCAs)
 	if err != nil {
-		return config.Errorf("Unable to parse LDAP configuration: %s", err)
+		return fmt.Errorf("Unable to parse LDAP configuration: %w", err)
 	}
 
 	// Load logger targets based on user's configuration
@@ -382,7 +393,7 @@ func lookupConfigs(s config.Config) (err error) {
 
 	loggerCfg, err := logger.LookupConfig(s)
 	if err != nil {
-		return config.Errorf("Unable to initialize logger: %s", err)
+		return fmt.Errorf("Unable to initialize logger: %w", err)
 	}
 
 	for _, l := range loggerCfg.HTTP {
@@ -420,24 +431,32 @@ func GetHelp(subSys, key string, envOnly bool) (Help, error) {
 	}
 	subSystemValue := strings.SplitN(subSys, config.SubSystemSeparator, 2)
 	if len(subSystemValue) == 0 {
-		return Help{}, config.Errorf("invalid number of arguments %s", subSys)
+		return Help{}, config.Errorf(
+			config.SafeModeKind,
+			"invalid number of arguments %s", subSys)
 	}
 
 	subSys = subSystemValue[0]
 
 	subSysHelp, ok := config.HelpSubSysMap[""].Lookup(subSys)
 	if !ok {
-		return Help{}, config.Errorf("unknown sub-system %s", subSys)
+		return Help{}, config.Errorf(
+			config.SafeModeKind,
+			"unknown sub-system %s", subSys)
 	}
 
 	h, ok := config.HelpSubSysMap[subSys]
 	if !ok {
-		return Help{}, config.Errorf("unknown sub-system %s", subSys)
+		return Help{}, config.Errorf(
+			config.SafeModeKind,
+			"unknown sub-system %s", subSys)
 	}
 	if key != "" {
 		value, ok := h.Lookup(key)
 		if !ok {
-			return Help{}, config.Errorf("unknown key %s for sub-system %s", key, subSys)
+			return Help{}, config.Errorf(
+				config.SafeModeKind,
+				"unknown key %s for sub-system %s", key, subSys)
 		}
 		h = config.HelpKVS{value}
 	}

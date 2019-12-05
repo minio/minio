@@ -31,10 +31,6 @@ func SetIdentityOpenID(s config.Config, cfg Config) {
 	}
 	s[config.IdentityOpenIDSubSys][config.Default] = config.KVS{
 		config.KV{
-			Key:   config.State,
-			Value: config.StateOn,
-		},
-		config.KV{
 			Key:   JwksURL,
 			Value: cfg.JWKS.URL.String(),
 		},

@@ -46,7 +46,7 @@ const (
 	KafkaSASLUsername  = "sasl_username"
 	KafkaSASLPassword  = "sasl_password"
 
-	EnvKafkaState         = "MINIO_NOTIFY_KAFKA_STATE"
+	EnvKafkaEnable        = "MINIO_NOTIFY_KAFKA_ENABLE"
 	EnvKafkaBrokers       = "MINIO_NOTIFY_KAFKA_BROKERS"
 	EnvKafkaTopic         = "MINIO_NOTIFY_KAFKA_TOPIC"
 	EnvKafkaQueueDir      = "MINIO_NOTIFY_KAFKA_QUEUE_DIR"

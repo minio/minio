@@ -58,8 +58,8 @@ const (
 var (
 	DefaultKVS = config.KVS{
 		config.KV{
-			Key:   config.State,
-			Value: config.StateOff,
+			Key:   config.Enable,
+			Value: config.EnableOff,
 		},
 		config.KV{
 			Key:   Endpoint,
@@ -72,8 +72,8 @@ var (
 	}
 	DefaultAuditKVS = config.KVS{
 		config.KV{
-			Key:   config.State,
-			Value: config.StateOff,
+			Key:   config.Enable,
+			Value: config.EnableOff,
 		},
 		config.KV{
 			Key:   Endpoint,
@@ -153,7 +153,7 @@ func LookupConfig(scfg config.Config) (Config, error) {
 			return cfg, err
 		}
 
-		enabled, err := config.ParseBool(kv.Get(config.State))
+		enabled, err := config.ParseBool(kv.Get(config.Enable))
 		if err != nil {
 			return cfg, err
 		}
@@ -185,7 +185,7 @@ func LookupConfig(scfg config.Config) (Config, error) {
 			return cfg, err
 		}
 
-		enabled, err := config.ParseBool(kv.Get(config.State))
+		enabled, err := config.ParseBool(kv.Get(config.Enable))
 		if err != nil {
 			return cfg, err
 		}

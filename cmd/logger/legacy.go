@@ -31,8 +31,8 @@ func SetLoggerHTTPAudit(scfg config.Config, k string, args HTTP) {
 	}
 	scfg[config.AuditWebhookSubSys][k] = config.KVS{
 		config.KV{
-			Key:   config.State,
-			Value: config.StateOn,
+			Key:   config.Enable,
+			Value: config.EnableOn,
 		},
 		config.KV{
 			Key:   Endpoint,
@@ -54,8 +54,8 @@ func SetLoggerHTTP(scfg config.Config, k string, args HTTP) {
 
 	scfg[config.LoggerWebhookSubSys][k] = config.KVS{
 		config.KV{
-			Key:   config.State,
-			Value: config.StateOn,
+			Key:   config.Enable,
+			Value: config.EnableOn,
 		},
 		config.KV{
 			Key:   Endpoint,

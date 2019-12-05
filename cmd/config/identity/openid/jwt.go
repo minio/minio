@@ -212,7 +212,6 @@ const (
 	ClaimPrefix = "claim_prefix"
 	ClientID    = "client_id"
 
-	EnvIdentityOpenIDState       = "MINIO_IDENTITY_OPENID_STATE"
 	EnvIdentityOpenIDClientID    = "MINIO_IDENTITY_OPENID_CLIENT_ID"
 	EnvIdentityOpenIDJWKSURL     = "MINIO_IDENTITY_OPENID_JWKS_URL"
 	EnvIdentityOpenIDURL         = "MINIO_IDENTITY_OPENID_CONFIG_URL"
@@ -265,10 +264,6 @@ func parseDiscoveryDoc(u *xnet.URL, transport *http.Transport, closeRespFn func(
 var (
 	DefaultKVS = config.KVS{
 		config.KV{
-			Key:   config.State,
-			Value: config.StateOff,
-		},
-		config.KV{
 			Key:   ConfigURL,
 			Value: "",
 		},
@@ -287,17 +282,14 @@ var (
 	}
 )
 
+// Enabled returns if jwks is enabled.
+func Enabled(kvs config.KVS) bool {
+	return kvs.Get(JwksURL) != ""
+}
+
 // LookupConfig lookup jwks from config, override with any ENVs.
 func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io.ReadCloser)) (c Config, err error) {
 	if err = config.CheckValidKeys(config.IdentityOpenIDSubSys, kvs, DefaultKVS); err != nil {
-		return c, err
-	}
-
-	stateBool, err := config.ParseBool(env.Get(EnvIdentityOpenIDState, kvs.Get(config.State)))
-	if err != nil {
-		if kvs.Empty() {
-			return c, nil
-		}
 		return c, err
 	}
 
@@ -330,12 +322,6 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 		jwksURL = c.DiscoveryDoc.JwksURI
 	}
 
-	if stateBool {
-		// This check is needed to ensure that empty Jwks urls are not allowed.
-		if jwksURL == "" {
-			return c, config.Error("'config_url' must be set to a proper OpenID discovery document URL")
-		}
-	}
 	if jwksURL == "" {
 		return c, nil
 	}

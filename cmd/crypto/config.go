@@ -47,10 +47,6 @@ const (
 var (
 	DefaultKVS = config.KVS{
 		config.KV{
-			Key:   config.State,
-			Value: config.StateOff,
-		},
-		config.KV{
 			Key:   KMSVaultEndpoint,
 			Value: "",
 		},
@@ -100,9 +96,6 @@ const (
 )
 
 const (
-	// EnvKMSVaultState to enable on/off
-	EnvKMSVaultState = "MINIO_KMS_VAULT_STATE"
-
 	// EnvKMSVaultEndpoint is the environment variable used to specify
 	// the vault HTTPS endpoint.
 	EnvKMSVaultEndpoint = "MINIO_KMS_VAULT_ENDPOINT"
@@ -145,6 +138,12 @@ var defaultCfg = VaultConfig{
 	},
 }
 
+// Enabled returns if HashiCorp Vault is enabled.
+func Enabled(kvs config.KVS) bool {
+	endpoint := kvs.Get(KMSVaultEndpoint)
+	return endpoint != ""
+}
+
 // LookupConfig extracts the KMS configuration provided by environment
 // variables and merge them with the provided KMS configuration. The
 // merging follows the following rules:
@@ -167,7 +166,7 @@ func LookupConfig(kvs config.KVS) (KMSConfig, error) {
 		return kmsCfg, err
 	}
 	if !kmsCfg.AutoEncryption {
-		kmsCfg.AutoEncryption, err = config.ParseBool(env.Get(EnvKMSAutoEncryption, config.StateOff))
+		kmsCfg.AutoEncryption, err = config.ParseBool(env.Get(EnvKMSAutoEncryption, config.EnableOff))
 		if err != nil {
 			return kmsCfg, err
 		}
@@ -176,16 +175,6 @@ func LookupConfig(kvs config.KVS) (KMSConfig, error) {
 		return kmsCfg, nil
 	}
 
-	stateBool, err := config.ParseBool(env.Get(EnvKMSVaultState, kvs.Get(config.State)))
-	if err != nil {
-		if kvs.Empty() {
-			return kmsCfg, nil
-		}
-		return kmsCfg, err
-	}
-	if !stateBool {
-		return kmsCfg, nil
-	}
 	vcfg := VaultConfig{
 		Auth: VaultAuth{
 			Type: "approle",
