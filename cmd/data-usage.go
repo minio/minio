@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -79,8 +78,8 @@ func runDataUsageInfoForFS(ctx context.Context, fsObj *FSObjects, endCh chan str
 	}
 }
 
-func runDataUsageInfoForXLZones(ctx context.Context, zones *xlZones, endCh chan struct{}) {
-	locker := zones.NewNSLock(ctx, minioMetaBucket, "leader-data-usage-info")
+func runDataUsageInfoForXLZones(ctx context.Context, z *xlZones, endCh chan struct{}) {
+	locker := z.NewNSLock(ctx, minioMetaBucket, "leader-data-usage-info")
 	for {
 		err := locker.GetLock(newDynamicTimeout(time.Millisecond, time.Millisecond))
 		if err != nil {
@@ -93,8 +92,8 @@ func runDataUsageInfoForXLZones(ctx context.Context, zones *xlZones, endCh chan 
 
 	t := time.NewTicker(dataUsageCrawlInterval)
 	for {
-		usageInfo := zonesCrawlAndGetDataUsage(ctx, zones, endCh)
-		err := storeDataUsageInBackend(ctx, zones, usageInfo)
+		usageInfo := z.crawlAndGetDataUsage(ctx, endCh)
+		err := storeDataUsageInBackend(ctx, z, usageInfo)
 		if err != nil {
 			logger.LogIf(ctx, err)
 		}
@@ -105,84 +104,6 @@ func runDataUsageInfoForXLZones(ctx context.Context, zones *xlZones, endCh chan 
 		case <-t.C:
 		}
 	}
-}
-
-func setCrawlAndGetDataUsage(ctx context.Context, xl *xlObjects, endCh chan struct{}) DataUsageInfo {
-	var randomDisks []StorageAPI
-	for _, d := range xl.getLoadBalancedDisks() {
-		if d == nil || !d.IsOnline() {
-			continue
-		}
-		if len(randomDisks) > 3 {
-			break
-		}
-		randomDisks = append(randomDisks, d)
-	}
-
-	var dataUsageResults = make([]DataUsageInfo, len(randomDisks))
-
-	var wg sync.WaitGroup
-	for i := 0; i < len(randomDisks); i++ {
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			var err error
-			dataUsageResults[index], err = disk.CrawlAndGetDataUsage(endCh)
-			if err != nil {
-				logger.LogIf(ctx, err)
-			}
-		}(i, randomDisks[i])
-	}
-	wg.Wait()
-
-	var dataUsageInfo DataUsageInfo
-	for i := 0; i < len(dataUsageResults); i++ {
-		if dataUsageResults[i].ObjectsCount > dataUsageInfo.ObjectsCount {
-			dataUsageInfo = dataUsageResults[i]
-		}
-	}
-
-	return dataUsageInfo
-}
-
-func zonesCrawlAndGetDataUsage(ctx context.Context, zones *xlZones, endCh chan struct{}) DataUsageInfo {
-	var aggDataUsageInfo = struct {
-		sync.Mutex
-		DataUsageInfo
-	}{}
-
-	aggDataUsageInfo.ObjectsSizesHistogram = make(map[string]uint64)
-	aggDataUsageInfo.BucketsSizes = make(map[string]uint64)
-
-	var wg sync.WaitGroup
-	for _, z := range zones.zones {
-		for _, xlObj := range z.sets {
-			wg.Add(1)
-			go func(xl *xlObjects) {
-				defer wg.Done()
-				info := setCrawlAndGetDataUsage(ctx, xl, endCh)
-
-				aggDataUsageInfo.Lock()
-				aggDataUsageInfo.ObjectsCount += info.ObjectsCount
-				aggDataUsageInfo.ObjectsTotalSize += info.ObjectsTotalSize
-				if aggDataUsageInfo.BucketsCount < info.BucketsCount {
-					aggDataUsageInfo.BucketsCount = info.BucketsCount
-				}
-				for k, v := range info.ObjectsSizesHistogram {
-					aggDataUsageInfo.ObjectsSizesHistogram[k] += v
-				}
-				for k, v := range info.BucketsSizes {
-					aggDataUsageInfo.BucketsSizes[k] += v
-				}
-				aggDataUsageInfo.Unlock()
-
-			}(xlObj)
-		}
-	}
-	wg.Wait()
-
-	aggDataUsageInfo.LastUpdate = UTCNow()
-	return aggDataUsageInfo.DataUsageInfo
 }
 
 func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dataUsageInfo DataUsageInfo) error {
