@@ -840,13 +840,13 @@ To update the configuration, use `mc admin config get` command to get the curren
 
 ```sh
 $ mc admin config get myminio/ notify_kafka
-notify_kafka:1 tls_skip_verify="off"  queue_dir="" queue_limit="0" sasl_enable="off" sasl_password="" sasl_username="" tls_client_auth="0" tls_enable="off" brokers="" topic=""
+notify_kafka:1 tls_skip_verify="off"  queue_dir="" queue_limit="0" sasl="off" sasl_password="" sasl_username="" tls_client_auth="0" tls="off" brokers="" topic="" client_tls_cert="" client_tls_key=""
 ```
 
 Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:kafka` at start-up if there were no errors.`bucketevents` is the topic used by kafka in this example.
 
 ```sh
-$ mc admin config set myminio notify_kafka:1 tls_skip_verify="off"  queue_dir="" queue_limit="0" sasl_enable="off" sasl_password="" sasl_username="" tls_client_auth="0" tls_enable="off" brokers="localhost:9092,localhost:9093" topic="bucketevents"
+$ mc admin config set myminio notify_kafka:1 tls_skip_verify="off"  queue_dir="" queue_limit="0" sasl="off" sasl_password="" sasl_username="" tls_client_auth="0" tls="off" client_tls_cert="" client_tls_key="" brokers="localhost:9092,localhost:9093" topic="bucketevents"
 ```
 
 ### Step 3: Enable bucket notification using MinIO client
