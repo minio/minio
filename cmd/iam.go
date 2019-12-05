@@ -369,6 +369,10 @@ func (sys *IAMSys) Init(objAPI ObjectLayer) error {
 		return errServerNotInitialized
 	}
 
+	if globalLDAPConfig.Enabled {
+		sys.EnableLDAPSys()
+	}
+
 	sys.Lock()
 	if globalEtcdClient == nil {
 		sys.store = newIAMObjectStore()
@@ -1791,22 +1795,18 @@ func (sys *IAMSys) removeGroupFromMembershipsMap(group string) {
 	}
 }
 
+// EnableLDAPSys - enable ldap system users type.
+func (sys *IAMSys) EnableLDAPSys() {
+	sys.Lock()
+	defer sys.Unlock()
+
+	sys.usersSysType = LDAPUsersSysType
+}
+
 // NewIAMSys - creates new config system object.
 func NewIAMSys() *IAMSys {
-	// Check global server configuration to determine the type of
-	// users system configured.
-
-	// The default users system
-	var utype UsersSysType
-	switch {
-	case globalLDAPConfig.Enabled:
-		utype = LDAPUsersSysType
-	default:
-		utype = MinIOUsersSysType
-	}
-
 	return &IAMSys{
-		usersSysType:            utype,
+		usersSysType:            MinIOUsersSysType,
 		iamUsersMap:             make(map[string]auth.Credentials),
 		iamPolicyDocsMap:        make(map[string]iampolicy.Policy),
 		iamUserPolicyMap:        make(map[string]MappedPolicy),
