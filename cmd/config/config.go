@@ -399,6 +399,12 @@ func LookupRegion(kv KVS) (string, error) {
 func CheckValidKeys(subSys string, kv KVS, validKVS KVS) error {
 	nkv := KVS{}
 	for _, kv := range kv {
+		// Comment is a valid key, its also fully optional
+		// ignore it since it is a valid key for all
+		// sub-systems.
+		if kv.Key == Comment {
+			continue
+		}
 		if _, ok := validKVS.Lookup(kv.Key); !ok {
 			nkv = append(nkv, kv)
 		}
@@ -557,23 +563,19 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 			continue
 		}
 		if len(kv) == 1 && prevK != "" {
-			kvs = append(kvs, KV{
-				Key: prevK,
-				Value: strings.Join([]string{
-					kvs.Get(prevK),
-					madmin.SanitizeValue(kv[0]),
-				}, KvSpaceSeparator),
-			})
+			value := strings.Join([]string{
+				kvs.Get(prevK),
+				madmin.SanitizeValue(kv[0]),
+			}, KvSpaceSeparator)
+			kvs.Set(prevK, value)
 			continue
 		}
-		if len(kv) == 1 {
-			return Errorf(SafeModeKind, "key '%s', cannot have empty value", kv[0])
+		if len(kv) == 2 {
+			prevK = kv[0]
+			kvs.Set(prevK, madmin.SanitizeValue(kv[1]))
+			continue
 		}
-		prevK = kv[0]
-		kvs = append(kvs, KV{
-			Key:   kv[0],
-			Value: madmin.SanitizeValue(kv[1]),
-		})
+		return Errorf(SafeModeKind, "key '%s', cannot have empty value", kv[0])
 	}
 
 	tgt := Default
@@ -587,25 +589,27 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 	_, defaultOk := defaultKVS[subSys].Lookup(Enable)
 	if !ok && defaultOk {
 		// implicit state "on" if not specified.
-		kvs = append(kvs, KV{
-			Key:   Enable,
-			Value: EnableOn,
-		})
+		kvs.Set(Enable, EnableOn)
 	}
 
-	currKVS := c[subSys][tgt]
+	currKVS, ok := c[subSys][tgt]
+	if !ok {
+		currKVS = defaultKVS[subSys]
+	}
 
 	for _, kv := range kvs {
+		if kv.Key == Comment {
+			// Skip comment and add it later.
+			continue
+		}
 		currKVS.Set(kv.Key, kv.Value)
 	}
 
-	for _, defaultKV := range defaultKVS[subSys] {
-		_, ok := c[subSys][tgt].Lookup(defaultKV.Key)
-		if !ok {
-			currKVS.Set(defaultKV.Key, defaultKV.Value)
-		}
+	v, ok := kvs.Lookup(Comment)
+	if ok {
+		currKVS.Set(Comment, v)
 	}
 
-	copy(c[subSys][tgt], currKVS)
+	c[subSys][tgt] = currKVS
 	return nil
 }
