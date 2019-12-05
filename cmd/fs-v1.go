@@ -28,7 +28,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
@@ -160,10 +159,6 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	// or cause changes on backend format.
 	fs.fsFormatRlk = rlk
 
-	if !fs.diskMount {
-		go fs.diskUsage(GlobalServiceDoneCh)
-	}
-
 	go fs.cleanupStaleMultipartUploads(ctx, GlobalMultipartCleanupInterval, GlobalMultipartExpiry, GlobalServiceDoneCh)
 
 	// Return successfully initialized object layer.
@@ -184,75 +179,6 @@ func (fs *FSObjects) Shutdown(ctx context.Context) error {
 	return fsRemoveAll(ctx, pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID))
 }
 
-// diskUsage returns du information for the posix path, in a continuous routine.
-func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
-	usageFn := func(ctx context.Context, entry string) error {
-		if httpServer := newHTTPServerFn(); httpServer != nil {
-			// Wait at max 1 minute for an inprogress request
-			// before proceeding to count the usage.
-			waitCount := 60
-			// Any requests in progress, delay the usage.
-			for httpServer.GetRequestCount() > 0 && waitCount > 0 {
-				waitCount--
-				time.Sleep(1 * time.Second)
-			}
-		}
-
-		select {
-		case <-doneCh:
-			return errWalkAbort
-		default:
-			fi, err := os.Stat(entry)
-			if err != nil {
-				err = osErrToFSFileErr(err)
-				return err
-			}
-			atomic.AddUint64(&fs.totalUsed, uint64(fi.Size()))
-		}
-		return nil
-	}
-
-	// Return this routine upon errWalkAbort, continue for any other error on purpose
-	// so that we can start the routine freshly in another 12 hours.
-	if err := getDiskUsage(context.Background(), fs.fsPath, usageFn); err == errWalkAbort {
-		return
-	}
-
-	for {
-		select {
-		case <-doneCh:
-			return
-		case <-time.After(globalUsageCheckInterval):
-			var usage uint64
-			usageFn = func(ctx context.Context, entry string) error {
-				if httpServer := newHTTPServerFn(); httpServer != nil {
-					// Wait at max 1 minute for an inprogress request
-					// before proceeding to count the usage.
-					waitCount := 60
-					// Any requests in progress, delay the usage.
-					for httpServer.GetRequestCount() > 0 && waitCount > 0 {
-						waitCount--
-						time.Sleep(1 * time.Second)
-					}
-				}
-
-				fi, err := os.Stat(entry)
-				if err != nil {
-					err = osErrToFSFileErr(err)
-					return err
-				}
-				usage = usage + uint64(fi.Size())
-				return nil
-			}
-
-			if err := getDiskUsage(context.Background(), fs.fsPath, usageFn); err != nil {
-				continue
-			}
-			atomic.StoreUint64(&fs.totalUsed, usage)
-		}
-	}
-}
-
 // StorageInfo - returns underlying storage statistics.
 func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
 	di, err := getDiskInfo(fs.fsPath)
@@ -263,6 +189,7 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
 	if !fs.diskMount {
 		used = atomic.LoadUint64(&fs.totalUsed)
 	}
+
 	storageInfo := StorageInfo{
 		Used:       []uint64{used},
 		Total:      []uint64{di.Total},
@@ -331,6 +258,8 @@ func (fs *FSObjects) crawlAndGetDataUsageInfo(ctx context.Context, endCh chan st
 	}
 
 	info.LastUpdate = UTCNow()
+
+	atomic.StoreUint64(&fs.totalUsed, info.ObjectsTotalSize)
 	return info
 }
 

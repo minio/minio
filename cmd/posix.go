@@ -219,10 +219,6 @@ func newPosix(path string) (*posix, error) {
 		diskMount:   mountinfo.IsLikelyMountPoint(path),
 	}
 
-	if !p.diskMount {
-		go p.diskUsage(GlobalServiceDoneCh)
-	}
-
 	// Success.
 	return p, nil
 }
@@ -399,6 +395,8 @@ func (s *posix) CrawlAndGetDataUsage(endCh chan struct{}) (DataUsageInfo, error)
 	// Update data usage information timestamp
 	dataUsageInfo.LastUpdate = UTCNow()
 
+	atomic.StoreUint64(&s.totalUsed, dataUsageInfo.ObjectsTotalSize)
+
 	// Attach the newly computed data usage to the current posix
 	s.dataUsageInProgressMu.Lock()
 	s.dataUsageInProgress = false
@@ -521,88 +519,6 @@ func (s *posix) getDiskID() (string, error) {
 	s.formatFileInfo = fi
 	s.formatLastCheck = time.Now()
 	return s.diskID, nil
-}
-
-// diskUsage returns du information for the posix path, in a continuous routine.
-func (s *posix) diskUsage(doneCh chan struct{}) {
-	ticker := time.NewTicker(globalUsageCheckInterval)
-	defer ticker.Stop()
-
-	usageFn := func(ctx context.Context, entry string) error {
-		if httpServer := newHTTPServerFn(); httpServer != nil {
-			// Wait at max 1 minute for an inprogress request
-			// before proceeding to count the usage.
-			waitCount := 60
-			// Any requests in progress, delay the usage.
-			for httpServer.GetRequestCount() > 0 && waitCount > 0 {
-				waitCount--
-				time.Sleep(1 * time.Second)
-			}
-		}
-
-		select {
-		case <-doneCh:
-			return errWalkAbort
-		case <-s.stopUsageCh:
-			return errWalkAbort
-		default:
-			fi, err := os.Stat(entry)
-			if err != nil {
-				err = osErrToFSFileErr(err)
-				return err
-			}
-			atomic.AddUint64(&s.totalUsed, uint64(fi.Size()))
-			return nil
-		}
-	}
-
-	// Return this routine upon errWalkAbort, continue for any other error on purpose
-	// so that we can start the routine freshly in another 12 hours.
-	if err := getDiskUsage(context.Background(), s.diskPath, usageFn); err == errWalkAbort {
-		return
-	}
-
-	for {
-		select {
-		case <-s.stopUsageCh:
-			return
-		case <-doneCh:
-			return
-		case <-time.After(globalUsageCheckInterval):
-			var usage uint64
-			usageFn = func(ctx context.Context, entry string) error {
-				if httpServer := newHTTPServerFn(); httpServer != nil {
-					// Wait at max 1 minute for an inprogress request
-					// before proceeding to count the usage.
-					waitCount := 60
-					// Any requests in progress, delay the usage.
-					for httpServer.GetRequestCount() > 0 && waitCount > 0 {
-						waitCount--
-						time.Sleep(1 * time.Second)
-					}
-				}
-
-				select {
-				case <-s.stopUsageCh:
-					return errWalkAbort
-				default:
-					fi, err := os.Stat(entry)
-					if err != nil {
-						err = osErrToFSFileErr(err)
-						return err
-					}
-					usage = usage + uint64(fi.Size())
-					return nil
-				}
-			}
-
-			if err := getDiskUsage(context.Background(), s.diskPath, usageFn); err != nil {
-				continue
-			}
-
-			atomic.StoreUint64(&s.totalUsed, usage)
-		}
-	}
 }
 
 // Make a volume entry.
