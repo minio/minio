@@ -27,7 +27,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path"
 	"reflect"
 	"sync"
 	"time"
@@ -71,11 +70,16 @@ type cacheMeta struct {
 	Ranges map[string]string `json:"ranges,omitempty"`
 }
 
-// rangeInfo has the range, file and range length information for a cached range.
-type rangeInfo struct {
-	rng  string
-	file string
-	size int64
+// RangeInfo has the range, file and range length information for a cached range.
+type RangeInfo struct {
+	Range string
+	File  string
+	Size  int64
+}
+
+// Empty returns true if this is an empty struct
+func (r *RangeInfo) Empty() bool {
+	return r.Range == "" && r.File == "" && r.Size == 0
 }
 
 func (m *cacheMeta) ToObjectInfo(bucket, object string) (o ObjectInfo) {
@@ -309,7 +313,7 @@ func (c *diskCache) Stat(ctx context.Context, bucket, object string) (oi ObjectI
 // if partial object is cached.
 func (c *diskCache) statCachedMeta(cacheObjPath string) (meta *cacheMeta, partial bool, err error) {
 	// Stat the file to get file size.
-	metaPath := path.Join(cacheObjPath, cacheMetaJSONFile)
+	metaPath := pathJoin(cacheObjPath, cacheMetaJSONFile)
 	f, err := os.Open(metaPath)
 	if err != nil {
 		return meta, partial, err
@@ -329,8 +333,8 @@ func (c *diskCache) statCachedMeta(cacheObjPath string) (meta *cacheMeta, partia
 	return meta, partial, nil
 }
 
-// statRange returns ObjectInfo and rangeInfo from disk cache
-func (c *diskCache) statRange(ctx context.Context, bucket, object string, rs *HTTPRangeSpec) (oi ObjectInfo, rngInfo rangeInfo, err error) {
+// statRange returns ObjectInfo and RangeInfo from disk cache
+func (c *diskCache) statRange(ctx context.Context, bucket, object string, rs *HTTPRangeSpec) (oi ObjectInfo, rngInfo RangeInfo, err error) {
 	// Stat the file to get file size.
 	cacheObjPath := getCacheSHADir(c.dir, bucket, object)
 
@@ -344,21 +348,22 @@ func (c *diskCache) statRange(ctx context.Context, bucket, object string, rs *HT
 	}
 
 	actualSize := uint64(meta.Stat.Size)
-
-	off, length, err := rs.GetOffsetLength(int64(actualSize))
+	_, length, err := rs.GetOffsetLength(int64(actualSize))
 	if err != nil {
 		return oi, rngInfo, err
 	}
+
 	actualRngSize := uint64(length)
 	if globalCacheKMS != nil {
 		actualRngSize, _ = sio.EncryptedSize(uint64(length))
 	}
-	rng := fmt.Sprintf("%d-%d", off, off+length-1)
+
+	rng := rs.String(int64(actualSize))
 	rngFile, ok := meta.Ranges[rng]
 	if !ok {
 		return oi, rngInfo, ObjectNotFound{Bucket: bucket, Object: object}
 	}
-	rngInfo = rangeInfo{rng: rng, file: rngFile, size: int64(actualRngSize)}
+	rngInfo = RangeInfo{Range: rng, File: rngFile, Size: int64(actualRngSize)}
 
 	oi = meta.ToObjectInfo("", "")
 	oi.Bucket = bucket
@@ -378,7 +383,7 @@ func (c *diskCache) statCache(cacheObjPath string) (oi ObjectInfo, e error) {
 		return oi, err
 	}
 	if partial {
-		return oi, ObjectNotFound{}
+		return oi, errFileNotFound
 	}
 	return meta.ToObjectInfo("", ""), nil
 }
@@ -399,18 +404,14 @@ func (c *diskCache) saveMetadata(ctx context.Context, bucket, object string, met
 		return err
 	}
 	if rs != nil {
-		off, length, err := rs.GetOffsetLength(actualSize)
-		if err != nil {
-			return err
-		}
 		if m.Ranges == nil {
 			m.Ranges = make(map[string]string)
 		}
-		m.Ranges[fmt.Sprintf("%d-%d", off, off+length-1)] = rsFileName
+		m.Ranges[rs.String(actualSize)] = rsFileName
 	} else {
 		// this is necessary cleanup of range files if entire object is cached.
 		for _, f := range m.Ranges {
-			removeAll(path.Join(fileName, f))
+			removeAll(pathJoin(fileName, f))
 		}
 		m.Ranges = nil
 	}
@@ -451,7 +452,7 @@ func (c *diskCache) updateMetadataIfChanged(ctx context.Context, bucket, object 
 }
 
 func getCacheSHADir(dir, bucket, object string) string {
-	return path.Join(dir, getSHA256Hash([]byte(path.Join(bucket, object))))
+	return pathJoin(dir, getSHA256Hash([]byte(pathJoin(bucket, object))))
 }
 
 // Cache data to disk with bitrot checksum added for each block of 1MB
@@ -459,7 +460,7 @@ func (c *diskCache) bitrotWriteToCache(cachePath, fileName string, reader io.Rea
 	if err := os.MkdirAll(cachePath, 0777); err != nil {
 		return 0, err
 	}
-	filePath := path.Join(cachePath, fileName)
+	filePath := pathJoin(cachePath, fileName)
 
 	if filePath == "" || reader == nil {
 		return 0, errInvalidArgument
@@ -528,7 +529,7 @@ func newCacheEncryptMetadata(bucket, object string, metadata map[string]string) 
 	if globalCacheKMS == nil {
 		return nil, errKMSNotConfigured
 	}
-	key, encKey, err := globalCacheKMS.GenerateKey(globalCacheKMS.KeyID(), crypto.Context{bucket: path.Join(bucket, object)})
+	key, encKey, err := globalCacheKMS.GenerateKey(globalCacheKMS.KeyID(), crypto.Context{bucket: pathJoin(bucket, object)})
 	if err != nil {
 		return nil, err
 	}
@@ -611,12 +612,16 @@ func (c *diskCache) putRange(ctx context.Context, bucket, object string, data io
 	}
 	var reader = data
 	var actualSize = uint64(rlen)
+	// objSize is the actual size of object (with encryption overhead if any)
+	var objSize = uint64(size)
 	if globalCacheKMS != nil {
 		reader, err = newCacheEncryptReader(data, bucket, object, metadata)
 		if err != nil {
 			return err
 		}
 		actualSize, _ = sio.EncryptedSize(uint64(rlen))
+		objSize, _ = sio.EncryptedSize(uint64(size))
+
 	}
 	cacheFile := MustGetUUID()
 	n, err := c.bitrotWriteToCache(cachePath, cacheFile, reader, actualSize)
@@ -631,7 +636,7 @@ func (c *diskCache) putRange(ctx context.Context, bucket, object string, data io
 		removeAll(cachePath)
 		return IncompleteBody{}
 	}
-	return c.saveMetadata(ctx, bucket, object, metadata, size, rs, cacheFile)
+	return c.saveMetadata(ctx, bucket, object, metadata, int64(objSize), rs, cacheFile)
 }
 
 // checks streaming bitrot checksum of cached object before returning data
@@ -734,18 +739,18 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	var objInfo ObjectInfo
 	cacheObjPath := getCacheSHADir(c.dir, bucket, object)
-	var rngInfo rangeInfo
+	var rngInfo RangeInfo
 
 	if objInfo, rngInfo, err = c.statRange(ctx, bucket, object, rs); err != nil {
 		return nil, toObjectErr(err, bucket, object)
 	}
 	cacheFile := cacheDataFile
 	objSize := objInfo.Size
-	if (rngInfo != rangeInfo{}) {
+	if !rngInfo.Empty() {
 		// for cached ranges, need to pass actual range file size to GetObjectReader
 		// and clear out range spec
-		cacheFile = rngInfo.file
-		objInfo.Size = rngInfo.size
+		cacheFile = rngInfo.File
+		objInfo.Size = rngInfo.Size
 		rs = nil
 	}
 	var nsUnlocker = func() {}
@@ -760,7 +765,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 	if nErr != nil {
 		return nil, nErr
 	}
-	filePath := path.Join(cacheObjPath, cacheFile)
+	filePath := pathJoin(cacheObjPath, cacheFile)
 	pr, pw := io.Pipe()
 	go func() {
 		err := c.bitrotReadFromCache(ctx, filePath, off, length, pw)
@@ -781,7 +786,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 		// clean up internal SSE cache metadata
 		delete(gr.ObjInfo.UserDefined, crypto.SSEHeader)
 	}
-	if (rngInfo != rangeInfo{}) {
+	if !rngInfo.Empty() {
 		// overlay Size with actual object size and not the range size
 		gr.ObjInfo.Size = objSize
 	}
