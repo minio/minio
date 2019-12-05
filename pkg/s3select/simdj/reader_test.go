@@ -95,11 +95,11 @@ func TestNDJSON(t *testing.T) {
 					close(dst)
 					break parser
 				case simdjson.TypeRoot:
-					obj, err := next.Root(nil)
+					typ, obj, err := next.Root(nil)
 					if err != nil {
 						t.Fatal(err)
 					}
-					if typ := obj.Advance(); typ != simdjson.TypeObject {
+					if typ != simdjson.TypeObject {
 						if typ == simdjson.TypeNone {
 							close(dst)
 							break parser

@@ -16,6 +16,8 @@
 
 package simdj
 
+import "fmt"
+
 type s3Error struct {
 	code       string
 	message    string
@@ -55,7 +57,7 @@ func errInvalidJSONType(err error) *s3Error {
 func errJSONParsingError(err error) *s3Error {
 	return &s3Error{
 		code:       "JSONParsingError",
-		message:    "Encountered an error parsing the JSON file. Check the file and try again.",
+		message:    fmt.Sprintf("Encountered an error parsing the JSON file: %v. Check the file and try again.", err),
 		statusCode: 400,
 		cause:      err,
 	}

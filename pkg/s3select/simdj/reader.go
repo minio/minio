@@ -107,12 +107,12 @@ func (r *Reader) startReader() {
 			case simdjson.TypeNone:
 				return
 			case simdjson.TypeRoot:
-				obj, err := next.Root(nil)
+				typ, obj, err := next.Root(nil)
 				if err != nil {
 					r.err = &err
 					return
 				}
-				if typ := obj.Advance(); typ != simdjson.TypeObject {
+				if typ != simdjson.TypeObject {
 					err = fmt.Errorf("unexpected json type below root :%v", typ)
 					r.err = &err
 					return
