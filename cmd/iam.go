@@ -654,9 +654,9 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 		SecretKey: cred.SecretKey,
 		Status: func() string {
 			if status == madmin.AccountEnabled {
-				return config.StateOn
+				return config.EnableOn
 			}
-			return config.StateOff
+			return config.EnableOff
 		}(),
 	})
 	if err := sys.store.saveUserIdentity(accessKey, false, uinfo); err != nil {

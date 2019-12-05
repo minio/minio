@@ -50,7 +50,7 @@ const (
 	MqttQueueDir          = "queue_dir"
 	MqttQueueLimit        = "queue_limit"
 
-	EnvMQTTState             = "MINIO_NOTIFY_MQTT_STATE"
+	EnvMQTTEnable            = "MINIO_NOTIFY_MQTT_ENABLE"
 	EnvMQTTBroker            = "MINIO_NOTIFY_MQTT_BROKER"
 	EnvMQTTTopic             = "MINIO_NOTIFY_MQTT_TOPIC"
 	EnvMQTTQoS               = "MINIO_NOTIFY_MQTT_QOS"
@@ -229,7 +229,7 @@ func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce 
 				ok := token.WaitTimeout(reconnectInterval * time.Second)
 				if ok && token.Error() != nil {
 					target.loggerOnce(context.Background(),
-						fmt.Errorf("Previous connect failed with %s attempting a reconnect",
+						fmt.Errorf("Previous connect failed with %w attempting a reconnect",
 							token.Error()),
 						target.ID())
 					time.Sleep(reconnectInterval * time.Second)

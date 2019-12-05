@@ -23,24 +23,24 @@ var (
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         ConfigURL,
-			Description: `OpenID discovery documented endpoint. eg: "https://accounts.google.com/.well-known/openid-configuration"`,
+			Description: `openid discovery document e.g. "https://accounts.google.com/.well-known/openid-configuration"`,
 			Type:        "url",
 		},
 		config.HelpKV{
 			Key:         ClientID,
-			Description: `The client identifier of the authenticating party at the identity provider`,
+			Description: `client identifier of the authenticating party at the identity provider`,
 			Type:        "string",
 			Optional:    true,
 		},
 		config.HelpKV{
 			Key:         ClaimPrefix,
-			Description: `OpenID JWT claim namespace prefix. eg: "customer"`,
+			Description: `openid JWT claim namespace prefix e.g. "customer"`,
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         config.Comment,
-			Description: "A comment to describe the OpenID identity setting",
+			Description: config.DefaultComment,
 			Optional:    true,
 			Type:        "sentence",
 		},

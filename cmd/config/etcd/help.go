@@ -23,35 +23,36 @@ var (
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         Endpoints,
-			Description: `Comma separated list of etcd endpoints eg: "http://localhost:2379"`,
+			Description: `comma separated list of etcd endpoints e.g. "http://localhost:2379"`,
 			Type:        "csv",
 		},
 		config.HelpKV{
 			Key:         PathPrefix,
-			Description: `Default etcd path prefix to populate all IAM assets eg: "customer/"`,
+			Description: `default etcd path prefix to populate all IAM assets eg: "customer/"`,
+			Optional:    true,
 			Type:        "path",
 		},
 		config.HelpKV{
 			Key:         CoreDNSPath,
-			Description: `Default etcd path location to populate bucket DNS srv records eg: "/skydns"`,
+			Description: `default etcd path location to populate bucket DNS srv records eg: "/skydns"`,
 			Optional:    true,
 			Type:        "path",
 		},
 		config.HelpKV{
 			Key:         ClientCert,
-			Description: `Etcd client cert for mTLS authentication`,
+			Description: `client cert for mTLS authentication`,
 			Optional:    true,
 			Type:        "path",
 		},
 		config.HelpKV{
 			Key:         ClientCertKey,
-			Description: `Etcd client cert key for mTLS authentication`,
+			Description: `client cert key for mTLS authentication`,
 			Optional:    true,
 			Type:        "path",
 		},
 		config.HelpKV{
 			Key:         config.Comment,
-			Description: "A comment to describe the etcd settings",
+			Description: config.DefaultComment,
 			Optional:    true,
 			Type:        "sentence",
 		},

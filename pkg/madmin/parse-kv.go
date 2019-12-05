@@ -40,6 +40,23 @@ func (kvs KVS) Empty() bool {
 	return len(kvs) == 0
 }
 
+// Set sets a value, if not sets a default value.
+func (kvs *KVS) Set(key, value string) {
+	for i, kv := range *kvs {
+		if kv.Key == key {
+			(*kvs)[i] = KV{
+				Key:   key,
+				Value: value,
+			}
+			return
+		}
+	}
+	*kvs = append(*kvs, KV{
+		Key:   key,
+		Value: value,
+	})
+}
+
 // Get - returns the value of a key, if not found returns empty.
 func (kvs KVS) Get(key string) string {
 	v, ok := kvs.Lookup(key)
@@ -59,27 +76,38 @@ func (kvs KVS) Lookup(key string) (string, bool) {
 	return "", false
 }
 
-// Targets sub-system targets
-type Targets map[string]map[string]KVS
+// Target signifies an individual target
+type Target struct {
+	SubSystem string `json:"subSys"`
+	KVS       KVS    `json:"kvs"`
+}
 
+// Targets sub-system targets
+type Targets []Target
+
+// Standard config keys and values.
 const (
-	stateKey   = "state"
-	commentKey = "comment"
+	EnableKey  = "enable"
+	CommentKey = "comment"
+
+	// Enable values
+	EnableOn  = "on"
+	EnableOff = "off"
 )
 
 func (kvs KVS) String() string {
 	var s strings.Builder
 	for _, kv := range kvs {
-		// Do not need to print state
-		if kv.Key == stateKey {
+		// Do not need to print state which is on.
+		if kv.Key == EnableKey && kv.Value == EnableOn {
 			continue
 		}
-		if kv.Key == commentKey && kv.Value == "" {
+		if kv.Key == CommentKey && kv.Value == "" {
 			continue
 		}
 		s.WriteString(kv.Key)
 		s.WriteString(KvSeparator)
-		spc := hasSpace(kv.Value)
+		spc := HasSpace(kv.Value)
 		if spc {
 			s.WriteString(KvDoubleQuote)
 		}
@@ -94,16 +122,11 @@ func (kvs KVS) String() string {
 
 // Count - returns total numbers of target
 func (t Targets) Count() int {
-	var count int
-	for _, targetKV := range t {
-		for range targetKV {
-			count++
-		}
-	}
-	return count
+	return len(t)
 }
 
-func hasSpace(s string) bool {
+// HasSpace - returns if given string has space.
+func HasSpace(s string) bool {
 	for _, r := range s {
 		if unicode.IsSpace(r) {
 			return true
@@ -115,19 +138,15 @@ func hasSpace(s string) bool {
 func (t Targets) String() string {
 	var s strings.Builder
 	count := t.Count()
-	for subSys, targetKV := range t {
-		for target, kv := range targetKV {
-			count--
-			s.WriteString(subSys)
-			if target != Default {
-				s.WriteString(SubSystemSeparator)
-				s.WriteString(target)
-			}
-			s.WriteString(KvSpaceSeparator)
-			s.WriteString(kv.String())
-			if (len(t) > 1 || len(targetKV) > 1) && count > 0 {
-				s.WriteString(KvNewline)
-			}
+	// Print all "on" states entries
+	for _, targetKV := range t {
+		kv := targetKV.KVS
+		count--
+		s.WriteString(targetKV.SubSystem)
+		s.WriteString(KvSpaceSeparator)
+		s.WriteString(kv.String())
+		if len(t) > 1 && count > 0 {
+			s.WriteString(KvNewline)
 		}
 	}
 	return s.String()
@@ -137,6 +156,7 @@ func (t Targets) String() string {
 const (
 	SubSystemSeparator = `:`
 	KvSeparator        = `=`
+	KvComment          = `#`
 	KvSpaceSeparator   = ` `
 	KvNewline          = "\n"
 	KvDoubleQuote      = `"`
@@ -145,21 +165,24 @@ const (
 	Default = `_`
 )
 
-// This function is needed, to trim off single or double quotes, creeping into the values.
-func sanitizeValue(v string) string {
+// SanitizeValue - this function is needed, to trim off single or double quotes, creeping into the values.
+func SanitizeValue(v string) string {
 	v = strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(v), KvDoubleQuote), KvDoubleQuote)
 	return strings.TrimSuffix(strings.TrimPrefix(v, KvSingleQuote), KvSingleQuote)
 }
 
-func convertTargets(s string, targets Targets) error {
+// AddTarget - adds new targets, by parsing the input string s.
+func (t *Targets) AddTarget(s string) error {
 	inputs := strings.SplitN(s, KvSpaceSeparator, 2)
 	if len(inputs) <= 1 {
 		return fmt.Errorf("invalid number of arguments '%s'", s)
 	}
+
 	subSystemValue := strings.SplitN(inputs[0], SubSystemSeparator, 2)
 	if len(subSystemValue) == 0 {
 		return fmt.Errorf("invalid number of arguments %s", s)
 	}
+
 	var kvs = KVS{}
 	var prevK string
 	for _, v := range strings.Fields(inputs[1]) {
@@ -168,40 +191,43 @@ func convertTargets(s string, targets Targets) error {
 			continue
 		}
 		if len(kv) == 1 && prevK != "" {
-			kvs = append(kvs, KV{
-				Key:   prevK,
-				Value: strings.Join([]string{kvs.Get(prevK), sanitizeValue(kv[0])}, KvSpaceSeparator),
-			})
+			value := strings.Join([]string{
+				kvs.Get(prevK),
+				SanitizeValue(kv[0]),
+			}, KvSpaceSeparator)
+			kvs.Set(prevK, value)
 			continue
 		}
-		if len(kv) == 1 {
-			return fmt.Errorf("value for key '%s' cannot be empty", kv[0])
+		if len(kv) == 2 {
+			prevK = kv[0]
+			kvs.Set(prevK, SanitizeValue(kv[1]))
+			continue
 		}
-		prevK = kv[0]
-		kvs = append(kvs, KV{
-			Key:   kv[0],
-			Value: sanitizeValue(kv[1]),
-		})
+		return fmt.Errorf("value for key '%s' cannot be empty", kv[0])
 	}
 
-	_, ok := targets[subSystemValue[0]]
-	if !ok {
-		targets[subSystemValue[0]] = map[string]KVS{}
+	for i := range *t {
+		if (*t)[i].SubSystem == inputs[0] {
+			(*t)[i] = Target{
+				SubSystem: inputs[0],
+				KVS:       kvs,
+			}
+			return nil
+		}
 	}
-	if len(subSystemValue) == 2 {
-		targets[subSystemValue[0]][subSystemValue[1]] = kvs
-	} else {
-		targets[subSystemValue[0]][Default] = kvs
-	}
+	*t = append(*t, Target{
+		SubSystem: inputs[0],
+		KVS:       kvs,
+	})
 	return nil
 }
 
 // ParseSubSysTarget - parse sub-system target
 func ParseSubSysTarget(buf []byte) (Targets, error) {
-	targets := make(map[string]map[string]KVS)
+	var targets Targets
 	bio := bufio.NewScanner(bytes.NewReader(buf))
 	for bio.Scan() {
-		if err := convertTargets(bio.Text(), targets); err != nil {
+		if err := targets.AddTarget(bio.Text()); err != nil {
 			return nil, err
 		}
 	}

@@ -156,7 +156,9 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	}
 	logger.FatalIf(err, "Invalid command line arguments")
 
-	logger.LogIf(context.Background(), checkEndpointsSubOptimal(ctx, setupType, globalEndpoints))
+	if err = checkEndpointsSubOptimal(ctx, setupType, globalEndpoints); err != nil {
+		logger.Info("Optimal endpoint check failed %s", err)
+	}
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
@@ -217,6 +219,17 @@ func initSafeModeInit(buckets []BucketInfo) (err error) {
 			if errors.As(err, &cerr) {
 				return
 			}
+
+			var cfgErr config.Error
+			if errors.As(err, &cfgErr) {
+				if cfgErr.Kind == config.ContinueKind {
+					// print the error and continue
+					logger.Info("Config validation failed '%s' the sub-system is turned-off and all other sub-systems", err)
+					err = nil
+					return
+				}
+			}
+
 			// Enable logger
 			logger.Disable = false
 
@@ -234,7 +247,7 @@ func initSafeModeInit(buckets []BucketInfo) (err error) {
 
 	// Migrate all backend configs to encrypted backend, also handles rotation as well.
 	if err = handleEncryptedConfigBackend(newObject, true); err != nil {
-		return fmt.Errorf("Unable to handle encrypted backend for config, iam and policies: %v", err)
+		return fmt.Errorf("Unable to handle encrypted backend for config, iam and policies: %w", err)
 	}
 
 	// ****  WARNING ****
@@ -264,7 +277,7 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 		// Migrating to encrypted backend on etcd should happen before initialization of
 		// IAM sub-systems, make sure that we do not move the above codeblock elsewhere.
 		if err = migrateIAMConfigsEtcdToEncrypted(globalEtcdClient); err != nil {
-			return fmt.Errorf("Unable to handle encrypted backend for iam and policies: %v", err)
+			return fmt.Errorf("Unable to handle encrypted backend for iam and policies: %w", err)
 		}
 	}
 
@@ -284,7 +297,7 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 
 	// Initialize lifecycle system.
 	if err = globalLifecycleSys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize lifecycle system: %v", err)
+		return fmt.Errorf("Unable to initialize lifecycle system: %w", err)
 	}
 
 	return nil
@@ -307,6 +320,9 @@ func serverMain(ctx *cli.Context) {
 
 	// Handle all server environment vars.
 	serverHandleEnvVars()
+
+	// Initialize all help
+	initHelp()
 
 	// Check and load TLS certificates.
 	var err error
@@ -338,7 +354,9 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	// Set system resources to maximum.
-	logger.LogIf(context.Background(), setMaxResources())
+	if err = setMaxResources(); err != nil {
+		logger.Info("Unable to set system resources to maximum %s", err)
+	}
 
 	if globalIsXL {
 		// Init global heal state
@@ -361,10 +379,14 @@ func serverMain(ctx *cli.Context) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	globalHTTPServer = xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{handler}, getCert)
+	httpServer := xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{handler}, getCert)
 	go func() {
-		globalHTTPServerErrorCh <- globalHTTPServer.Start()
+		globalHTTPServerErrorCh <- httpServer.Start()
 	}()
+
+	globalObjLayerMutex.Lock()
+	globalHTTPServer = httpServer
+	globalObjLayerMutex.Unlock()
 
 	if globalIsDistXL && globalEndpoints.FirstLocal() {
 		// Additionally in distributed setup validate
@@ -405,8 +427,14 @@ func serverMain(ctx *cli.Context) {
 	logger.FatalIf(initSafeModeInit(buckets), "Unable to initialize server")
 
 	if globalCacheConfig.Enabled {
-		msg := color.RedBold("Disk caching is disabled in 'server' mode, 'caching' is only supported in gateway deployments")
-		logger.StartupMessage(msg)
+		// initialize the new disk cache objects.
+		var cacheAPI CacheObjectLayer
+		cacheAPI, err = newServerCacheObjects(context.Background(), globalCacheConfig)
+		logger.FatalIf(err, "Unable to initialize disk caching")
+
+		globalObjLayerMutex.Lock()
+		globalCacheObjectAPI = cacheAPI
+		globalObjLayerMutex.Unlock()
 	}
 
 	initDailyLifecycle()

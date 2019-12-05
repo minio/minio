@@ -95,14 +95,14 @@ func getModTime(path string) (t time.Time, err error) {
 	// Convert to absolute path
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return t, fmt.Errorf("Unable to get absolute path of %s. %s", path, err)
+		return t, fmt.Errorf("Unable to get absolute path of %s. %w", path, err)
 	}
 
 	// Version is minio non-standard, we will use minio binary's
 	// ModTime as release time.
 	fi, err := os.Stat(absPath)
 	if err != nil {
-		return t, fmt.Errorf("Unable to get ModTime of %s. %s", absPath, err)
+		return t, fmt.Errorf("Unable to get ModTime of %s. %w", absPath, err)
 	}
 
 	// Return the ModTime
@@ -385,7 +385,7 @@ func parseReleaseData(data string) (sha256Hex string, releaseTime time.Time, err
 
 	releaseTime, err = releaseTagToReleaseTime(nfields[1])
 	if err != nil {
-		err = fmt.Errorf("Unknown release tag format. %s", err)
+		err = fmt.Errorf("Unknown release tag format. %w", err)
 	}
 
 	return sha256Hex, releaseTime, err

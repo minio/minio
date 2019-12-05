@@ -95,7 +95,7 @@ const (
 	PostgresQueueDir         = "queue_dir"
 	PostgresQueueLimit       = "queue_limit"
 
-	EnvPostgresState            = "MINIO_NOTIFY_POSTGRES_STATE"
+	EnvPostgresEnable           = "MINIO_NOTIFY_POSTGRES_ENABLE"
 	EnvPostgresFormat           = "MINIO_NOTIFY_POSTGRES_FORMAT"
 	EnvPostgresConnectionString = "MINIO_NOTIFY_POSTGRES_CONNECTION_STRING"
 	EnvPostgresTable            = "MINIO_NOTIFY_POSTGRES_TABLE"

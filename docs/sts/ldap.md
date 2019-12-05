@@ -42,7 +42,6 @@ LDAP is configured via the following environment variables:
 
 | Variable                                     | Required?               | Purpose                                                                 |
 |----------------------------------------------|-------------------------|-------------------------------------------------------------------------|
-| **MINIO_IDENTITY_LDAP_STATE**                | **YES**                 | Enable or disable ldap identity                                         |
 | **MINIO_IDENTITY_LDAP_SERVER_ADDR**          | **YES**                 | AD/LDAP server address                                                  |
 | **MINIO_IDENTITY_LDAP_USERNAME_FORMAT**      | **YES**                 | Format of full username DN                                              |
 | **MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN** | **NO**                  | Base DN in AD/LDAP hierarchy to use in search requests                  |
@@ -57,7 +56,6 @@ Please note that MinIO will only access the AD/LDAP server over TLS. If a self-s
 An example setup for development or experimentation:
 
 ``` shell
-export MINIO_IDENTITY_LDAP_STATE="on"
 export MINIO_IDENTITY_LDAP_SERVER_ADDR=myldapserver.com:636
 export MINIO_IDENTITY_LDAP_USERNAME_FORMAT="uid={username},cn=accounts,dc=myldapserver,dc=com"
 export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN="dc=myldapserver,dc=com"
@@ -111,7 +109,6 @@ The group search filter looks like `(&(objectclass=group)(member={usernamedn}))`
 Thus the key configuration parameters look like:
 
 ```
-MINIO_IDENTITY_LDAP_STATE="on"
 MINIO_IDENTITY_LDAP_SERVER_ADDR='my.ldap-active-dir-server.com:636'
 MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn={username},cn=users,dc=minioad,dc=local'
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local'
@@ -218,7 +215,6 @@ http://minio.cluster:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=foouser
 ```
 $ export MINIO_ACCESS_KEY=minio
 $ export MINIO_SECRET_KEY=minio123
-$ export MINIO_IDENTITY_LDAP_STATE="on"
 $ export MINIO_IDENTITY_LDAP_SERVER_ADDR='my.ldap-active-dir-server.com:636'
 $ export MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn={username},cn=users,dc=minioad,dc=local'
 $ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local'

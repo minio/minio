@@ -61,11 +61,11 @@ func (h *healRoutine) run() {
 			if !ok {
 				break
 			}
-			if globalHTTPServer != nil {
+			if httpServer := newHTTPServerFn(); httpServer != nil {
 				// Wait at max 10 minute for an inprogress request before proceeding to heal
 				waitCount := 600
 				// Any requests in progress, delay the heal.
-				for (globalHTTPServer.GetRequestCount() >= int32(globalEndpoints.Nodes())) &&
+				for (httpServer.GetRequestCount() >= int32(globalEndpoints.Nodes())) &&
 					waitCount > 0 {
 					waitCount--
 					time.Sleep(1 * time.Second)

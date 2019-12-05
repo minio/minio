@@ -117,7 +117,7 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 
 			// We go to here, so we know the bucket no longer exists, but is registered in DNS to this server
 			if err := globalDNSConfig.DeleteRecord(dnsBuckets[index]); err != nil {
-				return fmt.Errorf("Failed to remove DNS entry for %s due to %v", dnsBuckets[index].Key, err)
+				return fmt.Errorf("Failed to remove DNS entry for %s due to %w", dnsBuckets[index].Key, err)
 			}
 
 			return nil

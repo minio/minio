@@ -70,7 +70,7 @@ func replayEvents(store Store, doneCh <-chan struct{}, loggerOnce func(ctx conte
 				case <-retryTicker.C:
 					if err != nil {
 						loggerOnce(context.Background(),
-							fmt.Errorf("store.List() failed '%v'", err), id)
+							fmt.Errorf("store.List() failed '%w'", err), id)
 					}
 				case <-doneCh:
 					return
@@ -110,7 +110,7 @@ func sendEvents(target event.Target, eventKeyCh <-chan string, doneCh <-chan str
 
 			if err != errNotConnected && !IsConnResetErr(err) {
 				loggerOnce(context.Background(),
-					fmt.Errorf("target.Send() failed with '%v'", err),
+					fmt.Errorf("target.Send() failed with '%w'", err),
 					target.ID())
 				continue
 			}

@@ -40,7 +40,7 @@ const (
 	NSQQueueDir      = "queue_dir"
 	NSQQueueLimit    = "queue_limit"
 
-	EnvNSQState         = "MINIO_NOTIFY_NSQ"
+	EnvNSQEnable        = "MINIO_NOTIFY_NSQ"
 	EnvNSQAddress       = "MINIO_NOTIFY_NSQ_NSQD_ADDRESS"
 	EnvNSQTopic         = "MINIO_NOTIFY_NSQ_TOPIC"
 	EnvNSQTLS           = "MINIO_NOTIFY_NSQ_TLS"

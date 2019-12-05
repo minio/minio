@@ -23,18 +23,18 @@ var (
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         URL,
-			Description: `Points to URL for OPA HTTP API endpoint. eg: "http://localhost:8181/v1/data/httpapi/authz/allow"`,
+			Description: `OPA HTTP API endpoint e.g. "http://localhost:8181/v1/data/httpapi/authz/allow"`,
 			Type:        "url",
 		},
 		config.HelpKV{
 			Key:         AuthToken,
-			Description: "Authorization token for the OPA HTTP API endpoint",
+			Description: "authorization token for OPA HTTP API endpoint",
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         config.Comment,
-			Description: "A comment to describe the OPA policy setting",
+			Description: config.DefaultComment,
 			Optional:    true,
 			Type:        "sentence",
 		},

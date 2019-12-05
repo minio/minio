@@ -76,6 +76,7 @@ func init() {
 
 	logger.Disable = true
 
+	initHelp()
 	// Uncomment the following line to see trace logs during unit tests.
 	// logger.AddTarget(console.New())
 }
@@ -2220,7 +2221,7 @@ func generateTLSCertKey(host string) ([]byte, []byte, error) {
 	var err error
 	priv, err = rsa.GenerateKey(crand.Reader, rsaBits)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate private key: %s", err)
+		return nil, nil, fmt.Errorf("failed to generate private key: %w", err)
 	}
 
 	notBefore := time.Now()
@@ -2229,7 +2230,7 @@ func generateTLSCertKey(host string) ([]byte, []byte, error) {
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := crand.Int(crand.Reader, serialNumberLimit)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate serial number: %s", err)
+		return nil, nil, fmt.Errorf("failed to generate serial number: %w", err)
 	}
 
 	template := x509.Certificate{
@@ -2259,7 +2260,7 @@ func generateTLSCertKey(host string) ([]byte, []byte, error) {
 
 	derBytes, err := x509.CreateCertificate(crand.Reader, &template, &template, publicKey(priv), priv)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to create certificate: %s", err)
+		return nil, nil, fmt.Errorf("Failed to create certificate: %w", err)
 	}
 
 	certOut := bytes.NewBuffer([]byte{})

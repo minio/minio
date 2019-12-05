@@ -39,8 +39,6 @@ const (
 	ClassStandard = "standard"
 	ClassRRS      = "rrs"
 
-	// Env to on/off storage class settings.
-	EnvStorageClass = "MINIO_STORAGE_CLASS_STATE"
 	// Reduced redundancy storage class environment variable
 	RRSEnv = "MINIO_STORAGE_CLASS_RRS"
 	// Standard storage class environment variable
@@ -59,10 +57,6 @@ const (
 // DefaultKVS - default storage class config
 var (
 	DefaultKVS = config.KVS{
-		config.KV{
-			Key:   config.State,
-			Value: config.StateOff,
-		},
 		config.KV{
 			Key:   ClassStandard,
 			Value: "",
@@ -218,6 +212,13 @@ func (sCfg Config) GetParityForSC(sc string) (parity int) {
 	}
 }
 
+// Enabled returns if etcd is enabled.
+func Enabled(kvs config.KVS) bool {
+	ssc := kvs.Get(ClassStandard)
+	rrsc := kvs.Get(ClassRRS)
+	return ssc != "" || rrsc != ""
+}
+
 // LookupConfig - lookup storage class config and override with valid environment settings if any.
 func LookupConfig(kvs config.KVS, drivesPerSet int) (cfg Config, err error) {
 	cfg = Config{}
@@ -228,22 +229,8 @@ func LookupConfig(kvs config.KVS, drivesPerSet int) (cfg Config, err error) {
 		return cfg, err
 	}
 
-	stateBool, err := config.ParseBool(env.Get(EnvStorageClass, kvs.Get(config.State)))
-	if err != nil {
-		if kvs.Empty() {
-			return cfg, nil
-		}
-		return cfg, err
-	}
 	ssc := env.Get(StandardEnv, kvs.Get(ClassStandard))
 	rrsc := env.Get(RRSEnv, kvs.Get(ClassRRS))
-	if stateBool {
-		if ssc == "" && rrsc == "" {
-			return cfg, config.Error("'standard' and 'rrs' key cannot be empty for enabled storage class")
-		}
-		// if one of storage class is not empty proceed.
-	}
-
 	// Check for environment variables and parse into storageClass struct
 	if ssc != "" {
 		cfg.Standard, err = parseStorageClass(ssc)

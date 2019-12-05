@@ -182,12 +182,12 @@ func (fs *FSObjects) Shutdown(ctx context.Context) error {
 // diskUsage returns du information for the posix path, in a continuous routine.
 func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
 	usageFn := func(ctx context.Context, entry string) error {
-		if globalHTTPServer != nil {
+		if httpServer := newHTTPServerFn(); httpServer != nil {
 			// Wait at max 1 minute for an inprogress request
 			// before proceeding to count the usage.
 			waitCount := 60
 			// Any requests in progress, delay the usage.
-			for globalHTTPServer.GetRequestCount() > 0 && waitCount > 0 {
+			for httpServer.GetRequestCount() > 0 && waitCount > 0 {
 				waitCount--
 				time.Sleep(1 * time.Second)
 			}
@@ -220,12 +220,12 @@ func (fs *FSObjects) diskUsage(doneCh chan struct{}) {
 		case <-time.After(globalUsageCheckInterval):
 			var usage uint64
 			usageFn = func(ctx context.Context, entry string) error {
-				if globalHTTPServer != nil {
+				if httpServer := newHTTPServerFn(); httpServer != nil {
 					// Wait at max 1 minute for an inprogress request
 					// before proceeding to count the usage.
 					waitCount := 60
 					// Any requests in progress, delay the usage.
-					for globalHTTPServer.GetRequestCount() > 0 && waitCount > 0 {
+					for httpServer.GetRequestCount() > 0 && waitCount > 0 {
 						waitCount--
 						time.Sleep(1 * time.Second)
 					}
