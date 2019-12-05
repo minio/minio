@@ -52,31 +52,36 @@ func runDataUsageInfoUpdateRoutine() {
 
 	switch v := objAPI.(type) {
 	case *xlZones:
-		runDataUsageInfoForXLZones(ctx, v)
+		runDataUsageInfoForXLZones(ctx, v, GlobalServiceDoneCh)
 	case *FSObjects:
-		runDataUsageInfoForFS(ctx, v)
+		runDataUsageInfoForFS(ctx, v, GlobalServiceDoneCh)
 	default:
 		return
 	}
 }
 
-func runDataUsageInfoForFS(ctx context.Context, fsObj *FSObjects) {
+func runDataUsageInfoForFS(ctx context.Context, fsObj *FSObjects, endCh chan struct{}) {
+	t := time.NewTicker(dataUsageCrawlInterval)
 	for {
 		// Get data usage info of the FS Object
-		usageInfo := fsObj.crawlAndGetDataUsageInfo(ctx)
+		usageInfo := fsObj.crawlAndGetDataUsageInfo(ctx, endCh)
 		// Save the data usage in the disk
 		err := storeDataUsageInBackend(ctx, fsObj, usageInfo)
 		if err != nil {
 			logger.LogIf(ctx, err)
 		}
+		select {
+		case <-endCh:
+			return
 		// Wait until the next crawl interval
-		time.Sleep(dataUsageCrawlInterval)
+		case <-t.C:
+		}
 	}
 }
 
-func runDataUsageInfoForXLZones(ctx context.Context, zones *xlZones) {
+func runDataUsageInfoForXLZones(ctx context.Context, zones *xlZones, endCh chan struct{}) {
+	locker := zones.NewNSLock(ctx, minioMetaBucket, "leader-data-usage-info")
 	for {
-		locker := zones.NewNSLock(ctx, minioMetaBucket, "leader-data-usage-info")
 		err := locker.GetLock(newDynamicTimeout(time.Millisecond, time.Millisecond))
 		if err != nil {
 			time.Sleep(5 * time.Minute)
@@ -86,19 +91,23 @@ func runDataUsageInfoForXLZones(ctx context.Context, zones *xlZones) {
 		break
 	}
 
+	t := time.NewTicker(dataUsageCrawlInterval)
 	for {
-		usageInfo := zonesCrawlAndGetDataUsage(ctx, zones)
+		usageInfo := zonesCrawlAndGetDataUsage(ctx, zones, endCh)
 		err := storeDataUsageInBackend(ctx, zones, usageInfo)
 		if err != nil {
 			logger.LogIf(ctx, err)
 		}
-
-		time.Sleep(dataUsageCrawlInterval)
+		select {
+		case <-endCh:
+			locker.Unlock()
+			return
+		case <-t.C:
+		}
 	}
-
 }
 
-func setCrawlAndGetDataUsage(ctx context.Context, xl *xlObjects) DataUsageInfo {
+func setCrawlAndGetDataUsage(ctx context.Context, xl *xlObjects, endCh chan struct{}) DataUsageInfo {
 	var randomDisks []StorageAPI
 	for _, d := range xl.getLoadBalancedDisks() {
 		if d == nil || !d.IsOnline() {
@@ -118,7 +127,7 @@ func setCrawlAndGetDataUsage(ctx context.Context, xl *xlObjects) DataUsageInfo {
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			var err error
-			dataUsageResults[index], err = disk.CrawlAndGetDataUsage()
+			dataUsageResults[index], err = disk.CrawlAndGetDataUsage(endCh)
 			if err != nil {
 				logger.LogIf(ctx, err)
 			}
@@ -136,7 +145,7 @@ func setCrawlAndGetDataUsage(ctx context.Context, xl *xlObjects) DataUsageInfo {
 	return dataUsageInfo
 }
 
-func zonesCrawlAndGetDataUsage(ctx context.Context, zones *xlZones) DataUsageInfo {
+func zonesCrawlAndGetDataUsage(ctx context.Context, zones *xlZones, endCh chan struct{}) DataUsageInfo {
 	var aggDataUsageInfo = struct {
 		sync.Mutex
 		DataUsageInfo
@@ -151,7 +160,7 @@ func zonesCrawlAndGetDataUsage(ctx context.Context, zones *xlZones) DataUsageInf
 			wg.Add(1)
 			go func(xl *xlObjects) {
 				defer wg.Done()
-				info := setCrawlAndGetDataUsage(ctx, xl)
+				info := setCrawlAndGetDataUsage(ctx, xl, endCh)
 
 				aggDataUsageInfo.Lock()
 				aggDataUsageInfo.ObjectsCount += info.ObjectsCount

@@ -274,15 +274,24 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
 }
 
 // Update the data usage while walking recursively through the given bucket/prefix
-func (fs *FSObjects) walkDataUsageInfo(ctx context.Context, info *DataUsageInfo, bucket, prefix string) {
+func (fs *FSObjects) walkDataUsageInfo(ctx context.Context, info *DataUsageInfo, bucket, prefix string, endCh chan struct{}) {
+
+	if isQuitting(endCh) {
+		return
+	}
+
 	entries, err := readDir(pathJoin(fs.fsPath, bucket, prefix))
 	if err != nil {
 		return
 	}
 
 	for _, entry := range entries {
+		if isQuitting(endCh) {
+			return
+		}
+
 		if strings.HasSuffix(entry, "/") {
-			fs.walkDataUsageInfo(ctx, info, bucket, pathJoin(prefix, entry))
+			fs.walkDataUsageInfo(ctx, info, bucket, pathJoin(prefix, entry), endCh)
 		} else {
 			info.ObjectsCount++
 
@@ -300,7 +309,7 @@ func (fs *FSObjects) walkDataUsageInfo(ctx context.Context, info *DataUsageInfo,
 }
 
 // crawlAndGetDataUsageInfo returns data usage stats of the current FS deployment
-func (fs *FSObjects) crawlAndGetDataUsageInfo(ctx context.Context) DataUsageInfo {
+func (fs *FSObjects) crawlAndGetDataUsageInfo(ctx context.Context, endCh chan struct{}) DataUsageInfo {
 	buckets, err := readDir(fs.fsPath)
 	if err != nil {
 		return DataUsageInfo{}
@@ -318,7 +327,7 @@ func (fs *FSObjects) crawlAndGetDataUsageInfo(ctx context.Context) DataUsageInfo
 		if isReservedOrInvalidBucket(bucket, false) {
 			continue
 		}
-		fs.walkDataUsageInfo(ctx, &info, bucket, "")
+		fs.walkDataUsageInfo(ctx, &info, bucket, "", endCh)
 	}
 
 	info.LastUpdate = UTCNow()

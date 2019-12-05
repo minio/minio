@@ -324,15 +324,34 @@ func (s *posix) IsOnline() bool {
 	return true
 }
 
+func isQuitting(endCh chan struct{}) bool {
+	select {
+	case <-endCh:
+		return true
+	default:
+		return false
+	}
+}
+
 // Update the data usage info while recursively walking in bucketName/prefix
-func (s *posix) walkDataUsageInfo(info *DataUsageInfo, bucketName, prefix string) {
+func (s *posix) walkDataUsageInfo(info *DataUsageInfo, bucketName, prefix string, endCh chan struct{}) {
+
+	if isQuitting(endCh) {
+		return
+	}
+
 	entries, err := s.ListDir(bucketName, prefix, -1, xlMetaJSONFile)
 	if err != nil {
 		return
 	}
+
 	for _, entry := range entries {
+		if isQuitting(endCh) {
+			return
+		}
+
 		if strings.HasSuffix(entry, "/") {
-			s.walkDataUsageInfo(info, bucketName, pathJoin(prefix, entry))
+			s.walkDataUsageInfo(info, bucketName, pathJoin(prefix, entry), endCh)
 		} else {
 			info.ObjectsCount++
 			meta, err := readXLMeta(context.Background(), s, bucketName, pathJoin(prefix, entry))
@@ -346,7 +365,7 @@ func (s *posix) walkDataUsageInfo(info *DataUsageInfo, bucketName, prefix string
 	}
 }
 
-func (s *posix) CrawlAndGetDataUsage() (DataUsageInfo, error) {
+func (s *posix) CrawlAndGetDataUsage(endCh chan struct{}) (DataUsageInfo, error) {
 	// Check if there is a refresh routine in
 	// progress to quit if this is the case.
 	s.dataUsageInProgressMu.Lock()
@@ -374,7 +393,7 @@ func (s *posix) CrawlAndGetDataUsage() (DataUsageInfo, error) {
 			continue
 		}
 		dataUsageInfo.BucketsCount++
-		s.walkDataUsageInfo(&dataUsageInfo, vol.Name, "")
+		s.walkDataUsageInfo(&dataUsageInfo, vol.Name, "", endCh)
 	}
 
 	// Update data usage information timestamp

@@ -212,7 +212,7 @@ func (z *xlZones) StorageInfo(ctx context.Context) StorageInfo {
 	return storageInfo
 }
 
-func (z *xlZones) crawlAndGetDataUsage(ctx context.Context) DataUsageInfo {
+func (z *xlZones) crawlAndGetDataUsage(ctx context.Context, endCh chan struct{}) DataUsageInfo {
 	// Calculate the aggregated data usage, meaning accumulate data usage of all zones.
 	var aggregatedDataUsageInfo = DataUsageInfo{
 		ObjectsSizesHistogram: make(map[string]uint64),
@@ -254,7 +254,7 @@ func (z *xlZones) crawlAndGetDataUsage(ctx context.Context) DataUsageInfo {
 				go func(index int, disk StorageAPI) {
 					defer wg.Done()
 					var err error
-					dataUsageResult[index], err = disk.CrawlAndGetDataUsage()
+					dataUsageResult[index], err = disk.CrawlAndGetDataUsage(endCh)
 					if err != nil {
 						logger.LogIf(ctx, err)
 					}
@@ -275,7 +275,6 @@ func (z *xlZones) crawlAndGetDataUsage(ctx context.Context) DataUsageInfo {
 
 	aggregatedDataUsageInfo.LastUpdate = UTCNow()
 	return aggregatedDataUsageInfo
-
 }
 
 // This function is used to undo a successful MakeBucket operation.

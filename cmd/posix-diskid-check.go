@@ -38,8 +38,8 @@ func (p *posixDiskIDCheck) IsOnline() bool {
 	return storedDiskID == p.diskID
 }
 
-func (p *posixDiskIDCheck) CrawlAndGetDataUsage() (DataUsageInfo, error) {
-	return p.storage.CrawlAndGetDataUsage()
+func (p *posixDiskIDCheck) CrawlAndGetDataUsage(endCh chan struct{}) (DataUsageInfo, error) {
+	return p.storage.CrawlAndGetDataUsage(endCh)
 }
 
 func (p *posixDiskIDCheck) LastError() error {
