@@ -491,8 +491,14 @@ func (c Config) GetKVS(s string, defaultKVS map[string]KVS) (Targets, error) {
 			if !strings.HasPrefix(hkv.Key, subSysPrefix) {
 				continue
 			}
+			if c[hkv.Key][Default].Empty() {
+				targets = append(targets, Target{
+					SubSystem: hkv.Key,
+					KVS:       defaultKVS[hkv.Key],
+				})
+			}
 			for k, kvs := range c[hkv.Key] {
-				for _, dkv := range defaultKVS[subSysPrefix] {
+				for _, dkv := range defaultKVS[hkv.Key] {
 					_, ok := kvs.Lookup(dkv.Key)
 					if !ok {
 						kvs.Set(dkv.Key, dkv.Value)

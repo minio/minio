@@ -422,7 +422,11 @@ func SetNotifyNATS(s config.Config, natsName string, cfg target.NATSArgs) error 
 			Value: cfg.ClientKey,
 		},
 		config.KV{
-			Key:   target.NATSSecure,
+			Key:   target.NATSTLS,
+			Value: config.FormatBool(cfg.Secure),
+		},
+		config.KV{
+			Key:   target.NATSTLSSkipVerify,
 			Value: config.FormatBool(cfg.Secure),
 		},
 		config.KV{

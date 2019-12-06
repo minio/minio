@@ -23,44 +23,44 @@ var (
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         KMSVaultEndpoint,
-			Description: `HashiCorp Vault API endpoint e.g. "http://vault-endpoint-ip:8200"`,
+			Description: `API endpoint e.g. "http://vault-endpoint-ip:8200"`,
 			Type:        "url",
 		},
 		config.HelpKV{
 			Key:         KMSVaultKeyName,
-			Description: `transit key name used in vault policy, must be unique name e.g. "my-minio-key"`,
+			Description: `unique transit key name e.g. "my-minio-key"`,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         KMSVaultAuthType,
-			Description: `authentication type to Vault API endpoint e.g. "approle"`,
+			Description: `supported auth type(s) ["approle"], defaults to "approle"`,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         KMSVaultAppRoleID,
-			Description: `unique role ID created for AppRole`,
+			Description: `unique role ID for approle`,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         KMSVaultAppRoleSecret,
-			Description: `unique secret ID created for AppRole`,
+			Description: `unique secret ID for approle`,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         KMSVaultNamespace,
-			Description: `only needed if AppRole engine is scoped to Vault Namespace e.g. "ns1"`,
+			Description: `optional KMS namespace e.g. "customer1"`,
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         KMSVaultKeyVersion,
-			Description: `KMS Vault key version`,
+			Description: `optional key version number`,
 			Optional:    true,
 			Type:        "number",
 		},
 		config.HelpKV{
 			Key:         KMSVaultCAPath,
-			Description: `path to PEM-encoded CA cert files to use mTLS authentication (optional) e.g. "/home/user/custom-certs"`,
+			Description: `optional path to PEM-encoded CA certs e.g. "/home/user/custom-certs"`,
 			Optional:    true,
 			Type:        "path",
 		},

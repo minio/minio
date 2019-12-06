@@ -28,13 +28,13 @@ var (
 		},
 		config.HelpKV{
 			Key:         ClientID,
-			Description: `client identifier of the authenticating party at the identity provider`,
+			Description: `unique public identifier for apps e.g. "292085223830.apps.googleusercontent.com"`,
 			Type:        "string",
 			Optional:    true,
 		},
 		config.HelpKV{
 			Key:         ClaimPrefix,
-			Description: `openid JWT claim namespace prefix e.g. "customer"`,
+			Description: `JWT claim namespace prefix e.g. "customer1"`,
 			Optional:    true,
 			Type:        "string",
 		},

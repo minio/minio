@@ -85,7 +85,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		return nil, err
 	}
 
-	natsTargets, err := GetNotifyNATS(cfg[config.NotifyNATSSubSys])
+	natsTargets, err := GetNotifyNATS(cfg[config.NotifyNATSSubSys], rootCAs)
 	if err != nil {
 		return nil, err
 	}
@@ -841,6 +841,14 @@ var (
 			Value: "",
 		},
 		config.KV{
+			Key:   target.NATSTLS,
+			Value: config.EnableOff,
+		},
+		config.KV{
+			Key:   target.NATSTLSSkipVerify,
+			Value: config.EnableOff,
+		},
+		config.KV{
 			Key:   target.NATSCertAuthority,
 			Value: "",
 		},
@@ -851,10 +859,6 @@ var (
 		config.KV{
 			Key:   target.NATSClientKey,
 			Value: "",
-		},
-		config.KV{
-			Key:   target.NATSSecure,
-			Value: config.EnableOff,
 		},
 		config.KV{
 			Key:   target.NATSPingInterval,
@@ -888,7 +892,7 @@ var (
 )
 
 // GetNotifyNATS - returns a map of registered notification 'nats' targets
-func GetNotifyNATS(natsKVS map[string]config.KVS) (map[string]target.NATSArgs, error) {
+func GetNotifyNATS(natsKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[string]target.NATSArgs, error) {
 	natsTargets := make(map[string]target.NATSArgs)
 	for k, kv := range mergeTargets(natsKVS, target.EnvNATSEnable, DefaultNATSKVS) {
 		enableEnv := target.EnvNATSEnable
@@ -934,9 +938,14 @@ func GetNotifyNATS(natsKVS map[string]config.KVS) (map[string]target.NATSArgs, e
 			return nil, err
 		}
 
-		secureEnv := target.EnvNATSSecure
+		tlsEnv := target.EnvNATSTLS
 		if k != config.Default {
-			secureEnv = secureEnv + config.Default + k
+			tlsEnv = tlsEnv + config.Default + k
+		}
+
+		tlsSkipVerifyEnv := target.EnvNATSTLSSkipVerify
+		if k != config.Default {
+			tlsSkipVerifyEnv = tlsSkipVerifyEnv + config.Default + k
 		}
 
 		subjectEnv := target.EnvNATSSubject
@@ -989,10 +998,12 @@ func GetNotifyNATS(natsKVS map[string]config.KVS) (map[string]target.NATSArgs, e
 			ClientCert:    env.Get(clientCertEnv, kv.Get(target.NATSClientCert)),
 			ClientKey:     env.Get(clientKeyEnv, kv.Get(target.NATSClientKey)),
 			Token:         env.Get(tokenEnv, kv.Get(target.NATSToken)),
-			Secure:        env.Get(secureEnv, kv.Get(target.NATSSecure)) == config.EnableOn,
+			TLS:           env.Get(tlsEnv, kv.Get(target.NATSTLS)) == config.EnableOn,
+			TLSSkipVerify: env.Get(tlsSkipVerifyEnv, kv.Get(target.NATSTLSSkipVerify)) == config.EnableOn,
 			PingInterval:  pingInterval,
 			QueueDir:      env.Get(queueDirEnv, kv.Get(target.NATSQueueDir)),
 			QueueLimit:    queueLimit,
+			RootCAs:       rootCAs,
 		}
 
 		streamingEnableEnv := target.EnvNATSStreaming

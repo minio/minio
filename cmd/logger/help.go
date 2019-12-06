@@ -23,12 +23,12 @@ var (
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         Endpoint,
-			Description: `HTTP logger endpoint e.g. "http://localhost:8080/minio/logs/server"`,
+			Description: `HTTP(s) endpoint e.g. "http://localhost:8080/minio/logs/server"`,
 			Type:        "url",
 		},
 		config.HelpKV{
 			Key:         AuthToken,
-			Description: "authorization token for logger endpoint",
+			Description: `opaque string or JWT authorization token`,
 			Optional:    true,
 			Type:        "string",
 		},
@@ -43,12 +43,12 @@ var (
 	HelpAudit = config.HelpKVS{
 		config.HelpKV{
 			Key:         Endpoint,
-			Description: `HTTP Audit logger endpoint e.g. "http://localhost:8080/minio/logs/audit"`,
+			Description: `HTTP(s) endpoint e.g. "http://localhost:8080/minio/logs/audit"`,
 			Type:        "url",
 		},
 		config.HelpKV{
 			Key:         AuthToken,
-			Description: "authorization token for audit logger endpoint",
+			Description: `opaque string or JWT authorization token`,
 			Optional:    true,
 			Type:        "string",
 		},
