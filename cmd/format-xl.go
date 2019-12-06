@@ -746,7 +746,7 @@ func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, driv
 	}
 
 	// Initialize meta volume, if volume already exists ignores it.
-	if err := initFormatXLMetaVolume(storageDisks); err != nil {
+	if err := initFormatXLMetaVolume(storageDisks, formats); err != nil {
 		return format, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %w", err)
 	}
 
@@ -787,7 +787,7 @@ func makeFormatXLMetaVolumes(disk StorageAPI) error {
 var initMetaVolIgnoredErrs = append(baseIgnoredErrs, errVolumeExists)
 
 // Initializes meta volume on all input storage disks.
-func initFormatXLMetaVolume(storageDisks []StorageAPI) error {
+func initFormatXLMetaVolume(storageDisks []StorageAPI, formats []*formatXLV3) error {
 	// This happens for the first time, but keep this here since this
 	// is the only place where it can be made expensive optimizing all
 	// other calls. Create minio meta volume, if it doesn't exist yet.
@@ -799,7 +799,7 @@ func initFormatXLMetaVolume(storageDisks []StorageAPI) error {
 	for index := range storageDisks {
 		index := index
 		g.Go(func() error {
-			if storageDisks[index] == nil {
+			if formats[index] == nil || storageDisks[index] == nil {
 				// Ignore create meta volume on disks which are not found.
 				return nil
 			}
