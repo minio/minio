@@ -21,8 +21,46 @@ import (
 	"github.com/minio/minio/pkg/event/target"
 )
 
+const (
+	formatComment     = `'namespace' reflects current bucket/object list and 'access' reflects a journal of object operations, defaults to 'namespace'`
+	queueDirComment   = `staging dir for undelivered messages e.g. '/home/events'`
+	queueLimitComment = `maximum limit for undelivered messages, defaults to '10000'`
+)
+
 // Help template inputs for all notification targets
 var (
+	HelpWebhook = config.HelpKVS{
+		config.HelpKV{
+			Key:         target.WebhookEndpoint,
+			Description: "webhook server endpoint e.g. http://localhost:8080/minio/events",
+			Type:        "url",
+		},
+		config.HelpKV{
+			Key:         target.WebhookAuthToken,
+			Description: "opaque string or JWT authorization token",
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         target.WebhookQueueDir,
+			Description: queueDirComment,
+			Optional:    true,
+			Type:        "path",
+		},
+		config.HelpKV{
+			Key:         target.WebhookQueueLimit,
+			Description: queueLimitComment,
+			Optional:    true,
+			Type:        "number",
+		},
+		config.HelpKV{
+			Key:         config.Comment,
+			Description: config.DefaultComment,
+			Optional:    true,
+			Type:        "sentence",
+		},
+	}
+
 	HelpAMQP = config.HelpKVS{
 		config.HelpKV{
 			Key:         target.AmqpURL,
@@ -37,7 +75,7 @@ var (
 		},
 		config.HelpKV{
 			Key:         target.AmqpExchangeType,
-			Description: "kind of AMQP exchange type",
+			Description: "AMQP exchange type",
 			Optional:    true,
 			Type:        "string",
 		},
@@ -49,49 +87,49 @@ var (
 		},
 		config.HelpKV{
 			Key:         target.AmqpMandatory,
-			Description: "set this to 'on' for server to return an unroutable message with a Return method. If this flag is 'off', the server silently drops the message",
+			Description: "quietly ignore undelivered messages when set to 'off', default is 'on'",
 			Optional:    true,
 			Type:        "on|off",
 		},
 		config.HelpKV{
 			Key:         target.AmqpDurable,
-			Description: "set this to 'on' for queue to survive broker restarts",
+			Description: "persist queue across broker restarts when set to 'on', default is 'off'",
 			Optional:    true,
 			Type:        "on|off",
 		},
 		config.HelpKV{
 			Key:         target.AmqpNoWait,
-			Description: "when no_wait is 'on', declare without waiting for a confirmation from the server",
+			Description: "non-blocking message delivery when set to 'on', default is 'off'",
 			Optional:    true,
 			Type:        "on|off",
 		},
 		config.HelpKV{
 			Key:         target.AmqpInternal,
-			Description: "set this to 'on' for exchange to be not used directly by publishers, but only when bound to other exchanges",
+			Description: "set to 'on' for exchange to be not used directly by publishers, but only when bound to other exchanges",
 			Optional:    true,
 			Type:        "on|off",
 		},
 		config.HelpKV{
 			Key:         target.AmqpAutoDeleted,
-			Description: "set this to 'on' for queue that has had at least one consumer is deleted when last consumer unsubscribes",
+			Description: "auto delete queue when set to 'on', when there are no consumers",
 			Optional:    true,
 			Type:        "on|off",
 		},
 		config.HelpKV{
 			Key:         target.AmqpDeliveryMode,
-			Description: "delivery queue implementation use non-persistent (1) or persistent (2)",
+			Description: "set to '1' for non-persistent or '2' for persistent queue",
 			Optional:    true,
 			Type:        "number",
 		},
 		config.HelpKV{
 			Key:         target.AmqpQueueDir,
-			Description: "local directory where events are stored e.g. '/home/events'",
+			Description: queueDirComment,
 			Optional:    true,
 			Type:        "path",
 		},
 		config.HelpKV{
 			Key:         target.AmqpQueueLimit,
-			Description: "enable persistent event store queue limit, defaults to '10000'",
+			Description: queueLimitComment,
 			Optional:    true,
 			Type:        "number",
 		},
@@ -135,45 +173,45 @@ var (
 		},
 		config.HelpKV{
 			Key:         target.KafkaSASL,
-			Description: "set this to 'on' to enable SASL authentication",
+			Description: "set to 'on' to enable SASL authentication",
 			Optional:    true,
 			Type:        "on|off",
 		},
 		config.HelpKV{
 			Key:         target.KafkaTLS,
-			Description: "set this to 'on' to enable TLS",
+			Description: "set to 'on' to enable TLS",
 			Optional:    true,
 			Type:        "on|off",
 		},
 		config.HelpKV{
 			Key:         target.KafkaTLSSkipVerify,
-			Description: "set this to 'on' to disable client verification of server certificate chain",
+			Description: `trust server TLS without verification, defaults to "on" (verify)`,
 			Optional:    true,
 			Type:        "on|off",
 		},
 		config.HelpKV{
-			Key:         target.KafkaQueueDir,
-			Description: "local directory where events are stored e.g. '/home/events'",
-			Optional:    true,
-			Type:        "path",
-		},
-		config.HelpKV{
-			Key:         target.KafkaQueueLimit,
-			Description: "enable persistent event store queue limit, defaults to '10000'",
-			Optional:    true,
-			Type:        "number",
-		},
-		config.HelpKV{
 			Key:         target.KafkaClientTLSCert,
-			Description: "Set path to client certificate",
+			Description: "path to client certificate for mTLS auth",
 			Optional:    true,
 			Type:        "path",
 		},
 		config.HelpKV{
 			Key:         target.KafkaClientTLSKey,
-			Description: "Set path to client key",
+			Description: "path to client key for mTLS auth",
 			Optional:    true,
 			Type:        "path",
+		},
+		config.HelpKV{
+			Key:         target.KafkaQueueDir,
+			Description: queueDirComment,
+			Optional:    true,
+			Type:        "path",
+		},
+		config.HelpKV{
+			Key:         target.KafkaQueueLimit,
+			Description: queueLimitComment,
+			Optional:    true,
+			Type:        "number",
 		},
 		config.HelpKV{
 			Key:         config.Comment,
@@ -191,158 +229,48 @@ var (
 		},
 		config.HelpKV{
 			Key:         target.MqttTopic,
-			Description: "name of the MQTT topic to publish on, e.g. `minio`",
+			Description: "name of the MQTT topic to publish",
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.MqttUsername,
-			Description: "username to connect to the MQTT server",
+			Description: "MQTT username",
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.MqttPassword,
-			Description: "password to connect to the MQTT server",
+			Description: "MQTT password",
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.MqttQoS,
-			Description: "set the Quality of Service Level for MQTT endpoint",
+			Description: "set the quality of service priority, defaults to '0'",
 			Optional:    true,
 			Type:        "number",
 		},
 		config.HelpKV{
 			Key:         target.MqttKeepAliveInterval,
-			Description: "keep alive interval for MQTT connections",
+			Description: "keep-alive interval for MQTT connections in s,m,h,d",
 			Optional:    true,
 			Type:        "duration",
 		},
 		config.HelpKV{
 			Key:         target.MqttReconnectInterval,
-			Description: "reconnect interval for MQTT connections",
+			Description: "reconnect interval for MQTT connections in s,m,h,d",
 			Optional:    true,
 			Type:        "duration",
 		},
 		config.HelpKV{
 			Key:         target.MqttQueueDir,
-			Description: "local directory where events are stored e.g. '/home/events'",
+			Description: queueDirComment,
 			Optional:    true,
 			Type:        "path",
 		},
 		config.HelpKV{
 			Key:         target.MqttQueueLimit,
-			Description: "enable persistent event store queue limit, defaults to '10000'",
-			Optional:    true,
-			Type:        "number",
-		},
-		config.HelpKV{
-			Key:         config.Comment,
-			Description: config.DefaultComment,
-			Optional:    true,
-			Type:        "sentence",
-		},
-	}
-
-	HelpES = config.HelpKVS{
-		config.HelpKV{
-			Key:         target.ElasticURL,
-			Description: "Elasticsearch server's address, with optional authentication info",
-			Type:        "url",
-		},
-		config.HelpKV{
-			Key:         target.ElasticFormat,
-			Description: "set this to `namespace` or `access`, defaults to 'namespace'",
-			Type:        "namespace*|access",
-		},
-		config.HelpKV{
-			Key:         target.ElasticIndex,
-			Description: "the name of an Elasticsearch index in which MinIO will store document",
-			Type:        "string",
-		},
-		config.HelpKV{
-			Key:         target.ElasticQueueDir,
-			Description: "local directory where events are stored e.g. '/home/events'",
-			Optional:    true,
-			Type:        "path",
-		},
-		config.HelpKV{
-			Key:         target.ElasticQueueLimit,
-			Description: "enable persistent event store queue limit, defaults to '10000'",
-			Optional:    true,
-			Type:        "number",
-		},
-		config.HelpKV{
-			Key:         config.Comment,
-			Description: config.DefaultComment,
-			Optional:    true,
-			Type:        "sentence",
-		},
-	}
-
-	HelpWebhook = config.HelpKVS{
-		config.HelpKV{
-			Key:         target.WebhookEndpoint,
-			Description: "webhook server endpoint e.g. http://localhost:8080/minio/events",
-			Type:        "url",
-		},
-		config.HelpKV{
-			Key:         target.WebhookAuthToken,
-			Description: "authorization token used for webhook server endpoint",
-			Optional:    true,
-			Type:        "string",
-		},
-		config.HelpKV{
-			Key:         target.WebhookQueueDir,
-			Description: "local directory where events are stored e.g. '/home/events'",
-			Optional:    true,
-			Type:        "path",
-		},
-		config.HelpKV{
-			Key:         target.WebhookQueueLimit,
-			Description: "enable persistent event store queue limit, defaults to '10000'",
-			Optional:    true,
-			Type:        "number",
-		},
-		config.HelpKV{
-			Key:         config.Comment,
-			Description: config.DefaultComment,
-			Optional:    true,
-			Type:        "sentence",
-		},
-	}
-
-	HelpRedis = config.HelpKVS{
-		config.HelpKV{
-			Key:         target.RedisAddress,
-			Description: "Redis server's address. For example: `localhost:6379`",
-			Type:        "address",
-		},
-		config.HelpKV{
-			Key:         target.RedisFormat,
-			Description: "specifies how data is populated, a hash is used in case of `namespace` format and a list in case of `access` format, defaults to 'namespace'",
-			Type:        "namespace*|access",
-		},
-		config.HelpKV{
-			Key:         target.RedisKey,
-			Description: "name of the Redis key under which events are stored",
-			Type:        "string",
-		},
-		config.HelpKV{
-			Key:         target.RedisPassword,
-			Description: "Redis server's password",
-			Optional:    true,
-			Type:        "string",
-		},
-		config.HelpKV{
-			Key:         target.RedisQueueDir,
-			Description: "local directory where events are stored e.g. '/home/events'",
-			Optional:    true,
-			Type:        "path",
-		},
-		config.HelpKV{
-			Key:         target.RedisQueueLimit,
-			Description: "enable persistent event store queue limit, defaults to '10000'",
+			Description: queueLimitComment,
 			Optional:    true,
 			Type:        "number",
 		},
@@ -357,58 +285,58 @@ var (
 	HelpPostgres = config.HelpKVS{
 		config.HelpKV{
 			Key:         target.PostgresConnectionString,
-			Description: "connection string parameters for the PostgreSQL server",
+			Description: "Postgres server connection-string",
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         target.PostgresTable,
+			Description: "DB table name to store/update events, table is auto-created",
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.PostgresFormat,
-			Description: "specifies how data is populated, `namespace` format and `access` format, defaults to 'namespace'",
+			Description: formatComment,
 			Type:        "namespace*|access",
 		},
 		config.HelpKV{
-			Key:         target.PostgresTable,
-			Description: "table name in which events will be stored/updated. If the table does not exist, the MinIO server creates it at start-up",
-			Type:        "string",
-		},
-		config.HelpKV{
 			Key:         target.PostgresHost,
-			Description: "host name of the PostgreSQL server. Defaults to `localhost`. IPv6 host should be enclosed with `[` and `]`",
+			Description: "Postgres server hostname (used only if `connection_string` is empty)",
 			Optional:    true,
 			Type:        "hostname",
 		},
 		config.HelpKV{
 			Key:         target.PostgresPort,
-			Description: "port on which to connect to PostgreSQL server, defaults to `5432`",
+			Description: "Postgres server port, defaults to `5432` (used only if `connection_string` is empty)",
 			Optional:    true,
 			Type:        "port",
 		},
 		config.HelpKV{
 			Key:         target.PostgresUsername,
-			Description: "database username, defaults to user running the MinIO process if not specified",
+			Description: "database username (used only if `connection_string` is empty)",
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.PostgresPassword,
-			Description: "database password",
+			Description: "database password (used only if `connection_string` is empty)",
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.PostgresDatabase,
-			Description: "postgres Database name",
+			Description: "database name (used only if `connection_string` is empty)",
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.PostgresQueueDir,
-			Description: "local directory where events are stored e.g. '/home/events'",
+			Description: queueDirComment,
 			Optional:    true,
 			Type:        "path",
 		},
 		config.HelpKV{
 			Key:         target.PostgresQueueLimit,
-			Description: "enable persistent event store queue limit, defaults to '10000'",
+			Description: queueLimitComment,
 			Optional:    true,
 			Type:        "number",
 		},
@@ -423,58 +351,58 @@ var (
 	HelpMySQL = config.HelpKVS{
 		config.HelpKV{
 			Key:         target.MySQLDSNString,
-			Description: "data source name connection string for the MySQL server",
+			Description: "MySQL data-source-name connection string",
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.MySQLTable,
-			Description: "table name in which events will be stored/updated. If the table does not exist, the MinIO server creates it at start-up",
+			Description: "DB table name to store/update events, table is auto-created",
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.MySQLFormat,
-			Description: "specifies how data is populated, `namespace` format and `access` format, defaults to 'namespace'",
+			Description: formatComment,
 			Type:        "namespace*|access",
 		},
 		config.HelpKV{
 			Key:         target.MySQLHost,
-			Description: "host name of the MySQL server (used only if `dsnString` is empty)",
+			Description: "MySQL server hostname (used only if `dsn_string` is empty)",
 			Optional:    true,
 			Type:        "hostname",
 		},
 		config.HelpKV{
 			Key:         target.MySQLPort,
-			Description: "port on which to connect to the MySQL server (used only if `dsn_string` is empty)",
+			Description: "MySQL server port (used only if `dsn_string` is empty)",
 			Optional:    true,
 			Type:        "port",
 		},
 		config.HelpKV{
 			Key:         target.MySQLUsername,
-			Description: "database user-name (used only if `dsnString` is empty)",
+			Description: "database username (used only if `dsn_string` is empty)",
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.MySQLPassword,
-			Description: "database password (used only if `dsnString` is empty)",
+			Description: "database password (used only if `dsn_string` is empty)",
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.MySQLDatabase,
-			Description: "database name (used only if `dsnString` is empty)",
+			Description: "database name (used only if `dsn_string` is empty)",
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.MySQLQueueDir,
-			Description: "local directory where events are stored e.g. '/home/events'",
+			Description: queueDirComment,
 			Optional:    true,
 			Type:        "path",
 		},
 		config.HelpKV{
 			Key:         target.MySQLQueueLimit,
-			Description: "enable persistent event store queue limit, defaults to '10000'",
+			Description: queueLimitComment,
 			Optional:    true,
 			Type:        "number",
 		},
@@ -494,92 +422,98 @@ var (
 		},
 		config.HelpKV{
 			Key:         target.NATSSubject,
-			Description: "NATS subject that represents this subscription",
+			Description: "NATS subscription subject",
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.NATSUsername,
-			Description: "username to be used when connecting to the server",
+			Description: "NATS username",
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.NATSPassword,
-			Description: "password to be used when connecting to a server",
+			Description: "NATS password",
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.NATSToken,
-			Description: "token to be used when connecting to a server",
+			Description: "NATS token",
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
-			Key:         target.NATSSecure,
-			Description: "set this to 'on', enables TLS secure connections that skip server verification (not recommended)",
+			Key:         target.NATSTLS,
+			Description: "set to 'on' to enable TLS",
+			Optional:    true,
+			Type:        "on|off",
+		},
+		config.HelpKV{
+			Key:         target.NATSTLSSkipVerify,
+			Description: `trust server TLS without verification, defaults to "on" (verify)`,
 			Optional:    true,
 			Type:        "on|off",
 		},
 		config.HelpKV{
 			Key:         target.NATSPingInterval,
-			Description: "client ping commands interval to the server, disabled by default",
+			Description: "client ping commands interval in s,m,h,d. Disabled by default",
 			Optional:    true,
 			Type:        "duration",
 		},
 		config.HelpKV{
 			Key:         target.NATSStreaming,
-			Description: "set this to 'on', to use streaming NATS server",
+			Description: "set to 'on', to use streaming NATS server",
 			Optional:    true,
 			Type:        "on|off",
 		},
 		config.HelpKV{
 			Key:         target.NATSStreamingAsync,
-			Description: "set this to 'on', to enable asynchronous publish, process the ACK or error state",
+			Description: "set to 'on', to enable asynchronous publish",
 			Optional:    true,
 			Type:        "on|off",
 		},
 		config.HelpKV{
 			Key:         target.NATSStreamingMaxPubAcksInFlight,
-			Description: "specifies how many messages can be published without getting ACKs back from NATS streaming server",
+			Description: "number of messages to publish without waiting for ACKs",
 			Optional:    true,
 			Type:        "number",
 		},
 		config.HelpKV{
 			Key:         target.NATSStreamingClusterID,
-			Description: "unique ID for the NATS streaming cluster",
+			Description: "unique ID for NATS streaming cluster",
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
-			Key:         target.NATSQueueLimit,
-			Description: "enable persistent event store queue limit, defaults to '10000'",
-			Optional:    true,
-			Type:        "number",
-		},
-		config.HelpKV{
-			Key:         target.NATSQueueDir,
-			Description: "local directory where events are stored e.g. '/home/events'",
-			Optional:    true,
-			Type:        "path",
-		},
-		config.HelpKV{
 			Key:         target.NATSCertAuthority,
-			Description: "certificate chain of the target NATS server if self signed certs were used",
+			Description: "path to certificate chain of the target NATS server",
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.NATSClientCert,
-			Description: "TLS Cert used for NATS configured to require client certificates",
+			Description: "client cert for NATS mTLS auth",
 			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.NATSClientKey,
-			Description: "TLS Key used for NATS configured to require client certificates",
+			Description: "client cert key for NATS mTLS auth",
 			Optional:    true,
 			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         target.NATSQueueDir,
+			Description: queueDirComment,
+			Optional:    true,
+			Type:        "path",
+		},
+		config.HelpKV{
+			Key:         target.NATSQueueLimit,
+			Description: queueLimitComment,
+			Optional:    true,
+			Type:        "number",
 		},
 		config.HelpKV{
 			Key:         config.Comment,
@@ -597,30 +531,108 @@ var (
 		},
 		config.HelpKV{
 			Key:         target.NSQTopic,
-			Description: "NSQ topic unique per target",
+			Description: "NSQ topic",
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.NSQTLS,
-			Description: "set this to 'on', to enable TLS negotiation",
+			Description: "set to 'on' to enable TLS",
 			Optional:    true,
 			Type:        "on|off",
 		},
 		config.HelpKV{
 			Key:         target.NSQTLSSkipVerify,
-			Description: "set this to 'on', to disable client verification of server certificates",
+			Description: `trust server TLS without verification, defaults to "on" (verify)`,
 			Optional:    true,
 			Type:        "on|off",
 		},
 		config.HelpKV{
 			Key:         target.NSQQueueDir,
-			Description: "local directory where events are stored e.g. '/home/events'",
+			Description: queueDirComment,
 			Optional:    true,
 			Type:        "path",
 		},
 		config.HelpKV{
 			Key:         target.NSQQueueLimit,
-			Description: "enable persistent event store queue limit, defaults to '10000'",
+			Description: queueLimitComment,
+			Optional:    true,
+			Type:        "number",
+		},
+		config.HelpKV{
+			Key:         config.Comment,
+			Description: config.DefaultComment,
+			Optional:    true,
+			Type:        "sentence",
+		},
+	}
+
+	HelpES = config.HelpKVS{
+		config.HelpKV{
+			Key:         target.ElasticURL,
+			Description: "Elasticsearch server's address, with optional authentication info",
+			Type:        "url",
+		},
+		config.HelpKV{
+			Key:         target.ElasticIndex,
+			Description: `Elasticsearch index to store/update events, index is auto-created`,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         target.ElasticFormat,
+			Description: formatComment,
+			Type:        "namespace*|access",
+		},
+		config.HelpKV{
+			Key:         target.ElasticQueueDir,
+			Description: queueDirComment,
+			Optional:    true,
+			Type:        "path",
+		},
+		config.HelpKV{
+			Key:         target.ElasticQueueLimit,
+			Description: queueLimitComment,
+			Optional:    true,
+			Type:        "number",
+		},
+		config.HelpKV{
+			Key:         config.Comment,
+			Description: config.DefaultComment,
+			Optional:    true,
+			Type:        "sentence",
+		},
+	}
+
+	HelpRedis = config.HelpKVS{
+		config.HelpKV{
+			Key:         target.RedisAddress,
+			Description: "Redis server's address. For example: `localhost:6379`",
+			Type:        "address",
+		},
+		config.HelpKV{
+			Key:         target.RedisKey,
+			Description: "Redis key to store/update events, key is auto-created",
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         target.RedisFormat,
+			Description: formatComment,
+			Type:        "namespace*|access",
+		},
+		config.HelpKV{
+			Key:         target.RedisPassword,
+			Description: "Redis server password",
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         target.RedisQueueDir,
+			Description: queueDirComment,
+			Optional:    true,
+			Type:        "path",
+		},
+		config.HelpKV{
+			Key:         target.RedisQueueLimit,
+			Description: queueLimitComment,
 			Optional:    true,
 			Type:        "number",
 		},

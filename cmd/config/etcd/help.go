@@ -28,13 +28,13 @@ var (
 		},
 		config.HelpKV{
 			Key:         PathPrefix,
-			Description: `default etcd path prefix to populate all IAM assets eg: "customer/"`,
+			Description: `namespace prefix to isolate tenants e.g. "customer1/"`,
 			Optional:    true,
 			Type:        "path",
 		},
 		config.HelpKV{
 			Key:         CoreDNSPath,
-			Description: `default etcd path location to populate bucket DNS srv records eg: "/skydns"`,
+			Description: `shared bucket DNS records, default is "/skydns"`,
 			Optional:    true,
 			Type:        "path",
 		},
