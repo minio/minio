@@ -96,6 +96,7 @@ func (r *Reader) startReader() {
 			continue
 		}
 		i := in.Value.Iter()
+	readloop:
 		for {
 			var next simdjson.Iter
 			typ, err := i.AdvanceIter(&next)
@@ -105,7 +106,7 @@ func (r *Reader) startReader() {
 			}
 			switch typ {
 			case simdjson.TypeNone:
-				return
+				break readloop
 			case simdjson.TypeRoot:
 				typ, obj, err := next.Root(nil)
 				if err != nil {
@@ -113,6 +114,9 @@ func (r *Reader) startReader() {
 					return
 				}
 				if typ != simdjson.TypeObject {
+					if typ == simdjson.TypeNone {
+						continue
+					}
 					err = fmt.Errorf("unexpected json type below root :%v", typ)
 					r.err = &err
 					return
