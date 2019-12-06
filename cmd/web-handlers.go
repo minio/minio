@@ -669,7 +669,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 next:
 	for _, objectName := range args.Objects {
 		// If not a directory, remove the object.
-		if !hasSuffix(objectName, SlashSeparator) && objectName != "" {
+		if !HasSuffix(objectName, SlashSeparator) && objectName != "" {
 			// Check for permissions only in the case of
 			// non-anonymous login. For anonymous login, policy has already
 			// been checked.
@@ -1043,7 +1043,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if objectAPI.IsEncryptionSupported() {
-		if crypto.IsRequested(r.Header) && !hasSuffix(object, SlashSeparator) { // handle SSE requests
+		if crypto.IsRequested(r.Header) && !HasSuffix(object, SlashSeparator) { // handle SSE requests
 			rawReader := hashReader
 			var objectEncryptionKey []byte
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
@@ -1447,7 +1447,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 
-		if !hasSuffix(object, SlashSeparator) {
+		if !HasSuffix(object, SlashSeparator) {
 			// If not a directory, compress the file and write it to response.
 			err := zipit(pathJoin(args.Prefix, object))
 			if err != nil {

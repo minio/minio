@@ -617,7 +617,7 @@ func (z *xlZones) listObjects(ctx context.Context, bucket, prefix, marker, delim
 	// Marker is set validate pre-condition.
 	if marker != "" {
 		// Marker not common with prefix is not implemented. Send an empty response
-		if !hasPrefix(marker, prefix) {
+		if !HasPrefix(marker, prefix) {
 			return loi, nil
 		}
 	}
@@ -682,7 +682,7 @@ func (z *xlZones) listObjects(ctx context.Context, bucket, prefix, marker, delim
 
 	for _, entry := range entries.Files {
 		var objInfo ObjectInfo
-		if hasSuffix(entry.Name, SlashSeparator) {
+		if HasSuffix(entry.Name, SlashSeparator) {
 			if !recursive {
 				loi.Prefixes = append(loi.Prefixes, entry.Name)
 				continue
@@ -1311,4 +1311,10 @@ func (z *xlZones) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 		healBuckets = append(healBuckets, bucketsInfo...)
 	}
 	return healBuckets, nil
+}
+
+// GetMetrics - no op
+func (z *xlZones) GetMetrics(ctx context.Context) (*Metrics, error) {
+	logger.LogIf(ctx, NotImplemented{})
+	return &Metrics{}, NotImplemented{}
 }

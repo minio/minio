@@ -57,6 +57,7 @@ type CacheObjectLayer interface {
 	PutObject(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	// Storage operations.
 	StorageInfo(ctx context.Context) CacheStorageInfo
+	CacheStats() *CacheStats
 }
 
 // Abstracts disk caching - used by the S3 layer
@@ -73,6 +74,9 @@ type cacheObjects struct {
 
 	// nsMutex namespace lock
 	nsMutex *nsLockMap
+
+	// Cache stats
+	cacheStats *CacheStats
 
 	// Object functions pointing to the corresponding functions of backend implementation.
 	NewNSLockFn      func(ctx context.Context, bucket, object string) RWLocker
@@ -181,10 +185,16 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	cacheReader, cacheErr := c.get(ctx, dcache, bucket, object, rs, h, opts)
 	if cacheErr == nil {
 		cc = cacheControlOpts(cacheReader.ObjInfo)
-		if !cc.isEmpty() && !cc.isStale(cacheReader.ObjInfo.ModTime) {
+		if !cc.isStale(cacheReader.ObjInfo.ModTime) {
+			// This is a cache hit, mark it so
+			c.cacheStats.incHit()
+			c.cacheStats.incBytesServed(cacheReader.ObjInfo.Size)
 			return cacheReader, nil
 		}
 	}
+
+	// Reaching here implies cache miss
+	c.cacheStats.incMiss()
 
 	objInfo, err := c.GetObjectInfoFn(ctx, bucket, object, opts)
 	if backendDownError(err) && cacheErr == nil {
@@ -282,10 +292,16 @@ func (c *cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 	cachedObjInfo, cerr := c.stat(ctx, dcache, bucket, object)
 	if cerr == nil {
 		cc = cacheControlOpts(cachedObjInfo)
-		if !cc.isEmpty() && !cc.isStale(cachedObjInfo.ModTime) {
+		if !cc.isStale(cachedObjInfo.ModTime) {
+			// This is a cache hit, mark it so
+			c.cacheStats.incHit()
 			return cachedObjInfo, nil
 		}
 	}
+
+	// Reaching here implies cache miss
+	c.cacheStats.incMiss()
+
 	objInfo, err := getObjectInfoFn(ctx, bucket, object, opts)
 	if err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
@@ -330,6 +346,11 @@ func (c *cacheObjects) StorageInfo(ctx context.Context) (cInfo CacheStorageInfo)
 		Total: total,
 		Free:  free,
 	}
+}
+
+// CacheStats - returns underlying storage statistics.
+func (c *cacheObjects) CacheStats() (cs *CacheStats) {
+	return c.cacheStats
 }
 
 // skipCache() returns true if cache migration is in progress
@@ -572,11 +593,12 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 	}
 
 	c := &cacheObjects{
-		cache:     cache,
-		exclude:   config.Exclude,
-		migrating: migrateSw,
-		migMutex:  sync.Mutex{},
-		nsMutex:   newNSLock(false),
+		cache:      cache,
+		exclude:    config.Exclude,
+		migrating:  migrateSw,
+		migMutex:   sync.Mutex{},
+		nsMutex:    newNSLock(false),
+		cacheStats: newCacheStats(),
 		GetObjectInfoFn: func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 			return newObjectLayerFn().GetObjectInfo(ctx, bucket, object, opts)
 		},

@@ -102,7 +102,7 @@ func isHTTPHeaderSizeTooLarge(header http.Header) bool {
 		length := len(key) + len(header.Get(key))
 		size += length
 		for _, prefix := range userMetadataKeyPrefixes {
-			if hasPrefix(key, prefix) {
+			if HasPrefix(key, prefix) {
 				usersize += length
 				break
 			}
@@ -141,7 +141,7 @@ func (h reservedMetadataHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 // and must not set by clients
 func containsReservedMetadata(header http.Header) bool {
 	for key := range header {
-		if hasPrefix(key, ReservedMetadataPrefix) {
+		if HasPrefix(key, ReservedMetadataPrefix) {
 			return true
 		}
 	}
@@ -259,8 +259,8 @@ func setBrowserCacheControlHandler(h http.Handler) http.Handler {
 func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet && guessIsBrowserReq(r) {
 		// For all browser requests set appropriate Cache-Control policies
-		if hasPrefix(r.URL.Path, minioReservedBucketPath+SlashSeparator) {
-			if hasSuffix(r.URL.Path, ".js") || r.URL.Path == minioReservedBucketPath+"/favicon.ico" {
+		if HasPrefix(r.URL.Path, minioReservedBucketPath+SlashSeparator) {
+			if HasSuffix(r.URL.Path, ".js") || r.URL.Path == minioReservedBucketPath+"/favicon.ico" {
 				// For assets set cache expiry of one year. For each release, the name
 				// of the asset name will change and hence it can not be served from cache.
 				w.Header().Set(xhttp.CacheControl, "max-age=31536000")

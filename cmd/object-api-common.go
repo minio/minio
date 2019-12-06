@@ -59,7 +59,7 @@ func init() {
 // if size == 0 and object ends with SlashSeparator then
 // returns true.
 func isObjectDir(object string, size int64) bool {
-	return hasSuffix(object, SlashSeparator) && size == 0
+	return HasSuffix(object, SlashSeparator) && size == 0
 }
 
 // Converts just bucket, object metadata into ObjectInfo datatype.
@@ -114,7 +114,7 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 	var delFunc func(string) error
 	// Function to delete entries recursively.
 	delFunc = func(entryPath string) error {
-		if !hasSuffix(entryPath, SlashSeparator) {
+		if !HasSuffix(entryPath, SlashSeparator) {
 			// Delete the file entry.
 			err := storage.DeleteFile(volume, entryPath)
 			logger.LogIf(ctx, err)
@@ -161,7 +161,7 @@ func cleanupObjectsBulk(storage StorageAPI, volume string, objsPaths []string, e
 	var traverse func(string) ([]string, error)
 	traverse = func(entryPath string) ([]string, error) {
 		var output = make([]string, 0)
-		if !hasSuffix(entryPath, SlashSeparator) {
+		if !HasSuffix(entryPath, SlashSeparator) {
 			output = append(output, entryPath)
 			return output, nil
 		}
@@ -335,7 +335,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 	// Marker is set validate pre-condition.
 	if marker != "" {
 		// Marker not common with prefix is not implemented. Send an empty response
-		if !hasPrefix(marker, prefix) {
+		if !HasPrefix(marker, prefix) {
 			return loi, nil
 		}
 	}
@@ -386,7 +386,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 
 		var objInfo ObjectInfo
 		var err error
-		if hasSuffix(walkResult.entry, SlashSeparator) {
+		if HasSuffix(walkResult.entry, SlashSeparator) {
 			for _, getObjectInfoDir := range getObjectInfoDirs {
 				objInfo, err = getObjectInfoDir(ctx, bucket, walkResult.entry)
 				if err == nil {

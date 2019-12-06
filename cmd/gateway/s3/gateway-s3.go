@@ -132,9 +132,11 @@ func (g *S3) Name() string {
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyz01234569"
 const (
-	letterIdxBits = 6                    // 6 bits to represent a letter index
-	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+	letterIdxBits           = 6                    // 6 bits to represent a letter index
+	letterIdxMask           = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax            = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+	minioReservedBucket     = "minio"
+	minioReservedBucketPath = minio.SlashSeparator + minioReservedBucket
 )
 
 // randString generates random names and prepends them with a known prefix.
@@ -182,6 +184,32 @@ var defaultAWSCredProviders = []credentials.Provider{
 	&credentials.EnvMinio{},
 }
 
+type metricsTransport struct {
+	transport *http.Transport
+	metrics   *minio.Metrics
+}
+
+func (s metricsTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	isS3Request := func() bool {
+		return !(minio.HasPrefix(r.URL.Path, minioReservedBucketPath) ||
+			minio.HasSuffix(r.URL.Path, ".js") || strings.Contains(r.URL.Path, "favicon.ico") ||
+			strings.Contains(r.URL.Path, ".html"))
+	}
+	if isS3Request() && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		s.metrics.IncRequests(r.Method)
+		s.metrics.IncBytesSent(r.ContentLength)
+	}
+	// Make the request to the server.
+	resp, err := s.transport.RoundTrip(r)
+	if err != nil {
+		return nil, err
+	}
+	if isS3Request() && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		s.metrics.IncBytesReceived(resp.ContentLength)
+	}
+	return resp, nil
+}
+
 // newS3 - Initializes a new client by auto probing S3 server signature.
 func newS3(urlStr string) (*miniogo.Core, error) {
 	if urlStr == "" {
@@ -221,18 +249,6 @@ func newS3(urlStr string) (*miniogo.Core, error) {
 		return nil, err
 	}
 
-	// Set custom transport
-	clnt.SetCustomTransport(minio.NewCustomHTTPTransport())
-
-	probeBucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "probe-bucket-sign-")
-
-	// Check if the provided keys are valid.
-	if _, err = clnt.BucketExists(probeBucketName); err != nil {
-		if miniogo.ToErrorResponse(err).Code != "AccessDenied" {
-			return nil, err
-		}
-	}
-
 	return &miniogo.Core{Client: clnt}, nil
 }
 
@@ -245,10 +261,30 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 		return nil, err
 	}
 
+	metrics := minio.NewMetrics()
+
+	t := &metricsTransport{
+		transport: minio.NewCustomHTTPTransport(),
+		metrics:   metrics,
+	}
+
+	// Set custom transport
+	clnt.SetCustomTransport(t)
+
+	probeBucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "probe-bucket-sign-")
+
+	// Check if the provided keys are valid.
+	if _, err = clnt.BucketExists(probeBucketName); err != nil {
+		if miniogo.ToErrorResponse(err).Code != "AccessDenied" {
+			return nil, err
+		}
+	}
+
 	s := s3Objects{
-		Client: clnt,
+		Client:  clnt,
+		Metrics: metrics,
 		HTTPClient: &http.Client{
-			Transport: minio.NewCustomHTTPTransport(),
+			Transport: t,
 		},
 	}
 
@@ -275,6 +311,12 @@ type s3Objects struct {
 	minio.GatewayUnsupported
 	Client     *miniogo.Core
 	HTTPClient *http.Client
+	Metrics    *minio.Metrics
+}
+
+// GetMetrics returns this gateway's metrics
+func (l *s3Objects) GetMetrics(ctx context.Context) (*minio.Metrics, error) {
+	return l.Metrics, nil
 }
 
 // Shutdown saves any gateway metadata to disk
@@ -302,7 +344,6 @@ func (l *s3Objects) MakeBucketWithLocation(ctx context.Context, bucket, location
 	if s3utils.CheckValidBucketName(bucket) != nil {
 		return minio.BucketNameInvalid{Bucket: bucket}
 	}
-
 	err := l.Client.MakeBucket(bucket, location)
 	if err != nil {
 		return minio.ErrorRespToObjectError(err, bucket)
@@ -382,7 +423,6 @@ func (l *s3Objects) ListObjects(ctx context.Context, bucket string, prefix strin
 
 // ListObjectsV2 lists all blobs in S3 bucket filtered by prefix
 func (l *s3Objects) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (loi minio.ListObjectsV2Info, e error) {
-
 	result, err := l.Client.ListObjectsV2(bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys, startAfter)
 	if err != nil {
 		return loi, minio.ErrorRespToObjectError(err, bucket)
@@ -463,6 +503,7 @@ func (l *s3Objects) GetObjectInfo(ctx context.Context, bucket string, object str
 // PutObject creates a new object with the incoming data,
 func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	data := r.Reader
+
 	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), minio.ToMinioClientMetadata(opts.UserDefined), opts.ServerSideEncryption)
 	if err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
