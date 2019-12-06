@@ -290,17 +290,25 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 			prometheus.CounterValue,
 			float64(m.GetBytesSent()),
 		)
-		for method, count := range m.GetRequests() {
-			ch <- prometheus.MustNewConstMetric(
-				prometheus.NewDesc(
-					prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
-					"Total number of requests made to AWS S3 by current MinIO S3 Gateway",
-					[]string{"method"}, nil),
-				prometheus.CounterValue,
-				float64(count),
-				method,
-			)
-		}
+		s := m.GetRequests()
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
+				"Total number of requests made to AWS S3 by current MinIO S3 Gateway",
+				[]string{"method"}, nil),
+			prometheus.CounterValue,
+			float64(s.Get.Load()),
+			http.MethodGet,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
+				"Total number of requests made to AWS S3 by current MinIO S3 Gateway",
+				[]string{"method"}, nil),
+			prometheus.CounterValue,
+			float64(s.Head.Load()),
+			http.MethodHead,
+		)
 	}
 }
 
