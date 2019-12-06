@@ -211,7 +211,14 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		if (!cc.isEmpty() && !cc.isStale(cacheReader.ObjInfo.ModTime)) ||
 			cc.onlyIfCached {
 			// This is a cache hit, mark it so
-			c.incCacheStats(cacheObjSize)
+			bytesServed := cacheReader.ObjInfo.Size
+			if rs != nil {
+				if _, len, err := rs.GetOffsetLength(bytesServed); err == nil {
+					bytesServed = len
+				}
+			}
+			c.cacheStats.incHit()
+			c.cacheStats.incBytesServed(bytesServed)
 			return cacheReader, nil
 		}
 		if cc.noStore {
