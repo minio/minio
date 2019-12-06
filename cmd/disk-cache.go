@@ -185,11 +185,16 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	cacheReader, cacheErr := c.get(ctx, dcache, bucket, object, rs, h, opts)
 	if cacheErr == nil {
 		cc = cacheControlOpts(cacheReader.ObjInfo)
-		if !cc.isStale(cacheReader.ObjInfo.ModTime) {
+		if (!cc.isEmpty() && !cc.isStale(cacheReader.ObjInfo.ModTime)) ||
+			cc.onlyIfCached {
 			// This is a cache hit, mark it so
 			c.cacheStats.incHit()
 			c.cacheStats.incBytesServed(cacheReader.ObjInfo.Size)
 			return cacheReader, nil
+		}
+		if cc.noStore {
+			c.cacheStats.incMiss()
+			return c.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 		}
 	}
 
