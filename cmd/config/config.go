@@ -318,16 +318,16 @@ func NewConfigWriteTo(cfg Config, key string) io.WriterTo {
 
 // WriteTo - implements io.WriterTo interface implementation for config.
 func (c *configWriteTo) WriteTo(w io.Writer) (int64, error) {
-	kvs, err := c.GetKVS(c.filterByKey, DefaultKVS)
+	kvsTargets, err := c.GetKVS(c.filterByKey, DefaultKVS)
 	if err != nil {
 		return 0, err
 	}
 	var n int
-	for k, kv := range kvs {
-		m1, _ := w.Write([]byte(k))
+	for _, target := range kvsTargets {
+		m1, _ := w.Write([]byte(target.SubSystem))
 		m2, _ := w.Write([]byte(KvSpaceSeparator))
-		m3, _ := w.Write([]byte(kv.String()))
-		if len(kvs) > 1 {
+		m3, _ := w.Write([]byte(target.KVS.String()))
+		if len(kvsTargets) > 1 {
 			m4, _ := w.Write([]byte(KvNewline))
 			n += m1 + m2 + m3 + m4
 		} else {
@@ -432,8 +432,17 @@ func New() Config {
 	return srvCfg
 }
 
+// Target signifies an individual target
+type Target struct {
+	SubSystem string
+	KVS       KVS
+}
+
+// Targets sub-system targets
+type Targets []Target
+
 // GetKVS - get kvs from specific subsystem.
-func (c Config) GetKVS(s string, defaultKVS map[string]KVS) (map[string]KVS, error) {
+func (c Config) GetKVS(s string, defaultKVS map[string]KVS) (Targets, error) {
 	if len(s) == 0 {
 		return nil, Errorf(SafeModeKind, "input cannot be empty")
 	}
@@ -455,36 +464,55 @@ func (c Config) GetKVS(s string, defaultKVS map[string]KVS) (map[string]KVS, err
 		return nil, Errorf(SafeModeKind, "unknown sub-system %s", s)
 	}
 
-	kvs := make(map[string]KVS)
-	var ok bool
+	targets := Targets{}
 	subSysPrefix := subSystemValue[0]
 	if len(subSystemValue) == 2 {
 		if len(subSystemValue[1]) == 0 {
 			return nil, Errorf(SafeModeKind, "sub-system target '%s' cannot be empty", s)
 		}
-		kvs[inputs[0]], ok = c[subSysPrefix][subSystemValue[1]]
+		kvs, ok := c[subSysPrefix][subSystemValue[1]]
 		if !ok {
 			return nil, Errorf(SafeModeKind, "sub-system target '%s' doesn't exist", s)
 		}
+		for _, kv := range defaultKVS[subSysPrefix] {
+			_, ok = kvs.Lookup(kv.Key)
+			if !ok {
+				kvs.Set(kv.Key, kv.Value)
+			}
+		}
+		targets = append(targets, Target{
+			SubSystem: inputs[0],
+			KVS:       kvs,
+		})
 	} else {
-		for subSys, subSysTgts := range c {
-			if !strings.HasPrefix(subSys, subSysPrefix) {
+		hkvs := HelpSubSysMap[""]
+		// Use help for sub-system to preserve the order.
+		for _, hkv := range hkvs {
+			if !strings.HasPrefix(hkv.Key, subSysPrefix) {
 				continue
 			}
-			for k, kv := range subSysTgts {
+			for k, kvs := range c[hkv.Key] {
+				for _, dkv := range defaultKVS[subSysPrefix] {
+					_, ok := kvs.Lookup(dkv.Key)
+					if !ok {
+						kvs.Set(dkv.Key, dkv.Value)
+					}
+				}
 				if k != Default {
-					kvs[subSys+SubSystemSeparator+k] = kv
+					targets = append(targets, Target{
+						SubSystem: hkv.Key + SubSystemSeparator + k,
+						KVS:       kvs,
+					})
 				} else {
-					kvs[subSys] = kv
+					targets = append(targets, Target{
+						SubSystem: hkv.Key,
+						KVS:       kvs,
+					})
 				}
 			}
 		}
 	}
-	if len(kvs) == 0 {
-		kvs[subSysPrefix] = defaultKVS[subSysPrefix]
-		return kvs, nil
-	}
-	return kvs, nil
+	return targets, nil
 }
 
 // DelKVS - delete a specific key.
