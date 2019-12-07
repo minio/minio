@@ -170,12 +170,18 @@ func getMetadata(objInfo ObjectInfo) map[string]string {
 	return metadata
 }
 
+// marks cache hit
+func (c *cacheObjects) incCacheStats(size int64) {
+	c.cacheStats.incHit()
+	c.cacheStats.incBytesServed(size)
+}
+
 func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	if c.isCacheExclude(bucket, object) || c.skipCache() {
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
 	var cc cacheControl
-
+	var cacheObjSize int64
 	// fetch diskCache if object is currently cached or nearest available cache drive
 	dcache, err := c.getCacheToLoc(ctx, bucket, object)
 	if err != nil {
@@ -184,12 +190,17 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 
 	cacheReader, cacheErr := c.get(ctx, dcache, bucket, object, rs, h, opts)
 	if cacheErr == nil {
+		cacheObjSize = cacheReader.ObjInfo.Size
+		if rs != nil {
+			if _, len, err := rs.GetOffsetLength(cacheObjSize); err == nil {
+				cacheObjSize = len
+			}
+		}
 		cc = cacheControlOpts(cacheReader.ObjInfo)
 		if (!cc.isEmpty() && !cc.isStale(cacheReader.ObjInfo.ModTime)) ||
 			cc.onlyIfCached {
 			// This is a cache hit, mark it so
-			c.cacheStats.incHit()
-			c.cacheStats.incBytesServed(cacheReader.ObjInfo.Size)
+			c.incCacheStats(cacheObjSize)
 			return cacheReader, nil
 		}
 		if cc.noStore {
@@ -198,11 +209,9 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		}
 	}
 
-	// Reaching here implies cache miss
-	c.cacheStats.incMiss()
-
 	objInfo, err := c.GetObjectInfoFn(ctx, bucket, object, opts)
 	if backendDownError(err) && cacheErr == nil {
+		c.incCacheStats(cacheObjSize)
 		return cacheReader, nil
 	} else if err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
@@ -213,10 +222,12 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 				dcache.Delete(ctx, bucket, object)
 			}
 		}
+		c.cacheStats.incMiss()
 		return nil, err
 	}
 
 	if !objInfo.IsCacheable() {
+		c.cacheStats.incMiss()
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
 
@@ -225,6 +236,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		if cacheReader.ObjInfo.ETag == objInfo.ETag {
 			// Update metadata in case server-side copy might have changed object metadata
 			dcache.updateMetadataIfChanged(ctx, bucket, object, objInfo, cacheReader.ObjInfo)
+			c.incCacheStats(cacheObjSize)
 			return cacheReader, nil
 		}
 		cacheReader.Close()
@@ -232,6 +244,8 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		c.delete(ctx, dcache, bucket, object)
 	}
 
+	// Reaching here implies cache miss
+	c.cacheStats.incMiss()
 	// Since we got here, we are serving the request from backend,
 	// and also adding the object to the cache.
 	if !dcache.diskUsageLow() {
@@ -304,25 +318,28 @@ func (c *cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 		}
 	}
 
-	// Reaching here implies cache miss
-	c.cacheStats.incMiss()
-
 	objInfo, err := getObjectInfoFn(ctx, bucket, object, opts)
 	if err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
 			// Delete the cached entry if backend object was deleted.
 			c.delete(ctx, dcache, bucket, object)
+			c.cacheStats.incMiss()
 			return ObjectInfo{}, err
 		}
 		if !backendDownError(err) {
+			c.cacheStats.incMiss()
 			return ObjectInfo{}, err
 		}
 		if cerr == nil {
+			// This is a cache hit, mark it so
+			c.cacheStats.incHit()
 			return cachedObjInfo, nil
 		}
+		c.cacheStats.incMiss()
 		return ObjectInfo{}, BackendDown{}
 	}
-
+	// Reaching here implies cache miss
+	c.cacheStats.incMiss()
 	// when backend is up, do a sanity check on cached object
 	if cerr != nil {
 		return objInfo, nil
