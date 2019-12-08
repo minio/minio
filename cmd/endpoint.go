@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -229,8 +230,46 @@ func (endpoints Endpoints) GetString(i int) string {
 	return endpoints[i].String()
 }
 
+func (endpoints Endpoints) atleastOneEndpointLocal() bool {
+	for _, endpoint := range endpoints {
+		if endpoint.IsLocal {
+			return true
+		}
+	}
+	return false
+}
+
+func (endpoints Endpoints) doAllHostsResolveToLocalhost() bool {
+	var endpointHosts = map[string]set.StringSet{}
+	for _, endpoint := range endpoints {
+		hostIPs, err := getHostIP(endpoint.Hostname())
+		if err != nil {
+			continue
+		}
+		endpointHosts[endpoint.Hostname()] = hostIPs
+	}
+	sameHosts := make(map[string]int)
+	for hostName, endpointIPs := range endpointHosts {
+		for _, endpointIP := range endpointIPs.ToSlice() {
+			if net.ParseIP(endpointIP).IsLoopback() {
+				sameHosts[hostName]++
+			}
+		}
+	}
+	ok := true
+	for _, localCount := range sameHosts {
+		ok = ok && localCount > 0
+	}
+	if len(sameHosts) == 0 {
+		return false
+	}
+	return ok
+}
+
 // UpdateIsLocal - resolves the host and discovers the local host.
 func (endpoints Endpoints) UpdateIsLocal() error {
+	orchestrated := IsDocker() || IsKubernetes()
+
 	var epsResolved int
 	var foundLocal bool
 	resolvedList := make([]bool, len(endpoints))
@@ -256,29 +295,61 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 					continue
 				}
 
-				// return err if not Docker or Kubernetes
-				// We use IsDocker() to check for Docker environment
-				// We use IsKubernetes() to check for Kubernetes environment
-				isLocal, err := isLocalHost(endpoints[i].Hostname(), endpoints[i].Port(), globalMinioPort)
-				if err != nil {
-					if !IsDocker() && !IsKubernetes() {
-						return err
-					}
+				// Log the message to console about the host resolving
+				reqInfo := (&logger.ReqInfo{}).AppendTags(
+					"host",
+					endpoints[i].Hostname(),
+				)
+
+				if orchestrated && endpoints.doAllHostsResolveToLocalhost() {
+					err := errors.New("hosts resolve to same IP, DNS not updated on k8s")
 					// time elapsed
 					timeElapsed := time.Since(startTime)
 					// log error only if more than 1s elapsed
 					if timeElapsed > time.Second {
-						// Log the message to console about the host not being resolveable.
-						reqInfo := (&logger.ReqInfo{}).AppendTags("host", endpoints[i].Hostname())
 						reqInfo.AppendTags("elapsedTime",
-							humanize.RelTime(startTime, startTime.Add(timeElapsed),
-								"elapsed", ""))
+							humanize.RelTime(startTime,
+								startTime.Add(timeElapsed),
+								"elapsed",
+								""))
 						ctx := logger.SetReqInfo(context.Background(), reqInfo)
+						logger.LogIf(ctx, err, logger.Application)
+					}
+					continue
+				}
+
+				// return err if not Docker or Kubernetes
+				// We use IsDocker() to check for Docker environment
+				// We use IsKubernetes() to check for Kubernetes environment
+				isLocal, err := isLocalHost(endpoints[i].Hostname(),
+					endpoints[i].Port(),
+					globalMinioPort,
+				)
+				if err != nil && !orchestrated {
+					return err
+				}
+				if err != nil {
+					// time elapsed
+					timeElapsed := time.Since(startTime)
+					// log error only if more than 1s elapsed
+					if timeElapsed > time.Second {
+						reqInfo.AppendTags("elapsedTime",
+							humanize.RelTime(startTime,
+								startTime.Add(timeElapsed),
+								"elapsed",
+								"",
+							))
+						ctx := logger.SetReqInfo(context.Background(),
+							reqInfo)
 						logger.LogIf(ctx, err, logger.Application)
 					}
 				} else {
 					resolvedList[i] = true
 					endpoints[i].IsLocal = isLocal
+					if orchestrated && !endpoints.atleastOneEndpointLocal() {
+						resolvedList[i] = false
+						continue
+					}
 					epsResolved++
 					if !foundLocal {
 						foundLocal = isLocal
@@ -288,7 +359,7 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 
 			// Wait for the tick, if the there exist a local endpoint in discovery.
 			// Non docker/kubernetes environment we do not need to wait.
-			if !foundLocal && (IsDocker() || IsKubernetes()) {
+			if !foundLocal && orchestrated {
 				<-keepAliveTicker.C
 			}
 		}

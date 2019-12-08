@@ -26,6 +26,7 @@ matrix:
         - ARCH=x86_64
         - CGO_ENABLED=0
         - GO111MODULE=on
+        - SIMPLE_CI=1
       go: 1.13.x
       script:
         - make
@@ -43,6 +44,7 @@ matrix:
         - ARCH=x86_64
         - CGO_ENABLED=0
         - GO111MODULE=on
+        - SIMPLE_CI=1
       go: 1.13.x
       script:
         - go build --ldflags="$(go run buildscripts/gen-ldflags.go)" -o %GOPATH%\bin\minio.exe
