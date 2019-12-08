@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
@@ -48,6 +49,9 @@ var defaultEtag = "00000000000000000000000000000000-1"
 type FSObjects struct {
 	// Disk usage metrics
 	totalUsed uint64 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+
+	// The count of concurrent calls on FSObjects API
+	activeIOCount int64
 
 	// Path to be exported over S3 API.
 	fsPath string
@@ -181,6 +185,12 @@ func (fs *FSObjects) Shutdown(ctx context.Context) error {
 
 // StorageInfo - returns underlying storage statistics.
 func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
+
+	atomic.AddInt64(&fs.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt64(&fs.activeIOCount, -1)
+	}()
+
 	di, err := getDiskInfo(fs.fsPath)
 	if err != nil {
 		return StorageInfo{}
@@ -200,67 +210,68 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
 	return storageInfo
 }
 
-// Update the data usage while walking recursively through the given bucket/prefix
-func (fs *FSObjects) walkDataUsageInfo(ctx context.Context, info *DataUsageInfo, bucket, prefix string, endCh chan struct{}) {
-
-	if isQuitting(endCh) {
-		return
-	}
-
-	entries, err := readDir(pathJoin(fs.fsPath, bucket, prefix))
-	if err != nil {
-		return
-	}
-
-	for _, entry := range entries {
-		if isQuitting(endCh) {
-			return
+func (fs *FSObjects) waitForLowActiveIO() {
+	for {
+		if atomic.LoadInt64(&fs.activeIOCount) >= 10 {
+			time.Sleep(100 * time.Millisecond)
+			continue
 		}
-
-		if strings.HasSuffix(entry, "/") {
-			fs.walkDataUsageInfo(ctx, info, bucket, pathJoin(prefix, entry), endCh)
-		} else {
-			info.ObjectsCount++
-
-			// Stat the file to get file size.
-			fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, prefix, entry))
-			if err != nil {
-				continue
-			}
-			size := uint64(fi.Size())
-			info.ObjectsTotalSize += size
-			info.BucketsSizes[bucket] += size
-			info.ObjectsSizesHistogram[objSizeToHistoInterval(size)]++
-		}
+		break
 	}
 }
 
 // crawlAndGetDataUsageInfo returns data usage stats of the current FS deployment
 func (fs *FSObjects) crawlAndGetDataUsageInfo(ctx context.Context, endCh chan struct{}) DataUsageInfo {
-	buckets, err := readDir(fs.fsPath)
-	if err != nil {
-		return DataUsageInfo{}
-	}
 
-	var info = DataUsageInfo{
-		BucketsCount:          uint64(len(buckets)),
+	var dataUsageInfoMu sync.Mutex
+	var dataUsageInfo = DataUsageInfo{
 		BucketsSizes:          make(map[string]uint64),
 		ObjectsSizesHistogram: make(map[string]uint64),
 	}
 
-	for _, bucket := range buckets {
-		bucket = strings.TrimSuffix(bucket, "/")
-		// Ignore all reserved bucket names and invalid bucket names.
-		if isReservedOrInvalidBucket(bucket, false) {
-			continue
+	walkFn := func(origPath string, typ os.FileMode) error {
+
+		fs.waitForLowActiveIO()
+
+		path := strings.TrimPrefix(origPath, fs.fsPath)
+		path = strings.TrimPrefix(path, SlashSeparator)
+		split := strings.SplitN(path, SlashSeparator, 2)
+		if len(split) < 2 {
+			return nil
 		}
-		fs.walkDataUsageInfo(ctx, &info, bucket, "", endCh)
+
+		bucketName := split[0]
+		if isReservedOrInvalidBucket(bucketName, false) {
+			return nil
+		}
+
+		if typ&os.ModeDir != 0 {
+			return nil
+		}
+
+		fi, err := os.Stat(origPath)
+		if err != nil {
+			return nil
+		}
+		size := fi.Size()
+
+		dataUsageInfoMu.Lock()
+		dataUsageInfo.ObjectsCount++
+		dataUsageInfo.ObjectsTotalSize += uint64(size)
+		dataUsageInfo.BucketsSizes[bucketName] += uint64(size)
+		dataUsageInfo.ObjectsSizesHistogram[objSizeToHistoInterval(uint64(size))]++
+		dataUsageInfoMu.Unlock()
+
+		return nil
 	}
 
-	info.LastUpdate = UTCNow()
+	fastWalk(fs.fsPath, walkFn)
 
-	atomic.StoreUint64(&fs.totalUsed, info.ObjectsTotalSize)
-	return info
+	dataUsageInfo.BucketsCount = uint64(len(dataUsageInfo.BucketsSizes))
+	dataUsageInfo.LastUpdate = UTCNow()
+
+	atomic.StoreUint64(&fs.totalUsed, dataUsageInfo.ObjectsTotalSize)
+	return dataUsageInfo
 }
 
 /// Bucket operations
@@ -300,6 +311,12 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket, locatio
 	if s3utils.CheckValidBucketNameStrict(bucket) != nil {
 		return BucketNameInvalid{Bucket: bucket}
 	}
+
+	atomic.AddInt64(&fs.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt64(&fs.activeIOCount, -1)
+	}()
+
 	bucketDir, err := fs.getBucketDir(ctx, bucket)
 	if err != nil {
 		return toObjectErr(err, bucket)
@@ -319,6 +336,12 @@ func (fs *FSObjects) GetBucketInfo(ctx context.Context, bucket string) (bi Bucke
 		return bi, e
 	}
 	defer bucketLock.RUnlock()
+
+	atomic.AddInt64(&fs.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt64(&fs.activeIOCount, -1)
+	}()
+
 	st, err := fs.statBucketDir(ctx, bucket)
 	if err != nil {
 		return bi, toObjectErr(err, bucket)
@@ -338,6 +361,12 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 		logger.LogIf(ctx, err)
 		return nil, err
 	}
+
+	atomic.AddInt64(&fs.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt64(&fs.activeIOCount, -1)
+	}()
+
 	var bucketInfos []BucketInfo
 	entries, err := readDir((fs.fsPath))
 	if err != nil {
@@ -383,6 +412,12 @@ func (fs *FSObjects) DeleteBucket(ctx context.Context, bucket string) error {
 		return err
 	}
 	defer bucketLock.Unlock()
+
+	atomic.AddInt64(&fs.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt64(&fs.activeIOCount, -1)
+	}()
+
 	bucketDir, err := fs.getBucketDir(ctx, bucket)
 	if err != nil {
 		return toObjectErr(err, bucket)
@@ -419,6 +454,11 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		}
 		defer objectDWLock.Unlock()
 	}
+
+	atomic.AddInt64(&fs.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt64(&fs.activeIOCount, -1)
+	}()
 
 	if _, err := fs.statBucketDir(ctx, srcBucket); err != nil {
 		return oi, toObjectErr(err, srcBucket)
@@ -476,6 +516,11 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
 		return nil, err
 	}
+
+	atomic.AddInt64(&fs.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt64(&fs.activeIOCount, -1)
+	}()
 
 	if _, err = fs.statBucketDir(ctx, bucket); err != nil {
 		return nil, toObjectErr(err, bucket)
@@ -578,6 +623,12 @@ func (fs *FSObjects) GetObject(ctx context.Context, bucket, object string, offse
 		return err
 	}
 	defer objectLock.RUnlock()
+
+	atomic.AddInt64(&fs.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt64(&fs.activeIOCount, -1)
+	}()
+
 	return fs.getObject(ctx, bucket, object, offset, length, writer, etag, true)
 }
 
@@ -763,6 +814,12 @@ func (fs *FSObjects) getObjectInfoWithLock(ctx context.Context, bucket, object s
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (fs *FSObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (oi ObjectInfo, e error) {
+
+	atomic.AddInt64(&fs.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt64(&fs.activeIOCount, -1)
+	}()
+
 	oi, err := fs.getObjectInfoWithLock(ctx, bucket, object)
 	if err == errCorruptedFormat || err == io.EOF {
 		objectLock := fs.NewNSLock(ctx, bucket, object)
@@ -817,6 +874,11 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 		return objInfo, err
 	}
 	defer objectLock.Unlock()
+
+	atomic.AddInt64(&fs.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt64(&fs.activeIOCount, -1)
+	}()
 
 	return fs.putObject(ctx, bucket, object, r, opts)
 }
@@ -976,6 +1038,11 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string) er
 		return err
 	}
 
+	atomic.AddInt64(&fs.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt64(&fs.activeIOCount, -1)
+	}()
+
 	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
 		return toObjectErr(err, bucket)
 	}
@@ -1114,6 +1181,12 @@ func (fs *FSObjects) getObjectETag(ctx context.Context, bucket, entry string, lo
 // ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool
 // state for future re-entrant list requests.
 func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
+
+	atomic.AddInt64(&fs.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt64(&fs.activeIOCount, -1)
+	}()
+
 	return listObjects(ctx, fs, bucket, prefix, marker, delimiter, maxKeys, fs.listPool,
 		fs.listDirFactory(), fs.getObjectInfo, fs.getObjectInfo)
 }

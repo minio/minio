@@ -331,41 +331,6 @@ func isQuitting(endCh chan struct{}) bool {
 	}
 }
 
-// Update the data usage info while recursively walking in bucketName/prefix
-func (s *posix) walkDataUsageInfo(info *DataUsageInfo, bucketName, prefix string, endCh chan struct{}) {
-	if isQuitting(endCh) {
-		return
-	}
-
-	s.waitForLowActiveIO()
-
-	entries, err := s.ListDir(bucketName, prefix, -1, xlMetaJSONFile)
-	if err != nil {
-		return
-	}
-
-	for _, entry := range entries {
-		if isQuitting(endCh) {
-			return
-		}
-
-		s.waitForLowActiveIO()
-
-		if strings.HasSuffix(entry, "/") {
-			s.walkDataUsageInfo(info, bucketName, pathJoin(prefix, entry), endCh)
-		} else {
-			info.ObjectsCount++
-			meta, err := readXLMeta(context.Background(), s, bucketName, pathJoin(prefix, entry))
-			if err != nil {
-				continue
-			}
-			info.ObjectsTotalSize += uint64(meta.Stat.Size)
-			info.BucketsSizes[bucketName] += uint64(meta.Stat.Size)
-			info.ObjectsSizesHistogram[objSizeToHistoInterval(uint64(meta.Stat.Size))]++
-		}
-	}
-}
-
 func (s *posix) waitForLowActiveIO() {
 	for {
 		if atomic.LoadInt32(&s.activeIOCount) >= 10 {
@@ -391,26 +356,50 @@ func (s *posix) CrawlAndGetDataUsage(endCh chan struct{}) (DataUsageInfo, error)
 
 	s.waitForLowActiveIO()
 
-	volsInfo, err := s.ListVols()
-	if err != nil {
-		return DataUsageInfo{}, err
-	}
-
+	var dataUsageInfoMu sync.Mutex
 	var dataUsageInfo = DataUsageInfo{
 		BucketsSizes:          make(map[string]uint64),
 		ObjectsSizesHistogram: make(map[string]uint64),
 	}
 
-	for _, vol := range volsInfo {
-		// Skip if this is .minio.sys or a weird bucket name
-		if isReservedOrInvalidBucket(vol.Name, false) {
-			continue
+	walkFn := func(origPath string, typ os.FileMode) error {
+		path := strings.TrimPrefix(origPath, s.diskPath)
+		path = strings.TrimPrefix(path, SlashSeparator)
+		split := strings.SplitN(path, SlashSeparator, 2)
+		if len(split) < 2 {
+			return nil
 		}
-		dataUsageInfo.BucketsCount++
-		s.walkDataUsageInfo(&dataUsageInfo, vol.Name, "", endCh)
+
+		bucketName := split[0]
+		prefix := split[1]
+		if isReservedOrInvalidBucket(bucketName, false) {
+			return nil
+		}
+
+		if strings.HasSuffix(prefix, "/xl.json") {
+			xlMetaBuf, err := ioutil.ReadFile(origPath)
+			if err != nil {
+				return nil
+			}
+			meta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaBuf)
+			if err != nil {
+				return nil
+			}
+
+			dataUsageInfoMu.Lock()
+			dataUsageInfo.ObjectsCount++
+			dataUsageInfo.ObjectsTotalSize += uint64(meta.Stat.Size)
+			dataUsageInfo.BucketsSizes[bucketName] += uint64(meta.Stat.Size)
+			dataUsageInfo.ObjectsSizesHistogram[objSizeToHistoInterval(uint64(meta.Stat.Size))]++
+			dataUsageInfoMu.Unlock()
+		}
+
+		return nil
 	}
 
-	// Update data usage information timestamp
+	fastWalk(s.diskPath, walkFn)
+
+	dataUsageInfo.BucketsCount = uint64(len(dataUsageInfo.BucketsSizes))
 	dataUsageInfo.LastUpdate = UTCNow()
 
 	atomic.StoreUint64(&s.totalUsed, dataUsageInfo.ObjectsTotalSize)
