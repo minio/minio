@@ -96,13 +96,13 @@ func (c *cacheObjects) delete(ctx context.Context, dcache *diskCache, bucket, ob
 	return dcache.Delete(ctx, bucket, object)
 }
 
-func (c *cacheObjects) put(ctx context.Context, dcache *diskCache, bucket, object string, data io.Reader, size int64, opts ObjectOptions) error {
+func (c *cacheObjects) put(ctx context.Context, dcache *diskCache, bucket, object string, data io.Reader, size int64, rs *HTTPRangeSpec, opts ObjectOptions) error {
 	cLock := c.NewNSLockFn(ctx, bucket, object)
 	if err := cLock.GetLock(globalObjectTimeout); err != nil {
 		return err
 	}
 	defer cLock.Unlock()
-	return dcache.Put(ctx, bucket, object, data, size, opts)
+	return dcache.Put(ctx, bucket, object, data, size, rs, opts)
 }
 
 func (c *cacheObjects) get(ctx context.Context, dcache *diskCache, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error) {
@@ -123,6 +123,17 @@ func (c *cacheObjects) stat(ctx context.Context, dcache *diskCache, bucket, obje
 
 	defer cLock.RUnlock()
 	return dcache.Stat(ctx, bucket, object)
+}
+
+func (c *cacheObjects) statRange(ctx context.Context, dcache *diskCache, bucket, object string, rs *HTTPRangeSpec) (oi ObjectInfo, err error) {
+	cLock := c.NewNSLockFn(ctx, bucket, object)
+	if err := cLock.GetRLock(globalObjectTimeout); err != nil {
+		return oi, err
+	}
+
+	defer cLock.RUnlock()
+	oi, _, err = dcache.statRange(ctx, bucket, object, rs)
+	return oi, err
 }
 
 // DeleteObject clears cache entry if backend delete operation succeeds
@@ -200,7 +211,14 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		if (!cc.isEmpty() && !cc.isStale(cacheReader.ObjInfo.ModTime)) ||
 			cc.onlyIfCached {
 			// This is a cache hit, mark it so
-			c.incCacheStats(cacheObjSize)
+			bytesServed := cacheReader.ObjInfo.Size
+			if rs != nil {
+				if _, len, err := rs.GetOffsetLength(bytesServed); err == nil {
+					bytesServed = len
+				}
+			}
+			c.cacheStats.incHit()
+			c.cacheStats.incBytesServed(bytesServed)
 			return cacheReader, nil
 		}
 		if cc.noStore {
@@ -261,20 +279,19 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	if rs != nil {
 		go func() {
 			// fill cache in the background for range GET requests
-			bReader, bErr := c.GetObjectNInfoFn(ctx, bucket, object, nil, h, lockType, opts)
+			bReader, bErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 			if bErr != nil {
 				return
 			}
 			defer bReader.Close()
-			oi, err := c.stat(ctx, dcache, bucket, object)
+			oi, err := c.statRange(ctx, dcache, bucket, object, rs)
 			// avoid cache overwrite if another background routine filled cache
 			if err != nil || oi.ETag != bReader.ObjInfo.ETag {
-				c.put(ctx, dcache, bucket, object, bReader, bReader.ObjInfo.Size, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)})
+				c.put(ctx, dcache, bucket, object, bReader, bReader.ObjInfo.Size, rs, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)})
 			}
 		}()
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
-
 	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	if bkErr != nil {
 		return nil, bkErr
@@ -283,7 +300,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	pipeReader, pipeWriter := io.Pipe()
 	teeReader := io.TeeReader(bkReader, pipeWriter)
 	go func() {
-		putErr := c.put(ctx, dcache, bucket, object, io.LimitReader(pipeReader, bkReader.ObjInfo.Size), bkReader.ObjInfo.Size, ObjectOptions{UserDefined: getMetadata(bkReader.ObjInfo)})
+		putErr := c.put(ctx, dcache, bucket, object, io.LimitReader(pipeReader, bkReader.ObjInfo.Size), bkReader.ObjInfo.Size, nil, ObjectOptions{UserDefined: getMetadata(bkReader.ObjInfo)})
 		// close the write end of the pipe, so the error gets
 		// propagated to getObjReader
 		pipeWriter.CloseWithError(putErr)
@@ -597,7 +614,7 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 			oi, err := c.stat(ctx, dcache, bucket, object)
 			// avoid cache overwrite if another background routine filled cache
 			if err != nil || oi.ETag != bReader.ObjInfo.ETag {
-				c.put(ctx, dcache, bucket, object, bReader, bReader.ObjInfo.Size, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)})
+				c.put(ctx, dcache, bucket, object, bReader, bReader.ObjInfo.Size, nil, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)})
 			}
 		}()
 	}
