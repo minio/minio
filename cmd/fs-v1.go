@@ -255,6 +255,7 @@ func (fs *FSObjects) crawlAndGetDataUsageInfo(ctx context.Context, endCh chan st
 		if prefix == "" {
 			dataUsageInfoMu.Lock()
 			dataUsageInfo.BucketsCount++
+			dataUsageInfo.BucketsSizes[bucket] = 0
 			dataUsageInfoMu.Unlock()
 			return nil
 		}

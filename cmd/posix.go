@@ -388,6 +388,7 @@ func (s *posix) CrawlAndGetDataUsage(endCh chan struct{}) (DataUsageInfo, error)
 		if prefix == "" {
 			dataUsageInfoMu.Lock()
 			dataUsageInfo.BucketsCount++
+			dataUsageInfo.BucketsSizes[bucket] = 0
 			dataUsageInfoMu.Unlock()
 			return nil
 		}
