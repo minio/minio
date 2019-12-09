@@ -25,6 +25,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/minio/minio-go/pkg/set"
 )
 
 // startWithConds - map which indicates if a given condition supports starts-with policy operator
@@ -222,21 +224,22 @@ func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) erro
 	if !postPolicyForm.Expiration.After(UTCNow()) {
 		return fmt.Errorf("Invalid according to Policy: Policy expired")
 	}
-	// map to store the metadata
-	metaMap := make(map[string]string)
+
+	// headerSet and signatureSet are used to find any extra imput fields
+	headerSet := set.NewStringSet()
+	signatureSet := set.NewStringSet()
+
 	for _, policy := range postPolicyForm.Conditions.Policies {
-		if strings.HasPrefix(policy.Key, "$x-amz-meta-") {
-			formCanonicalName := http.CanonicalHeaderKey(strings.TrimPrefix(policy.Key, "$"))
-			metaMap[formCanonicalName] = policy.Value
-		}
+		signatureSet.Add(strings.TrimPrefix(policy.Key, "$"))
 	}
-	// Check if any extra metadata field is passed as input
+
 	for key := range formValues {
-		if strings.HasPrefix(key, "X-Amz-Meta-") {
-			if _, ok := metaMap[key]; !ok {
-				return fmt.Errorf("Invalid according to Policy: Extra input fields: %s", key)
-			}
-		}
+		headerSet.Add(strings.ToLower(key))
+	}
+
+	// Call to check for extra input values
+	if extraField := getExtraInput(headerSet, signatureSet); extraField != "" {
+		return fmt.Errorf("Invalid according to Policy: Extra input fields: %s", extraField)
 	}
 
 	// Flag to indicate if all policies conditions are satisfied
@@ -273,4 +276,22 @@ func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) erro
 	}
 
 	return nil
+}
+
+// Returns extra input filed that is not present in policy
+func getExtraInput(headerSet, signatureSet set.StringSet) string {
+	fmt.Println("headerSet", headerSet)
+	fmt.Println("signatureSet", signatureSet)
+	//  differenceSet keeps a track of the extra input fields:
+	differenceSet := headerSet.Difference(signatureSet)
+	extraInput := ""
+	for differentInputFileds := range differenceSet {
+		if differentInputFileds == "policy" || differentInputFileds == "x-amz-signature" || differentInputFileds == "file" || strings.HasPrefix(differentInputFileds, "x-ignore-") {
+			continue
+		} else {
+			extraInput = differentInputFileds
+			break
+		}
+	}
+	return extraInput
 }
