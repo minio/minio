@@ -32,6 +32,7 @@ import (
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/pkg/objectlock"
 	"github.com/minio/minio/pkg/sync/errgroup"
 	"github.com/minio/minio/pkg/wildcard"
 )
@@ -251,7 +252,13 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		c.cacheStats.incMiss()
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
-
+	// skip cache for objects with locks
+	objRetention := objectlock.GetObjectRetentionMeta(objInfo.UserDefined)
+	legalHold := objectlock.GetObjectLegalHoldMeta(objInfo.UserDefined)
+	if objRetention.Mode != objectlock.Invalid || legalHold.Status != "" {
+		c.cacheStats.incMiss()
+		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
+	}
 	if cacheErr == nil {
 		// if ETag matches for stale cache entry, serve from cache
 		if cacheReader.ObjInfo.ETag == objInfo.ETag {
@@ -596,8 +603,9 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 	}
 
 	// skip cache for objects with locks
-	objRetention := getObjectRetentionMeta(opts.UserDefined)
-	if objRetention.Mode == Governance || objRetention.Mode == Compliance {
+	objRetention := objectlock.GetObjectRetentionMeta(opts.UserDefined)
+	legalHold := objectlock.GetObjectLegalHoldMeta(opts.UserDefined)
+	if objRetention.Mode != objectlock.Invalid || legalHold.Status != "" {
 		dcache.Delete(ctx, bucket, object)
 		return putObjectFn(ctx, bucket, object, r, opts)
 	}

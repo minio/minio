@@ -40,6 +40,7 @@ import (
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/objectlock"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -577,14 +578,14 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if objectLockEnabled {
+	if objectLockEnabled && !globalIsGateway {
 		configFile := path.Join(bucketConfigPrefix, bucket, bucketObjectLockEnabledConfigFile)
 		if err = saveConfig(ctx, objectAPI, configFile, []byte(bucketObjectLockEnabledConfig)); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		globalBucketObjectLockConfig.Set(bucket, Retention{})
-		globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, Retention{})
+		globalBucketObjectLockConfig.Set(bucket, objectlock.Retention{})
+		globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, objectlock.Retention{})
 	}
 
 	// Make sure to add Location information here only for bucket
@@ -1005,7 +1006,7 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	config, err := parseObjectLockConfig(r.Body)
+	config, err := objectlock.ParseObjectLockConfig(r.Body)
 	if err != nil {
 		apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
 		apiErr.Description = err.Error()
@@ -1099,7 +1100,7 @@ func (api objectAPIHandlers) GetBucketObjectLockConfigHandler(w http.ResponseWri
 			return
 		}
 
-		if configData, err = xml.Marshal(newObjectLockConfig()); err != nil {
+		if configData, err = xml.Marshal(objectlock.NewObjectLockConfig()); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
