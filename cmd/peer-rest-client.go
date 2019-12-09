@@ -294,6 +294,21 @@ func (client *peerRESTClient) ListenBucketNotification(bucket string, eventNames
 
 // SendEvent - calls send event RPC.
 func (client *peerRESTClient) SendEvent(bucket string, targetID, remoteTargetID event.TargetID, eventData event.Event) error {
+	numTries := 10
+	for {
+		err := client.sendEvent(bucket, targetID, remoteTargetID, eventData)
+		if err == nil {
+			return nil
+		}
+		if numTries == 0 {
+			return err
+		}
+		numTries--
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func (client *peerRESTClient) sendEvent(bucket string, targetID, remoteTargetID event.TargetID, eventData event.Event) error {
 	args := sendEventRequest{
 		TargetID: remoteTargetID,
 		Event:    eventData,
