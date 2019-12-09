@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// fastwalk provides a faster version of filepath.Walk for file system
-// scanning tools.
 package cmd
 
 import (
@@ -15,14 +13,14 @@ import (
 	"sync"
 )
 
-// TraverseLink is used as a return value from WalkFuncs to indicate that the
+// ErrTraverseLink is used as a return value from WalkFuncs to indicate that the
 // symlink named in the call may be traversed.
-var TraverseLink = errors.New("fastwalk: traverse symlink, assuming target is a directory")
+var ErrTraverseLink = errors.New("fastwalk: traverse symlink, assuming target is a directory")
 
-// SkipFiles is a used as a return value from WalkFuncs to indicate that the
+// ErrSkipFiles is a used as a return value from WalkFuncs to indicate that the
 // callback should not be called for any other files in the current directory.
 // Child directories will still be traversed.
-var SkipFiles = errors.New("fastwalk: skip remaining files in directory")
+var ErrSkipFiles = errors.New("fastwalk: skip remaining files in directory")
 
 // Walk is a faster implementation of filepath.Walk.
 //
@@ -168,7 +166,7 @@ func (w *walker) onDirEnt(dirName, baseName string, typ os.FileMode) error {
 
 	err := w.fn(joined, typ)
 	if typ == os.ModeSymlink {
-		if err == TraverseLink {
+		if err == ErrTraverseLink {
 			// Set callbackDone so we don't call it twice for both the
 			// symlink-as-symlink and the symlink-as-directory later:
 			w.enqueue(walkItem{dir: joined, callbackDone: true})
@@ -199,7 +197,7 @@ func readDirFn(dirName string, fn func(dirName, entName string, typ os.FileMode)
 		}
 
 		if err := fn(dirName, fi, mode); err != nil {
-			if err == SkipFiles {
+			if err == ErrSkipFiles {
 				skipFiles = true
 				continue
 			}
