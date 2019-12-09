@@ -59,6 +59,10 @@ const (
 	readAheadBuffers = 4
 	// Size of each buffer.
 	readAheadBufSize = 1 << 20
+
+	// Wait interval to check if active IO count is low
+	// to proceed crawling to compute data usage
+	lowActiveIOWaitTick = 100 * time.Millisecond
 )
 
 // isValidVolname verifies a volname name in accordance with object
@@ -82,7 +86,8 @@ type posix struct {
 	totalUsed  uint64 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 	ioErrCount int32  // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 
-	activeIOCount int32
+	activeIOCount    int32
+	maxActiveIOCount int32
 
 	diskPath string
 	pool     sync.Pool
@@ -217,8 +222,9 @@ func newPosix(path string) (*posix, error) {
 				return &b
 			},
 		},
-		stopUsageCh: make(chan struct{}),
-		diskMount:   mountinfo.IsLikelyMountPoint(path),
+		stopUsageCh:      make(chan struct{}),
+		diskMount:        mountinfo.IsLikelyMountPoint(path),
+		maxActiveIOCount: 10,
 	}
 
 	// Success.
@@ -333,8 +339,8 @@ func isQuitting(endCh chan struct{}) bool {
 
 func (s *posix) waitForLowActiveIO() {
 	for {
-		if atomic.LoadInt32(&s.activeIOCount) >= 10 {
-			time.Sleep(100 * time.Millisecond)
+		if atomic.LoadInt32(&s.activeIOCount) >= s.maxActiveIOCount {
+			time.Sleep(lowActiveIOWaitTick)
 			continue
 		}
 		break

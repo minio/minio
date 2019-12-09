@@ -52,6 +52,8 @@ type FSObjects struct {
 
 	// The count of concurrent calls on FSObjects API
 	activeIOCount int64
+	// The active IO count ceiling for crawling to work
+	maxActiveIOCount int64
 
 	// Path to be exported over S3 API.
 	fsPath string
@@ -155,6 +157,8 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		listPool:      NewTreeWalkPool(globalLookupTimeout),
 		appendFileMap: make(map[string]*fsAppendFile),
 		diskMount:     mountinfo.IsLikelyMountPoint(fsPath),
+
+		maxActiveIOCount: 10,
 	}
 
 	// Once the filesystem has initialized hold the read lock for
@@ -212,8 +216,8 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
 
 func (fs *FSObjects) waitForLowActiveIO() {
 	for {
-		if atomic.LoadInt64(&fs.activeIOCount) >= 10 {
-			time.Sleep(100 * time.Millisecond)
+		if atomic.LoadInt64(&fs.activeIOCount) >= fs.maxActiveIOCount {
+			time.Sleep(lowActiveIOWaitTick)
 			continue
 		}
 		break
