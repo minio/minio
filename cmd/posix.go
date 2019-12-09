@@ -346,8 +346,6 @@ func (s *posix) waitForLowActiveIO() {
 
 func (s *posix) CrawlAndGetDataUsage(endCh chan struct{}) (DataUsageInfo, error) {
 
-	s.waitForLowActiveIO()
-
 	var dataUsageInfoMu sync.Mutex
 	var dataUsageInfo = DataUsageInfo{
 		BucketsSizes:          make(map[string]uint64),
@@ -355,6 +353,9 @@ func (s *posix) CrawlAndGetDataUsage(endCh chan struct{}) (DataUsageInfo, error)
 	}
 
 	walkFn := func(origPath string, typ os.FileMode) error {
+
+		s.waitForLowActiveIO()
+
 		path := strings.TrimPrefix(origPath, s.diskPath)
 		path = strings.TrimPrefix(path, SlashSeparator)
 
