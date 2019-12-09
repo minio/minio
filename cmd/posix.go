@@ -371,14 +371,24 @@ func (s *posix) CrawlAndGetDataUsage(endCh chan struct{}) (DataUsageInfo, error)
 	walkFn := func(origPath string, typ os.FileMode) error {
 		path := strings.TrimPrefix(origPath, s.diskPath)
 		path = strings.TrimPrefix(path, SlashSeparator)
-		split := strings.SplitN(path, SlashSeparator, 2)
-		if len(split) < 2 {
+
+		splits := splitN(path, SlashSeparator, 2)
+
+		bucket := splits[0]
+		prefix := splits[1]
+
+		if bucket == "" {
 			return nil
 		}
 
-		bucketName := split[0]
-		prefix := split[1]
-		if isReservedOrInvalidBucket(bucketName, false) {
+		if isReservedOrInvalidBucket(bucket, false) {
+			return nil
+		}
+
+		if prefix == "" {
+			dataUsageInfoMu.Lock()
+			dataUsageInfo.BucketsCount++
+			dataUsageInfoMu.Unlock()
 			return nil
 		}
 
@@ -395,7 +405,7 @@ func (s *posix) CrawlAndGetDataUsage(endCh chan struct{}) (DataUsageInfo, error)
 			dataUsageInfoMu.Lock()
 			dataUsageInfo.ObjectsCount++
 			dataUsageInfo.ObjectsTotalSize += uint64(meta.Stat.Size)
-			dataUsageInfo.BucketsSizes[bucketName] += uint64(meta.Stat.Size)
+			dataUsageInfo.BucketsSizes[bucket] += uint64(meta.Stat.Size)
 			dataUsageInfo.ObjectsSizesHistogram[objSizeToHistoInterval(uint64(meta.Stat.Size))]++
 			dataUsageInfoMu.Unlock()
 		}
@@ -405,7 +415,6 @@ func (s *posix) CrawlAndGetDataUsage(endCh chan struct{}) (DataUsageInfo, error)
 
 	fastWalk(s.diskPath, walkFn)
 
-	dataUsageInfo.BucketsCount = uint64(len(dataUsageInfo.BucketsSizes))
 	dataUsageInfo.LastUpdate = UTCNow()
 
 	atomic.StoreUint64(&s.totalUsed, dataUsageInfo.ObjectsTotalSize)

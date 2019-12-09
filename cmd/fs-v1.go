@@ -239,13 +239,23 @@ func (fs *FSObjects) crawlAndGetDataUsageInfo(ctx context.Context, endCh chan st
 
 		path := strings.TrimPrefix(origPath, fs.fsPath)
 		path = strings.TrimPrefix(path, SlashSeparator)
-		split := strings.SplitN(path, SlashSeparator, 2)
-		if len(split) < 2 {
+
+		splits := splitN(path, SlashSeparator, 2)
+		bucket := splits[0]
+		prefix := splits[1]
+
+		if bucket == "" {
 			return nil
 		}
 
-		bucketName := split[0]
-		if isReservedOrInvalidBucket(bucketName, false) {
+		if isReservedOrInvalidBucket(bucket, false) {
+			return nil
+		}
+
+		if prefix == "" {
+			dataUsageInfoMu.Lock()
+			dataUsageInfo.BucketsCount++
+			dataUsageInfoMu.Unlock()
 			return nil
 		}
 
@@ -253,6 +263,7 @@ func (fs *FSObjects) crawlAndGetDataUsageInfo(ctx context.Context, endCh chan st
 			return nil
 		}
 
+		// Get file size
 		fi, err := os.Stat(origPath)
 		if err != nil {
 			return nil
@@ -262,7 +273,7 @@ func (fs *FSObjects) crawlAndGetDataUsageInfo(ctx context.Context, endCh chan st
 		dataUsageInfoMu.Lock()
 		dataUsageInfo.ObjectsCount++
 		dataUsageInfo.ObjectsTotalSize += uint64(size)
-		dataUsageInfo.BucketsSizes[bucketName] += uint64(size)
+		dataUsageInfo.BucketsSizes[bucket] += uint64(size)
 		dataUsageInfo.ObjectsSizesHistogram[objSizeToHistoInterval(uint64(size))]++
 		dataUsageInfoMu.Unlock()
 
@@ -271,10 +282,9 @@ func (fs *FSObjects) crawlAndGetDataUsageInfo(ctx context.Context, endCh chan st
 
 	fastWalk(fs.fsPath, walkFn)
 
-	dataUsageInfo.BucketsCount = uint64(len(dataUsageInfo.BucketsSizes))
 	dataUsageInfo.LastUpdate = UTCNow()
-
 	atomic.StoreUint64(&fs.totalUsed, dataUsageInfo.ObjectsTotalSize)
+
 	return dataUsageInfo
 }
 
