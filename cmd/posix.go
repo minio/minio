@@ -102,9 +102,6 @@ type posix struct {
 	stopUsageCh chan struct{}
 
 	sync.RWMutex
-
-	dataUsageInProgress   bool
-	dataUsageInProgressMu sync.RWMutex
 }
 
 // checkPathLength - returns error if given path name length more than 255
@@ -349,17 +346,6 @@ func (s *posix) waitForLowActiveIO() {
 
 func (s *posix) CrawlAndGetDataUsage(endCh chan struct{}) (DataUsageInfo, error) {
 
-	// Check if there is a refresh routine in
-	// progress to quit if this is the case.
-	s.dataUsageInProgressMu.Lock()
-	if s.dataUsageInProgress {
-		s.dataUsageInProgressMu.Unlock()
-		return DataUsageInfo{}, nil
-	}
-
-	s.dataUsageInProgress = true
-	s.dataUsageInProgressMu.Unlock()
-
 	s.waitForLowActiveIO()
 
 	var dataUsageInfoMu sync.Mutex
@@ -419,12 +405,6 @@ func (s *posix) CrawlAndGetDataUsage(endCh chan struct{}) (DataUsageInfo, error)
 	dataUsageInfo.LastUpdate = UTCNow()
 
 	atomic.StoreUint64(&s.totalUsed, dataUsageInfo.ObjectsTotalSize)
-
-	// Attach the newly computed data usage to the current posix
-	s.dataUsageInProgressMu.Lock()
-	s.dataUsageInProgress = false
-	s.dataUsageInProgressMu.Unlock()
-
 	return dataUsageInfo, nil
 }
 
