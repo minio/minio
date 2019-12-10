@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"crypto/hmac"
 	"encoding/binary"
@@ -1259,7 +1260,13 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 				writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL, guessIsBrowserReq(r))
 				return
 			}
-			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
+			in := io.Reader(hashReader)
+			if size > 4<<20 {
+				// The encryption reads in blocks of 64KB.
+				// We add a buffer on bigger files to reduce the number of syscalls upstream.
+				in = bufio.NewReaderSize(hashReader, 1<<20)
+			}
+			reader, objectEncryptionKey, err = EncryptRequest(in, r, bucket, object, metadata)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
