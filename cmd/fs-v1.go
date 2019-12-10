@@ -19,11 +19,13 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -214,14 +216,23 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
 	return storageInfo
 }
 
-func (fs *FSObjects) waitForLowActiveIO() {
+func (fs *FSObjects) waitForLowActiveIO() error {
+	t := time.NewTicker(lowActiveIOWaitTick)
+	defer t.Stop()
 	for {
 		if atomic.LoadInt64(&fs.activeIOCount) >= fs.maxActiveIOCount {
-			time.Sleep(lowActiveIOWaitTick)
-			continue
+			select {
+			case <-GlobalServiceDoneCh:
+				return errors.New("forced exit")
+			case <-t.C:
+				continue
+			}
 		}
 		break
 	}
+
+	return nil
+
 }
 
 // crawlAndGetDataUsageInfo returns data usage stats of the current FS deployment
@@ -235,7 +246,15 @@ func (fs *FSObjects) crawlAndGetDataUsageInfo(ctx context.Context, endCh chan st
 
 	walkFn := func(origPath string, typ os.FileMode) error {
 
-		fs.waitForLowActiveIO()
+		select {
+		case <-GlobalServiceDoneCh:
+			return filepath.SkipDir
+		default:
+		}
+
+		if err := fs.waitForLowActiveIO(); err != nil {
+			return filepath.SkipDir
+		}
 
 		path := strings.TrimPrefix(origPath, fs.fsPath)
 		path = strings.TrimPrefix(path, SlashSeparator)
@@ -249,7 +268,7 @@ func (fs *FSObjects) crawlAndGetDataUsageInfo(ctx context.Context, endCh chan st
 		}
 
 		if isReservedOrInvalidBucket(bucket, false) {
-			return nil
+			return filepath.SkipDir
 		}
 
 		if prefix == "" {

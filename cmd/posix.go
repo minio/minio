@@ -334,14 +334,21 @@ func isQuitting(endCh chan struct{}) bool {
 	}
 }
 
-func (s *posix) waitForLowActiveIO() {
+func (s *posix) waitForLowActiveIO() error {
+	t := time.NewTicker(lowActiveIOWaitTick)
+	defer t.Stop()
 	for {
 		if atomic.LoadInt32(&s.activeIOCount) >= s.maxActiveIOCount {
-			time.Sleep(lowActiveIOWaitTick)
-			continue
+			select {
+			case <-GlobalServiceDoneCh:
+				return errors.New("forced exit")
+			case <-t.C:
+				continue
+			}
 		}
 		break
 	}
+	return nil
 }
 
 func (s *posix) CrawlAndGetDataUsage(endCh chan struct{}) (DataUsageInfo, error) {
@@ -354,7 +361,15 @@ func (s *posix) CrawlAndGetDataUsage(endCh chan struct{}) (DataUsageInfo, error)
 
 	walkFn := func(origPath string, typ os.FileMode) error {
 
-		s.waitForLowActiveIO()
+		select {
+		case <-GlobalServiceDoneCh:
+			return filepath.SkipDir
+		default:
+		}
+
+		if err := s.waitForLowActiveIO(); err != nil {
+			return filepath.SkipDir
+		}
 
 		path := strings.TrimPrefix(origPath, s.diskPath)
 		path = strings.TrimPrefix(path, SlashSeparator)
