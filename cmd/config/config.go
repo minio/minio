@@ -82,6 +82,7 @@ const (
 	StorageClassSubSys   = "storage_class"
 	CompressionSubSys    = "compression"
 	KmsVaultSubSys       = "kms_vault"
+	KmsKesSubSys         = "kms_kes"
 	LoggerWebhookSubSys  = "logger_webhook"
 	AuditWebhookSubSys   = "audit_webhook"
 
@@ -113,6 +114,7 @@ var SubSystems = set.CreateStringSet([]string{
 	StorageClassSubSys,
 	CompressionSubSys,
 	KmsVaultSubSys,
+	KmsKesSubSys,
 	LoggerWebhookSubSys,
 	AuditWebhookSubSys,
 	PolicyOPASubSys,
@@ -139,6 +141,7 @@ var SubSystemsSingleTargets = set.CreateStringSet([]string{
 	StorageClassSubSys,
 	CompressionSubSys,
 	KmsVaultSubSys,
+	KmsKesSubSys,
 	PolicyOPASubSys,
 	IdentityLDAPSubSys,
 	IdentityOpenIDSubSys,

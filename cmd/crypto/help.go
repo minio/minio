@@ -20,7 +20,7 @@ import "github.com/minio/minio/cmd/config"
 
 // Help template for KMS vault
 var (
-	Help = config.HelpKVS{
+	HelpVault = config.HelpKVS{
 		config.HelpKV{
 			Key:         KMSVaultEndpoint,
 			Description: `API endpoint e.g. "http://vault-endpoint-ip:8200"`,
@@ -28,7 +28,7 @@ var (
 		},
 		config.HelpKV{
 			Key:         KMSVaultKeyName,
-			Description: `unique transit key name e.g. "my-minio-key"`,
+			Description: `unique transit key name - e.g. "my-minio-key"`,
 			Type:        "string",
 		},
 		config.HelpKV{
@@ -61,6 +61,41 @@ var (
 		config.HelpKV{
 			Key:         KMSVaultCAPath,
 			Description: `optional path to PEM-encoded CA certs e.g. "/home/user/custom-certs"`,
+			Optional:    true,
+			Type:        "path",
+		},
+		config.HelpKV{
+			Key:         config.Comment,
+			Description: config.DefaultComment,
+			Optional:    true,
+			Type:        "sentence",
+		},
+	}
+
+	HelpKes = config.HelpKVS{
+		config.HelpKV{
+			Key:         KMSKesEndpoint,
+			Description: `API endpoint - e.g. "https://kes-endpoint:7373"`,
+			Type:        "url",
+		},
+		config.HelpKV{
+			Key:         KMSKesKeyName,
+			Description: `unique key name - e.g. "my-minio-key"`,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         KMSKesCertFile,
+			Description: `path to client certificate for TLS auth - e.g. /etc/keys/public.crt`,
+			Type:        "path",
+		},
+		config.HelpKV{
+			Key:         KMSKesKeyFile,
+			Description: `path to client private key for TLS auth - e.g. /etc/keys/private.key`,
+			Type:        "path",
+		},
+		config.HelpKV{
+			Key:         KMSKesCAPath,
+			Description: `path to PEM-encoded cert(s) to verify kes server cert - e.g. /etc/keys/CAs`,
 			Optional:    true,
 			Type:        "path",
 		},
