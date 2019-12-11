@@ -62,7 +62,7 @@ for event in r['Payload']:
 ## 4. Run the Program
 Upload a sample dataset to MinIO using the following commands.
 ```sh
-$ curl "https://esa.un.org/unpd/wpp/DVD/Files/1_Indicators%20(Standard)/CSV_FILES/WPP2017_TotalPopulationBySex.csv" > TotalPopulation.csv
+$ curl "https://population.un.org/wpp/Download/Files/1_Indicators%20(Standard)/CSV_FILES/WPP2019_TotalPopulationBySex.csv" > TotalPopulation.csv
 $ mc mb myminio/mycsvbucket
 $ gzip TotalPopulation.csv
 $ mc cp TotalPopulation.csv.gz myminio/mycsvbucket/sampledata/
