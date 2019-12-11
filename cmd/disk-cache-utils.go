@@ -29,11 +29,14 @@ import (
 )
 
 type cacheControl struct {
-	expiry   time.Time
-	maxAge   int
-	sMaxAge  int
-	minFresh int
-	maxStale int
+	expiry       time.Time
+	maxAge       int
+	sMaxAge      int
+	minFresh     int
+	maxStale     int
+	noStore      bool
+	onlyIfCached bool
+	noCache      bool
 }
 
 func (c cacheControl) isEmpty() bool {
@@ -44,6 +47,19 @@ func (c cacheControl) isEmpty() bool {
 func (c cacheControl) isStale(modTime time.Time) bool {
 	if c.isEmpty() {
 		return false
+	}
+	// response will never be stale if only-if-cached is set
+	if c.onlyIfCached {
+		return false
+	}
+	// Cache-Control value no-store indicates never cache
+	if c.noStore {
+		return true
+	}
+	// Cache-Control value no-cache indicates cache entry needs to be revalidated before
+	// serving from cache
+	if c.noCache {
+		return true
 	}
 	now := time.Now()
 
@@ -88,6 +104,19 @@ func cacheControlOpts(o ObjectInfo) (c cacheControl) {
 	vals := strings.Split(headerVal, ",")
 	for _, val := range vals {
 		val = strings.TrimSpace(val)
+
+		if val == "no-store" {
+			c.noStore = true
+			continue
+		}
+		if val == "only-if-cached" {
+			c.onlyIfCached = true
+			continue
+		}
+		if val == "no-cache" {
+			c.noCache = true
+			continue
+		}
 		p := strings.Split(val, "=")
 
 		if len(p) != 2 {

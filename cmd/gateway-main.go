@@ -226,7 +226,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		globalHTTPServer.Shutdown()
 		logger.FatalIf(err, "Unable to initialize gateway backend")
 	}
-
 	newObject = NewGatewayLayerWithLocker(newObject)
 
 	// Re-enable logging

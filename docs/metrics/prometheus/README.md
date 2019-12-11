@@ -118,7 +118,6 @@ The list of metrics and its definition are as follows. (NOTE: instance here is o
     > 1. Instance here is one MinIO node.
     > 2. `s3 requests` exclude internode requests.
 
-
 - standard go runtime metrics prefixed by `go_`
 - process level metrics prefixed with `process_`
 - prometheus scrap metrics prefixed with `promhttp_`
@@ -138,6 +137,23 @@ The list of metrics and its definition are as follows. (NOTE: instance here is o
 - `minio_version_info`: Current MinIO version with commit-id.
 - `s3_ttfb_seconds`: Histogram that holds the latency information of the requests.
 
+Apart from above metrics, MinIO also exposes below mode specific metrics
+
+### Cache specific metrics
+
+MinIO Gateway instances enabled with Disk-Caching expose caching related metrics.
+
+- `cache_data_served`: Total number of bytes served from cache.
+- `cache_hits_total`: Total number of cache hits.
+- `cache_misses_total`: Total number of cache misses.
+
+### S3 Gateway & Cache specific metrics
+
+MinIO S3 Gateway instance exposes metrics related to Gateway communication with AWS S3.
+
+- `gateway_s3_requests`: Total number of GET & HEAD requests made to AWS S3. This metrics has a label `method` that identifies GET & HEAD Requests.
+- `gateway_s3_bytes_sent`: Total number of bytes sent to AWS S3 (in GET & HEAD Requests).
+- `gateway_s3_bytes_received`: Total number of bytes received from AWS S3 (in GET & HEAD Requests).
 
 ## Migration guide for the new set of metrics
 
