@@ -67,6 +67,10 @@ func (target ExampleTarget) Close() error {
 	return nil
 }
 
+func (target ExampleTarget) IsActive() (bool, error) {
+	return false, errors.New("not connected to target server/service")
+}
+
 func TestTargetListAdd(t *testing.T) {
 	targetListCase1 := NewTargetList()
 

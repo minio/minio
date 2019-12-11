@@ -111,91 +111,6 @@ func (d1 BackendDisks) Merge(d2 BackendDisks) BackendDisks {
 	return d2
 }
 
-// ServerProperties holds some of the server's information such as uptime,
-// version, region, ..
-type ServerProperties struct {
-	Uptime       time.Duration `json:"uptime"`
-	Version      string        `json:"version"`
-	CommitID     string        `json:"commitID"`
-	DeploymentID string        `json:"deploymentID"`
-	Region       string        `json:"region"`
-	SQSARN       []string      `json:"sqsARN"`
-}
-
-// ServerConnStats holds network information
-type ServerConnStats struct {
-	TotalInputBytes  uint64 `json:"transferred"`
-	TotalOutputBytes uint64 `json:"received"`
-}
-
-// ServerHTTPMethodStats holds total number of HTTP operations from/to the server,
-// including the average duration the call was spent.
-type ServerHTTPMethodStats struct {
-	Count       uint64 `json:"count"`
-	AvgDuration string `json:"avgDuration"`
-}
-
-// ServerHTTPStats holds all type of http operations performed to/from the server
-// including their average execution time.
-type ServerHTTPStats struct {
-	TotalHEADStats     ServerHTTPMethodStats `json:"totalHEADs"`
-	SuccessHEADStats   ServerHTTPMethodStats `json:"successHEADs"`
-	TotalGETStats      ServerHTTPMethodStats `json:"totalGETs"`
-	SuccessGETStats    ServerHTTPMethodStats `json:"successGETs"`
-	TotalPUTStats      ServerHTTPMethodStats `json:"totalPUTs"`
-	SuccessPUTStats    ServerHTTPMethodStats `json:"successPUTs"`
-	TotalPOSTStats     ServerHTTPMethodStats `json:"totalPOSTs"`
-	SuccessPOSTStats   ServerHTTPMethodStats `json:"successPOSTs"`
-	TotalDELETEStats   ServerHTTPMethodStats `json:"totalDELETEs"`
-	SuccessDELETEStats ServerHTTPMethodStats `json:"successDELETEs"`
-}
-
-// ServerInfoData holds storage, connections and other
-// information of a given server
-type ServerInfoData struct {
-	StorageInfo StorageInfo      `json:"storage"`
-	ConnStats   ServerConnStats  `json:"network"`
-	HTTPStats   ServerHTTPStats  `json:"http"`
-	Properties  ServerProperties `json:"server"`
-}
-
-// ServerInfo holds server information result of one node
-type ServerInfo struct {
-	Error string          `json:"error"`
-	Addr  string          `json:"addr"`
-	Data  *ServerInfoData `json:"data"`
-}
-
-// ServerInfo - Connect to a minio server and call Server Info Management API
-// to fetch server's information represented by ServerInfo structure
-func (adm *AdminClient) ServerInfo() ([]ServerInfo, error) {
-	resp, err := adm.executeMethod("GET", requestData{relPath: adminAPIPrefix + "/info"})
-	defer closeResponse(resp)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check response http status code
-	if resp.StatusCode != http.StatusOK {
-		return nil, httpRespToErrorResponse(resp)
-	}
-
-	// Unmarshal the server's json response
-	var serversInfo []ServerInfo
-
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(respBytes, &serversInfo)
-	if err != nil {
-		return nil, err
-	}
-
-	return serversInfo, nil
-}
-
 // StorageInfo - Connect to a minio server and call Storage Info Management API
 // to fetch server's information represented by StorageInfo structure
 func (adm *AdminClient) StorageInfo() (StorageInfo, error) {
@@ -408,4 +323,157 @@ func (adm *AdminClient) NetPerfInfo(size int) (map[string][]NetPerfInfo, error) 
 	}
 
 	return info, nil
+}
+
+// InfoMessage container to hold server admin related information.
+type InfoMessage struct {
+	Mode         string             `json:"mode"`
+	Domain       []string           `json:"domain,omitempty"`
+	Region       string             `json:"region,omitempty"`
+	SQSARN       []string           `json:"sqsARN,omitempty"`
+	DeploymentID string             `json:"deploymentID"`
+	Buckets      Buckets            `json:"buckets"`
+	Objects      Objects            `json:"objects"`
+	Usage        Usage              `json:"usage"`
+	Services     Services           `json:"services"`
+	Backend      interface{}        `json:"backend"`
+	Servers      []ServerProperties `json:"servers"`
+}
+
+// Services contains different services information
+type Services struct {
+	Vault         Vault                         `json:"vault"`
+	LDAP          LDAP                          `json:"ldap"`
+	Logger        []Logger                      `json:"logger,omitempty"`
+	Audit         []Audit                       `json:"audit,omitempty"`
+	Notifications []map[string][]TargetIDStatus `json:"notifications"`
+}
+
+// Buckets contains the number of buckets
+type Buckets struct {
+	Count int `json:"count"`
+}
+
+// Objects contains the number of objects
+type Objects struct {
+	Count int `json:"count"`
+}
+
+// Usage contains the tottal size used
+type Usage struct {
+	Size uint64 `json:"size"`
+}
+
+// Vault - Fetches the Vault status
+type Vault struct {
+	Status  string `json:"status,omitempty"`
+	Encrypt string `json:"encryp,omitempty"`
+	Decrypt string `json:"decrypt,omitempty"`
+	Update  string `json:"update,omitempty"`
+}
+
+// LDAP contains ldap status
+type LDAP struct {
+	Status string `json:"status,omitempty"`
+}
+
+// Status of endpoint
+type Status struct {
+	Status string `json:"status"`
+}
+
+// Audit contains audit logger status
+type Audit map[string]Status
+
+// Logger contains logger status
+type Logger map[string]Status
+
+// TargetIDStatus containsid and status
+type TargetIDStatus map[string]Status
+
+// backendType - indicates the type of backend storage
+type backendType string
+
+const (
+	// FsType - Backend is FS Type
+	FsType = backendType("FS")
+	// ErasureType - Backend is Erasure type
+	ErasureType = backendType("Erasure")
+)
+
+// FsBackend contains specific FS storage information
+type FsBackend struct {
+	Type backendType `json:"backendType"`
+}
+
+// XlBackend contains specific erasure storage information
+type XlBackend struct {
+	Type         backendType `json:"backendType"`
+	OnlineDisks  int         `json:"onlineDisks"`
+	OfflineDisks int         `json:"offlineDisks"`
+	// Data disks for currently configured Standard storage class.
+	StandardSCData int `json:"standardSCData"`
+	// Parity disks for currently configured Standard storage class.
+	StandardSCParity int `json:"standardSCParity"`
+	// Data disks for currently configured Reduced Redundancy storage class.
+	RRSCData int `json:"rrSCData"`
+	// Parity disks for currently configured Reduced Redundancy storage class.
+	RRSCParity int `json:"rrSCParity"`
+}
+
+// ServerProperties holds server information
+type ServerProperties struct {
+	State    string            `json:"state"`
+	Endpoint string            `json:"endpoint"`
+	Uptime   time.Duration     `json:"uptime"`
+	Version  string            `json:"version"`
+	CommitID string            `json:"commitID"`
+	Network  map[string]string `json:"network"`
+	Disks    []Disk            `json:"disks"`
+}
+
+// Disk holds Disk information
+type Disk struct {
+	DrivePath       string  `json:"path"`
+	State           string  `json:"state"`
+	UUID            string  `json:"uuid,omitempty"`
+	Model           string  `json:"model,omitempty"`
+	TotalSpace      uint64  `json:"totalspace"`
+	UsedSpace       uint64  `json:"usedspace"`
+	ReadThroughput  float64 `json:"readthroughput,omitempty"`
+	WriteThroughPut float64 `json:"writethroughput,omitempty"`
+	ReadLatency     float64 `json:"readlatency,omitempty"`
+	WriteLatency    float64 `json:"writelatency,omitempty"`
+	Utilization     float64 `json:"utilization,omitempty"`
+}
+
+// ServerInfo - Connect to a minio server and call Server Admin Info Management API
+// to fetch server's information represented by infoMessage structure
+func (adm *AdminClient) ServerInfo() (InfoMessage, error) {
+
+	resp, err := adm.executeMethod("GET", requestData{relPath: adminAPIPrefix + "/info"})
+	defer closeResponse(resp)
+	if err != nil {
+		return InfoMessage{}, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return InfoMessage{}, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var message InfoMessage
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return InfoMessage{}, err
+	}
+
+	err = json.Unmarshal(respBytes, &message)
+	if err != nil {
+		return InfoMessage{}, err
+	}
+
+	return message, nil
 }

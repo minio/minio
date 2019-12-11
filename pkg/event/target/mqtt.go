@@ -121,6 +121,14 @@ func (target *MQTTTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - Return true if target is up and active
+func (target *MQTTTarget) IsActive() (bool, error) {
+	if !target.client.IsConnectionOpen() {
+		return false, errNotConnected
+	}
+	return true, nil
+}
+
 // send - sends an event to the mqtt.
 func (target *MQTTTarget) send(eventData event.Event) error {
 	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
@@ -144,8 +152,9 @@ func (target *MQTTTarget) send(eventData event.Event) error {
 // Send - reads an event from store and sends it to MQTT.
 func (target *MQTTTarget) Send(eventKey string) error {
 	// Do not send if the connection is not active.
-	if !target.client.IsConnectionOpen() {
-		return errNotConnected
+	_, err := target.IsActive()
+	if err != nil {
+		return err
 	}
 
 	eventData, err := target.store.Get(eventKey)
@@ -174,8 +183,9 @@ func (target *MQTTTarget) Save(eventData event.Event) error {
 	}
 
 	// Do not send if the connection is not active.
-	if !target.client.IsConnectionOpen() {
-		return errNotConnected
+	_, err := target.IsActive()
+	if err != nil {
+		return err
 	}
 
 	return target.send(eventData)

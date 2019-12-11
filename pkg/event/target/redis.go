@@ -125,11 +125,8 @@ func (target *RedisTarget) ID() event.TargetID {
 	return target.id
 }
 
-// Save - saves the events to the store if questore is configured, which will be replayed when the redis connection is active.
-func (target *RedisTarget) Save(eventData event.Event) error {
-	if target.store != nil {
-		return target.store.Put(eventData)
-	}
+// IsActive - Return true if target is up and active
+func (target *RedisTarget) IsActive() (bool, error) {
 	conn := target.pool.Get()
 	defer func() {
 		cErr := conn.Close()
@@ -138,9 +135,21 @@ func (target *RedisTarget) Save(eventData event.Event) error {
 	_, pingErr := conn.Do("PING")
 	if pingErr != nil {
 		if IsConnRefusedErr(pingErr) {
-			return errNotConnected
+			return false, errNotConnected
 		}
-		return pingErr
+		return false, pingErr
+	}
+	return true, nil
+}
+
+// Save - saves the events to the store if questore is configured, which will be replayed when the redis connection is active.
+func (target *RedisTarget) Save(eventData event.Event) error {
+	if target.store != nil {
+		return target.store.Put(eventData)
+	}
+	_, err := target.IsActive()
+	if err != nil {
+		return err
 	}
 	return target.send(eventData)
 }
