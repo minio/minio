@@ -242,7 +242,7 @@ func getLocalServerProperty(endpointZones EndpointZones, r *http.Request) madmin
 	return madmin.ServerProperties{
 		State:    "ok",
 		Endpoint: addr,
-		Uptime:   UTCNow().Sub(globalBootTime),
+		Uptime:   UTCNow().Unix() - globalBootTime.Unix(),
 		Version:  Version,
 		CommitID: CommitID,
 		Network:  network,
