@@ -88,11 +88,14 @@ func (r *Reader) startReader() {
 		case <-r.exitReader:
 			return
 		}
-		if in.Error != nil {
+		if in.Error != nil && in.Error != io.EOF {
 			r.err = &in.Error
 			return
 		}
 		if in.Value == nil {
+			if in.Error == io.EOF {
+				return
+			}
 			continue
 		}
 		i := in.Value.Iter()
@@ -142,6 +145,9 @@ func (r *Reader) startReader() {
 				r.err = &err
 				return
 			}
+		}
+		if in.Error == io.EOF {
+			return
 		}
 	}
 }
