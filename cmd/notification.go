@@ -614,7 +614,6 @@ func (sys *NotificationSys) AddNotificationTargetsFromConfig(cfg config.Config) 
 	if err != nil {
 		return err
 	}
-
 	for _, target := range targetList.Targets() {
 		if err = sys.targetList.Add(target); err != nil {
 			return err

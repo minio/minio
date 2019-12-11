@@ -199,10 +199,8 @@ func (target *PostgreSQLTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	if err := target.db.Ping(); err != nil {
-		if IsConnErr(err) {
-			return errNotConnected
-		}
+	_, err := target.IsActive()
+	if err != nil {
 		return err
 	}
 	return target.send(eventData)
@@ -256,14 +254,10 @@ func (target *PostgreSQLTarget) send(eventData event.Event) error {
 
 // Send - reads an event from store and sends it to PostgreSQL.
 func (target *PostgreSQLTarget) Send(eventKey string) error {
-
-	if err := target.db.Ping(); err != nil {
-		if IsConnErr(err) {
-			return errNotConnected
-		}
+	_, err := target.IsActive()
+	if err != nil {
 		return err
 	}
-
 	if !target.firstPing {
 		if err := target.executeStmts(); err != nil {
 			if IsConnErr(err) {

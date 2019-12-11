@@ -129,7 +129,8 @@ func (target *RedisTarget) ID() event.TargetID {
 func (target *RedisTarget) IsActive() (bool, error) {
 	conn := target.pool.Get()
 	defer func() {
-		conn.Close()
+		cErr := conn.Close()
+		target.loggerOnce(context.Background(), cErr, target.ID())
 	}()
 	_, pingErr := conn.Do("PING")
 	if pingErr != nil {
@@ -146,17 +147,9 @@ func (target *RedisTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	conn := target.pool.Get()
-	defer func() {
-		cErr := conn.Close()
-		target.loggerOnce(context.Background(), cErr, target.ID())
-	}()
-	_, pingErr := conn.Do("PING")
-	if pingErr != nil {
-		if IsConnRefusedErr(pingErr) {
-			return errNotConnected
-		}
-		return pingErr
+	_, err := target.IsActive()
+	if err != nil {
+		return err
 	}
 	return target.send(eventData)
 }

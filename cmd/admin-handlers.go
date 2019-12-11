@@ -57,8 +57,6 @@ const (
 	defaultNetPerfSize = 100 * humanize.MiByte
 )
 
-var errUnreachableEndpoint = errors.New("endpoint unreachable, please check your endpoint")
-
 // Type-safe query params.
 type mgmtQueryKey string
 
@@ -394,7 +392,6 @@ func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request
 
 		// Marshal API response
 		jsonBytes, err := json.Marshal(dps)
-
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
@@ -1297,7 +1294,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		if err != nil {
 			ldap.Status = "offline"
 		} else if ldapConn == nil {
-			ldap.Status = "LDAP server not configured"
+			ldap.Status = "Not Configured"
 		} else {
 			ldap.Status = "online"
 		}
@@ -1306,12 +1303,6 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	log, audit := fetchLoggerInfo(cfg)
-	if len(log) == 0 {
-		log = make([]madmin.Logger, 0)
-	}
-	if len(audit) == 0 {
-		audit = make([]madmin.Audit, 0)
-	}
 
 	// Get the notification target info
 	notifyTarget := fetchLambdaInfo(cfg)
@@ -1321,7 +1312,6 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	var OnDisks int
 	var OffDisks int
-
 	var backend interface{}
 
 	if storageInfo.Backend.Type == BackendType(madmin.Erasure) {
@@ -1356,7 +1346,6 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	server := getLocalServerProperty(globalEndpoints, r)
-
 	servers := globalNotificationSys.ServerInfo()
 	servers = append(servers, server)
 
@@ -1392,10 +1381,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	domain := []string{}
-	if len(globalDomainNames) != 0 {
-		domain = globalDomainNames
-	}
+	domain := globalDomainNames
 	buckets := madmin.Buckets{Count: 20}
 	objects := madmin.Objects{Count: 200}
 	usage := madmin.Usage{Size: 1024}
@@ -1558,9 +1544,9 @@ func checkConnection(endpointStr string) error {
 	}
 	if dErr := u.DialHTTP(); dErr != nil {
 		if urlErr, ok := dErr.(*url.Error); ok {
-			// To treat "connection refused" errors as errUnreachableEndpoint.
+			// To treat "connection refused" errors as un reachable endpoint.
 			if target.IsConnRefusedErr(urlErr.Err) {
-				return errUnreachableEndpoint
+				return errors.New("endpoint unreachable, please check your endpoint")
 			}
 		}
 		return dErr

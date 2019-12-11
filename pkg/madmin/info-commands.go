@@ -27,7 +27,6 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	// "github.com/minio/minio/cmd"
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mem"
@@ -329,9 +328,9 @@ func (adm *AdminClient) NetPerfInfo(size int) (map[string][]NetPerfInfo, error) 
 // InfoMessage container to hold server admin related information.
 type InfoMessage struct {
 	Mode         string             `json:"mode"`
-	Domain       []string           `json:"domain"`
-	Region       string             `json:"region"`
-	SQSARN       []string           `json:"sqsARN"`
+	Domain       []string           `json:"domain,omitempty"`
+	Region       string             `json:"region,omitempty"`
+	SQSARN       []string           `json:"sqsARN,omitempty"`
 	DeploymentID string             `json:"deploymentID"`
 	Buckets      Buckets            `json:"buckets"`
 	Objects      Objects            `json:"objects"`
@@ -345,8 +344,8 @@ type InfoMessage struct {
 type Services struct {
 	Vault         Vault                         `json:"vault"`
 	LDAP          LDAP                          `json:"ldap"`
-	Logger        []Logger                      `json:"logger"`
-	Audit         []Audit                       `json:"audit"`
+	Logger        []Logger                      `json:"logger,omitempty"`
+	Audit         []Audit                       `json:"audit,omitempty"`
 	Notifications []map[string][]TargetIDStatus `json:"notifications"`
 }
 
@@ -438,7 +437,7 @@ type Disk struct {
 	DrivePath       string  `json:"path"`
 	State           string  `json:"state"`
 	UUID            string  `json:"uuid,omitempty"`
-	Model           string  `json:"model"`
+	Model           string  `json:"model,omitempty"`
 	TotalSpace      uint64  `json:"totalspace"`
 	UsedSpace       uint64  `json:"usedspace"`
 	ReadThroughput  float64 `json:"readthroughput,omitempty"`

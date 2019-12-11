@@ -216,14 +216,9 @@ func (target *NATSTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	if target.args.Streaming.Enable {
-		if !target.stanConn.NatsConn().IsConnected() {
-			return errNotConnected
-		}
-	} else {
-		if !target.natsConn.IsConnected() {
-			return errNotConnected
-		}
+	_, err := target.IsActive()
+	if err != nil {
+		return err
 	}
 	return target.send(eventData)
 }

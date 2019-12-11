@@ -117,11 +117,8 @@ func (target *NSQTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	if err := target.producer.Ping(); err != nil {
-		// To treat "connection refused" errors as errNotConnected.
-		if IsConnRefusedErr(err) {
-			return errNotConnected
-		}
+	_, err := target.IsActive()
+	if err != nil {
 		return err
 	}
 	return target.send(eventData)
@@ -145,12 +142,8 @@ func (target *NSQTarget) send(eventData event.Event) error {
 
 // Send - reads an event from store and sends it to NSQ.
 func (target *NSQTarget) Send(eventKey string) error {
-
-	if err := target.producer.Ping(); err != nil {
-		// To treat "connection refused" errors as errNotConnected.
-		if IsConnRefusedErr(err) {
-			return errNotConnected
-		}
+	_, err := target.IsActive()
+	if err != nil {
 		return err
 	}
 
