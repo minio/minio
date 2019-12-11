@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// This code is imported from "golang.org/x/tools/internal/fastwalk",
+// only fastwalk.go is imported since we already implement readDir()
+// with some little tweaks.
+
 package cmd
 
 import (

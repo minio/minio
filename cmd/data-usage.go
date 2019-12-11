@@ -61,6 +61,7 @@ func runDataUsageInfoUpdateRoutine() {
 
 func runDataUsageInfoForFS(ctx context.Context, fsObj *FSObjects, endCh <-chan struct{}) {
 	t := time.NewTicker(dataUsageCrawlInterval)
+	defer t.Stop()
 	for {
 		// Get data usage info of the FS Object
 		usageInfo := fsObj.crawlAndGetDataUsageInfo(ctx, endCh)
@@ -91,6 +92,7 @@ func runDataUsageInfoForXLZones(ctx context.Context, z *xlZones, endCh <-chan st
 	}
 
 	t := time.NewTicker(dataUsageCrawlInterval)
+	defer t.Stop()
 	for {
 		usageInfo := z.crawlAndGetDataUsage(ctx, endCh)
 		err := storeDataUsageInBackend(ctx, z, usageInfo)

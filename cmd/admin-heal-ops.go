@@ -587,6 +587,11 @@ func (h *healSequence) healItemsFromSourceCh() error {
 		logger.LogIf(h.ctx, err)
 	}
 
+	// Start healing the background ops prefix.
+	if err := h.healMinioSysMeta(backgroundOpsMetaPrefix)(); err != nil {
+		logger.LogIf(h.ctx, err)
+	}
+
 	for path := range h.sourceCh {
 
 		var itemType madmin.HealItemType
@@ -631,6 +636,11 @@ func (h *healSequence) healItems() error {
 	// Start healing the bucket config prefix.
 	if err := h.healMinioSysMeta(bucketConfigPrefix)(); err != nil {
 		return err
+	}
+
+	// Start healing the background ops prefix.
+	if err := h.healMinioSysMeta(backgroundOpsMetaPrefix)(); err != nil {
+		logger.LogIf(h.ctx, err)
 	}
 
 	// Heal buckets and objects
