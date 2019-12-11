@@ -61,7 +61,7 @@ type Record interface {
 }
 
 // IterToValue converts a simdjson Iter to its underlying value.
-// Objects are returned as simdjson.Elements.
+// Objects are returned as simdjson.Object
 // Arrays are returned as []interface{} with parsed values.
 func IterToValue(iter simdjson.Iter) (interface{}, error) {
 	switch iter.Type() {
@@ -102,11 +102,7 @@ func IterToValue(iter simdjson.Iter) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		elems, err := obj.Parse(nil)
-		if err != nil || elems == nil {
-			return nil, err
-		}
-		return *elems, err
+		return *obj, err
 	case simdjson.TypeArray:
 		arr, err := iter.Array(nil)
 		if err != nil {

@@ -169,14 +169,14 @@ func (e *SelectStatement) EvalFrom(format string, input Record) (Record, error) 
 		}
 
 		return input, nil
-	case simdjson.Elements:
+	case simdjson.Object:
 		txedRec, _, err := jsonpathEval(e.selectAST.From.Table.PathExpr[1:], rec)
 		if err != nil {
 			return nil, err
 		}
 
 		switch v := txedRec.(type) {
-		case simdjson.Elements:
+		case simdjson.Object:
 			err := input.Replace(v)
 			if err != nil {
 				return nil, err

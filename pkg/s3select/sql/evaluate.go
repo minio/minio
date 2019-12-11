@@ -374,7 +374,7 @@ func (e *JSONPath) evalNode(r Record) (*Value, error) {
 	}
 	_, rawVal := r.Raw()
 	switch rowVal := rawVal.(type) {
-	case jstream.KVS, simdjson.Elements:
+	case jstream.KVS, simdjson.Object:
 		pathExpr := e.PathExpr
 		if len(pathExpr) == 0 {
 			pathExpr = []*JSONPathElement{{Key: &ObjectKey{ID: e.BaseKey}}}
@@ -423,8 +423,13 @@ func jsonToValue(result interface{}) (*Value, error) {
 			dst[i] = *v
 		}
 		return FromArray(dst), nil
-	case simdjson.Element:
-		bs, err := rval.Iter.MarshalJSON()
+	case simdjson.Object:
+		o := rval
+		elems, err := o.Parse(nil)
+		if err != nil {
+			return nil, err
+		}
+		bs, err := elems.MarshalJSON()
 		if err != nil {
 			return nil, err
 		}
