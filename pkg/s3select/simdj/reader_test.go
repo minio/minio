@@ -66,7 +66,7 @@ func TestNDJSON(t *testing.T) {
 			ref := loadCompressed(t, tt.name)
 
 			var err error
-			dst := make(chan simdjson.Elements, 100)
+			dst := make(chan simdjson.Object, 100)
 			dec := NewElementReader(dst, &err, &json.ReaderArgs{ContentType: "json"})
 			pj, err := simdjson.ParseND(ref, nil)
 			if err != nil {
@@ -111,12 +111,7 @@ func TestNDJSON(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					elems, err := o.Parse(nil)
-					if err != nil {
-						t.Fatal(err)
-					}
-
-					dst <- *elems
+					dst <- *o
 				default:
 					t.Fatal("unexpected type:", typ.String())
 				}

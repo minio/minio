@@ -30,7 +30,7 @@ import (
 type Reader struct {
 	args    *json.ReaderArgs
 	input   chan simdjson.Stream
-	decoded chan simdjson.Elements
+	decoded chan simdjson.Object
 
 	// err will only be returned after decoded has been closed.
 	err        *error
@@ -53,7 +53,7 @@ func (r *Reader) Read(dst sql.Record) (sql.Record, error) {
 	if !ok {
 		dstRec = &Record{}
 	}
-	dstRec.rootFields = v
+	dstRec.object = v
 	return dstRec, nil
 }
 
@@ -81,6 +81,7 @@ func (r *Reader) Close() error {
 func (r *Reader) startReader() {
 	defer r.readerWg.Done()
 	defer close(r.decoded)
+	var tmpObj simdjson.Object
 	for {
 		var in simdjson.Stream
 		select {
@@ -125,12 +126,7 @@ func (r *Reader) startReader() {
 					return
 				}
 
-				o, err := obj.Object(nil)
-				if err != nil {
-					r.err = &err
-					return
-				}
-				elems, err := o.Parse(nil)
+				o, err := obj.Object(&tmpObj)
 				if err != nil {
 					r.err = &err
 					return
@@ -138,7 +134,7 @@ func (r *Reader) startReader() {
 				select {
 				case <-r.exitReader:
 					return
-				case r.decoded <- *elems:
+				case r.decoded <- *o:
 				}
 			default:
 				err = fmt.Errorf("unexpected root json type:%v", typ)
@@ -157,7 +153,7 @@ func NewReader(readCloser io.ReadCloser, args *json.ReaderArgs) *Reader {
 	r := Reader{
 		args:       args,
 		readCloser: readCloser,
-		decoded:    make(chan simdjson.Elements, 1000),
+		decoded:    make(chan simdjson.Object, 1000),
 		input:      make(chan simdjson.Stream, 2),
 		exitReader: make(chan struct{}),
 	}
@@ -168,7 +164,7 @@ func NewReader(readCloser io.ReadCloser, args *json.ReaderArgs) *Reader {
 }
 
 // NewElementReader - creates new JSON reader using readCloser.
-func NewElementReader(ch chan simdjson.Elements, err *error, args *json.ReaderArgs) *Reader {
+func NewElementReader(ch chan simdjson.Object, err *error, args *json.ReaderArgs) *Reader {
 	return &Reader{
 		args:       args,
 		decoded:    ch,
@@ -181,7 +177,7 @@ func NewElementReader(ch chan simdjson.Elements, err *error, args *json.ReaderAr
 func NewTapeReader(pj simdjson.ParsedJson, args *json.ReaderArgs) *Reader {
 	r := Reader{
 		args:       args,
-		decoded:    make(chan simdjson.Elements, 1000),
+		decoded:    make(chan simdjson.Object, 1000),
 		input:      make(chan simdjson.Stream, 2),
 		exitReader: make(chan struct{}),
 	}
@@ -203,7 +199,7 @@ func NewTapeReader(pj simdjson.ParsedJson, args *json.ReaderArgs) *Reader {
 func NewTapeReaderChan(pj chan simdjson.Stream, args *json.ReaderArgs) *Reader {
 	r := Reader{
 		args:       args,
-		decoded:    make(chan simdjson.Elements, 1000),
+		decoded:    make(chan simdjson.Object, 1000),
 		input:      pj,
 		exitReader: make(chan struct{}),
 	}
