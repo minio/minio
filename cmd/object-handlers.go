@@ -1261,7 +1261,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 				return
 			}
 			in := io.Reader(hashReader)
-			if size > 4<<20 {
+			if size > 1<<20 {
 				// The encryption reads in blocks of 64KB.
 				// We add a buffer on bigger files to reduce the number of syscalls upstream.
 				in = bufio.NewReaderSize(hashReader, 1<<20)
