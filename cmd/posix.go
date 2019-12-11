@@ -351,7 +351,7 @@ func (s *posix) waitForLowActiveIO() error {
 	return nil
 }
 
-func (s *posix) CrawlAndGetDataUsage(endCh chan struct{}) (DataUsageInfo, error) {
+func (s *posix) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, error) {
 
 	var dataUsageInfoMu sync.Mutex
 	var dataUsageInfo = DataUsageInfo{

@@ -208,7 +208,7 @@ func (xl xlObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
 	return &Metrics{}, NotImplemented{}
 }
 
-func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, endCh chan struct{}) DataUsageInfo {
+func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
 	var randomDisks []StorageAPI
 	for _, d := range xl.getLoadBalancedDisks() {
 		if d == nil || !d.IsOnline() {

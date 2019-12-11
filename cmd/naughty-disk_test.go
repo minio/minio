@@ -80,7 +80,7 @@ func (d *naughtyDisk) calcError() (err error) {
 func (d *naughtyDisk) SetDiskID(id string) {
 }
 
-func (d *naughtyDisk) CrawlAndGetDataUsage(endCh chan struct{}) (info DataUsageInfo, err error) {
+func (d *naughtyDisk) CrawlAndGetDataUsage(endCh <-chan struct{}) (info DataUsageInfo, err error) {
 	return d.disk.CrawlAndGetDataUsage(endCh)
 }
 

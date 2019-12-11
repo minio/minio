@@ -59,7 +59,7 @@ func runDataUsageInfoUpdateRoutine() {
 	}
 }
 
-func runDataUsageInfoForFS(ctx context.Context, fsObj *FSObjects, endCh chan struct{}) {
+func runDataUsageInfoForFS(ctx context.Context, fsObj *FSObjects, endCh <-chan struct{}) {
 	t := time.NewTicker(dataUsageCrawlInterval)
 	for {
 		// Get data usage info of the FS Object
@@ -78,7 +78,7 @@ func runDataUsageInfoForFS(ctx context.Context, fsObj *FSObjects, endCh chan str
 	}
 }
 
-func runDataUsageInfoForXLZones(ctx context.Context, z *xlZones, endCh chan struct{}) {
+func runDataUsageInfoForXLZones(ctx context.Context, z *xlZones, endCh <-chan struct{}) {
 	locker := z.NewNSLock(ctx, minioMetaBucket, "leader-data-usage-info")
 	for {
 		err := locker.GetLock(newDynamicTimeout(time.Millisecond, time.Millisecond))

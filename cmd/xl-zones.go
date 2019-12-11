@@ -212,7 +212,7 @@ func (z *xlZones) StorageInfo(ctx context.Context) StorageInfo {
 	return storageInfo
 }
 
-func (z *xlZones) crawlAndGetDataUsage(ctx context.Context, endCh chan struct{}) DataUsageInfo {
+func (z *xlZones) crawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
 	var aggDataUsageInfo = struct {
 		sync.Mutex
 		DataUsageInfo

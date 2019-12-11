@@ -236,7 +236,7 @@ func (fs *FSObjects) waitForLowActiveIO() error {
 }
 
 // crawlAndGetDataUsageInfo returns data usage stats of the current FS deployment
-func (fs *FSObjects) crawlAndGetDataUsageInfo(ctx context.Context, endCh chan struct{}) DataUsageInfo {
+func (fs *FSObjects) crawlAndGetDataUsageInfo(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
 
 	var dataUsageInfoMu sync.Mutex
 	var dataUsageInfo = DataUsageInfo{
