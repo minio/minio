@@ -318,8 +318,13 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 			rc.Close()
 			return err
 		}
-		if cpuid.CPU.AVX2() {
-			s3Select.recordReader = simdj.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
+
+		if strings.EqualFold(s3Select.Input.JSONArgs.ContentType, "lines") {
+			if cpuid.CPU.AVX2() {
+				s3Select.recordReader = simdj.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
+			} else {
+				s3Select.recordReader = json.NewPReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
+			}
 		} else {
 			s3Select.recordReader = json.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
 		}
