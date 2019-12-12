@@ -1307,11 +1307,19 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	infoMsg := madmin.InfoMessage{}
-	vault := madmin.Vault{}
-	if GlobalKMS != nil {
-		vault = fetchVaultStatus(cfg)
+	buckets := madmin.Buckets{}
+	objects := madmin.Objects{}
+	usage := madmin.Usage{}
+
+	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
+	if err == nil {
+		buckets = madmin.Buckets{Count: dataUsageInfo.BucketsCount}
+		objects = madmin.Objects{Count: dataUsageInfo.ObjectsCount}
+		usage = madmin.Usage{Size: dataUsageInfo.ObjectsTotalSize}
 	}
+
+	infoMsg := madmin.InfoMessage{}
+	vault := fetchVaultStatus(cfg)
 
 	ldap := madmin.LDAP{}
 	if globalLDAPConfig.Enabled {
@@ -1407,9 +1415,6 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	domain := globalDomainNames
-	buckets := madmin.Buckets{}
-	objects := madmin.Objects{}
-	usage := madmin.Usage{}
 	services := madmin.Services{
 		Vault:         vault,
 		LDAP:          ldap,
@@ -1446,7 +1451,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 
 func fetchLambdaInfo(cfg config.Config) []map[string][]madmin.TargetIDStatus {
 	lambdaMap := make(map[string][]madmin.TargetIDStatus)
-	targetList, _ := notify.GetNotificationTargets(cfg, GlobalServiceDoneCh, globalRootCAs)
+	targetList, _ := notify.GetNotificationTargets(cfg, GlobalServiceDoneCh, NewCustomHTTPTransport())
 
 	for targetID, target := range targetList.TargetMap() {
 		targetIDStatus := make(map[string]madmin.Status)
