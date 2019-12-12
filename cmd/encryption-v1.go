@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -225,10 +226,8 @@ func setEncryptionMetadata(r *http.Request, bucket, object string, metadata map[
 // with the client provided key. It also marks the object as client-side-encrypted
 // and sets the correct headers.
 func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, metadata map[string]string) (reader io.Reader, objEncKey []byte, err error) {
+	var key []byte
 
-	var (
-		key []byte
-	)
 	if crypto.S3.IsRequested(r.Header) && crypto.SSEC.IsRequested(r.Header) {
 		return nil, objEncKey, crypto.ErrIncompatibleEncryptionMethod
 	}
@@ -237,6 +236,11 @@ func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, m
 		if err != nil {
 			return nil, objEncKey, err
 		}
+	}
+	if r.ContentLength > encryptBufferThreshold {
+		// The encryption reads in blocks of 64KB.
+		// We add a buffer on bigger files to reduce the number of syscalls upstream.
+		content = bufio.NewReaderSize(content, encryptBufferSize)
 	}
 	return newEncryptReader(content, key, bucket, object, metadata, crypto.S3.IsRequested(r.Header))
 }
