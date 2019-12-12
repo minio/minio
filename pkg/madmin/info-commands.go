@@ -326,41 +326,41 @@ func (adm *AdminClient) NetPerfInfo(size int) (map[string][]NetPerfInfo, error) 
 
 // InfoMessage container to hold server admin related information.
 type InfoMessage struct {
-	Mode         string             `json:"mode"`
+	Mode         string             `json:"mode,omitempty"`
 	Domain       []string           `json:"domain,omitempty"`
 	Region       string             `json:"region,omitempty"`
 	SQSARN       []string           `json:"sqsARN,omitempty"`
-	DeploymentID string             `json:"deploymentID"`
-	Buckets      Buckets            `json:"buckets"`
-	Objects      Objects            `json:"objects"`
-	Usage        Usage              `json:"usage"`
-	Services     Services           `json:"services"`
-	Backend      interface{}        `json:"backend"`
-	Servers      []ServerProperties `json:"servers"`
+	DeploymentID string             `json:"deploymentID,omitempty"`
+	Buckets      Buckets            `json:"buckets,omitempty"`
+	Objects      Objects            `json:"objects,omitempty"`
+	Usage        Usage              `json:"usage,omitempty"`
+	Services     Services           `json:"services,omitempty"`
+	Backend      interface{}        `json:"backend,omitempty"`
+	Servers      []ServerProperties `json:"servers,omitempty"`
 }
 
 // Services contains different services information
 type Services struct {
-	Vault         Vault                         `json:"vault"`
-	LDAP          LDAP                          `json:"ldap"`
+	Vault         Vault                         `json:"vault,omitempty"`
+	LDAP          LDAP                          `json:"ldap,omitempty"`
 	Logger        []Logger                      `json:"logger,omitempty"`
 	Audit         []Audit                       `json:"audit,omitempty"`
-	Notifications []map[string][]TargetIDStatus `json:"notifications"`
+	Notifications []map[string][]TargetIDStatus `json:"notifications,omitempty"`
 }
 
 // Buckets contains the number of buckets
 type Buckets struct {
-	Count int `json:"count"`
+	Count int `json:"count,omitempty"`
 }
 
 // Objects contains the number of objects
 type Objects struct {
-	Count int `json:"count"`
+	Count int `json:"count,omitempty"`
 }
 
 // Usage contains the tottal size used
 type Usage struct {
-	Size uint64 `json:"size"`
+	Size uint64 `json:"size,omitempty"`
 }
 
 // Vault - Fetches the Vault status
@@ -378,7 +378,7 @@ type LDAP struct {
 
 // Status of endpoint
 type Status struct {
-	Status string `json:"status"`
+	Status string `json:"status,omitempty"`
 }
 
 // Audit contains audit logger status
@@ -402,43 +402,43 @@ const (
 
 // FsBackend contains specific FS storage information
 type FsBackend struct {
-	Type backendType `json:"backendType"`
+	Type backendType `json:"backendType,omitempty"`
 }
 
 // XlBackend contains specific erasure storage information
 type XlBackend struct {
-	Type         backendType `json:"backendType"`
-	OnlineDisks  int         `json:"onlineDisks"`
-	OfflineDisks int         `json:"offlineDisks"`
+	Type         backendType `json:"backendType,omitempty"`
+	OnlineDisks  int         `json:"onlineDisks,omitempty"`
+	OfflineDisks int         `json:"offlineDisks,omitempty"`
 	// Data disks for currently configured Standard storage class.
-	StandardSCData int `json:"standardSCData"`
+	StandardSCData int `json:"standardSCData,omitempty"`
 	// Parity disks for currently configured Standard storage class.
-	StandardSCParity int `json:"standardSCParity"`
+	StandardSCParity int `json:"standardSCParity,omitempty"`
 	// Data disks for currently configured Reduced Redundancy storage class.
-	RRSCData int `json:"rrSCData"`
+	RRSCData int `json:"rrSCData,omitempty"`
 	// Parity disks for currently configured Reduced Redundancy storage class.
-	RRSCParity int `json:"rrSCParity"`
+	RRSCParity int `json:"rrSCParity,omitempty"`
 }
 
 // ServerProperties holds server information
 type ServerProperties struct {
-	State    string            `json:"state"`
-	Endpoint string            `json:"endpoint"`
-	Uptime   int64             `json:"uptime"`
-	Version  string            `json:"version"`
-	CommitID string            `json:"commitID"`
-	Network  map[string]string `json:"network"`
-	Disks    []Disk            `json:"disks"`
+	State    string            `json:"state,omitempty"`
+	Endpoint string            `json:"endpoint,omitempty"`
+	Uptime   int64             `json:"uptime,omitempty"`
+	Version  string            `json:"version,omitempty"`
+	CommitID string            `json:"commitID,omitempty"`
+	Network  map[string]string `json:"network,omitempty"`
+	Disks    []Disk            `json:"disks,omitempty"`
 }
 
 // Disk holds Disk information
 type Disk struct {
-	DrivePath       string  `json:"path"`
-	State           string  `json:"state"`
+	DrivePath       string  `json:"path,omitempty"`
+	State           string  `json:"state,omitempty"`
 	UUID            string  `json:"uuid,omitempty"`
 	Model           string  `json:"model,omitempty"`
-	TotalSpace      uint64  `json:"totalspace"`
-	UsedSpace       uint64  `json:"usedspace"`
+	TotalSpace      uint64  `json:"totalspace,omitempty"`
+	UsedSpace       uint64  `json:"usedspace,omitempty"`
 	ReadThroughput  float64 `json:"readthroughput,omitempty"`
 	WriteThroughPut float64 `json:"writethroughput,omitempty"`
 	ReadLatency     float64 `json:"readlatency,omitempty"`
