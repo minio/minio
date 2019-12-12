@@ -585,12 +585,14 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 		return putObjectFn(ctx, bucket, object, r, opts)
 	}
 	if opts.ServerSideEncryption != nil {
+		dcache.Delete(ctx, bucket, object)
 		return putObjectFn(ctx, bucket, object, r, opts)
 	}
 
 	// skip cache for objects with locks
 	objRetention := getObjectRetentionMeta(opts.UserDefined)
 	if objRetention.Mode == Governance || objRetention.Mode == Compliance {
+		dcache.Delete(ctx, bucket, object)
 		return putObjectFn(ctx, bucket, object, r, opts)
 	}
 
