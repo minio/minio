@@ -40,6 +40,7 @@ import (
 func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
+	logger.AddTarget(globalConsoleSys.Console())
 	gob.Register(VerifyFileError(""))
 	gob.Register(DeleteFileError(""))
 }
@@ -195,7 +196,7 @@ func newAllSubsystems() {
 	globalLifecycleSys = NewLifecycleSys()
 }
 
-func initSafeModeInit(buckets []BucketInfo) (err error) {
+func initSafeMode(buckets []BucketInfo) (err error) {
 	newObject := newObjectLayerWithoutSafeModeFn()
 
 	// Construct path to config/transaction.lock for locking
@@ -220,19 +221,6 @@ func initSafeModeInit(buckets []BucketInfo) (err error) {
 				return
 			}
 
-			var cfgErr config.Error
-			if errors.As(err, &cfgErr) {
-				if cfgErr.Kind == config.ContinueKind {
-					// print the error and continue
-					logger.Info("Config validation failed '%s' the sub-system is turned-off and all other sub-systems", err)
-					err = nil
-					return
-				}
-			}
-
-			// Enable logger
-			logger.Disable = false
-
 			// Prints the formatted startup message in safe mode operation.
 			printStartupSafeModeMessage(getAPIEndpoints(), err)
 
@@ -242,10 +230,11 @@ func initSafeModeInit(buckets []BucketInfo) (err error) {
 		}
 	}(objLock)
 
-	// Calls New() for all sub-systems.
+	// Calls New() and initializes all sub-systems.
 	newAllSubsystems()
 
-	// Migrate all backend configs to encrypted backend, also handles rotation as well.
+	// Migrate all backend configs to encrypted backend configs, optionally
+	// handles rotating keys for encryption.
 	if err = handleEncryptedConfigBackend(newObject, true); err != nil {
 		return fmt.Errorf("Unable to handle encrypted backend for config, iam and policies: %w", err)
 	}
@@ -310,10 +299,6 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
-
-	// Disable logging until server initialization is complete, any
-	// error during initialization will be shown as a fatal message
-	logger.Disable = true
 
 	// Handle all server command args.
 	serverHandleCmdArgs(ctx)
@@ -405,9 +390,6 @@ func serverMain(ctx *cli.Context) {
 		logger.Fatal(err, "Unable to initialize backend")
 	}
 
-	// Re-enable logging
-	logger.Disable = false
-
 	// Once endpoints are finalized, initialize the new object api in safe mode.
 	globalObjLayerMutex.Lock()
 	globalSafeMode = true
@@ -424,7 +406,7 @@ func serverMain(ctx *cli.Context) {
 		initFederatorBackend(buckets, newObject)
 	}
 
-	logger.FatalIf(initSafeModeInit(buckets), "Unable to initialize server")
+	logger.FatalIf(initSafeMode(buckets), "Unable to initialize server switching into safe-mode")
 
 	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.
