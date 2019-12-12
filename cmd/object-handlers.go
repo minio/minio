@@ -34,8 +34,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/minio-go/pkg/encrypt"
 	miniogo "github.com/minio/minio-go/v6"
+	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio/cmd/config/etcd/dns"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
