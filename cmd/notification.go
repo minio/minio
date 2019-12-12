@@ -610,7 +610,7 @@ func (sys *NotificationSys) ListenBucketNotification(ctx context.Context, bucket
 
 // AddNotificationTargetsFromConfig - adds notification targets from server config.
 func (sys *NotificationSys) AddNotificationTargetsFromConfig(cfg config.Config) error {
-	targetList, err := notify.GetNotificationTargets(cfg, GlobalServiceDoneCh, globalRootCAs)
+	targetList, err := notify.GetNotificationTargets(cfg, GlobalServiceDoneCh, NewCustomHTTPTransport())
 	if err != nil {
 		return err
 	}

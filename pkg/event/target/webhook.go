@@ -19,19 +19,15 @@ package target
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
@@ -53,12 +49,12 @@ const (
 
 // WebhookArgs - Webhook target arguments.
 type WebhookArgs struct {
-	Enable     bool           `json:"enable"`
-	Endpoint   xnet.URL       `json:"endpoint"`
-	AuthToken  string         `json:"authToken"`
-	RootCAs    *x509.CertPool `json:"-"`
-	QueueDir   string         `json:"queueDir"`
-	QueueLimit uint64         `json:"queueLimit"`
+	Enable     bool            `json:"enable"`
+	Endpoint   xnet.URL        `json:"endpoint"`
+	AuthToken  string          `json:"authToken"`
+	Transport  *http.Transport `json:"-"`
+	QueueDir   string          `json:"queueDir"`
+	QueueLimit uint64          `json:"queueLimit"`
 }
 
 // Validate WebhookArgs fields
@@ -149,11 +145,12 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 		return err
 	}
 
-	// FIXME: log returned error. ignore time being.
+	defer resp.Body.Close()
 	io.Copy(ioutil.Discard, resp.Body)
-	_ = resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		// close any idle connections upon any error.
+		target.httpClient.CloseIdleConnections()
 		return fmt.Errorf("sending event failed with %v", resp.Status)
 	}
 
@@ -193,7 +190,7 @@ func (target *WebhookTarget) Close() error {
 }
 
 // NewWebhookTarget - creates new Webhook target.
-func NewWebhookTarget(id string, args WebhookArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*WebhookTarget, error) {
+func NewWebhookTarget(id string, args WebhookArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), transport *http.Transport) (*WebhookTarget, error) {
 
 	var store Store
 
@@ -209,16 +206,7 @@ func NewWebhookTarget(id string, args WebhookArgs, doneCh <-chan struct{}, logge
 		id:   event.TargetID{ID: id, Name: "webhook"},
 		args: args,
 		httpClient: &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{RootCAs: args.RootCAs},
-				DialContext: (&net.Dialer{
-					Timeout:   5 * time.Second,
-					KeepAlive: 5 * time.Second,
-				}).DialContext,
-				TLSHandshakeTimeout:   3 * time.Second,
-				ResponseHeaderTimeout: 3 * time.Second,
-				ExpectContinueTimeout: 2 * time.Second,
-			},
+			Transport: transport,
 		},
 		store: store,
 	}

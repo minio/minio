@@ -282,7 +282,7 @@ func validateConfig(s config.Config) error {
 		return err
 	}
 
-	return notify.TestNotificationTargets(s, GlobalServiceDoneCh, globalRootCAs)
+	return notify.TestNotificationTargets(s, GlobalServiceDoneCh, NewCustomHTTPTransport())
 }
 
 func lookupConfigs(s config.Config) (err error) {
