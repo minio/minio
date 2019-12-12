@@ -34,27 +34,27 @@ func TestGetCacheControlOpts(t *testing.T) {
 	}{
 		{"", timeSentinel, cacheControl{}, false},
 		{"max-age=2592000, public", timeSentinel, cacheControl{maxAge: 2592000, sMaxAge: 0, minFresh: 0, expiry: time.Time{}}, false},
-		{"max-age=2592000, no-store", timeSentinel, cacheControl{maxAge: 2592000, sMaxAge: 0, minFresh: 0, expiry: time.Time{}}, false},
+		{"max-age=2592000, no-store", timeSentinel, cacheControl{maxAge: 2592000, sMaxAge: 0, noStore: true, minFresh: 0, expiry: time.Time{}}, false},
 		{"must-revalidate, max-age=600", timeSentinel, cacheControl{maxAge: 600, sMaxAge: 0, minFresh: 0, expiry: time.Time{}}, false},
 		{"s-maxAge=2500, max-age=600", timeSentinel, cacheControl{maxAge: 600, sMaxAge: 2500, minFresh: 0, expiry: time.Time{}}, false},
 		{"s-maxAge=2500, max-age=600", expiry, cacheControl{maxAge: 600, sMaxAge: 2500, minFresh: 0, expiry: time.Date(2015, time.October, 21, 07, 28, 00, 00, time.UTC)}, false},
 		{"s-maxAge=2500, max-age=600s", timeSentinel, cacheControl{maxAge: 600, sMaxAge: 2500, minFresh: 0, expiry: time.Time{}}, true},
 	}
-	var m map[string]string
 
-	for i, testCase := range testCases {
-		m = make(map[string]string)
-		m["cache-control"] = testCase.cacheControlHeaderVal
-		if testCase.expiryHeaderVal != timeSentinel {
-			m["expires"] = testCase.expiryHeaderVal.String()
-		}
-		c := cacheControlOpts(ObjectInfo{UserDefined: m, Expires: testCase.expiryHeaderVal})
-		if testCase.expectedErr && (c != cacheControl{}) {
-			t.Errorf("expected err for case %d", i)
-		}
-		if !testCase.expectedErr && !reflect.DeepEqual(c, testCase.expectedCacheControl) {
-			t.Errorf("expected  %v got %v for case %d", testCase.expectedCacheControl, c, i)
-		}
-
+	for _, testCase := range testCases {
+		t.Run("", func(t *testing.T) {
+			m := make(map[string]string)
+			m["cache-control"] = testCase.cacheControlHeaderVal
+			if testCase.expiryHeaderVal != timeSentinel {
+				m["expires"] = testCase.expiryHeaderVal.String()
+			}
+			c := cacheControlOpts(ObjectInfo{UserDefined: m, Expires: testCase.expiryHeaderVal})
+			if testCase.expectedErr && (c != cacheControl{}) {
+				t.Errorf("expected err, got <nil>")
+			}
+			if !testCase.expectedErr && !reflect.DeepEqual(c, testCase.expectedCacheControl) {
+				t.Errorf("expected %v, got %v", testCase.expectedCacheControl, c)
+			}
+		})
 	}
 }

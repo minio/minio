@@ -423,51 +423,6 @@ func (sys *NotificationSys) SignalService(sig serviceSignal) []NotificationPeerE
 	return ng.Wait()
 }
 
-// ServerInfo - calls ServerInfo RPC call on all peers.
-func (sys *NotificationSys) ServerInfo(ctx context.Context) []ServerInfo {
-	serverInfo := make([]ServerInfo, len(sys.peerClients))
-
-	g := errgroup.WithNErrs(len(sys.peerClients))
-	for index, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			// Try to fetch serverInfo remotely in three attempts.
-			for i := 0; i < 3; i++ {
-				serverInfo[index] = ServerInfo{
-					Addr: sys.peerClients[index].host.String(),
-				}
-				info, err := sys.peerClients[index].ServerInfo()
-				if err != nil {
-					serverInfo[index].Error = err.Error()
-				} else {
-					serverInfo[index].Data = &info
-				}
-				// Last iteration log the error.
-				if i == 2 {
-					return err
-				}
-				// Wait for one second and no need wait after last attempt.
-				if i < 2 {
-					time.Sleep(1 * time.Second)
-				}
-			}
-			return nil
-		}, index)
-	}
-	for index, err := range g.Wait() {
-		if err != nil {
-			addr := sys.peerClients[index].host.String()
-			reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", addr)
-			ctx := logger.SetReqInfo(ctx, reqInfo)
-			logger.LogIf(ctx, err)
-		}
-	}
-	return serverInfo
-}
-
 // GetLocks - makes GetLocks RPC call on all peers.
 func (sys *NotificationSys) GetLocks(ctx context.Context) []*PeerLocks {
 	locksResp := make([]*PeerLocks, len(sys.peerClients))
@@ -1207,6 +1162,31 @@ func (sys *NotificationSys) NetworkInfo() []madmin.ServerNetworkHardwareInfo {
 				netinfo.Error = err.Error()
 			}
 			reply[idx] = netinfo
+		}(client, i)
+	}
+	wg.Wait()
+	return reply
+}
+
+// ServerInfo - calls ServerInfo RPC call on all peers.
+func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
+	reply := make([]madmin.ServerProperties, len(sys.peerClients))
+	var wg sync.WaitGroup
+	for i, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(client *peerRESTClient, idx int) {
+			defer wg.Done()
+			info, err := client.ServerInfo()
+			if err != nil {
+				info.Endpoint = client.host.String()
+				info.State = "offline"
+			} else {
+				info.State = "ok"
+			}
+			reply[idx] = info
 		}(client, i)
 	}
 	wg.Wait()

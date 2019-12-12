@@ -197,19 +197,28 @@ func (target *NATSTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - Return true if target is up and active
+func (target *NATSTarget) IsActive() (bool, error) {
+	if target.args.Streaming.Enable {
+		if !target.stanConn.NatsConn().IsConnected() {
+			return false, errNotConnected
+		}
+	} else {
+		if !target.natsConn.IsConnected() {
+			return false, errNotConnected
+		}
+	}
+	return true, nil
+}
+
 // Save - saves the events to the store which will be replayed when the Nats connection is active.
 func (target *NATSTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	if target.args.Streaming.Enable {
-		if !target.stanConn.NatsConn().IsConnected() {
-			return errNotConnected
-		}
-	} else {
-		if !target.natsConn.IsConnected() {
-			return errNotConnected
-		}
+	_, err := target.IsActive()
+	if err != nil {
+		return err
 	}
 	return target.send(eventData)
 }

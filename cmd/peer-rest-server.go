@@ -52,7 +52,7 @@ func getServerInfo() (*ServerInfoData, error) {
 		ConnStats: globalConnStats.toServerConnStats(),
 		HTTPStats: globalHTTPStats.toServerHTTPStats(),
 		Properties: ServerProperties{
-			Uptime:       UTCNow().Sub(globalBootTime),
+			Uptime:       UTCNow().Unix() - globalBootTime.Unix(),
 			Version:      Version,
 			CommitID:     CommitID,
 			DeploymentID: globalDeploymentID,
@@ -172,6 +172,11 @@ func (s *peerRESTServer) DeletePolicyHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if globalIAMSys == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
 	vars := mux.Vars(r)
 	policyName := vars[peerRESTPolicy]
 	if policyName == "" {
@@ -200,6 +205,11 @@ func (s *peerRESTServer) LoadPolicyHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if globalIAMSys == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
 	vars := mux.Vars(r)
 	policyName := vars[peerRESTPolicy]
 	if policyName == "" {
@@ -224,6 +234,11 @@ func (s *peerRESTServer) LoadPolicyMappingHandler(w http.ResponseWriter, r *http
 
 	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	if globalIAMSys == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
 	}
@@ -257,6 +272,11 @@ func (s *peerRESTServer) DeleteUserHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if globalIAMSys == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
 	vars := mux.Vars(r)
 	accessKey := vars[peerRESTUser]
 	if accessKey == "" {
@@ -281,6 +301,11 @@ func (s *peerRESTServer) LoadUserHandler(w http.ResponseWriter, r *http.Request)
 
 	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	if globalIAMSys == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
 	}
@@ -313,6 +338,17 @@ func (s *peerRESTServer) LoadUsersHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	objAPI := newObjectLayerWithoutSafeModeFn()
+	if objAPI == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	if globalIAMSys == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
 	err := globalIAMSys.Load()
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -331,6 +367,11 @@ func (s *peerRESTServer) LoadGroupHandler(w http.ResponseWriter, r *http.Request
 
 	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	if globalIAMSys == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
 	}
@@ -372,24 +413,6 @@ func (s *peerRESTServer) StartProfilingHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	w.(http.Flusher).Flush()
-}
-
-// ServerInfoHandler - returns server info.
-func (s *peerRESTServer) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx := newContext(r, w, "ServerInfo")
-	info, err := getServerInfo()
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	defer w.(http.Flusher).Flush()
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
 
 // DownloadProflingDataHandler - returns proflied data.
@@ -447,6 +470,20 @@ func (s *peerRESTServer) NetworkInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	ctx := newContext(r, w, "NetworkInfo")
 	info := getLocalNetworkInfo(globalEndpoints, r)
+
+	defer w.(http.Flusher).Flush()
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+}
+
+// ServerInfoHandler - returns Server Info
+func (s *peerRESTServer) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	ctx := newContext(r, w, "ServerInfo")
+	info := getLocalServerProperty(globalEndpoints, r)
 
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
