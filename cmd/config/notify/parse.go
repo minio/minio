@@ -39,15 +39,18 @@ const (
 
 // TestNotificationTargets is similar to GetNotificationTargets()
 // avoids explicit registration.
-func TestNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport) error {
-	_, err := RegisterNotificationTargets(cfg, doneCh, transport, true)
+func TestNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport,
+	targetIDs []event.TargetID) error {
+	test := true
+	_, err := RegisterNotificationTargets(cfg, doneCh, transport, targetIDs, test)
 	return err
 }
 
 // GetNotificationTargets registers and initializes all notification
 // targets, returns error if any.
 func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport) (*event.TargetList, error) {
-	return RegisterNotificationTargets(cfg, doneCh, transport, false)
+	test := false
+	return RegisterNotificationTargets(cfg, doneCh, transport, nil, test)
 }
 
 // RegisterNotificationTargets - returns TargetList which contains enabled targets in serverConfig.
@@ -55,7 +58,7 @@ func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport
 // * Add a new target in pkg/event/target package.
 // * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
 // * Handle the configuration in this function to create/add into TargetList.
-func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, test bool) (*event.TargetList, error) {
+func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool) (*event.TargetList, error) {
 	targetList := event.NewTargetList()
 	if err := checkValidNotificationKeys(cfg); err != nil {
 		return nil, err
@@ -119,12 +122,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -137,12 +139,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 			return nil, err
 
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -155,12 +156,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -173,12 +173,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -190,12 +189,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -207,12 +205,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -224,12 +221,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -241,12 +237,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -258,12 +253,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -275,12 +269,24 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if err != nil {
 			return nil, err
 		}
+		if err := targetList.Add(newTarget); err != nil {
+			return nil, err
+		}
 		if test {
 			newTarget.Close()
 			continue
 		}
-		if err := targetList.Add(newTarget); err != nil {
-			return nil, err
+	}
+
+	if test {
+		// Verify if user is trying to disable already configured
+		// notification targets, based on their target IDs
+		for _, targetID := range targetIDs {
+			if !targetList.Exists(targetID) {
+				return nil, config.Errorf(config.SafeModeKind,
+					"Unable to disable configured targets '%v'",
+					targetID)
+			}
 		}
 	}
 
