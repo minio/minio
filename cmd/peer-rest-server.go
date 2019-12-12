@@ -52,7 +52,7 @@ func getServerInfo() (*ServerInfoData, error) {
 		ConnStats: globalConnStats.toServerConnStats(),
 		HTTPStats: globalHTTPStats.toServerHTTPStats(),
 		Properties: ServerProperties{
-			Uptime:       UTCNow().Sub(globalBootTime),
+			Uptime:       UTCNow().Unix() - globalBootTime.Unix(),
 			Version:      Version,
 			CommitID:     CommitID,
 			DeploymentID: globalDeploymentID,

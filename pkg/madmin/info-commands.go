@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"time"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/pkg/cpu"
@@ -425,7 +424,7 @@ type XlBackend struct {
 type ServerProperties struct {
 	State    string            `json:"state"`
 	Endpoint string            `json:"endpoint"`
-	Uptime   time.Duration     `json:"uptime"`
+	Uptime   int64             `json:"uptime"`
 	Version  string            `json:"version"`
 	CommitID string            `json:"commitID"`
 	Network  map[string]string `json:"network"`
