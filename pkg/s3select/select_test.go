@@ -28,6 +28,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fwessels/simdjson-go"
 	"github.com/klauspost/cpuid"
 	"github.com/minio/minio-go/v6"
 )
@@ -268,7 +269,7 @@ func TestJSONQueries(t *testing.T) {
     <InputSerialization>
         <CompressionType>NONE</CompressionType>
         <JSON>
-            <Type>DOCUMENT</Type>
+            <Type>LINES</Type>
         </JSON>
     </InputSerialization>
     <OutputSerialization>
@@ -299,7 +300,11 @@ func TestJSONQueries(t *testing.T) {
 			}
 
 			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
-				return ioutil.NopCloser(bytes.NewBufferString(input)), nil
+				in := input
+				if len(testCase.withJSON) > 0 {
+					in = testCase.withJSON
+				}
+				return ioutil.NopCloser(bytes.NewBufferString(in)), nil
 			}); err != nil {
 				t.Fatal(err)
 			}
@@ -328,7 +333,7 @@ func TestJSONQueries(t *testing.T) {
 			}
 		})
 		t.Run("simd-"+testCase.name, func(t *testing.T) {
-			if !cpuid.CPU.AVX2() || !cpuid.CPU.Clmul() {
+			if !simdjson.SupportedCPU() {
 				t.Skip("No CPU support")
 			}
 			testReq := testCase.requestXML

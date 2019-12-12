@@ -28,7 +28,7 @@ import (
 	"sync"
 
 	"github.com/fwessels/simdjson-go"
-	"github.com/klauspost/cpuid"
+
 	"github.com/minio/minio/pkg/s3select/csv"
 	"github.com/minio/minio/pkg/s3select/json"
 	"github.com/minio/minio/pkg/s3select/parquet"
@@ -320,7 +320,7 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 		}
 
 		if strings.EqualFold(s3Select.Input.JSONArgs.ContentType, "lines") {
-			if cpuid.CPU.AVX2() {
+			if simdjson.SupportedCPU() {
 				s3Select.recordReader = simdj.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
 			} else {
 				s3Select.recordReader = json.NewPReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
@@ -336,38 +336,6 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 	}
 
 	panic(fmt.Errorf("unknown input format '%v'", s3Select.Input.format))
-}
-
-// OpenTape - opens S3 object and accepts parsed simdjson input.
-// An optional progressReader can be given to output progress.
-func (s3Select *S3Select) OpenTape(pj simdjson.ParsedJson, pr *progressReader) error {
-	if pr == nil {
-		pr = &progressReader{}
-	}
-	switch s3Select.Input.format {
-	case jsonFormat:
-		s3Select.progressReader = pr
-		s3Select.recordReader = simdj.NewTapeReader(pj, &s3Select.Input.JSONArgs)
-		return nil
-	}
-
-	return fmt.Errorf("unknown input format '%v'", s3Select.Input.format)
-}
-
-// OpenTapeCh - opens S3 object and accepts a channel that supplies parsed simdjson input.
-// An optional progressReader can be given to output progress.
-func (s3Select *S3Select) OpenTapeStream(pj chan simdjson.Stream, pr *progressReader) error {
-	if pr == nil {
-		pr = &progressReader{}
-	}
-	switch s3Select.Input.format {
-	case jsonFormat:
-		s3Select.progressReader = pr
-		s3Select.recordReader = simdj.NewTapeReaderChan(pj, &s3Select.Input.JSONArgs)
-		return nil
-	}
-
-	return fmt.Errorf("unknown input format '%v'", s3Select.Input.format)
 }
 
 func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
