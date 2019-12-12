@@ -644,6 +644,15 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 		currKVS.Set(Comment, v)
 	}
 
+	hkvs := HelpSubSysMap[subSys]
+	for _, hkv := range hkvs {
+		v, _ := currKVS.Lookup(hkv.Key)
+		if v == "" && !hkv.Optional {
+			return Errorf(SafeModeKind,
+				"'%s' is not optional for '%s' sub-system, please check '%s' documentation",
+				hkv.Key, subSys, subSys)
+		}
+	}
 	c[subSys][tgt] = currKVS
 	return nil
 }
