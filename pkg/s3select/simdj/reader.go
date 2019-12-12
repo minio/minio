@@ -173,28 +173,6 @@ func NewElementReader(ch chan simdjson.Object, err *error, args *json.ReaderArgs
 	}
 }
 
-// NewTapeReader will queue the parsed json for processing.
-func NewTapeReader(pj simdjson.ParsedJson, args *json.ReaderArgs) *Reader {
-	r := Reader{
-		args:       args,
-		decoded:    make(chan simdjson.Object, 1000),
-		input:      make(chan simdjson.Stream, 2),
-		exitReader: make(chan struct{}),
-	}
-	r.input <- simdjson.Stream{
-		Value: &pj,
-		Error: nil,
-	}
-	r.input <- simdjson.Stream{
-		Value: nil,
-		Error: io.EOF,
-	}
-	close(r.input)
-	r.readerWg.Add(1)
-	go r.startReader()
-	return &r
-}
-
 // NewTapeReaderChan will start a reader that will read input from the provided channel.
 func NewTapeReaderChan(pj chan simdjson.Stream, args *json.ReaderArgs) *Reader {
 	r := Reader{
