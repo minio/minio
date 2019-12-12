@@ -1297,6 +1297,11 @@ func sendEvent(args eventArgs) {
 	crypto.RemoveSensitiveEntries(args.Object.UserDefined)
 	crypto.RemoveInternalEntries(args.Object.UserDefined)
 
+	if globalHTTPListen.HasSubscribers() {
+		globalHTTPListen.Publish(args.ToEvent())
+		return
+	}
+
 	// globalNotificationSys is not initialized in gateway mode.
 	if globalNotificationSys == nil {
 		return
