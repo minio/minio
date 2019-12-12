@@ -1382,9 +1382,9 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	domain := globalDomainNames
-	buckets := madmin.Buckets{Count: 20}
-	objects := madmin.Objects{Count: 200}
-	usage := madmin.Usage{Size: 1024}
+	buckets := madmin.Buckets{}
+	objects := madmin.Objects{}
+	usage := madmin.Usage{}
 	services := madmin.Services{
 		Vault:         vault,
 		LDAP:          ldap,
