@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -209,6 +210,46 @@ func (z *xlZones) StorageInfo(ctx context.Context) StorageInfo {
 	storageInfo.Backend.RRSCParity = storageInfos[0].Backend.RRSCParity
 
 	return storageInfo
+}
+
+func (z *xlZones) crawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
+	var aggDataUsageInfo = struct {
+		sync.Mutex
+		DataUsageInfo
+	}{}
+
+	aggDataUsageInfo.ObjectsSizesHistogram = make(map[string]uint64)
+	aggDataUsageInfo.BucketsSizes = make(map[string]uint64)
+
+	var wg sync.WaitGroup
+	for _, z := range z.zones {
+		for _, xlObj := range z.sets {
+			wg.Add(1)
+			go func(xl *xlObjects) {
+				defer wg.Done()
+				info := xl.crawlAndGetDataUsage(ctx, endCh)
+
+				aggDataUsageInfo.Lock()
+				aggDataUsageInfo.ObjectsCount += info.ObjectsCount
+				aggDataUsageInfo.ObjectsTotalSize += info.ObjectsTotalSize
+				if aggDataUsageInfo.BucketsCount < info.BucketsCount {
+					aggDataUsageInfo.BucketsCount = info.BucketsCount
+				}
+				for k, v := range info.ObjectsSizesHistogram {
+					aggDataUsageInfo.ObjectsSizesHistogram[k] += v
+				}
+				for k, v := range info.BucketsSizes {
+					aggDataUsageInfo.BucketsSizes[k] += v
+				}
+				aggDataUsageInfo.Unlock()
+
+			}(xlObj)
+		}
+	}
+	wg.Wait()
+
+	aggDataUsageInfo.LastUpdate = UTCNow()
+	return aggDataUsageInfo.DataUsageInfo
 }
 
 // This function is used to undo a successful MakeBucket operation.

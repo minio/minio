@@ -32,6 +32,7 @@ type StorageAPI interface {
 	SetDiskID(id string)
 
 	DiskInfo() (info DiskInfo, err error)
+	CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, error)
 
 	// Volume operations.
 	MakeVol(volume string) (err error)

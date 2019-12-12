@@ -290,6 +290,31 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 
 }
 
+// DataUsageInfoHandler - GET /minio/admin/v2/datausage
+// ----------
+// Get server/cluster data usage info
+func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "DataUsageInfo")
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListServerInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+		return
+	}
+
+	dataUsageInfoJSON, err := json.Marshal(dataUsageInfo)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, dataUsageInfoJSON)
+}
+
 // ServerCPULoadInfo holds informantion about cpu utilization
 // of one minio node. It also reports any errors if encountered
 // while trying to reach this server.

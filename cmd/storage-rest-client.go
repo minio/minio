@@ -147,6 +147,28 @@ func (client *storageRESTClient) IsOnline() bool {
 	return atomic.LoadInt32(&client.connected) == 1
 }
 
+func (client *storageRESTClient) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, error) {
+	respBody, err := client.call(storageRESTMethodCrawlAndGetDataUsage, nil, nil, -1)
+	defer http.DrainBody(respBody)
+	if err != nil {
+		return DataUsageInfo{}, err
+	}
+	reader := bufio.NewReader(respBody)
+	for {
+		b, err := reader.ReadByte()
+		if err != nil {
+			return DataUsageInfo{}, err
+		}
+		if b != ' ' {
+			reader.UnreadByte()
+			break
+		}
+	}
+	var usageInfo DataUsageInfo
+	err = gob.NewDecoder(reader).Decode(&usageInfo)
+	return usageInfo, err
+}
+
 // LastError - returns the network error if any.
 func (client *storageRESTClient) LastError() error {
 	return client.lastError

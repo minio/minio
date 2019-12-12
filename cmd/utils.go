@@ -525,6 +525,16 @@ func getMinioMode() string {
 	return mode
 }
 
+func splitN(str, delim string, num int) []string {
+	stdSplit := strings.SplitN(str, delim, num)
+	retSplit := make([]string, num)
+	for i := 0; i < len(stdSplit); i++ {
+		retSplit[i] = stdSplit[i]
+	}
+
+	return retSplit
+}
+
 func iamPolicyName() string {
 	return globalOpenIDConfig.ClaimPrefix + iampolicy.PolicyName
 }
