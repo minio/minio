@@ -34,8 +34,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio-go/pkg/encrypt"
 	miniogo "github.com/minio/minio-go/v6"
-	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio/cmd/config/etcd/dns"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
@@ -65,6 +65,11 @@ var supportedHeadGetReqParams = map[string]string{
 const (
 	compressionAlgorithmV1 = "golang/snappy/LZ77"
 	compressionAlgorithmV2 = "klauspost/compress/s2"
+
+	// When an upload exceeds encryptBufferThreshold ...
+	encryptBufferThreshold = 1 << 20
+	// add an input buffer of this size.
+	encryptBufferSize = 1 << 20
 )
 
 // setHeadGetRespHeaders - set any requested parameters as response headers.
@@ -1261,10 +1266,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 				return
 			}
 			in := io.Reader(hashReader)
-			if size > 1<<20 {
+			if size > encryptBufferThreshold {
 				// The encryption reads in blocks of 64KB.
 				// We add a buffer on bigger files to reduce the number of syscalls upstream.
-				in = bufio.NewReaderSize(hashReader, 1<<20)
+				in = bufio.NewReaderSize(hashReader, encryptBufferSize)
 			}
 			reader, objectEncryptionKey, err = EncryptRequest(in, r, bucket, object, metadata)
 			if err != nil {
@@ -1982,7 +1987,13 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			mac.Write(partIDbin[:])
 			partEncryptionKey := mac.Sum(nil)
 
-			reader, err = sio.EncryptReader(hashReader, sio.Config{Key: partEncryptionKey})
+			in := io.Reader(hashReader)
+			if size > encryptBufferThreshold {
+				// The encryption reads in blocks of 64KB.
+				// We add a buffer on bigger files to reduce the number of syscalls upstream.
+				in = bufio.NewReaderSize(hashReader, encryptBufferSize)
+			}
+			reader, err = sio.EncryptReader(in, sio.Config{Key: partEncryptionKey})
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
