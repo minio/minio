@@ -48,6 +48,12 @@ $ export AWS_SECRET_ACCESS_KEY="your-secret-key"
 $ aws s3api put-bucket-lifecycle-configuration --bucket your-bucket --endpoint-url http://minio-server-address:port --lifecycle-configuration file://bucket-lifecycle.json
 ```
 
+3. Verify that the configuration has been added
+
+```sh
+$ aws s3api get-bucket-lifecycle-configuration --bucket your-bucket --endpoint-url http://minio-server-address:port
+```
+
 ## Explore Further
 - [MinIO | Golang Client API Reference](https://docs.min.io/docs/golang-client-api-reference.html#SetBucketLifecycle)
 - [Object Lifecycle Management](https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lifecycle-mgmt.html)

@@ -221,12 +221,12 @@ type IAMStorageAPI interface {
 // simplifies the implementation for group removal. This is called
 // only via IAM notifications.
 func (sys *IAMSys) LoadGroup(objAPI ObjectLayer, group string) error {
-	if objAPI == nil {
-		return errInvalidArgument
-	}
-
 	sys.Lock()
 	defer sys.Unlock()
+
+	if objAPI == nil || sys.store == nil {
+		return errServerNotInitialized
+	}
 
 	if globalEtcdClient != nil {
 		// Watch APIs cover this case, so nothing to do.
@@ -262,12 +262,12 @@ func (sys *IAMSys) LoadGroup(objAPI ObjectLayer, group string) error {
 
 // LoadPolicy - reloads a specific canned policy from backend disks or etcd.
 func (sys *IAMSys) LoadPolicy(objAPI ObjectLayer, policyName string) error {
-	if objAPI == nil {
-		return errInvalidArgument
-	}
-
 	sys.Lock()
 	defer sys.Unlock()
+
+	if objAPI == nil || sys.store == nil {
+		return errServerNotInitialized
+	}
 
 	if globalEtcdClient == nil {
 		return sys.store.loadPolicyDoc(policyName, sys.iamPolicyDocsMap)
@@ -280,12 +280,12 @@ func (sys *IAMSys) LoadPolicy(objAPI ObjectLayer, policyName string) error {
 // LoadPolicyMapping - loads the mapped policy for a user or group
 // from storage into server memory.
 func (sys *IAMSys) LoadPolicyMapping(objAPI ObjectLayer, userOrGroup string, isGroup bool) error {
-	if objAPI == nil {
-		return errInvalidArgument
-	}
-
 	sys.Lock()
 	defer sys.Unlock()
+
+	if objAPI == nil || sys.store == nil {
+		return errServerNotInitialized
+	}
 
 	if globalEtcdClient == nil {
 		var err error
@@ -306,12 +306,12 @@ func (sys *IAMSys) LoadPolicyMapping(objAPI ObjectLayer, userOrGroup string, isG
 
 // LoadUser - reloads a specific user from backend disks or etcd.
 func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, isSTS bool) error {
-	if objAPI == nil {
-		return errInvalidArgument
-	}
-
 	sys.Lock()
 	defer sys.Unlock()
+
+	if objAPI == nil || sys.store == nil {
+		return errServerNotInitialized
+	}
 
 	if globalEtcdClient == nil {
 		err := sys.store.loadUser(accessKey, isSTS, sys.iamUsersMap)
@@ -351,14 +351,16 @@ func (sys *IAMSys) doIAMConfigMigration(objAPI ObjectLayer) error {
 // Init - initializes config system from iam.json
 func (sys *IAMSys) Init(objAPI ObjectLayer) error {
 	if objAPI == nil {
-		return errInvalidArgument
+		return errServerNotInitialized
 	}
 
+	sys.Lock()
 	if globalEtcdClient == nil {
 		sys.store = newIAMObjectStore()
 	} else {
 		sys.store = newIAMEtcdStore()
 	}
+	sys.Unlock()
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)
@@ -416,15 +418,19 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 		return errInvalidArgument
 	}
 
+	sys.Lock()
+	defer sys.Unlock()
+
+	if sys.store == nil {
+		return errServerNotInitialized
+	}
+
 	err := sys.store.deletePolicyDoc(policyName)
 	switch err.(type) {
 	case ObjectNotFound:
 		// Ignore error if policy is already deleted.
 		err = nil
 	}
-
-	sys.Lock()
-	defer sys.Unlock()
 
 	delete(sys.iamPolicyDocsMap, policyName)
 	return err
@@ -481,12 +487,17 @@ func (sys *IAMSys) SetPolicy(policyName string, p iampolicy.Policy) error {
 		return errInvalidArgument
 	}
 
+	sys.Lock()
+	defer sys.Unlock()
+
+	if sys.store == nil {
+		return errServerNotInitialized
+	}
+
 	if err := sys.store.savePolicyDoc(policyName, p); err != nil {
 		return err
 	}
 
-	sys.Lock()
-	defer sys.Unlock()
 	sys.iamPolicyDocsMap[policyName] = p
 	return nil
 }
@@ -503,6 +514,10 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 
 	if sys.usersSysType != MinIOUsersSysType {
 		return errIAMActionNotAllowed
+	}
+
+	if sys.store == nil {
+		return errServerNotInitialized
 	}
 
 	// It is ok to ignore deletion error on the mapped policy
@@ -543,12 +558,20 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 			return nil
 		}
 
+		if sys.store == nil {
+			return errServerNotInitialized
+		}
+
 		mp := newMappedPolicy(policyName)
 		if err := sys.store.saveMappedPolicy(accessKey, true, false, mp); err != nil {
 			return err
 		}
 
 		sys.iamUserPolicyMap[accessKey] = mp
+	}
+
+	if sys.store == nil {
+		return errServerNotInitialized
 	}
 
 	u := newUserIdentity(cred)
@@ -659,6 +682,11 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 			return config.EnableOff
 		}(),
 	})
+
+	if sys.store == nil {
+		return errServerNotInitialized
+	}
+
 	if err := sys.store.saveUserIdentity(accessKey, false, uinfo); err != nil {
 		return err
 	}
@@ -685,6 +713,10 @@ func (sys *IAMSys) SetUser(accessKey string, uinfo madmin.UserInfo) error {
 
 	if sys.usersSysType != MinIOUsersSysType {
 		return errIAMActionNotAllowed
+	}
+
+	if sys.store == nil {
+		return errServerNotInitialized
 	}
 
 	if err := sys.store.saveUserIdentity(accessKey, false, u); err != nil {
@@ -716,6 +748,10 @@ func (sys *IAMSys) SetUserSecretKey(accessKey string, secretKey string) error {
 	cred, ok := sys.iamUsersMap[accessKey]
 	if !ok {
 		return errNoSuchUser
+	}
+
+	if sys.store == nil {
+		return errServerNotInitialized
 	}
 
 	cred.SecretKey = secretKey
@@ -775,6 +811,10 @@ func (sys *IAMSys) AddUsersToGroup(group string, members []string) error {
 		gi.Members = uniqMembers
 	}
 
+	if sys.store == nil {
+		return errServerNotInitialized
+	}
+
 	if err := sys.store.saveGroupInfo(group, gi); err != nil {
 		return err
 	}
@@ -832,6 +872,10 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 		return errGroupNotEmpty
 	}
 
+	if sys.store == nil {
+		return errServerNotInitialized
+	}
+
 	if len(members) == 0 {
 		// len(gi.Members) == 0 here.
 
@@ -886,6 +930,10 @@ func (sys *IAMSys) SetGroupStatus(group string, enabled bool) error {
 
 	sys.Lock()
 	defer sys.Unlock()
+
+	if sys.store == nil {
+		return errServerNotInitialized
+	}
 
 	if sys.usersSysType != MinIOUsersSysType {
 		return errIAMActionNotAllowed
@@ -984,6 +1032,10 @@ func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
 // policyDBSet - sets a policy for user in the policy db. Assumes that
 // caller has sys.Lock().
 func (sys *IAMSys) policyDBSet(name, policy string, isSTS, isGroup bool) error {
+	if sys.store == nil {
+		return errServerNotInitialized
+	}
+
 	if name == "" || policy == "" {
 		return errInvalidArgument
 	}
