@@ -264,34 +264,6 @@ func (client *peerRESTClient) ReloadFormat(dryRun bool) error {
 	return nil
 }
 
-// ListenBucketNotification - send listen bucket notification to peer nodes.
-func (client *peerRESTClient) ListenBucketNotification(bucket string, eventNames []event.Name,
-	pattern string, targetID event.TargetID, addr xnet.Host) error {
-	args := listenBucketNotificationReq{
-		EventNames: eventNames,
-		Pattern:    pattern,
-		TargetID:   targetID,
-		Addr:       addr,
-	}
-
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-
-	var reader bytes.Buffer
-	err := gob.NewEncoder(&reader).Encode(args)
-	if err != nil {
-		return err
-	}
-
-	respBody, err := client.call(peerRESTMethodBucketNotificationListen, values, &reader, -1)
-	if err != nil {
-		return err
-	}
-
-	defer http.DrainBody(respBody)
-	return nil
-}
-
 // SendEvent - calls send event RPC.
 func (client *peerRESTClient) SendEvent(bucket string, targetID, remoteTargetID event.TargetID, eventData event.Event) error {
 	numTries := 10
