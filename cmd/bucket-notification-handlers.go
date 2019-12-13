@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -25,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"reflect"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -52,7 +52,6 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 
 	vars := mux.Vars(r)
 	bucketName := vars["bucket"]
-	var config *event.Config
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
@@ -79,21 +78,55 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 	// Construct path to notification.xml for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketNotificationConfig)
 
+	var config = event.Config{}
 	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
 		if err != errConfigNotFound {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		config = &event.Config{}
-	} else {
-		if err = xml.NewDecoder(bytes.NewReader(configData)).Decode(&config); err != nil {
+		config.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
+		config.SetRegion(globalServerRegion)
+		notificationBytes, err := xml.Marshal(config)
+		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
+
+		writeSuccessResponseXML(w, notificationBytes)
+		return
 	}
 
 	config.SetRegion(globalServerRegion)
+
+	if err = xml.Unmarshal(configData, &config); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if err = config.Validate(globalServerRegion, globalNotificationSys.targetList); err != nil {
+		arnErr, ok := err.(*event.ErrARNNotFound)
+		if !ok {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		for i, queue := range config.QueueList {
+			// Remove ARN not found queues, because we previously allowed
+			// adding unexpected entries into the config.
+			//
+			// With newer config disallowing changing / turning off
+			// notification targets without removing ARN in notification
+			// configuration we won't see this problem anymore.
+			if reflect.DeepEqual(queue.ARN, arnErr.ARN) {
+				config.QueueList = append(config.QueueList[:i],
+					config.QueueList[i+1:]...)
+			}
+			// This is a one time activity we shall do this
+			// here and allow stale ARN to be removed. We shall
+			// never reach a stage where we will have stale
+			// notification configs.
+		}
+	}
 
 	// If xml namespace is empty, set a default value before returning.
 	if config.XMLNS == "" {
@@ -147,17 +180,15 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	var config *event.Config
-	config, err = event.ParseConfig(io.LimitReader(r.Body, r.ContentLength), globalServerRegion, globalNotificationSys.targetList)
+	lreader := io.LimitReader(r.Body, r.ContentLength)
+	config, err := event.ParseConfig(lreader, globalServerRegion, globalNotificationSys.targetList)
 	if err != nil {
 		apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
 		if event.IsEventError(err) {
 			apiErr = toAPIError(ctx, err)
 		}
-		if _, ok := err.(*event.ErrARNNotFound); !ok {
-			writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
-			return
-		}
+		writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
+		return
 	}
 
 	if err = saveNotificationConfig(ctx, objectAPI, bucketName, config); err != nil {

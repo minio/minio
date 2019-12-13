@@ -255,8 +255,6 @@ func (conf Config) Validate(region string, targetList *TargetList) error {
 		if err := queue.Validate(region, targetList); err != nil {
 			return err
 		}
-
-		// TODO: Need to discuss/check why same ARN cannot be used in another queue configuration.
 	}
 
 	return nil
@@ -283,13 +281,14 @@ func (conf *Config) ToRulesMap() RulesMap {
 // ParseConfig - parses data in reader to notification configuration.
 func ParseConfig(reader io.Reader, region string, targetList *TargetList) (*Config, error) {
 	var config Config
-	var err error
 
-	if err = xml.NewDecoder(reader).Decode(&config); err != nil {
+	if err := xml.NewDecoder(reader).Decode(&config); err != nil {
 		return nil, err
 	}
 
-	err = config.Validate(region, targetList)
+	if err := config.Validate(region, targetList); err != nil {
+		return nil, err
+	}
 
 	config.SetRegion(region)
 
@@ -298,5 +297,5 @@ func ParseConfig(reader io.Reader, region string, targetList *TargetList) (*Conf
 		config.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
 	}
 
-	return &config, err
+	return &config, nil
 }

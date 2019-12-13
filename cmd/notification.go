@@ -796,6 +796,23 @@ func (sys *NotificationSys) RemoveRulesMap(bucketName string, rulesMap event.Rul
 	}
 }
 
+// ConfiguredTargetIDs - returns list of configured target id's
+func (sys *NotificationSys) ConfiguredTargetIDs() []event.TargetID {
+	sys.RLock()
+	defer sys.RUnlock()
+
+	var targetIDs []event.TargetID
+	for _, rmap := range sys.bucketRulesMap {
+		for _, rules := range rmap {
+			for _, targetSet := range rules {
+				targetIDs = append(targetIDs, targetSet.ToSlice()...)
+			}
+		}
+	}
+
+	return targetIDs
+}
+
 // RemoveNotification - removes all notification configuration for bucket name.
 func (sys *NotificationSys) RemoveNotification(bucketName string) {
 	sys.Lock()
