@@ -136,18 +136,10 @@ func SetKMSConfig(s config.Config, cfg KMSConfig) {
 //
 // It sets the global KMS configuration according to the merged configuration
 // on success.
-func lookupConfigLegacy(kvs config.KVS) (KMSConfig, error) {
-	autoBool, err := config.ParseBool(env.Get(EnvAutoEncryptionLegacy, config.EnableOff))
-	if err != nil {
-		return KMSConfig{}, err
-	}
-
-	cfg := KMSConfig{
-		AutoEncryption: autoBool,
-		Vault: VaultConfig{
-			Auth: VaultAuth{
-				Type: "approle",
-			},
+func lookupConfigLegacy(kvs config.KVS) (VaultConfig, error) {
+	vcfg := VaultConfig{
+		Auth: VaultAuth{
+			Type: "approle",
 		},
 	}
 
@@ -156,37 +148,38 @@ func lookupConfigLegacy(kvs config.KVS) (KMSConfig, error) {
 		// Lookup Hashicorp-Vault configuration & overwrite config entry if ENV var is present
 		endpoint, err := xnet.ParseHTTPURL(endpointStr)
 		if err != nil {
-			return cfg, err
+			return vcfg, err
 		}
 		endpointStr = endpoint.String()
 	}
 
-	cfg.Vault.Endpoint = endpointStr
-	cfg.Vault.CAPath = env.Get(EnvLegacyVaultCAPath, "")
-	cfg.Vault.Auth.Type = env.Get(EnvLegacyVaultAuthType, "")
-	if cfg.Vault.Auth.Type == "" {
-		cfg.Vault.Auth.Type = "approle"
+	var err error
+	vcfg.Endpoint = endpointStr
+	vcfg.CAPath = env.Get(EnvLegacyVaultCAPath, "")
+	vcfg.Auth.Type = env.Get(EnvLegacyVaultAuthType, "")
+	if vcfg.Auth.Type == "" {
+		vcfg.Auth.Type = "approle"
 	}
-	cfg.Vault.Auth.AppRole.ID = env.Get(EnvLegacyVaultAppRoleID, "")
-	cfg.Vault.Auth.AppRole.Secret = env.Get(EnvLegacyVaultAppSecretID, "")
-	cfg.Vault.Key.Name = env.Get(EnvLegacyVaultKeyName, "")
-	cfg.Vault.Namespace = env.Get(EnvLegacyVaultNamespace, "")
+	vcfg.Auth.AppRole.ID = env.Get(EnvLegacyVaultAppRoleID, "")
+	vcfg.Auth.AppRole.Secret = env.Get(EnvLegacyVaultAppSecretID, "")
+	vcfg.Key.Name = env.Get(EnvLegacyVaultKeyName, "")
+	vcfg.Namespace = env.Get(EnvLegacyVaultNamespace, "")
 	if keyVersion := env.Get(EnvLegacyVaultKeyVersion, ""); keyVersion != "" {
-		cfg.Vault.Key.Version, err = strconv.Atoi(keyVersion)
+		vcfg.Key.Version, err = strconv.Atoi(keyVersion)
 		if err != nil {
-			return cfg, fmt.Errorf("Invalid ENV variable: Unable to parse %s value (`%s`)",
+			return vcfg, fmt.Errorf("Invalid ENV variable: Unable to parse %s value (`%s`)",
 				EnvLegacyVaultKeyVersion, keyVersion)
 		}
 	}
 
-	if reflect.DeepEqual(cfg.Vault, defaultCfg) {
-		return cfg, nil
+	if reflect.DeepEqual(vcfg, defaultVaultCfg) {
+		return vcfg, nil
 	}
 
-	if err = cfg.Vault.Verify(); err != nil {
-		return cfg, err
+	if err = vcfg.Verify(); err != nil {
+		return vcfg, err
 	}
 
-	cfg.Vault.Enabled = true
-	return cfg, nil
+	vcfg.Enabled = true
+	return vcfg, nil
 }

@@ -50,7 +50,8 @@ func initHelp() {
 		config.PolicyOPASubSys:      opa.DefaultKVS,
 		config.RegionSubSys:         config.DefaultRegionKVS,
 		config.CredentialsSubSys:    config.DefaultCredentialKVS,
-		config.KmsVaultSubSys:       crypto.DefaultKVS,
+		config.KmsVaultSubSys:       crypto.DefaultVaultKVS,
+		config.KmsKesSubSys:         crypto.DefaultKesKVS,
 		config.LoggerWebhookSubSys:  logger.DefaultKVS,
 		config.AuditWebhookSubSys:   logger.DefaultAuditKVS,
 	}
@@ -95,6 +96,10 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.KmsVaultSubSys,
 			Description: "enable external HashiCorp Vault key management service",
+		},
+		config.HelpKV{
+			Key:         config.KmsKesSubSys,
+			Description: "enable external MinIO key encryption service",
 		},
 		config.HelpKV{
 			Key:             config.LoggerWebhookSubSys,
@@ -177,7 +182,8 @@ func initHelp() {
 		config.IdentityOpenIDSubSys: openid.Help,
 		config.IdentityLDAPSubSys:   xldap.Help,
 		config.PolicyOPASubSys:      opa.Help,
-		config.KmsVaultSubSys:       crypto.Help,
+		config.KmsVaultSubSys:       crypto.HelpVault,
+		config.KmsKesSubSys:         crypto.HelpKes,
 		config.LoggerWebhookSubSys:  logger.Help,
 		config.AuditWebhookSubSys:   logger.HelpAudit,
 		config.NotifyAMQPSubSys:     notify.HelpAMQP,
@@ -245,22 +251,21 @@ func validateConfig(s config.Config) error {
 		}
 	}
 	{
-		kmsCfg, err := crypto.LookupConfig(s[config.KmsVaultSubSys][config.Default])
+		kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get())
 		if err != nil {
 			return err
 		}
-		if kmsCfg.Vault.Enabled {
-			// Set env to enable master key validation.
-			// this is needed only for KMS.
-			env.SetEnvOn()
 
-			if _, err = crypto.NewKMS(kmsCfg); err != nil {
-				return err
-			}
+		// Set env to enable master key validation.
+		// this is needed only for KMS.
+		env.SetEnvOn()
 
-			// Disable merging env values for the rest.
-			env.SetEnvOff()
+		if _, err = crypto.NewKMS(kmsCfg); err != nil {
+			return err
 		}
+
+		// Disable merging env values for the rest.
+		env.SetEnvOff()
 	}
 
 	if _, err := openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
@@ -350,7 +355,7 @@ func lookupConfigs(s config.Config) (err error) {
 		}
 	}
 
-	kmsCfg, err := crypto.LookupConfig(s[config.KmsVaultSubSys][config.Default])
+	kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get())
 	if err != nil {
 		return fmt.Errorf("Unable to setup KMS config: %w", err)
 	}
