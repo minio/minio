@@ -637,7 +637,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 			if t := r.URL.Query().Get("token"); t != "" {
 				bucket, _ = urlPath2BucketObjectName(strings.TrimPrefix(r.URL.Path, minioReservedBucketPath+"/download"))
 			} else if getRequestAuthType(r) != authTypeJWT && !strings.HasPrefix(r.URL.Path, minioReservedBucketPath) {
-				bucket, _ = urlPath2BucketObjectName(r.URL.Path)
+				bucket, _ = request2BucketObjectName(r)
 			}
 		}
 		if bucket == "" {
