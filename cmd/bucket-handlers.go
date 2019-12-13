@@ -484,13 +484,13 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	bucket := vars["bucket"]
 
 	objectLockEnabled := false
-	if _, found := r.Header[http.CanonicalHeaderKey("x-amz-bucket-object-lock-enabled")]; found {
-		if r.Header.Get("x-amz-bucket-object-lock-enabled") != "true" {
+	if vs, found := r.Header[http.CanonicalHeaderKey("x-amz-bucket-object-lock-enabled")]; found {
+		v := strings.ToLower(strings.Join(vs, ""))
+		if v != "true" && v != "false" {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL, guessIsBrowserReq(r))
 			return
 		}
-
-		objectLockEnabled = true
+		objectLockEnabled = v == "true"
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.CreateBucketAction, bucket, ""); s3Error != ErrNone {
