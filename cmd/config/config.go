@@ -620,8 +620,8 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 
 	_, ok := kvs.Lookup(Enable)
 	// Check if state is required
-	_, defaultOk := defaultKVS[subSys].Lookup(Enable)
-	if !ok && defaultOk {
+	_, enableRequired := defaultKVS[subSys].Lookup(Enable)
+	if !ok && enableRequired {
 		// implicit state "on" if not specified.
 		kvs.Set(Enable, EnableOn)
 	}
@@ -646,8 +646,19 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 
 	hkvs := HelpSubSysMap[subSys]
 	for _, hkv := range hkvs {
+		var enabled bool
+		if enableRequired {
+			enabled = currKVS.Get(Enable) == EnableOn
+		} else {
+			// when enable arg is not required
+			// then it is implicit on for the sub-system.
+			enabled = true
+		}
 		v, _ := currKVS.Lookup(hkv.Key)
-		if v == "" && !hkv.Optional {
+		if v == "" && !hkv.Optional && enabled {
+			// Return error only if the
+			// key is enabled, for state=off
+			// let it be empty.
 			return Errorf(SafeModeKind,
 				"'%s' is not optional for '%s' sub-system, please check '%s' documentation",
 				hkv.Key, subSys, subSys)
