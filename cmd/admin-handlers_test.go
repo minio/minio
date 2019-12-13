@@ -288,23 +288,14 @@ func TestAdminServerInfo(t *testing.T) {
 		t.Errorf("Expected to succeed but failed with %d", rec.Code)
 	}
 
-	results := []ServerInfo{}
+	results := madmin.InfoMessage{}
 	err = json.NewDecoder(rec.Body).Decode(&results)
 	if err != nil {
 		t.Fatalf("Failed to decode set config result json %v", err)
 	}
 
-	if len(results) == 0 {
-		t.Error("Expected at least one server info result")
-	}
-
-	for _, serverInfo := range results {
-		if serverInfo.Error != "" {
-			t.Errorf("Unexpected error = %v\n", serverInfo.Error)
-		}
-		if serverInfo.Data.Properties.Region != globalMinioDefaultRegion {
-			t.Errorf("Expected %s, got %s", globalMinioDefaultRegion, serverInfo.Data.Properties.Region)
-		}
+	if results.Region != globalMinioDefaultRegion {
+		t.Errorf("Expected %s, got %s", globalMinioDefaultRegion, results.Region)
 	}
 }
 

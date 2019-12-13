@@ -31,7 +31,6 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/event/target"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
 )
@@ -39,7 +38,6 @@ import (
 const (
 	bucketConfigPrefix       = "buckets"
 	bucketNotificationConfig = "notification.xml"
-	bucketListenerConfig     = "listener.json"
 )
 
 var errNoSuchNotifications = errors.New("The specified bucket does not have bucket notifications")
@@ -174,10 +172,10 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	writeSuccessResponseHeadersOnly(w)
 }
 
-func (api objectAPIHandlers) ListenBucketNotificationHandlerV2(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ListenBucketNotificationV2")
+func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListenBucketNotification")
 
-	defer logger.AuditLog(w, r, "ListenBucketNotificationV2", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(w, r, "ListenBucketNotification", mustGetClaimsFromToken(r))
 
 	// Validate if bucket exists.
 	objAPI := api.ObjectAPI()
@@ -310,132 +308,4 @@ func (api objectAPIHandlers) ListenBucketNotificationHandlerV2(w http.ResponseWr
 		}
 	}
 
-}
-
-// ListenBucketNotificationHandler - This HTTP handler sends events to the connected HTTP client.
-// Client should send prefix/suffix object name to match and events to watch as query parameters.
-func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ListenBucketNotification")
-
-	defer logger.AuditLog(w, r, "ListenBucketNotification", mustGetClaimsFromToken(r))
-
-	// Validate if bucket exists.
-	objAPI := api.ObjectAPI()
-	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	if !objAPI.IsNotificationSupported() {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	if !objAPI.IsListenBucketSupported() {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
-		return
-	}
-	vars := mux.Vars(r)
-	bucketName := vars["bucket"]
-
-	if s3Error := checkRequestAuthType(ctx, r, policy.ListenBucketNotificationAction, bucketName, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	values := r.URL.Query()
-
-	var prefix string
-	if len(values["prefix"]) > 1 {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrFilterNamePrefix), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	if len(values["prefix"]) == 1 {
-		if err := event.ValidateFilterRuleValue(values["prefix"][0]); err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
-
-		prefix = values["prefix"][0]
-	}
-
-	var suffix string
-	if len(values["suffix"]) > 1 {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrFilterNameSuffix), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	if len(values["suffix"]) == 1 {
-		if err := event.ValidateFilterRuleValue(values["suffix"][0]); err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
-
-		suffix = values["suffix"][0]
-	}
-
-	pattern := event.NewPattern(prefix, suffix)
-
-	eventNames := []event.Name{}
-	for _, s := range values["events"] {
-		eventName, err := event.ParseName(s)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
-
-		eventNames = append(eventNames, eventName)
-	}
-
-	if _, err := objAPI.GetBucketInfo(ctx, bucketName); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	host, err := xnet.ParseHost(r.RemoteAddr)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	w.Header().Set(xhttp.ContentType, "text/event-stream")
-
-	target, err := target.NewHTTPClientTarget(*host, w)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	rulesMap := event.NewRulesMap(eventNames, pattern, target.ID())
-
-	if err = globalNotificationSys.AddRemoteTarget(bucketName, target, rulesMap); err != nil {
-		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-	defer globalNotificationSys.RemoveRemoteTarget(bucketName, target.ID())
-	defer globalNotificationSys.RemoveRulesMap(bucketName, rulesMap)
-
-	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	if err = SaveListener(objAPI, bucketName, eventNames, pattern, target.ID(), *thisAddr); err != nil {
-		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	globalNotificationSys.ListenBucketNotification(ctx, bucketName, eventNames, pattern, target.ID(), *thisAddr)
-
-	<-target.DoneCh
-
-	if err = RemoveListener(objAPI, bucketName, target.ID(), *thisAddr); err != nil {
-		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
 }

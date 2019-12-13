@@ -91,9 +91,6 @@ func deleteBucketMetadata(ctx context.Context, bucket string, objAPI ObjectLayer
 
 	// Delete notification config, if present - ignore any errors.
 	removeNotificationConfig(ctx, objAPI, bucket)
-
-	// Delete listener config, if present - ignore any errors.
-	removeListenerConfig(ctx, objAPI, bucket)
 }
 
 // Depending on the disk type network or local, initialize storage API.
@@ -231,13 +228,6 @@ func removeNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucket st
 
 	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
 	return objAPI.DeleteObject(ctx, minioMetaBucket, ncPath)
-}
-
-// Remove listener configuration from storage layer. Used when a bucket is deleted.
-func removeListenerConfig(ctx context.Context, objAPI ObjectLayer, bucket string) error {
-	// make the path
-	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
-	return objAPI.DeleteObject(ctx, minioMetaBucket, lcPath)
 }
 
 func listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {
