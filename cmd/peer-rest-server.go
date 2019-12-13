@@ -32,7 +32,6 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/lifecycle"
-	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
 	trace "github.com/minio/minio/pkg/trace"
 )
@@ -847,58 +846,6 @@ func (s *peerRESTServer) PutBucketObjectLockConfigHandler(w http.ResponseWriter,
 	w.(http.Flusher).Flush()
 }
 
-type listenBucketNotificationReq struct {
-	EventNames []event.Name   `json:"eventNames"`
-	Pattern    string         `json:"pattern"`
-	TargetID   event.TargetID `json:"targetId"`
-	Addr       xnet.Host      `json:"addr"`
-}
-
-// ListenBucketNotificationHandler - Listen bucket notification handler.
-func (s *peerRESTServer) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	vars := mux.Vars(r)
-	bucketName := vars[peerRESTBucket]
-	if bucketName == "" {
-		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
-		return
-	}
-
-	var args listenBucketNotificationReq
-	if r.ContentLength <= 0 {
-		s.writeErrorResponse(w, errInvalidArgument)
-		return
-	}
-
-	err := gob.NewDecoder(r.Body).Decode(&args)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	restClient, err := newPeerRESTClient(&args.Addr)
-	if err != nil {
-		s.writeErrorResponse(w, fmt.Errorf("unable to find PeerRESTClient for provided address %v. This happens only if remote and this minio run with different set of endpoints", args.Addr))
-		return
-	}
-
-	target := NewPeerRESTClientTarget(bucketName, args.TargetID, restClient)
-	rulesMap := event.NewRulesMap(args.EventNames, args.Pattern, target.ID())
-	if err := globalNotificationSys.AddRemoteTarget(bucketName, target, rulesMap); err != nil {
-		reqInfo := &logger.ReqInfo{BucketName: target.bucketName}
-		reqInfo.AppendTags("target", target.id.Name)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
-		s.writeErrorResponse(w, err)
-		return
-	}
-	w.(http.Flusher).Flush()
-}
-
 // ServerUpdateHandler - updates the current server.
 func (s *peerRESTServer) ServerUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -1154,7 +1101,6 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodTargetExists).HandlerFunc(httpTraceHdrs(server.TargetExistsHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSendEvent).HandlerFunc(httpTraceHdrs(server.SendEventHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBucketNotificationPut).HandlerFunc(httpTraceHdrs(server.PutBucketNotificationHandler)).Queries(restQueries(peerRESTBucket)...)
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBucketNotificationListen).HandlerFunc(httpTraceHdrs(server.ListenBucketNotificationHandler)).Queries(restQueries(peerRESTBucket)...)
 
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodReloadFormat).HandlerFunc(httpTraceHdrs(server.ReloadFormatHandler)).Queries(restQueries(peerRESTDryRun)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBucketLifecycleSet).HandlerFunc(httpTraceHdrs(server.SetBucketLifecycleHandler)).Queries(restQueries(peerRESTBucket)...)
