@@ -283,7 +283,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		// notification targets, based on their target IDs
 		for _, targetID := range targetIDs {
 			if !targetList.Exists(targetID) {
-				return nil, config.Errorf(config.SafeModeKind,
+				return nil, config.Errorf(
 					"Unable to disable configured targets '%v'",
 					targetID)
 			}
@@ -423,7 +423,7 @@ func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs
 		}
 		kafkaBrokers := env.Get(brokersEnv, kv.Get(target.KafkaBrokers))
 		if len(kafkaBrokers) == 0 {
-			return nil, config.Errorf(config.SafeModeKind, "kafka 'brokers' cannot be empty")
+			return nil, config.Errorf("kafka 'brokers' cannot be empty")
 		}
 		for _, s := range strings.Split(kafkaBrokers, config.ValueSeparator) {
 			var host *xnet.Host

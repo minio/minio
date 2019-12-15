@@ -213,6 +213,11 @@ func handleCommonEnvVars() {
 		globalActiveCred = cred
 		globalConfigEncrypted = true
 	}
+
+	globalWORMEnabled, err = config.LookupWorm()
+	if err != nil {
+		logger.Fatal(config.ErrInvalidWormValue(err), "Invalid worm configuration")
+	}
 }
 
 func logStartupMessage(msg string) {
