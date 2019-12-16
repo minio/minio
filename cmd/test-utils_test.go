@@ -74,6 +74,9 @@ func init() {
 	// Set system resources to maximum.
 	setMaxResources()
 
+	// Initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(context.Background())
+
 	logger.Disable = true
 
 	initHelp()
@@ -497,9 +500,6 @@ func resetTestGlobals() {
 
 // Configure the server for the test run.
 func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
-	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
-
 	// Initialize server config.
 	if err = newSrvConfig(obj); err != nil {
 		return err

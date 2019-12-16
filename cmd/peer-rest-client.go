@@ -649,7 +649,7 @@ func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan stru
 	}
 }
 
-func (client *peerRESTClient) doListen(listenCh chan interface{}, doneCh chan struct{}) {
+func (client *peerRESTClient) doListen(listenCh chan interface{}, doneCh chan struct{}, v url.Values) {
 	// To cancel the REST request in case doneCh gets closed.
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -664,7 +664,7 @@ func (client *peerRESTClient) doListen(listenCh chan interface{}, doneCh chan st
 		cancel()
 	}()
 
-	respBody, err := client.callWithContext(ctx, peerRESTMethodListen, nil, nil, -1)
+	respBody, err := client.callWithContext(ctx, peerRESTMethodListen, v, nil, -1)
 	defer http.DrainBody(respBody)
 
 	if err != nil {
@@ -688,10 +688,10 @@ func (client *peerRESTClient) doListen(listenCh chan interface{}, doneCh chan st
 }
 
 // Listen - listen on peers.
-func (client *peerRESTClient) Listen(listenCh chan interface{}, doneCh chan struct{}) {
+func (client *peerRESTClient) Listen(listenCh chan interface{}, doneCh chan struct{}, v url.Values) {
 	go func() {
 		for {
-			client.doListen(listenCh, doneCh)
+			client.doListen(listenCh, doneCh, v)
 			select {
 			case <-doneCh:
 				return

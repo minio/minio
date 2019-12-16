@@ -56,8 +56,12 @@ const (
 // - Range over all the available buckets
 // - Check if a bucket has an entry in etcd backend
 // -- If no, make an entry
-// -- If yes, check if the IP of entry matches local IP. This means entry is for this instance.
-// -- If IP of the entry doesn't match, this means entry is for another instance. Log an error to console.
+// -- If yes, check if the entry matches local IP check if we
+//    need to update the entry then proceed to update
+// -- If yes, check if the IP of entry matches local IP.
+//    This means entry is for this instance.
+// -- If IP of the entry doesn't match, this means entry is
+//    for another instance. Log an error to console.
 func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 	if len(buckets) == 0 {
 		return
@@ -85,11 +89,25 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 				}
 				return gerr
 			}
-			if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
-				// There is already an entry for this bucket, with all IP addresses different. This indicates a bucket name collision. Log an error and continue.
-				return fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket. Use one of these IP addresses %v to access the bucket", buckets[index].Name, globalDomainIPs.ToSlice())
+			if !globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
+				if globalDomainIPs.Difference(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
+					// No difference in terms of domainIPs and nothing
+					// has changed so we don't change anything on the etcd.
+					return nil
+				}
+				// if domain IPs intersect then it won't be an empty set.
+				// such an intersection means that bucket exists on etcd.
+				// but if we do see a difference with local domain IPs with
+				// hostSlice from etcd then we should update with newer
+				// domainIPs, we proceed to do that here.
+				return globalDNSConfig.Put(buckets[index].Name)
 			}
-			return nil
+			// No IPs seem to intersect, this means that bucket exists but has
+			// different IP addresses perhaps from a different deployment.
+			// bucket names are globally unique in federation at a given
+			// path prefix, name collision is not allowed. We simply log
+			// an error and continue.
+			return fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket. Use one of these IP addresses %v to access the bucket", buckets[index].Name, globalDomainIPs.ToSlice())
 		}, index)
 	}
 
@@ -115,9 +133,11 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 				return nil
 			}
 
-			// We go to here, so we know the bucket no longer exists, but is registered in DNS to this server
+			// We go to here, so we know the bucket no longer exists,
+			// but is registered in DNS to this server
 			if err := globalDNSConfig.DeleteRecord(dnsBuckets[index]); err != nil {
-				return fmt.Errorf("Failed to remove DNS entry for %s due to %w", dnsBuckets[index].Key, err)
+				return fmt.Errorf("Failed to remove DNS entry for %s due to %w",
+					dnsBuckets[index].Key, err)
 			}
 
 			return nil

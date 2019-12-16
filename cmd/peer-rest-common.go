@@ -81,4 +81,8 @@ const (
 	peerRESTDryRun        = "dry-run"
 	peerRESTTraceAll      = "all"
 	peerRESTTraceErr      = "err"
+
+	peerRESTListenPrefix = "prefix"
+	peerRESTListenSuffix = "suffix"
+	peerRESTListenEvents = "events"
 )

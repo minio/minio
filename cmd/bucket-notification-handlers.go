@@ -31,8 +31,6 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/handlers"
-	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
 )
 
@@ -232,39 +230,39 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	values := r.URL.Query()
 
 	var prefix string
-	if len(values["prefix"]) > 1 {
+	if len(values[peerRESTListenPrefix]) > 1 {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrFilterNamePrefix), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	if len(values["prefix"]) == 1 {
-		if err := event.ValidateFilterRuleValue(values["prefix"][0]); err != nil {
+	if len(values[peerRESTListenPrefix]) == 1 {
+		if err := event.ValidateFilterRuleValue(values[peerRESTListenPrefix][0]); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 
-		prefix = values["prefix"][0]
+		prefix = values[peerRESTListenPrefix][0]
 	}
 
 	var suffix string
-	if len(values["suffix"]) > 1 {
+	if len(values[peerRESTListenSuffix]) > 1 {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrFilterNameSuffix), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	if len(values["suffix"]) == 1 {
-		if err := event.ValidateFilterRuleValue(values["suffix"][0]); err != nil {
+	if len(values[peerRESTListenSuffix]) == 1 {
+		if err := event.ValidateFilterRuleValue(values[peerRESTListenSuffix][0]); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 
-		suffix = values["suffix"][0]
+		suffix = values[peerRESTListenSuffix][0]
 	}
 
 	pattern := event.NewPattern(prefix, suffix)
 
-	eventNames := []event.Name{}
-	for _, s := range values["events"] {
+	var eventNames []event.Name
+	for _, s := range values[peerRESTListenEvents] {
 		eventName, err := event.ParseName(s)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -279,14 +277,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		return
 	}
 
-	host, err := xnet.ParseHost(handlers.GetSourceIP(r))
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	rulesMap := event.NewRulesMap(eventNames, pattern,
-		event.TargetID{ID: "listen" + "+" + mustGetUUID() + "+" + host.Name, Name: host.Port.String()})
+	rulesMap := event.NewRulesMap(eventNames, pattern, event.TargetID{ID: mustGetUUID()})
 
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
 
@@ -306,7 +297,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		}
 		objectName, uerr := url.QueryUnescape(ev.S3.Object.Key)
 		if uerr != nil {
-			return false
+			objectName = ev.S3.Object.Key
 		}
 		return len(rulesMap.Match(ev.EventName, objectName).ToSlice()) != 0
 	})
@@ -315,7 +306,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		if peer == nil {
 			continue
 		}
-		peer.Listen(listenCh, doneCh)
+		peer.Listen(listenCh, doneCh, r.URL.Query())
 	}
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
@@ -326,8 +317,14 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		select {
 		case evI := <-listenCh:
 			ev := evI.(event.Event)
-			if err := enc.Encode(struct{ Records []event.Event }{[]event.Event{ev}}); err != nil {
-				return
+			if len(string(ev.EventName)) > 0 {
+				if err := enc.Encode(struct{ Records []event.Event }{[]event.Event{ev}}); err != nil {
+					return
+				}
+			} else {
+				if _, err := w.Write([]byte(" ")); err != nil {
+					return
+				}
 			}
 			w.(http.Flusher).Flush()
 		case <-keepAliveTicker.C:
