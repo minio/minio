@@ -30,7 +30,8 @@ import (
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 
-	sarama "gopkg.in/Shopify/sarama.v1"
+	sarama "github.com/Shopify/sarama"
+	saramatls "github.com/Shopify/sarama/tools/tls"
 )
 
 // MQTT input constants
@@ -45,6 +46,8 @@ const (
 	KafkaSASL          = "sasl"
 	KafkaSASLUsername  = "sasl_username"
 	KafkaSASLPassword  = "sasl_password"
+	KafkaClientTLSCert = "client_tls_cert"
+	KafkaClientTLSKey  = "client_tls_key"
 
 	EnvKafkaEnable        = "MINIO_NOTIFY_KAFKA_ENABLE"
 	EnvKafkaBrokers       = "MINIO_NOTIFY_KAFKA_BROKERS"
@@ -57,6 +60,8 @@ const (
 	EnvKafkaSASLEnable    = "MINIO_NOTIFY_KAFKA_SASL"
 	EnvKafkaSASLUsername  = "MINIO_NOTIFY_KAFKA_SASL_USERNAME"
 	EnvKafkaSASLPassword  = "MINIO_NOTIFY_KAFKA_SASL_PASSWORD"
+	EnvKafkaClientTLSCert = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_CERT"
+	EnvKafkaClientTLSKey  = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_KEY"
 )
 
 // KafkaArgs - Kafka target arguments.
@@ -67,10 +72,12 @@ type KafkaArgs struct {
 	QueueDir   string      `json:"queueDir"`
 	QueueLimit uint64      `json:"queueLimit"`
 	TLS        struct {
-		Enable     bool               `json:"enable"`
-		RootCAs    *x509.CertPool     `json:"-"`
-		SkipVerify bool               `json:"skipVerify"`
-		ClientAuth tls.ClientAuthType `json:"clientAuth"`
+		Enable        bool               `json:"enable"`
+		RootCAs       *x509.CertPool     `json:"-"`
+		SkipVerify    bool               `json:"skipVerify"`
+		ClientAuth    tls.ClientAuthType `json:"clientAuth"`
+		ClientTLSCert string             `json:"clientTLSCert"`
+		ClientTLSKey  string             `json:"clientTLSKey"`
 	} `json:"tls"`
 	SASL struct {
 		Enable   bool   `json:"enable"`
@@ -117,13 +124,22 @@ func (target *KafkaTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - Return true if target is up and active
+func (target *KafkaTarget) IsActive() (bool, error) {
+	if !target.args.pingBrokers() {
+		return false, errNotConnected
+	}
+	return true, nil
+}
+
 // Save - saves the events to the store which will be replayed when the Kafka connection is active.
 func (target *KafkaTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	if !target.args.pingBrokers() {
-		return errNotConnected
+	_, err := target.IsActive()
+	if err != nil {
+		return err
 	}
 	return target.send(eventData)
 }
@@ -155,9 +171,9 @@ func (target *KafkaTarget) send(eventData event.Event) error {
 // Send - reads an event from store and sends it to Kafka.
 func (target *KafkaTarget) Send(eventKey string) error {
 	var err error
-
-	if !target.args.pingBrokers() {
-		return errNotConnected
+	_, err = target.IsActive()
+	if err != nil {
+		return err
 	}
 
 	if target.producer == nil {
@@ -225,13 +241,17 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 	config.Net.SASL.Password = args.SASL.Password
 	config.Net.SASL.Enable = args.SASL.Enable
 
-	config.Net.TLS.Enable = args.TLS.Enable
-	tlsConfig := &tls.Config{
-		ClientAuth:         args.TLS.ClientAuth,
-		InsecureSkipVerify: args.TLS.SkipVerify,
-		RootCAs:            args.TLS.RootCAs,
+	tlsConfig, err := saramatls.NewConfig(args.TLS.ClientTLSCert, args.TLS.ClientTLSKey)
+
+	if err != nil {
+		return nil, err
 	}
+
+	config.Net.TLS.Enable = args.TLS.Enable
 	config.Net.TLS.Config = tlsConfig
+	config.Net.TLS.Config.InsecureSkipVerify = args.TLS.SkipVerify
+	config.Net.TLS.Config.ClientAuth = args.TLS.ClientAuth
+	config.Net.TLS.Config.RootCAs = args.TLS.RootCAs
 
 	config.Producer.RequiredAcks = sarama.WaitForAll
 	config.Producer.Retry.Max = 10

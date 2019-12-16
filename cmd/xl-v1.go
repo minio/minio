@@ -20,6 +20,7 @@ import (
 	"context"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
@@ -199,4 +200,48 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 // StorageInfo - returns underlying storage statistics.
 func (xl xlObjects) StorageInfo(ctx context.Context) StorageInfo {
 	return getStorageInfo(xl.getDisks())
+}
+
+// GetMetrics - no op
+func (xl xlObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
+	logger.LogIf(ctx, NotImplemented{})
+	return &Metrics{}, NotImplemented{}
+}
+
+func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
+	var randomDisks []StorageAPI
+	for _, d := range xl.getLoadBalancedDisks() {
+		if d == nil || !d.IsOnline() {
+			continue
+		}
+		if len(randomDisks) > 3 {
+			break
+		}
+		randomDisks = append(randomDisks, d)
+	}
+
+	var dataUsageResults = make([]DataUsageInfo, len(randomDisks))
+
+	var wg sync.WaitGroup
+	for i := 0; i < len(randomDisks); i++ {
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			var err error
+			dataUsageResults[index], err = disk.CrawlAndGetDataUsage(endCh)
+			if err != nil {
+				logger.LogIf(ctx, err)
+			}
+		}(i, randomDisks[i])
+	}
+	wg.Wait()
+
+	var dataUsageInfo DataUsageInfo
+	for i := 0; i < len(dataUsageResults); i++ {
+		if dataUsageResults[i].ObjectsCount > dataUsageInfo.ObjectsCount {
+			dataUsageInfo = dataUsageResults[i]
+		}
+	}
+
+	return dataUsageInfo
 }

@@ -59,7 +59,7 @@ func init() {
 // if size == 0 and object ends with SlashSeparator then
 // returns true.
 func isObjectDir(object string, size int64) bool {
-	return hasSuffix(object, SlashSeparator) && size == 0
+	return HasSuffix(object, SlashSeparator) && size == 0
 }
 
 // Converts just bucket, object metadata into ObjectInfo datatype.
@@ -91,9 +91,6 @@ func deleteBucketMetadata(ctx context.Context, bucket string, objAPI ObjectLayer
 
 	// Delete notification config, if present - ignore any errors.
 	removeNotificationConfig(ctx, objAPI, bucket)
-
-	// Delete listener config, if present - ignore any errors.
-	removeListenerConfig(ctx, objAPI, bucket)
 }
 
 // Depending on the disk type network or local, initialize storage API.
@@ -114,7 +111,7 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 	var delFunc func(string) error
 	// Function to delete entries recursively.
 	delFunc = func(entryPath string) error {
-		if !hasSuffix(entryPath, SlashSeparator) {
+		if !HasSuffix(entryPath, SlashSeparator) {
 			// Delete the file entry.
 			err := storage.DeleteFile(volume, entryPath)
 			logger.LogIf(ctx, err)
@@ -161,7 +158,7 @@ func cleanupObjectsBulk(storage StorageAPI, volume string, objsPaths []string, e
 	var traverse func(string) ([]string, error)
 	traverse = func(entryPath string) ([]string, error) {
 		var output = make([]string, 0)
-		if !hasSuffix(entryPath, SlashSeparator) {
+		if !HasSuffix(entryPath, SlashSeparator) {
 			output = append(output, entryPath)
 			return output, nil
 		}
@@ -231,13 +228,6 @@ func removeNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucket st
 
 	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
 	return objAPI.DeleteObject(ctx, minioMetaBucket, ncPath)
-}
-
-// Remove listener configuration from storage layer. Used when a bucket is deleted.
-func removeListenerConfig(ctx context.Context, objAPI ObjectLayer, bucket string) error {
-	// make the path
-	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
-	return objAPI.DeleteObject(ctx, minioMetaBucket, lcPath)
 }
 
 func listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {
@@ -335,7 +325,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 	// Marker is set validate pre-condition.
 	if marker != "" {
 		// Marker not common with prefix is not implemented. Send an empty response
-		if !hasPrefix(marker, prefix) {
+		if !HasPrefix(marker, prefix) {
 			return loi, nil
 		}
 	}
@@ -386,7 +376,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 
 		var objInfo ObjectInfo
 		var err error
-		if hasSuffix(walkResult.entry, SlashSeparator) {
+		if HasSuffix(walkResult.entry, SlashSeparator) {
 			for _, getObjectInfoDir := range getObjectInfoDirs {
 				objInfo, err = getObjectInfoDir(ctx, bucket, walkResult.entry)
 				if err == nil {
@@ -449,4 +439,27 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 
 	// Success.
 	return result, nil
+}
+
+// Fetch the histogram interval corresponding
+// to the passed object size.
+func objSizeToHistoInterval(usize uint64) string {
+	size := int64(usize)
+
+	var interval objectHistogramInterval
+	for _, interval = range ObjectsHistogramIntervals {
+		var cond1, cond2 bool
+		if size >= interval.start || interval.start == -1 {
+			cond1 = true
+		}
+		if size <= interval.end || interval.end == -1 {
+			cond2 = true
+		}
+		if cond1 && cond2 {
+			return interval.name
+		}
+	}
+
+	// This would be the last element of histogram intervals
+	return interval.name
 }

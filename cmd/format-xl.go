@@ -771,6 +771,11 @@ func makeFormatXLMetaVolumes(disk StorageAPI) error {
 			return err
 		}
 	}
+	if err := disk.MakeVol(minioMetaBackgroundOpsBucket); err != nil {
+		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
+			return err
+		}
+	}
 	if err := disk.MakeVol(minioMetaMultipartBucket); err != nil {
 		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
 			return err

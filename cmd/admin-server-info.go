@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/cpu"
@@ -115,7 +116,6 @@ func getLocalDrivesPerf(endpointZones EndpointZones, size int64, r *http.Request
 	return madmin.ServerDrivesPerfInfo{
 		Addr: addr,
 		Perf: dps,
-		Size: size,
 	}
 }
 
@@ -185,4 +185,77 @@ func getLocalNetworkInfo(endpointZones EndpointZones, r *http.Request) madmin.Se
 		Addr:        addr,
 		NetworkInfo: networkHardwares,
 	}
+}
+
+// getLocalServerProperty - returns ServerDrivesPerfInfo for only the
+// local endpoints from given list of endpoints
+func getLocalServerProperty(endpointZones EndpointZones, r *http.Request) madmin.ServerProperties {
+	var di madmin.Disk
+	var disks []madmin.Disk
+	addr := r.Host
+	if globalIsDistXL {
+		addr = GetLocalPeer(endpointZones)
+	}
+	network := make(map[string]string)
+	hosts := set.NewStringSet()
+	for _, ep := range endpointZones {
+		for _, endpoint := range ep.Endpoints {
+
+			url := strings.Replace(endpoint.URL.String(), endpoint.Path, "", -1)
+			if url == "" {
+				url = r.Host
+			}
+			hosts.Add(url)
+
+			// Only proceed for local endpoints
+			if endpoint.IsLocal {
+				url = fetchAddress(url)
+				network[url] = "online"
+				if _, err := os.Stat(endpoint.Path); err != nil {
+					continue
+				}
+
+				diInfo, _ := disk.GetInfo(endpoint.Path)
+				di.State = "ok"
+				di.DrivePath = endpoint.Path
+				di.TotalSpace = diInfo.Total
+				di.UsedSpace = diInfo.Total - diInfo.Free
+				di.Utilization = float64((diInfo.Total - diInfo.Free) / diInfo.Total * 100)
+				disks = append(disks, di)
+			}
+		}
+	}
+
+	for host := range hosts {
+		_, present := network[host]
+		if !present {
+			err := checkConnection(host)
+			host = fetchAddress(host)
+			if err != nil {
+				network[host] = "offline"
+			} else {
+				network[host] = "online"
+			}
+		}
+	}
+
+	return madmin.ServerProperties{
+		State:    "ok",
+		Endpoint: addr,
+		Uptime:   UTCNow().Unix() - globalBootTime.Unix(),
+		Version:  Version,
+		CommitID: CommitID,
+		Network:  network,
+		Disks:    disks,
+	}
+}
+
+// Replaces http and https from address
+func fetchAddress(address string) string {
+	if strings.Contains(address, "http://") {
+		address = strings.Replace(address, "http://", "", -1)
+	} else if strings.Contains(address, "https://") {
+		address = strings.Replace(address, "https://", "", -1)
+	}
+	return address
 }

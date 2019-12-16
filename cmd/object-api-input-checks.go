@@ -75,7 +75,7 @@ func checkListObjsArgs(ctx context.Context, bucket, prefix, marker, delimiter st
 		}
 	}
 	// Verify if marker has prefix.
-	if marker != "" && !hasPrefix(marker, prefix) {
+	if marker != "" && !HasPrefix(marker, prefix) {
 		logger.LogIf(ctx, InvalidMarkerPrefixCombination{
 			Marker: marker,
 			Prefix: prefix,
@@ -94,7 +94,7 @@ func checkListMultipartArgs(ctx context.Context, bucket, prefix, keyMarker, uplo
 		return err
 	}
 	if uploadIDMarker != "" {
-		if hasSuffix(keyMarker, SlashSeparator) {
+		if HasSuffix(keyMarker, SlashSeparator) {
 
 			logger.LogIf(ctx, InvalidUploadIDKeyCombination{
 				UploadIDMarker: uploadIDMarker,
@@ -188,7 +188,7 @@ func checkPutObjectArgs(ctx context.Context, bucket, object string, obj ObjectLa
 		return err
 	}
 	if len(object) == 0 ||
-		(hasSuffix(object, SlashSeparator) && size != 0) ||
+		(HasSuffix(object, SlashSeparator) && size != 0) ||
 		!IsValidObjectPrefix(object) {
 		return ObjectNameInvalid{
 			Bucket: bucket,

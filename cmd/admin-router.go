@@ -53,6 +53,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 	// StorageInfo operations
 	adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/storageinfo").HandlerFunc(httpTraceAll(adminAPI.StorageInfoHandler))
+	// DataUsageInfo operations
+	adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/datausageinfo").HandlerFunc(httpTraceAll(adminAPI.DataUsageInfoHandler))
 
 	if globalIsDistXL || globalIsXL {
 		/// Heal operations

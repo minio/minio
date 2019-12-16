@@ -163,6 +163,9 @@ var (
 	// registered listeners
 	globalHTTPTrace = pubsub.New()
 
+	// global Listen system to send S3 API events to registered listeners
+	globalHTTPListen = pubsub.New()
+
 	// global console system to send console logs to
 	// registered listeners
 	globalConsoleSys *HTTPConsoleLoggerSys

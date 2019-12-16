@@ -29,7 +29,7 @@ import (
 
 const (
 	// Lock maintenance interval.
-	lockMaintenanceInterval = 1 * time.Minute
+	lockMaintenanceInterval = 30 * time.Second
 
 	// Lock validity check interval.
 	lockValidityCheckInterval = 2 * time.Minute
@@ -234,9 +234,6 @@ func lockMaintenance(interval time.Duration) {
 
 // Start lock maintenance from all lock servers.
 func startLockMaintenance() {
-	// Start with random sleep time, so as to avoid "synchronous checks" between servers
-	time.Sleep(time.Duration(rand.Float64() * float64(lockMaintenanceInterval)))
-
 	// Initialize a new ticker with a minute between each ticks.
 	ticker := time.NewTicker(lockMaintenanceInterval)
 	// Stop the timer upon service closure and cleanup the go-routine.
@@ -248,6 +245,11 @@ func startLockMaintenance() {
 		case <-GlobalServiceDoneCh:
 			return
 		case <-ticker.C:
+			// Start with random sleep time, so as to avoid
+			// "synchronous checks" between servers
+			r := rand.New(rand.NewSource(UTCNow().UnixNano()))
+			duration := time.Duration(r.Float64() * float64(lockMaintenanceInterval))
+			time.Sleep(duration)
 			lockMaintenance(lockValidityCheckInterval)
 		}
 	}

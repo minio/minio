@@ -119,4 +119,7 @@ type ObjectLayer interface {
 	SetBucketLifecycle(context.Context, string, *lifecycle.Lifecycle) error
 	GetBucketLifecycle(context.Context, string) (*lifecycle.Lifecycle, error)
 	DeleteBucketLifecycle(context.Context, string) error
+
+	// Backend related metrics
+	GetMetrics(ctx context.Context) (*Metrics, error)
 }

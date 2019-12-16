@@ -439,7 +439,9 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 			case config.StorageClassSubSys:
 				off = !storageclass.Enabled(kv)
 			case config.KmsVaultSubSys:
-				off = !crypto.Enabled(kv)
+				off = !crypto.EnabledVault(kv)
+			case config.KmsKesSubSys:
+				off = !crypto.EnabledKes(kv)
 			case config.PolicyOPASubSys:
 				off = !opa.Enabled(kv)
 			case config.IdentityOpenIDSubSys:

@@ -20,7 +20,7 @@ getdeps:
 	@mkdir -p ${GOPATH}/bin
 	@which golint 1>/dev/null || (echo "Installing golint" && GO111MODULE=off go get -u golang.org/x/lint/golint)
 ifeq ($(GOARCH),s390x)
-	@which staticcheck 1>/dev/null || (echo "Installing staticcheck" && GO111MODULE=off go get honnef.co/go/tools/cmd/staticcheck)
+	@which staticcheck 1>/dev/null || (echo "Installing staticcheck" && GO111MODULE=on go get honnef.co/go/tools/cmd/staticcheck@2019.1)
 else
 	@which staticcheck 1>/dev/null || (echo "Installing staticcheck" && wget --quiet https://github.com/dominikh/go-tools/releases/download/2019.2.3/staticcheck_${GOOS}_${GOARCH}.tar.gz && tar xf staticcheck_${GOOS}_${GOARCH}.tar.gz && mv staticcheck/staticcheck ${GOPATH}/bin/staticcheck && chmod +x ${GOPATH}/bin/staticcheck && rm -f staticcheck_${GOOS}_${GOARCH}.tar.gz && rm -rf staticcheck)
 endif
@@ -66,8 +66,13 @@ test: verifiers build
 
 # Verify minio binary
 verify:
+ifeq ($(GOARCH),s390x)
+	@echo "Verifying build without race"
+	@GO111MODULE=on CGO_ENABLED=1 go build -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio 1>/dev/null
+else
 	@echo "Verifying build with race"
 	@GO111MODULE=on CGO_ENABLED=1 go build -race -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio 1>/dev/null
+endif
 	@(env bash $(PWD)/buildscripts/verify-build.sh)
 
 coverage: build

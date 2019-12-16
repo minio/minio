@@ -31,6 +31,11 @@ func (target *PeerRESTClientTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - does nothing and available for interface compatibility.
+func (target *PeerRESTClientTarget) IsActive() (bool, error) {
+	return true, nil
+}
+
 // Save - Sends event directly without persisting.
 func (target *PeerRESTClientTarget) Save(eventData event.Event) error {
 	return target.send(eventData)

@@ -32,7 +32,6 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/lifecycle"
-	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/policy"
 	trace "github.com/minio/minio/pkg/trace"
 )
@@ -52,7 +51,7 @@ func getServerInfo() (*ServerInfoData, error) {
 		ConnStats: globalConnStats.toServerConnStats(),
 		HTTPStats: globalHTTPStats.toServerHTTPStats(),
 		Properties: ServerProperties{
-			Uptime:       UTCNow().Sub(globalBootTime),
+			Uptime:       UTCNow().Unix() - globalBootTime.Unix(),
 			Version:      Version,
 			CommitID:     CommitID,
 			DeploymentID: globalDeploymentID,
@@ -172,6 +171,11 @@ func (s *peerRESTServer) DeletePolicyHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if globalIAMSys == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
 	vars := mux.Vars(r)
 	policyName := vars[peerRESTPolicy]
 	if policyName == "" {
@@ -200,6 +204,11 @@ func (s *peerRESTServer) LoadPolicyHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if globalIAMSys == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
 	vars := mux.Vars(r)
 	policyName := vars[peerRESTPolicy]
 	if policyName == "" {
@@ -224,6 +233,11 @@ func (s *peerRESTServer) LoadPolicyMappingHandler(w http.ResponseWriter, r *http
 
 	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	if globalIAMSys == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
 	}
@@ -257,6 +271,11 @@ func (s *peerRESTServer) DeleteUserHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if globalIAMSys == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
 	vars := mux.Vars(r)
 	accessKey := vars[peerRESTUser]
 	if accessKey == "" {
@@ -281,6 +300,11 @@ func (s *peerRESTServer) LoadUserHandler(w http.ResponseWriter, r *http.Request)
 
 	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	if globalIAMSys == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
 	}
@@ -313,6 +337,17 @@ func (s *peerRESTServer) LoadUsersHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	objAPI := newObjectLayerWithoutSafeModeFn()
+	if objAPI == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	if globalIAMSys == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
 	err := globalIAMSys.Load()
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -331,6 +366,11 @@ func (s *peerRESTServer) LoadGroupHandler(w http.ResponseWriter, r *http.Request
 
 	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	if globalIAMSys == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
 	}
@@ -372,24 +412,6 @@ func (s *peerRESTServer) StartProfilingHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	w.(http.Flusher).Flush()
-}
-
-// ServerInfoHandler - returns server info.
-func (s *peerRESTServer) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx := newContext(r, w, "ServerInfo")
-	info, err := getServerInfo()
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	defer w.(http.Flusher).Flush()
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
 
 // DownloadProflingDataHandler - returns proflied data.
@@ -447,6 +469,20 @@ func (s *peerRESTServer) NetworkInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	ctx := newContext(r, w, "NetworkInfo")
 	info := getLocalNetworkInfo(globalEndpoints, r)
+
+	defer w.(http.Flusher).Flush()
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+}
+
+// ServerInfoHandler - returns Server Info
+func (s *peerRESTServer) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	ctx := newContext(r, w, "ServerInfo")
+	info := getLocalServerProperty(globalEndpoints, r)
 
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
@@ -810,58 +846,6 @@ func (s *peerRESTServer) PutBucketObjectLockConfigHandler(w http.ResponseWriter,
 	w.(http.Flusher).Flush()
 }
 
-type listenBucketNotificationReq struct {
-	EventNames []event.Name   `json:"eventNames"`
-	Pattern    string         `json:"pattern"`
-	TargetID   event.TargetID `json:"targetId"`
-	Addr       xnet.Host      `json:"addr"`
-}
-
-// ListenBucketNotificationHandler - Listen bucket notification handler.
-func (s *peerRESTServer) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	vars := mux.Vars(r)
-	bucketName := vars[peerRESTBucket]
-	if bucketName == "" {
-		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
-		return
-	}
-
-	var args listenBucketNotificationReq
-	if r.ContentLength <= 0 {
-		s.writeErrorResponse(w, errInvalidArgument)
-		return
-	}
-
-	err := gob.NewDecoder(r.Body).Decode(&args)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	restClient, err := newPeerRESTClient(&args.Addr)
-	if err != nil {
-		s.writeErrorResponse(w, fmt.Errorf("unable to find PeerRESTClient for provided address %v. This happens only if remote and this minio run with different set of endpoints", args.Addr))
-		return
-	}
-
-	target := NewPeerRESTClientTarget(bucketName, args.TargetID, restClient)
-	rulesMap := event.NewRulesMap(args.EventNames, args.Pattern, target.ID())
-	if err := globalNotificationSys.AddRemoteTarget(bucketName, target, rulesMap); err != nil {
-		reqInfo := &logger.ReqInfo{BucketName: target.bucketName}
-		reqInfo.AppendTags("target", target.id.Name)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
-		s.writeErrorResponse(w, err)
-		return
-	}
-	w.(http.Flusher).Flush()
-}
-
 // ServerUpdateHandler - updates the current server.
 func (s *peerRESTServer) ServerUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -921,6 +905,47 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 	default:
 		s.writeErrorResponse(w, errUnsupportedSignal)
 		return
+	}
+}
+
+// ListenHandler sends http trace messages back to peer rest client
+func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.(http.Flusher).Flush()
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	// Listen Publisher uses nonblocking publish and hence does not wait for slow subscribers.
+	// Use buffered channel to take care of burst sends or slow w.Write()
+	ch := make(chan interface{}, 2000)
+
+	globalHTTPListen.Subscribe(ch, doneCh, func(entry interface{}) bool {
+		return true
+	})
+
+	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	defer keepAliveTicker.Stop()
+
+	enc := gob.NewEncoder(w)
+	for {
+		select {
+		case ev := <-ch:
+			if err := enc.Encode(ev); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-keepAliveTicker.C:
+			if err := enc.Encode(&event.Event{}); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		}
 	}
 }
 
@@ -1076,7 +1101,6 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodTargetExists).HandlerFunc(httpTraceHdrs(server.TargetExistsHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSendEvent).HandlerFunc(httpTraceHdrs(server.SendEventHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBucketNotificationPut).HandlerFunc(httpTraceHdrs(server.PutBucketNotificationHandler)).Queries(restQueries(peerRESTBucket)...)
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBucketNotificationListen).HandlerFunc(httpTraceHdrs(server.ListenBucketNotificationHandler)).Queries(restQueries(peerRESTBucket)...)
 
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodReloadFormat).HandlerFunc(httpTraceHdrs(server.ReloadFormatHandler)).Queries(restQueries(peerRESTDryRun)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBucketLifecycleSet).HandlerFunc(httpTraceHdrs(server.SetBucketLifecycleHandler)).Queries(restQueries(peerRESTBucket)...)
@@ -1084,6 +1108,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBackgroundOpsStatus).HandlerFunc(server.BackgroundOpsStatusHandler)
 
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodTrace).HandlerFunc(server.TraceHandler)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodListen).HandlerFunc(server.ListenHandler)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBackgroundHealStatus).HandlerFunc(server.BackgroundHealStatusHandler)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLog).HandlerFunc(server.ConsoleLogHandler)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodPutBucketObjectLockConfig).HandlerFunc(httpTraceHdrs(server.PutBucketObjectLockConfigHandler)).Queries(restQueries(peerRESTBucket)...)

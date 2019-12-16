@@ -680,7 +680,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 	healCtx := logger.SetReqInfo(context.Background(), newReqInfo)
 
 	// Healing directories handle it separately.
-	if hasSuffix(object, SlashSeparator) {
+	if HasSuffix(object, SlashSeparator) {
 		return xl.healObjectDir(healCtx, bucket, object, dryRun)
 	}
 

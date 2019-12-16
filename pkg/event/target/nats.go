@@ -18,6 +18,8 @@ package target
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"net/url"
@@ -37,7 +39,8 @@ const (
 	NATSUsername      = "username"
 	NATSPassword      = "password"
 	NATSToken         = "token"
-	NATSSecure        = "secure"
+	NATSTLS           = "tls"
+	NATSTLSSkipVerify = "tls_skip_verify"
 	NATSPingInterval  = "ping_interval"
 	NATSQueueDir      = "queue_dir"
 	NATSQueueLimit    = "queue_limit"
@@ -57,7 +60,8 @@ const (
 	EnvNATSUsername      = "MINIO_NOTIFY_NATS_USERNAME"
 	EnvNATSPassword      = "MINIO_NOTIFY_NATS_PASSWORD"
 	EnvNATSToken         = "MINIO_NOTIFY_NATS_TOKEN"
-	EnvNATSSecure        = "MINIO_NOTIFY_NATS_SECURE"
+	EnvNATSTLS           = "MINIO_NOTIFY_NATS_TLS"
+	EnvNATSTLSSkipVerify = "MINIO_NOTIFY_NATS_TLS_SKIP_VERIFY"
 	EnvNATSPingInterval  = "MINIO_NOTIFY_NATS_PING_INTERVAL"
 	EnvNATSQueueDir      = "MINIO_NOTIFY_NATS_QUEUE_DIR"
 	EnvNATSQueueLimit    = "MINIO_NOTIFY_NATS_QUEUE_LIMIT"
@@ -80,6 +84,8 @@ type NATSArgs struct {
 	Username      string    `json:"username"`
 	Password      string    `json:"password"`
 	Token         string    `json:"token"`
+	TLS           bool      `json:"tls"`
+	TLSSkipVerify bool      `json:"tlsSkipVerify"`
 	Secure        bool      `json:"secure"`
 	CertAuthority string    `json:"certAuthority"`
 	ClientCert    string    `json:"clientCert"`
@@ -93,6 +99,8 @@ type NATSArgs struct {
 		Async              bool   `json:"async"`
 		MaxPubAcksInflight int    `json:"maxPubAcksInflight"`
 	} `json:"streaming"`
+
+	RootCAs *x509.CertPool `json:"-"`
 }
 
 // Validate NATSArgs fields
@@ -140,8 +148,10 @@ func (n NATSArgs) connectNats() (*nats.Conn, error) {
 	if n.Token != "" {
 		connOpts = append(connOpts, nats.Token(n.Token))
 	}
-	if n.Secure {
+	if n.Secure || n.TLS && n.TLSSkipVerify {
 		connOpts = append(connOpts, nats.Secure(nil))
+	} else if n.TLS {
+		connOpts = append(connOpts, nats.Secure(&tls.Config{RootCAs: n.RootCAs}))
 	}
 	if n.CertAuthority != "" {
 		connOpts = append(connOpts, nats.RootCAs(n.CertAuthority))
@@ -187,19 +197,28 @@ func (target *NATSTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - Return true if target is up and active
+func (target *NATSTarget) IsActive() (bool, error) {
+	if target.args.Streaming.Enable {
+		if !target.stanConn.NatsConn().IsConnected() {
+			return false, errNotConnected
+		}
+	} else {
+		if !target.natsConn.IsConnected() {
+			return false, errNotConnected
+		}
+	}
+	return true, nil
+}
+
 // Save - saves the events to the store which will be replayed when the Nats connection is active.
 func (target *NATSTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	if target.args.Streaming.Enable {
-		if !target.stanConn.NatsConn().IsConnected() {
-			return errNotConnected
-		}
-	} else {
-		if !target.natsConn.IsConnected() {
-			return errNotConnected
-		}
+	_, err := target.IsActive()
+	if err != nil {
+		return err
 	}
 	return target.send(eventData)
 }

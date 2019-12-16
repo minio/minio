@@ -40,6 +40,23 @@ func (kvs KVS) Empty() bool {
 	return len(kvs) == 0
 }
 
+// Set sets a value, if not sets a default value.
+func (kvs *KVS) Set(key, value string) {
+	for i, kv := range *kvs {
+		if kv.Key == key {
+			(*kvs)[i] = KV{
+				Key:   key,
+				Value: value,
+			}
+			return
+		}
+	}
+	*kvs = append(*kvs, KV{
+		Key:   key,
+		Value: value,
+	})
+}
+
 // Get - returns the value of a key, if not found returns empty.
 func (kvs KVS) Get(key string) string {
 	v, ok := kvs.Lookup(key)
@@ -174,20 +191,19 @@ func (t *Targets) AddTarget(s string) error {
 			continue
 		}
 		if len(kv) == 1 && prevK != "" {
-			kvs = append(kvs, KV{
-				Key:   prevK,
-				Value: strings.Join([]string{kvs.Get(prevK), SanitizeValue(kv[0])}, KvSpaceSeparator),
-			})
+			value := strings.Join([]string{
+				kvs.Get(prevK),
+				SanitizeValue(kv[0]),
+			}, KvSpaceSeparator)
+			kvs.Set(prevK, value)
 			continue
 		}
-		if len(kv) == 1 {
-			return fmt.Errorf("value for key '%s' cannot be empty", kv[0])
+		if len(kv) == 2 {
+			prevK = kv[0]
+			kvs.Set(prevK, SanitizeValue(kv[1]))
+			continue
 		}
-		prevK = kv[0]
-		kvs = append(kvs, KV{
-			Key:   kv[0],
-			Value: SanitizeValue(kv[1]),
-		})
+		return fmt.Errorf("value for key '%s' cannot be empty", kv[0])
 	}
 
 	for i := range *t {

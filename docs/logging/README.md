@@ -16,11 +16,11 @@ HTTP target logs to a generic HTTP endpoint in JSON format and is not enabled by
 Assuming `mc` is already [configured](https://docs.min.io/docs/minio-client-quickstart-guide.html)
 ```
 mc admin config get myminio/ logger_webhook
-logger_webhook:target1 auth_token="" endpoint=""
+logger_webhook:name1 auth_token="" endpoint=""
 ```
 
 ```
-mc admin config set myminio logger_webhook:target1 auth_token="" endpoint="http://endpoint:port/path"
+mc admin config set myminio logger_webhook:name1 auth_token="" endpoint="http://endpoint:port/path"
 mc admin service restart myminio
 ```
 
@@ -38,11 +38,11 @@ minio server /mnt/data
 Assuming `mc` is already [configured](https://docs.min.io/docs/minio-client-quickstart-guide.html)
 ```
 mc admin config get myminio/ audit_webhook
-audit_webhook:target1 auth_token="" endpoint=""
+audit_webhook:name1 auth_token="" endpoint=""
 ```
 
 ```
-mc admin config set myminio audit_webhook:target1 auth_token="" endpoint="http://endpoint:port/path"
+mc admin config set myminio audit_webhook:name1 auth_token="" endpoint="http://endpoint:port/path"
 mc admin service restart myminio
 ```
 

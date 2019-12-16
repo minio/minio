@@ -214,7 +214,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 
 	if keyMarker != "" {
 		// Marker not common with prefix is not implemented.
-		if !hasPrefix(keyMarker, prefix) {
+		if !HasPrefix(keyMarker, prefix) {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 			return
 		}
@@ -484,13 +484,13 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	bucket := vars["bucket"]
 
 	objectLockEnabled := false
-	if _, found := r.Header[http.CanonicalHeaderKey("x-amz-bucket-object-lock-enabled")]; found {
-		if r.Header.Get("x-amz-bucket-object-lock-enabled") != "true" {
+	if vs, found := r.Header[http.CanonicalHeaderKey("x-amz-bucket-object-lock-enabled")]; found {
+		v := strings.ToLower(strings.Join(vs, ""))
+		if v != "true" && v != "false" {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL, guessIsBrowserReq(r))
 			return
 		}
-
-		objectLockEnabled = true
+		objectLockEnabled = v == "true"
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.CreateBucketAction, bucket, ""); s3Error != ErrNone {
@@ -750,7 +750,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 	if objectAPI.IsEncryptionSupported() {
-		if crypto.IsRequested(formValues) && !hasSuffix(object, SlashSeparator) { // handle SSE requests
+		if crypto.IsRequested(formValues) && !HasSuffix(object, SlashSeparator) { // handle SSE requests
 			if crypto.SSECopy.IsRequested(r.Header) {
 				writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL, guessIsBrowserReq(r))
 				return

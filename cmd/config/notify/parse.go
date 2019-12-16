@@ -19,6 +19,7 @@ package notify
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -38,15 +39,18 @@ const (
 
 // TestNotificationTargets is similar to GetNotificationTargets()
 // avoids explicit registration.
-func TestNotificationTargets(cfg config.Config, doneCh <-chan struct{}, rootCAs *x509.CertPool) error {
-	_, err := RegisterNotificationTargets(cfg, doneCh, rootCAs, true)
+func TestNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport,
+	targetIDs []event.TargetID) error {
+	test := true
+	_, err := RegisterNotificationTargets(cfg, doneCh, transport, targetIDs, test)
 	return err
 }
 
 // GetNotificationTargets registers and initializes all notification
 // targets, returns error if any.
-func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, rootCAs *x509.CertPool) (*event.TargetList, error) {
-	return RegisterNotificationTargets(cfg, doneCh, rootCAs, false)
+func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport) (*event.TargetList, error) {
+	test := false
+	return RegisterNotificationTargets(cfg, doneCh, transport, nil, test)
 }
 
 // RegisterNotificationTargets - returns TargetList which contains enabled targets in serverConfig.
@@ -54,7 +58,7 @@ func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, rootCAs *
 // * Add a new target in pkg/event/target package.
 // * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
 // * Handle the configuration in this function to create/add into TargetList.
-func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, rootCAs *x509.CertPool, test bool) (*event.TargetList, error) {
+func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool) (*event.TargetList, error) {
 	targetList := event.NewTargetList()
 	if err := checkValidNotificationKeys(cfg); err != nil {
 		return nil, err
@@ -75,7 +79,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		return nil, err
 	}
 
-	mqttTargets, err := GetNotifyMQTT(cfg[config.NotifyMQTTSubSys], rootCAs)
+	mqttTargets, err := GetNotifyMQTT(cfg[config.NotifyMQTTSubSys], transport.TLSClientConfig.RootCAs)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +89,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		return nil, err
 	}
 
-	natsTargets, err := GetNotifyNATS(cfg[config.NotifyNATSSubSys])
+	natsTargets, err := GetNotifyNATS(cfg[config.NotifyNATSSubSys], transport.TLSClientConfig.RootCAs)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +109,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		return nil, err
 	}
 
-	webhookTargets, err := GetNotifyWebhook(cfg[config.NotifyWebhookSubSys], rootCAs)
+	webhookTargets, err := GetNotifyWebhook(cfg[config.NotifyWebhookSubSys], transport)
 	if err != nil {
 		return nil, err
 	}
@@ -118,12 +122,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -136,12 +139,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 			return nil, err
 
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -149,17 +151,16 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if !args.Enable {
 			continue
 		}
-		args.TLS.RootCAs = rootCAs
+		args.TLS.RootCAs = transport.TLSClientConfig.RootCAs
 		newTarget, err := target.NewKafkaTarget(id, args, doneCh, logger.LogOnceIf)
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -167,17 +168,16 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if !args.Enable {
 			continue
 		}
-		args.RootCAs = rootCAs
+		args.RootCAs = transport.TLSClientConfig.RootCAs
 		newTarget, err := target.NewMQTTTarget(id, args, doneCh, logger.LogOnceIf)
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -189,12 +189,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -206,12 +205,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -223,12 +221,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -240,12 +237,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -257,12 +253,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+		if test {
+			newTarget.Close()
 		}
 	}
 
@@ -270,17 +265,28 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if !args.Enable {
 			continue
 		}
-		args.RootCAs = rootCAs
-		newTarget, err := target.NewWebhookTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewWebhookTarget(id, args, doneCh, logger.LogOnceIf, transport)
 		if err != nil {
+			return nil, err
+		}
+		if err := targetList.Add(newTarget); err != nil {
 			return nil, err
 		}
 		if test {
 			newTarget.Close()
 			continue
 		}
-		if err := targetList.Add(newTarget); err != nil {
-			return nil, err
+	}
+
+	if test {
+		// Verify if user is trying to disable already configured
+		// notification targets, based on their target IDs
+		for _, targetID := range targetIDs {
+			if !targetList.Exists(targetID) {
+				return nil, config.Errorf(
+					"Unable to disable configured targets '%v'",
+					targetID)
+			}
 		}
 	}
 
@@ -361,6 +367,14 @@ var (
 			Value: "",
 		},
 		config.KV{
+			Key:   target.KafkaClientTLSCert,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.KafkaClientTLSKey,
+			Value: "",
+		},
+		config.KV{
 			Key:   target.KafkaTLSClientAuth,
 			Value: "0",
 		},
@@ -409,7 +423,7 @@ func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs
 		}
 		kafkaBrokers := env.Get(brokersEnv, kv.Get(target.KafkaBrokers))
 		if len(kafkaBrokers) == 0 {
-			return nil, config.Errorf(config.SafeModeKind, "kafka 'brokers' cannot be empty")
+			return nil, config.Errorf("kafka 'brokers' cannot be empty")
 		}
 		for _, s := range strings.Split(kafkaBrokers, config.ValueSeparator) {
 			var host *xnet.Host
@@ -467,9 +481,23 @@ func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs
 		if k != config.Default {
 			tlsSkipVerifyEnv = tlsSkipVerifyEnv + config.Default + k
 		}
+
+		tlsClientTLSCertEnv := target.EnvKafkaClientTLSCert
+		if k != config.Default {
+			tlsClientTLSCertEnv = tlsClientTLSCertEnv + config.Default + k
+		}
+
+		tlsClientTLSKeyEnv := target.EnvKafkaClientTLSKey
+		if k != config.Default {
+			tlsClientTLSKeyEnv = tlsClientTLSKeyEnv + config.Default + k
+		}
+
 		kafkaArgs.TLS.Enable = env.Get(tlsEnableEnv, kv.Get(target.KafkaTLS)) == config.EnableOn
 		kafkaArgs.TLS.SkipVerify = env.Get(tlsSkipVerifyEnv, kv.Get(target.KafkaTLSSkipVerify)) == config.EnableOn
 		kafkaArgs.TLS.ClientAuth = tls.ClientAuthType(clientAuth)
+
+		kafkaArgs.TLS.ClientTLSCert = env.Get(tlsClientTLSCertEnv, kv.Get(target.KafkaClientTLSCert))
+		kafkaArgs.TLS.ClientTLSKey = env.Get(tlsClientTLSKeyEnv, kv.Get(target.KafkaClientTLSKey))
 
 		saslEnableEnv := target.EnvKafkaSASLEnable
 		if k != config.Default {
@@ -819,6 +847,14 @@ var (
 			Value: "",
 		},
 		config.KV{
+			Key:   target.NATSTLS,
+			Value: config.EnableOff,
+		},
+		config.KV{
+			Key:   target.NATSTLSSkipVerify,
+			Value: config.EnableOff,
+		},
+		config.KV{
 			Key:   target.NATSCertAuthority,
 			Value: "",
 		},
@@ -829,10 +865,6 @@ var (
 		config.KV{
 			Key:   target.NATSClientKey,
 			Value: "",
-		},
-		config.KV{
-			Key:   target.NATSSecure,
-			Value: config.EnableOff,
 		},
 		config.KV{
 			Key:   target.NATSPingInterval,
@@ -866,7 +898,7 @@ var (
 )
 
 // GetNotifyNATS - returns a map of registered notification 'nats' targets
-func GetNotifyNATS(natsKVS map[string]config.KVS) (map[string]target.NATSArgs, error) {
+func GetNotifyNATS(natsKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[string]target.NATSArgs, error) {
 	natsTargets := make(map[string]target.NATSArgs)
 	for k, kv := range mergeTargets(natsKVS, target.EnvNATSEnable, DefaultNATSKVS) {
 		enableEnv := target.EnvNATSEnable
@@ -912,9 +944,14 @@ func GetNotifyNATS(natsKVS map[string]config.KVS) (map[string]target.NATSArgs, e
 			return nil, err
 		}
 
-		secureEnv := target.EnvNATSSecure
+		tlsEnv := target.EnvNATSTLS
 		if k != config.Default {
-			secureEnv = secureEnv + config.Default + k
+			tlsEnv = tlsEnv + config.Default + k
+		}
+
+		tlsSkipVerifyEnv := target.EnvNATSTLSSkipVerify
+		if k != config.Default {
+			tlsSkipVerifyEnv = tlsSkipVerifyEnv + config.Default + k
 		}
 
 		subjectEnv := target.EnvNATSSubject
@@ -967,10 +1004,12 @@ func GetNotifyNATS(natsKVS map[string]config.KVS) (map[string]target.NATSArgs, e
 			ClientCert:    env.Get(clientCertEnv, kv.Get(target.NATSClientCert)),
 			ClientKey:     env.Get(clientKeyEnv, kv.Get(target.NATSClientKey)),
 			Token:         env.Get(tokenEnv, kv.Get(target.NATSToken)),
-			Secure:        env.Get(secureEnv, kv.Get(target.NATSSecure)) == config.EnableOn,
+			TLS:           env.Get(tlsEnv, kv.Get(target.NATSTLS)) == config.EnableOn,
+			TLSSkipVerify: env.Get(tlsSkipVerifyEnv, kv.Get(target.NATSTLSSkipVerify)) == config.EnableOn,
 			PingInterval:  pingInterval,
 			QueueDir:      env.Get(queueDirEnv, kv.Get(target.NATSQueueDir)),
 			QueueLimit:    queueLimit,
+			RootCAs:       rootCAs,
 		}
 
 		streamingEnableEnv := target.EnvNATSStreaming
@@ -1393,7 +1432,8 @@ var (
 )
 
 // GetNotifyWebhook - returns a map of registered notification 'webhook' targets
-func GetNotifyWebhook(webhookKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[string]target.WebhookArgs, error) {
+func GetNotifyWebhook(webhookKVS map[string]config.KVS, transport *http.Transport) (
+	map[string]target.WebhookArgs, error) {
 	webhookTargets := make(map[string]target.WebhookArgs)
 	for k, kv := range mergeTargets(webhookKVS, target.EnvWebhookEnable, DefaultWebhookKVS) {
 		enableEnv := target.EnvWebhookEnable
@@ -1435,7 +1475,7 @@ func GetNotifyWebhook(webhookKVS map[string]config.KVS, rootCAs *x509.CertPool) 
 		webhookArgs := target.WebhookArgs{
 			Enable:     enabled,
 			Endpoint:   *url,
-			RootCAs:    rootCAs,
+			Transport:  transport,
 			AuthToken:  env.Get(authEnv, kv.Get(target.WebhookAuthToken)),
 			QueueDir:   env.Get(queueDirEnv, kv.Get(target.WebhookQueueDir)),
 			QueueLimit: uint64(queueLimit),

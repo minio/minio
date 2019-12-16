@@ -112,6 +112,31 @@ func (s *storageRESTServer) DiskInfoHandler(w http.ResponseWriter, r *http.Reque
 	gob.NewEncoder(w).Encode(info)
 }
 
+func (s *storageRESTServer) CrawlAndGetDataUsageHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+
+	usageInfo, err := s.storage.CrawlAndGetDataUsage(GlobalServiceDoneCh)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	doneCh := sendWhiteSpaceToHTTPResponse(w)
+	usageInfo, err = s.storage.CrawlAndGetDataUsage(GlobalServiceDoneCh)
+	<-doneCh
+
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	gob.NewEncoder(w).Encode(usageInfo)
+	w.(http.Flusher).Flush()
+}
+
 // MakeVolHandler - make a volume.
 func (s *storageRESTServer) MakeVolHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -489,8 +514,9 @@ func (s *storageRESTServer) RenameFileHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// Send whitespace to the client to avoid timeouts as bitrot verification can take time on spinning/slow disks.
-func sendWhiteSpaceVerifyFile(w http.ResponseWriter) <-chan struct{} {
+// Send whitespace to the client to avoid timeouts with long storage
+// operations, such as bitrot verification or data usage crawling.
+func sendWhiteSpaceToHTTPResponse(w http.ResponseWriter) <-chan struct{} {
 	doneCh := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(time.Second * 10)
@@ -548,7 +574,7 @@ func (s *storageRESTServer) VerifyFile(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
 	encoder := gob.NewEncoder(w)
-	doneCh := sendWhiteSpaceVerifyFile(w)
+	doneCh := sendWhiteSpaceToHTTPResponse(w)
 	err = s.storage.VerifyFile(volume, filePath, size, BitrotAlgorithmFromString(algoStr), hash, int64(shardSize))
 	<-doneCh
 	vresp := &VerifyFileResp{}
@@ -577,6 +603,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 			subrouter := router.PathPrefix(path.Join(storageRESTPrefix, endpoint.Path)).Subrouter()
 
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDiskInfo).HandlerFunc(httpTraceHdrs(server.DiskInfoHandler))
+			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCrawlAndGetDataUsage).HandlerFunc(httpTraceHdrs(server.CrawlAndGetDataUsageHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodMakeVol).HandlerFunc(httpTraceHdrs(server.MakeVolHandler)).Queries(restQueries(storageRESTVolume)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatVol).HandlerFunc(httpTraceHdrs(server.StatVolHandler)).Queries(restQueries(storageRESTVolume)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteVol).HandlerFunc(httpTraceHdrs(server.DeleteVolHandler)).Queries(restQueries(storageRESTVolume)...)

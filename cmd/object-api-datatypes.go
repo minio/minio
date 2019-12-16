@@ -70,6 +70,39 @@ type StorageInfo struct {
 	}
 }
 
+// objectHistogramInterval is an interval that will be
+// used to report the histogram of objects data sizes
+type objectHistogramInterval struct {
+	name       string
+	start, end int64
+}
+
+// ObjectsHistogramIntervals is the list of all intervals
+// of object sizes to be included in objects histogram.
+var ObjectsHistogramIntervals = []objectHistogramInterval{
+	{"LESS_THAN_1024_B", -1, 1024 - 1},
+	{"BETWEEN_1024_B_AND_1_MB", 1024, 1024*1024 - 1},
+	{"BETWEEN_1_MB_AND_10_MB", 1024 * 1024, 1024*1024*10 - 1},
+	{"BETWEEN_10_MB_AND_64_MB", 1024 * 1024 * 10, 1024*1024*64 - 1},
+	{"BETWEEN_64_MB_AND_128_MB", 1024 * 1024 * 64, 1024*1024*128 - 1},
+	{"BETWEEN_128_MB_AND_512_MB", 1024 * 1024 * 128, 1024*1024*512 - 1},
+	{"GREATER_THAN_512_MB", 1024 * 1024 * 512, -1},
+}
+
+// DataUsageInfo represents data usage stats of the underlying Object API
+type DataUsageInfo struct {
+	// The timestamp of when the data usage info is generated
+	LastUpdate time.Time `json:"lastUpdate"`
+
+	ObjectsCount uint64 `json:"objectsCount"`
+	// Objects total size
+	ObjectsTotalSize      uint64            `json:"objectsTotalSize"`
+	ObjectsSizesHistogram map[string]uint64 `json:"objectsSizesHistogram"`
+
+	BucketsCount uint64            `json:"bucketsCount"`
+	BucketsSizes map[string]uint64 `json:"bucketsSizes"`
+}
+
 // BucketInfo - represents bucket metadata.
 type BucketInfo struct {
 	// Name of the bucket.

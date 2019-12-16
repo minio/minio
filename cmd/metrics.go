@@ -167,7 +167,6 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	connStats := globalConnStats.toServerConnStats()
-	httpStats := globalHTTPStats.toServerHTTPStats()
 
 	// Network Sent/Received Bytes (internode)
 	ch <- prometheus.MustNewConstMetric(
@@ -207,6 +206,8 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 		float64(connStats.S3InputBytes),
 	)
 
+	httpStats := globalHTTPStats.toServerHTTPStats()
+
 	for api, value := range httpStats.CurrentS3Requests.APIStats {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
@@ -243,6 +244,72 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 		)
 	}
 
+	// Cache related metrics
+	if globalCacheConfig.Enabled {
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("cache", "hits", "total"),
+				"Total number of disk cache hits in current MinIO instance",
+				nil, nil),
+			prometheus.CounterValue,
+			float64(newCachedObjectLayerFn().CacheStats().getHits()),
+		)
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("cache", "misses", "total"),
+				"Total number of disk cache misses in current MinIO instance",
+				nil, nil),
+			prometheus.CounterValue,
+			float64(newCachedObjectLayerFn().CacheStats().getMisses()),
+		)
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("cache", "data", "served"),
+				"Total number of bytes served from cache of current MinIO instance",
+				nil, nil),
+			prometheus.CounterValue,
+			float64(newCachedObjectLayerFn().CacheStats().getBytesServed()),
+		)
+	}
+
+	if globalIsGateway && globalGatewayName == "s3" {
+		m, _ := globalObjectAPI.GetMetrics(context.Background())
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("gateway", globalGatewayName, "bytes_received"),
+				"Total number of bytes received by current MinIO S3 Gateway from AWS S3",
+				nil, nil),
+			prometheus.CounterValue,
+			float64(m.GetBytesReceived()),
+		)
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("gateway", globalGatewayName, "bytes_sent"),
+				"Total number of bytes sent by current MinIO S3 Gateway to AWS S3",
+				nil, nil),
+			prometheus.CounterValue,
+			float64(m.GetBytesSent()),
+		)
+		s := m.GetRequests()
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
+				"Total number of requests made to AWS S3 by current MinIO S3 Gateway",
+				[]string{"method"}, nil),
+			prometheus.CounterValue,
+			float64(s.Get.Load()),
+			http.MethodGet,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
+				"Total number of requests made to AWS S3 by current MinIO S3 Gateway",
+				[]string{"method"}, nil),
+			prometheus.CounterValue,
+			float64(s.Head.Load()),
+			http.MethodHead,
+		)
+	}
 }
 
 func metricsHandler() http.Handler {

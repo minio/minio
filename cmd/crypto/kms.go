@@ -102,11 +102,21 @@ type KMS interface {
 	// keys this method may behave like a NOP and just return the sealedKey
 	// itself.
 	UpdateKey(keyID string, sealedKey []byte, context Context) (rotatedKey []byte, err error)
+
+	// Returns KMSInfo
+	Info() (kmsInfo KMSInfo)
 }
 
 type masterKeyKMS struct {
 	keyID     string
 	masterKey [32]byte
+}
+
+// KMSInfo stores the details of KMS
+type KMSInfo struct {
+	Endpoint string
+	Name     string
+	AuthType string
 }
 
 // NewMasterKey returns a basic KMS implementation from a single 256 bit master key.
@@ -133,6 +143,15 @@ func (kms *masterKeyKMS) GenerateKey(keyID string, ctx Context) (key [32]byte, s
 	}
 	sealedKey = buffer.Bytes()
 	return key, sealedKey, nil
+}
+
+// KMS is configured directly using master key
+func (kms *masterKeyKMS) Info() (info KMSInfo) {
+	return KMSInfo{
+		Endpoint: "",
+		Name:     "",
+		AuthType: "master-key",
+	}
 }
 
 func (kms *masterKeyKMS) UnsealKey(keyID string, sealedKey []byte, ctx Context) (key [32]byte, err error) {

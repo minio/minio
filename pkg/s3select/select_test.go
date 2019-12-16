@@ -61,6 +61,7 @@ func TestJSONQueries(t *testing.T) {
 		query      string
 		requestXML []byte // override request XML
 		wantResult string
+		withJSON   string // Override JSON input
 	}{
 		{
 			name:       "select-in-array-full",
@@ -209,6 +210,26 @@ func TestJSONQueries(t *testing.T) {
 			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
 		},
 		{
+			name:       "compare-mixed",
+			query:      `SELECT id from s3object s WHERE value = true`,
+			wantResult: `{"id":1}`,
+			withJSON: `{"id":0, "value": false}
+{"id":1, "value": true}
+{"id":2, "value": 42}
+{"id":3, "value": "true"}
+`,
+		},
+		{
+			name:       "compare-mixed-not",
+			query:      `SELECT COUNT(id) as n from s3object s WHERE value != true`,
+			wantResult: `{"n":3}`,
+			withJSON: `{"id":0, "value": false}
+{"id":1, "value": true}
+{"id":2, "value": 42}
+{"id":3, "value": "true"}
+`,
+		},
+		{
 			name: "select-output-field-as-csv",
 			requestXML: []byte(`<?xml version="1.0" encoding="UTF-8"?>
 <SelectObjectContentRequest>
@@ -263,7 +284,11 @@ func TestJSONQueries(t *testing.T) {
 			}
 
 			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
-				return ioutil.NopCloser(bytes.NewBufferString(input)), nil
+				in := input
+				if len(testCase.withJSON) > 0 {
+					in = testCase.withJSON
+				}
+				return ioutil.NopCloser(bytes.NewBufferString(in)), nil
 			}); err != nil {
 				t.Fatal(err)
 			}

@@ -24,6 +24,7 @@ import (
 // Target - event target interface
 type Target interface {
 	ID() TargetID
+	IsActive() (bool, error)
 	Save(Event) error
 	Send(string) error
 	Close() error
@@ -128,6 +129,13 @@ func (list *TargetList) List() []TargetID {
 	}
 
 	return keys
+}
+
+// TargetMap - returns available targets.
+func (list *TargetList) TargetMap() map[TargetID]Target {
+	list.RLock()
+	defer list.RUnlock()
+	return list.targets
 }
 
 // Send - sends events to targets identified by target IDs.
