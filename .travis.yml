@@ -15,7 +15,7 @@ services:
 # but as a workaround you can add the branch to this list
 branches:
   only:
-    - s390x-travis
+    - master
 
 matrix:
   include:
