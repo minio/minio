@@ -229,15 +229,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
-	// Populate existing buckets to the etcd backend
-	if globalDNSConfig != nil {
-		buckets, err := newObject.ListBuckets(context.Background())
-		if err != nil {
-			logger.Fatal(err, "Unable to list buckets")
-		}
-		initFederatorBackend(buckets, newObject)
-	}
-
 	// Migrate all backend configs to encrypted backend, also handles rotation as well.
 	// For "nas" gateway we need to specially handle the backend migration as well.
 	// Internally code handles migrating etcd if enabled automatically.
@@ -284,6 +275,15 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		globalObjLayerMutex.Lock()
 		globalCacheObjectAPI = cacheAPI
 		globalObjLayerMutex.Unlock()
+	}
+
+	// Populate existing buckets to the etcd backend
+	if globalDNSConfig != nil {
+		buckets, err := newObject.ListBuckets(context.Background())
+		if err != nil {
+			logger.Fatal(err, "Unable to list buckets")
+		}
+		initFederatorBackend(buckets, newObject)
 	}
 
 	// Verify if object layer supports
