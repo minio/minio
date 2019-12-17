@@ -374,11 +374,6 @@ func serverMain(ctx *cli.Context) {
 		logger.Fatal(err, "Unable to list buckets")
 	}
 
-	// Populate existing buckets to the etcd backend
-	if globalDNSConfig != nil {
-		initFederatorBackend(buckets, newObject)
-	}
-
 	logger.FatalIf(initSafeMode(buckets), "Unable to initialize server switching into safe-mode")
 
 	if globalCacheConfig.Enabled {
@@ -390,6 +385,11 @@ func serverMain(ctx *cli.Context) {
 		globalObjLayerMutex.Lock()
 		globalCacheObjectAPI = cacheAPI
 		globalObjLayerMutex.Unlock()
+	}
+
+	// Populate existing buckets to the etcd backend
+	if globalDNSConfig != nil {
+		initFederatorBackend(buckets, newObject)
 	}
 
 	initDataUsageStats()
