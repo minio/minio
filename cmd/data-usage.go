@@ -68,13 +68,7 @@ func runDataUsageInfoForFS(ctx context.Context, fsObj *FSObjects, endCh <-chan s
 		// Save the data usage in the disk
 		err := storeDataUsageInBackend(ctx, fsObj, usageInfo)
 		if err != nil {
-			if globalWORMEnabled {
-				if _, ok := err.(ObjectAlreadyExists); !ok {
-					logger.LogIf(ctx, err)
-				}
-			} else {
-				logger.LogIf(ctx, err)
-			}
+			logger.LogIf(ctx, err)
 		}
 		select {
 		case <-endCh:
@@ -103,13 +97,7 @@ func runDataUsageInfoForXLZones(ctx context.Context, z *xlZones, endCh <-chan st
 		usageInfo := z.crawlAndGetDataUsage(ctx, endCh)
 		err := storeDataUsageInBackend(ctx, z, usageInfo)
 		if err != nil {
-			if globalWORMEnabled {
-				if _, ok := err.(ObjectAlreadyExists); !ok {
-					logger.LogIf(ctx, err)
-				}
-			} else {
-				logger.LogIf(ctx, err)
-			}
+			logger.LogIf(ctx, err)
 		}
 		select {
 		case <-endCh:
