@@ -40,7 +40,11 @@ import (
 func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
-	logger.AddTarget(globalConsoleSys.Console())
+
+	// Initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(context.Background())
+	logger.AddTarget(globalConsoleSys)
+
 	gob.Register(VerifyFileError(""))
 	gob.Register(DeleteFileError(""))
 }
@@ -65,6 +69,7 @@ var serverCmd = cli.Command{
 USAGE:
   {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}DIR1 [DIR2..]
   {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}DIR{1...64}
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}DIR{1...64} DIR{65...128}
 
 DIR:
   DIR points to a directory on a filesystem. When you want to combine
@@ -76,56 +81,21 @@ DIR:
 FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
-ENVIRONMENT VARIABLES:
-  ACCESS:
-     MINIO_ACCESS_KEY: Custom username or access key of minimum 3 characters in length.
-     MINIO_SECRET_KEY: Custom password or secret key of minimum 8 characters in length.
-
-  BROWSER:
-     MINIO_BROWSER: To disable web browser access, set this value to "off".
-
-  DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to MinIO host domain name.
-
-  WORM:
-     MINIO_WORM: To turn on Write-Once-Read-Many in server, set this value to "on".
-
-  BUCKET-DNS:
-     MINIO_DOMAIN:    To enable bucket DNS requests, set this value to MinIO host domain name.
-     MINIO_PUBLIC_IPS: To enable bucket DNS requests, set this value to list of MinIO host public IP(s) delimited by ",".
-     MINIO_ETCD_ENDPOINTS: To enable bucket DNS requests, set this value to list of etcd endpoints delimited by ",".
-
-   KMS:
-     MINIO_KMS_VAULT_ENDPOINT: To enable Vault as KMS,set this value to Vault endpoint.
-     MINIO_KMS_VAULT_APPROLE_ID: To enable Vault as KMS,set this value to Vault AppRole ID.
-     MINIO_KMS_VAULT_APPROLE_SECRET: To enable Vault as KMS,set this value to Vault AppRole Secret ID.
-     MINIO_KMS_VAULT_KEY_NAME: To enable Vault as KMS,set this value to Vault encryption key-ring name.
 
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
      {{.Prompt}} {{.HelpName}} /home/shared
 
-  2. Start minio server bound to a specific ADDRESS:PORT.
-     {{.Prompt}} {{.HelpName}} --address 192.168.1.101:9000 /home/shared
-
-  3. Start minio server and enable virtual-host-style requests.
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_DOMAIN{{.AssignmentOperator}}mydomain.com
-     {{.Prompt}} {{.HelpName}} --address mydomain.com:9000 /mnt/export
-
-  4. Start erasure coded minio server on a node with 64 drives.
-     {{.Prompt}} {{.HelpName}} /mnt/export{1...64}
-
-  5. Start distributed minio server on an 32 node setup with 32 drives each. Run following command on all the 32 nodes.
+  2. Start distributed minio server on an 32 node setup with 32 drives each, run following command on all the nodes
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}minio
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
      {{.Prompt}} {{.HelpName}} http://node{1...32}.example.com/mnt/export/{1...32}
 
-  6. Start minio server with KMS enabled.
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_KMS_VAULT_APPROLE_ID{{.AssignmentOperator}}9b56cc08-8258-45d5-24a3-679876769126
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_KMS_VAULT_APPROLE_SECRET{{.AssignmentOperator}}4e30c52f-13e4-a6f5-0763-d50e8cb4321f
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_KMS_VAULT_ENDPOINT{{.AssignmentOperator}}https://vault-endpoint-ip:8200
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_KMS_VAULT_KEY_NAME{{.AssignmentOperator}}my-minio-key
-     {{.Prompt}} {{.HelpName}} /home/shared
+  3. Start distributed minio server in an expanded setup, run the following command on all the nodes
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}minio
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
+     {{.Prompt}} {{.HelpName}} http://node{1...16}.example.com/mnt/export/{1...32} \
+            http://node{17...64}.example.com/mnt/export/{1...64}
 `,
 }
 
@@ -236,7 +206,15 @@ func initSafeMode(buckets []BucketInfo) (err error) {
 	// Migrate all backend configs to encrypted backend configs, optionally
 	// handles rotating keys for encryption.
 	if err = handleEncryptedConfigBackend(newObject, true); err != nil {
-		return fmt.Errorf("Unable to handle encrypted backend for config, iam and policies: %w", err)
+		if globalWORMEnabled {
+			if _, ok := err.(ObjectAlreadyExists); !ok {
+				return fmt.Errorf("Unable to handle encrypted backend for config, iam and policies: %w",
+					err)
+			}
+			// Ignore ObjectAlreadyExists if globalWORMEnabled is true.
+		} else {
+			return fmt.Errorf("Unable to handle encrypted backend for config, iam and policies: %w", err)
+		}
 	}
 
 	// ****  WARNING ****
@@ -298,6 +276,9 @@ func serverMain(ctx *cli.Context) {
 		cli.ShowCommandHelpAndExit(ctx, "server", 1)
 	}
 
+	// Initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(context.Background())
+
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
 
 	// Handle all server command args.
@@ -305,6 +286,9 @@ func serverMain(ctx *cli.Context) {
 
 	// Handle all server environment vars.
 	serverHandleEnvVars()
+
+	// Set node name, only set for distributed setup.
+	globalConsoleSys.SetNodeName(globalEndpoints)
 
 	// Initialize all help
 	initHelp()
@@ -348,9 +332,6 @@ func serverMain(ctx *cli.Context) {
 		globalAllHealState = initHealState()
 		globalBackgroundHealState = initHealState()
 	}
-
-	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
 
 	// Configure server.
 	var handler http.Handler

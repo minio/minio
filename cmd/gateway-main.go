@@ -38,7 +38,10 @@ import (
 func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
-	logger.AddTarget(globalConsoleSys.Console())
+
+	// Initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(context.Background())
+	logger.AddTarget(globalConsoleSys)
 }
 
 var (
@@ -144,9 +147,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Set when gateway is enabled
 	globalIsGateway = true
-
-	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
 
 	enableConfigOps := gatewayName == "nas"
 

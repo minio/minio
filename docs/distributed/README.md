@@ -66,7 +66,7 @@ export MINIO_SECRET_KEY=<SECRET_KEY>
 minio server http://host{1...32}/export{1...32} http://host{33...64}/export{1...32}
 ```
 
-Now the server has expanded storage of *1024* more disks in total of *2048* disks, new object upload requests automatically start using the least used cluster. This expansion strategy works endlessly, so you can perpetually expand your clusters as needed.
+Now the server has expanded storage of *1024* more disks in total of *2048* disks, new object upload requests automatically start using the least used cluster. This expansion strategy works endlessly, so you can perpetually expand your clusters as needed.  When you restart, it is immediate and non-disruptive to the applications. Each group of servers in the command-line is called a zone. There are 2 zones in this example. Objects are placed in zones based on which zone has the *fmost free* space. Within each zone, the location of the erasure-set of drives is determined based on a deterministic hashing algorithm.
 
 ## 3. Test your setup
 To test this setup, access the MinIO server via browser or [`mc`](https://docs.min.io/docs/minio-client-quickstart-guide).
