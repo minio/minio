@@ -57,30 +57,14 @@ USAGE:
 FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
-ENVIRONMENT VARIABLES:
-  ACCESS:
-     MINIO_ACCESS_KEY: B2 account id.
-     MINIO_SECRET_KEY: B2 application key.
-
-  BROWSER:
-     MINIO_BROWSER: To disable web browser access, set this value to "off".
-
-  DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to MinIO host domain name.
-
-  CACHE:
-     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ",".
-     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ",".
-     MINIO_CACHE_EXPIRY: Cache expiry duration in days.
-     MINIO_CACHE_QUOTA: Maximum permitted usage of the cache in percentage (0-100).
 
 EXAMPLES:
-  1. Start minio gateway server for B2 backend.
+  1. Start minio gateway server for B2 backend
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accountID
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}applicationKey
      {{.Prompt}} {{.HelpName}}
 
-  2. Start minio gateway server for B2 backend with edge caching enabled.
+  2. Start minio gateway server for B2 backend with edge caching enabled
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accountID
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}applicationKey
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1,/mnt/drive2,/mnt/drive3,/mnt/drive4"

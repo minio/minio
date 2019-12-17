@@ -80,7 +80,7 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 	globalNotificationSys.SetBucketLifecycle(ctx, bucket, bucketLifecycle)
 
 	// Success.
-	writeSuccessNoContent(w)
+	writeSuccessResponseHeadersOnly(w)
 }
 
 // GetBucketLifecycleHandler - This HTTP handler returns bucket policy configuration.

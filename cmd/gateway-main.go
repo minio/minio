@@ -38,6 +38,10 @@ import (
 func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
+
+	// Initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(context.Background())
+	logger.AddTarget(globalConsoleSys)
 }
 
 var (
@@ -104,10 +108,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(errUnexpected, "Gateway implementation not initialized")
 	}
 
-	// Disable logging until gateway initialization is complete, any
-	// error during initialization will be shown as a fatal message
-	logger.Disable = true
-
 	// Validate if we have access, secret set through environment.
 	globalGatewayName = gw.Name()
 	gatewayName := gw.Name()
@@ -148,9 +148,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Set when gateway is enabled
 	globalIsGateway = true
 
-	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
-
 	enableConfigOps := gatewayName == "nas"
 
 	// TODO: We need to move this code with globalConfigSys.Init()
@@ -161,9 +158,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	srvCfg := newServerConfig()
 
 	// Override any values from ENVs.
-	if err := lookupConfigs(srvCfg); err != nil {
-		logger.FatalIf(err, "Unable to initialize server config")
-	}
+	lookupConfigs(srvCfg)
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
@@ -227,9 +222,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(err, "Unable to initialize gateway backend")
 	}
 	newObject = NewGatewayLayerWithLocker(newObject)
-
-	// Re-enable logging
-	logger.Disable = false
 
 	// Once endpoints are finalized, initialize the new object api in safe mode.
 	globalObjLayerMutex.Lock()
