@@ -206,15 +206,7 @@ func initSafeMode(buckets []BucketInfo) (err error) {
 	// Migrate all backend configs to encrypted backend configs, optionally
 	// handles rotating keys for encryption.
 	if err = handleEncryptedConfigBackend(newObject, true); err != nil {
-		if globalWORMEnabled {
-			if _, ok := err.(ObjectAlreadyExists); !ok {
-				return fmt.Errorf("Unable to handle encrypted backend for config, iam and policies: %w",
-					err)
-			}
-			// Ignore ObjectAlreadyExists if globalWORMEnabled is true.
-		} else {
-			return fmt.Errorf("Unable to handle encrypted backend for config, iam and policies: %w", err)
-		}
+		return fmt.Errorf("Unable to handle encrypted backend for config, iam and policies: %w", err)
 	}
 
 	// ****  WARNING ****

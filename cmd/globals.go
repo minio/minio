@@ -266,7 +266,6 @@ var (
 // list. Feel free to add new relevant fields.
 func getGlobalInfo() (globalInfo map[string]interface{}) {
 	globalInfo = map[string]interface{}{
-		"isWorm":       globalWORMEnabled,
 		"serverRegion": globalServerRegion,
 		// Add more relevant global settings here.
 	}

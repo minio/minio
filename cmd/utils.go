@@ -540,6 +540,9 @@ func iamPolicyName() string {
 }
 
 func isWORMEnabled(bucket string) (Retention, bool) {
+	if isMinioMetaBucketName(bucket) {
+		return Retention{}, false
+	}
 	if globalWORMEnabled {
 		return Retention{}, true
 	}

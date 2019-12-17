@@ -1022,7 +1022,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)
 	// Deny if WORM is enabled
-	if globalWORMEnabled {
+	if _, ok := isWORMEnabled(bucket); ok {
 		if _, err := fsStatFile(ctx, fsNSObjPath); err == nil {
 			return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
 		}

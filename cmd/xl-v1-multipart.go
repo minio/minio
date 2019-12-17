@@ -708,7 +708,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 
 	if xl.isObject(bucket, object) {
 		// Deny if WORM is enabled
-		if globalWORMEnabled {
+		if _, ok := isWORMEnabled(bucket); ok {
 			if _, err := xl.getObjectInfo(ctx, bucket, object); err == nil {
 				return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
 			}
