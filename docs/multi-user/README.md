@@ -1,7 +1,6 @@
 # MinIO Multi-user Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 MinIO supports multiple long term users in addition to default user created during server startup. New users can be added after server starts up, and server can be configured to deny or allow access to buckets and resources to each of these users. This document explains how to add/remove users and modify their access rights.
 
-
 ## Get started
 In this document we will explain in detail on how to configure multiple users.
 
