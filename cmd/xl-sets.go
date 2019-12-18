@@ -1693,7 +1693,7 @@ func (s *xlSets) IsReady(_ context.Context) bool {
 func (s *xlSets) maintainMRFList() {
 	var agg = make(chan partialUpload, 10000)
 	for i, set := range s.sets {
-		go func(c chan partialUpload, setIndex int) {
+		go func(c <-chan partialUpload, setIndex int) {
 			for msg := range c {
 				msg.failedSet = setIndex
 				select {
@@ -1707,6 +1707,7 @@ func (s *xlSets) maintainMRFList() {
 	for fUpload := range agg {
 		s.mrfMU.Lock()
 		if len(s.mrfUploads) > 10000 {
+			s.mrfMU.Unlock()
 			continue
 		}
 		s.mrfUploads[pathJoin(fUpload.bucket, fUpload.object)] = fUpload.failedSet
@@ -1715,17 +1716,15 @@ func (s *xlSets) maintainMRFList() {
 }
 
 // healMRFRoutine monitors new disks connection, sweep the MRF list
-// to find objects related to the new disk and that need to be heale.
+// to find objects related to the new disk that needs to be healed.
 func (s *xlSets) healMRFRoutine() {
 	// Wait until background heal state is initialized
 	var bgSeq *healSequence
 	for {
-		if globalBackgroundHealState != nil {
-			var ok bool
-			bgSeq, ok = globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
-			if ok {
-				break
-			}
+		var ok bool
+		bgSeq, ok = globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
+		if ok {
+			break
 		}
 		time.Sleep(time.Second)
 	}
@@ -1744,11 +1743,11 @@ func (s *xlSets) healMRFRoutine() {
 
 		// Heal objects
 		for _, u := range mrfUploads {
+			bgSeq.sourceCh <- u
+
 			s.mrfMU.Lock()
 			delete(s.mrfUploads, u)
 			s.mrfMU.Unlock()
-
-			bgSeq.sourceCh <- u
 		}
 	}
 }

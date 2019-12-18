@@ -969,7 +969,7 @@ func (xl xlObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continuat
 	return listObjectsV2Info, err
 }
 
-func (xl xlObjects) getMRFUploadCh() chan partialUpload {
+func (xl xlObjects) getMRFUploadCh() <-chan partialUpload {
 	return xl.mrfUploadCh
 }
 
