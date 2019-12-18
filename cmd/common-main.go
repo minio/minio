@@ -188,7 +188,6 @@ func handleCommonEnvVars() {
 				for _, addr := range addrs {
 					domainIPs.Add(addr)
 				}
-				continue
 			}
 			domainIPs.Add(endpoint)
 		}

@@ -694,17 +694,23 @@ func updateDomainIPs(endPoints set.StringSet) {
 				continue
 			}
 		}
-		IPs, err := getHostIP(host)
-		if err != nil {
-			continue
+
+		if net.ParseIP(host) == nil {
+			IPs, err := getHostIP(host)
+			if err != nil {
+				continue
+			}
+
+			IPsWithPort := IPs.ApplyFunc(func(ip string) string {
+				return net.JoinHostPort(ip, port)
+			})
+
+			ipList = ipList.Union(IPsWithPort)
 		}
 
-		IPsWithPort := IPs.ApplyFunc(func(ip string) string {
-			return net.JoinHostPort(ip, port)
-		})
-
-		ipList = ipList.Union(IPsWithPort)
+		ipList.Add(net.JoinHostPort(host, port))
 	}
+
 	globalDomainIPs = ipList.FuncMatch(func(ip string, matchString string) bool {
 		host, _, err := net.SplitHostPort(ip)
 		if err != nil {
