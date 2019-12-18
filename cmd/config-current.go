@@ -251,7 +251,7 @@ func validateConfig(s config.Config) error {
 		}
 	}
 	{
-		kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get())
+		kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get(), NewCustomHTTPTransport())
 		if err != nil {
 			return err
 		}
@@ -355,7 +355,7 @@ func lookupConfigs(s config.Config) {
 		}
 	}
 
-	kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get())
+	kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get(), NewCustomHTTPTransport())
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to setup KMS config: %w", err))
 	}

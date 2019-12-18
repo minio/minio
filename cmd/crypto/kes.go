@@ -18,13 +18,16 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
-
-	"github.com/minio/kes"
+	"strings"
 )
 
 // KesConfig contains the configuration required
@@ -63,6 +66,10 @@ type KesConfig struct {
 
 	// The default key ID returned by KMS.KeyID().
 	DefaultKeyID string
+
+	// The HTTP transport configuration for
+	// the KES client.
+	Transport *http.Transport
 }
 
 // Verify verifies if the kes configuration is correct
@@ -81,7 +88,7 @@ func (k KesConfig) Verify() (err error) {
 }
 
 type kesService struct {
-	client *kes.Client
+	client *kesClient
 
 	endpoint     string
 	defaultKeyID string
@@ -102,11 +109,17 @@ func NewKes(cfg KesConfig) (KMS, error) {
 	if err != nil {
 		return nil, err
 	}
+	cfg.Transport.TLSClientConfig = &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      certPool,
+	}
 	return &kesService{
-		client: kes.NewClient(cfg.Endpoint, &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			RootCAs:      certPool,
-		}),
+		client: &kesClient{
+			addr: cfg.Endpoint,
+			httpClient: http.Client{
+				Transport: cfg.Transport,
+			},
+		},
 		endpoint:     cfg.Endpoint,
 		defaultKeyID: cfg.DefaultKeyID,
 	}, nil
@@ -185,6 +198,110 @@ func (kes *kesService) UpdateKey(keyID string, sealedKey []byte, ctx Context) ([
 	// Currently a kes server does not support key rotation (of the same key)
 	// Therefore, we simply return the same sealedKey.
 	return sealedKey, nil
+}
+
+// kesClient implements the bare minimum functionality needed for
+// MinIO to talk to a KES server. In particular, it implements
+// GenerateDataKey (API: /v1/key/generate/) and
+// DecryptDataKey  (API: /v1/key/decrypt/).
+type kesClient struct {
+	addr       string
+	httpClient http.Client
+}
+
+// GenerateDataKey requests a new data key from the KES server.
+// On success, the KES server will respond with the plaintext key
+// and the ciphertext key as the plaintext key encrypted with
+// the key specified by name.
+//
+// The optional context is crytpo. bound to the generated data key
+// such that you have to provide the same context when decrypting
+// the data key.
+func (c *kesClient) GenerateDataKey(name string, context []byte) ([]byte, []byte, error) {
+	type Request struct {
+		Context []byte `json:"context"`
+	}
+	body, err := json.Marshal(Request{
+		Context: context,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	url := fmt.Sprintf("%s/v1/key/generate/%s", c.addr, url.PathEscape(name))
+	resp, err := c.httpClient.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return nil, nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil, c.parseErrorResponse(resp)
+	}
+	defer resp.Body.Close()
+
+	type Response struct {
+		Plaintext  []byte `json:"plaintext"`
+		Ciphertext []byte `json:"ciphertext"`
+	}
+	const limit = 1 << 20 // A plaintext/ciphertext key pair will never be larger than 1 MB
+	var response Response
+	if err = json.NewDecoder(io.LimitReader(resp.Body, limit)).Decode(&response); err != nil {
+		return nil, nil, err
+	}
+	return response.Plaintext, response.Ciphertext, nil
+}
+
+// GenerateDataKey decrypts an encrypted data key with the key
+// specified by name by talking to the KES server.
+// On success, the KES server will respond with the plaintext key.
+//
+// The optional context must match the value you provided when
+// generating the data key.
+func (c *kesClient) DecryptDataKey(name string, ciphertext, context []byte) ([]byte, error) {
+	type Request struct {
+		Ciphertext []byte `json:"ciphertext"`
+		Context    []byte `json:"context"`
+	}
+	body, err := json.Marshal(Request{
+		Ciphertext: ciphertext,
+		Context:    context,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("%s/v1/key/decrypt/%s", c.addr, url.PathEscape(name))
+	resp, err := c.httpClient.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseErrorResponse(resp)
+	}
+	defer resp.Body.Close()
+
+	type Response struct {
+		Plaintext []byte `json:"plaintext"`
+	}
+	const limit = 32 * 1024 // A data key will never be larger than 32 KB
+	var response Response
+	if err = json.NewDecoder(io.LimitReader(resp.Body, limit)).Decode(&response); err != nil {
+		return nil, err
+	}
+	return response.Plaintext, nil
+}
+
+func (c *kesClient) parseErrorResponse(resp *http.Response) error {
+	if resp.Body == nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	const limit = 32 * 1024 // A (valid) error response will not be greater than 32 KB
+	var errMsg strings.Builder
+	if _, err := io.Copy(&errMsg, io.LimitReader(resp.Body, limit)); err != nil {
+		return err
+	}
+	return fmt.Errorf("%s: %s", http.StatusText(resp.StatusCode), errMsg.String())
 }
 
 // loadCACertificates returns a new CertPool
