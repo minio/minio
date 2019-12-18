@@ -17,6 +17,7 @@ package crypto
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"strconv"
 
@@ -259,7 +260,7 @@ func lookupAutoEncryption() (bool, error) {
 
 // LookupConfig lookup vault or kes config, returns KMSConfig
 // to configure KMS object for object encryption
-func LookupConfig(c config.Config, defaultRootCAsDir string) (KMSConfig, error) {
+func LookupConfig(c config.Config, defaultRootCAsDir string, transport *http.Transport) (KMSConfig, error) {
 	vcfg, err := LookupVaultConfig(c[config.KmsVaultSubSys][config.Default])
 	if err != nil {
 		return KMSConfig{}, err
@@ -268,6 +269,7 @@ func LookupConfig(c config.Config, defaultRootCAsDir string) (KMSConfig, error) 
 	if err != nil {
 		return KMSConfig{}, err
 	}
+	kesCfg.Transport = transport
 	if kesCfg.Enabled && kesCfg.CAPath == "" {
 		kesCfg.CAPath = defaultRootCAsDir
 	}

@@ -44,7 +44,6 @@ require (
 	github.com/minio/gokrb5/v7 v7.2.5
 	github.com/minio/hdfs/v3 v3.0.1
 	github.com/minio/highwayhash v1.0.0
-	github.com/minio/kes v0.4.0
 	github.com/minio/lsync v1.0.1
 	github.com/minio/mc v0.0.0-20191012041914-735aa139b19c
 	github.com/minio/minio-go v0.0.0-20190327203652-5325257a208f
