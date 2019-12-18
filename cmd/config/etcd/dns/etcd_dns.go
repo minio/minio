@@ -154,6 +154,8 @@ func (c *CoreDNS) list(key string) ([]SrvRecord, error) {
 
 // Put - Adds DNS entries into etcd endpoint in CoreDNS etcd message format.
 func (c *CoreDNS) Put(bucket string) error {
+	c.Delete(bucket) // delete any existing entries.
+
 	for ip := range c.domainIPs {
 		bucketMsg, err := newCoreDNSMsg(ip, c.domainPort, defaultTTL)
 		if err != nil {
