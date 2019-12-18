@@ -17,7 +17,8 @@ docker run -p 9000:9000 minio/minio server /data
 docker pull minio/minio:edge
 docker run -p 9000:9000 minio/minio:edge server /data
 ```
-Note: Docker will not display the default keys unless you start the container with the `-it`(interactive TTY) argument. Generally, it is not recommended to use default keys with containers. Please visit MinIO Docker quickstart guide for more information [here](https://docs.min.io/docs/minio-docker-quickstart-guide)
+
+> NOTE: Docker will not display the default keys unless you start the container with the `-it`(interactive TTY) argument. Generally, it is not recommended to use default keys with containers. Please visit MinIO Docker quickstart guide for more information [here](https://docs.min.io/docs/minio-docker-quickstart-guide)
 
 ## macOS
 ### Homebrew
@@ -34,8 +35,8 @@ brew install minio/stable/minio
 ```
 
 ### Binary Download
-| Platform    | Architecture | URL                                                         |
-| ----------  | --------     | ------                                                      |
+| Platform    | Architecture | URL                                                       |
+| ----------  | --------     | ------                                                    |
 | Apple macOS | 64-bit Intel | https://dl.min.io/server/minio/release/darwin-amd64/minio |
 ```sh
 chmod 755 minio
@@ -44,8 +45,8 @@ chmod 755 minio
 
 ## GNU/Linux
 ### Binary Download
-| Platform   | Architecture | URL                                                        |
-| ---------- | --------     | ------                                                     |
+| Platform   | Architecture | URL                                                      |
+| ---------- | --------     | ------                                                   |
 | GNU/Linux  | 64-bit Intel | https://dl.min.io/server/minio/release/linux-amd64/minio |
 ```sh
 wget https://dl.min.io/server/minio/release/linux-amd64/minio
@@ -53,8 +54,8 @@ chmod +x minio
 ./minio server /data
 ```
 
-| Platform   | Architecture | URL                                                          |
-| ---------- | --------     | ------                                                       |
+| Platform   | Architecture | URL                                                        |
+| ---------- | --------     | ------                                                     |
 | GNU/Linux  | ppc64le      | https://dl.min.io/server/minio/release/linux-ppc64le/minio |
 ```sh
 wget https://dl.min.io/server/minio/release/linux-ppc64le/minio
@@ -64,8 +65,8 @@ chmod +x minio
 
 ## Microsoft Windows
 ### Binary Download
-| Platform          | Architecture | URL                                                              |
-| ----------        | --------     | ------                                                           |
+| Platform          | Architecture | URL                                                            |
+| ----------        | --------     | ------                                                         |
 | Microsoft Windows | 64-bit       | https://dl.min.io/server/minio/release/windows-amd64/minio.exe |
 ```sh
 minio.exe server D:\Photos

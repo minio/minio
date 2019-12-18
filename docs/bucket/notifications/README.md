@@ -5,8 +5,8 @@ Events occurring on objects in a bucket can be monitored using bucket event noti
 | Supported Event Types   |                                            |                          |
 | :---------------------- | ------------------------------------------ | ------------------------ |
 | `s3:ObjectCreated:Put`  | `s3:ObjectCreated:CompleteMultipartUpload` | `s3:ObjectAccessed:Head` |
-| `s3:ObjectCreated:Post` | `s3:ObjectRemoved:Delete`                  |
-| `s3:ObjectCreated:Copy` | `s3:ObjectAccessed:Get`                    |
+| `s3:ObjectCreated:Post` | `s3:ObjectRemoved:Delete`                  |                          |
+| `s3:ObjectCreated:Copy` | `s3:ObjectAccessed:Get`                    |                          |
 
 Use client tools like `mc` to set and listen for event notifications using the [`event` sub-command](https://docs.min.io/docs/minio-client-complete-guide#events). MinIO SDK's [`BucketNotification` APIs](https://docs.min.io/docs/golang-client-api-reference#SetBucketNotification) can also be used. The notification message MinIO sends to publish an event is a JSON message with the following [structure](https://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html).
 
@@ -23,6 +23,20 @@ Bucket events can be published to the following targets:
 
 - Install and configure MinIO Server from [here](https://docs.min.io/docs/minio-quickstart-guide).
 - Install and configure MinIO Client from [here](https://docs.min.io/docs/minio-client-quickstart-guide).
+
+```
+$ mc admin config get myminio | grep notify
+notify_webhook        publish bucket notifications to webhook endpoints
+notify_amqp           publish bucket notifications to AMQP endpoints
+notify_kafka          publish bucket notifications to Kafka endpoints
+notify_mqtt           publish bucket notifications to MQTT endpoints
+notify_nats           publish bucket notifications to NATS endpoints
+notify_nsq            publish bucket notifications to NSQ endpoints
+notify_mysql          publish bucket notifications to MySQL databases
+notify_postgres       publish bucket notifications to Postgres databases
+notify_elasticsearch  publish bucket notifications to Elasticsearch endpoints
+notify_redis          publish bucket notifications to Redis datastores
+```
 
 <a name="AMQP"></a>
 
@@ -403,13 +417,12 @@ The steps below show how to use this notification target in `namespace` and `acc
 The MinIO server configuration file is stored on the backend in json format.The Redis configuration is located in the `redis` key under the `notify` top-level key. Create a configuration key-value pair here for your Redis instance. The key is a name for your Redis endpoint, and the value is a collection of key-value parameters described in the table below.
 
 | Parameter  | Description                                                                                                                                             |
-| :--------- | :------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `state`   | (Required) Is this server endpoint configuration active/enabled?                                                                                        |
-| `format`   | (Required) Either `namespace` or `access`.                                                                                                              |
-| `address`  | (Required) The Redis server's address. For example: `localhost:6379`.                                                                                   |
-| `password` | (Optional) The Redis server's password.                                                                                                                 |
+| :--------- | :-------------                                                                                                                                          |
+| `state`    | (Required) Is this server endpoint configuration active/enabled?                                                                                        |
+| `format`   | (Required) Either `namespace` or `access`                                                                                                               |
+| `address`  | (Required) The Redis server's address. For example: `localhost:6379`                                                                                    |
+| `password` | (Optional) The Redis server's password                                                                                                                  |
 | `key`      | (Required) The name of the redis key under which events are stored. A hash is used in case of `namespace` format and a list in case of `access` format. |
-|            |                                                                                                                                                         |
 
 MinIO supports persistent event store. The persistent store will backup events when the Redis broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
 
@@ -754,14 +767,16 @@ MinIO requires MySQL version 5.7.8 or above. MinIO uses the [JSON](https://dev.m
 
 The MySQL configuration is located in the `notify_mysql` key. Create a configuration key-value pair here for your MySQL instance. The key is a name for your MySQL endpoint, and the value is a collection of key-value parameters described in the table below.
 
-| Parameter    | Description   |                                                                                             | :----------  | :-------------- |                                                                                           | `state`      | (Required) Is this server endpoint configuration active/enabled? |
-| `format`     | (Required) Either `namespace` or `access`. |                                                                | `dsn_string` | (Optional) [Data-Source-Name connection string](https://github.com/go-sql-driver/mysql#dsn-data-source-name) for the MySQL server. |
+| Parameter    | Description                                                                                                                         |
+| :----------  | :-------------                                                                                                                      |
+| `format`     | (Required) Either `namespace` or `access`.                                                                                          |
+| `dsn_string` | (Optional) [Data-Source-Name connection string](https://github.com/go-sql-driver/mysql#dsn-data-source-name) for the MySQL server.  |
 | `table`      | (Required) Table name in which events will be stored/updated. If the table does not exist, the MinIO server creates it at start-up. |
-| `host`       | Host name of the MySQL server (used only if `dsnString` is empty). |
-| `port`       | Port on which to connect to the MySQL server (used only if `dsn_string` is empty). |
-| `user`       | Database user-name (used only if `dsnString` is empty). |
-| `password`   | Database password (used only if `dsnString` is empty).  |
-| `database`   | Database name (used only if `dsnString` is empty). |
+| `host`       | Host name of the MySQL server (used only if `dsnString` is empty).                                                                  |
+| `port`       | Port on which to connect to the MySQL server (used only if `dsn_string` is empty).                                                  |
+| `user`       | Database user-name (used only if `dsnString` is empty).                                                                             |
+| `password`   | Database password (used only if `dsnString` is empty).                                                                              |
+| `database`   | Database name (used only if `dsnString` is empty).                                                                                  |
 
 `dns_string` is optional, if not specified, the connection information specified by the `host`, `port`, `user`, `password` and `database` parameters are used.
 
