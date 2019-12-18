@@ -220,10 +220,10 @@ func (c *diskCache) purge() {
 	}
 	ctx := context.Background()
 	for {
-		olderThan := c.expiry
+		olderThan := c.expiry * 24
 		for !c.diskUsageLow() {
 			// delete unaccessed objects older than expiry duration
-			expiry := UTCNow().AddDate(0, 0, -1*olderThan)
+			expiry := UTCNow().Add(time.Hour * time.Duration(-1*olderThan))
 			olderThan /= 2
 			if olderThan < 1 {
 				break
