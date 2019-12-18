@@ -230,40 +230,23 @@ func (endpoints Endpoints) GetString(i int) string {
 	return endpoints[i].String()
 }
 
-func (endpoints Endpoints) atleastOneEndpointLocal() bool {
-	for _, endpoint := range endpoints {
-		if endpoint.IsLocal {
-			return true
-		}
-	}
-	return false
-}
-
-func (endpoints Endpoints) doAllHostsResolveToLocalhost() bool {
-	var endpointHosts = map[string]set.StringSet{}
+func (endpoints Endpoints) doAnyHostsResolveToLocalhost() bool {
 	for _, endpoint := range endpoints {
 		hostIPs, err := getHostIP(endpoint.Hostname())
 		if err != nil {
 			continue
 		}
-		endpointHosts[endpoint.Hostname()] = hostIPs
-	}
-	sameHosts := make(map[string]int)
-	for hostName, endpointIPs := range endpointHosts {
-		for _, endpointIP := range endpointIPs.ToSlice() {
-			if net.ParseIP(endpointIP).IsLoopback() {
-				sameHosts[hostName]++
+		var loopback int
+		for _, hostIP := range hostIPs.ToSlice() {
+			if net.ParseIP(hostIP).IsLoopback() {
+				loopback++
 			}
 		}
+		if loopback == len(hostIPs) {
+			return true
+		}
 	}
-	ok := true
-	for _, localCount := range sameHosts {
-		ok = ok && localCount > 0
-	}
-	if len(sameHosts) == 0 {
-		return false
-	}
-	return ok
+	return false
 }
 
 // UpdateIsLocal - resolves the host and discovers the local host.
@@ -301,8 +284,8 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 					endpoints[i].Hostname(),
 				)
 
-				if orchestrated && endpoints.doAllHostsResolveToLocalhost() {
-					err := errors.New("hosts resolve to same IP, DNS not updated on k8s")
+				if orchestrated && endpoints.doAnyHostsResolveToLocalhost() {
+					err := errors.New("hosts resolve 127.*, DNS not updated on k8s")
 					// time elapsed
 					timeElapsed := time.Since(startTime)
 					// log error only if more than 1s elapsed
@@ -346,10 +329,6 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 				} else {
 					resolvedList[i] = true
 					endpoints[i].IsLocal = isLocal
-					if orchestrated && !endpoints.atleastOneEndpointLocal() {
-						resolvedList[i] = false
-						continue
-					}
 					epsResolved++
 					if !foundLocal {
 						foundLocal = isLocal
