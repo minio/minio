@@ -222,7 +222,11 @@ func (s *xlSets) connectDisks() {
 		s.xlDisks[setIndex][diskIndex] = disk
 		s.xlDisksMu.Unlock()
 
-		s.disksConnectEvent <- diskConnectInfo{setIndex: setIndex}
+		// Send a new disk connect event with a timeout
+		select {
+		case s.disksConnectEvent <- diskConnectInfo{setIndex: setIndex}:
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
 }
 
@@ -1743,7 +1747,11 @@ func (s *xlSets) healMRFRoutine() {
 
 		// Heal objects
 		for _, u := range mrfUploads {
-			bgSeq.sourceCh <- u
+			// Send an object to be healed with a timeout
+			select {
+			case bgSeq.sourceCh <- u:
+			case <-time.After(100 * time.Millisecond):
+			}
 
 			s.mrfMU.Lock()
 			delete(s.mrfUploads, u)
