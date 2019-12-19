@@ -154,6 +154,11 @@ func IsDCOS() bool {
 	return false
 }
 
+// IsKubernetesReplicaSet returns true if minio is running in kubernetes replica set.
+func IsKubernetesReplicaSet() bool {
+	return IsKubernetes() && (env.Get("KUBERNETES_REPLICA_SET", "") != "")
+}
+
 // IsKubernetes returns true if minio is running in kubernetes.
 func IsKubernetes() bool {
 	if env.Get("SIMPLE_CI", "") == "" {

@@ -249,9 +249,19 @@ func (endpoints Endpoints) doAnyHostsResolveToLocalhost() bool {
 	return false
 }
 
+func (endpoints Endpoints) atleastOneEndpointLocal() bool {
+	for _, endpoint := range endpoints {
+		if endpoint.IsLocal {
+			return true
+		}
+	}
+	return false
+}
+
 // UpdateIsLocal - resolves the host and discovers the local host.
-func (endpoints Endpoints) UpdateIsLocal() error {
+func (endpoints Endpoints) UpdateIsLocal(foundPrevLocal bool) error {
 	orchestrated := IsDocker() || IsKubernetes()
+	k8sReplicaSet := IsKubernetesReplicaSet()
 
 	var epsResolved int
 	var foundLocal bool
@@ -284,8 +294,8 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 					endpoints[i].Hostname(),
 				)
 
-				if orchestrated && endpoints.doAnyHostsResolveToLocalhost() {
-					err := errors.New("hosts resolve 127.*, DNS not updated on k8s")
+				if k8sReplicaSet && endpoints.doAnyHostsResolveToLocalhost() {
+					err := errors.New("host found resolves to 127.*, DNS incorrectly configured retrying")
 					// time elapsed
 					timeElapsed := time.Since(startTime)
 					// log error only if more than 1s elapsed
@@ -329,6 +339,21 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 				} else {
 					resolvedList[i] = true
 					endpoints[i].IsLocal = isLocal
+					if k8sReplicaSet && !endpoints.atleastOneEndpointLocal() && !foundPrevLocal {
+						// In replicated set in k8s deployment, IPs might
+						// get resolved for older IPs, add this code
+						// to ensure that we wait for this server to
+						// participate atleast one disk and be local.
+						//
+						// In special cases for replica set with expanded
+						// zone setups we need to make sure to provide
+						// value of foundPrevLocal from zone1 if we already
+						// found a local setup. Only if we haven't found
+						// previous local we continue to wait to look for
+						// atleast one local.
+						resolvedList[i] = false
+						continue
+					}
 					epsResolved++
 					if !foundLocal {
 						foundLocal = isLocal
@@ -439,7 +464,7 @@ func checkCrossDeviceMounts(endpoints Endpoints) (err error) {
 }
 
 // CreateEndpoints - validates and creates new endpoints for given args.
-func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, SetupType, error) {
+func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endpoints, SetupType, error) {
 	var endpoints Endpoints
 	var setupType SetupType
 	var err error
@@ -505,7 +530,7 @@ func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, SetupType,
 		return endpoints, setupType, nil
 	}
 
-	if err = endpoints.UpdateIsLocal(); err != nil {
+	if err = endpoints.UpdateIsLocal(foundLocal); err != nil {
 		return endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
 	}
 
@@ -695,6 +720,6 @@ func updateDomainIPs(endPoints set.StringSet) {
 		if err != nil {
 			host = ip
 		}
-		return !net.ParseIP(host).IsLoopback()
+		return !net.ParseIP(host).IsLoopback() && host != "localhost"
 	}, "")
 }

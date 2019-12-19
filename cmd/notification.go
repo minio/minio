@@ -798,6 +798,10 @@ func (sys *NotificationSys) RemoveRulesMap(bucketName string, rulesMap event.Rul
 
 // ConfiguredTargetIDs - returns list of configured target id's
 func (sys *NotificationSys) ConfiguredTargetIDs() []event.TargetID {
+	if sys == nil {
+		return nil
+	}
+
 	sys.RLock()
 	defer sys.RUnlock()
 

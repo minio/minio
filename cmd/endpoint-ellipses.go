@@ -270,7 +270,7 @@ func createServerEndpoints(serverAddr string, args ...string) (EndpointZones, in
 		if err != nil {
 			return nil, -1, -1, err
 		}
-		endpointList, newSetupType, err := CreateEndpoints(serverAddr, setArgs...)
+		endpointList, newSetupType, err := CreateEndpoints(serverAddr, false, setArgs...)
 		if err != nil {
 			return nil, -1, -1, err
 		}
@@ -283,6 +283,8 @@ func createServerEndpoints(serverAddr string, args ...string) (EndpointZones, in
 		return endpointZones, len(setArgs[0]), setupType, nil
 	}
 
+	var foundPrevLocal bool
+
 	// Verify the args setup-type appropriately.
 	{
 		setArgs, err := GetAllSets(args...)
@@ -290,10 +292,13 @@ func createServerEndpoints(serverAddr string, args ...string) (EndpointZones, in
 			return nil, -1, -1, err
 		}
 
-		_, setupType, err = CreateEndpoints(serverAddr, setArgs...)
+		var endpoints Endpoints
+		endpoints, setupType, err = CreateEndpoints(serverAddr, foundPrevLocal, setArgs...)
 		if err != nil {
 			return nil, -1, -1, err
 		}
+
+		foundPrevLocal = endpoints.atleastOneEndpointLocal()
 	}
 
 	for _, arg := range args {
@@ -301,7 +306,7 @@ func createServerEndpoints(serverAddr string, args ...string) (EndpointZones, in
 		if err != nil {
 			return nil, -1, -1, err
 		}
-		endpointList, _, err := CreateEndpoints(serverAddr, setArgs...)
+		endpointList, _, err := CreateEndpoints(serverAddr, foundPrevLocal, setArgs...)
 		if err != nil {
 			return nil, -1, -1, err
 		}

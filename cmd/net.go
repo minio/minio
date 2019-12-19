@@ -162,8 +162,8 @@ func sortIPs(ipList []string) []string {
 func getAPIEndpoints() (apiEndpoints []string) {
 	var ipList []string
 	if globalMinioHost == "" {
-		ipList = sortIPs(localIP4.ToSlice())
-		ipList = append(ipList, localIP6.ToSlice()...)
+		ipList = sortIPs(mustGetLocalIP4().ToSlice())
+		ipList = append(ipList, mustGetLocalIP6().ToSlice()...)
 	} else {
 		ipList = []string{globalMinioHost}
 	}
@@ -278,8 +278,8 @@ func isLocalHost(host string, port string, localPort string) (bool, error) {
 	}
 
 	// If intersection of two IP sets is not empty, then the host is localhost.
-	isLocalv4 := !localIP4.Intersection(hostIPs).IsEmpty()
-	isLocalv6 := !localIP6.Intersection(hostIPs).IsEmpty()
+	isLocalv4 := !mustGetLocalIP4().Intersection(hostIPs).IsEmpty()
+	isLocalv6 := !mustGetLocalIP6().Intersection(hostIPs).IsEmpty()
 	if port != "" {
 		return (isLocalv4 || isLocalv6) && (port == localPort), nil
 	}
