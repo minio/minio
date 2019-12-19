@@ -17,31 +17,26 @@
 package cmd
 
 import (
-	"fmt"
 	"net/http"
 	"os"
-	"runtime"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 )
 
-const (
-	minioHealthGoroutineThreshold = 10000
-)
-
-// ReadinessCheckHandler -- checks if there are more than threshold
-// number of goroutines running, returns service unavailable.
-//
-// Readiness probes are used to detect situations where application
-// is under heavy load and temporarily unable to serve. In a orchestrated
-// setup like Kubernetes, containers reporting that they are not ready do
-// not receive traffic through Kubernetes Services.
+// ReadinessCheckHandler -- Checks if the quorum number of disks are available.
+// For FS - Checks if the backend disk is available
+// For Zones - Checks if all the zones have enough quorum
 func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
-	if err := goroutineCountCheck(minioHealthGoroutineThreshold); err != nil {
+	ctx := newContext(r, w, "ReadinessCheckHandler")
+
+	objLayer := newObjectLayerFn()
+	// Service not initialized yet
+	if objLayer == nil || !objLayer.IsReady(ctx) {
 		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
 		return
 	}
+
 	writeResponse(w, http.StatusOK, nil, mimeNone)
 }
 
@@ -101,14 +96,4 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeResponse(w, http.StatusOK, nil, mimeNone)
-}
-
-// checks threshold against total number of go-routines in the system and
-// throws error if more than threshold go-routines are running.
-func goroutineCountCheck(threshold int) error {
-	count := runtime.NumGoroutine()
-	if count > threshold {
-		return fmt.Errorf("too many goroutines (%d > %d)", count, threshold)
-	}
-	return nil
 }
