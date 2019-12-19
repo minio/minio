@@ -69,6 +69,16 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	accessKey := vars["accessKey"]
 
+	ok, err := globalIAMSys.IsTempUser(accessKey)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	if ok {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
+		return
+	}
+
 	if err := globalIAMSys.DeleteUser(accessKey); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -516,6 +526,18 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 	if globalWORMEnabled {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
+	}
+
+	if !isGroup {
+		ok, err := globalIAMSys.IsTempUser(entityName)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		if ok {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
+			return
+		}
 	}
 
 	if err := globalIAMSys.PolicyDBSet(entityName, policyName, isGroup); err != nil {

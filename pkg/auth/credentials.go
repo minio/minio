@@ -117,6 +117,11 @@ func (cred Credentials) IsExpired() bool {
 	return cred.Expiration.Before(time.Now().UTC())
 }
 
+// IsTemp - returns whether credential is temporary or not.
+func (cred Credentials) IsTemp() bool {
+	return cred.SessionToken != ""
+}
+
 // IsValid - returns whether credential is valid or not.
 func (cred Credentials) IsValid() bool {
 	// Verify credentials if its enabled or not set.
