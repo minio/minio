@@ -341,7 +341,7 @@ func TestCreateEndpoints(t *testing.T) {
 	for _, testCase := range testCases {
 		testCase := testCase
 		t.Run("", func(t *testing.T) {
-			endpoints, setupType, err := CreateEndpoints(testCase.serverAddr, testCase.args...)
+			endpoints, setupType, err := CreateEndpoints(testCase.serverAddr, false, testCase.args...)
 			if err == nil && testCase.expectedErr != nil {
 				t.Errorf("error: expected = %v, got = <nil>", testCase.expectedErr)
 			}
@@ -398,7 +398,7 @@ func TestGetLocalPeer(t *testing.T) {
 	for i, testCase := range testCases {
 		zendpoints := mustGetZoneEndpoints(testCase.endpointArgs...)
 		if !zendpoints[0].Endpoints[0].IsLocal {
-			if err := zendpoints[0].Endpoints.UpdateIsLocal(); err != nil {
+			if err := zendpoints[0].Endpoints.UpdateIsLocal(false); err != nil {
 				t.Fatalf("error: expected = <nil>, got = %v", err)
 			}
 		}
@@ -430,7 +430,7 @@ func TestGetRemotePeers(t *testing.T) {
 	for _, testCase := range testCases {
 		zendpoints := mustGetZoneEndpoints(testCase.endpointArgs...)
 		if !zendpoints[0].Endpoints[0].IsLocal {
-			if err := zendpoints[0].Endpoints.UpdateIsLocal(); err != nil {
+			if err := zendpoints[0].Endpoints.UpdateIsLocal(false); err != nil {
 				t.Fatalf("error: expected = <nil>, got = %v", err)
 			}
 		}
