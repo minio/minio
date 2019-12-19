@@ -600,18 +600,38 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 	}
 
 	for k, v := range sys.iamUsersMap {
-		users[k] = madmin.UserInfo{
-			PolicyName: sys.iamUserPolicyMap[k].Policy,
-			Status: func() madmin.AccountStatus {
-				if v.IsValid() {
-					return madmin.AccountEnabled
-				}
-				return madmin.AccountDisabled
-			}(),
+		if !v.IsTemp() {
+			users[k] = madmin.UserInfo{
+				PolicyName: sys.iamUserPolicyMap[k].Policy,
+				Status: func() madmin.AccountStatus {
+					if v.IsValid() {
+						return madmin.AccountEnabled
+					}
+					return madmin.AccountDisabled
+				}(),
+			}
 		}
 	}
 
 	return users, nil
+}
+
+// IsTempUser - returns if given key is a temporary user.
+func (sys *IAMSys) IsTempUser(name string) (bool, error) {
+	objectAPI := newObjectLayerWithoutSafeModeFn()
+	if objectAPI == nil {
+		return false, errServerNotInitialized
+	}
+
+	sys.RLock()
+	defer sys.RUnlock()
+
+	creds, found := sys.iamUsersMap[name]
+	if !found {
+		return false, errNoSuchUser
+	}
+
+	return creds.IsTemp(), nil
 }
 
 // GetUserInfo - get info on a user.
@@ -634,6 +654,10 @@ func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
 	creds, found := sys.iamUsersMap[name]
 	if !found {
 		return u, errNoSuchUser
+	}
+
+	if creds.IsTemp() {
+		return u, errIAMActionNotAllowed
 	}
 
 	u = madmin.UserInfo{
@@ -670,6 +694,10 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 	cred, ok := sys.iamUsersMap[accessKey]
 	if !ok {
 		return errNoSuchUser
+	}
+
+	if cred.IsTemp() {
+		return errIAMActionNotAllowed
 	}
 
 	uinfo := newUserIdentity(auth.Credentials{
@@ -719,9 +747,15 @@ func (sys *IAMSys) SetUser(accessKey string, uinfo madmin.UserInfo) error {
 		return errServerNotInitialized
 	}
 
+	cr, ok := sys.iamUsersMap[accessKey]
+	if cr.IsTemp() && ok {
+		return errIAMActionNotAllowed
+	}
+
 	if err := sys.store.saveUserIdentity(accessKey, false, u); err != nil {
 		return err
 	}
+
 	sys.iamUsersMap[accessKey] = u.Credentials
 
 	// Set policy if specified.
@@ -794,9 +828,12 @@ func (sys *IAMSys) AddUsersToGroup(group string, members []string) error {
 
 	// Validate that all members exist.
 	for _, member := range members {
-		_, ok := sys.iamUsersMap[member]
+		cr, ok := sys.iamUsersMap[member]
 		if !ok {
 			return errNoSuchUser
+		}
+		if cr.IsTemp() {
+			return errIAMActionNotAllowed
 		}
 	}
 
@@ -856,9 +893,12 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 
 	// Validate that all members exist.
 	for _, member := range members {
-		_, ok := sys.iamUsersMap[member]
+		cr, ok := sys.iamUsersMap[member]
 		if !ok {
 			return errNoSuchUser
+		}
+		if cr.IsTemp() {
+			return errIAMActionNotAllowed
 		}
 	}
 
