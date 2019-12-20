@@ -978,6 +978,9 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return false
 		}
+		if ev.S3.Bucket.Name != values.Get(peerRESTListenBucket) {
+			return false
+		}
 		objectName, uerr := url.QueryUnescape(ev.S3.Object.Key)
 		if uerr != nil {
 			objectName = ev.S3.Object.Key
