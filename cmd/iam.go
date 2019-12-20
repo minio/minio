@@ -433,6 +433,38 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 	}
 
 	delete(sys.iamPolicyDocsMap, policyName)
+
+	// Delete user-policy mappings that will no longer apply
+	var usersToDel []string
+	var isUserSTS []bool
+	for u, mp := range sys.iamUserPolicyMap {
+		if mp.Policy == policyName {
+			usersToDel = append(usersToDel, u)
+			cr, ok := sys.iamUsersMap[u]
+			if !ok {
+				// This case cannot happen
+				return errNoSuchUser
+			}
+			// User is from STS if the creds are temporary
+			isSTS := cr.IsTemp()
+			isUserSTS = append(isUserSTS, isSTS)
+		}
+	}
+	for i, u := range usersToDel {
+		sys.policyDBSet(u, "", isUserSTS[i], false)
+	}
+
+	// Delete group-policy mappings that will no longer apply
+	var groupsToDel []string
+	for g, mp := range sys.iamGroupPolicyMap {
+		if mp.Policy == policyName {
+			groupsToDel = append(groupsToDel, g)
+		}
+	}
+	for _, g := range groupsToDel {
+		sys.policyDBSet(g, "", false, true)
+	}
+
 	return err
 }
 
@@ -509,6 +541,19 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 		return errServerNotInitialized
 	}
 
+	// First we remove the user from their groups.
+	userInfo, getErr := sys.GetUserInfo(accessKey)
+	if getErr != nil {
+		return getErr
+	}
+	for _, group := range userInfo.MemberOf {
+		removeErr := sys.RemoveUsersFromGroup(group, []string{accessKey})
+		if removeErr != nil {
+			return removeErr
+		}
+	}
+
+	// Next we can remove the user from memory and IAM store
 	sys.Lock()
 	defer sys.Unlock()
 
@@ -1069,17 +1114,17 @@ func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
 	return sys.policyDBSet(name, policy, false, isGroup)
 }
 
-// policyDBSet - sets a policy for user in the policy db. Assumes that
-// caller has sys.Lock().
+// policyDBSet - sets a policy for user in the policy db. Assumes that caller
+// has sys.Lock(). If policy == "", then policy mapping is removed.
 func (sys *IAMSys) policyDBSet(name, policy string, isSTS, isGroup bool) error {
 	if sys.store == nil {
 		return errServerNotInitialized
 	}
 
-	if name == "" || policy == "" {
+	if name == "" {
 		return errInvalidArgument
 	}
-	if _, ok := sys.iamPolicyDocsMap[policy]; !ok {
+	if _, ok := sys.iamPolicyDocsMap[policy]; !ok && policy != "" {
 		return errNoSuchPolicy
 	}
 
@@ -1095,6 +1140,20 @@ func (sys *IAMSys) policyDBSet(name, policy string, isSTS, isGroup bool) error {
 		}
 	}
 
+	// Handle policy mapping removal
+	if policy == "" {
+		if err := sys.store.deleteMappedPolicy(name, isSTS, isGroup); err != nil {
+			return err
+		}
+		if !isGroup {
+			delete(sys.iamUserPolicyMap, name)
+		} else {
+			delete(sys.iamGroupPolicyMap, name)
+		}
+		return nil
+	}
+
+	// Handle policy mapping set/update
 	mp := newMappedPolicy(policy)
 	if err := sys.store.saveMappedPolicy(name, isSTS, isGroup, mp); err != nil {
 		return err
