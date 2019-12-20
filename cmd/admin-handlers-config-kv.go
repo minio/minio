@@ -427,6 +427,10 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 
 	var s strings.Builder
 	hkvs := config.HelpSubSysMap[""]
+	var count int
+	for _, hkv := range hkvs {
+		count += len(cfg[hkv.Key])
+	}
 	for _, hkv := range hkvs {
 		v := cfg[hkv.Key]
 		for target, kv := range v {
@@ -460,7 +464,10 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 			}
 			s.WriteString(config.KvSpaceSeparator)
 			s.WriteString(kv.String())
-			s.WriteString(config.KvNewline)
+			count--
+			if count > 0 {
+				s.WriteString(config.KvNewline)
+			}
 		}
 	}
 
