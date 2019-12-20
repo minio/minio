@@ -316,6 +316,52 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseJSON(w, dataUsageInfoJSON)
 }
 
+func (a adminAPIHandlers) AccountingUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AccountingUsageInfo")
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListServerInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	var accountingUsageInfo = make(map[string][]madmin.AccountAccess)
+
+	buckets, err := objectAPI.ListBuckets(ctx)
+	if err != nil {
+		// writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	users, err := globalIAMSys.ListUsers()
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// Calculate for each bucket, which users are allowed to access to it
+	for _, bucket := range buckets {
+		for user := range users {
+			rd, wr, custom := globalIAMSys.GetAccountAccess(user, bucket.Name)
+			if rd || wr || custom {
+				accountingUsageInfo[bucket.Name] = append(accountingUsageInfo[bucket.Name], madmin.AccountAccess{
+					AccountName: user,
+					Read:        rd,
+					Write:       wr,
+					Custom:      custom,
+				})
+			}
+		}
+	}
+
+	usageInfoJSON, err := json.Marshal(accountingUsageInfo)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, usageInfoJSON)
+}
+
 // ServerCPULoadInfo holds informantion about cpu utilization
 // of one minio node. It also reports any errors if encountered
 // while trying to reach this server.
