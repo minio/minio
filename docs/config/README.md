@@ -59,9 +59,24 @@ Once the migration is complete, server will automatically unset the `MINIO_ACCES
 > **NOTE: Make sure to remove `MINIO_ACCESS_KEY_OLD` and `MINIO_SECRET_KEY_OLD` in scripts or service files before next service restarts of the server to avoid double encryption of your existing contents.**
 
 #### Region
-| Field                     | Type     | Description                                                                                                                                                                             |
-|:--------------------------|:---------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| ``region name=my_region`` | _string_ | `region` describes the physical location of the server. By default it is blank. You may override this field with `MINIO_REGION_NAME` environment variable. If you are unsure leave it unset. |
+```
+KEY:
+region  label the location of the server
+
+ARGS:
+name     (string)    name of the location of the server e.g. "us-west-rack2"
+comment  (sentence)  optionally add a comment to this setting
+```
+
+or environment variables
+```
+KEY:
+region  label the location of the server
+
+ARGS:
+MINIO_REGION_NAME     (string)    name of the location of the server e.g. "us-west-rack2"
+MINIO_REGION_COMMENT  (sentence)  optionally add a comment to this setting
+```
 
 Example:
 
@@ -71,37 +86,72 @@ minio server /data
 ```
 
 ### Storage Class
-
-| Field                          | Type     | Description                                                                                                                                                                                  |
-|:-------------------------------|:---------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| ``storage_class``               |          | Set storage class for configurable data and parity, as per object basis.                                                                                                                     |
-| ``storage_class standard=EC:4`` | _string_ | Value for standard storage class. It should be in the format `EC:Parity`, for example to set 4 disk parity for standard storage class objects, set this field to `EC:4`.                     |
-| ``storage_class rrs=EC:2``      | _string_ | Value for reduced redundancy storage class. It should be in the format `EC:Parity`, for example to set 3 disk parity for reduced redundancy storage class objects, set this field to `EC:3`. |
-
 By default, parity for objects with standard storage class is set to `N/2`, and parity for objects with reduced redundancy storage class objects is set to `2`. Read more about storage class support in MinIO server [here](https://github.com/minio/minio/blob/master/docs/erasure/storage-class/README.md).
 
+```
+KEY:
+storage_class  define object level redundancy
+
+ARGS:
+standard  (string)    set the parity count for default standard storage class e.g. "EC:4"
+rrs       (string)    set the parity count for reduced redundancy storage class e.g. "EC:2"
+comment   (sentence)  optionally add a comment to this setting
+```
+
+or environment variables
+```
+KEY:
+storage_class  define object level redundancy
+
+ARGS:
+MINIO_STORAGE_CLASS_STANDARD  (string)    set the parity count for default standard storage class e.g. "EC:4"
+MINIO_STORAGE_CLASS_RRS       (string)    set the parity count for reduced redundancy storage class e.g. "EC:2"
+MINIO_STORAGE_CLASS_COMMENT   (sentence)  optionally add a comment to this setting
+```
+
 ### Cache
-| Field                                                        | Type       | Description                                                                                                 |
-|:-------------------------------------------------------------|:-----------|:------------------------------------------------------------------------------------------------------------|
-| ``cache drives="/mnt/drive1,/mnt/drive2,/mnt/cache{1...3}"`` | _[]string_ | List of mounted file system drives with [`atime`](http://kerolasa.github.io/filetimes.html) support enabled |
-| ``cache exclude="*.pdf,mybucket/*"``                         | _[]string_ | List of wildcard patterns for prefixes to exclude from cache                                                |
-| ``cache expiry=90``                                          | _int_      | Days to cache expiry                                                                                        |
-| ``cache quota=70``                                           | _int_      | Percentage of disk available to cache                                                                       |
-|                                                              |            |                                                                                                             |
+MinIO provides caching storage tier for primarily gateway deployments, allowing you to cache content for faster reads, cost savings on repeated downloads from the cloud.
 
-#### Notify
+```
+KEY:
+cache  add caching storage tier
 
-| Field                    | Type | Description                                                                                                                           |
-|:-------------------------|:-----|:--------------------------------------------------------------------------------------------------------------------------------------|
-| ``notify_amqp``          |      | [Configure to publish MinIO events via AMQP target.](https://docs.min.io/docs/minio-bucket-notification-guide#AMQP)                   |
-| ``notify_nats``          |      | [Configure to publish MinIO events via NATS target.](https://docs.min.io/docs/minio-bucket-notification-guide#NATS)                   |
-| ``notify_elasticsearch`` |      | [Configure to publish MinIO events via Elasticsearch target.](https://docs.min.io/docs/minio-bucket-notification-guide#Elasticsearch) |
-| ``notify_redis``         |      | [Configure to publish MinIO events via Redis target.](https://docs.min.io/docs/minio-bucket-notification-guide#Redis)                 |
-| ``notify_postgresql``    |      | [Configure to publish MinIO events via PostgreSQL target.](https://docs.min.io/docs/minio-bucket-notification-guide#PostgreSQL)       |
-| ``notify_kafka``         |      | [Configure to publish MinIO events via Apache Kafka target.](https://docs.min.io/docs/minio-bucket-notification-guide#apache-kafka)   |
-| ``notify_webhook``       |      | [Configure to publish MinIO events via Webhooks target.](https://docs.min.io/docs/minio-bucket-notification-guide#webhooks)           |
-| ``notify_mysql``         |      | [Configure to publish MinIO events via MySql target.](https://docs.min.io/docs/minio-bucket-notification-guide#MySQL)                 |
-| ``notify_mqtt``          |      | [Configure to publish MinIO events via MQTT target.](https://docs.min.io/docs/minio-bucket-notification-guide#MQTT)                   |
+ARGS:
+drives*  (csv)       comma separated mountpoints e.g. "/optane1,/optane2"
+expiry   (number)    cache expiry duration in days e.g. "90"
+quota    (number)    limit cache drive usage in percentage e.g. "90"
+exclude  (csv)       comma separated wildcard exclusion patterns e.g. "bucket/*.tmp,*.exe"
+comment  (sentence)  optionally add a comment to this setting
+```
+
+or environment variables
+```
+KEY:
+cache  add caching storage tier
+
+ARGS:
+MINIO_CACHE_DRIVES*  (csv)       comma separated mountpoints e.g. "/optane1,/optane2"
+MINIO_CACHE_EXPIRY   (number)    cache expiry duration in days e.g. "90"
+MINIO_CACHE_QUOTA    (number)    limit cache drive usage in percentage e.g. "90"
+MINIO_CACHE_EXCLUDE  (csv)       comma separated wildcard exclusion patterns e.g. "bucket/*.tmp,*.exe"
+MINIO_CACHE_COMMENT  (sentence)  optionally add a comment to this setting
+```
+
+#### Notifications
+Notification targets supported by MinIO are in the following list. To configure individual targets please refer to more detailed documentation [here](https://docs.min.io/docs/minio-bucket-notification-guide.html)
+
+```
+notify_webhook        publish bucket notifications to webhook endpoints
+notify_amqp           publish bucket notifications to AMQP endpoints
+notify_kafka          publish bucket notifications to Kafka endpoints
+notify_mqtt           publish bucket notifications to MQTT endpoints
+notify_nats           publish bucket notifications to NATS endpoints
+notify_nsq            publish bucket notifications to NSQ endpoints
+notify_mysql          publish bucket notifications to MySQL databases
+notify_postgres       publish bucket notifications to Postgres databases
+notify_elasticsearch  publish bucket notifications to Elasticsearch endpoints
+notify_redis          publish bucket notifications to Redis datastores
+```
 
 ### Accessing configuration file
 All configuration changes can be made using [`mc admin config` get/set commands](https://github.com/minio/mc/blob/master/docs/minio-admin-complete-guide.md). Following sections provide brief explanation of fields and how to customize them. A complete example of `config.json` is available [here](https://raw.githubusercontent.com/minio/minio/master/docs/config/config.sample.json)
