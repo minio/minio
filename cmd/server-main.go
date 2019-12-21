@@ -227,10 +227,6 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 		return fmt.Errorf("Unable to initialize config system: %w", err)
 	}
 
-	if err = globalNotificationSys.AddNotificationTargetsFromConfig(globalServerConfig); err != nil {
-		return fmt.Errorf("Unable to initialize notification target(s) from config: %w", err)
-	}
-
 	if globalEtcdClient != nil {
 		// ****  WARNING ****
 		// Migrating to encrypted backend on etcd should happen before initialization of
