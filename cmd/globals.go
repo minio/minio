@@ -36,6 +36,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/pubsub"
 )
 
@@ -137,9 +138,10 @@ var (
 	// globalConfigSys server config system.
 	globalConfigSys *ConfigSys
 
-	globalNotificationSys *NotificationSys
-	globalPolicySys       *PolicySys
-	globalIAMSys          *IAMSys
+	globalNotificationSys  *NotificationSys
+	globalConfigTargetList *event.TargetList
+	globalPolicySys        *PolicySys
+	globalIAMSys           *IAMSys
 
 	globalLifecycleSys *LifecycleSys
 
