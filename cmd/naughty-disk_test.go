@@ -91,6 +91,13 @@ func (d *naughtyDisk) DiskInfo() (info DiskInfo, err error) {
 	return d.disk.DiskInfo()
 }
 
+func (d *naughtyDisk) MakeVolBulk(volumes ...string) (err error) {
+	if err := d.calcError(); err != nil {
+		return err
+	}
+	return d.disk.MakeVolBulk(volumes...)
+}
+
 func (d *naughtyDisk) MakeVol(volume string) (err error) {
 	if err := d.calcError(); err != nil {
 		return err

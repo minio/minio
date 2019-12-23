@@ -28,6 +28,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
 	"sync/atomic"
 
 	"github.com/minio/minio/cmd/http"
@@ -187,6 +188,15 @@ func (client *storageRESTClient) DiskInfo() (info DiskInfo, err error) {
 	defer http.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
 	return info, err
+}
+
+// MakeVolBulk - create multiple volumes in a bulk operation.
+func (client *storageRESTClient) MakeVolBulk(volumes ...string) (err error) {
+	values := make(url.Values)
+	values.Set(storageRESTVolumes, strings.Join(volumes, ","))
+	respBody, err := client.call(storageRESTMethodMakeVolBulk, values, nil, -1)
+	defer http.DrainBody(respBody)
+	return err
 }
 
 // MakeVol - create a volume on a remote disk.

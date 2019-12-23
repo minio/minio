@@ -551,6 +551,15 @@ func (s *posix) SetDiskID(id string) {
 	// storage rest server for remote disks.
 }
 
+func (s *posix) MakeVolBulk(volumes ...string) (err error) {
+	for _, volume := range volumes {
+		if err = s.MakeVol(volume); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Make a volume entry.
 func (s *posix) MakeVol(volume string) (err error) {
 	defer func() {
