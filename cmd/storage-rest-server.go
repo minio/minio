@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os/user"
 	"path"
 	"strconv"
 	"strings"
@@ -608,7 +609,16 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 			}
 			storage, err := newPosix(endpoint.Path)
 			if err != nil {
-				logger.Fatal(config.ErrUnableToWriteInBackend(err),
+				// Show a descriptive error with a hint about how to fix it.
+				var username string
+				if u, err := user.Current(); err == nil {
+					username = u.Username
+				} else {
+					username = "<your-username>"
+				}
+				hint := fmt.Sprintf("Run the following command to add the convenient permissions: `sudo chown %s %s && sudo chmod u+rxw %s`",
+					username, endpoint.Path, endpoint.Path)
+				logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint),
 					"Unable to initialize posix backend")
 			}
 
