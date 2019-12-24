@@ -542,7 +542,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 					return toJSONError(ctx, err)
 				}
 			} else if lo.Objects[i].IsCompressed() {
-				var actualSize int64 = lo.Objects[i].GetActualSize()
+				actualSize := lo.Objects[i].GetActualSize()
 				if actualSize < 0 {
 					return toJSONError(ctx, errInvalidDecompressedSize)
 				}
@@ -1401,8 +1401,10 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				info.Size = info.GetActualSize()
 			}
 			header := &zip.FileHeader{
-				Name:   strings.TrimPrefix(objectName, args.Prefix),
-				Method: zip.Deflate,
+				Name:     strings.TrimPrefix(objectName, args.Prefix),
+				Method:   zip.Deflate,
+				Flags:    1 << 11,
+				Modified: info.ModTime,
 			}
 			if hasStringSuffixInSlice(info.Name, standardExcludeCompressExtensions) || hasPattern(standardExcludeCompressContentTypes, info.ContentType) {
 				// We strictly disable compression for standard extensions/content-types.
