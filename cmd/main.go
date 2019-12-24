@@ -130,7 +130,6 @@ func newApp(name string) *cli.App {
 	app.Usage = "High Performance Object Storage"
 	app.Description = `Build high performance data infrastructure for machine learning, analytics and application data workloads with MinIO`
 	app.Flags = GlobalFlags
-	app.HideVersion = true     // Hide `--version` flag, we already have `minio version`.
 	app.HideHelpCommand = true // Hide `help, h` command, we already have `minio --help`.
 	app.Commands = commands
 	app.CustomAppHelpTemplate = minioHelpTemplate
