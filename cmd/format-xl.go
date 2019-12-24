@@ -155,24 +155,9 @@ func newFormatXLV3(numSets int, setLen int) *formatXLV3 {
 	return format
 }
 
-// Returns formatXL.XL.Version information, this code is specifically
-// used to read XL `format.json` and capture any version information
-// that it may have.
-func formatXLGetVersion(formatPath string) (string, error) {
-	format := &formatXLVersionDetect{}
-	b, err := ioutil.ReadFile(formatPath)
-	if err != nil {
-		return "", err
-	}
-	if err = json.Unmarshal(b, format); err != nil {
-		return "", err
-	}
-	return format.XL.Version, nil
-}
-
-// Returns format meta format version from `format.json`. This code
-// is specifically used to detect meta format.
-func formatMetaGetFormatBackendXL(formatPath string) (string, error) {
+// Returns format XL version after reading `format.json`, returns
+// successfully the version only if the backend is XL.
+func formatGetBackendXLVersion(formatPath string) (string, error) {
 	meta := &formatMetaV1{}
 	b, err := ioutil.ReadFile(formatPath)
 	if err != nil {
@@ -184,7 +169,15 @@ func formatMetaGetFormatBackendXL(formatPath string) (string, error) {
 	if meta.Version != formatMetaVersionV1 {
 		return "", fmt.Errorf(`format.Version expected: %s, got: %s`, formatMetaVersionV1, meta.Version)
 	}
-	return meta.Format, nil
+	if meta.Format != formatBackendXL {
+		return "", fmt.Errorf(`found backend %s, expected %s`, meta.Format, formatBackendXL)
+	}
+	// XL backend found, proceed to detect version.
+	format := &formatXLVersionDetect{}
+	if err = json.Unmarshal(b, format); err != nil {
+		return "", err
+	}
+	return format.XL.Version, nil
 }
 
 // Migrates all previous versions to latest version of `format.json`,
@@ -192,30 +185,27 @@ func formatMetaGetFormatBackendXL(formatPath string) (string, error) {
 // first before it V2 migrates to V3.
 func formatXLMigrate(export string) error {
 	formatPath := pathJoin(export, minioMetaBucket, formatConfigFile)
-	backend, err := formatMetaGetFormatBackendXL(formatPath)
-	if err != nil {
-		return err
-	}
-	if backend != formatBackendXL {
-		return fmt.Errorf(`Disk %s: found backend %s, expected %s`, export, backend, formatBackendXL)
-	}
-	version, err := formatXLGetVersion(formatPath)
+	version, err := formatGetBackendXLVersion(formatPath)
 	if err != nil {
 		return err
 	}
 	switch version {
 	case formatXLVersionV1:
-		if err = formatXLMigrateV1ToV2(export); err != nil {
+		if err = formatXLMigrateV1ToV2(export, version); err != nil {
 			return err
 		}
+		// Migrate successful v1 => v2, proceed to v2 => v3
+		version = formatXLVersionV2
 		fallthrough
 	case formatXLVersionV2:
-		if err = formatXLMigrateV2ToV3(export); err != nil {
+		if err = formatXLMigrateV2ToV3(export, version); err != nil {
 			return err
 		}
+		// Migrate successful v2 => v3, v3 is latest
+		version = formatXLVersionV3
 		fallthrough
 	case formatXLVersionV3:
-		// format-V3 is the latest verion.
+		// v3 is the latest version, return.
 		return nil
 	}
 	return fmt.Errorf(`%s: unknown format version %s`, export, version)
@@ -223,15 +213,12 @@ func formatXLMigrate(export string) error {
 
 // Migrates version V1 of format.json to version V2 of format.json,
 // migration fails upon any error.
-func formatXLMigrateV1ToV2(export string) error {
-	formatPath := pathJoin(export, minioMetaBucket, formatConfigFile)
-	version, err := formatXLGetVersion(formatPath)
-	if err != nil {
-		return err
-	}
+func formatXLMigrateV1ToV2(export, version string) error {
 	if version != formatXLVersionV1 {
 		return fmt.Errorf(`Disk %s: format version expected %s, found %s`, export, formatXLVersionV1, version)
 	}
+
+	formatPath := pathJoin(export, minioMetaBucket, formatConfigFile)
 
 	formatV1 := &formatXLV1{}
 	b, err := ioutil.ReadFile(formatPath)
@@ -260,15 +247,12 @@ func formatXLMigrateV1ToV2(export string) error {
 }
 
 // Migrates V2 for format.json to V3 (Flat hierarchy for multipart)
-func formatXLMigrateV2ToV3(export string) error {
-	formatPath := pathJoin(export, minioMetaBucket, formatConfigFile)
-	version, err := formatXLGetVersion(formatPath)
-	if err != nil {
-		return err
-	}
+func formatXLMigrateV2ToV3(export, version string) error {
 	if version != formatXLVersionV2 {
 		return fmt.Errorf(`Disk %s: format version expected %s, found %s`, export, formatXLVersionV2, version)
 	}
+
+	formatPath := pathJoin(export, minioMetaBucket, formatConfigFile)
 	formatV2 := &formatXLV2{}
 	b, err := ioutil.ReadFile(formatPath)
 	if err != nil {
@@ -360,18 +344,18 @@ func saveFormatXL(disk StorageAPI, format interface{}) error {
 		return err
 	}
 
-	tmpFormatJSON := mustGetUUID() + ".json"
+	tmpFormat := mustGetUUID()
 
 	// Purge any existing temporary file, okay to ignore errors here.
-	defer disk.DeleteFile(minioMetaBucket, tmpFormatJSON)
+	defer disk.DeleteFile(minioMetaBucket, tmpFormat)
 
-	// Append file `format.json.tmp`.
-	if err = disk.WriteAll(minioMetaBucket, tmpFormatJSON, bytes.NewReader(formatBytes)); err != nil {
+	// write to unique file.
+	if err = disk.WriteAll(minioMetaBucket, tmpFormat, bytes.NewReader(formatBytes)); err != nil {
 		return err
 	}
 
 	// Rename file `uuid.json` --> `format.json`.
-	return disk.RenameFile(minioMetaBucket, tmpFormatJSON, minioMetaBucket, formatConfigFile)
+	return disk.RenameFile(minioMetaBucket, tmpFormat, minioMetaBucket, formatConfigFile)
 }
 
 var ignoredHiddenDirectories = []string{
@@ -635,6 +619,39 @@ func formatXLV3Check(reference *formatXLV3, format *formatXLV3) error {
 	return fmt.Errorf("Disk ID %s not found in any disk sets %s", this, format.XL.Sets)
 }
 
+// Initializes meta volume on all input storage disks.
+func initFormatXLMetaVolume(storageDisks []StorageAPI, formats []*formatXLV3) error {
+	// This happens for the first time, but keep this here since this
+	// is the only place where it can be made expensive optimizing all
+	// other calls. Create minio meta volume, if it doesn't exist yet.
+
+	// Initialize errs to collect errors inside go-routine.
+	g := errgroup.WithNErrs(len(storageDisks))
+
+	// Initialize all disks in parallel.
+	for index := range storageDisks {
+		index := index
+		g.Go(func() error {
+			if formats[index] == nil || storageDisks[index] == nil {
+				// Ignore create meta volume on disks which are not found.
+				return nil
+			}
+			return makeFormatXLMetaVolumes(storageDisks[index])
+		}, index)
+	}
+
+	// Return upon first error.
+	for _, err := range g.Wait() {
+		if err == nil {
+			continue
+		}
+		return toObjectErr(err, minioMetaBucket)
+	}
+
+	// Return success here.
+	return nil
+}
+
 // saveFormatXLAll - populates `format.json` on disks in its order.
 func saveFormatXLAll(ctx context.Context, storageDisks []StorageAPI, formats []*formatXLV3) error {
 	g := errgroup.WithNErrs(len(storageDisks))
@@ -645,6 +662,9 @@ func saveFormatXLAll(ctx context.Context, storageDisks []StorageAPI, formats []*
 		g.Go(func() error {
 			if formats[index] == nil || storageDisks[index] == nil {
 				return errDiskNotFound
+			}
+			if err := makeFormatXLMetaVolumes(storageDisks[index]); err != nil {
+				return err
 			}
 			return saveFormatXL(storageDisks[index], formats[index])
 		}, index)
@@ -745,11 +765,6 @@ func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, driv
 		}
 	}
 
-	// Initialize meta volume, if volume already exists ignores it.
-	if err := initFormatXLMetaVolume(storageDisks, formats); err != nil {
-		return format, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %w", err)
-	}
-
 	// Save formats `format.json` across all disks.
 	if err := saveFormatXLAll(ctx, storageDisks, formats); err != nil {
 		return nil, err
@@ -760,23 +775,9 @@ func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, driv
 
 // Make XL backend meta volumes.
 func makeFormatXLMetaVolumes(disk StorageAPI) error {
-	// Attempt to create `.minio.sys`.
-	if err := disk.MakeVol(minioMetaBucket); err != nil {
-		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
-			return err
-		}
-	}
-	if err := disk.MakeVol(minioMetaTmpBucket); err != nil {
-		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
-			return err
-		}
-	}
-	if err := disk.MakeVol(minioMetaBackgroundOpsBucket); err != nil {
-		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
-			return err
-		}
-	}
-	if err := disk.MakeVol(minioMetaMultipartBucket); err != nil {
+	// Attempt to create MinIO internal buckets.
+	err := disk.MakeVolBulk(minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, minioMetaBackgroundOpsBucket)
+	if err != nil {
 		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
 			return err
 		}
@@ -785,39 +786,6 @@ func makeFormatXLMetaVolumes(disk StorageAPI) error {
 }
 
 var initMetaVolIgnoredErrs = append(baseIgnoredErrs, errVolumeExists)
-
-// Initializes meta volume on all input storage disks.
-func initFormatXLMetaVolume(storageDisks []StorageAPI, formats []*formatXLV3) error {
-	// This happens for the first time, but keep this here since this
-	// is the only place where it can be made expensive optimizing all
-	// other calls. Create minio meta volume, if it doesn't exist yet.
-
-	// Initialize errs to collect errors inside go-routine.
-	g := errgroup.WithNErrs(len(storageDisks))
-
-	// Initialize all disks in parallel.
-	for index := range storageDisks {
-		index := index
-		g.Go(func() error {
-			if formats[index] == nil || storageDisks[index] == nil {
-				// Ignore create meta volume on disks which are not found.
-				return nil
-			}
-			return makeFormatXLMetaVolumes(storageDisks[index])
-		}, index)
-	}
-
-	// Return upon first error.
-	for _, err := range g.Wait() {
-		if err == nil {
-			continue
-		}
-		return toObjectErr(err, minioMetaBucket)
-	}
-
-	// Return success here.
-	return nil
-}
 
 // Get all UUIDs which are present in reference format should
 // be present in the list of formats provided, those are considered

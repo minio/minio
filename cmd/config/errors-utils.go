@@ -39,7 +39,10 @@ type Err struct {
 // Return the error message
 func (u Err) Error() string {
 	if u.detail == "" {
-		return u.msg
+		if u.msg != "" {
+			return u.msg
+		}
+		return "<nil>"
 	}
 	return u.detail
 }
@@ -77,6 +80,10 @@ func newErrFn(msg, action, hint string) ErrFn {
 // ErrorToErr inspects the passed error and transforms it
 // to the appropriate UI error.
 func ErrorToErr(err error) Err {
+	if err == nil {
+		return Err{}
+	}
+
 	// If this is already a Err, do nothing
 	if e, ok := err.(Err); ok {
 		return e
@@ -95,7 +102,6 @@ func ErrorToErr(err error) Err {
 		// Failed to identify what type of error this, return a simple UI error
 		return Err{msg: err.Error()}
 	}
-
 }
 
 // FmtError converts a fatal error message to a more clear error

@@ -26,6 +26,7 @@ const (
 	storageRESTMethodDiskInfo             = "/diskinfo"
 	storageRESTMethodCrawlAndGetDataUsage = "/crawlandgetdatausage"
 	storageRESTMethodMakeVol              = "/makevol"
+	storageRESTMethodMakeVolBulk          = "/makevolbulk"
 	storageRESTMethodStatVol              = "/statvol"
 	storageRESTMethodDeleteVol            = "/deletevol"
 	storageRESTMethodListVols             = "/listvols"
@@ -47,6 +48,7 @@ const (
 
 const (
 	storageRESTVolume     = "volume"
+	storageRESTVolumes    = "volumes"
 	storageRESTDirPath    = "dir-path"
 	storageRESTFilePath   = "file-path"
 	storageRESTSrcVolume  = "source-volume"

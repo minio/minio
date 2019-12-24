@@ -74,6 +74,13 @@ func (p *posixDiskIDCheck) DiskInfo() (info DiskInfo, err error) {
 	return p.storage.DiskInfo()
 }
 
+func (p *posixDiskIDCheck) MakeVolBulk(volumes ...string) (err error) {
+	if p.isDiskStale() {
+		return errDiskNotFound
+	}
+	return p.storage.MakeVolBulk(volumes...)
+}
+
 func (p *posixDiskIDCheck) MakeVol(volume string) (err error) {
 	if p.isDiskStale() {
 		return errDiskNotFound
