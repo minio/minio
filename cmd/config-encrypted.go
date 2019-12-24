@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"unicode/utf8"
@@ -39,7 +40,6 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 
 	// If its server mode or nas gateway, migrate the backend.
 	doneCh := make(chan struct{})
-	defer close(doneCh)
 
 	var encrypted bool
 	var err error
@@ -48,17 +48,27 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 	// the following reasons:
 	//  - Read quorum is lost just after the initialization
 	//    of the object layer.
-	for range newRetryTimerSimple(doneCh) {
-		if encrypted, err = checkBackendEncrypted(objAPI); err != nil {
-			if err == errDiskNotFound ||
-				strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) {
-				logger.Info("Waiting for config backend to be encrypted..")
-				continue
+	retryTimerCh := newRetryTimerSimple(doneCh)
+	var stop bool
+	for !stop {
+		select {
+		case <-retryTimerCh:
+			if encrypted, err = checkBackendEncrypted(objAPI); err != nil {
+				if err == errDiskNotFound ||
+					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) {
+					logger.Info("Waiting for config backend to be encrypted..")
+					continue
+				}
+				close(doneCh)
+				return err
 			}
-			return err
+			stop = true
+		case <-globalOSSignalCh:
+			close(doneCh)
+			return fmt.Errorf("Config encryption process stopped gracefully")
 		}
-		break
 	}
+	close(doneCh)
 
 	if encrypted {
 		// backend is encrypted, but credentials are not specified
@@ -83,24 +93,33 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 		return err
 	}
 
+	doneCh = make(chan struct{})
+	defer close(doneCh)
+
+	retryTimerCh = newRetryTimerSimple(doneCh)
+
 	// Migrating Config backend needs a retry mechanism for
 	// the following reasons:
 	//  - Read quorum is lost just after the initialization
 	//    of the object layer.
-	for range newRetryTimerSimple(doneCh) {
-		// Migrate IAM configuration
-		if err = migrateConfigPrefixToEncrypted(objAPI, activeCredOld, encrypted); err != nil {
-			if err == errDiskNotFound ||
-				strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-				strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-				logger.Info("Waiting for config backend to be encrypted..")
-				continue
+	for {
+		select {
+		case <-retryTimerCh:
+			// Migrate IAM configuration
+			if err = migrateConfigPrefixToEncrypted(objAPI, activeCredOld, encrypted); err != nil {
+				if err == errDiskNotFound ||
+					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
+					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
+					logger.Info("Waiting for config backend to be encrypted..")
+					continue
+				}
+				return err
 			}
-			return err
+			return nil
+		case <-globalOSSignalCh:
+			return fmt.Errorf("Config encryption process stopped gracefully")
 		}
-		break
 	}
-	return nil
 }
 
 const (

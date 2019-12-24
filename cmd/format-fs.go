@@ -343,17 +343,24 @@ func formatFSFixDeploymentID(fsFormatPath string) error {
 	defer close(doneCh)
 
 	var wlk *lock.LockedFile
-	for range newRetryTimerSimple(doneCh) {
-		wlk, err = lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR, 0)
-		if err == lock.ErrAlreadyLocked {
-			// Lock already present, sleep and attempt again
-			logger.Info("Another minio process(es) might be holding a lock to the file %s. Please kill that minio process(es) (elapsed %s)\n", fsFormatPath, getElapsedTime())
-			continue
+	retryCh := newRetryTimerSimple(doneCh)
+	var stop bool
+	for !stop {
+		select {
+		case <-retryCh:
+			wlk, err = lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR, 0)
+			if err == lock.ErrAlreadyLocked {
+				// Lock already present, sleep and attempt again
+				logger.Info("Another minio process(es) might be holding a lock to the file %s. Please kill that minio process(es) (elapsed %s)\n", fsFormatPath, getElapsedTime())
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			stop = true
+		case <-globalOSSignalCh:
+			return fmt.Errorf("Initializing FS format stopped gracefully")
 		}
-		break
-	}
-	if err != nil {
-		return err
 	}
 
 	defer wlk.Close()
