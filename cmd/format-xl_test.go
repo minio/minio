@@ -149,95 +149,6 @@ func TestFormatXLEmpty(t *testing.T) {
 	}
 }
 
-// Tests format xl get version.
-func TestFormatXLGetVersion(t *testing.T) {
-	// Get test root.
-	rootPath, err := getTestRoot()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(rootPath)
-
-	v := &formatXLVersionDetect{}
-	v.XL.Version = "1"
-	b, err := json.Marshal(v)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = ioutil.WriteFile(pathJoin(rootPath, formatConfigFile), b, os.FileMode(0644)); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = formatXLGetVersion("not-found")
-	if err == nil {
-		t.Fatal("Expected to fail but found success")
-	}
-
-	vstr, err := formatXLGetVersion(pathJoin(rootPath, formatConfigFile))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if vstr != "1" {
-		t.Fatalf("Expected version '1', got '%s'", vstr)
-	}
-}
-
-// Tests format get backend format.
-func TestFormatMetaGetFormatBackendXL(t *testing.T) {
-	// Get test root.
-	rootPath, err := getTestRoot()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(rootPath)
-
-	m := &formatMetaV1{
-		Format:  "fs",
-		Version: formatMetaVersionV1,
-	}
-
-	b, err := json.Marshal(m)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = ioutil.WriteFile(pathJoin(rootPath, formatConfigFile), b, os.FileMode(0644)); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = formatMetaGetFormatBackendXL("not-found")
-	if err == nil {
-		t.Fatal("Expected to fail but found success")
-	}
-
-	format, err := formatMetaGetFormatBackendXL(pathJoin(rootPath, formatConfigFile))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if format != m.Format {
-		t.Fatalf("Expected format value %s, got %s", m.Format, format)
-	}
-
-	m = &formatMetaV1{
-		Format:  "xl",
-		Version: "2",
-	}
-
-	b, err = json.Marshal(m)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = ioutil.WriteFile(pathJoin(rootPath, formatConfigFile), b, os.FileMode(0644)); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = formatMetaGetFormatBackendXL(pathJoin(rootPath, formatConfigFile))
-	if err == nil {
-		t.Fatal("Expected to fail with incompatible meta version")
-	}
-}
-
 // Tests xl format migration.
 func TestFormatXLMigrate(t *testing.T) {
 	// Get test root.
@@ -271,10 +182,11 @@ func TestFormatXLMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	migratedVersion, err := formatXLGetVersion(pathJoin(rootPath, minioMetaBucket, formatConfigFile))
+	migratedVersion, err := formatGetBackendXLVersion(pathJoin(rootPath, minioMetaBucket, formatConfigFile))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if migratedVersion != formatXLVersionV3 {
 		t.Fatalf("expected version: %s, got: %s", formatXLVersionV3, migratedVersion)
 	}

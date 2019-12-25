@@ -84,7 +84,7 @@ func (r *Reader) Read(dst sql.Record) (sql.Record, error) {
 		}
 	}
 
-	// If no index max, add that.
+	// If no index map, add that.
 	if r.nameIndexMap == nil {
 		r.nameIndexMap = make(map[string]int64)
 		for i := range r.columnNames {

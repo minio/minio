@@ -718,8 +718,7 @@ func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error
 	//  - Read quorum is lost just after the initialization
 	//    of the object layer.
 	retryTimerCh := newRetryTimerSimple(doneCh)
-	stop := false
-	for !stop {
+	for {
 		select {
 		case <-retryTimerCh:
 			if err := sys.load(buckets, objAPI); err != nil {
@@ -731,17 +730,8 @@ func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error
 				}
 				return err
 			}
-			stop = true
-		case <-globalOSSignalCh:
-			return fmt.Errorf("Initializing Notification sub-system gracefully stopped")
-		}
-	}
-
-	// Initializing bucket retention config needs a retry mechanism if
-	// read quorum is lost just after the initialization of the object layer.
-	for {
-		select {
-		case <-retryTimerCh:
+			// Initializing bucket retention config needs a retry mechanism if
+			// read quorum is lost just after the initialization of the object layer.
 			if err := sys.initBucketObjectLockConfig(objAPI); err != nil {
 				if err == errDiskNotFound ||
 					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||

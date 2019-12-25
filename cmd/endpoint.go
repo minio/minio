@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -230,23 +229,25 @@ func (endpoints Endpoints) GetString(i int) string {
 	return endpoints[i].String()
 }
 
-func (endpoints Endpoints) doAnyHostsResolveToLocalhost() bool {
-	for _, endpoint := range endpoints {
-		hostIPs, err := getHostIP(endpoint.Hostname())
-		if err != nil {
-			continue
-		}
-		var loopback int
-		for _, hostIP := range hostIPs.ToSlice() {
-			if net.ParseIP(hostIP).IsLoopback() {
-				loopback++
-			}
-		}
-		if loopback == len(hostIPs) {
-			return true
+func hostResolveToLocalhost(endpoint Endpoint) bool {
+	hostIPs, err := getHostIP(endpoint.Hostname())
+	if err != nil {
+		// Log the message to console about the host resolving
+		reqInfo := (&logger.ReqInfo{}).AppendTags(
+			"host",
+			endpoint.Hostname(),
+		)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err, logger.Application)
+		return false
+	}
+	var loopback int
+	for _, hostIP := range hostIPs.ToSlice() {
+		if net.ParseIP(hostIP).IsLoopback() {
+			loopback++
 		}
 	}
-	return false
+	return loopback == len(hostIPs)
 }
 
 func (endpoints Endpoints) atleastOneEndpointLocal() bool {
@@ -294,8 +295,9 @@ func (endpoints Endpoints) UpdateIsLocal(foundPrevLocal bool) error {
 					endpoints[i].Hostname(),
 				)
 
-				if k8sReplicaSet && endpoints.doAnyHostsResolveToLocalhost() {
-					err := errors.New("host found resolves to 127.*, DNS incorrectly configured retrying")
+				if k8sReplicaSet && hostResolveToLocalhost(endpoints[i]) {
+					err := fmt.Errorf("host %s resolves to 127.*, DNS incorrectly configured retrying",
+						endpoints[i])
 					// time elapsed
 					timeElapsed := time.Since(startTime)
 					// log error only if more than 1s elapsed
@@ -352,6 +354,21 @@ func (endpoints Endpoints) UpdateIsLocal(foundPrevLocal bool) error {
 						// previous local we continue to wait to look for
 						// atleast one local.
 						resolvedList[i] = false
+						// time elapsed
+						err := fmt.Errorf("no endpoint is local to this host: %s", endpoints[i])
+						timeElapsed := time.Since(startTime)
+						// log error only if more than 1s elapsed
+						if timeElapsed > time.Second {
+							reqInfo.AppendTags("elapsedTime",
+								humanize.RelTime(startTime,
+									startTime.Add(timeElapsed),
+									"elapsed",
+									"",
+								))
+							ctx := logger.SetReqInfo(context.Background(),
+								reqInfo)
+							logger.LogIf(ctx, err, logger.Application)
+						}
 						continue
 					}
 					epsResolved++
