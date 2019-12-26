@@ -46,9 +46,7 @@ function main()
     gw_pid="$(start_minio_gateway_s3)"
 
     SERVER_ENDPOINT=127.0.0.1:24240 ENABLE_HTTPS=0 ACCESS_KEY=minio \
-                   SECRET_KEY=minio123 MINT_MODE="full" /mint/entrypoint.sh aws-sdk-go \
-                   aws-sdk-java aws-sdk-php aws-sdk-ruby awscli healthcheck minio-dotnet \
-                   minio-go minio-java minio-js minio-py
+                   SECRET_KEY=minio123 MINT_MODE="full" /mint/entrypoint.sh
     rv=$?
 
     kill "$sr_pid"
