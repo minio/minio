@@ -30,7 +30,7 @@ import (
 const defaultAppendBufferSize = humanize.MiByte
 
 // WriteOnCloser implements io.WriteCloser and always
-// exectues at least one write operation if it is closed.
+// executes at least one write operation if it is closed.
 //
 // This can be useful within the context of HTTP. At least
 // one write operation must happen to send the HTTP headers
