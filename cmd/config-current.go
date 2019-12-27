@@ -415,6 +415,11 @@ func lookupConfigs(s config.Config) {
 			logger.AddAuditTarget(http.New(l.Endpoint, loggerUserAgent, string(logger.All), NewCustomHTTPTransport()))
 		}
 	}
+
+	globalConfigTargetList, err = notify.GetNotificationTargets(s, GlobalServiceDoneCh, NewCustomHTTPTransport())
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
+	}
 }
 
 // Help - return sub-system level help

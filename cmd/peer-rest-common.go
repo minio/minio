@@ -82,6 +82,7 @@ const (
 	peerRESTTraceAll      = "all"
 	peerRESTTraceErr      = "err"
 
+	peerRESTListenBucket = "bucket"
 	peerRESTListenPrefix = "prefix"
 	peerRESTListenSuffix = "suffix"
 	peerRESTListenEvents = "events"

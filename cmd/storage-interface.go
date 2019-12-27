@@ -36,6 +36,7 @@ type StorageAPI interface {
 
 	// Volume operations.
 	MakeVol(volume string) (err error)
+	MakeVolBulk(volumes ...string) (err error)
 	ListVols() (vols []VolInfo, err error)
 	StatVol(volume string) (vol VolInfo, err error)
 	DeleteVol(volume string) (err error)

@@ -24,7 +24,7 @@ spec:
       containers:
       - name: minio
         # Pulls the default Minio image from Docker Hub
-        image: minio/minio:RELEASE.2019-12-19T22-52-26Z
+        image: minio/minio:RELEASE.2019-12-24T23-04-45Z
         args:
         - gateway
         - gcs

@@ -30,8 +30,6 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zip"
-	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/notify"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
@@ -589,20 +587,6 @@ func (sys *NotificationSys) PutBucketNotification(ctx context.Context, bucketNam
 	}()
 }
 
-// AddNotificationTargetsFromConfig - adds notification targets from server config.
-func (sys *NotificationSys) AddNotificationTargetsFromConfig(cfg config.Config) error {
-	targetList, err := notify.GetNotificationTargets(cfg, GlobalServiceDoneCh, NewCustomHTTPTransport())
-	if err != nil {
-		return err
-	}
-	for _, target := range targetList.Targets() {
-		if err = sys.targetList.Add(target); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // AddRemoteTarget - adds event rules map, HTTP/PeerRPC client target to bucket name.
 func (sys *NotificationSys) AddRemoteTarget(bucketName string, target event.Target, rulesMap event.RulesMap) error {
 	if err := sys.targetList.Add(target); err != nil {
@@ -718,6 +702,14 @@ func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error
 		return nil
 	}
 
+	if globalConfigTargetList != nil {
+		for _, target := range globalConfigTargetList.Targets() {
+			if err := sys.targetList.Add(target); err != nil {
+				return err
+			}
+		}
+	}
+
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
@@ -726,8 +718,7 @@ func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error
 	//  - Read quorum is lost just after the initialization
 	//    of the object layer.
 	retryTimerCh := newRetryTimerSimple(doneCh)
-	stop := false
-	for !stop {
+	for {
 		select {
 		case <-retryTimerCh:
 			if err := sys.load(buckets, objAPI); err != nil {
@@ -739,17 +730,8 @@ func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error
 				}
 				return err
 			}
-			stop = true
-		case <-globalOSSignalCh:
-			return fmt.Errorf("Initializing Notification sub-system gracefully stopped")
-		}
-	}
-
-	// Initializing bucket retention config needs a retry mechanism if
-	// read quorum is lost just after the initialization of the object layer.
-	for {
-		select {
-		case <-retryTimerCh:
+			// Initializing bucket retention config needs a retry mechanism if
+			// read quorum is lost just after the initialization of the object layer.
 			if err := sys.initBucketObjectLockConfig(objAPI); err != nil {
 				if err == errDiskNotFound ||
 					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||

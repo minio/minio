@@ -1491,12 +1491,6 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 			}
 		}
 
-		// Initialize meta volume, if volume already exists ignores it, all disks which
-		// are not found are ignored as well.
-		if err = initFormatXLMetaVolume(storageDisks, tmpNewFormats); err != nil {
-			return madmin.HealResultItem{}, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %w", err)
-		}
-
 		// Save formats `format.json` across all disks.
 		if err = saveFormatXLAll(ctx, storageDisks, tmpNewFormats); err != nil {
 			return madmin.HealResultItem{}, err

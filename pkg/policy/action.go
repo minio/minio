@@ -85,10 +85,10 @@ const (
 	PutObjectAction = "s3:PutObject"
 
 	// PutBucketLifecycleAction - PutBucketLifecycle Rest API action.
-	PutBucketLifecycleAction = "s3:PutBucketLifecycle"
+	PutBucketLifecycleAction = "s3:PutLifecycleConfiguration"
 
 	// GetBucketLifecycleAction - GetBucketLifecycle Rest API action.
-	GetBucketLifecycleAction = "s3:GetBucketLifecycle"
+	GetBucketLifecycleAction = "s3:GetLifecycleConfiguration"
 
 	// BypassGovernanceModeAction - bypass governance mode for DeleteObject Rest API action.
 	BypassGovernanceModeAction = "s3:BypassGovernanceMode"
