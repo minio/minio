@@ -1656,3 +1656,30 @@ func (s *xlSets) GetMetrics(ctx context.Context) (*Metrics, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return &Metrics{}, NotImplemented{}
 }
+
+// IsReady - Returns true if more than n/2 disks (quorum) are online
+func (s *xlSets) IsReady(_ context.Context) bool {
+	s.xlDisksMu.RLock()
+	defer s.xlDisksMu.RUnlock()
+
+	var activeDisks int
+	for i := 0; i < s.setCount; i++ {
+		for j := 0; j < s.drivesPerSet; j++ {
+			if s.xlDisks[i][j] == nil {
+				continue
+			}
+			if !s.xlLockers[i][j].IsOnline() {
+				continue
+			}
+			if s.xlDisks[i][j].IsOnline() {
+				activeDisks++
+			}
+			// Return if more than n/2 disks are online.
+			if activeDisks > len(s.endpoints)/2 {
+				return true
+			}
+		}
+	}
+	// Disks are not ready
+	return false
+}

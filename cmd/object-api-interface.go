@@ -122,4 +122,7 @@ type ObjectLayer interface {
 
 	// Backend related metrics
 	GetMetrics(ctx context.Context) (*Metrics, error)
+
+	// Check Readiness
+	IsReady(ctx context.Context) bool
 }

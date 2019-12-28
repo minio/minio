@@ -117,3 +117,9 @@ func (n *nasObjects) StorageInfo(ctx context.Context) minio.StorageInfo {
 type nasObjects struct {
 	minio.ObjectLayer
 }
+
+// IsReady returns whether the layer is ready to take requests.
+func (n *nasObjects) IsReady(ctx context.Context) bool {
+	sinfo := n.ObjectLayer.StorageInfo(ctx)
+	return sinfo.Backend.Type == minio.BackendFS
+}

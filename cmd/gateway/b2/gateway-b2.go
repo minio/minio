@@ -862,3 +862,8 @@ func (l *b2Objects) DeleteBucketPolicy(ctx context.Context, bucket string) error
 func (l *b2Objects) IsCompressionSupported() bool {
 	return false
 }
+
+// IsReady returns whether the layer is ready to take requests.
+func (l *b2Objects) IsReady(ctx context.Context) bool {
+	return minio.IsBackendOnline(ctx, l.httpClient, "https://api.backblazeb2.com/b2api/v1")
+}

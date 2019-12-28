@@ -1356,3 +1356,9 @@ func (fs *FSObjects) IsEncryptionSupported() bool {
 func (fs *FSObjects) IsCompressionSupported() bool {
 	return true
 }
+
+// IsReady - Check if the backend disk is ready to accept traffic.
+func (fs *FSObjects) IsReady(_ context.Context) bool {
+	_, err := os.Stat(fs.fsPath)
+	return err == nil
+}
