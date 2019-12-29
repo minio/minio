@@ -137,6 +137,38 @@ MINIO_CACHE_EXCLUDE  (csv)       comma separated wildcard exclusion patterns e.g
 MINIO_CACHE_COMMENT  (sentence)  optionally add a comment to this setting
 ```
 
+#### Etcd
+MinIO supports storing encrypted IAM assets and bucket DNS records on etcd.
+
+> NOTE: if *path_prefix* is set then MinIO will not federate your buckets, namespaced IAM assets are assumed as isolated tenants, only buckets are considered globally unique but performing a lookup with a *bucket* which belongs to a different tenant will fail unlike federated setups where MinIO would port-forward and route the request to relevant cluster accordingly. This is a special feature, federated deployments should not need to set *path_prefix*.
+
+```
+KEY:
+etcd  federate multiple clusters for IAM and Bucket DNS
+
+ARGS:
+endpoints*       (csv)       comma separated list of etcd endpoints e.g. "http://localhost:2379"
+path_prefix      (path)      namespace prefix to isolate tenants e.g. "customer1/"
+coredns_path     (path)      shared bucket DNS records, default is "/skydns"
+client_cert      (path)      client cert for mTLS authentication
+client_cert_key  (path)      client cert key for mTLS authentication
+comment          (sentence)  optionally add a comment to this setting
+```
+
+or environment variables
+```
+KEY:
+etcd  federate multiple clusters for IAM and Bucket DNS
+
+ARGS:
+MINIO_ETCD_ENDPOINTS*       (csv)       comma separated list of etcd endpoints e.g. "http://localhost:2379"
+MINIO_ETCD_PATH_PREFIX      (path)      namespace prefix to isolate tenants e.g. "customer1/"
+MINIO_ETCD_COREDNS_PATH     (path)      shared bucket DNS records, default is "/skydns"
+MINIO_ETCD_CLIENT_CERT      (path)      client cert for mTLS authentication
+MINIO_ETCD_CLIENT_CERT_KEY  (path)      client cert key for mTLS authentication
+MINIO_ETCD_COMMENT          (sentence)  optionally add a comment to this setting
+```
+
 #### Notifications
 Notification targets supported by MinIO are in the following list. To configure individual targets please refer to more detailed documentation [here](https://docs.min.io/docs/minio-bucket-notification-guide.html)
 

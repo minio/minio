@@ -640,8 +640,11 @@ func isRemoteCallRequired(ctx context.Context, bucket string, objAPI ObjectLayer
 	if globalDNSConfig == nil {
 		return false
 	}
-	_, err := objAPI.GetBucketInfo(ctx, bucket)
-	return err == toObjectErr(errVolumeNotFound, bucket)
+	if globalBucketFederation {
+		_, err := objAPI.GetBucketInfo(ctx, bucket)
+		return err == toObjectErr(errVolumeNotFound, bucket)
+	}
+	return false
 }
 
 // CopyObjectHandler - Copy Object
@@ -2421,6 +2424,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	if globalDNSConfig != nil {
 		_, err := globalDNSConfig.Get(bucket)
 		if err != nil {

@@ -258,10 +258,6 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 		return toJSONError(ctx, err, args.BucketName)
 	}
 
-	globalNotificationSys.RemoveNotification(args.BucketName)
-	globalPolicySys.Remove(args.BucketName)
-	globalNotificationSys.DeleteBucket(ctx, args.BucketName)
-
 	if globalDNSConfig != nil {
 		if err := globalDNSConfig.Delete(args.BucketName); err != nil {
 			// Deleting DNS entry failed, attempt to create the bucket again.
@@ -269,6 +265,8 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 			return toJSONError(ctx, err)
 		}
 	}
+
+	globalNotificationSys.DeleteBucket(ctx, args.BucketName)
 
 	return nil
 }
