@@ -315,6 +315,13 @@ func lookupConfigs(s config.Config) {
 		}
 	}
 
+	// Bucket federation is 'true' only when IAM assets are not namespaced
+	// per tenant and all tenants interested in globally available users
+	// if namespace was requested such as specifying etcdPathPrefix then
+	// we assume that users are interested in global bucket support
+	// but not federation.
+	globalBucketFederation = etcdCfg.PathPrefix == "" && etcdCfg.Enabled
+
 	if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
 		globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
 			dns.DomainNames(globalDomainNames),
