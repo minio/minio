@@ -32,7 +32,7 @@ spec:
         - name: data 
           mountPath: "/data"
         # Pulls the lastest Minio image from Docker Hub
-        image: minio/minio:RELEASE.2019-12-24T23-04-45Z
+        image: minio/minio:RELEASE.2019-12-30T05-45-39Z
         args:
         - server
         - /data
