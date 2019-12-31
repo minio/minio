@@ -117,9 +117,6 @@ func (c *CoreDNS) list(key string) ([]SrvRecord, error) {
 		if err != nil {
 			return nil, err
 		}
-		if r.Count == 0 {
-			return nil, ErrNoEntriesFound
-		}
 	}
 
 	var srvRecords []SrvRecord
@@ -142,9 +139,6 @@ func (c *CoreDNS) list(key string) ([]SrvRecord, error) {
 		srvRecord.Key = msgUnPath(srvRecord.Key)
 		srvRecords = append(srvRecords, srvRecord)
 
-	}
-	if len(srvRecords) == 0 {
-		return nil, ErrNoEntriesFound
 	}
 	sort.Slice(srvRecords, func(i int, j int) bool {
 		return srvRecords[i].Key < srvRecords[j].Key
