@@ -26,7 +26,7 @@ import (
 
 // ReadinessCheckHandler -- Checks if the quorum number of disks are available.
 // For FS - Checks if the backend disk is available
-// For Zones - Checks if all the zones have enough quorum
+// For Zones - Checks if all the zones have enough read quorum
 func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ReadinessCheckHandler")
 
