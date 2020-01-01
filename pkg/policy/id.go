@@ -18,7 +18,6 @@ package policy
 
 import (
 	"encoding/json"
-	"fmt"
 	"unicode/utf8"
 )
 
@@ -33,7 +32,7 @@ func (id ID) IsValid() bool {
 // MarshalJSON - encodes ID to JSON data.
 func (id ID) MarshalJSON() ([]byte, error) {
 	if !id.IsValid() {
-		return nil, fmt.Errorf("invalid ID %v", id)
+		return nil, Errorf("invalid ID %v", id)
 	}
 
 	return json.Marshal(string(id))
@@ -48,7 +47,7 @@ func (id *ID) UnmarshalJSON(data []byte) error {
 
 	i := ID(s)
 	if !i.IsValid() {
-		return fmt.Errorf("invalid ID %v", s)
+		return Errorf("invalid ID %v", s)
 	}
 
 	*id = i

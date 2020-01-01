@@ -69,7 +69,7 @@ func (resourceSet ResourceSet) Intersection(sset ResourceSet) ResourceSet {
 // MarshalJSON - encodes ResourceSet to JSON data.
 func (resourceSet ResourceSet) MarshalJSON() ([]byte, error) {
 	if len(resourceSet) == 0 {
-		return nil, fmt.Errorf("empty resource set")
+		return nil, Errorf("empty resource set")
 	}
 
 	resources := []Resource{}
@@ -116,7 +116,7 @@ func (resourceSet *ResourceSet) UnmarshalJSON(data []byte) error {
 		}
 
 		if _, found := (*resourceSet)[resource]; found {
-			return fmt.Errorf("duplicate resource '%v' found", s)
+			return Errorf("duplicate resource '%v' found", s)
 		}
 
 		resourceSet.Add(resource)
