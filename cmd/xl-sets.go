@@ -1657,7 +1657,7 @@ func (s *xlSets) GetMetrics(ctx context.Context) (*Metrics, error) {
 	return &Metrics{}, NotImplemented{}
 }
 
-// IsReady - Returns true if more than n/2 disks (quorum) are online
+// IsReady - Returns true if atleast n/2 disks (read quorum) are online
 func (s *xlSets) IsReady(_ context.Context) bool {
 	s.xlDisksMu.RLock()
 	defer s.xlDisksMu.RUnlock()
@@ -1674,8 +1674,8 @@ func (s *xlSets) IsReady(_ context.Context) bool {
 			if s.xlDisks[i][j].IsOnline() {
 				activeDisks++
 			}
-			// Return if more than n/2 disks are online.
-			if activeDisks > len(s.endpoints)/2 {
+			// Return true if read quorum is available.
+			if activeDisks >= len(s.endpoints)/2 {
 				return true
 			}
 		}
