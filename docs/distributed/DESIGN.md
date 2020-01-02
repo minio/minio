@@ -93,7 +93,7 @@ Input for the key is the object name specified in `PutObject()`, returns a uniqu
 *There are no limits on how many zones can be combined*
 
 ```
-minio server http://host{1...32}/export{1...32} minio server http://host{5...6}/export{1...8}
+minio server http://host{1...32}/export{1...32} http://host{5...6}/export{1...8}
 ```
 
 In above example there are two zones
