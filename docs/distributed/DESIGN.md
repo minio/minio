@@ -72,7 +72,7 @@ Expected expansion
 > http://host2/export8
 ```
 
-*A noticeable trait of this expansion is that it chooses unique hosts such the setup provides maximum availability.*
+*A noticeable trait of this expansion is that it chooses unique hosts such the setup provides maximum protection and availability.*
 
 - Choosing an erasure set for the object is decided during `PutObject()`, object names are used to find the right erasure set using the following pseudo code.
 ```go
@@ -88,7 +88,7 @@ Input for the key is the object name specified in `PutObject()`, returns a uniqu
 
 - MinIO does erasure coding at the object level not at the volume level, unlike other object storage vendors. This allows applications to choose different storage class by setting `x-amz-storage-class=STANDARD/REDUCED_REDUNDANCY` for each object uploads so effectively utilizing the capacity of the cluster. Additionally these can also be enforced using IAM policies to make sure the client uploads with correct HTTP headers.
 
-- MinIO also supports expansion of existing clusters in zones, each zone is a self contained entity with same SLA's (read/write quorum) for each object as original cluster. By using the existing namespace for lookup validation MinIO ensures conflicting objects are not created, when no such object exists then MinIO simply uses the least used zone.
+- MinIO also supports expansion of existing clusters in zones. Each zone is a self contained entity with same SLA's (read/write quorum) for each object as original cluster. By using the existing namespace for lookup validation MinIO ensures conflicting objects are not created. When no such object exists then MinIO simply uses the least used zone.
 
 *There are no limits on how many zones can be combined*
 
