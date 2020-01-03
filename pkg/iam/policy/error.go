@@ -18,22 +18,25 @@ package iampolicy
 
 import "fmt"
 
-// Error generic iam policy error type
+// Error is the generic type for any error happening during policy
+// parsing.
 type Error struct {
-	Err string
+	err error
 }
 
 // Errorf - formats according to a format specifier and returns
-// the string as a value that satisfies error of type iampolicy.Error
+// the string as a value that satisfies error of type policy.Error
 func Errorf(format string, a ...interface{}) error {
-	return Error{Err: fmt.Sprintf(format, a...)}
+	return Error{err: fmt.Errorf(format, a...)}
 }
 
-// New initializes a new Error
-func New(err string) error {
-	return Error{Err: err}
-}
+// Unwrap the internal error.
+func (e Error) Unwrap() error { return e.err }
 
+// Error 'error' compatible method.
 func (e Error) Error() string {
-	return e.Err
+	if e.err == nil {
+		return "iam: cause <nil>"
+	}
+	return e.err.Error()
 }
