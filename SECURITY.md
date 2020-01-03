@@ -13,7 +13,7 @@ and you'll receive a more detailed response to your email within 72 hours indica
 in handling your report. 
 
 Please, provide a detailed explanation of the issue. In particular, outline the type of the security 
-issue (DoS, authentication bypass, information disclouse, ...) and the assumptions you're making (e.g. do 
+issue (DoS, authentication bypass, information disclose, ...) and the assumptions you're making (e.g. do 
 you need access credentials for a successful exploit).
 
 If you have not received a reply to your email within 48 hours or you have not heard from the security team
@@ -28,8 +28,8 @@ MinIO uses the following disclosure process:
 
 1. Once the security report is received one member of the security team tries to verify and reproduce
    the issue and determines the impact it has.
-2. A member of the security team will respond and either confrim or reject the security report.
-   If the report is rejected the repsonse explains why.
+2. A member of the security team will respond and either confirm or reject the security report.
+   If the report is rejected the response explains why.
 3. Code is audited to find any potential similar problems.
 4. Fixes are prepared for the latest release. 
 5. On the date that the fixes are applied a security advisory will be published on https://blog.min.io.
