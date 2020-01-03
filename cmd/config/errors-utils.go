@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
+	"net"
 	"syscall"
 
 	"github.com/minio/minio/pkg/color"
@@ -106,9 +106,11 @@ func ErrorToErr(err error) Err {
 	// Show a generic message for known golang errors
 	if errors.Is(err, syscall.EADDRINUSE) {
 		return ErrPortAlreadyInUse(err).Msg("Specified port is already in use")
-	} else if errors.Is(err, syscall.EACCES) {
-		return ErrPortAccess(err).Msg("Insufficient permissions to use specified port")
-	} else if os.IsPermission(err) {
+	} else if errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) {
+		switch err.(type) {
+		case *net.OpError:
+			return ErrPortAccess(err).Msg("Insufficient permissions to use specified port")
+		}
 		return ErrNoPermissionsToAccessDirFiles(err).Msg("Insufficient permissions to access path")
 	} else if errors.Is(err, io.ErrUnexpectedEOF) {
 		return ErrUnexpectedDataContent(err)
