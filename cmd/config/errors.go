@@ -24,6 +24,12 @@ var (
 		"Browser can only accept `on` and `off` values. To disable web browser access, set this value to `off`",
 	)
 
+	ErrInvalidFSOSyncValue = newErrFn(
+		"Invalid O_SYNC value",
+		"Please check the passed value",
+		"Can only accept `on` and `off` values. To enabe O_SYNC for fs backend, set this value to `on`",
+	)
+
 	ErrInvalidDomainValue = newErrFn(
 		"Invalid domain value",
 		"Please check the passed value",
