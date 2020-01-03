@@ -192,11 +192,11 @@ var lockMaintenanceTimeout = newDynamicTimeout(60*time.Second, time.Second)
 // We will ignore the error, and we will retry later to get a resolve on this lock
 func lockMaintenance(ctx context.Context, interval time.Duration, objAPI ObjectLayer) error {
 	// Lock to avoid concurrent lock maintenance loops
-	maintainenceLock := objAPI.NewNSLock(ctx, "system", "lock-maintenance-ops")
-	if err := maintainenceLock.GetLock(lockMaintenanceTimeout); err != nil {
+	maintenanceLock := objAPI.NewNSLock(ctx, "system", "lock-maintenance-ops")
+	if err := maintenanceLock.GetLock(lockMaintenanceTimeout); err != nil {
 		return err
 	}
-	defer maintainenceLock.Unlock()
+	defer maintenanceLock.Unlock()
 
 	// Validate if long lived locks are indeed clean.
 	// Get list of long lived locks to check for staleness.
