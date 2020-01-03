@@ -17,8 +17,6 @@
 package iampolicy
 
 import (
-	"fmt"
-
 	"github.com/minio/minio/pkg/policy/condition"
 )
 
@@ -119,7 +117,7 @@ func parseAdminAction(s string) (AdminAction, error) {
 		return action, nil
 	}
 
-	return action, fmt.Errorf("unsupported action '%v'", s)
+	return action, Errorf("unsupported action '%v'", s)
 }
 
 // IsValid - checks if action is valid or not.

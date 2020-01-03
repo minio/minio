@@ -18,7 +18,6 @@ package policy
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 )
 
@@ -78,7 +77,7 @@ func (policy Policy) IsEmpty() bool {
 // isValid - checks if Policy is valid or not.
 func (policy Policy) isValid() error {
 	if policy.Version != DefaultVersion && policy.Version != "" {
-		return fmt.Errorf("invalid version '%v'", policy.Version)
+		return Errorf("invalid version '%v'", policy.Version)
 	}
 
 	for _, statement := range policy.Statements {
@@ -108,7 +107,7 @@ func (policy Policy) isValid() error {
 				continue
 			}
 
-			return fmt.Errorf("duplicate principal %v, actions %v, resouces %v found in statements %v, %v",
+			return Errorf("duplicate principal %v, actions %v, resouces %v found in statements %v, %v",
 				principals, actions, resources, policy.Statements[i], statement)
 		}
 	}

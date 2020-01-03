@@ -2106,11 +2106,7 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 
 	// Log unexpected and unhandled errors.
 	logger.LogIf(ctx, err)
-	return APIError{
-		Code:           "InternalError",
-		HTTPStatusCode: http.StatusInternalServerError,
-		Description:    err.Error(),
-	}
+	return toAPIError(ctx, err)
 }
 
 // writeWebErrorResponse - set HTTP status code and write error description to the body.

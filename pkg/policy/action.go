@@ -18,7 +18,6 @@ package policy
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/minio/minio/pkg/policy/condition"
 )
@@ -157,7 +156,7 @@ func (action Action) MarshalJSON() ([]byte, error) {
 		return json.Marshal(string(action))
 	}
 
-	return nil, fmt.Errorf("invalid action '%v'", action)
+	return nil, Errorf("invalid action '%v'", action)
 }
 
 // UnmarshalJSON - decodes JSON data to Action.
@@ -170,7 +169,7 @@ func (action *Action) UnmarshalJSON(data []byte) error {
 
 	a := Action(s)
 	if !a.IsValid() {
-		return fmt.Errorf("invalid action '%v'", s)
+		return Errorf("invalid action '%v'", s)
 	}
 
 	*action = a
@@ -185,7 +184,7 @@ func parseAction(s string) (Action, error) {
 		return action, nil
 	}
 
-	return action, fmt.Errorf("unsupported action '%v'", s)
+	return action, Errorf("unsupported action '%v'", s)
 }
 
 // actionConditionKeyMap - holds mapping of supported condition key for an action.
