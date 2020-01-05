@@ -43,6 +43,9 @@ To start a distributed MinIO instance, you just need to pass drive locations as 
 - Servers running distributed MinIO instances should be less than 15 minutes apart. You can enable [NTP](http://www.ntp.org/) service as a best practice to ensure same times across servers.
 - Running Distributed MinIO on Windows operating system is experimental. Please proceed with caution.
 - `MINIO_DOMAIN` environment variable should be defined and exported if domain is needed to be set.
+- MinIO creates erasure-coding sets of 4, 6, 8, 10, 12, 14 or 16 drives.  The number of drives you provide must be a multiple of one of those numbers.
+- MinIO chooses the largest EC set size which divides into the total number of drives given.  For example, 8 drives will be used as a single EC set of size 8, not two sets of size 4.
+- Each object is written to a single EC set, and therefore is spread over no more than 16 drives.
 
 Example 1: Start distributed MinIO instance on 32 nodes with 32 drives each mounted at `/export1` to `/export32` (pictured below), by running this command on all the 32 nodes:
 ![Distributed MinIO, 32 nodes with 32 drives each](https://github.com/minio/minio/blob/master/docs/screenshots/Architecture-diagram_distributed_32.png?raw=true)
@@ -66,7 +69,13 @@ export MINIO_SECRET_KEY=<SECRET_KEY>
 minio server http://host{1...32}/export{1...32} http://host{33...64}/export{1...32}
 ```
 
-Now the server has expanded storage of *1024* more disks in total of *2048* disks, new object upload requests automatically start using the least used cluster. This expansion strategy works endlessly, so you can perpetually expand your clusters as needed.  When you restart, it is immediate and non-disruptive to the applications. Each group of servers in the command-line is called a zone. There are 2 zones in this example. Objects are placed in zones based on which zone has the *fmost free* space. Within each zone, the location of the erasure-set of drives is determined based on a deterministic hashing algorithm.
+Now the server has expanded storage of *1024* more disks in total of *2048* disks, new object upload requests automatically start using the least used cluster. This expansion strategy works endlessly, so you can perpetually expand your clusters as needed.  When you restart, it is immediate and non-disruptive to the applications. Each group of servers in the command-line is called a zone. There are 2 zones in this example. New objects are placed in zones in proportion to the amount of free space in each zone. Within each zone, the location of the erasure-set of drives is determined based on a deterministic hashing algorithm.
+
+*Note*
+
+Each zone you add must have the same erasure coding set size as the original zone, so the same data redundancy SLA is maintained.
+
+For example, if your first zone was 8 drives, you could add further zones of 8 drives each, but not a zone of 16 drives.  That's because 16 drives are treated as a single EC set of 16, not two sets of 8.
 
 ## 3. Test your setup
 To test this setup, access the MinIO server via browser or [`mc`](https://docs.min.io/docs/minio-client-quickstart-guide).
