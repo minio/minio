@@ -85,7 +85,7 @@ func printStartupSafeModeMessage(apiEndpoints []string, err error) {
 	endPoint := strippedAPIEndpoints[0]
 
 	// Configure 'mc', following block prints platform specific information for minio client admin commands.
-	if color.IsTerminal() {
+	if color.IsTerminal() && !globalCLIContext.Anonymous {
 		logStartupMessage(color.RedBold("\nCommand-line Access: ") + mcAdminQuickStartGuide)
 		if runtime.GOOS == globalWindowsOSName {
 			mcMessage := fmt.Sprintf("> mc.exe config host add %s %s %s %s --api s3v4", alias,
@@ -222,7 +222,7 @@ func printCLIAccessMsg(endPoint string, alias string) {
 	cred := globalActiveCred
 
 	// Configure 'mc', following block prints platform specific information for minio client.
-	if color.IsTerminal() {
+	if color.IsTerminal() && !globalCLIContext.Anonymous {
 		logStartupMessage(color.Blue("\nCommand-line Access: ") + mcQuickStartGuide)
 		if runtime.GOOS == globalWindowsOSName {
 			mcMessage := fmt.Sprintf("$ mc.exe config host add %s %s %s %s", alias,
