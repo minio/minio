@@ -306,7 +306,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	r.Header.Set("delimiter", SlashSeparator)
 
 	// If etcd, dns federation configured list buckets from etcd.
-	if globalDNSConfig != nil {
+	if globalDNSConfig != nil && globalBucketFederation {
 		dnsBuckets, err := globalDNSConfig.List()
 		if err != nil && err != dns.ErrNoEntriesFound {
 			return toJSONError(ctx, err)
