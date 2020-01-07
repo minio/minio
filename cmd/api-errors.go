@@ -734,7 +734,7 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrObjectLockConfigurationNotAllowed: {
-		Code:           "InvalidRequest",
+		Code:           "InvalidBucketState",
 		Description:    "Object Lock configuration cannot be enabled on existing buckets.",
 		HTTPStatusCode: http.StatusConflict,
 	},
