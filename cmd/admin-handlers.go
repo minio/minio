@@ -1457,7 +1457,9 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 
 func fetchLambdaInfo(cfg config.Config) []map[string][]madmin.TargetIDStatus {
 	lambdaMap := make(map[string][]madmin.TargetIDStatus)
-	targetList, _ := notify.GetNotificationTargets(cfg, GlobalServiceDoneCh, NewCustomHTTPTransport())
+
+	// Fetch the targets
+	targetList, _ := notify.RegisterNotificationTargets(cfg, GlobalServiceDoneCh, NewCustomHTTPTransport(), nil, true)
 
 	for targetID, target := range targetList.TargetMap() {
 		targetIDStatus := make(map[string]madmin.Status)
@@ -1470,6 +1472,8 @@ func fetchLambdaInfo(cfg config.Config) []map[string][]madmin.TargetIDStatus {
 		list := lambdaMap[targetID.Name]
 		list = append(list, targetIDStatus)
 		lambdaMap[targetID.Name] = list
+		// Close any leaking connections
+		_ = target.Close()
 	}
 
 	notify := make([]map[string][]madmin.TargetIDStatus, len(lambdaMap))

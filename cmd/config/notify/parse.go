@@ -118,7 +118,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewAMQPTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewAMQPTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
 		}
@@ -134,7 +134,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewElasticsearchTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewElasticsearchTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
 
@@ -152,7 +152,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 			continue
 		}
 		args.TLS.RootCAs = transport.TLSClientConfig.RootCAs
-		newTarget, err := target.NewKafkaTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewKafkaTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
 		}
@@ -169,7 +169,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 			continue
 		}
 		args.RootCAs = transport.TLSClientConfig.RootCAs
-		newTarget, err := target.NewMQTTTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewMQTTTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
 		}
@@ -185,7 +185,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewMySQLTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewMySQLTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
 		}
@@ -201,7 +201,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewNATSTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewNATSTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
 		}
@@ -217,7 +217,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewNSQTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewNSQTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
 		}
@@ -233,7 +233,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewPostgreSQLTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewPostgreSQLTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
 		}
@@ -249,7 +249,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewRedisTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewRedisTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
 		}
@@ -265,7 +265,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewWebhookTarget(id, args, doneCh, logger.LogOnceIf, transport)
+		newTarget, err := target.NewWebhookTarget(id, args, doneCh, logger.LogOnceIf, transport, test)
 		if err != nil {
 			return nil, err
 		}

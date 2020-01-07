@@ -312,7 +312,7 @@ func (target *NATSTarget) Close() (err error) {
 }
 
 // NewNATSTarget - creates new NATS target.
-func NewNATSTarget(id string, args NATSArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*NATSTarget, error) {
+func NewNATSTarget(id string, args NATSArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*NATSTarget, error) {
 	var natsConn *nats.Conn
 	var stanConn stan.Conn
 
@@ -348,7 +348,7 @@ func NewNATSTarget(id string, args NATSArgs, doneCh <-chan struct{}, loggerOnce 
 		store:    store,
 	}
 
-	if target.store != nil {
+	if target.store != nil && !test {
 		// Replays the events from the store.
 		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
 		// Start replaying events from the store.
