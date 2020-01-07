@@ -1894,7 +1894,8 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
 
-	globalIAMSys = NewIAMSys()
+	newAllSubsystems()
+
 	globalIAMSys.Init(objLayer)
 
 	buckets, err := objLayer.ListBuckets(context.Background())
@@ -1902,7 +1903,6 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 		t.Fatalf("Unable to list buckets on backend %s", err)
 	}
 
-	globalPolicySys = NewPolicySys()
 	globalPolicySys.Init(buckets, objLayer)
 
 	credentials := globalActiveCred

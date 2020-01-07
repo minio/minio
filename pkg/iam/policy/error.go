@@ -16,7 +16,9 @@
 
 package iampolicy
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // Error is the generic type for any error happening during policy
 // parsing.
