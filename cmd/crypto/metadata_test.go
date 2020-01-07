@@ -125,15 +125,15 @@ var s3ParseMetadataTests = []struct {
 		DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 1
 	{
-		ExpectedErr: Error("The object metadata is missing the internal sealed key for SSE-S3"),
+		ExpectedErr: Errorf("The object metadata is missing the internal sealed key for SSE-S3"),
 		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: ""}, DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 2
 	{
-		ExpectedErr: Error("The object metadata is missing the internal KMS key-ID for SSE-S3"),
+		ExpectedErr: Errorf("The object metadata is missing the internal KMS key-ID for SSE-S3"),
 		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: "", S3SealedKey: "", S3KMSSealedKey: "IAAF0b=="}, DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 3
 	{
-		ExpectedErr: Error("The object metadata is missing the internal sealed KMS data key for SSE-S3"),
+		ExpectedErr: Errorf("The object metadata is missing the internal sealed KMS data key for SSE-S3"),
 		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: "", S3SealedKey: "", S3KMSKeyID: ""},
 		DataKey:     []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 4
@@ -150,7 +150,7 @@ var s3ParseMetadataTests = []struct {
 		DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 6
 	{
-		ExpectedErr: Error("The internal sealed key for SSE-S3 is invalid"),
+		ExpectedErr: Errorf("The internal sealed key for SSE-S3 is invalid"),
 		Metadata: map[string]string{
 			SSEIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), SSESealAlgorithm: SealAlgorithm, S3SealedKey: "",
 			S3KMSKeyID: "", S3KMSSealedKey: "",
@@ -158,7 +158,7 @@ var s3ParseMetadataTests = []struct {
 		DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 7
 	{
-		ExpectedErr: Error("The internal sealed KMS data key for SSE-S3 is invalid"),
+		ExpectedErr: Errorf("The internal sealed KMS data key for SSE-S3 is invalid"),
 		Metadata: map[string]string{
 			SSEIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), SSESealAlgorithm: SealAlgorithm,
 			S3SealedKey: base64.StdEncoding.EncodeToString(make([]byte, 64)), S3KMSKeyID: "key-1",
@@ -218,7 +218,7 @@ var ssecParseMetadataTests = []struct {
 	{ExpectedErr: errMissingInternalIV, Metadata: map[string]string{}, SealedKey: SealedKey{}},                     // 0
 	{ExpectedErr: errMissingInternalSealAlgorithm, Metadata: map[string]string{SSEIV: ""}, SealedKey: SealedKey{}}, // 1
 	{
-		ExpectedErr: Error("The object metadata is missing the internal sealed key for SSE-C"),
+		ExpectedErr: Errorf("The object metadata is missing the internal sealed key for SSE-C"),
 		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: ""}, SealedKey: SealedKey{},
 	}, // 2
 	{
@@ -233,7 +233,7 @@ var ssecParseMetadataTests = []struct {
 		SealedKey: SealedKey{},
 	}, // 4
 	{
-		ExpectedErr: Error("The internal sealed key for SSE-C is invalid"),
+		ExpectedErr: Errorf("The internal sealed key for SSE-C is invalid"),
 		Metadata: map[string]string{
 			SSEIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), SSESealAlgorithm: SealAlgorithm, SSECSealedKey: "",
 		},
