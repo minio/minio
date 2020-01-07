@@ -103,7 +103,7 @@ In above example there are two zones
 
 > Notice the requirement of common SLA here original cluster had 1024 drives with 16 drives per erasure set, second zone is expected to have a minimum of 16 drives to match the original cluster SLA or it should be in multiples of 16.
 
-New objects are placed in zones in proportion to the amount of free space in each zone, following pseudo code implements this behavior.
+MinIO places new objects in zones based on proportionate free space, per zone. Following pseudo code demonstrates this behavior.
 ```go
 func getAvailableZoneIdx(ctx context.Context) int {
         zones := z.getZonesAvailableSpace(ctx)
