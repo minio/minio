@@ -214,7 +214,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	// This policy is the policy associated with the user
 	// requesting for temporary credentials. The temporary
 	// credentials will inherit the same policy requirements.
-	m[iamPolicyName()] = policyName
+	m[iamPolicyClaimName()] = policyName
 
 	if len(sessionPolicyStr) > 0 {
 		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
@@ -350,7 +350,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	// be set and configured on your identity provider as part of
 	// JWT custom claims.
 	var policyName string
-	if v, ok := m[iamPolicyName()]; ok {
+	if v, ok := m[iamPolicyClaimName()]; ok {
 		policyName, _ = v.(string)
 	}
 
