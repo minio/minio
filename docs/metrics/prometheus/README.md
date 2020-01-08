@@ -163,8 +163,8 @@ This migration guide applies for older releases or any releases before `RELEASE.
 
 The migrations include
 
-    - `minio_total_disks` to `disks_total`
-    - `minio_offline_disks` to `disks_offline`
+    - `minio_total_disks` to `minio_disks_total`
+    - `minio_offline_disks` to `minio_disks_offline`
 
 ### MinIO disk level metrics - `disk_storage_*`
 
