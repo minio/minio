@@ -306,7 +306,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	r.Header.Set("delimiter", SlashSeparator)
 
 	// If etcd, dns federation configured list buckets from etcd.
-	if globalDNSConfig != nil {
+	if globalDNSConfig != nil && globalBucketFederation {
 		dnsBuckets, err := globalDNSConfig.List()
 		if err != nil && err != dns.ErrNoEntriesFound {
 			return toJSONError(ctx, err)
@@ -2026,13 +2026,20 @@ func toJSONError(ctx context.Context, err error, params ...string) (jerr *json2.
 // toWebAPIError - convert into error into APIError.
 func toWebAPIError(ctx context.Context, err error) APIError {
 	switch err {
+	case errNoAuthToken:
+		return APIError{
+			Code:           "WebTokenMissing",
+			HTTPStatusCode: http.StatusBadRequest,
+			Description:    err.Error(),
+		}
 	case errServerNotInitialized:
 		return APIError{
 			Code:           "XMinioServerNotInitialized",
 			HTTPStatusCode: http.StatusServiceUnavailable,
 			Description:    err.Error(),
 		}
-	case errAuthentication, auth.ErrInvalidAccessKeyLength, auth.ErrInvalidSecretKeyLength, errInvalidAccessKeyID:
+	case errAuthentication, auth.ErrInvalidAccessKeyLength,
+		auth.ErrInvalidSecretKeyLength, errInvalidAccessKeyID:
 		return APIError{
 			Code:           "AccessDenied",
 			HTTPStatusCode: http.StatusForbidden,

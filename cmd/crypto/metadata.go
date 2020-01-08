@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"fmt"
 
 	"github.com/minio/minio/cmd/logger"
 )
@@ -126,7 +125,7 @@ func CreateMultipartMetadata(metadata map[string]string) map[string]string {
 // is nil.
 func (s3) CreateMetadata(metadata map[string]string, keyID string, kmsKey []byte, sealedKey SealedKey) map[string]string {
 	if sealedKey.Algorithm != SealAlgorithm {
-		logger.CriticalIf(context.Background(), fmt.Errorf("The seal algorithm '%s' is invalid for SSE-S3", sealedKey.Algorithm))
+		logger.CriticalIf(context.Background(), Errorf("The seal algorithm '%s' is invalid for SSE-S3", sealedKey.Algorithm))
 	}
 
 	// There are two possibilites:
@@ -172,7 +171,7 @@ func (s3) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte
 	}
 	b64SealedKey, ok := metadata[S3SealedKey]
 	if !ok {
-		return keyID, kmsKey, sealedKey, Error("The object metadata is missing the internal sealed key for SSE-S3")
+		return keyID, kmsKey, sealedKey, Errorf("The object metadata is missing the internal sealed key for SSE-S3")
 	}
 
 	// There are two possibilites:
@@ -182,10 +181,10 @@ func (s3) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte
 	keyID, idPresent := metadata[S3KMSKeyID]
 	b64KMSSealedKey, kmsKeyPresent := metadata[S3KMSSealedKey]
 	if !idPresent && kmsKeyPresent {
-		return keyID, kmsKey, sealedKey, Error("The object metadata is missing the internal KMS key-ID for SSE-S3")
+		return keyID, kmsKey, sealedKey, Errorf("The object metadata is missing the internal KMS key-ID for SSE-S3")
 	}
 	if idPresent && !kmsKeyPresent {
-		return keyID, kmsKey, sealedKey, Error("The object metadata is missing the internal sealed KMS data key for SSE-S3")
+		return keyID, kmsKey, sealedKey, Errorf("The object metadata is missing the internal sealed KMS data key for SSE-S3")
 	}
 
 	// Check whether all extracted values are well-formed
@@ -198,12 +197,12 @@ func (s3) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte
 	}
 	encryptedKey, err := base64.StdEncoding.DecodeString(b64SealedKey)
 	if err != nil || len(encryptedKey) != 64 {
-		return keyID, kmsKey, sealedKey, Error("The internal sealed key for SSE-S3 is invalid")
+		return keyID, kmsKey, sealedKey, Errorf("The internal sealed key for SSE-S3 is invalid")
 	}
 	if idPresent && kmsKeyPresent { // We are using a KMS -> parse the sealed KMS data key.
 		kmsKey, err = base64.StdEncoding.DecodeString(b64KMSSealedKey)
 		if err != nil {
-			return keyID, kmsKey, sealedKey, Error("The internal sealed KMS data key for SSE-S3 is invalid")
+			return keyID, kmsKey, sealedKey, Errorf("The internal sealed KMS data key for SSE-S3 is invalid")
 		}
 	}
 
@@ -217,7 +216,7 @@ func (s3) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte
 // It allocates a new metadata map if metadata is nil.
 func (ssec) CreateMetadata(metadata map[string]string, sealedKey SealedKey) map[string]string {
 	if sealedKey.Algorithm != SealAlgorithm {
-		logger.CriticalIf(context.Background(), fmt.Errorf("The seal algorithm '%s' is invalid for SSE-C", sealedKey.Algorithm))
+		logger.CriticalIf(context.Background(), Errorf("The seal algorithm '%s' is invalid for SSE-C", sealedKey.Algorithm))
 	}
 
 	if metadata == nil {
@@ -244,7 +243,7 @@ func (ssec) ParseMetadata(metadata map[string]string) (sealedKey SealedKey, err 
 	}
 	b64SealedKey, ok := metadata[SSECSealedKey]
 	if !ok {
-		return sealedKey, Error("The object metadata is missing the internal sealed key for SSE-C")
+		return sealedKey, Errorf("The object metadata is missing the internal sealed key for SSE-C")
 	}
 
 	// Check whether all extracted values are well-formed
@@ -257,7 +256,7 @@ func (ssec) ParseMetadata(metadata map[string]string) (sealedKey SealedKey, err 
 	}
 	encryptedKey, err := base64.StdEncoding.DecodeString(b64SealedKey)
 	if err != nil || len(encryptedKey) != 64 {
-		return sealedKey, Error("The internal sealed key for SSE-C is invalid")
+		return sealedKey, Errorf("The internal sealed key for SSE-C is invalid")
 	}
 
 	sealedKey.Algorithm = algorithm

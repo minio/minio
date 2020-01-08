@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/madmin"
@@ -170,6 +171,7 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 	}
 
 	var config = config.New()
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(configData, &config); err != nil {
 		return nil, err
 	}

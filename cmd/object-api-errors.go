@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -429,14 +430,14 @@ func (e BackendDown) Error() string {
 
 // isErrBucketNotFound - Check if error type is BucketNotFound.
 func isErrBucketNotFound(err error) bool {
-	_, ok := err.(BucketNotFound)
-	return ok
+	var bkNotFound BucketNotFound
+	return errors.As(err, &bkNotFound)
 }
 
 // isErrObjectNotFound - Check if error type is ObjectNotFound.
 func isErrObjectNotFound(err error) bool {
-	_, ok := err.(ObjectNotFound)
-	return ok
+	var objNotFound ObjectNotFound
+	return errors.As(err, &objNotFound)
 }
 
 // PreConditionFailed - Check if copy precondition failed

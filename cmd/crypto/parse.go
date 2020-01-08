@@ -16,7 +16,6 @@ package crypto
 
 import (
 	"encoding/hex"
-	"fmt"
 	"strings"
 )
 
@@ -25,18 +24,18 @@ import (
 func ParseMasterKey(envArg string) (KMS, error) {
 	values := strings.SplitN(envArg, ":", 2)
 	if len(values) != 2 {
-		return nil, fmt.Errorf("Invalid KMS master key: %s does not contain a ':'", envArg)
+		return nil, Errorf("Invalid KMS master key: %s does not contain a ':'", envArg)
 	}
 	var (
 		keyID  = values[0]
 		hexKey = values[1]
 	)
 	if len(hexKey) != 64 { // 2 hex bytes = 1 byte
-		return nil, fmt.Errorf("Invalid KMS master key: %s not a 32 bytes long HEX value", hexKey)
+		return nil, Errorf("Invalid KMS master key: %s not a 32 bytes long HEX value", hexKey)
 	}
 	var masterKey [32]byte
 	if _, err := hex.Decode(masterKey[:], []byte(hexKey)); err != nil {
-		return nil, err
+		return nil, Errorf("Invalid KMS master key: %v", err)
 	}
 	return NewMasterKey(keyID, masterKey), nil
 }

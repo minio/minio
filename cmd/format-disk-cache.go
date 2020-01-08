@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -29,6 +28,7 @@ import (
 	"reflect"
 	"strings"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/sio"
 )
@@ -444,6 +444,7 @@ func migrateOldCache(ctx context.Context, c *diskCache) error {
 			}
 			// marshal cache metadata after adding version and stat info
 			meta := &cacheMeta{}
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			if err = json.Unmarshal(metaBytes, &meta); err != nil {
 				return err
 			}
