@@ -88,6 +88,10 @@ func (policy Policy) isValid() error {
 
 	for i := range policy.Statements {
 		for _, statement := range policy.Statements[i+1:] {
+			if policy.Statements[i].Effect != statement.Effect {
+				continue
+			}
+
 			principals := policy.Statements[i].Principal.Intersection(statement.Principal)
 			if principals.IsEmpty() {
 				continue

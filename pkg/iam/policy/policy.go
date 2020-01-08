@@ -106,6 +106,10 @@ func (iamp Policy) isValid() error {
 
 	for i := range iamp.Statements {
 		for _, statement := range iamp.Statements[i+1:] {
+			if iamp.Statements[i].Effect != statement.Effect {
+				continue
+			}
+
 			actions := iamp.Statements[i].Actions.Intersection(statement.Actions)
 			if len(actions) == 0 {
 				continue
