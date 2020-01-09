@@ -54,6 +54,24 @@ func (resourceSet ResourceSet) Add(resource Resource) {
 	resourceSet[resource] = struct{}{}
 }
 
+// Equals - checks whether given resource set is equal to current resource set or not.
+func (resourceSet ResourceSet) Equals(sresourceSet ResourceSet) bool {
+	// If length of set is not equal to length of given set, the
+	// set is not equal to given set.
+	if len(resourceSet) != len(sresourceSet) {
+		return false
+	}
+
+	// As both sets are equal in length, check each elements are equal.
+	for k := range resourceSet {
+		if _, ok := sresourceSet[k]; !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
 // Intersection - returns resouces available in both ResourcsSet.
 func (resourceSet ResourceSet) Intersection(sset ResourceSet) ResourceSet {
 	nset := NewResourceSet()
