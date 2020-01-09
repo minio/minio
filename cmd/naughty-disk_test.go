@@ -53,7 +53,7 @@ func (d *naughtyDisk) IsOnline() bool {
 	return d.disk.IsOnline()
 }
 
-func (_ naughtyDisk) Hostname() string {
+func (_ *naughtyDisk) Hostname() string {
 	return ""
 }
 
