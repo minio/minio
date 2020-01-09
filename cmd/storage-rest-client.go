@@ -148,6 +148,10 @@ func (client *storageRESTClient) IsOnline() bool {
 	return atomic.LoadInt32(&client.connected) == 1
 }
 
+func (client *storageRESTClient) Hostname() string {
+	return client.endpoint.Host
+}
+
 func (client *storageRESTClient) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, error) {
 	respBody, err := client.call(storageRESTMethodCrawlAndGetDataUsage, nil, nil, -1)
 	defer http.DrainBody(respBody)

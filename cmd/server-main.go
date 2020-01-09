@@ -127,10 +127,6 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	}
 	logger.FatalIf(err, "Invalid command line arguments")
 
-	if err = checkEndpointsSubOptimal(ctx, setupType, globalEndpoints); err != nil {
-		logger.Info("Optimal endpoint check failed %s", err)
-	}
-
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
 	// (non-)minio process is listening on IPv4 of given port.

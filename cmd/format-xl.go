@@ -19,15 +19,16 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"reflect"
 
-	"encoding/hex"
-
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/sync/errgroup"
 	sha256 "github.com/minio/sha256-simd"
 )
@@ -753,15 +754,42 @@ func fixFormatXLV3(storageDisks []StorageAPI, endpoints Endpoints, formats []*fo
 func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, drivesPerSet int, deploymentID string) (*formatXLV3, error) {
 	format := newFormatXLV3(setCount, drivesPerSet)
 	formats := make([]*formatXLV3, len(storageDisks))
-
+	logger.Info("Formatting Zone...")
 	for i := 0; i < setCount; i++ {
+		logger.Info(" * Set %v:", i+1)
+		hostCount := make(map[string]int, drivesPerSet)
 		for j := 0; j < drivesPerSet; j++ {
+			disk := storageDisks[i*drivesPerSet+j]
 			newFormat := format.Clone()
 			newFormat.XL.This = format.XL.Sets[i][j]
 			if deploymentID != "" {
 				newFormat.ID = deploymentID
 			}
+			logger.Info("   - Drive: %s, host: %v", disk.String(), disk.Hostname())
+			hostCount[disk.Hostname()]++
 			formats[i*drivesPerSet+j] = newFormat
+		}
+		if len(hostCount) > 0 {
+			// Config
+			wantAtMost := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+			if wantAtMost == 0 {
+				cfg, err := storageclass.LookupConfig(nil, drivesPerSet)
+				if err == nil {
+					wantAtMost = cfg.Standard.Parity
+				}
+				if wantAtMost == 0 {
+					wantAtMost = drivesPerSet / 2
+				}
+			}
+			for host, count := range hostCount {
+				if count > wantAtMost {
+					if host == "" {
+						host = "local"
+					}
+					logger.Info(color.Yellow("WARNING:")+" Host %v has more than %v drives of set. "+
+						"A host failure will result in data becoming unavailable.", host, wantAtMost)
+				}
+			}
 		}
 	}
 
