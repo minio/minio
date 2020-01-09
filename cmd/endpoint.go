@@ -53,8 +53,7 @@ const (
 // Endpoint - any type of endpoint.
 type Endpoint struct {
 	*url.URL
-	IsLocal  bool
-	SetIndex int
+	IsLocal bool
 }
 
 func (endpoint Endpoint) String() string {
@@ -535,9 +534,8 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 		return endpoints, setupType, nil
 	}
 
-	for i, iargs := range args {
+	for _, iargs := range args {
 		// Convert args to endpoints
-		var newEndpoints Endpoints
 		eps, err := NewEndpoints(iargs...)
 		if err != nil {
 			return endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
@@ -548,11 +546,7 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 			return endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
 		}
 
-		for _, ep := range eps {
-			ep.SetIndex = i
-			newEndpoints = append(newEndpoints, ep)
-		}
-		endpoints = append(endpoints, newEndpoints...)
+		endpoints = append(endpoints, eps...)
 	}
 
 	if len(endpoints) == 0 {

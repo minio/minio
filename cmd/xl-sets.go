@@ -74,9 +74,6 @@ type xlSets struct {
 	// Distributed locker clients.
 	xlLockers setsDsyncLockers
 
-	// Lockers map holds dsync lockers for each endpoint
-	lockersMap map[Endpoint]dsync.NetLocker
-
 	// List of endpoints provided on the command line.
 	endpoints Endpoints
 
@@ -110,9 +107,6 @@ func (s *xlSets) isConnected(endpoint Endpoint) bool {
 				endpointStr = endpoint.String()
 			}
 			if s.xlDisks[i][j].String() != endpointStr {
-				continue
-			}
-			if !s.xlLockers[i][j].IsOnline() {
 				continue
 			}
 			return s.xlDisks[i][j].IsOnline()
@@ -161,9 +155,9 @@ func findDiskIndex(refFormat, format *formatXLV3) (int, int, error) {
 	return -1, -1, fmt.Errorf("diskID: %s not found", format.XL.This)
 }
 
-// connectDisksAndLockersWithQuorum is same as connectDisksAndLockers but waits
+// connectDisksWithQuorum is same as connectDisks but waits
 // for quorum number of formatted disks to be online in any given sets.
-func (s *xlSets) connectDisksAndLockersWithQuorum() {
+func (s *xlSets) connectDisksWithQuorum() {
 	var onlineDisks int
 	for onlineDisks < len(s.endpoints)/2 {
 		for _, endpoint := range s.endpoints {
@@ -184,7 +178,6 @@ func (s *xlSets) connectDisksAndLockersWithQuorum() {
 			}
 			disk.SetDiskID(format.XL.This)
 			s.xlDisks[i][j] = disk
-			s.xlLockers[i][j] = s.lockersMap[endpoint]
 			onlineDisks++
 		}
 		// Sleep for a while - so that we don't go into
@@ -193,9 +186,9 @@ func (s *xlSets) connectDisksAndLockersWithQuorum() {
 	}
 }
 
-// connectDisksAndLockers - attempt to connect all the endpoints, loads format
+// connectDisks - attempt to connect all the endpoints, loads format
 // and re-arranges the disks in proper position.
-func (s *xlSets) connectDisksAndLockers() {
+func (s *xlSets) connectDisks() {
 	for _, endpoint := range s.endpoints {
 		if s.isConnected(endpoint) {
 			continue
@@ -215,7 +208,6 @@ func (s *xlSets) connectDisksAndLockers() {
 		disk.SetDiskID(format.XL.This)
 		s.xlDisksMu.Lock()
 		s.xlDisks[i][j] = disk
-		s.xlLockers[i][j] = s.lockersMap[endpoint]
 		s.xlDisksMu.Unlock()
 	}
 }
@@ -235,7 +227,7 @@ func (s *xlSets) monitorAndConnectEndpoints(monitorInterval time.Duration) {
 		case <-s.disksConnectDoneCh:
 			return
 		case <-ticker.C:
-			s.connectDisksAndLockers()
+			s.connectDisks()
 		}
 	}
 }
@@ -246,12 +238,6 @@ func (s *xlSets) GetLockers(setIndex int) func() []dsync.NetLocker {
 		defer s.xlDisksMu.Unlock()
 		lockers := make([]dsync.NetLocker, s.drivesPerSet)
 		copy(lockers, s.xlLockers[setIndex])
-		for i, lk := range lockers {
-			// Add error lockers for unavailable locker.
-			if lk == nil {
-				lockers[i] = &errorLocker{}
-			}
-		}
 		return lockers
 	}
 }
@@ -271,17 +257,11 @@ const defaultMonitorConnectEndpointInterval = time.Second * 10 // Set to 10 secs
 
 // Initialize new set of erasure coded sets.
 func newXLSets(endpoints Endpoints, format *formatXLV3, setCount int, drivesPerSet int) (*xlSets, error) {
-	lockersMap := make(map[Endpoint]dsync.NetLocker)
-	for _, endpoint := range endpoints {
-		lockersMap[endpoint] = newLockAPI(endpoint)
-	}
-
 	// Initialize the XL sets instance.
 	s := &xlSets{
 		sets:               make([]*xlObjects, setCount),
 		xlDisks:            make([][]StorageAPI, setCount),
 		xlLockers:          make([][]dsync.NetLocker, setCount),
-		lockersMap:         lockersMap,
 		endpoints:          endpoints,
 		setCount:           setCount,
 		drivesPerSet:       drivesPerSet,
@@ -308,12 +288,20 @@ func newXLSets(endpoints Endpoints, format *formatXLV3, setCount int, drivesPerS
 			nsMutex:    mutex,
 			bp:         bp,
 		}
+
 		go s.sets[i].cleanupStaleMultipartUploads(context.Background(),
 			GlobalMultipartCleanupInterval, GlobalMultipartExpiry, GlobalServiceDoneCh)
 	}
 
+	// Rely on endpoints list to initialize, init lockers.
+	for i := 0; i < s.setCount; i++ {
+		for j := 0; j < s.drivesPerSet; j++ {
+			s.xlLockers[i][j] = newLockAPI(s.endpoints[i*s.drivesPerSet+j])
+		}
+	}
+
 	// Connect disks right away, but wait until we have `format.json` quorum.
-	s.connectDisksAndLockersWithQuorum()
+	s.connectDisksWithQuorum()
 
 	// Start the disk monitoring and connect routine.
 	go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)
@@ -1312,9 +1300,9 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 	// Replace the new format.
 	s.format = refFormat
 
-	// Close all existing disks, lockers and reconnect all the disks/lockers.
+	// Close all existing disks and reconnect all the disks.
 	s.xlDisks.Close()
-	s.connectDisksAndLockers()
+	s.connectDisks()
 
 	// Restart monitoring loop to monitor reformatted disks again.
 	go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)
@@ -1435,11 +1423,6 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 		return res, errNoHealRequired
 	}
 
-	// All disks are unformatted, return quorum error.
-	if shouldInitXLDisks(sErrs) {
-		return res, errXLReadQuorum
-	}
-
 	refFormat, err := getFormatXLInQuorum(formats)
 	if err != nil {
 		return res, err
@@ -1506,7 +1489,7 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 
 		// Disconnect/relinquish all existing disks, lockers and reconnect the disks, lockers.
 		s.xlDisks.Close()
-		s.connectDisksAndLockers()
+		s.connectDisks()
 
 		// Restart our monitoring loop to start monitoring newly formatted disks.
 		go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)
@@ -1666,9 +1649,6 @@ func (s *xlSets) IsReady(_ context.Context) bool {
 	for i := 0; i < s.setCount; i++ {
 		for j := 0; j < s.drivesPerSet; j++ {
 			if s.xlDisks[i][j] == nil {
-				continue
-			}
-			if !s.xlLockers[i][j].IsOnline() {
 				continue
 			}
 			if s.xlDisks[i][j].IsOnline() {

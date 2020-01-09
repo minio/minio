@@ -554,7 +554,9 @@ func (s *posix) SetDiskID(id string) {
 func (s *posix) MakeVolBulk(volumes ...string) (err error) {
 	for _, volume := range volumes {
 		if err = s.MakeVol(volume); err != nil {
-			return err
+			if err != errVolumeExists {
+				return err
+			}
 		}
 	}
 	return nil

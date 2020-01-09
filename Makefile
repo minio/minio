@@ -64,15 +64,21 @@ test: verifiers build
 	@echo "Running unit tests"
 	@GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./... 1>/dev/null
 
+test-race: verifiers build
+	@echo "Running unit tests under -race"
+	@(env bash $(PWD)/buildscripts/race.sh)
+
 # Verify minio binary
 verify:
 	@echo "Verifying build with race"
 	@GO111MODULE=on CGO_ENABLED=1 go build -race -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/verify-build.sh)
 
-coverage: build
-	@echo "Running all coverage for minio"
-	@(env bash $(PWD)/buildscripts/go-coverage.sh)
+# Verify healing of disks with minio binary
+verify-healing:
+	@echo "Verify healing build with race"
+	@GO111MODULE=on CGO_ENABLED=1 go build -race -tags kqueue --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio 1>/dev/null
+	@(env bash $(PWD)/buildscripts/verify-healing.sh)
 
 # Builds minio locally.
 build: checks

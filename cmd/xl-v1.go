@@ -123,7 +123,6 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 	// Wait for the routines.
 	for i, err := range g.Wait() {
 		peerAddr, pErr := getPeerAddress(disksInfo[i].RelativePath)
-
 		if pErr != nil {
 			continue
 		}
@@ -144,39 +143,20 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 	return disksInfo, onlineDisks, offlineDisks
 }
 
-// returns sorted disksInfo slice which has only valid entries.
-// i.e the entries where the total size of the disk is not stated
-// as 0Bytes, this means that the disk is not online or ignored.
-func sortValidDisksInfo(disksInfo []DiskInfo) []DiskInfo {
-	var validDisksInfo []DiskInfo
-	for _, diskInfo := range disksInfo {
-		if diskInfo.Total == 0 {
-			continue
-		}
-		validDisksInfo = append(validDisksInfo, diskInfo)
-	}
-	sort.Sort(byDiskTotal(validDisksInfo))
-	return validDisksInfo
-}
-
 // Get an aggregated storage info across all disks.
 func getStorageInfo(disks []StorageAPI) StorageInfo {
 	disksInfo, onlineDisks, offlineDisks := getDisksInfo(disks)
 
 	// Sort so that the first element is the smallest.
-	validDisksInfo := sortValidDisksInfo(disksInfo)
-	// If there are no valid disks, set total and free disks to 0
-	if len(validDisksInfo) == 0 {
-		return StorageInfo{}
-	}
+	sort.Sort(byDiskTotal(disksInfo))
 
 	// Combine all disks to get total usage
-	usedList := make([]uint64, len(validDisksInfo))
-	totalList := make([]uint64, len(validDisksInfo))
-	availableList := make([]uint64, len(validDisksInfo))
-	mountPaths := make([]string, len(validDisksInfo))
+	usedList := make([]uint64, len(disksInfo))
+	totalList := make([]uint64, len(disksInfo))
+	availableList := make([]uint64, len(disksInfo))
+	mountPaths := make([]string, len(disksInfo))
 
-	for i, di := range validDisksInfo {
+	for i, di := range disksInfo {
 		usedList[i] = di.Used
 		totalList[i] = di.Total
 		availableList[i] = di.Free
