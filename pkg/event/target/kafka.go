@@ -237,6 +237,8 @@ func (k KafkaArgs) pingBrokers() bool {
 func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*KafkaTarget, error) {
 	config := sarama.NewConfig()
 
+	config.Version = sarama.V0_10_0_0
+
 	config.Net.SASL.User = args.SASL.User
 	config.Net.SASL.Password = args.SASL.Password
 	config.Net.SASL.Enable = args.SASL.Enable
