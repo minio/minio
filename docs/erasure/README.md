@@ -22,6 +22,14 @@ Bit Rot, also known as data rot or silent data corruption is a data loss issue f
 
 MinIO's erasure coded backend uses high speed [HighwayHash](https://github.com/minio/highwayhash) checksums to protect against Bit Rot.
 
+## How are drives used for Erasure Code?
+
+MinIO divides the drives you provide into erasure-coding sets of 4, 6, 8, 10, 12, 14 or 16 drives.  Therefore, the number of drives you present must be a multiple of one of these numbers.  Each object is written to a single erasure-coding set.
+
+Minio uses the largest possible EC set size which divides into the number of drives given.  For example, 18 drives are configured as 3 sets of 6 drives; but 24 drives are configured as 2 sets of 12 drives.
+
+The drives should all be of approximately the same size.
+
 ## Get Started with MinIO in Erasure Code
 
 ### 1. Prerequisites

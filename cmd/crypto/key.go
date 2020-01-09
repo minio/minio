@@ -21,7 +21,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"path"
 
@@ -108,7 +107,7 @@ func (key *ObjectKey) Unseal(extKey [32]byte, sealedKey SealedKey, domain, bucke
 	)
 	switch sealedKey.Algorithm {
 	default:
-		return Error(fmt.Sprintf("The sealing algorithm '%s' is not supported", sealedKey.Algorithm))
+		return Errorf("The sealing algorithm '%s' is not supported", sealedKey.Algorithm)
 	case SealAlgorithm:
 		mac := hmac.New(sha256.New, extKey[:])
 		mac.Write(sealedKey.IV[:])

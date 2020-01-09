@@ -19,6 +19,7 @@ package iampolicy
 import (
 	"encoding/json"
 	"io"
+	"strings"
 
 	"github.com/minio/minio/pkg/policy"
 )
@@ -35,6 +36,20 @@ type Args struct {
 	IsOwner         bool                   `json:"owner"`
 	ObjectName      string                 `json:"object"`
 	Claims          map[string]interface{} `json:"claims"`
+}
+
+// GetPolicies get policies
+func (a Args) GetPolicies(policyClaimName string) ([]string, bool) {
+	pname, ok := a.Claims[policyClaimName]
+	if !ok {
+		return nil, false
+	}
+	pnameStr, ok := pname.(string)
+	if ok {
+		return strings.Split(pnameStr, ","), true
+	}
+	pnameSlice, ok := pname.([]string)
+	return pnameSlice, ok
 }
 
 // Policy - iam bucket iamp.
@@ -165,7 +180,7 @@ func ParseConfig(reader io.Reader) (*Policy, error) {
 	decoder := json.NewDecoder(reader)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&iamp); err != nil {
-		return nil, err
+		return nil, Errorf("%w", err)
 	}
 
 	return &iamp, iamp.Validate()
