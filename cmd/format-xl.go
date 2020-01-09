@@ -621,8 +621,8 @@ func formatXLV3Check(reference *formatXLV3, format *formatXLV3) error {
 	return fmt.Errorf("Disk ID %s not found in any disk sets %s", this, format.XL.Sets)
 }
 
-// Initializes meta volume on all input storage disks.
-func initFormatXLMetaVolume(storageDisks []StorageAPI, formats []*formatXLV3) error {
+// Initializes meta volume only on local storage disks.
+func initXLMetaVolumesInLocalDisks(storageDisks []StorageAPI, formats []*formatXLV3) error {
 	// This happens for the first time, but keep this here since this
 	// is the only place where it can be made expensive optimizing all
 	// other calls. Create minio meta volume, if it doesn't exist yet.
@@ -634,8 +634,8 @@ func initFormatXLMetaVolume(storageDisks []StorageAPI, formats []*formatXLV3) er
 	for index := range storageDisks {
 		index := index
 		g.Go(func() error {
-			if formats[index] == nil || storageDisks[index] == nil {
-				// Ignore create meta volume on disks which are not found.
+			if formats[index] == nil || storageDisks[index] == nil || !storageDisks[index].IsLocal() {
+				// Ignore create meta volume on disks which are not found or not local.
 				return nil
 			}
 			return makeFormatXLMetaVolumes(storageDisks[index])
@@ -821,13 +821,7 @@ func ecDrivesNoConfig(drivesPerSet int) int {
 // Make XL backend meta volumes.
 func makeFormatXLMetaVolumes(disk StorageAPI) error {
 	// Attempt to create MinIO internal buckets.
-	err := disk.MakeVolBulk(minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, minioMetaBackgroundOpsBucket)
-	if err != nil {
-		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
-			return err
-		}
-	}
-	return nil
+	return disk.MakeVolBulk(minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, minioMetaBackgroundOpsBucket)
 }
 
 var initMetaVolIgnoredErrs = append(baseIgnoredErrs, errVolumeExists)

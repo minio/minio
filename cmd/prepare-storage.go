@@ -267,12 +267,6 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 		return format, nil
 	}
 
-	// The first will always recreate some directories inside .minio.sys
-	// such as, tmp, multipart and background-ops
-	if firstDisk {
-		initFormatXLMetaVolume(storageDisks, formatConfigs)
-	}
-
 	// Return error when quorum unformatted disks - indicating we are
 	// waiting for first server to be online.
 	if quorumUnformattedDisks(sErrs) && !firstDisk {
@@ -330,6 +324,10 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	if err = formatXLFixLocalDeploymentID(endpoints, storageDisks, format); err != nil {
 		return nil, err
 	}
+
+	// The will always recreate some directories inside .minio.sys of
+	// the local disk such as tmp, multipart and background-ops
+	initXLMetaVolumesInLocalDisks(storageDisks, formatConfigs)
 
 	return format, nil
 }
