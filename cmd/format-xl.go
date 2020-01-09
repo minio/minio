@@ -765,7 +765,7 @@ func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, driv
 			if deploymentID != "" {
 				newFormat.ID = deploymentID
 			}
-			logger.Info("   - Drive: %s, host: %v", disk.String(), disk.Hostname())
+			logger.Info("   - Drive: %s", disk.String())
 			hostCount[disk.Hostname()]++
 			formats[i*drivesPerSet+j] = newFormat
 		}
