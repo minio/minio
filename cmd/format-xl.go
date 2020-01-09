@@ -769,7 +769,7 @@ func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, driv
 			hostCount[disk.Hostname()]++
 			formats[i*drivesPerSet+j] = newFormat
 		}
-		if len(hostCount) > 0 {
+		if len(hostCount) > 1 {
 			// Config
 			wantAtMost := globalStorageClass.GetParityForSC(storageclass.STANDARD)
 			if wantAtMost == 0 {
