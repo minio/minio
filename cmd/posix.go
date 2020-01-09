@@ -309,7 +309,7 @@ func (s *posix) String() string {
 	return s.diskPath
 }
 
-func (_ *posix) Hostname() string {
+func (*posix) Hostname() string {
 	return ""
 }
 

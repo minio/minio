@@ -44,7 +44,7 @@ func (a badDisk) CreateFile(volume, path string, size int64, reader io.Reader) e
 	return errFaultyDisk
 }
 
-func (_ badDisk) Hostname() string {
+func (badDisk) Hostname() string {
 	return ""
 }
 
