@@ -39,7 +39,6 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
@@ -535,8 +534,8 @@ func splitN(str, delim string, num int) []string {
 	return retSplit
 }
 
-func iamPolicyName() string {
-	return globalOpenIDConfig.ClaimPrefix + iampolicy.PolicyName
+func iamPolicyClaimName() string {
+	return globalOpenIDConfig.ClaimPrefix + globalOpenIDConfig.ClaimName
 }
 
 func isWORMEnabled(bucket string) (Retention, bool) {
