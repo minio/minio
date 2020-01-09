@@ -28,12 +28,13 @@ import (
 
 // Config represents cache config settings
 type Config struct {
-	Enabled bool     `json:"-"`
-	Drives  []string `json:"drives"`
-	Expiry  int      `json:"expiry"`
-	MaxUse  int      `json:"maxuse"`
-	Quota   int      `json:"quota"`
-	Exclude []string `json:"exclude"`
+	Enabled     bool     `json:"-"`
+	Drives      []string `json:"drives"`
+	Expiry      int      `json:"expiry"`
+	MaxUse      int      `json:"maxuse"`
+	Quota       int      `json:"quota"`
+	Exclude     []string `json:"exclude"`
+	TriggerHits int      `json:"trigger_hits"`
 }
 
 // UnmarshalJSON - implements JSON unmarshal interface for unmarshalling
@@ -60,7 +61,9 @@ func (cfg *Config) UnmarshalJSON(data []byte) (err error) {
 	if _cfg.Quota < 0 {
 		return errors.New("config quota value should not be null or negative")
 	}
-
+	if _cfg.TriggerHits < 0 {
+		return errors.New("config trigger hits value should not be less than 0")
+	}
 	return nil
 }
 

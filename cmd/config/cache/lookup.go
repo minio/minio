@@ -26,21 +26,25 @@ import (
 
 // Cache ENVs
 const (
-	Drives  = "drives"
-	Exclude = "exclude"
-	Expiry  = "expiry"
-	MaxUse  = "maxuse"
-	Quota   = "quota"
+	Drives      = "drives"
+	Exclude     = "exclude"
+	Expiry      = "expiry"
+	MaxUse      = "maxuse"
+	Quota       = "quota"
+	TriggerHits = "trigger_hits"
 
-	EnvCacheDrives              = "MINIO_CACHE_DRIVES"
-	EnvCacheExclude             = "MINIO_CACHE_EXCLUDE"
-	EnvCacheExpiry              = "MINIO_CACHE_EXPIRY"
-	EnvCacheMaxUse              = "MINIO_CACHE_MAXUSE"
-	EnvCacheQuota               = "MINIO_CACHE_QUOTA"
+	EnvCacheDrives      = "MINIO_CACHE_DRIVES"
+	EnvCacheExclude     = "MINIO_CACHE_EXCLUDE"
+	EnvCacheExpiry      = "MINIO_CACHE_EXPIRY"
+	EnvCacheMaxUse      = "MINIO_CACHE_MAXUSE"
+	EnvCacheQuota       = "MINIO_CACHE_QUOTA"
+	EnvCacheTriggerHits = "MINIO_CACHE_TRIGGER_HITS"
+
 	EnvCacheEncryptionMasterKey = "MINIO_CACHE_ENCRYPTION_MASTER_KEY"
 
-	DefaultExpiry = "90"
-	DefaultQuota  = "80"
+	DefaultExpiry      = "90"
+	DefaultQuota       = "80"
+	DefaultTriggerHits = "0"
 )
 
 // DefaultKVS - default KV settings for caching.
@@ -61,6 +65,10 @@ var (
 		config.KV{
 			Key:   Quota,
 			Value: DefaultQuota,
+		},
+		config.KV{
+			Key:   TriggerHits,
+			Value: DefaultTriggerHits,
 		},
 	}
 )
@@ -132,6 +140,18 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 			return cfg, config.ErrInvalidCacheQuota(err)
 		}
 		cfg.MaxUse = cfg.Quota
+	}
+
+	if triggerhitsStr := env.Get(EnvCacheTriggerHits, kvs.Get(TriggerHits)); triggerhitsStr != "" {
+		cfg.TriggerHits, err = strconv.Atoi(triggerhitsStr)
+		if err != nil {
+			return cfg, config.ErrInvalidCacheTriggerHits(err)
+		}
+		// triggerHits should be a valid value >= 0.
+		if cfg.TriggerHits < 0 {
+			err := errors.New("config trigger hits value should not be less than 0")
+			return cfg, config.ErrInvalidCacheTriggerHits(err)
+		}
 	}
 
 	return cfg, nil

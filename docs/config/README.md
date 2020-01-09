@@ -121,6 +121,7 @@ drives*  (csv)       comma separated mountpoints e.g. "/optane1,/optane2"
 expiry   (number)    cache expiry duration in days e.g. "90"
 quota    (number)    limit cache drive usage in percentage e.g. "90"
 exclude  (csv)       comma separated wildcard exclusion patterns e.g. "bucket/*.tmp,*.exe"
+trigger_hits  (number) cache object after trigger hits
 comment  (sentence)  optionally add a comment to this setting
 ```
 
@@ -134,6 +135,7 @@ MINIO_CACHE_DRIVES*  (csv)       comma separated mountpoints e.g. "/optane1,/opt
 MINIO_CACHE_EXPIRY   (number)    cache expiry duration in days e.g. "90"
 MINIO_CACHE_QUOTA    (number)    limit cache drive usage in percentage e.g. "90"
 MINIO_CACHE_EXCLUDE  (csv)       comma separated wildcard exclusion patterns e.g. "bucket/*.tmp,*.exe"
+MINIO_CACHE_TRIGGER_HITS (number) minimum number of hits before caching an object
 MINIO_CACHE_COMMENT  (sentence)  optionally add a comment to this setting
 ```
 

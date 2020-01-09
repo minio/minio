@@ -50,5 +50,11 @@ var (
 			Optional:    true,
 			Type:        "sentence",
 		},
+		config.HelpKV{
+			Key:         TriggerHits,
+			Description: `minimum number of hits for object to be cached`,
+			Optional:    true,
+			Type:        "number",
+		},
 	}
 )
