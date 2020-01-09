@@ -195,7 +195,7 @@ func handleCommonEnvVars() {
 	} else {
 		// Add found interfaces IP address to global domain IPS,
 		// loopback addresses will be naturally dropped.
-		updateDomainIPs(localIP4)
+		updateDomainIPs(mustGetLocalIP4())
 	}
 
 	// In place update is true by default if the MINIO_UPDATE is not set

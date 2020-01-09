@@ -258,10 +258,6 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 		return toJSONError(ctx, err, args.BucketName)
 	}
 
-	globalNotificationSys.RemoveNotification(args.BucketName)
-	globalPolicySys.Remove(args.BucketName)
-	globalNotificationSys.DeleteBucket(ctx, args.BucketName)
-
 	if globalDNSConfig != nil {
 		if err := globalDNSConfig.Delete(args.BucketName); err != nil {
 			// Deleting DNS entry failed, attempt to create the bucket again.
@@ -269,6 +265,8 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 			return toJSONError(ctx, err)
 		}
 	}
+
+	globalNotificationSys.DeleteBucket(ctx, args.BucketName)
 
 	return nil
 }
@@ -308,7 +306,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	r.Header.Set("delimiter", SlashSeparator)
 
 	// If etcd, dns federation configured list buckets from etcd.
-	if globalDNSConfig != nil {
+	if globalDNSConfig != nil && globalBucketFederation {
 		dnsBuckets, err := globalDNSConfig.List()
 		if err != nil && err != dns.ErrNoEntriesFound {
 			return toJSONError(ctx, err)
@@ -544,7 +542,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 					return toJSONError(ctx, err)
 				}
 			} else if lo.Objects[i].IsCompressed() {
-				var actualSize int64 = lo.Objects[i].GetActualSize()
+				actualSize := lo.Objects[i].GetActualSize()
 				if actualSize < 0 {
 					return toJSONError(ctx, errInvalidDecompressedSize)
 				}
@@ -1403,8 +1401,10 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				info.Size = info.GetActualSize()
 			}
 			header := &zip.FileHeader{
-				Name:   strings.TrimPrefix(objectName, args.Prefix),
-				Method: zip.Deflate,
+				Name:     strings.TrimPrefix(objectName, args.Prefix),
+				Method:   zip.Deflate,
+				Flags:    1 << 11,
+				Modified: info.ModTime,
 			}
 			if hasStringSuffixInSlice(info.Name, standardExcludeCompressExtensions) || hasPattern(standardExcludeCompressContentTypes, info.ContentType) {
 				// We strictly disable compression for standard extensions/content-types.
@@ -2026,13 +2026,20 @@ func toJSONError(ctx context.Context, err error, params ...string) (jerr *json2.
 // toWebAPIError - convert into error into APIError.
 func toWebAPIError(ctx context.Context, err error) APIError {
 	switch err {
+	case errNoAuthToken:
+		return APIError{
+			Code:           "WebTokenMissing",
+			HTTPStatusCode: http.StatusBadRequest,
+			Description:    err.Error(),
+		}
 	case errServerNotInitialized:
 		return APIError{
 			Code:           "XMinioServerNotInitialized",
 			HTTPStatusCode: http.StatusServiceUnavailable,
 			Description:    err.Error(),
 		}
-	case errAuthentication, auth.ErrInvalidAccessKeyLength, auth.ErrInvalidSecretKeyLength, errInvalidAccessKeyID:
+	case errAuthentication, auth.ErrInvalidAccessKeyLength,
+		auth.ErrInvalidSecretKeyLength, errInvalidAccessKeyID:
 		return APIError{
 			Code:           "AccessDenied",
 			HTTPStatusCode: http.StatusForbidden,
@@ -2108,11 +2115,7 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 
 	// Log unexpected and unhandled errors.
 	logger.LogIf(ctx, err)
-	return APIError{
-		Code:           "InternalError",
-		HTTPStatusCode: http.StatusInternalServerError,
-		Description:    err.Error(),
-	}
+	return toAPIError(ctx, err)
 }
 
 // writeWebErrorResponse - set HTTP status code and write error description to the body.

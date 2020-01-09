@@ -53,7 +53,7 @@ func (actionSet ActionSet) Intersection(sset ActionSet) ActionSet {
 // MarshalJSON - encodes ActionSet to JSON data.
 func (actionSet ActionSet) MarshalJSON() ([]byte, error) {
 	if len(actionSet) == 0 {
-		return nil, fmt.Errorf("empty action set")
+		return nil, Errorf("empty actions not allowed")
 	}
 
 	return json.Marshal(actionSet.ToSlice())
@@ -87,7 +87,7 @@ func (actionSet *ActionSet) UnmarshalJSON(data []byte) error {
 	}
 
 	if len(sset) == 0 {
-		return fmt.Errorf("empty action set")
+		return Errorf("empty actions not allowed")
 	}
 
 	*actionSet = make(ActionSet)

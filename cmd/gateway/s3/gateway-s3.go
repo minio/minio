@@ -670,3 +670,8 @@ func (l *s3Objects) IsCompressionSupported() bool {
 func (l *s3Objects) IsEncryptionSupported() bool {
 	return minio.GlobalKMS != nil || len(minio.GlobalGatewaySSE) > 0
 }
+
+// IsReady returns whether the layer is ready to take requests.
+func (l *s3Objects) IsReady(ctx context.Context) bool {
+	return minio.IsBackendOnline(ctx, l.HTTPClient, l.Client.EndpointURL().String())
+}

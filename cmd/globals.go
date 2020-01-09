@@ -36,6 +36,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/pubsub"
 )
 
@@ -137,9 +138,10 @@ var (
 	// globalConfigSys server config system.
 	globalConfigSys *ConfigSys
 
-	globalNotificationSys *NotificationSys
-	globalPolicySys       *PolicySys
-	globalIAMSys          *IAMSys
+	globalNotificationSys  *NotificationSys
+	globalConfigTargetList *event.TargetList
+	globalPolicySys        *PolicySys
+	globalIAMSys           *IAMSys
 
 	globalLifecycleSys *LifecycleSys
 
@@ -209,6 +211,10 @@ var (
 
 	// Allocated etcd endpoint for config and bucket DNS.
 	globalEtcdClient *etcd.Client
+
+	// Is set to true when Bucket federation is requested
+	// and is 'true' when etcdConfig.PathPrefix is empty
+	globalBucketFederation bool
 
 	// Allocated DNS config wrapper over etcd client.
 	globalDNSConfig *dns.CoreDNS

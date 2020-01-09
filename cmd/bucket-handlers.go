@@ -278,7 +278,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 	// If etcd, dns federation configured list buckets from etcd.
 	var bucketsInfo []BucketInfo
-	if globalDNSConfig != nil {
+	if globalDNSConfig != nil && globalBucketFederation {
 		dnsBuckets, err := globalDNSConfig.List()
 		if err != nil && err != dns.ErrNoEntriesFound {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -1017,7 +1017,7 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 	if err != nil {
 		aerr := toAPIError(ctx, err)
 		if err == errConfigNotFound {
-			aerr = errorCodes.ToAPIErr(ErrMethodNotAllowed)
+			aerr = errorCodes.ToAPIErr(ErrObjectLockConfigurationNotAllowed)
 		}
 		writeErrorResponse(ctx, w, aerr, r.URL, guessIsBrowserReq(r))
 		return

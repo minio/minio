@@ -18,7 +18,6 @@ package policy
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/minio/minio/pkg/policy/condition"
@@ -63,7 +62,7 @@ func (r Resource) Match(resource string, conditionValues map[string][]string) bo
 // MarshalJSON - encodes Resource to JSON data.
 func (r Resource) MarshalJSON() ([]byte, error) {
 	if !r.IsValid() {
-		return nil, fmt.Errorf("invalid resource %v", r)
+		return nil, Errorf("invalid resource %v", r)
 	}
 
 	return json.Marshal(r.String())
@@ -93,11 +92,11 @@ func (r *Resource) UnmarshalJSON(data []byte) error {
 // Validate - validates Resource is for given bucket or not.
 func (r Resource) Validate(bucketName string) error {
 	if !r.IsValid() {
-		return fmt.Errorf("invalid resource")
+		return Errorf("invalid resource")
 	}
 
 	if !wildcard.Match(r.BucketName, bucketName) {
-		return fmt.Errorf("bucket name does not match")
+		return Errorf("bucket name does not match")
 	}
 
 	return nil
@@ -106,14 +105,14 @@ func (r Resource) Validate(bucketName string) error {
 // parseResource - parses string to Resource.
 func parseResource(s string) (Resource, error) {
 	if !strings.HasPrefix(s, ResourceARNPrefix) {
-		return Resource{}, fmt.Errorf("invalid resource '%v'", s)
+		return Resource{}, Errorf("invalid resource '%v'", s)
 	}
 
 	pattern := strings.TrimPrefix(s, ResourceARNPrefix)
 	tokens := strings.SplitN(pattern, "/", 2)
 	bucketName := tokens[0]
 	if bucketName == "" {
-		return Resource{}, fmt.Errorf("invalid resource format '%v'", s)
+		return Resource{}, Errorf("invalid resource format '%v'", s)
 	}
 
 	return Resource{

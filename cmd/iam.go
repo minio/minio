@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -365,46 +366,41 @@ func (sys *IAMSys) Init(objAPI ObjectLayer) error {
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
-	// Migrating IAM needs a retry mechanism for
+	// Migrating IAM amd Loading IAM needs a retry mechanism for
 	// the following reasons:
 	//  - Read quorum is lost just after the initialization
 	//    of the object layer.
-	for range newRetryTimerSimple(doneCh) {
-		// Migrate IAM configuration
-		if err := sys.doIAMConfigMigration(objAPI); err != nil {
-			if err == errDiskNotFound ||
-				strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-				strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-				logger.Info("Waiting for IAM subsystem to be initialized..")
-				continue
+	retryCh := newRetryTimerSimple(doneCh)
+	for {
+		select {
+		case <-retryCh:
+			// Migrate IAM configuration
+			if err := sys.doIAMConfigMigration(objAPI); err != nil {
+				if err == errDiskNotFound ||
+					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
+					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
+					logger.Info("Waiting for IAM subsystem to be initialized..")
+					continue
+				}
+				return err
 			}
-			return err
-		}
-		break
-	}
 
-	sys.store.watch(sys)
+			sys.store.watch(sys)
 
-	// Initializing IAM needs a retry mechanism for
-	// the following reasons:
-	//  - Read quorum is lost just after the initialization
-	//    of the object layer.
-	for range newRetryTimerSimple(doneCh) {
-		// Load IAMSys once during boot. Need to pass in
-		// objAPI as server has not yet initialized.
-		if err := sys.store.loadAll(sys, objAPI); err != nil {
-			if err == errDiskNotFound ||
-				strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-				strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-				logger.Info("Waiting for IAM subsystem to be initialized..")
-				continue
+			if err := sys.store.loadAll(sys, objAPI); err != nil {
+				if err == errDiskNotFound ||
+					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
+					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
+					logger.Info("Waiting for IAM subsystem to be initialized..")
+					continue
+				}
+				return err
 			}
-			return err
+			return nil
+		case <-globalOSSignalCh:
+			return fmt.Errorf("Initializing IAM sub-system gracefully stopped")
 		}
-		break
 	}
-
-	return nil
 }
 
 // DeletePolicy - deletes a canned policy from backend or etcd.
@@ -433,6 +429,38 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 	}
 
 	delete(sys.iamPolicyDocsMap, policyName)
+
+	// Delete user-policy mappings that will no longer apply
+	var usersToDel []string
+	var isUserSTS []bool
+	for u, mp := range sys.iamUserPolicyMap {
+		if mp.Policy == policyName {
+			usersToDel = append(usersToDel, u)
+			cr, ok := sys.iamUsersMap[u]
+			if !ok {
+				// This case cannot happen
+				return errNoSuchUser
+			}
+			// User is from STS if the creds are temporary
+			isSTS := cr.IsTemp()
+			isUserSTS = append(isUserSTS, isSTS)
+		}
+	}
+	for i, u := range usersToDel {
+		sys.policyDBSet(u, "", isUserSTS[i], false)
+	}
+
+	// Delete group-policy mappings that will no longer apply
+	var groupsToDel []string
+	for g, mp := range sys.iamGroupPolicyMap {
+		if mp.Policy == policyName {
+			groupsToDel = append(groupsToDel, g)
+		}
+	}
+	for _, g := range groupsToDel {
+		sys.policyDBSet(g, "", false, true)
+	}
+
 	return err
 }
 
@@ -509,6 +537,19 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 		return errServerNotInitialized
 	}
 
+	// First we remove the user from their groups.
+	userInfo, getErr := sys.GetUserInfo(accessKey)
+	if getErr != nil {
+		return getErr
+	}
+	for _, group := range userInfo.MemberOf {
+		removeErr := sys.RemoveUsersFromGroup(group, []string{accessKey})
+		if removeErr != nil {
+			return removeErr
+		}
+	}
+
+	// Next we can remove the user from memory and IAM store
 	sys.Lock()
 	defer sys.Unlock()
 
@@ -600,18 +641,38 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 	}
 
 	for k, v := range sys.iamUsersMap {
-		users[k] = madmin.UserInfo{
-			PolicyName: sys.iamUserPolicyMap[k].Policy,
-			Status: func() madmin.AccountStatus {
-				if v.IsValid() {
-					return madmin.AccountEnabled
-				}
-				return madmin.AccountDisabled
-			}(),
+		if !v.IsTemp() {
+			users[k] = madmin.UserInfo{
+				PolicyName: sys.iamUserPolicyMap[k].Policy,
+				Status: func() madmin.AccountStatus {
+					if v.IsValid() {
+						return madmin.AccountEnabled
+					}
+					return madmin.AccountDisabled
+				}(),
+			}
 		}
 	}
 
 	return users, nil
+}
+
+// IsTempUser - returns if given key is a temporary user.
+func (sys *IAMSys) IsTempUser(name string) (bool, error) {
+	objectAPI := newObjectLayerWithoutSafeModeFn()
+	if objectAPI == nil {
+		return false, errServerNotInitialized
+	}
+
+	sys.RLock()
+	defer sys.RUnlock()
+
+	creds, found := sys.iamUsersMap[name]
+	if !found {
+		return false, errNoSuchUser
+	}
+
+	return creds.IsTemp(), nil
 }
 
 // GetUserInfo - get info on a user.
@@ -634,6 +695,10 @@ func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
 	creds, found := sys.iamUsersMap[name]
 	if !found {
 		return u, errNoSuchUser
+	}
+
+	if creds.IsTemp() {
+		return u, errIAMActionNotAllowed
 	}
 
 	u = madmin.UserInfo{
@@ -670,6 +735,10 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 	cred, ok := sys.iamUsersMap[accessKey]
 	if !ok {
 		return errNoSuchUser
+	}
+
+	if cred.IsTemp() {
+		return errIAMActionNotAllowed
 	}
 
 	uinfo := newUserIdentity(auth.Credentials{
@@ -719,9 +788,15 @@ func (sys *IAMSys) SetUser(accessKey string, uinfo madmin.UserInfo) error {
 		return errServerNotInitialized
 	}
 
+	cr, ok := sys.iamUsersMap[accessKey]
+	if cr.IsTemp() && ok {
+		return errIAMActionNotAllowed
+	}
+
 	if err := sys.store.saveUserIdentity(accessKey, false, u); err != nil {
 		return err
 	}
+
 	sys.iamUsersMap[accessKey] = u.Credentials
 
 	// Set policy if specified.
@@ -794,9 +869,12 @@ func (sys *IAMSys) AddUsersToGroup(group string, members []string) error {
 
 	// Validate that all members exist.
 	for _, member := range members {
-		_, ok := sys.iamUsersMap[member]
+		cr, ok := sys.iamUsersMap[member]
 		if !ok {
 			return errNoSuchUser
+		}
+		if cr.IsTemp() {
+			return errIAMActionNotAllowed
 		}
 	}
 
@@ -856,9 +934,12 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 
 	// Validate that all members exist.
 	for _, member := range members {
-		_, ok := sys.iamUsersMap[member]
+		cr, ok := sys.iamUsersMap[member]
 		if !ok {
 			return errNoSuchUser
+		}
+		if cr.IsTemp() {
+			return errIAMActionNotAllowed
 		}
 	}
 
@@ -1029,17 +1110,17 @@ func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
 	return sys.policyDBSet(name, policy, false, isGroup)
 }
 
-// policyDBSet - sets a policy for user in the policy db. Assumes that
-// caller has sys.Lock().
+// policyDBSet - sets a policy for user in the policy db. Assumes that caller
+// has sys.Lock(). If policy == "", then policy mapping is removed.
 func (sys *IAMSys) policyDBSet(name, policy string, isSTS, isGroup bool) error {
 	if sys.store == nil {
 		return errServerNotInitialized
 	}
 
-	if name == "" || policy == "" {
+	if name == "" {
 		return errInvalidArgument
 	}
-	if _, ok := sys.iamPolicyDocsMap[policy]; !ok {
+	if _, ok := sys.iamPolicyDocsMap[policy]; !ok && policy != "" {
 		return errNoSuchPolicy
 	}
 
@@ -1055,6 +1136,20 @@ func (sys *IAMSys) policyDBSet(name, policy string, isSTS, isGroup bool) error {
 		}
 	}
 
+	// Handle policy mapping removal
+	if policy == "" {
+		if err := sys.store.deleteMappedPolicy(name, isSTS, isGroup); err != nil {
+			return err
+		}
+		if !isGroup {
+			delete(sys.iamUserPolicyMap, name)
+		} else {
+			delete(sys.iamGroupPolicyMap, name)
+		}
+		return nil
+	}
+
+	// Handle policy mapping set/update
 	mp := newMappedPolicy(policy)
 	if err := sys.store.saveMappedPolicy(name, isSTS, isGroup, mp); err != nil {
 		return err

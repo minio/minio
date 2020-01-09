@@ -245,3 +245,9 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, endCh <-chan struc
 
 	return dataUsageInfo
 }
+
+// IsReady - No Op.
+func (xl xlObjects) IsReady(ctx context.Context) bool {
+	logger.CriticalIf(ctx, NotImplemented{})
+	return true
+}

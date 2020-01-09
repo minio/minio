@@ -24,8 +24,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os/user"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -145,6 +147,19 @@ func (s *storageRESTServer) MakeVolHandler(w http.ResponseWriter, r *http.Reques
 	vars := mux.Vars(r)
 	volume := vars[storageRESTVolume]
 	err := s.storage.MakeVol(volume)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+	}
+}
+
+// MakeVolBulkHandler - create multiple volumes as a bulk operation.
+func (s *storageRESTServer) MakeVolBulkHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := mux.Vars(r)
+	volumes := strings.Split(vars[storageRESTVolumes], ",")
+	err := s.storage.MakeVolBulk(volumes...)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}
@@ -594,7 +609,16 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 			}
 			storage, err := newPosix(endpoint.Path)
 			if err != nil {
-				logger.Fatal(config.ErrUnableToWriteInBackend(err),
+				// Show a descriptive error with a hint about how to fix it.
+				var username string
+				if u, err := user.Current(); err == nil {
+					username = u.Username
+				} else {
+					username = "<your-username>"
+				}
+				hint := fmt.Sprintf("Run the following command to add the convenient permissions: `sudo chown %s %s && sudo chmod u+rxw %s`",
+					username, endpoint.Path, endpoint.Path)
+				logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint),
 					"Unable to initialize posix backend")
 			}
 
@@ -605,6 +629,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDiskInfo).HandlerFunc(httpTraceHdrs(server.DiskInfoHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCrawlAndGetDataUsage).HandlerFunc(httpTraceHdrs(server.CrawlAndGetDataUsageHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodMakeVol).HandlerFunc(httpTraceHdrs(server.MakeVolHandler)).Queries(restQueries(storageRESTVolume)...)
+			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodMakeVolBulk).HandlerFunc(httpTraceHdrs(server.MakeVolBulkHandler)).Queries(restQueries(storageRESTVolumes)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatVol).HandlerFunc(httpTraceHdrs(server.StatVolHandler)).Queries(restQueries(storageRESTVolume)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteVol).HandlerFunc(httpTraceHdrs(server.DeleteVolHandler)).Queries(restQueries(storageRESTVolume)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodListVols).HandlerFunc(httpTraceHdrs(server.ListVolsHandler))

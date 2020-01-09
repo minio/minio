@@ -1491,12 +1491,6 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 			}
 		}
 
-		// Initialize meta volume, if volume already exists ignores it, all disks which
-		// are not found are ignored as well.
-		if err = initFormatXLMetaVolume(storageDisks, tmpNewFormats); err != nil {
-			return madmin.HealResultItem{}, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %w", err)
-		}
-
 		// Save formats `format.json` across all disks.
 		if err = saveFormatXLAll(ctx, storageDisks, tmpNewFormats); err != nil {
 			return madmin.HealResultItem{}, err
@@ -1661,4 +1655,31 @@ func (s *xlSets) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, de
 func (s *xlSets) GetMetrics(ctx context.Context) (*Metrics, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return &Metrics{}, NotImplemented{}
+}
+
+// IsReady - Returns true if atleast n/2 disks (read quorum) are online
+func (s *xlSets) IsReady(_ context.Context) bool {
+	s.xlDisksMu.RLock()
+	defer s.xlDisksMu.RUnlock()
+
+	var activeDisks int
+	for i := 0; i < s.setCount; i++ {
+		for j := 0; j < s.drivesPerSet; j++ {
+			if s.xlDisks[i][j] == nil {
+				continue
+			}
+			if !s.xlLockers[i][j].IsOnline() {
+				continue
+			}
+			if s.xlDisks[i][j].IsOnline() {
+				activeDisks++
+			}
+			// Return true if read quorum is available.
+			if activeDisks >= len(s.endpoints)/2 {
+				return true
+			}
+		}
+	}
+	// Disks are not ready
+	return false
 }

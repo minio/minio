@@ -18,7 +18,6 @@ package policy
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/pkg/wildcard"
@@ -42,7 +41,7 @@ func (p Principal) Intersection(principal Principal) set.StringSet {
 // MarshalJSON - encodes Principal to JSON data.
 func (p Principal) MarshalJSON() ([]byte, error) {
 	if !p.IsValid() {
-		return nil, fmt.Errorf("invalid principal %v", p)
+		return nil, Errorf("invalid principal %v", p)
 	}
 
 	// subtype to avoid recursive call to MarshalJSON()
@@ -75,7 +74,7 @@ func (p *Principal) UnmarshalJSON(data []byte) error {
 		}
 
 		if s != "*" {
-			return fmt.Errorf("invalid principal '%v'", s)
+			return Errorf("invalid principal '%v'", s)
 		}
 
 		sp.AWS = set.CreateStringSet("*")

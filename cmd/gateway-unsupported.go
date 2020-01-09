@@ -192,3 +192,8 @@ func (a GatewayUnsupported) IsEncryptionSupported() bool {
 func (a GatewayUnsupported) IsCompressionSupported() bool {
 	return false
 }
+
+// IsReady - No Op.
+func (a GatewayUnsupported) IsReady(_ context.Context) bool {
+	return false
+}

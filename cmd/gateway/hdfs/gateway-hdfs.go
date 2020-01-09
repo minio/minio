@@ -715,3 +715,8 @@ func (n *hdfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, 
 	}
 	return hdfsToObjectErr(ctx, n.clnt.Remove(minio.PathJoin(hdfsSeparator, minioMetaTmpBucket, uploadID)), bucket, object, uploadID)
 }
+
+// IsReady returns whether the layer is ready to take requests.
+func (n *hdfsObjects) IsReady(_ context.Context) bool {
+	return true
+}

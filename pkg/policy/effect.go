@@ -18,7 +18,6 @@ package policy
 
 import (
 	"encoding/json"
-	"fmt"
 )
 
 // Effect - policy statement effect Allow or Deny.
@@ -54,7 +53,7 @@ func (effect Effect) IsValid() bool {
 // MarshalJSON - encodes Effect to JSON data.
 func (effect Effect) MarshalJSON() ([]byte, error) {
 	if !effect.IsValid() {
-		return nil, fmt.Errorf("invalid effect '%v'", effect)
+		return nil, Errorf("invalid effect '%v'", effect)
 	}
 
 	return json.Marshal(string(effect))
@@ -69,7 +68,7 @@ func (effect *Effect) UnmarshalJSON(data []byte) error {
 
 	e := Effect(s)
 	if !e.IsValid() {
-		return fmt.Errorf("invalid effect '%v'", s)
+		return Errorf("invalid effect '%v'", s)
 	}
 
 	*effect = e

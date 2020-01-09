@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -195,6 +194,24 @@ type ZoneEndpoints struct {
 // EndpointZones - list of list of endpoints
 type EndpointZones []ZoneEndpoints
 
+// Add add zone endpoints
+func (l *EndpointZones) Add(zeps ZoneEndpoints) error {
+	existSet := set.NewStringSet()
+	for _, zep := range *l {
+		for _, ep := range zep.Endpoints {
+			existSet.Add(ep.String())
+		}
+	}
+	// Validate if there are duplicate endpoints across zones
+	for _, ep := range zeps.Endpoints {
+		if existSet.Contains(ep.String()) {
+			return fmt.Errorf("duplicate endpoints found")
+		}
+	}
+	*l = append(*l, zeps)
+	return nil
+}
+
 // FirstLocal returns true if the first endpoint is local.
 func (l EndpointZones) FirstLocal() bool {
 	return l[0].Endpoints[0].IsLocal
@@ -230,19 +247,30 @@ func (endpoints Endpoints) GetString(i int) string {
 	return endpoints[i].String()
 }
 
-func (endpoints Endpoints) doAnyHostsResolveToLocalhost() bool {
+func hostResolveToLocalhost(endpoint Endpoint) bool {
+	hostIPs, err := getHostIP(endpoint.Hostname())
+	if err != nil {
+		// Log the message to console about the host resolving
+		reqInfo := (&logger.ReqInfo{}).AppendTags(
+			"host",
+			endpoint.Hostname(),
+		)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err, logger.Application)
+		return false
+	}
+	var loopback int
+	for _, hostIP := range hostIPs.ToSlice() {
+		if net.ParseIP(hostIP).IsLoopback() {
+			loopback++
+		}
+	}
+	return loopback == len(hostIPs)
+}
+
+func (endpoints Endpoints) atleastOneEndpointLocal() bool {
 	for _, endpoint := range endpoints {
-		hostIPs, err := getHostIP(endpoint.Hostname())
-		if err != nil {
-			continue
-		}
-		var loopback int
-		for _, hostIP := range hostIPs.ToSlice() {
-			if net.ParseIP(hostIP).IsLoopback() {
-				loopback++
-			}
-		}
-		if loopback == len(hostIPs) {
+		if endpoint.IsLocal {
 			return true
 		}
 	}
@@ -250,8 +278,9 @@ func (endpoints Endpoints) doAnyHostsResolveToLocalhost() bool {
 }
 
 // UpdateIsLocal - resolves the host and discovers the local host.
-func (endpoints Endpoints) UpdateIsLocal() error {
+func (endpoints Endpoints) UpdateIsLocal(foundPrevLocal bool) error {
 	orchestrated := IsDocker() || IsKubernetes()
+	k8sReplicaSet := IsKubernetesReplicaSet()
 
 	var epsResolved int
 	var foundLocal bool
@@ -284,8 +313,9 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 					endpoints[i].Hostname(),
 				)
 
-				if orchestrated && endpoints.doAnyHostsResolveToLocalhost() {
-					err := errors.New("hosts resolve 127.*, DNS not updated on k8s")
+				if k8sReplicaSet && hostResolveToLocalhost(endpoints[i]) {
+					err := fmt.Errorf("host %s resolves to 127.*, DNS incorrectly configured retrying",
+						endpoints[i])
 					// time elapsed
 					timeElapsed := time.Since(startTime)
 					// log error only if more than 1s elapsed
@@ -329,6 +359,36 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 				} else {
 					resolvedList[i] = true
 					endpoints[i].IsLocal = isLocal
+					if k8sReplicaSet && !endpoints.atleastOneEndpointLocal() && !foundPrevLocal {
+						// In replicated set in k8s deployment, IPs might
+						// get resolved for older IPs, add this code
+						// to ensure that we wait for this server to
+						// participate atleast one disk and be local.
+						//
+						// In special cases for replica set with expanded
+						// zone setups we need to make sure to provide
+						// value of foundPrevLocal from zone1 if we already
+						// found a local setup. Only if we haven't found
+						// previous local we continue to wait to look for
+						// atleast one local.
+						resolvedList[i] = false
+						// time elapsed
+						err := fmt.Errorf("no endpoint is local to this host: %s", endpoints[i])
+						timeElapsed := time.Since(startTime)
+						// log error only if more than 1s elapsed
+						if timeElapsed > time.Second {
+							reqInfo.AppendTags("elapsedTime",
+								humanize.RelTime(startTime,
+									startTime.Add(timeElapsed),
+									"elapsed",
+									"",
+								))
+							ctx := logger.SetReqInfo(context.Background(),
+								reqInfo)
+							logger.LogIf(ctx, err, logger.Application)
+						}
+						continue
+					}
 					epsResolved++
 					if !foundLocal {
 						foundLocal = isLocal
@@ -439,7 +499,7 @@ func checkCrossDeviceMounts(endpoints Endpoints) (err error) {
 }
 
 // CreateEndpoints - validates and creates new endpoints for given args.
-func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, SetupType, error) {
+func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endpoints, SetupType, error) {
 	var endpoints Endpoints
 	var setupType SetupType
 	var err error
@@ -505,7 +565,7 @@ func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, SetupType,
 		return endpoints, setupType, nil
 	}
 
-	if err = endpoints.UpdateIsLocal(); err != nil {
+	if err = endpoints.UpdateIsLocal(foundLocal); err != nil {
 		return endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
 	}
 
@@ -566,13 +626,14 @@ func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, SetupType,
 
 	// All endpoints are pointing to local host
 	if len(endpoints) == localEndpointCount {
-		// If all endpoints have same port number, then this is XL setup using URL style endpoints.
+		// If all endpoints have same port number, Just treat it as distXL setup
+		// using URL style endpoints.
 		if len(localPortSet) == 1 {
 			if len(localServerHostSet) > 1 {
 				return endpoints, setupType,
 					config.ErrInvalidErasureEndpoints(nil).Msg("all local endpoints should not have different hostnames/ips")
 			}
-			return endpoints, XLSetupType, nil
+			return endpoints, DistXLSetupType, nil
 		}
 
 		// Even though all endpoints are local, but those endpoints use different ports.
@@ -695,6 +756,6 @@ func updateDomainIPs(endPoints set.StringSet) {
 		if err != nil {
 			host = ip
 		}
-		return !net.ParseIP(host).IsLoopback()
+		return !net.ParseIP(host).IsLoopback() && host != "localhost"
 	}, "")
 }

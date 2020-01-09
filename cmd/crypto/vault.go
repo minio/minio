@@ -17,7 +17,6 @@ package crypto
 import (
 	"bytes"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -27,7 +26,7 @@ import (
 
 var (
 	//ErrKMSAuthLogin is raised when there is a failure authenticating to KMS
-	ErrKMSAuthLogin = errors.New("Vault service did not return auth info")
+	ErrKMSAuthLogin = Errorf("Vault service did not return auth info")
 )
 
 // VaultKey represents vault encryption key-ring.
@@ -75,17 +74,17 @@ var _ KMS = (*vaultService)(nil) // compiler check that *vaultService implements
 func (v *VaultConfig) Verify() (err error) {
 	switch {
 	case v.Endpoint == "":
-		err = errors.New("crypto: missing hashicorp vault endpoint")
+		err = Errorf("crypto: missing hashicorp vault endpoint")
 	case strings.ToLower(v.Auth.Type) != "approle":
-		err = fmt.Errorf("crypto: invalid hashicorp vault authentication type: %s is not supported", v.Auth.Type)
+		err = Errorf("crypto: invalid hashicorp vault authentication type: %s is not supported", v.Auth.Type)
 	case v.Auth.AppRole.ID == "":
-		err = errors.New("crypto: missing hashicorp vault AppRole ID")
+		err = Errorf("crypto: missing hashicorp vault AppRole ID")
 	case v.Auth.AppRole.Secret == "":
-		err = errors.New("crypto: missing hashicorp vault AppSecret ID")
+		err = Errorf("crypto: missing hashicorp vault AppSecret ID")
 	case v.Key.Name == "":
-		err = errors.New("crypto: missing hashicorp vault key name")
+		err = Errorf("crypto: missing hashicorp vault key name")
 	case v.Key.Version < 0:
-		err = errors.New("crypto: invalid hashicorp vault key version: The key version must not be negative")
+		err = Errorf("crypto: invalid hashicorp vault key version: The key version must not be negative")
 	}
 	return
 }
@@ -107,7 +106,7 @@ func NewVault(config VaultConfig) (KMS, error) {
 	}
 	client, err := vault.NewClient(&vaultCfg)
 	if err != nil {
-		return nil, err
+		return nil, Errorf("crypto: client error %w", err)
 	}
 	if config.Namespace != "" {
 		client.SetNamespace(config.Namespace)
@@ -167,6 +166,7 @@ func (v *vaultService) authenticate() (err error) {
 	var secret *vault.Secret
 	secret, err = v.client.Logical().Write("auth/approle/login", payload)
 	if err != nil {
+		err = Errorf("crypto: client error %w", err)
 		return
 	}
 	if secret == nil {
@@ -217,14 +217,23 @@ func (v *vaultService) GenerateKey(keyID string, ctx Context) (key [32]byte, sea
 	}
 	s, err := v.client.Logical().Write(fmt.Sprintf("/transit/datakey/plaintext/%s", keyID), payload)
 	if err != nil {
-		return key, sealedKey, err
+		return key, sealedKey, Errorf("crypto: client error %w", err)
 	}
-	sealKey := s.Data["ciphertext"].(string)
-	plainKey, err := base64.StdEncoding.DecodeString(s.Data["plaintext"].(string))
+	sealKey, ok := s.Data["ciphertext"].(string)
+	if !ok {
+		return key, sealedKey, Errorf("crypto: incorrect 'ciphertext' key type %v", s.Data["ciphertext"])
+	}
+
+	plainKeyB64, ok := s.Data["plaintext"].(string)
+	if !ok {
+		return key, sealedKey, Errorf("crypto: incorrect 'plaintext' key type %v", s.Data["plaintext"])
+	}
+
+	plainKey, err := base64.StdEncoding.DecodeString(plainKeyB64)
 	if err != nil {
-		return key, sealedKey, err
+		return key, sealedKey, Errorf("crypto: invalid base64 key %w", err)
 	}
-	copy(key[:], []byte(plainKey))
+	copy(key[:], plainKey)
 	return key, []byte(sealKey), nil
 }
 
@@ -243,16 +252,22 @@ func (v *vaultService) UnsealKey(keyID string, sealedKey []byte, ctx Context) (k
 		"ciphertext": string(sealedKey),
 		"context":    base64.StdEncoding.EncodeToString(contextStream.Bytes()),
 	}
+
 	s, err := v.client.Logical().Write(fmt.Sprintf("/transit/decrypt/%s", keyID), payload)
 	if err != nil {
-		return key, err
+		return key, Errorf("crypto: client error %w", err)
 	}
-	base64Key := s.Data["plaintext"].(string)
+
+	base64Key, ok := s.Data["plaintext"].(string)
+	if !ok {
+		return key, Errorf("crypto: incorrect 'plaintext' key type %v", s.Data["plaintext"])
+	}
+
 	plainKey, err := base64.StdEncoding.DecodeString(base64Key)
 	if err != nil {
-		return key, err
+		return key, Errorf("crypto: invalid base64 key %w", err)
 	}
-	copy(key[:], []byte(plainKey))
+	copy(key[:], plainKey)
 	return key, nil
 }
 
@@ -273,7 +288,7 @@ func (v *vaultService) UpdateKey(keyID string, sealedKey []byte, ctx Context) (r
 	}
 	s, err := v.client.Logical().Write(fmt.Sprintf("/transit/rewrap/%s", keyID), payload)
 	if err != nil {
-		return nil, err
+		return nil, Errorf("crypto: client error %w", err)
 	}
 	ciphertext, ok := s.Data["ciphertext"]
 	if !ok {

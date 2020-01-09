@@ -16,7 +16,6 @@ package crypto
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -342,7 +341,7 @@ func LookupVaultConfig(kvs config.KVS) (VaultConfig, error) {
 	if keyVersion := env.Get(EnvKMSVaultKeyVersion, kvs.Get(KMSVaultKeyVersion)); keyVersion != "" {
 		vcfg.Key.Version, err = strconv.Atoi(keyVersion)
 		if err != nil {
-			return vcfg, fmt.Errorf("Unable to parse VaultKeyVersion value (`%s`)", keyVersion)
+			return vcfg, Errorf("Unable to parse VaultKeyVersion value (`%s`)", keyVersion)
 		}
 	}
 

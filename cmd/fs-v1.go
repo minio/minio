@@ -20,10 +20,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/user"
 	"path"
 	"path/filepath"
 	"sort"
@@ -129,7 +131,15 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		if err == errMinDiskSize {
 			return nil, err
 		}
-		return nil, config.ErrUnableToWriteInBackend(err)
+		// Show a descriptive error with a hint about how to fix it.
+		var username string
+		if u, err := user.Current(); err == nil {
+			username = u.Username
+		} else {
+			username = "<your-username>"
+		}
+		hint := fmt.Sprintf("Use 'sudo chown %s %s && sudo chmod u+rxw %s' to provide sufficient permissions.", username, fsPath, fsPath)
+		return nil, config.ErrUnableToWriteInBackend(err).Hint(hint)
 	}
 
 	// Assign a new UUID for FS minio mode. Each server instance
@@ -1345,4 +1355,10 @@ func (fs *FSObjects) IsEncryptionSupported() bool {
 // IsCompressionSupported returns whether compression is applicable for this layer.
 func (fs *FSObjects) IsCompressionSupported() bool {
 	return true
+}
+
+// IsReady - Check if the backend disk is ready to accept traffic.
+func (fs *FSObjects) IsReady(_ context.Context) bool {
+	_, err := os.Stat(fs.fsPath)
+	return err == nil
 }

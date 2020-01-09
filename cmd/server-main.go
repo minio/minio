@@ -134,7 +134,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
 	// (non-)minio process is listening on IPv4 of given port.
-	// To avoid this error sutiation we check for port availability.
+	// To avoid this error situation we check for port availability.
 	logger.FatalIf(checkPortAvailability(globalMinioHost, globalMinioPort), "Unable to start the server")
 
 	globalIsXL = (setupType == XLSetupType)
@@ -225,10 +225,6 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 	// Initialize config system.
 	if err = globalConfigSys.Init(newObject); err != nil {
 		return fmt.Errorf("Unable to initialize config system: %w", err)
-	}
-
-	if err = globalNotificationSys.AddNotificationTargetsFromConfig(globalServerConfig); err != nil {
-		return fmt.Errorf("Unable to initialize notification target(s) from config: %w", err)
 	}
 
 	if globalEtcdClient != nil {

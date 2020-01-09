@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 )
@@ -133,6 +134,7 @@ func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsag
 	}
 
 	var dataUsageInfo DataUsageInfo
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err = json.Unmarshal(dataUsageInfoJSON.Bytes(), &dataUsageInfo)
 	if err != nil {
 		return DataUsageInfo{}, err

@@ -1098,3 +1098,8 @@ func (l *ossObjects) DeleteBucketPolicy(ctx context.Context, bucket string) erro
 func (l *ossObjects) IsCompressionSupported() bool {
 	return false
 }
+
+// IsReady returns whether the layer is ready to take requests.
+func (l *ossObjects) IsReady(ctx context.Context) bool {
+	return minio.IsBackendOnline(ctx, l.Client.HTTPClient, l.Client.Config.Endpoint)
+}

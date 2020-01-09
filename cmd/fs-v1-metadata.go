@@ -90,6 +90,7 @@ func (c *FSChecksumInfoV1) UnmarshalJSON(data []byte) error {
 	}
 
 	var info checksuminfo
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err := json.Unmarshal(data, &info)
 	if err != nil {
 		return err

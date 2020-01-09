@@ -979,6 +979,12 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 
 	var apiErr APIError
 	switch e := err.(type) {
+	case iampolicy.Error:
+		apiErr = APIError{
+			Code:           "XMinioMalformedIAMPolicy",
+			Description:    e.Error(),
+			HTTPStatusCode: http.StatusBadRequest,
+		}
 	case config.Error:
 		apiErr = APIError{
 			Code:           "XMinioConfigError",

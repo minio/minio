@@ -18,7 +18,6 @@ package iampolicy
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 
 	"github.com/minio/minio/pkg/policy"
@@ -81,7 +80,7 @@ func (iamp Policy) IsEmpty() bool {
 // isValid - checks if Policy is valid or not.
 func (iamp Policy) isValid() error {
 	if iamp.Version != DefaultVersion && iamp.Version != "" {
-		return fmt.Errorf("invalid version '%v'", iamp.Version)
+		return Errorf("invalid version '%v'", iamp.Version)
 	}
 
 	for _, statement := range iamp.Statements {
@@ -106,7 +105,7 @@ func (iamp Policy) isValid() error {
 				continue
 			}
 
-			return fmt.Errorf("duplicate actions %v, resources %v found in statements %v, %v",
+			return Errorf("duplicate actions %v, resources %v found in statements %v, %v",
 				actions, resources, iamp.Statements[i], statement)
 		}
 	}
@@ -166,7 +165,7 @@ func ParseConfig(reader io.Reader) (*Policy, error) {
 	decoder := json.NewDecoder(reader)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&iamp); err != nil {
-		return nil, err
+		return nil, Errorf("%w", err)
 	}
 
 	return &iamp, iamp.Validate()

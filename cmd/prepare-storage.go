@@ -223,12 +223,13 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 		// Assign globalDeploymentID on first run for the
 		// minio server managing the first disk
 		globalDeploymentID = format.ID
-	} else {
-		// The first will always recreate some directories inside .minio.sys
-		// such as, tmp, multipart and background-ops
-		if firstDisk {
-			initFormatXLMetaVolume(storageDisks, formatConfigs)
-		}
+		return format, nil
+	}
+
+	// The first will always recreate some directories inside .minio.sys
+	// such as, tmp, multipart and background-ops
+	if firstDisk {
+		initFormatXLMetaVolume(storageDisks, formatConfigs)
 	}
 
 	// Return error when quorum unformatted disks - indicating we are
@@ -288,6 +289,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	if err = formatXLFixLocalDeploymentID(endpoints, storageDisks, format); err != nil {
 		return nil, err
 	}
+
 	return format, nil
 }
 
@@ -305,13 +307,6 @@ func waitForFormatXL(firstDisk bool, endpoints Endpoints, setCount, drivesPerSet
 		return nil, err
 	}
 
-	// Done channel is used to close any lingering retry routine, as soon
-	// as this function returns.
-	doneCh := make(chan struct{})
-
-	// Indicate to our retry routine to exit cleanly, upon this function return.
-	defer close(doneCh)
-
 	// prepare getElapsedTime() to calculate elapsed time since we started trying formatting disks.
 	// All times are rounded to avoid showing milli, micro and nano seconds
 	formatStartTime := time.Now().Round(time.Second)
@@ -319,13 +314,16 @@ func waitForFormatXL(firstDisk bool, endpoints Endpoints, setCount, drivesPerSet
 		return time.Now().Round(time.Second).Sub(formatStartTime).String()
 	}
 
-	// Wait on the jitter retry loop.
-	retryTimerCh := newRetryTimerSimple(doneCh)
+	// Wait on each try for an update.
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	var tries int
 	for {
 		select {
-		case retryCount := <-retryTimerCh:
-			format, err := connectLoadInitFormats(retryCount, firstDisk, endpoints, setCount, drivesPerSet, deploymentID)
+		case <-ticker.C:
+			format, err := connectLoadInitFormats(tries, firstDisk, endpoints, setCount, drivesPerSet, deploymentID)
 			if err != nil {
+				tries++
 				switch err {
 				case errNotFirstDisk:
 					// Fresh setup, wait for first server to be up.

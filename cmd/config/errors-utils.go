@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
+	"net"
 	"syscall"
 
 	"github.com/minio/minio/pkg/color"
@@ -36,22 +36,39 @@ type Err struct {
 	hint   string
 }
 
+// Clone returns a new Err struct with the same information
+func (u Err) Clone() Err {
+	return Err{
+		msg:    u.msg,
+		detail: u.detail,
+		action: u.action,
+		hint:   u.hint,
+	}
+}
+
 // Return the error message
 func (u Err) Error() string {
 	if u.detail == "" {
-		return u.msg
+		if u.msg != "" {
+			return u.msg
+		}
+		return "<nil>"
 	}
 	return u.detail
 }
 
 // Msg - Replace the current error's message
 func (u Err) Msg(m string, args ...interface{}) Err {
-	return Err{
-		msg:    fmt.Sprintf(m, args...),
-		detail: u.detail,
-		action: u.action,
-		hint:   u.hint,
-	}
+	e := u.Clone()
+	e.msg = fmt.Sprintf(m, args...)
+	return e
+}
+
+// Hint - Replace the current error's message
+func (u Err) Hint(m string, args ...interface{}) Err {
+	e := u.Clone()
+	e.hint = fmt.Sprintf(m, args...)
+	return e
 }
 
 // ErrFn function wrapper
@@ -77,6 +94,10 @@ func newErrFn(msg, action, hint string) ErrFn {
 // ErrorToErr inspects the passed error and transforms it
 // to the appropriate UI error.
 func ErrorToErr(err error) Err {
+	if err == nil {
+		return Err{}
+	}
+
 	// If this is already a Err, do nothing
 	if e, ok := err.(Err); ok {
 		return e
@@ -85,9 +106,11 @@ func ErrorToErr(err error) Err {
 	// Show a generic message for known golang errors
 	if errors.Is(err, syscall.EADDRINUSE) {
 		return ErrPortAlreadyInUse(err).Msg("Specified port is already in use")
-	} else if errors.Is(err, syscall.EACCES) {
-		return ErrPortAccess(err).Msg("Insufficient permissions to use specified port")
-	} else if os.IsPermission(err) {
+	} else if errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) {
+		switch err.(type) {
+		case *net.OpError:
+			return ErrPortAccess(err).Msg("Insufficient permissions to use specified port")
+		}
 		return ErrNoPermissionsToAccessDirFiles(err).Msg("Insufficient permissions to access path")
 	} else if errors.Is(err, io.ErrUnexpectedEOF) {
 		return ErrUnexpectedDataContent(err)
@@ -95,7 +118,6 @@ func ErrorToErr(err error) Err {
 		// Failed to identify what type of error this, return a simple UI error
 		return Err{msg: err.Error()}
 	}
-
 }
 
 // FmtError converts a fatal error message to a more clear error

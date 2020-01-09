@@ -595,16 +595,32 @@ func checkPutObjectRetentionAllowed(ctx context.Context, r *http.Request, bucket
 
 // filter object lock metadata if s3:GetObjectRetention permission is denied or if isCopy flag set.
 func filterObjectLockMetadata(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string, isCopy bool, getRetPerms APIErrorCode) map[string]string {
+	// Copy on write
+	dst := metadata
+	var copied bool
+	delKey := func(key string) {
+		if _, ok := metadata[key]; !ok {
+			return
+		}
+		if !copied {
+			dst = make(map[string]string, len(metadata))
+			for k, v := range metadata {
+				dst[k] = v
+			}
+			copied = true
+		}
+		delete(dst, key)
+	}
 	ret := getObjectRetentionMeta(metadata)
 	if ret.Mode == Invalid || isCopy {
-		delete(metadata, xhttp.AmzObjectLockMode)
-		delete(metadata, xhttp.AmzObjectLockRetainUntilDate)
+		delKey(xhttp.AmzObjectLockMode)
+		delKey(xhttp.AmzObjectLockRetainUntilDate)
 		return metadata
 	}
 	if getRetPerms == ErrNone {
-		return metadata
+		return dst
 	}
-	delete(metadata, xhttp.AmzObjectLockMode)
-	delete(metadata, xhttp.AmzObjectLockRetainUntilDate)
-	return metadata
+	delKey(xhttp.AmzObjectLockMode)
+	delKey(xhttp.AmzObjectLockRetainUntilDate)
+	return dst
 }

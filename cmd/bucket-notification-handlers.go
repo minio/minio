@@ -228,6 +228,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	bucketName := vars["bucket"]
 
 	values := r.URL.Query()
+	values.Set(peerRESTListenBucket, bucketName)
 
 	var prefix string
 	if len(values[peerRESTListenPrefix]) > 1 {
@@ -295,6 +296,9 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		if !ok {
 			return false
 		}
+		if ev.S3.Bucket.Name != values.Get(peerRESTListenBucket) {
+			return false
+		}
 		objectName, uerr := url.QueryUnescape(ev.S3.Object.Key)
 		if uerr != nil {
 			objectName = ev.S3.Object.Key
@@ -306,7 +310,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		if peer == nil {
 			continue
 		}
-		peer.Listen(listenCh, doneCh, r.URL.Query())
+		peer.Listen(listenCh, doneCh, values)
 	}
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
