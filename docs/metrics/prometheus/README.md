@@ -120,7 +120,7 @@ The list of metrics and its definition are as follows. (NOTE: instance here is o
 
 - standard go runtime metrics prefixed by `go_`
 - process level metrics prefixed with `process_`
-- prometheus scrap metrics prefixed with `promhttp_`
+- prometheus scrape metrics prefixed with `promhttp_`
 
 - `disk_storage_used` : Disk space used by the disk.
 - `disk_storage_available`: Available disk space left on the disk.
