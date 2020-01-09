@@ -356,6 +356,26 @@ func TestPolicyIsValid(t *testing.T) {
 		},
 	}
 
+	case8Policy := Policy{
+		Version: DefaultVersion,
+		Statements: []Statement{
+			NewStatement(
+				Allow,
+				NewPrincipal("*"),
+				NewActionSet(PutObjectAction),
+				NewResourceSet(NewResource("mybucket", "/myobject*")),
+				condition.NewFunctions(),
+			),
+			NewStatement(
+				Allow,
+				NewPrincipal("*"),
+				NewActionSet(PutObjectAction),
+				NewResourceSet(NewResource("mybucket", "/myobject*")),
+				condition.NewFunctions(),
+			),
+		},
+	}
+
 	testCases := []struct {
 		policy    Policy
 		expectErr bool
@@ -371,8 +391,10 @@ func TestPolicyIsValid(t *testing.T) {
 		{case5Policy, true},
 		// Invalid statement error.
 		{case6Policy, true},
+		// Duplicate statement success different effects.
+		{case7Policy, false},
 		// Duplicate statement error.
-		{case7Policy, true},
+		{case8Policy, true},
 	}
 
 	for i, testCase := range testCases {
@@ -988,6 +1010,27 @@ func TestPolicyUnmarshalJSON(t *testing.T) {
     ]
 }`)
 
+	case11Policy := Policy{
+		ID:      "MyPolicyForMyBucket1",
+		Version: DefaultVersion,
+		Statements: []Statement{
+			NewStatement(
+				Allow,
+				NewPrincipal("*"),
+				NewActionSet(PutObjectAction),
+				NewResourceSet(NewResource("mybucket", "myobject*")),
+				condition.NewFunctions(),
+			),
+			NewStatement(
+				Deny,
+				NewPrincipal("*"),
+				NewActionSet(PutObjectAction),
+				NewResourceSet(NewResource("mybucket", "myobject*")),
+				condition.NewFunctions(),
+			),
+		},
+	}
+
 	testCases := []struct {
 		data           []byte
 		expectedResult Policy
@@ -1005,8 +1048,8 @@ func TestPolicyUnmarshalJSON(t *testing.T) {
 		{case9Data, Policy{}, true},
 		// Duplicate statement error.
 		{case10Data, Policy{}, true},
-		// Duplicate statement error (Effect differs).
-		{case11Data, Policy{}, true},
+		// Duplicate statement success (Effect differs).
+		{case11Data, case11Policy, false},
 	}
 
 	for i, testCase := range testCases {
