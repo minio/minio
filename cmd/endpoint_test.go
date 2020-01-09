@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"flag"
 	"fmt"
 	"net"
 	"net/url"
@@ -25,46 +24,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/minio/cli"
 	"github.com/minio/minio-go/v6/pkg/set"
 )
-
-func TestSubOptimalEndpointInput(t *testing.T) {
-	args1 := []string{"http://localhost/d1", "http://localhost/d2", "http://localhost/d3", "http://localhost/d4"}
-	args2 := []string{"http://example.org/d1", "http://example.com/d1", "http://example.net/d1", "http://example.edu/d1"}
-
-	tests := []struct {
-		setupType SetupType
-		ctx       *cli.Context
-		endpoints EndpointZones
-		isErr     bool
-	}{
-		{
-			setupType: DistXLSetupType,
-			ctx:       cli.NewContext(cli.NewApp(), flag.NewFlagSet("", flag.ContinueOnError), nil),
-			endpoints: mustGetZoneEndpoints(args1...),
-			isErr:     false,
-		},
-		{
-			setupType: DistXLSetupType,
-			ctx:       cli.NewContext(cli.NewApp(), flag.NewFlagSet("", flag.ContinueOnError), nil),
-			endpoints: mustGetZoneEndpoints(args2...),
-			isErr:     false,
-		},
-	}
-	for i, test := range tests {
-		test := test
-		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
-			err := checkEndpointsSubOptimal(test.ctx, test.setupType, test.endpoints)
-			if test.isErr && err == nil {
-				t.Error("expected err but found nil")
-			}
-			if !test.isErr && err != nil {
-				t.Errorf("expected err nil but found an err %s", err)
-			}
-		})
-	}
-}
 
 func TestNewEndpoint(t *testing.T) {
 	u2, _ := url.Parse("https://example.org/path")
