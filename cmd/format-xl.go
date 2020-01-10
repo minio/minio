@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"reflect"
+	"sync"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/config/storageclass"
@@ -756,7 +757,7 @@ func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, driv
 	formats := make([]*formatXLV3, len(storageDisks))
 	wantAtMost := ecDrivesNoConfig(drivesPerSet)
 
-	logger.Info("Formatting zone, %v sets, %v drives per set.", setCount, drivesPerSet)
+	logger.Info("Formatting zone, %v set(s), %v drives per set.", setCount, drivesPerSet)
 	for i := 0; i < setCount; i++ {
 		hostCount := make(map[string]int, drivesPerSet)
 		for j := 0; j < drivesPerSet; j++ {
@@ -769,17 +770,23 @@ func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, driv
 			hostCount[disk.Hostname()]++
 			formats[i*drivesPerSet+j] = newFormat
 		}
-		if len(hostCount) > 1 {
+		if len(hostCount) > 0 {
+			var once sync.Once
 			for host, count := range hostCount {
 				if count > wantAtMost {
 					if host == "" {
 						host = "local"
 					}
-					logger.Info(" * Set %v:", i+1)
-					for j := 0; j < drivesPerSet; j++ {
-						disk := storageDisks[i*drivesPerSet+j]
-						logger.Info("   - Drive: %s", disk.String())
-					}
+					once.Do(func() {
+						if len(hostCount) == 1 {
+							return
+						}
+						logger.Info(" * Set %v:", i+1)
+						for j := 0; j < drivesPerSet; j++ {
+							disk := storageDisks[i*drivesPerSet+j]
+							logger.Info("   - Drive: %s", disk.String())
+						}
+					})
 					logger.Info(color.Yellow("WARNING:")+" Host %v has more than %v drives of set. "+
 						"A host failure will result in data becoming unavailable.", host, wantAtMost)
 				}
