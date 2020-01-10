@@ -121,9 +121,7 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 			return cfg, config.ErrInvalidCacheQuota(err)
 		}
 		cfg.Quota = cfg.MaxUse
-	}
-
-	if quotaStr := env.Get(EnvCacheQuota, kvs.Get(Quota)); quotaStr != "" {
+	} else if quotaStr := env.Get(EnvCacheQuota, kvs.Get(Quota)); quotaStr != "" {
 		cfg.Quota, err = strconv.Atoi(quotaStr)
 		if err != nil {
 			return cfg, config.ErrInvalidCacheQuota(err)

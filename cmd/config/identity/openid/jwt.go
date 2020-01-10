@@ -326,6 +326,11 @@ func LookupConfig(kvs config.KVS, transport *http.Transport, closeRespFn func(io
 			return c, err
 		}
 	}
+
+	if c.ClaimName == "" {
+		c.ClaimName = iampolicy.PolicyName
+	}
+
 	if jwksURL == "" {
 		// Fallback to discovery document jwksURL
 		jwksURL = c.DiscoveryDoc.JwksURI
