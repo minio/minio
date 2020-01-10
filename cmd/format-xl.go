@@ -754,9 +754,10 @@ func fixFormatXLV3(storageDisks []StorageAPI, endpoints Endpoints, formats []*fo
 func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, drivesPerSet int, deploymentID string) (*formatXLV3, error) {
 	format := newFormatXLV3(setCount, drivesPerSet)
 	formats := make([]*formatXLV3, len(storageDisks))
-	logger.Info("Formatting Zone...")
+	wantAtMost := ecDrivesNoConfig(drivesPerSet)
+
+	logger.Info("Formatting zone, %v sets, %v drives per set.", setCount, drivesPerSet)
 	for i := 0; i < setCount; i++ {
-		logger.Info(" * Set %v:", i+1)
 		hostCount := make(map[string]int, drivesPerSet)
 		for j := 0; j < drivesPerSet; j++ {
 			disk := storageDisks[i*drivesPerSet+j]
@@ -765,26 +766,19 @@ func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, driv
 			if deploymentID != "" {
 				newFormat.ID = deploymentID
 			}
-			logger.Info("   - Drive: %s", disk.String())
 			hostCount[disk.Hostname()]++
 			formats[i*drivesPerSet+j] = newFormat
 		}
 		if len(hostCount) > 1 {
-			// Config
-			wantAtMost := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-			if wantAtMost == 0 {
-				cfg, err := storageclass.LookupConfig(nil, drivesPerSet)
-				if err == nil {
-					wantAtMost = cfg.Standard.Parity
-				}
-				if wantAtMost == 0 {
-					wantAtMost = drivesPerSet / 2
-				}
-			}
 			for host, count := range hostCount {
 				if count > wantAtMost {
 					if host == "" {
 						host = "local"
+					}
+					logger.Info(" * Set %v:", i+1)
+					for j := 0; j < drivesPerSet; j++ {
+						disk := storageDisks[i*drivesPerSet+j]
+						logger.Info("   - Drive: %s", disk.String())
 					}
 					logger.Info(color.Yellow("WARNING:")+" Host %v has more than %v drives of set. "+
 						"A host failure will result in data becoming unavailable.", host, wantAtMost)
@@ -799,6 +793,22 @@ func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, driv
 	}
 
 	return getFormatXLInQuorum(formats)
+}
+
+// ecDrivesNoConfig returns the erasure coded drives in a set if no config has been set.
+// It will attempt to read it from env variable and fall back to drives/2.
+func ecDrivesNoConfig(drivesPerSet int) int {
+	ecDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+	if ecDrives == 0 {
+		cfg, err := storageclass.LookupConfig(nil, drivesPerSet)
+		if err == nil {
+			ecDrives = cfg.Standard.Parity
+		}
+		if ecDrives == 0 {
+			ecDrives = drivesPerSet / 2
+		}
+	}
+	return ecDrives
 }
 
 // Make XL backend meta volumes.
