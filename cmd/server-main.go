@@ -200,9 +200,6 @@ func initSafeMode(buckets []BucketInfo) (err error) {
 		}
 	}(objLock)
 
-	// Calls New() and initializes all sub-systems.
-	newAllSubsystems()
-
 	// Migrate all backend configs to encrypted backend configs, optionally
 	// handles rotating keys for encryption.
 	if err = handleEncryptedConfigBackend(newObject, true); err != nil {
@@ -365,6 +362,16 @@ func serverMain(ctx *cli.Context) {
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
+	// Calls New() and initializes all sub-systems.
+	newAllSubsystems()
+
+	// Enable healing to heal drives if possible
+	if globalIsXL {
+		initBackgroundHealing()
+		initLocalDisksAutoHeal()
+		initGlobalHeal()
+	}
+
 	buckets, err := newObject.ListBuckets(context.Background())
 	if err != nil {
 		logger.Fatal(err, "Unable to list buckets")
@@ -390,12 +397,6 @@ func serverMain(ctx *cli.Context) {
 
 	initDataUsageStats()
 	initDailyLifecycle()
-
-	if globalIsXL {
-		initBackgroundHealing()
-		initLocalDisksAutoHeal()
-		initGlobalHeal()
-	}
 
 	// Disable safe mode operation, after all initialization is over.
 	globalObjLayerMutex.Lock()

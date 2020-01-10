@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -37,40 +36,6 @@ type lockRequesterInfo struct {
 // isWriteLock returns whether the lock is a write or read lock.
 func isWriteLock(lri []lockRequesterInfo) bool {
 	return len(lri) == 1 && lri[0].Writer
-}
-
-type errorLocker struct{}
-
-func (d *errorLocker) String() string {
-	return ""
-}
-
-func (d *errorLocker) Lock(args dsync.LockArgs) (reply bool, err error) {
-	return false, errors.New("unable to lock")
-}
-
-func (d *errorLocker) Unlock(args dsync.LockArgs) (reply bool, err error) {
-	return false, errors.New("unable to unlock")
-}
-
-func (d *errorLocker) RLock(args dsync.LockArgs) (reply bool, err error) {
-	return false, errors.New("unable to rlock")
-}
-
-func (d *errorLocker) RUnlock(args dsync.LockArgs) (reply bool, err error) {
-	return false, errors.New("unable to runlock")
-}
-
-func (d *errorLocker) Close() error {
-	return nil
-}
-
-func (d *errorLocker) IsOnline() bool {
-	return false
-}
-
-func (d *errorLocker) Expired(args dsync.LockArgs) (reply bool, err error) {
-	return false, errors.New("unable to check for lock expiration")
 }
 
 // localLocker implements Dsync.NetLocker

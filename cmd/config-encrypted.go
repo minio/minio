@@ -84,7 +84,7 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 			return nil
 		}
 		if !globalActiveCred.IsValid() {
-			return errInvalidArgument
+			return config.ErrMissingCredentialsBackendEncrypted(nil)
 		}
 	}
 
@@ -267,7 +267,12 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 		}
 
 		if !utf8.Valid(data) {
-			return errors.New("config data not in plain-text form")
+			_, err = decryptData(data, globalActiveCred)
+			if err == nil {
+				// Config is already encrypted with right keys
+				continue
+			}
+			return errors.New("config data not in plain-text form or encrypted")
 		}
 
 		cencdata, err = madmin.EncryptData(globalActiveCred.String(), data)
@@ -279,9 +284,11 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 			return err
 		}
 	}
-	if encrypted && globalActiveCred.IsValid() {
+
+	if encrypted && globalActiveCred.IsValid() && activeCredOld.IsValid() {
 		logger.Info("Rotation complete, please make sure to unset MINIO_ACCESS_KEY_OLD and MINIO_SECRET_KEY_OLD envs")
 	}
+
 	return saveKeyEtcd(ctx, client, backendEncryptedFile, backendEncryptedMigrationComplete)
 }
 
@@ -309,7 +316,8 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Crede
 
 	var marker string
 	for {
-		res, err := objAPI.ListObjects(context.Background(), minioMetaBucket, minioConfigPrefix, marker, "", maxObjectList)
+		res, err := objAPI.ListObjects(context.Background(), minioMetaBucket,
+			minioConfigPrefix, marker, "", maxObjectList)
 		if err != nil {
 			return err
 		}
@@ -339,7 +347,12 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Crede
 			}
 
 			if !utf8.Valid(data) {
-				return errors.New("config data not in plain-text form")
+				_, err = decryptData(data, globalActiveCred)
+				if err == nil {
+					// Config is already encrypted with right keys
+					continue
+				}
+				return errors.New("config data not in plain-text form or encrypted")
 			}
 
 			cencdata, err = madmin.EncryptData(globalActiveCred.String(), data)
@@ -359,7 +372,7 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Crede
 		marker = res.NextMarker
 	}
 
-	if encrypted && globalActiveCred.IsValid() {
+	if encrypted && globalActiveCred.IsValid() && activeCredOld.IsValid() {
 		logger.Info("Rotation complete, please make sure to unset MINIO_ACCESS_KEY_OLD and MINIO_SECRET_KEY_OLD envs")
 	}
 

@@ -61,6 +61,7 @@ func (h *healRoutine) run() {
 			if !ok {
 				break
 			}
+
 			if httpServer := newHTTPServerFn(); httpServer != nil {
 				// Wait at max 10 minute for an inprogress request before proceeding to heal
 				waitCount := 600

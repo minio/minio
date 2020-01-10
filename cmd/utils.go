@@ -145,9 +145,10 @@ const (
 	// (Acceptable values range from 1 to 10000 inclusive)
 	globalMaxPartID = 10000
 
-	// Default values used while communicating with the cloud backends
-	defaultDialTimeout   = 30 * time.Second
-	defaultDialKeepAlive = 30 * time.Second
+	// Default values used while communicating for
+	// internode communication.
+	defaultDialTimeout   = 15 * time.Second
+	defaultDialKeepAlive = 20 * time.Second
 )
 
 // isMaxObjectSize - verify if max object size
@@ -350,7 +351,6 @@ func newCustomDialContext(dialTimeout, dialKeepAlive time.Duration) dialContext 
 		dialer := &net.Dialer{
 			Timeout:   dialTimeout,
 			KeepAlive: dialKeepAlive,
-			DualStack: true,
 		}
 
 		return dialer.DialContext(ctx, network, addr)
@@ -363,10 +363,12 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout, dialKeepAlive ti
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           newCustomDialContext(dialTimeout, dialKeepAlive),
+		MaxIdleConns:          256,
 		MaxIdleConnsPerHost:   256,
-		IdleConnTimeout:       60 * time.Second,
-		TLSHandshakeTimeout:   30 * time.Second,
-		ExpectContinueTimeout: 10 * time.Second,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
+		ExpectContinueTimeout: 3 * time.Second,
 		TLSClientConfig:       tlsConfig,
 		// Go net/http automatically unzip if content-type is
 		// gzip disable this feature, as we are always interested
