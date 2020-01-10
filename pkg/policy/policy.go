@@ -92,18 +92,15 @@ func (policy Policy) isValid() error {
 				continue
 			}
 
-			principals := policy.Statements[i].Principal.Intersection(statement.Principal)
-			if principals.IsEmpty() {
+			if !policy.Statements[i].Principal.Equals(statement.Principal) {
 				continue
 			}
 
-			actions := policy.Statements[i].Actions.Intersection(statement.Actions)
-			if len(actions) == 0 {
+			if !policy.Statements[i].Actions.Equals(statement.Actions) {
 				continue
 			}
 
-			resources := policy.Statements[i].Resources.Intersection(statement.Resources)
-			if len(resources) == 0 {
+			if !policy.Statements[i].Resources.Equals(statement.Resources) {
 				continue
 			}
 
@@ -112,7 +109,9 @@ func (policy Policy) isValid() error {
 			}
 
 			return Errorf("duplicate principal %v, actions %v, resouces %v found in statements %v, %v",
-				principals, actions, resources, policy.Statements[i], statement)
+				statement.Principal, statement.Actions,
+				statement.Resources, policy.Statements[i],
+				statement)
 		}
 	}
 

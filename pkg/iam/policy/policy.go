@@ -110,13 +110,11 @@ func (iamp Policy) isValid() error {
 				continue
 			}
 
-			actions := iamp.Statements[i].Actions.Intersection(statement.Actions)
-			if len(actions) == 0 {
+			if !iamp.Statements[i].Actions.Equals(statement.Actions) {
 				continue
 			}
 
-			resources := iamp.Statements[i].Resources.Intersection(statement.Resources)
-			if len(resources) == 0 {
+			if !iamp.Statements[i].Resources.Equals(statement.Resources) {
 				continue
 			}
 
@@ -125,7 +123,7 @@ func (iamp Policy) isValid() error {
 			}
 
 			return Errorf("duplicate actions %v, resources %v found in statements %v, %v",
-				actions, resources, iamp.Statements[i], statement)
+				statement.Actions, statement.Resources, iamp.Statements[i], statement)
 		}
 	}
 
