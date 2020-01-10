@@ -6,15 +6,15 @@ MinIO server exposes two un-authenticated, healthcheck endpoints - liveness prob
 
 This probe is used to identify situations where the server is running but may not behave optimally, i.e. sluggish response or corrupt back-end. Such problems can be *only* fixed by a restart.
 
-Internally, MinIO liveness probe handler does a ListBuckets call. If successful, the server returns 200 OK, otherwise 503 Service Unavailable.
+Internally, MinIO liveness probe handler checks if backend is alive and in read quorum to take requests.
 
 When liveness probe fails, Kubernetes like platforms restart the container.
 
 ### Readiness probe
 
-This probe is used to identify situations where the server is not ready to accept requests yet. In most cases, such conditions recover in some time.
+This probe is used to identify situations where the server is not ready to accept requests yet. In most cases, such conditions recover in some time such as quorum not available on drives due to load.
 
-Internally, MinIO readiness probe handler checks for total go-routines. If the number of go-routines is less than 10000 (threshold), the server returns 200 OK, otherwise 503 Service Unavailable.
+Internally, MinIO readiness probe handler checks for backend is alive and in read quorum then the server returns 200 OK, otherwise 503 Service Unavailable.
 
 Platforms like Kubernetes *do not* forward traffic to a pod until its readiness probe is successful. 
 
