@@ -238,12 +238,6 @@ func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks [
 		t.Fatalf("Test %s: expected to fail but passed instead", instanceType)
 	}
 
-	// as majority of xl.json are not available, we expect uploadID to be not available.
-	expectedErr1 := BucketNotFound{Bucket: testCase.bucketName}
-	if err.Error() != expectedErr1.Error() {
-		t.Fatalf("Test %s: expected error %s, got %s instead.", instanceType, expectedErr1, err)
-	}
-
 	// This causes invalid upload id.
 	for _, disk := range disks {
 		os.RemoveAll(disk)

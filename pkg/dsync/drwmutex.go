@@ -18,6 +18,7 @@ package dsync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	golog "log"
 	"math"
@@ -191,6 +192,12 @@ func lock(ds *Dsync, locks *[]string, lockName, id, source string, isReadLock bo
 		go func(index int, isReadLock bool, c NetLocker) {
 			defer wg.Done()
 
+			g := Granted{index: index}
+			if c == nil {
+				ch <- g
+				return
+			}
+
 			args := LockArgs{
 				UID:      id,
 				Resource: lockName,
@@ -209,7 +216,6 @@ func lock(ds *Dsync, locks *[]string, lockName, id, source string, isReadLock bo
 				}
 			}
 
-			g := Granted{index: index}
 			if locked {
 				g.lockUID = args.UID
 			}
@@ -400,6 +406,11 @@ func unlock(ds *Dsync, locks []string, name string, isReadLock bool, restClnts [
 
 // sendRelease sends a release message to a node that previously granted a lock
 func sendRelease(ds *Dsync, c NetLocker, name, uid string, isReadLock bool) {
+	if c == nil {
+		log("Unable to call RUnlock", errors.New("netLocker is offline"))
+		return
+	}
+
 	args := LockArgs{
 		UID:      uid,
 		Resource: name,

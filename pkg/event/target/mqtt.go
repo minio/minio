@@ -199,7 +199,7 @@ func (target *MQTTTarget) Close() error {
 }
 
 // NewMQTTTarget - creates new MQTT target.
-func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*MQTTTarget, error) {
+func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*MQTTTarget, error) {
 	if args.MaxReconnectInterval == 0 {
 		// Default interval
 		// https://github.com/eclipse/paho.mqtt.golang/blob/master/options.go#L115
@@ -261,13 +261,13 @@ func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce 
 			return nil, err
 		}
 
-		go retryRegister()
-
-		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
-
-		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
+		if !test {
+			go retryRegister()
+			// Replays the events from the store.
+			eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
+			// Start replaying events from the store.
+			go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
+		}
 	} else {
 		if token.Wait() && token.Error() != nil {
 			return nil, token.Error()

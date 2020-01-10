@@ -577,44 +577,37 @@ func (h *healSequence) queueHealTask(path string, healType madmin.HealItemType) 
 func (h *healSequence) healItemsFromSourceCh() error {
 	h.lastHealActivity = UTCNow()
 
-	// Start healing the config prefix.
-	if err := h.healMinioSysMeta(minioConfigPrefix)(); err != nil {
+	if err := h.healItems(); err != nil {
 		logger.LogIf(h.ctx, err)
 	}
 
-	// Start healing the bucket config prefix.
-	if err := h.healMinioSysMeta(bucketConfigPrefix)(); err != nil {
-		logger.LogIf(h.ctx, err)
-	}
+	for {
+		select {
+		case path := <-h.sourceCh:
+			var itemType madmin.HealItemType
+			switch {
+			case path == nopHeal:
+				continue
+			case path == SlashSeparator:
+				itemType = madmin.HealItemMetadata
+			case !strings.Contains(path, SlashSeparator):
+				itemType = madmin.HealItemBucket
+			default:
+				itemType = madmin.HealItemObject
+			}
 
-	// Start healing the background ops prefix.
-	if err := h.healMinioSysMeta(backgroundOpsMetaPrefix)(); err != nil {
-		logger.LogIf(h.ctx, err)
-	}
+			if err := h.queueHealTask(path, itemType); err != nil {
+				logger.LogIf(h.ctx, err)
+			}
 
-	for path := range h.sourceCh {
-
-		var itemType madmin.HealItemType
-		switch {
-		case path == nopHeal:
-			continue
-		case path == SlashSeparator:
-			itemType = madmin.HealItemMetadata
-		case !strings.Contains(path, SlashSeparator):
-			itemType = madmin.HealItemBucket
-		default:
-			itemType = madmin.HealItemObject
+			h.scannedItemsCount++
+			h.lastHealActivity = UTCNow()
+		case <-h.traverseAndHealDoneCh:
+			return nil
+		case <-GlobalServiceDoneCh:
+			return nil
 		}
-
-		if err := h.queueHealTask(path, itemType); err != nil {
-			logger.LogIf(h.ctx, err)
-		}
-
-		h.scannedItemsCount++
-		h.lastHealActivity = UTCNow()
 	}
-
-	return nil
 }
 
 func (h *healSequence) healFromSourceCh() {

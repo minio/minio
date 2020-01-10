@@ -563,7 +563,7 @@ func (s *peerRESTServer) ReloadFormatHandler(w http.ResponseWriter, r *http.Requ
 	vars := mux.Vars(r)
 	dryRunString := vars[peerRESTDryRun]
 	if dryRunString == "" {
-		s.writeErrorResponse(w, errors.New("dry run parameter is missing"))
+		s.writeErrorResponse(w, errors.New("dry-run parameter is missing"))
 		return
 	}
 
@@ -583,6 +583,7 @@ func (s *peerRESTServer) ReloadFormatHandler(w http.ResponseWriter, r *http.Requ
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
 	}
+
 	err := objAPI.ReloadFormat(context.Background(), dryRun)
 	if err != nil {
 		s.writeErrorResponse(w, err)

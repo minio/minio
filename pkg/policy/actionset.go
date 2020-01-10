@@ -38,6 +38,24 @@ func (actionSet ActionSet) Contains(action Action) bool {
 	return found
 }
 
+// Equals - checks whether given action set is equal to current action set or not.
+func (actionSet ActionSet) Equals(sactionSet ActionSet) bool {
+	// If length of set is not equal to length of given set, the
+	// set is not equal to given set.
+	if len(actionSet) != len(sactionSet) {
+		return false
+	}
+
+	// As both sets are equal in length, check each elements are equal.
+	for k := range actionSet {
+		if _, ok := sactionSet[k]; !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
 // Intersection - returns actions available in both ActionSet.
 func (actionSet ActionSet) Intersection(sset ActionSet) ActionSet {
 	nset := NewActionSet()

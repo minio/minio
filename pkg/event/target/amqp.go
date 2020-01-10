@@ -260,11 +260,14 @@ func (target *AMQPTarget) Send(eventKey string) error {
 
 // Close - does nothing and available for interface compatibility.
 func (target *AMQPTarget) Close() error {
+	if target.conn != nil {
+		return target.conn.Close()
+	}
 	return nil
 }
 
 // NewAMQPTarget - creates new AMQP target.
-func NewAMQPTarget(id string, args AMQPArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})) (*AMQPTarget, error) {
+func NewAMQPTarget(id string, args AMQPArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{}), test bool) (*AMQPTarget, error) {
 	var conn *amqp.Connection
 	var err error
 
@@ -293,7 +296,7 @@ func NewAMQPTarget(id string, args AMQPArgs, doneCh <-chan struct{}, loggerOnce 
 		loggerOnce: loggerOnce,
 	}
 
-	if target.store != nil {
+	if target.store != nil && !test {
 		// Replays the events from the store.
 		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
 

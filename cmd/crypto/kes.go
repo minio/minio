@@ -19,7 +19,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -76,13 +75,13 @@ type KesConfig struct {
 func (k KesConfig) Verify() (err error) {
 	switch {
 	case k.Endpoint == "":
-		err = errors.New("crypto: missing kes endpoint")
+		err = Errorf("crypto: missing kes endpoint")
 	case k.CertFile == "":
-		err = errors.New("crypto: missing cert file")
+		err = Errorf("crypto: missing cert file")
 	case k.KeyFile == "":
-		err = errors.New("crypto: missing key file")
+		err = Errorf("crypto: missing key file")
 	case k.DefaultKeyID == "":
-		err = errors.New("crypto: missing default key id")
+		err = Errorf("crypto: missing default key id")
 	}
 	return err
 }
@@ -153,7 +152,7 @@ func (kes *kesService) GenerateKey(keyID string, ctx Context) (key [32]byte, sea
 		return key, nil, err
 	}
 	if len(plainKey) != len(key) {
-		return key, nil, errors.New("crypto: received invalid plaintext key size from KMS")
+		return key, nil, Errorf("crypto: received invalid plaintext key size from KMS")
 	}
 	copy(key[:], plainKey)
 	return key, sealedKey, nil
@@ -176,7 +175,7 @@ func (kes *kesService) UnsealKey(keyID string, sealedKey []byte, ctx Context) (k
 		return key, err
 	}
 	if len(plainKey) != len(key) {
-		return key, errors.New("crypto: received invalid plaintext key size from KMS")
+		return key, Errorf("crypto: received invalid plaintext key size from KMS")
 	}
 	copy(key[:], plainKey)
 	return key, nil
@@ -301,7 +300,7 @@ func (c *kesClient) parseErrorResponse(resp *http.Response) error {
 	if _, err := io.Copy(&errMsg, io.LimitReader(resp.Body, limit)); err != nil {
 		return err
 	}
-	return fmt.Errorf("%s: %s", http.StatusText(resp.StatusCode), errMsg.String())
+	return Errorf("%s: %s", http.StatusText(resp.StatusCode), errMsg.String())
 }
 
 // loadCACertificates returns a new CertPool
@@ -334,7 +333,7 @@ func loadCACertificates(path string) (*x509.CertPool, error) {
 		if os.IsNotExist(err) || os.IsPermission(err) {
 			return rootCAs, nil
 		}
-		return nil, fmt.Errorf("crypto: cannot open '%s': %v", path, err)
+		return nil, Errorf("crypto: cannot open '%s': %v", path, err)
 	}
 
 	// If path is a file, parse as PEM-encoded certifcate
@@ -346,7 +345,7 @@ func loadCACertificates(path string) (*x509.CertPool, error) {
 			return nil, err
 		}
 		if !rootCAs.AppendCertsFromPEM(cert) {
-			return nil, fmt.Errorf("crypto: '%s' is not a valid PEM-encoded certificate", path)
+			return nil, Errorf("crypto: '%s' is not a valid PEM-encoded certificate", path)
 		}
 		return rootCAs, nil
 	}

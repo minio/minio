@@ -33,8 +33,14 @@ var (
 			Optional:    true,
 		},
 		config.HelpKV{
+			Key:         ClaimName,
+			Description: `JWT canned policy claim name, defaults to "policy"`,
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
 			Key:         ClaimPrefix,
-			Description: `JWT claim namespace prefix e.g. "customer1"`,
+			Description: `JWT claim namespace prefix e.g. "customer1/"`,
 			Optional:    true,
 			Type:        "string",
 		},

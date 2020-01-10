@@ -1288,14 +1288,14 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 		return combinedPolicy.IsAllowed(args)
 	}
 
-	pname, ok := args.Claims[iamPolicyName()]
+	pnameSlice, ok := args.GetPolicies(iamPolicyClaimName())
 	if !ok {
-		// When claims are set, it should have a "policy" field.
+		// When claims are set, it should have a policy claim field.
 		return false
 	}
-	pnameStr, ok := pname.(string)
-	if !ok {
-		// When claims has "policy" field, it should be string.
+
+	// When claims are set, it should have a policy claim field.
+	if len(pnameSlice) == 0 {
 		return false
 	}
 
@@ -1310,7 +1310,7 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 	}
 	name := mp.Policy
 
-	if pnameStr != name {
+	if pnameSlice[0] != name {
 		// When claims has a policy, it should match the
 		// policy of args.AccountName which server remembers.
 		// if not reject such requests.
@@ -1319,36 +1319,36 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 
 	// Now check if we have a sessionPolicy.
 	spolicy, ok := args.Claims[iampolicy.SessionPolicyName]
-	if !ok {
-		// Sub policy not set, this is most common since subPolicy
-		// is optional, use the top level policy only.
-		p, ok := sys.iamPolicyDocsMap[pnameStr]
-		return ok && p.IsAllowed(args)
+	if ok {
+		spolicyStr, ok := spolicy.(string)
+		if !ok {
+			// Sub policy if set, should be a string reject
+			// malformed/malicious requests.
+			return false
+		}
+
+		// Check if policy is parseable.
+		subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
+		if err != nil {
+			// Log any error in input session policy config.
+			logger.LogIf(context.Background(), err)
+			return false
+		}
+
+		// Policy without Version string value reject it.
+		if subPolicy.Version == "" {
+			return false
+		}
+
+		// Sub policy is set and valid.
+		p, ok := sys.iamPolicyDocsMap[pnameSlice[0]]
+		return ok && p.IsAllowed(args) && subPolicy.IsAllowed(args)
 	}
 
-	spolicyStr, ok := spolicy.(string)
-	if !ok {
-		// Sub policy if set, should be a string reject
-		// malformed/malicious requests.
-		return false
-	}
-
-	// Check if policy is parseable.
-	subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
-	if err != nil {
-		// Log any error in input session policy config.
-		logger.LogIf(context.Background(), err)
-		return false
-	}
-
-	// Policy without Version string value reject it.
-	if subPolicy.Version == "" {
-		return false
-	}
-
-	// Sub policy is set and valid.
-	p, ok := sys.iamPolicyDocsMap[pnameStr]
-	return ok && p.IsAllowed(args) && subPolicy.IsAllowed(args)
+	// Sub policy not set, this is most common since subPolicy
+	// is optional, use the top level policy only.
+	p, ok := sys.iamPolicyDocsMap[pnameSlice[0]]
+	return ok && p.IsAllowed(args)
 }
 
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
