@@ -125,8 +125,8 @@ The list of metrics and its definition are as follows. (NOTE: instance here is o
 - `disk_storage_used` : Disk space used by the disk.
 - `disk_storage_available`: Available disk space left on the disk.
 - `disk_storage_total`: Total disk space on the disk.
-- `disks_offline`: Total number of offline disks in current MinIO instance.
-- `disks_total`: Total number of disks in current MinIO instance.
+- `minio_disks_offline`: Total number of offline disks in current MinIO instance.
+- `minio_disks_total`: Total number of disks in current MinIO instance.
 - `s3_requests_total`: Total number of s3 requests in current MinIO instance.
 - `s3_errors_total`: Total number of errors in s3 requests in current MinIO instance.
 - `s3_requests_current`: Total number of active s3 requests in current MinIO instance.
@@ -163,8 +163,8 @@ This migration guide applies for older releases or any releases before `RELEASE.
 
 The migrations include
 
-    - `minio_total_disks` to `disks_total`
-    - `minio_offline_disks` to `disks_offline`
+    - `minio_total_disks` to `minio_disks_total`
+    - `minio_offline_disks` to `minio_disks_offline`
 
 ### MinIO disk level metrics - `disk_storage_*`
 
