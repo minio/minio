@@ -190,11 +190,11 @@ func contains(slice interface{}, elem interface{}) bool {
 // provide any API to calculate the profiler file path in the
 // disk since the name of this latter is randomly generated.
 type profilerWrapper struct {
-	stopFn func(w io.Writer) error
+	stopFn func() ([]byte, error)
 }
 
-func (p profilerWrapper) Stop(w io.Writer) error {
-	p.stopFn(w)
+func (p profilerWrapper) Stop() ([]byte, error) {
+	return p.stopFn()
 }
 
 // Returns current profile data, returns error if there is no active
@@ -210,11 +210,12 @@ func getProfileData() (map[string][]byte, error) {
 	dst := make(map[string][]byte, len(globalProfiler))
 	for typ, prof := range globalProfiler {
 		// Stop the profiler
-		var buf bytes.Buffer
-		prof.Stop(&buf)
+		var err error
+		buf, err := prof.Stop()
 		delete(globalProfiler, typ)
-
-		dst[typ] = buf.Bytes()
+		if err == nil {
+			dst[typ] = buf
+		}
 	}
 	return dst, nil
 }
@@ -240,38 +241,39 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 		if err != nil {
 			return nil, err
 		}
-		prof.stopFn = func(w io.Writer) error {
+		prof.stopFn = func() ([]byte, error) {
 			pprof.StopCPUProfile()
 			err := f.Close()
 			if err != nil {
-				return err
+				return nil, err
 			}
-			f, err := os.Open(fn)
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(w, f)
-			return err
+			defer os.RemoveAll(dirPath)
+			return ioutil.ReadFile(fn)
 		}
 	case "mem":
 		old := runtime.MemProfileRate
 		runtime.MemProfileRate = 1
-		prof.stopFn = func(w io.Writer) error {
+		prof.stopFn = func() ([]byte, error) {
+			var buf bytes.Buffer
 			runtime.MemProfileRate = old
-			return pprof.Lookup("heap").WriteTo(w, 0)
-
+			err := pprof.Lookup("heap").WriteTo(&buf, 0)
+			return buf.Bytes(), err
 		}
 	case "block":
 		runtime.SetBlockProfileRate(1)
-		prof.stopFn = func(w io.Writer) error {
+		prof.stopFn = func() ([]byte, error) {
+			var buf bytes.Buffer
 			runtime.SetBlockProfileRate(0)
-			return pprof.Lookup("block").WriteTo(w, 0)
+			err := pprof.Lookup("block").WriteTo(&buf, 0)
+			return buf.Bytes(), err
 		}
 	case "mutex":
 		runtime.SetMutexProfileFraction(1)
-		prof.stopFn = func(w io.Writer) error {
+		prof.stopFn = func() ([]byte, error) {
+			var buf bytes.Buffer
 			runtime.SetMutexProfileFraction(0)
-			return pprof.Lookup("mutex").WriteTo(w, 0)
+			err := pprof.Lookup("mutex").WriteTo(&buf, 0)
+			return buf.Bytes(), err
 		}
 	case "trace":
 		dirPath, err := ioutil.TempDir("", "profile")
@@ -287,32 +289,26 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 		if err != nil {
 			return nil, err
 		}
-		prof.stopFn = func(w io.Writer) error {
+		prof.stopFn = func() ([]byte, error) {
 			trace.Stop()
 			err := f.Close()
 			if err != nil {
-				return err
+				return nil, err
 			}
-			f, err := os.Open(fn)
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(w, f)
-			return err
+			defer os.RemoveAll(dirPath)
+			return ioutil.ReadFile(fn)
 		}
 	default:
 		return nil, errors.New("profiler type unknown")
 	}
 
-	return &profilerWrapper{
-		stopFn: prof.Stop,
-	}, nil
+	return prof, nil
 }
 
 // minioProfiler - minio profiler interface.
 type minioProfiler interface {
 	// Stop the profiler
-	Stop(w io.Writer) error
+	Stop() ([]byte, error)
 }
 
 // Global profiler to be used by service go-routine.

@@ -417,7 +417,7 @@ func (s *peerRESTServer) StartProfilingHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	for _, profiler := range profiles {
-		prof, err := startProfiler(profiler, "")
+		prof, err := startProfiler(profiler)
 		if err != nil {
 			s.writeErrorResponse(w, err)
 			return
