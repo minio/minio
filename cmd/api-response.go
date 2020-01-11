@@ -721,7 +721,7 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 	case "AccessDenied":
 		// The request is from browser and also if browser
 		// is enabled we need to redirect.
-		if writeBrowserRedirect(w, browser, reqURL.Path) {
+		if writeBrowserRedirectResponse(w, reqURL, browser) {
 			return
 		}
 	}
@@ -733,9 +733,9 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
 }
 
-func writeBrowserRedirect(w http.ResponseWriter, browser bool, reqPath string) bool {
+func writeBrowserRedirectResponse(w http.ResponseWriter, reqURL *url.URL, browser bool) bool {
 	if browser && globalBrowserEnabled && globalBrowserRedirect {
-		w.Header().Set(xhttp.Location, minioReservedBucketPath+reqPath)
+		w.Header().Set(xhttp.Location, minioReservedBucketPath+reqURL.Path)
 		w.WriteHeader(http.StatusTemporaryRedirect)
 		return true
 	}
@@ -804,7 +804,7 @@ func writeCustomErrorResponseXML(ctx context.Context, w http.ResponseWriter, err
 	case "AccessDenied":
 		// The request is from browser and also if browser
 		// is enabled we need to redirect.
-		if writeBrowserRedirect(w, browser, reqURL.Path) {
+		if writeBrowserRedirectResponse(w, reqURL, browser) {
 			return
 		}
 	}
