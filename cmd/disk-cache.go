@@ -223,7 +223,10 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		}
 		if cc.noStore {
 			c.cacheStats.incMiss()
-			return c.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+			bReader, err := c.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+			bReader.ObjInfo.CacheLookupStatus = CacheHit
+			bReader.ObjInfo.CacheStatus = CacheMiss
+			return bReader, err
 		}
 	}
 
@@ -272,8 +275,14 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		default:
 		}
 	}
+
+	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
+	// Record if cache has a hit that was invalidated by ETag verification
+	if cacheErr == nil {
+		bkReader.ObjInfo.CacheLookupStatus = CacheHit
+	}
 	if !dcache.diskAvailable(objInfo.Size) {
-		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
+		return bkReader, bkErr
 	}
 
 	if rs != nil {
@@ -290,12 +299,9 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 				c.put(ctx, dcache, bucket, object, bReader, bReader.ObjInfo.Size, rs, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)})
 			}
 		}()
-		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
+		return bkReader, bkErr
 	}
-	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
-	if bkErr != nil {
-		return nil, bkErr
-	}
+
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()
 	teeReader := io.TeeReader(bkReader, pipeWriter)
