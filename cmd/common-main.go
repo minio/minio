@@ -163,6 +163,11 @@ func handleCommonEnvVars() {
 		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
 	}
 
+	globalBrowserRedirect, err = config.ParseBool(env.Get(config.EnvBrowserRedirect, config.EnableOn))
+	if err != nil {
+		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER_REDIRECT value in environment variable")
+	}
+
 	domains := env.Get(config.EnvDomain, "")
 	if len(domains) != 0 {
 		for _, domainName := range strings.Split(domains, config.ValueSeparator) {
