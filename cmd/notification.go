@@ -319,36 +319,39 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 
 		profilingDataFound = true
 
-		// Send profiling data to zip as file
-		header, zerr := zip.FileInfoHeader(dummyFileInfo{
-			name:    fmt.Sprintf("profiling-%s.pprof", client.host.String()),
-			size:    int64(len(data)),
-			mode:    0600,
-			modTime: UTCNow(),
-			isDir:   false,
-			sys:     nil,
-		})
-		if zerr != nil {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
-			ctx := logger.SetReqInfo(ctx, reqInfo)
-			logger.LogIf(ctx, zerr)
-			continue
-		}
-		zwriter, zerr := zipWriter.CreateHeader(header)
-		if zerr != nil {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
-			ctx := logger.SetReqInfo(ctx, reqInfo)
-			logger.LogIf(ctx, zerr)
-			continue
-		}
-		if _, err = io.Copy(zwriter, bytes.NewBuffer(data)); err != nil {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
-			ctx := logger.SetReqInfo(ctx, reqInfo)
-			logger.LogIf(ctx, err)
-			continue
+		for typ, data := range data {
+			// Send profiling data to zip as file
+			header, zerr := zip.FileInfoHeader(dummyFileInfo{
+				name:    fmt.Sprintf("profiling-%s-%s.pprof", client.host.String(), typ),
+				size:    int64(len(data)),
+				mode:    0600,
+				modTime: UTCNow(),
+				isDir:   false,
+				sys:     nil,
+			})
+			if zerr != nil {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
+				ctx := logger.SetReqInfo(ctx, reqInfo)
+				logger.LogIf(ctx, zerr)
+				continue
+			}
+			zwriter, zerr := zipWriter.CreateHeader(header)
+			if zerr != nil {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
+				ctx := logger.SetReqInfo(ctx, reqInfo)
+				logger.LogIf(ctx, zerr)
+				continue
+			}
+			if _, err = io.Copy(zwriter, bytes.NewBuffer(data)); err != nil {
+				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
+				ctx := logger.SetReqInfo(ctx, reqInfo)
+				logger.LogIf(ctx, err)
+				continue
+			}
 		}
 	}
 
+	// Local host
 	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -366,25 +369,27 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 	profilingDataFound = true
 
 	// Send profiling data to zip as file
-	header, zerr := zip.FileInfoHeader(dummyFileInfo{
-		name:    fmt.Sprintf("profiling-%s.pprof", thisAddr),
-		size:    int64(len(data)),
-		mode:    0600,
-		modTime: UTCNow(),
-		isDir:   false,
-		sys:     nil,
-	})
-	if zerr != nil {
-		return profilingDataFound
-	}
+	for typ, data := range data {
+		header, zerr := zip.FileInfoHeader(dummyFileInfo{
+			name:    fmt.Sprintf("profiling-%s-%s.pprof", thisAddr, typ),
+			size:    int64(len(data)),
+			mode:    0600,
+			modTime: UTCNow(),
+			isDir:   false,
+			sys:     nil,
+		})
+		if zerr != nil {
+			return profilingDataFound
+		}
 
-	zwriter, zerr := zipWriter.CreateHeader(header)
-	if zerr != nil {
-		return profilingDataFound
-	}
+		zwriter, zerr := zipWriter.CreateHeader(header)
+		if zerr != nil {
+			return profilingDataFound
+		}
 
-	if _, err = io.Copy(zwriter, bytes.NewBuffer(data)); err != nil {
-		return profilingDataFound
+		if _, err = io.Copy(zwriter, bytes.NewBuffer(data)); err != nil {
+			return profilingDataFound
+		}
 	}
 
 	return profilingDataFound
