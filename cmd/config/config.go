@@ -621,6 +621,12 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 	currKVS, ok := c[subSys][tgt]
 	if !ok {
 		currKVS = defaultKVS[subSys]
+	} else {
+		for _, kv := range defaultKVS[subSys] {
+			if _, ok = currKVS.Lookup(kv.Key); !ok {
+				currKVS.Set(kv.Key, kv.Value)
+			}
+		}
 	}
 
 	for _, kv := range kvs {
