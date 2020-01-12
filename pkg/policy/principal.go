@@ -33,6 +33,11 @@ func (p Principal) IsValid() bool {
 	return len(p.AWS) != 0
 }
 
+// Equals - returns true if principals are equal.
+func (p Principal) Equals(pp Principal) bool {
+	return p.AWS.Equals(pp.AWS)
+}
+
 // Intersection - returns principals available in both Principal.
 func (p Principal) Intersection(principal Principal) set.StringSet {
 	return p.AWS.Intersection(principal.AWS)

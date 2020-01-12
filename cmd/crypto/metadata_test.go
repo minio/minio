@@ -188,8 +188,16 @@ var s3ParseMetadataTests = []struct {
 func TestS3ParseMetadata(t *testing.T) {
 	for i, test := range s3ParseMetadataTests {
 		keyID, dataKey, sealedKey, err := S3.ParseMetadata(test.Metadata)
-		if err != test.ExpectedErr {
+		if err != nil && test.ExpectedErr == nil {
 			t.Errorf("Test %d: got error '%v' - want error '%v'", i, err, test.ExpectedErr)
+		}
+		if err == nil && test.ExpectedErr != nil {
+			t.Errorf("Test %d: got error '%v' - want error '%v'", i, err, test.ExpectedErr)
+		}
+		if err != nil && test.ExpectedErr != nil {
+			if err.Error() != test.ExpectedErr.Error() {
+				t.Errorf("Test %d: got error '%v' - want error '%v'", i, err, test.ExpectedErr)
+			}
 		}
 		if !bytes.Equal(dataKey, test.DataKey) {
 			t.Errorf("Test %d: got data key '%v' - want data key '%v'", i, dataKey, test.DataKey)
@@ -267,8 +275,16 @@ func TestCreateMultipartMetadata(t *testing.T) {
 func TestSSECParseMetadata(t *testing.T) {
 	for i, test := range ssecParseMetadataTests {
 		sealedKey, err := SSEC.ParseMetadata(test.Metadata)
-		if err != test.ExpectedErr {
+		if err != nil && test.ExpectedErr == nil {
 			t.Errorf("Test %d: got error '%v' - want error '%v'", i, err, test.ExpectedErr)
+		}
+		if err == nil && test.ExpectedErr != nil {
+			t.Errorf("Test %d: got error '%v' - want error '%v'", i, err, test.ExpectedErr)
+		}
+		if err != nil && test.ExpectedErr != nil {
+			if err.Error() != test.ExpectedErr.Error() {
+				t.Errorf("Test %d: got error '%v' - want error '%v'", i, err, test.ExpectedErr)
+			}
 		}
 		if sealedKey.Algorithm != test.SealedKey.Algorithm {
 			t.Errorf("Test %d: got sealed key algorithm '%v' - want sealed key algorithm '%v'", i, sealedKey.Algorithm, test.SealedKey.Algorithm)

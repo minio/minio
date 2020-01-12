@@ -225,7 +225,7 @@ func (client *peerRESTClient) StartProfiling(profiler string) error {
 }
 
 // DownloadProfileData - download profiled data from a remote node.
-func (client *peerRESTClient) DownloadProfileData() (data []byte, err error) {
+func (client *peerRESTClient) DownloadProfileData() (data map[string][]byte, err error) {
 	respBody, err := client.call(peerRESTMethodDownloadProfilingData, nil, nil, -1)
 	if err != nil {
 		return

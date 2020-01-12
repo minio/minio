@@ -77,6 +77,7 @@ KEY:
 notify_amqp[:name]  publish bucket notifications to AMQP endpoints
 
 ARGS:
+MINIO_NOTIFY_AMQP_ENABLE         (on|off)    enable amqp notifications, default is 'off'
 MINIO_NOTIFY_AMQP_URL*           (url)       AMQP server endpoint e.g. `amqp://myuser:mypassword@localhost:5672`
 MINIO_NOTIFY_AMQP_EXCHANGE       (string)    name of the AMQP exchange
 MINIO_NOTIFY_AMQP_EXCHANGE_TYPE  (string)    AMQP exchange type

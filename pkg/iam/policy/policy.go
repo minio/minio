@@ -19,6 +19,7 @@ package iampolicy
 import (
 	"encoding/json"
 	"io"
+	"strings"
 
 	"github.com/minio/minio/pkg/policy"
 )
@@ -35,6 +36,20 @@ type Args struct {
 	IsOwner         bool                   `json:"owner"`
 	ObjectName      string                 `json:"object"`
 	Claims          map[string]interface{} `json:"claims"`
+}
+
+// GetPolicies get policies
+func (a Args) GetPolicies(policyClaimName string) ([]string, bool) {
+	pname, ok := a.Claims[policyClaimName]
+	if !ok {
+		return nil, false
+	}
+	pnameStr, ok := pname.(string)
+	if ok {
+		return strings.Split(pnameStr, ","), true
+	}
+	pnameSlice, ok := pname.([]string)
+	return pnameSlice, ok
 }
 
 // Policy - iam bucket iamp.
@@ -91,13 +106,15 @@ func (iamp Policy) isValid() error {
 
 	for i := range iamp.Statements {
 		for _, statement := range iamp.Statements[i+1:] {
-			actions := iamp.Statements[i].Actions.Intersection(statement.Actions)
-			if len(actions) == 0 {
+			if iamp.Statements[i].Effect != statement.Effect {
 				continue
 			}
 
-			resources := iamp.Statements[i].Resources.Intersection(statement.Resources)
-			if len(resources) == 0 {
+			if !iamp.Statements[i].Actions.Equals(statement.Actions) {
+				continue
+			}
+
+			if !iamp.Statements[i].Resources.Equals(statement.Resources) {
 				continue
 			}
 
@@ -106,7 +123,7 @@ func (iamp Policy) isValid() error {
 			}
 
 			return Errorf("duplicate actions %v, resources %v found in statements %v, %v",
-				actions, resources, iamp.Statements[i], statement)
+				statement.Actions, statement.Resources, iamp.Statements[i], statement)
 		}
 	}
 

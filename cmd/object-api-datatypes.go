@@ -143,6 +143,11 @@ type ObjectInfo struct {
 	// Date and time at which the object is no longer able to be cached
 	Expires time.Time
 
+	// CacheStatus sets status of whether this is a cache hit/miss
+	CacheStatus CacheStatusType
+	// CacheLookupStatus sets whether a cacheable response is present in the cache
+	CacheLookupStatus CacheStatusType
+
 	// Specify object storage class
 	StorageClass string
 
