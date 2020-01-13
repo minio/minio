@@ -19,6 +19,7 @@ package logger
 import (
 	"fmt"
 	"regexp"
+	"runtime"
 
 	"github.com/minio/minio/pkg/color"
 )
@@ -32,18 +33,27 @@ func ansiEscape(format string, args ...interface{}) {
 }
 
 func ansiMoveRight(n int) {
+	if runtime.GOOS == "windows" {
+		return
+	}
 	if color.IsTerminal() {
 		ansiEscape("[%dC", n)
 	}
 }
 
 func ansiSaveAttributes() {
+	if runtime.GOOS == "windows" {
+		return
+	}
 	if color.IsTerminal() {
 		ansiEscape("7")
 	}
 }
 
 func ansiRestoreAttributes() {
+	if runtime.GOOS == "windows" {
+		return
+	}
 	if color.IsTerminal() {
 		ansiEscape("8")
 	}
