@@ -53,6 +53,10 @@ func (d *naughtyDisk) IsOnline() bool {
 	return d.disk.IsOnline()
 }
 
+func (*naughtyDisk) Hostname() string {
+	return ""
+}
+
 func (d *naughtyDisk) LastError() (err error) {
 	return nil
 }

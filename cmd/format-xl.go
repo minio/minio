@@ -19,15 +19,17 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"reflect"
-
-	"encoding/hex"
+	"sync"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/sync/errgroup"
 	sha256 "github.com/minio/sha256-simd"
 )
@@ -753,15 +755,42 @@ func fixFormatXLV3(storageDisks []StorageAPI, endpoints Endpoints, formats []*fo
 func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, drivesPerSet int, deploymentID string) (*formatXLV3, error) {
 	format := newFormatXLV3(setCount, drivesPerSet)
 	formats := make([]*formatXLV3, len(storageDisks))
+	wantAtMost := ecDrivesNoConfig(drivesPerSet)
 
+	logger.Info("Formatting zone, %v set(s), %v drives per set.", setCount, drivesPerSet)
 	for i := 0; i < setCount; i++ {
+		hostCount := make(map[string]int, drivesPerSet)
 		for j := 0; j < drivesPerSet; j++ {
+			disk := storageDisks[i*drivesPerSet+j]
 			newFormat := format.Clone()
 			newFormat.XL.This = format.XL.Sets[i][j]
 			if deploymentID != "" {
 				newFormat.ID = deploymentID
 			}
+			hostCount[disk.Hostname()]++
 			formats[i*drivesPerSet+j] = newFormat
+		}
+		if len(hostCount) > 0 {
+			var once sync.Once
+			for host, count := range hostCount {
+				if count > wantAtMost {
+					if host == "" {
+						host = "local"
+					}
+					once.Do(func() {
+						if len(hostCount) == 1 {
+							return
+						}
+						logger.Info(" * Set %v:", i+1)
+						for j := 0; j < drivesPerSet; j++ {
+							disk := storageDisks[i*drivesPerSet+j]
+							logger.Info("   - Drive: %s", disk.String())
+						}
+					})
+					logger.Info(color.Yellow("WARNING:")+" Host %v has more than %v drives of set. "+
+						"A host failure will result in data becoming unavailable.", host, wantAtMost)
+				}
+			}
 		}
 	}
 
@@ -771,6 +800,22 @@ func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, driv
 	}
 
 	return getFormatXLInQuorum(formats)
+}
+
+// ecDrivesNoConfig returns the erasure coded drives in a set if no config has been set.
+// It will attempt to read it from env variable and fall back to drives/2.
+func ecDrivesNoConfig(drivesPerSet int) int {
+	ecDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+	if ecDrives == 0 {
+		cfg, err := storageclass.LookupConfig(nil, drivesPerSet)
+		if err == nil {
+			ecDrives = cfg.Standard.Parity
+		}
+		if ecDrives == 0 {
+			ecDrives = drivesPerSet / 2
+		}
+	}
+	return ecDrives
 }
 
 // Make XL backend meta volumes.

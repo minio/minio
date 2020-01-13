@@ -160,6 +160,7 @@ func validateXLFormats(format *formatXLV3, formats []*formatXLV3, endpoints Endp
 	if len(format.XL.Sets[0]) != drivesPerSet {
 		return fmt.Errorf("Current backend format is inconsistent with input args (%s), Expected drive count per set %d, got %d", endpoints, len(format.XL.Sets[0]), drivesPerSet)
 	}
+
 	return nil
 }
 

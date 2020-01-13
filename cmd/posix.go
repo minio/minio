@@ -309,6 +309,10 @@ func (s *posix) String() string {
 	return s.diskPath
 }
 
+func (*posix) Hostname() string {
+	return ""
+}
+
 func (s *posix) LastError() error {
 	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return errFaultyDisk
