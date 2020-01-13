@@ -36,6 +36,7 @@ import (
 	jwtgo "github.com/dgrijalva/jwt-go"
 	humanize "github.com/dustin/go-humanize"
 	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
+	xjwt "github.com/minio/minio/cmd/jwt"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/policy/condition"
@@ -753,12 +754,10 @@ func TestWebCreateURLToken(t *testing.T) {
 }
 
 func getTokenString(accessKey, secretKey string) (string, error) {
-	utcNow := UTCNow()
-	mapClaims := jwtgo.MapClaims{}
-	mapClaims["exp"] = utcNow.Add(defaultJWTExpiry).Unix()
-	mapClaims["sub"] = accessKey
-	mapClaims["accessKey"] = accessKey
-	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, mapClaims)
+	claims := xjwt.NewMapClaims()
+	claims.SetExpiry(UTCNow().Add(defaultJWTExpiry))
+	claims.SetAccessKey(accessKey)
+	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, claims)
 	return token.SignedString([]byte(secretKey))
 }
 
@@ -1002,7 +1001,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	}
 
 	if !bytes.Equal(bodyContent, bytes.NewBufferString("Authentication failed, check your access credentials").Bytes()) {
-		t.Fatalf("Expected authentication error message, got %v", bodyContent)
+		t.Fatalf("Expected authentication error message, got %s", string(bodyContent))
 	}
 
 	// Unauthenticated download should fail.

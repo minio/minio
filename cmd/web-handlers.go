@@ -101,7 +101,7 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 	}
 
 	if !owner {
-		creds, ok := globalIAMSys.GetUser(claims.AccessKey())
+		creds, ok := globalIAMSys.GetUser(claims.AccessKey)
 		if ok && creds.SessionToken != "" {
 			reply.MinioUserInfo["isTempUser"] = true
 		}
@@ -154,10 +154,10 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 
 	// For authenticated users apply IAM policy.
 	if !globalIAMSys.IsAllowed(iampolicy.Args{
-		AccountName:     claims.AccessKey(),
+		AccountName:     claims.AccessKey,
 		Action:          iampolicy.CreateBucketAction,
 		BucketName:      args.BucketName,
-		ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+		ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 		IsOwner:         owner,
 		Claims:          claims.Map(),
 	}) {
@@ -216,10 +216,10 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 
 	// For authenticated users apply IAM policy.
 	if !globalIAMSys.IsAllowed(iampolicy.Args{
-		AccountName:     claims.AccessKey(),
+		AccountName:     claims.AccessKey,
 		Action:          iampolicy.DeleteBucketAction,
 		BucketName:      args.BucketName,
-		ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+		ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 		IsOwner:         owner,
 		Claims:          claims.Map(),
 	}) {
@@ -319,10 +319,10 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 			}
 
 			if globalIAMSys.IsAllowed(iampolicy.Args{
-				AccountName:     claims.AccessKey(),
+				AccountName:     claims.AccessKey,
 				Action:          iampolicy.ListBucketAction,
 				BucketName:      dnsRecord.Key,
-				ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+				ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 				IsOwner:         owner,
 				ObjectName:      "",
 				Claims:          claims.Map(),
@@ -342,10 +342,10 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		}
 		for _, bucket := range buckets {
 			if globalIAMSys.IsAllowed(iampolicy.Args{
-				AccountName:     claims.AccessKey(),
+				AccountName:     claims.AccessKey,
 				Action:          iampolicy.ListBucketAction,
 				BucketName:      bucket.Name,
-				ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+				ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 				IsOwner:         owner,
 				ObjectName:      "",
 				Claims:          claims.Map(),
@@ -495,19 +495,19 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		r.Header.Set("delimiter", SlashSeparator)
 
 		readable := globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.AccessKey(),
+			AccountName:     claims.AccessKey,
 			Action:          iampolicy.ListBucketAction,
 			BucketName:      args.BucketName,
-			ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+			ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 			IsOwner:         owner,
 			Claims:          claims.Map(),
 		})
 
 		writable := globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.AccessKey(),
+			AccountName:     claims.AccessKey,
 			Action:          iampolicy.PutObjectAction,
 			BucketName:      args.BucketName,
-			ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+			ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 			IsOwner:         owner,
 			ObjectName:      args.Prefix + SlashSeparator,
 			Claims:          claims.Map(),
@@ -675,10 +675,10 @@ next:
 			govBypassPerms := ErrAccessDenied
 			if authErr != errNoAuthToken {
 				if !globalIAMSys.IsAllowed(iampolicy.Args{
-					AccountName:     claims.AccessKey(),
+					AccountName:     claims.AccessKey,
 					Action:          iampolicy.DeleteObjectAction,
 					BucketName:      args.BucketName,
-					ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+					ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 					IsOwner:         owner,
 					ObjectName:      objectName,
 					Claims:          claims.Map(),
@@ -686,10 +686,10 @@ next:
 					return toJSONError(ctx, errAccessDenied)
 				}
 				if globalIAMSys.IsAllowed(iampolicy.Args{
-					AccountName:     claims.AccessKey(),
+					AccountName:     claims.AccessKey,
 					Action:          iampolicy.BypassGovernanceRetentionAction,
 					BucketName:      args.BucketName,
-					ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+					ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 					IsOwner:         owner,
 					ObjectName:      objectName,
 					Claims:          claims.Map(),
@@ -719,10 +719,10 @@ next:
 		}
 
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.AccessKey(),
+			AccountName:     claims.AccessKey,
 			Action:          iampolicy.DeleteObjectAction,
 			BucketName:      args.BucketName,
-			ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+			ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 			IsOwner:         owner,
 			ObjectName:      objectName,
 			Claims:          claims.Map(),
@@ -844,8 +844,8 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 
 	// for IAM users, access key cannot be updated
-	// claims.AccessKey() is used instead of accesskey from args
-	prevCred, ok := globalIAMSys.GetUser(claims.AccessKey())
+	// claims.AccessKey is used instead of accesskey from args
+	prevCred, ok := globalIAMSys.GetUser(claims.AccessKey)
 	if !ok {
 		return errInvalidAccessKeyID
 	}
@@ -855,7 +855,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return errIncorrectCreds
 	}
 
-	creds, err := auth.CreateCredentials(claims.AccessKey(), args.NewSecretKey)
+	creds, err := auth.CreateCredentials(claims.AccessKey, args.NewSecretKey)
 	if err != nil {
 		return toJSONError(ctx, err)
 	}
@@ -892,7 +892,7 @@ func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs,
 	creds := globalActiveCred
 	if !owner {
 		var ok bool
-		creds, ok = globalIAMSys.GetUser(claims.AccessKey())
+		creds, ok = globalIAMSys.GetUser(claims.AccessKey)
 		if !ok {
 			return toJSONError(ctx, errInvalidAccessKeyID)
 		}
@@ -954,10 +954,10 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// For authenticated users apply IAM policy.
 	if authErr == nil {
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.AccessKey(),
+			AccountName:     claims.AccessKey,
 			Action:          iampolicy.PutObjectAction,
 			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+			ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 			IsOwner:         owner,
 			ObjectName:      object,
 			Claims:          claims.Map(),
@@ -966,10 +966,10 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.AccessKey(),
+			AccountName:     claims.AccessKey,
 			Action:          iampolicy.PutObjectRetentionAction,
 			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+			ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 			IsOwner:         owner,
 			ObjectName:      object,
 			Claims:          claims.Map(),
@@ -977,10 +977,10 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			retPerms = ErrNone
 		}
 		if globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.AccessKey(),
+			AccountName:     claims.AccessKey,
 			Action:          iampolicy.PutObjectLegalHoldAction,
 			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+			ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 			IsOwner:         owner,
 			ObjectName:      object,
 			Claims:          claims.Map(),
@@ -1188,10 +1188,10 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	// For authenticated users apply IAM policy.
 	if authErr == nil {
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.AccessKey(),
+			AccountName:     claims.AccessKey,
 			Action:          iampolicy.GetObjectAction,
 			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+			ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 			IsOwner:         owner,
 			ObjectName:      object,
 			Claims:          claims.Map(),
@@ -1200,10 +1200,10 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.AccessKey(),
+			AccountName:     claims.AccessKey,
 			Action:          iampolicy.GetObjectRetentionAction,
 			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+			ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 			IsOwner:         owner,
 			ObjectName:      object,
 			Claims:          claims.Map(),
@@ -1211,10 +1211,10 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 			getRetPerms = ErrNone
 		}
 		if globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.AccessKey(),
+			AccountName:     claims.AccessKey,
 			Action:          iampolicy.GetObjectLegalHoldAction,
 			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+			ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 			IsOwner:         owner,
 			ObjectName:      object,
 			Claims:          claims.Map(),
@@ -1390,10 +1390,10 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	if authErr == nil {
 		for _, object := range args.Objects {
 			if !globalIAMSys.IsAllowed(iampolicy.Args{
-				AccountName:     claims.AccessKey(),
+				AccountName:     claims.AccessKey,
 				Action:          iampolicy.GetObjectAction,
 				BucketName:      args.BucketName,
-				ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+				ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 				IsOwner:         owner,
 				ObjectName:      pathJoin(args.Prefix, object),
 				Claims:          claims.Map(),
@@ -1403,10 +1403,10 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			}
 			retentionPerm := ErrAccessDenied
 			if globalIAMSys.IsAllowed(iampolicy.Args{
-				AccountName:     claims.AccessKey(),
+				AccountName:     claims.AccessKey,
 				Action:          iampolicy.GetObjectRetentionAction,
 				BucketName:      args.BucketName,
-				ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+				ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 				IsOwner:         owner,
 				ObjectName:      pathJoin(args.Prefix, object),
 				Claims:          claims.Map(),
@@ -1417,10 +1417,10 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 
 			legalHoldPerm := ErrAccessDenied
 			if globalIAMSys.IsAllowed(iampolicy.Args{
-				AccountName:     claims.AccessKey(),
+				AccountName:     claims.AccessKey,
 				Action:          iampolicy.GetObjectLegalHoldAction,
 				BucketName:      args.BucketName,
-				ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+				ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 				IsOwner:         owner,
 				ObjectName:      pathJoin(args.Prefix, object),
 				Claims:          claims.Map(),
@@ -1570,10 +1570,10 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 
 	// For authenticated users apply IAM policy.
 	if !globalIAMSys.IsAllowed(iampolicy.Args{
-		AccountName:     claims.AccessKey(),
+		AccountName:     claims.AccessKey,
 		Action:          iampolicy.GetBucketPolicyAction,
 		BucketName:      args.BucketName,
-		ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+		ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 		IsOwner:         owner,
 		Claims:          claims.Map(),
 	}) {
@@ -1668,10 +1668,10 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 
 	// For authenticated users apply IAM policy.
 	if !globalIAMSys.IsAllowed(iampolicy.Args{
-		AccountName:     claims.AccessKey(),
+		AccountName:     claims.AccessKey,
 		Action:          iampolicy.GetBucketPolicyAction,
 		BucketName:      args.BucketName,
-		ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+		ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 		IsOwner:         owner,
 		Claims:          claims.Map(),
 	}) {
@@ -1759,10 +1759,10 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 
 	// For authenticated users apply IAM policy.
 	if !globalIAMSys.IsAllowed(iampolicy.Args{
-		AccountName:     claims.AccessKey(),
+		AccountName:     claims.AccessKey,
 		Action:          iampolicy.PutBucketPolicyAction,
 		BucketName:      args.BucketName,
-		ConditionValues: getConditionValues(r, "", claims.AccessKey(), claims.Map()),
+		ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 		IsOwner:         owner,
 		Claims:          claims.Map(),
 	}) {
@@ -1905,7 +1905,7 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 	var creds auth.Credentials
 	if !owner {
 		var ok bool
-		creds, ok = globalIAMSys.GetUser(claims.AccessKey())
+		creds, ok = globalIAMSys.GetUser(claims.AccessKey)
 		if !ok {
 			return toJSONError(ctx, errInvalidAccessKeyID)
 		}

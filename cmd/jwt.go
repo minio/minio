@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,12 @@ package cmd
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	jwtreq "github.com/dgrijalva/jwt-go/request"
+	xjwt "github.com/minio/minio/cmd/jwt"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 )
@@ -35,8 +35,8 @@ const (
 	// Default JWT token for web handlers is one day.
 	defaultJWTExpiry = 24 * time.Hour
 
-	// Inter-node JWT token expiry is 100 years approx.
-	defaultInterNodeJWTExpiry = 100 * 365 * 24 * time.Hour
+	// Inter-node JWT token expiry is 15 minutes.
+	defaultInterNodeJWTExpiry = 15 * time.Minute
 
 	// URL JWT token expiry is one minute (might be exposed).
 	defaultURLJWTExpiry = time.Minute
@@ -73,42 +73,23 @@ func authenticateJWTUsersWithCredentials(credentials auth.Credentials, expiresAt
 		return "", errAuthentication
 	}
 
-	claims := jwtgo.MapClaims{}
-	claims["exp"] = expiresAt.Unix()
-	claims["sub"] = credentials.AccessKey
-	claims["accessKey"] = credentials.AccessKey
+	claims := xjwt.NewMapClaims()
+	claims.SetExpiry(expiresAt)
+	claims.SetAccessKey(credentials.AccessKey)
 
 	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, claims)
 	return jwt.SignedString([]byte(serverCred.SecretKey))
 }
 
-func authenticateJWTAdmin(accessKey, secretKey string, expiry time.Duration) (string, error) {
-	passedCredential, err := auth.CreateCredentials(accessKey, secretKey)
-	if err != nil {
-		return "", err
-	}
-
-	serverCred := globalActiveCred
-
-	if serverCred.AccessKey != passedCredential.AccessKey {
-		return "", errInvalidAccessKeyID
-	}
-
-	if !serverCred.Equal(passedCredential) {
-		return "", errAuthentication
-	}
-
-	claims := jwtgo.MapClaims{}
-	claims["exp"] = UTCNow().Add(expiry).Unix()
-	claims["sub"] = passedCredential.AccessKey
-	claims["accessKey"] = passedCredential.AccessKey
+func authenticateNode(accessKey, secretKey, audience string) (string, error) {
+	claims := xjwt.NewStandardClaims()
+	claims.SetExpiry(UTCNow().Add(defaultInterNodeJWTExpiry))
+	claims.SetAccessKey(accessKey)
+	claims.SetAudience(audience)
+	claims.SetIssuer(ReleaseTag)
 
 	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, claims)
-	return jwt.SignedString([]byte(serverCred.SecretKey))
-}
-
-func authenticateNode(accessKey, secretKey string) (string, error) {
-	return authenticateJWTAdmin(accessKey, secretKey, defaultInterNodeJWTExpiry)
+	return jwt.SignedString([]byte(secretKey))
 }
 
 func authenticateWeb(accessKey, secretKey string) (string, error) {
@@ -120,63 +101,29 @@ func authenticateURL(accessKey, secretKey string) (string, error) {
 }
 
 // Callback function used for parsing
-func webTokenCallback(jwtToken *jwtgo.Token) (interface{}, error) {
-	if _, ok := jwtToken.Method.(*jwtgo.SigningMethodHMAC); !ok {
-		return nil, fmt.Errorf("Unexpected signing method: %v", jwtToken.Header["alg"])
-	}
-
-	if err := jwtToken.Claims.Valid(); err != nil {
-		return nil, errAuthentication
-	}
-
-	if claimsPtr, ok := jwtToken.Claims.(*jwtgo.MapClaims); ok {
-		claims := *claimsPtr
-		accessKey, ok := claims["accessKey"].(string)
-		if !ok {
-			accessKey, ok = claims["sub"].(string)
-			if !ok {
-				return nil, errInvalidAccessKeyID
-			}
-		}
-		if accessKey == globalActiveCred.AccessKey {
-			return []byte(globalActiveCred.SecretKey), nil
-		}
-		if globalIAMSys == nil {
-			return nil, errInvalidAccessKeyID
-		}
-		if _, ok = claims["aud"].(string); !ok {
-			cred, ok := globalIAMSys.GetUser(accessKey)
-			if !ok {
-				return nil, errInvalidAccessKeyID
-			}
-			return []byte(cred.SecretKey), nil
-		}
+func webTokenCallback(claims *xjwt.MapClaims) ([]byte, error) {
+	if claims.AccessKey == globalActiveCred.AccessKey {
 		return []byte(globalActiveCred.SecretKey), nil
 	}
-
-	return nil, errAuthentication
-}
-
-func parseJWTWithClaims(tokenString string, claims jwtgo.Claims) (*jwtgo.Token, error) {
-	p := &jwtgo.Parser{
-		SkipClaimsValidation: true,
-		ValidMethods: []string{
-			jwtgo.SigningMethodHS256.Alg(),
-			jwtgo.SigningMethodHS512.Alg(),
-		},
+	if globalIAMSys == nil {
+		return nil, errInvalidAccessKeyID
 	}
-	jwtToken, err := p.ParseWithClaims(tokenString, claims, webTokenCallback)
+	ok, err := globalIAMSys.IsTempUser(claims.AccessKey)
 	if err != nil {
-		switch e := err.(type) {
-		case *jwtgo.ValidationError:
-			if e.Inner == nil {
-				return nil, errAuthentication
-			}
-			return nil, e.Inner
+		if err == errNoSuchUser {
+			return nil, errInvalidAccessKeyID
 		}
-		return nil, errAuthentication
+		return nil, err
 	}
-	return jwtToken, nil
+	if ok {
+		return []byte(globalActiveCred.SecretKey), nil
+	}
+	cred, ok := globalIAMSys.GetUser(claims.AccessKey)
+	if !ok {
+		return nil, errInvalidAccessKeyID
+	}
+	return []byte(cred.SecretKey), nil
+
 }
 
 func isAuthTokenValid(token string) bool {
@@ -184,78 +131,40 @@ func isAuthTokenValid(token string) bool {
 	return err == nil
 }
 
-func webTokenAuthenticate(token string) (mapClaims, bool, error) {
-	var claims = jwtgo.MapClaims{}
+func webTokenAuthenticate(token string) (*xjwt.MapClaims, bool, error) {
 	if token == "" {
-		return mapClaims{claims}, false, errNoAuthToken
+		return nil, false, errNoAuthToken
 	}
-	jwtToken, err := parseJWTWithClaims(token, &claims)
-	if err != nil {
-		return mapClaims{claims}, false, err
+	claims := xjwt.NewMapClaims()
+	if err := xjwt.ParseWithClaims(token, claims, webTokenCallback); err != nil {
+		return claims, false, errAuthentication
 	}
-	if !jwtToken.Valid {
-		return mapClaims{claims}, false, errAuthentication
-	}
-	accessKey, ok := claims["accessKey"].(string)
-	if !ok {
-		accessKey, ok = claims["sub"].(string)
-		if !ok {
-			return mapClaims{claims}, false, errAuthentication
-		}
-	}
-	owner := accessKey == globalActiveCred.AccessKey
-	return mapClaims{claims}, owner, nil
-}
-
-type mapClaims struct {
-	jwtgo.MapClaims
-}
-
-func (m mapClaims) Map() map[string]interface{} {
-	return m.MapClaims
-}
-
-func (m mapClaims) AccessKey() string {
-	claimSub, ok := m.MapClaims["accessKey"].(string)
-	if !ok {
-		claimSub, _ = m.MapClaims["sub"].(string)
-	}
-	return claimSub
+	owner := claims.AccessKey == globalActiveCred.AccessKey
+	return claims, owner, nil
 }
 
 // Check if the request is authenticated.
 // Returns nil if the request is authenticated. errNoAuthToken if token missing.
 // Returns errAuthentication for all other errors.
-func webRequestAuthenticate(req *http.Request) (mapClaims, bool, error) {
-	var claims = jwtgo.MapClaims{}
-	tokStr, err := jwtreq.AuthorizationHeaderExtractor.ExtractToken(req)
+func webRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, bool, error) {
+	token, err := jwtreq.AuthorizationHeaderExtractor.ExtractToken(req)
 	if err != nil {
 		if err == jwtreq.ErrNoTokenInRequest {
-			return mapClaims{claims}, false, errNoAuthToken
+			return nil, false, errNoAuthToken
 		}
-		return mapClaims{claims}, false, err
+		return nil, false, err
 	}
-	jwtToken, err := parseJWTWithClaims(tokStr, &claims)
-	if err != nil {
-		return mapClaims{claims}, false, err
+	claims := xjwt.NewMapClaims()
+	if err := xjwt.ParseWithClaims(token, claims, webTokenCallback); err != nil {
+		return claims, false, errAuthentication
 	}
-	if !jwtToken.Valid {
-		return mapClaims{claims}, false, errAuthentication
-	}
-	accessKey, ok := claims["accessKey"].(string)
-	if !ok {
-		accessKey, ok = claims["sub"].(string)
-		if !ok {
-			return mapClaims{claims}, false, errAuthentication
-		}
-	}
-	owner := accessKey == globalActiveCred.AccessKey
-	return mapClaims{claims}, owner, nil
+	owner := claims.AccessKey == globalActiveCred.AccessKey
+	return claims, owner, nil
 }
 
-func newAuthToken() string {
+func newAuthToken(audience string) string {
 	cred := globalActiveCred
-	token, err := authenticateNode(cred.AccessKey, cred.SecretKey)
+	token, err := authenticateNode(cred.AccessKey, cred.SecretKey, audience)
 	logger.CriticalIf(context.Background(), err)
 	return token
 }
