@@ -29,6 +29,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/minio/minio/cmd/http"
@@ -108,11 +109,12 @@ func toStorageErr(err error) error {
 
 // Abstracts a remote disk.
 type storageRESTClient struct {
-	endpoint   Endpoint
-	restClient *rest.Client
-	connected  int32
-	lastError  error
-	diskID     string
+	endpoint    Endpoint
+	restClient  *rest.Client
+	connected   int32
+	lastError   error
+	lastErrorMu sync.Mutex
+	diskID      string
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is makred disconnected
@@ -130,7 +132,11 @@ func (client *storageRESTClient) call(method string, values url.Values, body io.
 	if err == nil {
 		return respBody, nil
 	}
+
+	client.lastErrorMu.Lock()
 	client.lastError = err
+	client.lastErrorMu.Unlock()
+
 	if isNetworkError(err) || err.Error() == errDiskStale.Error() {
 		atomic.StoreInt32(&client.connected, 0)
 	}
@@ -176,7 +182,10 @@ func (client *storageRESTClient) CrawlAndGetDataUsage(endCh <-chan struct{}) (Da
 
 // LastError - returns the network error if any.
 func (client *storageRESTClient) LastError() error {
-	return client.lastError
+	client.lastErrorMu.Lock()
+	err := client.lastError
+	client.lastErrorMu.Unlock()
+	return err
 }
 
 func (client *storageRESTClient) SetDiskID(id string) {
