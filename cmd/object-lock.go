@@ -477,8 +477,7 @@ func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, bucket, 
 	ret := getObjectRetentionMeta(oi.UserDefined)
 	// no retention metadata on object
 	if ret.Mode == Invalid {
-		_, isWORMBucket := isWORMEnabled(bucket)
-		if !isWORMBucket {
+		if _, isWORMBucket := globalBucketObjectLockConfig.Get(bucket); !isWORMBucket {
 			return oi, ErrInvalidBucketObjectLockConfiguration
 		}
 		return oi, ErrNone
@@ -527,7 +526,7 @@ func checkPutObjectRetentionAllowed(ctx context.Context, r *http.Request, bucket
 	var mode RetentionMode
 	var retainDate RetentionDate
 
-	retention, isWORMBucket := isWORMEnabled(bucket)
+	retention, isWORMBucket := globalBucketObjectLockConfig.Get(bucket)
 
 	retentionRequested := isObjectLockRequested(r.Header)
 

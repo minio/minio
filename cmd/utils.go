@@ -579,12 +579,9 @@ func iamPolicyClaimName() string {
 	return globalOpenIDConfig.ClaimPrefix + globalOpenIDConfig.ClaimName
 }
 
-func isWORMEnabled(bucket string) (Retention, bool) {
+func isWORMEnabled(bucket string) bool {
 	if isMinioMetaBucketName(bucket) {
-		return Retention{}, false
+		return false
 	}
-	if globalWORMEnabled {
-		return Retention{}, true
-	}
-	return globalBucketObjectLockConfig.Get(bucket)
+	return globalWORMEnabled
 }
