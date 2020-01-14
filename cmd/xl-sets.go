@@ -96,7 +96,7 @@ type xlSets struct {
 	// Merge tree walk
 	pool *MergeWalkPool
 
-	mrfMU      sync.RWMutex
+	mrfMU      sync.Mutex
 	mrfUploads map[string]int
 }
 
@@ -1737,13 +1737,13 @@ func (s *xlSets) healMRFRoutine() {
 		// Get the list of objects related the xl set
 		// to which the connected disk belongs.
 		var mrfUploads []string
-		s.mrfMU.RLock()
+		s.mrfMU.Lock()
 		for k, v := range s.mrfUploads {
 			if v == e.setIndex {
 				mrfUploads = append(mrfUploads, k)
 			}
 		}
-		s.mrfMU.RUnlock()
+		s.mrfMU.Unlock()
 
 		// Heal objects
 		for _, u := range mrfUploads {
