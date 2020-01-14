@@ -234,8 +234,6 @@ func (s *xlSets) monitorAndConnectEndpoints(monitorInterval time.Duration) {
 
 func (s *xlSets) GetLockers(setIndex int) func() []dsync.NetLocker {
 	return func() []dsync.NetLocker {
-		s.xlDisksMu.Lock()
-		defer s.xlDisksMu.Unlock()
 		lockers := make([]dsync.NetLocker, s.drivesPerSet)
 		copy(lockers, s.xlLockers[setIndex])
 		return lockers
@@ -1301,7 +1299,9 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 	s.format = refFormat
 
 	// Close all existing disks and reconnect all the disks.
+	s.xlDisksMu.Lock()
 	s.xlDisks.Close()
+	s.xlDisksMu.Unlock()
 	s.connectDisks()
 
 	// Restart monitoring loop to monitor reformatted disks again.
@@ -1488,7 +1488,9 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 		s.format = refFormat
 
 		// Disconnect/relinquish all existing disks, lockers and reconnect the disks, lockers.
+		s.xlDisksMu.Lock()
 		s.xlDisks.Close()
+		s.xlDisksMu.Unlock()
 		s.connectDisks()
 
 		// Restart our monitoring loop to start monitoring newly formatted disks.
