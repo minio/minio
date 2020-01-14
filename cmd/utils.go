@@ -252,7 +252,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 		}
 	case "mem":
 		old := runtime.MemProfileRate
-		runtime.MemProfileRate = 1
+		runtime.MemProfileRate = 4096
 		prof.stopFn = func() ([]byte, error) {
 			var buf bytes.Buffer
 			runtime.MemProfileRate = old
