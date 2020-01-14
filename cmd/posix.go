@@ -313,13 +313,6 @@ func (*posix) Hostname() string {
 	return ""
 }
 
-func (s *posix) LastError() error {
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return errFaultyDisk
-	}
-	return nil
-}
-
 func (s *posix) Close() error {
 	close(s.stopUsageCh)
 	return nil

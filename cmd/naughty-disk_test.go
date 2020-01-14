@@ -57,10 +57,6 @@ func (*naughtyDisk) Hostname() string {
 	return ""
 }
 
-func (d *naughtyDisk) LastError() (err error) {
-	return nil
-}
-
 func (d *naughtyDisk) Close() (err error) {
 	if err = d.calcError(); err != nil {
 		return err

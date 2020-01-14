@@ -480,13 +480,6 @@ type DeleteFileBulkErrsResp struct {
 	Errs []error
 }
 
-// DeleteFileError - error captured per delete operation
-type DeleteFileError string
-
-func (d DeleteFileError) Error() string {
-	return string(d)
-}
-
 // DeleteFileBulkHandler - delete a file.
 func (s *storageRESTServer) DeleteFileBulkHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -505,7 +498,7 @@ func (s *storageRESTServer) DeleteFileBulkHandler(w http.ResponseWriter, r *http
 	derrsResp := &DeleteFileBulkErrsResp{Errs: make([]error, len(errs))}
 	for idx, err := range errs {
 		if err != nil {
-			derrsResp.Errs[idx] = DeleteFileError(err.Error())
+			derrsResp.Errs[idx] = StorageErr(err.Error())
 		}
 	}
 
@@ -594,7 +587,7 @@ func (s *storageRESTServer) VerifyFile(w http.ResponseWriter, r *http.Request) {
 	<-doneCh
 	vresp := &VerifyFileResp{}
 	if err != nil {
-		vresp.Err = VerifyFileError(err.Error())
+		vresp.Err = StorageErr(err.Error())
 	}
 	encoder.Encode(vresp)
 	w.(http.Flusher).Flush()
