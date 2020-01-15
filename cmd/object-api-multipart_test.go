@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -157,102 +156,6 @@ func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t TestE
 	case InvalidUploadID:
 	default:
 		t.Fatalf("%s: Expected uploadIDPath to exist.", instanceType)
-	}
-}
-
-// Wrapper for calling TestPutObjectPartDiskNotFound tests for both XL
-// write quorum.
-func TestPutObjectPartDiskNotFound(t *testing.T) {
-	ExecObjectLayerDiskAlteredTest(t, testPutObjectPartDiskNotFound)
-}
-
-// testPutObjectPartDiskNotFound - Tests validate PutObjectPart behavior when disks go offline.
-func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks []string, t *testing.T) {
-	bucketNames := []string{"minio-bucket", "minio-2-bucket"}
-	objectNames := []string{"minio-object-1.txt"}
-	uploadIDs := []string{}
-
-	// bucketnames[0].
-	// objectNames[0].
-	// uploadIds [0].
-	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucketWithLocation(context.Background(), bucketNames[0], "")
-	if err != nil {
-		// Failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err.Error())
-	}
-
-	// Initiate Multipart Upload on the above created bucket.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketNames[0], objectNames[0], ObjectOptions{})
-	if err != nil {
-		// Failed to create NewMultipartUpload, abort.
-		t.Fatalf("%s : %s", instanceType, err.Error())
-	}
-
-	// Remove some random disk.
-	for _, disk := range disks[:6] {
-		os.RemoveAll(disk)
-	}
-
-	uploadIDs = append(uploadIDs, uploadID)
-
-	// Create multipart parts.
-	// Need parts to be uploaded before MultipartLists can be called and tested.
-	createPartCases := []struct {
-		bucketName      string
-		objName         string
-		uploadID        string
-		PartID          int
-		inputReaderData string
-		inputMd5        string
-		intputDataSize  int64
-		expectedMd5     string
-	}{
-		// Case 1-5.
-		// Creating sequence of parts for same uploadID.
-		// Used to ensure that the ListMultipartResult produces one output for the four parts uploaded below for the given upload ID.
-		{bucketNames[0], objectNames[0], uploadIDs[0], 1, "abcd", "e2fc714c4727ee9395f324cd2e7f331f", int64(len("abcd")), "e2fc714c4727ee9395f324cd2e7f331f"},
-		{bucketNames[0], objectNames[0], uploadIDs[0], 2, "efgh", "1f7690ebdd9b4caf8fab49ca1757bf27", int64(len("efgh")), "1f7690ebdd9b4caf8fab49ca1757bf27"},
-		{bucketNames[0], objectNames[0], uploadIDs[0], 3, "ijkl", "09a0877d04abf8759f99adec02baf579", int64(len("ijkl")), "09a0877d04abf8759f99adec02baf579"},
-		{bucketNames[0], objectNames[0], uploadIDs[0], 4, "mnop", "e132e96a5ddad6da8b07bba6f6131fef", int64(len("mnop")), "e132e96a5ddad6da8b07bba6f6131fef"},
-		{bucketNames[0], objectNames[0], uploadIDs[0], 5, "mnop", "e132e96a5ddad6da8b07bba6f6131fef", int64(len("mnop")), "e132e96a5ddad6da8b07bba6f6131fef"},
-	}
-	sha256sum := ""
-	// Iterating over creatPartCases to generate multipart chunks.
-	for _, testCase := range createPartCases {
-		_, err = obj.PutObjectPart(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, mustGetPutObjReader(t, bytes.NewBufferString(testCase.inputReaderData), testCase.intputDataSize, testCase.inputMd5, sha256sum), ObjectOptions{})
-		if err != nil {
-			t.Fatalf("%s : %s", instanceType, err.Error())
-		}
-	}
-
-	// This causes quorum failure verify.
-	for _, disk := range disks[len(disks)-3:] {
-		os.RemoveAll(disk)
-	}
-
-	// Object part upload should fail with quorum not available.
-	testCase := createPartCases[len(createPartCases)-1]
-	_, err = obj.PutObjectPart(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, mustGetPutObjReader(t, bytes.NewBufferString(testCase.inputReaderData), testCase.intputDataSize, testCase.inputMd5, sha256sum), ObjectOptions{})
-	if err == nil {
-		t.Fatalf("Test %s: expected to fail but passed instead", instanceType)
-	}
-
-	// This causes invalid upload id.
-	for _, disk := range disks {
-		os.RemoveAll(disk)
-	}
-
-	// Object part upload should fail with bucket not found.
-	_, err = obj.PutObjectPart(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, mustGetPutObjReader(t, bytes.NewBufferString(testCase.inputReaderData), testCase.intputDataSize, testCase.inputMd5, sha256sum), ObjectOptions{})
-	if err == nil {
-		t.Fatalf("Test %s: expected to fail but passed instead", instanceType)
-	}
-
-	// As all disks at not available, bucket not found.
-	expectedErr2 := BucketNotFound{Bucket: testCase.bucketName}
-	if err.Error() != expectedErr2.Error() {
-		t.Fatalf("Test %s: expected error %s, got %s instead.", instanceType, expectedErr2, err)
 	}
 }
 
