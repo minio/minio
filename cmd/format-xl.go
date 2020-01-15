@@ -623,21 +623,26 @@ func formatXLV3Check(reference *formatXLV3, format *formatXLV3) error {
 
 // Initializes meta volume only on local storage disks.
 func initXLMetaVolumesInLocalDisks(storageDisks []StorageAPI, formats []*formatXLV3) error {
-	// This happens for the first time, but keep this here since this
-	// is the only place where it can be made expensive optimizing all
-	// other calls. Create minio meta volume, if it doesn't exist yet.
+
+	// Compute the local disks eligible for meta volumes (re)initialization
+	var disksToInit []StorageAPI
+	for index := range storageDisks {
+		if formats[index] == nil || storageDisks[index] == nil || storageDisks[index].Hostname() != "" {
+			// Ignore create meta volume on disks which are not found or not local.
+			continue
+		}
+		disksToInit = append(disksToInit, storageDisks[index])
+	}
 
 	// Initialize errs to collect errors inside go-routine.
-	g := errgroup.WithNErrs(len(storageDisks))
+	g := errgroup.WithNErrs(len(disksToInit))
 
 	// Initialize all disks in parallel.
-	for index := range storageDisks {
+	for index := range disksToInit {
+		// Initialize a new index variable in each loop so each
+		// goroutine will return its own instance of index variable.
 		index := index
 		g.Go(func() error {
-			if formats[index] == nil || storageDisks[index] == nil || !storageDisks[index].IsLocal() {
-				// Ignore create meta volume on disks which are not found or not local.
-				return nil
-			}
 			return makeFormatXLMetaVolumes(storageDisks[index])
 		}, index)
 	}
