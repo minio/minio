@@ -51,10 +51,6 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	// code backend.
 	globalIsXL = true
 
-	// Init global heal state
-	globalAllHealState = initHealState()
-	globalBackgroundHealState = initHealState()
-
 	// Initializing objectLayer for HealFormatHandler.
 	objLayer, xlDirs, xlErr := initTestXLObjLayer()
 	if xlErr != nil {

@@ -459,7 +459,10 @@ func resetGlobalIsXL() {
 
 // reset global heal state
 func resetGlobalHealState() {
-	if globalAllHealState != nil {
+	// Init global heal state
+	if globalAllHealState == nil {
+		globalAllHealState = initHealState()
+	} else {
 		globalAllHealState.Lock()
 		for _, v := range globalAllHealState.healSeqMap {
 			if !v.hasEnded() {
@@ -468,7 +471,11 @@ func resetGlobalHealState() {
 		}
 		globalAllHealState.Unlock()
 	}
-	if globalBackgroundHealState != nil {
+
+	// Init background heal state
+	if globalBackgroundHealState == nil {
+		globalBackgroundHealState = initHealState()
+	} else {
 		globalBackgroundHealState.Lock()
 		for _, v := range globalBackgroundHealState.healSeqMap {
 			if !v.hasEnded() {
