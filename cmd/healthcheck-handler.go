@@ -30,7 +30,7 @@ import (
 func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ReadinessCheckHandler")
 
-	objLayer := newObjectLayerFn()
+	objLayer := newObjectLayerWithoutSafeModeFn()
 	// Service not initialized yet
 	if objLayer == nil || !objLayer.IsReady(ctx) {
 		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
@@ -47,7 +47,7 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "LivenessCheckHandler")
 
-	objLayer := newObjectLayerFn()
+	objLayer := newObjectLayerWithoutSafeModeFn()
 	// Service not initialized yet
 	if objLayer == nil {
 		// Respond with 200 OK while server initializes to ensure a distributed cluster
@@ -95,5 +95,6 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
 		return
 	}
+
 	writeResponse(w, http.StatusOK, nil, mimeNone)
 }

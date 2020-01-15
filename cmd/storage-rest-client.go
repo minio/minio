@@ -47,9 +47,9 @@ func isNetworkError(err error) bool {
 	return false
 }
 
-// Converts rpc.ServerError to underlying error. This function is
-// written so that the storageAPI errors are consistent across network
-// disks as well.
+// Converts network error to storageErr. This function is
+// written so that the storageAPI errors are consistent
+// across network disks.
 func toStorageErr(err error) error {
 	if err == nil {
 		return nil
@@ -111,14 +111,13 @@ type storageRESTClient struct {
 	endpoint   Endpoint
 	restClient *rest.Client
 	connected  int32
-	lastError  error
 	diskID     string
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is makred disconnected
 // permanently. The only way to restore the storage connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
-func (client *storageRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
+func (client *storageRESTClient) call(method string, values url.Values, body io.Reader, length int64) (io.ReadCloser, error) {
 	if !client.IsOnline() {
 		return nil, errDiskNotFound
 	}
@@ -126,16 +125,17 @@ func (client *storageRESTClient) call(method string, values url.Values, body io.
 		values = make(url.Values)
 	}
 	values.Set(storageRESTDiskID, client.diskID)
-	respBody, err = client.restClient.Call(method, values, body, length)
+	respBody, err := client.restClient.Call(method, values, body, length)
 	if err == nil {
 		return respBody, nil
 	}
-	client.lastError = err
-	if isNetworkError(err) || err.Error() == errDiskStale.Error() {
+
+	err = toStorageErr(err)
+	if err == errDiskNotFound {
 		atomic.StoreInt32(&client.connected, 0)
 	}
 
-	return nil, toStorageErr(err)
+	return nil, err
 }
 
 // Stringer provides a canonicalized representation of network device.
@@ -172,11 +172,6 @@ func (client *storageRESTClient) CrawlAndGetDataUsage(endCh <-chan struct{}) (Da
 	var usageInfo DataUsageInfo
 	err = gob.NewDecoder(reader).Decode(&usageInfo)
 	return usageInfo, err
-}
-
-// LastError - returns the network error if any.
-func (client *storageRESTClient) LastError() error {
-	return client.lastError
 }
 
 func (client *storageRESTClient) SetDiskID(id string) {

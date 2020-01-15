@@ -45,8 +45,7 @@ func init() {
 	globalConsoleSys = NewConsoleLogger(context.Background())
 	logger.AddTarget(globalConsoleSys)
 
-	gob.Register(VerifyFileError(""))
-	gob.Register(DeleteFileError(""))
+	gob.Register(StorageErr(""))
 }
 
 // ServerFlags - server command specific flags

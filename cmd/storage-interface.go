@@ -28,7 +28,6 @@ type StorageAPI interface {
 	// Storage operations.
 	IsOnline() bool   // Returns true if disk is online.
 	Hostname() string // Returns host name if remote host.
-	LastError() error
 	Close() error
 	SetDiskID(id string)
 

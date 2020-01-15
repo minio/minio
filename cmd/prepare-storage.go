@@ -18,12 +18,18 @@ package cmd
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"sync"
 	"time"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -172,6 +178,45 @@ func validateXLFormats(format *formatXLV3, formats []*formatXLV3, endpoints Endp
 // https://github.com/minio/minio/issues/5667
 var errXLV3ThisEmpty = fmt.Errorf("XL format version 3 has This field empty")
 
+// IsServerResolvable - checks if the endpoint is resolvable
+// by sending a naked HTTP request with liveness checks.
+func IsServerResolvable(endpoint Endpoint) error {
+	serverURL := &url.URL{
+		Scheme: endpoint.Scheme,
+		Host:   endpoint.Host,
+		Path:   path.Join(healthCheckPathPrefix, healthCheckLivenessPath),
+	}
+
+	var tlsConfig *tls.Config
+	if globalIsSSL {
+		tlsConfig = &tls.Config{
+			ServerName: endpoint.Hostname(),
+			RootCAs:    globalRootCAs,
+			NextProtos: []string{"http/1.1"}, // Force http1.1
+		}
+	}
+
+	req, err := http.NewRequest(http.MethodGet, serverURL.String(), nil)
+	if err != nil {
+		return err
+	}
+
+	httpClient := &http.Client{
+		Transport: newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout, rest.DefaultRESTTimeout)(),
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer xhttp.DrainBody(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return StorageErr(resp.Status)
+	}
+	return nil
+}
+
 // connect to list of endpoints and load all XL disk formats, validate the formats are correct
 // and are in quorum, if no formats are found attempt to initialize all of them for the first
 // time. additionally make sure to close all the disks used in this attempt.
@@ -179,9 +224,15 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	// Initialize all storage disks
 	storageDisks, errs := initStorageDisksWithErrors(endpoints)
 	defer closeStorageDisks(storageDisks)
+
 	for i, err := range errs {
-		if err != nil && err != errDiskNotFound {
-			return nil, fmt.Errorf("Disk %s: %w", endpoints[i], err)
+		if err != nil {
+			if err != errDiskNotFound {
+				return nil, fmt.Errorf("Disk %s: %w", endpoints[i], err)
+			}
+			if retryCount >= 5 {
+				logger.Info("Unable to connect to %s: %v\n", endpoints[i], IsServerResolvable(endpoints[i]))
+			}
 		}
 	}
 
@@ -191,17 +242,6 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	for i, sErr := range sErrs {
 		if _, ok := formatCriticalErrors[sErr]; ok {
 			return nil, fmt.Errorf("Disk %s: %w", endpoints[i], sErr)
-		}
-	}
-
-	// Connect to all storage disks, a connection failure will be
-	// only logged after some retries.
-	for _, disk := range storageDisks {
-		if disk != nil {
-			connectErr := disk.LastError()
-			if connectErr != nil && retryCount >= 5 {
-				logger.Info("Unable to connect to %s: %v\n", disk.String(), connectErr.Error())
-			}
 		}
 	}
 
