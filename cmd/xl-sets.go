@@ -235,9 +235,6 @@ func (s *xlSets) connectDisks() {
 // the set topology, this monitoring happens at a given monitoring interval.
 func (s *xlSets) monitorAndConnectEndpoints(monitorInterval time.Duration) {
 
-	go s.maintainMRFList()
-	go s.healMRFRoutine()
-
 	ticker := time.NewTicker(monitorInterval)
 	// Stop the timer.
 	defer ticker.Stop()
@@ -328,6 +325,9 @@ func newXLSets(endpoints Endpoints, format *formatXLV3, setCount int, drivesPerS
 
 	// Start the disk monitoring and connect routine.
 	go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)
+
+	go s.maintainMRFList()
+	go s.healMRFRoutine()
 
 	return s, nil
 }
