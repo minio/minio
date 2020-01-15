@@ -762,7 +762,6 @@ func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, driv
 	formats := make([]*formatXLV3, len(storageDisks))
 	wantAtMost := ecDrivesNoConfig(drivesPerSet)
 
-	logger.Info("Formatting zone, %v set(s), %v drives per set.", setCount, drivesPerSet)
 	for i := 0; i < setCount; i++ {
 		hostCount := make(map[string]int, drivesPerSet)
 		for j := 0; j < drivesPerSet; j++ {
