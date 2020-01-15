@@ -1696,7 +1696,7 @@ func (s *xlSets) IsReady(_ context.Context) bool {
 // should not have more than 10000 entries.
 func (s *xlSets) maintainMRFList() {
 	var agg = make(chan partialUpload, 10000)
-	for i, set := range s.sets {
+	for i, xl := range s.sets {
 		go func(c <-chan partialUpload, setIndex int) {
 			for msg := range c {
 				msg.failedSet = setIndex
@@ -1705,7 +1705,7 @@ func (s *xlSets) maintainMRFList() {
 				default:
 				}
 			}
-		}(set.getMRFUploadCh(), i)
+		}(xl.mrfUploadCh, i)
 	}
 
 	for fUpload := range agg {
