@@ -355,8 +355,23 @@ func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 
 // ListObjects lists all blobs in HDFS bucket filtered by prefix.
 func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, err error) {
+	if _, err := n.clnt.Stat(minio.PathJoin(hdfsSeparator, bucket)); err != nil {
+		return loi, hdfsToObjectErr(ctx, err, bucket)
+	}
+
 	getObjectInfo := func(ctx context.Context, bucket, entry string) (minio.ObjectInfo, error) {
-		return n.GetObjectInfo(ctx, bucket, entry, minio.ObjectOptions{})
+		fi, err := n.clnt.Stat(minio.PathJoin(hdfsSeparator, bucket, entry))
+		if err != nil {
+			return minio.ObjectInfo{}, hdfsToObjectErr(ctx, err, bucket, entry)
+		}
+		return minio.ObjectInfo{
+			Bucket:  bucket,
+			Name:    entry,
+			ModTime: fi.ModTime(),
+			Size:    fi.Size(),
+			IsDir:   fi.IsDir(),
+			AccTime: fi.(*hdfs.FileInfo).AccessTime(),
+		}, nil
 	}
 
 	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), getObjectInfo, getObjectInfo)
