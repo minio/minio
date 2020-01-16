@@ -1374,13 +1374,5 @@ func (z *xlZones) GetMetrics(ctx context.Context) (*Metrics, error) {
 
 // IsReady - Returns True if all the zones have enough quorum to accept requests.
 func (z *xlZones) IsReady(ctx context.Context) bool {
-	if z.SingleZone() {
-		return z.zones[0].IsReady(ctx)
-	}
-	for _, xlsets := range z.zones {
-		if !xlsets.IsReady(ctx) {
-			return false
-		}
-	}
-	return true
+	return z.zones[0].IsReady(ctx)
 }
