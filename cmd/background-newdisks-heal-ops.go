@@ -64,6 +64,8 @@ func monitorLocalDisksAndHeal() {
 
 	// Perform automatic disk healing when a disk is replaced locally.
 	for {
+		time.Sleep(defaultMonitorNewDiskInterval)
+
 		// Attempt a heal as the server starts-up first.
 		localDisksInZoneHeal := make([]Endpoints, len(z.zones))
 		for i, ep := range globalEndpoints {
@@ -90,8 +92,6 @@ func monitorLocalDisksAndHeal() {
 
 		// Ensure that reformatting disks is finished
 		bgSeq.sourceCh <- nopHeal
-
-		time.Sleep(defaultMonitorNewDiskInterval)
 
 		var erasureSetInZoneToHeal = make([][]int, len(localDisksInZoneHeal))
 		// Compute the list of erasure set to heal

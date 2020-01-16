@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v12"
+	storageRESTVersion       = "v13" // Introduced StorageErr error type.
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )

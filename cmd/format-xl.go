@@ -621,23 +621,28 @@ func formatXLV3Check(reference *formatXLV3, format *formatXLV3) error {
 	return fmt.Errorf("Disk ID %s not found in any disk sets %s", this, format.XL.Sets)
 }
 
-// Initializes meta volume on all input storage disks.
-func initFormatXLMetaVolume(storageDisks []StorageAPI, formats []*formatXLV3) error {
-	// This happens for the first time, but keep this here since this
-	// is the only place where it can be made expensive optimizing all
-	// other calls. Create minio meta volume, if it doesn't exist yet.
+// Initializes meta volume only on local storage disks.
+func initXLMetaVolumesInLocalDisks(storageDisks []StorageAPI, formats []*formatXLV3) error {
+
+	// Compute the local disks eligible for meta volumes (re)initialization
+	var disksToInit []StorageAPI
+	for index := range storageDisks {
+		if formats[index] == nil || storageDisks[index] == nil || storageDisks[index].Hostname() != "" {
+			// Ignore create meta volume on disks which are not found or not local.
+			continue
+		}
+		disksToInit = append(disksToInit, storageDisks[index])
+	}
 
 	// Initialize errs to collect errors inside go-routine.
-	g := errgroup.WithNErrs(len(storageDisks))
+	g := errgroup.WithNErrs(len(disksToInit))
 
 	// Initialize all disks in parallel.
-	for index := range storageDisks {
+	for index := range disksToInit {
+		// Initialize a new index variable in each loop so each
+		// goroutine will return its own instance of index variable.
 		index := index
 		g.Go(func() error {
-			if formats[index] == nil || storageDisks[index] == nil {
-				// Ignore create meta volume on disks which are not found.
-				return nil
-			}
 			return makeFormatXLMetaVolumes(storageDisks[index])
 		}, index)
 	}
@@ -821,13 +826,7 @@ func ecDrivesNoConfig(drivesPerSet int) int {
 // Make XL backend meta volumes.
 func makeFormatXLMetaVolumes(disk StorageAPI) error {
 	// Attempt to create MinIO internal buckets.
-	err := disk.MakeVolBulk(minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, minioMetaBackgroundOpsBucket)
-	if err != nil {
-		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
-			return err
-		}
-	}
-	return nil
+	return disk.MakeVolBulk(minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, minioMetaBackgroundOpsBucket)
 }
 
 var initMetaVolIgnoredErrs = append(baseIgnoredErrs, errVolumeExists)

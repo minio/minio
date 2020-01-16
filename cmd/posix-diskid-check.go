@@ -46,10 +46,6 @@ func (p *posixDiskIDCheck) Hostname() string {
 	return p.storage.Hostname()
 }
 
-func (p *posixDiskIDCheck) LastError() error {
-	return p.storage.LastError()
-}
-
 func (p *posixDiskIDCheck) Close() error {
 	return p.storage.Close()
 }
