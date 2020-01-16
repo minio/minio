@@ -95,7 +95,7 @@ func newConnStats() *ConnStats {
 // HTTPAPIStats holds statistics information about
 // a given API in the requests.
 type HTTPAPIStats struct {
-	APIStats map[string]int
+	apiStats map[string]int
 	sync.RWMutex
 }
 
@@ -106,14 +106,14 @@ func (stats *HTTPAPIStats) Inc(api string) {
 	if stats == nil {
 		return
 	}
-	if stats.APIStats == nil {
-		stats.APIStats = make(map[string]int)
+	if stats.apiStats == nil {
+		stats.apiStats = make(map[string]int)
 	}
-	if _, ok := stats.APIStats[api]; ok {
-		stats.APIStats[api]++
+	if _, ok := stats.apiStats[api]; ok {
+		stats.apiStats[api]++
 		return
 	}
-	stats.APIStats[api] = 1
+	stats.apiStats[api] = 1
 }
 
 // Dec increments the api stats counter.
@@ -123,8 +123,8 @@ func (stats *HTTPAPIStats) Dec(api string) {
 	if stats == nil {
 		return
 	}
-	if val, ok := stats.APIStats[api]; ok && val > 0 {
-		stats.APIStats[api]--
+	if val, ok := stats.apiStats[api]; ok && val > 0 {
+		stats.apiStats[api]--
 	}
 }
 
@@ -132,7 +132,11 @@ func (stats *HTTPAPIStats) Dec(api string) {
 func (stats *HTTPAPIStats) Load() map[string]int {
 	stats.Lock()
 	defer stats.Unlock()
-	return stats.APIStats
+	var apiStats = make(map[string]int, len(stats.apiStats))
+	for k, v := range stats.apiStats {
+		apiStats[k] = v
+	}
+	return apiStats
 }
 
 // HTTPStats holds statistics information about
