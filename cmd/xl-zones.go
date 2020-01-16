@@ -1372,7 +1372,7 @@ func (z *xlZones) GetMetrics(ctx context.Context) (*Metrics, error) {
 	return &Metrics{}, NotImplemented{}
 }
 
-// IsReady - Returns True if all the zones have enough quorum to accept requests.
+// IsReady - Returns true if first zone returns true
 func (z *xlZones) IsReady(ctx context.Context) bool {
 	return z.zones[0].IsReady(ctx)
 }
