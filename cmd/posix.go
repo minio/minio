@@ -440,10 +440,6 @@ func (s *posix) DiskInfo() (info DiskInfo, err error) {
 		}
 	}()
 
-	if s == nil {
-		return info, errFaultyDisk
-	}
-
 	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return info, errFaultyDisk
 	}
