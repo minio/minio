@@ -1462,7 +1462,7 @@ function test_legal_hold() {
         out=$($function 2>&1)
         errcnt=$(echo "$out" | sed -n '/Bucket is missing ObjectLockConfiguration/p' | wc -l)
         # skip test for gateways
-        if [ $errcnt -eq 1 ]; then
+        if [ "$errcnt" -eq 1 ]; then
             return 0
         fi
         rv=$?
