@@ -56,6 +56,11 @@ func (s setsStorageAPI) Close() error {
 	return nil
 }
 
+// Information of a new disk connection
+type diskConnectInfo struct {
+	setIndex int
+}
+
 // xlSets implements ObjectLayer combining a static list of erasure coded
 // object sets. NOTE: There is no dynamic scaling allowed or intended in
 // current design.
@@ -80,6 +85,8 @@ type xlSets struct {
 	// Total number of sets and the number of disks per set.
 	setCount, drivesPerSet int
 
+	disksConnectEvent chan diskConnectInfo
+
 	// Done channel to control monitoring loop.
 	disksConnectDoneCh chan struct{}
 
@@ -88,6 +95,9 @@ type xlSets struct {
 
 	// Merge tree walk
 	pool *MergeWalkPool
+
+	mrfMU      sync.Mutex
+	mrfUploads map[string]int
 }
 
 // isConnected - checks if the endpoint is connected or not.
@@ -135,6 +145,8 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatXLV3, error) {
 
 // findDiskIndex - returns the i,j'th position of the input `format` against the reference
 // format, after successful validation.
+//   - i'th position is the set index
+//   - j'th position is the disk index in the current set
 func findDiskIndex(refFormat, format *formatXLV3) (int, int, error) {
 	if err := formatXLV3Check(refFormat, format); err != nil {
 		return 0, 0, err
@@ -198,7 +210,7 @@ func (s *xlSets) connectDisks() {
 			printEndpointError(endpoint, err)
 			continue
 		}
-		i, j, err := findDiskIndex(s.format, format)
+		setIndex, diskIndex, err := findDiskIndex(s.format, format)
 		if err != nil {
 			// Close the internal connection to avoid connection leaks.
 			disk.Close()
@@ -207,8 +219,14 @@ func (s *xlSets) connectDisks() {
 		}
 		disk.SetDiskID(format.XL.This)
 		s.xlDisksMu.Lock()
-		s.xlDisks[i][j] = disk
+		s.xlDisks[setIndex][diskIndex] = disk
 		s.xlDisksMu.Unlock()
+
+		// Send a new disk connect event with a timeout
+		select {
+		case s.disksConnectEvent <- diskConnectInfo{setIndex: setIndex}:
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
 }
 
@@ -216,6 +234,7 @@ func (s *xlSets) connectDisks() {
 // endpoints by reconnecting them and making sure to place them into right position in
 // the set topology, this monitoring happens at a given monitoring interval.
 func (s *xlSets) monitorAndConnectEndpoints(monitorInterval time.Duration) {
+
 	ticker := time.NewTicker(monitorInterval)
 	// Stop the timer.
 	defer ticker.Stop()
@@ -264,9 +283,11 @@ func newXLSets(endpoints Endpoints, format *formatXLV3, setCount int, drivesPerS
 		setCount:           setCount,
 		drivesPerSet:       drivesPerSet,
 		format:             format,
+		disksConnectEvent:  make(chan diskConnectInfo),
 		disksConnectDoneCh: make(chan struct{}),
 		distributionAlgo:   format.XL.DistributionAlgo,
 		pool:               NewMergeWalkPool(globalMergeLookupTimeout),
+		mrfUploads:         make(map[string]int),
 	}
 
 	mutex := newNSLock(globalIsDistXL)
@@ -281,10 +302,11 @@ func newXLSets(endpoints Endpoints, format *formatXLV3, setCount int, drivesPerS
 
 		// Initialize xl objects for a given set.
 		s.sets[i] = &xlObjects{
-			getDisks:   s.GetDisks(i),
-			getLockers: s.GetLockers(i),
-			nsMutex:    mutex,
-			bp:         bp,
+			getDisks:    s.GetDisks(i),
+			getLockers:  s.GetLockers(i),
+			nsMutex:     mutex,
+			bp:          bp,
+			mrfUploadCh: make(chan partialUpload, 10000),
 		}
 
 		go s.sets[i].cleanupStaleMultipartUploads(context.Background(),
@@ -303,6 +325,9 @@ func newXLSets(endpoints Endpoints, format *formatXLV3, setCount int, drivesPerS
 
 	// Start the disk monitoring and connect routine.
 	go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)
+
+	go s.maintainMRFList()
+	go s.healMRFRoutine()
 
 	return s, nil
 }
@@ -1664,4 +1689,73 @@ func (s *xlSets) IsReady(_ context.Context) bool {
 	}
 	// Disks are not ready
 	return false
+}
+
+// maintainMRFList gathers the list of successful partial uploads
+// from all underlying xl sets and puts them in a global map which
+// should not have more than 10000 entries.
+func (s *xlSets) maintainMRFList() {
+	var agg = make(chan partialUpload, 10000)
+	for i, xl := range s.sets {
+		go func(c <-chan partialUpload, setIndex int) {
+			for msg := range c {
+				msg.failedSet = setIndex
+				select {
+				case agg <- msg:
+				default:
+				}
+			}
+		}(xl.mrfUploadCh, i)
+	}
+
+	for fUpload := range agg {
+		s.mrfMU.Lock()
+		if len(s.mrfUploads) > 10000 {
+			s.mrfMU.Unlock()
+			continue
+		}
+		s.mrfUploads[pathJoin(fUpload.bucket, fUpload.object)] = fUpload.failedSet
+		s.mrfMU.Unlock()
+	}
+}
+
+// healMRFRoutine monitors new disks connection, sweep the MRF list
+// to find objects related to the new disk that needs to be healed.
+func (s *xlSets) healMRFRoutine() {
+	// Wait until background heal state is initialized
+	var bgSeq *healSequence
+	for {
+		var ok bool
+		bgSeq, ok = globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
+		if ok {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	for e := range s.disksConnectEvent {
+		// Get the list of objects related the xl set
+		// to which the connected disk belongs.
+		var mrfUploads []string
+		s.mrfMU.Lock()
+		for k, v := range s.mrfUploads {
+			if v == e.setIndex {
+				mrfUploads = append(mrfUploads, k)
+			}
+		}
+		s.mrfMU.Unlock()
+
+		// Heal objects
+		for _, u := range mrfUploads {
+			// Send an object to be healed with a timeout
+			select {
+			case bgSeq.sourceCh <- u:
+			case <-time.After(100 * time.Millisecond):
+			}
+
+			s.mrfMU.Lock()
+			delete(s.mrfUploads, u)
+			s.mrfMU.Unlock()
+		}
+	}
 }
