@@ -75,7 +75,7 @@ function __init__()
 }
 
 function perform_test_1() {
-    minio_pids=( $(start_minio_3_node 30) )
+    minio_pids=( $(start_minio_3_node 60) )
     for pid in "${minio_pids[@]}"; do
         kill "$pid"
     done
@@ -111,7 +111,7 @@ function perform_test_1() {
 }
 
 function perform_test_2() {
-    minio_pids=( $(start_minio_3_node 30) )
+    minio_pids=( $(start_minio_3_node 60) )
     for pid in "${minio_pids[@]}"; do
         kill "$pid"
     done
@@ -148,7 +148,7 @@ function perform_test_2() {
 }
 
 function perform_test_3() {
-    minio_pids=( $(start_minio_3_node 30) )
+    minio_pids=( $(start_minio_3_node 60) )
     for pid in "${minio_pids[@]}"; do
         kill "$pid"
     done
