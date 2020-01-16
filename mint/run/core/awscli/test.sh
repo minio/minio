@@ -69,6 +69,24 @@ function make_bucket() {
     return $rv
 }
 
+function make_bucket_with_lock() {
+    # Make bucket
+    bucket_name="awscli-mint-test-bucket-$RANDOM"
+    function="${AWS} s3api create-bucket --bucket ${bucket_name} --object-lock-enabled-for-bucket"
+
+    # execute the test
+    out=$($function 2>&1)
+    rv=$?
+
+    # if command is successful print bucket_name or print error
+    if [ $rv -eq 0 ]; then
+        echo "${bucket_name}"
+    else
+        echo "${out}"
+    fi
+
+    return $rv
+}
 function delete_bucket() {
     # Delete bucket
     function="${AWS} s3 rb s3://${1} --force"
@@ -1430,6 +1448,98 @@ function test_worm_bucket() {
     return $rv
 }
 
+# Tests creating and deleting an object with legal hold.
+function test_legal_hold() {
+    # log start time
+    start_time=$(get_time)
+
+    function="make_bucket_with_lock"
+    bucket_name=$(make_bucket_with_lock)
+    rv=$?
+    # if make bucket succeeds upload a file
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key datafile-1-kB --object-lock-legal-hold-status ON"
+        out=$($function 2>&1)
+        errcnt=$(echo "$out" | sed -n '/Bucket is missing ObjectLockConfiguration/p' | wc -l)
+        # skip test for gateways
+        if [ "$errcnt" -eq 1 ]; then
+            return 0
+        fi
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+
+    # if upload succeeds download the file
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api head-object --bucket ${bucket_name} --key datafile-1-kB"
+        # save the ref to function being tested, so it can be logged
+        test_function=${function}
+        out=$($function 2>&1)
+        lhold=$(echo "$out" | jq -r .ObjectLockLegalHoldStatus)
+        rv=$?
+    fi
+
+    # if head-object succeeds, verify metadata has legal hold status
+    if [ $rv -eq 0 ]; then
+       if [ "${lhold}" == "" ]; then
+            rv=1
+            out="Legal hold was not applied"
+        fi
+        if [ "${lhold}" == "OFF" ]; then
+            rv=1
+            out="Legal hold was not applied"
+        fi
+    fi
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object-legal-hold --bucket ${bucket_name} --key datafile-1-kB --legal-hold Status=OFF"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+    # if upload succeeds download the file
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api get-object-legal-hold --bucket ${bucket_name} --key datafile-1-kB"
+        # save the ref to function being tested, so it can be logged
+        test_function=${function}
+        out=$($function 2>&1)
+        lhold=$(echo "$out" | jq -r .LegalHold.Status)
+        rv=$?
+    fi
+
+    # if head-object succeeds, verify metadata has legal hold status
+    if [ $rv -eq 0 ]; then
+       if [ "${lhold}" == "" ]; then
+            rv=1
+            out="Legal hold was not applied"
+        fi
+        if [ "${lhold}" == "ON" ]; then
+            rv=1
+            out="Legal hold status not turned off"
+        fi
+    fi
+     # Attempt a delete on prefix shouldn't delete the directory since we have an object inside it.
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api delete-object --bucket ${bucket_name} --key datafile-1-kB"
+        # save the ref to function being tested, so it can be logged
+        test_function=${function}
+        out=$($function 2>&1)
+        rv=$?
+    fi
+    if [ $rv -eq 0 ]; then
+        log_success "$(get_duration "$start_time")" "${test_function}"
+    else
+        # clean up and log error
+        ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+        log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+    fi
+
+    return $rv
+}
+
 # main handler for all the tests.
 main() {
     # Success tests
@@ -1455,7 +1565,9 @@ main() {
     test_list_objects_error && \
     test_put_object_error && \
     test_serverside_encryption_error && \
-    test_worm_bucket
+    test_worm_bucket && \
+    test_legal_hold 
+
     return $?
 }
 

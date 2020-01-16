@@ -102,6 +102,12 @@ const (
 	// GetObjectRetentionAction - GetObjectRetention, GetObject, HeadObject Rest API action.
 	GetObjectRetentionAction = "s3:GetObjectRetention"
 
+	// GetObjectLegalHoldAction - GetObjectLegalHold, GetObject Rest API action.
+	GetObjectLegalHoldAction = "s3:GetObjectLegalHold"
+
+	// PutObjectLegalHoldAction - PutObjectLegalHold, PutObject Rest API action.
+	PutObjectLegalHoldAction = "s3:PutObjectLegalHold"
+
 	// GetBucketObjectLockConfigurationAction - GetBucketObjectLockConfiguration Rest API action
 	GetBucketObjectLockConfigurationAction = "s3:GetBucketObjectLockConfiguration"
 
@@ -137,6 +143,8 @@ var supportedActions = map[Action]struct{}{
 	PutBucketLifecycleAction:               {},
 	PutObjectRetentionAction:               {},
 	GetObjectRetentionAction:               {},
+	GetObjectLegalHoldAction:               {},
+	PutObjectLegalHoldAction:               {},
 	PutBucketObjectLockConfigurationAction: {},
 	GetBucketObjectLockConfigurationAction: {},
 	BypassGovernanceModeAction:             {},
@@ -153,6 +161,8 @@ func (action Action) isObjectAction() bool {
 	case BypassGovernanceModeAction, BypassGovernanceRetentionAction:
 		return true
 	case PutObjectRetentionAction, GetObjectRetentionAction:
+		return true
+	case PutObjectLegalHoldAction, GetObjectLegalHoldAction:
 		return true
 	}
 
@@ -267,6 +277,8 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 		}, condition.CommonKeys...)...),
 	PutObjectRetentionAction:               condition.NewKeySet(condition.CommonKeys...),
 	GetObjectRetentionAction:               condition.NewKeySet(condition.CommonKeys...),
+	PutObjectLegalHoldAction:               condition.NewKeySet(condition.CommonKeys...),
+	GetObjectLegalHoldAction:               condition.NewKeySet(condition.CommonKeys...),
 	BypassGovernanceModeAction:             condition.NewKeySet(condition.CommonKeys...),
 	BypassGovernanceRetentionAction:        condition.NewKeySet(condition.CommonKeys...),
 	GetBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),

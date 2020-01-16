@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/objectlock"
 	"github.com/minio/minio/pkg/policy"
 )
 
@@ -1611,14 +1612,16 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrOperationTimedOut
 	case errDiskNotFound:
 		apiErr = ErrSlowDown
-	case errInvalidRetentionDate:
+	case objectlock.ErrInvalidRetentionDate:
 		apiErr = ErrInvalidRetentionDate
-	case errPastObjectLockRetainDate:
+	case objectlock.ErrPastObjectLockRetainDate:
 		apiErr = ErrPastObjectLockRetainDate
-	case errUnknownWORMModeDirective:
+	case objectlock.ErrUnknownWORMModeDirective:
 		apiErr = ErrUnknownWORMModeDirective
-	case errObjectLockInvalidHeaders:
+	case objectlock.ErrObjectLockInvalidHeaders:
 		apiErr = ErrObjectLockInvalidHeaders
+	case objectlock.ErrMalformedXML:
+		apiErr = ErrMalformedXML
 	}
 
 	// Compression errors

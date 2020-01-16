@@ -36,6 +36,7 @@ import (
 	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/pkg/objectlock"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -668,7 +669,7 @@ func (sys *NotificationSys) initBucketObjectLockConfig(objAPI ObjectLayer) error
 
 		if string(bucketObjLockData) != bucketObjectLockEnabledConfig {
 			// this should never happen
-			logger.LogIf(ctx, errMalformedBucketObjectConfig)
+			logger.LogIf(ctx, objectlock.ErrMalformedBucketObjectConfig)
 			continue
 		}
 
@@ -677,17 +678,17 @@ func (sys *NotificationSys) initBucketObjectLockConfig(objAPI ObjectLayer) error
 
 		if err != nil {
 			if err == errConfigNotFound {
-				globalBucketObjectLockConfig.Set(bucket.Name, Retention{})
+				globalBucketObjectLockConfig.Set(bucket.Name, objectlock.Retention{})
 				continue
 			}
 			return err
 		}
 
-		config, err := parseObjectLockConfig(bytes.NewReader(configData))
+		config, err := objectlock.ParseObjectLockConfig(bytes.NewReader(configData))
 		if err != nil {
 			return err
 		}
-		retention := Retention{}
+		retention := objectlock.Retention{}
 		if config.Rule != nil {
 			retention = config.ToRetention()
 		}
@@ -874,7 +875,7 @@ func (sys *NotificationSys) Send(args eventArgs) []event.TargetIDErr {
 }
 
 // PutBucketObjectLockConfig - put bucket object lock configuration to all peers.
-func (sys *NotificationSys) PutBucketObjectLockConfig(ctx context.Context, bucketName string, retention Retention) {
+func (sys *NotificationSys) PutBucketObjectLockConfig(ctx context.Context, bucketName string, retention objectlock.Retention) {
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
 		if client == nil {
