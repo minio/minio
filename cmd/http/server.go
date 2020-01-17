@@ -87,14 +87,18 @@ func (srv *Server) Start() (err error) {
 	// Wrap given handler to do additional
 	// * return 503 (service unavailable) if the server in shutdown.
 	wrappedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&srv.requestCount, 1)
-		defer atomic.AddInt32(&srv.requestCount, -1)
-
-		// If server is in shutdown, return 503 (service unavailable)
+		// If server is in shutdown.
 		if atomic.LoadUint32(&srv.inShutdown) != 0 {
-			w.WriteHeader(http.StatusServiceUnavailable)
+			// To indicate disable keep-alives
+			w.Header().Set("Connection", "close")
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(http.ErrServerClosed.Error()))
+			w.(http.Flusher).Flush()
 			return
 		}
+
+		atomic.AddInt32(&srv.requestCount, 1)
+		defer atomic.AddInt32(&srv.requestCount, -1)
 
 		// Handle request using passed handler.
 		handler.ServeHTTP(w, r)
@@ -117,13 +121,13 @@ func (srv *Server) Shutdown() error {
 	srv.listenerMutex.Lock()
 	if srv.listener == nil {
 		srv.listenerMutex.Unlock()
-		return errors.New("server not initialized")
+		return http.ErrServerClosed
 	}
 	srv.listenerMutex.Unlock()
 
 	if atomic.AddUint32(&srv.inShutdown, 1) > 1 {
 		// shutdown in progress
-		return errors.New("http server already in shutdown")
+		return http.ErrServerClosed
 	}
 
 	// Close underneath HTTP listener.
