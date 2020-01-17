@@ -220,7 +220,7 @@ func IsServerResolvable(endpoint Endpoint) error {
 // connect to list of endpoints and load all XL disk formats, validate the formats are correct
 // and are in quorum, if no formats are found attempt to initialize all of them for the first
 // time. additionally make sure to close all the disks used in this attempt.
-func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints, setCount, drivesPerSet int, deploymentID string) (*formatXLV3, error) {
+func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints, zoneCount, setCount, drivesPerSet int, deploymentID string) (*formatXLV3, error) {
 	// Initialize all storage disks
 	storageDisks, errs := initStorageDisksWithErrors(endpoints)
 	defer closeStorageDisks(storageDisks)
@@ -256,6 +256,9 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 
 	// All disks report unformatted we should initialized everyone.
 	if shouldInitXLDisks(sErrs) && firstDisk {
+		logger.Info("Formatting %v zone, %v set(s), %v drives per set.",
+			zoneCount, setCount, drivesPerSet)
+
 		// Initialize erasure code format on disks
 		format, err := initFormatXL(context.Background(), storageDisks, setCount, drivesPerSet, deploymentID)
 		if err != nil {
@@ -333,7 +336,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 }
 
 // Format disks before initialization of object layer.
-func waitForFormatXL(firstDisk bool, endpoints Endpoints, setCount, drivesPerSet int, deploymentID string) (format *formatXLV3, err error) {
+func waitForFormatXL(firstDisk bool, endpoints Endpoints, zoneCount, setCount, drivesPerSet int, deploymentID string) (format *formatXLV3, err error) {
 	if len(endpoints) == 0 || setCount == 0 || drivesPerSet == 0 {
 		return nil, errInvalidArgument
 	}
@@ -360,7 +363,7 @@ func waitForFormatXL(firstDisk bool, endpoints Endpoints, setCount, drivesPerSet
 	for {
 		select {
 		case <-ticker.C:
-			format, err := connectLoadInitFormats(tries, firstDisk, endpoints, setCount, drivesPerSet, deploymentID)
+			format, err := connectLoadInitFormats(tries, firstDisk, endpoints, zoneCount, setCount, drivesPerSet, deploymentID)
 			if err != nil {
 				tries++
 				switch err {

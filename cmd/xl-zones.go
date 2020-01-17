@@ -62,9 +62,7 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 	)
 	local := endpointZones.FirstLocal()
 	for i, ep := range endpointZones {
-		logger.Info("Formatting %v zone, %v set(s), %v drives per set.",
-			i+1, ep.SetCount, ep.DrivesPerSet)
-		formats[i], err = waitForFormatXL(local, ep.Endpoints,
+		formats[i], err = waitForFormatXL(local, ep.Endpoints, i+1,
 			ep.SetCount, ep.DrivesPerSet, deploymentID)
 		if err != nil {
 			return nil, err
