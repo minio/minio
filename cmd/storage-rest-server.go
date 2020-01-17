@@ -119,15 +119,9 @@ func (s *storageRESTServer) CrawlAndGetDataUsageHandler(w http.ResponseWriter, r
 		return
 	}
 
-	usageInfo, err := s.storage.CrawlAndGetDataUsage(GlobalServiceDoneCh)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
 	doneCh := sendWhiteSpaceToHTTPResponse(w)
-	usageInfo, err = s.storage.CrawlAndGetDataUsage(GlobalServiceDoneCh)
+	usageInfo, err := s.storage.CrawlAndGetDataUsage(GlobalServiceDoneCh)
 	<-doneCh
 
 	if err != nil {

@@ -88,7 +88,8 @@ func runDataUsageInfoForXLZones(ctx context.Context, z *xlZones, endCh <-chan st
 			time.Sleep(5 * time.Minute)
 			continue
 		}
-		// Break without locking
+		// Break without unlocking, this node will acquire
+		// data usage calculator role for its lifetime.
 		break
 	}
 
