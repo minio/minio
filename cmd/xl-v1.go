@@ -198,16 +198,18 @@ func (xl xlObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
 	return &Metrics{}, NotImplemented{}
 }
 
+// crawlAndGetDataUsage picks three random disks to crawl and get data usage
 func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
+
 	var randomDisks []StorageAPI
 	for _, d := range xl.getLoadBalancedDisks() {
 		if d == nil || !d.IsOnline() {
 			continue
 		}
-		if len(randomDisks) > 3 {
+		randomDisks = append(randomDisks, d)
+		if len(randomDisks) >= 3 {
 			break
 		}
-		randomDisks = append(randomDisks, d)
 	}
 
 	var dataUsageResults = make([]DataUsageInfo, len(randomDisks))
