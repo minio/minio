@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cat > sysctl.conf <EOF
+cat > sysctl.conf <<EOF
 # maximum number of open files/file descriptors
 fs.file-max = 4194303
 
