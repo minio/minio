@@ -559,7 +559,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		defer xl.bp.Put(buffer)
 	case size < blockSizeV1:
 		// No need to allocate fully blockSizeV1 buffer if the incoming data is smaller.
-		buffer = make([]byte, size, 2*size)
+		buffer = make([]byte, size, 2*size+int64(erasure.parityBlocks+erasure.dataBlocks-1))
 	}
 
 	if len(buffer) > int(xlMeta.Erasure.BlockSize) {
