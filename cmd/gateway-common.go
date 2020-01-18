@@ -304,9 +304,12 @@ func IsBackendOnline(ctx context.Context, clnt *http.Client, urlStr string) bool
 	if err != nil {
 		return false
 	}
-	if _, err = clnt.Do(req); err != nil {
+	resp, err := clnt.Do(req)
+	if err != nil {
+		clnt.CloseIdleConnections()
 		return !xnet.IsNetworkOrHostDown(err)
 	}
+	xhttp.DrainBody(resp.Body)
 	return true
 }
 

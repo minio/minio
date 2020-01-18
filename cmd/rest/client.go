@@ -69,6 +69,7 @@ func (c *Client) CallWithContext(ctx context.Context, method string, values url.
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.httpClient.CloseIdleConnections()
 		return nil, &NetworkError{err}
 	}
 
