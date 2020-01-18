@@ -30,10 +30,8 @@ func handleSignals() {
 		// If global profiler is set stop before we exit.
 		globalProfilerMu.Lock()
 		defer globalProfilerMu.Unlock()
-		if len(globalProfiler) > 0 {
-			for _, p := range globalProfiler {
-				p.Stop()
-			}
+		for _, p := range globalProfiler {
+			p.Stop()
 		}
 
 		if success {

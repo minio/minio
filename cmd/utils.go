@@ -189,7 +189,22 @@ func contains(slice interface{}, elem interface{}) bool {
 // provide any API to calculate the profiler file path in the
 // disk since the name of this latter is randomly generated.
 type profilerWrapper struct {
+	base   []byte
 	stopFn func() ([]byte, error)
+}
+
+func (p *profilerWrapper) recordBase(name string) {
+	var buf bytes.Buffer
+	p.base = nil
+	err := pprof.Lookup(name).WriteTo(&buf, 0)
+	if err != nil {
+		return
+	}
+	p.base = buf.Bytes()
+}
+
+func (p profilerWrapper) Base() []byte {
+	return p.base
 }
 
 func (p profilerWrapper) Stop() ([]byte, error) {
@@ -214,6 +229,10 @@ func getProfileData() (map[string][]byte, error) {
 		delete(globalProfiler, typ)
 		if err == nil {
 			dst[typ] = buf
+		}
+		buf = prof.Base()
+		if len(buf) > 0 {
+			dst[typ+"-before"] = buf
 		}
 	}
 	return dst, nil
@@ -250,28 +269,42 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return ioutil.ReadFile(fn)
 		}
 	case "mem":
-		old := runtime.MemProfileRate
-		runtime.MemProfileRate = 4096
+		runtime.GC()
+		var buf bytes.Buffer
+		err := pprof.Lookup("heap").WriteTo(&buf, 0)
+		if err != nil {
+			return nil, err
+		}
+		prof.base = buf.Bytes()
 		prof.stopFn = func() ([]byte, error) {
+			runtime.GC()
 			var buf bytes.Buffer
-			runtime.MemProfileRate = old
 			err := pprof.Lookup("heap").WriteTo(&buf, 0)
 			return buf.Bytes(), err
 		}
 	case "block":
+		prof.recordBase("block")
 		runtime.SetBlockProfileRate(1)
 		prof.stopFn = func() ([]byte, error) {
 			var buf bytes.Buffer
-			runtime.SetBlockProfileRate(0)
 			err := pprof.Lookup("block").WriteTo(&buf, 0)
+			runtime.SetBlockProfileRate(0)
 			return buf.Bytes(), err
 		}
 	case "mutex":
+		prof.recordBase("mutex")
 		runtime.SetMutexProfileFraction(1)
 		prof.stopFn = func() ([]byte, error) {
 			var buf bytes.Buffer
-			runtime.SetMutexProfileFraction(0)
 			err := pprof.Lookup("mutex").WriteTo(&buf, 0)
+			runtime.SetMutexProfileFraction(0)
+			return buf.Bytes(), err
+		}
+	case "threads":
+		prof.recordBase("threadcreate")
+		prof.stopFn = func() ([]byte, error) {
+			var buf bytes.Buffer
+			err := pprof.Lookup("threadcreate").WriteTo(&buf, 0)
 			return buf.Bytes(), err
 		}
 	case "trace":
@@ -306,6 +339,9 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 
 // minioProfiler - minio profiler interface.
 type minioProfiler interface {
+	// Return base profile.
+	// Return nil if none.
+	Base() []byte
 	// Stop the profiler
 	Stop() ([]byte, error)
 }
