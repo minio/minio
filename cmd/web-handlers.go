@@ -1723,7 +1723,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 
 	reply.UIVersion = browser.UIVersion
 	for prefix, policy := range miniogopolicy.GetPolicies(policyInfo.Statements, args.BucketName, "") {
-		bucketName, objectPrefix := urlPath2BucketObjectName(prefix)
+		bucketName, objectPrefix := path2BucketObject(prefix)
 		objectPrefix = strings.TrimSuffix(objectPrefix, "*")
 		reply.Policies = append(reply.Policies, BucketAccessPolicy{
 			Bucket: bucketName,

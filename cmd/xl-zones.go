@@ -212,7 +212,7 @@ func (z *xlZones) StorageInfo(ctx context.Context) StorageInfo {
 	return storageInfo
 }
 
-func (z *xlZones) crawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
+func (z *xlZones) CrawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
 	var aggDataUsageInfo = struct {
 		sync.Mutex
 		DataUsageInfo
@@ -227,7 +227,7 @@ func (z *xlZones) crawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{
 			wg.Add(1)
 			go func(xl *xlObjects) {
 				defer wg.Done()
-				info := xl.crawlAndGetDataUsage(ctx, endCh)
+				info := xl.CrawlAndGetDataUsage(ctx, endCh)
 
 				aggDataUsageInfo.Lock()
 				aggDataUsageInfo.ObjectsCount += info.ObjectsCount

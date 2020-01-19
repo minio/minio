@@ -631,11 +631,11 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		switch r.Method {
 		case http.MethodPut:
 			if getRequestAuthType(r) == authTypeJWT {
-				bucket, _ = urlPath2BucketObjectName(strings.TrimPrefix(r.URL.Path, minioReservedBucketPath+"/upload"))
+				bucket, _ = path2BucketObjectWithBasePath(minioReservedBucketPath+"/upload", r.URL.Path)
 			}
 		case http.MethodGet:
 			if t := r.URL.Query().Get("token"); t != "" {
-				bucket, _ = urlPath2BucketObjectName(strings.TrimPrefix(r.URL.Path, minioReservedBucketPath+"/download"))
+				bucket, _ = path2BucketObjectWithBasePath(minioReservedBucketPath+"/download", r.URL.Path)
 			} else if getRequestAuthType(r) != authTypeJWT && !strings.HasPrefix(r.URL.Path, minioReservedBucketPath) {
 				bucket, _ = request2BucketObjectName(r)
 			}
@@ -687,7 +687,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	// requests have target bucket and object in URI and source details are in
 	// header fields
 	if r.Method == http.MethodPut && r.Header.Get(xhttp.AmzCopySource) != "" {
-		bucket, object = urlPath2BucketObjectName(r.Header.Get(xhttp.AmzCopySource))
+		bucket, object = path2BucketObject(r.Header.Get(xhttp.AmzCopySource))
 		if bucket == "" || object == "" {
 			f.handler.ServeHTTP(w, r)
 			return

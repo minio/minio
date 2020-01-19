@@ -743,7 +743,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	srcBucket, srcObject := path2BucketAndObject(cpSrcPath)
+	srcBucket, srcObject := path2BucketObject(cpSrcPath)
 	// If source object is empty or bucket is empty, reply back invalid copy source.
 	if srcObject == "" || srcBucket == "" {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopySource), r.URL, guessIsBrowserReq(r))
@@ -1578,7 +1578,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		}
 	}
 
-	srcBucket, srcObject := path2BucketAndObject(cpSrcPath)
+	srcBucket, srcObject := path2BucketObject(cpSrcPath)
 	// If source object is empty or bucket is empty, reply back invalid copy source.
 	if srcObject == "" || srcBucket == "" {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopySource), r.URL, guessIsBrowserReq(r))

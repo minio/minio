@@ -46,6 +46,12 @@ func NewGatewayLayerWithLocker(gwLayer ObjectLayer) ObjectLayer {
 // GatewayUnsupported list of unsupported call stubs for gateway.
 type GatewayUnsupported struct{}
 
+// CrawlAndGetDataUsage - crawl is not implemented for gateway
+func (a GatewayUnsupported) CrawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
+	logger.CriticalIf(ctx, errors.New("not implemented"))
+	return DataUsageInfo{}
+}
+
 // NewNSLock is a dummy stub for gateway.
 func (a GatewayUnsupported) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
 	logger.CriticalIf(ctx, errors.New("not implemented"))

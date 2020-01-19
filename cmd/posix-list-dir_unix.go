@@ -122,8 +122,11 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 		if typ == unexpectedFileMode || typ&os.ModeSymlink == os.ModeSymlink {
 			fi, err := os.Stat(pathJoin(dirPath, name))
 			if err != nil {
-				// It got deleted in the meantime.
-				if os.IsNotExist(err) {
+				// It got deleted in the meantime, not found
+				// or returns too many symlinks ignore this
+				// file/directory.
+				if os.IsNotExist(err) || isSysErrPathNotFound(err) ||
+					isSysErrTooManySymlinks(err) {
 					continue
 				}
 				return nil, err

@@ -334,91 +334,39 @@ func isQuitting(endCh chan struct{}) bool {
 }
 
 func (s *posix) waitForLowActiveIO() error {
-	t := time.NewTicker(lowActiveIOWaitTick)
-	defer t.Stop()
-	for {
-		if atomic.LoadInt32(&s.activeIOCount) >= s.maxActiveIOCount {
-			select {
-			case <-GlobalServiceDoneCh:
-				return errors.New("forced exit")
-			case <-t.C:
-				continue
-			}
+	for atomic.LoadInt32(&s.activeIOCount) >= s.maxActiveIOCount {
+		select {
+		case <-GlobalServiceDoneCh:
+			return errors.New("forced exit")
+		case <-time.NewTimer(lowActiveIOWaitTick).C:
+			continue
 		}
-		break
 	}
 	return nil
 }
 
 func (s *posix) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, error) {
-
-	var dataUsageInfoMu sync.Mutex
-	var dataUsageInfo = DataUsageInfo{
-		BucketsSizes:          make(map[string]uint64),
-		ObjectsSizesHistogram: make(map[string]uint64),
-	}
-
-	walkFn := func(origPath string, typ os.FileMode) error {
-
-		select {
-		case <-GlobalServiceDoneCh:
-			return filepath.SkipDir
-		default:
+	dataUsageInfo := updateUsage(s.diskPath, endCh, s.waitForLowActiveIO, func(item Item) (int64, error) {
+		// Look for `xl.json' at the leaf.
+		if !strings.HasSuffix(item.Path, SlashSeparator+xlMetaJSONFile) {
+			// if no xl.json found, skip the file.
+			return 0, errSkipFile
 		}
 
-		if err := s.waitForLowActiveIO(); err != nil {
-			return filepath.SkipDir
+		xlMetaBuf, err := ioutil.ReadFile(item.Path)
+		if err != nil {
+			return 0, errSkipFile
 		}
 
-		path := strings.TrimPrefix(origPath, s.diskPath)
-		path = strings.TrimPrefix(path, SlashSeparator)
-
-		splits := splitN(path, SlashSeparator, 2)
-
-		bucket := splits[0]
-		prefix := splits[1]
-
-		if bucket == "" {
-			return nil
+		meta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaBuf)
+		if err != nil {
+			return 0, errSkipFile
 		}
 
-		if isReservedOrInvalidBucket(bucket, false) {
-			return nil
-		}
-
-		if prefix == "" {
-			dataUsageInfoMu.Lock()
-			dataUsageInfo.BucketsCount++
-			dataUsageInfo.BucketsSizes[bucket] = 0
-			dataUsageInfoMu.Unlock()
-			return nil
-		}
-
-		if strings.HasSuffix(prefix, SlashSeparator+xlMetaJSONFile) {
-			xlMetaBuf, err := ioutil.ReadFile(origPath)
-			if err != nil {
-				return nil
-			}
-			meta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaBuf)
-			if err != nil {
-				return nil
-			}
-
-			dataUsageInfoMu.Lock()
-			dataUsageInfo.ObjectsCount++
-			dataUsageInfo.ObjectsTotalSize += uint64(meta.Stat.Size)
-			dataUsageInfo.BucketsSizes[bucket] += uint64(meta.Stat.Size)
-			dataUsageInfo.ObjectsSizesHistogram[objSizeToHistoInterval(uint64(meta.Stat.Size))]++
-			dataUsageInfoMu.Unlock()
-		}
-
-		return nil
-	}
-
-	fastWalk(s.diskPath, walkFn)
+		return meta.Stat.Size, nil
+	})
 
 	dataUsageInfo.LastUpdate = UTCNow()
-
 	atomic.StoreUint64(&s.totalUsed, dataUsageInfo.ObjectsTotalSize)
 	return dataUsageInfo, nil
 }

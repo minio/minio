@@ -302,13 +302,13 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 
 	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
 	if err != nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	dataUsageInfoJSON, err := json.Marshal(dataUsageInfo)
 	if err != nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 

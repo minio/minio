@@ -57,6 +57,7 @@ type ObjectLayer interface {
 
 	// Storage operations.
 	Shutdown(context.Context) error
+	CrawlAndGetDataUsage(context.Context, <-chan struct{}) DataUsageInfo
 	StorageInfo(context.Context) StorageInfo
 
 	// Bucket operations.

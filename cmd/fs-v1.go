@@ -27,7 +27,6 @@ import (
 	"os"
 	"os/user"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -111,8 +110,7 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 		return err
 	}
 
-	metaStatsPath := pathJoin(fsPath, minioMetaBackgroundOpsBucket, fsUUID)
-	if err := os.MkdirAll(metaStatsPath, 0777); err != nil {
+	if err := os.MkdirAll(pathJoin(fsPath, minioMetaBackgroundOpsBucket), 0777); err != nil {
 		return err
 	}
 
@@ -229,90 +227,30 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
 }
 
 func (fs *FSObjects) waitForLowActiveIO() error {
-	t := time.NewTicker(lowActiveIOWaitTick)
-	defer t.Stop()
-	for {
-		if atomic.LoadInt64(&fs.activeIOCount) >= fs.maxActiveIOCount {
-			select {
-			case <-GlobalServiceDoneCh:
-				return errors.New("forced exit")
-			case <-t.C:
-				continue
-			}
+	for atomic.LoadInt64(&fs.activeIOCount) >= fs.maxActiveIOCount {
+		select {
+		case <-GlobalServiceDoneCh:
+			return errors.New("forced exit")
+		case <-time.NewTimer(lowActiveIOWaitTick).C:
+			continue
 		}
-		break
 	}
 
 	return nil
 
 }
 
-// crawlAndGetDataUsageInfo returns data usage stats of the current FS deployment
-func (fs *FSObjects) crawlAndGetDataUsageInfo(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
-
-	var dataUsageInfoMu sync.Mutex
-	var dataUsageInfo = DataUsageInfo{
-		BucketsSizes:          make(map[string]uint64),
-		ObjectsSizesHistogram: make(map[string]uint64),
-	}
-
-	walkFn := func(origPath string, typ os.FileMode) error {
-
-		select {
-		case <-GlobalServiceDoneCh:
-			return filepath.SkipDir
-		default:
-		}
-
-		if err := fs.waitForLowActiveIO(); err != nil {
-			return filepath.SkipDir
-		}
-
-		path := strings.TrimPrefix(origPath, fs.fsPath)
-		path = strings.TrimPrefix(path, SlashSeparator)
-
-		splits := splitN(path, SlashSeparator, 2)
-		bucket := splits[0]
-		prefix := splits[1]
-
-		if bucket == "" {
-			return nil
-		}
-
-		if isReservedOrInvalidBucket(bucket, false) {
-			return filepath.SkipDir
-		}
-
-		if prefix == "" {
-			dataUsageInfoMu.Lock()
-			dataUsageInfo.BucketsCount++
-			dataUsageInfo.BucketsSizes[bucket] = 0
-			dataUsageInfoMu.Unlock()
-			return nil
-		}
-
-		if typ&os.ModeDir != 0 {
-			return nil
-		}
-
-		// Get file size
-		fi, err := os.Stat(origPath)
+// CrawlAndGetDataUsage returns data usage stats of the current FS deployment
+func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
+	dataUsageInfo := updateUsage(fs.fsPath, endCh, fs.waitForLowActiveIO, func(item Item) (int64, error) {
+		// Get file size, symlinks which cannot bex
+		// followed are automatically filtered by fastwalk.
+		fi, err := os.Stat(item.Path)
 		if err != nil {
-			return nil
+			return 0, errSkipFile
 		}
-		size := fi.Size()
-
-		dataUsageInfoMu.Lock()
-		dataUsageInfo.ObjectsCount++
-		dataUsageInfo.ObjectsTotalSize += uint64(size)
-		dataUsageInfo.BucketsSizes[bucket] += uint64(size)
-		dataUsageInfo.ObjectsSizesHistogram[objSizeToHistoInterval(uint64(size))]++
-		dataUsageInfoMu.Unlock()
-
-		return nil
-	}
-
-	fastWalk(fs.fsPath, walkFn)
+		return fi.Size(), nil
+	})
 
 	dataUsageInfo.LastUpdate = UTCNow()
 	atomic.StoreUint64(&fs.totalUsed, dataUsageInfo.ObjectsTotalSize)

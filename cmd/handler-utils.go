@@ -98,23 +98,6 @@ func isDirectiveReplace(value string) bool {
 	return value == replaceDirective
 }
 
-// Splits an incoming path into bucket and object components.
-func path2BucketAndObject(path string) (bucket, object string) {
-	// Skip the first element if it is '/', split the rest.
-	path = strings.TrimPrefix(path, SlashSeparator)
-	pathComponents := strings.SplitN(path, SlashSeparator, 2)
-
-	// Save the bucket and object extracted from path.
-	switch len(pathComponents) {
-	case 1:
-		bucket = pathComponents[0]
-	case 2:
-		bucket = pathComponents[0]
-		object = pathComponents[1]
-	}
-	return bucket, object
-}
-
 // userMetadataKeyPrefixes contains the prefixes of used-defined metadata keys.
 // All values stored with a key starting with one of the following prefixes
 // must be extracted from the header.

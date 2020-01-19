@@ -67,28 +67,24 @@ func request2BucketObjectName(r *http.Request) (bucketName, objectName string) {
 	if err != nil {
 		logger.CriticalIf(context.Background(), err)
 	}
-	return urlPath2BucketObjectName(path)
+
+	return path2BucketObject(path)
 }
 
-// Convert url path into bucket and object name.
-func urlPath2BucketObjectName(path string) (bucketName, objectName string) {
-	if path == "" || path == SlashSeparator {
-		return "", ""
+// path2BucketObjectWithBasePath returns bucket and prefix, if any,
+// of a 'path'. basePath is trimmed from the front of the 'path'.
+func path2BucketObjectWithBasePath(basePath, path string) (bucket, prefix string) {
+	path = strings.TrimPrefix(path, basePath)
+	path = strings.TrimPrefix(path, SlashSeparator)
+	m := strings.Index(path, SlashSeparator)
+	if m < 0 {
+		return path, ""
 	}
+	return path[:m], path[m+len(SlashSeparator):]
+}
 
-	// Trim any preceding slash separator.
-	urlPath := strings.TrimPrefix(path, SlashSeparator)
-
-	// Split urlpath using slash separator into a given number of
-	// expected tokens.
-	tokens := strings.SplitN(urlPath, SlashSeparator, 2)
-	bucketName = tokens[0]
-	if len(tokens) == 2 {
-		objectName = tokens[1]
-	}
-
-	// Success.
-	return bucketName, objectName
+func path2BucketObject(s string) (bucket, prefix string) {
+	return path2BucketObjectWithBasePath("", s)
 }
 
 // URI scheme constants.
@@ -551,16 +547,6 @@ func getMinioMode() string {
 		mode = globalMinioModeGatewayPrefix + globalGatewayName
 	}
 	return mode
-}
-
-func splitN(str, delim string, num int) []string {
-	stdSplit := strings.SplitN(str, delim, num)
-	retSplit := make([]string, num)
-	for i := 0; i < len(stdSplit); i++ {
-		retSplit[i] = stdSplit[i]
-	}
-
-	return retSplit
 }
 
 func iamPolicyClaimName() string {

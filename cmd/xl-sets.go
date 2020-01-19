@@ -435,6 +435,10 @@ func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 	return storageInfo
 }
 
+func (s *xlSets) CrawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
+	return DataUsageInfo{}
+}
+
 // Shutdown shutsdown all erasure coded sets in parallel
 // returns error upon first error.
 func (s *xlSets) Shutdown(ctx context.Context) error {
