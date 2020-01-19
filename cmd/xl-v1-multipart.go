@@ -353,7 +353,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 		defer xl.bp.Put(buffer)
 	case size < blockSizeV1:
 		// No need to allocate fully blockSizeV1 buffer if the incoming data is smaller.
-		buffer = make([]byte, size, 2*size)
+		buffer = make([]byte, size, 2*size+int64(erasure.parityBlocks+erasure.dataBlocks-1))
 	}
 
 	if len(buffer) > int(xlMeta.Erasure.BlockSize) {
@@ -584,8 +584,10 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 
 	uploadIDPath := xl.getUploadIDDir(bucket, object, uploadID)
 
+	storageDisks := xl.getDisks()
+
 	// Read metadata associated with the object from all disks.
-	partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), minioMetaMultipartBucket, uploadIDPath)
+	partsMetadata, errs := readAllXLMetadata(ctx, storageDisks, minioMetaMultipartBucket, uploadIDPath)
 
 	// get Quorum for this object
 	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
@@ -598,7 +600,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		return oi, toObjectErr(reducedErr, bucket, object)
 	}
 
-	onlineDisks, modTime := listOnlineDisks(xl.getDisks(), partsMetadata, errs)
+	onlineDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
 
 	// Calculate full object size.
 	var objectSize int64
@@ -708,7 +710,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 
 	if xl.isObject(bucket, object) {
 		// Deny if WORM is enabled
-		if _, ok := isWORMEnabled(bucket); ok {
+		if isWORMEnabled(bucket) {
 			if _, err := xl.getObjectInfo(ctx, bucket, object); err == nil {
 				return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
 			}
@@ -743,8 +745,15 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	}
 
 	// Rename the multipart object to final location.
-	if _, err = rename(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, bucket, object, true, writeQuorum, nil); err != nil {
+	if onlineDisks, err = rename(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, bucket, object, true, writeQuorum, nil); err != nil {
 		return oi, toObjectErr(err, bucket, object)
+	}
+
+	// Check if there is any offline disk and add it to the MRF list
+	for i := 0; i < len(onlineDisks); i++ {
+		if onlineDisks[i] == nil || storageDisks[i] == nil {
+			xl.addPartialUpload(bucket, object)
+		}
 	}
 
 	// Success, return object info.

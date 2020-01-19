@@ -234,7 +234,7 @@ func (k KafkaArgs) pingBrokers() bool {
 }
 
 // NewKafkaTarget - creates new Kafka target with auth credentials.
-func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*KafkaTarget, error) {
+func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*KafkaTarget, error) {
 	config := sarama.NewConfig()
 
 	config.Net.SASL.User = args.SASL.User
@@ -287,7 +287,7 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 		store:    store,
 	}
 
-	if target.store != nil {
+	if target.store != nil && !test {
 		// Replays the events from the store.
 		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
 		// Start replaying events from the store.

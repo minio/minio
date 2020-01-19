@@ -29,7 +29,6 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/cli"
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
@@ -53,8 +52,7 @@ const (
 // Endpoint - any type of endpoint.
 type Endpoint struct {
 	*url.URL
-	IsLocal  bool
-	SetIndex int
+	IsLocal bool
 }
 
 func (endpoint Endpoint) String() string {
@@ -193,6 +191,24 @@ type ZoneEndpoints struct {
 
 // EndpointZones - list of list of endpoints
 type EndpointZones []ZoneEndpoints
+
+// Add add zone endpoints
+func (l *EndpointZones) Add(zeps ZoneEndpoints) error {
+	existSet := set.NewStringSet()
+	for _, zep := range *l {
+		for _, ep := range zep.Endpoints {
+			existSet.Add(ep.String())
+		}
+	}
+	// Validate if there are duplicate endpoints across zones
+	for _, ep := range zeps.Endpoints {
+		if existSet.Contains(ep.String()) {
+			return fmt.Errorf("duplicate endpoints found")
+		}
+	}
+	*l = append(*l, zeps)
+	return nil
+}
 
 // FirstLocal returns true if the first endpoint is local.
 func (l EndpointZones) FirstLocal() bool {
@@ -442,28 +458,6 @@ func NewEndpoints(args ...string) (endpoints Endpoints, err error) {
 	return endpoints, nil
 }
 
-func checkEndpointsSubOptimal(ctx *cli.Context, setupType SetupType, endpointZones EndpointZones) (err error) {
-	// Validate sub optimal ordering only for distributed setup.
-	if setupType != DistXLSetupType {
-		return nil
-	}
-	var endpointOrder int
-	err = fmt.Errorf("Too many disk args are local, input is in sub-optimal order. Please review input args: %s", ctx.Args())
-	for _, endpoints := range endpointZones {
-		for _, endpoint := range endpoints.Endpoints {
-			if endpoint.IsLocal {
-				endpointOrder++
-			} else {
-				endpointOrder--
-			}
-			if endpointOrder >= 2 {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 // Checks if there are any cross device mounts.
 func checkCrossDeviceMounts(endpoints Endpoints) (err error) {
 	var absPaths []string
@@ -517,9 +511,8 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 		return endpoints, setupType, nil
 	}
 
-	for i, iargs := range args {
+	for _, iargs := range args {
 		// Convert args to endpoints
-		var newEndpoints Endpoints
 		eps, err := NewEndpoints(iargs...)
 		if err != nil {
 			return endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
@@ -530,11 +523,7 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 			return endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
 		}
 
-		for _, ep := range eps {
-			ep.SetIndex = i
-			newEndpoints = append(newEndpoints, ep)
-		}
-		endpoints = append(endpoints, newEndpoints...)
+		endpoints = append(endpoints, eps...)
 	}
 
 	if len(endpoints) == 0 {
@@ -608,13 +597,14 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 
 	// All endpoints are pointing to local host
 	if len(endpoints) == localEndpointCount {
-		// If all endpoints have same port number, then this is XL setup using URL style endpoints.
+		// If all endpoints have same port number, Just treat it as distXL setup
+		// using URL style endpoints.
 		if len(localPortSet) == 1 {
 			if len(localServerHostSet) > 1 {
 				return endpoints, setupType,
 					config.ErrInvalidErasureEndpoints(nil).Msg("all local endpoints should not have different hostnames/ips")
 			}
-			return endpoints, XLSetupType, nil
+			return endpoints, DistXLSetupType, nil
 		}
 
 		// Even though all endpoints are local, but those endpoints use different ports.

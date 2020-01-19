@@ -18,7 +18,6 @@ package iampolicy
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/minio/minio/pkg/policy/condition"
 	"github.com/minio/minio/pkg/wildcard"
@@ -103,6 +102,12 @@ const (
 	// GetObjectRetentionAction - GetObjectRetention, GetObject, HeadObject Rest API action.
 	GetObjectRetentionAction = "s3:GetObjectRetention"
 
+	// GetObjectLegalHoldAction - GetObjectLegalHold, GetObject Rest API action.
+	GetObjectLegalHoldAction = "s3:GetObjectLegalHold"
+
+	// PutObjectLegalHoldAction - PutObjectLegalHold, PutObject Rest API action.
+	PutObjectLegalHoldAction = "s3:PutObjectLegalHold"
+
 	// GetBucketObjectLockConfigurationAction - GetBucketObjectLockConfiguration Rest API action
 	GetBucketObjectLockConfigurationAction = "s3:GetBucketObjectLockConfiguration"
 
@@ -138,6 +143,8 @@ var supportedActions = map[Action]struct{}{
 	PutBucketLifecycleAction:               {},
 	PutObjectRetentionAction:               {},
 	GetObjectRetentionAction:               {},
+	GetObjectLegalHoldAction:               {},
+	PutObjectLegalHoldAction:               {},
 	PutBucketObjectLockConfigurationAction: {},
 	GetBucketObjectLockConfigurationAction: {},
 	BypassGovernanceModeAction:             {},
@@ -154,6 +161,8 @@ func (action Action) isObjectAction() bool {
 	case BypassGovernanceModeAction, BypassGovernanceRetentionAction:
 		return true
 	case PutObjectRetentionAction, GetObjectRetentionAction:
+		return true
+	case PutObjectLegalHoldAction, GetObjectLegalHoldAction:
 		return true
 	}
 
@@ -177,7 +186,7 @@ func (action Action) MarshalJSON() ([]byte, error) {
 		return json.Marshal(string(action))
 	}
 
-	return nil, fmt.Errorf("invalid action '%v'", action)
+	return nil, Errorf("invalid action '%v'", action)
 }
 
 // UnmarshalJSON - decodes JSON data to Action.
@@ -190,7 +199,7 @@ func (action *Action) UnmarshalJSON(data []byte) error {
 
 	a := Action(s)
 	if !a.IsValid() {
-		return fmt.Errorf("invalid action '%v'", s)
+		return Errorf("invalid action '%v'", s)
 	}
 
 	*action = a
@@ -209,7 +218,7 @@ func parseAction(s string) (Action, error) {
 		return action, nil
 	}
 
-	return action, fmt.Errorf("unsupported action '%v'", s)
+	return action, Errorf("unsupported action '%v'", s)
 }
 
 // actionConditionKeyMap - holds mapping of supported condition key for an action.
@@ -268,6 +277,8 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 		}, condition.CommonKeys...)...),
 	PutObjectRetentionAction:               condition.NewKeySet(condition.CommonKeys...),
 	GetObjectRetentionAction:               condition.NewKeySet(condition.CommonKeys...),
+	PutObjectLegalHoldAction:               condition.NewKeySet(condition.CommonKeys...),
+	GetObjectLegalHoldAction:               condition.NewKeySet(condition.CommonKeys...),
 	BypassGovernanceModeAction:             condition.NewKeySet(condition.CommonKeys...),
 	BypassGovernanceRetentionAction:        condition.NewKeySet(condition.CommonKeys...),
 	GetBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),

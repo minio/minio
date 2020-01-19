@@ -571,30 +571,44 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 	}
 
 	vars := mux.Vars(r)
-	profiler := vars["profilerType"]
-
+	profiles := strings.Split(vars["profilerType"], ",")
 	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	// Start profiling on remote servers.
-	hostErrs := globalNotificationSys.StartProfiling(profiler)
+	globalProfilerMu.Lock()
+	defer globalProfilerMu.Unlock()
 
-	// Start profiling locally as well.
-	{
-		if globalProfiler != nil {
-			globalProfiler.Stop()
+	if globalProfiler == nil {
+		globalProfiler = make(map[string]minioProfiler, 10)
+	}
+
+	// Stop profiler of all types if already running
+	for k, v := range globalProfiler {
+		for _, p := range profiles {
+			if p == k {
+				v.Stop()
+				delete(globalProfiler, k)
+			}
 		}
-		prof, err := startProfiler(profiler, "")
+	}
+
+	// Start profiling on remote servers.
+	var hostErrs []NotificationPeerErr
+	for _, profiler := range profiles {
+		hostErrs = append(hostErrs, globalNotificationSys.StartProfiling(profiler)...)
+
+		// Start profiling locally as well.
+		prof, err := startProfiler(profiler)
 		if err != nil {
 			hostErrs = append(hostErrs, NotificationPeerErr{
 				Host: *thisAddr,
 				Err:  err,
 			})
 		} else {
-			globalProfiler = prof
+			globalProfiler[profiler] = prof
 			hostErrs = append(hostErrs, NotificationPeerErr{
 				Host: *thisAddr,
 			})
@@ -620,7 +634,7 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	writeSuccessResponseJSON(w, []byte(startProfilingResultInBytes))
+	writeSuccessResponseJSON(w, startProfilingResultInBytes)
 }
 
 // dummyFileInfo represents a dummy representation of a profile data file
@@ -979,6 +993,12 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 
 	var apiErr APIError
 	switch e := err.(type) {
+	case iampolicy.Error:
+		apiErr = APIError{
+			Code:           "XMinioMalformedIAMPolicy",
+			Description:    e.Error(),
+			HTTPStatusCode: http.StatusBadRequest,
+		}
 	case config.Error:
 		apiErr = APIError{
 			Code:           "XMinioConfigError",
@@ -1451,7 +1471,9 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 
 func fetchLambdaInfo(cfg config.Config) []map[string][]madmin.TargetIDStatus {
 	lambdaMap := make(map[string][]madmin.TargetIDStatus)
-	targetList, _ := notify.GetNotificationTargets(cfg, GlobalServiceDoneCh, NewCustomHTTPTransport())
+
+	// Fetch the targets
+	targetList, _ := notify.RegisterNotificationTargets(cfg, GlobalServiceDoneCh, NewCustomHTTPTransport(), nil, true)
 
 	for targetID, target := range targetList.TargetMap() {
 		targetIDStatus := make(map[string]madmin.Status)
@@ -1464,6 +1486,8 @@ func fetchLambdaInfo(cfg config.Config) []map[string][]madmin.TargetIDStatus {
 		list := lambdaMap[targetID.Name]
 		list = append(list, targetIDStatus)
 		lambdaMap[targetID.Name] = list
+		// Close any leaking connections
+		_ = target.Close()
 	}
 
 	notify := make([]map[string][]madmin.TargetIDStatus, len(lambdaMap))

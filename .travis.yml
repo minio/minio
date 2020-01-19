@@ -32,8 +32,7 @@ matrix:
         - make
         - diff -au <(gofmt -s -d cmd) <(printf "")
         - diff -au <(gofmt -s -d pkg) <(printf "")
-        - for d in $(go list ./... | grep -v browser); do CGO_ENABLED=1 go test -v -race --timeout 20m "$d"; done
-        - make verifiers
+        - make test-race
         - make crosscompile
         - make verify
         - cd browser && npm install && npm run test && cd ..

@@ -47,6 +47,10 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	// reset global variables to start afresh.
 	resetTestGlobals()
 
+	// Set globalIsXL to indicate that the setup uses an erasure
+	// code backend.
+	globalIsXL = true
+
 	// Initializing objectLayer for HealFormatHandler.
 	objLayer, xlDirs, xlErr := initTestXLObjLayer()
 	if xlErr != nil {
@@ -62,15 +66,6 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	globalBootTime = UTCNow()
 
 	globalEndpoints = mustGetZoneEndpoints(xlDirs...)
-
-	// Set globalIsXL to indicate that the setup uses an erasure
-	// code backend.
-	globalIsXL = true
-
-	// Init global heal state
-	if globalIsXL {
-		globalAllHealState = initHealState()
-	}
 
 	globalConfigSys = NewConfigSys()
 
@@ -114,7 +109,7 @@ func initTestXLObjLayer() (ObjectLayer, []string, error) {
 		return nil, nil, err
 	}
 	endpoints := mustGetNewEndpoints(xlDirs...)
-	format, err := waitForFormatXL(true, endpoints, 1, 16, "")
+	format, err := waitForFormatXL(true, endpoints, 1, 1, 16, "")
 	if err != nil {
 		removeRoots(xlDirs)
 		return nil, nil, err

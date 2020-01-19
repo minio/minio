@@ -193,7 +193,7 @@ func prepareXLSets32() (ObjectLayer, []string, error) {
 
 	endpoints := append(endpoints1, endpoints2...)
 	fsDirs := append(fsDirs1, fsDirs2...)
-	format, err := waitForFormatXL(true, endpoints, 2, 16, "")
+	format, err := waitForFormatXL(true, endpoints, 1, 2, 16, "")
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, nil, err
@@ -459,15 +459,30 @@ func resetGlobalIsXL() {
 
 // reset global heal state
 func resetGlobalHealState() {
+	// Init global heal state
 	if globalAllHealState == nil {
-		return
-	}
-	globalAllHealState.Lock()
-	defer globalAllHealState.Unlock()
-	for _, v := range globalAllHealState.healSeqMap {
-		if !v.hasEnded() {
-			v.stop()
+		globalAllHealState = initHealState()
+	} else {
+		globalAllHealState.Lock()
+		for _, v := range globalAllHealState.healSeqMap {
+			if !v.hasEnded() {
+				v.stop()
+			}
 		}
+		globalAllHealState.Unlock()
+	}
+
+	// Init background heal state
+	if globalBackgroundHealState == nil {
+		globalBackgroundHealState = initHealState()
+	} else {
+		globalBackgroundHealState.Lock()
+		for _, v := range globalBackgroundHealState.healSeqMap {
+			if !v.hasEnded() {
+				v.stop()
+			}
+		}
+		globalBackgroundHealState.Unlock()
 	}
 }
 
@@ -1894,7 +1909,8 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
 
-	globalIAMSys = NewIAMSys()
+	newAllSubsystems()
+
 	globalIAMSys.Init(objLayer)
 
 	buckets, err := objLayer.ListBuckets(context.Background())
@@ -1902,7 +1918,6 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 		t.Fatalf("Unable to list buckets on backend %s", err)
 	}
 
-	globalPolicySys = NewPolicySys()
 	globalPolicySys.Init(buckets, objLayer)
 
 	credentials := globalActiveCred

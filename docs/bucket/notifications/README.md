@@ -77,6 +77,7 @@ KEY:
 notify_amqp[:name]  publish bucket notifications to AMQP endpoints
 
 ARGS:
+MINIO_NOTIFY_AMQP_ENABLE         (on|off)    enable amqp notifications, default is 'off'
 MINIO_NOTIFY_AMQP_URL*           (url)       AMQP server endpoint e.g. `amqp://myuser:mypassword@localhost:5672`
 MINIO_NOTIFY_AMQP_EXCHANGE       (string)    name of the AMQP exchange
 MINIO_NOTIFY_AMQP_EXCHANGE_TYPE  (string)    AMQP exchange type
@@ -971,7 +972,7 @@ MINIO_NOTIFY_MYSQL_QUEUE_LIMIT  (number)             maximum limit for undeliver
 MINIO_NOTIFY_MYSQL_COMMENT      (sentence)           optionally add a comment to this setting
 ```
 
-`dns_string` is optional, if not specified, the connection information specified by the `host`, `port`, `user`, `password` and `database` parameters are used.
+`dsn_string` is optional, if not specified, the connection information specified by the `host`, `port`, `user`, `password` and `database` parameters are used.
 
 MinIO supports persistent event store. The persistent store will backup events when the MySQL connection goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
 

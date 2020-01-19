@@ -60,8 +60,9 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 		formats = make([]*formatXLV3, len(endpointZones))
 		z       = &xlZones{zones: make([]*xlSets, len(endpointZones))}
 	)
+	local := endpointZones.FirstLocal()
 	for i, ep := range endpointZones {
-		formats[i], err = waitForFormatXL(endpointZones.FirstLocal(), ep.Endpoints,
+		formats[i], err = waitForFormatXL(local, ep.Endpoints, i+1,
 			ep.SetCount, ep.DrivesPerSet, deploymentID)
 		if err != nil {
 			return nil, err
@@ -69,8 +70,6 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 		if deploymentID == "" {
 			deploymentID = formats[i].ID
 		}
-	}
-	for i, ep := range endpointZones {
 		z.zones[i], err = newXLSets(ep.Endpoints, formats[i], ep.SetCount, ep.DrivesPerSet)
 		if err != nil {
 			return nil, err
@@ -1261,16 +1260,27 @@ func (z *xlZones) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResul
 		Type:   madmin.HealItemMetadata,
 		Detail: "disk-format",
 	}
+
+	var countNoHeal int
 	for _, zone := range z.zones {
 		result, err := zone.HealFormat(ctx, dryRun)
 		if err != nil && err != errNoHealRequired {
 			logger.LogIf(ctx, err)
 			continue
 		}
+		// Count errNoHealRequired across all zones,
+		// to return appropriate error to the caller
+		if err == errNoHealRequired {
+			countNoHeal++
+		}
 		r.DiskCount += result.DiskCount
 		r.SetCount += result.SetCount
 		r.Before.Drives = append(r.Before.Drives, result.Before.Drives...)
 		r.After.Drives = append(r.After.Drives, result.After.Drives...)
+	}
+	// No heal returned by all zones, return errNoHealRequired
+	if countNoHeal == len(z.zones) {
+		return r, errNoHealRequired
 	}
 	return r, nil
 }
@@ -1360,15 +1370,7 @@ func (z *xlZones) GetMetrics(ctx context.Context) (*Metrics, error) {
 	return &Metrics{}, NotImplemented{}
 }
 
-// IsReady - Returns True if all the zones have enough quorum to accept requests.
+// IsReady - Returns true if first zone returns true
 func (z *xlZones) IsReady(ctx context.Context) bool {
-	if z.SingleZone() {
-		return z.zones[0].IsReady(ctx)
-	}
-	for _, xlsets := range z.zones {
-		if !xlsets.IsReady(ctx) {
-			return false
-		}
-	}
-	return true
+	return z.zones[0].IsReady(ctx)
 }

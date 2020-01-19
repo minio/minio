@@ -353,7 +353,7 @@ func (s *TestSuiteCommon) TestBucketPolicy(c *check) {
 
 	bucketPolicyReadBuf, err := ioutil.ReadAll(response.Body)
 	c.Assert(err, nil)
-	// Verify if downloaded policy matches with previousy uploaded.
+	// Verify if downloaded policy matches with previously uploaded.
 	expectedPolicy, err := policy.ParseConfig(strings.NewReader(bucketPolicyStr), bucketName)
 	c.Assert(err, nil)
 	gotPolicy, err := policy.ParseConfig(bytes.NewReader(bucketPolicyReadBuf), bucketName)
@@ -521,7 +521,7 @@ func (s *TestSuiteCommon) TestListenBucketNotificationHandler(c *check) {
 	}
 }
 
-// Test deletes multple objects and verifies server resonse.
+// Test deletes multiple objects and verifies server response.
 func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *check) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
@@ -1014,7 +1014,7 @@ func (s *TestSuiteCommon) TestHeader(c *check) {
 func (s *TestSuiteCommon) TestPutBucket(c *check) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
-	// Block 1: Testing for racey access
+	// Block 1: Testing for racy access
 	// The assertion is removed from this block since the purpose of this block is to find races
 	// The purpose this block is not to check for correctness of functionality
 	// Run the test with -race flag to utilize this
@@ -1369,7 +1369,7 @@ func (s *TestSuiteCommon) TestPutObjectLongName(c *check) {
 	c.Assert(response.StatusCode, http.StatusBadRequest)
 	verifyError(c, response, "XMinioInvalidObjectName", "Object name contains a leading slash.", http.StatusBadRequest)
 
-	//make object name as unsuported
+	//make object name as unsupported
 	longObjName = fmt.Sprintf("%0256d", 1)
 	buffer = bytes.NewReader([]byte("hello world"))
 	request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, longObjName),
@@ -1818,7 +1818,7 @@ func (s *TestSuiteCommon) TestPutBucketErrors(c *check) {
 func (s *TestSuiteCommon) TestGetObjectLarge10MiB(c *check) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
-	// form HTTP reqest to create the bucket.
+	// form HTTP request to create the bucket.
 	request, err := newTestSignedRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
@@ -2005,7 +2005,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectMisAligned(c *check) {
 		{"1-", putContent[1:]},
 		// request for object data after the first byte.
 		{"6-", putContent[6:]},
-		// request for last 2 bytes of th object.
+		// request for last 2 bytes of the object.
 		{"-2", putContent[len(putContent)-2:]},
 		// request for last 7 bytes of the object.
 		{"-7", putContent[len(putContent)-7:]},
@@ -2159,7 +2159,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectLarge10MiB(c *check) {
 	request.Header.Add("Range", "bytes=2048-2058")
 
 	client = http.Client{Transport: s.transport}
-	// execute the HTTP request to download the partila content.
+	// execute the HTTP request to download the partial content.
 	response, err = client.Do(request)
 	c.Assert(err, nil)
 	// Since only part of the object is requested, expecting response status to be http.StatusPartialContent .
@@ -2424,11 +2424,11 @@ func (s *TestSuiteCommon) TestBucketMultipartList(c *check) {
 	// The reason to duplicate this structure here is to verify if the
 	// unmarshalling works from a client perspective, specifically
 	// while unmarshalling time.Time type for 'Initiated' field.
-	// time.Time does not honor xml marshaler, it means that we need
+	// time.Time does not honor xml marshaller, it means that we need
 	// to encode/format it before giving it to xml marshaling.
 
 	// This below check adds client side verification to see if its
-	// truly parseable.
+	// truly parsable.
 
 	// listMultipartUploadsResponse - format for list multipart uploads response.
 	type listMultipartUploadsResponse struct {

@@ -40,6 +40,12 @@ const (
 	Action             = "Action"
 )
 
+// Non standard S3 HTTP response constants
+const (
+	XCache       = "X-Cache"
+	XCacheLookup = "X-Cache-Lookup"
+)
+
 // Standard S3 HTTP request constants
 const (
 	IfModifiedSince   = "If-Modified-Since"

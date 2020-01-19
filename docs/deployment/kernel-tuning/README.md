@@ -58,6 +58,8 @@ echo madvise | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
 
 Also, set `transparent_hugepage=madvise` on your kernel command line (e.g. in /etc/default/grub) to persistently set this value.
 
+All these system level tunings are conveniently packaged in [shell script](https://github.com/minio/minio/blob/master/docs/deployment/kernel-tuning/sysctl.sh). Please review the shell script for our recommendations.
+
 ## Tuning Scheduler
 
 Proper scheduler configuration makes sure MinIO process gets adequate CPU time. Here are the recommended scheduler settings

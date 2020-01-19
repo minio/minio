@@ -204,6 +204,10 @@ func (target *ElasticsearchTarget) Send(eventKey string) error {
 
 // Close - does nothing and available for interface compatibility.
 func (target *ElasticsearchTarget) Close() error {
+	if target.client != nil {
+		// Stops the background processes that the client is running.
+		target.client.Stop()
+	}
 	return nil
 }
 
@@ -242,7 +246,7 @@ func newClient(args ElasticsearchArgs) (*elastic.Client, error) {
 }
 
 // NewElasticsearchTarget - creates new Elasticsearch target.
-func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*ElasticsearchTarget, error) {
+func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*ElasticsearchTarget, error) {
 	var client *elastic.Client
 	var err error
 
@@ -275,7 +279,7 @@ func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan str
 		store:  store,
 	}
 
-	if target.store != nil {
+	if target.store != nil && !test {
 		// Replays the events from the store.
 		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
 		// Start replaying events from the store.

@@ -42,8 +42,8 @@ func (p *posixDiskIDCheck) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsag
 	return p.storage.CrawlAndGetDataUsage(endCh)
 }
 
-func (p *posixDiskIDCheck) LastError() error {
-	return p.storage.LastError()
+func (p *posixDiskIDCheck) Hostname() string {
+	return p.storage.Hostname()
 }
 
 func (p *posixDiskIDCheck) Close() error {

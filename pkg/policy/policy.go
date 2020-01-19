@@ -18,7 +18,6 @@ package policy
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 )
 
@@ -78,7 +77,7 @@ func (policy Policy) IsEmpty() bool {
 // isValid - checks if Policy is valid or not.
 func (policy Policy) isValid() error {
 	if policy.Version != DefaultVersion && policy.Version != "" {
-		return fmt.Errorf("invalid version '%v'", policy.Version)
+		return Errorf("invalid version '%v'", policy.Version)
 	}
 
 	for _, statement := range policy.Statements {
@@ -89,18 +88,19 @@ func (policy Policy) isValid() error {
 
 	for i := range policy.Statements {
 		for _, statement := range policy.Statements[i+1:] {
-			principals := policy.Statements[i].Principal.Intersection(statement.Principal)
-			if principals.IsEmpty() {
+			if policy.Statements[i].Effect != statement.Effect {
 				continue
 			}
 
-			actions := policy.Statements[i].Actions.Intersection(statement.Actions)
-			if len(actions) == 0 {
+			if !policy.Statements[i].Principal.Equals(statement.Principal) {
 				continue
 			}
 
-			resources := policy.Statements[i].Resources.Intersection(statement.Resources)
-			if len(resources) == 0 {
+			if !policy.Statements[i].Actions.Equals(statement.Actions) {
+				continue
+			}
+
+			if !policy.Statements[i].Resources.Equals(statement.Resources) {
 				continue
 			}
 
@@ -108,8 +108,10 @@ func (policy Policy) isValid() error {
 				continue
 			}
 
-			return fmt.Errorf("duplicate principal %v, actions %v, resouces %v found in statements %v, %v",
-				principals, actions, resources, policy.Statements[i], statement)
+			return Errorf("duplicate principal %v, actions %v, resouces %v found in statements %v, %v",
+				statement.Principal, statement.Actions,
+				statement.Resources, policy.Statements[i],
+				statement)
 		}
 	}
 
@@ -168,7 +170,7 @@ func ParseConfig(reader io.Reader, bucketName string) (*Policy, error) {
 	decoder := json.NewDecoder(reader)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&policy); err != nil {
-		return nil, err
+		return nil, Errorf("%w", err)
 	}
 
 	err := policy.Validate(bucketName)

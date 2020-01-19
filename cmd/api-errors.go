@@ -34,6 +34,8 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/objectlock"
+	"github.com/minio/minio/pkg/policy"
 )
 
 // APIError structure
@@ -142,6 +144,7 @@ const (
 	ErrBadRequest
 	ErrKeyTooLongError
 	ErrInvalidBucketObjectLockConfiguration
+	ErrObjectLockConfigurationNotAllowed
 	ErrObjectLocked
 	ErrInvalidRetentionDate
 	ErrPastObjectLockRetainDate
@@ -730,6 +733,11 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidRequest",
 		Description:    "Bucket is missing ObjectLockConfiguration",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrObjectLockConfigurationNotAllowed: {
+		Code:           "InvalidBucketState",
+		Description:    "Object Lock configuration cannot be enabled on existing buckets.",
+		HTTPStatusCode: http.StatusConflict,
 	},
 	ErrObjectLocked: {
 		Code:           "InvalidRequest",
@@ -1604,14 +1612,16 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrOperationTimedOut
 	case errDiskNotFound:
 		apiErr = ErrSlowDown
-	case errInvalidRetentionDate:
+	case objectlock.ErrInvalidRetentionDate:
 		apiErr = ErrInvalidRetentionDate
-	case errPastObjectLockRetainDate:
+	case objectlock.ErrPastObjectLockRetainDate:
 		apiErr = ErrPastObjectLockRetainDate
-	case errUnknownWORMModeDirective:
+	case objectlock.ErrUnknownWORMModeDirective:
 		apiErr = ErrUnknownWORMModeDirective
-	case errObjectLockInvalidHeaders:
+	case objectlock.ErrObjectLockInvalidHeaders:
 		apiErr = ErrObjectLockInvalidHeaders
+	case objectlock.ErrMalformedXML:
+		apiErr = ErrMalformedXML
 	}
 
 	// Compression errors
@@ -1726,8 +1736,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrUnsupportedNotification
 	case BackendDown:
 		apiErr = ErrBackendDown
-	case crypto.Error:
-		apiErr = ErrObjectTampered
 	case ObjectNameTooLong:
 		apiErr = ErrKeyTooLongError
 	default:
@@ -1772,9 +1780,15 @@ func toAPIError(ctx context.Context, err error) APIError {
 		// their internal error types. This code is only
 		// useful with gateway implementations.
 		switch e := err.(type) {
+		case policy.Error:
+			apiErr = APIError{
+				Code:           "MalformedPolicy",
+				Description:    e.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
 		case crypto.Error:
 			apiErr = APIError{
-				Code:           "XKMSInternalError",
+				Code:           "XMinIOEncryptionError",
 				Description:    e.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}

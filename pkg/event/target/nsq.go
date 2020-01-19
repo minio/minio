@@ -167,13 +167,15 @@ func (target *NSQTarget) Send(eventKey string) error {
 
 // Close - closes underneath connections to NSQD server.
 func (target *NSQTarget) Close() (err error) {
-	// this blocks until complete:
-	target.producer.Stop()
+	if target.producer != nil {
+		// this blocks until complete:
+		target.producer.Stop()
+	}
 	return nil
 }
 
 // NewNSQTarget - creates new NSQ target.
-func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*NSQTarget, error) {
+func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*NSQTarget, error) {
 	config := nsq.NewConfig()
 	if args.TLS.Enable {
 		config.TlsV1 = true
@@ -211,7 +213,7 @@ func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce fu
 		}
 	}
 
-	if target.store != nil {
+	if target.store != nil && !test {
 		// Replays the events from the store.
 		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
 		// Start replaying events from the store.

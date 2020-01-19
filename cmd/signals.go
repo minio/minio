@@ -28,8 +28,12 @@ func handleSignals() {
 	// Custom exit function
 	exit := func(success bool) {
 		// If global profiler is set stop before we exit.
-		if globalProfiler != nil {
-			globalProfiler.Stop()
+		globalProfilerMu.Lock()
+		defer globalProfilerMu.Unlock()
+		if len(globalProfiler) > 0 {
+			for _, p := range globalProfiler {
+				p.Stop()
+			}
 		}
 
 		if success {

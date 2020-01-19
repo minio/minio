@@ -18,7 +18,6 @@ package iampolicy
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/minio/minio/pkg/policy"
@@ -74,11 +73,11 @@ func (statement Statement) isAdmin() bool {
 // isValid - checks whether statement is valid or not.
 func (statement Statement) isValid() error {
 	if !statement.Effect.IsValid() {
-		return fmt.Errorf("invalid Effect %v", statement.Effect)
+		return Errorf("invalid Effect %v", statement.Effect)
 	}
 
 	if len(statement.Actions) == 0 {
-		return fmt.Errorf("Action must not be empty")
+		return Errorf("Action must not be empty")
 	}
 
 	if statement.isAdmin() {
@@ -86,14 +85,14 @@ func (statement Statement) isValid() error {
 			keys := statement.Conditions.Keys()
 			keyDiff := keys.Difference(adminActionConditionKeyMap[action])
 			if !keyDiff.IsEmpty() {
-				return fmt.Errorf("unsupported condition keys '%v' used for action '%v'", keyDiff, action)
+				return Errorf("unsupported condition keys '%v' used for action '%v'", keyDiff, action)
 			}
 		}
 		return nil
 	}
 
 	if len(statement.Resources) == 0 {
-		return fmt.Errorf("Resource must not be empty")
+		return Errorf("Resource must not be empty")
 	}
 
 	if err := statement.Resources.Validate(); err != nil {
@@ -102,13 +101,13 @@ func (statement Statement) isValid() error {
 
 	for action := range statement.Actions {
 		if !statement.Resources.objectResourceExists() && !statement.Resources.bucketResourceExists() {
-			return fmt.Errorf("unsupported Resource found %v for action %v", statement.Resources, action)
+			return Errorf("unsupported Resource found %v for action %v", statement.Resources, action)
 		}
 
 		keys := statement.Conditions.Keys()
 		keyDiff := keys.Difference(actionConditionKeyMap[action])
 		if !keyDiff.IsEmpty() {
-			return fmt.Errorf("unsupported condition keys '%v' used for action '%v'", keyDiff, action)
+			return Errorf("unsupported condition keys '%v' used for action '%v'", keyDiff, action)
 		}
 	}
 

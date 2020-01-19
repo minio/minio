@@ -185,10 +185,53 @@ notify_elasticsearch  publish bucket notifications to Elasticsearch endpoints
 notify_redis          publish bucket notifications to Redis datastores
 ```
 
-### Accessing configuration file
-All configuration changes can be made using [`mc admin config` get/set commands](https://github.com/minio/mc/blob/master/docs/minio-admin-complete-guide.md). Following sections provide brief explanation of fields and how to customize them. A complete example of `config.json` is available [here](https://raw.githubusercontent.com/minio/minio/master/docs/config/config.sample.json)
+### Accessing configuration
+All configuration changes can be made using [`mc admin config` get/set/reset/export/import commands](https://github.com/minio/mc/blob/master/docs/minio-admin-complete-guide.md).
 
-## Environment only settings
+#### List all config keys available
+```
+~ mc admin config set myminio/
+```
+
+#### Obtain help for each key
+```
+~ mc admin config set myminio/ <key>
+```
+
+e.g: `mc admin config set myminio/ etcd` returns available `etcd` config args
+
+```
+~ mc admin config set play/ etcd
+KEY:
+etcd  federate multiple clusters for IAM and Bucket DNS
+
+ARGS:
+endpoints*       (csv)       comma separated list of etcd endpoints e.g. "http://localhost:2379"
+path_prefix      (path)      namespace prefix to isolate tenants e.g. "customer1/"
+coredns_path     (path)      shared bucket DNS records, default is "/skydns"
+client_cert      (path)      client cert for mTLS authentication
+client_cert_key  (path)      client cert key for mTLS authentication
+comment          (sentence)  optionally add a comment to this setting
+```
+
+To get ENV equivalent for each config args use `--env` flag
+```
+~ mc admin config set play/ etcd --env
+KEY:
+etcd  federate multiple clusters for IAM and Bucket DNS
+
+ARGS:
+MINIO_ETCD_ENDPOINTS*       (csv)       comma separated list of etcd endpoints e.g. "http://localhost:2379"
+MINIO_ETCD_PATH_PREFIX      (path)      namespace prefix to isolate tenants e.g. "customer1/"
+MINIO_ETCD_COREDNS_PATH     (path)      shared bucket DNS records, default is "/skydns"
+MINIO_ETCD_CLIENT_CERT      (path)      client cert for mTLS authentication
+MINIO_ETCD_CLIENT_CERT_KEY  (path)      client cert key for mTLS authentication
+MINIO_ETCD_COMMENT          (sentence)  optionally add a comment to this setting
+```
+
+This behavior is consistent across all keys, each key self documents itself with valid examples.
+
+## Environment only settings (not in config)
 
 #### Worm
 Enable this to turn on Write-Once-Read-Many. By default it is set to `off`. Set ``MINIO_WORM=on`` environment variable to enable WORM mode.

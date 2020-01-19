@@ -28,6 +28,24 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 )
 
+// CacheStatusType - whether the request was served from cache.
+type CacheStatusType string
+
+const (
+	// CacheHit - whether object was served from cache.
+	CacheHit CacheStatusType = "HIT"
+
+	// CacheMiss - object served from backend.
+	CacheMiss CacheStatusType = "MISS"
+)
+
+func (c CacheStatusType) String() string {
+	if c != "" {
+		return string(c)
+	}
+	return string(CacheMiss)
+}
+
 type cacheControl struct {
 	expiry       time.Time
 	maxAge       int

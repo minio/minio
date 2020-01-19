@@ -344,7 +344,7 @@ func (target *PostgreSQLTarget) executeStmts() error {
 }
 
 // NewPostgreSQLTarget - creates new PostgreSQL target.
-func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*PostgreSQLTarget, error) {
+func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*PostgreSQLTarget, error) {
 	var firstPing bool
 
 	params := []string{args.ConnectionString}
@@ -400,7 +400,7 @@ func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{},
 		target.firstPing = true
 	}
 
-	if target.store != nil {
+	if target.store != nil && !test {
 		// Replays the events from the store.
 		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
 		// Start replaying events from the store.

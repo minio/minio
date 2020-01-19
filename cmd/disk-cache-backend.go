@@ -89,8 +89,10 @@ func (m *cacheMeta) ToObjectInfo(bucket, object string) (o ObjectInfo) {
 	}
 
 	o = ObjectInfo{
-		Bucket: bucket,
-		Name:   object,
+		Bucket:            bucket,
+		Name:              object,
+		CacheStatus:       CacheHit,
+		CacheLookupStatus: CacheHit,
 	}
 
 	// We set file info only if its valid.

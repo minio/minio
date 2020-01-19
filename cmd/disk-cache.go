@@ -32,6 +32,7 @@ import (
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/pkg/objectlock"
 	"github.com/minio/minio/pkg/sync/errgroup"
 	"github.com/minio/minio/pkg/wildcard"
 )
@@ -223,7 +224,10 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		}
 		if cc.noStore {
 			c.cacheStats.incMiss()
-			return c.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+			bReader, err := c.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+			bReader.ObjInfo.CacheLookupStatus = CacheHit
+			bReader.ObjInfo.CacheStatus = CacheMiss
+			return bReader, err
 		}
 	}
 
@@ -248,7 +252,13 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		c.cacheStats.incMiss()
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
-
+	// skip cache for objects with locks
+	objRetention := objectlock.GetObjectRetentionMeta(objInfo.UserDefined)
+	legalHold := objectlock.GetObjectLegalHoldMeta(objInfo.UserDefined)
+	if objRetention.Mode != objectlock.Invalid || legalHold.Status != "" {
+		c.cacheStats.incMiss()
+		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
+	}
 	if cacheErr == nil {
 		// if ETag matches for stale cache entry, serve from cache
 		if cacheReader.ObjInfo.ETag == objInfo.ETag {
@@ -272,8 +282,14 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		default:
 		}
 	}
+
+	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
+	// Record if cache has a hit that was invalidated by ETag verification
+	if cacheErr == nil {
+		bkReader.ObjInfo.CacheLookupStatus = CacheHit
+	}
 	if !dcache.diskAvailable(objInfo.Size) {
-		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
+		return bkReader, bkErr
 	}
 
 	if rs != nil {
@@ -290,12 +306,9 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 				c.put(ctx, dcache, bucket, object, bReader, bReader.ObjInfo.Size, rs, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)})
 			}
 		}()
-		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
+		return bkReader, bkErr
 	}
-	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
-	if bkErr != nil {
-		return nil, bkErr
-	}
+
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()
 	teeReader := io.TeeReader(bkReader, pipeWriter)
@@ -590,8 +603,9 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 	}
 
 	// skip cache for objects with locks
-	objRetention := getObjectRetentionMeta(opts.UserDefined)
-	if objRetention.Mode == Governance || objRetention.Mode == Compliance {
+	objRetention := objectlock.GetObjectRetentionMeta(opts.UserDefined)
+	legalHold := objectlock.GetObjectLegalHoldMeta(opts.UserDefined)
+	if objRetention.Mode != objectlock.Invalid || legalHold.Status != "" {
 		dcache.Delete(ctx, bucket, object)
 		return putObjectFn(ctx, bucket, object, r, opts)
 	}

@@ -243,13 +243,13 @@ func (target *RedisTarget) Send(eventKey string) error {
 	return target.store.Del(eventKey)
 }
 
-// Close - does nothing and available for interface compatibility.
+// Close - releases the resources used by the pool.
 func (target *RedisTarget) Close() error {
-	return nil
+	return target.pool.Close()
 }
 
 // NewRedisTarget - creates new Redis target.
-func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})) (*RedisTarget, error) {
+func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{}), test bool) (*RedisTarget, error) {
 	pool := &redis.Pool{
 		MaxIdle:     3,
 		IdleTimeout: 2 * 60 * time.Second,
@@ -314,7 +314,7 @@ func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}, loggerOnc
 		target.firstPing = true
 	}
 
-	if target.store != nil {
+	if target.store != nil && !test {
 		// Replays the events from the store.
 		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
 		// Start replaying events from the store.

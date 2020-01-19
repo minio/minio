@@ -39,7 +39,7 @@ require (
 	github.com/gopherjs/gopherjs v0.0.0-20190328170749-bb2674552d8f // indirect
 	github.com/gorilla/handlers v1.4.0
 	github.com/gorilla/mux v1.7.0
-	github.com/gorilla/rpc v1.2.0+incompatible
+	github.com/gorilla/rpc v1.2.0
 	github.com/gorilla/websocket v1.4.1 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
@@ -50,8 +50,8 @@ require (
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/jonboulle/clockwork v0.1.0 // indirect
 	github.com/json-iterator/go v1.1.7
-	github.com/klauspost/compress v1.9.4
-	github.com/klauspost/cpuid v1.2.1 // indirect
+	github.com/klauspost/compress v1.9.7
+	github.com/klauspost/cpuid v1.2.2 // indirect
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.1
 	github.com/klauspost/reedsolomon v1.9.3
@@ -67,7 +67,7 @@ require (
 	github.com/minio/hdfs/v3 v3.0.1
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/lsync v1.0.1
-	github.com/minio/minio-go/v6 v6.0.44
+	github.com/minio/minio-go/v6 v6.0.45-0.20200117140906-66cf57d21ba4
 	github.com/minio/parquet-go v0.0.0-20191231003236-20b3c07bcd2c
 	github.com/minio/sha256-simd v0.1.1
 	github.com/minio/sio v0.2.0
@@ -85,7 +85,6 @@ require (
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.0.7
 	github.com/pkg/errors v0.8.1
-	github.com/pkg/profile v1.3.0
 	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829
 	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20190704165056-9c2d0518ed81 // indirect
@@ -100,7 +99,7 @@ require (
 	github.com/soheilhy/cmux v0.1.4 // indirect
 	github.com/streadway/amqp v0.0.0-20190404075320-75d898a42a94
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5 // indirect
-	github.com/ugorji/go v1.1.5-pre // indirect
+	github.com/ugorji/go/codec v1.1.5-pre // indirect
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 // indirect
 	go.etcd.io/bbolt v1.3.3 // indirect
@@ -121,6 +120,3 @@ require (
 	gopkg.in/olivere/elastic.v5 v5.0.80
 	gopkg.in/yaml.v2 v2.2.4
 )
-
-// Added for go1.13 migration https://github.com/golang/go/issues/32805
-replace github.com/gorilla/rpc v1.2.0+incompatible => github.com/gorilla/rpc v1.2.0

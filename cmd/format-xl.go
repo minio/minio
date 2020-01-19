@@ -19,15 +19,17 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"reflect"
-
-	"encoding/hex"
+	"sync"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/sync/errgroup"
 	sha256 "github.com/minio/sha256-simd"
 )
@@ -619,23 +621,28 @@ func formatXLV3Check(reference *formatXLV3, format *formatXLV3) error {
 	return fmt.Errorf("Disk ID %s not found in any disk sets %s", this, format.XL.Sets)
 }
 
-// Initializes meta volume on all input storage disks.
-func initFormatXLMetaVolume(storageDisks []StorageAPI, formats []*formatXLV3) error {
-	// This happens for the first time, but keep this here since this
-	// is the only place where it can be made expensive optimizing all
-	// other calls. Create minio meta volume, if it doesn't exist yet.
+// Initializes meta volume only on local storage disks.
+func initXLMetaVolumesInLocalDisks(storageDisks []StorageAPI, formats []*formatXLV3) error {
+
+	// Compute the local disks eligible for meta volumes (re)initialization
+	var disksToInit []StorageAPI
+	for index := range storageDisks {
+		if formats[index] == nil || storageDisks[index] == nil || storageDisks[index].Hostname() != "" {
+			// Ignore create meta volume on disks which are not found or not local.
+			continue
+		}
+		disksToInit = append(disksToInit, storageDisks[index])
+	}
 
 	// Initialize errs to collect errors inside go-routine.
-	g := errgroup.WithNErrs(len(storageDisks))
+	g := errgroup.WithNErrs(len(disksToInit))
 
 	// Initialize all disks in parallel.
-	for index := range storageDisks {
+	for index := range disksToInit {
+		// Initialize a new index variable in each loop so each
+		// goroutine will return its own instance of index variable.
 		index := index
 		g.Go(func() error {
-			if formats[index] == nil || storageDisks[index] == nil {
-				// Ignore create meta volume on disks which are not found.
-				return nil
-			}
 			return makeFormatXLMetaVolumes(storageDisks[index])
 		}, index)
 	}
@@ -753,15 +760,41 @@ func fixFormatXLV3(storageDisks []StorageAPI, endpoints Endpoints, formats []*fo
 func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, drivesPerSet int, deploymentID string) (*formatXLV3, error) {
 	format := newFormatXLV3(setCount, drivesPerSet)
 	formats := make([]*formatXLV3, len(storageDisks))
+	wantAtMost := ecDrivesNoConfig(drivesPerSet)
 
 	for i := 0; i < setCount; i++ {
+		hostCount := make(map[string]int, drivesPerSet)
 		for j := 0; j < drivesPerSet; j++ {
+			disk := storageDisks[i*drivesPerSet+j]
 			newFormat := format.Clone()
 			newFormat.XL.This = format.XL.Sets[i][j]
 			if deploymentID != "" {
 				newFormat.ID = deploymentID
 			}
+			hostCount[disk.Hostname()]++
 			formats[i*drivesPerSet+j] = newFormat
+		}
+		if len(hostCount) > 0 {
+			var once sync.Once
+			for host, count := range hostCount {
+				if count > wantAtMost {
+					if host == "" {
+						host = "local"
+					}
+					once.Do(func() {
+						if len(hostCount) == 1 {
+							return
+						}
+						logger.Info(" * Set %v:", i+1)
+						for j := 0; j < drivesPerSet; j++ {
+							disk := storageDisks[i*drivesPerSet+j]
+							logger.Info("   - Drive: %s", disk.String())
+						}
+					})
+					logger.Info(color.Yellow("WARNING:")+" Host %v has more than %v drives of set. "+
+						"A host failure will result in data becoming unavailable.", host, wantAtMost)
+				}
+			}
 		}
 	}
 
@@ -773,16 +806,26 @@ func initFormatXL(ctx context.Context, storageDisks []StorageAPI, setCount, driv
 	return getFormatXLInQuorum(formats)
 }
 
+// ecDrivesNoConfig returns the erasure coded drives in a set if no config has been set.
+// It will attempt to read it from env variable and fall back to drives/2.
+func ecDrivesNoConfig(drivesPerSet int) int {
+	ecDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+	if ecDrives == 0 {
+		cfg, err := storageclass.LookupConfig(nil, drivesPerSet)
+		if err == nil {
+			ecDrives = cfg.Standard.Parity
+		}
+		if ecDrives == 0 {
+			ecDrives = drivesPerSet / 2
+		}
+	}
+	return ecDrives
+}
+
 // Make XL backend meta volumes.
 func makeFormatXLMetaVolumes(disk StorageAPI) error {
 	// Attempt to create MinIO internal buckets.
-	err := disk.MakeVolBulk(minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, minioMetaBackgroundOpsBucket)
-	if err != nil {
-		if !IsErrIgnored(err, initMetaVolIgnoredErrs...) {
-			return err
-		}
-	}
-	return nil
+	return disk.MakeVolBulk(minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, minioMetaBackgroundOpsBucket)
 }
 
 var initMetaVolIgnoredErrs = append(baseIgnoredErrs, errVolumeExists)

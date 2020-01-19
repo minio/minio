@@ -559,7 +559,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		defer xl.bp.Put(buffer)
 	case size < blockSizeV1:
 		// No need to allocate fully blockSizeV1 buffer if the incoming data is smaller.
-		buffer = make([]byte, size, 2*size)
+		buffer = make([]byte, size, 2*size+int64(erasure.parityBlocks+erasure.dataBlocks-1))
 	}
 
 	if len(buffer) > int(xlMeta.Erasure.BlockSize) {
@@ -611,7 +611,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 
 	if xl.isObject(bucket, object) {
 		// Deny if WORM is enabled
-		if _, ok := isWORMEnabled(bucket); ok {
+		if isWORMEnabled(bucket) {
 			if _, err := xl.getObjectInfo(ctx, bucket, object); err == nil {
 				return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
 			}
@@ -626,7 +626,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		// NOTE: Do not use online disks slice here: the reason is that existing object should be purged
 		// regardless of `xl.json` status and rolled back in case of errors. Also allow renaming the
 		// existing object if it is not present in quorum disks so users can overwrite stale objects.
-		_, err = rename(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, newUniqueID, true, writeQuorum, []error{errFileNotFound})
+		_, err = rename(ctx, storageDisks, bucket, object, minioMetaTmpBucket, newUniqueID, true, writeQuorum, []error{errFileNotFound})
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
@@ -646,9 +646,17 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	}
 
 	// Rename the successfully written temporary object to final location.
-	_, err = rename(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, true, writeQuorum, nil)
-	if err != nil {
+	if onlineDisks, err = rename(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, true, writeQuorum, nil); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	// Whether a disk was initially or becomes offline
+	// during this upload, send it to the MRF list.
+	for i := 0; i < len(onlineDisks); i++ {
+		if onlineDisks[i] == nil || storageDisks[i] == nil {
+			xl.addPartialUpload(bucket, object)
+			break
+		}
 	}
 
 	// Object info is the same in all disks, so we can pick the first meta
@@ -959,4 +967,13 @@ func (xl xlObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continuat
 		Prefixes:              loi.Prefixes,
 	}
 	return listObjectsV2Info, err
+}
+
+// Send the successul but partial upload, however ignore
+// if the channel is blocked by other items.
+func (xl xlObjects) addPartialUpload(bucket, key string) {
+	select {
+	case xl.mrfUploadCh <- partialUpload{bucket: bucket, object: key}:
+	default:
+	}
 }

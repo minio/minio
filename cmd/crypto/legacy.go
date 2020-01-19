@@ -17,7 +17,6 @@
 package crypto
 
 import (
-	"fmt"
 	"reflect"
 	"strconv"
 
@@ -167,7 +166,7 @@ func lookupConfigLegacy(kvs config.KVS) (VaultConfig, error) {
 	if keyVersion := env.Get(EnvLegacyVaultKeyVersion, ""); keyVersion != "" {
 		vcfg.Key.Version, err = strconv.Atoi(keyVersion)
 		if err != nil {
-			return vcfg, fmt.Errorf("Invalid ENV variable: Unable to parse %s value (`%s`)",
+			return vcfg, Errorf("Invalid ENV variable: Unable to parse %s value (`%s`)",
 				EnvLegacyVaultKeyVersion, keyVersion)
 		}
 	}

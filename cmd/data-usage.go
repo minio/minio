@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 )
@@ -87,7 +88,8 @@ func runDataUsageInfoForXLZones(ctx context.Context, z *xlZones, endCh <-chan st
 			time.Sleep(5 * time.Minute)
 			continue
 		}
-		// Break without locking
+		// Break without unlocking, this node will acquire
+		// data usage calculator role for its lifetime.
 		break
 	}
 
@@ -133,6 +135,7 @@ func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsag
 	}
 
 	var dataUsageInfo DataUsageInfo
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err = json.Unmarshal(dataUsageInfoJSON.Bytes(), &dataUsageInfo)
 	if err != nil {
 		return DataUsageInfo{}, err

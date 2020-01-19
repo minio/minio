@@ -37,6 +37,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/objectlock"
 	"github.com/minio/minio/pkg/pubsub"
 )
 
@@ -201,7 +202,7 @@ var (
 	// Is worm enabled
 	globalWORMEnabled bool
 
-	globalBucketObjectLockConfig = newBucketObjectLockConfig()
+	globalBucketObjectLockConfig = objectlock.NewBucketObjectLockConfig()
 
 	// Disk cache drives
 	globalCacheConfig cache.Config

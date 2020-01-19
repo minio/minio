@@ -35,6 +35,7 @@ import (
 	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/pkg/objectlock"
 	"github.com/minio/minio/pkg/policy"
 	trace "github.com/minio/minio/pkg/trace"
 )
@@ -225,7 +226,7 @@ func (client *peerRESTClient) StartProfiling(profiler string) error {
 }
 
 // DownloadProfileData - download profiled data from a remote node.
-func (client *peerRESTClient) DownloadProfileData() (data []byte, err error) {
+func (client *peerRESTClient) DownloadProfileData() (data map[string][]byte, err error) {
 	respBody, err := client.call(peerRESTMethodDownloadProfilingData, nil, nil, -1)
 	if err != nil {
 		return
@@ -430,7 +431,7 @@ func (client *peerRESTClient) PutBucketNotification(bucket string, rulesMap even
 }
 
 // PutBucketObjectLockConfig - PUT bucket object lock configuration.
-func (client *peerRESTClient) PutBucketObjectLockConfig(bucket string, retention Retention) error {
+func (client *peerRESTClient) PutBucketObjectLockConfig(bucket string, retention objectlock.Retention) error {
 	values := make(url.Values)
 	values.Set(peerRESTBucket, bucket)
 

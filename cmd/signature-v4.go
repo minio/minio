@@ -222,14 +222,6 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 		return errCode
 	}
 
-	// Construct new query.
-	query := make(url.Values)
-	if req.URL.Query().Get(xhttp.AmzContentSha256) != "" {
-		query.Set(xhttp.AmzContentSha256, hashedPayload)
-	}
-
-	query.Set(xhttp.AmzAlgorithm, signV4Algorithm)
-
 	// If the host which signed the request is slightly ahead in time (by less than globalMaxSkewTime) the
 	// request should still be allowed.
 	if pSignValues.Date.After(UTCNow().Add(globalMaxSkewTime)) {
@@ -243,6 +235,20 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	// Save the date and expires.
 	t := pSignValues.Date
 	expireSeconds := int(pSignValues.Expires / time.Second)
+
+	// Construct new query.
+	query := make(url.Values)
+	clntHashedPayload := req.URL.Query().Get(xhttp.AmzContentSha256)
+	if clntHashedPayload != "" {
+		query.Set(xhttp.AmzContentSha256, hashedPayload)
+	}
+
+	token := req.URL.Query().Get(xhttp.AmzSecurityToken)
+	if token != "" {
+		query.Set(xhttp.AmzSecurityToken, cred.SessionToken)
+	}
+
+	query.Set(xhttp.AmzAlgorithm, signV4Algorithm)
 
 	// Construct the query.
 	query.Set(xhttp.AmzDate, t.Format(iso8601Format))
@@ -262,6 +268,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 
 		if strings.Contains(key, "x-amz-server-side-") {
 			query.Set(k, v[0])
+			continue
 		}
 
 		if strings.HasPrefix(key, "x-amz") {
@@ -290,10 +297,12 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 		return ErrSignatureDoesNotMatch
 	}
 	// Verify if sha256 payload query is same.
-	if req.URL.Query().Get(xhttp.AmzContentSha256) != "" {
-		if req.URL.Query().Get(xhttp.AmzContentSha256) != query.Get(xhttp.AmzContentSha256) {
-			return ErrContentSHA256Mismatch
-		}
+	if clntHashedPayload != "" && clntHashedPayload != query.Get(xhttp.AmzContentSha256) {
+		return ErrContentSHA256Mismatch
+	}
+	// Verify if security token is correct.
+	if token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(cred.SessionToken)) != 1 {
+		return ErrInvalidToken
 	}
 
 	/// Verify finally if signature is same.

@@ -33,6 +33,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/lifecycle"
+	objectlock "github.com/minio/minio/pkg/objectlock"
 	"github.com/minio/minio/pkg/policy"
 	trace "github.com/minio/minio/pkg/trace"
 )
@@ -395,28 +396,41 @@ func (s *peerRESTServer) StartProfilingHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	vars := mux.Vars(r)
-	profiler := vars[peerRESTProfiler]
-	if profiler == "" {
+	profiles := strings.Split(vars[peerRESTProfiler], ",")
+	if len(profiles) == 0 {
 		s.writeErrorResponse(w, errors.New("profiler name is missing"))
 		return
 	}
-
-	if globalProfiler != nil {
-		globalProfiler.Stop()
+	globalProfilerMu.Lock()
+	defer globalProfilerMu.Unlock()
+	if globalProfiler == nil {
+		globalProfiler = make(map[string]minioProfiler, 10)
 	}
 
-	var err error
-	globalProfiler, err = startProfiler(profiler, "")
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
+	// Stop profiler of all types if already running
+	for k, v := range globalProfiler {
+		for _, p := range profiles {
+			if p == k {
+				v.Stop()
+				delete(globalProfiler, k)
+			}
+		}
+	}
+
+	for _, profiler := range profiles {
+		prof, err := startProfiler(profiler)
+		if err != nil {
+			s.writeErrorResponse(w, err)
+			return
+		}
+		globalProfiler[profiler] = prof
 	}
 
 	w.(http.Flusher).Flush()
 }
 
-// DownloadProflingDataHandler - returns proflied data.
-func (s *peerRESTServer) DownloadProflingDataHandler(w http.ResponseWriter, r *http.Request) {
+// DownloadProfilingDataHandler - returns profiled data.
+func (s *peerRESTServer) DownloadProfilingDataHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
@@ -563,7 +577,7 @@ func (s *peerRESTServer) ReloadFormatHandler(w http.ResponseWriter, r *http.Requ
 	vars := mux.Vars(r)
 	dryRunString := vars[peerRESTDryRun]
 	if dryRunString == "" {
-		s.writeErrorResponse(w, errors.New("dry run parameter is missing"))
+		s.writeErrorResponse(w, errors.New("dry-run parameter is missing"))
 		return
 	}
 
@@ -583,6 +597,7 @@ func (s *peerRESTServer) ReloadFormatHandler(w http.ResponseWriter, r *http.Requ
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
 	}
+
 	err := objAPI.ReloadFormat(context.Background(), dryRun)
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -831,7 +846,7 @@ func (s *peerRESTServer) PutBucketObjectLockConfigHandler(w http.ResponseWriter,
 		return
 	}
 
-	var retention Retention
+	var retention objectlock.Retention
 	if r.ContentLength < 0 {
 		s.writeErrorResponse(w, errInvalidArgument)
 		return
@@ -1155,7 +1170,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadGroup).HandlerFunc(httpTraceAll(server.LoadGroupHandler)).Queries(restQueries(peerRESTGroup)...)
 
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodStartProfiling).HandlerFunc(httpTraceAll(server.StartProfilingHandler)).Queries(restQueries(peerRESTProfiler)...)
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDownloadProfilingData).HandlerFunc(httpTraceHdrs(server.DownloadProflingDataHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDownloadProfilingData).HandlerFunc(httpTraceHdrs(server.DownloadProfilingDataHandler))
 
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodTargetExists).HandlerFunc(httpTraceHdrs(server.TargetExistsHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSendEvent).HandlerFunc(httpTraceHdrs(server.SendEventHandler)).Queries(restQueries(peerRESTBucket)...)
