@@ -22,25 +22,12 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/tagging"
 )
 
 // Data types used for returning dummy tagging XML.
 // These variables shouldn't be used elsewhere.
 // They are only defined to be used in this file alone.
-
-type tagging struct {
-	XMLName xml.Name `xml:"Tagging"`
-	TagSet  tagSet   `xml:"TagSet"`
-}
-
-type tagSet struct {
-	Tag []tagElem `xml:"Tag"`
-}
-
-type tagElem struct {
-	Key   string `xml:"Key"`
-	Value string `xml:"Value"`
-}
 
 // GetBucketWebsite  - GET bucket website, a dummy api
 func (api objectAPIHandlers) GetBucketWebsiteHandler(w http.ResponseWriter, r *http.Request) {
@@ -171,47 +158,8 @@ func (api objectAPIHandlers) GetBucketTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	tags := &tagging{}
-	tags.TagSet.Tag = append(tags.TagSet.Tag, tagElem{})
-
-	if err := xml.NewEncoder(w).Encode(tags); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	w.(http.Flusher).Flush()
-}
-
-// GetObjectTaggingHandler - GET object tagging, a dummy api
-func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetObjectTagging")
-
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-	object := vars["object"]
-
-	objAPI := api.ObjectAPI()
-	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	// Allow getObjectTagging if policy action is set, since this is a dummy call
-	// we are simply re-purposing the bucketPolicyAction.
-	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketPolicyAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	// Validate if object exists, before proceeding further...
-	_, err := objAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	tags := &tagging{}
-	tags.TagSet.Tag = append(tags.TagSet.Tag, tagElem{})
+	tags := &tagging.Tagging{}
+	tags.TagSet.Tags = append(tags.TagSet.Tags, tagging.Tag{})
 
 	if err := xml.NewEncoder(w).Encode(tags); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))

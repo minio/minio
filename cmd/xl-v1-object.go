@@ -27,6 +27,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/minio/pkg/tagging"
 )
 
 // list all errors which can be ignored in object operations.
@@ -969,11 +970,68 @@ func (xl xlObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continuat
 	return listObjectsV2Info, err
 }
 
-// Send the successul but partial upload, however ignore
+// Send the successful but partial upload, however ignore
 // if the channel is blocked by other items.
 func (xl xlObjects) addPartialUpload(bucket, key string) {
 	select {
 	case xl.mrfUploadCh <- partialUpload{bucket: bucket, object: key}:
 	default:
 	}
+}
+
+// PutObjectTag - replace or add tags to an existing object
+func (xl xlObjects) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
+	disks := xl.getDisks()
+
+	// Read metadata associated with the object from all disks.
+	metaArr, errs := readAllXLMetadata(ctx, disks, bucket, object)
+
+	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
+	if err != nil {
+		return err
+	}
+
+	for i, xlMeta := range metaArr {
+		// clean xlMeta.Meta of tag key, before updating the new tags
+		delete(xlMeta.Meta, xhttp.AmzObjectTagging)
+		// Don't update for empty tags
+		if tags != "" {
+			xlMeta.Meta[xhttp.AmzObjectTagging] = tags
+		}
+		metaArr[i].Meta = xlMeta.Meta
+	}
+
+	tempObj := mustGetUUID()
+
+	// Write unique `xl.json` for each disk.
+	if disks, err = writeUniqueXLMetadata(ctx, disks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+
+	// Atomically rename `xl.json` from tmp location to destination for each disk.
+	if _, err = renameXLMetadata(ctx, disks, minioMetaTmpBucket, tempObj, bucket, object, writeQuorum); err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+
+	return nil
+}
+
+// DeleteObjectTag - delete object tags from an existing object
+func (xl xlObjects) DeleteObjectTag(ctx context.Context, bucket, object string) error {
+	return xl.PutObjectTag(ctx, bucket, object, "")
+}
+
+// GetObjectTag - get object tags from an existing object
+func (xl xlObjects) GetObjectTag(ctx context.Context, bucket, object string) (tagging.Tagging, error) {
+	// GetObjectInfo will return tag value as well
+	oi, err := xl.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
+	if err != nil {
+		return tagging.Tagging{}, err
+	}
+
+	tags, err := tagging.FromString(oi.UserTags)
+	if err != nil {
+		return tagging.Tagging{}, err
+	}
+	return tags, nil
 }

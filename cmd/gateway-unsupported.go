@@ -24,6 +24,7 @@ import (
 	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/tagging"
 )
 
 // GatewayLocker implements custom NeNSLock implementation
@@ -171,6 +172,24 @@ func (a GatewayUnsupported) CopyObject(ctx context.Context, srcBucket string, sr
 func (a GatewayUnsupported) GetMetrics(ctx context.Context) (*Metrics, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return &Metrics{}, NotImplemented{}
+}
+
+// PutObjectTag - not implemented.
+func (a GatewayUnsupported) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
+	logger.LogIf(ctx, NotImplemented{})
+	return NotImplemented{}
+}
+
+// GetObjectTag - not implemented.
+func (a GatewayUnsupported) GetObjectTag(ctx context.Context, bucket, object string) (tagging.Tagging, error) {
+	logger.LogIf(ctx, NotImplemented{})
+	return tagging.Tagging{}, NotImplemented{}
+}
+
+// DeleteObjectTag - not implemented.
+func (a GatewayUnsupported) DeleteObjectTag(ctx context.Context, bucket, object string) error {
+	logger.LogIf(ctx, NotImplemented{})
+	return NotImplemented{}
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.

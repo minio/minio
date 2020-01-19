@@ -114,6 +114,15 @@ const (
 	// PutBucketObjectLockConfigurationAction - PutBucketObjectLockConfiguration Rest API action
 	PutBucketObjectLockConfigurationAction = "s3:PutBucketObjectLockConfiguration"
 
+	// GetObjectTaggingAction - Get Object Tags API action
+	GetObjectTaggingAction = "s3:GetObjectTagging"
+
+	// PutObjectTaggingAction - Put Object Tags API action
+	PutObjectTaggingAction = "s3:PutObjectTagging"
+
+	// DeleteObjectTaggingAction - Delete Object Tags API action
+	DeleteObjectTaggingAction = "s3:DeleteObjectTagging"
+
 	// AllActions - all API actions
 	AllActions = "s3:*"
 )
@@ -149,6 +158,9 @@ var supportedActions = map[Action]struct{}{
 	GetBucketObjectLockConfigurationAction: {},
 	BypassGovernanceModeAction:             {},
 	BypassGovernanceRetentionAction:        {},
+	GetObjectTaggingAction:                 {},
+	PutObjectTaggingAction:                 {},
+	DeleteObjectTaggingAction:              {},
 }
 
 // isObjectAction - returns whether action is object type or not.
@@ -163,6 +175,8 @@ func (action Action) isObjectAction() bool {
 	case PutObjectRetentionAction, GetObjectRetentionAction:
 		return true
 	case PutObjectLegalHoldAction, GetObjectLegalHoldAction:
+		return true
+	case GetObjectTaggingAction, PutObjectTaggingAction, DeleteObjectTaggingAction:
 		return true
 	}
 
@@ -283,4 +297,7 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 	BypassGovernanceRetentionAction:        condition.NewKeySet(condition.CommonKeys...),
 	GetBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
 	PutBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
+	PutObjectTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
+	GetObjectTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
+	DeleteObjectTaggingAction:              condition.NewKeySet(condition.CommonKeys...),
 }

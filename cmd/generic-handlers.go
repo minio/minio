@@ -467,8 +467,8 @@ func ignoreNotImplementedBucketResources(req *http.Request) bool {
 // Checks requests for not implemented Object resources
 func ignoreNotImplementedObjectResources(req *http.Request) bool {
 	for name := range req.URL.Query() {
-		// Enable GetObjectACL and GetObjectTagging dummy calls specifically.
-		if (name == "acl" || name == "tagging") && req.Method == http.MethodGet {
+		// Enable GetObjectACL dummy call specifically.
+		if name == "acl" && req.Method == http.MethodGet {
 			return false
 		}
 		if notimplementedObjectResourceNames[name] {
@@ -497,7 +497,6 @@ var notimplementedBucketResourceNames = map[string]bool{
 var notimplementedObjectResourceNames = map[string]bool{
 	"acl":     true,
 	"restore": true,
-	"tagging": true,
 	"torrent": true,
 }
 
