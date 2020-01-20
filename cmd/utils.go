@@ -190,7 +190,7 @@ func contains(slice interface{}, elem interface{}) bool {
 // provide any API to calculate the profiler file path in the
 // disk since the name of this latter is randomly generated.
 type profilerWrapper struct {
-	// Profile recorded as start of benchmark.
+	// Profile recorded at start of benchmark.
 	base   []byte
 	stopFn func() ([]byte, error)
 }
