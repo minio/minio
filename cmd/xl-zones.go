@@ -31,6 +31,7 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/minio/pkg/tagging"
 )
 
 type xlZones struct {
@@ -1373,4 +1374,64 @@ func (z *xlZones) GetMetrics(ctx context.Context) (*Metrics, error) {
 // IsReady - Returns true if first zone returns true
 func (z *xlZones) IsReady(ctx context.Context) bool {
 	return z.zones[0].IsReady(ctx)
+}
+
+// PutObjectTag - replace or add tags to an existing object
+func (z *xlZones) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
+	if z.SingleZone() {
+		return z.zones[0].PutObjectTag(ctx, bucket, object, tags)
+	}
+	for _, zone := range z.zones {
+		err := zone.PutObjectTag(ctx, bucket, object, tags)
+		if err != nil {
+			if isErrBucketNotFound(err) {
+				continue
+			}
+			return err
+		}
+		return nil
+	}
+	return BucketNotFound{
+		Bucket: bucket,
+	}
+}
+
+// DeleteObjectTag - delete object tags from an existing object
+func (z *xlZones) DeleteObjectTag(ctx context.Context, bucket, object string) error {
+	if z.SingleZone() {
+		return z.zones[0].DeleteObjectTag(ctx, bucket, object)
+	}
+	for _, zone := range z.zones {
+		err := zone.DeleteObjectTag(ctx, bucket, object)
+		if err != nil {
+			if isErrBucketNotFound(err) {
+				continue
+			}
+			return err
+		}
+		return nil
+	}
+	return BucketNotFound{
+		Bucket: bucket,
+	}
+}
+
+// GetObjectTag - get object tags from an existing object
+func (z *xlZones) GetObjectTag(ctx context.Context, bucket, object string) (tagging.Tagging, error) {
+	if z.SingleZone() {
+		return z.zones[0].GetObjectTag(ctx, bucket, object)
+	}
+	for _, zone := range z.zones {
+		tags, err := zone.GetObjectTag(ctx, bucket, object)
+		if err != nil {
+			if isErrBucketNotFound(err) {
+				continue
+			}
+			return tags, err
+		}
+		return tags, nil
+	}
+	return tagging.Tagging{}, BucketNotFound{
+		Bucket: bucket,
+	}
 }

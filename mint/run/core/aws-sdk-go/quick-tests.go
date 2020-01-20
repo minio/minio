@@ -28,10 +28,12 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -130,6 +132,50 @@ func randString(n int, src rand.Source, prefix string) string {
 		remain--
 	}
 	return prefix + string(b[0:30-len(prefix)])
+}
+
+func isObjectTaggingImplemented(s3Client *s3.S3) bool {
+	bucket := randString(60, rand.NewSource(time.Now().UnixNano()), "aws-sdk-go-test-")
+	object := randString(60, rand.NewSource(time.Now().UnixNano()), "")
+	startTime := time.Now()
+	function := "isObjectTaggingImplemented"
+	args := map[string]interface{}{
+		"bucketName": bucket,
+		"objectName": object,
+	}
+	defer cleanup(s3Client, bucket, object, function, args, startTime, true)
+
+	_, err := s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucket),
+	})
+	if err != nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CreateBucket Failed", err).Fatal()
+		return false
+	}
+
+	_, err = s3Client.PutObject(&s3.PutObjectInput{
+		Body:   aws.ReadSeekCloser(strings.NewReader("testfile")),
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+	})
+
+	if err != nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to success but got %v", err), err).Fatal()
+		return false
+	}
+
+	_, err = s3Client.GetObjectTagging(&s3.GetObjectTaggingInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+	})
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			if awsErr.Code() == "NotImplemented" {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func cleanup(s3Client *s3.S3, bucket string, object string, function string,
@@ -474,6 +520,95 @@ func testSelectObject(s3Client *s3.S3) {
 	successLogger(function, args, startTime).Info()
 }
 
+func testObjectTagging(s3Client *s3.S3) {
+	startTime := time.Now()
+	function := "testObjectTagging"
+	bucket := randString(60, rand.NewSource(time.Now().UnixNano()), "aws-sdk-go-test-")
+	object := randString(60, rand.NewSource(time.Now().UnixNano()), "")
+	args := map[string]interface{}{
+		"bucketName": bucket,
+		"objectName": object,
+	}
+
+	_, err := s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucket),
+	})
+	if err != nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CreateBucket Failed", err).Fatal()
+		return
+	}
+	defer cleanup(s3Client, bucket, object, function, args, startTime, true)
+
+	taginput := "Tag1=Value1"
+	tagInputSet := []*s3.Tag{
+		{
+			Key:   aws.String("Tag1"),
+			Value: aws.String("Value1"),
+		},
+	}
+	_, err = s3Client.PutObject(&s3.PutObjectInput{
+		Body:    aws.ReadSeekCloser(strings.NewReader("testfile")),
+		Bucket:  aws.String(bucket),
+		Key:     aws.String(object),
+		Tagging: &taginput,
+	})
+
+	if err != nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to success but got %v", err), err).Fatal()
+		return
+	}
+
+	tagop, err := s3Client.GetObjectTagging(&s3.GetObjectTaggingInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+	})
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUTObjectTagging expected to success but got %v", awsErr.Code()), err).Fatal()
+			return
+		}
+	}
+	if !reflect.DeepEqual(tagop.TagSet, tagInputSet) {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUTObject Tag input did not match with GetObjectTagging output %v", nil), nil).Fatal()
+		return
+	}
+
+	taginputSet1 := []*s3.Tag{
+		{
+			Key:   aws.String("Key4"),
+			Value: aws.String("Value4"),
+		},
+	}
+	_, err = s3Client.PutObjectTagging(&s3.PutObjectTaggingInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+		Tagging: &s3.Tagging{
+			TagSet: taginputSet1,
+		},
+	})
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUTObjectTagging expected to success but got %v", awsErr.Code()), err).Fatal()
+			return
+		}
+	}
+
+	tagop, err = s3Client.GetObjectTagging(&s3.GetObjectTaggingInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+	})
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUTObjectTagging expected to success but got %v", awsErr.Code()), err).Fatal()
+			return
+		}
+	}
+	if !reflect.DeepEqual(tagop.TagSet, taginputSet1) {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUTObjectTagging input did not match with GetObjectTagging output %v", nil), nil).Fatal()
+		return
+	}
+}
+
 func main() {
 	endpoint := os.Getenv("SERVER_ENDPOINT")
 	accessKey := os.Getenv("ACCESS_KEY")
@@ -508,4 +643,7 @@ func main() {
 	testPresignedPutInvalidHash(s3Client)
 	testListObjects(s3Client)
 	testSelectObject(s3Client)
+	if isObjectTaggingImplemented(s3Client) {
+		testObjectTagging(s3Client)
+	}
 }

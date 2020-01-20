@@ -154,6 +154,9 @@ type ObjectInfo struct {
 	// User-Defined metadata
 	UserDefined map[string]string
 
+	// User-Defined object tags
+	UserTags string
+
 	// List of individual parts, maximum size of upto 10,000
 	Parts []ObjectPartInfo `json:"-"`
 

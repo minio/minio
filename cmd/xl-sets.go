@@ -35,6 +35,7 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/minio/pkg/tagging"
 )
 
 // setsStorageAPI is encapsulated type for Close()
@@ -1659,6 +1660,21 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObj
 
 func (s *xlSets) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
 	return s.listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys, true)
+}
+
+// PutObjectTag - replace or add tags to an existing object
+func (s *xlSets) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
+	return s.getHashedSet(object).PutObjectTag(ctx, bucket, object, tags)
+}
+
+// DeleteObjectTag - delete object tags from an existing object
+func (s *xlSets) DeleteObjectTag(ctx context.Context, bucket, object string) error {
+	return s.getHashedSet(object).DeleteObjectTag(ctx, bucket, object)
+}
+
+// GetObjectTag - get object tags from an existing object
+func (s *xlSets) GetObjectTag(ctx context.Context, bucket, object string) (tagging.Tagging, error) {
+	return s.getHashedSet(object).GetObjectTag(ctx, bucket, object)
 }
 
 // GetMetrics - no op
