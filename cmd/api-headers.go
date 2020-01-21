@@ -22,6 +22,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -95,6 +96,14 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 		w.Header().Set(xhttp.XCache, objInfo.CacheStatus.String())
 		w.Header().Set(xhttp.XCacheLookup, objInfo.CacheLookupStatus.String())
 	}
+
+	// Set tag count if object has tags
+	tags, _ := url.ParseQuery(objInfo.UserTags)
+	tagCount := len(tags)
+	if tagCount != 0 {
+		w.Header().Set(xhttp.AmzTagCount, strconv.Itoa(tagCount))
+	}
+
 	// Set all other user defined metadata.
 	for k, v := range objInfo.UserDefined {
 		if HasPrefix(k, ReservedMetadataPrefix) {

@@ -56,6 +56,11 @@ const (
 	// S3 storage class
 	AmzStorageClass = "x-amz-storage-class"
 
+	// S3 object tagging
+	AmzObjectTagging = "X-Amz-Tagging"
+	AmzTagCount      = "X-Amz-Tag-Count"
+	AmzTagDirective  = "X-Amz-Tagging-Directive"
+
 	// S3 extensions
 	AmzCopySourceIfModifiedSince   = "x-amz-copy-source-if-modified-since"
 	AmzCopySourceIfUnmodifiedSince = "x-amz-copy-source-if-unmodified-since"

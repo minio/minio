@@ -2029,6 +2029,7 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 
 	resp, err := clnt.Do(req)
 	if err != nil {
+		clnt.CloseIdleConnections()
 		return toJSONError(ctx, err)
 	}
 	defer xhttp.DrainBody(resp.Body)

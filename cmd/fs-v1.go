@@ -37,6 +37,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/config"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/lock"
@@ -44,6 +45,7 @@ import (
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/mountinfo"
 	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/tagging"
 )
 
 // Default etag is used for pre-existing objects.
@@ -1233,6 +1235,58 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 
 	return listObjects(ctx, fs, bucket, prefix, marker, delimiter, maxKeys, fs.listPool,
 		fs.listDirFactory(), fs.getObjectInfo, fs.getObjectInfo)
+}
+
+// GetObjectTag - get object tags from an existing object
+func (fs *FSObjects) GetObjectTag(ctx context.Context, bucket, object string) (tagging.Tagging, error) {
+	oi, err := fs.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
+	if err != nil {
+		return tagging.Tagging{}, err
+	}
+
+	tags, err := tagging.FromString(oi.UserTags)
+	if err != nil {
+		return tagging.Tagging{}, err
+	}
+
+	return tags, nil
+}
+
+// PutObjectTag - replace or add tags to an existing object
+func (fs *FSObjects) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
+	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
+	fsMeta := fsMetaV1{}
+	wlk, err := fs.rwPool.Write(fsMetaPath)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return toObjectErr(err, bucket, object)
+	}
+	// This close will allow for locks to be synchronized on `fs.json`.
+	defer wlk.Close()
+
+	// Read objects' metadata in `fs.json`.
+	if _, err = fsMeta.ReadFrom(ctx, wlk); err != nil {
+		// For any error to read fsMeta, set default ETag and proceed.
+		fsMeta = fs.defaultFsJSON(object)
+	}
+
+	// clean fsMeta.Meta of tag key, before updating the new tags
+	delete(fsMeta.Meta, xhttp.AmzObjectTagging)
+
+	// Do not update for empty tags
+	if tags != "" {
+		fsMeta.Meta[xhttp.AmzObjectTagging] = tags
+	}
+
+	if _, err = fsMeta.WriteTo(wlk); err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+	return nil
+}
+
+// DeleteObjectTag - delete object tags from an existing object
+func (fs *FSObjects) DeleteObjectTag(ctx context.Context, bucket, object string) error {
+	return fs.PutObjectTag(ctx, bucket, object, "")
 }
 
 // ReloadFormat - no-op for fs, Valid only for XL.

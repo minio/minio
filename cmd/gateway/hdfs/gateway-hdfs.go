@@ -196,7 +196,7 @@ func (g *HDFS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error
 
 // Production - hdfs gateway is production ready.
 func (g *HDFS) Production() bool {
-	return false
+	return true
 }
 
 func (n *hdfsObjects) Shutdown(ctx context.Context) error {

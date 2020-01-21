@@ -72,9 +72,12 @@ minio.exe server http://192.168.1.11/C:/data http://192.168.1.12/C:/data ^
                   http://192.168.1.17/C:/data http://192.168.1.18/C:/data
 ```
 
+
 ![分布式Minio,8节点，每个节点一块盘](https://github.com/minio/minio/blob/master/docs/screenshots/Architecture-diagram_distributed_8.jpg?raw=true)
 
 示例2: 启动分布式Minio实例，4节点，每节点4块盘，需要在4个节点上都运行下面的命令。
+
+
 
 #### GNU/Linux 和 macOS
 
@@ -107,6 +110,29 @@ minio.exe server http://192.168.1.11/C:/data1 http://192.168.1.11/C:/data2 ^
 ```
 
 ![分布式Minio,4节点，每节点4块盘](https://github.com/minio/minio/blob/master/docs/screenshots/Architecture-diagram_distributed_16.jpg?raw=true)
+
+#### 扩展现有的分布式集群
+例如我们是通过区的方式启动MinIO集群，命令行如下：
+
+```shell
+export MINIO_ACCESS_KEY=<ACCESS_KEY>
+export MINIO_SECRET_KEY=<SECRET_KEY>
+minio server http://host{1...32}/export{1...32}
+```
+
+MinIO支持通过命令，指定新的集群来扩展现有集群（纠删码模式），命令行如下：
+
+```shell
+export MINIO_ACCESS_KEY=<ACCESS_KEY>
+export MINIO_SECRET_KEY=<SECRET_KEY>
+minio server http://host{1...32}/export{1...32} http://host{33...64}/export{1...32}
+```
+
+现在整个集群就扩展了1024个磁盘，总磁盘变为2048个，新的对象上传请求会自动分配到最少使用的集群上。通过以上扩展策略，您就可以按需扩展您的集群。重新配置后重启集群，会立即在集群中生效，并对现有集群无影响。如上命令中，我们可以把原来的集群看做一个区，新增集群看做另一个区，新对象按每个区域中的可用空间比例放置在区域中。在每个区域内，基于确定性哈希算法确定位置。
+
+> __说明:__ __您添加的每个区域必须具有与原始区域相同的磁盘数量（纠删码集）大小，以便维持相同的数据冗余SLA。__ 
+> 例如，第一个区有8个磁盘，您可以将集群扩展为16个、32个或1024个磁盘的区域，您只需确保部署的SLA是原始区域的倍数即可。
+
 
 ## 3. 验证
 

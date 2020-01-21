@@ -66,6 +66,7 @@ func (h *Target) startHTTPLogger() {
 
 			resp, err := h.client.Do(req)
 			if err != nil {
+				h.client.CloseIdleConnections()
 				continue
 			}
 

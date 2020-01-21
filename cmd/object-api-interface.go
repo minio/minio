@@ -25,6 +25,7 @@ import (
 	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/tagging"
 )
 
 // CheckCopyPreconditionFn returns true if copy precondition check failed.
@@ -125,4 +126,9 @@ type ObjectLayer interface {
 
 	// Check Readiness
 	IsReady(ctx context.Context) bool
+
+	// ObjectTagging operations
+	PutObjectTag(context.Context, string, string, string) error
+	GetObjectTag(context.Context, string, string) (tagging.Tagging, error)
+	DeleteObjectTag(context.Context, string, string) error
 }

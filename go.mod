@@ -39,7 +39,7 @@ require (
 	github.com/gopherjs/gopherjs v0.0.0-20190328170749-bb2674552d8f // indirect
 	github.com/gorilla/handlers v1.4.0
 	github.com/gorilla/mux v1.7.0
-	github.com/gorilla/rpc v1.2.0+incompatible
+	github.com/gorilla/rpc v1.2.0
 	github.com/gorilla/websocket v1.4.1 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
@@ -67,7 +67,7 @@ require (
 	github.com/minio/hdfs/v3 v3.0.1
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/lsync v1.0.1
-	github.com/minio/minio-go/v6 v6.0.44
+	github.com/minio/minio-go/v6 v6.0.45-0.20200117140906-66cf57d21ba4
 	github.com/minio/parquet-go v0.0.0-20191231003236-20b3c07bcd2c
 	github.com/minio/sha256-simd v0.1.1
 	github.com/minio/sio v0.2.0
@@ -120,6 +120,3 @@ require (
 	gopkg.in/olivere/elastic.v5 v5.0.80
 	gopkg.in/yaml.v2 v2.2.4
 )
-
-// Added for go1.13 migration https://github.com/golang/go/issues/32805
-replace github.com/gorilla/rpc v1.2.0+incompatible => github.com/gorilla/rpc v1.2.0

@@ -38,6 +38,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/target/http"
 	"github.com/minio/minio/pkg/env"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 func initHelp() {
@@ -469,6 +470,20 @@ func GetHelp(subSys, key string, envOnly bool) (Help, error) {
 
 	envHelp := config.HelpKVS{}
 	if envOnly {
+		// Only for multiple targets, make sure
+		// to list the ENV, for regular k/v EnableKey is
+		// implicit, for ENVs we cannot make it implicit.
+		if subSysHelp.MultipleTargets {
+			envK := config.EnvPrefix + strings.Join([]string{
+				strings.ToTitle(subSys), strings.ToTitle(madmin.EnableKey),
+			}, config.EnvWordDelimiter)
+			envHelp = append(envHelp, config.HelpKV{
+				Key:         envK,
+				Description: fmt.Sprintf("enable %s target, default is 'off'", subSys),
+				Optional:    false,
+				Type:        "on|off",
+			})
+		}
 		for _, hkv := range h {
 			envK := config.EnvPrefix + strings.Join([]string{
 				strings.ToTitle(subSys), strings.ToTitle(hkv.Key),
