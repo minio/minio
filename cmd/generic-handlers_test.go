@@ -17,11 +17,13 @@
 package cmd
 
 import (
+	xhttp "github.com/minio/minio/cmd/http"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/minio/minio/cmd/crypto"
 )
@@ -243,5 +245,666 @@ func TestSSETLSHandler(t *testing.T) {
 		case !test.ShouldFail && w.Code != http.StatusOK:
 			t.Errorf("Test %d: should not fail but status code is HTTP %d and not 200 OK", i, w.Code)
 		}
+	}
+}
+
+func Test_guessIsHealthCheckReq(t *testing.T) {
+	type args struct {
+		req *http.Request
+	}
+	type testCase struct {
+		name string
+		args args
+		want bool
+	}
+	tests := []testCase{
+		{
+			name: "Nil Request",
+			args: args{
+				req: nil,
+			},
+			want: false,
+		}, {
+			name: "Valid GET HealthCheck Request",
+			args: args{
+				req: &http.Request{
+					Method: http.MethodGet,
+					URL:    &url.URL{Path: healthCheckPathPrefix + healthCheckLivenessPath},
+				},
+			},
+			want: true,
+		}, {
+			name: "Valid HEAD HealthCheck Request",
+			args: args{
+				req: &http.Request{
+					Method: http.MethodHead,
+					URL:    &url.URL{Path: healthCheckPathPrefix + healthCheckLivenessPath},
+				},
+			},
+			want: true,
+		}, {
+			name: "Invalid HEAD Request",
+			args: args{
+				req: &http.Request{
+					Method: http.MethodHead,
+					URL:    &url.URL{Path: healthCheckPathPrefix},
+				},
+			},
+			want: false,
+		}, {
+			name: "Invalid GET Request",
+			args: args{
+				req: &http.Request{
+					Method: http.MethodGet,
+					URL:    &url.URL{Path: healthCheckPathPrefix},
+				},
+			},
+			want: false,
+		}, {
+			name: "Valid GET Readiness Check Request",
+			args: args{
+				req: &http.Request{
+					Method: http.MethodGet,
+					URL:    &url.URL{Path: healthCheckPathPrefix + healthCheckReadinessPath},
+				},
+			},
+			want: true,
+		}, {
+			name: "Valid HEAD Readiness Check Request",
+			args: args{
+				req: &http.Request{
+					Method: http.MethodHead,
+					URL:    &url.URL{Path: healthCheckPathPrefix + healthCheckReadinessPath},
+				},
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := guessIsHealthCheckReq(tt.args.req); got != tt.want {
+				t.Errorf("guessIsHealthCheckReq() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_guessIsMetricsReq(t *testing.T) {
+	type args struct {
+		req *http.Request
+	}
+	type testCase struct {
+		name string
+		args args
+		want bool
+	}
+	tests := []testCase{
+		{
+			name: "Nil request should return false",
+			args: args{
+				req: nil,
+			},
+			want: false,
+		}, {
+			name: "Empty url should return false",
+			args: args{
+				req: &http.Request{
+					Method: http.MethodGet,
+					URL:    &url.URL{},
+				},
+			},
+			want: false,
+		}, {
+			name: "Valid url should return true",
+			args: args{
+				req: &http.Request{
+					Method: http.MethodPost,
+					URL:    &url.URL{Path: minioReservedBucketPath + prometheusMetricsPath},
+				},
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := guessIsMetricsReq(tt.args.req); got != tt.want {
+				t.Errorf("guessIsMetricsReq() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_isAdminReq(t *testing.T) {
+	type args struct {
+		r *http.Request
+	}
+	type testCase struct {
+		name string
+		args args
+		want bool
+	}
+	tests := []testCase{
+		{
+			name: "Empty path should return false",
+			args: args{
+				r: &http.Request{
+					Method: http.MethodGet,
+					URL: &url.URL{
+						Path: "",
+					},
+				},
+			},
+			want: false,
+		}, {
+			name: "Invalid path should return false",
+			args: args{
+				r: &http.Request{
+					Method: http.MethodGet,
+					URL: &url.URL{
+						Path: "/minio/admi",
+					},
+				},
+			},
+			want: false,
+		}, {
+			name: "Invalid path should return false",
+			args: args{
+				r: &http.Request{
+					Method: http.MethodGet,
+					URL: &url.URL{
+						Path: "fake/minio/admin",
+					},
+				},
+			},
+			want: false,
+		}, {
+			name: "Valid path should return true",
+			args: args{
+				r: &http.Request{
+					Method: http.MethodGet,
+					URL: &url.URL{
+						Path: "/minio/admin",
+					},
+				},
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isAdminReq(tt.args.r); got != tt.want {
+				t.Errorf("isAdminReq() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_parseAmzDate(t *testing.T) {
+	type args struct {
+		amzDateStr string
+	}
+	type testCase struct {
+		name        string
+		args        args
+		wantAmzDate time.Time
+		wantAPIErr  APIErrorCode
+	}
+
+	tests := []testCase{
+		{
+			name:        "Empty time should return ErrMalformedDate",
+			args:        args{},
+			wantAmzDate: time.Time{},
+			wantAPIErr:  ErrMalformedDate,
+		},
+	}
+	_time := time.Now()
+	for _, dateFormat := range amzDateFormats {
+		expected, _ := time.Parse(dateFormat, _time.UTC().Format(dateFormat))
+		tests = append(tests, testCase{
+			name: "Valid " + dateFormat,
+			args: args{
+				amzDateStr: _time.Format(dateFormat),
+			},
+			wantAmzDate: expected,
+			wantAPIErr:  ErrNone,
+		})
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotAmzDate, gotAPIErr := parseAmzDate(tt.args.amzDateStr)
+			if !gotAmzDate.Equal(tt.wantAmzDate) {
+				t.Errorf("parseAmzDate() gotAmzDate = %v, want %v", gotAmzDate, tt.wantAmzDate)
+			}
+			if gotAPIErr != tt.wantAPIErr {
+				t.Errorf("parseAmzDate() gotAPIErr = %v, want %v", gotAPIErr, tt.wantAPIErr)
+			}
+		})
+	}
+}
+
+func Test_parseAmzDateHeader(t *testing.T) {
+	type args struct {
+		req *http.Request
+	}
+	type testCase struct {
+		name         string
+		args         args
+		want         time.Time
+		apiErrorCode APIErrorCode
+	}
+
+	tests := []testCase{
+		{
+			name: "",
+			args: args{
+				req: &http.Request{},
+			},
+			want:         time.Time{},
+			apiErrorCode: ErrMissingDateHeader,
+		},
+	}
+	_time := time.Now()
+	for _, dateFormat := range amzDateFormats {
+		for _, amzDateHeader := range amzDateHeaders {
+			expected, _ := time.Parse(dateFormat, _time.Format(dateFormat))
+			header := http.Header{}
+			header.Set(http.CanonicalHeaderKey(amzDateHeader), _time.Format(dateFormat))
+			tests = append(tests, testCase{
+				name: "Valid " + amzDateHeader + " " + dateFormat,
+				args: args{
+					req: &http.Request{
+						Header: header,
+					},
+				},
+				want:         expected,
+				apiErrorCode: ErrNone,
+			})
+
+			// invalid headers
+			invalidHeader := http.Header{}
+			invalidHeader.Set(http.CanonicalHeaderKey(string(getRandomByte())), _time.Format(dateFormat))
+			tests = append(tests, testCase{
+				name: "Invalid " + amzDateHeader + " " + dateFormat,
+				args: args{
+					req: &http.Request{
+						Header: invalidHeader,
+					},
+				},
+				want:         time.Time{},
+				apiErrorCode: ErrMissingDateHeader,
+			})
+		}
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotTime, gotAPIErrorCode := parseAmzDateHeader(tt.args.req)
+			if !gotTime.Equal(tt.want) {
+				t.Errorf("parseAmzDateHeader() got = %v, want %v", gotTime, tt.want)
+			}
+			if gotAPIErrorCode != tt.apiErrorCode {
+				t.Errorf("parseAmzDateHeader() apiErrorCode = %v, want %v", gotAPIErrorCode, tt.apiErrorCode)
+			}
+		})
+	}
+}
+
+func Test_ignoreNotImplementedBucketResources(t *testing.T) {
+	type args struct {
+		req *http.Request
+	}
+	type testCase struct {
+		name string
+		args args
+		want bool
+	}
+	tests := []testCase{
+		{
+			name: "Empty request",
+			args: args{
+				req: &http.Request{
+					URL: &url.URL{},
+				},
+			},
+			want: false,
+		},
+	}
+
+	enabledResources := map[string][]string{
+		"acl":            {http.MethodGet},
+		"cors":           {http.MethodGet},
+		"website":        {http.MethodGet, http.MethodDelete},
+		"accelerate":     {http.MethodGet},
+		"requestPayment": {http.MethodGet},
+		"logging":        {http.MethodGet},
+		"lifecycle":      {http.MethodGet},
+		"replication":    {http.MethodGet},
+		"tagging":        {http.MethodGet, http.MethodDelete},
+		"versioning":     {http.MethodGet},
+	}
+
+	for resource, methods := range enabledResources {
+		for _, method := range methods {
+			tests = append(tests, testCase{
+				name: "Not ignore bucket resource " + resource + " " + method,
+				args: args{
+					req: &http.Request{
+						Method: method,
+						URL: &url.URL{
+							RawQuery: resource,
+						},
+					},
+				},
+				want: false,
+			})
+		}
+	}
+
+	for resource := range notimplementedBucketResourceNames {
+		tests = append(tests, testCase{
+			name: "Ignore bucket resource " + resource,
+			args: args{
+				req: &http.Request{
+					Method: http.MethodPost,
+					URL: &url.URL{
+						RawQuery: resource,
+					},
+				},
+			},
+			want: true,
+		})
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ignoreNotImplementedBucketResources(tt.args.req); got != tt.want {
+				t.Errorf("ignoreNotImplementedBucketResources() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_ignoreNotImplementedObjectResources(t *testing.T) {
+	type args struct {
+		req *http.Request
+	}
+	type testCase struct {
+		name string
+		args args
+		want bool
+	}
+	tests := []testCase{
+		{
+			name: "Empty request",
+			args: args{
+				req: &http.Request{
+					URL: &url.URL{},
+				},
+			},
+			want: false,
+		},
+	}
+
+	enabledResources := map[string][]string{
+		"acl":     {http.MethodGet},
+		"tagging": {http.MethodGet},
+	}
+
+	for resource, methods := range enabledResources {
+		for _, method := range methods {
+			tests = append(tests, testCase{
+				name: "Not ignore bucket resource " + resource + " " + method,
+				args: args{
+					req: &http.Request{
+						Method: method,
+						URL: &url.URL{
+							RawQuery: resource,
+						},
+					},
+				},
+				want: false,
+			})
+		}
+	}
+
+	for resource := range notimplementedObjectResourceNames {
+		tests = append(tests, testCase{
+			name: "Ignore bucket resource " + resource,
+			args: args{
+				req: &http.Request{
+					Method: http.MethodPost,
+					URL: &url.URL{
+						RawQuery: resource,
+					},
+				},
+			},
+			want: true,
+		})
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ignoreNotImplementedObjectResources(tt.args.req); got != tt.want {
+				t.Errorf("ignoreNotImplementedObjectResources() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_hasBadPathComponent(t *testing.T) {
+	type args struct {
+		path string
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "Empty",
+			args: args{},
+			want: false,
+		}, {
+			name: "dotdotComponent",
+			args: args{
+				path: "../admin",
+			},
+			want: true,
+		}, {
+			name: "dotdotComponent",
+			args: args{
+				path: "/test/../admin",
+			},
+			want: true,
+		}, {
+			name: "dotComponent",
+			args: args{
+				path: "./admin",
+			},
+			want: true,
+		}, {
+			name: "dotComponent",
+			args: args{
+				path: "/test/./admin",
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasBadPathComponent(tt.args.path); got != tt.want {
+				t.Errorf("hasBadPathComponent() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_hasMultipleAuth(t *testing.T) {
+	type args struct {
+		r *http.Request
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "Empty",
+			args: args{
+				r: &http.Request{
+					URL: &url.URL{},
+				},
+			},
+			want: false,
+		}, {
+			name: "Single Auth jwt",
+			args: args{
+				r: &http.Request{
+					Header: http.Header{
+						xhttp.Authorization: {jwtAlgorithm},
+					},
+					URL: &url.URL{},
+				},
+			},
+			want: false,
+		}, {
+			name: "Multiple Auth (jwt, PresignedSignatureV2)",
+			args: args{
+				r: &http.Request{
+					Header: http.Header{
+						xhttp.Authorization: {jwtAlgorithm},
+					},
+					URL: &url.URL{
+						RawQuery: xhttp.AmzAccessKeyID,
+					},
+				},
+			},
+			want: true,
+		}, {
+			name: "Multiple Auth (signV4Algorithm, PresignedSignatureV2)",
+			args: args{
+				r: &http.Request{
+					Header: http.Header{
+						xhttp.Authorization: {signV4Algorithm},
+					},
+					URL: &url.URL{
+						RawQuery: xhttp.AmzAccessKeyID,
+					},
+				},
+			},
+			want: true,
+		}, {
+			name: "Multiple Auth (signV2Algorithm, PresignedSignatureV2)",
+			args: args{
+				r: &http.Request{
+					Header: http.Header{
+						xhttp.Authorization: {signV2Algorithm},
+					},
+					URL: &url.URL{
+						RawQuery: xhttp.AmzAccessKeyID,
+					},
+				},
+			},
+			want: true,
+		}, {
+			name: "Multiple Auth (signV2Algorithm, RequestSignatureV4)",
+			args: args{
+				r: &http.Request{
+					Header: http.Header{
+						xhttp.Authorization: {signV2Algorithm},
+					},
+					URL: &url.URL{
+						RawQuery: xhttp.AmzCredential,
+					},
+				},
+			},
+			want: true,
+		}, {
+			name: "Multiple Auth (signV2Algorithm, PostPolicySignatureV4)",
+			args: args{
+				r: &http.Request{
+					Method: http.MethodPost,
+					Header: http.Header{
+						xhttp.ContentType: {"multipart/form-data"},
+					},
+					URL: &url.URL{
+						RawQuery: xhttp.AmzCredential,
+					},
+				},
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasMultipleAuth(tt.args.r); got != tt.want {
+				t.Errorf("hasMultipleAuth() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_guessIsLoginSTSReq(t *testing.T) {
+	type args struct {
+		req *http.Request
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "Empty",
+			args: args{
+				req: &http.Request{URL: &url.URL{}},
+			},
+			want: false,
+		}, {
+			name: "Nil request",
+			args: args{
+				req: nil,
+			},
+			want: false,
+		}, {
+			name: "loginPathPrefix",
+			args: args{
+				req: &http.Request{
+					URL: &url.URL{
+						Path: loginPathPrefix,
+					},
+				},
+			},
+			want: true,
+		}, {
+			name: "Not valid STS",
+			args: args{
+				req: &http.Request{
+					Method: http.MethodPost,
+					URL:    &url.URL{},
+				},
+			},
+			want: false,
+		}, {
+			name: "Valid STS",
+			args: args{
+				req: &http.Request{
+					Method: http.MethodPost,
+					URL: &url.URL{
+						Path:     SlashSeparator,
+						RawQuery: xhttp.Action,
+					},
+				},
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := guessIsLoginSTSReq(tt.args.req); got != tt.want {
+				t.Errorf("guessIsLoginSTSReq() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
