@@ -1367,6 +1367,11 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 		return true
 	}
 
+	// Check whether the account is a temp user obtained from Assume-role
+	if yeah, _ := sys.IsTempUser(args.AccountName); yeah {
+		return sys.IsAllowedSTS(args)
+	}
+	
 	// With claims set, we should do STS related checks and validation.
 	if _, ok := args.Claims["aud"]; ok {
 		return sys.IsAllowedSTS(args)
