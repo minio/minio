@@ -72,17 +72,6 @@ chmod +x minio
 minio.exe server D:\Photos
 ```
 
-## FreeBSD
-### Port
-Install minio packages using [pkg](https://github.com/freebsd/pkg)
-
-```sh
-pkg install minio
-sysrc minio_enable=yes
-sysrc minio_disks=/home/user/Photos
-service minio start
-```
-
 ## Install from Source
 Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://golang.org/doc/install). Minimum version required is [go1.13](https://golang.org/dl/#stable)
 
