@@ -1367,8 +1367,13 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 		return true
 	}
 
-	// With claims set, we should do STS related checks and validation.
-	if _, ok := args.Claims["aud"]; ok {
+	// If the credential is temporary, perform STS related checks.
+	ok, err := sys.IsTempUser(args.AccountName)
+	if err != nil {
+		logger.LogIf(context.Background(), err)
+		return false
+	}
+	if ok {
 		return sys.IsAllowedSTS(args)
 	}
 
