@@ -255,6 +255,7 @@ func serverMain(ctx *cli.Context) {
 	if ctx.Args().First() == "help" || !endpointsPresent(ctx) {
 		cli.ShowCommandHelpAndExit(ctx, "server", 1)
 	}
+	setDefaultProfilerRates()
 
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(context.Background())

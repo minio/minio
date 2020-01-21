@@ -42,6 +42,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/minio/pkg/madmin"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
@@ -185,9 +186,28 @@ func contains(slice interface{}, elem interface{}) bool {
 // provide any API to calculate the profiler file path in the
 // disk since the name of this latter is randomly generated.
 type profilerWrapper struct {
+	// Profile recorded at start of benchmark.
+	base   []byte
 	stopFn func() ([]byte, error)
 }
 
+// recordBase will record the profile and store it as the base.
+func (p *profilerWrapper) recordBase(name string) {
+	var buf bytes.Buffer
+	p.base = nil
+	err := pprof.Lookup(name).WriteTo(&buf, 0)
+	if err != nil {
+		return
+	}
+	p.base = buf.Bytes()
+}
+
+// Base returns the recorded base if any.
+func (p profilerWrapper) Base() []byte {
+	return p.base
+}
+
+// Stop the currently running benchmark.
 func (p profilerWrapper) Stop() ([]byte, error) {
 	return p.stopFn()
 }
@@ -211,8 +231,18 @@ func getProfileData() (map[string][]byte, error) {
 		if err == nil {
 			dst[typ] = buf
 		}
+		buf = prof.Base()
+		if len(buf) > 0 {
+			dst[typ+"-before"] = buf
+		}
 	}
 	return dst, nil
+}
+
+func setDefaultProfilerRates() {
+	runtime.MemProfileRate = 4096      // 512K -> 4K - Must be constant throughout application lifetime.
+	runtime.SetMutexProfileFraction(0) // Disable until needed
+	runtime.SetBlockProfileRate(0)     // Disable until needed
 }
 
 // Starts a profiler returns nil if profiler is not enabled, caller needs to handle this.
@@ -221,8 +251,8 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 
 	// Enable profiler and set the name of the file that pkg/pprof
 	// library creates to store profiling data.
-	switch profilerType {
-	case "cpu":
+	switch madmin.ProfilerType(profilerType) {
+	case madmin.ProfilerCPU:
 		dirPath, err := ioutil.TempDir("", "profile")
 		if err != nil {
 			return nil, err
@@ -245,32 +275,41 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			defer os.RemoveAll(dirPath)
 			return ioutil.ReadFile(fn)
 		}
-	case "mem":
-		old := runtime.MemProfileRate
-		runtime.MemProfileRate = 4096
+	case madmin.ProfilerMEM:
+		runtime.GC()
+		prof.recordBase("heap")
 		prof.stopFn = func() ([]byte, error) {
+			runtime.GC()
 			var buf bytes.Buffer
-			runtime.MemProfileRate = old
 			err := pprof.Lookup("heap").WriteTo(&buf, 0)
 			return buf.Bytes(), err
 		}
-	case "block":
+	case madmin.ProfilerBlock:
+		prof.recordBase("block")
 		runtime.SetBlockProfileRate(1)
 		prof.stopFn = func() ([]byte, error) {
 			var buf bytes.Buffer
-			runtime.SetBlockProfileRate(0)
 			err := pprof.Lookup("block").WriteTo(&buf, 0)
+			runtime.SetBlockProfileRate(0)
 			return buf.Bytes(), err
 		}
-	case "mutex":
+	case madmin.ProfilerMutex:
+		prof.recordBase("mutex")
 		runtime.SetMutexProfileFraction(1)
 		prof.stopFn = func() ([]byte, error) {
 			var buf bytes.Buffer
-			runtime.SetMutexProfileFraction(0)
 			err := pprof.Lookup("mutex").WriteTo(&buf, 0)
+			runtime.SetMutexProfileFraction(0)
 			return buf.Bytes(), err
 		}
-	case "trace":
+	case madmin.ProfilerThreads:
+		prof.recordBase("threadcreate")
+		prof.stopFn = func() ([]byte, error) {
+			var buf bytes.Buffer
+			err := pprof.Lookup("threadcreate").WriteTo(&buf, 0)
+			return buf.Bytes(), err
+		}
+	case madmin.ProfilerTrace:
 		dirPath, err := ioutil.TempDir("", "profile")
 		if err != nil {
 			return nil, err
@@ -302,6 +341,8 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 
 // minioProfiler - minio profiler interface.
 type minioProfiler interface {
+	// Return base profile. 'nil' if none.
+	Base() []byte
 	// Stop the profiler
 	Stop() ([]byte, error)
 }
