@@ -107,85 +107,74 @@ func TestMaxPartID(t *testing.T) {
 	}
 }
 
-// Tests extracting bucket and objectname from various types of URL paths.
-func TestURL2BucketObjectName(t *testing.T) {
+// Tests extracting bucket and objectname from various types of paths.
+func TestPath2BucketObjectName(t *testing.T) {
 	testCases := []struct {
-		u              *url.URL
+		path           string
 		bucket, object string
 	}{
 		// Test case 1 normal case.
 		{
-			u: &url.URL{
-				Path: "/bucket/object",
-			},
+			path:   "/bucket/object",
 			bucket: "bucket",
 			object: "object",
 		},
 		// Test case 2 where url only has separator.
 		{
-			u: &url.URL{
-				Path: SlashSeparator,
-			},
+			path:   SlashSeparator,
 			bucket: "",
 			object: "",
 		},
 		// Test case 3 only bucket is present.
 		{
-			u: &url.URL{
-				Path: "/bucket",
-			},
+			path:   "/bucket",
 			bucket: "bucket",
 			object: "",
 		},
 		// Test case 4 many separators and object is a directory.
 		{
-			u: &url.URL{
-				Path: "/bucket/object/1/",
-			},
+			path:   "/bucket/object/1/",
 			bucket: "bucket",
 			object: "object/1/",
 		},
 		// Test case 5 object has many trailing separators.
 		{
-			u: &url.URL{
-				Path: "/bucket/object/1///",
-			},
+			path:   "/bucket/object/1///",
 			bucket: "bucket",
 			object: "object/1///",
 		},
 		// Test case 6 object has only trailing separators.
 		{
-			u: &url.URL{
-				Path: "/bucket/object///////",
-			},
+			path:   "/bucket/object///////",
 			bucket: "bucket",
 			object: "object///////",
 		},
 		// Test case 7 object has preceding separators.
 		{
-			u: &url.URL{
-				Path: "/bucket////object////",
-			},
+			path:   "/bucket////object////",
 			bucket: "bucket",
 			object: "///object////",
 		},
-		// Test case 9 url path is empty.
+		// Test case 8 url path is empty.
 		{
-			u:      &url.URL{},
+			path:   "",
 			bucket: "",
 			object: "",
 		},
 	}
 
 	// Validate all test cases.
-	for i, testCase := range testCases {
-		bucketName, objectName := urlPath2BucketObjectName(testCase.u.Path)
-		if bucketName != testCase.bucket {
-			t.Errorf("Test %d: failed expected bucket name \"%s\", got \"%s\"", i+1, testCase.bucket, bucketName)
-		}
-		if objectName != testCase.object {
-			t.Errorf("Test %d: failed expected bucket name \"%s\", got \"%s\"", i+1, testCase.object, objectName)
-		}
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run("", func(t *testing.T) {
+			bucketName, objectName := path2BucketObject(testCase.path)
+			if bucketName != testCase.bucket {
+				t.Errorf("failed expected bucket name \"%s\", got \"%s\"", testCase.bucket, bucketName)
+			}
+			if objectName != testCase.object {
+				t.Errorf("failed expected bucket name \"%s\", got \"%s\"", testCase.object, objectName)
+			}
+		})
 	}
 }
 

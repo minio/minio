@@ -75,7 +75,7 @@ func (h *healRoutine) run() {
 
 			var res madmin.HealResultItem
 			var err error
-			bucket, object := urlPath2BucketObjectName(task.path)
+			bucket, object := path2BucketObject(task.path)
 			switch {
 			case bucket == "" && object == "":
 				res, err = bgHealDiskFormat(ctx, task.opts)

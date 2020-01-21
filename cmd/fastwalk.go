@@ -17,14 +17,7 @@ import (
 	"sync"
 )
 
-// ErrTraverseLink is used as a return value from WalkFuncs to indicate that the
-// symlink named in the call may be traversed.
-var ErrTraverseLink = errors.New("fastwalk: traverse symlink, assuming target is a directory")
-
-// ErrSkipFiles is a used as a return value from WalkFuncs to indicate that the
-// callback should not be called for any other files in the current directory.
-// Child directories will still be traversed.
-var ErrSkipFiles = errors.New("fastwalk: skip remaining files in directory")
+var errSkipFile = errors.New("fastwalk: skip this file")
 
 // Walk is a faster implementation of filepath.Walk.
 //
@@ -161,25 +154,32 @@ func (w *walker) enqueue(it walkItem) {
 	}
 }
 
+var stringsBuilderPool = sync.Pool{
+	New: func() interface{} {
+		return &strings.Builder{}
+	},
+}
+
 func (w *walker) onDirEnt(dirName, baseName string, typ os.FileMode) error {
-	joined := dirName + string(os.PathSeparator) + baseName
+	builder := stringsBuilderPool.Get().(*strings.Builder)
+	defer func() {
+		builder.Reset()
+		stringsBuilderPool.Put(builder)
+	}()
+
+	builder.WriteString(dirName)
+	if !strings.HasSuffix(dirName, SlashSeparator) {
+		builder.WriteString(SlashSeparator)
+	}
+	builder.WriteString(baseName)
 	if typ == os.ModeDir {
-		w.enqueue(walkItem{dir: joined})
+		w.enqueue(walkItem{dir: builder.String()})
 		return nil
 	}
 
-	err := w.fn(joined, typ)
-	if typ == os.ModeSymlink {
-		if err == ErrTraverseLink {
-			// Set callbackDone so we don't call it twice for both the
-			// symlink-as-symlink and the symlink-as-directory later:
-			w.enqueue(walkItem{dir: joined, callbackDone: true})
-			return nil
-		}
-		if err == filepath.SkipDir {
-			// Permit SkipDir on symlinks too.
-			return nil
-		}
+	err := w.fn(builder.String(), typ)
+	if err == filepath.SkipDir || err == errSkipFile {
+		return nil
 	}
 	return err
 }
@@ -189,22 +189,13 @@ func readDirFn(dirName string, fn func(dirName, entName string, typ os.FileMode)
 	if err != nil {
 		return err
 	}
-	skipFiles := false
 	for _, fi := range fis {
 		var mode os.FileMode
 		if strings.HasSuffix(fi, SlashSeparator) {
 			mode |= os.ModeDir
 		}
 
-		if mode == 0 && skipFiles {
-			continue
-		}
-
-		if err := fn(dirName, fi, mode); err != nil {
-			if err == ErrSkipFiles {
-				skipFiles = true
-				continue
-			}
+		if err = fn(dirName, fi, mode); err != nil {
 			return err
 		}
 	}
@@ -214,7 +205,7 @@ func readDirFn(dirName string, fn func(dirName, entName string, typ os.FileMode)
 func (w *walker) walk(root string, runUserCallback bool) error {
 	if runUserCallback {
 		err := w.fn(root, os.ModeDir)
-		if err == filepath.SkipDir {
+		if err == filepath.SkipDir || err == errSkipFile {
 			return nil
 		}
 		if err != nil {

@@ -192,15 +192,14 @@ func (xl xlObjects) StorageInfo(ctx context.Context) StorageInfo {
 	return getStorageInfo(xl.getDisks())
 }
 
-// GetMetrics - no op
+// GetMetrics - is not implemented and shouldn't be called.
 func (xl xlObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return &Metrics{}, NotImplemented{}
 }
 
-// crawlAndGetDataUsage picks three random disks to crawl and get data usage
-func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
-
+// CrawlAndGetDataUsage picks three random disks to crawl and get data usage
+func (xl xlObjects) CrawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
 	var randomDisks []StorageAPI
 	for _, d := range xl.getLoadBalancedDisks() {
 		if d == nil || !d.IsOnline() {
