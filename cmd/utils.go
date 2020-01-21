@@ -281,12 +281,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 		}
 	case madmin.ProfilerMEM:
 		runtime.GC()
-		var buf bytes.Buffer
-		err := pprof.Lookup("heap").WriteTo(&buf, 0)
-		if err != nil {
-			return nil, err
-		}
-		prof.base = buf.Bytes()
+		prof.recordBase("heap")
 		prof.stopFn = func() ([]byte, error) {
 			runtime.GC()
 			var buf bytes.Buffer
