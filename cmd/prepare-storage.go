@@ -207,6 +207,7 @@ func IsServerResolvable(endpoint Endpoint) error {
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
+		httpClient.CloseIdleConnections()
 		return err
 	}
 	defer xhttp.DrainBody(resp.Body)

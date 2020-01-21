@@ -142,15 +142,14 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 
 	resp, err := target.httpClient.Do(req)
 	if err != nil {
+		target.Close()
 		return err
 	}
-
 	defer resp.Body.Close()
 	io.Copy(ioutil.Discard, resp.Body)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		// close any idle connections upon any error.
-		target.httpClient.CloseIdleConnections()
+		target.Close()
 		return fmt.Errorf("sending event failed with %v", resp.Status)
 	}
 

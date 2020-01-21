@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -100,6 +102,7 @@ func (u URL) DialHTTP() error {
 	if err != nil {
 		return err
 	}
+	io.Copy(ioutil.Discard, resp.Body)
 	resp.Body.Close()
 	return nil
 }

@@ -251,6 +251,7 @@ func parseDiscoveryDoc(u *xnet.URL, transport *http.Transport, closeRespFn func(
 	}
 	resp, err := clnt.Do(req)
 	if err != nil {
+		clnt.CloseIdleConnections()
 		return d, err
 	}
 	defer closeRespFn(resp.Body)
