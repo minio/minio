@@ -1449,9 +1449,6 @@ func (sys *IAMSys) updateGroupMembershipsMap(group string, gi *GroupInfo) {
 // removeGroupFromMembershipsMap - removes the group from every member
 // in the cache. IMPORTANT: Assumes sys.Lock() is held by caller.
 func (sys *IAMSys) removeGroupFromMembershipsMap(group string) {
-	if _, ok := sys.iamUserGroupMemberships[group]; !ok {
-		return
-	}
 	for member, groups := range sys.iamUserGroupMemberships {
 		if !groups.Contains(group) {
 			continue
