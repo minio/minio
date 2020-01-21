@@ -534,7 +534,8 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	if globalDNSConfig != nil {
-		if _, err := globalDNSConfig.Get(bucket); err != nil {
+		sr, err := globalDNSConfig.Get(bucket)
+		if err != nil {
 			if err == dns.ErrNoEntriesFound {
 				// Proceed to creating a bucket.
 				if err = objectAPI.MakeBucketWithLocation(ctx, bucket, location); err != nil {
@@ -567,7 +568,15 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 			return
 
 		}
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBucketAlreadyOwnedByYou), r.URL, guessIsBrowserReq(r))
+		apiErr := ErrBucketAlreadyExists
+		if !globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(sr)...)).IsEmpty() {
+			apiErr = ErrBucketAlreadyOwnedByYou
+		}
+		// No IPs seem to intersect, this means that bucket exists but has
+		// different IP addresses perhaps from a different deployment.
+		// bucket names are globally unique in federation at a given
+		// path prefix, name collision is not allowed. Return appropriate error.
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(apiErr), r.URL, guessIsBrowserReq(r))
 		return
 	}
 

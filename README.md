@@ -21,7 +21,7 @@ docker run -p 9000:9000 minio/minio:edge server /data
 > NOTE: Docker will not display the default keys unless you start the container with the `-it`(interactive TTY) argument. Generally, it is not recommended to use default keys with containers. Please visit MinIO Docker quickstart guide for more information [here](https://docs.min.io/docs/minio-docker-quickstart-guide)
 
 ## macOS
-### Homebrew
+### Homebrew (recommended)
 Install minio packages using [Homebrew](http://brew.sh/)
 ```sh
 brew install minio/stable/minio
@@ -74,7 +74,7 @@ minio.exe server D:\Photos
 
 ## FreeBSD
 ### Port
-Install minio packages using [pkg](https://github.com/freebsd/pkg)
+Install minio packages using [pkg](https://github.com/freebsd/pkg), MinIO doesn't officially build FreeBSD binaries but is maintained by FreeBSD upstream [here](https://www.freshports.org/www/minio).
 
 ```sh
 pkg install minio
