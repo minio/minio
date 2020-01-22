@@ -2807,6 +2807,11 @@ func (api objectAPIHandlers) GetObjectRetentionHandler(w http.ResponseWriter, r 
 
 	retention := objectlock.GetObjectRetentionMeta(objInfo.UserDefined)
 
+	// If xml namespace is empty, set a default value before returning.
+	if retention.XMLNS == "" {
+		retention.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
+	}
+
 	writeSuccessResponseXML(w, encodeResponse(retention))
 	// Notify object retention accessed via a GET request.
 	sendEvent(eventArgs{
