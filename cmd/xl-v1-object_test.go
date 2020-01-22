@@ -217,12 +217,14 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	// for a 16 disk setup, quorum is 9. To simulate disks not found yet
 	// quorum is available, we remove disks leaving quorum disks behind.
 	xlDisks := xl.getDisks()
+	z.zones[0].xlDisksMu.Lock()
 	xl.getDisks = func() []StorageAPI {
 		for i := range xlDisks[:7] {
 			xlDisks[i] = newNaughtyDisk(xlDisks[i], nil, errFaultyDisk)
 		}
 		return xlDisks
 	}
+	z.zones[0].xlDisksMu.Unlock()
 	err = obj.DeleteObject(context.Background(), bucket, object)
 	if err != nil {
 		t.Fatal(err)
@@ -236,11 +238,13 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 
 	// Remove one more disk to 'lose' quorum, by setting it to nil.
 	xlDisks = xl.getDisks()
+	z.zones[0].xlDisksMu.Lock()
 	xl.getDisks = func() []StorageAPI {
 		xlDisks[7] = nil
 		xlDisks[8] = nil
 		return xlDisks
 	}
+	z.zones[0].xlDisksMu.Unlock()
 	err = obj.DeleteObject(context.Background(), bucket, object)
 	// since majority of disks are not available, metaquorum is not achieved and hence errXLReadQuorum error
 	if err != toObjectErr(errXLReadQuorum, bucket, object) {
@@ -293,9 +297,11 @@ func TestGetObjectNoQuorum(t *testing.T) {
 				xlDisks[i] = newNaughtyDisk(xlDisks[i], diskErrors, errFaultyDisk)
 			}
 		}
+		z.zones[0].xlDisksMu.Lock()
 		xl.getDisks = func() []StorageAPI {
 			return xlDisks
 		}
+		z.zones[0].xlDisksMu.Unlock()
 		// Fetch object from store.
 		err = xl.GetObject(context.Background(), bucket, object, 0, int64(len("abcd")), ioutil.Discard, "", opts)
 		if err != toObjectErr(errXLReadQuorum, bucket, object) {
@@ -350,9 +356,11 @@ func TestPutObjectNoQuorum(t *testing.T) {
 				xlDisks[i] = newNaughtyDisk(xlDisks[i], diskErrors, errFaultyDisk)
 			}
 		}
+		z.zones[0].xlDisksMu.Lock()
 		xl.getDisks = func() []StorageAPI {
 			return xlDisks
 		}
+		z.zones[0].xlDisksMu.Unlock()
 		// Upload new content to same object "object"
 		_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
 		if err != toObjectErr(errXLWriteQuorum, bucket, object) {
