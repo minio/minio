@@ -440,7 +440,8 @@ func GetObjectRetentionMeta(meta map[string]string) ObjectRetention {
 			retainTill = RetentionDate{t.UTC()}
 		}
 	}
-	return ObjectRetention{Mode: mode, RetainUntilDate: retainTill}
+
+	return ObjectRetention{XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/", Mode: mode, RetainUntilDate: retainTill}
 }
 
 // GetObjectLegalHoldMeta constructs ObjectLegalHold from metadata
