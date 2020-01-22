@@ -51,11 +51,11 @@ func (t Tagging) Validate() error {
 	if len(t.TagSet.Tags) > maxTags {
 		return ErrTooManyTags
 	}
+	if t.TagSet.ContainsDuplicateTag() {
+		return ErrInvalidTag
+	}
 	// Validate all the rules in the tagging config
 	for _, ts := range t.TagSet.Tags {
-		if t.TagSet.ContainsDuplicate(ts.Key) {
-			return ErrInvalidTag
-		}
 		if err := ts.Validate(); err != nil {
 			return err
 		}
@@ -71,8 +71,7 @@ func (t Tagging) String() string {
 		if buf.Len() > 0 {
 			buf.WriteString("&")
 		}
-		buf.WriteString(tag.Key + "=")
-		buf.WriteString(tag.Value)
+		buf.WriteString(tag.String())
 	}
 	return buf.String()
 }

@@ -14,28 +14,31 @@
  * limitations under the License.
  */
 
-package tagging
+package lifecycle
 
 import (
-	"encoding/xml"
+	"fmt"
 )
 
-// TagSet - Set of tags under Tagging
-type TagSet struct {
-	XMLName xml.Name `xml:"TagSet"`
-	Tags    []Tag    `xml:"Tag"`
+// Error is the generic type for any error happening during tag
+// parsing.
+type Error struct {
+	err error
 }
 
-// ContainsDuplicateTag - returns true if duplicate keys are present in TagSet
-func (t TagSet) ContainsDuplicateTag() bool {
-	x := make(map[string]struct{}, len(t.Tags))
+// Errorf - formats according to a format specifier and returns
+// the string as a value that satisfies error of type tagging.Error
+func Errorf(format string, a ...interface{}) error {
+	return Error{err: fmt.Errorf(format, a...)}
+}
 
-	for _, t := range t.Tags {
-		if _, has := x[t.Key]; has {
-			return true
-		}
-		x[t.Key] = struct{}{}
+// Unwrap the internal error.
+func (e Error) Unwrap() error { return e.err }
+
+// Error 'error' compatible method.
+func (e Error) Error() string {
+	if e.err == nil {
+		return "lifecycle: cause <nil>"
 	}
-
-	return false
+	return e.err.Error()
 }

@@ -2872,7 +2872,6 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 	}
 
 	tagging, err := tagging.ParseTagging(io.LimitReader(r.Body, r.ContentLength))
-
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
