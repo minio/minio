@@ -92,11 +92,7 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 					return nil
 				}
 
-				makeErr := storageDisks[index].MakeVol(bucket)
-				if makeErr == nil {
-					afterState[index] = madmin.DriveStateOk
-				}
-				return makeErr
+				return serr
 			}
 			beforeState[index] = madmin.DriveStateOk
 			afterState[index] = madmin.DriveStateOk
@@ -106,12 +102,18 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 
 	errs := g.Wait()
 
+	reducedErr := reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, writeQuorum-1)
+	if reducedErr == errVolumeNotFound {
+		return res, nil
+	}
+
 	// Initialize heal result info
 	res = madmin.HealResultItem{
 		Type:      madmin.HealItemBucket,
 		Bucket:    bucket,
 		DiskCount: len(storageDisks),
 	}
+
 	for i := range beforeState {
 		if storageDisks[i] != nil {
 			drive := storageDisks[i].String()
@@ -128,11 +130,32 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 		}
 	}
 
-	reducedErr := reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, writeQuorum)
+	// Initialize sync waitgroup.
+	g = errgroup.WithNErrs(len(storageDisks))
+
+	// Make a volume entry on all underlying storage disks.
+	for index := range storageDisks {
+		index := index
+		g.Go(func() error {
+			if beforeState[index] == madmin.DriveStateMissing {
+				makeErr := storageDisks[index].MakeVol(bucket)
+				if makeErr == nil {
+					afterState[index] = madmin.DriveStateOk
+				}
+				return makeErr
+			}
+			return errs[index]
+		}, index)
+	}
+
+	errs = g.Wait()
+
+	reducedErr = reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, writeQuorum)
 	if reducedErr == errXLWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
 		undoMakeBucket(storageDisks, bucket)
 	}
+
 	return res, reducedErr
 }
 
