@@ -1590,12 +1590,14 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	z := obj.(*xlZones)
 	xl := z.zones[0].sets[0]
 	xlDisks := xl.getDisks()
+	z.zones[0].xlDisksMu.Lock()
 	xl.getDisks = func() []StorageAPI {
 		for i, d := range xlDisks {
 			xlDisks[i] = newNaughtyDisk(d, nil, errFaultyDisk)
 		}
 		return xlDisks
 	}
+	z.zones[0].xlDisksMu.Unlock()
 
 	// Initialize web rpc endpoint.
 	apiRouter := initTestWebRPCEndPoint(obj)
