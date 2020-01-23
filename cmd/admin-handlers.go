@@ -323,7 +323,7 @@ func (a adminAPIHandlers) AccountingUsageInfoHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	var accountingUsageInfo = make(map[string][]madmin.AccountAccess)
+	var accountingUsageInfo = make(map[string]madmin.BucketAccountingUsage)
 
 	buckets, err := objectAPI.ListBuckets(ctx)
 	if err != nil {
@@ -338,12 +338,25 @@ func (a adminAPIHandlers) AccountingUsageInfoHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Load the latest calculated data usage
+	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
+	if err != nil {
+		logger.LogIf(ctx, err)
+	}
+
 	// Calculate for each bucket, which users are allowed to access to it
 	for _, bucket := range buckets {
+		bucketUsageInfo := madmin.BucketAccountingUsage{}
+
+		// Fetch the data usage of the current bucket
+		if !dataUsageInfo.LastUpdate.IsZero() && dataUsageInfo.BucketsSizes != nil {
+			bucketUsageInfo.Size = dataUsageInfo.BucketsSizes[bucket.Name]
+		}
+
 		for user := range users {
 			rd, wr, custom := globalIAMSys.GetAccountAccess(user, bucket.Name)
 			if rd || wr || custom {
-				accountingUsageInfo[bucket.Name] = append(accountingUsageInfo[bucket.Name], madmin.AccountAccess{
+				bucketUsageInfo.AccessList = append(bucketUsageInfo.AccessList, madmin.AccountAccess{
 					AccountName: user,
 					Read:        rd,
 					Write:       wr,
@@ -351,6 +364,8 @@ func (a adminAPIHandlers) AccountingUsageInfoHandler(w http.ResponseWriter, r *h
 				})
 			}
 		}
+
+		accountingUsageInfo[bucket.Name] = bucketUsageInfo
 	}
 
 	usageInfoJSON, err := json.Marshal(accountingUsageInfo)

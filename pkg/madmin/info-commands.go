@@ -206,9 +206,15 @@ type AccountAccess struct {
 	Custom      bool   `json:"custom"`
 }
 
+// BucketAccountingUsage represents the accounting usage of a particular bucket
+type BucketAccountingUsage struct {
+	Size       uint64          `json:"size"`
+	AccessList []AccountAccess `json:"accessList"`
+}
+
 // AccountingUsageInfo returns the accounting usage info, currently it returns
 // the type of access of different accounts to the different buckets.
-func (adm *AdminClient) AccountingUsageInfo() (map[string][]AccountAccess, error) {
+func (adm *AdminClient) AccountingUsageInfo() (map[string]BucketAccountingUsage, error) {
 	resp, err := adm.executeMethod(http.MethodGet, requestData{relPath: adminAPIPrefix + "/accountingusageinfo"})
 	defer closeResponse(resp)
 	if err != nil {
@@ -221,7 +227,7 @@ func (adm *AdminClient) AccountingUsageInfo() (map[string][]AccountAccess, error
 	}
 
 	// Unmarshal the server's json response
-	var accountingUsageInfo map[string][]AccountAccess
+	var accountingUsageInfo map[string]BucketAccountingUsage
 
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
