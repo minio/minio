@@ -609,6 +609,122 @@ func testObjectTagging(s3Client *s3.S3) {
 	}
 }
 
+// Tests bucket re-create errors.
+func testCreateBucketError(s3Client *s3.S3) {
+	region := s3Client.Config.Region
+	// Amazon S3 returns error in all AWS Regions except in the North Virginia Region.
+	// More details in https://docs.aws.amazon.com/sdk-for-go/api/service/s3/#S3.CreateBucket
+	s3Client.Config.Region = aws.String("us-west-1")
+
+	// initialize logging params
+	startTime := time.Now()
+	function := "testMakeBucketError"
+	bucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "aws-sdk-go-test-")
+	args := map[string]interface{}{
+		"bucketName": bucketName,
+	}
+	_, err := s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CreateBucket Failed", err).Fatal()
+		return
+	}
+	defer cleanup(s3Client, bucketName, "", function, args, startTime, true)
+
+	_, errCreating := s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if errCreating == nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CreateBucket Should Return Error for Existing bucket", err).Fatal()
+		return
+	}
+	// Verify valid error response from server.
+	if errCreating.(s3.RequestFailure).Code() != "BucketAlreadyExists" &&
+		errCreating.(s3.RequestFailure).Code() != "BucketAlreadyOwnedByYou" {
+		failureLog(function, args, startTime, "", "Invalid error returned by server", err).Fatal()
+		return
+	}
+
+	// Restore region in s3Client
+	s3Client.Config.Region = region
+	successLogger(function, args, startTime).Info()
+}
+
+func testListMultipartUploads(s3Client *s3.S3) {
+	startTime := time.Now()
+	function := "testListMultipartUploads"
+	bucket := randString(60, rand.NewSource(time.Now().UnixNano()), "aws-sdk-go-test-")
+	object := randString(60, rand.NewSource(time.Now().UnixNano()), "")
+	args := map[string]interface{}{
+		"bucketName": bucket,
+		"objectName": object,
+	}
+	_, errCreating := s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucket),
+	})
+	if errCreating != nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CreateBucket Failed", errCreating).Fatal()
+		return
+	}
+	defer cleanup(s3Client, bucket, object, function, args, startTime, true)
+
+	multipartUpload, err := s3Client.CreateMultipartUpload(&s3.CreateMultipartUploadInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+	})
+	if err != nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go createMultipartupload API failed", err).Fatal()
+		return
+	}
+	parts := make(map[*int64]*string)
+	for i := 0; i < 5; i++ {
+		result, errUpload := s3Client.UploadPart(&s3.UploadPartInput{
+			Bucket:     aws.String(bucket),
+			Key:        aws.String(object),
+			UploadId:   multipartUpload.UploadId,
+			PartNumber: aws.Int64(int64(i + 1)),
+			Body:       aws.ReadSeekCloser(strings.NewReader("fileToUpload")),
+		})
+		if errUpload != nil {
+			_, _ = s3Client.AbortMultipartUpload(&s3.AbortMultipartUploadInput{
+				Bucket:   aws.String(bucket),
+				Key:      aws.String(object),
+				UploadId: multipartUpload.UploadId,
+			})
+			failureLog(function, args, startTime, "", "AWS SDK Go uploadPart API failed for", errUpload).Fatal()
+			return
+		}
+		parts[aws.Int64(int64(i+1))] = result.ETag
+	}
+
+	listParts, errParts := s3Client.ListParts(&s3.ListPartsInput{
+		Bucket:   aws.String(bucket),
+		Key:      aws.String(object),
+		UploadId: multipartUpload.UploadId,
+	})
+	if errParts != nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go ListPartsInput API failed for", err).Fatal()
+		return
+	}
+
+	if len(parts) != len(listParts.Parts) {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go ListParts.Parts len mismatch want: %v got: %v", len(parts), len(listParts.Parts)), err).Fatal()
+		return
+	}
+
+	for _, part := range listParts.Parts {
+		if tag, ok := parts[part.PartNumber]; ok {
+			if tag != part.ETag {
+				failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go ListParts.Parts output mismatch want: %v got: %v", tag, part.ETag), err).Fatal()
+				return
+			}
+		}
+	}
+
+	successLogger(function, args, startTime).Info()
+}
+
 func main() {
 	endpoint := os.Getenv("SERVER_ENDPOINT")
 	accessKey := os.Getenv("ACCESS_KEY")
@@ -643,6 +759,8 @@ func main() {
 	testPresignedPutInvalidHash(s3Client)
 	testListObjects(s3Client)
 	testSelectObject(s3Client)
+	testCreateBucketError(s3Client)
+	testListMultipartUploads(s3Client)
 	if isObjectTaggingImplemented(s3Client) {
 		testObjectTagging(s3Client)
 	}
