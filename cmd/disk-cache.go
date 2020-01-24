@@ -284,6 +284,9 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	}
 
 	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
+	if bkErr != nil {
+		return bkReader, bkErr
+	}
 	// Record if cache has a hit that was invalidated by ETag verification
 	if cacheErr == nil {
 		bkReader.ObjInfo.CacheLookupStatus = CacheHit
