@@ -29,8 +29,26 @@ const (
 
 	// Service Actions
 
-	// ListServerInfoAdminAction - allow listing server info
-	ListServerInfoAdminAction = "admin:ListServerInfo"
+	// StorageInfoAdminAction - allow listing server info
+	StorageInfoAdminAction = "admin:StorageInfo"
+	// DataUsageInfoAdminAction - allow listing data usage info
+	DataUsageInfoAdminAction = "admin:DataUsageInfo"
+	// PerfInfoAdminAction - allow listing performance info
+	PerfInfoAdminAction = "admin:PerfInfo"
+	// TopLocksAdminAction - allow listing top locks
+	TopLocksAdminAction = "admin:TopLocksInfo"
+	// ProfilingAdminAction - allow profiling
+	ProfilingAdminAction = "admin:Profiling"
+	// TraceAdminAction - allow listing server trace
+	TraceAdminAction = "admin:ServerTrace"
+	// ConsoleLogAdminAction - allow listing console logs on terminal
+	ConsoleLogAdminAction = "admin:ConsoleLog"
+	// KMSKeyStatusAdminAction - allow getting KMS key status
+	KMSKeyStatusAdminAction = "admin:KMSKeyStatus"
+	// ServerHardwareInfoAdminAction - allow listing server hardware info
+	ServerHardwareInfoAdminAction = "admin:HardwareInfo"
+	// ServerInfoAdminAction - allow listing server info
+	ServerInfoAdminAction = "admin:ServerInfo"
 
 	// ServerUpdateAdminAction - allow MinIO binary update
 	ServerUpdateAdminAction = "admin:ServerUpdate"
@@ -90,7 +108,16 @@ const (
 var supportedAdminActions = map[AdminAction]struct{}{
 	AllAdminActions:                {},
 	HealAdminAction:                {},
-	ListServerInfoAdminAction:      {},
+	ServerInfoAdminAction:          {},
+	StorageInfoAdminAction:         {},
+	DataUsageInfoAdminAction:       {},
+	PerfInfoAdminAction:            {},
+	TopLocksAdminAction:            {},
+	ProfilingAdminAction:           {},
+	TraceAdminAction:               {},
+	ConsoleLogAdminAction:          {},
+	KMSKeyStatusAdminAction:        {},
+	ServerHardwareInfoAdminAction:  {},
 	ServerUpdateAdminAction:        {},
 	ConfigUpdateAdminAction:        {},
 	CreateUserAdminAction:          {},
@@ -130,7 +157,16 @@ func (action AdminAction) IsValid() bool {
 var adminActionConditionKeyMap = map[Action]condition.KeySet{
 	AllAdminActions:                condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	HealAdminAction:                condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	ListServerInfoAdminAction:      condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	StorageInfoAdminAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ServerInfoAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	DataUsageInfoAdminAction:       condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	PerfInfoAdminAction:            condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	TopLocksAdminAction:            condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ProfilingAdminAction:           condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	TraceAdminAction:               condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ConsoleLogAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	KMSKeyStatusAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ServerHardwareInfoAdminAction:  condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ServerUpdateAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ConfigUpdateAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	CreateUserAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
