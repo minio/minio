@@ -22,8 +22,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/minio/minio/pkg/policy"
-	"github.com/minio/minio/pkg/policy/condition"
+	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/policy/condition"
 )
 
 func TestPolicyIsAllowed(t *testing.T) {

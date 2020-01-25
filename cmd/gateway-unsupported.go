@@ -21,10 +21,10 @@ import (
 	"errors"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/lifecycle"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/pkg/bucket/object/tagging"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/madmin"
-	"github.com/minio/minio/pkg/policy"
-	"github.com/minio/minio/pkg/tagging"
 )
 
 // GatewayLocker implements custom NeNSLock implementation

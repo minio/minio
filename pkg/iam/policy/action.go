@@ -19,7 +19,7 @@ package iampolicy
 import (
 	"encoding/json"
 
-	"github.com/minio/minio/pkg/policy/condition"
+	"github.com/minio/minio/pkg/bucket/policy/condition"
 	"github.com/minio/minio/pkg/wildcard"
 )
 

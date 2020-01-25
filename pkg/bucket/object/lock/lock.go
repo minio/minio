@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package objectlock
+package lock
 
 import (
 	"context"
@@ -292,7 +292,7 @@ func ParseObjectLockConfig(reader io.Reader) (*Config, error) {
 	return &config, nil
 }
 
-// NewObjectLockConfig returns a initialized objectlock.Config struct
+// NewObjectLockConfig returns a initialized lock.Config struct
 func NewObjectLockConfig() *Config {
 	return &Config{
 		ObjectLockEnabled: "Enabled",

@@ -21,7 +21,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/bucket/policy"
 )
 
 // DefaultVersion - default policy version as per AWS S3 specification.

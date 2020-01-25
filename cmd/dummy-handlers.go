@@ -21,8 +21,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/minio/pkg/policy"
-	"github.com/minio/minio/pkg/tagging"
+	"github.com/minio/minio/pkg/bucket/object/tagging"
+	"github.com/minio/minio/pkg/bucket/policy"
 )
 
 // Data types used for returning dummy tagging XML.

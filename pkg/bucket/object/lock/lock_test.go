@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package objectlock
+package lock
 
 import (
 	"encoding/xml"

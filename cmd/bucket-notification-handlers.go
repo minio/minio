@@ -30,8 +30,8 @@ import (
 	"github.com/gorilla/mux"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/policy"
 )
 
 const (

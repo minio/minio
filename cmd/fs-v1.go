@@ -38,13 +38,13 @@ import (
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/lifecycle"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/pkg/bucket/object/tagging"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/mountinfo"
-	"github.com/minio/minio/pkg/policy"
-	"github.com/minio/minio/pkg/tagging"
 )
 
 // Default etag is used for pre-existing objects.
