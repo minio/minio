@@ -1,7 +1,7 @@
 // +build linux darwin dragonfly freebsd netbsd openbsd
 
 /*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,10 +48,10 @@ func TestIsValidUmaskVol(t *testing.T) {
 	}
 	testCase := testCases[0]
 
-	// Initialize a new posix layer.
-	disk, err := newPosix(tmpPath)
+	// Initialize a new xlStorage layer.
+	disk, err := newXLStorage(tmpPath)
 	if err != nil {
-		t.Fatalf("Initializing posix failed with %s.", err)
+		t.Fatalf("Initializing xlStorage failed with %s.", err)
 	}
 
 	// Attempt to create a volume to verify the permissions later.
@@ -90,10 +90,10 @@ func TestIsValidUmaskFile(t *testing.T) {
 	}
 	testCase := testCases[0]
 
-	// Initialize a new posix layer.
-	disk, err := newPosix(tmpPath)
+	// Initialize a new xlStorage layer.
+	disk, err := newXLStorage(tmpPath)
 	if err != nil {
-		t.Fatalf("Initializing posix failed with %s.", err)
+		t.Fatalf("Initializing xlStorage failed with %s.", err)
 	}
 
 	// Attempt to create a volume to verify the permissions later.

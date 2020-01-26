@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ func listDirFactory(ctx context.Context, disks ...StorageAPI) ListDirFunc {
 			var entries []string
 			var newEntries []string
 			var err error
-			entries, err = disk.ListDir(bucket, prefixDir, -1, xlMetaJSONFile)
+			entries, err = disk.ListDir(bucket, prefixDir, -1)
 			if err != nil {
 				continue
 			}
@@ -183,4 +183,19 @@ func (xl xlObjects) ListObjects(ctx context.Context, bucket, prefix, marker, del
 
 	// Return error at the end.
 	return loi, toObjectErr(err, bucket, prefix)
+}
+
+// This is not implemented/needed anymore, look for xl-sets.ListBucketHeal()
+func (xl xlObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
+	return nil, nil
+}
+
+// This is not implemented, look for xl-sets.ListObjectsHeal()
+func (xl xlObjects) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
+	return ListObjectsInfo{}, nil
+}
+
+// This is not implemented/needed anymore, look for xl-sets.HealObjects()
+func (xl xlObjects) HealObjects(ctx context.Context, bucket, prefix string, _ healObjectFn) (e error) {
+	return nil
 }

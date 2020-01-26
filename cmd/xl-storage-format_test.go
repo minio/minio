@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,121 +21,65 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"reflect"
 	"strconv"
 	"testing"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 )
 
-// Tests caclculating disk count.
-func TestDiskCount(t *testing.T) {
-	testCases := []struct {
-		disks     []StorageAPI
-		diskCount int
-	}{
-		// Test case - 1
-		{
-			disks:     []StorageAPI{&posix{}, &posix{}, &posix{}, &posix{}},
-			diskCount: 4,
-		},
-		// Test case - 2
-		{
-			disks:     []StorageAPI{nil, &posix{}, &posix{}, &posix{}},
-			diskCount: 3,
-		},
+// Helper function to check if two xlMetaV1 values are similar.
+func isXLMetaSimilar(m, n xlMetaV1) bool {
+	if m.Version != n.Version {
+		return false
 	}
-	for i, testCase := range testCases {
-		cdiskCount := diskCount(testCase.disks)
-		if cdiskCount != testCase.diskCount {
-			t.Errorf("Test %d: Expected %d, got %d", i+1, testCase.diskCount, cdiskCount)
+	if m.Format != n.Format {
+		return false
+	}
+	if len(m.Parts) != len(n.Parts) {
+		return false
+	}
+	return true
+}
+
+func TestIsXLMetaFormatValid(t *testing.T) {
+	tests := []struct {
+		name    int
+		version string
+		format  string
+		want    bool
+	}{
+		{1, "123", "fs", false},
+		{2, "123", xlMetaFormat, false},
+		{3, xlMetaVersion, "test", false},
+		{4, xlMetaVersion100, "hello", false},
+		{5, xlMetaVersion, xlMetaFormat, true},
+		{6, xlMetaVersion100, xlMetaFormat, true},
+	}
+	for _, tt := range tests {
+		if got := isXLMetaFormatValid(tt.version, tt.format); got != tt.want {
+			t.Errorf("Test %d: Expected %v but received %v", tt.name, got, tt.want)
 		}
 	}
 }
 
-// Test for reduceErrs, reduceErr reduces collection
-// of errors into a single maximal error with in the list.
-func TestReduceErrs(t *testing.T) {
-	// List all of all test cases to validate various cases of reduce errors.
-	testCases := []struct {
-		errs        []error
-		ignoredErrs []error
-		err         error
+func TestIsXLMetaErasureInfoValid(t *testing.T) {
+	tests := []struct {
+		name   int
+		data   int
+		parity int
+		want   bool
 	}{
-		// Validate if have reduced properly.
-		{[]error{
-			errDiskNotFound,
-			errDiskNotFound,
-			errDiskFull,
-		}, []error{}, errXLReadQuorum},
-		// Validate if have no consensus.
-		{[]error{
-			errDiskFull,
-			errDiskNotFound,
-			nil, nil,
-		}, []error{}, errXLReadQuorum},
-		// Validate if have consensus and errors ignored.
-		{[]error{
-			errVolumeNotFound,
-			errVolumeNotFound,
-			errVolumeNotFound,
-			errVolumeNotFound,
-			errVolumeNotFound,
-			errDiskNotFound,
-			errDiskNotFound,
-		}, []error{errDiskNotFound}, errVolumeNotFound},
-		{[]error{}, []error{}, errXLReadQuorum},
-		{[]error{errFileNotFound, errFileNotFound, errFileNotFound,
-			errFileNotFound, errFileNotFound, nil, nil, nil, nil, nil},
-			nil, nil},
+		{1, 5, 6, false},
+		{2, 5, 5, true},
+		{3, 0, 5, false},
+		{4, 5, 0, false},
+		{5, 5, 0, false},
+		{6, 5, 4, true},
 	}
-	// Validates list of all the testcases for returning valid errors.
-	for i, testCase := range testCases {
-		gotErr := reduceReadQuorumErrs(context.Background(), testCase.errs, testCase.ignoredErrs, 5)
-		if gotErr != testCase.err {
-			t.Errorf("Test %d : expected %s, got %s", i+1, testCase.err, gotErr)
+	for _, tt := range tests {
+		if got := isXLMetaErasureInfoValid(tt.data, tt.parity); got != tt.want {
+			t.Errorf("Test %d: Expected %v but received %v", tt.name, got, tt.want)
 		}
-		gotNewErr := reduceWriteQuorumErrs(context.Background(), testCase.errs, testCase.ignoredErrs, 6)
-		if gotNewErr != errXLWriteQuorum {
-			t.Errorf("Test %d : expected %s, got %s", i+1, errXLWriteQuorum, gotErr)
-		}
-	}
-}
-
-// TestHashOrder - test order of ints in array
-func TestHashOrder(t *testing.T) {
-	testCases := []struct {
-		objectName  string
-		hashedOrder []int
-	}{
-		// cases which should pass the test.
-		// passing in valid object name.
-		{"object", []int{14, 15, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}},
-		{"The Shining Script <v1>.pdf", []int{16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-		{"Cost Benefit Analysis (2009-2010).pptx", []int{15, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}},
-		{"117Gn8rfHL2ACARPAhaFd0AGzic9pUbIA/5OCn5A", []int{3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 2}},
-		{"SHØRT", []int{11, 12, 13, 14, 15, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}},
-		{"There are far too many object names, and far too few bucket names!", []int{15, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}},
-		{"a/b/c/", []int{3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 2}},
-		{"/a/b/c", []int{6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 2, 3, 4, 5}},
-		{string([]byte{0xff, 0xfe, 0xfd}), []int{15, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}},
-	}
-
-	// Tests hashing order to be consistent.
-	for i, testCase := range testCases {
-		hashedOrder := hashOrder(testCase.objectName, 16)
-		if !reflect.DeepEqual(testCase.hashedOrder, hashedOrder) {
-			t.Errorf("Test case %d: Expected \"%v\" but failed \"%v\"", i+1, testCase.hashedOrder, hashedOrder)
-		}
-	}
-
-	// Tests hashing order to fail for when order is '-1'.
-	if hashedOrder := hashOrder("This will fail", -1); hashedOrder != nil {
-		t.Errorf("Test: Expect \"nil\" but failed \"%#v\"", hashedOrder)
-	}
-
-	if hashedOrder := hashOrder("This will fail", 0); hashedOrder != nil {
-		t.Errorf("Test: Expect \"nil\" but failed \"%#v\"", hashedOrder)
 	}
 }
 
@@ -153,7 +97,7 @@ func newTestXLMetaV1() xlMetaV1 {
 		Index:        10,
 		Distribution: []int{9, 10, 1, 2, 3, 4, 5, 6, 7, 8},
 	}
-	xlMeta.Stat = statInfo{
+	xlMeta.Stat = StatInfo{
 		Size:    int64(20),
 		ModTime: UTCNow(),
 	}
@@ -391,65 +335,4 @@ func TestGetPartSizeFromIdx(t *testing.T) {
 			t.Errorf("Test %d: Expected err %s, but got %s", i+1, testCaseFailure.err, err)
 		}
 	}
-}
-
-func TestShuffleDisks(t *testing.T) {
-	nDisks := 16
-	disks, err := getRandomDisks(nDisks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	objLayer, _, err := initObjectLayer(mustGetZoneEndpoints(disks...))
-	if err != nil {
-		removeRoots(disks)
-		t.Fatal(err)
-	}
-	defer removeRoots(disks)
-	z := objLayer.(*xlZones)
-	testShuffleDisks(t, z)
-}
-
-// Test shuffleDisks which returns shuffled slice of disks for their actual distribution.
-func testShuffleDisks(t *testing.T, z *xlZones) {
-	disks := z.zones[0].GetDisks(0)()
-	distribution := []int{16, 14, 12, 10, 8, 6, 4, 2, 1, 3, 5, 7, 9, 11, 13, 15}
-	shuffledDisks := shuffleDisks(disks, distribution)
-	// From the "distribution" above you can notice that:
-	// 1st data block is in the 9th disk (i.e distribution index 8)
-	// 2nd data block is in the 8th disk (i.e distribution index 7) and so on.
-	if shuffledDisks[0] != disks[8] ||
-		shuffledDisks[1] != disks[7] ||
-		shuffledDisks[2] != disks[9] ||
-		shuffledDisks[3] != disks[6] ||
-		shuffledDisks[4] != disks[10] ||
-		shuffledDisks[5] != disks[5] ||
-		shuffledDisks[6] != disks[11] ||
-		shuffledDisks[7] != disks[4] ||
-		shuffledDisks[8] != disks[12] ||
-		shuffledDisks[9] != disks[3] ||
-		shuffledDisks[10] != disks[13] ||
-		shuffledDisks[11] != disks[2] ||
-		shuffledDisks[12] != disks[14] ||
-		shuffledDisks[13] != disks[1] ||
-		shuffledDisks[14] != disks[15] ||
-		shuffledDisks[15] != disks[0] {
-		t.Errorf("shuffleDisks returned incorrect order.")
-	}
-}
-
-// TestEvalDisks tests the behavior of evalDisks
-func TestEvalDisks(t *testing.T) {
-	nDisks := 16
-	disks, err := getRandomDisks(nDisks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	objLayer, _, err := initObjectLayer(mustGetZoneEndpoints(disks...))
-	if err != nil {
-		removeRoots(disks)
-		t.Fatal(err)
-	}
-	defer removeRoots(disks)
-	z := objLayer.(*xlZones)
-	testShuffleDisks(t, z)
 }

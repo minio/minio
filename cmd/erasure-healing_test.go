@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"path/filepath"
 	"testing"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -112,7 +111,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	z := objLayer.(*xlZones)
 	xl := z.zones[0].sets[0]
 	firstDisk := xl.getDisks()[0]
-	err = firstDisk.DeleteFile(bucket, filepath.Join(object, xlMetaJSONFile))
+	err = firstDisk.DeleteFile(bucket, pathJoin(object, xlStorageFormatFile))
 	if err != nil {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
@@ -122,21 +121,21 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
 
-	_, err = firstDisk.StatFile(bucket, filepath.Join(object, xlMetaJSONFile))
+	_, err = firstDisk.StatFile(bucket, pathJoin(object, xlStorageFormatFile))
 	if err != nil {
 		t.Errorf("Expected xl.json file to be present but stat failed - %v", err)
 	}
 
 	// Test 2: Heal when part.1 is empty
-	partSt1, err := firstDisk.StatFile(bucket, filepath.Join(object, "part.1"))
+	partSt1, err := firstDisk.StatFile(bucket, pathJoin(object, "part.1"))
 	if err != nil {
 		t.Errorf("Expected part.1 file to be present but stat failed - %v", err)
 	}
-	err = firstDisk.DeleteFile(bucket, filepath.Join(object, "part.1"))
+	err = firstDisk.DeleteFile(bucket, pathJoin(object, "part.1"))
 	if err != nil {
 		t.Errorf("Failure during deleting part.1 - %v", err)
 	}
-	err = firstDisk.WriteAll(bucket, filepath.Join(object, "part.1"), bytes.NewReader([]byte{}))
+	err = firstDisk.WriteAll(bucket, pathJoin(object, "part.1"), bytes.NewReader([]byte{}))
 	if err != nil {
 		t.Errorf("Failure during creating part.1 - %v", err)
 	}
@@ -144,7 +143,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected nil but received %v", err)
 	}
-	partSt2, err := firstDisk.StatFile(bucket, filepath.Join(object, "part.1"))
+	partSt2, err := firstDisk.StatFile(bucket, pathJoin(object, "part.1"))
 	if err != nil {
 		t.Errorf("Expected from part.1 file to be present but stat failed - %v", err)
 	}
@@ -153,16 +152,16 @@ func TestHealObjectCorrupted(t *testing.T) {
 	}
 
 	// Test 3: Heal when part.1 is correct in size but corrupted
-	partSt1, err = firstDisk.StatFile(bucket, filepath.Join(object, "part.1"))
+	partSt1, err = firstDisk.StatFile(bucket, pathJoin(object, "part.1"))
 	if err != nil {
 		t.Errorf("Expected part.1 file to be present but stat failed - %v", err)
 	}
-	err = firstDisk.DeleteFile(bucket, filepath.Join(object, "part.1"))
+	err = firstDisk.DeleteFile(bucket, pathJoin(object, "part.1"))
 	if err != nil {
 		t.Errorf("Failure during deleting part.1 - %v", err)
 	}
 	bdata := bytes.Repeat([]byte("b"), int(partSt1.Size))
-	err = firstDisk.WriteAll(bucket, filepath.Join(object, "part.1"), bytes.NewReader(bdata))
+	err = firstDisk.WriteAll(bucket, pathJoin(object, "part.1"), bytes.NewReader(bdata))
 	if err != nil {
 		t.Errorf("Failure during creating part.1 - %v", err)
 	}
@@ -170,7 +169,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected nil but received %v", err)
 	}
-	partSt2, err = firstDisk.StatFile(bucket, filepath.Join(object, "part.1"))
+	partSt2, err = firstDisk.StatFile(bucket, pathJoin(object, "part.1"))
 	if err != nil {
 		t.Errorf("Expected from part.1 file to be present but stat failed - %v", err)
 	}
@@ -182,7 +181,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	// in more than read quorum number of disks, to create a corrupted situation.
 
 	for i := 0; i <= len(xl.getDisks())/2; i++ {
-		xl.getDisks()[i].DeleteFile(bucket, filepath.Join(object, xlMetaJSONFile))
+		xl.getDisks()[i].DeleteFile(bucket, pathJoin(object, xlStorageFormatFile))
 	}
 
 	// Try healing now, expect to receive errFileNotFound.
@@ -245,16 +244,17 @@ func TestHealObjectXL(t *testing.T) {
 		})
 	}
 
+	// Remove the object backend files from the first disk.
+	z := obj.(*xlZones)
+	xl := z.zones[0].sets[0]
+	firstDisk := xl.getDisks()[0]
+
 	_, err = obj.CompleteMultipartUpload(context.Background(), bucket, object, uploadID, uploadedParts, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Failed to complete multipart upload - %v", err)
 	}
 
-	// Remove the object backend files from the first disk.
-	z := obj.(*xlZones)
-	xl := z.zones[0].sets[0]
-	firstDisk := xl.getDisks()[0]
-	err = firstDisk.DeleteFile(bucket, filepath.Join(object, xlMetaJSONFile))
+	err = firstDisk.DeleteFile(bucket, pathJoin(object, xlStorageFormatFile))
 	if err != nil {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
@@ -264,7 +264,7 @@ func TestHealObjectXL(t *testing.T) {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
 
-	_, err = firstDisk.StatFile(bucket, filepath.Join(object, xlMetaJSONFile))
+	_, err = firstDisk.StatFile(bucket, pathJoin(object, xlStorageFormatFile))
 	if err != nil {
 		t.Errorf("Expected xl.json file to be present but stat failed - %v", err)
 	}

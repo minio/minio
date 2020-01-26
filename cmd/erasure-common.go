@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 				return errDiskNotFound
 			}
 			// Check if 'prefix' is an object on this 'disk', else continue the check the next disk
-			fi, err := storageDisks[index].StatFile(bucket, pathJoin(prefix, xlMetaJSONFile))
+			fi, err := storageDisks[index].StatFile(bucket, pathJoin(prefix, xlStorageFormatFile))
 			if err != nil {
 				return err
 			}

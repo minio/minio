@@ -96,11 +96,11 @@ func deleteBucketMetadata(ctx context.Context, bucket string, objAPI ObjectLayer
 // Depending on the disk type network or local, initialize storage API.
 func newStorageAPI(endpoint Endpoint) (storage StorageAPI, err error) {
 	if endpoint.IsLocal {
-		storage, err := newPosix(endpoint.Path)
+		storage, err := newXLStorage(endpoint.Path)
 		if err != nil {
 			return nil, err
 		}
-		return &posixDiskIDCheck{storage: storage}, nil
+		return &xlStorageDiskIDCheck{storage: storage}, nil
 	}
 
 	return newStorageRESTClient(endpoint), nil
@@ -119,7 +119,7 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 		}
 
 		// If it's a directory, list and call delFunc() for each entry.
-		entries, err := storage.ListDir(volume, entryPath, -1, "")
+		entries, err := storage.ListDir(volume, entryPath, -1)
 		// If entryPath prefix never existed, safe to ignore.
 		if err == errFileNotFound {
 			return nil
@@ -162,7 +162,7 @@ func cleanupObjectsBulk(storage StorageAPI, volume string, objsPaths []string, e
 			output = append(output, entryPath)
 			return output, nil
 		}
-		entries, err := storage.ListDir(volume, entryPath, -1, "")
+		entries, err := storage.ListDir(volume, entryPath, -1)
 		if err != nil {
 			if err == errFileNotFound {
 				return nil, nil

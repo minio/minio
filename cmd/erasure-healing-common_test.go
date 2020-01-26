@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -228,12 +228,12 @@ func TestListOnlineDisks(t *testing.T) {
 
 		}
 
-		partsMetadata, errs := readAllXLMetadata(context.Background(), xlDisks, bucket, object)
+		partsMetadata, errs := readAllFileInfo(xlDisks, bucket, object)
 		for i := range partsMetadata {
 			if errs[i] != nil {
 				t.Fatalf("Test %d: expected error to be nil: %s", i+1, errs[i].Error())
 			}
-			partsMetadata[i].Stat.ModTime = test.modTimes[i]
+			partsMetadata[i].ModTime = test.modTimes[i]
 		}
 
 		onlineDisks, modTime := listOnlineDisks(xlDisks, partsMetadata, test.errs)
@@ -281,7 +281,7 @@ func TestDisksWithAllParts(t *testing.T) {
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	_, errs := readAllXLMetadata(ctx, xlDisks, bucket, object)
+	_, errs := readAllFileInfo(xlDisks, bucket, object)
 	readQuorum := len(xlDisks) / 2
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
 		t.Fatalf("Failed to read xl meta data %v", reducedErr)
@@ -289,7 +289,7 @@ func TestDisksWithAllParts(t *testing.T) {
 
 	// Test that all disks are returned without any failures with
 	// unmodified meta data
-	partsMetadata, errs := readAllXLMetadata(ctx, xlDisks, bucket, object)
+	partsMetadata, errs := readAllFileInfo(xlDisks, bucket, object)
 	if err != nil {
 		t.Fatalf("Failed to read xl meta data %v", err)
 	}

@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bufio"
-	"context"
 	"encoding/gob"
 	"encoding/hex"
 	"errors"
@@ -43,7 +42,7 @@ var errDiskStale = errors.New("disk stale")
 
 // To abstract a disk over network.
 type storageRESTServer struct {
-	storage *posix
+	storage *xlStorage
 }
 
 func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
@@ -397,26 +396,6 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 
 	io.Copy(w, rc)
 	w.(http.Flusher).Flush()
-
-}
-
-// readMetadata func provides the function types for reading leaf metadata.
-type readMetadataFunc func(buf []byte, volume, entry string) FileInfo
-
-func readMetadata(buf []byte, volume, entry string) FileInfo {
-	m, err := xlMetaV1UnmarshalJSON(context.Background(), buf)
-	if err != nil {
-		return FileInfo{}
-	}
-	return FileInfo{
-		Volume:   volume,
-		Name:     entry,
-		ModTime:  m.Stat.ModTime,
-		Size:     m.Stat.Size,
-		Metadata: m.Meta,
-		Parts:    m.Parts,
-		Quorum:   m.Erasure.DataBlocks,
-	}
 }
 
 // WalkHandler - remote caller to start walking at a requested directory path.
@@ -433,12 +412,11 @@ func (s *storageRESTServer) WalkHandler(w http.ResponseWriter, r *http.Request) 
 		s.writeErrorResponse(w, err)
 		return
 	}
-	leafFile := vars[storageRESTLeafFile]
 
 	endWalkCh := make(chan struct{})
 	defer close(endWalkCh)
 
-	fch, err := s.storage.Walk(volume, dirPath, markerPath, recursive, leafFile, readMetadata, endWalkCh)
+	fch, err := s.storage.Walk(volume, dirPath, markerPath, recursive, endWalkCh)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -460,13 +438,12 @@ func (s *storageRESTServer) ListDirHandler(w http.ResponseWriter, r *http.Reques
 	vars := mux.Vars(r)
 	volume := vars[storageRESTVolume]
 	dirPath := vars[storageRESTDirPath]
-	leafFile := vars[storageRESTLeafFile]
 	count, err := strconv.Atoi(vars[storageRESTCount])
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
-	entries, err := s.storage.ListDir(volume, dirPath, count, leafFile)
+	entries, err := s.storage.ListDir(volume, dirPath, count)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -607,7 +584,6 @@ func (s *storageRESTServer) VerifyFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
-	encoder := gob.NewEncoder(w)
 	doneCh := sendWhiteSpaceToHTTPResponse(w)
 	err = s.storage.VerifyFile(volume, filePath, size, BitrotAlgorithmFromString(algoStr), hash, int64(shardSize))
 	<-doneCh
@@ -615,7 +591,7 @@ func (s *storageRESTServer) VerifyFile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		vresp.Err = StorageErr(err.Error())
 	}
-	encoder.Encode(vresp)
+	gob.NewEncoder(w).Encode(vresp)
 	w.(http.Flusher).Flush()
 }
 
@@ -626,7 +602,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 			if !endpoint.IsLocal {
 				continue
 			}
-			storage, err := newPosix(endpoint.Path)
+			storage, err := newXLStorage(endpoint.Path)
 			if err != nil {
 				// Show a descriptive error with a hint about how to fix it.
 				var username string
@@ -638,7 +614,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 				hint := fmt.Sprintf("Run the following command to add the convenient permissions: `sudo chown %s %s && sudo chmod u+rxw %s`",
 					username, endpoint.Path, endpoint.Path)
 				logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint),
-					"Unable to initialize posix backend")
+					"Unable to initialize xlStorage backend")
 			}
 
 			server := &storageRESTServer{storage: storage}
@@ -669,9 +645,9 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadFileStream).HandlerFunc(httpTraceHdrs(server.ReadFileStreamHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTOffset, storageRESTLength)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodListDir).HandlerFunc(httpTraceHdrs(server.ListDirHandler)).
-				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTCount, storageRESTLeafFile)...)
+				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTCount)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalk).HandlerFunc(httpTraceHdrs(server.WalkHandler)).
-				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath, storageRESTRecursive, storageRESTLeafFile)...)
+				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath, storageRESTRecursive)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteFile).HandlerFunc(httpTraceHdrs(server.DeleteFileHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteFileBulk).HandlerFunc(httpTraceHdrs(server.DeleteFileBulkHandler)).
