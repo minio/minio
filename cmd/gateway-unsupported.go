@@ -149,7 +149,7 @@ func (a GatewayUnsupported) ListBucketsHeal(ctx context.Context) (buckets []Buck
 }
 
 // ListObjectsHeal - Not implemented stub
-func (a GatewayUnsupported) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
+func (a GatewayUnsupported) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, deep bool) (result ListObjectsInfo, err error) {
 	return ListObjectsInfo{}, NotImplemented{}
 }
 
@@ -164,7 +164,7 @@ func (a GatewayUnsupported) ListObjectsV2(ctx context.Context, bucket, prefix, c
 }
 
 // HealObjects - Not implemented stub
-func (a GatewayUnsupported) HealObjects(ctx context.Context, bucket, prefix string, fn func(string, string) error) (e error) {
+func (a GatewayUnsupported) HealObjects(ctx context.Context, bucket, prefix string, deep bool, healObjectFn func(string, string) error) (e error) {
 	return NotImplemented{}
 }
 

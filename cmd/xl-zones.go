@@ -1309,16 +1309,16 @@ func (z *xlZones) HealBucket(ctx context.Context, bucket string, dryRun, remove 
 	return r, nil
 }
 
-func (z *xlZones) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+func (z *xlZones) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, deep bool) (ListObjectsInfo, error) {
 	if z.SingleZone() {
-		return z.zones[0].ListObjectsHeal(ctx, bucket, prefix, marker, delimiter, maxKeys)
+		return z.zones[0].ListObjectsHeal(ctx, bucket, prefix, marker, delimiter, maxKeys, deep)
 	}
 	return z.listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys, true)
 }
 
-func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healObjectFn func(string, string) error) error {
+func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, deep bool, healObjectFn func(string, string) error) error {
 	for _, zone := range z.zones {
-		if err := zone.HealObjects(ctx, bucket, prefix, healObjectFn); err != nil {
+		if err := zone.HealObjects(ctx, bucket, prefix, deep, healObjectFn); err != nil {
 			return err
 		}
 	}

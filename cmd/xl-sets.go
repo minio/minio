@@ -1045,9 +1045,10 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 	return result, nil
 }
 
-// ListObjects - implements listing of objects across disks, each disk is indepenently
+// ListObjects - implements listing of objects across disks, each disk is independently
 // walked and merged at this layer. Resulting value through the merge process sends
 // the data in lexically sorted order.
+// If heal is set only objects that does not have full quorum is returned.
 func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, heal bool) (loi ListObjectsInfo, err error) {
 	if err = checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
 		return loi, err
@@ -1626,7 +1627,7 @@ func (s *xlSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 
 // HealObjects - Heal all objects recursively at a specified prefix, any
 // dangling objects deleted as well automatically.
-func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObjectFn func(string, string) error) error {
+func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, deep bool, healObjectFn func(string, string) error) error {
 
 	marker := ""
 	for {
@@ -1641,7 +1642,7 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObj
 			}
 		}
 
-		res, err := s.ListObjectsHeal(ctx, bucket, prefix, marker, "", maxObjectList)
+		res, err := s.ListObjectsHeal(ctx, bucket, prefix, marker, "", maxObjectList, deep)
 		if err != nil {
 			continue
 		}
@@ -1662,8 +1663,8 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObj
 	return nil
 }
 
-func (s *xlSets) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
-	return s.listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys, true)
+func (s *xlSets) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, deep bool) (result ListObjectsInfo, err error) {
+	return s.listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys, !deep)
 }
 
 // PutObjectTag - replace or add tags to an existing object

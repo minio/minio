@@ -16,7 +16,9 @@
 
 package cmd
 
-import "context"
+import (
+	"context"
+)
 
 // This is not implemented/needed anymore, look for xl-sets.ListBucketHeal()
 func (xl xlObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
@@ -24,11 +26,11 @@ func (xl xlObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 }
 
 // This is not implemented, look for xl-sets.ListObjectsHeal()
-func (xl xlObjects) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
+func (xl xlObjects) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, deep bool) (result ListObjectsInfo, err error) {
 	return ListObjectsInfo{}, nil
 }
 
 // This is not implemented/needed anymore, look for xl-sets.HealObjects()
-func (xl xlObjects) HealObjects(ctx context.Context, bucket, prefix string, healFn func(string, string) error) (e error) {
+func (xl xlObjects) HealObjects(ctx context.Context, bucket, prefix string, deep bool, healObjectFn func(string, string) error) (e error) {
 	return nil
 }
