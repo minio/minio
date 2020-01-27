@@ -26,7 +26,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/lifecycle"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 )
 
 const (
