@@ -26,7 +26,7 @@ fi
 
 WORK_DIR="$PWD/.verify-$RANDOM"
 MINIO_CONFIG_DIR="$WORK_DIR/.minio"
-MINIO=( "$PWD/minio" --config-dir "$MINIO_CONFIG_DIR" )
+MINIO=( "$PWD/minio" --config-dir "$MINIO_CONFIG_DIR" server )
 
 function start_minio_3_node() {
     declare -a minio_pids
@@ -37,13 +37,13 @@ function start_minio_3_node() {
         ARGS+=("http://127.0.0.1:$[9000+$i]${WORK_DIR}/$i/1/ http://127.0.0.1:$[9000+$i]${WORK_DIR}/$i/2/ http://127.0.0.1:$[9000+$i]${WORK_DIR}/$i/3/ http://127.0.0.1:$[9000+$i]${WORK_DIR}/$i/4/ http://127.0.0.1:$[9000+$i]${WORK_DIR}/$i/5/ http://127.0.0.1:$[9000+$i]${WORK_DIR}/$i/6/")
     done
 
-    "${MINIO[@]}" server --address ":9001" ${ARGS[@]} > "${WORK_DIR}/dist-minio-9001.log" 2>&1 &
+    "${MINIO[@]}" --address ":9001" ${ARGS[@]} > "${WORK_DIR}/dist-minio-9001.log" 2>&1 &
     minio_pids[0]=$!
 
-    "${MINIO[@]}" server --address ":9002" ${ARGS[@]} > "${WORK_DIR}/dist-minio-9002.log" 2>&1 &
+    "${MINIO[@]}" --address ":9002" ${ARGS[@]} > "${WORK_DIR}/dist-minio-9002.log" 2>&1 &
     minio_pids[1]=$!
 
-    "${MINIO[@]}" server --address ":9003" ${ARGS[@]} > "${WORK_DIR}/dist-minio-9003.log" 2>&1 &
+    "${MINIO[@]}" --address ":9003" ${ARGS[@]} > "${WORK_DIR}/dist-minio-9003.log" 2>&1 &
     minio_pids[2]=$!
 
     sleep "$1"
@@ -77,18 +77,29 @@ function __init__()
 function perform_test_1() {
     minio_pids=( $(start_minio_3_node 60) )
     for pid in "${minio_pids[@]}"; do
-        kill "$pid"
+        if ! kill "$pid"; then
+            for i in $(seq 1 3); do
+                echo "server$i log:"
+                cat "${WORK_DIR}/dist-minio-$[9000+$i].log"
+            done
+            echo "FAILED"
+            purge "$WORK_DIR"
+            exit 1
+        fi
     done
 
     echo "Testing in Distributed Erasure setup healing test case 1"
     echo "Remove the contents of the disks belonging to '2' erasure set"
 
-    rm -rf ${WORK_DIR}/2/*
+    rm -rf ${WORK_DIR}/2/*/
 
     minio_pids=( $(start_minio_3_node 60) )
     for pid in "${minio_pids[@]}"; do
         if ! kill "$pid"; then
-            cat "${WORK_DIR}/*.log"
+            for i in $(seq 1 3); do
+                echo "server$i log:"
+                cat "${WORK_DIR}/dist-minio-$[9000+$i].log"
+            done
             echo "FAILED"
             purge "$WORK_DIR"
             exit 1
@@ -113,7 +124,15 @@ function perform_test_1() {
 function perform_test_2() {
     minio_pids=( $(start_minio_3_node 60) )
     for pid in "${minio_pids[@]}"; do
-        kill "$pid"
+        if ! kill "$pid"; then
+            for i in $(seq 1 3); do
+                echo "server$i log:"
+                cat "${WORK_DIR}/dist-minio-$[9000+$i].log"
+            done
+            echo "FAILED"
+            purge "$WORK_DIR"
+            exit 1
+        fi
     done
 
     echo "Testing in Distributed Erasure setup healing test case 2"
@@ -124,7 +143,10 @@ function perform_test_2() {
     minio_pids=( $(start_minio_3_node 60) )
     for pid in "${minio_pids[@]}"; do
         if ! kill "$pid"; then
-            cat "${WORK_DIR}/*.log"
+            for i in $(seq 1 3); do
+                echo "server$i log:"
+                cat "${WORK_DIR}/dist-minio-$[9000+$i].log"
+            done
             echo "FAILED"
             purge "$WORK_DIR"
             exit 1
@@ -132,7 +154,6 @@ function perform_test_2() {
     done
 
     rv=$(check_online)
-
     if [ "$rv" == "1" ]; then
         for pid in "${minio_pids[@]}"; do
             kill -9 "$pid"
@@ -150,7 +171,15 @@ function perform_test_2() {
 function perform_test_3() {
     minio_pids=( $(start_minio_3_node 60) )
     for pid in "${minio_pids[@]}"; do
-        kill "$pid"
+        if ! kill "$pid"; then
+            for i in $(seq 1 3); do
+                echo "server$i log:"
+                cat "${WORK_DIR}/dist-minio-$[9000+$i].log"
+            done
+            echo "FAILED"
+            purge "$WORK_DIR"
+            exit 1
+        fi
     done
 
     echo "Testing in Distributed Erasure setup healing test case 3"
@@ -161,7 +190,10 @@ function perform_test_3() {
     minio_pids=( $(start_minio_3_node 60) )
     for pid in "${minio_pids[@]}"; do
         if ! kill "$pid"; then
-            cat "${WORK_DIR}/*.log"
+            for i in $(seq 1 3); do
+                echo "server$i log:"
+                cat "${WORK_DIR}/dist-minio-$[9000+$i].log"
+            done
             echo "FAILED"
             purge "$WORK_DIR"
             exit 1
@@ -169,7 +201,6 @@ function perform_test_3() {
     done
 
     rv=$(check_online)
-
     if [ "$rv" == "1" ]; then
         for pid in "${minio_pids[@]}"; do
             kill -9 "$pid"
