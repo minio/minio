@@ -1626,44 +1626,43 @@ func (s *xlSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 
 // HealObjects - Heal all objects recursively at a specified prefix, any
 // dangling objects deleted as well automatically.
-func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObjectFn func(string, string) error) error {
+func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObject healObjectFn) error {
+	endWalkCh := make(chan struct{})
+	defer close(endWalkCh)
 
-	marker := ""
+	recursive := true
+	entryChs := s.startMergeWalks(ctx, bucket, prefix, "", recursive, endWalkCh)
+
+	entriesValid := make([]bool, len(entryChs))
+	entries := make([]FileInfo, len(entryChs))
 	for {
+		entry, quorumCount, ok := leastEntry(entryChs, entries, entriesValid)
+		if !ok {
+			break
+		}
+
+		if quorumCount == s.drivesPerSet {
+			// Skip good entries.
+			continue
+		}
+
 		if httpServer := newHTTPServerFn(); httpServer != nil {
 			// Wait at max 10 minute for an inprogress request before proceeding to heal
 			waitCount := 600
 			// Any requests in progress, delay the heal.
-			for (httpServer.GetRequestCount() >= int32(s.setCount*s.drivesPerSet)) &&
+			for (httpServer.GetRequestCount() >= int32(s.drivesPerSet)) &&
 				waitCount > 0 {
 				waitCount--
 				time.Sleep(1 * time.Second)
 			}
 		}
 
-		res, err := s.ListObjectsHeal(ctx, bucket, prefix, marker, "", maxObjectList)
-		if err != nil {
-			continue
+		if err := healObject(bucket, entry.Name); err != nil {
+			return toObjectErr(err, bucket, entry.Name)
 		}
-
-		for _, obj := range res.Objects {
-			if err = healObjectFn(bucket, obj.Name); err != nil {
-				return toObjectErr(err, bucket, obj.Name)
-			}
-		}
-
-		if !res.IsTruncated {
-			break
-		}
-
-		marker = res.NextMarker
 	}
 
 	return nil
-}
-
-func (s *xlSets) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
-	return s.listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys, true)
 }
 
 // PutObjectTag - replace or add tags to an existing object
