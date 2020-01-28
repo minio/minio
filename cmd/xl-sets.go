@@ -857,6 +857,7 @@ func leastEntry(entryChs []FileInfoCh, entries []FileInfo, entriesValid []bool) 
 }
 
 // mergeEntriesCh - merges FileInfo channel to entries upto maxKeys.
+// If partialQuorumOnly is set only objects that does not have full quorum is returned.
 func mergeEntriesCh(entryChs []FileInfoCh, maxKeys int, totalDrives int, partialQuorumOnly bool) (entries FilesInfo) {
 	var i = 0
 	entriesInfos := make([]FileInfo, len(entryChs))
@@ -1048,7 +1049,7 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 // ListObjects - implements listing of objects across disks, each disk is independently
 // walked and merged at this layer. Resulting value through the merge process sends
 // the data in lexically sorted order.
-// If heal is set only objects that does not have full quorum is returned.
+// If partialQuorumOnly is set only objects that does not have full quorum is returned.
 func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, partialQuorumOnly bool) (loi ListObjectsInfo, err error) {
 	if err = checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
 		return loi, err
