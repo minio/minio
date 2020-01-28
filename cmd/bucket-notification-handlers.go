@@ -84,7 +84,6 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		config.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
 		config.SetRegion(globalServerRegion)
 		notificationBytes, err := xml.Marshal(config)
 		if err != nil {
@@ -125,11 +124,6 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 			// never reach a stage where we will have stale
 			// notification configs.
 		}
-	}
-
-	// If xml namespace is empty, set a default value before returning.
-	if config.XMLNS == "" {
-		config.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
 	}
 
 	notificationBytes, err := xml.Marshal(config)
