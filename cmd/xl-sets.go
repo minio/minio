@@ -30,12 +30,12 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/pkg/bucket/object/tagging"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/dsync"
-	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/madmin"
-	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
-	"github.com/minio/minio/pkg/tagging"
 )
 
 // setsStorageAPI is encapsulated type for Close()
@@ -1628,44 +1628,43 @@ func (s *xlSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 
 // HealObjects - Heal all objects recursively at a specified prefix, any
 // dangling objects deleted as well automatically.
-func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, deep bool, healObjectFn func(string, string) error) error {
+func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, deep bool, healObject healObjectFn) error {
+	endWalkCh := make(chan struct{})
+	defer close(endWalkCh)
 
-	marker := ""
+	recursive := true
+	entryChs := s.startMergeWalks(ctx, bucket, prefix, "", recursive, endWalkCh)
+
+	entriesValid := make([]bool, len(entryChs))
+	entries := make([]FileInfo, len(entryChs))
 	for {
+		entry, quorumCount, ok := leastEntry(entryChs, entries, entriesValid)
+		if !ok {
+			break
+		}
+
+		if quorumCount == s.drivesPerSet {
+			// Skip good entries.
+			continue
+		}
+
 		if httpServer := newHTTPServerFn(); httpServer != nil {
 			// Wait at max 10 minute for an inprogress request before proceeding to heal
 			waitCount := 600
 			// Any requests in progress, delay the heal.
-			for (httpServer.GetRequestCount() >= int32(s.setCount*s.drivesPerSet)) &&
+			for (httpServer.GetRequestCount() >= int32(s.drivesPerSet)) &&
 				waitCount > 0 {
 				waitCount--
 				time.Sleep(1 * time.Second)
 			}
 		}
 
-		res, err := s.ListObjectsHeal(ctx, bucket, prefix, marker, "", maxObjectList, deep)
-		if err != nil {
-			continue
+		if err := healObject(bucket, entry.Name); err != nil {
+			return toObjectErr(err, bucket, entry.Name)
 		}
-
-		for _, obj := range res.Objects {
-			if err = healObjectFn(bucket, obj.Name); err != nil {
-				return toObjectErr(err, bucket, obj.Name)
-			}
-		}
-
-		if !res.IsTruncated {
-			break
-		}
-
-		marker = res.NextMarker
 	}
 
 	return nil
-}
-
-func (s *xlSets) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, deep bool) (result ListObjectsInfo, err error) {
-	return s.listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys, !deep)
 }
 
 // PutObjectTag - replace or add tags to an existing object

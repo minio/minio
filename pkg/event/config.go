@@ -209,8 +209,7 @@ type topic struct {
 // Config - notification configuration described in
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html
 type Config struct {
-	XMLNS      string   `xml:"xmlns,attr,omitempty"`
-	XMLName    xml.Name `xml:"NotificationConfiguration"`
+	XMLName    xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ NotificationConfiguration"`
 	QueueList  []Queue  `xml:"QueueConfiguration,omitempty"`
 	LambdaList []lambda `xml:"CloudFunctionConfiguration,omitempty"`
 	TopicList  []topic  `xml:"TopicConfiguration,omitempty"`
@@ -291,11 +290,6 @@ func ParseConfig(reader io.Reader, region string, targetList *TargetList) (*Conf
 	}
 
 	config.SetRegion(region)
-
-	// If xml namespace is empty, set a default value before returning.
-	if config.XMLNS == "" {
-		config.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
-	}
 
 	return &config, nil
 }

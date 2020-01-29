@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/lifecycle"
 )
 
 const (

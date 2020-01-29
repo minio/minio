@@ -35,7 +35,7 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/bucket/policy"
 )
 
 // API suite container common to both FS and XL.

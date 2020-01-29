@@ -21,10 +21,10 @@ import (
 	"errors"
 
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/lifecycle"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/pkg/bucket/object/tagging"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/madmin"
-	"github.com/minio/minio/pkg/policy"
-	"github.com/minio/minio/pkg/tagging"
 )
 
 // GatewayLocker implements custom NeNSLock implementation
@@ -148,11 +148,6 @@ func (a GatewayUnsupported) ListBucketsHeal(ctx context.Context) (buckets []Buck
 	return nil, NotImplemented{}
 }
 
-// ListObjectsHeal - Not implemented stub
-func (a GatewayUnsupported) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, deep bool) (result ListObjectsInfo, err error) {
-	return ListObjectsInfo{}, NotImplemented{}
-}
-
 // HealObject - Not implemented stub
 func (a GatewayUnsupported) HealObject(ctx context.Context, bucket, object string, dryRun, remove bool, scanMode madmin.HealScanMode) (h madmin.HealResultItem, e error) {
 	return h, NotImplemented{}
@@ -164,7 +159,7 @@ func (a GatewayUnsupported) ListObjectsV2(ctx context.Context, bucket, prefix, c
 }
 
 // HealObjects - Not implemented stub
-func (a GatewayUnsupported) HealObjects(ctx context.Context, bucket, prefix string, deep bool, healObjectFn func(string, string) error) (e error) {
+func (a GatewayUnsupported) HealObjects(ctx context.Context, bucket, prefix string, deep bool, fn healObjectFn) (e error) {
 	return NotImplemented{}
 }
 

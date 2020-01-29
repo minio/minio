@@ -22,10 +22,10 @@ import (
 	"net/http"
 
 	"github.com/minio/minio-go/v6/pkg/encrypt"
-	"github.com/minio/minio/pkg/lifecycle"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/pkg/bucket/object/tagging"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/madmin"
-	"github.com/minio/minio/pkg/policy"
-	"github.com/minio/minio/pkg/tagging"
 )
 
 // CheckCopyPreconditionFn returns true if copy precondition check failed.
@@ -99,10 +99,9 @@ type ObjectLayer interface {
 	HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error)
 	HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem, error)
 	HealObject(ctx context.Context, bucket, object string, dryRun, remove bool, scanMode madmin.HealScanMode) (madmin.HealResultItem, error)
-	HealObjects(ctx context.Context, bucket, prefix string, deep bool, healObjectFn func(string, string) error) error
+	HealObjects(ctx context.Context, bucket, prefix string, deep bool, healObject healObjectFn) error
 
 	ListBucketsHeal(ctx context.Context) (buckets []BucketInfo, err error)
-	ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, deep bool) (result ListObjectsInfo, err error)
 
 	// Policy operations
 	SetBucketPolicy(context.Context, string, *policy.Policy) error
