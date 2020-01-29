@@ -233,8 +233,7 @@ func (dr *DefaultRetention) UnmarshalXML(d *xml.Decoder, start xml.StartElement)
 // Config - object lock configuration specified in
 // https://docs.aws.amazon.com/AmazonS3/latest/API/Type_API_ObjectLockConfiguration.html
 type Config struct {
-	XMLNS             string   `xml:"xmlns,attr,omitempty"`
-	XMLName           xml.Name `xml:"ObjectLockConfiguration"`
+	XMLName           xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ObjectLockConfiguration"`
 	ObjectLockEnabled string   `xml:"ObjectLockEnabled"`
 	Rule              *struct {
 		DefaultRetention DefaultRetention `xml:"DefaultRetention"`
@@ -336,8 +335,7 @@ func (rDate *RetentionDate) MarshalXML(e *xml.Encoder, startElement xml.StartEle
 // ObjectRetention specified in
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObjectRetention.html
 type ObjectRetention struct {
-	XMLNS           string        `xml:"xmlns,attr,omitempty"`
-	XMLName         xml.Name      `xml:"Retention"`
+	XMLName         xml.Name      `xml:"http://s3.amazonaws.com/doc/2006-03-01/ Retention"`
 	Mode            Mode          `xml:"Mode,omitempty"`
 	RetainUntilDate RetentionDate `xml:"RetainUntilDate,omitempty"`
 }
@@ -470,8 +468,7 @@ func ParseObjectLockLegalHoldHeaders(h http.Header) (lhold ObjectLegalHold, err 
 // ObjectLegalHold specified in
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObjectLegalHold.html
 type ObjectLegalHold struct {
-	XMLNS   string          `xml:"xmlns,attr,omitempty"`
-	XMLName xml.Name        `xml:"LegalHold"`
+	XMLName xml.Name        `xml:"http://s3.amazonaws.com/doc/2006-03-01/ LegalHold"`
 	Status  LegalHoldStatus `xml:"Status,omitempty"`
 }
 
