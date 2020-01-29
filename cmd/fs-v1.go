@@ -1254,7 +1254,7 @@ func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, dryRun, remo
 }
 
 // HealObjects - no-op for fs. Valid only for XL.
-func (fs *FSObjects) HealObjects(ctx context.Context, bucket, prefix string, fn func(string, string) error) (e error) {
+func (fs *FSObjects) HealObjects(ctx context.Context, bucket, prefix string, fn healObjectFn) (e error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return NotImplemented{}
 }
@@ -1263,12 +1263,6 @@ func (fs *FSObjects) HealObjects(ctx context.Context, bucket, prefix string, fn 
 func (fs *FSObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return []BucketInfo{}, NotImplemented{}
-}
-
-// ListObjectsHeal - list all objects to be healed. Valid only for XL
-func (fs *FSObjects) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
-	logger.LogIf(ctx, NotImplemented{})
-	return ListObjectsInfo{}, NotImplemented{}
 }
 
 // GetMetrics - no op

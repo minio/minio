@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -1309,19 +1310,58 @@ func (z *xlZones) HealBucket(ctx context.Context, bucket string, dryRun, remove 
 	return r, nil
 }
 
-func (z *xlZones) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	if z.SingleZone() {
-		return z.zones[0].ListObjectsHeal(ctx, bucket, prefix, marker, delimiter, maxKeys)
-	}
-	return z.listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys, true)
-}
+type healObjectFn func(string, string) error
 
-func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healObjectFn func(string, string) error) error {
+func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healObject healObjectFn) error {
+	var zonesEntryChs [][]FileInfoCh
+
+	recursive := true
 	for _, zone := range z.zones {
-		if err := zone.HealObjects(ctx, bucket, prefix, healObjectFn); err != nil {
-			return err
+		endWalkCh := make(chan struct{})
+		defer close(endWalkCh)
+		zonesEntryChs = append(zonesEntryChs,
+			zone.startMergeWalks(ctx, bucket, prefix, "", recursive, endWalkCh))
+	}
+
+	var zoneDrivesPerSet []int
+	for _, zone := range z.zones {
+		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.drivesPerSet)
+	}
+
+	var zonesEntriesInfos [][]FileInfo
+	var zonesEntriesValid [][]bool
+	for _, entryChs := range zonesEntryChs {
+		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfo, len(entryChs)))
+		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
+	}
+
+	for {
+		entry, quorumCount, zoneIndex, ok := leastEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+		if !ok {
+			break
+		}
+
+		if quorumCount == zoneDrivesPerSet[zoneIndex] {
+			// Skip good entries.
+			continue
+		}
+
+		if httpServer := newHTTPServerFn(); httpServer != nil {
+			// Wait at max 10 minute for an inprogress request before proceeding to heal
+			waitCount := 600
+			// Any requests in progress, delay the heal.
+			for (httpServer.GetRequestCount() >= int32(zoneDrivesPerSet[zoneIndex])) &&
+				waitCount > 0 {
+				waitCount--
+				time.Sleep(1 * time.Second)
+			}
+		}
+
+		if err := healObject(bucket, entry.Name); err != nil {
+			return toObjectErr(err, bucket, entry.Name)
 		}
 	}
+
 	return nil
 }
 

@@ -775,14 +775,14 @@ func (h *healSequence) healBucket(bucket string, bucketsOnly bool) error {
 
 // healObject - heal the given object and record result
 func (h *healSequence) healObject(bucket, object string) error {
-	if h.isQuitting() {
-		return errHealStopSignalled
-	}
-
 	// Get current object layer instance.
 	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil {
 		return errServerNotInitialized
+	}
+
+	if h.isQuitting() {
+		return errHealStopSignalled
 	}
 
 	return h.queueHealTask(pathJoin(bucket, object), madmin.HealItemObject)
