@@ -1254,7 +1254,7 @@ func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, dryRun, remo
 }
 
 // HealObjects - no-op for fs. Valid only for XL.
-func (fs *FSObjects) HealObjects(ctx context.Context, bucket, prefix string, deep bool, fn healObjectFn) (e error) {
+func (fs *FSObjects) HealObjects(ctx context.Context, bucket, prefix string, healObject healObjectFn) (e error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return NotImplemented{}
 }

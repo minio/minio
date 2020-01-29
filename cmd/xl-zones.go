@@ -1312,7 +1312,7 @@ func (z *xlZones) HealBucket(ctx context.Context, bucket string, dryRun, remove 
 
 type healObjectFn func(string, string) error
 
-func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, deep bool, healObject healObjectFn) error {
+func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healObject healObjectFn) error {
 	var zonesEntryChs [][]FileInfoCh
 
 	recursive := true

@@ -24,6 +24,6 @@ func (xl xlObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 }
 
 // This is not implemented/needed anymore, look for xl-sets.HealObjects()
-func (xl xlObjects) HealObjects(ctx context.Context, bucket, prefix string, deep bool, fn healObjectFn) (e error) {
+func (xl xlObjects) HealObjects(ctx context.Context, bucket, prefix string, healObject healObjectFn) (e error) {
 	return nil
 }

@@ -1628,7 +1628,7 @@ func (s *xlSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 
 // HealObjects - Heal all objects recursively at a specified prefix, any
 // dangling objects deleted as well automatically.
-func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, deep bool, healObject healObjectFn) error {
+func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObject healObjectFn) error {
 	endWalkCh := make(chan struct{})
 	defer close(endWalkCh)
 
