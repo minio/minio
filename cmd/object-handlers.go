@@ -766,6 +766,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	if isDirectiveValid(r.Header.Get(xhttp.AmzTagDirective)) && !objectAPI.IsObjectTaggingSupported() {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrTaggingOperation), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	// This request header needs to be set prior to setting ObjectOptions
 	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
@@ -805,7 +810,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	checkCopyPrecondFn := func(o ObjectInfo, encETag string) bool {
 		return checkCopyObjectPreconditions(ctx, w, r, o, encETag)
 	}
-	getOpts.CheckCopyPrecondFn = checkCopyPrecondFn
 	srcOpts.CheckCopyPrecondFn = checkCopyPrecondFn
 	var rs *HTTPRangeSpec
 	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, getOpts)
@@ -999,8 +1003,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if tags != "" {
+	if tags != "" && objectAPI.IsObjectTaggingSupported() {
 		srcInfo.UserDefined[xhttp.AmzObjectTagging] = tags
+	} else if tags != "" && !objectAPI.IsObjectTaggingSupported() {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrTaggingOperation), r.URL, guessIsBrowserReq(r))
+		return
 	}
 
 	getObjectInfo := objectAPI.GetObjectInfo
@@ -1123,6 +1130,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	if crypto.S3KMS.IsRequested(r.Header) && !api.AllowSSEKMS() {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
 		return
@@ -1191,12 +1199,18 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if tags := r.Header.Get(http.CanonicalHeaderKey(xhttp.AmzObjectTagging)); tags != "" {
+	taggingEnabled := objectAPI.IsObjectTaggingSupported()
+	tags := r.Header.Get(http.CanonicalHeaderKey(xhttp.AmzObjectTagging))
+	taggingDirective := r.Header.Get(http.CanonicalHeaderKey(xhttp.AmzTagDirective))
+	if taggingEnabled && tags != "" {
 		metadata[xhttp.AmzObjectTagging], err = extractTags(ctx, tags)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
+	} else if (!taggingEnabled && tags != "") || (!taggingEnabled && isDirectiveValid(taggingDirective)) {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrTaggingOperation), r.URL, guessIsBrowserReq(r))
+		return
 	}
 
 	if rAuthType == authTypeStreamingSigned {
@@ -1504,6 +1518,12 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
+	_, ok := opts.UserDefined[xhttp.AmzObjectTagging]
+	if ok && !objectAPI.IsObjectTaggingSupported() {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrTaggingOperation), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	newMultipartUpload := objectAPI.NewMultipartUpload
 
 	uploadID, err := newMultipartUpload(ctx, bucket, object, opts)
@@ -2862,6 +2882,10 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	if !objAPI.IsObjectTaggingSupported() {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrTaggingOperation), r.URL, guessIsBrowserReq(r))
 		return
 	}
 

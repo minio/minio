@@ -16,7 +16,12 @@
 
 package s3
 
-import minio "github.com/minio/minio/cmd"
+import (
+	"strings"
+
+	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/pkg/bucket/object/tagging"
+)
 
 // List of header keys to be filtered, usually
 // from all S3 API http responses.
@@ -44,4 +49,41 @@ func FromGatewayObjectPart(partID int, oi minio.ObjectInfo) (pi minio.PartInfo) 
 		LastModified: oi.ModTime,
 		PartNumber:   partID,
 	}
+}
+
+func makeTagMap(tags tagging.Tagging) map[string]string {
+	if len(tags.TagSet.Tags) <= 0 {
+		return nil
+	}
+	tagMap := make(map[string]string)
+	for _, tagEle := range tags.TagSet.Tags {
+		tagMap[tagEle.Key] = tagEle.Value
+	}
+	return tagMap
+}
+func getTagMap(tagStr string) (map[string]string, error) {
+	var tags tagging.Tagging
+	var err error
+	if tagStr == "" {
+		return nil, nil
+	}
+	if tags, err = tagging.FromString(tagStr); err != nil {
+		return nil, err
+	}
+	return makeTagMap(tags), nil
+}
+
+func getTagMapParse(tagStr string) (map[string]string, error) {
+	var tags *tagging.Tagging
+	var err error
+	if tagStr == "" {
+		return nil, nil
+	}
+	if tags, err = tagging.ParseTagging(strings.NewReader(tagStr)); err != nil {
+		return nil, err
+	}
+	if tags == nil {
+		return nil, nil
+	}
+	return makeTagMap(*tags), nil
 }

@@ -116,6 +116,8 @@ type ObjectLayer interface {
 	// Compression support check.
 	IsCompressionSupported() bool
 
+	// Object Tagging Support check.
+	IsObjectTaggingSupported() bool
 	// Lifecycle operations
 	SetBucketLifecycle(context.Context, string, *lifecycle.Lifecycle) error
 	GetBucketLifecycle(context.Context, string) (*lifecycle.Lifecycle, error)

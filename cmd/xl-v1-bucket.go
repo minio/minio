@@ -312,3 +312,8 @@ func (xl xlObjects) IsEncryptionSupported() bool {
 func (xl xlObjects) IsCompressionSupported() bool {
 	return true
 }
+
+// IsObjectTaggingSupported returns whether tagging is applicable for this layer.
+func (xl xlObjects) IsObjectTaggingSupported() bool {
+	return false
+}

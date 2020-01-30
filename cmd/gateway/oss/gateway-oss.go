@@ -1103,3 +1103,8 @@ func (l *ossObjects) IsCompressionSupported() bool {
 func (l *ossObjects) IsReady(ctx context.Context) bool {
 	return minio.IsBackendOnline(ctx, l.Client.HTTPClient, l.Client.Config.Endpoint)
 }
+
+// IsObjectTaggingSupported returns whether tagging is applicable for this layer.
+func (l *ossObjects) IsObjectTaggingSupported() bool {
+	return false
+}

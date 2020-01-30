@@ -30,11 +30,13 @@ import (
 	miniogo "github.com/minio/minio-go/v6"
 	"github.com/minio/minio-go/v6/pkg/credentials"
 	minio "github.com/minio/minio/cmd"
+	xhttp "github.com/minio/minio/cmd/http"
 
 	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
 )
 
@@ -482,6 +484,13 @@ func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string,
 	if err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
 	}
+	tagStr, ok := opts.UserDefined[xhttp.AmzObjectTagging]
+	tagMap, err := getTagMap(tagStr)
+	if ok && err == nil && len(tagMap) > 0 {
+		if err = l.Client.PutObjectTagging(bucket, object, tagMap); err != nil {
+			return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
+		}
+	}
 	// On success, populate the key & metadata so they are present in the notification
 	oi.Key = object
 	oi.Metadata = minio.ToMinioClientObjectInfoMetadata(opts.UserDefined)
@@ -500,6 +509,7 @@ func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject 
 	// So preserve it by adding "REPLACE" directive to save all the metadata set by CopyObject API.
 	srcInfo.UserDefined["x-amz-metadata-directive"] = "REPLACE"
 	srcInfo.UserDefined["x-amz-copy-source-if-match"] = srcInfo.ETag
+
 	header := make(http.Header)
 	if srcOpts.ServerSideEncryption != nil {
 		encrypt.SSECopy(srcOpts.ServerSideEncryption).Marshal(header)
@@ -515,6 +525,29 @@ func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject 
 	if _, err = l.Client.CopyObject(srcBucket, srcObject, dstBucket, dstObject, srcInfo.UserDefined); err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, srcBucket, srcObject)
 	}
+
+	var tagMap map[string]string
+	var tagStr string
+	var ok bool
+	tagStr, ok = srcInfo.UserDefined[xhttp.AmzObjectTagging]
+	if ok {
+		if tagMap, err = getTagMap(tagStr); err != nil {
+			return objInfo, minio.ErrorRespToObjectError(err, srcObject, srcObject)
+		}
+	} else {
+		if tagStr, err = l.Client.GetObjectTagging(srcBucket, srcObject); err != nil {
+			return objInfo, minio.ErrorRespToObjectError(err, srcObject, srcObject)
+		}
+		if tagMap, err = getTagMapParse(tagStr); err != nil {
+			return objInfo, minio.ErrorRespToObjectError(err, srcObject, srcObject)
+		}
+	}
+	if len(tagMap) > 0 {
+		if err = l.Client.PutObjectTagging(dstBucket, dstObject, tagMap); err != nil {
+			return objInfo, minio.ErrorRespToObjectError(err, dstBucket, dstObject)
+		}
+	}
+
 	return l.GetObjectInfo(ctx, dstBucket, dstObject, dstOpts)
 }
 
@@ -547,13 +580,18 @@ func (l *s3Objects) ListMultipartUploads(ctx context.Context, bucket string, pre
 }
 
 // NewMultipartUpload upload object in multiple parts
+
 func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket string, object string, o minio.ObjectOptions) (uploadID string, err error) {
 	// Create PutObject options
 	opts := miniogo.PutObjectOptions{UserMetadata: o.UserDefined, ServerSideEncryption: o.ServerSideEncryption}
+	if opts.UserTags, err = getTagMap(o.UserDefined["X-Amz-Tagging"]); err != nil {
+		return uploadID, minio.ErrorRespToObjectError(err, bucket, object)
+	}
 	uploadID, err = l.Client.NewMultipartUpload(bucket, object, opts)
 	if err != nil {
 		return uploadID, minio.ErrorRespToObjectError(err, bucket, object)
 	}
+
 	return uploadID, nil
 }
 
@@ -661,6 +699,50 @@ func (l *s3Objects) DeleteBucketPolicy(ctx context.Context, bucket string) error
 	return nil
 }
 
+// GetObjectTag gets the tags set on the object
+func (l *s3Objects) GetObjectTag(ctx context.Context, bucket string, object string) (tagging.Tagging, error) {
+	var err error
+	var tags *tagging.Tagging
+	var tagStr string
+	var opts minio.ObjectOptions
+
+	if _, err = l.GetObjectInfo(ctx, bucket, object, opts); err != nil {
+		return tagging.Tagging{}, minio.ErrorRespToObjectError(err, bucket, object)
+	}
+
+	if tagStr, err = l.Client.GetObjectTagging(bucket, object); err != nil {
+		return tagging.Tagging{}, minio.ErrorRespToObjectError(err, bucket, object)
+	}
+	if tags, err = tagging.ParseTagging(strings.NewReader(tagStr)); err != nil {
+		return tagging.Tagging{}, minio.ErrorRespToObjectError(err, bucket, object)
+	}
+	if tags == nil {
+		return tagging.Tagging{}, nil
+	}
+	return *tags, err
+}
+
+//PutObjectTag attaches the tags to the object
+func (l *s3Objects) PutObjectTag(ctx context.Context, bucket, object string, tagStr string) error {
+	var err error
+	var tagMap map[string]string
+	if tagMap, err = getTagMap(tagStr); err != nil {
+		return minio.ErrorRespToObjectError(err, bucket, object)
+	}
+	if err = l.Client.PutObjectTagging(bucket, object, tagMap); err != nil {
+		return minio.ErrorRespToObjectError(err, bucket, object)
+	}
+	return nil
+}
+
+func (l *s3Objects) DeleteObjectTag(ctx context.Context, bucket, object string) error {
+	var err error
+	if err = l.Client.RemoveObjectTagging(bucket, object); err != nil {
+		return minio.ErrorRespToObjectError(err, bucket, object)
+	}
+	return nil
+}
+
 // IsCompressionSupported returns whether compression is applicable for this layer.
 func (l *s3Objects) IsCompressionSupported() bool {
 	return false
@@ -674,4 +756,9 @@ func (l *s3Objects) IsEncryptionSupported() bool {
 // IsReady returns whether the layer is ready to take requests.
 func (l *s3Objects) IsReady(ctx context.Context) bool {
 	return minio.IsBackendOnline(ctx, l.HTTPClient, l.Client.EndpointURL().String())
+}
+
+// IsObjectTaggingSupported returns whether tagging is applicable for this layer.
+func (l *s3Objects) IsObjectTaggingSupported() bool {
+	return false
 }

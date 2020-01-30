@@ -153,6 +153,7 @@ const (
 	ErrObjectLockInvalidHeaders
 	ErrInvalidTagDirective
 	// Add new error codes here.
+	ErrTaggingOperation
 
 	// SSE-S3 related API errors
 	ErrInvalidEncryptionMethod
@@ -835,6 +836,11 @@ var errorCodes = errorCodeMap{
 	ErrInvalidTagDirective: {
 		Code:           "InvalidArgument",
 		Description:    "Unknown tag directive.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrTaggingOperation: {
+		Code:           "InvalidArgument",
+		Description:    "Tagging not Implemented.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidEncryptionMethod: {
