@@ -243,12 +243,16 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// sub-systems, make sure that we do not move the above codeblock elsewhere.
 	if enableConfigOps {
 		logger.FatalIf(globalConfigSys.Init(newObject), "Unable to initialize config system")
+		buckets, err := newObject.ListBuckets(context.Background())
+		if err != nil {
+			logger.Fatal(err, "Unable to list buckets")
+		}
 
+		logger.FatalIf(globalNotificationSys.Init(buckets, newObject), "Unable to initialize notification system")
 		// Start watching disk for reloading config, this
 		// is only enabled for "NAS" gateway.
 		globalConfigSys.WatchConfigNASDisk(newObject)
 	}
-
 	// This is only to uniquely identify each gateway deployments.
 	globalDeploymentID = env.Get("MINIO_GATEWAY_DEPLOYMENT_ID", mustGetUUID())
 	logger.SetDeploymentID(globalDeploymentID)
