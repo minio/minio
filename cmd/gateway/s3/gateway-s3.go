@@ -154,6 +154,7 @@ var defaultAWSCredProviders = []credentials.Provider{
 		Client: &http.Client{
 			Transport: minio.NewCustomHTTPTransport(),
 		},
+		Endpoint: "http://169.254.169.254",
 	},
 	&credentials.EnvMinio{},
 }
