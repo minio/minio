@@ -30,9 +30,11 @@ import (
 	"strings"
 	"time"
 
+	jwtreq "github.com/dgrijalva/jwt-go/request"
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
+	xjwt "github.com/minio/minio/cmd/jwt"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -54,11 +56,29 @@ const DefaultSkewTime = 15 * time.Minute
 
 // Authenticates storage client's requests and validates for skewed time.
 func storageServerRequestValidate(r *http.Request) error {
-	_, owner, err := webRequestAuthenticate(r)
+	token, err := jwtreq.AuthorizationHeaderExtractor.ExtractToken(r)
 	if err != nil {
+		if err == jwtreq.ErrNoTokenInRequest {
+			return errNoAuthToken
+		}
 		return err
 	}
-	if !owner { // Disable access for non-admin users.
+
+	claims := xjwt.NewStandardClaims()
+	if err = xjwt.ParseWithStandardClaims(token, claims, []byte(globalActiveCred.SecretKey)); err != nil {
+		return errAuthentication
+	}
+
+	owner := claims.AccessKey == globalActiveCred.AccessKey || claims.Subject == globalActiveCred.AccessKey
+	if !owner {
+		return errAuthentication
+	}
+
+	if claims.Audience != r.URL.Query().Encode() {
+		return errAuthentication
+	}
+
+	if claims.Issuer != ReleaseTag {
 		return errAuthentication
 	}
 
@@ -70,11 +90,12 @@ func storageServerRequestValidate(r *http.Request) error {
 	utcNow := UTCNow()
 	delta := requestTime.Sub(utcNow)
 	if delta < 0 {
-		delta = delta * -1
+		delta *= -1
 	}
 	if delta > DefaultSkewTime {
 		return fmt.Errorf("client time %v is too apart with server time %v", requestTime, utcNow)
 	}
+
 	return nil
 }
 
