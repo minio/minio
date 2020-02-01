@@ -427,12 +427,10 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout, dialKeepAlive ti
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           newCustomDialContext(dialTimeout, dialKeepAlive),
-		MaxIdleConns:          256,
 		MaxIdleConnsPerHost:   256,
-		IdleConnTimeout:       30 * time.Second,
+		IdleConnTimeout:       60 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 10 * time.Second,
-		ExpectContinueTimeout: 3 * time.Second,
+		ExpectContinueTimeout: 10 * time.Second,
 		TLSClientConfig:       tlsConfig,
 		// Go net/http automatically unzip if content-type is
 		// gzip disable this feature, as we are always interested
