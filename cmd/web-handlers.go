@@ -37,7 +37,6 @@ import (
 	"github.com/klauspost/compress/zip"
 	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
-	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/browser"
 	"github.com/minio/minio/cmd/config/etcd/dns"
 	"github.com/minio/minio/cmd/config/identity/openid"
@@ -312,27 +311,20 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		if err != nil && err != dns.ErrNoEntriesFound {
 			return toJSONError(ctx, err)
 		}
-		bucketSet := set.NewStringSet()
-		for _, dnsRecord := range dnsBuckets {
-			if bucketSet.Contains(dnsRecord.Key) {
-				continue
-			}
-
+		for _, dnsRecords := range dnsBuckets {
 			if globalIAMSys.IsAllowed(iampolicy.Args{
 				AccountName:     claims.AccessKey,
 				Action:          iampolicy.ListBucketAction,
-				BucketName:      dnsRecord.Key,
+				BucketName:      dnsRecords[0].Key,
 				ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 				IsOwner:         owner,
 				ObjectName:      "",
 				Claims:          claims.Map(),
 			}) {
 				reply.Buckets = append(reply.Buckets, WebBucketInfo{
-					Name:         dnsRecord.Key,
-					CreationDate: dnsRecord.CreationDate,
+					Name:         dnsRecords[0].Key,
+					CreationDate: dnsRecords[0].CreationDate,
 				})
-
-				bucketSet.Add(dnsRecord.Key)
 			}
 		}
 	} else {
