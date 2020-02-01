@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -226,18 +225,10 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
 	return storageInfo
 }
 
-func (fs *FSObjects) waitForLowActiveIO() error {
+func (fs *FSObjects) waitForLowActiveIO() {
 	for atomic.LoadInt64(&fs.activeIOCount) >= fs.maxActiveIOCount {
-		select {
-		case <-GlobalServiceDoneCh:
-			return errors.New("forced exit")
-		case <-time.NewTimer(lowActiveIOWaitTick).C:
-			continue
-		}
+		time.Sleep(lowActiveIOWaitTick)
 	}
-
-	return nil
-
 }
 
 // CrawlAndGetDataUsage returns data usage stats of the current FS deployment
