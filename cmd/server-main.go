@@ -391,7 +391,8 @@ func serverMain(ctx *cli.Context) {
 		initFederatorBackend(buckets, newObject)
 	}
 
-	initDataUsageStats()
+	// Disable disk crawling FIXME: fix the high CPU usage
+	// initDataUsageStats()
 	initDailyLifecycle()
 
 	// Disable safe mode operation, after all initialization is over.
