@@ -21,6 +21,7 @@ import (
 	"os"
 	"testing"
 
+	xjwt "github.com/minio/minio/cmd/jwt"
 	"github.com/minio/minio/pkg/auth"
 )
 
@@ -62,9 +63,7 @@ func testAuthenticate(authType string, t *testing.T) {
 	// Run tests.
 	for _, testCase := range testCases {
 		var err error
-		if authType == "node" {
-			_, err = authenticateNode(testCase.accessKey, testCase.secretKey)
-		} else if authType == "web" {
+		if authType == "web" {
 			_, err = authenticateWeb(testCase.accessKey, testCase.secretKey)
 		} else if authType == "url" {
 			_, err = authenticateURL(testCase.accessKey, testCase.secretKey)
@@ -81,10 +80,6 @@ func testAuthenticate(authType string, t *testing.T) {
 			t.Fatalf("%+v: expected: <nil>, got: %s", testCase, err)
 		}
 	}
-}
-
-func TestAuthenticateNode(t *testing.T) {
-	testAuthenticate("node", t)
 }
 
 func TestAuthenticateWeb(t *testing.T) {
@@ -150,6 +145,64 @@ func TestWebRequestAuthenticate(t *testing.T) {
 	}
 }
 
+func BenchmarkParseJWTStandardClaims(b *testing.B) {
+	obj, fsDir, err := prepareFS()
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		b.Fatal(err)
+	}
+
+	creds := globalActiveCred
+	token, err := authenticateNode(creds.AccessKey, creds.SecretKey, "")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			err = xjwt.ParseWithStandardClaims(token, xjwt.NewStandardClaims(), []byte(creds.SecretKey))
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+func BenchmarkParseJWTMapClaims(b *testing.B) {
+	obj, fsDir, err := prepareFS()
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		b.Fatal(err)
+	}
+
+	creds := globalActiveCred
+	token, err := authenticateNode(creds.AccessKey, creds.SecretKey, "")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			err = xjwt.ParseWithClaims(token, xjwt.NewMapClaims(), func(*xjwt.MapClaims) ([]byte, error) {
+				return []byte(creds.SecretKey), nil
+			})
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
 func BenchmarkAuthenticateNode(b *testing.B) {
 	obj, fsDir, err := prepareFS()
 	if err != nil {
@@ -164,7 +217,7 @@ func BenchmarkAuthenticateNode(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		authenticateNode(creds.AccessKey, creds.SecretKey)
+		authenticateNode(creds.AccessKey, creds.SecretKey, "")
 	}
 }
 
