@@ -49,7 +49,7 @@ func (z *xlZones) quickHealBuckets(ctx context.Context) {
 		return
 	}
 	for _, bucket := range bucketsInfo {
-		z.HealBucket(ctx, bucket.Name, false, false)
+		z.MakeBucketWithLocation(ctx, bucket.Name, "")
 	}
 }
 
@@ -77,7 +77,9 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 			return nil, err
 		}
 	}
-	z.quickHealBuckets(context.Background())
+	if !z.SingleZone() {
+		z.quickHealBuckets(context.Background())
+	}
 	return z, nil
 }
 

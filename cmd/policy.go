@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net/http"
 	"path"
-	"strings"
 	"sync"
 
 	jsoniter "github.com/json-iterator/go"
@@ -133,32 +132,8 @@ func (sys *PolicySys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
 		return nil
 	}
 
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-
-	// Initializing policy needs a retry mechanism for
-	// the following reasons:
-	//  - Read quorum is lost just after the initialization
-	//    of the object layer.
-	retryTimerCh := newRetryTimerSimple(doneCh)
-	for {
-		select {
-		case <-retryTimerCh:
-			// Load PolicySys once during boot.
-			if err := sys.load(buckets, objAPI); err != nil {
-				if err == errDiskNotFound ||
-					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-					logger.Info("Waiting for policy subsystem to be initialized..")
-					continue
-				}
-				return err
-			}
-			return nil
-		case <-globalOSSignalCh:
-			return fmt.Errorf("Initializing Policy sub-system gracefully stopped")
-		}
-	}
+	// Load PolicySys once during boot.
+	return sys.load(buckets, objAPI)
 }
 
 // NewPolicySys - creates new policy system.

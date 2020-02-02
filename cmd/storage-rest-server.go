@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"encoding/gob"
 	"encoding/hex"
@@ -502,7 +503,17 @@ func (s *storageRESTServer) DeleteFileBulkHandler(w http.ResponseWriter, r *http
 	}
 	vars := r.URL.Query()
 	volume := vars.Get(storageRESTVolume)
-	filePaths := vars[storageRESTFilePath]
+
+	bio := bufio.NewScanner(r.Body)
+	var filePaths []string
+	for bio.Scan() {
+		filePaths = append(filePaths, bio.Text())
+	}
+
+	if err := bio.Err(); err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
 
 	errs, err := s.storage.DeleteFileBulk(volume, filePaths)
 	if err != nil {
@@ -664,7 +675,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteFile).HandlerFunc(httpTraceHdrs(server.DeleteFileHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteFileBulk).HandlerFunc(httpTraceHdrs(server.DeleteFileBulkHandler)).
-				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
+				Queries(restQueries(storageRESTVolume)...)
 
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodRenameFile).HandlerFunc(httpTraceHdrs(server.RenameFileHandler)).
 				Queries(restQueries(storageRESTSrcVolume, storageRESTSrcPath, storageRESTDstVolume, storageRESTDstPath)...)

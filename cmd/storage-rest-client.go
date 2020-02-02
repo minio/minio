@@ -245,7 +245,7 @@ func (client *storageRESTClient) AppendFile(volume, path string, buffer []byte) 
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	reader := bytes.NewBuffer(buffer)
+	reader := bytes.NewReader(buffer)
 	respBody, err := client.call(storageRESTMethodAppendFile, values, reader, -1)
 	defer http.DrainBody(respBody)
 	return err
@@ -405,10 +405,14 @@ func (client *storageRESTClient) DeleteFileBulk(volume string, paths []string) (
 	}
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
+
+	var buffer bytes.Buffer
 	for _, path := range paths {
-		values.Add(storageRESTFilePath, path)
+		buffer.WriteString(path)
+		buffer.WriteString("\n")
 	}
-	respBody, err := client.call(storageRESTMethodDeleteFileBulk, values, nil, -1)
+
+	respBody, err := client.call(storageRESTMethodDeleteFileBulk, values, &buffer, -1)
 	defer http.DrainBody(respBody)
 
 	if err != nil {

@@ -738,8 +738,7 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string, wri
 // object.
 func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects []string, errs []error, writeQuorums []int, isDirs []bool) ([]error, error) {
 	var tmpObjs = make([]string, len(objects))
-	var disks = xl.getDisks()
-
+	disks := xl.getDisks()
 	if bucket == minioMetaTmpBucket {
 		copy(tmpObjs, objects)
 	} else {
@@ -753,10 +752,10 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 			// that a non found object in a given disk as a success since it already
 			// confirms that the object doesn't have a part in that disk (already removed)
 			if isDirs[i] {
-				disks, err = rename(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, tmpObjs[i], true, writeQuorums[i],
+				disks, err = rename(ctx, disks, bucket, object, minioMetaTmpBucket, tmpObjs[i], true, writeQuorums[i],
 					[]error{errFileNotFound, errFileAccessDenied})
 			} else {
-				disks, err = rename(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, tmpObjs[i], true, writeQuorums[i],
+				disks, err = rename(ctx, disks, bucket, object, minioMetaTmpBucket, tmpObjs[i], true, writeQuorums[i],
 					[]error{errFileNotFound})
 			}
 			if err != nil {
@@ -776,13 +775,13 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 			continue
 		}
 		delObjErrs[index], opErrs[index] = cleanupObjectsBulk(disk, minioMetaTmpBucket, tmpObjs, errs)
-		if opErrs[index] == errVolumeNotFound {
+		if opErrs[index] == errVolumeNotFound || opErrs[index] == errFileNotFound {
 			opErrs[index] = nil
 		}
 	}
 
 	// Return errors if any during deletion
-	if err := reduceWriteQuorumErrs(ctx, opErrs, objectOpIgnoredErrs, len(xl.getDisks())/2+1); err != nil {
+	if err := reduceWriteQuorumErrs(ctx, opErrs, objectOpIgnoredErrs, len(disks)/2+1); err != nil {
 		return nil, err
 	}
 
@@ -791,7 +790,7 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 		if errs[objIndex] != nil {
 			continue
 		}
-		listErrs := make([]error, len(xl.getDisks()))
+		listErrs := make([]error, len(disks))
 		for i := range delObjErrs {
 			if delObjErrs[i] != nil {
 				listErrs[i] = delObjErrs[i][objIndex]
