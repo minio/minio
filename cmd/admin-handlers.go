@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"crypto/subtle"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1519,7 +1520,7 @@ func fetchVaultStatus(cfg config.Config) madmin.Vault {
 		return vault
 	}
 
-	if err := checkConnection(kmsInfo.Endpoint); err != nil {
+	if err := checkConnection(kmsInfo.Endpoint, 15*time.Second); err != nil {
 
 		vault.Status = "offline"
 	} else {
@@ -1563,7 +1564,7 @@ func fetchLoggerInfo(cfg config.Config) ([]madmin.Logger, []madmin.Audit) {
 	var auditlogger []madmin.Audit
 	for log, l := range loggerCfg.HTTP {
 		if l.Enabled {
-			err := checkConnection(l.Endpoint)
+			err := checkConnection(l.Endpoint, 15*time.Second)
 			if err == nil {
 				mapLog := make(map[string]madmin.Status)
 				mapLog[log] = madmin.Status{Status: "Online"}
@@ -1578,7 +1579,7 @@ func fetchLoggerInfo(cfg config.Config) ([]madmin.Logger, []madmin.Audit) {
 
 	for audit, l := range loggerCfg.Audit {
 		if l.Enabled {
-			err := checkConnection(l.Endpoint)
+			err := checkConnection(l.Endpoint, 15*time.Second)
 			if err == nil {
 				mapAudit := make(map[string]madmin.Status)
 				mapAudit[audit] = madmin.Status{Status: "Online"}
@@ -1594,12 +1595,19 @@ func fetchLoggerInfo(cfg config.Config) ([]madmin.Logger, []madmin.Audit) {
 }
 
 // checkConnection - ping an endpoint , return err in case of no connection
-func checkConnection(endpointStr string) error {
+func checkConnection(endpointStr string, timeout time.Duration) error {
 	u, pErr := xnet.ParseURL(endpointStr)
 	if pErr != nil {
 		return pErr
 	}
-	if dErr := u.DialHTTP(); dErr != nil {
+
+	tr := newCustomHTTPTransport(
+		&tls.Config{RootCAs: globalRootCAs},
+		timeout,
+		0, /* Default value */
+	)()
+
+	if dErr := u.DialHTTP(tr); dErr != nil {
 		if urlErr, ok := dErr.(*url.Error); ok {
 			// To treat "connection refused" errors as un reachable endpoint.
 			if target.IsConnRefusedErr(urlErr.Err) {

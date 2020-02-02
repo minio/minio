@@ -20,7 +20,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/pkg/cpu"
@@ -190,51 +189,49 @@ func getLocalNetworkInfo(endpointZones EndpointZones, r *http.Request) madmin.Se
 // getLocalServerProperty - returns ServerDrivesPerfInfo for only the
 // local endpoints from given list of endpoints
 func getLocalServerProperty(endpointZones EndpointZones, r *http.Request) madmin.ServerProperties {
-	var di madmin.Disk
 	var disks []madmin.Disk
 	addr := r.Host
 	if globalIsDistXL {
 		addr = GetLocalPeer(endpointZones)
 	}
 	network := make(map[string]string)
-	hosts := set.NewStringSet()
 	for _, ep := range endpointZones {
 		for _, endpoint := range ep.Endpoints {
-
-			url := strings.Replace(endpoint.URL.String(), endpoint.Path, "", -1)
-			if url == "" {
-				url = r.Host
+			nodeName := endpoint.Host
+			if nodeName == "" {
+				nodeName = r.Host
 			}
-			hosts.Add(url)
-
-			// Only proceed for local endpoints
 			if endpoint.IsLocal {
-				url = fetchAddress(url)
-				network[url] = "online"
-				if _, err := os.Stat(endpoint.Path); err != nil {
-					continue
+				// Only proceed for local endpoints
+				network[nodeName] = "online"
+				var di = madmin.Disk{
+					DrivePath: endpoint.Path,
 				}
-
-				diInfo, _ := disk.GetInfo(endpoint.Path)
-				di.State = "ok"
-				di.DrivePath = endpoint.Path
-				di.TotalSpace = diInfo.Total
-				di.UsedSpace = diInfo.Total - diInfo.Free
-				di.Utilization = float64((diInfo.Total - diInfo.Free) / diInfo.Total * 100)
+				diInfo, err := disk.GetInfo(endpoint.Path)
+				if err != nil {
+					if os.IsNotExist(err) || isSysErrPathNotFound(err) {
+						di.State = madmin.DriveStateMissing
+					} else {
+						di.State = madmin.DriveStateCorrupt
+					}
+				} else {
+					di.State = madmin.DriveStateOk
+					di.DrivePath = endpoint.Path
+					di.TotalSpace = diInfo.Total
+					di.UsedSpace = diInfo.Total - diInfo.Free
+					di.Utilization = float64((diInfo.Total - diInfo.Free) / diInfo.Total * 100)
+				}
 				disks = append(disks, di)
-			}
-		}
-	}
-
-	for host := range hosts {
-		_, present := network[host]
-		if !present {
-			err := checkConnection(host)
-			host = fetchAddress(host)
-			if err != nil {
-				network[host] = "offline"
 			} else {
-				network[host] = "online"
+				_, present := network[nodeName]
+				if !present {
+					err := IsServerResolvable(endpoint)
+					if err == nil {
+						network[nodeName] = "online"
+					} else {
+						network[nodeName] = "offline"
+					}
+				}
 			}
 		}
 	}
@@ -248,14 +245,4 @@ func getLocalServerProperty(endpointZones EndpointZones, r *http.Request) madmin
 		Network:  network,
 		Disks:    disks,
 	}
-}
-
-// Replaces http and https from address
-func fetchAddress(address string) string {
-	if strings.Contains(address, "http://") {
-		address = strings.Replace(address, "http://", "", -1)
-	} else if strings.Contains(address, "https://") {
-		address = strings.Replace(address, "https://", "", -1)
-	}
-	return address
 }

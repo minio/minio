@@ -95,7 +95,7 @@ func (target *WebhookTarget) IsActive() (bool, error) {
 	if pErr != nil {
 		return false, pErr
 	}
-	if dErr := u.DialHTTP(); dErr != nil {
+	if dErr := u.DialHTTP(nil); dErr != nil {
 		if xnet.IsNetworkOrHostDown(dErr) {
 			return false, errNotConnected
 		}
