@@ -20,8 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/minio/minio-go/v6/pkg/set"
@@ -363,44 +361,14 @@ func (sys *IAMSys) Init(objAPI ObjectLayer) error {
 	}
 	sys.Unlock()
 
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-
-	// Migrating IAM amd Loading IAM needs a retry mechanism for
-	// the following reasons:
-	//  - Read quorum is lost just after the initialization
-	//    of the object layer.
-	retryCh := newRetryTimerSimple(doneCh)
-	for {
-		select {
-		case <-retryCh:
-			// Migrate IAM configuration
-			if err := sys.doIAMConfigMigration(objAPI); err != nil {
-				if err == errDiskNotFound ||
-					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-					logger.Info("Waiting for IAM subsystem to be initialized..")
-					continue
-				}
-				return err
-			}
-
-			sys.store.watch(sys)
-
-			if err := sys.store.loadAll(sys, objAPI); err != nil {
-				if err == errDiskNotFound ||
-					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-					logger.Info("Waiting for IAM subsystem to be initialized..")
-					continue
-				}
-				return err
-			}
-			return nil
-		case <-globalOSSignalCh:
-			return fmt.Errorf("Initializing IAM sub-system gracefully stopped")
-		}
+	// Migrate IAM configuration
+	if err := sys.doIAMConfigMigration(objAPI); err != nil {
+		return err
 	}
+
+	sys.store.watch(sys)
+
+	return sys.store.loadAll(sys, objAPI)
 }
 
 // DeletePolicy - deletes a canned policy from backend or etcd.
