@@ -26,25 +26,31 @@ import (
 
 // Cache ENVs
 const (
-	Drives  = "drives"
-	Exclude = "exclude"
-	Expiry  = "expiry"
-	MaxUse  = "maxuse"
-	Quota   = "quota"
-	After   = "after"
+	Drives        = "drives"
+	Exclude       = "exclude"
+	Expiry        = "expiry"
+	MaxUse        = "maxuse"
+	Quota         = "quota"
+	After         = "after"
+	WatermarkLow  = "watermark_low"
+	WatermarkHigh = "watermark_high"
 
-	EnvCacheDrives  = "MINIO_CACHE_DRIVES"
-	EnvCacheExclude = "MINIO_CACHE_EXCLUDE"
-	EnvCacheExpiry  = "MINIO_CACHE_EXPIRY"
-	EnvCacheMaxUse  = "MINIO_CACHE_MAXUSE"
-	EnvCacheQuota   = "MINIO_CACHE_QUOTA"
-	EnvCacheAfter   = "MINIO_CACHE_AFTER"
+	EnvCacheDrives        = "MINIO_CACHE_DRIVES"
+	EnvCacheExclude       = "MINIO_CACHE_EXCLUDE"
+	EnvCacheExpiry        = "MINIO_CACHE_EXPIRY"
+	EnvCacheMaxUse        = "MINIO_CACHE_MAXUSE"
+	EnvCacheQuota         = "MINIO_CACHE_QUOTA"
+	EnvCacheAfter         = "MINIO_CACHE_AFTER"
+	EnvCacheWatermarkLow  = "MINIO_CACHE_WATERMARK_LOW"
+	EnvCacheWatermarkHigh = "MINIO_CACHE_WATERMARK_HIGH"
 
 	EnvCacheEncryptionMasterKey = "MINIO_CACHE_ENCRYPTION_MASTER_KEY"
 
-	DefaultExpiry = "90"
-	DefaultQuota  = "80"
-	DefaultAfter  = "0"
+	DefaultExpiry        = "90"
+	DefaultQuota         = "80"
+	DefaultAfter         = "0"
+	DefaultWaterMarkLow  = "70"
+	DefaultWaterMarkHigh = "80"
 )
 
 // DefaultKVS - default KV settings for caching.
@@ -70,6 +76,14 @@ var (
 			Key:   After,
 			Value: DefaultAfter,
 		},
+		config.KV{
+			Key:   WatermarkLow,
+			Value: DefaultWaterMarkLow,
+		},
+		config.KV{
+			Key:   WatermarkHigh,
+			Value: DefaultWaterMarkHigh,
+		},
 	}
 )
 
@@ -87,7 +101,6 @@ func Enabled(kvs config.KVS) bool {
 // variables and merge them with provided CacheConfiguration.
 func LookupConfig(kvs config.KVS) (Config, error) {
 	cfg := Config{}
-
 	if err := config.CheckValidKeys(config.CacheSubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
@@ -154,5 +167,33 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 		}
 	}
 
+	if lowWMStr := env.Get(EnvCacheWatermarkLow, kvs.Get(WatermarkLow)); lowWMStr != "" {
+		cfg.WatermarkLow, err = strconv.Atoi(lowWMStr)
+		if err != nil {
+			return cfg, config.ErrInvalidCacheWatermarkLow(err)
+		}
+		// WatermarkLow should be a valid percentage.
+		if cfg.WatermarkLow < 0 || cfg.WatermarkLow > 100 {
+			err := errors.New("config min watermark value should be between 0 and 100")
+			return cfg, config.ErrInvalidCacheWatermarkLow(err)
+		}
+	}
+
+	if highWMStr := env.Get(EnvCacheWatermarkHigh, kvs.Get(WatermarkHigh)); highWMStr != "" {
+		cfg.WatermarkHigh, err = strconv.Atoi(highWMStr)
+		if err != nil {
+			return cfg, config.ErrInvalidCacheWatermarkHigh(err)
+		}
+
+		// MaxWatermark should be a valid percentage.
+		if cfg.WatermarkHigh < 0 || cfg.WatermarkHigh > 100 {
+			err := errors.New("config high watermark value should be between 0 and 100")
+			return cfg, config.ErrInvalidCacheWatermarkHigh(err)
+		}
+	}
+	if cfg.WatermarkLow > cfg.WatermarkHigh {
+		err := errors.New("config high watermark value should be greater than low watermark value")
+		return cfg, config.ErrInvalidCacheWatermarkHigh(err)
+	}
 	return cfg, nil
 }

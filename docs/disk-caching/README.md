@@ -13,17 +13,19 @@ Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quicksta
 
 ### 2. Run MinIO gateway with cache
 
-Disk caching can be enabled by setting the `cache` environment variables for MinIO gateway . `cache` environment variables takes the mounted drive(s) or directory paths, cache expiry duration (in days) and any wildcard patterns to exclude from being cached.
+Disk caching can be enabled by setting the `cache` environment variables for MinIO gateway . `cache` environment variables takes the mounted drive(s) or directory paths, any wildcard patterns to exclude from being cached,low and high watermarks for garbage collection and the minimum accesses before caching an object.
 
-Following example uses `/mnt/drive1`, `/mnt/drive2` ,`/mnt/cache1` ... `/mnt/cache3` for caching, with expiry up to 90 days while excluding all objects under bucket `mybucket` and all objects with '.pdf' as extension while starting a s3 gateway setup. Objects are cached if they have been accessed three times or more.Cache max usage is restricted to 80% of disk capacity in this example.
+Following example uses `/mnt/drive1`, `/mnt/drive2` ,`/mnt/cache1` ... `/mnt/cache3` for caching, while excluding all objects under bucket `mybucket` and all objects with '.pdf' as extension on a s3 gateway setup. Objects are cached if they have been accessed three times or more.Cache max usage is restricted to 80% of disk capacity in this example. Garbage collection is triggered when high watermark is reached - i.e. at 72% of cache disk usage and clears least recently accessed entries until the disk usage drops to low watermark - i.e. cache disk usage drops to 56% (70% of 80% quota)
 
 ```bash
 export MINIO_CACHE="on"
 export MINIO_CACHE_DRIVES="/mnt/drive1,/mnt/drive2,/mnt/cache{1...3}"
-export MINIO_CACHE_EXPIRY=90
 export MINIO_CACHE_EXCLUDE="*.pdf,mybucket/*"
 export MINIO_CACHE_QUOTA=80
 export MINIO_CACHE_AFTER=3
+export MINIO_CACHE_WATERMARK_LOW=70
+export MINIO_CACHE_WATERMARK_HIGH=90
+
 minio gateway s3
 ```
 
