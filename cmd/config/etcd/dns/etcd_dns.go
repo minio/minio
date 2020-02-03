@@ -38,18 +38,18 @@ var ErrNoEntriesFound = errors.New("No entries found for this key")
 const etcdPathSeparator = "/"
 
 // create a new coredns service record for the bucket.
-func newCoreDNSMsg(ip string, port string, ttl uint32) ([]byte, error) {
+func newCoreDNSMsg(ip string, port string, ttl uint32, t time.Time) ([]byte, error) {
 	return json.Marshal(&SrvRecord{
 		Host:         ip,
 		Port:         json.Number(port),
 		TTL:          ttl,
-		CreationDate: time.Now().UTC(),
+		CreationDate: t,
 	})
 }
 
 // List - Retrieves list of DNS entries for the domain.
-func (c *CoreDNS) List() ([]SrvRecord, error) {
-	var srvRecords []SrvRecord
+func (c *CoreDNS) List() (map[string][]SrvRecord, error) {
+	var srvRecords = map[string][]SrvRecord{}
 	for _, domainName := range c.domainNames {
 		key := msg.Path(fmt.Sprintf("%s.", domainName), c.prefixPath)
 		records, err := c.list(key)
@@ -60,7 +60,11 @@ func (c *CoreDNS) List() ([]SrvRecord, error) {
 			if record.Key == "" {
 				continue
 			}
-			srvRecords = append(srvRecords, record)
+			if _, ok := srvRecords[record.Key]; ok {
+				srvRecords[record.Key] = append(srvRecords[record.Key], record)
+			} else {
+				srvRecords[record.Key] = []SrvRecord{record}
+			}
 		}
 	}
 	return srvRecords, nil
@@ -150,8 +154,9 @@ func (c *CoreDNS) list(key string) ([]SrvRecord, error) {
 func (c *CoreDNS) Put(bucket string) error {
 	c.Delete(bucket) // delete any existing entries.
 
+	t := time.Now().UTC()
 	for ip := range c.domainIPs {
-		bucketMsg, err := newCoreDNSMsg(ip, c.domainPort, defaultTTL)
+		bucketMsg, err := newCoreDNSMsg(ip, c.domainPort, defaultTTL, t)
 		if err != nil {
 			return err
 		}
