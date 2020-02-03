@@ -1,56 +1,139 @@
-# KMS Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+# KMS Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
 MinIO uses a key-management-system (KMS) to support SSE-S3. If a client requests SSE-S3, or auto-encryption
 is enabled, the MinIO server encrypts each object with an unique object key which is protected by a master key
-managed by the KMS. Usually all object keys are protected by a single master key.
+managed by the KMS.
 
-MinIO supports two different KMS concepts:
- - External KMS:
-   MinIO can be configured to use an external KMS i.e. [Hashicorp Vault](https://www.vaultproject.io/).
-   An external KMS decouples MinIO as storage system from key-management. An external KMS can
-   be managed by a dedicated security team and allows you to grant/deny access to (certain) objects
-   by enabling or disabling the corresponding master keys on demand.
+> MinIO still provides native Hashicorp Vault support. However, this is feature is **deprecated** and may be
+> removed in the future. Therefore, we strongly recommend to use the architecture and KMS Guide below.
+> If you have to maintain a legacy MinIO-Vault deployment you can find the legacy documentation [here](./vault-legacy.md).
 
-- Direct KMS master keys:
-   MinIO can also be configured to directly use a master key specified by the environment variable `MINIO_KMS_MASTER_KEY` or with a docker secret key.
-   Direct master keys are useful if the storage backend is not on the same machine as the MinIO server, e.g.,
-   if network drives or MinIO gateway is used and an external KMS would cause too much management overhead.
+## Architecture and Concepts
 
-   Note: KMS master keys are mainly for testing purposes. It's not recommended to use them for production deployments.
-   Further if the MinIO server machine is ever compromised, then the master key must also be treated as compromised.
+The KMS decouples MinIO as an application-facing storage system from the secure key storage and
+may be managed by a dedicated security team. In general, the MinIO-KMS infrastructure looks like this:
+```
+ +-------+       +-----+
+ | MinIO +-------+ KMS |
+ +-------+       +-----+
+```
 
-**Important:**
-If multiple MinIO servers are configured as [gateways](https://github.com/minio/minio/blob/master/docs/gateway/README.md) pointing to the *same* backend - for example the same NAS storage - then the KMS configuration **must** be the same for all gateways. Otherwise one gateway may not be able to decrypt objects created by another gateway. It is the operator responsibility to ensure consistency.
+If you scale your storage infrastructure to multiple MinIO clusters your architecture should look like this:
+```
+ +-------+                       +-------+
+ | MinIO +----+             +----+ MinIO |
+ +-------+    |   +-----+   |    +-------+
+              +---+ KMS +---+
+ +-------+    |   +-----+   |    +-------+
+ | MinIO +----+             +----+ MinIO |
+ +-------+                       +-------+
+``` 
 
-## Get started
+MinIO supports commonly-used KMS implementations, like [AWS-KMS](https://aws.amazon.com/kms/) or
+[Hashicorp Vault](https://www.vaultproject.io/) via our [KES project](https://github.com/minio/kes/wiki).
+KES makes it possible to scale your KMS horizontally with your storage infrastructure (MinIO clusters).
+Therefore, it wraps around the KMS implementation like this:
+```
+       +-------+                 +-------+
+       | MinIO |                 | MinIO |
+       +---+---+                 +---+---+
+           |                         |
+      +----+-------------------------+----+---- KMS
+      |    |                         |    |
+      | +--+--+                   +--+--+ |
+      | | KES +--+             +--+ KES | |
+      | +-----+  |  +-------+  |  +-----+ |
+      |          +--+ Vault +--+          |
+      | +-----+  |  +-------+  |  +-----+ |
+      | | KES +--+             +--+ KES | |
+      | +--+--+                   +--+--+ |
+      |    |                         |    |
+      +----+-------------------------+----+---- KMS
+           |                         |
+       +---+---+                 +---+---+
+       | MinIO |                 | MinIO |
+       +-------+                 +-------+
+```
+Observe that all MinIO clusters only have a connection to "their own" KES instance and no direct access to Vault (as one possible KMS implementation).
+Each KES instance will handle all encrypton/decryption requests made by "its" MinIO cluster such that the central KMS implementation does not have to handle
+a lot of traffic. Instead, each KES instance will use the central KMS implementation as secure key store and fetches the required master keys from it.
 
-### 1. Prerequisites
-Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide).
+## Get Started Guide
 
-### 2. Setup a KMS
+In the subsequent sections this guide shows how to setup a MinIO-KMS deployment with Hashicorp Vault as KMS implementation.
+Therefore, it shows how to setup and configure:
+ - A Vault server as central key store.
+ - A KES server instance as middleware between MinIO and Vault.
+ - The MinIO instance itself.
 
-Either use Hashicorp Vault as external KMS or specify a master key directly depending on your use case.
+> Please note that this guide uses self-signed certificates for simplicity. In a production deployment you should use
+> X.509 certificates issued by a "public" (e.g. Let's Encrypt) or your organization-internal CA. 
 
-#### 2.1 Setup Hashicorp Vault
+This guide shows how to set up three different servers on the same machine:
+ - The Vault server as `https://127.0.0.1:8200`
+ - The KES server as `https://127.0.0.1:7373`
+ - The MinIO server as `https://127.0.0.1:9000`
 
-Here is a sample quick start for configuring vault with a transit backend and Approle with correct policy
+### 1 Prerequisites
 
-MinIO requires the following Vault setup:
-- The [transit backend](https://www.vaultproject.io/api/secret/transit/index.html) configured with a named encryption key-ring
-- [AppRole](https://www.vaultproject.io/docs/auth/approle.html) based authentication with read/update policy for transit backend. In particular, read and update policy are required for the [Generate Data Key](https://www.vaultproject.io/api/secret/transit/index.html#generate-data-key) endpoint and [Decrypt Data](https://www.vaultproject.io/api/secret/transit/index.html#decrypt-data) endpoint.
+Install MinIO, KES and Vault. For MinIO take a look at the [MinIO quickstart guide](https://docs.min.io/docs/minio-quickstart-guide).
+Then download the [latest KES binary](https://github.com/minio/kes/releases/latest/) and the [latest Vault binary](https://github.com/hashicorp/vault/releases/latest/)
+for your OS and platform.
 
-**2.1.1 Start Vault server**
+### 2 Generate TLS certificates
 
-Vault requires access to `mlock` syscall by default. Use `setcap` to give the Vault executable the ability to use the `mlock` syscall without running the process as root.  To do so run:
+Since KES sends object encryption keys to MinIO and Vault sends master keys (used to encrypt the object encryption keys) to KES we absolutely need
+TLS connections between MinIO, KES and Vault. Therefore, we need to generate at least two TLS certificates.
+
+#### 2.1 Generate a TLS certificate for Vault
+
+To generate a new private key for Vault's certificate run the following openssl command:
+```
+openssl ecparam -genkey -name prime256v1 | openssl ec -out vault-tls.key
+```
+
+Then generate a new TLS certificate for the private/public key pair via:
+```
+openssl req -new -x509 -days 365 -key vault-tls.key -out vault-tls.crt -subj "/C=US/ST=state/L=location/O=organization/CN=localhost"
+```
+> You may want to adjust the X.509 subject (`-subj` parameter). Note that this is a self-signed certificate. For production deployments
+> this certificate should be issued by a CA. 
+
+#### 2.2 Generate a TLS certificate for KES
+
+To generate a new private key for KES's certificate run the following openssl command:
+```
+openssl ecparam -genkey -name prime256v1 | openssl ec -out kes-tls.key
+```
+
+Then generate a new TLS certificate for the private/public key pair via:
+```
+openssl req -new -x509 -days 365 -key kes-tls.key -out kes-tls.crt -subj "/C=US/ST=state/L=location/O=organization/CN=localhost"
+```
+> You may want to adjust the X.509 subject (`-subj` parameter). Note that this is a self-signed certificate. For production deployments
+> this certificate should be issued by a CA. 
+
+#### 2.3 Generate a TLS certificate for MinIO (Optional)
+
+This step is optional. However, we recommend to up/download your S3 objects via TLS - especially when they should be encrypted at the
+storage backend with a KMS.
+
+Checkout the [MinIO TLS guide](https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls.html) for configuring MinIO and TLS.
+
+### 3 Set up Vault
+
+On unix-like systems, Vault uses the `mlock` syscall to prevent the OS from writing in-memory data
+to disk (swapping). Therefore, you should give the Vault executable the ability to use the `mlock`
+syscall without running the process as root. To do so run:
 ```
 sudo setcap cap_ipc_lock=+ep $(readlink -f $(which vault))
 ```
 
-Create `vault-config.json` to use file backend and start the server.
+Then create the Vault config file:
 ```
 cat > vault-config.json <<EOF
 {
-  "api_addr": "http://127.0.0.1:8200",
+  "api_addr": "https://127.0.0.1:8200",
   "backend": {
     "file": {
       "path": "vault/file"
@@ -61,27 +144,44 @@ cat > vault-config.json <<EOF
   "listener": {
     "tcp": {
       "address": "0.0.0.0:8200",
-      "tls_disable": true
+      "tls_cert_file": "vault-tls.crt",
+      "tls_key_file": "vault-tls.key",
+      "tls_min_version": "tls12"
     }
-  },
-  "ui": true
+  }
 }
 EOF
+```
+> Note that we run Vault with a file backend. For high-availability you may want to use a different
+> backend - like [etcd](https://www.vaultproject.io/docs/configuration/storage/etcd/) or [consul](https://learn.hashicorp.com/vault/operations/ops-vault-ha-consul).
 
+Finally, start the Vault server via:
+```
 vault server -config vault-config.json
+``` 
+
+#### 3.1 Initialize and unseal Vault
+
+In a separate terminal window set the `VAULT_ADDR` env. variable to your Vault server:
+```
+export VAULT_ADDR='https://127.0.0.1:8200'
 ```
 
-> NOTE: In this example we use `"tls_disable": true` for demonstration purposes only,
-> in production setup you should generate proper TLS certificates by specifying
-> - [`tls_cert_file`](https://www.vaultproject.io/docs/configuration/listener/tcp.html#tls_cert_file)
-> - [`tls_key_file`](https://www.vaultproject.io/docs/configuration/listener/tcp.html#tls_key_file)
+Further, you may want to run `export VAULT_SKIP_VERIFY=true` if Vault uses a self-signed TLS
+certificate. When Vault serves a TLS certificate that has been issued by a CA that is trusted
+by your machine - e.g. Let's Encrypt - then you don't need to run this command.
 
-
-**2.1.2 Initialize vault and unseal it**
-
+Then initialize Vault via:
 ```
-export VAULT_ADDR='http://127.0.0.1:8200'
 vault operator init
+``` 
+
+Vault will print `n` (5 by default) unseal key shares of which at least `m` (3 by default)
+are required to regenerate the actual unseal key to unseal Vault. Therefore, make sure to
+remember them. In particular, keep those unseal key shares at a secure and durable location.
+
+You should see some output similar to:
+```
 Unseal Key 1: eyW/+8ZtsgT81Cb0e8OVxzJAQP5lY7Dcamnze+JnWEDT
 Unseal Key 2: 0tZn+7QQCxphpHwTm6/dC3LpP5JGIbYl6PK8Sy79R+P2
 Unseal Key 3: cmhs+AUMXUuB6Lzsvgcbp3bRT6VDGQjgCBwB2xm0ANeF
@@ -102,147 +202,242 @@ It is possible to generate new unseal keys, provided you have a quorum of
 existing unseal keys shares. See "vault operator rekey" for more information.
 ```
 
-Use any of the previously generated keys to unseal the vault
+Now, set the env. variable `VAULT_TOKEN` to the root token printed by the command before:
+```
+export VAULT_TOKEN=s.zaU4Gbcu0Wh46uj2V3VuUde0
+```
+
+Then use any of the previously generated key shares to unseal Vault.
 ```
 vault operator unseal eyW/+8ZtsgT81Cb0e8OVxzJAQP5lY7Dcamnze+JnWEDT
 vault operator unseal 0tZn+7QQCxphpHwTm6/dC3LpP5JGIbYl6PK8Sy79R+P2
 vault operator unseal cmhs+AUMXUuB6Lzsvgcbp3bRT6VDGQjgCBwB2xm0ANeF
-Key             Value
----             -----
-Seal Type       shamir
-Initialized     true
-Sealed          false  ---> NOTE: vault is unsealed
-Total Shares    5
-Threshold       3
-Version         1.1.3
-Cluster Name    vault-cluster-3f084948
-Cluster ID      8c92e999-7062-4da6-4434-0fc05f34824d
-HA Enabled      false
 ```
 
-Obtain root token from the `vault operator init` output above. It is displayed as `Initial Root Token: s.zaU4Gbcu0Wh46uj2V3VuUde0`
+Once you have submitted enough valid key shares Vault will become unsealed
+and able to process requests.
 
-**2.1.3 Set up vault transit backend and create an app role**
+#### 3.2 Enable Vault's K/V backend
+
+The cryptographic master keys (but not the object encryption keys) will be stored
+at Vault. Therefore, we need to enable Vault's K/V backend. To do so run:
 ```
-export VAULT_TOKEN=s.zaU4Gbcu0Wh46uj2V3VuUde0
+vault secrets enable kv
+```
 
-vault auth enable approle    # enable approle style auth
-vault secrets enable transit  # enable transit secrets engine
-# define an encryption key-ring for the transit path
-vault write -f  transit/keys/my-minio-key
+#### 3.3 Enable AppRole authentication
 
-cat > vaultpolicy.hcl <<EOF
-path "transit/datakey/plaintext/my-minio-key" {
-  capabilities = [ "read", "update"]
-}
-path "transit/decrypt/my-minio-key" {
-  capabilities = [ "read", "update"]
-}
-path "transit/rewrap/my-minio-key" {
-  capabilities = ["update"]
+Since we want connect one/multiple KES server to Vault later, we have to enable
+AppRole authentication. To do so run:
+```
+vault auth enable approle
+```
+
+#### 3.4 Create an access policy for the K/V engine
+
+The following policy determines how an application (i.e. KES server) can interact
+with Vault. 
+```
+cat > minio-kes-policy.hcl <<EOF
+path "kv/minio/*" {
+  capabilities = [ "create", "read", "delete" ]
 }
 
 EOF
+```
+> Observe the path-prefix `minio` in `kv/minio/*`. This prefix ensures that the
+> KES server can only read from and write to entries under `minio/*` - but not under
+> `some-app/*`. How to separate domains on the K/V engine depends on your infrastructure
+> and security requirements.
 
-# define a policy for AppRole to access transit path
-vault policy write minio-policy ./vaultpolicy.hcl
-
-# period indicates it is renewable if token is renewed before the period is over
-vault write auth/approle/role/my-role token_num_uses=0  secret_id_num_uses=0  period=5m
-
-# define an AppRole
-vault write auth/approle/role/my-role policies=minio-policy # apply policy to role
-vault read auth/approle/role/my-role/role-id  # get Approle ID
-Key        Value
----        -----
-role_id    8c03926c-6c51-7a1d-cf7d-62e48ab8d6d7
-
-vault write -f auth/approle/role/my-role/secret-id
-Key                   Value
----                   -----
-secret_id             edd8738c-6efe-c226-74f9-ef5b66e119d7
-secret_id_accessor    57d1db64-6350-c321-4a3e-fc6aeb7d00b6
+Then we upload the policy to Vault:
+```
+vault policy write minio-key-policy ./minio-kes-policy.hcl
 ```
 
-The AppRole ID, AppRole Secret Id, Vault endpoint and Vault key name can now be used to start minio server with Vault as KMS.
+#### 3.5 Create an new AppRole ID and bind it to a policy
 
-**2.1.3 Vault Environment variables**
+Now, we need to create a new AppRole ID and grant that ID specific permissions.
+The application (i.e. KES server) will authenticate to Vault via the AppRole role ID
+and secret ID and is only allowed to perform operations granted by the specific policy.
 
-You'll need the Vault endpoint, AppRole ID, AppRole SecretID and encryption key-ring name defined in step 2.1.2
-
+So, we first create a new role for our KES server:
 ```
-export MINIO_KMS_VAULT_APPROLE_ID=8c03926c-6c51-7a1d-cf7d-62e48ab8d6d7
-export MINIO_KMS_VAULT_APPROLE_SECRET=edd8738c-6efe-c226-74f9-ef5b66e119d7
-export MINIO_KMS_VAULT_ENDPOINT=http://vault-endpoint-ip:8200
-export MINIO_KMS_VAULT_KEY_NAME=my-minio-key
-export MINIO_KMS_VAULT_AUTH_TYPE=approle
-minio server ~/export
+vault write auth/approle/role/kes-role token_num_uses=0  secret_id_num_uses=0  period=5m
 ```
 
-Optionally, set `MINIO_KMS_VAULT_CAPATH` to a directory of PEM-encoded CA cert files to use mTLS for client-server authentication.
-
+Then we bind a policy to the role:
 ```
-export MINIO_KMS_VAULT_CAPATH=/home/user/custom-certs
-```
-
-An additional option is to set `MINIO_KMS_VAULT_NAMESPACE` if AppRole and Transit Secrets engine have been scoped to Vault Namespace
-
-```
-export MINIO_KMS_VAULT_NAMESPACE=ns1
+vault write auth/approle/role/kes-role policies=minio-key-policy
 ```
 
-Note: If [Vault Namespaces](https://learn.hashicorp.com/vault/operations/namespaces) are in use, MINIO_KMS_VAULT_VAULT_NAMESPACE variable needs to be set before setting approle and transit secrets engine.
-
-#### 2.2 Specify a master key
-
-**2.2.1 KMS master key from environment variables**
-
-A KMS master key consists of a master-key ID (CMK) and the 256 bit master key encoded as HEX value separated by a `:`.
-A KMS master key can be specified directly using:
-
+Finally, we request an AppRole role ID and secret ID from Vault.  
+First, the role ID:
 ```
-export MINIO_KMS_MASTER_KEY=my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574
+vault read auth/approle/role/kes-role/role-id 
 ```
 
-Please use your own master key. A random master key can be generated using e.g. this command on Linux/Mac/BSD* systems:
-
+Then the secret ID:
 ```
-head -c 32 /dev/urandom | xxd -c 32 -ps
+vault write -f auth/approle/role/kes-role/secret-id
 ```
+> We are only interested in the `secret_id` - not in the `secret_id_accessor`.
 
-**2.2.2 KMS master key from docker secret**
+### 4 Set up KES
 
-Alternatively, you may pass a master key as a [Docker secret](https://docs.docker.com/engine/swarm/secrets/).
-
-```bash
-echo "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574" | docker secret create kms_master_key
+Similar to Vault, KES uses the `mlock` syscall on linux systems to prevent the OS from writing in-memory
+data to disk (swapping). Therefore, you should give the KES executable the ability to use the `mlock`
+syscall without running the process as root. To do so run:
 ```
-
-Obviously, do not use this demo key for anything real!
-
-To use another secret name, follow the instructions above and replace kms_master_key with your custom names (e.g. my_kms_master_key). Then, set the MINIO_KMS_MASTER_KEY_FILE environment variable to your secret name:
-
-```bash
-export MINIO_KMS_MASTER_KEY_FILE=my_kms_master_key
+sudo setcap cap_ipc_lock=+ep $(readlink -f $(which kes))
 ```
 
-### 3. Test your setup
-To test this setup, start minio server with environment variables set in Step 3, and server is ready to handle SSE-S3 requests.
+#### 4.1 Create an identity for MinIO
 
-### Auto-Encryption
+Each user or application must present a valid X.509 certificate when connecting to the KES server (mTLS).
+The KES server will accept/reject the connection attempt and applies policies based on the certificate.
 
-MinIO can also enable auto-encryption **if** a valid KMS configuration is specified and the storage backend supports
-encrypted objects. Auto-Encryption, if enabled, ensures that all uploaded objects are encrypted using the specified
-KMS configuration.
+Therefore, each MinIO cluster needs a X.509 TLS certificate for client authentication. You can create a
+(self-signed) certificate by running:
+```
+kes tool identity new MinIO --key=minio.key --cert=minio.cert --time=8760h
+```
+> Note that *MinIO* is the [subject name](https://en.wikipedia.org/wiki/X.509#Structure_of_a_certificate).
+> You may choose a more appropriate name for your deployment scenario. Also, for production deployments we
+> recommend to get a TLS certificate for client authentication that has been issued by a CA.
 
-Auto-Encryption is useful especially if the MinIO operator wants to ensure that objects are **never** stored in
-plaintext - for example if sensitive data is stored on public cloud storage.
+To get the identity of a X.509 certificate run:
+```
+kes tool identity of minio.cert
+``` 
+> This command works with any (valid) X.509 certificate - regardless how it has been created - and 
+> produces an output similar to:
+<blockquote>
+<p><code>Identity:  dd46485bedc9ad2909d2e8f9017216eec4413bc5c64b236d992f7ec19c843c5f</code></p>
+</blockquote>
 
-To enable auto-encryption set the environment variable to `on`:
+#### 4.2 Create the KES config file
 
+Now, we can create the KES config file and start the KES server.
+```
+cat > kes-config.toml <<EOF
+# The address:port of the kes server - i.e. on the local machine.
+address = "127.0.0.1:7373"
+
+[tls]
+key  = "./kes-tls.key"
+cert = "./kes-tls.crt" 
+
+[policy.minio]
+paths = [
+          "/v1/key/create/minio-*",
+          "/v1/key/generate/minio-*",
+          "/v1/key/decrypt/minio-*"
+        ]
+identities = [ "dd46485bedc9ad2909d2e8f9017216eec4413bc5c64b236d992f7ec19c843c5f" ]
+
+[cache.expiry]
+all    = "5m" 
+unused = "20s" 
+
+[keystore.vault]
+address   = "https://127.0.0.1:8200"  # The Vault endpoint - i.e. https://127.0.0.1:8200
+name      = "minio"                   # The domain resp. prefix at Vault's K/V backend 
+
+[keystore.vault.approle]
+id     = ""    # Your AppRole Role ID 
+secret = ""    # Your AppRole Secret ID
+retry  = "15s" # Duration until the server tries to re-authenticate after connection loss.
+
+[keystore.vault.tls]
+ca = "./vault-tls.crt" # Since we use self-signed certificates
+
+[keystore.vault.status]
+ping = "10s"
+
+EOF
+```
+> Please change the value of `identities` under `policy.minio` to the identity of your `minio.cert`.
+> Also, insert the AppRole role ID and secret ID that you have created previously during the Vault setup.
+> You can find a documented config file with all available parameters [here](https://github.com/minio/kes/blob/master/server-config.toml).
+
+Finally, start the KES server via:
+```
+kes server --config=kes-config.toml --mlock --root=disabled --mtls-auth=ignore
+```
+> Note that we effectively disable the special *root* identity since we don't need it.
+> For more information about KES identities checkout: [KES Identities](https://github.com/minio/kes/wiki#identities)
+> Further, note that we pass `--mtls-auth=ignore` since the client X.509 certificate
+> is a self-signed certificate.
+
+#### 4.3 Create a new master key
+
+Before we can proceed with the MinIO setup we need to create a new master key. Therefore we use the
+MinIO identity and the KES CLI.
+
+In a new terminal window become the MinIO identity via:
+```
+export KES_CLIENT_TLS_KEY_FILE=minio.key
+export KES_CLIENT_TLS_CERT_FILE=minio.cert
+```
+
+Then create the master key by running:
+```
+kes key create minio-key-1 -k
+```
+> The `-k` flag is only required since we use self-signed certificates.
+> Also, observe that based on the server config file the MinIO identity
+> is only allowed to create/use master keys that start with `minio-`.
+> So, trying to create a key e.g. `kes key create my-key-1 -k` will
+> fail with a *prohibited by policy* error.
+
+### 5 Set up the MinIO server
+
+The MinIO server will need to know the KES server endpoint, its mTLS client certificate
+for authentication and authorization and the default master key name. 
+
+```
+export MINIO_KMS_KES_ENDPOINT=https://localhost:7373
+export MINIO_KMS_KES_KEY_FILE=minio.key
+export MINIO_KMS_KES_CERT_FILE=minio.cert
+export MINIO_KMS_KES_KEY_NAME=minio-key-1
+export MINIO_KMS_KES_CAPATH=kes-tls.crt
+```
+> The `MINIO_KMS_KES_CAPATH` is only required since we use self-signed certificates.
+
+Optionally, enable auto-encryption to encrypt uploaded objects automatically:
 ```
 export MINIO_KMS_AUTO_ENCRYPTION=on
 ```
+> For more information about auto-encryption see: [Appendix A](#appendix-a---auto-encryption)
+
+Then start the MinIO server:
+
+```
+export MINIO_ACCESS_KEY=minio
+export MINIO_SECRET_KEY=minio123
+```
+
+```
+minio server ~/export
+```
+
+### Appendix A - Auto-Encryption
+
+Optionally, you can instruct the MinIO server to automatically encrypt all objects with keys from the KES
+server - even if the client does not specify any encryption headers during the S3 PUT operation.
+
+Auto-Encryption is especially useful when the MinIO operator wants to ensure that all data stored on MinIO
+gets encrypted before it's written to the storage backend.
+
+To enable auto-encryption set the environment variable to `on`:
+```
+export MINIO_KMS_AUTO_ENCRYPTION=on
+```
+
+> Note that auto-encryption only affects requests without S3 encryption headers. So, if a S3 client sends
+> e.g. SSE-C headers, MinIO will encrypt the object with the key sent by the client and won't reach out to
+> the KMS.
 
 To verify auto-encryption, use the `mc` command:
 
@@ -256,10 +451,40 @@ Encrypted :
   X-Amz-Server-Side-Encryption: AES256
 ```
 
-Note: Auto-Encryption only affects non-SSE-C requests since objects uploaded using SSE-C are already encrypted
-and S3 only allows either SSE-S3 or SSE-C but not both for the same object.
+### Appendix B - Specify a master key
 
-# Explore Further
+Instead of a proper KMS setup you can also **test** MinIO encryption using a KMS master key.
+**A single master key via env. variable is for testing purposes only and not recommended for production deployments.**
+
+A KMS master key consists of a master-key ID (CMK) and the 256 bit master key encoded as HEX value separated by a `:`.
+A KMS master key can be specified directly using:
+
+```
+export MINIO_KMS_MASTER_KEY=minio-demo-key:6368616e676520746869732070617373776f726420746f206120736563726574
+```
+
+Please use your own master key. A random master key can be generated using e.g. this command on Linux/Mac/BSD systems:
+
+```
+head -c 32 /dev/urandom | xxd -c 32 -ps
+```
+
+***
+
+Alternatively, you may pass a master key as a [Docker secret](https://docs.docker.com/engine/swarm/secrets/).
+
+```bash
+echo "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574" | docker secret create kms_master_key
+```
+
+To use another secret name, follow the instructions above and replace `kms_master_key` with your custom names (e.g. `my_kms_master_key`).
+Then, set the `MINIO_KMS_MASTER_KEY_FILE` environment variable to your secret name:
+
+```bash
+export MINIO_KMS_MASTER_KEY_FILE=my_kms_master_key
+```
+
+## Explore Further
 
 - [Use `mc` with MinIO Server](https://docs.min.io/docs/minio-client-quickstart-guide)
 - [Use `aws-cli` with MinIO Server](https://docs.min.io/docs/aws-cli-with-minio)
