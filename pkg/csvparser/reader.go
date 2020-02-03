@@ -80,6 +80,7 @@ func (e *ParseError) Error() string {
 	return fmt.Sprintf("parse error on line %d, column %d: %v", e.Line, e.Column, e.Err)
 }
 
+// Unwrap returns the underlying error
 func (e *ParseError) Unwrap() error { return e.Err }
 
 // These are the errors that can be returned in ParseError.Err.
