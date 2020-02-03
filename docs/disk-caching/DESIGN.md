@@ -13,7 +13,7 @@ minio gateway <name> -h
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ","
      MINIO_CACHE_EXPIRY: Cache expiry duration in days
      MINIO_CACHE_QUOTA: Maximum permitted usage of the cache in percentage (0-100).
-     MINIO_CACHE_TRIGGER_HITS: Minimum number of hits before caching an object.
+     MINIO_CACHE_AFTER: Minimum number of accesses before caching an object.
 
 ...
 ...
@@ -25,7 +25,7 @@ minio gateway <name> -h
      $ export MINIO_CACHE_EXCLUDE="mybucket/*,*.pdf"
      $ export MINIO_CACHE_EXPIRY=40
      $ export MINIO_CACHE_QUOTA=80
-     $ export MINIO_CACHE_TRIGGER_HITS=3
+     $ export MINIO_CACHE_AFTER=3
      $ minio gateway s3
 ```
 

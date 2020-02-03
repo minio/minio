@@ -27,15 +27,15 @@ import (
 )
 
 // Initialize cache objects.
-func initCacheObjects(disk string, cacheMaxUse, minHits int) (*diskCache, error) {
-	return newDiskCache(disk, 80, cacheMaxUse, minHits)
+func initCacheObjects(disk string, cacheMaxUse, cacheAfter int) (*diskCache, error) {
+	return newDiskCache(disk, 80, cacheMaxUse, cacheAfter)
 }
 
 // inits diskCache struct for nDisks
-func initDiskCaches(drives []string, cacheMaxUse, cacheMinHits int, t *testing.T) ([]*diskCache, error) {
+func initDiskCaches(drives []string, cacheMaxUse, cacheAfter int, t *testing.T) ([]*diskCache, error) {
 	var cb []*diskCache
 	for _, d := range drives {
-		obj, err := initCacheObjects(d, cacheMaxUse, cacheMinHits)
+		obj, err := initCacheObjects(d, cacheMaxUse, cacheAfter)
 		if err != nil {
 			return nil, err
 		}

@@ -132,9 +132,9 @@ type diskCache struct {
 	// mutex to protect updates to online variable
 	onlineMutex *sync.RWMutex
 	// purge() listens on this channel to start the cache-purge process
-	purgeChan   chan struct{}
-	pool        sync.Pool
-	triggerHits int // minimum number of hits before an object is cached.
+	purgeChan chan struct{}
+	pool      sync.Pool
+	after     int // minimum accesses before an object is cached.
 	// nsMutex namespace lock
 	nsMutex *nsLockMap
 	// Object functions pointing to the corresponding functions of backend implementation.
@@ -142,7 +142,7 @@ type diskCache struct {
 }
 
 // Inits the disk cache dir if it is not initialized already.
-func newDiskCache(dir string, expiry int, quotaPct, triggerHits int) (*diskCache, error) {
+func newDiskCache(dir string, expiry int, quotaPct, after int) (*diskCache, error) {
 	if err := os.MkdirAll(dir, 0777); err != nil {
 		return nil, fmt.Errorf("Unable to initialize '%s' dir, %w", dir, err)
 	}
@@ -150,7 +150,7 @@ func newDiskCache(dir string, expiry int, quotaPct, triggerHits int) (*diskCache
 		dir:         dir,
 		expiry:      expiry,
 		quotaPct:    quotaPct,
-		triggerHits: triggerHits,
+		after:       after,
 		purgeChan:   make(chan struct{}),
 		online:      true,
 		onlineMutex: &sync.RWMutex{},
@@ -583,11 +583,11 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 
 	meta, _, numHits, err := c.statCache(ctx, cachePath)
 	// Case where object not yet cached
-	if os.IsNotExist(err) && c.triggerHits >= 1 {
+	if os.IsNotExist(err) && c.after >= 1 {
 		return c.saveMetadata(ctx, bucket, object, opts.UserDefined, size, nil, "", false)
 	}
 	// Case where object already has a cache metadata entry but not yet cached
-	if err == nil && numHits < c.triggerHits {
+	if err == nil && numHits < c.after {
 		cETag := extractETag(meta.Meta)
 		bETag := extractETag(opts.UserDefined)
 		if cETag == bETag {

@@ -26,25 +26,25 @@ import (
 
 // Cache ENVs
 const (
-	Drives      = "drives"
-	Exclude     = "exclude"
-	Expiry      = "expiry"
-	MaxUse      = "maxuse"
-	Quota       = "quota"
-	TriggerHits = "trigger_hits"
+	Drives  = "drives"
+	Exclude = "exclude"
+	Expiry  = "expiry"
+	MaxUse  = "maxuse"
+	Quota   = "quota"
+	After   = "after"
 
-	EnvCacheDrives      = "MINIO_CACHE_DRIVES"
-	EnvCacheExclude     = "MINIO_CACHE_EXCLUDE"
-	EnvCacheExpiry      = "MINIO_CACHE_EXPIRY"
-	EnvCacheMaxUse      = "MINIO_CACHE_MAXUSE"
-	EnvCacheQuota       = "MINIO_CACHE_QUOTA"
-	EnvCacheTriggerHits = "MINIO_CACHE_TRIGGER_HITS"
+	EnvCacheDrives  = "MINIO_CACHE_DRIVES"
+	EnvCacheExclude = "MINIO_CACHE_EXCLUDE"
+	EnvCacheExpiry  = "MINIO_CACHE_EXPIRY"
+	EnvCacheMaxUse  = "MINIO_CACHE_MAXUSE"
+	EnvCacheQuota   = "MINIO_CACHE_QUOTA"
+	EnvCacheAfter   = "MINIO_CACHE_AFTER"
 
 	EnvCacheEncryptionMasterKey = "MINIO_CACHE_ENCRYPTION_MASTER_KEY"
 
-	DefaultExpiry      = "90"
-	DefaultQuota       = "80"
-	DefaultTriggerHits = "0"
+	DefaultExpiry = "90"
+	DefaultQuota  = "80"
+	DefaultAfter  = "0"
 )
 
 // DefaultKVS - default KV settings for caching.
@@ -67,8 +67,8 @@ var (
 			Value: DefaultQuota,
 		},
 		config.KV{
-			Key:   TriggerHits,
-			Value: DefaultTriggerHits,
+			Key:   After,
+			Value: DefaultAfter,
 		},
 	}
 )
@@ -142,15 +142,15 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 		cfg.MaxUse = cfg.Quota
 	}
 
-	if triggerhitsStr := env.Get(EnvCacheTriggerHits, kvs.Get(TriggerHits)); triggerhitsStr != "" {
-		cfg.TriggerHits, err = strconv.Atoi(triggerhitsStr)
+	if afterStr := env.Get(EnvCacheAfter, kvs.Get(After)); afterStr != "" {
+		cfg.After, err = strconv.Atoi(afterStr)
 		if err != nil {
-			return cfg, config.ErrInvalidCacheTriggerHits(err)
+			return cfg, config.ErrInvalidCacheAfter(err)
 		}
-		// triggerHits should be a valid value >= 0.
-		if cfg.TriggerHits < 0 {
-			err := errors.New("config trigger hits value should not be less than 0")
-			return cfg, config.ErrInvalidCacheTriggerHits(err)
+		// after should be a valid value >= 0.
+		if cfg.After < 0 {
+			err := errors.New("cache after value cannot be less than 0")
+			return cfg, config.ErrInvalidCacheAfter(err)
 		}
 	}
 

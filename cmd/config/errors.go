@@ -66,10 +66,10 @@ var (
 		"MINIO_CACHE_QUOTA: Valid cache quota value must be between 0-100",
 	)
 
-	ErrInvalidCacheTriggerHits = newErrFn(
-		"Invalid cache trigger hits value",
+	ErrInvalidCacheAfter = newErrFn(
+		"Invalid cache after value",
 		"Please check the passed value",
-		"MINIO_CACHE_TRIGGER_HITS: Valid cache trigger hits value must be 0 or greater",
+		"MINIO_CACHE_AFTER: Valid cache after value must be 0 or greater",
 	)
 
 	ErrInvalidCacheEncryptionKey = newErrFn(

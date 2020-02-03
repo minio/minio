@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -67,8 +66,9 @@ type cacheObjects struct {
 	// slice of cache drives
 	cache []*diskCache
 	// file path patterns to exclude from cache
-	exclude     []string
-	triggerHits int
+	exclude []string
+	// number of accesses after which to cache an object
+	after int
 	// if true migration is in progress from v1 to v2
 	migrating bool
 	// mutex to protect migration bool
@@ -110,7 +110,7 @@ func (c *cacheObjects) updateMetadataIfChanged(ctx context.Context, dcache *disk
 		cacheMeta[http.CanonicalHeaderKey(k)] = v
 	}
 
-	if !reflect.DeepEqual(bkMeta, cacheMeta) ||
+	if !isMetadataSame(bkMeta, cacheMeta) ||
 		bkObjectInfo.ETag != cacheObjInfo.ETag ||
 		bkObjectInfo.ContentType != cacheObjInfo.ContentType ||
 		!bkObjectInfo.Expires.Equal(cacheObjInfo.Expires) {
@@ -200,7 +200,6 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			}
 			c.cacheStats.incHit()
 			c.cacheStats.incBytesServed(bytesServed)
-			// is this hit counter incrementing even necessary
 			c.incHitsToMeta(ctx, dcache, bucket, object, cacheReader.ObjInfo.Size, cacheReader.ObjInfo.ETag)
 			return cacheReader, nil
 		}
@@ -270,9 +269,9 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	if bkErr != nil {
 		return bkReader, bkErr
 	}
-	// If object has less hits than configured cache triggerHits, just increment the hit counter
+	// If object has less hits than configured cache after, just increment the hit counter
 	// but do not cache it.
-	if numCacheHits < c.triggerHits {
+	if numCacheHits < c.after {
 		c.incHitsToMeta(ctx, dcache, bucket, object, objInfo.Size, objInfo.ETag)
 		return bkReader, bkErr
 	}
@@ -498,7 +497,7 @@ func newCache(config cache.Config) ([]*diskCache, bool, error) {
 			quota = config.Quota
 		}
 
-		cache, err := newDiskCache(dir, config.Expiry, quota, config.TriggerHits)
+		cache, err := newDiskCache(dir, config.Expiry, quota, config.After)
 		if err != nil {
 			return nil, false, err
 		}
@@ -639,12 +638,12 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 		return nil, err
 	}
 	c := &cacheObjects{
-		cache:       cache,
-		exclude:     config.Exclude,
-		triggerHits: config.TriggerHits,
-		migrating:   migrateSw,
-		migMutex:    sync.Mutex{},
-		cacheStats:  newCacheStats(),
+		cache:      cache,
+		exclude:    config.Exclude,
+		after:      config.After,
+		migrating:  migrateSw,
+		migMutex:   sync.Mutex{},
+		cacheStats: newCacheStats(),
 		GetObjectInfoFn: func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 			return newObjectLayerFn().GetObjectInfo(ctx, bucket, object, opts)
 		},
