@@ -131,11 +131,11 @@ func TestNDJSON(t *testing.T) {
 					t.Error(err)
 				}
 				var gotB, wantB bytes.Buffer
-				err = rec.WriteCSV(&gotB, ',')
+				err = rec.WriteCSV(&gotB, ',', '"', false)
 				if err != nil {
 					t.Error(err)
 				}
-				err = want.WriteCSV(&wantB, ',')
+				err = want.WriteCSV(&wantB, ',', '"', false)
 				if err != nil {
 					t.Error(err)
 				}

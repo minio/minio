@@ -12,6 +12,24 @@ import (
 	"unicode/utf8"
 )
 
+// minNonNeg returns the minimal non negative value of a and b,
+// it also returns -1 if both values are negative.
+func minNonNeg(a, b int) int {
+	switch {
+	case a < 0 && b < 0:
+		return -1
+	case a < 0:
+		return b
+	case b < 0:
+		return a
+	default:
+		if a < b {
+			return a
+		}
+		return b
+	}
+}
+
 // A Writer writes records using CSV encoding.
 //
 // As returned by NewWriter, a Writer writes records terminated by a
@@ -28,15 +46,18 @@ import (
 // the underlying io.Writer.  Any errors that occurred should
 // be checked by calling the Error method.
 type Writer struct {
-	Comma   rune // Field delimiter (set to ',' by NewWriter)
-	UseCRLF bool // True to use \r\n as the line terminator
-	w       *bufio.Writer
+	Comma       rune // Field delimiter (set to ',' by NewWriter)
+	Quote       rune // Fields quote character
+	AlwaysQuote bool // True to quote all fields
+	UseCRLF     bool // True to use \r\n as the line terminator
+	w           *bufio.Writer
 }
 
 // NewWriter returns a new Writer that writes to w.
 func NewWriter(w io.Writer) *Writer {
 	return &Writer{
 		Comma: ',',
+		Quote: '"',
 		w:     bufio.NewWriter(w),
 	}
 }
@@ -59,19 +80,20 @@ func (w *Writer) Write(record []string) error {
 
 		// If we don't have to have a quoted field then just
 		// write out the field and continue to the next field.
-		if !w.fieldNeedsQuotes(field) {
+		if !w.AlwaysQuote && !w.fieldNeedsQuotes(field) {
 			if _, err := w.w.WriteString(field); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if err := w.w.WriteByte('"'); err != nil {
+		if _, err := w.w.WriteRune(w.Quote); err != nil {
 			return err
 		}
+
 		for len(field) > 0 {
 			// Search for special characters.
-			i := strings.IndexAny(field, "\"\r\n")
+			i := minNonNeg(strings.IndexAny(field, "\r\n"), strings.IndexRune(field, w.Quote))
 			if i < 0 {
 				i = len(field)
 			}
@@ -85,9 +107,9 @@ func (w *Writer) Write(record []string) error {
 			// Encode the special character.
 			if len(field) > 0 {
 				var err error
-				switch field[0] {
-				case '"':
-					_, err = w.w.WriteString(`""`)
+				switch nextRune([]byte(field)) {
+				case w.Quote:
+					_, err = w.w.WriteString(string(w.Quote) + string(w.Quote))
 				case '\r':
 					if !w.UseCRLF {
 						err = w.w.WriteByte('\r')
@@ -105,7 +127,7 @@ func (w *Writer) Write(record []string) error {
 				}
 			}
 		}
-		if err := w.w.WriteByte('"'); err != nil {
+		if _, err := w.w.WriteString(string(w.Quote)); err != nil {
 			return err
 		}
 	}
@@ -158,7 +180,7 @@ func (w *Writer) fieldNeedsQuotes(field string) bool {
 	if field == "" {
 		return false
 	}
-	if field == `\.` || strings.ContainsRune(field, w.Comma) || strings.ContainsAny(field, "\"\r\n") {
+	if field == `\.` || strings.ContainsAny(field, "\r\n"+string(w.Quote)+string(w.Comma)) {
 		return true
 	}
 

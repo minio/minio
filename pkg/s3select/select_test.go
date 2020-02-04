@@ -252,6 +252,7 @@ func TestJSONQueries(t *testing.T) {
     </InputSerialization>
     <OutputSerialization>
         <CSV>
+	   <QuoteCharacter>"</QuoteCharacter>
         </CSV>
     </OutputSerialization>
     <RequestProgress>
@@ -525,6 +526,7 @@ func TestCSVQueries2(t *testing.T) {
         <CompressionType>NONE</CompressionType>
         <CSV>
             <FileHeaderInfo>USE</FileHeaderInfo>
+	    <QuoteCharacter>"</QuoteCharacter>
         </CSV>
     </InputSerialization>
     <OutputSerialization>

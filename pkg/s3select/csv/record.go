@@ -92,9 +92,11 @@ func (r *Record) Clone(dst sql.Record) sql.Record {
 }
 
 // WriteCSV - encodes to CSV data.
-func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune) error {
+func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune, quote rune, alwaysQuote bool) error {
 	w := csv.NewWriter(writer)
 	w.Comma = fieldDelimiter
+	w.AlwaysQuote = alwaysQuote
+	w.Quote = quote
 	if err := w.Write(r.csvRecord); err != nil {
 		return err
 	}

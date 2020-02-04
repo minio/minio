@@ -17,9 +17,10 @@
 package simdj
 
 import (
-	"encoding/csv"
 	"fmt"
 	"io"
+
+	csv "github.com/minio/minio/pkg/csvparser"
 
 	"github.com/bcicen/jstream"
 	"github.com/minio/minio/pkg/s3select/json"
@@ -140,7 +141,7 @@ func (r *Record) Set(name string, value *sql.Value) (sql.Record, error) {
 }
 
 // WriteCSV - encodes to CSV data.
-func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune) error {
+func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter, quote rune, alwaysQuote bool) error {
 	csvRecord := make([]string, 0, 10)
 	var tmp simdjson.Iter
 	obj := r.object
@@ -173,6 +174,8 @@ allElems:
 	}
 	w := csv.NewWriter(writer)
 	w.Comma = fieldDelimiter
+	w.Quote = quote
+	w.AlwaysQuote = alwaysQuote
 	if err := w.Write(csvRecord); err != nil {
 		return err
 	}
