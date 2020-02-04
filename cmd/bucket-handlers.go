@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2015-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -75,40 +74,45 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 		return
 	}
 
-	bucketSet := set.NewStringSet()
+	bucketsSet := set.NewStringSet()
+	bucketsToBeUpdated := set.NewStringSet()
+	bucketsInConflict := set.NewStringSet()
+	for _, bucket := range buckets {
+		bucketsSet.Add(bucket.Name)
+		r, ok := dnsBuckets[bucket.Name]
+		if !ok {
+			bucketsToBeUpdated.Add(bucket.Name)
+			continue
+		}
+		if !globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
+			if globalDomainIPs.Difference(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
+				// No difference in terms of domainIPs and nothing
+				// has changed so we don't change anything on the etcd.
+				continue
+			}
+			// if domain IPs intersect then it won't be an empty set.
+			// such an intersection means that bucket exists on etcd.
+			// but if we do see a difference with local domain IPs with
+			// hostSlice from etcd then we should update with newer
+			// domainIPs, we proceed to do that here.
+			bucketsToBeUpdated.Add(bucket.Name)
+			continue
+		}
+		// No IPs seem to intersect, this means that bucket exists but has
+		// different IP addresses perhaps from a different deployment.
+		// bucket names are globally unique in federation at a given
+		// path prefix, name collision is not allowed. We simply log
+		// an error and continue.
+		bucketsInConflict.Add(bucket.Name)
+	}
 
-	// Add buckets that are not registered with the DNS
+	// Add/update buckets that are not registered with the DNS
 	g := errgroup.WithNErrs(len(buckets))
-	for index := range buckets {
-		bucketSet.Add(buckets[index].Name)
+	bucketsToBeUpdatedSlice := bucketsToBeUpdated.ToSlice()
+	for index := range bucketsToBeUpdatedSlice {
 		index := index
 		g.Go(func() error {
-			r, gerr := globalDNSConfig.Get(buckets[index].Name)
-			if gerr != nil {
-				if gerr == dns.ErrNoEntriesFound {
-					return globalDNSConfig.Put(buckets[index].Name)
-				}
-				return gerr
-			}
-			if !globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
-				if globalDomainIPs.Difference(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
-					// No difference in terms of domainIPs and nothing
-					// has changed so we don't change anything on the etcd.
-					return nil
-				}
-				// if domain IPs intersect then it won't be an empty set.
-				// such an intersection means that bucket exists on etcd.
-				// but if we do see a difference with local domain IPs with
-				// hostSlice from etcd then we should update with newer
-				// domainIPs, we proceed to do that here.
-				return globalDNSConfig.Put(buckets[index].Name)
-			}
-			// No IPs seem to intersect, this means that bucket exists but has
-			// different IP addresses perhaps from a different deployment.
-			// bucket names are globally unique in federation at a given
-			// path prefix, name collision is not allowed. We simply log
-			// an error and continue.
-			return fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket. Use one of these IP addresses %v to access the bucket", buckets[index].Name, globalDomainIPs.ToSlice())
+			return globalDNSConfig.Put(bucketsToBeUpdatedSlice[index])
 		}, index)
 	}
 
@@ -118,36 +122,26 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 		}
 	}
 
-	g = errgroup.WithNErrs(len(dnsBuckets))
-	// Remove buckets that are in DNS for this server, but aren't local
-	for index := range dnsBuckets {
-		index := index
-		g.Go(func() error {
-			// This is a local bucket that exists, so we can continue
-			if bucketSet.Contains(dnsBuckets[index].Key) {
-				return nil
-			}
-
-			// This is not for our server, so we can continue
-			hostPort := net.JoinHostPort(dnsBuckets[index].Host, string(dnsBuckets[index].Port))
-			if globalDomainIPs.Intersection(set.CreateStringSet(hostPort)).IsEmpty() {
-				return nil
-			}
-
-			// We go to here, so we know the bucket no longer exists,
-			// but is registered in DNS to this server
-			if err := globalDNSConfig.DeleteRecord(dnsBuckets[index]); err != nil {
-				return fmt.Errorf("Failed to remove DNS entry for %s due to %w",
-					dnsBuckets[index].Key, err)
-			}
-
-			return nil
-		}, index)
+	for _, bucket := range bucketsInConflict.ToSlice() {
+		logger.LogIf(context.Background(), fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket. Use one of these IP addresses %v to access the bucket", bucket, globalDomainIPs.ToSlice()))
 	}
 
-	for _, err := range g.Wait() {
-		if err != nil {
-			logger.LogIf(context.Background(), err)
+	// Remove buckets that are in DNS for this server, but aren't local
+	for bucket, records := range dnsBuckets {
+		if bucketsSet.Contains(bucket) {
+			continue
+		}
+
+		if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(records)...)).IsEmpty() {
+			// This is not for our server, so we can continue
+			continue
+		}
+
+		// We go to here, so we know the bucket no longer exists,
+		// but is registered in DNS to this server
+		if err = globalDNSConfig.Delete(bucket); err != nil {
+			logger.LogIf(context.Background(), fmt.Errorf("Failed to remove DNS entry for %s due to %w",
+				bucket, err))
 		}
 	}
 }
@@ -285,16 +279,11 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		bucketSet := set.NewStringSet()
-		for _, dnsRecord := range dnsBuckets {
-			if bucketSet.Contains(dnsRecord.Key) {
-				continue
-			}
+		for _, dnsRecords := range dnsBuckets {
 			bucketsInfo = append(bucketsInfo, BucketInfo{
-				Name:    dnsRecord.Key,
-				Created: dnsRecord.CreationDate,
+				Name:    dnsRecords[0].Key,
+				Created: dnsRecords[0].CreationDate,
 			})
-			bucketSet.Add(dnsRecord.Key)
 		}
 	} else {
 		// Invoke the list buckets.

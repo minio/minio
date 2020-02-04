@@ -704,7 +704,7 @@ func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error
 	}
 
 	// In gateway mode, notifications are not supported.
-	if globalIsGateway {
+	if globalIsGateway && !objAPI.IsNotificationSupported() {
 		return nil
 	}
 

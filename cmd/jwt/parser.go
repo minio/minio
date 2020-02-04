@@ -57,7 +57,7 @@ var (
 func init() {
 	base64BufPool = sync.Pool{
 		New: func() interface{} {
-			buf := make([]byte, 1024)
+			buf := make([]byte, 8192)
 			return &buf
 		},
 	}
