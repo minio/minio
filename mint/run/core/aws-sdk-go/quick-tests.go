@@ -725,6 +725,93 @@ func testListMultipartUploads(s3Client *s3.S3) {
 	successLogger(function, args, startTime).Info()
 }
 
+func testSSECopyObject(s3Client *s3.S3) {
+	// initialize logging params
+	startTime := time.Now()
+	function := "testSSECopyObjectSourceEncrypted"
+	bucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "aws-sdk-go-test-")
+	object := randString(60, rand.NewSource(time.Now().UnixNano()), "")
+	args := map[string]interface{}{
+		"bucketName": bucketName,
+		"objectName": object,
+	}
+	_, err := s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CreateBucket Failed", err).Fatal()
+		return
+	}
+	defer cleanup(s3Client, bucketName, object+"-enc", function, args, startTime, true)
+	defer cleanup(s3Client, bucketName, object+"-noenc", function, args, startTime, false)
+	var wrongSuccess = errors.New("Succeeded instead of failing. ")
+
+	// create encrypted object
+	sseCustomerKey := aws.String("32byteslongsecretkeymustbegiven2")
+	_, errPutEnc := s3Client.PutObject(&s3.PutObjectInput{
+		Body:                 aws.ReadSeekCloser(strings.NewReader("fileToUpload")),
+		Bucket:               aws.String(bucketName),
+		Key:                  aws.String(object + "-enc"),
+		SSECustomerAlgorithm: aws.String("AES256"),
+		SSECustomerKey:       sseCustomerKey,
+	})
+	if errPutEnc != nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to succeed but got %v", errPutEnc), errPutEnc).Fatal()
+		return
+	}
+
+	// copy the encrypted object
+	_, errCopyEnc := s3Client.CopyObject(&s3.CopyObjectInput{
+		SSECustomerAlgorithm: aws.String("AES256"),
+		SSECustomerKey:       sseCustomerKey,
+		CopySource:           aws.String(bucketName + "/" + object + "-enc"),
+		Bucket:               aws.String(bucketName),
+		Key:                  aws.String(object + "-copy"),
+	})
+	if errCopyEnc == nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CopyObject expected to fail, but it succeeds ", wrongSuccess).Fatal()
+		return
+	}
+	var invalidSSECustomerAlgorithm = "Requests specifying Server Side Encryption with Customer provided keys must provide a valid encryption algorithm"
+	if !strings.Contains(errCopyEnc.Error(), invalidSSECustomerAlgorithm) {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go CopyObject expected error %v got %v", invalidSSECustomerAlgorithm, errCopyEnc), errCopyEnc).Fatal()
+		return
+	}
+
+	// create non-encrypted object
+	_, errPut := s3Client.PutObject(&s3.PutObjectInput{
+		Body:   aws.ReadSeekCloser(strings.NewReader("fileToUpload")),
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(object + "-noenc"),
+	})
+	if errPut != nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to succeed but got %v", errPut), errPut).Fatal()
+		return
+	}
+
+	// copy the non-encrypted object
+	_, errCopy := s3Client.CopyObject(&s3.CopyObjectInput{
+		CopySourceSSECustomerAlgorithm: aws.String("AES256"),
+		CopySourceSSECustomerKey:       sseCustomerKey,
+		SSECustomerAlgorithm:           aws.String("AES256"),
+		SSECustomerKey:                 sseCustomerKey,
+		CopySource:                     aws.String(bucketName + "/" + object + "-noenc"),
+		Bucket:                         aws.String(bucketName),
+		Key:                            aws.String(object + "-copy"),
+	})
+	if errCopy == nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CopyObject expected to fail, but it succeeds ", wrongSuccess).Fatal()
+		return
+	}
+	var invalidEncryptionParameters = "The encryption parameters are not applicable to this object."
+	if !strings.Contains(errCopy.Error(), invalidEncryptionParameters) {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go CopyObject expected error %v got %v", invalidEncryptionParameters, errCopy), errCopy).Fatal()
+		return
+	}
+
+	successLogger(function, args, startTime).Info()
+}
+
 func main() {
 	endpoint := os.Getenv("SERVER_ENDPOINT")
 	accessKey := os.Getenv("ACCESS_KEY")
@@ -761,6 +848,9 @@ func main() {
 	testSelectObject(s3Client)
 	testCreateBucketError(s3Client)
 	testListMultipartUploads(s3Client)
+	if secure == "1" {
+		testSSECopyObject(s3Client)
+	}
 	if isObjectTaggingImplemented(s3Client) {
 		testObjectTagging(s3Client)
 	}
