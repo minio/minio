@@ -31,6 +31,8 @@ const (
 
 	// StorageInfoAdminAction - allow listing server info
 	StorageInfoAdminAction = "admin:StorageInfo"
+	// AccountingUsageInfoAdminAction - allow listing accounting usage info
+	AccountingUsageInfoAdminAction = "admin:AccountingUsageInfo"
 	// DataUsageInfoAdminAction - allow listing data usage info
 	DataUsageInfoAdminAction = "admin:DataUsageInfo"
 	// PerfInfoAdminAction - allow listing performance info

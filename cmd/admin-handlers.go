@@ -318,7 +318,7 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 
 func (a adminAPIHandlers) AccountingUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AccountingUsageInfo")
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListServerInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.AccountingUsageInfoAdminAction)
 	if objectAPI == nil {
 		return
 	}
