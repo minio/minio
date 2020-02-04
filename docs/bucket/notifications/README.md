@@ -941,7 +941,7 @@ The MySQL configuration is located in the `notify_mysql` key. Create a configura
 
 ```
 KEY:
-notify_mysql[:name]  publish bucket notifications to MySQL databases
+notify_mysql[:name]  publish bucket notifications to MySQL databases. When multiple MySQL server endpoints are needed, a user specified "name" can be added for each configuration, (e.g."notify_mysql:myinstance").
 
 ARGS:
 dsn_string*  (string)             MySQL data-source-name connection string
@@ -979,22 +979,24 @@ MINIO_NOTIFY_MYSQL_COMMENT      (sentence)           optionally add a comment to
 
 `dsn_string` is optional, if not specified, the connection information specified by the `host`, `port`, `user`, `password` and `database` parameters are used.
 
-MinIO supports persistent event store. The persistent store will backup events when the MySQL connection goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
+MinIO supports persistent event store. The persistent store will backup events if MySQL connection goes offline and then replays the stored events when the broken connection comes back up. The event store can be configured by setting a directory path in `queue_dir` field, and the maximum number of events, which can be stored in a `queue_dir`, in `queue_limit` field. For example, `queue_dir` can be set to `/home/events` and `queue_limit` can be set to `1000`. By default, the `queue_limit` is set to `10000`.
 
-To update the configuration, use `mc admin config get` command to get the current configuration.
+Before updating the configuration, let's start with `mc admin config get` command to get the current configuration.
 
 ```sh
 $ mc admin config get myminio/ notify_mysql
-notify_mysql:1 table="" database="" format="namespace" password="" port="" queue_dir="" queue_limit="0"  username="" dsn_string="" host=""
+notify_mysql:myinstance table="" database="" format="namespace" password="" port="" queue_dir="" queue_limit="0"  username="" dsn_string="" host=""
 ```
 
-Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:mysql` at start-up if there were no errors.
+Use `mc admin config set` command to update MySQL notification configuration for the deployment.
 
 ```sh
-$ mc admin config set myminio notify_mysql:1 table="minio_images" database="miniodb" format="namespace" password="" port="3306" queue_dir="" queue_limit="0"  username="root" dsn_string="" host="172.17.0.1"
+$ mc admin config set myminio notify_mysql:myinstance table="minio_images" database="miniodb" format="namespace" password="" port="3306" queue_dir="" queue_limit="0"  username="root" dsn_string="" host="172.17.0.1"
 ```
 
-Note that, you can add as many MySQL server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the MySQL instance and an object of per-server configuration parameters.
+Note that, you can add as many MySQL server endpoint configurations as needed by providing an identifier (like "myinstance" in the example above) for each MySQL instance desired.
+
+Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::myinstance:mysql` at start-up, if there are no errors.
 
 ### Step 3: Enable bucket notification using MinIO client
 
@@ -1008,10 +1010,10 @@ With the `mc` tool, the configuration is very simple to add. Let us say that the
 # Create bucket named `images` in myminio
 mc mb myminio/images
 # Add notification configuration on the `images` bucket using the MySQL ARN. The --suffix argument filters events.
-mc event add myminio/images arn:minio:sqs::1:postgresql --suffix .jpg
+mc event add myminio/images arn:minio:sqs::myinstance:mysql --suffix .jpg
 # Print out the notification configuration on the `images` bucket.
 mc event list myminio/images
-arn:minio:sqs::1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
+arn:minio:sqs::myinstance:mysql s3:ObjectCreated:*,s3:ObjectRemoved:*,s3:ObjectAccessed:* Filter: suffix=”.jpg”
 ```
 
 ### Step 4: Test on MySQL
