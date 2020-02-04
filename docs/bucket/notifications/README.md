@@ -977,7 +977,7 @@ MINIO_NOTIFY_MYSQL_QUEUE_LIMIT  (number)             maximum limit for undeliver
 MINIO_NOTIFY_MYSQL_COMMENT      (sentence)           optionally add a comment to this setting
 ```
 
-`dsn_string` is optional, if not specified, the connection information specified by the `host`, `port`, `user`, `password` and `database` parameters are used.
+`dsn_string` is optional. If not specified, the connection information specified by the `user`, `password`, `host`, `port`, and `database` parameters are used. `dsn_string` is formed as `"<user>:<password>@tcp(<host>:<port>)/<database>"`
 
 MinIO supports persistent event store. The persistent store will backup events if MySQL connection goes offline and then replays the stored events when the broken connection comes back up. The event store can be configured by setting a directory path in `queue_dir` field, and the maximum number of events, which can be stored in a `queue_dir`, in `queue_limit` field. For example, `queue_dir` can be set to `/home/events` and `queue_limit` can be set to `1000`. By default, the `queue_limit` is set to `10000`.
 
@@ -985,13 +985,17 @@ Before updating the configuration, let's start with `mc admin config get` comman
 
 ```sh
 $ mc admin config get myminio/ notify_mysql
-notify_mysql:myinstance table="" database="" format="namespace" password="" port="" queue_dir="" queue_limit="0"  username="" dsn_string="" host=""
+notify_mysql:myinstance enable=off format=namespace host= port= username= password= database= dsn_string= table= queue_dir= queue_limit=0 
 ```
 
 Use `mc admin config set` command to update MySQL notification configuration for the deployment.
 
 ```sh
-$ mc admin config set myminio notify_mysql:myinstance table="minio_images" database="miniodb" format="namespace" password="" port="3306" queue_dir="" queue_limit="0"  username="root" dsn_string="" host="172.17.0.1"
+$ mc admin config set myminio notify_mysql:myinstance table="minio_images" username="root" password="xxxx" host="172.17.0.1" port="3306" database="miniodb"
+```
+or with `dsn_string` parameter;
+```sh
+$ mc admin config set myminio notify_mysql:myinstance table="minio_images" dsn_string="root:xxxx@tcp(172.17.0.1:3306)/miniodb"
 ```
 
 Note that, you can add as many MySQL server endpoint configurations as needed by providing an identifier (like "myinstance" in the example above) for each MySQL instance desired.
