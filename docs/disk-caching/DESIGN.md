@@ -13,7 +13,7 @@ minio gateway <name> -h
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ","
      MINIO_CACHE_EXPIRY: Cache expiry duration in days
      MINIO_CACHE_QUOTA: Maximum permitted usage of the cache in percentage (0-100).
-     MINIO_CACHE_AFTER: Minimum number of accesses before caching an object.
+     MINIO_CACHE_AFTER: Minimum number of access before caching an object.
 
 ...
 ...
