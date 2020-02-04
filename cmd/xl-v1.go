@@ -227,8 +227,10 @@ func (xl xlObjects) CrawlAndGetDataUsage(ctx context.Context, endCh <-chan struc
 	}
 	wg.Wait()
 
-	var dataUsageInfo DataUsageInfo
-	for i := 0; i < len(dataUsageResults); i++ {
+	var dataUsageInfo = dataUsageResults[0]
+	// Pick the crawling result of the disk which has the most
+	// number of objects in it.
+	for i := 1; i < len(dataUsageResults); i++ {
 		if dataUsageResults[i].ObjectsCount > dataUsageInfo.ObjectsCount {
 			dataUsageInfo = dataUsageResults[i]
 		}
