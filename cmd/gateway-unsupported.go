@@ -37,8 +37,8 @@ type GatewayLocker struct {
 }
 
 // NewNSLock - implements gateway level locker
-func (l *GatewayLocker) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
-	return l.nsMutex.NewNSLock(ctx, nil, bucket, object)
+func (l *GatewayLocker) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
+	return l.nsMutex.NewNSLock(ctx, nil, bucket, objects...)
 }
 
 // NewGatewayLayerWithLocker - initialize gateway with locker.
@@ -56,7 +56,7 @@ func (a GatewayUnsupported) CrawlAndGetDataUsage(ctx context.Context, endCh <-ch
 }
 
 // NewNSLock is a dummy stub for gateway.
-func (a GatewayUnsupported) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
+func (a GatewayUnsupported) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
 	logger.CriticalIf(ctx, errors.New("not implemented"))
 	return nil
 }

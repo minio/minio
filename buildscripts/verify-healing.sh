@@ -74,7 +74,7 @@ function __init__()
     echo '{"version": "3", "credential": {"accessKey": "minio", "secretKey": "minio123"}, "region": "us-east-1"}' > "$MINIO_CONFIG_DIR/config.json"
 }
 
-function perform_test_1() {
+function perform_test() {
     minio_pids=( $(start_minio_3_node 60) )
     for pid in "${minio_pids[@]}"; do
         if ! kill "$pid"; then
@@ -86,59 +86,14 @@ function perform_test_1() {
             purge "$WORK_DIR"
             exit 1
         fi
+        # forcibly killing, to proceed further properly.
+        kill -9 "$pid"
     done
 
-    echo "Testing in Distributed Erasure setup healing test case 1"
-    echo "Remove the contents of the disks belonging to '2' erasure set"
+    echo "Testing Distributed Erasure setup healing of drives"
+    echo "Remove the contents of the disks belonging to '${1}' erasure set"
 
-    rm -rf ${WORK_DIR}/2/*/
-
-    minio_pids=( $(start_minio_3_node 60) )
-    for pid in "${minio_pids[@]}"; do
-        if ! kill "$pid"; then
-            for i in $(seq 1 3); do
-                echo "server$i log:"
-                cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
-            done
-            echo "FAILED"
-            purge "$WORK_DIR"
-            exit 1
-        fi
-    done
-
-    rv=$(check_online)
-    if [ "$rv" == "1" ]; then
-        for pid in "${minio_pids[@]}"; do
-            kill -9 "$pid"
-        done
-        for i in $(seq 1 3); do
-            echo "server$i log:"
-            cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
-        done
-        echo "FAILED"
-        purge "$WORK_DIR"
-        exit 1
-    fi
-}
-
-function perform_test_2() {
-    minio_pids=( $(start_minio_3_node 60) )
-    for pid in "${minio_pids[@]}"; do
-        if ! kill "$pid"; then
-            for i in $(seq 1 3); do
-                echo "server$i log:"
-                cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
-            done
-            echo "FAILED"
-            purge "$WORK_DIR"
-            exit 1
-        fi
-    done
-
-    echo "Testing in Distributed Erasure setup healing test case 2"
-    echo "Remove the contents of the disks belonging to '1' erasure set"
-
-    rm -rf ${WORK_DIR}/1/*/
+    rm -rf ${WORK_DIR}/${1}/*/
 
     minio_pids=( $(start_minio_3_node 60) )
     for pid in "${minio_pids[@]}"; do
@@ -151,53 +106,9 @@ function perform_test_2() {
             purge "$WORK_DIR"
             exit 1
         fi
-    done
-
-    rv=$(check_online)
-    if [ "$rv" == "1" ]; then
-        for pid in "${minio_pids[@]}"; do
-            kill -9 "$pid"
-        done
-        for i in $(seq 1 3); do
-            echo "server$i log:"
-            cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
-        done
-        echo "FAILED"
-        purge "$WORK_DIR"
-        exit 1
-    fi
-}
-
-function perform_test_3() {
-    minio_pids=( $(start_minio_3_node 60) )
-    for pid in "${minio_pids[@]}"; do
-        if ! kill "$pid"; then
-            for i in $(seq 1 3); do
-                echo "server$i log:"
-                cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
-            done
-            echo "FAILED"
-            purge "$WORK_DIR"
-            exit 1
-        fi
-    done
-
-    echo "Testing in Distributed Erasure setup healing test case 3"
-    echo "Remove the contents of the disks belonging to '3' erasure set"
-
-    rm -rf ${WORK_DIR}/3/*/
-
-    minio_pids=( $(start_minio_3_node 60) )
-    for pid in "${minio_pids[@]}"; do
-        if ! kill "$pid"; then
-            for i in $(seq 1 3); do
-                echo "server$i log:"
-                cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
-            done
-            echo "FAILED"
-            purge "$WORK_DIR"
-            exit 1
-        fi
+        # forcibly killing, to proceed further properly.
+        # if the previous kill is taking time.
+        kill -9 "$pid"
     done
 
     rv=$(check_online)
@@ -217,9 +128,9 @@ function perform_test_3() {
 
 function main()
 {
-    perform_test_1
-    perform_test_2
-    perform_test_3
+    perform_test "2"
+    perform_test "1"
+    perform_test "3"
 }
 
 ( __init__ "$@" && main "$@" )

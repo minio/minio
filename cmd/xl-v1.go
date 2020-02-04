@@ -66,8 +66,8 @@ type xlObjects struct {
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
-func (xl xlObjects) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
-	return xl.nsMutex.NewNSLock(ctx, xl.getLockers, bucket, object)
+func (xl xlObjects) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
+	return xl.nsMutex.NewNSLock(ctx, xl.getLockers, bucket, objects...)
 }
 
 // Shutdown function for object storage interface.

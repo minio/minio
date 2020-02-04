@@ -335,8 +335,11 @@ func newXLSets(endpoints Endpoints, format *formatXLV3, setCount int, drivesPerS
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
-func (s *xlSets) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
-	return s.getHashedSet(object).NewNSLock(ctx, bucket, object)
+func (s *xlSets) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
+	if len(objects) == 1 {
+		return s.getHashedSet(objects[0]).NewNSLock(ctx, bucket, objects...)
+	}
+	return s.getHashedSet("").NewNSLock(ctx, bucket, objects...)
 }
 
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.

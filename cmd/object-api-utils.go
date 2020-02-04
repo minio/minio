@@ -198,6 +198,16 @@ func retainSlash(s string) string {
 	return strings.TrimSuffix(s, SlashSeparator) + SlashSeparator
 }
 
+// pathsJoinPrefix - like pathJoin retains trailing SlashSeparator
+// for all elements, prepends them with 'prefix' respectively.
+func pathsJoinPrefix(prefix string, elem ...string) (paths []string) {
+	paths = make([]string, len(elem))
+	for i, e := range elem {
+		paths[i] = pathJoin(prefix, e)
+	}
+	return paths
+}
+
 // pathJoin - like path.Join() but retains trailing SlashSeparator of the last element
 func pathJoin(elem ...string) string {
 	trailingSlash := ""

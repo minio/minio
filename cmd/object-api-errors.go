@@ -348,11 +348,10 @@ func (e ObjectTooSmall) Error() string {
 
 // OperationTimedOut - a timeout occurred.
 type OperationTimedOut struct {
-	Path string
 }
 
 func (e OperationTimedOut) Error() string {
-	return "Operation timed out: " + e.Path
+	return "Operation timed out"
 }
 
 /// Multipart related errors.
