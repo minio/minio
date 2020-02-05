@@ -39,6 +39,16 @@ var GlobalFlags = []cli.Flag{
 		Value: defaultCertsDir.Get(),
 		Usage: "path to certs directory",
 	},
+	cli.StringFlag{
+		Name:  "public-key",
+		Value: defaultPublicKey,
+		Usage: "file name of the public cert",
+	},
+	cli.StringFlag{
+		Name:  "private-key",
+		Value: defaultPrivateKey,
+		Usage: "file name of the private key",
+	},
 	cli.BoolFlag{
 		Name:  "quiet",
 		Usage: "disable startup information",

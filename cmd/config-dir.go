@@ -62,11 +62,21 @@ func getDefaultCertsCADir() string {
 	return filepath.Join(getDefaultCertsDir(), certsCADir)
 }
 
+func getDefaultPublicKey() string {
+	return publicCertFile
+}
+
+func getDefaultPrivateKey() string {
+	return privateKeyFile
+}
+
 var (
 	// Default config, certs and CA directories.
 	defaultConfigDir  = &ConfigDir{path: getDefaultConfigDir()}
 	defaultCertsDir   = &ConfigDir{path: getDefaultCertsDir()}
 	defaultCertsCADir = &ConfigDir{path: getDefaultCertsCADir()}
+	defaultPublicKey  = getDefaultPublicKey()
+	defaultPrivateKey = getDefaultPrivateKey()
 
 	// Points to current configuration directory -- deprecated, to be removed in future.
 	globalConfigDir = defaultConfigDir
@@ -74,6 +84,10 @@ var (
 	globalCertsDir = defaultCertsDir
 	// Points to relative path to certs directory and is <value-of-certs-dir>/CAs
 	globalCertsCADir = defaultCertsCADir
+	// Points to current public certificate
+	globalPublicKey = defaultPublicKey
+	// Points to current private key
+	globalPrivateKey = defaultPrivateKey
 )
 
 // Get - returns current directory.
@@ -99,9 +113,9 @@ func getConfigFile() string {
 }
 
 func getPublicCertFile() string {
-	return filepath.Join(globalCertsDir.Get(), publicCertFile)
+	return filepath.Join(globalCertsDir.Get(), globalPublicKey)
 }
 
 func getPrivateKeyFile() string {
-	return filepath.Join(globalCertsDir.Get(), privateKeyFile)
+	return filepath.Join(globalCertsDir.Get(), globalPrivateKey)
 }

@@ -130,6 +130,13 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 		logger.EnableAnonymous()
 	}
 
+	if ctx.IsSet("public-key") {
+		globalPublicKey = ctx.String("public-key")
+	}
+	if ctx.IsSet("private-key") {
+		globalPrivateKey = ctx.String("private-key")
+	}
+
 	// Fetch address option
 	globalCLIContext.Addr = ctx.GlobalString("address")
 	if globalCLIContext.Addr == "" || globalCLIContext.Addr == ":"+globalMinioDefaultPort {
