@@ -470,7 +470,6 @@ type Vault struct {
 	Status  string `json:"status,omitempty"`
 	Encrypt string `json:"encryp,omitempty"`
 	Decrypt string `json:"decrypt,omitempty"`
-	Update  string `json:"update,omitempty"`
 }
 
 // LDAP contains ldap status
