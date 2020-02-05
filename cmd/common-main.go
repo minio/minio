@@ -130,8 +130,8 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 		logger.EnableAnonymous()
 	}
 
-	if ctx.IsSet("public-key") {
-		globalPublicKey = ctx.String("public-key")
+	if ctx.IsSet("public-crt") {
+		globalPublicKey = ctx.String("public-crt")
 	}
 	if ctx.IsSet("private-key") {
 		globalPrivateKey = ctx.String("private-key")

@@ -40,7 +40,7 @@ var GlobalFlags = []cli.Flag{
 		Usage: "path to certs directory",
 	},
 	cli.StringFlag{
-		Name:  "public-key",
+		Name:  "public-crt",
 		Value: defaultPublicKey,
 		Usage: "file name of the public cert",
 	},
