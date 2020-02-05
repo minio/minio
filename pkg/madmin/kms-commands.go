@@ -57,6 +57,5 @@ func (adm *AdminClient) GetKeyStatus(keyID string) (*KMSKeyStatus, error) {
 type KMSKeyStatus struct {
 	KeyID         string `json:"key-id"`
 	EncryptionErr string `json:"encryption-error,omitempty"` // An empty error == success
-	UpdateErr     string `json:"update-error,omitempty"`     // An empty error == success
 	DecryptionErr string `json:"decryption-error,omitempty"` // An empty error == success
 }
