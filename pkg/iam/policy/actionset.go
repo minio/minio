@@ -32,6 +32,11 @@ func (actionSet ActionSet) Add(action Action) {
 	actionSet[action] = struct{}{}
 }
 
+// IsEmpty - returns if the current action set is empty
+func (actionSet ActionSet) IsEmpty() bool {
+	return len(actionSet) == 0
+}
+
 // Match - matches object name with anyone of action pattern in action set.
 func (actionSet ActionSet) Match(action Action) bool {
 	for r := range actionSet {
