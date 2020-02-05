@@ -3,7 +3,6 @@ module github.com/minio/minio
 go 1.13
 
 require (
-	cloud.google.com/go v0.39.0
 	contrib.go.opencensus.io/exporter/ocagent v0.5.0 // indirect
 	github.com/Azure/azure-pipeline-go v0.2.1
 	github.com/Azure/azure-storage-blob-go v0.8.0
@@ -36,6 +35,7 @@ require (
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
 	github.com/gomodule/redigo v2.0.0+incompatible
+	github.com/google/btree v0.0.0-20180813153112-4030bb1f1f0c // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20190328170749-bb2674552d8f // indirect
 	github.com/gorilla/handlers v1.4.0
 	github.com/gorilla/mux v1.7.0
@@ -108,10 +108,9 @@ require (
 	go.uber.org/zap v1.10.0 // indirect
 	golang.org/x/crypto v0.0.0-20191117063200-497ca9f6d64f
 	golang.org/x/net v0.0.0-20190923162816-aa69164e4478 // indirect
-	golang.org/x/oauth2 v0.0.0-20190402181905-9f3314589c9a // indirect
 	golang.org/x/sys v0.0.0-20190922100055-0a153f010e69
 	golang.org/x/text v0.3.2 // indirect
-	google.golang.org/api v0.5.0
+	google.golang.org/api v0.5.0 // indirect
 	google.golang.org/appengine v1.6.0 // indirect
 	google.golang.org/genproto v0.0.0-20190513181449-d00d292a067c // indirect
 	gopkg.in/cheggaaa/pb.v1 v1.0.28 // indirect

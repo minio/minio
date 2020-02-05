@@ -25,7 +25,6 @@ import (
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
-	"google.golang.org/api/googleapi"
 
 	minio "github.com/minio/minio-go/v6"
 	"github.com/minio/minio/cmd/config/etcd/dns"
@@ -1818,18 +1817,6 @@ func toAPIError(ctx context.Context, err error) APIError {
 				Code:           e.Code,
 				Description:    e.Message,
 				HTTPStatusCode: e.StatusCode,
-			}
-		case *googleapi.Error:
-			apiErr = APIError{
-				Code:           "XGCSInternalError",
-				Description:    e.Message,
-				HTTPStatusCode: e.Code,
-			}
-			// GCS may send multiple errors, just pick the first one
-			// since S3 only sends one Error XML response.
-			if len(e.Errors) >= 1 {
-				apiErr.Code = e.Errors[0].Reason
-
 			}
 		case azblob.StorageError:
 			apiErr = APIError{
