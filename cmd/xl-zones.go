@@ -49,7 +49,7 @@ func (z *xlZones) quickHealBuckets(ctx context.Context) {
 		return
 	}
 	for _, bucket := range bucketsInfo {
-		z.HealBucket(ctx, bucket.Name, false, false)
+		z.MakeBucketWithLocation(ctx, bucket.Name, "")
 	}
 }
 
@@ -77,7 +77,9 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 			return nil, err
 		}
 	}
-	z.quickHealBuckets(context.Background())
+	if !z.SingleZone() {
+		z.quickHealBuckets(context.Background())
+	}
 	return z, nil
 }
 
@@ -698,7 +700,7 @@ func (z *xlZones) listObjects(ctx context.Context, bucket, prefix, marker, delim
 	var zonesEndWalkCh []chan struct{}
 
 	for _, zone := range z.zones {
-		entryChs, endWalkCh := zone.pool.Release(listParams{bucket, recursive, marker, prefix, heal})
+		entryChs, endWalkCh := zone.pool.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
 			entryChs = zone.startMergeWalks(ctx, bucket, prefix, marker, recursive, endWalkCh)
@@ -767,7 +769,7 @@ func (z *xlZones) listObjects(ctx context.Context, bucket, prefix, marker, delim
 	}
 	if loi.IsTruncated {
 		for i, zone := range z.zones {
-			zone.pool.Set(listParams{bucket, recursive, loi.NextMarker, prefix, heal}, zonesEntryChs[i],
+			zone.pool.Set(listParams{bucket, recursive, loi.NextMarker, prefix}, zonesEntryChs[i],
 				zonesEndWalkCh[i])
 		}
 	}

@@ -99,7 +99,7 @@ type ObjectLayer interface {
 	HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error)
 	HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem, error)
 	HealObject(ctx context.Context, bucket, object string, dryRun, remove bool, scanMode madmin.HealScanMode) (madmin.HealResultItem, error)
-	HealObjects(ctx context.Context, bucket, prefix string, healObject healObjectFn) error
+	HealObjects(ctx context.Context, bucket, prefix string, fn healObjectFn) error
 
 	ListBucketsHeal(ctx context.Context) (buckets []BucketInfo, err error)
 

@@ -121,6 +121,10 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 		t.NodeName = host
 	}
 
+	rw := logger.NewResponseWriter(w)
+	rw.LogBody = logBody
+	f(rw, r)
+
 	rq := trace.RequestInfo{
 		Time:     time.Now().UTC(),
 		Method:   r.Method,
@@ -130,10 +134,6 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 		Headers:  reqHeaders,
 		Body:     reqBodyRecorder.Data(),
 	}
-	rw := logger.NewResponseWriter(w)
-	rw.LogBody = logBody
-	f(rw, r)
-
 	rs := trace.ResponseInfo{
 		Time:       time.Now().UTC(),
 		Headers:    rw.Header().Clone(),

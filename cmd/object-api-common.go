@@ -355,7 +355,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 		recursive = false
 	}
 
-	walkResultCh, endWalkCh := tpool.Release(listParams{bucket, recursive, marker, prefix, false})
+	walkResultCh, endWalkCh := tpool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, endWalkCh)
@@ -416,7 +416,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 	}
 
 	// Save list routine for the next marker if we haven't reached EOF.
-	params := listParams{bucket, recursive, nextMarker, prefix, false}
+	params := listParams{bucket, recursive, nextMarker, prefix}
 	if !eof {
 		tpool.Set(params, walkResultCh, endWalkCh)
 	}

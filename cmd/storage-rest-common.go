@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v13" // Introduced StorageErr error type.
+	storageRESTVersion       = "v14" // DeleteFileBulk API change
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )

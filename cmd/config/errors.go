@@ -66,6 +66,12 @@ var (
 		"MINIO_CACHE_QUOTA: Valid cache quota value must be between 0-100",
 	)
 
+	ErrInvalidCacheAfter = newErrFn(
+		"Invalid cache after value",
+		"Please check the passed value",
+		"MINIO_CACHE_AFTER: Valid cache after value must be 0 or greater",
+	)
+
 	ErrInvalidCacheEncryptionKey = newErrFn(
 		"Invalid cache encryption master key value",
 		"Please check the passed value",

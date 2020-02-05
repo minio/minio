@@ -206,11 +206,44 @@ func initSafeMode(buckets []BucketInfo) (err error) {
 	// sub-systems, make sure that we do not move the above codeblock elsewhere.
 
 	// Validate and initialize all subsystems.
-	if err = initAllSubsystems(buckets, newObject); err != nil {
-		return err
-	}
+	doneCh := make(chan struct{})
+	defer close(doneCh)
 
-	return nil
+	// Initializing sub-systems needs a retry mechanism for
+	// the following reasons:
+	//  - Read quorum is lost just after the initialization
+	//    of the object layer.
+	//  - Write quorum not met when upgrading configuration
+	//    version is needed, migration is needed etc.
+	retryTimerCh := newRetryTimerSimple(doneCh)
+	for {
+		rquorum := InsufficientReadQuorum{}
+		wquorum := InsufficientWriteQuorum{}
+
+		var err error
+		select {
+		case n := <-retryTimerCh:
+			if err = initAllSubsystems(buckets, newObject); err != nil {
+				if errors.Is(err, errDiskNotFound) ||
+					errors.As(err, &rquorum) ||
+					errors.As(err, &wquorum) {
+					if n < 5 {
+						logger.Info("Waiting for all sub-systems to be initialized..")
+					} else {
+						logger.Info("Waiting for all sub-systems to be initialized.. %v", err)
+					}
+					continue
+				}
+				return err
+			}
+			return nil
+		case <-globalOSSignalCh:
+			if err == nil {
+				return errors.New("Initializing sub-systems stopped gracefully")
+			}
+			return fmt.Errorf("Unable to initialize sub-systems: %w", err)
+		}
+	}
 }
 
 func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) {

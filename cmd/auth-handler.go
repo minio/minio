@@ -28,8 +28,8 @@ import (
 	"net/http"
 	"strings"
 
-	jwtgo "github.com/dgrijalva/jwt-go"
 	xhttp "github.com/minio/minio/cmd/http"
+	xjwt "github.com/minio/minio/cmd/jwt"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/policy"
@@ -179,12 +179,14 @@ func mustGetClaimsFromToken(r *http.Request) map[string]interface{} {
 
 // Fetch claims in the security token returned by the client.
 func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
-	claims := make(map[string]interface{})
+	claims := xjwt.NewMapClaims()
+
 	token := getSessionToken(r)
 	if token == "" {
-		return claims, nil
+		return claims.Map(), nil
 	}
-	stsTokenCallback := func(jwtToken *jwtgo.Token) (interface{}, error) {
+
+	stsTokenCallback := func(claims *xjwt.MapClaims) ([]byte, error) {
 		// JWT token for x-amz-security-token is signed with admin
 		// secret key, temporary credentials become invalid if
 		// server admin credentials change. This is done to ensure
@@ -195,66 +197,42 @@ func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
 		// on the client side and is treated like an opaque value.
 		return []byte(globalActiveCred.SecretKey), nil
 	}
-	p := &jwtgo.Parser{
-		ValidMethods: []string{
-			jwtgo.SigningMethodHS256.Alg(),
-			jwtgo.SigningMethodHS512.Alg(),
-		},
-	}
-	jtoken, err := p.ParseWithClaims(token, jwtgo.MapClaims(claims), stsTokenCallback)
-	if err != nil {
-		return nil, err
-	}
-	if !jtoken.Valid {
+
+	if err := xjwt.ParseWithClaims(token, claims, stsTokenCallback); err != nil {
 		return nil, errAuthentication
-	}
-	v, ok := claims["accessKey"]
-	if !ok {
-		return nil, errInvalidAccessKeyID
-	}
-	if _, ok = v.(string); !ok {
-		return nil, errInvalidAccessKeyID
 	}
 
 	if globalPolicyOPA == nil {
-		// If OPA is not set and if ldap claim key is set,
-		// allow the claim.
-		if _, ok := claims[ldapUser]; ok {
-			return claims, nil
+		// If OPA is not set and if ldap claim key is set, allow the claim.
+		if _, ok := claims.Lookup(ldapUser); ok {
+			return claims.Map(), nil
 		}
 
 		// If OPA is not set, session token should
 		// have a policy and its mandatory, reject
 		// requests without policy claim.
-		p, pok := claims[iamPolicyClaimName()]
+		_, pok := claims.Lookup(iamPolicyClaimName())
 		if !pok {
 			return nil, errAuthentication
 		}
-		if _, pok = p.(string); !pok {
-			return nil, errAuthentication
-		}
-		sp, spok := claims[iampolicy.SessionPolicyName]
-		// Sub policy is optional, if not set return success.
+
+		sp, spok := claims.Lookup(iampolicy.SessionPolicyName)
 		if !spok {
-			return claims, nil
-		}
-		// Sub policy is set but its not a string, reject such requests
-		spStr, spok := sp.(string)
-		if !spok {
-			return nil, errAuthentication
+			return claims.Map(), nil
 		}
 		// Looks like subpolicy is set and is a string, if set then its
 		// base64 encoded, decode it. Decoding fails reject such requests.
-		spBytes, err := base64.StdEncoding.DecodeString(spStr)
+		spBytes, err := base64.StdEncoding.DecodeString(sp)
 		if err != nil {
 			// Base64 decoding fails, we should log to indicate
 			// something is malforming the request sent by client.
 			logger.LogIf(context.Background(), err, logger.Application)
 			return nil, errAuthentication
 		}
-		claims[iampolicy.SessionPolicyName] = string(spBytes)
+		claims.MapClaims[iampolicy.SessionPolicyName] = string(spBytes)
 	}
-	return claims, nil
+
+	return claims.Map(), nil
 }
 
 // Fetch claims in the security token returned by the client and validate the token.

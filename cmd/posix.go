@@ -333,16 +333,10 @@ func isQuitting(endCh chan struct{}) bool {
 	}
 }
 
-func (s *posix) waitForLowActiveIO() error {
+func (s *posix) waitForLowActiveIO() {
 	for atomic.LoadInt32(&s.activeIOCount) >= s.maxActiveIOCount {
-		select {
-		case <-GlobalServiceDoneCh:
-			return errors.New("forced exit")
-		case <-time.NewTimer(lowActiveIOWaitTick).C:
-			continue
-		}
+		time.Sleep(lowActiveIOWaitTick)
 	}
-	return nil
 }
 
 func (s *posix) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, error) {

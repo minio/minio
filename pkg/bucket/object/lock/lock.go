@@ -233,7 +233,8 @@ func (dr *DefaultRetention) UnmarshalXML(d *xml.Decoder, start xml.StartElement)
 // Config - object lock configuration specified in
 // https://docs.aws.amazon.com/AmazonS3/latest/API/Type_API_ObjectLockConfiguration.html
 type Config struct {
-	XMLName           xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ObjectLockConfiguration"`
+	XMLNS             string   `xml:"xmlns,attr,omitempty"`
+	XMLName           xml.Name `xml:"ObjectLockConfiguration"`
 	ObjectLockEnabled string   `xml:"ObjectLockEnabled"`
 	Rule              *struct {
 		DefaultRetention DefaultRetention `xml:"DefaultRetention"`
@@ -335,7 +336,8 @@ func (rDate *RetentionDate) MarshalXML(e *xml.Encoder, startElement xml.StartEle
 // ObjectRetention specified in
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObjectRetention.html
 type ObjectRetention struct {
-	XMLName         xml.Name      `xml:"http://s3.amazonaws.com/doc/2006-03-01/ Retention"`
+	XMLNS           string        `xml:"xmlns,attr,omitempty"`
+	XMLName         xml.Name      `xml:"Retention"`
 	Mode            Mode          `xml:"Mode,omitempty"`
 	RetainUntilDate RetentionDate `xml:"RetainUntilDate,omitempty"`
 }
@@ -438,7 +440,7 @@ func GetObjectRetentionMeta(meta map[string]string) ObjectRetention {
 			retainTill = RetentionDate{t.UTC()}
 		}
 	}
-	return ObjectRetention{Mode: mode, RetainUntilDate: retainTill}
+	return ObjectRetention{XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/", Mode: mode, RetainUntilDate: retainTill}
 }
 
 // GetObjectLegalHoldMeta constructs ObjectLegalHold from metadata
@@ -446,7 +448,7 @@ func GetObjectLegalHoldMeta(meta map[string]string) ObjectLegalHold {
 
 	holdStr, ok := meta[strings.ToLower(xhttp.AmzObjectLockLegalHold)]
 	if ok {
-		return ObjectLegalHold{Status: parseLegalHoldStatus(holdStr)}
+		return ObjectLegalHold{XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/", Status: parseLegalHoldStatus(holdStr)}
 	}
 	return ObjectLegalHold{}
 }
@@ -468,7 +470,8 @@ func ParseObjectLockLegalHoldHeaders(h http.Header) (lhold ObjectLegalHold, err 
 // ObjectLegalHold specified in
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObjectLegalHold.html
 type ObjectLegalHold struct {
-	XMLName xml.Name        `xml:"http://s3.amazonaws.com/doc/2006-03-01/ LegalHold"`
+	XMLNS   string          `xml:"xmlns,attr,omitempty"`
+	XMLName xml.Name        `xml:"LegalHold"`
 	Status  LegalHoldStatus `xml:"Status,omitempty"`
 }
 
@@ -480,6 +483,9 @@ func ParseObjectLegalHold(reader io.Reader) (hold *ObjectLegalHold, err error) {
 
 	if hold.Status != ON && hold.Status != OFF {
 		return nil, ErrMalformedXML
+	}
+	if hold.XMLNS == "" {
+		hold.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
 	}
 	return
 }

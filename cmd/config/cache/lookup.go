@@ -31,16 +31,20 @@ const (
 	Expiry  = "expiry"
 	MaxUse  = "maxuse"
 	Quota   = "quota"
+	After   = "after"
 
-	EnvCacheDrives              = "MINIO_CACHE_DRIVES"
-	EnvCacheExclude             = "MINIO_CACHE_EXCLUDE"
-	EnvCacheExpiry              = "MINIO_CACHE_EXPIRY"
-	EnvCacheMaxUse              = "MINIO_CACHE_MAXUSE"
-	EnvCacheQuota               = "MINIO_CACHE_QUOTA"
+	EnvCacheDrives  = "MINIO_CACHE_DRIVES"
+	EnvCacheExclude = "MINIO_CACHE_EXCLUDE"
+	EnvCacheExpiry  = "MINIO_CACHE_EXPIRY"
+	EnvCacheMaxUse  = "MINIO_CACHE_MAXUSE"
+	EnvCacheQuota   = "MINIO_CACHE_QUOTA"
+	EnvCacheAfter   = "MINIO_CACHE_AFTER"
+
 	EnvCacheEncryptionMasterKey = "MINIO_CACHE_ENCRYPTION_MASTER_KEY"
 
 	DefaultExpiry = "90"
 	DefaultQuota  = "80"
+	DefaultAfter  = "0"
 )
 
 // DefaultKVS - default KV settings for caching.
@@ -61,6 +65,10 @@ var (
 		config.KV{
 			Key:   Quota,
 			Value: DefaultQuota,
+		},
+		config.KV{
+			Key:   After,
+			Value: DefaultAfter,
 		},
 	}
 )
@@ -132,6 +140,18 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 			return cfg, config.ErrInvalidCacheQuota(err)
 		}
 		cfg.MaxUse = cfg.Quota
+	}
+
+	if afterStr := env.Get(EnvCacheAfter, kvs.Get(After)); afterStr != "" {
+		cfg.After, err = strconv.Atoi(afterStr)
+		if err != nil {
+			return cfg, config.ErrInvalidCacheAfter(err)
+		}
+		// after should be a valid value >= 0.
+		if cfg.After < 0 {
+			err := errors.New("cache after value cannot be less than 0")
+			return cfg, config.ErrInvalidCacheAfter(err)
+		}
 	}
 
 	return cfg, nil

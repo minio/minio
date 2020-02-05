@@ -27,15 +27,15 @@ import (
 )
 
 // Initialize cache objects.
-func initCacheObjects(disk string, cacheMaxUse int) (*diskCache, error) {
-	return newDiskCache(disk, 80, cacheMaxUse)
+func initCacheObjects(disk string, cacheMaxUse, cacheAfter int) (*diskCache, error) {
+	return newDiskCache(disk, 80, cacheMaxUse, cacheAfter)
 }
 
 // inits diskCache struct for nDisks
-func initDiskCaches(drives []string, cacheMaxUse int, t *testing.T) ([]*diskCache, error) {
+func initDiskCaches(drives []string, cacheMaxUse, cacheAfter int, t *testing.T) ([]*diskCache, error) {
 	var cb []*diskCache
 	for _, d := range drives {
-		obj, err := initCacheObjects(d, cacheMaxUse)
+		obj, err := initCacheObjects(d, cacheMaxUse, cacheAfter)
 		if err != nil {
 			return nil, err
 		}
@@ -70,7 +70,7 @@ func TestGetCachedLoc(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		d, err := initDiskCaches(fsDirs, 100, t)
+		d, err := initDiskCaches(fsDirs, 100, 1, t)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -109,7 +109,7 @@ func TestGetCacheMaxUse(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		d, err := initDiskCaches(fsDirs, 80, t)
+		d, err := initDiskCaches(fsDirs, 80, 1, t)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -180,7 +180,7 @@ func TestDiskCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := initDiskCaches(fsDirs, 100, t)
+	d, err := initDiskCaches(fsDirs, 100, 0, t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,11 +212,11 @@ func TestDiskCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cache.Put(ctx, bucketName, objectName, hashReader, hashReader.Size(), nil, ObjectOptions{UserDefined: httpMeta})
+	err = cache.Put(ctx, bucketName, objectName, hashReader, hashReader.Size(), nil, ObjectOptions{UserDefined: httpMeta}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cReader, err := cache.Get(ctx, bucketName, objectName, nil, http.Header{
+	cReader, _, err := cache.Get(ctx, bucketName, objectName, nil, http.Header{
 		"Content-Type": []string{"application/json"},
 	}, opts)
 	if err != nil {
@@ -258,7 +258,7 @@ func TestDiskCacheMaxUse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := initDiskCaches(fsDirs, 80, t)
+	d, err := initDiskCaches(fsDirs, 80, 0, t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,16 +290,16 @@ func TestDiskCacheMaxUse(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !cache.diskAvailable(int64(size)) {
-		err = cache.Put(ctx, bucketName, objectName, hashReader, hashReader.Size(), nil, ObjectOptions{UserDefined: httpMeta})
+		err = cache.Put(ctx, bucketName, objectName, hashReader, hashReader.Size(), nil, ObjectOptions{UserDefined: httpMeta}, false)
 		if err != errDiskFull {
 			t.Fatal("Cache max-use limit violated.")
 		}
 	} else {
-		err = cache.Put(ctx, bucketName, objectName, hashReader, hashReader.Size(), nil, ObjectOptions{UserDefined: httpMeta})
+		err = cache.Put(ctx, bucketName, objectName, hashReader, hashReader.Size(), nil, ObjectOptions{UserDefined: httpMeta}, false)
 		if err != nil {
 			t.Fatal(err)
 		}
-		cReader, err := cache.Get(ctx, bucketName, objectName, nil, nil, opts)
+		cReader, _, err := cache.Get(ctx, bucketName, objectName, nil, nil, opts)
 		if err != nil {
 			t.Fatal(err)
 		}

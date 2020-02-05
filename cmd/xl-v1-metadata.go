@@ -40,7 +40,7 @@ const erasureAlgorithmKlauspost = "klauspost/reedsolomon/vandermonde"
 type ObjectPartInfo struct {
 	Number     int    `json:"number"`
 	Name       string `json:"name"`
-	ETag       string `json:"etag"`
+	ETag       string `json:"etag,omitempty"`
 	Size       int64  `json:"size"`
 	ActualSize int64  `json:"actualSize"`
 }

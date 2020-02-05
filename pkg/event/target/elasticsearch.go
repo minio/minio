@@ -95,7 +95,7 @@ func (target *ElasticsearchTarget) ID() event.TargetID {
 
 // IsActive - Return true if target is up and active
 func (target *ElasticsearchTarget) IsActive() (bool, error) {
-	if dErr := target.args.URL.DialHTTP(); dErr != nil {
+	if dErr := target.args.URL.DialHTTP(nil); dErr != nil {
 		if xnet.IsNetworkOrHostDown(dErr) {
 			return false, errNotConnected
 		}
@@ -260,7 +260,7 @@ func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan str
 		}
 	}
 
-	dErr := args.URL.DialHTTP()
+	dErr := args.URL.DialHTTP(nil)
 	if dErr != nil {
 		if store == nil {
 			return nil, dErr
