@@ -56,6 +56,8 @@ const (
 	peerRESTMethodListen                       = "/listen"
 	peerRESTMethodBucketLifecycleSet           = "/setbucketlifecycle"
 	peerRESTMethodBucketLifecycleRemove        = "/removebucketlifecycle"
+	peerRESTMethodBucketEncryptionSet          = "/setbucketencryption"
+	peerRESTMethodBucketEncryptionRemove       = "/removebucketencryption"
 	peerRESTMethodLog                          = "/log"
 	peerRESTMethodHardwareCPUInfo              = "/cpuhardwareinfo"
 	peerRESTMethodHardwareNetworkInfo          = "/networkhardwareinfo"

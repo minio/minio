@@ -52,7 +52,7 @@ func (sys *LifecycleSys) Set(bucketName string, lifecycle lifecycle.Lifecycle) {
 }
 
 // Get - gets lifecycle config associated to a given bucket name.
-func (sys *LifecycleSys) Get(bucketName string) (lifecycle lifecycle.Lifecycle, ok bool) {
+func (sys *LifecycleSys) Get(bucketName string) (lc lifecycle.Lifecycle, ok bool) {
 	if globalIsGateway {
 		// When gateway is enabled, no cached value
 		// is used to validate life cycle policies.
@@ -60,14 +60,18 @@ func (sys *LifecycleSys) Get(bucketName string) (lifecycle lifecycle.Lifecycle, 
 		if objAPI == nil {
 			return
 		}
+
 		l, err := objAPI.GetBucketLifecycle(context.Background(), bucketName)
-		return *l, err == nil
+		if err != nil {
+			return
+		}
+		return *l, true
 	}
+
 	sys.Lock()
 	defer sys.Unlock()
-
-	l, ok := sys.bucketLifecycleMap[bucketName]
-	return l, ok
+	lc, ok = sys.bucketLifecycleMap[bucketName]
+	return
 }
 
 func saveLifecycleConfig(ctx context.Context, objAPI ObjectLayer, bucketName string, bucketLifecycle *lifecycle.Lifecycle) error {
@@ -149,7 +153,7 @@ func (sys *LifecycleSys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 	return nil
 }
 
-// Remove - removes policy for given bucket name.
+// Remove - removes lifecycle config for given bucket name.
 func (sys *LifecycleSys) Remove(bucketName string) {
 	sys.Lock()
 	defer sys.Unlock()
