@@ -1,5 +1,5 @@
 {
-  "api_addr": "http://127.0.0.1:8200",
+  "api_addr": "https://127.0.0.1:8200",
   "backend": {
     "file": {
       "path": "vault/file"
@@ -10,8 +10,9 @@
   "listener": {
     "tcp": {
       "address": "0.0.0.0:8200",
-      "tls_disable": true
+      "tls_cert_file": "vault-tls.crt",
+      "tls_key_file": "vault-tls.key",
+      "tls_min_version": "tls12"
     }
-  },
-  "ui": true
+  }
 }
