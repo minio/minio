@@ -56,6 +56,7 @@ type CacheObjectLayer interface {
 	DeleteObject(ctx context.Context, bucket, object string) error
 	DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error)
 	PutObject(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
+	CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error)
 	// Storage operations.
 	StorageInfo(ctx context.Context) CacheStorageInfo
 	CacheStats() *CacheStats
@@ -82,6 +83,7 @@ type cacheObjects struct {
 	DeleteObjectFn   func(ctx context.Context, bucket, object string) error
 	DeleteObjectsFn  func(ctx context.Context, bucket string, objects []string) ([]error, error)
 	PutObjectFn      func(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
+	CopyObjectFn     func(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error)
 }
 
 func (c *cacheObjects) incHitsToMeta(ctx context.Context, dcache *diskCache, bucket, object string, size int64, eTag string) error {
@@ -373,6 +375,30 @@ func (c *cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 	return objInfo, nil
 }
 
+// CopyObject reverts to backend after evicting any stale cache entries
+func (c *cacheObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
+	copyObjectFn := c.CopyObjectFn
+	if c.isCacheExclude(srcBucket, srcObject) || c.skipCache() {
+		return copyObjectFn(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+	}
+	if srcBucket != dstBucket || srcObject != dstObject {
+		return copyObjectFn(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+	}
+	// fetch diskCache if object is currently cached or nearest available cache drive
+	dcache, err := c.getCacheToLoc(ctx, srcBucket, srcObject)
+	if err != nil {
+		return copyObjectFn(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+	}
+	// if currently cached, evict old entry and revert to backend.
+	if cachedObjInfo, _, cerr := dcache.Stat(ctx, srcBucket, srcObject); cerr == nil {
+		cc := cacheControlOpts(cachedObjInfo)
+		if !cc.isStale(cachedObjInfo.ModTime) {
+			dcache.Delete(ctx, srcBucket, srcObject)
+		}
+	}
+	return copyObjectFn(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+}
+
 // StorageInfo - returns underlying storage statistics.
 func (c *cacheObjects) StorageInfo(ctx context.Context) (cInfo CacheStorageInfo) {
 	var total, free uint64
@@ -662,6 +688,9 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 		},
 		PutObjectFn: func(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 			return newObjectLayerFn().PutObject(ctx, bucket, object, data, opts)
+		},
+		CopyObjectFn: func(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
+			return newObjectLayerFn().CopyObject(ctx, srcBucket, srcObject, destBucket, destObject, srcInfo, srcOpts, dstOpts)
 		},
 	}
 
