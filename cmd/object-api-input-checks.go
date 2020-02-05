@@ -162,6 +162,7 @@ func checkObjectArgs(ctx context.Context, bucket, object string, obj ObjectLayer
 	if err := checkObjectNameForLengthAndSlash(bucket, object); err != nil {
 		return err
 	}
+
 	// Validates object name validity after bucket exists.
 	if !IsValidObjectName(object) {
 		return ObjectNameInvalid{
