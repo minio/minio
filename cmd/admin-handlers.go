@@ -1270,20 +1270,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// 2. Check whether we can update / re-wrap the sealed key.
-	sealedKey, err = GlobalKMS.UpdateKey(keyID, sealedKey, kmsContext)
-	if err != nil {
-		response.UpdateErr = err.Error()
-		resp, err := json.Marshal(response)
-		if err != nil {
-			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
-			return
-		}
-		writeSuccessResponseJSON(w, resp)
-		return
-	}
-
-	// 3. Verify that we can indeed decrypt the (encrypted) key
+	// 2. Verify that we can indeed decrypt the (encrypted) key
 	decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
 	if err != nil {
 		response.DecryptionErr = err.Error()
@@ -1296,7 +1283,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// 4. Compare generated key with decrypted key
+	// 3. Compare generated key with decrypted key
 	if subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1 {
 		response.DecryptionErr = "The generated and the decrypted data key do not match"
 		resp, err := json.Marshal(response)
