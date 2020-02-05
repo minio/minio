@@ -56,6 +56,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 	// DataUsageInfo operations
 	adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/datausageinfo").HandlerFunc(httpTraceAll(adminAPI.DataUsageInfoHandler))
 
+	adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/accountingusageinfo").HandlerFunc(httpTraceAll(adminAPI.AccountingUsageInfoHandler))
+
 	if globalIsDistXL || globalIsXL {
 		/// Heal operations
 

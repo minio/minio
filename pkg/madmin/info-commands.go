@@ -198,6 +198,50 @@ func (adm *AdminClient) DataUsageInfo() (DataUsageInfo, error) {
 	return dataUsageInfo, nil
 }
 
+// AccountAccess contains information about
+type AccountAccess struct {
+	AccountName string `json:"accountName"`
+	Read        bool   `json:"read"`
+	Write       bool   `json:"write"`
+	Custom      bool   `json:"custom"`
+}
+
+// BucketAccountingUsage represents the accounting usage of a particular bucket
+type BucketAccountingUsage struct {
+	Size       uint64          `json:"size"`
+	AccessList []AccountAccess `json:"accessList"`
+}
+
+// AccountingUsageInfo returns the accounting usage info, currently it returns
+// the type of access of different accounts to the different buckets.
+func (adm *AdminClient) AccountingUsageInfo() (map[string]BucketAccountingUsage, error) {
+	resp, err := adm.executeMethod(http.MethodGet, requestData{relPath: adminAPIPrefix + "/accountingusageinfo"})
+	defer closeResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var accountingUsageInfo map[string]BucketAccountingUsage
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(respBytes, &accountingUsageInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	return accountingUsageInfo, nil
+}
+
 // ServerDrivesPerfInfo holds informantion about address and write speed of
 // all drives in a single server node
 type ServerDrivesPerfInfo struct {
