@@ -1574,30 +1574,23 @@ func fetchVaultStatus(cfg config.Config) madmin.Vault {
 	} else {
 		vault.Status = "online"
 
-		kmsContext := crypto.Context{"MinIO admin API": "KMSKeyStatusHandler"} // Context for a test key operation
+		kmsContext := crypto.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
 		// 1. Generate a new key using the KMS.
 		key, sealedKey, err := GlobalKMS.GenerateKey(keyID, kmsContext)
 		if err != nil {
-			vault.Encrypt = "Encryption failed"
+			vault.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
 		} else {
 			vault.Encrypt = "Ok"
 		}
 
-		// 2. Check whether we can update / re-wrap the sealed key.
-		sealedKey, err = GlobalKMS.UpdateKey(keyID, sealedKey, kmsContext)
-		if err != nil {
-			vault.Update = "Re-wrap failed:"
-		} else {
-			vault.Update = "Ok"
-		}
-
-		// 3. Verify that we can indeed decrypt the (encrypted) key
-		decryptedKey, decryptErr := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
-
-		// 4. Compare generated key with decrypted key
-		if subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1 || decryptErr != nil {
-			vault.Decrypt = "Re-wrap failed:"
-		} else {
+		// 2. Verify that we can indeed decrypt the (encrypted) key
+		decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
+		switch {
+		case err != nil:
+			vault.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
+		case subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1:
+			vault.Decrypt = "Decryption failed: decrypted key does not match generated key"
+		default:
 			vault.Decrypt = "Ok"
 		}
 	}
