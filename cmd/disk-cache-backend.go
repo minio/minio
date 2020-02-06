@@ -59,7 +59,7 @@ type CacheChecksumInfoV1 struct {
 // Represents the cache metadata struct
 type cacheMeta struct {
 	Version string   `json:"version"`
-	Stat    statInfo `json:"stat"` // Stat of the current object `cache.json`.
+	Stat    StatInfo `json:"stat"` // Stat of the current object `cache.json`.
 
 	// checksums of blocks on disk.
 	Checksum CacheChecksumInfoV1 `json:"checksum,omitempty"`

@@ -42,11 +42,15 @@ type StorageAPI interface {
 	DeleteVol(volume string) (err error)
 
 	// Walk in sorted order directly on disk.
-	Walk(volume, dirPath string, marker string, recursive bool, leafFile string,
-		readMetadataFn readMetadataFunc, endWalkCh chan struct{}) (chan FileInfo, error)
+	Walk(volume, dirPath string, marker string, recursive bool, endWalkCh chan struct{}) (chan FileInfo, error)
+
+	// Metadata operations
+	WriteMetadata(volume string, path, versionID string, fi FileInfo) error
+	ReadMetadata(volume string, path, versionID string) (FileInfo, error)
+	RenameMetadata(srcVolume, srcPath, dstVolume, dstPath string) error
 
 	// File operations.
-	ListDir(volume, dirPath string, count int, leafFile string) ([]string, error)
+	ListDir(volume, dirPath string, count int) ([]string, error)
 	ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error)
 	AppendFile(volume string, path string, buf []byte) (err error)
 	CreateFile(volume, path string, size int64, reader io.Reader) error

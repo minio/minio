@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
@@ -261,6 +262,29 @@ func (client *storageRESTClient) CreateFile(volume, path string, length int64, r
 	return err
 }
 
+func (client *storageRESTClient) WriteMetadata(volume, path, versionID string, fi FileInfo) error {
+	// versionID is not used yet, its meant for future.
+
+	xlMeta := newXLMetaV1(path, fi.Erasure.DataBlocks, fi.Erasure.ParityBlocks)
+	xlMeta.Erasure.Distribution = fi.Erasure.Distribution
+	xlMeta.Stat = StatInfo{
+		Size:    fi.Size,
+		ModTime: fi.ModTime,
+	}
+	xlMeta.Meta = fi.Metadata
+	xlMeta.Parts = fi.Parts
+	xlMeta.Erasure.Checksums = fi.Erasure.Checksums
+	xlMeta.Erasure.Index = fi.Erasure.Index
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	buf, err := json.Marshal(&xlMeta)
+	if err != nil {
+		return err
+	}
+
+	return client.WriteAll(volume, pathJoin(path, xlStorageFormatFile), bytes.NewReader(buf))
+}
+
 // WriteAll - write all data to a file.
 func (client *storageRESTClient) WriteAll(volume, path string, reader io.Reader) error {
 	values := make(url.Values)
@@ -283,6 +307,42 @@ func (client *storageRESTClient) StatFile(volume, path string) (info FileInfo, e
 	defer http.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
 	return info, err
+}
+
+// RenameMetadata - rename source path to destination path atomically, only metadata file.
+func (client *storageRESTClient) RenameMetadata(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
+	srcJSONFile := pathJoin(srcPath, xlStorageFormatFile)
+	dstJSONFile := pathJoin(dstPath, xlStorageFormatFile)
+
+	return client.RenameFile(srcVolume, srcJSONFile, dstVolume, dstJSONFile)
+}
+
+func (client *storageRESTClient) ReadMetadata(volume, path, versionID string) (fi FileInfo, err error) {
+	// versionID is not used yet, its meant for future.
+
+	buf, err := client.ReadAll(volume, pathJoin(path, xlStorageFormatFile))
+	if err != nil {
+		return fi, err
+	}
+
+	if len(buf) == 0 {
+		return fi, errFileNotFound
+	}
+
+	m, err := xlMetaV1UnmarshalJSON(context.Background(), buf)
+	if err != nil {
+		return fi, err
+	}
+
+	return FileInfo{
+		Volume:   volume,
+		Name:     path,
+		ModTime:  m.Stat.ModTime,
+		Size:     m.Stat.Size,
+		Metadata: m.Meta,
+		Parts:    m.Parts,
+		Erasure:  m.Erasure,
+	}, nil
 }
 
 // ReadAll - reads all contents of a file.
@@ -335,14 +395,12 @@ func (client *storageRESTClient) ReadFile(volume, path string, offset int64, buf
 	return int64(n), err
 }
 
-func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive bool, leafFile string,
-	readMetadataFn readMetadataFunc, endWalkCh chan struct{}) (chan FileInfo, error) {
+func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive bool, endWalkCh chan struct{}) (chan FileInfo, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTMarkerPath, marker)
 	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
-	values.Set(storageRESTLeafFile, leafFile)
 	respBody, err := client.call(storageRESTMethodWalk, values, nil, -1)
 	if err != nil {
 		return nil, err
@@ -373,12 +431,11 @@ func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive 
 }
 
 // ListDir - lists a directory.
-func (client *storageRESTClient) ListDir(volume, dirPath string, count int, leafFile string) (entries []string, err error) {
+func (client *storageRESTClient) ListDir(volume, dirPath string, count int) (entries []string, err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTCount, strconv.Itoa(count))
-	values.Set(storageRESTLeafFile, leafFile)
 	respBody, err := client.call(storageRESTMethodListDir, values, nil, -1)
 	if err != nil {
 		return nil, err

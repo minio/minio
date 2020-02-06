@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -196,7 +196,7 @@ func listAllBuckets(storageDisks []StorageAPI) (buckets map[string]VolInfo,
 
 // Only heal on disks where we are sure that healing is needed. We can expand
 // this list as and when we figure out more errors can be added to this list safely.
-func shouldHealObjectOnDisk(xlErr, dataErr error, meta xlMetaV1, quorumModTime time.Time) bool {
+func shouldHealObjectOnDisk(xlErr, dataErr error, meta FileInfo, quorumModTime time.Time) bool {
 	switch xlErr {
 	case errFileNotFound:
 		return true
@@ -211,7 +211,7 @@ func shouldHealObjectOnDisk(xlErr, dataErr error, meta xlMetaV1, quorumModTime t
 		}...) {
 			return true
 		}
-		if !quorumModTime.Equal(meta.Stat.ModTime) {
+		if !quorumModTime.Equal(meta.ModTime) {
 			return true
 		}
 	}
@@ -220,10 +220,10 @@ func shouldHealObjectOnDisk(xlErr, dataErr error, meta xlMetaV1, quorumModTime t
 
 // Heals an object by re-writing corrupt/missing erasure blocks.
 func (xl xlObjects) healObject(ctx context.Context, bucket string, object string,
-	partsMetadata []xlMetaV1, errs []error, latestXLMeta xlMetaV1,
+	partsMetadata []FileInfo, errs []error, latestFileInfo FileInfo,
 	dryRun bool, remove bool, scanMode madmin.HealScanMode) (result madmin.HealResultItem, err error) {
 
-	dataBlocks := latestXLMeta.Erasure.DataBlocks
+	dataBlocks := latestFileInfo.Erasure.DataBlocks
 
 	storageDisks := xl.getDisks()
 
@@ -240,8 +240,8 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 		Bucket:       bucket,
 		Object:       object,
 		DiskCount:    len(storageDisks),
-		ParityBlocks: latestXLMeta.Erasure.ParityBlocks,
-		DataBlocks:   latestXLMeta.Erasure.DataBlocks,
+		ParityBlocks: latestFileInfo.Erasure.ParityBlocks,
+		DataBlocks:   latestFileInfo.Erasure.DataBlocks,
 
 		// Initialize object size to -1, so we can detect if we are
 		// unable to reliably find the object size.
@@ -262,7 +262,7 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 			numAvailableDisks++
 			// If data is sane on any one disk, we can
 			// extract the correct object size.
-			result.ObjectSize = partsMetadata[i].Stat.Size
+			result.ObjectSize = partsMetadata[i].Size
 			result.ParityBlocks = partsMetadata[i].Erasure.ParityBlocks
 			result.DataBlocks = partsMetadata[i].Erasure.DataBlocks
 		case errs[i] == errDiskNotFound, dataErrs[i] == errDiskNotFound:
@@ -319,7 +319,7 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 			if !dryRun && remove {
 				err = xl.deleteObject(ctx, bucket, object, writeQuorum, false)
 			}
-			return defaultHealResult(latestXLMeta, storageDisks, errs, bucket, object), err
+			return defaultHealResult(latestFileInfo, storageDisks, errs, bucket, object), err
 		}
 		return result, toObjectErr(errXLReadQuorum, bucket, object)
 	}
@@ -335,9 +335,9 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 		return result, nil
 	}
 
-	// Latest xlMetaV1 for reference. If a valid metadata is not
+	// Latest FileInfo for reference. If a valid metadata is not
 	// present, it is as good as object not found.
-	latestMeta, pErr := pickValidXLMeta(ctx, partsMetadata, modTime, dataBlocks)
+	latestMeta, pErr := pickValidFileInfo(ctx, partsMetadata, modTime, dataBlocks)
 	if pErr != nil {
 		return result, toObjectErr(pErr, bucket, object)
 	}
@@ -354,7 +354,7 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 		}
 
 		// List and delete the object directory,
-		files, derr := disk.ListDir(bucket, object, -1, "")
+		files, derr := disk.ListDir(bucket, object, -1)
 		if derr == nil {
 			for _, entry := range files {
 				_ = disk.DeleteFile(bucket,
@@ -371,7 +371,7 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 		if outDatedDisks[i] == nil {
 			continue
 		}
-		partsMetadata[i] = newXLMetaFromXLMeta(latestMeta)
+		partsMetadata[i] = cloneFileInfo(latestMeta)
 	}
 
 	// We write at temporary location and then rename to final location.
@@ -388,11 +388,11 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 
 	erasureInfo := latestMeta.Erasure
 	for partIndex := 0; partIndex < len(latestMeta.Parts); partIndex++ {
-		partName := latestMeta.Parts[partIndex].Name
+		partName := fmt.Sprintf("part.%d", latestMeta.Parts[partIndex].Number)
 		partSize := latestMeta.Parts[partIndex].Size
 		partActualSize := latestMeta.Parts[partIndex].ActualSize
 		partNumber := latestMeta.Parts[partIndex].Number
-		tillOffset := erasure.ShardFileTillOffset(0, partSize, partSize)
+		tillOffset := erasure.ShardFileOffset(0, partSize, partSize)
 		readers := make([]io.ReaderAt, len(latestDisks))
 		checksumAlgo := erasureInfo.GetChecksumInfo(partName).Algorithm
 		for i, disk := range latestDisks {
@@ -443,7 +443,7 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 	defer xl.deleteObject(ctx, minioMetaTmpBucket, tmpID, writeQuorum, false)
 
 	// Generate and write `xl.json` generated from other disks.
-	outDatedDisks, aErr := writeUniqueXLMetadata(ctx, outDatedDisks, minioMetaTmpBucket, tmpID,
+	outDatedDisks, aErr := writeUniqueFileInfo(ctx, outDatedDisks, minioMetaTmpBucket, tmpID,
 		partsMetadata, diskCount(outDatedDisks))
 	if aErr != nil {
 		return result, toObjectErr(aErr, bucket, object)
@@ -471,7 +471,7 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 	}
 
 	// Set the size of the object in the heal result
-	result.ObjectSize = latestMeta.Stat.Size
+	result.ObjectSize = latestMeta.Size
 
 	return result, nil
 }
@@ -550,7 +550,7 @@ func (xl xlObjects) healObjectDir(ctx context.Context, bucket, object string, dr
 
 // Populates default heal result item entries with possible values when we are returning prematurely.
 // This is to ensure that in any circumstance we are not returning empty arrays with wrong values.
-func defaultHealResult(latestXLMeta xlMetaV1, storageDisks []StorageAPI, errs []error, bucket, object string) madmin.HealResultItem {
+func defaultHealResult(latestFileInfo FileInfo, storageDisks []StorageAPI, errs []error, bucket, object string) madmin.HealResultItem {
 	// Initialize heal result object
 	result := madmin.HealResultItem{
 		Type:      madmin.HealItemObject,
@@ -562,8 +562,8 @@ func defaultHealResult(latestXLMeta xlMetaV1, storageDisks []StorageAPI, errs []
 		// unable to reliably find the object size.
 		ObjectSize: -1,
 	}
-	if latestXLMeta.IsValid() {
-		result.ObjectSize = latestXLMeta.Stat.Size
+	if latestFileInfo.IsValid() {
+		result.ObjectSize = latestFileInfo.Size
 	}
 
 	for index, disk := range storageDisks {
@@ -596,13 +596,13 @@ func defaultHealResult(latestXLMeta xlMetaV1, storageDisks []StorageAPI, errs []
 		})
 	}
 
-	if !latestXLMeta.IsValid() {
+	if !latestFileInfo.IsValid() {
 		// Default to most common configuration for erasure blocks.
 		result.ParityBlocks = len(storageDisks) / 2
 		result.DataBlocks = len(storageDisks) / 2
 	} else {
-		result.ParityBlocks = latestXLMeta.Erasure.ParityBlocks
-		result.DataBlocks = latestXLMeta.Erasure.DataBlocks
+		result.ParityBlocks = latestFileInfo.Erasure.ParityBlocks
+		result.DataBlocks = latestFileInfo.Erasure.DataBlocks
 	}
 
 	return result
@@ -617,7 +617,7 @@ func statAllDirs(ctx context.Context, storageDisks []StorageAPI, bucket, prefix 
 		}
 		index := index
 		g.Go(func() error {
-			entries, err := storageDisks[index].ListDir(bucket, prefix, 1, "")
+			entries, err := storageDisks[index].ListDir(bucket, prefix, 1)
 			if err != nil {
 				return err
 			}
@@ -647,7 +647,7 @@ func isObjectDirDangling(errs []error) (ok bool) {
 // Object is considered dangling/corrupted if any only
 // if total disks - a combination of corrupted and missing
 // files is lesser than number of data blocks.
-func isObjectDangling(metaArr []xlMetaV1, errs []error, dataErrs []error) (validMeta xlMetaV1, ok bool) {
+func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (validMeta FileInfo, ok bool) {
 	// We can consider an object data not reliable
 	// when xl.json is not found in read quorum disks.
 	// or when xl.json is not readable in read quorum disks.
@@ -710,7 +710,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 	storageDisks := xl.getDisks()
 
 	// Read metadata files from all the disks
-	partsMetadata, errs := readAllXLMetadata(healCtx, storageDisks, bucket, object)
+	partsMetadata, errs := readAllFileInfo(storageDisks, bucket, object)
 
 	// Check if the object is dangling, if yes and user requested
 	// remove we simply delete it from namespace.
@@ -723,12 +723,12 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 			xl.deleteObject(healCtx, bucket, object, writeQuorum, false)
 		}
 		err = reduceReadQuorumErrs(ctx, errs, nil, writeQuorum-1)
-		return defaultHealResult(xlMetaV1{}, storageDisks, errs, bucket, object), toObjectErr(err, bucket, object)
+		return defaultHealResult(FileInfo{}, storageDisks, errs, bucket, object), toObjectErr(err, bucket, object)
 	}
 
-	latestXLMeta, err := getLatestXLMeta(healCtx, partsMetadata, errs)
+	latestFileInfo, err := getLatestFileInfo(healCtx, partsMetadata, errs)
 	if err != nil {
-		return defaultHealResult(xlMetaV1{}, storageDisks, errs, bucket, object), toObjectErr(err, bucket, object)
+		return defaultHealResult(FileInfo{}, storageDisks, errs, bucket, object), toObjectErr(err, bucket, object)
 	}
 
 	errCount := 0
@@ -742,7 +742,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 		// Only if we get errors from all the disks we return error. Else we need to
 		// continue to return filled madmin.HealResultItem struct which includes info
 		// on what disks the file is available etc.
-		if err = reduceReadQuorumErrs(ctx, errs, nil, latestXLMeta.Erasure.DataBlocks); err != nil {
+		if err = reduceReadQuorumErrs(ctx, errs, nil, latestFileInfo.Erasure.DataBlocks); err != nil {
 			if m, ok := isObjectDangling(partsMetadata, errs, []error{}); ok {
 				writeQuorum := m.Erasure.DataBlocks + 1
 				if m.Erasure.DataBlocks == 0 {
@@ -752,10 +752,10 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 					xl.deleteObject(ctx, bucket, object, writeQuorum, false)
 				}
 			}
-			return defaultHealResult(latestXLMeta, storageDisks, errs, bucket, object), toObjectErr(err, bucket, object)
+			return defaultHealResult(latestFileInfo, storageDisks, errs, bucket, object), toObjectErr(err, bucket, object)
 		}
 	}
 
 	// Heal the object.
-	return xl.healObject(healCtx, bucket, object, partsMetadata, errs, latestXLMeta, dryRun, remove, scanMode)
+	return xl.healObject(healCtx, bucket, object, partsMetadata, errs, latestFileInfo, dryRun, remove, scanMode)
 }

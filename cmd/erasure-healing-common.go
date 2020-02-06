@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -60,16 +61,16 @@ func bootModtimes(diskCount int) []time.Time {
 	return modTimes
 }
 
-// Extracts list of times from xlMetaV1 slice and returns, skips
+// Extracts list of times from FileInfo slice and returns, skips
 // slice elements which have errors.
-func listObjectModtimes(partsMetadata []xlMetaV1, errs []error) (modTimes []time.Time) {
+func listObjectModtimes(partsMetadata []FileInfo, errs []error) (modTimes []time.Time) {
 	modTimes = bootModtimes(len(partsMetadata))
 	for index, metadata := range partsMetadata {
 		if errs[index] != nil {
 			continue
 		}
 		// Once the file is found, save the uuid saved on disk.
-		modTimes[index] = metadata.Stat.ModTime
+		modTimes[index] = metadata.ModTime
 	}
 	return modTimes
 }
@@ -98,7 +99,7 @@ func listObjectModtimes(partsMetadata []xlMetaV1, errs []error) (modTimes []time
 // - a slice of disks where disk having 'older' xl.json (or nothing)
 // are set to nil.
 // - latest (in time) of the maximally occurring modTime(s).
-func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error) (onlineDisks []StorageAPI, modTime time.Time) {
+func listOnlineDisks(disks []StorageAPI, partsMetadata []FileInfo, errs []error) (onlineDisks []StorageAPI, modTime time.Time) {
 	onlineDisks = make([]StorageAPI, len(disks))
 
 	// List all the file commit ids from parts metadata.
@@ -118,36 +119,36 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error)
 	return onlineDisks, modTime
 }
 
-// Returns the latest updated xlMeta files and error in case of failure.
-func getLatestXLMeta(ctx context.Context, partsMetadata []xlMetaV1, errs []error) (xlMetaV1, error) {
+// Returns the latest updated FileInfo files and error in case of failure.
+func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []error) (FileInfo, error) {
 
 	// There should be atleast half correct entries, if not return failure
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, len(partsMetadata)/2); reducedErr != nil {
-		return xlMetaV1{}, reducedErr
+		return FileInfo{}, reducedErr
 	}
 
 	// List all the file commit ids from parts metadata.
 	modTimes := listObjectModtimes(partsMetadata, errs)
 
-	// Count all latest updated xlMeta values
+	// Count all latest updated FileInfo values
 	var count int
-	var latestXLMeta xlMetaV1
+	var latestFileInfo FileInfo
 
 	// Reduce list of UUIDs to a single common value - i.e. the last updated Time
 	modTime, _ := commonTime(modTimes)
 
-	// Interate through all the modTimes and count the xlMeta(s) with latest time.
+	// Interate through all the modTimes and count the FileInfo(s) with latest time.
 	for index, t := range modTimes {
 		if t == modTime && partsMetadata[index].IsValid() {
-			latestXLMeta = partsMetadata[index]
+			latestFileInfo = partsMetadata[index]
 			count++
 		}
 	}
 	if count < len(partsMetadata)/2 {
-		return xlMetaV1{}, errXLReadQuorum
+		return FileInfo{}, errXLReadQuorum
 	}
 
-	return latestXLMeta, nil
+	return latestFileInfo, nil
 }
 
 // disksWithAllParts - This function needs to be called with
@@ -157,7 +158,7 @@ func getLatestXLMeta(ctx context.Context, partsMetadata []xlMetaV1, errs []error
 //
 // - slice of errors about the state of data files on disk - can have
 //   a not-found error or a hash-mismatch error.
-func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket,
+func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetadata []FileInfo, errs []error, bucket,
 	object string, scanMode madmin.HealScanMode) ([]StorageAPI, []error) {
 	availableDisks := make([]StorageAPI, len(onlineDisks))
 	dataErrs := make([]error, len(onlineDisks))
@@ -171,7 +172,8 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 		switch scanMode {
 		case madmin.HealDeepScan:
 			erasureInfo := partsMetadata[i].Erasure
-			erasure, err := NewErasure(ctx, erasureInfo.DataBlocks, erasureInfo.ParityBlocks, erasureInfo.BlockSize)
+			erasure, err := NewErasure(ctx, erasureInfo.DataBlocks,
+				erasureInfo.ParityBlocks, erasureInfo.BlockSize)
 			if err != nil {
 				dataErrs[i] = err
 				continue
@@ -181,8 +183,11 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			// parts. This is considered an outdated disk, since
 			// it needs healing too.
 			for _, part := range partsMetadata[i].Parts {
-				checksumInfo := erasureInfo.GetChecksumInfo(part.Name)
-				err = onlineDisk.VerifyFile(bucket, pathJoin(object, part.Name), erasure.ShardFileSize(part.Size), checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
+				name := fmt.Sprintf("part.%d", part.Number)
+				checksumInfo := erasureInfo.GetChecksumInfo(name)
+				err = onlineDisk.VerifyFile(bucket, pathJoin(object, name),
+					erasure.ShardFileSize(part.Size), checksumInfo.Algorithm,
+					checksumInfo.Hash, erasure.ShardSize())
 				if err != nil {
 					if !IsErr(err, []error{
 						errFileNotFound,
@@ -198,7 +203,8 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			}
 		case madmin.HealNormalScan:
 			for _, part := range partsMetadata[i].Parts {
-				_, err := onlineDisk.StatFile(bucket, pathJoin(object, part.Name))
+				name := fmt.Sprintf("part.%d", part.Number)
+				_, err := onlineDisk.StatFile(bucket, pathJoin(object, name))
 				if err != nil {
 					dataErrs[i] = err
 					break

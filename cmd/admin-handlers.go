@@ -1569,7 +1569,6 @@ func fetchVaultStatus(cfg config.Config) madmin.Vault {
 	}
 
 	if err := checkConnection(kmsInfo.Endpoint, 15*time.Second); err != nil {
-
 		vault.Status = "offline"
 	} else {
 		vault.Status = "online"

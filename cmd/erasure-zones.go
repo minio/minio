@@ -569,7 +569,7 @@ func (z *xlZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, marke
 			eof = true
 			break
 		}
-		rquorum := result.Quorum
+		rquorum := result.Erasure.DataBlocks
 		// Quorum is zero for all directories.
 		if rquorum == 0 {
 			// Choose N/2 quorum for directory entries.
@@ -869,7 +869,7 @@ func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, zoneDrives [
 			// We have reached EOF across all entryChs, break the loop.
 			break
 		}
-		rquorum := fi.Quorum
+		rquorum := fi.Erasure.DataBlocks
 		// Quorum is zero for all directories.
 		if rquorum == 0 {
 			// Choose N/2 quoroum for directory entries.

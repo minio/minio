@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,6 +48,7 @@ import (
 )
 
 const (
+	nullVersionID     = "null"                // default version ID.
 	diskMinFreeSpace  = 900 * humanize.MiByte // Min 900MiB free space.
 	diskMinTotalSpace = diskMinFreeSpace      // Min 900MiB total space.
 	readBlockSize     = 4 * humanize.MiByte   // Default read block size 4MiB.
@@ -79,8 +80,8 @@ func isValidVolname(volname string) bool {
 	return true
 }
 
-// posix - implements StorageAPI interface.
-type posix struct {
+// xlStorage - implements StorageAPI interface.
+type xlStorage struct {
 	// Disk usage metrics
 	totalUsed uint64 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 
@@ -150,7 +151,7 @@ func getValidPath(path string) (string, error) {
 		}
 	}
 	if fi != nil && !fi.IsDir() {
-		return path, syscall.ENOTDIR
+		return path, errDiskNotDir
 	}
 
 	di, err := getDiskInfo(path)
@@ -200,16 +201,13 @@ func isDirEmpty(dirname string) bool {
 }
 
 // Initialize a new storage disk.
-func newPosix(path string) (*posix, error) {
+func newXLStorage(path string) (*xlStorage, error) {
 	var err error
 	if path, err = getValidPath(path); err != nil {
 		return nil, err
 	}
-	_, err = os.Stat(path)
-	if err != nil {
-		return nil, err
-	}
-	p := &posix{
+
+	p := &xlStorage{
 		diskPath: path,
 		pool: sync.Pool{
 			New: func() interface{} {
@@ -307,20 +305,20 @@ func checkDiskFree(diskPath string, neededSpace int64) (err error) {
 }
 
 // Implements stringer compatible interface.
-func (s *posix) String() string {
+func (s *xlStorage) String() string {
 	return s.diskPath
 }
 
-func (*posix) Hostname() string {
+func (*xlStorage) Hostname() string {
 	return ""
 }
 
-func (s *posix) Close() error {
+func (s *xlStorage) Close() error {
 	close(s.stopUsageCh)
 	return nil
 }
 
-func (s *posix) IsOnline() bool {
+func (s *xlStorage) IsOnline() bool {
 	return true
 }
 
@@ -333,16 +331,16 @@ func isQuitting(endCh chan struct{}) bool {
 	}
 }
 
-func (s *posix) waitForLowActiveIO() {
+func (s *xlStorage) waitForLowActiveIO() {
 	for atomic.LoadInt32(&s.activeIOCount) >= s.maxActiveIOCount {
 		time.Sleep(lowActiveIOWaitTick)
 	}
 }
 
-func (s *posix) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, error) {
+func (s *xlStorage) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, error) {
 	dataUsageInfo := updateUsage(s.diskPath, endCh, s.waitForLowActiveIO, func(item Item) (int64, error) {
 		// Look for `xl.json' at the leaf.
-		if !strings.HasSuffix(item.Path, SlashSeparator+xlMetaJSONFile) {
+		if !strings.HasSuffix(item.Path, SlashSeparator+xlStorageFormatFile) {
 			// if no xl.json found, skip the file.
 			return 0, errSkipFile
 		}
@@ -377,7 +375,7 @@ type DiskInfo struct {
 
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
-func (s *posix) DiskInfo() (info DiskInfo, err error) {
+func (s *xlStorage) DiskInfo() (info DiskInfo, err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -416,7 +414,7 @@ func (s *posix) DiskInfo() (info DiskInfo, err error) {
 // corresponding valid volume names on the backend in a platform
 // compatible way for all operating systems. If volume is not found
 // an error is generated.
-func (s *posix) getVolDir(volume string) (string, error) {
+func (s *xlStorage) getVolDir(volume string) (string, error) {
 	if volume == "" || volume == "." || volume == ".." {
 		return "", errVolumeNotFound
 	}
@@ -424,7 +422,7 @@ func (s *posix) getVolDir(volume string) (string, error) {
 	return volumeDir, nil
 }
 
-func (s *posix) getDiskID() (string, error) {
+func (s *xlStorage) getDiskID() (string, error) {
 	s.RLock()
 	diskID := s.diskID
 	fileInfo := s.formatFileInfo
@@ -473,12 +471,12 @@ func (s *posix) getDiskID() (string, error) {
 }
 
 // Make a volume entry.
-func (s *posix) SetDiskID(id string) {
-	// NO-OP for posix as it is handled either by posixDiskIDCheck{} for local disks or
+func (s *xlStorage) SetDiskID(id string) {
+	// NO-OP for xlStorage as it is handled either by xlStorageDiskIDCheck{} for local disks or
 	// storage rest server for remote disks.
 }
 
-func (s *posix) MakeVolBulk(volumes ...string) (err error) {
+func (s *xlStorage) MakeVolBulk(volumes ...string) (err error) {
 	for _, volume := range volumes {
 		if err = s.MakeVol(volume); err != nil {
 			if err != errVolumeExists {
@@ -490,7 +488,7 @@ func (s *posix) MakeVolBulk(volumes ...string) (err error) {
 }
 
 // Make a volume entry.
-func (s *posix) MakeVol(volume string) (err error) {
+func (s *xlStorage) MakeVol(volume string) (err error) {
 	if !isValidVolname(volume) {
 		return errInvalidArgument
 	}
@@ -524,7 +522,7 @@ func (s *posix) MakeVol(volume string) (err error) {
 }
 
 // ListVols - list volumes.
-func (s *posix) ListVols() (volsInfo []VolInfo, err error) {
+func (s *xlStorage) ListVols() (volsInfo []VolInfo, err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -584,7 +582,7 @@ func listVols(dirPath string) ([]VolInfo, error) {
 }
 
 // StatVol - get volume info.
-func (s *posix) StatVol(volume string) (volInfo VolInfo, err error) {
+func (s *xlStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -616,7 +614,7 @@ func (s *posix) StatVol(volume string) (volInfo VolInfo, err error) {
 }
 
 // DeleteVol - delete a volume.
-func (s *posix) DeleteVol(volume string) (err error) {
+func (s *xlStorage) DeleteVol(volume string) (err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -647,9 +645,7 @@ func (s *posix) DeleteVol(volume string) (err error) {
 
 // Walk - is a sorted walker which returns file entries in lexically
 // sorted order, additionally along with metadata about each of those entries.
-func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile string,
-	readMetadataFn readMetadataFunc, endWalkCh chan struct{}) (ch chan FileInfo, err error) {
-
+func (s *xlStorage) Walk(volume, dirPath, marker string, recursive bool, endWalkCh chan struct{}) (ch chan FileInfo, err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -676,7 +672,7 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 	go func() {
 		defer close(ch)
 		listDir := func(volume, dirPath, dirEntry string) (entries []string) {
-			entries, err := s.ListDir(volume, dirPath, -1, leafFile)
+			entries, err := s.ListDir(volume, dirPath, -1)
 			if err != nil {
 				return
 			}
@@ -698,11 +694,11 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 					Mode:   os.ModeDir,
 				}
 			} else {
-				buf, err := s.ReadAll(volume, pathJoin(walkResult.entry, leafFile))
+				var err error
+				fi, err = s.ReadMetadata(volume, walkResult.entry, "")
 				if err != nil {
 					continue
 				}
-				fi = readMetadataFn(buf, volume, walkResult.entry)
 			}
 			select {
 			case ch <- fi:
@@ -717,7 +713,7 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing SlashSeparator.
-func (s *posix) ListDir(volume, dirPath string, count int, leafFile string) (entries []string, err error) {
+func (s *xlStorage) ListDir(volume, dirPath string, count int) (entries []string, err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -747,15 +743,70 @@ func (s *posix) ListDir(volume, dirPath string, count int, leafFile string) (ent
 	}
 
 	// If leaf file is specified, filter out the entries.
-	if leafFile != "" {
-		for i, entry := range entries {
-			if _, serr := os.Stat(pathJoin(dirPath, entry, leafFile)); serr == nil {
-				entries[i] = strings.TrimSuffix(entry, SlashSeparator)
-			}
+	for i, entry := range entries {
+		if _, serr := os.Stat(pathJoin(dirPath, entry, xlStorageFormatFile)); serr == nil {
+			entries[i] = strings.TrimSuffix(entry, SlashSeparator)
 		}
 	}
 
 	return entries, err
+}
+
+// WriteMetadata - writes FileInfo metadata for path at `xl.json`
+func (s *xlStorage) WriteMetadata(volume, path, versionID string, fi FileInfo) error {
+	// versionID is not used yet, its meant for future.
+
+	xlMeta := newXLMetaV1(path, fi.Erasure.DataBlocks, fi.Erasure.ParityBlocks)
+	xlMeta.Erasure.Distribution = fi.Erasure.Distribution
+	xlMeta.Stat = StatInfo{
+		Size:    fi.Size,
+		ModTime: fi.ModTime,
+	}
+	xlMeta.Meta = fi.Metadata
+	xlMeta.Parts = fi.Parts
+	xlMeta.Erasure.Checksums = fi.Erasure.Checksums
+	xlMeta.Erasure.Index = fi.Erasure.Index
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	buf, err := json.Marshal(&xlMeta)
+	if err != nil {
+		return err
+	}
+
+	return s.WriteAll(volume, pathJoin(path, xlStorageFormatFile), bytes.NewReader(buf))
+}
+
+// ReadMetadata - reads metadata and returns FileInfo at path `xl.json`
+func (s *xlStorage) ReadMetadata(volume, path, versionID string) (fi FileInfo, err error) {
+	// versionID is not used yet, its meant for future.
+
+	buf, err := s.ReadAll(volume, pathJoin(path, xlStorageFormatFile))
+	if err != nil {
+		return fi, err
+	}
+
+	if len(buf) == 0 {
+		return fi, errFileNotFound
+	}
+
+	m, err := xlMetaV1UnmarshalJSON(context.Background(), buf)
+	if err != nil {
+		return fi, err
+	}
+
+	if !m.IsValid() {
+		return fi, errFileCorrupt
+	}
+
+	return FileInfo{
+		Volume:   volume,
+		Name:     path,
+		ModTime:  m.Stat.ModTime,
+		Size:     m.Stat.Size,
+		Metadata: m.Meta,
+		Parts:    m.Parts,
+		Erasure:  m.Erasure,
+	}, nil
 }
 
 // ReadAll reads from r until an error or EOF and returns the data it read.
@@ -764,7 +815,7 @@ func (s *posix) ListDir(volume, dirPath string, count int, leafFile string) (ent
 // as an error to be reported.
 // This API is meant to be used on files which have small memory footprint, do
 // not use this on large files as it would cause server to crash.
-func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
+func (s *xlStorage) ReadAll(volume, path string) (buf []byte, err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -774,6 +825,7 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
+
 	// Stat a volume entry.
 	_, err = os.Stat((volumeDir))
 	if err != nil {
@@ -826,7 +878,7 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 //
 // Additionally ReadFile also starts reading from an offset. ReadFile
 // semantics are same as io.ReadFull.
-func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (int64, error) {
+func (s *xlStorage) ReadFile(volume, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (int64, error) {
 	if offset < 0 {
 		return 0, errInvalidArgument
 	}
@@ -925,7 +977,7 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 	return int64(len(buffer)), nil
 }
 
-func (s *posix) openFile(volume, path string, mode int) (f *os.File, err error) {
+func (s *xlStorage) openFile(volume, path string, mode int) (f *os.File, err error) {
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return nil, err
@@ -981,7 +1033,7 @@ func (s *posix) openFile(volume, path string, mode int) (f *os.File, err error) 
 }
 
 // ReadFileStream - Returns the read stream of the file.
-func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
+func (s *xlStorage) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
 	if offset < 0 {
 		return nil, errInvalidArgument
 	}
@@ -1074,7 +1126,7 @@ func (c closeWrapper) Close() error {
 }
 
 // CreateFile - creates the file.
-func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (err error) {
+func (s *xlStorage) CreateFile(volume, path string, fileSize int64, r io.Reader) (err error) {
 	if fileSize < -1 {
 		return errInvalidArgument
 	}
@@ -1172,7 +1224,7 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 	return nil
 }
 
-func (s *posix) WriteAll(volume, path string, reader io.Reader) (err error) {
+func (s *xlStorage) WriteAll(volume, path string, reader io.Reader) (err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -1196,7 +1248,7 @@ func (s *posix) WriteAll(volume, path string, reader io.Reader) (err error) {
 
 // AppendFile - append a byte array at path, if file doesn't exist at
 // path this call explicitly creates it.
-func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
+func (s *xlStorage) AppendFile(volume, path string, buf []byte) (err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -1218,7 +1270,7 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 }
 
 // StatFile - get file info.
-func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
+func (s *xlStorage) StatFile(volume, path string) (file FileInfo, err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -1241,6 +1293,7 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 	if err = checkPathLength((filePath)); err != nil {
 		return FileInfo{}, err
 	}
+
 	st, err := os.Stat((filePath))
 	if err != nil {
 		switch {
@@ -1257,10 +1310,12 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 			return FileInfo{}, err
 		}
 	}
+
 	// If its a directory its not a regular file.
 	if st.Mode().IsDir() {
 		return FileInfo{}, errFileNotFound
 	}
+
 	return FileInfo{
 		Volume:  volume,
 		Name:    path,
@@ -1309,7 +1364,7 @@ func deleteFile(basePath, deletePath string) error {
 }
 
 // DeleteFile - delete a file at path.
-func (s *posix) DeleteFile(volume, path string) (err error) {
+func (s *xlStorage) DeleteFile(volume, path string) (err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -1344,7 +1399,7 @@ func (s *posix) DeleteFile(volume, path string) (err error) {
 	return deleteFile(volumeDir, filePath)
 }
 
-func (s *posix) DeleteFileBulk(volume string, paths []string) (errs []error, err error) {
+func (s *xlStorage) DeleteFileBulk(volume string, paths []string) (errs []error, err error) {
 	errs = make([]error, len(paths))
 	for idx, path := range paths {
 		errs[idx] = s.DeleteFile(volume, path)
@@ -1352,8 +1407,16 @@ func (s *posix) DeleteFileBulk(volume string, paths []string) (errs []error, err
 	return
 }
 
+// RenameMetadata - rename source path to destination path atomically, only metadata file.
+func (s *xlStorage) RenameMetadata(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
+	srcJSONFile := pathJoin(srcPath, xlStorageFormatFile)
+	dstJSONFile := pathJoin(dstPath, xlStorageFormatFile)
+
+	return s.RenameFile(srcVolume, srcJSONFile, dstVolume, dstJSONFile)
+}
+
 // RenameFile - rename source path to destination path atomically.
-func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
+func (s *xlStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -1440,7 +1503,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 	return nil
 }
 
-func (s *posix) VerifyFile(volume, path string, fileSize int64, algo BitrotAlgorithm, sum []byte, shardSize int64) (err error) {
+func (s *xlStorage) VerifyFile(volume, path string, fileSize int64, algo BitrotAlgorithm, sum []byte, shardSize int64) (err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)

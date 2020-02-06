@@ -885,7 +885,7 @@ func mergeEntriesCh(entryChs []FileInfoCh, maxKeys int, totalDrives int, partial
 			break
 		}
 
-		rquorum := fi.Quorum
+		rquorum := fi.Erasure.DataBlocks
 		// Quorum is zero for all directories.
 		if rquorum == 0 {
 			// Choose N/2 quoroum for directory entries.
@@ -946,7 +946,7 @@ func (s *xlSets) startMergeWalks(ctx context.Context, bucket, prefix, marker str
 				// Disk can be offline
 				continue
 			}
-			entryCh, err := disk.Walk(bucket, prefix, marker, recursive, xlMetaJSONFile, readMetadata, endWalkCh)
+			entryCh, err := disk.Walk(bucket, prefix, marker, recursive, endWalkCh)
 			if err != nil {
 				// Disk walk returned error, ignore it.
 				continue
@@ -980,7 +980,7 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 			eof = true
 			break
 		}
-		rquorum := result.Quorum
+		rquorum := result.Erasure.DataBlocks
 		// Quorum is zero for all directories.
 		if rquorum == 0 {
 			// Choose N/2 quorum for directory entries.

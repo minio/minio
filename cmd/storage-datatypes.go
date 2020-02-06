@@ -60,5 +60,6 @@ type FileInfo struct {
 	// All the parts per object.
 	Parts []ObjectPartInfo
 
-	Quorum int
+	// Erasure info for all objects.
+	Erasure ErasureInfo
 }

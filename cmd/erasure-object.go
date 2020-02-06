@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"path"
@@ -70,7 +71,7 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 		// Read metadata associated with the object from all disks.
 		storageDisks := xl.getDisks()
 
-		metaArr, errs := readAllXLMetadata(ctx, storageDisks, srcBucket, srcObject)
+		metaArr, errs := readAllFileInfo(storageDisks, srcBucket, srcObject)
 
 		// get Quorum for this object
 		readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
@@ -86,15 +87,15 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 		_, modTime := listOnlineDisks(storageDisks, metaArr, errs)
 
 		// Pick latest valid metadata.
-		xlMeta, err := pickValidXLMeta(ctx, metaArr, modTime, readQuorum)
+		fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
 		if err != nil {
 			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
 
 		// Update `xl.json` content on each disks.
 		for index := range metaArr {
-			metaArr[index].Meta = srcInfo.UserDefined
-			metaArr[index].Meta["etag"] = srcInfo.ETag
+			metaArr[index].Metadata = srcInfo.UserDefined
+			metaArr[index].Metadata["etag"] = srcInfo.ETag
 		}
 
 		var onlineDisks []StorageAPI
@@ -105,16 +106,16 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 		defer xl.deleteObject(ctx, minioMetaTmpBucket, tempObj, writeQuorum, false)
 
 		// Write unique `xl.json` for each disk.
-		if onlineDisks, err = writeUniqueXLMetadata(ctx, storageDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
+		if onlineDisks, err = writeUniqueFileInfo(ctx, storageDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
 			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
 
 		// Rename atomically `xl.json` from tmp location to destination for each disk.
-		if _, err = renameXLMetadata(ctx, onlineDisks, minioMetaTmpBucket, tempObj, srcBucket, srcObject, writeQuorum); err != nil {
+		if _, err = renameFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, srcBucket, srcObject, writeQuorum); err != nil {
 			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
 
-		return xlMeta.ToObjectInfo(srcBucket, srcObject), nil
+		return fi.ToObjectInfo(srcBucket, srcObject), nil
 	}
 
 	putOpts := ObjectOptions{ServerSideEncryption: dstOpts.ServerSideEncryption, UserDefined: srcInfo.UserDefined}
@@ -198,7 +199,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 	}
 
 	// Read metadata associated with the object from all disks.
-	metaArr, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
+	metaArr, errs := readAllFileInfo(xl.getDisks(), bucket, object)
 
 	// get Quorum for this object
 	readQuorum, _, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
@@ -214,32 +215,32 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 	onlineDisks, modTime := listOnlineDisks(xl.getDisks(), metaArr, errs)
 
 	// Pick latest valid metadata.
-	xlMeta, err := pickValidXLMeta(ctx, metaArr, modTime, readQuorum)
+	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
 	if err != nil {
 		return err
 	}
 
 	// Reorder online disks based on erasure distribution order.
-	onlineDisks = shuffleDisks(onlineDisks, xlMeta.Erasure.Distribution)
+	onlineDisks = shuffleDisks(onlineDisks, fi.Erasure.Distribution)
 
 	// Reorder parts metadata based on erasure distribution order.
-	metaArr = shufflePartsMetadata(metaArr, xlMeta.Erasure.Distribution)
+	metaArr = shufflePartsMetadata(metaArr, fi.Erasure.Distribution)
 
 	// For negative length read everything.
 	if length < 0 {
-		length = xlMeta.Stat.Size - startOffset
+		length = fi.Size - startOffset
 	}
 
 	// Reply back invalid range if the input offset and length fall out of range.
-	if startOffset > xlMeta.Stat.Size || startOffset+length > xlMeta.Stat.Size {
-		logger.LogIf(ctx, InvalidRange{startOffset, length, xlMeta.Stat.Size}, logger.Application)
-		return InvalidRange{startOffset, length, xlMeta.Stat.Size}
+	if startOffset > fi.Size || startOffset+length > fi.Size {
+		logger.LogIf(ctx, InvalidRange{startOffset, length, fi.Size}, logger.Application)
+		return InvalidRange{startOffset, length, fi.Size}
 	}
 
 	// Get start part index and offset.
-	partIndex, partOffset, err := xlMeta.ObjectToPartOffset(ctx, startOffset)
+	partIndex, partOffset, err := fi.ObjectToPartOffset(ctx, startOffset)
 	if err != nil {
-		return InvalidRange{startOffset, length, xlMeta.Stat.Size}
+		return InvalidRange{startOffset, length, fi.Size}
 	}
 
 	// Calculate endOffset according to length
@@ -249,13 +250,13 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 	}
 
 	// Get last part index to read given length.
-	lastPartIndex, _, err := xlMeta.ObjectToPartOffset(ctx, endOffset)
+	lastPartIndex, _, err := fi.ObjectToPartOffset(ctx, endOffset)
 	if err != nil {
-		return InvalidRange{startOffset, length, xlMeta.Stat.Size}
+		return InvalidRange{startOffset, length, fi.Size}
 	}
 
 	var totalBytesRead int64
-	erasure, err := NewErasure(ctx, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xlMeta.Erasure.BlockSize)
+	erasure, err := NewErasure(ctx, fi.Erasure.DataBlocks, fi.Erasure.ParityBlocks, fi.Erasure.BlockSize)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
@@ -265,8 +266,8 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 			break
 		}
 		// Save the current part name and size.
-		partName := xlMeta.Parts[partIndex].Name
-		partSize := xlMeta.Parts[partIndex].Size
+		partName := fmt.Sprintf("part.%d", fi.Parts[partIndex].Number)
+		partSize := fi.Parts[partIndex].Size
 
 		partLength := partSize - partOffset
 		// partLength should be adjusted so that we don't write more data than what was requested.
@@ -274,7 +275,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 			partLength = length - totalBytesRead
 		}
 
-		tillOffset := erasure.ShardFileTillOffset(partOffset, partLength, partSize)
+		tillOffset := erasure.ShardFileOffset(partOffset, partLength, partSize)
 		// Get the checksums of the current part.
 		readers := make([]io.ReaderAt, len(onlineDisks))
 		for index, disk := range onlineDisks {
@@ -322,7 +323,7 @@ func (xl xlObjects) getObjectInfoDir(ctx context.Context, bucket, object string)
 		index := index
 		g.Go(func() error {
 			// Check if 'prefix' is an object on this 'disk'.
-			entries, err := storageDisks[index].ListDir(bucket, object, 1, "")
+			entries, err := storageDisks[index].ListDir(bucket, object, 1)
 			if err != nil {
 				return err
 			}
@@ -366,7 +367,7 @@ func (xl xlObjects) getObjectInfo(ctx context.Context, bucket, object string) (o
 	disks := xl.getDisks()
 
 	// Read metadata associated with the object from all disks.
-	metaArr, errs := readAllXLMetadata(ctx, disks, bucket, object)
+	metaArr, errs := readAllFileInfo(disks, bucket, object)
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
 	if err != nil {
@@ -380,12 +381,12 @@ func (xl xlObjects) getObjectInfo(ctx context.Context, bucket, object string) (o
 	modTime, _ := commonTime(modTimes)
 
 	// Pick latest valid metadata.
-	xlMeta, err := pickValidXLMeta(ctx, metaArr, modTime, readQuorum)
+	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
 	if err != nil {
 		return objInfo, err
 	}
 
-	return xlMeta.ToObjectInfo(bucket, object), nil
+	return fi.ToObjectInfo(bucket, object), nil
 }
 
 func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, errs []error) {
@@ -533,19 +534,19 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	}
 
 	// Initialize parts metadata
-	partsMetadata := make([]xlMetaV1, len(xl.getDisks()))
+	partsMetadata := make([]FileInfo, len(xl.getDisks()))
 
-	xlMeta := newXLMetaV1(object, dataDrives, parityDrives)
+	fi := newFileInfo(object, dataDrives, parityDrives)
 
 	// Initialize xl meta.
 	for index := range partsMetadata {
-		partsMetadata[index] = xlMeta
+		partsMetadata[index] = fi
 	}
 
 	// Order disks according to erasure distribution
-	onlineDisks := shuffleDisks(storageDisks, xlMeta.Erasure.Distribution)
+	onlineDisks := shuffleDisks(storageDisks, fi.Erasure.Distribution)
 
-	erasure, err := NewErasure(ctx, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xlMeta.Erasure.BlockSize)
+	erasure, err := NewErasure(ctx, fi.Erasure.DataBlocks, fi.Erasure.ParityBlocks, fi.Erasure.BlockSize)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
@@ -555,16 +556,16 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	switch size := data.Size(); {
 	case size == 0:
 		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
-	case size == -1 || size >= blockSizeV1:
+	case size == -1 || size >= fi.Erasure.BlockSize:
 		buffer = xl.bp.Get()
 		defer xl.bp.Put(buffer)
-	case size < blockSizeV1:
+	case size < fi.Erasure.BlockSize:
 		// No need to allocate fully blockSizeV1 buffer if the incoming data is smaller.
-		buffer = make([]byte, size, 2*size+int64(erasure.parityBlocks+erasure.dataBlocks-1))
+		buffer = make([]byte, size, 2*size+int64(fi.Erasure.ParityBlocks+fi.Erasure.DataBlocks-1))
 	}
 
-	if len(buffer) > int(xlMeta.Erasure.BlockSize) {
-		buffer = buffer[:xlMeta.Erasure.BlockSize]
+	if len(buffer) > int(fi.Erasure.BlockSize) {
+		buffer = buffer[:fi.Erasure.BlockSize]
 	}
 
 	partName := "part.1"
@@ -578,7 +579,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj, erasure.ShardFileSize(data.Size()), DefaultBitrotAlgorithm, erasure.ShardSize())
 	}
 
-	n, erasureErr := erasure.Encode(ctx, data, writers, buffer, erasure.dataBlocks+1)
+	n, erasureErr := erasure.Encode(ctx, data, writers, buffer, fi.Erasure.DataBlocks+1)
 	closeBitrotWriters(writers)
 	if erasureErr != nil {
 		return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)
@@ -636,13 +637,13 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// Fill all the necessary metadata.
 	// Update `xl.json` content on each disks.
 	for index := range partsMetadata {
-		partsMetadata[index].Meta = opts.UserDefined
-		partsMetadata[index].Stat.Size = n
-		partsMetadata[index].Stat.ModTime = modTime
+		partsMetadata[index].Metadata = opts.UserDefined
+		partsMetadata[index].Size = n
+		partsMetadata[index].ModTime = modTime
 	}
 
 	// Write unique `xl.json` for each disk.
-	if onlineDisks, err = writeUniqueXLMetadata(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, writeQuorum); err != nil {
+	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, writeQuorum); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
@@ -662,18 +663,18 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 
 	// Object info is the same in all disks, so we can pick the first meta
 	// of the first disk
-	xlMeta = partsMetadata[0]
+	fi = partsMetadata[0]
 
 	objInfo = ObjectInfo{
 		IsDir:           false,
 		Bucket:          bucket,
 		Name:            object,
-		Size:            xlMeta.Stat.Size,
-		ModTime:         xlMeta.Stat.ModTime,
-		ETag:            xlMeta.Meta["etag"],
-		ContentType:     xlMeta.Meta["content-type"],
-		ContentEncoding: xlMeta.Meta["content-encoding"],
-		UserDefined:     xlMeta.Meta,
+		Size:            fi.Size,
+		ModTime:         fi.ModTime,
+		ETag:            fi.Metadata["etag"],
+		ContentType:     fi.Metadata["content-type"],
+		ContentEncoding: fi.Metadata["content-encoding"],
+		UserDefined:     fi.Metadata,
 	}
 
 	return objInfo, nil
@@ -840,7 +841,7 @@ func (xl xlObjects) deleteObjects(ctx context.Context, bucket string, objects []
 		} else {
 			var err error
 			// Read metadata associated with the object from all disks.
-			partsMetadata, readXLErrs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
+			partsMetadata, readXLErrs := readAllFileInfo(xl.getDisks(), bucket, object)
 			// get Quorum for this object
 			_, writeQuorums[i], err = objectQuorumFromMeta(ctx, xl, partsMetadata, readXLErrs)
 			if err != nil {
@@ -930,7 +931,7 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (er
 		writeQuorum = len(xl.getDisks())/2 + 1
 	} else {
 		// Read metadata associated with the object from all disks.
-		partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
+		partsMetadata, errs := readAllFileInfo(xl.getDisks(), bucket, object)
 		// get Quorum for this object
 		_, writeQuorum, err = objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
 		if err != nil {
@@ -983,32 +984,32 @@ func (xl xlObjects) PutObjectTag(ctx context.Context, bucket, object string, tag
 	disks := xl.getDisks()
 
 	// Read metadata associated with the object from all disks.
-	metaArr, errs := readAllXLMetadata(ctx, disks, bucket, object)
+	metaArr, errs := readAllFileInfo(disks, bucket, object)
 
 	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
 	if err != nil {
 		return err
 	}
 
-	for i, xlMeta := range metaArr {
-		// clean xlMeta.Meta of tag key, before updating the new tags
-		delete(xlMeta.Meta, xhttp.AmzObjectTagging)
+	for i, fi := range metaArr {
+		// clean fi.Meta of tag key, before updating the new tags
+		delete(fi.Metadata, xhttp.AmzObjectTagging)
 		// Don't update for empty tags
 		if tags != "" {
-			xlMeta.Meta[xhttp.AmzObjectTagging] = tags
+			fi.Metadata[xhttp.AmzObjectTagging] = tags
 		}
-		metaArr[i].Meta = xlMeta.Meta
+		metaArr[i].Metadata = fi.Metadata
 	}
 
 	tempObj := mustGetUUID()
 
 	// Write unique `xl.json` for each disk.
-	if disks, err = writeUniqueXLMetadata(ctx, disks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
+	if disks, err = writeUniqueFileInfo(ctx, disks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 
-	// Atomically rename `xl.json` from tmp location to destination for each disk.
-	if _, err = renameXLMetadata(ctx, disks, minioMetaTmpBucket, tempObj, bucket, object, writeQuorum); err != nil {
+	// Atomically rename metadata from tmp location to destination for each disk.
+	if _, err = renameFileInfo(ctx, disks, minioMetaTmpBucket, tempObj, bucket, object, writeQuorum); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 

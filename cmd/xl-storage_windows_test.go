@@ -1,7 +1,7 @@
 // +build windows
 
 /*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ func TestUNCPaths(t *testing.T) {
 		{string(bytes.Repeat([]byte("界"), 100)), false},
 		{`/p/q/r/s/t`, true},
 	}
-	// Instantiate posix object to manage a disk
+	// Instantiate xlStorage object to manage a disk
 	var err error
 	err = os.Mkdir("c:\\testdisk", 0700)
 	if err != nil {
@@ -47,7 +47,7 @@ func TestUNCPaths(t *testing.T) {
 	defer os.RemoveAll("c:\\testdisk")
 
 	var fs StorageAPI
-	fs, err = newPosix(`c:\testdisk`)
+	fs, err = newXLStorage(`c:\testdisk`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,10 +69,10 @@ func TestUNCPaths(t *testing.T) {
 	}
 }
 
-// Test to validate posix behavior on windows when a non-final path component is a file.
+// Test to validate xlStorage behavior on windows when a non-final path component is a file.
 func TestUNCPathENOTDIR(t *testing.T) {
 	var err error
-	// Instantiate posix object to manage a disk
+	// Instantiate xlStorage object to manage a disk
 	err = os.Mkdir("c:\\testdisk", 0700)
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +81,7 @@ func TestUNCPathENOTDIR(t *testing.T) {
 	defer os.RemoveAll("c:\\testdisk")
 
 	var fs StorageAPI
-	fs, err = newPosix(`c:\testdisk`)
+	fs, err = newXLStorage(`c:\testdisk`)
 	if err != nil {
 		t.Fatal(err)
 	}
