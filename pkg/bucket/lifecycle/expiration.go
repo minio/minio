@@ -25,7 +25,7 @@ var (
 	errLifecycleInvalidDate       = Errorf("Date must be provided in ISO 8601 format")
 	errLifecycleInvalidDays       = Errorf("Days must be positive integer when used with Expiration")
 	errLifecycleInvalidExpiration = Errorf("At least one of Days or Date should be present inside Expiration")
-	errLifecycleDateNotMidnight   = Errorf(" 'Date' must be at midnight GMT")
+	errLifecycleDateNotMidnight   = Errorf("'Date' must be at midnight GMT")
 )
 
 // ExpirationDays is a type alias to unmarshal Days in Expiration
