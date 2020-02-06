@@ -18,7 +18,6 @@ package lifecycle
 
 import (
 	"encoding/xml"
-	"errors"
 )
 
 // Transition - transition actions for a rule in lifecycle configuration.
@@ -29,7 +28,7 @@ type Transition struct {
 	StorageClass string   `xml:"StorageClass"`
 }
 
-var errTransitionUnsupported = errors.New("Specifying <Transition></Transition> tag is not supported")
+var errTransitionUnsupported = Errorf("Specifying <Transition></Transition> tag is not supported")
 
 // UnmarshalXML is extended to indicate lack of support for Transition
 // xml tag in object lifecycle configuration

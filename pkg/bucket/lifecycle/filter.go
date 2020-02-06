@@ -16,17 +16,52 @@
 
 package lifecycle
 
-import "encoding/xml"
+import (
+	"encoding/xml"
+
+	"github.com/minio/minio/pkg/bucket/object/tagging"
+)
 
 // Filter - a filter for a lifecycle configuration Rule.
 type Filter struct {
-	XMLName xml.Name `xml:"Filter"`
-	And     And      `xml:"And,omitempty"`
-	Prefix  string   `xml:"Prefix"`
-	Tag     Tag      `xml:"Tag,omitempty"`
+	XMLName xml.Name    `xml:"Filter"`
+	Prefix  string      `xml:"Prefix,omitempty"`
+	And     And         `xml:"And,omitempty"`
+	Tag     tagging.Tag `xml:"Tag,omitempty"`
 }
+
+var (
+	errInvalidFilter = Errorf("Filter must have exactly one of Prefix, Tag, or And specified")
+)
 
 // Validate - validates the filter element
 func (f Filter) Validate() error {
+	// A Filter must have exactly one of Prefix, Tag, or And specified.
+	if !f.And.isEmpty() {
+		if f.Prefix != "" {
+			return errInvalidFilter
+		}
+		if !f.Tag.IsEmpty() {
+			return errInvalidFilter
+		}
+		if err := f.And.Validate(); err != nil {
+			return err
+		}
+	}
+	if f.Prefix != "" {
+		if !f.Tag.IsEmpty() {
+			return errInvalidFilter
+		}
+	}
+	if !f.Tag.IsEmpty() {
+		if err := f.Tag.Validate(); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// isEmpty - returns true if Filter tag is empty
+func (f Filter) isEmpty() bool {
+	return f.And.isEmpty() && f.Prefix == "" && f.Tag == tagging.Tag{}
 }

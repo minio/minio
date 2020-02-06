@@ -17,8 +17,8 @@
 package lifecycle
 
 import (
+	"bytes"
 	"encoding/xml"
-	"errors"
 )
 
 // Rule - a rule for lifecycle configuration.
@@ -26,7 +26,7 @@ type Rule struct {
 	XMLName    xml.Name   `xml:"Rule"`
 	ID         string     `xml:"ID,omitempty"`
 	Status     string     `xml:"Status"`
-	Filter     Filter     `xml:"Filter"`
+	Filter     Filter     `xml:"Filter,omitempty"`
 	Expiration Expiration `xml:"Expiration,omitempty"`
 	Transition Transition `xml:"Transition,omitempty"`
 	// FIXME: add a type to catch unsupported AbortIncompleteMultipartUpload AbortIncompleteMultipartUpload `xml:"AbortIncompleteMultipartUpload,omitempty"`
@@ -35,13 +35,13 @@ type Rule struct {
 }
 
 var (
-	errInvalidRuleID           = errors.New("ID must be less than 255 characters")
-	errEmptyRuleStatus         = errors.New("Status should not be empty")
-	errInvalidRuleStatus       = errors.New("Status must be set to either Enabled or Disabled")
-	errMissingExpirationAction = errors.New("No expiration action found")
+	errInvalidRuleID           = Errorf("ID must be less than 255 characters")
+	errEmptyRuleStatus         = Errorf("Status should not be empty")
+	errInvalidRuleStatus       = Errorf("Status must be set to either Enabled or Disabled")
+	errMissingExpirationAction = Errorf("No expiration action found")
 )
 
-// isIDValid - checks if ID is valid or not.
+// validateID - checks if ID is valid or not.
 func (r Rule) validateID() error {
 	// cannot be longer than 255 characters
 	if len(string(r.ID)) > 255 {
@@ -50,7 +50,7 @@ func (r Rule) validateID() error {
 	return nil
 }
 
-// isStatusValid - checks if status is valid or not.
+// validateStatus - checks if status is valid or not.
 func (r Rule) validateStatus() error {
 	// Status can't be empty
 	if len(r.Status) == 0 {
@@ -71,6 +71,43 @@ func (r Rule) validateAction() error {
 	return nil
 }
 
+func (r Rule) validateFilter() error {
+	return r.Filter.Validate()
+}
+
+// Prefix - a rule can either have prefix under <filter></filter> or under
+// <filter><and></and></filter>. This method returns the prefix from the
+// location where it is available
+func (r Rule) Prefix() string {
+	if r.Filter.Prefix != "" {
+		return r.Filter.Prefix
+	}
+	if r.Filter.And.Prefix != "" {
+		return r.Filter.And.Prefix
+	}
+	return ""
+}
+
+// Tags - a rule can either have tag under <filter></filter> or under
+// <filter><and></and></filter>. This method returns all the tags from the
+// rule in the format tag1=value1&tag2=value2
+func (r Rule) Tags() string {
+	if !r.Filter.Tag.IsEmpty() {
+		return r.Filter.Tag.String()
+	}
+	if len(r.Filter.And.Tags) != 0 {
+		var buf bytes.Buffer
+		for _, t := range r.Filter.And.Tags {
+			if buf.Len() > 0 {
+				buf.WriteString("&")
+			}
+			buf.WriteString(t.String())
+		}
+		return buf.String()
+	}
+	return ""
+}
+
 // Validate - validates the rule element
 func (r Rule) Validate() error {
 	if err := r.validateID(); err != nil {
@@ -80,6 +117,9 @@ func (r Rule) Validate() error {
 		return err
 	}
 	if err := r.validateAction(); err != nil {
+		return err
+	}
+	if err := r.validateFilter(); err != nil {
 		return err
 	}
 	return nil

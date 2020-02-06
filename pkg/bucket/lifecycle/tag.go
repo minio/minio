@@ -18,7 +18,6 @@ package lifecycle
 
 import (
 	"encoding/xml"
-	"errors"
 )
 
 // Tag - a tag for a lifecycle configuration Rule filter.
@@ -28,7 +27,7 @@ type Tag struct {
 	Value   string   `xml:"Value,omitempty"`
 }
 
-var errTagUnsupported = errors.New("Specifying <Tag></Tag> is not supported")
+var errTagUnsupported = Errorf("Specifying <Tag></Tag> is not supported")
 
 // UnmarshalXML is extended to indicate lack of support for Tag
 // xml tag in object lifecycle configuration

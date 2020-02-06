@@ -18,16 +18,15 @@ package lifecycle
 
 import (
 	"encoding/xml"
-	"errors"
 	"io"
 	"strings"
 	"time"
 )
 
 var (
-	errLifecycleTooManyRules      = errors.New("Lifecycle configuration allows a maximum of 1000 rules")
-	errLifecycleNoRule            = errors.New("Lifecycle configuration should have at least one rule")
-	errLifecycleOverlappingPrefix = errors.New("Lifecycle configuration has rules with overlapping prefix")
+	errLifecycleTooManyRules      = Errorf("Lifecycle configuration allows a maximum of 1000 rules")
+	errLifecycleNoRule            = Errorf("Lifecycle configuration should have at least one rule")
+	errLifecycleOverlappingPrefix = Errorf("Lifecycle configuration has rules with overlapping prefix")
 )
 
 // Action represents a delete action or other transition
@@ -88,8 +87,8 @@ func (lc Lifecycle) Validate() error {
 		// N B Empty prefixes overlap with all prefixes
 		otherRules := lc.Rules[i+1:]
 		for _, otherRule := range otherRules {
-			if strings.HasPrefix(lc.Rules[i].Filter.Prefix, otherRule.Filter.Prefix) ||
-				strings.HasPrefix(otherRule.Filter.Prefix, lc.Rules[i].Filter.Prefix) {
+			if strings.HasPrefix(lc.Rules[i].Prefix(), otherRule.Prefix()) ||
+				strings.HasPrefix(otherRule.Prefix(), lc.Rules[i].Prefix()) {
 				return errLifecycleOverlappingPrefix
 			}
 		}
@@ -99,13 +98,20 @@ func (lc Lifecycle) Validate() error {
 
 // FilterRuleActions returns the expiration and transition from the object name
 // after evaluating all rules.
-func (lc Lifecycle) FilterRuleActions(objName string) (Expiration, Transition) {
+func (lc Lifecycle) FilterRuleActions(objName, objTags string) (Expiration, Transition) {
 	for _, rule := range lc.Rules {
 		if strings.ToLower(rule.Status) != "enabled" {
 			continue
 		}
-		if strings.HasPrefix(objName, rule.Filter.Prefix) {
-			return rule.Expiration, Transition{}
+		tags := rule.Tags()
+		if strings.HasPrefix(objName, rule.Prefix()) {
+			if tags != "" {
+				if strings.Contains(objTags, tags) {
+					return rule.Expiration, Transition{}
+				}
+			} else {
+				return rule.Expiration, Transition{}
+			}
 		}
 	}
 	return Expiration{}, Transition{}
@@ -113,9 +119,9 @@ func (lc Lifecycle) FilterRuleActions(objName string) (Expiration, Transition) {
 
 // ComputeAction returns the action to perform by evaluating all lifecycle rules
 // against the object name and its modification time.
-func (lc Lifecycle) ComputeAction(objName string, modTime time.Time) Action {
+func (lc Lifecycle) ComputeAction(objName, objTags string, modTime time.Time) Action {
 	var action = NoneAction
-	exp, _ := lc.FilterRuleActions(objName)
+	exp, _ := lc.FilterRuleActions(objName, objTags)
 	if !exp.IsDateNull() {
 		if time.Now().After(exp.Date.Time) {
 			action = DeleteAction
