@@ -987,7 +987,9 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
+	// Check if bucket encryption is enabled
+	_, encEnabled := globalBucketSSEConfigSys.Get(bucket)
+	if (globalAutoEncryption || encEnabled) && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 

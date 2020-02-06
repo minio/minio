@@ -21,9 +21,12 @@ import (
 	"errors"
 
 	"github.com/minio/minio/cmd/logger"
+
+	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
+
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -125,6 +128,21 @@ func (a GatewayUnsupported) GetBucketLifecycle(ctx context.Context, bucket strin
 
 // DeleteBucketLifecycle deletes all lifecycle on bucket
 func (a GatewayUnsupported) DeleteBucketLifecycle(ctx context.Context, bucket string) error {
+	return NotImplemented{}
+}
+
+// GetBucketSSEConfig returns bucket encryption config on given bucket
+func (a GatewayUnsupported) GetBucketSSEConfig(ctx context.Context, bucket string) (*bucketsse.BucketSSEConfig, error) {
+	return nil, NotImplemented{}
+}
+
+// SetBucketSSEConfig sets bucket encryption config on given bucket
+func (a GatewayUnsupported) SetBucketSSEConfig(ctx context.Context, bucket string, config *bucketsse.BucketSSEConfig) error {
+	return NotImplemented{}
+}
+
+// DeleteBucketSSEConfig deletes bucket encryption config on given bucket
+func (a GatewayUnsupported) DeleteBucketSSEConfig(ctx context.Context, bucket string) error {
 	return NotImplemented{}
 }
 

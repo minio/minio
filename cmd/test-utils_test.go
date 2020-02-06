@@ -374,6 +374,9 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalLifecycleSys = NewLifecycleSys()
 	globalLifecycleSys.Init(buckets, objLayer)
 
+	globalBucketSSEConfigSys = NewBucketSSEConfigSys()
+	globalBucketSSEConfigSys.Init(buckets, objLayer)
+
 	return testServer
 }
 
@@ -1976,6 +1979,9 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 
 	globalPolicySys = NewPolicySys()
 	globalPolicySys.Init(buckets, objLayer)
+
+	globalBucketSSEConfigSys = NewBucketSSEConfigSys()
+	globalBucketSSEConfigSys.Init(buckets, objLayer)
 
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, FSTestStr, t)

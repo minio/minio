@@ -97,6 +97,7 @@ const (
 	ErrNoSuchBucket
 	ErrNoSuchBucketPolicy
 	ErrNoSuchBucketLifecycle
+	ErrNoSuchBucketSSEConfig
 	ErrNoSuchKey
 	ErrNoSuchUpload
 	ErrNoSuchVersion
@@ -486,6 +487,11 @@ var errorCodes = errorCodeMap{
 	ErrNoSuchBucketLifecycle: {
 		Code:           "NoSuchBucketLifecycle",
 		Description:    "The bucket lifecycle configuration does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrNoSuchBucketSSEConfig: {
+		Code:           "ServerSideEncryptionConfigurationNotFoundError",
+		Description:    "The server side encryption configuration was not found",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrNoSuchKey: {
@@ -1720,6 +1726,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrNoSuchBucketPolicy
 	case BucketLifecycleNotFound:
 		apiErr = ErrNoSuchBucketLifecycle
+	case BucketSSEConfigNotFound:
+		apiErr = ErrNoSuchBucketSSEConfig
 	case *event.ErrInvalidEventName:
 		apiErr = ErrEventNotification
 	case *event.ErrInvalidARN:

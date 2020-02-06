@@ -113,6 +113,11 @@ const (
 	PutObjectTaggingAction = "s3:PutObjectTagging"
 	// DeleteObjectTaggingAction - Delete Object Tags API action
 	DeleteObjectTaggingAction = "s3:DeleteObjectTagging"
+
+	// PutBucketEncryptionAction - PutBucketEncryption REST API action
+	PutBucketEncryptionAction = "s3:PutEncryptionConfiguration"
+	// GetBucketEncryptionAction - GetBucketEncryption REST API action
+	GetBucketEncryptionAction = "s3:GetEncryptionConfiguration"
 )
 
 // isObjectAction - returns whether action is object type or not.

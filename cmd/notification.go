@@ -32,9 +32,12 @@ import (
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
+
+	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
+
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
@@ -570,6 +573,41 @@ func (sys *NotificationSys) RemoveBucketLifecycle(ctx context.Context, bucketNam
 			client := client
 			ng.Go(ctx, func() error {
 				return client.RemoveBucketLifecycle(bucketName)
+			}, idx, *client.host)
+		}
+		ng.Wait()
+	}()
+}
+
+// SetBucketSSEConfig - calls SetBucketSSEConfig on all peers.
+func (sys *NotificationSys) SetBucketSSEConfig(ctx context.Context, bucketName string,
+	encConfig *bucketsse.BucketSSEConfig) {
+	go func() {
+		ng := WithNPeers(len(sys.peerClients))
+		for idx, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
+			client := client
+			ng.Go(ctx, func() error {
+				return client.SetBucketSSEConfig(bucketName, encConfig)
+			}, idx, *client.host)
+		}
+		ng.Wait()
+	}()
+}
+
+// RemoveBucketSSEConfig - calls RemoveBucketSSEConfig on all peers.
+func (sys *NotificationSys) RemoveBucketSSEConfig(ctx context.Context, bucketName string) {
+	go func() {
+		ng := WithNPeers(len(sys.peerClients))
+		for idx, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
+			client := client
+			ng.Go(ctx, func() error {
+				return client.RemoveBucketSSEConfig(bucketName)
 			}, idx, *client.host)
 		}
 		ng.Wait()

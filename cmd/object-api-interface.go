@@ -22,9 +22,11 @@ import (
 	"net/http"
 
 	"github.com/minio/minio-go/v6/pkg/encrypt"
+	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
+
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -120,6 +122,11 @@ type ObjectLayer interface {
 	SetBucketLifecycle(context.Context, string, *lifecycle.Lifecycle) error
 	GetBucketLifecycle(context.Context, string) (*lifecycle.Lifecycle, error)
 	DeleteBucketLifecycle(context.Context, string) error
+
+	// Bucket Encryption operations
+	SetBucketSSEConfig(context.Context, string, *bucketsse.BucketSSEConfig) error
+	GetBucketSSEConfig(context.Context, string) (*bucketsse.BucketSSEConfig, error)
+	DeleteBucketSSEConfig(context.Context, string) error
 
 	// Backend related metrics
 	GetMetrics(ctx context.Context) (*Metrics, error)

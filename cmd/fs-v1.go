@@ -37,9 +37,12 @@ import (
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+
+	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
+
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mimedb"
@@ -1290,6 +1293,21 @@ func (fs *FSObjects) GetBucketLifecycle(ctx context.Context, bucket string) (*li
 // DeleteBucketLifecycle deletes all lifecycle on bucket
 func (fs *FSObjects) DeleteBucketLifecycle(ctx context.Context, bucket string) error {
 	return removeLifecycleConfig(ctx, fs, bucket)
+}
+
+// GetBucketSSEConfig returns bucket encryption config on given bucket
+func (fs *FSObjects) GetBucketSSEConfig(ctx context.Context, bucket string) (*bucketsse.BucketSSEConfig, error) {
+	return getBucketSSEConfig(fs, bucket)
+}
+
+// SetBucketSSEConfig sets bucket encryption config on given bucket
+func (fs *FSObjects) SetBucketSSEConfig(ctx context.Context, bucket string, config *bucketsse.BucketSSEConfig) error {
+	return saveBucketSSEConfig(ctx, fs, bucket, config)
+}
+
+// DeleteBucketSSEConfig deletes bucket encryption config on given bucket
+func (fs *FSObjects) DeleteBucketSSEConfig(ctx context.Context, bucket string) error {
+	return removeBucketSSEConfig(ctx, fs, bucket)
 }
 
 // ListObjectsV2 lists all blobs in bucket filtered by prefix

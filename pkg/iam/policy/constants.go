@@ -64,3 +64,16 @@ var WriteOnly = Policy{
 		},
 	},
 }
+
+// AdminDiagnostics - provides admin diagnostics access.
+var AdminDiagnostics = Policy{
+	Version: DefaultVersion,
+	Statements: []Statement{
+		{
+			SID:       policy.ID(""),
+			Effect:    policy.Allow,
+			Actions:   NewActionSet(PerfInfoAdminAction, ProfilingAdminAction, TraceAdminAction, ConsoleLogAdminAction, ServerInfoAdminAction, ServerHardwareInfoAdminAction),
+			Resources: NewResourceSet(NewResource("*", "")),
+		},
+	},
+}

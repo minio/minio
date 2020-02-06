@@ -223,5 +223,6 @@ func (o *Opa) IsAllowed(args iampolicy.Args) (bool, error) {
 		}
 		return resultAllow.Result.Allow, nil
 	}
+
 	return result.Result, nil
 }
