@@ -643,7 +643,7 @@ func initXLMetaVolumesInLocalDisks(storageDisks []StorageAPI, formats []*formatX
 		// goroutine will return its own instance of index variable.
 		index := index
 		g.Go(func() error {
-			return makeFormatXLMetaVolumes(storageDisks[index])
+			return makeFormatXLMetaVolumes(disksToInit[index])
 		}, index)
 	}
 
