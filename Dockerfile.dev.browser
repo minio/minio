@@ -10,4 +10,3 @@ ENV PATH=$PATH:/root/go/bin
 
 RUN go get github.com/go-bindata/go-bindata/go-bindata && \
     go get github.com/elazarl/go-bindata-assetfs/go-bindata-assetfs
-

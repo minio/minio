@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/config"
-	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/color"
@@ -512,7 +511,6 @@ func (i *crawlItem) transformMetaDir() {
 type actionMeta struct {
 	oi      ObjectInfo
 	trustOI bool // Set true if oi can be trusted and has been read with quorum.
-	meta    map[string]string
 }
 
 // applyActions will apply lifecycle checks on to a scanned item.
@@ -528,7 +526,16 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 		return size
 	}
 
-	action := i.lifeCycle.ComputeAction(i.objectPath(), meta.meta[xhttp.AmzObjectTagging], meta.oi.ModTime)
+	versionID := meta.oi.VersionID
+	action := i.lifeCycle.ComputeAction(
+		lifecycle.ObjectOpts{
+			Name:         i.objectPath(),
+			UserTags:     meta.oi.UserTags,
+			ModTime:      meta.oi.ModTime,
+			VersionID:    meta.oi.VersionID,
+			DeleteMarker: meta.oi.DeleteMarker,
+			IsLatest:     meta.oi.IsLatest,
+		})
 	if i.debug {
 		logger.Info(color.Green("applyActions:")+" lifecycle: %q, Initial scan: %v", i.objectPath(), action)
 	}
@@ -542,19 +549,42 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	// These (expensive) operations should only run on items we are likely to delete.
 	// Load to ensure that we have the correct version and not an unsynced version.
 	if !meta.trustOI {
-		obj, err := o.GetObjectInfo(ctx, i.bucket, i.objectPath(), ObjectOptions{})
+		obj, err := o.GetObjectInfo(ctx, i.bucket, i.objectPath(), ObjectOptions{
+			VersionID: versionID,
+		})
 		if err != nil {
-			// Do nothing - heal in the future.
-			logger.LogIf(ctx, err)
-			return size
+			switch err.(type) {
+			case MethodNotAllowed: // This happens usually for a delete marker
+				if !obj.DeleteMarker { // if this is not a delete marker log and return
+					// Do nothing - heal in the future.
+					logger.LogIf(ctx, err)
+					return size
+				}
+			case ObjectNotFound:
+				// object not found return 0
+				return 0
+			default:
+				// All other errors proceed.
+				logger.LogIf(ctx, err)
+				return size
+			}
 		}
 		size = obj.Size
 
 		// Recalculate action.
-		action = i.lifeCycle.ComputeAction(i.objectPath(), obj.UserTags, obj.ModTime)
+		action = i.lifeCycle.ComputeAction(
+			lifecycle.ObjectOpts{
+				Name:         i.objectPath(),
+				UserTags:     obj.UserTags,
+				ModTime:      obj.ModTime,
+				VersionID:    obj.VersionID,
+				DeleteMarker: obj.DeleteMarker,
+				IsLatest:     obj.IsLatest,
+			})
 		if i.debug {
 			logger.Info(color.Green("applyActions:")+" lifecycle: Secondary scan: %v", action)
 		}
+		versionID = obj.VersionID
 		switch action {
 		case lifecycle.DeleteAction:
 		default:
@@ -563,7 +593,7 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 		}
 	}
 
-	err = o.DeleteObject(ctx, i.bucket, i.objectPath())
+	obj, err := o.DeleteObject(ctx, i.bucket, i.objectPath(), ObjectOptions{VersionID: versionID})
 	if err != nil {
 		// Assume it is still there.
 		logger.LogIf(ctx, err)
@@ -574,10 +604,8 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	sendEvent(eventArgs{
 		EventName:  event.ObjectRemovedDelete,
 		BucketName: i.bucket,
-		Object: ObjectInfo{
-			Name: i.objectPath(),
-		},
-		Host: "Internal: [ILM-EXPIRY]",
+		Object:     obj,
+		Host:       "Internal: [ILM-EXPIRY]",
 	})
 	return 0
 }

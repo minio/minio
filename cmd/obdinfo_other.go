@@ -30,7 +30,7 @@ import (
 
 func getLocalDiskHwOBD(ctx context.Context, r *http.Request) madmin.ServerDiskHwOBDInfo {
 	addr := r.Host
-	if globalIsDistXL {
+	if globalIsDistErasure {
 		addr = GetLocalPeer(globalEndpoints)
 	}
 

@@ -59,7 +59,7 @@ func initHelp() {
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
 	}
-	if globalIsXL {
+	if globalIsErasure {
 		kvs[config.StorageClassSubSys] = storageclass.DefaultKVS
 	}
 	config.RegisterDefaultKVS(kvs)
@@ -168,7 +168,7 @@ func initHelp() {
 		},
 	}
 
-	if globalIsXL {
+	if globalIsErasure {
 		helpSubSys = append(helpSubSys, config.HelpKV{})
 		copy(helpSubSys[2:], helpSubSys[1:])
 		helpSubSys[1] = config.HelpKV{
@@ -232,9 +232,9 @@ func validateConfig(s config.Config) error {
 		return err
 	}
 
-	if globalIsXL {
+	if globalIsErasure {
 		if _, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default],
-			globalXLSetDriveCount); err != nil {
+			globalErasureSetDriveCount); err != nil {
 			return err
 		}
 	}
@@ -367,9 +367,9 @@ func lookupConfigs(s config.Config) {
 
 	globalAPIConfig.init(apiConfig)
 
-	if globalIsXL {
+	if globalIsErasure {
 		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default],
-			globalXLSetDriveCount)
+			globalErasureSetDriveCount)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
 		}

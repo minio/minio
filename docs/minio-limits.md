@@ -39,7 +39,6 @@ We found the following APIs to be redundant or less useful outside of AWS S3. If
 
 - BucketACL (Use [bucket policies](https://docs.min.io/docs/minio-client-complete-guide#policy) instead)
 - BucketCORS (CORS enabled by default on all buckets for all HTTP verbs)
-- BucketReplication (Use [`mc mirror`](https://docs.min.io/docs/minio-client-complete-guide#mirror) instead)
 - BucketWebsite (Use [`caddy`](https://github.com/mholt/caddy) or [`nginx`](https://www.nginx.com/resources/wiki/))
 - BucketAnalytics, BucketMetrics, BucketLogging (Use [bucket notification](https://docs.min.io/docs/minio-client-complete-guide#events) APIs)
 - BucketRequestPayment

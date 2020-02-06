@@ -59,6 +59,10 @@ const (
 	// S3Delimiter - key representing delimiter query parameter of ListBucket API only.
 	S3Delimiter Key = "s3:delimiter"
 
+	// S3VersionID - Enables you to limit the permission for the
+	// s3:PutObjectVersionTagging action to a specific object version.
+	S3VersionID Key = "s3:versionid"
+
 	// S3MaxKeys - key representing max-keys query parameter of ListBucket API only.
 	S3MaxKeys Key = "s3:max-keys"
 

@@ -614,10 +614,10 @@ func lcp(l []string) string {
 // Returns the mode in which MinIO is running
 func getMinioMode() string {
 	mode := globalMinioModeFS
-	if globalIsDistXL {
-		mode = globalMinioModeDistXL
-	} else if globalIsXL {
-		mode = globalMinioModeXL
+	if globalIsDistErasure {
+		mode = globalMinioModeDistErasure
+	} else if globalIsErasure {
+		mode = globalMinioModeErasure
 	} else if globalIsGateway {
 		mode = globalMinioModeGatewayPrefix + globalGatewayName
 	}

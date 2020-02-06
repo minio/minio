@@ -631,7 +631,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if this setup has an erasure coded backend.
-	if !globalIsXL {
+	if !globalIsErasure {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
 		return
 	}
@@ -779,7 +779,7 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 	}
 
 	// Check if this setup has an erasure coded backend.
-	if !globalIsXL {
+	if !globalIsErasure {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
 		return
 	}
@@ -789,7 +789,7 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 	// Get local heal status first
 	bgHealStates = append(bgHealStates, getLocalBackgroundHealStatus())
 
-	if globalIsDistXL {
+	if globalIsDistErasure {
 		// Get heal status from other peers
 		peersHealStates := globalNotificationSys.BackgroundHealStatus()
 		bgHealStates = append(bgHealStates, peersHealStates...)
@@ -862,11 +862,11 @@ const (
 	AdminUpdateApplyFailure      = "XMinioAdminUpdateApplyFailure"
 )
 
-// toAdminAPIErrCode - converts errXLWriteQuorum error to admin API
+// toAdminAPIErrCode - converts errErasureWriteQuorum error to admin API
 // specific error.
 func toAdminAPIErrCode(ctx context.Context, err error) APIErrorCode {
 	switch err {
-	case errXLWriteQuorum:
+	case errErasureWriteQuorum:
 		return ErrAdminConfigNoQuorum
 	default:
 		return toAPIErrorCode(ctx, err)
@@ -1277,7 +1277,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 			partialWrite(obdInfo)
 		}
 
-		if net, ok := vars["perfnet"]; ok && net == "true" && globalIsDistXL {
+		if net, ok := vars["perfnet"]; ok && net == "true" && globalIsDistErasure {
 			obdInfo.Perf.Net = append(obdInfo.Perf.Net, globalNotificationSys.NetOBDInfo(deadlinedCtx))
 			partialWrite(obdInfo)
 
@@ -1384,7 +1384,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 			OffDisks += v
 		}
 
-		backend = madmin.XLBackend{
+		backend = madmin.ErasureBackend{
 			Type:             madmin.ErasureType,
 			OnlineDisks:      OnDisks,
 			OfflineDisks:     OffDisks,
@@ -1413,10 +1413,10 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	for _, sp := range servers {
 		for i, di := range sp.Disks {
 			path := ""
-			if globalIsXL {
+			if globalIsErasure {
 				path = di.DrivePath
 			}
-			if globalIsDistXL {
+			if globalIsDistErasure {
 				path = sp.Endpoint + di.DrivePath
 			}
 			// For distributed
@@ -1424,13 +1424,13 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 				for b := range storageInfo.Backend.Sets[a] {
 					ep := storageInfo.Backend.Sets[a][b].Endpoint
 
-					if globalIsDistXL {
+					if globalIsDistErasure {
 						if strings.Replace(ep, "http://", "", -1) == path || strings.Replace(ep, "https://", "", -1) == path {
 							sp.Disks[i].State = storageInfo.Backend.Sets[a][b].State
 							sp.Disks[i].UUID = storageInfo.Backend.Sets[a][b].UUID
 						}
 					}
-					if globalIsXL {
+					if globalIsErasure {
 						if ep == path {
 							sp.Disks[i].State = storageInfo.Backend.Sets[a][b].State
 							sp.Disks[i].UUID = storageInfo.Backend.Sets[a][b].UUID

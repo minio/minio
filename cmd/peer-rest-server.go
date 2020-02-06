@@ -667,8 +667,8 @@ func (s *peerRESTServer) CycleServerBloomFilterHandler(w http.ResponseWriter, r 
 		s.writeErrorResponse(w, err)
 		return
 	}
+
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(bf))
-	w.(http.Flusher).Flush()
 }
 
 // PutBucketNotificationHandler - Set bucket policy.
@@ -702,7 +702,7 @@ func (s *peerRESTServer) PutBucketNotificationHandler(w http.ResponseWriter, r *
 }
 
 // Return disk IDs of all the local disks.
-func getLocalDiskIDs(z *xlZones) []string {
+func getLocalDiskIDs(z *erasureZones) []string {
 	var ids []string
 
 	for zoneIdx := range z.zones {
@@ -746,7 +746,7 @@ func (s *peerRESTServer) GetLocalDiskIDs(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	z, ok := objLayer.(*xlZones)
+	z, ok := objLayer.(*erasureZones)
 	if !ok {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return

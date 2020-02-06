@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -132,7 +132,7 @@ func TestErasureDecode(t *testing.T) {
 			if disk == OfflineDisk {
 				continue
 			}
-			tillOffset := erasure.ShardFileTillOffset(test.offset, test.length, test.data)
+			tillOffset := erasure.ShardFileOffset(test.offset, test.length, test.data)
 
 			bitrotReaders[index] = newBitrotReader(disk, "testbucket", "object", tillOffset, writeAlgorithm, bitrotWriterSum(writers[index]), erasure.ShardSize())
 		}
@@ -163,7 +163,7 @@ func TestErasureDecode(t *testing.T) {
 				if disk == OfflineDisk {
 					continue
 				}
-				tillOffset := erasure.ShardFileTillOffset(test.offset, test.length, test.data)
+				tillOffset := erasure.ShardFileOffset(test.offset, test.length, test.data)
 				bitrotReaders[index] = newBitrotReader(disk, "testbucket", "object", tillOffset, writeAlgorithm, bitrotWriterSum(writers[index]), erasure.ShardSize())
 			}
 			for j := range disks[:test.offDisks] {
@@ -268,7 +268,7 @@ func TestErasureDecodeRandomOffsetLength(t *testing.T) {
 			if disk == OfflineDisk {
 				continue
 			}
-			tillOffset := erasure.ShardFileTillOffset(offset, readLen, length)
+			tillOffset := erasure.ShardFileOffset(offset, readLen, length)
 			bitrotReaders[index] = newStreamingBitrotReader(disk, "testbucket", "object", tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
 		}
 		err = erasure.Decode(context.Background(), buf, bitrotReaders, offset, readLen, length, nil)
@@ -330,7 +330,7 @@ func benchmarkErasureDecode(data, parity, dataDown, parityDown int, size int64, 
 			if writers[index] == nil {
 				continue
 			}
-			tillOffset := erasure.ShardFileTillOffset(0, size, size)
+			tillOffset := erasure.ShardFileOffset(0, size, size)
 			bitrotReaders[index] = newStreamingBitrotReader(disk, "testbucket", "object", tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
 		}
 		if err = erasure.Decode(context.Background(), bytes.NewBuffer(content[:0]), bitrotReaders, 0, size, size, nil); err != nil {

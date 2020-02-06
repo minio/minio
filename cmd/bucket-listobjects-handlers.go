@@ -49,13 +49,13 @@ func validateListObjectsArgs(marker, delimiter, encodingType string, maxKeys int
 	return ErrNone
 }
 
-// ListBucketObjectVersions - GET Bucket Object versions
+// ListObjectVersions - GET Bucket Object versions
 // You can use the versions subresource to list metadata about all
 // of the versions of objects in a bucket.
-func (api objectAPIHandlers) ListBucketObjectVersionsHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ListBucketObjectVersions")
+func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListObjectVersions")
 
-	defer logger.AuditLog(w, r, "ListBucketObjectVersions", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(w, r, "ListObjectVersions", mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -74,8 +74,7 @@ func (api objectAPIHandlers) ListBucketObjectVersionsHandler(w http.ResponseWrit
 	urlValues := r.URL.Query()
 
 	// Extract all the listBucketVersions query params to their native values.
-	// versionIDMarker is ignored here.
-	prefix, marker, delimiter, maxkeys, encodingType, _, errCode := getListBucketObjectVersionsArgs(urlValues)
+	prefix, marker, delimiter, maxkeys, encodingType, versionIDMarker, errCode := getListBucketObjectVersionsArgs(urlValues)
 	if errCode != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(errCode), r.URL, guessIsBrowserReq(r))
 		return
@@ -87,29 +86,29 @@ func (api objectAPIHandlers) ListBucketObjectVersionsHandler(w http.ResponseWrit
 		return
 	}
 
-	listObjects := objectAPI.ListObjects
+	listObjectVersions := objectAPI.ListObjectVersions
 
-	// Inititate a list objects operation based on the input params.
+	// Inititate a list object versions operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
 	// marshaled into S3 compatible XML header.
-	listObjectsInfo, err := listObjects(ctx, bucket, prefix, marker, delimiter, maxkeys)
+	listObjectVersionsInfo, err := listObjectVersions(ctx, bucket, prefix, marker, versionIDMarker, delimiter, maxkeys)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	for i := range listObjectsInfo.Objects {
-		if crypto.IsEncrypted(listObjectsInfo.Objects[i].UserDefined) {
-			listObjectsInfo.Objects[i].ETag = getDecryptedETag(r.Header, listObjectsInfo.Objects[i], false)
+	for i := range listObjectVersionsInfo.Objects {
+		if crypto.IsEncrypted(listObjectVersionsInfo.Objects[i].UserDefined) {
+			listObjectVersionsInfo.Objects[i].ETag = getDecryptedETag(r.Header, listObjectVersionsInfo.Objects[i], false)
 		}
-		listObjectsInfo.Objects[i].Size, err = listObjectsInfo.Objects[i].GetActualSize()
+		listObjectVersionsInfo.Objects[i].Size, err = listObjectVersionsInfo.Objects[i].GetActualSize()
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
 
-	response := generateListVersionsResponse(bucket, prefix, marker, delimiter, encodingType, maxkeys, listObjectsInfo)
+	response := generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType, maxkeys, listObjectVersionsInfo)
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodeResponse(response))

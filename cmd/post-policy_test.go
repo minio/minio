@@ -113,7 +113,7 @@ func newPostPolicyBytesV2(bucketName, objectKey string, expiration time.Time) []
 	return []byte(retStr)
 }
 
-// Wrapper for calling TestPostPolicyBucketHandler tests for both XL multiple disks and single node setup.
+// Wrapper for calling TestPostPolicyBucketHandler tests for both Erasure multiple disks and single node setup.
 func TestPostPolicyBucketHandler(t *testing.T) {
 	ExecObjectLayerTest(t, testPostPolicyBucketHandler)
 }
@@ -128,7 +128,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 	bucketName := getRandomBucketName()
 
 	var opts ObjectOptions
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestAPIEndPoints(obj, []string{"PostPolicy"})
 
 	credentials := globalActiveCred
@@ -140,7 +140,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before initiating NewMultipartUpload.
-	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "", false)
+	err := obj.MakeBucketWithLocation(context.Background(), bucketName, BucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -414,7 +414,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 
 }
 
-// Wrapper for calling TestPostPolicyBucketHandlerRedirect tests for both XL multiple disks and single node setup.
+// Wrapper for calling TestPostPolicyBucketHandlerRedirect tests for both Erasure multiple disks and single node setup.
 func TestPostPolicyBucketHandlerRedirect(t *testing.T) {
 	ExecObjectLayerTest(t, testPostPolicyBucketHandlerRedirect)
 }
@@ -442,7 +442,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 		t.Fatal(err)
 	}
 
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestAPIEndPoints(obj, []string{"PostPolicy"})
 
 	credentials := globalActiveCred
@@ -450,7 +450,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	curTime := UTCNow()
 	curTimePlus5Min := curTime.Add(time.Minute * 5)
 
-	err = obj.MakeBucketWithLocation(context.Background(), bucketName, "", false)
+	err = obj.MakeBucketWithLocation(context.Background(), bucketName, BucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())

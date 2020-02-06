@@ -366,7 +366,7 @@ func loadAndValidateCacheFormat(ctx context.Context, drives []string) (formats [
 func migrateCacheData(ctx context.Context, c *diskCache, bucket, object, oldfile, destDir string, metadata map[string]string) error {
 	st, err := os.Stat(oldfile)
 	if err != nil {
-		err = osErrToFSFileErr(err)
+		err = osErrToFileErr(err)
 		return err
 	}
 	readCloser, err := readCacheFileStream(oldfile, 0, st.Size())

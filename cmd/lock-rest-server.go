@@ -270,10 +270,10 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 			}
 
 			// Read locks we assume quorum for be N/2 success
-			quorum := globalXLSetDriveCount / 2
+			quorum := globalErasureSetDriveCount / 2
 			if nlrip.lri.Writer {
 				// For write locks we need N/2+1 success
-				quorum = globalXLSetDriveCount/2 + 1
+				quorum = globalErasureSetDriveCount/2 + 1
 			}
 
 			// less than the quorum, we have locks expired.

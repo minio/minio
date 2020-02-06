@@ -187,12 +187,12 @@ func readCacheFileStream(filePath string, offset, length int64) (io.ReadCloser, 
 
 	fr, err := os.Open(filePath)
 	if err != nil {
-		return nil, osErrToFSFileErr(err)
+		return nil, osErrToFileErr(err)
 	}
 	// Stat to get the size of the file at path.
 	st, err := fr.Stat()
 	if err != nil {
-		err = osErrToFSFileErr(err)
+		err = osErrToFileErr(err)
 		return nil, err
 	}
 
@@ -298,9 +298,10 @@ type fileScorer struct {
 }
 
 type queuedFile struct {
-	name  string
-	size  uint64
-	score float64
+	name      string
+	versionID string
+	size      uint64
+	score     float64
 }
 
 // newFileScorer allows to collect files to save a specific number of bytes.
@@ -321,15 +322,33 @@ func newFileScorer(saveBytes uint64, now int64, maxHits int) (*fileScorer, error
 	return &f, nil
 }
 
-func (f *fileScorer) addFile(name string, lastAccess time.Time, size int64, hits int) {
+func (f *fileScorer) addFile(name string, accTime time.Time, size int64, hits int) {
+	f.addFileWithObjInfo(ObjectInfo{
+		Name:    name,
+		AccTime: accTime,
+		Size:    size,
+	}, hits)
+}
+
+func (f *fileScorer) addFileWithObjInfo(objInfo ObjectInfo, hits int) {
 	// Calculate how much we want to delete this object.
 	file := queuedFile{
-		name: name,
-		size: uint64(size),
+		name:      objInfo.Name,
+		versionID: objInfo.VersionID,
+		size:      uint64(objInfo.Size),
 	}
-	score := float64(f.now - lastAccess.Unix())
+
+	var score float64
+	if objInfo.ModTime.IsZero() {
+		// Mod time is not available with disk cache use atime.
+		score = float64(f.now - objInfo.AccTime.Unix())
+	} else {
+		// if not used mod time when mod time is available.
+		score = float64(f.now - objInfo.ModTime.Unix())
+	}
+
 	// Size as fraction of how much we want to save, 0->1.
-	szWeight := math.Max(0, (math.Min(1, float64(size)*f.sizeMult)))
+	szWeight := math.Max(0, (math.Min(1, float64(file.size)*f.sizeMult)))
 	// 0 at f.maxHits, 1 at 0.
 	hitsWeight := (1.0 - math.Max(0, math.Min(1.0, float64(hits)/float64(f.maxHits))))
 	file.score = score * (1 + 0.25*szWeight + 0.25*hitsWeight)
@@ -402,6 +421,22 @@ func (f *fileScorer) trimQueue() {
 		f.queue.Remove(e)
 		f.queuedBytes -= v.size
 	}
+}
+
+// fileObjInfos returns all queued file object infos
+func (f *fileScorer) fileObjInfos() []ObjectInfo {
+	res := make([]ObjectInfo, 0, f.queue.Len())
+	e := f.queue.Front()
+	for e != nil {
+		qfile := e.Value.(queuedFile)
+		res = append(res, ObjectInfo{
+			Name:      qfile.name,
+			Size:      int64(qfile.size),
+			VersionID: qfile.versionID,
+		})
+		e = e.Next()
+	}
+	return res
 }
 
 // fileNames returns all queued file names.

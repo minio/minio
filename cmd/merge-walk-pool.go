@@ -26,11 +26,115 @@ const (
 	globalMergeLookupTimeout = time.Minute * 1 // 1 minutes.
 )
 
+// mergeWalkVersions - represents the go routine that does the merge walk versions.
+type mergeWalkVersions struct {
+	entryChs   []FileInfoVersionsCh
+	endWalkCh  chan struct{}   // To signal when mergeWalk go-routine should end.
+	endTimerCh chan<- struct{} // To signal when timer go-routine should end.
+}
+
 // mergeWalk - represents the go routine that does the merge walk.
 type mergeWalk struct {
 	entryChs   []FileInfoCh
 	endWalkCh  chan struct{}   // To signal when mergeWalk go-routine should end.
 	endTimerCh chan<- struct{} // To signal when timer go-routine should end.
+}
+
+// MergeWalkVersionsPool - pool of mergeWalk go routines.
+// A mergeWalk is added to the pool by Set() and removed either by
+// doing a Release() or if the concerned timer goes off.
+// mergeWalkPool's purpose is to maintain active mergeWalk go-routines in a map so that
+// it can be looked up across related list calls.
+type MergeWalkVersionsPool struct {
+	sync.Mutex
+	pool    map[listParams][]mergeWalkVersions
+	timeOut time.Duration
+}
+
+// NewMergeWalkVersionsPool - initialize new tree walk pool for versions.
+func NewMergeWalkVersionsPool(timeout time.Duration) *MergeWalkVersionsPool {
+	tPool := &MergeWalkVersionsPool{
+		pool:    make(map[listParams][]mergeWalkVersions),
+		timeOut: timeout,
+	}
+	return tPool
+}
+
+// Release - similar to mergeWalkPool.Release but for versions.
+func (t *MergeWalkVersionsPool) Release(params listParams) ([]FileInfoVersionsCh, chan struct{}) {
+	t.Lock()
+	defer t.Unlock()
+	walks, ok := t.pool[params] // Pick the valid walks.
+	if !ok || len(walks) == 0 {
+		// Release return nil if params not found.
+		return nil, nil
+	}
+
+	// Pop out the first valid walk entry.
+	walk := walks[0]
+	walks = walks[1:]
+	if len(walks) > 0 {
+		t.pool[params] = walks
+	} else {
+		delete(t.pool, params)
+	}
+	walk.endTimerCh <- struct{}{}
+	return walk.entryChs, walk.endWalkCh
+}
+
+// Set - similar to mergeWalkPool.Set but for file versions
+func (t *MergeWalkVersionsPool) Set(params listParams, resultChs []FileInfoVersionsCh, endWalkCh chan struct{}) {
+	t.Lock()
+	defer t.Unlock()
+
+	// Should be a buffered channel so that Release() never blocks.
+	endTimerCh := make(chan struct{}, 1)
+
+	walkInfo := mergeWalkVersions{
+		entryChs:   resultChs,
+		endWalkCh:  endWalkCh,
+		endTimerCh: endTimerCh,
+	}
+
+	// Append new walk info.
+	t.pool[params] = append(t.pool[params], walkInfo)
+
+	// Timer go-routine which times out after t.timeOut seconds.
+	go func(endTimerCh <-chan struct{}, walkInfo mergeWalkVersions) {
+		select {
+		// Wait until timeOut
+		case <-time.After(t.timeOut):
+			// Timeout has expired. Remove the mergeWalk from mergeWalkPool and
+			// end the mergeWalk go-routine.
+			t.Lock()
+			walks, ok := t.pool[params]
+			if ok {
+				// Trick of filtering without allocating
+				// https://github.com/golang/go/wiki/SliceTricks#filtering-without-allocating
+				nwalks := walks[:0]
+				// Look for walkInfo, remove it from the walks list.
+				for _, walk := range walks {
+					if !reflect.DeepEqual(walk, walkInfo) {
+						nwalks = append(nwalks, walk)
+					}
+				}
+				if len(nwalks) == 0 {
+					// No more mergeWalk go-routines associated with listParams
+					// hence remove map entry.
+					delete(t.pool, params)
+				} else {
+					// There are more mergeWalk go-routines associated with listParams
+					// hence save the list in the map.
+					t.pool[params] = nwalks
+				}
+			}
+			// Signal the mergeWalk go-routine to die.
+			close(endWalkCh)
+			t.Unlock()
+		case <-endTimerCh:
+			return
+		}
+	}(endTimerCh, walkInfo)
 }
 
 // MergeWalkPool - pool of mergeWalk go routines.
@@ -84,7 +188,7 @@ func (t *MergeWalkPool) Release(params listParams) ([]FileInfoCh, chan struct{})
 // 1) time.After() expires after t.timeOut seconds.
 //    The expiration is needed so that the mergeWalk go-routine resources are freed after a timeout
 //    if the S3 client does only partial listing of objects.
-// 2) Relase() signals the timer go-routine to end on endTimerCh.
+// 2) Release() signals the timer go-routine to end on endTimerCh.
 //    During listing the timer should not timeout and end the mergeWalk go-routine, hence the
 //    timer go-routine should be ended.
 func (t *MergeWalkPool) Set(params listParams, resultChs []FileInfoCh, endWalkCh chan struct{}) {

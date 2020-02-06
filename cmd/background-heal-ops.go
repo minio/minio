@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"path"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -29,8 +30,10 @@ import (
 //   path: 'bucket/' or '/bucket/' => Heal bucket
 //   path: 'bucket/object' => Heal object
 type healTask struct {
-	path string
-	opts madmin.HealOpts
+	bucket    string
+	object    string
+	versionID string
+	opts      madmin.HealOpts
 	// Healing response will be sent here
 	responseCh chan healResult
 }
@@ -79,17 +82,18 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 
 			var res madmin.HealResultItem
 			var err error
-			bucket, object := path2BucketObject(task.path)
 			switch {
-			case bucket == "" && object == "":
+			case task.bucket == nopHeal:
+				continue
+			case task.bucket == SlashSeparator:
 				res, err = healDiskFormat(ctx, objAPI, task.opts)
-			case bucket != "" && object == "":
-				res, err = objAPI.HealBucket(ctx, bucket, task.opts.DryRun, task.opts.Remove)
-			case bucket != "" && object != "":
-				res, err = objAPI.HealObject(ctx, bucket, object, task.opts)
+			case task.bucket != "" && task.object == "":
+				res, err = objAPI.HealBucket(ctx, task.bucket, task.opts.DryRun, task.opts.Remove)
+			case task.bucket != "" && task.object != "":
+				res, err = objAPI.HealObject(ctx, task.bucket, task.object, task.versionID, task.opts)
 			}
-			if task.path != slashSeparator && task.path != nopHeal {
-				ObjectPathUpdated(task.path)
+			if task.bucket != "" && task.object != "" {
+				ObjectPathUpdated(path.Join(task.bucket, task.object))
 			}
 			task.responseCh <- healResult{result: res, err: err}
 		case <-h.doneCh:

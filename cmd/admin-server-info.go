@@ -29,7 +29,7 @@ import (
 func getLocalServerProperty(endpointZones EndpointZones, r *http.Request) madmin.ServerProperties {
 	var disks []madmin.Disk
 	addr := r.Host
-	if globalIsDistXL {
+	if globalIsDistErasure {
 		addr = GetLocalPeer(endpointZones)
 	}
 	network := make(map[string]string)

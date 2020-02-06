@@ -29,7 +29,7 @@ import (
 	"testing"
 )
 
-// Wrapper for calling ListObjects tests for both XL multiple disks and single node setup.
+// Wrapper for calling ListObjects tests for both Erasure multiple disks and single node setup.
 func TestListObjects(t *testing.T) {
 	ExecObjectLayerTest(t, testListObjects)
 }
@@ -49,7 +49,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		"test-bucket-single-object",
 	}
 	for _, bucket := range testBuckets {
-		err := obj.MakeBucketWithLocation(context.Background(), bucket, "", false)
+		err := obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{})
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -669,7 +669,7 @@ func BenchmarkListObjects(b *testing.B) {
 
 	bucket := "ls-benchmark-bucket"
 	// Create a bucket.
-	err = obj.MakeBucketWithLocation(context.Background(), bucket, "", false)
+	err = obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{})
 	if err != nil {
 		b.Fatal(err)
 	}

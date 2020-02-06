@@ -28,10 +28,10 @@ import (
 )
 
 func TestFSRenameFile(t *testing.T) {
-	// create posix test setup
-	_, path, err := newPosixTestSetup()
+	// create xlStorage test setup
+	_, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
@@ -53,10 +53,10 @@ func TestFSRenameFile(t *testing.T) {
 }
 
 func TestFSStats(t *testing.T) {
-	// create posix test setup
-	_, path, err := newPosixTestSetup()
+	// create xlStorage test setup
+	_, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
@@ -170,11 +170,11 @@ func TestFSStats(t *testing.T) {
 		if testCase.srcPath != "" {
 			if _, err := fsStatFile(GlobalContext, pathJoin(testCase.srcFSPath, testCase.srcVol,
 				testCase.srcPath)); err != testCase.expectedErr {
-				t.Fatalf("TestPosix case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
+				t.Fatalf("TestErasureStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 			}
 		} else {
 			if _, err := fsStatVolume(GlobalContext, pathJoin(testCase.srcFSPath, testCase.srcVol)); err != testCase.expectedErr {
-				t.Fatalf("TestPosix case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
+				t.Fatalf("TestFS case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 			}
 		}
 	}
@@ -182,9 +182,9 @@ func TestFSStats(t *testing.T) {
 
 func TestFSCreateAndOpen(t *testing.T) {
 	// Setup test environment.
-	_, path, err := newPosixTestSetup()
+	_, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
@@ -246,10 +246,10 @@ func TestFSCreateAndOpen(t *testing.T) {
 }
 
 func TestFSDeletes(t *testing.T) {
-	// create posix test setup
-	_, path, err := newPosixTestSetup()
+	// create xlStorage test setup
+	_, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
@@ -349,10 +349,10 @@ func TestFSDeletes(t *testing.T) {
 }
 
 func BenchmarkFSDeleteFile(b *testing.B) {
-	// create posix test setup
-	_, path, err := newPosixTestSetup()
+	// create xlStorage test setup
+	_, path, err := newXLStorageTestSetup()
 	if err != nil {
-		b.Fatalf("Unable to create posix test setup, %s", err)
+		b.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
@@ -383,10 +383,10 @@ func BenchmarkFSDeleteFile(b *testing.B) {
 
 // Tests fs removes.
 func TestFSRemoves(t *testing.T) {
-	// create posix test setup
-	_, path, err := newPosixTestSetup()
+	// create xlStorage test setup
+	_, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
@@ -500,10 +500,10 @@ func TestFSRemoves(t *testing.T) {
 }
 
 func TestFSRemoveMeta(t *testing.T) {
-	// create posix test setup
-	_, fsPath, err := newPosixTestSetup()
+	// create xlStorage test setup
+	_, fsPath, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(fsPath)
 
