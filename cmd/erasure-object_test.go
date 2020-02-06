@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,16 +20,11 @@ import (
 	"bytes"
 	"context"
 	"io/ioutil"
-	"math/rand"
 	"os"
-	"path"
-	"reflect"
 	"testing"
-	"time"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/config/storageclass"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 func TestRepeatPutObjectPart(t *testing.T) {
@@ -369,118 +364,16 @@ func TestPutObjectNoQuorum(t *testing.T) {
 	}
 }
 
-// Tests both object and bucket healing.
-func TestHealing(t *testing.T) {
-	obj, fsDirs, err := prepareXL16()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer removeRoots(fsDirs)
-
-	z := obj.(*xlZones)
-	xl := z.zones[0].sets[0]
-
-	// Create "bucket"
-	err = obj.MakeBucketWithLocation(context.Background(), "bucket", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	bucket := "bucket"
-	object := "object"
-
-	data := make([]byte, 1*humanize.MiByte)
-	length := int64(len(data))
-	_, err = rand.Read(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), length, "", ""), ObjectOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	disk := xl.getDisks()[0]
-	xlMetaPreHeal, err := readXLMeta(context.Background(), disk, bucket, object)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Remove the object - to simulate the case where the disk was down when the object
-	// was created.
-	err = os.RemoveAll(path.Join(fsDirs[0], bucket, object))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = xl.HealObject(context.Background(), bucket, object, false, false, madmin.HealNormalScan)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	xlMetaPostHeal, err := readXLMeta(context.Background(), disk, bucket, object)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// After heal the meta file should be as expected.
-	if !reflect.DeepEqual(xlMetaPreHeal, xlMetaPostHeal) {
-		t.Fatal("HealObject failed")
-	}
-
-	err = os.RemoveAll(path.Join(fsDirs[0], bucket, object, "xl.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Write xl.json with different modtime to simulate the case where a disk had
-	// gone down when an object was replaced by a new object.
-	xlMetaOutDated := xlMetaPreHeal
-	xlMetaOutDated.Stat.ModTime = time.Now()
-	err = writeXLMetadata(context.Background(), disk, bucket, object, xlMetaOutDated)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = xl.HealObject(context.Background(), bucket, object, false, false, madmin.HealDeepScan)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	xlMetaPostHeal, err = readXLMeta(context.Background(), disk, bucket, object)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// After heal the meta file should be as expected.
-	if !reflect.DeepEqual(xlMetaPreHeal, xlMetaPostHeal) {
-		t.Fatal("HealObject failed")
-	}
-
-	// Remove the bucket - to simulate the case where bucket was
-	// created when the disk was down.
-	err = os.RemoveAll(path.Join(fsDirs[0], bucket))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// This would create the bucket.
-	_, err = xl.HealBucket(context.Background(), bucket, false, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Stat the bucket to make sure that it was created.
-	_, err = xl.getDisks()[0].StatVol(bucket)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestObjectQuorumFromMeta(t *testing.T) {
 	ExecObjectLayerTestWithDirs(t, testObjectQuorumFromMeta)
 }
 
 func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []string, t TestErrHandler) {
+	restoreGlobalStorageClass := globalStorageClass
+	defer func() {
+		globalStorageClass = restoreGlobalStorageClass
+	}()
+
 	bucket := getRandomBucketName()
 
 	var opts ObjectOptions
@@ -504,7 +397,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts1, errs1 := readAllXLMetadata(context.Background(), xlDisks, bucket, object1)
+	parts1, errs1 := readAllFileInfo(xlDisks, bucket, object1)
 
 	// Object for test case 2 - No StorageClass defined, MetaData in PutObject requesting RRS Class
 	object2 := "object2"
@@ -515,7 +408,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts2, errs2 := readAllXLMetadata(context.Background(), xlDisks, bucket, object2)
+	parts2, errs2 := readAllFileInfo(xlDisks, bucket, object2)
 
 	// Object for test case 3 - No StorageClass defined, MetaData in PutObject requesting Standard Storage Class
 	object3 := "object3"
@@ -526,7 +419,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts3, errs3 := readAllXLMetadata(context.Background(), xlDisks, bucket, object3)
+	parts3, errs3 := readAllFileInfo(xlDisks, bucket, object3)
 
 	// Object for test case 4 - Standard StorageClass defined as Parity 6, MetaData in PutObject requesting Standard Storage Class
 	object4 := "object4"
@@ -543,7 +436,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts4, errs4 := readAllXLMetadata(context.Background(), xlDisks, bucket, object4)
+	parts4, errs4 := readAllFileInfo(xlDisks, bucket, object4)
 
 	// Object for test case 5 - RRS StorageClass defined as Parity 2, MetaData in PutObject requesting RRS Class
 	// Reset global storage class flags
@@ -561,7 +454,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts5, errs5 := readAllXLMetadata(context.Background(), xlDisks, bucket, object5)
+	parts5, errs5 := readAllFileInfo(xlDisks, bucket, object5)
 
 	// Object for test case 6 - RRS StorageClass defined as Parity 2, MetaData in PutObject requesting Standard Storage Class
 	object6 := "object6"
@@ -578,7 +471,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts6, errs6 := readAllXLMetadata(context.Background(), xlDisks, bucket, object6)
+	parts6, errs6 := readAllFileInfo(xlDisks, bucket, object6)
 
 	// Object for test case 7 - Standard StorageClass defined as Parity 5, MetaData in PutObject requesting RRS Class
 	// Reset global storage class flags
@@ -596,10 +489,10 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts7, errs7 := readAllXLMetadata(context.Background(), xlDisks, bucket, object7)
+	parts7, errs7 := readAllFileInfo(xlDisks, bucket, object7)
 
 	tests := []struct {
-		parts               []xlMetaV1
+		parts               []FileInfo
 		errs                []error
 		expectedReadQuorum  int
 		expectedWriteQuorum int

@@ -431,7 +431,7 @@ func generateListVersionsResponse(bucket, prefix, marker, delimiter, encodingTyp
 		content.Size = object.Size
 		content.StorageClass = object.StorageClass
 		content.Owner = owner
-		content.VersionID = "null"
+		content.VersionID = nullVersionID
 		content.IsLatest = true
 		versions = append(versions, content)
 	}

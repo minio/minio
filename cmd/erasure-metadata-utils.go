@@ -20,9 +20,7 @@ import (
 	"context"
 	"errors"
 	"hash/crc32"
-	"path"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -115,72 +113,10 @@ func hashOrder(key string, cardinality int) []int {
 	return nums
 }
 
-// Constructs xlMetaV1 using `jsoniter` lib.
-func xlMetaV1UnmarshalJSON(ctx context.Context, xlMetaBuf []byte) (xlMeta xlMetaV1, err error) {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	err = json.Unmarshal(xlMetaBuf, &xlMeta)
-	return xlMeta, err
-}
-
-// read xl.json from the given disk, parse and return xlV1MetaV1.Parts.
-func readXLMetaParts(ctx context.Context, disk StorageAPI, bucket string, object string) ([]ObjectPartInfo, map[string]string, error) {
-	// Reads entire `xl.json`.
-	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return nil, nil, err
-	}
-
-	var xlMeta xlMetaV1
-	xlMeta, err = xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return xlMeta.Parts, xlMeta.Meta, nil
-}
-
-// read xl.json from the given disk and parse xlV1Meta.Stat and xlV1Meta.Meta using jsoniter.
-func readXLMetaStat(ctx context.Context, disk StorageAPI, bucket string, object string) (si statInfo,
-	mp map[string]string, e error) {
-	// Reads entire `xl.json`.
-	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return si, nil, err
-	}
-
-	var xlMeta xlMetaV1
-	xlMeta, err = xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
-	if err != nil {
-		return si, mp, err
-	}
-
-	// Return structured `xl.json`.
-	return xlMeta.Stat, xlMeta.Meta, nil
-}
-
-// readXLMeta reads `xl.json` and returns back XL metadata structure.
-func readXLMeta(ctx context.Context, disk StorageAPI, bucket string, object string) (xlMeta xlMetaV1, err error) {
-	// Reads entire `xl.json`.
-	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
-	if err != nil {
-		if err != errFileNotFound && err != errVolumeNotFound {
-			logger.GetReqInfo(ctx).AppendTags("disk", disk.String())
-			logger.LogIf(ctx, err)
-		}
-		return xlMetaV1{}, err
-	}
-	if len(xlMetaBuf) == 0 {
-		return xlMetaV1{}, errFileNotFound
-	}
-	return xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
-}
-
-// Reads all `xl.json` metadata as a xlMetaV1 slice.
+// Reads all `xl.json` metadata as a FileInfo slice.
 // Returns error slice indicating the failed metadata reads.
-func readAllXLMetadata(ctx context.Context, disks []StorageAPI, bucket, object string) ([]xlMetaV1, []error) {
-	metadataArray := make([]xlMetaV1, len(disks))
+func readAllFileInfo(disks []StorageAPI, bucket, object string) ([]FileInfo, []error) {
+	metadataArray := make([]FileInfo, len(disks))
 
 	g := errgroup.WithNErrs(len(disks))
 	// Read `xl.json` parallelly across disks.
@@ -190,7 +126,14 @@ func readAllXLMetadata(ctx context.Context, disks []StorageAPI, bucket, object s
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			metadataArray[index], err = readXLMeta(ctx, disks[index], bucket, object)
+			metadataArray[index], err = disks[index].ReadMetadata(bucket, object, nullVersionID)
+			if err != nil {
+				ctx := context.Background()
+				if err != errFileNotFound && err != errVolumeNotFound {
+					logger.GetReqInfo(ctx).AppendTags("disk", disks[index].String())
+					logger.LogIf(ctx, err)
+				}
+			}
 			return err
 		}, index)
 	}
@@ -200,11 +143,11 @@ func readAllXLMetadata(ctx context.Context, disks []StorageAPI, bucket, object s
 }
 
 // Return shuffled partsMetadata depending on distribution.
-func shufflePartsMetadata(partsMetadata []xlMetaV1, distribution []int) (shuffledPartsMetadata []xlMetaV1) {
+func shufflePartsMetadata(partsMetadata []FileInfo, distribution []int) (shuffledPartsMetadata []FileInfo) {
 	if distribution == nil {
 		return partsMetadata
 	}
-	shuffledPartsMetadata = make([]xlMetaV1, len(partsMetadata))
+	shuffledPartsMetadata = make([]FileInfo, len(partsMetadata))
 	// Shuffle slice xl metadata for expected distribution.
 	for index := range partsMetadata {
 		blockIndex := distribution[index]

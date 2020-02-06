@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,15 +86,15 @@ func TestIsValidVolname(t *testing.T) {
 	}
 }
 
-// creates a temp dir and sets up posix layer.
-// returns posix layer, temp dir path to be used for the purpose of tests.
-func newPosixTestSetup() (StorageAPI, string, error) {
+// creates a temp dir and sets up xlStorage layer.
+// returns xlStorage layer, temp dir path to be used for the purpose of tests.
+func newXLStorageTestSetup() (StorageAPI, string, error) {
 	diskPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
 		return nil, "", err
 	}
-	// Initialize a new posix layer.
-	storage, err := newPosix(diskPath)
+	// Initialize a new xlStorage layer.
+	storage, err := newXLStorage(diskPath)
 	if err != nil {
 		return nil, "", err
 	}
@@ -107,7 +107,7 @@ func newPosixTestSetup() (StorageAPI, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	return &posixDiskIDCheck{storage: storage, diskID: "da017d62-70e3-45f1-8a1a-587707e69ad1"}, diskPath, nil
+	return &xlStorageDiskIDCheck{storage: storage, diskID: "da017d62-70e3-45f1-8a1a-587707e69ad1"}, diskPath, nil
 }
 
 // createPermDeniedFile - creates temporary directory and file with path '/mybucket/myobject'
@@ -163,8 +163,8 @@ func removePermDeniedFile(permDeniedDir string) {
 	}
 }
 
-// TestPosixs posix.getDiskInfo()
-func TestPosixGetDiskInfo(t *testing.T) {
+// TestXLStorages xlStorage.getDiskInfo()
+func TestXLStorageGetDiskInfo(t *testing.T) {
 	path, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
 		t.Fatalf("Unable to create a temporary directory, %s", err)
@@ -187,7 +187,7 @@ func TestPosixGetDiskInfo(t *testing.T) {
 	}
 }
 
-func TestPosixIsDirEmpty(t *testing.T) {
+func TestXLStorageIsDirEmpty(t *testing.T) {
 	tmp, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
 		t.Fatal(err)
@@ -223,51 +223,51 @@ func TestPosixIsDirEmpty(t *testing.T) {
 	}
 }
 
-// TestPosixReadAll - TestPosixs the functionality implemented by posix ReadAll storage API.
-func TestPosixReadAll(t *testing.T) {
-	// create posix test setup
-	posixStorage, path, err := newPosixTestSetup()
+// TestXLStorageReadAll - TestXLStorages the functionality implemented by xlStorage ReadAll storage API.
+func TestXLStorageReadAll(t *testing.T) {
+	// create xlStorage test setup
+	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 
 	defer os.RemoveAll(path)
 
 	// Create files for the test cases.
-	if err = posixStorage.MakeVol("exists"); err != nil {
+	if err = xlStorage.MakeVol("exists"); err != nil {
 		t.Fatalf("Unable to create a volume \"exists\", %s", err)
 	}
-	if err = posixStorage.AppendFile("exists", "as-directory/as-file", []byte("Hello, World")); err != nil {
+	if err = xlStorage.AppendFile("exists", "as-directory/as-file", []byte("Hello, World")); err != nil {
 		t.Fatalf("Unable to create a file \"as-directory/as-file\", %s", err)
 	}
-	if err = posixStorage.AppendFile("exists", "as-file", []byte("Hello, World")); err != nil {
+	if err = xlStorage.AppendFile("exists", "as-file", []byte("Hello, World")); err != nil {
 		t.Fatalf("Unable to create a file \"as-file\", %s", err)
 	}
-	if err = posixStorage.AppendFile("exists", "as-file-parent", []byte("Hello, World")); err != nil {
+	if err = xlStorage.AppendFile("exists", "as-file-parent", []byte("Hello, World")); err != nil {
 		t.Fatalf("Unable to create a file \"as-file-parent\", %s", err)
 	}
 
-	// TestPosixcases to validate different conditions for ReadAll API.
+	// TestXLStoragecases to validate different conditions for ReadAll API.
 	testCases := []struct {
 		volume string
 		path   string
 		err    error
 	}{
-		// TestPosix case - 1.
+		// TestXLStorage case - 1.
 		// Validate volume does not exist.
 		{
 			volume: "i-dont-exist",
 			path:   "",
 			err:    errVolumeNotFound,
 		},
-		// TestPosix case - 2.
+		// TestXLStorage case - 2.
 		// Validate bad condition file does not exist.
 		{
 			volume: "exists",
 			path:   "as-file-not-found",
 			err:    errFileNotFound,
 		},
-		// TestPosix case - 3.
+		// TestXLStorage case - 3.
 		// Validate bad condition file exists as prefix/directory and
 		// we are attempting to read it.
 		{
@@ -275,21 +275,21 @@ func TestPosixReadAll(t *testing.T) {
 			path:   "as-directory",
 			err:    errFileNotFound,
 		},
-		// TestPosix case - 4.
+		// TestXLStorage case - 4.
 		{
 			volume: "exists",
 			path:   "as-file-parent/as-file",
 			err:    errFileNotFound,
 		},
-		// TestPosix case - 5.
+		// TestXLStorage case - 5.
 		// Validate the good condition file exists and we are able to read it.
 		{
 			volume: "exists",
 			path:   "as-file",
 			err:    nil,
 		},
-		// TestPosix case - 6.
-		// TestPosix case with invalid volume name.
+		// TestXLStorage case - 6.
+		// TestXLStorage case with invalid volume name.
 		{
 			volume: "ab",
 			path:   "as-file",
@@ -300,20 +300,20 @@ func TestPosixReadAll(t *testing.T) {
 	var dataRead []byte
 	// Run through all the test cases and validate for ReadAll.
 	for i, testCase := range testCases {
-		dataRead, err = posixStorage.ReadAll(testCase.volume, testCase.path)
+		dataRead, err = xlStorage.ReadAll(testCase.volume, testCase.path)
 		if err != testCase.err {
-			t.Fatalf("TestPosix %d: Expected err \"%s\", got err \"%s\"", i+1, testCase.err, err)
+			t.Fatalf("TestXLStorage %d: Expected err \"%s\", got err \"%s\"", i+1, testCase.err, err)
 		}
 		if err == nil {
 			if string(dataRead) != string([]byte("Hello, World")) {
-				t.Errorf("TestPosix %d: Expected the data read to be \"%s\", but instead got \"%s\"", i+1, "Hello, World", string(dataRead))
+				t.Errorf("TestXLStorage %d: Expected the data read to be \"%s\", but instead got \"%s\"", i+1, "Hello, World", string(dataRead))
 			}
 		}
 	}
 }
 
-// TestPosixNewPosix all the cases handled in posix storage layer initialization.
-func TestPosixNewPosix(t *testing.T) {
+// TestNewXLStorage all the cases handled in xlStorage storage layer initialization.
+func TestNewXLStorage(t *testing.T) {
 	// Temporary dir name.
 	tmpDirName := globalTestTmpDir + SlashSeparator + "minio-" + nextSuffix()
 	// Temporary file name.
@@ -322,7 +322,7 @@ func TestPosixNewPosix(t *testing.T) {
 	f.Close()
 	defer os.Remove(tmpFileName)
 
-	// List of all tests for posix initialization.
+	// List of all tests for xlStorage initialization.
 	testCases := []struct {
 		name string
 		err  error
@@ -342,27 +342,27 @@ func TestPosixNewPosix(t *testing.T) {
 		// not a directory.
 		{
 			tmpFileName,
-			syscall.ENOTDIR,
+			errDiskNotDir,
 		},
 	}
 
 	// Validate all test cases.
 	for i, testCase := range testCases {
-		// Initialize a new posix layer.
-		_, err := newPosix(testCase.name)
+		// Initialize a new xlStorage layer.
+		_, err := newXLStorage(testCase.name)
 		if err != testCase.err {
-			t.Fatalf("TestPosix %d failed wanted: %s, got: %s", i+1, err, testCase.err)
+			t.Fatalf("TestXLStorage %d failed wanted: %s, got: %s", i+1, err, testCase.err)
 		}
 	}
 }
 
-// TestPosixMakeVol - TestPosix validate the logic for creation of new posix volume.
+// TestXLStorageMakeVol - TestXLStorage validate the logic for creation of new xlStorage volume.
 // Asserts the failures too against the expected failures.
-func TestPosixMakeVol(t *testing.T) {
-	// create posix test setup
-	posixStorage, path, err := newPosixTestSetup()
+func TestXLStorageMakeVol(t *testing.T) {
+	// create xlStorage test setup
+	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
@@ -380,25 +380,25 @@ func TestPosixMakeVol(t *testing.T) {
 		volName     string
 		expectedErr error
 	}{
-		// TestPosix case - 1.
+		// TestXLStorage case - 1.
 		// A valid case, volume creation is expected to succeed.
 		{
 			volName:     "success-vol",
 			expectedErr: nil,
 		},
-		// TestPosix case - 2.
+		// TestXLStorage case - 2.
 		// Case where a file exists by the name of the volume to be created.
 		{
 			volName:     "vol-as-file",
 			expectedErr: errVolumeExists,
 		},
-		// TestPosix case - 3.
+		// TestXLStorage case - 3.
 		{
 			volName:     "existing-vol",
 			expectedErr: errVolumeExists,
 		},
-		// TestPosix case - 5.
-		// TestPosix case with invalid volume name.
+		// TestXLStorage case - 5.
+		// TestXLStorage case with invalid volume name.
 		{
 			volName:     "ab",
 			expectedErr: errInvalidArgument,
@@ -406,15 +406,15 @@ func TestPosixMakeVol(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if _, ok := posixStorage.(*posixDiskIDCheck); !ok {
-			t.Errorf("Expected the StorageAPI to be of type *posix")
+		if _, ok := xlStorage.(*xlStorageDiskIDCheck); !ok {
+			t.Errorf("Expected the StorageAPI to be of type *xlStorage")
 		}
-		if err := posixStorage.MakeVol(testCase.volName); err != testCase.expectedErr {
-			t.Fatalf("TestPosix %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
+		if err := xlStorage.MakeVol(testCase.volName); err != testCase.expectedErr {
+			t.Fatalf("TestXLStorage %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 	}
 
-	// TestPosix for permission denied.
+	// TestXLStorage for permission denied.
 	if runtime.GOOS != globalWindowsOSName {
 		permDeniedDir, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 		if err != nil {
@@ -425,19 +425,19 @@ func TestPosixMakeVol(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		// Initialize posix storage layer for permission denied error.
-		_, err = newPosix(permDeniedDir)
+		// Initialize xlStorage storage layer for permission denied error.
+		_, err = newXLStorage(permDeniedDir)
 		if err != nil && !os.IsPermission(err) {
-			t.Fatalf("Unable to initialize posix, %s", err)
+			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
 		if err = os.Chmod(permDeniedDir, 0755); err != nil {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		posixStorage, err = newPosix(permDeniedDir)
+		xlStorage, err = newXLStorage(permDeniedDir)
 		if err != nil {
-			t.Fatalf("Unable to initialize posix, %s", err)
+			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
 		// change backend permissions for MakeVol error.
@@ -445,27 +445,27 @@ func TestPosixMakeVol(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		if err := posixStorage.MakeVol("test-vol"); err != errDiskAccessDenied {
+		if err := xlStorage.MakeVol("test-vol"); err != errDiskAccessDenied {
 			t.Fatalf("expected: %s, got: %s", errDiskAccessDenied, err)
 		}
 	}
 }
 
-// TestPosixDeleteVol - Validates the expected behavior of posix.DeleteVol for various cases.
-func TestPosixDeleteVol(t *testing.T) {
-	// create posix test setup
-	posixStorage, path, err := newPosixTestSetup()
+// TestXLStorageDeleteVol - Validates the expected behavior of xlStorage.DeleteVol for various cases.
+func TestXLStorageDeleteVol(t *testing.T) {
+	// create xlStorage test setup
+	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
 	// Setup test environment.
-	if err = posixStorage.MakeVol("success-vol"); err != nil {
+	if err = xlStorage.MakeVol("success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
-	// TestPosix failure cases.
+	// TestXLStorage failure cases.
 	vol := slashpath.Join(path, "nonempty-vol")
 	if err = os.Mkdir(vol, 0777); err != nil {
 		t.Fatalf("Unable to create directory, %s", err)
@@ -478,25 +478,25 @@ func TestPosixDeleteVol(t *testing.T) {
 		volName     string
 		expectedErr error
 	}{
-		// TestPosix case  - 1.
+		// TestXLStorage case  - 1.
 		// A valida case. Empty vol, should be possible to delete.
 		{
 			volName:     "success-vol",
 			expectedErr: nil,
 		},
-		// TestPosix case - 2.
+		// TestXLStorage case - 2.
 		// volume is non-existent.
 		{
 			volName:     "nonexistent-vol",
 			expectedErr: errVolumeNotFound,
 		},
-		// TestPosix case - 3.
+		// TestXLStorage case - 3.
 		// It shouldn't be possible to delete an non-empty volume, validating the same.
 		{
 			volName:     "nonempty-vol",
 			expectedErr: errVolumeNotEmpty,
 		},
-		// TestPosix case - 5.
+		// TestXLStorage case - 5.
 		// Invalid volume name.
 		{
 			volName:     "ab",
@@ -505,15 +505,15 @@ func TestPosixDeleteVol(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if _, ok := posixStorage.(*posixDiskIDCheck); !ok {
-			t.Errorf("Expected the StorageAPI to be of type *posixDiskIDCheck")
+		if _, ok := xlStorage.(*xlStorageDiskIDCheck); !ok {
+			t.Errorf("Expected the StorageAPI to be of type *xlStorageDiskIDCheck")
 		}
-		if err = posixStorage.DeleteVol(testCase.volName); err != testCase.expectedErr {
-			t.Fatalf("TestPosix: %d, expected: %s, got: %s", i+1, testCase.expectedErr, err)
+		if err = xlStorage.DeleteVol(testCase.volName); err != testCase.expectedErr {
+			t.Fatalf("TestXLStorage: %d, expected: %s, got: %s", i+1, testCase.expectedErr, err)
 		}
 	}
 
-	// TestPosix for permission denied.
+	// TestXLStorage for permission denied.
 	if runtime.GOOS != globalWindowsOSName {
 		var permDeniedDir string
 		if permDeniedDir, err = ioutil.TempDir(globalTestTmpDir, "minio-"); err != nil {
@@ -527,19 +527,19 @@ func TestPosixDeleteVol(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		// Initialize posix storage layer for permission denied error.
-		_, err = newPosix(permDeniedDir)
+		// Initialize xlStorage storage layer for permission denied error.
+		_, err = newXLStorage(permDeniedDir)
 		if err != nil && !os.IsPermission(err) {
-			t.Fatalf("Unable to initialize posix, %s", err)
+			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
 		if err = os.Chmod(permDeniedDir, 0755); err != nil {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		posixStorage, err = newPosix(permDeniedDir)
+		xlStorage, err = newXLStorage(permDeniedDir)
 		if err != nil {
-			t.Fatalf("Unable to initialize posix, %s", err)
+			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
 		// change backend permissions for MakeVol error.
@@ -547,37 +547,37 @@ func TestPosixDeleteVol(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		if err = posixStorage.DeleteVol("mybucket"); err != errDiskAccessDenied {
+		if err = xlStorage.DeleteVol("mybucket"); err != errDiskAccessDenied {
 			t.Fatalf("expected: Permission error, got: %s", err)
 		}
 	}
 
-	posixDeletedStorage, diskPath, err := newPosixTestSetup()
+	xlStorageDeletedStorage, diskPath, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	// removing the disk, used to recreate disk not found error.
 	os.RemoveAll(diskPath)
 
-	// TestPosix for delete on an removed disk.
+	// TestXLStorage for delete on an removed disk.
 	// should fail with disk not found.
-	err = posixDeletedStorage.DeleteVol("Del-Vol")
+	err = xlStorageDeletedStorage.DeleteVol("Del-Vol")
 	if err != errDiskNotFound {
 		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
 	}
 }
 
-// TestPosixStatVol - TestPosixs validate the volume info returned by posix.StatVol() for various inputs.
-func TestPosixStatVol(t *testing.T) {
-	// create posix test setup
-	posixStorage, path, err := newPosixTestSetup()
+// TestXLStorageStatVol - TestXLStorages validate the volume info returned by xlStorage.StatVol() for various inputs.
+func TestXLStorageStatVol(t *testing.T) {
+	// create xlStorage test setup
+	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
 	// Setup test environment.
-	if err = posixStorage.MakeVol("success-vol"); err != nil {
+	if err = xlStorage.MakeVol("success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
@@ -585,17 +585,17 @@ func TestPosixStatVol(t *testing.T) {
 		volName     string
 		expectedErr error
 	}{
-		// TestPosix case - 1.
+		// TestXLStorage case - 1.
 		{
 			volName:     "success-vol",
 			expectedErr: nil,
 		},
-		// TestPosix case - 2.
+		// TestXLStorage case - 2.
 		{
 			volName:     "nonexistent-vol",
 			expectedErr: errVolumeNotFound,
 		},
-		// TestPosix case - 3.
+		// TestXLStorage case - 3.
 		{
 			volName:     "ab",
 			expectedErr: errVolumeNotFound,
@@ -604,58 +604,58 @@ func TestPosixStatVol(t *testing.T) {
 
 	for i, testCase := range testCases {
 		var volInfo VolInfo
-		if _, ok := posixStorage.(*posixDiskIDCheck); !ok {
-			t.Errorf("Expected the StorageAPI to be of type *posix")
+		if _, ok := xlStorage.(*xlStorageDiskIDCheck); !ok {
+			t.Errorf("Expected the StorageAPI to be of type *xlStorage")
 		}
-		volInfo, err = posixStorage.StatVol(testCase.volName)
+		volInfo, err = xlStorage.StatVol(testCase.volName)
 		if err != testCase.expectedErr {
-			t.Fatalf("TestPosix case : %d, Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
+			t.Fatalf("TestXLStorage case : %d, Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 
 		if err == nil {
 			if volInfo.Name != volInfo.Name {
-				t.Errorf("TestPosix case %d: Expected the volume name to be \"%s\", instead found \"%s\"", i+1, volInfo.Name, volInfo.Name)
+				t.Errorf("TestXLStorage case %d: Expected the volume name to be \"%s\", instead found \"%s\"", i+1, volInfo.Name, volInfo.Name)
 			}
 		}
 	}
 
-	posixDeletedStorage, diskPath, err := newPosixTestSetup()
+	xlStorageDeletedStorage, diskPath, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	// removing the disk, used to recreate disk not found error.
 	os.RemoveAll(diskPath)
 
-	// TestPosix for delete on an removed disk.
+	// TestXLStorage for delete on an removed disk.
 	// should fail with disk not found.
-	_, err = posixDeletedStorage.StatVol("Stat vol")
+	_, err = xlStorageDeletedStorage.StatVol("Stat vol")
 	if err != errDiskNotFound {
 		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
 	}
 }
 
-// TestPosixListVols - Validates the result and the error output for posix volume listing functionality posix.ListVols().
-func TestPosixListVols(t *testing.T) {
-	// create posix test setup
-	posixStorage, path, err := newPosixTestSetup()
+// TestXLStorageListVols - Validates the result and the error output for xlStorage volume listing functionality xlStorage.ListVols().
+func TestXLStorageListVols(t *testing.T) {
+	// create xlStorage test setup
+	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 
 	var volInfos []VolInfo
-	// TestPosix empty list vols.
-	if volInfos, err = posixStorage.ListVols(); err != nil {
+	// TestXLStorage empty list vols.
+	if volInfos, err = xlStorage.ListVols(); err != nil {
 		t.Fatalf("expected: <nil>, got: %s", err)
 	} else if len(volInfos) != 1 {
 		t.Fatalf("expected: one entry, got: %s", volInfos)
 	}
 
-	// TestPosix non-empty list vols.
-	if err = posixStorage.MakeVol("success-vol"); err != nil {
+	// TestXLStorage non-empty list vols.
+	if err = xlStorage.MakeVol("success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
-	volInfos, err = posixStorage.ListVols()
+	volInfos, err = xlStorage.ListVols()
 	if err != nil {
 		t.Fatalf("expected: <nil>, got: %s", err)
 	}
@@ -676,35 +676,35 @@ func TestPosixListVols(t *testing.T) {
 	// removing the path and simulating disk failure
 	os.RemoveAll(path)
 	// should fail with errDiskNotFound.
-	if _, err = posixStorage.ListVols(); err != errDiskNotFound {
+	if _, err = xlStorage.ListVols(); err != errDiskNotFound {
 		t.Errorf("Expected to fail with \"%s\", but instead failed with \"%s\"", errDiskNotFound, err)
 	}
 }
 
-// TestPosixPosixListDir -  TestPosixs validate the directory listing functionality provided by posix.ListDir .
-func TestPosixPosixListDir(t *testing.T) {
-	// create posix test setup
-	posixStorage, path, err := newPosixTestSetup()
+// TestXLStorageXlStorageListDir -  TestXLStorages validate the directory listing functionality provided by xlStorage.ListDir .
+func TestXLStorageXlStorageListDir(t *testing.T) {
+	// create xlStorage test setup
+	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
-	// create posix test setup.
-	posixDeletedStorage, diskPath, err := newPosixTestSetup()
+	// create xlStorage test setup.
+	xlStorageDeletedStorage, diskPath, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	// removing the disk, used to recreate disk not found error.
 	os.RemoveAll(diskPath)
 	// Setup test environment.
-	if err = posixStorage.MakeVol("success-vol"); err != nil {
+	if err = xlStorage.MakeVol("success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
-	if err = posixStorage.AppendFile("success-vol", "abc/def/ghi/success-file", []byte("Hello, world")); err != nil {
+	if err = xlStorage.AppendFile("success-vol", "abc/def/ghi/success-file", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
-	if err = posixStorage.AppendFile("success-vol", "abc/xyz/ghi/success-file", []byte("Hello, world")); err != nil {
+	if err = xlStorage.AppendFile("success-vol", "abc/xyz/ghi/success-file", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
@@ -715,7 +715,7 @@ func TestPosixPosixListDir(t *testing.T) {
 		expectedListDir []string
 		expectedErr     error
 	}{
-		// TestPosix case - 1.
+		// TestXLStorage case - 1.
 		// valid case with existing volume and file to delete.
 		{
 			srcVol:          "success-vol",
@@ -723,7 +723,7 @@ func TestPosixPosixListDir(t *testing.T) {
 			expectedListDir: []string{"def/", "xyz/"},
 			expectedErr:     nil,
 		},
-		// TestPosix case - 1.
+		// TestXLStorage case - 1.
 		// valid case with existing volume and file to delete.
 		{
 			srcVol:          "success-vol",
@@ -731,7 +731,7 @@ func TestPosixPosixListDir(t *testing.T) {
 			expectedListDir: []string{"ghi/"},
 			expectedErr:     nil,
 		},
-		// TestPosix case - 1.
+		// TestXLStorage case - 1.
 		// valid case with existing volume and file to delete.
 		{
 			srcVol:          "success-vol",
@@ -739,21 +739,21 @@ func TestPosixPosixListDir(t *testing.T) {
 			expectedListDir: []string{"success-file"},
 			expectedErr:     nil,
 		},
-		// TestPosix case - 2.
+		// TestXLStorage case - 2.
 		{
 			srcVol:      "success-vol",
 			srcPath:     "abcdef",
 			expectedErr: errFileNotFound,
 		},
-		// TestPosix case - 3.
-		// TestPosix case with invalid volume name.
+		// TestXLStorage case - 3.
+		// TestXLStorage case with invalid volume name.
 		{
 			srcVol:      "ab",
 			srcPath:     "success-file",
 			expectedErr: errVolumeNotFound,
 		},
-		// TestPosix case - 4.
-		// TestPosix case with non existent volume.
+		// TestXLStorage case - 4.
+		// TestXLStorage case with non existent volume.
 		{
 			srcVol:      "non-existent-vol",
 			srcPath:     "success-file",
@@ -763,83 +763,83 @@ func TestPosixPosixListDir(t *testing.T) {
 
 	for i, testCase := range testCases {
 		var dirList []string
-		if _, ok := posixStorage.(*posixDiskIDCheck); !ok {
-			t.Errorf("Expected the StorageAPI to be of type *posix")
+		if _, ok := xlStorage.(*xlStorageDiskIDCheck); !ok {
+			t.Errorf("Expected the StorageAPI to be of type *xlStorage")
 		}
-		dirList, err = posixStorage.ListDir(testCase.srcVol, testCase.srcPath, -1, "")
+		dirList, err = xlStorage.ListDir(testCase.srcVol, testCase.srcPath, -1)
 		if err != testCase.expectedErr {
-			t.Fatalf("TestPosix case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
+			t.Fatalf("TestXLStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 		if err == nil {
 			for _, expected := range testCase.expectedListDir {
 				if !strings.Contains(strings.Join(dirList, ","), expected) {
-					t.Errorf("TestPosix case %d: Expected the directory listing to be \"%v\", but got \"%v\"", i+1, testCase.expectedListDir, dirList)
+					t.Errorf("TestXLStorage case %d: Expected the directory listing to be \"%v\", but got \"%v\"", i+1, testCase.expectedListDir, dirList)
 				}
 			}
 		}
 	}
 
-	// TestPosix for permission denied.
+	// TestXLStorage for permission denied.
 	if runtime.GOOS != globalWindowsOSName {
 		permDeniedDir := createPermDeniedFile(t)
 		defer removePermDeniedFile(permDeniedDir)
 
-		// Initialize posix storage layer for permission denied error.
-		_, err = newPosix(permDeniedDir)
+		// Initialize xlStorage storage layer for permission denied error.
+		_, err = newXLStorage(permDeniedDir)
 		if err != nil && !os.IsPermission(err) {
-			t.Fatalf("Unable to initialize posix, %s", err)
+			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
 		if err = os.Chmod(permDeniedDir, 0755); err != nil {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		posixStorage, err = newPosix(permDeniedDir)
+		xlStorage, err = newXLStorage(permDeniedDir)
 		if err != nil {
-			t.Fatalf("Unable to initialize posix, %s", err)
+			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
-		if err = posixStorage.DeleteFile("mybucket", "myobject"); err != errFileAccessDenied {
+		if err = xlStorage.DeleteFile("mybucket", "myobject"); err != errFileAccessDenied {
 			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
 
-	// TestPosix for delete on an removed disk.
+	// TestXLStorage for delete on an removed disk.
 	// should fail with disk not found.
-	err = posixDeletedStorage.DeleteFile("del-vol", "my-file")
+	err = xlStorageDeletedStorage.DeleteFile("del-vol", "my-file")
 	if err != errDiskNotFound {
 		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
 	}
 }
 
-// TestPosixDeleteFile - Series of test cases construct valid and invalid input data and validates the result and the error response.
-func TestPosixDeleteFile(t *testing.T) {
-	// create posix test setup
-	posixStorage, path, err := newPosixTestSetup()
+// TestXLStorageDeleteFile - Series of test cases construct valid and invalid input data and validates the result and the error response.
+func TestXLStorageDeleteFile(t *testing.T) {
+	// create xlStorage test setup
+	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
-	// create posix test setup
-	posixDeletedStorage, diskPath, err := newPosixTestSetup()
+	// create xlStorage test setup
+	xlStorageDeletedStorage, diskPath, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	// removing the disk, used to recreate disk not found error.
 	os.RemoveAll(diskPath)
 	// Setup test environment.
-	if err = posixStorage.MakeVol("success-vol"); err != nil {
+	if err = xlStorage.MakeVol("success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
-	if err = posixStorage.AppendFile("success-vol", "success-file", []byte("Hello, world")); err != nil {
+	if err = xlStorage.AppendFile("success-vol", "success-file", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
-	if err = posixStorage.MakeVol("no-permissions"); err != nil {
+	if err = xlStorage.MakeVol("no-permissions"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err.Error())
 	}
-	if err = posixStorage.AppendFile("no-permissions", "dir/file", []byte("Hello, world")); err != nil {
+	if err = xlStorage.AppendFile("no-permissions", "dir/file", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err.Error())
 	}
 	// Parent directory must have write permissions, this is read + execute.
@@ -852,43 +852,43 @@ func TestPosixDeleteFile(t *testing.T) {
 		srcPath     string
 		expectedErr error
 	}{
-		// TestPosix case - 1.
+		// TestXLStorage case - 1.
 		// valid case with existing volume and file to delete.
 		{
 			srcVol:      "success-vol",
 			srcPath:     "success-file",
 			expectedErr: nil,
 		},
-		// TestPosix case - 2.
+		// TestXLStorage case - 2.
 		// The file was deleted in the last  case, so DeleteFile should fail.
 		{
 			srcVol:      "success-vol",
 			srcPath:     "success-file",
 			expectedErr: errFileNotFound,
 		},
-		// TestPosix case - 3.
-		// TestPosix case with segment of the volume name > 255.
+		// TestXLStorage case - 3.
+		// TestXLStorage case with segment of the volume name > 255.
 		{
 			srcVol:      "my",
 			srcPath:     "success-file",
 			expectedErr: errVolumeNotFound,
 		},
-		// TestPosix case - 4.
-		// TestPosix case with non-existent volume.
+		// TestXLStorage case - 4.
+		// TestXLStorage case with non-existent volume.
 		{
 			srcVol:      "non-existent-vol",
 			srcPath:     "success-file",
 			expectedErr: errVolumeNotFound,
 		},
-		// TestPosix case - 5.
-		// TestPosix case with src path segment > 255.
+		// TestXLStorage case - 5.
+		// TestXLStorage case with src path segment > 255.
 		{
 			srcVol:      "success-vol",
 			srcPath:     "my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
 			expectedErr: errFileNameTooLong,
 		},
-		// TestPosix case - 6.
-		// TestPosix case with undeletable parent directory.
+		// TestXLStorage case - 6.
+		// TestXLStorage case with undeletable parent directory.
 		// File can delete, dir cannot delete because no-permissions doesn't have write perms.
 		{
 			srcVol:      "no-permissions",
@@ -898,59 +898,59 @@ func TestPosixDeleteFile(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if _, ok := posixStorage.(*posixDiskIDCheck); !ok {
-			t.Errorf("Expected the StorageAPI to be of type *posix")
+		if _, ok := xlStorage.(*xlStorageDiskIDCheck); !ok {
+			t.Errorf("Expected the StorageAPI to be of type *xlStorage")
 		}
-		if err = posixStorage.DeleteFile(testCase.srcVol, testCase.srcPath); err != testCase.expectedErr {
-			t.Errorf("TestPosix case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
+		if err = xlStorage.DeleteFile(testCase.srcVol, testCase.srcPath); err != testCase.expectedErr {
+			t.Errorf("TestXLStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 	}
 
-	// TestPosix for permission denied.
+	// TestXLStorage for permission denied.
 	if runtime.GOOS != globalWindowsOSName {
 		permDeniedDir := createPermDeniedFile(t)
 		defer removePermDeniedFile(permDeniedDir)
 
-		// Initialize posix storage layer for permission denied error.
-		_, err = newPosix(permDeniedDir)
+		// Initialize xlStorage storage layer for permission denied error.
+		_, err = newXLStorage(permDeniedDir)
 		if err != nil && !os.IsPermission(err) {
-			t.Fatalf("Unable to initialize posix, %s", err)
+			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
 		if err = os.Chmod(permDeniedDir, 0755); err != nil {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		posixStorage, err = newPosix(permDeniedDir)
+		xlStorage, err = newXLStorage(permDeniedDir)
 		if err != nil {
-			t.Fatalf("Unable to initialize posix, %s", err)
+			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
-		if err = posixStorage.DeleteFile("mybucket", "myobject"); err != errFileAccessDenied {
+		if err = xlStorage.DeleteFile("mybucket", "myobject"); err != errFileAccessDenied {
 			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
 
-	// TestPosix for delete on an removed disk.
+	// TestXLStorage for delete on an removed disk.
 	// should fail with disk not found.
-	err = posixDeletedStorage.DeleteFile("del-vol", "my-file")
+	err = xlStorageDeletedStorage.DeleteFile("del-vol", "my-file")
 	if err != errDiskNotFound {
 		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
 	}
 }
 
-// TestPosixReadFile - TestPosixs posix.ReadFile with wide range of cases and asserts the result and error response.
-func TestPosixReadFile(t *testing.T) {
-	// create posix test setup
-	posixStorage, path, err := newPosixTestSetup()
+// TestXLStorageReadFile - TestXLStorages xlStorage.ReadFile with wide range of cases and asserts the result and error response.
+func TestXLStorageReadFile(t *testing.T) {
+	// create xlStorage test setup
+	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
 	volume := "success-vol"
 	// Setup test environment.
-	if err = posixStorage.MakeVol(volume); err != nil {
+	if err = xlStorage.MakeVol(volume); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
@@ -1034,7 +1034,7 @@ func TestPosixReadFile(t *testing.T) {
 	v := NewBitrotVerifier(SHA256, getSHA256Sum([]byte("hello, world")))
 	// Create test files for further reading.
 	for i, appendFile := range appendFiles {
-		err = posixStorage.AppendFile(volume, appendFile.fileName, []byte("hello, world"))
+		err = xlStorage.AppendFile(volume, appendFile.fileName, []byte("hello, world"))
 		if err != appendFile.expectedErr {
 			t.Fatalf("Creating file failed: %d %#v, expected: %s, got: %s", i+1, appendFile, appendFile.expectedErr, err)
 		}
@@ -1043,7 +1043,7 @@ func TestPosixReadFile(t *testing.T) {
 	{
 		buf := make([]byte, 5)
 		// Test for negative offset.
-		if _, err = posixStorage.ReadFile(volume, "myobject", -1, buf, v); err == nil {
+		if _, err = xlStorage.ReadFile(volume, "myobject", -1, buf, v); err == nil {
 			t.Fatalf("expected: error, got: <nil>")
 		}
 	}
@@ -1053,7 +1053,7 @@ func TestPosixReadFile(t *testing.T) {
 		var n int64
 		// Common read buffer.
 		var buf = make([]byte, testCase.bufSize)
-		n, err = posixStorage.ReadFile(testCase.volume, testCase.fileName, testCase.offset, buf, v)
+		n, err = xlStorage.ReadFile(testCase.volume, testCase.fileName, testCase.offset, buf, v)
 		if err != nil && testCase.expectedErr != nil {
 			// Validate if the type string of the errors are an exact match.
 			if err.Error() != testCase.expectedErr.Error() {
@@ -1104,35 +1104,35 @@ func TestPosixReadFile(t *testing.T) {
 		}
 	}
 
-	// TestPosix for permission denied.
+	// TestXLStorage for permission denied.
 	if runtime.GOOS != globalWindowsOSName {
 		permDeniedDir := createPermDeniedFile(t)
 		defer removePermDeniedFile(permDeniedDir)
 
-		// Initialize posix storage layer for permission denied error.
-		_, err = newPosix(permDeniedDir)
+		// Initialize xlStorage storage layer for permission denied error.
+		_, err = newXLStorage(permDeniedDir)
 		if err != nil && !os.IsPermission(err) {
-			t.Fatalf("Unable to initialize posix, %s", err)
+			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
 		if err = os.Chmod(permDeniedDir, 0755); err != nil {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		posixPermStorage, err := newPosix(permDeniedDir)
+		xlStoragePermStorage, err := newXLStorage(permDeniedDir)
 		if err != nil {
-			t.Fatalf("Unable to initialize posix, %s", err)
+			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
 		// Common read buffer.
 		var buf = make([]byte, 10)
-		if _, err = posixPermStorage.ReadFile("mybucket", "myobject", 0, buf, v); err != errFileAccessDenied {
+		if _, err = xlStoragePermStorage.ReadFile("mybucket", "myobject", 0, buf, v); err != errFileAccessDenied {
 			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
 }
 
-var posixReadFileWithVerifyTests = []struct {
+var xlStorageReadFileWithVerifyTests = []struct {
 	file      string
 	offset    int
 	length    int
@@ -1157,18 +1157,18 @@ var posixReadFileWithVerifyTests = []struct {
 	{file: "myobject", offset: 1000, length: 1001, algorithm: BLAKE2b512, expError: nil},        // 15
 }
 
-// TestPosixReadFile with bitrot verification - tests the posix level
+// TestXLStorageReadFile with bitrot verification - tests the xlStorage level
 // ReadFile API with a BitrotVerifier. Only tests hashing related
 // functionality. Other functionality is tested with
-// TestPosixReadFile.
-func TestPosixReadFileWithVerify(t *testing.T) {
+// TestXLStorageReadFile.
+func TestXLStorageReadFileWithVerify(t *testing.T) {
 	volume, object := "test-vol", "myobject"
-	posixStorage, path, err := newPosixTestSetup()
+	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
 		os.RemoveAll(path)
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
-	if err = posixStorage.MakeVol(volume); err != nil {
+	if err = xlStorage.MakeVol(volume); err != nil {
 		os.RemoveAll(path)
 		t.Fatalf("Unable to create volume %s: %v", volume, err)
 	}
@@ -1177,12 +1177,12 @@ func TestPosixReadFileWithVerify(t *testing.T) {
 		os.RemoveAll(path)
 		t.Fatalf("Unable to create generate random data: %v", err)
 	}
-	if err = posixStorage.AppendFile(volume, object, data); err != nil {
+	if err = xlStorage.AppendFile(volume, object, data); err != nil {
 		os.RemoveAll(path)
 		t.Fatalf("Unable to create object: %v", err)
 	}
 
-	for i, test := range posixReadFileWithVerifyTests {
+	for i, test := range xlStorageReadFileWithVerifyTests {
 		h := test.algorithm.New()
 		h.Write(data)
 		if test.expError != nil {
@@ -1190,7 +1190,7 @@ func TestPosixReadFileWithVerify(t *testing.T) {
 		}
 
 		buffer := make([]byte, test.length)
-		n, err := posixStorage.ReadFile(volume, test.file, int64(test.offset), buffer, NewBitrotVerifier(test.algorithm, h.Sum(nil)))
+		n, err := xlStorage.ReadFile(volume, test.file, int64(test.offset), buffer, NewBitrotVerifier(test.algorithm, h.Sum(nil)))
 
 		switch {
 		case err == nil && test.expError != nil:
@@ -1205,40 +1205,40 @@ func TestPosixReadFileWithVerify(t *testing.T) {
 	}
 }
 
-// TestPosixFormatFileChange - to test if changing the diskID makes the calls fail.
-func TestPosixFormatFileChange(t *testing.T) {
-	posixStorage, path, err := newPosixTestSetup()
+// TestXLStorageFormatFileChange - to test if changing the diskID makes the calls fail.
+func TestXLStorageFormatFileChange(t *testing.T) {
+	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
-	if err = posixStorage.MakeVol(volume); err != nil {
+	if err = xlStorage.MakeVol(volume); err != nil {
 		t.Fatalf("MakeVol failed with %s", err)
 	}
 
 	// Change the format.json such that "this" is changed to "randomid".
-	if err = ioutil.WriteFile(pathJoin(posixStorage.String(), minioMetaBucket, formatConfigFile), []byte(`{"version":"1","format":"xl","id":"592a41c2-b7cc-4130-b883-c4b5cb15965b","xl":{"version":"3","this":"randomid","sets":[["e07285a6-8c73-4962-89c6-047fb939f803","33b8d431-482d-4376-b63c-626d229f0a29","cff6513a-4439-4dc1-bcaa-56c9e880c352","randomid","9c9f21d5-1f15-4737-bce6-835faa0d9626","0a59b346-1424-4fc2-9fa2-a2e80541d0c1","7924a3dc-b69a-4971-9a2e-014966d6aebb","4d2b8dd9-4e48-444b-bdca-c89194b26042"]],"distributionAlgo":"CRCMOD"}}`), 0644); err != nil {
+	if err = ioutil.WriteFile(pathJoin(xlStorage.String(), minioMetaBucket, formatConfigFile), []byte(`{"version":"1","format":"xl","id":"592a41c2-b7cc-4130-b883-c4b5cb15965b","xl":{"version":"3","this":"randomid","sets":[["e07285a6-8c73-4962-89c6-047fb939f803","33b8d431-482d-4376-b63c-626d229f0a29","cff6513a-4439-4dc1-bcaa-56c9e880c352","randomid","9c9f21d5-1f15-4737-bce6-835faa0d9626","0a59b346-1424-4fc2-9fa2-a2e80541d0c1","7924a3dc-b69a-4971-9a2e-014966d6aebb","4d2b8dd9-4e48-444b-bdca-c89194b26042"]],"distributionAlgo":"CRCMOD"}}`), 0644); err != nil {
 		t.Fatalf("ioutil.WriteFile failed with %s", err)
 	}
 
-	err = posixStorage.MakeVol(volume)
+	err = xlStorage.MakeVol(volume)
 	if err != errVolumeExists {
 		t.Fatalf("MakeVol expected to fail with errDiskNotFound but failed with %s", err)
 	}
 }
 
-// TestPosix posix.AppendFile()
-func TestPosixAppendFile(t *testing.T) {
-	// create posix test setup
-	posixStorage, path, err := newPosixTestSetup()
+// TestXLStorage xlStorage.AppendFile()
+func TestXLStorageAppendFile(t *testing.T) {
+	// create xlStorage test setup
+	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
 	// Setup test environment.
-	if err = posixStorage.MakeVol("success-vol"); err != nil {
+	if err = xlStorage.MakeVol("success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
@@ -1253,11 +1253,11 @@ func TestPosixAppendFile(t *testing.T) {
 	}{
 		{"myobject", nil},
 		{"path/to/my/object", nil},
-		// TestPosix to append to previously created file.
+		// TestXLStorage to append to previously created file.
 		{"myobject", nil},
-		// TestPosix to use same path of previously created file.
+		// TestXLStorage to use same path of previously created file.
 		{"path/to/my/testobject", nil},
-		// TestPosix to use object is a directory now.
+		// TestXLStorage to use object is a directory now.
 		{"object-as-dir", errIsNotRegular},
 		// path segment uses previously uploaded object.
 		{"myobject/testobject", errFileAccessDenied},
@@ -1268,81 +1268,81 @@ func TestPosixAppendFile(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if err = posixStorage.AppendFile("success-vol", testCase.fileName, []byte("hello, world")); err != testCase.expectedErr {
+		if err = xlStorage.AppendFile("success-vol", testCase.fileName, []byte("hello, world")); err != testCase.expectedErr {
 			t.Errorf("Case: %d, expected: %s, got: %s", i+1, testCase.expectedErr, err)
 		}
 	}
 
-	// TestPosix for permission denied.
+	// TestXLStorage for permission denied.
 	if runtime.GOOS != globalWindowsOSName {
 		permDeniedDir := createPermDeniedFile(t)
 		defer removePermDeniedFile(permDeniedDir)
 
-		var posixPermStorage StorageAPI
-		// Initialize posix storage layer for permission denied error.
-		_, err = newPosix(permDeniedDir)
+		var xlStoragePermStorage StorageAPI
+		// Initialize xlStorage storage layer for permission denied error.
+		_, err = newXLStorage(permDeniedDir)
 		if err != nil && !os.IsPermission(err) {
-			t.Fatalf("Unable to initialize posix, %s", err)
+			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
 		if err = os.Chmod(permDeniedDir, 0755); err != nil {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		posixPermStorage, err = newPosix(permDeniedDir)
+		xlStoragePermStorage, err = newXLStorage(permDeniedDir)
 		if err != nil {
-			t.Fatalf("Unable to initialize posix, %s", err)
+			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
-		if err = posixPermStorage.AppendFile("mybucket", "myobject", []byte("hello, world")); err != errFileAccessDenied {
+		if err = xlStoragePermStorage.AppendFile("mybucket", "myobject", []byte("hello, world")); err != errFileAccessDenied {
 			t.Fatalf("expected: Permission error, got: %s", err)
 		}
 	}
 
-	// TestPosix case with invalid volume name.
+	// TestXLStorage case with invalid volume name.
 	// A valid volume name should be atleast of size 3.
-	err = posixStorage.AppendFile("bn", "yes", []byte("hello, world"))
+	err = xlStorage.AppendFile("bn", "yes", []byte("hello, world"))
 	if err != errVolumeNotFound {
 		t.Fatalf("expected: \"Invalid argument error\", got: \"%s\"", err)
 	}
 }
 
-// TestPosix posix.RenameFile()
-func TestPosixRenameFile(t *testing.T) {
-	// create posix test setup
-	posixStorage, path, err := newPosixTestSetup()
+// TestXLStorage xlStorage.RenameFile()
+func TestXLStorageRenameFile(t *testing.T) {
+	// create xlStorage test setup
+	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
 	// Setup test environment.
-	if err := posixStorage.MakeVol("src-vol"); err != nil {
+	if err := xlStorage.MakeVol("src-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
-	if err := posixStorage.MakeVol("dest-vol"); err != nil {
+	if err := xlStorage.MakeVol("dest-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
-	if err := posixStorage.AppendFile("src-vol", "file1", []byte("Hello, world")); err != nil {
+	if err := xlStorage.AppendFile("src-vol", "file1", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
-	if err := posixStorage.AppendFile("src-vol", "file2", []byte("Hello, world")); err != nil {
+	if err := xlStorage.AppendFile("src-vol", "file2", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
-	if err := posixStorage.AppendFile("src-vol", "file3", []byte("Hello, world")); err != nil {
+	if err := xlStorage.AppendFile("src-vol", "file3", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
-	if err := posixStorage.AppendFile("src-vol", "file4", []byte("Hello, world")); err != nil {
+	if err := xlStorage.AppendFile("src-vol", "file4", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
-	if err := posixStorage.AppendFile("src-vol", "file5", []byte("Hello, world")); err != nil {
+	if err := xlStorage.AppendFile("src-vol", "file5", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
-	if err := posixStorage.AppendFile("src-vol", "path/to/file1", []byte("Hello, world")); err != nil {
+	if err := xlStorage.AppendFile("src-vol", "path/to/file1", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
@@ -1353,7 +1353,7 @@ func TestPosixRenameFile(t *testing.T) {
 		destPath    string
 		expectedErr error
 	}{
-		// TestPosix case - 1.
+		// TestXLStorage case - 1.
 		{
 			srcVol:      "src-vol",
 			destVol:     "dest-vol",
@@ -1361,7 +1361,7 @@ func TestPosixRenameFile(t *testing.T) {
 			destPath:    "file-one",
 			expectedErr: nil,
 		},
-		// TestPosix case - 2.
+		// TestXLStorage case - 2.
 		{
 			srcVol:      "src-vol",
 			destVol:     "dest-vol",
@@ -1369,8 +1369,8 @@ func TestPosixRenameFile(t *testing.T) {
 			destPath:    "new-path/",
 			expectedErr: nil,
 		},
-		// TestPosix case - 3.
-		// TestPosix to overwrite destination file.
+		// TestXLStorage case - 3.
+		// TestXLStorage to overwrite destination file.
 		{
 			srcVol:      "src-vol",
 			destVol:     "dest-vol",
@@ -1378,8 +1378,8 @@ func TestPosixRenameFile(t *testing.T) {
 			destPath:    "file-one",
 			expectedErr: nil,
 		},
-		// TestPosix case - 4.
-		// TestPosix case with io error count set to 1.
+		// TestXLStorage case - 4.
+		// TestXLStorage case with io error count set to 1.
 		// expected not to fail.
 		{
 			srcVol:      "src-vol",
@@ -1388,8 +1388,8 @@ func TestPosixRenameFile(t *testing.T) {
 			destPath:    "file-two",
 			expectedErr: nil,
 		},
-		// TestPosix case - 5.
-		// TestPosix case with io error count set to maximum allowed count.
+		// TestXLStorage case - 5.
+		// TestXLStorage case with io error count set to maximum allowed count.
 		// expected not to fail.
 		{
 			srcVol:      "src-vol",
@@ -1398,8 +1398,8 @@ func TestPosixRenameFile(t *testing.T) {
 			destPath:    "file-three",
 			expectedErr: nil,
 		},
-		// TestPosix case - 6.
-		// TestPosix case with non-existent source file.
+		// TestXLStorage case - 6.
+		// TestXLStorage case with non-existent source file.
 		{
 			srcVol:      "src-vol",
 			destVol:     "dest-vol",
@@ -1407,8 +1407,8 @@ func TestPosixRenameFile(t *testing.T) {
 			destPath:    "file-three",
 			expectedErr: errFileNotFound,
 		},
-		// TestPosix case - 7.
-		// TestPosix to check failure of source and destination are not same type.
+		// TestXLStorage case - 7.
+		// TestXLStorage to check failure of source and destination are not same type.
 		{
 			srcVol:      "src-vol",
 			destVol:     "dest-vol",
@@ -1416,8 +1416,8 @@ func TestPosixRenameFile(t *testing.T) {
 			destPath:    "file-one",
 			expectedErr: errFileAccessDenied,
 		},
-		// TestPosix case - 8.
-		// TestPosix to check failure of destination directory exists.
+		// TestXLStorage case - 8.
+		// TestXLStorage to check failure of destination directory exists.
 		{
 			srcVol:      "src-vol",
 			destVol:     "dest-vol",
@@ -1425,8 +1425,8 @@ func TestPosixRenameFile(t *testing.T) {
 			destPath:    "new-path/",
 			expectedErr: errFileAccessDenied,
 		},
-		// TestPosix case - 9.
-		// TestPosix case with source being a file and destination being a directory.
+		// TestXLStorage case - 9.
+		// TestXLStorage case with source being a file and destination being a directory.
 		// Either both have to be files or directories.
 		// Expecting to fail with `errFileAccessDenied`.
 		{
@@ -1436,8 +1436,8 @@ func TestPosixRenameFile(t *testing.T) {
 			destPath:    "new-path/",
 			expectedErr: errFileAccessDenied,
 		},
-		// TestPosix case - 10.
-		// TestPosix case with non-existent source volume.
+		// TestXLStorage case - 10.
+		// TestXLStorage case with non-existent source volume.
 		// Expecting to fail with `errVolumeNotFound`.
 		{
 			srcVol:      "src-vol-non-existent",
@@ -1446,8 +1446,8 @@ func TestPosixRenameFile(t *testing.T) {
 			destPath:    "new-path/",
 			expectedErr: errVolumeNotFound,
 		},
-		// TestPosix case - 11.
-		// TestPosix case with non-existent destination volume.
+		// TestXLStorage case - 11.
+		// TestXLStorage case with non-existent destination volume.
 		// Expecting to fail with `errVolumeNotFound`.
 		{
 			srcVol:      "src-vol",
@@ -1456,8 +1456,8 @@ func TestPosixRenameFile(t *testing.T) {
 			destPath:    "new-path/",
 			expectedErr: errVolumeNotFound,
 		},
-		// TestPosix case - 12.
-		// TestPosix case with invalid src volume name. Length should be atleast 3.
+		// TestXLStorage case - 12.
+		// TestXLStorage case with invalid src volume name. Length should be atleast 3.
 		// Expecting to fail with `errInvalidArgument`.
 		{
 			srcVol:      "ab",
@@ -1466,8 +1466,8 @@ func TestPosixRenameFile(t *testing.T) {
 			destPath:    "new-path/",
 			expectedErr: errVolumeNotFound,
 		},
-		// TestPosix case - 13.
-		// TestPosix case with invalid destination volume name. Length should be atleast 3.
+		// TestXLStorage case - 13.
+		// TestXLStorage case with invalid destination volume name. Length should be atleast 3.
 		// Expecting to fail with `errInvalidArgument`.
 		{
 			srcVol:      "abcd",
@@ -1476,8 +1476,8 @@ func TestPosixRenameFile(t *testing.T) {
 			destPath:    "new-path/",
 			expectedErr: errVolumeNotFound,
 		},
-		// TestPosix case - 14.
-		// TestPosix case with invalid destination volume name. Length should be atleast 3.
+		// TestXLStorage case - 14.
+		// TestXLStorage case with invalid destination volume name. Length should be atleast 3.
 		// Expecting to fail with `errInvalidArgument`.
 		{
 			srcVol:      "abcd",
@@ -1486,8 +1486,8 @@ func TestPosixRenameFile(t *testing.T) {
 			destPath:    "new-path/",
 			expectedErr: errVolumeNotFound,
 		},
-		// TestPosix case - 15.
-		// TestPosix case with the parent of the destination being a file.
+		// TestXLStorage case - 15.
+		// TestXLStorage case with the parent of the destination being a file.
 		// expected to fail with `errFileAccessDenied`.
 		{
 			srcVol:      "src-vol",
@@ -1496,8 +1496,8 @@ func TestPosixRenameFile(t *testing.T) {
 			destPath:    "file-one/parent-is-file",
 			expectedErr: errFileAccessDenied,
 		},
-		// TestPosix case - 16.
-		// TestPosix case with segment of source file name more than 255.
+		// TestXLStorage case - 16.
+		// TestXLStorage case with segment of source file name more than 255.
 		// expected not to fail.
 		{
 			srcVol:      "src-vol",
@@ -1506,8 +1506,8 @@ func TestPosixRenameFile(t *testing.T) {
 			destPath:    "file-six",
 			expectedErr: errFileNameTooLong,
 		},
-		// TestPosix case - 17.
-		// TestPosix case with segment of destination file name more than 255.
+		// TestXLStorage case - 17.
+		// TestXLStorage case with segment of destination file name more than 255.
 		// expected not to fail.
 		{
 			srcVol:      "src-vol",
@@ -1519,35 +1519,35 @@ func TestPosixRenameFile(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if _, ok := posixStorage.(*posixDiskIDCheck); !ok {
-			t.Fatalf("Expected the StorageAPI to be of type *posix")
+		if _, ok := xlStorage.(*xlStorageDiskIDCheck); !ok {
+			t.Fatalf("Expected the StorageAPI to be of type *xlStorage")
 		}
 
-		if err := posixStorage.RenameFile(testCase.srcVol, testCase.srcPath, testCase.destVol, testCase.destPath); err != testCase.expectedErr {
-			t.Fatalf("TestPosix %d:  Expected the error to be : \"%v\", got: \"%v\".", i+1, testCase.expectedErr, err)
+		if err := xlStorage.RenameFile(testCase.srcVol, testCase.srcPath, testCase.destVol, testCase.destPath); err != testCase.expectedErr {
+			t.Fatalf("TestXLStorage %d:  Expected the error to be : \"%v\", got: \"%v\".", i+1, testCase.expectedErr, err)
 		}
 	}
 }
 
-// TestPosix posix.StatFile()
-func TestPosixStatFile(t *testing.T) {
-	// create posix test setup
-	posixStorage, path, err := newPosixTestSetup()
+// TestXLStorage xlStorage.StatFile()
+func TestXLStorageStatFile(t *testing.T) {
+	// create xlStorage test setup
+	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
 	// Setup test environment.
-	if err := posixStorage.MakeVol("success-vol"); err != nil {
+	if err := xlStorage.MakeVol("success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
-	if err := posixStorage.AppendFile("success-vol", "success-file", []byte("Hello, world")); err != nil {
+	if err := xlStorage.AppendFile("success-vol", "success-file", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
-	if err := posixStorage.AppendFile("success-vol", "path/to/success-file", []byte("Hello, world")); err != nil {
+	if err := xlStorage.AppendFile("success-vol", "path/to/success-file", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
@@ -1556,43 +1556,43 @@ func TestPosixStatFile(t *testing.T) {
 		srcPath     string
 		expectedErr error
 	}{
-		// TestPosix case - 1.
-		// TestPosix case with valid inputs, expected to pass.
+		// TestXLStorage case - 1.
+		// TestXLStorage case with valid inputs, expected to pass.
 		{
 			srcVol:      "success-vol",
 			srcPath:     "success-file",
 			expectedErr: nil,
 		},
-		// TestPosix case - 2.
-		// TestPosix case with valid inputs, expected to pass.
+		// TestXLStorage case - 2.
+		// TestXLStorage case with valid inputs, expected to pass.
 		{
 			srcVol:      "success-vol",
 			srcPath:     "path/to/success-file",
 			expectedErr: nil,
 		},
-		// TestPosix case - 3.
-		// TestPosix case with non-existent file.
+		// TestXLStorage case - 3.
+		// TestXLStorage case with non-existent file.
 		{
 			srcVol:      "success-vol",
 			srcPath:     "nonexistent-file",
 			expectedErr: errFileNotFound,
 		},
-		// TestPosix case - 4.
-		// TestPosix case with non-existent file path.
+		// TestXLStorage case - 4.
+		// TestXLStorage case with non-existent file path.
 		{
 			srcVol:      "success-vol",
 			srcPath:     "path/2/success-file",
 			expectedErr: errFileNotFound,
 		},
-		// TestPosix case - 5.
-		// TestPosix case with path being a directory.
+		// TestXLStorage case - 5.
+		// TestXLStorage case with path being a directory.
 		{
 			srcVol:      "success-vol",
 			srcPath:     "path",
 			expectedErr: errFileNotFound,
 		},
-		// TestPosix case - 6.
-		// TestPosix case with non existent volume.
+		// TestXLStorage case - 6.
+		// TestXLStorage case with non existent volume.
 		{
 			srcVol:      "non-existent-vol",
 			srcPath:     "success-file",
@@ -1601,33 +1601,33 @@ func TestPosixStatFile(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if _, ok := posixStorage.(*posixDiskIDCheck); !ok {
-			t.Errorf("Expected the StorageAPI to be of type *posix")
+		if _, ok := xlStorage.(*xlStorageDiskIDCheck); !ok {
+			t.Errorf("Expected the StorageAPI to be of type *xlStorage")
 		}
-		if _, err := posixStorage.StatFile(testCase.srcVol, testCase.srcPath); err != testCase.expectedErr {
-			t.Fatalf("TestPosix case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
+		if _, err := xlStorage.StatFile(testCase.srcVol, testCase.srcPath); err != testCase.expectedErr {
+			t.Fatalf("TestXLStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 	}
 }
 
-// Test posix.VerifyFile()
-func TestPosixVerifyFile(t *testing.T) {
+// Test xlStorage.VerifyFile()
+func TestXLStorageVerifyFile(t *testing.T) {
 	// We test 4 cases:
 	// 1) Whole-file bitrot check on proper file
 	// 2) Whole-file bitrot check on corrupted file
 	// 3) Streaming bitrot check on proper file
 	// 4) Streaming bitrot check on corrupted file
 
-	// create posix test setup
-	posixStorage, path, err := newPosixTestSetup()
+	// create xlStorage test setup
+	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
 	volName := "testvol"
 	fileName := "testfile"
-	if err := posixStorage.MakeVol(volName); err != nil {
+	if err := xlStorage.MakeVol(volName); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1641,29 +1641,29 @@ func TestPosixVerifyFile(t *testing.T) {
 	h := algo.New()
 	h.Write(data)
 	hashBytes := h.Sum(nil)
-	if err := posixStorage.WriteAll(volName, fileName, bytes.NewBuffer(data)); err != nil {
+	if err := xlStorage.WriteAll(volName, fileName, bytes.NewBuffer(data)); err != nil {
 		t.Fatal(err)
 	}
-	if err := posixStorage.VerifyFile(volName, fileName, size, algo, hashBytes, 0); err != nil {
+	if err := xlStorage.VerifyFile(volName, fileName, size, algo, hashBytes, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	// 2) Whole-file bitrot check on corrupted file
-	if err := posixStorage.AppendFile(volName, fileName, []byte("a")); err != nil {
+	if err := xlStorage.AppendFile(volName, fileName, []byte("a")); err != nil {
 		t.Fatal(err)
 	}
 
 	// Check if VerifyFile reports the incorrect file length (the correct length is `size+1`)
-	if err := posixStorage.VerifyFile(volName, fileName, size, algo, hashBytes, 0); err == nil {
+	if err := xlStorage.VerifyFile(volName, fileName, size, algo, hashBytes, 0); err == nil {
 		t.Fatal("expected to fail bitrot check")
 	}
 
 	// Check if bitrot fails
-	if err := posixStorage.VerifyFile(volName, fileName, size+1, algo, hashBytes, 0); err == nil {
+	if err := xlStorage.VerifyFile(volName, fileName, size+1, algo, hashBytes, 0); err == nil {
 		t.Fatal("expected to fail bitrot check")
 	}
 
-	if err := posixStorage.DeleteFile(volName, fileName); err != nil {
+	if err := xlStorage.DeleteFile(volName, fileName); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1671,7 +1671,7 @@ func TestPosixVerifyFile(t *testing.T) {
 	algo = HighwayHash256S
 	shardSize := int64(1024 * 1024)
 	shard := make([]byte, shardSize)
-	w := newStreamingBitrotWriter(posixStorage, volName, fileName, size, algo, shardSize)
+	w := newStreamingBitrotWriter(xlStorage, volName, fileName, size, algo, shardSize)
 	reader := bytes.NewReader(data)
 	for {
 		// Using io.CopyBuffer instead of this loop will not work for us as io.CopyBuffer
@@ -1687,12 +1687,12 @@ func TestPosixVerifyFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	w.Close()
-	if err := posixStorage.VerifyFile(volName, fileName, size, algo, nil, shardSize); err != nil {
+	if err := xlStorage.VerifyFile(volName, fileName, size, algo, nil, shardSize); err != nil {
 		t.Fatal(err)
 	}
 
 	// 4) Streaming bitrot check on corrupted file
-	filePath := pathJoin(posixStorage.String(), volName, fileName)
+	filePath := pathJoin(xlStorage.String(), volName, fileName)
 	f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_SYNC, 0644)
 	if err != nil {
 		t.Fatal(err)
@@ -1701,10 +1701,10 @@ func TestPosixVerifyFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.Close()
-	if err := posixStorage.VerifyFile(volName, fileName, size, algo, nil, shardSize); err == nil {
+	if err := xlStorage.VerifyFile(volName, fileName, size, algo, nil, shardSize); err == nil {
 		t.Fatal("expected to fail bitrot check")
 	}
-	if err := posixStorage.VerifyFile(volName, fileName, size+1, algo, nil, shardSize); err == nil {
+	if err := xlStorage.VerifyFile(volName, fileName, size+1, algo, nil, shardSize); err == nil {
 		t.Fatal("expected to fail bitrot check")
 	}
 }

@@ -68,7 +68,7 @@ type result struct {
 
 func mustSetupDir(t *testing.T) string {
 	// Create unique test directory.
-	dir, err := ioutil.TempDir(globalTestTmpDir, "minio-posix-list-dir")
+	dir, err := ioutil.TempDir(globalTestTmpDir, "minio-list-dir")
 	if err != nil {
 		t.Fatalf("Unable to setup directory, %s", err)
 	}

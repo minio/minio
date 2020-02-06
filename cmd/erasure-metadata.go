@@ -17,13 +17,11 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path"
 	"sort"
 	"time"
 
@@ -75,7 +73,7 @@ func (c ChecksumInfo) MarshalJSON() ([]byte, error) {
 	return json.Marshal(info)
 }
 
-// UnmarshalJSON - should never be called, instead xlMetaV1UnmarshalJSON() should be used.
+// UnmarshalJSON - custom checksum info unmarshaller
 func (c *ChecksumInfo) UnmarshalJSON(data []byte) error {
 	var info checksumInfoJSON
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -139,105 +137,53 @@ func (e ErasureInfo) GetChecksumInfo(partNumber int) (ckSum ChecksumInfo) {
 	return ChecksumInfo{}
 }
 
-// statInfo - carries stat information of the object.
-type statInfo struct {
+// StatInfo - carries stat information of the object.
+type StatInfo struct {
 	Size    int64     `json:"size"`    // Size of the object `xl.json`.
 	ModTime time.Time `json:"modTime"` // ModTime of the object `xl.json`.
 }
 
-// A xlMetaV1 represents `xl.json` metadata header.
-type xlMetaV1 struct {
-	Version string   `json:"version"` // Version of the current `xl.json`.
-	Format  string   `json:"format"`  // Format of the current `xl.json`.
-	Stat    statInfo `json:"stat"`    // Stat of the current object `xl.json`.
-	// Erasure coded info for the current object `xl.json`.
-	Erasure ErasureInfo `json:"erasure"`
-	// MinIO release tag for current object `xl.json`.
-	Minio struct {
-		Release string `json:"release"`
-	} `json:"minio"`
-	// Metadata map for current object `xl.json`.
-	Meta map[string]string `json:"meta,omitempty"`
-	// Captures all the individual object `xl.json`.
-	Parts []ObjectPartInfo `json:"parts,omitempty"`
+// Return a new FileInfo initialized using the given FileInfo. Used in healing
+// to make sure that we do not copy over any part's checksum info which will
+// differ for different disks.
+func cloneFileInfo(fi FileInfo) FileInfo {
+	nfi := fi
+	nfi.Erasure.Checksums = nil
+	nfi.Parts = nil
+	return nfi
 }
 
-// XL metadata constants.
-const (
-	// XL meta version.
-	xlMetaVersion = "1.0.1"
-
-	// XL meta version.
-	xlMetaVersion100 = "1.0.0"
-
-	// XL meta format string.
-	xlMetaFormat = "xl"
-
-	// Add new constants here.
-)
-
-// newXLMetaV1 - initializes new xlMetaV1, adds version, allocates a fresh erasure info.
-func newXLMetaV1(object string, dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
-	xlMeta = xlMetaV1{}
-	xlMeta.Version = xlMetaVersion
-	xlMeta.Format = xlMetaFormat
-	xlMeta.Minio.Release = ReleaseTag
-	xlMeta.Erasure = ErasureInfo{
-		Algorithm:    erasureAlgorithmKlauspost,
-		DataBlocks:   dataBlocks,
-		ParityBlocks: parityBlocks,
-		BlockSize:    blockSizeV1,
-		Distribution: hashOrder(object, dataBlocks+parityBlocks),
-	}
-	return xlMeta
-}
-
-// Return a new xlMetaV1 initialized using the given xlMetaV1. Used in healing to make sure that we do not copy
-// over any part's checksum info which will differ for different disks.
-func newXLMetaFromXLMeta(meta xlMetaV1) xlMetaV1 {
-	xlMeta := meta
-	xlMeta.Erasure.Checksums = nil
-	xlMeta.Parts = nil
-	return xlMeta
-}
-
-// IsValid - tells if the format is sane by validating the version
-// string, format and erasure info fields.
-func (m xlMetaV1) IsValid() bool {
-	return isXLMetaFormatValid(m.Version, m.Format) &&
-		isXLMetaErasureInfoValid(m.Erasure.DataBlocks, m.Erasure.ParityBlocks)
-}
-
-// Verifies if the backend format metadata is sane by validating
-// the version string and format style.
-func isXLMetaFormatValid(version, format string) bool {
-	return ((version == xlMetaVersion || version == xlMetaVersion100) &&
-		format == xlMetaFormat)
-}
-
-// Verifies if the backend format metadata is sane by validating
-// the ErasureInfo, i.e. data and parity blocks.
-func isXLMetaErasureInfoValid(data, parity int) bool {
+// IsValid - tells if erasure info fields are valid.
+func (fi FileInfo) IsValid() bool {
+	data := fi.Erasure.DataBlocks
+	parity := fi.Erasure.ParityBlocks
 	return ((data >= parity) && (data != 0) && (parity != 0))
 }
 
-// Converts metadata to object info.
-func (m xlMetaV1) ToObjectInfo(bucket, object string) ObjectInfo {
+// ToObjectInfo - Converts metadata to object info.
+func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
+	if HasSuffix(object, SlashSeparator) {
+		return ObjectInfo{
+			Bucket: bucket,
+			Name:   object,
+			IsDir:  true,
+		}
+	}
 	objInfo := ObjectInfo{
 		IsDir:           false,
 		Bucket:          bucket,
 		Name:            object,
-		Size:            m.Stat.Size,
-		ModTime:         m.Stat.ModTime,
-		ContentType:     m.Meta["content-type"],
-		ContentEncoding: m.Meta["content-encoding"],
+		Size:            fi.Size,
+		ModTime:         fi.ModTime,
+		ContentType:     fi.Metadata["content-type"],
+		ContentEncoding: fi.Metadata["content-encoding"],
 	}
 	// Update expires
 	var (
 		t time.Time
 		e error
 	)
-	if exp, ok := m.Meta["expires"]; ok {
+	if exp, ok := fi.Metadata["expires"]; ok {
 		if t, e = time.Parse(http.TimeFormat, exp); e == nil {
 			objInfo.Expires = t.UTC()
 		}
@@ -245,22 +191,22 @@ func (m xlMetaV1) ToObjectInfo(bucket, object string) ObjectInfo {
 	objInfo.backendType = BackendErasure
 
 	// Extract etag from metadata.
-	objInfo.ETag = extractETag(m.Meta)
+	objInfo.ETag = extractETag(fi.Metadata)
 
 	// Add user tags to the object info
-	objInfo.UserTags = m.Meta[xhttp.AmzObjectTagging]
+	objInfo.UserTags = fi.Metadata[xhttp.AmzObjectTagging]
 
 	// etag/md5Sum has already been extracted. We need to
 	// remove to avoid it from appearing as part of
 	// response headers. e.g, X-Minio-* or X-Amz-*.
 	// Tags have also been extracted, we remove that as well.
-	objInfo.UserDefined = cleanMetadata(m.Meta)
+	objInfo.UserDefined = cleanMetadata(fi.Metadata)
 
 	// All the parts per object.
-	objInfo.Parts = m.Parts
+	objInfo.Parts = fi.Parts
 
 	// Update storage class
-	if sc, ok := m.Meta[xhttp.AmzStorageClass]; ok {
+	if sc, ok := fi.Metadata[xhttp.AmzStorageClass]; ok {
 		objInfo.StorageClass = sc
 	} else {
 		objInfo.StorageClass = globalMinioDefaultStorageClass
@@ -281,7 +227,7 @@ func objectPartIndex(parts []ObjectPartInfo, partNumber int) int {
 }
 
 // AddObjectPart - add a new object part in order.
-func (m *xlMetaV1) AddObjectPart(partNumber int, partETag string, partSize int64, actualSize int64) {
+func (fi *FileInfo) AddObjectPart(partNumber int, partETag string, partSize int64, actualSize int64) {
 	partInfo := ObjectPartInfo{
 		Number:     partNumber,
 		ETag:       partETag,
@@ -290,29 +236,29 @@ func (m *xlMetaV1) AddObjectPart(partNumber int, partETag string, partSize int64
 	}
 
 	// Update part info if it already exists.
-	for i, part := range m.Parts {
+	for i, part := range fi.Parts {
 		if partNumber == part.Number {
-			m.Parts[i] = partInfo
+			fi.Parts[i] = partInfo
 			return
 		}
 	}
 
 	// Proceed to include new part info.
-	m.Parts = append(m.Parts, partInfo)
+	fi.Parts = append(fi.Parts, partInfo)
 
-	// Parts in xlMeta should be in sorted order by part number.
-	sort.Sort(byObjectPartNumber(m.Parts))
+	// Parts in FileInfo should be in sorted order by part number.
+	sort.Sort(byObjectPartNumber(fi.Parts))
 }
 
 // ObjectToPartOffset - translate offset of an object to offset of its individual part.
-func (m xlMetaV1) ObjectToPartOffset(ctx context.Context, offset int64) (partIndex int, partOffset int64, err error) {
+func (fi FileInfo) ObjectToPartOffset(ctx context.Context, offset int64) (partIndex int, partOffset int64, err error) {
 	if offset == 0 {
 		// Special case - if offset is 0, then partIndex and partOffset are always 0.
 		return 0, 0, nil
 	}
 	partOffset = offset
 	// Seek until object offset maps to a particular part offset.
-	for i, part := range m.Parts {
+	for i, part := range fi.Parts {
 		partIndex = i
 		// Offset is smaller than size we have reached the proper part offset.
 		if partOffset < part.Size {
@@ -326,10 +272,10 @@ func (m xlMetaV1) ObjectToPartOffset(ctx context.Context, offset int64) (partInd
 	return 0, 0, InvalidRange{}
 }
 
-func getXLMetaInQuorum(ctx context.Context, metaArr []xlMetaV1, modTime time.Time, quorum int) (xmv xlMetaV1, e error) {
+func getFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.Time, quorum int) (xmv FileInfo, e error) {
 	metaHashes := make([]string, len(metaArr))
 	for i, meta := range metaArr {
-		if meta.IsValid() && meta.Stat.ModTime.Equal(modTime) {
+		if meta.IsValid() && meta.ModTime.Equal(modTime) {
 			h := sha256.New()
 			for _, part := range meta.Parts {
 				h.Write([]byte(fmt.Sprintf("part.%d", part.Number)))
@@ -356,7 +302,7 @@ func getXLMetaInQuorum(ctx context.Context, metaArr []xlMetaV1, modTime time.Tim
 	}
 
 	if maxCount < quorum {
-		return xlMetaV1{}, errXLReadQuorum
+		return FileInfo{}, errXLReadQuorum
 	}
 
 	for i, hash := range metaHashes {
@@ -365,100 +311,68 @@ func getXLMetaInQuorum(ctx context.Context, metaArr []xlMetaV1, modTime time.Tim
 		}
 	}
 
-	return xlMetaV1{}, errXLReadQuorum
+	return FileInfo{}, errXLReadQuorum
 }
 
-// pickValidXLMeta - picks one valid xlMeta content and returns from a
+// pickValidFileInfo - picks one valid FileInfo content and returns from a
 // slice of xlmeta content.
-func pickValidXLMeta(ctx context.Context, metaArr []xlMetaV1, modTime time.Time, quorum int) (xmv xlMetaV1, e error) {
-	return getXLMetaInQuorum(ctx, metaArr, modTime, quorum)
+func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Time, quorum int) (xmv FileInfo, e error) {
+	return getFileInfoInQuorum(ctx, metaArr, modTime, quorum)
 }
 
 // list of all errors that can be ignored in a metadata operation.
 var objMetadataOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound, errFileAccessDenied, errCorruptedFormat)
 
-// readXLMetaParts - returns the XL Metadata Parts from xl.json of one of the disks picked at random.
-func (xl xlObjects) readXLMetaParts(ctx context.Context, bucket, object string) (xlMetaParts []ObjectPartInfo, xlMeta map[string]string, err error) {
-	var ignoredErrs []error
-	for _, disk := range xl.getLoadBalancedDisks() {
-		if disk == nil {
-			ignoredErrs = append(ignoredErrs, errDiskNotFound)
-			continue
-		}
-		xlMetaParts, xlMeta, err = readXLMetaParts(ctx, disk, bucket, object)
-		if err == nil {
-			return xlMetaParts, xlMeta, nil
-		}
-		// For any reason disk or bucket is not available continue
-		// and read from other disks.
-		if IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
-			ignoredErrs = append(ignoredErrs, err)
-			continue
-		}
-		// Error is not ignored, return right here.
-		return nil, nil, err
-	}
-	// If all errors were ignored, reduce to maximal occurrence
-	// based on the read quorum.
-	readQuorum := len(xl.getDisks()) / 2
-	return nil, nil, reduceReadQuorumErrs(ctx, ignoredErrs, nil, readQuorum)
-}
+// Rename metadata content to destination location for each disk in order.
+func renameFileInfo(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, quorum int) ([]StorageAPI, error) {
+	ignoredErr := []error{errFileNotFound}
 
-// readXLMetaStat - return xlMetaV1.Stat and xlMetaV1.Meta from  one of the disks picked at random.
-func (xl xlObjects) readXLMetaStat(ctx context.Context, bucket, object string) (xlStat statInfo, xlMeta map[string]string, err error) {
-	var ignoredErrs []error
-	for _, disk := range xl.getLoadBalancedDisks() {
-		if disk == nil {
-			ignoredErrs = append(ignoredErrs, errDiskNotFound)
-			continue
-		}
-		// parses only xlMetaV1.Meta and xlMeta.Stat
-		xlStat, xlMeta, err = readXLMetaStat(ctx, disk, bucket, object)
-		if err == nil {
-			return xlStat, xlMeta, nil
-		}
-		// For any reason disk or bucket is not available continue
-		// and read from other disks.
-		if IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
-			ignoredErrs = append(ignoredErrs, err)
-			continue
-		}
-		// Error is not ignored, return right here.
-		return statInfo{}, nil, err
-	}
-	// If all errors were ignored, reduce to maximal occurrence
-	// based on the read quorum.
-	readQuorum := len(xl.getDisks()) / 2
-	return statInfo{}, nil, reduceReadQuorumErrs(ctx, ignoredErrs, nil, readQuorum)
-}
+	g := errgroup.WithNErrs(len(disks))
 
-// writeXLMetadata - writes `xl.json` to a single disk.
-func writeXLMetadata(ctx context.Context, disk StorageAPI, bucket, prefix string, xlMeta xlMetaV1) error {
-	jsonFile := path.Join(prefix, xlMetaJSONFile)
-
-	// Marshal json.
-	metadataBytes, err := json.Marshal(&xlMeta)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return err
+	// Rename file on all underlying storage disks.
+	for index := range disks {
+		index := index
+		g.Go(func() error {
+			if disks[index] == nil {
+				return errDiskNotFound
+			}
+			if err := disks[index].RenameMetadata(srcBucket, srcEntry, dstBucket, dstEntry); err != nil {
+				if !IsErrIgnored(err, ignoredErr...) {
+					return err
+				}
+			}
+			return nil
+		}, index)
 	}
 
-	// Persist marshaled data.
-	err = disk.WriteAll(bucket, jsonFile, bytes.NewReader(metadataBytes))
-	logger.LogIf(ctx, err)
-	return err
+	// Wait for all renames to finish.
+	errs := g.Wait()
+
+	// We can safely allow RenameFile errors up to len(xl.getDisks()) - writeQuorum
+	// otherwise return failure. Cleanup successful renames.
+	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, quorum)
+	if err == errXLWriteQuorum {
+		g = errgroup.WithNErrs(len(disks))
+		for index, disk := range disks {
+			if disk == nil {
+				continue
+			}
+			index := index
+			g.Go(func() error {
+				if errs[index] == nil {
+					// Undo all the partial rename operations.
+					_ = disks[index].RenameMetadata(dstBucket, dstEntry, srcBucket, srcEntry)
+				}
+				return nil
+			}, index)
+		}
+		g.Wait()
+	}
+	return evalDisks(disks, errs), err
 }
 
-// Rename `xl.json` content to destination location for each disk in order.
-func renameXLMetadata(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, quorum int) ([]StorageAPI, error) {
-	isDir := false
-	srcXLJSON := path.Join(srcEntry, xlMetaJSONFile)
-	dstXLJSON := path.Join(dstEntry, xlMetaJSONFile)
-	return rename(ctx, disks, srcBucket, srcXLJSON, dstBucket, dstXLJSON, isDir, quorum, []error{errFileNotFound})
-}
-
-// writeUniqueXLMetadata - writes unique `xl.json` content for each disk in order.
-func writeUniqueXLMetadata(ctx context.Context, disks []StorageAPI, bucket, prefix string, xlMetas []xlMetaV1, quorum int) ([]StorageAPI, error) {
+// writeUniqueFileInfo - writes unique `xl.json` content for each disk in order.
+func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix string, files []FileInfo, quorum int) ([]StorageAPI, error) {
 	g := errgroup.WithNErrs(len(disks))
 
 	// Start writing `xl.json` to all disks in parallel.
@@ -468,9 +382,10 @@ func writeUniqueXLMetadata(ctx context.Context, disks []StorageAPI, bucket, pref
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			// Pick one xlMeta for a disk at index.
-			xlMetas[index].Erasure.Index = index + 1
-			return writeXLMetadata(ctx, disks[index], bucket, prefix, xlMetas[index])
+			// Pick one FileInfo for a disk at index.
+			files[index].Erasure.Index = index + 1
+			return disks[index].WriteMetadata(bucket, prefix,
+				nullVersionID, files[index])
 		}, index)
 	}
 
@@ -484,15 +399,14 @@ func writeUniqueXLMetadata(ctx context.Context, disks []StorageAPI, bucket, pref
 // Returns per object readQuorum and writeQuorum
 // readQuorum is the min required disks to read data.
 // writeQuorum is the min required disks to write data.
-func objectQuorumFromMeta(ctx context.Context, xl xlObjects, partsMetaData []xlMetaV1, errs []error) (objectReadQuorum, objectWriteQuorum int, err error) {
-	// get the latest updated Metadata and a count of all the latest updated xlMeta(s)
-	latestXLMeta, err := getLatestXLMeta(ctx, partsMetaData, errs)
-
+func objectQuorumFromMeta(ctx context.Context, xl xlObjects, partsMetaData []FileInfo, errs []error) (objectReadQuorum, objectWriteQuorum int, err error) {
+	// get the latest updated Metadata and a count of all the latest updated FileInfo(s)
+	latestFileInfo, err := getLatestFileInfo(ctx, partsMetaData, errs)
 	if err != nil {
 		return 0, 0, err
 	}
 
 	// Since all the valid erasure code meta updated at the same time are equivalent, pass dataBlocks
-	// from latestXLMeta to get the quorum
-	return latestXLMeta.Erasure.DataBlocks, latestXLMeta.Erasure.DataBlocks + 1, nil
+	// from latestFileInfo to get the quorum
+	return latestFileInfo.Erasure.DataBlocks, latestFileInfo.Erasure.DataBlocks + 1, nil
 }

@@ -125,18 +125,18 @@ func (d *naughtyDisk) DeleteVol(volume string) (err error) {
 	return d.disk.DeleteVol(volume)
 }
 
-func (d *naughtyDisk) Walk(volume, path, marker string, recursive bool, leafFile string, readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (chan FileInfo, error) {
+func (d *naughtyDisk) Walk(volume, path, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfo, error) {
 	if err := d.calcError(); err != nil {
 		return nil, err
 	}
-	return d.disk.Walk(volume, path, marker, recursive, leafFile, readMetadataFn, endWalkCh)
+	return d.disk.Walk(volume, path, marker, recursive, endWalkCh)
 }
 
-func (d *naughtyDisk) ListDir(volume, path string, count int, leafFile string) (entries []string, err error) {
+func (d *naughtyDisk) ListDir(volume, path string, count int) (entries []string, err error) {
 	if err := d.calcError(); err != nil {
 		return []string{}, err
 	}
-	return d.disk.ListDir(volume, path, count, leafFile)
+	return d.disk.ListDir(volume, path, count)
 }
 
 func (d *naughtyDisk) ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
@@ -165,6 +165,13 @@ func (d *naughtyDisk) AppendFile(volume, path string, buf []byte) error {
 		return err
 	}
 	return d.disk.AppendFile(volume, path, buf)
+}
+
+func (d *naughtyDisk) RenameMetadata(srcVolume, srcPath, dstVolume, dstPath string) error {
+	if err := d.calcError(); err != nil {
+		return err
+	}
+	return d.disk.RenameMetadata(srcVolume, srcPath, dstVolume, dstPath)
 }
 
 func (d *naughtyDisk) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
@@ -201,6 +208,20 @@ func (d *naughtyDisk) DeletePrefixes(volume string, paths []string) ([]error, er
 		return nil, err
 	}
 	return d.disk.DeletePrefixes(volume, paths)
+}
+
+func (d *naughtyDisk) WriteMetadata(volume string, path string, versionID string, fi FileInfo) (err error) {
+	if err := d.calcError(); err != nil {
+		return err
+	}
+	return d.disk.WriteMetadata(volume, path, versionID, fi)
+}
+
+func (d *naughtyDisk) ReadMetadata(volume string, path string, versionID string) (fi FileInfo, err error) {
+	if err := d.calcError(); err != nil {
+		return FileInfo{}, err
+	}
+	return d.disk.ReadMetadata(volume, path, versionID)
 }
 
 func (d *naughtyDisk) WriteAll(volume string, path string, reader io.Reader) (err error) {

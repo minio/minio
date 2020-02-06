@@ -46,10 +46,10 @@ func TestRWPoolLongPath(t *testing.T) {
 
 // Tests all RWPool methods.
 func TestRWPool(t *testing.T) {
-	// create posix test setup
-	_, path, err := newPosixTestSetup()
+	// create xlStorage test setup
+	_, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 

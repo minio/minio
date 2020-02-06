@@ -561,7 +561,7 @@ func (z *xlZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, marke
 			eof = true
 			break
 		}
-		rquorum := result.Quorum
+		rquorum := result.Erasure.DataBlocks
 		// Quorum is zero for all directories.
 		if rquorum == 0 {
 			// Choose N/2 quorum for directory entries.
@@ -717,7 +717,7 @@ func (z *xlZones) listObjects(ctx context.Context, bucket, prefix, marker, delim
 	}
 
 	for _, entry := range entries.Files {
-		objInfo := entry.ToObjectInfo()
+		objInfo := entry.ToObjectInfo(entry.Volume, entry.Name)
 		if HasSuffix(objInfo.Name, SlashSeparator) && !recursive {
 			loi.Prefixes = append(loi.Prefixes, objInfo.Name)
 			continue
@@ -826,7 +826,7 @@ func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, zoneDrives [
 			// We have reached EOF across all entryChs, break the loop.
 			break
 		}
-		rquorum := fi.Quorum
+		rquorum := fi.Erasure.DataBlocks
 		// Quorum is zero for all directories.
 		if rquorum == 0 {
 			// Choose N/2 quoroum for directory entries.
@@ -1329,7 +1329,7 @@ func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, results chan<
 				continue
 			}
 
-			results <- entry.ToObjectInfo()
+			results <- entry.ToObjectInfo(entry.Volume, entry.Name)
 		}
 	}()
 

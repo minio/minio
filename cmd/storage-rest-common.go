@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v15" // Adding DeletePrefixes API
+	storageRESTVersion       = "v16" // Changes to FileInfo data structure
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -61,7 +61,6 @@ const (
 	storageRESTShardSize  = "shard-size"
 	storageRESTCount      = "count"
 	storageRESTMarkerPath = "marker"
-	storageRESTLeafFile   = "leaf-file"
 	storageRESTRecursive  = "recursive"
 	storageRESTBitrotAlgo = "bitrot-algo"
 	storageRESTBitrotHash = "bitrot-hash"
