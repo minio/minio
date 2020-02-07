@@ -219,11 +219,11 @@ func newPosix(path string) (*posix, error) {
 		},
 		stopUsageCh: make(chan struct{}),
 		diskMount:   mountinfo.IsLikelyMountPoint(path),
-		// Allow disk usage crawler to run upto 10 concurrent
+		// Allow disk usage crawler to run with up to 2 concurrent
 		// I/O ops, if and when activeIOCount reaches this
 		// value disk usage routine suspends the crawler
 		// and waits until activeIOCount reaches below this threshold.
-		maxActiveIOCount: 10,
+		maxActiveIOCount: 3,
 	}
 
 	// Success.
