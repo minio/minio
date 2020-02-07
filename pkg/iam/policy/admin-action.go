@@ -47,6 +47,8 @@ const (
 	ConsoleLogAdminAction = "admin:ConsoleLog"
 	// KMSKeyStatusAdminAction - allow getting KMS key status
 	KMSKeyStatusAdminAction = "admin:KMSKeyStatus"
+	// KMSKeyRotateAdminAction - allow rotating the KMS data encryption keys
+	KMSKeyRotateAdminAction = "admin:KMSKeyRotate"
 	// ServerHardwareInfoAdminAction - allow listing server hardware info
 	ServerHardwareInfoAdminAction = "admin:HardwareInfo"
 	// ServerInfoAdminAction - allow listing server info

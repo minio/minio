@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
@@ -1301,6 +1302,151 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeSuccessResponseJSON(w, resp)
+}
+
+// KMSKeyRotateHandler - POST /minio/admin/v2/kms/key/rotate
+func (a adminAPIHandlers) KMSKeyRotateHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "KMSKeyRotateHandler")
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSKeyRotateAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	if GlobalKMS == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
+		return
+	}
+
+	var req madmin.KMSRotateKeyRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// Delete rotation entries where the old key ID
+	// is equal to the new key ID. It's pointless to
+	// rotate when the old and the new key are the same.
+	for k, v := range req.KeyMapping {
+		if k == v {
+			delete(req.KeyMapping, k)
+		}
+	}
+
+	// Verify that the key mapping is well-formed. In particular,
+	// that a old key ID does not appear as new key ID as well.
+	// This is not allowed since it would cause unpredictable
+	// behavior.
+	for oldKey := range req.KeyMapping {
+		for _, newKey := range req.KeyMapping {
+			if oldKey == newKey {
+				err := crypto.Errorf("invalid key mapping: cannot rotate from and to: %s", oldKey)
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+		}
+	}
+
+	// If there is no key mapping for rotation return early.
+	if len(req.KeyMapping) == 0 {
+		writeSuccessResponseHeadersOnly(w)
+		return
+	}
+
+	// If the bucket is empty and rotation is not recursive there are no
+	// objects - only buckets. So return early.
+	if req.Bucket == "" && !req.Recursive {
+		writeSuccessResponseHeadersOnly(w)
+		return
+	}
+
+	// Either check whether the requested bucket exists or
+	// if no bucket is specified list all buckets.
+	var bucketNames []string
+	if req.Bucket != "" {
+		if _, err := objectAPI.GetBucketInfo(ctx, req.Bucket); err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		bucketNames = []string{req.Bucket}
+	} else {
+		bucketInfo, err := objectAPI.ListBuckets(ctx)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		bucketNames = make([]string, len(bucketInfo))
+		for i, b := range bucketInfo {
+			bucketNames[i] = b.Name
+		}
+	}
+
+	// For each bucket list all objects for the requested prefix.
+	// If the object is encrypted with the KMS perform a key
+	// rotation if there is a mapping for the current key ID.
+	for _, bucket := range bucketNames {
+		var err error
+		var objectListing ListObjectsV2Info
+		for {
+			objectListing, err = objectAPI.ListObjectsV2(ctx, bucket, req.Prefix, objectListing.NextContinuationToken, "", 1000, false, objectListing.ContinuationToken)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+
+			for _, object := range objectListing.Objects {
+				if !req.Recursive && object.IsDir {
+					continue
+				}
+
+				if crypto.IsEncrypted(object.UserDefined) && crypto.S3.IsEncrypted(object.UserDefined) {
+					keyID := object.UserDefined[crypto.S3KMSKeyID]
+					newKeyID, ok := req.KeyMapping[keyID]
+					if !ok {
+						continue // No key mapping
+					}
+
+					objectKey, err := crypto.S3.UnsealObjectKey(GlobalKMS, object.UserDefined, bucket, object.Name)
+					if err != nil {
+						writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+						return
+					}
+					newKey, newEncKey, err := GlobalKMS.GenerateKey(newKeyID, crypto.Context{bucket: path.Join(bucket, object.Name)})
+					if err != nil {
+						writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+						return
+					}
+					sealedKey := objectKey.Seal(newKey, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object.Name)
+					object.UserDefined = crypto.S3.CreateMetadata(object.UserDefined, newKeyID, newEncKey, sealedKey)
+					object.metadataOnly = true
+
+					if !req.DryRun { // actually update the metadata on the backend
+						object, err = objectAPI.CopyObject(ctx, bucket, object.Name, bucket, object.Name, object, ObjectOptions{}, ObjectOptions{})
+						if err != nil {
+							writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+							return
+						}
+					}
+
+					rotateResponse := madmin.KMSRotateKeyResponse{
+						Bucket:   bucket,
+						Object:   object.Name,
+						OldKeyID: keyID,
+						NewKeyID: object.UserDefined[crypto.S3KMSKeyID],
+					}
+					if _, err = fmt.Fprintln(w, rotateResponse.JSON()); err != nil {
+						// There is no point in trying to write an error response to the client if
+						// write itself failed.
+						return
+					}
+				}
+			}
+
+			if !objectListing.IsTruncated {
+				break
+			}
+		}
+	}
 }
 
 // ServerHardwareInfoHandler - GET /minio/admin/v2/hardwareinfo?Type={hwType}

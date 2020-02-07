@@ -18,6 +18,8 @@ package madmin
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 )
@@ -58,4 +60,55 @@ type KMSKeyStatus struct {
 	KeyID         string `json:"key-id"`
 	EncryptionErr string `json:"encryption-error,omitempty"` // An empty error == success
 	DecryptionErr string `json:"decryption-error,omitempty"` // An empty error == success
+}
+
+// RotateKeys performs a key rotation of the data encryption keys (DEK) derived by
+// the KMS. The MinIO server will inspect all objects specified by req and requests
+// a new data encryption key from the KMS for this object.
+//
+// RotateKeys returns a stream of newline-delimited JSON objects. Each object represents
+// one successful key rotation.
+func (adm *AdminClient) RotateKeys(req *KMSRotateKeyRequest) (io.ReadCloser, error) {
+	content, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	reqData := requestData{
+		relPath: adminAPIPrefix + "/kms/key/rotate",
+		content: content,
+	}
+
+	resp, err := adm.executeMethod(http.MethodPost, reqData)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpRespToErrorResponse(resp)
+	}
+	return resp.Body, nil
+}
+
+// KMSRotateKeyRequest specifies how and for which objects the
+// MinIO server should perform the key rotation.
+type KMSRotateKeyRequest struct {
+	Bucket string `json:"bucket"` // If not specified MinIO will use all buckets
+	Prefix string `json:"prefix"` // The object prefix. If empty MinIO will rotate every object.
+
+	KeyMapping map[string]string `json:"key-mapping"` // The mapping old-key -> new-key
+	Recursive  bool              `json:"recursive"`   // Specifies whether the rotation should be recursive
+	DryRun     bool              `json:"dry-run"`     // Specifies whether the rotation should be persistet
+}
+
+// KMSRotateKeyResponse represents one successful key rotation operation.
+type KMSRotateKeyResponse struct {
+	Bucket   string `json:"bucket"`
+	Object   string `json:"object"`
+	OldKeyID string `json:"old-key-id"`
+	NewKeyID string `json:"new-key-id"`
+}
+
+// JSON returns the JSON representation of a KMSRotateKeyResponse as string.
+func (r *KMSRotateKeyResponse) JSON() string {
+	const format = `{"bucket":"%s","object":"%s","old-key-id":"%s","new-key-id":"%s"}`
+	return fmt.Sprintf(format, r.Bucket, r.Object, r.OldKeyID, r.NewKeyID)
 }

@@ -1,7 +1,7 @@
 // +build ignore
 
 /*
- * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,9 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
+	"fmt"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -36,20 +39,27 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	status, err := madmClnt.GetKeyStatus("") // empty string refers to the default master key
+	req := madmin.KMSRotateKeyRequest{
+		Bucket: "my-bucket",
+		Prefix: "my-folder/a",
+		KeyMapping: map[string]string{
+			"OldKeyID": "NewKeyID",
+		},
+		Recursive: true,
+	}
+
+	resp, err := madmClnt.RotateKeys(&req)
 	if err != nil {
 		log.Fatalln(err)
 	}
+	defer resp.Close()
 
-	log.Printf("Key: %s\n", status.KeyID)
-	if status.EncryptionErr == "" {
-		log.Println("\t • Encryption ✔")
-	} else {
-		log.Printf("\t • Encryption failed: %s\n", status.EncryptionErr)
-	}
-	if status.DecryptionErr == "" {
-		log.Println("\t • Decryption ✔")
-	} else {
-		log.Printf("\t •  Decryption failed: %s\n", status.DecryptionErr)
+	scanner := bufio.NewScanner(resp)
+	for scanner.Scan() {
+		var response madmin.KMSRotateKeyResponse
+		if err = json.Unmarshal(scanner.Bytes(), &response); err != nil {
+			log.Fatalln(err)
+		}
+		fmt.Println(response.JSON())
 	}
 }
