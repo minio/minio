@@ -106,11 +106,9 @@ func (g *S3) Name() string {
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyz01234569"
 const (
-	letterIdxBits           = 6                    // 6 bits to represent a letter index
-	letterIdxMask           = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-	letterIdxMax            = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-	minioReservedBucket     = "minio"
-	minioReservedBucketPath = minio.SlashSeparator + minioReservedBucket
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
 )
 
 // randString generates random names and prepends them with a known prefix.
@@ -156,32 +154,6 @@ var defaultAWSCredProviders = []credentials.Provider{
 		},
 	},
 	&credentials.EnvMinio{},
-}
-
-type metricsTransport struct {
-	transport *http.Transport
-	metrics   *minio.Metrics
-}
-
-func (s metricsTransport) RoundTrip(r *http.Request) (*http.Response, error) {
-	isS3Request := func() bool {
-		return !(minio.HasPrefix(r.URL.Path, minioReservedBucketPath) ||
-			minio.HasSuffix(r.URL.Path, ".js") || strings.Contains(r.URL.Path, "favicon.ico") ||
-			strings.Contains(r.URL.Path, ".html"))
-	}
-	if isS3Request() && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
-		s.metrics.IncRequests(r.Method)
-		s.metrics.IncBytesSent(r.ContentLength)
-	}
-	// Make the request to the server.
-	resp, err := s.transport.RoundTrip(r)
-	if err != nil {
-		return nil, err
-	}
-	if isS3Request() && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
-		s.metrics.IncBytesReceived(resp.ContentLength)
-	}
-	return resp, nil
 }
 
 // newS3 - Initializes a new client by auto probing S3 server signature.
@@ -237,9 +209,9 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 
 	metrics := minio.NewMetrics()
 
-	t := &metricsTransport{
-		transport: minio.NewCustomHTTPTransport(),
-		metrics:   metrics,
+	t := &minio.MetricsTransport{
+		Transport: minio.NewCustomHTTPTransport(),
+		Metrics:   metrics,
 	}
 
 	// Set custom transport

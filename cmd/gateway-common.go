@@ -417,3 +417,32 @@ func gatewayHandleEnvVars() {
 		}
 	}
 }
+
+// shouldMeterRequest checks whether incoming request should be added to prometheus gateway metrics
+func shouldMeterRequest(req *http.Request) bool {
+	return !(guessIsBrowserReq(req) || guessIsHealthCheckReq(req) || guessIsMetricsReq(req))
+}
+
+// MetricsTransport is a custom wrapper around Transport to track metrics
+type MetricsTransport struct {
+	Transport *http.Transport
+	Metrics   *Metrics
+}
+
+// RoundTrip implements the RoundTrip method for MetricsTransport
+func (m MetricsTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	metered := shouldMeterRequest(r)
+	if metered && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		m.Metrics.IncRequests(r.Method)
+		m.Metrics.IncBytesSent(r.ContentLength)
+	}
+	// Make the request to the server.
+	resp, err := m.Transport.RoundTrip(r)
+	if err != nil {
+		return nil, err
+	}
+	if metered && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		m.Metrics.IncBytesReceived(resp.ContentLength)
+	}
+	return resp, nil
+}
