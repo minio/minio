@@ -986,13 +986,6 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 		return nil, errInvalidArgument
 	}
 
-	atomic.AddInt32(&s.activeIOCount, 1)
-	decActive := func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}
-	// Wrap so we can replace the inner function.
-	defer func() { decActive() }()
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return nil, err
@@ -1048,6 +1041,7 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 		return nil, err
 	}
 
+	atomic.AddInt32(&s.activeIOCount, 1)
 	r := struct {
 		io.Reader
 		io.Closer
@@ -1055,12 +1049,15 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 		atomic.AddInt32(&s.activeIOCount, -1)
 		return file.Close()
 	})}
-	// Remove decrement operation from deferred call
-	decActive = func() {}
 
 	// Add readahead to big reads
 	if length >= readAheadSize {
-		return readahead.NewReadCloserSize(r, readAheadBuffers, readAheadBufSize)
+		rc, err := readahead.NewReadCloserSize(r, readAheadBuffers, readAheadBufSize)
+		if err != nil {
+			r.Close()
+			return nil, err
+		}
+		return rc, nil
 	}
 
 	// Just add a small 64k buffer.
