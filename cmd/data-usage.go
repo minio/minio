@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"sync"
@@ -160,18 +159,11 @@ func updateUsage(basePath string, doneCh <-chan struct{}, waitForLowActiveIO fun
 	}
 
 	numWorkers := 4
-	walkInterval := 1 * time.Millisecond
-
 	var mutex sync.Mutex // Mutex to update dataUsageInfo
-
-	r := rand.New(rand.NewSource(UTCNow().UnixNano()))
 
 	fastWalk(basePath, numWorkers, doneCh, func(path string, typ os.FileMode) error {
 		// Wait for I/O to go down.
 		waitForLowActiveIO()
-
-		// Randomize sleep intervals, to stagger the walk.
-		defer time.Sleep(time.Duration(r.Float64() * float64(walkInterval)))
 
 		bucket, entry := path2BucketObjectWithBasePath(basePath, path)
 		if bucket == "" {
@@ -197,7 +189,13 @@ func updateUsage(basePath string, doneCh <-chan struct{}, waitForLowActiveIO fun
 			return nil
 		}
 
+		t := time.Now()
 		size, err := getSize(Item{path, typ})
+		// Use the response time of the getSize call to guess system load.
+		// Sleep equivalent time.
+		if d := time.Since(t); d > 100*time.Microsecond {
+			time.Sleep(d)
+		}
 		if err != nil {
 			return errSkipFile
 		}
