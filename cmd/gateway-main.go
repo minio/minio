@@ -35,15 +35,6 @@ import (
 	"github.com/minio/minio/pkg/env"
 )
 
-func init() {
-	logger.Init(GOPATH, GOROOT)
-	logger.RegisterError(config.FmtError)
-
-	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background())
-	logger.AddTarget(globalConsoleSys)
-}
-
 var (
 	gatewayCmd = cli.Command{
 		Name:            "gateway",
