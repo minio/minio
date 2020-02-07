@@ -61,17 +61,12 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestEr
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	_, err = obj.NewMultipartUpload(context.Background(), bucket, "\\", opts)
-	if err == nil {
-		t.Fatalf("%s: Expected to fail since object name is invalid.", instanceType)
-	}
-
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, object, opts)
+	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, "\\", opts)
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	err = obj.AbortMultipartUpload(context.Background(), bucket, object, uploadID)
+	err = obj.AbortMultipartUpload(context.Background(), bucket, "\\", uploadID)
 	if err != nil {
 		switch err.(type) {
 		case InvalidUploadID:
@@ -112,9 +107,9 @@ func testObjectAbortMultipartUpload(obj ObjectLayer, instanceType string, t Test
 		expectedErrType error
 	}{
 		{"--", object, uploadID, BucketNotFound{}},
-		{bucket, "\\", uploadID, ObjectNameInvalid{}},
 		{"foo", object, uploadID, BucketNotFound{}},
 		{bucket, object, "foo-foo", InvalidUploadID{}},
+		{bucket, "\\", uploadID, InvalidUploadID{}},
 		{bucket, object, uploadID, nil},
 	}
 	// Iterating over creatPartCases to generate multipart chunks.

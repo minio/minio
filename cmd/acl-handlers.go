@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/xml"
 	"net/http"
+	"net/url"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
@@ -110,7 +111,11 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	object := vars["object"]
+	object, err := url.PathUnescape(vars["object"])
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
@@ -126,7 +131,7 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 	}
 
 	// Before proceeding validate if object exists.
-	_, err := objAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
+	_, err = objAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
