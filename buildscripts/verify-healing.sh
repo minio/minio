@@ -34,16 +34,16 @@ function start_minio_3_node() {
     export MINIO_SECRET_KEY=minio123
 
     for i in $(seq 1 3); do
-        ARGS+=("http://127.0.0.1:$[9000+$i]${WORK_DIR}/$i/1/ http://127.0.0.1:$[9000+$i]${WORK_DIR}/$i/2/ http://127.0.0.1:$[9000+$i]${WORK_DIR}/$i/3/ http://127.0.0.1:$[9000+$i]${WORK_DIR}/$i/4/ http://127.0.0.1:$[9000+$i]${WORK_DIR}/$i/5/ http://127.0.0.1:$[9000+$i]${WORK_DIR}/$i/6/")
+        ARGS+=("http://127.0.0.1:$[8000+$i]${WORK_DIR}/$i/1/ http://127.0.0.1:$[8000+$i]${WORK_DIR}/$i/2/ http://127.0.0.1:$[8000+$i]${WORK_DIR}/$i/3/ http://127.0.0.1:$[8000+$i]${WORK_DIR}/$i/4/ http://127.0.0.1:$[8000+$i]${WORK_DIR}/$i/5/ http://127.0.0.1:$[8000+$i]${WORK_DIR}/$i/6/")
     done
 
-    "${MINIO[@]}" --address ":9001" ${ARGS[@]} > "${WORK_DIR}/dist-minio-9001.log" 2>&1 &
+    "${MINIO[@]}" --address ":8001" ${ARGS[@]} > "${WORK_DIR}/dist-minio-8001.log" 2>&1 &
     minio_pids[0]=$!
 
-    "${MINIO[@]}" --address ":9002" ${ARGS[@]} > "${WORK_DIR}/dist-minio-9002.log" 2>&1 &
+    "${MINIO[@]}" --address ":8002" ${ARGS[@]} > "${WORK_DIR}/dist-minio-8002.log" 2>&1 &
     minio_pids[1]=$!
 
-    "${MINIO[@]}" --address ":9003" ${ARGS[@]} > "${WORK_DIR}/dist-minio-9003.log" 2>&1 &
+    "${MINIO[@]}" --address ":8003" ${ARGS[@]} > "${WORK_DIR}/dist-minio-8003.log" 2>&1 &
     minio_pids[2]=$!
 
     sleep "$1"
@@ -53,7 +53,7 @@ function start_minio_3_node() {
 
 function check_online() {
     for i in $(seq 1 3); do
-        if grep -q 'Server switching to safe mode' ${WORK_DIR}/dist-minio-$[9000+$i].log; then
+        if grep -q 'Server switching to safe mode' ${WORK_DIR}/dist-minio-$[8000+$i].log; then
             echo "1"
         fi
     done
@@ -80,7 +80,7 @@ function perform_test_1() {
         if ! kill "$pid"; then
             for i in $(seq 1 3); do
                 echo "server$i log:"
-                cat "${WORK_DIR}/dist-minio-$[9000+$i].log"
+                cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
             done
             echo "FAILED"
             purge "$WORK_DIR"
@@ -98,7 +98,7 @@ function perform_test_1() {
         if ! kill "$pid"; then
             for i in $(seq 1 3); do
                 echo "server$i log:"
-                cat "${WORK_DIR}/dist-minio-$[9000+$i].log"
+                cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
             done
             echo "FAILED"
             purge "$WORK_DIR"
@@ -113,7 +113,7 @@ function perform_test_1() {
         done
         for i in $(seq 1 3); do
             echo "server$i log:"
-            cat "${WORK_DIR}/dist-minio-$[9000+$i].log"
+            cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
         done
         echo "FAILED"
         purge "$WORK_DIR"
@@ -127,7 +127,7 @@ function perform_test_2() {
         if ! kill "$pid"; then
             for i in $(seq 1 3); do
                 echo "server$i log:"
-                cat "${WORK_DIR}/dist-minio-$[9000+$i].log"
+                cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
             done
             echo "FAILED"
             purge "$WORK_DIR"
@@ -145,7 +145,7 @@ function perform_test_2() {
         if ! kill "$pid"; then
             for i in $(seq 1 3); do
                 echo "server$i log:"
-                cat "${WORK_DIR}/dist-minio-$[9000+$i].log"
+                cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
             done
             echo "FAILED"
             purge "$WORK_DIR"
@@ -160,7 +160,7 @@ function perform_test_2() {
         done
         for i in $(seq 1 3); do
             echo "server$i log:"
-            cat "${WORK_DIR}/dist-minio-$[9000+$i].log"
+            cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
         done
         echo "FAILED"
         purge "$WORK_DIR"
@@ -174,7 +174,7 @@ function perform_test_3() {
         if ! kill "$pid"; then
             for i in $(seq 1 3); do
                 echo "server$i log:"
-                cat "${WORK_DIR}/dist-minio-$[9000+$i].log"
+                cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
             done
             echo "FAILED"
             purge "$WORK_DIR"
@@ -192,7 +192,7 @@ function perform_test_3() {
         if ! kill "$pid"; then
             for i in $(seq 1 3); do
                 echo "server$i log:"
-                cat "${WORK_DIR}/dist-minio-$[9000+$i].log"
+                cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
             done
             echo "FAILED"
             purge "$WORK_DIR"
@@ -207,7 +207,7 @@ function perform_test_3() {
         done
         for i in $(seq 1 3); do
             echo "server$i log:"
-            cat "${WORK_DIR}/dist-minio-$[9000+$i].log"
+            cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
         done
         echo "FAILED"
         purge "$WORK_DIR"

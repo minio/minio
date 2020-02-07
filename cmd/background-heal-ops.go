@@ -75,6 +75,7 @@ func (h *healRoutine) run() {
 				break
 			}
 
+			// Wait and proceed if there are active requests
 			waitForLowHTTPReq(int32(globalEndpoints.Nodes()))
 
 			var res madmin.HealResultItem
