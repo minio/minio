@@ -193,7 +193,7 @@ func updateUsage(basePath string, doneCh <-chan struct{}, waitForLowActiveIO fun
 		size, err := getSize(Item{path, typ})
 		// Use the response time of the getSize call to guess system load.
 		// Sleep equivalent time.
-		if d := time.Now().Sub(t); d > 100*time.Microsecond {
+		if d := time.Since(t); d > 100*time.Microsecond {
 			time.Sleep(d)
 		}
 		if err != nil {
