@@ -987,9 +987,11 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 	}
 
 	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
+	decActive := func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
+	}
+	// Wrap so we can replace the inner function.
+	defer func() { decActive() }()
 
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -1049,7 +1051,14 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 	r := struct {
 		io.Reader
 		io.Closer
-	}{Reader: io.LimitReader(file, length), Closer: file}
+	}{Reader: io.LimitReader(file, length), Closer: closeWrapper(func() error {
+		atomic.AddInt32(&s.activeIOCount, -1)
+		return file.Close()
+	})}
+	// Remove decrement operation from deferred call
+	decActive = func() {}
+
+	// Add readahead to big reads
 	if length >= readAheadSize {
 		return readahead.NewReadCloserSize(r, readAheadBuffers, readAheadBufSize)
 	}
@@ -1057,6 +1066,14 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 	// Just add a small 64k buffer.
 	r.Reader = bufio.NewReaderSize(r.Reader, 64<<10)
 	return r, nil
+}
+
+// closeWrapper converts a function to an io.Closer
+type closeWrapper func() error
+
+// Close calls the wrapped function.
+func (c closeWrapper) Close() error {
+	return c()
 }
 
 // CreateFile - creates the file.
