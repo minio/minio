@@ -42,7 +42,14 @@ const (
 func TestNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport,
 	targetIDs []event.TargetID) error {
 	test := true
-	_, err := RegisterNotificationTargets(cfg, doneCh, transport, targetIDs, test)
+	targets, err := RegisterNotificationTargets(cfg, doneCh, transport, targetIDs, test)
+	if err == nil {
+		// Close all targets since we are only testing connections.
+		for _, t := range targets.TargetMap() {
+			_ = t.Close()
+		}
+	}
+
 	return err
 }
 
@@ -58,8 +65,18 @@ func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport
 // * Add a new target in pkg/event/target package.
 // * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
 // * Handle the configuration in this function to create/add into TargetList.
-func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool) (*event.TargetList, error) {
-	targetList := event.NewTargetList()
+func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool) (targetList *event.TargetList, registerErr error) {
+	targetList = event.NewTargetList()
+
+	// Automatially close all connections when an error occur
+	defer func() {
+		if registerErr != nil {
+			for _, t := range targetList.TargetMap() {
+				_ = t.Close()
+			}
+		}
+	}()
+
 	if err := checkValidNotificationKeys(cfg); err != nil {
 		return nil, err
 	}
@@ -125,9 +142,6 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-		}
 	}
 
 	for id, args := range esTargets {
@@ -141,9 +155,6 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
-		}
-		if test {
-			newTarget.Close()
 		}
 	}
 
@@ -159,9 +170,6 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-		}
 	}
 
 	for id, args := range mqttTargets {
@@ -176,9 +184,6 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-		}
 	}
 
 	for id, args := range mysqlTargets {
@@ -191,9 +196,6 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
-		}
-		if test {
-			newTarget.Close()
 		}
 	}
 
@@ -208,9 +210,6 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-		}
 	}
 
 	for id, args := range nsqTargets {
@@ -223,9 +222,6 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
-		}
-		if test {
-			newTarget.Close()
 		}
 	}
 
@@ -240,9 +236,6 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-		}
 	}
 
 	for id, args := range redisTargets {
@@ -256,9 +249,6 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-		}
 	}
 
 	for id, args := range webhookTargets {
@@ -271,10 +261,6 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		}
 		if err := targetList.Add(newTarget); err != nil {
 			return nil, err
-		}
-		if test {
-			newTarget.Close()
-			continue
 		}
 	}
 
