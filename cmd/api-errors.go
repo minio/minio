@@ -97,6 +97,7 @@ const (
 	ErrNoSuchBucket
 	ErrNoSuchBucketPolicy
 	ErrNoSuchBucketLifecycle
+	ErrNoSuchLifecycleConfiguration
 	ErrNoSuchBucketSSEConfig
 	ErrNoSuchKey
 	ErrNoSuchUpload
@@ -487,6 +488,11 @@ var errorCodes = errorCodeMap{
 	ErrNoSuchBucketLifecycle: {
 		Code:           "NoSuchBucketLifecycle",
 		Description:    "The bucket lifecycle configuration does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrNoSuchLifecycleConfiguration: {
+		Code:           "NoSuchLifecycleConfiguration",
+		Description:    "The lifecycle configuration does not exist",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrNoSuchBucketSSEConfig: {
@@ -1725,7 +1731,7 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	case BucketPolicyNotFound:
 		apiErr = ErrNoSuchBucketPolicy
 	case BucketLifecycleNotFound:
-		apiErr = ErrNoSuchBucketLifecycle
+		apiErr = ErrNoSuchLifecycleConfiguration
 	case BucketSSEConfigNotFound:
 		apiErr = ErrNoSuchBucketSSEConfig
 	case *event.ErrInvalidEventName:
