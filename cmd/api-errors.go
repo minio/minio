@@ -1810,7 +1810,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 			}
 		case tagging.Error:
 			apiErr = APIError{
-				Code:           "InvalidTag",
+				Code:           e.Code(),
 				Description:    e.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
