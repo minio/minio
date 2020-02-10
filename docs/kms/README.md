@@ -401,7 +401,7 @@ export MINIO_KMS_KES_ENDPOINT=https://localhost:7373
 export MINIO_KMS_KES_KEY_FILE=minio.key
 export MINIO_KMS_KES_CERT_FILE=minio.cert
 export MINIO_KMS_KES_KEY_NAME=minio-key-1
-export MINIO_KMS_KES_CAPATH=kes-tls.crt
+export MINIO_KMS_KES_CA_PATH=kes-tls.crt
 ```
 > The `MINIO_KMS_KES_CAPATH` is only required since we use self-signed certificates.
 
@@ -453,14 +453,14 @@ Encrypted :
 
 ### Appendix B - Specify a master key
 
-Instead of a proper KMS setup you can also **test** MinIO encryption using a KMS master key.
+Instead of a proper KMS setup you can also **test** MinIO server side encryption using a master key.
 **A single master key via env. variable is for testing purposes only and not recommended for production deployments.**
 
-A KMS master key consists of a master-key ID (CMK) and the 256 bit master key encoded as HEX value separated by a `:`.
-A KMS master key can be specified directly using:
+A SSE master key consists of a master-key ID (CMK) and the 256 bit master key encoded as HEX value separated by a `:`.
+A SSE master key can be specified directly using:
 
 ```
-export MINIO_KMS_MASTER_KEY=minio-demo-key:6368616e676520746869732070617373776f726420746f206120736563726574
+export MINIO_SSE_MASTER_KEY=minio-demo-key:6368616e676520746869732070617373776f726420746f206120736563726574
 ```
 
 Please use your own master key. A random master key can be generated using e.g. this command on Linux/Mac/BSD systems:
@@ -474,14 +474,19 @@ head -c 32 /dev/urandom | xxd -c 32 -ps
 Alternatively, you may pass a master key as a [Docker secret](https://docs.docker.com/engine/swarm/secrets/).
 
 ```bash
-echo "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574" | docker secret create kms_master_key
+echo "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574" | docker secret create sse_master_key
 ```
 
 To use another secret name, follow the instructions above and replace `kms_master_key` with your custom names (e.g. `my_kms_master_key`).
-Then, set the `MINIO_KMS_MASTER_KEY_FILE` environment variable to your secret name:
+Then, set the `MINIO_SSE_MASTER_KEY_FILE` environment variable to your secret name:
 
 ```bash
-export MINIO_KMS_MASTER_KEY_FILE=my_kms_master_key
+export MINIO_SSE_MASTER_KEY_FILE=my_kms_master_key
+```
+
+To enable auto-encryption set the environment variable to `on`:
+```
+export MINIO_SSE_AUTO_ENCRYPTION=on
 ```
 
 ## Explore Further
