@@ -477,11 +477,11 @@ Alternatively, you may pass a master key as a [Docker secret](https://docs.docke
 echo "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574" | docker secret create sse_master_key
 ```
 
-To use another secret name, follow the instructions above and replace `kms_master_key` with your custom names (e.g. `my_kms_master_key`).
+To use another secret name, follow the instructions above and replace `sse_master_key` with your custom names (e.g. `my_sse_master_key`).
 Then, set the `MINIO_SSE_MASTER_KEY_FILE` environment variable to your secret name:
 
 ```bash
-export MINIO_SSE_MASTER_KEY_FILE=my_kms_master_key
+export MINIO_SSE_MASTER_KEY_FILE=my_sse_master_key
 ```
 
 To enable auto-encryption set the environment variable to `on`:
