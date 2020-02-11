@@ -58,3 +58,28 @@ func TestGetCacheControlOpts(t *testing.T) {
 		})
 	}
 }
+
+func TestIsMetadataSame(t *testing.T) {
+
+	testCases := []struct {
+		m1       map[string]string
+		m2       map[string]string
+		expected bool
+	}{
+		{nil, nil, true},
+		{nil, map[string]string{}, false},
+		{map[string]string{"k": "v"}, map[string]string{"k": "v"}, true},
+		{map[string]string{"k": "v"}, map[string]string{"a": "b"}, false},
+		{map[string]string{"k1": "v1", "k2": "v2"}, map[string]string{"k1": "v1", "k2": "v1"}, false},
+		{map[string]string{"k1": "v1", "k2": "v2"}, map[string]string{"k1": "v1", "k2": "v2"}, true},
+		{map[string]string{"K1": "v1", "k2": "v2"}, map[string]string{"k1": "v1", "k2": "v2"}, false},
+		{map[string]string{"k1": "v1", "k2": "v2", "k3": "v3"}, map[string]string{"k1": "v1", "k2": "v2"}, false},
+	}
+
+	for i, testCase := range testCases {
+		actual := isMetadataSame(testCase.m1, testCase.m2)
+		if testCase.expected != actual {
+			t.Errorf("test %d expected %v, got %v", i, testCase.expected, actual)
+		}
+	}
+}

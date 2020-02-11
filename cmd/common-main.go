@@ -17,7 +17,9 @@
 package cmd
 
 import (
+	"context"
 	"crypto/x509"
+	"encoding/gob"
 	"errors"
 	"net"
 	"path/filepath"
@@ -33,6 +35,17 @@ import (
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/env"
 )
+
+func init() {
+	logger.Init(GOPATH, GOROOT)
+	logger.RegisterError(config.FmtError)
+
+	// Initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(context.Background())
+	logger.AddTarget(globalConsoleSys)
+
+	gob.Register(StorageErr(""))
+}
 
 func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
 	if (globalAutoEncryption || GlobalKMS != nil) && !objAPI.IsEncryptionSupported() {

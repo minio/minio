@@ -138,6 +138,8 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketpolicy", httpTraceAll(api.GetBucketPolicyHandler))).Queries("policy", "")
 		// GetBucketLifecycle
 		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketlifecycle", httpTraceAll(api.GetBucketLifecycleHandler))).Queries("lifecycle", "")
+		// GetBucketEncryption
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketencryption", httpTraceAll(api.GetBucketEncryptionHandler))).Queries("encryption", "")
 
 		// Dummy Bucket Calls
 		// GetBucketACL -- this is a dummy call.
@@ -183,6 +185,9 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("listobjectsv1", httpTraceAll(api.ListObjectsV1Handler)))
 		// PutBucketLifecycle
 		bucket.Methods(http.MethodPut).HandlerFunc(collectAPIStats("putbucketlifecycle", httpTraceAll(api.PutBucketLifecycleHandler))).Queries("lifecycle", "")
+		// PutBucketEncryption
+		bucket.Methods(http.MethodPut).HandlerFunc(collectAPIStats("putbucketencryption", httpTraceAll(api.PutBucketEncryptionHandler))).Queries("encryption", "")
+
 		// PutBucketPolicy
 		bucket.Methods(http.MethodPut).HandlerFunc(collectAPIStats("putbucketpolicy", httpTraceAll(api.PutBucketPolicyHandler))).Queries("policy", "")
 
@@ -204,6 +209,8 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		bucket.Methods(http.MethodDelete).HandlerFunc(collectAPIStats("deletebucketpolicy", httpTraceAll(api.DeleteBucketPolicyHandler))).Queries("policy", "")
 		// DeleteBucketLifecycle
 		bucket.Methods(http.MethodDelete).HandlerFunc(collectAPIStats("deletebucketlifecycle", httpTraceAll(api.DeleteBucketLifecycleHandler))).Queries("lifecycle", "")
+		// DeleteBucketEncryption
+		bucket.Methods(http.MethodDelete).HandlerFunc(collectAPIStats("deletebucketencryption", httpTraceAll(api.DeleteBucketEncryptionHandler))).Queries("encryption", "")
 		// DeleteBucket
 		bucket.Methods(http.MethodDelete).HandlerFunc(collectAPIStats("deletebucket", httpTraceAll(api.DeleteBucketHandler)))
 	}

@@ -40,7 +40,7 @@ func createLockTestServer(t *testing.T) (string, *lockRESTServer, string) {
 		},
 	}
 	creds := globalActiveCred
-	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
+	token, err := authenticateNode(creds.AccessKey, creds.SecretKey, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -38,9 +37,12 @@ import (
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+
+	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
+
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mimedb"
@@ -226,18 +228,10 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
 	return storageInfo
 }
 
-func (fs *FSObjects) waitForLowActiveIO() error {
+func (fs *FSObjects) waitForLowActiveIO() {
 	for atomic.LoadInt64(&fs.activeIOCount) >= fs.maxActiveIOCount {
-		select {
-		case <-GlobalServiceDoneCh:
-			return errors.New("forced exit")
-		case <-time.NewTimer(lowActiveIOWaitTick).C:
-			continue
-		}
+		time.Sleep(lowActiveIOWaitTick)
 	}
-
-	return nil
-
 }
 
 // CrawlAndGetDataUsage returns data usage stats of the current FS deployment
@@ -1301,6 +1295,21 @@ func (fs *FSObjects) DeleteBucketLifecycle(ctx context.Context, bucket string) e
 	return removeLifecycleConfig(ctx, fs, bucket)
 }
 
+// GetBucketSSEConfig returns bucket encryption config on given bucket
+func (fs *FSObjects) GetBucketSSEConfig(ctx context.Context, bucket string) (*bucketsse.BucketSSEConfig, error) {
+	return getBucketSSEConfig(fs, bucket)
+}
+
+// SetBucketSSEConfig sets bucket encryption config on given bucket
+func (fs *FSObjects) SetBucketSSEConfig(ctx context.Context, bucket string, config *bucketsse.BucketSSEConfig) error {
+	return saveBucketSSEConfig(ctx, fs, bucket, config)
+}
+
+// DeleteBucketSSEConfig deletes bucket encryption config on given bucket
+func (fs *FSObjects) DeleteBucketSSEConfig(ctx context.Context, bucket string) error {
+	return removeBucketSSEConfig(ctx, fs, bucket)
+}
+
 // ListObjectsV2 lists all blobs in bucket filtered by prefix
 func (fs *FSObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
 	marker := continuationToken
@@ -1345,7 +1354,7 @@ func (fs *FSObjects) IsCompressionSupported() bool {
 
 // IsObjectTaggingSupported returns whether tagging is applicable for this layer.
 func (fs *FSObjects) IsObjectTaggingSupported() bool {
-	return false
+	return true
 }
 
 // IsReady - Check if the backend disk is ready to accept traffic.

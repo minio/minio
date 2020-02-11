@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"crypto/subtle"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -313,6 +314,67 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	writeSuccessResponseJSON(w, dataUsageInfoJSON)
+}
+
+func (a adminAPIHandlers) AccountingUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AccountingUsageInfo")
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.AccountingUsageInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	var accountingUsageInfo = make(map[string]madmin.BucketAccountingUsage)
+
+	buckets, err := objectAPI.ListBuckets(ctx)
+	if err != nil {
+		// writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	users, err := globalIAMSys.ListUsers()
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// Load the latest calculated data usage
+	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
+	if err != nil {
+		logger.LogIf(ctx, err)
+	}
+
+	// Calculate for each bucket, which users are allowed to access to it
+	for _, bucket := range buckets {
+		bucketUsageInfo := madmin.BucketAccountingUsage{}
+
+		// Fetch the data usage of the current bucket
+		if !dataUsageInfo.LastUpdate.IsZero() && dataUsageInfo.BucketsSizes != nil {
+			bucketUsageInfo.Size = dataUsageInfo.BucketsSizes[bucket.Name]
+		}
+
+		for user := range users {
+			rd, wr, custom := globalIAMSys.GetAccountAccess(user, bucket.Name)
+			if rd || wr || custom {
+				bucketUsageInfo.AccessList = append(bucketUsageInfo.AccessList, madmin.AccountAccess{
+					AccountName: user,
+					Read:        rd,
+					Write:       wr,
+					Custom:      custom,
+				})
+			}
+		}
+
+		accountingUsageInfo[bucket.Name] = bucketUsageInfo
+	}
+
+	usageInfoJSON, err := json.Marshal(accountingUsageInfo)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, usageInfoJSON)
 }
 
 // ServerCPULoadInfo holds informantion about cpu utilization
@@ -1208,20 +1270,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// 2. Check whether we can update / re-wrap the sealed key.
-	sealedKey, err = GlobalKMS.UpdateKey(keyID, sealedKey, kmsContext)
-	if err != nil {
-		response.UpdateErr = err.Error()
-		resp, err := json.Marshal(response)
-		if err != nil {
-			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
-			return
-		}
-		writeSuccessResponseJSON(w, resp)
-		return
-	}
-
-	// 3. Verify that we can indeed decrypt the (encrypted) key
+	// 2. Verify that we can indeed decrypt the (encrypted) key
 	decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
 	if err != nil {
 		response.DecryptionErr = err.Error()
@@ -1234,7 +1283,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// 4. Compare generated key with decrypted key
+	// 3. Compare generated key with decrypted key
 	if subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1 {
 		response.DecryptionErr = "The generated and the decrypted data key do not match"
 		resp, err := json.Marshal(response)
@@ -1470,10 +1519,13 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func fetchLambdaInfo(cfg config.Config) []map[string][]madmin.TargetIDStatus {
-	lambdaMap := make(map[string][]madmin.TargetIDStatus)
 
 	// Fetch the targets
-	targetList, _ := notify.RegisterNotificationTargets(cfg, GlobalServiceDoneCh, NewCustomHTTPTransport(), nil, true)
+	targetList, err := notify.RegisterNotificationTargets(cfg, GlobalServiceDoneCh, NewCustomHTTPTransport(), nil, true)
+	if err != nil {
+		return nil
+	}
+	lambdaMap := make(map[string][]madmin.TargetIDStatus)
 
 	for targetID, target := range targetList.TargetMap() {
 		targetIDStatus := make(map[string]madmin.Status)
@@ -1516,36 +1568,29 @@ func fetchVaultStatus(cfg config.Config) madmin.Vault {
 		return vault
 	}
 
-	if err := checkConnection(kmsInfo.Endpoint); err != nil {
+	if err := checkConnection(kmsInfo.Endpoint, 15*time.Second); err != nil {
 
 		vault.Status = "offline"
 	} else {
 		vault.Status = "online"
 
-		kmsContext := crypto.Context{"MinIO admin API": "KMSKeyStatusHandler"} // Context for a test key operation
+		kmsContext := crypto.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
 		// 1. Generate a new key using the KMS.
 		key, sealedKey, err := GlobalKMS.GenerateKey(keyID, kmsContext)
 		if err != nil {
-			vault.Encrypt = "Encryption failed"
+			vault.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
 		} else {
 			vault.Encrypt = "Ok"
 		}
 
-		// 2. Check whether we can update / re-wrap the sealed key.
-		sealedKey, err = GlobalKMS.UpdateKey(keyID, sealedKey, kmsContext)
-		if err != nil {
-			vault.Update = "Re-wrap failed:"
-		} else {
-			vault.Update = "Ok"
-		}
-
-		// 3. Verify that we can indeed decrypt the (encrypted) key
-		decryptedKey, decryptErr := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
-
-		// 4. Compare generated key with decrypted key
-		if subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1 || decryptErr != nil {
-			vault.Decrypt = "Re-wrap failed:"
-		} else {
+		// 2. Verify that we can indeed decrypt the (encrypted) key
+		decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
+		switch {
+		case err != nil:
+			vault.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
+		case subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1:
+			vault.Decrypt = "Decryption failed: decrypted key does not match generated key"
+		default:
 			vault.Decrypt = "Ok"
 		}
 	}
@@ -1560,7 +1605,7 @@ func fetchLoggerInfo(cfg config.Config) ([]madmin.Logger, []madmin.Audit) {
 	var auditlogger []madmin.Audit
 	for log, l := range loggerCfg.HTTP {
 		if l.Enabled {
-			err := checkConnection(l.Endpoint)
+			err := checkConnection(l.Endpoint, 15*time.Second)
 			if err == nil {
 				mapLog := make(map[string]madmin.Status)
 				mapLog[log] = madmin.Status{Status: "Online"}
@@ -1575,7 +1620,7 @@ func fetchLoggerInfo(cfg config.Config) ([]madmin.Logger, []madmin.Audit) {
 
 	for audit, l := range loggerCfg.Audit {
 		if l.Enabled {
-			err := checkConnection(l.Endpoint)
+			err := checkConnection(l.Endpoint, 15*time.Second)
 			if err == nil {
 				mapAudit := make(map[string]madmin.Status)
 				mapAudit[audit] = madmin.Status{Status: "Online"}
@@ -1591,12 +1636,19 @@ func fetchLoggerInfo(cfg config.Config) ([]madmin.Logger, []madmin.Audit) {
 }
 
 // checkConnection - ping an endpoint , return err in case of no connection
-func checkConnection(endpointStr string) error {
+func checkConnection(endpointStr string, timeout time.Duration) error {
 	u, pErr := xnet.ParseURL(endpointStr)
 	if pErr != nil {
 		return pErr
 	}
-	if dErr := u.DialHTTP(); dErr != nil {
+
+	tr := newCustomHTTPTransport(
+		&tls.Config{RootCAs: globalRootCAs},
+		timeout,
+		0, /* Default value */
+	)()
+
+	if dErr := u.DialHTTP(tr); dErr != nil {
 		if urlErr, ok := dErr.(*url.Error); ok {
 			// To treat "connection refused" errors as un reachable endpoint.
 			if target.IsConnRefusedErr(urlErr.Err) {

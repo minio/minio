@@ -12,7 +12,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 )
@@ -44,16 +43,7 @@ var errSkipFile = errors.New("fastwalk: skip this file")
 //   * fastWalk can follow symlinks if walkFn returns the TraverseLink
 //     sentinel error. It is the walkFn's responsibility to prevent
 //     fastWalk from going into symlink cycles.
-func fastWalk(root string, walkFn func(path string, typ os.FileMode) error) error {
-	// TODO(bradfitz): make numWorkers configurable? We used a
-	// minimum of 4 to give the kernel more info about multiple
-	// things we want, in hopes its I/O scheduling can take
-	// advantage of that. Hopefully most are in cache. Maybe 4 is
-	// even too low of a minimum. Profile more.
-	numWorkers := 4
-	if n := runtime.NumCPU(); n > numWorkers {
-		numWorkers = n
-	}
+func fastWalk(root string, nworkers int, doneCh <-chan struct{}, walkFn func(path string, typ os.FileMode) error) error {
 
 	// Make sure to wait for all workers to finish, otherwise
 	// walkFn could still be called after returning. This Wait call
@@ -63,19 +53,20 @@ func fastWalk(root string, walkFn func(path string, typ os.FileMode) error) erro
 
 	w := &walker{
 		fn:       walkFn,
-		enqueuec: make(chan walkItem, numWorkers), // buffered for performance
-		workc:    make(chan walkItem, numWorkers), // buffered for performance
+		enqueuec: make(chan walkItem, nworkers), // buffered for performance
+		workc:    make(chan walkItem, nworkers), // buffered for performance
 		donec:    make(chan struct{}),
 
 		// buffered for correctness & not leaking goroutines:
-		resc: make(chan error, numWorkers),
+		resc: make(chan error, nworkers),
 	}
 	defer close(w.donec)
 
-	for i := 0; i < numWorkers; i++ {
+	for i := 0; i < nworkers; i++ {
 		wg.Add(1)
 		go w.doWork(&wg)
 	}
+
 	todo := []walkItem{{dir: root}}
 	out := 0
 	for {
@@ -87,6 +78,8 @@ func fastWalk(root string, walkFn func(path string, typ os.FileMode) error) erro
 			workItem = todo[len(todo)-1]
 		}
 		select {
+		case <-doneCh:
+			return nil
 		case workc <- workItem:
 			todo = todo[:len(todo)-1]
 			out++

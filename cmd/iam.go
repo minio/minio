@@ -20,14 +20,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bucket/policy"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -363,44 +362,14 @@ func (sys *IAMSys) Init(objAPI ObjectLayer) error {
 	}
 	sys.Unlock()
 
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-
-	// Migrating IAM amd Loading IAM needs a retry mechanism for
-	// the following reasons:
-	//  - Read quorum is lost just after the initialization
-	//    of the object layer.
-	retryCh := newRetryTimerSimple(doneCh)
-	for {
-		select {
-		case <-retryCh:
-			// Migrate IAM configuration
-			if err := sys.doIAMConfigMigration(objAPI); err != nil {
-				if err == errDiskNotFound ||
-					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-					logger.Info("Waiting for IAM subsystem to be initialized..")
-					continue
-				}
-				return err
-			}
-
-			sys.store.watch(sys)
-
-			if err := sys.store.loadAll(sys, objAPI); err != nil {
-				if err == errDiskNotFound ||
-					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-					logger.Info("Waiting for IAM subsystem to be initialized..")
-					continue
-				}
-				return err
-			}
-			return nil
-		case <-globalOSSignalCh:
-			return fmt.Errorf("Initializing IAM sub-system gracefully stopped")
-		}
+	// Migrate IAM configuration
+	if err := sys.doIAMConfigMigration(objAPI); err != nil {
+		return err
 	}
+
+	sys.store.watch(sys)
+
+	return sys.store.loadAll(sys, objAPI)
 }
 
 // DeletePolicy - deletes a canned policy from backend or etcd.
@@ -1162,6 +1131,109 @@ func (sys *IAMSys) policyDBSet(name, policy string, isSTS, isGroup bool) error {
 	return nil
 }
 
+var iamAccountReadAccessActions = iampolicy.NewActionSet(
+	iampolicy.ListMultipartUploadPartsAction,
+	iampolicy.ListBucketMultipartUploadsAction,
+	iampolicy.ListBucketAction,
+	iampolicy.HeadBucketAction,
+	iampolicy.GetObjectAction,
+	iampolicy.GetBucketLocationAction,
+
+	// iampolicy.ListAllMyBucketsAction,
+)
+
+var iamAccountWriteAccessActions = iampolicy.NewActionSet(
+	iampolicy.AbortMultipartUploadAction,
+	iampolicy.CreateBucketAction,
+	iampolicy.PutObjectAction,
+	iampolicy.DeleteObjectAction,
+	iampolicy.DeleteBucketAction,
+)
+
+var iamAccountOtherAccessActions = iampolicy.NewActionSet(
+	iampolicy.BypassGovernanceModeAction,
+	iampolicy.BypassGovernanceRetentionAction,
+	iampolicy.PutObjectRetentionAction,
+	iampolicy.GetObjectRetentionAction,
+	iampolicy.GetObjectLegalHoldAction,
+	iampolicy.PutObjectLegalHoldAction,
+	iampolicy.GetBucketObjectLockConfigurationAction,
+	iampolicy.PutBucketObjectLockConfigurationAction,
+
+	iampolicy.ListenBucketNotificationAction,
+
+	iampolicy.PutBucketLifecycleAction,
+	iampolicy.GetBucketLifecycleAction,
+
+	iampolicy.PutBucketNotificationAction,
+	iampolicy.GetBucketNotificationAction,
+
+	iampolicy.PutBucketPolicyAction,
+	iampolicy.DeleteBucketPolicyAction,
+	iampolicy.GetBucketPolicyAction,
+)
+
+// GetAccountAccess iterates over all policies documents associated to a user
+// and returns if the user has read and/or write access to any resource.
+func (sys *IAMSys) GetAccountAccess(accountName, bucket string) (rd, wr, o bool) {
+	policies, err := sys.PolicyDBGet(accountName, false)
+	if err != nil {
+		logger.LogIf(context.Background(), err)
+		return false, false, false
+	}
+
+	if len(policies) == 0 {
+		// No policy found.
+		return false, false, false
+	}
+
+	// Policies were found, evaluate all of them.
+	sys.RLock()
+	defer sys.RUnlock()
+
+	var availablePolicies []iampolicy.Policy
+	for _, pname := range policies {
+		p, found := sys.iamPolicyDocsMap[pname]
+		if found {
+			availablePolicies = append(availablePolicies, p)
+		}
+	}
+
+	if len(availablePolicies) == 0 {
+		return false, false, false
+	}
+
+	combinedPolicy := availablePolicies[0]
+	for i := 1; i < len(availablePolicies); i++ {
+		combinedPolicy.Statements = append(combinedPolicy.Statements,
+			availablePolicies[i].Statements...)
+	}
+
+	allActions := iampolicy.NewActionSet(iampolicy.AllActions)
+	for _, st := range combinedPolicy.Statements {
+		// Ignore if this is not an allow policy statement
+		if st.Effect != policy.Allow {
+			continue
+		}
+		// Fast calculation if there is s3:* permissions to any resource
+		if !st.Actions.Intersection(allActions).IsEmpty() {
+			rd, wr, o = true, true, true
+			break
+		}
+		if !st.Actions.Intersection(iamAccountReadAccessActions).IsEmpty() {
+			rd = true
+		}
+		if !st.Actions.Intersection(iamAccountWriteAccessActions).IsEmpty() {
+			wr = true
+		}
+		if !st.Actions.Intersection(iamAccountOtherAccessActions).IsEmpty() {
+			o = true
+		}
+	}
+
+	return
+}
+
 // PolicyDBGet - gets policy set on a user or group. Since a user may
 // be a member of multiple groups, this function returns an array of
 // applicable policies (each group is mapped to at most one policy).
@@ -1423,6 +1495,10 @@ func setDefaultCannedPolicies(policies map[string]iampolicy.Policy) {
 	_, ok = policies["readwrite"]
 	if !ok {
 		policies["readwrite"] = iampolicy.ReadWrite
+	}
+	_, ok = policies["diagnostics"]
+	if !ok {
+		policies["diagnostics"] = iampolicy.AdminDiagnostics
 	}
 }
 

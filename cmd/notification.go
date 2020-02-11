@@ -32,9 +32,12 @@ import (
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
+
+	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
+
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
@@ -576,6 +579,41 @@ func (sys *NotificationSys) RemoveBucketLifecycle(ctx context.Context, bucketNam
 	}()
 }
 
+// SetBucketSSEConfig - calls SetBucketSSEConfig on all peers.
+func (sys *NotificationSys) SetBucketSSEConfig(ctx context.Context, bucketName string,
+	encConfig *bucketsse.BucketSSEConfig) {
+	go func() {
+		ng := WithNPeers(len(sys.peerClients))
+		for idx, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
+			client := client
+			ng.Go(ctx, func() error {
+				return client.SetBucketSSEConfig(bucketName, encConfig)
+			}, idx, *client.host)
+		}
+		ng.Wait()
+	}()
+}
+
+// RemoveBucketSSEConfig - calls RemoveBucketSSEConfig on all peers.
+func (sys *NotificationSys) RemoveBucketSSEConfig(ctx context.Context, bucketName string) {
+	go func() {
+		ng := WithNPeers(len(sys.peerClients))
+		for idx, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
+			client := client
+			ng.Go(ctx, func() error {
+				return client.RemoveBucketSSEConfig(bucketName)
+			}, idx, *client.host)
+		}
+		ng.Wait()
+	}()
+}
+
 // PutBucketNotification - calls PutBucketNotification RPC call on all peers.
 func (sys *NotificationSys) PutBucketNotification(ctx context.Context, bucketName string, rulesMap event.RulesMap) {
 	go func() {
@@ -704,7 +742,7 @@ func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error
 	}
 
 	// In gateway mode, notifications are not supported.
-	if globalIsGateway {
+	if globalIsGateway && !objAPI.IsNotificationSupported() {
 		return nil
 	}
 
@@ -716,42 +754,11 @@ func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error
 		}
 	}
 
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-
-	// Initializing notification needs a retry mechanism for
-	// the following reasons:
-	//  - Read quorum is lost just after the initialization
-	//    of the object layer.
-	retryTimerCh := newRetryTimerSimple(doneCh)
-	for {
-		select {
-		case <-retryTimerCh:
-			if err := sys.load(buckets, objAPI); err != nil {
-				if err == errDiskNotFound ||
-					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-					logger.Info("Waiting for notification subsystem to be initialized..")
-					continue
-				}
-				return err
-			}
-			// Initializing bucket retention config needs a retry mechanism if
-			// read quorum is lost just after the initialization of the object layer.
-			if err := sys.initBucketObjectLockConfig(objAPI); err != nil {
-				if err == errDiskNotFound ||
-					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-					logger.Info("Waiting for bucket retention configuration to be initialized..")
-					continue
-				}
-				return err
-			}
-			return nil
-		case <-globalOSSignalCh:
-			return fmt.Errorf("Initializing Notification sub-system gracefully stopped")
-		}
+	if err := sys.load(buckets, objAPI); err != nil {
+		return err
 	}
+
+	return sys.initBucketObjectLockConfig(objAPI)
 }
 
 // AddRulesMap - adds rules map for bucket name.

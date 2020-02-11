@@ -179,6 +179,13 @@ func (g *GCS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 		}
 	}
 
+	metrics := minio.NewMetrics()
+
+	t := &minio.MetricsTransport{
+		Transport: minio.NewCustomHTTPTransport(),
+		Metrics:   metrics,
+	}
+
 	// Initialize a GCS client.
 	// Send user-agent in this format for Google to obtain usage insights while participating in the
 	// Google Cloud Technology Partners (https://cloud.google.com/partners/)
@@ -190,8 +197,9 @@ func (g *GCS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	gcs := &gcsGateway{
 		client:    client,
 		projectID: g.projectID,
+		metrics:   metrics,
 		httpClient: &http.Client{
-			Transport: minio.NewCustomHTTPTransport(),
+			Transport: t,
 		},
 	}
 
@@ -333,6 +341,7 @@ type gcsGateway struct {
 	minio.GatewayUnsupported
 	client     *storage.Client
 	httpClient *http.Client
+	metrics    *minio.Metrics
 	projectID  string
 }
 
@@ -347,6 +356,11 @@ func gcsParseProjectID(credsFile string) (projectID string, err error) {
 		return projectID, err
 	}
 	return googleCreds[gcsProjectIDKey], err
+}
+
+// GetMetrics returns this gateway's metrics
+func (l *gcsGateway) GetMetrics(ctx context.Context) (*minio.Metrics, error) {
+	return l.metrics, nil
 }
 
 // Cleanup old files in minio.sys.tmp of the given bucket.

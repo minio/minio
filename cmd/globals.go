@@ -95,6 +95,9 @@ const (
 
 	// Limit of location constraint XML for unauthenticted PUT bucket operations.
 	maxLocationConstraintSize = 3 * humanize.MiByte
+
+	// Maximum size of default bucket encryption configuration allowed
+	maxBucketSSEConfigSize = 1 * humanize.MiByte
 )
 
 var globalCLIContext = struct {
@@ -144,7 +147,8 @@ var (
 	globalPolicySys        *PolicySys
 	globalIAMSys           *IAMSys
 
-	globalLifecycleSys *LifecycleSys
+	globalLifecycleSys       *LifecycleSys
+	globalBucketSSEConfigSys *BucketSSEConfigSys
 
 	globalStorageClass storageclass.Config
 	globalLDAPConfig   xldap.Config

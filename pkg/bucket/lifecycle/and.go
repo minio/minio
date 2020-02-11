@@ -18,25 +18,47 @@ package lifecycle
 
 import (
 	"encoding/xml"
-	"errors"
+
+	"github.com/minio/minio/pkg/bucket/object/tagging"
 )
 
 // And - a tag to combine a prefix and multiple tags for lifecycle configuration rule.
 type And struct {
-	XMLName xml.Name `xml:"And"`
-	Prefix  string   `xml:"Prefix,omitempty"`
-	Tags    []Tag    `xml:"Tag,omitempty"`
+	XMLName xml.Name      `xml:"And"`
+	Prefix  string        `xml:"Prefix,omitempty"`
+	Tags    []tagging.Tag `xml:"Tag,omitempty"`
 }
 
-var errAndUnsupported = errors.New("Specifying <And></And> tag is not supported")
+var errDuplicateTagKey = Errorf("Duplicate Tag Keys are not allowed")
 
-// UnmarshalXML is extended to indicate lack of support for And xml
-// tag in object lifecycle configuration
-func (a And) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return errAndUnsupported
+// isEmpty returns true if Tags field is null
+func (a And) isEmpty() bool {
+	return len(a.Tags) == 0 && a.Prefix == ""
 }
 
-// MarshalXML is extended to leave out <And></And> tags
-func (a And) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+// Validate - validates the And field
+func (a And) Validate() error {
+	if a.ContainsDuplicateTag() {
+		return errDuplicateTagKey
+	}
+	for _, t := range a.Tags {
+		if err := t.Validate(); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// ContainsDuplicateTag - returns true if duplicate keys are present in And
+func (a And) ContainsDuplicateTag() bool {
+	x := make(map[string]struct{}, len(a.Tags))
+
+	for _, t := range a.Tags {
+		if _, has := x[t.Key]; has {
+			return true
+		}
+		x[t.Key] = struct{}{}
+	}
+
+	return false
 }

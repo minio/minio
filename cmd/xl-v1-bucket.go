@@ -22,8 +22,10 @@ import (
 
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
+	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/policy"
+
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -293,6 +295,21 @@ func (xl xlObjects) DeleteBucketLifecycle(ctx context.Context, bucket string) er
 	return removeLifecycleConfig(ctx, xl, bucket)
 }
 
+// GetBucketSSEConfig returns bucket encryption config on given bucket
+func (xl xlObjects) GetBucketSSEConfig(ctx context.Context, bucket string) (*bucketsse.BucketSSEConfig, error) {
+	return getBucketSSEConfig(xl, bucket)
+}
+
+// SetBucketSSEConfig sets bucket encryption config on given bucket
+func (xl xlObjects) SetBucketSSEConfig(ctx context.Context, bucket string, config *bucketsse.BucketSSEConfig) error {
+	return saveBucketSSEConfig(ctx, xl, bucket, config)
+}
+
+// DeleteBucketSSEConfig deletes bucket encryption config on given bucket
+func (xl xlObjects) DeleteBucketSSEConfig(ctx context.Context, bucket string) error {
+	return removeBucketSSEConfig(ctx, xl, bucket)
+}
+
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
 func (xl xlObjects) IsNotificationSupported() bool {
 	return true
@@ -315,5 +332,5 @@ func (xl xlObjects) IsCompressionSupported() bool {
 
 // IsObjectTaggingSupported returns whether tagging is applicable for this layer.
 func (xl xlObjects) IsObjectTaggingSupported() bool {
-	return false
+	return true
 }

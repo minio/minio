@@ -262,6 +262,13 @@ func (e BucketLifecycleNotFound) Error() string {
 	return "No bucket life cycle found for bucket : " + e.Bucket
 }
 
+// BucketSSEConfigNotFound - no bucket encryption config found
+type BucketSSEConfigNotFound GenericError
+
+func (e BucketSSEConfigNotFound) Error() string {
+	return "No bucket encryption found for bucket: " + e.Bucket
+}
+
 /// Bucket related errors.
 
 // BucketNameInvalid - bucketname provided is invalid.

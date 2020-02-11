@@ -30,6 +30,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
+	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
@@ -597,6 +598,21 @@ func (s *xlSets) DeleteBucketLifecycle(ctx context.Context, bucket string) error
 	return removeLifecycleConfig(ctx, s, bucket)
 }
 
+// GetBucketSSEConfig returns bucket encryption config on given bucket
+func (s *xlSets) GetBucketSSEConfig(ctx context.Context, bucket string) (*bucketsse.BucketSSEConfig, error) {
+	return getBucketSSEConfig(s, bucket)
+}
+
+// SetBucketSSEConfig sets bucket encryption config on given bucket
+func (s *xlSets) SetBucketSSEConfig(ctx context.Context, bucket string, config *bucketsse.BucketSSEConfig) error {
+	return saveBucketSSEConfig(ctx, s, bucket, config)
+}
+
+// DeleteBucketSSEConfig deletes bucket encryption config on given bucket
+func (s *xlSets) DeleteBucketSSEConfig(ctx context.Context, bucket string) error {
+	return removeBucketSSEConfig(ctx, s, bucket)
+}
+
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
 func (s *xlSets) IsNotificationSupported() bool {
 	return s.getHashedSet("").IsNotificationSupported()
@@ -619,7 +635,7 @@ func (s *xlSets) IsCompressionSupported() bool {
 
 // IsObjectTaggingSupported returns whether tagging is applicable for this layer.
 func (s *xlSets) IsObjectTaggingSupported() bool {
-	return false
+	return s.getHashedSet("").IsObjectTaggingSupported()
 }
 
 // DeleteBucket - deletes a bucket on all sets simultaneously,
@@ -862,7 +878,8 @@ func leastEntry(entryChs []FileInfoCh, entries []FileInfo, entriesValid []bool) 
 }
 
 // mergeEntriesCh - merges FileInfo channel to entries upto maxKeys.
-func mergeEntriesCh(entryChs []FileInfoCh, maxKeys int, totalDrives int, heal bool) (entries FilesInfo) {
+// If partialQuorumOnly is set only objects that does not have full quorum is returned.
+func mergeEntriesCh(entryChs []FileInfoCh, maxKeys int, totalDrives int, partialQuorumOnly bool) (entries FilesInfo) {
 	var i = 0
 	entriesInfos := make([]FileInfo, len(entryChs))
 	entriesValid := make([]bool, len(entryChs))
@@ -880,7 +897,7 @@ func mergeEntriesCh(entryChs []FileInfoCh, maxKeys int, totalDrives int, heal bo
 			rquorum = totalDrives / 2
 		}
 
-		if heal {
+		if partialQuorumOnly {
 			// When healing is enabled, we should
 			// list only objects which need healing.
 			if quorumCount == totalDrives {
@@ -1050,10 +1067,11 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 	return result, nil
 }
 
-// ListObjects - implements listing of objects across disks, each disk is indepenently
+// ListObjects - implements listing of objects across disks, each disk is independently
 // walked and merged at this layer. Resulting value through the merge process sends
 // the data in lexically sorted order.
-func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, heal bool) (loi ListObjectsInfo, err error) {
+// If partialQuorumOnly is set only objects that does not have full quorum is returned.
+func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, partialQuorumOnly bool) (loi ListObjectsInfo, err error) {
 	if err = checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, s); err != nil {
 		return loi, err
 	}
@@ -1096,13 +1114,13 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 		recursive = false
 	}
 
-	entryChs, endWalkCh := s.pool.Release(listParams{bucket, recursive, marker, prefix, heal})
+	entryChs, endWalkCh := s.pool.Release(listParams{bucket: bucket, recursive: recursive, marker: marker, prefix: prefix})
 	if entryChs == nil {
 		endWalkCh = make(chan struct{})
 		entryChs = s.startMergeWalks(context.Background(), bucket, prefix, marker, recursive, endWalkCh)
 	}
 
-	entries := mergeEntriesCh(entryChs, maxKeys, s.drivesPerSet, heal)
+	entries := mergeEntriesCh(entryChs, maxKeys, s.drivesPerSet, partialQuorumOnly)
 	if len(entries.Files) == 0 {
 		return loi, nil
 	}
@@ -1156,7 +1174,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 		loi.Objects = append(loi.Objects, objInfo)
 	}
 	if loi.IsTruncated {
-		s.pool.Set(listParams{bucket, recursive, loi.NextMarker, prefix, heal}, entryChs, endWalkCh)
+		s.pool.Set(listParams{bucket, recursive, loi.NextMarker, prefix}, entryChs, endWalkCh)
 	}
 	return loi, nil
 }
