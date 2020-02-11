@@ -47,6 +47,10 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	// reset global variables to start afresh.
 	resetTestGlobals()
 
+	// Set globalIsXL to indicate that the setup uses an erasure
+	// code backend.
+	globalIsXL = true
+
 	// Initializing objectLayer for HealFormatHandler.
 	objLayer, xlDirs, xlErr := initTestXLObjLayer()
 	if xlErr != nil {
@@ -62,15 +66,6 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	globalBootTime = UTCNow()
 
 	globalEndpoints = mustGetZoneEndpoints(xlDirs...)
-
-	// Set globalIsXL to indicate that the setup uses an erasure
-	// code backend.
-	globalIsXL = true
-
-	// Init global heal state
-	if globalIsXL {
-		globalAllHealState = initHealState()
-	}
 
 	globalConfigSys = NewConfigSys()
 
@@ -114,7 +109,7 @@ func initTestXLObjLayer() (ObjectLayer, []string, error) {
 		return nil, nil, err
 	}
 	endpoints := mustGetNewEndpoints(xlDirs...)
-	format, err := waitForFormatXL(true, endpoints, 1, 16, "")
+	format, err := waitForFormatXL(true, endpoints, 1, 1, 16, "")
 	if err != nil {
 		removeRoots(xlDirs)
 		return nil, nil, err
@@ -288,23 +283,14 @@ func TestAdminServerInfo(t *testing.T) {
 		t.Errorf("Expected to succeed but failed with %d", rec.Code)
 	}
 
-	results := []ServerInfo{}
+	results := madmin.InfoMessage{}
 	err = json.NewDecoder(rec.Body).Decode(&results)
 	if err != nil {
 		t.Fatalf("Failed to decode set config result json %v", err)
 	}
 
-	if len(results) == 0 {
-		t.Error("Expected at least one server info result")
-	}
-
-	for _, serverInfo := range results {
-		if serverInfo.Error != "" {
-			t.Errorf("Unexpected error = %v\n", serverInfo.Error)
-		}
-		if serverInfo.Data.Properties.Region != globalMinioDefaultRegion {
-			t.Errorf("Expected %s, got %s", globalMinioDefaultRegion, serverInfo.Data.Properties.Region)
-		}
+	if results.Region != globalMinioDefaultRegion {
+		t.Errorf("Expected %s, got %s", globalMinioDefaultRegion, results.Region)
 	}
 }
 

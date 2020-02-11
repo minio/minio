@@ -23,9 +23,9 @@ import (
 	"strings"
 	"time"
 
-	c "github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/cmd/logger/message/log"
 	"github.com/minio/minio/pkg/color"
+	c "github.com/minio/minio/pkg/console"
 )
 
 // Logger interface describes the methods that need to be implemented to satisfy the interface requirements.
@@ -119,16 +119,16 @@ func (f fatalMsg) pretty(msg string, args ...interface{}) {
 			ansiSaveAttributes()
 			// Print banner with or without the log tag
 			if !tagPrinted {
-				fmt.Print(logBanner)
+				c.Print(logBanner)
 				tagPrinted = true
 			} else {
-				fmt.Print(emptyBanner)
+				c.Print(emptyBanner)
 			}
 			// Restore the text color of the error message
 			ansiRestoreAttributes()
 			ansiMoveRight(bannerWidth)
 			// Continue  error message printing
-			fmt.Println(line)
+			c.Println(line)
 			break
 		}
 	}

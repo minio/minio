@@ -35,7 +35,9 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
+	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/pubsub"
 )
 
@@ -93,6 +95,9 @@ const (
 
 	// Limit of location constraint XML for unauthenticted PUT bucket operations.
 	maxLocationConstraintSize = 3 * humanize.MiByte
+
+	// Maximum size of default bucket encryption configuration allowed
+	maxBucketSSEConfigSize = 1 * humanize.MiByte
 )
 
 var globalCLIContext = struct {
@@ -137,11 +142,13 @@ var (
 	// globalConfigSys server config system.
 	globalConfigSys *ConfigSys
 
-	globalNotificationSys *NotificationSys
-	globalPolicySys       *PolicySys
-	globalIAMSys          *IAMSys
+	globalNotificationSys  *NotificationSys
+	globalConfigTargetList *event.TargetList
+	globalPolicySys        *PolicySys
+	globalIAMSys           *IAMSys
 
-	globalLifecycleSys *LifecycleSys
+	globalLifecycleSys       *LifecycleSys
+	globalBucketSSEConfigSys *BucketSSEConfigSys
 
 	globalStorageClass storageclass.Config
 	globalLDAPConfig   xldap.Config
@@ -162,6 +169,9 @@ var (
 	// global Trace system to send HTTP request/response logs to
 	// registered listeners
 	globalHTTPTrace = pubsub.New()
+
+	// global Listen system to send S3 API events to registered listeners
+	globalHTTPListen = pubsub.New()
 
 	// global console system to send console logs to
 	// registered listeners
@@ -196,7 +206,7 @@ var (
 	// Is worm enabled
 	globalWORMEnabled bool
 
-	globalBucketObjectLockConfig = newBucketObjectLockConfig()
+	globalBucketObjectLockConfig = objectlock.NewBucketObjectLockConfig()
 
 	// Disk cache drives
 	globalCacheConfig cache.Config
@@ -206,6 +216,10 @@ var (
 
 	// Allocated etcd endpoint for config and bucket DNS.
 	globalEtcdClient *etcd.Client
+
+	// Is set to true when Bucket federation is requested
+	// and is 'true' when etcdConfig.PathPrefix is empty
+	globalBucketFederation bool
 
 	// Allocated DNS config wrapper over etcd client.
 	globalDNSConfig *dns.CoreDNS
@@ -263,7 +277,6 @@ var (
 // list. Feel free to add new relevant fields.
 func getGlobalInfo() (globalInfo map[string]interface{}) {
 	globalInfo = map[string]interface{}{
-		"isWorm":       globalWORMEnabled,
 		"serverRegion": globalServerRegion,
 		// Add more relevant global settings here.
 	}

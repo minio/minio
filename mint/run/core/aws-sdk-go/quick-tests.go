@@ -28,10 +28,12 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -130,6 +132,50 @@ func randString(n int, src rand.Source, prefix string) string {
 		remain--
 	}
 	return prefix + string(b[0:30-len(prefix)])
+}
+
+func isObjectTaggingImplemented(s3Client *s3.S3) bool {
+	bucket := randString(60, rand.NewSource(time.Now().UnixNano()), "aws-sdk-go-test-")
+	object := randString(60, rand.NewSource(time.Now().UnixNano()), "")
+	startTime := time.Now()
+	function := "isObjectTaggingImplemented"
+	args := map[string]interface{}{
+		"bucketName": bucket,
+		"objectName": object,
+	}
+	defer cleanup(s3Client, bucket, object, function, args, startTime, true)
+
+	_, err := s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucket),
+	})
+	if err != nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CreateBucket Failed", err).Fatal()
+		return false
+	}
+
+	_, err = s3Client.PutObject(&s3.PutObjectInput{
+		Body:   aws.ReadSeekCloser(strings.NewReader("testfile")),
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+	})
+
+	if err != nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to success but got %v", err), err).Fatal()
+		return false
+	}
+
+	_, err = s3Client.GetObjectTagging(&s3.GetObjectTaggingInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+	})
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			if awsErr.Code() == "NotImplemented" {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func cleanup(s3Client *s3.S3, bucket string, object string, function string,
@@ -474,6 +520,298 @@ func testSelectObject(s3Client *s3.S3) {
 	successLogger(function, args, startTime).Info()
 }
 
+func testObjectTagging(s3Client *s3.S3) {
+	startTime := time.Now()
+	function := "testObjectTagging"
+	bucket := randString(60, rand.NewSource(time.Now().UnixNano()), "aws-sdk-go-test-")
+	object := randString(60, rand.NewSource(time.Now().UnixNano()), "")
+	args := map[string]interface{}{
+		"bucketName": bucket,
+		"objectName": object,
+	}
+
+	_, err := s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucket),
+	})
+	if err != nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CreateBucket Failed", err).Fatal()
+		return
+	}
+	defer cleanup(s3Client, bucket, object, function, args, startTime, true)
+
+	taginput := "Tag1=Value1"
+	tagInputSet := []*s3.Tag{
+		{
+			Key:   aws.String("Tag1"),
+			Value: aws.String("Value1"),
+		},
+	}
+	_, err = s3Client.PutObject(&s3.PutObjectInput{
+		Body:    aws.ReadSeekCloser(strings.NewReader("testfile")),
+		Bucket:  aws.String(bucket),
+		Key:     aws.String(object),
+		Tagging: &taginput,
+	})
+
+	if err != nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to success but got %v", err), err).Fatal()
+		return
+	}
+
+	tagop, err := s3Client.GetObjectTagging(&s3.GetObjectTaggingInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+	})
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUTObjectTagging expected to success but got %v", awsErr.Code()), err).Fatal()
+			return
+		}
+	}
+	if !reflect.DeepEqual(tagop.TagSet, tagInputSet) {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUTObject Tag input did not match with GetObjectTagging output %v", nil), nil).Fatal()
+		return
+	}
+
+	taginputSet1 := []*s3.Tag{
+		{
+			Key:   aws.String("Key4"),
+			Value: aws.String("Value4"),
+		},
+	}
+	_, err = s3Client.PutObjectTagging(&s3.PutObjectTaggingInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+		Tagging: &s3.Tagging{
+			TagSet: taginputSet1,
+		},
+	})
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUTObjectTagging expected to success but got %v", awsErr.Code()), err).Fatal()
+			return
+		}
+	}
+
+	tagop, err = s3Client.GetObjectTagging(&s3.GetObjectTaggingInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+	})
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUTObjectTagging expected to success but got %v", awsErr.Code()), err).Fatal()
+			return
+		}
+	}
+	if !reflect.DeepEqual(tagop.TagSet, taginputSet1) {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUTObjectTagging input did not match with GetObjectTagging output %v", nil), nil).Fatal()
+		return
+	}
+}
+
+// Tests bucket re-create errors.
+func testCreateBucketError(s3Client *s3.S3) {
+	region := s3Client.Config.Region
+	// Amazon S3 returns error in all AWS Regions except in the North Virginia Region.
+	// More details in https://docs.aws.amazon.com/sdk-for-go/api/service/s3/#S3.CreateBucket
+	s3Client.Config.Region = aws.String("us-west-1")
+
+	// initialize logging params
+	startTime := time.Now()
+	function := "testMakeBucketError"
+	bucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "aws-sdk-go-test-")
+	args := map[string]interface{}{
+		"bucketName": bucketName,
+	}
+	_, err := s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CreateBucket Failed", err).Fatal()
+		return
+	}
+	defer cleanup(s3Client, bucketName, "", function, args, startTime, true)
+
+	_, errCreating := s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if errCreating == nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CreateBucket Should Return Error for Existing bucket", err).Fatal()
+		return
+	}
+	// Verify valid error response from server.
+	if errCreating.(s3.RequestFailure).Code() != "BucketAlreadyExists" &&
+		errCreating.(s3.RequestFailure).Code() != "BucketAlreadyOwnedByYou" {
+		failureLog(function, args, startTime, "", "Invalid error returned by server", err).Fatal()
+		return
+	}
+
+	// Restore region in s3Client
+	s3Client.Config.Region = region
+	successLogger(function, args, startTime).Info()
+}
+
+func testListMultipartUploads(s3Client *s3.S3) {
+	startTime := time.Now()
+	function := "testListMultipartUploads"
+	bucket := randString(60, rand.NewSource(time.Now().UnixNano()), "aws-sdk-go-test-")
+	object := randString(60, rand.NewSource(time.Now().UnixNano()), "")
+	args := map[string]interface{}{
+		"bucketName": bucket,
+		"objectName": object,
+	}
+	_, errCreating := s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucket),
+	})
+	if errCreating != nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CreateBucket Failed", errCreating).Fatal()
+		return
+	}
+	defer cleanup(s3Client, bucket, object, function, args, startTime, true)
+
+	multipartUpload, err := s3Client.CreateMultipartUpload(&s3.CreateMultipartUploadInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+	})
+	if err != nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go createMultipartupload API failed", err).Fatal()
+		return
+	}
+	parts := make(map[*int64]*string)
+	for i := 0; i < 5; i++ {
+		result, errUpload := s3Client.UploadPart(&s3.UploadPartInput{
+			Bucket:     aws.String(bucket),
+			Key:        aws.String(object),
+			UploadId:   multipartUpload.UploadId,
+			PartNumber: aws.Int64(int64(i + 1)),
+			Body:       aws.ReadSeekCloser(strings.NewReader("fileToUpload")),
+		})
+		if errUpload != nil {
+			_, _ = s3Client.AbortMultipartUpload(&s3.AbortMultipartUploadInput{
+				Bucket:   aws.String(bucket),
+				Key:      aws.String(object),
+				UploadId: multipartUpload.UploadId,
+			})
+			failureLog(function, args, startTime, "", "AWS SDK Go uploadPart API failed for", errUpload).Fatal()
+			return
+		}
+		parts[aws.Int64(int64(i+1))] = result.ETag
+	}
+
+	listParts, errParts := s3Client.ListParts(&s3.ListPartsInput{
+		Bucket:   aws.String(bucket),
+		Key:      aws.String(object),
+		UploadId: multipartUpload.UploadId,
+	})
+	if errParts != nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go ListPartsInput API failed for", err).Fatal()
+		return
+	}
+
+	if len(parts) != len(listParts.Parts) {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go ListParts.Parts len mismatch want: %v got: %v", len(parts), len(listParts.Parts)), err).Fatal()
+		return
+	}
+
+	for _, part := range listParts.Parts {
+		if tag, ok := parts[part.PartNumber]; ok {
+			if tag != part.ETag {
+				failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go ListParts.Parts output mismatch want: %v got: %v", tag, part.ETag), err).Fatal()
+				return
+			}
+		}
+	}
+
+	successLogger(function, args, startTime).Info()
+}
+
+func testSSECopyObject(s3Client *s3.S3) {
+	// initialize logging params
+	startTime := time.Now()
+	function := "testSSECopyObjectSourceEncrypted"
+	bucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "aws-sdk-go-test-")
+	object := randString(60, rand.NewSource(time.Now().UnixNano()), "")
+	args := map[string]interface{}{
+		"bucketName": bucketName,
+		"objectName": object,
+	}
+	_, err := s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CreateBucket Failed", err).Fatal()
+		return
+	}
+	defer cleanup(s3Client, bucketName, object+"-enc", function, args, startTime, true)
+	defer cleanup(s3Client, bucketName, object+"-noenc", function, args, startTime, false)
+	var wrongSuccess = errors.New("Succeeded instead of failing. ")
+
+	// create encrypted object
+	sseCustomerKey := aws.String("32byteslongsecretkeymustbegiven2")
+	_, errPutEnc := s3Client.PutObject(&s3.PutObjectInput{
+		Body:                 aws.ReadSeekCloser(strings.NewReader("fileToUpload")),
+		Bucket:               aws.String(bucketName),
+		Key:                  aws.String(object + "-enc"),
+		SSECustomerAlgorithm: aws.String("AES256"),
+		SSECustomerKey:       sseCustomerKey,
+	})
+	if errPutEnc != nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to succeed but got %v", errPutEnc), errPutEnc).Fatal()
+		return
+	}
+
+	// copy the encrypted object
+	_, errCopyEnc := s3Client.CopyObject(&s3.CopyObjectInput{
+		SSECustomerAlgorithm: aws.String("AES256"),
+		SSECustomerKey:       sseCustomerKey,
+		CopySource:           aws.String(bucketName + "/" + object + "-enc"),
+		Bucket:               aws.String(bucketName),
+		Key:                  aws.String(object + "-copy"),
+	})
+	if errCopyEnc == nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CopyObject expected to fail, but it succeeds ", wrongSuccess).Fatal()
+		return
+	}
+	var invalidSSECustomerAlgorithm = "Requests specifying Server Side Encryption with Customer provided keys must provide a valid encryption algorithm"
+	if !strings.Contains(errCopyEnc.Error(), invalidSSECustomerAlgorithm) {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go CopyObject expected error %v got %v", invalidSSECustomerAlgorithm, errCopyEnc), errCopyEnc).Fatal()
+		return
+	}
+
+	// create non-encrypted object
+	_, errPut := s3Client.PutObject(&s3.PutObjectInput{
+		Body:   aws.ReadSeekCloser(strings.NewReader("fileToUpload")),
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(object + "-noenc"),
+	})
+	if errPut != nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to succeed but got %v", errPut), errPut).Fatal()
+		return
+	}
+
+	// copy the non-encrypted object
+	_, errCopy := s3Client.CopyObject(&s3.CopyObjectInput{
+		CopySourceSSECustomerAlgorithm: aws.String("AES256"),
+		CopySourceSSECustomerKey:       sseCustomerKey,
+		SSECustomerAlgorithm:           aws.String("AES256"),
+		SSECustomerKey:                 sseCustomerKey,
+		CopySource:                     aws.String(bucketName + "/" + object + "-noenc"),
+		Bucket:                         aws.String(bucketName),
+		Key:                            aws.String(object + "-copy"),
+	})
+	if errCopy == nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CopyObject expected to fail, but it succeeds ", wrongSuccess).Fatal()
+		return
+	}
+	var invalidEncryptionParameters = "The encryption parameters are not applicable to this object."
+	if !strings.Contains(errCopy.Error(), invalidEncryptionParameters) {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go CopyObject expected error %v got %v", invalidEncryptionParameters, errCopy), errCopy).Fatal()
+		return
+	}
+
+	successLogger(function, args, startTime).Info()
+}
+
 func main() {
 	endpoint := os.Getenv("SERVER_ENDPOINT")
 	accessKey := os.Getenv("ACCESS_KEY")
@@ -508,4 +846,12 @@ func main() {
 	testPresignedPutInvalidHash(s3Client)
 	testListObjects(s3Client)
 	testSelectObject(s3Client)
+	testCreateBucketError(s3Client)
+	testListMultipartUploads(s3Client)
+	if secure == "1" {
+		testSSECopyObject(s3Client)
+	}
+	if isObjectTaggingImplemented(s3Client) {
+		testObjectTagging(s3Client)
+	}
 }

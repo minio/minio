@@ -183,15 +183,24 @@ func (target *PostgreSQLTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - Return true if target is up and active
+func (target *PostgreSQLTarget) IsActive() (bool, error) {
+	if err := target.db.Ping(); err != nil {
+		if IsConnErr(err) {
+			return false, errNotConnected
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 // Save - saves the events to the store if questore is configured, which will be replayed when the PostgreSQL connection is active.
 func (target *PostgreSQLTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	if err := target.db.Ping(); err != nil {
-		if IsConnErr(err) {
-			return errNotConnected
-		}
+	_, err := target.IsActive()
+	if err != nil {
 		return err
 	}
 	return target.send(eventData)
@@ -245,14 +254,10 @@ func (target *PostgreSQLTarget) send(eventData event.Event) error {
 
 // Send - reads an event from store and sends it to PostgreSQL.
 func (target *PostgreSQLTarget) Send(eventKey string) error {
-
-	if err := target.db.Ping(); err != nil {
-		if IsConnErr(err) {
-			return errNotConnected
-		}
+	_, err := target.IsActive()
+	if err != nil {
 		return err
 	}
-
 	if !target.firstPing {
 		if err := target.executeStmts(); err != nil {
 			if IsConnErr(err) {
@@ -339,7 +344,7 @@ func (target *PostgreSQLTarget) executeStmts() error {
 }
 
 // NewPostgreSQLTarget - creates new PostgreSQL target.
-func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*PostgreSQLTarget, error) {
+func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*PostgreSQLTarget, error) {
 	var firstPing bool
 
 	params := []string{args.ConnectionString}
@@ -395,7 +400,7 @@ func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{},
 		target.firstPing = true
 	}
 
-	if target.store != nil {
+	if target.store != nil && !test {
 		// Replays the events from the store.
 		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
 		// Start replaying events from the store.

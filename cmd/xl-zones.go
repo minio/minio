@@ -23,12 +23,16 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/lifecycle"
+	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/pkg/bucket/object/tagging"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/madmin"
-	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -46,7 +50,7 @@ func (z *xlZones) quickHealBuckets(ctx context.Context) {
 		return
 	}
 	for _, bucket := range bucketsInfo {
-		z.HealBucket(ctx, bucket.Name, false, false)
+		z.MakeBucketWithLocation(ctx, bucket.Name, "")
 	}
 }
 
@@ -59,8 +63,9 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 		formats = make([]*formatXLV3, len(endpointZones))
 		z       = &xlZones{zones: make([]*xlSets, len(endpointZones))}
 	)
+	local := endpointZones.FirstLocal()
 	for i, ep := range endpointZones {
-		formats[i], err = waitForFormatXL(endpointZones.FirstLocal(), ep.Endpoints,
+		formats[i], err = waitForFormatXL(local, ep.Endpoints, i+1,
 			ep.SetCount, ep.DrivesPerSet, deploymentID)
 		if err != nil {
 			return nil, err
@@ -68,14 +73,14 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 		if deploymentID == "" {
 			deploymentID = formats[i].ID
 		}
-	}
-	for i, ep := range endpointZones {
 		z.zones[i], err = newXLSets(ep.Endpoints, formats[i], ep.SetCount, ep.DrivesPerSet)
 		if err != nil {
 			return nil, err
 		}
 	}
-	z.quickHealBuckets(context.Background())
+	if !z.SingleZone() {
+		z.quickHealBuckets(context.Background())
+	}
 	return z, nil
 }
 
@@ -209,6 +214,46 @@ func (z *xlZones) StorageInfo(ctx context.Context) StorageInfo {
 	storageInfo.Backend.RRSCParity = storageInfos[0].Backend.RRSCParity
 
 	return storageInfo
+}
+
+func (z *xlZones) CrawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
+	var aggDataUsageInfo = struct {
+		sync.Mutex
+		DataUsageInfo
+	}{}
+
+	aggDataUsageInfo.ObjectsSizesHistogram = make(map[string]uint64)
+	aggDataUsageInfo.BucketsSizes = make(map[string]uint64)
+
+	var wg sync.WaitGroup
+	for _, z := range z.zones {
+		for _, xlObj := range z.sets {
+			wg.Add(1)
+			go func(xl *xlObjects) {
+				defer wg.Done()
+				info := xl.CrawlAndGetDataUsage(ctx, endCh)
+
+				aggDataUsageInfo.Lock()
+				aggDataUsageInfo.ObjectsCount += info.ObjectsCount
+				aggDataUsageInfo.ObjectsTotalSize += info.ObjectsTotalSize
+				if aggDataUsageInfo.BucketsCount < info.BucketsCount {
+					aggDataUsageInfo.BucketsCount = info.BucketsCount
+				}
+				for k, v := range info.ObjectsSizesHistogram {
+					aggDataUsageInfo.ObjectsSizesHistogram[k] += v
+				}
+				for k, v := range info.BucketsSizes {
+					aggDataUsageInfo.BucketsSizes[k] += v
+				}
+				aggDataUsageInfo.Unlock()
+
+			}(xlObj)
+		}
+	}
+	wg.Wait()
+
+	aggDataUsageInfo.LastUpdate = UTCNow()
+	return aggDataUsageInfo.DataUsageInfo
 }
 
 // This function is used to undo a successful MakeBucket operation.
@@ -656,7 +701,7 @@ func (z *xlZones) listObjects(ctx context.Context, bucket, prefix, marker, delim
 	var zonesEndWalkCh []chan struct{}
 
 	for _, zone := range z.zones {
-		entryChs, endWalkCh := zone.pool.Release(listParams{bucket, recursive, marker, prefix, heal})
+		entryChs, endWalkCh := zone.pool.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
 			entryChs = zone.startMergeWalks(ctx, bucket, prefix, marker, recursive, endWalkCh)
@@ -725,7 +770,7 @@ func (z *xlZones) listObjects(ctx context.Context, bucket, prefix, marker, delim
 	}
 	if loi.IsTruncated {
 		for i, zone := range z.zones {
-			zone.pool.Set(listParams{bucket, recursive, loi.NextMarker, prefix, heal}, zonesEntryChs[i],
+			zone.pool.Set(listParams{bucket, recursive, loi.NextMarker, prefix}, zonesEntryChs[i],
 				zonesEndWalkCh[i])
 		}
 	}
@@ -1103,6 +1148,21 @@ func (z *xlZones) DeleteBucketLifecycle(ctx context.Context, bucket string) erro
 	return removeLifecycleConfig(ctx, z, bucket)
 }
 
+// GetBucketSSEConfig returns bucket encryption config on given bucket
+func (z *xlZones) GetBucketSSEConfig(ctx context.Context, bucket string) (*bucketsse.BucketSSEConfig, error) {
+	return getBucketSSEConfig(z, bucket)
+}
+
+// SetBucketSSEConfig sets bucket encryption config on given bucket
+func (z *xlZones) SetBucketSSEConfig(ctx context.Context, bucket string, config *bucketsse.BucketSSEConfig) error {
+	return saveBucketSSEConfig(ctx, z, bucket, config)
+}
+
+// DeleteBucketSSEConfig deletes bucket encryption config on given bucket
+func (z *xlZones) DeleteBucketSSEConfig(ctx context.Context, bucket string) error {
+	return removeBucketSSEConfig(ctx, z, bucket)
+}
+
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
 func (z *xlZones) IsNotificationSupported() bool {
 	return true
@@ -1220,16 +1280,27 @@ func (z *xlZones) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResul
 		Type:   madmin.HealItemMetadata,
 		Detail: "disk-format",
 	}
+
+	var countNoHeal int
 	for _, zone := range z.zones {
 		result, err := zone.HealFormat(ctx, dryRun)
 		if err != nil && err != errNoHealRequired {
 			logger.LogIf(ctx, err)
 			continue
 		}
+		// Count errNoHealRequired across all zones,
+		// to return appropriate error to the caller
+		if err == errNoHealRequired {
+			countNoHeal++
+		}
 		r.DiskCount += result.DiskCount
 		r.SetCount += result.SetCount
 		r.Before.Drives = append(r.Before.Drives, result.Before.Drives...)
 		r.After.Drives = append(r.After.Drives, result.After.Drives...)
+	}
+	// No heal returned by all zones, return errNoHealRequired
+	if countNoHeal == len(z.zones) {
+		return r, errNoHealRequired
 	}
 	return r, nil
 }
@@ -1257,19 +1328,58 @@ func (z *xlZones) HealBucket(ctx context.Context, bucket string, dryRun, remove 
 	return r, nil
 }
 
-func (z *xlZones) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	if z.SingleZone() {
-		return z.zones[0].ListObjectsHeal(ctx, bucket, prefix, marker, delimiter, maxKeys)
-	}
-	return z.listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys, true)
-}
+type healObjectFn func(string, string) error
 
-func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healObjectFn func(string, string) error) error {
+func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healObject healObjectFn) error {
+	var zonesEntryChs [][]FileInfoCh
+
+	recursive := true
 	for _, zone := range z.zones {
-		if err := zone.HealObjects(ctx, bucket, prefix, healObjectFn); err != nil {
-			return err
+		endWalkCh := make(chan struct{})
+		defer close(endWalkCh)
+		zonesEntryChs = append(zonesEntryChs,
+			zone.startMergeWalks(ctx, bucket, prefix, "", recursive, endWalkCh))
+	}
+
+	var zoneDrivesPerSet []int
+	for _, zone := range z.zones {
+		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.drivesPerSet)
+	}
+
+	var zonesEntriesInfos [][]FileInfo
+	var zonesEntriesValid [][]bool
+	for _, entryChs := range zonesEntryChs {
+		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfo, len(entryChs)))
+		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
+	}
+
+	for {
+		entry, quorumCount, zoneIndex, ok := leastEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+		if !ok {
+			break
+		}
+
+		if quorumCount == zoneDrivesPerSet[zoneIndex] {
+			// Skip good entries.
+			continue
+		}
+
+		if httpServer := newHTTPServerFn(); httpServer != nil {
+			// Wait at max 10 minute for an inprogress request before proceeding to heal
+			waitCount := 600
+			// Any requests in progress, delay the heal.
+			for (httpServer.GetRequestCount() >= int32(zoneDrivesPerSet[zoneIndex])) &&
+				waitCount > 0 {
+				waitCount--
+				time.Sleep(1 * time.Second)
+			}
+		}
+
+		if err := healObject(bucket, entry.Name); err != nil {
+			return toObjectErr(err, bucket, entry.Name)
 		}
 	}
+
 	return nil
 }
 
@@ -1317,4 +1427,69 @@ func (z *xlZones) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 func (z *xlZones) GetMetrics(ctx context.Context) (*Metrics, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return &Metrics{}, NotImplemented{}
+}
+
+// IsReady - Returns true if first zone returns true
+func (z *xlZones) IsReady(ctx context.Context) bool {
+	return z.zones[0].IsReady(ctx)
+}
+
+// PutObjectTag - replace or add tags to an existing object
+func (z *xlZones) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
+	if z.SingleZone() {
+		return z.zones[0].PutObjectTag(ctx, bucket, object, tags)
+	}
+	for _, zone := range z.zones {
+		err := zone.PutObjectTag(ctx, bucket, object, tags)
+		if err != nil {
+			if isErrBucketNotFound(err) {
+				continue
+			}
+			return err
+		}
+		return nil
+	}
+	return BucketNotFound{
+		Bucket: bucket,
+	}
+}
+
+// DeleteObjectTag - delete object tags from an existing object
+func (z *xlZones) DeleteObjectTag(ctx context.Context, bucket, object string) error {
+	if z.SingleZone() {
+		return z.zones[0].DeleteObjectTag(ctx, bucket, object)
+	}
+	for _, zone := range z.zones {
+		err := zone.DeleteObjectTag(ctx, bucket, object)
+		if err != nil {
+			if isErrBucketNotFound(err) {
+				continue
+			}
+			return err
+		}
+		return nil
+	}
+	return BucketNotFound{
+		Bucket: bucket,
+	}
+}
+
+// GetObjectTag - get object tags from an existing object
+func (z *xlZones) GetObjectTag(ctx context.Context, bucket, object string) (tagging.Tagging, error) {
+	if z.SingleZone() {
+		return z.zones[0].GetObjectTag(ctx, bucket, object)
+	}
+	for _, zone := range z.zones {
+		tags, err := zone.GetObjectTag(ctx, bucket, object)
+		if err != nil {
+			if isErrBucketNotFound(err) {
+				continue
+			}
+			return tags, err
+		}
+		return tags, nil
+	}
+	return tagging.Tagging{}, BucketNotFound{
+		Bucket: bucket,
+	}
 }

@@ -467,8 +467,8 @@ func ignoreNotImplementedBucketResources(req *http.Request) bool {
 // Checks requests for not implemented Object resources
 func ignoreNotImplementedObjectResources(req *http.Request) bool {
 	for name := range req.URL.Query() {
-		// Enable GetObjectACL and GetObjectTagging dummy calls specifically.
-		if (name == "acl" || name == "tagging") && req.Method == http.MethodGet {
+		// Enable GetObjectACL dummy call specifically.
+		if name == "acl" && req.Method == http.MethodGet {
 			return false
 		}
 		if notimplementedObjectResourceNames[name] {
@@ -497,7 +497,6 @@ var notimplementedBucketResourceNames = map[string]bool{
 var notimplementedObjectResourceNames = map[string]bool{
 	"acl":     true,
 	"restore": true,
-	"tagging": true,
 	"torrent": true,
 }
 
@@ -619,7 +618,8 @@ type bucketForwardingHandler struct {
 func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if globalDNSConfig == nil || len(globalDomainNames) == 0 ||
 		guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
-		guessIsRPCReq(r) || guessIsLoginSTSReq(r) || isAdminReq(r) {
+		guessIsRPCReq(r) || guessIsLoginSTSReq(r) || isAdminReq(r) ||
+		!globalBucketFederation {
 		f.handler.ServeHTTP(w, r)
 		return
 	}
@@ -631,13 +631,13 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		switch r.Method {
 		case http.MethodPut:
 			if getRequestAuthType(r) == authTypeJWT {
-				bucket, _ = urlPath2BucketObjectName(strings.TrimPrefix(r.URL.Path, minioReservedBucketPath+"/upload"))
+				bucket, _ = path2BucketObjectWithBasePath(minioReservedBucketPath+"/upload", r.URL.Path)
 			}
 		case http.MethodGet:
 			if t := r.URL.Query().Get("token"); t != "" {
-				bucket, _ = urlPath2BucketObjectName(strings.TrimPrefix(r.URL.Path, minioReservedBucketPath+"/download"))
+				bucket, _ = path2BucketObjectWithBasePath(minioReservedBucketPath+"/download", r.URL.Path)
 			} else if getRequestAuthType(r) != authTypeJWT && !strings.HasPrefix(r.URL.Path, minioReservedBucketPath) {
-				bucket, _ = urlPath2BucketObjectName(r.URL.Path)
+				bucket, _ = request2BucketObjectName(r)
 			}
 		}
 		if bucket == "" {
@@ -687,7 +687,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	// requests have target bucket and object in URI and source details are in
 	// header fields
 	if r.Method == http.MethodPut && r.Header.Get(xhttp.AmzCopySource) != "" {
-		bucket, object = urlPath2BucketObjectName(r.Header.Get(xhttp.AmzCopySource))
+		bucket, object = path2BucketObject(r.Header.Get(xhttp.AmzCopySource))
 		if bucket == "" || object == "" {
 			f.handler.ServeHTTP(w, r)
 			return

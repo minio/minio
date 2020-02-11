@@ -32,6 +32,11 @@ func (actionSet ActionSet) Add(action Action) {
 	actionSet[action] = struct{}{}
 }
 
+// IsEmpty - returns if the current action set is empty
+func (actionSet ActionSet) IsEmpty() bool {
+	return len(actionSet) == 0
+}
+
 // Match - matches object name with anyone of action pattern in action set.
 func (actionSet ActionSet) Match(action Action) bool {
 	for r := range actionSet {
@@ -41,6 +46,24 @@ func (actionSet ActionSet) Match(action Action) bool {
 	}
 
 	return false
+}
+
+// Equals - checks whether given action set is equal to current action set or not.
+func (actionSet ActionSet) Equals(sactionSet ActionSet) bool {
+	// If length of set is not equal to length of given set, the
+	// set is not equal to given set.
+	if len(actionSet) != len(sactionSet) {
+		return false
+	}
+
+	// As both sets are equal in length, check each elements are equal.
+	for k := range actionSet {
+		if _, ok := sactionSet[k]; !ok {
+			return false
+		}
+	}
+
+	return true
 }
 
 // Intersection - returns actions available in both ActionSet.
@@ -58,7 +81,7 @@ func (actionSet ActionSet) Intersection(sset ActionSet) ActionSet {
 // MarshalJSON - encodes ActionSet to JSON data.
 func (actionSet ActionSet) MarshalJSON() ([]byte, error) {
 	if len(actionSet) == 0 {
-		return nil, fmt.Errorf("empty action set")
+		return nil, Errorf("empty action set")
 	}
 
 	return json.Marshal(actionSet.ToSlice())
@@ -92,7 +115,7 @@ func (actionSet *ActionSet) UnmarshalJSON(data []byte) error {
 	}
 
 	if len(sset) == 0 {
-		return fmt.Errorf("empty action set")
+		return Errorf("empty action set")
 	}
 
 	*actionSet = make(ActionSet)

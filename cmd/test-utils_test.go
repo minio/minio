@@ -59,8 +59,8 @@ import (
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/policy"
 )
 
 // Tests should initNSLock only once.
@@ -73,6 +73,9 @@ func init() {
 
 	// Set system resources to maximum.
 	setMaxResources()
+
+	// Initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(context.Background())
 
 	logger.Disable = true
 
@@ -190,7 +193,7 @@ func prepareXLSets32() (ObjectLayer, []string, error) {
 
 	endpoints := append(endpoints1, endpoints2...)
 	fsDirs := append(fsDirs1, fsDirs2...)
-	format, err := waitForFormatXL(true, endpoints, 2, 16, "")
+	format, err := waitForFormatXL(true, endpoints, 1, 2, 16, "")
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, nil, err
@@ -371,6 +374,9 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalLifecycleSys = NewLifecycleSys()
 	globalLifecycleSys.Init(buckets, objLayer)
 
+	globalBucketSSEConfigSys = NewBucketSSEConfigSys()
+	globalBucketSSEConfigSys.Init(buckets, objLayer)
+
 	return testServer
 }
 
@@ -456,15 +462,30 @@ func resetGlobalIsXL() {
 
 // reset global heal state
 func resetGlobalHealState() {
+	// Init global heal state
 	if globalAllHealState == nil {
-		return
-	}
-	globalAllHealState.Lock()
-	defer globalAllHealState.Unlock()
-	for _, v := range globalAllHealState.healSeqMap {
-		if !v.hasEnded() {
-			v.stop()
+		globalAllHealState = initHealState()
+	} else {
+		globalAllHealState.Lock()
+		for _, v := range globalAllHealState.healSeqMap {
+			if !v.hasEnded() {
+				v.stop()
+			}
 		}
+		globalAllHealState.Unlock()
+	}
+
+	// Init background heal state
+	if globalBackgroundHealState == nil {
+		globalBackgroundHealState = initHealState()
+	} else {
+		globalBackgroundHealState.Lock()
+		for _, v := range globalBackgroundHealState.healSeqMap {
+			if !v.hasEnded() {
+				v.stop()
+			}
+		}
+		globalBackgroundHealState.Unlock()
 	}
 }
 
@@ -497,9 +518,6 @@ func resetTestGlobals() {
 
 // Configure the server for the test run.
 func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
-	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
-
 	// Initialize server config.
 	if err = newSrvConfig(obj); err != nil {
 		return err
@@ -1894,7 +1912,8 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
 
-	globalIAMSys = NewIAMSys()
+	newAllSubsystems()
+
 	globalIAMSys.Init(objLayer)
 
 	buckets, err := objLayer.ListBuckets(context.Background())
@@ -1902,7 +1921,6 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 		t.Fatalf("Unable to list buckets on backend %s", err)
 	}
 
-	globalPolicySys = NewPolicySys()
 	globalPolicySys.Init(buckets, objLayer)
 
 	credentials := globalActiveCred
@@ -1961,6 +1979,9 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 
 	globalPolicySys = NewPolicySys()
 	globalPolicySys.Init(buckets, objLayer)
+
+	globalBucketSSEConfigSys = NewBucketSSEConfigSys()
+	globalBucketSSEConfigSys.Init(buckets, objLayer)
 
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, FSTestStr, t)

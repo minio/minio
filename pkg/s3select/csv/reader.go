@@ -19,12 +19,12 @@ package csv
 import (
 	"bufio"
 	"bytes"
-	"encoding/csv"
 	"fmt"
 	"io"
 	"runtime"
 	"sync"
 
+	csv "github.com/minio/minio/pkg/csvparser"
 	"github.com/minio/minio/pkg/s3select/sql"
 )
 
@@ -84,7 +84,7 @@ func (r *Reader) Read(dst sql.Record) (sql.Record, error) {
 		}
 	}
 
-	// If no index max, add that.
+	// If no index map, add that.
 	if r.nameIndexMap == nil {
 		r.nameIndexMap = make(map[string]int64)
 		for i := range r.columnNames {

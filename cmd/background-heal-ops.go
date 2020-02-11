@@ -61,6 +61,7 @@ func (h *healRoutine) run() {
 			if !ok {
 				break
 			}
+
 			if httpServer := newHTTPServerFn(); httpServer != nil {
 				// Wait at max 10 minute for an inprogress request before proceeding to heal
 				waitCount := 600
@@ -74,7 +75,7 @@ func (h *healRoutine) run() {
 
 			var res madmin.HealResultItem
 			var err error
-			bucket, object := urlPath2BucketObjectName(task.path)
+			bucket, object := path2BucketObject(task.path)
 			switch {
 			case bucket == "" && object == "":
 				res, err = bgHealDiskFormat(ctx, task.opts)

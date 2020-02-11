@@ -19,6 +19,7 @@ package notify
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -38,15 +39,25 @@ const (
 
 // TestNotificationTargets is similar to GetNotificationTargets()
 // avoids explicit registration.
-func TestNotificationTargets(cfg config.Config, doneCh <-chan struct{}, rootCAs *x509.CertPool) error {
-	_, err := RegisterNotificationTargets(cfg, doneCh, rootCAs, true)
+func TestNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport,
+	targetIDs []event.TargetID) error {
+	test := true
+	targets, err := RegisterNotificationTargets(cfg, doneCh, transport, targetIDs, test)
+	if err == nil {
+		// Close all targets since we are only testing connections.
+		for _, t := range targets.TargetMap() {
+			_ = t.Close()
+		}
+	}
+
 	return err
 }
 
 // GetNotificationTargets registers and initializes all notification
 // targets, returns error if any.
-func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, rootCAs *x509.CertPool) (*event.TargetList, error) {
-	return RegisterNotificationTargets(cfg, doneCh, rootCAs, false)
+func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport) (*event.TargetList, error) {
+	test := false
+	return RegisterNotificationTargets(cfg, doneCh, transport, nil, test)
 }
 
 // RegisterNotificationTargets - returns TargetList which contains enabled targets in serverConfig.
@@ -54,8 +65,18 @@ func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, rootCAs *
 // * Add a new target in pkg/event/target package.
 // * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
 // * Handle the configuration in this function to create/add into TargetList.
-func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, rootCAs *x509.CertPool, test bool) (*event.TargetList, error) {
-	targetList := event.NewTargetList()
+func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool) (targetList *event.TargetList, registerErr error) {
+	targetList = event.NewTargetList()
+
+	// Automatially close all connections when an error occur
+	defer func() {
+		if registerErr != nil {
+			for _, t := range targetList.TargetMap() {
+				_ = t.Close()
+			}
+		}
+	}()
+
 	if err := checkValidNotificationKeys(cfg); err != nil {
 		return nil, err
 	}
@@ -75,7 +96,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		return nil, err
 	}
 
-	mqttTargets, err := GetNotifyMQTT(cfg[config.NotifyMQTTSubSys], rootCAs)
+	mqttTargets, err := GetNotifyMQTT(cfg[config.NotifyMQTTSubSys], transport.TLSClientConfig.RootCAs)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +106,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		return nil, err
 	}
 
-	natsTargets, err := GetNotifyNATS(cfg[config.NotifyNATSSubSys], rootCAs)
+	natsTargets, err := GetNotifyNATS(cfg[config.NotifyNATSSubSys], transport.TLSClientConfig.RootCAs)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +126,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		return nil, err
 	}
 
-	webhookTargets, err := GetNotifyWebhook(cfg[config.NotifyWebhookSubSys], rootCAs)
+	webhookTargets, err := GetNotifyWebhook(cfg[config.NotifyWebhookSubSys], transport)
 	if err != nil {
 		return nil, err
 	}
@@ -114,13 +135,9 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewAMQPTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewAMQPTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
-		}
-		if test {
-			newTarget.Close()
-			continue
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
@@ -131,14 +148,10 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewElasticsearchTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewElasticsearchTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
 
-		}
-		if test {
-			newTarget.Close()
-			continue
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
@@ -149,14 +162,10 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if !args.Enable {
 			continue
 		}
-		args.TLS.RootCAs = rootCAs
-		newTarget, err := target.NewKafkaTarget(id, args, doneCh, logger.LogOnceIf)
+		args.TLS.RootCAs = transport.TLSClientConfig.RootCAs
+		newTarget, err := target.NewKafkaTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
-		}
-		if test {
-			newTarget.Close()
-			continue
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
@@ -167,14 +176,10 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if !args.Enable {
 			continue
 		}
-		args.RootCAs = rootCAs
-		newTarget, err := target.NewMQTTTarget(id, args, doneCh, logger.LogOnceIf)
+		args.RootCAs = transport.TLSClientConfig.RootCAs
+		newTarget, err := target.NewMQTTTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
-		}
-		if test {
-			newTarget.Close()
-			continue
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
@@ -185,13 +190,9 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewMySQLTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewMySQLTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
-		}
-		if test {
-			newTarget.Close()
-			continue
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
@@ -202,13 +203,9 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewNATSTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewNATSTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
-		}
-		if test {
-			newTarget.Close()
-			continue
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
@@ -219,13 +216,9 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewNSQTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewNSQTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
-		}
-		if test {
-			newTarget.Close()
-			continue
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
@@ -236,13 +229,9 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewPostgreSQLTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewPostgreSQLTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
-		}
-		if test {
-			newTarget.Close()
-			continue
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
@@ -253,13 +242,9 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewRedisTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewRedisTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
 			return nil, err
-		}
-		if test {
-			newTarget.Close()
-			continue
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			return nil, err
@@ -270,17 +255,24 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, root
 		if !args.Enable {
 			continue
 		}
-		args.RootCAs = rootCAs
-		newTarget, err := target.NewWebhookTarget(id, args, doneCh, logger.LogOnceIf)
+		newTarget, err := target.NewWebhookTarget(id, args, doneCh, logger.LogOnceIf, transport, test)
 		if err != nil {
 			return nil, err
 		}
-		if test {
-			newTarget.Close()
-			continue
-		}
 		if err := targetList.Add(newTarget); err != nil {
 			return nil, err
+		}
+	}
+
+	if test {
+		// Verify if user is trying to disable already configured
+		// notification targets, based on their target IDs
+		for _, targetID := range targetIDs {
+			if !targetList.Exists(targetID) {
+				return nil, config.Errorf(
+					"Unable to disable configured targets '%v'",
+					targetID)
+			}
 		}
 	}
 
@@ -417,7 +409,7 @@ func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs
 		}
 		kafkaBrokers := env.Get(brokersEnv, kv.Get(target.KafkaBrokers))
 		if len(kafkaBrokers) == 0 {
-			return nil, config.Errorf(config.SafeModeKind, "kafka 'brokers' cannot be empty")
+			return nil, config.Errorf("kafka 'brokers' cannot be empty")
 		}
 		for _, s := range strings.Split(kafkaBrokers, config.ValueSeparator) {
 			var host *xnet.Host
@@ -1426,7 +1418,8 @@ var (
 )
 
 // GetNotifyWebhook - returns a map of registered notification 'webhook' targets
-func GetNotifyWebhook(webhookKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[string]target.WebhookArgs, error) {
+func GetNotifyWebhook(webhookKVS map[string]config.KVS, transport *http.Transport) (
+	map[string]target.WebhookArgs, error) {
 	webhookTargets := make(map[string]target.WebhookArgs)
 	for k, kv := range mergeTargets(webhookKVS, target.EnvWebhookEnable, DefaultWebhookKVS) {
 		enableEnv := target.EnvWebhookEnable
@@ -1468,7 +1461,7 @@ func GetNotifyWebhook(webhookKVS map[string]config.KVS, rootCAs *x509.CertPool) 
 		webhookArgs := target.WebhookArgs{
 			Enable:     enabled,
 			Endpoint:   *url,
-			RootCAs:    rootCAs,
+			Transport:  transport,
 			AuthToken:  env.Get(authEnv, kv.Get(target.WebhookAuthToken)),
 			QueueDir:   env.Get(queueDirEnv, kv.Get(target.WebhookQueueDir)),
 			QueueLimit: uint64(queueLimit),

@@ -35,7 +35,7 @@ Recommended virtual memory settings are as follows.
 - *`swappiness`* : This parameter controls the relative weight given to swapping out runtime memory, as opposed to dropping pages from the system page cache. It takes values from 0 to 100, both inclusive. We recommend setting it to 10.
 
 ```sh
-sysctl -w vm.swappiness=10
+sysctl -w vm.swappiness=1
 ```
 
 - *`dirty_background_ratio`*: This is the percentage of system memory that can be filled with `dirty` pages, i.e. memory pages that still need to be written to disk. We recommend writing the data to the disk as soon as possible. To do this, set the `dirty_background_ratio` to 1.
@@ -57,6 +57,8 @@ echo madvise | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
 ```
 
 Also, set `transparent_hugepage=madvise` on your kernel command line (e.g. in /etc/default/grub) to persistently set this value.
+
+All these system level tunings are conveniently packaged in [shell script](https://github.com/minio/minio/blob/master/docs/deployment/kernel-tuning/sysctl.sh). Please review the shell script for our recommendations.
 
 ## Tuning Scheduler
 

@@ -20,13 +20,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"strings"
 	"sync"
 
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bucket/policy"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -362,49 +362,14 @@ func (sys *IAMSys) Init(objAPI ObjectLayer) error {
 	}
 	sys.Unlock()
 
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-
-	// Migrating IAM needs a retry mechanism for
-	// the following reasons:
-	//  - Read quorum is lost just after the initialization
-	//    of the object layer.
-	for range newRetryTimerSimple(doneCh) {
-		// Migrate IAM configuration
-		if err := sys.doIAMConfigMigration(objAPI); err != nil {
-			if err == errDiskNotFound ||
-				strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-				strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-				logger.Info("Waiting for IAM subsystem to be initialized..")
-				continue
-			}
-			return err
-		}
-		break
+	// Migrate IAM configuration
+	if err := sys.doIAMConfigMigration(objAPI); err != nil {
+		return err
 	}
 
 	sys.store.watch(sys)
 
-	// Initializing IAM needs a retry mechanism for
-	// the following reasons:
-	//  - Read quorum is lost just after the initialization
-	//    of the object layer.
-	for range newRetryTimerSimple(doneCh) {
-		// Load IAMSys once during boot. Need to pass in
-		// objAPI as server has not yet initialized.
-		if err := sys.store.loadAll(sys, objAPI); err != nil {
-			if err == errDiskNotFound ||
-				strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-				strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-				logger.Info("Waiting for IAM subsystem to be initialized..")
-				continue
-			}
-			return err
-		}
-		break
-	}
-
-	return nil
+	return sys.store.loadAll(sys, objAPI)
 }
 
 // DeletePolicy - deletes a canned policy from backend or etcd.
@@ -433,6 +398,38 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 	}
 
 	delete(sys.iamPolicyDocsMap, policyName)
+
+	// Delete user-policy mappings that will no longer apply
+	var usersToDel []string
+	var isUserSTS []bool
+	for u, mp := range sys.iamUserPolicyMap {
+		if mp.Policy == policyName {
+			usersToDel = append(usersToDel, u)
+			cr, ok := sys.iamUsersMap[u]
+			if !ok {
+				// This case cannot happen
+				return errNoSuchUser
+			}
+			// User is from STS if the creds are temporary
+			isSTS := cr.IsTemp()
+			isUserSTS = append(isUserSTS, isSTS)
+		}
+	}
+	for i, u := range usersToDel {
+		sys.policyDBSet(u, "", isUserSTS[i], false)
+	}
+
+	// Delete group-policy mappings that will no longer apply
+	var groupsToDel []string
+	for g, mp := range sys.iamGroupPolicyMap {
+		if mp.Policy == policyName {
+			groupsToDel = append(groupsToDel, g)
+		}
+	}
+	for _, g := range groupsToDel {
+		sys.policyDBSet(g, "", false, true)
+	}
+
 	return err
 }
 
@@ -509,6 +506,19 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 		return errServerNotInitialized
 	}
 
+	// First we remove the user from their groups.
+	userInfo, getErr := sys.GetUserInfo(accessKey)
+	if getErr != nil {
+		return getErr
+	}
+	for _, group := range userInfo.MemberOf {
+		removeErr := sys.RemoveUsersFromGroup(group, []string{accessKey})
+		if removeErr != nil {
+			return removeErr
+		}
+	}
+
+	// Next we can remove the user from memory and IAM store
 	sys.Lock()
 	defer sys.Unlock()
 
@@ -600,18 +610,38 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 	}
 
 	for k, v := range sys.iamUsersMap {
-		users[k] = madmin.UserInfo{
-			PolicyName: sys.iamUserPolicyMap[k].Policy,
-			Status: func() madmin.AccountStatus {
-				if v.IsValid() {
-					return madmin.AccountEnabled
-				}
-				return madmin.AccountDisabled
-			}(),
+		if !v.IsTemp() {
+			users[k] = madmin.UserInfo{
+				PolicyName: sys.iamUserPolicyMap[k].Policy,
+				Status: func() madmin.AccountStatus {
+					if v.IsValid() {
+						return madmin.AccountEnabled
+					}
+					return madmin.AccountDisabled
+				}(),
+			}
 		}
 	}
 
 	return users, nil
+}
+
+// IsTempUser - returns if given key is a temporary user.
+func (sys *IAMSys) IsTempUser(name string) (bool, error) {
+	objectAPI := newObjectLayerWithoutSafeModeFn()
+	if objectAPI == nil {
+		return false, errServerNotInitialized
+	}
+
+	sys.RLock()
+	defer sys.RUnlock()
+
+	creds, found := sys.iamUsersMap[name]
+	if !found {
+		return false, errNoSuchUser
+	}
+
+	return creds.IsTemp(), nil
 }
 
 // GetUserInfo - get info on a user.
@@ -634,6 +664,10 @@ func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
 	creds, found := sys.iamUsersMap[name]
 	if !found {
 		return u, errNoSuchUser
+	}
+
+	if creds.IsTemp() {
+		return u, errIAMActionNotAllowed
 	}
 
 	u = madmin.UserInfo{
@@ -670,6 +704,10 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 	cred, ok := sys.iamUsersMap[accessKey]
 	if !ok {
 		return errNoSuchUser
+	}
+
+	if cred.IsTemp() {
+		return errIAMActionNotAllowed
 	}
 
 	uinfo := newUserIdentity(auth.Credentials{
@@ -719,9 +757,15 @@ func (sys *IAMSys) SetUser(accessKey string, uinfo madmin.UserInfo) error {
 		return errServerNotInitialized
 	}
 
+	cr, ok := sys.iamUsersMap[accessKey]
+	if cr.IsTemp() && ok {
+		return errIAMActionNotAllowed
+	}
+
 	if err := sys.store.saveUserIdentity(accessKey, false, u); err != nil {
 		return err
 	}
+
 	sys.iamUsersMap[accessKey] = u.Credentials
 
 	// Set policy if specified.
@@ -794,9 +838,12 @@ func (sys *IAMSys) AddUsersToGroup(group string, members []string) error {
 
 	// Validate that all members exist.
 	for _, member := range members {
-		_, ok := sys.iamUsersMap[member]
+		cr, ok := sys.iamUsersMap[member]
 		if !ok {
 			return errNoSuchUser
+		}
+		if cr.IsTemp() {
+			return errIAMActionNotAllowed
 		}
 	}
 
@@ -856,9 +903,12 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 
 	// Validate that all members exist.
 	for _, member := range members {
-		_, ok := sys.iamUsersMap[member]
+		cr, ok := sys.iamUsersMap[member]
 		if !ok {
 			return errNoSuchUser
+		}
+		if cr.IsTemp() {
+			return errIAMActionNotAllowed
 		}
 	}
 
@@ -1029,17 +1079,17 @@ func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
 	return sys.policyDBSet(name, policy, false, isGroup)
 }
 
-// policyDBSet - sets a policy for user in the policy db. Assumes that
-// caller has sys.Lock().
+// policyDBSet - sets a policy for user in the policy db. Assumes that caller
+// has sys.Lock(). If policy == "", then policy mapping is removed.
 func (sys *IAMSys) policyDBSet(name, policy string, isSTS, isGroup bool) error {
 	if sys.store == nil {
 		return errServerNotInitialized
 	}
 
-	if name == "" || policy == "" {
+	if name == "" {
 		return errInvalidArgument
 	}
-	if _, ok := sys.iamPolicyDocsMap[policy]; !ok {
+	if _, ok := sys.iamPolicyDocsMap[policy]; !ok && policy != "" {
 		return errNoSuchPolicy
 	}
 
@@ -1055,6 +1105,20 @@ func (sys *IAMSys) policyDBSet(name, policy string, isSTS, isGroup bool) error {
 		}
 	}
 
+	// Handle policy mapping removal
+	if policy == "" {
+		if err := sys.store.deleteMappedPolicy(name, isSTS, isGroup); err != nil {
+			return err
+		}
+		if !isGroup {
+			delete(sys.iamUserPolicyMap, name)
+		} else {
+			delete(sys.iamGroupPolicyMap, name)
+		}
+		return nil
+	}
+
+	// Handle policy mapping set/update
 	mp := newMappedPolicy(policy)
 	if err := sys.store.saveMappedPolicy(name, isSTS, isGroup, mp); err != nil {
 		return err
@@ -1065,6 +1129,109 @@ func (sys *IAMSys) policyDBSet(name, policy string, isSTS, isGroup bool) error {
 		sys.iamGroupPolicyMap[name] = mp
 	}
 	return nil
+}
+
+var iamAccountReadAccessActions = iampolicy.NewActionSet(
+	iampolicy.ListMultipartUploadPartsAction,
+	iampolicy.ListBucketMultipartUploadsAction,
+	iampolicy.ListBucketAction,
+	iampolicy.HeadBucketAction,
+	iampolicy.GetObjectAction,
+	iampolicy.GetBucketLocationAction,
+
+	// iampolicy.ListAllMyBucketsAction,
+)
+
+var iamAccountWriteAccessActions = iampolicy.NewActionSet(
+	iampolicy.AbortMultipartUploadAction,
+	iampolicy.CreateBucketAction,
+	iampolicy.PutObjectAction,
+	iampolicy.DeleteObjectAction,
+	iampolicy.DeleteBucketAction,
+)
+
+var iamAccountOtherAccessActions = iampolicy.NewActionSet(
+	iampolicy.BypassGovernanceModeAction,
+	iampolicy.BypassGovernanceRetentionAction,
+	iampolicy.PutObjectRetentionAction,
+	iampolicy.GetObjectRetentionAction,
+	iampolicy.GetObjectLegalHoldAction,
+	iampolicy.PutObjectLegalHoldAction,
+	iampolicy.GetBucketObjectLockConfigurationAction,
+	iampolicy.PutBucketObjectLockConfigurationAction,
+
+	iampolicy.ListenBucketNotificationAction,
+
+	iampolicy.PutBucketLifecycleAction,
+	iampolicy.GetBucketLifecycleAction,
+
+	iampolicy.PutBucketNotificationAction,
+	iampolicy.GetBucketNotificationAction,
+
+	iampolicy.PutBucketPolicyAction,
+	iampolicy.DeleteBucketPolicyAction,
+	iampolicy.GetBucketPolicyAction,
+)
+
+// GetAccountAccess iterates over all policies documents associated to a user
+// and returns if the user has read and/or write access to any resource.
+func (sys *IAMSys) GetAccountAccess(accountName, bucket string) (rd, wr, o bool) {
+	policies, err := sys.PolicyDBGet(accountName, false)
+	if err != nil {
+		logger.LogIf(context.Background(), err)
+		return false, false, false
+	}
+
+	if len(policies) == 0 {
+		// No policy found.
+		return false, false, false
+	}
+
+	// Policies were found, evaluate all of them.
+	sys.RLock()
+	defer sys.RUnlock()
+
+	var availablePolicies []iampolicy.Policy
+	for _, pname := range policies {
+		p, found := sys.iamPolicyDocsMap[pname]
+		if found {
+			availablePolicies = append(availablePolicies, p)
+		}
+	}
+
+	if len(availablePolicies) == 0 {
+		return false, false, false
+	}
+
+	combinedPolicy := availablePolicies[0]
+	for i := 1; i < len(availablePolicies); i++ {
+		combinedPolicy.Statements = append(combinedPolicy.Statements,
+			availablePolicies[i].Statements...)
+	}
+
+	allActions := iampolicy.NewActionSet(iampolicy.AllActions)
+	for _, st := range combinedPolicy.Statements {
+		// Ignore if this is not an allow policy statement
+		if st.Effect != policy.Allow {
+			continue
+		}
+		// Fast calculation if there is s3:* permissions to any resource
+		if !st.Actions.Intersection(allActions).IsEmpty() {
+			rd, wr, o = true, true, true
+			break
+		}
+		if !st.Actions.Intersection(iamAccountReadAccessActions).IsEmpty() {
+			rd = true
+		}
+		if !st.Actions.Intersection(iamAccountWriteAccessActions).IsEmpty() {
+			wr = true
+		}
+		if !st.Actions.Intersection(iamAccountOtherAccessActions).IsEmpty() {
+			o = true
+		}
+	}
+
+	return
 }
 
 // PolicyDBGet - gets policy set on a user or group. Since a user may
@@ -1193,14 +1360,14 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 		return combinedPolicy.IsAllowed(args)
 	}
 
-	pname, ok := args.Claims[iamPolicyName()]
+	pnameSlice, ok := args.GetPolicies(iamPolicyClaimName())
 	if !ok {
-		// When claims are set, it should have a "policy" field.
+		// When claims are set, it should have a policy claim field.
 		return false
 	}
-	pnameStr, ok := pname.(string)
-	if !ok {
-		// When claims has "policy" field, it should be string.
+
+	// When claims are set, it should have a policy claim field.
+	if len(pnameSlice) == 0 {
 		return false
 	}
 
@@ -1215,7 +1382,7 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 	}
 	name := mp.Policy
 
-	if pnameStr != name {
+	if pnameSlice[0] != name {
 		// When claims has a policy, it should match the
 		// policy of args.AccountName which server remembers.
 		// if not reject such requests.
@@ -1224,36 +1391,36 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 
 	// Now check if we have a sessionPolicy.
 	spolicy, ok := args.Claims[iampolicy.SessionPolicyName]
-	if !ok {
-		// Sub policy not set, this is most common since subPolicy
-		// is optional, use the top level policy only.
-		p, ok := sys.iamPolicyDocsMap[pnameStr]
-		return ok && p.IsAllowed(args)
+	if ok {
+		spolicyStr, ok := spolicy.(string)
+		if !ok {
+			// Sub policy if set, should be a string reject
+			// malformed/malicious requests.
+			return false
+		}
+
+		// Check if policy is parseable.
+		subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
+		if err != nil {
+			// Log any error in input session policy config.
+			logger.LogIf(context.Background(), err)
+			return false
+		}
+
+		// Policy without Version string value reject it.
+		if subPolicy.Version == "" {
+			return false
+		}
+
+		// Sub policy is set and valid.
+		p, ok := sys.iamPolicyDocsMap[pnameSlice[0]]
+		return ok && p.IsAllowed(args) && subPolicy.IsAllowed(args)
 	}
 
-	spolicyStr, ok := spolicy.(string)
-	if !ok {
-		// Sub policy if set, should be a string reject
-		// malformed/malicious requests.
-		return false
-	}
-
-	// Check if policy is parseable.
-	subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
-	if err != nil {
-		// Log any error in input session policy config.
-		logger.LogIf(context.Background(), err)
-		return false
-	}
-
-	// Policy without Version string value reject it.
-	if subPolicy.Version == "" {
-		return false
-	}
-
-	// Sub policy is set and valid.
-	p, ok := sys.iamPolicyDocsMap[pnameStr]
-	return ok && p.IsAllowed(args) && subPolicy.IsAllowed(args)
+	// Sub policy not set, this is most common since subPolicy
+	// is optional, use the top level policy only.
+	p, ok := sys.iamPolicyDocsMap[pnameSlice[0]]
+	return ok && p.IsAllowed(args)
 }
 
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
@@ -1272,8 +1439,13 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 		return true
 	}
 
-	// With claims set, we should do STS related checks and validation.
-	if _, ok := args.Claims["aud"]; ok {
+	// If the credential is temporary, perform STS related checks.
+	ok, err := sys.IsTempUser(args.AccountName)
+	if err != nil {
+		logger.LogIf(context.Background(), err)
+		return false
+	}
+	if ok {
 		return sys.IsAllowedSTS(args)
 	}
 
@@ -1324,6 +1496,10 @@ func setDefaultCannedPolicies(policies map[string]iampolicy.Policy) {
 	if !ok {
 		policies["readwrite"] = iampolicy.ReadWrite
 	}
+	_, ok = policies["diagnostics"]
+	if !ok {
+		policies["diagnostics"] = iampolicy.AdminDiagnostics
+	}
 }
 
 // buildUserGroupMemberships - builds the memberships map. IMPORTANT:
@@ -1354,9 +1530,6 @@ func (sys *IAMSys) updateGroupMembershipsMap(group string, gi *GroupInfo) {
 // removeGroupFromMembershipsMap - removes the group from every member
 // in the cache. IMPORTANT: Assumes sys.Lock() is held by caller.
 func (sys *IAMSys) removeGroupFromMembershipsMap(group string) {
-	if _, ok := sys.iamUserGroupMemberships[group]; !ok {
-		return
-	}
 	for member, groups := range sys.iamUserGroupMemberships {
 		if !groups.Contains(group) {
 			continue

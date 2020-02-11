@@ -50,5 +50,11 @@ var (
 			Optional:    true,
 			Type:        "sentence",
 		},
+		config.HelpKV{
+			Key:         After,
+			Description: `minimum accesses before caching an object`,
+			Optional:    true,
+			Type:        "number",
+		},
 	}
 )

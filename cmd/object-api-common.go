@@ -91,9 +91,6 @@ func deleteBucketMetadata(ctx context.Context, bucket string, objAPI ObjectLayer
 
 	// Delete notification config, if present - ignore any errors.
 	removeNotificationConfig(ctx, objAPI, bucket)
-
-	// Delete listener config, if present - ignore any errors.
-	removeListenerConfig(ctx, objAPI, bucket)
 }
 
 // Depending on the disk type network or local, initialize storage API.
@@ -233,13 +230,6 @@ func removeNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucket st
 	return objAPI.DeleteObject(ctx, minioMetaBucket, ncPath)
 }
 
-// Remove listener configuration from storage layer. Used when a bucket is deleted.
-func removeListenerConfig(ctx context.Context, objAPI ObjectLayer, bucket string) error {
-	// make the path
-	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
-	return objAPI.DeleteObject(ctx, minioMetaBucket, lcPath)
-}
-
 func listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {
 	endWalkCh := make(chan struct{})
 	defer close(endWalkCh)
@@ -365,7 +355,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 		recursive = false
 	}
 
-	walkResultCh, endWalkCh := tpool.Release(listParams{bucket, recursive, marker, prefix, false})
+	walkResultCh, endWalkCh := tpool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, endWalkCh)
@@ -426,7 +416,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 	}
 
 	// Save list routine for the next marker if we haven't reached EOF.
-	params := listParams{bucket, recursive, nextMarker, prefix, false}
+	params := listParams{bucket, recursive, nextMarker, prefix}
 	if !eof {
 		tpool.Set(params, walkResultCh, endWalkCh)
 	}
@@ -449,4 +439,27 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 
 	// Success.
 	return result, nil
+}
+
+// Fetch the histogram interval corresponding
+// to the passed object size.
+func objSizeToHistoInterval(usize uint64) string {
+	size := int64(usize)
+
+	var interval objectHistogramInterval
+	for _, interval = range ObjectsHistogramIntervals {
+		var cond1, cond2 bool
+		if size >= interval.start || interval.start == -1 {
+			cond1 = true
+		}
+		if size <= interval.end || interval.end == -1 {
+			cond2 = true
+		}
+		if cond1 && cond2 {
+			return interval.name
+		}
+	}
+
+	// This would be the last element of histogram intervals
+	return interval.name
 }

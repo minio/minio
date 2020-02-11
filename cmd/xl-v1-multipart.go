@@ -76,34 +76,6 @@ func (xl xlObjects) removeObjectPart(bucket, object, uploadID, partName string) 
 	g.Wait()
 }
 
-// statPart - returns fileInfo structure for a successful stat on part file.
-func (xl xlObjects) statPart(ctx context.Context, bucket, object, uploadID, partName string) (fileInfo FileInfo, err error) {
-	var ignoredErrs []error
-	partNamePath := path.Join(xl.getUploadIDDir(bucket, object, uploadID), partName)
-	for _, disk := range xl.getLoadBalancedDisks() {
-		if disk == nil {
-			ignoredErrs = append(ignoredErrs, errDiskNotFound)
-			continue
-		}
-		fileInfo, err = disk.StatFile(minioMetaMultipartBucket, partNamePath)
-		if err == nil {
-			return fileInfo, nil
-		}
-		// For any reason disk was deleted or goes offline we continue to next disk.
-		if IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
-			ignoredErrs = append(ignoredErrs, err)
-			continue
-		}
-		// Error is not ignored, return right here.
-		logger.LogIf(ctx, err)
-		return FileInfo{}, err
-	}
-	// If all errors were ignored, reduce to maximal occurrence
-	// based on the read quorum.
-	readQuorum := len(xl.getDisks()) / 2
-	return FileInfo{}, reduceReadQuorumErrs(ctx, ignoredErrs, nil, readQuorum)
-}
-
 // commitXLMetadata - commit `xl.json` from source prefix to destination prefix in the given slice of disks.
 func commitXLMetadata(ctx context.Context, disks []StorageAPI, srcBucket, srcPrefix, dstBucket, dstPrefix string, quorum int) ([]StorageAPI, error) {
 	srcJSONFile := path.Join(srcPrefix, xlMetaJSONFile)
@@ -353,7 +325,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 		defer xl.bp.Put(buffer)
 	case size < blockSizeV1:
 		// No need to allocate fully blockSizeV1 buffer if the incoming data is smaller.
-		buffer = make([]byte, size, 2*size)
+		buffer = make([]byte, size, 2*size+int64(erasure.parityBlocks+erasure.dataBlocks-1))
 	}
 
 	if len(buffer) > int(xlMeta.Erasure.BlockSize) {
@@ -446,17 +418,12 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 		return pi, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
 
-	fi, err := xl.statPart(ctx, bucket, object, uploadID, partSuffix)
-	if err != nil {
-		return pi, toObjectErr(err, minioMetaMultipartBucket, partSuffix)
-	}
-
 	// Return success.
 	return PartInfo{
 		PartNumber:   partID,
-		LastModified: fi.ModTime,
+		LastModified: xlMeta.Stat.ModTime,
 		ETag:         md5hex,
-		Size:         fi.Size,
+		Size:         xlMeta.Stat.Size,
 		ActualSize:   data.ActualSize(),
 	}, nil
 }
@@ -531,15 +498,10 @@ func (xl xlObjects) ListObjectParts(ctx context.Context, bucket, object, uploadI
 	}
 	count := maxParts
 	for _, part := range parts {
-		var fi FileInfo
-		fi, err = xl.statPart(ctx, bucket, object, uploadID, part.Name)
-		if err != nil {
-			return result, toObjectErr(err, minioMetaBucket, path.Join(uploadID, part.Name))
-		}
 		result.Parts = append(result.Parts, PartInfo{
 			PartNumber:   part.Number,
 			ETag:         part.ETag,
-			LastModified: fi.ModTime,
+			LastModified: xlValidMeta.Stat.ModTime,
 			Size:         part.Size,
 		})
 		count--
@@ -584,8 +546,10 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 
 	uploadIDPath := xl.getUploadIDDir(bucket, object, uploadID)
 
+	storageDisks := xl.getDisks()
+
 	// Read metadata associated with the object from all disks.
-	partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), minioMetaMultipartBucket, uploadIDPath)
+	partsMetadata, errs := readAllXLMetadata(ctx, storageDisks, minioMetaMultipartBucket, uploadIDPath)
 
 	// get Quorum for this object
 	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
@@ -598,7 +562,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		return oi, toObjectErr(reducedErr, bucket, object)
 	}
 
-	onlineDisks, modTime := listOnlineDisks(xl.getDisks(), partsMetadata, errs)
+	onlineDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
 
 	// Calculate full object size.
 	var objectSize int64
@@ -665,7 +629,6 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		// Add incoming parts.
 		xlMeta.Parts[i] = ObjectPartInfo{
 			Number:     part.PartNumber,
-			ETag:       part.ETag,
 			Size:       currentXLMeta.Parts[partIdx].Size,
 			Name:       fmt.Sprintf("part.%d", part.PartNumber),
 			ActualSize: currentXLMeta.Parts[partIdx].ActualSize,
@@ -708,7 +671,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 
 	if xl.isObject(bucket, object) {
 		// Deny if WORM is enabled
-		if globalWORMEnabled {
+		if isWORMEnabled(bucket) {
 			if _, err := xl.getObjectInfo(ctx, bucket, object); err == nil {
 				return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
 			}
@@ -743,8 +706,15 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	}
 
 	// Rename the multipart object to final location.
-	if _, err = rename(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, bucket, object, true, writeQuorum, nil); err != nil {
+	if onlineDisks, err = rename(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath, bucket, object, true, writeQuorum, nil); err != nil {
 		return oi, toObjectErr(err, bucket, object)
+	}
+
+	// Check if there is any offline disk and add it to the MRF list
+	for i := 0; i < len(onlineDisks); i++ {
+		if onlineDisks[i] == nil || storageDisks[i] == nil {
+			xl.addPartialUpload(bucket, object)
+		}
 	}
 
 	// Success, return object info.

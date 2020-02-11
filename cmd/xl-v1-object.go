@@ -25,6 +25,7 @@ import (
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -559,7 +560,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		defer xl.bp.Put(buffer)
 	case size < blockSizeV1:
 		// No need to allocate fully blockSizeV1 buffer if the incoming data is smaller.
-		buffer = make([]byte, size, 2*size)
+		buffer = make([]byte, size, 2*size+int64(erasure.parityBlocks+erasure.dataBlocks-1))
 	}
 
 	if len(buffer) > int(xlMeta.Erasure.BlockSize) {
@@ -611,7 +612,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 
 	if xl.isObject(bucket, object) {
 		// Deny if WORM is enabled
-		if globalWORMEnabled {
+		if isWORMEnabled(bucket) {
 			if _, err := xl.getObjectInfo(ctx, bucket, object); err == nil {
 				return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
 			}
@@ -626,7 +627,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		// NOTE: Do not use online disks slice here: the reason is that existing object should be purged
 		// regardless of `xl.json` status and rolled back in case of errors. Also allow renaming the
 		// existing object if it is not present in quorum disks so users can overwrite stale objects.
-		_, err = rename(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, newUniqueID, true, writeQuorum, []error{errFileNotFound})
+		_, err = rename(ctx, storageDisks, bucket, object, minioMetaTmpBucket, newUniqueID, true, writeQuorum, []error{errFileNotFound})
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
@@ -646,9 +647,17 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	}
 
 	// Rename the successfully written temporary object to final location.
-	_, err = rename(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, true, writeQuorum, nil)
-	if err != nil {
+	if onlineDisks, err = rename(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, true, writeQuorum, nil); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	// Whether a disk was initially or becomes offline
+	// during this upload, send it to the MRF list.
+	for i := 0; i < len(onlineDisks); i++ {
+		if onlineDisks[i] == nil || storageDisks[i] == nil {
+			xl.addPartialUpload(bucket, object)
+			break
+		}
 	}
 
 	// Object info is the same in all disks, so we can pick the first meta
@@ -729,8 +738,7 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string, wri
 // object.
 func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects []string, errs []error, writeQuorums []int, isDirs []bool) ([]error, error) {
 	var tmpObjs = make([]string, len(objects))
-	var disks = xl.getDisks()
-
+	disks := xl.getDisks()
 	if bucket == minioMetaTmpBucket {
 		copy(tmpObjs, objects)
 	} else {
@@ -744,10 +752,10 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 			// that a non found object in a given disk as a success since it already
 			// confirms that the object doesn't have a part in that disk (already removed)
 			if isDirs[i] {
-				disks, err = rename(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, tmpObjs[i], true, writeQuorums[i],
+				disks, err = rename(ctx, disks, bucket, object, minioMetaTmpBucket, tmpObjs[i], true, writeQuorums[i],
 					[]error{errFileNotFound, errFileAccessDenied})
 			} else {
-				disks, err = rename(ctx, xl.getDisks(), bucket, object, minioMetaTmpBucket, tmpObjs[i], true, writeQuorums[i],
+				disks, err = rename(ctx, disks, bucket, object, minioMetaTmpBucket, tmpObjs[i], true, writeQuorums[i],
 					[]error{errFileNotFound})
 			}
 			if err != nil {
@@ -767,13 +775,13 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 			continue
 		}
 		delObjErrs[index], opErrs[index] = cleanupObjectsBulk(disk, minioMetaTmpBucket, tmpObjs, errs)
-		if opErrs[index] == errVolumeNotFound {
+		if opErrs[index] == errVolumeNotFound || opErrs[index] == errFileNotFound {
 			opErrs[index] = nil
 		}
 	}
 
 	// Return errors if any during deletion
-	if err := reduceWriteQuorumErrs(ctx, opErrs, objectOpIgnoredErrs, len(xl.getDisks())/2+1); err != nil {
+	if err := reduceWriteQuorumErrs(ctx, opErrs, objectOpIgnoredErrs, len(disks)/2+1); err != nil {
 		return nil, err
 	}
 
@@ -782,7 +790,7 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 		if errs[objIndex] != nil {
 			continue
 		}
-		listErrs := make([]error, len(xl.getDisks()))
+		listErrs := make([]error, len(disks))
 		for i := range delObjErrs {
 			if delObjErrs[i] != nil {
 				listErrs[i] = delObjErrs[i][objIndex]
@@ -959,4 +967,70 @@ func (xl xlObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continuat
 		Prefixes:              loi.Prefixes,
 	}
 	return listObjectsV2Info, err
+}
+
+// Send the successful but partial upload, however ignore
+// if the channel is blocked by other items.
+func (xl xlObjects) addPartialUpload(bucket, key string) {
+	select {
+	case xl.mrfUploadCh <- partialUpload{bucket: bucket, object: key}:
+	default:
+	}
+}
+
+// PutObjectTag - replace or add tags to an existing object
+func (xl xlObjects) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
+	disks := xl.getDisks()
+
+	// Read metadata associated with the object from all disks.
+	metaArr, errs := readAllXLMetadata(ctx, disks, bucket, object)
+
+	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
+	if err != nil {
+		return err
+	}
+
+	for i, xlMeta := range metaArr {
+		// clean xlMeta.Meta of tag key, before updating the new tags
+		delete(xlMeta.Meta, xhttp.AmzObjectTagging)
+		// Don't update for empty tags
+		if tags != "" {
+			xlMeta.Meta[xhttp.AmzObjectTagging] = tags
+		}
+		metaArr[i].Meta = xlMeta.Meta
+	}
+
+	tempObj := mustGetUUID()
+
+	// Write unique `xl.json` for each disk.
+	if disks, err = writeUniqueXLMetadata(ctx, disks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+
+	// Atomically rename `xl.json` from tmp location to destination for each disk.
+	if _, err = renameXLMetadata(ctx, disks, minioMetaTmpBucket, tempObj, bucket, object, writeQuorum); err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+
+	return nil
+}
+
+// DeleteObjectTag - delete object tags from an existing object
+func (xl xlObjects) DeleteObjectTag(ctx context.Context, bucket, object string) error {
+	return xl.PutObjectTag(ctx, bucket, object, "")
+}
+
+// GetObjectTag - get object tags from an existing object
+func (xl xlObjects) GetObjectTag(ctx context.Context, bucket, object string) (tagging.Tagging, error) {
+	// GetObjectInfo will return tag value as well
+	oi, err := xl.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
+	if err != nil {
+		return tagging.Tagging{}, err
+	}
+
+	tags, err := tagging.FromString(oi.UserTags)
+	if err != nil {
+		return tagging.Tagging{}, err
+	}
+	return tags, nil
 }

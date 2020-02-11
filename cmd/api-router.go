@@ -105,26 +105,31 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		bucket.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(collectAPIStats("abortmultipartupload", httpTraceAll(api.AbortMultipartUploadHandler))).Queries("uploadId", "{uploadId:.*}")
 		// GetObjectACL - this is a dummy call.
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(collectAPIStats("getobjectacl", httpTraceHdrs(api.GetObjectACLHandler))).Queries("acl", "")
-		// GetObjectTagging - this is a dummy call.
+		// GetObjectTagging
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(collectAPIStats("getobjecttagging", httpTraceHdrs(api.GetObjectTaggingHandler))).Queries("tagging", "")
+		// PutObjectTagging
+		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(collectAPIStats("putobjecttagging", httpTraceHdrs(api.PutObjectTaggingHandler))).Queries("tagging", "")
+		// DeleteObjectTagging
+		bucket.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(collectAPIStats("deleteobjecttagging", httpTraceHdrs(api.DeleteObjectTaggingHandler))).Queries("tagging", "")
 		// SelectObjectContent
 		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(collectAPIStats("selectobjectcontent", httpTraceHdrs(api.SelectObjectContentHandler))).Queries("select", "").Queries("select-type", "2")
 		// GetObjectRetention
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(collectAPIStats("getobjectretention", httpTraceHdrs(api.GetObjectRetentionHandler))).Queries("retention", "")
+		// GetObjectLegalHold
+		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(collectAPIStats("getobjectlegalhold", httpTraceHdrs(api.GetObjectLegalHoldHandler))).Queries("legal-hold", "")
 		// GetObject
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(collectAPIStats("getobject", httpTraceHdrs(api.GetObjectHandler)))
 		// CopyObject
 		bucket.Methods(http.MethodPut).Path("/{object:.+}").HeadersRegexp(xhttp.AmzCopySource, ".*?(\\/|%2F).*?").HandlerFunc(collectAPIStats("copyobject", httpTraceAll(api.CopyObjectHandler)))
 		// PutObjectRetention
 		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(collectAPIStats("putobjectretention", httpTraceHdrs(api.PutObjectRetentionHandler))).Queries("retention", "")
+		// PutObjectLegalHold
+		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(collectAPIStats("putobjectlegalhold", httpTraceHdrs(api.PutObjectLegalHoldHandler))).Queries("legal-hold", "")
+
 		// PutObject
 		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(collectAPIStats("putobject", httpTraceHdrs(api.PutObjectHandler)))
 		// DeleteObject
 		bucket.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(collectAPIStats("deleteobject", httpTraceAll(api.DeleteObjectHandler)))
-		// PutObjectLegalHold
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(collectAPIStats("putobjectlegalhold", httpTraceHdrs(api.PutObjectLegalHoldHandler))).Queries("legal-hold", "")
-		// GetObjectLegalHold
-		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(collectAPIStats("getobjectlegalhold", httpTraceHdrs(api.GetObjectLegalHoldHandler))).Queries("legal-hold", "")
 
 		/// Bucket operations
 		// GetBucketLocation
@@ -133,6 +138,8 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketpolicy", httpTraceAll(api.GetBucketPolicyHandler))).Queries("policy", "")
 		// GetBucketLifecycle
 		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketlifecycle", httpTraceAll(api.GetBucketLifecycleHandler))).Queries("lifecycle", "")
+		// GetBucketEncryption
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketencryption", httpTraceAll(api.GetBucketEncryptionHandler))).Queries("encryption", "")
 
 		// Dummy Bucket Calls
 		// GetBucketACL -- this is a dummy call.
@@ -178,6 +185,9 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("listobjectsv1", httpTraceAll(api.ListObjectsV1Handler)))
 		// PutBucketLifecycle
 		bucket.Methods(http.MethodPut).HandlerFunc(collectAPIStats("putbucketlifecycle", httpTraceAll(api.PutBucketLifecycleHandler))).Queries("lifecycle", "")
+		// PutBucketEncryption
+		bucket.Methods(http.MethodPut).HandlerFunc(collectAPIStats("putbucketencryption", httpTraceAll(api.PutBucketEncryptionHandler))).Queries("encryption", "")
+
 		// PutBucketPolicy
 		bucket.Methods(http.MethodPut).HandlerFunc(collectAPIStats("putbucketpolicy", httpTraceAll(api.PutBucketPolicyHandler))).Queries("policy", "")
 
@@ -199,6 +209,8 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		bucket.Methods(http.MethodDelete).HandlerFunc(collectAPIStats("deletebucketpolicy", httpTraceAll(api.DeleteBucketPolicyHandler))).Queries("policy", "")
 		// DeleteBucketLifecycle
 		bucket.Methods(http.MethodDelete).HandlerFunc(collectAPIStats("deletebucketlifecycle", httpTraceAll(api.DeleteBucketLifecycleHandler))).Queries("lifecycle", "")
+		// DeleteBucketEncryption
+		bucket.Methods(http.MethodDelete).HandlerFunc(collectAPIStats("deletebucketencryption", httpTraceAll(api.DeleteBucketEncryptionHandler))).Queries("encryption", "")
 		// DeleteBucket
 		bucket.Methods(http.MethodDelete).HandlerFunc(collectAPIStats("deletebucket", httpTraceAll(api.DeleteBucketHandler)))
 	}

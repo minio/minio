@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2015-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -36,11 +35,12 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -56,8 +56,12 @@ const (
 // - Range over all the available buckets
 // - Check if a bucket has an entry in etcd backend
 // -- If no, make an entry
-// -- If yes, check if the IP of entry matches local IP. This means entry is for this instance.
-// -- If IP of the entry doesn't match, this means entry is for another instance. Log an error to console.
+// -- If yes, check if the entry matches local IP check if we
+//    need to update the entry then proceed to update
+// -- If yes, check if the IP of entry matches local IP.
+//    This means entry is for this instance.
+// -- If IP of the entry doesn't match, this means entry is
+//    for another instance. Log an error to console.
 func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 	if len(buckets) == 0 {
 		return
@@ -70,26 +74,45 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 		return
 	}
 
-	bucketSet := set.NewStringSet()
+	bucketsSet := set.NewStringSet()
+	bucketsToBeUpdated := set.NewStringSet()
+	bucketsInConflict := set.NewStringSet()
+	for _, bucket := range buckets {
+		bucketsSet.Add(bucket.Name)
+		r, ok := dnsBuckets[bucket.Name]
+		if !ok {
+			bucketsToBeUpdated.Add(bucket.Name)
+			continue
+		}
+		if !globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
+			if globalDomainIPs.Difference(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
+				// No difference in terms of domainIPs and nothing
+				// has changed so we don't change anything on the etcd.
+				continue
+			}
+			// if domain IPs intersect then it won't be an empty set.
+			// such an intersection means that bucket exists on etcd.
+			// but if we do see a difference with local domain IPs with
+			// hostSlice from etcd then we should update with newer
+			// domainIPs, we proceed to do that here.
+			bucketsToBeUpdated.Add(bucket.Name)
+			continue
+		}
+		// No IPs seem to intersect, this means that bucket exists but has
+		// different IP addresses perhaps from a different deployment.
+		// bucket names are globally unique in federation at a given
+		// path prefix, name collision is not allowed. We simply log
+		// an error and continue.
+		bucketsInConflict.Add(bucket.Name)
+	}
 
-	// Add buckets that are not registered with the DNS
+	// Add/update buckets that are not registered with the DNS
 	g := errgroup.WithNErrs(len(buckets))
-	for index := range buckets {
-		bucketSet.Add(buckets[index].Name)
+	bucketsToBeUpdatedSlice := bucketsToBeUpdated.ToSlice()
+	for index := range bucketsToBeUpdatedSlice {
 		index := index
 		g.Go(func() error {
-			r, gerr := globalDNSConfig.Get(buckets[index].Name)
-			if gerr != nil {
-				if gerr == dns.ErrNoEntriesFound {
-					return globalDNSConfig.Put(buckets[index].Name)
-				}
-				return gerr
-			}
-			if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
-				// There is already an entry for this bucket, with all IP addresses different. This indicates a bucket name collision. Log an error and continue.
-				return fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket. Use one of these IP addresses %v to access the bucket", buckets[index].Name, globalDomainIPs.ToSlice())
-			}
-			return nil
+			return globalDNSConfig.Put(bucketsToBeUpdatedSlice[index])
 		}, index)
 	}
 
@@ -99,34 +122,26 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 		}
 	}
 
-	g = errgroup.WithNErrs(len(dnsBuckets))
-	// Remove buckets that are in DNS for this server, but aren't local
-	for index := range dnsBuckets {
-		index := index
-		g.Go(func() error {
-			// This is a local bucket that exists, so we can continue
-			if bucketSet.Contains(dnsBuckets[index].Key) {
-				return nil
-			}
-
-			// This is not for our server, so we can continue
-			hostPort := net.JoinHostPort(dnsBuckets[index].Host, string(dnsBuckets[index].Port))
-			if globalDomainIPs.Intersection(set.CreateStringSet(hostPort)).IsEmpty() {
-				return nil
-			}
-
-			// We go to here, so we know the bucket no longer exists, but is registered in DNS to this server
-			if err := globalDNSConfig.DeleteRecord(dnsBuckets[index]); err != nil {
-				return fmt.Errorf("Failed to remove DNS entry for %s due to %w", dnsBuckets[index].Key, err)
-			}
-
-			return nil
-		}, index)
+	for _, bucket := range bucketsInConflict.ToSlice() {
+		logger.LogIf(context.Background(), fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket. Use one of these IP addresses %v to access the bucket", bucket, globalDomainIPs.ToSlice()))
 	}
 
-	for _, err := range g.Wait() {
-		if err != nil {
-			logger.LogIf(context.Background(), err)
+	// Remove buckets that are in DNS for this server, but aren't local
+	for bucket, records := range dnsBuckets {
+		if bucketsSet.Contains(bucket) {
+			continue
+		}
+
+		if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(records)...)).IsEmpty() {
+			// This is not for our server, so we can continue
+			continue
+		}
+
+		// We go to here, so we know the bucket no longer exists,
+		// but is registered in DNS to this server
+		if err = globalDNSConfig.Delete(bucket); err != nil {
+			logger.LogIf(context.Background(), fmt.Errorf("Failed to remove DNS entry for %s due to %w",
+				bucket, err))
 		}
 	}
 }
@@ -258,22 +273,17 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 	// If etcd, dns federation configured list buckets from etcd.
 	var bucketsInfo []BucketInfo
-	if globalDNSConfig != nil {
+	if globalDNSConfig != nil && globalBucketFederation {
 		dnsBuckets, err := globalDNSConfig.List()
 		if err != nil && err != dns.ErrNoEntriesFound {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		bucketSet := set.NewStringSet()
-		for _, dnsRecord := range dnsBuckets {
-			if bucketSet.Contains(dnsRecord.Key) {
-				continue
-			}
+		for _, dnsRecords := range dnsBuckets {
 			bucketsInfo = append(bucketsInfo, BucketInfo{
-				Name:    dnsRecord.Key,
-				Created: dnsRecord.CreationDate,
+				Name:    dnsRecords[0].Key,
+				Created: dnsRecords[0].CreationDate,
 			})
-			bucketSet.Add(dnsRecord.Key)
 		}
 	} else {
 		// Invoke the list buckets.
@@ -484,13 +494,13 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	bucket := vars["bucket"]
 
 	objectLockEnabled := false
-	if _, found := r.Header[http.CanonicalHeaderKey("x-amz-bucket-object-lock-enabled")]; found {
-		if r.Header.Get("x-amz-bucket-object-lock-enabled") != "true" {
+	if vs, found := r.Header[http.CanonicalHeaderKey("x-amz-bucket-object-lock-enabled")]; found {
+		v := strings.ToLower(strings.Join(vs, ""))
+		if v != "true" && v != "false" {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL, guessIsBrowserReq(r))
 			return
 		}
-
-		objectLockEnabled = true
+		objectLockEnabled = v == "true"
 	}
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.CreateBucketAction, bucket, ""); s3Error != ErrNone {
@@ -513,7 +523,8 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	if globalDNSConfig != nil {
-		if _, err := globalDNSConfig.Get(bucket); err != nil {
+		sr, err := globalDNSConfig.Get(bucket)
+		if err != nil {
 			if err == dns.ErrNoEntriesFound {
 				// Proceed to creating a bucket.
 				if err = objectAPI.MakeBucketWithLocation(ctx, bucket, location); err != nil {
@@ -546,7 +557,15 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 			return
 
 		}
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBucketAlreadyOwnedByYou), r.URL, guessIsBrowserReq(r))
+		apiErr := ErrBucketAlreadyExists
+		if !globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(sr)...)).IsEmpty() {
+			apiErr = ErrBucketAlreadyOwnedByYou
+		}
+		// No IPs seem to intersect, this means that bucket exists but has
+		// different IP addresses perhaps from a different deployment.
+		// bucket names are globally unique in federation at a given
+		// path prefix, name collision is not allowed. Return appropriate error.
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(apiErr), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -557,14 +576,14 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if objectLockEnabled {
+	if objectLockEnabled && !globalIsGateway {
 		configFile := path.Join(bucketConfigPrefix, bucket, bucketObjectLockEnabledConfigFile)
 		if err = saveConfig(ctx, objectAPI, configFile, []byte(bucketObjectLockEnabledConfig)); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		globalBucketObjectLockConfig.Set(bucket, Retention{})
-		globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, Retention{})
+		globalBucketObjectLockConfig.Set(bucket, objectlock.Retention{})
+		globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, objectlock.Retention{})
 	}
 
 	// Make sure to add Location information here only for bucket
@@ -738,8 +757,10 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	pReader := NewPutObjReader(rawReader, nil, nil)
 	var objectEncryptionKey []byte
 
+	// Check if bucket encryption is enabled
+	_, encEnabled := globalBucketSSEConfigSys.Get(bucket)
 	// This request header needs to be set prior to setting ObjectOptions
-	if globalAutoEncryption && !crypto.SSEC.IsRequested(r.Header) {
+	if (globalAutoEncryption || encEnabled) && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 	// get gateway encryption options
@@ -985,7 +1006,7 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	config, err := parseObjectLockConfig(r.Body)
+	config, err := objectlock.ParseObjectLockConfig(r.Body)
 	if err != nil {
 		apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
 		apiErr.Description = err.Error()
@@ -997,7 +1018,7 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 	if err != nil {
 		aerr := toAPIError(ctx, err)
 		if err == errConfigNotFound {
-			aerr = errorCodes.ToAPIErr(ErrMethodNotAllowed)
+			aerr = errorCodes.ToAPIErr(ErrObjectLockConfigurationNotAllowed)
 		}
 		writeErrorResponse(ctx, w, aerr, r.URL, guessIsBrowserReq(r))
 		return
@@ -1079,7 +1100,7 @@ func (api objectAPIHandlers) GetBucketObjectLockConfigHandler(w http.ResponseWri
 			return
 		}
 
-		if configData, err = xml.Marshal(newObjectLockConfig()); err != nil {
+		if configData, err = xml.Marshal(objectlock.NewObjectLockConfig()); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}

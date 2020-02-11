@@ -19,19 +19,15 @@ package target
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
@@ -53,12 +49,12 @@ const (
 
 // WebhookArgs - Webhook target arguments.
 type WebhookArgs struct {
-	Enable     bool           `json:"enable"`
-	Endpoint   xnet.URL       `json:"endpoint"`
-	AuthToken  string         `json:"authToken"`
-	RootCAs    *x509.CertPool `json:"-"`
-	QueueDir   string         `json:"queueDir"`
-	QueueLimit uint64         `json:"queueLimit"`
+	Enable     bool            `json:"enable"`
+	Endpoint   xnet.URL        `json:"endpoint"`
+	AuthToken  string          `json:"authToken"`
+	Transport  *http.Transport `json:"-"`
+	QueueDir   string          `json:"queueDir"`
+	QueueLimit uint64          `json:"queueLimit"`
 }
 
 // Validate WebhookArgs fields
@@ -93,20 +89,29 @@ func (target WebhookTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - Return true if target is up and active
+func (target *WebhookTarget) IsActive() (bool, error) {
+	u, pErr := xnet.ParseHTTPURL(target.args.Endpoint.String())
+	if pErr != nil {
+		return false, pErr
+	}
+	if dErr := u.DialHTTP(nil); dErr != nil {
+		if xnet.IsNetworkOrHostDown(dErr) {
+			return false, errNotConnected
+		}
+		return false, dErr
+	}
+	return true, nil
+}
+
 // Save - saves the events to the store if queuestore is configured, which will be replayed when the wenhook connection is active.
 func (target *WebhookTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	u, pErr := xnet.ParseHTTPURL(target.args.Endpoint.String())
-	if pErr != nil {
-		return pErr
-	}
-	if dErr := u.DialHTTP(); dErr != nil {
-		if xnet.IsNetworkOrHostDown(dErr) {
-			return errNotConnected
-		}
-		return dErr
+	_, err := target.IsActive()
+	if err != nil {
+		return err
 	}
 	return target.send(eventData)
 }
@@ -137,14 +142,14 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 
 	resp, err := target.httpClient.Do(req)
 	if err != nil {
+		target.Close()
 		return err
 	}
-
-	// FIXME: log returned error. ignore time being.
+	defer resp.Body.Close()
 	io.Copy(ioutil.Discard, resp.Body)
-	_ = resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		target.Close()
 		return fmt.Errorf("sending event failed with %v", resp.Status)
 	}
 
@@ -153,17 +158,10 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 
 // Send - reads an event from store and sends it to webhook.
 func (target *WebhookTarget) Send(eventKey string) error {
-	u, pErr := xnet.ParseHTTPURL(target.args.Endpoint.String())
-	if pErr != nil {
-		return pErr
+	_, err := target.IsActive()
+	if err != nil {
+		return err
 	}
-	if dErr := u.DialHTTP(); dErr != nil {
-		if xnet.IsNetworkOrHostDown(dErr) {
-			return errNotConnected
-		}
-		return dErr
-	}
-
 	eventData, eErr := target.store.Get(eventKey)
 	if eErr != nil {
 		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
@@ -187,11 +185,13 @@ func (target *WebhookTarget) Send(eventKey string) error {
 
 // Close - does nothing and available for interface compatibility.
 func (target *WebhookTarget) Close() error {
+	// Close idle connection with "keep-alive" states
+	target.httpClient.CloseIdleConnections()
 	return nil
 }
 
 // NewWebhookTarget - creates new Webhook target.
-func NewWebhookTarget(id string, args WebhookArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*WebhookTarget, error) {
+func NewWebhookTarget(id string, args WebhookArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), transport *http.Transport, test bool) (*WebhookTarget, error) {
 
 	var store Store
 
@@ -207,21 +207,12 @@ func NewWebhookTarget(id string, args WebhookArgs, doneCh <-chan struct{}, logge
 		id:   event.TargetID{ID: id, Name: "webhook"},
 		args: args,
 		httpClient: &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{RootCAs: args.RootCAs},
-				DialContext: (&net.Dialer{
-					Timeout:   5 * time.Second,
-					KeepAlive: 5 * time.Second,
-				}).DialContext,
-				TLSHandshakeTimeout:   3 * time.Second,
-				ResponseHeaderTimeout: 3 * time.Second,
-				ExpectContinueTimeout: 2 * time.Second,
-			},
+			Transport: transport,
 		},
 		store: store,
 	}
 
-	if target.store != nil {
+	if target.store != nil && !test {
 		// Replays the events from the store.
 		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
 		// Start replaying events from the store.

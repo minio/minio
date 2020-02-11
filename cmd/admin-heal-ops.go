@@ -577,39 +577,38 @@ func (h *healSequence) queueHealTask(path string, healType madmin.HealItemType) 
 func (h *healSequence) healItemsFromSourceCh() error {
 	h.lastHealActivity = UTCNow()
 
-	// Start healing the config prefix.
-	if err := h.healMinioSysMeta(minioConfigPrefix)(); err != nil {
+	bucketsOnly := true // heal buckets only, not objects.
+	if err := h.healItems(bucketsOnly); err != nil {
 		logger.LogIf(h.ctx, err)
 	}
 
-	// Start healing the bucket config prefix.
-	if err := h.healMinioSysMeta(bucketConfigPrefix)(); err != nil {
-		logger.LogIf(h.ctx, err)
-	}
+	for {
+		select {
+		case path := <-h.sourceCh:
+			var itemType madmin.HealItemType
+			switch {
+			case path == nopHeal:
+				continue
+			case path == SlashSeparator:
+				itemType = madmin.HealItemMetadata
+			case !strings.Contains(path, SlashSeparator):
+				itemType = madmin.HealItemBucket
+			default:
+				itemType = madmin.HealItemObject
+			}
 
-	for path := range h.sourceCh {
+			if err := h.queueHealTask(path, itemType); err != nil {
+				logger.LogIf(h.ctx, err)
+			}
 
-		var itemType madmin.HealItemType
-		switch {
-		case path == nopHeal:
-			continue
-		case path == SlashSeparator:
-			itemType = madmin.HealItemMetadata
-		case !strings.Contains(path, SlashSeparator):
-			itemType = madmin.HealItemBucket
-		default:
-			itemType = madmin.HealItemObject
+			h.scannedItemsCount++
+			h.lastHealActivity = UTCNow()
+		case <-h.traverseAndHealDoneCh:
+			return nil
+		case <-GlobalServiceDoneCh:
+			return nil
 		}
-
-		if err := h.queueHealTask(path, itemType); err != nil {
-			logger.LogIf(h.ctx, err)
-		}
-
-		h.scannedItemsCount++
-		h.lastHealActivity = UTCNow()
 	}
-
-	return nil
 }
 
 func (h *healSequence) healFromSourceCh() {
@@ -617,7 +616,7 @@ func (h *healSequence) healFromSourceCh() {
 	close(h.traverseAndHealDoneCh)
 }
 
-func (h *healSequence) healItems() error {
+func (h *healSequence) healItems(bucketsOnly bool) error {
 	// Start with format healing
 	if err := h.healDiskFormat(); err != nil {
 		return err
@@ -633,8 +632,13 @@ func (h *healSequence) healItems() error {
 		return err
 	}
 
+	// Start healing the background ops prefix.
+	if err := h.healMinioSysMeta(backgroundOpsMetaPrefix)(); err != nil {
+		logger.LogIf(h.ctx, err)
+	}
+
 	// Heal buckets and objects
-	return h.healBuckets()
+	return h.healBuckets(bucketsOnly)
 }
 
 // traverseAndHeal - traverses on-disk data and performs healing
@@ -645,7 +649,8 @@ func (h *healSequence) healItems() error {
 // has to wait until a safe point is reached, such as between scanning
 // two objects.
 func (h *healSequence) traverseAndHeal() {
-	if err := h.healItems(); err != nil {
+	bucketsOnly := false // Heals buckets and objects also.
+	if err := h.healItems(bucketsOnly); err != nil {
 		if h.isQuitting() {
 			err = errHealStopSignalled
 		}
@@ -701,14 +706,14 @@ func (h *healSequence) healDiskFormat() error {
 }
 
 // healBuckets - check for all buckets heal or just particular bucket.
-func (h *healSequence) healBuckets() error {
+func (h *healSequence) healBuckets(bucketsOnly bool) error {
 	if h.isQuitting() {
 		return errHealStopSignalled
 	}
 
 	// 1. If a bucket was specified, heal only the bucket.
 	if h.bucket != "" {
-		return h.healBucket(h.bucket)
+		return h.healBucket(h.bucket, bucketsOnly)
 	}
 
 	// Get current object layer instance.
@@ -723,7 +728,7 @@ func (h *healSequence) healBuckets() error {
 	}
 
 	for _, bucket := range buckets {
-		if err = h.healBucket(bucket.Name); err != nil {
+		if err = h.healBucket(bucket.Name, bucketsOnly); err != nil {
 			return err
 		}
 	}
@@ -732,7 +737,7 @@ func (h *healSequence) healBuckets() error {
 }
 
 // healBucket - traverses and heals given bucket
-func (h *healSequence) healBucket(bucket string) error {
+func (h *healSequence) healBucket(bucket string, bucketsOnly bool) error {
 	// Get current object layer instance.
 	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil {
@@ -741,6 +746,10 @@ func (h *healSequence) healBucket(bucket string) error {
 
 	if err := h.queueHealTask(bucket, madmin.HealItemBucket); err != nil {
 		return err
+	}
+
+	if bucketsOnly {
+		return nil
 	}
 
 	if !h.settings.Recursive {
@@ -766,14 +775,14 @@ func (h *healSequence) healBucket(bucket string) error {
 
 // healObject - heal the given object and record result
 func (h *healSequence) healObject(bucket, object string) error {
-	if h.isQuitting() {
-		return errHealStopSignalled
-	}
-
 	// Get current object layer instance.
 	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil {
 		return errServerNotInitialized
+	}
+
+	if h.isQuitting() {
+		return errHealStopSignalled
 	}
 
 	return h.queueHealTask(pathJoin(bucket, object), madmin.HealItemObject)

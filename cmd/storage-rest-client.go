@@ -28,6 +28,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
 	"sync/atomic"
 
 	"github.com/minio/minio/cmd/http"
@@ -46,9 +47,9 @@ func isNetworkError(err error) bool {
 	return false
 }
 
-// Converts rpc.ServerError to underlying error. This function is
-// written so that the storageAPI errors are consistent across network
-// disks as well.
+// Converts network error to storageErr. This function is
+// written so that the storageAPI errors are consistent
+// across network disks.
 func toStorageErr(err error) error {
 	if err == nil {
 		return nil
@@ -110,14 +111,13 @@ type storageRESTClient struct {
 	endpoint   Endpoint
 	restClient *rest.Client
 	connected  int32
-	lastError  error
 	diskID     string
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is makred disconnected
 // permanently. The only way to restore the storage connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
-func (client *storageRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
+func (client *storageRESTClient) call(method string, values url.Values, body io.Reader, length int64) (io.ReadCloser, error) {
 	if !client.IsOnline() {
 		return nil, errDiskNotFound
 	}
@@ -125,16 +125,17 @@ func (client *storageRESTClient) call(method string, values url.Values, body io.
 		values = make(url.Values)
 	}
 	values.Set(storageRESTDiskID, client.diskID)
-	respBody, err = client.restClient.Call(method, values, body, length)
+	respBody, err := client.restClient.Call(method, values, body, length)
 	if err == nil {
 		return respBody, nil
 	}
-	client.lastError = err
-	if isNetworkError(err) || err.Error() == errDiskStale.Error() {
+
+	err = toStorageErr(err)
+	if err == errDiskNotFound {
 		atomic.StoreInt32(&client.connected, 0)
 	}
 
-	return nil, toStorageErr(err)
+	return nil, err
 }
 
 // Stringer provides a canonicalized representation of network device.
@@ -147,9 +148,30 @@ func (client *storageRESTClient) IsOnline() bool {
 	return atomic.LoadInt32(&client.connected) == 1
 }
 
-// LastError - returns the network error if any.
-func (client *storageRESTClient) LastError() error {
-	return client.lastError
+func (client *storageRESTClient) Hostname() string {
+	return client.endpoint.Host
+}
+
+func (client *storageRESTClient) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, error) {
+	respBody, err := client.call(storageRESTMethodCrawlAndGetDataUsage, nil, nil, -1)
+	defer http.DrainBody(respBody)
+	if err != nil {
+		return DataUsageInfo{}, err
+	}
+	reader := bufio.NewReader(respBody)
+	for {
+		b, err := reader.ReadByte()
+		if err != nil {
+			return DataUsageInfo{}, err
+		}
+		if b != ' ' {
+			reader.UnreadByte()
+			break
+		}
+	}
+	var usageInfo DataUsageInfo
+	err = gob.NewDecoder(reader).Decode(&usageInfo)
+	return usageInfo, err
 }
 
 func (client *storageRESTClient) SetDiskID(id string) {
@@ -165,6 +187,15 @@ func (client *storageRESTClient) DiskInfo() (info DiskInfo, err error) {
 	defer http.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
 	return info, err
+}
+
+// MakeVolBulk - create multiple volumes in a bulk operation.
+func (client *storageRESTClient) MakeVolBulk(volumes ...string) (err error) {
+	values := make(url.Values)
+	values.Set(storageRESTVolumes, strings.Join(volumes, ","))
+	respBody, err := client.call(storageRESTMethodMakeVolBulk, values, nil, -1)
+	defer http.DrainBody(respBody)
+	return err
 }
 
 // MakeVol - create a volume on a remote disk.
@@ -214,7 +245,7 @@ func (client *storageRESTClient) AppendFile(volume, path string, buffer []byte) 
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	reader := bytes.NewBuffer(buffer)
+	reader := bytes.NewReader(buffer)
 	respBody, err := client.call(storageRESTMethodAppendFile, values, reader, -1)
 	defer http.DrainBody(respBody)
 	return err
@@ -374,10 +405,14 @@ func (client *storageRESTClient) DeleteFileBulk(volume string, paths []string) (
 	}
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
+
+	var buffer bytes.Buffer
 	for _, path := range paths {
-		values.Add(storageRESTFilePath, path)
+		buffer.WriteString(path)
+		buffer.WriteString("\n")
 	}
-	respBody, err := client.call(storageRESTMethodDeleteFileBulk, values, nil, -1)
+
+	respBody, err := client.call(storageRESTMethodDeleteFileBulk, values, &buffer, -1)
 	defer http.DrainBody(respBody)
 
 	if err != nil {

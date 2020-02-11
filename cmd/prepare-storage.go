@@ -18,12 +18,18 @@ package cmd
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"sync"
 	"time"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -160,6 +166,7 @@ func validateXLFormats(format *formatXLV3, formats []*formatXLV3, endpoints Endp
 	if len(format.XL.Sets[0]) != drivesPerSet {
 		return fmt.Errorf("Current backend format is inconsistent with input args (%s), Expected drive count per set %d, got %d", endpoints, len(format.XL.Sets[0]), drivesPerSet)
 	}
+
 	return nil
 }
 
@@ -171,16 +178,62 @@ func validateXLFormats(format *formatXLV3, formats []*formatXLV3, endpoints Endp
 // https://github.com/minio/minio/issues/5667
 var errXLV3ThisEmpty = fmt.Errorf("XL format version 3 has This field empty")
 
+// IsServerResolvable - checks if the endpoint is resolvable
+// by sending a naked HTTP request with liveness checks.
+func IsServerResolvable(endpoint Endpoint) error {
+	serverURL := &url.URL{
+		Scheme: endpoint.Scheme,
+		Host:   endpoint.Host,
+		Path:   path.Join(healthCheckPathPrefix, healthCheckLivenessPath),
+	}
+
+	var tlsConfig *tls.Config
+	if globalIsSSL {
+		tlsConfig = &tls.Config{
+			ServerName: endpoint.Hostname(),
+			RootCAs:    globalRootCAs,
+			NextProtos: []string{"http/1.1"}, // Force http1.1
+		}
+	}
+
+	req, err := http.NewRequest(http.MethodGet, serverURL.String(), nil)
+	if err != nil {
+		return err
+	}
+
+	httpClient := &http.Client{
+		Transport: newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout, rest.DefaultRESTTimeout)(),
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		httpClient.CloseIdleConnections()
+		return err
+	}
+	defer xhttp.DrainBody(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return StorageErr(resp.Status)
+	}
+	return nil
+}
+
 // connect to list of endpoints and load all XL disk formats, validate the formats are correct
 // and are in quorum, if no formats are found attempt to initialize all of them for the first
 // time. additionally make sure to close all the disks used in this attempt.
-func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints, setCount, drivesPerSet int, deploymentID string) (*formatXLV3, error) {
+func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints, zoneCount, setCount, drivesPerSet int, deploymentID string) (*formatXLV3, error) {
 	// Initialize all storage disks
 	storageDisks, errs := initStorageDisksWithErrors(endpoints)
 	defer closeStorageDisks(storageDisks)
+
 	for i, err := range errs {
-		if err != nil && err != errDiskNotFound {
-			return nil, fmt.Errorf("Disk %s: %w", endpoints[i], err)
+		if err != nil {
+			if err != errDiskNotFound {
+				return nil, fmt.Errorf("Disk %s: %w", endpoints[i], err)
+			}
+			if retryCount >= 5 {
+				logger.Info("Unable to connect to %s: %v\n", endpoints[i], IsServerResolvable(endpoints[i]))
+			}
 		}
 	}
 
@@ -190,17 +243,6 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	for i, sErr := range sErrs {
 		if _, ok := formatCriticalErrors[sErr]; ok {
 			return nil, fmt.Errorf("Disk %s: %w", endpoints[i], sErr)
-		}
-	}
-
-	// Connect to all storage disks, a connection failure will be
-	// only logged after some retries.
-	for _, disk := range storageDisks {
-		if disk != nil {
-			connectErr := disk.LastError()
-			if connectErr != nil && retryCount >= 5 {
-				logger.Info("Unable to connect to %s: %v\n", disk.String(), connectErr.Error())
-			}
 		}
 	}
 
@@ -215,6 +257,9 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 
 	// All disks report unformatted we should initialized everyone.
 	if shouldInitXLDisks(sErrs) && firstDisk {
+		logger.Info("Formatting %v zone, %v set(s), %v drives per set.",
+			zoneCount, setCount, drivesPerSet)
+
 		// Initialize erasure code format on disks
 		format, err := initFormatXL(context.Background(), storageDisks, setCount, drivesPerSet, deploymentID)
 		if err != nil {
@@ -223,6 +268,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 		// Assign globalDeploymentID on first run for the
 		// minio server managing the first disk
 		globalDeploymentID = format.ID
+		return format, nil
 	}
 
 	// Return error when quorum unformatted disks - indicating we are
@@ -282,11 +328,16 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	if err = formatXLFixLocalDeploymentID(endpoints, storageDisks, format); err != nil {
 		return nil, err
 	}
+
+	// The will always recreate some directories inside .minio.sys of
+	// the local disk such as tmp, multipart and background-ops
+	initXLMetaVolumesInLocalDisks(storageDisks, formatConfigs)
+
 	return format, nil
 }
 
 // Format disks before initialization of object layer.
-func waitForFormatXL(firstDisk bool, endpoints Endpoints, setCount, drivesPerSet int, deploymentID string) (format *formatXLV3, err error) {
+func waitForFormatXL(firstDisk bool, endpoints Endpoints, zoneCount, setCount, drivesPerSet int, deploymentID string) (format *formatXLV3, err error) {
 	if len(endpoints) == 0 || setCount == 0 || drivesPerSet == 0 {
 		return nil, errInvalidArgument
 	}
@@ -299,13 +350,6 @@ func waitForFormatXL(firstDisk bool, endpoints Endpoints, setCount, drivesPerSet
 		return nil, err
 	}
 
-	// Done channel is used to close any lingering retry routine, as soon
-	// as this function returns.
-	doneCh := make(chan struct{})
-
-	// Indicate to our retry routine to exit cleanly, upon this function return.
-	defer close(doneCh)
-
 	// prepare getElapsedTime() to calculate elapsed time since we started trying formatting disks.
 	// All times are rounded to avoid showing milli, micro and nano seconds
 	formatStartTime := time.Now().Round(time.Second)
@@ -313,13 +357,16 @@ func waitForFormatXL(firstDisk bool, endpoints Endpoints, setCount, drivesPerSet
 		return time.Now().Round(time.Second).Sub(formatStartTime).String()
 	}
 
-	// Wait on the jitter retry loop.
-	retryTimerCh := newRetryTimerSimple(doneCh)
+	// Wait on each try for an update.
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	var tries int
 	for {
 		select {
-		case retryCount := <-retryTimerCh:
-			format, err := connectLoadInitFormats(retryCount, firstDisk, endpoints, setCount, drivesPerSet, deploymentID)
+		case <-ticker.C:
+			format, err := connectLoadInitFormats(tries, firstDisk, endpoints, zoneCount, setCount, drivesPerSet, deploymentID)
 			if err != nil {
+				tries++
 				switch err {
 				case errNotFirstDisk:
 					// Fresh setup, wait for first server to be up.

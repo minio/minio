@@ -20,13 +20,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
-	"fmt"
 	"path"
-	"strings"
 	"sync"
 
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/lifecycle"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 )
 
 const (
@@ -55,7 +52,7 @@ func (sys *LifecycleSys) Set(bucketName string, lifecycle lifecycle.Lifecycle) {
 }
 
 // Get - gets lifecycle config associated to a given bucket name.
-func (sys *LifecycleSys) Get(bucketName string) (lifecycle lifecycle.Lifecycle, ok bool) {
+func (sys *LifecycleSys) Get(bucketName string) (lc lifecycle.Lifecycle, ok bool) {
 	if globalIsGateway {
 		// When gateway is enabled, no cached value
 		// is used to validate life cycle policies.
@@ -63,14 +60,18 @@ func (sys *LifecycleSys) Get(bucketName string) (lifecycle lifecycle.Lifecycle, 
 		if objAPI == nil {
 			return
 		}
+
 		l, err := objAPI.GetBucketLifecycle(context.Background(), bucketName)
-		return *l, err == nil
+		if err != nil {
+			return
+		}
+		return *l, true
 	}
+
 	sys.Lock()
 	defer sys.Unlock()
-
-	l, ok := sys.bucketLifecycleMap[bucketName]
-	return l, ok
+	lc, ok = sys.bucketLifecycleMap[bucketName]
+	return
 }
 
 func saveLifecycleConfig(ctx context.Context, objAPI ObjectLayer, bucketName string, bucketLifecycle *lifecycle.Lifecycle) error {
@@ -131,32 +132,8 @@ func (sys *LifecycleSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
 		return nil
 	}
 
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-
-	// Initializing lifecycle needs a retry mechanism for
-	// the following reasons:
-	//  - Read quorum is lost just after the initialization
-	//    of the object layer.
-	retryTimerCh := newRetryTimerSimple(doneCh)
-	for {
-		select {
-		case <-retryTimerCh:
-			// Load LifecycleSys once during boot.
-			if err := sys.load(buckets, objAPI); err != nil {
-				if err == errDiskNotFound ||
-					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-					logger.Info("Waiting for lifecycle subsystem to be initialized..")
-					continue
-				}
-				return err
-			}
-			return nil
-		case <-globalOSSignalCh:
-			return fmt.Errorf("Initializing Lifecycle sub-system gracefully stopped")
-		}
-	}
+	// Load LifecycleSys once during boot.
+	return sys.load(buckets, objAPI)
 }
 
 // Loads lifecycle policies for all buckets into LifecycleSys.
@@ -176,7 +153,7 @@ func (sys *LifecycleSys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 	return nil
 }
 
-// Remove - removes policy for given bucket name.
+// Remove - removes lifecycle config for given bucket name.
 func (sys *LifecycleSys) Remove(bucketName string) {
 	sys.Lock()
 	defer sys.Unlock()

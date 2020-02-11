@@ -32,6 +32,10 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
+	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
+	"github.com/minio/minio/pkg/bucket/object/tagging"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 )
@@ -93,6 +97,8 @@ const (
 	ErrNoSuchBucket
 	ErrNoSuchBucketPolicy
 	ErrNoSuchBucketLifecycle
+	ErrNoSuchLifecycleConfiguration
+	ErrNoSuchBucketSSEConfig
 	ErrNoSuchKey
 	ErrNoSuchUpload
 	ErrNoSuchVersion
@@ -142,11 +148,13 @@ const (
 	ErrBadRequest
 	ErrKeyTooLongError
 	ErrInvalidBucketObjectLockConfiguration
+	ErrObjectLockConfigurationNotAllowed
 	ErrObjectLocked
 	ErrInvalidRetentionDate
 	ErrPastObjectLockRetainDate
 	ErrUnknownWORMModeDirective
 	ErrObjectLockInvalidHeaders
+	ErrInvalidTagDirective
 	// Add new error codes here.
 
 	// SSE-S3 related API errors
@@ -482,6 +490,16 @@ var errorCodes = errorCodeMap{
 		Description:    "The bucket lifecycle configuration does not exist",
 		HTTPStatusCode: http.StatusNotFound,
 	},
+	ErrNoSuchLifecycleConfiguration: {
+		Code:           "NoSuchLifecycleConfiguration",
+		Description:    "The lifecycle configuration does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrNoSuchBucketSSEConfig: {
+		Code:           "ServerSideEncryptionConfigurationNotFoundError",
+		Description:    "The server side encryption configuration was not found",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	ErrNoSuchKey: {
 		Code:           "NoSuchKey",
 		Description:    "The specified key does not exist.",
@@ -731,6 +749,11 @@ var errorCodes = errorCodeMap{
 		Description:    "Bucket is missing ObjectLockConfiguration",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrObjectLockConfigurationNotAllowed: {
+		Code:           "InvalidBucketState",
+		Description:    "Object Lock configuration cannot be enabled on existing buckets.",
+		HTTPStatusCode: http.StatusConflict,
+	},
 	ErrObjectLocked: {
 		Code:           "InvalidRequest",
 		Description:    "Object is WORM protected and cannot be overwritten",
@@ -820,6 +843,11 @@ var errorCodes = errorCodeMap{
 	ErrMetadataTooLarge: {
 		Code:           "InvalidArgument",
 		Description:    "Your metadata headers exceed the maximum allowed metadata size.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidTagDirective: {
+		Code:           "InvalidArgument",
+		Description:    "Unknown tag directive.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidEncryptionMethod: {
@@ -1604,14 +1632,16 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrOperationTimedOut
 	case errDiskNotFound:
 		apiErr = ErrSlowDown
-	case errInvalidRetentionDate:
+	case objectlock.ErrInvalidRetentionDate:
 		apiErr = ErrInvalidRetentionDate
-	case errPastObjectLockRetainDate:
+	case objectlock.ErrPastObjectLockRetainDate:
 		apiErr = ErrPastObjectLockRetainDate
-	case errUnknownWORMModeDirective:
+	case objectlock.ErrUnknownWORMModeDirective:
 		apiErr = ErrUnknownWORMModeDirective
-	case errObjectLockInvalidHeaders:
+	case objectlock.ErrObjectLockInvalidHeaders:
 		apiErr = ErrObjectLockInvalidHeaders
+	case objectlock.ErrMalformedXML:
+		apiErr = ErrMalformedXML
 	}
 
 	// Compression errors
@@ -1701,7 +1731,9 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	case BucketPolicyNotFound:
 		apiErr = ErrNoSuchBucketPolicy
 	case BucketLifecycleNotFound:
-		apiErr = ErrNoSuchBucketLifecycle
+		apiErr = ErrNoSuchLifecycleConfiguration
+	case BucketSSEConfigNotFound:
+		apiErr = ErrNoSuchBucketSSEConfig
 	case *event.ErrInvalidEventName:
 		apiErr = ErrEventNotification
 	case *event.ErrInvalidARN:
@@ -1726,8 +1758,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrUnsupportedNotification
 	case BackendDown:
 		apiErr = ErrBackendDown
-	case crypto.Error:
-		apiErr = ErrObjectTampered
 	case ObjectNameTooLong:
 		apiErr = ErrKeyTooLongError
 	default:
@@ -1772,9 +1802,27 @@ func toAPIError(ctx context.Context, err error) APIError {
 		// their internal error types. This code is only
 		// useful with gateway implementations.
 		switch e := err.(type) {
+		case lifecycle.Error:
+			apiErr = APIError{
+				Code:           "InvalidRequest",
+				Description:    e.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case tagging.Error:
+			apiErr = APIError{
+				Code:           "InvalidTag",
+				Description:    e.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case policy.Error:
+			apiErr = APIError{
+				Code:           "MalformedPolicy",
+				Description:    e.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
 		case crypto.Error:
 			apiErr = APIError{
-				Code:           "XKMSInternalError",
+				Code:           "XMinIOEncryptionError",
 				Description:    e.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}

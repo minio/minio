@@ -31,11 +31,13 @@ import (
 	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
+	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
+	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/lifecycle"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
-	"github.com/minio/minio/pkg/policy"
 	trace "github.com/minio/minio/pkg/trace"
 )
 
@@ -145,7 +147,7 @@ func (client *peerRESTClient) GetLocks() (locks GetLocksResp, err error) {
 }
 
 // ServerInfo - fetch server information for a remote node.
-func (client *peerRESTClient) ServerInfo() (info ServerInfoData, err error) {
+func (client *peerRESTClient) ServerInfo() (info madmin.ServerProperties, err error) {
 	respBody, err := client.call(peerRESTMethodServerInfo, nil, nil, -1)
 	if err != nil {
 		return
@@ -225,7 +227,7 @@ func (client *peerRESTClient) StartProfiling(profiler string) error {
 }
 
 // DownloadProfileData - download profiled data from a remote node.
-func (client *peerRESTClient) DownloadProfileData() (data []byte, err error) {
+func (client *peerRESTClient) DownloadProfileData() (data map[string][]byte, err error) {
 	respBody, err := client.call(peerRESTMethodDownloadProfilingData, nil, nil, -1)
 	if err != nil {
 		return
@@ -260,34 +262,6 @@ func (client *peerRESTClient) ReloadFormat(dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
-// ListenBucketNotification - send listen bucket notification to peer nodes.
-func (client *peerRESTClient) ListenBucketNotification(bucket string, eventNames []event.Name,
-	pattern string, targetID event.TargetID, addr xnet.Host) error {
-	args := listenBucketNotificationReq{
-		EventNames: eventNames,
-		Pattern:    pattern,
-		TargetID:   targetID,
-		Addr:       addr,
-	}
-
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-
-	var reader bytes.Buffer
-	err := gob.NewEncoder(&reader).Encode(args)
-	if err != nil {
-		return err
-	}
-
-	respBody, err := client.call(peerRESTMethodBucketNotificationListen, values, &reader, -1)
-	if err != nil {
-		return err
-	}
-
 	defer http.DrainBody(respBody)
 	return nil
 }
@@ -438,6 +412,37 @@ func (client *peerRESTClient) SetBucketLifecycle(bucket string, bucketLifecycle 
 	return nil
 }
 
+// RemoveBucketSSEConfig - Remove bucket encryption configuration on the peer node
+func (client *peerRESTClient) RemoveBucketSSEConfig(bucket string) error {
+	values := make(url.Values)
+	values.Set(peerRESTBucket, bucket)
+	respBody, err := client.call(peerRESTMethodBucketEncryptionRemove, values, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// SetBucketSSEConfig - Set bucket encryption configuration on the peer node
+func (client *peerRESTClient) SetBucketSSEConfig(bucket string, encConfig *bucketsse.BucketSSEConfig) error {
+	values := make(url.Values)
+	values.Set(peerRESTBucket, bucket)
+
+	var reader bytes.Buffer
+	err := gob.NewEncoder(&reader).Encode(encConfig)
+	if err != nil {
+		return err
+	}
+
+	respBody, err := client.call(peerRESTMethodBucketEncryptionSet, values, &reader, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 // PutBucketNotification - Put bucket notification on the peer node.
 func (client *peerRESTClient) PutBucketNotification(bucket string, rulesMap event.RulesMap) error {
 	values := make(url.Values)
@@ -458,7 +463,7 @@ func (client *peerRESTClient) PutBucketNotification(bucket string, rulesMap even
 }
 
 // PutBucketObjectLockConfig - PUT bucket object lock configuration.
-func (client *peerRESTClient) PutBucketObjectLockConfig(bucket string, retention Retention) error {
+func (client *peerRESTClient) PutBucketObjectLockConfig(bucket string, retention objectlock.Retention) error {
 	values := make(url.Values)
 	values.Set(peerRESTBucket, bucket)
 
@@ -675,6 +680,60 @@ func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan stru
 			}
 		}
 	}
+}
+
+func (client *peerRESTClient) doListen(listenCh chan interface{}, doneCh chan struct{}, v url.Values) {
+	// To cancel the REST request in case doneCh gets closed.
+	ctx, cancel := context.WithCancel(context.Background())
+
+	cancelCh := make(chan struct{})
+	defer close(cancelCh)
+	go func() {
+		select {
+		case <-doneCh:
+		case <-cancelCh:
+			// There was an error in the REST request.
+		}
+		cancel()
+	}()
+
+	respBody, err := client.callWithContext(ctx, peerRESTMethodListen, v, nil, -1)
+	defer http.DrainBody(respBody)
+
+	if err != nil {
+		return
+	}
+
+	dec := gob.NewDecoder(respBody)
+	for {
+		var ev event.Event
+		if err = dec.Decode(&ev); err != nil {
+			return
+		}
+		if len(ev.EventVersion) > 0 {
+			select {
+			case listenCh <- ev:
+			default:
+				// Do not block on slow receivers.
+			}
+		}
+	}
+}
+
+// Listen - listen on peers.
+func (client *peerRESTClient) Listen(listenCh chan interface{}, doneCh chan struct{}, v url.Values) {
+	go func() {
+		for {
+			client.doListen(listenCh, doneCh, v)
+			select {
+			case <-doneCh:
+				return
+			default:
+				// There was error in the REST request, retry after sometime as probably the peer is down.
+				time.Sleep(5 * time.Second)
+			}
+		}
+	}()
 }
 
 // Trace - send http trace request to peer nodes

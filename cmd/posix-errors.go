@@ -58,6 +58,11 @@ func isSysErrTooLong(err error) bool {
 	return errors.Is(err, syscall.ENAMETOOLONG)
 }
 
+// Check if the given error corresponds to the ELOOP (too many symlinks).
+func isSysErrTooManySymlinks(err error) bool {
+	return errors.Is(err, syscall.ELOOP)
+}
+
 // Check if the given error corresponds to ENOTEMPTY for unix
 // and ERROR_DIR_NOT_EMPTY for windows (directory not empty).
 func isSysErrNotEmpty(err error) bool {

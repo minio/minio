@@ -53,8 +53,11 @@ const (
 	peerRESTMethodTargetExists                 = "/targetexists"
 	peerRESTMethodSendEvent                    = "/sendevent"
 	peerRESTMethodTrace                        = "/trace"
+	peerRESTMethodListen                       = "/listen"
 	peerRESTMethodBucketLifecycleSet           = "/setbucketlifecycle"
 	peerRESTMethodBucketLifecycleRemove        = "/removebucketlifecycle"
+	peerRESTMethodBucketEncryptionSet          = "/setbucketencryption"
+	peerRESTMethodBucketEncryptionRemove       = "/removebucketencryption"
 	peerRESTMethodLog                          = "/log"
 	peerRESTMethodHardwareCPUInfo              = "/cpuhardwareinfo"
 	peerRESTMethodHardwareNetworkInfo          = "/networkhardwareinfo"
@@ -80,4 +83,9 @@ const (
 	peerRESTDryRun        = "dry-run"
 	peerRESTTraceAll      = "all"
 	peerRESTTraceErr      = "err"
+
+	peerRESTListenBucket = "bucket"
+	peerRESTListenPrefix = "prefix"
+	peerRESTListenSuffix = "suffix"
+	peerRESTListenEvents = "events"
 )

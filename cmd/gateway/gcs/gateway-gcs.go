@@ -41,9 +41,9 @@ import (
 	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/policy/condition"
 	"github.com/minio/minio/pkg/env"
-	"github.com/minio/minio/pkg/policy"
-	"github.com/minio/minio/pkg/policy/condition"
 
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
@@ -106,37 +106,19 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 PROJECTID:
-  GCS project-id should be provided if GOOGLE_APPLICATION_CREDENTIALS environmental variable is not set.
+  optional GCS project-id expected GOOGLE_APPLICATION_CREDENTIALS env is not set
 
-ENVIRONMENT VARIABLES:
-  ACCESS:
-     MINIO_ACCESS_KEY: Username or access key of GCS.
-     MINIO_SECRET_KEY: Password or secret key of GCS.
-
-  BROWSER:
-     MINIO_BROWSER: To disable web browser access, set this value to "off".
-
-  DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to MinIO host domain name.
-
-  CACHE:
-     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ",".
-     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ",".
-     MINIO_CACHE_EXPIRY: Cache expiry duration in days.
-     MINIO_CACHE_QUOTA: Maximum permitted usage of the cache in percentage (0-100).
-
-  GCS credentials file:
-     GOOGLE_APPLICATION_CREDENTIALS: Path to credentials.json
+GOOGLE_APPLICATION_CREDENTIALS:
+  path to credentials.json, generated it from here https://developers.google.com/identity/protocols/application-default-credentials
 
 EXAMPLES:
-  1. Start minio gateway server for GCS backend.
+  1. Start minio gateway server for GCS backend
      {{.Prompt}} {{.EnvVarSetCommand}} GOOGLE_APPLICATION_CREDENTIALS{{.AssignmentOperator}}/path/to/credentials.json
-     (Instructions to generate credentials : https://developers.google.com/identity/protocols/application-default-credentials)
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
      {{.Prompt}} {{.HelpName}} mygcsprojectid
 
-  2. Start minio gateway server for GCS backend with edge caching enabled.
+  2. Start minio gateway server for GCS backend with edge caching enabled
      {{.Prompt}} {{.EnvVarSetCommand}} GOOGLE_APPLICATION_CREDENTIALS{{.AssignmentOperator}}/path/to/credentials.json
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
@@ -1484,4 +1466,9 @@ func (l *gcsGateway) DeleteBucketPolicy(ctx context.Context, bucket string) erro
 // IsCompressionSupported returns whether compression is applicable for this layer.
 func (l *gcsGateway) IsCompressionSupported() bool {
 	return false
+}
+
+// IsReady returns whether the layer is ready to take requests.
+func (l *gcsGateway) IsReady(ctx context.Context) bool {
+	return minio.IsBackendOnline(ctx, l.httpClient, "https://storage.googleapis.com")
 }

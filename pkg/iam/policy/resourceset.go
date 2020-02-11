@@ -54,6 +54,24 @@ func (resourceSet ResourceSet) Add(resource Resource) {
 	resourceSet[resource] = struct{}{}
 }
 
+// Equals - checks whether given resource set is equal to current resource set or not.
+func (resourceSet ResourceSet) Equals(sresourceSet ResourceSet) bool {
+	// If length of set is not equal to length of given set, the
+	// set is not equal to given set.
+	if len(resourceSet) != len(sresourceSet) {
+		return false
+	}
+
+	// As both sets are equal in length, check each elements are equal.
+	for k := range resourceSet {
+		if _, ok := sresourceSet[k]; !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
 // Intersection - returns resources available in both ResourceSet.
 func (resourceSet ResourceSet) Intersection(sset ResourceSet) ResourceSet {
 	nset := NewResourceSet()
@@ -69,7 +87,7 @@ func (resourceSet ResourceSet) Intersection(sset ResourceSet) ResourceSet {
 // MarshalJSON - encodes ResourceSet to JSON data.
 func (resourceSet ResourceSet) MarshalJSON() ([]byte, error) {
 	if len(resourceSet) == 0 {
-		return nil, fmt.Errorf("empty resource set")
+		return nil, Errorf("empty resource set")
 	}
 
 	resources := []Resource{}
@@ -116,7 +134,7 @@ func (resourceSet *ResourceSet) UnmarshalJSON(data []byte) error {
 		}
 
 		if _, found := (*resourceSet)[resource]; found {
-			return fmt.Errorf("duplicate resource '%v' found", s)
+			return Errorf("duplicate resource '%v' found", s)
 		}
 
 		resourceSet.Add(resource)

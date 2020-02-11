@@ -26,15 +26,17 @@ type StorageAPI interface {
 	String() string
 
 	// Storage operations.
-	IsOnline() bool // Returns true if disk is online.
-	LastError() error
+	IsOnline() bool   // Returns true if disk is online.
+	Hostname() string // Returns host name if remote host.
 	Close() error
 	SetDiskID(id string)
 
 	DiskInfo() (info DiskInfo, err error)
+	CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, error)
 
 	// Volume operations.
 	MakeVol(volume string) (err error)
+	MakeVolBulk(volumes ...string) (err error)
 	ListVols() (vols []VolInfo, err error)
 	StatVol(volume string) (vol VolInfo, err error)
 	DeleteVol(volume string) (err error)

@@ -23,14 +23,14 @@ import (
 	"fmt"
 	"net/http"
 	"path"
-	"strings"
 	"sync"
 
+	jsoniter "github.com/json-iterator/go"
 	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
-	"github.com/minio/minio/pkg/policy"
 )
 
 // PolicySys - policy subsystem.
@@ -132,32 +132,8 @@ func (sys *PolicySys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
 		return nil
 	}
 
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-
-	// Initializing policy needs a retry mechanism for
-	// the following reasons:
-	//  - Read quorum is lost just after the initialization
-	//    of the object layer.
-	retryTimerCh := newRetryTimerSimple(doneCh)
-	for {
-		select {
-		case <-retryTimerCh:
-			// Load PolicySys once during boot.
-			if err := sys.load(buckets, objAPI); err != nil {
-				if err == errDiskNotFound ||
-					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-					logger.Info("Waiting for policy subsystem to be initialized..")
-					continue
-				}
-				return err
-			}
-			return nil
-		case <-globalOSSignalCh:
-			return fmt.Errorf("Initializing Policy sub-system gracefully stopped")
-		}
-	}
+	// Load PolicySys once during boot.
+	return sys.load(buckets, objAPI)
 }
 
 // NewPolicySys - creates new policy system.
@@ -275,6 +251,7 @@ func PolicyToBucketAccessPolicy(bucketPolicy *policy.Policy) (*miniogopolicy.Buc
 	}
 
 	var policyInfo miniogopolicy.BucketAccessPolicy
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(data, &policyInfo); err != nil {
 		// This should not happen because data is valid to JSON data.
 		return nil, err
@@ -292,6 +269,7 @@ func BucketAccessPolicyToPolicy(policyInfo *miniogopolicy.BucketAccessPolicy) (*
 	}
 
 	var bucketPolicy policy.Policy
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(data, &bucketPolicy); err != nil {
 		// This should not happen because data is valid to JSON data.
 		return nil, err

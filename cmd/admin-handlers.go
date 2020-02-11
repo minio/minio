@@ -19,7 +19,9 @@ package cmd
 import (
 	"context"
 	"crypto/subtle"
+	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -36,11 +38,13 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/config/notify"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/cpu"
+	"github.com/minio/minio/pkg/event/target"
 	"github.com/minio/minio/pkg/handlers"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
@@ -216,12 +220,12 @@ func (a adminAPIHandlers) ServiceActionHandler(w http.ResponseWriter, r *http.Re
 // ServerProperties holds some server information such as, version, region
 // uptime, etc..
 type ServerProperties struct {
-	Uptime       time.Duration `json:"uptime"`
-	Version      string        `json:"version"`
-	CommitID     string        `json:"commitID"`
-	DeploymentID string        `json:"deploymentID"`
-	Region       string        `json:"region"`
-	SQSARN       []string      `json:"sqsARN"`
+	Uptime       int64    `json:"uptime"`
+	Version      string   `json:"version"`
+	CommitID     string   `json:"commitID"`
+	DeploymentID string   `json:"deploymentID"`
+	Region       string   `json:"region"`
+	SQSARN       []string `json:"sqsARN"`
 }
 
 // ServerConnStats holds transferred bytes from/to the server
@@ -262,53 +266,12 @@ type ServerInfo struct {
 	Data  *ServerInfoData `json:"data"`
 }
 
-// ServerInfoHandler - GET /minio/admin/v2/info
-// ----------
-// Get server information
-func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ServerInfo")
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListServerInfoAdminAction)
-	if objectAPI == nil {
-		return
-	}
-
-	serverInfo := globalNotificationSys.ServerInfo(ctx)
-	// Once we have received all the ServerInfo from peers
-	// add the local peer server info as well.
-	serverInfo = append(serverInfo, ServerInfo{
-		Addr: getHostName(r),
-		Data: &ServerInfoData{
-			ConnStats: globalConnStats.toServerConnStats(),
-			HTTPStats: globalHTTPStats.toServerHTTPStats(),
-			Properties: ServerProperties{
-				Uptime:       UTCNow().Sub(globalBootTime),
-				Version:      Version,
-				CommitID:     CommitID,
-				DeploymentID: globalDeploymentID,
-				SQSARN:       globalNotificationSys.GetARNList(),
-				Region:       globalServerRegion,
-			},
-		},
-	})
-
-	// Marshal API response
-	jsonBytes, err := json.Marshal(serverInfo)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	// Reply with storage information (across nodes in a
-	// distributed setup) as json.
-	writeSuccessResponseJSON(w, jsonBytes)
-}
-
-// ServerInfoHandler - GET /minio/admin/v2/storageinfo
+// StorageInfoHandler - GET /minio/admin/v2/storageinfo
 // ----------
 // Get server information
 func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "StorageInfo")
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListServerInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.StorageInfoAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -326,6 +289,92 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 	// distributed setup) as json.
 	writeSuccessResponseJSON(w, jsonBytes)
 
+}
+
+// DataUsageInfoHandler - GET /minio/admin/v2/datausage
+// ----------
+// Get server/cluster data usage info
+func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "DataUsageInfo")
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.DataUsageInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	dataUsageInfoJSON, err := json.Marshal(dataUsageInfo)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, dataUsageInfoJSON)
+}
+
+func (a adminAPIHandlers) AccountingUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AccountingUsageInfo")
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.AccountingUsageInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	var accountingUsageInfo = make(map[string]madmin.BucketAccountingUsage)
+
+	buckets, err := objectAPI.ListBuckets(ctx)
+	if err != nil {
+		// writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	users, err := globalIAMSys.ListUsers()
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// Load the latest calculated data usage
+	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
+	if err != nil {
+		logger.LogIf(ctx, err)
+	}
+
+	// Calculate for each bucket, which users are allowed to access to it
+	for _, bucket := range buckets {
+		bucketUsageInfo := madmin.BucketAccountingUsage{}
+
+		// Fetch the data usage of the current bucket
+		if !dataUsageInfo.LastUpdate.IsZero() && dataUsageInfo.BucketsSizes != nil {
+			bucketUsageInfo.Size = dataUsageInfo.BucketsSizes[bucket.Name]
+		}
+
+		for user := range users {
+			rd, wr, custom := globalIAMSys.GetAccountAccess(user, bucket.Name)
+			if rd || wr || custom {
+				bucketUsageInfo.AccessList = append(bucketUsageInfo.AccessList, madmin.AccountAccess{
+					AccountName: user,
+					Read:        rd,
+					Write:       wr,
+					Custom:      custom,
+				})
+			}
+		}
+
+		accountingUsageInfo[bucket.Name] = bucketUsageInfo
+	}
+
+	usageInfoJSON, err := json.Marshal(accountingUsageInfo)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, usageInfoJSON)
 }
 
 // ServerCPULoadInfo holds informantion about cpu utilization
@@ -362,7 +411,7 @@ type ServerNetReadPerfInfo struct {
 func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PerfInfo")
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListServerInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.PerfInfoAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -533,7 +582,7 @@ type PeerLocks struct {
 func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "TopLocks")
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListServerInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.TopLocksAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -578,36 +627,50 @@ type StartProfilingResult struct {
 func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "StartProfiling")
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListServerInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ProfilingAdminAction)
 	if objectAPI == nil {
 		return
 	}
 
 	vars := mux.Vars(r)
-	profiler := vars["profilerType"]
-
+	profiles := strings.Split(vars["profilerType"], ",")
 	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	// Start profiling on remote servers.
-	hostErrs := globalNotificationSys.StartProfiling(profiler)
+	globalProfilerMu.Lock()
+	defer globalProfilerMu.Unlock()
 
-	// Start profiling locally as well.
-	{
-		if globalProfiler != nil {
-			globalProfiler.Stop()
+	if globalProfiler == nil {
+		globalProfiler = make(map[string]minioProfiler, 10)
+	}
+
+	// Stop profiler of all types if already running
+	for k, v := range globalProfiler {
+		for _, p := range profiles {
+			if p == k {
+				v.Stop()
+				delete(globalProfiler, k)
+			}
 		}
-		prof, err := startProfiler(profiler, "")
+	}
+
+	// Start profiling on remote servers.
+	var hostErrs []NotificationPeerErr
+	for _, profiler := range profiles {
+		hostErrs = append(hostErrs, globalNotificationSys.StartProfiling(profiler)...)
+
+		// Start profiling locally as well.
+		prof, err := startProfiler(profiler)
 		if err != nil {
 			hostErrs = append(hostErrs, NotificationPeerErr{
 				Host: *thisAddr,
 				Err:  err,
 			})
 		} else {
-			globalProfiler = prof
+			globalProfiler[profiler] = prof
 			hostErrs = append(hostErrs, NotificationPeerErr{
 				Host: *thisAddr,
 			})
@@ -633,7 +696,7 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	writeSuccessResponseJSON(w, []byte(startProfilingResultInBytes))
+	writeSuccessResponseJSON(w, startProfilingResultInBytes)
 }
 
 // dummyFileInfo represents a dummy representation of a profile data file
@@ -660,7 +723,7 @@ func (f dummyFileInfo) Sys() interface{}   { return f.sys }
 func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DownloadProfiling")
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListServerInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ProfilingAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -992,6 +1055,12 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 
 	var apiErr APIError
 	switch e := err.(type) {
+	case iampolicy.Error:
+		apiErr = APIError{
+			Code:           "XMinioMalformedIAMPolicy",
+			Description:    e.Error(),
+			HTTPStatusCode: http.StatusBadRequest,
+		}
 	case config.Error:
 		apiErr = APIError{
 			Code:           "XMinioConfigError",
@@ -1044,7 +1113,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	trcErr := r.URL.Query().Get("err") == "true"
 
 	// Validate request signature.
-	_, adminAPIErr := checkAdminRequestAuthType(ctx, r, iampolicy.ListServerInfoAdminAction, "")
+	_, adminAPIErr := checkAdminRequestAuthType(ctx, r, iampolicy.TraceAdminAction, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
@@ -1098,7 +1167,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ConsoleLog")
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListServerInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ConsoleLogAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1169,7 +1238,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "KMSKeyStatusHandler")
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListServerInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSKeyStatusAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1201,20 +1270,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// 2. Check whether we can update / re-wrap the sealed key.
-	sealedKey, err = GlobalKMS.UpdateKey(keyID, sealedKey, kmsContext)
-	if err != nil {
-		response.UpdateErr = err.Error()
-		resp, err := json.Marshal(response)
-		if err != nil {
-			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
-			return
-		}
-		writeSuccessResponseJSON(w, resp)
-		return
-	}
-
-	// 3. Verify that we can indeed decrypt the (encrypted) key
+	// 2. Verify that we can indeed decrypt the (encrypted) key
 	decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
 	if err != nil {
 		response.DecryptionErr = err.Error()
@@ -1227,7 +1283,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// 4. Compare generated key with decrypted key
+	// 3. Compare generated key with decrypted key
 	if subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1 {
 		response.DecryptionErr = "The generated and the decrypted data key do not match"
 		resp, err := json.Marshal(response)
@@ -1254,7 +1310,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 func (a adminAPIHandlers) ServerHardwareInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HardwareInfo")
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ListServerInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerHardwareInfoAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -1302,4 +1358,304 @@ func (a adminAPIHandlers) ServerHardwareInfoHandler(w http.ResponseWriter, r *ht
 	default:
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
 	}
+}
+
+// ServerInfoHandler - GET /minio/admin/v2/info
+// ----------
+// Get server information
+func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ServerInfo")
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	cfg, err := readServerConfig(ctx, objectAPI)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	buckets := madmin.Buckets{}
+	objects := madmin.Objects{}
+	usage := madmin.Usage{}
+
+	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
+	if err == nil {
+		buckets = madmin.Buckets{Count: dataUsageInfo.BucketsCount}
+		objects = madmin.Objects{Count: dataUsageInfo.ObjectsCount}
+		usage = madmin.Usage{Size: dataUsageInfo.ObjectsTotalSize}
+	}
+
+	infoMsg := madmin.InfoMessage{}
+	vault := fetchVaultStatus(cfg)
+
+	ldap := madmin.LDAP{}
+	if globalLDAPConfig.Enabled {
+		ldapConn, err := globalLDAPConfig.Connect()
+		if err != nil {
+			ldap.Status = "offline"
+		} else if ldapConn == nil {
+			ldap.Status = "Not Configured"
+		} else {
+			ldap.Status = "online"
+		}
+		// Close ldap connection to avoid leaks.
+		defer ldapConn.Close()
+	}
+
+	log, audit := fetchLoggerInfo(cfg)
+
+	// Get the notification target info
+	notifyTarget := fetchLambdaInfo(cfg)
+
+	// Fetching the Storage information
+	storageInfo := objectAPI.StorageInfo(ctx)
+
+	var OnDisks int
+	var OffDisks int
+	var backend interface{}
+
+	if storageInfo.Backend.Type == BackendType(madmin.Erasure) {
+
+		for _, v := range storageInfo.Backend.OnlineDisks {
+			OnDisks += v
+		}
+		for _, v := range storageInfo.Backend.OfflineDisks {
+			OffDisks += v
+		}
+
+		backend = madmin.XlBackend{
+			Type:             madmin.ErasureType,
+			OnlineDisks:      OnDisks,
+			OfflineDisks:     OffDisks,
+			StandardSCData:   storageInfo.Backend.StandardSCData,
+			StandardSCParity: storageInfo.Backend.StandardSCParity,
+			RRSCData:         storageInfo.Backend.RRSCData,
+			RRSCParity:       storageInfo.Backend.RRSCParity,
+		}
+	} else {
+		backend = madmin.FsBackend{
+			Type: madmin.FsType,
+		}
+	}
+
+	mode := ""
+	if globalSafeMode {
+		mode = "safe"
+	} else {
+		mode = "online"
+	}
+
+	server := getLocalServerProperty(globalEndpoints, r)
+	servers := globalNotificationSys.ServerInfo()
+	servers = append(servers, server)
+
+	for _, sp := range servers {
+		for i, di := range sp.Disks {
+			path := ""
+			if globalIsXL {
+				path = di.DrivePath
+			}
+			if globalIsDistXL {
+				path = sp.Endpoint + di.DrivePath
+			}
+			// For distributed
+			for a := range storageInfo.Backend.Sets {
+				for b := range storageInfo.Backend.Sets[a] {
+					ep := storageInfo.Backend.Sets[a][b].Endpoint
+
+					if globalIsDistXL {
+						if strings.Replace(ep, "http://", "", -1) == path || strings.Replace(ep, "https://", "", -1) == path {
+							sp.Disks[i].State = storageInfo.Backend.Sets[a][b].State
+							sp.Disks[i].UUID = storageInfo.Backend.Sets[a][b].UUID
+						}
+					}
+					if globalIsXL {
+						if ep == path {
+							sp.Disks[i].State = storageInfo.Backend.Sets[a][b].State
+							sp.Disks[i].UUID = storageInfo.Backend.Sets[a][b].UUID
+						}
+					}
+				}
+			}
+
+		}
+	}
+
+	domain := globalDomainNames
+	services := madmin.Services{
+		Vault:         vault,
+		LDAP:          ldap,
+		Logger:        log,
+		Audit:         audit,
+		Notifications: notifyTarget,
+	}
+
+	infoMsg = madmin.InfoMessage{
+		Mode:         mode,
+		Domain:       domain,
+		Region:       globalServerRegion,
+		SQSARN:       globalNotificationSys.GetARNList(),
+		DeploymentID: globalDeploymentID,
+		Buckets:      buckets,
+		Objects:      objects,
+		Usage:        usage,
+		Services:     services,
+		Backend:      backend,
+		Servers:      servers,
+	}
+
+	// Marshal API response
+	jsonBytes, err := json.Marshal(infoMsg)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	//Reply with storage information (across nodes in a
+	// distributed setup) as json.
+	writeSuccessResponseJSON(w, jsonBytes)
+}
+
+func fetchLambdaInfo(cfg config.Config) []map[string][]madmin.TargetIDStatus {
+
+	// Fetch the targets
+	targetList, err := notify.RegisterNotificationTargets(cfg, GlobalServiceDoneCh, NewCustomHTTPTransport(), nil, true)
+	if err != nil {
+		return nil
+	}
+	lambdaMap := make(map[string][]madmin.TargetIDStatus)
+
+	for targetID, target := range targetList.TargetMap() {
+		targetIDStatus := make(map[string]madmin.Status)
+		active, _ := target.IsActive()
+		if active {
+			targetIDStatus[targetID.ID] = madmin.Status{Status: "Online"}
+		} else {
+			targetIDStatus[targetID.ID] = madmin.Status{Status: "Offline"}
+		}
+		list := lambdaMap[targetID.Name]
+		list = append(list, targetIDStatus)
+		lambdaMap[targetID.Name] = list
+		// Close any leaking connections
+		_ = target.Close()
+	}
+
+	notify := make([]map[string][]madmin.TargetIDStatus, len(lambdaMap))
+	counter := 0
+	for key, value := range lambdaMap {
+		v := make(map[string][]madmin.TargetIDStatus)
+		v[key] = value
+		notify[counter] = v
+		counter++
+	}
+	return notify
+}
+
+// fetchVaultStatus fetches Vault Info
+func fetchVaultStatus(cfg config.Config) madmin.Vault {
+	vault := madmin.Vault{}
+	if GlobalKMS == nil {
+		vault.Status = "disabled"
+		return vault
+	}
+	keyID := GlobalKMS.KeyID()
+	kmsInfo := GlobalKMS.Info()
+
+	if kmsInfo.Endpoint == "" {
+		vault.Status = "KMS configured using master key"
+		return vault
+	}
+
+	if err := checkConnection(kmsInfo.Endpoint, 15*time.Second); err != nil {
+
+		vault.Status = "offline"
+	} else {
+		vault.Status = "online"
+
+		kmsContext := crypto.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
+		// 1. Generate a new key using the KMS.
+		key, sealedKey, err := GlobalKMS.GenerateKey(keyID, kmsContext)
+		if err != nil {
+			vault.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
+		} else {
+			vault.Encrypt = "Ok"
+		}
+
+		// 2. Verify that we can indeed decrypt the (encrypted) key
+		decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
+		switch {
+		case err != nil:
+			vault.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
+		case subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1:
+			vault.Decrypt = "Decryption failed: decrypted key does not match generated key"
+		default:
+			vault.Decrypt = "Ok"
+		}
+	}
+	return vault
+}
+
+// fetchLoggerDetails return log info
+func fetchLoggerInfo(cfg config.Config) ([]madmin.Logger, []madmin.Audit) {
+	loggerCfg, _ := logger.LookupConfig(cfg)
+
+	var logger []madmin.Logger
+	var auditlogger []madmin.Audit
+	for log, l := range loggerCfg.HTTP {
+		if l.Enabled {
+			err := checkConnection(l.Endpoint, 15*time.Second)
+			if err == nil {
+				mapLog := make(map[string]madmin.Status)
+				mapLog[log] = madmin.Status{Status: "Online"}
+				logger = append(logger, mapLog)
+			} else {
+				mapLog := make(map[string]madmin.Status)
+				mapLog[log] = madmin.Status{Status: "offline"}
+				logger = append(logger, mapLog)
+			}
+		}
+	}
+
+	for audit, l := range loggerCfg.Audit {
+		if l.Enabled {
+			err := checkConnection(l.Endpoint, 15*time.Second)
+			if err == nil {
+				mapAudit := make(map[string]madmin.Status)
+				mapAudit[audit] = madmin.Status{Status: "Online"}
+				auditlogger = append(auditlogger, mapAudit)
+			} else {
+				mapAudit := make(map[string]madmin.Status)
+				mapAudit[audit] = madmin.Status{Status: "Offline"}
+				auditlogger = append(auditlogger, mapAudit)
+			}
+		}
+	}
+	return logger, auditlogger
+}
+
+// checkConnection - ping an endpoint , return err in case of no connection
+func checkConnection(endpointStr string, timeout time.Duration) error {
+	u, pErr := xnet.ParseURL(endpointStr)
+	if pErr != nil {
+		return pErr
+	}
+
+	tr := newCustomHTTPTransport(
+		&tls.Config{RootCAs: globalRootCAs},
+		timeout,
+		0, /* Default value */
+	)()
+
+	if dErr := u.DialHTTP(tr); dErr != nil {
+		if urlErr, ok := dErr.(*url.Error); ok {
+			// To treat "connection refused" errors as un reachable endpoint.
+			if target.IsConnRefusedErr(urlErr.Err) {
+				return errors.New("endpoint unreachable, please check your endpoint")
+			}
+		}
+		return dErr
+	}
+	return nil
 }

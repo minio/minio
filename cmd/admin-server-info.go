@@ -21,7 +21,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/madmin"
@@ -115,7 +115,6 @@ func getLocalDrivesPerf(endpointZones EndpointZones, size int64, r *http.Request
 	return madmin.ServerDrivesPerfInfo{
 		Addr: addr,
 		Perf: dps,
-		Size: size,
 	}
 }
 
@@ -184,5 +183,66 @@ func getLocalNetworkInfo(endpointZones EndpointZones, r *http.Request) madmin.Se
 	return madmin.ServerNetworkHardwareInfo{
 		Addr:        addr,
 		NetworkInfo: networkHardwares,
+	}
+}
+
+// getLocalServerProperty - returns ServerDrivesPerfInfo for only the
+// local endpoints from given list of endpoints
+func getLocalServerProperty(endpointZones EndpointZones, r *http.Request) madmin.ServerProperties {
+	var disks []madmin.Disk
+	addr := r.Host
+	if globalIsDistXL {
+		addr = GetLocalPeer(endpointZones)
+	}
+	network := make(map[string]string)
+	for _, ep := range endpointZones {
+		for _, endpoint := range ep.Endpoints {
+			nodeName := endpoint.Host
+			if nodeName == "" {
+				nodeName = r.Host
+			}
+			if endpoint.IsLocal {
+				// Only proceed for local endpoints
+				network[nodeName] = "online"
+				var di = madmin.Disk{
+					DrivePath: endpoint.Path,
+				}
+				diInfo, err := disk.GetInfo(endpoint.Path)
+				if err != nil {
+					if os.IsNotExist(err) || isSysErrPathNotFound(err) {
+						di.State = madmin.DriveStateMissing
+					} else {
+						di.State = madmin.DriveStateCorrupt
+					}
+				} else {
+					di.State = madmin.DriveStateOk
+					di.DrivePath = endpoint.Path
+					di.TotalSpace = diInfo.Total
+					di.UsedSpace = diInfo.Total - diInfo.Free
+					di.Utilization = float64((diInfo.Total - diInfo.Free) / diInfo.Total * 100)
+				}
+				disks = append(disks, di)
+			} else {
+				_, present := network[nodeName]
+				if !present {
+					err := IsServerResolvable(endpoint)
+					if err == nil {
+						network[nodeName] = "online"
+					} else {
+						network[nodeName] = "offline"
+					}
+				}
+			}
+		}
+	}
+
+	return madmin.ServerProperties{
+		State:    "ok",
+		Endpoint: addr,
+		Uptime:   UTCNow().Unix() - globalBootTime.Unix(),
+		Version:  Version,
+		CommitID: CommitID,
+		Network:  network,
+		Disks:    disks,
 	}
 }

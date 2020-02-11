@@ -270,6 +270,9 @@ func (adm AdminClient) do(req *http.Request) (*http.Response, error) {
 	for {
 		resp, err = adm.httpClient.Do(req)
 		if err != nil {
+			// Close idle connections upon error.
+			adm.httpClient.CloseIdleConnections()
+
 			// Handle this specifically for now until future Golang
 			// versions fix this issue properly.
 			urlErr, ok := err.(*url.Error)

@@ -17,7 +17,9 @@
 package cmd
 
 import (
+	"context"
 	"crypto/x509"
+	"encoding/gob"
 	"errors"
 	"net"
 	"path/filepath"
@@ -33,6 +35,17 @@ import (
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/env"
 )
+
+func init() {
+	logger.Init(GOPATH, GOROOT)
+	logger.RegisterError(config.FmtError)
+
+	// Initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(context.Background())
+	logger.AddTarget(globalConsoleSys)
+
+	gob.Register(StorageErr(""))
+}
 
 func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
 	if (globalAutoEncryption || GlobalKMS != nil) && !objAPI.IsEncryptionSupported() {
@@ -188,7 +201,6 @@ func handleCommonEnvVars() {
 				for _, addr := range addrs {
 					domainIPs.Add(addr)
 				}
-				continue
 			}
 			domainIPs.Add(endpoint)
 		}
@@ -196,7 +208,7 @@ func handleCommonEnvVars() {
 	} else {
 		// Add found interfaces IP address to global domain IPS,
 		// loopback addresses will be naturally dropped.
-		updateDomainIPs(localIP4)
+		updateDomainIPs(mustGetLocalIP4())
 	}
 
 	// In place update is true by default if the MINIO_UPDATE is not set
@@ -212,6 +224,11 @@ func handleCommonEnvVars() {
 		}
 		globalActiveCred = cred
 		globalConfigEncrypted = true
+	}
+
+	globalWORMEnabled, err = config.LookupWorm()
+	if err != nil {
+		logger.Fatal(config.ErrInvalidWormValue(err), "Invalid worm configuration")
 	}
 }
 

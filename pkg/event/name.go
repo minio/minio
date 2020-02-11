@@ -30,6 +30,7 @@ const (
 	ObjectAccessedAll Name = 1 + iota
 	ObjectAccessedGet
 	ObjectAccessedGetRetention
+	ObjectAccessedGetLegalHold
 	ObjectAccessedHead
 	ObjectCreatedAll
 	ObjectCreatedCompleteMultipartUpload
@@ -37,6 +38,7 @@ const (
 	ObjectCreatedPost
 	ObjectCreatedPut
 	ObjectCreatedPutRetention
+	ObjectCreatedPutLegalHold
 	ObjectRemovedAll
 	ObjectRemovedDelete
 )
@@ -45,9 +47,9 @@ const (
 func (name Name) Expand() []Name {
 	switch name {
 	case ObjectAccessedAll:
-		return []Name{ObjectAccessedGet, ObjectAccessedHead, ObjectAccessedGetRetention}
+		return []Name{ObjectAccessedGet, ObjectAccessedHead, ObjectAccessedGetRetention, ObjectAccessedGetLegalHold}
 	case ObjectCreatedAll:
-		return []Name{ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy, ObjectCreatedPost, ObjectCreatedPut, ObjectCreatedPutRetention}
+		return []Name{ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy, ObjectCreatedPost, ObjectCreatedPut, ObjectCreatedPutRetention, ObjectCreatedPutLegalHold}
 	case ObjectRemovedAll:
 		return []Name{ObjectRemovedDelete}
 	default:
@@ -64,6 +66,8 @@ func (name Name) String() string {
 		return "s3:ObjectAccessed:Get"
 	case ObjectAccessedGetRetention:
 		return "s3:ObjectAccessed:GetRetention"
+	case ObjectAccessedGetLegalHold:
+		return "s3:ObjectAccessed:GetLegalHold"
 	case ObjectAccessedHead:
 		return "s3:ObjectAccessed:Head"
 	case ObjectCreatedAll:
@@ -78,6 +82,8 @@ func (name Name) String() string {
 		return "s3:ObjectCreated:Put"
 	case ObjectCreatedPutRetention:
 		return "s3:ObjectCreated:PutRetention"
+	case ObjectCreatedPutLegalHold:
+		return "s3:ObjectCreated:PutLegalHold"
 	case ObjectRemovedAll:
 		return "s3:ObjectRemoved:*"
 	case ObjectRemovedDelete:
@@ -138,6 +144,8 @@ func ParseName(s string) (Name, error) {
 		return ObjectAccessedGet, nil
 	case "s3:ObjectAccessed:GetRetention":
 		return ObjectAccessedGetRetention, nil
+	case "s3:ObjectAccessed:GetLegalHold":
+		return ObjectAccessedGetLegalHold, nil
 	case "s3:ObjectAccessed:Head":
 		return ObjectAccessedHead, nil
 	case "s3:ObjectCreated:*":
@@ -152,6 +160,8 @@ func ParseName(s string) (Name, error) {
 		return ObjectCreatedPut, nil
 	case "s3:ObjectCreated:PutRetention":
 		return ObjectCreatedPutRetention, nil
+	case "s3:ObjectCreated:PutLegalHold":
+		return ObjectCreatedPutLegalHold, nil
 	case "s3:ObjectRemoved:*":
 		return ObjectRemovedAll, nil
 	case "s3:ObjectRemoved:Delete":

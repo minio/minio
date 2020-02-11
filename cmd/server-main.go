@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"net/http"
@@ -36,13 +35,6 @@ import (
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
 )
-
-func init() {
-	logger.Init(GOPATH, GOROOT)
-	logger.RegisterError(config.FmtError)
-	gob.Register(VerifyFileError(""))
-	gob.Register(DeleteFileError(""))
-}
 
 // ServerFlags - server command specific flags
 var ServerFlags = []cli.Flag{
@@ -64,6 +56,7 @@ var serverCmd = cli.Command{
 USAGE:
   {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}DIR1 [DIR2..]
   {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}DIR{1...64}
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}DIR{1...64} DIR{65...128}
 
 DIR:
   DIR points to a directory on a filesystem. When you want to combine
@@ -75,56 +68,21 @@ DIR:
 FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
-ENVIRONMENT VARIABLES:
-  ACCESS:
-     MINIO_ACCESS_KEY: Custom username or access key of minimum 3 characters in length.
-     MINIO_SECRET_KEY: Custom password or secret key of minimum 8 characters in length.
-
-  BROWSER:
-     MINIO_BROWSER: To disable web browser access, set this value to "off".
-
-  DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to MinIO host domain name.
-
-  WORM:
-     MINIO_WORM: To turn on Write-Once-Read-Many in server, set this value to "on".
-
-  BUCKET-DNS:
-     MINIO_DOMAIN:    To enable bucket DNS requests, set this value to MinIO host domain name.
-     MINIO_PUBLIC_IPS: To enable bucket DNS requests, set this value to list of MinIO host public IP(s) delimited by ",".
-     MINIO_ETCD_ENDPOINTS: To enable bucket DNS requests, set this value to list of etcd endpoints delimited by ",".
-
-   KMS:
-     MINIO_KMS_VAULT_ENDPOINT: To enable Vault as KMS,set this value to Vault endpoint.
-     MINIO_KMS_VAULT_APPROLE_ID: To enable Vault as KMS,set this value to Vault AppRole ID.
-     MINIO_KMS_VAULT_APPROLE_SECRET: To enable Vault as KMS,set this value to Vault AppRole Secret ID.
-     MINIO_KMS_VAULT_KEY_NAME: To enable Vault as KMS,set this value to Vault encryption key-ring name.
 
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
      {{.Prompt}} {{.HelpName}} /home/shared
 
-  2. Start minio server bound to a specific ADDRESS:PORT.
-     {{.Prompt}} {{.HelpName}} --address 192.168.1.101:9000 /home/shared
-
-  3. Start minio server and enable virtual-host-style requests.
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_DOMAIN{{.AssignmentOperator}}mydomain.com
-     {{.Prompt}} {{.HelpName}} --address mydomain.com:9000 /mnt/export
-
-  4. Start erasure coded minio server on a node with 64 drives.
-     {{.Prompt}} {{.HelpName}} /mnt/export{1...64}
-
-  5. Start distributed minio server on an 32 node setup with 32 drives each. Run following command on all the 32 nodes.
+  2. Start distributed minio server on an 32 node setup with 32 drives each, run following command on all the nodes
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}minio
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
      {{.Prompt}} {{.HelpName}} http://node{1...32}.example.com/mnt/export/{1...32}
 
-  6. Start minio server with KMS enabled.
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_KMS_VAULT_APPROLE_ID{{.AssignmentOperator}}9b56cc08-8258-45d5-24a3-679876769126
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_KMS_VAULT_APPROLE_SECRET{{.AssignmentOperator}}4e30c52f-13e4-a6f5-0763-d50e8cb4321f
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_KMS_VAULT_ENDPOINT{{.AssignmentOperator}}https://vault-endpoint-ip:8200
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_KMS_VAULT_KEY_NAME{{.AssignmentOperator}}my-minio-key
-     {{.Prompt}} {{.HelpName}} /home/shared
+  3. Start distributed minio server in an expanded setup, run the following command on all the nodes
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}minio
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
+     {{.Prompt}} {{.HelpName}} http://node{1...16}.example.com/mnt/export/{1...32} \
+            http://node{17...64}.example.com/mnt/export/{1...64}
 `,
 }
 
@@ -156,14 +114,10 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	}
 	logger.FatalIf(err, "Invalid command line arguments")
 
-	if err = checkEndpointsSubOptimal(ctx, setupType, globalEndpoints); err != nil {
-		logger.Info("Optimal endpoint check failed %s", err)
-	}
-
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
 	// (non-)minio process is listening on IPv4 of given port.
-	// To avoid this error sutiation we check for port availability.
+	// To avoid this error situation we check for port availability.
 	logger.FatalIf(checkPortAvailability(globalMinioHost, globalMinioPort), "Unable to start the server")
 
 	globalIsXL = (setupType == XLSetupType)
@@ -193,9 +147,12 @@ func newAllSubsystems() {
 
 	// Create new lifecycle system.
 	globalLifecycleSys = NewLifecycleSys()
+
+	// Create new bucket encryption subsystem
+	globalBucketSSEConfigSys = NewBucketSSEConfigSys()
 }
 
-func initSafeModeInit(buckets []BucketInfo) (err error) {
+func initSafeMode(buckets []BucketInfo) (err error) {
 	newObject := newObjectLayerWithoutSafeModeFn()
 
 	// Construct path to config/transaction.lock for locking
@@ -220,19 +177,6 @@ func initSafeModeInit(buckets []BucketInfo) (err error) {
 				return
 			}
 
-			var cfgErr config.Error
-			if errors.As(err, &cfgErr) {
-				if cfgErr.Kind == config.ContinueKind {
-					// print the error and continue
-					logger.Info("Config validation failed '%s' the sub-system is turned-off and all other sub-systems", err)
-					err = nil
-					return
-				}
-			}
-
-			// Enable logger
-			logger.Disable = false
-
 			// Prints the formatted startup message in safe mode operation.
 			printStartupSafeModeMessage(getAPIEndpoints(), err)
 
@@ -242,10 +186,8 @@ func initSafeModeInit(buckets []BucketInfo) (err error) {
 		}
 	}(objLock)
 
-	// Calls New() for all sub-systems.
-	newAllSubsystems()
-
-	// Migrate all backend configs to encrypted backend, also handles rotation as well.
+	// Migrate all backend configs to encrypted backend configs, optionally
+	// handles rotating keys for encryption.
 	if err = handleEncryptedConfigBackend(newObject, true); err != nil {
 		return fmt.Errorf("Unable to handle encrypted backend for config, iam and policies: %w", err)
 	}
@@ -255,21 +197,50 @@ func initSafeModeInit(buckets []BucketInfo) (err error) {
 	// sub-systems, make sure that we do not move the above codeblock elsewhere.
 
 	// Validate and initialize all subsystems.
-	if err = initAllSubsystems(buckets, newObject); err != nil {
-		return err
-	}
+	doneCh := make(chan struct{})
+	defer close(doneCh)
 
-	return nil
+	// Initializing sub-systems needs a retry mechanism for
+	// the following reasons:
+	//  - Read quorum is lost just after the initialization
+	//    of the object layer.
+	//  - Write quorum not met when upgrading configuration
+	//    version is needed, migration is needed etc.
+	retryTimerCh := newRetryTimerSimple(doneCh)
+	for {
+		rquorum := InsufficientReadQuorum{}
+		wquorum := InsufficientWriteQuorum{}
+
+		var err error
+		select {
+		case n := <-retryTimerCh:
+			if err = initAllSubsystems(buckets, newObject); err != nil {
+				if errors.Is(err, errDiskNotFound) ||
+					errors.As(err, &rquorum) ||
+					errors.As(err, &wquorum) {
+					if n < 5 {
+						logger.Info("Waiting for all sub-systems to be initialized..")
+					} else {
+						logger.Info("Waiting for all sub-systems to be initialized.. %v", err)
+					}
+					continue
+				}
+				return err
+			}
+			return nil
+		case <-globalOSSignalCh:
+			if err == nil {
+				return errors.New("Initializing sub-systems stopped gracefully")
+			}
+			return fmt.Errorf("Unable to initialize sub-systems: %w", err)
+		}
+	}
 }
 
 func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) {
 	// Initialize config system.
 	if err = globalConfigSys.Init(newObject); err != nil {
 		return fmt.Errorf("Unable to initialize config system: %w", err)
-	}
-
-	if err = globalNotificationSys.AddNotificationTargetsFromConfig(globalServerConfig); err != nil {
-		return fmt.Errorf("Unable to initialize notification target(s) from config: %w", err)
 	}
 
 	if globalEtcdClient != nil {
@@ -300,6 +271,10 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 		return fmt.Errorf("Unable to initialize lifecycle system: %w", err)
 	}
 
+	// Initialize bucket encryption subsystem.
+	if err = globalBucketSSEConfigSys.Init(buckets, newObject); err != nil {
+		return fmt.Errorf("Unable to initialize bucket encryption subsystem: %w", err)
+	}
 	return nil
 }
 
@@ -308,18 +283,21 @@ func serverMain(ctx *cli.Context) {
 	if ctx.Args().First() == "help" || !endpointsPresent(ctx) {
 		cli.ShowCommandHelpAndExit(ctx, "server", 1)
 	}
+	setDefaultProfilerRates()
+
+	// Initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(context.Background())
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
-
-	// Disable logging until server initialization is complete, any
-	// error during initialization will be shown as a fatal message
-	logger.Disable = true
 
 	// Handle all server command args.
 	serverHandleCmdArgs(ctx)
 
 	// Handle all server environment vars.
 	serverHandleEnvVars()
+
+	// Set node name, only set for distributed setup.
+	globalConsoleSys.SetNodeName(globalEndpoints)
 
 	// Initialize all help
 	initHelp()
@@ -364,9 +342,6 @@ func serverMain(ctx *cli.Context) {
 		globalBackgroundHealState = initHealState()
 	}
 
-	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
-
 	// Configure server.
 	var handler http.Handler
 	handler, err = configureServerHandler(globalEndpoints)
@@ -405,26 +380,28 @@ func serverMain(ctx *cli.Context) {
 		logger.Fatal(err, "Unable to initialize backend")
 	}
 
-	// Re-enable logging
-	logger.Disable = false
-
 	// Once endpoints are finalized, initialize the new object api in safe mode.
 	globalObjLayerMutex.Lock()
 	globalSafeMode = true
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
+	// Calls New() and initializes all sub-systems.
+	newAllSubsystems()
+
+	// Enable healing to heal drives if possible
+	if globalIsXL {
+		initBackgroundHealing()
+		initLocalDisksAutoHeal()
+		initGlobalHeal()
+	}
+
 	buckets, err := newObject.ListBuckets(context.Background())
 	if err != nil {
 		logger.Fatal(err, "Unable to list buckets")
 	}
 
-	// Populate existing buckets to the etcd backend
-	if globalDNSConfig != nil {
-		initFederatorBackend(buckets, newObject)
-	}
-
-	logger.FatalIf(initSafeModeInit(buckets), "Unable to initialize server")
+	logger.FatalIf(initSafeMode(buckets), "Unable to initialize server switching into safe-mode")
 
 	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.
@@ -437,13 +414,13 @@ func serverMain(ctx *cli.Context) {
 		globalObjLayerMutex.Unlock()
 	}
 
-	initDailyLifecycle()
-
-	if globalIsXL {
-		initBackgroundHealing()
-		initLocalDisksAutoHeal()
-		initGlobalHeal()
+	// Populate existing buckets to the etcd backend
+	if globalDNSConfig != nil {
+		initFederatorBackend(buckets, newObject)
 	}
+
+	initDataUsageStats()
+	initDailyLifecycle()
 
 	// Disable safe mode operation, after all initialization is over.
 	globalObjLayerMutex.Lock()

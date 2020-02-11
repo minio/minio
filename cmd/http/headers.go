@@ -40,6 +40,12 @@ const (
 	Action             = "Action"
 )
 
+// Non standard S3 HTTP response constants
+const (
+	XCache       = "X-Cache"
+	XCacheLookup = "X-Cache-Lookup"
+)
+
 // Standard S3 HTTP request constants
 const (
 	IfModifiedSince   = "If-Modified-Since"
@@ -49,6 +55,11 @@ const (
 
 	// S3 storage class
 	AmzStorageClass = "x-amz-storage-class"
+
+	// S3 object tagging
+	AmzObjectTagging = "X-Amz-Tagging"
+	AmzTagCount      = "X-Amz-Tag-Count"
+	AmzTagDirective  = "X-Amz-Tagging-Directive"
 
 	// S3 extensions
 	AmzCopySourceIfModifiedSince   = "x-amz-copy-source-if-modified-since"

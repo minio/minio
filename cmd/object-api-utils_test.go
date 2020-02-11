@@ -122,7 +122,9 @@ func TestIsValidObjectName(t *testing.T) {
 		{" ../etc", false},
 		{"./././", false},
 		{"./etc", false},
-		{"contains-\\-backslash", false},
+		{`contains-\-backslash`, false},
+		{`contains//double/forwardslash`, false},
+		{`//contains/double-forwardslash-prefix`, false},
 		{string([]byte{0xff, 0xfe, 0xfd}), false},
 	}
 

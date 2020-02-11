@@ -33,11 +33,12 @@ type ProfilerType string
 
 // Different supported profiler types.
 const (
-	ProfilerCPU   ProfilerType = "cpu"   // represents CPU profiler type
-	ProfilerMEM                = "mem"   // represents MEM profiler type
-	ProfilerBlock              = "block" // represents Block profiler type
-	ProfilerMutex              = "mutex" // represents Mutex profiler type
-	ProfilerTrace              = "trace" // represents Trace profiler type
+	ProfilerCPU     ProfilerType = "cpu"     // represents CPU profiler type
+	ProfilerMEM     ProfilerType = "mem"     // represents MEM profiler type
+	ProfilerBlock   ProfilerType = "block"   // represents Block profiler type
+	ProfilerMutex   ProfilerType = "mutex"   // represents Mutex profiler type
+	ProfilerTrace   ProfilerType = "trace"   // represents Trace profiler type
+	ProfilerThreads ProfilerType = "threads" // represents ThreadCreate profiler type
 )
 
 // StartProfilingResult holds the result of starting

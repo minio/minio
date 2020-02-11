@@ -38,8 +38,12 @@ func (p *posixDiskIDCheck) IsOnline() bool {
 	return storedDiskID == p.diskID
 }
 
-func (p *posixDiskIDCheck) LastError() error {
-	return p.storage.LastError()
+func (p *posixDiskIDCheck) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, error) {
+	return p.storage.CrawlAndGetDataUsage(endCh)
+}
+
+func (p *posixDiskIDCheck) Hostname() string {
+	return p.storage.Hostname()
 }
 
 func (p *posixDiskIDCheck) Close() error {
@@ -68,6 +72,13 @@ func (p *posixDiskIDCheck) DiskInfo() (info DiskInfo, err error) {
 		return info, errDiskNotFound
 	}
 	return p.storage.DiskInfo()
+}
+
+func (p *posixDiskIDCheck) MakeVolBulk(volumes ...string) (err error) {
+	if p.isDiskStale() {
+		return errDiskNotFound
+	}
+	return p.storage.MakeVolBulk(volumes...)
 }
 
 func (p *posixDiskIDCheck) MakeVol(volume string) (err error) {

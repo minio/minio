@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"math/rand"
 	"net/http"
@@ -179,6 +180,8 @@ func getLongLivedLocks(interval time.Duration) map[Endpoint][]nameLockRequesterI
 	return nlripMap
 }
 
+var lockMaintenanceTimeout = newDynamicTimeout(60*time.Second, time.Second)
+
 // lockMaintenance loops over locks that have been active for some time and checks back
 // with the original server whether it is still alive or not
 //
@@ -187,7 +190,14 @@ func getLongLivedLocks(interval time.Duration) map[Endpoint][]nameLockRequesterI
 // - some network error (and server is up normally)
 //
 // We will ignore the error, and we will retry later to get a resolve on this lock
-func lockMaintenance(interval time.Duration) {
+func lockMaintenance(ctx context.Context, interval time.Duration, objAPI ObjectLayer) error {
+	// Lock to avoid concurrent lock maintenance loops
+	maintenanceLock := objAPI.NewNSLock(ctx, "system", "lock-maintenance-ops")
+	if err := maintenanceLock.GetLock(lockMaintenanceTimeout); err != nil {
+		return err
+	}
+	defer maintenanceLock.Unlock()
+
 	// Validate if long lived locks are indeed clean.
 	// Get list of long lived locks to check for staleness.
 	for lendpoint, nlrips := range getLongLivedLocks(interval) {
@@ -203,7 +213,8 @@ func lockMaintenance(interval time.Duration) {
 						continue
 					}
 
-					// Call back to original server verify whether the lock is still active (based on name & uid)
+					// Call back to original server verify whether the lock is
+					// still active (based on name & uid)
 					expired, err := c.Expired(dsync.LockArgs{
 						UID:      nlrip.lri.UID,
 						Resource: nlrip.name,
@@ -230,25 +241,46 @@ func lockMaintenance(interval time.Duration) {
 			}
 		}
 	}
+
+	return nil
 }
 
 // Start lock maintenance from all lock servers.
 func startLockMaintenance() {
-	// Start with random sleep time, so as to avoid "synchronous checks" between servers
-	time.Sleep(time.Duration(rand.Float64() * float64(lockMaintenanceInterval)))
+	var objAPI ObjectLayer
+	var ctx = context.Background()
+
+	// Wait until the object API is ready
+	for {
+		objAPI = newObjectLayerWithoutSafeModeFn()
+		if objAPI == nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		break
+	}
 
 	// Initialize a new ticker with a minute between each ticks.
 	ticker := time.NewTicker(lockMaintenanceInterval)
 	// Stop the timer upon service closure and cleanup the go-routine.
 	defer ticker.Stop()
 
+	r := rand.New(rand.NewSource(UTCNow().UnixNano()))
 	for {
 		// Verifies every minute for locks held more than 2 minutes.
 		select {
 		case <-GlobalServiceDoneCh:
 			return
 		case <-ticker.C:
-			lockMaintenance(lockValidityCheckInterval)
+			// Start with random sleep time, so as to avoid
+			// "synchronous checks" between servers
+			duration := time.Duration(r.Float64() * float64(lockMaintenanceInterval))
+			time.Sleep(duration)
+			if err := lockMaintenance(ctx, lockValidityCheckInterval, objAPI); err != nil {
+				// Sleep right after an error.
+				duration := time.Duration(r.Float64() * float64(lockMaintenanceInterval))
+				time.Sleep(duration)
+			}
 		}
 	}
 }

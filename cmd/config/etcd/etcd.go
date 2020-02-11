@@ -109,8 +109,7 @@ func parseEndpoints(endpoints string) ([]string, bool, error) {
 			return nil, false, err
 		}
 		if etcdSecure && u.Scheme == "http" {
-			return nil, false, config.Errorf(config.SafeModeKind,
-				"all endpoints should be https or http: %s", endpoint)
+			return nil, false, config.Errorf("all endpoints should be https or http: %s", endpoint)
 		}
 		// If one of the endpoint is https, we will use https directly.
 		etcdSecure = etcdSecure || u.Scheme == "https"

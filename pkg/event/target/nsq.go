@@ -100,16 +100,25 @@ func (target *NSQTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - Return true if target is up and active
+func (target *NSQTarget) IsActive() (bool, error) {
+	if err := target.producer.Ping(); err != nil {
+		// To treat "connection refused" errors as errNotConnected.
+		if IsConnRefusedErr(err) {
+			return false, errNotConnected
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 // Save - saves the events to the store which will be replayed when the nsq connection is active.
 func (target *NSQTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	if err := target.producer.Ping(); err != nil {
-		// To treat "connection refused" errors as errNotConnected.
-		if IsConnRefusedErr(err) {
-			return errNotConnected
-		}
+	_, err := target.IsActive()
+	if err != nil {
 		return err
 	}
 	return target.send(eventData)
@@ -133,12 +142,8 @@ func (target *NSQTarget) send(eventData event.Event) error {
 
 // Send - reads an event from store and sends it to NSQ.
 func (target *NSQTarget) Send(eventKey string) error {
-
-	if err := target.producer.Ping(); err != nil {
-		// To treat "connection refused" errors as errNotConnected.
-		if IsConnRefusedErr(err) {
-			return errNotConnected
-		}
+	_, err := target.IsActive()
+	if err != nil {
 		return err
 	}
 
@@ -162,13 +167,15 @@ func (target *NSQTarget) Send(eventKey string) error {
 
 // Close - closes underneath connections to NSQD server.
 func (target *NSQTarget) Close() (err error) {
-	// this blocks until complete:
-	target.producer.Stop()
+	if target.producer != nil {
+		// this blocks until complete:
+		target.producer.Stop()
+	}
 	return nil
 }
 
 // NewNSQTarget - creates new NSQ target.
-func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*NSQTarget, error) {
+func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*NSQTarget, error) {
 	config := nsq.NewConfig()
 	if args.TLS.Enable {
 		config.TlsV1 = true
@@ -206,7 +213,7 @@ func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce fu
 		}
 	}
 
-	if target.store != nil {
+	if target.store != nil && !test {
 		// Replays the events from the store.
 		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
 		// Start replaying events from the store.

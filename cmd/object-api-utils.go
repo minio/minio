@@ -51,6 +51,10 @@ import (
 const (
 	// MinIO meta bucket.
 	minioMetaBucket = ".minio.sys"
+	// Background ops meta prefix
+	backgroundOpsMetaPrefix = "background-ops"
+	// MinIO Stats meta prefix.
+	minioMetaBackgroundOpsBucket = minioMetaBucket + SlashSeparator + backgroundOpsMetaPrefix
 	// Multipart meta prefix.
 	mpartMetaPrefix = "multipart"
 	// MinIO Multipart meta prefix.
@@ -72,7 +76,8 @@ const (
 func isMinioMetaBucketName(bucket string) bool {
 	return bucket == minioMetaBucket ||
 		bucket == minioMetaMultipartBucket ||
-		bucket == minioMetaTmpBucket
+		bucket == minioMetaTmpBucket ||
+		bucket == minioMetaBackgroundOpsBucket
 }
 
 // IsValidBucketName verifies that a bucket name is in accordance with
@@ -161,7 +166,10 @@ func IsValidObjectPrefix(object string) bool {
 		return false
 	}
 	// Reject unsupported characters in object name.
-	if strings.ContainsAny(object, "\\") {
+	if strings.ContainsAny(object, `\`) {
+		return false
+	}
+	if strings.Contains(object, `//`) {
 		return false
 	}
 	return true
@@ -234,8 +242,8 @@ func getCompleteMultipartMD5(parts []CompletePart) string {
 func cleanMetadata(metadata map[string]string) map[string]string {
 	// Remove STANDARD StorageClass
 	metadata = removeStandardStorageClass(metadata)
-	// Clean meta etag keys 'md5Sum', 'etag', "expires".
-	return cleanMetadataKeys(metadata, "md5Sum", "etag", "expires")
+	// Clean meta etag keys 'md5Sum', 'etag', "expires", "x-amz-tagging".
+	return cleanMetadataKeys(metadata, "md5Sum", "etag", "expires", xhttp.AmzObjectTagging)
 }
 
 // Filter X-Amz-Storage-Class field only if it is set to STANDARD.

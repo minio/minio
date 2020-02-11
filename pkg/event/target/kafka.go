@@ -124,13 +124,22 @@ func (target *KafkaTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - Return true if target is up and active
+func (target *KafkaTarget) IsActive() (bool, error) {
+	if !target.args.pingBrokers() {
+		return false, errNotConnected
+	}
+	return true, nil
+}
+
 // Save - saves the events to the store which will be replayed when the Kafka connection is active.
 func (target *KafkaTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	if !target.args.pingBrokers() {
-		return errNotConnected
+	_, err := target.IsActive()
+	if err != nil {
+		return err
 	}
 	return target.send(eventData)
 }
@@ -162,9 +171,9 @@ func (target *KafkaTarget) send(eventData event.Event) error {
 // Send - reads an event from store and sends it to Kafka.
 func (target *KafkaTarget) Send(eventKey string) error {
 	var err error
-
-	if !target.args.pingBrokers() {
-		return errNotConnected
+	_, err = target.IsActive()
+	if err != nil {
+		return err
 	}
 
 	if target.producer == nil {
@@ -225,7 +234,7 @@ func (k KafkaArgs) pingBrokers() bool {
 }
 
 // NewKafkaTarget - creates new Kafka target with auth credentials.
-func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})) (*KafkaTarget, error) {
+func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*KafkaTarget, error) {
 	config := sarama.NewConfig()
 
 	config.Net.SASL.User = args.SASL.User
@@ -278,7 +287,7 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 		store:    store,
 	}
 
-	if target.store != nil {
+	if target.store != nil && !test {
 		// Replays the events from the store.
 		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
 		// Start replaying events from the store.

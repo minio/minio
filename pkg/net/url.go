@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -84,14 +86,20 @@ func (u *URL) UnmarshalJSON(data []byte) (err error) {
 }
 
 // DialHTTP - dials the url to check the connection.
-func (u URL) DialHTTP() error {
-	var client = &http.Client{
-		Transport: &http.Transport{
+func (u URL) DialHTTP(transport *http.Transport) error {
+	if transport == nil {
+		transport = &http.Transport{
 			DialContext: (&net.Dialer{
 				Timeout: 2 * time.Second,
 			}).DialContext,
-		},
+		}
+
 	}
+
+	var client = &http.Client{
+		Transport: transport,
+	}
+
 	req, err := http.NewRequest("POST", u.String(), nil)
 	if err != nil {
 		return err
@@ -100,6 +108,7 @@ func (u URL) DialHTTP() error {
 	if err != nil {
 		return err
 	}
+	io.Copy(ioutil.Discard, resp.Body)
 	resp.Body.Close()
 	return nil
 }

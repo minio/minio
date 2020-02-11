@@ -23,8 +23,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/lifecycle"
-	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/pkg/bucket/policy"
 )
 
 const (
@@ -67,7 +67,7 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 
 	bucketLifecycle, err := lifecycle.ParseLifecycleConfig(io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedXML), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -80,7 +80,7 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 	globalNotificationSys.SetBucketLifecycle(ctx, bucket, bucketLifecycle)
 
 	// Success.
-	writeSuccessNoContent(w)
+	writeSuccessResponseHeadersOnly(w)
 }
 
 // GetBucketLifecycleHandler - This HTTP handler returns bucket policy configuration.
