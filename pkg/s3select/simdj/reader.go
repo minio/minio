@@ -21,9 +21,9 @@ import (
 	"io"
 	"sync"
 
-	"github.com/fwessels/simdjson-go"
 	"github.com/minio/minio/pkg/s3select/json"
 	"github.com/minio/minio/pkg/s3select/sql"
+	"github.com/minio/simdjson-go"
 )
 
 // Reader - JSON record reader for S3Select.

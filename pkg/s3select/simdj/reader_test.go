@@ -23,9 +23,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/fwessels/simdjson-go"
 	"github.com/klauspost/compress/zstd"
 	"github.com/minio/minio/pkg/s3select/json"
+	"github.com/minio/simdjson-go"
 )
 
 type tester interface {

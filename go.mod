@@ -23,7 +23,6 @@ require (
 	github.com/elazarl/go-bindata-assetfs v1.0.0
 	github.com/fatih/color v1.7.0
 	github.com/fatih/structs v1.1.0
-	github.com/fwessels/simdjson-go v0.0.0-20191127205001-62ebf2d455a9
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gomodule/redigo v2.0.0+incompatible
@@ -52,6 +51,7 @@ require (
 	github.com/minio/minio-go/v6 v6.0.39
 	github.com/minio/parquet-go v0.0.0-20190318185229-9d767baf1679
 	github.com/minio/sha256-simd v0.1.1
+	github.com/minio/simdjson-go v0.0.0-20200211174142-83296216b80a
 	github.com/minio/sio v0.2.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/nats-io/nats-server/v2 v2.1.2
@@ -90,5 +90,3 @@ replace github.com/eapache/queue => github.com/eapache/queue v1.1.0
 replace github.com/mattn/go-runewidth => github.com/mattn/go-runewidth v0.0.4
 
 replace github.com/mitchellh/mapstructure => github.com/mitchellh/mapstructure v1.1.2
-
-replace github.com/fwessels/simdjson-go => ../../fwessels/simdjson-go
