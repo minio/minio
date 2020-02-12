@@ -21,6 +21,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
@@ -1802,6 +1803,13 @@ func toAPIError(ctx context.Context, err error) APIError {
 		// their internal error types. This code is only
 		// useful with gateway implementations.
 		switch e := err.(type) {
+		case url.EscapeError:
+			apiErr = APIError{
+				Code: "XMinioInvalidObjectName",
+				Description: fmt.Sprintf("%s (%s)", errorCodes[ErrInvalidObjectName].Description,
+					e.Error()),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
 		case lifecycle.Error:
 			apiErr = APIError{
 				Code:           "InvalidRequest",

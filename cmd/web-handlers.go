@@ -918,7 +918,11 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	object := vars["object"]
+	object, err := url.PathUnescape(vars["object"])
+	if err != nil {
+		writeWebErrorResponse(w, err)
+		return
+	}
 
 	retPerms := ErrAccessDenied
 	holdPerms := ErrAccessDenied
@@ -1135,7 +1139,11 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	object := vars["object"]
+	object, err := url.PathUnescape(vars["object"])
+	if err != nil {
+		writeWebErrorResponse(w, err)
+		return
+	}
 	token := r.URL.Query().Get("token")
 
 	getRetPerms := ErrAccessDenied
