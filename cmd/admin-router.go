@@ -166,6 +166,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 	//
 	adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/kms/key/status").HandlerFunc(httpTraceAll(adminAPI.KMSKeyStatusHandler))
 
+	// -- OBD API --
+	adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/obdinfo").HandlerFunc(httpTraceAll(adminAPI.OBDInfoHandler)).Queries("drive", "{drive:true|false}", "net", "{net:true|false}" , "sysinfo", "{sysinfo:true|false}", "hwinfo", "{hwinfo:true|false}", "config", "{config:true|false}")
+	
 	// If none of the routes match add default error handler routes
 	adminRouter.NotFoundHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
 	adminRouter.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))

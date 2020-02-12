@@ -1372,6 +1372,55 @@ func (a adminAPIHandlers) ServerHardwareInfoHandler(w http.ResponseWriter, r *ht
 	}
 }
 
+// OBDInfoHandler - GET /minio/admin/v2/obdinfo
+// ----------
+// Get server on-board diagnostics
+func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "OBDInfo")
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.OBDInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	obdInfo := madmin.OBDInfo{}
+	vars := mux.Vars(r)
+	
+	if drive, ok := vars["drive"]; ok && drive == "true"{
+		// Get drive performance details from local server's drive(s)
+		driveOBD := getLocalDrivesOBD(globalEndpoints, r)
+
+		// Notify all other MinIO peers to report drive performance numbers
+		driveOBDs := globalNotificationSys.DriveOBDInfo()
+		driveOBDs = append(driveOBDs, driveOBD)
+		
+		obdInfo.DriveInfo = driveOBDs
+	}
+	
+	if c, ok := vars["config"]; ok && c == "true" {
+		cfg, err := readServerConfig(ctx, objectAPI)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		cfgBytes, err := json.Marshal(cfg)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		obdInfo.Config = cfgBytes
+
+	}
+	// Marshal API response
+	jsonBytes, err := json.Marshal(obdInfo)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, jsonBytes)
+}
+
 // ServerInfoHandler - GET /minio/admin/v2/info
 // ----------
 // Get server information

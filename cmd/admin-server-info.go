@@ -90,6 +90,49 @@ func getLocalCPULoad(endpointZones EndpointZones, r *http.Request) ServerCPULoad
 	}
 }
 
+func getLocalDrivesOBD(endpointZones EndpointZones, r *http.Request) madmin.ServerDrivesOBDInfo {
+	var drivesOBDInfo []madmin.DriveOBDInfo
+	for _, ep := range endpointZones {
+		for _, endpoint := range ep.Endpoints {
+			// Only proceed for local endpoints
+			if endpoint.IsLocal {
+				if _, err := os.Stat(endpoint.Path); err != nil {
+					// Since this drive is not available, add relevant details and proceed
+					drivesOBDInfo = append(drivesOBDInfo, madmin.DriveOBDInfo{
+						Path:  endpoint.Path,
+						Error: err.Error(),
+					})
+					continue
+				}
+				latency, throughput, err := disk.GetOBDInfo(pathJoin(endpoint.Path, minioMetaTmpBucket, mustGetUUID()))
+				if err != nil {
+					drivesOBDInfo = append(drivesOBDInfo, madmin.DriveOBDInfo{
+						Path:  endpoint.Path,
+						Error: err.Error(),
+					})
+					continue
+				}
+				driveOBDInfo := madmin.DriveOBDInfo{
+					Path:       endpoint.Path,
+					Latency:    latency,
+					Throughput: throughput,
+				}
+				drivesOBDInfo = append(drivesOBDInfo, driveOBDInfo)
+			}
+		}
+	}
+	addr := r.Host
+	if globalIsDistXL {
+		addr = GetLocalPeer(endpointZones)
+	} else {
+		addr = "minio"
+	}
+	return madmin.ServerDrivesOBDInfo{
+		Addr:   addr,
+		Drives: drivesOBDInfo,
+	}
+}
+
 // getLocalDrivesPerf - returns ServerDrivesPerfInfo for all zones, endpoints.
 func getLocalDrivesPerf(endpointZones EndpointZones, size int64, r *http.Request) madmin.ServerDrivesPerfInfo {
 	var dps []disk.Performance

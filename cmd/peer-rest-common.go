@@ -30,6 +30,7 @@ const (
 	peerRESTMethodCPULoadInfo                  = "/cpuloadinfo"
 	peerRESTMethodMemUsageInfo                 = "/memusageinfo"
 	peerRESTMethodDrivePerfInfo                = "/driveperfinfo"
+	peerRESTMethodDriveOBDInfo                 = "/driveobdinfo"
 	peerRESTMethodDeleteBucket                 = "/deletebucket"
 	peerRESTMethodServerUpdate                 = "/serverupdate"
 	peerRESTMethodSignalService                = "/signalservice"

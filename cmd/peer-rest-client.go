@@ -190,6 +190,17 @@ func (client *peerRESTClient) NetworkInfo() (info madmin.ServerNetworkHardwareIn
 	return info, err
 }
 
+// DriveOBDInfo - fetch Drive OBD information for a remote node.
+func (client *peerRESTClient) DriveOBDInfo() (info madmin.ServerDrivesOBDInfo, err error) {
+	respBody, err := client.call(peerRESTMethodDriveOBDInfo, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
 // DrivePerfInfo - fetch Drive performance information for a remote node.
 func (client *peerRESTClient) DrivePerfInfo(size int64) (info madmin.ServerDrivesPerfInfo, err error) {
 	params := make(url.Values)

@@ -51,7 +51,9 @@ const (
 	ServerHardwareInfoAdminAction = "admin:HardwareInfo"
 	// ServerInfoAdminAction - allow listing server info
 	ServerInfoAdminAction = "admin:ServerInfo"
-
+	// OBDInfoAdminAction - allow obtaining cluster on-board diagnostics
+	OBDInfoAdminAction = "admin:OBDInfo"
+	
 	// ServerUpdateAdminAction - allow MinIO binary update
 	ServerUpdateAdminAction = "admin:ServerUpdate"
 

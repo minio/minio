@@ -890,6 +890,36 @@ func (sys *NotificationSys) CollectNetPerfInfo(size int64) map[string][]ServerNe
 	return reply
 }
 
+// DriveOBDInfo - Drive OBD information
+func (sys *NotificationSys) DriveOBDInfo() []madmin.ServerDrivesOBDInfo {
+	reply := make([]madmin.ServerDrivesOBDInfo, len(sys.peerClients))
+
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			reply[index], err = sys.peerClients[index].DriveOBDInfo()
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			addr := sys.peerClients[index].host.String()
+			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
+			reply[index].Addr = addr
+			reply[index].Error = err.Error()
+		}
+	}
+	return reply
+}
+
 // DrivePerfInfo - Drive speed (read and write) information
 func (sys *NotificationSys) DrivePerfInfo(size int64) []madmin.ServerDrivesPerfInfo {
 	reply := make([]madmin.ServerDrivesPerfInfo, len(sys.peerClients))
