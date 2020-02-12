@@ -58,8 +58,8 @@ func (alg *SSEAlgorithm) MarshalXML(e *xml.Encoder, start xml.StartElement) erro
 
 // EncryptionAction - for ApplyServerSideEncryptionByDefault XML tag
 type EncryptionAction struct {
-	Algorithm   SSEAlgorithm `xml:"SSEAlgorithm"`
-	MasterKeyID string       `xml:"KMSMasterKeyID"`
+	Algorithm   SSEAlgorithm `xml:"SSEAlgorithm,omitempty"`
+	MasterKeyID string       `xml:"KMSMasterKeyID,omitempty"`
 }
 
 // SSERule - for ServerSideEncryptionConfiguration XML tag
@@ -67,8 +67,11 @@ type SSERule struct {
 	DefaultEncryptionAction EncryptionAction `xml:"ApplyServerSideEncryptionByDefault"`
 }
 
+const xmlNS = "http://s3.amazonaws.com/doc/2006-03-01/"
+
 // BucketSSEConfig - represents default bucket encryption configuration
 type BucketSSEConfig struct {
+	XMLNS   string    `xml:"xmlns,attr,omitempty"`
 	XMLName xml.Name  `xml:"ServerSideEncryptionConfiguration"`
 	Rules   []SSERule `xml:"Rule"`
 }
@@ -99,5 +102,10 @@ func ParseBucketSSEConfig(r io.Reader) (*BucketSSEConfig, error) {
 			}
 		}
 	}
+
+	if config.XMLNS == "" {
+		config.XMLNS = xmlNS
+	}
+
 	return &config, nil
 }
