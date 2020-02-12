@@ -23,13 +23,14 @@ import (
 // Error is the generic type for any error happening during tag
 // parsing.
 type Error struct {
-	err error
+	err  error
+	code string
 }
 
 // Errorf - formats according to a format specifier and returns
 // the string as a value that satisfies error of type tagging.Error
-func Errorf(format string, a ...interface{}) error {
-	return Error{err: fmt.Errorf(format, a...)}
+func Errorf(format, code string, a ...interface{}) error {
+	return Error{err: fmt.Errorf(format, a...), code: code}
 }
 
 // Unwrap the internal error.
@@ -41,4 +42,12 @@ func (e Error) Error() string {
 		return "tagging: cause <nil>"
 	}
 	return e.err.Error()
+}
+
+// Code returns appropriate error code.
+func (e Error) Code() string {
+	if e.code == "" {
+		return "BadRequest"
+	}
+	return e.code
 }
