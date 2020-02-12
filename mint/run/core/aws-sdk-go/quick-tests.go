@@ -607,6 +607,200 @@ func testObjectTagging(s3Client *s3.S3) {
 		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUTObjectTagging input did not match with GetObjectTagging output %v", nil), nil).Fatal()
 		return
 	}
+	successLogger(function, args, startTime).Info()
+}
+
+func testObjectTaggingErrors(s3Client *s3.S3) {
+	startTime := time.Now()
+	function := "testObjectTagging"
+	bucket := randString(60, rand.NewSource(time.Now().UnixNano()), "aws-sdk-go-test-")
+	object := randString(60, rand.NewSource(time.Now().UnixNano()), "")
+	args := map[string]interface{}{
+		"bucketName": bucket,
+		"objectName": object,
+	}
+
+	_, err := s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucket),
+	})
+	if err != nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CreateBucket Failed", err).Fatal()
+		return
+	}
+	defer cleanup(s3Client, bucket, object, function, args, startTime, true)
+
+	_, err = s3Client.PutObject(&s3.PutObjectInput{
+		Body:   aws.ReadSeekCloser(strings.NewReader("testfile")),
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+	})
+
+	if err != nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to success but got %v", err), err).Fatal()
+		return
+	}
+
+	// case 1 : Too many tags > 10
+	input := &s3.PutObjectTaggingInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+		Tagging: &s3.Tagging{
+			TagSet: []*s3.Tag{
+				{
+					Key:   aws.String("Key1"),
+					Value: aws.String("Value3"),
+				},
+				{
+					Key:   aws.String("Key2"),
+					Value: aws.String("Value4"),
+				},
+				{
+					Key:   aws.String("Key3"),
+					Value: aws.String("Value3"),
+				},
+				{
+					Key:   aws.String("Key4"),
+					Value: aws.String("Value3"),
+				},
+				{
+					Key:   aws.String("Key5"),
+					Value: aws.String("Value3"),
+				},
+				{
+					Key:   aws.String("Key6"),
+					Value: aws.String("Value3"),
+				},
+				{
+					Key:   aws.String("Key7"),
+					Value: aws.String("Value3"),
+				},
+				{
+					Key:   aws.String("Key8"),
+					Value: aws.String("Value3"),
+				},
+				{
+					Key:   aws.String("Key9"),
+					Value: aws.String("Value3"),
+				},
+				{
+					Key:   aws.String("Key10"),
+					Value: aws.String("Value3"),
+				},
+				{
+					Key:   aws.String("Key11"),
+					Value: aws.String("Value3"),
+				},
+			},
+		},
+	}
+
+	_, err = s3Client.PutObjectTagging(input)
+	if err == nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to fail but succeeded"), err).Fatal()
+		return
+	}
+
+	if aerr, ok := err.(awserr.Error); ok {
+		if aerr.Code() != "BadRequest" && aerr.Message() != "BadRequest: Object tags cannot be greater than 10" {
+			failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to fail but got %v", err), err).Fatal()
+			return
+		}
+	}
+
+	// case 2 : Duplicate Tag Keys
+	input = &s3.PutObjectTaggingInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+		Tagging: &s3.Tagging{
+			TagSet: []*s3.Tag{
+				{
+					Key:   aws.String("Key1"),
+					Value: aws.String("Value3"),
+				},
+				{
+					Key:   aws.String("Key1"),
+					Value: aws.String("Value4"),
+				},
+			},
+		},
+	}
+
+	_, err = s3Client.PutObjectTagging(input)
+	if err == nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to fail but succeeded"), err).Fatal()
+		return
+	}
+
+	if aerr, ok := err.(awserr.Error); ok {
+		if aerr.Code() != "InvalidTag" && aerr.Message() != "InvalidTag: Cannot provide multiple Tags with the same key" {
+			failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to fail but got %v", err), err).Fatal()
+			return
+		}
+	}
+
+	// case 3 : Too long Tag Key
+	input = &s3.PutObjectTaggingInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+		Tagging: &s3.Tagging{
+			TagSet: []*s3.Tag{
+				{
+					Key:   aws.String("Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1"),
+					Value: aws.String("Value3"),
+				},
+				{
+					Key:   aws.String("Key1"),
+					Value: aws.String("Value4"),
+				},
+			},
+		},
+	}
+
+	_, err = s3Client.PutObjectTagging(input)
+	if err == nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to fail but succeeded"), err).Fatal()
+		return
+	}
+
+	if aerr, ok := err.(awserr.Error); ok {
+		if aerr.Code() != "InvalidTag" && aerr.Message() != "InvalidTag: The TagKey you have provided is invalid" {
+			failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to fail but got %v", err), err).Fatal()
+			return
+		}
+	}
+
+	// case 4 : Too long Tag value
+	input = &s3.PutObjectTaggingInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+		Tagging: &s3.Tagging{
+			TagSet: []*s3.Tag{
+				{
+					Key:   aws.String("Key1"),
+					Value: aws.String("Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1Key1"),
+				},
+				{
+					Key:   aws.String("Key1"),
+					Value: aws.String("Value4"),
+				},
+			},
+		},
+	}
+
+	_, err = s3Client.PutObjectTagging(input)
+	if err == nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to fail but succeeded"), err).Fatal()
+		return
+	}
+
+	if aerr, ok := err.(awserr.Error); ok {
+		if aerr.Code() != "InvalidTag" && aerr.Message() != "InvalidTag: The TagValue you have provided is invalid" {
+			failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to fail but got %v", err), err).Fatal()
+			return
+		}
+	}
+
+	successLogger(function, args, startTime).Info()
 }
 
 // Tests bucket re-create errors.
@@ -853,5 +1047,6 @@ func main() {
 	}
 	if isObjectTaggingImplemented(s3Client) {
 		testObjectTagging(s3Client)
+		testObjectTaggingErrors(s3Client)
 	}
 }
