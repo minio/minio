@@ -19,6 +19,7 @@ package gcs
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,10 +27,10 @@ import (
 	"io/ioutil"
 	"math"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -37,11 +38,12 @@ import (
 	"cloud.google.com/go/storage"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/cli"
-	miniogopolicy "github.com/minio/minio-go/pkg/policy"
+	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/policy"
-	"github.com/minio/minio/pkg/policy/condition"
+	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/policy/condition"
+	"github.com/minio/minio/pkg/env"
 
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
@@ -104,45 +106,27 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 PROJECTID:
-  GCS project-id should be provided if GOOGLE_APPLICATION_CREDENTIALS environmental variable is not set.
+  optional GCS project-id expected GOOGLE_APPLICATION_CREDENTIALS env is not set
 
-ENVIRONMENT VARIABLES:
-  ACCESS:
-     MINIO_ACCESS_KEY: Username or access key of GCS.
-     MINIO_SECRET_KEY: Password or secret key of GCS.
-
-  BROWSER:
-     MINIO_BROWSER: To disable web browser access, set this value to "off".
-
-  DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to MinIO host domain name.
-
-  CACHE:
-     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
-     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
-     MINIO_CACHE_EXPIRY: Cache expiry duration in days.
-     MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
-
-  GCS credentials file:
-     GOOGLE_APPLICATION_CREDENTIALS: Path to credentials.json
+GOOGLE_APPLICATION_CREDENTIALS:
+  path to credentials.json, generated it from here https://developers.google.com/identity/protocols/application-default-credentials
 
 EXAMPLES:
-  1. Start minio gateway server for GCS backend.
-     $ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
-     (Instructions to generate credentials : https://developers.google.com/identity/protocols/application-default-credentials)
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ {{.HelpName}} mygcsprojectid
+  1. Start minio gateway server for GCS backend
+     {{.Prompt}} {{.EnvVarSetCommand}} GOOGLE_APPLICATION_CREDENTIALS{{.AssignmentOperator}}/path/to/credentials.json
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.HelpName}} mygcsprojectid
 
-  2. Start minio gateway server for GCS backend with edge caching enabled.
-     $ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-     $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
-     $ export MINIO_CACHE_EXPIRY=40
-     $ export MINIO_CACHE_MAXUSE=80
-     $ {{.HelpName}} mygcsprojectid
+  2. Start minio gateway server for GCS backend with edge caching enabled
+     {{.Prompt}} {{.EnvVarSetCommand}} GOOGLE_APPLICATION_CREDENTIALS{{.AssignmentOperator}}/path/to/credentials.json
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1,/mnt/drive2,/mnt/drive3,/mnt/drive4"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*;*.png"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXPIRY{{.AssignmentOperator}}40
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}80
+     {{.Prompt}} {{.HelpName}} mygcsprojectid
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
@@ -158,13 +142,13 @@ EXAMPLES:
 func gcsGatewayMain(ctx *cli.Context) {
 	projectID := ctx.Args().First()
 	if projectID == "" && os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
-		logger.LogIf(context.Background(), errGCSProjectIDNotFound)
+		logger.LogIf(context.Background(), errGCSProjectIDNotFound, logger.Application)
 		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
 	}
 	if projectID != "" && !isValidGCSProjectIDFormat(projectID) {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("projectID", ctx.Args().First())
 		contxt := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(contxt, errGCSInvalidProjectID)
+		logger.LogIf(contxt, errGCSInvalidProjectID, logger.Application)
 		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
 	}
 
@@ -189,10 +173,17 @@ func (g *GCS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	if g.projectID == "" {
 		// If project ID is not provided on command line, we figure it out
 		// from the credentials.json file.
-		g.projectID, err = gcsParseProjectID(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+		g.projectID, err = gcsParseProjectID(env.Get("GOOGLE_APPLICATION_CREDENTIALS", ""))
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	metrics := minio.NewMetrics()
+
+	t := &minio.MetricsTransport{
+		Transport: minio.NewCustomHTTPTransport(),
+		Metrics:   metrics,
 	}
 
 	// Initialize a GCS client.
@@ -206,6 +197,10 @@ func (g *GCS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	gcs := &gcsGateway{
 		client:    client,
 		projectID: g.projectID,
+		metrics:   metrics,
+		httpClient: &http.Client{
+			Transport: t,
+		},
 	}
 
 	// Start background process to cleanup old files in minio.sys.tmp
@@ -344,8 +339,10 @@ func isValidGCSProjectIDFormat(projectID string) bool {
 // gcsGateway - Implements gateway for MinIO and GCS compatible object storage servers.
 type gcsGateway struct {
 	minio.GatewayUnsupported
-	client    *storage.Client
-	projectID string
+	client     *storage.Client
+	httpClient *http.Client
+	metrics    *minio.Metrics
+	projectID  string
 }
 
 // Returns projectID from the GOOGLE_APPLICATION_CREDENTIALS file.
@@ -359,6 +356,11 @@ func gcsParseProjectID(credsFile string) (projectID string, err error) {
 		return projectID, err
 	}
 	return googleCreds[gcsProjectIDKey], err
+}
+
+// GetMetrics returns this gateway's metrics
+func (l *gcsGateway) GetMetrics(ctx context.Context) (*minio.Metrics, error) {
+	return l.metrics, nil
 }
 
 // Cleanup old files in minio.sys.tmp of the given bucket.
@@ -394,10 +396,6 @@ func (l *gcsGateway) CleanupGCSMinioSysTmp(ctx context.Context) {
 		for {
 			attrs, err := it.Next()
 			if err != nil {
-				if err != iterator.Done {
-					ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{})
-					logger.LogIf(ctx, err)
-				}
 				break
 			}
 			l.CleanupGCSMinioSysTmpBucket(ctx, attrs.Name)
@@ -414,8 +412,10 @@ func (l *gcsGateway) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo - Not relevant to GCS backend.
-func (l *gcsGateway) StorageInfo(ctx context.Context) minio.StorageInfo {
-	return minio.StorageInfo{}
+func (l *gcsGateway) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
+	si.Backend.Type = minio.BackendGateway
+	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.httpClient, "https://storage.googleapis.com")
+	return si
 }
 
 // MakeBucketWithLocation - Create a new container on GCS backend.
@@ -460,7 +460,6 @@ func (l *gcsGateway) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 		}
 
 		if ierr != nil {
-			logger.LogIf(ctx, ierr)
 			return buckets, gcsToObjectError(ierr)
 		}
 
@@ -476,7 +475,7 @@ func (l *gcsGateway) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 // DeleteBucket delete a bucket on GCS.
 func (l *gcsGateway) DeleteBucket(ctx context.Context, bucket string) error {
 	itObject := l.client.Bucket(bucket).Objects(ctx, &storage.Query{
-		Delimiter: "/",
+		Delimiter: minio.SlashSeparator,
 		Versions:  false,
 	})
 	// We list the bucket and if we find any objects we return BucketNotEmpty error. If we
@@ -766,7 +765,7 @@ func (l *gcsGateway) GetObject(ctx context.Context, bucket string, key string, s
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(ctx); err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, err, logger.Application)
 		return gcsToObjectError(err, bucket)
 	}
 
@@ -779,7 +778,7 @@ func (l *gcsGateway) GetObject(ctx context.Context, bucket string, key string, s
 
 	r, err := object.NewRangeReader(ctx, startOffset, length)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, err, logger.Application)
 		return gcsToObjectError(err, bucket, key)
 	}
 	defer r.Close()
@@ -830,12 +829,17 @@ func fromGCSAttrsToObjectInfo(attrs *storage.ObjectAttrs) minio.ObjectInfo {
 	if attrs.ContentLanguage != "" {
 		metadata["Content-Language"] = attrs.ContentLanguage
 	}
+
+	etag := hex.EncodeToString(attrs.MD5)
+	if etag == "" {
+		etag = minio.ToS3ETag(fmt.Sprintf("%d", attrs.CRC32C))
+	}
 	return minio.ObjectInfo{
 		Name:            attrs.Name,
 		Bucket:          attrs.Bucket,
 		ModTime:         attrs.Updated,
 		Size:            attrs.Size,
-		ETag:            minio.ToS3ETag(fmt.Sprintf("%d", attrs.CRC32C)),
+		ETag:            etag,
 		UserDefined:     metadata,
 		ContentType:     attrs.ContentType,
 		ContentEncoding: attrs.ContentEncoding,
@@ -872,7 +876,7 @@ func (l *gcsGateway) GetObjectInfo(ctx context.Context, bucket string, object st
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(ctx); err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, err, logger.Application)
 		return minio.ObjectInfo{}, gcsToObjectError(err, bucket)
 	}
 
@@ -892,7 +896,7 @@ func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, r
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(ctx); err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, err, logger.Application)
 		return minio.ObjectInfo{}, gcsToObjectError(err, bucket)
 	}
 
@@ -915,15 +919,12 @@ func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, r
 	}
 
 	// Close the object writer upon success.
-	w.Close()
-
-	attrs, err := object.Attrs(ctx)
-	if err != nil {
+	if err := w.Close(); err != nil {
 		logger.LogIf(ctx, err)
 		return minio.ObjectInfo{}, gcsToObjectError(err, bucket, key)
 	}
 
-	return fromGCSAttrsToObjectInfo(attrs), nil
+	return fromGCSAttrsToObjectInfo(w.Attrs()), nil
 }
 
 // CopyObject - Copies a blob from source container to destination container.
@@ -956,6 +957,14 @@ func (l *gcsGateway) DeleteObject(ctx context.Context, bucket string, object str
 	}
 
 	return nil
+}
+
+func (l *gcsGateway) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = l.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
 }
 
 // NewMultipartUpload - upload object in multiple parts
@@ -1034,7 +1043,7 @@ func (l *gcsGateway) ListMultipartUploads(ctx context.Context, bucket string, pr
 		if prefix == mpMeta.Object {
 			// Extract uploadId
 			// E.g minio.sys.tmp/multipart/v1/d063ad89-fdc4-4ea3-a99e-22dba98151f5/gcs.json
-			components := strings.SplitN(attrs.Name, "/", 5)
+			components := strings.SplitN(attrs.Name, minio.SlashSeparator, 5)
 			if len(components) != 5 {
 				compErr := errors.New("Invalid multipart upload format")
 				logger.LogIf(ctx, compErr)
@@ -1093,7 +1102,10 @@ func (l *gcsGateway) PutObjectPart(ctx context.Context, bucket string, key strin
 		return minio.PartInfo{}, gcsToObjectError(err, bucket, key)
 	}
 	// Make sure to close the object writer upon success.
-	w.Close()
+	if err := w.Close(); err != nil {
+		logger.LogIf(ctx, err)
+		return minio.PartInfo{}, gcsToObjectError(err, bucket, key)
+	}
 	return minio.PartInfo{
 		PartNumber:   partNumber,
 		ETag:         etag,
@@ -1105,7 +1117,7 @@ func (l *gcsGateway) PutObjectPart(ctx context.Context, bucket string, key strin
 
 // gcsGetPartInfo returns PartInfo of a given object part
 func gcsGetPartInfo(ctx context.Context, attrs *storage.ObjectAttrs) (minio.PartInfo, error) {
-	components := strings.SplitN(attrs.Name, "/", 5)
+	components := strings.SplitN(attrs.Name, minio.SlashSeparator, 5)
 	if len(components) != 5 {
 		logger.LogIf(ctx, errors.New("Invalid multipart upload format"))
 		return minio.PartInfo{}, errors.New("Invalid multipart upload format")
@@ -1468,4 +1480,9 @@ func (l *gcsGateway) DeleteBucketPolicy(ctx context.Context, bucket string) erro
 // IsCompressionSupported returns whether compression is applicable for this layer.
 func (l *gcsGateway) IsCompressionSupported() bool {
 	return false
+}
+
+// IsReady returns whether the layer is ready to take requests.
+func (l *gcsGateway) IsReady(ctx context.Context) bool {
+	return minio.IsBackendOnline(ctx, l.httpClient, "https://storage.googleapis.com")
 }

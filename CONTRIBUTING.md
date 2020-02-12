@@ -1,4 +1,4 @@
-# MinIO Contribution Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# MinIO Contribution Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
 ``MinIO`` community welcomes your contribution. To make the process as seamless as possible, we recommend you read this contribution guide.
 
@@ -37,7 +37,7 @@ After your code changes, make sure
 - To add test cases for the new code. If you have questions about how to do it, please ask on our [Slack](https://slack.min.io) channel.
 - To run `make verifiers`
 - To squash your commits into a single commit. `git rebase -i`. It's okay to force update your pull request.
-- To run `go test -race ./...` and `go build` completes.
+- To run `make test` and `make build` completes.
 
 ### Commit changes
 After verification, commit your changes. This is a [great post](https://chris.beams.io/posts/git-commit/) on how to write useful commit messages

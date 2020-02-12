@@ -44,7 +44,7 @@ func (c credentialHeader) getScope() string {
 		c.scope.region,
 		c.scope.service,
 		c.scope.request,
-	}, "/")
+	}, SlashSeparator)
 }
 
 func getReqAccessKeyV4(r *http.Request, region string, stype serviceType) (auth.Credentials, bool, APIErrorCode) {
@@ -73,11 +73,11 @@ func parseCredentialHeader(credElement string, region string, stype serviceType)
 	if creds[0] != "Credential" {
 		return ch, ErrMissingCredTag
 	}
-	credElements := strings.Split(strings.TrimSpace(creds[1]), "/")
+	credElements := strings.Split(strings.TrimSpace(creds[1]), SlashSeparator)
 	if len(credElements) < 5 {
 		return ch, ErrCredMalformed
 	}
-	accessKey := strings.Join(credElements[:len(credElements)-4], "/") // The access key may contain one or more `/`
+	accessKey := strings.Join(credElements[:len(credElements)-4], SlashSeparator) // The access key may contain one or more `/`
 	if !auth.IsAccessKeyValid(accessKey) {
 		return ch, ErrInvalidAccessKeyID
 	}
@@ -250,6 +250,8 @@ func parsePreSignV4(query url.Values, region string, stype serviceType) (psv pre
 //            SignedHeaders=signedHeaders, Signature=signature
 //
 func parseSignV4(v4Auth string, region string, stype serviceType) (sv signValues, aec APIErrorCode) {
+	// credElement is fetched first to skip replacing the space in access key.
+	credElement := strings.TrimPrefix(strings.Split(strings.TrimSpace(v4Auth), ",")[0], signV4Algorithm)
 	// Replace all spaced strings, some clients can send spaced
 	// parameters and some won't. So we pro-actively remove any spaces
 	// to make parsing easier.
@@ -275,7 +277,7 @@ func parseSignV4(v4Auth string, region string, stype serviceType) (sv signValues
 
 	var err APIErrorCode
 	// Save credentail values.
-	signV4Values.Credential, err = parseCredentialHeader(authFields[0], region, stype)
+	signV4Values.Credential, err = parseCredentialHeader(strings.TrimSpace(credElement), region, stype)
 	if err != ErrNone {
 		return sv, err
 	}

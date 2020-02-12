@@ -24,7 +24,7 @@ function start_minio_server()
     MINIO_ACCESS_KEY=minio MINIO_SECRET_KEY=minio123 \
                     minio --quiet --json server /data --address 127.0.0.1:24242 > server.log 2>&1 &
     server_pid=$!
-    sleep 3
+    sleep 10
 
     echo "$server_pid"
 }
@@ -35,7 +35,7 @@ function start_minio_gateway_s3()
                     minio --quiet --json gateway s3 http://127.0.0.1:24242 \
                     --address 127.0.0.1:24240 > gateway.log 2>&1 &
     gw_pid=$!
-    sleep 3
+    sleep 10
 
     echo "$gw_pid"
 }
@@ -46,9 +46,9 @@ function main()
     gw_pid="$(start_minio_gateway_s3)"
 
     SERVER_ENDPOINT=127.0.0.1:24240 ENABLE_HTTPS=0 ACCESS_KEY=minio \
-                   SECRET_KEY=minio123 MINT_MODE="full" /mint/entrypoint.sh aws-sdk-go \
-                   aws-sdk-java aws-sdk-php aws-sdk-ruby awscli healthcheck minio-dotnet \
-                   minio-go minio-java minio-js minio-py
+                   SECRET_KEY=minio123 MINT_MODE="full" /mint/entrypoint.sh \
+                   awscli aws-sdk-java aws-sdk-ruby mc minio-go minio-js s3cmd \
+                   aws-sdk-go aws-sdk-php healthcheck minio-dotnet minio-py security
     rv=$?
 
     kill "$sr_pid"

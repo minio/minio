@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018, 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,11 @@ type PeerRESTClientTarget struct {
 // ID - returns target ID.
 func (target *PeerRESTClientTarget) ID() event.TargetID {
 	return target.id
+}
+
+// IsActive - does nothing and available for interface compatibility.
+func (target *PeerRESTClientTarget) IsActive() (bool, error) {
+	return true, nil
 }
 
 // Save - Sends event directly without persisting.

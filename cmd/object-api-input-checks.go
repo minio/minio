@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
@@ -36,7 +37,7 @@ func checkDelObjArgs(ctx context.Context, bucket, object string) error {
 // Checks bucket and object name validity, returns nil if both are valid.
 func checkBucketAndObjectNames(ctx context.Context, bucket, object string) error {
 	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
+	if !isMinioMetaBucketName(bucket) && s3utils.CheckValidBucketName(bucket) != nil {
 		logger.LogIf(ctx, BucketNameInvalid{Bucket: bucket})
 		return BucketNameInvalid{Bucket: bucket}
 	}
@@ -73,17 +74,8 @@ func checkListObjsArgs(ctx context.Context, bucket, prefix, marker, delimiter st
 			Object: prefix,
 		}
 	}
-	// Verify if delimiter is anything other than '/', which we do not support.
-	if delimiter != "" && delimiter != slashSeparator {
-		logger.LogIf(ctx, UnsupportedDelimiter{
-			Delimiter: delimiter,
-		})
-		return UnsupportedDelimiter{
-			Delimiter: delimiter,
-		}
-	}
 	// Verify if marker has prefix.
-	if marker != "" && !hasPrefix(marker, prefix) {
+	if marker != "" && !HasPrefix(marker, prefix) {
 		logger.LogIf(ctx, InvalidMarkerPrefixCombination{
 			Marker: marker,
 			Prefix: prefix,
@@ -102,7 +94,7 @@ func checkListMultipartArgs(ctx context.Context, bucket, prefix, keyMarker, uplo
 		return err
 	}
 	if uploadIDMarker != "" {
-		if hasSuffix(keyMarker, slashSeparator) {
+		if HasSuffix(keyMarker, SlashSeparator) {
 
 			logger.LogIf(ctx, InvalidUploadIDKeyCombination{
 				UploadIDMarker: uploadIDMarker,
@@ -166,18 +158,19 @@ func checkObjectArgs(ctx context.Context, bucket, object string, obj ObjectLayer
 	if err := checkBucketExist(ctx, bucket, obj); err != nil {
 		return err
 	}
+
+	if err := checkObjectNameForLengthAndSlash(bucket, object); err != nil {
+		return err
+	}
+
 	// Validates object name validity after bucket exists.
 	if !IsValidObjectName(object) {
-		logger.LogIf(ctx, ObjectNameInvalid{
-			Bucket: bucket,
-			Object: object,
-		})
-
 		return ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
 		}
 	}
+
 	return nil
 }
 
@@ -192,9 +185,11 @@ func checkPutObjectArgs(ctx context.Context, bucket, object string, obj ObjectLa
 		return err
 	}
 
+	if err := checkObjectNameForLengthAndSlash(bucket, object); err != nil {
+		return err
+	}
 	if len(object) == 0 ||
-		hasPrefix(object, slashSeparator) ||
-		(hasSuffix(object, slashSeparator) && size != 0) ||
+		(HasSuffix(object, SlashSeparator) && size != 0) ||
 		!IsValidObjectPrefix(object) {
 		return ObjectNameInvalid{
 			Bucket: bucket,

@@ -16,6 +16,10 @@
         font-weight: normal;
         margin: 0;
 
+        @media(min-width: (@screen-md-min)) {
+            width: calc(100% - 60px);
+        }
+
         & > span {
             margin-bottom: 7px;
             display: inline-block;
@@ -27,7 +31,7 @@
                     color: @text-color;
                 }
             }
-            &:last-child {
+            &:last-of-type {
                 &:after {
                     content: '/';
                     margin: 0 4px;
@@ -42,6 +46,19 @@
     }
 }
 
+
+/*--------------------------
+    Edit path
+----------------------------*/
+.fe-edit {
+    font-size: 20px;
+    color: @link-color;
+    margin-left: 4px;
+
+    i {
+        vertical-align: middle;
+    }
+}
 
 /*--------------------------
     Disk used
@@ -132,7 +149,7 @@
             @media(max-width: (@screen-sm-max)) {
                 background: url(../../img/more-h-light.svg) no-repeat center;
 
-                .fa-reorder {
+                .fa-bars {
                     display: none;
                 }
             }

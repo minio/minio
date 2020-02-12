@@ -17,6 +17,9 @@
 package cmd
 
 import (
+	"os"
+	"strings"
+
 	"github.com/gorilla/mux"
 )
 
@@ -24,9 +27,28 @@ const (
 	prometheusMetricsPath = "/prometheus/metrics"
 )
 
+// Standard env prometheus auth type
+const (
+	EnvPrometheusAuthType = "MINIO_PROMETHEUS_AUTH_TYPE"
+)
+
+type prometheusAuthType string
+
+const (
+	prometheusJWT    prometheusAuthType = "jwt"
+	prometheusPublic prometheusAuthType = "public"
+)
+
 // registerMetricsRouter - add handler functions for metrics.
 func registerMetricsRouter(router *mux.Router) {
 	// metrics router
 	metricsRouter := router.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
-	metricsRouter.Handle(prometheusMetricsPath, metricsHandler())
+
+	authType := strings.ToLower(os.Getenv(EnvPrometheusAuthType))
+	switch prometheusAuthType(authType) {
+	case prometheusPublic:
+		metricsRouter.Handle(prometheusMetricsPath, metricsHandler())
+	default:
+		metricsRouter.Handle(prometheusMetricsPath, AuthMiddleware(metricsHandler()))
+	}
 }

@@ -29,15 +29,15 @@ import (
 	humanize "github.com/dustin/go-humanize"
 
 	"github.com/minio/cli"
-	miniogopolicy "github.com/minio/minio-go/pkg/policy"
-	"github.com/minio/minio-go/pkg/s3utils"
+	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/policy/condition"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/policy"
-	"github.com/minio/minio/pkg/policy/condition"
 )
 
 const (
@@ -58,44 +58,22 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 ENDPOINT:
-  OSS server endpoint. Default ENDPOINT is https://oss.aliyuncs.com
-
-ENVIRONMENT VARIABLES:
-  ACCESS:
-     MINIO_ACCESS_KEY: Username or access key of OSS storage.
-     MINIO_SECRET_KEY: Password or secret key of OSS storage.
-
-  BROWSER:
-     MINIO_BROWSER: To disable web browser access, set this value to "off".
-
-  DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to MinIO host domain name.
-
-  CACHE:
-     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
-     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
-     MINIO_CACHE_EXPIRY: Cache expiry duration in days.
-     MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
+  oss server endpoint. Default ENDPOINT is https://oss.aliyuncs.com
 
 EXAMPLES:
-  1. Start minio gateway server for Aliyun OSS backend.
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ {{.HelpName}}
+  1. Start minio gateway server for Aliyun OSS backend
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.HelpName}}
 
-  2. Start minio gateway server for Aliyun OSS backend on custom endpoint.
-     $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
-     $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-     $ {{.HelpName}} https://oss.example.com
-
-  3. Start minio gateway server for Aliyun OSS backend with edge caching enabled.
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-     $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
-     $ export MINIO_CACHE_EXPIRY=40
-     $ export MINIO_CACHE_MAXUSE=80
-     $ {{.HelpName}}
+  2. Start minio gateway server for Aliyun OSS backend with edge caching enabled
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1,/mnt/drive2,/mnt/drive3,/mnt/drive4"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*,*.png"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXPIRY{{.AssignmentOperator}}40
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}80
+     {{.Prompt}} {{.HelpName}}
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
@@ -145,7 +123,9 @@ func (g *OSS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	if err != nil {
 		return nil, err
 	}
-
+	client.HTTPClient = &http.Client{
+		Transport: minio.NewCustomHTTPTransport(),
+	}
 	return &ossObjects{
 		Client: client,
 	}, nil
@@ -341,7 +321,9 @@ func (l *ossObjects) Shutdown(ctx context.Context) error {
 
 // StorageInfo is not relevant to OSS backend.
 func (l *ossObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
-	return
+	si.Backend.Type = minio.BackendGateway
+	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.Client.HTTPClient, l.Client.Config.Endpoint)
+	return si
 }
 
 // ossIsValidBucketName verifies whether a bucket name is valid.
@@ -519,13 +501,13 @@ func (l *ossObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continua
 // length indicates the total length of the object.
 func ossGetObject(ctx context.Context, client *oss.Client, bucket, key string, startOffset, length int64, writer io.Writer, etag string) error {
 	if length < 0 && length != -1 {
-		logger.LogIf(ctx, fmt.Errorf("Invalid argument"))
+		logger.LogIf(ctx, fmt.Errorf("Invalid argument"), logger.Application)
 		return ossToObjectError(fmt.Errorf("Invalid argument"), bucket, key)
 	}
 
 	bkt, err := client.Bucket(bucket)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, err, logger.Application)
 		return ossToObjectError(err, bucket, key)
 	}
 
@@ -708,6 +690,14 @@ func (l *ossObjects) DeleteObject(ctx context.Context, bucket, object string) er
 		return ossToObjectError(err, bucket, object)
 	}
 	return nil
+}
+
+func (l *ossObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = l.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
 }
 
 // fromOSSClientListMultipartsInfo converts oss ListMultipartUploadResult to ListMultipartsInfo
@@ -1107,4 +1097,9 @@ func (l *ossObjects) DeleteBucketPolicy(ctx context.Context, bucket string) erro
 // IsCompressionSupported returns whether compression is applicable for this layer.
 func (l *ossObjects) IsCompressionSupported() bool {
 	return false
+}
+
+// IsReady returns whether the layer is ready to take requests.
+func (l *ossObjects) IsReady(ctx context.Context) bool {
+	return minio.IsBackendOnline(ctx, l.Client.HTTPClient, l.Client.Config.Endpoint)
 }

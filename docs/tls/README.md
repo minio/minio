@@ -13,26 +13,25 @@ Install MinIO Server using the instructions in the [MinIO Quickstart Guide](http
 
 ## <a name="use-an-existing-key-and-certificate-with-minio"></a>2. Use an Existing Key and Certificate with MinIO 
 
-This section describes how to use a private key and public certificate that have been obtained from a certificate authority (CA). If these files have not been obtained, skip to [3. Generate Self-signed Certificates](#generate-use-self-signed-keys-certificates) or generate them with [Let's Encrypt](https://letsencrypt.org) using these instructions: [https://docs.min.io/docs/generate-let-s-encypt-certificate-using-concert-for-minio](https://docs.min.io/docs/).
+This section describes how to use a private key and public certificate that have been obtained from a certificate authority (CA). If these files have not been obtained, skip to [3. Generate Self-signed Certificates](#generate-use-self-signed-keys-certificates) or generate them with [Let's Encrypt](https://letsencrypt.org) using these instructions: [Generate let's encypt certificate using concert for minio](https://docs.min.io/docs/generate-let-s-encypt-certificate-using-concert-for-minio.html).
 
 Copy the existing private key and public certificate to the `certs` directory. The default certs directory is:
 * **Linux:** `${HOME}/.minio/certs`
 * **Windows:** `%%USERPROFILE%%\.minio\certs`
 
-> NOTE: Location of custom certs directory can be specified using `--certs-dir` command line option.
-
-**Note:** 
-* The key and certificate files must be appended with `.key` and `.crt`, respectively.
+**Note:**
+* Location of custom certs directory can be specified using `--certs-dir` command line option.
+* Inside the `certs` directory, the private key must by named `private.key` and the public key must be named `public.crt`.
 * A certificate signed by a CA contains information about the issued identity (e.g. name, expiry, public key) and any intermediate certificates. The root CA is not included.
 
 ## <a name="generate-use-self-signed-keys-certificates"></a>3. Generate and use Self-signed Keys and Certificates with MinIO
 
 This section describes how to generate a self-signed certificate using various tools:
 
-3.1 [Use generate_cert.go to Generate a Certificate](#using-go) 
-3.2 [Use OpenSSL to Generate a Certificate](#using-open-ssl) 
-3.3 [Use OpenSSL (with IP address) to Generate a Certificate](#using-open-ssl-with-ip) 
-3.4 [Use GnuTLS (for Windows) to Generate a Certificate](#using-gnu-tls)
+* 3.1 [Use generate_cert.go to Generate a Certificate](#using-go) 
+* 3.2 [Use OpenSSL to Generate a Certificate](#using-open-ssl) 
+* 3.3 [Use OpenSSL (with IP address) to Generate a Certificate](#using-open-ssl-with-ip) 
+* 3.4 [Use GnuTLS (for Windows) to Generate a Certificate](#using-gnu-tls) 
 
 **Note:**
 * MinIO only supports keys and certificates in PEM format on Linux and Windows.
@@ -64,7 +63,6 @@ Use one of the following methods to generate a certificate using `openssl`:
 * 3.2.1 [Generate a private key with ECDSA](#generate-private-key-with-ecdsa) 
 * 3.2.2 [Generate a private key with RSA](#generate-private-key-with-rsa)
 * 3.2.3 [Generate a self-signed certificate](#generate-a-self-signed-certificate)
-
 
 #### 3.2.1 <a name="generate-private-key-with-ecdsa"></a>Generate a private key with ECDSA.
 
@@ -239,11 +237,6 @@ ip_address = "127.0.0.1"
 
 # Whether this certificate will be used for a TLS server
 tls_www_server
-
-# Whether this certificate will be used to encrypt data (needed
-# in TLS RSA cipher suites). Note that it is preferred to use different
-# keys for encryption and signing.
-encryption_key
 ```
 
 Run `certtool.exe` and specify the configuration file to generate a certificate:

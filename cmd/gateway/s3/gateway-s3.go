@@ -27,15 +27,15 @@ import (
 	"time"
 
 	"github.com/minio/cli"
-	miniogo "github.com/minio/minio-go"
-	"github.com/minio/minio-go/pkg/credentials"
+	miniogo "github.com/minio/minio-go/v6"
+	"github.com/minio/minio-go/v6/pkg/credentials"
 	minio "github.com/minio/minio/cmd"
 
-	"github.com/minio/minio-go/pkg/encrypt"
-	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/encrypt"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/bucket/policy"
 )
 
 const (
@@ -53,62 +53,22 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 ENDPOINT:
-  S3 server endpoint. Default ENDPOINT is https://s3.amazonaws.com
-
-ENVIRONMENT VARIABLES:
-  ACCESS:
-     MINIO_ACCESS_KEY: Username or access key of S3 storage.
-     MINIO_SECRET_KEY: Password or secret key of S3 storage.
-
-  BROWSER:
-     MINIO_BROWSER: To disable web browser access, set this value to "off".
-
-  DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to MinIO host domain name.
-
-  CACHE:
-     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
-     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
-     MINIO_CACHE_EXPIRY: Cache expiry duration in days.
-     MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
-
-  LOGGER:
-     MINIO_LOGGER_HTTP_ENDPOINT: HTTP endpoint URL to log all incoming requests.
+  s3 server endpoint. Default ENDPOINT is https://s3.amazonaws.com
 
 EXAMPLES:
-  1. Start minio gateway server for AWS S3 backend.
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ {{.HelpName}}
+  1. Start minio gateway server for AWS S3 backend
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.HelpName}}
 
-  2. Start minio gateway server for S3 backend on custom endpoint.
-     $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
-     $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-     $ {{.HelpName}} https://play.min.io:9000
-
-  3. Start minio gateway server for AWS S3 backend logging all requests to http endpoint.
-     $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
-     $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-     $ export MINIO_LOGGER_HTTP_ENDPOINT="http://localhost:8000/"
-     $ {{.HelpName}} https://play.min.io:9000
-
-  4. Start minio gateway server for AWS S3 backend with edge caching enabled.
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-     $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
-     $ export MINIO_CACHE_EXPIRY=40
-     $ export MINIO_CACHE_MAXUSE=80
-     $ {{.HelpName}}
-
-  4. Start minio gateway server for AWS S3 backend using AWS environment variables.
-     NOTE: The access and secret key in this case will authenticate with MinIO instead
-     of AWS and AWS envs will be used to authenticate to AWS S3.
-     $ export AWS_ACCESS_KEY_ID=aws_access_key
-     $ export AWS_SECRET_ACCESS_KEY=aws_secret_key
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ {{.HelpName}}
+  2. Start minio gateway server for AWS S3 backend with edge caching enabled
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1,/mnt/drive2,/mnt/drive3,/mnt/drive4"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*,*.png"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXPIRY{{.AssignmentOperator}}40
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}80
+     {{.Prompt}} {{.HelpName}}
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
@@ -169,14 +129,6 @@ func randString(n int, src rand.Source, prefix string) string {
 	return prefix + string(b[0:30-len(prefix)])
 }
 
-func isAmazonS3Endpoint(urlStr string) bool {
-	u, err := url.Parse(urlStr)
-	if err != nil {
-		panic(err)
-	}
-	return s3utils.IsAmazonEndpoint(*u)
-}
-
 // Chains all credential types, in the following order:
 //  - AWS env vars (i.e. AWS_ACCESS_KEY_ID)
 //  - AWS creds file (i.e. AWS_SHARED_CREDENTIALS_FILE or ~/.aws/credentials)
@@ -210,6 +162,11 @@ func newS3(urlStr string) (*miniogo.Core, error) {
 		urlStr = "https://s3.amazonaws.com"
 	}
 
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, err
+	}
+
 	// Override default params if the host is provided
 	endpoint, secure, err := minio.ParseGatewayEndpoint(urlStr)
 	if err != nil {
@@ -217,25 +174,24 @@ func newS3(urlStr string) (*miniogo.Core, error) {
 	}
 
 	var creds *credentials.Credentials
-	if isAmazonS3Endpoint(urlStr) {
+	if s3utils.IsAmazonEndpoint(*u) {
 		// If we see an Amazon S3 endpoint, then we use more ways to fetch backend credentials.
 		// Specifically IAM style rotating credentials are only supported with AWS S3 endpoint.
 		creds = credentials.NewChainCredentials(defaultAWSCredProviders)
+
 	} else {
 		creds = credentials.NewChainCredentials(defaultProviders)
 	}
 
-	clnt, err := miniogo.NewWithCredentials(endpoint, creds, secure, "")
-	if err != nil {
-		return nil, err
+	options := miniogo.Options{
+		Creds:        creds,
+		Secure:       secure,
+		Region:       s3utils.GetRegionFromURL(*u),
+		BucketLookup: miniogo.BucketLookupAuto,
 	}
 
-	// Set custom transport
-	clnt.SetCustomTransport(minio.NewCustomHTTPTransport())
-
-	probeBucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "probe-bucket-sign-")
-	// Check if the provided keys are valid.
-	if _, err = clnt.BucketExists(probeBucketName); err != nil {
+	clnt, err := miniogo.NewWithOptions(endpoint, &options)
+	if err != nil {
 		return nil, err
 	}
 
@@ -251,10 +207,34 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 		return nil, err
 	}
 
-	s := s3Objects{
-		Client: clnt,
+	metrics := minio.NewMetrics()
+
+	t := &minio.MetricsTransport{
+		Transport: minio.NewCustomHTTPTransport(),
+		Metrics:   metrics,
 	}
-	// Enables single encyption of KMS is configured.
+
+	// Set custom transport
+	clnt.SetCustomTransport(t)
+
+	probeBucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "probe-bucket-sign-")
+
+	// Check if the provided keys are valid.
+	if _, err = clnt.BucketExists(probeBucketName); err != nil {
+		if miniogo.ToErrorResponse(err).Code != "AccessDenied" {
+			return nil, err
+		}
+	}
+
+	s := s3Objects{
+		Client:  clnt,
+		Metrics: metrics,
+		HTTPClient: &http.Client{
+			Transport: t,
+		},
+	}
+
+	// Enables single encryption of KMS is configured.
 	if minio.GlobalKMS != nil {
 		encS := s3EncObjects{s}
 
@@ -275,7 +255,14 @@ func (g *S3) Production() bool {
 // s3Objects implements gateway for MinIO and S3 compatible object storage servers.
 type s3Objects struct {
 	minio.GatewayUnsupported
-	Client *miniogo.Core
+	Client     *miniogo.Core
+	HTTPClient *http.Client
+	Metrics    *minio.Metrics
+}
+
+// GetMetrics returns this gateway's metrics
+func (l *s3Objects) GetMetrics(ctx context.Context) (*minio.Metrics, error) {
+	return l.Metrics, nil
 }
 
 // Shutdown saves any gateway metadata to disk
@@ -286,6 +273,8 @@ func (l *s3Objects) Shutdown(ctx context.Context) error {
 
 // StorageInfo is not relevant to S3 backend.
 func (l *s3Objects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
+	si.Backend.Type = minio.BackendGateway
+	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.HTTPClient, l.Client.EndpointURL().String())
 	return si
 }
 
@@ -301,7 +290,6 @@ func (l *s3Objects) MakeBucketWithLocation(ctx context.Context, bucket, location
 	if s3utils.CheckValidBucketName(bucket) != nil {
 		return minio.BucketNameInvalid{Bucket: bucket}
 	}
-
 	err := l.Client.MakeBucket(bucket, location)
 	if err != nil {
 		return minio.ErrorRespToObjectError(err, bucket)
@@ -313,7 +301,19 @@ func (l *s3Objects) MakeBucketWithLocation(ctx context.Context, bucket, location
 func (l *s3Objects) GetBucketInfo(ctx context.Context, bucket string) (bi minio.BucketInfo, e error) {
 	buckets, err := l.Client.ListBuckets()
 	if err != nil {
-		return bi, minio.ErrorRespToObjectError(err, bucket)
+		// Listbuckets may be disallowed, proceed to check if
+		// bucket indeed exists, if yes return success.
+		var ok bool
+		if ok, err = l.Client.BucketExists(bucket); err != nil {
+			return bi, minio.ErrorRespToObjectError(err, bucket)
+		}
+		if !ok {
+			return bi, minio.BucketNotFound{Bucket: bucket}
+		}
+		return minio.BucketInfo{
+			Name:    bi.Name,
+			Created: time.Now().UTC(),
+		}, nil
 	}
 
 	for _, bi := range buckets {
@@ -369,7 +369,6 @@ func (l *s3Objects) ListObjects(ctx context.Context, bucket string, prefix strin
 
 // ListObjectsV2 lists all blobs in S3 bucket filtered by prefix
 func (l *s3Objects) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (loi minio.ListObjectsV2Info, e error) {
-
 	result, err := l.Client.ListObjectsV2(bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys, startAfter)
 	if err != nil {
 		return loi, minio.ErrorRespToObjectError(err, bucket)
@@ -422,7 +421,7 @@ func (l *s3Objects) GetObject(ctx context.Context, bucket string, key string, st
 			return minio.ErrorRespToObjectError(err, bucket, key)
 		}
 	}
-	object, _, err := l.Client.GetObject(bucket, key, opts)
+	object, _, _, err := l.Client.GetObject(bucket, key, opts)
 	if err != nil {
 		return minio.ErrorRespToObjectError(err, bucket, key)
 	}
@@ -450,6 +449,7 @@ func (l *s3Objects) GetObjectInfo(ctx context.Context, bucket string, object str
 // PutObject creates a new object with the incoming data,
 func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	data := r.Reader
+
 	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), minio.ToMinioClientMetadata(opts.UserDefined), opts.ServerSideEncryption)
 	if err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
@@ -498,6 +498,14 @@ func (l *s3Objects) DeleteObject(ctx context.Context, bucket string, object stri
 	}
 
 	return nil
+}
+
+func (l *s3Objects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = l.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
 }
 
 // ListMultipartUploads lists all multipart uploads.
@@ -633,4 +641,9 @@ func (l *s3Objects) IsCompressionSupported() bool {
 // IsEncryptionSupported returns whether server side encryption is implemented for this layer.
 func (l *s3Objects) IsEncryptionSupported() bool {
 	return minio.GlobalKMS != nil || len(minio.GlobalGatewaySSE) > 0
+}
+
+// IsReady returns whether the layer is ready to take requests.
+func (l *s3Objects) IsReady(ctx context.Context) bool {
+	return minio.IsBackendOnline(ctx, l.HTTPClient, l.Client.EndpointURL().String())
 }

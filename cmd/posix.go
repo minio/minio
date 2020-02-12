@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,14 +17,18 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
+	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"io"
 	"io/ioutil"
 	"os"
 	slashpath "path"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -34,15 +38,30 @@ import (
 	"bytes"
 
 	humanize "github.com/dustin/go-humanize"
+	jsoniter "github.com/json-iterator/go"
+	"github.com/klauspost/readahead"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
+	xioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/mountinfo"
+	"github.com/ncw/directio"
 )
 
 const (
 	diskMinFreeSpace  = 900 * humanize.MiByte // Min 900MiB free space.
 	diskMinTotalSpace = diskMinFreeSpace      // Min 900MiB total space.
-	maxAllowedIOError = 5
+	readBlockSize     = 4 * humanize.MiByte   // Default read block size 4MiB.
+
+	// On regular files bigger than this;
+	readAheadSize = 16 << 20
+	// Read this many buffers ahead.
+	readAheadBuffers = 4
+	// Size of each buffer.
+	readAheadBufSize = 1 << 20
+
+	// Wait interval to check if active IO count is low
+	// to proceed crawling to compute data usage
+	lowActiveIOWaitTick = 100 * time.Millisecond
 )
 
 // isValidVolname verifies a volname name in accordance with object
@@ -63,19 +82,24 @@ func isValidVolname(volname string) bool {
 // posix - implements StorageAPI interface.
 type posix struct {
 	// Disk usage metrics
-	totalUsed  uint64 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	ioErrCount int32  // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	totalUsed uint64 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 
-	diskPath  string
-	pool      sync.Pool
-	connected bool
+	maxActiveIOCount int32
+	activeIOCount    int32
+
+	diskPath string
+	pool     sync.Pool
 
 	diskMount bool // indicates if the path is an actual mount.
-	driveSync bool // indicates if the backend is synchronous.
 
-	diskFileInfo os.FileInfo
+	diskID string
+
+	formatFileInfo  os.FileInfo
+	formatLastCheck time.Time
 	// Disk usage metrics
 	stopUsageCh chan struct{}
+
+	sync.RWMutex
 }
 
 // checkPathLength - returns error if given path name length more than 255
@@ -91,7 +115,7 @@ func checkPathLength(pathName string) error {
 	}
 
 	// Check each path segment length is > 255
-	for len(pathName) > 0 && pathName != "." && pathName != "/" {
+	for len(pathName) > 0 && pathName != "." && pathName != SlashSeparator {
 		dir, file := slashpath.Dir(pathName), slashpath.Base(pathName)
 
 		if len(file) > 255 {
@@ -138,12 +162,15 @@ func getValidPath(path string) (string, error) {
 	}
 
 	// check if backend is writable.
-	file, err := os.Create(pathJoin(path, ".writable-check.tmp"))
+	var rnd [8]byte
+	_, _ = rand.Read(rnd[:])
+	fn := pathJoin(path, ".writable-check-"+hex.EncodeToString(rnd[:])+".tmp")
+	file, err := os.Create(fn)
 	if err != nil {
 		return path, err
 	}
-	defer os.Remove(pathJoin(path, ".writable-check.tmp"))
 	file.Close()
+	os.Remove(fn)
 
 	return path, nil
 }
@@ -178,36 +205,25 @@ func newPosix(path string) (*posix, error) {
 	if path, err = getValidPath(path); err != nil {
 		return nil, err
 	}
-	fi, err := os.Stat(path)
+	_, err = os.Stat(path)
 	if err != nil {
 		return nil, err
 	}
 	p := &posix{
-		connected: true,
-		diskPath:  path,
-		// 1MiB buffer pool for posix internal operations.
+		diskPath: path,
 		pool: sync.Pool{
 			New: func() interface{} {
-				b := make([]byte, readSizeV1)
+				b := directio.AlignedBlock(readBlockSize)
 				return &b
 			},
 		},
-		stopUsageCh:  make(chan struct{}),
-		diskFileInfo: fi,
-		diskMount:    mountinfo.IsLikelyMountPoint(path),
-	}
-
-	var pf BoolFlag
-	if driveSync := os.Getenv("MINIO_DRIVE_SYNC"); driveSync != "" {
-		pf, err = ParseBoolFlag(driveSync)
-		if err != nil {
-			return nil, err
-		}
-		p.driveSync = bool(pf)
-	}
-
-	if !p.diskMount {
-		go p.diskUsage(GlobalServiceDoneCh)
+		stopUsageCh: make(chan struct{}),
+		diskMount:   mountinfo.IsLikelyMountPoint(path),
+		// Allow disk usage crawler to run with up to 2 concurrent
+		// I/O ops, if and when activeIOCount reaches this
+		// value disk usage routine suspends the crawler
+		// and waits until activeIOCount reaches below this threshold.
+		maxActiveIOCount: 3,
 	}
 
 	// Success.
@@ -220,8 +236,13 @@ func getDiskInfo(diskPath string) (di disk.Info, err error) {
 		di, err = disk.GetInfo(diskPath)
 	}
 
-	if os.IsNotExist(err) {
+	switch {
+	case os.IsNotExist(err):
 		err = errDiskNotFound
+	case isSysErrTooLong(err):
+		err = errFileNameTooLong
+	case isSysErrIO(err):
+		err = errFaultyDisk
 	}
 
 	return di, err
@@ -290,36 +311,83 @@ func (s *posix) String() string {
 	return s.diskPath
 }
 
-func (s *posix) LastError() error {
-	return nil
+func (*posix) Hostname() string {
+	return ""
 }
 
 func (s *posix) Close() error {
 	close(s.stopUsageCh)
-	s.connected = false
 	return nil
 }
 
 func (s *posix) IsOnline() bool {
-	return s.connected
+	return true
+}
+
+func isQuitting(endCh chan struct{}) bool {
+	select {
+	case <-endCh:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *posix) waitForLowActiveIO() {
+	for atomic.LoadInt32(&s.activeIOCount) >= s.maxActiveIOCount {
+		time.Sleep(lowActiveIOWaitTick)
+	}
+}
+
+func (s *posix) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, error) {
+	dataUsageInfo := updateUsage(s.diskPath, endCh, s.waitForLowActiveIO, func(item Item) (int64, error) {
+		// Look for `xl.json' at the leaf.
+		if !strings.HasSuffix(item.Path, SlashSeparator+xlMetaJSONFile) {
+			// if no xl.json found, skip the file.
+			return 0, errSkipFile
+		}
+
+		xlMetaBuf, err := ioutil.ReadFile(item.Path)
+		if err != nil {
+			return 0, errSkipFile
+		}
+
+		meta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaBuf)
+		if err != nil {
+			return 0, errSkipFile
+		}
+
+		return meta.Stat.Size, nil
+	})
+
+	dataUsageInfo.LastUpdate = UTCNow()
+	atomic.StoreUint64(&s.totalUsed, dataUsageInfo.ObjectsTotalSize)
+	return dataUsageInfo, nil
 }
 
 // DiskInfo is an extended type which returns current
 // disk usage per path.
 type DiskInfo struct {
-	Total    uint64
-	Free     uint64
-	Used     uint64
-	RootDisk bool
+	Total        uint64
+	Free         uint64
+	Used         uint64
+	RootDisk     bool
+	RelativePath string
 }
 
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
 func (s *posix) DiskInfo() (info DiskInfo, err error) {
+	atomic.AddInt32(&s.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt32(&s.activeIOCount, -1)
+	}()
+
 	di, err := getDiskInfo(s.diskPath)
 	if err != nil {
 		return info, err
 	}
+
 	used := di.Total - di.Free
 	if !s.diskMount {
 		used = atomic.LoadUint64(&s.totalUsed)
@@ -329,11 +397,18 @@ func (s *posix) DiskInfo() (info DiskInfo, err error) {
 	if err != nil {
 		return info, err
 	}
+
+	localPeer := ""
+	if globalIsDistXL {
+		localPeer = GetLocalPeer(globalEndpoints)
+	}
+
 	return DiskInfo{
-		Total:    di.Total,
-		Free:     di.Free,
-		Used:     used,
-		RootDisk: rootDisk,
+		Total:        di.Total,
+		Free:         di.Free,
+		Used:         used,
+		RootDisk:     rootDisk,
+		RelativePath: localPeer + s.diskPath,
 	}, nil
 }
 
@@ -349,133 +424,81 @@ func (s *posix) getVolDir(volume string) (string, error) {
 	return volumeDir, nil
 }
 
-// checkDiskFound - validates if disk is available,
-// returns errDiskNotFound if not found.
-func (s *posix) checkDiskFound() (err error) {
-	if !s.IsOnline() {
-		return errDiskNotFound
+func (s *posix) getDiskID() (string, error) {
+	s.RLock()
+	diskID := s.diskID
+	fileInfo := s.formatFileInfo
+	lastCheck := s.formatLastCheck
+	s.RUnlock()
+
+	// check if we have a valid disk ID that is less than 1 second old.
+	if fileInfo != nil && diskID != "" && time.Now().Before(lastCheck.Add(time.Second)) {
+		return diskID, nil
 	}
-	fi, err := os.Stat(s.diskPath)
+
+	s.Lock()
+	defer s.Unlock()
+
+	// If somebody else updated the disk ID and changed the time, return what they got.
+	if !s.formatLastCheck.Equal(lastCheck) {
+		// Somebody else got the lock first.
+		return diskID, nil
+	}
+	formatFile := pathJoin(s.diskPath, minioMetaBucket, formatConfigFile)
+	fi, err := os.Stat(formatFile)
 	if err != nil {
-		switch {
-		case os.IsNotExist(err):
-			return errDiskNotFound
-		case isSysErrTooLong(err):
-			return errFileNameTooLong
-		case isSysErrIO(err):
-			return errFaultyDisk
-		default:
-			return err
-		}
+		// If the disk is still not initialized.
+		return "", err
 	}
-	if !os.SameFile(s.diskFileInfo, fi) {
-		s.connected = false
-		return errDiskNotFound
+
+	if xioutil.SameFile(fi, fileInfo) {
+		// If the file has not changed, just return the cached diskID information.
+		s.formatLastCheck = time.Now()
+		return diskID, nil
+	}
+
+	b, err := ioutil.ReadFile(formatFile)
+	if err != nil {
+		return "", err
+	}
+	format := &formatXLV3{}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err = json.Unmarshal(b, &format); err != nil {
+		return "", err
+	}
+	s.diskID = format.XL.This
+	s.formatFileInfo = fi
+	s.formatLastCheck = time.Now()
+	return s.diskID, nil
+}
+
+// Make a volume entry.
+func (s *posix) SetDiskID(id string) {
+	// NO-OP for posix as it is handled either by posixDiskIDCheck{} for local disks or
+	// storage rest server for remote disks.
+}
+
+func (s *posix) MakeVolBulk(volumes ...string) (err error) {
+	for _, volume := range volumes {
+		if err = s.MakeVol(volume); err != nil {
+			if err != errVolumeExists {
+				return err
+			}
+		}
 	}
 	return nil
 }
 
-// diskUsage returns du information for the posix path, in a continuous routine.
-func (s *posix) diskUsage(doneCh chan struct{}) {
-	ticker := time.NewTicker(globalUsageCheckInterval)
-	defer ticker.Stop()
-
-	usageFn := func(ctx context.Context, entry string) error {
-		if globalHTTPServer != nil {
-			// Wait at max 1 minute for an inprogress request
-			// before proceeding to count the usage.
-			waitCount := 60
-			// Any requests in progress, delay the usage.
-			for globalHTTPServer.GetRequestCount() > 0 && waitCount > 0 {
-				waitCount--
-				time.Sleep(1 * time.Second)
-			}
-		}
-
-		select {
-		case <-doneCh:
-			return errWalkAbort
-		case <-s.stopUsageCh:
-			return errWalkAbort
-		default:
-			fi, err := os.Stat(entry)
-			if err != nil {
-				err = osErrToFSFileErr(err)
-				return err
-			}
-			atomic.AddUint64(&s.totalUsed, uint64(fi.Size()))
-			return nil
-		}
-	}
-
-	// Return this routine upon errWalkAbort, continue for any other error on purpose
-	// so that we can start the routine freshly in another 12 hours.
-	if err := getDiskUsage(context.Background(), s.diskPath, usageFn); err == errWalkAbort {
-		return
-	}
-
-	for {
-		select {
-		case <-s.stopUsageCh:
-			return
-		case <-doneCh:
-			return
-		case <-time.After(globalUsageCheckInterval):
-			var usage uint64
-			usageFn = func(ctx context.Context, entry string) error {
-				if globalHTTPServer != nil {
-					// Wait at max 1 minute for an inprogress request
-					// before proceeding to count the usage.
-					waitCount := 60
-					// Any requests in progress, delay the usage.
-					for globalHTTPServer.GetRequestCount() > 0 && waitCount > 0 {
-						waitCount--
-						time.Sleep(1 * time.Second)
-					}
-				}
-
-				select {
-				case <-s.stopUsageCh:
-					return errWalkAbort
-				default:
-					fi, err := os.Stat(entry)
-					if err != nil {
-						err = osErrToFSFileErr(err)
-						return err
-					}
-					usage = usage + uint64(fi.Size())
-					return nil
-				}
-			}
-
-			if err := getDiskUsage(context.Background(), s.diskPath, usageFn); err != nil {
-				continue
-			}
-
-			atomic.StoreUint64(&s.totalUsed, usage)
-		}
-	}
-}
-
 // Make a volume entry.
 func (s *posix) MakeVol(volume string) (err error) {
-	defer func() {
-		if err == errFaultyDisk {
-			atomic.AddInt32(&s.ioErrCount, 1)
-		}
-	}()
-
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return err
-	}
-
 	if !isValidVolname(volume) {
 		return errInvalidArgument
 	}
+
+	atomic.AddInt32(&s.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt32(&s.activeIOCount, -1)
+	}()
 
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -502,19 +525,10 @@ func (s *posix) MakeVol(volume string) (err error) {
 
 // ListVols - list volumes.
 func (s *posix) ListVols() (volsInfo []VolInfo, err error) {
+	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
-		if err == errFaultyDisk {
-			atomic.AddInt32(&s.ioErrCount, 1)
-		}
+		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
-
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return nil, errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return nil, err
-	}
 
 	volsInfo, err = listVols(s.diskPath)
 	if err != nil {
@@ -544,7 +558,7 @@ func listVols(dirPath string) ([]VolInfo, error) {
 	}
 	var volsInfo []VolInfo
 	for _, entry := range entries {
-		if !hasSuffix(entry, slashSeparator) || !isValidVolname(slashpath.Clean(entry)) {
+		if !HasSuffix(entry, SlashSeparator) || !isValidVolname(slashpath.Clean(entry)) {
 			// Skip if entry is neither a directory not a valid volume name.
 			continue
 		}
@@ -571,19 +585,10 @@ func listVols(dirPath string) ([]VolInfo, error) {
 
 // StatVol - get volume info.
 func (s *posix) StatVol(volume string) (volInfo VolInfo, err error) {
+	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
-		if err == errFaultyDisk {
-			atomic.AddInt32(&s.ioErrCount, 1)
-		}
+		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
-
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return VolInfo{}, errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return VolInfo{}, err
-	}
 
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolDir(volume)
@@ -612,19 +617,10 @@ func (s *posix) StatVol(volume string) (volInfo VolInfo, err error) {
 
 // DeleteVol - delete a volume.
 func (s *posix) DeleteVol(volume string) (err error) {
+	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
-		if err == errFaultyDisk {
-			atomic.AddInt32(&s.ioErrCount, 1)
-		}
+		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
-
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return err
-	}
 
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolDir(volume)
@@ -649,22 +645,83 @@ func (s *posix) DeleteVol(volume string) (err error) {
 	return nil
 }
 
-// ListDir - return all the entries at the given directory path.
-// If an entry is a directory it will be returned with a trailing "/".
-func (s *posix) ListDir(volume, dirPath string, count int) (entries []string, err error) {
+// Walk - is a sorted walker which returns file entries in lexically
+// sorted order, additionally along with metadata about each of those entries.
+func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile string,
+	readMetadataFn readMetadataFunc, endWalkCh chan struct{}) (ch chan FileInfo, err error) {
+
+	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
-		if err == errFaultyDisk {
-			atomic.AddInt32(&s.ioErrCount, 1)
+		atomic.AddInt32(&s.activeIOCount, -1)
+	}()
+
+	// Verify if volume is valid and it exists.
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return nil, err
+	}
+
+	// Stat a volume entry.
+	_, err = os.Stat(volumeDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errVolumeNotFound
+		} else if isSysErrIO(err) {
+			return nil, errFaultyDisk
+		}
+		return nil, err
+	}
+
+	ch = make(chan FileInfo)
+	go func() {
+		defer close(ch)
+		listDir := func(volume, dirPath, dirEntry string) (entries []string) {
+			entries, err := s.ListDir(volume, dirPath, -1, leafFile)
+			if err != nil {
+				return
+			}
+			sort.Strings(entries)
+			return filterMatchingPrefix(entries, dirEntry)
+		}
+
+		walkResultCh := startTreeWalk(context.Background(), volume, dirPath, marker, recursive, listDir, endWalkCh)
+		for {
+			walkResult, ok := <-walkResultCh
+			if !ok {
+				return
+			}
+			var fi FileInfo
+			if HasSuffix(walkResult.entry, SlashSeparator) {
+				fi = FileInfo{
+					Volume: volume,
+					Name:   walkResult.entry,
+					Mode:   os.ModeDir,
+				}
+			} else {
+				buf, err := s.ReadAll(volume, pathJoin(walkResult.entry, leafFile))
+				if err != nil {
+					continue
+				}
+				fi = readMetadataFn(buf, volume, walkResult.entry)
+			}
+			select {
+			case ch <- fi:
+			case <-endWalkCh:
+				return
+			}
 		}
 	}()
 
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return nil, errFaultyDisk
-	}
+	return ch, nil
+}
 
-	if err = s.checkDiskFound(); err != nil {
-		return nil, err
-	}
+// ListDir - return all the entries at the given directory path.
+// If an entry is a directory it will be returned with a trailing SlashSeparator.
+func (s *posix) ListDir(volume, dirPath string, count int, leafFile string) (entries []string, err error) {
+	atomic.AddInt32(&s.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt32(&s.activeIOCount, -1)
+	}()
 
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolDir(volume)
@@ -684,9 +741,21 @@ func (s *posix) ListDir(volume, dirPath string, count int) (entries []string, er
 
 	dirPath = pathJoin(volumeDir, dirPath)
 	if count > 0 {
-		return readDirN(dirPath, count)
+		entries, err = readDirN(dirPath, count)
+	} else {
+		entries, err = readDir(dirPath)
 	}
-	return readDir(dirPath)
+
+	// If leaf file is specified, filter out the entries.
+	if leafFile != "" {
+		for i, entry := range entries {
+			if _, serr := os.Stat(pathJoin(dirPath, entry, leafFile)); serr == nil {
+				entries[i] = strings.TrimSuffix(entry, SlashSeparator)
+			}
+		}
+	}
+
+	return entries, err
 }
 
 // ReadAll reads from r until an error or EOF and returns the data it read.
@@ -696,19 +765,10 @@ func (s *posix) ListDir(volume, dirPath string, count int) (entries []string, er
 // This API is meant to be used on files which have small memory footprint, do
 // not use this on large files as it would cause server to crash.
 func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
+	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
-		if err == errFaultyDisk {
-			atomic.AddInt32(&s.ioErrCount, 1)
-		}
+		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
-
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return nil, errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return nil, err
-	}
 
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -721,6 +781,8 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 			return nil, errVolumeNotFound
 		} else if isSysErrIO(err) {
 			return nil, errFaultyDisk
+		} else if isSysErrTooManyFiles(err) {
+			return nil, errTooManyOpenFiles
 		}
 		return nil, err
 	}
@@ -738,17 +800,11 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 			return nil, errFileNotFound
 		} else if os.IsPermission(err) {
 			return nil, errFileAccessDenied
-		} else if pathErr, ok := err.(*os.PathError); ok {
-			switch pathErr.Err {
-			case syscall.ENOTDIR, syscall.EISDIR:
-				return nil, errFileNotFound
-			default:
-				if isSysErrHandleInvalid(pathErr.Err) {
-					// This case is special and needs to be handled for windows.
-					return nil, errFileNotFound
-				}
-			}
-			return nil, pathErr
+		} else if errors.Is(err, syscall.ENOTDIR) || errors.Is(err, syscall.EISDIR) {
+			return nil, errFileNotFound
+		} else if isSysErrHandleInvalid(err) {
+			// This case is special and needs to be handled for windows.
+			return nil, errFileNotFound
 		} else if isSysErrIO(err) {
 			return nil, errFaultyDisk
 		}
@@ -771,30 +827,22 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 // Additionally ReadFile also starts reading from an offset. ReadFile
 // semantics are same as io.ReadFull.
 func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (int64, error) {
-	var n int
-	var err error
-	defer func() {
-		if err == errFaultyDisk {
-			atomic.AddInt32(&s.ioErrCount, 1)
-		}
-	}()
-
 	if offset < 0 {
 		return 0, errInvalidArgument
 	}
 
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return 0, errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return 0, err
-	}
+	atomic.AddInt32(&s.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt32(&s.activeIOCount, -1)
+	}()
 
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return 0, err
 	}
+
+	var n int
+
 	// Stat a volume entry.
 	_, err = os.Stat((volumeDir))
 	if err != nil {
@@ -824,6 +872,8 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 			return 0, errFileAccessDenied
 		case isSysErrIO(err):
 			return 0, errFaultyDisk
+		case isSysErrTooManyFiles(err):
+			return 0, errTooManyOpenFiles
 		default:
 			return 0, err
 		}
@@ -869,27 +919,13 @@ func (s *posix) ReadFile(volume, path string, offset int64, buffer []byte, verif
 	}
 
 	if !bytes.Equal(h.Sum(nil), verifier.sum) {
-		return 0, hashMismatchError{hex.EncodeToString(verifier.sum), hex.EncodeToString(h.Sum(nil))}
+		return 0, errFileCorrupt
 	}
 
 	return int64(len(buffer)), nil
 }
 
 func (s *posix) openFile(volume, path string, mode int) (f *os.File, err error) {
-	defer func() {
-		if err == errFaultyDisk {
-			atomic.AddInt32(&s.ioErrCount, 1)
-		}
-	}()
-
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return nil, errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return nil, err
-	}
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return nil, err
@@ -934,6 +970,8 @@ func (s *posix) openFile(volume, path string, mode int) (f *os.File, err error) 
 			return nil, errFileAccessDenied
 		case isSysErrIO(err):
 			return nil, errFaultyDisk
+		case isSysErrTooManyFiles(err):
+			return nil, errTooManyOpenFiles
 		default:
 			return nil, err
 		}
@@ -944,23 +982,8 @@ func (s *posix) openFile(volume, path string, mode int) (f *os.File, err error) 
 
 // ReadFileStream - Returns the read stream of the file.
 func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
-	var err error
-	defer func() {
-		if err == errFaultyDisk {
-			atomic.AddInt32(&s.ioErrCount, 1)
-		}
-	}()
-
 	if offset < 0 {
 		return nil, errInvalidArgument
-	}
-
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return nil, errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return nil, err
 	}
 
 	volumeDir, err := s.getVolDir(volume)
@@ -996,6 +1019,8 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 			return nil, errFileAccessDenied
 		case isSysErrIO(err):
 			return nil, errFaultyDisk
+		case isSysErrTooManyFiles(err):
+			return nil, errTooManyOpenFiles
 		default:
 			return nil, err
 		}
@@ -1015,27 +1040,49 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 	if _, err = file.Seek(offset, io.SeekStart); err != nil {
 		return nil, err
 	}
-	return struct {
+
+	atomic.AddInt32(&s.activeIOCount, 1)
+	r := struct {
 		io.Reader
 		io.Closer
-	}{Reader: io.LimitReader(file, length), Closer: file}, nil
+	}{Reader: io.LimitReader(file, length), Closer: closeWrapper(func() error {
+		atomic.AddInt32(&s.activeIOCount, -1)
+		return file.Close()
+	})}
+
+	// Add readahead to big reads
+	if length >= readAheadSize {
+		rc, err := readahead.NewReadCloserSize(r, readAheadBuffers, readAheadBufSize)
+		if err != nil {
+			r.Close()
+			return nil, err
+		}
+		return rc, nil
+	}
+
+	// Just add a small 64k buffer.
+	r.Reader = bufio.NewReaderSize(r.Reader, 64<<10)
+	return r, nil
+}
+
+// closeWrapper converts a function to an io.Closer
+type closeWrapper func() error
+
+// Close calls the wrapped function.
+func (c closeWrapper) Close() error {
+	return c()
 }
 
 // CreateFile - creates the file.
 func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (err error) {
-	if fileSize < 0 {
+	if fileSize < -1 {
 		return errInvalidArgument
 	}
 
+	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
-		if err == errFaultyDisk {
-			atomic.AddInt32(&s.ioErrCount, 1)
-		}
+		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
-
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return errFaultyDisk
-	}
 
 	// Validate if disk is indeed free.
 	if err = checkDiskFree(s.diskPath, fileSize); err != nil {
@@ -1045,14 +1092,45 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 		return err
 	}
 
-	// Create file if not found. Note that it is created with os.O_EXCL flag as the file
-	// always is supposed to be created in the tmp directory with a unique file name.
-	w, err := s.openFile(volume, path, os.O_CREATE|os.O_APPEND|os.O_WRONLY|os.O_EXCL)
+	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
 	}
+	// Stat a volume entry.
+	_, err = os.Stat((volumeDir))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errVolumeNotFound
+		} else if isSysErrIO(err) {
+			return errFaultyDisk
+		}
+		return err
+	}
 
-	defer w.Close()
+	filePath := pathJoin(volumeDir, path)
+	if err = checkPathLength((filePath)); err != nil {
+		return err
+	}
+
+	// Create top level directories if they don't exist.
+	// with mode 0777 mkdir honors system umask.
+	if err = mkdirAll(slashpath.Dir(filePath), 0777); err != nil {
+		return err
+	}
+
+	w, err := disk.OpenFileDirectIO(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0666)
+	if err != nil {
+		switch {
+		case os.IsPermission(err):
+			return errFileAccessDenied
+		case os.IsExist(err):
+			return errFileAccessDenied
+		case isSysErrIO(err):
+			return errFaultyDisk
+		default:
+			return err
+		}
+	}
 
 	var e error
 	if fileSize > 0 {
@@ -1075,32 +1153,30 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 		return err
 	}
 
+	defer w.Close()
+
 	bufp := s.pool.Get().(*[]byte)
 	defer s.pool.Put(bufp)
 
-	n, err := io.CopyBuffer(w, r, *bufp)
+	written, err := xioutil.CopyAligned(w, r, *bufp, fileSize)
 	if err != nil {
 		return err
 	}
-	if n < fileSize {
+
+	if written < fileSize {
 		return errLessData
-	}
-	if n > fileSize {
+	} else if written > fileSize {
 		return errMoreData
 	}
+
 	return nil
 }
 
-func (s *posix) WriteAll(volume, path string, buf []byte) (err error) {
+func (s *posix) WriteAll(volume, path string, reader io.Reader) (err error) {
+	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
-		if err == errFaultyDisk {
-			atomic.AddInt32(&s.ioErrCount, 1)
-		}
+		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
-
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return errFaultyDisk
-	}
 
 	// Create file if not found. Note that it is created with os.O_EXCL flag as the file
 	// always is supposed to be created in the tmp directory with a unique file name.
@@ -1109,34 +1185,27 @@ func (s *posix) WriteAll(volume, path string, buf []byte) (err error) {
 		return err
 	}
 
-	if _, err = w.Write(buf); err != nil {
-		return err
-	}
+	defer w.Close()
 
-	return w.Close()
+	bufp := s.pool.Get().(*[]byte)
+	defer s.pool.Put(bufp)
+
+	_, err = io.CopyBuffer(w, reader, *bufp)
+	return err
 }
 
 // AppendFile - append a byte array at path, if file doesn't exist at
 // path this call explicitly creates it.
 func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
+	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
-		if err == errFaultyDisk {
-			atomic.AddInt32(&s.ioErrCount, 1)
-		}
+		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
 
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return errFaultyDisk
-	}
-
 	var w *os.File
-	// Create file if not found, additionally also enables synchronous
-	// operation if asked by the user.
-	if s.driveSync {
-		w, err = s.openFile(volume, path, os.O_CREATE|os.O_SYNC|os.O_APPEND|os.O_WRONLY)
-	} else {
-		w, err = s.openFile(volume, path, os.O_CREATE|os.O_APPEND|os.O_WRONLY)
-	}
+	// Create file if not found. Not doing O_DIRECT here to avoid the code that does buffer aligned writes.
+	// AppendFile() is only used by healing code to heal objects written in old format.
+	w, err = s.openFile(volume, path, os.O_CREATE|os.O_SYNC|os.O_APPEND|os.O_WRONLY)
 	if err != nil {
 		return err
 	}
@@ -1150,19 +1219,10 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 
 // StatFile - get file info.
 func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
+	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
-		if err == errFaultyDisk {
-			atomic.AddInt32(&s.ioErrCount, 1)
-		}
+		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
-
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return FileInfo{}, errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return FileInfo{}, err
-	}
 
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -1239,7 +1299,7 @@ func deleteFile(basePath, deletePath string) error {
 
 	// Trailing slash is removed when found to ensure
 	// slashpath.Dir() to work as intended.
-	deletePath = strings.TrimSuffix(deletePath, slashSeparator)
+	deletePath = strings.TrimSuffix(deletePath, SlashSeparator)
 	deletePath = slashpath.Dir(deletePath)
 
 	// Delete parent directory. Errors for parent directories shouldn't trickle down.
@@ -1250,36 +1310,30 @@ func deleteFile(basePath, deletePath string) error {
 
 // DeleteFile - delete a file at path.
 func (s *posix) DeleteFile(volume, path string) (err error) {
+	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
-		if err == errFaultyDisk {
-			atomic.AddInt32(&s.ioErrCount, 1)
-		}
+		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
-
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return err
-	}
 
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
 	}
+
 	// Stat a volume entry.
 	_, err = os.Stat((volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
+		} else if os.IsPermission(err) {
+			return errVolumeAccessDenied
 		} else if isSysErrIO(err) {
 			return errFaultyDisk
 		}
 		return err
 	}
 
-	// Following code is needed so that we retain "/" suffix if any in
+	// Following code is needed so that we retain SlashSeparator suffix if any in
 	// path argument.
 	filePath := pathJoin(volumeDir, path)
 	if err = checkPathLength((filePath)); err != nil {
@@ -1290,21 +1344,20 @@ func (s *posix) DeleteFile(volume, path string) (err error) {
 	return deleteFile(volumeDir, filePath)
 }
 
+func (s *posix) DeleteFileBulk(volume string, paths []string) (errs []error, err error) {
+	errs = make([]error, len(paths))
+	for idx, path := range paths {
+		errs[idx] = s.DeleteFile(volume, path)
+	}
+	return
+}
+
 // RenameFile - rename source path to destination path atomically.
 func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
+	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
-		if err == errFaultyDisk {
-			atomic.AddInt32(&s.ioErrCount, 1)
-		}
+		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
-
-	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
-		return errFaultyDisk
-	}
-
-	if err = s.checkDiskFound(); err != nil {
-		return err
-	}
 
 	srcVolumeDir, err := s.getVolDir(srcVolume)
 	if err != nil {
@@ -1333,8 +1386,8 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		}
 	}
 
-	srcIsDir := hasSuffix(srcPath, slashSeparator)
-	dstIsDir := hasSuffix(dstPath, slashSeparator)
+	srcIsDir := HasSuffix(srcPath, SlashSeparator)
+	dstIsDir := HasSuffix(dstPath, SlashSeparator)
 	// Either src and dst have to be directories or files, else return error.
 	if !(srcIsDir && dstIsDir || !srcIsDir && !dstIsDir) {
 		return errFileAccessDenied
@@ -1385,4 +1438,104 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 	}
 
 	return nil
+}
+
+func (s *posix) VerifyFile(volume, path string, fileSize int64, algo BitrotAlgorithm, sum []byte, shardSize int64) (err error) {
+	atomic.AddInt32(&s.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt32(&s.activeIOCount, -1)
+	}()
+
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return err
+	}
+
+	// Stat a volume entry.
+	_, err = os.Stat(volumeDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errVolumeNotFound
+		} else if isSysErrIO(err) {
+			return errFaultyDisk
+		} else if os.IsPermission(err) {
+			return errVolumeAccessDenied
+		}
+		return err
+	}
+
+	// Validate effective path length before reading.
+	filePath := pathJoin(volumeDir, path)
+	if err = checkPathLength(filePath); err != nil {
+		return err
+	}
+
+	// Open the file for reading.
+	file, err := os.Open(filePath)
+	if err != nil {
+		return osErrToFSFileErr(err)
+	}
+
+	// Close the file descriptor.
+	defer file.Close()
+
+	if algo != HighwayHash256S {
+		bufp := s.pool.Get().(*[]byte)
+		defer s.pool.Put(bufp)
+
+		h := algo.New()
+		if _, err = io.CopyBuffer(h, file, *bufp); err != nil {
+			// Premature failure in reading the object,file is corrupt.
+			return errFileCorrupt
+		}
+		if !bytes.Equal(h.Sum(nil), sum) {
+			return errFileCorrupt
+		}
+		return nil
+	}
+
+	buf := make([]byte, shardSize)
+	h := algo.New()
+	hashBuf := make([]byte, h.Size())
+	fi, err := file.Stat()
+	if err != nil {
+		// Unable to stat on the file, return an expected error
+		// for healing code to fix this file.
+		return err
+	}
+
+	size := fi.Size()
+
+	// Calculate the size of the bitrot file and compare
+	// it with the actual file size.
+	if size != bitrotShardFileSize(fileSize, shardSize, algo) {
+		return errFileCorrupt
+	}
+
+	var n int
+	for {
+		if size == 0 {
+			return nil
+		}
+		h.Reset()
+		n, err = file.Read(hashBuf)
+		if err != nil {
+			// Read's failed for object with right size, file is corrupt.
+			return err
+		}
+		size -= int64(n)
+		if size < int64(len(buf)) {
+			buf = buf[:size]
+		}
+		n, err = file.Read(buf)
+		if err != nil {
+			// Read's failed for object with right size, at different offsets.
+			return err
+		}
+		size -= int64(n)
+		h.Write(buf)
+		if !bytes.Equal(h.Sum(nil), hashBuf) {
+			return errFileCorrupt
+		}
+	}
 }

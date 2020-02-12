@@ -24,6 +24,7 @@ import (
 // Target - event target interface
 type Target interface {
 	ID() TargetID
+	IsActive() (bool, error)
 	Save(Event) error
 	Send(string) error
 	Close() error
@@ -36,15 +37,17 @@ type TargetList struct {
 }
 
 // Add - adds unique target to target list.
-func (list *TargetList) Add(target Target) error {
+func (list *TargetList) Add(targets ...Target) error {
 	list.Lock()
 	defer list.Unlock()
 
-	if _, ok := list.targets[target.ID()]; ok {
-		return fmt.Errorf("target %v already exists", target.ID())
+	for _, target := range targets {
+		if _, ok := list.targets[target.ID()]; ok {
+			return fmt.Errorf("target %v already exists", target.ID())
+		}
+		list.targets[target.ID()] = target
 	}
 
-	list.targets[target.ID()] = target
 	return nil
 }
 
@@ -102,6 +105,19 @@ func (list *TargetList) Remove(targetids ...TargetID) <-chan TargetIDErr {
 	return errCh
 }
 
+// Targets - list all targets
+func (list *TargetList) Targets() []Target {
+	list.RLock()
+	defer list.RUnlock()
+
+	targets := []Target{}
+	for _, tgt := range list.targets {
+		targets = append(targets, tgt)
+	}
+
+	return targets
+}
+
 // List - returns available target IDs.
 func (list *TargetList) List() []TargetID {
 	list.RLock()
@@ -113,6 +129,13 @@ func (list *TargetList) List() []TargetID {
 	}
 
 	return keys
+}
+
+// TargetMap - returns available targets.
+func (list *TargetList) TargetMap() map[TargetID]Target {
+	list.RLock()
+	defer list.RUnlock()
+	return list.targets
 }
 
 // Send - sends events to targets identified by target IDs.

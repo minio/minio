@@ -49,7 +49,7 @@ type aggVal struct {
 func newAggVal(fn FuncName) *aggVal {
 	switch fn {
 	case aggFnAvg, aggFnSum:
-		return &aggVal{runningSum: FromInt(0)}
+		return &aggVal{runningSum: FromFloat(0)}
 	case aggFnMin:
 		return &aggVal{runningMin: FromInt(0)}
 	case aggFnMax:
@@ -103,12 +103,14 @@ func (e *FuncExpr) evalAggregationNode(r Record) error {
 
 		// Here, we diverge from Amazon S3 behavior by
 		// inferring untyped values are numbers.
-		if i, ok := argVal.bytesToInt(); ok {
-			argVal.setInt(i)
-		} else if f, ok := argVal.bytesToFloat(); ok {
-			argVal.setFloat(f)
-		} else {
-			return errNonNumericArg(funcName)
+		if !argVal.isNumeric() {
+			if i, ok := argVal.bytesToInt(); ok {
+				argVal.setInt(i)
+			} else if f, ok := argVal.bytesToFloat(); ok {
+				argVal.setFloat(f)
+			} else {
+				return errNonNumericArg(funcName)
+			}
 		}
 	}
 
@@ -124,8 +126,14 @@ func (e *FuncExpr) evalAggregationNode(r Record) error {
 		// For all non-null values, the count is incremented.
 		e.aggregate.runningCount++
 
-	case aggFnAvg:
+	case aggFnAvg, aggFnSum:
 		e.aggregate.runningCount++
+		// Convert to float.
+		f, ok := argVal.ToFloat()
+		if !ok {
+			return fmt.Errorf("Could not convert value %v (%s) to a number", argVal.value, argVal.GetTypeString())
+		}
+		argVal.setFloat(f)
 		err = e.aggregate.runningSum.arithOp(opPlus, argVal)
 
 	case aggFnMin:
@@ -133,9 +141,6 @@ func (e *FuncExpr) evalAggregationNode(r Record) error {
 
 	case aggFnMax:
 		err = e.aggregate.runningMax.minmax(argVal, true, isFirstRow)
-
-	case aggFnSum:
-		err = e.aggregate.runningSum.arithOp(opPlus, argVal)
 
 	default:
 		err = errInvalidAggregation
@@ -150,6 +155,16 @@ func (e *AliasedExpression) aggregateRow(r Record) error {
 
 func (e *Expression) aggregateRow(r Record) error {
 	for _, ex := range e.And {
+		err := ex.aggregateRow(r)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (e *ListExpr) aggregateRow(r Record) error {
+	for _, ex := range e.Elements {
 		err := ex.aggregateRow(r)
 		if err != nil {
 			return err
@@ -195,11 +210,10 @@ func (e *ConditionOperand) aggregateRow(r Record) error {
 		}
 		return e.ConditionRHS.Between.End.aggregateRow(r)
 	case e.ConditionRHS.In != nil:
-		for _, elt := range e.ConditionRHS.In.Expressions {
-			err = elt.aggregateRow(r)
-			if err != nil {
-				return err
-			}
+		elt := e.ConditionRHS.In.ListExpression
+		err = elt.aggregateRow(r)
+		if err != nil {
+			return err
 		}
 		return nil
 	case e.ConditionRHS.Like != nil:
@@ -250,6 +264,8 @@ func (e *UnaryTerm) aggregateRow(r Record) error {
 
 func (e *PrimaryTerm) aggregateRow(r Record) error {
 	switch {
+	case e.ListExpr != nil:
+		return e.ListExpr.aggregateRow(r)
 	case e.SubExpression != nil:
 		return e.SubExpression.aggregateRow(r)
 	case e.FuncCall != nil:

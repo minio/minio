@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2015-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,34 +22,38 @@ import (
 	"sort"
 
 	"github.com/minio/cli"
-	"github.com/minio/mc/pkg/console"
+	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/trie"
 	"github.com/minio/minio/pkg/words"
 )
 
-// global flags for minio.
-var globalFlags = []cli.Flag{
+// GlobalFlags - global flags for minio.
+var GlobalFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "config-dir, C",
 		Value: defaultConfigDir.Get(),
-		Usage: "[DEPRECATED] Path to legacy configuration directory.",
+		Usage: "[DEPRECATED] path to legacy configuration directory",
 	},
 	cli.StringFlag{
 		Name:  "certs-dir, S",
 		Value: defaultCertsDir.Get(),
-		Usage: "Path to certs directory.",
+		Usage: "path to certs directory",
 	},
 	cli.BoolFlag{
 		Name:  "quiet",
-		Usage: "Disable startup information.",
+		Usage: "disable startup information",
 	},
 	cli.BoolFlag{
 		Name:  "anonymous",
-		Usage: "Hide sensitive information from logging.",
+		Usage: "hide sensitive information from logging",
 	},
 	cli.BoolFlag{
 		Name:  "json",
-		Usage: "Output server logs and startup information in json format.",
+		Usage: "output server logs and startup information in json format",
+	},
+	cli.BoolFlag{
+		Name:  "compat",
+		Usage: "enable strict S3 compatibility by turning off certain performance optimizations",
 	},
 }
 
@@ -70,8 +74,8 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 VERSION:
-  ` + Version +
-	`{{ "\n"}}`
+{{.Version}}
+`
 
 func newApp(name string) *cli.App {
 	// Collection of minio commands currently supported are.
@@ -112,23 +116,20 @@ func newApp(name string) *cli.App {
 	// Register all commands.
 	registerCommand(serverCmd)
 	registerCommand(gatewayCmd)
-	registerCommand(updateCmd)
-	registerCommand(versionCmd)
 
 	// Set up app.
 	cli.HelpFlag = cli.BoolFlag{
 		Name:  "help, h",
-		Usage: "Show help.",
+		Usage: "show help",
 	}
 
 	app := cli.NewApp()
 	app.Name = name
 	app.Author = "MinIO, Inc."
-	app.Version = Version
-	app.Usage = "Cloud Storage Server."
-	app.Description = `MinIO is an Amazon S3 compatible object storage server. Use it to store photos, videos, VMs, containers, log files, or any blob of data as objects.`
-	app.Flags = globalFlags
-	app.HideVersion = true     // Hide `--version` flag, we already have `minio version`.
+	app.Version = ReleaseTag
+	app.Usage = "High Performance Object Storage"
+	app.Description = `Build high performance data infrastructure for machine learning, analytics and application data workloads with MinIO`
+	app.Flags = GlobalFlags
 	app.HideHelpCommand = true // Hide `help, h` command, we already have `minio --help`.
 	app.Commands = commands
 	app.CustomAppHelpTemplate = minioHelpTemplate

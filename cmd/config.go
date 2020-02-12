@@ -21,83 +21,156 @@ import (
 	"context"
 	"encoding/json"
 	"path"
-	"runtime"
+	"sort"
 	"strings"
+	"time"
 
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/quick"
+	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 const (
 	minioConfigPrefix = "config"
 
+	kvPrefix = ".kv"
+
+	// Captures all the previous SetKV operations and allows rollback.
+	minioConfigHistoryPrefix = minioConfigPrefix + "/history"
+
 	// MinIO configuration file.
 	minioConfigFile = "config.json"
 
-	// MinIO backup file
+	// MinIO configuration backup file
 	minioConfigBackupFile = minioConfigFile + ".backup"
 )
 
-func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config *serverConfig) error {
-	if err := quick.CheckData(config); err != nil {
-		return err
+func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer, withData bool, count int) (
+	[]madmin.ConfigHistoryEntry, error) {
+
+	var configHistory []madmin.ConfigHistoryEntry
+
+	// List all kvs
+	marker := ""
+	for {
+		res, err := objAPI.ListObjects(ctx, minioMetaBucket, minioConfigHistoryPrefix, marker, "", maxObjectList)
+		if err != nil {
+			return nil, err
+		}
+		for _, obj := range res.Objects {
+			cfgEntry := madmin.ConfigHistoryEntry{
+				RestoreID:  strings.TrimSuffix(path.Base(obj.Name), kvPrefix),
+				CreateTime: obj.ModTime, // ModTime is createTime for config history entries.
+			}
+			if withData {
+				data, err := readConfig(ctx, objAPI, obj.Name)
+				if err != nil {
+					return nil, err
+				}
+				if globalConfigEncrypted {
+					data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+					if err != nil {
+						return nil, err
+					}
+				}
+				cfgEntry.Data = string(data)
+			}
+			configHistory = append(configHistory, cfgEntry)
+			count--
+			if count == 0 {
+				break
+			}
+		}
+		if !res.IsTruncated {
+			// We are done here
+			break
+		}
+		marker = res.NextMarker
+	}
+	sort.Slice(configHistory, func(i, j int) bool {
+		return configHistory[i].CreateTime.Before(configHistory[j].CreateTime)
+	})
+	return configHistory, nil
+}
+
+func delServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV string) error {
+	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV+kvPrefix)
+	return objAPI.DeleteObject(ctx, minioMetaBucket, historyFile)
+}
+
+func readServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV string) ([]byte, error) {
+	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV+kvPrefix)
+	data, err := readConfig(ctx, objAPI, historyFile)
+	if err != nil {
+		return nil, err
 	}
 
-	data, err := json.MarshalIndent(config, "", "\t")
+	if globalConfigEncrypted {
+		data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+	}
+
+	return data, err
+}
+
+func saveServerConfigHistory(ctx context.Context, objAPI ObjectLayer, kv []byte) error {
+	uuidKV := mustGetUUID() + kvPrefix
+	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV)
+
+	var err error
+	if globalConfigEncrypted {
+		kv, err = madmin.EncryptData(globalActiveCred.String(), kv)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Save the new config KV settings into the history path.
+	return saveConfig(ctx, objAPI, historyFile, kv)
+}
+
+func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config interface{}) error {
+	data, err := json.Marshal(config)
 	if err != nil {
 		return err
 	}
 
+	if globalConfigEncrypted {
+		data, err = madmin.EncryptData(globalActiveCred.String(), data)
+		if err != nil {
+			return err
+		}
+	}
+
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
-	if globalEtcdClient != nil {
-		return saveConfigEtcd(ctx, globalEtcdClient, configFile, data)
-	}
-
-	// Create a backup of the current config
-	oldData, err := readConfig(ctx, objAPI, configFile)
-	if err == nil {
-		backupConfigFile := path.Join(minioConfigPrefix, minioConfigBackupFile)
-		if err = saveConfig(ctx, objAPI, backupConfigFile, oldData); err != nil {
-			return err
-		}
-	} else {
-		if err != errConfigNotFound {
-			return err
-		}
-	}
-
 	// Save the new config in the std config path
 	return saveConfig(ctx, objAPI, configFile, data)
 }
 
-func readServerConfig(ctx context.Context, objAPI ObjectLayer) (*serverConfig, error) {
-	var configData []byte
-	var err error
-
+func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, error) {
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
-	if globalEtcdClient != nil {
-		configData, err = readConfigEtcd(ctx, globalEtcdClient, configFile)
-	} else {
-		configData, err = readConfig(ctx, objAPI, configFile)
-	}
+	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
+		// Config not found for some reason, allow things to continue
+		// by initializing a new fresh config in safe mode.
+		if err == errConfigNotFound && globalSafeMode {
+			return newServerConfig(), nil
+		}
 		return nil, err
 	}
 
-	if runtime.GOOS == "windows" {
-		configData = bytes.Replace(configData, []byte("\r\n"), []byte("\n"), -1)
+	if globalConfigEncrypted {
+		configData, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(configData))
+		if err != nil {
+			if err == madmin.ErrMaliciousData {
+				return nil, config.ErrInvalidCredentialsBackendEncrypted(nil)
+			}
+			return nil, err
+		}
 	}
 
-	if err = quick.CheckDuplicateKeys(string(configData)); err != nil {
-		return nil, err
-	}
-
-	var config = &serverConfig{}
-	if err = json.Unmarshal(configData, config); err != nil {
-		return nil, err
-	}
-
-	if err = quick.CheckData(config); err != nil {
+	var config = config.New()
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err = json.Unmarshal(configData, &config); err != nil {
 		return nil, err
 	}
 
@@ -112,33 +185,32 @@ func (sys *ConfigSys) Load(objAPI ObjectLayer) error {
 	return sys.Init(objAPI)
 }
 
+// WatchConfigNASDisk - watches nas disk on periodic basis.
+func (sys *ConfigSys) WatchConfigNASDisk(objAPI ObjectLayer) {
+	configInterval := globalRefreshIAMInterval
+	watchDisk := func() {
+		ticker := time.NewTicker(configInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-GlobalServiceDoneCh:
+				return
+			case <-ticker.C:
+				loadConfig(objAPI)
+			}
+		}
+	}
+	// Refresh configSys in background for NAS gateway.
+	go watchDisk()
+}
+
 // Init - initializes config system from config.json.
 func (sys *ConfigSys) Init(objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errInvalidArgument
 	}
 
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-
-	// Initializing configuration needs a retry mechanism for
-	// the following reasons:
-	//  - Read quorum is lost just after the initialization
-	//    of the object layer.
-	//  - Write quorum not met when upgrading configuration
-	//    version is needed.
-	for range newRetryTimerSimple(doneCh) {
-		if err := initConfig(objAPI); err != nil {
-			if strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-				strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-				logger.Info("Waiting for configuration to be initialized..")
-				continue
-			}
-			return err
-		}
-		break
-	}
-	return nil
+	return initConfig(objAPI)
 }
 
 // NewConfigSys - creates new config system object.
@@ -152,44 +224,30 @@ func initConfig(objAPI ObjectLayer) error {
 		return errServerNotInitialized
 	}
 
-	configFile := path.Join(minioConfigPrefix, minioConfigFile)
-
-	if globalEtcdClient != nil {
-		if err := checkConfigEtcd(context.Background(), globalEtcdClient, getConfigFile()); err != nil {
-			if err == errConfigNotFound {
-				// Migrates all configs at old location.
-				if err = migrateConfig(); err != nil {
-					return err
-				}
-				// Migrates etcd ${HOME}/.minio/config.json to '/config/config.json'
-				if err = migrateConfigToMinioSys(objAPI); err != nil {
-					return err
-				}
-			} else {
-				return err
-			}
-		}
-
-		// Watch config for changes and reloads them.
-		go watchConfigEtcd(objAPI, configFile, loadConfig)
-
-	} else {
-		if isFile(getConfigFile()) {
-			if err := migrateConfig(); err != nil {
-				return err
-			}
-		}
-		// Migrates ${HOME}/.minio/config.json or config.json.deprecated
-		// to '<export_path>/.minio.sys/config/config.json'
-		// ignore if the file doesn't exist.
-		if err := migrateConfigToMinioSys(objAPI); err != nil {
+	if isFile(getConfigFile()) {
+		if err := migrateConfig(); err != nil {
 			return err
 		}
+	}
 
-		// Migrates backend '<export_path>/.minio.sys/config/config.json' to latest version.
-		if err := migrateMinioSysConfig(objAPI); err != nil {
-			return err
-		}
+	// Migrates ${HOME}/.minio/config.json or config.json.deprecated
+	// to '<export_path>/.minio.sys/config/config.json'
+	// ignore if the file doesn't exist.
+	// If etcd is set then migrates /config/config.json
+	// to '<export_path>/.minio.sys/config/config.json'
+	if err := migrateConfigToMinioSys(objAPI); err != nil {
+		return err
+	}
+
+	// Migrates backend '<export_path>/.minio.sys/config/config.json' to latest version.
+	if err := migrateMinioSysConfig(objAPI); err != nil {
+		return err
+	}
+
+	// Migrates backend '<export_path>/.minio.sys/config/config.json' to
+	// latest config format.
+	if err := migrateMinioSysConfigToKV(objAPI); err != nil {
+		return err
 	}
 
 	return loadConfig(objAPI)

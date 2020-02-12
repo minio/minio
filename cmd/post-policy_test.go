@@ -132,7 +132,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestAPIEndPoints(obj, []string{"PostPolicy"})
 
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	curTime := UTCNow()
 	curTimePlus5Min := curTime.Add(time.Minute * 5)
@@ -314,7 +314,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		{
 			objectName:         "test",
 			data:               []byte("Hello, World"),
-			expectedRespStatus: http.StatusBadRequest,
+			expectedRespStatus: http.StatusForbidden,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			dates:              []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
@@ -446,7 +446,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestAPIEndPoints(obj, []string{"PostPolicy"})
 
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	curTime := UTCNow()
 	curTimePlus5Min := curTime.Add(time.Minute * 5)

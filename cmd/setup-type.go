@@ -20,8 +20,11 @@ package cmd
 type SetupType int
 
 const (
+	// UnknownSetupType - starts with unknown setup type.
+	UnknownSetupType SetupType = iota
+
 	// FSSetupType - FS setup type enum.
-	FSSetupType SetupType = iota + 1
+	FSSetupType
 
 	// XLSetupType - XL setup type enum.
 	XLSetupType
@@ -45,5 +48,5 @@ func (setupType SetupType) String() string {
 		return globalMinioModeGatewayPrefix
 	}
 
-	return ""
+	return "unknown"
 }

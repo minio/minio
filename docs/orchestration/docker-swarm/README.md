@@ -1,4 +1,4 @@
-# Deploy MinIO on Docker Swarm [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# Deploy MinIO on Docker Swarm [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
 Docker Engine provides cluster management and orchestration features in Swarm mode. MinIO server can be easily deployed in distributed mode on Swarm to create a multi-tenant, highly-available and scalable object store.
 
@@ -71,6 +71,12 @@ docker volume prune
 ```
 This will remove all the volumes not associated with any container.
 
+## 5. Accessing MinIO services
+
+The services are exposed, by default, on the internal overlay network by their services names (minio1, minio2, ...).
+The docker-compose.yml file also exposes the MinIO services behind a single alias on the minio_distributed network.
+
+Services in the Swarm which are attached to that network can interact with the host "minio-cluster" instead of individual services' hostnames.  This provides a simple way to loosely load balance across all the MinIO services in the Swarm as well as simplifies configuration and management.
 
 ### Notes
 

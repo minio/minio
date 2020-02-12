@@ -36,7 +36,7 @@ func joinWithSlash(accessKey, date, region, service, requestVersion string) stri
 		date,
 		region,
 		service,
-		requestVersion}, "/")
+		requestVersion}, SlashSeparator)
 }
 
 // generate CredentialHeader from its fields.
@@ -79,12 +79,12 @@ func validateCredentialfields(t *testing.T, testNum int, expectedCredentials cre
 
 // TestParseCredentialHeader - validates the format validator and extractor for the Credential header in an aws v4 request.
 // A valid format of creadential should be of the following format.
-// Credential = accessKey + "/"+ scope
+// Credential = accessKey + SlashSeparator+ scope
 // where scope = string.Join([]string{  currTime.Format(yyyymmdd),
 // 			globalMinioDefaultRegion,
 //               	"s3",
 //		        "aws4_request",
-//                       },"/")
+//                       },SlashSeparator)
 func TestParseCredentialHeader(t *testing.T) {
 
 	sampleTimeStr := UTCNow().Format(yyyymmdd)
@@ -453,6 +453,36 @@ func TestParseSignV4(t *testing.T) {
 				Credential: generateCredentials(
 					t,
 					"Z7IXGOO6BZ0REAN1Q26I",
+					sampleTimeStr,
+					"us-west-1",
+					"s3",
+					"aws4_request"),
+				SignedHeaders: []string{"host", "x-amz-content-sha256", "x-amz-date"},
+				Signature:     "abcd",
+			},
+			expectedErrCode: ErrNone,
+		},
+		// Test case - 8.
+		{
+			inputV4AuthStr: signV4Algorithm +
+				strings.Join([]string{
+					// generating a valid credential.
+					generateCredentialStr(
+						"access key",
+						sampleTimeStr,
+						"us-west-1",
+						"s3",
+						"aws4_request"),
+					// valid SignedHeader.
+					"SignedHeaders=host;x-amz-content-sha256;x-amz-date",
+					// valid Signature field.
+					// a valid signature is of form "Signature="
+					"Signature=abcd",
+				}, ","),
+			expectedAuthField: signValues{
+				Credential: generateCredentials(
+					t,
+					"access key",
 					sampleTimeStr,
 					"us-west-1",
 					"s3",

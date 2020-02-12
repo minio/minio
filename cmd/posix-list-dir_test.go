@@ -129,6 +129,10 @@ func setupTestReadDirGeneric(t *testing.T) (testResults []result) {
 
 // Test to read non-empty directory with symlinks.
 func setupTestReadDirSymlink(t *testing.T) (testResults []result) {
+	if runtime.GOOS == globalWindowsOSName {
+		t.Skip("symlinks not available on windows")
+		return nil
+	}
 	dir := mustSetupDir(t)
 	entries := []string{}
 	for i := 0; i < 10; i++ {
@@ -223,7 +227,7 @@ func TestReadDirN(t *testing.T) {
 	}{
 		{0, 0, 0},
 		{0, 1, 0},
-		{1, 0, 1},
+		{1, 0, 0},
 		{0, -1, 0},
 		{1, -1, 1},
 		{10, -1, 10},
@@ -236,19 +240,24 @@ func TestReadDirN(t *testing.T) {
 
 	for i, testCase := range testCases {
 		dir := mustSetupDir(t)
-		defer os.RemoveAll(dir)
 
 		for c := 1; c <= testCase.numFiles; c++ {
-			if err := ioutil.WriteFile(filepath.Join(dir, fmt.Sprintf("%d", c)), []byte{}, os.ModePerm); err != nil {
+			err := ioutil.WriteFile(filepath.Join(dir, fmt.Sprintf("%d", c)), []byte{}, os.ModePerm)
+			if err != nil {
+				os.RemoveAll(dir)
 				t.Fatalf("Unable to create a file, %s", err)
 			}
 		}
 		entries, err := readDirN(dir, testCase.n)
 		if err != nil {
+			os.RemoveAll(dir)
 			t.Fatalf("Unable to read entries, %s", err)
 		}
 		if len(entries) != testCase.expectedNum {
-			t.Fatalf("Test %d: unexpected number of entries, waiting for %d, but found %d", i+1, testCase.expectedNum, len(entries))
+			os.RemoveAll(dir)
+			t.Fatalf("Test %d: unexpected number of entries, waiting for %d, but found %d",
+				i+1, testCase.expectedNum, len(entries))
 		}
+		os.RemoveAll(dir)
 	}
 }

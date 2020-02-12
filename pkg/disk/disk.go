@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,25 +17,9 @@
 package disk
 
 import (
-	"bytes"
-	"crypto/rand"
-	"errors"
 	"os"
-	"path"
-	"strconv"
-	"time"
 
-	humanize "github.com/dustin/go-humanize"
-)
-
-// file size for performance read and write checks
-const (
-	randBufSize = 1 * humanize.KiByte
-	randParts   = 1024
-	fileSize    = randParts * randBufSize
-
-	// Total count of read / write iteration for performance measurement
-	iterations = 10
+	"github.com/ncw/directio"
 )
 
 // Info stat fs struct is container which holds following values
@@ -64,9 +48,9 @@ type Performance struct {
 }
 
 // GetPerformance returns given disk's read and write performance
-func GetPerformance(path string) Performance {
+func GetPerformance(path string, size int64) Performance {
 	perf := Performance{}
-	write, read, err := doPerfMeasure(path)
+	write, read, err := doPerfMeasure(path, size)
 	if err != nil {
 		perf.Error = err.Error()
 		return perf
@@ -78,63 +62,36 @@ func GetPerformance(path string) Performance {
 
 // Calculate the write and read performance - write and read 10 tmp (1 MiB)
 // files and find the average time taken (Bytes / Sec)
-func doPerfMeasure(fsPath string) (write, read float64, err error) {
-	var count int
-	var totalWriteElapsed time.Duration
-	var totalReadElapsed time.Duration
-
+func doPerfMeasure(fsPath string, size int64) (writeSpeed, readSpeed float64, err error) {
+	// Remove the file created for speed test purposes
 	defer os.RemoveAll(fsPath)
 
-	randBuf := make([]byte, randBufSize)
-	rand.Read(randBuf)
-	buf := bytes.Repeat(randBuf, randParts)
-
-	// create the enclosing directory
-	err = os.MkdirAll(fsPath, 0777)
+	// Create a file with O_DIRECT flag
+	w, err := OpenFileDirectIO(fsPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0666)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	for count = 1; count <= iterations; count++ {
-		fsTempObjPath := path.Join(fsPath, strconv.Itoa(count))
+	// Fetch aligned buf for direct-io
+	buf := directio.AlignedBlock(speedTestBlockSize)
 
-		// Write performance calculation
-		writeStart := time.Now()
-		n, err := writeFile(fsTempObjPath, buf)
-
-		if err != nil {
-			return 0, 0, err
-		}
-		if n != fileSize {
-			return 0, 0, errors.New("Could not write temporary data to disk")
-		}
-
-		writeElapsed := time.Since(writeStart)
-		totalWriteElapsed += writeElapsed
-
-		// Read performance calculation
-		readStart := time.Now()
-		n, err = readFile(fsTempObjPath, buf)
-
-		if err != nil {
-			return 0, 0, err
-		}
-		if n != fileSize {
-			return 0, 0, errors.New("Could not read temporary data from disk")
-		}
-
-		readElapsed := time.Since(readStart)
-		totalReadElapsed += readElapsed
+	writeSpeed, err = speedTestWrite(w, buf, size)
+	w.Close()
+	if err != nil {
+		return 0, 0, err
 	}
-	// Average time spent = total time elapsed / number of writes
-	avgWriteTime := totalWriteElapsed.Seconds() / float64(count)
-	// Write perf = fileSize (in Bytes) / average time spent writing (in seconds)
-	write = fileSize / avgWriteTime
 
-	// Average time spent = total time elapsed / number of writes
-	avgReadTime := totalReadElapsed.Seconds() / float64(count)
-	// read perf = fileSize (in Bytes) / average time spent reading (in seconds)
-	read = fileSize / avgReadTime
+	// Open file to compute read speed
+	r, err := OpenFileDirectIO(fsPath, os.O_RDONLY, 0666)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer r.Close()
 
-	return write, read, nil
+	readSpeed, err = speedTestRead(r, buf, size)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return writeSpeed, readSpeed, nil
 }

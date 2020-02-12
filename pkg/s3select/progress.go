@@ -18,8 +18,10 @@ package s3select
 
 import (
 	"compress/bzip2"
+	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"sync/atomic"
 
 	gzip "github.com/klauspost/pgzip"
@@ -50,13 +52,29 @@ type progressReader struct {
 	rc              io.ReadCloser
 	scannedReader   *countUpReader
 	processedReader *countUpReader
+
+	closedMu sync.Mutex
+	closed   bool
 }
 
 func (pr *progressReader) Read(p []byte) (n int, err error) {
+	// This ensures that Close will block until Read has completed.
+	// This allows another goroutine to close the reader.
+	pr.closedMu.Lock()
+	defer pr.closedMu.Unlock()
+	if pr.closed {
+		return 0, errors.New("progressReader: read after Close")
+	}
 	return pr.processedReader.Read(p)
 }
 
 func (pr *progressReader) Close() error {
+	pr.closedMu.Lock()
+	defer pr.closedMu.Unlock()
+	if pr.closed {
+		return nil
+	}
+	pr.closed = true
 	return pr.rc.Close()
 }
 

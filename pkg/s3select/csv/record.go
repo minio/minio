@@ -17,17 +17,17 @@
 package csv
 
 import (
-	"bytes"
-	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/bcicen/jstream"
+	csv "github.com/minio/minio/pkg/csvparser"
 	"github.com/minio/minio/pkg/s3select/sql"
 )
 
-// Record - is CSV record.
+// Record - is a CSV record.
 type Record struct {
 	columnNames  []string
 	csvRecord    []string
@@ -61,30 +61,58 @@ func (r *Record) Set(name string, value *sql.Value) error {
 	return nil
 }
 
-// MarshalCSV - encodes to CSV data.
-func (r *Record) MarshalCSV(fieldDelimiter rune) ([]byte, error) {
-	buf := new(bytes.Buffer)
-	w := csv.NewWriter(buf)
+// Reset data in record.
+func (r *Record) Reset() {
+	if len(r.columnNames) > 0 {
+		r.columnNames = r.columnNames[:0]
+	}
+	if len(r.csvRecord) > 0 {
+		r.csvRecord = r.csvRecord[:0]
+	}
+	for k := range r.nameIndexMap {
+		delete(r.nameIndexMap, k)
+	}
+}
+
+// Clone the record.
+func (r *Record) Clone(dst sql.Record) sql.Record {
+	other, ok := dst.(*Record)
+	if !ok {
+		other = &Record{}
+	}
+	if len(other.columnNames) > 0 {
+		other.columnNames = other.columnNames[:0]
+	}
+	if len(other.csvRecord) > 0 {
+		other.csvRecord = other.csvRecord[:0]
+	}
+	other.columnNames = append(other.columnNames, r.columnNames...)
+	other.csvRecord = append(other.csvRecord, r.csvRecord...)
+	return other
+}
+
+// WriteCSV - encodes to CSV data.
+func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune) error {
+	w := csv.NewWriter(writer)
 	w.Comma = fieldDelimiter
 	if err := w.Write(r.csvRecord); err != nil {
-		return nil, err
+		return err
 	}
 	w.Flush()
 	if err := w.Error(); err != nil {
-		return nil, err
+		return err
 	}
 
-	data := buf.Bytes()
-	return data[:len(data)-1], nil
+	return nil
 }
 
-// MarshalJSON - encodes to JSON data.
-func (r *Record) MarshalJSON() ([]byte, error) {
+// WriteJSON - encodes to JSON data.
+func (r *Record) WriteJSON(writer io.Writer) error {
 	var kvs jstream.KVS = make([]jstream.KV, len(r.columnNames))
 	for i := 0; i < len(r.columnNames); i++ {
 		kvs[i] = jstream.KV{Key: r.columnNames[i], Value: r.csvRecord[i]}
 	}
-	return json.Marshal(kvs)
+	return json.NewEncoder(writer).Encode(kvs)
 }
 
 // Raw - returns the underlying data with format info.

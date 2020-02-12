@@ -19,50 +19,118 @@ package madmin
 
 import (
 	"bytes"
-	"crypto/rand"
+	"errors"
 	"io"
 	"io/ioutil"
 
-	"github.com/minio/sio"
+	"github.com/secure-io/sio-go"
+	"github.com/secure-io/sio-go/sioutil"
 	"golang.org/x/crypto/argon2"
 )
 
-// EncryptData - encrypts server config data.
+// EncryptData encrypts the data with an unique key
+// derived from password using the Argon2id PBKDF.
+//
+// The returned ciphertext data consists of:
+//    salt | AEAD ID | nonce | encrypted data
+//     32      1         8      ~ len(data)
 func EncryptData(password string, data []byte) ([]byte, error) {
-	salt := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
-		return nil, err
-	}
+	salt := sioutil.MustRandom(32)
 
-	// derive an encryption key from the master key and the nonce
-	var key [32]byte
-	copy(key[:], argon2.IDKey([]byte(password), salt, 1, 64*1024, 4, 32))
+	// Derive an unique 256 bit key from the password and the random salt.
+	key := argon2.IDKey([]byte(password), salt, 1, 64*1024, 4, 32)
 
-	encrypted, err := sio.EncryptReader(bytes.NewReader(data), sio.Config{
-		Key: key[:]},
+	var (
+		id     byte
+		err    error
+		stream *sio.Stream
 	)
+	if sioutil.NativeAES() { // Only use AES-GCM if we can use an optimized implementation
+		id = aesGcm
+		stream, err = sio.AES_256_GCM.Stream(key)
+	} else {
+		id = c20p1305
+		stream, err = sio.ChaCha20Poly1305.Stream(key)
+	}
 	if err != nil {
 		return nil, err
 	}
-	edata, err := ioutil.ReadAll(encrypted)
-	return append(salt, edata...), err
+	nonce := sioutil.MustRandom(stream.NonceSize())
+
+	// ciphertext = salt || AEAD ID | nonce | encrypted data
+	cLen := int64(len(salt)+1+len(nonce)+len(data)) + stream.Overhead(int64(len(data)))
+	ciphertext := bytes.NewBuffer(make([]byte, 0, cLen)) // pre-alloc correct length
+
+	// Prefix the ciphertext with salt, AEAD ID and nonce
+	ciphertext.Write(salt)
+	ciphertext.WriteByte(id)
+	ciphertext.Write(nonce)
+
+	w := stream.EncryptWriter(ciphertext, nonce, nil)
+	if _, err = w.Write(data); err != nil {
+		return nil, err
+	}
+	if err = w.Close(); err != nil {
+		return nil, err
+	}
+	return ciphertext.Bytes(), nil
 }
 
-// DecryptData - decrypts server config data.
+// ErrMaliciousData indicates that the stream cannot be
+// decrypted by provided credentials.
+var ErrMaliciousData = sio.NotAuthentic
+
+// DecryptData decrypts the data with the key derived
+// from the salt (part of data) and the password using
+// the PBKDF used in EncryptData. DecryptData returns
+// the decrypted plaintext on success.
+//
+// The data must be a valid ciphertext produced by
+// EncryptData. Otherwise, the decryption will fail.
 func DecryptData(password string, data io.Reader) ([]byte, error) {
-	salt := make([]byte, 32)
-	if _, err := io.ReadFull(data, salt); err != nil {
+	var (
+		salt  [32]byte
+		id    [1]byte
+		nonce [8]byte // This depends on the AEAD but both used ciphers have the same nonce length.
+	)
+
+	if _, err := io.ReadFull(data, salt[:]); err != nil {
 		return nil, err
 	}
-	// derive an encryption key from the master key and the nonce
-	var key [32]byte
-	copy(key[:], argon2.IDKey([]byte(password), salt, 1, 64*1024, 4, 32))
+	if _, err := io.ReadFull(data, id[:]); err != nil {
+		return nil, err
+	}
+	if _, err := io.ReadFull(data, nonce[:]); err != nil {
+		return nil, err
+	}
 
-	decrypted, err := sio.DecryptReader(data, sio.Config{
-		Key: key[:]},
+	key := argon2.IDKey([]byte(password), salt[:], 1, 64*1024, 4, 32)
+	var (
+		err    error
+		stream *sio.Stream
 	)
+	switch id[0] {
+	case aesGcm:
+		stream, err = sio.AES_256_GCM.Stream(key)
+	case c20p1305:
+		stream, err = sio.ChaCha20Poly1305.Stream(key)
+	default:
+		err = errors.New("madmin: invalid AEAD algorithm ID")
+	}
 	if err != nil {
 		return nil, err
 	}
-	return ioutil.ReadAll(decrypted)
+
+	enBytes, err := ioutil.ReadAll(stream.DecryptReader(data, nonce[:], nil))
+	if err != nil {
+		if err == sio.NotAuthentic {
+			return enBytes, ErrMaliciousData
+		}
+	}
+	return enBytes, err
 }
+
+const (
+	aesGcm   = 0x00
+	c20p1305 = 0x01
+)

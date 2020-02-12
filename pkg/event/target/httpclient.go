@@ -44,6 +44,11 @@ func (target HTTPClientTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - does nothing and available for interface compatibility.
+func (target *HTTPClientTarget) IsActive() (bool, error) {
+	return true, nil
+}
+
 func (target *HTTPClientTarget) start() {
 	go func() {
 		defer func() {

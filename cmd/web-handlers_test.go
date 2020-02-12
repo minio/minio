@@ -35,10 +35,13 @@ import (
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	humanize "github.com/dustin/go-humanize"
-	miniogopolicy "github.com/minio/minio-go/pkg/policy"
+	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
+	xjwt "github.com/minio/minio/cmd/jwt"
+	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/policy/condition"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/policy"
-	"github.com/minio/minio/pkg/policy/condition"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // Implement a dummy flush writer.
@@ -140,7 +143,7 @@ func TestWebHandlerLogin(t *testing.T) {
 func testLoginWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	// test cases with sample input and expected output.
 	testCases := []struct {
@@ -180,7 +183,7 @@ func testStorageInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	// get random bucket name.
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -213,7 +216,7 @@ func TestWebHandlerServerInfo(t *testing.T) {
 func testServerInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -254,7 +257,7 @@ func TestWebHandlerMakeBucket(t *testing.T) {
 func testMakeBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -307,7 +310,7 @@ func TestWebHandlerDeleteBucket(t *testing.T) {
 func testDeleteBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	apiRouter := initTestWebRPCEndPoint(obj)
 
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 	token, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatalf("could not get RPC token, %s", err.Error())
@@ -338,7 +341,7 @@ func testDeleteBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 		{"minio", false, "false token", "Authentication failed"},
 		{"minio", false, token, "The specified bucket is not valid"},
 		{bucketName, false, token, ""},
-		{bucketName, true, token, "Bucket not empty"},
+		{bucketName, true, token, "The bucket you tried to delete is not empty"},
 		{bucketName, false, "", "JWT token missing"},
 	}
 
@@ -411,7 +414,7 @@ func TestWebHandlerListBuckets(t *testing.T) {
 func testListBucketsWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -459,7 +462,7 @@ func TestWebHandlerListObjects(t *testing.T) {
 func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	rec := httptest.NewRecorder()
 
@@ -564,7 +567,7 @@ func TestWebHandlerRemoveObject(t *testing.T) {
 func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	rec := httptest.NewRecorder()
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -655,7 +658,7 @@ func TestWebHandlerGenerateAuth(t *testing.T) {
 func testGenerateAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	rec := httptest.NewRecorder()
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -692,7 +695,15 @@ func TestWebHandlerSetAuth(t *testing.T) {
 func testSetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials, err := auth.GetNewCredentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	globalIAMSys.SetUser(credentials.AccessKey, madmin.UserInfo{
+		SecretKey: credentials.SecretKey,
+		Status:    madmin.AccountEnabled,
+	})
 
 	rec := httptest.NewRecorder()
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -701,18 +712,21 @@ func testSetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	}
 
 	testCases := []struct {
-		username string
-		password string
-		success  bool
+		currentAccessKey string
+		currentSecretKey string
+		newAccessKey     string
+		newSecretKey     string
+		success          bool
 	}{
-		{"", "", false},
-		{"1", "1", false},
-		{"azerty", "foooooooooooooo", true},
+		{"", "", "", "", false},
+		{"1", "1", "1", "1", false},
+		{credentials.AccessKey, credentials.SecretKey, "azerty", "bar", false},
+		{credentials.AccessKey, credentials.SecretKey, "azerty", "foooooooooooooo", true},
 	}
 
 	// Iterating over the test cases, calling the function under test and asserting the response.
 	for i, testCase := range testCases {
-		setAuthRequest := SetAuthArgs{AccessKey: testCase.username, SecretKey: testCase.password}
+		setAuthRequest := SetAuthArgs{CurrentAccessKey: testCase.currentAccessKey, CurrentSecretKey: testCase.currentSecretKey, NewAccessKey: testCase.newAccessKey, NewSecretKey: testCase.newSecretKey}
 		setAuthReply := &SetAuthReply{}
 		req, err := newTestWebRPCRequest("Web.SetAuth", authorization, setAuthRequest)
 		if err != nil {
@@ -735,59 +749,21 @@ func testSetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	}
 }
 
-// Wrapper for calling Get Auth Handler
-func TestWebHandlerGetAuth(t *testing.T) {
-	ExecObjectLayerTest(t, testGetAuthWebHandler)
-}
-
-// testGetAuthWebHandler - Test GetAuth web handler
-func testGetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// Register the API end points with XL/FS object layer.
-	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
-
-	rec := httptest.NewRecorder()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
-	if err != nil {
-		t.Fatal("Cannot authenticate")
-	}
-
-	getAuthRequest := WebGenericArgs{}
-	getAuthReply := &GetAuthReply{}
-	req, err := newTestWebRPCRequest("Web.GetAuth", authorization, getAuthRequest)
-	if err != nil {
-		t.Fatalf("Failed to create HTTP request: <ERROR> %v", err)
-	}
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
-	}
-	err = getTestWebRPCResponse(rec, &getAuthReply)
-	if err != nil {
-		t.Fatalf("Failed, %v", err)
-	}
-	if getAuthReply.AccessKey != credentials.AccessKey || getAuthReply.SecretKey != credentials.SecretKey {
-		t.Fatalf("Failed to get correct auth keys")
-	}
-}
-
 func TestWebCreateURLToken(t *testing.T) {
 	ExecObjectLayerTest(t, testCreateURLToken)
 }
 
 func getTokenString(accessKey, secretKey string) (string, error) {
-	utcNow := UTCNow()
-	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.StandardClaims{
-		ExpiresAt: utcNow.Add(defaultJWTExpiry).Unix(),
-		IssuedAt:  utcNow.Unix(),
-		Subject:   accessKey,
-	})
+	claims := xjwt.NewMapClaims()
+	claims.SetExpiry(UTCNow().Add(defaultJWTExpiry))
+	claims.SetAccessKey(accessKey)
+	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, claims)
 	return token.SignedString([]byte(secretKey))
 }
 
 func testCreateURLToken(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -844,7 +820,7 @@ func TestWebHandlerUpload(t *testing.T) {
 func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	content := []byte("temporary file's content")
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -857,13 +833,14 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 
 	test := func(token string, sendContentLength bool) int {
 		rec := httptest.NewRecorder()
-		req, rErr := http.NewRequest("PUT", "/minio/upload/"+bucketName+"/"+objectName, nil)
+		req, rErr := http.NewRequest("PUT", "/minio/upload/"+bucketName+SlashSeparator+objectName, nil)
 		if rErr != nil {
 			t.Fatalf("Cannot create upload request, %v", rErr)
 		}
 
 		req.Header.Set("x-amz-date", "20160814T114029Z")
 		req.Header.Set("Accept", "*/*")
+		req.Header.Set("User-Agent", "Mozilla")
 
 		req.Body = ioutil.NopCloser(bytes.NewReader(content))
 
@@ -947,7 +924,7 @@ func TestWebHandlerDownload(t *testing.T) {
 func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -959,7 +936,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 
 	test := func(token string) (int, []byte) {
 		rec := httptest.NewRecorder()
-		path := "/minio/download/" + bucketName + "/" + objectName + "?token="
+		path := "/minio/download/" + bucketName + SlashSeparator + objectName + "?token="
 		if token != "" {
 			path = path + token
 		}
@@ -969,6 +946,8 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 		if err != nil {
 			t.Fatalf("Cannot create upload request, %v", err)
 		}
+
+		req.Header.Set("User-Agent", "Mozilla")
 
 		apiRouter.ServeHTTP(rec, req)
 		return rec.Code, rec.Body.Bytes()
@@ -1022,7 +1001,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	}
 
 	if !bytes.Equal(bodyContent, bytes.NewBufferString("Authentication failed, check your access credentials").Bytes()) {
-		t.Fatalf("Expected authentication error message, got %v", bodyContent)
+		t.Fatalf("Expected authentication error message, got %s", string(bodyContent))
 	}
 
 	// Unauthenticated download should fail.
@@ -1066,7 +1045,7 @@ func TestWebHandlerDownloadZip(t *testing.T) {
 
 func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 	var opts ObjectOptions
 
 	authorization, err := authenticateURL(credentials.AccessKey, credentials.SecretKey)
@@ -1114,6 +1093,8 @@ func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHa
 			t.Fatalf("Cannot create upload request, %v", err)
 		}
 
+		req.Header.Set("User-Agent", "Mozilla")
+
 		apiRouter.ServeHTTP(rec, req)
 		return rec.Code, rec.Body.Bytes()
 	}
@@ -1151,7 +1132,7 @@ func TestWebHandlerPresignedGetHandler(t *testing.T) {
 func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -1256,7 +1237,7 @@ func TestWebHandlerGetBucketPolicyHandler(t *testing.T) {
 func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -1331,7 +1312,7 @@ func TestWebHandlerListAllBucketPoliciesHandler(t *testing.T) {
 func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -1435,7 +1416,7 @@ func TestWebHandlerSetBucketPolicyHandler(t *testing.T) {
 func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -1518,7 +1499,7 @@ func TestWebCheckAuthorization(t *testing.T) {
 	webRPCs := []string{
 		"ServerInfo", "StorageInfo", "MakeBucket",
 		"ListBuckets", "ListObjects", "RemoveObject",
-		"GenerateAuth", "SetAuth", "GetAuth",
+		"GenerateAuth", "SetAuth",
 		"GetBucketPolicy", "SetBucketPolicy", "ListAllBucketPolicies",
 		"PresignedGet",
 	}
@@ -1548,6 +1529,7 @@ func TestWebCheckAuthorization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot create upload request, %v", err)
 	}
+	req.Header.Set("User-Agent", "Mozilla")
 	apiRouter.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("Expected the response status to be 403, but instead found `%d`", rec.Code)
@@ -1562,6 +1544,7 @@ func TestWebCheckAuthorization(t *testing.T) {
 	content := []byte("temporary file's content")
 	req, err = http.NewRequest("PUT", "/minio/upload/bucket/object", nil)
 	req.Header.Set("Authorization", "Bearer foo-authorization")
+	req.Header.Set("User-Agent", "Mozilla")
 	req.Header.Set("Content-Length", strconv.Itoa(len(content)))
 	req.Header.Set("x-amz-date", "20160814T114029Z")
 	req.Header.Set("Accept", "*/*")
@@ -1603,17 +1586,24 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	}
 
 	// Set faulty disks to XL backend
-	xl := obj.(*xlObjects)
-	for i, d := range xl.storageDisks {
-		xl.storageDisks[i] = newNaughtyDisk(d, nil, errFaultyDisk)
+	z := obj.(*xlZones)
+	xl := z.zones[0].sets[0]
+	xlDisks := xl.getDisks()
+	z.zones[0].xlDisksMu.Lock()
+	xl.getDisks = func() []StorageAPI {
+		for i, d := range xlDisks {
+			xlDisks[i] = newNaughtyDisk(d, nil, errFaultyDisk)
+		}
+		return xlDisks
 	}
+	z.zones[0].xlDisksMu.Unlock()
 
 	// Initialize web rpc endpoint.
 	apiRouter := initTestWebRPCEndPoint(obj)
 
 	rec := httptest.NewRecorder()
 
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate", err)

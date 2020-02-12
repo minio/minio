@@ -19,25 +19,18 @@ package http
 import (
 	"crypto/tls"
 	"errors"
+	"io/ioutil"
 	"net/http"
-	"os"
+	"runtime/pprof"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	"golang.org/x/net/http2"
 
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/pkg/certs"
 )
-
-func init() {
-	// Opt-in to TLS 1.3. See: https://golang.org/pkg/crypto/tls
-	// In future Go versions TLS 1.3 probably gets enabled by default.
-	// So, we can remove this line as soon as this is the case.
-	os.Setenv("GODEBUG", os.Getenv("GODEBUG")+",tls13=1")
-}
 
 const (
 	serverShutdownPoll = 500 * time.Millisecond
@@ -48,33 +41,20 @@ const (
 	// DefaultTCPKeepAliveTimeout - default TCP keep alive timeout for accepted connection.
 	DefaultTCPKeepAliveTimeout = 30 * time.Second
 
-	// DefaultReadTimeout - default timout to read data from accepted connection.
-	DefaultReadTimeout = 5 * time.Minute
-
-	// DefaultWriteTimeout - default timout to write data to accepted connection.
-	DefaultWriteTimeout = 5 * time.Minute
-
 	// DefaultMaxHeaderBytes - default maximum HTTP header size in bytes.
 	DefaultMaxHeaderBytes = 1 * humanize.MiByte
-
-	// DefaultHTTP2MaxConcurrentStreams - default value for HTTP 2.0 maximum concurrent streams allowed.
-	DefaultHTTP2MaxConcurrentStreams = 1024
 )
 
 // Server - extended http.Server supports multiple addresses to serve and enhanced connection handling.
 type Server struct {
 	http.Server
-	Addrs                  []string      // addresses on which the server listens for new connection.
-	ReadTimeout            time.Duration // timeout used for net.Conn.Read() deadlines.
-	WriteTimeout           time.Duration // timeout used for net.Conn.Write() deadlines.
-	ShutdownTimeout        time.Duration // timeout used for graceful server shutdown.
-	TCPKeepAliveTimeout    time.Duration // timeout used for underneath TCP connection.
-	UpdateBytesReadFunc    func(int)     // function to be called to update bytes read in bufConn.
-	UpdateBytesWrittenFunc func(int)     // function to be called to update bytes written in bufConn.
-	listenerMutex          sync.Mutex    // to guard 'listener' field.
-	listener               *httpListener // HTTP listener for all 'Addrs' field.
-	inShutdown             uint32        // indicates whether the server is in shutdown or not
-	requestCount           int32         // counter holds no. of request in progress.
+	Addrs               []string      // addresses on which the server listens for new connection.
+	ShutdownTimeout     time.Duration // timeout used for graceful server shutdown.
+	TCPKeepAliveTimeout time.Duration // timeout used for underneath TCP connection.
+	listenerMutex       sync.Mutex    // to guard 'listener' field.
+	listener            *httpListener // HTTP listener for all 'Addrs' field.
+	inShutdown          uint32        // indicates whether the server is in shutdown or not
+	requestCount        int32         // counter holds no. of request in progress.
 }
 
 // GetRequestCount - returns number of request in progress.
@@ -89,8 +69,6 @@ func (srv *Server) Start() (err error) {
 	if srv.TLSConfig != nil {
 		tlsConfig = srv.TLSConfig.Clone()
 	}
-	readTimeout := srv.ReadTimeout
-	writeTimeout := srv.WriteTimeout
 	handler := srv.Handler // if srv.Handler holds non-synced state -> possible data race
 
 	addrs := set.CreateStringSet(srv.Addrs...).ToSlice() // copy and remove duplicates
@@ -101,10 +79,6 @@ func (srv *Server) Start() (err error) {
 	listener, err = newHTTPListener(
 		addrs,
 		tcpKeepAliveTimeout,
-		readTimeout,
-		writeTimeout,
-		srv.UpdateBytesReadFunc,
-		srv.UpdateBytesWrittenFunc,
 	)
 	if err != nil {
 		return err
@@ -113,14 +87,18 @@ func (srv *Server) Start() (err error) {
 	// Wrap given handler to do additional
 	// * return 503 (service unavailable) if the server in shutdown.
 	wrappedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&srv.requestCount, 1)
-		defer atomic.AddInt32(&srv.requestCount, -1)
-
-		// If server is in shutdown, return 503 (service unavailable)
+		// If server is in shutdown.
 		if atomic.LoadUint32(&srv.inShutdown) != 0 {
-			w.WriteHeader(http.StatusServiceUnavailable)
+			// To indicate disable keep-alives
+			w.Header().Set("Connection", "close")
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(http.ErrServerClosed.Error()))
+			w.(http.Flusher).Flush()
 			return
 		}
+
+		atomic.AddInt32(&srv.requestCount, 1)
+		defer atomic.AddInt32(&srv.requestCount, -1)
 
 		// Handle request using passed handler.
 		handler.ServeHTTP(w, r)
@@ -133,11 +111,6 @@ func (srv *Server) Start() (err error) {
 
 	// Start servicing with listener.
 	if tlsConfig != nil {
-		if err = http2.ConfigureServer(&srv.Server, &http2.Server{
-			MaxConcurrentStreams: DefaultHTTP2MaxConcurrentStreams,
-		}); err != nil {
-			return err
-		}
 		return srv.Server.Serve(tls.NewListener(listener, tlsConfig))
 	}
 	return srv.Server.Serve(listener)
@@ -148,13 +121,13 @@ func (srv *Server) Shutdown() error {
 	srv.listenerMutex.Lock()
 	if srv.listener == nil {
 		srv.listenerMutex.Unlock()
-		return errors.New("server not initialized")
+		return http.ErrServerClosed
 	}
 	srv.listenerMutex.Unlock()
 
 	if atomic.AddUint32(&srv.inShutdown, 1) > 1 {
 		// shutdown in progress
-		return errors.New("http server already in shutdown")
+		return http.ErrServerClosed
 	}
 
 	// Close underneath HTTP listener.
@@ -170,6 +143,13 @@ func (srv *Server) Shutdown() error {
 	for {
 		select {
 		case <-shutdownTimer.C:
+			// Write all running goroutines.
+			tmp, err := ioutil.TempFile("", "minio-goroutines-*.txt")
+			if err == nil {
+				_ = pprof.Lookup("goroutine").WriteTo(tmp, 1)
+				tmp.Close()
+				return errors.New("timed out. some connections are still active. doing abnormal shutdown. goroutines written to " + tmp.Name())
+			}
 			return errors.New("timed out. some connections are still active. doing abnormal shutdown")
 		case <-ticker.C:
 			if atomic.LoadInt32(&srv.requestCount) <= 0 {
@@ -211,7 +191,14 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 			CipherSuites:             defaultCipherSuites,
 			CurvePreferences:         secureCurves,
 			MinVersion:               tls.VersionTLS12,
-			NextProtos:               []string{"h2", "http/1.1"},
+			// Do not edit the next line, protos priority is kept
+			// on purpose in this manner for HTTP 2.0, we would
+			// still like HTTP 2.0 clients to negotiate connection
+			// to server if needed but by default HTTP 1.1 is
+			// expected. We need to change this in future
+			// when we wish to go back to HTTP 2.0 as default
+			// priority for HTTP protocol negotiation.
+			NextProtos: []string{"http/1.1", "h2"},
 		}
 		tlsConfig.GetCertificate = getCert
 	}
@@ -223,8 +210,6 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 	}
 	httpServer.Handler = handler
 	httpServer.TLSConfig = tlsConfig
-	httpServer.ReadTimeout = DefaultReadTimeout
-	httpServer.WriteTimeout = DefaultWriteTimeout
 	httpServer.MaxHeaderBytes = DefaultMaxHeaderBytes
 
 	return httpServer

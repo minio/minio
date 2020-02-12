@@ -62,7 +62,12 @@ var recordsHeader = []byte{
 }
 
 const (
-	maxRecordMessageLength = 128 * 1024 // Chosen for compatibility with AWS JAVA SDK
+	// Chosen for compatibility with AWS JAVA SDK
+	// It has a a buffer size of 128K:
+	// https://github.com/aws/aws-sdk-java/blob/master/aws-java-sdk-s3/src/main/java/com/amazonaws/services/s3/internal/eventstreaming/MessageDecoder.java#L26
+	// but we must make sure there is always space to add 256 bytes:
+	// https://github.com/aws/aws-sdk-java/blob/master/aws-java-sdk-s3/src/main/java/com/amazonaws/services/s3/model/SelectObjectContentEventStream.java#L197
+	maxRecordMessageLength = (128 << 10) - 256
 )
 
 var (
@@ -83,7 +88,7 @@ func newRecordsMessage(payload []byte) []byte {
 }
 
 // payloadLenForMsgLen computes the length of the payload in a record
-// message given the length of the message.
+// message given the total length of the message.
 func payloadLenForMsgLen(messageLength int) int {
 	headerLength := len(recordsHeader)
 	payloadLength := messageLength - 4 - 4 - 4 - headerLength - 4
@@ -242,7 +247,7 @@ type messageWriter struct {
 
 	payloadBuffer      []byte
 	payloadBufferIndex int
-	payloadCh          chan []byte
+	payloadCh          chan *bytes.Buffer
 
 	finBytesScanned, finBytesProcessed int64
 
@@ -308,10 +313,10 @@ func (writer *messageWriter) start() {
 				}
 				writer.write(endMessage)
 			} else {
-				for len(payload) > 0 {
-					copiedLen := copy(writer.payloadBuffer[writer.payloadBufferIndex:], payload)
+				for payload.Len() > 0 {
+					copiedLen := copy(writer.payloadBuffer[writer.payloadBufferIndex:], payload.Bytes())
 					writer.payloadBufferIndex += copiedLen
-					payload = payload[copiedLen:]
+					payload.Next(copiedLen)
 
 					// If buffer is filled, flush it now!
 					freeSpace := bufLength - writer.payloadBufferIndex
@@ -322,6 +327,8 @@ func (writer *messageWriter) start() {
 						}
 					}
 				}
+
+				bufPool.Put(payload)
 			}
 
 		case <-recordStagingTicker.C:
@@ -349,10 +356,16 @@ func (writer *messageWriter) start() {
 	if progressTicker != nil {
 		progressTicker.Stop()
 	}
+
+	// Whatever drain the payloadCh to prevent from memory leaking.
+	for len(writer.payloadCh) > 0 {
+		payload := <-writer.payloadCh
+		bufPool.Put(payload)
+	}
 }
 
 // Sends a single whole record.
-func (writer *messageWriter) SendRecord(payload []byte) error {
+func (writer *messageWriter) SendRecord(payload *bytes.Buffer) error {
 	select {
 	case writer.payloadCh <- payload:
 		return nil
@@ -409,7 +422,7 @@ func newMessageWriter(w http.ResponseWriter, getProgressFunc func() (bytesScanne
 		getProgressFunc: getProgressFunc,
 
 		payloadBuffer: make([]byte, bufLength),
-		payloadCh:     make(chan []byte),
+		payloadCh:     make(chan *bytes.Buffer, 1),
 
 		errCh:  make(chan []byte),
 		doneCh: make(chan struct{}),

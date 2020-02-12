@@ -2,6 +2,14 @@ go_import_path: github.com/minio/minio
 
 language: go
 
+addons:
+  apt:
+    packages:
+    - shellcheck
+
+services:
+  - docker
+
 # this ensures PRs based on a local branch are not built twice
 # the downside is that a PR targeting a different branch is not built
 # but as a workaround you can add the branch to this list
@@ -18,34 +26,28 @@ matrix:
         - ARCH=x86_64
         - CGO_ENABLED=0
         - GO111MODULE=on
-      # Enable build cache
-      # https://restic.net/blog/2018-09-02/travis-build-cache
-      cache:
-       directories:
-         - $HOME/.cache/go-build
-         - $HOME/gopath/pkg/mod
-         - $HOME/go/pkg/mod
-
-      go: 1.12.1
+        - SIMPLE_CI=1
+      go: 1.13.x
       script:
         - make
         - diff -au <(gofmt -s -d cmd) <(printf "")
         - diff -au <(gofmt -s -d pkg) <(printf "")
-        - for d in $(go list ./... | grep -v browser); do CGO_ENABLED=1 go test -v -race --timeout 15m "$d"; done
-        - make verifiers
+        - make test-race
         - make crosscompile
         - make verify
-        - make coverage
-        - cd browser && yarn && yarn test && cd ..
+        - cd browser && npm install && npm run test && cd ..
+        - bash -c 'shopt -s globstar; shellcheck mint/**/*.sh'
+
     - os: windows
       env:
         - ARCH=x86_64
         - CGO_ENABLED=0
         - GO111MODULE=on
-      go: 1.12.1
+        - SIMPLE_CI=1
+      go: 1.13.x
       script:
         - go build --ldflags="$(go run buildscripts/gen-ldflags.go)" -o %GOPATH%\bin\minio.exe
-        - bash buildscripts/go-coverage.sh
+        - for d in $(go list ./... | grep -v browser); do go test -v --timeout 20m "$d"; done
 
 before_script:
   # Add an IPv6 config - see the corresponding Travis issue
@@ -53,7 +55,4 @@ before_script:
   - if [[ "${TRAVIS_OS_NAME}" == "linux" ]]; then sudo sh -c 'echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6'; fi
 
 before_install:
- - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then nvm install 11.10.1 ; fi
-
-after_success:
-- bash <(curl -s https://codecov.io/bash)
+ - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then nvm install stable ; fi

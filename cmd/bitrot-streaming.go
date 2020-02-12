@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"hash"
 	"io"
 
@@ -32,33 +33,20 @@ type streamingBitrotWriter struct {
 	h         hash.Hash
 	shardSize int64
 	canClose  chan struct{} // Needed to avoid race explained in Close() call.
-
-	// Following two fields are used only to make sure that Write(p) is called such that
-	// len(p) is always the block size except the last block, i.e prevent programmer errors.
-	currentBlockIdx int
-	verifyTillIdx   int
 }
 
 func (b *streamingBitrotWriter) Write(p []byte) (int, error) {
-	if b.currentBlockIdx < b.verifyTillIdx && int64(len(p)) != b.shardSize {
-		// All blocks except last should be of the length b.shardSize
-		logger.LogIf(context.Background(), errUnexpected)
-		return 0, errUnexpected
-	}
 	if len(p) == 0 {
 		return 0, nil
 	}
 	b.h.Reset()
 	b.h.Write(p)
 	hashBytes := b.h.Sum(nil)
-	n, err := b.iow.Write(hashBytes)
-	if n != len(hashBytes) {
-		logger.LogIf(context.Background(), err)
+	_, err := b.iow.Write(hashBytes)
+	if err != nil {
 		return 0, err
 	}
-	n, err = b.iow.Write(p)
-	b.currentBlockIdx++
-	return n, err
+	return b.iow.Write(p)
 }
 
 func (b *streamingBitrotWriter) Close() error {
@@ -78,16 +66,14 @@ func (b *streamingBitrotWriter) Close() error {
 func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64) io.WriteCloser {
 	r, w := io.Pipe()
 	h := algo.New()
-	bw := &streamingBitrotWriter{w, h, shardSize, make(chan struct{}), 0, int(length / shardSize)}
+	bw := &streamingBitrotWriter{w, h, shardSize, make(chan struct{})}
 	go func() {
-		bitrotSumsTotalSize := ceilFrac(length, shardSize) * int64(h.Size()) // Size used for storing bitrot checksums.
-		totalFileSize := bitrotSumsTotalSize + length
-		err := disk.CreateFile(volume, filePath, totalFileSize, r)
-		if err != nil {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("storageDisk", disk.String())
-			ctx := logger.SetReqInfo(context.Background(), reqInfo)
-			logger.LogIf(ctx, err)
+		totalFileSize := int64(-1) // For compressed objects length will be unknown (represented by length=-1)
+		if length != -1 {
+			bitrotSumsTotalSize := ceilFrac(length, shardSize) * int64(h.Size()) // Size used for storing bitrot checksums.
+			totalFileSize = bitrotSumsTotalSize + length
 		}
+		err := disk.CreateFile(volume, filePath, totalFileSize, r)
 		r.CloseWithError(err)
 		close(bw.canClose)
 	}()
@@ -118,7 +104,7 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 	var err error
 	if offset%b.shardSize != 0 {
 		// Offset should always be aligned to b.shardSize
-		logger.LogIf(context.Background(), errUnexpected)
+		// Can never happen unless there are programmer bugs
 		return 0, errUnexpected
 	}
 	if b.rc == nil {
@@ -127,31 +113,27 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 		streamOffset := (offset/b.shardSize)*int64(b.h.Size()) + offset
 		b.rc, err = b.disk.ReadFileStream(b.volume, b.filePath, streamOffset, b.tillOffset-streamOffset)
 		if err != nil {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("storageDisk", b.disk.String())
-			ctx := logger.SetReqInfo(context.Background(), reqInfo)
-			logger.LogIf(ctx, err)
 			return 0, err
 		}
 	}
 	if offset != b.currOffset {
-		logger.LogIf(context.Background(), errUnexpected)
+		// Can never happen unless there are programmer bugs
 		return 0, errUnexpected
 	}
 	b.h.Reset()
 	_, err = io.ReadFull(b.rc, b.hashBytes)
 	if err != nil {
-		logger.LogIf(context.Background(), err)
 		return 0, err
 	}
 	_, err = io.ReadFull(b.rc, buf)
 	if err != nil {
-		logger.LogIf(context.Background(), err)
 		return 0, err
 	}
 	b.h.Write(buf)
 
 	if !bytes.Equal(b.h.Sum(nil), b.hashBytes) {
-		err = hashMismatchError{hex.EncodeToString(b.hashBytes), hex.EncodeToString(b.h.Sum(nil))}
+		err = fmt.Errorf("hashes do not match expected %s, got %s",
+			hex.EncodeToString(b.hashBytes), hex.EncodeToString(b.h.Sum(nil)))
 		logger.LogIf(context.Background(), err)
 		return 0, err
 	}

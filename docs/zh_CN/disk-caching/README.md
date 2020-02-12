@@ -23,9 +23,9 @@
 缓存设置也可以通过环境变量设置。设置后，环境变量会覆盖任何`cache`配置中的值。下面示例使用`/mnt/drive1`, `/mnt/drive2` 和 `/mnt/drive3`来做缓存，90天失效，并且`mybucket`下的所有对象以及后缀名为`.pdf`的对象不做缓存。
 
 ```bash
-export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3"
+export MINIO_CACHE_DRIVES="/mnt/drive1,/mnt/drive2,/mnt/drive3"
 export MINIO_CACHE_EXPIRY=90
-export MINIO_CACHE_EXCLUDE="*.pdf;mybucket/*"
+export MINIO_CACHE_EXCLUDE="*.pdf,mybucket/*"
 minio server /export{1...24}
 ```
 

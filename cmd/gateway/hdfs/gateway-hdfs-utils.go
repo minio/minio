@@ -19,7 +19,7 @@ package hdfs
 import (
 	"strings"
 
-	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 )
 
@@ -36,7 +36,7 @@ const (
 
 // Ignores all reserved bucket names or invalid bucket names.
 func isReservedOrInvalidBucket(bucketEntry string, strict bool) bool {
-	bucketEntry = strings.TrimSuffix(bucketEntry, "/")
+	bucketEntry = strings.TrimSuffix(bucketEntry, minio.SlashSeparator)
 	if strict {
 		if err := s3utils.CheckValidBucketNameStrict(bucketEntry); err != nil {
 			return true

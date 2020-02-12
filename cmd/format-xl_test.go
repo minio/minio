@@ -83,23 +83,25 @@ func TestFixFormatV3(t *testing.T) {
 	for _, xlDir := range xlDirs {
 		defer os.RemoveAll(xlDir)
 	}
-	endpoints := mustGetNewEndpointList(xlDirs...)
+	endpoints := mustGetNewEndpoints(xlDirs...)
 
-	storageDisks, err := initStorageDisks(endpoints)
-	if err != nil {
-		t.Fatal(err)
+	storageDisks, errs := initStorageDisksWithErrors(endpoints)
+	for _, err := range errs {
+		if err != nil && err != errDiskNotFound {
+			t.Fatal(err)
+		}
 	}
 
 	format := newFormatXLV3(1, 8)
 	formats := make([]*formatXLV3, 8)
 
 	for j := 0; j < 8; j++ {
-		newFormat := *format
+		newFormat := format.Clone()
 		newFormat.XL.This = format.XL.Sets[0][j]
-		formats[j] = &newFormat
+		formats[j] = newFormat
 	}
 
-	if err = initFormatXLMetaVolume(storageDisks, formats); err != nil {
+	if err = initXLMetaVolumesInLocalDisks(storageDisks, formats); err != nil {
 		t.Fatal(err)
 	}
 
@@ -128,9 +130,9 @@ func TestFormatXLEmpty(t *testing.T) {
 	formats := make([]*formatXLV3, 16)
 
 	for j := 0; j < 16; j++ {
-		newFormat := *format
+		newFormat := format.Clone()
 		newFormat.XL.This = format.XL.Sets[0][j]
-		formats[j] = &newFormat
+		formats[j] = newFormat
 	}
 
 	// empty format to indicate disk not found, but this
@@ -144,95 +146,6 @@ func TestFormatXLEmpty(t *testing.T) {
 	formats[2].XL.This = ""
 	if ok := formatXLV3ThisEmpty(formats); !ok {
 		t.Fatalf("expected value true, got %t", ok)
-	}
-}
-
-// Tests format xl get version.
-func TestFormatXLGetVersion(t *testing.T) {
-	// Get test root.
-	rootPath, err := getTestRoot()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(rootPath)
-
-	v := &formatXLVersionDetect{}
-	v.XL.Version = "1"
-	b, err := json.Marshal(v)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = ioutil.WriteFile(pathJoin(rootPath, formatConfigFile), b, os.FileMode(0644)); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = formatXLGetVersion("not-found")
-	if err == nil {
-		t.Fatal("Expected to fail but found success")
-	}
-
-	vstr, err := formatXLGetVersion(pathJoin(rootPath, formatConfigFile))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if vstr != "1" {
-		t.Fatalf("Expected version '1', got '%s'", vstr)
-	}
-}
-
-// Tests format get backend format.
-func TestFormatMetaGetFormatBackendXL(t *testing.T) {
-	// Get test root.
-	rootPath, err := getTestRoot()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(rootPath)
-
-	m := &formatMetaV1{
-		Format:  "fs",
-		Version: formatMetaVersionV1,
-	}
-
-	b, err := json.Marshal(m)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = ioutil.WriteFile(pathJoin(rootPath, formatConfigFile), b, os.FileMode(0644)); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = formatMetaGetFormatBackendXL("not-found")
-	if err == nil {
-		t.Fatal("Expected to fail but found success")
-	}
-
-	format, err := formatMetaGetFormatBackendXL(pathJoin(rootPath, formatConfigFile))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if format != m.Format {
-		t.Fatalf("Expected format value %s, got %s", m.Format, format)
-	}
-
-	m = &formatMetaV1{
-		Format:  "xl",
-		Version: "2",
-	}
-
-	b, err = json.Marshal(m)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = ioutil.WriteFile(pathJoin(rootPath, formatConfigFile), b, os.FileMode(0644)); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = formatMetaGetFormatBackendXL(pathJoin(rootPath, formatConfigFile))
-	if err == nil {
-		t.Fatal("Expected to fail with incompatible meta version")
 	}
 }
 
@@ -269,10 +182,11 @@ func TestFormatXLMigrate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	migratedVersion, err := formatXLGetVersion(pathJoin(rootPath, minioMetaBucket, formatConfigFile))
+	migratedVersion, err := formatGetBackendXLVersion(pathJoin(rootPath, minioMetaBucket, formatConfigFile))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if migratedVersion != formatXLVersionV3 {
 		t.Fatalf("expected version: %s, got: %s", formatXLVersionV3, migratedVersion)
 	}
@@ -409,16 +323,16 @@ func TestCheckFormatXLValue(t *testing.T) {
 // Tests getFormatXLInQuorum()
 func TestGetFormatXLInQuorumCheck(t *testing.T) {
 	setCount := 2
-	disksPerSet := 16
+	drivesPerSet := 16
 
-	format := newFormatXLV3(setCount, disksPerSet)
+	format := newFormatXLV3(setCount, drivesPerSet)
 	formats := make([]*formatXLV3, 32)
 
 	for i := 0; i < setCount; i++ {
-		for j := 0; j < disksPerSet; j++ {
-			newFormat := *format
+		for j := 0; j < drivesPerSet; j++ {
+			newFormat := format.Clone()
 			newFormat.XL.This = format.XL.Sets[i][j]
-			formats[i*disksPerSet+j] = &newFormat
+			formats[i*drivesPerSet+j] = newFormat
 		}
 	}
 
@@ -475,16 +389,16 @@ func TestGetFormatXLInQuorumCheck(t *testing.T) {
 // Tests formatXLGetDeploymentID()
 func TestGetXLID(t *testing.T) {
 	setCount := 2
-	disksPerSet := 8
+	drivesPerSet := 8
 
-	format := newFormatXLV3(setCount, disksPerSet)
+	format := newFormatXLV3(setCount, drivesPerSet)
 	formats := make([]*formatXLV3, 16)
 
 	for i := 0; i < setCount; i++ {
-		for j := 0; j < disksPerSet; j++ {
-			newFormat := *format
+		for j := 0; j < drivesPerSet; j++ {
+			newFormat := format.Clone()
 			newFormat.XL.This = format.XL.Sets[i][j]
-			formats[i*disksPerSet+j] = &newFormat
+			formats[i*drivesPerSet+j] = newFormat
 		}
 	}
 
@@ -530,17 +444,17 @@ func TestGetXLID(t *testing.T) {
 // Initialize new format sets.
 func TestNewFormatSets(t *testing.T) {
 	setCount := 2
-	disksPerSet := 16
+	drivesPerSet := 16
 
-	format := newFormatXLV3(setCount, disksPerSet)
+	format := newFormatXLV3(setCount, drivesPerSet)
 	formats := make([]*formatXLV3, 32)
 	errs := make([]error, 32)
 
 	for i := 0; i < setCount; i++ {
-		for j := 0; j < disksPerSet; j++ {
-			newFormat := *format
+		for j := 0; j < drivesPerSet; j++ {
+			newFormat := format.Clone()
 			newFormat.XL.This = format.XL.Sets[i][j]
-			formats[i*disksPerSet+j] = &newFormat
+			formats[i*drivesPerSet+j] = newFormat
 		}
 	}
 
@@ -552,7 +466,7 @@ func TestNewFormatSets(t *testing.T) {
 	// 16th disk is unformatted.
 	errs[15] = errUnformattedDisk
 
-	newFormats := newHealFormatSets(quorumFormat, setCount, disksPerSet, formats, errs)
+	newFormats := newHealFormatSets(quorumFormat, setCount, drivesPerSet, formats, errs)
 	if newFormats == nil {
 		t.Fatal("Unexpected failure")
 	}
@@ -565,4 +479,37 @@ func TestNewFormatSets(t *testing.T) {
 			}
 		}
 	}
+}
+
+func BenchmarkInitStorageDisks256(b *testing.B) {
+	benchmarkInitStorageDisksN(b, 256)
+}
+
+func BenchmarkInitStorageDisks1024(b *testing.B) {
+	benchmarkInitStorageDisksN(b, 1024)
+}
+
+func BenchmarkInitStorageDisks2048(b *testing.B) {
+	benchmarkInitStorageDisksN(b, 2048)
+}
+
+func BenchmarkInitStorageDisksMax(b *testing.B) {
+	benchmarkInitStorageDisksN(b, 32*204)
+}
+
+func benchmarkInitStorageDisksN(b *testing.B, nDisks int) {
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	fsDirs, err := getRandomDisks(nDisks)
+	if err != nil {
+		b.Fatal(err)
+	}
+	endpoints := mustGetNewEndpoints(fsDirs...)
+	b.RunParallel(func(pb *testing.PB) {
+		endpoints := endpoints
+		for pb.Next() {
+			initStorageDisksWithErrors(endpoints)
+		}
+	})
 }

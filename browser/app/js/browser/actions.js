@@ -34,7 +34,7 @@ export const fetchStorageInfo = () => {
     return web.StorageInfo().then(res => {
       const storageInfo = {
         total: res.storageInfo.Total,
-        used:  res.storageInfo.Used
+        used: res.storageInfo.Used
       }
       dispatch(setStorageInfo(storageInfo))
     })
@@ -51,10 +51,10 @@ export const fetchServerInfo = () => {
     return web.ServerInfo().then(res => {
       const serverInfo = {
         version: res.MinioVersion,
-        memory: res.MinioMemory,
         platform: res.MinioPlatform,
         runtime: res.MinioRuntime,
-        info: res.MinioGlobalInfo
+        info: res.MinioGlobalInfo,
+        userInfo: res.MinioUserInfo
       }
       dispatch(setServerInfo(serverInfo))
     })

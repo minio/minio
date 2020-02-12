@@ -47,6 +47,19 @@ func (ls *LiteralString) Capture(values []string) error {
 	return nil
 }
 
+// LiteralList is a type for parsed SQL lists literals
+type LiteralList []string
+
+// Capture interface used by participle
+func (ls *LiteralList) Capture(values []string) error {
+	// Remove enclosing parenthesis.
+	n := len(values[0])
+	r := values[0][1 : n-1]
+	// Translate doubled quotes
+	*ls = LiteralList(strings.Split(r, ","))
+	return nil
+}
+
 // ObjectKey is a type for parsed strings occurring in key paths
 type ObjectKey struct {
 	Lit *LiteralString `parser:" \"[\" @LitString \"]\""`
@@ -99,10 +112,14 @@ type JSONPathElement struct {
 	ArrayWildcard  bool       `parser:"| @\"[*]\""`            // [*] form
 }
 
-// JSONPath represents a keypath
+// JSONPath represents a keypath.
+// Instances should be treated idempotent and not change once created.
 type JSONPath struct {
 	BaseKey  *Identifier        `parser:" @@"`
 	PathExpr []*JSONPathElement `parser:"(@@)*"`
+
+	// Cached values:
+	pathString string
 }
 
 // AliasedExpression is an expression that can be optionally named
@@ -130,6 +147,11 @@ type Expression struct {
 	And []*AndCondition `parser:"@@ ( \"OR\" @@ )*"`
 }
 
+// ListExpr represents a literal list with elements as expressions.
+type ListExpr struct {
+	Elements []*Expression `parser:"\"(\" @@ ( \",\" @@ )* \")\" | \"[\" @@ ( \",\" @@ )* \"]\""`
+}
+
 // AndCondition represents logical conjunction of clauses
 type AndCondition struct {
 	Condition []*Condition `parser:"@@ ( \"AND\" @@ )*"`
@@ -153,7 +175,7 @@ type ConditionOperand struct {
 type ConditionRHS struct {
 	Compare *Compare `parser:"  @@"`
 	Between *Between `parser:"| @@"`
-	In      *In      `parser:"| \"IN\" \"(\" @@ \")\""`
+	In      *In      `parser:"| \"IN\" @@"`
 	Like    *Like    `parser:"| @@"`
 }
 
@@ -179,7 +201,7 @@ type Between struct {
 
 // In represents the RHS of an IN expression
 type In struct {
-	Expressions []*Expression `parser:"@@ ( \",\" @@ )*"`
+	ListExpression *Expression `parser:"@@ "`
 }
 
 // Grammar for Operand:
@@ -232,6 +254,7 @@ type NegatedTerm struct {
 type PrimaryTerm struct {
 	Value         *LitValue   `parser:"  @@"`
 	JPathExpr     *JSONPath   `parser:"| @@"`
+	ListExpr      *ListExpr   `parser:"| @@"`
 	SubExpression *Expression `parser:"| \"(\" @@ \")\""`
 	// Include function expressions here.
 	FuncCall *FuncExpr `parser:"| @@"`

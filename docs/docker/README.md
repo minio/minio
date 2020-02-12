@@ -1,4 +1,4 @@
-# MinIO Docker Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# MinIO Docker Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
 ## Prerequisites
 Docker installed on your machine. Download the relevant installer from [here](https://www.docker.com/community-edition#/download).
@@ -16,7 +16,6 @@ To create a MinIO container with persistent storage, you need to map local persi
 ```sh
 docker run -p 9000:9000 --name minio1 \
   -v /mnt/data:/data \
-  -v /mnt/config:/root/.minio \
   minio/minio server /data
 ```
 
@@ -24,7 +23,6 @@ docker run -p 9000:9000 --name minio1 \
 ```sh
 docker run -p 9000:9000 --name minio1 \
   -v D:\data:/data \
-  -v D:\minio\config:/root/.minio \
   minio/minio server /data
 ```
 
@@ -44,7 +42,6 @@ docker run -p 9000:9000 --name minio1 \
   -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
   -v /mnt/data:/data \
-  -v /mnt/config:/root/.minio \
   minio/minio server /data
 ```
 
@@ -54,7 +51,39 @@ docker run -p 9000:9000 --name minio1 \
   -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
   -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
   -v D:\data:/data \
-  -v D:\minio\config:/root/.minio \
+  minio/minio server /data
+```
+
+### Run MinIO Docker as a regular user
+Docker provides standardized mechanisms to run docker containers as non-root users.
+
+#### GNU/Linux and macOS
+On Linux and macOS you can use `--user` to run the container as regular user.
+
+> NOTE: make sure --user has write permission to *${HOME}/data* prior to using `--user`.
+```sh
+mkdir -p ${HOME}/data
+docker run -p 9000:9000 \
+  --user $(id -u):$(id -g) \
+  --name minio1 \
+  -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
+  -e "MINIO_SECRET_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY" \
+  -v ${HOME}/data:/data \
+  minio/minio server /data
+```
+
+#### Windows
+On windows you would need to use [Docker integrated windows authentication](https://success.docker.com/article/modernizing-traditional-dot-net-applications#integratedwindowsauthentication) and [Create a container with Active Directory Support](https://blogs.msdn.microsoft.com/containerstuff/2017/01/30/create-a-container-with-active-directory-support/)
+
+> NOTE: make sure your AD/Windows user has write permissions to *D:\data* prior to using `credentialspec=`.
+
+```powershell
+docker run -p 9000:9000 \
+  --name minio1 \
+  --security-opt "credentialspec=file://myuser.json"
+  -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
+  -e "MINIO_SECRET_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY" \
+  -v D:\data:/data \
   minio/minio server /data
 ```
 

@@ -77,10 +77,7 @@ func (e *Erasure) DecodeDataBlocks(data [][]byte) error {
 	if !needsReconstruction {
 		return nil
 	}
-	if err := e.encoder.ReconstructData(data); err != nil {
-		return err
-	}
-	return nil
+	return e.encoder.ReconstructData(data)
 }
 
 // DecodeDataAndParityBlocks decodes the given erasure-coded data and verifies it.
@@ -102,6 +99,9 @@ func (e *Erasure) ShardSize() int64 {
 func (e *Erasure) ShardFileSize(totalLength int64) int64 {
 	if totalLength == 0 {
 		return 0
+	}
+	if totalLength == -1 {
+		return -1
 	}
 	numShards := totalLength / e.blockSize
 	lastBlockSize := totalLength % int64(e.blockSize)

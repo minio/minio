@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"errors"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -127,20 +128,23 @@ func (t TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endWa
 			t.lock.Lock()
 			walks, ok := t.pool[params]
 			if ok {
+				// Trick of filtering without allocating
+				// https://github.com/golang/go/wiki/SliceTricks#filtering-without-allocating
+				nwalks := walks[:0]
 				// Look for walkInfo, remove it from the walks list.
-				for i, walk := range walks {
-					if walk == walkInfo {
-						walks = append(walks[:i], walks[i+1:]...)
+				for _, walk := range walks {
+					if !reflect.DeepEqual(walk, walkInfo) {
+						nwalks = append(nwalks, walk)
 					}
 				}
-				if len(walks) == 0 {
+				if len(nwalks) == 0 {
 					// No more treeWalk go-routines associated with listParams
 					// hence remove map entry.
 					delete(t.pool, params)
 				} else {
 					// There are more treeWalk go-routines associated with listParams
 					// hence save the list in the map.
-					t.pool[params] = walks
+					t.pool[params] = nwalks
 				}
 			}
 			// Signal the treeWalk go-routine to die.

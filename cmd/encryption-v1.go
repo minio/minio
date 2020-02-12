@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -29,10 +30,9 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/minio/minio-go/pkg/encrypt"
+	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/ioutil"
 	sha256 "github.com/minio/sha256-simd"
 	"github.com/minio/sio"
 )
@@ -63,23 +63,6 @@ const (
 	SSEDAREPackageMetaSize = 32 // 32 bytes
 
 )
-
-const (
-	// SSESealAlgorithmDareSha256 specifies DARE as authenticated en/decryption scheme and SHA256 as cryptographic
-	// hash function. The key derivation of DARE-SHA256 is not optimal and does not include the object path.
-	// It is considered legacy and should not be used anymore.
-	SSESealAlgorithmDareSha256 = "DARE-SHA256"
-
-	// SSESealAlgorithmDareV2HmacSha256 specifies DAREv2 as authenticated en/decryption scheme and SHA256 as cryptographic
-	// hash function for the HMAC PRF.
-	SSESealAlgorithmDareV2HmacSha256 = "DAREv2-HMAC-SHA256"
-)
-
-// hasServerSideEncryptionHeader returns true if the given HTTP header
-// contains server-side-encryption.
-func hasServerSideEncryptionHeader(header http.Header) bool {
-	return crypto.S3.IsRequested(header) || crypto.SSEC.IsRequested(header)
-}
 
 // isEncryptedMultipart returns true if the current object is
 // uploaded by the user using multipart mechanism:
@@ -175,12 +158,12 @@ func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map
 			return err
 		}
 
-		newKey, encKey, err := GlobalKMS.GenerateKey(globalKMSKeyID, crypto.Context{bucket: path.Join(bucket, object)})
+		newKey, encKey, err := GlobalKMS.GenerateKey(GlobalKMS.KeyID(), crypto.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
 			return err
 		}
 		sealedKey = objectKey.Seal(newKey, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
-		crypto.S3.CreateMetadata(metadata, globalKMSKeyID, encKey, sealedKey)
+		crypto.S3.CreateMetadata(metadata, GlobalKMS.KeyID(), encKey, sealedKey)
 		return nil
 	}
 }
@@ -191,14 +174,14 @@ func newEncryptMetadata(key []byte, bucket, object string, metadata map[string]s
 		if GlobalKMS == nil {
 			return nil, errKMSNotConfigured
 		}
-		key, encKey, err := GlobalKMS.GenerateKey(globalKMSKeyID, crypto.Context{bucket: path.Join(bucket, object)})
+		key, encKey, err := GlobalKMS.GenerateKey(GlobalKMS.KeyID(), crypto.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
 			return nil, err
 		}
 
 		objectKey := crypto.GenerateKey(key, rand.Reader)
 		sealedKey = objectKey.Seal(key, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
-		crypto.S3.CreateMetadata(metadata, globalKMSKeyID, encKey, sealedKey)
+		crypto.S3.CreateMetadata(metadata, GlobalKMS.KeyID(), encKey, sealedKey)
 		return objectKey[:], nil
 	}
 	var extKey [32]byte
@@ -243,10 +226,8 @@ func setEncryptionMetadata(r *http.Request, bucket, object string, metadata map[
 // with the client provided key. It also marks the object as client-side-encrypted
 // and sets the correct headers.
 func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, metadata map[string]string) (reader io.Reader, objEncKey []byte, err error) {
+	var key []byte
 
-	var (
-		key []byte
-	)
 	if crypto.S3.IsRequested(r.Header) && crypto.SSEC.IsRequested(r.Header) {
 		return nil, objEncKey, crypto.ErrIncompatibleEncryptionMethod
 	}
@@ -255,6 +236,11 @@ func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, m
 		if err != nil {
 			return nil, objEncKey, err
 		}
+	}
+	if r.ContentLength > encryptBufferThreshold {
+		// The encryption reads in blocks of 64KB.
+		// We add a buffer on bigger files to reduce the number of syscalls upstream.
+		content = bufio.NewReaderSize(content, encryptBufferSize)
 	}
 	return newEncryptReader(content, key, bucket, object, metadata, crypto.S3.IsRequested(r.Header))
 }
@@ -279,6 +265,23 @@ func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]st
 	switch {
 	default:
 		return nil, errObjectTampered
+	case crypto.S3.IsEncrypted(metadata) && isCacheEncrypted(metadata):
+		if globalCacheKMS == nil {
+			return nil, errKMSNotConfigured
+		}
+		keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(metadata)
+		if err != nil {
+			return nil, err
+		}
+		extKey, err := globalCacheKMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
+		if err != nil {
+			return nil, err
+		}
+		var objectKey crypto.ObjectKey
+		if err = objectKey.Unseal(extKey, sealedKey, crypto.S3.String(), bucket, object); err != nil {
+			return nil, err
+		}
+		return objectKey[:], nil
 	case crypto.S3.IsEncrypted(metadata):
 		if GlobalKMS == nil {
 			return nil, errKMSNotConfigured
@@ -375,10 +378,10 @@ func newDecryptReader(client io.Reader, key []byte, bucket, object string, seqNu
 	if err != nil {
 		return nil, err
 	}
-	return newDecryptReaderWithObjectKey(client, objectEncryptionKey, seqNumber, metadata)
+	return newDecryptReaderWithObjectKey(client, objectEncryptionKey, seqNumber)
 }
 
-func newDecryptReaderWithObjectKey(client io.Reader, objectEncryptionKey []byte, seqNumber uint32, metadata map[string]string) (io.Reader, error) {
+func newDecryptReaderWithObjectKey(client io.Reader, objectEncryptionKey []byte, seqNumber uint32) (io.Reader, error) {
 	reader, err := sio.DecryptReader(client, sio.Config{
 		Key:            objectEncryptionKey,
 		SequenceNumber: seqNumber,
@@ -528,7 +531,7 @@ func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
 	// Limit the reader, so the decryptor doesnt receive bytes
 	// from the next part (different DARE stream)
 	encLenToRead := d.parts[d.partIndex].Size - d.partEncRelOffset
-	decrypter, err := newDecryptReaderWithObjectKey(io.LimitReader(d.reader, encLenToRead), partEncryptionKey, d.startSeqNum, m)
+	decrypter, err := newDecryptReaderWithObjectKey(io.LimitReader(d.reader, encLenToRead), partEncryptionKey, d.startSeqNum)
 	if err != nil {
 		return err
 	}
@@ -578,282 +581,6 @@ func (d *DecryptBlocksReader) Read(p []byte) (int, error) {
 		d.partDecRelOffset += int64(n1)
 	}
 	return len(p), nil
-}
-
-// DecryptBlocksWriter - decrypts  multipart parts, while implementing
-// a io.Writer compatible interface.
-type DecryptBlocksWriter struct {
-	// Original writer where the plain data will be written
-	writer io.Writer
-	// Current decrypter for the current encrypted data block
-	decrypter io.WriteCloser
-	// Start sequence number
-	startSeqNum uint32
-	// Current part index
-	partIndex int
-	// Parts information
-	parts          []ObjectPartInfo
-	req            *http.Request
-	bucket, object string
-	metadata       map[string]string
-
-	partEncRelOffset int64
-
-	copySource bool
-	// Customer Key
-	customerKeyHeader string
-}
-
-func (w *DecryptBlocksWriter) buildDecrypter(partID int) error {
-	m := make(map[string]string)
-	for k, v := range w.metadata {
-		m[k] = v
-	}
-	// Initialize the first decrypter, new decrypters will be initialized in Write() operation as needed.
-	var key []byte
-	var err error
-	if w.copySource {
-		if crypto.SSEC.IsEncrypted(w.metadata) {
-			w.req.Header.Set(crypto.SSECopyKey, w.customerKeyHeader)
-			key, err = ParseSSECopyCustomerRequest(w.req.Header, w.metadata)
-		}
-	} else {
-		if crypto.SSEC.IsEncrypted(w.metadata) {
-			w.req.Header.Set(crypto.SSECKey, w.customerKeyHeader)
-			key, err = ParseSSECustomerRequest(w.req)
-		}
-	}
-	if err != nil {
-		return err
-	}
-
-	objectEncryptionKey, err := decryptObjectInfo(key, w.bucket, w.object, m)
-	if err != nil {
-		return err
-	}
-
-	var partIDbin [4]byte
-	binary.LittleEndian.PutUint32(partIDbin[:], uint32(partID)) // marshal part ID
-
-	mac := hmac.New(sha256.New, objectEncryptionKey) // derive part encryption key from part ID and object key
-	mac.Write(partIDbin[:])
-	partEncryptionKey := mac.Sum(nil)
-
-	// make sure to provide a NopCloser such that a Close
-	// on sio.decryptWriter doesn't close the underlying writer's
-	// close which perhaps can close the stream prematurely.
-	decrypter, err := newDecryptWriterWithObjectKey(ioutil.NopCloser(w.writer), partEncryptionKey, w.startSeqNum, m)
-	if err != nil {
-		return err
-	}
-
-	if w.decrypter != nil {
-		// Pro-actively close the writer such that any pending buffers
-		// are flushed already before we allocate a new decrypter.
-		err = w.decrypter.Close()
-		if err != nil {
-			return err
-		}
-	}
-
-	w.decrypter = decrypter
-	return nil
-}
-
-func (w *DecryptBlocksWriter) Write(p []byte) (int, error) {
-	var err error
-	var n1 int
-	if int64(len(p)) < w.parts[w.partIndex].Size-w.partEncRelOffset {
-		n1, err = w.decrypter.Write(p)
-		if err != nil {
-			return 0, err
-		}
-		w.partEncRelOffset += int64(n1)
-	} else {
-		n1, err = w.decrypter.Write(p[:w.parts[w.partIndex].Size-w.partEncRelOffset])
-		if err != nil {
-			return 0, err
-		}
-
-		// We should now proceed to next part, reset all values appropriately.
-		w.partEncRelOffset = 0
-		w.startSeqNum = 0
-
-		w.partIndex++
-
-		err = w.buildDecrypter(w.partIndex + 1)
-		if err != nil {
-			return 0, err
-		}
-
-		n1, err = w.decrypter.Write(p[n1:])
-		if err != nil {
-			return 0, err
-		}
-
-		w.partEncRelOffset += int64(n1)
-	}
-
-	return len(p), nil
-}
-
-// Close closes the LimitWriter. It behaves like io.Closer.
-func (w *DecryptBlocksWriter) Close() error {
-	if w.decrypter != nil {
-		err := w.decrypter.Close()
-		if err != nil {
-			return err
-		}
-	}
-
-	if closer, ok := w.writer.(io.Closer); ok {
-		return closer.Close()
-	}
-	return nil
-}
-
-// DecryptAllBlocksCopyRequest - setup a struct which can decrypt many concatenated encrypted data
-// parts information helps to know the boundaries of each encrypted data block, this function decrypts
-// all parts starting from part-1.
-func DecryptAllBlocksCopyRequest(client io.Writer, r *http.Request, bucket, object string, objInfo ObjectInfo) (io.WriteCloser, int64, error) {
-	w, _, size, err := DecryptBlocksRequest(client, r, bucket, object, 0, objInfo.Size, objInfo, true)
-	return w, size, err
-}
-
-// DecryptBlocksRequest - setup a struct which can decrypt many concatenated encrypted data
-// parts information helps to know the boundaries of each encrypted data block.
-func DecryptBlocksRequest(client io.Writer, r *http.Request, bucket, object string, startOffset, length int64, objInfo ObjectInfo, copySource bool) (io.WriteCloser, int64, int64, error) {
-	var seqNumber uint32
-	var encStartOffset, encLength int64
-
-	if !isEncryptedMultipart(objInfo) {
-		seqNumber, encStartOffset, encLength = getEncryptedSinglePartOffsetLength(startOffset, length, objInfo)
-
-		var writer io.WriteCloser
-		var err error
-		if copySource {
-			writer, err = DecryptCopyRequest(client, r, bucket, object, objInfo.UserDefined)
-		} else {
-			writer, err = DecryptRequestWithSequenceNumber(client, r, bucket, object, seqNumber, objInfo.UserDefined)
-		}
-		if err != nil {
-			return nil, 0, 0, err
-		}
-		return writer, encStartOffset, encLength, nil
-	}
-
-	_, encStartOffset, encLength = getEncryptedMultipartsOffsetLength(startOffset, length, objInfo)
-
-	var partStartIndex int
-	var partStartOffset = startOffset
-	// Skip parts until final offset maps to a particular part offset.
-	for i, part := range objInfo.Parts {
-		decryptedSize, err := sio.DecryptedSize(uint64(part.Size))
-		if err != nil {
-			return nil, -1, -1, errObjectTampered
-		}
-
-		partStartIndex = i
-
-		// Offset is smaller than size we have reached the
-		// proper part offset, break out we start from
-		// this part index.
-		if partStartOffset < int64(decryptedSize) {
-			break
-		}
-
-		// Continue to look for next part.
-		partStartOffset -= int64(decryptedSize)
-	}
-
-	startSeqNum := partStartOffset / SSEDAREPackageBlockSize
-	partEncRelOffset := int64(startSeqNum) * (SSEDAREPackageBlockSize + SSEDAREPackageMetaSize)
-
-	w := &DecryptBlocksWriter{
-		writer:            client,
-		startSeqNum:       uint32(startSeqNum),
-		partEncRelOffset:  partEncRelOffset,
-		parts:             objInfo.Parts,
-		partIndex:         partStartIndex,
-		req:               r,
-		bucket:            bucket,
-		object:            object,
-		customerKeyHeader: r.Header.Get(crypto.SSECKey),
-		copySource:        copySource,
-	}
-
-	w.metadata = map[string]string{}
-	// Copy encryption metadata for internal use.
-	for k, v := range objInfo.UserDefined {
-		w.metadata[k] = v
-	}
-
-	// Purge all the encryption headers.
-	delete(objInfo.UserDefined, crypto.SSEIV)
-	delete(objInfo.UserDefined, crypto.SSESealAlgorithm)
-	delete(objInfo.UserDefined, crypto.SSECSealedKey)
-	delete(objInfo.UserDefined, crypto.SSEMultipart)
-
-	if crypto.S3.IsEncrypted(objInfo.UserDefined) {
-		delete(objInfo.UserDefined, crypto.S3SealedKey)
-		delete(objInfo.UserDefined, crypto.S3KMSKeyID)
-		delete(objInfo.UserDefined, crypto.S3KMSSealedKey)
-	}
-	if w.copySource {
-		w.customerKeyHeader = r.Header.Get(crypto.SSECopyKey)
-	}
-
-	if err := w.buildDecrypter(w.parts[w.partIndex].Number); err != nil {
-		return nil, 0, 0, err
-	}
-
-	return w, encStartOffset, encLength, nil
-}
-
-// getEncryptedMultipartsOffsetLength - fetch sequence number, encrypted start offset and encrypted length.
-func getEncryptedMultipartsOffsetLength(offset, length int64, obj ObjectInfo) (uint32, int64, int64) {
-	// Calculate encrypted offset of a multipart object
-	computeEncOffset := func(off int64, obj ObjectInfo) (seqNumber uint32, encryptedOffset int64, err error) {
-		var curPartEndOffset uint64
-		var prevPartsEncSize int64
-		for _, p := range obj.Parts {
-			size, decErr := sio.DecryptedSize(uint64(p.Size))
-			if decErr != nil {
-				err = errObjectTampered // assign correct error type
-				return
-			}
-			if off < int64(curPartEndOffset+size) {
-				seqNumber, encryptedOffset, _ = getEncryptedSinglePartOffsetLength(off-int64(curPartEndOffset), 1, obj)
-				encryptedOffset += int64(prevPartsEncSize)
-				break
-			}
-			curPartEndOffset += size
-			prevPartsEncSize += p.Size
-		}
-		return
-	}
-
-	// Calculate the encrypted start offset corresponding to the plain offset
-	seqNumber, encStartOffset, _ := computeEncOffset(offset, obj)
-	// Calculate also the encrypted end offset corresponding to plain offset + plain length
-	_, encEndOffset, _ := computeEncOffset(offset+length-1, obj)
-
-	// encLength is the diff between encrypted end offset and encrypted start offset + one package size
-	// to ensure all encrypted data are covered
-	encLength := encEndOffset - encStartOffset + (64*1024 + 32)
-
-	// Calculate total size of all parts
-	var totalPartsLength int64
-	for _, p := range obj.Parts {
-		totalPartsLength += p.Size
-	}
-
-	// Set encLength to maximum possible value if it exceeded total parts size
-	if encLength+encStartOffset > totalPartsLength {
-		encLength = totalPartsLength - encStartOffset
-	}
-
-	return seqNumber, encStartOffset, encLength
 }
 
 // getEncryptedSinglePartOffsetLength - fetch sequence number, encrypted start offset and encrypted length.
@@ -1237,6 +964,17 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		opts, err = getOpts(ctx, r, bucket, object)
 		opts.UserDefined = metadata
 		return
+	}
+	if crypto.S3KMS.IsRequested(r.Header) {
+		keyID, context, err := crypto.S3KMS.ParseHTTP(r.Header)
+		if err != nil {
+			return ObjectOptions{}, err
+		}
+		sseKms, err := encrypt.NewSSEKMS(keyID, context)
+		if err != nil {
+			return ObjectOptions{}, err
+		}
+		return ObjectOptions{ServerSideEncryption: sseKms, UserDefined: metadata}, nil
 	}
 	// default case of passing encryption headers and UserDefined metadata to backend
 	return getDefaultOpts(r.Header, false, metadata)

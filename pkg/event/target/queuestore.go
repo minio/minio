@@ -19,11 +19,14 @@ package target
 import (
 	"encoding/json"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/sys"
 )
 
 const (
@@ -34,21 +37,29 @@ const (
 // QueueStore - Filestore for persisting events.
 type QueueStore struct {
 	sync.RWMutex
-	directory string
-	eC        uint16
-	limit     uint16
+	currentEntries uint64
+	entryLimit     uint64
+	directory      string
 }
 
 // NewQueueStore - Creates an instance for QueueStore.
-func NewQueueStore(directory string, limit uint16) *QueueStore {
+func NewQueueStore(directory string, limit uint64) Store {
 	if limit == 0 {
 		limit = maxLimit
+		_, maxRLimit, err := sys.GetMaxOpenFileLimit()
+		if err == nil {
+			// Limit the maximum number of entries
+			// to maximum open file limit
+			if maxRLimit < limit {
+				limit = maxRLimit
+			}
+		}
 	}
-	queueStore := &QueueStore{
-		directory: directory,
-		limit:     limit,
+
+	return &QueueStore{
+		directory:  directory,
+		entryLimit: limit,
 	}
-	return queueStore
 }
 
 // Open - Creates the directory if not present.
@@ -56,22 +67,27 @@ func (store *QueueStore) Open() error {
 	store.Lock()
 	defer store.Unlock()
 
-	if terr := os.MkdirAll(store.directory, os.FileMode(0770)); terr != nil {
-		return terr
+	if err := os.MkdirAll(store.directory, os.FileMode(0770)); err != nil {
+		return err
 	}
 
-	eCount := uint16(len(store.listN(-1)))
-	if eCount >= store.limit {
+	names, err := store.list()
+	if err != nil {
+		return err
+	}
+
+	currentEntries := uint64(len(names))
+	if currentEntries >= store.entryLimit {
 		return errLimitExceeded
 	}
 
-	store.eC = eCount
+	store.currentEntries = currentEntries
 
 	return nil
 }
 
 // write - writes event to the directory.
-func (store *QueueStore) write(directory string, key string, e event.Event) error {
+func (store *QueueStore) write(key string, e event.Event) error {
 
 	// Marshalls the event.
 	eventData, err := json.Marshal(e)
@@ -85,7 +101,7 @@ func (store *QueueStore) write(directory string, key string, e event.Event) erro
 	}
 
 	// Increment the event count.
-	store.eC++
+	store.currentEntries++
 
 	return nil
 }
@@ -94,39 +110,40 @@ func (store *QueueStore) write(directory string, key string, e event.Event) erro
 func (store *QueueStore) Put(e event.Event) error {
 	store.Lock()
 	defer store.Unlock()
-	if store.eC >= store.limit {
+	if store.currentEntries >= store.entryLimit {
 		return errLimitExceeded
 	}
-	key, kErr := getNewUUID()
-	if kErr != nil {
-		return kErr
+	key, err := getNewUUID()
+	if err != nil {
+		return err
 	}
-	return store.write(store.directory, key, e)
+	return store.write(key, e)
 }
 
 // Get - gets a event from the store.
-func (store *QueueStore) Get(key string) (event.Event, error) {
+func (store *QueueStore) Get(key string) (event event.Event, err error) {
 	store.RLock()
-	defer store.RUnlock()
 
-	var event event.Event
+	defer func(store *QueueStore) {
+		store.RUnlock()
+		if err != nil {
+			// Upon error we remove the entry.
+			store.Del(key)
+		}
+	}(store)
 
-	filepath := filepath.Join(store.directory, key+eventExt)
-
-	eventData, rerr := ioutil.ReadFile(filepath)
-	if rerr != nil {
-		store.del(key)
-		return event, rerr
+	var eventData []byte
+	eventData, err = ioutil.ReadFile(filepath.Join(store.directory, key+eventExt))
+	if err != nil {
+		return event, err
 	}
 
 	if len(eventData) == 0 {
-		store.del(key)
+		return event, os.ErrNotExist
 	}
 
-	uerr := json.Unmarshal(eventData, &event)
-	if uerr != nil {
-		store.del(key)
-		return event, uerr
+	if err = json.Unmarshal(eventData, &event); err != nil {
+		return event, err
 	}
 
 	return event, nil
@@ -141,30 +158,49 @@ func (store *QueueStore) Del(key string) error {
 
 // lockless call
 func (store *QueueStore) del(key string) error {
-	p := filepath.Join(store.directory, key+eventExt)
-
-	rerr := os.Remove(p)
-	if rerr != nil {
-		return rerr
+	if err := os.Remove(filepath.Join(store.directory, key+eventExt)); err != nil {
+		return err
 	}
 
-	// Decrement the event count.
-	store.eC--
+	// Decrement the current entries count.
+	store.currentEntries--
 
+	// Current entries can underflow, when multiple
+	// events are being pushed in parallel, this code
+	// is needed to ensure that we don't underflow.
+	//
+	// queueStore replayEvents is not serialized,
+	// this code is needed to protect us under
+	// such situations.
+	if store.currentEntries == math.MaxUint64 {
+		store.currentEntries = 0
+	}
 	return nil
 }
 
-// ListN - lists atmost N files from the directory.
-func (store *QueueStore) ListN(n int) []string {
+// List - lists all files from the directory.
+func (store *QueueStore) List() ([]string, error) {
 	store.RLock()
 	defer store.RUnlock()
-	return store.listN(n)
+	return store.list()
 }
 
-// lockless call.
-func (store *QueueStore) listN(n int) []string {
-	storeDir, _ := os.Open(store.directory)
-	names, _ := storeDir.Readdirnames(n)
-	_ = storeDir.Close()
-	return names
+// list lock less.
+func (store *QueueStore) list() ([]string, error) {
+	var names []string
+	files, err := ioutil.ReadDir(store.directory)
+	if err != nil {
+		return names, err
+	}
+
+	// Sort the dentries.
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].ModTime().Before(files[j].ModTime())
+	})
+
+	for _, file := range files {
+		names = append(names, file.Name())
+	}
+
+	return names, nil
 }

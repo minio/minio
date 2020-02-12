@@ -161,3 +161,15 @@ func parseRequestRangeSpec(rangeString string) (hrange *HTTPRangeSpec, err error
 		return nil, fmt.Errorf("'%s' does not have valid range value", rangeString)
 	}
 }
+
+// String returns stringified representation of range for a particular resource size.
+func (h *HTTPRangeSpec) String(resourceSize int64) string {
+	if h == nil {
+		return ""
+	}
+	off, length, err := h.GetOffsetLength(resourceSize)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d-%d", off, off+length-1)
+}

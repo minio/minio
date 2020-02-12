@@ -206,6 +206,9 @@ func osErrToFSFileErr(err error) error {
 	if isSysErrPathNotFound(err) {
 		return errFileNotFound
 	}
+	if isSysErrTooManyFiles(err) {
+		return errTooManyOpenFiles
+	}
 	return err
 }
 
@@ -223,15 +226,6 @@ func fsStatDir(ctx context.Context, statDir string) (os.FileInfo, error) {
 		return nil, errFileNotFound
 	}
 	return fi, nil
-}
-
-// Returns if the dirPath is a directory.
-func fsIsDir(ctx context.Context, dirPath string) bool {
-	fi, err := fsStat(ctx, dirPath)
-	if err != nil {
-		return false
-	}
-	return fi.IsDir()
 }
 
 // Lookup if file exists, returns file attributes upon success.
@@ -277,7 +271,7 @@ func fsOpenFile(ctx context.Context, readPath string, offset int64) (io.ReadClos
 	}
 
 	// Stat to get the size of the file at path.
-	st, err := os.Stat(readPath)
+	st, err := fr.Stat()
 	if err != nil {
 		err = osErrToFSFileErr(err)
 		if err != errFileNotFound {
@@ -383,6 +377,26 @@ func fsFAllocate(fd int, offset int64, len int64) (err error) {
 	return nil
 }
 
+// Renames source path to destination path, fails if the destination path
+// parents are not already created.
+func fsSimpleRenameFile(ctx context.Context, sourcePath, destPath string) error {
+	if err := checkPathLength(sourcePath); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+	if err := checkPathLength(destPath); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+
+	if err := os.Rename(sourcePath, destPath); err != nil {
+		logger.LogIf(ctx, err)
+		return osErrToFSFileErr(err)
+	}
+
+	return nil
+}
+
 // Renames source path to destination path, creates all the
 // missing parents if they don't exist.
 func fsRenameFile(ctx context.Context, sourcePath, destPath string) error {
@@ -393,11 +407,6 @@ func fsRenameFile(ctx context.Context, sourcePath, destPath string) error {
 	if err := checkPathLength(destPath); err != nil {
 		logger.LogIf(ctx, err)
 		return err
-	}
-
-	// Verify if source path exists.
-	if _, err := os.Stat(sourcePath); err != nil {
-		return osErrToFSFileErr(err)
 	}
 
 	if err := renameAll(sourcePath, destPath); err != nil {

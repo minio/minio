@@ -27,7 +27,13 @@ import (
 
 	sha256 "github.com/minio/sha256-simd"
 
-	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
+)
+
+const (
+	// AdminAPIVersion - admin api version used in the request.
+	AdminAPIVersion = "v2"
+	adminAPIPrefix  = "/" + AdminAPIVersion
 )
 
 // sum256 calculate sha256 sum for an input byte array.

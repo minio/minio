@@ -21,6 +21,8 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/minio/minio/cmd/config"
 )
 
 // Test if config v1 is purged
@@ -175,7 +177,7 @@ func TestServerConfigMigrateV2toV33(t *testing.T) {
 	}
 	defer os.RemoveAll(fsDir)
 
-	configPath := rootPath + "/" + minioConfigFile
+	configPath := rootPath + SlashSeparator + minioConfigFile
 
 	// Create a corrupted config file
 	if err := ioutil.WriteFile(configPath, []byte("{ \"version\":\"2\","), 0644); err != nil {
@@ -208,24 +210,24 @@ func TestServerConfigMigrateV2toV33(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
+	if err := migrateMinioSysConfigToKV(objLayer); err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
 	// Initialize server config and check again if everything is fine
 	if err := loadConfig(objLayer); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 
-	// Check the version number in the upgraded config file
-	expectedVersion := serverConfigVersion
-	if globalServerConfig.Version != expectedVersion {
-		t.Fatalf("Expect version "+expectedVersion+", found: %v", globalServerConfig.Version)
-	}
-
 	// Check if accessKey and secretKey are not altered during migration
-	if globalServerConfig.Credential.AccessKey != accessKey {
-		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, globalServerConfig.Credential.AccessKey)
+	caccessKey := globalServerConfig[config.CredentialsSubSys][config.Default].Get(config.AccessKey)
+	if caccessKey != accessKey {
+		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, caccessKey)
 	}
 
-	if globalServerConfig.Credential.SecretKey != secretKey {
-		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, globalServerConfig.Credential.SecretKey)
+	csecretKey := globalServerConfig[config.CredentialsSubSys][config.Default].Get(config.SecretKey)
+	if csecretKey != secretKey {
+		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, csecretKey)
 	}
 }
 
@@ -238,7 +240,7 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	defer os.RemoveAll(rootPath)
 
 	globalConfigDir = &ConfigDir{path: rootPath}
-	configPath := rootPath + "/" + minioConfigFile
+	configPath := rootPath + SlashSeparator + minioConfigFile
 
 	// Create a corrupted config file
 	if err := ioutil.WriteFile(configPath, []byte("{ \"version\":\"2\", \"test\":"), 0644); err != nil {
@@ -335,7 +337,7 @@ func TestServerConfigMigrateCorruptedConfig(t *testing.T) {
 	defer os.RemoveAll(rootPath)
 
 	globalConfigDir = &ConfigDir{path: rootPath}
-	configPath := rootPath + "/" + minioConfigFile
+	configPath := rootPath + SlashSeparator + minioConfigFile
 
 	for i := 3; i <= 17; i++ {
 		// Create a corrupted config file

@@ -17,7 +17,13 @@
 package iampolicy
 
 import (
-	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/bucket/policy"
+)
+
+// Policy claim constants
+const (
+	PolicyName        = "policy"
+	SessionPolicyName = "sessionPolicy"
 )
 
 // ReadWrite - provides full access to all buckets and all objects
@@ -54,6 +60,19 @@ var WriteOnly = Policy{
 			SID:       policy.ID(""),
 			Effect:    policy.Allow,
 			Actions:   NewActionSet(PutObjectAction),
+			Resources: NewResourceSet(NewResource("*", "")),
+		},
+	},
+}
+
+// AdminDiagnostics - provides admin diagnostics access.
+var AdminDiagnostics = Policy{
+	Version: DefaultVersion,
+	Statements: []Statement{
+		{
+			SID:       policy.ID(""),
+			Effect:    policy.Allow,
+			Actions:   NewActionSet(PerfInfoAdminAction, ProfilingAdminAction, TraceAdminAction, ConsoleLogAdminAction, ServerInfoAdminAction, ServerHardwareInfoAdminAction),
 			Resources: NewResourceSet(NewResource("*", "")),
 		},
 	},

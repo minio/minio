@@ -17,81 +17,52 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/gob"
 	"errors"
 	"io"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"net/url"
 
-	"github.com/minio/dsync"
 	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
-	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/pkg/dsync"
 )
 
 // lockRESTClient is authenticable lock REST client
 type lockRESTClient struct {
-	lockSync   sync.RWMutex
-	host       *xnet.Host
 	restClient *rest.Client
-	serverURL  *url.URL
-	connected  bool
-	timer      *time.Timer
+	endpoint   Endpoint
+	connected  int32
 }
 
-// ServerAddr - dsync.NetLocker interface compatible method.
-func (client *lockRESTClient) ServerAddr() string {
-	return client.serverURL.Host
-}
-
-// ServiceEndpoint - dsync.NetLocker interface compatible method.
-func (client *lockRESTClient) ServiceEndpoint() string {
-	return client.serverURL.Path
-}
-
-// check if the host is up or if it is fine
-// to make a call to the lock rest server.
-func (client *lockRESTClient) isHostUp() bool {
-	client.lockSync.Lock()
-	defer client.lockSync.Unlock()
-
-	if client.connected {
-		return true
+func toLockError(err error) error {
+	if err == nil {
+		return nil
 	}
-	select {
-	case <-client.timer.C:
-		client.connected = true
-		client.timer = nil
-		return true
-	default:
+
+	switch err.Error() {
+	case errLockConflict.Error():
+		return errLockConflict
+	case errLockNotExpired.Error():
+		return errLockNotExpired
 	}
-	return false
+	return err
 }
 
-// Mark the host as down if there is a Network error.
-func (client *lockRESTClient) markHostDown() {
-	client.lockSync.Lock()
-	defer client.lockSync.Unlock()
-
-	if !client.connected {
-		return
-	}
-	client.connected = false
-	client.timer = time.NewTimer(defaultRetryUnit * 5)
+// String stringer *dsync.NetLocker* interface compatible method.
+func (client *lockRESTClient) String() string {
+	return client.endpoint.String()
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *lockRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-
-	if !client.isHostUp() {
+	if !client.IsOnline() {
 		return nil, errors.New("Lock rest server node is down")
 	}
 
@@ -100,63 +71,51 @@ func (client *lockRESTClient) call(method string, values url.Values, body io.Rea
 	}
 
 	respBody, err = client.restClient.Call(method, values, body, length)
-
 	if err == nil {
 		return respBody, nil
 	}
 
 	if isNetworkError(err) {
-		client.markHostDown()
+		time.AfterFunc(defaultRetryUnit, func() {
+			// After 1 seconds, take this lock client online for a retry.
+			atomic.StoreInt32(&client.connected, 1)
+		})
+
+		atomic.StoreInt32(&client.connected, 0)
 	}
 
-	return nil, err
-}
-
-// Stringer provides a canonicalized representation of node.
-func (client *lockRESTClient) String() string {
-	return client.host.String()
+	return nil, toLockError(err)
 }
 
 // IsOnline - returns whether REST client failed to connect or not.
 func (client *lockRESTClient) IsOnline() bool {
-	return client.connected
+	return atomic.LoadInt32(&client.connected) == 1
 }
 
 // Close - marks the client as closed.
 func (client *lockRESTClient) Close() error {
-	client.connected = false
+	atomic.StoreInt32(&client.connected, 0)
 	client.restClient.Close()
 	return nil
 }
 
 // restCall makes a call to the lock REST server.
 func (client *lockRESTClient) restCall(call string, args dsync.LockArgs) (reply bool, err error) {
+	values := url.Values{}
+	values.Set(lockRESTUID, args.UID)
+	values.Set(lockRESTSource, args.Source)
+	values.Set(lockRESTResource, args.Resource)
 
-	reader := bytes.NewBuffer(make([]byte, 0, 2048))
-	err = gob.NewEncoder(reader).Encode(args)
-	if err != nil {
-		return false, err
-	}
-	respBody, err := client.call(call, nil, reader, -1)
-	if err != nil {
-		return false, err
-	}
-
-	var resp lockResponse
+	respBody, err := client.call(call, values, nil, -1)
 	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&resp)
-
-	if err != nil || !resp.Success {
-		reqInfo := &logger.ReqInfo{}
-		reqInfo.AppendTags("resource", args.Resource)
-		reqInfo.AppendTags("serveraddress", args.ServerAddr)
-		reqInfo.AppendTags("serviceendpoint", args.ServiceEndpoint)
-		reqInfo.AppendTags("source", args.Source)
-		reqInfo.AppendTags("uid", args.UID)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, err)
+	switch err {
+	case nil:
+		return true, nil
+	case errLockConflict, errLockNotExpired:
+		return false, nil
+	default:
+		return false, err
 	}
-	return resp.Success, err
 }
 
 // RLock calls read lock REST API.
@@ -179,45 +138,47 @@ func (client *lockRESTClient) Unlock(args dsync.LockArgs) (reply bool, err error
 	return client.restCall(lockRESTMethodUnlock, args)
 }
 
-// ForceUnlock calls force unlock RPC.
-func (client *lockRESTClient) ForceUnlock(args dsync.LockArgs) (reply bool, err error) {
-	return client.restCall(lockRESTMethodForceUnlock, args)
-}
-
-// Expired calls expired RPC.
-func (client *lockRESTClient) Expired(args dsync.LockArgs) (reply bool, err error) {
+// Expired calls expired handler to check if lock args have expired.
+func (client *lockRESTClient) Expired(args dsync.LockArgs) (expired bool, err error) {
 	return client.restCall(lockRESTMethodExpired, args)
 }
 
-// Returns a lock rest client.
-func newlockRESTClient(peer *xnet.Host) *lockRESTClient {
-
-	scheme := "http"
-	if globalIsSSL {
-		scheme = "https"
+func closeLockers(lockers []dsync.NetLocker) {
+	for _, locker := range lockers {
+		locker.Close()
 	}
+}
 
+func newLockAPI(endpoint Endpoint) dsync.NetLocker {
+	if endpoint.IsLocal {
+		return globalLockServers[endpoint]
+	}
+	return newlockRESTClient(endpoint)
+}
+
+// Returns a lock rest client.
+func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
 	serverURL := &url.URL{
-		Scheme: scheme,
-		Host:   peer.String(),
-		Path:   lockRESTPath,
+		Scheme: endpoint.Scheme,
+		Host:   endpoint.Host,
+		Path:   pathJoin(lockRESTPrefix, endpoint.Path, lockRESTVersion),
 	}
 
 	var tlsConfig *tls.Config
 	if globalIsSSL {
 		tlsConfig = &tls.Config{
-			ServerName: peer.Name,
+			ServerName: endpoint.Hostname(),
 			RootCAs:    globalRootCAs,
 			NextProtos: []string{"http/1.1"}, // Force http1.1
 		}
 	}
 
-	restClient, err := rest.NewClient(serverURL, tlsConfig, rest.DefaultRESTTimeout, newAuthToken)
-
+	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout, rest.DefaultRESTTimeout)
+	restClient, err := rest.NewClient(serverURL, trFn, newAuthToken)
 	if err != nil {
 		logger.LogIf(context.Background(), err)
-		return &lockRESTClient{serverURL: serverURL, host: peer, restClient: restClient, connected: false, timer: time.NewTimer(defaultRetryUnit * 5)}
+		return &lockRESTClient{endpoint: endpoint, restClient: restClient, connected: 0}
 	}
 
-	return &lockRESTClient{serverURL: serverURL, host: peer, restClient: restClient, connected: true}
+	return &lockRESTClient{endpoint: endpoint, restClient: restClient, connected: 1}
 }

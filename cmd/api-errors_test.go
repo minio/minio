@@ -19,6 +19,8 @@ package cmd
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/minio/minio/cmd/crypto"
@@ -39,8 +41,8 @@ var toAPIErrorTests = []struct {
 	{err: ObjectNameInvalid{}, errCode: ErrInvalidObjectName},
 	{err: InvalidUploadID{}, errCode: ErrNoSuchUpload},
 	{err: InvalidPart{}, errCode: ErrInvalidPart},
-	{err: InsufficientReadQuorum{}, errCode: ErrReadQuorum},
-	{err: InsufficientWriteQuorum{}, errCode: ErrWriteQuorum},
+	{err: InsufficientReadQuorum{}, errCode: ErrSlowDown},
+	{err: InsufficientWriteQuorum{}, errCode: ErrSlowDown},
 	{err: UnsupportedDelimiter{}, errCode: ErrNotImplemented},
 	{err: InvalidMarkerPrefixCombination{}, errCode: ErrNotImplemented},
 	{err: InvalidUploadIDKeyCombination{}, errCode: ErrNotImplemented},
@@ -65,6 +67,11 @@ var toAPIErrorTests = []struct {
 }
 
 func TestAPIErrCode(t *testing.T) {
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	defer os.RemoveAll(disk)
+
+	initFSObjects(disk, t)
+
 	ctx := context.Background()
 	for i, testCase := range toAPIErrorTests {
 		errCode := toAPIErrorCode(ctx, testCase.err)

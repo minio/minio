@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/minio/highwayhash"
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/logger/message/log"
 )
 
@@ -54,6 +54,8 @@ const (
 )
 
 var trimStrings []string
+
+var globalDeploymentID string
 
 // TimeFormat - logging time format.
 const TimeFormat string = "15:04:05 MST 01/02/2006"
@@ -137,9 +139,9 @@ func IsQuiet() bool {
 	return quietFlag
 }
 
-// RegisterUIError registers the specified rendering function. This latter
+// RegisterError registers the specified rendering function. This latter
 // will be called for a pretty rendering of fatal errors.
-func RegisterUIError(f func(string, error, bool) string) {
+func RegisterError(f func(string, error, bool) string) {
 	errorFmtFunc = f
 }
 
@@ -152,6 +154,11 @@ func uniqueEntries(paths []string) []string {
 		}
 	}
 	return m.ToSlice()
+}
+
+// SetDeploymentID -- Deployment Id from the main package is set here
+func SetDeploymentID(deploymentID string) {
+	globalDeploymentID = deploymentID
 }
 
 // Init sets the trimStrings to possible GOPATHs
@@ -266,36 +273,53 @@ func hashString(input string) string {
 	return hex.EncodeToString(checksum)
 }
 
+// Kind specifies the kind of error log
+type Kind string
+
+const (
+	// Minio errors
+	Minio Kind = "MINIO"
+	// Application errors
+	Application Kind = "APPLICATION"
+	// All errors
+	All Kind = "ALL"
+)
+
 // LogAlwaysIf prints a detailed error message during
 // the execution of the server.
-func LogAlwaysIf(ctx context.Context, err error) {
+func LogAlwaysIf(ctx context.Context, err error, errKind ...interface{}) {
 	if err == nil {
 		return
 	}
 
-	logIf(ctx, err)
+	logIf(ctx, err, errKind...)
 }
 
 // LogIf prints a detailed error message during
 // the execution of the server, if it is not an
 // ignored error.
-func LogIf(ctx context.Context, err error) {
+func LogIf(ctx context.Context, err error, errKind ...interface{}) {
 	if err == nil {
 		return
 	}
 
 	if err.Error() != diskNotFoundError {
-		logIf(ctx, err)
+		logIf(ctx, err, errKind...)
 	}
 }
 
 // logIf prints a detailed error message during
 // the execution of the server.
-func logIf(ctx context.Context, err error) {
+func logIf(ctx context.Context, err error, errKind ...interface{}) {
 	if Disable {
 		return
 	}
-
+	logKind := string(Minio)
+	if len(errKind) > 0 {
+		if ek, ok := errKind[0].(Kind); ok {
+			logKind = string(ek)
+		}
+	}
 	req := GetReqInfo(ctx)
 
 	if req == nil {
@@ -317,11 +341,15 @@ func logIf(ctx context.Context, err error) {
 
 	// Get the cause for the Error
 	message := err.Error()
-
+	if req.DeploymentID == "" {
+		req.DeploymentID = globalDeploymentID
+	}
 	entry := log.Entry{
 		DeploymentID: req.DeploymentID,
 		Level:        ErrorLvl.String(),
+		LogKind:      logKind,
 		RemoteHost:   req.RemoteHost,
+		Host:         req.Host,
 		RequestID:    req.RequestID,
 		UserAgent:    req.UserAgent,
 		Time:         time.Now().UTC().Format(time.RFC3339Nano),
@@ -349,7 +377,7 @@ func logIf(ctx context.Context, err error) {
 
 	// Iterate over all logger targets to send the log entry
 	for _, t := range Targets {
-		t.Send(entry)
+		t.Send(entry, entry.LogKind)
 	}
 }
 
@@ -358,9 +386,9 @@ var ErrCritical struct{}
 
 // CriticalIf logs the provided error on the console. It fails the
 // current go-routine by causing a `panic(ErrCritical)`.
-func CriticalIf(ctx context.Context, err error) {
+func CriticalIf(ctx context.Context, err error, errKind ...interface{}) {
 	if err != nil {
-		LogIf(ctx, err)
+		LogIf(ctx, err, errKind...)
 		panic(ErrCritical)
 	}
 }

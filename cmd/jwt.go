@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,12 @@ package cmd
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	jwtreq "github.com/dgrijalva/jwt-go/request"
+	xjwt "github.com/minio/minio/cmd/jwt"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 )
@@ -35,8 +35,8 @@ const (
 	// Default JWT token for web handlers is one day.
 	defaultJWTExpiry = 24 * time.Hour
 
-	// Inter-node JWT token expiry is 100 years approx.
-	defaultInterNodeJWTExpiry = 100 * 365 * 24 * time.Hour
+	// Inter-node JWT token expiry is 15 minutes.
+	defaultInterNodeJWTExpiry = 15 * time.Minute
 
 	// URL JWT token expiry is one minute (might be exposed).
 	defaultURLJWTExpiry = time.Minute
@@ -47,6 +47,7 @@ var (
 	errChangeCredNotAllowed = errors.New("Changing access key and secret key not allowed")
 	errAuthentication       = errors.New("Authentication failed, check your access credentials")
 	errNoAuthToken          = errors.New("JWT token missing")
+	errIncorrectCreds       = errors.New("Current access key or secret key is incorrect")
 )
 
 func authenticateJWTUsers(accessKey, secretKey string, expiry time.Duration) (string, error) {
@@ -54,52 +55,41 @@ func authenticateJWTUsers(accessKey, secretKey string, expiry time.Duration) (st
 	if err != nil {
 		return "", err
 	}
+	expiresAt := UTCNow().Add(expiry)
+	return authenticateJWTUsersWithCredentials(passedCredential, expiresAt)
+}
 
-	serverCred := globalServerConfig.GetCredential()
-	if serverCred.AccessKey != passedCredential.AccessKey {
+func authenticateJWTUsersWithCredentials(credentials auth.Credentials, expiresAt time.Time) (string, error) {
+	serverCred := globalActiveCred
+	if serverCred.AccessKey != credentials.AccessKey {
 		var ok bool
-		serverCred, ok = globalIAMSys.GetUser(accessKey)
+		serverCred, ok = globalIAMSys.GetUser(credentials.AccessKey)
 		if !ok {
 			return "", errInvalidAccessKeyID
 		}
 	}
 
-	if !serverCred.Equal(passedCredential) {
+	if !serverCred.Equal(credentials) {
 		return "", errAuthentication
 	}
 
-	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.StandardClaims{
-		ExpiresAt: UTCNow().Add(expiry).Unix(),
-		Subject:   accessKey,
-	})
+	claims := xjwt.NewMapClaims()
+	claims.SetExpiry(expiresAt)
+	claims.SetAccessKey(credentials.AccessKey)
+
+	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, claims)
 	return jwt.SignedString([]byte(serverCred.SecretKey))
 }
 
-func authenticateJWTAdmin(accessKey, secretKey string, expiry time.Duration) (string, error) {
-	passedCredential, err := auth.CreateCredentials(accessKey, secretKey)
-	if err != nil {
-		return "", err
-	}
+func authenticateNode(accessKey, secretKey, audience string) (string, error) {
+	claims := xjwt.NewStandardClaims()
+	claims.SetExpiry(UTCNow().Add(defaultInterNodeJWTExpiry))
+	claims.SetAccessKey(accessKey)
+	claims.SetAudience(audience)
+	claims.SetIssuer(ReleaseTag)
 
-	serverCred := globalServerConfig.GetCredential()
-
-	if serverCred.AccessKey != passedCredential.AccessKey {
-		return "", errInvalidAccessKeyID
-	}
-
-	if !serverCred.Equal(passedCredential) {
-		return "", errAuthentication
-	}
-
-	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.StandardClaims{
-		ExpiresAt: UTCNow().Add(expiry).Unix(),
-		Subject:   accessKey,
-	})
-	return jwt.SignedString([]byte(serverCred.SecretKey))
-}
-
-func authenticateNode(accessKey, secretKey string) (string, error) {
-	return authenticateJWTAdmin(accessKey, secretKey, defaultInterNodeJWTExpiry)
+	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, claims)
+	return jwt.SignedString([]byte(secretKey))
 }
 
 func authenticateWeb(accessKey, secretKey string) (string, error) {
@@ -111,48 +101,29 @@ func authenticateURL(accessKey, secretKey string) (string, error) {
 }
 
 // Callback function used for parsing
-func webTokenCallback(jwtToken *jwtgo.Token) (interface{}, error) {
-	if _, ok := jwtToken.Method.(*jwtgo.SigningMethodHMAC); !ok {
-		return nil, fmt.Errorf("Unexpected signing method: %v", jwtToken.Header["alg"])
+func webTokenCallback(claims *xjwt.MapClaims) ([]byte, error) {
+	if claims.AccessKey == globalActiveCred.AccessKey {
+		return []byte(globalActiveCred.SecretKey), nil
 	}
-
-	if err := jwtToken.Claims.Valid(); err != nil {
-		return nil, errAuthentication
+	if globalIAMSys == nil {
+		return nil, errInvalidAccessKeyID
 	}
-
-	if claims, ok := jwtToken.Claims.(*jwtgo.StandardClaims); ok {
-		if claims.Subject == globalServerConfig.GetCredential().AccessKey {
-			return []byte(globalServerConfig.GetCredential().SecretKey), nil
-		}
-		if globalIAMSys == nil {
-			return nil, errInvalidAccessKeyID
-		}
-		cred, ok := globalIAMSys.GetUser(claims.Subject)
-		if !ok {
-			return nil, errInvalidAccessKeyID
-		}
-		return []byte(cred.SecretKey), nil
-	}
-
-	return nil, errAuthentication
-}
-
-func parseJWTWithClaims(tokenString string, claims jwtgo.Claims) (*jwtgo.Token, error) {
-	p := &jwtgo.Parser{
-		SkipClaimsValidation: true,
-	}
-	jwtToken, err := p.ParseWithClaims(tokenString, claims, webTokenCallback)
+	ok, err := globalIAMSys.IsTempUser(claims.AccessKey)
 	if err != nil {
-		switch e := err.(type) {
-		case *jwtgo.ValidationError:
-			if e.Inner == nil {
-				return nil, errAuthentication
-			}
-			return nil, e.Inner
+		if err == errNoSuchUser {
+			return nil, errInvalidAccessKeyID
 		}
-		return nil, errAuthentication
+		return nil, err
 	}
-	return jwtToken, nil
+	if ok {
+		return []byte(globalActiveCred.SecretKey), nil
+	}
+	cred, ok := globalIAMSys.GetUser(claims.AccessKey)
+	if !ok {
+		return nil, errInvalidAccessKeyID
+	}
+	return []byte(cred.SecretKey), nil
+
 }
 
 func isAuthTokenValid(token string) bool {
@@ -160,49 +131,40 @@ func isAuthTokenValid(token string) bool {
 	return err == nil
 }
 
-func webTokenAuthenticate(token string) (jwtgo.StandardClaims, bool, error) {
-	var claims = jwtgo.StandardClaims{}
+func webTokenAuthenticate(token string) (*xjwt.MapClaims, bool, error) {
 	if token == "" {
-		return claims, false, errNoAuthToken
+		return nil, false, errNoAuthToken
 	}
-
-	jwtToken, err := parseJWTWithClaims(token, &claims)
-	if err != nil {
-		return claims, false, err
-	}
-	if !jwtToken.Valid {
+	claims := xjwt.NewMapClaims()
+	if err := xjwt.ParseWithClaims(token, claims, webTokenCallback); err != nil {
 		return claims, false, errAuthentication
 	}
-	owner := claims.Subject == globalServerConfig.GetCredential().AccessKey
+	owner := claims.AccessKey == globalActiveCred.AccessKey
 	return claims, owner, nil
 }
 
 // Check if the request is authenticated.
 // Returns nil if the request is authenticated. errNoAuthToken if token missing.
 // Returns errAuthentication for all other errors.
-func webRequestAuthenticate(req *http.Request) (jwtgo.StandardClaims, bool, error) {
-	var claims = jwtgo.StandardClaims{}
-	tokStr, err := jwtreq.AuthorizationHeaderExtractor.ExtractToken(req)
+func webRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, bool, error) {
+	token, err := jwtreq.AuthorizationHeaderExtractor.ExtractToken(req)
 	if err != nil {
 		if err == jwtreq.ErrNoTokenInRequest {
-			return claims, false, errNoAuthToken
+			return nil, false, errNoAuthToken
 		}
-		return claims, false, err
+		return nil, false, err
 	}
-	jwtToken, err := parseJWTWithClaims(tokStr, &claims)
-	if err != nil {
-		return claims, false, err
-	}
-	if !jwtToken.Valid {
+	claims := xjwt.NewMapClaims()
+	if err := xjwt.ParseWithClaims(token, claims, webTokenCallback); err != nil {
 		return claims, false, errAuthentication
 	}
-	owner := claims.Subject == globalServerConfig.GetCredential().AccessKey
+	owner := claims.AccessKey == globalActiveCred.AccessKey
 	return claims, owner, nil
 }
 
-func newAuthToken() string {
-	cred := globalServerConfig.GetCredential()
-	token, err := authenticateNode(cred.AccessKey, cred.SecretKey)
+func newAuthToken(audience string) string {
+	cred := globalActiveCred
+	token, err := authenticateNode(cred.AccessKey, cred.SecretKey, audience)
 	logger.CriticalIf(context.Background(), err)
 	return token
 }

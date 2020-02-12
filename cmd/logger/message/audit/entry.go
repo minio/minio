@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/handlers"
 )
 
@@ -34,11 +34,13 @@ type Entry struct {
 	DeploymentID string `json:"deploymentid,omitempty"`
 	Time         string `json:"time"`
 	API          struct {
-		Name       string `json:"name,omitempty"`
-		Bucket     string `json:"bucket,omitempty"`
-		Object     string `json:"object,omitempty"`
-		Status     string `json:"status,omitempty"`
-		StatusCode int    `json:"statusCode,omitempty"`
+		Name            string `json:"name,omitempty"`
+		Bucket          string `json:"bucket,omitempty"`
+		Object          string `json:"object,omitempty"`
+		Status          string `json:"status,omitempty"`
+		StatusCode      int    `json:"statusCode,omitempty"`
+		TimeToFirstByte string `json:"timeToFirstByte,omitempty"`
+		TimeToResponse  string `json:"timeToResponse,omitempty"`
 	} `json:"api"`
 	RemoteHost string                 `json:"remotehost,omitempty"`
 	RequestID  string                 `json:"requestID,omitempty"`
@@ -50,11 +52,7 @@ type Entry struct {
 }
 
 // ToEntry - constructs an audit entry object.
-func ToEntry(w http.ResponseWriter, r *http.Request, api string, statusCode int, reqClaims map[string]interface{}) Entry {
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-	object := vars["object"]
-
+func ToEntry(w http.ResponseWriter, r *http.Request, reqClaims map[string]interface{}, deploymentID string) Entry {
 	reqQuery := make(map[string]string)
 	for k, v := range r.URL.Query() {
 		reqQuery[k] = strings.Join(v, ",")
@@ -67,13 +65,13 @@ func ToEntry(w http.ResponseWriter, r *http.Request, api string, statusCode int,
 	for k, v := range w.Header() {
 		respHeader[k] = strings.Join(v, ",")
 	}
-	respHeader["Etag"] = strings.Trim(respHeader["Etag"], `"`)
+	respHeader[xhttp.ETag] = strings.Trim(respHeader[xhttp.ETag], `"`)
 
 	entry := Entry{
 		Version:      Version,
-		DeploymentID: w.Header().Get("x-minio-deployment-id"),
+		DeploymentID: deploymentID,
 		RemoteHost:   handlers.GetSourceIP(r),
-		RequestID:    w.Header().Get("x-amz-request-id"),
+		RequestID:    w.Header().Get(xhttp.AmzRequestID),
 		UserAgent:    r.UserAgent(),
 		Time:         time.Now().UTC().Format(time.RFC3339Nano),
 		ReqQuery:     reqQuery,
@@ -81,12 +79,6 @@ func ToEntry(w http.ResponseWriter, r *http.Request, api string, statusCode int,
 		ReqClaims:    reqClaims,
 		RespHeader:   respHeader,
 	}
-
-	entry.API.Name = api
-	entry.API.Bucket = bucket
-	entry.API.Object = object
-	entry.API.Status = http.StatusText(statusCode)
-	entry.API.StatusCode = statusCode
 
 	return entry
 }

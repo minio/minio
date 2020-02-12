@@ -18,45 +18,10 @@ package logger
 
 import (
 	"fmt"
-	"os"
 	"regexp"
+	"runtime"
 
-	"github.com/fatih/color"
-	isatty "github.com/mattn/go-isatty"
-)
-
-// Global colors.
-var (
-	// Check if we stderr, stdout are dumb terminals, we do not apply
-	// ansi coloring on dumb terminals.
-	isTerminal = func() bool {
-		return isatty.IsTerminal(os.Stdout.Fd()) && isatty.IsTerminal(os.Stderr.Fd())
-	}
-
-	ColorBold = func() func(a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.Bold).SprintFunc()
-		}
-		return fmt.Sprint
-	}()
-	ColorFgRed = func() func(a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgRed).SprintFunc()
-		}
-		return fmt.Sprint
-	}()
-	ColorBgRed = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.BgRed).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
-	ColorFgWhite = func() func(format string, a ...interface{}) string {
-		if isTerminal() {
-			return color.New(color.FgWhite).SprintfFunc()
-		}
-		return fmt.Sprintf
-	}()
+	"github.com/minio/minio/pkg/color"
 )
 
 var ansiRE = regexp.MustCompile("(\x1b[^m]*m)")
@@ -68,19 +33,28 @@ func ansiEscape(format string, args ...interface{}) {
 }
 
 func ansiMoveRight(n int) {
-	if isTerminal() {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	if color.IsTerminal() {
 		ansiEscape("[%dC", n)
 	}
 }
 
 func ansiSaveAttributes() {
-	if isTerminal() {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	if color.IsTerminal() {
 		ansiEscape("7")
 	}
 }
 
 func ansiRestoreAttributes() {
-	if isTerminal() {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	if color.IsTerminal() {
 		ansiEscape("8")
 	}
 

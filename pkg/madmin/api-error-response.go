@@ -77,6 +77,28 @@ func httpRespToErrorResponse(resp *http.Response) error {
 	return errResp
 }
 
+// ToErrorResponse - Returns parsed ErrorResponse struct from body and
+// http headers.
+//
+// For example:
+//
+//   import admin "github.com/minio/minio/pkg/madmin"
+//   ...
+//   ...
+//   ss, err := adm.ServiceStatus(...)
+//   if err != nil {
+//      resp := admin.ToErrorResponse(err)
+//   }
+//   ...
+func ToErrorResponse(err error) ErrorResponse {
+	switch err := err.(type) {
+	case ErrorResponse:
+		return err
+	default:
+		return ErrorResponse{}
+	}
+}
+
 // ErrInvalidArgument - Invalid argument response.
 func ErrInvalidArgument(message string) error {
 	return ErrorResponse{

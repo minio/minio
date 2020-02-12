@@ -174,3 +174,19 @@ type ClientGrantsResult struct {
 	// provider as the token's sub (Subject) claim.
 	SubjectFromToken string `xml:",omitempty"`
 }
+
+// AssumeRoleWithLDAPResponse contains the result of successful
+// AssumeRoleWithLDAPIdentity request
+type AssumeRoleWithLDAPResponse struct {
+	XMLName          xml.Name           `xml:"https://sts.amazonaws.com/doc/2011-06-15/ AssumeRoleWithLDAPIdentityResponse" json:"-"`
+	Result           LDAPIdentityResult `xml:"AssumeRoleWithLDAPIdentityResult"`
+	ResponseMetadata struct {
+		RequestID string `xml:"RequestId,omitempty"`
+	} `xml:"ResponseMetadata,omitempty"`
+}
+
+// LDAPIdentityResult - contains credentials for a successful
+// AssumeRoleWithLDAPIdentity request.
+type LDAPIdentityResult struct {
+	Credentials auth.Credentials `xml:",omitempty"`
+}

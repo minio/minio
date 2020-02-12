@@ -19,7 +19,7 @@ MinIO GCS Gateway allows you to access Google Cloud Storage (GCS) with Amazon S3
 
 **Note:** For alternate ways to set up *Application Default Credentials*, see [Setting Up Authentication for Server to Server Production Applications](https://developers.google.com/identity/protocols/application-default-credentials).
 
-### 1.1 Run MinIO GCS Gateway Using Docker
+### 1.2 Run MinIO GCS Gateway Using Docker
 ```sh
 docker run -p 9000:9000 --name gcs-s3 \
  -v /path/to/credentials.json:/credentials.json \
@@ -29,7 +29,7 @@ docker run -p 9000:9000 --name gcs-s3 \
  minio/minio gateway gcs yourprojectid
 ```
 
-### 1.2 Run MinIO GCS Gateway Using the MinIO Binary
+### 1.3 Run MinIO GCS Gateway Using the MinIO Binary
 
 ```sh
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json

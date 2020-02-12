@@ -18,6 +18,8 @@ package hdfs
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -29,19 +31,24 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/colinmarc/hdfs/v2"
 	"github.com/minio/cli"
-	"github.com/minio/minio-go/pkg/s3utils"
+	krb "github.com/minio/gokrb5/v7/client"
+	"github.com/minio/gokrb5/v7/config"
+	"github.com/minio/gokrb5/v7/credentials"
+	"github.com/minio/hdfs/v3"
+	"github.com/minio/hdfs/v3/hadoopconf"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
 )
 
 const (
 	hdfsBackend = "hdfs"
 
-	hdfsSeparator = "/"
+	hdfsSeparator = minio.SlashSeparator
 )
 
 func init() {
@@ -57,37 +64,20 @@ FLAGS:
 HDFS-NAMENODE:
   HDFS namenode URI
 
-ENVIRONMENT VARIABLES:
-  ACCESS:
-     MINIO_ACCESS_KEY: Username or access key of minimum 3 characters in length.
-     MINIO_SECRET_KEY: Password or secret key of minimum 8 characters in length.
-
-  BROWSER:
-     MINIO_BROWSER: To disable web browser access, set this value to "off".
-
-  DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
-
-  CACHE:
-     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
-     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
-     MINIO_CACHE_EXPIRY: Cache expiry duration in days.
-     MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
-
 EXAMPLES:
-  1. Start minio gateway server for HDFS backend.
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ {{.HelpName}} hdfs://namenode:8200
+  1. Start minio gateway server for HDFS backend
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.HelpName}} hdfs://namenode:8200
 
-  2. Start minio gateway server for HDFS with edge caching enabled.
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-     $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
-     $ export MINIO_CACHE_EXPIRY=40
-     $ export MINIO_CACHE_MAXUSE=80
-     $ {{.HelpName}} hdfs://namenode:8200
+  2. Start minio gateway server for HDFS with edge caching enabled
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1,/mnt/drive2,/mnt/drive3,/mnt/drive4"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*,*.png"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXPIRY{{.AssignmentOperator}}40
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}80
+     {{.Prompt}} {{.HelpName}} hdfs://namenode:8200
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
@@ -102,7 +92,7 @@ EXAMPLES:
 // Handler for 'minio gateway hdfs' command line.
 func hdfsGatewayMain(ctx *cli.Context) {
 	// Validate gateway arguments.
-	if !ctx.Args().Present() || ctx.Args().First() == "help" {
+	if ctx.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(ctx, hdfsBackend, 1)
 	}
 
@@ -119,6 +109,35 @@ func (g *HDFS) Name() string {
 	return hdfsBackend
 }
 
+func getKerberosClient() (*krb.Client, error) {
+	cfg, err := config.Load(env.Get("KRB5_CONFIG", "/etc/krb5.conf"))
+	if err != nil {
+		return nil, err
+	}
+
+	u, err := user.Current()
+	if err != nil {
+		return nil, err
+	}
+
+	// Determine the ccache location from the environment, falling back to the default location.
+	ccachePath := env.Get("KRB5CCNAME", fmt.Sprintf("/tmp/krb5cc_%s", u.Uid))
+	if strings.Contains(ccachePath, ":") {
+		if strings.HasPrefix(ccachePath, "FILE:") {
+			ccachePath = strings.TrimPrefix(ccachePath, "FILE:")
+		} else {
+			return nil, fmt.Errorf("unable to use kerberos ccache: %s", ccachePath)
+		}
+	}
+
+	ccache, err := credentials.LoadCCache(ccachePath)
+	if err != nil {
+		return nil, err
+	}
+
+	return krb.NewClientFromCCache(ccache, cfg)
+}
+
 // NewGatewayLayer returns hdfs gatewaylayer.
 func (g *HDFS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	dialFunc := (&net.Dialer{
@@ -127,25 +146,40 @@ func (g *HDFS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error
 		DualStack: true,
 	}).DialContext
 
-	var addresses []string
-	for _, s := range g.args {
-		u, err := xnet.ParseURL(s)
-		if err != nil {
-			return nil, err
-		}
-		addresses = append(addresses, u.Host)
-	}
-
-	user, err := user.Current()
+	hconfig, err := hadoopconf.LoadFromEnvironment()
 	if err != nil {
 		return nil, err
 	}
 
-	opts := hdfs.ClientOptions{
-		Addresses:        addresses,
-		User:             user.Username,
-		NamenodeDialFunc: dialFunc,
-		DatanodeDialFunc: dialFunc,
+	opts := hdfs.ClientOptionsFromConf(hconfig)
+	opts.NamenodeDialFunc = dialFunc
+	opts.DatanodeDialFunc = dialFunc
+
+	// Not addresses found, load it from command line.
+	if len(opts.Addresses) == 0 {
+		var addresses []string
+		for _, s := range g.args {
+			u, err := xnet.ParseURL(s)
+			if err != nil {
+				return nil, err
+			}
+			addresses = append(addresses, u.Host)
+		}
+		opts.Addresses = addresses
+	}
+
+	u, err := user.Current()
+	if err != nil {
+		return nil, fmt.Errorf("Unable to lookup local user: %s", err)
+	}
+
+	if opts.KerberosClient != nil {
+		opts.KerberosClient, err = getKerberosClient()
+		if err != nil {
+			return nil, fmt.Errorf("Unable to initialize kerberos client: %s", err)
+		}
+	} else {
+		opts.User = env.Get("HADOOP_USER_NAME", u.Username)
 	}
 
 	clnt, err := hdfs.NewClient(opts)
@@ -162,7 +196,7 @@ func (g *HDFS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error
 
 // Production - hdfs gateway is production ready.
 func (g *HDFS) Production() bool {
-	return false
+	return true
 }
 
 func (n *hdfsObjects) Shutdown(ctx context.Context) error {
@@ -175,8 +209,9 @@ func (n *hdfsObjects) StorageInfo(ctx context.Context) minio.StorageInfo {
 		return minio.StorageInfo{}
 	}
 	sinfo := minio.StorageInfo{}
-	sinfo.Used = fsInfo.Used
-	sinfo.Backend.Type = minio.Unknown
+	sinfo.Used = []uint64{fsInfo.Used}
+	sinfo.Backend.Type = minio.BackendGateway
+	sinfo.Backend.GatewayOnline = true
 	return sinfo
 }
 
@@ -221,7 +256,7 @@ func hdfsToObjectErr(ctx context.Context, err error, params ...string) error {
 			return minio.PrefixAccessDenied{Bucket: bucket, Object: object}
 		}
 		return minio.BucketAlreadyOwnedByYou{Bucket: bucket}
-	case isSysErrNotEmpty(err):
+	case errors.Is(err, syscall.ENOTEMPTY):
 		if object != "" {
 			return minio.PrefixAccessDenied{Bucket: bucket, Object: object}
 		}
@@ -287,24 +322,9 @@ func (n *hdfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketIn
 	return buckets, nil
 }
 
-func (n *hdfsObjects) isObjectDir(bucket, object string) bool {
-	f, err := n.clnt.Open(minio.PathJoin(hdfsSeparator, bucket, object))
-	if err != nil {
-		return false
-	}
-	defer f.Close()
-
-	entries, err := f.Readdir(1)
-	if err != nil {
-		return false
-	}
-
-	return len(entries) == 0
-}
-
-func (n *hdfsObjects) listDirFactory(isLeaf minio.IsLeafFunc) minio.ListDirFunc {
+func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string) {
 		f, err := n.clnt.Open(minio.PathJoin(hdfsSeparator, bucket, prefixDir))
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -326,9 +346,7 @@ func (n *hdfsObjects) listDirFactory(isLeaf minio.IsLeafFunc) minio.ListDirFunc 
 				entries = append(entries, fi.Name())
 			}
 		}
-		fis = nil
-		entries, delayIsLeaf = minio.FilterListEntries(bucket, prefixDir, entries, prefixEntry, isLeaf)
-		return entries, delayIsLeaf
+		return minio.FilterMatchingPrefix(entries, prefixEntry)
 	}
 
 	// Return list factory instance.
@@ -337,41 +355,26 @@ func (n *hdfsObjects) listDirFactory(isLeaf minio.IsLeafFunc) minio.ListDirFunc 
 
 // ListObjects lists all blobs in HDFS bucket filtered by prefix.
 func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, err error) {
-	isLeaf := func(bucket, object string) bool {
-		// bucket argument is unused as we don't need to StatFile
-		// to figure if it's a file, just need to check that the
-		// object string does not end with "/".
-		return !strings.HasSuffix(object, hdfsSeparator)
+	if _, err := n.clnt.Stat(minio.PathJoin(hdfsSeparator, bucket)); err != nil {
+		return loi, hdfsToObjectErr(ctx, err, bucket)
 	}
-
-	// Return true if the specified object is an empty directory
-	isLeafDir := func(bucket, object string) bool {
-		if !strings.HasSuffix(object, hdfsSeparator) {
-			return false
-		}
-		return n.isObjectDir(bucket, object)
-	}
-	listDir := n.listDirFactory(isLeaf)
 
 	getObjectInfo := func(ctx context.Context, bucket, entry string) (minio.ObjectInfo, error) {
-		return n.GetObjectInfo(ctx, bucket, entry, minio.ObjectOptions{})
-	}
-
-	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, isLeaf, isLeafDir, listDir, getObjectInfo, getObjectInfo)
-}
-
-// Check if the given error corresponds to ENOTEMPTY for unix
-// and ERROR_DIR_NOT_EMPTY for windows (directory not empty).
-func isSysErrNotEmpty(err error) bool {
-	if err == syscall.ENOTEMPTY {
-		return true
-	}
-	if pathErr, ok := err.(*os.PathError); ok {
-		if pathErr.Err == syscall.ENOTEMPTY {
-			return true
+		fi, err := n.clnt.Stat(minio.PathJoin(hdfsSeparator, bucket, entry))
+		if err != nil {
+			return minio.ObjectInfo{}, hdfsToObjectErr(ctx, err, bucket, entry)
 		}
+		return minio.ObjectInfo{
+			Bucket:  bucket,
+			Name:    entry,
+			ModTime: fi.ModTime(),
+			Size:    fi.Size(),
+			IsDir:   fi.IsDir(),
+			AccTime: fi.(*hdfs.FileInfo).AccessTime(),
+		}, nil
 	}
-	return false
+
+	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), getObjectInfo, getObjectInfo)
 }
 
 // deleteObject deletes a file path if its empty. If it's successfully deleted,
@@ -384,16 +387,13 @@ func (n *hdfsObjects) deleteObject(basePath, deletePath string) error {
 
 	// Attempt to remove path.
 	if err := n.clnt.Remove(deletePath); err != nil {
-		switch {
-		case err == syscall.ENOTEMPTY:
-		case isSysErrNotEmpty(err):
+		if errors.Is(err, syscall.ENOTEMPTY) {
 			// Ignore errors if the directory is not empty. The server relies on
 			// this functionality, and sometimes uses recursion that should not
 			// error on parent directories.
 			return nil
-		default:
-			return err
 		}
+		return err
 	}
 
 	// Trailing slash is removed when found to ensure
@@ -430,6 +430,14 @@ func (n *hdfsObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continu
 
 func (n *hdfsObjects) DeleteObject(ctx context.Context, bucket, object string) error {
 	return hdfsToObjectErr(ctx, n.deleteObject(minio.PathJoin(hdfsSeparator, bucket), minio.PathJoin(hdfsSeparator, bucket, object)), bucket, object)
+}
+
+func (n *hdfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = n.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
 }
 
 func (n *hdfsObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, opts minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
@@ -477,13 +485,34 @@ func (n *hdfsObjects) GetObject(ctx context.Context, bucket, key string, startOf
 	if err != nil {
 		return hdfsToObjectErr(ctx, err, bucket, key)
 	}
-	if _, err = rd.Seek(startOffset, io.SeekStart); err != nil {
-		return hdfsToObjectErr(ctx, err, bucket, key)
+	defer rd.Close()
+	_, err = io.Copy(writer, io.NewSectionReader(rd, startOffset, length))
+	if err == io.ErrClosedPipe {
+		// hdfs library doesn't send EOF correctly, so io.Copy attempts
+		// to write which returns io.ErrClosedPipe - just ignore
+		// this for now.
+		err = nil
 	}
-	if _, err = io.Copy(writer, io.LimitReader(rd, length)); err != nil {
-		return hdfsToObjectErr(ctx, err, bucket, key)
+	return hdfsToObjectErr(ctx, err, bucket, key)
+}
+
+func (n *hdfsObjects) isObjectDir(ctx context.Context, bucket, object string) bool {
+	f, err := n.clnt.Open(minio.PathJoin(hdfsSeparator, bucket, object))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+		logger.LogIf(ctx, err)
+		return false
 	}
-	return nil
+	defer f.Close()
+	fis, err := f.Readdir(1)
+	if err != nil && err != io.EOF {
+		logger.LogIf(ctx, err)
+		return false
+	}
+	// Readdir returns an io.EOF when len(fis) == 0.
+	return len(fis) == 0
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo.
@@ -492,6 +521,10 @@ func (n *hdfsObjects) GetObjectInfo(ctx context.Context, bucket, object string, 
 	if err != nil {
 		return objInfo, hdfsToObjectErr(ctx, err, bucket)
 	}
+	if strings.HasSuffix(object, hdfsSeparator) && !n.isObjectDir(ctx, bucket, object) {
+		return objInfo, hdfsToObjectErr(ctx, os.ErrNotExist, bucket, object)
+	}
+
 	fi, err := n.clnt.Stat(minio.PathJoin(hdfsSeparator, bucket, object))
 	if err != nil {
 		return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
@@ -515,7 +548,7 @@ func (n *hdfsObjects) PutObject(ctx context.Context, bucket string, object strin
 	name := minio.PathJoin(hdfsSeparator, bucket, object)
 
 	// If its a directory create a prefix {
-	if strings.HasSuffix(object, hdfsSeparator) {
+	if strings.HasSuffix(object, hdfsSeparator) && r.Size() == 0 {
 		if err = n.clnt.MkdirAll(name, os.FileMode(0755)); err != nil {
 			n.deleteObject(minio.PathJoin(hdfsSeparator, bucket), name)
 			return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
@@ -528,17 +561,19 @@ func (n *hdfsObjects) PutObject(ctx context.Context, bucket string, object strin
 			return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
 		}
 		defer n.deleteObject(minio.PathJoin(hdfsSeparator, minioMetaTmpBucket), tmpname)
-		defer w.Close()
 		if _, err = io.Copy(w, r); err != nil {
+			w.Close()
 			return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
 		}
 		dir := path.Dir(name)
 		if dir != "" {
 			if err = n.clnt.MkdirAll(dir, os.FileMode(0755)); err != nil {
+				w.Close()
 				n.deleteObject(minio.PathJoin(hdfsSeparator, bucket), dir)
 				return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
 			}
 		}
+		w.Close()
 		if err = n.clnt.Rename(tmpname, name); err != nil {
 			return objInfo, hdfsToObjectErr(ctx, err, bucket, object)
 		}
@@ -675,10 +710,7 @@ func (n *hdfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, objec
 	}
 
 	// Calculate s3 compatible md5sum for complete multipart.
-	s3MD5, err := minio.GetCompleteMultipartMD5(ctx, parts)
-	if err != nil {
-		return objInfo, err
-	}
+	s3MD5 := minio.ComputeCompleteMultipartMD5(parts)
 
 	return minio.ObjectInfo{
 		Bucket:  bucket,
@@ -697,4 +729,9 @@ func (n *hdfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, 
 		return hdfsToObjectErr(ctx, err, bucket)
 	}
 	return hdfsToObjectErr(ctx, n.clnt.Remove(minio.PathJoin(hdfsSeparator, minioMetaTmpBucket, uploadID)), bucket, object, uploadID)
+}
+
+// IsReady returns whether the layer is ready to take requests.
+func (n *hdfsObjects) IsReady(_ context.Context) bool {
+	return true
 }

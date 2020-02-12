@@ -77,7 +77,7 @@ more details.
 
 *Note*
 
-- If `STANDARD` storage class is set via environment variables or `mc admin config` get/set commands, and `x-amz-storage-class` is not present in request metadata, MinIO server will 
+- If `STANDARD` storage class is set via environment variables or `mc admin config` get/set commands, and `x-amz-storage-class` is not present in request metadata, MinIO server will
 apply `STANDARD` storage class to the object. This means the data and parity disks will be used as set in `STANDARD` storage class.
 
 - If storage class is not defined before starting MinIO server, and subsequent PutObject metadata field has `x-amz-storage-class` present

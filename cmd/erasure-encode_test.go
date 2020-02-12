@@ -44,6 +44,10 @@ func (a badDisk) CreateFile(volume, path string, size int64, reader io.Reader) e
 	return errFaultyDisk
 }
 
+func (badDisk) Hostname() string {
+	return ""
+}
+
 const oneMiByte = 1 * humanize.MiByte
 
 var erasureEncodeTests = []struct {

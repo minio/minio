@@ -120,7 +120,7 @@ func newBitrotWriter(disk StorageAPI, volume, filePath string, length int64, alg
 	if algo == HighwayHash256S {
 		return newStreamingBitrotWriter(disk, volume, filePath, length, algo, shardSize)
 	}
-	return newWholeBitrotWriter(disk, volume, filePath, length, algo, shardSize)
+	return newWholeBitrotWriter(disk, volume, filePath, algo, shardSize)
 }
 
 func newBitrotReader(disk StorageAPI, bucket string, filePath string, tillOffset int64, algo BitrotAlgorithm, sum []byte, shardSize int64) io.ReaderAt {
@@ -156,32 +156,10 @@ func bitrotWriterSum(w io.Writer) []byte {
 	return nil
 }
 
-// Verify if a file has bitrot error.
-func bitrotCheckFile(disk StorageAPI, volume string, filePath string, tillOffset int64, algo BitrotAlgorithm, sum []byte, shardSize int64) (err error) {
+// Returns the size of the file with bitrot protection
+func bitrotShardFileSize(size int64, shardSize int64, algo BitrotAlgorithm) int64 {
 	if algo != HighwayHash256S {
-		buf := []byte{}
-		// For whole-file bitrot we don't need to read the entire file as the bitrot verify happens on the server side even if we read 0-bytes.
-		_, err = disk.ReadFile(volume, filePath, 0, buf, NewBitrotVerifier(algo, sum))
-		return err
+		return size
 	}
-	buf := make([]byte, shardSize)
-	r := newStreamingBitrotReader(disk, volume, filePath, tillOffset, algo, shardSize)
-	defer closeBitrotReaders([]io.ReaderAt{r})
-	var offset int64
-	for {
-		if offset == tillOffset {
-			break
-		}
-		var n int
-		tmpBuf := buf
-		if int64(len(tmpBuf)) > (tillOffset - offset) {
-			tmpBuf = tmpBuf[:(tillOffset - offset)]
-		}
-		n, err = r.ReadAt(tmpBuf, offset)
-		if err != nil {
-			return err
-		}
-		offset += int64(n)
-	}
-	return nil
+	return ceilFrac(size, shardSize)*int64(algo.New().Size()) + size
 }

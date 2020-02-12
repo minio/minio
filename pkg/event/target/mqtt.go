@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +17,18 @@
 package target
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/eclipse/paho.mqtt.golang"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -34,6 +36,30 @@ import (
 const (
 	reconnectInterval = 5 // In Seconds
 	storePrefix       = "minio"
+)
+
+// MQTT input constants
+const (
+	MqttBroker            = "broker"
+	MqttTopic             = "topic"
+	MqttQoS               = "qos"
+	MqttUsername          = "username"
+	MqttPassword          = "password"
+	MqttReconnectInterval = "reconnect_interval"
+	MqttKeepAliveInterval = "keep_alive_interval"
+	MqttQueueDir          = "queue_dir"
+	MqttQueueLimit        = "queue_limit"
+
+	EnvMQTTEnable            = "MINIO_NOTIFY_MQTT_ENABLE"
+	EnvMQTTBroker            = "MINIO_NOTIFY_MQTT_BROKER"
+	EnvMQTTTopic             = "MINIO_NOTIFY_MQTT_TOPIC"
+	EnvMQTTQoS               = "MINIO_NOTIFY_MQTT_QOS"
+	EnvMQTTUsername          = "MINIO_NOTIFY_MQTT_USERNAME"
+	EnvMQTTPassword          = "MINIO_NOTIFY_MQTT_PASSWORD"
+	EnvMQTTReconnectInterval = "MINIO_NOTIFY_MQTT_RECONNECT_INTERVAL"
+	EnvMQTTKeepAliveInterval = "MINIO_NOTIFY_MQTT_KEEP_ALIVE_INTERVAL"
+	EnvMQTTQueueDir          = "MINIO_NOTIFY_MQTT_QUEUE_DIR"
+	EnvMQTTQueueLimit        = "MINIO_NOTIFY_MQTT_QUEUE_LIMIT"
 )
 
 // MQTTArgs - MQTT target arguments.
@@ -48,7 +74,7 @@ type MQTTArgs struct {
 	KeepAlive            time.Duration  `json:"keepAliveInterval"`
 	RootCAs              *x509.CertPool `json:"-"`
 	QueueDir             string         `json:"queueDir"`
-	QueueLimit           uint16         `json:"queueLimit"`
+	QueueLimit           uint64         `json:"queueLimit"`
 }
 
 // Validate MQTTArgs fields
@@ -73,16 +99,21 @@ func (m MQTTArgs) Validate() error {
 			return errors.New("qos should be set to 1 or 2 if queueDir is set")
 		}
 	}
+	if m.QueueLimit > 10000 {
+		return errors.New("queueLimit should not exceed 10000")
+	}
 
 	return nil
 }
 
 // MQTTTarget - MQTT target.
 type MQTTTarget struct {
-	id     event.TargetID
-	args   MQTTArgs
-	client mqtt.Client
-	store  Store
+	id         event.TargetID
+	args       MQTTArgs
+	client     mqtt.Client
+	store      Store
+	quitCh     chan struct{}
+	loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{})
 }
 
 // ID - returns target ID.
@@ -90,23 +121,16 @@ func (target *MQTTTarget) ID() event.TargetID {
 	return target.id
 }
 
-// Send - sends event to MQTT.
-func (target *MQTTTarget) Send(eventKey string) error {
-
+// IsActive - Return true if target is up and active
+func (target *MQTTTarget) IsActive() (bool, error) {
 	if !target.client.IsConnectionOpen() {
-		return errNotConnected
+		return false, errNotConnected
 	}
+	return true, nil
+}
 
-	eventData, eErr := target.store.Get(eventKey)
-	if eErr != nil {
-		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
-		// Such events will not exist and wouldve been already been sent successfully.
-		if os.IsNotExist(eErr) {
-			return nil
-		}
-		return eErr
-	}
-
+// send - sends an event to the mqtt.
+func (target *MQTTTarget) send(eventData event.Event) error {
 	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
 	if err != nil {
 		return err
@@ -119,27 +143,69 @@ func (target *MQTTTarget) Send(eventKey string) error {
 	}
 
 	token := target.client.Publish(target.args.Topic, target.args.QoS, false, string(data))
-	token.Wait()
-	if token.Error() != nil {
-		return token.Error()
+	if !token.WaitTimeout(reconnectInterval * time.Second) {
+		return errNotConnected
+	}
+	return token.Error()
+}
+
+// Send - reads an event from store and sends it to MQTT.
+func (target *MQTTTarget) Send(eventKey string) error {
+	// Do not send if the connection is not active.
+	_, err := target.IsActive()
+	if err != nil {
+		return err
+	}
+
+	eventData, err := target.store.Get(eventKey)
+	if err != nil {
+		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
+		// Such events will not exist and wouldve been already been sent successfully.
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	if err = target.send(eventData); err != nil {
+		return err
 	}
 
 	// Delete the event from store.
 	return target.store.Del(eventKey)
 }
 
-// Save - saves the events to the store which will be replayed when the mqtt connection is active.
+// Save - saves the events to the store if queuestore is configured, which will
+// be replayed when the mqtt connection is active.
 func (target *MQTTTarget) Save(eventData event.Event) error {
-	return target.store.Put(eventData)
+	if target.store != nil {
+		return target.store.Put(eventData)
+	}
+
+	// Do not send if the connection is not active.
+	_, err := target.IsActive()
+	if err != nil {
+		return err
+	}
+
+	return target.send(eventData)
 }
 
 // Close - does nothing and available for interface compatibility.
 func (target *MQTTTarget) Close() error {
+	target.client.Disconnect(100)
+	close(target.quitCh)
 	return nil
 }
 
 // NewMQTTTarget - creates new MQTT target.
-func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}) (*MQTTTarget, error) {
+func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*MQTTTarget, error) {
+	if args.MaxReconnectInterval == 0 {
+		// Default interval
+		// https://github.com/eclipse/paho.mqtt.golang/blob/master/options.go#L115
+		args.MaxReconnectInterval = 10 * time.Minute
+	}
+
 	options := mqtt.NewClientOptions().
 		SetClientID("").
 		SetCleanSession(true).
@@ -150,49 +216,62 @@ func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}) (*MQTTTarge
 		SetTLSConfig(&tls.Config{RootCAs: args.RootCAs}).
 		AddBroker(args.Broker.String())
 
-	var store Store
+	client := mqtt.NewClient(options)
+
+	target := &MQTTTarget{
+		id:         event.TargetID{ID: id, Name: "mqtt"},
+		args:       args,
+		client:     client,
+		quitCh:     make(chan struct{}),
+		loggerOnce: loggerOnce,
+	}
+
+	token := client.Connect()
+	retryRegister := func() {
+		for {
+		retry:
+			select {
+			case <-doneCh:
+				return
+			case <-target.quitCh:
+				return
+			default:
+				ok := token.WaitTimeout(reconnectInterval * time.Second)
+				if ok && token.Error() != nil {
+					target.loggerOnce(context.Background(),
+						fmt.Errorf("Previous connect failed with %w attempting a reconnect",
+							token.Error()),
+						target.ID())
+					time.Sleep(reconnectInterval * time.Second)
+					token = client.Connect()
+					goto retry
+				}
+				if ok {
+					// Successfully connected.
+					return
+				}
+			}
+		}
+	}
 
 	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-mqtt-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if oErr := store.Open(); oErr != nil {
-			return nil, oErr
+		target.store = NewQueueStore(queueDir, args.QueueLimit)
+		if err := target.store.Open(); err != nil {
+			return nil, err
+		}
+
+		if !test {
+			go retryRegister()
+			// Replays the events from the store.
+			eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
+			// Start replaying events from the store.
+			go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
 		}
 	} else {
-		store = NewMemoryStore(args.QueueLimit)
-	}
-
-	client := mqtt.NewClient(options)
-
-	// The client should establish a first time connection.
-	// Connect() should be successful atleast once to publish events.
-	token := client.Connect()
-
-	go func() {
-		// Repeat the pings until the client registers the clientId and receives a token.
-		for {
-			if token.Wait() && token.Error() == nil {
-				// Connected
-				break
-			}
-			// Reconnecting
-			time.Sleep(reconnectInterval * time.Second)
-			token = client.Connect()
+		if token.Wait() && token.Error() != nil {
+			return nil, token.Error()
 		}
-	}()
-
-	target := &MQTTTarget{
-		id:     event.TargetID{ID: id, Name: "mqtt"},
-		args:   args,
-		client: client,
-		store:  store,
 	}
-
-	// Replays the events from the store.
-	eventKeyCh := replayEvents(target.store, doneCh)
-
-	// Start replaying events from the store.
-	go sendEvents(target, eventKeyCh, doneCh)
-
 	return target, nil
 }

@@ -24,6 +24,8 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/message/log"
+	"github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/pkg/console"
 )
 
 // Target implements loggerTarget to send log
@@ -31,7 +33,7 @@ import (
 type Target struct{}
 
 // Send log message 'e' to console
-func (c *Target) Send(e interface{}) error {
+func (c *Target) Send(e interface{}, logKind string) error {
 	entry, ok := e.(log.Entry)
 	if !ok {
 		return fmt.Errorf("Uexpected log entry structure %#v", e)
@@ -45,12 +47,13 @@ func (c *Target) Send(e interface{}) error {
 		return nil
 	}
 
-	trace := make([]string, len(entry.Trace.Source))
+	traceLength := len(entry.Trace.Source)
+	trace := make([]string, traceLength)
 
 	// Add a sequence number and formatting for each stack trace
 	// No formatting is required for the first entry
 	for i, element := range entry.Trace.Source {
-		trace[i] = fmt.Sprintf("%8v: %s", i+1, element)
+		trace[i] = fmt.Sprintf("%8v: %s", traceLength-i, element)
 	}
 
 	tagString := ""
@@ -73,6 +76,11 @@ func (c *Target) Send(e interface{}) error {
 	apiString += ")"
 	timeString := "Time: " + time.Now().Format(logger.TimeFormat)
 
+	var deploymentID string
+	if entry.DeploymentID != "" {
+		deploymentID = "\nDeploymentID: " + entry.DeploymentID
+	}
+
 	var requestID string
 	if entry.RequestID != "" {
 		requestID = "\nRequestID: " + entry.RequestID
@@ -81,6 +89,11 @@ func (c *Target) Send(e interface{}) error {
 	var remoteHost string
 	if entry.RemoteHost != "" {
 		remoteHost = "\nRemoteHost: " + entry.RemoteHost
+	}
+
+	var host string
+	if entry.Host != "" {
+		host = "\nHost: " + entry.Host
 	}
 
 	var userAgent string
@@ -92,12 +105,12 @@ func (c *Target) Send(e interface{}) error {
 		tagString = "\n       " + tagString
 	}
 
-	var msg = logger.ColorFgRed(logger.ColorBold(entry.Trace.Message))
-	var output = fmt.Sprintf("\n%s\n%s%s%s%s\nError: %s%s\n%s",
-		apiString, timeString, requestID, remoteHost, userAgent,
+	var msg = color.FgRed(color.Bold(entry.Trace.Message))
+	var output = fmt.Sprintf("\n%s\n%s%s%s%s%s%s\nError: %s%s\n%s",
+		apiString, timeString, deploymentID, requestID, remoteHost, host, userAgent,
 		msg, tagString, strings.Join(trace, "\n"))
 
-	fmt.Println(output)
+	console.Println(output)
 	return nil
 }
 

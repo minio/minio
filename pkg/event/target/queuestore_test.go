@@ -33,7 +33,7 @@ var queueDir = filepath.Join(os.TempDir(), "minio_test")
 var testEvent = event.Event{EventVersion: "1.0", EventSource: "test_source", AwsRegion: "test_region", EventTime: "test_time", EventName: event.ObjectAccessedGet}
 
 // Initialize the store.
-func setUpStore(directory string, limit uint16) (Store, error) {
+func setUpStore(directory string, limit uint64) (Store, error) {
 	store := NewQueueStore(queueDir, limit)
 	if oErr := store.Open(); oErr != nil {
 		return nil, oErr
@@ -43,10 +43,7 @@ func setUpStore(directory string, limit uint16) (Store, error) {
 
 // Tear down store
 func tearDownStore() error {
-	if err := os.RemoveAll(queueDir); err != nil {
-		return err
-	}
-	return nil
+	return os.RemoveAll(queueDir)
 }
 
 // TestQueueStorePut - tests for store.Put
@@ -68,8 +65,12 @@ func TestQueueStorePut(t *testing.T) {
 		}
 	}
 	// Count the events.
-	if len(store.ListN(-1)) != 100 {
-		t.Fatalf("ListN() Expected: 100, got %d", len(store.ListN(-1)))
+	names, err := store.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(names) != 100 {
+		t.Fatalf("List() Expected: 100, got %d", len(names))
 	}
 }
 
@@ -90,7 +91,10 @@ func TestQueueStoreGet(t *testing.T) {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
-	eventKeys := store.ListN(-1)
+	eventKeys, err := store.List()
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Get 10 events.
 	if len(eventKeys) == 10 {
 		for _, key := range eventKeys {
@@ -103,7 +107,7 @@ func TestQueueStoreGet(t *testing.T) {
 			}
 		}
 	} else {
-		t.Fatalf("ListN() Expected: 10, got %d", len(eventKeys))
+		t.Fatalf("List() Expected: 10, got %d", len(eventKeys))
 	}
 }
 
@@ -124,7 +128,10 @@ func TestQueueStoreDel(t *testing.T) {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
-	eventKeys := store.ListN(-1)
+	eventKeys, err := store.List()
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Remove all the events.
 	if len(eventKeys) == 20 {
 		for _, key := range eventKeys {
@@ -134,11 +141,15 @@ func TestQueueStoreDel(t *testing.T) {
 			}
 		}
 	} else {
-		t.Fatalf("ListN() Expected: 20, got %d", len(eventKeys))
+		t.Fatalf("List() Expected: 20, got %d", len(eventKeys))
 	}
 
-	if len(store.ListN(-1)) != 0 {
-		t.Fatalf("ListN() Expected: 0, got %d", len(store.ListN(-1)))
+	names, err := store.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(names) != 0 {
+		t.Fatalf("List() Expected: 0, got %d", len(names))
 	}
 }
 
@@ -181,12 +192,22 @@ func TestQueueStoreListN(t *testing.T) {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
-	// Should return only 5 event keys.
-	if len(store.ListN(5)) != 5 {
-		t.Fatalf("ListN(5) Expected: 5, got %d", len(store.ListN(5)))
-	}
 	// Should return all the event keys in the store.
-	if len(store.ListN(-1)) != 10 {
-		t.Fatalf("ListN(-1) Expected: 10, got %d", len(store.ListN(-1)))
+	names, err := store.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(names) != 10 {
+		t.Fatalf("List() Expected: 10, got %d", len(names))
+	}
+
+	if err = os.RemoveAll(queueDir); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = store.List()
+	if !os.IsNotExist(err) {
+		t.Fatalf("Expected List() to fail with os.ErrNotExist, %s", err)
 	}
 }

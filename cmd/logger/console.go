@@ -23,18 +23,19 @@ import (
 	"strings"
 	"time"
 
-	c "github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/cmd/logger/message/log"
+	"github.com/minio/minio/pkg/color"
+	c "github.com/minio/minio/pkg/console"
 )
 
-// Console interface describes the methods that need to be implemented to satisfy the interface requirements.
-type Console interface {
+// Logger interface describes the methods that need to be implemented to satisfy the interface requirements.
+type Logger interface {
 	json(msg string, args ...interface{})
 	quiet(msg string, args ...interface{})
 	pretty(msg string, args ...interface{})
 }
 
-func consoleLog(console Console, msg string, args ...interface{}) {
+func consoleLog(console Logger, msg string, args ...interface{}) {
 	switch {
 	case jsonFlag:
 		// Strip escape control characters from json message
@@ -89,8 +90,8 @@ func (f fatalMsg) quiet(msg string, args ...interface{}) {
 
 var (
 	logTag      = "ERROR"
-	logBanner   = ColorBgRed(ColorFgWhite(ColorBold(logTag))) + " "
-	emptyBanner = ColorBgRed(strings.Repeat(" ", len(logTag))) + " "
+	logBanner   = color.BgRed(color.FgWhite(color.Bold(logTag))) + " "
+	emptyBanner = color.BgRed(strings.Repeat(" ", len(logTag))) + " "
 	bannerWidth = len(logTag) + 1
 )
 
@@ -118,16 +119,16 @@ func (f fatalMsg) pretty(msg string, args ...interface{}) {
 			ansiSaveAttributes()
 			// Print banner with or without the log tag
 			if !tagPrinted {
-				fmt.Print(logBanner)
+				c.Print(logBanner)
 				tagPrinted = true
 			} else {
-				fmt.Print(emptyBanner)
+				c.Print(emptyBanner)
 			}
 			// Restore the text color of the error message
 			ansiRestoreAttributes()
 			ansiMoveRight(bannerWidth)
 			// Continue  error message printing
-			fmt.Println(line)
+			c.Println(line)
 			break
 		}
 	}

@@ -3,27 +3,32 @@ MinIO HDFS gateway adds Amazon S3 API support to Hadoop HDFS filesystem. Applica
 
 ## Run MinIO Gateway for HDFS Storage
 
-### Using Docker
-
-Please ensure to replace `hdfs://namenode:8200` with *an* actual name node ip/hostname and port.
-
-```
-docker run -p 9000:9000 --name hdfs-s3 \
- -e "MINIO_ACCESS_KEY=minio" \
- -e "MINIO_SECRET_KEY=minio123" \
- minio/minio gateway hdfs hdfs://namenode:8200
-```
-
 ### Using Binary
+Namenode information is obtained by reading `core-site.xml` automatically from your hadoop environment variables *$HADOOP_HOME*
+```
+export MINIO_ACCESS_KEY=minio
+export MINIO_SECRET_KEY=minio123
+minio gateway hdfs
+```
 
+You can also override the namenode endpoint as shown below.
 ```
 export MINIO_ACCESS_KEY=minio
 export MINIO_SECRET_KEY=minio123
 minio gateway hdfs hdfs://namenode:8200
 ```
 
-## Test using MinIO Browser
+### Using Docker
+Using docker is experimental, most Hadoop environments are not dockerized and may require additional steps in getting this to work properly. You are better off just using the binary in this situation.
+```
+docker run -p 9000:9000 \
+ --name hdfs-s3 \
+ -e "MINIO_ACCESS_KEY=minio" \
+ -e "MINIO_SECRET_KEY=minio123" \
+ minio/minio gateway hdfs hdfs://namenode:8200
+```
 
+## Test using MinIO Browser
 *MinIO gateway* comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure that your server has started successfully.
 
 ![Screenshot](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/minio-browser-gateway.png)
@@ -58,6 +63,8 @@ Gateway inherits the following limitations of HDFS storage layer:
 - Additional metadata support for PutObject operations
 - Additional metadata support for Multipart operations
 - Background append to provide concurrency support for multipart operations
+
+Please open a GitHub issue if you wish these to be fixed https://github.com/minio/minio/issues
 
 ## Explore Further
 - [`mc` command-line interface](https://docs.minio.io/docs/minio-client-quickstart-guide)

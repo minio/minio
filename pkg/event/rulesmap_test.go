@@ -153,10 +153,12 @@ func TestRulesMapMatch(t *testing.T) {
 
 func TestNewRulesMap(t *testing.T) {
 	rulesMapCase1 := make(RulesMap)
-	rulesMapCase1.add([]Name{ObjectAccessedGet, ObjectAccessedHead}, "*", TargetID{"1", "webhook"})
+	rulesMapCase1.add([]Name{ObjectAccessedGet, ObjectAccessedHead, ObjectAccessedGetRetention, ObjectAccessedGetLegalHold},
+		"*", TargetID{"1", "webhook"})
 
 	rulesMapCase2 := make(RulesMap)
-	rulesMapCase2.add([]Name{ObjectAccessedGet, ObjectAccessedHead, ObjectCreatedPut}, "*", TargetID{"1", "webhook"})
+	rulesMapCase2.add([]Name{ObjectAccessedGet, ObjectAccessedHead,
+		ObjectCreatedPut, ObjectAccessedGetRetention, ObjectAccessedGetLegalHold}, "*", TargetID{"1", "webhook"})
 
 	rulesMapCase3 := make(RulesMap)
 	rulesMapCase3.add([]Name{ObjectRemovedDelete}, "2010*.jpg", TargetID{"1", "webhook"})
@@ -176,7 +178,7 @@ func TestNewRulesMap(t *testing.T) {
 		result := NewRulesMap(testCase.eventNames, testCase.pattern, testCase.targetID)
 
 		if !reflect.DeepEqual(result, testCase.expectedResult) {
-			t.Fatalf("test %v: result: expected: %v, got: %v", i+1, testCase.expectedResult, result)
+			t.Errorf("test %v: result: expected: %v, got: %v", i+1, testCase.expectedResult, result)
 		}
 	}
 }

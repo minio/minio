@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,31 +16,39 @@
 
 package cmd
 
-const storageRESTVersion = "v4"
-const storageRESTPath = minioReservedBucketPath + "/storage/" + storageRESTVersion + "/"
+const (
+	storageRESTVersion       = "v14" // DeleteFileBulk API change
+	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
+	storageRESTPrefix        = minioReservedBucketPath + "/storage"
+)
 
 const (
-	storageRESTMethodDiskInfo  = "diskinfo"
-	storageRESTMethodMakeVol   = "makevol"
-	storageRESTMethodStatVol   = "statvol"
-	storageRESTMethodDeleteVol = "deletevol"
-	storageRESTMethodListVols  = "listvols"
+	storageRESTMethodDiskInfo             = "/diskinfo"
+	storageRESTMethodCrawlAndGetDataUsage = "/crawlandgetdatausage"
+	storageRESTMethodMakeVol              = "/makevol"
+	storageRESTMethodMakeVolBulk          = "/makevolbulk"
+	storageRESTMethodStatVol              = "/statvol"
+	storageRESTMethodDeleteVol            = "/deletevol"
+	storageRESTMethodListVols             = "/listvols"
 
-	storageRESTMethodAppendFile     = "appendfile"
-	storageRESTMethodCreateFile     = "createfile"
-	storageRESTMethodWriteAll       = "writeall"
-	storageRESTMethodStatFile       = "statfile"
-	storageRESTMethodReadAll        = "readall"
-	storageRESTMethodReadFile       = "readfile"
-	storageRESTMethodReadFileStream = "readfilestream"
-	storageRESTMethodListDir        = "listdir"
-	storageRESTMethodDeleteFile     = "deletefile"
-	storageRESTMethodRenameFile     = "renamefile"
-	storageRESTMethodGetInstanceID  = "getinstanceid"
+	storageRESTMethodAppendFile     = "/appendfile"
+	storageRESTMethodCreateFile     = "/createfile"
+	storageRESTMethodWriteAll       = "/writeall"
+	storageRESTMethodStatFile       = "/statfile"
+	storageRESTMethodReadAll        = "/readall"
+	storageRESTMethodReadFile       = "/readfile"
+	storageRESTMethodReadFileStream = "/readfilestream"
+	storageRESTMethodListDir        = "/listdir"
+	storageRESTMethodWalk           = "/walk"
+	storageRESTMethodDeleteFile     = "/deletefile"
+	storageRESTMethodDeleteFileBulk = "/deletefilebulk"
+	storageRESTMethodRenameFile     = "/renamefile"
+	storageRESTMethodVerifyFile     = "/verifyfile"
 )
 
 const (
 	storageRESTVolume     = "volume"
+	storageRESTVolumes    = "volumes"
 	storageRESTDirPath    = "dir-path"
 	storageRESTFilePath   = "file-path"
 	storageRESTSrcVolume  = "source-volume"
@@ -49,8 +57,12 @@ const (
 	storageRESTDstPath    = "destination-path"
 	storageRESTOffset     = "offset"
 	storageRESTLength     = "length"
+	storageRESTShardSize  = "shard-size"
 	storageRESTCount      = "count"
+	storageRESTMarkerPath = "marker"
+	storageRESTLeafFile   = "leaf-file"
+	storageRESTRecursive  = "recursive"
 	storageRESTBitrotAlgo = "bitrot-algo"
 	storageRESTBitrotHash = "bitrot-hash"
-	storageRESTInstanceID = "instance-id"
+	storageRESTDiskID     = "disk-id"
 )

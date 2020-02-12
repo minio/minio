@@ -29,8 +29,8 @@ import (
 	"net/url"
 	"strings"
 
-	minio "github.com/minio/minio-go"
-	"github.com/minio/minio-go/pkg/credentials"
+	minio "github.com/minio/minio-go/v6"
+	"github.com/minio/minio-go/v6/pkg/credentials"
 )
 
 // JWTToken - parses the output from IDP access token.
@@ -99,7 +99,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Uncommend this to use MinIO API operations by initializing minio
+	// Uncomment this to use MinIO API operations by initializing minio
 	// client with obtained credentials.
 
 	opts := &minio.Options{

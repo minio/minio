@@ -72,6 +72,19 @@ class Web {
   Logout() {
     storage.removeItem('token')
   }
+  GetToken() {
+    return storage.getItem('token')
+  }
+  GetDiscoveryDoc() {
+    return this.makeCall("GetDiscoveryDoc")
+  }
+  LoginSTS(args) {
+    return this.makeCall('LoginSTS', args)
+      .then(res => {
+        storage.setItem('token', `${res.token}`)
+        return res
+      })
+  }
   ServerInfo() {
     return this.makeCall('ServerInfo')
   }
@@ -98,12 +111,6 @@ class Web {
   }
   RemoveObject(args) {
     return this.makeCall('RemoveObject', args)
-  }
-  GetAuth() {
-    return this.makeCall('GetAuth')
-  }
-  GenerateAuth() {
-    return this.makeCall('GenerateAuth')
   }
   SetAuth(args) {
     return this.makeCall('SetAuth', args)

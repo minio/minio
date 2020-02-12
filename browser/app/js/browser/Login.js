@@ -16,20 +16,22 @@
 
 import React from "react"
 import { connect } from "react-redux"
-import classNames from "classnames"
 import logo from "../../img/logo.svg"
 import Alert from "../alert/Alert"
 import * as actionsAlert from "../alert/actions"
 import InputGroup from "./InputGroup"
 import web from "../web"
-import { Redirect } from "react-router-dom"
+import { Redirect, Link } from "react-router-dom"
+import OpenIDLoginButton from './OpenIDLoginButton'
 
 export class Login extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
       accessKey: "",
-      secretKey: ""
+      secretKey: "",
+      discoveryDoc: {},
+      clientId: ""
     }
   }
 
@@ -83,6 +85,15 @@ export class Login extends React.Component {
     document.body.classList.add("is-guest")
   }
 
+  componentDidMount() {
+    web.GetDiscoveryDoc().then(({ DiscoveryDoc, clientId }) => {
+      this.setState({
+        clientId,
+        discoveryDoc: DiscoveryDoc
+      })
+    })
+  }
+
   componentWillUnmount() {
     document.body.classList.remove("is-guest")
   }
@@ -95,6 +106,8 @@ export class Login extends React.Component {
     let alertBox = <Alert {...alert} onDismiss={clearAlert} />
     // Make sure you don't show a fading out alert box on the initial web-page load.
     if (!alert.message) alertBox = ""
+
+    const showOpenID = Boolean(this.state.discoveryDoc && this.state.discoveryDoc.authorization_endpoint)
     return (
       <div className="login">
         {alertBox}
@@ -122,12 +135,31 @@ export class Login extends React.Component {
               type="password"
               spellCheck="false"
               required="required"
-              autoComplete="new-password"
             />
             <button className="lw-btn" type="submit">
-              <i className="fa fa-sign-in" />
+              <i className="fas fa-sign-in-alt" />
             </button>
           </form>
+          {showOpenID && (
+            <div className="openid-login">
+              <div className="or">or</div>
+              {
+                this.state.clientId ? (
+                  <OpenIDLoginButton
+                    className="btn openid-btn"
+                    clientId={this.state.clientId}
+                    authorizationEndpoint={this.state.discoveryDoc.authorization_endpoint}
+                  >
+                    Log in with OpenID
+                  </OpenIDLoginButton>
+                ) : (
+                  <Link to={"/login/openid"} className="btn openid-btn">
+                    Log in with OpenID
+                  </Link>
+                )
+              }
+            </div>
+          )}
         </div>
         <div className="l-footer">
           <a className="lf-logo" href="">

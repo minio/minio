@@ -56,6 +56,21 @@ func ParseSelectStatement(s string) (stmt SelectStatement, err error) {
 		err = errQueryParseFailure(err)
 		return
 	}
+
+	// Check if select is "SELECT s.* from S3Object s"
+	if !selectAST.Expression.All &&
+		len(selectAST.Expression.Expressions) == 1 &&
+		len(selectAST.Expression.Expressions[0].Expression.And) == 1 &&
+		len(selectAST.Expression.Expressions[0].Expression.And[0].Condition) == 1 &&
+		selectAST.Expression.Expressions[0].Expression.And[0].Condition[0].Operand != nil &&
+		selectAST.Expression.Expressions[0].Expression.And[0].Condition[0].Operand.Operand.Left != nil &&
+		selectAST.Expression.Expressions[0].Expression.And[0].Condition[0].Operand.Operand.Left.Left != nil &&
+		selectAST.Expression.Expressions[0].Expression.And[0].Condition[0].Operand.Operand.Left.Left.Primary != nil &&
+		selectAST.Expression.Expressions[0].Expression.And[0].Condition[0].Operand.Operand.Left.Left.Primary.JPathExpr != nil {
+		if selectAST.Expression.Expressions[0].Expression.And[0].Condition[0].Operand.Operand.Left.Left.Primary.JPathExpr.String() == selectAST.From.As+".*" {
+			selectAST.Expression.All = true
+		}
+	}
 	stmt.selectAST = &selectAST
 
 	// Check the parsed limit value
@@ -69,7 +84,7 @@ func ParseSelectStatement(s string) (stmt SelectStatement, err error) {
 	if selectAST.Where != nil {
 		whereQProp := selectAST.Where.analyze(&selectAST)
 		if whereQProp.err != nil {
-			err = errQueryAnalysisFailure(fmt.Errorf("Where clause error: %v", whereQProp.err))
+			err = errQueryAnalysisFailure(fmt.Errorf("Where clause error: %w", whereQProp.err))
 			return
 		}
 
@@ -133,7 +148,7 @@ func (e *SelectStatement) EvalFrom(format string, input Record) (Record, error) 
 			}
 
 			jsonRec := rawVal.(jstream.KVS)
-			txedRec, err := jsonpathEval(e.selectAST.From.Table.PathExpr[1:], jsonRec)
+			txedRec, _, err := jsonpathEval(e.selectAST.From.Table.PathExpr[1:], jsonRec)
 			if err != nil {
 				return nil, err
 			}
@@ -170,7 +185,11 @@ func (e *SelectStatement) AggregateResult(output Record) error {
 		if err != nil {
 			return err
 		}
-		output.Set(fmt.Sprintf("_%d", i+1), v)
+		if expr.As != "" {
+			output.Set(expr.As, v)
+		} else {
+			output.Set(fmt.Sprintf("_%d", i+1), v)
+		}
 	}
 	return nil
 }
@@ -215,6 +234,7 @@ func (e *SelectStatement) AggregateRow(input Record) error {
 
 // Eval - evaluates the Select statement for the given record. It
 // applies only to non-aggregation queries.
+// The function returns whether the statement passed the WHERE clause and should be outputted.
 func (e *SelectStatement) Eval(input, output Record) (Record, error) {
 	ok, err := e.isPassingWhereClause(input)
 	if err != nil || !ok {
@@ -230,8 +250,8 @@ func (e *SelectStatement) Eval(input, output Record) (Record, error) {
 		if e.limitValue > -1 {
 			e.outputCount++
 		}
-
-		return input, nil
+		output = input.Clone(output)
+		return output, nil
 	}
 
 	for i, expr := range e.selectAST.Expression.Expressions {

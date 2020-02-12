@@ -17,23 +17,26 @@
 package cmd
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
+	"path"
+	"reflect"
+	"time"
 
 	"github.com/gorilla/mux"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/event/target"
-	xnet "github.com/minio/minio/pkg/net"
-	"github.com/minio/minio/pkg/policy"
 )
 
 const (
 	bucketConfigPrefix       = "buckets"
 	bucketNotificationConfig = "notification.xml"
-	bucketListenerConfig     = "listener.json"
 )
 
 var errNoSuchNotifications = errors.New("The specified bucket does not have bucket notifications")
@@ -71,24 +74,65 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	// Attempt to successfully load notification config.
-	nConfig, err := readNotificationConfig(ctx, objAPI, bucketName)
+	// Construct path to notification.xml for the given bucket.
+	configFile := path.Join(bucketConfigPrefix, bucketName, bucketNotificationConfig)
+
+	var config = event.Config{}
+	configData, err := readConfig(ctx, objAPI, configFile)
 	if err != nil {
-		// Ignore errNoSuchNotifications to comply with AWS S3.
-		if err != errNoSuchNotifications {
+		if err != errConfigNotFound {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		config.SetRegion(globalServerRegion)
+		config.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
+		notificationBytes, err := xml.Marshal(config)
+		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 
-		nConfig = &event.Config{}
+		writeSuccessResponseXML(w, notificationBytes)
+		return
+	}
+
+	config.SetRegion(globalServerRegion)
+
+	if err = xml.Unmarshal(configData, &config); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if err = config.Validate(globalServerRegion, globalNotificationSys.targetList); err != nil {
+		arnErr, ok := err.(*event.ErrARNNotFound)
+		if !ok {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		for i, queue := range config.QueueList {
+			// Remove ARN not found queues, because we previously allowed
+			// adding unexpected entries into the config.
+			//
+			// With newer config disallowing changing / turning off
+			// notification targets without removing ARN in notification
+			// configuration we won't see this problem anymore.
+			if reflect.DeepEqual(queue.ARN, arnErr.ARN) {
+				config.QueueList = append(config.QueueList[:i],
+					config.QueueList[i+1:]...)
+			}
+			// This is a one time activity we shall do this
+			// here and allow stale ARN to be removed. We shall
+			// never reach a stage where we will have stale
+			// notification configs.
+		}
 	}
 
 	// If xml namespace is empty, set a default value before returning.
-	if nConfig.XMLNS == "" {
-		nConfig.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
+	if config.XMLNS == "" {
+		config.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
 	}
 
-	notificationBytes, err := xml.Marshal(nConfig)
+	notificationBytes, err := xml.Marshal(config)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -135,14 +179,13 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	var config *event.Config
-	config, err = event.ParseConfig(io.LimitReader(r.Body, r.ContentLength), globalServerConfig.GetRegion(), globalNotificationSys.targetList)
+	lreader := io.LimitReader(r.Body, r.ContentLength)
+	config, err := event.ParseConfig(lreader, globalServerRegion, globalNotificationSys.targetList)
 	if err != nil {
 		apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
 		if event.IsEventError(err) {
 			apiErr = toAPIError(ctx, err)
 		}
-
 		writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -159,8 +202,6 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	writeSuccessResponseHeadersOnly(w)
 }
 
-// ListenBucketNotificationHandler - This HTTP handler sends events to the connected HTTP client.
-// Client should send prefix/suffix object name to match and events to watch as query parameters.
 func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListenBucketNotification")
 
@@ -182,50 +223,47 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	vars := mux.Vars(r)
 	bucketName := vars["bucket"]
 
-	if s3Error := checkRequestAuthType(ctx, r, policy.ListenBucketNotificationAction, bucketName, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
 	values := r.URL.Query()
+	values.Set(peerRESTListenBucket, bucketName)
 
 	var prefix string
-	if len(values["prefix"]) > 1 {
+	if len(values[peerRESTListenPrefix]) > 1 {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrFilterNamePrefix), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	if len(values["prefix"]) == 1 {
-		if err := event.ValidateFilterRuleValue(values["prefix"][0]); err != nil {
+	if len(values[peerRESTListenPrefix]) == 1 {
+		if err := event.ValidateFilterRuleValue(values[peerRESTListenPrefix][0]); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 
-		prefix = values["prefix"][0]
+		prefix = values[peerRESTListenPrefix][0]
 	}
 
 	var suffix string
-	if len(values["suffix"]) > 1 {
+	if len(values[peerRESTListenSuffix]) > 1 {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrFilterNameSuffix), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	if len(values["suffix"]) == 1 {
-		if err := event.ValidateFilterRuleValue(values["suffix"][0]); err != nil {
+	if len(values[peerRESTListenSuffix]) == 1 {
+		if err := event.ValidateFilterRuleValue(values[peerRESTListenSuffix][0]); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 
-		suffix = values["suffix"][0]
+		suffix = values[peerRESTListenSuffix][0]
 	}
 
 	pattern := event.NewPattern(prefix, suffix)
 
-	eventNames := []event.Name{}
-	for _, s := range values["events"] {
+	var eventNames []event.Name
+	for _, s := range values[peerRESTListenEvents] {
 		eventName, err := event.ParseName(s)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -240,47 +278,67 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		return
 	}
 
-	host, err := xnet.ParseHost(r.RemoteAddr)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
+	rulesMap := event.NewRulesMap(eventNames, pattern, event.TargetID{ID: mustGetUUID()})
+
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	// Listen Publisher and peer-listen-client uses nonblocking send and hence does not wait for slow receivers.
+	// Use buffered channel to take care of burst sends or slow w.Write()
+	listenCh := make(chan interface{}, 4000)
+
+	peers := getRestClients(globalEndpoints)
+
+	globalHTTPListen.Subscribe(listenCh, doneCh, func(evI interface{}) bool {
+		ev, ok := evI.(event.Event)
+		if !ok {
+			return false
+		}
+		if ev.S3.Bucket.Name != values.Get(peerRESTListenBucket) {
+			return false
+		}
+		objectName, uerr := url.QueryUnescape(ev.S3.Object.Key)
+		if uerr != nil {
+			objectName = ev.S3.Object.Key
+		}
+		return len(rulesMap.Match(ev.EventName, objectName).ToSlice()) != 0
+	})
+
+	for _, peer := range peers {
+		if peer == nil {
+			continue
+		}
+		peer.Listen(listenCh, doneCh, values)
 	}
 
-	target, err := target.NewHTTPClientTarget(*host, w)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
+	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	defer keepAliveTicker.Stop()
+
+	enc := json.NewEncoder(w)
+	for {
+		select {
+		case evI := <-listenCh:
+			ev := evI.(event.Event)
+			if len(string(ev.EventName)) > 0 {
+				if err := enc.Encode(struct{ Records []event.Event }{[]event.Event{ev}}); err != nil {
+					return
+				}
+			} else {
+				if _, err := w.Write([]byte(" ")); err != nil {
+					return
+				}
+			}
+			w.(http.Flusher).Flush()
+		case <-keepAliveTicker.C:
+			if _, err := w.Write([]byte(" ")); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-GlobalServiceDoneCh:
+			return
+		}
 	}
 
-	rulesMap := event.NewRulesMap(eventNames, pattern, target.ID())
-
-	if err = globalNotificationSys.AddRemoteTarget(bucketName, target, rulesMap); err != nil {
-		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-	defer globalNotificationSys.RemoveRemoteTarget(bucketName, target.ID())
-	defer globalNotificationSys.RemoveRulesMap(bucketName, rulesMap)
-
-	thisAddr, err := xnet.ParseHost(GetLocalPeer(globalEndpoints))
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	if err = SaveListener(objAPI, bucketName, eventNames, pattern, target.ID(), *thisAddr); err != nil {
-		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	globalNotificationSys.ListenBucketNotification(ctx, bucketName, eventNames, pattern, target.ID(), *thisAddr)
-
-	<-target.DoneCh
-
-	if err = RemoveListener(objAPI, bucketName, target.ID(), *thisAddr); err != nil {
-		logger.GetReqInfo(ctx).AppendTags("target", target.ID().Name)
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
 }
