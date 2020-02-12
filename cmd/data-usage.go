@@ -159,7 +159,6 @@ func updateUsage(basePath string, doneCh <-chan struct{}, waitForLowActiveIO fun
 	}
 
 	numWorkers := 4
-
 	var mutex sync.Mutex // Mutex to update dataUsageInfo
 
 	fastWalk(basePath, numWorkers, doneCh, func(path string, typ os.FileMode) error {
@@ -183,21 +182,28 @@ func updateUsage(basePath string, doneCh <-chan struct{}, waitForLowActiveIO fun
 			return nil
 		}
 
+		mutex.Lock()
+		defer mutex.Unlock()
+
 		if typ&os.ModeDir != 0 {
 			return nil
 		}
 
+		t := time.Now()
 		size, err := getSize(Item{path, typ})
+		// Use the response time of the getSize call to guess system load.
+		// Sleep equivalent time.
+		if d := time.Since(t); d > 100*time.Microsecond {
+			time.Sleep(d)
+		}
 		if err != nil {
 			return errSkipFile
 		}
 
-		mutex.Lock()
 		dataUsageInfo.ObjectsCount++
 		dataUsageInfo.ObjectsTotalSize += uint64(size)
 		dataUsageInfo.BucketsSizes[bucket] += uint64(size)
 		dataUsageInfo.ObjectsSizesHistogram[objSizeToHistoInterval(uint64(size))]++
-		mutex.Unlock()
 		return nil
 	})
 

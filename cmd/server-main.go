@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"net/http"
@@ -36,17 +35,6 @@ import (
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
 )
-
-func init() {
-	logger.Init(GOPATH, GOROOT)
-	logger.RegisterError(config.FmtError)
-
-	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background())
-	logger.AddTarget(globalConsoleSys)
-
-	gob.Register(StorageErr(""))
-}
 
 // ServerFlags - server command specific flags
 var ServerFlags = []cli.Flag{

@@ -219,11 +219,11 @@ func newPosix(path string) (*posix, error) {
 		},
 		stopUsageCh: make(chan struct{}),
 		diskMount:   mountinfo.IsLikelyMountPoint(path),
-		// Allow disk usage crawler to run upto 10 concurrent
+		// Allow disk usage crawler to run with up to 2 concurrent
 		// I/O ops, if and when activeIOCount reaches this
 		// value disk usage routine suspends the crawler
 		// and waits until activeIOCount reaches below this threshold.
-		maxActiveIOCount: 10,
+		maxActiveIOCount: 3,
 	}
 
 	// Success.
@@ -986,11 +986,6 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 		return nil, errInvalidArgument
 	}
 
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return nil, err
@@ -1046,17 +1041,36 @@ func (s *posix) ReadFileStream(volume, path string, offset, length int64) (io.Re
 		return nil, err
 	}
 
+	atomic.AddInt32(&s.activeIOCount, 1)
 	r := struct {
 		io.Reader
 		io.Closer
-	}{Reader: io.LimitReader(file, length), Closer: file}
+	}{Reader: io.LimitReader(file, length), Closer: closeWrapper(func() error {
+		atomic.AddInt32(&s.activeIOCount, -1)
+		return file.Close()
+	})}
+
+	// Add readahead to big reads
 	if length >= readAheadSize {
-		return readahead.NewReadCloserSize(r, readAheadBuffers, readAheadBufSize)
+		rc, err := readahead.NewReadCloserSize(r, readAheadBuffers, readAheadBufSize)
+		if err != nil {
+			r.Close()
+			return nil, err
+		}
+		return rc, nil
 	}
 
 	// Just add a small 64k buffer.
 	r.Reader = bufio.NewReaderSize(r.Reader, 64<<10)
 	return r, nil
+}
+
+// closeWrapper converts a function to an io.Closer
+type closeWrapper func() error
+
+// Close calls the wrapped function.
+func (c closeWrapper) Close() error {
+	return c()
 }
 
 // CreateFile - creates the file.

@@ -18,15 +18,14 @@ package lifecycle
 
 import (
 	"encoding/xml"
-	"errors"
 	"time"
 )
 
 var (
-	errLifecycleInvalidDate       = errors.New("Date must be provided in ISO 8601 format")
-	errLifecycleInvalidDays       = errors.New("Days must be positive integer when used with Expiration")
-	errLifecycleInvalidExpiration = errors.New("At least one of Days or Date should be present inside Expiration")
-	errLifecycleDateNotMidnight   = errors.New(" 'Date' must be at midnight GMT")
+	errLifecycleInvalidDate       = Errorf("Date must be provided in ISO 8601 format")
+	errLifecycleInvalidDays       = Errorf("Days must be positive integer when used with Expiration")
+	errLifecycleInvalidExpiration = Errorf("At least one of Days or Date should be present inside Expiration")
+	errLifecycleDateNotMidnight   = Errorf("'Date' must be at midnight GMT")
 )
 
 // ExpirationDays is a type alias to unmarshal Days in Expiration
@@ -121,7 +120,6 @@ func (e Expiration) Validate() error {
 // IsDaysNull returns true if days field is null
 func (e Expiration) IsDaysNull() bool {
 	return e.Days == ExpirationDays(0)
-
 }
 
 // IsDateNull returns true if date field is null

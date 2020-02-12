@@ -6,7 +6,7 @@ managed by the KMS.
 
 > MinIO still provides native Hashicorp Vault support. However, this is feature is **deprecated** and may be
 > removed in the future. Therefore, we strongly recommend to use the architecture and KMS Guide below.
-> If you have to maintain a legacy MinIO-Vault deployment you can find the legacy documentation [here](./vault-legacy.md).
+> If you have to maintain a legacy MinIO-Vault deployment you can find the legacy documentation [here](https://docs.min.io/docs/minio-vault-legacy.html).
 
 ## Architecture and Concepts
 

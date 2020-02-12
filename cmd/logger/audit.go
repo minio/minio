@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -143,7 +144,10 @@ func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	object := vars["object"]
+	object, err := url.PathUnescape(vars["object"])
+	if err != nil {
+		object = vars["object"]
+	}
 
 	// Send audit logs only to http targets.
 	for _, t := range AuditTargets {

@@ -346,7 +346,7 @@ func ErrorRespToObjectError(err error, params ...string) error {
 		err = BucketNotEmpty{}
 	case "NoSuchBucketPolicy":
 		err = BucketPolicyNotFound{}
-	case "NoSuchBucketLifecycle":
+	case "NoSuchLifecycleConfiguration":
 		err = BucketLifecycleNotFound{}
 	case "InvalidBucketName":
 		err = BucketNameInvalid{Bucket: bucket}
@@ -416,4 +416,37 @@ func gatewayHandleEnvVars() {
 			logger.Fatal(err, "Unable to parse MINIO_GATEWAY_SSE value (`%s`)", gwsseVal)
 		}
 	}
+}
+
+// shouldMeterRequest checks whether incoming request should be added to prometheus gateway metrics
+func shouldMeterRequest(req *http.Request) bool {
+	return !(guessIsBrowserReq(req) || guessIsHealthCheckReq(req) || guessIsMetricsReq(req))
+}
+
+// MetricsTransport is a custom wrapper around Transport to track metrics
+type MetricsTransport struct {
+	Transport *http.Transport
+	Metrics   *Metrics
+}
+
+// RoundTrip implements the RoundTrip method for MetricsTransport
+func (m MetricsTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	metered := shouldMeterRequest(r)
+	if metered && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		m.Metrics.IncRequests(r.Method)
+		if r.ContentLength > 0 {
+			m.Metrics.IncBytesSent(uint64(r.ContentLength))
+		}
+	}
+	// Make the request to the server.
+	resp, err := m.Transport.RoundTrip(r)
+	if err != nil {
+		return nil, err
+	}
+	if metered && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		if r.ContentLength > 0 {
+			m.Metrics.IncBytesReceived(uint64(resp.ContentLength))
+		}
+	}
+	return resp, nil
 }

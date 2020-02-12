@@ -129,7 +129,7 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 		// Calculate the common prefix of all lifecycle rules
 		var prefixes []string
 		for _, rule := range l.Rules {
-			prefixes = append(prefixes, rule.Filter.Prefix)
+			prefixes = append(prefixes, rule.Prefix())
 		}
 		commonPrefix := lcp(prefixes)
 
@@ -143,7 +143,7 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 			var objects []string
 			for _, obj := range res.Objects {
 				// Find the action that need to be executed
-				action := l.ComputeAction(obj.Name, obj.ModTime)
+				action := l.ComputeAction(obj.Name, obj.UserTags, obj.ModTime)
 				switch action {
 				case lifecycle.DeleteAction:
 					objects = append(objects, obj.Name)

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package tagging
+package lifecycle
 
 import (
 	"fmt"
@@ -23,14 +23,13 @@ import (
 // Error is the generic type for any error happening during tag
 // parsing.
 type Error struct {
-	err  error
-	code string
+	err error
 }
 
 // Errorf - formats according to a format specifier and returns
 // the string as a value that satisfies error of type tagging.Error
-func Errorf(format, code string, a ...interface{}) error {
-	return Error{err: fmt.Errorf(format, a...), code: code}
+func Errorf(format string, a ...interface{}) error {
+	return Error{err: fmt.Errorf(format, a...)}
 }
 
 // Unwrap the internal error.
@@ -39,15 +38,7 @@ func (e Error) Unwrap() error { return e.err }
 // Error 'error' compatible method.
 func (e Error) Error() string {
 	if e.err == nil {
-		return "tagging: cause <nil>"
+		return "lifecycle: cause <nil>"
 	}
 	return e.err.Error()
-}
-
-// Code returns appropriate error code.
-func (e Error) Code() string {
-	if e.code == "" {
-		return "BadRequest"
-	}
-	return e.code
 }

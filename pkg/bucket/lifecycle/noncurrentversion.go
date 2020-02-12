@@ -18,7 +18,6 @@ package lifecycle
 
 import (
 	"encoding/xml"
-	"errors"
 )
 
 // NoncurrentVersionExpiration - an action for lifecycle configuration rule.
@@ -34,8 +33,8 @@ type NoncurrentVersionTransition struct {
 }
 
 var (
-	errNoncurrentVersionExpirationUnsupported = errors.New("Specifying <NoncurrentVersionExpiration></NoncurrentVersionExpiration> is not supported")
-	errNoncurrentVersionTransitionUnsupported = errors.New("Specifying <NoncurrentVersionTransition></NoncurrentVersionTransition> is not supported")
+	errNoncurrentVersionExpirationUnsupported = Errorf("Specifying <NoncurrentVersionExpiration></NoncurrentVersionExpiration> is not supported")
+	errNoncurrentVersionTransitionUnsupported = Errorf("Specifying <NoncurrentVersionTransition></NoncurrentVersionTransition> is not supported")
 )
 
 // UnmarshalXML is extended to indicate lack of support for

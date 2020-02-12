@@ -35,15 +35,6 @@ import (
 	"github.com/minio/minio/pkg/env"
 )
 
-func init() {
-	logger.Init(GOPATH, GOROOT)
-	logger.RegisterError(config.FmtError)
-
-	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background())
-	logger.AddTarget(globalConsoleSys)
-}
-
 var (
 	gatewayCmd = cli.Command{
 		Name:            "gateway",
@@ -165,7 +156,10 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalServerConfig = srvCfg
 	globalServerConfigMu.Unlock()
 
-	router := mux.NewRouter().SkipClean(true)
+	// Initialize router. `SkipClean(true)` stops gorilla/mux from
+	// normalizing URL path minio/minio#3256
+	// avoid URL path encoding minio/minio#8950
+	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 
 	if globalEtcdClient != nil {
 		// Enable STS router if etcd is enabled.

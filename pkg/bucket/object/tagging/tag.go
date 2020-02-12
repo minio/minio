@@ -18,14 +18,15 @@ package tagging
 
 import (
 	"encoding/xml"
+	"strings"
 	"unicode/utf8"
 )
 
 // Tag - single tag
 type Tag struct {
 	XMLName xml.Name `xml:"Tag"`
-	Key     string   `xml:"Key"`
-	Value   string   `xml:"Value"`
+	Key     string   `xml:"Key,omitempty"`
+	Value   string   `xml:"Value,omitempty"`
 }
 
 // Validate - validates the tag element
@@ -49,6 +50,10 @@ func (t Tag) validateKey() error {
 	if len(t.Key) == 0 {
 		return ErrInvalidTagKey
 	}
+	// Tag key shouldn't have "&"
+	if strings.Contains(t.Key, "&") {
+		return ErrInvalidTagKey
+	}
 	return nil
 }
 
@@ -58,5 +63,20 @@ func (t Tag) validateValue() error {
 	if utf8.RuneCountInString(t.Value) > maxTagValueLength {
 		return ErrInvalidTagValue
 	}
+	// Tag value shouldn't have "&"
+	if strings.Contains(t.Value, "&") {
+		return ErrInvalidTagValue
+	}
 	return nil
+}
+
+// IsEmpty - checks if tag is empty or not
+func (t Tag) IsEmpty() bool {
+	return t.Key == "" && t.Value == ""
+}
+
+// String - returns a string in format "tag1=value1" for the
+// current Tag
+func (t Tag) String() string {
+	return t.Key + "=" + t.Value
 }
