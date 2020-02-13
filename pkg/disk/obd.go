@@ -5,13 +5,17 @@ import (
 	"fmt"
 	"os"
 	"time"
-
+	"path/filepath"
+	
 	"github.com/montanaflynn/stats"
 )
 
 const KB = uint64(1 << 10)
 const MB = uint64(KB << 10)
 const GB = uint64(MB << 10)
+
+var GlobalLatency = map[string]Latency{}
+var GlobalThroughput = map[string]Throughput{}
 
 type Latency struct {
 	Avg          float64 `json:"avg,omitempty"`
@@ -38,8 +42,16 @@ func GetOBDInfo(endpoint string) (Latency, Throughput, error) {
 	}
 	defer f.Close()
 
-	blockSize := 4 * KB
-	fileSize := 4 * GB
+	drive := filepath.Dir(endpoint)
+	
+	if gl, ok := GlobalLatency[drive]; ok {
+		if gt, ok := GlobalThroughput[drive]; ok {
+			return gl, gt, nil
+		}
+	}
+	
+	blockSize := 1 * MB
+	fileSize := 1 * GB
 
 	latencies := []float64{}
 	throughputs := []float64{}
@@ -127,5 +139,8 @@ func GetOBDInfo(endpoint string) (Latency, Throughput, error) {
 		Max:          max_throughput,
 	}
 
+	GlobalLatency[drive] = l
+	GlobalThroughput[drive] = t
+	
 	return l, t, nil
 }

@@ -1396,19 +1396,13 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		obdInfo.DriveInfo = driveOBDs
 	}
 	
-	if c, ok := vars["config"]; ok && c == "true" {
+	if config, ok := vars["config"]; ok && config == "true" {
 		cfg, err := readServerConfig(ctx, objectAPI)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
-		cfgBytes, err := json.Marshal(cfg)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		obdInfo.Config = cfgBytes
+		obdInfo.Config = cfg
 
 	}
 	// Marshal API response

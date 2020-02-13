@@ -19,19 +19,18 @@ package madmin
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"time"
-	
+
 	"github.com/minio/minio/pkg/disk"
 )
 
 type OBDInfo struct {
 	TimeStamp time.Time             `json:"timestamp,omitempty"`
 	DriveInfo []ServerDrivesOBDInfo `json:"driveInfo,omitempty"`
-	Config    []byte                `json:"config,omitempty"`
+	Config    interface{}           `json:"config,omitempty"`
 	Error     string                `json:"error,omitempty"`
 }
 
@@ -48,15 +47,43 @@ type DriveOBDInfo struct {
 	Error      string          `json:"error,omitempty"`
 }
 
+type OBDDataType string
+
+const (
+	OBDDataTypeDrive  OBDDataType = "drive"
+	OBDDataTypeNet    OBDDataType = "net"
+	OBDDataTypeInfo   OBDDataType = "info"
+	OBDDataTypeConfig OBDDataType = "config"
+)
+
+var OBDDataTypesMap = map[string]OBDDataType{
+	"drive":  OBDDataTypeDrive,
+	"net":    OBDDataTypeNet,
+	"info":   OBDDataTypeInfo,
+	"config": OBDDataTypeConfig,
+}
+
+var OBDDataTypesList = []OBDDataType{
+	OBDDataTypeDrive,
+	OBDDataTypeNet,
+	OBDDataTypeInfo,
+	OBDDataTypeConfig,
+}
+
 // OBDInfo - Connect to a minio server and call OBD Info Management API
 // to fetch server's information represented by OBDInfo structure
-func (adm *AdminClient) ServerOBDInfo(drive, net, sysinfo, hwinfo, config bool) (OBDInfo, error) {
+func (adm *AdminClient) ServerOBDInfo(obdDataTypes []OBDDataType) (OBDInfo, error) {
 	v := url.Values{}
-	v.Set("drive", fmt.Sprintf("%t", drive))
-	v.Set("net", fmt.Sprintf("%t", net))
-	v.Set("sysinfo", fmt.Sprintf("%t", sysinfo))
-	v.Set("hwinfo", fmt.Sprintf("%t", hwinfo))
-	v.Set("config", fmt.Sprintf("%t", config))
+
+	// start with all set to false
+	for _, d := range OBDDataTypesList {
+		v.Set(string(d), "false")
+	}
+
+	// only 'trueify' user provided values
+	for _, d := range obdDataTypes {
+		v.Set(string(d), "true")
+	}
 
 	resp, err := adm.executeMethod("GET", requestData{
 		relPath:     adminAPIPrefix + "/obdinfo",
