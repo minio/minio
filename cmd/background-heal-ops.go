@@ -52,6 +52,19 @@ func (h *healRoutine) queueHealTask(task healTask) {
 	h.tasks <- task
 }
 
+func waitForLowHTTPReq(tolerance int32) {
+	if httpServer := newHTTPServerFn(); httpServer != nil {
+		// Wait at max 10 minute for an inprogress request before proceeding to heal
+		waitCount := 600
+		// Any requests in progress, delay the heal.
+		for (httpServer.GetRequestCount() >= tolerance) &&
+			waitCount > 0 {
+			waitCount--
+			time.Sleep(1 * time.Second)
+		}
+	}
+}
+
 // Wait for heal requests and process them
 func (h *healRoutine) run() {
 	ctx := context.Background()
@@ -62,16 +75,7 @@ func (h *healRoutine) run() {
 				break
 			}
 
-			if httpServer := newHTTPServerFn(); httpServer != nil {
-				// Wait at max 10 minute for an inprogress request before proceeding to heal
-				waitCount := 600
-				// Any requests in progress, delay the heal.
-				for (httpServer.GetRequestCount() >= int32(globalEndpoints.Nodes())) &&
-					waitCount > 0 {
-					waitCount--
-					time.Sleep(1 * time.Second)
-				}
-			}
+			waitForLowHTTPReq(int32(globalEndpoints.Nodes()))
 
 			var res madmin.HealResultItem
 			var err error
