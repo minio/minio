@@ -484,9 +484,6 @@ func ParseObjectLegalHold(reader io.Reader) (hold *ObjectLegalHold, err error) {
 	if hold.Status != ON && hold.Status != OFF {
 		return nil, ErrMalformedXML
 	}
-	if hold.XMLNS == "" {
-		hold.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
-	}
 	return
 }
 
