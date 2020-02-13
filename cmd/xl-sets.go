@@ -1664,6 +1664,7 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObj
 			continue
 		}
 
+		// Wait and proceed if there are active requests
 		waitForLowHTTPReq(int32(s.drivesPerSet))
 
 		if err := healObject(bucket, entry.Name); err != nil {

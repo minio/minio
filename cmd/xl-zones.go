@@ -1363,6 +1363,7 @@ func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healOb
 			continue
 		}
 
+		// Wait and proceed if there are active requests
 		waitForLowHTTPReq(int32(zoneDrivesPerSet[zoneIndex]))
 
 		if err := healObject(bucket, entry.Name); err != nil {
