@@ -165,10 +165,6 @@ func IsValidObjectPrefix(object string) bool {
 	if !utf8.ValidString(object) {
 		return false
 	}
-	// Reject unsupported characters in object name.
-	if strings.ContainsAny(object, `\`) {
-		return false
-	}
 	if strings.Contains(object, `//`) {
 		return false
 	}

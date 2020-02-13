@@ -552,7 +552,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		// Test with prefix and delimiter set to '/'. (60)
 		{"test-bucket-list-object", SlashSeparator, "", SlashSeparator, 10, resultCases[30], nil, true},
 		// Test with invalid prefix (61)
-		{"test-bucket-list-object", "\\", "", SlashSeparator, 10, ListObjectsInfo{}, ObjectNameInvalid{Bucket: "test-bucket-list-object", Object: "\\"}, false},
+		{"test-bucket-list-object", "\\", "", SlashSeparator, 10, ListObjectsInfo{}, nil, true},
 		// Test listing an empty directory in recursive mode (62)
 		{"test-bucket-empty-dir", "", "", "", 10, resultCases[31], nil, true},
 		// Test listing an empty directory in a non recursive mode (63)

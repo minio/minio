@@ -65,19 +65,19 @@ func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport
 // * Add a new target in pkg/event/target package.
 // * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
 // * Handle the configuration in this function to create/add into TargetList.
-func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool) (targetList *event.TargetList, registerErr error) {
-	targetList = event.NewTargetList()
+func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool) (_ *event.TargetList, err error) {
+	targetList := event.NewTargetList()
 
-	// Automatially close all connections when an error occur
 	defer func() {
-		if registerErr != nil {
+		// Automatically close all connections to targets when an error occur
+		if err != nil {
 			for _, t := range targetList.TargetMap() {
 				_ = t.Close()
 			}
 		}
 	}()
 
-	if err := checkValidNotificationKeys(cfg); err != nil {
+	if err = checkValidNotificationKeys(cfg); err != nil {
 		return nil, err
 	}
 

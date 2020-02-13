@@ -460,7 +460,7 @@ func (c *diskCache) saveMetadata(ctx context.Context, bucket, object string, met
 		if m.Meta == nil {
 			m.Meta = make(map[string]string)
 		}
-		if etag, ok := meta["etag"]; !ok {
+		if etag, ok := meta["etag"]; ok {
 			m.Meta["etag"] = etag
 		}
 	}
