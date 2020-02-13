@@ -158,6 +158,7 @@ const (
 	ErrPastObjectLockRetainDate
 	ErrUnknownWORMModeDirective
 	ErrObjectLockInvalidHeaders
+	ErrOBDLockTimeout
 	ErrInvalidTagDirective
 	// Add new error codes here.
 
@@ -800,6 +801,12 @@ var errorCodes = errorCodeMap{
 		Description:    "x-amz-object-lock-retain-until-date and x-amz-object-lock-mode must both be supplied",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrOBDLockTimeout: {
+		Code:           "UnsupportedOperation",
+		Description:    "parallel OBD requests are not supported at this time",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+
 	/// Bucket notification related errors.
 	ErrEventNotification: {
 		Code:           "InvalidArgument",

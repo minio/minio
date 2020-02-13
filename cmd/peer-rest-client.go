@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"encoding/gob"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"net/url"
 	"strconv"
@@ -41,7 +42,9 @@ import (
 	trace "github.com/minio/minio/pkg/trace"
 )
 
-// client to talk to peer NEndpoints.
+const netOBDDataSize int64 = 4 * 1024 * 1024 // 4 MiB
+
+// client to talk to peer Nodes.
 type peerRESTClient struct {
 	host       *xnet.Host
 	restClient *rest.Client
@@ -188,6 +191,54 @@ func (client *peerRESTClient) NetworkInfo() (info madmin.ServerNetworkHardwareIn
 	defer http.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
 	return info, err
+}
+
+// NetOBDInfo - fetch Net OBD information for a remote node.
+func (client *peerRESTClient) NetOBDInfo() (info madmin.NetOBDInfo, err error) {
+	latencies := []float64{}
+	throughputs := []float64{}
+
+	buf := make([]byte, netOBDDataSize)
+
+	for i := 0; i < 64; i++ { // 64 samples * 4 MiB = 256 MiB
+		bufReader := bytes.NewBuffer(buf)
+		bufReadCloser := ioutil.NopCloser(bufReader)
+		start := time.Now()
+
+		for i := int64(0); i < netOBDDataSize; i++ {
+			bufReader.WriteByte(0xff)
+		}
+
+		respBody, err := client.call(peerRESTMethodNetOBDInfo, nil, bufReadCloser, netOBDDataSize*2)
+		if err != nil {
+			return info, err
+		}
+		http.DrainBody(respBody)
+		end := time.Now()
+
+		latency := float64(end.Sub(start).Seconds())
+		throughput := float64(netOBDDataSize) / latency
+
+		latencies = append(latencies, latency)
+		throughputs = append(throughputs, throughput)
+	}
+	latency, throughput, err := xnet.ComputeOBDStats(latencies, throughputs)
+	info = madmin.NetOBDInfo{
+		Latency:    latency,
+		Throughput: throughput,
+	}
+	return info, err
+}
+
+// DispatchNetOBDInfo - dispatch other nodes to run Net OBD.
+func (client *peerRESTClient) DispatchNetOBDInfo() (info madmin.ServerNetOBDInfo, err error) {
+	respBody, err := client.call(peerRESTMethodDispatchNetOBDInfo, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return
 }
 
 // DriveOBDInfo - fetch Drive OBD information for a remote node.

@@ -1,23 +1,10 @@
-package disk
+package net
 
 import (
-	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
-	"time"
-
 	"github.com/montanaflynn/stats"
 )
 
-const kb = uint64(1 << 10)
-const mb = uint64(kb << 10)
-const gb = uint64(mb << 10)
-
-var globalLatency = map[string]Latency{}
-var globalThroughput = map[string]Throughput{}
-
-// Latency holds latency information for write operations to the drive
+// Latency holds latency information for read/write operations to the drive  
 type Latency struct {
 	Avg          float64 `json:"avg,omitempty"`
 	Percentile50 float64 `json:"percentile50,omitempty"`
@@ -27,7 +14,7 @@ type Latency struct {
 	Max          float64 `json:"max,omitempty"`
 }
 
-// Throughput holds throughput information for write operations to the drive
+// Throughput holds throughput information for read/write operations to the drive  
 type Throughput struct {
 	Avg          float64 `json:"avg_bps,omitempty"`
 	Percentile50 float64 `json:"percentile50_bps,omitempty"`
@@ -37,59 +24,8 @@ type Throughput struct {
 	Max          float64 `json:"max_bps,omitempty"`
 }
 
-// GetOBDInfo about the drive
-func GetOBDInfo(endpoint string) (Latency, Throughput, error) {
-	f, err := OpenFileDirectIO(endpoint, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0755)
-	if err != nil {
-		return Latency{}, Throughput{}, err
-	}
-	defer func() {
-		if err := f.Close(); err != nil {
-			// Ideal behavior should be to panic. But it might
-			// lead to availability issues for the server. Given
-			// that this code is not on the critical path, it's ok
-			// to silently fail here
-			// panic(err)
-		}
-		if err := os.Remove(f.Name()); err != nil {
-			// Ideal behavior should be to panic. But it might
-			// lead to availability issues for the server. Given
-			// that this code is not on the critical path, it's ok
-			// to silently fail here
-			// panic(err)
-		}
-	}()
-
-	drive := filepath.Dir(endpoint)
-
-	// going to leave this here incase we decide to go back to caching again
-	// if gl, ok := globalLatency[drive]; ok {
-	// 	if gt, ok := globalThroughput[drive]; ok {
-	// 		return gl, gt, nil
-	// 	}
-	// }
-
-	blockSize := 1 * mb
-	fileSize := 1 * gb
-
-	latencies := []float64{}
-	throughputs := []float64{}
-
-	data := make([]byte, blockSize)
-	for i := uint64(0); i < (fileSize / blockSize); i++ {
-		startTime := time.Now()
-		if n, err := f.Write(data); err != nil {
-			return Latency{}, Throughput{}, err
-		} else if uint64(n) != blockSize {
-			return Latency{}, Throughput{}, fmt.Errorf("Expected to write %d, but only wrote %d", blockSize, n)
-		}
-		latency := time.Now().Sub(startTime)
-		throughput := float64(blockSize) / float64(latency.Seconds())
-
-		latencies = append(latencies, float64(latency.Seconds()))
-		throughputs = append(throughputs, throughput)
-	}
-
+// ComputeOBDStats takes arrays of Latency & Throughput to compute Statistics
+func ComputeOBDStats(latencies, throughputs []float64) (Latency, Throughput, error) {
 	var avgLatency float64
 	var percentile50Latency float64
 	var percentile90Latency float64
@@ -103,6 +39,7 @@ func GetOBDInfo(endpoint string) (Latency, Throughput, error) {
 	var percentile99Throughput float64
 	var minThroughput float64
 	var maxThroughput float64
+	var err error
 
 	if avgLatency, err = stats.Mean(latencies); err != nil {
 		return Latency{}, Throughput{}, err
@@ -157,9 +94,6 @@ func GetOBDInfo(endpoint string) (Latency, Throughput, error) {
 		Min:          minThroughput,
 		Max:          maxThroughput,
 	}
-
-	globalLatency[drive] = l
-	globalThroughput[drive] = t
 
 	return l, t, nil
 }

@@ -825,6 +825,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	if !globalIsXL {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
 		return
+
 	}
 
 	hip, errCode := extractHealInitParams(mux.Vars(r), r.URL.Query(), r.Body)
@@ -1382,20 +1383,49 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if globalIsDistXL {
+		zones, ok := objectAPI.(*xlZones)
+		if !ok {
+			panic("Unreachable")
+		}
+
+		// Hold a lock so only one server performs on-board diagnostics
+		obdLock := zones.NewNSLock(ctx, minioMetaBucket, "obd")
+		if err := obdLock.GetLock(newDynamicTimeout(5*time.Second, 2*time.Second)); err != nil {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrOBDLockTimeout), r.URL)
+			return
+		}
+		defer obdLock.Unlock()
+	} else {
+		fsObjects, ok := objectAPI.(*FSObjects)
+		if !ok {
+			panic("Unreachable")
+		}
+
+		// Hold a lock so only one server performs on-board diagnostics
+		obdLock := fsObjects.NewNSLock(ctx, minioMetaBucket, "obd")
+		if err := obdLock.GetLock(newDynamicTimeout(5*time.Second, 2*time.Second)); err != nil {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrOBDLockTimeout), r.URL)
+			return
+		}
+		defer obdLock.Unlock()
+
+	}
+
 	obdInfo := madmin.OBDInfo{}
 	vars := mux.Vars(r)
-	
-	if drive, ok := vars["drive"]; ok && drive == "true"{
-		// Get drive performance details from local server's drive(s)
+
+	if drive, ok := vars["drive"]; ok && drive == "true" {
+		// Get drive obd details from local server's drive(s)
 		driveOBD := getLocalDrivesOBD(globalEndpoints, r)
 
-		// Notify all other MinIO peers to report drive performance numbers
+		// Notify all other MinIO peers to report drive obd numbers
 		driveOBDs := globalNotificationSys.DriveOBDInfo()
 		driveOBDs = append(driveOBDs, driveOBD)
-		
+
 		obdInfo.DriveInfo = driveOBDs
 	}
-	
+
 	if config, ok := vars["config"]; ok && config == "true" {
 		cfg, err := readServerConfig(ctx, objectAPI)
 		if err != nil {
@@ -1405,6 +1435,12 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		obdInfo.Config = cfg
 
 	}
+
+	if net, ok := vars["net"]; ok && net == "true" && globalIsDistXL {
+		obdInfo.Net = append(obdInfo.Net, globalNotificationSys.NetOBDInfo())
+		obdInfo.Net = append(obdInfo.Net, globalNotificationSys.DispatchNetOBDInfo()...)
+	}
+
 	// Marshal API response
 	jsonBytes, err := json.Marshal(obdInfo)
 	if err != nil {

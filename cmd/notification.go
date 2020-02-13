@@ -890,6 +890,48 @@ func (sys *NotificationSys) CollectNetPerfInfo(size int64) map[string][]ServerNe
 	return reply
 }
 
+// NetOBDInfo - Net OBD information
+func (sys *NotificationSys) NetOBDInfo() madmin.ServerNetOBDInfo {
+	netOBDs := make([]madmin.NetOBDInfo, len(sys.peerClients))
+
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		var err error
+		netOBDs[index], err = sys.peerClients[index].NetOBDInfo()
+		addr := sys.peerClients[index].host.String()
+		reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
+		netOBDs[index].Addr = addr
+		if err != nil {
+			netOBDs[index].Error = err.Error()
+		}
+	}
+	return madmin.ServerNetOBDInfo{
+		Net:  netOBDs,
+		Addr: GetLocalPeer(globalEndpoints),
+	}
+}
+
+// DispatchNetOBDInfo - Net OBD information from other nodes
+func (sys *NotificationSys) DispatchNetOBDInfo() []madmin.ServerNetOBDInfo {
+	serverNetOBDs := []madmin.ServerNetOBDInfo{}
+
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		serverNetOBD, err := sys.peerClients[index].DispatchNetOBDInfo()
+		if err != nil {
+			serverNetOBD.Error = err.Error()
+		}
+		serverNetOBDs = append(serverNetOBDs, serverNetOBD)
+	}
+	return serverNetOBDs
+}
+
 // DriveOBDInfo - Drive OBD information
 func (sys *NotificationSys) DriveOBDInfo() []madmin.ServerDrivesOBDInfo {
 	reply := make([]madmin.ServerDrivesOBDInfo, len(sys.peerClients))

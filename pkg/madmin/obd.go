@@ -25,21 +25,27 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/net"
 )
 
+// OBDInfo - MinIO cluster's OBD Info
 type OBDInfo struct {
 	TimeStamp time.Time             `json:"timestamp,omitempty"`
 	DriveInfo []ServerDrivesOBDInfo `json:"driveInfo,omitempty"`
-	Config    interface{}           `json:"config,omitempty"`
+	Config    interface{}           `json:"configInfo,omitempty"`
+	Info      InfoMessage           `json:"adminInfo,omitempty"`
+	Net       []ServerNetOBDInfo    `json:"netInfo,omitempty"`
 	Error     string                `json:"error,omitempty"`
 }
 
+// ServerDrivesOBDInfo - Drive OBD info about all drives in a single MinIO node
 type ServerDrivesOBDInfo struct {
 	Addr   string         `json:"addr"`
 	Drives []DriveOBDInfo `json:"drives,omitempty"`
 	Error  string         `json:"error,omitempty"`
 }
 
+// DriveOBDInfo - Stats about a single drive in a MinIO node
 type DriveOBDInfo struct {
 	Path       string          `json:"endpoint"`
 	Latency    disk.Latency    `json:"latency,omitempty"`
@@ -47,15 +53,33 @@ type DriveOBDInfo struct {
 	Error      string          `json:"error,omitempty"`
 }
 
+// ServerNetOBDInfo - Network OBD info about a single MinIO node
+type ServerNetOBDInfo struct {
+	Addr  string       `json:"addr"`
+	Net   []NetOBDInfo `json:"net,omitempty"`
+	Error string       `json:"error,omitempty"`
+}
+
+// NetOBDInfo - one-to-one network connectivity Stats between 2 MinIO nodes
+type NetOBDInfo struct {
+	Addr       string         `json:"remote"`
+	Latency    net.Latency    `json:"latency,omitempty"`
+	Throughput net.Throughput `json:"throughput,omitempty"`
+	Error      string         `json:"error,omitempty"`
+}
+
+// OBDDataType - Typed OBD data types
 type OBDDataType string
 
+// OBDDataTypes 
 const (
-	OBDDataTypeDrive  OBDDataType = "drive"
-	OBDDataTypeNet    OBDDataType = "net"
-	OBDDataTypeInfo   OBDDataType = "info"
-	OBDDataTypeConfig OBDDataType = "config"
+	OBDDataTypeDrive  OBDDataType = "drive"  // Drive
+	OBDDataTypeNet    OBDDataType = "net"    // Net
+	OBDDataTypeInfo   OBDDataType = "info"   // Admin Info
+	OBDDataTypeConfig OBDDataType = "config" // Config
 )
 
+// OBDDataTypesMap - Map of OBD datatypes
 var OBDDataTypesMap = map[string]OBDDataType{
 	"drive":  OBDDataTypeDrive,
 	"net":    OBDDataTypeNet,
@@ -63,6 +87,7 @@ var OBDDataTypesMap = map[string]OBDDataType{
 	"config": OBDDataTypeConfig,
 }
 
+// OBDDataTypesList - List of OBD datatypes
 var OBDDataTypesList = []OBDDataType{
 	OBDDataTypeDrive,
 	OBDDataTypeNet,
@@ -70,7 +95,7 @@ var OBDDataTypesList = []OBDDataType{
 	OBDDataTypeConfig,
 }
 
-// OBDInfo - Connect to a minio server and call OBD Info Management API
+// ServerOBDInfo - Connect to a minio server and call OBD Info Management API
 // to fetch server's information represented by OBDInfo structure
 func (adm *AdminClient) ServerOBDInfo(obdDataTypes []OBDDataType) (OBDInfo, error) {
 	v := url.Values{}
@@ -108,6 +133,16 @@ func (adm *AdminClient) ServerOBDInfo(obdDataTypes []OBDDataType) (OBDInfo, erro
 	if err != nil {
 		return OBDInfo{}, err
 	}
+
+	info, err := adm.ServerInfo()
+	if err != nil {
+		return OBDInfo{}, err
+	}
+
+	if v.Get(string(OBDDataTypeInfo)) == "true" {
+		OBDInfoMessage.Info = info
+	}
+
 	OBDInfoMessage.TimeStamp = time.Now()
 	return OBDInfoMessage, nil
 }
