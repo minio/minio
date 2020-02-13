@@ -224,6 +224,8 @@ github.com/klauspost/compress v1.8.2/go.mod h1:RyIbtBH6LamlWaDj8nUwkbUhJ87Yi3uG0
 github.com/klauspost/compress v1.9.4/go.mod h1:RyIbtBH6LamlWaDj8nUwkbUhJ87Yi3uG0guNDohfE1A=
 github.com/klauspost/compress v1.9.7 h1:hYW1gP94JUmAhBtJ+LNz5My+gBobDxPR1iVuKug26aA=
 github.com/klauspost/compress v1.9.7/go.mod h1:RyIbtBH6LamlWaDj8nUwkbUhJ87Yi3uG0guNDohfE1A=
+github.com/klauspost/compress v1.9.8 h1:VMAMUUOh+gaxKTMk+zqbjsSjsIcUcL/LF4o63i82QyA=
+github.com/klauspost/compress v1.9.8/go.mod h1:RyIbtBH6LamlWaDj8nUwkbUhJ87Yi3uG0guNDohfE1A=
 github.com/klauspost/cpuid v1.2.2 h1:1xAgYebNnsb9LKCdLOvFWtAxGU/33mjJtyOVbmUa0Us=
 github.com/klauspost/cpuid v1.2.2/go.mod h1:Pj4uuM528wm8OyEC2QMXAi2YiTZ96dNQPGgoMS4s3ek=
 github.com/klauspost/pgzip v1.2.1 h1:oIPZROsWuPHpOdMVWLuJZXwgjhrW8r1yEX8UqMyeNHM=
@@ -278,6 +280,12 @@ github.com/minio/parquet-go v0.0.0-20200125064549-a1e49702e174 h1:WYFHZIJ5LTWd4C
 github.com/minio/parquet-go v0.0.0-20200125064549-a1e49702e174/go.mod h1:PXYM9yI2l0YPmxHUXe6mFTmkQcyaVasDshAPTbGpDoo=
 github.com/minio/sha256-simd v0.1.1 h1:5QHSlgo3nt5yKOJrC7W8w7X+NFl8cMPZm96iu8kKUJU=
 github.com/minio/sha256-simd v0.1.1/go.mod h1:B5e1o+1/KgNmWrSQK08Y6Z1Vb5pwIktudl0J58iy0KM=
+github.com/minio/simdjson-go v0.1.0 h1:4QbJlXkE6lIzwzFP63e1aExJxDI6certBM0YKNPVm3g=
+github.com/minio/simdjson-go v0.1.0/go.mod h1:ZAVJ8HB/LLrnk+nt4+nYd9kTAdRKGZdvW/x5Jelgevk=
+github.com/minio/simdjson-go v0.1.1 h1:m1e/lgS21pUtACcNn6j6juiZetOBaM/FjrwW/pehg14=
+github.com/minio/simdjson-go v0.1.1/go.mod h1:ZAVJ8HB/LLrnk+nt4+nYd9kTAdRKGZdvW/x5Jelgevk=
+github.com/minio/simdjson-go v0.1.2 h1:ZKMpcX+qscSGcy3ZG9uBeJoNbYNZkwCpVyj7pWJLXQQ=
+github.com/minio/simdjson-go v0.1.2/go.mod h1:ZAVJ8HB/LLrnk+nt4+nYd9kTAdRKGZdvW/x5Jelgevk=
 github.com/minio/sio v0.2.0 h1:NCRCFLx0r5pRbXf65LVNjxbCGZgNQvNFQkgX3XF4BoA=
 github.com/minio/sio v0.2.0/go.mod h1:nKM5GIWSrqbOZp0uhyj6M1iA0X6xQzSGtYSaTKSCut0=
 github.com/mitchellh/cli v1.0.0/go.mod h1:hNIlj7HEI86fIcpObd7a0FcrxTWetlwJDGcceTlRvqc=

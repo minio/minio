@@ -20,6 +20,7 @@ import (
 	"errors"
 
 	"github.com/bcicen/jstream"
+	"github.com/minio/simdjson-go"
 )
 
 var (
@@ -42,17 +43,29 @@ func jsonpathEval(p []*JSONPathElement, v interface{}) (r interface{}, flat bool
 	case p[0].Key != nil:
 		key := p[0].Key.keyString()
 
-		kvs, ok := v.(jstream.KVS)
-		if !ok {
+		switch kvs := v.(type) {
+		case jstream.KVS:
+			for _, kv := range kvs {
+				if kv.Key == key {
+					return jsonpathEval(p[1:], kv.Value)
+				}
+			}
+			// Key not found - return nil result
+			return nil, false, nil
+		case simdjson.Object:
+			elem := kvs.FindKey(key, nil)
+			if elem == nil {
+				// Key not found - return nil result
+				return nil, false, nil
+			}
+			val, err := IterToValue(elem.Iter)
+			if err != nil {
+				return nil, false, err
+			}
+			return jsonpathEval(p[1:], val)
+		default:
 			return nil, false, errKeyLookup
 		}
-		for _, kv := range kvs {
-			if kv.Key == key {
-				return jsonpathEval(p[1:], kv.Value)
-			}
-		}
-		// Key not found - return nil result
-		return nil, false, nil
 
 	case p[0].Index != nil:
 		idx := *p[0].Index
@@ -68,16 +81,22 @@ func jsonpathEval(p []*JSONPathElement, v interface{}) (r interface{}, flat bool
 		return jsonpathEval(p[1:], arr[idx])
 
 	case p[0].ObjectWildcard:
-		kvs, ok := v.(jstream.KVS)
-		if !ok {
+		switch kvs := v.(type) {
+		case jstream.KVS:
+			if len(p[1:]) > 0 {
+				return nil, false, errWilcardObjectUsageInvalid
+			}
+
+			return kvs, false, nil
+		case simdjson.Object:
+			if len(p[1:]) > 0 {
+				return nil, false, errWilcardObjectUsageInvalid
+			}
+
+			return kvs, false, nil
+		default:
 			return nil, false, errWildcardObjectLookup
 		}
-
-		if len(p[1:]) > 0 {
-			return nil, false, errWilcardObjectUsageInvalid
-		}
-
-		return kvs, false, nil
 
 	case p[0].ArrayWildcard:
 		arr, ok := v.([]interface{})
