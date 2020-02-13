@@ -297,7 +297,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			oi, _, _, err := dcache.statRange(ctx, bucket, object, rs)
 			// avoid cache overwrite if another background routine filled cache
 			if err != nil || oi.ETag != bReader.ObjInfo.ETag {
-				dcache.Put(ctx, bucket, object, bReader, bReader.ObjInfo.Size, rs, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)}, true)
+				dcache.Put(ctx, bucket, object, bReader, bReader.ObjInfo.Size, rs, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)}, false)
 			}
 		}()
 		return bkReader, bkErr
@@ -647,7 +647,7 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 			oi, _, err := dcache.Stat(ctx, bucket, object)
 			// avoid cache overwrite if another background routine filled cache
 			if err != nil || oi.ETag != bReader.ObjInfo.ETag {
-				dcache.Put(ctx, bucket, object, bReader, bReader.ObjInfo.Size, nil, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)}, true)
+				dcache.Put(ctx, bucket, object, bReader, bReader.ObjInfo.Size, nil, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)}, false)
 			}
 		}()
 	}
