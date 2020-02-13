@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -1364,16 +1363,7 @@ func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healOb
 			continue
 		}
 
-		if httpServer := newHTTPServerFn(); httpServer != nil {
-			// Wait at max 10 minute for an inprogress request before proceeding to heal
-			waitCount := 600
-			// Any requests in progress, delay the heal.
-			for (httpServer.GetRequestCount() >= int32(zoneDrivesPerSet[zoneIndex])) &&
-				waitCount > 0 {
-				waitCount--
-				time.Sleep(1 * time.Second)
-			}
-		}
+		waitForLowHTTPReq(int32(zoneDrivesPerSet[zoneIndex]))
 
 		if err := healObject(bucket, entry.Name); err != nil {
 			return toObjectErr(err, bucket, entry.Name)
