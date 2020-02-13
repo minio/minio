@@ -37,8 +37,8 @@ type Metrics struct {
 }
 
 // IncBytesReceived - Increase total bytes received from gateway backend
-func (s *Metrics) IncBytesReceived(n int64) {
-	s.bytesReceived.Add(uint64(n))
+func (s *Metrics) IncBytesReceived(n uint64) {
+	s.bytesReceived.Add(n)
 }
 
 // GetBytesReceived - Get total bytes received from gateway backend
@@ -47,8 +47,8 @@ func (s *Metrics) GetBytesReceived() uint64 {
 }
 
 // IncBytesSent - Increase total bytes sent to gateway backend
-func (s *Metrics) IncBytesSent(n int64) {
-	s.bytesSent.Add(uint64(n))
+func (s *Metrics) IncBytesSent(n uint64) {
+	s.bytesSent.Add(n)
 }
 
 // GetBytesSent - Get total bytes received from gateway backend

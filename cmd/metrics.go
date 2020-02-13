@@ -272,12 +272,12 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 		)
 	}
 
-	if globalIsGateway && globalGatewayName == "s3" {
+	if globalIsGateway && (globalGatewayName == "s3" || globalGatewayName == "azure" || globalGatewayName == "gcs") {
 		m, _ := globalObjectAPI.GetMetrics(context.Background())
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
 				prometheus.BuildFQName("gateway", globalGatewayName, "bytes_received"),
-				"Total number of bytes received by current MinIO S3 Gateway from AWS S3",
+				"Total number of bytes received by current MinIO Gateway "+globalGatewayName+" backend",
 				nil, nil),
 			prometheus.CounterValue,
 			float64(m.GetBytesReceived()),
@@ -285,7 +285,7 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
 				prometheus.BuildFQName("gateway", globalGatewayName, "bytes_sent"),
-				"Total number of bytes sent by current MinIO S3 Gateway to AWS S3",
+				"Total number of bytes sent by current MinIO Gateway to "+globalGatewayName+" backend",
 				nil, nil),
 			prometheus.CounterValue,
 			float64(m.GetBytesSent()),
@@ -294,7 +294,7 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
 				prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
-				"Total number of requests made to AWS S3 by current MinIO S3 Gateway",
+				"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
 				[]string{"method"}, nil),
 			prometheus.CounterValue,
 			float64(s.Get.Load()),
@@ -303,7 +303,7 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
 				prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
-				"Total number of requests made to AWS S3 by current MinIO S3 Gateway",
+				"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
 				[]string{"method"}, nil),
 			prometheus.CounterValue,
 			float64(s.Head.Load()),

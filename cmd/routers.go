@@ -84,7 +84,7 @@ var globalHandlers = []HandlerFunc{
 func configureServerHandler(endpointZones EndpointZones) (http.Handler, error) {
 	// Initialize router. `SkipClean(true)` stops gorilla/mux from
 	// normalizing URL path minio/minio#3256
-	router := mux.NewRouter().SkipClean(true)
+	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 
 	// Initialize distributed NS lock.
 	if globalIsDistXL {

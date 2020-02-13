@@ -33,15 +33,15 @@ const (
 
 // errors returned by tagging package
 var (
-	ErrTooManyTags     = Errorf("Cannot have more than 10 object tags")
-	ErrInvalidTagKey   = Errorf("The TagKey you have provided is invalid")
-	ErrInvalidTagValue = Errorf("The TagValue you have provided is invalid")
-	ErrInvalidTag      = Errorf("Cannot provide multiple Tags with the same key")
+	ErrTooManyTags     = Errorf("Object tags cannot be greater than 10", "BadRequest")
+	ErrInvalidTagKey   = Errorf("The TagKey you have provided is invalid", "InvalidTag")
+	ErrInvalidTagValue = Errorf("The TagValue you have provided is invalid", "InvalidTag")
+	ErrInvalidTag      = Errorf("Cannot provide multiple Tags with the same key", "InvalidTag")
 )
 
 // Tagging - object tagging interface
 type Tagging struct {
-	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ Tagging"`
+	XMLName xml.Name `xml:"Tagging"`
 	TagSet  TagSet   `xml:"TagSet"`
 }
 
@@ -51,14 +51,14 @@ func (t Tagging) Validate() error {
 	if len(t.TagSet.Tags) > maxTags {
 		return ErrTooManyTags
 	}
-	if t.TagSet.ContainsDuplicateTag() {
-		return ErrInvalidTag
-	}
 	// Validate all the rules in the tagging config
 	for _, ts := range t.TagSet.Tags {
 		if err := ts.Validate(); err != nil {
 			return err
 		}
+	}
+	if t.TagSet.ContainsDuplicateTag() {
+		return ErrInvalidTag
 	}
 	return nil
 }
