@@ -812,9 +812,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 
 	getObjectNInfo := objectAPI.GetObjectNInfo
-	if api.CacheAPI() != nil {
-		getObjectNInfo = api.CacheAPI().GetObjectNInfo
-	}
 
 	var lock = noLock
 	if !cpSrcDstSame {
