@@ -34,7 +34,7 @@ import (
 	saramatls "github.com/Shopify/sarama/tools/tls"
 )
 
-// MQTT input constants
+// Kafka input constants
 const (
 	KafkaBrokers       = "brokers"
 	KafkaTopic         = "topic"
@@ -48,6 +48,7 @@ const (
 	KafkaSASLPassword  = "sasl_password"
 	KafkaClientTLSCert = "client_tls_cert"
 	KafkaClientTLSKey  = "client_tls_key"
+	KafkaVersion       = "version"
 
 	EnvKafkaEnable        = "MINIO_NOTIFY_KAFKA_ENABLE"
 	EnvKafkaBrokers       = "MINIO_NOTIFY_KAFKA_BROKERS"
@@ -62,6 +63,7 @@ const (
 	EnvKafkaSASLPassword  = "MINIO_NOTIFY_KAFKA_SASL_PASSWORD"
 	EnvKafkaClientTLSCert = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_CERT"
 	EnvKafkaClientTLSKey  = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_KEY"
+	EnvKafkaVersion       = "MINIO_NOTIFY_KAFKA_VERSION"
 )
 
 // KafkaArgs - Kafka target arguments.
@@ -71,6 +73,7 @@ type KafkaArgs struct {
 	Topic      string      `json:"topic"`
 	QueueDir   string      `json:"queueDir"`
 	QueueLimit uint64      `json:"queueLimit"`
+	Version    string      `json:"version"`
 	TLS        struct {
 		Enable        bool               `json:"enable"`
 		RootCAs       *x509.CertPool     `json:"-"`
@@ -106,6 +109,11 @@ func (k KafkaArgs) Validate() error {
 	}
 	if k.QueueLimit > 10000 {
 		return errors.New("queueLimit should not exceed 10000")
+	}
+	if k.Version != "" {
+		if _, err := sarama.ParseKafkaVersion(k.Version); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -236,6 +244,14 @@ func (k KafkaArgs) pingBrokers() bool {
 // NewKafkaTarget - creates new Kafka target with auth credentials.
 func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*KafkaTarget, error) {
 	config := sarama.NewConfig()
+
+	if args.Version != "" {
+		kafkaVersion, err := sarama.ParseKafkaVersion(args.Version)
+		if err != nil {
+			return nil, err
+		}
+		config.Version = kafkaVersion
+	}
 
 	config.Net.SASL.User = args.SASL.User
 	config.Net.SASL.Password = args.SASL.Password

@@ -1069,6 +1069,7 @@ client_tls_cert  (path)      path to client certificate for mTLS auth
 client_tls_key   (path)      path to client key for mTLS auth
 queue_dir        (path)      staging dir for undelivered messages e.g. '/home/events'
 queue_limit      (number)    maximum limit for undelivered messages, defaults to '10000'
+version          (string)    specify the version of the Kafka cluster e.g '2.2.0'
 comment          (sentence)  optionally add a comment to this setting
 ```
 
@@ -1092,19 +1093,20 @@ MINIO_NOTIFY_KAFKA_CLIENT_TLS_KEY   (path)      path to client key for mTLS auth
 MINIO_NOTIFY_KAFKA_QUEUE_DIR        (path)      staging dir for undelivered messages e.g. '/home/events'
 MINIO_NOTIFY_KAFKA_QUEUE_LIMIT      (number)    maximum limit for undelivered messages, defaults to '10000'
 MINIO_NOTIFY_KAFKA_COMMENT          (sentence)  optionally add a comment to this setting
+MINIO_NOTIFY_KAFKA_VERSION          (string)    specify the version of the Kafka cluster e.g. '2.2.0'
 ```
 
 To update the configuration, use `mc admin config get` command to get the current configuration.
 
 ```sh
 $ mc admin config get myminio/ notify_kafka
-notify_kafka:1 tls_skip_verify="off"  queue_dir="" queue_limit="0" sasl="off" sasl_password="" sasl_username="" tls_client_auth="0" tls="off" brokers="" topic="" client_tls_cert="" client_tls_key=""
+notify_kafka:1 tls_skip_verify="off"  queue_dir="" queue_limit="0" sasl="off" sasl_password="" sasl_username="" tls_client_auth="0" tls="off" brokers="" topic="" client_tls_cert="" client_tls_key="" version=""
 ```
 
 Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:kafka` at start-up if there were no errors.`bucketevents` is the topic used by kafka in this example.
 
 ```sh
-$ mc admin config set myminio notify_kafka:1 tls_skip_verify="off"  queue_dir="" queue_limit="0" sasl="off" sasl_password="" sasl_username="" tls_client_auth="0" tls="off" client_tls_cert="" client_tls_key="" brokers="localhost:9092,localhost:9093" topic="bucketevents"
+$ mc admin config set myminio notify_kafka:1 tls_skip_verify="off"  queue_dir="" queue_limit="0" sasl="off" sasl_password="" sasl_username="" tls_client_auth="0" tls="off" client_tls_cert="" client_tls_key="" brokers="localhost:9092,localhost:9093" topic="bucketevents" version=""
 ```
 
 ### Step 3: Enable bucket notification using MinIO client
