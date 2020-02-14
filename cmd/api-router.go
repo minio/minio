@@ -105,6 +105,8 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		bucket.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(collectAPIStats("abortmultipartupload", httpTraceAll(api.AbortMultipartUploadHandler))).Queries("uploadId", "{uploadId:.*}")
 		// GetObjectACL - this is a dummy call.
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(collectAPIStats("getobjectacl", httpTraceHdrs(api.GetObjectACLHandler))).Queries("acl", "")
+		// PutObjectACL - this is a dummy call.
+		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(collectAPIStats("putobjectacl", httpTraceHdrs(api.PutObjectACLHandler))).Queries("acl", "")
 		// GetObjectTagging
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(collectAPIStats("getobjecttagging", httpTraceHdrs(api.GetObjectTaggingHandler))).Queries("tagging", "")
 		// PutObjectTagging
@@ -144,6 +146,8 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// Dummy Bucket Calls
 		// GetBucketACL -- this is a dummy call.
 		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketacl", httpTraceAll(api.GetBucketACLHandler))).Queries("acl", "")
+		// PutBucketACL -- this is a dummy call.
+		bucket.Methods(http.MethodPut).HandlerFunc(collectAPIStats("putbucketacl", httpTraceAll(api.PutBucketACLHandler))).Queries("acl", "")
 		// GetBucketCors - this is a dummy call.
 		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("getbucketcors", httpTraceAll(api.GetBucketCorsHandler))).Queries("cors", "")
 		// GetBucketWebsiteHandler - this is a dummy call.
