@@ -1,5 +1,3 @@
-// +build !amd64
-
 /*
  * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
@@ -23,13 +21,16 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/klauspost/cpuid"
 	"github.com/minio/minio-go/v6"
+	"github.com/minio/simdjson-go"
 )
 
 type testResponseWriter struct {
@@ -51,6 +52,333 @@ func (w *testResponseWriter) WriteHeader(statusCode int) {
 }
 
 func (w *testResponseWriter) Flush() {
+}
+
+func TestJSONQueries(t *testing.T) {
+	input := `{"id": 0,"title": "Test Record","desc": "Some text","synonyms": ["foo", "bar", "whatever"]}
+	{"id": 1,"title": "Second Record","desc": "another text","synonyms": ["some", "synonym", "value"]}
+	{"id": 2,"title": "Second Record","desc": "another text","numbers": [2, 3.0, 4]}
+	{"id": 3,"title": "Second Record","desc": "another text","nested": [[2, 3.0, 4], [7, 8.5, 9]]}`
+
+	var testTable = []struct {
+		name       string
+		query      string
+		requestXML []byte // override request XML
+		wantResult string
+		withJSON   string // Override JSON input
+	}{
+		{
+			name:       "select-in-array-full",
+			query:      `SELECT * from s3object s WHERE 'bar' IN s.synonyms[*]`,
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}`,
+		},
+		{
+			name:  "simple-in-array",
+			query: `SELECT * from s3object s WHERE s.id IN (1,3)`,
+			wantResult: `{"id":1,"title":"Second Record","desc":"another text","synonyms":["some","synonym","value"]}
+{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "select-in-array-single",
+			query:      `SELECT synonyms from s3object s WHERE 'bar' IN s.synonyms[*] `,
+			wantResult: `{"synonyms":["foo","bar","whatever"]}`,
+		},
+		{
+			name:       "donatello-1",
+			query:      `SELECT * from s3object s WHERE 'bar' in s.synonyms`,
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}`,
+		},
+		{
+			name:       "donatello-2",
+			query:      `SELECT * from s3object s WHERE 'bar' in s.synonyms[*]`,
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}`,
+		},
+		{
+			name:       "donatello-3",
+			query:      `SELECT * from s3object s WHERE 'value' IN s.synonyms[*]`,
+			wantResult: `{"id":1,"title":"Second Record","desc":"another text","synonyms":["some","synonym","value"]}`,
+		},
+		{
+			name:       "select-in-number",
+			query:      `SELECT * from s3object s WHERE 4 in s.numbers[*]`,
+			wantResult: `{"id":2,"title":"Second Record","desc":"another text","numbers":[2,3,4]}`,
+		},
+		{
+			name:       "select-in-number-float",
+			query:      `SELECT * from s3object s WHERE 3 in s.numbers[*]`,
+			wantResult: `{"id":2,"title":"Second Record","desc":"another text","numbers":[2,3,4]}`,
+		},
+		{
+			name:       "select-in-number-float-in-sql",
+			query:      `SELECT * from s3object s WHERE 3.0 in s.numbers[*]`,
+			wantResult: `{"id":2,"title":"Second Record","desc":"another text","numbers":[2,3,4]}`,
+		},
+		{
+			name:       "select-in-list-match",
+			query:      `SELECT * from s3object s WHERE (2,3,4) IN s.nested[*]`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "select-in-nested-float",
+			query:      `SELECT s.nested from s3object s WHERE 8.5 IN s.nested[*][*]`,
+			wantResult: `{"nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "select-in-combine-and",
+			query:      `SELECT s.nested from s3object s WHERE (8.5 IN s.nested[*][*]) AND (s.id > 0)`,
+			wantResult: `{"nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "select-in-combine-and-no",
+			query:      `SELECT s.nested from s3object s WHERE (8.5 IN s.nested[*][*]) AND (s.id = 0)`,
+			wantResult: ``,
+		},
+		{
+			name:       "select-in-nested-float-no-flat",
+			query:      `SELECT s.nested from s3object s WHERE 8.5 IN s.nested[*]`,
+			wantResult: ``,
+		},
+		{
+			name:       "select-empty-field-result",
+			query:      `SELECT * from s3object s WHERE s.nested[0][0] = 2`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "select-arrays-specific",
+			query:      `SELECT * from s3object s WHERE s.nested[1][0] = 7`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "wrong-index-no-result",
+			query:      `SELECT * from s3object s WHERE s.nested[0][0] = 7`,
+			wantResult: ``,
+		},
+		{
+			name:  "not-equal-result",
+			query: `SELECT * from s3object s WHERE s.nested[1][0] != 7`,
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}
+{"id":1,"title":"Second Record","desc":"another text","synonyms":["some","synonym","value"]}
+{"id":2,"title":"Second Record","desc":"another text","numbers":[2,3,4]}`,
+		},
+		{
+			name:       "indexed-list-match",
+			query:      `SELECT * from s3object s WHERE (7,8.5,9) IN s.nested[1]`,
+			wantResult: ``,
+		},
+		{
+			name:       "indexed-list-match-equals",
+			query:      `SELECT * from s3object s WHERE (7,8.5,9) = s.nested[1]`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "indexed-list-match-equals-s-star",
+			query:      `SELECT s.* from s3object s WHERE (7,8.5,9) = s.nested[1]`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "indexed-list-match-equals-s-index",
+			query:      `SELECT s.nested[1], s.nested[0] from s3object s WHERE (7,8.5,9) = s.nested[1]`,
+			wantResult: `{"_1":[7,8.5,9],"_2":[2,3,4]}`,
+		},
+		{
+			name:  "indexed-list-match-not-equals",
+			query: `SELECT * from s3object s WHERE (7,8.5,9) != s.nested[1]`,
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}
+{"id":1,"title":"Second Record","desc":"another text","synonyms":["some","synonym","value"]}
+{"id":2,"title":"Second Record","desc":"another text","numbers":[2,3,4]}`,
+		},
+		{
+			name:       "indexed-list-square-bracket",
+			query:      `SELECT * from s3object s WHERE [7,8.5,9] = s.nested[1]`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "indexed-list-square-bracket",
+			query:      `SELECT * from s3object s WHERE [7,8.5,9] IN s.nested`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:  "indexed-list-square-bracket",
+			query: `SELECT * from s3object s WHERE id IN [3,2]`,
+			wantResult: `{"id":2,"title":"Second Record","desc":"another text","numbers":[2,3,4]}
+{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "index-wildcard-in",
+			query:      `SELECT * from s3object s WHERE (8.5) IN s.nested[1][*]`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "index-wildcard-in",
+			query:      `SELECT * from s3object s WHERE (8.0+0.5) IN s.nested[1][*]`,
+			wantResult: `{"id":3,"title":"Second Record","desc":"another text","nested":[[2,3,4],[7,8.5,9]]}`,
+		},
+		{
+			name:       "compare-mixed",
+			query:      `SELECT id from s3object s WHERE value = true`,
+			wantResult: `{"id":1}`,
+			withJSON: `{"id":0, "value": false}
+{"id":1, "value": true}
+{"id":2, "value": 42}
+{"id":3, "value": "true"}
+`,
+		},
+		{
+			name:       "compare-mixed-not",
+			query:      `SELECT COUNT(id) as n from s3object s WHERE value != true`,
+			wantResult: `{"n":3}`,
+			withJSON: `{"id":0, "value": false}
+{"id":1, "value": true}
+{"id":2, "value": 42}
+{"id":3, "value": "true"}
+`,
+		},
+		{
+			name:       "index-wildcard-in",
+			query:      `SELECT * from s3object s WHERE title = 'Test Record'`,
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}`,
+		},
+		{
+			name: "select-output-field-as-csv",
+			requestXML: []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<SelectObjectContentRequest>
+    <Expression>SELECT s.synonyms from s3object s WHERE 'whatever' IN s.synonyms</Expression>
+    <ExpressionType>SQL</ExpressionType>
+    <InputSerialization>
+        <CompressionType>NONE</CompressionType>
+        <JSON>
+            <Type>DOCUMENT</Type>
+        </JSON>
+    </InputSerialization>
+    <OutputSerialization>
+        <CSV>
+        </CSV>
+    </OutputSerialization>
+    <RequestProgress>
+        <Enabled>FALSE</Enabled>
+    </RequestProgress>
+</SelectObjectContentRequest>`),
+			wantResult: `"[""foo"",""bar"",""whatever""]"`,
+		},
+	}
+
+	defRequest := `<?xml version="1.0" encoding="UTF-8"?>
+<SelectObjectContentRequest>
+    <Expression>%s</Expression>
+    <ExpressionType>SQL</ExpressionType>
+    <InputSerialization>
+        <CompressionType>NONE</CompressionType>
+        <JSON>
+            <Type>LINES</Type>
+        </JSON>
+    </InputSerialization>
+    <OutputSerialization>
+        <JSON>
+        </JSON>
+    </OutputSerialization>
+    <RequestProgress>
+        <Enabled>FALSE</Enabled>
+    </RequestProgress>
+</SelectObjectContentRequest>`
+
+	for _, testCase := range testTable {
+		t.Run(testCase.name, func(t *testing.T) {
+			// Hack cpuid to the CPU doesn't appear to support AVX2.
+			// Restore whatever happens.
+			defer func(f cpuid.Flags) {
+				cpuid.CPU.Features = f
+			}(cpuid.CPU.Features)
+			cpuid.CPU.Features &= math.MaxUint64 - cpuid.AVX2
+
+			testReq := testCase.requestXML
+			if len(testReq) == 0 {
+				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
+			}
+			s3Select, err := NewS3Select(bytes.NewReader(testReq))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
+				in := input
+				if len(testCase.withJSON) > 0 {
+					in = testCase.withJSON
+				}
+				return ioutil.NopCloser(bytes.NewBufferString(in)), nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			w := &testResponseWriter{}
+			s3Select.Evaluate(w)
+			s3Select.Close()
+			resp := http.Response{
+				StatusCode:    http.StatusOK,
+				Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
+				ContentLength: int64(len(w.response)),
+			}
+			res, err := minio.NewSelectResults(&resp, "testbucket")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			got, err := ioutil.ReadAll(res)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			gotS := strings.TrimSpace(string(got))
+			if !reflect.DeepEqual(gotS, testCase.wantResult) {
+				t.Errorf("received response does not match with expected reply. Query: %s\ngot: %s\nwant:%s", testCase.query, gotS, testCase.wantResult)
+			}
+		})
+		t.Run("simd-"+testCase.name, func(t *testing.T) {
+			if !simdjson.SupportedCPU() {
+				t.Skip("No CPU support")
+			}
+			testReq := testCase.requestXML
+			if len(testReq) == 0 {
+				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
+			}
+			s3Select, err := NewS3Select(bytes.NewReader(testReq))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
+				in := input
+				if len(testCase.withJSON) > 0 {
+					in = testCase.withJSON
+				}
+				return ioutil.NopCloser(bytes.NewBufferString(in)), nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			w := &testResponseWriter{}
+			s3Select.Evaluate(w)
+			s3Select.Close()
+			resp := http.Response{
+				StatusCode:    http.StatusOK,
+				Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
+				ContentLength: int64(len(w.response)),
+			}
+			res, err := minio.NewSelectResults(&resp, "testbucket")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			got, err := ioutil.ReadAll(res)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			gotS := strings.TrimSpace(string(got))
+			if !reflect.DeepEqual(gotS, testCase.wantResult) {
+				t.Errorf("received response does not match with expected reply. Query: %s\ngot: %s\nwant:%s", testCase.query, gotS, testCase.wantResult)
+			}
+		})
+	}
 }
 
 func TestCSVQueries(t *testing.T) {

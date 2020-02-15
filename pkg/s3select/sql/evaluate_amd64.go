@@ -1,5 +1,3 @@
-// +build !amd64
-
 /*
  * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
@@ -26,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/bcicen/jstream"
+	"github.com/minio/simdjson-go"
 )
 
 var (
@@ -375,7 +374,7 @@ func (e *JSONPath) evalNode(r Record) (*Value, error) {
 	}
 	_, rawVal := r.Raw()
 	switch rowVal := rawVal.(type) {
-	case jstream.KVS:
+	case jstream.KVS, simdjson.Object:
 		pathExpr := e.PathExpr
 		if len(pathExpr) == 0 {
 			pathExpr = []*JSONPathElement{{Key: &ObjectKey{ID: e.BaseKey}}}
@@ -424,6 +423,17 @@ func jsonToValue(result interface{}) (*Value, error) {
 			dst[i] = *v
 		}
 		return FromArray(dst), nil
+	case simdjson.Object:
+		o := rval
+		elems, err := o.Parse(nil)
+		if err != nil {
+			return nil, err
+		}
+		bs, err := elems.MarshalJSON()
+		if err != nil {
+			return nil, err
+		}
+		return FromBytes(bs), nil
 	case []Value:
 		return FromArray(rval), nil
 	case nil:

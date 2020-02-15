@@ -1,5 +1,3 @@
-// +build !amd64
-
 /*
  * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
@@ -32,7 +30,9 @@ import (
 	"github.com/minio/minio/pkg/s3select/csv"
 	"github.com/minio/minio/pkg/s3select/json"
 	"github.com/minio/minio/pkg/s3select/parquet"
+	"github.com/minio/minio/pkg/s3select/simdj"
 	"github.com/minio/minio/pkg/s3select/sql"
+	"github.com/minio/simdjson-go"
 )
 
 type recordReader interface {
@@ -319,7 +319,11 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 		}
 
 		if strings.EqualFold(s3Select.Input.JSONArgs.ContentType, "lines") {
-			s3Select.recordReader = json.NewPReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
+			if simdjson.SupportedCPU() {
+				s3Select.recordReader = simdj.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
+			} else {
+				s3Select.recordReader = json.NewPReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
+			}
 		} else {
 			s3Select.recordReader = json.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
 		}

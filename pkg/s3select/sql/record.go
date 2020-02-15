@@ -1,3 +1,5 @@
+// +build !amd64
+
 /*
  * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
@@ -17,10 +19,7 @@
 package sql
 
 import (
-	"fmt"
 	"io"
-
-	"github.com/minio/simdjson-go"
 )
 
 // SelectObjectFormat specifies the format of the underlying data
@@ -33,8 +32,6 @@ const (
 	SelectFmtCSV
 	// SelectFmtJSON - JSON format
 	SelectFmtJSON
-	// SelectFmtSIMDJSON - SIMD JSON format
-	SelectFmtSIMDJSON
 	// SelectFmtParquet - Parquet format
 	SelectFmtParquet
 )
@@ -58,76 +55,4 @@ type Record interface {
 
 	// Replaces the underlying data
 	Replace(k interface{}) error
-}
-
-// IterToValue converts a simdjson Iter to its underlying value.
-// Objects are returned as simdjson.Object
-// Arrays are returned as []interface{} with parsed values.
-func IterToValue(iter simdjson.Iter) (interface{}, error) {
-	switch iter.Type() {
-	case simdjson.TypeString:
-		v, err := iter.String()
-		if err != nil {
-			return nil, err
-		}
-		return v, nil
-	case simdjson.TypeFloat:
-		v, err := iter.Float()
-		if err != nil {
-			return nil, err
-		}
-		return v, nil
-	case simdjson.TypeInt:
-		v, err := iter.Int()
-		if err != nil {
-			return nil, err
-		}
-		return v, nil
-	case simdjson.TypeUint:
-		v, err := iter.Int()
-		if err != nil {
-			// Can't fit into int, convert to float.
-			v, err := iter.Float()
-			return v, err
-		}
-		return v, nil
-	case simdjson.TypeBool:
-		v, err := iter.Bool()
-		if err != nil {
-			return nil, err
-		}
-		return v, nil
-	case simdjson.TypeObject:
-		obj, err := iter.Object(nil)
-		if err != nil {
-			return nil, err
-		}
-		return *obj, err
-	case simdjson.TypeArray:
-		arr, err := iter.Array(nil)
-		if err != nil {
-			return nil, err
-		}
-		iter := arr.Iter()
-		var dst []interface{}
-		var next simdjson.Iter
-		for {
-			typ, err := iter.AdvanceIter(&next)
-			if err != nil {
-				return nil, err
-			}
-			if typ == simdjson.TypeNone {
-				break
-			}
-			v, err := IterToValue(next)
-			if err != nil {
-				return nil, err
-			}
-			dst = append(dst, v)
-		}
-		return dst, err
-	case simdjson.TypeNull:
-		return nil, nil
-	}
-	return nil, fmt.Errorf("IterToValue: unknown JSON type: %s", iter.Type().String())
 }

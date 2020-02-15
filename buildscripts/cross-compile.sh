@@ -1,7 +1,9 @@
 #!/bin/bash
 
+set -e
+
 # Enable tracing if set.
-[ -n "$BASH_XTRACEFD" ] && set -ex
+[ -n "$BASH_XTRACEFD" ] && set -x
 
 function _init() {
     ## All binaries are static make sure to disable CGO.

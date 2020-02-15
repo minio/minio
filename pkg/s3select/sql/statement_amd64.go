@@ -1,5 +1,3 @@
-// +build !amd64
-
 /*
  * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
@@ -24,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/bcicen/jstream"
+	"github.com/minio/simdjson-go"
 )
 
 var (
@@ -169,6 +168,26 @@ func (e *SelectStatement) EvalFrom(format string, input Record) (Record, error) 
 			return nil, err
 		}
 
+		return input, nil
+	case simdjson.Object:
+		txedRec, _, err := jsonpathEval(e.selectAST.From.Table.PathExpr[1:], rec)
+		if err != nil {
+			return nil, err
+		}
+
+		switch v := txedRec.(type) {
+		case simdjson.Object:
+			err := input.Replace(v)
+			if err != nil {
+				return nil, err
+			}
+		default:
+			input.Reset()
+			input, err = input.Set("_1", &Value{value: v})
+			if err != nil {
+				return nil, err
+			}
+		}
 		return input, nil
 	}
 	return nil, errDataSource(errors.New("unexpected non JSON input"))

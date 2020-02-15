@@ -1,5 +1,3 @@
-// +build !amd64
-
 /*
  * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
@@ -22,6 +20,7 @@ import (
 	"errors"
 
 	"github.com/bcicen/jstream"
+	"github.com/minio/simdjson-go"
 )
 
 var (
@@ -53,6 +52,17 @@ func jsonpathEval(p []*JSONPathElement, v interface{}) (r interface{}, flat bool
 			}
 			// Key not found - return nil result
 			return nil, false, nil
+		case simdjson.Object:
+			elem := kvs.FindKey(key, nil)
+			if elem == nil {
+				// Key not found - return nil result
+				return nil, false, nil
+			}
+			val, err := IterToValue(elem.Iter)
+			if err != nil {
+				return nil, false, err
+			}
+			return jsonpathEval(p[1:], val)
 		default:
 			return nil, false, errKeyLookup
 		}
@@ -73,6 +83,12 @@ func jsonpathEval(p []*JSONPathElement, v interface{}) (r interface{}, flat bool
 	case p[0].ObjectWildcard:
 		switch kvs := v.(type) {
 		case jstream.KVS:
+			if len(p[1:]) > 0 {
+				return nil, false, errWilcardObjectUsageInvalid
+			}
+
+			return kvs, false, nil
+		case simdjson.Object:
 			if len(p[1:]) > 0 {
 				return nil, false, errWilcardObjectUsageInvalid
 			}
