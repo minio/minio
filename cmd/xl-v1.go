@@ -188,8 +188,19 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 }
 
 // StorageInfo - returns underlying storage statistics.
-func (xl xlObjects) StorageInfo(ctx context.Context) StorageInfo {
-	return getStorageInfo(xl.getDisks())
+func (xl xlObjects) StorageInfo(ctx context.Context, local bool) StorageInfo {
+	var disks []StorageAPI
+	if !local {
+		disks = xl.getDisks()
+	} else {
+		for _, d := range xl.getDisks() {
+			if d.Hostname() == "" {
+				// This is a local disk and local flag is enabled
+				disks = append(disks, d)
+			}
+		}
+	}
+	return getStorageInfo(disks)
 }
 
 // GetMetrics - is not implemented and shouldn't be called.
