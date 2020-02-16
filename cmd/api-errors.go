@@ -95,6 +95,7 @@ const (
 	ErrMissingContentLength
 	ErrMissingContentMD5
 	ErrMissingRequestBodyError
+	ErrMissingSecurityHeader
 	ErrNoSuchBucket
 	ErrNoSuchBucketPolicy
 	ErrNoSuchBucketLifecycle
@@ -469,6 +470,11 @@ var errorCodes = errorCodeMap{
 	ErrMissingContentMD5: {
 		Code:           "MissingContentMD5",
 		Description:    "Missing required header for this request: Content-Md5.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrMissingSecurityHeader: {
+		Code:           "MissingSecurityHeader",
+		Description:    "Your request was missing a required header",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMissingRequestBodyError: {
@@ -1803,6 +1809,13 @@ func toAPIError(ctx context.Context, err error) APIError {
 		// their internal error types. This code is only
 		// useful with gateway implementations.
 		switch e := err.(type) {
+		case *xml.SyntaxError:
+			apiErr = APIError{
+				Code: "MalformedXML",
+				Description: fmt.Sprintf("%s (%s)", errorCodes[ErrMalformedXML].Description,
+					e.Error()),
+				HTTPStatusCode: errorCodes[ErrMalformedXML].HTTPStatusCode,
+			}
 		case url.EscapeError:
 			apiErr = APIError{
 				Code: "XMinioInvalidObjectName",

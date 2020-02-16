@@ -436,12 +436,16 @@ func setIgnoreResourcesHandler(h http.Handler) http.Handler {
 // Checks requests for not implemented Bucket resources
 func ignoreNotImplementedBucketResources(req *http.Request) bool {
 	for name := range req.URL.Query() {
-		// Enable GetBucketACL, GetBucketCors, GetBucketWebsite,
-		// GetBucketAcccelerate, GetBucketRequestPayment,
-		// GetBucketLogging, GetBucketLifecycle,
-		// GetBucketReplication, GetBucketTagging,
-		// GetBucketVersioning, DeleteBucketTagging,
-		// and DeleteBucketWebsite dummy calls specifically.
+		// Enable PutBucketACL, GetBucketACL, GetBucketCors,
+		// GetBucketWebsite, GetBucketAcccelerate,
+		// GetBucketRequestPayment, GetBucketLogging,
+		// GetBucketLifecycle, GetBucketReplication,
+		// GetBucketTagging, GetBucketVersioning,
+		// DeleteBucketTagging, and DeleteBucketWebsite
+		// dummy calls specifically.
+		if name == "acl" && req.Method == http.MethodPut {
+			return false
+		}
 		if ((name == "acl" ||
 			name == "cors" ||
 			name == "website" ||
@@ -457,7 +461,7 @@ func ignoreNotImplementedBucketResources(req *http.Request) bool {
 			return false
 		}
 
-		if notimplementedBucketResourceNames[name] {
+		if notImplementedBucketResourceNames[name] {
 			return true
 		}
 	}
@@ -467,11 +471,11 @@ func ignoreNotImplementedBucketResources(req *http.Request) bool {
 // Checks requests for not implemented Object resources
 func ignoreNotImplementedObjectResources(req *http.Request) bool {
 	for name := range req.URL.Query() {
-		// Enable GetObjectACL dummy call specifically.
-		if name == "acl" && req.Method == http.MethodGet {
+		// Enable Get/PutObjectACL dummy call specifically.
+		if name == "acl" && (req.Method == http.MethodGet || req.Method == http.MethodPut) {
 			return false
 		}
-		if notimplementedObjectResourceNames[name] {
+		if notImplementedObjectResourceNames[name] {
 			return true
 		}
 	}
@@ -479,9 +483,8 @@ func ignoreNotImplementedObjectResources(req *http.Request) bool {
 }
 
 // List of not implemented bucket queries
-var notimplementedBucketResourceNames = map[string]bool{
+var notImplementedBucketResourceNames = map[string]bool{
 	"accelerate":     true,
-	"acl":            true,
 	"cors":           true,
 	"inventory":      true,
 	"logging":        true,
@@ -494,8 +497,7 @@ var notimplementedBucketResourceNames = map[string]bool{
 }
 
 // List of not implemented object queries
-var notimplementedObjectResourceNames = map[string]bool{
-	"acl":     true,
+var notImplementedObjectResourceNames = map[string]bool{
 	"restore": true,
 	"torrent": true,
 }
