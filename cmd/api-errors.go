@@ -37,6 +37,7 @@ import (
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 )
@@ -1821,6 +1822,12 @@ func toAPIError(ctx context.Context, err error) APIError {
 				Code: "XMinioInvalidObjectName",
 				Description: fmt.Sprintf("%s (%s)", errorCodes[ErrInvalidObjectName].Description,
 					e.Error()),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case versioning.Error:
+			apiErr = APIError{
+				Code:           "IllegalVersioningConfigurationException",
+				Description:    fmt.Sprintf("Versioning configuration specified in the request is invalid. (%s)", e.Error()),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
 		case lifecycle.Error:

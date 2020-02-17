@@ -123,6 +123,16 @@ const (
 	// DeleteObjectTaggingAction - Delete Object Tags API action
 	DeleteObjectTaggingAction = "s3:DeleteObjectTagging"
 
+	// PutBucketEncryptionAction - PutBucketEncryption REST API action
+	PutBucketEncryptionAction = "s3:PutEncryptionConfiguration"
+	// GetBucketEncryptionAction - GetBucketEncryption REST API action
+	GetBucketEncryptionAction = "s3:GetEncryptionConfiguration"
+
+	// PutBucketVersioningAction - PutBucketVersioning REST API action
+	PutBucketVersioningAction = "s3:PutBucketVersioning"
+	// GetBucketVersioningAction - GetBucketVersioning REST API action
+	GetBucketVersioningAction = "s3:GetBucketVersioning"
+
 	// AllActions - all API actions
 	AllActions = "s3:*"
 )
@@ -161,6 +171,10 @@ var supportedActions = map[Action]struct{}{
 	GetObjectTaggingAction:                 {},
 	PutObjectTaggingAction:                 {},
 	DeleteObjectTaggingAction:              {},
+	PutBucketEncryptionAction:              {},
+	GetBucketEncryptionAction:              {},
+	PutBucketVersioningAction:              {},
+	GetBucketVersioningAction:              {},
 }
 
 // isObjectAction - returns whether action is object type or not.

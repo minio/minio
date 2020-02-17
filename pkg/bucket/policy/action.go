@@ -118,6 +118,11 @@ const (
 	PutBucketEncryptionAction = "s3:PutEncryptionConfiguration"
 	// GetBucketEncryptionAction - GetBucketEncryption REST API action
 	GetBucketEncryptionAction = "s3:GetEncryptionConfiguration"
+
+	// PutBucketVersioningAction - PutBucketVersioning REST API action
+	PutBucketVersioningAction = "s3:PutBucketVersioning"
+	// GetBucketVersioningAction - GetBucketVersioning REST API action
+	GetBucketVersioningAction = "s3:GetBucketVersioning"
 )
 
 // isObjectAction - returns whether action is object type or not.
@@ -140,38 +145,49 @@ func (action Action) isObjectAction() bool {
 	return false
 }
 
+// List of all supported actions.
+var supportedActions = map[Action]struct{}{
+	AbortMultipartUploadAction:             {},
+	CreateBucketAction:                     {},
+	DeleteBucketAction:                     {},
+	DeleteBucketPolicyAction:               {},
+	DeleteObjectAction:                     {},
+	GetBucketLocationAction:                {},
+	GetBucketNotificationAction:            {},
+	GetBucketPolicyAction:                  {},
+	GetObjectAction:                        {},
+	HeadBucketAction:                       {},
+	ListAllMyBucketsAction:                 {},
+	ListBucketAction:                       {},
+	ListBucketMultipartUploadsAction:       {},
+	ListenBucketNotificationAction:         {},
+	ListMultipartUploadPartsAction:         {},
+	PutBucketNotificationAction:            {},
+	PutBucketPolicyAction:                  {},
+	PutObjectAction:                        {},
+	GetBucketLifecycleAction:               {},
+	PutBucketLifecycleAction:               {},
+	PutObjectRetentionAction:               {},
+	GetObjectRetentionAction:               {},
+	GetObjectLegalHoldAction:               {},
+	PutObjectLegalHoldAction:               {},
+	PutBucketObjectLockConfigurationAction: {},
+	GetBucketObjectLockConfigurationAction: {},
+	BypassGovernanceModeAction:             {},
+	BypassGovernanceRetentionAction:        {},
+	GetObjectTaggingAction:                 {},
+	PutObjectTaggingAction:                 {},
+	DeleteObjectTaggingAction:              {},
+	PutBucketEncryptionAction:              {},
+	GetBucketEncryptionAction:              {},
+	PutBucketVersioningAction:              {},
+	GetBucketVersioningAction:              {},
+}
+
 // IsValid - checks if action is valid or not.
 func (action Action) IsValid() bool {
-	switch action {
-	case AbortMultipartUploadAction, CreateBucketAction, DeleteBucketAction:
-		fallthrough
-	case DeleteBucketPolicyAction, DeleteObjectAction, GetBucketLocationAction:
-		fallthrough
-	case GetBucketNotificationAction, GetBucketPolicyAction, GetObjectAction:
-		fallthrough
-	case HeadBucketAction, ListAllMyBucketsAction, ListBucketAction:
-		fallthrough
-	case ListBucketMultipartUploadsAction, ListenBucketNotificationAction:
-		fallthrough
-	case ListMultipartUploadPartsAction, PutBucketNotificationAction:
-		fallthrough
-	case PutBucketPolicyAction, PutObjectAction:
-		fallthrough
-	case PutBucketLifecycleAction, GetBucketLifecycleAction:
-		return true
-	case BypassGovernanceModeAction, BypassGovernanceRetentionAction:
-		return true
-	case PutObjectRetentionAction, GetObjectRetentionAction:
-		return true
-	case PutObjectLegalHoldAction, GetObjectLegalHoldAction:
-		return true
-	case PutBucketObjectLockConfigurationAction, GetBucketObjectLockConfigurationAction:
-		return true
-	case GetObjectTaggingAction, PutObjectTaggingAction, DeleteObjectTaggingAction:
-		return true
-	}
-
-	return false
+	_, ok := supportedActions[action]
+	return ok
 }
 
 // MarshalJSON - encodes Action to JSON data.

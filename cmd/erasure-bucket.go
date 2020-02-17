@@ -25,6 +25,7 @@ import (
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/versioning"
 
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -278,6 +279,16 @@ func (xl xlObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy
 // DeleteBucketPolicy deletes all policies on bucket
 func (xl xlObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	return removePolicyConfig(ctx, xl, bucket)
+}
+
+// SetBucketVersioning enables versioning on a bucket.
+func (xl xlObjects) SetBucketVersioning(ctx context.Context, bucket string, versioning *versioning.Versioning) error {
+	return saveVersioningConfig(ctx, xl, bucket, versioning)
+}
+
+// GetBucketVersioning retrieves versioning configuration on a bucket
+func (xl xlObjects) GetBucketVersioning(ctx context.Context, bucket string) (*versioning.Versioning, error) {
+	return getVersioningConfig(xl, bucket)
 }
 
 // SetBucketLifecycle sets lifecycle on bucket

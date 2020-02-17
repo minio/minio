@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v6"
+	peerRESTVersion       = "v7"
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
@@ -63,6 +63,7 @@ const (
 	peerRESTMethodHardwareNetworkInfo          = "/networkhardwareinfo"
 	peerRESTMethodPutBucketObjectLockConfig    = "/putbucketobjectlockconfig"
 	peerRESTMethodBucketObjectLockConfigRemove = "/removebucketobjectlockconfig"
+	peerRESTMethodBucketVersioningSet          = "/setbucketversioning"
 )
 
 const (

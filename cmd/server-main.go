@@ -150,6 +150,9 @@ func newAllSubsystems() {
 
 	// Create new bucket encryption subsystem
 	globalBucketSSEConfigSys = NewBucketSSEConfigSys()
+
+	// Create new bucket versioning subsystem
+	globalBucketVersioningSys = NewBucketVersioningSys()
 }
 
 func initSafeMode(buckets []BucketInfo) (err error) {
@@ -275,6 +278,12 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 	if err = globalBucketSSEConfigSys.Init(buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize bucket encryption subsystem: %w", err)
 	}
+
+	// Initialize bucket versioning subsystem.
+	if err = globalBucketVersioningSys.Init(buckets, newObject); err != nil {
+		return fmt.Errorf("Unable to initialize bucket versioning subsystem: %w", err)
+	}
+
 	return nil
 }
 

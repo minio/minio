@@ -26,6 +26,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/versioning"
 
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -117,6 +118,10 @@ type ObjectLayer interface {
 
 	// Compression support check.
 	IsCompressionSupported() bool
+
+	// Versioning operations
+	SetBucketVersioning(context.Context, string, *versioning.Versioning) error
+	GetBucketVersioning(context.Context, string) (*versioning.Versioning, error)
 
 	// Lifecycle operations
 	SetBucketLifecycle(context.Context, string, *lifecycle.Lifecycle) error

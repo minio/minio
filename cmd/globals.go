@@ -147,8 +147,9 @@ var (
 	globalPolicySys        *PolicySys
 	globalIAMSys           *IAMSys
 
-	globalLifecycleSys       *LifecycleSys
-	globalBucketSSEConfigSys *BucketSSEConfigSys
+	globalLifecycleSys        *LifecycleSys
+	globalBucketSSEConfigSys  *BucketSSEConfigSys
+	globalBucketVersioningSys *BucketVersioningSys
 
 	globalStorageClass storageclass.Config
 	globalLDAPConfig   xldap.Config

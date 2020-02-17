@@ -26,6 +26,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/versioning"
 
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -115,33 +116,45 @@ func (a GatewayUnsupported) DeleteBucketPolicy(ctx context.Context, bucket strin
 	return NotImplemented{}
 }
 
-// SetBucketLifecycle sets lifecycle on bucket
+// SetBucketVersioning enables versioning on a bucket.
+func (a GatewayUnsupported) SetBucketVersioning(ctx context.Context, bucket string, v *versioning.Versioning) error {
+	logger.LogIf(ctx, NotImplemented{})
+	return NotImplemented{}
+}
+
+// GetBucketVersioning retrieves versioning configuration of a bucket.
+func (a GatewayUnsupported) GetBucketVersioning(ctx context.Context, bucket string) (*versioning.Versioning, error) {
+	logger.LogIf(ctx, NotImplemented{})
+	return nil, NotImplemented{}
+}
+
+// SetBucketLifecycle enables lifecycle policies on a bucket.
 func (a GatewayUnsupported) SetBucketLifecycle(ctx context.Context, bucket string, lifecycle *lifecycle.Lifecycle) error {
 	logger.LogIf(ctx, NotImplemented{})
 	return NotImplemented{}
 }
 
-// GetBucketLifecycle will get lifecycle on bucket
+// GetBucketLifecycle retrieves lifecycle configuration of a bucket.
 func (a GatewayUnsupported) GetBucketLifecycle(ctx context.Context, bucket string) (*lifecycle.Lifecycle, error) {
 	return nil, NotImplemented{}
 }
 
-// DeleteBucketLifecycle deletes all lifecycle on bucket
+// DeleteBucketLifecycle deletes all lifecycle policies on a bucket
 func (a GatewayUnsupported) DeleteBucketLifecycle(ctx context.Context, bucket string) error {
 	return NotImplemented{}
 }
 
-// GetBucketSSEConfig returns bucket encryption config on given bucket
+// GetBucketSSEConfig returns bucket encryption config on a bucket
 func (a GatewayUnsupported) GetBucketSSEConfig(ctx context.Context, bucket string) (*bucketsse.BucketSSEConfig, error) {
 	return nil, NotImplemented{}
 }
 
-// SetBucketSSEConfig sets bucket encryption config on given bucket
+// SetBucketSSEConfig sets bucket encryption config on a bucket
 func (a GatewayUnsupported) SetBucketSSEConfig(ctx context.Context, bucket string, config *bucketsse.BucketSSEConfig) error {
 	return NotImplemented{}
 }
 
-// DeleteBucketSSEConfig deletes bucket encryption config on given bucket
+// DeleteBucketSSEConfig deletes bucket encryption config on a bucket
 func (a GatewayUnsupported) DeleteBucketSSEConfig(ctx context.Context, bucket string) error {
 	return NotImplemented{}
 }
