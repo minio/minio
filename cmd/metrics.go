@@ -19,7 +19,6 @@ package cmd
 import (
 	"context"
 	"net/http"
-	"strings"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/prometheus/client_golang/prometheus"
@@ -115,14 +114,9 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 		float64(totalDisks.Sum()),
 	)
 
-	localPeer := GetLocalPeer(globalEndpoints)
-
 	for i := 0; i < len(storageInfo.Total); i++ {
-		mountPoint, total, free := storageInfo.MountPaths[i], storageInfo.Total[i],
+		mountPath, total, free := storageInfo.MountPaths[i], storageInfo.Total[i],
 			storageInfo.Available[i]
-
-		// Trim the host
-		absPath := strings.TrimPrefix(mountPoint, localPeer)
 
 		// Total disk usage by the disk
 		ch <- prometheus.MustNewConstMetric(
@@ -132,7 +126,7 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
 			float64(total-free),
-			absPath,
+			mountPath,
 		)
 
 		// Total available space in the disk
@@ -143,7 +137,7 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
 			float64(free),
-			absPath,
+			mountPath,
 		)
 
 		// Total storage space of the disk
@@ -154,7 +148,7 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
 			float64(total),
-			absPath,
+			mountPath,
 		)
 	}
 

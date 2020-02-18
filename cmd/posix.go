@@ -368,11 +368,11 @@ func (s *posix) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, erro
 // DiskInfo is an extended type which returns current
 // disk usage per path.
 type DiskInfo struct {
-	Total        uint64
-	Free         uint64
-	Used         uint64
-	RootDisk     bool
-	RelativePath string
+	Total     uint64
+	Free      uint64
+	Used      uint64
+	RootDisk  bool
+	MountPath string
 }
 
 // DiskInfo provides current information about disk space usage,
@@ -398,17 +398,12 @@ func (s *posix) DiskInfo() (info DiskInfo, err error) {
 		return info, err
 	}
 
-	localPeer := ""
-	if globalIsDistXL {
-		localPeer = GetLocalPeer(globalEndpoints)
-	}
-
 	return DiskInfo{
-		Total:        di.Total,
-		Free:         di.Free,
-		Used:         used,
-		RootDisk:     rootDisk,
-		RelativePath: localPeer + s.diskPath,
+		Total:     di.Total,
+		Free:      di.Free,
+		Used:      used,
+		RootDisk:  rootDisk,
+		MountPath: s.diskPath,
 	}, nil
 }
 
