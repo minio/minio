@@ -1171,6 +1171,9 @@ var iamAccountOtherAccessActions = iampolicy.NewActionSet(
 	iampolicy.PutBucketPolicyAction,
 	iampolicy.DeleteBucketPolicyAction,
 	iampolicy.GetBucketPolicyAction,
+
+	iampolicy.PutBucketEncryptionAction,
+	iampolicy.GetBucketEncryptionAction,
 )
 
 // GetAccountAccess iterates over all policies documents associated to a user
