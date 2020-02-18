@@ -45,7 +45,6 @@ import (
 )
 
 const (
-	getBucketVersioningResponse       = `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"/>`
 	objectLockConfig                  = "object-lock.xml"
 	bucketObjectLockEnabledConfigFile = "object-lock-enabled.json"
 	bucketObjectLockEnabledConfig     = `{"x-amz-bucket-object-lock-enabled":true}`
@@ -909,60 +908,6 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 
 	// Write success response.
 	writeSuccessNoContent(w)
-}
-
-// PutBucketVersioningHandler - PUT Bucket Versioning.
-// ----------
-// No-op. Available for API compatibility.
-func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "PutBucketVersioning")
-
-	defer logger.AuditLog(w, r, "PutBucketVersioning", mustGetClaimsFromToken(r))
-
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	getBucketInfo := objectAPI.GetBucketInfo
-	if _, err := getBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	// Write success response.
-	writeSuccessResponseHeadersOnly(w)
-}
-
-// GetBucketVersioningHandler - GET Bucket Versioning.
-// ----------
-// No-op. Available for API compatibility.
-func (api objectAPIHandlers) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetBucketVersioning")
-
-	defer logger.AuditLog(w, r, "GetBucketVersioning", mustGetClaimsFromToken(r))
-
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	getBucketInfo := objectAPI.GetBucketInfo
-	if _, err := getBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	// Write success response.
-	writeSuccessResponseXML(w, []byte(getBucketVersioningResponse))
 }
 
 // PutBucketObjectLockConfigHandler - PUT Bucket object lock configuration.

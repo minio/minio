@@ -31,6 +31,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -1087,6 +1088,16 @@ func (z *xlZones) GetBucketPolicy(ctx context.Context, bucket string) (*policy.P
 // DeleteBucketPolicy deletes all policies on bucket
 func (z *xlZones) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	return removePolicyConfig(ctx, z, bucket)
+}
+
+// SetBucketVersioning enables versioning on a bucket.
+func (z *xlZones) SetBucketVersioning(ctx context.Context, bucket string, versioning *versioning.Versioning) error {
+	return saveVersioningConfig(ctx, z, bucket, versioning)
+}
+
+// GetBucketVersioning retrieves versioning configuration on a bucket
+func (z *xlZones) GetBucketVersioning(ctx context.Context, bucket string) (*versioning.Versioning, error) {
+	return getVersioningConfig(z, bucket)
 }
 
 // SetBucketLifecycle zones lifecycle on bucket

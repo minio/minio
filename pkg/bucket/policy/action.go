@@ -118,6 +118,11 @@ const (
 	PutBucketEncryptionAction = "s3:PutEncryptionConfiguration"
 	// GetBucketEncryptionAction - GetBucketEncryption REST API action
 	GetBucketEncryptionAction = "s3:GetEncryptionConfiguration"
+
+	// PutBucketVersioningAction - PutBucketVersioning REST API action
+	PutBucketVersioningAction = "s3:PutBucketVersioning"
+	// GetBucketVersioningAction - GetBucketVersioning REST API action
+	GetBucketVersioningAction = "s3:GetBucketVersioning"
 )
 
 // List of all supported object actions.
@@ -179,6 +184,8 @@ var supportedActions = map[Action]struct{}{
 	DeleteObjectTaggingAction:              {},
 	PutBucketEncryptionAction:              {},
 	GetBucketEncryptionAction:              {},
+	PutBucketVersioningAction:              {},
+	GetBucketVersioningAction:              {},
 }
 
 // IsValid - checks if action is valid or not.

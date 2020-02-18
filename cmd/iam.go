@@ -1151,6 +1151,10 @@ var iamAccountOtherAccessActions = iampolicy.NewActionSet(
 	iampolicy.PutObjectLegalHoldAction,
 	iampolicy.GetBucketObjectLockConfigurationAction,
 	iampolicy.PutBucketObjectLockConfigurationAction,
+	iampolicy.PutBucketEncryptionAction,
+	iampolicy.GetBucketEncryptionAction,
+	iampolicy.PutBucketVersioningAction,
+	iampolicy.GetBucketVersioningAction,
 
 	iampolicy.ListenBucketNotificationAction,
 

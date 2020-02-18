@@ -27,7 +27,6 @@ import (
 )
 
 const (
-
 	// Disabled means the lifecycle rule is inactive
 	Disabled = "Disabled"
 )

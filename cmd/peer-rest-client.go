@@ -35,6 +35,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
@@ -417,6 +418,25 @@ func (client *peerRESTClient) RemoveBucketSSEConfig(bucket string) error {
 	values := make(url.Values)
 	values.Set(peerRESTBucket, bucket)
 	respBody, err := client.call(peerRESTMethodBucketEncryptionRemove, values, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// SetBucketVersioning - Set bucket encryption configuration on the peer node
+func (client *peerRESTClient) SetBucketVersioning(bucket string, v *versioning.Versioning) error {
+	values := make(url.Values)
+	values.Set(peerRESTBucket, bucket)
+
+	var reader bytes.Buffer
+	err := gob.NewEncoder(&reader).Encode(v)
+	if err != nil {
+		return err
+	}
+
+	respBody, err := client.call(peerRESTMethodBucketVersioningSet, values, &reader, -1)
 	if err != nil {
 		return err
 	}

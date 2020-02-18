@@ -37,6 +37,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/versioning"
 
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
@@ -591,6 +592,24 @@ func (sys *NotificationSys) SetBucketSSEConfig(ctx context.Context, bucketName s
 			client := client
 			ng.Go(ctx, func() error {
 				return client.SetBucketSSEConfig(bucketName, encConfig)
+			}, idx, *client.host)
+		}
+		ng.Wait()
+	}()
+}
+
+// SetBucketVersioning - calls SetBucketVersioning on all peers.
+func (sys *NotificationSys) SetBucketVersioning(ctx context.Context, bucketName string,
+	v *versioning.Versioning) {
+	go func() {
+		ng := WithNPeers(len(sys.peerClients))
+		for idx, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
+			client := client
+			ng.Go(ctx, func() error {
+				return client.SetBucketVersioning(bucketName, v)
 			}, idx, *client.host)
 		}
 		ng.Wait()

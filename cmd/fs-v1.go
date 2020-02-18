@@ -42,6 +42,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/versioning"
 
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
@@ -1286,6 +1287,16 @@ func (fs *FSObjects) GetBucketPolicy(ctx context.Context, bucket string) (*polic
 // DeleteBucketPolicy deletes all policies on bucket
 func (fs *FSObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
 	return removePolicyConfig(ctx, fs, bucket)
+}
+
+// SetBucketVersioning enable versioning on a bucket
+func (fs *FSObjects) SetBucketVersioning(ctx context.Context, bucket string, versioning *versioning.Versioning) error {
+	return saveVersioningConfig(ctx, fs, bucket, versioning)
+}
+
+// GetBucketVersioning retrieve versioning configuration of a bucket
+func (fs *FSObjects) GetBucketVersioning(ctx context.Context, bucket string) (*versioning.Versioning, error) {
+	return getVersioningConfig(fs, bucket)
 }
 
 // SetBucketLifecycle sets lifecycle on bucket
