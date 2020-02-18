@@ -151,6 +151,7 @@ const (
 	ErrKeyTooLongError
 	ErrInvalidBucketObjectLockConfiguration
 	ErrObjectLockConfigurationNotAllowed
+	ErrNoSuchObjectLockConfiguration
 	ErrObjectLocked
 	ErrInvalidRetentionDate
 	ErrPastObjectLockRetainDate
@@ -760,6 +761,11 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidBucketState",
 		Description:    "Object Lock configuration cannot be enabled on existing buckets.",
 		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrNoSuchObjectLockConfiguration: {
+		Code:           "NoSuchObjectLockConfiguration",
+		Description:    "The specified object does not have a ObjectLock configuration",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrObjectLocked: {
 		Code:           "InvalidRequest",
