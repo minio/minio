@@ -107,7 +107,7 @@ Use `mc admin config set` command to update the configuration for the deployment
 An example configuration for RabbitMQ is shown below:
 
 ```sh
-$ mc admin config set myminio/ notify_amqp:1 exchange="bucketevents" exchange_type="fanout" mandatory="false" no_wait="false"  url="amqp://myuser:mypassword@localhost:5672" auto_deleted="false" delivery_mode="0" durable="false" internal="false" routing_key="bucketlogs"
+$ mc admin config set myminio/ notify_amqp:1 enable="on" exchange="bucketevents" exchange_type="fanout" mandatory="false" no_wait="false"  url="amqp://myuser:mypassword@localhost:5672" auto_deleted="false" delivery_mode="0" durable="false" internal="false" routing_key="bucketlogs"
 ```
 
 MinIO supports all the exchanges available in [RabbitMQ](https://www.rabbitmq.com/). For this setup, we are using `fanout` exchange.
@@ -236,7 +236,7 @@ notify_mqtt:1 broker="" password="" queue_dir="" queue_limit="0" reconnect_inter
 Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:mqtt` at start-up if there were no errors.
 
 ```sh
-$ mc admin config set myminio notify_mqtt:1 broker="tcp://localhost:1883" password="" queue_dir="" queue_limit="0" reconnect_interval="0s"  keep_alive_interval="0s" qos="1" topic="minio" username=""
+$ mc admin config set myminio notify_mqtt:1 enable="on" broker="tcp://localhost:1883" password="" queue_dir="" queue_limit="0" reconnect_interval="0s"  keep_alive_interval="0s" qos="1" topic="minio" username=""
 ```
 
 MinIO supports any MQTT server that supports MQTT 3.1 or 3.1.1 and can connect to them over TCP, TLS, or a Websocket connection using `tcp://`, `tls://`, or `ws://` respectively as the scheme for the broker url. See the [Go Client](http://www.eclipse.org/paho/clients/golang/) documentation for more information.
@@ -369,7 +369,7 @@ notify_elasticsearch:1 queue_limit="0"  url="" format="namespace" index="" queue
 Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:elasticsearch` at start-up if there were no errors.
 
 ```sh
-$ mc admin config set myminio notify_elasticsearch:1 queue_limit="0"  url="http://127.0.0.1:9200" format="namespace" index="minio_events" queue_dir=""
+$ mc admin config set myminio notify_elasticsearch:1 enable="on" queue_limit="0"  url="http://127.0.0.1:9200" format="namespace" index="minio_events" queue_dir=""
 ```
 
 Note that, you can add as many Elasticsearch server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the Elasticsearch instance and an object of per-server configuration parameters.
@@ -531,7 +531,7 @@ notify_redis:1 address="" format="namespace" key="" password="" queue_dir="" que
 Use `mc admin config set` command to update the configuration for the deployment.Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:redis` at start-up if there were no errors.
 
 ```sh
-$ mc admin config set myminio/ notify_redis:1 address="127.0.0.1:6379" format="namespace" key="bucketevents" password="yoursecret" queue_dir="" queue_limit="0"
+$ mc admin config set myminio/ notify_redis:1 enable="on" address="127.0.0.1:6379" format="namespace" key="bucketevents" password="yoursecret" queue_dir="" queue_limit="0"
 ```
 
 Note that, you can add as many Redis server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the Redis instance and an object of per-server configuration parameters.
@@ -652,7 +652,7 @@ notify_nats:1 password="yoursecret" streaming_max_pub_acks_in_flight="10" subjec
 Use `mc admin config set` command to update the configuration for the deployment.Restart MinIO server to reflect config changes. `bucketevents` is the subject used by NATS in this example.
 
 ```sh
-$ mc admin config set myminio notify_nats:1 password="yoursecret" streaming_max_pub_acks_in_flight="10" subject="" address="0.0.0.0:4222"  token="" username="yourusername" ping_interval="0" queue_limit="0" tls="off" streaming_async="on" queue_dir="" streaming_cluster_id="test-cluster" streaming_enable="on"
+$ mc admin config set myminio notify_nats:1 enable="on" password="yoursecret" streaming_max_pub_acks_in_flight="10" subject="" address="0.0.0.0:4222"  token="" username="yourusername" ping_interval="0" queue_limit="0" tls="off" streaming_async="on" queue_dir="" streaming_cluster_id="test-cluster" streaming_enable="on"
 ```
 
 MinIO server also supports [NATS Streaming mode](http://nats.io/documentation/streaming/nats-streaming-intro/) that offers additional functionality like `At-least-once-delivery`, and `Publisher rate limiting`. To configure MinIO server to send notifications to NATS Streaming server, update the MinIO server configuration file as follows:
@@ -873,7 +873,7 @@ notify_postgres:1 password="" port="" queue_dir="" connection_string="" host="" 
 Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:postgresql` at start-up if there were no errors.
 
 ```sh
-$ mc admin config set myminio notify_postgres:1 password="password" port="5432" queue_dir="" connection_string="sslmode=disable" host="127.0.0.1" queue_limit="0"  table="bucketevents" username="postgres" database="minio_events" format="namespace"
+$ mc admin config set myminio notify_postgres:1 enable="on" password="password" port="5432" queue_dir="" connection_string="sslmode=disable" host="127.0.0.1" queue_limit="0"  table="bucketevents" username="postgres" database="minio_events" format="namespace"
 ```
 
 Note that, you can add as many PostgreSQL server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the PostgreSQL instance and an object of per-server configuration parameters.
@@ -991,7 +991,7 @@ notify_mysql:myinstance table="" database="" format="namespace" password="" port
 Use `mc admin config set` command to update MySQL notification configuration for the deployment.
 
 ```sh
-$ mc admin config set myminio notify_mysql:myinstance table="minio_images" database="miniodb" format="namespace" password="" port="3306" queue_dir="" queue_limit="0"  username="root" dsn_string="" host="172.17.0.1"
+$ mc admin config set myminio notify_mysql:myinstance enable="on" table="minio_images" database="miniodb" format="namespace" password="" port="3306" queue_dir="" queue_limit="0"  username="root" dsn_string="" host="172.17.0.1"
 ```
 
 Note that, you can add as many MySQL server endpoint configurations as needed by providing an identifier (like "myinstance" in the example above) for each MySQL instance desired.
@@ -1106,7 +1106,7 @@ notify_kafka:1 tls_skip_verify="off"  queue_dir="" queue_limit="0" sasl="off" sa
 Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:kafka` at start-up if there were no errors.`bucketevents` is the topic used by kafka in this example.
 
 ```sh
-$ mc admin config set myminio notify_kafka:1 tls_skip_verify="off"  queue_dir="" queue_limit="0" sasl="off" sasl_password="" sasl_username="" tls_client_auth="0" tls="off" client_tls_cert="" client_tls_key="" brokers="localhost:9092,localhost:9093" topic="bucketevents" version=""
+$ mc admin config set myminio notify_kafka:1 enable="on" tls_skip_verify="off"  queue_dir="" queue_limit="0" sasl="off" sasl_password="" sasl_username="" tls_client_auth="0" tls="off" client_tls_cert="" client_tls_key="" brokers="localhost:9092,localhost:9093" topic="bucketevents" version=""
 ```
 
 ### Step 3: Enable bucket notification using MinIO client
@@ -1238,7 +1238,7 @@ $ mc admin config get myminio/ notify_webhook notify_webhook:1 queue_limit="0"  
 Use `mc admin config set` command to update the configuration for the deployment. Here the endpoint is the server listening for webhook notifications. Save the settings and restart the MinIO server for changes to take effect. Note that the endpoint needs to be live and reachable when you restart your MinIO server.
 
 ```sh
-$ mc admin config set myminio notify_webhook:1 queue_limit="0"  endpoint="http://localhost:3000" queue_dir=""
+$ mc admin config set myminio notify_webhook:1 enable="on" queue_limit="0"  endpoint="http://localhost:3000" queue_dir=""
 ```
 
 ### Step 2: Enable bucket notification using MinIO client
@@ -1347,7 +1347,7 @@ notify_nsq:1 nsqd_address="" queue_dir="" queue_limit="0"  tls_enable="off" tls_
 Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:nsq` at start-up if there were no errors.
 
 ```sh
-$ mc admin config set myminio notify_nsq:1 nsqd_address="127.0.0.1:4150" queue_dir="" queue_limit="0" tls_enable="off" tls_skip_verify="on" topic="minio"
+$ mc admin config set myminio notify_nsq:1 enable="on" nsqd_address="127.0.0.1:4150" queue_dir="" queue_limit="0" tls_enable="off" tls_skip_verify="on" topic="minio"
 ```
 
 Note that, you can add as many NSQ daemon endpoint configurations as needed by providing an identifier (like "1" in the example above) for the NSQ instance and an object of per-server configuration parameters.
