@@ -24,7 +24,6 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"io"
-	goioutil "io/ioutil"
 	"net/http"
 	"net/url"
 	"sort"
@@ -2331,12 +2330,19 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		return
 	}
 
+	// Content-Length is required and should be non-zero
+	if r.ContentLength <= 0 {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	// Reject retention or governance headers if set, CompleteMultipartUpload spec
 	// does not use these headers, and should not be passed down to checkPutObjectLockAllowed
 	if objectlock.IsObjectLockRequested(r.Header) || objectlock.IsObjectLockGovernanceBypassSet(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	// Enforce object lock governance in case a competing upload finalized first.
 	retPerms := isPutActionAllowed(getRequestAuthType(r), bucket, object, r, iampolicy.PutObjectRetentionAction)
 	holdPerms := isPutActionAllowed(getRequestAuthType(r), bucket, object, r, iampolicy.PutObjectLegalHoldAction)
@@ -2353,14 +2359,9 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		return
 	}
 
-	completeMultipartBytes, err := goioutil.ReadAll(r.Body)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
 	complMultipartUpload := &CompleteMultipartUpload{}
-	if err = xml.Unmarshal(completeMultipartBytes, complMultipartUpload); err != nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedXML), r.URL, guessIsBrowserReq(r))
+	if err = xmlDecoder(r.Body, complMultipartUpload, r.ContentLength); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 	if len(complMultipartUpload.Parts) == 0 {

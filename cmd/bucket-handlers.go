@@ -342,17 +342,17 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
-	// Content-Length is required and should be non-zero
-	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
-	if r.ContentLength <= 0 {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
 	// Content-Md5 is requied should be set
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 	if _, ok := r.Header[xhttp.ContentMD5]; !ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentMD5), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Content-Length is required and should be non-zero
+	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
+	if r.ContentLength <= 0 {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -363,7 +363,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	deleteObjects := &DeleteObjectsRequest{}
 	if err := xmlDecoder(r.Body, deleteObjects, maxBodySize); err != nil {
 		logger.LogIf(ctx, err, logger.Application)
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedXML), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
