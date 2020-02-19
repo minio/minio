@@ -66,6 +66,7 @@ export class OpenIDLogin extends React.Component {
 
       const authURL = buildOpenIDAuthURL(
         this.state.discoveryDoc.authorization_endpoint,
+        this.state.discoveryDoc.scopes_supported,
         redirectURI,
         this.state.clientID,
         nonce
