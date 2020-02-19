@@ -49,7 +49,7 @@ require (
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/jonboulle/clockwork v0.1.0 // indirect
-	github.com/json-iterator/go v1.1.7
+	github.com/json-iterator/go v1.1.9
 	github.com/klauspost/compress v1.9.8
 	github.com/klauspost/cpuid v1.2.2
 	github.com/klauspost/pgzip v1.2.1
@@ -70,7 +70,7 @@ require (
 	github.com/minio/minio-go/v6 v6.0.45
 	github.com/minio/parquet-go v0.0.0-20200125064549-a1e49702e174
 	github.com/minio/sha256-simd v0.1.1
-	github.com/minio/simdjson-go v0.1.2
+	github.com/minio/simdjson-go v0.1.3
 	github.com/minio/sio v0.2.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect

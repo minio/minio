@@ -2658,7 +2658,7 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	writeSuccessNoContent(w)
+	writeSuccessResponseHeadersOnly(w)
 	// Notify object  event.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectCreatedPutLegalHold,
@@ -2718,8 +2718,15 @@ func (api objectAPIHandlers) GetObjectLegalHoldHandler(w http.ResponseWriter, r 
 		return
 	}
 
+	if _, ok := globalBucketObjectLockConfig.Get(bucket); !ok {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidBucketObjectLockConfiguration), r.URL, guessIsBrowserReq(r))
+		return
+	}
 	legalHold := objectlock.GetObjectLegalHoldMeta(objInfo.UserDefined)
-
+	if legalHold.IsEmpty() {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNoSuchObjectLockConfiguration), r.URL, guessIsBrowserReq(r))
+		return
+	}
 	writeSuccessResponseXML(w, encodeResponse(legalHold))
 	// Notify object legal hold accessed via a GET request.
 	sendEvent(eventArgs{

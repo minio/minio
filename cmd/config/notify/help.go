@@ -214,6 +214,12 @@ var (
 			Type:        "number",
 		},
 		config.HelpKV{
+			Key:         target.KafkaVersion,
+			Description: "specify the version of the Kafka cluster",
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
 			Key:         config.Comment,
 			Description: config.DefaultComment,
 			Optional:    true,
