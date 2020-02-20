@@ -202,7 +202,7 @@ func (fs *FSObjects) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo - returns underlying storage statistics.
-func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
+func (fs *FSObjects) StorageInfo(ctx context.Context, _ bool) StorageInfo {
 
 	atomic.AddInt64(&fs.activeIOCount, 1)
 	defer func() {

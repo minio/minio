@@ -54,7 +54,7 @@ func printStartupSafeModeMessage(apiEndpoints []string, err error) {
 	// Object layer is initialized then print StorageInfo in safe mode.
 	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI != nil {
-		if msg := getStorageInfoMsgSafeMode(objAPI.StorageInfo(context.Background())); msg != "" {
+		if msg := getStorageInfoMsgSafeMode(objAPI.StorageInfo(context.Background(), false)); msg != "" {
 			logStartupMessage(msg)
 		}
 	}
@@ -116,7 +116,7 @@ func printStartupMessage(apiEndpoints []string) {
 	// Object layer is initialized then print StorageInfo.
 	objAPI := newObjectLayerFn()
 	if objAPI != nil {
-		printStorageInfo(objAPI.StorageInfo(context.Background()))
+		printStorageInfo(objAPI.StorageInfo(context.Background(), false))
 	}
 
 	// Prints credential, region and browser access.

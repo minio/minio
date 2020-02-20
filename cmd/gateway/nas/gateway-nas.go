@@ -106,8 +106,8 @@ func (n *nasObjects) IsListenBucketSupported() bool {
 	return false
 }
 
-func (n *nasObjects) StorageInfo(ctx context.Context) minio.StorageInfo {
-	sinfo := n.ObjectLayer.StorageInfo(ctx)
+func (n *nasObjects) StorageInfo(ctx context.Context, _ bool) minio.StorageInfo {
+	sinfo := n.ObjectLayer.StorageInfo(ctx, false)
 	sinfo.Backend.GatewayOnline = sinfo.Backend.Type == minio.BackendFS
 	sinfo.Backend.Type = minio.BackendGateway
 	return sinfo
@@ -120,6 +120,6 @@ type nasObjects struct {
 
 // IsReady returns whether the layer is ready to take requests.
 func (n *nasObjects) IsReady(ctx context.Context) bool {
-	sinfo := n.ObjectLayer.StorageInfo(ctx)
+	sinfo := n.ObjectLayer.StorageInfo(ctx, false)
 	return sinfo.Backend.Type == minio.BackendFS
 }

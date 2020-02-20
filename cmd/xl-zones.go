@@ -131,7 +131,7 @@ func (z *xlZones) getZonesAvailableSpace(ctx context.Context) zonesAvailableSpac
 	for index := range z.zones {
 		index := index
 		g.Go(func() error {
-			storageInfos[index] = z.zones[index].StorageInfo(ctx)
+			storageInfos[index] = z.zones[index].StorageInfo(ctx, false)
 			return nil
 		}, index)
 	}
@@ -176,9 +176,9 @@ func (z *xlZones) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (z *xlZones) StorageInfo(ctx context.Context) StorageInfo {
+func (z *xlZones) StorageInfo(ctx context.Context, local bool) StorageInfo {
 	if z.SingleZone() {
-		return z.zones[0].StorageInfo(ctx)
+		return z.zones[0].StorageInfo(ctx, local)
 	}
 
 	var storageInfo StorageInfo
@@ -188,7 +188,7 @@ func (z *xlZones) StorageInfo(ctx context.Context) StorageInfo {
 	for index := range z.zones {
 		index := index
 		g.Go(func() error {
-			storageInfos[index] = z.zones[index].StorageInfo(ctx)
+			storageInfos[index] = z.zones[index].StorageInfo(ctx, local)
 			return nil
 		}, index)
 	}

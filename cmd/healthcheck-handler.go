@@ -60,7 +60,7 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !globalIsXL && !globalIsDistXL {
-		s := objLayer.StorageInfo(ctx)
+		s := objLayer.StorageInfo(ctx, false)
 		if s.Backend.Type == BackendGateway {
 			if !s.Backend.GatewayOnline {
 				writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)

@@ -203,7 +203,7 @@ func (n *hdfsObjects) Shutdown(ctx context.Context) error {
 	return n.clnt.Close()
 }
 
-func (n *hdfsObjects) StorageInfo(ctx context.Context) minio.StorageInfo {
+func (n *hdfsObjects) StorageInfo(ctx context.Context, _ bool) minio.StorageInfo {
 	fsInfo, err := n.clnt.StatFs()
 	if err != nil {
 		return minio.StorageInfo{}

@@ -412,7 +412,7 @@ func (l *gcsGateway) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo - Not relevant to GCS backend.
-func (l *gcsGateway) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
+func (l *gcsGateway) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo) {
 	si.Backend.Type = minio.BackendGateway
 	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.httpClient, "https://storage.googleapis.com")
 	return si

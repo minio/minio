@@ -218,7 +218,7 @@ func (l *b2Objects) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo is not relevant to B2 backend.
-func (l *b2Objects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
+func (l *b2Objects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo) {
 	si.Backend.Type = minio.BackendGateway
 	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.httpClient, "https://api.backblazeb2.com/b2api/v1")
 	return si

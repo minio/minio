@@ -60,7 +60,7 @@ type ObjectLayer interface {
 	// Storage operations.
 	Shutdown(context.Context) error
 	CrawlAndGetDataUsage(context.Context, <-chan struct{}) DataUsageInfo
-	StorageInfo(context.Context) StorageInfo
+	StorageInfo(ctx context.Context, local bool) StorageInfo // local queries only local disks
 
 	// Bucket operations.
 	MakeBucketWithLocation(ctx context.Context, bucket string, location string) error

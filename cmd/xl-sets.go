@@ -340,7 +340,7 @@ func (s *xlSets) NewNSLock(ctx context.Context, bucket string, object string) RW
 }
 
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
-func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
+func (s *xlSets) StorageInfo(ctx context.Context, local bool) StorageInfo {
 	var storageInfo StorageInfo
 
 	storageInfos := make([]StorageInfo, len(s.sets))
@@ -350,7 +350,7 @@ func (s *xlSets) StorageInfo(ctx context.Context) StorageInfo {
 	for index := range s.sets {
 		index := index
 		g.Go(func() error {
-			storageInfos[index] = s.sets[index].StorageInfo(ctx)
+			storageInfos[index] = s.sets[index].StorageInfo(ctx, local)
 			return nil
 		}, index)
 	}

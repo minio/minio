@@ -320,7 +320,7 @@ func (l *ossObjects) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo is not relevant to OSS backend.
-func (l *ossObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
+func (l *ossObjects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo) {
 	si.Backend.Type = minio.BackendGateway
 	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.Client.HTTPClient, l.Client.Config.Endpoint)
 	return si
