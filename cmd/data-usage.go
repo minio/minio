@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
@@ -158,10 +157,7 @@ func updateUsage(basePath string, doneCh <-chan struct{}, waitForLowActiveIO fun
 		ObjectsSizesHistogram: make(map[string]uint64),
 	}
 
-	numWorkers := 4
-	var mutex sync.Mutex // Mutex to update dataUsageInfo
-
-	fastWalk(basePath, numWorkers, doneCh, func(path string, typ os.FileMode) error {
+	fastWalk(basePath, 1, doneCh, func(path string, typ os.FileMode) error {
 		// Wait for I/O to go down.
 		waitForLowActiveIO()
 
@@ -175,15 +171,10 @@ func updateUsage(basePath string, doneCh <-chan struct{}, waitForLowActiveIO fun
 		}
 
 		if entry == "" && typ&os.ModeDir != 0 {
-			mutex.Lock()
 			dataUsageInfo.BucketsCount++
 			dataUsageInfo.BucketsSizes[bucket] = 0
-			mutex.Unlock()
 			return nil
 		}
-
-		mutex.Lock()
-		defer mutex.Unlock()
 
 		if typ&os.ModeDir != 0 {
 			return nil
