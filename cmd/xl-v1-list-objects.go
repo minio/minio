@@ -144,7 +144,7 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 
 // ListObjects - list all objects at prefix, delimited by '/'.
 func (xl xlObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
-	if err := checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, xl); err != nil {
+	if err := checkListObjsArgs(ctx, bucket, prefix, marker, xl); err != nil {
 		return loi, err
 	}
 

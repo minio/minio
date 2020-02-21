@@ -21,11 +21,20 @@ import (
 	"encoding/xml"
 )
 
+// Status represents lifecycle configuration status
+type Status string
+
+// Supported status types
+const (
+	Enabled  Status = "Enabled"
+	Disabled Status = "Disabled"
+)
+
 // Rule - a rule for lifecycle configuration.
 type Rule struct {
 	XMLName    xml.Name   `xml:"Rule"`
 	ID         string     `xml:"ID,omitempty"`
-	Status     string     `xml:"Status"`
+	Status     Status     `xml:"Status"`
 	Filter     Filter     `xml:"Filter,omitempty"`
 	Expiration Expiration `xml:"Expiration,omitempty"`
 	Transition Transition `xml:"Transition,omitempty"`
@@ -58,7 +67,7 @@ func (r Rule) validateStatus() error {
 	}
 
 	// Status must be one of Enabled or Disabled
-	if r.Status != "Enabled" && r.Status != "Disabled" {
+	if r.Status != Enabled && r.Status != Disabled {
 		return errInvalidRuleStatus
 	}
 	return nil

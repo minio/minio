@@ -74,7 +74,6 @@ func (xl xlObjects) NewNSLock(ctx context.Context, bucket string, objects ...str
 func (xl xlObjects) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.
 	closeStorageDisks(xl.getDisks())
-	closeLockers(xl.getLockers())
 	return nil
 }
 

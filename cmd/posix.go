@@ -643,7 +643,7 @@ func (s *posix) DeleteVol(volume string) (err error) {
 // Walk - is a sorted walker which returns file entries in lexically
 // sorted order, additionally along with metadata about each of those entries.
 func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile string,
-	readMetadataFn readMetadataFunc, endWalkCh chan struct{}) (ch chan FileInfo, err error) {
+	readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (ch chan FileInfo, err error) {
 
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
