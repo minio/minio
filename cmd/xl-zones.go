@@ -83,8 +83,8 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 	return z, nil
 }
 
-func (z *xlZones) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
-	return z.zones[0].NewNSLock(ctx, bucket, object)
+func (z *xlZones) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
+	return z.zones[0].NewNSLock(ctx, bucket, objects...)
 }
 
 type zonesAvailableSpace []zoneAvailableSpace
@@ -445,20 +445,12 @@ func (z *xlZones) DeleteObjects(ctx context.Context, bucket string, objects []st
 		derrs[i] = checkDelObjArgs(ctx, bucket, objects[i])
 	}
 
-	var objectLocks = make([]RWLocker, len(objects))
-	for i := range objects {
-		if derrs[i] != nil {
-			continue
-		}
-
-		// Acquire a write lock before deleting the object.
-		objectLocks[i] = z.NewNSLock(ctx, bucket, objects[i])
-		if derrs[i] = objectLocks[i].GetLock(globalOperationTimeout); derrs[i] != nil {
-			continue
-		}
-
-		defer objectLocks[i].Unlock()
+	// Acquire a bulk write lock across 'objects'
+	multiDeleteLock := z.NewNSLock(ctx, bucket, objects...)
+	if err := multiDeleteLock.GetLock(globalOperationTimeout); err != nil {
+		return nil, err
 	}
+	defer multiDeleteLock.Unlock()
 
 	for _, zone := range z.zones {
 		errs, err := zone.DeleteObjects(ctx, bucket, objects)

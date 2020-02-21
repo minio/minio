@@ -337,14 +337,6 @@ func (sys *IAMSys) Load() error {
 
 // Perform IAM configuration migration.
 func (sys *IAMSys) doIAMConfigMigration(objAPI ObjectLayer) error {
-	// Take IAM configuration migration lock
-	lockPath := iamConfigPrefix + "/migration.lock"
-	objLock := objAPI.NewNSLock(context.Background(), minioMetaBucket, lockPath)
-	if err := objLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer objLock.Unlock()
-
 	return sys.store.migrateBackendFormat(objAPI)
 }
 

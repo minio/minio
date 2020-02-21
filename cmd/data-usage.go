@@ -79,10 +79,12 @@ func timeToCrawl(ctx context.Context, objAPI ObjectLayer) time.Duration {
 	return dataUsageCrawlInterval - waitDuration
 }
 
+var dataUsageLockTimeout = lifecycleLockTimeout
+
 func runDataUsageInfo(ctx context.Context, objAPI ObjectLayer, endCh <-chan struct{}) {
 	locker := objAPI.NewNSLock(ctx, minioMetaBucket, "leader-data-usage-info")
 	for {
-		err := locker.GetLock(newDynamicTimeout(time.Millisecond, time.Millisecond))
+		err := locker.GetLock(dataUsageLockTimeout)
 		if err != nil {
 			time.Sleep(5 * time.Minute)
 			continue
