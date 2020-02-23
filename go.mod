@@ -100,6 +100,7 @@ require (
 	github.com/smartystreets/assertions v0.0.0-20190401211740-f487f9de1cd3 // indirect
 	github.com/soheilhy/cmux v0.1.4 // indirect
 	github.com/streadway/amqp v0.0.0-20190404075320-75d898a42a94
+	github.com/tidwall/gjson v1.3.5
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5 // indirect
 	github.com/ugorji/go v1.1.5-pre // indirect
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a

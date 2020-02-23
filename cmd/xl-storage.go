@@ -350,12 +350,12 @@ func (s *xlStorage) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, 
 			return 0, errSkipFile
 		}
 
-		meta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaBuf)
+		fi, err := getFileInfo(xlMetaBuf, "", "", "")
 		if err != nil {
 			return 0, errSkipFile
 		}
 
-		return meta.Stat.Size, nil
+		return fi.Size, nil
 	})
 
 	dataUsageInfo.LastUpdate = UTCNow()
@@ -751,16 +751,28 @@ func (s *xlStorage) ListDir(volume, dirPath string, count int) (entries []string
 func (s *xlStorage) WriteMetadata(volume, path, versionID string, fi FileInfo) error {
 	// versionID is not used yet, its meant for future.
 
-	xlMeta := newXLMetaV1(path, fi.Erasure.DataBlocks, fi.Erasure.ParityBlocks)
-	xlMeta.Erasure.Distribution = fi.Erasure.Distribution
-	xlMeta.Stat = StatInfo{
-		Size:    fi.Size,
-		ModTime: fi.ModTime,
+	xlMeta := newXLMetaV2(path, versionID, fi.Erasure.DataBlocks, fi.Erasure.ParityBlocks)
+	for i, journal := range xlMeta.XL.Journal {
+		if journal.Object.VersionID == versionID {
+			xlMeta.XL.Journal[i].Object.Data.Erasure.Index = fi.Erasure.Index
+			xlMeta.XL.Journal[i].Object.Data.Erasure.Distribution = fi.Erasure.Distribution
+			xlMeta.XL.Journal[i].Object.Stat.Size = fi.Size
+			xlMeta.XL.Journal[i].Object.Stat.ModTime = fi.ModTime.Unix()
+			for k, v := range fi.Metadata {
+				if strings.HasPrefix(k, strings.ToLower(ReservedMetadataPrefix)) {
+					xlMeta.XL.Journal[i].Object.Meta.Sys[k] = v
+				} else {
+					xlMeta.XL.Journal[i].Object.Meta.User[k] = v
+				}
+			}
+			xlMeta.XL.Journal[i].Object.Data.Parts.Sizes = make([]int64, len(fi.Parts))
+			xlMeta.XL.Journal[i].Object.Data.Parts.ActualSizes = make([]int64, len(fi.Parts))
+			for i, part := range fi.Parts {
+				xlMeta.XL.Journal[i].Object.Data.Parts.Sizes[i] = part.Size
+				xlMeta.XL.Journal[i].Object.Data.Parts.ActualSizes[i] = part.ActualSize
+			}
+		}
 	}
-	xlMeta.Meta = fi.Metadata
-	xlMeta.Parts = fi.Parts
-	xlMeta.Erasure.Checksums = fi.Erasure.Checksums
-	xlMeta.Erasure.Index = fi.Erasure.Index
 
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	buf, err := json.Marshal(&xlMeta)
@@ -773,8 +785,6 @@ func (s *xlStorage) WriteMetadata(volume, path, versionID string, fi FileInfo) e
 
 // ReadMetadata - reads metadata and returns FileInfo at path `xl.json`
 func (s *xlStorage) ReadMetadata(volume, path, versionID string) (fi FileInfo, err error) {
-	// versionID is not used yet, its meant for future.
-
 	buf, err := s.ReadAll(volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
 		return fi, err
@@ -784,24 +794,7 @@ func (s *xlStorage) ReadMetadata(volume, path, versionID string) (fi FileInfo, e
 		return fi, errFileNotFound
 	}
 
-	m, err := xlMetaV1UnmarshalJSON(context.Background(), buf)
-	if err != nil {
-		return fi, err
-	}
-
-	if !m.IsValid() {
-		return fi, errFileCorrupt
-	}
-
-	return FileInfo{
-		Volume:   volume,
-		Name:     path,
-		ModTime:  m.Stat.ModTime,
-		Size:     m.Stat.Size,
-		Metadata: m.Meta,
-		Parts:    m.Parts,
-		Erasure:  m.Erasure,
-	}, nil
+	return getFileInfo(buf, volume, path, versionID)
 }
 
 // ReadAll reads from r until an error or EOF and returns the data it read.

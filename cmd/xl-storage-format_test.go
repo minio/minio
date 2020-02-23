@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/dustin/go-humanize"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Helper function to check if two xlMetaV1 values are similar.
@@ -246,8 +247,9 @@ func TestGetXLMetaV1Jsoniter1(t *testing.T) {
 		t.Errorf("Unmarshalling failed: %v", err)
 	}
 
-	jsoniterXLMeta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaJSON)
-	if err != nil {
+	var jsoniterXLMeta xlMetaV1
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := json.Unmarshal(xlMetaJSON, &jsoniterXLMeta); err != nil {
 		t.Errorf("jsoniter parsing of XLMeta failed: %v", err)
 	}
 	compareXLMetaV1(t, unMarshalXLMeta, jsoniterXLMeta)
@@ -263,10 +265,13 @@ func TestGetXLMetaV1Jsoniter10(t *testing.T) {
 	if err := json.Unmarshal(xlMetaJSON, &unMarshalXLMeta); err != nil {
 		t.Errorf("Unmarshalling failed: %v", err)
 	}
-	jsoniterXLMeta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaJSON)
-	if err != nil {
+
+	var jsoniterXLMeta xlMetaV1
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := json.Unmarshal(xlMetaJSON, &jsoniterXLMeta); err != nil {
 		t.Errorf("jsoniter parsing of XLMeta failed: %v", err)
 	}
+
 	compareXLMetaV1(t, unMarshalXLMeta, jsoniterXLMeta)
 }
 

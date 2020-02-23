@@ -318,8 +318,6 @@ func (client *storageRESTClient) RenameMetadata(srcVolume, srcPath, dstVolume, d
 }
 
 func (client *storageRESTClient) ReadMetadata(volume, path, versionID string) (fi FileInfo, err error) {
-	// versionID is not used yet, its meant for future.
-
 	buf, err := client.ReadAll(volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
 		return fi, err
@@ -329,20 +327,7 @@ func (client *storageRESTClient) ReadMetadata(volume, path, versionID string) (f
 		return fi, errFileNotFound
 	}
 
-	m, err := xlMetaV1UnmarshalJSON(context.Background(), buf)
-	if err != nil {
-		return fi, err
-	}
-
-	return FileInfo{
-		Volume:   volume,
-		Name:     path,
-		ModTime:  m.Stat.ModTime,
-		Size:     m.Stat.Size,
-		Metadata: m.Meta,
-		Parts:    m.Parts,
-		Erasure:  m.Erasure,
-	}, nil
+	return getFileInfo(buf, volume, path, versionID)
 }
 
 // ReadAll - reads all contents of a file.

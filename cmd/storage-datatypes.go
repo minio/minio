@@ -45,6 +45,9 @@ type FileInfo struct {
 	// Name of the file.
 	Name string
 
+	// Version of the file.
+	VersionID string
+
 	// Date and time when the file was last modified.
 	ModTime time.Time
 

@@ -16,21 +16,15 @@
 
 package cmd
 
-import (
-	"context"
-
-	jsoniter "github.com/json-iterator/go"
-)
-
 // XL constants.
 const (
 	// XL metadata file carries per object metadata.
 	xlStorageFormatFile = "xl.json"
 )
 
-// IsValid - tells if the format is sane by validating the version
-// string, format and erasure info fields.
-func (m xlMetaV1) IsValid() bool {
+// Valid - tells us if the format is sane by validating
+// format version and erasure coding information.
+func (m xlMetaV1) Valid() bool {
 	return isXLMetaFormatValid(m.Version, m.Format) &&
 		isXLMetaErasureInfoValid(m.Erasure.DataBlocks, m.Erasure.ParityBlocks)
 }
@@ -38,7 +32,9 @@ func (m xlMetaV1) IsValid() bool {
 // Verifies if the backend format metadata is sane by validating
 // the version string and format style.
 func isXLMetaFormatValid(version, format string) bool {
-	return ((version == xlMetaVersion || version == xlMetaVersion100) &&
+	return ((version == xlMetaVersion ||
+		version == xlMetaVersion101 ||
+		version == xlMetaVersion100) &&
 		format == xlMetaFormat)
 }
 
@@ -65,10 +61,22 @@ type xlMetaV1 struct {
 	Parts []ObjectPartInfo `json:"parts,omitempty"`
 }
 
+func (m xlMetaV1) ToFileInfo(volume, path string) FileInfo {
+	return FileInfo{
+		Volume:   volume,
+		Name:     path,
+		ModTime:  m.Stat.ModTime,
+		Size:     m.Stat.Size,
+		Metadata: m.Meta,
+		Parts:    m.Parts,
+		Erasure:  m.Erasure,
+	}
+}
+
 // XL metadata constants.
 const (
 	// XL meta version.
-	xlMetaVersion = "1.0.1"
+	xlMetaVersion101 = "1.0.1"
 
 	// XL meta version.
 	xlMetaVersion100 = "1.0.0"
@@ -89,7 +97,7 @@ func newFileInfo(object string, dataBlocks, parityBlocks int) (fi FileInfo) {
 // newXLMetaV1 - initializes new xlMetaV1, adds version, allocates a fresh erasure info.
 func newXLMetaV1(object string, dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
 	xlMeta = xlMetaV1{}
-	xlMeta.Version = xlMetaVersion
+	xlMeta.Version = xlMetaVersion101
 	xlMeta.Format = xlMetaFormat
 	xlMeta.Minio.Release = ReleaseTag
 	xlMeta.Erasure = ErasureInfo{
@@ -100,11 +108,4 @@ func newXLMetaV1(object string, dataBlocks, parityBlocks int) (xlMeta xlMetaV1) 
 		Distribution: hashOrder(object, dataBlocks+parityBlocks),
 	}
 	return xlMeta
-}
-
-// Constructs xlMetaV1 using `jsoniter` lib.
-func xlMetaV1UnmarshalJSON(ctx context.Context, xlMetaBuf []byte) (xlMeta xlMetaV1, err error) {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	err = json.Unmarshal(xlMetaBuf, &xlMeta)
-	return xlMeta, err
 }
