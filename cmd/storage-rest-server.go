@@ -79,10 +79,6 @@ func storageServerRequestValidate(r *http.Request) error {
 		return errAuthentication
 	}
 
-	if claims.Issuer != ReleaseTag {
-		return errAuthentication
-	}
-
 	requestTimeStr := r.Header.Get("X-Minio-Time")
 	requestTime, err := time.Parse(time.RFC3339, requestTimeStr)
 	if err != nil {
