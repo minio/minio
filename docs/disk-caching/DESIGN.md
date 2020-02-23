@@ -11,30 +11,32 @@ minio gateway <name> -h
   CACHE:
      MINIO_CACHE_DRIVES: List of mounted cache drives or directories delimited by ","
      MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ","
-     MINIO_CACHE_EXPIRY: Cache expiry duration in days
      MINIO_CACHE_QUOTA: Maximum permitted usage of the cache in percentage (0-100).
      MINIO_CACHE_AFTER: Minimum number of access before caching an object.
+     MINIO_CACHE_WATERMARK_LOW: % of cache quota at which cache eviction stops
+     MINIO_CACHE_WATERMARK_HIGH: % of cache quota at which cache eviction starts
+
 
 ...
 ...
 
   7. Start MinIO gateway to s3 with edge caching enabled on '/mnt/drive1', '/mnt/drive2' and '/mnt/export1 ... /mnt/export24',
-     exclude all objects under 'mybucket', exclude all objects with '.pdf' as extension
-     with expiry up to 40 days. Cache only those objects accessed atleast 3 times.
+     exclude all objects under 'mybucket', exclude all objects with '.pdf' as extension. Cache only those objects accessed atleast 3 times. Garbage collection triggers in at high water mark (i.e. cache disk usage reaches 90% of cache quota) or at 72% and evicts oldest objects by access time until low watermark is reached ( 70% of cache quota) , i.e. 63% of disk usage.
      $ export MINIO_CACHE_DRIVES="/mnt/drive1,/mnt/drive2,/mnt/export{1..24}"
      $ export MINIO_CACHE_EXCLUDE="mybucket/*,*.pdf"
-     $ export MINIO_CACHE_EXPIRY=40
      $ export MINIO_CACHE_QUOTA=80
      $ export MINIO_CACHE_AFTER=3
+     $ export MINIO_CACHE_WATERMARK_LOW=70
+     $ export MINIO_CACHE_WATERMARK_HIGH=90
+
      $ minio gateway s3
 ```
 
 ## Assumptions
 
-- Disk cache size defaults to 80% of your drive capacity.
+- Disk cache quota defaults to 80% of your drive capacity.
 - The cache drives are required to be a filesystem mount point with [`atime`](http://kerolasa.github.io/filetimes.html) support to be enabled on the drive. Alternatively writable directories with atime support can be specified in MINIO_CACHE_DRIVES
-- Expiration of each cached entry takes user provided expiry as a hint, and defaults to 90 days if not provided.
-- Garbage collection sweep of the expired cache entries happens whenever cache usage is > 80% of drive capacity, GC continues until sufficient disk space is reclaimed.
+- Garbage collection sweep happens whenever cache disk usage reaches high watermark with respect to the configured cache quota , GC evicts least recently accessed objects until cache low watermark is reached with respect to the configured cache quota. Garbage collection runs a cache eviction sweep at 30 minute intervals.
 - An object is only cached when drive has sufficient disk space.
 
 ## Behavior

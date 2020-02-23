@@ -27,15 +27,15 @@ import (
 )
 
 // Initialize cache objects.
-func initCacheObjects(disk string, cacheMaxUse, cacheAfter int) (*diskCache, error) {
-	return newDiskCache(disk, 80, cacheMaxUse, cacheAfter)
+func initCacheObjects(disk string, cacheMaxUse, cacheAfter, cacheWatermarkLow, cacheWatermarkHigh int) (*diskCache, error) {
+	return newDiskCache(disk, cacheMaxUse, cacheAfter, cacheWatermarkLow, cacheWatermarkHigh)
 }
 
 // inits diskCache struct for nDisks
-func initDiskCaches(drives []string, cacheMaxUse, cacheAfter int, t *testing.T) ([]*diskCache, error) {
+func initDiskCaches(drives []string, cacheMaxUse, cacheAfter, cacheWatermarkLow, cacheWatermarkHigh int, t *testing.T) ([]*diskCache, error) {
 	var cb []*diskCache
 	for _, d := range drives {
-		obj, err := initCacheObjects(d, cacheMaxUse, cacheAfter)
+		obj, err := initCacheObjects(d, cacheMaxUse, cacheAfter, cacheWatermarkLow, cacheWatermarkHigh)
 		if err != nil {
 			return nil, err
 		}
@@ -70,7 +70,7 @@ func TestGetCachedLoc(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		d, err := initDiskCaches(fsDirs, 100, 1, t)
+		d, err := initDiskCaches(fsDirs, 100, 1, 80, 90, t)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -109,7 +109,7 @@ func TestGetCacheMaxUse(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		d, err := initDiskCaches(fsDirs, 80, 1, t)
+		d, err := initDiskCaches(fsDirs, 80, 1, 80, 90, t)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -180,7 +180,7 @@ func TestDiskCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := initDiskCaches(fsDirs, 100, 0, t)
+	d, err := initDiskCaches(fsDirs, 100, 0, 80, 90, t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +258,7 @@ func TestDiskCacheMaxUse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := initDiskCaches(fsDirs, 80, 0, t)
+	d, err := initDiskCaches(fsDirs, 80, 0, 80, 90, t)
 	if err != nil {
 		t.Fatal(err)
 	}
