@@ -362,14 +362,16 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		isS3Request := !strings.HasPrefix(r.URL.Path, minioReservedBucketPath)
-		apiStatsWriter := &recordAPIStats{w, UTCNow(), false, 0, isS3Request}
 
 		// Time start before the call is about to start.
 		tBefore := UTCNow()
 
+		apiStatsWriter := &recordAPIStats{ResponseWriter: w, TTFB: tBefore, isS3Request: isS3Request}
+
 		if isS3Request {
 			globalHTTPStats.currentS3Requests.Inc(api)
 		}
+
 		// Execute the request
 		f.ServeHTTP(apiStatsWriter, r)
 
