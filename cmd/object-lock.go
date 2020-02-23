@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"net/http"
+	"path"
 
 	"github.com/minio/minio/cmd/logger"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
@@ -243,4 +245,45 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 		}
 	}
 	return mode, retainDate, legalHold, ErrNone
+}
+
+func initBucketObjectLockConfig(buckets []BucketInfo, objAPI ObjectLayer) error {
+	for _, bucket := range buckets {
+		ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{BucketName: bucket.Name})
+		configFile := path.Join(bucketConfigPrefix, bucket.Name, bucketObjectLockEnabledConfigFile)
+		bucketObjLockData, err := readConfig(ctx, objAPI, configFile)
+		if err != nil {
+			if err == errConfigNotFound {
+				continue
+			}
+			return err
+		}
+
+		if string(bucketObjLockData) != bucketObjectLockEnabledConfig {
+			// this should never happen
+			logger.LogIf(ctx, objectlock.ErrMalformedBucketObjectConfig)
+			continue
+		}
+
+		configFile = path.Join(bucketConfigPrefix, bucket.Name, objectLockConfig)
+		configData, err := readConfig(ctx, objAPI, configFile)
+		if err != nil {
+			if err == errConfigNotFound {
+				globalBucketObjectLockConfig.Set(bucket.Name, objectlock.Retention{})
+				continue
+			}
+			return err
+		}
+
+		config, err := objectlock.ParseObjectLockConfig(bytes.NewReader(configData))
+		if err != nil {
+			return err
+		}
+		retention := objectlock.Retention{}
+		if config.Rule != nil {
+			retention = config.ToRetention()
+		}
+		globalBucketObjectLockConfig.Set(bucket.Name, retention)
+	}
+	return nil
 }
