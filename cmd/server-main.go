@@ -263,7 +263,12 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 
 	// Initialize policy system.
 	if err = globalPolicySys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize policy system; %w", err)
+		return fmt.Errorf("Unable to initialize policy system: %w", err)
+	}
+
+	// Initialize bucket object lock.
+	if err = initBucketObjectLockConfig(buckets, newObject); err != nil {
+		return fmt.Errorf("Unable to initialize object lock system: %w", err)
 	}
 
 	// Initialize lifecycle system.
@@ -275,6 +280,7 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 	if err = globalBucketSSEConfigSys.Init(buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize bucket encryption subsystem: %w", err)
 	}
+
 	return nil
 }
 
