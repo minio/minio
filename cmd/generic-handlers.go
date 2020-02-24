@@ -538,9 +538,8 @@ func setHTTPStatsHandler(h http.Handler) http.Handler {
 func (h httpStatsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	isS3Request := !strings.HasPrefix(r.URL.Path, minioReservedBucketPath)
 	// record s3 connection stats.
-	recordRequest := &recordTrafficRequest{ReadCloser: r.Body, isS3Request: isS3Request}
-	r.Body = recordRequest
-	recordResponse := &recordTrafficResponse{w, isS3Request}
+	r.Body = &recordTrafficRequest{ReadCloser: r.Body, isS3Request: isS3Request}
+	recordResponse := &recordTrafficResponse{ResponseWriter: w, isS3Request: isS3Request}
 	// Execute the request
 	h.handler.ServeHTTP(recordResponse, r)
 }
