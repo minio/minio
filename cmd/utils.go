@@ -127,6 +127,12 @@ func checkValidMD5(h http.Header) ([]byte, error) {
 	return []byte{}, nil
 }
 
+// hasContentMD5 returns true if Content-MD5 header is set.
+func hasContentMD5(h http.Header) bool {
+	_, ok := h[xhttp.ContentMD5]
+	return ok
+}
+
 /// http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html
 const (
 	// Maximum object size per PUT request is 5TB.
