@@ -688,53 +688,6 @@ func (sys *NotificationSys) load(buckets []BucketInfo, objAPI ObjectLayer) error
 	return nil
 }
 
-func (sys *NotificationSys) initBucketObjectLockConfig(objAPI ObjectLayer) error {
-	buckets, err := objAPI.ListBuckets(context.Background())
-	if err != nil {
-		return err
-	}
-	for _, bucket := range buckets {
-		ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{BucketName: bucket.Name})
-		configFile := path.Join(bucketConfigPrefix, bucket.Name, bucketObjectLockEnabledConfigFile)
-		bucketObjLockData, err := readConfig(ctx, objAPI, configFile)
-
-		if err != nil {
-			if err == errConfigNotFound {
-				continue
-			}
-			return err
-		}
-
-		if string(bucketObjLockData) != bucketObjectLockEnabledConfig {
-			// this should never happen
-			logger.LogIf(ctx, objectlock.ErrMalformedBucketObjectConfig)
-			continue
-		}
-
-		configFile = path.Join(bucketConfigPrefix, bucket.Name, objectLockConfig)
-		configData, err := readConfig(ctx, objAPI, configFile)
-
-		if err != nil {
-			if err == errConfigNotFound {
-				globalBucketObjectLockConfig.Set(bucket.Name, objectlock.Retention{})
-				continue
-			}
-			return err
-		}
-
-		config, err := objectlock.ParseObjectLockConfig(bytes.NewReader(configData))
-		if err != nil {
-			return err
-		}
-		retention := objectlock.Retention{}
-		if config.Rule != nil {
-			retention = config.ToRetention()
-		}
-		globalBucketObjectLockConfig.Set(bucket.Name, retention)
-	}
-	return nil
-}
-
 // Init - initializes notification system from notification.xml and listener.json of all buckets.
 func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
 	if objAPI == nil {
@@ -754,11 +707,7 @@ func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error
 		}
 	}
 
-	if err := sys.load(buckets, objAPI); err != nil {
-		return err
-	}
-
-	return sys.initBucketObjectLockConfig(objAPI)
+	return sys.load(buckets, objAPI)
 }
 
 // AddRulesMap - adds rules map for bucket name.
