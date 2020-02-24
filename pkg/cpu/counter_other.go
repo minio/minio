@@ -1,4 +1,4 @@
-// +build darwin freebsd openbsd netbsd dragonfly windows
+// +build darwin freebsd openbsd netbsd dragonfly windows solaris
 
 /*
  * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
