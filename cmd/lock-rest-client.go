@@ -147,12 +147,6 @@ func (client *lockRESTClient) Expired(args dsync.LockArgs) (expired bool, err er
 	return client.restCall(lockRESTMethodExpired, args)
 }
 
-func closeLockers(lockers []dsync.NetLocker) {
-	for _, locker := range lockers {
-		locker.Close()
-	}
-}
-
 func newLockAPI(endpoint Endpoint) dsync.NetLocker {
 	if endpoint.IsLocal {
 		return globalLockServers[endpoint]

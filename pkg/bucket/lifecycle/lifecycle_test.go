@@ -179,6 +179,12 @@ func TestComputeActions(t *testing.T) {
 			objectModTime:  time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
 			expectedAction: NoneAction,
 		},
+		// No modTime, should be none-action
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			objectName:     "foodir/fooobject",
+			expectedAction: NoneAction,
+		},
 		// Prefix not matched
 		{
 			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,

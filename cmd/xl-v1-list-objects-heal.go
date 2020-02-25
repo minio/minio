@@ -16,14 +16,26 @@
 
 package cmd
 
-import "context"
+import (
+	"context"
+
+	"github.com/minio/minio/cmd/logger"
+)
 
 // This is not implemented/needed anymore, look for xl-sets.ListBucketHeal()
 func (xl xlObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
-	return nil, nil
+	logger.LogIf(ctx, NotImplemented{})
+	return nil, NotImplemented{}
 }
 
 // This is not implemented/needed anymore, look for xl-sets.HealObjects()
-func (xl xlObjects) HealObjects(ctx context.Context, bucket, prefix string, fn healObjectFn) (e error) {
-	return nil
+func (xl xlObjects) HealObjects(ctx context.Context, bucket, prefix string, fn healObjectFn) error {
+	logger.LogIf(ctx, NotImplemented{})
+	return NotImplemented{}
+}
+
+// this is not implemented/needed anymore, look for xl-sets.Walk()
+func (xl xlObjects) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+	logger.LogIf(ctx, NotImplemented{})
+	return NotImplemented{}
 }
