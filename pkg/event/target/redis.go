@@ -191,7 +191,7 @@ func (target *RedisTarget) send(eventData event.Event) error {
 	}
 
 	if target.args.Format == event.AccessFormat {
-		data, err := json.Marshal([]RedisAccessEvent{RedisAccessEvent{Event: []event.Event{eventData}, EventTime: eventData.EventTime}})
+		data, err := json.Marshal([]RedisAccessEvent{{Event: []event.Event{eventData}, EventTime: eventData.EventTime}})
 		if err != nil {
 			return err
 		}
