@@ -74,7 +74,7 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 VERSION:
-{{.Version}}
+  {{.Version}}
 `
 
 func newApp(name string) *cli.App {
