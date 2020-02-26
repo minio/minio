@@ -403,17 +403,18 @@ func (z *xlZones) PutObject(ctx context.Context, bucket string, object string, d
 	if z.SingleZone() {
 		return z.zones[0].PutObject(ctx, bucket, object, data, opts)
 	}
-
-	for _, zone := range z.zones {
-		objInfo, err := zone.GetObjectInfo(ctx, bucket, object, opts)
-		if err != nil {
-			if isErrObjectNotFound(err) {
-				continue
+	if !globalWORMEnabled {
+		for _, zone := range z.zones {
+			objInfo, err := zone.GetObjectInfo(ctx, bucket, object, opts)
+			if err != nil {
+				if isErrObjectNotFound(err) {
+					continue
+				}
+				return objInfo, err
 			}
-			return objInfo, err
+			// Overwrite request upload to right zone.
+			return zone.PutObject(ctx, bucket, object, data, opts)
 		}
-		// Overwrite request upload to right zone.
-		return zone.PutObject(ctx, bucket, object, data, opts)
 	}
 	// Object not found pick the least used and upload to this zone.
 	return z.zones[z.getAvailableZoneIdx(ctx)].PutObject(ctx, bucket, object, data, opts)
