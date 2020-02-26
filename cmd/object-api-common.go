@@ -320,6 +320,8 @@ func listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter 
 // then Walk() stops the walker.
 func fsWalk(ctx context.Context, obj ObjectLayer, bucket, prefix string, listDir ListDirFunc, results chan<- ObjectInfo, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) error {
 	if err := checkListObjsArgs(ctx, bucket, prefix, "", obj); err != nil {
+		// Upon error close the channel.
+		close(results)
 		return err
 	}
 

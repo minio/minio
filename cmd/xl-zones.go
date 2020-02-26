@@ -1291,6 +1291,8 @@ func (z *xlZones) HealBucket(ctx context.Context, bucket string, dryRun, remove 
 // then Walk() stops the walker.
 func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
 	if err := checkListObjsArgs(ctx, bucket, prefix, "", z); err != nil {
+		// Upon error close the channel.
+		close(results)
 		return err
 	}
 

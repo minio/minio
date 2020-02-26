@@ -1617,6 +1617,8 @@ func (s *xlSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 // then Walk() stops the walker.
 func (s *xlSets) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
 	if err := checkListObjsArgs(ctx, bucket, prefix, "", s); err != nil {
+		// Upon error close the channel.
+		close(results)
 		return err
 	}
 
