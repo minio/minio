@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"path"
@@ -264,8 +265,10 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 		if length == totalBytesRead {
 			break
 		}
+
+		partNumber := xlMeta.Parts[partIndex].Number
+
 		// Save the current part name and size.
-		partName := xlMeta.Parts[partIndex].Name
 		partSize := xlMeta.Parts[partIndex].Size
 
 		partLength := partSize - partOffset
@@ -281,8 +284,10 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 			if disk == OfflineDisk {
 				continue
 			}
-			checksumInfo := metaArr[index].Erasure.GetChecksumInfo(partName)
-			readers[index] = newBitrotReader(disk, bucket, pathJoin(object, partName), tillOffset, checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
+			checksumInfo := metaArr[index].Erasure.GetChecksumInfo(partNumber)
+			partPath := pathJoin(object, fmt.Sprintf("part.%d", partNumber))
+			readers[index] = newBitrotReader(disk, bucket, partPath, tillOffset,
+				checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
 		}
 		err := erasure.Decode(ctx, writer, readers, partOffset, partLength, partSize)
 		// Note: we should not be defer'ing the following closeBitrotReaders() call as we are inside a for loop i.e if we use defer, we would accumulate a lot of open files by the time
@@ -596,8 +601,12 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 			onlineDisks[i] = nil
 			continue
 		}
-		partsMetadata[i].AddObjectPart(1, partName, "", n, data.ActualSize())
-		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, DefaultBitrotAlgorithm, bitrotWriterSum(w)})
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize())
+		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
+			PartNumber: 1,
+			Algorithm:  DefaultBitrotAlgorithm,
+			Hash:       bitrotWriterSum(w),
+		})
 	}
 
 	// Save additional erasureMetadata.

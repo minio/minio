@@ -21,7 +21,6 @@ import (
 	"context"
 	"os"
 	"path"
-	"strconv"
 	"testing"
 	"time"
 
@@ -218,8 +217,7 @@ func TestAddObjectPart(t *testing.T) {
 	// Test them.
 	for _, testCase := range testCases {
 		if testCase.expectedIndex > -1 {
-			partNumString := strconv.Itoa(testCase.partNum)
-			xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte), ActualSize)
+			xlMeta.AddObjectPart(testCase.partNum, "", int64(testCase.partNum+humanize.MiByte), ActualSize)
 		}
 
 		if index := objectPartIndex(xlMeta.Parts, testCase.partNum); index != testCase.expectedIndex {
@@ -250,8 +248,7 @@ func TestObjectPartIndex(t *testing.T) {
 
 	// Add some parts for testing.
 	for _, testCase := range testCases {
-		partNumString := strconv.Itoa(testCase.partNum)
-		xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte), ActualSize)
+		xlMeta.AddObjectPart(testCase.partNum, "", int64(testCase.partNum+humanize.MiByte), ActualSize)
 	}
 
 	// Add failure test case.
@@ -279,8 +276,7 @@ func TestObjectToPartOffset(t *testing.T) {
 	// Add some parts for testing.
 	// Total size of all parts is 5,242,899 bytes.
 	for _, partNum := range []int{1, 2, 4, 5, 7} {
-		partNumString := strconv.Itoa(partNum)
-		xlMeta.AddObjectPart(partNum, "part."+partNumString, "etag."+partNumString, int64(partNum+humanize.MiByte), ActualSize)
+		xlMeta.AddObjectPart(partNum, "", int64(partNum+humanize.MiByte), ActualSize)
 	}
 
 	testCases := []struct {

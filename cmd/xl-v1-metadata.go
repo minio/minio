@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path"
 	"sort"
@@ -38,9 +39,8 @@ const erasureAlgorithmKlauspost = "klauspost/reedsolomon/vandermonde"
 // ObjectPartInfo Info of each part kept in the multipart metadata
 // file after CompleteMultipartUpload() is called.
 type ObjectPartInfo struct {
-	Number     int    `json:"number"`
-	Name       string `json:"name"`
 	ETag       string `json:"etag,omitempty"`
+	Number     int    `json:"number"`
 	Size       int64  `json:"size"`
 	ActualSize int64  `json:"actualSize"`
 }
@@ -54,9 +54,9 @@ func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Numb
 
 // ChecksumInfo - carries checksums of individual scattered parts per disk.
 type ChecksumInfo struct {
-	Name      string
-	Algorithm BitrotAlgorithm
-	Hash      []byte
+	PartNumber int
+	Algorithm  BitrotAlgorithm
+	Hash       []byte
 }
 
 type checksumInfoJSON struct {
@@ -68,7 +68,7 @@ type checksumInfoJSON struct {
 // MarshalJSON marshals the ChecksumInfo struct
 func (c ChecksumInfo) MarshalJSON() ([]byte, error) {
 	info := checksumInfoJSON{
-		Name:      c.Name,
+		Name:      fmt.Sprintf("part.%d", c.PartNumber),
 		Algorithm: c.Algorithm.String(),
 		Hash:      hex.EncodeToString(c.Hash),
 	}
@@ -86,9 +86,11 @@ func (c *ChecksumInfo) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	c.Name = info.Name
 	c.Algorithm = BitrotAlgorithmFromString(info.Algorithm)
 	c.Hash = sum
+	if _, err = fmt.Sscanf(info.Name, "part.%d", &c.PartNumber); err != nil {
+		return err
+	}
 
 	if !c.Algorithm.Available() {
 		logger.LogIf(context.Background(), errBitrotHashAlgoInvalid)
@@ -118,7 +120,7 @@ type ErasureInfo struct {
 // AddChecksumInfo adds a checksum of a part.
 func (e *ErasureInfo) AddChecksumInfo(ckSumInfo ChecksumInfo) {
 	for i, sum := range e.Checksums {
-		if sum.Name == ckSumInfo.Name {
+		if sum.PartNumber == ckSumInfo.PartNumber {
 			e.Checksums[i] = ckSumInfo
 			return
 		}
@@ -127,10 +129,10 @@ func (e *ErasureInfo) AddChecksumInfo(ckSumInfo ChecksumInfo) {
 }
 
 // GetChecksumInfo - get checksum of a part.
-func (e ErasureInfo) GetChecksumInfo(partName string) (ckSum ChecksumInfo) {
-	// Return the checksum.
+func (e ErasureInfo) GetChecksumInfo(partNumber int) (ckSum ChecksumInfo) {
 	for _, sum := range e.Checksums {
-		if sum.Name == partName {
+		if sum.PartNumber == partNumber {
+			// Return the checksum
 			return sum
 		}
 	}
@@ -279,10 +281,9 @@ func objectPartIndex(parts []ObjectPartInfo, partNumber int) int {
 }
 
 // AddObjectPart - add a new object part in order.
-func (m *xlMetaV1) AddObjectPart(partNumber int, partName string, partETag string, partSize int64, actualSize int64) {
+func (m *xlMetaV1) AddObjectPart(partNumber int, partETag string, partSize int64, actualSize int64) {
 	partInfo := ObjectPartInfo{
 		Number:     partNumber,
-		Name:       partName,
 		ETag:       partETag,
 		Size:       partSize,
 		ActualSize: actualSize,
@@ -330,8 +331,8 @@ func getXLMetaInQuorum(ctx context.Context, metaArr []xlMetaV1, modTime time.Tim
 	for i, meta := range metaArr {
 		if meta.IsValid() && meta.Stat.ModTime.Equal(modTime) {
 			h := sha256.New()
-			for _, p := range meta.Parts {
-				h.Write([]byte(p.Name))
+			for _, part := range meta.Parts {
+				h.Write([]byte(fmt.Sprintf("part.%d", part.Number)))
 			}
 			metaHashes[i] = hex.EncodeToString(h.Sum(nil))
 		}

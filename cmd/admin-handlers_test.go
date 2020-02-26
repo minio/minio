@@ -263,6 +263,7 @@ func TestAdminServerInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
 	}
+
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.

@@ -575,7 +575,6 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 
 		fsMeta.Parts[i] = ObjectPartInfo{
 			Number:     part.PartNumber,
-			ETag:       part.ETag,
 			Size:       fi.Size(),
 			ActualSize: actualSize,
 		}
