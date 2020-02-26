@@ -184,7 +184,7 @@ func (xl xlObjects) StorageInfo(ctx context.Context, local bool) StorageInfo {
 		disks = xl.getDisks()
 	} else {
 		for _, d := range xl.getDisks() {
-			if d.Hostname() == "" {
+			if d != nil && d.Hostname() == "" {
 				// Append this local disk since local flag is true
 				disks = append(disks, d)
 			}
