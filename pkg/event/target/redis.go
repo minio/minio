@@ -61,6 +61,12 @@ type RedisArgs struct {
 	QueueLimit uint64    `json:"queueLimit"`
 }
 
+// RedisAccessEvent holds event log data and timestamp
+type RedisAccessEvent struct {
+	Event     []event.Event
+	EventTime string
+}
+
 // Validate RedisArgs fields
 func (r RedisArgs) Validate() error {
 	if !r.Enable {
@@ -185,10 +191,7 @@ func (target *RedisTarget) send(eventData event.Event) error {
 	}
 
 	if target.args.Format == event.AccessFormat {
-		data, err := json.Marshal(struct {
-			Event     []event.Event
-			EventTime string
-		}{Event: []event.Event{eventData}, EventTime: eventData.EventTime})
+		data, err := json.Marshal([]RedisAccessEvent{RedisAccessEvent{Event: []event.Event{eventData}, EventTime: eventData.EventTime}})
 		if err != nil {
 			return err
 		}
