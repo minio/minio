@@ -206,7 +206,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			c.incHitsToMeta(ctx, dcache, bucket, object, cacheReader.ObjInfo.Size, cacheReader.ObjInfo.ETag)
 			return cacheReader, nil
 		}
-		if cc.noStore {
+		if cc != nil && cc.noStore {
 			c.cacheStats.incMiss()
 			bReader, err := c.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 			bReader.ObjInfo.CacheLookupStatus = CacheHit
@@ -390,7 +390,7 @@ func (c *cacheObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dst
 	// if currently cached, evict old entry and revert to backend.
 	if cachedObjInfo, _, cerr := dcache.Stat(ctx, srcBucket, srcObject); cerr == nil {
 		cc := cacheControlOpts(cachedObjInfo)
-		if !cc.isStale(cachedObjInfo.ModTime) {
+		if cc == nil || !cc.isStale(cachedObjInfo.ModTime) {
 			dcache.Delete(ctx, srcBucket, srcObject)
 		}
 	}
