@@ -43,6 +43,13 @@ type ObjectOptions struct {
 	CheckCopyPrecondFn   CheckCopyPreconditionFn
 }
 
+// WalkOptions allows to customize how an ObjectLayer implementation
+// performs a Walk - e.g. whether the traversal walk should be recursive
+// or not.
+type WalkOptions struct {
+	Recursive bool
+}
+
 // LockType represents required locking for ObjectLayer operations
 type LockType int
 
@@ -69,7 +76,7 @@ type ObjectLayer interface {
 	DeleteBucket(ctx context.Context, bucket string) error
 	ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
 	ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
-	Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error
+	Walk(ctx context.Context, bucket, prefix string, opts WalkOptions) (<-chan ObjectInfo, error)
 
 	// Object operations.
 

@@ -35,7 +35,7 @@ func (xl xlObjects) HealObjects(ctx context.Context, bucket, prefix string, fn h
 }
 
 // this is not implemented/needed anymore, look for xl-sets.Walk()
-func (xl xlObjects) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+func (xl xlObjects) Walk(ctx context.Context, bucket, prefix string, opts WalkOptions) (<-chan ObjectInfo, error) {
 	logger.LogIf(ctx, NotImplemented{})
-	return NotImplemented{}
+	return nil, NotImplemented{}
 }

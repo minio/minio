@@ -318,15 +318,14 @@ func listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter 
 // to allocate a receive channel for ObjectInfo, upon any unhandled
 // error walker returns error. Optionally if context.Done() is received
 // then Walk() stops the walker.
-func fsWalk(ctx context.Context, obj ObjectLayer, bucket, prefix string, listDir ListDirFunc, results chan<- ObjectInfo, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) error {
+func fsWalk(ctx context.Context, obj ObjectLayer, bucket, prefix string, listDir ListDirFunc, opts WalkOptions, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (<-chan ObjectInfo, error) {
 	if err := checkListObjsArgs(ctx, bucket, prefix, "", obj); err != nil {
-		// Upon error close the channel.
-		close(results)
-		return err
+		return nil, err
 	}
 
-	walkResultCh := startTreeWalk(ctx, bucket, prefix, "", true, listDir, ctx.Done())
+	walkResultCh := startTreeWalk(ctx, bucket, prefix, "", opts.Recursive, listDir, ctx.Done())
 
+	results := make(chan ObjectInfo, 10)
 	go func() {
 		defer close(results)
 
@@ -365,7 +364,7 @@ func fsWalk(ctx context.Context, obj ObjectLayer, bucket, prefix string, listDir
 			}
 		}
 	}()
-	return nil
+	return results, nil
 }
 
 func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {

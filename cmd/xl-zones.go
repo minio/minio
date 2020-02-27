@@ -1289,18 +1289,15 @@ func (z *xlZones) HealBucket(ctx context.Context, bucket string, dryRun, remove 
 // to allocate a receive channel for ObjectInfo, upon any unhandled
 // error walker returns error. Optionally if context.Done() is received
 // then Walk() stops the walker.
-func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, opts WalkOptions) (<-chan ObjectInfo, error) {
 	if err := checkListObjsArgs(ctx, bucket, prefix, "", z); err != nil {
-		// Upon error close the channel.
-		close(results)
-		return err
+		return nil, err
 	}
 
 	var zonesEntryChs [][]FileInfoCh
-
 	for _, zone := range z.zones {
 		zonesEntryChs = append(zonesEntryChs,
-			zone.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done()))
+			zone.startMergeWalks(ctx, bucket, prefix, "", opts.Recursive, ctx.Done()))
 	}
 
 	var zoneDrivesPerSet []int
@@ -1315,6 +1312,7 @@ func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, results chan<
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
 	}
 
+	results := make(chan ObjectInfo, 10)
 	go func() {
 		defer close(results)
 
@@ -1333,7 +1331,7 @@ func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, results chan<
 		}
 	}()
 
-	return nil
+	return results, nil
 }
 
 type healObjectFn func(string, string) error

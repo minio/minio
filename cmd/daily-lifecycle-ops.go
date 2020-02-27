@@ -133,11 +133,9 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 		}
 		commonPrefix := lcp(prefixes)
 
-		// Allocate new results channel to receive ObjectInfo.
-		objInfoCh := make(chan ObjectInfo)
-
 		// Walk through all objects
-		if err := objAPI.Walk(ctx, bucket.Name, commonPrefix, objInfoCh); err != nil {
+		objInfoCh, err := objAPI.Walk(ctx, bucket.Name, commonPrefix, WalkOptions{Recursive: true})
+		if err != nil {
 			return err
 		}
 

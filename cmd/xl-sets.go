@@ -1610,23 +1610,22 @@ func (s *xlSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 	return listBuckets, nil
 }
 
-// Walk a bucket, optionally prefix recursively, until we have returned
-// all the content to objectInfo channel, it is callers responsibility
-// to allocate a receive channel for ObjectInfo, upon any unhandled
-// error walker returns error. Optionally if context.Done() is received
-// then Walk() stops the walker.
-func (s *xlSets) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+// Walk traverses all objects inside a bucket under an optionally prefix and
+// returns a receive-only channel that returns all traversed objects.
+//
+// Walk closes the returned channel once it has visited all objects or
+// once the ctx.Done() stops blocking.
+func (s *xlSets) Walk(ctx context.Context, bucket, prefix string, opts WalkOptions) (<-chan ObjectInfo, error) {
 	if err := checkListObjsArgs(ctx, bucket, prefix, "", s); err != nil {
-		// Upon error close the channel.
-		close(results)
-		return err
+		return nil, err
 	}
 
-	entryChs := s.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done())
+	entryChs := s.startMergeWalks(ctx, bucket, prefix, "", opts.Recursive, ctx.Done())
 
 	entriesValid := make([]bool, len(entryChs))
 	entries := make([]FileInfo, len(entryChs))
 
+	results := make(chan ObjectInfo, 10)
 	go func() {
 		defer close(results)
 
@@ -1643,8 +1642,7 @@ func (s *xlSets) Walk(ctx context.Context, bucket, prefix string, results chan<-
 			results <- entry.ToObjectInfo()
 		}
 	}()
-
-	return nil
+	return results, nil
 }
 
 // HealObjects - Heal all objects recursively at a specified prefix, any
