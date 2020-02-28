@@ -19,7 +19,9 @@ package s3select
 import (
 	"bufio"
 	"bytes"
+	"compress/bzip2"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -302,9 +304,12 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 		s3Select.recordReader, err = csv.NewReader(s3Select.progressReader, &s3Select.Input.CSVArgs)
 		if err != nil {
 			rc.Close()
+			var stErr bzip2.StructuralError
+			if errors.As(err, &stErr) {
+				return errInvalidBZIP2CompressionFormat(err)
+			}
 			return err
 		}
-
 		return nil
 	case jsonFormat:
 		rc, err := getReader(0, -1)
