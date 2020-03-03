@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"reflect"
-	"strconv"
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
@@ -164,25 +163,23 @@ func newTestXLMetaV1() xlMetaV1 {
 	return xlMeta
 }
 
-func (m *xlMetaV1) AddTestObjectCheckSum(checkSumNum int, name string, algorithm BitrotAlgorithm, hash string) {
+func (m *xlMetaV1) AddTestObjectCheckSum(partNumber int, algorithm BitrotAlgorithm, hash string) {
 	checksum, err := hex.DecodeString(hash)
 	if err != nil {
 		panic(err)
 	}
-	m.Erasure.Checksums[checkSumNum] = ChecksumInfo{name, algorithm, checksum}
+	m.Erasure.Checksums[partNumber-1] = ChecksumInfo{partNumber, algorithm, checksum}
 }
 
 // AddTestObjectPart - add a new object part in order.
-func (m *xlMetaV1) AddTestObjectPart(partNumber int, partName string, partETag string, partSize int64) {
+func (m *xlMetaV1) AddTestObjectPart(partNumber int, partSize int64) {
 	partInfo := ObjectPartInfo{
 		Number: partNumber,
-		Name:   partName,
-		ETag:   partETag,
 		Size:   partSize,
 	}
 
 	// Proceed to include new part info.
-	m.Parts[partNumber] = partInfo
+	m.Parts[partNumber-1] = partInfo
 }
 
 // Constructs xlMetaV1{} for given number of parts and converts it into bytes.
@@ -203,11 +200,10 @@ func getSampleXLMeta(totalParts int) xlMetaV1 {
 	// total number of parts.
 	xlMeta.Parts = make([]ObjectPartInfo, totalParts)
 	for i := 0; i < totalParts; i++ {
-		partName := "part." + strconv.Itoa(i+1)
 		// hard coding hash and algo value for the checksum, Since we are benchmarking the parsing of xl.json the magnitude doesn't affect the test,
 		// The magnitude doesn't make a difference, only the size does.
-		xlMeta.AddTestObjectCheckSum(i, partName, BLAKE2b512, "a23f5eff248c4372badd9f3b2455a285cd4ca86c3d9a570b091d3fc5cd7ca6d9484bbea3f8c5d8d4f84daae96874419eda578fd736455334afbac2c924b3915a")
-		xlMeta.AddTestObjectPart(i, partName, "d3fdd79cc3efd5fe5c068d7be397934b", 67108864)
+		xlMeta.AddTestObjectCheckSum(i+1, BLAKE2b512, "a23f5eff248c4372badd9f3b2455a285cd4ca86c3d9a570b091d3fc5cd7ca6d9484bbea3f8c5d8d4f84daae96874419eda578fd736455334afbac2c924b3915a")
+		xlMeta.AddTestObjectPart(i+1, 67108864)
 	}
 	return xlMeta
 }
@@ -256,8 +252,8 @@ func compareXLMetaV1(t *testing.T, unMarshalXLMeta, jsoniterXLMeta xlMetaV1) {
 		t.Errorf("Expected the size of Erasure Checksums to be %d, but got %d.", len(unMarshalXLMeta.Erasure.Checksums), len(jsoniterXLMeta.Erasure.Checksums))
 	} else {
 		for i := 0; i < len(unMarshalXLMeta.Erasure.Checksums); i++ {
-			if unMarshalXLMeta.Erasure.Checksums[i].Name != jsoniterXLMeta.Erasure.Checksums[i].Name {
-				t.Errorf("Expected the Erasure Checksum Name to be \"%s\", got \"%s\".", unMarshalXLMeta.Erasure.Checksums[i].Name, jsoniterXLMeta.Erasure.Checksums[i].Name)
+			if unMarshalXLMeta.Erasure.Checksums[i].PartNumber != jsoniterXLMeta.Erasure.Checksums[i].PartNumber {
+				t.Errorf("Expected the Erasure Checksum PartNumber to be \"%d\", got \"%d\".", unMarshalXLMeta.Erasure.Checksums[i].PartNumber, jsoniterXLMeta.Erasure.Checksums[i].PartNumber)
 			}
 			if unMarshalXLMeta.Erasure.Checksums[i].Algorithm != jsoniterXLMeta.Erasure.Checksums[i].Algorithm {
 				t.Errorf("Expected the Erasure Checksum Algorithm to be \"%s\", got \"%s\".", unMarshalXLMeta.Erasure.Checksums[i].Algorithm, jsoniterXLMeta.Erasure.Checksums[i].Algorithm)
@@ -275,12 +271,6 @@ func compareXLMetaV1(t *testing.T, unMarshalXLMeta, jsoniterXLMeta xlMetaV1) {
 		t.Errorf("Expected info of  %d parts to be present, but got %d instead.", len(unMarshalXLMeta.Parts), len(jsoniterXLMeta.Parts))
 	} else {
 		for i := 0; i < len(unMarshalXLMeta.Parts); i++ {
-			if unMarshalXLMeta.Parts[i].Name != jsoniterXLMeta.Parts[i].Name {
-				t.Errorf("Expected the name of part %d to be \"%s\", got \"%s\".", i+1, unMarshalXLMeta.Parts[i].Name, jsoniterXLMeta.Parts[i].Name)
-			}
-			if unMarshalXLMeta.Parts[i].ETag != jsoniterXLMeta.Parts[i].ETag {
-				t.Errorf("Expected the ETag of part %d to be \"%s\", got \"%s\".", i+1, unMarshalXLMeta.Parts[i].ETag, jsoniterXLMeta.Parts[i].ETag)
-			}
 			if unMarshalXLMeta.Parts[i].Number != jsoniterXLMeta.Parts[i].Number {
 				t.Errorf("Expected the number of part %d to be \"%d\", got \"%d\".", i+1, unMarshalXLMeta.Parts[i].Number, jsoniterXLMeta.Parts[i].Number)
 			}

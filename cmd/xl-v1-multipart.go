@@ -55,8 +55,8 @@ func (xl xlObjects) checkUploadIDExists(ctx context.Context, bucket, object, upl
 }
 
 // Removes part given by partName belonging to a mulitpart upload from minioMetaBucket
-func (xl xlObjects) removeObjectPart(bucket, object, uploadID, partName string) {
-	curpartPath := path.Join(bucket, object, uploadID, partName)
+func (xl xlObjects) removeObjectPart(bucket, object, uploadID string, partNumber int) {
+	curpartPath := pathJoin(bucket, object, uploadID, fmt.Sprintf("part.%d", partNumber))
 	storageDisks := xl.getDisks()
 
 	g := errgroup.WithNErrs(len(storageDisks))
@@ -391,7 +391,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	md5hex := r.MD5CurrentHexString()
 
 	// Add the current part.
-	xlMeta.AddObjectPart(partID, partSuffix, md5hex, n, data.ActualSize())
+	xlMeta.AddObjectPart(partID, md5hex, n, data.ActualSize())
 
 	for i, disk := range onlineDisks {
 		if disk == OfflineDisk {
@@ -399,7 +399,11 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 		}
 		partsMetadata[i].Stat = xlMeta.Stat
 		partsMetadata[i].Parts = xlMeta.Parts
-		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partSuffix, DefaultBitrotAlgorithm, bitrotWriterSum(writers[i])})
+		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
+			PartNumber: partID,
+			Algorithm:  DefaultBitrotAlgorithm,
+			Hash:       bitrotWriterSum(writers[i]),
+		})
 	}
 
 	// Write all the checksum metadata.
@@ -421,8 +425,8 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	// Return success.
 	return PartInfo{
 		PartNumber:   partID,
-		LastModified: xlMeta.Stat.ModTime,
 		ETag:         md5hex,
+		LastModified: xlMeta.Stat.ModTime,
 		Size:         xlMeta.Stat.Size,
 		ActualSize:   data.ActualSize(),
 	}, nil
@@ -630,7 +634,6 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		xlMeta.Parts[i] = ObjectPartInfo{
 			Number:     part.PartNumber,
 			Size:       currentXLMeta.Parts[partIdx].Size,
-			Name:       fmt.Sprintf("part.%d", part.PartNumber),
 			ActualSize: currentXLMeta.Parts[partIdx].ActualSize,
 		}
 	}
@@ -701,7 +704,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 			// Request 3: PutObjectPart 2
 			// Request 4: CompleteMultipartUpload --part 2
 			// N.B. 1st part is not present. This part should be removed from the storage.
-			xl.removeObjectPart(bucket, object, uploadID, curpart.Name)
+			xl.removeObjectPart(bucket, object, uploadID, curpart.Number)
 		}
 	}
 
