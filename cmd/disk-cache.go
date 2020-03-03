@@ -695,7 +695,6 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 
 func (c *cacheObjects) gc(ctx context.Context, doneCh chan struct{}) {
 	ticker := time.NewTicker(cacheGCInterval)
-	var gcLock sync.Mutex
 
 	defer ticker.Stop()
 	for {
@@ -711,14 +710,12 @@ func (c *cacheObjects) gc(ctx context.Context, doneCh chan struct{}) {
 				if dcache.gcCount() == 0 {
 					continue
 				}
-				gcLock.Lock()
 				wg.Add(1)
-				go func(d *diskCache, l *sync.Mutex) {
+				go func(d *diskCache) {
 					defer wg.Done()
 					d.resetGCCounter()
 					d.purge(ctx, doneCh)
-					l.Unlock()
-				}(dcache, &gcLock)
+				}(dcache)
 			}
 			wg.Wait()
 		}
