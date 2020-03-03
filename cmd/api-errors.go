@@ -95,6 +95,7 @@ const (
 	ErrMissingContentLength
 	ErrMissingContentMD5
 	ErrMissingRequestBodyError
+	ErrMissingSecurityHeader
 	ErrNoSuchBucket
 	ErrNoSuchBucketPolicy
 	ErrNoSuchBucketLifecycle
@@ -150,6 +151,7 @@ const (
 	ErrKeyTooLongError
 	ErrInvalidBucketObjectLockConfiguration
 	ErrObjectLockConfigurationNotAllowed
+	ErrNoSuchObjectLockConfiguration
 	ErrObjectLocked
 	ErrInvalidRetentionDate
 	ErrPastObjectLockRetainDate
@@ -157,7 +159,6 @@ const (
 	ErrObjectLockInvalidHeaders
 	ErrInvalidTagDirective
 	// Add new error codes here.
-	ErrTaggingOperation
 
 	// SSE-S3 related API errors
 	ErrInvalidEncryptionMethod
@@ -472,6 +473,11 @@ var errorCodes = errorCodeMap{
 		Description:    "Missing required header for this request: Content-Md5.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrMissingSecurityHeader: {
+		Code:           "MissingSecurityHeader",
+		Description:    "Your request was missing a required header",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrMissingRequestBodyError: {
 		Code:           "MissingRequestBodyError",
 		Description:    "Request body is empty.",
@@ -756,6 +762,11 @@ var errorCodes = errorCodeMap{
 		Description:    "Object Lock configuration cannot be enabled on existing buckets.",
 		HTTPStatusCode: http.StatusConflict,
 	},
+	ErrNoSuchObjectLockConfiguration: {
+		Code:           "NoSuchObjectLockConfiguration",
+		Description:    "The specified object does not have a ObjectLock configuration",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrObjectLocked: {
 		Code:           "InvalidRequest",
 		Description:    "Object is WORM protected and cannot be overwritten",
@@ -850,11 +861,6 @@ var errorCodes = errorCodeMap{
 	ErrInvalidTagDirective: {
 		Code:           "InvalidArgument",
 		Description:    "Unknown tag directive.",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
-	ErrTaggingOperation: {
-		Code:           "InvalidArgument",
-		Description:    "Tagging not Implemented.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidEncryptionMethod: {
@@ -1809,6 +1815,13 @@ func toAPIError(ctx context.Context, err error) APIError {
 		// their internal error types. This code is only
 		// useful with gateway implementations.
 		switch e := err.(type) {
+		case *xml.SyntaxError:
+			apiErr = APIError{
+				Code: "MalformedXML",
+				Description: fmt.Sprintf("%s (%s)", errorCodes[ErrMalformedXML].Description,
+					e.Error()),
+				HTTPStatusCode: errorCodes[ErrMalformedXML].HTTPStatusCode,
+			}
 		case url.EscapeError:
 			apiErr = APIError{
 				Code: "XMinioInvalidObjectName",

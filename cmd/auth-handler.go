@@ -380,12 +380,11 @@ func isReqAuthenticated(ctx context.Context, r *http.Request, region string, sty
 		err                       error
 		contentMD5, contentSHA256 []byte
 	)
+
 	// Extract 'Content-Md5' if present.
-	if _, ok := r.Header[xhttp.ContentMD5]; ok {
-		contentMD5, err = base64.StdEncoding.Strict().DecodeString(r.Header.Get(xhttp.ContentMD5))
-		if err != nil || len(contentMD5) == 0 {
-			return ErrInvalidDigest
-		}
+	contentMD5, err = checkValidMD5(r.Header)
+	if err != nil {
+		return ErrInvalidDigest
 	}
 
 	// Extract either 'X-Amz-Content-Sha256' header or 'X-Amz-Content-Sha256' query parameter (if V4 presigned)

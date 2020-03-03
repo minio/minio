@@ -60,6 +60,10 @@ func TestUndoMakeBucket(t *testing.T) {
 }
 
 func TestHealObjectCorrupted(t *testing.T) {
+	resetGlobalHealState()
+
+	defer resetGlobalHealState()
+
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)
 	if err != nil {

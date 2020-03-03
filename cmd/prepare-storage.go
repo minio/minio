@@ -302,17 +302,6 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 		return nil, err
 	}
 
-	// Validate all format configs with reference format.
-	if err = validateXLFormats(format, formatConfigs, endpoints, setCount, drivesPerSet); err != nil {
-		return nil, err
-	}
-
-	// Get the deploymentID if set.
-	format.ID, err = formatXLGetDeploymentID(format, formatConfigs)
-	if err != nil {
-		return nil, err
-	}
-
 	if format.ID == "" {
 		// Not a first disk, wait until first disk fixes deploymentID
 		if !firstDisk {

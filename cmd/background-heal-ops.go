@@ -75,6 +75,7 @@ func (h *healRoutine) run() {
 				break
 			}
 
+			// Wait and proceed if there are active requests
 			waitForLowHTTPReq(int32(globalEndpoints.Nodes()))
 
 			var res madmin.HealResultItem
@@ -126,7 +127,7 @@ func startBackgroundHealing() {
 
 	// Launch the background healer sequence to track
 	// background healing operations
-	info := objAPI.StorageInfo(ctx)
+	info := objAPI.StorageInfo(ctx, false)
 	numDisks := info.Backend.OnlineDisks.Sum() + info.Backend.OfflineDisks.Sum()
 	nh := newBgHealSequence(numDisks)
 	globalBackgroundHealState.LaunchNewHealSequence(nh)

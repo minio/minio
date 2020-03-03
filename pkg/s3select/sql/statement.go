@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/bcicen/jstream"
+	"github.com/minio/simdjson-go"
 )
 
 var (
@@ -140,36 +141,56 @@ func parseLimit(v *LitValue) (int64, error) {
 // EvalFrom evaluates the From clause on the input record. It only
 // applies to JSON input data format (currently).
 func (e *SelectStatement) EvalFrom(format string, input Record) (Record, error) {
-	if e.selectAST.From.HasKeypath() {
-		if format == "json" {
-			objFmt, rawVal := input.Raw()
-			if objFmt != SelectFmtJSON {
-				return nil, errDataSource(errors.New("unexpected non JSON input"))
-			}
+	if !e.selectAST.From.HasKeypath() {
+		return input, nil
+	}
+	_, rawVal := input.Raw()
 
-			jsonRec := rawVal.(jstream.KVS)
-			txedRec, _, err := jsonpathEval(e.selectAST.From.Table.PathExpr[1:], jsonRec)
+	if format != "json" {
+		return nil, errDataSource(errors.New("path not supported"))
+	}
+	switch rec := rawVal.(type) {
+	case jstream.KVS:
+		txedRec, _, err := jsonpathEval(e.selectAST.From.Table.PathExpr[1:], rec)
+		if err != nil {
+			return nil, err
+		}
+
+		var kvs jstream.KVS
+		switch v := txedRec.(type) {
+		case jstream.KVS:
+			kvs = v
+		default:
+			kvs = jstream.KVS{jstream.KV{Key: "_1", Value: v}}
+		}
+
+		if err = input.Replace(kvs); err != nil {
+			return nil, err
+		}
+
+		return input, nil
+	case simdjson.Object:
+		txedRec, _, err := jsonpathEval(e.selectAST.From.Table.PathExpr[1:], rec)
+		if err != nil {
+			return nil, err
+		}
+
+		switch v := txedRec.(type) {
+		case simdjson.Object:
+			err := input.Replace(v)
 			if err != nil {
 				return nil, err
 			}
-
-			var kvs jstream.KVS
-			switch v := txedRec.(type) {
-			case jstream.KVS:
-				kvs = v
-			default:
-				kvs = jstream.KVS{jstream.KV{Key: "_1", Value: v}}
-			}
-
-			if err = input.Replace(kvs); err != nil {
+		default:
+			input.Reset()
+			input, err = input.Set("_1", &Value{value: v})
+			if err != nil {
 				return nil, err
 			}
-
-			return input, nil
 		}
-		return nil, errDataSource(errors.New("path not supported"))
+		return input, nil
 	}
-	return input, nil
+	return nil, errDataSource(errors.New("unexpected non JSON input"))
 }
 
 // IsAggregated returns if the statement involves SQL aggregation
@@ -186,9 +207,12 @@ func (e *SelectStatement) AggregateResult(output Record) error {
 			return err
 		}
 		if expr.As != "" {
-			output.Set(expr.As, v)
+			output, err = output.Set(expr.As, v)
 		} else {
-			output.Set(fmt.Sprintf("_%d", i+1), v)
+			output, err = output.Set(fmt.Sprintf("_%d", i+1), v)
+		}
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -250,8 +274,7 @@ func (e *SelectStatement) Eval(input, output Record) (Record, error) {
 		if e.limitValue > -1 {
 			e.outputCount++
 		}
-		output = input.Clone(output)
-		return output, nil
+		return input.Clone(output), nil
 	}
 
 	for i, expr := range e.selectAST.Expression.Expressions {
@@ -262,11 +285,14 @@ func (e *SelectStatement) Eval(input, output Record) (Record, error) {
 
 		// Pick output column names
 		if expr.As != "" {
-			output.Set(expr.As, v)
+			output, err = output.Set(expr.As, v)
 		} else if comp, ok := getLastKeypathComponent(expr.Expression); ok {
-			output.Set(comp, v)
+			output, err = output.Set(comp, v)
 		} else {
-			output.Set(fmt.Sprintf("_%d", i+1), v)
+			output, err = output.Set(fmt.Sprintf("_%d", i+1), v)
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 

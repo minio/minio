@@ -19,14 +19,12 @@ package cmd
 import (
 	"context"
 	"sort"
-	"strings"
 	"sync"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
-	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -68,15 +66,14 @@ type xlObjects struct {
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
-func (xl xlObjects) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
-	return xl.nsMutex.NewNSLock(ctx, xl.getLockers, bucket, object)
+func (xl xlObjects) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
+	return xl.nsMutex.NewNSLock(ctx, xl.getLockers, bucket, objects...)
 }
 
 // Shutdown function for object storage interface.
 func (xl xlObjects) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.
 	closeStorageDisks(xl.getDisks())
-	closeLockers(xl.getLockers())
 	return nil
 }
 
@@ -115,26 +112,19 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 		}, index)
 	}
 
-	getPeerAddress := func(diskPath string) (string, error) {
-		hostPort := strings.Split(diskPath, SlashSeparator)[0]
-		// Host will be empty for xl/fs disk paths.
-		if hostPort == "" {
-			return "", nil
-		}
-		thisAddr, err := xnet.ParseHost(hostPort)
-		if err != nil {
-			return "", err
-		}
-		return thisAddr.String(), nil
-	}
-
 	onlineDisks = make(madmin.BackendDisks)
 	offlineDisks = make(madmin.BackendDisks)
+
+	localNodeAddr := GetLocalPeer(globalEndpoints)
+
 	// Wait for the routines.
-	for i, err := range g.Wait() {
-		peerAddr, pErr := getPeerAddress(disksInfo[i].RelativePath)
-		if pErr != nil {
+	for i, diskInfoErr := range g.Wait() {
+		if disks[i] == nil {
 			continue
+		}
+		peerAddr := disks[i].Hostname()
+		if peerAddr == "" {
+			peerAddr = localNodeAddr
 		}
 		if _, ok := offlineDisks[peerAddr]; !ok {
 			offlineDisks[peerAddr] = 0
@@ -142,7 +132,7 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 		if _, ok := onlineDisks[peerAddr]; !ok {
 			onlineDisks[peerAddr] = 0
 		}
-		if err != nil {
+		if diskInfoErr != nil {
 			offlineDisks[peerAddr]++
 			continue
 		}
@@ -170,7 +160,7 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 		usedList[i] = di.Used
 		totalList[i] = di.Total
 		availableList[i] = di.Free
-		mountPaths[i] = di.RelativePath
+		mountPaths[i] = di.MountPath
 	}
 
 	storageInfo := StorageInfo{
@@ -188,8 +178,19 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 }
 
 // StorageInfo - returns underlying storage statistics.
-func (xl xlObjects) StorageInfo(ctx context.Context) StorageInfo {
-	return getStorageInfo(xl.getDisks())
+func (xl xlObjects) StorageInfo(ctx context.Context, local bool) StorageInfo {
+	var disks []StorageAPI
+	if !local {
+		disks = xl.getDisks()
+	} else {
+		for _, d := range xl.getDisks() {
+			if d != nil && d.Hostname() == "" {
+				// Append this local disk since local flag is true
+				disks = append(disks, d)
+			}
+		}
+	}
+	return getStorageInfo(disks)
 }
 
 // GetMetrics - is not implemented and shouldn't be called.

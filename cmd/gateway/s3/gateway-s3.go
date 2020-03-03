@@ -30,7 +30,6 @@ import (
 	miniogo "github.com/minio/minio-go/v6"
 	"github.com/minio/minio-go/v6/pkg/credentials"
 	minio "github.com/minio/minio/cmd"
-	xhttp "github.com/minio/minio/cmd/http"
 
 	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
@@ -68,8 +67,10 @@ EXAMPLES:
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1,/mnt/drive2,/mnt/drive3,/mnt/drive4"
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*,*.png"
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXPIRY{{.AssignmentOperator}}40
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}80
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}90
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_AFTER{{.AssignmentOperator}}3
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_LOW{{.AssignmentOperator}}75
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_HIGH{{.AssignmentOperator}}85
      {{.Prompt}} {{.HelpName}}
 `
 
@@ -274,7 +275,7 @@ func (l *s3Objects) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo is not relevant to S3 backend.
-func (l *s3Objects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
+func (l *s3Objects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo) {
 	si.Backend.Type = minio.BackendGateway
 	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.HTTPClient, l.Client.EndpointURL().String())
 	return si
@@ -452,16 +453,16 @@ func (l *s3Objects) GetObjectInfo(ctx context.Context, bucket string, object str
 func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	data := r.Reader
 
-	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), minio.ToMinioClientMetadata(opts.UserDefined), opts.ServerSideEncryption)
+	var tagMap map[string]string
+	if !minio.IsStringEqual(opts.UserDefined["X-Amz-Tagging"], "") {
+		opts.UserTags = opts.UserDefined["X-Amz-Tagging"]
+		taggingObj, _ := tagging.FromString(opts.UserTags)
+		tagMap = tagging.ToMap(taggingObj)
+		delete(opts.UserDefined, "X-Amz-Tagging")
+	}
+	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), minio.ToMinioClientMetadata(opts.UserDefined), opts.ServerSideEncryption, tagMap)
 	if err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
-	}
-	tagStr, ok := opts.UserDefined[xhttp.AmzObjectTagging]
-	tagMap, err := getTagMap(tagStr)
-	if ok && err == nil && len(tagMap) > 0 {
-		if err = l.Client.PutObjectTagging(bucket, object, tagMap); err != nil {
-			return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
-		}
 	}
 	// On success, populate the key & metadata so they are present in the notification
 	oi.Key = object
@@ -481,6 +482,13 @@ func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject 
 	// So preserve it by adding "REPLACE" directive to save all the metadata set by CopyObject API.
 	srcInfo.UserDefined["x-amz-metadata-directive"] = "REPLACE"
 	srcInfo.UserDefined["x-amz-copy-source-if-match"] = srcInfo.ETag
+	// See comment above. Tags will be applied on destination object.
+	if !minio.IsStringEqual(srcInfo.UserDefined["X-Amz-Tagging"], "") {
+		if minio.IsStringEqual(srcInfo.UserDefined["X-Amz-Tagging-Directive"], "") {
+			srcInfo.UserDefined["x-amz-tagging-directive"] = "REPLACE"
+		}
+		srcInfo.UserTags = srcInfo.UserDefined["X-Amz-Tagging"]
+	}
 
 	header := make(http.Header)
 	if srcOpts.ServerSideEncryption != nil {
@@ -497,29 +505,6 @@ func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject 
 	if _, err = l.Client.CopyObject(srcBucket, srcObject, dstBucket, dstObject, srcInfo.UserDefined); err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, srcBucket, srcObject)
 	}
-
-	var tagMap map[string]string
-	var tagStr string
-	var ok bool
-	tagStr, ok = srcInfo.UserDefined[xhttp.AmzObjectTagging]
-	if ok {
-		if tagMap, err = getTagMap(tagStr); err != nil {
-			return objInfo, minio.ErrorRespToObjectError(err, srcObject, srcObject)
-		}
-	} else {
-		if tagStr, err = l.Client.GetObjectTagging(srcBucket, srcObject); err != nil {
-			return objInfo, minio.ErrorRespToObjectError(err, srcObject, srcObject)
-		}
-		if tagMap, err = getTagMapParse(tagStr); err != nil {
-			return objInfo, minio.ErrorRespToObjectError(err, srcObject, srcObject)
-		}
-	}
-	if len(tagMap) > 0 {
-		if err = l.Client.PutObjectTagging(dstBucket, dstObject, tagMap); err != nil {
-			return objInfo, minio.ErrorRespToObjectError(err, dstBucket, dstObject)
-		}
-	}
-
 	return l.GetObjectInfo(ctx, dstBucket, dstObject, dstOpts)
 }
 
@@ -552,13 +537,13 @@ func (l *s3Objects) ListMultipartUploads(ctx context.Context, bucket string, pre
 }
 
 // NewMultipartUpload upload object in multiple parts
-
 func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket string, object string, o minio.ObjectOptions) (uploadID string, err error) {
 	// Create PutObject options
-	opts := miniogo.PutObjectOptions{UserMetadata: o.UserDefined, ServerSideEncryption: o.ServerSideEncryption}
-	if opts.UserTags, err = getTagMap(o.UserDefined["X-Amz-Tagging"]); err != nil {
+	var tags map[string]string
+	if tags, err = getTagMap(o.UserDefined["X-Amz-Tagging"]); err != nil {
 		return uploadID, minio.ErrorRespToObjectError(err, bucket, object)
 	}
+	opts := miniogo.PutObjectOptions{UserMetadata: o.UserDefined, ServerSideEncryption: o.ServerSideEncryption, UserTags: tags}
 	uploadID, err = l.Client.NewMultipartUpload(bucket, object, opts)
 	if err != nil {
 		return uploadID, minio.ErrorRespToObjectError(err, bucket, object)
@@ -730,7 +715,7 @@ func (l *s3Objects) IsReady(ctx context.Context) bool {
 	return minio.IsBackendOnline(ctx, l.HTTPClient, l.Client.EndpointURL().String())
 }
 
-// IsObjectTaggingSupported returns whether tagging is applicable for this layer.
+// IsObjectTaggingSupported returns whether tagging is applicable for S3 Gateway.
 func (l *s3Objects) IsObjectTaggingSupported() bool {
 	return true
 }

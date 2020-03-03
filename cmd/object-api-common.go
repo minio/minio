@@ -313,12 +313,67 @@ func listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter 
 	return result, nil
 }
 
+// Walk a bucket, optionally prefix recursively, until we have returned
+// all the content to objectInfo channel, it is callers responsibility
+// to allocate a receive channel for ObjectInfo, upon any unhandled
+// error walker returns error. Optionally if context.Done() is received
+// then Walk() stops the walker.
+func fsWalk(ctx context.Context, obj ObjectLayer, bucket, prefix string, listDir ListDirFunc, results chan<- ObjectInfo, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) error {
+	if err := checkListObjsArgs(ctx, bucket, prefix, "", obj); err != nil {
+		// Upon error close the channel.
+		close(results)
+		return err
+	}
+
+	walkResultCh := startTreeWalk(ctx, bucket, prefix, "", true, listDir, ctx.Done())
+
+	go func() {
+		defer close(results)
+
+		for {
+			walkResult, ok := <-walkResultCh
+			if !ok {
+				break
+			}
+
+			var objInfo ObjectInfo
+			var err error
+			if HasSuffix(walkResult.entry, SlashSeparator) {
+				for _, getObjectInfoDir := range getObjectInfoDirs {
+					objInfo, err = getObjectInfoDir(ctx, bucket, walkResult.entry)
+					if err == nil {
+						break
+					}
+					if err == errFileNotFound {
+						err = nil
+						objInfo = ObjectInfo{
+							Bucket: bucket,
+							Name:   walkResult.entry,
+							IsDir:  true,
+						}
+					}
+				}
+			} else {
+				objInfo, err = getObjInfo(ctx, bucket, walkResult.entry)
+			}
+			if err != nil {
+				continue
+			}
+			results <- objInfo
+			if walkResult.end {
+				break
+			}
+		}
+	}()
+	return nil
+}
+
 func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {
 	if delimiter != SlashSeparator && delimiter != "" {
 		return listObjectsNonSlash(ctx, bucket, prefix, marker, delimiter, maxKeys, tpool, listDir, getObjInfo, getObjectInfoDirs...)
 	}
 
-	if err := checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, obj); err != nil {
+	if err := checkListObjsArgs(ctx, bucket, prefix, marker, obj); err != nil {
 		return loi, err
 	}
 

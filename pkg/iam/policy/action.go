@@ -123,6 +123,12 @@ const (
 	// DeleteObjectTaggingAction - Delete Object Tags API action
 	DeleteObjectTaggingAction = "s3:DeleteObjectTagging"
 
+	// PutBucketEncryptionAction - PutBucketEncryption REST API action
+	PutBucketEncryptionAction = "s3:PutEncryptionConfiguration"
+
+	// GetBucketEncryptionAction - GetBucketEncryption REST API action
+	GetBucketEncryptionAction = "s3:GetEncryptionConfiguration"
+
 	// AllActions - all API actions
 	AllActions = "s3:*"
 )
@@ -161,26 +167,33 @@ var supportedActions = map[Action]struct{}{
 	GetObjectTaggingAction:                 {},
 	PutObjectTaggingAction:                 {},
 	DeleteObjectTaggingAction:              {},
+	PutBucketEncryptionAction:              {},
+	GetBucketEncryptionAction:              {},
+}
+
+// List of all supported object actions.
+var supportedObjectActions = map[Action]struct{}{
+	AllActions:                      {},
+	AbortMultipartUploadAction:      {},
+	DeleteObjectAction:              {},
+	GetObjectAction:                 {},
+	ListMultipartUploadPartsAction:  {},
+	PutObjectAction:                 {},
+	BypassGovernanceModeAction:      {},
+	BypassGovernanceRetentionAction: {},
+	PutObjectRetentionAction:        {},
+	GetObjectRetentionAction:        {},
+	PutObjectLegalHoldAction:        {},
+	GetObjectLegalHoldAction:        {},
+	GetObjectTaggingAction:          {},
+	PutObjectTaggingAction:          {},
+	DeleteObjectTaggingAction:       {},
 }
 
 // isObjectAction - returns whether action is object type or not.
 func (action Action) isObjectAction() bool {
-	switch action {
-	case AbortMultipartUploadAction, DeleteObjectAction, GetObjectAction:
-		fallthrough
-	case ListMultipartUploadPartsAction, PutObjectAction, AllActions:
-		return true
-	case BypassGovernanceModeAction, BypassGovernanceRetentionAction:
-		return true
-	case PutObjectRetentionAction, GetObjectRetentionAction:
-		return true
-	case PutObjectLegalHoldAction, GetObjectLegalHoldAction:
-		return true
-	case GetObjectTaggingAction, PutObjectTaggingAction, DeleteObjectTaggingAction:
-		return true
-	}
-
-	return false
+	_, ok := supportedObjectActions[action]
+	return ok
 }
 
 // Match - matches object name with resource pattern.

@@ -157,7 +157,7 @@ func main() {
 			TokenURL: ddoc.TokenEndpoint,
 		},
 		RedirectURL: fmt.Sprintf("http://localhost:%d/oauth2/callback", port),
-		Scopes:      []string{"openid"},
+		Scopes:      ddoc.ScopesSupported,
 	}
 
 	state := randomState()

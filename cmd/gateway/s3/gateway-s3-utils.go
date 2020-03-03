@@ -51,16 +51,6 @@ func FromGatewayObjectPart(partID int, oi minio.ObjectInfo) (pi minio.PartInfo) 
 	}
 }
 
-func makeTagMap(tags tagging.Tagging) map[string]string {
-	if len(tags.TagSet.Tags) <= 0 {
-		return nil
-	}
-	tagMap := make(map[string]string)
-	for _, tagEle := range tags.TagSet.Tags {
-		tagMap[tagEle.Key] = tagEle.Value
-	}
-	return tagMap
-}
 func getTagMap(tagStr string) (map[string]string, error) {
 	var tags tagging.Tagging
 	var err error
@@ -70,7 +60,7 @@ func getTagMap(tagStr string) (map[string]string, error) {
 	if tags, err = tagging.FromString(tagStr); err != nil {
 		return nil, err
 	}
-	return makeTagMap(tags), nil
+	return tagging.ToMap(tags), nil
 }
 
 func getTagMapParse(tagStr string) (map[string]string, error) {
@@ -85,5 +75,5 @@ func getTagMapParse(tagStr string) (map[string]string, error) {
 	if tags == nil {
 		return nil, nil
 	}
-	return makeTagMap(*tags), nil
+	return tagging.ToMap(*tags), nil
 }

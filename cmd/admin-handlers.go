@@ -276,7 +276,7 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	storageInfo := objectAPI.StorageInfo(ctx)
+	storageInfo := objectAPI.StorageInfo(ctx, false)
 
 	// Marshal API response
 	jsonBytes, err := json.Marshal(storageInfo)
@@ -897,7 +897,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// find number of disks in the setup
-	info := objectAPI.StorageInfo(ctx)
+	info := objectAPI.StorageInfo(ctx, false)
 	numDisks := info.Backend.OfflineDisks.Sum() + info.Backend.OnlineDisks.Sum()
 
 	healPath := pathJoin(hip.bucket, hip.objPrefix)
@@ -1410,7 +1410,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	notifyTarget := fetchLambdaInfo(cfg)
 
 	// Fetching the Storage information
-	storageInfo := objectAPI.StorageInfo(ctx)
+	storageInfo := objectAPI.StorageInfo(ctx, false)
 
 	var OnDisks int
 	var OffDisks int

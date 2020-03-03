@@ -336,7 +336,7 @@ func (client *storageRESTClient) ReadFile(volume, path string, offset int64, buf
 }
 
 func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive bool, leafFile string,
-	readMetadataFn readMetadataFunc, endWalkCh chan struct{}) (chan FileInfo, error) {
+	readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (chan FileInfo, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTDirPath, dirPath)

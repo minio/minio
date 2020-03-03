@@ -188,9 +188,9 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
-func (fs *FSObjects) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
+func (fs *FSObjects) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
 	// lockers are explicitly 'nil' for FS mode since there are only local lockers
-	return fs.nsMutex.NewNSLock(ctx, nil, bucket, object)
+	return fs.nsMutex.NewNSLock(ctx, nil, bucket, objects...)
 }
 
 // Shutdown - should be called when process shuts down.
@@ -202,7 +202,7 @@ func (fs *FSObjects) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo - returns underlying storage statistics.
-func (fs *FSObjects) StorageInfo(ctx context.Context) StorageInfo {
+func (fs *FSObjects) StorageInfo(ctx context.Context, _ bool) StorageInfo {
 
 	atomic.AddInt64(&fs.activeIOCount, 1)
 	defer func() {
@@ -490,7 +490,6 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 // GetObjectNInfo - returns object info and a reader for object
 // content.
 func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
-
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
 		return nil, err
 	}
@@ -1245,6 +1244,15 @@ func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, dryRun, remo
 	error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return madmin.HealResultItem{}, NotImplemented{}
+}
+
+// Walk a bucket, optionally prefix recursively, until we have returned
+// all the content to objectInfo channel, it is callers responsibility
+// to allocate a receive channel for ObjectInfo, upon any unhandled
+// error walker returns error. Optionally if context.Done() is received
+// then Walk() stops the walker.
+func (fs *FSObjects) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+	return fsWalk(ctx, fs, bucket, prefix, fs.listDirFactory(), results, fs.getObjectInfo, fs.getObjectInfo)
 }
 
 // HealObjects - no-op for fs. Valid only for XL.

@@ -104,12 +104,12 @@ func startDailyLifecycle() {
 	}
 }
 
-var lifecycleTimeout = newDynamicTimeout(60*time.Second, time.Second)
+var lifecycleLockTimeout = newDynamicTimeout(60*time.Second, time.Second)
 
 func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 	// Lock to avoid concurrent lifecycle ops from other nodes
 	sweepLock := objAPI.NewNSLock(ctx, "system", "daily-lifecycle-ops")
-	if err := sweepLock.GetLock(lifecycleTimeout); err != nil {
+	if err := sweepLock.GetLock(lifecycleLockTimeout); err != nil {
 		return err
 	}
 	defer sweepLock.Unlock()
@@ -133,24 +133,34 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 		}
 		commonPrefix := lcp(prefixes)
 
-		// List all objects and calculate lifecycle action based on object name & object modtime
-		marker := ""
+		// Allocate new results channel to receive ObjectInfo.
+		objInfoCh := make(chan ObjectInfo)
+
+		// Walk through all objects
+		if err := objAPI.Walk(ctx, bucket.Name, commonPrefix, objInfoCh); err != nil {
+			return err
+		}
+
 		for {
-			res, err := objAPI.ListObjects(ctx, bucket.Name, commonPrefix, marker, "", maxObjectList)
-			if err != nil {
-				continue
-			}
 			var objects []string
-			for _, obj := range res.Objects {
+			for obj := range objInfoCh {
+				if len(objects) == maxObjectList {
+					// Reached maximum delete requests, attempt a delete for now.
+					break
+				}
+
 				// Find the action that need to be executed
-				action := l.ComputeAction(obj.Name, obj.UserTags, obj.ModTime)
-				switch action {
-				case lifecycle.DeleteAction:
+				if l.ComputeAction(obj.Name, obj.UserTags, obj.ModTime) == lifecycle.DeleteAction {
 					objects = append(objects, obj.Name)
-				default:
-					// Do nothing, for now.
 				}
 			}
+
+			// Nothing to do.
+			if len(objects) == 0 {
+				break
+			}
+
+			waitForLowHTTPReq(int32(globalEndpoints.Nodes()))
 
 			// Deletes a list of objects.
 			deleteErrs, err := objAPI.DeleteObjects(ctx, bucket.Name, objects)
@@ -173,12 +183,6 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 					})
 				}
 			}
-
-			if !res.IsTruncated {
-				// We are done here, proceed to next bucket.
-				break
-			}
-			marker = res.NextMarker
 		}
 	}
 

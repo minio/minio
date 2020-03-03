@@ -384,6 +384,10 @@ var (
 			Key:   target.KafkaQueueDir,
 			Value: "",
 		},
+		config.KV{
+			Key:   target.KafkaVersion,
+			Value: "",
+		},
 	}
 )
 
@@ -451,12 +455,18 @@ func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs
 			queueDirEnv = queueDirEnv + config.Default + k
 		}
 
+		versionEnv := target.EnvKafkaVersion
+		if k != config.Default {
+			versionEnv = versionEnv + config.Default + k
+		}
+
 		kafkaArgs := target.KafkaArgs{
 			Enable:     enabled,
 			Brokers:    brokers,
 			Topic:      env.Get(topicEnv, kv.Get(target.KafkaTopic)),
 			QueueDir:   env.Get(queueDirEnv, kv.Get(target.KafkaQueueDir)),
 			QueueLimit: queueLimit,
+			Version:    env.Get(versionEnv, kv.Get(target.KafkaVersion)),
 		}
 
 		tlsEnableEnv := target.EnvKafkaTLS

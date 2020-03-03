@@ -79,10 +79,6 @@ func storageServerRequestValidate(r *http.Request) error {
 		return errAuthentication
 	}
 
-	if claims.Issuer != ReleaseTag {
-		return errAuthentication
-	}
-
 	requestTimeStr := r.Header.Get("X-Minio-Time")
 	requestTime, err := time.Parse(time.RFC3339, requestTimeStr)
 	if err != nil {
@@ -435,10 +431,7 @@ func (s *storageRESTServer) WalkHandler(w http.ResponseWriter, r *http.Request) 
 	}
 	leafFile := vars[storageRESTLeafFile]
 
-	endWalkCh := make(chan struct{})
-	defer close(endWalkCh)
-
-	fch, err := s.storage.Walk(volume, dirPath, markerPath, recursive, leafFile, readMetadata, endWalkCh)
+	fch, err := s.storage.Walk(volume, dirPath, markerPath, recursive, leafFile, readMetadata, r.Context().Done())
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return

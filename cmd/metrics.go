@@ -19,7 +19,6 @@ package cmd
 import (
 	"context"
 	"net/http"
-	"strings"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/prometheus/client_golang/prometheus"
@@ -89,48 +88,35 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	storageAPIs := []StorageAPI{}
-	for _, ep := range globalEndpoints {
-		for _, endpoint := range ep.Endpoints {
-			if endpoint.IsLocal {
-				// Construct storageAPIs.
-				sAPI, _ := newStorageAPI(endpoint)
-				storageAPIs = append(storageAPIs, sAPI)
-			}
-		}
-	}
+	storageInfo := objLayer.StorageInfo(context.Background(), true)
 
-	disksInfo, onlineDisks, offlineDisks := getDisksInfo(storageAPIs)
+	offlineDisks := storageInfo.Backend.OfflineDisks
+	onlineDisks := storageInfo.Backend.OnlineDisks
 	totalDisks := offlineDisks.Merge(onlineDisks)
 
-	for _, offDisks := range offlineDisks {
-		// MinIO Offline Disks per node
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("minio", "disks", "offline"),
-				"Total number of offline disks in current MinIO server instance",
-				nil, nil),
-			prometheus.GaugeValue,
-			float64(offDisks),
-		)
-	}
+	// MinIO Offline Disks per node
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("minio", "disks", "offline"),
+			"Total number of offline disks in current MinIO server instance",
+			nil, nil),
+		prometheus.GaugeValue,
+		float64(offlineDisks.Sum()),
+	)
 
-	for _, totDisks := range totalDisks {
-		// MinIO Total Disks per node
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("minio", "disks", "total"),
-				"Total number of disks for current MinIO server instance",
-				nil, nil),
-			prometheus.GaugeValue,
-			float64(totDisks),
-		)
-	}
+	// MinIO Total Disks per node
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("minio", "disks", "total"),
+			"Total number of disks for current MinIO server instance",
+			nil, nil),
+		prometheus.GaugeValue,
+		float64(totalDisks.Sum()),
+	)
 
-	localPeer := GetLocalPeer(globalEndpoints)
-	for _, di := range disksInfo {
-		// Trim the host
-		absPath := strings.TrimPrefix(di.RelativePath, localPeer)
+	for i := 0; i < len(storageInfo.Total); i++ {
+		mountPath, total, free := storageInfo.MountPaths[i], storageInfo.Total[i],
+			storageInfo.Available[i]
 
 		// Total disk usage by the disk
 		ch <- prometheus.MustNewConstMetric(
@@ -139,8 +125,8 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 				"Total disk storage used on the disk",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
-			float64(di.Total-di.Free),
-			absPath,
+			float64(total-free),
+			mountPath,
 		)
 
 		// Total available space in the disk
@@ -150,8 +136,8 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 				"Total available space left on the disk",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
-			float64(di.Free),
-			absPath,
+			float64(free),
+			mountPath,
 		)
 
 		// Total storage space of the disk
@@ -161,8 +147,8 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 				"Total space on the disk",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
-			float64(di.Total),
-			absPath,
+			float64(total),
+			mountPath,
 		)
 	}
 

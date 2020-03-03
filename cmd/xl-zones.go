@@ -83,8 +83,8 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 	return z, nil
 }
 
-func (z *xlZones) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
-	return z.zones[0].NewNSLock(ctx, bucket, object)
+func (z *xlZones) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
+	return z.zones[0].NewNSLock(ctx, bucket, objects...)
 }
 
 type zonesAvailableSpace []zoneAvailableSpace
@@ -131,7 +131,7 @@ func (z *xlZones) getZonesAvailableSpace(ctx context.Context) zonesAvailableSpac
 	for index := range z.zones {
 		index := index
 		g.Go(func() error {
-			storageInfos[index] = z.zones[index].StorageInfo(ctx)
+			storageInfos[index] = z.zones[index].StorageInfo(ctx, false)
 			return nil
 		}, index)
 	}
@@ -176,9 +176,9 @@ func (z *xlZones) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (z *xlZones) StorageInfo(ctx context.Context) StorageInfo {
+func (z *xlZones) StorageInfo(ctx context.Context, local bool) StorageInfo {
 	if z.SingleZone() {
-		return z.zones[0].StorageInfo(ctx)
+		return z.zones[0].StorageInfo(ctx, local)
 	}
 
 	var storageInfo StorageInfo
@@ -188,7 +188,7 @@ func (z *xlZones) StorageInfo(ctx context.Context) StorageInfo {
 	for index := range z.zones {
 		index := index
 		g.Go(func() error {
-			storageInfos[index] = z.zones[index].StorageInfo(ctx)
+			storageInfos[index] = z.zones[index].StorageInfo(ctx, local)
 			return nil
 		}, index)
 	}
@@ -445,20 +445,12 @@ func (z *xlZones) DeleteObjects(ctx context.Context, bucket string, objects []st
 		derrs[i] = checkDelObjArgs(ctx, bucket, objects[i])
 	}
 
-	var objectLocks = make([]RWLocker, len(objects))
-	for i := range objects {
-		if derrs[i] != nil {
-			continue
-		}
-
-		// Acquire a write lock before deleting the object.
-		objectLocks[i] = z.NewNSLock(ctx, bucket, objects[i])
-		if derrs[i] = objectLocks[i].GetLock(globalOperationTimeout); derrs[i] != nil {
-			continue
-		}
-
-		defer objectLocks[i].Unlock()
+	// Acquire a bulk write lock across 'objects'
+	multiDeleteLock := z.NewNSLock(ctx, bucket, objects...)
+	if err := multiDeleteLock.GetLock(globalOperationTimeout); err != nil {
+		return nil, err
 	}
+	defer multiDeleteLock.Unlock()
 
 	for _, zone := range z.zones {
 		errs, err := zone.DeleteObjects(ctx, bucket, objects)
@@ -536,12 +528,12 @@ func (z *xlZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, marke
 
 	var zonesEntryChs [][]FileInfoCh
 
-	recursive := true
+	endWalkCh := make(chan struct{})
+	defer close(endWalkCh)
+
 	for _, zone := range z.zones {
-		endWalkCh := make(chan struct{})
-		defer close(endWalkCh)
 		zonesEntryChs = append(zonesEntryChs,
-			zone.startMergeWalks(ctx, bucket, prefix, "", recursive, endWalkCh))
+			zone.startMergeWalks(ctx, bucket, prefix, "", true, endWalkCh))
 	}
 
 	var objInfos []ObjectInfo
@@ -654,7 +646,7 @@ func (z *xlZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, marke
 func (z *xlZones) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, heal bool) (ListObjectsInfo, error) {
 	loi := ListObjectsInfo{}
 
-	if err := checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, z); err != nil {
+	if err := checkListObjsArgs(ctx, bucket, prefix, marker, z); err != nil {
 		return loi, err
 	}
 
@@ -725,45 +717,10 @@ func (z *xlZones) listObjects(ctx context.Context, bucket, prefix, marker, delim
 	}
 
 	for _, entry := range entries.Files {
-		var objInfo ObjectInfo
-		if HasSuffix(entry.Name, SlashSeparator) {
-			if !recursive {
-				loi.Prefixes = append(loi.Prefixes, entry.Name)
-				continue
-			}
-			objInfo = ObjectInfo{
-				Bucket: bucket,
-				Name:   entry.Name,
-				IsDir:  true,
-			}
-		} else {
-			objInfo = ObjectInfo{
-				IsDir:           false,
-				Bucket:          bucket,
-				Name:            entry.Name,
-				ModTime:         entry.ModTime,
-				Size:            entry.Size,
-				ContentType:     entry.Metadata["content-type"],
-				ContentEncoding: entry.Metadata["content-encoding"],
-			}
-
-			// Extract etag from metadata.
-			objInfo.ETag = extractETag(entry.Metadata)
-
-			// All the parts per object.
-			objInfo.Parts = entry.Parts
-
-			// etag/md5Sum has already been extracted. We need to
-			// remove to avoid it from appearing as part of
-			// response headers. e.g, X-Minio-* or X-Amz-*.
-			objInfo.UserDefined = cleanMetadata(entry.Metadata)
-
-			// Update storage class
-			if sc, ok := entry.Metadata[xhttp.AmzStorageClass]; ok {
-				objInfo.StorageClass = sc
-			} else {
-				objInfo.StorageClass = globalMinioDefaultStorageClass
-			}
+		objInfo := entry.ToObjectInfo()
+		if HasSuffix(objInfo.Name, SlashSeparator) && !recursive {
+			loi.Prefixes = append(loi.Prefixes, objInfo.Name)
+			continue
 		}
 		loi.Objects = append(loi.Objects, objInfo)
 	}
@@ -1332,17 +1289,69 @@ func (z *xlZones) HealBucket(ctx context.Context, bucket string, dryRun, remove 
 	return r, nil
 }
 
+// Walk a bucket, optionally prefix recursively, until we have returned
+// all the content to objectInfo channel, it is callers responsibility
+// to allocate a receive channel for ObjectInfo, upon any unhandled
+// error walker returns error. Optionally if context.Done() is received
+// then Walk() stops the walker.
+func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+	if err := checkListObjsArgs(ctx, bucket, prefix, "", z); err != nil {
+		// Upon error close the channel.
+		close(results)
+		return err
+	}
+
+	var zonesEntryChs [][]FileInfoCh
+
+	for _, zone := range z.zones {
+		zonesEntryChs = append(zonesEntryChs,
+			zone.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done()))
+	}
+
+	var zoneDrivesPerSet []int
+	for _, zone := range z.zones {
+		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.drivesPerSet)
+	}
+
+	var zonesEntriesInfos [][]FileInfo
+	var zonesEntriesValid [][]bool
+	for _, entryChs := range zonesEntryChs {
+		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfo, len(entryChs)))
+		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
+	}
+
+	go func() {
+		defer close(results)
+
+		for {
+			entry, quorumCount, zoneIndex, ok := leastEntryZone(zonesEntryChs,
+				zonesEntriesInfos, zonesEntriesValid)
+			if !ok {
+				return
+			}
+
+			if quorumCount != zoneDrivesPerSet[zoneIndex] {
+				continue
+			}
+
+			results <- entry.ToObjectInfo()
+		}
+	}()
+
+	return nil
+}
+
 type healObjectFn func(string, string) error
 
 func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healObject healObjectFn) error {
 	var zonesEntryChs [][]FileInfoCh
 
-	recursive := true
+	endWalkCh := make(chan struct{})
+	defer close(endWalkCh)
+
 	for _, zone := range z.zones {
-		endWalkCh := make(chan struct{})
-		defer close(endWalkCh)
 		zonesEntryChs = append(zonesEntryChs,
-			zone.startMergeWalks(ctx, bucket, prefix, "", recursive, endWalkCh))
+			zone.startMergeWalks(ctx, bucket, prefix, "", true, endWalkCh))
 	}
 
 	var zoneDrivesPerSet []int
@@ -1368,6 +1377,7 @@ func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healOb
 			continue
 		}
 
+		// Wait and proceed if there are active requests
 		waitForLowHTTPReq(int32(zoneDrivesPerSet[zoneIndex]))
 
 		if err := healObject(bucket, entry.Name); err != nil {

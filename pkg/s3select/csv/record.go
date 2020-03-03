@@ -55,10 +55,10 @@ func (r *Record) Get(name string) (*sql.Value, error) {
 }
 
 // Set - sets the value for a column name.
-func (r *Record) Set(name string, value *sql.Value) error {
+func (r *Record) Set(name string, value *sql.Value) (sql.Record, error) {
 	r.columnNames = append(r.columnNames, name)
 	r.csvRecord = append(r.csvRecord, value.CSVString())
-	return nil
+	return r, nil
 }
 
 // Reset data in record.
@@ -121,7 +121,7 @@ func (r *Record) Raw() (sql.SelectObjectFormat, interface{}) {
 }
 
 // Replace - is not supported for CSV
-func (r *Record) Replace(_ jstream.KVS) error {
+func (r *Record) Replace(_ interface{}) error {
 	return errors.New("Replace is not supported for CSV")
 }
 

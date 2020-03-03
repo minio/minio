@@ -35,8 +35,8 @@ type lockServer struct {
 func (l *lockServer) Lock(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	if _, *reply = l.lockMap[args.Resource]; !*reply {
-		l.lockMap[args.Resource] = WriteLock // No locks held on the given name, so claim write lock
+	if _, *reply = l.lockMap[args.Resources[0]]; !*reply {
+		l.lockMap[args.Resources[0]] = WriteLock // No locks held on the given name, so claim write lock
 	}
 	*reply = !*reply // Negate *reply to return true when lock is granted or false otherwise
 	return nil
@@ -46,13 +46,13 @@ func (l *lockServer) Unlock(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	var locksHeld int64
-	if locksHeld, *reply = l.lockMap[args.Resource]; !*reply { // No lock is held on the given name
-		return fmt.Errorf("Unlock attempted on an unlocked entity: %s", args.Resource)
+	if locksHeld, *reply = l.lockMap[args.Resources[0]]; !*reply { // No lock is held on the given name
+		return fmt.Errorf("Unlock attempted on an unlocked entity: %s", args.Resources[0])
 	}
 	if *reply = locksHeld == WriteLock; !*reply { // Unless it is a write lock
-		return fmt.Errorf("Unlock attempted on a read locked entity: %s (%d read locks active)", args.Resource, locksHeld)
+		return fmt.Errorf("Unlock attempted on a read locked entity: %s (%d read locks active)", args.Resources[0], locksHeld)
 	}
-	delete(l.lockMap, args.Resource) // Remove the write lock
+	delete(l.lockMap, args.Resources[0]) // Remove the write lock
 	return nil
 }
 
@@ -62,12 +62,12 @@ func (l *lockServer) RLock(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	var locksHeld int64
-	if locksHeld, *reply = l.lockMap[args.Resource]; !*reply {
-		l.lockMap[args.Resource] = ReadLock // No locks held on the given name, so claim (first) read lock
+	if locksHeld, *reply = l.lockMap[args.Resources[0]]; !*reply {
+		l.lockMap[args.Resources[0]] = ReadLock // No locks held on the given name, so claim (first) read lock
 		*reply = true
 	} else {
 		if *reply = locksHeld != WriteLock; *reply { // Unless there is a write lock
-			l.lockMap[args.Resource] = locksHeld + ReadLock // Grant another read lock
+			l.lockMap[args.Resources[0]] = locksHeld + ReadLock // Grant another read lock
 		}
 	}
 	return nil
@@ -77,16 +77,16 @@ func (l *lockServer) RUnlock(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	var locksHeld int64
-	if locksHeld, *reply = l.lockMap[args.Resource]; !*reply { // No lock is held on the given name
-		return fmt.Errorf("RUnlock attempted on an unlocked entity: %s", args.Resource)
+	if locksHeld, *reply = l.lockMap[args.Resources[0]]; !*reply { // No lock is held on the given name
+		return fmt.Errorf("RUnlock attempted on an unlocked entity: %s", args.Resources[0])
 	}
 	if *reply = locksHeld != WriteLock; !*reply { // A write-lock is held, cannot release a read lock
-		return fmt.Errorf("RUnlock attempted on a write locked entity: %s", args.Resource)
+		return fmt.Errorf("RUnlock attempted on a write locked entity: %s", args.Resources[0])
 	}
 	if locksHeld > ReadLock {
-		l.lockMap[args.Resource] = locksHeld - ReadLock // Remove one of the read locks held
+		l.lockMap[args.Resources[0]] = locksHeld - ReadLock // Remove one of the read locks held
 	} else {
-		delete(l.lockMap, args.Resource) // Remove the (last) read lock
+		delete(l.lockMap, args.Resources[0]) // Remove the (last) read lock
 	}
 	return nil
 }
@@ -97,7 +97,7 @@ func (l *lockServer) ForceUnlock(args *LockArgs, reply *bool) error {
 	if len(args.UID) != 0 {
 		return fmt.Errorf("ForceUnlock called with non-empty UID: %s", args.UID)
 	}
-	delete(l.lockMap, args.Resource) // Remove the lock (irrespective of write or read lock)
+	delete(l.lockMap, args.Resources[0]) // Remove the lock (irrespective of write or read lock)
 	*reply = true
 	return nil
 }

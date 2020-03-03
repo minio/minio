@@ -39,6 +39,9 @@ func (r *countUpReader) Read(p []byte) (n int, err error) {
 }
 
 func (r *countUpReader) BytesRead() int64 {
+	if r == nil {
+		return 0
+	}
 	return atomic.LoadInt64(&r.bytesRead)
 }
 
@@ -69,6 +72,9 @@ func (pr *progressReader) Read(p []byte) (n int, err error) {
 }
 
 func (pr *progressReader) Close() error {
+	if pr.rc == nil {
+		return nil
+	}
 	pr.closedMu.Lock()
 	defer pr.closedMu.Unlock()
 	if pr.closed {
@@ -79,6 +85,9 @@ func (pr *progressReader) Close() error {
 }
 
 func (pr *progressReader) Stats() (bytesScanned, bytesProcessed int64) {
+	if pr == nil {
+		return 0, 0
+	}
 	return pr.scannedReader.BytesRead(), pr.processedReader.BytesRead()
 }
 
