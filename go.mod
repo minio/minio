@@ -50,7 +50,7 @@ require (
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/jonboulle/clockwork v0.1.0 // indirect
 	github.com/json-iterator/go v1.1.9
-	github.com/klauspost/compress v1.9.8
+	github.com/klauspost/compress v1.10.1
 	github.com/klauspost/cpuid v1.2.2
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.1
@@ -70,9 +70,10 @@ require (
 	github.com/minio/minio-go/v6 v6.0.45
 	github.com/minio/parquet-go v0.0.0-20200125064549-a1e49702e174
 	github.com/minio/sha256-simd v0.1.1
-	github.com/minio/simdjson-go v0.1.3
+	github.com/minio/simdjson-go v0.1.5-0.20200303142138-b17fe061ea37
 	github.com/minio/sio v0.2.0
 	github.com/mitchellh/go-homedir v1.1.0
+	github.com/mmcloughlin/avo v0.0.0-20200303042253-6df701fe672f // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/nats-io/gnatsd v1.4.1 // indirect
