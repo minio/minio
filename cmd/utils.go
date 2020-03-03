@@ -190,13 +190,14 @@ type profilerWrapper struct {
 	// Profile recorded at start of benchmark.
 	base   []byte
 	stopFn func() ([]byte, error)
+	ext    string
 }
 
 // recordBase will record the profile and store it as the base.
-func (p *profilerWrapper) recordBase(name string) {
+func (p *profilerWrapper) recordBase(name string, debug int) {
 	var buf bytes.Buffer
 	p.base = nil
-	err := pprof.Lookup(name).WriteTo(&buf, 0)
+	err := pprof.Lookup(name).WriteTo(&buf, debug)
 	if err != nil {
 		return
 	}
@@ -211,6 +212,11 @@ func (p profilerWrapper) Base() []byte {
 // Stop the currently running benchmark.
 func (p profilerWrapper) Stop() ([]byte, error) {
 	return p.stopFn()
+}
+
+// Extension returns the extension without dot prefix.
+func (p profilerWrapper) Extension() string {
+	return p.ext
 }
 
 // Returns current profile data, returns error if there is no active
@@ -230,11 +236,11 @@ func getProfileData() (map[string][]byte, error) {
 		buf, err := prof.Stop()
 		delete(globalProfiler, typ)
 		if err == nil {
-			dst[typ] = buf
+			dst[typ+"."+prof.Extension()] = buf
 		}
 		buf = prof.Base()
 		if len(buf) > 0 {
-			dst[typ+"-before"] = buf
+			dst[typ+"-before"+"."+prof.Extension()] = buf
 		}
 	}
 	return dst, nil
@@ -249,7 +255,7 @@ func setDefaultProfilerRates() {
 // Starts a profiler returns nil if profiler is not enabled, caller needs to handle this.
 func startProfiler(profilerType string) (minioProfiler, error) {
 	var prof profilerWrapper
-
+	prof.ext = "pprof"
 	// Enable profiler and set the name of the file that pkg/pprof
 	// library creates to store profiling data.
 	switch madmin.ProfilerType(profilerType) {
@@ -278,7 +284,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 		}
 	case madmin.ProfilerMEM:
 		runtime.GC()
-		prof.recordBase("heap")
+		prof.recordBase("heap", 0)
 		prof.stopFn = func() ([]byte, error) {
 			runtime.GC()
 			var buf bytes.Buffer
@@ -286,7 +292,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return buf.Bytes(), err
 		}
 	case madmin.ProfilerBlock:
-		prof.recordBase("block")
+		prof.recordBase("block", 0)
 		runtime.SetBlockProfileRate(1)
 		prof.stopFn = func() ([]byte, error) {
 			var buf bytes.Buffer
@@ -295,7 +301,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return buf.Bytes(), err
 		}
 	case madmin.ProfilerMutex:
-		prof.recordBase("mutex")
+		prof.recordBase("mutex", 0)
 		runtime.SetMutexProfileFraction(1)
 		prof.stopFn = func() ([]byte, error) {
 			var buf bytes.Buffer
@@ -304,10 +310,18 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return buf.Bytes(), err
 		}
 	case madmin.ProfilerThreads:
-		prof.recordBase("threadcreate")
+		prof.recordBase("threadcreate", 0)
 		prof.stopFn = func() ([]byte, error) {
 			var buf bytes.Buffer
 			err := pprof.Lookup("threadcreate").WriteTo(&buf, 0)
+			return buf.Bytes(), err
+		}
+	case madmin.ProfilerGoroutines:
+		prof.ext = "txt"
+		prof.recordBase("goroutines", 1)
+		prof.stopFn = func() ([]byte, error) {
+			var buf bytes.Buffer
+			err := pprof.Lookup("goroutines").WriteTo(&buf, 1)
 			return buf.Bytes(), err
 		}
 	case madmin.ProfilerTrace:
@@ -324,6 +338,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 		if err != nil {
 			return nil, err
 		}
+		prof.ext = "trace"
 		prof.stopFn = func() ([]byte, error) {
 			trace.Stop()
 			err := f.Close()
@@ -346,6 +361,8 @@ type minioProfiler interface {
 	Base() []byte
 	// Stop the profiler
 	Stop() ([]byte, error)
+	// Return extension of profile
+	Extension() string
 }
 
 // Global profiler to be used by service go-routine.
