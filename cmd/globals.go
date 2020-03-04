@@ -144,8 +144,11 @@ var (
 
 	globalNotificationSys  *NotificationSys
 	globalConfigTargetList *event.TargetList
-	globalPolicySys        *PolicySys
-	globalIAMSys           *IAMSys
+	// globalEnvTargetList has list of targets configured via env.
+	globalEnvTargetList *event.TargetList
+
+	globalPolicySys *PolicySys
+	globalIAMSys    *IAMSys
 
 	globalLifecycleSys       *LifecycleSys
 	globalBucketSSEConfigSys *BucketSSEConfigSys
