@@ -25,16 +25,23 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/hash"
 )
 
 const (
 	dataUsageObjName       = "data-usage"
 	dataUsageCrawlInterval = 12 * time.Hour
+	dataUsageCrawlConf     = "MINIO_DISK_USAGE_CRAWL"
 )
 
 func initDataUsageStats() {
+	dataUsageEnabled, err := config.ParseBool(env.Get(dataUsageCrawlConf, config.EnableOn))
+	if err == nil && !dataUsageEnabled {
+		return
+	}
 	go runDataUsageInfoUpdateRoutine()
 }
 
