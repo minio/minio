@@ -388,26 +388,27 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 
 	erasureInfo := latestMeta.Erasure
 	for partIndex := 0; partIndex < len(latestMeta.Parts); partIndex++ {
-		partName := latestMeta.Parts[partIndex].Name
 		partSize := latestMeta.Parts[partIndex].Size
 		partActualSize := latestMeta.Parts[partIndex].ActualSize
 		partNumber := latestMeta.Parts[partIndex].Number
 		tillOffset := erasure.ShardFileTillOffset(0, partSize, partSize)
 		readers := make([]io.ReaderAt, len(latestDisks))
-		checksumAlgo := erasureInfo.GetChecksumInfo(partName).Algorithm
+		checksumAlgo := erasureInfo.GetChecksumInfo(partNumber).Algorithm
 		for i, disk := range latestDisks {
 			if disk == OfflineDisk {
 				continue
 			}
-			checksumInfo := partsMetadata[i].Erasure.GetChecksumInfo(partName)
-			readers[i] = newBitrotReader(disk, bucket, pathJoin(object, partName), tillOffset, checksumAlgo, checksumInfo.Hash, erasure.ShardSize())
+			checksumInfo := partsMetadata[i].Erasure.GetChecksumInfo(partNumber)
+			partPath := pathJoin(object, fmt.Sprintf("part.%d", partNumber))
+			readers[i] = newBitrotReader(disk, bucket, partPath, tillOffset, checksumAlgo, checksumInfo.Hash, erasure.ShardSize())
 		}
 		writers := make([]io.Writer, len(outDatedDisks))
 		for i, disk := range outDatedDisks {
 			if disk == OfflineDisk {
 				continue
 			}
-			writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, pathJoin(tmpID, partName), tillOffset, checksumAlgo, erasure.ShardSize())
+			partPath := pathJoin(tmpID, fmt.Sprintf("part.%d", partNumber))
+			writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, partPath, tillOffset, checksumAlgo, erasure.ShardSize())
 		}
 		hErr := erasure.Heal(ctx, readers, writers, partSize)
 		closeBitrotReaders(readers)
@@ -428,8 +429,12 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 				disksToHealCount--
 				continue
 			}
-			partsMetadata[i].AddObjectPart(partNumber, partName, "", partSize, partActualSize)
-			partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, checksumAlgo, bitrotWriterSum(writers[i])})
+			partsMetadata[i].AddObjectPart(partNumber, "", partSize, partActualSize)
+			partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
+				PartNumber: partNumber,
+				Algorithm:  checksumAlgo,
+				Hash:       bitrotWriterSum(writers[i]),
+			})
 		}
 
 		// If all disks are having errors, we give up.

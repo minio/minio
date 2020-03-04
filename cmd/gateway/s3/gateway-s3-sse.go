@@ -506,7 +506,6 @@ func (l *s3EncObjects) PutObjectPart(ctx context.Context, bucket string, object 
 		Number: partID,
 		ETag:   pi.ETag,
 		Size:   pi.Size,
-		Name:   strconv.Itoa(partID),
 	}
 	gwMeta.ETag = data.MD5CurrentHexString() // encrypted ETag
 	gwMeta.Stat.Size = pi.Size

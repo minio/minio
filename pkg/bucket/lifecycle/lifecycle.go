@@ -99,8 +99,11 @@ func (lc Lifecycle) Validate() error {
 // FilterRuleActions returns the expiration and transition from the object name
 // after evaluating all rules.
 func (lc Lifecycle) FilterRuleActions(objName, objTags string) (Expiration, Transition) {
+	if objName == "" {
+		return Expiration{}, Transition{}
+	}
 	for _, rule := range lc.Rules {
-		if strings.ToLower(rule.Status) != "enabled" {
+		if rule.Status == Disabled {
 			continue
 		}
 		tags := rule.Tags()
@@ -121,6 +124,9 @@ func (lc Lifecycle) FilterRuleActions(objName, objTags string) (Expiration, Tran
 // against the object name and its modification time.
 func (lc Lifecycle) ComputeAction(objName, objTags string, modTime time.Time) Action {
 	var action = NoneAction
+	if modTime.IsZero() {
+		return action
+	}
 	exp, _ := lc.FilterRuleActions(objName, objTags)
 	if !exp.IsDateNull() {
 		if time.Now().After(exp.Date.Time) {

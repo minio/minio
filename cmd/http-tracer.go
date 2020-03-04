@@ -83,14 +83,15 @@ func getOpName(name string) (op string) {
 	op = strings.TrimPrefix(name, "github.com/minio/minio/cmd.")
 	op = strings.TrimSuffix(op, "Handler-fm")
 	op = strings.Replace(op, "objectAPIHandlers", "s3", 1)
-	op = strings.Replace(op, "webAPIHandlers", "s3", 1)
+	op = strings.Replace(op, "webAPIHandlers", "webui", 1)
 	op = strings.Replace(op, "adminAPIHandlers", "admin", 1)
 	op = strings.Replace(op, "(*storageRESTServer)", "internal", 1)
 	op = strings.Replace(op, "(*peerRESTServer)", "internal", 1)
 	op = strings.Replace(op, "(*lockRESTServer)", "internal", 1)
-	op = strings.Replace(op, "stsAPIHandlers", "sts", 1)
+	op = strings.Replace(op, "(*stsAPIHandlers)", "sts", 1)
 	op = strings.Replace(op, "LivenessCheckHandler", "healthcheck", 1)
 	op = strings.Replace(op, "ReadinessCheckHandler", "healthcheck", 1)
+	op = strings.Replace(op, "-fm", "", 1)
 	return op
 }
 

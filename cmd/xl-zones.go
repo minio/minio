@@ -528,12 +528,12 @@ func (z *xlZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, marke
 
 	var zonesEntryChs [][]FileInfoCh
 
-	recursive := true
+	endWalkCh := make(chan struct{})
+	defer close(endWalkCh)
+
 	for _, zone := range z.zones {
-		endWalkCh := make(chan struct{})
-		defer close(endWalkCh)
 		zonesEntryChs = append(zonesEntryChs,
-			zone.startMergeWalks(ctx, bucket, prefix, "", recursive, endWalkCh))
+			zone.startMergeWalks(ctx, bucket, prefix, "", true, endWalkCh))
 	}
 
 	var objInfos []ObjectInfo
@@ -646,7 +646,7 @@ func (z *xlZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, marke
 func (z *xlZones) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, heal bool) (ListObjectsInfo, error) {
 	loi := ListObjectsInfo{}
 
-	if err := checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, z); err != nil {
+	if err := checkListObjsArgs(ctx, bucket, prefix, marker, z); err != nil {
 		return loi, err
 	}
 
@@ -717,45 +717,10 @@ func (z *xlZones) listObjects(ctx context.Context, bucket, prefix, marker, delim
 	}
 
 	for _, entry := range entries.Files {
-		var objInfo ObjectInfo
-		if HasSuffix(entry.Name, SlashSeparator) {
-			if !recursive {
-				loi.Prefixes = append(loi.Prefixes, entry.Name)
-				continue
-			}
-			objInfo = ObjectInfo{
-				Bucket: bucket,
-				Name:   entry.Name,
-				IsDir:  true,
-			}
-		} else {
-			objInfo = ObjectInfo{
-				IsDir:           false,
-				Bucket:          bucket,
-				Name:            entry.Name,
-				ModTime:         entry.ModTime,
-				Size:            entry.Size,
-				ContentType:     entry.Metadata["content-type"],
-				ContentEncoding: entry.Metadata["content-encoding"],
-			}
-
-			// Extract etag from metadata.
-			objInfo.ETag = extractETag(entry.Metadata)
-
-			// All the parts per object.
-			objInfo.Parts = entry.Parts
-
-			// etag/md5Sum has already been extracted. We need to
-			// remove to avoid it from appearing as part of
-			// response headers. e.g, X-Minio-* or X-Amz-*.
-			objInfo.UserDefined = cleanMetadata(entry.Metadata)
-
-			// Update storage class
-			if sc, ok := entry.Metadata[xhttp.AmzStorageClass]; ok {
-				objInfo.StorageClass = sc
-			} else {
-				objInfo.StorageClass = globalMinioDefaultStorageClass
-			}
+		objInfo := entry.ToObjectInfo()
+		if HasSuffix(objInfo.Name, SlashSeparator) && !recursive {
+			loi.Prefixes = append(loi.Prefixes, objInfo.Name)
+			continue
 		}
 		loi.Objects = append(loi.Objects, objInfo)
 	}
@@ -1319,17 +1284,69 @@ func (z *xlZones) HealBucket(ctx context.Context, bucket string, dryRun, remove 
 	return r, nil
 }
 
+// Walk a bucket, optionally prefix recursively, until we have returned
+// all the content to objectInfo channel, it is callers responsibility
+// to allocate a receive channel for ObjectInfo, upon any unhandled
+// error walker returns error. Optionally if context.Done() is received
+// then Walk() stops the walker.
+func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+	if err := checkListObjsArgs(ctx, bucket, prefix, "", z); err != nil {
+		// Upon error close the channel.
+		close(results)
+		return err
+	}
+
+	var zonesEntryChs [][]FileInfoCh
+
+	for _, zone := range z.zones {
+		zonesEntryChs = append(zonesEntryChs,
+			zone.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done()))
+	}
+
+	var zoneDrivesPerSet []int
+	for _, zone := range z.zones {
+		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.drivesPerSet)
+	}
+
+	var zonesEntriesInfos [][]FileInfo
+	var zonesEntriesValid [][]bool
+	for _, entryChs := range zonesEntryChs {
+		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfo, len(entryChs)))
+		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
+	}
+
+	go func() {
+		defer close(results)
+
+		for {
+			entry, quorumCount, zoneIndex, ok := leastEntryZone(zonesEntryChs,
+				zonesEntriesInfos, zonesEntriesValid)
+			if !ok {
+				return
+			}
+
+			if quorumCount != zoneDrivesPerSet[zoneIndex] {
+				continue
+			}
+
+			results <- entry.ToObjectInfo()
+		}
+	}()
+
+	return nil
+}
+
 type healObjectFn func(string, string) error
 
 func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healObject healObjectFn) error {
 	var zonesEntryChs [][]FileInfoCh
 
-	recursive := true
+	endWalkCh := make(chan struct{})
+	defer close(endWalkCh)
+
 	for _, zone := range z.zones {
-		endWalkCh := make(chan struct{})
-		defer close(endWalkCh)
 		zonesEntryChs = append(zonesEntryChs,
-			zone.startMergeWalks(ctx, bucket, prefix, "", recursive, endWalkCh))
+			zone.startMergeWalks(ctx, bucket, prefix, "", true, endWalkCh))
 	}
 
 	var zoneDrivesPerSet []int

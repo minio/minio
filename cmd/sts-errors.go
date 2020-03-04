@@ -78,6 +78,7 @@ const (
 	ErrSTSInvalidParameterValue
 	ErrSTSWebIdentityExpiredToken
 	ErrSTSClientGrantsExpiredToken
+	ErrSTSInvalidAccessKey
 	ErrSTSInvalidClientGrantsToken
 	ErrSTSMalformedPolicyDocument
 	ErrSTSNotInitialized
@@ -126,6 +127,11 @@ var stsErrCodes = stsErrorCodeMap{
 		Code:           "InvalidClientGrantsToken",
 		Description:    "The client grants token that was passed could not be validated by MinIO.",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrSTSInvalidAccessKey: {
+		Code:           "InvalidClientTokenId",
+		Description:    "The security token included in the request is invalid.",
+		HTTPStatusCode: http.StatusForbidden,
 	},
 	ErrSTSMalformedPolicyDocument: {
 		Code:           "MalformedPolicyDocument",

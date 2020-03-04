@@ -280,15 +280,11 @@ func TestGetDecryptedRange_Issue50(t *testing.T) {
 		Parts: []ObjectPartInfo{
 			{
 				Number:     1,
-				Name:       "part.1",
-				ETag:       "etag1",
 				Size:       297580380,
 				ActualSize: 297435132,
 			},
 			{
 				Number:     2,
-				Name:       "part.2",
-				ETag:       "etag2",
 				Size:       297580380,
 				ActualSize: 297435132,
 			},

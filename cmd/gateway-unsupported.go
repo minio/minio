@@ -176,6 +176,11 @@ func (a GatewayUnsupported) ListObjectsV2(ctx context.Context, bucket, prefix, c
 	return result, NotImplemented{}
 }
 
+// Walk - Not implemented stub
+func (a GatewayUnsupported) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+	return NotImplemented{}
+}
+
 // HealObjects - Not implemented stub
 func (a GatewayUnsupported) HealObjects(ctx context.Context, bucket, prefix string, fn healObjectFn) (e error) {
 	return NotImplemented{}

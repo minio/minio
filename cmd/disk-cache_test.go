@@ -258,7 +258,7 @@ func TestDiskCacheMaxUse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := initDiskCaches(fsDirs, 80, 0, 80, 90, t)
+	d, err := initDiskCaches(fsDirs, 90, 0, 90, 99, t)
 	if err != nil {
 		t.Fatal(err)
 	}

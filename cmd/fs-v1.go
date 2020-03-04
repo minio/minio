@@ -1246,6 +1246,15 @@ func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, dryRun, remo
 	return madmin.HealResultItem{}, NotImplemented{}
 }
 
+// Walk a bucket, optionally prefix recursively, until we have returned
+// all the content to objectInfo channel, it is callers responsibility
+// to allocate a receive channel for ObjectInfo, upon any unhandled
+// error walker returns error. Optionally if context.Done() is received
+// then Walk() stops the walker.
+func (fs *FSObjects) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+	return fsWalk(ctx, fs, bucket, prefix, fs.listDirFactory(), results, fs.getObjectInfo, fs.getObjectInfo)
+}
+
 // HealObjects - no-op for fs. Valid only for XL.
 func (fs *FSObjects) HealObjects(ctx context.Context, bucket, prefix string, fn healObjectFn) (e error) {
 	logger.LogIf(ctx, NotImplemented{})

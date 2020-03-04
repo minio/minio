@@ -59,7 +59,7 @@ func filterMatchingPrefix(entries []string, prefixEntry string) []string {
 type ListDirFunc func(bucket, prefixDir, prefixEntry string) (entries []string)
 
 // treeWalk walks directory tree recursively pushing TreeWalkResult into the channel as and when it encounters files.
-func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, listDir ListDirFunc, resultCh chan TreeWalkResult, endWalkCh chan struct{}, isEnd bool) (totalNum int, treeErr error) {
+func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, listDir ListDirFunc, resultCh chan TreeWalkResult, endWalkCh <-chan struct{}, isEnd bool) (totalNum int, treeErr error) {
 	// Example:
 	// if prefixDir="one/two/three/" and marker="four/five.txt" treeWalk is recursively
 	// called with prefixDir="one/two/three/four/" and marker="five.txt"
@@ -151,7 +151,7 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 }
 
 // Initiate a new treeWalk in a goroutine.
-func startTreeWalk(ctx context.Context, bucket, prefix, marker string, recursive bool, listDir ListDirFunc, endWalkCh chan struct{}) chan TreeWalkResult {
+func startTreeWalk(ctx context.Context, bucket, prefix, marker string, recursive bool, listDir ListDirFunc, endWalkCh <-chan struct{}) chan TreeWalkResult {
 	// Example 1
 	// If prefix is "one/two/three/" and marker is "one/two/three/four/five.txt"
 	// treeWalk is called with prefixDir="one/two/three/" and marker="four/five.txt"
