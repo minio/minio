@@ -247,42 +247,43 @@ func lockMaintenance(ctx context.Context, interval time.Duration, objAPI ObjectL
 	// Get list of long lived locks to check for staleness.
 	for lendpoint, nlrips := range getLongLivedLocks(interval) {
 		for _, nlrip := range nlrips {
-			for _, ep := range globalEndpoints {
-				for _, endpoint := range ep.Endpoints {
-					if endpoint.String() == lendpoint.String() {
-						continue
-					}
-
-					c := newLockAPI(endpoint)
-					if !c.IsOnline() {
-						continue
-					}
-
-					// Call back to original server verify whether the lock is
-					// still active (based on name & uid)
-					expired, err := c.Expired(dsync.LockArgs{
-						UID:       nlrip.lri.UID,
-						Resources: []string{nlrip.name},
-					})
-
-					if err != nil {
-						c.Close()
-						continue
-					}
-
-					// For successful response, verify if lock was indeed active or stale.
-					if expired {
-						// The lock is no longer active at server that originated
-						// the lock, attempt to remove the lock.
-						globalLockServers[lendpoint].mutex.Lock()
-						// Purge the stale entry if it exists.
-						globalLockServers[lendpoint].removeEntryIfExists(nlrip)
-						globalLockServers[lendpoint].mutex.Unlock()
-					}
-
-					// Close the connection regardless of the call response.
-					c.Close()
+			// Locks are only held on first zone, make sure that
+			// we only look for ownership of locks from endpoints
+			// on first zone.
+			for _, endpoint := range globalEndpoints[0].Endpoints {
+				if endpoint.String() == lendpoint.String() {
+					continue
 				}
+
+				c := newLockAPI(endpoint)
+				if !c.IsOnline() {
+					continue
+				}
+
+				// Call back to original server verify whether the lock is
+				// still active (based on name & uid)
+				expired, err := c.Expired(dsync.LockArgs{
+					UID:       nlrip.lri.UID,
+					Resources: []string{nlrip.name},
+				})
+
+				if err != nil {
+					c.Close()
+					continue
+				}
+
+				// For successful response, verify if lock was indeed active or stale.
+				if expired {
+					// The lock is no longer active at server that originated
+					// the lock, attempt to remove the lock.
+					globalLockServers[lendpoint].mutex.Lock()
+					// Purge the stale entry if it exists.
+					globalLockServers[lendpoint].removeEntryIfExists(nlrip)
+					globalLockServers[lendpoint].mutex.Unlock()
+				}
+
+				// Close the connection regardless of the call response.
+				c.Close()
 			}
 		}
 	}
