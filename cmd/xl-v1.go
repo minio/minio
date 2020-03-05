@@ -53,6 +53,8 @@ type xlObjects struct {
 	// getLockers returns list of remote and local lockers.
 	getLockers func() []dsync.NetLocker
 
+	endpoints Endpoints
+
 	// Locker mutex map.
 	nsMutex *nsLockMap
 
@@ -87,7 +89,7 @@ func (d byDiskTotal) Less(i, j int) bool {
 }
 
 // getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlineDisks madmin.BackendDisks) {
+func getDisksInfo(disks []StorageAPI, endpoints Endpoints) (disksInfo []DiskInfo, onlineDisks, offlineDisks madmin.BackendDisks) {
 	disksInfo = make([]DiskInfo, len(disks))
 
 	g := errgroup.WithNErrs(len(disks))
@@ -115,24 +117,16 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 	onlineDisks = make(madmin.BackendDisks)
 	offlineDisks = make(madmin.BackendDisks)
 
-	localNodeAddr := GetLocalPeer(globalEndpoints)
-
 	// Wait for the routines.
 	for i, diskInfoErr := range g.Wait() {
-		if disks[i] == nil {
-			continue
-		}
-		peerAddr := disks[i].Hostname()
-		if peerAddr == "" {
-			peerAddr = localNodeAddr
-		}
+		peerAddr := endpoints[i].Host
 		if _, ok := offlineDisks[peerAddr]; !ok {
 			offlineDisks[peerAddr] = 0
 		}
 		if _, ok := onlineDisks[peerAddr]; !ok {
 			onlineDisks[peerAddr] = 0
 		}
-		if diskInfoErr != nil {
+		if disks[i] == nil || diskInfoErr != nil {
 			offlineDisks[peerAddr]++
 			continue
 		}
@@ -144,8 +138,8 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 }
 
 // Get an aggregated storage info across all disks.
-func getStorageInfo(disks []StorageAPI) StorageInfo {
-	disksInfo, onlineDisks, offlineDisks := getDisksInfo(disks)
+func getStorageInfo(disks []StorageAPI, endpoints Endpoints) StorageInfo {
+	disksInfo, onlineDisks, offlineDisks := getDisksInfo(disks, endpoints)
 
 	// Sort so that the first element is the smallest.
 	sort.Sort(byDiskTotal(disksInfo))
@@ -179,18 +173,20 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 
 // StorageInfo - returns underlying storage statistics.
 func (xl xlObjects) StorageInfo(ctx context.Context, local bool) StorageInfo {
+	var endpoints = xl.endpoints
 	var disks []StorageAPI
+
 	if !local {
 		disks = xl.getDisks()
 	} else {
-		for _, d := range xl.getDisks() {
-			if d != nil && d.Hostname() == "" {
+		for i, d := range xl.getDisks() {
+			if endpoints[i].IsLocal {
 				// Append this local disk since local flag is true
 				disks = append(disks, d)
 			}
 		}
 	}
-	return getStorageInfo(disks)
+	return getStorageInfo(disks, endpoints)
 }
 
 // GetMetrics - is not implemented and shouldn't be called.
