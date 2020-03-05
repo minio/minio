@@ -1586,7 +1586,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	}
 
 	// Set faulty disks to XL backend
-	z := obj.(*xlZones)
+	z := obj.(*erasureZones)
 	xl := z.zones[0].sets[0]
 	xlDisks := xl.getDisks()
 	z.zones[0].xlDisksMu.Lock()

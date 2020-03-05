@@ -1037,11 +1037,11 @@ const (
 	AdminUpdateApplyFailure      = "XMinioAdminUpdateApplyFailure"
 )
 
-// toAdminAPIErrCode - converts errXLWriteQuorum error to admin API
+// toAdminAPIErrCode - converts errERWriteQuorum error to admin API
 // specific error.
 func toAdminAPIErrCode(ctx context.Context, err error) APIErrorCode {
 	switch err {
-	case errXLWriteQuorum:
+	case errERWriteQuorum:
 		return ErrAdminConfigNoQuorum
 	default:
 		return toAPIErrorCode(ctx, err)

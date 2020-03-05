@@ -24,7 +24,7 @@ import (
 )
 
 // getLoadBalancedDisks - fetches load balanced (sufficiently randomized) disk slice.
-func (xl xlObjects) getLoadBalancedDisks() (disks []StorageAPI) {
+func (xl erasureObjects) getLoadBalancedDisks() (disks []StorageAPI) {
 	// Based on the random shuffling return back randomized disks.
 	for _, i := range hashOrder(UTCNow().String(), len(xl.getDisks())) {
 		disks = append(disks, xl.getDisks()[i-1])
@@ -35,7 +35,7 @@ func (xl xlObjects) getLoadBalancedDisks() (disks []StorageAPI) {
 // This function does the following check, suppose
 // object is "a/b/c/d", stat makes sure that objects ""a/b/c""
 // "a/b" and "a" do not exist.
-func (xl xlObjects) parentDirIsObject(ctx context.Context, bucket, parent string) bool {
+func (xl erasureObjects) parentDirIsObject(ctx context.Context, bucket, parent string) bool {
 	var isParentDirObject func(string) bool
 	isParentDirObject = func(p string) bool {
 		if p == "." || p == SlashSeparator {
@@ -53,7 +53,7 @@ func (xl xlObjects) parentDirIsObject(ctx context.Context, bucket, parent string
 
 // isObject - returns `true` if the prefix is an object i.e if
 // `xl.json` exists at the leaf, false otherwise.
-func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
+func (xl erasureObjects) isObject(bucket, prefix string) (ok bool) {
 	storageDisks := xl.getDisks()
 
 	g := errgroup.WithNErrs(len(storageDisks))

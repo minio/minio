@@ -32,7 +32,7 @@ func TestXLCleanupStaleMultipartUploads(t *testing.T) {
 	// Defer cleanup of backend directories
 	defer removeRoots(fsDirs)
 
-	z := obj.(*xlZones)
+	z := obj.(*erasureZones)
 	xl := z.zones[0].sets[0]
 
 	// Close the go-routine, we are going to

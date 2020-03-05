@@ -369,7 +369,7 @@ func waitForFormatXL(firstDisk bool, endpoints Endpoints, zoneCount, setCount, d
 					// Fresh setup, wait for other servers to come up.
 					logger.Info("Waiting for all other servers to be online to format the disks.")
 					continue
-				case errXLReadQuorum:
+				case errERReadQuorum:
 					// no quorum available continue to wait for minimum number of servers.
 					logger.Info("Waiting for a minimum of %d disks to come online (elapsed %s)\n", len(endpoints)/2, getElapsedTime())
 					continue

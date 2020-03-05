@@ -60,7 +60,7 @@ func listDirFactory(ctx context.Context, disks ...StorageAPI) ListDirFunc {
 }
 
 // listObjects - wrapper function implemented over file tree walk.
-func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
+func (xl erasureObjects) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	// Default is recursive, if delimiter is set then list non recursive.
 	recursive := true
 	if delimiter == SlashSeparator {
@@ -102,7 +102,7 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 				// ignore quorum error as it might be an entry from an outdated disk.
 				if IsErrIgnored(err, []error{
 					errFileNotFound,
-					errXLReadQuorum,
+					errERReadQuorum,
 				}...) {
 					continue
 				}
@@ -143,7 +143,7 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 }
 
 // ListObjects - list all objects at prefix, delimited by '/'.
-func (xl xlObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
+func (xl erasureObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	if err := checkListObjsArgs(ctx, bucket, prefix, marker, xl); err != nil {
 		return loi, err
 	}
@@ -186,21 +186,21 @@ func (xl xlObjects) ListObjects(ctx context.Context, bucket, prefix, marker, del
 }
 
 // This is not implemented/needed anymore, look for xl-sets.ListBucketHeal()
-func (xl xlObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
+func (xl erasureObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 	return nil, NotImplemented{}
 }
 
 // This is not implemented, look for xl-sets.ListObjectsHeal()
-func (xl xlObjects) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
+func (xl erasureObjects) ListObjectsHeal(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
 	return ListObjectsInfo{}, NotImplemented{}
 }
 
 // This is not implemented/needed anymore, look for xl-sets.HealObjects()
-func (xl xlObjects) HealObjects(ctx context.Context, bucket, prefix string, _ healObjectFn) (e error) {
+func (xl erasureObjects) HealObjects(ctx context.Context, bucket, prefix string, _ healObjectFn) (e error) {
 	return NotImplemented{}
 }
 
 // This is not implemented/needed anymore, look for xl-sets.Walk()
-func (xl xlObjects) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+func (xl erasureObjects) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
 	return NotImplemented{}
 }

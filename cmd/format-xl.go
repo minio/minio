@@ -577,7 +577,7 @@ func getFormatXLInQuorum(formats []*formatXLV3) (*formatXLV3, error) {
 	}
 
 	if maxCount < len(formats)/2 {
-		return nil, errXLReadQuorum
+		return nil, errERReadQuorum
 	}
 
 	for i, hash := range formatHashes {
@@ -588,7 +588,7 @@ func getFormatXLInQuorum(formats []*formatXLV3) (*formatXLV3, error) {
 		}
 	}
 
-	return nil, errXLReadQuorum
+	return nil, errERReadQuorum
 }
 
 func formatXLV3Check(reference *formatXLV3, format *formatXLV3) error {

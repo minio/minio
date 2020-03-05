@@ -303,7 +303,7 @@ func TestToAdminAPIErrCode(t *testing.T) {
 	}{
 		// 1. Server not in quorum.
 		{
-			err:            errXLWriteQuorum,
+			err:            errERWriteQuorum,
 			expectedAPIErr: ErrAdminConfigNoQuorum,
 		},
 		// 2. No error.

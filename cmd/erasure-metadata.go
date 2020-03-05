@@ -139,8 +139,8 @@ func (e ErasureInfo) GetChecksumInfo(partNumber int) (ckSum ChecksumInfo) {
 
 // StatInfo - carries stat information of the object.
 type StatInfo struct {
-	Size    int64     `json:"size"`    // Size of the object `xl.json`.
-	ModTime time.Time `json:"modTime"` // ModTime of the object `xl.json`.
+	Size    int64     `json:"size"`    // Size of the object `er.json`.
+	ModTime time.Time `json:"modTime"` // ModTime of the object `er.json`.
 }
 
 // Return a new FileInfo initialized using the given FileInfo. Used in healing
@@ -302,7 +302,7 @@ func getFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.T
 	}
 
 	if maxCount < quorum {
-		return FileInfo{}, errXLReadQuorum
+		return FileInfo{}, errERReadQuorum
 	}
 
 	for i, hash := range metaHashes {
@@ -311,11 +311,11 @@ func getFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.T
 		}
 	}
 
-	return FileInfo{}, errXLReadQuorum
+	return FileInfo{}, errERReadQuorum
 }
 
 // pickValidFileInfo - picks one valid FileInfo content and returns from a
-// slice of xlmeta content.
+// slice of ermeta content.
 func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Time, quorum int) (xmv FileInfo, e error) {
 	return getFileInfoInQuorum(ctx, metaArr, modTime, quorum)
 }
@@ -348,10 +348,10 @@ func renameFileInfo(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry
 	// Wait for all renames to finish.
 	errs := g.Wait()
 
-	// We can safely allow RenameFile errors up to len(xl.getDisks()) - writeQuorum
+	// We can safely allow RenameFile errors up to len(er.getDisks()) - writeQuorum
 	// otherwise return failure. Cleanup successful renames.
 	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, quorum)
-	if err == errXLWriteQuorum {
+	if err == errERWriteQuorum {
 		g = errgroup.WithNErrs(len(disks))
 		for index, disk := range disks {
 			if disk == nil {
@@ -371,11 +371,11 @@ func renameFileInfo(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry
 	return evalDisks(disks, errs), err
 }
 
-// writeUniqueFileInfo - writes unique `xl.json` content for each disk in order.
+// writeUniqueFileInfo - writes unique `er.json` content for each disk in order.
 func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix string, files []FileInfo, quorum int) ([]StorageAPI, error) {
 	g := errgroup.WithNErrs(len(disks))
 
-	// Start writing `xl.json` to all disks in parallel.
+	// Start writing `er.json` to all disks in parallel.
 	for index := range disks {
 		index := index
 		g.Go(func() error {
@@ -399,7 +399,7 @@ func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix
 // Returns per object readQuorum and writeQuorum
 // readQuorum is the min required disks to read data.
 // writeQuorum is the min required disks to write data.
-func objectQuorumFromMeta(ctx context.Context, xl xlObjects, partsMetaData []FileInfo, errs []error) (objectReadQuorum, objectWriteQuorum int, err error) {
+func objectQuorumFromMeta(ctx context.Context, er erasureObjects, partsMetaData []FileInfo, errs []error) (objectReadQuorum, objectWriteQuorum int, err error) {
 	// get the latest updated Metadata and a count of all the latest updated FileInfo(s)
 	latestFileInfo, err := getLatestFileInfo(ctx, partsMetaData, errs)
 	if err != nil {

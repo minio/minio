@@ -103,7 +103,7 @@ type xlMetaV2Object struct {
 }
 
 func (o xlMetaV2Object) Valid() bool {
-	if o.Data.Dir == "" || o.VersionID == "" {
+	if o.VersionID == "" {
 		return false
 	}
 	return isXLMetaErasureInfoValid(o.Data.Erasure.Data, o.Data.Erasure.Parity)

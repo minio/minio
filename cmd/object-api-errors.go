@@ -100,9 +100,9 @@ func toObjectErr(err error, params ...string) error {
 				Object: params[1],
 			}
 		}
-	case errXLReadQuorum:
+	case errERReadQuorum:
 		err = InsufficientReadQuorum{}
-	case errXLWriteQuorum:
+	case errERWriteQuorum:
 		err = InsufficientWriteQuorum{}
 	case io.ErrUnexpectedEOF, io.ErrShortWrite:
 		err = IncompleteBody{}

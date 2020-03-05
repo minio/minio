@@ -100,7 +100,7 @@ func TestNewXLSets(t *testing.T) {
 // TestHashedLayer - tests the hashed layer which will be returned
 // consistently for a given object name.
 func TestHashedLayer(t *testing.T) {
-	var objs []*xlObjects
+	var objs []*erasureObjects
 
 	for i := 0; i < 16; i++ {
 		obj, fsDirs, err := prepareXL16()
@@ -113,15 +113,15 @@ func TestHashedLayer(t *testing.T) {
 			defer os.RemoveAll(dir)
 		}
 
-		z := obj.(*xlZones)
+		z := obj.(*erasureZones)
 		objs = append(objs, z.zones[0].sets[0])
 	}
 
-	sets := &xlSets{sets: objs, distributionAlgo: "CRCMOD"}
+	sets := &erasureSets{sets: objs, distributionAlgo: "CRCMOD"}
 
 	testCases := []struct {
 		objectName  string
-		expectedObj *xlObjects
+		expectedObj *erasureObjects
 	}{
 		// cases which should pass the test.
 		// passing in valid object name.

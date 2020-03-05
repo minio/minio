@@ -719,8 +719,9 @@ func (s *xlStorage) ListDir(volume, dirPath string, count int) (entries []string
 	if err != nil {
 		return nil, err
 	}
+
 	// Stat a volume entry.
-	_, err = os.Stat((volumeDir))
+	_, err = os.Stat(volumeDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errVolumeNotFound
@@ -1368,7 +1369,7 @@ func deleteFile(basePath, deletePath string, recursive bool) error {
 // Parent directories are automatically removed if they become empty. err can
 // bil nil while errs can contain some errors for corresponding objects. No error
 // is set if a specified prefix path does not exist.
-func (s *posix) DeletePrefixes(volume string, paths []string) (errs []error, err error) {
+func (s *xlStorage) DeletePrefixes(volume string, paths []string) (errs []error, err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)

@@ -145,7 +145,7 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []err
 		}
 	}
 	if count < len(partsMetadata)/2 {
-		return FileInfo{}, errXLReadQuorum
+		return FileInfo{}, errERReadQuorum
 	}
 
 	return latestFileInfo, nil

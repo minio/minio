@@ -44,7 +44,7 @@ func monitorLocalDisksAndHeal() {
 		break
 	}
 
-	z, ok := objAPI.(*xlZones)
+	z, ok := objAPI.(*erasureZones)
 	if !ok {
 		return
 	}

@@ -61,13 +61,13 @@ func TestReduceErrs(t *testing.T) {
 			errDiskNotFound,
 			errDiskNotFound,
 			errDiskFull,
-		}, []error{}, errXLReadQuorum},
+		}, []error{}, errERReadQuorum},
 		// Validate if have no consensus.
 		{[]error{
 			errDiskFull,
 			errDiskNotFound,
 			nil, nil,
-		}, []error{}, errXLReadQuorum},
+		}, []error{}, errERReadQuorum},
 		// Validate if have consensus and errors ignored.
 		{[]error{
 			errVolumeNotFound,
@@ -78,7 +78,7 @@ func TestReduceErrs(t *testing.T) {
 			errDiskNotFound,
 			errDiskNotFound,
 		}, []error{errDiskNotFound}, errVolumeNotFound},
-		{[]error{}, []error{}, errXLReadQuorum},
+		{[]error{}, []error{}, errERReadQuorum},
 		{[]error{errFileNotFound, errFileNotFound, errFileNotFound,
 			errFileNotFound, errFileNotFound, nil, nil, nil, nil, nil},
 			nil, nil},
@@ -90,8 +90,8 @@ func TestReduceErrs(t *testing.T) {
 			t.Errorf("Test %d : expected %s, got %s", i+1, testCase.err, gotErr)
 		}
 		gotNewErr := reduceWriteQuorumErrs(context.Background(), testCase.errs, testCase.ignoredErrs, 6)
-		if gotNewErr != errXLWriteQuorum {
-			t.Errorf("Test %d : expected %s, got %s", i+1, errXLWriteQuorum, gotErr)
+		if gotNewErr != errERWriteQuorum {
+			t.Errorf("Test %d : expected %s, got %s", i+1, errERWriteQuorum, gotErr)
 		}
 	}
 }
@@ -145,12 +145,12 @@ func TestShuffleDisks(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer removeRoots(disks)
-	z := objLayer.(*xlZones)
+	z := objLayer.(*erasureZones)
 	testShuffleDisks(t, z)
 }
 
 // Test shuffleDisks which returns shuffled slice of disks for their actual distribution.
-func testShuffleDisks(t *testing.T, z *xlZones) {
+func testShuffleDisks(t *testing.T, z *erasureZones) {
 	disks := z.zones[0].GetDisks(0)()
 	distribution := []int{16, 14, 12, 10, 8, 6, 4, 2, 1, 3, 5, 7, 9, 11, 13, 15}
 	shuffledDisks := shuffleDisks(disks, distribution)
@@ -190,6 +190,6 @@ func TestEvalDisks(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer removeRoots(disks)
-	z := objLayer.(*xlZones)
+	z := objLayer.(*erasureZones)
 	testShuffleDisks(t, z)
 }

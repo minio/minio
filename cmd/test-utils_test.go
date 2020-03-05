@@ -1634,7 +1634,7 @@ func initObjectLayer(endpointZones EndpointZones) (ObjectLayer, []StorageAPI, er
 
 	var formattedDisks []StorageAPI
 	// Should use the object layer tests for validating cache.
-	if z, ok := objLayer.(*xlZones); ok {
+	if z, ok := objLayer.(*erasureZones); ok {
 		formattedDisks = z.zones[0].GetDisks(0)()
 	}
 

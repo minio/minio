@@ -129,7 +129,7 @@ func (p *parallelReader) Read() ([][]byte, error) {
 		return newBuf, nil
 	}
 
-	return nil, errXLReadQuorum
+	return nil, errERReadQuorum
 }
 
 // Decode reads from readers, reconstructs data if needed and writes the data to the writer.

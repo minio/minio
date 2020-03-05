@@ -39,13 +39,13 @@ var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
 /// Bucket operations
 
 // MakeBucket - make a bucket.
-func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
+func (er erasureObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
 	// Verify if bucket is valid.
 	if err := s3utils.CheckValidBucketNameStrict(bucket); err != nil {
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
-	storageDisks := xl.getDisks()
+	storageDisks := er.getDisks()
 
 	g := errgroup.WithNErrs(len(storageDisks))
 
@@ -68,7 +68,7 @@ func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location
 
 	writeQuorum := len(storageDisks)/2 + 1
 	err := reduceWriteQuorumErrs(ctx, g.Wait(), bucketOpIgnoredErrs, writeQuorum)
-	if err == errXLWriteQuorum {
+	if err == errERWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
 		undoMakeBucket(storageDisks, bucket)
 	}
@@ -113,9 +113,9 @@ func undoMakeBucket(storageDisks []StorageAPI, bucket string) {
 }
 
 // getBucketInfo - returns the BucketInfo from one of the load balanced disks.
-func (xl xlObjects) getBucketInfo(ctx context.Context, bucketName string) (bucketInfo BucketInfo, err error) {
+func (er erasureObjects) getBucketInfo(ctx context.Context, bucketName string) (bucketInfo BucketInfo, err error) {
 	var bucketErrs []error
-	for _, disk := range xl.getLoadBalancedDisks() {
+	for _, disk := range er.getLoadBalancedDisks() {
 		if disk == nil {
 			bucketErrs = append(bucketErrs, errDiskNotFound)
 			continue
@@ -137,13 +137,13 @@ func (xl xlObjects) getBucketInfo(ctx context.Context, bucketName string) (bucke
 	// reduce to one error based on read quorum.
 	// `nil` is deliberately passed for ignoredErrs
 	// because these errors were already ignored.
-	readQuorum := len(xl.getDisks()) / 2
+	readQuorum := len(er.getDisks()) / 2
 	return BucketInfo{}, reduceReadQuorumErrs(ctx, bucketErrs, nil, readQuorum)
 }
 
 // GetBucketInfo - returns BucketInfo for a bucket.
-func (xl xlObjects) GetBucketInfo(ctx context.Context, bucket string) (bi BucketInfo, e error) {
-	bucketInfo, err := xl.getBucketInfo(ctx, bucket)
+func (er erasureObjects) GetBucketInfo(ctx context.Context, bucket string) (bi BucketInfo, e error) {
+	bucketInfo, err := er.getBucketInfo(ctx, bucket)
 	if err != nil {
 		return bi, toObjectErr(err, bucket)
 	}
@@ -151,8 +151,8 @@ func (xl xlObjects) GetBucketInfo(ctx context.Context, bucket string) (bi Bucket
 }
 
 // listBuckets - returns list of all buckets from a disk picked at random.
-func (xl xlObjects) listBuckets(ctx context.Context) (bucketsInfo []BucketInfo, err error) {
-	for _, disk := range xl.getLoadBalancedDisks() {
+func (er erasureObjects) listBuckets(ctx context.Context) (bucketsInfo []BucketInfo, err error) {
+	for _, disk := range er.getLoadBalancedDisks() {
 		if disk == nil {
 			continue
 		}
@@ -188,8 +188,8 @@ func (xl xlObjects) listBuckets(ctx context.Context) (bucketsInfo []BucketInfo, 
 }
 
 // ListBuckets - lists all the buckets, sorted by its name.
-func (xl xlObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
-	bucketInfos, err := xl.listBuckets(ctx)
+func (er erasureObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
+	bucketInfos, err := er.listBuckets(ctx)
 	if err != nil {
 		return nil, toObjectErr(err)
 	}
@@ -223,9 +223,9 @@ func deleteDanglingBucket(ctx context.Context, storageDisks []StorageAPI, dErrs 
 }
 
 // DeleteBucket - deletes a bucket.
-func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
+func (er erasureObjects) DeleteBucket(ctx context.Context, bucket string) error {
 	// Collect if all disks report volume not found.
-	storageDisks := xl.getDisks()
+	storageDisks := er.getDisks()
 
 	g := errgroup.WithNErrs(len(storageDisks))
 
@@ -251,7 +251,7 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 
 	writeQuorum := len(storageDisks)/2 + 1
 	err := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, writeQuorum)
-	if err == errXLWriteQuorum {
+	if err == errERWriteQuorum {
 		undoDeleteBucket(storageDisks, bucket)
 	}
 	if err != nil {
@@ -267,76 +267,76 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 }
 
 // SetBucketPolicy sets policy on bucket
-func (xl xlObjects) SetBucketPolicy(ctx context.Context, bucket string, policy *policy.Policy) error {
-	return savePolicyConfig(ctx, xl, bucket, policy)
+func (er erasureObjects) SetBucketPolicy(ctx context.Context, bucket string, policy *policy.Policy) error {
+	return savePolicyConfig(ctx, er, bucket, policy)
 }
 
 // GetBucketPolicy will get policy on bucket
-func (xl xlObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
-	return getPolicyConfig(xl, bucket)
+func (er erasureObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
+	return getPolicyConfig(er, bucket)
 }
 
 // DeleteBucketPolicy deletes all policies on bucket
-func (xl xlObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
-	return removePolicyConfig(ctx, xl, bucket)
+func (er erasureObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
+	return removePolicyConfig(ctx, er, bucket)
 }
 
 // SetBucketVersioning enables versioning on a bucket.
-func (xl xlObjects) SetBucketVersioning(ctx context.Context, bucket string, versioning *versioning.Versioning) error {
-	return saveVersioningConfig(ctx, xl, bucket, versioning)
+func (er erasureObjects) SetBucketVersioning(ctx context.Context, bucket string, versioning *versioning.Versioning) error {
+	return saveVersioningConfig(ctx, er, bucket, versioning)
 }
 
 // GetBucketVersioning retrieves versioning configuration on a bucket
-func (xl xlObjects) GetBucketVersioning(ctx context.Context, bucket string) (*versioning.Versioning, error) {
-	return getVersioningConfig(xl, bucket)
+func (er erasureObjects) GetBucketVersioning(ctx context.Context, bucket string) (*versioning.Versioning, error) {
+	return getVersioningConfig(er, bucket)
 }
 
 // SetBucketLifecycle sets lifecycle on bucket
-func (xl xlObjects) SetBucketLifecycle(ctx context.Context, bucket string, lifecycle *lifecycle.Lifecycle) error {
-	return saveLifecycleConfig(ctx, xl, bucket, lifecycle)
+func (er erasureObjects) SetBucketLifecycle(ctx context.Context, bucket string, lifecycle *lifecycle.Lifecycle) error {
+	return saveLifecycleConfig(ctx, er, bucket, lifecycle)
 }
 
 // GetBucketLifecycle will get lifecycle on bucket
-func (xl xlObjects) GetBucketLifecycle(ctx context.Context, bucket string) (*lifecycle.Lifecycle, error) {
-	return getLifecycleConfig(xl, bucket)
+func (er erasureObjects) GetBucketLifecycle(ctx context.Context, bucket string) (*lifecycle.Lifecycle, error) {
+	return getLifecycleConfig(er, bucket)
 }
 
 // DeleteBucketLifecycle deletes all lifecycle on bucket
-func (xl xlObjects) DeleteBucketLifecycle(ctx context.Context, bucket string) error {
-	return removeLifecycleConfig(ctx, xl, bucket)
+func (er erasureObjects) DeleteBucketLifecycle(ctx context.Context, bucket string) error {
+	return removeLifecycleConfig(ctx, er, bucket)
 }
 
 // GetBucketSSEConfig returns bucket encryption config on given bucket
-func (xl xlObjects) GetBucketSSEConfig(ctx context.Context, bucket string) (*bucketsse.BucketSSEConfig, error) {
-	return getBucketSSEConfig(xl, bucket)
+func (er erasureObjects) GetBucketSSEConfig(ctx context.Context, bucket string) (*bucketsse.BucketSSEConfig, error) {
+	return getBucketSSEConfig(er, bucket)
 }
 
 // SetBucketSSEConfig sets bucket encryption config on given bucket
-func (xl xlObjects) SetBucketSSEConfig(ctx context.Context, bucket string, config *bucketsse.BucketSSEConfig) error {
-	return saveBucketSSEConfig(ctx, xl, bucket, config)
+func (er erasureObjects) SetBucketSSEConfig(ctx context.Context, bucket string, config *bucketsse.BucketSSEConfig) error {
+	return saveBucketSSEConfig(ctx, er, bucket, config)
 }
 
 // DeleteBucketSSEConfig deletes bucket encryption config on given bucket
-func (xl xlObjects) DeleteBucketSSEConfig(ctx context.Context, bucket string) error {
-	return removeBucketSSEConfig(ctx, xl, bucket)
+func (er erasureObjects) DeleteBucketSSEConfig(ctx context.Context, bucket string) error {
+	return removeBucketSSEConfig(ctx, er, bucket)
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
-func (xl xlObjects) IsNotificationSupported() bool {
+func (er erasureObjects) IsNotificationSupported() bool {
 	return true
 }
 
 // IsListenBucketSupported returns whether listen bucket notification is applicable for this layer.
-func (xl xlObjects) IsListenBucketSupported() bool {
+func (er erasureObjects) IsListenBucketSupported() bool {
 	return true
 }
 
 // IsEncryptionSupported returns whether server side encryption is implemented for this layer.
-func (xl xlObjects) IsEncryptionSupported() bool {
+func (er erasureObjects) IsEncryptionSupported() bool {
 	return true
 }
 
 // IsCompressionSupported returns whether compression is applicable for this layer.
-func (xl xlObjects) IsCompressionSupported() bool {
+func (er erasureObjects) IsCompressionSupported() bool {
 	return true
 }

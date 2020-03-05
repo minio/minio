@@ -43,7 +43,7 @@ func TestUndoMakeBucket(t *testing.T) {
 	if err = obj.MakeBucketWithLocation(context.Background(), bucketName, ""); err != nil {
 		t.Fatal(err)
 	}
-	z := obj.(*xlZones)
+	z := obj.(*erasureZones)
 	xl := z.zones[0].sets[0]
 	undoMakeBucket(xl.getDisks(), bucketName)
 
@@ -112,7 +112,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	}
 
 	// Test 1: Remove the object backend files from the first disk.
-	z := objLayer.(*xlZones)
+	z := objLayer.(*erasureZones)
 	xl := z.zones[0].sets[0]
 	firstDisk := xl.getDisks()[0]
 	err = firstDisk.DeleteFile(bucket, pathJoin(object, xlStorageFormatFile))
@@ -249,7 +249,7 @@ func TestHealObjectXL(t *testing.T) {
 	}
 
 	// Remove the object backend files from the first disk.
-	z := obj.(*xlZones)
+	z := obj.(*erasureZones)
 	xl := z.zones[0].sets[0]
 	firstDisk := xl.getDisks()[0]
 
@@ -286,7 +286,7 @@ func TestHealObjectXL(t *testing.T) {
 
 	// Try healing now, expect to receive errDiskNotFound.
 	_, err = obj.HealObject(context.Background(), bucket, object, false, false, madmin.HealDeepScan)
-	// since majority of xl.jsons are not available, object quorum can't be read properly and error will be errXLReadQuorum
+	// since majority of xl.jsons are not available, object quorum can't be read properly and error will be errERReadQuorum
 	if _, ok := err.(InsufficientReadQuorum); !ok {
 		t.Errorf("Expected %v but received %v", InsufficientReadQuorum{}, err)
 	}
@@ -324,7 +324,7 @@ func TestHealEmptyDirectoryXL(t *testing.T) {
 	}
 
 	// Remove the object backend files from the first disk.
-	z := obj.(*xlZones)
+	z := obj.(*erasureZones)
 	xl := z.zones[0].sets[0]
 	firstDisk := xl.getDisks()[0]
 	err = firstDisk.DeleteFile(bucket, object)

@@ -169,7 +169,7 @@ func TestListOnlineDisks(t *testing.T) {
 	bucket := "bucket"
 	object := "object"
 	data := bytes.Repeat([]byte("a"), 1024)
-	z := obj.(*xlZones)
+	z := obj.(*erasureZones)
 	xlDisks := z.zones[0].sets[0].getDisks()
 	for i, test := range testCases {
 		// Prepare bucket/object backend for the tests below.
@@ -178,7 +178,7 @@ func TestListOnlineDisks(t *testing.T) {
 		obj.DeleteObject(context.Background(), bucket, object)
 		obj.DeleteBucket(context.Background(), bucket)
 
-		err = obj.MakeBucketWithLocation(context.Background(), "bucket", "")
+		err = obj.MakeBucketWithLocation(context.Background(), bucket, "")
 		if err != nil {
 			t.Fatalf("Failed to make a bucket %v", err)
 		}
@@ -232,7 +232,7 @@ func TestListOnlineDisks(t *testing.T) {
 		partsMetadata, errs := readAllFileInfo(xlDisks, bucket, object)
 		for i := range partsMetadata {
 			if errs[i] != nil {
-				t.Fatalf("Test %d: expected error to be nil: %s", i+1, errs[i].Error())
+				t.Fatalf("Test %d: expected error to be nil: %s", i+1, errs[i])
 			}
 			partsMetadata[i].ModTime = test.modTimes[i]
 		}
@@ -269,7 +269,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	// make data with more than one part
 	partCount := 3
 	data := bytes.Repeat([]byte("a"), 6*1024*1024*partCount)
-	z := obj.(*xlZones)
+	z := obj.(*erasureZones)
 	xl := z.zones[0].sets[0]
 	xlDisks := xl.getDisks()
 	err = obj.MakeBucketWithLocation(ctx, "bucket", "")

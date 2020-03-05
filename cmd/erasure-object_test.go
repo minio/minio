@@ -110,7 +110,7 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 
 func TestXLDeleteObjectsXLSet(t *testing.T) {
 
-	var objs []*xlObjects
+	var objs []*erasureObjects
 	for i := 0; i < 32; i++ {
 		obj, fsDirs, err := prepareXL(16)
 		if err != nil {
@@ -120,12 +120,12 @@ func TestXLDeleteObjectsXLSet(t *testing.T) {
 		for _, dir := range fsDirs {
 			defer os.RemoveAll(dir)
 		}
-		z := obj.(*xlZones)
+		z := obj.(*erasureZones)
 		xl := z.zones[0].sets[0]
 		objs = append(objs, xl)
 	}
 
-	xlSets := &xlSets{sets: objs, distributionAlgo: "CRCMOD"}
+	erasureSets := &erasureSets{sets: objs, distributionAlgo: "CRCMOD"}
 
 	type testCaseType struct {
 		bucket string
@@ -140,13 +140,13 @@ func TestXLDeleteObjectsXLSet(t *testing.T) {
 		{bucketName, "obj_4"},
 	}
 
-	err := xlSets.MakeBucketWithLocation(context.Background(), bucketName, "")
+	err := erasureSets.MakeBucketWithLocation(context.Background(), bucketName, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for _, testCase := range testCases {
-		_, err = xlSets.PutObject(context.Background(), testCase.bucket, testCase.object,
+		_, err = erasureSets.PutObject(context.Background(), testCase.bucket, testCase.object,
 			mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{})
 		if err != nil {
 			t.Fatalf("XL Object upload failed: <ERROR> %s", err)
@@ -162,7 +162,7 @@ func TestXLDeleteObjectsXLSet(t *testing.T) {
 	}
 
 	objectNames := toObjectNames(testCases)
-	delErrs, err := xlSets.DeleteObjects(context.Background(), bucketName, objectNames)
+	delErrs, err := erasureSets.DeleteObjects(context.Background(), bucketName, objectNames)
 	if err != nil {
 		t.Errorf("Failed to call DeleteObjects with the error: `%v`", err)
 	}
@@ -174,7 +174,7 @@ func TestXLDeleteObjectsXLSet(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		_, statErr := xlSets.GetObjectInfo(context.Background(), test.bucket, test.object, ObjectOptions{})
+		_, statErr := erasureSets.GetObjectInfo(context.Background(), test.bucket, test.object, ObjectOptions{})
 		switch statErr.(type) {
 		case ObjectNotFound:
 		default:
@@ -192,7 +192,7 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	// Cleanup backend directories
 	defer removeRoots(fsDirs)
 
-	z := obj.(*xlZones)
+	z := obj.(*erasureZones)
 	xl := z.zones[0].sets[0]
 
 	// Create "bucket"
@@ -241,9 +241,9 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	}
 	z.zones[0].xlDisksMu.Unlock()
 	err = obj.DeleteObject(context.Background(), bucket, object)
-	// since majority of disks are not available, metaquorum is not achieved and hence errXLReadQuorum error
-	if err != toObjectErr(errXLReadQuorum, bucket, object) {
-		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errXLReadQuorum, bucket, object), err)
+	// since majority of disks are not available, metaquorum is not achieved and hence errERReadQuorum error
+	if err != toObjectErr(errERReadQuorum, bucket, object) {
+		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errERReadQuorum, bucket, object), err)
 	}
 }
 
@@ -256,7 +256,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 	// Cleanup backend directories.
 	defer removeRoots(fsDirs)
 
-	z := obj.(*xlZones)
+	z := obj.(*erasureZones)
 	xl := z.zones[0].sets[0]
 
 	// Create "bucket"
@@ -299,8 +299,8 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		z.zones[0].xlDisksMu.Unlock()
 		// Fetch object from store.
 		err = xl.GetObject(context.Background(), bucket, object, 0, int64(len("abcd")), ioutil.Discard, "", opts)
-		if err != toObjectErr(errXLReadQuorum, bucket, object) {
-			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
+		if err != toObjectErr(errERReadQuorum, bucket, object) {
+			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errERWriteQuorum, bucket, object), err)
 		}
 	}
 }
@@ -315,7 +315,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 	// Cleanup backend directories.
 	defer removeRoots(fsDirs)
 
-	z := obj.(*xlZones)
+	z := obj.(*erasureZones)
 	xl := z.zones[0].sets[0]
 
 	// Create "bucket"
@@ -358,8 +358,8 @@ func TestPutObjectNoQuorum(t *testing.T) {
 		z.zones[0].xlDisksMu.Unlock()
 		// Upload new content to same object "object"
 		_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
-		if err != toObjectErr(errXLWriteQuorum, bucket, object) {
-			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
+		if err != toObjectErr(errERWriteQuorum, bucket, object) {
+			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errERWriteQuorum, bucket, object), err)
 		}
 	}
 }
@@ -381,7 +381,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	partCount := 3
 	data := bytes.Repeat([]byte("a"), 6*1024*1024*partCount)
 
-	z := obj.(*xlZones)
+	z := obj.(*erasureZones)
 	xl := z.zones[0].sets[0]
 	xlDisks := xl.getDisks()
 

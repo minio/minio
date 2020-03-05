@@ -79,7 +79,7 @@ func getLocalBackgroundHealStatus() madmin.BgHealState {
 }
 
 // healErasureSet lists and heals all objects in a specific erasure set
-func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects) error {
+func healErasureSet(ctx context.Context, setIndex int, xlObj *erasureObjects) error {
 	buckets, err := xlObj.ListBuckets(ctx)
 	if err != nil {
 		return err
@@ -113,7 +113,7 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects) error {
 }
 
 // Healing leader will take the charge of healing all erasure sets
-func execLeaderTasks(z *xlZones) {
+func execLeaderTasks(z *erasureZones) {
 	ctx := context.Background()
 
 	// Hold a lock so only one server performs auto-healing
@@ -167,7 +167,7 @@ func startGlobalHeal() {
 		break
 	}
 
-	zones, ok := objAPI.(*xlZones)
+	zones, ok := objAPI.(*erasureZones)
 	if !ok {
 		return
 	}

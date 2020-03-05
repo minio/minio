@@ -51,7 +51,7 @@ func TestXLParentDirIsObject(t *testing.T) {
 		t.Fatalf("Unexpected object name returned got %s, expected %s", objInfo.Name, objectName)
 	}
 
-	z := obj.(*xlZones)
+	z := obj.(*erasureZones)
 	xl := z.zones[0].sets[0]
 	testCases := []struct {
 		parentIsObject bool

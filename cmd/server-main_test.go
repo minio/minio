@@ -55,7 +55,7 @@ func TestNewObjectLayer(t *testing.T) {
 		t.Fatal("Unexpected object layer initialization error", err)
 	}
 
-	_, ok = obj.(*xlZones)
+	_, ok = obj.(*erasureZones)
 	if !ok {
 		t.Fatal("Unexpected object layer detected", reflect.TypeOf(obj))
 	}

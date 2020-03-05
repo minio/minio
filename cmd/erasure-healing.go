@@ -27,12 +27,12 @@ import (
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
-func (xl xlObjects) ReloadFormat(ctx context.Context, dryRun bool) error {
+func (xl erasureObjects) ReloadFormat(ctx context.Context, dryRun bool) error {
 	logger.LogIf(ctx, NotImplemented{})
 	return NotImplemented{}
 }
 
-func (xl xlObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
+func (xl erasureObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return madmin.HealResultItem{}, NotImplemented{}
 }
@@ -40,7 +40,7 @@ func (xl xlObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealRes
 // Heals a bucket if it doesn't exist on one of the disks, additionally
 // also heals the missing entries for bucket metadata files
 // `policy.json, notification.xml, listeners.json`.
-func (xl xlObjects) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (
+func (xl erasureObjects) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (
 	result madmin.HealResultItem, err error) {
 
 	storageDisks := xl.getDisks()
@@ -151,7 +151,7 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 	errs = g.Wait()
 
 	reducedErr = reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, writeQuorum)
-	if reducedErr == errXLWriteQuorum {
+	if reducedErr == errERWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
 		undoMakeBucket(storageDisks, bucket)
 	}
@@ -219,7 +219,7 @@ func shouldHealObjectOnDisk(xlErr, dataErr error, meta FileInfo, quorumModTime t
 }
 
 // Heals an object by re-writing corrupt/missing erasure blocks.
-func (xl xlObjects) healObject(ctx context.Context, bucket string, object string,
+func (xl erasureObjects) healObject(ctx context.Context, bucket string, object string,
 	partsMetadata []FileInfo, errs []error, latestFileInfo FileInfo,
 	dryRun bool, remove bool, scanMode madmin.HealScanMode) (result madmin.HealResultItem, err error) {
 
@@ -321,7 +321,7 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 			}
 			return defaultHealResult(latestFileInfo, storageDisks, errs, bucket, object), err
 		}
-		return result, toObjectErr(errXLReadQuorum, bucket, object)
+		return result, toObjectErr(errERReadQuorum, bucket, object)
 	}
 
 	if disksToHealCount == 0 {
@@ -483,7 +483,7 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 
 // healObjectDir - heals object directory specifically, this special call
 // is needed since we do not have a special backend format for directories.
-func (xl xlObjects) healObjectDir(ctx context.Context, bucket, object string, dryRun bool) (hr madmin.HealResultItem, err error) {
+func (xl erasureObjects) healObjectDir(ctx context.Context, bucket, object string, dryRun bool) (hr madmin.HealResultItem, err error) {
 	storageDisks := xl.getDisks()
 
 	// Initialize heal result object
@@ -695,7 +695,7 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 }
 
 // HealObject - heal the given object, automatically deletes the object if stale/corrupted if `remove` is true.
-func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRun bool, remove bool, scanMode madmin.HealScanMode) (hr madmin.HealResultItem, err error) {
+func (xl erasureObjects) HealObject(ctx context.Context, bucket, object string, dryRun bool, remove bool, scanMode madmin.HealScanMode) (hr madmin.HealResultItem, err error) {
 	// Create context that also contains information about the object and bucket.
 	// The top level handler might not have this information.
 	reqInfo := logger.GetReqInfo(ctx)

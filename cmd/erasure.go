@@ -39,8 +39,8 @@ type partialUpload struct {
 	failedSet int
 }
 
-// xlObjects - Implements XL object layer.
-type xlObjects struct {
+// erasureObjects - Implements ER object layer.
+type erasureObjects struct {
 	// getDisks returns list of storageAPIs.
 	getDisks func() []StorageAPI
 
@@ -57,17 +57,19 @@ type xlObjects struct {
 	listPool *TreeWalkPool
 
 	mrfUploadCh chan partialUpload
+
+	endpoints Endpoints
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
-func (xl xlObjects) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
-	return xl.nsMutex.NewNSLock(ctx, xl.getLockers, bucket, objects...)
+func (er erasureObjects) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
+	return er.nsMutex.NewNSLock(ctx, er.getLockers, bucket, objects...)
 }
 
 // Shutdown function for object storage interface.
-func (xl xlObjects) Shutdown(ctx context.Context) error {
+func (er erasureObjects) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.
-	closeStorageDisks(xl.getDisks())
+	closeStorageDisks(er.getDisks())
 	return nil
 }
 
@@ -81,7 +83,7 @@ func (d byDiskTotal) Less(i, j int) bool {
 }
 
 // getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlineDisks madmin.BackendDisks) {
+func getDisksInfo(disks []StorageAPI, endpoints Endpoints) (disksInfo []DiskInfo, onlineDisks, offlineDisks madmin.BackendDisks) {
 	disksInfo = make([]DiskInfo, len(disks))
 
 	g := errgroup.WithNErrs(len(disks))
@@ -109,24 +111,16 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 	onlineDisks = make(madmin.BackendDisks)
 	offlineDisks = make(madmin.BackendDisks)
 
-	localNodeAddr := GetLocalPeer(globalEndpoints)
-
 	// Wait for the routines.
 	for i, diskInfoErr := range g.Wait() {
-		if disks[i] == nil {
-			continue
-		}
-		peerAddr := disks[i].Hostname()
-		if peerAddr == "" {
-			peerAddr = localNodeAddr
-		}
+		peerAddr := endpoints[i].Host
 		if _, ok := offlineDisks[peerAddr]; !ok {
 			offlineDisks[peerAddr] = 0
 		}
 		if _, ok := onlineDisks[peerAddr]; !ok {
 			onlineDisks[peerAddr] = 0
 		}
-		if diskInfoErr != nil {
+		if disks[i] == nil || diskInfoErr != nil {
 			// Upon error update offline disks.
 			offlineDisks[peerAddr]++
 			continue
@@ -139,8 +133,8 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 }
 
 // Get an aggregated storage info across all disks.
-func getStorageInfo(disks []StorageAPI) StorageInfo {
-	disksInfo, onlineDisks, offlineDisks := getDisksInfo(disks)
+func getStorageInfo(disks []StorageAPI, endpoints Endpoints) StorageInfo {
+	disksInfo, onlineDisks, offlineDisks := getDisksInfo(disks, endpoints)
 
 	// Sort so that the first element is the smallest.
 	sort.Sort(byDiskTotal(disksInfo))
@@ -173,20 +167,33 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 }
 
 // StorageInfo - returns underlying storage statistics.
-func (xl xlObjects) StorageInfo(ctx context.Context, local bool) StorageInfo {
-	return getStorageInfo(xl.getDisks())
+func (er erasureObjects) StorageInfo(ctx context.Context, local bool) StorageInfo {
+	var endpoints = er.endpoints
+	var disks []StorageAPI
+
+	if !local {
+		disks = er.getDisks()
+	} else {
+		for i, d := range er.getDisks() {
+			if endpoints[i].IsLocal {
+				// Append this local disk since local flag is true
+				disks = append(disks, d)
+			}
+		}
+	}
+	return getStorageInfo(disks, endpoints)
 }
 
 // GetMetrics - is not implemented and shouldn't be called.
-func (xl xlObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
+func (er erasureObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return &Metrics{}, NotImplemented{}
 }
 
 // CrawlAndGetDataUsage picks three random disks to crawl and get data usage
-func (xl xlObjects) CrawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
+func (er erasureObjects) CrawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
 	var randomDisks []StorageAPI
-	for _, d := range xl.getLoadBalancedDisks() {
+	for _, d := range er.getLoadBalancedDisks() {
 		if d == nil || !d.IsOnline() {
 			continue
 		}
@@ -223,7 +230,7 @@ func (xl xlObjects) CrawlAndGetDataUsage(ctx context.Context, endCh <-chan struc
 }
 
 // IsReady - No Op.
-func (xl xlObjects) IsReady(ctx context.Context) bool {
+func (er erasureObjects) IsReady(ctx context.Context) bool {
 	logger.CriticalIf(ctx, NotImplemented{})
 	return true
 }
