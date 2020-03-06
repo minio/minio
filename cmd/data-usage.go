@@ -74,15 +74,15 @@ func timeToCrawl(ctx context.Context, objAPI ObjectLayer) time.Duration {
 	if dataUsageInfo.LastUpdate.IsZero() {
 		return 1 * time.Second
 	}
-	waitDuration := dataUsageInfo.LastUpdate.Sub(UTCNow())
-	if waitDuration > dataUsageCrawlInterval {
+	timeSinceLastUpdate := UTCNow().Sub(dataUsageInfo.LastUpdate)
+	if timeSinceLastUpdate > dataUsageCrawlInterval {
 		// Waited long enough start crawl in a 1 second
 		return 1 * time.Second
 	}
 	// No crawling needed, ask the routine to wait until
 	// the daily interval 12hrs - delta between last update
 	// with current time.
-	return dataUsageCrawlInterval - waitDuration
+	return dataUsageCrawlInterval - timeSinceLastUpdate
 }
 
 var dataUsageLockTimeout = lifecycleLockTimeout
