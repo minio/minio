@@ -12,24 +12,6 @@ import (
 	"unicode/utf8"
 )
 
-// minNonNeg returns the minimal non negative value of a and b,
-// it also returns -1 if both values are negative.
-func minNonNeg(a, b int) int {
-	switch {
-	case a < 0 && b < 0:
-		return -1
-	case a < 0:
-		return b
-	case b < 0:
-		return a
-	default:
-		if a < b {
-			return a
-		}
-		return b
-	}
-}
-
 // A Writer writes records using CSV encoding.
 //
 // As returned by NewWriter, a Writer writes records terminated by a
@@ -91,9 +73,11 @@ func (w *Writer) Write(record []string) error {
 			return err
 		}
 
+		specialChars := "\r\n" + string(w.Quote)
+
 		for len(field) > 0 {
 			// Search for special characters.
-			i := minNonNeg(strings.IndexAny(field, "\r\n"), strings.IndexRune(field, w.Quote))
+			i := strings.IndexAny(field, specialChars)
 			if i < 0 {
 				i = len(field)
 			}
@@ -109,7 +93,11 @@ func (w *Writer) Write(record []string) error {
 				var err error
 				switch nextRune([]byte(field)) {
 				case w.Quote:
-					_, err = w.w.WriteString(string(w.Quote) + string(w.Quote))
+					_, err = w.w.WriteRune(w.Quote)
+					if err != nil {
+						break
+					}
+					_, err = w.w.WriteRune(w.Quote)
 				case '\r':
 					if !w.UseCRLF {
 						err = w.w.WriteByte('\r')
@@ -127,7 +115,7 @@ func (w *Writer) Write(record []string) error {
 				}
 			}
 		}
-		if _, err := w.w.WriteString(string(w.Quote)); err != nil {
+		if _, err := w.w.WriteRune(w.Quote); err != nil {
 			return err
 		}
 	}
