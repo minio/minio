@@ -431,6 +431,39 @@ func (client *storageRESTClient) DeleteFileBulk(volume string, paths []string) (
 	return errs, nil
 }
 
+// DeletePrefixes - deletes prefixes in bulk.
+func (client *storageRESTClient) DeletePrefixes(volume string, paths []string) (errs []error, err error) {
+	if len(paths) == 0 {
+		return errs, err
+	}
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+
+	var buffer bytes.Buffer
+	for _, path := range paths {
+		buffer.WriteString(path)
+		buffer.WriteString("\n")
+	}
+
+	respBody, err := client.call(storageRESTMethodDeletePrefixes, values, &buffer, -1)
+	defer http.DrainBody(respBody)
+
+	if err != nil {
+		return nil, err
+	}
+
+	dErrResp := &DeletePrefixesErrsResp{}
+	if err = gob.NewDecoder(respBody).Decode(dErrResp); err != nil {
+		return nil, err
+	}
+
+	for _, dErr := range dErrResp.Errs {
+		errs = append(errs, toStorageErr(dErr))
+	}
+
+	return errs, nil
+}
+
 // RenameFile - renames a file.
 func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
 	values := make(url.Values)

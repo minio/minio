@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"sync"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -781,18 +782,25 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 	// Initialize list of errors.
 	var opErrs = make([]error, len(disks))
 	var delObjErrs = make([][]error, len(disks))
+	var wg = sync.WaitGroup{}
 
 	// Remove objects in bulk for each disk
-	for index, disk := range disks {
-		if disk == nil {
-			opErrs[index] = errDiskNotFound
+	for i, d := range disks {
+		if d == nil {
+			opErrs[i] = errDiskNotFound
 			continue
 		}
-		delObjErrs[index], opErrs[index] = cleanupObjectsBulk(disk, minioMetaTmpBucket, tmpObjs, errs)
-		if opErrs[index] == errVolumeNotFound || opErrs[index] == errFileNotFound {
-			opErrs[index] = nil
-		}
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			delObjErrs[index], opErrs[index] = disk.DeletePrefixes(minioMetaTmpBucket, tmpObjs)
+			if opErrs[index] == errVolumeNotFound || opErrs[index] == errFileNotFound {
+				opErrs[index] = nil
+			}
+		}(i, d)
 	}
+
+	wg.Wait()
 
 	// Return errors if any during deletion
 	if err := reduceWriteQuorumErrs(ctx, opErrs, objectOpIgnoredErrs, len(disks)/2+1); err != nil {
@@ -805,9 +813,14 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 			continue
 		}
 		listErrs := make([]error, len(disks))
+		// Iterate over disks to fetch the error
+		// of deleting of the current object
 		for i := range delObjErrs {
+			// delObjErrs[i] is not nil when disks[i] is also not nil
 			if delObjErrs[i] != nil {
-				listErrs[i] = delObjErrs[i][objIndex]
+				if delObjErrs[i][objIndex] != errFileNotFound {
+					listErrs[i] = delObjErrs[i][objIndex]
+				}
 			}
 		}
 		errs[objIndex] = reduceWriteQuorumErrs(ctx, listErrs, objectOpIgnoredErrs, writeQuorums[objIndex])
