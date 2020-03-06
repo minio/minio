@@ -324,10 +324,10 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 		}
 	case madmin.ProfilerGoroutines:
 		prof.ext = "txt"
-		prof.recordBase("goroutines", 1)
+		prof.recordBase("goroutine", 1)
 		prof.stopFn = func() ([]byte, error) {
 			var buf bytes.Buffer
-			err := pprof.Lookup("goroutines").WriteTo(&buf, 1)
+			err := pprof.Lookup("goroutine").WriteTo(&buf, 1)
 			return buf.Bytes(), err
 		}
 	case madmin.ProfilerTrace:
