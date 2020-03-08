@@ -255,7 +255,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	// most part unless one of the formats is not consistent
 	// with expected XL format. For example if a user is
 	// trying to pool FS backend into an XL set.
-	if err := checkFormatXLValues(formatConfigs); err != nil {
+	if err := checkFormatXLValues(formatConfigs, drivesPerSet); err != nil {
 		return nil, err
 	}
 

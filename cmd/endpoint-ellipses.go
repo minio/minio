@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,12 +108,24 @@ func getSetIndexes(args []string, totalSizes []uint64, customSetDriveCount uint6
 		return ss
 	}
 
+	setCounts := possibleSetCounts(commonSize)
+	if len(setCounts) == 0 {
+		msg := fmt.Sprintf("Incorrect number of endpoints provided %s, number of disks %d is not divisible by any supported erasure set sizes %d", args, commonSize, setSizes)
+		return nil, config.ErrInvalidNumberOfErasureEndpoints(nil).Msg(msg)
+	}
+
 	if customSetDriveCount > 0 {
-		msg := fmt.Sprintf("Invalid set drive count, leads to non-uniform distribution for the given number of disks. Possible values for custom set count are %d", possibleSetCounts(setSize))
+		msg := fmt.Sprintf("Invalid set drive count. Acceptable values for %d number drives are %d", commonSize, setCounts)
 		if customSetDriveCount > setSize {
 			return nil, config.ErrInvalidErasureSetSize(nil).Msg(msg)
 		}
-		if setSize%customSetDriveCount != 0 {
+		var found bool
+		for _, ss := range setCounts {
+			if ss == customSetDriveCount {
+				found = true
+			}
+		}
+		if !found {
 			return nil, config.ErrInvalidErasureSetSize(nil).Msg(msg)
 		}
 		setSize = customSetDriveCount
@@ -121,7 +133,7 @@ func getSetIndexes(args []string, totalSizes []uint64, customSetDriveCount uint6
 
 	// Check whether setSize is with the supported range.
 	if !isValidSetSize(setSize) {
-		msg := fmt.Sprintf("Incorrect number of endpoints provided %s", args)
+		msg := fmt.Sprintf("Incorrect number of endpoints provided %s, number of disks %d is not divisible by any supported erasure set sizes %d", args, commonSize, setSizes)
 		return nil, config.ErrInvalidNumberOfErasureEndpoints(nil).Msg(msg)
 	}
 
@@ -260,9 +272,6 @@ func createServerEndpoints(serverAddr string, args ...string) (
 		setDriveCount, err = strconv.Atoi(v)
 		if err != nil {
 			return nil, -1, -1, config.ErrInvalidErasureSetSize(err)
-		}
-		if !isValidSetSize(uint64(setDriveCount)) {
-			return nil, -1, -1, config.ErrInvalidErasureSetSize(nil)
 		}
 	}
 
