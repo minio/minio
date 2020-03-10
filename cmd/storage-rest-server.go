@@ -508,20 +508,24 @@ func (s *storageRESTServer) DeleteFileBulkHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	encoder := gob.NewEncoder(w)
+	doneCh := sendWhiteSpaceToHTTPResponse(w)
 	errs, err := s.storage.DeleteFileBulk(volume, filePaths)
+	<-doneCh
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 
-	derrsResp := &DeleteFileBulkErrsResp{Errs: make([]error, len(errs))}
+	dErrsResp := &DeleteFileBulkErrsResp{Errs: make([]error, len(errs))}
 	for idx, err := range errs {
 		if err != nil {
-			derrsResp.Errs[idx] = StorageErr(err.Error())
+			dErrsResp.Errs[idx] = StorageErr(err.Error())
 		}
 	}
 
-	gob.NewEncoder(w).Encode(derrsResp)
+	encoder.Encode(dErrsResp)
 	w.(http.Flusher).Flush()
 }
 
@@ -550,20 +554,23 @@ func (s *storageRESTServer) DeletePrefixesHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	encoder := gob.NewEncoder(w)
+	doneCh := sendWhiteSpaceToHTTPResponse(w)
 	errs, err := s.storage.DeletePrefixes(volume, prefixes)
+	<-doneCh
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 
-	derrsResp := &DeletePrefixesErrsResp{Errs: make([]error, len(errs))}
+	dErrsResp := &DeletePrefixesErrsResp{Errs: make([]error, len(errs))}
 	for idx, err := range errs {
 		if err != nil {
-			derrsResp.Errs[idx] = StorageErr(err.Error())
+			dErrsResp.Errs[idx] = StorageErr(err.Error())
 		}
 	}
-
-	gob.NewEncoder(w).Encode(derrsResp)
+	encoder.Encode(dErrsResp)
 	w.(http.Flusher).Flush()
 }
 

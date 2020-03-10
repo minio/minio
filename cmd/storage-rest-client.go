@@ -414,13 +414,17 @@ func (client *storageRESTClient) DeleteFileBulk(volume string, paths []string) (
 
 	respBody, err := client.call(storageRESTMethodDeleteFileBulk, values, &buffer, -1)
 	defer http.DrainBody(respBody)
+	if err != nil {
+		return nil, err
+	}
 
+	reader, err := clearLeadingSpaces(respBody)
 	if err != nil {
 		return nil, err
 	}
 
 	dErrResp := &DeleteFileBulkErrsResp{}
-	if err = gob.NewDecoder(respBody).Decode(dErrResp); err != nil {
+	if err = gob.NewDecoder(reader).Decode(dErrResp); err != nil {
 		return nil, err
 	}
 
@@ -447,13 +451,17 @@ func (client *storageRESTClient) DeletePrefixes(volume string, paths []string) (
 
 	respBody, err := client.call(storageRESTMethodDeletePrefixes, values, &buffer, -1)
 	defer http.DrainBody(respBody)
+	if err != nil {
+		return nil, err
+	}
 
+	reader, err := clearLeadingSpaces(respBody)
 	if err != nil {
 		return nil, err
 	}
 
 	dErrResp := &DeletePrefixesErrsResp{}
-	if err = gob.NewDecoder(respBody).Decode(dErrResp); err != nil {
+	if err = gob.NewDecoder(reader).Decode(dErrResp); err != nil {
 		return nil, err
 	}
 
@@ -476,6 +484,22 @@ func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPa
 	return err
 }
 
+// clearLeadingSpaces removes all the first spaces returned from a reader.
+func clearLeadingSpaces(r io.Reader) (io.Reader, error) {
+	reader := bufio.NewReader(r)
+	for {
+		b, err := reader.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		if b != ' ' {
+			reader.UnreadByte()
+			break
+		}
+	}
+	return reader, nil
+}
+
 func (client *storageRESTClient) VerifyFile(volume, path string, size int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
@@ -490,16 +514,9 @@ func (client *storageRESTClient) VerifyFile(volume, path string, size int64, alg
 	if err != nil {
 		return err
 	}
-	reader := bufio.NewReader(respBody)
-	for {
-		b, err := reader.ReadByte()
-		if err != nil {
-			return err
-		}
-		if b != ' ' {
-			reader.UnreadByte()
-			break
-		}
+	reader, err := clearLeadingSpaces(respBody)
+	if err != nil {
+		return err
 	}
 	verifyResp := &VerifyFileResp{}
 	if err = gob.NewDecoder(reader).Decode(verifyResp); err != nil {

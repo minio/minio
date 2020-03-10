@@ -1271,7 +1271,12 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 // with files in it. Returns nil for a non-empty directory even when
 // recursive is set to false.
 func deleteFile(basePath, deletePath string, recursive bool) error {
-	if basePath == deletePath {
+	if basePath == "" || deletePath == "" {
+		return nil
+	}
+	basePath = filepath.Clean(basePath)
+	deletePath = filepath.Clean(deletePath)
+	if !strings.HasPrefix(deletePath, basePath) || deletePath == basePath {
 		return nil
 	}
 
@@ -1312,7 +1317,8 @@ func deleteFile(basePath, deletePath string, recursive bool) error {
 }
 
 // DeletePrefixes forcibly deletes all the contents of a set of specified paths.
-// Parent directories are automatically removed if they become empty. No error
+// Parent directories are automatically removed if they become empty. err can
+// bil nil while errs can contain some errors for corresponding objects. No error
 // is set if a specified prefix path does not exist.
 func (s *posix) DeletePrefixes(volume string, paths []string) (errs []error, err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
