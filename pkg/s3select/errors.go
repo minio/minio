@@ -71,6 +71,24 @@ func errInvalidCompressionFormat(err error) *s3Error {
 	}
 }
 
+func errInvalidBZIP2CompressionFormat(err error) *s3Error {
+	return &s3Error{
+		code:       "InvalidCompressionFormat",
+		message:    "BZIP2 is not applicable to the queried object. Please correct the request and try again.",
+		statusCode: 400,
+		cause:      err,
+	}
+}
+
+func errInvalidGZIPCompressionFormat(err error) *s3Error {
+	return &s3Error{
+		code:       "InvalidCompressionFormat",
+		message:    "GZIP is not applicable to the queried object. Please correct the request and try again.",
+		statusCode: 400,
+		cause:      err,
+	}
+}
+
 func errInvalidDataSource(err error) *s3Error {
 	return &s3Error{
 		code:       "InvalidDataSource",

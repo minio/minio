@@ -22,6 +22,7 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
 EXPOSE 9000
 
 COPY --from=0 /go/bin/minio /usr/bin/minio
+COPY CREDITS /third_party/
 COPY dockerscripts/docker-entrypoint.sh /usr/bin/
 
 RUN  \

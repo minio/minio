@@ -1340,9 +1340,40 @@ func (s *posix) DeleteFile(volume, path string) (err error) {
 }
 
 func (s *posix) DeleteFileBulk(volume string, paths []string) (errs []error, err error) {
+	atomic.AddInt32(&s.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt32(&s.activeIOCount, -1)
+	}()
+
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return nil, err
+	}
+
+	// Stat a volume entry.
+	_, err = os.Stat(volumeDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errVolumeNotFound
+		} else if os.IsPermission(err) {
+			return nil, errVolumeAccessDenied
+		} else if isSysErrIO(err) {
+			return nil, errFaultyDisk
+		}
+		return nil, err
+	}
+
 	errs = make([]error, len(paths))
+	// Following code is needed so that we retain SlashSeparator
+	// suffix if any in path argument.
 	for idx, path := range paths {
-		errs[idx] = s.DeleteFile(volume, path)
+		filePath := pathJoin(volumeDir, path)
+		errs[idx] = checkPathLength(filePath)
+		if errs[idx] != nil {
+			continue
+		}
+		// Delete file and delete parent directory as well if its empty.
+		errs[idx] = deleteFile(volumeDir, filePath)
 	}
 	return
 }

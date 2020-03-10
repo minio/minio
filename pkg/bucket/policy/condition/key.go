@@ -85,22 +85,10 @@ const (
 
 	// AWSUsername - user friendly name, in MinIO this value is same as your user Access Key.
 	AWSUsername Key = "aws:username"
-
-	// JWTSub - JWT subject claim substitution.
-	JWTSub Key = "jwt:sub"
-
-	// JWTIss issuer claim substitution.
-	JWTIss Key = "jwt:iss"
-
-	// JWTAud audience claim substitution.
-	JWTAud Key = "jwt:aud"
-
-	// JWTJti JWT unique identifier claim substitution.
-	JWTJti Key = "jwt:jti"
 )
 
 // AllSupportedKeys - is list of all all supported keys.
-var AllSupportedKeys = []Key{
+var AllSupportedKeys = append([]Key{
 	S3XAmzCopySource,
 	S3XAmzServerSideEncryption,
 	S3XAmzServerSideEncryptionCustomerAlgorithm,
@@ -119,15 +107,11 @@ var AllSupportedKeys = []Key{
 	AWSPrincipalType,
 	AWSUserID,
 	AWSUsername,
-	JWTSub,
-	JWTIss,
-	JWTAud,
-	JWTJti,
 	// Add new supported condition keys.
-}
+}, JWTKeys...)
 
 // CommonKeys - is list of all common condition keys.
-var CommonKeys = []Key{
+var CommonKeys = append([]Key{
 	AWSReferer,
 	AWSSourceIP,
 	AWSUserAgent,
@@ -137,11 +121,7 @@ var CommonKeys = []Key{
 	AWSPrincipalType,
 	AWSUserID,
 	AWSUsername,
-	JWTSub,
-	JWTIss,
-	JWTAud,
-	JWTJti,
-}
+}, JWTKeys...)
 
 func substFuncFromValues(values map[string][]string) func(string) string {
 	return func(v string) string {

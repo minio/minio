@@ -747,31 +747,36 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string, wri
 // object.
 func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects []string, errs []error, writeQuorums []int, isDirs []bool) ([]error, error) {
 	var tmpObjs = make([]string, len(objects))
-	disks := xl.getDisks()
 	if bucket == minioMetaTmpBucket {
 		copy(tmpObjs, objects)
 	} else {
-		for i, object := range objects {
-			if errs[i] != nil {
+		for idx := range objects {
+			if errs[idx] != nil {
 				continue
 			}
+			tmpObjs[idx] = mustGetUUID()
 			var err error
-			tmpObjs[i] = mustGetUUID()
-			// Rename the current object while requiring write quorum, but also consider
-			// that a non found object in a given disk as a success since it already
-			// confirms that the object doesn't have a part in that disk (already removed)
-			if isDirs[i] {
-				disks, err = rename(ctx, disks, bucket, object, minioMetaTmpBucket, tmpObjs[i], true, writeQuorums[i],
+			// Rename the current object while requiring
+			// write quorum, but also consider that a non
+			// found object in a given disk as a success
+			// since it already confirms that the object
+			// doesn't have a part in that disk (already removed)
+			if isDirs[idx] {
+				_, err = rename(ctx, xl.getDisks(), bucket, objects[idx],
+					minioMetaTmpBucket, tmpObjs[idx], true, writeQuorums[idx],
 					[]error{errFileNotFound, errFileAccessDenied})
 			} else {
-				disks, err = rename(ctx, disks, bucket, object, minioMetaTmpBucket, tmpObjs[i], true, writeQuorums[i],
+				_, err = rename(ctx, xl.getDisks(), bucket, objects[idx],
+					minioMetaTmpBucket, tmpObjs[idx], true, writeQuorums[idx],
 					[]error{errFileNotFound})
 			}
 			if err != nil {
-				errs[i] = err
+				errs[idx] = err
 			}
 		}
 	}
+
+	disks := xl.getDisks()
 
 	// Initialize list of errors.
 	var opErrs = make([]error, len(disks))
@@ -840,23 +845,17 @@ func (xl xlObjects) deleteObjects(ctx context.Context, bucket string, objects []
 		}
 	}
 
-	for i, object := range objects {
+	for i := range objects {
 		if errs[i] != nil {
 			continue
 		}
-		if isObjectDirs[i] {
-			writeQuorums[i] = len(xl.getDisks())/2 + 1
-		} else {
-			var err error
-			// Read metadata associated with the object from all disks.
-			partsMetadata, readXLErrs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
-			// get Quorum for this object
-			_, writeQuorums[i], err = objectQuorumFromMeta(ctx, xl, partsMetadata, readXLErrs)
-			if err != nil {
-				errs[i] = toObjectErr(err, bucket, object)
-				continue
-			}
-		}
+		// Assume (N/2 + 1) quorums for all objects
+		// this is a theoretical assumption such that
+		// for delete's we do not need to honor storage
+		// class for objects which have reduced quorum
+		// storage class only needs to be honored for
+		// Read() requests alone which we already do.
+		writeQuorums[i] = len(xl.getDisks())/2 + 1
 	}
 
 	return xl.doDeleteObjects(ctx, bucket, objects, errs, writeQuorums, isObjectDirs)

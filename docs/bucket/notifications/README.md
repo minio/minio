@@ -38,7 +38,9 @@ notify_elasticsearch  publish bucket notifications to Elasticsearch endpoints
 notify_redis          publish bucket notifications to Redis datastores
 ```
 
-> NOTE: '*' at the end of arg means its mandatory, '*' at the end of the values, means its the default value for the arg.
+> NOTE: '\*' at the end of arg means its mandatory.  
+> NOTE: '\*' at the end of the values, means its the default value for the arg.  
+> NOTE: When configured using environment variables, the `:name` can be specified using this format `MINIO_NOTIFY_WEBHOOK_ENABLE_<name>`.
 
 <a name="AMQP"></a>
 
@@ -1203,8 +1205,6 @@ kafkacat -b localhost:9092 -t bucketevents
 
 MinIO supports persistent event store. The persistent store will backup events when the webhook goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
 
-To update the configuration, use `mc admin config get` command to get the current configuration.
-
 ```
 KEY:
 notify_webhook[:name]  publish bucket notifications to webhook endpoints
@@ -1232,7 +1232,8 @@ MINIO_NOTIFY_WEBHOOK_COMMENT      (sentence)  optionally add a comment to this s
 ```
 
 ```sh
-$ mc admin config get myminio/ notify_webhook notify_webhook:1 queue_limit="0"  endpoint="" queue_dir=""
+$ mc admin config get myminio/ notify_webhook
+notify_webhook:1 queue_limit="0"  endpoint="" queue_dir=""
 ```
 
 Use `mc admin config set` command to update the configuration for the deployment. Here the endpoint is the server listening for webhook notifications. Save the settings and restart the MinIO server for changes to take effect. Note that the endpoint needs to be live and reachable when you restart your MinIO server.

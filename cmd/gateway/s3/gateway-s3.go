@@ -454,9 +454,9 @@ func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string,
 	data := r.Reader
 
 	var tagMap map[string]string
-	if !minio.IsStringEqual(opts.UserDefined["X-Amz-Tagging"], "") {
-		opts.UserTags = opts.UserDefined["X-Amz-Tagging"]
-		taggingObj, _ := tagging.FromString(opts.UserTags)
+	tags, ok := opts.UserDefined["X-Amz-Tagging"]
+	if ok {
+		taggingObj, _ := tagging.FromString(tags)
 		tagMap = tagging.ToMap(taggingObj)
 		delete(opts.UserDefined, "X-Amz-Tagging")
 	}
@@ -483,11 +483,9 @@ func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject 
 	srcInfo.UserDefined["x-amz-metadata-directive"] = "REPLACE"
 	srcInfo.UserDefined["x-amz-copy-source-if-match"] = srcInfo.ETag
 	// See comment above. Tags will be applied on destination object.
-	if !minio.IsStringEqual(srcInfo.UserDefined["X-Amz-Tagging"], "") {
-		if minio.IsStringEqual(srcInfo.UserDefined["X-Amz-Tagging-Directive"], "") {
-			srcInfo.UserDefined["x-amz-tagging-directive"] = "REPLACE"
-		}
-		srcInfo.UserTags = srcInfo.UserDefined["X-Amz-Tagging"]
+	_, ok := srcInfo.UserDefined["X-Amz-Tagging"]
+	if ok {
+		srcInfo.UserDefined["x-amz-tagging-directive"] = "REPLACE"
 	}
 
 	header := make(http.Header)
@@ -539,11 +537,15 @@ func (l *s3Objects) ListMultipartUploads(ctx context.Context, bucket string, pre
 // NewMultipartUpload upload object in multiple parts
 func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket string, object string, o minio.ObjectOptions) (uploadID string, err error) {
 	// Create PutObject options
-	var tags map[string]string
-	if tags, err = getTagMap(o.UserDefined["X-Amz-Tagging"]); err != nil {
-		return uploadID, minio.ErrorRespToObjectError(err, bucket, object)
+	var tagMap map[string]string
+	tags, ok := o.UserDefined["X-Amz-Tagging"]
+	if ok {
+		if tagMap, err = getTagMap(tags); err != nil {
+			return uploadID, minio.ErrorRespToObjectError(err, bucket, object)
+		}
+		delete(o.UserDefined, "X-Amz-Tagging")
 	}
-	opts := miniogo.PutObjectOptions{UserMetadata: o.UserDefined, ServerSideEncryption: o.ServerSideEncryption, UserTags: tags}
+	opts := miniogo.PutObjectOptions{UserMetadata: o.UserDefined, ServerSideEncryption: o.ServerSideEncryption, UserTags: tagMap}
 	uploadID, err = l.Client.NewMultipartUpload(bucket, object, opts)
 	if err != nil {
 		return uploadID, minio.ErrorRespToObjectError(err, bucket, object)
@@ -693,8 +695,7 @@ func (l *s3Objects) PutObjectTag(ctx context.Context, bucket, object string, tag
 }
 
 func (l *s3Objects) DeleteObjectTag(ctx context.Context, bucket, object string) error {
-	var err error
-	if err = l.Client.RemoveObjectTagging(bucket, object); err != nil {
+	if err := l.Client.RemoveObjectTagging(bucket, object); err != nil {
 		return minio.ErrorRespToObjectError(err, bucket, object)
 	}
 	return nil

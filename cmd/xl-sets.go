@@ -302,10 +302,16 @@ func newXLSets(endpoints Endpoints, format *formatXLV3, setCount int, drivesPerS
 		s.xlDisks[i] = make([]StorageAPI, drivesPerSet)
 		s.xlLockers[i] = make([]dsync.NetLocker, drivesPerSet)
 
+		var endpoints Endpoints
+		for j := 0; j < drivesPerSet; j++ {
+			endpoints = append(endpoints, s.endpoints[i*s.drivesPerSet+j])
+		}
+
 		// Initialize xl objects for a given set.
 		s.sets[i] = &xlObjects{
 			getDisks:    s.GetDisks(i),
 			getLockers:  s.GetLockers(i),
+			endpoints:   endpoints,
 			nsMutex:     mutex,
 			bp:          bp,
 			mrfUploadCh: make(chan partialUpload, 10000),
@@ -1292,7 +1298,7 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 	}(storageDisks)
 
 	formats, sErrs := loadFormatXLAll(storageDisks)
-	if err = checkFormatXLValues(formats); err != nil {
+	if err = checkFormatXLValues(formats, s.drivesPerSet); err != nil {
 		return err
 	}
 
@@ -1405,7 +1411,7 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 	markRootDisksAsDown(storageDisks)
 
 	formats, sErrs := loadFormatXLAll(storageDisks)
-	if err = checkFormatXLValues(formats); err != nil {
+	if err = checkFormatXLValues(formats, s.drivesPerSet); err != nil {
 		return madmin.HealResultItem{}, err
 	}
 
