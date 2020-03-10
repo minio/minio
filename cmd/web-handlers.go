@@ -691,6 +691,17 @@ next:
 			}
 			if authErr == errNoAuthToken {
 				// Check if object is allowed to be deleted anonymously
+				if !globalPolicySys.IsAllowed(policy.Args{
+					Action:          policy.DeleteObjectAction,
+					BucketName:      args.BucketName,
+					ConditionValues: getConditionValues(r, "", "", nil),
+					IsOwner:         false,
+					ObjectName:      objectName,
+				}) {
+					return toJSONError(ctx, errAccessDenied)
+				}
+
+				// Check if object is allowed to be deleted anonymously
 				if globalPolicySys.IsAllowed(policy.Args{
 					Action:          policy.BypassGovernanceRetentionAction,
 					BucketName:      args.BucketName,
@@ -710,16 +721,29 @@ next:
 			continue
 		}
 
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.AccessKey,
-			Action:          iampolicy.DeleteObjectAction,
-			BucketName:      args.BucketName,
-			ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
-			IsOwner:         owner,
-			ObjectName:      objectName,
-			Claims:          claims.Map(),
-		}) {
-			return toJSONError(ctx, errAccessDenied)
+		if authErr == errNoAuthToken {
+			// Check if object is allowed to be deleted anonymously
+			if !globalPolicySys.IsAllowed(policy.Args{
+				Action:          iampolicy.DeleteObjectAction,
+				BucketName:      args.BucketName,
+				ConditionValues: getConditionValues(r, "", "", nil),
+				IsOwner:         false,
+				ObjectName:      objectName,
+			}) {
+				return toJSONError(ctx, errAccessDenied)
+			}
+		} else {
+			if !globalIAMSys.IsAllowed(iampolicy.Args{
+				AccountName:     claims.AccessKey,
+				Action:          iampolicy.DeleteObjectAction,
+				BucketName:      args.BucketName,
+				ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
+				IsOwner:         owner,
+				ObjectName:      objectName,
+				Claims:          claims.Map(),
+			}) {
+				return toJSONError(ctx, errAccessDenied)
+			}
 		}
 
 		// For directories, list the contents recursively and remove.
