@@ -426,7 +426,7 @@ func checkFormatXLValue(formatXL *formatXLV3) error {
 }
 
 // Check all format values.
-func checkFormatXLValues(formats []*formatXLV3) error {
+func checkFormatXLValues(formats []*formatXLV3, drivesPerSet int) error {
 	for i, formatXL := range formats {
 		if formatXL == nil {
 			continue
@@ -437,6 +437,9 @@ func checkFormatXLValues(formats []*formatXLV3) error {
 		if len(formats) != len(formatXL.XL.Sets)*len(formatXL.XL.Sets[0]) {
 			return fmt.Errorf("%s disk is already being used in another erasure deployment. (Number of disks specified: %d but the number of disks found in the %s disk's format.json: %d)",
 				humanize.Ordinal(i+1), len(formats), humanize.Ordinal(i+1), len(formatXL.XL.Sets)*len(formatXL.XL.Sets[0]))
+		}
+		if len(formatXL.XL.Sets[0]) != drivesPerSet {
+			return fmt.Errorf("%s disk is already formatted with %d drives per erasure set. This cannot be changed to %d, please revert your MINIO_ERASURE_SET_DRIVE_COUNT setting", humanize.Ordinal(i+1), len(formatXL.XL.Sets[0]), drivesPerSet)
 		}
 	}
 	return nil

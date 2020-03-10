@@ -1293,7 +1293,7 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 	}(storageDisks)
 
 	formats, sErrs := loadFormatXLAll(storageDisks)
-	if err = checkFormatXLValues(formats); err != nil {
+	if err = checkFormatXLValues(formats, s.drivesPerSet); err != nil {
 		return err
 	}
 
@@ -1406,7 +1406,7 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 	markRootDisksAsDown(storageDisks)
 
 	formats, sErrs := loadFormatXLAll(storageDisks)
-	if err = checkFormatXLValues(formats); err != nil {
+	if err = checkFormatXLValues(formats, s.drivesPerSet); err != nil {
 		return madmin.HealResultItem{}, err
 	}
 
