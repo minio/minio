@@ -326,7 +326,7 @@ func (n *hdfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketIn
 
 func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string) {
 		f, err := n.clnt.Open(minio.PathJoin(hdfsSeparator, bucket, prefixDir))
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -341,6 +341,9 @@ func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 			logger.LogIf(context.Background(), err)
 			return
 		}
+		if len(fis) == 0 {
+			return true, nil
+		}
 		for _, fi := range fis {
 			if fi.IsDir() {
 				entries = append(entries, fi.Name()+hdfsSeparator)
@@ -348,7 +351,7 @@ func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 				entries = append(entries, fi.Name())
 			}
 		}
-		return minio.FilterMatchingPrefix(entries, prefixEntry)
+		return false, minio.FilterMatchingPrefix(entries, prefixEntry)
 	}
 
 	// Return list factory instance.

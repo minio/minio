@@ -670,13 +670,16 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 	ch = make(chan FileInfo)
 	go func() {
 		defer close(ch)
-		listDir := func(volume, dirPath, dirEntry string) (entries []string) {
+		listDir := func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string) {
 			entries, err := s.ListDir(volume, dirPath, -1, leafFile)
 			if err != nil {
 				return
 			}
+			if len(entries) == 0 {
+				return true, nil
+			}
 			sort.Strings(entries)
-			return filterMatchingPrefix(entries, dirEntry)
+			return false, filterMatchingPrefix(entries, dirEntry)
 		}
 
 		walkResultCh := startTreeWalk(context.Background(), volume, dirPath, marker, recursive, listDir, endWalkCh)

@@ -1058,15 +1058,18 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string) er
 // is a leaf or non-leaf entry.
 func (fs *FSObjects) listDirFactory() ListDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string) {
 		var err error
 		entries, err = readDir(pathJoin(fs.fsPath, bucket, prefixDir))
 		if err != nil && err != errFileNotFound {
 			logger.LogIf(context.Background(), err)
-			return
+			return false, nil
+		}
+		if len(entries) == 0 {
+			return true, nil
 		}
 		sort.Strings(entries)
-		return filterMatchingPrefix(entries, prefixEntry)
+		return false, filterMatchingPrefix(entries, prefixEntry)
 	}
 
 	// Return list factory instance.
