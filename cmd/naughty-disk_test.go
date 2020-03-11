@@ -196,6 +196,13 @@ func (d *naughtyDisk) DeleteFileBulk(volume string, paths []string) ([]error, er
 	return errs, nil
 }
 
+func (d *naughtyDisk) DeletePrefixes(volume string, paths []string) ([]error, error) {
+	if err := d.calcError(); err != nil {
+		return nil, err
+	}
+	return d.disk.DeletePrefixes(volume, paths)
+}
+
 func (d *naughtyDisk) WriteAll(volume string, path string, reader io.Reader) (err error) {
 	if err := d.calcError(); err != nil {
 		return err
