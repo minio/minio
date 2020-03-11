@@ -141,9 +141,9 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		}
 
 		if runtime.GOOS == "windows" {
-			u.Path = path.Dir(u.Path) + "minio.exe"
+			u.Path = path.Dir(u.Path) + SlashSeparator + "minio.exe"
 		} else {
-			u.Path = path.Dir(u.Path) + "minio"
+			u.Path = path.Dir(u.Path) + SlashSeparator + "minio"
 		}
 
 		updateURL = u.String()
