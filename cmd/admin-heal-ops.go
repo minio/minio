@@ -575,8 +575,6 @@ func (h *healSequence) queueHealTask(path string, healType madmin.HealItemType) 
 }
 
 func (h *healSequence) healItemsFromSourceCh() error {
-	h.lastHealActivity = UTCNow()
-
 	bucketsOnly := true // heal buckets only, not objects.
 	if err := h.healItems(bucketsOnly); err != nil {
 		logger.LogIf(h.ctx, err)
