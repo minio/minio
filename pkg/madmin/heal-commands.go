@@ -274,6 +274,7 @@ func (adm *AdminClient) Heal(bucket, prefix string, healOpts HealOpts,
 type BgHealState struct {
 	ScannedItemsCount int64
 	LastHealActivity  time.Time
+	NextHealRound     time.Time
 }
 
 // BackgroundHealStatus returns the background heal status of the
