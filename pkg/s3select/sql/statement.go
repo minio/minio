@@ -140,9 +140,9 @@ func parseLimit(v *LitValue) (int64, error) {
 
 // EvalFrom evaluates the From clause on the input record. It only
 // applies to JSON input data format (currently).
-func (e *SelectStatement) EvalFrom(format string, input Record) (Record, error) {
+func (e *SelectStatement) EvalFrom(format string, input Record) ([]*Record, error) {
 	if !e.selectAST.From.HasKeypath() {
-		return input, nil
+		return []*Record{&input}, nil
 	}
 	_, rawVal := input.Raw()
 
@@ -160,6 +160,18 @@ func (e *SelectStatement) EvalFrom(format string, input Record) (Record, error) 
 		switch v := txedRec.(type) {
 		case jstream.KVS:
 			kvs = v
+
+		case []interface{}:
+			recs := make([]*Record, len(v))
+			for i, val := range v {
+				tmpRec := input.Clone(nil)
+				if err = tmpRec.Replace(val); err != nil {
+					return nil, err
+				}
+				recs[i] = &tmpRec
+			}
+			return recs, nil
+
 		default:
 			kvs = jstream.KVS{jstream.KV{Key: "_1", Value: v}}
 		}
@@ -168,7 +180,7 @@ func (e *SelectStatement) EvalFrom(format string, input Record) (Record, error) 
 			return nil, err
 		}
 
-		return input, nil
+		return []*Record{&input}, nil
 	case simdjson.Object:
 		txedRec, _, err := jsonpathEval(e.selectAST.From.Table.PathExpr[1:], rec)
 		if err != nil {
@@ -181,6 +193,18 @@ func (e *SelectStatement) EvalFrom(format string, input Record) (Record, error) 
 			if err != nil {
 				return nil, err
 			}
+
+		case []interface{}:
+			recs := make([]*Record, len(v))
+			for i, val := range v {
+				tmpRec := input.Clone(nil)
+				if err = tmpRec.Replace(val); err != nil {
+					return nil, err
+				}
+				recs[i] = &tmpRec
+			}
+			return recs, nil
+
 		default:
 			input.Reset()
 			input, err = input.Set("_1", &Value{value: v})
@@ -188,7 +212,7 @@ func (e *SelectStatement) EvalFrom(format string, input Record) (Record, error) 
 				return nil, err
 			}
 		}
-		return input, nil
+		return []*Record{&input}, nil
 	}
 	return nil, errDataSource(errors.New("unexpected non JSON input"))
 }

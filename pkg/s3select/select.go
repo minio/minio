@@ -392,7 +392,6 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 	}
 	writer := newMessageWriter(w, getProgressFunc)
 
-	var inputRecord sql.Record
 	var outputQueue []sql.Record
 
 	// Create queue based on the type.
@@ -433,6 +432,7 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 	}
 
 	var rec sql.Record
+OuterLoop:
 	for {
 		if s3Select.statement.LimitReached() {
 			if !sendRecord() {
@@ -469,47 +469,50 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 			break
 		}
 
-		if inputRecord, err = s3Select.statement.EvalFrom(s3Select.Input.format, rec); err != nil {
+		var inputRecords []*sql.Record
+		if inputRecords, err = s3Select.statement.EvalFrom(s3Select.Input.format, rec); err != nil {
 			break
 		}
 
-		if s3Select.statement.IsAggregated() {
-			if err = s3Select.statement.AggregateRow(inputRecord); err != nil {
-				break
-			}
-		} else {
-			var outputRecord sql.Record
-			// We will attempt to reuse the records in the table.
-			// The type of these should not change.
-			// The queue should always have at least one entry left for this to work.
-			outputQueue = outputQueue[:len(outputQueue)+1]
-			if t := outputQueue[len(outputQueue)-1]; t != nil {
-				// If the output record is already set, we reuse it.
-				outputRecord = t
-				outputRecord.Reset()
-			} else {
-				// Create new one
-				outputRecord = s3Select.outputRecord()
-				outputQueue[len(outputQueue)-1] = outputRecord
-			}
-			outputRecord, err = s3Select.statement.Eval(inputRecord, outputRecord)
-			if outputRecord == nil || err != nil {
-				// This should not be written.
-				// Remove it from the queue.
-				outputQueue = outputQueue[:len(outputQueue)-1]
-				if err != nil {
-					break
+		for _, inputRecord := range inputRecords {
+			if s3Select.statement.IsAggregated() {
+				if err = s3Select.statement.AggregateRow(*inputRecord); err != nil {
+					break OuterLoop
 				}
-				continue
-			}
+			} else {
+				var outputRecord sql.Record
+				// We will attempt to reuse the records in the table.
+				// The type of these should not change.
+				// The queue should always have at least one entry left for this to work.
+				outputQueue = outputQueue[:len(outputQueue)+1]
+				if t := outputQueue[len(outputQueue)-1]; t != nil {
+					// If the output record is already set, we reuse it.
+					outputRecord = t
+					outputRecord.Reset()
+				} else {
+					// Create new one
+					outputRecord = s3Select.outputRecord()
+					outputQueue[len(outputQueue)-1] = outputRecord
+				}
+				outputRecord, err = s3Select.statement.Eval(*inputRecord, outputRecord)
+				if outputRecord == nil || err != nil {
+					// This should not be written.
+					// Remove it from the queue.
+					outputQueue = outputQueue[:len(outputQueue)-1]
+					if err != nil {
+						break OuterLoop
+					}
+					continue
+				}
 
-			outputQueue[len(outputQueue)-1] = outputRecord
-			if len(outputQueue) < cap(outputQueue) {
-				continue
-			}
+				outputQueue[len(outputQueue)-1] = outputRecord
+				if len(outputQueue) < cap(outputQueue) {
+					continue
+				}
 
-			if !sendRecord() {
-				break
+				if !sendRecord() {
+					break OuterLoop
+				}
 			}
 		}
 	}
