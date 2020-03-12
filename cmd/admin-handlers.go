@@ -1398,10 +1398,10 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		} else if ldapConn == nil {
 			ldap.Status = "Not Configured"
 		} else {
+			// Close ldap connection to avoid leaks.
+			ldapConn.Close()
 			ldap.Status = "online"
 		}
-		// Close ldap connection to avoid leaks.
-		defer ldapConn.Close()
 	}
 
 	log, audit := fetchLoggerInfo(cfg)
