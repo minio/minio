@@ -29,7 +29,6 @@ import (
 const (
 	bgHealingUUID = "0000-0000-0000-0000"
 	leaderTick    = time.Hour
-	healTick      = time.Hour
 	healInterval  = 30 * 24 * time.Hour
 )
 
@@ -75,6 +74,7 @@ func getLocalBackgroundHealStatus() madmin.BgHealState {
 	return madmin.BgHealState{
 		ScannedItemsCount: bgSeq.scannedItemsCount,
 		LastHealActivity:  bgSeq.lastHealActivity,
+		NextHealRound:     UTCNow().Add(durationToNextHealRound(bgSeq.lastHealActivity)),
 	}
 }
 
@@ -112,6 +112,19 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects) error {
 	return nil
 }
 
+// Returns the duration to the next background healing round
+func durationToNextHealRound(lastHeal time.Time) time.Duration {
+	if lastHeal.IsZero() {
+		lastHeal = globalBootTime
+	}
+
+	d := lastHeal.Add(healInterval).Sub(UTCNow())
+	if d < 0 {
+		return time.Second
+	}
+	return d
+}
+
 // Healing leader will take the charge of healing all erasure sets
 func execLeaderTasks(z *xlZones) {
 	ctx := context.Background()
@@ -132,10 +145,7 @@ func execLeaderTasks(z *xlZones) {
 
 	lastScanTime := time.Now() // So that we don't heal immediately, but after one month.
 	for {
-		if time.Since(lastScanTime) < healInterval {
-			time.Sleep(healTick)
-			continue
-		}
+		time.Sleep(durationToNextHealRound(lastScanTime))
 		for _, zone := range z.zones {
 			// Heal set by set
 			for i, set := range zone.sets {

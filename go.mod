@@ -50,7 +50,7 @@ require (
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/jonboulle/clockwork v0.1.0 // indirect
 	github.com/json-iterator/go v1.1.9
-	github.com/klauspost/compress v1.10.1
+	github.com/klauspost/compress v1.10.3
 	github.com/klauspost/cpuid v1.2.2
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.1
