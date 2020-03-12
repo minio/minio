@@ -1,68 +1,73 @@
+/*
+ * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package disk
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"time"
-	"syscall"
-	"context"
-	
+
 	"github.com/montanaflynn/stats"
 )
 
-
-const kb = uint64(1 << 10)
-const mb = uint64(kb << 10)
-const gb = uint64(mb << 10)
+const (
+	kb = uint64(1 << 10)
+	mb = uint64(kb << 10)
+	gb = uint64(mb << 10)
+)
 
 var globalLatency = map[string]Latency{}
 var globalThroughput = map[string]Throughput{}
 
 // Latency holds latency information for write operations to the drive
 type Latency struct {
-	Avg          float64 `json:"avg,omitempty"`
-	Percentile50 float64 `json:"percentile50,omitempty"`
-	Percentile90 float64 `json:"percentile90,omitempty"`
-	Percentile99 float64 `json:"percentile99,omitempty"`
-	Min          float64 `json:"min,omitempty"`
-	Max          float64 `json:"max,omitempty"`
+	Avg          float64 `json:"avg_secs,omitempty"`
+	Percentile50 float64 `json:"percentile50_secs,omitempty"`
+	Percentile90 float64 `json:"percentile90_secs,omitempty"`
+	Percentile99 float64 `json:"percentile99_secs,omitempty"`
+	Min          float64 `json:"min_secs,omitempty"`
+	Max          float64 `json:"max_secs,omitempty"`
 }
 
 // Throughput holds throughput information for write operations to the drive
 type Throughput struct {
-	Avg          float64 `json:"avg_bps,omitempty"`
-	Percentile50 float64 `json:"percentile50_bps,omitempty"`
-	Percentile90 float64 `json:"percentile90_bps,omitempty"`
-	Percentile99 float64 `json:"percentile99_bps,omitempty"`
-	Min          float64 `json:"min_bps,omitempty"`
-	Max          float64 `json:"max_bps,omitempty"`
+	Avg          float64 `json:"avg_bytes_per_sec,omitempty"`
+	Percentile50 float64 `json:"percentile50_bytes_per_sec,omitempty"`
+	Percentile90 float64 `json:"percentile90_bytes_per_sec,omitempty"`
+	Percentile99 float64 `json:"percentile99_bytes_per_sec,omitempty"`
+	Min          float64 `json:"min_bytes_per_sec,omitempty"`
+	Max          float64 `json:"max_bytes_per_sec,omitempty"`
 }
 
 // GetOBDInfo about the drive
 func GetOBDInfo(ctx context.Context, endpoint string) (Latency, Throughput, error) {
 	runtime.LockOSThread()
-	
+
 	f, err := OpenFileDirectIO(endpoint, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0755)
 	if err != nil {
 		return Latency{}, Throughput{}, err
 	}
 	defer func() {
-		if err := f.Close(); err != nil {
-			// Ideal behavior should be to panic. But it might
-			// lead to availability issues for the server. Given
-			// that this code is not on the critical path, it's ok
-			// to silently fail here
-			// panic(err)
-		}
-			if err := os.Remove(f.Name()); err != nil {
-			// Ideal behavior should be to panic. But it might
-			// lead to availability issues for the server. Given
-			// that this code is not on the critical path, it's ok
-			// to silently fail here
-			// panic(err)
-		}
+		f.Close()
+		os.Remove(f.Name())
 	}()
 
 	drive := filepath.Dir(endpoint)
@@ -80,25 +85,27 @@ func GetOBDInfo(ctx context.Context, endpoint string) (Latency, Throughput, erro
 	latencies := make([]float64, fileSize/blockSize)
 	throughputs := make([]float64, fileSize/blockSize)
 
+	dioFile := os.NewFile(uintptr(f.Fd()), endpoint)
 	data := make([]byte, blockSize)
+
 	for i := uint64(0); i < (fileSize / blockSize); i++ {
 		if ctx.Err() != nil {
 			return Latency{}, Throughput{}, ctx.Err()
 		}
 		startTime := time.Now()
-		if n, err := syscall.Write(int(f.Fd()), data); err != nil {
+		if n, err := dioFile.Write(data); err != nil {
 			return Latency{}, Throughput{}, err
 		} else if uint64(n) != blockSize {
 			return Latency{}, Throughput{}, fmt.Errorf("Expected to write %d, but only wrote %d", blockSize, n)
 		}
-		latency := time.Now().Sub(startTime)
+		latency := time.Since(startTime)
 		latencies[i] = float64(latency.Seconds())
 	}
 
 	runtime.UnlockOSThread()
-	
+
 	for i := range latencies {
-		throughput := float64(blockSize)/latencies[i]
+		throughput := float64(blockSize) / latencies[i]
 		throughputs[i] = throughput
 	}
 

@@ -49,6 +49,10 @@ import (
 	"github.com/gorilla/mux"
 )
 
+const (
+	slashSeparator = "/"
+)
+
 // IsErrIgnored returns whether given error is ignored or not.
 func IsErrIgnored(err error, ignoredErrs ...error) bool {
 	return IsErr(err, ignoredErrs...)
@@ -62,15 +66,6 @@ func IsErr(err error, errs ...error) bool {
 		}
 	}
 	return false
-}
-
-func printStackTraceHere(w io.Writer) {
-	pc, file, line, ok := runtime.Caller(1)
-	if !ok {
-		return
-	}
-	fn := runtime.FuncForPC(pc)
-	w.Write([]byte(fmt.Sprintf("%s:%d %s\n", file, line, fn.Name())))
 }
 
 func request2BucketObjectName(r *http.Request) (bucketName, objectName string) {

@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v6"
+	peerRESTVersion       = "v7"
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
@@ -32,6 +32,11 @@ const (
 	peerRESTMethodDrivePerfInfo                = "/driveperfinfo"
 	peerRESTMethodDriveOBDInfo                 = "/driveobdinfo"
 	peerRESTMethodNetOBDInfo                   = "/netobdinfo"
+	peerRESTMethodCPUOBDInfo                   = "/cpuobdinfo"
+	peerRESTMethodDiskHwOBDInfo                = "/diskhwobdinfo"
+	peerRESTMethodOsInfoOBDInfo                = "/osinfoobdinfo"
+	peerRESTMethodMemOBDInfo                   = "/memobdinfo"
+	peerRESTMethodProcOBDInfo                  = "/procobdinfo"
 	peerRESTMethodDispatchNetOBDInfo           = "/dispatchnetobdinfo"
 	peerRESTMethodDeleteBucket                 = "/deletebucket"
 	peerRESTMethodServerUpdate                 = "/serverupdate"

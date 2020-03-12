@@ -17,11 +17,9 @@
 package cmd
 
 import (
-	"context"
 	"net"
 	"net/http"
 	"os"
-	"sync"
 
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/pkg/cpu"
@@ -89,63 +87,6 @@ func getLocalCPULoad(endpointZones EndpointZones, r *http.Request) ServerCPULoad
 		Addr:         addr,
 		Load:         cpuLoads,
 		HistoricLoad: historicLoads,
-	}
-}
-
-func getLocalDrivesOBD(ctx context.Context, parallel bool, endpointZones EndpointZones, r *http.Request) madmin.ServerDrivesOBDInfo {
-	var drivesOBDInfo []madmin.DriveOBDInfo
-	wg := sync.WaitGroup{}
-	for _, ep := range endpointZones {
-		for i, endpoint := range ep.Endpoints {
-			// Only proceed for local endpoints
-			if endpoint.IsLocal {
-				if _, err := os.Stat(endpoint.Path); err != nil {
-					// Since this drive is not available, add relevant details and proceed
-					drivesOBDInfo = append(drivesOBDInfo, madmin.DriveOBDInfo{
-						Path:  endpoint.Path,
-						Error: err.Error(),
-					})
-					continue
-				}
-				measure := func(index int) {
-					latency, throughput, err := disk.GetOBDInfo(ctx, pathJoin(endpoint.Path, minioMetaTmpBucket, mustGetUUID()))
-					driveOBDInfo := madmin.DriveOBDInfo{
-						Path:       endpoint.Path,
-						Latency:    latency,
-						Throughput: throughput,
-					}
-					if err != nil {
-						driveOBDInfo.Error = err.Error()
-					}
-					drivesOBDInfo = append(drivesOBDInfo, driveOBDInfo)
-					wg.Done()
-				}
-				wg.Add(1)
-
-				if parallel {
-					go measure(i)
-				} else {
-					measure(i)
-				}
-			}
-		}
-	}
-	wg.Wait()
-	addr := r.Host
-	if globalIsDistXL {
-		addr = GetLocalPeer(endpointZones)
-	} else {
-		addr = "minio"
-	}
-	if parallel {
-		return madmin.ServerDrivesOBDInfo{
-			Addr:     addr,
-			Parallel: drivesOBDInfo,
-		}
-	}
-	return madmin.ServerDrivesOBDInfo{
-		Addr:   addr,
-		Serial: drivesOBDInfo,
 	}
 }
 

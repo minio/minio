@@ -45,10 +45,9 @@ import (
 )
 
 const (
-	KiB            int64 = 1 << 10
-	MiB            int64 = KiB << 10
-	GiB            int64 = MiB << 10
-	netOBDDataSize       = MiB * 64
+	kiB int64 = 1 << 10
+	miB int64 = kiB << 10
+	giB int64 = miB << 10
 )
 
 // client to talk to peer Nodes.
@@ -200,11 +199,11 @@ func (client *peerRESTClient) NetworkInfo() (info madmin.ServerNetworkHardwareIn
 	return info, err
 }
 
-type NetworkOverloaded struct{}
+type networkOverloadedErr struct{}
 
-var networkOverloaded NetworkOverloaded
+var networkOverloaded networkOverloadedErr
 
-func (n NetworkOverloaded) Error() string {
+func (n networkOverloadedErr) Error() string {
 	return "network overloaded"
 }
 
@@ -228,7 +227,7 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 
 	buf := make([]byte, dataSize)
 
-	buflimiter := make(chan bool, threadCount)
+	buflimiter := make(chan struct{}, threadCount)
 	errChan := make(chan error, threadCount)
 
 	totalTransferred := int64(0)
@@ -255,8 +254,8 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 			cancel()
 		}
 	}
-	
-	wg := &sync.WaitGroup{}
+
+	wg := sync.WaitGroup{}
 	finish := func() {
 		<-buflimiter
 		wg.Done()
@@ -267,15 +266,15 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 		case <-ctx.Done():
 			return info, ctx.Err()
 		case err = <-errChan:
-			break
-		case buflimiter <- true:
-			go func(i int) {
-				if innerCtx.Err() != nil {
-					<-buflimiter
-					return
-				}
+		case buflimiter <- struct{}{}:
+			wg.Add(1)
 
-				wg.Add(1)
+			if innerCtx.Err() != nil {
+				finish()
+				continue
+			}
+
+			go func(i int) {
 				bufReader := bytes.NewReader(buf)
 				bufReadCloser := ioutil.NopCloser(&progressReader{
 					r:            bufReader,
@@ -284,7 +283,8 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 				start := time.Now()
 				before := atomic.LoadInt64(&totalTransferred)
 
-				ctx, _ := context.WithTimeout(innerCtx, 10*time.Second)
+				ctx, cancel := context.WithTimeout(innerCtx, 10*time.Second)
+				defer cancel()
 				respBody, err := client.callWithContext(ctx, peerRESTMethodNetOBDInfo, nil, bufReadCloser, dataSize)
 				if err != nil {
 
@@ -323,7 +323,6 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 		}
 	}
 	wg.Wait()
-	close(transferChan)
 
 	if err != nil {
 		return info, err
@@ -339,11 +338,11 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 }
 
 func maxLatencyForSizeThreads(size int64, threadCount uint) float64 {
-	Gbit100 := 12.5 * float64(GiB)
-	Gbit40 := 5.00 * float64(GiB)
-	Gbit25 := 3.25 * float64(GiB)
-	Gbit10 := 1.25 * float64(GiB)
-	// Gbit1 := 0.25 * float64(GiB)
+	Gbit100 := 12.5 * float64(giB)
+	Gbit40 := 5.00 * float64(giB)
+	Gbit25 := 3.25 * float64(giB)
+	Gbit10 := 1.25 * float64(giB)
+	// Gbit1 := 0.25 * float64(giB)
 
 	// Given the current defaults, each combination of size/thread
 	// is supposed to fully saturate the intended pipe when all threads are active
@@ -392,23 +391,23 @@ func (client *peerRESTClient) NetOBDInfo(ctx context.Context) (info madmin.NetOB
 	}
 	steps := []step{
 		{ // 100 Gbit
-			size:    256 * MiB,
+			size:    256 * miB,
 			threads: 50,
 		},
 		{ // 40 Gbit
-			size:    256 * MiB,
+			size:    256 * miB,
 			threads: 20,
 		},
 		{ // 25 Gbit
-			size:    128 * MiB,
+			size:    128 * miB,
 			threads: 25,
 		},
 		{ // 10 Gbit
-			size:    128 * MiB,
+			size:    128 * miB,
 			threads: 10,
 		},
 		{ // 1 Gbit
-			size:    64 * MiB,
+			size:    64 * miB,
 			threads: 2,
 		},
 	}
@@ -452,6 +451,61 @@ func (client *peerRESTClient) DispatchNetOBDInfo(ctx context.Context) (info madm
 // DriveOBDInfo - fetch Drive OBD information for a remote node.
 func (client *peerRESTClient) DriveOBDInfo(ctx context.Context) (info madmin.ServerDrivesOBDInfo, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodDriveOBDInfo, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
+// CPUOBDInfo - fetch CPU OBD information for a remote node.
+func (client *peerRESTClient) CPUOBDInfo(ctx context.Context) (info madmin.ServerCPUOBDInfo, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodCPUOBDInfo, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
+// DiskHwOBDInfo - fetch Disk HW OBD information for a remote node.
+func (client *peerRESTClient) DiskHwOBDInfo(ctx context.Context) (info madmin.ServerDiskHwOBDInfo, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodDiskHwOBDInfo, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
+// OsOBDInfo - fetch OsInfo OBD information for a remote node.
+func (client *peerRESTClient) OsOBDInfo(ctx context.Context) (info madmin.ServerOsOBDInfo, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodOsInfoOBDInfo, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
+// MemOBDInfo - fetch MemInfo OBD information for a remote node.
+func (client *peerRESTClient) MemOBDInfo(ctx context.Context) (info madmin.ServerMemOBDInfo, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodMemOBDInfo, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
+// ProcOBDInfo - fetch ProcInfo OBD information for a remote node.
+func (client *peerRESTClient) ProcOBDInfo(ctx context.Context) (info madmin.ServerProcOBDInfo, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodProcOBDInfo, nil, nil, -1)
 	if err != nil {
 		return
 	}
