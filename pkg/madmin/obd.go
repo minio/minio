@@ -19,7 +19,7 @@ package madmin
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -30,19 +30,37 @@ import (
 
 // OBDInfo - MinIO cluster's OBD Info
 type OBDInfo struct {
-	TimeStamp time.Time             `json:"timestamp,omitempty"`
-	DriveInfo []ServerDrivesOBDInfo `json:"driveInfo,omitempty"`
-	Config    interface{}           `json:"configInfo,omitempty"`
-	Info      InfoMessage           `json:"adminInfo,omitempty"`
-	Net       []ServerNetOBDInfo    `json:"netInfo,omitempty"`
+	TimeStamp time.Time    `json:"timestamp,omitempty"`
+	Error     string       `json:"error,omitempty"`
+	Perf      PerfOBDInfo  `json:"perf,omitempty"`
+	Minio     MinioOBDInfo `json:"minio,omitempty"`
+	Sys       SysOBDInfo   `json:"sys,omitempty"`
+}
+
+// SysOBDInfo - Includes hardware and system information of the MinIO cluster
+type SysOBDInfo struct {
+}
+
+// MinioOBDInfo - Includes MinIO confifuration information
+type MinioOBDInfo struct {
+	Info   InfoMessage `json:"info,omitempty"`
+	Config interface{} `json:"config,omitempty"`
+	Error  string      `json:"error,omitempty"`
+}
+
+// PerfOBDInfo - Includes Drive and Net perf info for the entire MinIO cluster
+type PerfOBDInfo struct {
+	DriveInfo []ServerDrivesOBDInfo `json:"drives,omitempty"`
+	Net       []ServerNetOBDInfo    `json:"net,omitempty"`
 	Error     string                `json:"error,omitempty"`
 }
 
 // ServerDrivesOBDInfo - Drive OBD info about all drives in a single MinIO node
 type ServerDrivesOBDInfo struct {
-	Addr   string         `json:"addr"`
-	Drives []DriveOBDInfo `json:"drives,omitempty"`
-	Error  string         `json:"error,omitempty"`
+	Addr     string         `json:"addr"`
+	Serial   []DriveOBDInfo `json:"serial,omitempty"`
+	Parallel []DriveOBDInfo `json:"parallel,omitempty"`
+	Error    string         `json:"error,omitempty"`
 }
 
 // DriveOBDInfo - Stats about a single drive in a MinIO node
@@ -71,78 +89,122 @@ type NetOBDInfo struct {
 // OBDDataType - Typed OBD data types
 type OBDDataType string
 
-// OBDDataTypes 
+// OBDDataTypes
 const (
-	OBDDataTypeDrive  OBDDataType = "drive"  // Drive
-	OBDDataTypeNet    OBDDataType = "net"    // Net
-	OBDDataTypeInfo   OBDDataType = "info"   // Admin Info
-	OBDDataTypeConfig OBDDataType = "config" // Config
+	OBDDataTypePerfDrive   OBDDataType = "perfdrive"
+	OBDDataTypePerfNet     OBDDataType = "perfnet"
+	OBDDataTypeMinioInfo   OBDDataType = "minioinfo"
+	OBDDataTypeMinioConfig OBDDataType = "minioconfig"
+	OBDDataTypeSysCPU      OBDDataType = "syscpu"
+	OBDDataTypeSysDrive    OBDDataType = "sysdrive"
+	OBDDataTypeSysDocker   OBDDataType = "sysdocker"
+	OBDDataTypeSysHost     OBDDataType = "syshost"
+	OBDDataTypeSysLoad     OBDDataType = "sysload"
+	OBDDataTypeSysMem      OBDDataType = "sysmem"
+	OBDDataTypeSysNet      OBDDataType = "sysnet"
+	OBDDataTypeSysProcess  OBDDataType = "sysprocess"
 )
 
 // OBDDataTypesMap - Map of OBD datatypes
 var OBDDataTypesMap = map[string]OBDDataType{
-	"drive":  OBDDataTypeDrive,
-	"net":    OBDDataTypeNet,
-	"info":   OBDDataTypeInfo,
-	"config": OBDDataTypeConfig,
+	"perfdrive":   OBDDataTypePerfDrive,
+	"perfnet":     OBDDataTypePerfNet,
+	"minioinfo":   OBDDataTypeMinioInfo,
+	"minioconfig": OBDDataTypeMinioConfig,
+	"syscpu":      OBDDataTypeSysCPU,
+	"sysdrive":    OBDDataTypeSysDrive,
+	"sysdocker":   OBDDataTypeSysDocker,
+	"syshost":     OBDDataTypeSysHost,
+	"sysload":     OBDDataTypeSysLoad,
+	"sysmem":      OBDDataTypeSysMem,
+	"sysnet":      OBDDataTypeSysNet,
+	"sysprocess":  OBDDataTypeSysProcess,
 }
 
 // OBDDataTypesList - List of OBD datatypes
 var OBDDataTypesList = []OBDDataType{
-	OBDDataTypeDrive,
-	OBDDataTypeNet,
-	OBDDataTypeInfo,
-	OBDDataTypeConfig,
+	OBDDataTypePerfDrive,
+	OBDDataTypePerfNet,
+	OBDDataTypeMinioInfo,
+	OBDDataTypeMinioConfig,
+	OBDDataTypeSysCPU,
+	OBDDataTypeSysDrive,
+	OBDDataTypeSysDocker,
+	OBDDataTypeSysHost,
+	OBDDataTypeSysLoad,
+	OBDDataTypeSysMem,
+	OBDDataTypeSysNet,
+	OBDDataTypeSysProcess,
 }
 
 // ServerOBDInfo - Connect to a minio server and call OBD Info Management API
 // to fetch server's information represented by OBDInfo structure
-func (adm *AdminClient) ServerOBDInfo(obdDataTypes []OBDDataType) (OBDInfo, error) {
-	v := url.Values{}
+func (adm *AdminClient) ServerOBDInfo(obdDataTypes []OBDDataType) <-chan OBDInfo {
+	respChan := make(chan OBDInfo)
+	go func() {
+		v := url.Values{}
 
-	// start with all set to false
-	for _, d := range OBDDataTypesList {
-		v.Set(string(d), "false")
-	}
+		// start with all set to false
+		for _, d := range OBDDataTypesList {
+			v.Set(string(d), "false")
+		}
 
-	// only 'trueify' user provided values
-	for _, d := range obdDataTypes {
-		v.Set(string(d), "true")
-	}
+		// only 'trueify' user provided values
+		for _, d := range obdDataTypes {
+			v.Set(string(d), "true")
+		}
+		var OBDInfoMessage OBDInfo
 
-	resp, err := adm.executeMethod("GET", requestData{
-		relPath:     adminAPIPrefix + "/obdinfo",
-		queryValues: v,
-	})
+		if v.Get(string(OBDDataTypeMinioInfo)) == "true" {
+			info, err := adm.ServerInfo()
+			if err != nil {
+				respChan <- OBDInfo{
+					Error: err.Error(),
+				}
+				return
+			}
+			OBDInfoMessage.Minio.Info = info
+			respChan <- OBDInfoMessage
+		}
 
-	defer closeResponse(resp)
-	if err != nil {
-		return OBDInfo{}, err
-	}
-	// Check response http status code
-	if resp.StatusCode != http.StatusOK {
-		return OBDInfo{}, httpRespToErrorResponse(resp)
-	}
-	// Unmarshal the server's json response
-	var OBDInfoMessage OBDInfo
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return OBDInfo{}, err
-	}
-	err = json.Unmarshal(respBytes, &OBDInfoMessage)
-	if err != nil {
-		return OBDInfo{}, err
-	}
+		resp, err := adm.executeMethod("GET", requestData{
+			relPath:     adminAPIPrefix + "/obdinfo",
+			queryValues: v,
+		})
 
-	info, err := adm.ServerInfo()
-	if err != nil {
-		return OBDInfo{}, err
-	}
+		defer closeResponse(resp)
+		if err != nil {
+			respChan <- OBDInfo{
+				Error: err.Error(),
+			}
+			return
+		}
+		// Check response http status code
+		if resp.StatusCode != http.StatusOK {
+			respChan <- OBDInfo{
+				Error: httpRespToErrorResponse(resp).Error(),
+			}
+			return
+		}
+		// Unmarshal the server's json response
+		decoder := json.NewDecoder(resp.Body)
+		for {
+			err := decoder.Decode(&OBDInfoMessage)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				respChan <- OBDInfo{
+					Error: err.Error(),
+				}
+			}
+			respChan <- OBDInfoMessage
+		}
 
-	if v.Get(string(OBDDataTypeInfo)) == "true" {
-		OBDInfoMessage.Info = info
-	}
+		OBDInfoMessage.TimeStamp = time.Now()
+		respChan <- OBDInfoMessage
+		close(respChan)
+	}()
+	return respChan
 
-	OBDInfoMessage.TimeStamp = time.Now()
-	return OBDInfoMessage, nil
 }

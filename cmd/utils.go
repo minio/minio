@@ -64,6 +64,15 @@ func IsErr(err error, errs ...error) bool {
 	return false
 }
 
+func printStackTraceHere(w io.Writer) {
+	pc, file, line, ok := runtime.Caller(1)
+	if !ok {
+		return
+	}
+	fn := runtime.FuncForPC(pc)
+	w.Write([]byte(fmt.Sprintf("%s:%d %s\n", file, line, fn.Name())))
+}
+
 func request2BucketObjectName(r *http.Request) (bucketName, objectName string) {
 	path, err := getResource(r.URL.Path, r.Host, globalDomainNames)
 	if err != nil {

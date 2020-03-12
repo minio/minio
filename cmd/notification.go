@@ -25,10 +25,11 @@ import (
 	"net"
 	"net/url"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
-
+	
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
@@ -891,16 +892,79 @@ func (sys *NotificationSys) CollectNetPerfInfo(size int64) map[string][]ServerNe
 }
 
 // NetOBDInfo - Net OBD information
-func (sys *NotificationSys) NetOBDInfo() madmin.ServerNetOBDInfo {
-	netOBDs := make([]madmin.NetOBDInfo, len(sys.peerClients))
+func (sys *NotificationSys) NetOBDInfo(ctx context.Context) madmin.ServerNetOBDInfo {
+	var sortedGlobalEndpoints []string
 
-	for index, client := range sys.peerClients {
+	/*
+		Ensure that only untraversed links are visited by this server
+	        i.e. if netOBD tests have been performed between a -> b, then do
+		not run it between b -> a
+
+	        The graph of tests looks like this
+
+	            a   b   c   d
+	        a | o | x | x | x |
+	        b | o | o | x | x |
+	        c | o | o | o | x |
+	        d | o | o | o | o |
+
+	        'x's should be tested, and 'o's should be skipped
+	*/
+	stripPath := func(hostPath string) string {
+		return strings.Split(hostPath, "/")[0]
+	}
+
+	hostMap := map[string]bool{}
+	for _, ez := range globalEndpoints {
+		for _, e := range ez.Endpoints {
+			host := stripPath(e.Host)
+			if _, ok := hostMap[host]; !ok {
+				sortedGlobalEndpoints = append(sortedGlobalEndpoints, host)
+				hostMap[host] = true
+			}
+		}
+	}
+	
+	sort.Strings(sortedGlobalEndpoints)
+	var remoteTargets []*peerRESTClient
+	var remoteTargetStrings []string
+	search := func(host string) *peerRESTClient {
+		for index, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
+			if sys.peerClients[index].host.String() == host {
+				return client
+			}
+		}
+		return nil
+	}
+
+	for i := 0; i < len(sortedGlobalEndpoints); i++ {
+		if sortedGlobalEndpoints[i] != GetLocalPeer(globalEndpoints) {
+			continue
+		}
+		for j := 0; j < len(sortedGlobalEndpoints); j++ {
+			if j > i {
+				remoteTarget := search(sortedGlobalEndpoints[j])
+				if remoteTarget != nil {
+					remoteTargets = append(remoteTargets, remoteTarget)
+					remoteTargetStrings = append(remoteTargetStrings, sortedGlobalEndpoints[j])
+				}
+			}
+		}
+	}
+
+	netOBDs := make([]madmin.NetOBDInfo, len(remoteTargets))
+	
+	for index, client := range remoteTargets {
 		if client == nil {
 			continue
 		}
 		var err error
-		netOBDs[index], err = sys.peerClients[index].NetOBDInfo()
-		addr := sys.peerClients[index].host.String()
+		netOBDs[index], err = client.NetOBDInfo(ctx)
+		
+		addr := client.host.String()
 		reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
 		ctx := logger.SetReqInfo(context.Background(), reqInfo)
 		logger.LogIf(ctx, err)
@@ -916,15 +980,16 @@ func (sys *NotificationSys) NetOBDInfo() madmin.ServerNetOBDInfo {
 }
 
 // DispatchNetOBDInfo - Net OBD information from other nodes
-func (sys *NotificationSys) DispatchNetOBDInfo() []madmin.ServerNetOBDInfo {
+func (sys *NotificationSys) DispatchNetOBDInfo(ctx context.Context) []madmin.ServerNetOBDInfo {
 	serverNetOBDs := []madmin.ServerNetOBDInfo{}
 
 	for index, client := range sys.peerClients {
 		if client == nil {
 			continue
 		}
-		serverNetOBD, err := sys.peerClients[index].DispatchNetOBDInfo()
+		serverNetOBD, err := sys.peerClients[index].DispatchNetOBDInfo(ctx)
 		if err != nil {
+			serverNetOBD.Addr = client.host.String()
 			serverNetOBD.Error = err.Error()
 		}
 		serverNetOBDs = append(serverNetOBDs, serverNetOBD)
@@ -933,7 +998,7 @@ func (sys *NotificationSys) DispatchNetOBDInfo() []madmin.ServerNetOBDInfo {
 }
 
 // DriveOBDInfo - Drive OBD information
-func (sys *NotificationSys) DriveOBDInfo() []madmin.ServerDrivesOBDInfo {
+func (sys *NotificationSys) DriveOBDInfo(ctx context.Context) []madmin.ServerDrivesOBDInfo {
 	reply := make([]madmin.ServerDrivesOBDInfo, len(sys.peerClients))
 
 	g := errgroup.WithNErrs(len(sys.peerClients))
@@ -944,7 +1009,7 @@ func (sys *NotificationSys) DriveOBDInfo() []madmin.ServerDrivesOBDInfo {
 		index := index
 		g.Go(func() error {
 			var err error
-			reply[index], err = sys.peerClients[index].DriveOBDInfo()
+			reply[index], err = sys.peerClients[index].DriveOBDInfo(ctx)
 			return err
 		}, index)
 	}

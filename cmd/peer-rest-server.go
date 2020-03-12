@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/gob"
 	"errors"
@@ -38,6 +37,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/event"
 	trace "github.com/minio/minio/pkg/trace"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // To abstract a node over network.
@@ -511,18 +511,9 @@ func (s *peerRESTServer) ServerInfoHandler(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *peerRESTServer) NetOBDInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "NetOBDInfo")
 	if !s.IsValid(w, r) {
 		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-	data, err := ioutil.ReadAll(r.Body)
-	if err != nil && err != io.EOF {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	if int64(len(data)) != netOBDDataSize*2 {
-		s.writeErrorResponse(w, fmt.Errorf("short read; expected: %v, got: %v", netOBDDataSize, len(data)))
 		return
 	}
 
@@ -530,27 +521,26 @@ func (s *peerRESTServer) NetOBDInfoHandler(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Trailer", "FinalStatus")
 
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", 2*netOBDDataSize))
 	w.WriteHeader(http.StatusOK)
 
-	buf := make([]byte, 2*netOBDDataSize)
-	n, err := io.CopyBuffer(w, bytes.NewReader(data), buf)
+	n, err := io.Copy(ioutil.Discard, r.Body)
+	if err == io.ErrUnexpectedEOF {
+		w.Header().Set("FinalStatus", err.Error())
+		return
+	}
 	if err != nil && err != io.EOF {
+		logger.LogIf(ctx, err)
 		w.Header().Set("FinalStatus", err.Error())
 		return
 	}
+	if n != r.ContentLength {
+		err := fmt.Errorf("OBD: short read: expected %d found %d", r.ContentLength, n)
 
-	if n != netOBDDataSize {
-		err := fmt.Errorf("short write; expected: %v, got: %v", netOBDDataSize, n)
+		logger.LogIf(ctx, err)
 		w.Header().Set("FinalStatus", err.Error())
 		return
 	}
-	info := struct{}{}
-
 	w.Header().Set("FinalStatus", "Success")
-
-	ctx := newContext(r, w, "NetOBDInfo")
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 	w.(http.Flusher).Flush()
 }
 
@@ -560,9 +550,9 @@ func (s *peerRESTServer) DispatchNetOBDInfoHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	info := globalNotificationSys.NetOBDInfo()
-
 	ctx := newContext(r, w, "DispatchNetOBDInfo")
+	info := globalNotificationSys.NetOBDInfo(ctx)
+
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 	w.(http.Flusher).Flush()
 }
@@ -573,9 +563,25 @@ func (s *peerRESTServer) DriveOBDInfoHandler(w http.ResponseWriter, r *http.Requ
 		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
-	ctx := newContext(r, w, "DriveOBDInfo")
-	info := getLocalDrivesOBD(globalEndpoints, r)
+	ctx, cancel := context.WithCancel(newContext(r, w, "DriveOBDInfo"))
+	defer cancel()
+	infoSerial := getLocalDrivesOBD(ctx, false, globalEndpoints, r)
+	infoParallel := getLocalDrivesOBD(ctx, true, globalEndpoints, r)
 
+	errStr := ""
+	if infoSerial.Error != "" {
+		errStr = "serial: " + infoSerial.Error
+	}
+	if infoParallel.Error != "" {
+		errStr = errStr + " parallel: " + infoParallel.Error
+	}
+	info := madmin.ServerDrivesOBDInfo{
+		Addr:     infoSerial.Addr,
+		Serial:   infoSerial.Serial,
+		Parallel: infoParallel.Parallel,
+		Error:    errStr,
+	}
+	fmt.Printf("%#v\n", info)
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }

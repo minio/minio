@@ -1,14 +1,17 @@
 package disk
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
-
+	"syscall"
+	"context"
+	
 	"github.com/montanaflynn/stats"
 )
+
 
 const kb = uint64(1 << 10)
 const mb = uint64(kb << 10)
@@ -38,7 +41,9 @@ type Throughput struct {
 }
 
 // GetOBDInfo about the drive
-func GetOBDInfo(endpoint string) (Latency, Throughput, error) {
+func GetOBDInfo(ctx context.Context, endpoint string) (Latency, Throughput, error) {
+	runtime.LockOSThread()
+	
 	f, err := OpenFileDirectIO(endpoint, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0755)
 	if err != nil {
 		return Latency{}, Throughput{}, err
@@ -51,7 +56,7 @@ func GetOBDInfo(endpoint string) (Latency, Throughput, error) {
 			// to silently fail here
 			// panic(err)
 		}
-		if err := os.Remove(f.Name()); err != nil {
+			if err := os.Remove(f.Name()); err != nil {
 			// Ideal behavior should be to panic. But it might
 			// lead to availability issues for the server. Given
 			// that this code is not on the critical path, it's ok
@@ -70,24 +75,31 @@ func GetOBDInfo(endpoint string) (Latency, Throughput, error) {
 	// }
 
 	blockSize := 1 * mb
-	fileSize := 1 * gb
+	fileSize := 256 * mb
 
-	latencies := []float64{}
-	throughputs := []float64{}
+	latencies := make([]float64, fileSize/blockSize)
+	throughputs := make([]float64, fileSize/blockSize)
 
 	data := make([]byte, blockSize)
 	for i := uint64(0); i < (fileSize / blockSize); i++ {
+		if ctx.Err() != nil {
+			return Latency{}, Throughput{}, ctx.Err()
+		}
 		startTime := time.Now()
-		if n, err := f.Write(data); err != nil {
+		if n, err := syscall.Write(int(f.Fd()), data); err != nil {
 			return Latency{}, Throughput{}, err
 		} else if uint64(n) != blockSize {
 			return Latency{}, Throughput{}, fmt.Errorf("Expected to write %d, but only wrote %d", blockSize, n)
 		}
 		latency := time.Now().Sub(startTime)
-		throughput := float64(blockSize) / float64(latency.Seconds())
+		latencies[i] = float64(latency.Seconds())
+	}
 
-		latencies = append(latencies, float64(latency.Seconds()))
-		throughputs = append(throughputs, throughput)
+	runtime.UnlockOSThread()
+	
+	for i := range latencies {
+		throughput := float64(blockSize)/latencies[i]
+		throughputs[i] = throughput
 	}
 
 	var avgLatency float64

@@ -1382,6 +1382,32 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 	if objectAPI == nil {
 		return
 	}
+	deadlinedCtx, cancel := context.WithDeadline(ctx, time.Now().Add(10*time.Minute))
+	obdInfo := madmin.OBDInfo{}
+
+	setCommonHeaders(w)
+	w.Header().Set(xhttp.ContentType, string(mimeJSON))
+	w.WriteHeader(http.StatusOK)
+
+	partialWrite := func() {
+		jsonBytes, _ := json.MarshalIndent(obdInfo, " ", "  ")
+		_, err := w.Write(jsonBytes)
+		logger.LogIf(ctx, err)
+	}
+
+	finish := func() {
+		partialWrite()
+		w.(http.Flusher).Flush()
+		cancel()
+	}
+
+	errResp := func(err error) {
+		errorResponse := getAPIErrorResponse(ctx, toAdminAPIErr(ctx, err), r.URL.String(),
+			w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
+		encodedErrorResponse := encodeResponse(errorResponse)
+		obdInfo.Error = string(encodedErrorResponse)
+		finish()
+	}
 
 	if globalIsDistXL {
 		zones, ok := objectAPI.(*xlZones)
@@ -1389,66 +1415,75 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 			panic("Unreachable")
 		}
 
-		// Hold a lock so only one server performs on-board diagnostics
+		// Hold a lock so only one client performs on-board diagnostics at any given time
 		obdLock := zones.NewNSLock(ctx, minioMetaBucket, "obd")
 		if err := obdLock.GetLock(newDynamicTimeout(5*time.Second, 2*time.Second)); err != nil {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrOBDLockTimeout), r.URL)
+			logger.LogIf(ctx, err)
+			errResp(err)
 			return
 		}
 		defer obdLock.Unlock()
 	} else {
 		fsObjects, ok := objectAPI.(*FSObjects)
-		if !ok {
-			panic("Unreachable")
+		if ok {
+			// Hold a lock so only one server performs on-board diagnostics
+			obdLock := fsObjects.NewNSLock(ctx, minioMetaBucket, "obd")
+			if err := obdLock.GetLock(newDynamicTimeout(5*time.Second, 2*time.Second)); err != nil {
+				logger.LogIf(ctx, err)
+				errResp(err)
+				return
+			}
+			defer obdLock.Unlock()
 		}
-
-		// Hold a lock so only one server performs on-board diagnostics
-		obdLock := fsObjects.NewNSLock(ctx, minioMetaBucket, "obd")
-		if err := obdLock.GetLock(newDynamicTimeout(5*time.Second, 2*time.Second)); err != nil {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrOBDLockTimeout), r.URL)
-			return
-		}
-		defer obdLock.Unlock()
-
 	}
 
-	obdInfo := madmin.OBDInfo{}
 	vars := mux.Vars(r)
 
-	if drive, ok := vars["drive"]; ok && drive == "true" {
-		// Get drive obd details from local server's drive(s)
-		driveOBD := getLocalDrivesOBD(globalEndpoints, r)
-
-		// Notify all other MinIO peers to report drive obd numbers
-		driveOBDs := globalNotificationSys.DriveOBDInfo()
-		driveOBDs = append(driveOBDs, driveOBD)
-
-		obdInfo.DriveInfo = driveOBDs
-	}
-
-	if config, ok := vars["config"]; ok && config == "true" {
+	if config, ok := vars["minioconfig"]; ok && config == "true" {
 		cfg, err := readServerConfig(ctx, objectAPI)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
+		logger.LogIf(ctx, err)
+		obdInfo.Minio.Config = cfg
+		partialWrite()
+	}
+
+	if drive, ok := vars["perfdrive"]; ok && drive == "true" {
+		// Get drive obd details from local server's drive(s)
+		driveOBDSerial := getLocalDrivesOBD(deadlinedCtx, false, globalEndpoints, r)		
+		driveOBDParallel := getLocalDrivesOBD(deadlinedCtx, true, globalEndpoints, r)
+
+		errStr := ""
+		if driveOBDSerial.Error != "" {
+			errStr = "serial: " + driveOBDSerial.Error
 		}
-		obdInfo.Config = cfg
+		if driveOBDParallel.Error != "" {
+			errStr = errStr + " parallel: " + driveOBDParallel.Error
+		}
 
+		driveOBD := madmin.ServerDrivesOBDInfo{
+			Addr:     driveOBDSerial.Addr,
+			Serial:   driveOBDSerial.Serial,
+			Parallel: driveOBDParallel.Parallel,
+			Error:    errStr,
+		}
+		obdInfo.Perf.DriveInfo = append(obdInfo.Perf.DriveInfo, driveOBD)
+		partialWrite()
+		
+		// Notify all other MinIO peers to report drive obd numbers
+		driveOBDs := globalNotificationSys.DriveOBDInfo(deadlinedCtx)
+		obdInfo.Perf.DriveInfo = append(obdInfo.Perf.DriveInfo, driveOBDs...)
+		fmt.Printf("%#v\n", obdInfo.Perf.DriveInfo)
+		
+		partialWrite()
 	}
 
-	if net, ok := vars["net"]; ok && net == "true" && globalIsDistXL {
-		obdInfo.Net = append(obdInfo.Net, globalNotificationSys.NetOBDInfo())
-		obdInfo.Net = append(obdInfo.Net, globalNotificationSys.DispatchNetOBDInfo()...)
+	if net, ok := vars["perfnet"]; ok && net == "true" && globalIsDistXL {
+		obdInfo.Perf.Net = append(obdInfo.Perf.Net, globalNotificationSys.NetOBDInfo(deadlinedCtx))
+		partialWrite()
+
+		obdInfo.Perf.Net = append(obdInfo.Perf.Net, globalNotificationSys.DispatchNetOBDInfo(deadlinedCtx)...)
 	}
 
-	// Marshal API response
-	jsonBytes, err := json.Marshal(obdInfo)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	writeSuccessResponseJSON(w, jsonBytes)
+	finish()
 }
 
 // ServerInfoHandler - GET /minio/admin/v2/info
