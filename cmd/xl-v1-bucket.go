@@ -329,3 +329,7 @@ func (xl xlObjects) IsEncryptionSupported() bool {
 func (xl xlObjects) IsCompressionSupported() bool {
 	return true
 }
+
+func (xl xlObjects) IsObjectTaggingSupported() bool {
+	return true
+}

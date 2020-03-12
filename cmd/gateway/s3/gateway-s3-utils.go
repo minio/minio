@@ -16,7 +16,13 @@
 
 package s3
 
-import minio "github.com/minio/minio/cmd"
+import (
+	"strconv"
+
+	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/pkg/bucket/object/tagging"
+	"github.com/minio/minio/pkg/console"
+)
 
 // List of header keys to be filtered, usually
 // from all S3 API http responses.
@@ -44,4 +50,20 @@ func FromGatewayObjectPart(partID int, oi minio.ObjectInfo) (pi minio.PartInfo) 
 		LastModified: oi.ModTime,
 		PartNumber:   partID,
 	}
+}
+
+func getTagMap(tagStr string) (map[string]string, error) {
+	var tags tagging.Tagging
+	var err error
+	if tagStr == "" {
+		return nil, nil
+	}
+	if tags, err = tagging.FromString(tagStr); err != nil {
+		return nil, err
+	}
+	console.Println(strconv.Itoa(len(tags.TagSet.Tags)))
+	if err = tags.Validate(); err != nil {
+		return nil, err
+	}
+	return tagging.ToMap(tags), nil
 }

@@ -1051,3 +1051,7 @@ func (l *b2Objects) IsCompressionSupported() bool {
 func (l *b2Objects) IsReady(ctx context.Context) bool {
 	return minio.IsBackendOnline(ctx, l.httpClient, "https://api.backblazeb2.com/b2api/v1")
 }
+
+func (l *b2Objects) IsObjectTaggingSupported() bool {
+	return false
+}

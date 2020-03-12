@@ -1139,6 +1139,10 @@ func (z *xlZones) IsCompressionSupported() bool {
 	return true
 }
 
+func (z *xlZones) IsObjectTaggingSupported() bool {
+	return true
+}
+
 // DeleteBucket - deletes a bucket on all zones simultaneously,
 // even if one of the zones fail to delete buckets, we proceed to
 // undo a successful operation.

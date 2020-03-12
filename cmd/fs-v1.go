@@ -1360,6 +1360,10 @@ func (fs *FSObjects) IsCompressionSupported() bool {
 	return true
 }
 
+func (fs *FSObjects) IsObjectTaggingSupported() bool {
+	return true
+}
+
 // IsReady - Check if the backend disk is ready to accept traffic.
 func (fs *FSObjects) IsReady(_ context.Context) bool {
 	_, err := os.Stat(fs.fsPath)

@@ -1317,3 +1317,7 @@ func (a *azureObjects) IsCompressionSupported() bool {
 func (a *azureObjects) IsReady(ctx context.Context) bool {
 	return minio.IsBackendOnline(ctx, a.httpClient, a.endpoint)
 }
+
+func (a *azureObjects) IsObjectTaggingSupported() bool {
+	return false
+}

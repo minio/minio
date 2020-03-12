@@ -33,8 +33,10 @@ import (
 
 	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
 )
 
@@ -485,6 +487,30 @@ func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject 
 	for k, v := range header {
 		srcInfo.UserDefined[k] = v[0]
 	}
+	tags, ok := srcInfo.UserDefined[xhttp.AmzObjectTagging]
+	if ok {
+		delete(srcInfo.UserDefined, xhttp.AmzTagDirective)
+		delete(srcInfo.UserDefined, xhttp.AmzObjectTagging)
+		delete(srcInfo.UserDefined, xhttp.AmzTagCount)
+		delete(srcInfo.UserDefined, strings.ToLower(xhttp.AmzMetadataDirective))
+		delete(srcInfo.UserDefined, strings.ToLower(xhttp.AmzCopySourceIfMatch))
+		var copyDstInfo miniogo.DestinationInfo
+		var err error
+		var tag tagging.Tagging
+		if tag, err = tagging.FromString(tags); err != nil {
+			return minio.ObjectInfo{}, err
+		}
+		copySrcInfo := miniogo.NewSourceInfo(srcBucket, srcObject, srcOpts.ServerSideEncryption)
+		if copyDstInfo, err = miniogo.NewDestinationInfoWithOptions(dstBucket, dstObject, miniogo.DestInfoOptions{
+			UserTags: tagging.ToMap(tag), ReplaceTags: true, Encryption: dstOpts.ServerSideEncryption, UserMeta: srcInfo.UserDefined,
+		}); err != nil {
+			return minio.ObjectInfo{}, err
+		}
+		if err = l.Client.CopyObjectWithProgress(copyDstInfo, copySrcInfo, nil); err != nil {
+			return minio.ObjectInfo{}, err
+		}
+		return l.GetObjectInfo(ctx, dstBucket, dstObject, dstOpts)
+	}
 
 	if _, err = l.Client.CopyObject(srcBucket, srcObject, dstBucket, dstObject, srcInfo.UserDefined); err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, srcBucket, srcObject)
@@ -635,6 +661,49 @@ func (l *s3Objects) DeleteBucketPolicy(ctx context.Context, bucket string) error
 	return nil
 }
 
+// GetObjectTag gets the tags set on the object
+func (l *s3Objects) GetObjectTag(ctx context.Context, bucket string, object string) (tagging.Tagging, error) {
+	var err error
+	var tags *tagging.Tagging
+	var tagStr string
+	var opts minio.ObjectOptions
+
+	if _, err = l.GetObjectInfo(ctx, bucket, object, opts); err != nil {
+		return tagging.Tagging{}, minio.ErrorRespToObjectError(err, bucket, object)
+	}
+
+	if tagStr, err = l.Client.GetObjectTagging(bucket, object); err != nil {
+		return tagging.Tagging{}, minio.ErrorRespToObjectError(err, bucket, object)
+	}
+	if tags, err = tagging.ParseTagging(strings.NewReader(tagStr)); err != nil {
+		return tagging.Tagging{}, minio.ErrorRespToObjectError(err, bucket, object)
+	}
+	if tags == nil {
+		return tagging.Tagging{}, nil
+	}
+	return *tags, err
+}
+
+//PutObjectTag attaches the tags to the object
+func (l *s3Objects) PutObjectTag(ctx context.Context, bucket, object string, tagStr string) error {
+	var err error
+	var tagMap map[string]string
+	if tagMap, err = getTagMap(tagStr); err != nil {
+		return minio.ErrorRespToObjectError(err, bucket, object)
+	}
+	if err = l.Client.PutObjectTagging(bucket, object, tagMap); err != nil {
+		return minio.ErrorRespToObjectError(err, bucket, object)
+	}
+	return nil
+}
+
+func (l *s3Objects) DeleteObjectTag(ctx context.Context, bucket, object string) error {
+	if err := l.Client.RemoveObjectTagging(bucket, object); err != nil {
+		return minio.ErrorRespToObjectError(err, bucket, object)
+	}
+	return nil
+}
+
 // IsCompressionSupported returns whether compression is applicable for this layer.
 func (l *s3Objects) IsCompressionSupported() bool {
 	return false
@@ -648,4 +717,8 @@ func (l *s3Objects) IsEncryptionSupported() bool {
 // IsReady returns whether the layer is ready to take requests.
 func (l *s3Objects) IsReady(ctx context.Context) bool {
 	return minio.IsBackendOnline(ctx, l.HTTPClient, l.Client.EndpointURL().String())
+}
+
+func (l *s3Objects) IsObjectTaggingSupported() bool {
+	return true
 }

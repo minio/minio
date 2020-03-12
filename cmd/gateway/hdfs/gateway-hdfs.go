@@ -737,3 +737,7 @@ func (n *hdfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, 
 func (n *hdfsObjects) IsReady(_ context.Context) bool {
 	return true
 }
+
+func (n *hdfsObjects) IsObjectTaggingSupported() bool {
+	return false
+}

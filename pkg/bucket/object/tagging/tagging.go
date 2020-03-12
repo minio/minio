@@ -110,3 +110,15 @@ func ParseTagging(reader io.Reader) (*Tagging, error) {
 	}
 	return &t, nil
 }
+
+// ToMap - converts Tagging to a key->value map.
+func ToMap(tags Tagging) map[string]string {
+	if len(tags.TagSet.Tags) <= 0 {
+		return nil
+	}
+	tagMap := make(map[string]string)
+	for _, tagEle := range tags.TagSet.Tags {
+		tagMap[tagEle.Key] = tagEle.Value
+	}
+	return tagMap
+}
