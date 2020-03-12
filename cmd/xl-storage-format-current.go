@@ -40,6 +40,15 @@ const (
 // ErasureAlgo types of erasure algorithm
 type ErasureAlgo int
 
+func (e ErasureAlgo) String() string {
+	switch e {
+	case ReedSolomon:
+		return "reedsolomon"
+	default:
+		return ""
+	}
+}
+
 // Supported erasure algorithms
 const (
 	ReedSolomon ErasureAlgo = iota
@@ -47,6 +56,15 @@ const (
 
 // ChecksumAlgo types of checksum algorithm
 type ChecksumAlgo int
+
+func (c ChecksumAlgo) String() string {
+	switch c {
+	case HighwayHashStreaming:
+		return "highwayhash256S"
+	default:
+		return ""
+	}
+}
 
 // Supported highway hash streaming
 const (
@@ -80,7 +98,7 @@ type xlMetaV2Object struct {
 			Algorithm    ErasureAlgo `json:"algorithm"`
 			Data         int         `json:"data"`
 			Parity       int         `json:"parity"`
-			BlockSize    int         `json:"blockSize"`
+			BlockSize    int64       `json:"blockSize"`
 			Index        int         `json:"index"`
 			Distribution []int       `json:"distribution"`
 			Checksum     struct {
@@ -227,6 +245,9 @@ func (m xlMetaV2) ToFileInfo(volume, path, versionID string) FileInfo {
 			}
 			oj = *journal.Object
 		}
+		if oj.VersionID != versionID {
+			continue
+		}
 		fi.Size = oj.Stat.Size
 		fi.ModTime = time.Unix(oj.Stat.ModTime, 0)
 		for k, v := range oj.Meta.User {
@@ -243,6 +264,20 @@ func (m xlMetaV2) ToFileInfo(volume, path, versionID string) FileInfo {
 			fi.Parts[i].Size = oj.Data.Parts.Sizes[i]
 			fi.Parts[i].ActualSize = oj.Data.Parts.ActualSizes[i]
 		}
+		fi.Erasure.Checksums = make([]ChecksumInfo, len(oj.Data.Parts.Sizes))
+		for i := range oj.Data.Parts.Sizes {
+			fi.Erasure.Checksums[i].PartNumber = i + 1
+			switch oj.Data.Erasure.Checksum.Algorithm {
+			case HighwayHashStreaming:
+				fi.Erasure.Checksums[i].Algorithm = HighwayHash256S
+			}
+		}
+		fi.Erasure.Algorithm = oj.Data.Erasure.Algorithm.String()
+		fi.Erasure.Index = oj.Data.Erasure.Index
+		fi.Erasure.BlockSize = oj.Data.Erasure.BlockSize
+		fi.Erasure.DataBlocks = oj.Data.Erasure.Data
+		fi.Erasure.ParityBlocks = oj.Data.Erasure.Parity
+		fi.Erasure.Distribution = oj.Data.Erasure.Distribution
 	}
 	return fi
 }

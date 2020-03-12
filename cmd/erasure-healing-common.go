@@ -121,7 +121,6 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []FileInfo, errs []error)
 
 // Returns the latest updated FileInfo files and error in case of failure.
 func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []error) (FileInfo, error) {
-
 	// There should be atleast half correct entries, if not return failure
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, len(partsMetadata)/2); reducedErr != nil {
 		return FileInfo{}, reducedErr
@@ -139,7 +138,7 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, errs []err
 
 	// Interate through all the modTimes and count the FileInfo(s) with latest time.
 	for index, t := range modTimes {
-		if t == modTime && partsMetadata[index].IsValid() {
+		if t.Equal(modTime) && partsMetadata[index].IsValid() {
 			latestFileInfo = partsMetadata[index]
 			count++
 		}
