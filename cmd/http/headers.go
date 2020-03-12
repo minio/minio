@@ -77,6 +77,9 @@ const (
 	AmzObjectLockLegalHold        = "X-Amz-Object-Lock-Legal-Hold"
 	AmzObjectLockBypassGovernance = "X-Amz-Bypass-Governance-Retention"
 
+	// Multipart parts count
+	AmzMpPartsCount = "x-amz-mp-parts-count"
+
 	// Dummy putBucketACL
 	AmzACL = "x-amz-acl"
 
