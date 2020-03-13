@@ -508,20 +508,69 @@ func (s *storageRESTServer) DeleteFileBulkHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	encoder := gob.NewEncoder(w)
+	doneCh := sendWhiteSpaceToHTTPResponse(w)
 	errs, err := s.storage.DeleteFileBulk(volume, filePaths)
+	<-doneCh
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 
-	derrsResp := &DeleteFileBulkErrsResp{Errs: make([]error, len(errs))}
+	dErrsResp := &DeleteFileBulkErrsResp{Errs: make([]error, len(errs))}
 	for idx, err := range errs {
 		if err != nil {
-			derrsResp.Errs[idx] = StorageErr(err.Error())
+			dErrsResp.Errs[idx] = StorageErr(err.Error())
 		}
 	}
 
-	gob.NewEncoder(w).Encode(derrsResp)
+	encoder.Encode(dErrsResp)
+	w.(http.Flusher).Flush()
+}
+
+// DeletePrefixesErrsResp - collection of delete errors
+// for bulk prefixes deletes
+type DeletePrefixesErrsResp struct {
+	Errs []error
+}
+
+// DeletePrefixesHandler - delete a set of a prefixes.
+func (s *storageRESTServer) DeletePrefixesHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := r.URL.Query()
+	volume := vars.Get(storageRESTVolume)
+
+	bio := bufio.NewScanner(r.Body)
+	var prefixes []string
+	for bio.Scan() {
+		prefixes = append(prefixes, bio.Text())
+	}
+
+	if err := bio.Err(); err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	encoder := gob.NewEncoder(w)
+	doneCh := sendWhiteSpaceToHTTPResponse(w)
+	errs, err := s.storage.DeletePrefixes(volume, prefixes)
+	<-doneCh
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	dErrsResp := &DeletePrefixesErrsResp{Errs: make([]error, len(errs))}
+	for idx, err := range errs {
+		if err != nil {
+			dErrsResp.Errs[idx] = StorageErr(err.Error())
+		}
+	}
+	encoder.Encode(dErrsResp)
 	w.(http.Flusher).Flush()
 }
 
@@ -665,6 +714,8 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTCount, storageRESTLeafFile)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalk).HandlerFunc(httpTraceHdrs(server.WalkHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath, storageRESTRecursive, storageRESTLeafFile)...)
+			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeletePrefixes).HandlerFunc(httpTraceHdrs(server.DeletePrefixesHandler)).
+				Queries(restQueries(storageRESTVolume)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteFile).HandlerFunc(httpTraceHdrs(server.DeleteFileHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteFileBulk).HandlerFunc(httpTraceHdrs(server.DeleteFileBulkHandler)).

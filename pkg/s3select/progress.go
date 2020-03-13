@@ -100,7 +100,11 @@ func newProgressReader(rc io.ReadCloser, compType CompressionType) (*progressRea
 	case noneType:
 		r = scannedReader
 	case gzipType:
-		if r, err = gzip.NewReader(scannedReader); err != nil {
+		r, err = gzip.NewReader(scannedReader)
+		if err != nil {
+			if errors.Is(err, gzip.ErrHeader) || errors.Is(err, gzip.ErrChecksum) {
+				return nil, errInvalidGZIPCompressionFormat(err)
+			}
 			return nil, errTruncatedInput(err)
 		}
 	case bzip2Type:

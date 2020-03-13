@@ -1641,7 +1641,7 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrKMSNotConfigured
 	case crypto.ErrKMSAuthLogin:
 		apiErr = ErrKMSAuthFailure
-	case errOperationTimedOut, context.Canceled, context.DeadlineExceeded:
+	case context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
 	case errDiskNotFound:
 		apiErr = ErrSlowDown
@@ -1769,6 +1769,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrOverlappingFilterNotification
 	case *event.ErrUnsupportedConfiguration:
 		apiErr = ErrUnsupportedNotification
+	case OperationTimedOut:
+		apiErr = ErrOperationTimedOut
 	case BackendDown:
 		apiErr = ErrBackendDown
 	case ObjectNameTooLong:

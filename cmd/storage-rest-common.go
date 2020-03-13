@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v14" // DeleteFileBulk API change
+	storageRESTVersion       = "v15" // Adding DeletePrefixes API
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -42,6 +42,7 @@ const (
 	storageRESTMethodWalk           = "/walk"
 	storageRESTMethodDeleteFile     = "/deletefile"
 	storageRESTMethodDeleteFileBulk = "/deletefilebulk"
+	storageRESTMethodDeletePrefixes = "/deleteprefixes"
 	storageRESTMethodRenameFile     = "/renamefile"
 	storageRESTMethodVerifyFile     = "/verifyfile"
 )
