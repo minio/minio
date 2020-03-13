@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2019 Minio, Inc.
+ * Minio Cloud Storage, (C) 2019-2020 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,4 +33,9 @@ func DisableDirectIO(f *os.File) error {
 	fd := f.Fd()
 	_, err := unix.FcntlInt(fd, unix.F_NOCACHE, 0)
 	return err
+}
+
+// AlignedBlock - pass through to directio implementation.
+func AlignedBlock(BlockSize int) []byte {
+	return directio.AlignedBlock(BlockSize)
 }
