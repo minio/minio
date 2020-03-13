@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,6 @@ package disk
 
 import (
 	"os"
-
-	"github.com/ncw/directio"
 )
 
 // Info stat fs struct is container which holds following values
@@ -73,7 +71,7 @@ func doPerfMeasure(fsPath string, size int64) (writeSpeed, readSpeed float64, er
 	}
 
 	// Fetch aligned buf for direct-io
-	buf := directio.AlignedBlock(speedTestBlockSize)
+	buf := AlignedBlock(speedTestBlockSize)
 
 	writeSpeed, err = speedTestWrite(w, buf, size)
 	w.Close()
