@@ -51,7 +51,8 @@ const (
 	FS
 	// Multi disk Erasure (single, distributed) backend.
 	Erasure
-
+	// Gateway type
+	Gateway
 	// Add your own backend.
 )
 
@@ -456,8 +457,15 @@ type InfoMessage struct {
 	Objects      Objects            `json:"objects,omitempty"`
 	Usage        Usage              `json:"usage,omitempty"`
 	Services     Services           `json:"services,omitempty"`
-	Backend      interface{}        `json:"backend,omitempty"`
+	Backend      Backend            `json:"backend,omitempty"`
 	Servers      []ServerProperties `json:"servers,omitempty"`
+}
+
+// Backend contains information of the underlying object API
+type Backend struct {
+	Type BackendType `json:"type"`
+	XL   XLBackend   `json:"xl"`
+	FS   FSBackend   `json:"fs"`
 }
 
 // Services contains different services information
@@ -522,14 +530,12 @@ const (
 
 // FSBackend contains specific FS storage information
 type FSBackend struct {
-	Type backendType `json:"backendType,omitempty"`
 }
 
 // XLBackend contains specific erasure storage information
 type XLBackend struct {
-	Type         backendType `json:"backendType,omitempty"`
-	OnlineDisks  int         `json:"onlineDisks,omitempty"`
-	OfflineDisks int         `json:"offlineDisks,omitempty"`
+	OnlineDisks  int `json:"onlineDisks,omitempty"`
+	OfflineDisks int `json:"offlineDisks,omitempty"`
 	// Data disks for currently configured Standard storage class.
 	StandardSCData int `json:"standardSCData,omitempty"`
 	// Parity disks for currently configured Standard storage class.

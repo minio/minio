@@ -1554,19 +1554,19 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	var OnDisks int
 	var OffDisks int
-	var backend interface{}
+	var backend = madmin.Backend{
+		Type: madmin.BackendType(storageInfo.Backend.Type),
+	}
 
-	if storageInfo.Backend.Type == BackendType(madmin.Erasure) {
-
+	switch backend.Type {
+	case madmin.Erasure:
 		for _, v := range storageInfo.Backend.OnlineDisks {
 			OnDisks += v
 		}
 		for _, v := range storageInfo.Backend.OfflineDisks {
 			OffDisks += v
 		}
-
-		backend = madmin.XLBackend{
-			Type:             madmin.ErasureType,
+		backend.XL = madmin.XLBackend{
 			OnlineDisks:      OnDisks,
 			OfflineDisks:     OffDisks,
 			StandardSCData:   storageInfo.Backend.StandardSCData,
@@ -1574,10 +1574,8 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 			RRSCData:         storageInfo.Backend.RRSCData,
 			RRSCParity:       storageInfo.Backend.RRSCParity,
 		}
-	} else {
-		backend = madmin.FSBackend{
-			Type: madmin.FsType,
-		}
+	case madmin.FS:
+		backend.FS = madmin.FSBackend{}
 	}
 
 	mode := ""
