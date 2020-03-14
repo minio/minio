@@ -982,13 +982,24 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 	}
 
 	// Aggregate healing result
-	var aggregatedHealStateResult = madmin.BgHealState{}
+	var aggregatedHealStateResult = madmin.BgHealState{
+		ScannedItemsCount: bgHealStates[0].ScannedItemsCount,
+		LastHealActivity:  bgHealStates[0].LastHealActivity,
+		NextHealRound:     bgHealStates[0].NextHealRound,
+	}
+
+	bgHealStates = bgHealStates[1:]
+
 	for _, state := range bgHealStates {
 		aggregatedHealStateResult.ScannedItemsCount += state.ScannedItemsCount
-		if aggregatedHealStateResult.LastHealActivity.Before(state.LastHealActivity) {
+		if !state.LastHealActivity.IsZero() && aggregatedHealStateResult.LastHealActivity.Before(state.LastHealActivity) {
 			aggregatedHealStateResult.LastHealActivity = state.LastHealActivity
+			// The node which has the last heal activity means its
+			// is the node that is orchestrating self healing operations,
+			// which also means it is the same node which decides when
+			// the next self healing operation will be done.
+			aggregatedHealStateResult.NextHealRound = state.NextHealRound
 		}
-
 	}
 
 	if err := json.NewEncoder(w).Encode(aggregatedHealStateResult); err != nil {
@@ -1398,10 +1409,10 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		} else if ldapConn == nil {
 			ldap.Status = "Not Configured"
 		} else {
+			// Close ldap connection to avoid leaks.
+			ldapConn.Close()
 			ldap.Status = "online"
 		}
-		// Close ldap connection to avoid leaks.
-		defer ldapConn.Close()
 	}
 
 	log, audit := fetchLoggerInfo(cfg)

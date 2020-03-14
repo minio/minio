@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,6 @@ import (
 	"github.com/minio/minio/pkg/disk"
 	xioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/mountinfo"
-	"github.com/ncw/directio"
 )
 
 const (
@@ -213,7 +212,7 @@ func newPosix(path string) (*posix, error) {
 		diskPath: path,
 		pool: sync.Pool{
 			New: func() interface{} {
-				b := directio.AlignedBlock(readBlockSize)
+				b := disk.AlignedBlock(readBlockSize)
 				return &b
 			},
 		},
@@ -670,13 +669,16 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 	ch = make(chan FileInfo)
 	go func() {
 		defer close(ch)
-		listDir := func(volume, dirPath, dirEntry string) (entries []string) {
+		listDir := func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string) {
 			entries, err := s.ListDir(volume, dirPath, -1, leafFile)
 			if err != nil {
 				return
 			}
+			if len(entries) == 0 {
+				return true, nil
+			}
 			sort.Strings(entries)
-			return filterMatchingPrefix(entries, dirEntry)
+			return false, filterMatchingPrefix(entries, dirEntry)
 		}
 
 		walkResultCh := startTreeWalk(context.Background(), volume, dirPath, marker, recursive, listDir, endWalkCh)
