@@ -46,7 +46,7 @@ type Record interface {
 	// Set a value.
 	// Can return a different record type.
 	Set(name string, value *Value) (Record, error)
-	WriteCSV(writer io.Writer, fieldDelimiter rune) error
+	WriteCSV(writer io.Writer, fieldDelimiter, quote rune, alwaysQuote bool) error
 	WriteJSON(writer io.Writer) error
 
 	// Clone the record and if possible use the destination provided.
