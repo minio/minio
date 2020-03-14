@@ -757,8 +757,14 @@ func (sys *NotificationSys) ConfiguredTargetIDs() []event.TargetID {
 			}
 		}
 	}
-
-	return targetIDs
+	// Filter out targets configured via env
+	var tIDs []event.TargetID
+	for _, targetID := range targetIDs {
+		if !globalEnvTargetList.Exists(targetID) {
+			tIDs = append(tIDs, targetID)
+		}
+	}
+	return tIDs
 }
 
 // RemoveNotification - removes all notification configuration for bucket name.
