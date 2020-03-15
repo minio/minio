@@ -225,8 +225,6 @@ func getLongLivedLocks(interval time.Duration) map[Endpoint][]nameLockRequesterI
 	return nlripMap
 }
 
-var lockMaintenanceTimeout = newDynamicTimeout(60*time.Second, time.Second)
-
 // lockMaintenance loops over locks that have been active for some time and checks back
 // with the original server whether it is still alive or not
 //
@@ -235,28 +233,19 @@ var lockMaintenanceTimeout = newDynamicTimeout(60*time.Second, time.Second)
 // - some network error (and server is up normally)
 //
 // We will ignore the error, and we will retry later to get a resolve on this lock
-func lockMaintenance(ctx context.Context, interval time.Duration, objAPI ObjectLayer) error {
-	// Lock to avoid concurrent lock maintenance loops
-	maintenanceLock := objAPI.NewNSLock(ctx, "system", "lock-maintenance-ops")
-	if err := maintenanceLock.GetLock(lockMaintenanceTimeout); err != nil {
-		return err
-	}
-	defer maintenanceLock.Unlock()
-
+func lockMaintenance(ctx context.Context, interval time.Duration) error {
 	// Validate if long lived locks are indeed clean.
 	// Get list of long lived locks to check for staleness.
 	for lendpoint, nlrips := range getLongLivedLocks(interval) {
+		nlripsMap := make(map[string]int, len(nlrips))
 		for _, nlrip := range nlrips {
 			// Locks are only held on first zone, make sure that
 			// we only look for ownership of locks from endpoints
 			// on first zone.
 			for _, endpoint := range globalEndpoints[0].Endpoints {
-				if endpoint.String() == lendpoint.String() {
-					continue
-				}
-
 				c := newLockAPI(endpoint)
 				if !c.IsOnline() {
+					nlripsMap[nlrip.name]++
 					continue
 				}
 
@@ -266,25 +255,37 @@ func lockMaintenance(ctx context.Context, interval time.Duration, objAPI ObjectL
 					UID:       nlrip.lri.UID,
 					Resources: []string{nlrip.name},
 				})
-
 				if err != nil {
+					nlripsMap[nlrip.name]++
 					c.Close()
 					continue
 				}
 
-				// For successful response, verify if lock was indeed active or stale.
-				if expired {
-					// The lock is no longer active at server that originated
-					// the lock, attempt to remove the lock.
-					globalLockServers[lendpoint].mutex.Lock()
-					// Purge the stale entry if it exists.
-					globalLockServers[lendpoint].removeEntryIfExists(nlrip)
-					globalLockServers[lendpoint].mutex.Unlock()
+				if !expired {
+					nlripsMap[nlrip.name]++
 				}
 
 				// Close the connection regardless of the call response.
 				c.Close()
 			}
+
+			// Read locks we assume quorum for be N/2 success
+			quorum := globalXLSetDriveCount / 2
+			if nlrip.lri.Writer {
+				// For write locks we need N/2+1 success
+				quorum = globalXLSetDriveCount/2 + 1
+			}
+
+			// less than the quorum, we have locks expired.
+			if nlripsMap[nlrip.name] < quorum {
+				// The lock is no longer active at server that originated
+				// the lock, attempt to remove the lock.
+				globalLockServers[lendpoint].mutex.Lock()
+				// Purge the stale entry if it exists.
+				globalLockServers[lendpoint].removeEntryIfExists(nlrip)
+				globalLockServers[lendpoint].mutex.Unlock()
+			}
+
 		}
 	}
 
@@ -293,12 +294,13 @@ func lockMaintenance(ctx context.Context, interval time.Duration, objAPI ObjectL
 
 // Start lock maintenance from all lock servers.
 func startLockMaintenance() {
-	var objAPI ObjectLayer
 	var ctx = context.Background()
 
 	// Wait until the object API is ready
+	// no need to start the lock maintenance
+	// if ObjectAPI is not initialized.
 	for {
-		objAPI = newObjectLayerWithoutSafeModeFn()
+		objAPI := newObjectLayerWithoutSafeModeFn()
 		if objAPI == nil {
 			time.Sleep(time.Second)
 			continue
@@ -322,7 +324,7 @@ func startLockMaintenance() {
 			// "synchronous checks" between servers
 			duration := time.Duration(r.Float64() * float64(lockMaintenanceInterval))
 			time.Sleep(duration)
-			if err := lockMaintenance(ctx, lockValidityCheckInterval, objAPI); err != nil {
+			if err := lockMaintenance(ctx, lockValidityCheckInterval); err != nil {
 				// Sleep right after an error.
 				duration := time.Duration(r.Float64() * float64(lockMaintenanceInterval))
 				time.Sleep(duration)
