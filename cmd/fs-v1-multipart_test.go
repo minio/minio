@@ -21,6 +21,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -34,33 +35,38 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 	obj := initFSObjects(disk, t)
 	fs := obj.(*FSObjects)
 
-	// Close the go-routine, we are going to
-	// manually start it and test in this test case.
-	GlobalServiceDoneCh <- struct{}{}
-
 	bucketName := "bucket"
 	objectName := "object"
 
-	obj.MakeBucketWithLocation(context.Background(), bucketName, "")
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, objectName, ObjectOptions{})
+	// Create a context we can cancel.
+	ctx, cancel := context.WithCancel(context.Background())
+	obj.MakeBucketWithLocation(ctx, bucketName, "")
+
+	uploadID, err := obj.NewMultipartUpload(ctx, bucketName, objectName, ObjectOptions{})
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 
-	go fs.cleanupStaleMultipartUploads(context.Background(), 20*time.Millisecond, 0, GlobalServiceDoneCh)
+	var cleanupWg sync.WaitGroup
+	cleanupWg.Add(1)
+	go func() {
+		defer cleanupWg.Done()
+		fs.cleanupStaleMultipartUploads(context.Background(), time.Millisecond, 0, ctx.Done())
+	}()
 
-	// Wait for 40ms such that - we have given enough time for
-	// cleanup routine to kick in.
-	time.Sleep(40 * time.Millisecond)
-
-	// Close the routine we do not need it anymore.
-	GlobalServiceDoneCh <- struct{}{}
+	// Wait for 100ms such that - we have given enough time for
+	// cleanup routine to kick in. Flaky on slow systems...
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	cleanupWg.Wait()
 
 	// Check if upload id was already purged.
 	if err = obj.AbortMultipartUpload(context.Background(), bucketName, objectName, uploadID); err != nil {
 		if _, ok := err.(InvalidUploadID); !ok {
 			t.Fatal("Unexpected err: ", err)
 		}
+	} else {
+		t.Error("Item was not cleaned up.")
 	}
 }
 

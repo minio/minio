@@ -57,7 +57,7 @@ func handleSignals() {
 		}
 
 		// send signal to various go-routines that they need to quit.
-		close(GlobalServiceDoneCh)
+		cancelGlobalContext()
 
 		if objAPI := newObjectLayerWithoutSafeModeFn(); objAPI != nil {
 			oerr = objAPI.Shutdown(context.Background())
