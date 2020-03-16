@@ -91,13 +91,13 @@ func printStartupSafeModeMessage(apiEndpoints []string, err error) {
 			mcMessage := fmt.Sprintf("> mc.exe config host add %s %s %s %s --api s3v4", alias,
 				endPoint, cred.AccessKey, cred.SecretKey)
 			logStartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
-			mcMessage = fmt.Sprintf("> mc.exe admin config --help")
+			mcMessage = "> mc.exe admin config --help"
 			logStartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 		} else {
 			mcMessage := fmt.Sprintf("$ mc config host add %s %s %s %s --api s3v4", alias,
 				endPoint, cred.AccessKey, cred.SecretKey)
 			logStartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
-			mcMessage = fmt.Sprintf("$ mc admin config --help")
+			mcMessage = "$ mc admin config --help"
 			logStartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 		}
 	}

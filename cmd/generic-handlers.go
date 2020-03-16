@@ -353,7 +353,7 @@ func parseAmzDate(amzDateStr string) (amzDate time.Time, apiErr APIErrorCode) {
 // supported amz date formats.
 func parseAmzDateHeader(req *http.Request) (time.Time, APIErrorCode) {
 	for _, amzDateHeader := range amzDateHeaders {
-		amzDateStr := req.Header.Get(http.CanonicalHeaderKey(amzDateHeader))
+		amzDateStr := req.Header.Get(amzDateHeader)
 		if amzDateStr != "" {
 			return parseAmzDate(amzDateStr)
 		}

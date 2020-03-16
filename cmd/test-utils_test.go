@@ -419,22 +419,6 @@ func resetGlobalConfigPath() {
 	globalConfigDir = &ConfigDir{path: ""}
 }
 
-func resetGlobalServiceDoneCh() {
-	// Repeatedly send on the service done channel, so that
-	// listening go-routines will quit. This works better than
-	// closing the channel - closing introduces a new race, as the
-	// current thread writes to the variable, and other threads
-	// listening on it, read from it.
-loop:
-	for {
-		select {
-		case GlobalServiceDoneCh <- struct{}{}:
-		default:
-			break loop
-		}
-	}
-}
-
 // sets globalObjectAPI to `nil`.
 func resetGlobalObjectAPI() {
 	globalObjLayerMutex.Lock()
@@ -499,7 +483,8 @@ func resetGlobalIAMSys() {
 func resetTestGlobals() {
 	// close any indefinitely running go-routines from previous
 	// tests.
-	resetGlobalServiceDoneCh()
+	cancelGlobalContext()
+	initGlobalContext()
 	// set globalObjectAPI to `nil`.
 	resetGlobalObjectAPI()
 	// Reset config path set.

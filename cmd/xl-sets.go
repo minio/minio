@@ -235,7 +235,7 @@ func (s *xlSets) connectDisks() {
 // monitorAndConnectEndpoints this is a monitoring loop to keep track of disconnected
 // endpoints by reconnecting them and making sure to place them into right position in
 // the set topology, this monitoring happens at a given monitoring interval.
-func (s *xlSets) monitorAndConnectEndpoints(monitorInterval time.Duration) {
+func (s *xlSets) monitorAndConnectEndpoints(ctx context.Context, monitorInterval time.Duration) {
 
 	ticker := time.NewTicker(monitorInterval)
 	// Stop the timer.
@@ -243,7 +243,7 @@ func (s *xlSets) monitorAndConnectEndpoints(monitorInterval time.Duration) {
 
 	for {
 		select {
-		case <-GlobalServiceDoneCh:
+		case <-ctx.Done():
 			return
 		case <-s.disksConnectDoneCh:
 			return
@@ -332,7 +332,7 @@ func newXLSets(endpoints Endpoints, format *formatXLV3, setCount int, drivesPerS
 	s.connectDisksWithQuorum()
 
 	// Start the disk monitoring and connect routine.
-	go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)
+	go s.monitorAndConnectEndpoints(GlobalContext, defaultMonitorConnectEndpointInterval)
 
 	go s.maintainMRFList()
 	go s.healMRFRoutine()
@@ -445,8 +445,8 @@ func (s *xlSets) StorageInfo(ctx context.Context, local bool) StorageInfo {
 	return storageInfo
 }
 
-func (s *xlSets) CrawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
-	return DataUsageInfo{}
+func (s *xlSets) CrawlAndGetDataUsage(ctx context.Context, updates chan<- DataUsageInfo) error {
+	return NotImplemented{}
 }
 
 // Shutdown shutsdown all erasure coded sets in parallel
@@ -1327,7 +1327,7 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 	s.connectDisks()
 
 	// Restart monitoring loop to monitor reformatted disks again.
-	go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)
+	go s.monitorAndConnectEndpoints(GlobalContext, defaultMonitorConnectEndpointInterval)
 
 	return nil
 }
@@ -1516,7 +1516,7 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 		s.connectDisks()
 
 		// Restart our monitoring loop to start monitoring newly formatted disks.
-		go s.monitorAndConnectEndpoints(defaultMonitorConnectEndpointInterval)
+		go s.monitorAndConnectEndpoints(GlobalContext, defaultMonitorConnectEndpointInterval)
 	}
 
 	return res, nil
@@ -1764,6 +1764,10 @@ func (s *xlSets) healMRFRoutine() {
 	// Wait until background heal state is initialized
 	var bgSeq *healSequence
 	for {
+		if globalBackgroundHealState == nil {
+			time.Sleep(time.Second)
+			continue
+		}
 		var ok bool
 		bgSeq, ok = globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
 		if ok {

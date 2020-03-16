@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"io"
 )
 
@@ -38,8 +39,8 @@ func (p *posixDiskIDCheck) IsOnline() bool {
 	return storedDiskID == p.diskID
 }
 
-func (p *posixDiskIDCheck) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, error) {
-	return p.storage.CrawlAndGetDataUsage(endCh)
+func (p *posixDiskIDCheck) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
+	return p.storage.CrawlAndGetDataUsage(ctx, cache)
 }
 
 func (p *posixDiskIDCheck) Hostname() string {

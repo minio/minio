@@ -50,9 +50,9 @@ func NewGatewayLayerWithLocker(gwLayer ObjectLayer) ObjectLayer {
 type GatewayUnsupported struct{}
 
 // CrawlAndGetDataUsage - crawl is not implemented for gateway
-func (a GatewayUnsupported) CrawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
+func (a GatewayUnsupported) CrawlAndGetDataUsage(ctx context.Context, updates chan<- DataUsageInfo) error {
 	logger.CriticalIf(ctx, errors.New("not implemented"))
-	return DataUsageInfo{}
+	return NotImplemented{}
 }
 
 // NewNSLock is a dummy stub for gateway.

@@ -106,12 +106,12 @@ func initHealState() *allHealState {
 		healSeqMap: make(map[string]*healSequence),
 	}
 
-	go healState.periodicHealSeqsClean()
+	go healState.periodicHealSeqsClean(GlobalContext)
 
 	return healState
 }
 
-func (ahs *allHealState) periodicHealSeqsClean() {
+func (ahs *allHealState) periodicHealSeqsClean(ctx context.Context) {
 	// Launch clean-up routine to remove this heal sequence (after
 	// it ends) from the global state after timeout has elapsed.
 	ticker := time.NewTicker(time.Minute * 5)
@@ -127,7 +127,7 @@ func (ahs *allHealState) periodicHealSeqsClean() {
 				}
 			}
 			ahs.Unlock()
-		case <-GlobalServiceDoneCh:
+		case <-ctx.Done():
 			// server could be restarting - need
 			// to exit immediately
 			return
@@ -369,7 +369,7 @@ func newHealSequence(bucket, objPrefix, clientAddr string,
 
 	reqInfo := &logger.ReqInfo{RemoteHost: clientAddr, API: "Heal", BucketName: bucket}
 	reqInfo.AppendTags("prefix", objPrefix)
-	ctx := logger.SetReqInfo(context.Background(), reqInfo)
+	ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 
 	return &healSequence{
 		bucket:         bucket,
@@ -603,7 +603,7 @@ func (h *healSequence) healItemsFromSourceCh() error {
 			h.lastHealActivity = UTCNow()
 		case <-h.traverseAndHealDoneCh:
 			return nil
-		case <-GlobalServiceDoneCh:
+		case <-h.ctx.Done():
 			return nil
 		}
 	}

@@ -356,8 +356,6 @@ func TestFSListBuckets(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	GlobalServiceDoneCh <- struct{}{}
-
 	// Create a bucket with invalid name
 	if err := os.MkdirAll(pathJoin(fs.fsPath, "vo^"), 0777); err != nil {
 		t.Fatal("Unexpected error: ", err)

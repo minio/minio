@@ -39,7 +39,7 @@ var leaderLockTimeout = newDynamicTimeout(time.Minute, time.Minute)
 func newBgHealSequence(numDisks int) *healSequence {
 
 	reqInfo := &logger.ReqInfo{API: "BackgroundHeal"}
-	ctx := logger.SetReqInfo(context.Background(), reqInfo)
+	ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 
 	hs := madmin.HealOpts{
 		// Remove objects that do not have read-quorum

@@ -693,7 +693,7 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 	return c, nil
 }
 
-func (c *cacheObjects) gc(ctx context.Context, doneCh chan struct{}) {
+func (c *cacheObjects) gc(ctx context.Context, doneCh <-chan struct{}) {
 	ticker := time.NewTicker(cacheGCInterval)
 
 	defer ticker.Stop()
