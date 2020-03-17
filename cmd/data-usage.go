@@ -45,7 +45,7 @@ const (
 	dataUsageSleepDefMult    = 10.0
 	dataUsageUpdateDirCycles = 16
 	dataUsageRoot            = SlashSeparator
-	dataUsageBucket          = bucketConfigPrefix + SlashSeparator + bucketMetaPrefix
+	dataUsageBucket          = minioMetaBucket + SlashSeparator + bucketMetaPrefix
 )
 
 // initDataUsageStats will start the crawler unless disabled.
