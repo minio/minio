@@ -441,9 +441,6 @@ func serverMain(ctx *cli.Context) {
 		logger.StartupMessage(color.RedBold(msg))
 	}
 
-	// Set uptime time after object layer has initialized.
-	globalBootTime = UTCNow()
-
 	handleSignals()
 }
 
