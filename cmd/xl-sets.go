@@ -334,8 +334,10 @@ func newXLSets(endpoints Endpoints, format *formatXLV3, setCount int, drivesPerS
 	// Start the disk monitoring and connect routine.
 	go s.monitorAndConnectEndpoints(GlobalContext, defaultMonitorConnectEndpointInterval)
 
-	go s.maintainMRFList()
-	go s.healMRFRoutine()
+	/*
+		go s.maintainMRFList()
+		go s.healMRFRoutine()
+	*/
 
 	return s, nil
 }

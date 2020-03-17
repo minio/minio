@@ -374,19 +374,18 @@ func (xl xlObjects) getObjectInfo(ctx context.Context, bucket, object string) (o
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(ctx, disks, bucket, object)
 
-	readQuorum, _, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
-	if err != nil {
-		return objInfo, err
+	// There should be atleast half correct entries, if not return failure
+	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, len(disks)/2); reducedErr != nil {
+		return objInfo, reducedErr
 	}
 
 	// List all the file commit ids from parts metadata.
 	modTimes := listObjectModtimes(metaArr, errs)
-
 	// Reduce list of UUIDs to a single common value.
 	modTime, _ := commonTime(modTimes)
 
 	// Pick latest valid metadata.
-	xlMeta, err := pickValidXLMeta(ctx, metaArr, modTime, readQuorum)
+	xlMeta, err := pickValidXLMeta(ctx, metaArr, modTime, len(disks)/2)
 	if err != nil {
 		return objInfo, err
 	}
