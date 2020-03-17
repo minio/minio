@@ -29,6 +29,7 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -213,7 +214,7 @@ func (d *dataUsageCache) pathSizes(buckets []BucketInfo) map[string]uint64 {
 		e := d.find(bucket.Name)
 		if e == nil {
 			if dataUsageDebug {
-				logger.Info("bucket not found: %v", bucket.Name)
+				logger.Info(color.Green("data-usage:")+" Bucket not found in cache: %v", bucket.Name)
 			}
 			continue
 		}
@@ -298,10 +299,10 @@ func (d *dataUsageCache) merge(other dataUsageCache) {
 // If the object is not found or unable to deserialize d is cleared and nil error is returned.
 func (d *dataUsageCache) load(ctx context.Context, store ObjectLayer, name string) error {
 	var buf bytes.Buffer
-	err := store.GetObject(ctx, minioMetaBackgroundOpsBucket, name, 0, -1, &buf, "", ObjectOptions{})
+	err := store.GetObject(ctx, dataUsageBucket, name, 0, -1, &buf, "", ObjectOptions{})
 	if err != nil {
 		if !isErrObjectNotFound(err) {
-			return toObjectErr(err, minioMetaBackgroundOpsBucket, name)
+			return toObjectErr(err, dataUsageBucket, name)
 		}
 		*d = dataUsageCache{}
 		return nil
@@ -324,7 +325,7 @@ func (d *dataUsageCache) save(ctx context.Context, store ObjectLayer, name strin
 	}
 
 	_, err = store.PutObject(ctx,
-		minioMetaBackgroundOpsBucket,
+		dataUsageBucket,
 		name,
 		NewPutObjReader(r, nil, nil),
 		ObjectOptions{})
@@ -443,37 +444,39 @@ type dataUsageHashMap map[dataUsageHash]struct{}
 // MarshalMsg implements msgp.Marshaler
 func (d dataUsageHashMap) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, d.Msgsize())
-	o = msgp.AppendArrayHeader(o, uint32(len(d)))
+
+	// Write bin header manually
+	const mbin32 uint8 = 0xc6
+	sz := uint32(len(d)) * dataUsageHashLen
+	o = append(o, mbin32, byte(sz>>24), byte(sz>>16), byte(sz>>8), byte(sz))
+
+	var tmp [dataUsageHashLen]byte
 	for k := range d {
-		o = msgp.AppendUint64(o, uint64(k))
+		binary.LittleEndian.PutUint64(tmp[:], uint64(k))
+		o = append(o, tmp[:]...)
 	}
 	return
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (d dataUsageHashMap) Msgsize() (s int) {
-	s = len(d) * (msgp.Uint64Size)
+	s = 5 + len(d)*dataUsageHashLen
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (d *dataUsageHashMap) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var zb0003 uint32
-	zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	var hashes []byte
+	hashes, bts, err = msgp.ReadBytesZC(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "dataUsageHashMap")
 		return
 	}
 
-	var dst = make(dataUsageHashMap, zb0003)
-	for i := uint32(0); i < zb0003; i++ {
-		var zb0004 uint64
-		zb0004, bts, err = msgp.ReadUint64Bytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err, "dataUsageHashMap")
-			return
-		}
-		dst[dataUsageHash(zb0004)] = struct{}{}
+	var dst = make(dataUsageHashMap, len(hashes)/dataUsageHashLen)
+	for len(hashes) >= dataUsageHashLen {
+		dst[dataUsageHash(binary.LittleEndian.Uint64(hashes[:dataUsageHashLen]))] = struct{}{}
+		hashes = hashes[dataUsageHashLen:]
 	}
 	*d = dst
 	o = bts
@@ -482,31 +485,33 @@ func (d *dataUsageHashMap) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 func (d *dataUsageHashMap) DecodeMsg(dc *msgp.Reader) (err error) {
 	var zb0001 uint32
-	zb0001, err = dc.ReadArrayHeader()
+	zb0001, err = dc.ReadBytesHeader()
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
 	var dst = make(dataUsageHashMap, zb0001)
+	var tmp [8]byte
 	for i := uint32(0); i < zb0001; i++ {
-		var zb0004 uint64
-		zb0004, err = dc.ReadUint64()
+		_, err = io.ReadFull(dc, tmp[:])
 		if err != nil {
 			err = msgp.WrapError(err, "dataUsageHashMap")
 			return
 		}
-		dst[dataUsageHash(zb0004)] = struct{}{}
+		dst[dataUsageHash(binary.LittleEndian.Uint64(tmp[:]))] = struct{}{}
 	}
 	return nil
 }
 func (d dataUsageHashMap) EncodeMsg(en *msgp.Writer) (err error) {
-	err = en.WriteArrayHeader(uint32(len(d)))
+	err = en.WriteBytesHeader(uint32(len(d)) * dataUsageHashLen)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
+	var tmp [dataUsageHashLen]byte
 	for k := range d {
-		err = en.WriteUint64(uint64(k))
+		binary.LittleEndian.PutUint64(tmp[:], uint64(k))
+		_, err = en.Write(tmp[:])
 		if err != nil {
 			err = msgp.WrapError(err)
 			return

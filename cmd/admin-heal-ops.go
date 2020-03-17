@@ -630,11 +630,6 @@ func (h *healSequence) healItems(bucketsOnly bool) error {
 		return err
 	}
 
-	// Start healing the background ops prefix.
-	if err := h.healMinioSysMeta(backgroundOpsMetaPrefix)(); err != nil {
-		logger.LogIf(h.ctx, err)
-	}
-
 	// Heal buckets and objects
 	return h.healBuckets(bucketsOnly)
 }

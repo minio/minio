@@ -35,9 +35,9 @@ import (
 )
 
 const (
-	dataUsageObjName         = "data-usage"
-	dataUsageCacheName       = "data-usage-cache"
-	dataUsageBucketCacheDir  = "bucket-data-usage-cache"
+	dataUsageObjName         = "usage.json"
+	dataUsageCacheName       = "usage-cache.bin"
+	dataUsageBucketCacheDir  = "usage-caches"
 	dataUsageCrawlConf       = "MINIO_DISK_USAGE_CRAWL"
 	dataUsageCrawlDelay      = "MINIO_DISK_USAGE_CRAWL_DELAY"
 	dataUsageDebug           = true
@@ -45,6 +45,7 @@ const (
 	dataUsageSleepDefMult    = 10.0
 	dataUsageUpdateDirCycles = 16
 	dataUsageRoot            = SlashSeparator
+	dataUsageBucket          = bucketConfigPrefix + SlashSeparator + bucketMetaPrefix
 )
 
 // initDataUsageStats will start the crawler unless disabled.
@@ -125,7 +126,7 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, gui <-chan
 			continue
 		}
 
-		_, err = objAPI.PutObject(ctx, minioMetaBackgroundOpsBucket, dataUsageObjName, NewPutObjReader(r, nil, nil), ObjectOptions{})
+		_, err = objAPI.PutObject(ctx, dataUsageBucket, dataUsageObjName, NewPutObjReader(r, nil, nil), ObjectOptions{})
 		logger.LogIf(ctx, err)
 	}
 }
@@ -133,12 +134,12 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, gui <-chan
 func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsageInfo, error) {
 	var dataUsageInfoJSON bytes.Buffer
 
-	err := objAPI.GetObject(ctx, minioMetaBackgroundOpsBucket, dataUsageObjName, 0, -1, &dataUsageInfoJSON, "", ObjectOptions{})
+	err := objAPI.GetObject(ctx, dataUsageBucket, dataUsageObjName, 0, -1, &dataUsageInfoJSON, "", ObjectOptions{})
 	if err != nil {
 		if isErrObjectNotFound(err) {
 			return DataUsageInfo{}, nil
 		}
-		return DataUsageInfo{}, toObjectErr(err, minioMetaBackgroundOpsBucket, dataUsageObjName)
+		return DataUsageInfo{}, toObjectErr(err, dataUsageBucket, dataUsageObjName)
 	}
 
 	var dataUsageInfo DataUsageInfo
