@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -155,17 +156,24 @@ var ObjectsHistogramIntervals = []objectHistogramInterval{
 	{"BETWEEN_10_MB_AND_64_MB", 1024 * 1024 * 10, 1024*1024*64 - 1},
 	{"BETWEEN_64_MB_AND_128_MB", 1024 * 1024 * 64, 1024*1024*128 - 1},
 	{"BETWEEN_128_MB_AND_512_MB", 1024 * 1024 * 128, 1024*1024*512 - 1},
-	{"GREATER_THAN_512_MB", 1024 * 1024 * 512, -1},
+	{"GREATER_THAN_512_MB", 1024 * 1024 * 512, math.MaxInt64},
 }
 
 // DataUsageInfo represents data usage of an Object API
 type DataUsageInfo struct {
-	LastUpdate            time.Time         `json:"lastUpdate"`
-	ObjectsCount          uint64            `json:"objectsCount"`
-	ObjectsTotalSize      uint64            `json:"objectsTotalSize"`
+	// LastUpdate is the timestamp of when the data usage info was last updated.
+	// This does not indicate a full scan.
+	LastUpdate       time.Time `json:"lastUpdate"`
+	ObjectsCount     uint64    `json:"objectsCount"`
+	ObjectsTotalSize uint64    `json:"objectsTotalSize"`
+
+	// ObjectsSizesHistogram contains information on objects across all buckets.
+	// See ObjectsHistogramIntervals.
 	ObjectsSizesHistogram map[string]uint64 `json:"objectsSizesHistogram"`
 
-	BucketsCount uint64            `json:"bucketsCount"`
+	BucketsCount uint64 `json:"bucketsCount"`
+
+	// BucketsSizes is "bucket name" -> size.
 	BucketsSizes map[string]uint64 `json:"bucketsSizes"`
 }
 
