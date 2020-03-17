@@ -57,7 +57,13 @@ var (
 		},
 		config.HelpKV{
 			Key:         TLSSkipVerify,
-			Description: `trust server TLS without verification, defaults to "on" (verify)`,
+			Description: `trust server TLS without verification, defaults to "off" (verify)`,
+			Optional:    true,
+			Type:        "on|off",
+		},
+		config.HelpKV{
+			Key:         ServerInsecure,
+			Description: `allow plain text connection to AD/LDAP server, defaults to "off" (TLS)`,
 			Optional:    true,
 			Type:        "on|off",
 		},
