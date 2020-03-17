@@ -210,3 +210,101 @@ func (adm *AdminClient) SetUserStatus(accessKey string, status AccountStatus) er
 
 	return nil
 }
+
+// AddServiceAccountReq is the request body of the add service account admin call
+type AddServiceAccountReq struct {
+	Parent string `json:"parent"`
+	Policy string `json:"policy"`
+}
+
+// AddServiceAccountResp is the response body of the add service account admin call
+type AddServiceAccountResp struct {
+	Credentials auth.Credentials `json:"credentials"`
+}
+
+// AddServiceAccount - creates a new service account belonging to the given parent user
+// while restricting the service account permission by the given policy document.
+func (adm *AdminClient) AddServiceAccount(parentUser string, policy string) (auth.Credentials, error) {
+
+	if !auth.IsAccessKeyValid(parentUser) {
+		return auth.Credentials{}, auth.ErrInvalidAccessKeyLength
+	}
+
+	data, err := json.Marshal(AddServiceAccountReq{
+		Parent: parentUser,
+		Policy: policy,
+	})
+	if err != nil {
+		return auth.Credentials{}, err
+	}
+
+	econfigBytes, err := EncryptData(adm.secretAccessKey, data)
+	if err != nil {
+		return auth.Credentials{}, err
+	}
+
+	reqData := requestData{
+		relPath: adminAPIPrefix + "/add-service-account",
+		content: econfigBytes,
+	}
+
+	// Execute PUT on /minio/admin/v2/add-service-account to set a user.
+	resp, err := adm.executeMethod("PUT", reqData)
+	defer closeResponse(resp)
+	if err != nil {
+		return auth.Credentials{}, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return auth.Credentials{}, httpRespToErrorResponse(resp)
+	}
+
+	data, err = DecryptData(adm.secretAccessKey, resp.Body)
+	if err != nil {
+		return auth.Credentials{}, err
+	}
+
+	var serviceAccountResp AddServiceAccountResp
+	if err = json.Unmarshal(data, &serviceAccountResp); err != nil {
+		return auth.Credentials{}, err
+	}
+	return serviceAccountResp.Credentials, nil
+}
+
+// GetServiceAccount returns the credential of the service account
+func (adm *AdminClient) GetServiceAccount(serviceAccountAccessKey string) (auth.Credentials, error) {
+
+	if !auth.IsAccessKeyValid(serviceAccountAccessKey) {
+		return auth.Credentials{}, auth.ErrInvalidAccessKeyLength
+	}
+
+	queryValues := url.Values{}
+	queryValues.Set("accessKey", serviceAccountAccessKey)
+
+	reqData := requestData{
+		relPath:     adminAPIPrefix + "/get-service-account",
+		queryValues: queryValues,
+	}
+
+	// Execute GET on /minio/admin/v2/get-service-account to set a user.
+	resp, err := adm.executeMethod("GET", reqData)
+	defer closeResponse(resp)
+	if err != nil {
+		return auth.Credentials{}, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return auth.Credentials{}, httpRespToErrorResponse(resp)
+	}
+
+	data, err := DecryptData(adm.secretAccessKey, resp.Body)
+	if err != nil {
+		return auth.Credentials{}, err
+	}
+
+	var creds auth.Credentials
+	if err = json.Unmarshal(data, &creds); err != nil {
+		return auth.Credentials{}, err
+	}
+	return creds, nil
+}

@@ -193,6 +193,9 @@ var (
 
 	globalActiveCred auth.Credentials
 
+	// Hold the old server credentials passed by the environment
+	globalOldCred auth.Credentials
+
 	// Indicates if config is to be encrypted
 	globalConfigEncrypted bool
 
