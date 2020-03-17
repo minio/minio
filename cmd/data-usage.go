@@ -46,6 +46,7 @@ const (
 	dataUsageUpdateDirCycles = 16
 	dataUsageRoot            = SlashSeparator
 	dataUsageBucket          = minioMetaBucket + SlashSeparator + bucketMetaPrefix
+	dataUsageStartDelay      = 5 * time.Minute // Time to wait on startup and between cycles.
 )
 
 // initDataUsageStats will start the crawler unless disabled.
@@ -96,9 +97,8 @@ func runDataUsageInfo(ctx context.Context, objAPI ObjectLayer) {
 		case <-ctx.Done():
 			locker.Unlock()
 			return
-			// Wait 5 minutes before starting.
-			// FIXME: For testing, set to 5 seconds...
-		case <-time.NewTimer(5 * time.Second).C:
+			// Wait before starting next cycle and wait on startup.
+		case <-time.NewTimer(dataUsageStartDelay).C:
 			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
 			err := objAPI.CrawlAndGetDataUsage(ctx, results)
