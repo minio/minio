@@ -34,12 +34,8 @@ func listDirFactory(ctx context.Context, disks ...StorageAPI) ListDirFunc {
 			var newEntries []string
 			var err error
 			entries, err = disk.ListDir(bucket, prefixDir, -1, xlMetaJSONFile)
-			if err != nil {
+			if err != nil || len(entries) == 0 {
 				continue
-			}
-
-			if len(entries) == 0 {
-				return true, nil
 			}
 
 			// Find elements in entries which are not in mergedEntries
@@ -58,6 +54,11 @@ func listDirFactory(ctx context.Context, disks ...StorageAPI) ListDirFunc {
 				sort.Strings(mergedEntries)
 			}
 		}
+
+		if len(mergedEntries) == 0 {
+			return true, nil
+		}
+
 		return false, filterMatchingPrefix(mergedEntries, prefixEntry)
 	}
 	return listDir
