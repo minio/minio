@@ -151,7 +151,7 @@ func TestParseCredentialHeader(t *testing.T) {
 				"ABCD",
 				"ABCD"),
 			expectedCredentials: credentialHeader{},
-			expectedErrCode:     ErrInvalidService,
+			expectedErrCode:     ErrInvalidServiceS3,
 		},
 		// Test Case - 7.
 		// Test case with invalid region.
