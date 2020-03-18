@@ -34,7 +34,7 @@ describe("ShareObjectModal", () => {
     shallow(
       <ShareObjectModal
         object={{ name: "obj1" }}
-        shareObjectDetails={{ show: true, object: "obj1", url: "test" }}
+        shareObjectDetails={{ show: true, object: "obj1", url: "test", showExpiryDate: true }}
       />
     )
   })
@@ -44,7 +44,7 @@ describe("ShareObjectModal", () => {
     const wrapper = shallow(
       <ShareObjectModal
         object={{ name: "obj1" }}
-        shareObjectDetails={{ show: true, object: "obj1", url: "test" }}
+        shareObjectDetails={{ show: true, object: "obj1", url: "test", showExpiryDate: true }}
         hideShareObject={hideShareObject}
       />
     )
@@ -59,7 +59,7 @@ describe("ShareObjectModal", () => {
     const wrapper = shallow(
       <ShareObjectModal
         object={{ name: "obj1" }}
-        shareObjectDetails={{ show: true, object: "obj1", url: "test" }}
+        shareObjectDetails={{ show: true, object: "obj1", url: "test", showExpiryDate: true }}
       />
     )
     expect(
@@ -76,7 +76,7 @@ describe("ShareObjectModal", () => {
     const wrapper = shallow(
       <ShareObjectModal
         object={{ name: "obj1" }}
-        shareObjectDetails={{ show: true, object: "obj1", url: "test" }}
+        shareObjectDetails={{ show: true, object: "obj1", url: "test", showExpiryDate: true }}
         hideShareObject={hideShareObject}
         showCopyAlert={showCopyAlert}
       />
@@ -89,8 +89,15 @@ describe("ShareObjectModal", () => {
   describe("Update expiry values", () => {
     const props = {
       object: { name: "obj1" },
-      shareObjectDetails: { show: true, object: "obj1", url: "test" }
+      shareObjectDetails: { show: true, object: "obj1", url: "test", showExpiryDate: true }
     }
+
+    it("should not show expiry values if shared with public link", () => {
+      const shareObjectDetails = { show: true, object: "obj1", url: "test", showExpiryDate: false }
+      const wrapper = shallow(<ShareObjectModal {...props} shareObjectDetails={shareObjectDetails} />)
+      expect(wrapper.find('.set-expire').exists()).toEqual(false)
+    })
+
     it("should have default expiry values", () => {
       const wrapper = shallow(<ShareObjectModal {...props} />)
       expect(wrapper.state("expiry")).toEqual({

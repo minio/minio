@@ -284,6 +284,7 @@ var (
 func getGlobalInfo() (globalInfo map[string]interface{}) {
 	globalInfo = map[string]interface{}{
 		"serverRegion": globalServerRegion,
+		"domains":      globalDomainNames,
 		// Add more relevant global settings here.
 	}
 

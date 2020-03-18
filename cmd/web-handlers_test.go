@@ -242,6 +242,7 @@ func testServerInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 	if serverInfoReply.MinioVersion != Version {
 		t.Fatalf("Cannot get minio version from server info handler")
 	}
+	serverInfoReply.MinioGlobalInfo["domains"] = []string(nil)
 	globalInfo := getGlobalInfo()
 	if !reflect.DeepEqual(serverInfoReply.MinioGlobalInfo, globalInfo) {
 		t.Fatalf("Global info did not match got %#v, expected %#v", serverInfoReply.MinioGlobalInfo, globalInfo)
