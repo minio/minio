@@ -332,6 +332,7 @@ const (
 	ErrAdminProfilerNotEnabled
 	ErrInvalidDecompressedSize
 	ErrAddUserInvalidArgument
+	ErrAddServiceAccountInvalidArgument
 	ErrPostPolicyConditionInvalidFormat
 )
 
@@ -1573,6 +1574,12 @@ var errorCodes = errorCodeMap{
 		Description:    "User is not allowed to be same as admin access key",
 		HTTPStatusCode: http.StatusConflict,
 	},
+	ErrAddServiceAccountInvalidArgument: {
+		Code:           "XMinioInvalidArgument",
+		Description:    "New service accounts for admin access key is not allowed",
+		HTTPStatusCode: http.StatusConflict,
+	},
+
 	ErrPostPolicyConditionInvalidFormat: {
 		Code:           "PostPolicyInvalidKeyName",
 		Description:    "Invalid according to Policy: Policy Condition failed",

@@ -2981,5 +2981,5 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		return
 	}
 
-	writeSuccessResponseHeadersOnly(w)
+	writeSuccessNoContent(w)
 }

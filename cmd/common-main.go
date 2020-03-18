@@ -22,6 +22,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -226,10 +227,22 @@ func handleCommonEnvVars() {
 		globalConfigEncrypted = true
 	}
 
+	if env.IsSet(config.EnvAccessKeyOld) && env.IsSet(config.EnvSecretKeyOld) {
+		oldCred, err := auth.CreateCredentials(env.Get(config.EnvAccessKeyOld, ""), env.Get(config.EnvSecretKeyOld, ""))
+		if err != nil {
+			logger.Fatal(config.ErrInvalidCredentials(err),
+				"Unable to validate the old credentials inherited from the shell environment")
+		}
+		globalOldCred = oldCred
+		os.Unsetenv(config.EnvAccessKeyOld)
+		os.Unsetenv(config.EnvSecretKeyOld)
+	}
+
 	globalWORMEnabled, err = config.LookupWorm()
 	if err != nil {
 		logger.Fatal(config.ErrInvalidWormValue(err), "Invalid worm configuration")
 	}
+
 }
 
 func logStartupMessage(msg string) {

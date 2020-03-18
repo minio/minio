@@ -326,7 +326,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 		for typ, data := range data {
 			// Send profiling data to zip as file
 			header, zerr := zip.FileInfoHeader(dummyFileInfo{
-				name:    fmt.Sprintf("profiling-%s-%s.pprof", client.host.String(), typ),
+				name:    fmt.Sprintf("profile-%s-%s", client.host.String(), typ),
 				size:    int64(len(data)),
 				mode:    0600,
 				modTime: UTCNow(),

@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/logger"
 	color "github.com/minio/minio/pkg/color"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -249,8 +250,12 @@ func printObjectAPIMsg() {
 // Get formatted disk/storage info message.
 func getStorageInfoMsgSafeMode(storageInfo StorageInfo) string {
 	var msg string
+	var mcMessage string
 	if storageInfo.Backend.Type == BackendErasure {
-		diskInfo := fmt.Sprintf(" %d Online, %d Offline. ", storageInfo.Backend.OnlineDisks.Sum(), storageInfo.Backend.OfflineDisks.Sum())
+		if storageInfo.Backend.OfflineDisks.Sum() > 0 {
+			mcMessage = "Run `mc admin info` to look for server/disk info`"
+		}
+		diskInfo := fmt.Sprintf(" %d Online, %d Offline.%s ", storageInfo.Backend.OnlineDisks.Sum(), storageInfo.Backend.OfflineDisks.Sum(), mcMessage)
 		msg += color.Red("Status:") + fmt.Sprintf(getFormatStr(len(diskInfo), 8), diskInfo)
 	}
 	return msg
@@ -259,8 +264,12 @@ func getStorageInfoMsgSafeMode(storageInfo StorageInfo) string {
 // Get formatted disk/storage info message.
 func getStorageInfoMsg(storageInfo StorageInfo) string {
 	var msg string
+	var mcMessage string
 	if storageInfo.Backend.Type == BackendErasure {
-		diskInfo := fmt.Sprintf(" %d Online, %d Offline. ", storageInfo.Backend.OnlineDisks.Sum(), storageInfo.Backend.OfflineDisks.Sum())
+		if storageInfo.Backend.OfflineDisks.Sum() > 0 {
+			mcMessage = "Use `mc admin info` to look for server/disk info"
+		}
+		diskInfo := fmt.Sprintf(" %d Online, %d Offline.%s ", storageInfo.Backend.OnlineDisks.Sum(), storageInfo.Backend.OfflineDisks.Sum(), mcMessage)
 		msg += color.Blue("Status:") + fmt.Sprintf(getFormatStr(len(diskInfo), 8), diskInfo)
 	}
 	return msg
@@ -269,6 +278,9 @@ func getStorageInfoMsg(storageInfo StorageInfo) string {
 // Prints startup message of storage capacity and erasure information.
 func printStorageInfo(storageInfo StorageInfo) {
 	if msg := getStorageInfoMsg(storageInfo); msg != "" {
+		if globalCLIContext.Quiet {
+			logger.Info(msg)
+		}
 		logStartupMessage(msg)
 	}
 }
