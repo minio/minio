@@ -338,8 +338,8 @@ func (s *posix) waitForLowActiveIO() {
 	}
 }
 
-func (s *posix) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, error) {
-	dataUsageInfo := updateUsage(s.diskPath, endCh, s.waitForLowActiveIO, func(item Item) (int64, error) {
+func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
+	dataUsageInfo, err := updateUsage(ctx, s.diskPath, cache, s.waitForLowActiveIO, func(item Item) (int64, error) {
 		// Look for `xl.json' at the leaf.
 		if !strings.HasSuffix(item.Path, SlashSeparator+xlMetaJSONFile) {
 			// if no xl.json found, skip the file.
@@ -353,14 +353,20 @@ func (s *posix) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, erro
 
 		meta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaBuf)
 		if err != nil {
-			return 0, errSkipFile
+			return 0, nil
 		}
 
 		return meta.Stat.Size, nil
 	})
-
-	dataUsageInfo.LastUpdate = UTCNow()
-	atomic.StoreUint64(&s.totalUsed, dataUsageInfo.ObjectsTotalSize)
+	if err != nil {
+		return dataUsageInfo, err
+	}
+	dataUsageInfo.Info.LastUpdate = time.Now()
+	total := dataUsageInfo.sizeRecursive(dataUsageInfo.Info.Name)
+	if total == nil {
+		total = &dataUsageEntry{}
+	}
+	atomic.StoreUint64(&s.totalUsed, uint64(total.Size))
 	return dataUsageInfo, nil
 }
 
