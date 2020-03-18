@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2017-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -308,9 +308,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// Print gateway startup message.
 		printGatewayStartupMessage(getAPIEndpoints(), gatewayName)
 	}
-
-	// Set uptime time after object layer has initialized.
-	globalBootTime = UTCNow()
 
 	handleSignals()
 }

@@ -58,6 +58,9 @@ const (
 	expClaim = "exp"
 	subClaim = "sub"
 
+	// JWT claim to check the parent user
+	parentClaim = "parent"
+
 	// LDAP claim keys
 	ldapUser   = "ldapUser"
 	ldapGroups = "ldapGroups"

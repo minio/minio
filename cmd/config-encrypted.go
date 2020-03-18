@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"unicode/utf8"
 
@@ -29,7 +28,6 @@ import (
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -88,11 +86,6 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 		}
 	}
 
-	activeCredOld, err := getOldCreds()
-	if err != nil {
-		return err
-	}
-
 	doneCh = make(chan struct{})
 	defer close(doneCh)
 
@@ -106,7 +99,7 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 		select {
 		case <-retryTimerCh:
 			// Migrate IAM configuration
-			if err = migrateConfigPrefixToEncrypted(objAPI, activeCredOld, encrypted); err != nil {
+			if err = migrateConfigPrefixToEncrypted(objAPI, globalOldCred, encrypted); err != nil {
 				if err == errDiskNotFound ||
 					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
 					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
@@ -164,21 +157,6 @@ func decryptData(edata []byte, creds ...auth.Credentials) ([]byte, error) {
 	return data, err
 }
 
-func getOldCreds() (activeCredOld auth.Credentials, err error) {
-	accessKeyOld := env.Get(config.EnvAccessKeyOld, "")
-	secretKeyOld := env.Get(config.EnvSecretKeyOld, "")
-	if accessKeyOld != "" && secretKeyOld != "" {
-		activeCredOld, err = auth.CreateCredentials(accessKeyOld, secretKeyOld)
-		if err != nil {
-			return activeCredOld, err
-		}
-		// Once we have obtained the rotating creds
-		os.Unsetenv(config.EnvAccessKeyOld)
-		os.Unsetenv(config.EnvSecretKeyOld)
-	}
-	return activeCredOld, nil
-}
-
 func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 	defer cancel()
@@ -206,20 +184,15 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 		}
 	}
 
-	activeCredOld, err := getOldCreds()
-	if err != nil {
-		return err
-	}
-
 	if encrypted {
 		// No key rotation requested, and backend is
 		// already encrypted. We proceed without migration.
-		if !activeCredOld.IsValid() {
+		if !globalOldCred.IsValid() {
 			return nil
 		}
 
 		// No real reason to rotate if old and new creds are same.
-		if activeCredOld.Equal(globalActiveCred) {
+		if globalOldCred.Equal(globalActiveCred) {
 			return nil
 		}
 
@@ -254,8 +227,8 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 
 		var data []byte
 		// Is rotating of creds requested?
-		if activeCredOld.IsValid() {
-			data, err = decryptData(cdata, activeCredOld, globalActiveCred)
+		if globalOldCred.IsValid() {
+			data, err = decryptData(cdata, globalOldCred, globalActiveCred)
 			if err != nil {
 				if err == madmin.ErrMaliciousData {
 					return config.ErrInvalidRotatingCredentialsBackendEncrypted(nil)
@@ -285,7 +258,7 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 		}
 	}
 
-	if encrypted && globalActiveCred.IsValid() && activeCredOld.IsValid() {
+	if encrypted && globalActiveCred.IsValid() && globalOldCred.IsValid() {
 		logger.Info("Rotation complete, please make sure to unset MINIO_ACCESS_KEY_OLD and MINIO_SECRET_KEY_OLD envs")
 	}
 
