@@ -1593,8 +1593,8 @@ func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove b
 }
 
 // HealObject - heals inconsistent object on a hashedSet based on object name.
-func (s *xlSets) HealObject(ctx context.Context, bucket, object string, dryRun, remove bool, scanMode madmin.HealScanMode) (madmin.HealResultItem, error) {
-	return s.getHashedSet(object).HealObject(ctx, bucket, object, dryRun, remove, scanMode)
+func (s *xlSets) HealObject(ctx context.Context, bucket, object string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
+	return s.getHashedSet(object).HealObject(ctx, bucket, object, opts)
 }
 
 // Lists all buckets which need healing.
@@ -1655,7 +1655,7 @@ func (s *xlSets) Walk(ctx context.Context, bucket, prefix string, results chan<-
 
 // HealObjects - Heal all objects recursively at a specified prefix, any
 // dangling objects deleted as well automatically.
-func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObject healObjectFn) error {
+func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObject healObjectFn) error {
 	endWalkCh := make(chan struct{})
 	defer close(endWalkCh)
 
@@ -1669,7 +1669,7 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, healObj
 			break
 		}
 
-		if quorumCount == s.drivesPerSet {
+		if quorumCount == s.drivesPerSet && opts.ScanMode == madmin.HealNormalScan {
 			// Skip good entries.
 			continue
 		}

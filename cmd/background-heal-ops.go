@@ -186,5 +186,5 @@ func bgHealObject(ctx context.Context, bucket, object string, opts madmin.HealOp
 	if objectAPI == nil {
 		return madmin.HealResultItem{}, errServerNotInitialized
 	}
-	return objectAPI.HealObject(ctx, bucket, object, opts.DryRun, opts.Remove, opts.ScanMode)
+	return objectAPI.HealObject(ctx, bucket, object, opts)
 }
