@@ -29,7 +29,6 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -114,7 +113,7 @@ func (d *dataUsageCache) find(path string) *dataUsageEntry {
 func (d *dataUsageCache) dui(path string, buckets []BucketInfo) DataUsageInfo {
 	e := d.find(path)
 	if e == nil {
-		return DataUsageInfo{LastUpdate: time.Now()}
+		return DataUsageInfo{LastUpdate: UTCNow()}
 	}
 	flat := d.flatten(*e)
 	return DataUsageInfo{
@@ -213,9 +212,6 @@ func (d *dataUsageCache) pathSizes(buckets []BucketInfo) map[string]uint64 {
 	for _, bucket := range buckets {
 		e := d.find(bucket.Name)
 		if e == nil {
-			if dataUsageDebug {
-				logger.Info(color.Green("data-usage:")+" Bucket not found in cache: %v", bucket.Name)
-			}
 			continue
 		}
 		flat := d.flatten(*e)
