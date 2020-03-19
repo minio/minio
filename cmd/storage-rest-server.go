@@ -444,14 +444,16 @@ func (s *storageRESTServer) WalkHandler(w http.ResponseWriter, r *http.Request) 
 	}
 	leafFile := vars[storageRESTLeafFile]
 
-	fch, err := s.storage.Walk(volume, dirPath, markerPath, recursive, leafFile, readMetadata, r.Context().Done())
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
 	encoder := gob.NewEncoder(w)
+	done := keepHTTPResponseAlive(w)
+	defer done()
+
+	fch, err := s.storage.Walk(volume, dirPath, markerPath, recursive, leafFile, readMetadata, r.Context().Done())
+	if err != nil {
+		logger.LogIf(r.Context(), err)
+		return
+	}
 	for fi := range fch {
 		encoder.Encode(&fi)
 	}
@@ -472,6 +474,7 @@ func (s *storageRESTServer) ListDirHandler(w http.ResponseWriter, r *http.Reques
 		s.writeErrorResponse(w, err)
 		return
 	}
+
 	entries, err := s.storage.ListDir(volume, dirPath, count, leafFile)
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -521,20 +524,21 @@ func (s *storageRESTServer) DeleteFileBulkHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	dErrsResp := &DeleteFileBulkErrsResp{Errs: make([]error, len(filePaths))}
+
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
 	encoder := gob.NewEncoder(w)
 	done := keepHTTPResponseAlive(w)
 	errs, err := s.storage.DeleteFileBulk(volume, filePaths)
 	done()
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
 
-	dErrsResp := &DeleteFileBulkErrsResp{Errs: make([]error, len(errs))}
-	for idx, err := range errs {
+	for idx := range filePaths {
 		if err != nil {
 			dErrsResp.Errs[idx] = StorageErr(err.Error())
+		} else {
+			if errs[idx] != nil {
+				dErrsResp.Errs[idx] = StorageErr(errs[idx].Error())
+			}
 		}
 	}
 
@@ -567,20 +571,20 @@ func (s *storageRESTServer) DeletePrefixesHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	dErrsResp := &DeletePrefixesErrsResp{Errs: make([]error, len(prefixes))}
+
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
 	encoder := gob.NewEncoder(w)
 	done := keepHTTPResponseAlive(w)
 	errs, err := s.storage.DeletePrefixes(volume, prefixes)
 	done()
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	dErrsResp := &DeletePrefixesErrsResp{Errs: make([]error, len(errs))}
-	for idx, err := range errs {
+	for idx := range prefixes {
 		if err != nil {
 			dErrsResp.Errs[idx] = StorageErr(err.Error())
+		} else {
+			if errs[idx] != nil {
+				dErrsResp.Errs[idx] = StorageErr(errs[idx].Error())
+			}
 		}
 	}
 	encoder.Encode(dErrsResp)

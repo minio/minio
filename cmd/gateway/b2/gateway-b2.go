@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2017-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,7 +102,7 @@ func (g *B2) Name() string {
 // talk to B2 remote backend.
 func (g *B2) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	ctx := context.Background()
-	client, err := b2.AuthorizeAccount(ctx, creds.AccessKey, creds.SecretKey, b2.Transport(minio.NewCustomHTTPTransport()))
+	client, err := b2.AuthorizeAccount(ctx, creds.AccessKey, creds.SecretKey, b2.Transport(minio.NewGatewayHTTPTransport()))
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func (g *B2) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 		creds:    creds,
 		b2Client: client,
 		httpClient: &http.Client{
-			Transport: minio.NewCustomHTTPTransport(),
+			Transport: minio.NewGatewayHTTPTransport(),
 		},
 		ctx: ctx,
 	}, nil
@@ -238,7 +238,7 @@ func (l *b2Objects) MakeBucketWithLocation(ctx context.Context, bucket, location
 }
 
 func (l *b2Objects) reAuthorizeAccount(ctx context.Context) error {
-	client, err := b2.AuthorizeAccount(l.ctx, l.creds.AccessKey, l.creds.SecretKey, b2.Transport(minio.NewCustomHTTPTransport()))
+	client, err := b2.AuthorizeAccount(l.ctx, l.creds.AccessKey, l.creds.SecretKey, b2.Transport(minio.NewGatewayHTTPTransport()))
 	if err != nil {
 		return err
 	}

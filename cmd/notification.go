@@ -784,6 +784,9 @@ func (sys *NotificationSys) RemoveNotification(bucketName string) {
 
 // RemoveAllRemoteTargets - closes and removes all HTTP/PeerRPC client targets.
 func (sys *NotificationSys) RemoveAllRemoteTargets() {
+	sys.Lock()
+	defer sys.Unlock()
+
 	for _, targetMap := range sys.bucketRemoteTargetRulesMap {
 		for targetID := range targetMap {
 			sys.targetList.Remove(targetID)

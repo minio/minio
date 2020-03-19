@@ -2050,7 +2050,7 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 	}
 
 	clnt := &http.Client{
-		Transport: NewCustomHTTPTransport(),
+		Transport: NewGatewayHTTPTransport(),
 	}
 
 	resp, err := clnt.Do(req)
@@ -2059,6 +2059,7 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 		return toJSONError(ctx, err)
 	}
 	defer xhttp.DrainBody(resp.Body)
+
 	if resp.StatusCode != http.StatusOK {
 		return toJSONError(ctx, errors.New(resp.Status))
 	}

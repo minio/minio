@@ -657,7 +657,7 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 	if err != nil {
 		return nil, err
 	}
-	core.SetCustomTransport(NewCustomHTTPTransport())
+	core.SetCustomTransport(NewGatewayHTTPTransport())
 	return core, nil
 }
 
