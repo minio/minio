@@ -828,7 +828,7 @@ func ecDrivesNoConfig(drivesPerSet int) int {
 // Make XL backend meta volumes.
 func makeFormatXLMetaVolumes(disk StorageAPI) error {
 	// Attempt to create MinIO internal buckets.
-	return disk.MakeVolBulk(minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, minioMetaBackgroundOpsBucket)
+	return disk.MakeVolBulk(minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, dataUsageBucket)
 }
 
 var initMetaVolIgnoredErrs = append(baseIgnoredErrs, errVolumeExists)

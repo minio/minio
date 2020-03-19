@@ -110,6 +110,10 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		adminRouter.Methods(http.MethodPut).Path(adminAPIVersionPrefix+"/set-user-status").HandlerFunc(httpTraceHdrs(adminAPI.SetUserStatus)).
 			Queries("accessKey", "{accessKey:.*}").Queries("status", "{status:.*}")
 
+		// Service accounts ops
+		adminRouter.Methods(http.MethodPut).Path(adminAPIVersionPrefix + "/add-service-account").HandlerFunc(httpTraceHdrs(adminAPI.AddServiceAccount))
+		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix+"/get-service-account").HandlerFunc(httpTraceHdrs(adminAPI.GetServiceAccount)).Queries("accessKey", "{accessKey:.*}")
+
 		// Info policy IAM
 		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix+"/info-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.InfoCannedPolicy)).Queries("name", "{name:.*}")
 

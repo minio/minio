@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	jwtgo "github.com/dgrijalva/jwt-go"
+
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
@@ -116,7 +118,11 @@ func (iamOS *IAMObjectStore) migrateUsersConfigToV1(isSTS bool) error {
 
 			// 2. copy policy file to new location.
 			mp := newMappedPolicy(policyName)
-			if err := iamOS.saveMappedPolicy(user, isSTS, false, mp); err != nil {
+			userType := regularUser
+			if isSTS {
+				userType = stsUser
+			}
+			if err := iamOS.saveMappedPolicy(user, userType, false, mp); err != nil {
 				return err
 			}
 
@@ -289,14 +295,14 @@ func (iamOS *IAMObjectStore) loadPolicyDocs(m map[string]iampolicy.Policy) error
 	return nil
 }
 
-func (iamOS *IAMObjectStore) loadUser(user string, isSTS bool, m map[string]auth.Credentials) error {
+func (iamOS *IAMObjectStore) loadUser(user string, userType IAMUserType, m map[string]auth.Credentials) error {
 	objectAPI := iamOS.getObjectAPI()
 	if objectAPI == nil {
 		return errServerNotInitialized
 	}
 
 	var u UserIdentity
-	err := iamOS.loadIAMConfig(&u, getUserIdentityPath(user, isSTS))
+	err := iamOS.loadIAMConfig(&u, getUserIdentityPath(user, userType))
 	if err != nil {
 		if err == errConfigNotFound {
 			return errNoSuchUser
@@ -306,9 +312,29 @@ func (iamOS *IAMObjectStore) loadUser(user string, isSTS bool, m map[string]auth
 
 	if u.Credentials.IsExpired() {
 		// Delete expired identity - ignoring errors here.
-		iamOS.deleteIAMConfig(getUserIdentityPath(user, isSTS))
-		iamOS.deleteIAMConfig(getMappedPolicyPath(user, isSTS, false))
+		iamOS.deleteIAMConfig(getUserIdentityPath(user, userType))
+		iamOS.deleteIAMConfig(getMappedPolicyPath(user, userType, false))
 		return nil
+	}
+
+	// If this is a service account, rotate the session key if needed
+	if globalOldCred.IsValid() && u.Credentials.IsServiceAccount() {
+		if !globalOldCred.Equal(globalActiveCred) {
+			m := jwtgo.MapClaims{}
+			stsTokenCallback := func(t *jwtgo.Token) (interface{}, error) {
+				return []byte(globalOldCred.SecretKey), nil
+			}
+			if _, err := jwtgo.ParseWithClaims(u.Credentials.SessionToken, m, stsTokenCallback); err == nil {
+				jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.MapClaims(m))
+				if token, err := jwt.SignedString([]byte(globalActiveCred.SecretKey)); err == nil {
+					u.Credentials.SessionToken = token
+					err := iamOS.saveIAMConfig(&u, getUserIdentityPath(user, userType))
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
 	}
 
 	if u.Credentials.AccessKey == "" {
@@ -318,7 +344,7 @@ func (iamOS *IAMObjectStore) loadUser(user string, isSTS bool, m map[string]auth
 	return nil
 }
 
-func (iamOS *IAMObjectStore) loadUsers(isSTS bool, m map[string]auth.Credentials) error {
+func (iamOS *IAMObjectStore) loadUsers(userType IAMUserType, m map[string]auth.Credentials) error {
 	objectAPI := iamOS.getObjectAPI()
 	if objectAPI == nil {
 		return errServerNotInitialized
@@ -326,17 +352,24 @@ func (iamOS *IAMObjectStore) loadUsers(isSTS bool, m map[string]auth.Credentials
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)
-	basePrefix := iamConfigUsersPrefix
-	if isSTS {
+
+	var basePrefix string
+	switch userType {
+	case srvAccUser:
+		basePrefix = iamConfigServiceAccountsPrefix
+	case stsUser:
 		basePrefix = iamConfigSTSPrefix
+	default:
+		basePrefix = iamConfigUsersPrefix
 	}
+
 	for item := range listIAMConfigItems(objectAPI, basePrefix, true, doneCh) {
 		if item.Err != nil {
 			return item.Err
 		}
 
 		userName := item.Item
-		err := iamOS.loadUser(userName, isSTS, m)
+		err := iamOS.loadUser(userName, userType, m)
 		if err != nil {
 			return err
 		}
@@ -384,7 +417,7 @@ func (iamOS *IAMObjectStore) loadGroups(m map[string]GroupInfo) error {
 	return nil
 }
 
-func (iamOS *IAMObjectStore) loadMappedPolicy(name string, isSTS, isGroup bool,
+func (iamOS *IAMObjectStore) loadMappedPolicy(name string, userType IAMUserType, isGroup bool,
 	m map[string]MappedPolicy) error {
 
 	objectAPI := iamOS.getObjectAPI()
@@ -393,7 +426,7 @@ func (iamOS *IAMObjectStore) loadMappedPolicy(name string, isSTS, isGroup bool,
 	}
 
 	var p MappedPolicy
-	err := iamOS.loadIAMConfig(&p, getMappedPolicyPath(name, isSTS, isGroup))
+	err := iamOS.loadIAMConfig(&p, getMappedPolicyPath(name, userType, isGroup))
 	if err != nil {
 		if err == errConfigNotFound {
 			return errNoSuchPolicy
@@ -404,7 +437,7 @@ func (iamOS *IAMObjectStore) loadMappedPolicy(name string, isSTS, isGroup bool,
 	return nil
 }
 
-func (iamOS *IAMObjectStore) loadMappedPolicies(isSTS, isGroup bool, m map[string]MappedPolicy) error {
+func (iamOS *IAMObjectStore) loadMappedPolicies(userType IAMUserType, isGroup bool, m map[string]MappedPolicy) error {
 	objectAPI := iamOS.getObjectAPI()
 	if objectAPI == nil {
 		return errServerNotInitialized
@@ -413,13 +446,17 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(isSTS, isGroup bool, m map[strin
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 	var basePath string
-	switch {
-	case isSTS:
-		basePath = iamConfigPolicyDBSTSUsersPrefix
-	case isGroup:
+	if isGroup {
 		basePath = iamConfigPolicyDBGroupsPrefix
-	default:
-		basePath = iamConfigPolicyDBUsersPrefix
+	} else {
+		switch userType {
+		case srvAccUser:
+			basePath = iamConfigPolicyDBServiceAccountsPrefix
+		case stsUser:
+			basePath = iamConfigPolicyDBSTSUsersPrefix
+		default:
+			basePath = iamConfigPolicyDBUsersPrefix
+		}
 	}
 	for item := range listIAMConfigItems(objectAPI, basePath, false, doneCh) {
 		if item.Err != nil {
@@ -428,7 +465,7 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(isSTS, isGroup bool, m map[strin
 
 		policyFile := item.Item
 		userOrGroupName := strings.TrimSuffix(policyFile, ".json")
-		err := iamOS.loadMappedPolicy(userOrGroupName, isSTS, isGroup, m)
+		err := iamOS.loadMappedPolicy(userOrGroupName, userType, isGroup, m)
 		if err != nil {
 			return err
 		}
@@ -466,27 +503,30 @@ func (iamOS *IAMObjectStore) loadAll(sys *IAMSys, objectAPI ObjectLayer) error {
 		return err
 	}
 	// load STS temp users
-	if err := iamOS.loadUsers(true, iamUsersMap); err != nil {
+	if err := iamOS.loadUsers(stsUser, iamUsersMap); err != nil {
 		return err
 	}
 	if isMinIOUsersSys {
-		if err := iamOS.loadUsers(false, iamUsersMap); err != nil {
+		if err := iamOS.loadUsers(regularUser, iamUsersMap); err != nil {
+			return err
+		}
+		if err := iamOS.loadUsers(srvAccUser, iamUsersMap); err != nil {
 			return err
 		}
 		if err := iamOS.loadGroups(iamGroupsMap); err != nil {
 			return err
 		}
 
-		if err := iamOS.loadMappedPolicies(false, false, iamUserPolicyMap); err != nil {
+		if err := iamOS.loadMappedPolicies(regularUser, false, iamUserPolicyMap); err != nil {
 			return err
 		}
 	}
 	// load STS policy mappings
-	if err := iamOS.loadMappedPolicies(true, false, iamUserPolicyMap); err != nil {
+	if err := iamOS.loadMappedPolicies(stsUser, false, iamUserPolicyMap); err != nil {
 		return err
 	}
 	// load policies mapped to groups
-	if err := iamOS.loadMappedPolicies(false, true, iamGroupPolicyMap); err != nil {
+	if err := iamOS.loadMappedPolicies(regularUser, true, iamGroupPolicyMap); err != nil {
 		return err
 	}
 
@@ -510,12 +550,12 @@ func (iamOS *IAMObjectStore) savePolicyDoc(policyName string, p iampolicy.Policy
 	return iamOS.saveIAMConfig(&p, getPolicyDocPath(policyName))
 }
 
-func (iamOS *IAMObjectStore) saveMappedPolicy(name string, isSTS, isGroup bool, mp MappedPolicy) error {
-	return iamOS.saveIAMConfig(mp, getMappedPolicyPath(name, isSTS, isGroup))
+func (iamOS *IAMObjectStore) saveMappedPolicy(name string, userType IAMUserType, isGroup bool, mp MappedPolicy) error {
+	return iamOS.saveIAMConfig(mp, getMappedPolicyPath(name, userType, isGroup))
 }
 
-func (iamOS *IAMObjectStore) saveUserIdentity(name string, isSTS bool, u UserIdentity) error {
-	return iamOS.saveIAMConfig(u, getUserIdentityPath(name, isSTS))
+func (iamOS *IAMObjectStore) saveUserIdentity(name string, userType IAMUserType, u UserIdentity) error {
+	return iamOS.saveIAMConfig(u, getUserIdentityPath(name, userType))
 }
 
 func (iamOS *IAMObjectStore) saveGroupInfo(name string, gi GroupInfo) error {
@@ -530,16 +570,16 @@ func (iamOS *IAMObjectStore) deletePolicyDoc(name string) error {
 	return err
 }
 
-func (iamOS *IAMObjectStore) deleteMappedPolicy(name string, isSTS, isGroup bool) error {
-	err := iamOS.deleteIAMConfig(getMappedPolicyPath(name, isSTS, isGroup))
+func (iamOS *IAMObjectStore) deleteMappedPolicy(name string, userType IAMUserType, isGroup bool) error {
+	err := iamOS.deleteIAMConfig(getMappedPolicyPath(name, userType, isGroup))
 	if err == errConfigNotFound {
 		err = errNoSuchPolicy
 	}
 	return err
 }
 
-func (iamOS *IAMObjectStore) deleteUserIdentity(name string, isSTS bool) error {
-	err := iamOS.deleteIAMConfig(getUserIdentityPath(name, isSTS))
+func (iamOS *IAMObjectStore) deleteUserIdentity(name string, userType IAMUserType) error {
+	err := iamOS.deleteIAMConfig(getUserIdentityPath(name, userType))
 	if err == errConfigNotFound {
 		err = errNoSuchUser
 	}
@@ -624,14 +664,15 @@ func listIAMConfigItems(objectAPI ObjectLayer, pathPrefix string, dirs bool,
 }
 
 func (iamOS *IAMObjectStore) watch(sys *IAMSys) {
+	ctx := GlobalContext
 	watchDisk := func() {
 		for {
 			select {
-			case <-GlobalServiceDoneCh:
+			case <-ctx.Done():
 				return
 			case <-time.NewTimer(globalRefreshIAMInterval).C:
 				err := iamOS.loadAll(sys, nil)
-				logger.LogIf(context.Background(), err)
+				logger.LogIf(ctx, err)
 			}
 		}
 	}

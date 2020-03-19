@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -31,6 +32,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -215,44 +217,111 @@ func (z *xlZones) StorageInfo(ctx context.Context, local bool) StorageInfo {
 	return storageInfo
 }
 
-func (z *xlZones) CrawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
-	var aggDataUsageInfo = struct {
-		sync.Mutex
-		DataUsageInfo
-	}{}
-
-	aggDataUsageInfo.ObjectsSizesHistogram = make(map[string]uint64)
-	aggDataUsageInfo.BucketsSizes = make(map[string]uint64)
-
+func (z *xlZones) CrawlAndGetDataUsage(ctx context.Context, updates chan<- DataUsageInfo) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var results []dataUsageCache
+	var firstErr error
+	var knownBuckets = make(map[string]struct{}) // used to deduplicate buckets.
+	var allBuckets []BucketInfo
+
+	t := time.Now()
+	if dataUsageDebug {
+		logger.Info(color.Green("xlZones.CrawlAndGetDataUsage:") + " Start crawl cycle")
+	}
+	// Collect for each set in zones.
 	for _, z := range z.zones {
 		for _, xlObj := range z.sets {
+			// Add new buckets.
+			buckets, err := xlObj.ListBuckets(ctx)
+			if err != nil {
+				return err
+			}
+			for _, b := range buckets {
+				if _, ok := knownBuckets[b.Name]; ok {
+					continue
+				}
+				allBuckets = append(allBuckets, b)
+				knownBuckets[b.Name] = struct{}{}
+			}
 			wg.Add(1)
-			go func(xl *xlObjects) {
-				defer wg.Done()
-				info := xl.CrawlAndGetDataUsage(ctx, endCh)
-
-				aggDataUsageInfo.Lock()
-				aggDataUsageInfo.ObjectsCount += info.ObjectsCount
-				aggDataUsageInfo.ObjectsTotalSize += info.ObjectsTotalSize
-				if aggDataUsageInfo.BucketsCount < info.BucketsCount {
-					aggDataUsageInfo.BucketsCount = info.BucketsCount
+			results = append(results, dataUsageCache{})
+			go func(i int, xl *xlObjects) {
+				updates := make(chan dataUsageCache, 1)
+				defer close(updates)
+				// Start update collector.
+				go func() {
+					defer wg.Done()
+					for info := range updates {
+						mu.Lock()
+						results[i] = info
+						mu.Unlock()
+					}
+				}()
+				// Start crawler. Blocks until done.
+				err := xl.crawlAndGetDataUsage(ctx, buckets, updates)
+				if err != nil {
+					mu.Lock()
+					if firstErr == nil {
+						firstErr = err
+					}
+					// Cancel remaining...
+					cancel()
+					mu.Unlock()
+					return
 				}
-				for k, v := range info.ObjectsSizesHistogram {
-					aggDataUsageInfo.ObjectsSizesHistogram[k] += v
-				}
-				for k, v := range info.BucketsSizes {
-					aggDataUsageInfo.BucketsSizes[k] += v
-				}
-				aggDataUsageInfo.Unlock()
-
-			}(xlObj)
+			}(len(results)-1, xlObj)
 		}
 	}
-	wg.Wait()
+	updateCloser := make(chan chan struct{})
+	go func() {
+		updateTicker := time.NewTicker(30 * time.Second)
+		defer updateTicker.Stop()
+		var lastUpdate time.Time
+		update := func() {
+			mu.Lock()
+			defer mu.Unlock()
 
-	aggDataUsageInfo.LastUpdate = UTCNow()
-	return aggDataUsageInfo.DataUsageInfo
+			// We need to merge since we will get the same buckets from each zone.
+			// Therefore to get the exact bucket sizes we must merge before we can convert.
+			allMerged := dataUsageCache{Info: dataUsageCacheInfo{Name: dataUsageRoot}}
+			for _, info := range results {
+				if info.Info.LastUpdate.IsZero() {
+					// Not filled yet.
+					return
+				}
+				allMerged.merge(info)
+			}
+			if allMerged.root() != nil && allMerged.Info.LastUpdate.After(lastUpdate) {
+				updates <- allMerged.dui(allMerged.Info.Name, allBuckets)
+				lastUpdate = allMerged.Info.LastUpdate
+			}
+		}
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case v := <-updateCloser:
+				update()
+				close(v)
+				return
+			case <-updateTicker.C:
+				update()
+			}
+		}
+	}()
+
+	wg.Wait()
+	if dataUsageDebug {
+		logger.Info(color.Green("xlZones.CrawlAndGetDataUsage:")+" Cycle scan time: %v", time.Since(t))
+	}
+	ch := make(chan struct{})
+	updateCloser <- ch
+	<-ch
+
+	return firstErr
 }
 
 // This function is used to undo a successful MakeBucket operation.
@@ -1325,11 +1394,11 @@ func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, results chan<
 				return
 			}
 
-			if quorumCount != zoneDrivesPerSet[zoneIndex] {
-				continue
+			if quorumCount >= zoneDrivesPerSet[zoneIndex]/2 {
+				results <- entry.ToObjectInfo() // Read quorum exists proceed
 			}
 
-			results <- entry.ToObjectInfo()
+			// skip entries which do not have quorum
 		}
 	}()
 
@@ -1338,7 +1407,7 @@ func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, results chan<
 
 type healObjectFn func(string, string) error
 
-func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healObject healObjectFn) error {
+func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObject healObjectFn) error {
 	var zonesEntryChs [][]FileInfoCh
 
 	endWalkCh := make(chan struct{})
@@ -1367,7 +1436,7 @@ func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healOb
 			break
 		}
 
-		if quorumCount == zoneDrivesPerSet[zoneIndex] {
+		if quorumCount == zoneDrivesPerSet[zoneIndex] && opts.ScanMode == madmin.HealNormalScan {
 			// Skip good entries.
 			continue
 		}
@@ -1383,7 +1452,7 @@ func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healOb
 	return nil
 }
 
-func (z *xlZones) HealObject(ctx context.Context, bucket, object string, dryRun, remove bool, scanMode madmin.HealScanMode) (madmin.HealResultItem, error) {
+func (z *xlZones) HealObject(ctx context.Context, bucket, object string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	// Lock the object before healing. Use read lock since healing
 	// will only regenerate parts & xl.json of outdated disks.
 	objectLock := z.NewNSLock(ctx, bucket, object)
@@ -1393,10 +1462,10 @@ func (z *xlZones) HealObject(ctx context.Context, bucket, object string, dryRun,
 	defer objectLock.RUnlock()
 
 	if z.SingleZone() {
-		return z.zones[0].HealObject(ctx, bucket, object, dryRun, remove, scanMode)
+		return z.zones[0].HealObject(ctx, bucket, object, opts)
 	}
 	for _, zone := range z.zones {
-		result, err := zone.HealObject(ctx, bucket, object, dryRun, remove, scanMode)
+		result, err := zone.HealObject(ctx, bucket, object, opts)
 		if err != nil {
 			if isErrObjectNotFound(err) {
 				continue

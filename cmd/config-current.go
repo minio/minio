@@ -26,7 +26,6 @@ import (
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
 	"github.com/minio/minio/cmd/config/etcd"
-	xetcd "github.com/minio/minio/cmd/config/etcd"
 	"github.com/minio/minio/cmd/config/etcd/dns"
 	xldap "github.com/minio/minio/cmd/config/identity/ldap"
 	"github.com/minio/minio/cmd/config/identity/openid"
@@ -304,13 +303,13 @@ func lookupConfigs(s config.Config) {
 		}
 	}
 
-	etcdCfg, err := xetcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
+	etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
 	}
 
 	if etcdCfg.Enabled {
-		globalEtcdClient, err = xetcd.New(etcdCfg)
+		globalEtcdClient, err = etcd.New(etcdCfg)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
 		}

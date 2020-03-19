@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
-	jwtgo "github.com/dgrijalva/jwt-go"
 )
 
 var (
@@ -49,7 +48,7 @@ var jwtTestData = []struct {
 		"",
 		defaultKeyFunc,
 		&MapClaims{
-			MapClaims: jwtgo.MapClaims{
+			MapClaims: jwt.MapClaims{
 				"foo": "bar",
 			},
 		},
@@ -61,7 +60,7 @@ var jwtTestData = []struct {
 		"", // autogen
 		defaultKeyFunc,
 		&MapClaims{
-			MapClaims: jwtgo.MapClaims{
+			MapClaims: jwt.MapClaims{
 				"foo": "bar",
 				"exp": float64(time.Now().Unix() - 100),
 			},
@@ -74,7 +73,7 @@ var jwtTestData = []struct {
 		"", // autogen
 		defaultKeyFunc,
 		&MapClaims{
-			MapClaims: jwtgo.MapClaims{
+			MapClaims: jwt.MapClaims{
 				"foo": "bar",
 				"nbf": float64(time.Now().Unix() + 100),
 			},
@@ -87,7 +86,7 @@ var jwtTestData = []struct {
 		"", // autogen
 		defaultKeyFunc,
 		&MapClaims{
-			MapClaims: jwtgo.MapClaims{
+			MapClaims: jwt.MapClaims{
 				"foo": "bar",
 				"nbf": float64(time.Now().Unix() + 100),
 				"exp": float64(time.Now().Unix() - 100),
@@ -101,7 +100,7 @@ var jwtTestData = []struct {
 		"eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJmb28iOiJiYXIifQ.EhkiHkoESI_cG3NPigFrxEk9Z60_oXrOT2vGm9Pn6RDgYNovYORQmmA0zs1AoAOf09ly2Nx2YAg6ABqAYga1AcMFkJljwxTT5fYphTuqpWdy4BELeSYJx5Ty2gmr8e7RonuUztrdD5WfPqLKMm1Ozp_T6zALpRmwTIW0QPnaBXaQD90FplAg46Iy1UlDKr-Eupy0i5SLch5Q-p2ZpaL_5fnTIUDlxC3pWhJTyx_71qDI-mAA_5lE_VdroOeflG56sSmDxopPEG3bFlSu1eowyBfxtu0_CuVd-M42RU75Zc4Gsj6uV77MBtbMrf4_7M_NUTSgoIF3fRqxrj0NzihIBg",
 		defaultKeyFunc,
 		&MapClaims{
-			MapClaims: jwtgo.MapClaims{
+			MapClaims: jwt.MapClaims{
 				"foo": "bar",
 			},
 		},
@@ -113,7 +112,7 @@ var jwtTestData = []struct {
 		"eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJmb28iOiJiYXIifQ.FhkiHkoESI_cG3NPigFrxEk9Z60_oXrOT2vGm9Pn6RDgYNovYORQmmA0zs1AoAOf09ly2Nx2YAg6ABqAYga1AcMFkJljwxTT5fYphTuqpWdy4BELeSYJx5Ty2gmr8e7RonuUztrdD5WfPqLKMm1Ozp_T6zALpRmwTIW0QPnaBXaQD90FplAg46Iy1UlDKr-Eupy0i5SLch5Q-p2ZpaL_5fnTIUDlxC3pWhJTyx_71qDI-mAA_5lE_VdroOeflG56sSmDxopPEG3bFlSu1eowyBfxtu0_CuVd-M42RU75Zc4Gsj6uV77MBtbMrf4_7M_NUTSgoIF3fRqxrj0NzihIBg",
 		nil,
 		&MapClaims{
-			MapClaims: jwtgo.MapClaims{
+			MapClaims: jwt.MapClaims{
 				"foo": "bar",
 			},
 		},
@@ -125,7 +124,7 @@ var jwtTestData = []struct {
 		"eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJmb28iOiJiYXIifQ.FhkiHkoESI_cG3NPigFrxEk9Z60_oXrOT2vGm9Pn6RDgYNovYORQmmA0zs1AoAOf09ly2Nx2YAg6ABqAYga1AcMFkJljwxTT5fYphTuqpWdy4BELeSYJx5Ty2gmr8e7RonuUztrdD5WfPqLKMm1Ozp_T6zALpRmwTIW0QPnaBXaQD90FplAg46Iy1UlDKr-Eupy0i5SLch5Q-p2ZpaL_5fnTIUDlxC3pWhJTyx_71qDI-mAA_5lE_VdroOeflG56sSmDxopPEG3bFlSu1eowyBfxtu0_CuVd-M42RU75Zc4Gsj6uV77MBtbMrf4_7M_NUTSgoIF3fRqxrj0NzihIBg",
 		emptyKeyFunc,
 		&MapClaims{
-			MapClaims: jwtgo.MapClaims{
+			MapClaims: jwt.MapClaims{
 				"foo": "bar",
 			},
 		},
@@ -137,7 +136,7 @@ var jwtTestData = []struct {
 		"eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJmb28iOiJiYXIifQ.FhkiHkoESI_cG3NPigFrxEk9Z60_oXrOT2vGm9Pn6RDgYNovYORQmmA0zs1AoAOf09ly2Nx2YAg6ABqAYga1AcMFkJljwxTT5fYphTuqpWdy4BELeSYJx5Ty2gmr8e7RonuUztrdD5WfPqLKMm1Ozp_T6zALpRmwTIW0QPnaBXaQD90FplAg46Iy1UlDKr-Eupy0i5SLch5Q-p2ZpaL_5fnTIUDlxC3pWhJTyx_71qDI-mAA_5lE_VdroOeflG56sSmDxopPEG3bFlSu1eowyBfxtu0_CuVd-M42RU75Zc4Gsj6uV77MBtbMrf4_7M_NUTSgoIF3fRqxrj0NzihIBg",
 		errorKeyFunc,
 		&MapClaims{
-			MapClaims: jwtgo.MapClaims{
+			MapClaims: jwt.MapClaims{
 				"foo": "bar",
 			},
 		},
@@ -149,7 +148,7 @@ var jwtTestData = []struct {
 		"",
 		defaultKeyFunc,
 		&StandardClaims{
-			StandardClaims: jwtgo.StandardClaims{
+			StandardClaims: jwt.StandardClaims{
 				ExpiresAt: time.Now().Add(time.Second * 10).Unix(),
 			},
 		},
@@ -160,7 +159,7 @@ var jwtTestData = []struct {
 
 func mapClaimsToken(claims *MapClaims) string {
 	claims.SetAccessKey("test")
-	j := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, claims)
+	j := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
 	tk, _ := j.SignedString([]byte("HelloSecret"))
 	return tk
 }
@@ -168,7 +167,7 @@ func mapClaimsToken(claims *MapClaims) string {
 func standardClaimsToken(claims *StandardClaims) string {
 	claims.AccessKey = "test"
 	claims.Subject = "test"
-	j := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, claims)
+	j := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
 	tk, _ := j.SignedString([]byte("HelloSecret"))
 	return tk
 }

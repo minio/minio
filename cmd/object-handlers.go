@@ -1214,7 +1214,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if tags := r.Header.Get(http.CanonicalHeaderKey(xhttp.AmzObjectTagging)); tags != "" {
+	if tags := r.Header.Get(xhttp.AmzObjectTagging); tags != "" {
 		metadata[xhttp.AmzObjectTagging], err = extractTags(ctx, tags)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -2981,5 +2981,5 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		return
 	}
 
-	writeSuccessResponseHeadersOnly(w)
+	writeSuccessNoContent(w)
 }

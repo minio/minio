@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v15" // Adding DeletePrefixes API
+	storageRESTVersion       = "v16" // CrawlAndGetDataUsageHandler API change
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )

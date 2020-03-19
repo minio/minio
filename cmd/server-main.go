@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -361,6 +362,9 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	httpServer := xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{handler}, getCert)
+	httpServer.BaseContext = func(listener net.Listener) context.Context {
+		return GlobalContext
+	}
 	go func() {
 		globalHTTPServerErrorCh <- httpServer.Start()
 	}()
@@ -440,9 +444,6 @@ func serverMain(ctx *cli.Context) {
 		msg := fmt.Sprintf("Detected default credentials '%s', please change the credentials immediately using 'MINIO_ACCESS_KEY' and 'MINIO_SECRET_KEY'", globalActiveCred)
 		logger.StartupMessage(color.RedBold(msg))
 	}
-
-	// Set uptime time after object layer has initialized.
-	globalBootTime = UTCNow()
 
 	handleSignals()
 }

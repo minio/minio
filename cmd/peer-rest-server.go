@@ -325,7 +325,12 @@ func (s *peerRESTServer) LoadUserHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err = globalIAMSys.LoadUser(objAPI, accessKey, temp); err != nil {
+	var userType = regularUser
+	if temp {
+		userType = stsUser
+	}
+
+	if err = globalIAMSys.LoadUser(objAPI, accessKey, userType); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}

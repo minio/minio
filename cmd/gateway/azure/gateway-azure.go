@@ -39,7 +39,6 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/cli"
 	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
-	"github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/policy"
@@ -1196,7 +1195,7 @@ func (a *azureObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 	if err != nil {
 		return objInfo, azureToObjectError(err, bucket, object)
 	}
-	objMetadata["md5sum"] = cmd.ComputeCompleteMultipartMD5(uploadedParts)
+	objMetadata["md5sum"] = minio.ComputeCompleteMultipartMD5(uploadedParts)
 
 	_, err = objBlob.CommitBlockList(ctx, allBlocks, objProperties, objMetadata, azblob.BlobAccessConditions{})
 	if err != nil {

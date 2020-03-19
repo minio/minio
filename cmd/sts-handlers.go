@@ -58,6 +58,9 @@ const (
 	expClaim = "exp"
 	subClaim = "sub"
 
+	// JWT claim to check the parent user
+	parentClaim = "parent"
+
 	// LDAP claim keys
 	ldapUser   = "ldapUser"
 	ldapGroups = "ldapGroups"
@@ -116,17 +119,11 @@ func checkAssumeRoleAuth(ctx context.Context, r *http.Request) (user auth.Creden
 	case authTypeSigned:
 		s3Err := isReqAuthenticated(ctx, r, globalServerRegion, serviceSTS)
 		if STSErrorCode(s3Err) != ErrSTSNone {
-			if s3Err == ErrInvalidAccessKeyID {
-				return user, ErrSTSInvalidAccessKey
-			}
 			return user, STSErrorCode(s3Err)
 		}
 		var owner bool
 		user, owner, s3Err = getReqAccessKeyV4(r, globalServerRegion, serviceSTS)
 		if STSErrorCode(s3Err) != ErrSTSNone {
-			if s3Err == ErrInvalidAccessKeyID {
-				return user, ErrSTSInvalidAccessKey
-			}
 			return user, STSErrorCode(s3Err)
 		}
 		// Root credentials are not allowed to use STS API
