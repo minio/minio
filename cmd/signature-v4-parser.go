@@ -108,7 +108,11 @@ func parseCredentialHeader(credElement string, region string, stype serviceType)
 
 	}
 	if credElements[2] != string(stype) {
-		return ch, ErrInvalidService
+		switch stype {
+		case serviceSTS:
+			return ch, ErrInvalidServiceSTS
+		}
+		return ch, ErrInvalidServiceS3
 	}
 	cred.scope.service = credElements[2]
 	if credElements[3] != "aws4_request" {

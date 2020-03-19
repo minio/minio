@@ -106,12 +106,12 @@ func initHealState() *allHealState {
 		healSeqMap: make(map[string]*healSequence),
 	}
 
-	go healState.periodicHealSeqsClean()
+	go healState.periodicHealSeqsClean(GlobalContext)
 
 	return healState
 }
 
-func (ahs *allHealState) periodicHealSeqsClean() {
+func (ahs *allHealState) periodicHealSeqsClean(ctx context.Context) {
 	// Launch clean-up routine to remove this heal sequence (after
 	// it ends) from the global state after timeout has elapsed.
 	ticker := time.NewTicker(time.Minute * 5)
@@ -127,7 +127,7 @@ func (ahs *allHealState) periodicHealSeqsClean() {
 				}
 			}
 			ahs.Unlock()
-		case <-GlobalServiceDoneCh:
+		case <-ctx.Done():
 			// server could be restarting - need
 			// to exit immediately
 			return
@@ -369,7 +369,7 @@ func newHealSequence(bucket, objPrefix, clientAddr string,
 
 	reqInfo := &logger.ReqInfo{RemoteHost: clientAddr, API: "Heal", BucketName: bucket}
 	reqInfo.AppendTags("prefix", objPrefix)
-	ctx := logger.SetReqInfo(context.Background(), reqInfo)
+	ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 
 	return &healSequence{
 		bucket:         bucket,
@@ -603,7 +603,7 @@ func (h *healSequence) healItemsFromSourceCh() error {
 			h.lastHealActivity = UTCNow()
 		case <-h.traverseAndHealDoneCh:
 			return nil
-		case <-GlobalServiceDoneCh:
+		case <-h.ctx.Done():
 			return nil
 		}
 	}
@@ -628,11 +628,6 @@ func (h *healSequence) healItems(bucketsOnly bool) error {
 	// Start healing the bucket config prefix.
 	if err := h.healMinioSysMeta(bucketConfigPrefix)(); err != nil {
 		return err
-	}
-
-	// Start healing the background ops prefix.
-	if err := h.healMinioSysMeta(backgroundOpsMetaPrefix)(); err != nil {
-		logger.LogIf(h.ctx, err)
 	}
 
 	// Heal buckets and objects
@@ -671,7 +666,7 @@ func (h *healSequence) healMinioSysMeta(metaPrefix string) func() error {
 		// NOTE: Healing on meta is run regardless
 		// of any bucket being selected, this is to ensure that
 		// meta are always upto date and correct.
-		return objectAPI.HealObjects(h.ctx, minioMetaBucket, metaPrefix, func(bucket string, object string) error {
+		return objectAPI.HealObjects(h.ctx, minioMetaBucket, metaPrefix, h.settings, func(bucket string, object string) error {
 			if h.isQuitting() {
 				return errHealStopSignalled
 			}
@@ -765,7 +760,7 @@ func (h *healSequence) healBucket(bucket string, bucketsOnly bool) error {
 		return nil
 	}
 
-	if err := objectAPI.HealObjects(h.ctx, bucket, h.objPrefix, h.healObject); err != nil {
+	if err := objectAPI.HealObjects(h.ctx, bucket, h.objPrefix, h.settings, h.healObject); err != nil {
 		return errFnHealFromAPIErr(h.ctx, err)
 	}
 	return nil

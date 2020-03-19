@@ -80,6 +80,7 @@ func TryLockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, er
 	switch flag {
 	case syscall.O_RDONLY:
 		// https://docs.microsoft.com/en-us/windows/desktop/api/fileapi/nf-fileapi-lockfileex
+		//lint:ignore SA4016 Reasons
 		lockType = lockFileFailImmediately | 0 // Set this to enable shared lock and fail immediately.
 	}
 	return lockedOpenFile(path, flag, perm, lockType)
