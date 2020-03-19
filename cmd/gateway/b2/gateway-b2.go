@@ -317,7 +317,7 @@ func (l *b2Objects) ListBuckets(ctx context.Context) ([]minio.BucketInfo, error)
 }
 
 // DeleteBucket deletes a bucket on B2
-func (l *b2Objects) DeleteBucket(ctx context.Context, bucket string) error {
+func (l *b2Objects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	bkt, err := l.Bucket(ctx, bucket)
 	if err != nil {
 		return err

@@ -41,7 +41,7 @@ type StorageAPI interface {
 	MakeVolBulk(volumes ...string) (err error)
 	ListVols() (vols []VolInfo, err error)
 	StatVol(volume string) (vol VolInfo, err error)
-	DeleteVol(volume string) (err error)
+	DeleteVol(volume string, forceDelete bool) (err error)
 
 	// Walk in sorted order directly on disk.
 	Walk(volume, dirPath string, marker string, recursive bool, leafFile string,

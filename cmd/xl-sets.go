@@ -528,7 +528,7 @@ func undoMakeBucketSets(bucket string, sets []*xlObjects, errs []error) {
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return sets[index].DeleteBucket(context.Background(), bucket)
+				return sets[index].DeleteBucket(context.Background(), bucket, false)
 			}
 			return nil
 		}, index)
@@ -665,14 +665,14 @@ func (s *xlSets) IsCompressionSupported() bool {
 // DeleteBucket - deletes a bucket on all sets simultaneously,
 // even if one of the sets fail to delete buckets, we proceed to
 // undo a successful operation.
-func (s *xlSets) DeleteBucket(ctx context.Context, bucket string) error {
+func (s *xlSets) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	g := errgroup.WithNErrs(len(s.sets))
 
 	// Delete buckets in parallel across all sets.
 	for index := range s.sets {
 		index := index
 		g.Go(func() error {
-			return s.sets[index].DeleteBucket(ctx, bucket)
+			return s.sets[index].DeleteBucket(ctx, bucket, forceDelete)
 		}, index)
 	}
 
