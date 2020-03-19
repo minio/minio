@@ -1394,11 +1394,11 @@ func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, results chan<
 				return
 			}
 
-			if quorumCount != zoneDrivesPerSet[zoneIndex] {
-				continue
+			if quorumCount >= zoneDrivesPerSet[zoneIndex]/2 {
+				results <- entry.ToObjectInfo() // Read quorum exists proceed
 			}
 
-			results <- entry.ToObjectInfo()
+			// skip entries which do not have quorum
 		}
 	}()
 

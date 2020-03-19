@@ -1642,11 +1642,10 @@ func (s *xlSets) Walk(ctx context.Context, bucket, prefix string, results chan<-
 				return
 			}
 
-			if quorumCount != s.drivesPerSet {
-				return
+			if quorumCount >= s.drivesPerSet/2 {
+				results <- entry.ToObjectInfo() // Read quorum exists proceed
 			}
-
-			results <- entry.ToObjectInfo()
+			// skip entries which do not have quorum
 		}
 	}()
 
