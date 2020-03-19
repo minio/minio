@@ -390,7 +390,7 @@ func TestFSHealObject(t *testing.T) {
 	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	_, err := obj.HealObject(context.Background(), "bucket", "object", false, false, madmin.HealDeepScan)
+	_, err := obj.HealObject(context.Background(), "bucket", "object", madmin.HealOpts{})
 	if err == nil || !isSameType(err, NotImplemented{}) {
 		t.Fatalf("Heal Object should return NotImplemented error ")
 	}
@@ -402,7 +402,7 @@ func TestFSHealObjects(t *testing.T) {
 	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	err := obj.HealObjects(context.Background(), "bucket", "prefix", nil)
+	err := obj.HealObjects(context.Background(), "bucket", "prefix", madmin.HealOpts{}, nil)
 	if err == nil || !isSameType(err, NotImplemented{}) {
 		t.Fatalf("Heal Object should return NotImplemented error ")
 	}

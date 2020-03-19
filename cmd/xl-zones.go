@@ -1407,7 +1407,7 @@ func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, results chan<
 
 type healObjectFn func(string, string) error
 
-func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healObject healObjectFn) error {
+func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObject healObjectFn) error {
 	var zonesEntryChs [][]FileInfoCh
 
 	endWalkCh := make(chan struct{})
@@ -1436,7 +1436,7 @@ func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healOb
 			break
 		}
 
-		if quorumCount == zoneDrivesPerSet[zoneIndex] {
+		if quorumCount == zoneDrivesPerSet[zoneIndex] && opts.ScanMode == madmin.HealNormalScan {
 			// Skip good entries.
 			continue
 		}
@@ -1452,7 +1452,7 @@ func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, healOb
 	return nil
 }
 
-func (z *xlZones) HealObject(ctx context.Context, bucket, object string, dryRun, remove bool, scanMode madmin.HealScanMode) (madmin.HealResultItem, error) {
+func (z *xlZones) HealObject(ctx context.Context, bucket, object string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	// Lock the object before healing. Use read lock since healing
 	// will only regenerate parts & xl.json of outdated disks.
 	objectLock := z.NewNSLock(ctx, bucket, object)
@@ -1462,10 +1462,10 @@ func (z *xlZones) HealObject(ctx context.Context, bucket, object string, dryRun,
 	defer objectLock.RUnlock()
 
 	if z.SingleZone() {
-		return z.zones[0].HealObject(ctx, bucket, object, dryRun, remove, scanMode)
+		return z.zones[0].HealObject(ctx, bucket, object, opts)
 	}
 	for _, zone := range z.zones {
-		result, err := zone.HealObject(ctx, bucket, object, dryRun, remove, scanMode)
+		result, err := zone.HealObject(ctx, bucket, object, opts)
 		if err != nil {
 			if isErrObjectNotFound(err) {
 				continue
