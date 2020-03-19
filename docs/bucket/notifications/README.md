@@ -1063,6 +1063,7 @@ brokers*         (csv)       comma separated list of Kafka broker addresses
 topic            (string)    Kafka topic used for bucket notifications
 sasl_username    (string)    username for SASL/PLAIN or SASL/SCRAM authentication
 sasl_password    (string)    password for SASL/PLAIN or SASL/SCRAM authentication
+sasl_mechanism   (string)    sasl authentication mechanism, default 'PLAIN'
 tls_client_auth  (string)    clientAuth determines the Kafka server's policy for TLS client auth
 sasl             (on|off)    set to 'on' to enable SASL authentication
 tls              (on|off)    set to 'on' to enable TLS
@@ -1081,21 +1082,22 @@ KEY:
 notify_kafka[:name]  publish bucket notifications to Kafka endpoints
 
 ARGS:
-MINIO_NOTIFY_KAFKA_ENABLE*          (on|off)    enable notify_kafka target, default is 'off'
-MINIO_NOTIFY_KAFKA_BROKERS*         (csv)       comma separated list of Kafka broker addresses
-MINIO_NOTIFY_KAFKA_TOPIC            (string)    Kafka topic used for bucket notifications
-MINIO_NOTIFY_KAFKA_SASL_USERNAME    (string)    username for SASL/PLAIN or SASL/SCRAM authentication
-MINIO_NOTIFY_KAFKA_SASL_PASSWORD    (string)    password for SASL/PLAIN or SASL/SCRAM authentication
-MINIO_NOTIFY_KAFKA_TLS_CLIENT_AUTH  (string)    clientAuth determines the Kafka server's policy for TLS client auth
-MINIO_NOTIFY_KAFKA_SASL             (on|off)    set to 'on' to enable SASL authentication
-MINIO_NOTIFY_KAFKA_TLS              (on|off)    set to 'on' to enable TLS
-MINIO_NOTIFY_KAFKA_TLS_SKIP_VERIFY  (on|off)    trust server TLS without verification, defaults to "on" (verify)
-MINIO_NOTIFY_KAFKA_CLIENT_TLS_CERT  (path)      path to client certificate for mTLS auth
-MINIO_NOTIFY_KAFKA_CLIENT_TLS_KEY   (path)      path to client key for mTLS auth
-MINIO_NOTIFY_KAFKA_QUEUE_DIR        (path)      staging dir for undelivered messages e.g. '/home/events'
-MINIO_NOTIFY_KAFKA_QUEUE_LIMIT      (number)    maximum limit for undelivered messages, defaults to '10000'
-MINIO_NOTIFY_KAFKA_COMMENT          (sentence)  optionally add a comment to this setting
-MINIO_NOTIFY_KAFKA_VERSION          (string)    specify the version of the Kafka cluster e.g. '2.2.0'
+MINIO_NOTIFY_KAFKA_ENABLE*          (on|off)                enable notify_kafka target, default is 'off'
+MINIO_NOTIFY_KAFKA_BROKERS*         (csv)                   comma separated list of Kafka broker addresses
+MINIO_NOTIFY_KAFKA_TOPIC            (string)                Kafka topic used for bucket notifications
+MINIO_NOTIFY_KAFKA_SASL_USERNAME    (string)                username for SASL/PLAIN or SASL/SCRAM authentication
+MINIO_NOTIFY_KAFKA_SASL_PASSWORD    (string)                password for SASL/PLAIN or SASL/SCRAM authentication
+MINIO_NOTIFY_KAFKA_SASL_MECHANISM   (plain*|sha256|sha512)  sasl authentication mechanism, default 'plain'
+MINIO_NOTIFY_KAFKA_TLS_CLIENT_AUTH  (string)                clientAuth determines the Kafka server's policy for TLS client auth
+MINIO_NOTIFY_KAFKA_SASL             (on|off)                set to 'on' to enable SASL authentication
+MINIO_NOTIFY_KAFKA_TLS              (on|off)                set to 'on' to enable TLS
+MINIO_NOTIFY_KAFKA_TLS_SKIP_VERIFY  (on|off)                trust server TLS without verification, defaults to "on" (verify)
+MINIO_NOTIFY_KAFKA_CLIENT_TLS_CERT  (path)                  path to client certificate for mTLS auth
+MINIO_NOTIFY_KAFKA_CLIENT_TLS_KEY   (path)                  path to client key for mTLS auth
+MINIO_NOTIFY_KAFKA_QUEUE_DIR        (path)                  staging dir for undelivered messages e.g. '/home/events'
+MINIO_NOTIFY_KAFKA_QUEUE_LIMIT      (number)                maximum limit for undelivered messages, defaults to '10000'
+MINIO_NOTIFY_KAFKA_COMMENT          (sentence)              optionally add a comment to this setting
+MINIO_NOTIFY_KAFKA_VERSION          (string)                specify the version of the Kafka cluster e.g. '2.2.0'
 ```
 
 To update the configuration, use `mc admin config get` command to get the current configuration.

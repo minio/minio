@@ -166,6 +166,12 @@ var (
 			Type:        "string",
 		},
 		config.HelpKV{
+			Key:         target.KafkaSASLMechanism,
+			Description: "sasl authentication mechanism, default 'plain'",
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
 			Key:         target.KafkaTLSClientAuth,
 			Description: "clientAuth determines the Kafka server's policy for TLS client auth",
 			Optional:    true,
