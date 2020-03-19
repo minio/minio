@@ -41,7 +41,6 @@ import (
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mimedb"
@@ -244,14 +243,10 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, updates chan<- Da
 	if oldCache.Info.Name == "" {
 		oldCache.Info.Name = dataUsageRoot
 	}
-	if dataUsageDebug {
-		logger.Info(color.Green("FSObjects.CrawlAndGetDataUsage:") + " Start crawl cycle")
-	}
 	buckets, err := fs.ListBuckets(ctx)
 	if err != nil {
 		return err
 	}
-	t := time.Now()
 	cache, err := updateUsage(ctx, fs.fsPath, oldCache, fs.waitForLowActiveIO, func(item Item) (int64, error) {
 		// Get file size, symlinks which cannot be
 		// followed are automatically filtered by fastwalk.
@@ -261,9 +256,7 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, updates chan<- Da
 		}
 		return fi.Size(), nil
 	})
-	if dataUsageDebug {
-		logger.Info(color.Green("FSObjects.CrawlAndGetDataUsage:")+" Crawl time: %v", time.Since(t))
-	}
+
 	// Even if there was an error, the new cache may have better info.
 	if cache.Info.LastUpdate.After(oldCache.Info.LastUpdate) {
 		logger.LogIf(ctx, cache.save(ctx, fs, dataUsageCacheName))
