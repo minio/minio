@@ -1436,7 +1436,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 			OffDisks += v
 		}
 
-		backend = madmin.XlBackend{
+		backend = madmin.XLBackend{
 			Type:             madmin.ErasureType,
 			OnlineDisks:      OnDisks,
 			OfflineDisks:     OffDisks,
@@ -1446,7 +1446,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 			RRSCParity:       storageInfo.Backend.RRSCParity,
 		}
 	} else {
-		backend = madmin.FsBackend{
+		backend = madmin.FSBackend{
 			Type: madmin.FsType,
 		}
 	}

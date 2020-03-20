@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -43,7 +44,7 @@ func main() {
 	// in the minio cluster.
 	allTrace := false
 	errTrace := false
-	traceCh := madmClnt.ServiceTrace(allTrace, errTrace, doneCh)
+	traceCh := madmClnt.ServiceTrace(context.Background(), allTrace, errTrace, doneCh)
 	for traceInfo := range traceCh {
 		if traceInfo.Err != nil {
 			fmt.Println(traceInfo.Err)
