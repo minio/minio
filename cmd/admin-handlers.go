@@ -42,6 +42,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/cmd/logger/message/log"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/event/target"
@@ -1227,8 +1228,8 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 	for {
 		select {
 		case entry := <-logCh:
-			log := entry.(madmin.LogInfo)
-			if log.SendLog(node, logKind) {
+			log, ok := entry.(log.Info)
+			if ok && log.SendLog(node, logKind) {
 				if err := enc.Encode(log); err != nil {
 					return
 				}

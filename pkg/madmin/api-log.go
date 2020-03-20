@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 )
 
 // LogInfo holds console log messages
@@ -31,13 +30,6 @@ type LogInfo struct {
 	ConsoleMsg string
 	NodeName   string `json:"node"`
 	Err        error  `json:"-"`
-}
-
-// SendLog returns true if log pertains to node specified in args.
-func (l LogInfo) SendLog(node, logKind string) bool {
-	nodeFltr := (node == "" || strings.EqualFold(node, l.NodeName))
-	typeFltr := strings.EqualFold(logKind, "all") || strings.EqualFold(l.LogKind, logKind)
-	return nodeFltr && typeFltr
 }
 
 // GetLogs - listen on console log messages.
