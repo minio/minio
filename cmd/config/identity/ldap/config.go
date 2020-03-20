@@ -52,6 +52,7 @@ type Config struct {
 
 	stsExpiryDuration time.Duration // contains converted value
 	tlsSkipVerify     bool          // allows skipping TLS verification
+	serverInsecure    bool          // allows plain text connection to LDAP Server
 	rootCAs           *x509.CertPool
 }
 
@@ -64,10 +65,12 @@ const (
 	GroupNameAttribute = "group_name_attribute"
 	GroupSearchBaseDN  = "group_search_base_dn"
 	TLSSkipVerify      = "tls_skip_verify"
+	ServerInsecure     = "server_insecure"
 
 	EnvServerAddr         = "MINIO_IDENTITY_LDAP_SERVER_ADDR"
 	EnvSTSExpiry          = "MINIO_IDENTITY_LDAP_STS_EXPIRY"
 	EnvTLSSkipVerify      = "MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY"
+	EnvServerInsecure     = "MINIO_IDENTITY_LDAP_SERVER_INSECURE"
 	EnvUsernameFormat     = "MINIO_IDENTITY_LDAP_USERNAME_FORMAT"
 	EnvGroupSearchFilter  = "MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER"
 	EnvGroupNameAttribute = "MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE"
@@ -105,6 +108,10 @@ var (
 			Key:   TLSSkipVerify,
 			Value: config.EnableOff,
 		},
+		config.KV{
+			Key:   ServerInsecure,
+			Value: config.EnableOff,
+		},
 	}
 )
 
@@ -113,6 +120,10 @@ func (l *Config) Connect() (ldapConn *ldap.Conn, err error) {
 	if l == nil {
 		// Happens when LDAP is not configured.
 		return
+	}
+
+	if l.serverInsecure {
+		return ldap.Dial("tcp", l.ServerAddr)
 	}
 	return ldap.DialTLS("tcp", l.ServerAddr, &tls.Config{
 		InsecureSkipVerify: l.tlsSkipVerify,
@@ -153,6 +164,12 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 		}
 		l.STSExpiryDuration = v
 		l.stsExpiryDuration = expDur
+	}
+	if v := env.Get(EnvServerInsecure, kvs.Get(ServerInsecure)); v != "" {
+		l.serverInsecure, err = config.ParseBool(v)
+		if err != nil {
+			return l, err
+		}
 	}
 	if v := env.Get(EnvTLSSkipVerify, kvs.Get(TLSSkipVerify)); v != "" {
 		l.tlsSkipVerify, err = config.ParseBool(v)
