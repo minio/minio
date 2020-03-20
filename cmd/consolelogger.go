@@ -118,12 +118,12 @@ func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh chan s
 // Send log message 'e' to console and publish to console
 // log pubsub system
 func (sys *HTTPConsoleLoggerSys) Send(e interface{}, logKind string) error {
-	var lg madmin.LogInfo
+	var lg log.Info
 	switch e := e.(type) {
 	case log.Entry:
-		lg = madmin.LogInfo{Entry: e, NodeName: sys.nodeName}
+		lg = log.Info{Entry: e, NodeName: sys.nodeName}
 	case string:
-		lg = madmin.LogInfo{ConsoleMsg: e, NodeName: sys.nodeName}
+		lg = log.Info{ConsoleMsg: e, NodeName: sys.nodeName}
 	}
 
 	sys.pubsub.Publish(lg)

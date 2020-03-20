@@ -18,6 +18,7 @@
 package madmin
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -44,7 +45,7 @@ type UserInfo struct {
 }
 
 // RemoveUser - remove a user.
-func (adm *AdminClient) RemoveUser(accessKey string) error {
+func (adm *AdminClient) RemoveUser(ctx context.Context, accessKey string) error {
 	queryValues := url.Values{}
 	queryValues.Set("accessKey", accessKey)
 
@@ -54,7 +55,7 @@ func (adm *AdminClient) RemoveUser(accessKey string) error {
 	}
 
 	// Execute DELETE on /minio/admin/v2/remove-user to remove a user.
-	resp, err := adm.executeMethod("DELETE", reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodDelete, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -69,13 +70,13 @@ func (adm *AdminClient) RemoveUser(accessKey string) error {
 }
 
 // ListUsers - list all users.
-func (adm *AdminClient) ListUsers() (map[string]UserInfo, error) {
+func (adm *AdminClient) ListUsers(ctx context.Context) (map[string]UserInfo, error) {
 	reqData := requestData{
 		relPath: adminAPIPrefix + "/list-users",
 	}
 
 	// Execute GET on /minio/admin/v2/list-users
-	resp, err := adm.executeMethod("GET", reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -100,7 +101,7 @@ func (adm *AdminClient) ListUsers() (map[string]UserInfo, error) {
 }
 
 // GetUserInfo - get info on a user
-func (adm *AdminClient) GetUserInfo(name string) (u UserInfo, err error) {
+func (adm *AdminClient) GetUserInfo(ctx context.Context, name string) (u UserInfo, err error) {
 	queryValues := url.Values{}
 	queryValues.Set("accessKey", name)
 
@@ -110,7 +111,7 @@ func (adm *AdminClient) GetUserInfo(name string) (u UserInfo, err error) {
 	}
 
 	// Execute GET on /minio/admin/v2/user-info
-	resp, err := adm.executeMethod("GET", reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -134,7 +135,7 @@ func (adm *AdminClient) GetUserInfo(name string) (u UserInfo, err error) {
 }
 
 // SetUser - sets a user info.
-func (adm *AdminClient) SetUser(accessKey, secretKey string, status AccountStatus) error {
+func (adm *AdminClient) SetUser(ctx context.Context, accessKey, secretKey string, status AccountStatus) error {
 
 	if !auth.IsAccessKeyValid(accessKey) {
 		return auth.ErrInvalidAccessKeyLength
@@ -166,7 +167,7 @@ func (adm *AdminClient) SetUser(accessKey, secretKey string, status AccountStatu
 	}
 
 	// Execute PUT on /minio/admin/v2/add-user to set a user.
-	resp, err := adm.executeMethod("PUT", reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -181,12 +182,12 @@ func (adm *AdminClient) SetUser(accessKey, secretKey string, status AccountStatu
 }
 
 // AddUser - adds a user.
-func (adm *AdminClient) AddUser(accessKey, secretKey string) error {
-	return adm.SetUser(accessKey, secretKey, AccountEnabled)
+func (adm *AdminClient) AddUser(ctx context.Context, accessKey, secretKey string) error {
+	return adm.SetUser(ctx, accessKey, secretKey, AccountEnabled)
 }
 
 // SetUserStatus - adds a status for a user.
-func (adm *AdminClient) SetUserStatus(accessKey string, status AccountStatus) error {
+func (adm *AdminClient) SetUserStatus(ctx context.Context, accessKey string, status AccountStatus) error {
 	queryValues := url.Values{}
 	queryValues.Set("accessKey", accessKey)
 	queryValues.Set("status", string(status))
@@ -197,7 +198,7 @@ func (adm *AdminClient) SetUserStatus(accessKey string, status AccountStatus) er
 	}
 
 	// Execute PUT on /minio/admin/v2/set-user-status to set status.
-	resp, err := adm.executeMethod("PUT", reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -224,7 +225,7 @@ type AddServiceAccountResp struct {
 
 // AddServiceAccount - creates a new service account belonging to the given parent user
 // while restricting the service account permission by the given policy document.
-func (adm *AdminClient) AddServiceAccount(parentUser string, policy string) (auth.Credentials, error) {
+func (adm *AdminClient) AddServiceAccount(ctx context.Context, parentUser string, policy string) (auth.Credentials, error) {
 
 	if !auth.IsAccessKeyValid(parentUser) {
 		return auth.Credentials{}, auth.ErrInvalidAccessKeyLength
@@ -249,7 +250,7 @@ func (adm *AdminClient) AddServiceAccount(parentUser string, policy string) (aut
 	}
 
 	// Execute PUT on /minio/admin/v2/add-service-account to set a user.
-	resp, err := adm.executeMethod("PUT", reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 	defer closeResponse(resp)
 	if err != nil {
 		return auth.Credentials{}, err
@@ -272,7 +273,7 @@ func (adm *AdminClient) AddServiceAccount(parentUser string, policy string) (aut
 }
 
 // GetServiceAccount returns the credential of the service account
-func (adm *AdminClient) GetServiceAccount(serviceAccountAccessKey string) (auth.Credentials, error) {
+func (adm *AdminClient) GetServiceAccount(ctx context.Context, serviceAccountAccessKey string) (auth.Credentials, error) {
 
 	if !auth.IsAccessKeyValid(serviceAccountAccessKey) {
 		return auth.Credentials{}, auth.ErrInvalidAccessKeyLength
@@ -287,7 +288,7 @@ func (adm *AdminClient) GetServiceAccount(serviceAccountAccessKey string) (auth.
 	}
 
 	// Execute GET on /minio/admin/v2/get-service-account to set a user.
-	resp, err := adm.executeMethod("GET", reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 	defer closeResponse(resp)
 	if err != nil {
 		return auth.Credentials{}, err

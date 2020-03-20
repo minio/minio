@@ -18,6 +18,7 @@
 package madmin
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -45,7 +46,7 @@ type HelpKV struct {
 type HelpKVS []HelpKV
 
 // HelpConfigKV - return help for a given sub-system.
-func (adm *AdminClient) HelpConfigKV(subSys, key string, envOnly bool) (Help, error) {
+func (adm *AdminClient) HelpConfigKV(ctx context.Context, subSys, key string, envOnly bool) (Help, error) {
 	v := url.Values{}
 	v.Set("subSys", subSys)
 	v.Set("key", key)
@@ -59,7 +60,7 @@ func (adm *AdminClient) HelpConfigKV(subSys, key string, envOnly bool) (Help, er
 	}
 
 	// Execute GET on /minio/admin/v2/help-config-kv
-	resp, err := adm.executeMethod(http.MethodGet, reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 	if err != nil {
 		return Help{}, err
 	}

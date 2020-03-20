@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -39,18 +40,18 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	if err = madmClnt.AddUser("newuser", "newstrongpassword"); err != nil {
+	if err = madmClnt.AddUser(context.Background(), "newuser", "newstrongpassword"); err != nil {
 		log.Fatalln(err)
 	}
 
 	// Create policy
 	policy := `{"Version": "2012-10-17","Statement": [{"Action": ["s3:GetObject"],"Effect": "Allow","Resource": ["arn:aws:s3:::my-bucketname/*"],"Sid": ""}]}`
 
-	if err = madmClnt.AddCannedPolicy("get-only", policy); err != nil {
+	if err = madmClnt.AddCannedPolicy(context.Background(), "get-only", policy); err != nil {
 		log.Fatalln(err)
 	}
 
-	if err = madmClnt.SetUserPolicy("newuser", "get-only"); err != nil {
+	if err = madmClnt.SetUserPolicy(context.Background(), "newuser", "get-only"); err != nil {
 		log.Fatalln(err)
 	}
 }
