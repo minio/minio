@@ -47,15 +47,18 @@ func WithNTasks(ctx context.Context, n int) *Group {
 	}
 }
 
-// Wait blocks until all function calls from the Go method have returned, then
-// returns the slice of errors from all function calls.
+// Wait blocks until all function calls from the Go method have returned
 func (g *Group) Wait() {
 	g.WaitForSuccess(func(_ int) bool {
 		return false
 	})
 }
 
-// WaitForNSuccess
+// WaitForNSuccess waits for goroutines ran in parallel
+// until enough function returns true. In that case,
+// cancel the context for other goroutines to stop
+// and wait until other goroutines already started
+// to finish execution.
 func (g *Group) WaitForSuccess(enough func(_ int) bool) {
 	if enough == nil {
 		return
@@ -78,9 +81,6 @@ func (g *Group) WaitForSuccess(enough func(_ int) bool) {
 }
 
 // Go calls the given function in a new goroutine.
-//
-// The first call to return a non-nil error will be
-// collected in errs slice and returned by Wait().
 func (g *Group) Go(f func(context.Context), index int) {
 	select {
 	case <-g.ctx.Done():

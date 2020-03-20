@@ -205,27 +205,36 @@ func readAllXLMetadata(ctx context.Context, disks []StorageAPI, bucket, object s
 	}
 
 	mu := sync.RWMutex{}
-	tm := make(map[time.Time]int)
-	quit := false
+	foundModTimes := make(map[time.Time]int)
+	enough := false
 
-	g.WaitForSuccess(func(index int) bool {
-		if quit {
+	// areEnoughXLJSONFound returns true when there
+	// are more than N/2+1 xl json found and has
+	// a common mod time.
+	areEnoughXLJSONFound := func(index int) bool {
+		if enough {
 			return true
 		}
 
 		mu.Lock()
-		tm[metadataArray[index].Stat.ModTime]++
+		t := metadataArray[index].Stat.ModTime
+		if !t.IsZero() {
+			foundModTimes[t]++
+		}
 		mu.Unlock()
+
 		mu.RLock()
-		for _, v := range tm {
+		for _, v := range foundModTimes {
 			if v >= len(disks)+1 {
-				quit = true
+				enough = true
 				return true
 			}
 		}
 		mu.RUnlock()
 		return false
-	})
+	}
+
+	g.WaitForSuccess(areEnoughXLJSONFound)
 
 	// Return all the metadata.
 	return metadataArray, metaErrs
