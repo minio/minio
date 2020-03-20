@@ -695,7 +695,7 @@ func isObjectDangling(metaArr []xlMetaV1, errs []error, dataErrs []error) (valid
 }
 
 // HealObject - heal the given object, automatically deletes the object if stale/corrupted if `remove` is true.
-func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRun bool, remove bool, scanMode madmin.HealScanMode) (hr madmin.HealResultItem, err error) {
+func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, opts madmin.HealOpts) (hr madmin.HealResultItem, err error) {
 	// Create context that also contains information about the object and bucket.
 	// The top level handler might not have this information.
 	reqInfo := logger.GetReqInfo(ctx)
@@ -709,7 +709,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 
 	// Healing directories handle it separately.
 	if HasSuffix(object, SlashSeparator) {
-		return xl.healObjectDir(healCtx, bucket, object, dryRun)
+		return xl.healObjectDir(healCtx, bucket, object, opts.DryRun)
 	}
 
 	storageDisks := xl.getDisks()
@@ -724,7 +724,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 		if m.Erasure.DataBlocks == 0 {
 			writeQuorum = len(xl.getDisks())/2 + 1
 		}
-		if !dryRun && remove {
+		if !opts.DryRun && opts.Remove {
 			xl.deleteObject(healCtx, bucket, object, writeQuorum, false)
 		}
 		err = reduceReadQuorumErrs(ctx, errs, nil, writeQuorum-1)
@@ -753,7 +753,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 				if m.Erasure.DataBlocks == 0 {
 					writeQuorum = len(storageDisks)/2 + 1
 				}
-				if !dryRun && remove {
+				if !opts.DryRun && opts.Remove {
 					xl.deleteObject(ctx, bucket, object, writeQuorum, false)
 				}
 			}
@@ -762,5 +762,5 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, dryRu
 	}
 
 	// Heal the object.
-	return xl.healObject(healCtx, bucket, object, partsMetadata, errs, latestXLMeta, dryRun, remove, scanMode)
+	return xl.healObject(healCtx, bucket, object, partsMetadata, errs, latestXLMeta, opts.DryRun, opts.Remove, opts.ScanMode)
 }

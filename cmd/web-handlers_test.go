@@ -449,7 +449,7 @@ func testListBucketsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 		t.Fatalf("Cannot find the bucket already created by MakeBucket")
 	}
 	if listBucketsReply.Buckets[0].Name != bucketName {
-		t.Fatalf("Found another bucket other than already created by MakeBucket")
+		t.Fatalf("Found another bucket %q other than already created by MakeBucket", listBucketsReply.Buckets[0].Name)
 	}
 }
 

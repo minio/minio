@@ -78,7 +78,7 @@ type LimitWriter struct {
 	wLimit    int64
 }
 
-// Implements the io.Writer interface limiting upto
+// Write implements the io.Writer interface limiting upto
 // configured length, also skips the first N bytes.
 func (w *LimitWriter) Write(p []byte) (n int, err error) {
 	n = len(p)

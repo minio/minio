@@ -414,7 +414,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = xl.HealObject(context.Background(), bucket, object, false, false, madmin.HealNormalScan)
+	_, err = xl.HealObject(context.Background(), bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -443,7 +443,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = xl.HealObject(context.Background(), bucket, object, false, false, madmin.HealDeepScan)
+	_, err = xl.HealObject(context.Background(), bucket, object, madmin.HealOpts{ScanMode: madmin.HealDeepScan})
 	if err != nil {
 		t.Fatal(err)
 	}

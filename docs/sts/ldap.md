@@ -49,11 +49,11 @@ LDAP is configured via the following environment variables:
 | **MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE** | **NO**                  | Attribute of search results to use as group name                        |
 | **MINIO_IDENTITY_LDAP_STS_EXPIRY**           | **NO** (default: "1h")  | STS credentials validity duration                                       |
 | **MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY**      | **NO** (default: "off") | Set this to 'on', to disable client verification of server certificates |
+| **MINIO_IDENTITY_LDAP_SERVER_INSECURE**      | **NO** (default: "off") | Set this to 'on', to allow plain text connection to LDAP/AD Server (only for testing) |
 
+MinIO sends LDAP credentials to LDAP server for validation. So we _strongly recommend_ to use MinIO with AD/LDAP server over TLS _only_. Using plain-text connection between MinIO and LDAP server means _credentials can be compromised_ by anyone listening to network traffic.
 
-Please note that MinIO will only access the AD/LDAP server over TLS. If a self-signed certificate is being used, the certificate can be added to MinIO's certificates directory, so it can be trusted by the server.
-
-An example setup for development or experimentation:
+If a self-signed certificate is being used, the certificate can be added to MinIO's certificates directory, so it can be trusted by the server. An example setup for development or experimentation:
 
 ``` shell
 export MINIO_IDENTITY_LDAP_SERVER_ADDR=myldapserver.com:636

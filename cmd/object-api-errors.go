@@ -274,7 +274,7 @@ func (e BucketSSEConfigNotFound) Error() string {
 // BucketNameInvalid - bucketname provided is invalid.
 type BucketNameInvalid GenericError
 
-// Return string an error formatted as the given text.
+// Error returns string an error formatted as the given text.
 func (e BucketNameInvalid) Error() string {
 	return "Bucket name invalid: " + e.Bucket
 }
@@ -290,17 +290,17 @@ type ObjectNameTooLong GenericError
 // ObjectNamePrefixAsSlash - object name has a slash as prefix.
 type ObjectNamePrefixAsSlash GenericError
 
-// Return string an error formatted as the given text.
+// Error returns string an error formatted as the given text.
 func (e ObjectNameInvalid) Error() string {
 	return "Object name invalid: " + e.Bucket + "#" + e.Object
 }
 
-// Return string an error formatted as the given text.
+// Error returns string an error formatted as the given text.
 func (e ObjectNameTooLong) Error() string {
 	return "Object name too long: " + e.Bucket + "#" + e.Object
 }
 
-// Return string an error formatted as the given text.
+// Error returns string an error formatted as the given text.
 func (e ObjectNamePrefixAsSlash) Error() string {
 	return "Object name contains forward slash as pefix: " + e.Bucket + "#" + e.Object
 }
@@ -308,7 +308,7 @@ func (e ObjectNamePrefixAsSlash) Error() string {
 // AllAccessDisabled All access to this object has been disabled
 type AllAccessDisabled GenericError
 
-// Return string an error formatted as the given text.
+// Error returns string an error formatted as the given text.
 func (e AllAccessDisabled) Error() string {
 	return "All access to this object has been disabled"
 }
@@ -316,7 +316,7 @@ func (e AllAccessDisabled) Error() string {
 // IncompleteBody You did not provide the number of bytes specified by the Content-Length HTTP header.
 type IncompleteBody GenericError
 
-// Return string an error formatted as the given text.
+// Error returns string an error formatted as the given text.
 func (e IncompleteBody) Error() string {
 	return e.Bucket + "#" + e.Object + "has incomplete body"
 }

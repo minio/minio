@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	gohttp "net/http"
 	"strings"
 
 	xhttp "github.com/minio/minio/cmd/http"
@@ -41,7 +40,7 @@ type Target struct {
 	// User-Agent to be set on each log request sent to the `endpoint`
 	userAgent string
 	logKind   string
-	client    gohttp.Client
+	client    http.Client
 }
 
 func (h *Target) startHTTPLogger() {
@@ -54,7 +53,7 @@ func (h *Target) startHTTPLogger() {
 				continue
 			}
 
-			req, err := gohttp.NewRequest(http.MethodPost, h.endpoint, bytes.NewBuffer(logJSON))
+			req, err := http.NewRequest(http.MethodPost, h.endpoint, bytes.NewBuffer(logJSON))
 			if err != nil {
 				continue
 			}
@@ -78,12 +77,12 @@ func (h *Target) startHTTPLogger() {
 
 // New initializes a new logger target which
 // sends log over http to the specified endpoint
-func New(endpoint, userAgent, logKind string, transport *gohttp.Transport) *Target {
+func New(endpoint, userAgent, logKind string, transport *http.Transport) *Target {
 	h := Target{
 		endpoint:  endpoint,
 		userAgent: userAgent,
 		logKind:   strings.ToUpper(logKind),
-		client: gohttp.Client{
+		client: http.Client{
 			Transport: transport,
 		},
 		logCh: make(chan interface{}, 10000),

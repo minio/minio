@@ -64,14 +64,14 @@ func (err ErrInvalidFilterName) Error() string {
 type ErrFilterNamePrefix struct{}
 
 func (err ErrFilterNamePrefix) Error() string {
-	return fmt.Sprintf("more than one prefix in filter rule")
+	return "more than one prefix in filter rule"
 }
 
 // ErrFilterNameSuffix - more than one suffix usage error.
 type ErrFilterNameSuffix struct{}
 
 func (err ErrFilterNameSuffix) Error() string {
-	return fmt.Sprintf("more than one suffix in filter rule")
+	return "more than one suffix in filter rule"
 }
 
 // ErrInvalidFilterValue - invalid filter value error.

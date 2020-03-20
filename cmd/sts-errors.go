@@ -29,6 +29,14 @@ import (
 // writeSTSErrorRespone writes error headers
 func writeSTSErrorResponse(ctx context.Context, w http.ResponseWriter, errCode STSErrorCode, errCtxt error) {
 	err := stsErrCodes.ToSTSErr(errCode)
+	if err.Code == "InternalError" {
+		aerr := getAPIError(APIErrorCode(errCode))
+		if aerr.Code != "InternalError" {
+			err.Code = aerr.Code
+			err.Description = aerr.Description
+			err.HTTPStatusCode = aerr.HTTPStatusCode
+		}
+	}
 	// Generate error response.
 	stsErrorResponse := STSErrorResponse{}
 	stsErrorResponse.Error.Code = err.Code
@@ -73,12 +81,12 @@ type STSErrorCode int
 // Error codes, non exhaustive list - http://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithSAML.html
 const (
 	ErrSTSNone STSErrorCode = iota
+	ErrSTSInvalidService
 	ErrSTSAccessDenied
 	ErrSTSMissingParameter
 	ErrSTSInvalidParameterValue
 	ErrSTSWebIdentityExpiredToken
 	ErrSTSClientGrantsExpiredToken
-	ErrSTSInvalidAccessKey
 	ErrSTSInvalidClientGrantsToken
 	ErrSTSMalformedPolicyDocument
 	ErrSTSNotInitialized
@@ -127,11 +135,6 @@ var stsErrCodes = stsErrorCodeMap{
 		Code:           "InvalidClientGrantsToken",
 		Description:    "The client grants token that was passed could not be validated by MinIO.",
 		HTTPStatusCode: http.StatusBadRequest,
-	},
-	ErrSTSInvalidAccessKey: {
-		Code:           "InvalidClientTokenId",
-		Description:    "The security token included in the request is invalid.",
-		HTTPStatusCode: http.StatusForbidden,
 	},
 	ErrSTSMalformedPolicyDocument: {
 		Code:           "MalformedPolicyDocument",
