@@ -392,6 +392,11 @@ func (s *xlSets) StorageInfo(ctx context.Context, local bool) StorageInfo {
 		storageInfo.Backend.Sets[i] = make([]madmin.DriveInfo, s.drivesPerSet)
 	}
 
+	if local {
+		// if local is true, we don't need to read format.json
+		return storageInfo
+	}
+
 	storageDisks, dErrs := initStorageDisksWithErrors(s.endpoints)
 	defer closeStorageDisks(storageDisks)
 

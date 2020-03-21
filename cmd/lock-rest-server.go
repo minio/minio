@@ -293,9 +293,7 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 }
 
 // Start lock maintenance from all lock servers.
-func startLockMaintenance() {
-	var ctx = context.Background()
-
+func startLockMaintenance(ctx context.Context) {
 	// Wait until the object API is ready
 	// no need to start the lock maintenance
 	// if ObjectAPI is not initialized.
@@ -317,7 +315,7 @@ func startLockMaintenance() {
 	for {
 		// Verifies every minute for locks held more than 2 minutes.
 		select {
-		case <-GlobalServiceDoneCh:
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			// Start with random sleep time, so as to avoid
@@ -357,5 +355,5 @@ func registerLockRESTHandlers(router *mux.Router, endpointZones EndpointZones) {
 		}
 	}
 
-	go startLockMaintenance()
+	go startLockMaintenance(GlobalContext)
 }

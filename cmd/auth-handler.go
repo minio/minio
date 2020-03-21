@@ -226,7 +226,7 @@ func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
 		if err != nil {
 			// Base64 decoding fails, we should log to indicate
 			// something is malforming the request sent by client.
-			logger.LogIf(context.Background(), err, logger.Application)
+			logger.LogIf(r.Context(), err, logger.Application)
 			return nil, errAuthentication
 		}
 		claims.MapClaims[iampolicy.SessionPolicyName] = string(spBytes)
@@ -246,7 +246,7 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 	}
 	claims, err := getClaimsFromToken(r)
 	if err != nil {
-		return nil, toAPIErrorCode(context.Background(), err)
+		return nil, toAPIErrorCode(r.Context(), err)
 	}
 	return claims, ErrNone
 }
@@ -460,7 +460,7 @@ func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.handler.ServeHTTP(w, r)
 		return
 	}
-	writeErrorResponse(context.Background(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL, guessIsBrowserReq(r))
+	writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL, guessIsBrowserReq(r))
 }
 
 // isPutActionAllowed - check if PUT operation is allowed on the resource, this

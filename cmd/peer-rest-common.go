@@ -34,7 +34,6 @@ const (
 	peerRESTMethodServerUpdate                 = "/serverupdate"
 	peerRESTMethodSignalService                = "/signalservice"
 	peerRESTMethodBackgroundHealStatus         = "/backgroundhealstatus"
-	peerRESTMethodBackgroundOpsStatus          = "/backgroundopsstatus"
 	peerRESTMethodGetLocks                     = "/getlocks"
 	peerRESTMethodBucketPolicyRemove           = "/removebucketpolicy"
 	peerRESTMethodLoadUser                     = "/loaduser"
