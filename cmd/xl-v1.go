@@ -19,14 +19,12 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"path"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
-	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -321,11 +319,9 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 					return
 				default:
 				}
-				if dataUsageDebug {
-					logger.Info(color.Green("crawlAndGetDataUsage:")+" Scanning bucket %v.", bucket.Name)
-				}
+
 				// Load cache for bucket
-				cacheName := path.Join(dataUsageBucketCacheDir, bucket.Name+".bin")
+				cacheName := pathJoin(bucket.Name, dataUsageCacheName)
 				cache := dataUsageCache{}
 				logger.LogIf(ctx, cache.load(ctx, xl, cacheName))
 				if cache.Info.Name == "" {

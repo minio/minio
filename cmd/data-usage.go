@@ -35,12 +35,11 @@ import (
 )
 
 const (
-	dataUsageObjName         = "usage.json"
-	dataUsageCacheName       = "usage-cache.bin"
-	dataUsageBucketCacheDir  = "usage-caches"
-	dataUsageCrawlConf       = "MINIO_DISK_USAGE_CRAWL"
-	dataUsageCrawlDelay      = "MINIO_DISK_USAGE_CRAWL_DELAY"
-	dataUsageDebug           = true
+	dataUsageObjName         = ".usage.json"
+	dataUsageCacheName       = ".usage-cache.bin"
+	envDataUsageCrawlConf    = "MINIO_DISK_USAGE_CRAWL_ENABLE"
+	envDataUsageCrawlDelay   = "MINIO_DISK_USAGE_CRAWL_DELAY"
+	envDataUsageCrawlDebug   = "MINIO_DISK_USAGE_CRAWL_DEBUG"
 	dataUsageSleepPerFolder  = 1 * time.Millisecond
 	dataUsageSleepDefMult    = 10.0
 	dataUsageUpdateDirCycles = 16
@@ -51,11 +50,9 @@ const (
 
 // initDataUsageStats will start the crawler unless disabled.
 func initDataUsageStats() {
-	dataUsageEnabled, err := config.ParseBool(env.Get(dataUsageCrawlConf, config.EnableOn))
-	if err == nil && !dataUsageEnabled {
-		return
+	if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn {
+		go runDataUsageInfoUpdateRoutine()
 	}
-	go runDataUsageInfoUpdateRoutine()
 }
 
 // runDataUsageInfoUpdateRoutine will contain the main crawler.
@@ -89,9 +86,6 @@ func runDataUsageInfo(ctx context.Context, objAPI ObjectLayer) {
 		// data usage calculator role for its lifetime.
 		break
 	}
-	if dataUsageDebug {
-		logger.Info(color.Green("runDataUsageInfo:") + " Starting crawler master")
-	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -111,13 +105,10 @@ func runDataUsageInfo(ctx context.Context, objAPI ObjectLayer) {
 // storeDataUsageInBackend will store all objects sent on the gui channel until closed.
 func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, gui <-chan DataUsageInfo) {
 	for dataUsageInfo := range gui {
-		dataUsageJSON, err := json.MarshalIndent(dataUsageInfo, "", "  ")
+		dataUsageJSON, err := json.Marshal(dataUsageInfo)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			continue
-		}
-		if dataUsageDebug {
-			logger.Info(color.Green("data-usage:")+" Received update: %s", string(dataUsageJSON))
 		}
 		size := int64(len(dataUsageJSON))
 		r, err := hash.NewReader(bytes.NewReader(dataUsageJSON), size, "", "", size, false)
@@ -172,6 +163,9 @@ type folderScanner struct {
 	newCache           dataUsageCache
 	waitForLowActiveIO func()
 
+	dataUsageCrawlMult  float64
+	dataUsageCrawlDebug bool
+
 	newFolders      []cachedFolder
 	existingFolders []cachedFolder
 }
@@ -194,12 +188,6 @@ func sleepDuration(d time.Duration, x float64) {
 // If final is not provided the folders found are returned from the function.
 func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFolder, final bool) ([]cachedFolder, error) {
 	var nextFolders []cachedFolder
-	delayMult := dataUsageSleepDefMult
-	if mult := os.Getenv(dataUsageCrawlDelay); mult != "" {
-		if d, err := strconv.ParseFloat(mult, 64); err == nil {
-			delayMult = d
-		}
-	}
 	done := ctx.Done()
 	for _, folder := range folders {
 		select {
@@ -207,8 +195,9 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			return nil, ctx.Err()
 		default:
 		}
+
 		f.waitForLowActiveIO()
-		sleepDuration(dataUsageSleepPerFolder, delayMult)
+		sleepDuration(dataUsageSleepPerFolder, f.dataUsageCrawlMult)
 
 		cache := dataUsageEntry{}
 		thisHash := hashPath(folder.name)
@@ -218,14 +207,14 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			entName = path.Clean(path.Join(folder.name, entName))
 			bucket, _ := path2BucketObjectWithBasePath(f.root, entName)
 			if bucket == "" {
-				if dataUsageDebug {
+				if f.dataUsageCrawlDebug {
 					logger.Info(color.Green("data-usage:")+" no bucket (%s,%s)", f.root, entName)
 				}
 				return nil
 			}
 
 			if isReservedOrInvalidBucket(bucket, false) {
-				if dataUsageDebug {
+				if f.dataUsageCrawlDebug {
 					logger.Info(color.Green("data-usage:")+" invalid bucket: %v, entry: %v", bucket, entName)
 				}
 				return nil
@@ -257,12 +246,12 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			}
 			f.waitForLowActiveIO()
 			// Dynamic time delay.
-			t := time.Now()
+			t := UTCNow()
 
 			// Get file size, ignore errors.
 			size, err := f.getSize(Item{Path: path.Join(f.root, entName), Typ: typ})
 
-			sleepDuration(time.Since(t), delayMult)
+			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
 			if err == errSkipFile {
 				return nil
 			}
@@ -284,12 +273,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 // deepScanFolder will deep scan a folder and return the size if no error occurs.
 func (f *folderScanner) deepScanFolder(ctx context.Context, folder string) (*dataUsageEntry, error) {
 	var cache dataUsageEntry
-	delayMult := dataUsageSleepDefMult
-	if mult := os.Getenv(dataUsageCrawlDelay); mult != "" {
-		if d, err := strconv.ParseFloat(mult, 64); err == nil {
-			delayMult = d
-		}
-	}
+
 	done := ctx.Done()
 
 	var addDir func(entName string, typ os.FileMode) error
@@ -307,11 +291,12 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder string) (*dat
 			dirStack = append(dirStack, entName)
 			err := readDirFn(path.Join(dirStack...), addDir)
 			dirStack = dirStack[:len(dirStack)-1]
-			sleepDuration(dataUsageSleepPerFolder, delayMult)
+			sleepDuration(dataUsageSleepPerFolder, f.dataUsageCrawlMult)
 			return err
 		}
+
 		// Dynamic time delay.
-		t := time.Now()
+		t := UTCNow()
 
 		// Get file size, ignore errors.
 		dirStack = append(dirStack, entName)
@@ -321,7 +306,7 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder string) (*dat
 		size, err := f.getSize(Item{Path: fileName, Typ: typ})
 
 		// Don't sleep for really small amount of time
-		sleepDuration(time.Since(t), delayMult)
+		sleepDuration(time.Since(t), f.dataUsageCrawlMult)
 
 		if err == errSkipFile {
 			return nil
@@ -344,22 +329,39 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder string) (*dat
 // Before each operation waitForLowActiveIO is called which can be used to temporarily halt the crawler.
 // If the supplied context is canceled the function will return at the first chance.
 func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, waitForLowActiveIO func(), getSize getSizeFn) (dataUsageCache, error) {
+	t := UTCNow()
+
+	dataUsageDebug := env.Get(envDataUsageCrawlDebug, config.EnableOff) == config.EnableOn
+	defer func() {
+		if dataUsageDebug {
+			logger.Info(color.Green("updateUsage")+" Crawl time at %s: %v", basePath, time.Since(t))
+		}
+	}()
+
 	if cache.Info.Name == "" {
 		cache.Info.Name = dataUsageRoot
 	}
-	var logPrefix, logSuffix string
-	if dataUsageDebug {
-		logPrefix = color.Green("data-usage: ")
-		logSuffix = color.Blue(" - %v + %v", basePath, cache.Info.Name)
+
+	delayMult, err := strconv.ParseFloat(env.Get(envDataUsageCrawlDelay, "10.0"), 64)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		delayMult = dataUsageSleepDefMult
 	}
+
 	s := folderScanner{
-		root:               basePath,
-		getSize:            getSize,
-		oldCache:           cache,
-		newCache:           dataUsageCache{Info: cache.Info},
-		waitForLowActiveIO: waitForLowActiveIO,
-		newFolders:         nil,
-		existingFolders:    nil,
+		root:                basePath,
+		getSize:             getSize,
+		oldCache:            cache,
+		newCache:            dataUsageCache{Info: cache.Info},
+		waitForLowActiveIO:  waitForLowActiveIO,
+		newFolders:          nil,
+		existingFolders:     nil,
+		dataUsageCrawlMult:  delayMult,
+		dataUsageCrawlDebug: dataUsageDebug,
+	}
+
+	if s.dataUsageCrawlDebug {
+		logger.Info(color.Green("runDataUsageInfo:") + " Starting crawler master")
 	}
 
 	done := ctx.Done()
@@ -369,14 +371,21 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 	if cache.Info.Name != dataUsageRoot {
 		flattenLevels--
 	}
-	if dataUsageDebug {
+
+	var logPrefix, logSuffix string
+	if s.dataUsageCrawlDebug {
+		logPrefix = color.Green("data-usage: ")
+		logSuffix = color.Blue(" - %v + %v", basePath, cache.Info.Name)
+	}
+
+	if s.dataUsageCrawlDebug {
 		logger.Info(logPrefix+"Cycle: %v"+logSuffix, cache.Info.NextCycle)
 	}
 
 	// Always scan flattenLevels deep. Cache root is level 0.
 	todo := []cachedFolder{{name: cache.Info.Name}}
 	for i := 0; i < flattenLevels; i++ {
-		if dataUsageDebug {
+		if s.dataUsageCrawlDebug {
 			logger.Info(logPrefix+"Level %v, scanning %v directories."+logSuffix, i, len(todo))
 		}
 		select {
@@ -392,9 +401,10 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 		}
 	}
 
-	if dataUsageDebug {
+	if s.dataUsageCrawlDebug {
 		logger.Info(logPrefix+"New folders: %v"+logSuffix, s.newFolders)
 	}
+
 	// Add new folders first
 	for _, folder := range s.newFolders {
 		select {
@@ -419,9 +429,10 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 		}
 	}
 
-	if dataUsageDebug {
+	if s.dataUsageCrawlDebug {
 		logger.Info(logPrefix+"Existing folders: %v"+logSuffix, len(s.existingFolders))
 	}
+
 	// Do selective scanning of existing folders.
 	for _, folder := range s.existingFolders {
 		select {
@@ -448,7 +459,7 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 		s.newCache.replaceHashed(h, folder.parent, *du)
 	}
 
-	s.newCache.Info.LastUpdate = time.Now()
+	s.newCache.Info.LastUpdate = UTCNow()
 	s.newCache.Info.NextCycle++
 	return s.newCache, nil
 }

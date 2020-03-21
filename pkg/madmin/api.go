@@ -18,7 +18,9 @@ package madmin
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -109,7 +111,7 @@ func privateNew(endpoint, accessKeyID, secretAccessKey string, secure bool) (*Ad
 		endpointURL: *endpointURL,
 		// Instantiate http client and bucket location cache.
 		httpClient: &http.Client{
-			Transport: http.DefaultTransport,
+			Transport: DefaultTransport(secure),
 		},
 		// Introduce a new locked random seed.
 		random: rand.New(&lockedRandSource{src: rand.NewSource(time.Now().UTC().UnixNano())}),
@@ -263,38 +265,19 @@ func (adm AdminClient) dumpHTTP(req *http.Request, resp *http.Response) error {
 
 // do - execute http request.
 func (adm AdminClient) do(req *http.Request) (*http.Response, error) {
-	var resp *http.Response
-	var err error
-	// Do the request in a loop in case of 307 http is met since golang still doesn't
-	// handle properly this situation (https://github.com/golang/go/issues/7912)
-	for {
-		resp, err = adm.httpClient.Do(req)
-		if err != nil {
-			// Close idle connections upon error.
-			adm.httpClient.CloseIdleConnections()
-
-			// Handle this specifically for now until future Golang
-			// versions fix this issue properly.
-			urlErr, ok := err.(*url.Error)
-			if ok && strings.Contains(urlErr.Err.Error(), "EOF") {
+	resp, err := adm.httpClient.Do(req)
+	if err != nil {
+		// Handle this specifically for now until future Golang versions fix this issue properly.
+		if urlErr, ok := err.(*url.Error); ok {
+			if strings.Contains(urlErr.Err.Error(), "EOF") {
 				return nil, &url.Error{
 					Op:  urlErr.Op,
 					URL: urlErr.URL,
-					Err: fmt.Errorf("Connection closed by foreign host %s", urlErr.URL),
+					Err: errors.New("Connection closed by foreign host " + urlErr.URL + ". Retry again."),
 				}
 			}
-			return nil, err
 		}
-		// Redo the request with the new redirect url if http 307 is returned, quit the loop otherwise
-		if resp != nil && resp.StatusCode == http.StatusTemporaryRedirect {
-			newURL, uErr := url.Parse(resp.Header.Get("Location"))
-			if uErr != nil {
-				break
-			}
-			req.URL = newURL
-		} else {
-			break
-		}
+		return nil, err
 	}
 
 	// Response cannot be non-nil, report if its the case.
@@ -323,22 +306,32 @@ var successStatus = []int{
 // executeMethod - instantiates a given method, and retries the
 // request upon any error up to maxRetries attempts in a binomially
 // delayed manner using a standard back off algorithm.
-func (adm AdminClient) executeMethod(method string, reqData requestData) (res *http.Response, err error) {
+func (adm AdminClient) executeMethod(ctx context.Context, method string, reqData requestData) (res *http.Response, err error) {
 	var reqRetry = MaxRetry // Indicates how many times we can retry the request
 
-	// Create a done channel to control 'ListObjects' go routine.
-	doneCh := make(chan struct{}, 1)
+	defer func() {
+		if err != nil {
+			// close idle connections before returning, upon error.
+			adm.httpClient.CloseIdleConnections()
+		}
+	}()
+
+	// Create cancel context to control 'newRetryTimer' go routine.
+	retryCtx, cancel := context.WithCancel(ctx)
 
 	// Indicate to our routine to exit cleanly upon return.
-	defer close(doneCh)
+	defer cancel()
 
-	for range adm.newRetryTimer(reqRetry, DefaultRetryUnit, DefaultRetryCap, MaxJitter, doneCh) {
+	for range adm.newRetryTimer(retryCtx, reqRetry, DefaultRetryUnit, DefaultRetryCap, MaxJitter) {
 		// Instantiate a new request.
 		var req *http.Request
 		req, err = adm.newRequest(method, reqData)
 		if err != nil {
 			return nil, err
 		}
+
+		// Add context to request
+		req = req.WithContext(ctx)
 
 		// Initiate the request.
 		res, err = adm.do(req)

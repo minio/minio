@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -43,7 +44,7 @@ func main() {
 	// Create policy
 	policy := `{"Version": "2012-10-17","Statement": [{"Action": ["s3:GetObject"],"Effect": "Allow","Resource": ["arn:aws:s3:::testbucket/*"],"Sid": ""}]}`
 
-	creds, err := madmClnt.AddServiceAccount("parentuser", policy)
+	creds, err := madmClnt.AddServiceAccount(context.Background(), "parentuser", policy)
 	if err != nil {
 		log.Fatalln(err)
 	}

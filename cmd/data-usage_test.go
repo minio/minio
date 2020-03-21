@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -30,8 +29,8 @@ type usageTestFile struct {
 	size int
 }
 
-func Test_updateUsage(t *testing.T) {
-	base, err := ioutil.TempDir("", "Test_updateUsage")
+func TestDataUsageUpdate(t *testing.T) {
+	base, err := ioutil.TempDir("", "TestDataUsageUpdate")
 	if err != nil {
 		t.Skip(err)
 	}
@@ -58,6 +57,7 @@ func Test_updateUsage(t *testing.T) {
 		}
 		return 0, nil
 	}
+
 	got, err := updateUsage(context.Background(), base, dataUsageCache{}, func() {}, getSize)
 	if err != nil {
 		t.Fatal(err)
@@ -316,17 +316,10 @@ func Test_updateUsage(t *testing.T) {
 			}
 		})
 	}
-
-	t.Log(got.StringAll())
-
-	t.Logf("Root, flat: %+v", got.flatten(*got.root()))
-	t.Logf("Root: %+v", *got.root())
-	t.Logf("/dir1/dira: %+v", *got.find("/dir1/dira"))
-
 }
 
-func Test_updateUsagePrefix(t *testing.T) {
-	base, err := ioutil.TempDir("", "Test_updateUsagePrefix")
+func TestDataUsageUpdatePrefix(t *testing.T) {
+	base, err := ioutil.TempDir("", "TestDataUpdateUsagePrefix")
 	if err != nil {
 		t.Skip(err)
 	}
@@ -593,12 +586,6 @@ func Test_updateUsagePrefix(t *testing.T) {
 			}
 		})
 	}
-
-	t.Log(got.StringAll())
-
-	t.Logf("Root, flat: %+v", got.flatten(*got.root()))
-	t.Logf("Root: %+v", *got.root())
-	t.Logf("bucket/dir1/dira: %+v", *got.find("bucket/dir1/dira"))
 }
 
 func createUsageTestFiles(t *testing.T, base string, files []usageTestFile) {
@@ -614,8 +601,8 @@ func createUsageTestFiles(t *testing.T, base string, files []usageTestFile) {
 	}
 }
 
-func Test_dataUsageCacheSerialize(t *testing.T) {
-	base, err := ioutil.TempDir("", "Test_dataUsageCacheSerialize")
+func TestDataUsageCacheSerialize(t *testing.T) {
+	base, err := ioutil.TempDir("", "TestDataUsageCacheSerialize")
 	if err != nil {
 		t.Skip(err)
 	}
@@ -646,19 +633,19 @@ func Test_dataUsageCacheSerialize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := want.serialize()
-	t.Log("serialize -> ", len(b), "bytes")
 
+	b := want.serialize()
 	var got dataUsageCache
 	err = got.deserialize(b)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if got.Info.LastUpdate.IsZero() {
 		t.Error("lastupdate not set")
 	}
 
-	if fmt.Sprint(want) == fmt.Sprint(got) {
+	if !want.Info.LastUpdate.Equal(got.Info.LastUpdate) {
 		t.Fatalf("deserialize mismatch\nwant: %+v\ngot:  %+v", want, got)
 	}
 }

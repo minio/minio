@@ -32,7 +32,6 @@ import (
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -227,10 +226,6 @@ func (z *xlZones) CrawlAndGetDataUsage(ctx context.Context, updates chan<- DataU
 	var knownBuckets = make(map[string]struct{}) // used to deduplicate buckets.
 	var allBuckets []BucketInfo
 
-	t := time.Now()
-	if dataUsageDebug {
-		logger.Info(color.Green("xlZones.CrawlAndGetDataUsage:") + " Start crawl cycle")
-	}
 	// Collect for each set in zones.
 	for _, z := range z.zones {
 		for _, xlObj := range z.sets {
@@ -314,9 +309,6 @@ func (z *xlZones) CrawlAndGetDataUsage(ctx context.Context, updates chan<- DataU
 	}()
 
 	wg.Wait()
-	if dataUsageDebug {
-		logger.Info(color.Green("xlZones.CrawlAndGetDataUsage:")+" Cycle scan time: %v", time.Since(t))
-	}
 	ch := make(chan struct{})
 	updateCloser <- ch
 	<-ch
