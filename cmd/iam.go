@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 
 	"github.com/minio/minio-go/v6/pkg/set"
@@ -457,10 +456,10 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 }
 
 // InfoPolicy - expands the canned policy into its JSON structure.
-func (sys *IAMSys) InfoPolicy(policyName string) ([]byte, error) {
+func (sys *IAMSys) InfoPolicy(policyName string) (iampolicy.Policy, error) {
 	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil || sys == nil || sys.store == nil {
-		return nil, errServerNotInitialized
+		return iampolicy.Policy{}, errServerNotInitialized
 	}
 
 	sys.store.rlock()
@@ -468,29 +467,25 @@ func (sys *IAMSys) InfoPolicy(policyName string) ([]byte, error) {
 
 	v, ok := sys.iamPolicyDocsMap[policyName]
 	if !ok {
-		return nil, errNoSuchPolicy
+		return iampolicy.Policy{}, errNoSuchPolicy
 	}
-	return json.Marshal(v)
+
+	return v, nil
 }
 
 // ListPolicies - lists all canned policies.
-func (sys *IAMSys) ListPolicies() (map[string][]byte, error) {
+func (sys *IAMSys) ListPolicies() (map[string]iampolicy.Policy, error) {
 	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil || sys == nil || sys.store == nil {
 		return nil, errServerNotInitialized
 	}
 
-	var policyDocsMap = make(map[string][]byte)
-
 	sys.store.rlock()
 	defer sys.store.runlock()
 
+	policyDocsMap := make(map[string]iampolicy.Policy, len(sys.iamPolicyDocsMap))
 	for k, v := range sys.iamPolicyDocsMap {
-		data, err := json.Marshal(v)
-		if err != nil {
-			return nil, err
-		}
-		policyDocsMap[k] = data
+		policyDocsMap[k] = v
 	}
 
 	return policyDocsMap, nil

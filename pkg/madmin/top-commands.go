@@ -55,7 +55,7 @@ func (l LockEntries) Swap(i, j int) {
 
 // TopLocks - returns the oldest locks in a minio setup.
 func (adm *AdminClient) TopLocks(ctx context.Context) (LockEntries, error) {
-	// Execute GET on /minio/admin/v2/top/locks
+	// Execute GET on /minio/admin/v3/top/locks
 	// to get the oldest locks in a minio setup.
 	resp, err := adm.executeMethod(ctx,
 		http.MethodGet,
