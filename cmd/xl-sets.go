@@ -887,8 +887,7 @@ func leastEntry(entryChs []FileInfoCh, entries []FileInfo, entriesValid []bool) 
 }
 
 // mergeEntriesCh - merges FileInfo channel to entries upto maxKeys.
-// If partialQuorumOnly is set only objects that does not have full quorum is returned.
-func mergeEntriesCh(entryChs []FileInfoCh, maxKeys int, totalDrives int, partialQuorumOnly bool) (entries FilesInfo) {
+func mergeEntriesCh(entryChs []FileInfoCh, maxKeys int, ndisks int) (entries FilesInfo) {
 	var i = 0
 	entriesInfos := make([]FileInfo, len(entryChs))
 	entriesValid := make([]bool, len(entryChs))
@@ -899,27 +898,11 @@ func mergeEntriesCh(entryChs []FileInfoCh, maxKeys int, totalDrives int, partial
 			break
 		}
 
-		rquorum := fi.Quorum
-		// Quorum is zero for all directories.
-		if rquorum == 0 {
-			// Choose N/2 quoroum for directory entries.
-			rquorum = totalDrives / 2
+		if quorumCount < ndisks-1 {
+			// Skip entries which are not found on upto ndisks.
+			continue
 		}
 
-		if partialQuorumOnly {
-			// When healing is enabled, we should
-			// list only objects which need healing.
-			if quorumCount == totalDrives {
-				// Skip good entries.
-				continue
-			}
-		} else {
-			// Regular listing, we skip entries not in quorum.
-			if quorumCount < rquorum {
-				// Skip entries which do not have quorum.
-				continue
-			}
-		}
 		entries.Files = append(entries.Files, fi)
 		i++
 		if i == maxKeys {
@@ -951,11 +934,19 @@ func isTruncated(entryChs []FileInfoCh, entries []FileInfo, entriesValid []bool)
 	return isTruncated
 }
 
-// Starts a walk channel across all disks and returns a slice.
 func (s *xlSets) startMergeWalks(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}) []FileInfoCh {
+	return s.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, -1)
+}
+
+// Starts a walk channel across all disks and returns a slice of
+// FileInfo channels which can be read from.
+func (s *xlSets) startMergeWalksN(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}, ndisks int) []FileInfoCh {
 	var entryChs []FileInfoCh
+	var success int
 	for _, set := range s.sets {
-		for _, disk := range set.getDisks() {
+		// Reset for the next erasure set.
+		success = ndisks
+		for _, disk := range set.getLoadBalancedDisks() {
 			if disk == nil {
 				// Disk can be offline
 				continue
@@ -968,6 +959,10 @@ func (s *xlSets) startMergeWalks(ctx context.Context, bucket, prefix, marker str
 			entryChs = append(entryChs, FileInfoCh{
 				Ch: entryCh,
 			})
+			success--
+			if success == 0 {
+				break
+			}
 		}
 	}
 	return entryChs
@@ -977,7 +972,8 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 	endWalkCh := make(chan struct{})
 	defer close(endWalkCh)
 
-	entryChs := s.startMergeWalks(context.Background(), bucket, prefix, "", true, endWalkCh)
+	const ndisks = 3
+	entryChs := s.startMergeWalksN(context.Background(), bucket, prefix, "", true, endWalkCh, ndisks)
 
 	var objInfos []ObjectInfo
 	var eof bool
@@ -989,18 +985,15 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 		if len(objInfos) == maxKeys {
 			break
 		}
+
 		result, quorumCount, ok := leastEntry(entryChs, entries, entriesValid)
 		if !ok {
 			eof = true
 			break
 		}
-		rquorum := result.Quorum
-		// Quorum is zero for all directories.
-		if rquorum == 0 {
-			// Choose N/2 quorum for directory entries.
-			rquorum = s.drivesPerSet / 2
-		}
-		if quorumCount < rquorum {
+
+		if quorumCount < ndisks-1 {
+			// Skip entries which are not found on upto ndisks.
 			continue
 		}
 
@@ -1080,7 +1073,7 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 // walked and merged at this layer. Resulting value through the merge process sends
 // the data in lexically sorted order.
 // If partialQuorumOnly is set only objects that does not have full quorum is returned.
-func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, partialQuorumOnly bool) (loi ListObjectsInfo, err error) {
+func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
 	if err = checkListObjsArgs(ctx, bucket, prefix, marker, s); err != nil {
 		return loi, err
 	}
@@ -1123,13 +1116,16 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 		recursive = false
 	}
 
+	const ndisks = 3
+
 	entryChs, endWalkCh := s.pool.Release(listParams{bucket: bucket, recursive: recursive, marker: marker, prefix: prefix})
 	if entryChs == nil {
 		endWalkCh = make(chan struct{})
-		entryChs = s.startMergeWalks(context.Background(), bucket, prefix, marker, recursive, endWalkCh)
+		// start file tree walk across at most randomly 3 disks in a set.
+		entryChs = s.startMergeWalksN(context.Background(), bucket, prefix, marker, recursive, endWalkCh, ndisks)
 	}
 
-	entries := mergeEntriesCh(entryChs, maxKeys, s.drivesPerSet, partialQuorumOnly)
+	entries := mergeEntriesCh(entryChs, maxKeys, ndisks)
 	if len(entries.Files) == 0 {
 		return loi, nil
 	}
@@ -1157,7 +1153,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 // walked and merged at this layer. Resulting value through the merge process sends
 // the data in lexically sorted order.
 func (s *xlSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
-	return s.listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys, false)
+	return s.listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)
 }
 
 func (s *xlSets) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error) {
