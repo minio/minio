@@ -841,10 +841,9 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser, sessionPol
 
 	if len(sessionPolicy) > 0 {
 		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicy))
-		m[iamPolicyClaimName()] = "embedded-policy"
+		m[iamPolicyClaimNameSA()] = "embedded-policy"
 	} else {
-		m[iamPolicyClaimName()] = "inherited-policy"
-		m[inheritParentPolicyClaim] = "true"
+		m[iamPolicyClaimNameSA()] = "inherited-policy"
 	}
 
 	secret := globalActiveCred.SecretKey
@@ -1480,6 +1479,11 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 		if parentInClaim != parent {
 			return false
 		}
+	} else {
+		// This is needed so a malicious user cannot
+		// use a leaked session key of another user
+		// to widen its privileges.
+		return false
 	}
 
 	// Check if the parent is allowed to perform this action, reject if not
@@ -1521,18 +1525,18 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 		return false
 	}
 
-	inherit, ok := args.Claims[inheritParentPolicyClaim]
+	saPolicyClaim, ok := args.Claims[iamPolicyClaimNameSA()]
 	if ok {
-		inheritStr, ok := inherit.(string)
+		saPolicyClaimStr, ok := saPolicyClaim.(string)
 		if !ok {
 			// Sub policy if set, should be a string reject
 			// malformed/malicious requests.
 			return false
 		}
 
-		// Immediately returns true since at this stage,
-		// parent user is allowed to do this action.
-		if inheritStr == "true" {
+		if saPolicyClaimStr == "inherited-policy" {
+			// Immediately returns true since at this stage, since
+			// parent user is allowed to do this action.
 			return true
 		}
 	}
@@ -1627,7 +1631,7 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 		return combinedPolicy.IsAllowed(args)
 	}
 
-	pnameSlice, ok := args.GetPolicies(iamPolicyClaimName())
+	pnameSlice, ok := args.GetPolicies(iamPolicyClaimNameOpenID())
 	if !ok {
 		// When claims are set, it should have a policy claim field.
 		return false

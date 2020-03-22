@@ -620,8 +620,12 @@ func getMinioMode() string {
 	return mode
 }
 
-func iamPolicyClaimName() string {
+func iamPolicyClaimNameOpenID() string {
 	return globalOpenIDConfig.ClaimPrefix + globalOpenIDConfig.ClaimName
+}
+
+func iamPolicyClaimNameSA() string {
+	return "sa-policy"
 }
 
 func isWORMEnabled(bucket string) bool {

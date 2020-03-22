@@ -58,8 +58,6 @@ const (
 
 	// JWT claim to check the parent user
 	parentClaim = "parent"
-	// JWT claim to inherit parent policy
-	inheritParentPolicyClaim = "inherit-parent-policy"
 
 	// LDAP claim keys
 	ldapUser   = "ldapUser"
@@ -217,7 +215,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	// This policy is the policy associated with the user
 	// requesting for temporary credentials. The temporary
 	// credentials will inherit the same policy requirements.
-	m[iamPolicyClaimName()] = policyName
+	m[iamPolicyClaimNameOpenID()] = policyName
 
 	if len(sessionPolicyStr) > 0 {
 		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
@@ -353,7 +351,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	// be set and configured on your identity provider as part of
 	// JWT custom claims.
 	var policyName string
-	if v, ok := m[iamPolicyClaimName()]; ok {
+	if v, ok := m[iamPolicyClaimNameOpenID()]; ok {
 		policyName, _ = v.(string)
 	}
 
