@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -126,65 +125,36 @@ func durationToNextHealRound(lastHeal time.Time) time.Duration {
 }
 
 // Healing leader will take the charge of healing all erasure sets
-func execLeaderTasks(z *xlZones) {
-	ctx := context.Background()
-
-	// Hold a lock so only one server performs auto-healing
-	leaderLock := z.NewNSLock(ctx, minioMetaBucket, "leader")
+func execLeaderTasks(ctx context.Context, z *xlZones) {
+	lastScanTime := UTCNow() // So that we don't heal immediately, but after one month.
 	for {
-		err := leaderLock.GetLock(leaderLockTimeout)
-		if err == nil {
-			break
-		}
-		time.Sleep(leaderTick)
-	}
-
-	// Hold a lock for healing the erasure set
-	zeroDuration := time.Millisecond
-	zeroDynamicTimeout := newDynamicTimeout(zeroDuration, zeroDuration)
-
-	lastScanTime := time.Now() // So that we don't heal immediately, but after one month.
-	for {
-		time.Sleep(durationToNextHealRound(lastScanTime))
-		for _, zone := range z.zones {
-			// Heal set by set
-			for i, set := range zone.sets {
-				setLock := z.zones[0].NewNSLock(ctx, "system", fmt.Sprintf("erasure-set-heal-%d", i))
-				if err := setLock.GetLock(zeroDynamicTimeout); err != nil {
-					logger.LogIf(ctx, err)
-					continue
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.NewTimer(durationToNextHealRound(lastScanTime)).C:
+			for _, zone := range z.zones {
+				// Heal set by set
+				for i, set := range zone.sets {
+					if err := healErasureSet(ctx, i, set); err != nil {
+						logger.LogIf(ctx, err)
+						continue
+					}
 				}
-				if err := healErasureSet(ctx, i, set); err != nil {
-					setLock.Unlock()
-					logger.LogIf(ctx, err)
-					continue
-				}
-				setLock.Unlock()
 			}
+			lastScanTime = UTCNow()
 		}
-		lastScanTime = time.Now()
 	}
 }
 
-func startGlobalHeal() {
-	var objAPI ObjectLayer
-	for {
-		objAPI = newObjectLayerWithoutSafeModeFn()
-		if objAPI == nil {
-			time.Sleep(time.Second)
-			continue
-		}
-		break
-	}
-
+func startGlobalHeal(ctx context.Context, objAPI ObjectLayer) {
 	zones, ok := objAPI.(*xlZones)
 	if !ok {
 		return
 	}
 
-	execLeaderTasks(zones)
+	execLeaderTasks(ctx, zones)
 }
 
-func initGlobalHeal() {
-	go startGlobalHeal()
+func initGlobalHeal(ctx context.Context, objAPI ObjectLayer) {
+	go startGlobalHeal(ctx, objAPI)
 }

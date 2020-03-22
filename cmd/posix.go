@@ -672,11 +672,15 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 		return nil, err
 	}
 
-	ch = make(chan FileInfo)
+	// buffer channel matches the S3 ListObjects implementation
+	ch = make(chan FileInfo, maxObjectList)
 	go func() {
 		defer close(ch)
 		listDir := func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string) {
+			// Dynamic time delay.
+			t := UTCNow()
 			entries, err := s.ListDir(volume, dirPath, -1, leafFile)
+			sleepDuration(time.Since(t), 10.0)
 			if err != nil {
 				return
 			}
@@ -701,7 +705,10 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 					Mode:   os.ModeDir,
 				}
 			} else {
+				// Dynamic time delay.
+				t := UTCNow()
 				buf, err := s.ReadAll(volume, pathJoin(walkResult.entry, leafFile))
+				sleepDuration(time.Since(t), 10.0)
 				if err != nil {
 					continue
 				}
