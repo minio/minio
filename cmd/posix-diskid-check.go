@@ -117,6 +117,13 @@ func (p *posixDiskIDCheck) Walk(volume, dirPath string, marker string, recursive
 	return p.storage.Walk(volume, dirPath, marker, recursive, leafFile, readMetadataFn, endWalkCh)
 }
 
+func (p *posixDiskIDCheck) WalkSplunk(volume, dirPath string, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
+	if p.isDiskStale() {
+		return nil, errDiskNotFound
+	}
+	return p.storage.WalkSplunk(volume, dirPath, marker, endWalkCh)
+}
+
 func (p *posixDiskIDCheck) ListDir(volume, dirPath string, count int, leafFile string) ([]string, error) {
 	if p.isDiskStale() {
 		return nil, errDiskNotFound

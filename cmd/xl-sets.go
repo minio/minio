@@ -96,7 +96,8 @@ type xlSets struct {
 	distributionAlgo string
 
 	// Merge tree walk
-	pool *MergeWalkPool
+	pool       *MergeWalkPool
+	poolSplunk *MergeWalkPool
 
 	mrfMU      sync.Mutex
 	mrfUploads map[string]int
@@ -289,6 +290,7 @@ func newXLSets(endpoints Endpoints, format *formatXLV3, setCount int, drivesPerS
 		disksConnectDoneCh: make(chan struct{}),
 		distributionAlgo:   format.XL.DistributionAlgo,
 		pool:               NewMergeWalkPool(globalMergeLookupTimeout),
+		poolSplunk:         NewMergeWalkPool(globalMergeLookupTimeout),
 		mrfUploads:         make(map[string]int),
 	}
 
@@ -952,6 +954,36 @@ func (s *xlSets) startMergeWalksN(ctx context.Context, bucket, prefix, marker st
 				continue
 			}
 			entryCh, err := disk.Walk(bucket, prefix, marker, recursive, xlMetaJSONFile, readMetadata, endWalkCh)
+			if err != nil {
+				// Disk walk returned error, ignore it.
+				continue
+			}
+			entryChs = append(entryChs, FileInfoCh{
+				Ch: entryCh,
+			})
+			success--
+			if success == 0 {
+				break
+			}
+		}
+	}
+	return entryChs
+}
+
+// Starts a walk channel across all disks and returns a slice of
+// FileInfo channels which can be read from.
+func (s *xlSets) startSplunkMergeWalksN(ctx context.Context, bucket, prefix, marker string, endWalkCh <-chan struct{}, ndisks int) []FileInfoCh {
+	var entryChs []FileInfoCh
+	var success int
+	for _, set := range s.sets {
+		// Reset for the next erasure set.
+		success = ndisks
+		for _, disk := range set.getLoadBalancedDisks() {
+			if disk == nil {
+				// Disk can be offline
+				continue
+			}
+			entryCh, err := disk.WalkSplunk(bucket, prefix, marker, endWalkCh)
 			if err != nil {
 				// Disk walk returned error, ignore it.
 				continue
