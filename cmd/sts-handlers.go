@@ -58,6 +58,8 @@ const (
 
 	// JWT claim to check the parent user
 	parentClaim = "parent"
+	// JWT claim to inherit parent policy
+	inheritParentPolicyClaim = "inherit-parent-policy"
 
 	// LDAP claim keys
 	ldapUser   = "ldapUser"

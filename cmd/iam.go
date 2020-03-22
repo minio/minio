@@ -798,17 +798,18 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser, sessionPol
 	}
 
 	if len(sessionPolicy) > 16*1024 {
-		return auth.Credentials{}, fmt.Errorf("Session policy should not exceed 16*1024 characters")
+		return auth.Credentials{}, fmt.Errorf("Session policy should not exceed 16 KiB characters")
 	}
 
-	policy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(sessionPolicy)))
-	if err != nil {
-		return auth.Credentials{}, err
-	}
-
-	// Version in policy must not be empty
-	if policy.Version == "" {
-		return auth.Credentials{}, fmt.Errorf("Invalid session policy version")
+	if len(sessionPolicy) > 0 {
+		policy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(sessionPolicy)))
+		if err != nil {
+			return auth.Credentials{}, err
+		}
+		// Version in policy must not be empty
+		if policy.Version == "" {
+			return auth.Credentials{}, fmt.Errorf("Invalid session policy version")
+		}
 	}
 
 	sys.Lock()
@@ -836,9 +837,15 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser, sessionPol
 	}
 
 	m := make(map[string]interface{})
-	m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicy))
 	m[parentClaim] = parentUser
-	m[iamPolicyClaimName()] = "embedded-policy"
+
+	if len(sessionPolicy) > 0 {
+		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicy))
+		m[iamPolicyClaimName()] = "embedded-policy"
+	} else {
+		m[iamPolicyClaimName()] = "inherited-policy"
+		m[inheritParentPolicyClaim] = "true"
+	}
 
 	secret := globalActiveCred.SecretKey
 	cred, err := auth.GetNewCredentialsWithMetadata(m, secret)
@@ -1508,12 +1515,27 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 			availablePolicies[i].Statements...)
 	}
 
-	serviceAcc := args.AccountName
-	args.AccountName = parent
-	if !combinedPolicy.IsAllowed(args) {
+	parentArgs := args
+	parentArgs.AccountName = parent
+	if !combinedPolicy.IsAllowed(parentArgs) {
 		return false
 	}
-	args.AccountName = serviceAcc
+
+	inherit, ok := args.Claims[inheritParentPolicyClaim]
+	if ok {
+		inheritStr, ok := inherit.(string)
+		if !ok {
+			// Sub policy if set, should be a string reject
+			// malformed/malicious requests.
+			return false
+		}
+
+		// Immediately returns true since at this stage,
+		// parent user is allowed to do this action.
+		if inheritStr == "true" {
+			return true
+		}
+	}
 
 	// Now check if we have a sessionPolicy.
 	spolicy, ok := args.Claims[iampolicy.SessionPolicyName]
