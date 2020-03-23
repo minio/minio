@@ -645,6 +645,129 @@ func (s *posix) DeleteVol(volume string) (err error) {
 	return nil
 }
 
+const guidSplunk = "guidSplunk"
+
+// ListDirSplunk - return all the entries at the given directory path.
+// If an entry is a directory it will be returned with a trailing SlashSeparator.
+func (s *posix) ListDirSplunk(volume, dirPath string, count int) (entries []string, err error) {
+	guidIndex := strings.Index(dirPath, guidSplunk)
+	if guidIndex != -1 {
+		return nil, nil
+	}
+
+	const receiptJSON = "receipt.json"
+
+	atomic.AddInt32(&s.activeIOCount, 1)
+	defer func() {
+		atomic.AddInt32(&s.activeIOCount, -1)
+	}()
+
+	// Verify if volume is valid and it exists.
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return nil, err
+	}
+	// Stat a volume entry.
+	_, err = os.Stat((volumeDir))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errVolumeNotFound
+		} else if isSysErrIO(err) {
+			return nil, errFaultyDisk
+		}
+		return nil, err
+	}
+
+	dirPath = pathJoin(volumeDir, dirPath)
+	if count > 0 {
+		entries, err = readDirN(dirPath, count)
+	} else {
+		entries, err = readDir(dirPath)
+	}
+
+	for i, entry := range entries {
+		if entry != receiptJSON {
+			continue
+		}
+		if _, serr := os.Stat(pathJoin(dirPath, entry, xlMetaJSONFile)); serr == nil {
+			entries[i] = strings.TrimSuffix(entry, SlashSeparator)
+		}
+	}
+
+	return entries, err
+}
+
+// WalkSplunk - is a sorted walker which returns file entries in lexically
+// sorted order, additionally along with metadata about each of those entries.
+// Implemented specifically for Splunk backend structure and List call with
+// delimiter as "guidSplunk"
+func (s *posix) WalkSplunk(volume, dirPath, marker string, endWalkCh <-chan struct{}) (ch chan FileInfo, err error) {
+	// Verify if volume is valid and it exists.
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return nil, err
+	}
+
+	// Stat a volume entry.
+	_, err = os.Stat(volumeDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errVolumeNotFound
+		} else if isSysErrIO(err) {
+			return nil, errFaultyDisk
+		}
+		return nil, err
+	}
+
+	ch = make(chan FileInfo)
+	go func() {
+		defer close(ch)
+		listDir := func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string) {
+			entries, err := s.ListDirSplunk(volume, dirPath, -1)
+			if err != nil {
+				return
+			}
+			if len(entries) == 0 {
+				return true, nil
+			}
+			sort.Strings(entries)
+			return false, filterMatchingPrefix(entries, dirEntry)
+		}
+
+		walkResultCh := startTreeWalk(context.Background(), volume, dirPath, marker, true, listDir, endWalkCh)
+		for {
+			walkResult, ok := <-walkResultCh
+			if !ok {
+				return
+			}
+			var fi FileInfo
+			if HasSuffix(walkResult.entry, SlashSeparator) {
+				fi = FileInfo{
+					Volume: volume,
+					Name:   walkResult.entry,
+					Mode:   os.ModeDir,
+				}
+			} else {
+				// Dynamic time delay.
+				t := UTCNow()
+				buf, err := s.ReadAll(volume, pathJoin(walkResult.entry, xlMetaJSONFile))
+				sleepDuration(time.Since(t), 10.0)
+				if err != nil {
+					continue
+				}
+				fi = readMetadata(buf, volume, walkResult.entry)
+			}
+			select {
+			case ch <- fi:
+			case <-endWalkCh:
+				return
+			}
+		}
+	}()
+
+	return ch, nil
+}
+
 // Walk - is a sorted walker which returns file entries in lexically
 // sorted order, additionally along with metadata about each of those entries.
 func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile string,

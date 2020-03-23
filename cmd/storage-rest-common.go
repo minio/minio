@@ -40,6 +40,7 @@ const (
 	storageRESTMethodReadFileStream = "/readfilestream"
 	storageRESTMethodListDir        = "/listdir"
 	storageRESTMethodWalk           = "/walk"
+	storageRESTMethodWalkSplunk     = "/walksplunk"
 	storageRESTMethodDeleteFile     = "/deletefile"
 	storageRESTMethodDeleteFileBulk = "/deletefilebulk"
 	storageRESTMethodDeletePrefixes = "/deleteprefixes"

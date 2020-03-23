@@ -697,6 +697,58 @@ func (z *xlZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, marke
 	return result, nil
 }
 
+func (z *xlZones) listObjectsSplunk(ctx context.Context, bucket, prefix, marker string, maxKeys int) (loi ListObjectsInfo, err error) {
+	if strings.Contains(prefix, guidSplunk) {
+		logger.LogIf(ctx, NotImplemented{})
+		return loi, NotImplemented{}
+	}
+
+	recursive := true
+
+	var zonesEntryChs [][]FileInfoCh
+	var zonesEndWalkCh []chan struct{}
+
+	const ndisks = 3
+	for _, zone := range z.zones {
+		entryChs, endWalkCh := zone.poolSplunk.Release(listParams{bucket, recursive, marker, prefix})
+		if entryChs == nil {
+			endWalkCh = make(chan struct{})
+			entryChs = zone.startSplunkMergeWalksN(ctx, bucket, prefix, marker, endWalkCh, ndisks)
+		}
+		zonesEntryChs = append(zonesEntryChs, entryChs)
+		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
+	}
+
+	entries := mergeZonesEntriesCh(zonesEntryChs, maxKeys, ndisks)
+	if len(entries.Files) == 0 {
+		return loi, nil
+	}
+
+	loi.IsTruncated = entries.IsTruncated
+	if loi.IsTruncated {
+		loi.NextMarker = entries.Files[len(entries.Files)-1].Name
+	}
+
+	for _, entry := range entries.Files {
+		objInfo := entry.ToObjectInfo()
+		splits := strings.Split(objInfo.Name, guidSplunk)
+		if len(splits) == 0 {
+			loi.Objects = append(loi.Objects, objInfo)
+			continue
+		}
+
+		loi.Prefixes = append(loi.Prefixes, splits[0]+guidSplunk)
+	}
+
+	if loi.IsTruncated {
+		for i, zone := range z.zones {
+			zone.poolSplunk.Set(listParams{bucket, recursive, loi.NextMarker, prefix}, zonesEntryChs[i],
+				zonesEndWalkCh[i])
+		}
+	}
+	return loi, nil
+}
+
 func (z *xlZones) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	loi := ListObjectsInfo{}
 
@@ -732,7 +784,9 @@ func (z *xlZones) listObjects(ctx context.Context, bucket, prefix, marker, delim
 	}
 
 	if delimiter != SlashSeparator && delimiter != "" {
-		// "heal" option passed can be ignored as the heal-listing does not send non-standard delimiter.
+		if delimiter == guidSplunk {
+			return z.listObjectsSplunk(ctx, bucket, prefix, marker, maxKeys)
+		}
 		return z.listObjectsNonSlash(ctx, bucket, prefix, marker, delimiter, maxKeys)
 	}
 
