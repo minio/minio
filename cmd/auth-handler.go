@@ -211,8 +211,9 @@ func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
 		// If OPA is not set, session token should
 		// have a policy and its mandatory, reject
 		// requests without policy claim.
-		_, pok := claims.Lookup(iamPolicyClaimName())
-		if !pok {
+		_, pokOpenID := claims.Lookup(iamPolicyClaimNameOpenID())
+		_, pokSA := claims.Lookup(iamPolicyClaimNameSA())
+		if !pokOpenID && !pokSA {
 			return nil, errAuthentication
 		}
 
