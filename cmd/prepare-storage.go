@@ -246,7 +246,9 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 		}
 		// not critical error but still print the error, nonetheless, which is perhaps unhandled
 		if sErr != errUnformattedDisk && sErr != errDiskNotFound && retryCount >= 5 {
-			logger.Info("Unable to read 'format.json' from %s: %v\n", endpoints[i], sErr)
+			if sErr != nil {
+				logger.Info("Unable to read 'format.json' from %s: %v\n", endpoints[i], sErr)
+			}
 		}
 	}
 
