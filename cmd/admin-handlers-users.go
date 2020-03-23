@@ -97,10 +97,12 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListUsers")
 
-	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.ListUsersAdminAction)
+	objectAPI, cred := validateAdminUsersReq(ctx, w, r, iampolicy.ListUsersAdminAction)
 	if objectAPI == nil {
 		return
 	}
+
+	password := cred.SecretKey
 
 	allCredentials, err := globalIAMSys.ListUsers()
 	if err != nil {
@@ -114,7 +116,6 @@ func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	password := globalActiveCred.SecretKey
 	econfigData, err := madmin.EncryptData(password, data)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -462,13 +463,15 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 func (a adminAPIHandlers) GetServiceAccount(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetServiceAccount")
 
-	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.GetUserAdminAction)
+	objectAPI, cred := validateAdminUsersReq(ctx, w, r, iampolicy.GetUserAdminAction)
 	if objectAPI == nil {
 		return
 	}
 
 	vars := mux.Vars(r)
 	accessKey := vars["accessKey"]
+
+	password := cred.SecretKey
 
 	creds, err := globalIAMSys.GetServiceAccount(ctx, accessKey)
 	if err != nil {
@@ -482,7 +485,6 @@ func (a adminAPIHandlers) GetServiceAccount(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	password := globalActiveCred.SecretKey
 	econfigData, err := madmin.EncryptData(password, data)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
