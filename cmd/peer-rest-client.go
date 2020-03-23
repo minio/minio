@@ -41,7 +41,7 @@ import (
 	trace "github.com/minio/minio/pkg/trace"
 )
 
-// client to talk to peer Nodes.
+// client to talk to peer NEndpoints.
 type peerRESTClient struct {
 	host       *xnet.Host
 	restClient *rest.Client

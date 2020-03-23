@@ -33,6 +33,10 @@ const (
 	EnvPublicIPs    = "MINIO_PUBLIC_IPS"
 	EnvEndpoints    = "MINIO_ENDPOINTS"
 
+	// API sub-system
+	EnvAPIRequestsMax      = "MINIO_API_REQUESTS_MAX"
+	EnvAPIRequestsDeadline = "MINIO_API_REQUESTS_DEADLINE"
+
 	EnvUpdate = "MINIO_UPDATE"
 
 	EnvWorm   = "MINIO_WORM"   // legacy

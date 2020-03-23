@@ -107,7 +107,7 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 				break
 			}
 
-			waitForLowHTTPReq(int32(globalEndpoints.Nodes()))
+			waitForLowHTTPReq(int32(globalEndpoints.NEndpoints()))
 
 			// Deletes a list of objects.
 			deleteErrs, err := objAPI.DeleteObjects(ctx, bucket.Name, objects)
