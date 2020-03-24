@@ -25,6 +25,18 @@ const isPdf = (name, contentType) => {
   if (contentType === 'application/pdf') return true
   return false
 }
+const isImage = (name, contentType) => {
+  if (
+    contentType === 'image/jpeg'    ||
+    contentType === 'image/gif'     ||
+    contentType === 'image/x-icon'  ||
+    contentType === 'image/png'     ||
+    contentType === 'image/svg+xml' ||
+    contentType === 'image/tiff'    ||
+    contentType === 'image/webp'
+  ) return true
+  return false
+}
 
 const isZip = (name, contentType) => {
   if (!contentType || !contentType.includes('/')) return false
@@ -94,6 +106,7 @@ export const getDataType = (name, contentType) => {
     ['video', typeToIcon('video')],
     ['text', typeToIcon('text')],
     ['pdf', isPdf],
+    ['image', isImage],
     ['zip', isZip],
     ['excel', isExcel],
     ['doc', isDoc],

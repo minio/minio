@@ -285,7 +285,39 @@ export const hideShareObject = (object, url) => ({
   object: "",
   url: ""
 })
-
+export const getObjectURL = (object, callback) => {
+  return function(dispatch, getState) {
+    const currentBucket = getCurrentBucket(getState())
+    const currentPrefix = getCurrentPrefix(getState())
+    const objectName = `${currentPrefix}${object}`
+    const encObjectName = encodeURI(objectName)
+    if (web.LoggedIn()) {
+      return web
+        .CreateURLToken()
+        .then(res => {
+          const url = `${
+            window.location.origin
+          }${minioBrowserPrefix}/download/${currentBucket}/${encObjectName}?token=${
+            res.token
+          }`
+          callback(url)
+        })
+        .catch(err => {
+          dispatch(
+            alertActions.set({
+              type: "danger",
+              message: err.message
+            })
+          )
+        })
+    } else {
+      const url = `${
+        window.location.origin
+      }${minioBrowserPrefix}/download/${currentBucket}/${encObjectName}?token=`
+      callback(url)
+    }
+  }
+}
 export const downloadObject = object => {
   return function(dispatch, getState) {
     const currentBucket = getCurrentBucket(getState())

@@ -19,7 +19,10 @@ import { connect } from "react-redux"
 import { Dropdown } from "react-bootstrap"
 import ShareObjectModal from "./ShareObjectModal"
 import DeleteObjectConfirmModal from "./DeleteObjectConfirmModal"
+import PreviewObjectModal from "./PreviewObjectModal"
+
 import * as objectsActions from "./actions"
+import {getDataType} from "../mime.js"
 import {
   SHARE_OBJECT_EXPIRY_DAYS,
   SHARE_OBJECT_EXPIRY_HOURS,
@@ -30,7 +33,8 @@ export class ObjectActions extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
-      showDeleteConfirmation: false
+      showDeleteConfirmation: false,
+      showPreview: false
     }
   }
   shareObject(e) {
@@ -56,12 +60,26 @@ export class ObjectActions extends React.Component {
       showDeleteConfirmation: false
     })
   }
+  getObjectURL(objectname, callback){
+    const { getObjectURL } = this.props
+    getObjectURL(objectname,callback)
+  }
+  showPreviewModal(e){
+    e.preventDefault()
+    this.setState({ showPreview: true })
+  }
+  hidePreviewModal() {
+    this.setState({
+      showPreview: false
+    })
+  }
   render() {
     const { object, showShareObjectModal, shareObjectName } = this.props
     return (
       <Dropdown id={`obj-actions-${object.name}`}>
         <Dropdown.Toggle noCaret className="fia-toggle" />
         <Dropdown.Menu>
+
           <a
             href=""
             className="fiad-action"
@@ -69,6 +87,15 @@ export class ObjectActions extends React.Component {
           >
             <i className="fas fa-share-alt" />
           </a>
+          {(getDataType(object.name, object.contentType)=="image")&&
+            <a
+              href=""
+              className="fiad-action"
+              onClick={this.showPreviewModal.bind(this)}
+            >
+              <i className="far fa-file-image" />
+            </a>
+          }
           <a
             href=""
             className="fiad-action"
@@ -85,6 +112,14 @@ export class ObjectActions extends React.Component {
             hideDeleteConfirmModal={this.hideDeleteConfirmModal.bind(this)}
           />
         )}
+        {(this.state.showPreview) && (
+          <PreviewObjectModal
+            object={object} 
+            hidePreviewModal={this.hidePreviewModal.bind(this)}
+            getObjectURL={this.getObjectURL.bind(this)}
+          />
+        )}
+         
       </Dropdown>
     )
   }
@@ -102,7 +137,10 @@ const mapDispatchToProps = dispatch => {
   return {
     shareObject: (object, days, hours, minutes) =>
       dispatch(objectsActions.shareObject(object, days, hours, minutes)),
-    deleteObject: object => dispatch(objectsActions.deleteObject(object))
+    deleteObject: object => 
+      dispatch(objectsActions.deleteObject(object)),
+    getObjectURL:(object, callback) =>
+      dispatch(objectsActions.getObjectURL(object,callback)),
   }
 }
 
