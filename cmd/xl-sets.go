@@ -84,6 +84,11 @@ type xlSets struct {
 	// List of endpoints provided on the command line.
 	endpoints Endpoints
 
+	// String version of all the endpoints, an optimization
+	// to avoid url.String() conversion taking CPU on
+	// large disk setups.
+	endpointStrings []string
+
 	// Total number of sets and the number of disks per set.
 	setCount, drivesPerSet int
 
@@ -104,7 +109,7 @@ type xlSets struct {
 }
 
 // isConnected - checks if the endpoint is connected or not.
-func (s *xlSets) isConnected(endpoint Endpoint) bool {
+func (s *xlSets) isConnected(endpointStr string) bool {
 	s.xlDisksMu.RLock()
 	defer s.xlDisksMu.RUnlock()
 
@@ -112,12 +117,6 @@ func (s *xlSets) isConnected(endpoint Endpoint) bool {
 		for j := 0; j < s.drivesPerSet; j++ {
 			if s.xlDisks[i][j] == nil {
 				continue
-			}
-			var endpointStr string
-			if endpoint.IsLocal {
-				endpointStr = endpoint.Path
-			} else {
-				endpointStr = endpoint.String()
 			}
 			if s.xlDisks[i][j].String() != endpointStr {
 				continue
@@ -175,8 +174,8 @@ func findDiskIndex(refFormat, format *formatXLV3) (int, int, error) {
 func (s *xlSets) connectDisksWithQuorum() {
 	var onlineDisks int
 	for onlineDisks < len(s.endpoints)/2 {
-		for _, endpoint := range s.endpoints {
-			if s.isConnected(endpoint) {
+		for i, endpoint := range s.endpoints {
+			if s.isConnected(s.endpointStrings[i]) {
 				continue
 			}
 			disk, format, err := connectEndpoint(endpoint)
@@ -197,15 +196,15 @@ func (s *xlSets) connectDisksWithQuorum() {
 		}
 		// Sleep for a while - so that we don't go into
 		// 100% CPU when half the disks are online.
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
 // connectDisks - attempt to connect all the endpoints, loads format
 // and re-arranges the disks in proper position.
 func (s *xlSets) connectDisks() {
-	for _, endpoint := range s.endpoints {
-		if s.isConnected(endpoint) {
+	for i, endpoint := range s.endpoints {
+		if s.isConnected(s.endpointStrings[i]) {
 			continue
 		}
 		disk, format, err := connectEndpoint(endpoint)
@@ -237,18 +236,13 @@ func (s *xlSets) connectDisks() {
 // endpoints by reconnecting them and making sure to place them into right position in
 // the set topology, this monitoring happens at a given monitoring interval.
 func (s *xlSets) monitorAndConnectEndpoints(ctx context.Context, monitorInterval time.Duration) {
-
-	ticker := time.NewTicker(monitorInterval)
-	// Stop the timer.
-	defer ticker.Stop()
-
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-s.disksConnectDoneCh:
 			return
-		case <-ticker.C:
+		case <-time.After(monitorInterval):
 			s.connectDisks()
 		}
 	}
@@ -277,12 +271,21 @@ const defaultMonitorConnectEndpointInterval = time.Second * 10 // Set to 10 secs
 
 // Initialize new set of erasure coded sets.
 func newXLSets(endpoints Endpoints, format *formatXLV3, setCount int, drivesPerSet int) (*xlSets, error) {
+	endpointStrings := make([]string, len(endpoints))
+	for _, endpoint := range endpoints {
+		if endpoint.IsLocal {
+			endpointStrings = append(endpointStrings, endpoint.Path)
+		} else {
+			endpointStrings = append(endpointStrings, endpoint.String())
+		}
+	}
 	// Initialize the XL sets instance.
 	s := &xlSets{
 		sets:               make([]*xlObjects, setCount),
 		xlDisks:            make([][]StorageAPI, setCount),
 		xlLockers:          make([][]dsync.NetLocker, setCount),
 		endpoints:          endpoints,
+		endpointStrings:    endpointStrings,
 		setCount:           setCount,
 		drivesPerSet:       drivesPerSet,
 		format:             format,
@@ -1575,42 +1578,30 @@ func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove b
 		result.After.Drives = append(result.After.Drives, healResult.After.Drives...)
 	}
 
-	for _, endpoint := range s.endpoints {
+	for i := range s.endpoints {
 		var foundBefore bool
 		for _, v := range result.Before.Drives {
-			if endpoint.IsLocal {
-				if v.Endpoint == endpoint.Path {
-					foundBefore = true
-				}
-			} else {
-				if v.Endpoint == endpoint.String() {
-					foundBefore = true
-				}
+			if s.endpointStrings[i] == v.Endpoint {
+				foundBefore = true
 			}
 		}
 		if !foundBefore {
 			result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
 				UUID:     "",
-				Endpoint: endpoint.String(),
+				Endpoint: s.endpointStrings[i],
 				State:    madmin.DriveStateOffline,
 			})
 		}
 		var foundAfter bool
 		for _, v := range result.After.Drives {
-			if endpoint.IsLocal {
-				if v.Endpoint == endpoint.Path {
-					foundAfter = true
-				}
-			} else {
-				if v.Endpoint == endpoint.String() {
-					foundAfter = true
-				}
+			if s.endpointStrings[i] == v.Endpoint {
+				foundAfter = true
 			}
 		}
 		if !foundAfter {
 			result.After.Drives = append(result.After.Drives, madmin.HealDriveInfo{
 				UUID:     "",
-				Endpoint: endpoint.String(),
+				Endpoint: s.endpointStrings[i],
 				State:    madmin.DriveStateOffline,
 			})
 		}

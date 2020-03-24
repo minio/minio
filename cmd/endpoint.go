@@ -171,7 +171,11 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 		if isHostIP(arg) {
 			return ep, fmt.Errorf("invalid URL endpoint format: missing scheme http or https")
 		}
-		u = &url.URL{Path: path.Clean(arg)}
+		absArg, err := filepath.Abs(arg)
+		if err != nil {
+			return Endpoint{}, fmt.Errorf("absolute path failed %s", err)
+		}
+		u = &url.URL{Path: path.Clean(absArg)}
 		isLocal = true
 	}
 
