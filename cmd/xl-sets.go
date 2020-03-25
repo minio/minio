@@ -182,29 +182,51 @@ func findDiskIndex(refFormat, format *formatXLV3) (int, int, error) {
 // connectDisksWithQuorum is same as connectDisks but waits
 // for quorum number of formatted disks to be online in any given sets.
 func (s *xlSets) connectDisksWithQuorum() {
-	var onlineDisks int
-	diskMap := s.getDiskMap()
+	diskMap := make(map[string]StorageAPI)
+	var diskMapMu sync.RWMutex
 
-	for onlineDisks < len(s.endpoints)/2 {
-		for i, endpoint := range s.endpoints {
-			if isEndpointConnected(diskMap, s.endpointStrings[i]) {
+	connectQ := make(chan struct{}, len(s.endpoints)/2)
+
+	for {
+		for epIdx := range s.endpoints {
+			if isEndpointConnected(diskMap, s.endpointStrings[epIdx]) {
 				continue
 			}
-			disk, format, err := connectEndpoint(endpoint)
-			if err != nil {
-				printEndpointError(endpoint, err)
-				continue
+
+			connectQ <- struct{}{}
+
+			diskMapMu.RLock()
+			if len(diskMap) > len(s.endpoints)/2 {
+				diskMapMu.RUnlock()
+				return
 			}
-			i, j, err := findDiskIndex(s.format, format)
-			if err != nil {
-				// Close the internal connection to avoid connection leaks.
-				disk.Close()
-				printEndpointError(endpoint, err)
-				continue
-			}
-			disk.SetDiskID(format.XL.This)
-			s.xlDisks[i][j] = disk
-			onlineDisks++
+			diskMapMu.RUnlock()
+
+			go func(epIdx int) {
+				defer func() { <-connectQ }()
+				endpoint := s.endpoints[epIdx]
+				disk, format, err := connectEndpoint(endpoint)
+				if err != nil {
+					printEndpointError(endpoint, err)
+					return
+				}
+				i, j, err := findDiskIndex(s.format, format)
+				if err != nil {
+					// Close the internal connection to avoid connection leaks.
+					disk.Close()
+					printEndpointError(endpoint, err)
+					return
+				}
+				disk.SetDiskID(format.XL.This)
+
+				s.xlDisksMu.Lock()
+				s.xlDisks[i][j] = disk
+				s.xlDisksMu.Unlock()
+
+				diskMapMu.Lock()
+				diskMap[s.endpointStrings[epIdx]] = disk
+				diskMapMu.Unlock()
+			}(epIdx)
 		}
 		// Sleep for a while - so that we don't go into
 		// 100% CPU when half the disks are online.
