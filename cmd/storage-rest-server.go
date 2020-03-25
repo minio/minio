@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -131,6 +132,33 @@ func (s *storageRESTServer) DiskInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 	defer w.(http.Flusher).Flush()
 	gob.NewEncoder(w).Encode(info)
+}
+
+func (s *storageRESTServer) UpdateBloomFilter(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	var req bloomFilterRequest
+	dec := json.NewDecoder(r.Body)
+	err := dec.Decode(&req)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	resp, err := CycleBloomFilter(r.Context(), req.Oldest, req.Current)
+	switch err {
+	case nil:
+		w.WriteHeader(http.StatusOK)
+	default:
+		logger.LogIf(r.Context(), err)
+		s.writeErrorResponse(w, err)
+		return
+	}
+	enc := json.NewEncoder(w)
+	err = enc.Encode(resp)
+	logger.LogIf(r.Context(), err)
 }
 
 func (s *storageRESTServer) CrawlAndGetDataUsageHandler(w http.ResponseWriter, r *http.Request) {
@@ -757,6 +785,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDiskInfo).HandlerFunc(httpTraceHdrs(server.DiskInfoHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCrawlAndGetDataUsage).HandlerFunc(httpTraceHdrs(server.CrawlAndGetDataUsageHandler))
+			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodUpdateBloomFilter).HandlerFunc(httpTraceHdrs(server.UpdateBloomFilter))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodMakeVol).HandlerFunc(httpTraceHdrs(server.MakeVolHandler)).Queries(restQueries(storageRESTVolume)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodMakeVolBulk).HandlerFunc(httpTraceHdrs(server.MakeVolBulkHandler)).Queries(restQueries(storageRESTVolumes)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatVol).HandlerFunc(httpTraceHdrs(server.StatVolHandler)).Queries(restQueries(storageRESTVolume)...)

@@ -62,9 +62,10 @@ type dataUsageEntryInfo struct {
 
 type dataUsageCacheInfo struct {
 	// Name of the bucket. Also root element.
-	Name       string
-	LastUpdate time.Time
-	NextCycle  uint8
+	Name         string
+	LastUpdate   time.Time
+	NextCycle    uint8
+	NextBloomIdx uint64
 }
 
 // merge other data usage entry into this, excluding children.
@@ -165,6 +166,12 @@ func (d *dataUsageCache) StringAll() string {
 		s += fmt.Sprintf("\t%v: %+v\n", k, v)
 	}
 	return strings.TrimSpace(s)
+}
+
+// insert the hash into dst.
+// dst must be at least dataUsageHashLen bytes long.
+func (h dataUsageHash) bytes(dst []byte) {
+	binary.LittleEndian.PutUint64(dst, uint64(h))
 }
 
 // String returns a human readable representation of the string.

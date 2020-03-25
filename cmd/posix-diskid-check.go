@@ -39,6 +39,10 @@ func (p *posixDiskIDCheck) IsOnline() bool {
 	return storedDiskID == p.diskID
 }
 
+func (p *posixDiskIDCheck) UpdateBloomFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error) {
+	return p.storage.UpdateBloomFilter(ctx, oldest, current)
+}
+
 func (p *posixDiskIDCheck) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
 	return p.storage.CrawlAndGetDataUsage(ctx, cache)
 }

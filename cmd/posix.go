@@ -338,6 +338,10 @@ func (s *posix) waitForLowActiveIO() {
 	}
 }
 
+func (s *posix) UpdateBloomFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error) {
+	return CycleBloomFilter(ctx, oldest, current)
+}
+
 func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
 	dataUsageInfo, err := updateUsage(ctx, s.diskPath, cache, s.waitForLowActiveIO, func(item Item) (int64, error) {
 		// Look for `xl.json' at the leaf.

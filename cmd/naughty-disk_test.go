@@ -81,6 +81,9 @@ func (d *naughtyDisk) calcError() (err error) {
 func (d *naughtyDisk) SetDiskID(id string) {
 }
 
+func (d *naughtyDisk) UpdateBloomFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error) {
+	return d.disk.UpdateBloomFilter(ctx, oldest, current)
+}
 func (d *naughtyDisk) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (info dataUsageCache, err error) {
 	return d.disk.CrawlAndGetDataUsage(ctx, cache)
 }

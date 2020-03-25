@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"encoding/gob"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"io/ioutil"
 	"net/url"
@@ -149,6 +150,26 @@ func (client *storageRESTClient) IsOnline() bool {
 
 func (client *storageRESTClient) Hostname() string {
 	return client.endpoint.Host
+}
+
+func (client *storageRESTClient) UpdateBloomFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error) {
+	b, err := json.Marshal(bloomFilterRequest{
+		Oldest:  oldest,
+		Current: current,
+	})
+	if err != nil {
+		return nil, err
+	}
+	respBody, err := client.call(storageRESTMethodUpdateBloomFilter,
+		url.Values{},
+		bytes.NewBuffer(b), int64(len(b)))
+	defer http.DrainBody(respBody)
+	if err != nil {
+		return nil, err
+	}
+	dec := json.NewDecoder(respBody)
+	var resp bloomFilterResponse
+	return &resp, dec.Decode(&resp)
 }
 
 func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {

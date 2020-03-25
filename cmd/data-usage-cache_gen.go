@@ -42,6 +42,12 @@ func (z *dataUsageCacheInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "NextCycle")
 				return
 			}
+		case "NextBloomIdx":
+			z.NextBloomIdx, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "NextBloomIdx")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -54,10 +60,10 @@ func (z *dataUsageCacheInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z dataUsageCacheInfo) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 3
+func (z *dataUsageCacheInfo) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 4
 	// write "Name"
-	err = en.Append(0x83, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	err = en.Append(0x84, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
 	if err != nil {
 		return
 	}
@@ -86,15 +92,25 @@ func (z dataUsageCacheInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "NextCycle")
 		return
 	}
+	// write "NextBloomIdx"
+	err = en.Append(0xac, 0x4e, 0x65, 0x78, 0x74, 0x42, 0x6c, 0x6f, 0x6f, 0x6d, 0x49, 0x64, 0x78)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.NextBloomIdx)
+	if err != nil {
+		err = msgp.WrapError(err, "NextBloomIdx")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z dataUsageCacheInfo) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *dataUsageCacheInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 3
+	// map header, size 4
 	// string "Name"
-	o = append(o, 0x83, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	o = append(o, 0x84, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
 	o = msgp.AppendString(o, z.Name)
 	// string "LastUpdate"
 	o = append(o, 0xaa, 0x4c, 0x61, 0x73, 0x74, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65)
@@ -102,6 +118,9 @@ func (z dataUsageCacheInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "NextCycle"
 	o = append(o, 0xa9, 0x4e, 0x65, 0x78, 0x74, 0x43, 0x79, 0x63, 0x6c, 0x65)
 	o = msgp.AppendUint8(o, z.NextCycle)
+	// string "NextBloomIdx"
+	o = append(o, 0xac, 0x4e, 0x65, 0x78, 0x74, 0x42, 0x6c, 0x6f, 0x6f, 0x6d, 0x49, 0x64, 0x78)
+	o = msgp.AppendUint64(o, z.NextBloomIdx)
 	return
 }
 
@@ -141,6 +160,12 @@ func (z *dataUsageCacheInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "NextCycle")
 				return
 			}
+		case "NextBloomIdx":
+			z.NextBloomIdx, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "NextBloomIdx")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -154,8 +179,8 @@ func (z *dataUsageCacheInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z dataUsageCacheInfo) Msgsize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 11 + msgp.TimeSize + 10 + msgp.Uint8Size
+func (z *dataUsageCacheInfo) Msgsize() (s int) {
+	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 11 + msgp.TimeSize + 10 + msgp.Uint8Size + 13 + msgp.Uint64Size
 	return
 }
 

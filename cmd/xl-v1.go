@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sort"
@@ -28,6 +29,7 @@ import (
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/willf/bloom"
 )
 
 // XL constants.
@@ -236,6 +238,45 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 		return err
 	}
 
+	// Collect bloom filters from all disks here...
+	bf := &bloomFilter{}
+	for _, disk := range disks {
+		hist := oldCache.Info.NextBloomIdx - dataUsageUpdateDirCycles
+		if oldCache.Info.NextBloomIdx < dataUsageUpdateDirCycles {
+			hist = 0
+		}
+
+		diskBF, err := disk.UpdateBloomFilter(ctx, hist, oldCache.Info.NextBloomIdx)
+		if err != nil || !diskBF.Complete || bf == nil {
+			logger.LogIf(ctx, err)
+			bf = nil
+			continue
+		}
+		if bf.BloomFilter == nil {
+			// For the first, add this as the first filter.
+			bf.BloomFilter = &bloom.BloomFilter{}
+			_, err := bf.ReadFrom(bytes.NewBuffer(diskBF.Filter))
+			if err != nil {
+				logger.LogIf(ctx, err)
+				bf = nil
+			}
+			continue
+		}
+		var tmp bloom.BloomFilter
+		_, err = tmp.ReadFrom(bytes.NewBuffer(diskBF.Filter))
+		if err != nil {
+			logger.LogIf(ctx, err)
+			bf = nil
+			continue
+		}
+		err = bf.Merge(&tmp)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			bf = nil
+			continue
+		}
+	}
+
 	// New cache..
 	cache := dataUsageCache{
 		Info: dataUsageCacheInfo{
@@ -257,8 +298,12 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 	for _, b := range buckets {
 		e := oldCache.find(b.Name)
 		if e != nil {
-			bucketCh <- b
-			cache.replace(b.Name, dataUsageRoot, *e)
+			if bf != nil && bf.containsDir(b.Name) {
+				bucketCh <- b
+				cache.replace(b.Name, dataUsageRoot, *e)
+			} else {
+				// TODO: Maybe add bucket sometimes??
+			}
 		}
 	}
 
@@ -300,6 +345,7 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 		}
 		// Save final state...
 		cache.Info.NextCycle++
+		cache.Info.NextBloomIdx++
 		cache.Info.LastUpdate = time.Now()
 		logger.LogIf(ctx, cache.save(ctx, xl, dataUsageCacheName))
 		updates <- cache
@@ -338,6 +384,7 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 
 				// Calc usage
 				before := cache.Info.LastUpdate
+				// TODO: Maybe send bloom filter?
 				cache, err = disk.CrawlAndGetDataUsage(ctx, cache)
 				if err != nil {
 					logger.LogIf(ctx, err)
