@@ -21,7 +21,7 @@ TLS certificates by default are stored under ``${HOME}/.minio/certs`` directory.
 Following is the directory structure for MinIO server with TLS certificates.
 
 ```sh
-$ mc tree --files ~/.minio
+$ tree ~/.minio
 /home/user1/.minio
 └─ certs
    ├─ CAs
