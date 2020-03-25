@@ -318,9 +318,7 @@ type healSequence struct {
 	// List of entities (format, buckets, objects) to heal
 	sourceCh chan string
 
-	// Report healing progress, false if this is a background
-	// healing since currently there is no entity which will
-	// receive realtime healing status
+	// Report healing progress
 	reportProgress bool
 
 	// time at which heal sequence was started
@@ -352,14 +350,23 @@ type healSequence struct {
 	// the last result index sent to client
 	lastSentResultIndex int64
 
-	// Number of total items scanned
-	scannedItemsCount int64
+	// Number of total items scanned against item type
+	scannedItemsMap map[madmin.HealItemType]int64
+
+	// Number of total items healed against item type
+	healedItemsMap map[madmin.HealItemType]int64
+
+	// Number of total items where healing failed against endpoint and drive state
+	healFailedItemsMap map[string]int64
 
 	// The time of the last scan/heal activity
 	lastHealActivity time.Time
 
 	// Holds the request-info for logging
 	ctx context.Context
+
+	// used to lock this structure as it is concurrently accessed
+	mutex sync.RWMutex
 }
 
 // NewHealSequence - creates healSettings, assumes bucket and
@@ -390,7 +397,81 @@ func newHealSequence(bucket, objPrefix, clientAddr string,
 		traverseAndHealDoneCh: make(chan error),
 		stopSignalCh:          make(chan struct{}),
 		ctx:                   ctx,
+		scannedItemsMap:       make(map[madmin.HealItemType]int64),
+		healedItemsMap:        make(map[madmin.HealItemType]int64),
+		healFailedItemsMap:    make(map[string]int64),
 	}
+}
+
+// resetHealStatusCounters - reset the healSequence status counters between
+// each monthly background heal scanning activity.
+// This is used only in case of Background healing scenario, where
+// we use a single long running healSequence which reactively heals
+// objects passed to the SourceCh.
+func (h *healSequence) resetHealStatusCounters() {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	h.currentStatus.Items = []madmin.HealResultItem{}
+	h.lastSentResultIndex = 0
+	h.scannedItemsMap = make(map[madmin.HealItemType]int64)
+	h.healedItemsMap = make(map[madmin.HealItemType]int64)
+	h.healFailedItemsMap = make(map[string]int64)
+}
+
+// getScannedItemsCount - returns a count of all scanned items
+func (h *healSequence) getScannedItemsCount() int64 {
+	var count int64
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+
+	for _, v := range h.scannedItemsMap {
+		count = count + v
+	}
+	return count
+}
+
+// getScannedItemsMap - returns map of all scanned items against type
+func (h *healSequence) getScannedItemsMap() map[madmin.HealItemType]int64 {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+
+	// Make a copy before returning the value
+	retMap := make(map[madmin.HealItemType]int64, len(h.scannedItemsMap))
+	for k, v := range h.scannedItemsMap {
+		retMap[k] = v
+	}
+
+	return retMap
+}
+
+// getHealedItemsMap - returns the map of all healed items against type
+func (h *healSequence) getHealedItemsMap() map[madmin.HealItemType]int64 {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+
+	// Make a copy before returning the value
+	retMap := make(map[madmin.HealItemType]int64, len(h.healedItemsMap))
+	for k, v := range h.healedItemsMap {
+		retMap[k] = v
+	}
+
+	return retMap
+}
+
+// gethealFailedItemsMap - returns map of all items where heal failed against
+// drive endpoint and status
+func (h *healSequence) gethealFailedItemsMap() map[string]int64 {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+
+	// Make a copy before returning the value
+	retMap := make(map[string]int64, len(h.healFailedItemsMap))
+	for k, v := range h.healFailedItemsMap {
+		retMap[k] = v
+	}
+
+	return retMap
 }
 
 // isQuitting - determines if the heal sequence is quitting (due to an
@@ -556,6 +637,22 @@ func (h *healSequence) queueHealTask(path string, healType madmin.HealItemType) 
 	// Wait for answer and push result to the client
 	res := <-respCh
 	if !h.reportProgress {
+		h.mutex.Lock()
+		defer h.mutex.Unlock()
+
+		// Progress is not reported in case of background heal processing.
+		// Instead we increment relevant counter based on the heal result
+		// for prometheus reporting.
+		if res.err != nil && !isErrObjectNotFound(res.err) {
+			for _, d := range res.result.After.Drives {
+				// For failed items we report the endpoint and drive state
+				// This will help users take corrective actions for drives
+				h.healFailedItemsMap[d.Endpoint+","+d.State]++
+			}
+		} else {
+			// Only object type reported for successful healing
+			h.healedItemsMap[res.result.Type]++
+		}
 		return nil
 	}
 	res.result.Type = healType
@@ -599,7 +696,7 @@ func (h *healSequence) healItemsFromSourceCh() error {
 				logger.LogIf(h.ctx, err)
 			}
 
-			h.scannedItemsCount++
+			h.scannedItemsMap[itemType]++
 			h.lastHealActivity = UTCNow()
 		case <-h.traverseAndHealDoneCh:
 			return nil
