@@ -108,23 +108,33 @@ type xlSets struct {
 	mrfUploads map[string]int
 }
 
-// isConnected - checks if the endpoint is connected or not.
-func (s *xlSets) isConnected(endpointStr string) bool {
+func isEndpointConnected(diskMap map[string]StorageAPI, endpoint string) bool {
+	disk := diskMap[endpoint]
+	if disk == nil {
+		return false
+	}
+	return disk.IsOnline()
+}
+
+func (s *xlSets) getDiskMap() map[string]StorageAPI {
+	diskMap := make(map[string]StorageAPI)
+
 	s.xlDisksMu.RLock()
 	defer s.xlDisksMu.RUnlock()
 
 	for i := 0; i < s.setCount; i++ {
 		for j := 0; j < s.drivesPerSet; j++ {
-			if s.xlDisks[i][j] == nil {
+			disk := s.xlDisks[i][j]
+			if disk == nil {
 				continue
 			}
-			if s.xlDisks[i][j].String() != endpointStr {
+			if !disk.IsOnline() {
 				continue
 			}
-			return s.xlDisks[i][j].IsOnline()
+			diskMap[disk.String()] = disk
 		}
 	}
-	return false
+	return diskMap
 }
 
 // Initializes a new StorageAPI from the endpoint argument, returns
@@ -173,9 +183,11 @@ func findDiskIndex(refFormat, format *formatXLV3) (int, int, error) {
 // for quorum number of formatted disks to be online in any given sets.
 func (s *xlSets) connectDisksWithQuorum() {
 	var onlineDisks int
+	diskMap := s.getDiskMap()
+
 	for onlineDisks < len(s.endpoints)/2 {
 		for i, endpoint := range s.endpoints {
-			if s.isConnected(s.endpointStrings[i]) {
+			if isEndpointConnected(diskMap, s.endpointStrings[i]) {
 				continue
 			}
 			disk, format, err := connectEndpoint(endpoint)
@@ -204,8 +216,9 @@ func (s *xlSets) connectDisksWithQuorum() {
 // and re-arranges the disks in proper position.
 func (s *xlSets) connectDisks() {
 	var wg sync.WaitGroup
+	diskMap := s.getDiskMap()
 	for i, endpoint := range s.endpoints {
-		if s.isConnected(s.endpointStrings[i]) {
+		if isEndpointConnected(diskMap, s.endpointStrings[i]) {
 			continue
 		}
 		wg.Add(1)
