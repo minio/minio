@@ -116,6 +116,25 @@ func isEndpointConnected(diskMap map[string]StorageAPI, endpoint string) bool {
 	return disk.IsOnline()
 }
 
+func (s *xlSets) getOnlineDisksCount() int {
+	s.xlDisksMu.RLock()
+	defer s.xlDisksMu.RUnlock()
+	count := 0
+	for i := 0; i < s.setCount; i++ {
+		for j := 0; j < s.drivesPerSet; j++ {
+			disk := s.xlDisks[i][j]
+			if disk == nil {
+				continue
+			}
+			if !disk.IsOnline() {
+				continue
+			}
+			count++
+		}
+	}
+	return count
+}
+
 func (s *xlSets) getDiskMap() map[string]StorageAPI {
 	diskMap := make(map[string]StorageAPI)
 
@@ -182,54 +201,11 @@ func findDiskIndex(refFormat, format *formatXLV3) (int, int, error) {
 // connectDisksWithQuorum is same as connectDisks but waits
 // for quorum number of formatted disks to be online in any given sets.
 func (s *xlSets) connectDisksWithQuorum() {
-	diskMap := make(map[string]StorageAPI)
-	var diskMapMu sync.RWMutex
-
-	connectQ := make(chan struct{}, len(s.endpoints)/2)
-
 	for {
-		for epIdx := range s.endpoints {
-			if isEndpointConnected(diskMap, s.endpointStrings[epIdx]) {
-				continue
-			}
-
-			connectQ <- struct{}{}
-
-			diskMapMu.RLock()
-			if len(diskMap) > len(s.endpoints)/2 {
-				diskMapMu.RUnlock()
-				return
-			}
-			diskMapMu.RUnlock()
-
-			go func(epIdx int) {
-				defer func() { <-connectQ }()
-				endpoint := s.endpoints[epIdx]
-				disk, format, err := connectEndpoint(endpoint)
-				if err != nil {
-					printEndpointError(endpoint, err)
-					return
-				}
-				i, j, err := findDiskIndex(s.format, format)
-				if err != nil {
-					// Close the internal connection to avoid connection leaks.
-					disk.Close()
-					printEndpointError(endpoint, err)
-					return
-				}
-				disk.SetDiskID(format.XL.This)
-
-				s.xlDisksMu.Lock()
-				s.xlDisks[i][j] = disk
-				s.xlDisksMu.Unlock()
-
-				diskMapMu.Lock()
-				diskMap[s.endpointStrings[epIdx]] = disk
-				diskMapMu.Unlock()
-			}(epIdx)
+		s.connectDisks()
+		if s.getOnlineDisksCount() > len(s.endpoints)/2 {
+			return
 		}
-		// Sleep for a while - so that we don't go into
-		// 100% CPU when half the disks are online.
 		time.Sleep(100 * time.Millisecond)
 	}
 }
@@ -314,13 +290,14 @@ const defaultMonitorConnectEndpointInterval = time.Second * 10 // Set to 10 secs
 // Initialize new set of erasure coded sets.
 func newXLSets(endpoints Endpoints, format *formatXLV3, setCount int, drivesPerSet int) (*xlSets, error) {
 	endpointStrings := make([]string, len(endpoints))
-	for _, endpoint := range endpoints {
+	for i, endpoint := range endpoints {
 		if endpoint.IsLocal {
-			endpointStrings = append(endpointStrings, endpoint.Path)
+			endpointStrings[i] = endpoint.Path
 		} else {
-			endpointStrings = append(endpointStrings, endpoint.String())
+			endpointStrings[i] = endpoint.String()
 		}
 	}
+
 	// Initialize the XL sets instance.
 	s := &xlSets{
 		sets:               make([]*xlObjects, setCount),
