@@ -448,6 +448,8 @@ func (fs *FSObjects) DeleteBucket(ctx context.Context, bucket string) error {
 // update metadata.
 func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (oi ObjectInfo, e error) {
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
+	defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
+
 	if !cpSrcDstSame {
 		objectDWLock := fs.NewNSLock(ctx, dstBucket, dstObject)
 		if err := objectDWLock.GetLock(globalObjectTimeout); err != nil {
@@ -867,6 +869,7 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 	if err := checkPutObjectArgs(ctx, bucket, object, fs, r.Size()); err != nil {
 		return ObjectInfo{}, err
 	}
+
 	// Lock the object.
 	objectLock := fs.NewNSLock(ctx, bucket, object)
 	if err := objectLock.GetLock(globalObjectTimeout); err != nil {
@@ -874,6 +877,7 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 		return objInfo, err
 	}
 	defer objectLock.Unlock()
+	defer ObjectPathUpdated(path.Join(bucket, object))
 
 	atomic.AddInt64(&fs.activeIOCount, 1)
 	defer func() {
@@ -1037,6 +1041,8 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string) er
 	if err := checkDelObjArgs(ctx, bucket, object); err != nil {
 		return err
 	}
+
+	defer ObjectPathUpdated(path.Join(bucket, object))
 
 	atomic.AddInt64(&fs.activeIOCount, 1)
 	defer func() {

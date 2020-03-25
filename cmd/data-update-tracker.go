@@ -38,18 +38,18 @@ import (
 
 const (
 	// Estimate bloom filter size. With this many items
-	dataUsageTrackerEstItems = 250000
+	dataUpdateTrackerEstItems = 250000
 	// ... we want this false positive rate:
-	dataUsageTrackerFP        = 0.99
-	dataUsageTrackerQueueSize = 1000
+	dataUpdateTrackerFP        = 0.99
+	dataUpdateTrackerQueueSize = 10000
 
-	dataUsageTrackerVersion      = 1
-	dataUsageTrackerFilename     = "tracker.bin"
-	dataUsageTrackerSaveInterval = 5 * time.Minute
+	dataUpdateTrackerVersion      = 1
+	dataUpdateTrackerFilename     = "tracker.bin"
+	dataUpdateTrackerSaveInterval = 5 * time.Minute
 )
 
 var (
-	ObjUpdatedCh         chan<- string
+	objectUpdatedCh      chan<- string
 	intDataUpdateTracker *dataUpdateTracker
 )
 
@@ -156,14 +156,14 @@ func initDataUpdateTracker() {
 			idx: 1,
 		},
 
-		input: make(chan string, dataUsageTrackerQueueSize),
+		input: make(chan string, dataUpdateTrackerQueueSize),
 	}
 	intDataUpdateTracker.Current.bf = intDataUpdateTracker.newBloomFilter()
-	ObjUpdatedCh = intDataUpdateTracker.input
+	objectUpdatedCh = intDataUpdateTracker.input
 }
 
 func (d *dataUpdateTracker) newBloomFilter() bloomFilter {
-	return bloomFilter{bloom.NewWithEstimates(dataUsageTrackerEstItems, dataUsageTrackerFP)}
+	return bloomFilter{bloom.NewWithEstimates(dataUpdateTrackerEstItems, dataUpdateTrackerFP)}
 }
 
 // start will load the current data from the drives start collecting information and
@@ -172,7 +172,7 @@ func (d *dataUpdateTracker) newBloomFilter() bloomFilter {
 func (d *dataUpdateTracker) start(ctx context.Context, drives []string) {
 	d.load(ctx, drives)
 	go d.startCollector(ctx)
-	go d.startSaver(ctx, dataUsageTrackerSaveInterval, drives)
+	go d.startSaver(ctx, dataUpdateTrackerSaveInterval, drives)
 }
 
 // load will attempt to load data tracking information from the supplied drives.
@@ -183,7 +183,7 @@ func (d *dataUpdateTracker) start(ctx context.Context, drives []string) {
 func (d *dataUpdateTracker) load(ctx context.Context, drives []string) {
 	for _, drive := range drives {
 		func(drive string) {
-			cacheFormatPath := pathJoin(drive, minioMetaBucket, dataUsageTrackerFilename)
+			cacheFormatPath := pathJoin(drive, minioMetaBucket, dataUpdateTrackerFilename)
 			f, err := os.OpenFile(cacheFormatPath, os.O_RDWR, 0)
 
 			if err != nil {
@@ -229,7 +229,7 @@ func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Durati
 		}
 		for _, drive := range drives {
 			func(drive string) {
-				cacheFormatPath := pathJoin(drive, minioMetaBucket, dataUsageTrackerFilename)
+				cacheFormatPath := pathJoin(drive, minioMetaBucket, dataUpdateTrackerFilename)
 				err := ioutil.WriteFile(cacheFormatPath, buf.Bytes(), os.ModePerm)
 				if err != nil {
 					logger.LogIf(ctx, err)
@@ -256,7 +256,7 @@ func (d *dataUpdateTracker) serialize(dst io.Writer) (err error) {
 	}()
 
 	// Version
-	if err := o.WriteByte(dataUsageTrackerVersion); err != nil {
+	if err := o.WriteByte(dataUpdateTrackerVersion); err != nil {
 		return err
 	}
 	// Timestamp.
@@ -300,7 +300,7 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 		return err
 	}
 	switch tmp[0] {
-	case dataUsageTrackerVersion:
+	case dataUpdateTrackerVersion:
 	default:
 		return errors.New("dataUpdateTracker: Unknown data version")
 	}
@@ -348,7 +348,7 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 	return nil
 }
 
-// start a collector that picks up entries from ObjUpdatedCh
+// start a collector that picks up entries from objectUpdatedCh
 // and adds them  to the current bloom filter.
 func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 	var tmp [dataUsageHashLen]byte
@@ -507,4 +507,13 @@ type bloomFilterResponse struct {
 // from the current x to y-1.
 func CycleBloomFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error) {
 	return intDataUpdateTracker.cycleFilter(ctx, oldest, current)
+}
+
+// ObjectPathUpdated indicates a path has been updated.
+// The function will never block.
+func ObjectPathUpdated(s string) {
+	select {
+	case objectUpdatedCh <- s:
+	default:
+	}
 }

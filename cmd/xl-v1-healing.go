@@ -42,6 +42,9 @@ func (xl xlObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealRes
 // `policy.json, notification.xml, listeners.json`.
 func (xl xlObjects) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (
 	result madmin.HealResultItem, err error) {
+	if !dryRun {
+		defer ObjectPathUpdated(bucket)
+	}
 
 	storageDisks := xl.getDisks()
 
