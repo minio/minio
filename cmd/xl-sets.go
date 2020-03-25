@@ -203,33 +203,40 @@ func (s *xlSets) connectDisksWithQuorum() {
 // connectDisks - attempt to connect all the endpoints, loads format
 // and re-arranges the disks in proper position.
 func (s *xlSets) connectDisks() {
+	var wg sync.WaitGroup
 	for i, endpoint := range s.endpoints {
 		if s.isConnected(s.endpointStrings[i]) {
 			continue
 		}
-		disk, format, err := connectEndpoint(endpoint)
-		if err != nil {
-			printEndpointError(endpoint, err)
-			continue
-		}
-		setIndex, diskIndex, err := findDiskIndex(s.format, format)
-		if err != nil {
-			// Close the internal connection to avoid connection leaks.
-			disk.Close()
-			printEndpointError(endpoint, err)
-			continue
-		}
-		disk.SetDiskID(format.XL.This)
-		s.xlDisksMu.Lock()
-		s.xlDisks[setIndex][diskIndex] = disk
-		s.xlDisksMu.Unlock()
-
-		// Send a new disk connect event with a timeout
-		select {
-		case s.disksConnectEvent <- diskConnectInfo{setIndex: setIndex}:
-		case <-time.After(100 * time.Millisecond):
-		}
+		wg.Add(1)
+		go func(endpoint Endpoint) {
+			defer wg.Done()
+			disk, format, err := connectEndpoint(endpoint)
+			if err != nil {
+				printEndpointError(endpoint, err)
+				return
+			}
+			setIndex, diskIndex, err := findDiskIndex(s.format, format)
+			if err != nil {
+				// Close the internal connection to avoid connection leaks.
+				disk.Close()
+				printEndpointError(endpoint, err)
+				return
+			}
+			disk.SetDiskID(format.XL.This)
+			s.xlDisksMu.Lock()
+			s.xlDisks[setIndex][diskIndex] = disk
+			s.xlDisksMu.Unlock()
+			go func(setIndex int) {
+				// Send a new disk connect event with a timeout
+				select {
+				case s.disksConnectEvent <- diskConnectInfo{setIndex: setIndex}:
+				case <-time.After(100 * time.Millisecond):
+				}
+			}(setIndex)
+		}(endpoint)
 	}
+	wg.Wait()
 }
 
 // monitorAndConnectEndpoints this is a monitoring loop to keep track of disconnected
@@ -259,8 +266,8 @@ func (s *xlSets) GetLockers(setIndex int) func() []dsync.NetLocker {
 // GetDisks returns a closure for a given set, which provides list of disks per set.
 func (s *xlSets) GetDisks(setIndex int) func() []StorageAPI {
 	return func() []StorageAPI {
-		s.xlDisksMu.Lock()
-		defer s.xlDisksMu.Unlock()
+		s.xlDisksMu.RLock()
+		defer s.xlDisksMu.RUnlock()
 		disks := make([]StorageAPI, s.drivesPerSet)
 		copy(disks, s.xlDisks[setIndex])
 		return disks
