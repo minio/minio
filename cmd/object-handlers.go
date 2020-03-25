@@ -1390,6 +1390,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		etag = getDecryptedETag(r.Header, objInfo, false)
 	}
 	w.Header()[xhttp.ETag] = []string{"\"" + etag + "\""}
+	// Set ETag in metadata.
+	objInfo.UserDefined[xhttp.ETag] = etag
 
 	if objectAPI.IsEncryptionSupported() {
 		if crypto.IsEncrypted(objInfo.UserDefined) {
@@ -2493,6 +2495,8 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	// Set etag.
 	w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
+	// Set in metadata
+	objInfo.UserDefined[xhttp.ETag] = objInfo.ETag
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
