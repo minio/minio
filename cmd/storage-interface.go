@@ -45,6 +45,8 @@ type StorageAPI interface {
 	// Walk in sorted order directly on disk.
 	Walk(volume, dirPath string, marker string, recursive bool, leafFile string,
 		readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (chan FileInfo, error)
+	// Walk in sorted order directly on disk.
+	WalkSplunk(volume, dirPath string, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error)
 
 	// File operations.
 	ListDir(volume, dirPath string, count int, leafFile string) ([]string, error)

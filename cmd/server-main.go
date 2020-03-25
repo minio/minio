@@ -26,6 +26,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/minio/cli"
 	"github.com/minio/minio/cmd/config"
@@ -285,6 +286,27 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 	return nil
 }
 
+func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
+	// Make sure only 1 crawler is running on the cluster.
+	locker := objAPI.NewNSLock(ctx, minioMetaBucket, "leader")
+	for {
+		err := locker.GetLock(leaderLockTimeout)
+		if err != nil {
+			time.Sleep(leaderTick)
+			continue
+		}
+		break
+		// No unlock for "leader" lock.
+	}
+
+	if globalIsXL {
+		initGlobalHeal(ctx, objAPI)
+	}
+
+	initDataUsageStats(ctx, objAPI)
+	initDailyLifecycle(ctx, objAPI)
+}
+
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
 	if ctx.Args().First() == "help" || !endpointsPresent(ctx) {
@@ -401,12 +423,11 @@ func serverMain(ctx *cli.Context) {
 
 	// Enable healing to heal drives if possible
 	if globalIsXL {
-		initBackgroundHealing()
-		initLocalDisksAutoHeal()
-		initGlobalHeal()
+		initBackgroundHealing(GlobalContext, newObject)
+		initLocalDisksAutoHeal(GlobalContext, newObject)
 	}
 
-	buckets, err := newObject.ListBuckets(context.Background())
+	buckets, err := newObject.ListBuckets(GlobalContext)
 	if err != nil {
 		logger.Fatal(err, "Unable to list buckets")
 	}
@@ -416,7 +437,7 @@ func serverMain(ctx *cli.Context) {
 	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.
 		var cacheAPI CacheObjectLayer
-		cacheAPI, err = newServerCacheObjects(context.Background(), globalCacheConfig)
+		cacheAPI, err = newServerCacheObjects(GlobalContext, globalCacheConfig)
 		logger.FatalIf(err, "Unable to initialize disk caching")
 
 		globalObjLayerMutex.Lock()
@@ -429,8 +450,7 @@ func serverMain(ctx *cli.Context) {
 		initFederatorBackend(buckets, newObject)
 	}
 
-	initDataUsageStats()
-	initDailyLifecycle()
+	go startBackgroundOps(GlobalContext, newObject)
 
 	// Disable safe mode operation, after all initialization is over.
 	globalObjLayerMutex.Lock()
@@ -452,7 +472,7 @@ func serverMain(ctx *cli.Context) {
 func newObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err error) {
 	// For FS only, directly use the disk.
 
-	if endpointZones.Nodes() == 1 {
+	if endpointZones.NEndpoints() == 1 {
 		// Initialize new FS object layer.
 		return NewFSObjectLayer(endpointZones[0].Endpoints[0].Path)
 	}

@@ -1,4 +1,4 @@
-# 使用Kubernetes部署MinIO [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
+# 使用Kubernetes部署MinIO [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)  [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
 Kubernetes的部署和状态集提供了在独立，分布式或共享模式下部署MinIO服务器的完美平台。 在Kubernetes上部署MinIO有多种选择，您可以选择最适合您的。
 

@@ -41,7 +41,7 @@ import (
 	trace "github.com/minio/minio/pkg/trace"
 )
 
-// client to talk to peer Nodes.
+// client to talk to peer NEndpoints.
 type peerRESTClient struct {
 	host       *xnet.Host
 	restClient *rest.Client
@@ -610,32 +610,6 @@ func (client *peerRESTClient) BackgroundHealStatus() (madmin.BgHealState, error)
 	defer http.DrainBody(respBody)
 
 	state := madmin.BgHealState{}
-	err = gob.NewDecoder(respBody).Decode(&state)
-	return state, err
-}
-
-// BgLifecycleOpsStatus describes the status
-// of the background lifecycle operations
-type BgLifecycleOpsStatus struct {
-	LastActivity time.Time
-}
-
-// BgOpsStatus describes the status of all operations performed
-// in background such as auto-healing and lifecycle.
-// Notice: We need to increase peer REST API version when adding
-// new fields to this struct.
-type BgOpsStatus struct {
-	LifecycleOps BgLifecycleOpsStatus
-}
-
-func (client *peerRESTClient) BackgroundOpsStatus() (BgOpsStatus, error) {
-	respBody, err := client.call(peerRESTMethodBackgroundOpsStatus, nil, nil, -1)
-	if err != nil {
-		return BgOpsStatus{}, err
-	}
-	defer http.DrainBody(respBody)
-
-	state := BgOpsStatus{}
 	err = gob.NewDecoder(respBody).Decode(&state)
 	return state, err
 }

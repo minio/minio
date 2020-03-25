@@ -1533,7 +1533,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 func fetchLambdaInfo(cfg config.Config) []map[string][]madmin.TargetIDStatus {
 
 	// Fetch the targets
-	targetList, err := notify.RegisterNotificationTargets(cfg, GlobalServiceDoneCh, NewCustomHTTPTransport(), nil, true)
+	targetList, err := notify.RegisterNotificationTargets(cfg, GlobalServiceDoneCh, NewGatewayHTTPTransport(), nil, true)
 	if err != nil {
 		return nil
 	}

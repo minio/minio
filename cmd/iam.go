@@ -369,6 +369,10 @@ func (sys *IAMSys) Init(objAPI ObjectLayer) error {
 		return errServerNotInitialized
 	}
 
+	if globalLDAPConfig.Enabled {
+		sys.EnableLDAPSys()
+	}
+
 	sys.Lock()
 	if globalEtcdClient == nil {
 		sys.store = newIAMObjectStore()
@@ -794,17 +798,18 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser, sessionPol
 	}
 
 	if len(sessionPolicy) > 16*1024 {
-		return auth.Credentials{}, fmt.Errorf("Session policy should not exceed 16*1024 characters")
+		return auth.Credentials{}, fmt.Errorf("Session policy should not exceed 16 KiB characters")
 	}
 
-	policy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(sessionPolicy)))
-	if err != nil {
-		return auth.Credentials{}, err
-	}
-
-	// Version in policy must not be empty
-	if policy.Version == "" {
-		return auth.Credentials{}, fmt.Errorf("Invalid session policy version")
+	if len(sessionPolicy) > 0 {
+		policy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(sessionPolicy)))
+		if err != nil {
+			return auth.Credentials{}, err
+		}
+		// Version in policy must not be empty
+		if policy.Version == "" {
+			return auth.Credentials{}, fmt.Errorf("Invalid session policy version")
+		}
 	}
 
 	sys.Lock()
@@ -832,9 +837,14 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser, sessionPol
 	}
 
 	m := make(map[string]interface{})
-	m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicy))
 	m[parentClaim] = parentUser
-	m[iamPolicyClaimName()] = "embedded-policy"
+
+	if len(sessionPolicy) > 0 {
+		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicy))
+		m[iamPolicyClaimNameSA()] = "embedded-policy"
+	} else {
+		m[iamPolicyClaimNameSA()] = "inherited-policy"
+	}
 
 	secret := globalActiveCred.SecretKey
 	cred, err := auth.GetNewCredentialsWithMetadata(m, secret)
@@ -1469,6 +1479,11 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 		if parentInClaim != parent {
 			return false
 		}
+	} else {
+		// This is needed so a malicious user cannot
+		// use a leaked session key of another user
+		// to widen its privileges.
+		return false
 	}
 
 	// Check if the parent is allowed to perform this action, reject if not
@@ -1504,12 +1519,27 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 			availablePolicies[i].Statements...)
 	}
 
-	serviceAcc := args.AccountName
-	args.AccountName = parent
-	if !combinedPolicy.IsAllowed(args) {
+	parentArgs := args
+	parentArgs.AccountName = parent
+	if !combinedPolicy.IsAllowed(parentArgs) {
 		return false
 	}
-	args.AccountName = serviceAcc
+
+	saPolicyClaim, ok := args.Claims[iamPolicyClaimNameSA()]
+	if ok {
+		saPolicyClaimStr, ok := saPolicyClaim.(string)
+		if !ok {
+			// Sub policy if set, should be a string reject
+			// malformed/malicious requests.
+			return false
+		}
+
+		if saPolicyClaimStr == "inherited-policy" {
+			// Immediately returns true since at this stage, since
+			// parent user is allowed to do this action.
+			return true
+		}
+	}
 
 	// Now check if we have a sessionPolicy.
 	spolicy, ok := args.Claims[iampolicy.SessionPolicyName]
@@ -1601,7 +1631,7 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 		return combinedPolicy.IsAllowed(args)
 	}
 
-	pnameSlice, ok := args.GetPolicies(iamPolicyClaimName())
+	pnameSlice, ok := args.GetPolicies(iamPolicyClaimNameOpenID())
 	if !ok {
 		// When claims are set, it should have a policy claim field.
 		return false
@@ -1791,22 +1821,18 @@ func (sys *IAMSys) removeGroupFromMembershipsMap(group string) {
 	}
 }
 
+// EnableLDAPSys - enable ldap system users type.
+func (sys *IAMSys) EnableLDAPSys() {
+	sys.Lock()
+	defer sys.Unlock()
+
+	sys.usersSysType = LDAPUsersSysType
+}
+
 // NewIAMSys - creates new config system object.
 func NewIAMSys() *IAMSys {
-	// Check global server configuration to determine the type of
-	// users system configured.
-
-	// The default users system
-	var utype UsersSysType
-	switch {
-	case globalLDAPConfig.Enabled:
-		utype = LDAPUsersSysType
-	default:
-		utype = MinIOUsersSysType
-	}
-
 	return &IAMSys{
-		usersSysType:            utype,
+		usersSysType:            MinIOUsersSysType,
 		iamUsersMap:             make(map[string]auth.Credentials),
 		iamPolicyDocsMap:        make(map[string]iampolicy.Policy),
 		iamUserPolicyMap:        make(map[string]MappedPolicy),
