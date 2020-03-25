@@ -247,6 +247,14 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, updates chan<- Da
 	if err != nil {
 		return err
 	}
+	hist := oldCache.Info.NextBloomIdx - dataUsageUpdateDirCycles
+	if oldCache.Info.NextBloomIdx < dataUsageUpdateDirCycles {
+		hist = 0
+	}
+	bf, err := CycleBloomFilter(ctx, hist, oldCache.Info.NextBloomIdx)
+	if err == nil && bf.Complete && hist > 0 {
+		oldCache.Info.BloomFilter = bf.Filter
+	}
 	cache, err := updateUsage(ctx, fs.fsPath, oldCache, fs.waitForLowActiveIO, func(item Item) (int64, error) {
 		// Get file size, symlinks which cannot be
 		// followed are automatically filtered by fastwalk.
@@ -256,6 +264,7 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, updates chan<- Da
 		}
 		return fi.Size(), nil
 	})
+	cache.Info.BloomFilter = nil
 
 	// Even if there was an error, the new cache may have better info.
 	if cache.Info.LastUpdate.After(oldCache.Info.LastUpdate) {

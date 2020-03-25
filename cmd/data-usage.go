@@ -26,6 +26,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/willf/bloom"
+
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
@@ -130,6 +132,7 @@ type folderScanner struct {
 	getSize            getSizeFn
 	oldCache           dataUsageCache
 	newCache           dataUsageCache
+	withFilter         *bloomFilter
 	waitForLowActiveIO func()
 
 	dataUsageCrawlMult  float64
@@ -164,7 +167,12 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			return nil, ctx.Err()
 		default:
 		}
-
+		if f.withFilter != nil {
+			// If folder isn't in filter, skip it completely.
+			if !f.withFilter.containsDir(folder.name) {
+				return nil, nil
+			}
+		}
 		f.waitForLowActiveIO()
 		sleepDuration(dataUsageSleepPerFolder, f.dataUsageCrawlMult)
 
@@ -242,6 +250,13 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 // deepScanFolder will deep scan a folder and return the size if no error occurs.
 func (f *folderScanner) deepScanFolder(ctx context.Context, folder string) (*dataUsageEntry, error) {
 	var cache dataUsageEntry
+
+	if f.withFilter != nil {
+		// If folder isn't in filter, skip it completely.
+		if !f.withFilter.containsDir(folder) {
+			return nil, nil
+		}
+	}
 
 	done := ctx.Done()
 
@@ -329,6 +344,14 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 		dataUsageCrawlDebug: dataUsageDebug,
 	}
 
+	if len(cache.Info.BloomFilter) > 0 {
+		s.withFilter = &bloomFilter{BloomFilter: &bloom.BloomFilter{}}
+		_, err := s.withFilter.ReadFrom(bytes.NewBuffer(cache.Info.BloomFilter))
+		if err != nil {
+			logger.LogIf(ctx, err, "Error reading bloom filter")
+			s.withFilter = nil
+		}
+	}
 	if s.dataUsageCrawlDebug {
 		logger.Info(color.Green("runDataUsageInfo:") + " Starting crawler master")
 	}
@@ -430,5 +453,6 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 
 	s.newCache.Info.LastUpdate = UTCNow()
 	s.newCache.Info.NextCycle++
+	s.newCache.Info.NextBloomIdx++
 	return s.newCache, nil
 }

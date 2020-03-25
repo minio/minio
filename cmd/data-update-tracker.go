@@ -33,7 +33,6 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
-
 	"github.com/willf/bloom"
 )
 
@@ -50,8 +49,8 @@ const (
 )
 
 var (
-	ObjUpdatedCh             chan<- string
-	internalDataUsageTracker *dataUpdateTracker
+	ObjUpdatedCh         chan<- string
+	intDataUpdateTracker *dataUpdateTracker
 )
 
 type dataUpdateTracker struct {
@@ -102,6 +101,19 @@ func (b bloomFilter) containsDir(in string) bool {
 	return b.Test(tmp[:])
 }
 
+func (b bloomFilter) bytes() []byte {
+	if b.BloomFilter == nil {
+		return nil
+	}
+	var buf bytes.Buffer
+	_, err := b.WriteTo(&buf)
+	if err != nil {
+		logger.LogIf(context.Background(), err)
+		return nil
+	}
+	return buf.Bytes()
+}
+
 // sort the dataUpdateTrackerHistory, newest first.
 // Returns whether the history is complete.
 func (d dataUpdateTrackerHistory) sort() bool {
@@ -138,16 +150,16 @@ func (d *dataUpdateTrackerHistory) removeOlderThan(n uint64) {
 	*d = dd
 }
 
-func initDataUsageTracker() {
-	internalDataUsageTracker = &dataUpdateTracker{
+func initDataUpdateTracker() {
+	intDataUpdateTracker = &dataUpdateTracker{
 		Current: dataUpdateFilter{
 			idx: 1,
 		},
 
 		input: make(chan string, dataUsageTrackerQueueSize),
 	}
-	internalDataUsageTracker.Current.bf = internalDataUsageTracker.newBloomFilter()
-	ObjUpdatedCh = internalDataUsageTracker.input
+	intDataUpdateTracker.Current.bf = intDataUpdateTracker.newBloomFilter()
+	ObjUpdatedCh = intDataUpdateTracker.input
 }
 
 func (d *dataUpdateTracker) newBloomFilter() bloomFilter {
@@ -494,5 +506,5 @@ type bloomFilterResponse struct {
 // If y is 0, the response will not update y, but return the currently recorded information
 // from the current x to y-1.
 func CycleBloomFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error) {
-	return internalDataUsageTracker.cycleFilter(ctx, oldest, current)
+	return intDataUpdateTracker.cycleFilter(ctx, oldest, current)
 }

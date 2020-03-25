@@ -66,6 +66,7 @@ type dataUsageCacheInfo struct {
 	LastUpdate   time.Time
 	NextCycle    uint8
 	NextBloomIdx uint64
+	BloomFilter  []byte `msg:"BloomFilter,omitempty"`
 }
 
 // merge other data usage entry into this, excluding children.

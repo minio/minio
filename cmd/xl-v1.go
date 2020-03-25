@@ -301,8 +301,6 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 			if bf != nil && bf.containsDir(b.Name) {
 				bucketCh <- b
 				cache.replace(b.Name, dataUsageRoot, *e)
-			} else {
-				// TODO: Maybe add bucket sometimes??
 			}
 		}
 	}
@@ -384,8 +382,11 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 
 				// Calc usage
 				before := cache.Info.LastUpdate
-				// TODO: Maybe send bloom filter?
+				if bf != nil {
+					cache.Info.BloomFilter = bf.bytes()
+				}
 				cache, err = disk.CrawlAndGetDataUsage(ctx, cache)
+				cache.Info.BloomFilter = nil
 				if err != nil {
 					logger.LogIf(ctx, err)
 					if cache.Info.LastUpdate.After(before) {
