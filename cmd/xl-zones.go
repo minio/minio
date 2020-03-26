@@ -60,12 +60,13 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 		deploymentID string
 		err          error
 
-		formats = make([]*formatXLV3, len(endpointZones))
-		z       = &xlZones{zones: make([]*xlSets, len(endpointZones))}
+		formats      = make([]*formatXLV3, len(endpointZones))
+		storageDisks = make([][]StorageAPI, len(endpointZones))
+		z            = &xlZones{zones: make([]*xlSets, len(endpointZones))}
 	)
 	local := endpointZones.FirstLocal()
 	for i, ep := range endpointZones {
-		formats[i], err = waitForFormatXL(local, ep.Endpoints, i+1,
+		storageDisks[i], formats[i], err = waitForFormatXL(local, ep.Endpoints, i+1,
 			ep.SetCount, ep.DrivesPerSet, deploymentID)
 		if err != nil {
 			return nil, err
@@ -73,7 +74,7 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 		if deploymentID == "" {
 			deploymentID = formats[i].ID
 		}
-		z.zones[i], err = newXLSets(ep.Endpoints, formats[i], ep.SetCount, ep.DrivesPerSet)
+		z.zones[i], err = newXLSets(ep.Endpoints, storageDisks[i], formats[i], ep.SetCount, ep.DrivesPerSet)
 		if err != nil {
 			return nil, err
 		}

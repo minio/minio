@@ -110,7 +110,7 @@ func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool
 		// or create format.json
 		return true
 	}
-	storedDiskID, err := s.storage.getDiskID()
+	storedDiskID, err := s.storage.GetDiskID()
 	if err == nil && diskID == storedDiskID {
 		// If format.json is available and request sent the right disk-id, we allow the request
 		return true

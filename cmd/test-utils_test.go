@@ -193,13 +193,13 @@ func prepareXLSets32() (ObjectLayer, []string, error) {
 
 	endpoints := append(endpoints1, endpoints2...)
 	fsDirs := append(fsDirs1, fsDirs2...)
-	format, err := waitForFormatXL(true, endpoints, 1, 2, 16, "")
+	storageDisks, format, err := waitForFormatXL(true, endpoints, 1, 2, 16, "")
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, nil, err
 	}
 
-	objAPI, err := newXLSets(endpoints, format, 2, 16)
+	objAPI, err := newXLSets(endpoints, storageDisks, format, 2, 16)
 	if err != nil {
 		return nil, nil, err
 	}
