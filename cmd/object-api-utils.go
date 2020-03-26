@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -519,9 +520,7 @@ type ObjReaderFn func(inputReader io.Reader, h http.Header, pcfn CheckCopyPrecon
 // are called on Close() in reverse order as passed here. NOTE: It is
 // assumed that clean up functions do not panic (otherwise, they may
 // not all run!).
-func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPreconditionFn, cleanUpFns ...func()) (
-	fn ObjReaderFn, off, length int64, err error) {
-
+func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPreconditionFn, cleanUpFns ...func()) (fn ObjReaderFn, off, length int64, err error) {
 	// Call the clean-up functions immediately in case of exit
 	// with error
 	defer func() {
@@ -532,14 +531,21 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 		}
 	}()
 
-	isEncrypted := crypto.IsEncrypted(oi.UserDefined)
-	isCompressed, err := oi.IsCompressedOK()
-	if err != nil {
-		return nil, 0, 0, err
+	var (
+		isEncrypted  = crypto.IsEncrypted(oi.UserDefined)
+		isCompressed = oi.IsCompressed()
+	)
+	if isEncrypted && isCompressed {
+		// Currently compression and encryption are mutually
+		// exclusive. Therefore, we return a server-internal
+		// error since the object either has been modified
+		// or was produced incorrectly.
+		return nil, 0, 0, errors.New("compression and encryption are enabled on same object")
 	}
-	var skipLen int64
+
 	// Calculate range to read (different for
 	// e.g. encrypted/compressed objects)
+	var skipLen int64
 	switch {
 	case isEncrypted:
 		var seqNumber uint32
@@ -564,29 +570,84 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 		// encrypted bytes. The header parameter is used to
 		// provide encryption parameters.
 		fn = func(inputReader io.Reader, h http.Header, pcfn CheckCopyPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
-			copySource := h.Get(crypto.SSECopyAlgorithm) != ""
-
 			cFns = append(cleanUpFns, cFns...)
-			// Attach decrypter on inputReader
-			var decReader io.Reader
-			decReader, err = DecryptBlocksRequestR(inputReader, h,
-				off, length, seqNumber, partStart, oi, copySource)
-			if err != nil {
-				// Call the cleanup funcs
+			runCleanUp := func() {
 				for i := len(cFns) - 1; i >= 0; i-- {
 					cFns[i]()
 				}
+			}
+
+			// First, we extract and decrypt the object encryption key.
+			// This process is slightly different for SSE-C and SSE-S3
+			// since for the former we need the client key in the HTTP
+			// headers and for the later we need to talk to the KMS.
+			var objectEncrypionKey crypto.ObjectKey
+			switch {
+			case crypto.S3.IsEncrypted(oi.UserDefined):
+				objectEncrypionKey, err = crypto.S3.UnsealObjectKey(GlobalKMS, oi.UserDefined, oi.Bucket, oi.Name)
+				if err != nil {
+					runCleanUp()
+					return nil, err
+				}
+			case crypto.SSEC.IsEncrypted(oi.UserDefined):
+				// In case of SSE-C the client may either perform a regular GET
+				// or a COPY. If the client provides the SSE-C copy headers we
+				// have to use them instead of the regular SSE-C headers.
+				// For more details see: https://docs.aws.amazon.com/AmazonS3/latest/dev/ServerSideEncryptionCustomerKeys.html
+				if crypto.SSECopy.IsRequested(h) {
+					objectEncrypionKey, err = crypto.SSECopy.UnsealObjectKey(h, oi.UserDefined, oi.Bucket, oi.Name)
+				} else {
+					objectEncrypionKey, err = crypto.SSEC.UnsealObjectKey(h, oi.UserDefined, oi.Bucket, oi.Name)
+				}
+				if err != nil {
+					runCleanUp()
+					return nil, err
+				}
+			default:
+				runCleanUp()
+				return nil, errObjectTampered
+			}
+
+			// Finally, we need to decrypt the ETag. Unfortunately, S3 ETag handling is complicated.
+			// In general, the ETag is encrypted to prevent leaking information about the object
+			// content through it. According to the AWS S3, the ETag sent to the client is the
+			// object MD5 in case of SSE-S3 but not in case of SSE-C or SSE-KMS.
+			//
+			// However, we have to always preserve the MD5 of the object content since a client could
+			// copy an SSE-C-encrypted object (ETag != MD5(content)) to an SSE-S3-encrypted object
+			// (ETag == MD5(content)). ¯\_(ツ)_/¯
+			//
+			// Therefore, we return the decrypted ETag to the client whenever the encryption "method"
+			// is SSE-S3. Otherwise, we return (a part) of the encrypted ETag to the client since the
+			// encrypted ETag is larger then 16 bytes but the client expects a 16-byte ETag.
+			//
+			// However, we always decrypt the ETag here and let the caller decide whether it wants
+			// to present the plaintext ETag (MD5) or part of the encrypted ETag (random) to the
+			// client. By providing the CheckCopyPreconditionFn callback a caller can get access to
+			// the encrypted ETag.
+			//
+			// In addition, there is one special case when running MinIO without the `--compat` flag.
+			// In this case, MinIO will never compute the ETag as MD5 sum but always use a random
+			// ETag. This random ETag is not encrypted. Since it's randomly generated it does not leak
+			// anything about the object content.. Therefore, it cannot be decrypted. However,
+			// DecryptETag just skips decryption in this case and returns this random plaintext ETag
+			// directly.
+			encryptedETag := oi.ETag
+			oi.ETag, err = DecryptETag(objectEncrypionKey, oi)
+			if err != nil {
+				runCleanUp()
 				return nil, err
 			}
-			encETag := oi.ETag
-			oi.ETag = getDecryptedETag(h, oi, copySource) // Decrypt the ETag before top layer consumes this value.
 
+			copySource := crypto.SSECopy.IsRequested(h)
+			decReader, err := DecryptBlocksRequestR(inputReader, objectEncrypionKey, off, length, seqNumber, partStart, oi, copySource)
+			if err != nil {
+				runCleanUp()
+				return nil, err
+			}
 			if pcfn != nil {
-				if ok := pcfn(oi, encETag); ok {
-					// Call the cleanup funcs
-					for i := len(cFns) - 1; i >= 0; i-- {
-						cFns[i]()
-					}
+				if ok := pcfn(oi, encryptedETag); ok {
+					runCleanUp()
 					return nil, PreConditionFailed{}
 				}
 			}

@@ -22,7 +22,6 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/subtle"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -247,22 +246,6 @@ func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, m
 	return newEncryptReader(content, key, bucket, object, metadata, crypto.S3.IsRequested(r.Header))
 }
 
-// DecryptCopyRequest decrypts the object with the client provided key. It also removes
-// the client-side-encryption metadata from the object and sets the correct headers.
-func DecryptCopyRequest(client io.Writer, r *http.Request, bucket, object string, metadata map[string]string) (io.WriteCloser, error) {
-	var (
-		key []byte
-		err error
-	)
-	if crypto.SSECopy.IsRequested(r.Header) {
-		key, err = ParseSSECopyCustomerRequest(r.Header, metadata)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return newDecryptWriter(client, key, bucket, object, 0, metadata)
-}
-
 func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]string) ([]byte, error) {
 	switch {
 	default:
@@ -317,75 +300,9 @@ func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]st
 	}
 }
 
-func newDecryptWriter(client io.Writer, key []byte, bucket, object string, seqNumber uint32, metadata map[string]string) (io.WriteCloser, error) {
-	objectEncryptionKey, err := decryptObjectInfo(key, bucket, object, metadata)
-	if err != nil {
-		return nil, err
-	}
-	return newDecryptWriterWithObjectKey(client, objectEncryptionKey, seqNumber, metadata)
-}
-
-func newDecryptWriterWithObjectKey(client io.Writer, objectEncryptionKey []byte, seqNumber uint32, metadata map[string]string) (io.WriteCloser, error) {
-	writer, err := sio.DecryptWriter(client, sio.Config{
-		Key:            objectEncryptionKey,
-		SequenceNumber: seqNumber,
-	})
-	if err != nil {
-		return nil, crypto.ErrInvalidCustomerKey
-	}
-	delete(metadata, crypto.SSEIV)
-	delete(metadata, crypto.SSESealAlgorithm)
-	delete(metadata, crypto.SSECSealedKey)
-	delete(metadata, crypto.SSEMultipart)
-	delete(metadata, crypto.S3SealedKey)
-	delete(metadata, crypto.S3KMSSealedKey)
-	delete(metadata, crypto.S3KMSKeyID)
-	return writer, nil
-}
-
-// Adding support for reader based interface
-
-// DecryptRequestWithSequenceNumberR - same as
-// DecryptRequestWithSequenceNumber but with a reader
-func DecryptRequestWithSequenceNumberR(client io.Reader, h http.Header, bucket, object string, seqNumber uint32, metadata map[string]string) (io.Reader, error) {
-	if crypto.S3.IsEncrypted(metadata) {
-		return newDecryptReader(client, nil, bucket, object, seqNumber, metadata)
-	}
-
-	key, err := ParseSSECustomerHeader(h)
-	if err != nil {
-		return nil, err
-	}
-	return newDecryptReader(client, key, bucket, object, seqNumber, metadata)
-}
-
-// DecryptCopyRequestR - same as DecryptCopyRequest, but with a
-// Reader
-func DecryptCopyRequestR(client io.Reader, h http.Header, bucket, object string, seqNumber uint32, metadata map[string]string) (io.Reader, error) {
-	var (
-		key []byte
-		err error
-	)
-	if crypto.SSECopy.IsRequested(h) {
-		key, err = ParseSSECopyCustomerRequest(h, metadata)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return newDecryptReader(client, key, bucket, object, seqNumber, metadata)
-}
-
-func newDecryptReader(client io.Reader, key []byte, bucket, object string, seqNumber uint32, metadata map[string]string) (io.Reader, error) {
-	objectEncryptionKey, err := decryptObjectInfo(key, bucket, object, metadata)
-	if err != nil {
-		return nil, err
-	}
-	return newDecryptReaderWithObjectKey(client, objectEncryptionKey, seqNumber)
-}
-
-func newDecryptReaderWithObjectKey(client io.Reader, objectEncryptionKey []byte, seqNumber uint32) (io.Reader, error) {
+func newDecryptReader(client io.Reader, key crypto.ObjectKey, seqNumber uint32) (io.Reader, error) {
 	reader, err := sio.DecryptReader(client, sio.Config{
-		Key:            objectEncryptionKey,
+		Key:            key[:],
 		SequenceNumber: seqNumber,
 	})
 	if err != nil {
@@ -396,78 +313,30 @@ func newDecryptReaderWithObjectKey(client io.Reader, objectEncryptionKey []byte,
 
 // DecryptBlocksRequestR - same as DecryptBlocksRequest but with a
 // reader
-func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, offset,
-	length int64, seqNumber uint32, partStart int, oi ObjectInfo, copySource bool) (
-	io.Reader, error) {
-
-	bucket, object := oi.Bucket, oi.Name
+func DecryptBlocksRequestR(inputReader io.Reader, key crypto.ObjectKey, offset, length int64, seqNumber uint32, partStart int, oi ObjectInfo, copySource bool) (io.Reader, error) {
 	// Single part case
 	if !isEncryptedMultipart(oi) {
-		var reader io.Reader
-		var err error
-		if copySource {
-			reader, err = DecryptCopyRequestR(inputReader, h, bucket, object, seqNumber, oi.UserDefined)
-		} else {
-			reader, err = DecryptRequestWithSequenceNumberR(inputReader, h, bucket, object, seqNumber, oi.UserDefined)
-		}
-		if err != nil {
-			return nil, err
-		}
-		return reader, nil
+		return newDecryptReader(inputReader, key, seqNumber)
 	}
 
 	partDecRelOffset := int64(seqNumber) * SSEDAREPackageBlockSize
 	partEncRelOffset := int64(seqNumber) * (SSEDAREPackageBlockSize + SSEDAREPackageMetaSize)
 
 	w := &DecryptBlocksReader{
-		reader:            inputReader,
-		startSeqNum:       seqNumber,
-		partDecRelOffset:  partDecRelOffset,
-		partEncRelOffset:  partEncRelOffset,
-		parts:             oi.Parts,
-		partIndex:         partStart,
-		header:            h,
-		bucket:            bucket,
-		object:            object,
-		customerKeyHeader: h.Get(crypto.SSECKey),
-		copySource:        copySource,
+		reader:           inputReader,
+		startSeqNum:      seqNumber,
+		partDecRelOffset: partDecRelOffset,
+		partEncRelOffset: partEncRelOffset,
+		parts:            oi.Parts,
+		partIndex:        partStart,
+		key:              key,
+		copySource:       copySource,
 	}
 
-	w.metadata = map[string]string{}
-	// Copy encryption metadata for internal use.
-	for k, v := range oi.UserDefined {
-		w.metadata[k] = v
-	}
-
-	if w.copySource {
-		w.customerKeyHeader = h.Get(crypto.SSECopyKey)
-	}
-
-	if err := w.buildDecrypter(w.parts[w.partIndex].Number); err != nil {
+	if err := w.buildDecrypter(uint32(w.parts[w.partIndex].Number)); err != nil {
 		return nil, err
 	}
-
 	return w, nil
-}
-
-// DecryptRequestWithSequenceNumber decrypts the object with the client provided key. It also removes
-// the client-side-encryption metadata from the object and sets the correct headers.
-func DecryptRequestWithSequenceNumber(client io.Writer, r *http.Request, bucket, object string, seqNumber uint32, metadata map[string]string) (io.WriteCloser, error) {
-	if crypto.S3.IsEncrypted(metadata) {
-		return newDecryptWriter(client, nil, bucket, object, seqNumber, metadata)
-	}
-
-	key, err := ParseSSECustomerRequest(r)
-	if err != nil {
-		return nil, err
-	}
-	return newDecryptWriter(client, key, bucket, object, seqNumber, metadata)
-}
-
-// DecryptRequest decrypts the object with client provided key for SSE-C and SSE-S3. It also removes
-// the encryption metadata from the object and sets the correct headers.
-func DecryptRequest(client io.Writer, r *http.Request, bucket, object string, metadata map[string]string) (io.WriteCloser, error) {
-	return DecryptRequestWithSequenceNumber(client, r, bucket, object, 0, metadata)
 }
 
 // DecryptBlocksReader - decrypts multipart parts, while implementing
@@ -482,58 +351,21 @@ type DecryptBlocksReader struct {
 	// Current part index
 	partIndex int
 	// Parts information
-	parts          []ObjectPartInfo
-	header         http.Header
-	bucket, object string
-	metadata       map[string]string
-
+	parts                              []ObjectPartInfo
 	partDecRelOffset, partEncRelOffset int64
 
+	key crypto.ObjectKey
+
 	copySource bool
-	// Customer Key
-	customerKeyHeader string
 }
 
-func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
-	m := make(map[string]string)
-	for k, v := range d.metadata {
-		m[k] = v
-	}
-	// Initialize the first decrypter; new decrypters will be
-	// initialized in Read() operation as needed.
-	var key []byte
-	var err error
-	if d.copySource {
-		if crypto.SSEC.IsEncrypted(d.metadata) {
-			d.header.Set(crypto.SSECopyKey, d.customerKeyHeader)
-			key, err = ParseSSECopyCustomerRequest(d.header, d.metadata)
-		}
-	} else {
-		if crypto.SSEC.IsEncrypted(d.metadata) {
-			d.header.Set(crypto.SSECKey, d.customerKeyHeader)
-			key, err = ParseSSECustomerHeader(d.header)
-		}
-	}
-	if err != nil {
-		return err
-	}
-
-	objectEncryptionKey, err := decryptObjectInfo(key, d.bucket, d.object, m)
-	if err != nil {
-		return err
-	}
-
-	var partIDbin [4]byte
-	binary.LittleEndian.PutUint32(partIDbin[:], uint32(partID)) // marshal part ID
-
-	mac := hmac.New(sha256.New, objectEncryptionKey) // derive part encryption key from part ID and object key
-	mac.Write(partIDbin[:])
-	partEncryptionKey := mac.Sum(nil)
+func (d *DecryptBlocksReader) buildDecrypter(partID uint32) error {
+	partEncryptionKey := d.key.DerivePartKey(partID)
 
 	// Limit the reader, so the decryptor doesnt receive bytes
 	// from the next part (different DARE stream)
 	encLenToRead := d.parts[d.partIndex].Size - d.partEncRelOffset
-	decrypter, err := newDecryptReaderWithObjectKey(io.LimitReader(d.reader, encLenToRead), partEncryptionKey, d.startSeqNum)
+	decrypter, err := newDecryptReader(io.LimitReader(d.reader, encLenToRead), partEncryptionKey, d.startSeqNum)
 	if err != nil {
 		return err
 	}
@@ -570,7 +402,7 @@ func (d *DecryptBlocksReader) Read(p []byte) (int, error) {
 			return n1, io.EOF
 		}
 
-		err = d.buildDecrypter(d.parts[d.partIndex].Number)
+		err = d.buildDecrypter(uint32(d.parts[d.partIndex].Number))
 		if err != nil {
 			return 0, err
 		}
@@ -702,7 +534,7 @@ func getDecryptedETag(headers http.Header, objInfo ObjectInfo, copySource bool) 
 	// As per AWS S3 Spec, ETag for SSE-C encrypted objects need not be MD5Sum of the data.
 	// Since server side copy with same source and dest just replaces the ETag, we save
 	// encrypted content MD5Sum as ETag for both SSE-C and SSE-S3, we standardize the ETag
-	//encryption across SSE-C and SSE-S3, and only return last 32 bytes for SSE-C
+	// encryption across SSE-C and SSE-S3, and only return last 32 bytes for SSE-C
 	if crypto.SSEC.IsEncrypted(objInfo.UserDefined) && !copySource {
 		return objInfo.ETag[len(objInfo.ETag)-32:]
 	}
