@@ -864,7 +864,7 @@ func (xl xlObjects) deleteObjects(ctx context.Context, bucket string, objects []
 		}
 	}
 
-	for i, object := range objects {
+	for i := range objects {
 		if errs[i] != nil {
 			continue
 		}

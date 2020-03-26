@@ -31,8 +31,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/pkg/env"
 	"github.com/willf/bloom"
 )
 
@@ -44,7 +46,7 @@ const (
 	dataUpdateTrackerQueueSize = 10000
 
 	dataUpdateTrackerVersion      = 1
-	dataUpdateTrackerFilename     = "tracker.bin"
+	dataUpdateTrackerFilename     = minioMetaBucket + SlashSeparator + bucketMetaPrefix + SlashSeparator + "tracker.bin"
 	dataUpdateTrackerSaveInterval = 5 * time.Minute
 )
 
@@ -56,6 +58,8 @@ var (
 type dataUpdateTracker struct {
 	mu    sync.Mutex
 	input chan string
+	save  chan struct{}
+	debug bool
 
 	Current dataUpdateFilter
 	History dataUpdateTrackerHistory
@@ -71,6 +75,11 @@ type dataUpdateFilter struct {
 
 type bloomFilter struct {
 	*bloom.BloomFilter
+}
+
+// emptyBloomFilter returns an empty bloom filter.
+func emptyBloomFilter() bloomFilter {
+	return bloomFilter{BloomFilter: &bloom.BloomFilter{}}
 }
 
 func (b bloomFilter) containsDir(in string) bool {
@@ -155,8 +164,9 @@ func initDataUpdateTracker() {
 		Current: dataUpdateFilter{
 			idx: 1,
 		},
-
+		debug: env.Get(envDataUsageCrawlDebug, config.EnableOff) == config.EnableOn,
 		input: make(chan string, dataUpdateTrackerQueueSize),
+		save:  make(chan struct{}, 1),
 	}
 	intDataUpdateTracker.Current.bf = intDataUpdateTracker.newBloomFilter()
 	objectUpdatedCh = intDataUpdateTracker.input
@@ -169,7 +179,11 @@ func (d *dataUpdateTracker) newBloomFilter() bloomFilter {
 // start will load the current data from the drives start collecting information and
 // start a saver goroutine.
 // All of these will exit when the context is cancelled.
-func (d *dataUpdateTracker) start(ctx context.Context, drives []string) {
+func (d *dataUpdateTracker) start(ctx context.Context, drives ...string) {
+	if len(drives) <= 0 {
+		logger.LogIf(ctx, errors.New("dataUpdateTracker.start: No drives specified"))
+		return
+	}
 	d.load(ctx, drives)
 	go d.startCollector(ctx)
 	go d.startSaver(ctx, dataUpdateTrackerSaveInterval, drives)
@@ -183,7 +197,7 @@ func (d *dataUpdateTracker) start(ctx context.Context, drives []string) {
 func (d *dataUpdateTracker) load(ctx context.Context, drives []string) {
 	for _, drive := range drives {
 		func(drive string) {
-			cacheFormatPath := pathJoin(drive, minioMetaBucket, dataUpdateTrackerFilename)
+			cacheFormatPath := pathJoin(drive, dataUpdateTrackerFilename)
 			f, err := os.OpenFile(cacheFormatPath, os.O_RDWR, 0)
 
 			if err != nil {
@@ -219,6 +233,9 @@ func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Durati
 		d.mu.Lock()
 		d.Saved = UTCNow()
 		err := d.serialize(&buf)
+		if d.debug {
+			logger.Info(color.Green("dataUpdateTracker:")+" Saving: %v bytes, Current idx: %v", buf.Len(), d.Current.idx)
+		}
 		d.mu.Unlock()
 		if err != nil {
 			logger.LogIf(ctx, err, "Error serializing usage tracker data")
@@ -227,15 +244,14 @@ func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Durati
 			}
 			continue
 		}
+
 		for _, drive := range drives {
-			func(drive string) {
-				cacheFormatPath := pathJoin(drive, minioMetaBucket, dataUpdateTrackerFilename)
-				err := ioutil.WriteFile(cacheFormatPath, buf.Bytes(), os.ModePerm)
-				if err != nil {
-					logger.LogIf(ctx, err)
-					return
-				}
-			}(drive)
+			cacheFormatPath := pathJoin(drive, dataUpdateTrackerFilename)
+			err := ioutil.WriteFile(cacheFormatPath, buf.Bytes(), os.ModePerm)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				continue
+			}
 		}
 		if exit {
 			return
@@ -247,6 +263,7 @@ func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Durati
 // Caller should hold lock if d is expected to be shared.
 // If an error is returned, there will likely be partial data written to dst.
 func (d *dataUpdateTracker) serialize(dst io.Writer) (err error) {
+	ctx := context.Background()
 	var tmp [8]byte
 	o := bufio.NewWriter(dst)
 	defer func() {
@@ -257,34 +274,59 @@ func (d *dataUpdateTracker) serialize(dst io.Writer) (err error) {
 
 	// Version
 	if err := o.WriteByte(dataUpdateTrackerVersion); err != nil {
+		if d.debug {
+			logger.LogIf(ctx, err)
+		}
 		return err
 	}
 	// Timestamp.
 	binary.LittleEndian.PutUint64(tmp[:], uint64(d.Saved.Unix()))
 	if _, err := o.Write(tmp[:]); err != nil {
+		if d.debug {
+			logger.LogIf(ctx, err)
+		}
 		return err
 	}
 
 	// Current
 	binary.LittleEndian.PutUint64(tmp[:], d.Current.idx)
 	if _, err := o.Write(tmp[:]); err != nil {
+		if d.debug {
+			logger.LogIf(ctx, err)
+		}
 		return err
 	}
 
 	if _, err := d.Current.bf.WriteTo(o); err != nil {
+		if d.debug {
+			logger.LogIf(ctx, err)
+		}
 		return err
 	}
 
 	// History
 	binary.LittleEndian.PutUint64(tmp[:], uint64(len(d.History)))
+	if _, err := o.Write(tmp[:]); err != nil {
+		if d.debug {
+			logger.LogIf(ctx, err)
+		}
+		return err
+	}
+
 	for _, bf := range d.History {
 		// Current
 		binary.LittleEndian.PutUint64(tmp[:], bf.idx)
 		if _, err := o.Write(tmp[:]); err != nil {
+			if d.debug {
+				logger.LogIf(ctx, err)
+			}
 			return err
 		}
 
 		if _, err := bf.bf.WriteTo(o); err != nil {
+			if d.debug {
+				logger.LogIf(ctx, err)
+			}
 			return err
 		}
 	}
@@ -292,6 +334,7 @@ func (d *dataUpdateTracker) serialize(dst io.Writer) (err error) {
 }
 
 func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) error {
+	ctx := context.Background()
 	var dst dataUpdateTracker
 	var tmp [8]byte
 
@@ -306,6 +349,9 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 	}
 	// Timestamp.
 	if _, err := io.ReadFull(src, tmp[:8]); err != nil {
+		if d.debug {
+			logger.LogIf(ctx, err)
+		}
 		return err
 	}
 	t := time.Unix(int64(binary.LittleEndian.Uint64(tmp[:])), 0)
@@ -315,27 +361,42 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 
 	// Current
 	if _, err := io.ReadFull(src, tmp[:8]); err != nil {
+		if d.debug {
+			logger.LogIf(ctx, err)
+		}
 		return err
 	}
 	dst.Current.idx = binary.LittleEndian.Uint64(tmp[:])
-	dst.Current.bf = d.newBloomFilter()
-	if _, err := d.Current.bf.ReadFrom(src); err != nil {
+	dst.Current.bf = emptyBloomFilter()
+	if _, err := dst.Current.bf.ReadFrom(src); err != nil {
+		if d.debug {
+			logger.LogIf(ctx, err)
+		}
 		return err
 	}
 
 	// History
 	if _, err := io.ReadFull(src, tmp[:8]); err != nil {
+		if d.debug {
+			logger.LogIf(ctx, err)
+		}
 		return err
 	}
 	n := binary.LittleEndian.Uint64(tmp[:])
 	dst.History = make(dataUpdateTrackerHistory, int(n))
 	for i, e := range dst.History {
 		if _, err := io.ReadFull(src, tmp[:8]); err != nil {
+			if d.debug {
+				logger.LogIf(ctx, err)
+			}
 			return err
 		}
 		e.idx = binary.LittleEndian.Uint64(tmp[:])
-		e.bf = bloomFilter{}
+		e.bf = emptyBloomFilter()
 		if _, err := e.bf.ReadFrom(src); err != nil {
+			if d.debug {
+				logger.LogIf(ctx, err)
+			}
 			return err
 		}
 		dst.History[i] = e
@@ -359,14 +420,14 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 		case in := <-d.input:
 			bucket, _ := path2BucketObjectWithBasePath("", in)
 			if bucket == "" {
-				if false {
+				if d.debug {
 					logger.Info(color.Green("data-usage:")+" no bucket (%s)", in)
 				}
 				continue
 			}
 
 			if isReservedOrInvalidBucket(bucket, false) {
-				if false {
+				if d.debug {
 					logger.Info(color.Green("data-usage:")+" isReservedOrInvalidBucket: %v, entry: %v", bucket, in)
 				}
 				continue
@@ -376,7 +437,7 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 
 			// Trim empty start/end
 			for len(split) > 0 {
-				if len(split[0]) > 0 {
+				if len(split[0]) > 0 && split[0] != "." {
 					break
 				}
 				split = split[1:]
@@ -396,6 +457,9 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 			// Add all paths until level 3.
 			d.mu.Lock()
 			for i := range split {
+				if d.debug {
+					logger.Info(color.Green("dataUpdateTracker:", "marking path dirty:", color.Blue(path.Join(split[:i+1]...))))
+				}
 				hashPath(path.Join(split[:i+1]...)).bytes(tmp[:])
 				d.Current.bf.Add(tmp[:])
 			}
@@ -453,6 +517,7 @@ func (d *dataUpdateTracker) filterFrom(ctx context.Context, oldest, newest uint6
 		logger.LogIf(ctx, err)
 		return nil
 	}
+	bfr.Filter = dst.Bytes()
 
 	return &bfr
 }
@@ -478,6 +543,10 @@ func (d *dataUpdateTracker) cycleFilter(ctx context.Context, oldest, current uin
 		d.History = append(d.History, d.Current)
 		d.Current.idx = current
 		d.Current.bf = d.newBloomFilter()
+		select {
+		case d.save <- struct{}{}:
+		default:
+		}
 	}
 	d.History.removeOlderThan(oldest)
 	return d.filterFrom(ctx, oldest, current), nil

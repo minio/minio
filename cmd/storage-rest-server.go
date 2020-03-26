@@ -138,15 +138,16 @@ func (s *storageRESTServer) UpdateBloomFilter(w http.ResponseWriter, r *http.Req
 	if !s.IsValid(w, r) {
 		return
 	}
-
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
 	var req bloomFilterRequest
 	dec := json.NewDecoder(r.Body)
 	err := dec.Decode(&req)
 	if err != nil {
+		logger.LogIf(r.Context(), err)
 		s.writeErrorResponse(w, err)
 		return
 	}
+	fmt.Println("storageRESTServer.UpdateBloomFilter", req)
 	resp, err := CycleBloomFilter(r.Context(), req.Oldest, req.Current)
 	switch err {
 	case nil:
@@ -158,6 +159,7 @@ func (s *storageRESTServer) UpdateBloomFilter(w http.ResponseWriter, r *http.Req
 	}
 	enc := json.NewEncoder(w)
 	err = enc.Encode(resp)
+
 	logger.LogIf(r.Context(), err)
 }
 

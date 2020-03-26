@@ -158,6 +158,7 @@ func (client *storageRESTClient) UpdateBloomFilter(ctx context.Context, oldest, 
 		Current: current,
 	})
 	if err != nil {
+		logger.LogIf(ctx, err)
 		return nil, err
 	}
 	respBody, err := client.call(storageRESTMethodUpdateBloomFilter,
@@ -165,6 +166,7 @@ func (client *storageRESTClient) UpdateBloomFilter(ctx context.Context, oldest, 
 		bytes.NewBuffer(b), int64(len(b)))
 	defer http.DrainBody(respBody)
 	if err != nil {
+		logger.LogIf(ctx, err)
 		return nil, err
 	}
 	dec := json.NewDecoder(respBody)

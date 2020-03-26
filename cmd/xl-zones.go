@@ -63,8 +63,16 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 		formats = make([]*formatXLV3, len(endpointZones))
 		z       = &xlZones{zones: make([]*xlSets, len(endpointZones))}
 	)
+
+	var localDrives []string
+
 	local := endpointZones.FirstLocal()
 	for i, ep := range endpointZones {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				localDrives = append(localDrives, endpoint.Path)
+			}
+		}
 		formats[i], err = waitForFormatXL(local, ep.Endpoints, i+1,
 			ep.SetCount, ep.DrivesPerSet, deploymentID)
 		if err != nil {
@@ -81,6 +89,8 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 	if !z.SingleZone() {
 		z.quickHealBuckets(context.Background())
 	}
+	go intDataUpdateTracker.start(GlobalContext, localDrives...)
+
 	return z, nil
 }
 

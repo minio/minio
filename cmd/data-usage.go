@@ -47,7 +47,7 @@ const (
 	dataUsageUpdateDirCycles = 16
 	dataUsageRoot            = SlashSeparator
 	dataUsageBucket          = minioMetaBucket + SlashSeparator + bucketMetaPrefix
-	dataUsageStartDelay      = 5 * time.Minute // Time to wait on startup and between cycles.
+	dataUsageStartDelay      = 5 * time.Second // Time to wait on startup and between cycles.
 )
 
 // initDataUsageStats will start the crawler unless disabled.
@@ -170,7 +170,11 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		if f.withFilter != nil {
 			// If folder isn't in filter, skip it completely.
 			if !f.withFilter.containsDir(folder.name) {
-				return nil, nil
+				// TODO: Disable, too verbose.
+				if f.dataUsageCrawlDebug {
+					logger.Info(color.Green("data-usage:")+" Skipping non-updated folder: %v", folder.name)
+				}
+				continue
 			}
 		}
 		f.waitForLowActiveIO()
@@ -250,13 +254,6 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 // deepScanFolder will deep scan a folder and return the size if no error occurs.
 func (f *folderScanner) deepScanFolder(ctx context.Context, folder string) (*dataUsageEntry, error) {
 	var cache dataUsageEntry
-
-	if f.withFilter != nil {
-		// If folder isn't in filter, skip it completely.
-		if !f.withFilter.containsDir(folder) {
-			return nil, nil
-		}
-	}
 
 	done := ctx.Done()
 
@@ -353,7 +350,7 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 		}
 	}
 	if s.dataUsageCrawlDebug {
-		logger.Info(color.Green("runDataUsageInfo:") + " Starting crawler master")
+		logger.Info(color.Green("updateUsage:")+" Start crawling. Bloom filter: %v", s.withFilter != nil)
 	}
 
 	done := ctx.Done()
@@ -410,7 +407,7 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 			continue
 		}
 		if du == nil {
-			logger.LogIf(ctx, errors.New("data-usage: no disk usage provided"))
+			logger.Info("data-usage: no disk usage provided")
 			continue
 		}
 		s.newCache.replace(folder.name, "", *du)
@@ -436,6 +433,18 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 		if !h.mod(s.oldCache.Info.NextCycle, dataUsageUpdateDirCycles) {
 			s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h])
 			continue
+		}
+
+		if s.withFilter != nil {
+			// If folder isn't in filter, skip it completely.
+			if !s.withFilter.containsDir(folder.name) {
+				// TODO: Disable, too verbose.
+				if s.dataUsageCrawlDebug {
+					logger.Info(color.Green("data-usage:")+" Skipping non-updated folder: %v", folder)
+				}
+				s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h])
+				continue
+			}
 		}
 
 		// Update on this cycle...

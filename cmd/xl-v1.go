@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"sync"
@@ -237,6 +238,9 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 	if err != nil {
 		return err
 	}
+	if intDataUpdateTracker.debug {
+		logger.Info("xl: %v, Bloom filter index: %v", xl.endpoints, oldCache.Info.NextBloomIdx)
+	}
 
 	// Collect bloom filters from all disks here...
 	bf := &bloomFilter{}
@@ -247,11 +251,17 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 		}
 
 		diskBF, err := disk.UpdateBloomFilter(ctx, hist, oldCache.Info.NextBloomIdx)
+
 		if err != nil || !diskBF.Complete || bf == nil {
 			logger.LogIf(ctx, err)
 			bf = nil
 			continue
 		}
+		if intDataUpdateTracker.debug {
+			b, _ := json.MarshalIndent(diskBF, "", "  ")
+			logger.Info("Disk %v, Bloom filter: %v", disk.String(), string(b))
+		}
+
 		if bf.BloomFilter == nil {
 			// For the first, add this as the first filter.
 			bf.BloomFilter = &bloom.BloomFilter{}
@@ -280,8 +290,9 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 	// New cache..
 	cache := dataUsageCache{
 		Info: dataUsageCacheInfo{
-			Name:      dataUsageRoot,
-			NextCycle: oldCache.Info.NextCycle,
+			Name:         dataUsageRoot,
+			NextCycle:    oldCache.Info.NextCycle,
+			NextBloomIdx: oldCache.Info.NextBloomIdx,
 		},
 		Cache: make(map[dataUsageHash]dataUsageEntry, len(oldCache.Cache)),
 	}
@@ -298,9 +309,14 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 	for _, b := range buckets {
 		e := oldCache.find(b.Name)
 		if e != nil {
-			if bf != nil && bf.containsDir(b.Name) {
+			if bf == nil || bf.containsDir(b.Name) {
 				bucketCh <- b
 				cache.replace(b.Name, dataUsageRoot, *e)
+			} else {
+				// TODO: Remove, too verbose.
+				if intDataUpdateTracker.debug {
+					logger.Info("Skipping bucket %v, not updated", b.Name)
+				}
 			}
 		}
 	}
@@ -346,6 +362,7 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 		cache.Info.NextBloomIdx++
 		cache.Info.LastUpdate = time.Now()
 		logger.LogIf(ctx, cache.save(ctx, xl, dataUsageCacheName))
+		logger.Info("Cache saved, Next Cycle: %d, Next Bloom Filter: %v", cache.Info.NextCycle, cache.Info.NextBloomIdx)
 		updates <- cache
 	}()
 

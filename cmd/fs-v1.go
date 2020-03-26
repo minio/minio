@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -180,6 +181,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	fs.fsFormatRlk = rlk
 
 	go fs.cleanupStaleMultipartUploads(ctx, GlobalMultipartCleanupInterval, GlobalMultipartExpiry, GlobalServiceDoneCh)
+	go intDataUpdateTracker.start(GlobalContext, fsPath)
 
 	// Return successfully initialized object layer.
 	return fs, nil
@@ -254,6 +256,10 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, updates chan<- Da
 	bf, err := CycleBloomFilter(ctx, hist, oldCache.Info.NextBloomIdx)
 	if err == nil && bf.Complete && hist > 0 {
 		oldCache.Info.BloomFilter = bf.Filter
+	}
+	if intDataUpdateTracker.debug {
+		b, _ := json.MarshalIndent(bf, "", "  ")
+		logger.Info("Bloom filter: %v", string(b))
 	}
 	cache, err := updateUsage(ctx, fs.fsPath, oldCache, fs.waitForLowActiveIO, func(item Item) (int64, error) {
 		// Get file size, symlinks which cannot be
