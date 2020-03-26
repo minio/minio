@@ -18,6 +18,7 @@
 package madmin
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -25,7 +26,7 @@ import (
 )
 
 // InfoCannedPolicy - expand canned policy into JSON structure.
-func (adm *AdminClient) InfoCannedPolicy(policyName string) ([]byte, error) {
+func (adm *AdminClient) InfoCannedPolicy(ctx context.Context, policyName string) ([]byte, error) {
 	queryValues := url.Values{}
 	queryValues.Set("name", policyName)
 
@@ -35,7 +36,7 @@ func (adm *AdminClient) InfoCannedPolicy(policyName string) ([]byte, error) {
 	}
 
 	// Execute GET on /minio/admin/v2/info-canned-policy
-	resp, err := adm.executeMethod("GET", reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -50,13 +51,13 @@ func (adm *AdminClient) InfoCannedPolicy(policyName string) ([]byte, error) {
 }
 
 // ListCannedPolicies - list all configured canned policies.
-func (adm *AdminClient) ListCannedPolicies() (map[string][]byte, error) {
+func (adm *AdminClient) ListCannedPolicies(ctx context.Context) (map[string][]byte, error) {
 	reqData := requestData{
 		relPath: adminAPIPrefix + "/list-canned-policies",
 	}
 
 	// Execute GET on /minio/admin/v2/list-canned-policies
-	resp, err := adm.executeMethod("GET", reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -81,7 +82,7 @@ func (adm *AdminClient) ListCannedPolicies() (map[string][]byte, error) {
 }
 
 // RemoveCannedPolicy - remove a policy for a canned.
-func (adm *AdminClient) RemoveCannedPolicy(policyName string) error {
+func (adm *AdminClient) RemoveCannedPolicy(ctx context.Context, policyName string) error {
 	queryValues := url.Values{}
 	queryValues.Set("name", policyName)
 
@@ -91,7 +92,7 @@ func (adm *AdminClient) RemoveCannedPolicy(policyName string) error {
 	}
 
 	// Execute DELETE on /minio/admin/v2/remove-canned-policy to remove policy.
-	resp, err := adm.executeMethod("DELETE", reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodDelete, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -106,7 +107,7 @@ func (adm *AdminClient) RemoveCannedPolicy(policyName string) error {
 }
 
 // AddCannedPolicy - adds a policy for a canned.
-func (adm *AdminClient) AddCannedPolicy(policyName, policy string) error {
+func (adm *AdminClient) AddCannedPolicy(ctx context.Context, policyName, policy string) error {
 	queryValues := url.Values{}
 	queryValues.Set("name", policyName)
 
@@ -117,7 +118,7 @@ func (adm *AdminClient) AddCannedPolicy(policyName, policy string) error {
 	}
 
 	// Execute PUT on /minio/admin/v2/add-canned-policy to set policy.
-	resp, err := adm.executeMethod("PUT", reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -132,7 +133,7 @@ func (adm *AdminClient) AddCannedPolicy(policyName, policy string) error {
 }
 
 // SetPolicy - sets the policy for a user or a group.
-func (adm *AdminClient) SetPolicy(policyName, entityName string, isGroup bool) error {
+func (adm *AdminClient) SetPolicy(ctx context.Context, policyName, entityName string, isGroup bool) error {
 	queryValues := url.Values{}
 	queryValues.Set("policyName", policyName)
 	queryValues.Set("userOrGroup", entityName)
@@ -148,7 +149,7 @@ func (adm *AdminClient) SetPolicy(policyName, entityName string, isGroup bool) e
 	}
 
 	// Execute PUT on /minio/admin/v2/set-user-or-group-policy to set policy.
-	resp, err := adm.executeMethod("PUT", reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 	defer closeResponse(resp)
 	if err != nil {
 		return err

@@ -229,7 +229,7 @@ func (c *diskCache) toClear() uint64 {
 }
 
 // Purge cache entries that were not accessed.
-func (c *diskCache) purge(ctx context.Context, doneCh <-chan struct{}) {
+func (c *diskCache) purge(ctx context.Context) {
 	if c.diskUsageLow() {
 		return
 	}

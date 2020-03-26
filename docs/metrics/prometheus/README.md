@@ -157,6 +157,15 @@ MinIO Gateway instance exposes metrics related to Gateway communication with the
 
 Note that this is currently only support for Azure, S3 and GCS Gateway.
 
+### MinIO self-healing metrics - `self_heal_*`
+
+MinIO exposes self-healing related metrics for erasure-code deployments _only_. These metrics are _not_ available on Gateway or Single Node, Single Drive deployments. Note that these metrics will be exposed _only_ when there is a relevant event happening on MinIO server.
+
+- `self_heal_time_since_last_activity`: Time elapsed since last self-healing related activity.
+- `self_heal_objects_scanned`: Number of objects scanned by self-healing thread in its current run. This will reset when a fresh self-healing run starts. This is labeled with the object type scanned.
+- `self_heal_objects_healed`: Number of objects healing by self-healing thread in its current run. This will reset when a fresh self-healing run starts. This is labeled with the object type scanned.
+- `self_heal_objects_heal_failed`: Number of objects for which self-healing failed in its current run. This will reset when a fresh self-healing run starts. This is labeled with disk status and its endpoint.
+
 ## Migration guide for the new set of metrics
 
 This migration guide applies for older releases or any releases before `RELEASE.2019-10-23*`

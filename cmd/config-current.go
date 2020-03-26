@@ -251,7 +251,7 @@ func validateConfig(s config.Config) error {
 		}
 	}
 	{
-		kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get(), NewCustomHTTPTransport())
+		kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get(), NewGatewayHTTPTransport())
 		if err != nil {
 			return err
 		}
@@ -269,17 +269,27 @@ func validateConfig(s config.Config) error {
 	}
 
 	if _, err := openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
-		NewCustomHTTPTransport(), xhttp.DrainBody); err != nil {
+		NewGatewayHTTPTransport(), xhttp.DrainBody); err != nil {
 		return err
 	}
 
-	if _, err := xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
-		globalRootCAs); err != nil {
-		return err
+	{
+		cfg, err := xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
+			globalRootCAs)
+		if err != nil {
+			return err
+		}
+		if cfg.Enabled {
+			conn, cerr := cfg.Connect()
+			if cerr != nil {
+				return cerr
+			}
+			conn.Close()
+		}
 	}
 
 	if _, err := opa.LookupConfig(s[config.PolicyOPASubSys][config.Default],
-		NewCustomHTTPTransport(), xhttp.DrainBody); err != nil {
+		NewGatewayHTTPTransport(), xhttp.DrainBody); err != nil {
 		return err
 	}
 
@@ -287,7 +297,7 @@ func validateConfig(s config.Config) error {
 		return err
 	}
 
-	return notify.TestNotificationTargets(s, GlobalServiceDoneCh, NewCustomHTTPTransport(),
+	return notify.TestNotificationTargets(s, GlobalServiceDoneCh, NewGatewayHTTPTransport(),
 		globalNotificationSys.ConfiguredTargetIDs())
 }
 
@@ -362,7 +372,7 @@ func lookupConfigs(s config.Config) {
 		}
 	}
 
-	kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get(), NewCustomHTTPTransport())
+	kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get(), NewGatewayHTTPTransport())
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to setup KMS config: %w", err))
 	}
@@ -381,13 +391,13 @@ func lookupConfigs(s config.Config) {
 	}
 
 	globalOpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
-		NewCustomHTTPTransport(), xhttp.DrainBody)
+		NewGatewayHTTPTransport(), xhttp.DrainBody)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err))
 	}
 
 	opaCfg, err := opa.LookupConfig(s[config.PolicyOPASubSys][config.Default],
-		NewCustomHTTPTransport(), xhttp.DrainBody)
+		NewGatewayHTTPTransport(), xhttp.DrainBody)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize OPA: %w", err))
 	}
@@ -412,22 +422,23 @@ func lookupConfigs(s config.Config) {
 	for _, l := range loggerCfg.HTTP {
 		if l.Enabled {
 			// Enable http logging
-			logger.AddTarget(http.New(l.Endpoint, loggerUserAgent, string(logger.All), NewCustomHTTPTransport()))
+			logger.AddTarget(http.New(l.Endpoint, loggerUserAgent, string(logger.All), NewGatewayHTTPTransport()))
 		}
 	}
 
 	for _, l := range loggerCfg.Audit {
 		if l.Enabled {
 			// Enable http audit logging
-			logger.AddAuditTarget(http.New(l.Endpoint, loggerUserAgent, string(logger.All), NewCustomHTTPTransport()))
+			logger.AddAuditTarget(http.New(l.Endpoint, loggerUserAgent, string(logger.All), NewGatewayHTTPTransport()))
 		}
 	}
 
-	globalConfigTargetList, err = notify.GetNotificationTargets(s, GlobalServiceDoneCh, NewCustomHTTPTransport())
+	globalConfigTargetList, err = notify.GetNotificationTargets(s, GlobalServiceDoneCh, NewGatewayHTTPTransport())
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
-	globalEnvTargetList, err = notify.GetNotificationTargets(newServerConfig(), GlobalServiceDoneCh, NewCustomHTTPTransport())
+
+	globalEnvTargetList, err = notify.GetNotificationTargets(newServerConfig(), GlobalServiceDoneCh, NewGatewayHTTPTransport())
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}

@@ -49,50 +49,19 @@ const (
 )
 
 // initDataUsageStats will start the crawler unless disabled.
-func initDataUsageStats() {
+func initDataUsageStats(ctx context.Context, objAPI ObjectLayer) {
 	if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn {
-		go runDataUsageInfoUpdateRoutine()
+		go runDataUsageInfo(ctx, objAPI)
 	}
 }
-
-// runDataUsageInfoUpdateRoutine will contain the main crawler.
-func runDataUsageInfoUpdateRoutine() {
-	// Wait until the object layer is ready
-	var objAPI ObjectLayer
-	for {
-		objAPI = newObjectLayerWithoutSafeModeFn()
-		if objAPI == nil {
-			time.Sleep(time.Second)
-			continue
-		}
-		break
-	}
-
-	runDataUsageInfo(GlobalContext, objAPI)
-}
-
-var dataUsageLockTimeout = lifecycleLockTimeout
 
 func runDataUsageInfo(ctx context.Context, objAPI ObjectLayer) {
-	// Make sure only 1 crawler is running on the cluster.
-	locker := objAPI.NewNSLock(ctx, minioMetaBucket, "leader-data-usage-info")
-	for {
-		err := locker.GetLock(dataUsageLockTimeout)
-		if err != nil {
-			time.Sleep(5 * time.Minute)
-			continue
-		}
-		// Break without unlocking, this node will acquire
-		// data usage calculator role for its lifetime.
-		break
-	}
 	for {
 		select {
 		case <-ctx.Done():
-			locker.Unlock()
 			return
-			// Wait before starting next cycle and wait on startup.
 		case <-time.NewTimer(dataUsageStartDelay).C:
+			// Wait before starting next cycle and wait on startup.
 			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
 			err := objAPI.CrawlAndGetDataUsage(ctx, results)

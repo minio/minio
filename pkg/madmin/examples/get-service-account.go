@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -40,7 +41,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	creds, err := madmClnt.GetServiceAccount("service-account-access-key")
+	creds, err := madmClnt.GetServiceAccount(context.Background(), "service-account-access-key")
 	if err != nil {
 		log.Fatalln(err)
 	}
