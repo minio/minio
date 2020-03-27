@@ -187,7 +187,7 @@ func (d *dataUpdateTracker) current() uint64 {
 
 // start will load the current data from the drives start collecting information and
 // start a saver goroutine.
-// All of these will exit when the context is cancelled.
+// All of these will exit when the context is canceled.
 func (d *dataUpdateTracker) start(ctx context.Context, drives ...string) {
 	if len(drives) <= 0 {
 		logger.LogIf(ctx, errors.New("dataUpdateTracker.start: No drives specified"))

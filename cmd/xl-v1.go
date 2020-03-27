@@ -28,6 +28,7 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
+	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -229,9 +230,6 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 	if err != nil {
 		return err
 	}
-	if intDataUpdateTracker.debug {
-		logger.Info("xl: %v, Bloom filter index: %v", xl.endpoints, bloomIdx)
-	}
 
 	// Collect bloom filters from all disks here...
 	bf := &bloomFilter{}
@@ -305,7 +303,7 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 			} else {
 				// TODO: Remove, too verbose.
 				if intDataUpdateTracker.debug {
-					logger.Info("Skipping bucket %v, not updated", b.Name)
+					logger.Info(color.Green("crawlAndGetDataUsage:")+" Skipping bucket %v, not updated", b.Name)
 				}
 			}
 		}
@@ -351,7 +349,7 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 		cache.Info.NextCycle++
 		cache.Info.LastUpdate = time.Now()
 		logger.LogIf(ctx, cache.save(ctx, xl, dataUsageCacheName))
-		logger.Info("Cache saved, Next Cycle: %d", cache.Info.NextCycle)
+		logger.Info(color.Green("crawlAndGetDataUsage:")+" Cache saved, Next Cycle: %d", cache.Info.NextCycle)
 		updates <- cache
 	}()
 
