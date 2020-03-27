@@ -27,14 +27,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/willf/bloom"
-
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/willf/bloom"
 )
 
 const (
