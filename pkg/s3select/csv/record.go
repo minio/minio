@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/bcicen/jstream"
 	csv "github.com/minio/minio/pkg/csvparser"
+	"github.com/minio/minio/pkg/s3select/json/jstream"
 	"github.com/minio/minio/pkg/s3select/sql"
 )
 

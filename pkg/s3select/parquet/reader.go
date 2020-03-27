@@ -19,8 +19,8 @@ package parquet
 import (
 	"io"
 
-	"github.com/bcicen/jstream"
 	jsonfmt "github.com/minio/minio/pkg/s3select/json"
+	"github.com/minio/minio/pkg/s3select/json/jstream"
 	"github.com/minio/minio/pkg/s3select/sql"
 	parquetgo "github.com/minio/parquet-go"
 	parquetgen "github.com/minio/parquet-go/gen-go/parquet"

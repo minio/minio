@@ -21,9 +21,8 @@ import (
 	"io"
 	"sync"
 
+	"github.com/minio/minio/pkg/s3select/json/jstream"
 	"github.com/minio/minio/pkg/s3select/sql"
-
-	"github.com/bcicen/jstream"
 )
 
 // Reader - JSON record reader for S3Select.
@@ -39,7 +38,7 @@ func (r *Reader) Read(dst sql.Record) (sql.Record, error) {
 	v, ok := <-r.valueCh
 	if !ok {
 		if err := r.decoder.Err(); err != nil {
-			return nil, errJSONParsingError(err)
+			return nil, ErrJSONParsingError(err)
 		}
 		return nil, io.EOF
 	}
@@ -78,15 +77,19 @@ func (r *Reader) Close() error {
 }
 
 // NewReader - creates new JSON reader using readCloser.
-func NewReader(readCloser io.ReadCloser, args *ReaderArgs) *Reader {
+func NewReader(readCloser io.ReadCloser, args *ReaderArgs) (*Reader, error) {
 	readCloser = &syncReadCloser{rc: readCloser}
 	d := jstream.NewDecoder(readCloser, 0).ObjectAsKVS()
+	metaValChan, err := d.Stream()
+	if err != nil {
+		return nil, err
+	}
 	return &Reader{
 		args:       args,
 		decoder:    d,
-		valueCh:    d.Stream(),
+		valueCh:    metaValChan,
 		readCloser: readCloser,
-	}
+	}, nil
 }
 
 // syncReadCloser will wrap a readcloser and make it safe to call Close
@@ -105,13 +108,12 @@ func (pr *syncReadCloser) Read(p []byte) (n int, err error) {
 	pr.errMu.Lock()
 	defer pr.errMu.Unlock()
 	if pr.err != nil {
-		return 0, io.EOF
+		return 0, pr.err
 	}
 	n, pr.err = pr.rc.Read(p)
 	if pr.err != nil {
-		// Translate any error into io.EOF, so we don't crash:
-		// https://github.com/bcicen/jstream/blob/master/scanner.go#L48
-		return n, io.EOF
+		// send the error to upper layer
+		return 0, pr.err
 	}
 
 	return n, nil

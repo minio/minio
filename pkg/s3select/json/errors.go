@@ -52,10 +52,10 @@ func errInvalidJSONType(err error) *s3Error {
 	}
 }
 
-func errJSONParsingError(err error) *s3Error {
+func ErrJSONParsingError(err error) *s3Error {
 	return &s3Error{
 		code:       "JSONParsingError",
-		message:    "Encountered an error parsing the JSON file. Check the file and try again.",
+		message:    "Error parsing JSON file. Please check the file and try again.",
 		statusCode: 400,
 		cause:      err,
 	}

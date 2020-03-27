@@ -26,13 +26,14 @@ import (
 	"testing"
 
 	"github.com/alecthomas/participle"
-	"github.com/bcicen/jstream"
+	"github.com/minio/minio/pkg/s3select/json/jstream"
 )
 
 func getJSONStructs(b []byte) ([]interface{}, error) {
 	dec := jstream.NewDecoder(bytes.NewBuffer(b), 0).ObjectAsKVS()
 	var result []interface{}
-	for parsedVal := range dec.Stream() {
+	metaChan, _ := dec.Stream()
+	for parsedVal := range metaChan {
 		result = append(result, parsedVal.Value)
 	}
 	if err := dec.Err(); err != nil {

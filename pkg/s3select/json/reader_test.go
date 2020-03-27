@@ -38,7 +38,7 @@ func TestNewReader(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			r := NewReader(f, &ReaderArgs{})
+			r, err := NewReader(f, &ReaderArgs{})
 			var record sql.Record
 			for {
 				record, err = r.Read(record)
@@ -57,7 +57,7 @@ func TestNewReader(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			r := NewReader(f, &ReaderArgs{})
+			r, err := NewReader(f, &ReaderArgs{})
 			r.Close()
 			var record sql.Record
 			for {
@@ -89,7 +89,7 @@ func BenchmarkReader(b *testing.B) {
 			b.ResetTimer()
 			var record sql.Record
 			for i := 0; i < b.N; i++ {
-				r := NewReader(ioutil.NopCloser(bytes.NewBuffer(f)), &ReaderArgs{})
+				r, err := NewReader(ioutil.NopCloser(bytes.NewBuffer(f)), &ReaderArgs{})
 				for {
 					record, err = r.Read(record)
 					if err != nil {

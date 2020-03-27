@@ -23,7 +23,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/bcicen/jstream"
+	"github.com/minio/minio/pkg/s3select/json/jstream"
 	"github.com/minio/minio/pkg/s3select/sql"
 )
 
@@ -185,7 +185,12 @@ func (r *PReader) startReaders() {
 				}
 
 				d := jstream.NewDecoder(bytes.NewBuffer(in.input), 0).ObjectAsKVS()
-				stream := d.Stream()
+				stream, err := d.Stream()
+				if err != nil {
+					// Exit on any error.
+					return
+				}
+
 				all := dst[:0]
 				for mv := range stream {
 					var kvs jstream.KVS

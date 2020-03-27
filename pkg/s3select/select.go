@@ -330,7 +330,16 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 				s3Select.recordReader = json.NewPReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
 			}
 		} else {
-			s3Select.recordReader = json.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
+			s3Select.recordReader, err = json.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
+			if err != nil {
+				rc.Close()
+				var stErr bzip2.StructuralError
+				if errors.As(err, &stErr) {
+					return errInvalidBZIP2CompressionFormat(err)
+				}
+				return json.ErrJSONParsingError(err)
+			}
+			return nil
 		}
 		return nil
 	case parquetFormat:

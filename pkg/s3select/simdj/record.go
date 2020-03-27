@@ -22,8 +22,8 @@ import (
 
 	csv "github.com/minio/minio/pkg/csvparser"
 
-	"github.com/bcicen/jstream"
 	"github.com/minio/minio/pkg/s3select/json"
+	"github.com/minio/minio/pkg/s3select/json/jstream"
 	"github.com/minio/minio/pkg/s3select/sql"
 	"github.com/minio/simdjson-go"
 )

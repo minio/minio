@@ -116,7 +116,7 @@ func TestNDJSON(t *testing.T) {
 					t.Fatal("unexpected type:", typ.String())
 				}
 			}
-			refDec := json.NewReader(ioutil.NopCloser(bytes.NewBuffer(ref)), &json.ReaderArgs{ContentType: "json"})
+			refDec, err := json.NewReader(ioutil.NopCloser(bytes.NewBuffer(ref)), &json.ReaderArgs{ContentType: "json"})
 
 			for {
 				rec, err := dec.Read(nil)

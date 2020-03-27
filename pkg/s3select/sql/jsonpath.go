@@ -19,7 +19,7 @@ package sql
 import (
 	"errors"
 
-	"github.com/bcicen/jstream"
+	"github.com/minio/minio/pkg/s3select/json/jstream"
 	"github.com/minio/simdjson-go"
 )
 
