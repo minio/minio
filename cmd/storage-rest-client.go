@@ -172,6 +172,10 @@ func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache
 	return newCache, newCache.deserialize(b)
 }
 
+func (client *storageRESTClient) GetDiskID() (string, error) {
+	return client.diskID, nil
+}
+
 func (client *storageRESTClient) SetDiskID(id string) {
 	client.diskID = id
 }

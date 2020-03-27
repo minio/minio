@@ -213,14 +213,15 @@ func initSafeMode(buckets []BucketInfo) (err error) {
 	for {
 		rquorum := InsufficientReadQuorum{}
 		wquorum := InsufficientWriteQuorum{}
-
+		bucketNotFound := BucketNotFound{}
 		var err error
 		select {
 		case n := <-retryTimerCh:
 			if err = initAllSubsystems(buckets, newObject); err != nil {
 				if errors.Is(err, errDiskNotFound) ||
 					errors.As(err, &rquorum) ||
-					errors.As(err, &wquorum) {
+					errors.As(err, &wquorum) ||
+					errors.As(err, &bucketNotFound) {
 					if n < 5 {
 						logger.Info("Waiting for all sub-systems to be initialized..")
 					} else {
@@ -245,7 +246,6 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 	if err = globalConfigSys.Init(newObject); err != nil {
 		return fmt.Errorf("Unable to initialize config system: %w", err)
 	}
-
 	if globalEtcdClient != nil {
 		// ****  WARNING ****
 		// Migrating to encrypted backend on etcd should happen before initialization of
@@ -419,7 +419,6 @@ func serverMain(ctx *cli.Context) {
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
-	// Calls New() and initializes all sub-systems.
 	newAllSubsystems()
 
 	// Enable healing to heal drives if possible
@@ -428,6 +427,9 @@ func serverMain(ctx *cli.Context) {
 		initLocalDisksAutoHeal(GlobalContext, newObject)
 	}
 
+	go startBackgroundOps(GlobalContext, newObject)
+
+	// Calls New() and initializes all sub-systems.
 	buckets, err := newObject.ListBuckets(GlobalContext)
 	if err != nil {
 		logger.Fatal(err, "Unable to list buckets")
@@ -450,8 +452,6 @@ func serverMain(ctx *cli.Context) {
 	if globalDNSConfig != nil {
 		initFederatorBackend(buckets, newObject)
 	}
-
-	go startBackgroundOps(GlobalContext, newObject)
 
 	// Disable safe mode operation, after all initialization is over.
 	globalObjLayerMutex.Lock()
