@@ -147,7 +147,6 @@ func (s *storageRESTServer) UpdateBloomFilter(w http.ResponseWriter, r *http.Req
 		s.writeErrorResponse(w, err)
 		return
 	}
-	fmt.Println("storageRESTServer.UpdateBloomFilter", req)
 	resp, err := CycleBloomFilter(r.Context(), req.Oldest, req.Current)
 	switch err {
 	case nil:

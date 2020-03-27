@@ -474,7 +474,7 @@ func (s *xlSets) StorageInfo(ctx context.Context, local bool) StorageInfo {
 	return storageInfo
 }
 
-func (s *xlSets) CrawlAndGetDataUsage(ctx context.Context, updates chan<- DataUsageInfo) error {
+func (s *xlSets) CrawlAndGetDataUsage(ctx context.Context, bloomIdx uint64, updates chan<- DataUsageInfo) error {
 	return NotImplemented{}
 }
 

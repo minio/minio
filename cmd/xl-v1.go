@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -202,24 +203,14 @@ func (xl xlObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
 
 // CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
-func (xl xlObjects) CrawlAndGetDataUsage(ctx context.Context, updates chan<- DataUsageInfo) error {
-	cache := make(chan dataUsageCache, 1)
-	defer close(cache)
-	buckets, err := xl.ListBuckets(ctx)
-	if err != nil {
-		return err
-	}
-	go func() {
-		for update := range cache {
-			updates <- update.dui(update.Info.Name, buckets)
-		}
-	}()
-	return xl.crawlAndGetDataUsage(ctx, buckets, cache)
+func (xl xlObjects) CrawlAndGetDataUsage(ctx context.Context, bloomIdx uint64, updates chan<- DataUsageInfo) error {
+	// This should only be called from runDataUsageInfo and this setup should not happen (zones).
+	return errors.New("xlObjects CrawlAndGetDataUsage not implemented")
 }
 
 // CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
-func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketInfo, updates chan<- dataUsageCache) error {
+func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketInfo, bloomIdx uint64, updates chan<- dataUsageCache) error {
 	var disks []StorageAPI
 
 	for _, d := range xl.getLoadBalancedDisks() {
@@ -239,27 +230,27 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 		return err
 	}
 	if intDataUpdateTracker.debug {
-		logger.Info("xl: %v, Bloom filter index: %v", xl.endpoints, oldCache.Info.NextBloomIdx)
+		logger.Info("xl: %v, Bloom filter index: %v", xl.endpoints, bloomIdx)
 	}
 
 	// Collect bloom filters from all disks here...
 	bf := &bloomFilter{}
 	for _, disk := range disks {
-		hist := oldCache.Info.NextBloomIdx - dataUsageUpdateDirCycles
-		if oldCache.Info.NextBloomIdx < dataUsageUpdateDirCycles {
+		hist := bloomIdx - dataUsageUpdateDirCycles
+		if bloomIdx < dataUsageUpdateDirCycles {
 			hist = 0
 		}
 
-		diskBF, err := disk.UpdateBloomFilter(ctx, hist, oldCache.Info.NextBloomIdx)
+		diskBF, err := disk.UpdateBloomFilter(ctx, hist, bloomIdx)
+		if false && intDataUpdateTracker.debug {
+			b, _ := json.MarshalIndent(diskBF, "", "  ")
+			logger.Info("Disk %v, Bloom filter: %v", disk.String(), string(b))
+		}
 
 		if err != nil || !diskBF.Complete || bf == nil {
 			logger.LogIf(ctx, err)
 			bf = nil
 			continue
-		}
-		if intDataUpdateTracker.debug {
-			b, _ := json.MarshalIndent(diskBF, "", "  ")
-			logger.Info("Disk %v, Bloom filter: %v", disk.String(), string(b))
 		}
 
 		if bf.BloomFilter == nil {
@@ -290,9 +281,8 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 	// New cache..
 	cache := dataUsageCache{
 		Info: dataUsageCacheInfo{
-			Name:         dataUsageRoot,
-			NextCycle:    oldCache.Info.NextCycle,
-			NextBloomIdx: oldCache.Info.NextBloomIdx,
+			Name:      dataUsageRoot,
+			NextCycle: oldCache.Info.NextCycle,
 		},
 		Cache: make(map[dataUsageHash]dataUsageEntry, len(oldCache.Cache)),
 	}
@@ -359,10 +349,9 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 		}
 		// Save final state...
 		cache.Info.NextCycle++
-		cache.Info.NextBloomIdx++
 		cache.Info.LastUpdate = time.Now()
 		logger.LogIf(ctx, cache.save(ctx, xl, dataUsageCacheName))
-		logger.Info("Cache saved, Next Cycle: %d, Next Bloom Filter: %v", cache.Info.NextCycle, cache.Info.NextBloomIdx)
+		logger.Info("Cache saved, Next Cycle: %d", cache.Info.NextCycle)
 		updates <- cache
 	}()
 

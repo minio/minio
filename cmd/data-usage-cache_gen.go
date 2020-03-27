@@ -42,12 +42,6 @@ func (z *dataUsageCacheInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "NextCycle")
 				return
 			}
-		case "NextBloomIdx":
-			z.NextBloomIdx, err = dc.ReadUint64()
-			if err != nil {
-				err = msgp.WrapError(err, "NextBloomIdx")
-				return
-			}
 		case "BloomFilter":
 			z.BloomFilter, err = dc.ReadBytes(z.BloomFilter)
 			if err != nil {
@@ -68,11 +62,11 @@ func (z *dataUsageCacheInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *dataUsageCacheInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 5 bits */
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 4 bits */
 	if z.BloomFilter == nil {
 		zb0001Len--
-		zb0001Mask |= 0x10
+		zb0001Mask |= 0x8
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -112,17 +106,7 @@ func (z *dataUsageCacheInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "NextCycle")
 		return
 	}
-	// write "NextBloomIdx"
-	err = en.Append(0xac, 0x4e, 0x65, 0x78, 0x74, 0x42, 0x6c, 0x6f, 0x6f, 0x6d, 0x49, 0x64, 0x78)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint64(z.NextBloomIdx)
-	if err != nil {
-		err = msgp.WrapError(err, "NextBloomIdx")
-		return
-	}
-	if (zb0001Mask & 0x10) == 0 { // if not empty
+	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// write "BloomFilter"
 		err = en.Append(0xab, 0x42, 0x6c, 0x6f, 0x6f, 0x6d, 0x46, 0x69, 0x6c, 0x74, 0x65, 0x72)
 		if err != nil {
@@ -141,11 +125,11 @@ func (z *dataUsageCacheInfo) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *dataUsageCacheInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 5 bits */
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 4 bits */
 	if z.BloomFilter == nil {
 		zb0001Len--
-		zb0001Mask |= 0x10
+		zb0001Mask |= 0x8
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -161,10 +145,7 @@ func (z *dataUsageCacheInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "NextCycle"
 	o = append(o, 0xa9, 0x4e, 0x65, 0x78, 0x74, 0x43, 0x79, 0x63, 0x6c, 0x65)
 	o = msgp.AppendUint8(o, z.NextCycle)
-	// string "NextBloomIdx"
-	o = append(o, 0xac, 0x4e, 0x65, 0x78, 0x74, 0x42, 0x6c, 0x6f, 0x6f, 0x6d, 0x49, 0x64, 0x78)
-	o = msgp.AppendUint64(o, z.NextBloomIdx)
-	if (zb0001Mask & 0x10) == 0 { // if not empty
+	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "BloomFilter"
 		o = append(o, 0xab, 0x42, 0x6c, 0x6f, 0x6f, 0x6d, 0x46, 0x69, 0x6c, 0x74, 0x65, 0x72)
 		o = msgp.AppendBytes(o, z.BloomFilter)
@@ -208,12 +189,6 @@ func (z *dataUsageCacheInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "NextCycle")
 				return
 			}
-		case "NextBloomIdx":
-			z.NextBloomIdx, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "NextBloomIdx")
-				return
-			}
 		case "BloomFilter":
 			z.BloomFilter, bts, err = msgp.ReadBytesBytes(bts, z.BloomFilter)
 			if err != nil {
@@ -234,7 +209,7 @@ func (z *dataUsageCacheInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageCacheInfo) Msgsize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 11 + msgp.TimeSize + 10 + msgp.Uint8Size + 13 + msgp.Uint64Size + 12 + msgp.BytesPrefixSize + len(z.BloomFilter)
+	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 11 + msgp.TimeSize + 10 + msgp.Uint8Size + 12 + msgp.BytesPrefixSize + len(z.BloomFilter)
 	return
 }
 

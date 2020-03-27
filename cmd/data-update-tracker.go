@@ -48,6 +48,9 @@ const (
 	dataUpdateTrackerVersion      = 1
 	dataUpdateTrackerFilename     = minioMetaBucket + SlashSeparator + bucketMetaPrefix + SlashSeparator + "tracker.bin"
 	dataUpdateTrackerSaveInterval = 5 * time.Minute
+
+	// Reset bloom filters every n cycle
+	dataUpdateTrackerResetEvery = 1000
 )
 
 var (
@@ -176,6 +179,12 @@ func (d *dataUpdateTracker) newBloomFilter() bloomFilter {
 	return bloomFilter{bloom.NewWithEstimates(dataUpdateTrackerEstItems, dataUpdateTrackerFP)}
 }
 
+func (d *dataUpdateTracker) current() uint64 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.Current.idx
+}
+
 // start will load the current data from the drives start collecting information and
 // start a saver goroutine.
 // All of these will exit when the context is cancelled.
@@ -222,12 +231,16 @@ func (d *dataUpdateTracker) load(ctx context.Context, drives []string) {
 func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Duration, drives []string) {
 	t := time.NewTicker(interval)
 	var buf bytes.Buffer
+	d.mu.Lock()
+	saveNow := d.save
+	d.mu.Unlock()
 	for {
 		var exit bool
 		select {
 		case <-ctx.Done():
 			exit = true
 		case <-t.C:
+		case <-saveNow:
 		}
 		buf.Reset()
 		d.mu.Lock()
@@ -340,6 +353,9 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 
 	// Version
 	if _, err := io.ReadFull(src, tmp[:1]); err != nil {
+		if d.debug {
+			logger.LogIf(ctx, err)
+		}
 		return err
 	}
 	switch tmp[0] {
@@ -420,14 +436,14 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 		case in := <-d.input:
 			bucket, _ := path2BucketObjectWithBasePath("", in)
 			if bucket == "" {
-				if d.debug {
+				if d.debug && len(in) > 0 {
 					logger.Info(color.Green("data-usage:")+" no bucket (%s)", in)
 				}
 				continue
 			}
 
 			if isReservedOrInvalidBucket(bucket, false) {
-				if d.debug {
+				if false && d.debug {
 					logger.Info(color.Green("data-usage:")+" isReservedOrInvalidBucket: %v, entry: %v", bucket, in)
 				}
 				continue
@@ -449,7 +465,7 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 				split = split[:len(split)-1]
 			}
 			if len(split) == 0 {
-				return
+				continue
 			}
 			if len(split) > 3 {
 				split = split[:3]
@@ -540,6 +556,10 @@ func (d *dataUpdateTracker) cycleFilter(ctx context.Context, oldest, current uin
 
 	// Move current to history if new one requested
 	if d.Current.idx != current {
+		if d.debug {
+			logger.Info(color.Green("dataUpdateTracker:")+" cycle bloom filter: %v -> %v", d.Current.idx, current)
+		}
+
 		d.History = append(d.History, d.Current)
 		d.Current.idx = current
 		d.Current.bf = d.newBloomFilter()

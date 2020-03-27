@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"os"
@@ -47,6 +48,7 @@ const (
 	dataUsageUpdateDirCycles = 16
 	dataUsageRoot            = SlashSeparator
 	dataUsageBucket          = minioMetaBucket + SlashSeparator + bucketMetaPrefix
+	dataUsageBloomName       = ".bloomcycle.bin"
 	dataUsageStartDelay      = 5 * time.Second // Time to wait on startup and between cycles.
 )
 
@@ -58,6 +60,20 @@ func initDataUsageStats(ctx context.Context, objAPI ObjectLayer) {
 }
 
 func runDataUsageInfo(ctx context.Context, objAPI ObjectLayer) {
+	// Load current bloom cycle
+	nextBloomCycle := intDataUpdateTracker.current() + 1
+	var buf bytes.Buffer
+	err := objAPI.GetObject(ctx, dataUsageBucket, dataUsageBloomName, 0, -1, &buf, "", ObjectOptions{})
+	if err != nil {
+		if !isErrObjectNotFound(err) {
+			logger.LogIf(ctx, err)
+		}
+	} else {
+		if buf.Len() == 8 {
+			nextBloomCycle = binary.LittleEndian.Uint64(buf.Bytes())
+		}
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -66,9 +82,29 @@ func runDataUsageInfo(ctx context.Context, objAPI ObjectLayer) {
 			// Wait before starting next cycle and wait on startup.
 			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
-			err := objAPI.CrawlAndGetDataUsage(ctx, results)
+			err := objAPI.CrawlAndGetDataUsage(ctx, nextBloomCycle, results)
 			close(results)
 			logger.LogIf(ctx, err)
+			if err == nil {
+				// Store new cycle...
+				nextBloomCycle++
+				if nextBloomCycle%dataUpdateTrackerResetEvery == 0 {
+					if intDataUpdateTracker.debug {
+						logger.Info(color.Green("runDataUsageInfo:") + " Resetting bloom filter for next runs.")
+					}
+					nextBloomCycle++
+				}
+				var tmp [8]byte
+				binary.LittleEndian.PutUint64(tmp[:], nextBloomCycle)
+				r, err := hash.NewReader(bytes.NewReader(tmp[:]), int64(len(tmp)), "", "", int64(len(tmp)), false)
+				if err != nil {
+					logger.LogIf(ctx, err)
+					continue
+				}
+
+				_, err = objAPI.PutObject(ctx, dataUsageBucket, dataUsageBloomName, NewPutObjReader(r, nil, nil), ObjectOptions{})
+				logger.LogIf(ctx, err)
+			}
 		}
 	}
 }
@@ -462,6 +498,5 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 
 	s.newCache.Info.LastUpdate = UTCNow()
 	s.newCache.Info.NextCycle++
-	s.newCache.Info.NextBloomIdx++
 	return s.newCache, nil
 }

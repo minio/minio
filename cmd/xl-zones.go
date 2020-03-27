@@ -226,7 +226,7 @@ func (z *xlZones) StorageInfo(ctx context.Context, local bool) StorageInfo {
 	return storageInfo
 }
 
-func (z *xlZones) CrawlAndGetDataUsage(ctx context.Context, updates chan<- DataUsageInfo) error {
+func (z *xlZones) CrawlAndGetDataUsage(ctx context.Context, bloomIdx uint64, updates chan<- DataUsageInfo) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var wg sync.WaitGroup
@@ -266,7 +266,7 @@ func (z *xlZones) CrawlAndGetDataUsage(ctx context.Context, updates chan<- DataU
 					}
 				}()
 				// Start crawler. Blocks until done.
-				err := xl.crawlAndGetDataUsage(ctx, buckets, updates)
+				err := xl.crawlAndGetDataUsage(ctx, buckets, bloomIdx, updates)
 				if err != nil {
 					mu.Lock()
 					if firstErr == nil {

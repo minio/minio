@@ -62,11 +62,10 @@ type dataUsageEntryInfo struct {
 
 type dataUsageCacheInfo struct {
 	// Name of the bucket. Also root element.
-	Name         string
-	LastUpdate   time.Time
-	NextCycle    uint8
-	NextBloomIdx uint64
-	BloomFilter  []byte `msg:"BloomFilter,omitempty"`
+	Name        string
+	LastUpdate  time.Time
+	NextCycle   uint8
+	BloomFilter []byte `msg:"BloomFilter,omitempty"`
 }
 
 // merge other data usage entry into this, excluding children.

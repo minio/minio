@@ -235,7 +235,7 @@ func (fs *FSObjects) waitForLowActiveIO() {
 }
 
 // CrawlAndGetDataUsage returns data usage stats of the current FS deployment
-func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, updates chan<- DataUsageInfo) error {
+func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bloomIdx uint64, updates chan<- DataUsageInfo) error {
 	// Load bucket totals
 	var oldCache dataUsageCache
 	err := oldCache.load(ctx, fs, dataUsageCacheName)
@@ -249,15 +249,15 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, updates chan<- Da
 	if err != nil {
 		return err
 	}
-	hist := oldCache.Info.NextBloomIdx - dataUsageUpdateDirCycles
-	if oldCache.Info.NextBloomIdx < dataUsageUpdateDirCycles {
+	hist := bloomIdx - dataUsageUpdateDirCycles
+	if bloomIdx < dataUsageUpdateDirCycles {
 		hist = 0
 	}
-	bf, err := CycleBloomFilter(ctx, hist, oldCache.Info.NextBloomIdx)
+	bf, err := CycleBloomFilter(ctx, hist, bloomIdx)
 	if err == nil && bf.Complete && hist > 0 {
 		oldCache.Info.BloomFilter = bf.Filter
 	}
-	if intDataUpdateTracker.debug {
+	if false && intDataUpdateTracker.debug {
 		b, _ := json.MarshalIndent(bf, "", "  ")
 		logger.Info("Bloom filter: %v", string(b))
 	}
