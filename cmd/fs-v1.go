@@ -253,7 +253,7 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bloomIdx uint64, 
 	if bloomIdx < dataUsageUpdateDirCycles {
 		hist = 0
 	}
-	bf, err := CycleBloomFilter(ctx, hist, bloomIdx)
+	bf, err := cycleServerBloomFilter(ctx, hist, bloomIdx)
 	if err == nil && bf.Complete && hist > 0 {
 		oldCache.Info.BloomFilter = bf.Filter
 	}

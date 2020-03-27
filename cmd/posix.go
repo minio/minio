@@ -339,7 +339,7 @@ func (s *posix) waitForLowActiveIO() {
 }
 
 func (s *posix) UpdateBloomFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error) {
-	return CycleBloomFilter(ctx, oldest, current)
+	return cycleServerBloomFilter(ctx, oldest, current)
 }
 
 func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {

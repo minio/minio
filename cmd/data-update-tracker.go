@@ -590,11 +590,11 @@ type bloomFilterResponse struct {
 	Filter []byte
 }
 
-// CycleBloomFilter will cycle the bloom filter to start recording to index y if not already.
+// cycleServerBloomFilter will cycle the bloom filter to start recording to index y if not already.
 // The response will contain a bloom filter starting at index x up to, but not including index y.
 // If y is 0, the response will not update y, but return the currently recorded information
 // from the current x to y-1.
-func CycleBloomFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error) {
+func cycleServerBloomFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error) {
 	return intDataUpdateTracker.cycleFilter(ctx, oldest, current)
 }
 
