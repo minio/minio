@@ -44,21 +44,11 @@ func startDailyLifecycle(ctx context.Context, objAPI ObjectLayer) {
 			return
 		case <-time.NewTimer(bgLifecycleInterval).C:
 			// Perform one lifecycle operation
-			err := lifecycleRound(ctx, objAPI)
-			switch err.(type) {
-			case OperationTimedOut:
-				// Unable to hold a lock means there is another
-				// caller holding write lock, ignore and try next round.
-				continue
-			default:
-				logger.LogIf(ctx, err)
-			}
+			logger.LogIf(ctx, lifecycleRound(ctx, objAPI))
 		}
 
 	}
 }
-
-var lifecycleLockTimeout = newDynamicTimeout(60*time.Second, time.Second)
 
 func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 	buckets, err := objAPI.ListBuckets(ctx)
