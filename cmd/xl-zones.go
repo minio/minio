@@ -596,7 +596,7 @@ func (z *xlZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, marke
 	const ndisks = 3
 	for _, zone := range z.zones {
 		zonesEntryChs = append(zonesEntryChs,
-			zone.startMergeWalksN(ctx, bucket, prefix, "", true, endWalkCh, ndisks))
+			zone.startMergeWalksN(ctx, bucket, prefix, "", true, false, endWalkCh, ndisks))
 	}
 
 	var objInfos []ObjectInfo
@@ -805,7 +805,7 @@ func (z *xlZones) listObjects(ctx context.Context, bucket, prefix, marker, delim
 		entryChs, endWalkCh := zone.pool.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, ndisks)
+			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, false, endWalkCh, ndisks)
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
@@ -1394,7 +1394,7 @@ func (z *xlZones) HealBucket(ctx context.Context, bucket string, dryRun, remove 
 // to allocate a receive channel for ObjectInfo, upon any unhandled
 // error walker returns error. Optionally if context.Done() is received
 // then Walk() stops the walker.
-func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, withMetadata bool, results chan<- ObjectInfo) error {
 	if err := checkListObjsArgs(ctx, bucket, prefix, "", z); err != nil {
 		// Upon error close the channel.
 		close(results)
@@ -1405,7 +1405,7 @@ func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, results chan<
 
 	for _, zone := range z.zones {
 		zonesEntryChs = append(zonesEntryChs,
-			zone.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done()))
+			zone.startMergeWalks(ctx, bucket, prefix, "", true, withMetadata, ctx.Done()))
 	}
 
 	var zoneDrivesPerSet []int
@@ -1431,7 +1431,12 @@ func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, results chan<
 			}
 
 			if quorumCount >= zoneDrivesPerSet[zoneIndex]/2 {
-				results <- entry.ToObjectInfo() // Read quorum exists proceed
+				// Read quorum exists proceed
+				objInfo := entry.ToObjectInfo()
+				if quorumCount == zoneDrivesPerSet[zoneIndex] {
+					objInfo.hasFullQuorum = true
+				}
+				results <- objInfo // Read quorum exists proceed
 			}
 
 			// skip entries which do not have quorum
@@ -1451,7 +1456,7 @@ func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, opts m
 
 	for _, zone := range z.zones {
 		zonesEntryChs = append(zonesEntryChs,
-			zone.startMergeWalks(ctx, bucket, prefix, "", true, endWalkCh))
+			zone.startMergeWalks(ctx, bucket, prefix, "", true, false, endWalkCh))
 	}
 
 	var zoneDrivesPerSet []int

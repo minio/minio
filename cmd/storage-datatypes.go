@@ -103,5 +103,7 @@ func (entry FileInfo) ToObjectInfo() ObjectInfo {
 			objInfo.StorageClass = globalMinioDefaultStorageClass
 		}
 	}
+
+	objInfo.hasFullQuorum = false
 	return objInfo
 }

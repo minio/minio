@@ -176,7 +176,8 @@ type ObjectInfo struct {
 	Reader       *hash.Reader   `json:"-"`
 	PutObjReader *PutObjReader  `json:"-"`
 
-	metadataOnly bool
+	metadataOnly  bool
+	hasFullQuorum bool
 
 	// Date and time when the object was last accessed.
 	AccTime time.Time

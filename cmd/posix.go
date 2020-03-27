@@ -845,7 +845,11 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 				if err != nil {
 					continue
 				}
-				fi = readMetadataFn(buf, volume, walkResult.entry)
+				if readMetadataFn != nil {
+					fi = readMetadataFn(buf, volume, walkResult.entry)
+				} else {
+					fi = FileInfo{Volume: volume, Name: walkResult.entry}
+				}
 			}
 			select {
 			case ch <- fi:

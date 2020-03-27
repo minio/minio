@@ -69,7 +69,7 @@ type ObjectLayer interface {
 	DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error
 	ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
 	ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
-	Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error
+	Walk(ctx context.Context, bucket, prefix string, withMetadata bool, results chan<- ObjectInfo) error
 
 	// Object operations.
 

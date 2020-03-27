@@ -305,7 +305,7 @@ func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 	}
 
 	initDataUsageStats(ctx, objAPI)
-	initDailyLifecycle(ctx, objAPI)
+	initGeneralListing(ctx, objAPI)
 }
 
 // serverMain handler called for 'minio server' command.

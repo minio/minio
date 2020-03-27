@@ -949,13 +949,13 @@ func isTruncated(entryChs []FileInfoCh, entries []FileInfo, entriesValid []bool)
 	return isTruncated
 }
 
-func (s *xlSets) startMergeWalks(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}) []FileInfoCh {
-	return s.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, -1)
+func (s *xlSets) startMergeWalks(ctx context.Context, bucket, prefix, marker string, recursive bool, withMetadata bool, endWalkCh <-chan struct{}) []FileInfoCh {
+	return s.startMergeWalksN(ctx, bucket, prefix, marker, recursive, withMetadata, endWalkCh, -1)
 }
 
 // Starts a walk channel across all disks and returns a slice of
 // FileInfo channels which can be read from.
-func (s *xlSets) startMergeWalksN(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}, ndisks int) []FileInfoCh {
+func (s *xlSets) startMergeWalksN(ctx context.Context, bucket, prefix, marker string, recursive bool, withMetadata bool, endWalkCh <-chan struct{}, ndisks int) []FileInfoCh {
 	var entryChs []FileInfoCh
 	var success int
 	for _, set := range s.sets {
@@ -966,7 +966,11 @@ func (s *xlSets) startMergeWalksN(ctx context.Context, bucket, prefix, marker st
 				// Disk can be offline
 				continue
 			}
-			entryCh, err := disk.Walk(bucket, prefix, marker, recursive, xlMetaJSONFile, readMetadata, endWalkCh)
+			var metadataFn readMetadataFunc
+			if withMetadata {
+				metadataFn = readMetadata
+			}
+			entryCh, err := disk.Walk(bucket, prefix, marker, recursive, xlMetaJSONFile, metadataFn, endWalkCh)
 			if err != nil {
 				// Disk walk returned error, ignore it.
 				continue
@@ -1018,7 +1022,7 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 	defer close(endWalkCh)
 
 	const ndisks = 3
-	entryChs := s.startMergeWalksN(context.Background(), bucket, prefix, "", true, endWalkCh, ndisks)
+	entryChs := s.startMergeWalksN(context.Background(), bucket, prefix, "", true, false, endWalkCh, ndisks)
 
 	var objInfos []ObjectInfo
 	var eof bool
@@ -1167,7 +1171,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 	if entryChs == nil {
 		endWalkCh = make(chan struct{})
 		// start file tree walk across at most randomly 3 disks in a set.
-		entryChs = s.startMergeWalksN(context.Background(), bucket, prefix, marker, recursive, endWalkCh, ndisks)
+		entryChs = s.startMergeWalksN(context.Background(), bucket, prefix, marker, recursive, false, endWalkCh, ndisks)
 	}
 
 	entries := mergeEntriesCh(entryChs, maxKeys, ndisks)
@@ -1693,14 +1697,14 @@ func (s *xlSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 // to allocate a receive channel for ObjectInfo, upon any unhandled
 // error walker returns error. Optionally if context.Done() is received
 // then Walk() stops the walker.
-func (s *xlSets) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+func (s *xlSets) Walk(ctx context.Context, bucket, prefix string, noMetadata bool, results chan<- ObjectInfo) error {
 	if err := checkListObjsArgs(ctx, bucket, prefix, "", s); err != nil {
 		// Upon error close the channel.
 		close(results)
 		return err
 	}
 
-	entryChs := s.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done())
+	entryChs := s.startMergeWalks(ctx, bucket, prefix, "", true, noMetadata, ctx.Done())
 
 	entriesValid := make([]bool, len(entryChs))
 	entries := make([]FileInfo, len(entryChs))
@@ -1715,7 +1719,12 @@ func (s *xlSets) Walk(ctx context.Context, bucket, prefix string, results chan<-
 			}
 
 			if quorumCount >= s.drivesPerSet/2 {
-				results <- entry.ToObjectInfo() // Read quorum exists proceed
+				// Read quorum exists proceed
+				objInfo := entry.ToObjectInfo()
+				if quorumCount == s.drivesPerSet {
+					objInfo.hasFullQuorum = true
+				}
+				results <- objInfo
 			}
 			// skip entries which do not have quorum
 		}
@@ -1730,7 +1739,7 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, opts ma
 	endWalkCh := make(chan struct{})
 	defer close(endWalkCh)
 
-	entryChs := s.startMergeWalks(ctx, bucket, prefix, "", true, endWalkCh)
+	entryChs := s.startMergeWalks(ctx, bucket, prefix, "", true, false, endWalkCh)
 
 	entriesValid := make([]bool, len(entryChs))
 	entries := make([]FileInfo, len(entryChs))
