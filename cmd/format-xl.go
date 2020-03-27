@@ -705,7 +705,7 @@ func saveFormatXLAll(ctx context.Context, storageDisks []StorageAPI, formats []*
 		}, index)
 	}
 
-	writeQuorum := len(storageDisks)/2 + 1
+	writeQuorum := getWriteQuorum(len(storageDisks))
 	// Wait for the routines to finish.
 	return reduceWriteQuorumErrs(ctx, g.Wait(), nil, writeQuorum)
 }

@@ -130,9 +130,9 @@ func TestGetSetIndexesEnvOverride(t *testing.T) {
 		{
 			[]string{"http://host{1...11}/data{1...11}"},
 			[]uint64{121},
-			nil,
+			[][]uint64{{11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11}},
 			11,
-			false,
+			true,
 		},
 		{
 			[]string{"data{1...60}"},
@@ -184,12 +184,6 @@ func TestGetSetIndexes(t *testing.T) {
 	}{
 		// Invalid inputs.
 		{
-			[]string{"data{1...27}"},
-			[]uint64{27},
-			nil,
-			false,
-		},
-		{
 			[]string{"data{1...3}"},
 			[]uint64{3},
 			nil,
@@ -202,6 +196,12 @@ func TestGetSetIndexes(t *testing.T) {
 			false,
 		},
 		// Valid inputs.
+		{
+			[]string{"data{1...27}"},
+			[]uint64{27},
+			[][]uint64{{9, 9, 9}},
+			true,
+		},
 		{
 			[]string{"data/controller1/export{1...4}, data/controller2/export{1...8}, data/controller3/export{1...12}"},
 			[]uint64{4, 8, 12},
@@ -223,7 +223,7 @@ func TestGetSetIndexes(t *testing.T) {
 		{
 			[]string{"data/controller{1...11}/export{1...8}"},
 			[]uint64{88},
-			[][]uint64{{8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8}},
+			[][]uint64{{11, 11, 11, 11, 11, 11, 11, 11}},
 			true,
 		},
 		{
@@ -292,12 +292,6 @@ func TestParseEndpointSet(t *testing.T) {
 			endpointSet{},
 			false,
 		},
-		// Indivisible range.
-		{
-			"{1...27}",
-			endpointSet{},
-			false,
-		},
 		// No range specified.
 		{
 			"{...}",
@@ -323,6 +317,23 @@ func TestParseEndpointSet(t *testing.T) {
 			false,
 		},
 		// Tests valid inputs.
+		{
+			"{1...27}",
+			endpointSet{
+				[]ellipses.ArgPattern{
+					[]ellipses.Pattern{
+						{
+							Prefix: "",
+							Suffix: "",
+							Seq:    getSequences(1, 27, 0),
+						},
+					},
+				},
+				nil,
+				[][]uint64{{9, 9, 9}},
+			},
+			true,
+		},
 		{
 			"/export/set{1...64}",
 			endpointSet{
