@@ -1463,6 +1463,13 @@ func getBucketLocationURL(endPoint, bucketName string) string {
 	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
 }
 
+// return URL For set/get lifecycle of the bucket.
+func getBucketLifecycleURL(endPoint, bucketName string) (ret string) {
+	queryValue := url.Values{}
+	queryValue.Set("lifecycle", "")
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
+}
+
 // return URL for listing objects in the bucket with V1 legacy API.
 func getListObjectsV1URL(endPoint, bucketName, prefix, maxKeys, encodingType string) string {
 	queryValue := url.Values{}
@@ -2070,6 +2077,12 @@ func registerBucketLevelFunc(bucket *mux.Router, api objectAPIHandlers, apiFunct
 		case "GetBucketPolicy":
 			// Register Get Bucket policy HTTP Handler.
 			bucket.Methods("GET").HandlerFunc(api.GetBucketPolicyHandler).Queries("policy", "")
+		case "GetBucketLifecycle":
+			bucket.Methods("GET").HandlerFunc(api.GetBucketLifecycleHandler).Queries("lifecycle", "")
+		case "PutBucketLifecycle":
+			bucket.Methods("PUT").HandlerFunc(api.PutBucketLifecycleHandler).Queries("lifecycle", "")
+		case "DeleteBucketLifecycle":
+			bucket.Methods("DELETE").HandlerFunc(api.DeleteBucketLifecycleHandler).Queries("lifecycle", "")
 		case "GetBucketLocation":
 			// Register GetBucketLocation handler.
 			bucket.Methods("GET").HandlerFunc(api.GetBucketLocationHandler).Queries("location", "")
