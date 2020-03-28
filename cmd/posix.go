@@ -620,7 +620,7 @@ func (s *posix) StatVol(volume string) (volInfo VolInfo, err error) {
 }
 
 // DeleteVol - delete a volume.
-func (s *posix) DeleteVol(volume string) (err error) {
+func (s *posix) DeleteVol(volume string, forceDelete bool) (err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -631,7 +631,13 @@ func (s *posix) DeleteVol(volume string) (err error) {
 	if err != nil {
 		return err
 	}
-	err = os.Remove((volumeDir))
+
+	if forceDelete {
+		err = os.RemoveAll(volumeDir)
+	} else {
+		err = os.Remove(volumeDir)
+	}
+
 	if err != nil {
 		switch {
 		case os.IsNotExist(err):

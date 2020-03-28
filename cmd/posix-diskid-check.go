@@ -107,11 +107,11 @@ func (p *posixDiskIDCheck) StatVol(volume string) (vol VolInfo, err error) {
 	return p.storage.StatVol(volume)
 }
 
-func (p *posixDiskIDCheck) DeleteVol(volume string) (err error) {
+func (p *posixDiskIDCheck) DeleteVol(volume string, forceDelete bool) (err error) {
 	if p.isDiskStale() {
 		return errDiskNotFound
 	}
-	return p.storage.DeleteVol(volume)
+	return p.storage.DeleteVol(volume, forceDelete)
 }
 
 func (p *posixDiskIDCheck) Walk(volume, dirPath string, marker string, recursive bool, leafFile string, readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (chan FileInfo, error) {

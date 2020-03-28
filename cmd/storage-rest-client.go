@@ -234,9 +234,12 @@ func (client *storageRESTClient) StatVol(volume string) (volInfo VolInfo, err er
 }
 
 // DeleteVol - Deletes a volume over the network.
-func (client *storageRESTClient) DeleteVol(volume string) (err error) {
+func (client *storageRESTClient) DeleteVol(volume string, forceDelete bool) (err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
+	if forceDelete {
+		values.Set(storageRESTForceDelete, "true")
+	}
 	respBody, err := client.call(storageRESTMethodDeleteVol, values, nil, -1)
 	defer http.DrainBody(respBody)
 	return err

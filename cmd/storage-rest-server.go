@@ -227,7 +227,8 @@ func (s *storageRESTServer) DeleteVolHandler(w http.ResponseWriter, r *http.Requ
 	}
 	vars := mux.Vars(r)
 	volume := vars[storageRESTVolume]
-	err := s.storage.DeleteVol(volume)
+	forceDelete := vars[storageRESTForceDelete] == "true"
+	err := s.storage.DeleteVol(volume, forceDelete)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}
