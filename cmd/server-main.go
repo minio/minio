@@ -471,8 +471,6 @@ func serverMain(ctx *cli.Context) {
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
 func newObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err error) {
-	initDataUpdateTracker()
-
 	// For FS only, directly use the disk.
 	if endpointZones.NEndpoints() == 1 {
 		// Initialize new FS object layer.

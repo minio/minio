@@ -226,7 +226,6 @@ func prepareXL16() (ObjectLayer, []string, error) {
 
 // Initialize FS objects.
 func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
-	initDataUpdateTracker()
 	var err error
 	obj, err = NewFSObjectLayer(disk)
 	if err != nil {

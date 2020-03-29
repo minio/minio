@@ -58,6 +58,19 @@ var (
 	intDataUpdateTracker *dataUpdateTracker
 )
 
+func init() {
+	intDataUpdateTracker = &dataUpdateTracker{
+		Current: dataUpdateFilter{
+			idx: 1,
+		},
+		debug: env.Get(envDataUsageCrawlDebug, config.EnableOff) == config.EnableOn,
+		input: make(chan string, dataUpdateTrackerQueueSize),
+		save:  make(chan struct{}, 1),
+	}
+	intDataUpdateTracker.Current.bf = intDataUpdateTracker.newBloomFilter()
+	objectUpdatedCh = intDataUpdateTracker.input
+}
+
 type dataUpdateTracker struct {
 	mu    sync.Mutex
 	input chan string
@@ -160,19 +173,6 @@ func (d *dataUpdateTrackerHistory) removeOlderThan(n uint64) {
 	}
 	dd = dd[:end]
 	*d = dd
-}
-
-func initDataUpdateTracker() {
-	intDataUpdateTracker = &dataUpdateTracker{
-		Current: dataUpdateFilter{
-			idx: 1,
-		},
-		debug: env.Get(envDataUsageCrawlDebug, config.EnableOff) == config.EnableOn,
-		input: make(chan string, dataUpdateTrackerQueueSize),
-		save:  make(chan struct{}, 1),
-	}
-	intDataUpdateTracker.Current.bf = intDataUpdateTracker.newBloomFilter()
-	objectUpdatedCh = intDataUpdateTracker.input
 }
 
 func (d *dataUpdateTracker) newBloomFilter() bloomFilter {
