@@ -4,6 +4,7 @@ LABEL maintainer="MinIO Inc <dev@min.io>"
 
 COPY dockerscripts/docker-entrypoint.sh /usr/bin/
 COPY minio /usr/bin/
+COPY CREDITS /third_party/
 
 ENV MINIO_UPDATE off
 ENV MINIO_ACCESS_KEY_FILE=access_key \

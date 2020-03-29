@@ -72,7 +72,7 @@ var AdminDiagnostics = Policy{
 		{
 			SID:       policy.ID(""),
 			Effect:    policy.Allow,
-			Actions:   NewActionSet(PerfInfoAdminAction, ProfilingAdminAction, TraceAdminAction, ConsoleLogAdminAction, ServerInfoAdminAction, ServerHardwareInfoAdminAction),
+			Actions:   NewActionSet(PerfInfoAdminAction, ProfilingAdminAction, TraceAdminAction, ConsoleLogAdminAction, ServerInfoAdminAction, ServerHardwareInfoAdminAction, TopLocksAdminAction),
 			Resources: NewResourceSet(NewResource("*", "")),
 		},
 	},

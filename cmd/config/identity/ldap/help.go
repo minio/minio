@@ -28,24 +28,33 @@ var (
 		},
 		config.HelpKV{
 			Key:         UsernameFormat,
-			Description: `username bind DNs e.g. "uid=%s,cn=accounts,dc=myldapserver,dc=com"`,
+			Description: `";" separated list of username bind DNs e.g. "uid=%s,cn=accounts,dc=myldapserver,dc=com"`,
+			Type:        "list",
+		},
+		config.HelpKV{
+			Key:         UsernameSearchFilter,
+			Description: `user search filter, for example "(cn=%s)" or "(sAMAccountName=%s)" or "(uid=%s)"`,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         GroupSearchFilter,
 			Description: `search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"`,
-			Optional:    true,
-			Type:        "string",
-		},
-		config.HelpKV{
-			Key:         GroupNameAttribute,
-			Description: `search attribute for group name e.g. "cn"`,
-			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         GroupSearchBaseDN,
-			Description: `group search base DNs e.g. "dc=myldapserver,dc=com"`,
+			Description: `";" separated list of group search base DNs e.g. "dc=myldapserver,dc=com"`,
+			Type:        "list",
+		},
+		config.HelpKV{
+			Key:         UsernameSearchBaseDN,
+			Description: `";" separated list of username search DNs`,
+			Type:        "list",
+			Optional:    true,
+		},
+		config.HelpKV{
+			Key:         GroupNameAttribute,
+			Description: `search attribute for group name e.g. "cn"`,
 			Optional:    true,
 			Type:        "string",
 		},
@@ -57,7 +66,13 @@ var (
 		},
 		config.HelpKV{
 			Key:         TLSSkipVerify,
-			Description: `trust server TLS without verification, defaults to "on" (verify)`,
+			Description: `trust server TLS without verification, defaults to "off" (verify)`,
+			Optional:    true,
+			Type:        "on|off",
+		},
+		config.HelpKV{
+			Key:         ServerInsecure,
+			Description: `allow plain text connection to AD/LDAP server, defaults to "off"`,
 			Optional:    true,
 			Type:        "on|off",
 		},

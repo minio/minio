@@ -34,7 +34,7 @@ import (
 	saramatls "github.com/Shopify/sarama/tools/tls"
 )
 
-// MQTT input constants
+// Kafka input constants
 const (
 	KafkaBrokers       = "brokers"
 	KafkaTopic         = "topic"
@@ -46,8 +46,10 @@ const (
 	KafkaSASL          = "sasl"
 	KafkaSASLUsername  = "sasl_username"
 	KafkaSASLPassword  = "sasl_password"
+	KafkaSASLMechanism = "sasl_mechanism"
 	KafkaClientTLSCert = "client_tls_cert"
 	KafkaClientTLSKey  = "client_tls_key"
+	KafkaVersion       = "version"
 
 	EnvKafkaEnable        = "MINIO_NOTIFY_KAFKA_ENABLE"
 	EnvKafkaBrokers       = "MINIO_NOTIFY_KAFKA_BROKERS"
@@ -60,8 +62,10 @@ const (
 	EnvKafkaSASLEnable    = "MINIO_NOTIFY_KAFKA_SASL"
 	EnvKafkaSASLUsername  = "MINIO_NOTIFY_KAFKA_SASL_USERNAME"
 	EnvKafkaSASLPassword  = "MINIO_NOTIFY_KAFKA_SASL_PASSWORD"
+	EnvKafkaSASLMechanism = "MINIO_NOTIFY_KAFKA_SASL_MECHANISM"
 	EnvKafkaClientTLSCert = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_CERT"
 	EnvKafkaClientTLSKey  = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_KEY"
+	EnvKafkaVersion       = "MINIO_NOTIFY_KAFKA_VERSION"
 )
 
 // KafkaArgs - Kafka target arguments.
@@ -71,6 +75,7 @@ type KafkaArgs struct {
 	Topic      string      `json:"topic"`
 	QueueDir   string      `json:"queueDir"`
 	QueueLimit uint64      `json:"queueLimit"`
+	Version    string      `json:"version"`
 	TLS        struct {
 		Enable        bool               `json:"enable"`
 		RootCAs       *x509.CertPool     `json:"-"`
@@ -80,9 +85,10 @@ type KafkaArgs struct {
 		ClientTLSKey  string             `json:"clientTLSKey"`
 	} `json:"tls"`
 	SASL struct {
-		Enable   bool   `json:"enable"`
-		User     string `json:"username"`
-		Password string `json:"password"`
+		Enable    bool   `json:"enable"`
+		User      string `json:"username"`
+		Password  string `json:"password"`
+		Mechanism string `json:"mechanism"`
 	} `json:"sasl"`
 }
 
@@ -106,6 +112,11 @@ func (k KafkaArgs) Validate() error {
 	}
 	if k.QueueLimit > 10000 {
 		return errors.New("queueLimit should not exceed 10000")
+	}
+	if k.Version != "" {
+		if _, err := sarama.ParseKafkaVersion(k.Version); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -237,8 +248,26 @@ func (k KafkaArgs) pingBrokers() bool {
 func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*KafkaTarget, error) {
 	config := sarama.NewConfig()
 
+	if args.Version != "" {
+		kafkaVersion, err := sarama.ParseKafkaVersion(args.Version)
+		if err != nil {
+			return nil, err
+		}
+		config.Version = kafkaVersion
+	}
+
 	config.Net.SASL.User = args.SASL.User
 	config.Net.SASL.Password = args.SASL.Password
+	if args.SASL.Mechanism == "sha512" {
+		config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: KafkaSHA512} }
+		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA512)
+	} else if args.SASL.Mechanism == "sha256" {
+		config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: KafkaSHA256} }
+		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA256)
+	} else {
+		// default to PLAIN
+		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypePlaintext)
+	}
 	config.Net.SASL.Enable = args.SASL.Enable
 
 	tlsConfig, err := saramatls.NewConfig(args.TLS.ClientTLSCert, args.TLS.ClientTLSKey)

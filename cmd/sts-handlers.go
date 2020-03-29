@@ -24,14 +24,12 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	xldap "github.com/minio/minio/cmd/config/identity/ldap"
 	"github.com/minio/minio/cmd/config/identity/openid"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/wildcard"
-	ldap "gopkg.in/ldap.v3"
 )
 
 const (
@@ -57,6 +55,9 @@ const (
 	// JWT claim keys
 	expClaim = "exp"
 	subClaim = "sub"
+
+	// JWT claim to check the parent user
+	parentClaim = "parent"
 
 	// LDAP claim keys
 	ldapUser   = "ldapUser"
@@ -214,7 +215,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	// This policy is the policy associated with the user
 	// requesting for temporary credentials. The temporary
 	// credentials will inherit the same policy requirements.
-	m[iamPolicyClaimName()] = policyName
+	m[iamPolicyClaimNameOpenID()] = policyName
 
 	if len(sessionPolicyStr) > 0 {
 		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
@@ -350,7 +351,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	// be set and configured on your identity provider as part of
 	// JWT custom claims.
 	var policyName string
-	if v, ok := m[iamPolicyClaimName()]; ok {
+	if v, ok := m[iamPolicyClaimNameOpenID()]; ok {
 		policyName, _ = v.(string)
 	}
 
@@ -474,61 +475,13 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		}
 	}
 
-	ldapConn, err := globalLDAPConfig.Connect()
+	groups, err := globalLDAPConfig.Bind(ldapUsername, ldapPassword)
 	if err != nil {
-		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, fmt.Errorf("LDAP server connection failure: %w", err))
-		return
-	}
-	if ldapConn == nil {
-		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, fmt.Errorf("LDAP server not configured: %w", err))
-		return
-	}
-
-	// Close ldap connection to avoid leaks.
-	defer ldapConn.Close()
-
-	usernameSubs, _ := xldap.NewSubstituter("username", ldapUsername)
-	// We ignore error below as we already validated the username
-	// format string at startup.
-	usernameDN, _ := usernameSubs.Substitute(globalLDAPConfig.UsernameFormat)
-	// Bind with user credentials to validate the password
-	if err = ldapConn.Bind(usernameDN, ldapPassword); err != nil {
-		err = fmt.Errorf("LDAP authentication failure: %w", err)
+		err = fmt.Errorf("LDAP server connection failure: %w", err)
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 		return
 	}
 
-	groups := []string{}
-	if globalLDAPConfig.GroupSearchFilter != "" {
-		// Verified user credentials. Now we find the groups they are
-		// a member of.
-		searchSubs, _ := xldap.NewSubstituter(
-			"username", ldapUsername,
-			"usernamedn", usernameDN,
-		)
-		// We ignore error below as we already validated the search string
-		// at startup.
-		groupSearchFilter, _ := searchSubs.Substitute(globalLDAPConfig.GroupSearchFilter)
-		baseDN, _ := searchSubs.Substitute(globalLDAPConfig.GroupSearchBaseDN)
-		searchRequest := ldap.NewSearchRequest(
-			baseDN,
-			ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-			groupSearchFilter,
-			[]string{globalLDAPConfig.GroupNameAttribute},
-			nil,
-		)
-
-		sr, err := ldapConn.Search(searchRequest)
-		if err != nil {
-			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, fmt.Errorf("LDAP search failure: %w", err))
-			return
-		}
-		for _, entry := range sr.Entries {
-			// We only queried one attribute, so we only look up
-			// the first one.
-			groups = append(groups, entry.Attributes[0].Values...)
-		}
-	}
 	expiryDur := globalLDAPConfig.GetExpiryDuration()
 	m := map[string]interface{}{
 		expClaim:   UTCNow().Add(expiryDur).Unix(),

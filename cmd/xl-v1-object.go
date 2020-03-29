@@ -19,9 +19,11 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"path"
+	"sync"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -264,8 +266,10 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 		if length == totalBytesRead {
 			break
 		}
+
+		partNumber := xlMeta.Parts[partIndex].Number
+
 		// Save the current part name and size.
-		partName := xlMeta.Parts[partIndex].Name
 		partSize := xlMeta.Parts[partIndex].Size
 
 		partLength := partSize - partOffset
@@ -281,8 +285,10 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 			if disk == OfflineDisk {
 				continue
 			}
-			checksumInfo := metaArr[index].Erasure.GetChecksumInfo(partName)
-			readers[index] = newBitrotReader(disk, bucket, pathJoin(object, partName), tillOffset, checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
+			checksumInfo := metaArr[index].Erasure.GetChecksumInfo(partNumber)
+			partPath := pathJoin(object, fmt.Sprintf("part.%d", partNumber))
+			readers[index] = newBitrotReader(disk, bucket, partPath, tillOffset,
+				checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
 		}
 		err := erasure.Decode(ctx, writer, readers, partOffset, partLength, partSize)
 		// Note: we should not be defer'ing the following closeBitrotReaders() call as we are inside a for loop i.e if we use defer, we would accumulate a lot of open files by the time
@@ -596,8 +602,12 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 			onlineDisks[i] = nil
 			continue
 		}
-		partsMetadata[i].AddObjectPart(1, partName, "", n, data.ActualSize())
-		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, DefaultBitrotAlgorithm, bitrotWriterSum(w)})
+		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize())
+		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
+			PartNumber: 1,
+			Algorithm:  DefaultBitrotAlgorithm,
+			Hash:       bitrotWriterSum(w),
+		})
 	}
 
 	// Save additional erasureMetadata.
@@ -738,47 +748,59 @@ func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string, wri
 // object.
 func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects []string, errs []error, writeQuorums []int, isDirs []bool) ([]error, error) {
 	var tmpObjs = make([]string, len(objects))
-	disks := xl.getDisks()
 	if bucket == minioMetaTmpBucket {
 		copy(tmpObjs, objects)
 	} else {
-		for i, object := range objects {
-			if errs[i] != nil {
+		for idx := range objects {
+			if errs[idx] != nil {
 				continue
 			}
+			tmpObjs[idx] = mustGetUUID()
 			var err error
-			tmpObjs[i] = mustGetUUID()
-			// Rename the current object while requiring write quorum, but also consider
-			// that a non found object in a given disk as a success since it already
-			// confirms that the object doesn't have a part in that disk (already removed)
-			if isDirs[i] {
-				disks, err = rename(ctx, disks, bucket, object, minioMetaTmpBucket, tmpObjs[i], true, writeQuorums[i],
+			// Rename the current object while requiring
+			// write quorum, but also consider that a non
+			// found object in a given disk as a success
+			// since it already confirms that the object
+			// doesn't have a part in that disk (already removed)
+			if isDirs[idx] {
+				_, err = rename(ctx, xl.getDisks(), bucket, objects[idx],
+					minioMetaTmpBucket, tmpObjs[idx], true, writeQuorums[idx],
 					[]error{errFileNotFound, errFileAccessDenied})
 			} else {
-				disks, err = rename(ctx, disks, bucket, object, minioMetaTmpBucket, tmpObjs[i], true, writeQuorums[i],
+				_, err = rename(ctx, xl.getDisks(), bucket, objects[idx],
+					minioMetaTmpBucket, tmpObjs[idx], true, writeQuorums[idx],
 					[]error{errFileNotFound})
 			}
 			if err != nil {
-				errs[i] = err
+				errs[idx] = err
 			}
 		}
 	}
+
+	disks := xl.getDisks()
 
 	// Initialize list of errors.
 	var opErrs = make([]error, len(disks))
 	var delObjErrs = make([][]error, len(disks))
+	var wg = sync.WaitGroup{}
 
 	// Remove objects in bulk for each disk
-	for index, disk := range disks {
-		if disk == nil {
-			opErrs[index] = errDiskNotFound
+	for i, d := range disks {
+		if d == nil {
+			opErrs[i] = errDiskNotFound
 			continue
 		}
-		delObjErrs[index], opErrs[index] = cleanupObjectsBulk(disk, minioMetaTmpBucket, tmpObjs, errs)
-		if opErrs[index] == errVolumeNotFound || opErrs[index] == errFileNotFound {
-			opErrs[index] = nil
-		}
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			delObjErrs[index], opErrs[index] = disk.DeletePrefixes(minioMetaTmpBucket, tmpObjs)
+			if opErrs[index] == errVolumeNotFound || opErrs[index] == errFileNotFound {
+				opErrs[index] = nil
+			}
+		}(i, d)
 	}
+
+	wg.Wait()
 
 	// Return errors if any during deletion
 	if err := reduceWriteQuorumErrs(ctx, opErrs, objectOpIgnoredErrs, len(disks)/2+1); err != nil {
@@ -791,9 +813,14 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 			continue
 		}
 		listErrs := make([]error, len(disks))
+		// Iterate over disks to fetch the error
+		// of deleting of the current object
 		for i := range delObjErrs {
+			// delObjErrs[i] is not nil when disks[i] is also not nil
 			if delObjErrs[i] != nil {
-				listErrs[i] = delObjErrs[i][objIndex]
+				if delObjErrs[i][objIndex] != errFileNotFound {
+					listErrs[i] = delObjErrs[i][objIndex]
+				}
 			}
 		}
 		errs[objIndex] = reduceWriteQuorumErrs(ctx, listErrs, objectOpIgnoredErrs, writeQuorums[objIndex])
@@ -831,23 +858,17 @@ func (xl xlObjects) deleteObjects(ctx context.Context, bucket string, objects []
 		}
 	}
 
-	for i, object := range objects {
+	for i := range objects {
 		if errs[i] != nil {
 			continue
 		}
-		if isObjectDirs[i] {
-			writeQuorums[i] = len(xl.getDisks())/2 + 1
-		} else {
-			var err error
-			// Read metadata associated with the object from all disks.
-			partsMetadata, readXLErrs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
-			// get Quorum for this object
-			_, writeQuorums[i], err = objectQuorumFromMeta(ctx, xl, partsMetadata, readXLErrs)
-			if err != nil {
-				errs[i] = toObjectErr(err, bucket, object)
-				continue
-			}
-		}
+		// Assume (N/2 + 1) quorums for all objects
+		// this is a theoretical assumption such that
+		// for delete's we do not need to honor storage
+		// class for objects which have reduced quorum
+		// storage class only needs to be honored for
+		// Read() requests alone which we already do.
+		writeQuorums[i] = len(xl.getDisks())/2 + 1
 	}
 
 	return xl.doDeleteObjects(ctx, bucket, objects, errs, writeQuorums, isObjectDirs)

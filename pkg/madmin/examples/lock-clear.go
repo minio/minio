@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -39,7 +40,7 @@ func main() {
 
 	// Clear locks held on mybucket/myprefix for longer than 30s.
 	olderThan := time.Duration(30 * time.Second)
-	locksCleared, err := madmClnt.ClearLocks("mybucket", "myprefix", olderThan)
+	locksCleared, err := madmClnt.ClearLocks(context.Background(), "mybucket", "myprefix", olderThan)
 	if err != nil {
 		log.Fatalln(err)
 	}

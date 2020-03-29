@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -36,7 +37,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	status, err := madmClnt.GetKeyStatus("") // empty string refers to the default master key
+	status, err := madmClnt.GetKeyStatus(context.Background(), "") // empty string refers to the default master key
 	if err != nil {
 		log.Fatalln(err)
 	}

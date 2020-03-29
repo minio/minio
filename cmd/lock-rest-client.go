@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -104,9 +105,12 @@ func (client *lockRESTClient) restCall(call string, args dsync.LockArgs) (reply 
 	values := url.Values{}
 	values.Set(lockRESTUID, args.UID)
 	values.Set(lockRESTSource, args.Source)
-	values.Set(lockRESTResource, args.Resource)
-
-	respBody, err := client.call(call, values, nil, -1)
+	var buffer bytes.Buffer
+	for _, resource := range args.Resources {
+		buffer.WriteString(resource)
+		buffer.WriteString("\n")
+	}
+	respBody, err := client.call(call, values, &buffer, -1)
 	defer http.DrainBody(respBody)
 	switch err {
 	case nil:
@@ -141,12 +145,6 @@ func (client *lockRESTClient) Unlock(args dsync.LockArgs) (reply bool, err error
 // Expired calls expired handler to check if lock args have expired.
 func (client *lockRESTClient) Expired(args dsync.LockArgs) (expired bool, err error) {
 	return client.restCall(lockRESTMethodExpired, args)
-}
-
-func closeLockers(lockers []dsync.NetLocker) {
-	for _, locker := range lockers {
-		locker.Close()
-	}
 }
 
 func newLockAPI(endpoint Endpoint) dsync.NetLocker {

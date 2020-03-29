@@ -109,14 +109,14 @@ func initTestXLObjLayer() (ObjectLayer, []string, error) {
 		return nil, nil, err
 	}
 	endpoints := mustGetNewEndpoints(xlDirs...)
-	format, err := waitForFormatXL(true, endpoints, 1, 1, 16, "")
+	storageDisks, format, err := waitForFormatXL(true, endpoints, 1, 1, 16, "")
 	if err != nil {
 		removeRoots(xlDirs)
 		return nil, nil, err
 	}
 
 	globalPolicySys = NewPolicySys()
-	objLayer, err := newXLSets(endpoints, format, 1, 16)
+	objLayer, err := newXLSets(endpoints, storageDisks, format, 1, 16)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -263,6 +263,7 @@ func TestAdminServerInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
 	}
+
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.

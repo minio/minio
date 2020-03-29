@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"log"
 	"os"
@@ -45,7 +46,7 @@ func main() {
 	profiler := madmin.ProfilerCPU
 	log.Println("Starting " + profiler + " profiling..")
 
-	startResults, err := madmClnt.StartProfiling(profiler)
+	startResults, err := madmClnt.StartProfiling(context.Background(), profiler)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -63,7 +64,7 @@ func main() {
 
 	log.Println("Stopping profiling..")
 
-	profilingData, err := madmClnt.DownloadProfilingData()
+	profilingData, err := madmClnt.DownloadProfilingData(context.Background())
 	if err != nil {
 		log.Fatalln(err)
 	}

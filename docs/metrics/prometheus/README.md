@@ -147,13 +147,24 @@ MinIO Gateway instances enabled with Disk-Caching expose caching related metrics
 - `cache_hits_total`: Total number of cache hits.
 - `cache_misses_total`: Total number of cache misses.
 
-### S3 Gateway & Cache specific metrics
+### Gateway & Cache specific metrics
 
-MinIO S3 Gateway instance exposes metrics related to Gateway communication with AWS S3.
+MinIO Gateway instance exposes metrics related to Gateway communication with the cloud backend (S3, Azure & GCS Gateway).
 
-- `gateway_s3_requests`: Total number of GET & HEAD requests made to AWS S3. This metrics has a label `method` that identifies GET & HEAD Requests.
-- `gateway_s3_bytes_sent`: Total number of bytes sent to AWS S3 (in GET & HEAD Requests).
-- `gateway_s3_bytes_received`: Total number of bytes received from AWS S3 (in GET & HEAD Requests).
+- `gateway_<gateway_type>_requests`: Total number of GET & HEAD requests made to cloud backend. This metrics has a label `method` that identifies GET & HEAD Requests.
+- `gateway_<gateway_type>_bytes_sent`: Total number of bytes sent to cloud backend (in GET & HEAD Requests).
+- `gateway_<gateway_type>_bytes_received`: Total number of bytes received from cloud backend (in GET & HEAD Requests).
+
+Note that this is currently only support for Azure, S3 and GCS Gateway.
+
+### MinIO self-healing metrics - `self_heal_*`
+
+MinIO exposes self-healing related metrics for erasure-code deployments _only_. These metrics are _not_ available on Gateway or Single Node, Single Drive deployments. Note that these metrics will be exposed _only_ when there is a relevant event happening on MinIO server.
+
+- `self_heal_time_since_last_activity`: Time elapsed since last self-healing related activity.
+- `self_heal_objects_scanned`: Number of objects scanned by self-healing thread in its current run. This will reset when a fresh self-healing run starts. This is labeled with the object type scanned.
+- `self_heal_objects_healed`: Number of objects healing by self-healing thread in its current run. This will reset when a fresh self-healing run starts. This is labeled with the object type scanned.
+- `self_heal_objects_heal_failed`: Number of objects for which self-healing failed in its current run. This will reset when a fresh self-healing run starts. This is labeled with disk status and its endpoint.
 
 ## Migration guide for the new set of metrics
 

@@ -41,23 +41,13 @@ func (r *recordTrafficRequest) Read(p []byte) (n int, err error) {
 // Records the outgoing bytes through the responseWriter.
 type recordTrafficResponse struct {
 	// wrapper for underlying http.ResponseWriter.
-	writer      http.ResponseWriter
+	http.ResponseWriter
 	isS3Request bool
-}
-
-// Calls the underlying WriteHeader.
-func (r *recordTrafficResponse) WriteHeader(i int) {
-	r.writer.WriteHeader(i)
-}
-
-// Calls the underlying Header.
-func (r *recordTrafficResponse) Header() http.Header {
-	return r.writer.Header()
 }
 
 // Records the output bytes
 func (r *recordTrafficResponse) Write(p []byte) (n int, err error) {
-	n, err = r.writer.Write(p)
+	n, err = r.ResponseWriter.Write(p)
 	globalConnStats.incOutputBytes(n)
 	// Check if it is s3 request
 	if r.isS3Request {
@@ -68,13 +58,12 @@ func (r *recordTrafficResponse) Write(p []byte) (n int, err error) {
 
 // Calls the underlying Flush.
 func (r *recordTrafficResponse) Flush() {
-	r.writer.(http.Flusher).Flush()
+	r.ResponseWriter.(http.Flusher).Flush()
 }
 
 // Records the outgoing bytes through the responseWriter.
 type recordAPIStats struct {
-	// wrapper for underlying http.ResponseWriter.
-	writer         http.ResponseWriter
+	http.ResponseWriter
 	TTFB           time.Time // TimeToFirstByte.
 	firstByteRead  bool
 	respStatusCode int
@@ -84,12 +73,7 @@ type recordAPIStats struct {
 // Calls the underlying WriteHeader.
 func (r *recordAPIStats) WriteHeader(i int) {
 	r.respStatusCode = i
-	r.writer.WriteHeader(i)
-}
-
-// Calls the underlying Header.
-func (r *recordAPIStats) Header() http.Header {
-	return r.writer.Header()
+	r.ResponseWriter.WriteHeader(i)
 }
 
 // Records the TTFB on the first byte write.
@@ -98,10 +82,10 @@ func (r *recordAPIStats) Write(p []byte) (n int, err error) {
 		r.TTFB = UTCNow()
 		r.firstByteRead = true
 	}
-	return r.writer.Write(p)
+	return r.ResponseWriter.Write(p)
 }
 
 // Calls the underlying Flush.
 func (r *recordAPIStats) Flush() {
-	r.writer.(http.Flusher).Flush()
+	r.ResponseWriter.(http.Flusher).Flush()
 }

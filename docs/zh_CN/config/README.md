@@ -1,4 +1,4 @@
-# MinIO Server `config.json` (v18) 指南 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
+# MinIO Server `config.json` (v18) 指南 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)  [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
 MinIO server在默认情况下会将所有配置信息存到 `${HOME}/.minio/config.json` 文件中。 以下部分提供每个字段的详细说明以及如何自定义它们。一个完整的 `config.json` 在 [这里](https://raw.githubusercontent.com/minio/minio/master/docs/config/config.sample.json)
 

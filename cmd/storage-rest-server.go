@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os/user"
 	"path"
@@ -79,10 +80,6 @@ func storageServerRequestValidate(r *http.Request) error {
 		return errAuthentication
 	}
 
-	if claims.Issuer != ReleaseTag {
-		return errAuthentication
-	}
-
 	requestTimeStr := r.Header.Get("X-Minio-Time")
 	requestTime, err := time.Parse(time.RFC3339, requestTimeStr)
 	if err != nil {
@@ -113,7 +110,7 @@ func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool
 		// or create format.json
 		return true
 	}
-	storedDiskID, err := s.storage.getDiskID()
+	storedDiskID, err := s.storage.GetDiskID()
 	if err == nil && diskID == storedDiskID {
 		// If format.json is available and request sent the right disk-id, we allow the request
 		return true
@@ -142,16 +139,28 @@ func (s *storageRESTServer) CrawlAndGetDataUsageHandler(w http.ResponseWriter, r
 	}
 
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
-	doneCh := sendWhiteSpaceToHTTPResponse(w)
-	usageInfo, err := s.storage.CrawlAndGetDataUsage(GlobalServiceDoneCh)
-	<-doneCh
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	var cache dataUsageCache
+	err = cache.deserialize(b)
+	if err != nil {
+		logger.LogIf(r.Context(), err)
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	done := keepHTTPResponseAlive(w)
+	usageInfo, err := s.storage.CrawlAndGetDataUsage(r.Context(), cache)
+	done()
 
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
-
-	gob.NewEncoder(w).Encode(usageInfo)
+	w.Write(usageInfo.serialize())
 	w.(http.Flusher).Flush()
 }
 
@@ -218,7 +227,8 @@ func (s *storageRESTServer) DeleteVolHandler(w http.ResponseWriter, r *http.Requ
 	}
 	vars := mux.Vars(r)
 	volume := vars[storageRESTVolume]
-	err := s.storage.DeleteVol(volume)
+	forceDelete := vars[storageRESTForceDelete] == "true"
+	err := s.storage.DeleteVol(volume, forceDelete)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}
@@ -420,6 +430,30 @@ func readMetadata(buf []byte, volume, entry string) FileInfo {
 }
 
 // WalkHandler - remote caller to start walking at a requested directory path.
+func (s *storageRESTServer) WalkSplunkHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := mux.Vars(r)
+	volume := vars[storageRESTVolume]
+	dirPath := vars[storageRESTDirPath]
+	markerPath := vars[storageRESTMarkerPath]
+
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	encoder := gob.NewEncoder(w)
+
+	fch, err := s.storage.WalkSplunk(volume, dirPath, markerPath, r.Context().Done())
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	for fi := range fch {
+		encoder.Encode(&fi)
+	}
+	w.(http.Flusher).Flush()
+}
+
+// WalkHandler - remote caller to start walking at a requested directory path.
 func (s *storageRESTServer) WalkHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		return
@@ -435,17 +469,14 @@ func (s *storageRESTServer) WalkHandler(w http.ResponseWriter, r *http.Request) 
 	}
 	leafFile := vars[storageRESTLeafFile]
 
-	endWalkCh := make(chan struct{})
-	defer close(endWalkCh)
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	encoder := gob.NewEncoder(w)
 
-	fch, err := s.storage.Walk(volume, dirPath, markerPath, recursive, leafFile, readMetadata, endWalkCh)
+	fch, err := s.storage.Walk(volume, dirPath, markerPath, recursive, leafFile, readMetadata, r.Context().Done())
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
-
-	w.Header().Set(xhttp.ContentType, "text/event-stream")
-	encoder := gob.NewEncoder(w)
 	for fi := range fch {
 		encoder.Encode(&fi)
 	}
@@ -466,6 +497,7 @@ func (s *storageRESTServer) ListDirHandler(w http.ResponseWriter, r *http.Reques
 		s.writeErrorResponse(w, err)
 		return
 	}
+
 	entries, err := s.storage.ListDir(volume, dirPath, count, leafFile)
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -515,20 +547,70 @@ func (s *storageRESTServer) DeleteFileBulkHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	dErrsResp := &DeleteFileBulkErrsResp{Errs: make([]error, len(filePaths))}
+
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	encoder := gob.NewEncoder(w)
+	done := keepHTTPResponseAlive(w)
 	errs, err := s.storage.DeleteFileBulk(volume, filePaths)
-	if err != nil {
+	done()
+
+	for idx := range filePaths {
+		if err != nil {
+			dErrsResp.Errs[idx] = StorageErr(err.Error())
+		} else {
+			if errs[idx] != nil {
+				dErrsResp.Errs[idx] = StorageErr(errs[idx].Error())
+			}
+		}
+	}
+
+	encoder.Encode(dErrsResp)
+	w.(http.Flusher).Flush()
+}
+
+// DeletePrefixesErrsResp - collection of delete errors
+// for bulk prefixes deletes
+type DeletePrefixesErrsResp struct {
+	Errs []error
+}
+
+// DeletePrefixesHandler - delete a set of a prefixes.
+func (s *storageRESTServer) DeletePrefixesHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	vars := r.URL.Query()
+	volume := vars.Get(storageRESTVolume)
+
+	bio := bufio.NewScanner(r.Body)
+	var prefixes []string
+	for bio.Scan() {
+		prefixes = append(prefixes, bio.Text())
+	}
+
+	if err := bio.Err(); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 
-	derrsResp := &DeleteFileBulkErrsResp{Errs: make([]error, len(errs))}
-	for idx, err := range errs {
+	dErrsResp := &DeletePrefixesErrsResp{Errs: make([]error, len(prefixes))}
+
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	encoder := gob.NewEncoder(w)
+	done := keepHTTPResponseAlive(w)
+	errs, err := s.storage.DeletePrefixes(volume, prefixes)
+	done()
+	for idx := range prefixes {
 		if err != nil {
-			derrsResp.Errs[idx] = StorageErr(err.Error())
+			dErrsResp.Errs[idx] = StorageErr(err.Error())
+		} else {
+			if errs[idx] != nil {
+				dErrsResp.Errs[idx] = StorageErr(errs[idx].Error())
+			}
 		}
 	}
-
-	gob.NewEncoder(w).Encode(derrsResp)
+	encoder.Encode(dErrsResp)
 	w.(http.Flusher).Flush()
 }
 
@@ -548,11 +630,15 @@ func (s *storageRESTServer) RenameFileHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// Send whitespace to the client to avoid timeouts with long storage
+// keepHTTPResponseAlive can be used to avoid timeouts with long storage
 // operations, such as bitrot verification or data usage crawling.
-func sendWhiteSpaceToHTTPResponse(w http.ResponseWriter) <-chan struct{} {
+// Every 10 seconds a space character is sent.
+// The returned function should always be called to release resources.
+// waitForHTTPResponse should be used to the receiving side.
+func keepHTTPResponseAlive(w http.ResponseWriter) func() {
 	doneCh := make(chan struct{})
 	go func() {
+		defer close(doneCh)
 		ticker := time.NewTicker(time.Second * 10)
 		for {
 			select {
@@ -560,13 +646,38 @@ func sendWhiteSpaceToHTTPResponse(w http.ResponseWriter) <-chan struct{} {
 				w.Write([]byte(" "))
 				w.(http.Flusher).Flush()
 			case doneCh <- struct{}{}:
+				w.Write([]byte{0})
 				ticker.Stop()
 				return
 			}
 		}
-
 	}()
-	return doneCh
+	return func() {
+		// Indicate we are ready to write.
+		<-doneCh
+		// Wait for channel to be closed so we don't race on writes.
+		<-doneCh
+	}
+}
+
+// waitForHTTPResponse will wait for responses where keepHTTPResponseAlive
+// has been used.
+// The returned reader contains the payload.
+func waitForHTTPResponse(respBody io.Reader) (io.Reader, error) {
+	reader := bufio.NewReader(respBody)
+	for {
+		b, err := reader.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		if b != ' ' {
+			if b != 0 {
+				reader.UnreadByte()
+			}
+			break
+		}
+	}
+	return reader, nil
 }
 
 // VerifyFileResp - VerifyFile()'s response.
@@ -608,9 +719,9 @@ func (s *storageRESTServer) VerifyFile(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
 	encoder := gob.NewEncoder(w)
-	doneCh := sendWhiteSpaceToHTTPResponse(w)
+	done := keepHTTPResponseAlive(w)
 	err = s.storage.VerifyFile(volume, filePath, size, BitrotAlgorithmFromString(algoStr), hash, int64(shardSize))
-	<-doneCh
+	done()
 	vresp := &VerifyFileResp{}
 	if err != nil {
 		vresp.Err = StorageErr(err.Error())
@@ -672,6 +783,10 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTCount, storageRESTLeafFile)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalk).HandlerFunc(httpTraceHdrs(server.WalkHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath, storageRESTRecursive, storageRESTLeafFile)...)
+			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalkSplunk).HandlerFunc(httpTraceHdrs(server.WalkSplunkHandler)).
+				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath)...)
+			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeletePrefixes).HandlerFunc(httpTraceHdrs(server.DeletePrefixesHandler)).
+				Queries(restQueries(storageRESTVolume)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteFile).HandlerFunc(httpTraceHdrs(server.DeleteFileHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteFileBulk).HandlerFunc(httpTraceHdrs(server.DeleteFileBulkHandler)).

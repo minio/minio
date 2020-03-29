@@ -235,8 +235,22 @@ This behavior is consistent across all keys, each key self documents itself with
 
 ## Environment only settings (not in config)
 
-#### Worm
-Enable this to turn on Write-Once-Read-Many. By default it is set to `off`. Set ``MINIO_WORM=on`` environment variable to enable WORM mode.
+#### Usage crawler
+Data usage crawler is enabled by default, following ENVs allow for more staggered delay in terms of usage calculation. 
+
+The crawler adapts to the system speed and completely pauses when the system is under load. It is possible to adjust the speed of the crawler and thereby the latency of updates being reflected. The delays between each operation of the crawl can be adjusted by the `MINIO_DISK_USAGE_CRAWL_DELAY` environment variable. By default the value is `10`. This means the crawler will sleep *10x* the time each operation takes.
+
+This will in most setups make the crawler slow enough to not impact overall system performance. Setting `MINIO_DISK_USAGE_CRAWL_DELAY` to a *lower* value will make the crawler faster and setting it to 0 will make the crawler run at full speed (not recommended). Setting it to a higher value will make the crawler slower, further consume less resources.
+
+Example: Following setting will decrease the crawler speed by a factor of 3, reducing the system resource use, but increasing the latency of updates being reflected.
+
+```sh
+export MINIO_DISK_USAGE_CRAWL_DELAY=30
+minio server /data
+```
+
+#### Worm (deprecated)
+Enable this to turn on Write-Once-Read-Many. By default it is set to `off`. Set ``MINIO_WORM=on`` environment variable to enable WORM mode. This ENV setting is not recommended anymore, please use Object Locking and Object Retention APIs documented [here](https://github.com/minio/minio/tree/master/docs/retention).
 
 Example:
 

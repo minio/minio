@@ -54,7 +54,7 @@ func checkBucketAndObjectNames(ctx context.Context, bucket, object string) error
 }
 
 // Checks for all ListObjects arguments validity.
-func checkListObjsArgs(ctx context.Context, bucket, prefix, marker, delimiter string, obj ObjectLayer) error {
+func checkListObjsArgs(ctx context.Context, bucket, prefix, marker string, obj ObjectLayer) error {
 	// Verify if bucket exists before validating object name.
 	// This is done on purpose since the order of errors is
 	// important here bucket does not exist error should
@@ -90,7 +90,7 @@ func checkListObjsArgs(ctx context.Context, bucket, prefix, marker, delimiter st
 
 // Checks for all ListMultipartUploads arguments validity.
 func checkListMultipartArgs(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, obj ObjectLayer) error {
-	if err := checkListObjsArgs(ctx, bucket, prefix, keyMarker, delimiter, obj); err != nil {
+	if err := checkListObjsArgs(ctx, bucket, prefix, keyMarker, obj); err != nil {
 		return err
 	}
 	if uploadIDMarker != "" {

@@ -49,6 +49,8 @@ type AMQPArgs struct {
 	QueueLimit   uint64   `json:"queueLimit"`
 }
 
+//lint:file-ignore ST1003 We cannot change these exported names.
+
 // AMQP input constants.
 const (
 	AmqpQueueDir   = "queue_dir"

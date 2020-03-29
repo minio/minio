@@ -66,8 +66,10 @@ EXAMPLES:
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1,/mnt/drive2,/mnt/drive3,/mnt/drive4"
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*,*.png"
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXPIRY{{.AssignmentOperator}}40
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}80
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}90
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_AFTER{{.AssignmentOperator}}3
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_LOW{{.AssignmentOperator}}75
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_HIGH{{.AssignmentOperator}}85
      {{.Prompt}} {{.HelpName}}
 `
 
@@ -106,11 +108,9 @@ func (g *S3) Name() string {
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyz01234569"
 const (
-	letterIdxBits           = 6                    // 6 bits to represent a letter index
-	letterIdxMask           = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-	letterIdxMax            = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-	minioReservedBucket     = "minio"
-	minioReservedBucketPath = minio.SlashSeparator + minioReservedBucket
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
 )
 
 // randString generates random names and prepends them with a known prefix.
@@ -152,36 +152,10 @@ var defaultAWSCredProviders = []credentials.Provider{
 	&credentials.FileAWSCredentials{},
 	&credentials.IAM{
 		Client: &http.Client{
-			Transport: minio.NewCustomHTTPTransport(),
+			Transport: minio.NewGatewayHTTPTransport(),
 		},
 	},
 	&credentials.EnvMinio{},
-}
-
-type metricsTransport struct {
-	transport *http.Transport
-	metrics   *minio.Metrics
-}
-
-func (s metricsTransport) RoundTrip(r *http.Request) (*http.Response, error) {
-	isS3Request := func() bool {
-		return !(minio.HasPrefix(r.URL.Path, minioReservedBucketPath) ||
-			minio.HasSuffix(r.URL.Path, ".js") || strings.Contains(r.URL.Path, "favicon.ico") ||
-			strings.Contains(r.URL.Path, ".html"))
-	}
-	if isS3Request() && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
-		s.metrics.IncRequests(r.Method)
-		s.metrics.IncBytesSent(r.ContentLength)
-	}
-	// Make the request to the server.
-	resp, err := s.transport.RoundTrip(r)
-	if err != nil {
-		return nil, err
-	}
-	if isS3Request() && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
-		s.metrics.IncBytesReceived(resp.ContentLength)
-	}
-	return resp, nil
 }
 
 // newS3 - Initializes a new client by auto probing S3 server signature.
@@ -237,9 +211,9 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 
 	metrics := minio.NewMetrics()
 
-	t := &metricsTransport{
-		transport: minio.NewCustomHTTPTransport(),
-		metrics:   metrics,
+	t := &minio.MetricsTransport{
+		Transport: minio.NewGatewayHTTPTransport(),
+		Metrics:   metrics,
 	}
 
 	// Set custom transport
@@ -300,7 +274,7 @@ func (l *s3Objects) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo is not relevant to S3 backend.
-func (l *s3Objects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
+func (l *s3Objects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo) {
 	si.Backend.Type = minio.BackendGateway
 	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.HTTPClient, l.Client.EndpointURL().String())
 	return si
@@ -377,7 +351,7 @@ func (l *s3Objects) ListBuckets(ctx context.Context) ([]minio.BucketInfo, error)
 }
 
 // DeleteBucket deletes a bucket on S3
-func (l *s3Objects) DeleteBucket(ctx context.Context, bucket string) error {
+func (l *s3Objects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	err := l.Client.RemoveBucket(bucket)
 	if err != nil {
 		return minio.ErrorRespToObjectError(err, bucket)

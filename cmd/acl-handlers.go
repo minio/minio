@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,12 @@ package cmd
 
 import (
 	"encoding/xml"
+	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/gorilla/mux"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/policy"
 )
@@ -48,6 +51,71 @@ type accessControlPolicy struct {
 	AccessControlList struct {
 		Grants []grant `xml:"Grant"`
 	} `xml:"AccessControlList"`
+}
+
+// PutBucketACLHandler - PUT Bucket ACL
+// -----------------
+// This operation uses the ACL subresource
+// to set ACL for a bucket, this is a dummy call
+// only responds success if the ACL is private.
+func (api objectAPIHandlers) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "PutBucketACL")
+
+	defer logger.AuditLog(w, r, "PutBucketACL", mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	objAPI := api.ObjectAPI()
+	if objAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Allow putBucketACL if policy action is set, since this is a dummy call
+	// we are simply re-purposing the bucketPolicyAction.
+	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketPolicyAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Before proceeding validate if bucket exists.
+	_, err := objAPI.GetBucketInfo(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	aclHeader := r.Header.Get(xhttp.AmzACL)
+	if aclHeader == "" {
+		acl := &accessControlPolicy{}
+		if err = xmlDecoder(r.Body, acl, r.ContentLength); err != nil {
+			if err == io.EOF {
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingSecurityHeader),
+					r.URL, guessIsBrowserReq(r))
+				return
+			}
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		if len(acl.AccessControlList.Grants) == 0 {
+			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		if acl.AccessControlList.Grants[0].Permission != "FULL_CONTROL" {
+			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL, guessIsBrowserReq(r))
+			return
+		}
+	}
+
+	if aclHeader != "" && aclHeader != "private" {
+		writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	w.(http.Flusher).Flush()
 }
 
 // GetBucketACLHandler - GET Bucket ACL
@@ -99,6 +167,71 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 	w.(http.Flusher).Flush()
 }
 
+// PutObjectACLHandler - PUT Object ACL
+// -----------------
+// This operation uses the ACL subresource
+// to set ACL for a bucket, this is a dummy call
+// only responds success if the ACL is private.
+func (api objectAPIHandlers) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "PutObjectACL")
+
+	defer logger.AuditLog(w, r, "PutObjectACL", mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object, err := url.PathUnescape(vars["object"])
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	objAPI := api.ObjectAPI()
+	if objAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Allow putObjectACL if policy action is set, since this is a dummy call
+	// we are simply re-purposing the bucketPolicyAction.
+	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketPolicyAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Before proceeding validate if object exists.
+	_, err = objAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	aclHeader := r.Header.Get(xhttp.AmzACL)
+	if aclHeader == "" {
+		acl := &accessControlPolicy{}
+		if err = xmlDecoder(r.Body, acl, r.ContentLength); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		if len(acl.AccessControlList.Grants) == 0 {
+			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		if acl.AccessControlList.Grants[0].Permission != "FULL_CONTROL" {
+			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL, guessIsBrowserReq(r))
+			return
+		}
+	}
+
+	if aclHeader != "" && aclHeader != "private" {
+		writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	w.(http.Flusher).Flush()
+}
+
 // GetObjectACLHandler - GET Object ACL
 // -----------------
 // This operation uses the ACL
@@ -110,7 +243,11 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	object := vars["object"]
+	object, err := url.PathUnescape(vars["object"])
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
@@ -126,7 +263,7 @@ func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.
 	}
 
 	// Before proceeding validate if object exists.
-	_, err := objAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
+	_, err = objAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return

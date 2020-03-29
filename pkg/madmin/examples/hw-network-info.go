@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -35,7 +36,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	st, err := madmClnt.ServerNetworkHardwareInfo()
+	st, err := madmClnt.ServerNetworkHardwareInfo(context.Background())
 	if err != nil {
 		log.Fatalln(err)
 	}

@@ -51,10 +51,6 @@ import (
 const (
 	// MinIO meta bucket.
 	minioMetaBucket = ".minio.sys"
-	// Background ops meta prefix
-	backgroundOpsMetaPrefix = "background-ops"
-	// MinIO Stats meta prefix.
-	minioMetaBackgroundOpsBucket = minioMetaBucket + SlashSeparator + backgroundOpsMetaPrefix
 	// Multipart meta prefix.
 	mpartMetaPrefix = "multipart"
 	// MinIO Multipart meta prefix.
@@ -77,7 +73,7 @@ func isMinioMetaBucketName(bucket string) bool {
 	return bucket == minioMetaBucket ||
 		bucket == minioMetaMultipartBucket ||
 		bucket == minioMetaTmpBucket ||
-		bucket == minioMetaBackgroundOpsBucket
+		bucket == dataUsageBucket
 }
 
 // IsValidBucketName verifies that a bucket name is in accordance with
@@ -165,10 +161,6 @@ func IsValidObjectPrefix(object string) bool {
 	if !utf8.ValidString(object) {
 		return false
 	}
-	// Reject unsupported characters in object name.
-	if strings.ContainsAny(object, `\`) {
-		return false
-	}
 	if strings.Contains(object, `//`) {
 		return false
 	}
@@ -200,6 +192,16 @@ const SlashSeparator = "/"
 // retainSlash - retains slash from a path.
 func retainSlash(s string) string {
 	return strings.TrimSuffix(s, SlashSeparator) + SlashSeparator
+}
+
+// pathsJoinPrefix - like pathJoin retains trailing SlashSeparator
+// for all elements, prepends them with 'prefix' respectively.
+func pathsJoinPrefix(prefix string, elem ...string) (paths []string) {
+	paths = make([]string, len(elem))
+	for i, e := range elem {
+		paths[i] = pathJoin(prefix, e)
+	}
+	return paths
 }
 
 // pathJoin - like path.Join() but retains trailing SlashSeparator of the last element
