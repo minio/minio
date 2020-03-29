@@ -475,6 +475,11 @@ type ObjectLegalHold struct {
 	Status  LegalHoldStatus `xml:"Status,omitempty"`
 }
 
+// IsEmpty returns true if struct is empty
+func (l *ObjectLegalHold) IsEmpty() bool {
+	return l.Status != ON && l.Status != OFF
+}
+
 // ParseObjectLegalHold decodes the XML into ObjectLegalHold
 func ParseObjectLegalHold(reader io.Reader) (hold *ObjectLegalHold, err error) {
 	if err = xml.NewDecoder(reader).Decode(&hold); err != nil {
@@ -483,9 +488,6 @@ func ParseObjectLegalHold(reader io.Reader) (hold *ObjectLegalHold, err error) {
 
 	if hold.Status != ON && hold.Status != OFF {
 		return nil, ErrMalformedXML
-	}
-	if hold.XMLNS == "" {
-		hold.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
 	}
 	return
 }

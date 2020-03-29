@@ -211,8 +211,9 @@ func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
 		// If OPA is not set, session token should
 		// have a policy and its mandatory, reject
 		// requests without policy claim.
-		_, pok := claims.Lookup(iamPolicyClaimName())
-		if !pok {
+		_, pokOpenID := claims.Lookup(iamPolicyClaimNameOpenID())
+		_, pokSA := claims.Lookup(iamPolicyClaimNameSA())
+		if !pokOpenID && !pokSA {
 			return nil, errAuthentication
 		}
 
@@ -226,7 +227,7 @@ func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
 		if err != nil {
 			// Base64 decoding fails, we should log to indicate
 			// something is malforming the request sent by client.
-			logger.LogIf(context.Background(), err, logger.Application)
+			logger.LogIf(r.Context(), err, logger.Application)
 			return nil, errAuthentication
 		}
 		claims.MapClaims[iampolicy.SessionPolicyName] = string(spBytes)
@@ -246,7 +247,7 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 	}
 	claims, err := getClaimsFromToken(r)
 	if err != nil {
-		return nil, toAPIErrorCode(context.Background(), err)
+		return nil, toAPIErrorCode(r.Context(), err)
 	}
 	return claims, ErrNone
 }
@@ -380,12 +381,11 @@ func isReqAuthenticated(ctx context.Context, r *http.Request, region string, sty
 		err                       error
 		contentMD5, contentSHA256 []byte
 	)
+
 	// Extract 'Content-Md5' if present.
-	if _, ok := r.Header[xhttp.ContentMD5]; ok {
-		contentMD5, err = base64.StdEncoding.Strict().DecodeString(r.Header.Get(xhttp.ContentMD5))
-		if err != nil || len(contentMD5) == 0 {
-			return ErrInvalidDigest
-		}
+	contentMD5, err = checkValidMD5(r.Header)
+	if err != nil {
+		return ErrInvalidDigest
 	}
 
 	// Extract either 'X-Amz-Content-Sha256' header or 'X-Amz-Content-Sha256' query parameter (if V4 presigned)
@@ -461,7 +461,7 @@ func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.handler.ServeHTTP(w, r)
 		return
 	}
-	writeErrorResponse(context.Background(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL, guessIsBrowserReq(r))
+	writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL, guessIsBrowserReq(r))
 }
 
 // isPutActionAllowed - check if PUT operation is allowed on the resource, this

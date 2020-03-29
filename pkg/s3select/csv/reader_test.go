@@ -63,7 +63,7 @@ func TestRead(t *testing.T) {
 			if err != nil {
 				break
 			}
-			record.WriteCSV(&result, []rune(c.fieldDelimiter)[0])
+			record.WriteCSV(&result, []rune(c.fieldDelimiter)[0], '"', false)
 			result.Truncate(result.Len() - 1)
 			result.WriteString(c.recordDelimiter)
 		}
@@ -243,7 +243,7 @@ func TestReadExtended(t *testing.T) {
 				}
 				if fields < 10 {
 					// Write with fixed delimiters, newlines.
-					err := record.WriteCSV(&result, ',')
+					err := record.WriteCSV(&result, ',', '"', false)
 					if err != nil {
 						t.Error(err)
 					}
@@ -454,7 +454,7 @@ func TestReadFailures(t *testing.T) {
 					break
 				}
 				// Write with fixed delimiters, newlines.
-				err := record.WriteCSV(&result, ',')
+				err := record.WriteCSV(&result, ',', '"', false)
 				if err != nil {
 					t.Error(err)
 				}

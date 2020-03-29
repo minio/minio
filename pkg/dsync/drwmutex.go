@@ -19,13 +19,10 @@ package dsync
 import (
 	"context"
 	"errors"
-	"fmt"
 	golog "log"
 	"math"
 	"math/rand"
 	"os"
-	"path"
-	"runtime"
 	"sync"
 	"time"
 )
@@ -51,7 +48,7 @@ const drwMutexInfinite = time.Duration(1<<63 - 1)
 
 // A DRWMutex is a distributed mutual exclusion lock.
 type DRWMutex struct {
-	Name         string
+	Names        []string
 	writeLocks   []string   // Array of nodes that granted a write lock
 	readersLocks [][]string // Array of array of nodes that granted reader locks
 	m            sync.Mutex // Mutex to prevent multiple simultaneous locks from this node
@@ -74,10 +71,10 @@ func isLocked(uid string) bool {
 }
 
 // NewDRWMutex - initializes a new dsync RW mutex.
-func NewDRWMutex(ctx context.Context, name string, clnt *Dsync) *DRWMutex {
+func NewDRWMutex(ctx context.Context, clnt *Dsync, names ...string) *DRWMutex {
 	return &DRWMutex{
-		Name:       name,
 		writeLocks: make([]string, len(clnt.GetLockersFn())),
+		Names:      names,
 		clnt:       clnt,
 		ctx:        ctx,
 	}
@@ -149,7 +146,7 @@ func (dm *DRWMutex) lockBlocking(timeout time.Duration, id, source string, isRea
 		locks := make([]string, len(restClnts))
 
 		// Try to acquire the lock.
-		success := lock(dm.clnt, &locks, dm.Name, id, source, isReadLock)
+		success := lock(dm.clnt, &locks, id, source, isReadLock, dm.Names...)
 		if success {
 			dm.m.Lock()
 
@@ -176,7 +173,7 @@ func (dm *DRWMutex) lockBlocking(timeout time.Duration, id, source string, isRea
 }
 
 // lock tries to acquire the distributed lock, returning true or false.
-func lock(ds *Dsync, locks *[]string, lockName, id, source string, isReadLock bool) bool {
+func lock(ds *Dsync, locks *[]string, id, source string, isReadLock bool, lockNames ...string) bool {
 
 	restClnts := ds.GetLockersFn()
 
@@ -199,9 +196,9 @@ func lock(ds *Dsync, locks *[]string, lockName, id, source string, isReadLock bo
 			}
 
 			args := LockArgs{
-				UID:      id,
-				Resource: lockName,
-				Source:   source,
+				UID:       id,
+				Resources: lockNames,
+				Source:    source,
 			}
 
 			var locked bool
@@ -259,7 +256,7 @@ func lock(ds *Dsync, locks *[]string, lockName, id, source string, isReadLock bo
 						done = true
 						// Increment the number of grants received from the buffered channel.
 						i++
-						releaseAll(ds, locks, lockName, isReadLock, restClnts)
+						releaseAll(ds, locks, isReadLock, restClnts, lockNames...)
 					}
 				}
 			case <-timeout:
@@ -267,7 +264,7 @@ func lock(ds *Dsync, locks *[]string, lockName, id, source string, isReadLock bo
 				// timeout happened, maybe one of the nodes is slow, count
 				// number of locks to check whether we have quorum or not
 				if !quorumMet(locks, isReadLock, dquorum, dquorumReads) {
-					releaseAll(ds, locks, lockName, isReadLock, restClnts)
+					releaseAll(ds, locks, isReadLock, restClnts, lockNames...)
 				}
 			}
 
@@ -289,8 +286,8 @@ func lock(ds *Dsync, locks *[]string, lockName, id, source string, isReadLock bo
 			grantToBeReleased := <-ch
 			if grantToBeReleased.isLocked() {
 				// release lock
-				sendRelease(ds, restClnts[grantToBeReleased.index], lockName,
-					grantToBeReleased.lockUID, isReadLock)
+				sendRelease(ds, restClnts[grantToBeReleased.index],
+					grantToBeReleased.lockUID, isReadLock, lockNames...)
 			}
 		}
 	}(isReadLock)
@@ -321,10 +318,10 @@ func quorumMet(locks *[]string, isReadLock bool, quorum, quorumReads int) bool {
 }
 
 // releaseAll releases all locks that are marked as locked
-func releaseAll(ds *Dsync, locks *[]string, lockName string, isReadLock bool, restClnts []NetLocker) {
-	for lock := 0; lock < len(restClnts); lock++ {
+func releaseAll(ds *Dsync, locks *[]string, isReadLock bool, restClnts []NetLocker, lockNames ...string) {
+	for lock := range restClnts {
 		if isLocked((*locks)[lock]) {
-			sendRelease(ds, restClnts[lock], lockName, (*locks)[lock], isReadLock)
+			sendRelease(ds, restClnts[lock], (*locks)[lock], isReadLock, lockNames...)
 			(*locks)[lock] = ""
 		}
 	}
@@ -362,7 +359,7 @@ func (dm *DRWMutex) Unlock() {
 	}
 
 	isReadLock := false
-	unlock(dm.clnt, locks, dm.Name, isReadLock, restClnts)
+	unlock(dm.clnt, locks, isReadLock, restClnts, dm.Names...)
 }
 
 // RUnlock releases a read lock held on dm.
@@ -387,10 +384,10 @@ func (dm *DRWMutex) RUnlock() {
 	}
 
 	isReadLock := true
-	unlock(dm.clnt, locks, dm.Name, isReadLock, restClnts)
+	unlock(dm.clnt, locks, isReadLock, restClnts, dm.Names...)
 }
 
-func unlock(ds *Dsync, locks []string, name string, isReadLock bool, restClnts []NetLocker) {
+func unlock(ds *Dsync, locks []string, isReadLock bool, restClnts []NetLocker, names ...string) {
 
 	// We don't need to synchronously wait until we have released all the locks (or the quorum)
 	// (a subsequent lock will retry automatically in case it would fail to get quorum)
@@ -399,21 +396,21 @@ func unlock(ds *Dsync, locks []string, name string, isReadLock bool, restClnts [
 
 		if isLocked(locks[index]) {
 			// broadcast lock release to all nodes that granted the lock
-			sendRelease(ds, c, name, locks[index], isReadLock)
+			sendRelease(ds, c, locks[index], isReadLock, names...)
 		}
 	}
 }
 
 // sendRelease sends a release message to a node that previously granted a lock
-func sendRelease(ds *Dsync, c NetLocker, name, uid string, isReadLock bool) {
+func sendRelease(ds *Dsync, c NetLocker, uid string, isReadLock bool, names ...string) {
 	if c == nil {
 		log("Unable to call RUnlock", errors.New("netLocker is offline"))
 		return
 	}
 
 	args := LockArgs{
-		UID:      uid,
-		Resource: name,
+		UID:       uid,
+		Resources: names,
 	}
 	if isReadLock {
 		if _, err := c.RUnlock(args); err != nil {
@@ -425,38 +422,3 @@ func sendRelease(ds *Dsync, c NetLocker, name, uid string, isReadLock bool) {
 		}
 	}
 }
-
-// DRLocker returns a sync.Locker interface that implements
-// the Lock and Unlock methods by calling drw.RLock and drw.RUnlock.
-func (dm *DRWMutex) DRLocker() sync.Locker {
-	return (*drlocker)(dm)
-}
-
-type drlocker DRWMutex
-
-var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-func randString(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
-	}
-	return string(b)
-}
-
-func getSource() string {
-	var funcName string
-	pc, filename, lineNum, ok := runtime.Caller(2)
-	if ok {
-		filename = path.Base(filename)
-		funcName = runtime.FuncForPC(pc).Name()
-	} else {
-		filename = "<unknown>"
-		lineNum = 0
-	}
-
-	return fmt.Sprintf("[%s:%d:%s()]", filename, lineNum, funcName)
-}
-
-func (dr *drlocker) Lock()   { (*DRWMutex)(dr).RLock(randString(16), getSource()) }
-func (dr *drlocker) Unlock() { (*DRWMutex)(dr).RUnlock() }

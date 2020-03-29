@@ -65,19 +65,19 @@ func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport
 // * Add a new target in pkg/event/target package.
 // * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
 // * Handle the configuration in this function to create/add into TargetList.
-func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool) (targetList *event.TargetList, registerErr error) {
-	targetList = event.NewTargetList()
+func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool) (_ *event.TargetList, err error) {
+	targetList := event.NewTargetList()
 
-	// Automatially close all connections when an error occur
 	defer func() {
-		if registerErr != nil {
+		// Automatically close all connections to targets when an error occur
+		if err != nil {
 			for _, t := range targetList.TargetMap() {
 				_ = t.Close()
 			}
 		}
 	}()
 
-	if err := checkValidNotificationKeys(cfg); err != nil {
+	if err = checkValidNotificationKeys(cfg); err != nil {
 		return nil, err
 	}
 
@@ -353,6 +353,10 @@ var (
 			Value: "",
 		},
 		config.KV{
+			Key:   target.KafkaSASLMechanism,
+			Value: "plain",
+		},
+		config.KV{
 			Key:   target.KafkaClientTLSCert,
 			Value: "",
 		},
@@ -382,6 +386,10 @@ var (
 		},
 		config.KV{
 			Key:   target.KafkaQueueDir,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.KafkaVersion,
 			Value: "",
 		},
 	}
@@ -451,12 +459,18 @@ func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs
 			queueDirEnv = queueDirEnv + config.Default + k
 		}
 
+		versionEnv := target.EnvKafkaVersion
+		if k != config.Default {
+			versionEnv = versionEnv + config.Default + k
+		}
+
 		kafkaArgs := target.KafkaArgs{
 			Enable:     enabled,
 			Brokers:    brokers,
 			Topic:      env.Get(topicEnv, kv.Get(target.KafkaTopic)),
 			QueueDir:   env.Get(queueDirEnv, kv.Get(target.KafkaQueueDir)),
 			QueueLimit: queueLimit,
+			Version:    env.Get(versionEnv, kv.Get(target.KafkaVersion)),
 		}
 
 		tlsEnableEnv := target.EnvKafkaTLS
@@ -497,9 +511,14 @@ func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs
 		if k != config.Default {
 			saslPasswordEnv = saslPasswordEnv + config.Default + k
 		}
+		saslMechanismEnv := target.EnvKafkaSASLMechanism
+		if k != config.Default {
+			saslMechanismEnv = saslMechanismEnv + config.Default + k
+		}
 		kafkaArgs.SASL.Enable = env.Get(saslEnableEnv, kv.Get(target.KafkaSASL)) == config.EnableOn
 		kafkaArgs.SASL.User = env.Get(saslUsernameEnv, kv.Get(target.KafkaSASLUsername))
 		kafkaArgs.SASL.Password = env.Get(saslPasswordEnv, kv.Get(target.KafkaSASLPassword))
+		kafkaArgs.SASL.Mechanism = env.Get(saslMechanismEnv, kv.Get(target.KafkaSASLMechanism))
 
 		if err = kafkaArgs.Validate(); err != nil {
 			return nil, err

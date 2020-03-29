@@ -72,6 +72,18 @@ var (
 		"MINIO_CACHE_AFTER: Valid cache after value must be 0 or greater",
 	)
 
+	ErrInvalidCacheWatermarkLow = newErrFn(
+		"Invalid cache low watermark value",
+		"Please check the passed value",
+		"MINIO_CACHE_WATERMARK_LOW: Valid cache low watermark value must be between 0-100",
+	)
+
+	ErrInvalidCacheWatermarkHigh = newErrFn(
+		"Invalid cache high watermark value",
+		"Please check the passed value",
+		"MINIO_CACHE_WATERMARK_HIGH: Valid cache high watermark value must be between 0-100",
+	)
+
 	ErrInvalidCacheEncryptionKey = newErrFn(
 		"Invalid cache encryption master key value",
 		"Please check the passed value",

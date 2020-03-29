@@ -129,7 +129,7 @@ func (web *webAPIHandlers) StorageInfo(r *http.Request, args *WebGenericArgs, re
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
 	}
-	reply.StorageInfo = objectAPI.StorageInfo(ctx)
+	reply.StorageInfo = objectAPI.StorageInfo(ctx, false)
 	reply.UIVersion = browser.UIVersion
 	return nil
 }
@@ -176,7 +176,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 					return toJSONError(ctx, err)
 				}
 				if err = globalDNSConfig.Put(args.BucketName); err != nil {
-					objectAPI.DeleteBucket(ctx, args.BucketName)
+					objectAPI.DeleteBucket(ctx, args.BucketName, false)
 					return toJSONError(ctx, err)
 				}
 
@@ -254,7 +254,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 
 	deleteBucket := objectAPI.DeleteBucket
 
-	if err := deleteBucket(ctx, args.BucketName); err != nil {
+	if err := deleteBucket(ctx, args.BucketName, false); err != nil {
 		return toJSONError(ctx, err, args.BucketName)
 	}
 
@@ -691,6 +691,17 @@ next:
 			}
 			if authErr == errNoAuthToken {
 				// Check if object is allowed to be deleted anonymously
+				if !globalPolicySys.IsAllowed(policy.Args{
+					Action:          policy.DeleteObjectAction,
+					BucketName:      args.BucketName,
+					ConditionValues: getConditionValues(r, "", "", nil),
+					IsOwner:         false,
+					ObjectName:      objectName,
+				}) {
+					return toJSONError(ctx, errAccessDenied)
+				}
+
+				// Check if object is allowed to be deleted anonymously
 				if globalPolicySys.IsAllowed(policy.Args{
 					Action:          policy.BypassGovernanceRetentionAction,
 					BucketName:      args.BucketName,
@@ -710,16 +721,29 @@ next:
 			continue
 		}
 
-		if !globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     claims.AccessKey,
-			Action:          iampolicy.DeleteObjectAction,
-			BucketName:      args.BucketName,
-			ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
-			IsOwner:         owner,
-			ObjectName:      objectName,
-			Claims:          claims.Map(),
-		}) {
-			return toJSONError(ctx, errAccessDenied)
+		if authErr == errNoAuthToken {
+			// Check if object is allowed to be deleted anonymously
+			if !globalPolicySys.IsAllowed(policy.Args{
+				Action:          iampolicy.DeleteObjectAction,
+				BucketName:      args.BucketName,
+				ConditionValues: getConditionValues(r, "", "", nil),
+				IsOwner:         false,
+				ObjectName:      objectName,
+			}) {
+				return toJSONError(ctx, errAccessDenied)
+			}
+		} else {
+			if !globalIAMSys.IsAllowed(iampolicy.Args{
+				AccountName:     claims.AccessKey,
+				Action:          iampolicy.DeleteObjectAction,
+				BucketName:      args.BucketName,
+				ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
+				IsOwner:         owner,
+				ObjectName:      objectName,
+				Claims:          claims.Map(),
+			}) {
+				return toJSONError(ctx, errAccessDenied)
+			}
 		}
 
 		// For directories, list the contents recursively and remove.
@@ -2026,7 +2050,7 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 	}
 
 	clnt := &http.Client{
-		Transport: NewCustomHTTPTransport(),
+		Transport: NewGatewayHTTPTransport(),
 	}
 
 	resp, err := clnt.Do(req)
@@ -2035,6 +2059,7 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 		return toJSONError(ctx, err)
 	}
 	defer xhttp.DrainBody(resp.Body)
+
 	if resp.StatusCode != http.StatusOK {
 		return toJSONError(ctx, errors.New(resp.Status))
 	}

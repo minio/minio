@@ -60,11 +60,7 @@ func (c *CoreDNS) List() (map[string][]SrvRecord, error) {
 			if record.Key == "" {
 				continue
 			}
-			if _, ok := srvRecords[record.Key]; ok {
-				srvRecords[record.Key] = append(srvRecords[record.Key], record)
-			} else {
-				srvRecords[record.Key] = []SrvRecord{record}
-			}
+			srvRecords[record.Key] = append(srvRecords[record.Key], record)
 		}
 	}
 	return srvRecords, nil

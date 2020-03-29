@@ -105,6 +105,36 @@ func TestGetSetIndexesEnvOverride(t *testing.T) {
 			true,
 		},
 		{
+			[]string{"http://host{1...12}/data{1...12}"},
+			[]uint64{144},
+			[][]uint64{{16, 16, 16, 16, 16, 16, 16, 16, 16}},
+			16,
+			true,
+		},
+		{
+			[]string{"http://host{0...5}/data{1...28}"},
+			[]uint64{168},
+			[][]uint64{{12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12}},
+			12,
+			true,
+		},
+		// Incorrect custom set drive count.
+		{
+			[]string{"http://host{0...5}/data{1...28}"},
+			[]uint64{168},
+			nil,
+			10,
+			false,
+		},
+		// Failure not divisible number of disks.
+		{
+			[]string{"http://host{1...11}/data{1...11}"},
+			[]uint64{121},
+			nil,
+			11,
+			false,
+		},
+		{
 			[]string{"data{1...60}"},
 			nil,
 			nil,

@@ -86,7 +86,6 @@ func authenticateNode(accessKey, secretKey, audience string) (string, error) {
 	claims.SetExpiry(UTCNow().Add(defaultInterNodeJWTExpiry))
 	claims.SetAccessKey(accessKey)
 	claims.SetAudience(audience)
-	claims.SetIssuer(ReleaseTag)
 
 	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, claims)
 	return jwt.SignedString([]byte(secretKey))

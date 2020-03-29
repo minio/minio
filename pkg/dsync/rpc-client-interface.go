@@ -21,8 +21,8 @@ type LockArgs struct {
 	// Unique ID of lock/unlock request.
 	UID string
 
-	// Resource contains a entity to be locked/unlocked.
-	Resource string
+	// Resources contains single or multiple entries to be locked/unlocked.
+	Resources []string
 
 	// Source contains the line number, function and file name of the code
 	// on the client node that requested the lock.

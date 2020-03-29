@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -175,7 +176,7 @@ func TestListOnlineDisks(t *testing.T) {
 
 		// Cleanup from previous test.
 		obj.DeleteObject(context.Background(), bucket, object)
-		obj.DeleteBucket(context.Background(), bucket)
+		obj.DeleteBucket(context.Background(), bucket, false)
 
 		err = obj.MakeBucketWithLocation(context.Background(), "bucket", "")
 		if err != nil {
@@ -317,8 +318,8 @@ func TestDisksWithAllParts(t *testing.T) {
 	diskFailures[15] = "part.1"
 
 	for diskIndex, partName := range diskFailures {
-		for _, info := range partsMetadata[diskIndex].Erasure.Checksums {
-			if info.Name == partName {
+		for i := range partsMetadata[diskIndex].Erasure.Checksums {
+			if fmt.Sprintf("part.%d", i+1) == partName {
 				filePath := pathJoin(xlDisks[diskIndex].String(), bucket, object, partName)
 				f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_SYNC, 0)
 				if err != nil {

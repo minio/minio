@@ -1,4 +1,4 @@
-# MinIO Kubernetes YAML Files [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
+# MinIO Kubernetes YAML Files [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)  [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
 This document covers the steps needed to deploy MinIO on Kubernetes using plain `YAML` files.
 
@@ -34,9 +34,9 @@ This section uses following core components of Kubernetes:
 Run the below commands to get started quickly
 
 ```sh
-kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-standalone-pvc.yaml?raw=true
-kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-standalone-deployment.yaml?raw=true
-kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-standalone-service.yaml?raw=true
+kubectl create -f https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-standalone-pvc.yaml
+kubectl create -f https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-standalone-deployment.yaml
+kubectl create -f https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-standalone-service.yaml
 ```
 
 ### Create Persistent Volume Claim
@@ -47,7 +47,7 @@ Create a persistent volume claim (PVC) to request storage for the MinIO instance
 
 
 ```sh
-kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-standalone-pvc.yaml?raw=true
+kubectl create -f https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-standalone-pvc.yaml
 persistentvolumeclaim "minio-pv-claim" created
 ```
 
@@ -56,7 +56,7 @@ persistentvolumeclaim "minio-pv-claim" created
 A deployment encapsulates replica sets and pods. If a pod goes down, the replication controller makes sure another pod comes up automatically. This way, you won’t need to bother about pod failures and will have a stable MinIO service available. Create the Deployment using the following command:
 
 ```sh
-kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-standalone-deployment.yaml?raw=true
+kubectl create -f https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-standalone-deployment.yaml
 deployment "minio-deployment" created
 ```
 
@@ -67,7 +67,7 @@ Now that you have a MinIO deployment running, you may either access it internall
 In this example, we expose the MinIO Deployment by creating a LoadBalancer service. Create the MinIO service using the following command
 
 ```sh
-kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-standalone-service.yaml?raw=true
+kubectl create -f https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-standalone-service.yaml
 service "minio-service" created
 ```
 
@@ -120,9 +120,9 @@ This example uses following core components of Kubernetes:
 Run the below commands to get started quickly
 
 ```sh
-kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-distributed-headless-service.yaml?raw=true
-kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-distributed-statefulset.yaml?raw=true
-kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-distributed-service.yaml?raw=true
+kubectl create -f https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-distributed-headless-service.yaml
+kubectl create -f https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-distributed-statefulset.yaml
+kubectl create -f https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-distributed-service.yaml
 ```
 
 ### Create MinIO Headless Service
@@ -130,7 +130,7 @@ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/
 Headless Service controls the domain within which StatefulSets are created. The domain managed by this Service takes the form: `$(service name).$(namespace).svc.cluster.local` (where “cluster.local” is the cluster domain), and the pods in this domain take the form: `$(pod-name-{i}).$(service name).$(namespace).svc.cluster.local`. This is required to get a DNS resolvable URL for each of the pods created within the Statefulset. Create the Headless Service using the following command
 
 ```sh
-$ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-distributed-headless-service.yaml?raw=true
+$ kubectl create -f https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-distributed-headless-service.yaml
 service "minio" created
 ```
 
@@ -139,7 +139,7 @@ service "minio" created
 A StatefulSet provides a deterministic name and a unique identity to each pod, making it easy to deploy stateful distributed applications. To launch distributed MinIO you need to pass drive locations as parameters to the minio server command. Then, you’ll need to run the same command on all the participating pods. StatefulSets offer a perfect way to handle this requirement. Create the Statefulset using the following command:
 
 ```sh
-$ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-distributed-statefulset.yaml?raw=true
+$ kubectl create -f https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-distributed-statefulset.yaml
 statefulset "minio" created
 ```
 
@@ -148,7 +148,7 @@ statefulset "minio" created
 Now that you have a MinIO statefulset running, you may either access it internally (within the cluster) or expose it as a Service onto an external (outside of your cluster, maybe public internet) IP address, depending on your use case. You can achieve this using Services. There are 3 major service types — default type is ClusterIP, which exposes a service to connection from inside the cluster. NodePort and LoadBalancer are two types that expose services to external traffic. Create the MinIO service using the following command
 
 ```sh
-$ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-distributed-service.yaml?raw=true
+$ kubectl create -f https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-distributed-service.yaml
 service "minio-service" created
 ```
 
@@ -243,14 +243,14 @@ kubectl create secret generic gcs-credentials --from-file=/path/to/gcloud/creden
 Then download the `minio-gcs-gateway-deployment.yaml` file
 
 ```sh
-wget https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-gcs-gateway-deployment.yaml?raw=true
+wget https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-gcs-gateway-deployment.yaml
 ```
 
 Update the section `gcp_project_id` with your GCS project ID. Then run
 
 ```sh
 kubectl create -f minio-gcs-gateway-deployment.yaml
-kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-gcs-gateway-service.yaml?raw=true
+kubectl create -f https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-gcs-gateway-service.yaml
 ```
 
 ### Create GCS Credentials Secret
@@ -273,7 +273,7 @@ MinIO Gateway uses GCS as its storage backend and needs to use a GCP `projectid`
 GCS project ID. Create the Deployment using the following command
 
 ```sh
-kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-gcs-gateway-deployment.yaml?raw=true
+kubectl create -f https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-gcs-gateway-deployment.yaml
 deployment "minio-deployment" created
 ```
 
@@ -282,7 +282,7 @@ deployment "minio-deployment" created
 Now that you have a MinIO deployment running, you may either access it internally (within the cluster) or expose it as a Service onto an external (outside of your cluster, for example via public internet) IP address, depending on your use case. You can achieve this using Services. There are 3 major service types — default type is ClusterIP, which exposes a service to connection from inside the cluster. NodePort and LoadBalancer are two types that expose services to external traffic. Create the MinIO service using the following command
 
 ```sh
-kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/minio-gcs-gateway-service.yaml?raw=true
+kubectl create -f https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-gcs-gateway-service.yaml
 service "minio-service" created
 ```
 

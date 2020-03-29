@@ -18,6 +18,7 @@
 package madmin
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -81,10 +82,11 @@ const (
 
 // Drive state constants
 const (
-	DriveStateOk      string = "ok"
-	DriveStateOffline        = "offline"
-	DriveStateCorrupt        = "corrupt"
-	DriveStateMissing        = "missing"
+	DriveStateOk          string = "ok"
+	DriveStateOffline            = "offline"
+	DriveStateCorrupt            = "corrupt"
+	DriveStateMissing            = "missing"
+	DriveStateUnformatted        = "unformatted" // only returned by disk
 )
 
 // HealDriveInfo - struct for an individual drive info item.
@@ -195,8 +197,8 @@ func (hri *HealResultItem) GetOnlineCounts() (b, a int) {
 // forceStart and forceStop are mutually exclusive, you can either
 // set one of them to 'true'. If both are set 'forceStart' will be
 // honored.
-func (adm *AdminClient) Heal(bucket, prefix string, healOpts HealOpts,
-	clientToken string, forceStart, forceStop bool) (
+func (adm *AdminClient) Heal(ctx context.Context, bucket, prefix string,
+	healOpts HealOpts, clientToken string, forceStart, forceStop bool) (
 	healStart HealStartSuccess, healTaskStatus HealTaskStatus, err error) {
 
 	if forceStart && forceStop {
@@ -227,11 +229,12 @@ func (adm *AdminClient) Heal(bucket, prefix string, healOpts HealOpts,
 		queryVals.Set("forceStop", "true")
 	}
 
-	resp, err := adm.executeMethod("POST", requestData{
-		relPath:     path,
-		content:     body,
-		queryValues: queryVals,
-	})
+	resp, err := adm.executeMethod(ctx,
+		http.MethodPost, requestData{
+			relPath:     path,
+			content:     body,
+			queryValues: queryVals,
+		})
 	defer closeResponse(resp)
 	if err != nil {
 		return healStart, healTaskStatus, err
@@ -274,13 +277,16 @@ func (adm *AdminClient) Heal(bucket, prefix string, healOpts HealOpts,
 type BgHealState struct {
 	ScannedItemsCount int64
 	LastHealActivity  time.Time
+	NextHealRound     time.Time
 }
 
 // BackgroundHealStatus returns the background heal status of the
 // current server or cluster.
-func (adm *AdminClient) BackgroundHealStatus() (BgHealState, error) {
+func (adm *AdminClient) BackgroundHealStatus(ctx context.Context) (BgHealState, error) {
 	// Execute POST request to background heal status api
-	resp, err := adm.executeMethod("POST", requestData{relPath: adminAPIPrefix + "/background-heal/status"})
+	resp, err := adm.executeMethod(ctx,
+		http.MethodPost,
+		requestData{relPath: adminAPIPrefix + "/background-heal/status"})
 	if err != nil {
 		return BgHealState{}, err
 	}

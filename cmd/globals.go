@@ -144,8 +144,11 @@ var (
 
 	globalNotificationSys  *NotificationSys
 	globalConfigTargetList *event.TargetList
-	globalPolicySys        *PolicySys
-	globalIAMSys           *IAMSys
+	// globalEnvTargetList has list of targets configured via env.
+	globalEnvTargetList *event.TargetList
+
+	globalPolicySys *PolicySys
+	globalIAMSys    *IAMSys
 
 	globalLifecycleSys       *LifecycleSys
 	globalBucketSSEConfigSys *BucketSSEConfigSys
@@ -185,10 +188,13 @@ var (
 	// Global HTTP request statisitics
 	globalHTTPStats = newHTTPStats()
 
-	// Time when object layer was initialized on start up.
-	globalBootTime time.Time
+	// Time when the server is started
+	globalBootTime = UTCNow()
 
 	globalActiveCred auth.Credentials
+
+	// Hold the old server credentials passed by the environment
+	globalOldCred auth.Credentials
 
 	// Indicates if config is to be encrypted
 	globalConfigEncrypted bool

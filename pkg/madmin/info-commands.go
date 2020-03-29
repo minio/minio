@@ -18,9 +18,11 @@
 package madmin
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -113,8 +115,8 @@ func (d1 BackendDisks) Merge(d2 BackendDisks) BackendDisks {
 
 // StorageInfo - Connect to a minio server and call Storage Info Management API
 // to fetch server's information represented by StorageInfo structure
-func (adm *AdminClient) StorageInfo() (StorageInfo, error) {
-	resp, err := adm.executeMethod("GET", requestData{relPath: adminAPIPrefix + "/storageinfo"})
+func (adm *AdminClient) StorageInfo(ctx context.Context) (StorageInfo, error) {
+	resp, err := adm.executeMethod(ctx, http.MethodGet, requestData{relPath: adminAPIPrefix + "/storageinfo"})
 	defer closeResponse(resp)
 	if err != nil {
 		return StorageInfo{}, err
@@ -155,23 +157,30 @@ var ObjectsHistogramIntervals = []objectHistogramInterval{
 	{"BETWEEN_10_MB_AND_64_MB", 1024 * 1024 * 10, 1024*1024*64 - 1},
 	{"BETWEEN_64_MB_AND_128_MB", 1024 * 1024 * 64, 1024*1024*128 - 1},
 	{"BETWEEN_128_MB_AND_512_MB", 1024 * 1024 * 128, 1024*1024*512 - 1},
-	{"GREATER_THAN_512_MB", 1024 * 1024 * 512, -1},
+	{"GREATER_THAN_512_MB", 1024 * 1024 * 512, math.MaxInt64},
 }
 
 // DataUsageInfo represents data usage of an Object API
 type DataUsageInfo struct {
-	LastUpdate            time.Time         `json:"lastUpdate"`
-	ObjectsCount          uint64            `json:"objectsCount"`
-	ObjectsTotalSize      uint64            `json:"objectsTotalSize"`
+	// LastUpdate is the timestamp of when the data usage info was last updated.
+	// This does not indicate a full scan.
+	LastUpdate       time.Time `json:"lastUpdate"`
+	ObjectsCount     uint64    `json:"objectsCount"`
+	ObjectsTotalSize uint64    `json:"objectsTotalSize"`
+
+	// ObjectsSizesHistogram contains information on objects across all buckets.
+	// See ObjectsHistogramIntervals.
 	ObjectsSizesHistogram map[string]uint64 `json:"objectsSizesHistogram"`
 
-	BucketsCount uint64            `json:"bucketsCount"`
+	BucketsCount uint64 `json:"bucketsCount"`
+
+	// BucketsSizes is "bucket name" -> size.
 	BucketsSizes map[string]uint64 `json:"bucketsSizes"`
 }
 
 // DataUsageInfo - returns data usage of the current object API
-func (adm *AdminClient) DataUsageInfo() (DataUsageInfo, error) {
-	resp, err := adm.executeMethod("GET", requestData{relPath: adminAPIPrefix + "/datausageinfo"})
+func (adm *AdminClient) DataUsageInfo(ctx context.Context) (DataUsageInfo, error) {
+	resp, err := adm.executeMethod(ctx, http.MethodGet, requestData{relPath: adminAPIPrefix + "/datausageinfo"})
 	defer closeResponse(resp)
 	if err != nil {
 		return DataUsageInfo{}, err
@@ -214,8 +223,8 @@ type BucketAccountingUsage struct {
 
 // AccountingUsageInfo returns the accounting usage info, currently it returns
 // the type of access of different accounts to the different buckets.
-func (adm *AdminClient) AccountingUsageInfo() (map[string]BucketAccountingUsage, error) {
-	resp, err := adm.executeMethod(http.MethodGet, requestData{relPath: adminAPIPrefix + "/accountingusageinfo"})
+func (adm *AdminClient) AccountingUsageInfo(ctx context.Context) (map[string]BucketAccountingUsage, error) {
+	resp, err := adm.executeMethod(ctx, http.MethodGet, requestData{relPath: adminAPIPrefix + "/accountingusageinfo"})
 	defer closeResponse(resp)
 	if err != nil {
 		return nil, err
@@ -252,16 +261,18 @@ type ServerDrivesPerfInfo struct {
 }
 
 // ServerDrivesPerfInfo - Returns drive's read and write performance information
-func (adm *AdminClient) ServerDrivesPerfInfo(size int64) ([]ServerDrivesPerfInfo, error) {
+func (adm *AdminClient) ServerDrivesPerfInfo(ctx context.Context, size int64) ([]ServerDrivesPerfInfo, error) {
 	v := url.Values{}
 	v.Set("perfType", string("drive"))
 
 	v.Set("size", strconv.FormatInt(size, 10))
 
-	resp, err := adm.executeMethod("GET", requestData{
-		relPath:     adminAPIPrefix + "/performance",
-		queryValues: v,
-	})
+	resp, err := adm.executeMethod(ctx, http.MethodGet,
+		requestData{
+			relPath:     adminAPIPrefix + "/performance",
+			queryValues: v,
+		},
+	)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -299,13 +310,15 @@ type ServerCPULoadInfo struct {
 }
 
 // ServerCPULoadInfo - Returns cpu utilization information
-func (adm *AdminClient) ServerCPULoadInfo() ([]ServerCPULoadInfo, error) {
+func (adm *AdminClient) ServerCPULoadInfo(ctx context.Context) ([]ServerCPULoadInfo, error) {
 	v := url.Values{}
 	v.Set("perfType", string("cpu"))
-	resp, err := adm.executeMethod("GET", requestData{
-		relPath:     adminAPIPrefix + "/performance",
-		queryValues: v,
-	})
+	resp, err := adm.executeMethod(ctx,
+		http.MethodGet, requestData{
+			relPath:     adminAPIPrefix + "/performance",
+			queryValues: v,
+		},
+	)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -343,13 +356,16 @@ type ServerMemUsageInfo struct {
 }
 
 // ServerMemUsageInfo - Returns mem utilization information
-func (adm *AdminClient) ServerMemUsageInfo() ([]ServerMemUsageInfo, error) {
+func (adm *AdminClient) ServerMemUsageInfo(ctx context.Context) ([]ServerMemUsageInfo, error) {
 	v := url.Values{}
 	v.Set("perfType", string("mem"))
-	resp, err := adm.executeMethod("GET", requestData{
-		relPath:     adminAPIPrefix + "/performance",
-		queryValues: v,
-	})
+	resp, err := adm.executeMethod(ctx,
+		http.MethodGet,
+		requestData{
+			relPath:     adminAPIPrefix + "/performance",
+			queryValues: v,
+		},
+	)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -385,16 +401,19 @@ type NetPerfInfo struct {
 }
 
 // NetPerfInfo - Returns network performance information of all cluster nodes.
-func (adm *AdminClient) NetPerfInfo(size int) (map[string][]NetPerfInfo, error) {
+func (adm *AdminClient) NetPerfInfo(ctx context.Context, size int) (map[string][]NetPerfInfo, error) {
 	v := url.Values{}
 	v.Set("perfType", "net")
 	if size > 0 {
 		v.Set("size", strconv.Itoa(size))
 	}
-	resp, err := adm.executeMethod("GET", requestData{
-		relPath:     adminAPIPrefix + "/performance",
-		queryValues: v,
-	})
+	resp, err := adm.executeMethod(ctx,
+		http.MethodGet,
+		requestData{
+			relPath:     adminAPIPrefix + "/performance",
+			queryValues: v,
+		},
+	)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -501,13 +520,13 @@ const (
 	ErasureType = backendType("Erasure")
 )
 
-// FsBackend contains specific FS storage information
-type FsBackend struct {
+// FSBackend contains specific FS storage information
+type FSBackend struct {
 	Type backendType `json:"backendType,omitempty"`
 }
 
-// XlBackend contains specific erasure storage information
-type XlBackend struct {
+// XLBackend contains specific erasure storage information
+type XLBackend struct {
 	Type         backendType `json:"backendType,omitempty"`
 	OnlineDisks  int         `json:"onlineDisks,omitempty"`
 	OfflineDisks int         `json:"offlineDisks,omitempty"`
@@ -549,9 +568,11 @@ type Disk struct {
 
 // ServerInfo - Connect to a minio server and call Server Admin Info Management API
 // to fetch server's information represented by infoMessage structure
-func (adm *AdminClient) ServerInfo() (InfoMessage, error) {
-
-	resp, err := adm.executeMethod("GET", requestData{relPath: adminAPIPrefix + "/info"})
+func (adm *AdminClient) ServerInfo(ctx context.Context) (InfoMessage, error) {
+	resp, err := adm.executeMethod(ctx,
+		http.MethodGet,
+		requestData{relPath: adminAPIPrefix + "/info"},
+	)
 	defer closeResponse(resp)
 	if err != nil {
 		return InfoMessage{}, err

@@ -97,10 +97,12 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListUsers")
 
-	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.ListUsersAdminAction)
+	objectAPI, cred := validateAdminUsersReq(ctx, w, r, iampolicy.ListUsersAdminAction)
 	if objectAPI == nil {
 		return
 	}
+
+	password := cred.SecretKey
 
 	allCredentials, err := globalIAMSys.ListUsers()
 	if err != nil {
@@ -114,7 +116,6 @@ func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	password := globalActiveCred.SecretKey
 	econfigData, err := madmin.EncryptData(password, data)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -376,6 +377,121 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 			logger.LogIf(ctx, nerr.Err)
 		}
 	}
+}
+
+// AddServiceAccount - PUT /minio/admin/v2/add-service-account?parentUser=<parent_user_accesskey>
+func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AddServiceAccount")
+
+	objectAPI, cred := validateAdminUsersReq(ctx, w, r, iampolicy.CreateUserAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		return
+	}
+
+	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
+		// More than maxConfigSize bytes were available
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigTooLarge), r.URL)
+		return
+	}
+
+	password := cred.SecretKey
+	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
+		return
+	}
+
+	var createReq madmin.AddServiceAccountReq
+	if err = json.Unmarshal(configBytes, &createReq); err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
+		return
+	}
+
+	if createReq.Parent == "" {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminInvalidArgument), r.URL)
+		return
+	}
+
+	// Disallow creating service accounts for the root user
+	if createReq.Parent == globalActiveCred.AccessKey {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAddServiceAccountInvalidArgument), r.URL)
+		return
+	}
+
+	creds, err := globalIAMSys.NewServiceAccount(ctx, createReq.Parent, createReq.Policy)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// Notify all other Minio peers to reload user
+	for _, nerr := range globalNotificationSys.LoadUser(creds.AccessKey, false) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+
+	var createResp = madmin.AddServiceAccountResp{
+		Credentials: creds,
+	}
+
+	data, err := json.Marshal(createResp)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	econfigData, err := madmin.EncryptData(password, data)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, econfigData)
+}
+
+// GetServiceAccount - GET /minio/admin/v2/get-service-account?accessKey=<access_key>
+func (a adminAPIHandlers) GetServiceAccount(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetServiceAccount")
+
+	objectAPI, cred := validateAdminUsersReq(ctx, w, r, iampolicy.GetUserAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	accessKey := vars["accessKey"]
+
+	password := cred.SecretKey
+
+	creds, err := globalIAMSys.GetServiceAccount(ctx, accessKey)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	data, err := json.Marshal(creds)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	econfigData, err := madmin.EncryptData(password, data)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, econfigData)
 }
 
 // InfoCannedPolicy - GET /minio/admin/v2/info-canned-policy?name={policyName}

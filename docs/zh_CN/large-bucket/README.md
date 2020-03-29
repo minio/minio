@@ -1,4 +1,4 @@
-# 超大存储桶快速入门 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
+# 超大存储桶快速入门 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)  [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
 MinIO的纠删码功能限制了最多只能使用16块磁盘。这就限制了一个租户的数据可以用多少存储空间。不过，为了满足需要大量磁盘或者是超大容量存储空间的需求，我们引入了超大存储桶的支持。
 

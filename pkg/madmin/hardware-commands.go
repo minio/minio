@@ -18,6 +18,7 @@
 package madmin
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net"
@@ -47,13 +48,15 @@ type ServerCPUHardwareInfo struct {
 }
 
 // ServerCPUHardwareInfo - Returns cpu hardware information
-func (adm *AdminClient) ServerCPUHardwareInfo() ([]ServerCPUHardwareInfo, error) {
+func (adm *AdminClient) ServerCPUHardwareInfo(ctx context.Context) ([]ServerCPUHardwareInfo, error) {
 	v := url.Values{}
 	v.Set(HARDWARE, string(CPU))
-	resp, err := adm.executeMethod("GET", requestData{
-		relPath:     adminAPIPrefix + "/hardware",
-		queryValues: v,
-	})
+	resp, err := adm.executeMethod(ctx,
+		http.MethodGet, requestData{
+			relPath:     adminAPIPrefix + "/hardware",
+			queryValues: v,
+		},
+	)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -88,13 +91,15 @@ type ServerNetworkHardwareInfo struct {
 }
 
 // ServerNetworkHardwareInfo - Returns network hardware information
-func (adm *AdminClient) ServerNetworkHardwareInfo() ([]ServerNetworkHardwareInfo, error) {
+func (adm *AdminClient) ServerNetworkHardwareInfo(ctx context.Context) ([]ServerNetworkHardwareInfo, error) {
 	v := url.Values{}
 	v.Set(HARDWARE, string(NETWORK))
-	resp, err := adm.executeMethod("GET", requestData{
-		relPath:     "/v1/hardware",
-		queryValues: v,
-	})
+	resp, err := adm.executeMethod(ctx,
+		http.MethodGet, requestData{
+			relPath:     "/v1/hardware",
+			queryValues: v,
+		},
+	)
 
 	defer closeResponse(resp)
 	if err != nil {

@@ -11,11 +11,13 @@ import (
 )
 
 var writeTests = []struct {
-	Input   [][]string
-	Output  string
-	Error   error
-	UseCRLF bool
-	Comma   rune
+	Input       [][]string
+	Output      string
+	Error       error
+	UseCRLF     bool
+	Comma       rune
+	Quote       rune
+	AlwaysQuote bool
 }{
 	{Input: [][]string{{"abc"}}, Output: "abc\n"},
 	{Input: [][]string{{"abc"}}, Output: "abc\r\n", UseCRLF: true},
@@ -46,6 +48,7 @@ var writeTests = []struct {
 	{Input: [][]string{{"a", "a", ""}}, Output: "a|a|\n", Comma: '|'},
 	{Input: [][]string{{",", ",", ""}}, Output: ",|,|\n", Comma: '|'},
 	{Input: [][]string{{"foo"}}, Comma: '"', Error: errInvalidDelim},
+	{Input: [][]string{{"a", "a", ""}}, Quote: '"', AlwaysQuote: true, Output: "\"a\"|\"a\"|\"\"\n", Comma: '|'},
 }
 
 func TestWrite(t *testing.T) {
@@ -56,6 +59,10 @@ func TestWrite(t *testing.T) {
 		if tt.Comma != 0 {
 			f.Comma = tt.Comma
 		}
+		if tt.Quote != 0 {
+			f.Quote = tt.Quote
+		}
+		f.AlwaysQuote = tt.AlwaysQuote
 		err := f.WriteAll(tt.Input)
 		if err != tt.Error {
 			t.Errorf("Unexpected error:\ngot  %v\nwant %v", err, tt.Error)

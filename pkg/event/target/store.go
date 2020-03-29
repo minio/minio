@@ -112,8 +112,9 @@ func sendEvents(target event.Target, eventKeyCh <-chan string, doneCh <-chan str
 				loggerOnce(context.Background(),
 					fmt.Errorf("target.Send() failed with '%w'", err),
 					target.ID())
-				continue
 			}
+
+			// Retrying after 3secs back-off
 
 			select {
 			case <-retryTicker.C:

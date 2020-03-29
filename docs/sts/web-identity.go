@@ -143,6 +143,7 @@ func main() {
 
 	ddoc, err := parseDiscoveryDoc(configEndpoint)
 	if err != nil {
+		log.Println(fmt.Errorf("Failed to parse OIDC discovery document %s", err))
 		fmt.Println(err)
 		return
 	}
@@ -157,16 +158,22 @@ func main() {
 			TokenURL: ddoc.TokenEndpoint,
 		},
 		RedirectURL: fmt.Sprintf("http://localhost:%d/oauth2/callback", port),
-		Scopes:      []string{"openid"},
+		Scopes:      ddoc.ScopesSupported,
 	}
 
 	state := randomState()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("%s %s", r.Method, r.RequestURI)
+		if r.RequestURI != "/" {
+			http.NotFound(w, r)
+			return
+		}
 		http.Redirect(w, r, config.AuthCodeURL(state), http.StatusFound)
 	})
 
 	http.HandleFunc("/oauth2/callback", func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("%s %s", r.Method, r.RequestURI)
 		if r.URL.Query().Get("state") != state {
 			http.Error(w, "state did not match", http.StatusBadRequest)
 			return
@@ -189,12 +196,10 @@ func main() {
 
 		sts, err := credentials.NewSTSWebIdentity(stsEndpoint, getWebTokenExpiry)
 		if err != nil {
+			log.Println(fmt.Errorf("Could not get STS credentials: %s", err))
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
-		// Uncomment this to use MinIO API operations by initializing minio
-		// client with obtained credentials.
 
 		opts := &minio.Options{
 			Creds:        sts,
@@ -203,23 +208,40 @@ func main() {
 
 		u, err := url.Parse(stsEndpoint)
 		if err != nil {
+			log.Println(fmt.Errorf("Failed to parse STS Endpoint: %s", err))
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
 		clnt, err := minio.NewWithOptions(u.Host, opts)
 		if err != nil {
+			log.Println(fmt.Errorf("Error while initializing Minio client, %s", err))
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		buckets, err := clnt.ListBuckets()
 		if err != nil {
+			log.Println(fmt.Errorf("Error while listing buckets, %s", err))
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		creds, _ := sts.Get()
+
+		bucketNames := []string{}
+
 		for _, bucket := range buckets {
-			log.Println(bucket)
+			log.Println(fmt.Sprintf("Bucket discovered: %s", bucket.Name))
+			bucketNames = append(bucketNames, bucket.Name)
 		}
+		response := make(map[string]interface{})
+		response["credentials"] = creds
+		response["buckets"] = bucketNames
+		c, err := json.MarshalIndent(response, "", "\t")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Write(c)
 	})
 
 	address := fmt.Sprintf("localhost:%v", port)

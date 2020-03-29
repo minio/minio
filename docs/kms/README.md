@@ -401,7 +401,7 @@ export MINIO_KMS_KES_ENDPOINT=https://localhost:7373
 export MINIO_KMS_KES_KEY_FILE=minio.key
 export MINIO_KMS_KES_CERT_FILE=minio.cert
 export MINIO_KMS_KES_KEY_NAME=minio-key-1
-export MINIO_KMS_KES_CAPATH=kes-tls.crt
+export MINIO_KMS_KES_CA_PATH=kes-tls.crt
 ```
 > The `MINIO_KMS_KES_CAPATH` is only required since we use self-signed certificates.
 

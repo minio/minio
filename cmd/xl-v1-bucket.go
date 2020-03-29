@@ -102,7 +102,7 @@ func undoMakeBucket(storageDisks []StorageAPI, bucket string) {
 		}
 		index := index
 		g.Go(func() error {
-			_ = storageDisks[index].DeleteVol(bucket)
+			_ = storageDisks[index].DeleteVol(bucket, false)
 			return nil
 		}, index)
 	}
@@ -209,10 +209,10 @@ func deleteDanglingBucket(ctx context.Context, storageDisks []StorageAPI, dErrs 
 	for index, err := range dErrs {
 		if err == errVolumeNotEmpty {
 			// Attempt to delete bucket again.
-			if derr := storageDisks[index].DeleteVol(bucket); derr == errVolumeNotEmpty {
+			if derr := storageDisks[index].DeleteVol(bucket, false); derr == errVolumeNotEmpty {
 				_ = cleanupDir(ctx, storageDisks[index], bucket, "")
 
-				_ = storageDisks[index].DeleteVol(bucket)
+				_ = storageDisks[index].DeleteVol(bucket, false)
 
 				// Cleanup all the previously incomplete multiparts.
 				_ = cleanupDir(ctx, storageDisks[index], minioMetaMultipartBucket, bucket)
@@ -222,7 +222,7 @@ func deleteDanglingBucket(ctx context.Context, storageDisks []StorageAPI, dErrs 
 }
 
 // DeleteBucket - deletes a bucket.
-func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
+func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	// Collect if all disks report volume not found.
 	storageDisks := xl.getDisks()
 
@@ -232,7 +232,7 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 		index := index
 		g.Go(func() error {
 			if storageDisks[index] != nil {
-				if err := storageDisks[index].DeleteVol(bucket); err != nil {
+				if err := storageDisks[index].DeleteVol(bucket, forceDelete); err != nil {
 					return err
 				}
 				err := cleanupDir(ctx, storageDisks[index], minioMetaMultipartBucket, bucket)
@@ -247,6 +247,17 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
 
 	// Wait for all the delete vols to finish.
 	dErrs := g.Wait()
+
+	if forceDelete {
+		for _, err := range dErrs {
+			if err != nil {
+				undoDeleteBucket(storageDisks, bucket)
+				return toObjectErr(err, bucket)
+			}
+		}
+
+		return nil
+	}
 
 	writeQuorum := len(storageDisks)/2 + 1
 	err := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, writeQuorum)

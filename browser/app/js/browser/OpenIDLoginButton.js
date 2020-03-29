@@ -27,7 +27,7 @@ export class OpenIDLoginButton extends React.Component {
 
   handleClick(event) {
     event.stopPropagation()
-    const { authorizationEndpoint, clientId } = this.props
+    const { authEp, authScopes, clientId } = this.props
 
     let redirectURI = window.location.href.split("#")[0]
     if (redirectURI.endsWith('/')) {
@@ -40,7 +40,7 @@ export class OpenIDLoginButton extends React.Component {
     const nonce = getRandomString(16)
     storage.setItem(OPEN_ID_NONCE_KEY, nonce)
 
-    const authURL = buildOpenIDAuthURL(authorizationEndpoint, redirectURI, clientId, nonce)
+    const authURL = buildOpenIDAuthURL(authEp, authScopes, redirectURI, clientId, nonce)
     window.location = authURL
   }
 

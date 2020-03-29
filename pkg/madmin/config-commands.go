@@ -19,14 +19,16 @@ package madmin
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 )
 
 // GetConfig - returns the config.json of a minio setup, incoming data is encrypted.
-func (adm *AdminClient) GetConfig() ([]byte, error) {
+func (adm *AdminClient) GetConfig(ctx context.Context) ([]byte, error) {
 	// Execute GET on /minio/admin/v2/config to get config of a setup.
-	resp, err := adm.executeMethod(http.MethodGet,
+	resp, err := adm.executeMethod(ctx,
+		http.MethodGet,
 		requestData{relPath: adminAPIPrefix + "/config"})
 	defer closeResponse(resp)
 	if err != nil {
@@ -41,7 +43,7 @@ func (adm *AdminClient) GetConfig() ([]byte, error) {
 }
 
 // SetConfig - set config supplied as config.json for the setup.
-func (adm *AdminClient) SetConfig(config io.Reader) (err error) {
+func (adm *AdminClient) SetConfig(ctx context.Context, config io.Reader) (err error) {
 	const maxConfigJSONSize = 256 * 1024 // 256KiB
 
 	// Read configuration bytes
@@ -65,7 +67,7 @@ func (adm *AdminClient) SetConfig(config io.Reader) (err error) {
 	}
 
 	// Execute PUT on /minio/admin/v2/config to set config.
-	resp, err := adm.executeMethod(http.MethodPut, reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {

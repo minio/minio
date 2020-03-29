@@ -110,6 +110,10 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		adminRouter.Methods(http.MethodPut).Path(adminAPIVersionPrefix+"/set-user-status").HandlerFunc(httpTraceHdrs(adminAPI.SetUserStatus)).
 			Queries("accessKey", "{accessKey:.*}").Queries("status", "{status:.*}")
 
+		// Service accounts ops
+		adminRouter.Methods(http.MethodPut).Path(adminAPIVersionPrefix + "/add-service-account").HandlerFunc(httpTraceHdrs(adminAPI.AddServiceAccount))
+		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix+"/get-service-account").HandlerFunc(httpTraceHdrs(adminAPI.GetServiceAccount)).Queries("accessKey", "{accessKey:.*}")
+
 		// Info policy IAM
 		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix+"/info-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.InfoCannedPolicy)).Queries("name", "{name:.*}")
 
@@ -161,6 +165,12 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 	// -- KMS APIs --
 	//
 	adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix + "/kms/key/status").HandlerFunc(httpTraceAll(adminAPI.KMSKeyStatusHandler))
+
+	if !globalIsGateway {
+
+		// -- OBD API --
+		adminRouter.Methods(http.MethodGet).Path(adminAPIVersionPrefix+"/obdinfo").HandlerFunc(httpTraceHdrs(adminAPI.OBDInfoHandler)).Queries("perfdrive", "{perfdrive:true|false}", "perfnet", "{perfnet:true|false}", "minioinfo", "{minioinfo:true|false}", "minioconfig", "{minioconfig:true|false}", "syscpu", "{syscpu:true|false}", "sysdiskhw", "{sysdiskhw:true|false}", "sysosinfo", "{sysosinfo:true|false}", "sysmem", "{sysmem:true|false}", "sysprocess", "{sysprocess:true|false}")
+	}
 
 	// If none of the routes match add default error handler routes
 	adminRouter.NotFoundHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))

@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -36,7 +37,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	st, err := madmClnt.NetPerfInfo(madmin.DefaultNetPerfSize)
+	st, err := madmClnt.NetPerfInfo(context.Background(), madmin.DefaultNetPerfSize)
 	if err != nil {
 		log.Fatalln(err)
 	}

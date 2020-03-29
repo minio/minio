@@ -20,6 +20,7 @@ package main
  */
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -39,7 +40,7 @@ func main() {
 	}
 
 	// List buckets that need healing
-	healBucketsList, err := madmClnt.ListBucketsHeal()
+	healBucketsList, err := madmClnt.ListBucketsHeal(context.Background())
 	if err != nil {
 		log.Fatalln(err)
 	}
