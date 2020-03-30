@@ -111,6 +111,7 @@ func (d *dataUsageCache) find(path string) *dataUsageEntry {
 }
 
 // dui converts the flattened version of the path to DataUsageInfo.
+// As a side effect d will be flattened, use a clone if this is not ok.
 func (d *dataUsageCache) dui(path string, buckets []BucketInfo) DataUsageInfo {
 	e := d.find(path)
 	if e == nil {
@@ -152,6 +153,31 @@ func (d *dataUsageCache) replaceHashed(hash dataUsageHash, parent *dataUsageHash
 		d.Cache = make(map[dataUsageHash]dataUsageEntry, 100)
 	}
 	d.Cache[hash] = e
+	if parent != nil {
+		p := d.Cache[*parent]
+		p.addChild(hash)
+		d.Cache[*parent] = p
+	}
+}
+
+// copyWithChildren will copy entry with hash from src if it exists along with any children.
+// If a parent is specified it will be added to that if not already there.
+// If the parent does not exist, it will be added.
+func (d *dataUsageCache) copyWithChildren(src *dataUsageCache, hash dataUsageHash, parent *dataUsageHash) {
+	if d.Cache == nil {
+		d.Cache = make(map[dataUsageHash]dataUsageEntry, 100)
+	}
+	e, ok := src.Cache[hash]
+	if !ok {
+		return
+	}
+	d.Cache[hash] = e
+	for ch := range e.Children {
+		if ch == hash {
+			panic("dataUsageCache.copyWithChildren: Circular reference.")
+		}
+		d.copyWithChildren(src, ch, &hash)
+	}
 	if parent != nil {
 		p := d.Cache[*parent]
 		p.addChild(hash)

@@ -202,9 +202,12 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			return nil, ctx.Err()
 		default:
 		}
-		if f.withFilter != nil {
-			// If folder isn't in filter, skip it completely.
+		thisHash := hashPath(folder.name)
+
+		if _, ok := f.oldCache.Cache[thisHash]; f.withFilter != nil && ok {
+			// If folder isn't in filter and we have data, skip it completely.
 			if !f.withFilter.containsDir(folder.name) {
+				f.newCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
 				// TODO: Disable, too verbose.
 				if f.dataUsageCrawlDebug {
 					logger.Info(color.Green("data-usage:")+" Skipping non-updated folder: %v", folder.name)
@@ -216,7 +219,6 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		sleepDuration(dataUsageSleepPerFolder, f.dataUsageCrawlMult)
 
 		cache := dataUsageEntry{}
-		thisHash := hashPath(folder.name)
 
 		err := readDirFn(path.Join(f.root, folder.name), func(entName string, typ os.FileMode) error {
 			// Parse
@@ -403,7 +405,7 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 	}
 
 	if s.dataUsageCrawlDebug {
-		logger.Info(logPrefix+"Cycle: %v"+logSuffix, cache.Info.NextCycle)
+		logger.Info(logPrefix+"Cycle: %v, Entries: %v"+logSuffix, cache.Info.NextCycle, len(cache.Cache))
 	}
 
 	// Always scan flattenLevels deep. Cache root is level 0.
@@ -445,6 +447,7 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 			logger.Info("data-usage: no disk usage provided")
 			continue
 		}
+
 		s.newCache.replace(folder.name, "", *du)
 		// Add to parent manually
 		if folder.parent != nil {
@@ -494,7 +497,9 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 		}
 		s.newCache.replaceHashed(h, folder.parent, *du)
 	}
-
+	if s.dataUsageCrawlDebug {
+		logger.Info(logPrefix+"Finished crawl, %v entries"+logSuffix, len(s.newCache.Cache))
+	}
 	s.newCache.Info.LastUpdate = UTCNow()
 	s.newCache.Info.NextCycle++
 	return s.newCache, nil
