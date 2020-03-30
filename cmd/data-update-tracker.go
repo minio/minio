@@ -101,7 +101,7 @@ func emptyBloomFilter() bloomFilter {
 // containsDir returns whether the bloom filter contains a directory.
 // Note that objects in XL mode are also considered directories.
 func (b bloomFilter) containsDir(in string) bool {
-	split := strings.Split(in, SlashSeparator)
+	split := strings.Split(path.Clean(in), SlashSeparator)
 
 	// Trim empty start/end
 	for len(split) > 0 {
