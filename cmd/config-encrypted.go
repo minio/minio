@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"unicode/utf8"
 
 	etcd "github.com/coreos/etcd/clientv3"
@@ -48,12 +47,18 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 	//    of the object layer.
 	retryTimerCh := newRetryTimerSimple(doneCh)
 	var stop bool
+
+	rquorum := InsufficientReadQuorum{}
+	wquorum := InsufficientWriteQuorum{}
+	bucketNotFound := BucketNotFound{}
+
 	for !stop {
 		select {
 		case <-retryTimerCh:
 			if encrypted, err = checkBackendEncrypted(objAPI); err != nil {
-				if err == errDiskNotFound ||
-					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) {
+				if errors.Is(err, errDiskNotFound) ||
+					errors.As(err, &rquorum) ||
+					errors.As(err, &bucketNotFound) {
 					logger.Info("Waiting for config backend to be encrypted..")
 					continue
 				}
@@ -100,9 +105,10 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 		case <-retryTimerCh:
 			// Migrate IAM configuration
 			if err = migrateConfigPrefixToEncrypted(objAPI, globalOldCred, encrypted); err != nil {
-				if err == errDiskNotFound ||
-					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
+				if errors.Is(err, errDiskNotFound) ||
+					errors.As(err, &rquorum) ||
+					errors.As(err, &wquorum) ||
+					errors.As(err, &bucketNotFound) {
 					logger.Info("Waiting for config backend to be encrypted..")
 					continue
 				}

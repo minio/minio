@@ -559,7 +559,7 @@ func (a *azureObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketI
 }
 
 // DeleteBucket - delete a container on azure, uses Azure equivalent `ContainerURL.Delete`.
-func (a *azureObjects) DeleteBucket(ctx context.Context, bucket string) error {
+func (a *azureObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	containerURL := a.client.NewContainerURL(bucket)
 	_, err := containerURL.Delete(ctx, azblob.ContainerAccessConditions{})
 	return azureToObjectError(err, bucket)

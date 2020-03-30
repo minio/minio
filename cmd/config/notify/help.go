@@ -364,6 +364,7 @@ var (
 		config.HelpKV{
 			Key:         target.MySQLDSNString,
 			Description: "MySQL data-source-name connection string",
+			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{

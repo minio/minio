@@ -110,7 +110,7 @@ func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool
 		// or create format.json
 		return true
 	}
-	storedDiskID, err := s.storage.getDiskID()
+	storedDiskID, err := s.storage.GetDiskID()
 	if err == nil && diskID == storedDiskID {
 		// If format.json is available and request sent the right disk-id, we allow the request
 		return true
@@ -227,7 +227,8 @@ func (s *storageRESTServer) DeleteVolHandler(w http.ResponseWriter, r *http.Requ
 	}
 	vars := mux.Vars(r)
 	volume := vars[storageRESTVolume]
-	err := s.storage.DeleteVol(volume)
+	forceDelete := vars[storageRESTForceDelete] == "true"
+	err := s.storage.DeleteVol(volume, forceDelete)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}
