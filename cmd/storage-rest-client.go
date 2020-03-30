@@ -195,6 +195,10 @@ func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache
 	return newCache, newCache.deserialize(b)
 }
 
+func (client *storageRESTClient) GetDiskID() (string, error) {
+	return client.diskID, nil
+}
+
 func (client *storageRESTClient) SetDiskID(id string) {
 	client.diskID = id
 }
@@ -253,9 +257,12 @@ func (client *storageRESTClient) StatVol(volume string) (volInfo VolInfo, err er
 }
 
 // DeleteVol - Deletes a volume over the network.
-func (client *storageRESTClient) DeleteVol(volume string) (err error) {
+func (client *storageRESTClient) DeleteVol(volume string, forceDelete bool) (err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
+	if forceDelete {
+		values.Set(storageRESTForceDelete, "true")
+	}
 	respBody, err := client.call(storageRESTMethodDeleteVol, values, nil, -1)
 	defer http.DrainBody(respBody)
 	return err

@@ -78,7 +78,12 @@ func (d *naughtyDisk) calcError() (err error) {
 	return nil
 }
 
+func (d *naughtyDisk) GetDiskID() (string, error) {
+	return d.disk.GetDiskID()
+}
+
 func (d *naughtyDisk) SetDiskID(id string) {
+	d.disk.SetDiskID(id)
 }
 
 func (d *naughtyDisk) UpdateBloomFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error) {
@@ -122,11 +127,11 @@ func (d *naughtyDisk) StatVol(volume string) (volInfo VolInfo, err error) {
 	}
 	return d.disk.StatVol(volume)
 }
-func (d *naughtyDisk) DeleteVol(volume string) (err error) {
+func (d *naughtyDisk) DeleteVol(volume string, forceDelete bool) (err error) {
 	if err := d.calcError(); err != nil {
 		return err
 	}
-	return d.disk.DeleteVol(volume)
+	return d.disk.DeleteVol(volume, forceDelete)
 }
 
 func (d *naughtyDisk) WalkSplunk(volume, path, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {

@@ -32,7 +32,7 @@ func (p *posixDiskIDCheck) String() string {
 }
 
 func (p *posixDiskIDCheck) IsOnline() bool {
-	storedDiskID, err := p.storage.getDiskID()
+	storedDiskID, err := p.storage.GetDiskID()
 	if err != nil {
 		return false
 	}
@@ -55,6 +55,10 @@ func (p *posixDiskIDCheck) Close() error {
 	return p.storage.Close()
 }
 
+func (p *posixDiskIDCheck) GetDiskID() (string, error) {
+	return p.diskID, nil
+}
+
 func (p *posixDiskIDCheck) SetDiskID(id string) {
 	p.diskID = id
 }
@@ -65,7 +69,7 @@ func (p *posixDiskIDCheck) isDiskStale() bool {
 		// or create format.json
 		return false
 	}
-	storedDiskID, err := p.storage.getDiskID()
+	storedDiskID, err := p.storage.GetDiskID()
 	if err == nil && p.diskID == storedDiskID {
 		return false
 	}
@@ -107,11 +111,11 @@ func (p *posixDiskIDCheck) StatVol(volume string) (vol VolInfo, err error) {
 	return p.storage.StatVol(volume)
 }
 
-func (p *posixDiskIDCheck) DeleteVol(volume string) (err error) {
+func (p *posixDiskIDCheck) DeleteVol(volume string, forceDelete bool) (err error) {
 	if p.isDiskStale() {
 		return errDiskNotFound
 	}
-	return p.storage.DeleteVol(volume)
+	return p.storage.DeleteVol(volume, forceDelete)
 }
 
 func (p *posixDiskIDCheck) Walk(volume, dirPath string, marker string, recursive bool, leafFile string, readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (chan FileInfo, error) {

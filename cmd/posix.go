@@ -428,7 +428,8 @@ func (s *posix) getVolDir(volume string) (string, error) {
 	return volumeDir, nil
 }
 
-func (s *posix) getDiskID() (string, error) {
+// GetDiskID - returns the cached disk uuid
+func (s *posix) GetDiskID() (string, error) {
 	s.RLock()
 	diskID := s.diskID
 	fileInfo := s.formatFileInfo
@@ -444,7 +445,7 @@ func (s *posix) getDiskID() (string, error) {
 	defer s.Unlock()
 
 	// If somebody else updated the disk ID and changed the time, return what they got.
-	if !s.formatLastCheck.Equal(lastCheck) {
+	if !lastCheck.IsZero() && !s.formatLastCheck.Equal(lastCheck) && diskID != "" {
 		// Somebody else got the lock first.
 		return diskID, nil
 	}
@@ -452,10 +453,13 @@ func (s *posix) getDiskID() (string, error) {
 	fi, err := os.Stat(formatFile)
 	if err != nil {
 		// If the disk is still not initialized.
-		return "", err
+		if os.IsNotExist(err) {
+			return "", errUnformattedDisk
+		}
+		return "", errCorruptedFormat
 	}
 
-	if xioutil.SameFile(fi, fileInfo) {
+	if xioutil.SameFile(fi, fileInfo) && diskID != "" {
 		// If the file has not changed, just return the cached diskID information.
 		s.formatLastCheck = time.Now()
 		return diskID, nil
@@ -463,12 +467,12 @@ func (s *posix) getDiskID() (string, error) {
 
 	b, err := ioutil.ReadFile(formatFile)
 	if err != nil {
-		return "", err
+		return "", errCorruptedFormat
 	}
 	format := &formatXLV3{}
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(b, &format); err != nil {
-		return "", err
+		return "", errCorruptedFormat
 	}
 	s.diskID = format.XL.This
 	s.formatFileInfo = fi
@@ -620,7 +624,7 @@ func (s *posix) StatVol(volume string) (volInfo VolInfo, err error) {
 }
 
 // DeleteVol - delete a volume.
-func (s *posix) DeleteVol(volume string) (err error) {
+func (s *posix) DeleteVol(volume string, forceDelete bool) (err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -631,7 +635,13 @@ func (s *posix) DeleteVol(volume string) (err error) {
 	if err != nil {
 		return err
 	}
-	err = os.Remove((volumeDir))
+
+	if forceDelete {
+		err = os.RemoveAll(volumeDir)
+	} else {
+		err = os.Remove(volumeDir)
+	}
+
 	if err != nil {
 		switch {
 		case os.IsNotExist(err):

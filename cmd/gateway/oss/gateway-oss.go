@@ -398,7 +398,7 @@ func (l *ossObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 }
 
 // DeleteBucket deletes a bucket on OSS.
-func (l *ossObjects) DeleteBucket(ctx context.Context, bucket string) error {
+func (l *ossObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	err := l.Client.DeleteBucket(bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)
