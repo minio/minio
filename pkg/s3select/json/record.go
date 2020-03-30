@@ -108,7 +108,7 @@ func (r *Record) Set(name string, value *sql.Value) (sql.Record, error) {
 }
 
 // WriteCSV - encodes to CSV data.
-func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune, quote rune, alwaysQuote bool) error {
+func (r *Record) WriteCSV(writer io.Writer, opts sql.WriteCSVOpts) error {
 	var csvRecord []string
 	for _, kv := range r.KVS {
 		var columnValue string
@@ -136,9 +136,10 @@ func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune, quote rune, alw
 	}
 
 	w := csv.NewWriter(writer)
-	w.Comma = fieldDelimiter
-	w.Quote = quote
-	w.AlwaysQuote = alwaysQuote
+	w.Comma = opts.FieldDelimiter
+	w.Quote = opts.Quote
+	w.AlwaysQuote = opts.AlwaysQuote
+	w.QuoteEscape = opts.QuoteEscape
 	if err := w.Write(csvRecord); err != nil {
 		return err
 	}
