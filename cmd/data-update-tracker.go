@@ -212,24 +212,20 @@ func (d *dataUpdateTracker) start(ctx context.Context, drives ...string) {
 // If object is shared the caller should lock it.
 func (d *dataUpdateTracker) load(ctx context.Context, drives []string) {
 	for _, drive := range drives {
-		func(drive string) {
-			cacheFormatPath := pathJoin(drive, dataUpdateTrackerFilename)
-			f, err := os.OpenFile(cacheFormatPath, os.O_RDWR, 0)
-
-			if err != nil {
-				if os.IsNotExist(err) {
-					return
-				}
-				logger.LogIf(ctx, err)
+		cacheFormatPath := pathJoin(drive, dataUpdateTrackerFilename)
+		f, err := os.Open(cacheFormatPath)
+		if err != nil {
+			if os.IsNotExist(err) {
 				return
 			}
-			defer f.Close()
-			err = d.deserialize(f, d.Saved)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				return
-			}
-		}(drive)
+			logger.LogIf(ctx, err)
+			return
+		}
+		err = d.deserialize(f, d.Saved)
+		if err != nil {
+			logger.LogIf(ctx, err)
+		}
+		f.Close()
 	}
 }
 
