@@ -357,7 +357,7 @@ func (s *peerRESTServer) LoadUsersHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err := globalIAMSys.Load()
+	err := globalIAMSys.Load(GlobalContext)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return

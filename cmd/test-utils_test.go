@@ -358,7 +358,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalConfigSys = NewConfigSys()
 
 	globalIAMSys = NewIAMSys()
-	globalIAMSys.Init(objLayer)
+	globalIAMSys.Init(GlobalContext, objLayer)
 
 	buckets, err := objLayer.ListBuckets(context.Background())
 	if err != nil {
@@ -1604,7 +1604,7 @@ func newTestObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err
 	globalConfigSys = NewConfigSys()
 
 	globalIAMSys = NewIAMSys()
-	globalIAMSys.Init(z)
+	globalIAMSys.Init(GlobalContext, z)
 
 	globalPolicySys = NewPolicySys()
 	globalPolicySys.Init(nil, z)
@@ -1908,7 +1908,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 
 	newAllSubsystems()
 
-	globalIAMSys.Init(objLayer)
+	globalIAMSys.Init(GlobalContext, objLayer)
 
 	buckets, err := objLayer.ListBuckets(context.Background())
 	if err != nil {
@@ -1964,7 +1964,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	}
 
 	globalIAMSys = NewIAMSys()
-	globalIAMSys.Init(objLayer)
+	globalIAMSys.Init(GlobalContext, objLayer)
 
 	buckets, err := objLayer.ListBuckets(context.Background())
 	if err != nil {

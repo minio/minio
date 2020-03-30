@@ -163,8 +163,8 @@ func decryptData(edata []byte, creds ...auth.Credentials) ([]byte, error) {
 	return data, err
 }
 
-func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
+func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) error {
+	ctx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
 	defer cancel()
 
 	encrypted, err := checkBackendEtcdEncrypted(ctx, client)
