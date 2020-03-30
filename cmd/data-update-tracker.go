@@ -98,6 +98,8 @@ func emptyBloomFilter() bloomFilter {
 	return bloomFilter{BloomFilter: &bloom.BloomFilter{}}
 }
 
+// containsDir returns whether the bloom filter contains a directory.
+// Note that objects in XL mode are also considered directories.
 func (b bloomFilter) containsDir(in string) bool {
 	split := strings.Split(in, SlashSeparator)
 
@@ -126,6 +128,7 @@ func (b bloomFilter) containsDir(in string) bool {
 	return b.Test(tmp[:])
 }
 
+// bytes returns the bloom filter serialized as a byte slice.
 func (b bloomFilter) bytes() []byte {
 	if b.BloomFilter == nil {
 		return nil
@@ -151,6 +154,8 @@ func (d dataUpdateTrackerHistory) sort() bool {
 	return d[0].idx-d[len(d)-1].idx == uint64(len(d))
 }
 
+// all returns whether the history is complete and there are no gaps.
+// The history will be sorted afterwards.
 func (d dataUpdateTrackerHistory) all() bool {
 	if len(d) == 0 {
 		return true
@@ -175,10 +180,12 @@ func (d *dataUpdateTrackerHistory) removeOlderThan(n uint64) {
 	*d = dd
 }
 
+// newBloomFilter returns a new bloom filter with default settings.
 func (d *dataUpdateTracker) newBloomFilter() bloomFilter {
 	return bloomFilter{bloom.NewWithEstimates(dataUpdateTrackerEstItems, dataUpdateTrackerFP)}
 }
 
+// current returns the current index.
 func (d *dataUpdateTracker) current() uint64 {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -346,6 +353,7 @@ func (d *dataUpdateTracker) serialize(dst io.Writer) (err error) {
 	return nil
 }
 
+// deserialize will deserialize the supplied input if the input is newer than the supplied time.
 func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) error {
 	ctx := context.Background()
 	var dst dataUpdateTracker
@@ -448,7 +456,6 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 				}
 				continue
 			}
-			in = path.Dir(in)
 			split := strings.Split(in, SlashSeparator)
 
 			// Trim empty start/end
@@ -474,7 +481,7 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 			d.mu.Lock()
 			for i := range split {
 				if d.debug {
-					logger.Info(color.Green("dataUpdateTracker:", "marking path dirty:", color.Blue(path.Join(split[:i+1]...))))
+					logger.Info(color.Green("dataUpdateTracker:") + " Marking path dirty: " + color.Blue(path.Join(split[:i+1]...)))
 				}
 				hashPath(path.Join(split[:i+1]...)).bytes(tmp[:])
 				d.Current.bf.Add(tmp[:])
@@ -484,6 +491,8 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 	}
 }
 
+// find entry with specified index.
+// Returns nil if not found.
 func (d dataUpdateTrackerHistory) find(idx uint64) *dataUpdateFilter {
 	for _, f := range d {
 		if f.idx == idx {
@@ -572,6 +581,8 @@ func (d *dataUpdateTracker) cycleFilter(ctx context.Context, oldest, current uin
 	return d.filterFrom(ctx, oldest, current), nil
 }
 
+// bloomFilterRequest request bloom filters.
+// Current index will be updated to current and entries back to Oldest is returned.
 type bloomFilterRequest struct {
 	Oldest  uint64
 	Current uint64

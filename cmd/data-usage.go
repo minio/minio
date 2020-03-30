@@ -64,7 +64,7 @@ func runDataUsageInfo(ctx context.Context, objAPI ObjectLayer) {
 	var buf bytes.Buffer
 	err := objAPI.GetObject(ctx, dataUsageBucket, dataUsageBloomName, 0, -1, &buf, "", ObjectOptions{})
 	if err != nil {
-		if !isErrObjectNotFound(err) {
+		if !isErrObjectNotFound(err) && !isErrBucketNotFound(err) {
 			logger.LogIf(ctx, err)
 		}
 	} else {
