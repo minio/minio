@@ -182,7 +182,7 @@ func (xl xlObjects) StorageInfo(ctx context.Context, local bool) StorageInfo {
 		disks = xl.getDisks()
 	} else {
 		for i, d := range xl.getDisks() {
-			if endpoints[i].IsLocal {
+			if endpoints[i].IsLocal && d.Hostname() == "" {
 				// Append this local disk since local flag is true
 				disks = append(disks, d)
 			}

@@ -60,12 +60,13 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 		deploymentID string
 		err          error
 
-		formats = make([]*formatXLV3, len(endpointZones))
-		z       = &xlZones{zones: make([]*xlSets, len(endpointZones))}
+		formats      = make([]*formatXLV3, len(endpointZones))
+		storageDisks = make([][]StorageAPI, len(endpointZones))
+		z            = &xlZones{zones: make([]*xlSets, len(endpointZones))}
 	)
 	local := endpointZones.FirstLocal()
 	for i, ep := range endpointZones {
-		formats[i], err = waitForFormatXL(local, ep.Endpoints, i+1,
+		storageDisks[i], formats[i], err = waitForFormatXL(local, ep.Endpoints, i+1,
 			ep.SetCount, ep.DrivesPerSet, deploymentID)
 		if err != nil {
 			return nil, err
@@ -73,7 +74,7 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 		if deploymentID == "" {
 			deploymentID = formats[i].ID
 		}
-		z.zones[i], err = newXLSets(ep.Endpoints, formats[i], ep.SetCount, ep.DrivesPerSet)
+		z.zones[i], err = newXLSets(ep.Endpoints, storageDisks[i], formats[i], ep.SetCount, ep.DrivesPerSet)
 		if err != nil {
 			return nil, err
 		}
@@ -325,7 +326,7 @@ func undoMakeBucketZones(bucket string, zones []*xlSets, errs []error) {
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return zones[index].DeleteBucket(context.Background(), bucket)
+				return zones[index].DeleteBucket(context.Background(), bucket, false)
 			}
 			return nil
 		}, index)
@@ -1231,9 +1232,9 @@ func (z *xlZones) IsCompressionSupported() bool {
 // DeleteBucket - deletes a bucket on all zones simultaneously,
 // even if one of the zones fail to delete buckets, we proceed to
 // undo a successful operation.
-func (z *xlZones) DeleteBucket(ctx context.Context, bucket string) error {
+func (z *xlZones) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	if z.SingleZone() {
-		return z.zones[0].DeleteBucket(ctx, bucket)
+		return z.zones[0].DeleteBucket(ctx, bucket, forceDelete)
 	}
 	g := errgroup.WithNErrs(len(z.zones))
 
@@ -1241,11 +1242,26 @@ func (z *xlZones) DeleteBucket(ctx context.Context, bucket string) error {
 	for index := range z.zones {
 		index := index
 		g.Go(func() error {
-			return z.zones[index].DeleteBucket(ctx, bucket)
+			return z.zones[index].DeleteBucket(ctx, bucket, forceDelete)
 		}, index)
 	}
 
 	errs := g.Wait()
+
+	if forceDelete {
+		for _, err := range errs {
+			if err != nil {
+				if _, ok := err.(InsufficientWriteQuorum); ok {
+					undoDeleteBucketZones(bucket, z.zones, errs)
+				}
+
+				return err
+			}
+		}
+
+		return nil
+	}
+
 	// For any write quorum failure, we undo all the delete buckets operation
 	// by creating all the buckets again.
 	for _, err := range errs {
