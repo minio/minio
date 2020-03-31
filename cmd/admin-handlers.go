@@ -1388,10 +1388,9 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 	w.Header().Set(xhttp.ContentType, string(mimeJSON))
 	w.WriteHeader(http.StatusOK)
 
+	enc := json.NewEncoder(w)
 	partialWrite := func() {
-		jsonBytes, _ := json.Marshal(obdInfo)
-		_, err := w.Write(jsonBytes)
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, enc.Encode(obdInfo))
 	}
 
 	finish := func() {
