@@ -49,6 +49,10 @@ import (
 	"github.com/gorilla/mux"
 )
 
+const (
+	slashSeparator = "/"
+)
+
 // IsErrIgnored returns whether given error is ignored or not.
 func IsErrIgnored(err error, ignoredErrs ...error) bool {
 	return IsErr(err, ignoredErrs...)
@@ -87,6 +91,22 @@ func path2BucketObjectWithBasePath(basePath, path string) (bucket, prefix string
 
 func path2BucketObject(s string) (bucket, prefix string) {
 	return path2BucketObjectWithBasePath("", s)
+}
+
+func getDefaultParityBlocks(drive int) int {
+	return drive / 2
+}
+
+func getDefaultDataBlocks(drive int) int {
+	return drive - getDefaultParityBlocks(drive)
+}
+
+func getReadQuorum(drive int) int {
+	return getDefaultDataBlocks(drive)
+}
+
+func getWriteQuorum(drive int) int {
+	return getDefaultDataBlocks(drive) + 1
 }
 
 // URI scheme constants.

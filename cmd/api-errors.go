@@ -211,6 +211,7 @@ const (
 	ErrInvalidResourceName
 	ErrServerNotInitialized
 	ErrOperationTimedOut
+	ErrOperationMaxedOut
 	ErrInvalidRequest
 	// MinIO storage class error codes
 	ErrInvalidStorageClass
@@ -1083,6 +1084,11 @@ var errorCodes = errorCodeMap{
 	ErrOperationTimedOut: {
 		Code:           "XMinioServerTimedOut",
 		Description:    "A timeout occurred while trying to lock a resource",
+		HTTPStatusCode: http.StatusRequestTimeout,
+	},
+	ErrOperationMaxedOut: {
+		Code:           "XMinioServerTimedOut",
+		Description:    "A timeout exceeded while waiting to proceed with the request",
 		HTTPStatusCode: http.StatusRequestTimeout,
 	},
 	ErrUnsupportedMetadata: {

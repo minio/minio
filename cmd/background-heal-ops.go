@@ -75,7 +75,7 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 			}
 
 			// Wait and proceed if there are active requests
-			waitForLowHTTPReq(int32(globalEndpoints.Nodes()))
+			waitForLowHTTPReq(int32(globalEndpoints.NEndpoints()))
 
 			var res madmin.HealResultItem
 			var err error

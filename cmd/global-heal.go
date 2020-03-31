@@ -61,6 +61,9 @@ func newBgHealSequence(numDisks int) *healSequence {
 		stopSignalCh:          make(chan struct{}),
 		ctx:                   ctx,
 		reportProgress:        false,
+		scannedItemsMap:       make(map[madmin.HealItemType]int64),
+		healedItemsMap:        make(map[madmin.HealItemType]int64),
+		healFailedItemsMap:    make(map[string]int64),
 	}
 }
 
@@ -71,7 +74,7 @@ func getLocalBackgroundHealStatus() madmin.BgHealState {
 	}
 
 	return madmin.BgHealState{
-		ScannedItemsCount: bgSeq.scannedItemsCount,
+		ScannedItemsCount: bgSeq.getScannedItemsCount(),
 		LastHealActivity:  bgSeq.lastHealActivity,
 		NextHealRound:     UTCNow().Add(durationToNextHealRound(bgSeq.lastHealActivity)),
 	}
@@ -126,12 +129,24 @@ func durationToNextHealRound(lastHeal time.Time) time.Duration {
 
 // Healing leader will take the charge of healing all erasure sets
 func execLeaderTasks(ctx context.Context, z *xlZones) {
-	lastScanTime := UTCNow() // So that we don't heal immediately, but after one month.
+	// So that we don't heal immediately, but after one month.
+	lastScanTime := UTCNow()
+	// Get background heal sequence to send elements to heal
+	var bgSeq *healSequence
+	var ok bool
+	for {
+		bgSeq, ok = globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
+		if ok {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.NewTimer(durationToNextHealRound(lastScanTime)).C:
+			bgSeq.resetHealStatusCounters()
 			for _, zone := range z.zones {
 				// Heal set by set
 				for i, set := range zone.sets {
