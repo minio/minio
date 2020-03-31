@@ -911,17 +911,13 @@ func (sys *NotificationSys) NetOBDInfo(ctx context.Context) madmin.ServerNetOBDI
 
 		        'x's should be tested, and 'o's should be skipped
 	*/
-	stripPath := func(hostPath string) string {
-		return strings.Split(hostPath, slashSeparator)[0]
-	}
 
 	hostSet := set.NewStringSet()
 	for _, ez := range globalEndpoints {
 		for _, e := range ez.Endpoints {
-			host := stripPath(e.Host)
-			if hostSet.Contains(host) {
-				sortedGlobalEndpoints = append(sortedGlobalEndpoints, host)
-				hostSet.Add(host)
+			if !hostSet.Contains(e.Host) {
+				sortedGlobalEndpoints = append(sortedGlobalEndpoints, e.Host)
+				hostSet.Add(e.Host)
 			}
 		}
 	}
