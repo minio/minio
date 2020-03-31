@@ -65,7 +65,7 @@ func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location
 		}, index)
 	}
 
-	writeQuorum := len(storageDisks)/2 + 1
+	writeQuorum := getWriteQuorum(len(storageDisks))
 	err := reduceWriteQuorumErrs(ctx, g.Wait(), bucketOpIgnoredErrs, writeQuorum)
 	if err == errXLWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
@@ -136,7 +136,7 @@ func (xl xlObjects) getBucketInfo(ctx context.Context, bucketName string) (bucke
 	// reduce to one error based on read quorum.
 	// `nil` is deliberately passed for ignoredErrs
 	// because these errors were already ignored.
-	readQuorum := len(xl.getDisks()) / 2
+	readQuorum := getReadQuorum(len(xl.getDisks()))
 	return BucketInfo{}, reduceReadQuorumErrs(ctx, bucketErrs, nil, readQuorum)
 }
 
@@ -259,7 +259,7 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete
 		return nil
 	}
 
-	writeQuorum := len(storageDisks)/2 + 1
+	writeQuorum := getWriteQuorum(len(storageDisks))
 	err := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, writeQuorum)
 	if err == errXLWriteQuorum {
 		undoDeleteBucket(storageDisks, bucket)

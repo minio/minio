@@ -81,7 +81,7 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 	// quorum intentionally, but rely on the default case scenario. Actual quorum
 	// verification will happen by top layer by using getObjectInfo() and will be
 	// ignored if necessary.
-	readQuorum := len(storageDisks) / 2
+	readQuorum := getReadQuorum(len(storageDisks))
 
 	return reduceReadQuorumErrs(context.Background(), g.Wait(), objectOpIgnoredErrs, readQuorum) == nil
 }

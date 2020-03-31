@@ -40,7 +40,7 @@ type endpointSet struct {
 
 // Supported set sizes this is used to find the optimal
 // single set size.
-var setSizes = []uint64{4, 6, 8, 10, 12, 14, 16}
+var setSizes = []uint64{4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 
 // getDivisibleSize - returns a greatest common divisor of
 // all the ellipses sizes.
@@ -60,7 +60,7 @@ func getDivisibleSize(totalSizes []uint64) (result uint64) {
 
 // isValidSetSize - checks whether given count is a valid set size for erasure coding.
 var isValidSetSize = func(count uint64) bool {
-	return (count >= setSizes[0] && count <= setSizes[len(setSizes)-1] && count%2 == 0)
+	return (count >= setSizes[0] && count <= setSizes[len(setSizes)-1])
 }
 
 // getSetIndexes returns list of indexes which provides the set size
