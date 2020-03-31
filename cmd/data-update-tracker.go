@@ -237,7 +237,8 @@ func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Durati
 	var buf bytes.Buffer
 	d.mu.Lock()
 	saveNow := d.save
-	exited := d.saveExited
+	exited := make(chan struct{})
+	d.saveExited = exited
 	d.mu.Unlock()
 	defer close(exited)
 	for {
