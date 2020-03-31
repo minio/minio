@@ -84,7 +84,7 @@ func newDataUpdateTracker() *dataUpdateTracker {
 		debug:      env.Get(envDataUsageCrawlDebug, config.EnableOff) == config.EnableOn,
 		input:      make(chan string, dataUpdateTrackerQueueSize),
 		save:       make(chan struct{}, 1),
-		saveExited: make(chan struct{}, 0),
+		saveExited: make(chan struct{}),
 	}
 	d.Current.bf = d.newBloomFilter()
 	return d
@@ -233,6 +233,7 @@ func (d *dataUpdateTracker) load(ctx context.Context, drives ...string) {
 // The saver will save and exit when supplied context is closed.
 func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Duration, drives []string) {
 	t := time.NewTicker(interval)
+	defer t.Stop()
 	var buf bytes.Buffer
 	d.mu.Lock()
 	saveNow := d.save
