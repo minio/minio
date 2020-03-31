@@ -1,4 +1,4 @@
-# MinIO共享后端存储快速入门[![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
+# MinIO共享后端存储快速入门[![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)  [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
 MinIO共享模式可以让你使用一个[NAS](https://en.wikipedia.org/wiki/Network-attached_storage) 做为多个MinIO服务的存储后端。我我们在设计时已经对多个MinIO服务之间的同步做了很多的处理。更多MinIO共享模式的设计文档，请访问[这里](https://github.com/minio/minio/blob/master/docs/shared-backend/DESIGN.md).
 

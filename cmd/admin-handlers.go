@@ -42,6 +42,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/cmd/logger/message/log"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/event/target"
@@ -1227,8 +1228,8 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 	for {
 		select {
 		case entry := <-logCh:
-			log := entry.(madmin.LogInfo)
-			if log.SendLog(node, logKind) {
+			log, ok := entry.(log.Info)
+			if ok && log.SendLog(node, logKind) {
 				if err := enc.Encode(log); err != nil {
 					return
 				}
@@ -1371,6 +1372,134 @@ func (a adminAPIHandlers) ServerHardwareInfoHandler(w http.ResponseWriter, r *ht
 	}
 }
 
+// OBDInfoHandler - GET /minio/admin/v2/obdinfo
+// ----------
+// Get server on-board diagnostics
+func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "OBDInfo")
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.OBDInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+	deadlinedCtx, cancel := context.WithDeadline(ctx, time.Now().Add(10*time.Minute))
+	obdInfo := madmin.OBDInfo{}
+
+	setCommonHeaders(w)
+	w.Header().Set(xhttp.ContentType, string(mimeJSON))
+	w.WriteHeader(http.StatusOK)
+
+	enc := json.NewEncoder(w)
+	partialWrite := func() {
+		logger.LogIf(ctx, enc.Encode(obdInfo))
+	}
+
+	finish := func() {
+		partialWrite()
+		w.(http.Flusher).Flush()
+		cancel()
+	}
+
+	errResp := func(err error) {
+		errorResponse := getAPIErrorResponse(ctx, toAdminAPIErr(ctx, err), r.URL.String(),
+			w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
+		encodedErrorResponse := encodeResponse(errorResponse)
+		obdInfo.Error = string(encodedErrorResponse)
+		finish()
+	}
+
+	nsLock := objectAPI.NewNSLock(deadlinedCtx, minioMetaBucket, "obd-in-progress")
+	if err := nsLock.GetLock(newDynamicTimeout(10*time.Minute, 600*time.Second)); err != nil { // returns a locked lock
+		errResp(err)
+		return
+	}
+	defer nsLock.Unlock()
+
+	vars := mux.Vars(r)
+
+	if cpu, ok := vars["syscpu"]; ok && cpu == "true" {
+		cpuInfo := getLocalCPUOBDInfo(deadlinedCtx)
+
+		obdInfo.Sys.CPUInfo = append(obdInfo.Sys.CPUInfo, cpuInfo)
+		obdInfo.Sys.CPUInfo = append(obdInfo.Sys.CPUInfo, globalNotificationSys.CPUOBDInfo(deadlinedCtx)...)
+		partialWrite()
+	}
+
+	if diskHw, ok := vars["sysdiskhw"]; ok && diskHw == "true" {
+		diskHwInfo := getLocalDiskHwOBD(deadlinedCtx)
+
+		obdInfo.Sys.DiskHwInfo = append(obdInfo.Sys.DiskHwInfo, diskHwInfo)
+		obdInfo.Sys.DiskHwInfo = append(obdInfo.Sys.DiskHwInfo, globalNotificationSys.DiskHwOBDInfo(deadlinedCtx)...)
+		partialWrite()
+	}
+
+	if osInfo, ok := vars["sysosinfo"]; ok && osInfo == "true" {
+		osInfo := getLocalOsInfoOBD(deadlinedCtx)
+
+		obdInfo.Sys.OsInfo = append(obdInfo.Sys.OsInfo, osInfo)
+		obdInfo.Sys.OsInfo = append(obdInfo.Sys.OsInfo, globalNotificationSys.OsOBDInfo(deadlinedCtx)...)
+		partialWrite()
+	}
+
+	if mem, ok := vars["sysmem"]; ok && mem == "true" {
+		memInfo := getLocalMemOBD(deadlinedCtx)
+
+		obdInfo.Sys.MemInfo = append(obdInfo.Sys.MemInfo, memInfo)
+		obdInfo.Sys.MemInfo = append(obdInfo.Sys.MemInfo, globalNotificationSys.MemOBDInfo(deadlinedCtx)...)
+		partialWrite()
+	}
+
+	if proc, ok := vars["sysprocess"]; ok && proc == "true" {
+		procInfo := getLocalProcOBD(deadlinedCtx)
+
+		obdInfo.Sys.ProcInfo = append(obdInfo.Sys.ProcInfo, procInfo)
+		obdInfo.Sys.ProcInfo = append(obdInfo.Sys.ProcInfo, globalNotificationSys.ProcOBDInfo(deadlinedCtx)...)
+		partialWrite()
+	}
+
+	if config, ok := vars["minioconfig"]; ok && config == "true" {
+		cfg, err := readServerConfig(ctx, objectAPI)
+		logger.LogIf(ctx, err)
+		obdInfo.Minio.Config = cfg
+		partialWrite()
+	}
+
+	if drive, ok := vars["perfdrive"]; ok && drive == "true" {
+		// Get drive obd details from local server's drive(s)
+		driveOBDSerial := getLocalDrivesOBD(deadlinedCtx, false, globalEndpoints, r)
+		driveOBDParallel := getLocalDrivesOBD(deadlinedCtx, true, globalEndpoints, r)
+
+		errStr := ""
+		if driveOBDSerial.Error != "" {
+			errStr = "serial: " + driveOBDSerial.Error
+		}
+		if driveOBDParallel.Error != "" {
+			errStr = errStr + " parallel: " + driveOBDParallel.Error
+		}
+
+		driveOBD := madmin.ServerDrivesOBDInfo{
+			Addr:     driveOBDSerial.Addr,
+			Serial:   driveOBDSerial.Serial,
+			Parallel: driveOBDParallel.Parallel,
+			Error:    errStr,
+		}
+		obdInfo.Perf.DriveInfo = append(obdInfo.Perf.DriveInfo, driveOBD)
+
+		// Notify all other MinIO peers to report drive obd numbers
+		driveOBDs := globalNotificationSys.DriveOBDInfo(deadlinedCtx)
+		obdInfo.Perf.DriveInfo = append(obdInfo.Perf.DriveInfo, driveOBDs...)
+
+		partialWrite()
+	}
+
+	if net, ok := vars["perfnet"]; ok && net == "true" && globalIsDistXL {
+		obdInfo.Perf.Net = append(obdInfo.Perf.Net, globalNotificationSys.NetOBDInfo(deadlinedCtx))
+		obdInfo.Perf.Net = append(obdInfo.Perf.Net, globalNotificationSys.DispatchNetOBDInfo(deadlinedCtx)...)
+		partialWrite()
+	}
+
+	finish()
+}
+
 // ServerInfoHandler - GET /minio/admin/v2/info
 // ----------
 // Get server information
@@ -1436,7 +1565,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 			OffDisks += v
 		}
 
-		backend = madmin.XlBackend{
+		backend = madmin.XLBackend{
 			Type:             madmin.ErasureType,
 			OnlineDisks:      OnDisks,
 			OfflineDisks:     OffDisks,
@@ -1446,7 +1575,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 			RRSCParity:       storageInfo.Backend.RRSCParity,
 		}
 	} else {
-		backend = madmin.FsBackend{
+		backend = madmin.FSBackend{
 			Type: madmin.FsType,
 		}
 	}
@@ -1532,7 +1661,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 func fetchLambdaInfo(cfg config.Config) []map[string][]madmin.TargetIDStatus {
 
 	// Fetch the targets
-	targetList, err := notify.RegisterNotificationTargets(cfg, GlobalServiceDoneCh, NewCustomHTTPTransport(), nil, true)
+	targetList, err := notify.RegisterNotificationTargets(cfg, GlobalServiceDoneCh, NewGatewayHTTPTransport(), nil, true)
 	if err != nil {
 		return nil
 	}

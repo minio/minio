@@ -689,17 +689,17 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 	if migrateSw {
 		go c.migrateCacheFromV1toV2(ctx)
 	}
-	go c.gc(ctx, GlobalServiceDoneCh)
+	go c.gc(ctx)
 	return c, nil
 }
 
-func (c *cacheObjects) gc(ctx context.Context, doneCh chan struct{}) {
+func (c *cacheObjects) gc(ctx context.Context) {
 	ticker := time.NewTicker(cacheGCInterval)
 
 	defer ticker.Stop()
 	for {
 		select {
-		case <-doneCh:
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			if c.migrating {
@@ -714,7 +714,7 @@ func (c *cacheObjects) gc(ctx context.Context, doneCh chan struct{}) {
 				go func(d *diskCache) {
 					defer wg.Done()
 					d.resetGCCounter()
-					d.purge(ctx, doneCh)
+					d.purge(ctx)
 				}(dcache)
 			}
 			wg.Wait()

@@ -188,8 +188,8 @@ var (
 	// Global HTTP request statisitics
 	globalHTTPStats = newHTTPStats()
 
-	// Time when object layer was initialized on start up.
-	globalBootTime time.Time
+	// Time when the server is started
+	globalBootTime = UTCNow()
 
 	globalActiveCred auth.Credentials
 

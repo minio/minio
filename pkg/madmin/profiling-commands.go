@@ -18,6 +18,7 @@
 package madmin
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,13 +53,15 @@ type StartProfilingResult struct {
 
 // StartProfiling makes an admin call to remotely start profiling on a standalone
 // server or the whole cluster in  case of a distributed setup.
-func (adm *AdminClient) StartProfiling(profiler ProfilerType) ([]StartProfilingResult, error) {
+func (adm *AdminClient) StartProfiling(ctx context.Context, profiler ProfilerType) ([]StartProfilingResult, error) {
 	v := url.Values{}
 	v.Set("profilerType", string(profiler))
-	resp, err := adm.executeMethod("POST", requestData{
-		relPath:     adminAPIPrefix + "/profiling/start",
-		queryValues: v,
-	})
+	resp, err := adm.executeMethod(ctx,
+		http.MethodPost, requestData{
+			relPath:     adminAPIPrefix + "/profiling/start",
+			queryValues: v,
+		},
+	)
 	defer closeResponse(resp)
 	if err != nil {
 		return nil, err
@@ -84,11 +87,13 @@ func (adm *AdminClient) StartProfiling(profiler ProfilerType) ([]StartProfilingR
 
 // DownloadProfilingData makes an admin call to download profiling data of a standalone
 // server or of the whole cluster in  case of a distributed setup.
-func (adm *AdminClient) DownloadProfilingData() (io.ReadCloser, error) {
+func (adm *AdminClient) DownloadProfilingData(ctx context.Context) (io.ReadCloser, error) {
 	path := fmt.Sprintf(adminAPIPrefix + "/profiling/download")
-	resp, err := adm.executeMethod("GET", requestData{
-		relPath: path,
-	})
+	resp, err := adm.executeMethod(ctx,
+		http.MethodGet, requestData{
+			relPath: path,
+		},
+	)
 
 	if err != nil {
 		closeResponse(resp)

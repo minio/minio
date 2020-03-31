@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2017-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,7 +126,7 @@ func (g *OSS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 		return nil, err
 	}
 	client.HTTPClient = &http.Client{
-		Transport: minio.NewCustomHTTPTransport(),
+		Transport: minio.NewGatewayHTTPTransport(),
 	}
 	return &ossObjects{
 		Client: client,
@@ -398,7 +398,7 @@ func (l *ossObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 }
 
 // DeleteBucket deletes a bucket on OSS.
-func (l *ossObjects) DeleteBucket(ctx context.Context, bucket string) error {
+func (l *ossObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	err := l.Client.DeleteBucket(bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)

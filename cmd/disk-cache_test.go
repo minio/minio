@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"net/http"
 	"testing"
 
 	"github.com/minio/minio/pkg/hash"
@@ -171,84 +170,6 @@ func TestCacheExclusion(t *testing.T) {
 		if cobjects.isCacheExclude(testCase.bucketName, testCase.objectName) != testCase.expectedResult {
 			t.Fatal("Cache exclusion test failed for case ", i)
 		}
-	}
-}
-
-// Test diskCache.
-func TestDiskCache(t *testing.T) {
-	fsDirs, err := getRandomDisks(1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	d, err := initDiskCaches(fsDirs, 100, 0, 80, 90, t)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c := cacheObjects{cache: d}
-
-	cache := c.cache[0]
-	ctx := context.Background()
-	bucketName := "testbucket"
-	objectName := "testobject"
-	content := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	etag := "061208c10af71a30c6dcd6cf5d89f0fe"
-	contentType := "application/zip"
-	size := len(content)
-
-	httpMeta := make(map[string]string)
-	httpMeta["etag"] = etag
-	httpMeta["content-type"] = contentType
-
-	objInfo := ObjectInfo{}
-	objInfo.Bucket = bucketName
-	objInfo.Name = objectName
-	objInfo.Size = int64(size)
-	objInfo.ContentType = contentType
-	objInfo.ETag = etag
-	objInfo.UserDefined = httpMeta
-	var opts ObjectOptions
-	byteReader := bytes.NewReader([]byte(content))
-	hashReader, err := hash.NewReader(byteReader, int64(size), "", "", int64(size), globalCLIContext.StrictS3Compat)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = cache.Put(ctx, bucketName, objectName, hashReader, hashReader.Size(), nil, ObjectOptions{UserDefined: httpMeta}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cReader, _, err := cache.Get(ctx, bucketName, objectName, nil, http.Header{
-		"Content-Type": []string{"application/json"},
-	}, opts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cachedObjInfo := cReader.ObjInfo
-	if !cache.Exists(ctx, bucketName, objectName) {
-		t.Fatal("Expected object to exist on cache")
-	}
-	if cachedObjInfo.ETag != objInfo.ETag {
-		t.Fatal("Expected ETag to match")
-	}
-	if cachedObjInfo.Size != objInfo.Size {
-		t.Fatal("Size mismatch")
-	}
-	if cachedObjInfo.ContentType != objInfo.ContentType {
-		t.Fatal("Cached content-type does not match")
-	}
-	writer := bytes.NewBuffer(nil)
-	_, err = io.Copy(writer, cReader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ccontent := writer.Bytes(); !bytes.Equal([]byte(content), ccontent) {
-		t.Errorf("wrong cached file content")
-	}
-	cReader.Close()
-
-	cache.Delete(ctx, bucketName, objectName)
-	online := cache.IsOnline()
-	if !online {
-		t.Errorf("expected cache drive to be online")
 	}
 }
 

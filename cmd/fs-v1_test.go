@@ -318,16 +318,16 @@ func TestFSDeleteBucket(t *testing.T) {
 	}
 
 	// Test with an invalid bucket name
-	if err = fs.DeleteBucket(context.Background(), "fo"); !isSameType(err, BucketNotFound{}) {
+	if err = fs.DeleteBucket(context.Background(), "fo", false); !isSameType(err, BucketNotFound{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
 	// Test with an inexistant bucket
-	if err = fs.DeleteBucket(context.Background(), "foobucket"); !isSameType(err, BucketNotFound{}) {
+	if err = fs.DeleteBucket(context.Background(), "foobucket", false); !isSameType(err, BucketNotFound{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with a valid case
-	if err = fs.DeleteBucket(context.Background(), bucketName); err != nil {
+	if err = fs.DeleteBucket(context.Background(), bucketName, false); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
@@ -335,7 +335,7 @@ func TestFSDeleteBucket(t *testing.T) {
 
 	// Delete bucket should get error disk not found.
 	os.RemoveAll(disk)
-	if err = fs.DeleteBucket(context.Background(), bucketName); err != nil {
+	if err = fs.DeleteBucket(context.Background(), bucketName, false); err != nil {
 		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error: ", err)
 		}
@@ -355,8 +355,6 @@ func TestFSListBuckets(t *testing.T) {
 	if err := obj.MakeBucketWithLocation(context.Background(), bucketName, ""); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
-
-	GlobalServiceDoneCh <- struct{}{}
 
 	// Create a bucket with invalid name
 	if err := os.MkdirAll(pathJoin(fs.fsPath, "vo^"), 0777); err != nil {
@@ -392,7 +390,7 @@ func TestFSHealObject(t *testing.T) {
 	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	_, err := obj.HealObject(context.Background(), "bucket", "object", false, false, madmin.HealDeepScan)
+	_, err := obj.HealObject(context.Background(), "bucket", "object", madmin.HealOpts{})
 	if err == nil || !isSameType(err, NotImplemented{}) {
 		t.Fatalf("Heal Object should return NotImplemented error ")
 	}
@@ -404,7 +402,7 @@ func TestFSHealObjects(t *testing.T) {
 	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	err := obj.HealObjects(context.Background(), "bucket", "prefix", nil)
+	err := obj.HealObjects(context.Background(), "bucket", "prefix", madmin.HealOpts{}, nil)
 	if err == nil || !isSameType(err, NotImplemented{}) {
 		t.Fatalf("Heal Object should return NotImplemented error ")
 	}

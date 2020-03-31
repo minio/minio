@@ -638,7 +638,7 @@ func listIAMConfigItems(objectAPI ObjectLayer, pathPrefix string, dirs bool,
 			if !globalSafeMode {
 				// Slow down listing and loading for config items to
 				// reduce load on the server
-				waitForLowHTTPReq(int32(globalEndpoints.Nodes()))
+				waitForLowHTTPReq(int32(globalEndpoints.NEndpoints()))
 			}
 
 			marker = lo.NextMarker
@@ -664,14 +664,15 @@ func listIAMConfigItems(objectAPI ObjectLayer, pathPrefix string, dirs bool,
 }
 
 func (iamOS *IAMObjectStore) watch(sys *IAMSys) {
+	ctx := GlobalContext
 	watchDisk := func() {
 		for {
 			select {
-			case <-GlobalServiceDoneCh:
+			case <-ctx.Done():
 				return
 			case <-time.NewTimer(globalRefreshIAMInterval).C:
 				err := iamOS.loadAll(sys, nil)
-				logger.LogIf(context.Background(), err)
+				logger.LogIf(ctx, err)
 			}
 		}
 	}

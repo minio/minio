@@ -101,28 +101,24 @@ type HTTPAPIStats struct {
 
 // Inc increments the api stats counter.
 func (stats *HTTPAPIStats) Inc(api string) {
-	stats.Lock()
-	defer stats.Unlock()
 	if stats == nil {
 		return
 	}
+	stats.Lock()
+	defer stats.Unlock()
 	if stats.apiStats == nil {
 		stats.apiStats = make(map[string]int)
 	}
-	if _, ok := stats.apiStats[api]; ok {
-		stats.apiStats[api]++
-		return
-	}
-	stats.apiStats[api] = 1
+	stats.apiStats[api]++
 }
 
 // Dec increments the api stats counter.
 func (stats *HTTPAPIStats) Dec(api string) {
-	stats.Lock()
-	defer stats.Unlock()
 	if stats == nil {
 		return
 	}
+	stats.Lock()
+	defer stats.Unlock()
 	if val, ok := stats.apiStats[api]; ok && val > 0 {
 		stats.apiStats[api]--
 	}

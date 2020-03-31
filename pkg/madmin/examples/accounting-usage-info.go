@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -36,7 +37,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	accountingUsageInfo, err := madmClnt.AccountingUsageInfo()
+	accountingUsageInfo, err := madmClnt.AccountingUsageInfo(context.Background())
 	if err != nil {
 		log.Fatalln(err)
 	}

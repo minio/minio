@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -39,7 +38,7 @@ var leaderLockTimeout = newDynamicTimeout(time.Minute, time.Minute)
 func newBgHealSequence(numDisks int) *healSequence {
 
 	reqInfo := &logger.ReqInfo{API: "BackgroundHeal"}
-	ctx := logger.SetReqInfo(context.Background(), reqInfo)
+	ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 
 	hs := madmin.HealOpts{
 		// Remove objects that do not have read-quorum
@@ -62,6 +61,9 @@ func newBgHealSequence(numDisks int) *healSequence {
 		stopSignalCh:          make(chan struct{}),
 		ctx:                   ctx,
 		reportProgress:        false,
+		scannedItemsMap:       make(map[madmin.HealItemType]int64),
+		healedItemsMap:        make(map[madmin.HealItemType]int64),
+		healFailedItemsMap:    make(map[string]int64),
 	}
 }
 
@@ -72,7 +74,7 @@ func getLocalBackgroundHealStatus() madmin.BgHealState {
 	}
 
 	return madmin.BgHealState{
-		ScannedItemsCount: bgSeq.scannedItemsCount,
+		ScannedItemsCount: bgSeq.getScannedItemsCount(),
 		LastHealActivity:  bgSeq.lastHealActivity,
 		NextHealRound:     UTCNow().Add(durationToNextHealRound(bgSeq.lastHealActivity)),
 	}
@@ -126,65 +128,48 @@ func durationToNextHealRound(lastHeal time.Time) time.Duration {
 }
 
 // Healing leader will take the charge of healing all erasure sets
-func execLeaderTasks(z *xlZones) {
-	ctx := context.Background()
-
-	// Hold a lock so only one server performs auto-healing
-	leaderLock := z.NewNSLock(ctx, minioMetaBucket, "leader")
+func execLeaderTasks(ctx context.Context, z *xlZones) {
+	// So that we don't heal immediately, but after one month.
+	lastScanTime := UTCNow()
+	// Get background heal sequence to send elements to heal
+	var bgSeq *healSequence
+	var ok bool
 	for {
-		err := leaderLock.GetLock(leaderLockTimeout)
-		if err == nil {
+		bgSeq, ok = globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
+		if ok {
 			break
 		}
-		time.Sleep(leaderTick)
+		time.Sleep(time.Second)
 	}
-
-	// Hold a lock for healing the erasure set
-	zeroDuration := time.Millisecond
-	zeroDynamicTimeout := newDynamicTimeout(zeroDuration, zeroDuration)
-
-	lastScanTime := time.Now() // So that we don't heal immediately, but after one month.
 	for {
-		time.Sleep(durationToNextHealRound(lastScanTime))
-		for _, zone := range z.zones {
-			// Heal set by set
-			for i, set := range zone.sets {
-				setLock := z.zones[0].NewNSLock(ctx, "system", fmt.Sprintf("erasure-set-heal-%d", i))
-				if err := setLock.GetLock(zeroDynamicTimeout); err != nil {
-					logger.LogIf(ctx, err)
-					continue
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.NewTimer(durationToNextHealRound(lastScanTime)).C:
+			bgSeq.resetHealStatusCounters()
+			for _, zone := range z.zones {
+				// Heal set by set
+				for i, set := range zone.sets {
+					if err := healErasureSet(ctx, i, set); err != nil {
+						logger.LogIf(ctx, err)
+						continue
+					}
 				}
-				if err := healErasureSet(ctx, i, set); err != nil {
-					setLock.Unlock()
-					logger.LogIf(ctx, err)
-					continue
-				}
-				setLock.Unlock()
 			}
+			lastScanTime = UTCNow()
 		}
-		lastScanTime = time.Now()
 	}
 }
 
-func startGlobalHeal() {
-	var objAPI ObjectLayer
-	for {
-		objAPI = newObjectLayerWithoutSafeModeFn()
-		if objAPI == nil {
-			time.Sleep(time.Second)
-			continue
-		}
-		break
-	}
-
+func startGlobalHeal(ctx context.Context, objAPI ObjectLayer) {
 	zones, ok := objAPI.(*xlZones)
 	if !ok {
 		return
 	}
 
-	execLeaderTasks(zones)
+	execLeaderTasks(ctx, zones)
 }
 
-func initGlobalHeal() {
-	go startGlobalHeal()
+func initGlobalHeal(ctx context.Context, objAPI ObjectLayer) {
+	go startGlobalHeal(ctx, objAPI)
 }

@@ -102,7 +102,7 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 
 	// Extract date, if not present throw error.
 	var dateStr string
-	if dateStr = req.Header.Get(http.CanonicalHeaderKey("x-amz-date")); dateStr == "" {
+	if dateStr = req.Header.Get("x-amz-date"); dateStr == "" {
 		if dateStr = r.Header.Get("Date"); dateStr == "" {
 			return cred, "", "", time.Time{}, ErrMissingDateHeader
 		}

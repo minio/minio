@@ -46,7 +46,7 @@ func (u Err) Clone() Err {
 	}
 }
 
-// Return the error message
+// Error returns the error message
 func (u Err) Error() string {
 	if u.detail == "" {
 		if u.msg != "" {

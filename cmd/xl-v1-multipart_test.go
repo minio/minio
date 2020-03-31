@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 )
@@ -35,10 +36,6 @@ func TestXLCleanupStaleMultipartUploads(t *testing.T) {
 	z := obj.(*xlZones)
 	xl := z.zones[0].sets[0]
 
-	// Close the go-routine, we are going to
-	// manually start it and test in this test case.
-	GlobalServiceDoneCh <- struct{}{}
-
 	bucketName := "bucket"
 	objectName := "object"
 	var opts ObjectOptions
@@ -49,19 +46,30 @@ func TestXLCleanupStaleMultipartUploads(t *testing.T) {
 		t.Fatal("Unexpected err: ", err)
 	}
 
-	go xl.cleanupStaleMultipartUploads(context.Background(), 20*time.Millisecond, 0, GlobalServiceDoneCh)
+	// Create a context we can cancel.
+	ctx, cancel := context.WithCancel(context.Background())
 
-	// Wait for 40ms such that - we have given enough time for
-	// cleanup routine to kick in.
-	time.Sleep(40 * time.Millisecond)
+	var cleanupWg sync.WaitGroup
+	cleanupWg.Add(1)
+	go func() {
+		defer cleanupWg.Done()
+		xl.cleanupStaleMultipartUploads(context.Background(), time.Millisecond, 0, ctx.Done())
+	}()
 
-	// Close the routine we do not need it anymore.
-	GlobalServiceDoneCh <- struct{}{}
+	// Wait for 100ms such that - we have given enough time for cleanup routine to kick in.
+	// Flaky on slow systems :/
+	time.Sleep(100 * time.Millisecond)
+
+	// Exit cleanup..
+	cancel()
+	cleanupWg.Wait()
 
 	// Check if upload id was already purged.
 	if err = obj.AbortMultipartUpload(context.Background(), bucketName, objectName, uploadID); err != nil {
 		if _, ok := err.(InvalidUploadID); !ok {
 			t.Fatal("Unexpected err: ", err)
 		}
+	} else {
+		t.Error("Item was not cleaned up.")
 	}
 }

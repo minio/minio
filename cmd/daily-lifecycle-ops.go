@@ -30,90 +30,27 @@ const (
 	bgLifecycleTick     = time.Hour
 )
 
-type lifecycleOps struct {
-	LastActivity time.Time
-}
-
-// Register to the daily objects listing
-var globalLifecycleOps = &lifecycleOps{}
-
-func getLocalBgLifecycleOpsStatus() BgLifecycleOpsStatus {
-	return BgLifecycleOpsStatus{
-		LastActivity: globalLifecycleOps.LastActivity,
-	}
-}
-
 // initDailyLifecycle starts the routine that receives the daily
 // listing of all objects and applies any matching bucket lifecycle
 // rules.
-func initDailyLifecycle() {
-	go startDailyLifecycle()
+func initDailyLifecycle(ctx context.Context, objAPI ObjectLayer) {
+	go startDailyLifecycle(ctx, objAPI)
 }
 
-func startDailyLifecycle() {
-	var objAPI ObjectLayer
-	var ctx = context.Background()
-
-	// Wait until the object API is ready
+func startDailyLifecycle(ctx context.Context, objAPI ObjectLayer) {
 	for {
-		objAPI = newObjectLayerWithoutSafeModeFn()
-		if objAPI == nil {
-			time.Sleep(time.Second)
-			continue
-		}
-		break
-	}
-
-	// Calculate the time of the last lifecycle operation in all peers node of the cluster
-	computeLastLifecycleActivity := func(status []BgOpsStatus) time.Time {
-		var lastAct time.Time
-		for _, st := range status {
-			if st.LifecycleOps.LastActivity.After(lastAct) {
-				lastAct = st.LifecycleOps.LastActivity
-			}
-		}
-		return lastAct
-	}
-
-	for {
-		// Check if we should perform lifecycle ops based on the last lifecycle activity, sleep one hour otherwise
-		allLifecycleStatus := []BgOpsStatus{
-			{LifecycleOps: getLocalBgLifecycleOpsStatus()},
-		}
-		if globalIsDistXL {
-			allLifecycleStatus = append(allLifecycleStatus, globalNotificationSys.BackgroundOpsStatus()...)
-		}
-		lastAct := computeLastLifecycleActivity(allLifecycleStatus)
-		if !lastAct.IsZero() && time.Since(lastAct) < bgLifecycleInterval {
-			time.Sleep(bgLifecycleTick)
-		}
-
-		// Perform one lifecycle operation
-		err := lifecycleRound(ctx, objAPI)
-		switch err.(type) {
-		// Unable to hold a lock means there is another
-		// instance doing the lifecycle round round
-		case OperationTimedOut:
-			time.Sleep(bgLifecycleTick)
-		default:
-			logger.LogIf(ctx, err)
-			time.Sleep(time.Minute)
-			continue
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.NewTimer(bgLifecycleInterval).C:
+			// Perform one lifecycle operation
+			logger.LogIf(ctx, lifecycleRound(ctx, objAPI))
 		}
 
 	}
 }
-
-var lifecycleLockTimeout = newDynamicTimeout(60*time.Second, time.Second)
 
 func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
-	// Lock to avoid concurrent lifecycle ops from other nodes
-	sweepLock := objAPI.NewNSLock(ctx, "system", "daily-lifecycle-ops")
-	if err := sweepLock.GetLock(lifecycleLockTimeout); err != nil {
-		return err
-	}
-	defer sweepLock.Unlock()
-
 	buckets, err := objAPI.ListBuckets(ctx)
 	if err != nil {
 		return err
@@ -160,7 +97,7 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 				break
 			}
 
-			waitForLowHTTPReq(int32(globalEndpoints.Nodes()))
+			waitForLowHTTPReq(int32(globalEndpoints.NEndpoints()))
 
 			// Deletes a list of objects.
 			deleteErrs, err := objAPI.DeleteObjects(ctx, bucket.Name, objects)

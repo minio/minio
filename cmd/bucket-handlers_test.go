@@ -29,6 +29,51 @@ import (
 	"github.com/minio/minio/pkg/auth"
 )
 
+// Wrapper for calling RemoveBucket HTTP handler tests for both XL multiple disks and single node setup.
+func TestRemoveBucketHandler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testRemoveBucketHandler, []string{"RemoveBucket"})
+}
+
+func testRemoveBucketHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials auth.Credentials, t *testing.T) {
+	_, err := obj.PutObject(context.Background(), bucketName, "test-object", mustGetPutObjReader(t, bytes.NewBuffer([]byte{}), int64(0), "", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"), ObjectOptions{})
+	// if object upload fails stop the test.
+	if err != nil {
+		t.Fatalf("Error uploading object: <ERROR> %v", err)
+	}
+
+	// initialize httptest Recorder, this records any mutations to response writer inside the handler.
+	rec := httptest.NewRecorder()
+	// construct HTTP request for DELETE bucket.
+	req, err := newTestSignedRequestV4("DELETE", getBucketLocationURL("", bucketName), 0, nil, credentials.AccessKey, credentials.SecretKey, nil)
+	if err != nil {
+		t.Fatalf("Test %s: Failed to create HTTP request for RemoveBucketHandler: <ERROR> %v", instanceType, err)
+	}
+	// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+	// Call the ServeHTTP to execute the handler.
+	apiRouter.ServeHTTP(rec, req)
+	switch rec.Code {
+	case http.StatusOK, http.StatusCreated, http.StatusAccepted, http.StatusNoContent:
+		t.Fatalf("Test %v: expected failure, but succeeded with %v", instanceType, rec.Code)
+	}
+
+	// Verify response of the V2 signed HTTP request.
+	// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+	recV2 := httptest.NewRecorder()
+	// construct HTTP request for DELETE bucket.
+	reqV2, err := newTestSignedRequestV2("DELETE", getBucketLocationURL("", bucketName), 0, nil, credentials.AccessKey, credentials.SecretKey, nil)
+	if err != nil {
+		t.Fatalf("Test %s: Failed to create HTTP request for RemoveBucketHandler: <ERROR> %v", instanceType, err)
+	}
+	// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+	// Call the ServeHTTP to execute the handler.
+	apiRouter.ServeHTTP(recV2, reqV2)
+	switch recV2.Code {
+	case http.StatusOK, http.StatusCreated, http.StatusAccepted, http.StatusNoContent:
+		t.Fatalf("Test %v: expected failure, but succeeded with %v", instanceType, recV2.Code)
+	}
+}
+
 // Wrapper for calling GetBucketPolicy HTTP handler tests for both XL multiple disks and single node setup.
 func TestGetBucketLocationHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testGetBucketLocationHandler, []string{"GetBucketLocation"})
