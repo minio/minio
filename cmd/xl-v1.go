@@ -251,16 +251,6 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 			continue
 		}
 
-		if bf.BloomFilter == nil {
-			// For the first, add this as the first filter.
-			bf.BloomFilter = &bloom.BloomFilter{}
-			_, err := bf.ReadFrom(bytes.NewBuffer(diskBF.Filter))
-			if err != nil {
-				logger.LogIf(ctx, err)
-				bf = nil
-			}
-			continue
-		}
 		var tmp bloom.BloomFilter
 		_, err = tmp.ReadFrom(bytes.NewBuffer(diskBF.Filter))
 		if err != nil {
@@ -268,11 +258,15 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 			bf = nil
 			continue
 		}
-		err = bf.Merge(&tmp)
-		if err != nil {
-			logger.LogIf(ctx, err)
-			bf = nil
-			continue
+		if bf.BloomFilter == nil {
+			bf.BloomFilter = &tmp
+		} else {
+			err = bf.Merge(&tmp)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				bf = nil
+				continue
+			}
 		}
 	}
 

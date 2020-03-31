@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -174,7 +175,7 @@ func (d *dataUsageCache) copyWithChildren(src *dataUsageCache, hash dataUsageHas
 	d.Cache[hash] = e
 	for ch := range e.Children {
 		if ch == hash {
-			panic("dataUsageCache.copyWithChildren: Circular reference.")
+			logger.LogIf(context.Background(), errors.New("dataUsageCache.copyWithChildren: Circular reference"))
 		}
 		d.copyWithChildren(src, ch, &hash)
 	}

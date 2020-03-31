@@ -154,18 +154,6 @@ func (d dataUpdateTrackerHistory) sort() bool {
 	return d[0].idx-d[len(d)-1].idx == uint64(len(d))
 }
 
-// all returns whether the history is complete and there are no gaps.
-// The history will be sorted afterwards.
-func (d dataUpdateTrackerHistory) all() bool {
-	if len(d) == 0 {
-		return true
-	}
-	sort.Slice(d, func(i, j int) bool {
-		return d[i].idx > d[j].idx
-	})
-	return d[0].idx-d[len(d)-1].idx == uint64(len(d))
-}
-
 // removeOlderThan will remove entries older than index 'n'.
 func (d *dataUpdateTrackerHistory) removeOlderThan(n uint64) {
 	d.sort()
@@ -206,7 +194,7 @@ func (d *dataUpdateTracker) start(ctx context.Context, drives ...string) {
 }
 
 // load will attempt to load data tracking information from the supplied drives.
-// The data will only be loaded if d.Saved is older than the found.
+// The data will only be loaded if d.Saved is older than the one found on disk.
 // The newest working cache will be kept in d.
 // If no valid data usage tracker can be found d will remain unchanged.
 // If object is shared the caller should lock it.
