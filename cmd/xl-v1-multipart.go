@@ -808,7 +808,8 @@ func (xl xlObjects) cleanupStaleMultipartUploadsOnDisk(ctx context.Context, disk
 				continue
 			}
 			if now.Sub(fi.ModTime) > expiry {
-				xl.deleteObject(ctx, minioMetaMultipartBucket, uploadIDPath, len(xl.getDisks())/2+1, false)
+				writeQuorum := getWriteQuorum(len(xl.getDisks()))
+				xl.deleteObject(ctx, minioMetaMultipartBucket, uploadIDPath, writeQuorum, false)
 			}
 		}
 	}
