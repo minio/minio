@@ -59,27 +59,35 @@ var (
 )
 
 func init() {
-	intDataUpdateTracker = &dataUpdateTracker{
-		Current: dataUpdateFilter{
-			idx: 1,
-		},
-		debug: env.Get(envDataUsageCrawlDebug, config.EnableOff) == config.EnableOn,
-		input: make(chan string, dataUpdateTrackerQueueSize),
-		save:  make(chan struct{}, 1),
-	}
-	intDataUpdateTracker.Current.bf = intDataUpdateTracker.newBloomFilter()
+	intDataUpdateTracker = newDataUpdateTracker()
 	objectUpdatedCh = intDataUpdateTracker.input
 }
 
 type dataUpdateTracker struct {
-	mu    sync.Mutex
-	input chan string
-	save  chan struct{}
-	debug bool
+	mu         sync.Mutex
+	input      chan string
+	save       chan struct{}
+	debug      bool
+	saveExited chan struct{}
 
 	Current dataUpdateFilter
 	History dataUpdateTrackerHistory
 	Saved   time.Time
+}
+
+// newDataUpdateTracker returns a dataUpdateTracker with default settings.
+func newDataUpdateTracker() *dataUpdateTracker {
+	d := &dataUpdateTracker{
+		Current: dataUpdateFilter{
+			idx: 1,
+		},
+		debug:      env.Get(envDataUsageCrawlDebug, config.EnableOff) == config.EnableOn,
+		input:      make(chan string, dataUpdateTrackerQueueSize),
+		save:       make(chan struct{}, 1),
+		saveExited: make(chan struct{}, 0),
+	}
+	d.Current.bf = d.newBloomFilter()
+	return d
 }
 
 type dataUpdateTrackerHistory []dataUpdateFilter
@@ -188,7 +196,7 @@ func (d *dataUpdateTracker) start(ctx context.Context, drives ...string) {
 		logger.LogIf(ctx, errors.New("dataUpdateTracker.start: No drives specified"))
 		return
 	}
-	d.load(ctx, drives)
+	d.load(ctx, drives...)
 	go d.startCollector(ctx)
 	go d.startSaver(ctx, dataUpdateTrackerSaveInterval, drives)
 }
@@ -198,7 +206,11 @@ func (d *dataUpdateTracker) start(ctx context.Context, drives ...string) {
 // The newest working cache will be kept in d.
 // If no valid data usage tracker can be found d will remain unchanged.
 // If object is shared the caller should lock it.
-func (d *dataUpdateTracker) load(ctx context.Context, drives []string) {
+func (d *dataUpdateTracker) load(ctx context.Context, drives ...string) {
+	if len(drives) <= 0 {
+		logger.LogIf(ctx, errors.New("dataUpdateTracker.load: No drives specified"))
+		return
+	}
 	for _, drive := range drives {
 		cacheFormatPath := pathJoin(drive, dataUpdateTrackerFilename)
 		f, err := os.Open(cacheFormatPath)
@@ -224,7 +236,9 @@ func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Durati
 	var buf bytes.Buffer
 	d.mu.Lock()
 	saveNow := d.save
+	exited := d.saveExited
 	d.mu.Unlock()
+	defer close(exited)
 	for {
 		var exit bool
 		select {
