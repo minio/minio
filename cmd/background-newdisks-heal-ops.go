@@ -77,10 +77,10 @@ func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
 			}
 
 			// Reformat disks
-			bgSeq.sourceCh <- SlashSeparator
+			bgSeq.sourceCh <- healSource{path: SlashSeparator}
 
 			// Ensure that reformatting disks is finished
-			bgSeq.sourceCh <- nopHeal
+			bgSeq.sourceCh <- healSource{path: nopHeal}
 
 			var erasureSetInZoneToHeal = make([][]int, len(localDisksInZoneHeal))
 			// Compute the list of erasure set to heal

@@ -111,6 +111,10 @@ func validateBinaryEqualsValues(n name, key Key, values set.StringSet) error {
 			if s != "COPY" && s != "REPLACE" {
 				return fmt.Errorf("invalid value '%v' for '%v' for %v condition", s, S3XAmzMetadataDirective, n)
 			}
+		case S3XAmzContentSha256:
+			if s == "" {
+				return fmt.Errorf("invalid empty value for '%v' for %v condition", S3XAmzContentSha256, n)
+			}
 		}
 		values.Add(s)
 	}
