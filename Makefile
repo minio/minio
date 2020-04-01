@@ -101,3 +101,4 @@ clean:
 	@rm -rvf minio
 	@rm -rvf build
 	@rm -rvf release
+	@rm -rvf .verify*

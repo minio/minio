@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"path"
 
@@ -251,7 +252,7 @@ func initBucketObjectLockConfig(buckets []BucketInfo, objAPI ObjectLayer) error 
 		configFile := path.Join(bucketConfigPrefix, bucket.Name, bucketObjectLockEnabledConfigFile)
 		bucketObjLockData, err := readConfig(ctx, objAPI, configFile)
 		if err != nil {
-			if err == errConfigNotFound {
+			if errors.Is(err, errConfigNotFound) {
 				continue
 			}
 			return err
@@ -266,7 +267,7 @@ func initBucketObjectLockConfig(buckets []BucketInfo, objAPI ObjectLayer) error 
 		configFile = path.Join(bucketConfigPrefix, bucket.Name, objectLockConfig)
 		configData, err := readConfig(ctx, objAPI, configFile)
 		if err != nil {
-			if err == errConfigNotFound {
+			if errors.Is(err, errConfigNotFound) {
 				globalBucketObjectLockConfig.Set(bucket.Name, objectlock.Retention{})
 				continue
 			}
