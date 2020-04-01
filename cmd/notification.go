@@ -992,6 +992,35 @@ func (sys *NotificationSys) DispatchNetOBDInfo(ctx context.Context) []madmin.Ser
 	return serverNetOBDs
 }
 
+// NetOBDParallelInfo - Performs NetOBD tests
+func (sys *NotificationSys) NetOBDParallelInfo(ctx context.Context) madmin.ServerNetOBDInfo {
+	netOBDs := []madmin.NetOBDInfo{}
+	wg := sync.WaitGroup{}
+
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+
+		wg.Add(1)
+		go func(index int) {
+			netOBD, err := sys.peerClients[index].NetOBDInfo(ctx)
+			netOBD.Addr = sys.peerClients[index].host.String()
+			if err != nil {
+				netOBD.Error = err.Error()
+			}
+			netOBDs = append(netOBDs, netOBD)
+			wg.Done()
+		}(index)
+	}
+	wg.Wait()
+	return madmin.ServerNetOBDInfo{
+		Net:  netOBDs,
+		Addr: GetLocalPeer(globalEndpoints),
+	}
+
+}
+
 // DriveOBDInfo - Drive OBD information
 func (sys *NotificationSys) DriveOBDInfo(ctx context.Context) []madmin.ServerDrivesOBDInfo {
 	reply := make([]madmin.ServerDrivesOBDInfo, len(sys.peerClients))

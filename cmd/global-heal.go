@@ -47,7 +47,7 @@ func newBgHealSequence(numDisks int) *healSequence {
 	}
 
 	return &healSequence{
-		sourceCh:    make(chan string),
+		sourceCh:    make(chan healSource),
 		startTime:   UTCNow(),
 		clientToken: bgHealingUUID,
 		settings:    hs,
@@ -101,17 +101,32 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects) error {
 	// Heal all buckets with all objects
 	for _, bucket := range buckets {
 		// Heal current bucket
-		bgSeq.sourceCh <- bucket.Name
+		bgSeq.sourceCh <- healSource{
+			path: bucket.Name,
+		}
 
 		// List all objects in the current bucket and heal them
 		listDir := listDirFactory(ctx, xlObj.getLoadBalancedDisks()...)
 		walkResultCh := startTreeWalk(ctx, bucket.Name, "", "", true, listDir, nil)
 		for walkEntry := range walkResultCh {
-			bgSeq.sourceCh <- pathJoin(bucket.Name, walkEntry.entry)
+			bgSeq.sourceCh <- healSource{
+				path: pathJoin(bucket.Name, walkEntry.entry),
+			}
 		}
 	}
 
 	return nil
+}
+
+// deepHealObject heals given object path in deep to fix bitrot.
+func deepHealObject(objectPath string) {
+	// Get background heal sequence to send elements to heal
+	bgSeq, _ := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
+
+	bgSeq.sourceCh <- healSource{
+		path: objectPath,
+		opts: &madmin.HealOpts{ScanMode: madmin.HealDeepScan},
+	}
 }
 
 // Returns the duration to the next background healing round

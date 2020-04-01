@@ -268,12 +268,7 @@ func TestFunctionsUnmarshalJSON(t *testing.T) {
 
 	case3Data := []byte(`{}`)
 
-	// Remove this test after supporting date conditions.
 	case4Data := []byte(`{
-"DateEquals": { "aws:CurrentTime": "2013-06-30T00:00:00Z" }
-}`)
-
-	case5Data := []byte(`{
     "StringLike": {
         "s3:x-amz-metadata-directive": "REPL*"
     },
@@ -336,10 +331,8 @@ func TestFunctionsUnmarshalJSON(t *testing.T) {
 		{case2Data, NewFunctions(func6), false},
 		// empty condition error.
 		{case3Data, nil, true},
-		// unsupported condition error.
-		{case4Data, nil, true},
 		// Success case multiple keys, same condition.
-		{case5Data, NewFunctions(func1, func2_1, func2_2, func2_3, func3, func4, func5, func6, func7), false},
+		{case4Data, NewFunctions(func1, func2_1, func2_2, func2_3, func3, func4, func5, func6, func7), false},
 	}
 
 	for i, testCase := range testCases {

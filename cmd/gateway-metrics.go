@@ -26,6 +26,8 @@ import (
 type RequestStats struct {
 	Get  atomic.Uint64 `json:"Get"`
 	Head atomic.Uint64 `json:"Head"`
+	Put  atomic.Uint64 `json:"Put"`
+	Post atomic.Uint64 `json:"Post"`
 }
 
 // Metrics - represents bytes served from backend
@@ -63,6 +65,10 @@ func (s *Metrics) IncRequests(method string) {
 		s.requestStats.Get.Add(1)
 	} else if method == http.MethodHead {
 		s.requestStats.Head.Add(1)
+	} else if method == http.MethodPut {
+		s.requestStats.Put.Add(1)
+	} else if method == http.MethodPost {
+		s.requestStats.Post.Add(1)
 	}
 }
 
