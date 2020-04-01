@@ -422,14 +422,28 @@ func lookupConfigs(s config.Config) {
 	for _, l := range loggerCfg.HTTP {
 		if l.Enabled {
 			// Enable http logging
-			logger.AddTarget(http.New(l.Endpoint, loggerUserAgent, string(logger.All), NewGatewayHTTPTransport()))
+			logger.AddTarget(
+				http.New(http.WithEndpoint(l.Endpoint),
+					http.WithAuthToken(l.AuthToken),
+					http.WithUserAgent(loggerUserAgent),
+					http.WithLogKind(string(logger.All)),
+					http.WithTransport(NewGatewayHTTPTransport()),
+				),
+			)
 		}
 	}
 
 	for _, l := range loggerCfg.Audit {
 		if l.Enabled {
 			// Enable http audit logging
-			logger.AddAuditTarget(http.New(l.Endpoint, loggerUserAgent, string(logger.All), NewGatewayHTTPTransport()))
+			logger.AddAuditTarget(
+				http.New(http.WithEndpoint(l.Endpoint),
+					http.WithAuthToken(l.AuthToken),
+					http.WithUserAgent(loggerUserAgent),
+					http.WithLogKind(string(logger.All)),
+					http.WithTransport(NewGatewayHTTPTransport()),
+				),
+			)
 		}
 	}
 
