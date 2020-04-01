@@ -491,7 +491,7 @@ func isPutActionAllowed(atype authType, bucketName, objectName string, r *http.R
 	if cred.AccessKey == "" {
 		if globalPolicySys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
-			Action:          policy.PutObjectAction,
+			Action:          policy.Action(action),
 			BucketName:      bucketName,
 			ConditionValues: getConditionValues(r, "", "", nil),
 			IsOwner:         false,

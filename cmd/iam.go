@@ -1312,7 +1312,6 @@ var iamAccountWriteAccessActions = iampolicy.NewActionSet(
 )
 
 var iamAccountOtherAccessActions = iampolicy.NewActionSet(
-	iampolicy.BypassGovernanceModeAction,
 	iampolicy.BypassGovernanceRetentionAction,
 	iampolicy.PutObjectRetentionAction,
 	iampolicy.GetObjectRetentionAction,
