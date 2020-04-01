@@ -27,6 +27,14 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
+type errHashMismatch struct {
+	message string
+}
+
+func (err *errHashMismatch) Error() string {
+	return err.message
+}
+
 // Calculates bitrot in chunks and writes the hash into the stream.
 type streamingBitrotWriter struct {
 	iow       *io.PipeWriter
@@ -132,8 +140,8 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 	b.h.Write(buf)
 
 	if !bytes.Equal(b.h.Sum(nil), b.hashBytes) {
-		err = fmt.Errorf("hashes do not match expected %s, got %s",
-			hex.EncodeToString(b.hashBytes), hex.EncodeToString(b.h.Sum(nil)))
+		err := &errHashMismatch{fmt.Sprintf("hashes do not match expected %s, got %s",
+			hex.EncodeToString(b.hashBytes), hex.EncodeToString(b.h.Sum(nil)))}
 		logger.LogIf(context.Background(), err)
 		return 0, err
 	}

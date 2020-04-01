@@ -1863,7 +1863,7 @@ func (s *xlSets) healMRFRoutine() {
 		for _, u := range mrfUploads {
 			// Send an object to be healed with a timeout
 			select {
-			case bgSeq.sourceCh <- u:
+			case bgSeq.sourceCh <- healSource{path: u}:
 			case <-time.After(100 * time.Millisecond):
 			}
 
