@@ -39,6 +39,14 @@ const (
 	SelectFmtParquet
 )
 
+// WriteCSVOpts - encapsulates options for Select CSV output
+type WriteCSVOpts struct {
+	FieldDelimiter rune
+	Quote          rune
+	QuoteEscape    rune
+	AlwaysQuote    bool
+}
+
 // Record - is a type containing columns and their values.
 type Record interface {
 	Get(name string) (*Value, error)
@@ -46,7 +54,7 @@ type Record interface {
 	// Set a value.
 	// Can return a different record type.
 	Set(name string, value *Value) (Record, error)
-	WriteCSV(writer io.Writer, fieldDelimiter, quote rune, alwaysQuote bool) error
+	WriteCSV(writer io.Writer, opts WriteCSVOpts) error
 	WriteJSON(writer io.Writer) error
 
 	// Clone the record and if possible use the destination provided.
