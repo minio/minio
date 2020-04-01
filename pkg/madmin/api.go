@@ -145,7 +145,7 @@ func privateNew(endpoint string, creds *credentials.Credentials, secure bool) (*
 		Transport: DefaultTransport(secure),
 	}
 
-	// Introduce a new locked random seed.
+	// Add locked pseudo-random number generator.
 	clnt.random = rand.New(&lockedRandSource{src: rand.NewSource(time.Now().UTC().UnixNano())})
 
 	// Return.
