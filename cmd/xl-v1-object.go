@@ -297,7 +297,13 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 		// we return from this function.
 		closeBitrotReaders(readers)
 		if err != nil {
-			return toObjectErr(err, bucket, object)
+			if decodeHealErr, ok := err.(*errDecodeHealRequired); ok {
+				go deepHealObject(pathJoin(bucket, object))
+				err = decodeHealErr.err
+			}
+			if err != nil {
+				return toObjectErr(err, bucket, object)
+			}
 		}
 		for i, r := range readers {
 			if r == nil {

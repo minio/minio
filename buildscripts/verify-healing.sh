@@ -30,33 +30,49 @@ MINIO=( "$PWD/minio" --config-dir "$MINIO_CONFIG_DIR" server )
 
 function start_minio_3_node() {
     declare -a minio_pids
+    declare -a ARGS
     export MINIO_ACCESS_KEY=minio
     export MINIO_SECRET_KEY=minio123
 
+    start_port=$(shuf -i 10000-65000 -n 1)
     for i in $(seq 1 3); do
-        ARGS+=("http://127.0.0.1:$[8000+$i]${WORK_DIR}/$i/1/ http://127.0.0.1:$[8000+$i]${WORK_DIR}/$i/2/ http://127.0.0.1:$[8000+$i]${WORK_DIR}/$i/3/ http://127.0.0.1:$[8000+$i]${WORK_DIR}/$i/4/ http://127.0.0.1:$[8000+$i]${WORK_DIR}/$i/5/ http://127.0.0.1:$[8000+$i]${WORK_DIR}/$i/6/")
+        ARGS+=("http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/1/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/2/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/3/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/4/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/5/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/6/")
     done
 
-    "${MINIO[@]}" --address ":8001" ${ARGS[@]} > "${WORK_DIR}/dist-minio-8001.log" 2>&1 &
+    "${MINIO[@]}" --address ":$[$start_port+1]" ${ARGS[@]} > "${WORK_DIR}/dist-minio-server1.log" 2>&1 &
     minio_pids[0]=$!
+    disown "${minio_pids[0]}"
 
-    "${MINIO[@]}" --address ":8002" ${ARGS[@]} > "${WORK_DIR}/dist-minio-8002.log" 2>&1 &
+    "${MINIO[@]}" --address ":$[$start_port+2]" ${ARGS[@]} > "${WORK_DIR}/dist-minio-server2.log" 2>&1 &
     minio_pids[1]=$!
+    disown "${minio_pids[1]}"
 
-    "${MINIO[@]}" --address ":8003" ${ARGS[@]} > "${WORK_DIR}/dist-minio-8003.log" 2>&1 &
+    "${MINIO[@]}" --address ":$[$start_port+3]" ${ARGS[@]} > "${WORK_DIR}/dist-minio-server3.log" 2>&1 &
     minio_pids[2]=$!
+    disown "${minio_pids[2]}"
 
     sleep "$1"
-    echo "${minio_pids[@]}"
+    for pid in "${minio_pids[@]}"; do
+        if ! kill "$pid"; then
+            for i in $(seq 1 3); do
+                echo "server$i log:"
+                cat "${WORK_DIR}/dist-minio-server$i.log"
+            done
+            echo "FAILED"
+            purge "$WORK_DIR"
+            exit 1
+        fi
+        # forcibly killing, to proceed further properly.
+        kill -9 "$pid"
+        sleep 1 # wait 1sec per pid
+    done
 }
 
 
 function check_online() {
-    for i in $(seq 1 3); do
-        if grep -q 'Server switching to safe mode' ${WORK_DIR}/dist-minio-$[8000+$i].log; then
-            echo "1"
-        fi
-    done
+    if grep -q 'Server switching to safe mode' ${WORK_DIR}/dist-minio-*.log; then
+        echo "1"
+    fi
 }
 
 function purge()
@@ -75,50 +91,21 @@ function __init__()
 }
 
 function perform_test() {
-    minio_pids=( $(start_minio_3_node 60) )
-    for pid in "${minio_pids[@]}"; do
-        if ! kill "$pid"; then
-            for i in $(seq 1 3); do
-                echo "server$i log:"
-                cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
-            done
-            echo "FAILED"
-            purge "$WORK_DIR"
-            exit 1
-        fi
-        # forcibly killing, to proceed further properly.
-        kill -9 "$pid"
-    done
+    start_minio_3_node 60
 
     echo "Testing Distributed Erasure setup healing of drives"
     echo "Remove the contents of the disks belonging to '${1}' erasure set"
 
     rm -rf ${WORK_DIR}/${1}/*/
 
-    minio_pids=( $(start_minio_3_node 60) )
-    for pid in "${minio_pids[@]}"; do
-        if ! kill "$pid"; then
-            for i in $(seq 1 3); do
-                echo "server$i log:"
-                cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
-            done
-            echo "FAILED"
-            purge "$WORK_DIR"
-            exit 1
-        fi
-        # forcibly killing, to proceed further properly.
-        # if the previous kill is taking time.
-        kill -9 "$pid"
-    done
+    start_minio_3_node 60
 
     rv=$(check_online)
     if [ "$rv" == "1" ]; then
-        for pid in "${minio_pids[@]}"; do
-            kill -9 "$pid"
-        done
+        pkill -9 minio
         for i in $(seq 1 3); do
             echo "server$i log:"
-            cat "${WORK_DIR}/dist-minio-$[8000+$i].log"
+            cat "${WORK_DIR}/dist-minio-server$i.log"
         done
         echo "FAILED"
         purge "$WORK_DIR"
