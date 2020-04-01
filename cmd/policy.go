@@ -22,14 +22,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"path"
+	"strings"
 	"sync"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 )
 
@@ -145,14 +148,14 @@ func NewPolicySys() *PolicySys {
 
 func getConditionValues(request *http.Request, locationConstraint string, username string, claims map[string]interface{}) map[string][]string {
 	currTime := UTCNow()
-	principalType := func() string {
-		if username != "" {
-			return "User"
-		}
-		return "Anonymous"
-	}()
+
+	principalType := "Anonymous"
+	if username != "" {
+		principalType = "User"
+	}
+
 	args := map[string][]string{
-		"CurrenTime":      {currTime.Format(event.AMZTimeFormat)},
+		"CurrentTime":     {currTime.Format(time.RFC3339)},
 		"EpochTime":       {fmt.Sprintf("%d", currTime.Unix())},
 		"principaltype":   {principalType},
 		"SecureTransport": {fmt.Sprintf("%t", request.TLS != nil)},
@@ -163,24 +166,54 @@ func getConditionValues(request *http.Request, locationConstraint string, userna
 		"username":        {username},
 	}
 
-	for key, values := range request.Header {
-		if existingValues, found := args[key]; found {
-			args[key] = append(existingValues, values...)
-		} else {
-			args[key] = values
-		}
-	}
-
-	for key, values := range request.URL.Query() {
-		if existingValues, found := args[key]; found {
-			args[key] = append(existingValues, values...)
-		} else {
-			args[key] = values
-		}
-	}
-
 	if locationConstraint != "" {
 		args["LocationConstraint"] = []string{locationConstraint}
+	}
+
+	// TODO: support object-lock-remaining-retention-days
+	cloneHeader := request.Header.Clone()
+
+	for _, objLock := range []string{
+		xhttp.AmzObjectLockMode,
+		xhttp.AmzObjectLockLegalHold,
+		xhttp.AmzObjectLockRetainUntilDate,
+	} {
+		if values, ok := cloneHeader[objLock]; ok {
+			args[strings.TrimPrefix(objLock, "X-Amz-")] = values
+		}
+		cloneHeader.Del(objLock)
+	}
+
+	for key, values := range cloneHeader {
+		if existingValues, found := args[key]; found {
+			args[key] = append(existingValues, values...)
+		} else {
+			args[key] = values
+		}
+	}
+
+	var cloneURLValues = url.Values{}
+	for k, v := range request.URL.Query() {
+		cloneURLValues[k] = v
+	}
+
+	for _, objLock := range []string{
+		xhttp.AmzObjectLockMode,
+		xhttp.AmzObjectLockLegalHold,
+		xhttp.AmzObjectLockRetainUntilDate,
+	} {
+		if values, ok := cloneURLValues[objLock]; ok {
+			args[strings.TrimPrefix(objLock, "X-Amz-")] = values
+		}
+		cloneURLValues.Del(objLock)
+	}
+
+	for key, values := range cloneURLValues {
+		if existingValues, found := args[key]; found {
+			args[key] = append(existingValues, values...)
+		} else {
+			args[key] = values
+		}
 	}
 
 	// JWT specific values
@@ -190,6 +223,7 @@ func getConditionValues(request *http.Request, locationConstraint string, userna
 			args[k] = []string{vStr}
 		}
 	}
+
 	return args
 }
 
