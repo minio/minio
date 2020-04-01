@@ -87,7 +87,7 @@ func (adm *AdminClient) ListUsers(ctx context.Context) (map[string]UserInfo, err
 		return nil, httpRespToErrorResponse(resp)
 	}
 
-	data, err := DecryptData(adm.secretAccessKey, resp.Body)
+	data, err := DecryptData(adm.getSecretKey(), resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +152,7 @@ func (adm *AdminClient) SetUser(ctx context.Context, accessKey, secretKey string
 	if err != nil {
 		return err
 	}
-	econfigBytes, err := EncryptData(adm.secretAccessKey, data)
+	econfigBytes, err := EncryptData(adm.getSecretKey(), data)
 	if err != nil {
 		return err
 	}
@@ -239,7 +239,7 @@ func (adm *AdminClient) AddServiceAccount(ctx context.Context, parentUser string
 		return auth.Credentials{}, err
 	}
 
-	econfigBytes, err := EncryptData(adm.secretAccessKey, data)
+	econfigBytes, err := EncryptData(adm.getSecretKey(), data)
 	if err != nil {
 		return auth.Credentials{}, err
 	}
@@ -260,7 +260,7 @@ func (adm *AdminClient) AddServiceAccount(ctx context.Context, parentUser string
 		return auth.Credentials{}, httpRespToErrorResponse(resp)
 	}
 
-	data, err = DecryptData(adm.secretAccessKey, resp.Body)
+	data, err = DecryptData(adm.getSecretKey(), resp.Body)
 	if err != nil {
 		return auth.Credentials{}, err
 	}
@@ -298,7 +298,7 @@ func (adm *AdminClient) GetServiceAccount(ctx context.Context, serviceAccountAcc
 		return auth.Credentials{}, httpRespToErrorResponse(resp)
 	}
 
-	data, err := DecryptData(adm.secretAccessKey, resp.Body)
+	data, err := DecryptData(adm.getSecretKey(), resp.Body)
 	if err != nil {
 		return auth.Credentials{}, err
 	}

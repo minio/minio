@@ -26,6 +26,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httputil"
 	"net/url"
 	"os"
@@ -34,26 +35,27 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio-go/v6/pkg/credentials"
 	"github.com/minio/minio-go/v6/pkg/s3signer"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
+	"golang.org/x/net/publicsuffix"
 )
 
 // AdminClient implements Amazon S3 compatible methods.
 type AdminClient struct {
 	///  Standard options.
 
-	// AccessKeyID required for authorized requests.
-	accessKeyID string
-	// SecretAccessKey required for authorized requests.
-	secretAccessKey string
+	// Parsed endpoint url provided by the user.
+	endpointURL *url.URL
+
+	// Holds various credential providers.
+	credsProvider *credentials.Credentials
 
 	// User supplied.
 	appInfo struct {
 		appName    string
 		appVersion string
 	}
-
-	endpointURL url.URL
 
 	// Indicate whether we are using https or not
 	secure bool
@@ -85,37 +87,66 @@ const (
 	libraryUserAgent       = libraryUserAgentPrefix + libraryName + "/" + libraryVersion
 )
 
-// New - instantiate minio client Client, adds automatic verification of signature.
+// Options for New method
+type Options struct {
+	Creds  *credentials.Credentials
+	Secure bool
+	// Add future fields here
+}
+
+// New - instantiate minio admin client
 func New(endpoint string, accessKeyID, secretAccessKey string, secure bool) (*AdminClient, error) {
-	clnt, err := privateNew(endpoint, accessKeyID, secretAccessKey, secure)
+	creds := credentials.NewStaticV4(accessKeyID, secretAccessKey, "")
+
+	clnt, err := privateNew(endpoint, creds, secure)
 	if err != nil {
 		return nil, err
 	}
 	return clnt, nil
 }
 
-func privateNew(endpoint, accessKeyID, secretAccessKey string, secure bool) (*AdminClient, error) {
+// NewWithOptions - instantiate minio admin client with options.
+func NewWithOptions(endpoint string, opts *Options) (*AdminClient, error) {
+	clnt, err := privateNew(endpoint, opts.Creds, opts.Secure)
+	if err != nil {
+		return nil, err
+	}
+	return clnt, nil
+}
+
+func privateNew(endpoint string, creds *credentials.Credentials, secure bool) (*AdminClient, error) {
+	// Initialize cookies to preserve server sent cookies if any and replay
+	// them upon each request.
+	jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+	if err != nil {
+		return nil, err
+	}
+
 	// construct endpoint.
 	endpointURL, err := getEndpointURL(endpoint, secure)
 	if err != nil {
 		return nil, err
 	}
 
-	// instantiate new Client.
-	clnt := &AdminClient{
-		accessKeyID:     accessKeyID,
-		secretAccessKey: secretAccessKey,
-		// Remember whether we are using https or not
-		secure: secure,
-		// Save endpoint URL, user agent for future uses.
-		endpointURL: *endpointURL,
-		// Instantiate http client and bucket location cache.
-		httpClient: &http.Client{
-			Transport: DefaultTransport(secure),
-		},
-		// Introduce a new locked random seed.
-		random: rand.New(&lockedRandSource{src: rand.NewSource(time.Now().UTC().UnixNano())}),
+	clnt := new(AdminClient)
+
+	// Save the credentials.
+	clnt.credsProvider = creds
+
+	// Remember whether we are using https or not
+	clnt.secure = secure
+
+	// Save endpoint URL, user agent for future uses.
+	clnt.endpointURL = endpointURL
+
+	// Instantiate http client and bucket location cache.
+	clnt.httpClient = &http.Client{
+		Jar:       jar,
+		Transport: DefaultTransport(secure),
 	}
+
+	// Introduce a new locked random seed.
+	clnt.random = rand.New(&lockedRandSource{src: rand.NewSource(time.Now().UTC().UnixNano())})
 
 	// Return.
 	return clnt, nil
@@ -393,6 +424,16 @@ func (adm AdminClient) setUserAgent(req *http.Request) {
 	}
 }
 
+func (adm AdminClient) getSecretKey() string {
+	value, err := adm.credsProvider.Get()
+	if err != nil {
+		// Return empty, call will fail.
+		return ""
+	}
+
+	return value.SecretAccessKey
+}
+
 // newRequest - instantiate a new HTTP request for a given method.
 func (adm AdminClient) newRequest(method string, reqData requestData) (req *http.Request, err error) {
 	// If no method is supplied default to 'POST'.
@@ -415,6 +456,17 @@ func (adm AdminClient) newRequest(method string, reqData requestData) (req *http
 		return nil, err
 	}
 
+	value, err := adm.credsProvider.Get()
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		accessKeyID     = value.AccessKeyID
+		secretAccessKey = value.SecretAccessKey
+		sessionToken    = value.SessionToken
+	)
+
 	adm.setUserAgent(req)
 	for k, v := range reqData.customHeaders {
 		req.Header.Set(k, v[0])
@@ -425,7 +477,7 @@ func (adm AdminClient) newRequest(method string, reqData requestData) (req *http
 	req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(sum256(reqData.content)))
 	req.Body = ioutil.NopCloser(bytes.NewReader(reqData.content))
 
-	req = s3signer.SignV4(*req, adm.accessKeyID, adm.secretAccessKey, "", location)
+	req = s3signer.SignV4(*req, accessKeyID, secretAccessKey, sessionToken, location)
 	return req, nil
 }
 
