@@ -113,7 +113,7 @@ func (adm *AdminClient) ListConfigHistoryKV(ctx context.Context, count int) ([]C
 		return nil, httpRespToErrorResponse(resp)
 	}
 
-	data, err := DecryptData(adm.secretAccessKey, resp.Body)
+	data, err := DecryptData(adm.getSecretKey(), resp.Body)
 	if err != nil {
 		return nil, err
 	}
