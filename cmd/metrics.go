@@ -203,6 +203,24 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 		float64(s.Head.Load()),
 		http.MethodHead,
 	)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
+			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
+			[]string{"method"}, nil),
+		prometheus.CounterValue,
+		float64(s.Put.Load()),
+		http.MethodPut,
+	)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
+			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
+			[]string{"method"}, nil),
+		prometheus.CounterValue,
+		float64(s.Post.Load()),
+		http.MethodPost,
+	)
 }
 
 // collects cache metrics for MinIO server in Prometheus specific format
