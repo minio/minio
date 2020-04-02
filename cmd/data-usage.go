@@ -208,7 +208,6 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			// If folder isn't in filter and we have data, skip it completely.
 			if !f.withFilter.containsDir(folder.name) {
 				f.newCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
-				// TODO: Disable, too verbose.
 				if f.dataUsageCrawlDebug {
 					logger.Info(color.Green("data-usage:")+" Skipping non-updated folder: %v", folder.name)
 				}
@@ -476,7 +475,6 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 		if s.withFilter != nil {
 			// If folder isn't in filter, skip it completely.
 			if !s.withFilter.containsDir(folder.name) {
-				// TODO: Disable, too verbose.
 				if s.dataUsageCrawlDebug {
 					logger.Info(color.Green("data-usage:")+" Skipping non-updated folder: %v", folder)
 				}

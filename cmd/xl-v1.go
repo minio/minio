@@ -295,7 +295,6 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 				bucketCh <- b
 				cache.replace(b.Name, dataUsageRoot, *e)
 			} else {
-				// TODO: Remove, too verbose.
 				if intDataUpdateTracker.debug {
 					logger.Info(color.Green("crawlAndGetDataUsage:")+" Skipping bucket %v, not updated", b.Name)
 				}
