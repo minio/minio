@@ -64,6 +64,7 @@ func TestDataUpdateTracker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer os.RemoveAll(tmpDir)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	dut.start(ctx, tmpDir)

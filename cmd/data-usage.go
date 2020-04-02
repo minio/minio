@@ -48,7 +48,7 @@ const (
 	dataUsageRoot            = SlashSeparator
 	dataUsageBucket          = minioMetaBucket + SlashSeparator + bucketMetaPrefix
 	dataUsageBloomName       = ".bloomcycle.bin"
-	dataUsageStartDelay      = 5 * time.Second // Time to wait on startup and between cycles.
+	dataUsageStartDelay      = 5 * time.Minute // Time to wait on startup and between cycles.
 )
 
 // initDataUsageStats will start the crawler unless disabled.
