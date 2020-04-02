@@ -30,6 +30,7 @@ import (
 type Writer struct {
 	Comma       rune // Field delimiter (set to ',' by NewWriter)
 	Quote       rune // Fields quote character
+	QuoteEscape rune
 	AlwaysQuote bool // True to quote all fields
 	UseCRLF     bool // True to use \r\n as the line terminator
 	w           *bufio.Writer
@@ -38,9 +39,10 @@ type Writer struct {
 // NewWriter returns a new Writer that writes to w.
 func NewWriter(w io.Writer) *Writer {
 	return &Writer{
-		Comma: ',',
-		Quote: '"',
-		w:     bufio.NewWriter(w),
+		Comma:       ',',
+		Quote:       '"',
+		QuoteEscape: '"',
+		w:           bufio.NewWriter(w),
 	}
 }
 
@@ -93,7 +95,7 @@ func (w *Writer) Write(record []string) error {
 				var err error
 				switch nextRune([]byte(field)) {
 				case w.Quote:
-					_, err = w.w.WriteRune(w.Quote)
+					_, err = w.w.WriteRune(w.QuoteEscape)
 					if err != nil {
 						break
 					}
