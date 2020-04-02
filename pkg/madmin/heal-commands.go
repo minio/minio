@@ -82,10 +82,11 @@ const (
 
 // Drive state constants
 const (
-	DriveStateOk      string = "ok"
-	DriveStateOffline        = "offline"
-	DriveStateCorrupt        = "corrupt"
-	DriveStateMissing        = "missing"
+	DriveStateOk          string = "ok"
+	DriveStateOffline            = "offline"
+	DriveStateCorrupt            = "corrupt"
+	DriveStateMissing            = "missing"
+	DriveStateUnformatted        = "unformatted" // only returned by disk
 )
 
 // HealDriveInfo - struct for an individual drive info item.

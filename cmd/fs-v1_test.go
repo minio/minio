@@ -318,16 +318,16 @@ func TestFSDeleteBucket(t *testing.T) {
 	}
 
 	// Test with an invalid bucket name
-	if err = fs.DeleteBucket(context.Background(), "fo"); !isSameType(err, BucketNotFound{}) {
+	if err = fs.DeleteBucket(context.Background(), "fo", false); !isSameType(err, BucketNotFound{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
 	// Test with an inexistant bucket
-	if err = fs.DeleteBucket(context.Background(), "foobucket"); !isSameType(err, BucketNotFound{}) {
+	if err = fs.DeleteBucket(context.Background(), "foobucket", false); !isSameType(err, BucketNotFound{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with a valid case
-	if err = fs.DeleteBucket(context.Background(), bucketName); err != nil {
+	if err = fs.DeleteBucket(context.Background(), bucketName, false); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
@@ -335,7 +335,7 @@ func TestFSDeleteBucket(t *testing.T) {
 
 	// Delete bucket should get error disk not found.
 	os.RemoveAll(disk)
-	if err = fs.DeleteBucket(context.Background(), bucketName); err != nil {
+	if err = fs.DeleteBucket(context.Background(), bucketName, false); err != nil {
 		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error: ", err)
 		}

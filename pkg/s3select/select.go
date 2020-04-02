@@ -353,10 +353,13 @@ func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
 		}()
 
 		bufioWriter.Reset(buf)
-		err := record.WriteCSV(bufioWriter,
-			[]rune(s3Select.Output.CSVArgs.FieldDelimiter)[0],
-			[]rune(s3Select.Output.CSVArgs.QuoteCharacter)[0],
-			strings.ToLower(s3Select.Output.CSVArgs.QuoteFields) == "always")
+		opts := sql.WriteCSVOpts{
+			FieldDelimiter: []rune(s3Select.Output.CSVArgs.FieldDelimiter)[0],
+			Quote:          []rune(s3Select.Output.CSVArgs.QuoteCharacter)[0],
+			QuoteEscape:    []rune(s3Select.Output.CSVArgs.QuoteEscapeCharacter)[0],
+			AlwaysQuote:    strings.ToLower(s3Select.Output.CSVArgs.QuoteFields) == "always",
+		}
+		err := record.WriteCSV(bufioWriter, opts)
 		if err != nil {
 			return err
 		}

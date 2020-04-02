@@ -151,8 +151,8 @@ MinIO Gateway instances enabled with Disk-Caching expose caching related metrics
 
 MinIO Gateway instance exposes metrics related to Gateway communication with the cloud backend (S3, Azure & GCS Gateway).
 
-- `gateway_<gateway_type>_requests`: Total number of GET & HEAD requests made to cloud backend. This metrics has a label `method` that identifies GET & HEAD Requests.
-- `gateway_<gateway_type>_bytes_sent`: Total number of bytes sent to cloud backend (in GET & HEAD Requests).
+- `gateway_<gateway_type>_requests`: Total number of requests made to cloud backend. This metrics has a label `method` that identifies GET, HEAD, PUT and POST Requests.
+- `gateway_<gateway_type>_bytes_sent`: Total number of bytes sent to cloud backend (in PUT & POST Requests).
 - `gateway_<gateway_type>_bytes_received`: Total number of bytes received from cloud backend (in GET & HEAD Requests).
 
 Note that this is currently only support for Azure, S3 and GCS Gateway.

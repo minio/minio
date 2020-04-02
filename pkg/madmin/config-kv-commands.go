@@ -25,7 +25,7 @@ import (
 
 // DelConfigKV - delete key from server config.
 func (adm *AdminClient) DelConfigKV(ctx context.Context, k string) (err error) {
-	econfigBytes, err := EncryptData(adm.secretAccessKey, []byte(k))
+	econfigBytes, err := EncryptData(adm.getSecretKey(), []byte(k))
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func (adm *AdminClient) DelConfigKV(ctx context.Context, k string) (err error) {
 
 // SetConfigKV - set key value config to server.
 func (adm *AdminClient) SetConfigKV(ctx context.Context, kv string) (err error) {
-	econfigBytes, err := EncryptData(adm.secretAccessKey, []byte(kv))
+	econfigBytes, err := EncryptData(adm.getSecretKey(), []byte(kv))
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (adm *AdminClient) GetConfigKV(ctx context.Context, key string) (Targets, e
 		return nil, httpRespToErrorResponse(resp)
 	}
 
-	data, err := DecryptData(adm.secretAccessKey, resp.Body)
+	data, err := DecryptData(adm.getSecretKey(), resp.Body)
 	if err != nil {
 		return nil, err
 	}

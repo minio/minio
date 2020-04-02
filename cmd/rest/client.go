@@ -73,6 +73,12 @@ func (c *Client) CallWithContext(ctx context.Context, method string, values url.
 		return nil, &NetworkError{err}
 	}
 
+	final := resp.Trailer.Get("FinalStatus")
+	if final != "" && final != "Success" {
+		defer xhttp.DrainBody(resp.Body)
+		return nil, errors.New(final)
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		defer xhttp.DrainBody(resp.Body)
 		// Limit the ReadAll(), just in case, because of a bug, the server responds with large data.

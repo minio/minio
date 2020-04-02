@@ -377,61 +377,6 @@ func pickValidXLMeta(ctx context.Context, metaArr []xlMetaV1, modTime time.Time,
 // list of all errors that can be ignored in a metadata operation.
 var objMetadataOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound, errFileAccessDenied, errCorruptedFormat)
 
-// readXLMetaParts - returns the XL Metadata Parts from xl.json of one of the disks picked at random.
-func (xl xlObjects) readXLMetaParts(ctx context.Context, bucket, object string) (xlMetaParts []ObjectPartInfo, xlMeta map[string]string, err error) {
-	var ignoredErrs []error
-	for _, disk := range xl.getLoadBalancedDisks() {
-		if disk == nil {
-			ignoredErrs = append(ignoredErrs, errDiskNotFound)
-			continue
-		}
-		xlMetaParts, xlMeta, err = readXLMetaParts(ctx, disk, bucket, object)
-		if err == nil {
-			return xlMetaParts, xlMeta, nil
-		}
-		// For any reason disk or bucket is not available continue
-		// and read from other disks.
-		if IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
-			ignoredErrs = append(ignoredErrs, err)
-			continue
-		}
-		// Error is not ignored, return right here.
-		return nil, nil, err
-	}
-	// If all errors were ignored, reduce to maximal occurrence
-	// based on the read quorum.
-	readQuorum := len(xl.getDisks()) / 2
-	return nil, nil, reduceReadQuorumErrs(ctx, ignoredErrs, nil, readQuorum)
-}
-
-// readXLMetaStat - return xlMetaV1.Stat and xlMetaV1.Meta from  one of the disks picked at random.
-func (xl xlObjects) readXLMetaStat(ctx context.Context, bucket, object string) (xlStat statInfo, xlMeta map[string]string, err error) {
-	var ignoredErrs []error
-	for _, disk := range xl.getLoadBalancedDisks() {
-		if disk == nil {
-			ignoredErrs = append(ignoredErrs, errDiskNotFound)
-			continue
-		}
-		// parses only xlMetaV1.Meta and xlMeta.Stat
-		xlStat, xlMeta, err = readXLMetaStat(ctx, disk, bucket, object)
-		if err == nil {
-			return xlStat, xlMeta, nil
-		}
-		// For any reason disk or bucket is not available continue
-		// and read from other disks.
-		if IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
-			ignoredErrs = append(ignoredErrs, err)
-			continue
-		}
-		// Error is not ignored, return right here.
-		return statInfo{}, nil, err
-	}
-	// If all errors were ignored, reduce to maximal occurrence
-	// based on the read quorum.
-	readQuorum := len(xl.getDisks()) / 2
-	return statInfo{}, nil, reduceReadQuorumErrs(ctx, ignoredErrs, nil, readQuorum)
-}
-
 // writeXLMetadata - writes `xl.json` to a single disk.
 func writeXLMetadata(ctx context.Context, disk StorageAPI, bucket, prefix string, xlMeta xlMetaV1) error {
 	jsonFile := path.Join(prefix, xlMetaJSONFile)

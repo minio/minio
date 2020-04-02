@@ -111,29 +111,39 @@ def generate_bucket_name():
     return "s3select-test-" + uuid.uuid4().__str__()
 
 
-def test_csv_input_quote_char(client, log_output):
+def test_csv_input_custom_quote_char(client, log_output):
     # Get a unique bucket_name and object_name
     log_output.args['bucket_name'] = bucket_name = generate_bucket_name()
 
     tests = [
             # Invalid quote character, should fail
-            ('""', b'col1,col2,col3\n', Exception()),
+            ('""', '"', b'col1,col2,col3\n', Exception()),
             # UTF-8 quote character
-            ('ع', b'\xd8\xb9col1\xd8\xb9,\xd8\xb9col2\xd8\xb9,\xd8\xb9col3\xd8\xb9\n', b'{"_1":"col1","_2":"col2","_3":"col3"}\n'),
+            ('ع', '"', b'\xd8\xb9col1\xd8\xb9,\xd8\xb9col2\xd8\xb9,\xd8\xb9col3\xd8\xb9\n', b'{"_1":"col1","_2":"col2","_3":"col3"}\n'),
             # Only one field is quoted
-            ('"', b'"col1",col2,col3\n', b'{"_1":"col1","_2":"col2","_3":"col3"}\n'),
-            ('"', b'"col1,col2,col3"\n', b'{"_1":"col1,col2,col3"}\n'),
-            ('\'', b'"col1",col2,col3\n', b'{"_1":"\\"col1\\"","_2":"col2","_3":"col3"}\n'),
-            ('', b'"col1",col2,col3\n', b'{"_1":"\\"col1\\"","_2":"col2","_3":"col3"}\n'),
-            ('', b'"col1",col2,col3\n', b'{"_1":"\\"col1\\"","_2":"col2","_3":"col3"}\n'),
-            ('', b'"col1","col2","col3"\n', b'{"_1":"\\"col1\\"","_2":"\\"col2\\"","_3":"\\"col3\\""}\n'),
-            ('"', b'""""""\n', b'{"_1":"\\"\\""}\n'),
+            ('"', '"', b'"col1",col2,col3\n', b'{"_1":"col1","_2":"col2","_3":"col3"}\n'),
+            ('"', '"', b'"col1,col2,col3"\n', b'{"_1":"col1,col2,col3"}\n'),
+            ('\'', '"', b'"col1",col2,col3\n', b'{"_1":"\\"col1\\"","_2":"col2","_3":"col3"}\n'),
+            ('', '"', b'"col1",col2,col3\n', b'{"_1":"\\"col1\\"","_2":"col2","_3":"col3"}\n'),
+            ('', '"', b'"col1",col2,col3\n', b'{"_1":"\\"col1\\"","_2":"col2","_3":"col3"}\n'),
+            ('', '"', b'"col1","col2","col3"\n', b'{"_1":"\\"col1\\"","_2":"\\"col2\\"","_3":"\\"col3\\""}\n'),
+            ('"', '"', b'""""""\n', b'{"_1":"\\"\\""}\n'),
+            ('"', '"', b'A",B\n', b'{"_1":"A\\"","_2":"B"}\n'),
+            ('"', '"', b'A"",B\n', b'{"_1":"A\\"\\"","_2":"B"}\n'),
+            ('"', '\\', b'A\\B,C\n', b'{"_1":"A\\\\B","_2":"C"}\n'),
+            ('"', '"', b'"A""B","CD"\n', b'{"_1":"A\\"B","_2":"CD"}\n'),
+            ('"', '\\', b'"A\\B","CD"\n', b'{"_1":"AB","_2":"CD"}\n'),
+            ('"', '\\', b'"A\\,","CD"\n', b'{"_1":"A,","_2":"CD"}\n'),
+            ('"', '\\', b'"A\\"B","CD"\n', b'{"_1":"A\\"B","_2":"CD"}\n'),
+            ('"', '\\', b'"A\\""\n', b'{"_1":"A\\""}\n'),
+            ('"', '\\', b'"A\\"\\"B"\n', b'{"_1":"A\\"\\"B"}\n'),
+            ('"', '\\', b'"A\\"","\\"B"\n', b'{"_1":"A\\"","_2":"\\"B"}\n'),
     ]
 
     try:
         client.make_bucket(bucket_name)
 
-        for idx, (quote_char, object_content, expected_output) in enumerate(tests):
+        for idx, (quote_char, escape_char, object_content, expected_output) in enumerate(tests):
             options = SelectObjectOptions(
                     expression="select * from s3object",
                     input_serialization=InputSerialization(
@@ -142,14 +152,14 @@ def test_csv_input_quote_char(client, log_output):
                             RecordDelimiter="\n",
                             FieldDelimiter=",",
                             QuoteCharacter=quote_char,
-                            QuoteEscapeCharacter=quote_char,
+                            QuoteEscapeCharacter=escape_char,
                             Comments="#",
                             AllowQuotedRecordDelimiter="FALSE",),
                         ),
                     output_serialization=OutputSerialization(
                         json = JsonOutput(
-                            RecordDelimiter="\n",
-                            )
+                           RecordDelimiter="\n",
+                           )
                         ),
                     request_progress=RequestProgress(
                         enabled="False"
@@ -180,24 +190,32 @@ def test_csv_input_quote_char(client, log_output):
     # Test passes
     print(log_output.json_report())
 
-def test_csv_output_quote_char(client, log_output):
+def test_csv_output_custom_quote_char(client, log_output):
     # Get a unique bucket_name and object_name
     log_output.args['bucket_name'] = bucket_name = generate_bucket_name()
 
     tests = [
             # UTF-8 quote character
-            ("''", b'col1,col2,col3\n', Exception()),
-            ("'", b'col1,col2,col3\n', b"'col1','col2','col3'\n"),
-            ("", b'col1,col2,col3\n', b'\x00col1\x00,\x00col2\x00,\x00col3\x00\n'),
-            ('"', b'col1,col2,col3\n', b'"col1","col2","col3"\n'),
-            ('"', b'col"1,col2,col3\n', b'"col""1","col2","col3"\n'),
-            ('"', b'\n', b''),
+            ("''", "''", b'col1,col2,col3\n', Exception()),
+            ("'", "'", b'col1,col2,col3\n', b"'col1','col2','col3'\n"),
+            ("", '"', b'col1,col2,col3\n', b'\x00col1\x00,\x00col2\x00,\x00col3\x00\n'),
+            ('"', '"', b'col1,col2,col3\n', b'"col1","col2","col3"\n'),
+            ('"', '"', b'col"1,col2,col3\n', b'"col""1","col2","col3"\n'),
+            ('"', '"', b'""""\n', b'""""\n'),
+            ('"', '"', b'\n', b''),
+            ("'", "\\", b'col1,col2,col3\n', b"'col1','col2','col3'\n"),
+            ("'", "\\", b'col""1,col2,col3\n', b"'col\"\"1','col2','col3'\n"),
+            ("'", "\\", b'col\'1,col2,col3\n', b"'col\\'1','col2','col3'\n"),
+            ("'", "\\", b'"col\'1","col2","col3"\n', b"'col\\'1','col2','col3'\n"),
+            ("'", "\\", b'col\'\n', b"'col\\''\n"),
+            # Two consecutive escaped quotes
+            ("'", "\\", b'"a"""""\n', b"'a\"\"'\n"),
     ]
 
     try:
         client.make_bucket(bucket_name)
 
-        for idx, (quote_char, object_content, expected_output) in enumerate(tests):
+        for idx, (quote_char, escape_char, object_content, expected_output) in enumerate(tests):
             options = SelectObjectOptions(
                     expression="select * from s3object",
                     input_serialization=InputSerialization(
@@ -215,7 +233,7 @@ def test_csv_output_quote_char(client, log_output):
                             RecordDelimiter="\n",
                             FieldDelimiter=",",
                             QuoteCharacter=quote_char,
-                            QuoteEscapeCharacter=quote_char,)
+                            QuoteEscapeCharacter=escape_char,)
                         ),
                     request_progress=RequestProgress(
                         enabled="False"
@@ -286,14 +304,13 @@ def main():
             secret_key = 'zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG'
             secure = True
 
-        client = Minio(server_endpoint, access_key, secret_key, secure=secure)
+        client = Minio(server_endpoint, access_key, secret_key, secure=False)
 
         log_output = LogOutput(client.select_object_content, 'test_csv_input_quote_char')
-        test_csv_input_quote_char(client, log_output)
+        test_csv_input_custom_quote_char(client, log_output)
 
         log_output = LogOutput(client.select_object_content, 'test_csv_output_quote_char')
-        test_csv_output_quote_char(client, log_output)
-
+        test_csv_output_custom_quote_char(client, log_output)
 
     except Exception as err:
         print(log_output.json_report(err))
