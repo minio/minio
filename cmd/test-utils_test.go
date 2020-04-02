@@ -1737,9 +1737,9 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	apiRouter.ServeHTTP(rec, anonReq)
 
 	// expected error response when the unsigned HTTP request is not permitted.
-	accesDeniedHTTPStatus := getAPIError(ErrAccessDenied).HTTPStatusCode
-	if rec.Code != accesDeniedHTTPStatus {
-		t.Fatal(failTestStr(anonTestStr, fmt.Sprintf("Object API Nil Test expected to fail with %d, but failed with %d", accesDeniedHTTPStatus, rec.Code)))
+	accessDenied := getAPIError(ErrAccessDenied).HTTPStatusCode
+	if rec.Code != accessDenied {
+		t.Fatal(failTestStr(anonTestStr, fmt.Sprintf("Object API Nil Test expected to fail with %d, but failed with %d", accessDenied, rec.Code)))
 	}
 
 	// HEAD HTTTP request doesn't contain response body.
@@ -1826,8 +1826,10 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 		}
 	}
 
-	if rec.Code != accesDeniedHTTPStatus {
-		t.Fatal(failTestStr(unknownSignTestStr, fmt.Sprintf("Object API Unknow auth test for \"%s\", expected to fail with %d, but failed with %d", testName, accesDeniedHTTPStatus, rec.Code)))
+	// expected error response when the unsigned HTTP request is not permitted.
+	unsupportedSignature := getAPIError(ErrSignatureVersionNotSupported).HTTPStatusCode
+	if rec.Code != unsupportedSignature {
+		t.Fatal(failTestStr(unknownSignTestStr, fmt.Sprintf("Object API Unknow auth test for \"%s\", expected to fail with %d, but failed with %d", testName, unsupportedSignature, rec.Code)))
 	}
 
 }
