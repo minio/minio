@@ -432,7 +432,7 @@ type MetricsTransport struct {
 // RoundTrip implements the RoundTrip method for MetricsTransport
 func (m MetricsTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	metered := shouldMeterRequest(r)
-	if metered && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+	if metered && (r.Method == http.MethodPost || r.Method == http.MethodPut) {
 		m.Metrics.IncRequests(r.Method)
 		if r.ContentLength > 0 {
 			m.Metrics.IncBytesSent(uint64(r.ContentLength))
@@ -444,7 +444,8 @@ func (m MetricsTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	if metered && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
-		if r.ContentLength > 0 {
+		m.Metrics.IncRequests(r.Method)
+		if resp.ContentLength > 0 {
 			m.Metrics.IncBytesReceived(uint64(resp.ContentLength))
 		}
 	}

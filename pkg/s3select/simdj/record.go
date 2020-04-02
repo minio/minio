@@ -141,7 +141,7 @@ func (r *Record) Set(name string, value *sql.Value) (sql.Record, error) {
 }
 
 // WriteCSV - encodes to CSV data.
-func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter, quote rune, alwaysQuote bool) error {
+func (r *Record) WriteCSV(writer io.Writer, opts sql.WriteCSVOpts) error {
 	csvRecord := make([]string, 0, 10)
 	var tmp simdjson.Iter
 	obj := r.object
@@ -173,9 +173,10 @@ allElems:
 		csvRecord = append(csvRecord, columnValue)
 	}
 	w := csv.NewWriter(writer)
-	w.Comma = fieldDelimiter
-	w.Quote = quote
-	w.AlwaysQuote = alwaysQuote
+	w.Comma = opts.FieldDelimiter
+	w.Quote = opts.Quote
+	w.QuoteEscape = opts.QuoteEscape
+	w.AlwaysQuote = opts.AlwaysQuote
 	if err := w.Write(csvRecord); err != nil {
 		return err
 	}

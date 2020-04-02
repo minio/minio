@@ -39,7 +39,7 @@ func (adm *AdminClient) GetConfig(ctx context.Context) ([]byte, error) {
 		return nil, httpRespToErrorResponse(resp)
 	}
 
-	return DecryptData(adm.secretAccessKey, resp.Body)
+	return DecryptData(adm.getSecretKey(), resp.Body)
 }
 
 // SetConfig - set config supplied as config.json for the setup.
@@ -56,7 +56,7 @@ func (adm *AdminClient) SetConfig(ctx context.Context, config io.Reader) (err er
 		return err
 	}
 	configBytes := configBuf[:n]
-	econfigBytes, err := EncryptData(adm.secretAccessKey, configBytes)
+	econfigBytes, err := EncryptData(adm.getSecretKey(), configBytes)
 	if err != nil {
 		return err
 	}

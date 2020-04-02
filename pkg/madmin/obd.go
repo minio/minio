@@ -131,9 +131,10 @@ type MinioOBDInfo struct {
 
 // PerfOBDInfo - Includes Drive and Net perf info for the entire MinIO cluster
 type PerfOBDInfo struct {
-	DriveInfo []ServerDrivesOBDInfo `json:"drives,omitempty"`
-	Net       []ServerNetOBDInfo    `json:"net,omitempty"`
-	Error     string                `json:"error,omitempty"`
+	DriveInfo   []ServerDrivesOBDInfo `json:"drives,omitempty"`
+	Net         []ServerNetOBDInfo    `json:"net,omitempty"`
+	NetParallel ServerNetOBDInfo      `json:"net_parallel,omitempty"`
+	Error       string                `json:"error,omitempty"`
 }
 
 // ServerDrivesOBDInfo - Drive OBD info about all drives in a single MinIO node
