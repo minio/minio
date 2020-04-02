@@ -429,7 +429,12 @@ func generateListVersionsResponse(bucket, prefix, marker, delimiter, encodingTyp
 			content.ETag = "\"" + object.ETag + "\""
 		}
 		content.Size = object.Size
-		content.StorageClass = object.StorageClass
+		if object.StorageClass != "" {
+			content.StorageClass = object.StorageClass
+		} else {
+			content.StorageClass = globalMinioDefaultStorageClass
+		}
+
 		content.Owner = owner
 		content.VersionID = "null"
 		content.IsLatest = true
@@ -475,7 +480,11 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingTy
 			content.ETag = "\"" + object.ETag + "\""
 		}
 		content.Size = object.Size
-		content.StorageClass = object.StorageClass
+		if object.StorageClass != "" {
+			content.StorageClass = object.StorageClass
+		} else {
+			content.StorageClass = globalMinioDefaultStorageClass
+		}
 		content.Owner = owner
 		contents = append(contents, content)
 	}
@@ -521,7 +530,11 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 			content.ETag = "\"" + object.ETag + "\""
 		}
 		content.Size = object.Size
-		content.StorageClass = object.StorageClass
+		if object.StorageClass != "" {
+			content.StorageClass = object.StorageClass
+		} else {
+			content.StorageClass = globalMinioDefaultStorageClass
+		}
 		content.Owner = owner
 		if metadata {
 			content.UserMetadata = make(StringMap)

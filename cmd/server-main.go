@@ -397,9 +397,18 @@ func serverMain(ctx *cli.Context) {
 	globalObjLayerMutex.Unlock()
 
 	if globalIsDistXL && globalEndpoints.FirstLocal() {
-		// Additionally in distributed setup validate
-		if err := verifyServerSystemConfig(globalEndpoints); err != nil {
-			logger.Fatal(err, "Unable to initialize distributed setup")
+		for {
+			// Additionally in distributed setup, validate the setup and configuration.
+			err := verifyServerSystemConfig(globalEndpoints)
+			if err == nil {
+				break
+			}
+			logger.LogIf(GlobalContext, err, "Unable to initialize distributed setup")
+			select {
+			case <-GlobalContext.Done():
+				return
+			case <-time.After(5 * time.Second):
+			}
 		}
 	}
 
