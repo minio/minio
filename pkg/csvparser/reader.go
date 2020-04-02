@@ -113,8 +113,11 @@ type Reader struct {
 	// or the Unicode replacement character (0xFFFD).
 	Comma rune
 
-	// Quote is the single character used for marking fields limits
+	// Quote is a single rune used for marking fields limits
 	Quote []rune
+
+	// QuoteEscape is a single rune to escape the quote character
+	QuoteEscape rune
 
 	// Comment, if not 0, is the comment character. Lines beginning with the
 	// Comment character without preceding whitespace are ignored.
@@ -173,9 +176,10 @@ type Reader struct {
 // NewReader returns a new Reader that reads from r.
 func NewReader(r io.Reader) *Reader {
 	return &Reader{
-		Comma: ',',
-		Quote: []rune(`"`),
-		r:     bufio.NewReader(r),
+		Comma:       ',',
+		Quote:       []rune(`"`),
+		QuoteEscape: '"',
+		r:           bufio.NewReader(r),
 	}
 }
 
@@ -291,6 +295,9 @@ func (r *Reader) readRecord(dst []string) ([]string, error) {
 		return nil, errRead
 	}
 
+	var quoteEscape = r.QuoteEscape
+	var quoteEscapeLen = utf8.RuneLen(quoteEscape)
+
 	var quote rune
 	var quoteLen int
 	if len(r.Quote) > 0 {
@@ -339,12 +346,22 @@ parseField:
 			// Quoted string field
 			line = line[quoteLen:]
 			for {
-				i := bytes.IndexRune(line, quote)
+				i := bytes.IndexAny(line, string(quote)+string(quoteEscape))
 				if i >= 0 {
-					// Hit next quote.
+					// Hit next quote or escape quote
 					r.recordBuffer = append(r.recordBuffer, line[:i]...)
-					line = line[i+quoteLen:]
+
+					escape := nextRune(line[i:]) == quoteEscape
+					if escape {
+						line = line[i+quoteEscapeLen:]
+					} else {
+						line = line[i+quoteLen:]
+					}
+
 					switch rn := nextRune(line); {
+					case escape && quoteEscape != quote:
+						r.recordBuffer = append(r.recordBuffer, encodeRune(rn)...)
+						line = line[utf8.RuneLen(rn):]
 					case rn == quote:
 						// `""` sequence (append quote).
 						r.recordBuffer = append(r.recordBuffer, encodedQuote...)
