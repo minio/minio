@@ -109,14 +109,14 @@ func initTestXLObjLayer() (ObjectLayer, []string, error) {
 		return nil, nil, err
 	}
 	endpoints := mustGetNewEndpoints(xlDirs...)
-	format, err := waitForFormatXL(true, endpoints, 1, 1, 16, "")
+	storageDisks, format, err := waitForFormatXL(true, endpoints, 1, 1, 16, "")
 	if err != nil {
 		removeRoots(xlDirs)
 		return nil, nil, err
 	}
 
 	globalPolicySys = NewPolicySys()
-	objLayer, err := newXLSets(endpoints, format, 1, 16)
+	objLayer, err := newXLSets(endpoints, storageDisks, format, 1, 16)
 	if err != nil {
 		return nil, nil, err
 	}

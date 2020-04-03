@@ -122,7 +122,8 @@ const (
 	ErrMissingCredTag
 	ErrCredMalformed
 	ErrInvalidRegion
-	ErrInvalidService
+	ErrInvalidServiceS3
+	ErrInvalidServiceSTS
 	ErrInvalidRequestVersion
 	ErrMissingSignTag
 	ErrMissingSignHeadersTag
@@ -210,6 +211,7 @@ const (
 	ErrInvalidResourceName
 	ErrServerNotInitialized
 	ErrOperationTimedOut
+	ErrOperationMaxedOut
 	ErrInvalidRequest
 	// MinIO storage class error codes
 	ErrInvalidStorageClass
@@ -653,9 +655,14 @@ var errorCodes = errorCodeMap{
 	// FIXME: Should contain the invalid param set as seen in https://github.com/minio/minio/issues/2385.
 	// right Description:   "Error parsing the X-Amz-Credential parameter; incorrect service \"s4\". This endpoint belongs to \"s3\".".
 	// Need changes to make sure variable messages can be constructed.
-	ErrInvalidService: {
-		Code:           "AuthorizationQueryParametersError",
-		Description:    "Error parsing the X-Amz-Credential parameter; incorrect service. This endpoint belongs to \"s3\".",
+	ErrInvalidServiceS3: {
+		Code:           "AuthorizationParametersError",
+		Description:    "Error parsing the Credential/X-Amz-Credential parameter; incorrect service. This endpoint belongs to \"s3\".",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidServiceSTS: {
+		Code:           "AuthorizationParametersError",
+		Description:    "Error parsing the Credential parameter; incorrect service. This endpoint belongs to \"sts\".",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// FIXME: Should contain the invalid param set as seen in https://github.com/minio/minio/issues/2385.
@@ -1077,6 +1084,11 @@ var errorCodes = errorCodeMap{
 	ErrOperationTimedOut: {
 		Code:           "XMinioServerTimedOut",
 		Description:    "A timeout occurred while trying to lock a resource",
+		HTTPStatusCode: http.StatusRequestTimeout,
+	},
+	ErrOperationMaxedOut: {
+		Code:           "XMinioServerTimedOut",
+		Description:    "A timeout exceeded while waiting to proceed with the request",
 		HTTPStatusCode: http.StatusRequestTimeout,
 	},
 	ErrUnsupportedMetadata: {

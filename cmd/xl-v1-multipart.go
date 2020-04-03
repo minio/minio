@@ -765,7 +765,7 @@ func (xl xlObjects) AbortMultipartUpload(ctx context.Context, bucket, object, up
 }
 
 // Clean-up the old multipart uploads. Should be run in a Go routine.
-func (xl xlObjects) cleanupStaleMultipartUploads(ctx context.Context, cleanupInterval, expiry time.Duration, doneCh chan struct{}) {
+func (xl xlObjects) cleanupStaleMultipartUploads(ctx context.Context, cleanupInterval, expiry time.Duration, doneCh <-chan struct{}) {
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
@@ -808,7 +808,8 @@ func (xl xlObjects) cleanupStaleMultipartUploadsOnDisk(ctx context.Context, disk
 				continue
 			}
 			if now.Sub(fi.ModTime) > expiry {
-				xl.deleteObject(ctx, minioMetaMultipartBucket, uploadIDPath, len(xl.getDisks())/2+1, false)
+				writeQuorum := getWriteQuorum(len(xl.getDisks()))
+				xl.deleteObject(ctx, minioMetaMultipartBucket, uploadIDPath, writeQuorum, false)
 			}
 		}
 	}

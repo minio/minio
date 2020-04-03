@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // This is not implemented/needed anymore, look for xl-sets.ListBucketHeal()
@@ -29,7 +30,7 @@ func (xl xlObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 }
 
 // This is not implemented/needed anymore, look for xl-sets.HealObjects()
-func (xl xlObjects) HealObjects(ctx context.Context, bucket, prefix string, fn healObjectFn) error {
+func (xl xlObjects) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn healObjectFn) error {
 	logger.LogIf(ctx, NotImplemented{})
 	return NotImplemented{}
 }

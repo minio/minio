@@ -193,13 +193,13 @@ func prepareXLSets32() (ObjectLayer, []string, error) {
 
 	endpoints := append(endpoints1, endpoints2...)
 	fsDirs := append(fsDirs1, fsDirs2...)
-	format, err := waitForFormatXL(true, endpoints, 1, 2, 16, "")
+	storageDisks, format, err := waitForFormatXL(true, endpoints, 1, 2, 16, "")
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, nil, err
 	}
 
-	objAPI, err := newXLSets(endpoints, format, 2, 16)
+	objAPI, err := newXLSets(endpoints, storageDisks, format, 2, 16)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -419,22 +419,6 @@ func resetGlobalConfigPath() {
 	globalConfigDir = &ConfigDir{path: ""}
 }
 
-func resetGlobalServiceDoneCh() {
-	// Repeatedly send on the service done channel, so that
-	// listening go-routines will quit. This works better than
-	// closing the channel - closing introduces a new race, as the
-	// current thread writes to the variable, and other threads
-	// listening on it, read from it.
-loop:
-	for {
-		select {
-		case GlobalServiceDoneCh <- struct{}{}:
-		default:
-			break loop
-		}
-	}
-}
-
 // sets globalObjectAPI to `nil`.
 func resetGlobalObjectAPI() {
 	globalObjLayerMutex.Lock()
@@ -499,7 +483,8 @@ func resetGlobalIAMSys() {
 func resetTestGlobals() {
 	// close any indefinitely running go-routines from previous
 	// tests.
-	resetGlobalServiceDoneCh()
+	cancelGlobalContext()
+	initGlobalContext()
 	// set globalObjectAPI to `nil`.
 	resetGlobalObjectAPI()
 	// Reset config path set.
@@ -1478,6 +1463,13 @@ func getBucketLocationURL(endPoint, bucketName string) string {
 	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
 }
 
+// return URL For set/get lifecycle of the bucket.
+func getBucketLifecycleURL(endPoint, bucketName string) (ret string) {
+	queryValue := url.Values{}
+	queryValue.Set("lifecycle", "")
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
+}
+
 // return URL for listing objects in the bucket with V1 legacy API.
 func getListObjectsV1URL(endPoint, bucketName, prefix, maxKeys, encodingType string) string {
 	queryValue := url.Values{}
@@ -1599,7 +1591,7 @@ func getRandomDisks(N int) ([]string, error) {
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
 func newTestObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err error) {
 	// For FS only, directly use the disk.
-	if endpointZones.Nodes() == 1 {
+	if endpointZones.NEndpoints() == 1 {
 		// Initialize new FS object layer.
 		return NewFSObjectLayer(endpointZones[0].Endpoints[0].Path)
 	}
@@ -1745,9 +1737,9 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	apiRouter.ServeHTTP(rec, anonReq)
 
 	// expected error response when the unsigned HTTP request is not permitted.
-	accesDeniedHTTPStatus := getAPIError(ErrAccessDenied).HTTPStatusCode
-	if rec.Code != accesDeniedHTTPStatus {
-		t.Fatal(failTestStr(anonTestStr, fmt.Sprintf("Object API Nil Test expected to fail with %d, but failed with %d", accesDeniedHTTPStatus, rec.Code)))
+	accessDenied := getAPIError(ErrAccessDenied).HTTPStatusCode
+	if rec.Code != accessDenied {
+		t.Fatal(failTestStr(anonTestStr, fmt.Sprintf("Object API Nil Test expected to fail with %d, but failed with %d", accessDenied, rec.Code)))
 	}
 
 	// HEAD HTTTP request doesn't contain response body.
@@ -1834,8 +1826,10 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 		}
 	}
 
-	if rec.Code != accesDeniedHTTPStatus {
-		t.Fatal(failTestStr(unknownSignTestStr, fmt.Sprintf("Object API Unknow auth test for \"%s\", expected to fail with %d, but failed with %d", testName, accesDeniedHTTPStatus, rec.Code)))
+	// expected error response when the unsigned HTTP request is not permitted.
+	unsupportedSignature := getAPIError(ErrSignatureVersionNotSupported).HTTPStatusCode
+	if rec.Code != unsupportedSignature {
+		t.Fatal(failTestStr(unknownSignTestStr, fmt.Sprintf("Object API Unknow auth test for \"%s\", expected to fail with %d, but failed with %d", testName, unsupportedSignature, rec.Code)))
 	}
 
 }
@@ -2085,6 +2079,12 @@ func registerBucketLevelFunc(bucket *mux.Router, api objectAPIHandlers, apiFunct
 		case "GetBucketPolicy":
 			// Register Get Bucket policy HTTP Handler.
 			bucket.Methods("GET").HandlerFunc(api.GetBucketPolicyHandler).Queries("policy", "")
+		case "GetBucketLifecycle":
+			bucket.Methods("GET").HandlerFunc(api.GetBucketLifecycleHandler).Queries("lifecycle", "")
+		case "PutBucketLifecycle":
+			bucket.Methods("PUT").HandlerFunc(api.PutBucketLifecycleHandler).Queries("lifecycle", "")
+		case "DeleteBucketLifecycle":
+			bucket.Methods("DELETE").HandlerFunc(api.DeleteBucketLifecycleHandler).Queries("lifecycle", "")
 		case "GetBucketLocation":
 			// Register GetBucketLocation handler.
 			bucket.Methods("GET").HandlerFunc(api.GetBucketLocationHandler).Queries("location", "")

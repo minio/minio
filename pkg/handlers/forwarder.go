@@ -91,7 +91,8 @@ func (f *Forwarder) getURLFromRequest(req *http.Request) *url.URL {
 func copyURL(i *url.URL) *url.URL {
 	out := *i
 	if i.User != nil {
-		out.User = &(*i.User)
+		u := *i.User
+		out.User = &u
 	}
 	return &out
 }

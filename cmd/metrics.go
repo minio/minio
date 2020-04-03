@@ -19,6 +19,8 @@ package cmd
 import (
 	"context"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/prometheus/client_golang/prometheus"
@@ -81,13 +83,277 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 	// Expose MinIO's version information
 	minioVersionInfo.WithLabelValues(Version, CommitID).Set(float64(1.0))
 
-	// Fetch disk space info
-	objLayer := newObjectLayerFn()
+	storageMetricsPrometheus(ch)
+	networkMetricsPrometheus(ch)
+	httpMetricsPrometheus(ch)
+	gatewayMetricsPrometheus(ch)
+	healingMetricsPrometheus(ch)
+}
+
+// collects healing specific metrics for MinIO instance in Prometheus specific format
+// and sends to given channel
+func healingMetricsPrometheus(ch chan<- prometheus.Metric) {
+	if !globalIsXL {
+		return
+	}
+	bgSeq, exists := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
+	if !exists {
+		return
+	}
+	healMetricsNamespace := "self_heal"
+
+	dur := time.Duration(-1)
+	if !bgSeq.lastHealActivity.IsZero() {
+		dur = time.Since(bgSeq.lastHealActivity)
+	}
+
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName(healMetricsNamespace, "time", "since_last_activity"),
+			"Time elapsed (in nano seconds) since last self healing activity. This is set to -1 until initial self heal activity",
+			nil, nil),
+		prometheus.GaugeValue,
+		float64(dur),
+	)
+	for k, v := range bgSeq.getScannedItemsMap() {
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName(healMetricsNamespace, "objects", "scanned"),
+				"Objects scanned in current self healing run",
+				[]string{"type"}, nil),
+			prometheus.GaugeValue,
+			float64(v), string(k),
+		)
+	}
+	for k, v := range bgSeq.getHealedItemsMap() {
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName(healMetricsNamespace, "objects", "healed"),
+				"Objects healed in current self healing run",
+				[]string{"type"}, nil),
+			prometheus.GaugeValue,
+			float64(v), string(k),
+		)
+	}
+	for k, v := range bgSeq.gethealFailedItemsMap() {
+		// healFailedItemsMap stores the endpoint and volume state separated by comma,
+		// split the fields and pass to channel at correct index
+		s := strings.Split(k, ",")
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName(healMetricsNamespace, "objects", "heal_failed"),
+				"Objects for which healing failed in current self healing run",
+				[]string{"mount_path", "volume_status"}, nil),
+			prometheus.GaugeValue,
+			float64(v), string(s[0]), string(s[1]),
+		)
+	}
+}
+
+// collects gateway specific metrics for MinIO instance in Prometheus specific format
+// and sends to given channel
+func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
+	if !globalIsGateway || (globalGatewayName != "s3" && globalGatewayName != "azure" && globalGatewayName != "gcs") {
+		return
+	}
+
+	objLayer := newObjectLayerWithoutSafeModeFn()
 	// Service not initialized yet
 	if objLayer == nil {
 		return
 	}
 
+	m, err := objLayer.GetMetrics(context.Background())
+	if err != nil {
+		return
+	}
+
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("gateway", globalGatewayName, "bytes_received"),
+			"Total number of bytes received by current MinIO Gateway "+globalGatewayName+" backend",
+			nil, nil),
+		prometheus.CounterValue,
+		float64(m.GetBytesReceived()),
+	)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("gateway", globalGatewayName, "bytes_sent"),
+			"Total number of bytes sent by current MinIO Gateway to "+globalGatewayName+" backend",
+			nil, nil),
+		prometheus.CounterValue,
+		float64(m.GetBytesSent()),
+	)
+	s := m.GetRequests()
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
+			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
+			[]string{"method"}, nil),
+		prometheus.CounterValue,
+		float64(s.Get.Load()),
+		http.MethodGet,
+	)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
+			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
+			[]string{"method"}, nil),
+		prometheus.CounterValue,
+		float64(s.Head.Load()),
+		http.MethodHead,
+	)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
+			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
+			[]string{"method"}, nil),
+		prometheus.CounterValue,
+		float64(s.Put.Load()),
+		http.MethodPut,
+	)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
+			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
+			[]string{"method"}, nil),
+		prometheus.CounterValue,
+		float64(s.Post.Load()),
+		http.MethodPost,
+	)
+}
+
+// collects cache metrics for MinIO server in Prometheus specific format
+// and sends to given channel
+func cacheMetricsPrometheus(ch chan<- prometheus.Metric) {
+	cacheObjLayer := newCachedObjectLayerFn()
+	// Service not initialized yet
+	if cacheObjLayer == nil {
+		return
+	}
+
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("cache", "hits", "total"),
+			"Total number of disk cache hits in current MinIO instance",
+			nil, nil),
+		prometheus.CounterValue,
+		float64(cacheObjLayer.CacheStats().getHits()),
+	)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("cache", "misses", "total"),
+			"Total number of disk cache misses in current MinIO instance",
+			nil, nil),
+		prometheus.CounterValue,
+		float64(cacheObjLayer.CacheStats().getMisses()),
+	)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("cache", "data", "served"),
+			"Total number of bytes served from cache of current MinIO instance",
+			nil, nil),
+		prometheus.CounterValue,
+		float64(cacheObjLayer.CacheStats().getBytesServed()),
+	)
+}
+
+// collects http metrics for MinIO server in Prometheus specific format
+// and sends to given channel
+func httpMetricsPrometheus(ch chan<- prometheus.Metric) {
+	httpStats := globalHTTPStats.toServerHTTPStats()
+
+	for api, value := range httpStats.CurrentS3Requests.APIStats {
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("s3", "requests", "current"),
+				"Total number of running s3 requests in current MinIO server instance",
+				[]string{"api"}, nil),
+			prometheus.CounterValue,
+			float64(value),
+			api,
+		)
+	}
+
+	for api, value := range httpStats.TotalS3Requests.APIStats {
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("s3", "requests", "total"),
+				"Total number of s3 requests in current MinIO server instance",
+				[]string{"api"}, nil),
+			prometheus.CounterValue,
+			float64(value),
+			api,
+		)
+	}
+
+	for api, value := range httpStats.TotalS3Errors.APIStats {
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("s3", "errors", "total"),
+				"Total number of s3 errors in current MinIO server instance",
+				[]string{"api"}, nil),
+			prometheus.CounterValue,
+			float64(value),
+			api,
+		)
+	}
+}
+
+// collects network metrics for MinIO server in Prometheus specific format
+// and sends to given channel
+func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
+	connStats := globalConnStats.toServerConnStats()
+
+	// Network Sent/Received Bytes (internode)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("internode", "tx", "bytes_total"),
+			"Total number of bytes sent to the other peer nodes by current MinIO server instance",
+			nil, nil),
+		prometheus.CounterValue,
+		float64(connStats.TotalOutputBytes),
+	)
+
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("internode", "rx", "bytes_total"),
+			"Total number of internode bytes received by current MinIO server instance",
+			nil, nil),
+		prometheus.CounterValue,
+		float64(connStats.TotalInputBytes),
+	)
+
+	// Network Sent/Received Bytes (Outbound)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("s3", "tx", "bytes_total"),
+			"Total number of s3 bytes sent by current MinIO server instance",
+			nil, nil),
+		prometheus.CounterValue,
+		float64(connStats.S3OutputBytes),
+	)
+
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("s3", "rx", "bytes_total"),
+			"Total number of s3 bytes received by current MinIO server instance",
+			nil, nil),
+		prometheus.CounterValue,
+		float64(connStats.S3InputBytes),
+	)
+}
+
+// collects storage metrics for MinIO server in Prometheus specific format
+// and sends to given channel
+func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
+	objLayer := newObjectLayerWithoutSafeModeFn()
+	// Service not initialized yet
+	if objLayer == nil {
+		return
+	}
+
+	// Fetch disk space info
 	storageInfo := objLayer.StorageInfo(context.Background(), true)
 
 	offlineDisks := storageInfo.Backend.OfflineDisks
@@ -149,151 +415,6 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 			prometheus.GaugeValue,
 			float64(total),
 			mountPath,
-		)
-	}
-
-	connStats := globalConnStats.toServerConnStats()
-
-	// Network Sent/Received Bytes (internode)
-	ch <- prometheus.MustNewConstMetric(
-		prometheus.NewDesc(
-			prometheus.BuildFQName("internode", "tx", "bytes_total"),
-			"Total number of bytes sent to the other peer nodes by current MinIO server instance",
-			nil, nil),
-		prometheus.CounterValue,
-		float64(connStats.TotalOutputBytes),
-	)
-
-	ch <- prometheus.MustNewConstMetric(
-		prometheus.NewDesc(
-			prometheus.BuildFQName("internode", "rx", "bytes_total"),
-			"Total number of internode bytes received by current MinIO server instance",
-			nil, nil),
-		prometheus.CounterValue,
-		float64(connStats.TotalInputBytes),
-	)
-
-	// Network Sent/Received Bytes (Outbound)
-	ch <- prometheus.MustNewConstMetric(
-		prometheus.NewDesc(
-			prometheus.BuildFQName("s3", "tx", "bytes_total"),
-			"Total number of s3 bytes sent by current MinIO server instance",
-			nil, nil),
-		prometheus.CounterValue,
-		float64(connStats.S3OutputBytes),
-	)
-
-	ch <- prometheus.MustNewConstMetric(
-		prometheus.NewDesc(
-			prometheus.BuildFQName("s3", "rx", "bytes_total"),
-			"Total number of s3 bytes received by current MinIO server instance",
-			nil, nil),
-		prometheus.CounterValue,
-		float64(connStats.S3InputBytes),
-	)
-
-	httpStats := globalHTTPStats.toServerHTTPStats()
-
-	for api, value := range httpStats.CurrentS3Requests.APIStats {
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("s3", "requests", "current"),
-				"Total number of running s3 requests in current MinIO server instance",
-				[]string{"api"}, nil),
-			prometheus.CounterValue,
-			float64(value),
-			api,
-		)
-	}
-
-	for api, value := range httpStats.TotalS3Requests.APIStats {
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("s3", "requests", "total"),
-				"Total number of s3 requests in current MinIO server instance",
-				[]string{"api"}, nil),
-			prometheus.CounterValue,
-			float64(value),
-			api,
-		)
-	}
-
-	for api, value := range httpStats.TotalS3Errors.APIStats {
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("s3", "errors", "total"),
-				"Total number of s3 errors in current MinIO server instance",
-				[]string{"api"}, nil),
-			prometheus.CounterValue,
-			float64(value),
-			api,
-		)
-	}
-
-	// Cache related metrics
-	if globalCacheConfig.Enabled {
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("cache", "hits", "total"),
-				"Total number of disk cache hits in current MinIO instance",
-				nil, nil),
-			prometheus.CounterValue,
-			float64(newCachedObjectLayerFn().CacheStats().getHits()),
-		)
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("cache", "misses", "total"),
-				"Total number of disk cache misses in current MinIO instance",
-				nil, nil),
-			prometheus.CounterValue,
-			float64(newCachedObjectLayerFn().CacheStats().getMisses()),
-		)
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("cache", "data", "served"),
-				"Total number of bytes served from cache of current MinIO instance",
-				nil, nil),
-			prometheus.CounterValue,
-			float64(newCachedObjectLayerFn().CacheStats().getBytesServed()),
-		)
-	}
-
-	if globalIsGateway && (globalGatewayName == "s3" || globalGatewayName == "azure" || globalGatewayName == "gcs") {
-		m, _ := globalObjectAPI.GetMetrics(context.Background())
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("gateway", globalGatewayName, "bytes_received"),
-				"Total number of bytes received by current MinIO Gateway "+globalGatewayName+" backend",
-				nil, nil),
-			prometheus.CounterValue,
-			float64(m.GetBytesReceived()),
-		)
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("gateway", globalGatewayName, "bytes_sent"),
-				"Total number of bytes sent by current MinIO Gateway to "+globalGatewayName+" backend",
-				nil, nil),
-			prometheus.CounterValue,
-			float64(m.GetBytesSent()),
-		)
-		s := m.GetRequests()
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
-				"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
-				[]string{"method"}, nil),
-			prometheus.CounterValue,
-			float64(s.Get.Load()),
-			http.MethodGet,
-		)
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
-				"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
-				[]string{"method"}, nil),
-			prometheus.CounterValue,
-			float64(s.Head.Load()),
-			http.MethodHead,
 		)
 	}
 }

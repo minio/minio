@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2017-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,11 +87,15 @@ EXAMPLES:
 
 // Handler for 'minio gateway b2' command line.
 func b2GatewayMain(ctx *cli.Context) {
-	minio.StartGateway(ctx, &B2{})
+	minio.StartGateway(ctx, &B2{
+		strictS3Compat: ctx.IsSet("compat") || ctx.GlobalIsSet("compat"),
+	})
 }
 
 // B2 implements MinIO Gateway
-type B2 struct{}
+type B2 struct {
+	strictS3Compat bool
+}
 
 // Name implements Gateway interface.
 func (g *B2) Name() string {
@@ -102,7 +106,7 @@ func (g *B2) Name() string {
 // talk to B2 remote backend.
 func (g *B2) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
 	ctx := context.Background()
-	client, err := b2.AuthorizeAccount(ctx, creds.AccessKey, creds.SecretKey, b2.Transport(minio.NewCustomHTTPTransport()))
+	client, err := b2.AuthorizeAccount(ctx, creds.AccessKey, creds.SecretKey, b2.Transport(minio.NewGatewayHTTPTransport()))
 	if err != nil {
 		return nil, err
 	}
@@ -111,9 +115,10 @@ func (g *B2) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 		creds:    creds,
 		b2Client: client,
 		httpClient: &http.Client{
-			Transport: minio.NewCustomHTTPTransport(),
+			Transport: minio.NewGatewayHTTPTransport(),
 		},
-		ctx: ctx,
+		ctx:            ctx,
+		strictS3Compat: g.strictS3Compat,
 	}, nil
 }
 
@@ -125,12 +130,13 @@ func (g *B2) Production() bool {
 // b2Object implements gateway for MinIO and BackBlaze B2 compatible object storage servers.
 type b2Objects struct {
 	minio.GatewayUnsupported
-	mu         sync.Mutex
-	creds      auth.Credentials
-	b2Client   *b2.B2
-	httpClient *http.Client
-	ctx        context.Context
-	buckets    []*b2.Bucket
+	mu             sync.Mutex
+	creds          auth.Credentials
+	b2Client       *b2.B2
+	httpClient     *http.Client
+	ctx            context.Context
+	buckets        []*b2.Bucket
+	strictS3Compat bool
 }
 
 // Convert B2 errors to minio object layer errors.
@@ -238,7 +244,7 @@ func (l *b2Objects) MakeBucketWithLocation(ctx context.Context, bucket, location
 }
 
 func (l *b2Objects) reAuthorizeAccount(ctx context.Context) error {
-	client, err := b2.AuthorizeAccount(l.ctx, l.creds.AccessKey, l.creds.SecretKey, b2.Transport(minio.NewCustomHTTPTransport()))
+	client, err := b2.AuthorizeAccount(l.ctx, l.creds.AccessKey, l.creds.SecretKey, b2.Transport(minio.NewGatewayHTTPTransport()))
 	if err != nil {
 		return err
 	}
@@ -246,6 +252,15 @@ func (l *b2Objects) reAuthorizeAccount(ctx context.Context) error {
 	l.b2Client.Update(client)
 	l.mu.Unlock()
 	return nil
+}
+
+// getETag returns an S3-compatible md5sum-ETag if requested and possible.
+func (l *b2Objects) getETag(f *b2.File, fi *b2.FileInfo) string {
+	if l.strictS3Compat && fi.MD5 != "" {
+		return fi.MD5
+	}
+
+	return minio.ToS3ETag(f.ID)
 }
 
 // listBuckets is a wrapper similar to ListBuckets, which re-authorizes
@@ -317,7 +332,7 @@ func (l *b2Objects) ListBuckets(ctx context.Context) ([]minio.BucketInfo, error)
 }
 
 // DeleteBucket deletes a bucket on B2
-func (l *b2Objects) DeleteBucket(ctx context.Context, bucket string) error {
+func (l *b2Objects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	bkt, err := l.Bucket(ctx, bucket)
 	if err != nil {
 		return err
@@ -374,7 +389,7 @@ func (l *b2Objects) ListObjects(ctx context.Context, bucket string, prefix strin
 				Name:        file.Name,
 				ModTime:     file.Timestamp,
 				Size:        file.Size,
-				ETag:        minio.ToS3ETag(file.ID),
+				ETag:        l.getETag(file, file.Info),
 				ContentType: file.Info.ContentType,
 				UserDefined: file.Info.Info,
 			})
@@ -427,7 +442,7 @@ func (l *b2Objects) ListObjectsV2(ctx context.Context, bucket, prefix, continuat
 				Name:        file.Name,
 				ModTime:     file.Timestamp,
 				Size:        file.Size,
-				ETag:        minio.ToS3ETag(file.ID),
+				ETag:        l.getETag(file, file.Info),
 				ContentType: file.Info.ContentType,
 				UserDefined: file.Info.Info,
 			})
@@ -452,7 +467,7 @@ func (l *b2Objects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 
 	pr, pw := io.Pipe()
 	go func() {
-		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, opts)
+		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, "", opts)
 		pw.CloseWithError(err)
 	}()
 	// Setup cleanup function to cause the above go-routine to
@@ -472,7 +487,7 @@ func (l *b2Objects) GetObject(ctx context.Context, bucket string, object string,
 	if err != nil {
 		return err
 	}
-	reader, err := bkt.DownloadFileByName(l.ctx, object, startOffset, length)
+	reader, err := bkt.DownloadFileByName(l.ctx, object, startOffset, length, false)
 	if err != nil {
 		l.buckets = []*b2.Bucket{}
 
@@ -481,7 +496,7 @@ func (l *b2Objects) GetObject(ctx context.Context, bucket string, object string,
 			return err
 		}
 
-		reader, err = bkt.DownloadFileByName(l.ctx, object, startOffset, length)
+		reader, err = bkt.DownloadFileByName(l.ctx, object, startOffset, length, false)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return b2ToObjectError(err, bucket, object)
@@ -543,7 +558,7 @@ func (l *b2Objects) GetObjectInfo(ctx context.Context, bucket string, object str
 	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
-		ETag:        minio.ToS3ETag(f[0].ID),
+		ETag:        l.getETag(f[0], fi),
 		Size:        fi.Size,
 		ModTime:     fi.Timestamp,
 		ContentType: fi.ContentType,
@@ -660,7 +675,7 @@ func (l *b2Objects) PutObject(ctx context.Context, bucket string, object string,
 	return minio.ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
-		ETag:        minio.ToS3ETag(f.ID),
+		ETag:        l.getETag(f, fi),
 		Size:        fi.Size,
 		ModTime:     fi.Timestamp,
 		ContentType: fi.ContentType,

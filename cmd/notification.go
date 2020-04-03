@@ -25,6 +25,7 @@ import (
 	"net"
 	"net/url"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +39,7 @@ import (
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
@@ -257,24 +259,6 @@ func (sys *NotificationSys) BackgroundHealStatus() []madmin.BgHealState {
 			continue
 		}
 		st, err := client.BackgroundHealStatus()
-		if err != nil {
-			logger.LogIf(context.Background(), err)
-		} else {
-			states[idx] = st
-		}
-	}
-
-	return states
-}
-
-// BackgroundOpsStatus - returns the status of all background operations of all peers
-func (sys *NotificationSys) BackgroundOpsStatus() []BgOpsStatus {
-	states := make([]BgOpsStatus, len(sys.peerClients))
-	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
-		st, err := client.BackgroundOpsStatus()
 		if err != nil {
 			logger.LogIf(context.Background(), err)
 		} else {
@@ -784,6 +768,9 @@ func (sys *NotificationSys) RemoveNotification(bucketName string) {
 
 // RemoveAllRemoteTargets - closes and removes all HTTP/PeerRPC client targets.
 func (sys *NotificationSys) RemoveAllRemoteTargets() {
+	sys.Lock()
+	defer sys.Unlock()
+
 	for _, targetMap := range sys.bucketRemoteTargetRulesMap {
 		for targetID := range targetMap {
 			sys.targetList.Remove(targetID)
@@ -902,6 +889,315 @@ func (sys *NotificationSys) CollectNetPerfInfo(size int64) map[string][]ServerNe
 		reply[client.host.String()] = info
 	}
 
+	return reply
+}
+
+// NetOBDInfo - Net OBD information
+func (sys *NotificationSys) NetOBDInfo(ctx context.Context) madmin.ServerNetOBDInfo {
+	var sortedGlobalEndpoints []string
+
+	/*
+			Ensure that only untraversed links are visited by this server
+		        i.e. if netOBD tests have been performed between a -> b, then do
+			not run it between b -> a
+
+		        The graph of tests looks like this
+
+		            a   b   c   d
+		        a | o | x | x | x |
+		        b | o | o | x | x |
+		        c | o | o | o | x |
+		        d | o | o | o | o |
+
+		        'x's should be tested, and 'o's should be skipped
+	*/
+
+	hostSet := set.NewStringSet()
+	for _, ez := range globalEndpoints {
+		for _, e := range ez.Endpoints {
+			if !hostSet.Contains(e.Host) {
+				sortedGlobalEndpoints = append(sortedGlobalEndpoints, e.Host)
+				hostSet.Add(e.Host)
+			}
+		}
+	}
+
+	sort.Strings(sortedGlobalEndpoints)
+	var remoteTargets []*peerRESTClient
+	search := func(host string) *peerRESTClient {
+		for index, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
+			if sys.peerClients[index].host.String() == host {
+				return client
+			}
+		}
+		return nil
+	}
+
+	for i := 0; i < len(sortedGlobalEndpoints); i++ {
+		if sortedGlobalEndpoints[i] != GetLocalPeer(globalEndpoints) {
+			continue
+		}
+		for j := 0; j < len(sortedGlobalEndpoints); j++ {
+			if j > i {
+				remoteTarget := search(sortedGlobalEndpoints[j])
+				if remoteTarget != nil {
+					remoteTargets = append(remoteTargets, remoteTarget)
+				}
+			}
+		}
+	}
+
+	netOBDs := make([]madmin.NetOBDInfo, len(remoteTargets))
+
+	for index, client := range remoteTargets {
+		if client == nil {
+			continue
+		}
+		var err error
+		netOBDs[index], err = client.NetOBDInfo(ctx)
+
+		addr := client.host.String()
+		reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
+		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		logger.LogIf(ctx, err)
+		netOBDs[index].Addr = addr
+		if err != nil {
+			netOBDs[index].Error = err.Error()
+		}
+	}
+	return madmin.ServerNetOBDInfo{
+		Net:  netOBDs,
+		Addr: GetLocalPeer(globalEndpoints),
+	}
+}
+
+// DispatchNetOBDInfo - Net OBD information from other nodes
+func (sys *NotificationSys) DispatchNetOBDInfo(ctx context.Context) []madmin.ServerNetOBDInfo {
+	serverNetOBDs := []madmin.ServerNetOBDInfo{}
+
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		serverNetOBD, err := sys.peerClients[index].DispatchNetOBDInfo(ctx)
+		if err != nil {
+			serverNetOBD.Addr = client.host.String()
+			serverNetOBD.Error = err.Error()
+		}
+		serverNetOBDs = append(serverNetOBDs, serverNetOBD)
+	}
+	return serverNetOBDs
+}
+
+// NetOBDParallelInfo - Performs NetOBD tests
+func (sys *NotificationSys) NetOBDParallelInfo(ctx context.Context) madmin.ServerNetOBDInfo {
+	netOBDs := []madmin.NetOBDInfo{}
+	wg := sync.WaitGroup{}
+
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+
+		wg.Add(1)
+		go func(index int) {
+			netOBD, err := sys.peerClients[index].NetOBDInfo(ctx)
+			netOBD.Addr = sys.peerClients[index].host.String()
+			if err != nil {
+				netOBD.Error = err.Error()
+			}
+			netOBDs = append(netOBDs, netOBD)
+			wg.Done()
+		}(index)
+	}
+	wg.Wait()
+	return madmin.ServerNetOBDInfo{
+		Net:  netOBDs,
+		Addr: GetLocalPeer(globalEndpoints),
+	}
+
+}
+
+// DriveOBDInfo - Drive OBD information
+func (sys *NotificationSys) DriveOBDInfo(ctx context.Context) []madmin.ServerDrivesOBDInfo {
+	reply := make([]madmin.ServerDrivesOBDInfo, len(sys.peerClients))
+
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			reply[index], err = sys.peerClients[index].DriveOBDInfo(ctx)
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			addr := sys.peerClients[index].host.String()
+			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
+			reply[index].Addr = addr
+			reply[index].Error = err.Error()
+		}
+	}
+	return reply
+}
+
+// CPUOBDInfo - CPU OBD information
+func (sys *NotificationSys) CPUOBDInfo(ctx context.Context) []madmin.ServerCPUOBDInfo {
+	reply := make([]madmin.ServerCPUOBDInfo, len(sys.peerClients))
+
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			reply[index], err = sys.peerClients[index].CPUOBDInfo(ctx)
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			addr := sys.peerClients[index].host.String()
+			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
+			reply[index].Addr = addr
+			reply[index].Error = err.Error()
+		}
+	}
+	return reply
+}
+
+// DiskHwOBDInfo - Disk HW OBD information
+func (sys *NotificationSys) DiskHwOBDInfo(ctx context.Context) []madmin.ServerDiskHwOBDInfo {
+	reply := make([]madmin.ServerDiskHwOBDInfo, len(sys.peerClients))
+
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			reply[index], err = sys.peerClients[index].DiskHwOBDInfo(ctx)
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			addr := sys.peerClients[index].host.String()
+			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
+			reply[index].Addr = addr
+			reply[index].Error = err.Error()
+		}
+	}
+	return reply
+}
+
+// OsOBDInfo - Os OBD information
+func (sys *NotificationSys) OsOBDInfo(ctx context.Context) []madmin.ServerOsOBDInfo {
+	reply := make([]madmin.ServerOsOBDInfo, len(sys.peerClients))
+
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			reply[index], err = sys.peerClients[index].OsOBDInfo(ctx)
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			addr := sys.peerClients[index].host.String()
+			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
+			reply[index].Addr = addr
+			reply[index].Error = err.Error()
+		}
+	}
+	return reply
+}
+
+// MemOBDInfo - Mem OBD information
+func (sys *NotificationSys) MemOBDInfo(ctx context.Context) []madmin.ServerMemOBDInfo {
+	reply := make([]madmin.ServerMemOBDInfo, len(sys.peerClients))
+
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			reply[index], err = sys.peerClients[index].MemOBDInfo(ctx)
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			addr := sys.peerClients[index].host.String()
+			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
+			reply[index].Addr = addr
+			reply[index].Error = err.Error()
+		}
+	}
+	return reply
+}
+
+// ProcOBDInfo - Process OBD information
+func (sys *NotificationSys) ProcOBDInfo(ctx context.Context) []madmin.ServerProcOBDInfo {
+	reply := make([]madmin.ServerProcOBDInfo, len(sys.peerClients))
+
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			reply[index], err = sys.peerClients[index].ProcOBDInfo(ctx)
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			addr := sys.peerClients[index].host.String()
+			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
+			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			logger.LogIf(ctx, err)
+			reply[index].Addr = addr
+			reply[index].Error = err.Error()
+		}
+	}
 	return reply
 }
 

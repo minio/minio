@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -152,26 +151,29 @@ func (client *storageRESTClient) Hostname() string {
 	return client.endpoint.Host
 }
 
-func (client *storageRESTClient) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, error) {
-	respBody, err := client.call(storageRESTMethodCrawlAndGetDataUsage, nil, nil, -1)
+func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
+	b := cache.serialize()
+	respBody, err := client.call(storageRESTMethodCrawlAndGetDataUsage,
+		url.Values{},
+		bytes.NewBuffer(b), int64(len(b)))
 	defer http.DrainBody(respBody)
 	if err != nil {
-		return DataUsageInfo{}, err
+		return cache, err
 	}
-	reader := bufio.NewReader(respBody)
-	for {
-		b, err := reader.ReadByte()
-		if err != nil {
-			return DataUsageInfo{}, err
-		}
-		if b != ' ' {
-			reader.UnreadByte()
-			break
-		}
+	reader, err := waitForHTTPResponse(respBody)
+	if err != nil {
+		return cache, err
 	}
-	var usageInfo DataUsageInfo
-	err = gob.NewDecoder(reader).Decode(&usageInfo)
-	return usageInfo, err
+	b, err = ioutil.ReadAll(reader)
+	if err != nil {
+		return cache, err
+	}
+	var newCache dataUsageCache
+	return newCache, newCache.deserialize(b)
+}
+
+func (client *storageRESTClient) GetDiskID() (string, error) {
+	return client.diskID, nil
 }
 
 func (client *storageRESTClient) SetDiskID(id string) {
@@ -232,9 +234,12 @@ func (client *storageRESTClient) StatVol(volume string) (volInfo VolInfo, err er
 }
 
 // DeleteVol - Deletes a volume over the network.
-func (client *storageRESTClient) DeleteVol(volume string) (err error) {
+func (client *storageRESTClient) DeleteVol(volume string, forceDelete bool) (err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
+	if forceDelete {
+		values.Set(storageRESTForceDelete, "true")
+	}
 	respBody, err := client.call(storageRESTMethodDeleteVol, values, nil, -1)
 	defer http.DrainBody(respBody)
 	return err
@@ -335,6 +340,40 @@ func (client *storageRESTClient) ReadFile(volume, path string, offset int64, buf
 	return int64(n), err
 }
 
+func (client *storageRESTClient) WalkSplunk(volume, dirPath, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTDirPath, dirPath)
+	values.Set(storageRESTMarkerPath, marker)
+	respBody, err := client.call(storageRESTMethodWalkSplunk, values, nil, -1)
+	if err != nil {
+		return nil, err
+	}
+
+	ch := make(chan FileInfo)
+	go func() {
+		defer close(ch)
+		defer http.DrainBody(respBody)
+
+		decoder := gob.NewDecoder(respBody)
+		for {
+			var fi FileInfo
+			if gerr := decoder.Decode(&fi); gerr != nil {
+				// Upon error return
+				return
+			}
+			select {
+			case ch <- fi:
+			case <-endWalkCh:
+				return
+			}
+
+		}
+	}()
+
+	return ch, nil
+}
+
 func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive bool, leafFile string,
 	readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (chan FileInfo, error) {
 	values := make(url.Values)
@@ -418,7 +457,7 @@ func (client *storageRESTClient) DeleteFileBulk(volume string, paths []string) (
 		return nil, err
 	}
 
-	reader, err := clearLeadingSpaces(respBody)
+	reader, err := waitForHTTPResponse(respBody)
 	if err != nil {
 		return nil, err
 	}
@@ -455,7 +494,7 @@ func (client *storageRESTClient) DeletePrefixes(volume string, paths []string) (
 		return nil, err
 	}
 
-	reader, err := clearLeadingSpaces(respBody)
+	reader, err := waitForHTTPResponse(respBody)
 	if err != nil {
 		return nil, err
 	}
@@ -484,22 +523,6 @@ func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPa
 	return err
 }
 
-// clearLeadingSpaces removes all the first spaces returned from a reader.
-func clearLeadingSpaces(r io.Reader) (io.Reader, error) {
-	reader := bufio.NewReader(r)
-	for {
-		b, err := reader.ReadByte()
-		if err != nil {
-			return nil, err
-		}
-		if b != ' ' {
-			reader.UnreadByte()
-			break
-		}
-	}
-	return reader, nil
-}
-
 func (client *storageRESTClient) VerifyFile(volume, path string, size int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
@@ -514,7 +537,7 @@ func (client *storageRESTClient) VerifyFile(volume, path string, size int64, alg
 	if err != nil {
 		return err
 	}
-	reader, err := clearLeadingSpaces(respBody)
+	reader, err := waitForHTTPResponse(respBody)
 	if err != nil {
 		return err
 	}

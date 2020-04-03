@@ -211,8 +211,9 @@ func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
 		// If OPA is not set, session token should
 		// have a policy and its mandatory, reject
 		// requests without policy claim.
-		_, pok := claims.Lookup(iamPolicyClaimName())
-		if !pok {
+		_, pokOpenID := claims.Lookup(iamPolicyClaimNameOpenID())
+		_, pokSA := claims.Lookup(iamPolicyClaimNameSA())
+		if !pokOpenID && !pokSA {
 			return nil, errAuthentication
 		}
 
@@ -226,7 +227,7 @@ func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
 		if err != nil {
 			// Base64 decoding fails, we should log to indicate
 			// something is malforming the request sent by client.
-			logger.LogIf(context.Background(), err, logger.Application)
+			logger.LogIf(r.Context(), err, logger.Application)
 			return nil, errAuthentication
 		}
 		claims.MapClaims[iampolicy.SessionPolicyName] = string(spBytes)
@@ -246,7 +247,7 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 	}
 	claims, err := getClaimsFromToken(r)
 	if err != nil {
-		return nil, toAPIErrorCode(context.Background(), err)
+		return nil, toAPIErrorCode(r.Context(), err)
 	}
 	return claims, ErrNone
 }
@@ -271,7 +272,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 	var cred auth.Credentials
 	switch getRequestAuthType(r) {
 	case authTypeUnknown, authTypeStreamingSigned:
-		return accessKey, owner, ErrAccessDenied
+		return accessKey, owner, ErrSignatureVersionNotSupported
 	case authTypePresignedV2, authTypeSignedV2:
 		if s3Err = isReqAuthenticatedV2(r); s3Err != ErrNone {
 			return accessKey, owner, s3Err
@@ -333,7 +334,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 			// Request is allowed return the appropriate access key.
 			return cred.AccessKey, owner, ErrNone
 		}
-		return accessKey, owner, ErrAccessDenied
+		return cred.AccessKey, owner, ErrAccessDenied
 	}
 	if globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
@@ -347,7 +348,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 		// Request is allowed return the appropriate access key.
 		return cred.AccessKey, owner, ErrNone
 	}
-	return accessKey, owner, ErrAccessDenied
+	return cred.AccessKey, owner, ErrAccessDenied
 }
 
 // Verify if request has valid AWS Signature Version '2'.
@@ -460,7 +461,7 @@ func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.handler.ServeHTTP(w, r)
 		return
 	}
-	writeErrorResponse(context.Background(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL, guessIsBrowserReq(r))
+	writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL, guessIsBrowserReq(r))
 }
 
 // isPutActionAllowed - check if PUT operation is allowed on the resource, this
@@ -471,7 +472,7 @@ func isPutActionAllowed(atype authType, bucketName, objectName string, r *http.R
 	var owner bool
 	switch atype {
 	case authTypeUnknown:
-		return ErrAccessDenied
+		return ErrSignatureVersionNotSupported
 	case authTypeSignedV2, authTypePresignedV2:
 		cred, owner, s3Err = getReqAccessKeyV2(r)
 	case authTypeStreamingSigned, authTypePresigned, authTypeSigned:
@@ -490,7 +491,7 @@ func isPutActionAllowed(atype authType, bucketName, objectName string, r *http.R
 	if cred.AccessKey == "" {
 		if globalPolicySys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
-			Action:          policy.PutObjectAction,
+			Action:          policy.Action(action),
 			BucketName:      bucketName,
 			ConditionValues: getConditionValues(r, "", "", nil),
 			IsOwner:         false,

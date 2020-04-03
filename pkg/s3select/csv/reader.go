@@ -299,6 +299,7 @@ func NewReader(readCloser io.ReadCloser, args *ReaderArgs) (*Reader, error) {
 			// Add the first rune of args.QuoteChracter
 			ret.Quote = append(ret.Quote, []rune(args.QuoteCharacter)[0])
 		}
+		ret.QuoteEscape = []rune(args.QuoteEscapeCharacter)[0]
 		ret.FieldsPerRecord = -1
 		// If LazyQuotes is true, a quote may appear in an unquoted field and a
 		// non-doubled quote may appear in a quoted field.

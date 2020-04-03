@@ -234,6 +234,11 @@ func testPresignedPutInvalidHash(s3Client *s3.S3) {
 	}
 
 	rreq, err := http.NewRequest("PUT", url, bytes.NewReader([]byte("")))
+	if err != nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go presigned PUT request failed", err).Fatal()
+		return
+	}
+
 	rreq.Header.Add("X-Amz-Content-Sha256", "invalid-sha256")
 	rreq.Header.Add("Content-Type", "application/octet-stream")
 
@@ -390,6 +395,10 @@ func testSelectObject(s3Client *s3.S3) {
 		Key:    aws.String(object1),
 	}
 	_, err = s3Client.PutObject(putInput1)
+	if err != nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go Select object failed %v", err), err).Fatal()
+		return
+	}
 
 	defer cleanup(s3Client, bucket, object1, function, args, startTime, true)
 
@@ -470,6 +479,10 @@ func testSelectObject(s3Client *s3.S3) {
 		Key:    aws.String(object2),
 	}
 	_, err = s3Client.PutObject(putInput2)
+	if err != nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go Select object upload failed: %v", err), err).Fatal()
+		return
+	}
 
 	defer cleanup(s3Client, bucket, object2, function, args, startTime, false)
 
@@ -696,7 +709,7 @@ func testObjectTaggingErrors(s3Client *s3.S3) {
 
 	_, err = s3Client.PutObjectTagging(input)
 	if err == nil {
-		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to fail but succeeded"), err).Fatal()
+		failureLog(function, args, startTime, "", "AWS SDK Go PUT expected to fail but succeeded", err).Fatal()
 		return
 	}
 
@@ -727,7 +740,7 @@ func testObjectTaggingErrors(s3Client *s3.S3) {
 
 	_, err = s3Client.PutObjectTagging(input)
 	if err == nil {
-		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to fail but succeeded"), err).Fatal()
+		failureLog(function, args, startTime, "", "AWS SDK Go PUT expected to fail but succeeded", err).Fatal()
 		return
 	}
 
@@ -758,7 +771,7 @@ func testObjectTaggingErrors(s3Client *s3.S3) {
 
 	_, err = s3Client.PutObjectTagging(input)
 	if err == nil {
-		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to fail but succeeded"), err).Fatal()
+		failureLog(function, args, startTime, "", "AWS SDK Go PUT expected to fail but succeeded", err).Fatal()
 		return
 	}
 
@@ -789,7 +802,7 @@ func testObjectTaggingErrors(s3Client *s3.S3) {
 
 	_, err = s3Client.PutObjectTagging(input)
 	if err == nil {
-		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go PUT expected to fail but succeeded"), err).Fatal()
+		failureLog(function, args, startTime, "", "AWS SDK Go PUT expected to fail but succeeded", err).Fatal()
 		return
 	}
 

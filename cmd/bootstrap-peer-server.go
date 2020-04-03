@@ -62,9 +62,9 @@ func (s1 ServerSystemConfig) Diff(s2 ServerSystemConfig) error {
 		return fmt.Errorf("Expected platform '%s', found to be running '%s'",
 			s1.MinioPlatform, s2.MinioPlatform)
 	}
-	if s1.MinioEndpoints.Nodes() != s2.MinioEndpoints.Nodes() {
-		return fmt.Errorf("Expected number of endpoints %d, seen %d", s1.MinioEndpoints.Nodes(),
-			s2.MinioEndpoints.Nodes())
+	if s1.MinioEndpoints.NEndpoints() != s2.MinioEndpoints.NEndpoints() {
+		return fmt.Errorf("Expected number of endpoints %d, seen %d", s1.MinioEndpoints.NEndpoints(),
+			s2.MinioEndpoints.NEndpoints())
 	}
 
 	for i, ep := range s1.MinioEndpoints {
@@ -110,7 +110,7 @@ func registerBootstrapRESTHandlers(router *mux.Router) {
 		httpTraceHdrs(server.VerifyHandler))
 }
 
-// client to talk to bootstrap Nodes.
+// client to talk to bootstrap NEndpoints.
 type bootstrapRESTClient struct {
 	endpoint   Endpoint
 	restClient *rest.Client

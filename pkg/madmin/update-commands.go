@@ -18,6 +18,7 @@
 package madmin
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -32,15 +33,17 @@ type ServerUpdateStatus struct {
 
 // ServerUpdate - updates and restarts the MinIO cluster to latest version.
 // optionally takes an input URL to specify a custom update binary link
-func (adm *AdminClient) ServerUpdate(updateURL string) (us ServerUpdateStatus, err error) {
+func (adm *AdminClient) ServerUpdate(ctx context.Context, updateURL string) (us ServerUpdateStatus, err error) {
 	queryValues := url.Values{}
 	queryValues.Set("updateURL", updateURL)
 
 	// Request API to Restart server
-	resp, err := adm.executeMethod("POST", requestData{
-		relPath:     adminAPIPrefix + "/update",
-		queryValues: queryValues,
-	})
+	resp, err := adm.executeMethod(ctx,
+		http.MethodPost, requestData{
+			relPath:     adminAPIPrefix + "/update",
+			queryValues: queryValues,
+		},
+	)
 	defer closeResponse(resp)
 	if err != nil {
 		return us, err

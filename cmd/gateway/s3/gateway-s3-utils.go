@@ -17,11 +17,8 @@
 package s3
 
 import (
-	"strconv"
-
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/pkg/bucket/object/tagging"
-	"github.com/minio/minio/pkg/console"
 )
 
 // List of header keys to be filtered, usually
@@ -61,7 +58,6 @@ func getTagMap(tagStr string) (map[string]string, error) {
 	if tags, err = tagging.FromString(tagStr); err != nil {
 		return nil, err
 	}
-	console.Println(strconv.Itoa(len(tags.TagSet.Tags)))
 	if err = tags.Validate(); err != nil {
 		return nil, err
 	}

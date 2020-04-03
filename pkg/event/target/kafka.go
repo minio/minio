@@ -46,6 +46,7 @@ const (
 	KafkaSASL          = "sasl"
 	KafkaSASLUsername  = "sasl_username"
 	KafkaSASLPassword  = "sasl_password"
+	KafkaSASLMechanism = "sasl_mechanism"
 	KafkaClientTLSCert = "client_tls_cert"
 	KafkaClientTLSKey  = "client_tls_key"
 	KafkaVersion       = "version"
@@ -61,6 +62,7 @@ const (
 	EnvKafkaSASLEnable    = "MINIO_NOTIFY_KAFKA_SASL"
 	EnvKafkaSASLUsername  = "MINIO_NOTIFY_KAFKA_SASL_USERNAME"
 	EnvKafkaSASLPassword  = "MINIO_NOTIFY_KAFKA_SASL_PASSWORD"
+	EnvKafkaSASLMechanism = "MINIO_NOTIFY_KAFKA_SASL_MECHANISM"
 	EnvKafkaClientTLSCert = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_CERT"
 	EnvKafkaClientTLSKey  = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_KEY"
 	EnvKafkaVersion       = "MINIO_NOTIFY_KAFKA_VERSION"
@@ -83,9 +85,10 @@ type KafkaArgs struct {
 		ClientTLSKey  string             `json:"clientTLSKey"`
 	} `json:"tls"`
 	SASL struct {
-		Enable   bool   `json:"enable"`
-		User     string `json:"username"`
-		Password string `json:"password"`
+		Enable    bool   `json:"enable"`
+		User      string `json:"username"`
+		Password  string `json:"password"`
+		Mechanism string `json:"mechanism"`
 	} `json:"sasl"`
 }
 
@@ -255,6 +258,16 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 
 	config.Net.SASL.User = args.SASL.User
 	config.Net.SASL.Password = args.SASL.Password
+	if args.SASL.Mechanism == "sha512" {
+		config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: KafkaSHA512} }
+		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA512)
+	} else if args.SASL.Mechanism == "sha256" {
+		config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: KafkaSHA256} }
+		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypeSCRAMSHA256)
+	} else {
+		// default to PLAIN
+		config.Net.SASL.Mechanism = sarama.SASLMechanism(sarama.SASLTypePlaintext)
+	}
 	config.Net.SASL.Enable = args.SASL.Enable
 
 	tlsConfig, err := saramatls.NewConfig(args.TLS.ClientTLSCert, args.TLS.ClientTLSKey)

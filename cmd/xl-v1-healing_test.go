@@ -121,7 +121,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
 
-	_, err = objLayer.HealObject(context.Background(), bucket, object, false, false, madmin.HealNormalScan)
+	_, err = objLayer.HealObject(context.Background(), bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan})
 	if err != nil {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
@@ -144,7 +144,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failure during creating part.1 - %v", err)
 	}
-	_, err = objLayer.HealObject(context.Background(), bucket, object, false, true, madmin.HealDeepScan)
+	_, err = objLayer.HealObject(context.Background(), bucket, object, madmin.HealOpts{DryRun: false, Remove: true, ScanMode: madmin.HealDeepScan})
 	if err != nil {
 		t.Errorf("Expected nil but received %v", err)
 	}
@@ -170,7 +170,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failure during creating part.1 - %v", err)
 	}
-	_, err = objLayer.HealObject(context.Background(), bucket, object, false, true, madmin.HealDeepScan)
+	_, err = objLayer.HealObject(context.Background(), bucket, object, madmin.HealOpts{DryRun: false, Remove: true, ScanMode: madmin.HealDeepScan})
 	if err != nil {
 		t.Errorf("Expected nil but received %v", err)
 	}
@@ -190,7 +190,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	}
 
 	// Try healing now, expect to receive errFileNotFound.
-	_, err = objLayer.HealObject(context.Background(), bucket, object, false, true, madmin.HealDeepScan)
+	_, err = objLayer.HealObject(context.Background(), bucket, object, madmin.HealOpts{DryRun: false, Remove: true, ScanMode: madmin.HealDeepScan})
 	if err != nil {
 		if _, ok := err.(ObjectNotFound); !ok {
 			t.Errorf("Expect %v but received %v", ObjectNotFound{Bucket: bucket, Object: object}, err)
@@ -263,7 +263,7 @@ func TestHealObjectXL(t *testing.T) {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
 
-	_, err = obj.HealObject(context.Background(), bucket, object, false, false, madmin.HealNormalScan)
+	_, err = obj.HealObject(context.Background(), bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan})
 	if err != nil {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
@@ -285,7 +285,7 @@ func TestHealObjectXL(t *testing.T) {
 	z.zones[0].xlDisksMu.Unlock()
 
 	// Try healing now, expect to receive errDiskNotFound.
-	_, err = obj.HealObject(context.Background(), bucket, object, false, false, madmin.HealDeepScan)
+	_, err = obj.HealObject(context.Background(), bucket, object, madmin.HealOpts{ScanMode: madmin.HealDeepScan})
 	// since majority of xl.jsons are not available, object quorum can't be read properly and error will be errXLReadQuorum
 	if _, ok := err.(InsufficientReadQuorum); !ok {
 		t.Errorf("Expected %v but received %v", InsufficientReadQuorum{}, err)
@@ -333,7 +333,7 @@ func TestHealEmptyDirectoryXL(t *testing.T) {
 	}
 
 	// Heal the object
-	hr, err := obj.HealObject(context.Background(), bucket, object, false, false, madmin.HealNormalScan)
+	hr, err := obj.HealObject(context.Background(), bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan})
 	if err != nil {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
@@ -357,7 +357,7 @@ func TestHealEmptyDirectoryXL(t *testing.T) {
 	}
 
 	// Heal the same object again
-	hr, err = obj.HealObject(context.Background(), bucket, object, false, false, madmin.HealNormalScan)
+	hr, err = obj.HealObject(context.Background(), bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan})
 	if err != nil {
 		t.Fatalf("Failed to heal object - %v", err)
 	}

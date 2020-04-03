@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -38,7 +39,7 @@ func main() {
 
 	// Heal bucket mybucket - dry run
 	isDryRun := true
-	err = madmClnt.HealBucket("mybucket", isDryRun)
+	err = madmClnt.HealBucket(context.Background(), "mybucket", isDryRun)
 	if err != nil {
 		log.Fatalln(err)
 
@@ -46,7 +47,7 @@ func main() {
 
 	// Heal bucket mybucket - for real this time.
 	isDryRun := false
-	err = madmClnt.HealBucket("mybucket", isDryRun)
+	err = madmClnt.HealBucket(context.Background(), "mybucket", isDryRun)
 	if err != nil {
 		log.Fatalln(err)
 	}

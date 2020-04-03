@@ -154,7 +154,7 @@ var defaultAWSCredProviders = []credentials.Provider{
 	&credentials.FileAWSCredentials{},
 	&credentials.IAM{
 		Client: &http.Client{
-			Transport: minio.NewCustomHTTPTransport(),
+			Transport: minio.NewGatewayHTTPTransport(),
 		},
 	},
 	&credentials.EnvMinio{},
@@ -214,7 +214,7 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 	metrics := minio.NewMetrics()
 
 	t := &minio.MetricsTransport{
-		Transport: minio.NewCustomHTTPTransport(),
+		Transport: minio.NewGatewayHTTPTransport(),
 		Metrics:   metrics,
 	}
 
@@ -353,7 +353,7 @@ func (l *s3Objects) ListBuckets(ctx context.Context) ([]minio.BucketInfo, error)
 }
 
 // DeleteBucket deletes a bucket on S3
-func (l *s3Objects) DeleteBucket(ctx context.Context, bucket string) error {
+func (l *s3Objects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	err := l.Client.RemoveBucket(bucket)
 	if err != nil {
 		return minio.ErrorRespToObjectError(err, bucket)
@@ -476,6 +476,11 @@ func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject 
 	// So preserve it by adding "REPLACE" directive to save all the metadata set by CopyObject API.
 	srcInfo.UserDefined["x-amz-metadata-directive"] = "REPLACE"
 	srcInfo.UserDefined["x-amz-copy-source-if-match"] = srcInfo.ETag
+	_, okTag := srcInfo.UserDefined[xhttp.AmzObjectTagging]
+	if minio.IsStringEqual(srcInfo.UserDefined[xhttp.AmzTagDirective], "REPLACE") && !okTag {
+		// If replace directive is set and tags are not set tags should be unset.
+		srcInfo.UserDefined[xhttp.AmzObjectTagging] = ""
+	}
 	header := make(http.Header)
 	if srcOpts.ServerSideEncryption != nil {
 		encrypt.SSECopy(srcOpts.ServerSideEncryption).Marshal(header)
@@ -486,30 +491,6 @@ func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject 
 	}
 	for k, v := range header {
 		srcInfo.UserDefined[k] = v[0]
-	}
-	tags, ok := srcInfo.UserDefined[xhttp.AmzObjectTagging]
-	if ok {
-		delete(srcInfo.UserDefined, xhttp.AmzTagDirective)
-		delete(srcInfo.UserDefined, xhttp.AmzObjectTagging)
-		delete(srcInfo.UserDefined, xhttp.AmzTagCount)
-		delete(srcInfo.UserDefined, strings.ToLower(xhttp.AmzMetadataDirective))
-		delete(srcInfo.UserDefined, strings.ToLower(xhttp.AmzCopySourceIfMatch))
-		var copyDstInfo miniogo.DestinationInfo
-		var err error
-		var tag tagging.Tagging
-		if tag, err = tagging.FromString(tags); err != nil {
-			return minio.ObjectInfo{}, err
-		}
-		copySrcInfo := miniogo.NewSourceInfo(srcBucket, srcObject, srcOpts.ServerSideEncryption)
-		if copyDstInfo, err = miniogo.NewDestinationInfoWithOptions(dstBucket, dstObject, miniogo.DestInfoOptions{
-			UserTags: tagging.ToMap(tag), ReplaceTags: true, Encryption: dstOpts.ServerSideEncryption, UserMeta: srcInfo.UserDefined,
-		}); err != nil {
-			return minio.ObjectInfo{}, err
-		}
-		if err = l.Client.CopyObjectWithProgress(copyDstInfo, copySrcInfo, nil); err != nil {
-			return minio.ObjectInfo{}, err
-		}
-		return l.GetObjectInfo(ctx, dstBucket, dstObject, dstOpts)
 	}
 
 	if _, err = l.Client.CopyObject(srcBucket, srcObject, dstBucket, dstObject, srcInfo.UserDefined); err != nil {
