@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"path"
 
@@ -160,7 +161,7 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 	var retainDate objectlock.RetentionDate
 	var legalHold objectlock.ObjectLegalHold
 
-	retention, isWORMBucket := globalBucketObjectLockConfig.Get(bucket)
+	retentionCfg, isWORMBucket := globalBucketObjectLockConfig.Get(bucket)
 
 	retentionRequested := objectlock.IsObjectLockRetentionRequested(r.Header)
 	legalHoldRequested := objectlock.IsObjectLockLegalHoldRequested(r.Header)
@@ -170,10 +171,16 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 	if err != nil {
 		return mode, retainDate, legalHold, toAPIErrorCode(ctx, err)
 	}
+
+	t, err := objectlock.UTCNowNTP()
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return mode, retainDate, legalHold, ErrObjectLocked
+	}
 	if objInfo, err := getObjectInfoFn(ctx, bucket, object, opts); err == nil {
 		objExists = true
 		r := objectlock.GetObjectRetentionMeta(objInfo.UserDefined)
-		if globalWORMEnabled || r.Mode == objectlock.Compliance {
+		if globalWORMEnabled || ((r.Mode == objectlock.Compliance) && r.RetainUntilDate.After(t)) {
 			return mode, retainDate, legalHold, ErrObjectLocked
 		}
 		mode = r.Mode
@@ -205,12 +212,6 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 		if err != nil {
 			return mode, retainDate, legalHold, toAPIErrorCode(ctx, err)
 		}
-		// AWS S3 just creates a new version of object when an object is being overwritten.
-		t, err := objectlock.UTCNowNTP()
-		if err != nil {
-			logger.LogIf(ctx, err)
-			return mode, retainDate, legalHold, ErrObjectLocked
-		}
 		if objExists && retainDate.After(t) {
 			return mode, retainDate, legalHold, ErrObjectLocked
 		}
@@ -224,9 +225,6 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 	}
 
 	if !retentionRequested && isWORMBucket {
-		if retention.IsEmpty() && (mode == objectlock.Compliance || mode == objectlock.Governance) {
-			return mode, retainDate, legalHold, ErrObjectLocked
-		}
 		if retentionPermErr != ErrNone {
 			return mode, retainDate, legalHold, retentionPermErr
 		}
@@ -239,10 +237,11 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 		if objExists && retainDate.After(t) {
 			return mode, retainDate, legalHold, ErrObjectLocked
 		}
-		if !legalHoldRequested {
+		if !legalHoldRequested && !retentionCfg.IsEmpty() {
 			// inherit retention from bucket configuration
-			return retention.Mode, objectlock.RetentionDate{Time: t.Add(retention.Validity)}, legalHold, ErrNone
+			return retentionCfg.Mode, objectlock.RetentionDate{Time: t.Add(retentionCfg.Validity)}, legalHold, ErrNone
 		}
+		return objectlock.Mode(""), objectlock.RetentionDate{}, legalHold, ErrNone
 	}
 	return mode, retainDate, legalHold, ErrNone
 }
@@ -253,7 +252,7 @@ func initBucketObjectLockConfig(buckets []BucketInfo, objAPI ObjectLayer) error 
 		configFile := path.Join(bucketConfigPrefix, bucket.Name, bucketObjectLockEnabledConfigFile)
 		bucketObjLockData, err := readConfig(ctx, objAPI, configFile)
 		if err != nil {
-			if err == errConfigNotFound {
+			if errors.Is(err, errConfigNotFound) {
 				continue
 			}
 			return err
@@ -268,7 +267,7 @@ func initBucketObjectLockConfig(buckets []BucketInfo, objAPI ObjectLayer) error 
 		configFile = path.Join(bucketConfigPrefix, bucket.Name, objectLockConfig)
 		configData, err := readConfig(ctx, objAPI, configFile)
 		if err != nil {
-			if err == errConfigNotFound {
+			if errors.Is(err, errConfigNotFound) {
 				globalBucketObjectLockConfig.Set(bucket.Name, objectlock.Retention{})
 				continue
 			}

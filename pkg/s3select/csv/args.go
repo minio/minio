@@ -104,8 +104,15 @@ func (args *ReaderArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (er
 						return fmt.Errorf("unsupported QuoteCharacter '%v'", s)
 					}
 					args.QuoteCharacter = s
-				// Not supported yet
 				case "QuoteEscapeCharacter":
+					switch utf8.RuneCountInString(s) {
+					case 0:
+						args.QuoteEscapeCharacter = defaultQuoteEscapeCharacter
+					case 1:
+						args.QuoteEscapeCharacter = s
+					default:
+						return fmt.Errorf("unsupported QuoteEscapeCharacter '%v'", s)
+					}
 				case "Comments":
 					args.CommentCharacter = s
 				default:
@@ -115,7 +122,6 @@ func (args *ReaderArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (er
 		}
 	}
 
-	args.QuoteEscapeCharacter = args.QuoteCharacter
 	args.unmarshaled = true
 	return nil
 }
@@ -176,15 +182,21 @@ func (args *WriterArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 				default:
 					return fmt.Errorf("unsupported QuoteCharacter '%v'", s)
 				}
-			// Not supported yet
 			case "QuoteEscapeCharacter":
+				switch utf8.RuneCountInString(s) {
+				case 0:
+					args.QuoteEscapeCharacter = defaultQuoteEscapeCharacter
+				case 1:
+					args.QuoteEscapeCharacter = s
+				default:
+					return fmt.Errorf("unsupported QuoteCharacter '%v'", s)
+				}
 			default:
 				return errors.New("unrecognized option")
 			}
 		}
 	}
 
-	args.QuoteEscapeCharacter = args.QuoteCharacter
 	args.unmarshaled = true
 	return nil
 }

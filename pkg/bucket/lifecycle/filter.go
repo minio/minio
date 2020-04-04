@@ -22,17 +22,43 @@ import (
 	"github.com/minio/minio/pkg/bucket/object/tagging"
 )
 
-// Filter - a filter for a lifecycle configuration Rule.
-type Filter struct {
-	XMLName xml.Name    `xml:"Filter"`
-	Prefix  string      `xml:"Prefix,omitempty"`
-	And     And         `xml:"And,omitempty"`
-	Tag     tagging.Tag `xml:"Tag,omitempty"`
-}
-
 var (
 	errInvalidFilter = Errorf("Filter must have exactly one of Prefix, Tag, or And specified")
 )
+
+// Filter - a filter for a lifecycle configuration Rule.
+type Filter struct {
+	XMLName xml.Name `xml:"Filter"`
+	Prefix  string
+	And     And
+	Tag     tagging.Tag
+}
+
+// MarshalXML - produces the xml representation of the Filter struct
+// only one of Prefix, And and Tag should be present in the output.
+func (f Filter) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+
+	switch {
+	case !f.And.isEmpty():
+		if err := e.EncodeElement(f.And, xml.StartElement{Name: xml.Name{Local: "And"}}); err != nil {
+			return err
+		}
+	case !f.Tag.IsEmpty():
+		if err := e.EncodeElement(f.Tag, xml.StartElement{Name: xml.Name{Local: "Tag"}}); err != nil {
+			return err
+		}
+	default:
+		// Always print Prefix field when both And & Tag are empty
+		if err := e.EncodeElement(f.Prefix, xml.StartElement{Name: xml.Name{Local: "Prefix"}}); err != nil {
+			return err
+		}
+	}
+
+	return e.EncodeToken(xml.EndElement{Name: start.Name})
+}
 
 // Validate - validates the filter element
 func (f Filter) Validate() error {

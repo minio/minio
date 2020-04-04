@@ -47,7 +47,7 @@ func newBgHealSequence(numDisks int) *healSequence {
 	}
 
 	return &healSequence{
-		sourceCh:    make(chan string),
+		sourceCh:    make(chan healSource),
 		startTime:   UTCNow(),
 		clientToken: bgHealingUUID,
 		settings:    hs,
@@ -61,6 +61,9 @@ func newBgHealSequence(numDisks int) *healSequence {
 		stopSignalCh:          make(chan struct{}),
 		ctx:                   ctx,
 		reportProgress:        false,
+		scannedItemsMap:       make(map[madmin.HealItemType]int64),
+		healedItemsMap:        make(map[madmin.HealItemType]int64),
+		healFailedItemsMap:    make(map[string]int64),
 	}
 }
 
@@ -71,7 +74,7 @@ func getLocalBackgroundHealStatus() madmin.BgHealState {
 	}
 
 	return madmin.BgHealState{
-		ScannedItemsCount: bgSeq.scannedItemsCount,
+		ScannedItemsCount: bgSeq.getScannedItemsCount(),
 		LastHealActivity:  bgSeq.lastHealActivity,
 		NextHealRound:     UTCNow().Add(durationToNextHealRound(bgSeq.lastHealActivity)),
 	}
@@ -98,17 +101,32 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects) error {
 	// Heal all buckets with all objects
 	for _, bucket := range buckets {
 		// Heal current bucket
-		bgSeq.sourceCh <- bucket.Name
+		bgSeq.sourceCh <- healSource{
+			path: bucket.Name,
+		}
 
 		// List all objects in the current bucket and heal them
 		listDir := listDirFactory(ctx, xlObj.getLoadBalancedDisks()...)
 		walkResultCh := startTreeWalk(ctx, bucket.Name, "", "", true, listDir, nil)
 		for walkEntry := range walkResultCh {
-			bgSeq.sourceCh <- pathJoin(bucket.Name, walkEntry.entry)
+			bgSeq.sourceCh <- healSource{
+				path: pathJoin(bucket.Name, walkEntry.entry),
+			}
 		}
 	}
 
 	return nil
+}
+
+// deepHealObject heals given object path in deep to fix bitrot.
+func deepHealObject(objectPath string) {
+	// Get background heal sequence to send elements to heal
+	bgSeq, _ := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
+
+	bgSeq.sourceCh <- healSource{
+		path: objectPath,
+		opts: &madmin.HealOpts{ScanMode: madmin.HealDeepScan},
+	}
 }
 
 // Returns the duration to the next background healing round
@@ -126,12 +144,24 @@ func durationToNextHealRound(lastHeal time.Time) time.Duration {
 
 // Healing leader will take the charge of healing all erasure sets
 func execLeaderTasks(ctx context.Context, z *xlZones) {
-	lastScanTime := UTCNow() // So that we don't heal immediately, but after one month.
+	// So that we don't heal immediately, but after one month.
+	lastScanTime := UTCNow()
+	// Get background heal sequence to send elements to heal
+	var bgSeq *healSequence
+	var ok bool
+	for {
+		bgSeq, ok = globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
+		if ok {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.NewTimer(durationToNextHealRound(lastScanTime)).C:
+			bgSeq.resetHealStatusCounters()
 			for _, zone := range z.zones {
 				// Heal set by set
 				for i, set := range zone.sets {

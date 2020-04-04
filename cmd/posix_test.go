@@ -508,7 +508,7 @@ func TestPosixDeleteVol(t *testing.T) {
 		if _, ok := posixStorage.(*posixDiskIDCheck); !ok {
 			t.Errorf("Expected the StorageAPI to be of type *posixDiskIDCheck")
 		}
-		if err = posixStorage.DeleteVol(testCase.volName); err != testCase.expectedErr {
+		if err = posixStorage.DeleteVol(testCase.volName, false); err != testCase.expectedErr {
 			t.Fatalf("TestPosix: %d, expected: %s, got: %s", i+1, testCase.expectedErr, err)
 		}
 	}
@@ -547,7 +547,7 @@ func TestPosixDeleteVol(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		if err = posixStorage.DeleteVol("mybucket"); err != errDiskAccessDenied {
+		if err = posixStorage.DeleteVol("mybucket", false); err != errDiskAccessDenied {
 			t.Fatalf("expected: Permission error, got: %s", err)
 		}
 	}
@@ -561,7 +561,7 @@ func TestPosixDeleteVol(t *testing.T) {
 
 	// TestPosix for delete on an removed disk.
 	// should fail with disk not found.
-	err = posixDeletedStorage.DeleteVol("Del-Vol")
+	err = posixDeletedStorage.DeleteVol("Del-Vol", false)
 	if err != errDiskNotFound {
 		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
 	}

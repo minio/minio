@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	golog "log"
-	"math"
 	"math/rand"
 	"os"
 	"sync"
@@ -237,8 +236,8 @@ func lock(ds *Dsync, locks *[]string, id, source string, isReadLock bool, lockNa
 		done := false
 		timeout := time.After(DRWMutexAcquireTimeout)
 
-		dquorum := int(len(restClnts)/2) + 1
-		dquorumReads := int(math.Ceil(float64(len(restClnts)) / 2.0))
+		dquorumReads := (len(restClnts) + 1) / 2
+		dquorum := dquorumReads + 1
 
 		for ; i < len(restClnts); i++ { // Loop until we acquired all locks
 

@@ -1,4 +1,4 @@
-# Distributed MinIO Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
+# Distributed MinIO Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
 MinIO in distributed mode lets you pool multiple drives (even on different machines) into a single object storage server. As drives are distributed across several nodes, distributed MinIO can withstand multiple node failures and yet ensure full data protection.
 
@@ -37,7 +37,7 @@ To start a distributed MinIO instance, you just need to pass drive locations as 
 __NOTE:__
 
 - All the nodes running distributed MinIO need to have same access key and secret key for the nodes to connect. To achieve this, it is __recommended__ to export access key and secret key as environment variables, `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`, on all the nodes before executing MinIO server command.
-- __MinIO creates erasure-coding sets of 4, 6, 8, 10, 12, 14 or 16 drives.  The number of drives you provide must be a multiple of one of those numbers.__
+- __MinIO creates erasure-coding sets of *4* to *16* drives.  The number of drives you provide must be a multiple of one of those numbers.__
 - __MinIO chooses the largest EC set size which divides into the total number of drives given.  For example, 8 drives will be used as a single EC set of size 8, not two sets of size 4.__
 - __Each object is written to a single EC set, and therefore is spread over no more than 16 drives.__
 - __All the nodes running distributed MinIO setup are recommended to be homogeneous, i.e. same operating system, same number of disks and same network interconnects.__

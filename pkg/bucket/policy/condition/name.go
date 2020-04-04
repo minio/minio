@@ -35,6 +35,18 @@ const (
 	notIPAddress                   = "NotIpAddress"
 	null                           = "Null"
 	boolean                        = "Bool"
+	numericEquals                  = "NumericEquals"
+	numericNotEquals               = "NumericNotEquals"
+	numericLessThan                = "NumericLessThan"
+	numericLessThanEquals          = "NumericLessThanEquals"
+	numericGreaterThan             = "NumericGreaterThan"
+	numericGreaterThanEquals       = "NumericGreaterThanEquals"
+	dateEquals                     = "DateEquals"
+	dateNotEquals                  = "DateNotEquals"
+	dateLessThan                   = "DateLessThan"
+	dateLessThanEquals             = "DateLessThanEquals"
+	dateGreaterThan                = "DateGreaterThan"
+	dateGreaterThanEquals          = "DateGreaterThanEquals"
 )
 
 var supportedConditions = []name{
@@ -49,6 +61,18 @@ var supportedConditions = []name{
 	notIPAddress,
 	null,
 	boolean,
+	numericEquals,
+	numericNotEquals,
+	numericLessThan,
+	numericLessThanEquals,
+	numericGreaterThan,
+	numericGreaterThanEquals,
+	dateEquals,
+	dateNotEquals,
+	dateLessThan,
+	dateLessThanEquals,
+	dateGreaterThan,
+	dateGreaterThanEquals,
 	// Add new conditions here.
 }
 

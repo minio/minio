@@ -638,7 +638,7 @@ func listIAMConfigItems(objectAPI ObjectLayer, pathPrefix string, dirs bool,
 			if !globalSafeMode {
 				// Slow down listing and loading for config items to
 				// reduce load on the server
-				waitForLowHTTPReq(int32(globalEndpoints.Nodes()))
+				waitForLowHTTPReq(int32(globalEndpoints.NEndpoints()))
 			}
 
 			marker = lo.NextMarker

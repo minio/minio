@@ -176,7 +176,7 @@ func TestListOnlineDisks(t *testing.T) {
 
 		// Cleanup from previous test.
 		obj.DeleteObject(context.Background(), bucket, object)
-		obj.DeleteBucket(context.Background(), bucket)
+		obj.DeleteBucket(context.Background(), bucket, false)
 
 		err = obj.MakeBucketWithLocation(context.Background(), "bucket", "")
 		if err != nil {
