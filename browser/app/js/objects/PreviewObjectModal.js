@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage (C) 2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,53 +14,52 @@
  * limitations under the License.
  */
 
-import React from "react"
-import { Modal, ModalHeader, ModalBody } from "react-bootstrap"
+import React from "react";
+import { Modal, ModalHeader, ModalBody } from "react-bootstrap";
 
 class PreviewObjectModal extends React.Component {
   constructor(props) {
-    super(props)
+    super(props);
     this.state = {
-      url: ""
-    }
-    props.getObjectURL(props.object.name, url => {
+      url: "",
+    };
+    props.getObjectURL(props.object.name, (url) => {
       this.setState({
-        url:url
-      })
-    })
+        url: url,
+      });
+    });
   }
-  
-  render(){
-    const  { hidePreviewModal} = this.props
-    return(
-        <Modal
-          show={true}
-          animation={false}
-          onHide={hidePreviewModal}
-          bsSize="large"
-        >
-          <ModalHeader>Object Preview</ModalHeader>
-          <ModalBody>
-            <div className="input-group">
-                {(this.state.url)&& 
-                (<img 
-                  alt="Image broken"
-                  src={this.state.url}
-                  style={{ display: "block", width: "100%" }}
-                  />)
-                
-                }
-              
-            </div>
-          </ModalBody>
-          <div className="modal-footer">
-            {<button className="btn btn-link" onClick={hidePreviewModal}>
-              Cancel
-            </button> }
+
+  render() {
+    const { hidePreviewModal } = this.props;
+    return (
+      <Modal
+        show={true}
+        animation={false}
+        onHide={hidePreviewModal}
+        bsSize="large"
+      >
+        <ModalHeader>Object Preview</ModalHeader>
+        <ModalBody>
+          <div className="input-group">
+            {this.state.url && (
+              <img
+                alt="Image broken"
+                src={this.state.url}
+                style={{ display: "block", width: "100%" }}
+              />
+            )}
           </div>
-        </Modal>
-      )}
-
-
+        </ModalBody>
+        <div className="modal-footer">
+          {
+            <button className="btn btn-link" onClick={hidePreviewModal}>
+              Cancel
+            </button>
+          }
+        </div>
+      </Modal>
+    );
+  }
 }
-export default PreviewObjectModal
+export default PreviewObjectModal;

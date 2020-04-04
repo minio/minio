@@ -14,106 +14,131 @@
  * limitations under the License.
  */
 
-import mimedb from 'mime-types'
+import mimedb from "mime-types";
 
 const isFolder = (name, contentType) => {
-  if (name.endsWith('/')) return true
-  return false
-}
+  if (name.endsWith("/")) return true;
+  return false;
+};
 
 const isPdf = (name, contentType) => {
-  if (contentType === 'application/pdf') return true
-  return false
-}
+  if (contentType === "application/pdf") return true;
+  return false;
+};
 const isImage = (name, contentType) => {
   if (
-    contentType === 'image/jpeg'    ||
-    contentType === 'image/gif'     ||
-    contentType === 'image/x-icon'  ||
-    contentType === 'image/png'     ||
-    contentType === 'image/svg+xml' ||
-    contentType === 'image/tiff'    ||
-    contentType === 'image/webp'
-  ) return true
-  return false
-}
+    contentType === "image/jpeg" ||
+    contentType === "image/gif" ||
+    contentType === "image/x-icon" ||
+    contentType === "image/png" ||
+    contentType === "image/svg+xml" ||
+    contentType === "image/tiff" ||
+    contentType === "image/webp"
+  )
+    return true;
+  return false;
+};
 
 const isZip = (name, contentType) => {
-  if (!contentType || !contentType.includes('/')) return false
-  if (contentType.split('/')[1].includes('zip')) return true
-  return false
-}
+  if (!contentType || !contentType.includes("/")) return false;
+  if (contentType.split("/")[1].includes("zip")) return true;
+  return false;
+};
 
 const isCode = (name, contentType) => {
-  const codeExt = ['c', 'cpp', 'go', 'py', 'java', 'rb', 'js', 'pl', 'fs',
-    'php', 'css', 'less', 'scss', 'coffee', 'net', 'html',
-    'rs', 'exs', 'scala', 'hs', 'clj', 'el', 'scm', 'lisp',
-    'asp', 'aspx']
-  const ext = name.split('.').reverse()[0]
+  const codeExt = [
+    "c",
+    "cpp",
+    "go",
+    "py",
+    "java",
+    "rb",
+    "js",
+    "pl",
+    "fs",
+    "php",
+    "css",
+    "less",
+    "scss",
+    "coffee",
+    "net",
+    "html",
+    "rs",
+    "exs",
+    "scala",
+    "hs",
+    "clj",
+    "el",
+    "scm",
+    "lisp",
+    "asp",
+    "aspx",
+  ];
+  const ext = name.split(".").reverse()[0];
   for (var i in codeExt) {
-    if (ext === codeExt[i]) return true
+    if (ext === codeExt[i]) return true;
   }
-  return false
-}
+  return false;
+};
 
 const isExcel = (name, contentType) => {
-  if (!contentType || !contentType.includes('/')) return false
-  const types = ['excel', 'spreadsheet']
-  const subType = contentType.split('/')[1]
+  if (!contentType || !contentType.includes("/")) return false;
+  const types = ["excel", "spreadsheet"];
+  const subType = contentType.split("/")[1];
   for (var i in types) {
-    if (subType.includes(types[i])) return true
+    if (subType.includes(types[i])) return true;
   }
-  return false
-}
+  return false;
+};
 
 const isDoc = (name, contentType) => {
-  if (!contentType || !contentType.includes('/')) return false
-  const types = ['word', '.document']
-  const subType = contentType.split('/')[1]
+  if (!contentType || !contentType.includes("/")) return false;
+  const types = ["word", ".document"];
+  const subType = contentType.split("/")[1];
   for (var i in types) {
-    if (subType.includes(types[i])) return true
+    if (subType.includes(types[i])) return true;
   }
-  return false
-}
+  return false;
+};
 
 const isPresentation = (name, contentType) => {
-  if (!contentType || !contentType.includes('/')) return false
-  var types = ['powerpoint', 'presentation']
-  const subType = contentType.split('/')[1]
+  if (!contentType || !contentType.includes("/")) return false;
+  var types = ["powerpoint", "presentation"];
+  const subType = contentType.split("/")[1];
   for (var i in types) {
-    if (subType.includes(types[i])) return true
+    if (subType.includes(types[i])) return true;
   }
-  return false
-}
+  return false;
+};
 
 const typeToIcon = (type) => {
   return (name, contentType) => {
-    if (!contentType || !contentType.includes('/')) return false
-    if (contentType.split('/')[0] === type) return true
-    return false
-  }
-}
+    if (!contentType || !contentType.includes("/")) return false;
+    if (contentType.split("/")[0] === type) return true;
+    return false;
+  };
+};
 
 export const getDataType = (name, contentType) => {
   if (contentType === "") {
-    contentType = mimedb.lookup(name) || 'application/octet-stream'
+    contentType = mimedb.lookup(name) || "application/octet-stream";
   }
   const check = [
-    ['folder', isFolder],
-    ['code', isCode],
-    ['audio', typeToIcon('audio')],
-    ['image', typeToIcon('image')],
-    ['video', typeToIcon('video')],
-    ['text', typeToIcon('text')],
-    ['pdf', isPdf],
-    ['image', isImage],
-    ['zip', isZip],
-    ['excel', isExcel],
-    ['doc', isDoc],
-    ['presentation', isPresentation]
-  ]
+    ["folder", isFolder],
+    ["code", isCode],
+    ["audio", typeToIcon("audio")],
+    ["image", typeToIcon("image")],
+    ["video", typeToIcon("video")],
+    ["text", typeToIcon("text")],
+    ["pdf", isPdf],
+    ["image", isImage],
+    ["zip", isZip],
+    ["excel", isExcel],
+    ["doc", isDoc],
+    ["presentation", isPresentation],
+  ];
   for (var i in check) {
-    if (check[i][1](name, contentType)) return check[i][0]
+    if (check[i][1](name, contentType)) return check[i][0];
   }
-  return 'other'
-}
+  return "other";
+};
