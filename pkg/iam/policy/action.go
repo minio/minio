@@ -301,12 +301,13 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 			condition.S3ObjectLockLegalHold,
 		}, condition.CommonKeys...)...),
 
+	// https://docs.aws.amazon.com/AmazonS3/latest/dev/list_amazons3.html
+	// LockLegalHold is not supported with PutObjectRetentionAction
 	PutObjectRetentionAction: condition.NewKeySet(
 		append([]condition.Key{
 			condition.S3ObjectLockRemainingRetentionDays,
 			condition.S3ObjectLockRetainUntilDate,
 			condition.S3ObjectLockMode,
-			condition.S3ObjectLockLegalHold,
 		}, condition.CommonKeys...)...),
 
 	GetObjectRetentionAction: condition.NewKeySet(condition.CommonKeys...),
@@ -315,6 +316,8 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 			condition.S3ObjectLockLegalHold,
 		}, condition.CommonKeys...)...),
 	GetObjectLegalHoldAction: condition.NewKeySet(condition.CommonKeys...),
+
+	// https://docs.aws.amazon.com/AmazonS3/latest/dev/list_amazons3.html
 	BypassGovernanceRetentionAction: condition.NewKeySet(
 		append([]condition.Key{
 			condition.S3ObjectLockRemainingRetentionDays,
@@ -322,6 +325,7 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 			condition.S3ObjectLockMode,
 			condition.S3ObjectLockLegalHold,
 		}, condition.CommonKeys...)...),
+
 	GetBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
 	PutBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
 	PutObjectTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),

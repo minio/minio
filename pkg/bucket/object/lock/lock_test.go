@@ -31,25 +31,25 @@ import (
 func TestParseMode(t *testing.T) {
 	testCases := []struct {
 		value        string
-		expectedMode Mode
+		expectedMode RetMode
 	}{
 		{
 			value:        "governance",
-			expectedMode: Governance,
+			expectedMode: RetGovernance,
 		},
 		{
 			value:        "complIAnce",
-			expectedMode: Compliance,
+			expectedMode: RetCompliance,
 		},
 		{
 			value:        "gce",
-			expectedMode: Invalid,
+			expectedMode: "",
 		},
 	}
 
 	for _, tc := range testCases {
-		if parseMode(tc.value) != tc.expectedMode {
-			t.Errorf("Expected Mode %s, got %s", tc.expectedMode, parseMode(tc.value))
+		if parseRetMode(tc.value) != tc.expectedMode {
+			t.Errorf("Expected Mode %s, got %s", tc.expectedMode, parseRetMode(tc.value))
 		}
 	}
 }
@@ -60,11 +60,11 @@ func TestParseLegalHoldStatus(t *testing.T) {
 	}{
 		{
 			value:          "ON",
-			expectedStatus: ON,
+			expectedStatus: LegalHoldOn,
 		},
 		{
 			value:          "Off",
-			expectedStatus: OFF,
+			expectedStatus: LegalHoldOff,
 		},
 		{
 			value:          "x",
@@ -98,32 +98,32 @@ func TestUnmarshalDefaultRetention(t *testing.T) {
 			expectErr:   true,
 		},
 		{
-			value:       DefaultRetention{Mode: "GOVERNANCE"},
+			value:       DefaultRetention{Mode: RetGovernance},
 			expectedErr: fmt.Errorf("either Days or Years must be specified"),
 			expectErr:   true,
 		},
 		{
-			value:       DefaultRetention{Mode: "GOVERNANCE", Days: &days},
+			value:       DefaultRetention{Mode: RetGovernance, Days: &days},
 			expectedErr: nil,
 			expectErr:   false,
 		},
 		{
-			value:       DefaultRetention{Mode: "GOVERNANCE", Years: &years},
+			value:       DefaultRetention{Mode: RetGovernance, Years: &years},
 			expectedErr: nil,
 			expectErr:   false,
 		},
 		{
-			value:       DefaultRetention{Mode: "GOVERNANCE", Days: &days, Years: &years},
+			value:       DefaultRetention{Mode: RetGovernance, Days: &days, Years: &years},
 			expectedErr: fmt.Errorf("either Days or Years must be specified, not both"),
 			expectErr:   true,
 		},
 		{
-			value:       DefaultRetention{Mode: "GOVERNANCE", Days: &zerodays},
+			value:       DefaultRetention{Mode: RetGovernance, Days: &zerodays},
 			expectedErr: fmt.Errorf("Default retention period must be a positive integer value for 'Days'"),
 			expectErr:   true,
 		},
 		{
-			value:       DefaultRetention{Mode: "GOVERNANCE", Days: &invalidDays},
+			value:       DefaultRetention{Mode: RetGovernance, Days: &invalidDays},
 			expectedErr: fmt.Errorf("Default retention period too large for 'Days' %d", invalidDays),
 			expectErr:   true,
 		},
@@ -234,20 +234,20 @@ func TestIsObjectLockRequested(t *testing.T) {
 		},
 		{
 			header: http.Header{
-				xhttp.AmzObjectLockLegalHold: []string{""},
+				AmzObjectLockLegalHold: []string{""},
 			},
 			expectedVal: true,
 		},
 		{
 			header: http.Header{
-				xhttp.AmzObjectLockRetainUntilDate: []string{""},
-				xhttp.AmzObjectLockMode:            []string{""},
+				AmzObjectLockRetainUntilDate: []string{""},
+				AmzObjectLockMode:            []string{""},
 			},
 			expectedVal: true,
 		},
 		{
 			header: http.Header{
-				xhttp.AmzObjectLockBypassGovernance: []string{""},
+				AmzObjectLockBypassRetGovernance: []string{""},
 			},
 			expectedVal: false,
 		},
@@ -275,26 +275,26 @@ func TestIsObjectLockGovernanceBypassSet(t *testing.T) {
 		},
 		{
 			header: http.Header{
-				xhttp.AmzObjectLockLegalHold: []string{""},
+				AmzObjectLockLegalHold: []string{""},
 			},
 			expectedVal: false,
 		},
 		{
 			header: http.Header{
-				xhttp.AmzObjectLockRetainUntilDate: []string{""},
-				xhttp.AmzObjectLockMode:            []string{""},
+				AmzObjectLockRetainUntilDate: []string{""},
+				AmzObjectLockMode:            []string{""},
 			},
 			expectedVal: false,
 		},
 		{
 			header: http.Header{
-				xhttp.AmzObjectLockBypassGovernance: []string{""},
+				AmzObjectLockBypassRetGovernance: []string{""},
 			},
 			expectedVal: false,
 		},
 		{
 			header: http.Header{
-				xhttp.AmzObjectLockBypassGovernance: []string{"true"},
+				AmzObjectLockBypassRetGovernance: []string{"true"},
 			},
 			expectedVal: true,
 		},
@@ -394,7 +394,7 @@ func TestGetObjectRetentionMeta(t *testing.T) {
 			metadata: map[string]string{
 				"x-amz-object-lock-mode": "governance",
 			},
-			expected: ObjectRetention{Mode: Governance},
+			expected: ObjectRetention{Mode: RetGovernance},
 		},
 		{
 			metadata: map[string]string{
@@ -427,13 +427,13 @@ func TestGetObjectLegalHoldMeta(t *testing.T) {
 			metadata: map[string]string{
 				"x-amz-object-lock-legal-hold": "on",
 			},
-			expected: ObjectLegalHold{Status: ON},
+			expected: ObjectLegalHold{Status: LegalHoldOn},
 		},
 		{
 			metadata: map[string]string{
 				"x-amz-object-lock-legal-hold": "off",
 			},
-			expected: ObjectLegalHold{Status: OFF},
+			expected: ObjectLegalHold{Status: LegalHoldOff},
 		},
 		{
 			metadata: map[string]string{
