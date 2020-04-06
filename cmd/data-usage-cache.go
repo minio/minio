@@ -331,7 +331,7 @@ func (d *dataUsageCache) load(ctx context.Context, store ObjectLayer, name strin
 	var buf bytes.Buffer
 	err := store.GetObject(ctx, dataUsageBucket, name, 0, -1, &buf, "", ObjectOptions{})
 	if err != nil {
-		if !isErrObjectNotFound(err) {
+		if !isErrObjectNotFound(err) && !isErrBucketNotFound(err) {
 			return toObjectErr(err, dataUsageBucket, name)
 		}
 		*d = dataUsageCache{}
