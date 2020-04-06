@@ -266,7 +266,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	listBuckets := objectAPI.ListBuckets
 
 	accessKey, owner, s3Error := checkRequestAuthTypeToAccessKey(ctx, r, policy.ListAllMyBucketsAction, "", "")
-	if s3Error != ErrNone {
+	if s3Error != ErrNone && s3Error != ErrAccessDenied {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -295,32 +295,43 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	// Set prefix value for "s3:prefix" policy conditionals.
-	r.Header.Set("prefix", "")
+	if s3Error == ErrAccessDenied {
+		// Set prefix value for "s3:prefix" policy conditionals.
+		r.Header.Set("prefix", "")
 
-	// Set delimiter value for "s3:delimiter" policy conditionals.
-	r.Header.Set("delimiter", SlashSeparator)
+		// Set delimiter value for "s3:delimiter" policy conditionals.
+		r.Header.Set("delimiter", SlashSeparator)
 
-	// err will be nil here as we already called this function
-	// earlier in this request.
-	claims, _ := getClaimsFromToken(r)
-	var newBucketsInfo []BucketInfo
-	for _, bucketInfo := range bucketsInfo {
-		if globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     accessKey,
-			Action:          iampolicy.ListBucketAction,
-			BucketName:      bucketInfo.Name,
-			ConditionValues: getConditionValues(r, "", accessKey, claims),
-			IsOwner:         owner,
-			ObjectName:      "",
-			Claims:          claims,
-		}) {
-			newBucketsInfo = append(newBucketsInfo, bucketInfo)
+		// err will be nil here as we already called this function
+		// earlier in this request.
+		claims, _ := getClaimsFromToken(r)
+		n := 0
+		// Use the following trick to filter in place
+		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
+		for _, bucketInfo := range bucketsInfo {
+			if globalIAMSys.IsAllowed(iampolicy.Args{
+				AccountName:     accessKey,
+				Action:          iampolicy.ListBucketAction,
+				BucketName:      bucketInfo.Name,
+				ConditionValues: getConditionValues(r, "", accessKey, claims),
+				IsOwner:         owner,
+				ObjectName:      "",
+				Claims:          claims,
+			}) {
+				bucketsInfo[n] = bucketInfo
+				n++
+			}
+		}
+		bucketsInfo = bucketsInfo[:n]
+		// No buckets can be filtered return access denied error.
+		if len(bucketsInfo) == 0 {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+			return
 		}
 	}
 
 	// Generate response.
-	response := generateListBucketsResponse(newBucketsInfo)
+	response := generateListBucketsResponse(bucketsInfo)
 	encodedSuccessResponse := encodeResponse(response)
 
 	// Write response.

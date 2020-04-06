@@ -272,7 +272,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 	var cred auth.Credentials
 	switch getRequestAuthType(r) {
 	case authTypeUnknown, authTypeStreamingSigned:
-		return accessKey, owner, ErrAccessDenied
+		return accessKey, owner, ErrSignatureVersionNotSupported
 	case authTypePresignedV2, authTypeSignedV2:
 		if s3Err = isReqAuthenticatedV2(r); s3Err != ErrNone {
 			return accessKey, owner, s3Err
@@ -334,7 +334,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 			// Request is allowed return the appropriate access key.
 			return cred.AccessKey, owner, ErrNone
 		}
-		return accessKey, owner, ErrAccessDenied
+		return cred.AccessKey, owner, ErrAccessDenied
 	}
 	if globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
@@ -348,7 +348,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 		// Request is allowed return the appropriate access key.
 		return cred.AccessKey, owner, ErrNone
 	}
-	return accessKey, owner, ErrAccessDenied
+	return cred.AccessKey, owner, ErrAccessDenied
 }
 
 // Verify if request has valid AWS Signature Version '2'.
@@ -472,7 +472,7 @@ func isPutActionAllowed(atype authType, bucketName, objectName string, r *http.R
 	var owner bool
 	switch atype {
 	case authTypeUnknown:
-		return ErrAccessDenied
+		return ErrSignatureVersionNotSupported
 	case authTypeSignedV2, authTypePresignedV2:
 		cred, owner, s3Err = getReqAccessKeyV2(r)
 	case authTypeStreamingSigned, authTypePresigned, authTypeSigned:
