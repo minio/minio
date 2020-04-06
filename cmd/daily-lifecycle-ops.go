@@ -51,6 +51,11 @@ func startDailyLifecycle(ctx context.Context, objAPI ObjectLayer) {
 }
 
 func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
+	// No action is expected when WORM is enabled
+	if globalWORMEnabled {
+		return nil
+	}
+
 	buckets, err := objAPI.ListBuckets(ctx)
 	if err != nil {
 		return err
@@ -62,6 +67,8 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 		if !ok {
 			continue
 		}
+
+		_, bucketHasLockConfig := globalBucketObjectLockConfig.Get(bucket.Name)
 
 		// Calculate the common prefix of all lifecycle rules
 		var prefixes []string
@@ -85,9 +92,11 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 					// Reached maximum delete requests, attempt a delete for now.
 					break
 				}
-
 				// Find the action that need to be executed
 				if l.ComputeAction(obj.Name, obj.UserTags, obj.ModTime) == lifecycle.DeleteAction {
+					if bucketHasLockConfig && enforceRetentionForLifecycle(ctx, obj) {
+						continue
+					}
 					objects = append(objects, obj.Name)
 				}
 			}

@@ -98,6 +98,28 @@ func enforceRetentionBypassForDeleteWeb(ctx context.Context, r *http.Request, bu
 	return ErrNone
 }
 
+// enforceRetentionForLifecycle checks if it is appropriate to remove an
+// object according to locking configuration when this is lifecycle asking.
+func enforceRetentionForLifecycle(ctx context.Context, objInfo ObjectInfo) (locked bool) {
+	lhold := objectlock.GetObjectLegalHoldMeta(objInfo.UserDefined)
+	if lhold.Status.Valid() && lhold.Status == objectlock.LegalHoldOn {
+		return true
+	}
+
+	ret := objectlock.GetObjectRetentionMeta(objInfo.UserDefined)
+	if ret.Mode.Valid() && (ret.Mode == objectlock.RetCompliance || ret.Mode == objectlock.RetGovernance) {
+		t, err := objectlock.UTCNowNTP()
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return true
+		}
+		if ret.RetainUntilDate.After(t) {
+			return true
+		}
+	}
+	return false
+}
+
 // enforceRetentionBypassForDelete enforces whether an existing object under governance can be deleted
 // with governance bypass headers set in the request.
 // Objects under site wide WORM can never be overwritten.
