@@ -70,6 +70,7 @@ const (
 	RegionSubSys         = "region"
 	EtcdSubSys           = "etcd"
 	StorageClassSubSys   = "storage_class"
+	APISubSys            = "api"
 	CompressionSubSys    = "compression"
 	KmsVaultSubSys       = "kms_vault"
 	KmsKesSubSys         = "kms_kes"
@@ -101,6 +102,7 @@ var SubSystems = set.CreateStringSet([]string{
 	RegionSubSys,
 	EtcdSubSys,
 	CacheSubSys,
+	APISubSys,
 	StorageClassSubSys,
 	CompressionSubSys,
 	KmsVaultSubSys,
@@ -128,6 +130,7 @@ var SubSystemsSingleTargets = set.CreateStringSet([]string{
 	RegionSubSys,
 	EtcdSubSys,
 	CacheSubSys,
+	APISubSys,
 	StorageClassSubSys,
 	CompressionSubSys,
 	KmsVaultSubSys,
