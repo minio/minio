@@ -349,11 +349,14 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 	t := UTCNow()
 
 	dataUsageDebug := env.Get(envDataUsageCrawlDebug, config.EnableOff) == config.EnableOn
-	defer func() {
-		if dataUsageDebug {
-			logger.Info(color.Green("updateUsage")+" Crawl time at %s: %v", basePath, time.Since(t))
-		}
-	}()
+	logPrefix := color.Green("data-usage: ")
+	logSuffix := color.Blue(" - %v + %v", basePath, cache.Info.Name)
+	if dataUsageDebug {
+		defer func() {
+			logger.Info(logPrefix+" Crawl time: %v"+logSuffix, time.Since(t))
+		}()
+
+	}
 
 	if cache.Info.Name == "" {
 		cache.Info.Name = dataUsageRoot
@@ -381,12 +384,12 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 		s.withFilter = &bloomFilter{BloomFilter: &bloom.BloomFilter{}}
 		_, err := s.withFilter.ReadFrom(bytes.NewBuffer(cache.Info.BloomFilter))
 		if err != nil {
-			logger.LogIf(ctx, err, "Error reading bloom filter")
+			logger.LogIf(ctx, err, logPrefix+"Error reading bloom filter")
 			s.withFilter = nil
 		}
 	}
 	if s.dataUsageCrawlDebug {
-		logger.Info(color.Green("updateUsage:")+" Start crawling. Bloom filter: %v", s.withFilter != nil)
+		logger.Info(logPrefix+"Start crawling. Bloom filter: %v"+logSuffix, s.withFilter != nil)
 	}
 
 	done := ctx.Done()
@@ -395,12 +398,6 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 	// If we are scanning inside a bucket reduce depth by 1.
 	if cache.Info.Name != dataUsageRoot {
 		flattenLevels--
-	}
-
-	var logPrefix, logSuffix string
-	if s.dataUsageCrawlDebug {
-		logPrefix = color.Green("data-usage: ")
-		logSuffix = color.Blue(" - %v + %v", basePath, cache.Info.Name)
 	}
 
 	if s.dataUsageCrawlDebug {
@@ -443,7 +440,7 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 			continue
 		}
 		if du == nil {
-			logger.Info("data-usage: no disk usage provided")
+			logger.Info(logPrefix + "no disk usage provided" + logSuffix)
 			continue
 		}
 
@@ -476,7 +473,7 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 			// If folder isn't in filter, skip it completely.
 			if !s.withFilter.containsDir(folder.name) {
 				if s.dataUsageCrawlDebug {
-					logger.Info(color.Green("data-usage:")+" Skipping non-updated folder: %v", folder)
+					logger.Info(logPrefix+"Skipping non-updated folder: %v"+logSuffix, folder)
 				}
 				s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h])
 				continue
