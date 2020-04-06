@@ -238,6 +238,9 @@ func (s *xlSets) connectDisks() {
 			}
 			disk.SetDiskID(format.XL.This)
 			s.xlDisksMu.Lock()
+			if s.xlDisks[setIndex][diskIndex] != nil {
+				s.xlDisks[setIndex][diskIndex].Close()
+			}
 			s.xlDisks[setIndex][diskIndex] = disk
 			s.xlDisksMu.Unlock()
 			go func(setIndex int) {
@@ -333,16 +336,21 @@ func newXLSets(endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV
 			endpoints = append(endpoints, s.endpoints[i*drivesPerSet+j])
 			// Rely on endpoints list to initialize, init lockers and available disks.
 			s.xlLockers[i][j] = newLockAPI(s.endpoints[i*drivesPerSet+j])
-			if storageDisks[i*drivesPerSet+j] == nil {
+			disk := storageDisks[i*drivesPerSet+j]
+			if disk == nil {
 				continue
 			}
-			if diskID, derr := storageDisks[i*drivesPerSet+j].GetDiskID(); derr == nil {
-				m, n, err := findDiskIndexByDiskID(format, diskID)
-				if err != nil {
-					continue
-				}
-				s.xlDisks[m][n] = storageDisks[i*drivesPerSet+j]
+			diskID, derr := disk.GetDiskID()
+			if derr != nil {
+				disk.Close()
+				continue
 			}
+			m, n, err := findDiskIndexByDiskID(format, diskID)
+			if err != nil {
+				disk.Close()
+				continue
+			}
+			s.xlDisks[m][n] = disk
 		}
 
 		// Initialize xl objects for a given set.
@@ -1375,11 +1383,13 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 
 		diskID, err := disk.GetDiskID()
 		if err != nil {
+			disk.Close()
 			continue
 		}
 
 		m, n, err := findDiskIndexByDiskID(refFormat, diskID)
 		if err != nil {
+			disk.Close()
 			continue
 		}
 
@@ -1583,11 +1593,13 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 
 			diskID, err := disk.GetDiskID()
 			if err != nil {
+				disk.Close()
 				continue
 			}
 
 			m, n, err := findDiskIndexByDiskID(refFormat, diskID)
 			if err != nil {
+				disk.Close()
 				continue
 			}
 
