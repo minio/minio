@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -146,7 +146,7 @@ func NewPolicySys() *PolicySys {
 	}
 }
 
-func getConditionValues(request *http.Request, locationConstraint string, username string, claims map[string]interface{}) map[string][]string {
+func getConditionValues(r *http.Request, lc string, username string, claims map[string]interface{}) map[string][]string {
 	currTime := UTCNow()
 
 	principalType := "Anonymous"
@@ -156,22 +156,21 @@ func getConditionValues(request *http.Request, locationConstraint string, userna
 
 	args := map[string][]string{
 		"CurrentTime":     {currTime.Format(time.RFC3339)},
-		"EpochTime":       {fmt.Sprintf("%d", currTime.Unix())},
+		"EpochTime":       {strconv.FormatInt(currTime.Unix(), 10)},
+		"SecureTransport": {strconv.FormatBool(r.TLS != nil)},
+		"SourceIp":        {handlers.GetSourceIP(r)},
+		"UserAgent":       {r.UserAgent()},
+		"Referer":         {r.Referer()},
 		"principaltype":   {principalType},
-		"SecureTransport": {fmt.Sprintf("%t", request.TLS != nil)},
-		"SourceIp":        {handlers.GetSourceIP(request)},
-		"UserAgent":       {request.UserAgent()},
-		"Referer":         {request.Referer()},
 		"userid":          {username},
 		"username":        {username},
 	}
 
-	if locationConstraint != "" {
-		args["LocationConstraint"] = []string{locationConstraint}
+	if lc != "" {
+		args["LocationConstraint"] = []string{lc}
 	}
 
-	// TODO: support object-lock-remaining-retention-days
-	cloneHeader := request.Header.Clone()
+	cloneHeader := r.Header.Clone()
 
 	for _, objLock := range []string{
 		xhttp.AmzObjectLockMode,
@@ -193,7 +192,7 @@ func getConditionValues(request *http.Request, locationConstraint string, userna
 	}
 
 	var cloneURLValues = url.Values{}
-	for k, v := range request.URL.Query() {
+	for k, v := range r.URL.Query() {
 		cloneURLValues[k] = v
 	}
 

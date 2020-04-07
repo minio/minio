@@ -399,11 +399,14 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			}
 			continue
 		}
-		govBypassPerms := checkRequestAuthType(ctx, r, policy.BypassGovernanceRetentionAction, bucket, object.ObjectName)
-		if _, err := enforceRetentionBypassForDelete(ctx, r, bucket, object.ObjectName, getObjectInfoFn, govBypassPerms); err != ErrNone {
-			dErrs[index] = err
-			continue
+
+		if _, ok := globalBucketObjectLockConfig.Get(bucket); ok {
+			if err := enforceRetentionBypassForDelete(ctx, r, bucket, object.ObjectName, getObjectInfoFn); err != ErrNone {
+				dErrs[index] = err
+				continue
+			}
 		}
+
 		// Avoid duplicate objects, we use map to filter them out.
 		if _, ok := objectsToDelete[object.ObjectName]; !ok {
 			objectsToDelete[object.ObjectName] = index
