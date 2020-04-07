@@ -65,8 +65,14 @@ docker_sse_encryption_env() {
 # su-exec to requested user, if service cannot run exec will fail.
 docker_switch_user() {
     if [ ! -z "${MINIO_USERNAME}" ] && [ ! -z "${MINIO_GROUPNAME}" ]; then
-        addgroup -S "$MINIO_GROUPNAME" >/dev/null 2>&1 && \
-            adduser -S -G "$MINIO_GROUPNAME" "$MINIO_USERNAME" >/dev/null 2>&1
+
+	if [ ! -z "${MINIO_UID}" ] && [ ! -z "${MINIO_GID}" ]; then
+		addgroup -S -g "$MINIO_GID" "$MINIO_GROUPNAME" && \
+                        adduser -S -u "$MINIO_UID" -G "$MINIO_GROUPNAME" "$MINIO_USERNAME"
+	else
+		addgroup -S "$MINIO_GROUPNAME" && \
+                	adduser -S -G "$MINIO_GROUPNAME" "$MINIO_USERNAME"
+	fi
 
         exec su-exec "${MINIO_USERNAME}:${MINIO_GROUPNAME}" "$@"
     else
