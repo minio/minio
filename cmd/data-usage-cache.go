@@ -65,7 +65,7 @@ type dataUsageCacheInfo struct {
 	// Name of the bucket. Also root element.
 	Name        string
 	LastUpdate  time.Time
-	NextCycle   uint8
+	NextCycle   uint32
 	BloomFilter []byte `msg:"BloomFilter,omitempty"`
 }
 
@@ -79,8 +79,8 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 }
 
 // mod returns true if the hash mod cycles == cycle.
-func (h dataUsageHash) mod(cycle uint8, cycles uint8) bool {
-	return uint8(h)%cycles == cycle%cycles
+func (h dataUsageHash) mod(cycle uint32, cycles uint32) bool {
+	return uint32(h)%cycles == cycle%cycles
 }
 
 // addChildString will add a child based on its name.

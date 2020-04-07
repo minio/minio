@@ -37,7 +37,7 @@ func (z *dataUsageCacheInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "NextCycle":
-			z.NextCycle, err = dc.ReadUint8()
+			z.NextCycle, err = dc.ReadUint32()
 			if err != nil {
 				err = msgp.WrapError(err, "NextCycle")
 				return
@@ -101,7 +101,7 @@ func (z *dataUsageCacheInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint8(z.NextCycle)
+	err = en.WriteUint32(z.NextCycle)
 	if err != nil {
 		err = msgp.WrapError(err, "NextCycle")
 		return
@@ -144,7 +144,7 @@ func (z *dataUsageCacheInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendTime(o, z.LastUpdate)
 	// string "NextCycle"
 	o = append(o, 0xa9, 0x4e, 0x65, 0x78, 0x74, 0x43, 0x79, 0x63, 0x6c, 0x65)
-	o = msgp.AppendUint8(o, z.NextCycle)
+	o = msgp.AppendUint32(o, z.NextCycle)
 	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "BloomFilter"
 		o = append(o, 0xab, 0x42, 0x6c, 0x6f, 0x6f, 0x6d, 0x46, 0x69, 0x6c, 0x74, 0x65, 0x72)
@@ -184,7 +184,7 @@ func (z *dataUsageCacheInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "NextCycle":
-			z.NextCycle, bts, err = msgp.ReadUint8Bytes(bts)
+			z.NextCycle, bts, err = msgp.ReadUint32Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "NextCycle")
 				return
@@ -209,7 +209,7 @@ func (z *dataUsageCacheInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageCacheInfo) Msgsize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 11 + msgp.TimeSize + 10 + msgp.Uint8Size + 12 + msgp.BytesPrefixSize + len(z.BloomFilter)
+	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 11 + msgp.TimeSize + 10 + msgp.Uint32Size + 12 + msgp.BytesPrefixSize + len(z.BloomFilter)
 	return
 }
 
