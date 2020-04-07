@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 	"testing"
 
@@ -301,4 +302,37 @@ func TestCheckAzureUploadID(t *testing.T) {
 			t.Fatalf("%s: expected: <nil>, got: %s", uploadID, err)
 		}
 	}
+}
+
+func TestParsingUploadChunkSize(t *testing.T) {
+	key := "AZURE_CHUNK_SIZE_MB"
+	invalidValues := []string{
+		"",
+		"0,3",
+		"100.1",
+		"-1",
+	}
+
+	for i, chunkValue := range invalidValues {
+		os.Setenv(key, chunkValue)
+		result := getUploadChunkSizeFromEnv(key, azureDefaultUploadChunkSize)
+		if(result != azureDefaultUploadChunkSize) {
+			t.Errorf("Test %d: expected: #{azureDefaultUploadChunkSize}, got: #{result}", i+1)
+		}
+	}
+
+	validValues := []string{
+		"1",
+		"1.25",
+		"50",
+		"99",
+	}
+	for i, chunkValue := range validValues {
+		os.Setenv(key, chunkValue)
+		result := getUploadChunkSizeFromEnv(key, azureDefaultUploadChunkSize)
+		if(result == azureDefaultUploadChunkSize) {
+			t.Errorf("Test %d: expected: #{chunkValue}, got: #{result}", i+1)
+		}
+	}
+
 }
