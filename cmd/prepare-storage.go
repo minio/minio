@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"crypto/tls"
 	"fmt"
 	"net/http"
@@ -39,7 +38,7 @@ var printEndpointError = func() func(Endpoint, error) {
 
 	return func(endpoint Endpoint, err error) {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("endpoint", endpoint.String())
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		mutex.Lock()
 		defer mutex.Unlock()
 		m, ok := printOnce[endpoint]
@@ -272,7 +271,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 			zoneCount, setCount, drivesPerSet)
 
 		// Initialize erasure code format on disks
-		format, err = initFormatXL(context.Background(), storageDisks, setCount, drivesPerSet, deploymentID)
+		format, err = initFormatXL(GlobalContext, storageDisks, setCount, drivesPerSet, deploymentID)
 		if err != nil {
 			return nil, nil, err
 		}

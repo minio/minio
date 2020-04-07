@@ -353,7 +353,7 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 
 func initBucketObjectLockConfig(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
-		ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{BucketName: bucket.Name})
+		ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{BucketName: bucket.Name})
 		configFile := path.Join(bucketConfigPrefix, bucket.Name, bucketObjectLockEnabledConfigFile)
 		bucketObjLockData, err := readConfig(ctx, objAPI, configFile)
 		if err != nil {

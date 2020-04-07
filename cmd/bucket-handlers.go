@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
@@ -70,7 +69,7 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 	// Get buckets in the DNS
 	dnsBuckets, err := globalDNSConfig.List()
 	if err != nil && err != dns.ErrNoEntriesFound {
-		logger.LogIf(context.Background(), err)
+		logger.LogIf(GlobalContext, err)
 		return
 	}
 
@@ -118,12 +117,12 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 
 	for _, err := range g.Wait() {
 		if err != nil {
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(GlobalContext, err)
 		}
 	}
 
 	for _, bucket := range bucketsInConflict.ToSlice() {
-		logger.LogIf(context.Background(), fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket. Use one of these IP addresses %v to access the bucket", bucket, globalDomainIPs.ToSlice()))
+		logger.LogIf(GlobalContext, fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket. Use one of these IP addresses %v to access the bucket", bucket, globalDomainIPs.ToSlice()))
 	}
 
 	// Remove buckets that are in DNS for this server, but aren't local
@@ -140,7 +139,7 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 		// We go to here, so we know the bucket no longer exists,
 		// but is registered in DNS to this server
 		if err = globalDNSConfig.Delete(bucket); err != nil {
-			logger.LogIf(context.Background(), fmt.Errorf("Failed to remove DNS entry for %s due to %w",
+			logger.LogIf(GlobalContext, fmt.Errorf("Failed to remove DNS entry for %s due to %w",
 				bucket, err))
 		}
 	}

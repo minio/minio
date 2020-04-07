@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"crypto/x509"
 	"encoding/gob"
 	"errors"
@@ -42,7 +41,7 @@ func init() {
 	logger.RegisterError(config.FmtError)
 
 	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background())
+	globalConsoleSys = NewConsoleLogger(GlobalContext)
 	logger.AddTarget(globalConsoleSys)
 
 	gob.Register(StorageErr(""))

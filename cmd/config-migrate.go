@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -2430,7 +2429,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 	defer func() {
 		if err == nil {
 			if globalEtcdClient != nil {
-				deleteKeyEtcd(context.Background(), globalEtcdClient, configFile)
+				deleteKeyEtcd(GlobalContext, globalEtcdClient, configFile)
 			} else {
 				// Rename config.json to config.json.deprecated only upon
 				// success of this function.
@@ -2440,7 +2439,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 	}()
 
 	// Verify if backend already has the file (after holding lock)
-	if err = checkConfig(context.Background(), objAPI, configFile); err != errConfigNotFound {
+	if err = checkConfig(GlobalContext, objAPI, configFile); err != errConfigNotFound {
 		return err
 	} // if errConfigNotFound proceed to migrate..
 
@@ -2466,7 +2465,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 		// Initialize the server config, if no config exists.
 		return newSrvConfig(objAPI)
 	}
-	return saveServerConfig(context.Background(), objAPI, config)
+	return saveServerConfig(GlobalContext, objAPI, config)
 }
 
 // Migrates '.minio.sys/config.json' to v33.
@@ -2502,7 +2501,7 @@ func migrateMinioSysConfig(objAPI ObjectLayer) error {
 }
 
 func checkConfigVersion(objAPI ObjectLayer, configFile string, version string) (bool, []byte, error) {
-	data, err := readConfig(context.Background(), objAPI, configFile)
+	data, err := readConfig(GlobalContext, objAPI, configFile)
 	if err != nil {
 		return false, nil, err
 	}
@@ -2548,7 +2547,7 @@ func migrateV27ToV28MinioSys(objAPI ObjectLayer) error {
 	cfg.Version = "28"
 	cfg.KMS = crypto.KMSConfig{}
 
-	if err = saveServerConfig(context.Background(), objAPI, cfg); err != nil {
+	if err = saveServerConfig(GlobalContext, objAPI, cfg); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘27’ to ‘28’. %w", err)
 	}
 
@@ -2575,7 +2574,7 @@ func migrateV28ToV29MinioSys(objAPI ObjectLayer) error {
 	}
 
 	cfg.Version = "29"
-	if err = saveServerConfig(context.Background(), objAPI, cfg); err != nil {
+	if err = saveServerConfig(GlobalContext, objAPI, cfg); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘28’ to ‘29’. %w", err)
 	}
 
@@ -2607,7 +2606,7 @@ func migrateV29ToV30MinioSys(objAPI ObjectLayer) error {
 	cfg.Compression.Extensions = strings.Split(compress.DefaultExtensions, config.ValueSeparator)
 	cfg.Compression.MimeTypes = strings.Split(compress.DefaultMimeTypes, config.ValueSeparator)
 
-	if err = saveServerConfig(context.Background(), objAPI, cfg); err != nil {
+	if err = saveServerConfig(GlobalContext, objAPI, cfg); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘29’ to ‘30’. %w", err)
 	}
 
@@ -2642,7 +2641,7 @@ func migrateV30ToV31MinioSys(objAPI ObjectLayer) error {
 		AuthToken: "",
 	}
 
-	if err = saveServerConfig(context.Background(), objAPI, cfg); err != nil {
+	if err = saveServerConfig(GlobalContext, objAPI, cfg); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘30’ to ‘31’. %w", err)
 	}
 
@@ -2672,7 +2671,7 @@ func migrateV31ToV32MinioSys(objAPI ObjectLayer) error {
 	cfg.Notify.NSQ = make(map[string]target.NSQArgs)
 	cfg.Notify.NSQ["1"] = target.NSQArgs{}
 
-	if err = saveServerConfig(context.Background(), objAPI, cfg); err != nil {
+	if err = saveServerConfig(GlobalContext, objAPI, cfg); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘31’ to ‘32’. %w", err)
 	}
 
@@ -2700,7 +2699,7 @@ func migrateV32ToV33MinioSys(objAPI ObjectLayer) error {
 
 	cfg.Version = "33"
 
-	if err = saveServerConfig(context.Background(), objAPI, cfg); err != nil {
+	if err = saveServerConfig(GlobalContext, objAPI, cfg); err != nil {
 		return fmt.Errorf("Failed to migrate config from '32' to '33' . %w", err)
 	}
 
@@ -2777,7 +2776,7 @@ func migrateMinioSysConfigToKV(objAPI ObjectLayer) error {
 		notify.SetNotifyWebhook(newCfg, k, args)
 	}
 
-	if err = saveServerConfig(context.Background(), objAPI, newCfg); err != nil {
+	if err = saveServerConfig(GlobalContext, objAPI, newCfg); err != nil {
 		return err
 	}
 

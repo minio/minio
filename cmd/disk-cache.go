@@ -501,7 +501,7 @@ func (c *cacheObjects) hashIndex(bucket, object string) int {
 // or the global env overrides.
 func newCache(config cache.Config) ([]*diskCache, bool, error) {
 	var caches []*diskCache
-	ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{})
+	ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{})
 	formats, migrating, err := loadAndValidateCacheFormat(ctx, config.Drives)
 	if err != nil {
 		return nil, false, err
