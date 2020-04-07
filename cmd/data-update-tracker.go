@@ -40,7 +40,7 @@ import (
 
 const (
 	// Estimate bloom filter size. With this many items
-	dataUpdateTrackerEstItems = 250000
+	dataUpdateTrackerEstItems = 1000000
 	// ... we want this false positive rate:
 	dataUpdateTrackerFP        = 0.99
 	dataUpdateTrackerQueueSize = 10000

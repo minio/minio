@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
+	"path"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -14,9 +16,14 @@ import (
 	"github.com/minio/minio/cmd/logger/message/log"
 )
 
+type testLoggerI interface {
+	Helper()
+	Log(args ...interface{})
+}
+
 type testingLogger struct {
 	mu sync.Mutex
-	t  *testing.T
+	t  testLoggerI
 }
 
 func (t *testingLogger) Send(entry interface{}, errKind string) error {
@@ -35,7 +42,7 @@ func (t *testingLogger) Send(entry interface{}, errKind string) error {
 	return nil
 }
 
-func addTestingLogging(t *testing.T) func() {
+func addTestingLogging(t testLoggerI) func() {
 	tl := &testingLogger{t: t}
 	logger.AddTarget(tl)
 	return func() {
@@ -206,5 +213,34 @@ func TestDataUpdateTracker(t *testing.T) {
 				continue
 			}
 		})
+	}
+}
+
+func BenchmarkDataUpdateTracker(b *testing.B) {
+	dut := newDataUpdateTracker()
+	// Change some defaults.
+	dut.debug = false
+	dut.input = make(chan string)
+	dut.save = make(chan struct{})
+
+	defer addTestingLogging(b)()
+
+	dut.Current.bf = dut.newBloomFilter()
+	// We do this unbuffered. This will very significantly reduce throughput, so this is a worst case.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go dut.startCollector(ctx)
+	input := make([]string, 1000)
+	rng := rand.New(rand.NewSource(0xabad1dea))
+	tmp := []string{"bucket", "aprefix", "nextprefixlevel", "maybeobjname", "evendeeper", "ok-one-morelevel", "final.object"}
+	for i := range input {
+		tmp := tmp[:1+rng.Intn(cap(tmp)-1)]
+		input[i] = path.Join(tmp...)
+	}
+	b.SetBytes(1)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		dut.input <- input[rng.Intn(len(input))]
 	}
 }
