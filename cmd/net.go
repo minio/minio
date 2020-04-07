@@ -277,9 +277,23 @@ func isLocalHost(host string, port string, localPort string) (bool, error) {
 		return false, err
 	}
 
+	nonInterIPV4s := mustGetLocalIP4().Intersection(hostIPs)
+	if nonInterIPV4s.IsEmpty() {
+		hostIPs = hostIPs.ApplyFunc(func(ip string) string {
+			if net.ParseIP(ip).IsLoopback() {
+				// Any loopback IP which is not 127.0.0.1
+				// convert it to check for intersections.
+				return "127.0.0.1"
+			}
+			return ip
+		})
+		nonInterIPV4s = mustGetLocalIP4().Intersection(hostIPs)
+	}
+	nonInterIPV6s := mustGetLocalIP6().Intersection(hostIPs)
+
 	// If intersection of two IP sets is not empty, then the host is localhost.
-	isLocalv4 := !mustGetLocalIP4().Intersection(hostIPs).IsEmpty()
-	isLocalv6 := !mustGetLocalIP6().Intersection(hostIPs).IsEmpty()
+	isLocalv4 := !nonInterIPV4s.IsEmpty()
+	isLocalv6 := !nonInterIPV6s.IsEmpty()
 	if port != "" {
 		return (isLocalv4 || isLocalv6) && (port == localPort), nil
 	}
