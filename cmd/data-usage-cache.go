@@ -176,6 +176,7 @@ func (d *dataUsageCache) copyWithChildren(src *dataUsageCache, hash dataUsageHas
 	for ch := range e.Children {
 		if ch == hash {
 			logger.LogIf(context.Background(), errors.New("dataUsageCache.copyWithChildren: Circular reference"))
+			return
 		}
 		d.copyWithChildren(src, ch, &hash)
 	}
