@@ -689,9 +689,16 @@ func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
 	defer sys.store.runlock()
 
 	if sys.usersSysType != MinIOUsersSysType {
+		// If the user has a mapped policy or is a member of a group, we
+		// return that info. Otherwise we return error.
+		mappedPolicy, ok1 := sys.iamUserPolicyMap[name]
+		memberships, ok2 := sys.iamUserGroupMemberships[name]
+		if !ok1 && !ok2 {
+			return u, errNoSuchUser
+		}
 		return madmin.UserInfo{
-			PolicyName: sys.iamUserPolicyMap[name].Policy,
-			MemberOf:   sys.iamUserGroupMemberships[name].ToSlice(),
+			PolicyName: mappedPolicy.Policy,
+			MemberOf:   memberships.ToSlice(),
 		}, nil
 	}
 
@@ -1183,9 +1190,7 @@ func (sys *IAMSys) ListGroups() (r []string, err error) {
 	return r, nil
 }
 
-// PolicyDBSet - sets a policy for a user or group in the
-// PolicyDB. This function applies only long-term users. For STS
-// users, policy is set directly by called sys.policyDBSet().
+// PolicyDBSet - sets a policy for a user or group in the PolicyDB.
 func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
 	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil || sys == nil || sys.store == nil {
@@ -1195,8 +1200,6 @@ func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	// isSTS is always false when called via PolicyDBSet as policy
-	// is never set by an external API call for STS users.
 	return sys.policyDBSet(name, policy, regularUser, isGroup)
 }
 

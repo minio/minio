@@ -703,7 +703,7 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 
 	if !isGroup {
 		ok, err := globalIAMSys.IsTempUser(entityName)
-		if err != nil {
+		if err != nil && err != errNoSuchUser {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
