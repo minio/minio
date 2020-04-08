@@ -49,9 +49,9 @@ import (
 	minio "github.com/minio/minio/cmd"
 )
 
-var azureUploadChunkSize		= getUploadChunkSizeFromEnv("AZURE_CHUNK_SIZE_MB", azureDefaultUploadChunkSize)
-var azureSdkTimeout			= time.Duration(azureUploadChunkSize / humanize.MiByte) * 60 * time.Second
-var azureUploadConcurrency		= azureUploadMaxMemoryUsage / azureUploadChunkSize
+var azureUploadChunkSize = getUploadChunkSizeFromEnv("AZURE_CHUNK_SIZE_MB", azureDefaultUploadChunkSize)
+var azureSdkTimeout = time.Duration(azureUploadChunkSize/humanize.MiByte) * 60 * time.Second
+var azureUploadConcurrency = azureUploadMaxMemoryUsage / azureUploadChunkSize
 
 const (
 	// The defaultDialTimeout for communicating with the cloud backends is set
@@ -60,17 +60,17 @@ const (
 	// than 0.5 MB per chunk to stay within the defaultDialTimeout tolerance.
 	// See https://github.com/Azure/azure-storage-blob-go/blob/fc70003/azblob/zc_policy_retry.go#L39-L44 for more details.
 	// To change the upload chunk size, set the environmental variable AZURE_CHUNK_SIZE_MB with a (float) value between 0 and 100
-	azureDefaultUploadChunkSize	= 0.25 * humanize.MiByte
-	azureUploadMaxMemoryUsage  	= 10 * humanize.MiByte
+	azureDefaultUploadChunkSize = 0.25 * humanize.MiByte
+	azureUploadMaxMemoryUsage   = 10 * humanize.MiByte
 
-	azureDownloadRetryAttempts 	= 5
-	azureBlockSize             	= 100 * humanize.MiByte
-	azureS3MinPartSize         	= 5 * humanize.MiByte
-	metadataObjectNameTemplate 	= minio.GatewayMinioSysTmp + "multipart/v1/%s.%x/azure.json"
-	azureBackend               	= "azure"
-	azureMarkerPrefix          	= "{minio}"
-	metadataPartNamePrefix     	= minio.GatewayMinioSysTmp + "multipart/v1/%s.%x"
-	maxPartsCount              	= 10000
+	azureDownloadRetryAttempts = 5
+	azureBlockSize             = 100 * humanize.MiByte
+	azureS3MinPartSize         = 5 * humanize.MiByte
+	metadataObjectNameTemplate = minio.GatewayMinioSysTmp + "multipart/v1/%s.%x/azure.json"
+	azureBackend               = "azure"
+	azureMarkerPrefix          = "{minio}"
+	metadataPartNamePrefix     = minio.GatewayMinioSysTmp + "multipart/v1/%s.%x"
+	maxPartsCount              = 10000
 )
 
 func init() {
@@ -134,10 +134,10 @@ func azureGatewayMain(ctx *cli.Context) {
 func getUploadChunkSizeFromEnv(envvar string, defaultValue int) int {
 	envChunkSize := os.Getenv(envvar)
 	i, err := strconv.ParseFloat(envChunkSize, 64)
-	if(err != nil){
+	if err != nil {
 		return defaultValue
 	}
-	if(i <= 0 || i > 100){
+	if i <= 0 || i > 100 {
 		// Value too large/small, ignored
 		return defaultValue
 	}
