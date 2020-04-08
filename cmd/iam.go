@@ -1048,7 +1048,7 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 		// mapped policy.
 		err := sys.store.deleteMappedPolicy(group, regularUser, true)
 		// No-mapped-policy case is ignored.
-		if err != nil && err != errConfigNotFound {
+		if err != nil && err != errNoSuchPolicy {
 			return err
 		}
 		err = sys.store.deleteGroupInfo(group)
