@@ -1452,10 +1452,7 @@ func deleteFile(basePath, deletePath string, recursive bool) error {
 		}
 	}
 
-	// Trailing slash is removed when found to ensure
-	// slashpath.Dir() to work as intended.
-	deletePath = strings.TrimSuffix(deletePath, SlashSeparator)
-	deletePath = slashpath.Dir(deletePath)
+	deletePath = filepath.Dir(deletePath)
 
 	// Delete parent directory obviously not recursively. Errors for
 	// parent directories shouldn't trickle down.
