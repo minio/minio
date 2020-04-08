@@ -70,7 +70,7 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	globalConfigSys = NewConfigSys()
 
 	globalIAMSys = NewIAMSys()
-	globalIAMSys.Init(objLayer)
+	globalIAMSys.Init(GlobalContext, objLayer)
 
 	buckets, err := objLayer.ListBuckets(context.Background())
 	if err != nil {
