@@ -79,7 +79,7 @@ func GetOBDInfo(ctx context.Context, endpoint string) (Latency, Throughput, erro
 	// 	}
 	// }
 
-	blockSize := 1 * mb
+	blockSize := 4 * mb
 	fileSize := 256 * mb
 
 	latencies := make([]float64, fileSize/blockSize)
