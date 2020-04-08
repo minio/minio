@@ -213,7 +213,7 @@ http://minio.cluster:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=foouser
 
 ## Testing
 
-With multiple OU heirarchies for users, and multiple group search base DN's.
+With multiple OU hierarchies for users, and multiple group search base DN's.
 ```
 $ export MINIO_ACCESS_KEY=minio
 $ export MINIO_SECRET_KEY=minio123
