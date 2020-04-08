@@ -14,24 +14,24 @@
  * limitations under the License.
  */
 
-import React from "react";
-import { Modal, ModalHeader, ModalBody } from "react-bootstrap";
+import React from "react"
+import { Modal, ModalHeader, ModalBody } from "react-bootstrap"
 
 class PreviewObjectModal extends React.Component {
   constructor(props) {
-    super(props);
+    super(props)
     this.state = {
       url: "",
-    };
+    }
     props.getObjectURL(props.object.name, (url) => {
       this.setState({
         url: url,
-      });
-    });
+      })
+    })
   }
 
   render() {
-    const { hidePreviewModal } = this.props;
+    const { hidePreviewModal } = this.props
     return (
       <Modal
         show={true}
@@ -59,7 +59,7 @@ class PreviewObjectModal extends React.Component {
           }
         </div>
       </Modal>
-    );
+    )
   }
 }
-export default PreviewObjectModal;
+export default PreviewObjectModal

@@ -14,67 +14,67 @@
  * limitations under the License.
  */
 
-import React from "react";
-import { connect } from "react-redux";
-import { Dropdown } from "react-bootstrap";
-import ShareObjectModal from "./ShareObjectModal";
-import DeleteObjectConfirmModal from "./DeleteObjectConfirmModal";
-import PreviewObjectModal from "./PreviewObjectModal";
+import React from "react"
+import { connect } from "react-redux"
+import { Dropdown } from "react-bootstrap"
+import ShareObjectModal from "./ShareObjectModal"
+import DeleteObjectConfirmModal from "./DeleteObjectConfirmModal"
+import PreviewObjectModal from "./PreviewObjectModal"
 
-import * as objectsActions from "./actions";
-import { getDataType } from "../mime.js";
+import * as objectsActions from "./actions"
+import { getDataType } from "../mime.js"
 import {
   SHARE_OBJECT_EXPIRY_DAYS,
   SHARE_OBJECT_EXPIRY_HOURS,
   SHARE_OBJECT_EXPIRY_MINUTES,
-} from "../constants";
+} from "../constants"
 
 export class ObjectActions extends React.Component {
   constructor(props) {
-    super(props);
+    super(props)
     this.state = {
       showDeleteConfirmation: false,
       showPreview: false,
-    };
+    }
   }
   shareObject(e) {
-    e.preventDefault();
-    const { object, shareObject } = this.props;
+    e.preventDefault()
+    const { object, shareObject } = this.props
     shareObject(
       object.name,
       SHARE_OBJECT_EXPIRY_DAYS,
       SHARE_OBJECT_EXPIRY_HOURS,
       SHARE_OBJECT_EXPIRY_MINUTES
-    );
+    )
   }
   deleteObject() {
-    const { object, deleteObject } = this.props;
-    deleteObject(object.name);
+    const { object, deleteObject } = this.props
+    deleteObject(object.name)
   }
   showDeleteConfirmModal(e) {
-    e.preventDefault();
-    this.setState({ showDeleteConfirmation: true });
+    e.preventDefault()
+    this.setState({ showDeleteConfirmation: true })
   }
   hideDeleteConfirmModal() {
     this.setState({
       showDeleteConfirmation: false,
-    });
+    })
   }
   getObjectURL(objectname, callback) {
-    const { getObjectURL } = this.props;
-    getObjectURL(objectname, callback);
+    const { getObjectURL } = this.props
+    getObjectURL(objectname, callback)
   }
   showPreviewModal(e) {
-    e.preventDefault();
-    this.setState({ showPreview: true });
+    e.preventDefault()
+    this.setState({ showPreview: true })
   }
   hidePreviewModal() {
     this.setState({
       showPreview: false,
-    });
+    })
   }
   render() {
-    const { object, showShareObjectModal, shareObjectName } = this.props;
+    const { object, showShareObjectModal, shareObjectName } = this.props
     return (
       <Dropdown id={`obj-actions-${object.name}`}>
         <Dropdown.Toggle noCaret className="fia-toggle" />
@@ -120,7 +120,7 @@ export class ObjectActions extends React.Component {
           />
         )}
       </Dropdown>
-    );
+    )
   }
 }
 
@@ -129,8 +129,8 @@ const mapStateToProps = (state, ownProps) => {
     object: ownProps.object,
     showShareObjectModal: state.objects.shareObject.show,
     shareObjectName: state.objects.shareObject.object,
-  };
-};
+  }
+}
 
 const mapDispatchToProps = (dispatch) => {
   return {
@@ -139,7 +139,7 @@ const mapDispatchToProps = (dispatch) => {
     deleteObject: (object) => dispatch(objectsActions.deleteObject(object)),
     getObjectURL: (object, callback) =>
       dispatch(objectsActions.getObjectURL(object, callback)),
-  };
-};
+  }
+}
 
-export default connect(mapStateToProps, mapDispatchToProps)(ObjectActions);
+export default connect(mapStateToProps, mapDispatchToProps)(ObjectActions)
