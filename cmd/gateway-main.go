@@ -255,13 +255,13 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// ****  WARNING ****
 		// Migrating to encrypted backend on etcd should happen before initialization of
 		// IAM sub-systems, make sure that we do not move the above codeblock elsewhere.
-		logger.FatalIf(migrateIAMConfigsEtcdToEncrypted(globalEtcdClient),
+		logger.FatalIf(migrateIAMConfigsEtcdToEncrypted(GlobalContext, globalEtcdClient),
 			"Unable to handle encrypted backend for iam and policies")
 	}
 
 	if enableIAMOps {
 		// Initialize IAM sys.
-		logger.FatalIf(globalIAMSys.Init(newObject), "Unable to initialize IAM system")
+		logger.FatalIf(globalIAMSys.Init(GlobalContext, newObject), "Unable to initialize IAM system")
 	}
 
 	if globalCacheConfig.Enabled {

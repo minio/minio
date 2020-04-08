@@ -38,6 +38,10 @@ const (
 	// DeleteBucketAction - DeleteBucket Rest API action.
 	DeleteBucketAction = "s3:DeleteBucket"
 
+	// ForceDeleteBucketAction - DeleteBucket Rest API action when x-minio-force-delete flag
+	// is specified.
+	ForceDeleteBucketAction = "s3:ForceDeleteBucket"
+
 	// DeleteBucketPolicyAction - DeleteBucketPolicy Rest API action.
 	DeleteBucketPolicyAction = "s3:DeleteBucketPolicy"
 
@@ -136,6 +140,7 @@ var supportedActions = map[Action]struct{}{
 	AbortMultipartUploadAction:             {},
 	CreateBucketAction:                     {},
 	DeleteBucketAction:                     {},
+	ForceDeleteBucketAction:                {},
 	DeleteBucketPolicyAction:               {},
 	DeleteObjectAction:                     {},
 	GetBucketLocationAction:                {},
