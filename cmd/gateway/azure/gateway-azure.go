@@ -49,7 +49,7 @@ import (
 	minio "github.com/minio/minio/cmd"
 )
 
-var azureUploadChunkSize = getUploadChunkSizeFromEnv("AZURE_CHUNK_SIZE_MB", azureDefaultUploadChunkSize)
+var azureUploadChunkSize = getUploadChunkSizeFromEnv("MINIO_AZURE_CHUNK_SIZE_MB", azureDefaultUploadChunkSize)
 var azureSdkTimeout = time.Duration(azureUploadChunkSize/humanize.MiByte) * 60 * time.Second
 var azureUploadConcurrency = azureUploadMaxMemoryUsage / azureUploadChunkSize
 
@@ -59,7 +59,7 @@ const (
 	// seconds per MB of data a client expects to upload so we must transfer less
 	// than 0.5 MB per chunk to stay within the defaultDialTimeout tolerance.
 	// See https://github.com/Azure/azure-storage-blob-go/blob/fc70003/azblob/zc_policy_retry.go#L39-L44 for more details.
-	// To change the upload chunk size, set the environmental variable AZURE_CHUNK_SIZE_MB with a (float) value between 0 and 100
+	// To change the upload chunk size, set the environmental variable MINIO_AZURE_CHUNK_SIZE_MB with a (float) value between 0 and 100
 	azureDefaultUploadChunkSize = 0.25 * humanize.MiByte
 	azureUploadMaxMemoryUsage   = 10 * humanize.MiByte
 
@@ -91,7 +91,7 @@ EXAMPLES:
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}azureaccountname
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}azureaccountkey
      {{.Prompt}} {{.HelpName}} https://azureaccountname.blob.custom.azure.endpoint
-     {{.Prompt}} {{.EnvVarSetCommand}} AZURE_CHUNK_SIZE_MB {{.AssignmentOperator}}0.25
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_AZURE_CHUNK_SIZE_MB {{.AssignmentOperator}}0.25
 
   2. Start minio gateway server for Azure Blob Storage backend with edge caching enabled.
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}azureaccountname
@@ -102,7 +102,7 @@ EXAMPLES:
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_AFTER{{.AssignmentOperator}}3
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_LOW{{.AssignmentOperator}}75
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_HIGH{{.AssignmentOperator}}85
-     {{.Prompt}} {{.EnvVarSetCommand}} AZURE_CHUNK_SIZE_MB {{.AssignmentOperator}}0.25
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_AZURE_CHUNK_SIZE_MB {{.AssignmentOperator}}0.25
      {{.Prompt}} {{.HelpName}}
 `
 

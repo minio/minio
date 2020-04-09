@@ -305,7 +305,7 @@ func TestCheckAzureUploadID(t *testing.T) {
 }
 
 func TestParsingUploadChunkSize(t *testing.T) {
-	key := "AZURE_CHUNK_SIZE_MB"
+	key := "MINIO_AZURE_CHUNK_SIZE_MB"
 	invalidValues := []string{
 		"",
 		"0,3",
