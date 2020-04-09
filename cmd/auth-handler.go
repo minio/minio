@@ -26,12 +26,15 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	xjwt "github.com/minio/minio/cmd/jwt"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
@@ -272,7 +275,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 	var cred auth.Credentials
 	switch getRequestAuthType(r) {
 	case authTypeUnknown, authTypeStreamingSigned:
-		return accessKey, owner, ErrAccessDenied
+		return accessKey, owner, ErrSignatureVersionNotSupported
 	case authTypePresignedV2, authTypeSignedV2:
 		if s3Err = isReqAuthenticatedV2(r); s3Err != ErrNone {
 			return accessKey, owner, s3Err
@@ -334,7 +337,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 			// Request is allowed return the appropriate access key.
 			return cred.AccessKey, owner, ErrNone
 		}
-		return accessKey, owner, ErrAccessDenied
+		return cred.AccessKey, owner, ErrAccessDenied
 	}
 	if globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
@@ -348,7 +351,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 		// Request is allowed return the appropriate access key.
 		return cred.AccessKey, owner, ErrNone
 	}
-	return accessKey, owner, ErrAccessDenied
+	return cred.AccessKey, owner, ErrAccessDenied
 }
 
 // Verify if request has valid AWS Signature Version '2'.
@@ -464,6 +467,106 @@ func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL, guessIsBrowserReq(r))
 }
 
+func validateSignature(atype authType, r *http.Request) (auth.Credentials, bool, map[string]interface{}, APIErrorCode) {
+	var cred auth.Credentials
+	var owner bool
+	var s3Err APIErrorCode
+	switch atype {
+	case authTypeUnknown, authTypeStreamingSigned:
+		return cred, owner, nil, ErrSignatureVersionNotSupported
+	case authTypeSignedV2, authTypePresignedV2:
+		if s3Err = isReqAuthenticatedV2(r); s3Err != ErrNone {
+			return cred, owner, nil, s3Err
+		}
+		cred, owner, s3Err = getReqAccessKeyV2(r)
+	case authTypePresigned, authTypeSigned:
+		region := globalServerRegion
+		if s3Err = isReqAuthenticated(GlobalContext, r, region, serviceS3); s3Err != ErrNone {
+			return cred, owner, nil, s3Err
+		}
+		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
+	}
+	if s3Err != ErrNone {
+		return cred, owner, nil, s3Err
+	}
+
+	claims, s3Err := checkClaimsFromToken(r, cred)
+	if s3Err != ErrNone {
+		return cred, owner, nil, s3Err
+	}
+
+	return cred, owner, claims, ErrNone
+}
+
+func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate time.Time, retMode objectlock.RetMode, byPassSet bool, r *http.Request, cred auth.Credentials, owner bool, claims map[string]interface{}) (s3Err APIErrorCode) {
+	var retSet bool
+	if cred.AccessKey == "" {
+		conditions := getConditionValues(r, "", "", nil)
+		conditions["object-lock-mode"] = []string{string(retMode)}
+		conditions["object-lock-retain-until-date"] = []string{retDate.Format(time.RFC3339)}
+		if retDays > 0 {
+			conditions["object-lock-remaining-retention-days"] = []string{strconv.Itoa(retDays)}
+		}
+		if retMode == objectlock.RetGovernance && byPassSet {
+			byPassSet = globalPolicySys.IsAllowed(policy.Args{
+				AccountName:     cred.AccessKey,
+				Action:          policy.Action(policy.BypassGovernanceRetentionAction),
+				BucketName:      bucketName,
+				ConditionValues: conditions,
+				IsOwner:         false,
+				ObjectName:      objectName,
+			})
+		}
+		if globalPolicySys.IsAllowed(policy.Args{
+			AccountName:     cred.AccessKey,
+			Action:          policy.Action(policy.PutObjectRetentionAction),
+			BucketName:      bucketName,
+			ConditionValues: conditions,
+			IsOwner:         false,
+			ObjectName:      objectName,
+		}) {
+			retSet = true
+		}
+		if byPassSet || retSet {
+			return ErrNone
+		}
+		return ErrAccessDenied
+	}
+
+	conditions := getConditionValues(r, "", cred.AccessKey, claims)
+	conditions["object-lock-mode"] = []string{string(retMode)}
+	conditions["object-lock-retain-until-date"] = []string{retDate.Format(time.RFC3339)}
+	if retDays > 0 {
+		conditions["object-lock-remaining-retention-days"] = []string{strconv.Itoa(retDays)}
+	}
+	if retMode == objectlock.RetGovernance && byPassSet {
+		byPassSet = globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     cred.AccessKey,
+			Action:          policy.BypassGovernanceRetentionAction,
+			BucketName:      bucketName,
+			ObjectName:      objectName,
+			ConditionValues: conditions,
+			IsOwner:         owner,
+			Claims:          claims,
+		})
+	}
+	if globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     cred.AccessKey,
+		Action:          policy.PutObjectRetentionAction,
+		BucketName:      bucketName,
+		ConditionValues: conditions,
+		ObjectName:      objectName,
+		IsOwner:         owner,
+		Claims:          claims,
+	}) {
+		retSet = true
+	}
+	if byPassSet || retSet {
+		return ErrNone
+	}
+	return ErrAccessDenied
+}
+
 // isPutActionAllowed - check if PUT operation is allowed on the resource, this
 // call verifies bucket policies and IAM policies, supports multi user
 // checks etc.
@@ -472,7 +575,7 @@ func isPutActionAllowed(atype authType, bucketName, objectName string, r *http.R
 	var owner bool
 	switch atype {
 	case authTypeUnknown:
-		return ErrAccessDenied
+		return ErrSignatureVersionNotSupported
 	case authTypeSignedV2, authTypePresignedV2:
 		cred, owner, s3Err = getReqAccessKeyV2(r)
 	case authTypeStreamingSigned, authTypePresigned, authTypeSigned:

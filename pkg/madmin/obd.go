@@ -236,6 +236,7 @@ func (adm *AdminClient) ServerOBDInfo(ctx context.Context, obdDataTypes []OBDDat
 			v.Set(string(d), "true")
 		}
 		var OBDInfoMessage OBDInfo
+		OBDInfoMessage.TimeStamp = time.Now()
 
 		if v.Get(string(OBDDataTypeMinioInfo)) == "true" {
 			info, err := adm.ServerInfo(ctx)
@@ -259,8 +260,10 @@ func (adm *AdminClient) ServerOBDInfo(ctx context.Context, obdDataTypes []OBDDat
 			respChan <- OBDInfo{
 				Error: err.Error(),
 			}
+			close(respChan)
 			return
 		}
+
 		// Check response http status code
 		if resp.StatusCode != http.StatusOK {
 			respChan <- OBDInfo{
@@ -268,10 +271,13 @@ func (adm *AdminClient) ServerOBDInfo(ctx context.Context, obdDataTypes []OBDDat
 			}
 			return
 		}
+
 		// Unmarshal the server's json response
 		decoder := json.NewDecoder(resp.Body)
 		for {
 			err := decoder.Decode(&OBDInfoMessage)
+			OBDInfoMessage.TimeStamp = time.Now()
+
 			if err == io.EOF {
 				break
 			}
@@ -283,7 +289,6 @@ func (adm *AdminClient) ServerOBDInfo(ctx context.Context, obdDataTypes []OBDDat
 			respChan <- OBDInfoMessage
 		}
 
-		OBDInfoMessage.TimeStamp = time.Now()
 		respChan <- OBDInfoMessage
 		close(respChan)
 	}()

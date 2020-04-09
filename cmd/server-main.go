@@ -250,12 +250,12 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 		// ****  WARNING ****
 		// Migrating to encrypted backend on etcd should happen before initialization of
 		// IAM sub-systems, make sure that we do not move the above codeblock elsewhere.
-		if err = migrateIAMConfigsEtcdToEncrypted(globalEtcdClient); err != nil {
+		if err = migrateIAMConfigsEtcdToEncrypted(GlobalContext, globalEtcdClient); err != nil {
 			return fmt.Errorf("Unable to handle encrypted backend for iam and policies: %w", err)
 		}
 	}
 
-	if err = globalIAMSys.Init(newObject); err != nil {
+	if err = globalIAMSys.Init(GlobalContext, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize IAM system: %w", err)
 	}
 
@@ -397,9 +397,18 @@ func serverMain(ctx *cli.Context) {
 	globalObjLayerMutex.Unlock()
 
 	if globalIsDistXL && globalEndpoints.FirstLocal() {
-		// Additionally in distributed setup validate
-		if err := verifyServerSystemConfig(globalEndpoints); err != nil {
-			logger.Fatal(err, "Unable to initialize distributed setup")
+		for {
+			// Additionally in distributed setup, validate the setup and configuration.
+			err := verifyServerSystemConfig(globalEndpoints)
+			if err == nil {
+				break
+			}
+			logger.LogIf(GlobalContext, err, "Unable to initialize distributed setup")
+			select {
+			case <-GlobalContext.Done():
+				return
+			case <-time.After(5 * time.Second):
+			}
 		}
 	}
 

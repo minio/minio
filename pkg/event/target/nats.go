@@ -121,6 +121,10 @@ func (n NATSArgs) Validate() error {
 		return errors.New("cert and key must be specified as a pair")
 	}
 
+	if n.Username != "" && n.Password == "" || n.Username == "" && n.Password != "" {
+		return errors.New("username and password must be specified as a pair")
+	}
+
 	if n.Streaming.Enable {
 		if n.Streaming.ClusterID == "" {
 			return errors.New("empty cluster id")
@@ -168,7 +172,15 @@ func (n NATSArgs) connectStan() (stan.Conn, error) {
 	if n.Secure {
 		scheme = "tls"
 	}
-	addressURL := scheme + "://" + n.Username + ":" + n.Password + "@" + n.Address.String()
+
+	var addressURL string
+	if n.Username != "" && n.Password != "" {
+		addressURL = scheme + "://" + n.Username + ":" + n.Password + "@" + n.Address.String()
+	} else if n.Token != "" {
+		addressURL = scheme + "://" + n.Token + "@" + n.Address.String()
+	} else {
+		addressURL = scheme + "://" + n.Address.String()
+	}
 
 	clientID, err := getNewUUID()
 	if err != nil {

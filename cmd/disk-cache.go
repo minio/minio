@@ -239,7 +239,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	// skip cache for objects with locks
 	objRetention := objectlock.GetObjectRetentionMeta(objInfo.UserDefined)
 	legalHold := objectlock.GetObjectLegalHoldMeta(objInfo.UserDefined)
-	if objRetention.Mode != objectlock.Invalid || legalHold.Status != "" {
+	if objRetention.Mode.Valid() || legalHold.Status.Valid() {
 		c.cacheStats.incMiss()
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
@@ -614,7 +614,7 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 	// skip cache for objects with locks
 	objRetention := objectlock.GetObjectRetentionMeta(opts.UserDefined)
 	legalHold := objectlock.GetObjectLegalHoldMeta(opts.UserDefined)
-	if objRetention.Mode != objectlock.Invalid || legalHold.Status != "" {
+	if objRetention.Mode.Valid() || legalHold.Status.Valid() {
 		dcache.Delete(ctx, bucket, object)
 		return putObjectFn(ctx, bucket, object, r, opts)
 	}

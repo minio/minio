@@ -266,7 +266,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	listBuckets := objectAPI.ListBuckets
 
 	accessKey, owner, s3Error := checkRequestAuthTypeToAccessKey(ctx, r, policy.ListAllMyBucketsAction, "", "")
-	if s3Error != ErrNone {
+	if s3Error != ErrNone && s3Error != ErrAccessDenied {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -295,32 +295,43 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	// Set prefix value for "s3:prefix" policy conditionals.
-	r.Header.Set("prefix", "")
+	if s3Error == ErrAccessDenied {
+		// Set prefix value for "s3:prefix" policy conditionals.
+		r.Header.Set("prefix", "")
 
-	// Set delimiter value for "s3:delimiter" policy conditionals.
-	r.Header.Set("delimiter", SlashSeparator)
+		// Set delimiter value for "s3:delimiter" policy conditionals.
+		r.Header.Set("delimiter", SlashSeparator)
 
-	// err will be nil here as we already called this function
-	// earlier in this request.
-	claims, _ := getClaimsFromToken(r)
-	var newBucketsInfo []BucketInfo
-	for _, bucketInfo := range bucketsInfo {
-		if globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     accessKey,
-			Action:          iampolicy.ListBucketAction,
-			BucketName:      bucketInfo.Name,
-			ConditionValues: getConditionValues(r, "", accessKey, claims),
-			IsOwner:         owner,
-			ObjectName:      "",
-			Claims:          claims,
-		}) {
-			newBucketsInfo = append(newBucketsInfo, bucketInfo)
+		// err will be nil here as we already called this function
+		// earlier in this request.
+		claims, _ := getClaimsFromToken(r)
+		n := 0
+		// Use the following trick to filter in place
+		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
+		for _, bucketInfo := range bucketsInfo {
+			if globalIAMSys.IsAllowed(iampolicy.Args{
+				AccountName:     accessKey,
+				Action:          iampolicy.ListBucketAction,
+				BucketName:      bucketInfo.Name,
+				ConditionValues: getConditionValues(r, "", accessKey, claims),
+				IsOwner:         owner,
+				ObjectName:      "",
+				Claims:          claims,
+			}) {
+				bucketsInfo[n] = bucketInfo
+				n++
+			}
+		}
+		bucketsInfo = bucketsInfo[:n]
+		// No buckets can be filtered return access denied error.
+		if len(bucketsInfo) == 0 {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+			return
 		}
 	}
 
 	// Generate response.
-	response := generateListBucketsResponse(newBucketsInfo)
+	response := generateListBucketsResponse(bucketsInfo)
 	encodedSuccessResponse := encodeResponse(response)
 
 	// Write response.
@@ -388,11 +399,14 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			}
 			continue
 		}
-		govBypassPerms := checkRequestAuthType(ctx, r, policy.BypassGovernanceRetentionAction, bucket, object.ObjectName)
-		if _, err := enforceRetentionBypassForDelete(ctx, r, bucket, object.ObjectName, getObjectInfoFn, govBypassPerms); err != ErrNone {
-			dErrs[index] = err
-			continue
+
+		if _, ok := globalBucketObjectLockConfig.Get(bucket); ok {
+			if err := enforceRetentionBypassForDelete(ctx, r, bucket, object.ObjectName, getObjectInfoFn); err != ErrNone {
+				dErrs[index] = err
+				continue
+			}
 		}
+
 		// Avoid duplicate objects, we use map to filter them out.
 		if _, ok := objectsToDelete[object.ObjectName]; !ok {
 			objectsToDelete[object.ObjectName] = index
@@ -877,9 +891,15 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	forceDelete := false
-	if vs, found := r.Header[http.CanonicalHeaderKey("x-minio-force-delete")]; found {
-		switch strings.ToLower(strings.Join(vs, "")) {
+	if value := r.Header.Get(xhttp.MinIOForceDelete); value != "" {
+		switch value {
 		case "true":
 			forceDelete = true
 		case "false":
@@ -889,14 +909,20 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
-		return
+	if forceDelete {
+		if s3Error := checkRequestAuthType(ctx, r, policy.ForceDeleteBucketAction, bucket, ""); s3Error != ErrNone {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+			return
+		}
+	} else {
+		if s3Error := checkRequestAuthType(ctx, r, policy.DeleteBucketAction, bucket, ""); s3Error != ErrNone {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+			return
+		}
 	}
 
-	if s3Error := checkRequestAuthType(ctx, r, policy.DeleteBucketAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+	if _, ok := globalBucketObjectLockConfig.Get(bucket); (ok || globalWORMEnabled) && forceDelete {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
 		return
 	}
 

@@ -106,4 +106,7 @@ const (
 
 	// Server-Status
 	MinIOServerStatus = "x-minio-server-status"
+
+	// Delete special flag
+	MinIOForceDelete = "x-minio-force-delete"
 )

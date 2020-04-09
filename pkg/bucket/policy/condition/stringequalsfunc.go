@@ -112,7 +112,6 @@ func valuesToStringSlice(n name, values ValueSet) ([]string, error) {
 	valueStrings := []string{}
 
 	for value := range values {
-		// FIXME: if AWS supports non-string values, we would need to support it.
 		s, err := value.GetString()
 		if err != nil {
 			return nil, fmt.Errorf("value must be a string for %v condition", n)

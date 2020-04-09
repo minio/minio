@@ -1392,6 +1392,13 @@ func (fs *FSObjects) IsCompressionSupported() bool {
 
 // IsReady - Check if the backend disk is ready to accept traffic.
 func (fs *FSObjects) IsReady(_ context.Context) bool {
-	_, err := os.Stat(fs.fsPath)
-	return err == nil
+	if _, err := os.Stat(fs.fsPath); err != nil {
+		return false
+	}
+
+	globalObjLayerMutex.RLock()
+	res := globalObjectAPI != nil && !globalSafeMode
+	globalObjLayerMutex.RUnlock()
+
+	return res
 }
