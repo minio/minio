@@ -25,7 +25,7 @@ import (
 
 // DelConfigKV - delete key from server config.
 func (adm *AdminClient) DelConfigKV(ctx context.Context, k string) (err error) {
-	econfigBytes, err := EncryptData(adm.secretAccessKey, []byte(k))
+	econfigBytes, err := EncryptData(adm.getSecretKey(), []byte(k))
 	if err != nil {
 		return err
 	}
@@ -35,7 +35,7 @@ func (adm *AdminClient) DelConfigKV(ctx context.Context, k string) (err error) {
 		content: econfigBytes,
 	}
 
-	// Execute DELETE on /minio/admin/v2/del-config-kv to delete config key.
+	// Execute DELETE on /minio/admin/v3/del-config-kv to delete config key.
 	resp, err := adm.executeMethod(ctx, http.MethodDelete, reqData)
 
 	defer closeResponse(resp)
@@ -52,7 +52,7 @@ func (adm *AdminClient) DelConfigKV(ctx context.Context, k string) (err error) {
 
 // SetConfigKV - set key value config to server.
 func (adm *AdminClient) SetConfigKV(ctx context.Context, kv string) (err error) {
-	econfigBytes, err := EncryptData(adm.secretAccessKey, []byte(kv))
+	econfigBytes, err := EncryptData(adm.getSecretKey(), []byte(kv))
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func (adm *AdminClient) SetConfigKV(ctx context.Context, kv string) (err error) 
 		content: econfigBytes,
 	}
 
-	// Execute PUT on /minio/admin/v2/set-config-kv to set config key/value.
+	// Execute PUT on /minio/admin/v3/set-config-kv to set config key/value.
 	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 
 	defer closeResponse(resp)
@@ -82,7 +82,7 @@ func (adm *AdminClient) GetConfigKV(ctx context.Context, key string) (Targets, e
 	v := url.Values{}
 	v.Set("key", key)
 
-	// Execute GET on /minio/admin/v2/get-config-kv?key={key} to get value of key.
+	// Execute GET on /minio/admin/v3/get-config-kv?key={key} to get value of key.
 	resp, err := adm.executeMethod(ctx,
 		http.MethodGet,
 		requestData{
@@ -100,7 +100,7 @@ func (adm *AdminClient) GetConfigKV(ctx context.Context, key string) (Targets, e
 		return nil, httpRespToErrorResponse(resp)
 	}
 
-	data, err := DecryptData(adm.secretAccessKey, resp.Body)
+	data, err := DecryptData(adm.getSecretKey(), resp.Body)
 	if err != nil {
 		return nil, err
 	}

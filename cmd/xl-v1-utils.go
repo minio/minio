@@ -122,44 +122,6 @@ func xlMetaV1UnmarshalJSON(ctx context.Context, xlMetaBuf []byte) (xlMeta xlMeta
 	return xlMeta, err
 }
 
-// read xl.json from the given disk, parse and return xlV1MetaV1.Parts.
-func readXLMetaParts(ctx context.Context, disk StorageAPI, bucket string, object string) ([]ObjectPartInfo, map[string]string, error) {
-	// Reads entire `xl.json`.
-	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return nil, nil, err
-	}
-
-	var xlMeta xlMetaV1
-	xlMeta, err = xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return xlMeta.Parts, xlMeta.Meta, nil
-}
-
-// read xl.json from the given disk and parse xlV1Meta.Stat and xlV1Meta.Meta using jsoniter.
-func readXLMetaStat(ctx context.Context, disk StorageAPI, bucket string, object string) (si statInfo,
-	mp map[string]string, e error) {
-	// Reads entire `xl.json`.
-	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return si, nil, err
-	}
-
-	var xlMeta xlMetaV1
-	xlMeta, err = xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
-	if err != nil {
-		return si, mp, err
-	}
-
-	// Return structured `xl.json`.
-	return xlMeta.Stat, xlMeta.Meta, nil
-}
-
 // readXLMeta reads `xl.json` and returns back XL metadata structure.
 func readXLMeta(ctx context.Context, disk StorageAPI, bucket string, object string) (xlMeta xlMetaV1, err error) {
 	// Reads entire `xl.json`.
@@ -233,7 +195,7 @@ func shuffleDisks(disks []StorageAPI, distribution []int) (shuffledDisks []Stora
 // the corresponding error in errs slice is not nil
 func evalDisks(disks []StorageAPI, errs []error) []StorageAPI {
 	if len(errs) != len(disks) {
-		logger.LogIf(context.Background(), errors.New("unexpected disks/errors slice length"))
+		logger.LogIf(GlobalContext, errors.New("unexpected disks/errors slice length"))
 		return nil
 	}
 	newDisks := make([]StorageAPI, len(disks))

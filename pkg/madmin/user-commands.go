@@ -54,7 +54,7 @@ func (adm *AdminClient) RemoveUser(ctx context.Context, accessKey string) error 
 		queryValues: queryValues,
 	}
 
-	// Execute DELETE on /minio/admin/v2/remove-user to remove a user.
+	// Execute DELETE on /minio/admin/v3/remove-user to remove a user.
 	resp, err := adm.executeMethod(ctx, http.MethodDelete, reqData)
 
 	defer closeResponse(resp)
@@ -75,7 +75,7 @@ func (adm *AdminClient) ListUsers(ctx context.Context) (map[string]UserInfo, err
 		relPath: adminAPIPrefix + "/list-users",
 	}
 
-	// Execute GET on /minio/admin/v2/list-users
+	// Execute GET on /minio/admin/v3/list-users
 	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 
 	defer closeResponse(resp)
@@ -87,7 +87,7 @@ func (adm *AdminClient) ListUsers(ctx context.Context) (map[string]UserInfo, err
 		return nil, httpRespToErrorResponse(resp)
 	}
 
-	data, err := DecryptData(adm.secretAccessKey, resp.Body)
+	data, err := DecryptData(adm.getSecretKey(), resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func (adm *AdminClient) GetUserInfo(ctx context.Context, name string) (u UserInf
 		queryValues: queryValues,
 	}
 
-	// Execute GET on /minio/admin/v2/user-info
+	// Execute GET on /minio/admin/v3/user-info
 	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 
 	defer closeResponse(resp)
@@ -152,7 +152,7 @@ func (adm *AdminClient) SetUser(ctx context.Context, accessKey, secretKey string
 	if err != nil {
 		return err
 	}
-	econfigBytes, err := EncryptData(adm.secretAccessKey, data)
+	econfigBytes, err := EncryptData(adm.getSecretKey(), data)
 	if err != nil {
 		return err
 	}
@@ -166,7 +166,7 @@ func (adm *AdminClient) SetUser(ctx context.Context, accessKey, secretKey string
 		content:     econfigBytes,
 	}
 
-	// Execute PUT on /minio/admin/v2/add-user to set a user.
+	// Execute PUT on /minio/admin/v3/add-user to set a user.
 	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 
 	defer closeResponse(resp)
@@ -197,7 +197,7 @@ func (adm *AdminClient) SetUserStatus(ctx context.Context, accessKey string, sta
 		queryValues: queryValues,
 	}
 
-	// Execute PUT on /minio/admin/v2/set-user-status to set status.
+	// Execute PUT on /minio/admin/v3/set-user-status to set status.
 	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 
 	defer closeResponse(resp)
@@ -239,7 +239,7 @@ func (adm *AdminClient) AddServiceAccount(ctx context.Context, parentUser string
 		return auth.Credentials{}, err
 	}
 
-	econfigBytes, err := EncryptData(adm.secretAccessKey, data)
+	econfigBytes, err := EncryptData(adm.getSecretKey(), data)
 	if err != nil {
 		return auth.Credentials{}, err
 	}
@@ -249,7 +249,7 @@ func (adm *AdminClient) AddServiceAccount(ctx context.Context, parentUser string
 		content: econfigBytes,
 	}
 
-	// Execute PUT on /minio/admin/v2/add-service-account to set a user.
+	// Execute PUT on /minio/admin/v3/add-service-account to set a user.
 	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 	defer closeResponse(resp)
 	if err != nil {
@@ -260,7 +260,7 @@ func (adm *AdminClient) AddServiceAccount(ctx context.Context, parentUser string
 		return auth.Credentials{}, httpRespToErrorResponse(resp)
 	}
 
-	data, err = DecryptData(adm.secretAccessKey, resp.Body)
+	data, err = DecryptData(adm.getSecretKey(), resp.Body)
 	if err != nil {
 		return auth.Credentials{}, err
 	}
@@ -287,7 +287,7 @@ func (adm *AdminClient) GetServiceAccount(ctx context.Context, serviceAccountAcc
 		queryValues: queryValues,
 	}
 
-	// Execute GET on /minio/admin/v2/get-service-account to set a user.
+	// Execute GET on /minio/admin/v3/get-service-account to set a user.
 	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 	defer closeResponse(resp)
 	if err != nil {
@@ -298,7 +298,7 @@ func (adm *AdminClient) GetServiceAccount(ctx context.Context, serviceAccountAcc
 		return auth.Credentials{}, httpRespToErrorResponse(resp)
 	}
 
-	data, err := DecryptData(adm.secretAccessKey, resp.Body)
+	data, err := DecryptData(adm.getSecretKey(), resp.Body)
 	if err != nil {
 		return auth.Credentials{}, err
 	}

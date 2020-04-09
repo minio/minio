@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ func validateAdminUsersReq(ctx context.Context, w http.ResponseWriter, r *http.R
 	return objectAPI, cred
 }
 
-// RemoveUser - DELETE /minio/admin/v2/remove-user?accessKey=<access_key>
+// RemoveUser - DELETE /minio/admin/v3/remove-user?accessKey=<access_key>
 func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "RemoveUser")
 
@@ -93,7 +93,7 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ListUsers - GET /minio/admin/v2/list-users
+// ListUsers - GET /minio/admin/v3/list-users
 func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListUsers")
 
@@ -125,7 +125,7 @@ func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponseJSON(w, econfigData)
 }
 
-// GetUserInfo - GET /minio/admin/v2/user-info
+// GetUserInfo - GET /minio/admin/v3/user-info
 func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetUserInfo")
 
@@ -152,7 +152,7 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponseJSON(w, data)
 }
 
-// UpdateGroupMembers - PUT /minio/admin/v2/update-group-members
+// UpdateGroupMembers - PUT /minio/admin/v3/update-group-members
 func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "UpdateGroupMembers")
 
@@ -195,7 +195,7 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// GetGroup - /minio/admin/v2/group?group=mygroup1
+// GetGroup - /minio/admin/v3/group?group=mygroup1
 func (a adminAPIHandlers) GetGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetGroup")
 
@@ -222,7 +222,7 @@ func (a adminAPIHandlers) GetGroup(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponseJSON(w, body)
 }
 
-// ListGroups - GET /minio/admin/v2/groups
+// ListGroups - GET /minio/admin/v3/groups
 func (a adminAPIHandlers) ListGroups(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListGroups")
 
@@ -246,7 +246,7 @@ func (a adminAPIHandlers) ListGroups(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponseJSON(w, body)
 }
 
-// SetGroupStatus - PUT /minio/admin/v2/set-group-status?group=mygroup1&status=enabled
+// SetGroupStatus - PUT /minio/admin/v3/set-group-status?group=mygroup1&status=enabled
 func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetGroupStatus")
 
@@ -281,7 +281,7 @@ func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// SetUserStatus - PUT /minio/admin/v2/set-user-status?accessKey=<access_key>&status=[enabled|disabled]
+// SetUserStatus - PUT /minio/admin/v3/set-user-status?accessKey=<access_key>&status=[enabled|disabled]
 func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetUserStatus")
 
@@ -320,7 +320,7 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// AddUser - PUT /minio/admin/v2/add-user?accessKey=<access_key>
+// AddUser - PUT /minio/admin/v3/add-user?accessKey=<access_key>
 func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AddUser")
 
@@ -379,7 +379,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// AddServiceAccount - PUT /minio/admin/v2/add-service-account?parentUser=<parent_user_accesskey>
+// AddServiceAccount - PUT /minio/admin/v3/add-service-account?parentUser=<parent_user_accesskey>
 func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AddServiceAccount")
 
@@ -459,7 +459,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	writeSuccessResponseJSON(w, econfigData)
 }
 
-// GetServiceAccount - GET /minio/admin/v2/get-service-account?accessKey=<access_key>
+// GetServiceAccount - GET /minio/admin/v3/get-service-account?accessKey=<access_key>
 func (a adminAPIHandlers) GetServiceAccount(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetServiceAccount")
 
@@ -494,16 +494,22 @@ func (a adminAPIHandlers) GetServiceAccount(w http.ResponseWriter, r *http.Reque
 	writeSuccessResponseJSON(w, econfigData)
 }
 
-// InfoCannedPolicy - GET /minio/admin/v2/info-canned-policy?name={policyName}
-func (a adminAPIHandlers) InfoCannedPolicy(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "InfoCannedPolicy")
+// InfoCannedPolicyV2 - GET /minio/admin/v2/info-canned-policy?name={policyName}
+func (a adminAPIHandlers) InfoCannedPolicyV2(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "InfoCannedPolicyV2")
 
 	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.GetPolicyAdminAction)
 	if objectAPI == nil {
 		return
 	}
 
-	data, err := globalIAMSys.InfoPolicy(mux.Vars(r)["name"])
+	policy, err := globalIAMSys.InfoPolicy(mux.Vars(r)["name"])
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	data, err := json.Marshal(policy)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -513,7 +519,58 @@ func (a adminAPIHandlers) InfoCannedPolicy(w http.ResponseWriter, r *http.Reques
 	w.(http.Flusher).Flush()
 }
 
-// ListCannedPolicies - GET /minio/admin/v2/list-canned-policies
+// InfoCannedPolicy - GET /minio/admin/v3/info-canned-policy?name={policyName}
+func (a adminAPIHandlers) InfoCannedPolicy(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "InfoCannedPolicy")
+
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.GetPolicyAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	policy, err := globalIAMSys.InfoPolicy(mux.Vars(r)["name"])
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	json.NewEncoder(w).Encode(policy)
+	w.(http.Flusher).Flush()
+}
+
+// ListCannedPoliciesV2 - GET /minio/admin/v2/list-canned-policies
+func (a adminAPIHandlers) ListCannedPoliciesV2(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListCannedPoliciesV2")
+
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.ListUserPoliciesAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	policies, err := globalIAMSys.ListPolicies()
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	policyMap := make(map[string][]byte, len(policies))
+	for k, p := range policies {
+		var err error
+		policyMap[k], err = json.Marshal(p)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			continue
+		}
+	}
+	if err = json.NewEncoder(w).Encode(policyMap); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	w.(http.Flusher).Flush()
+}
+
+// ListCannedPolicies - GET /minio/admin/v3/list-canned-policies
 func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListCannedPolicies")
 
@@ -536,7 +593,7 @@ func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Requ
 	w.(http.Flusher).Flush()
 }
 
-// RemoveCannedPolicy - DELETE /minio/admin/v2/remove-canned-policy?name=<policy_name>
+// RemoveCannedPolicy - DELETE /minio/admin/v3/remove-canned-policy?name=<policy_name>
 func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "RemoveCannedPolicy")
 
@@ -568,7 +625,7 @@ func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// AddCannedPolicy - PUT /minio/admin/v2/add-canned-policy?name=<policy_name>
+// AddCannedPolicy - PUT /minio/admin/v3/add-canned-policy?name=<policy_name>
 func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AddCannedPolicy")
 
@@ -624,7 +681,7 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// SetPolicyForUserOrGroup - PUT /minio/admin/v2/set-policy?policy=xxx&user-or-group=?[&is-group]
+// SetPolicyForUserOrGroup - PUT /minio/admin/v3/set-policy?policy=xxx&user-or-group=?[&is-group]
 func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetPolicyForUserOrGroup")
 
@@ -646,7 +703,7 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 
 	if !isGroup {
 		ok, err := globalIAMSys.IsTempUser(entityName)
-		if err != nil {
+		if err != nil && err != errNoSuchUser {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}

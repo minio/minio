@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bufio"
-	"context"
 	"encoding/gob"
 	"encoding/hex"
 	"errors"
@@ -414,7 +413,7 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 type readMetadataFunc func(buf []byte, volume, entry string) FileInfo
 
 func readMetadata(buf []byte, volume, entry string) FileInfo {
-	m, err := xlMetaV1UnmarshalJSON(context.Background(), buf)
+	m, err := xlMetaV1UnmarshalJSON(GlobalContext, buf)
 	if err != nil {
 		return FileInfo{}
 	}

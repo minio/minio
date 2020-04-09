@@ -46,7 +46,7 @@ func (xl xlObjects) HealBucket(ctx context.Context, bucket string, dryRun, remov
 	storageDisks := xl.getDisks()
 
 	// get write quorum for an object
-	writeQuorum := len(storageDisks)/2 + 1
+	writeQuorum := getWriteQuorum(len(storageDisks))
 
 	// Heal bucket.
 	return healBucket(ctx, storageDisks, bucket, writeQuorum, dryRun)
@@ -314,7 +314,7 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 		if m, ok := isObjectDangling(partsMetadata, errs, dataErrs); ok {
 			writeQuorum := m.Erasure.DataBlocks + 1
 			if m.Erasure.DataBlocks == 0 {
-				writeQuorum = len(storageDisks)/2 + 1
+				writeQuorum = getWriteQuorum(len(storageDisks))
 			}
 			if !dryRun && remove {
 				err = xl.deleteObject(ctx, bucket, object, writeQuorum, false)
@@ -492,8 +492,8 @@ func (xl xlObjects) healObjectDir(ctx context.Context, bucket, object string, dr
 		Bucket:       bucket,
 		Object:       object,
 		DiskCount:    len(storageDisks),
-		ParityBlocks: len(storageDisks) / 2,
-		DataBlocks:   len(storageDisks) / 2,
+		ParityBlocks: getDefaultParityBlocks(len(storageDisks)),
+		DataBlocks:   getDefaultDataBlocks(len(storageDisks)),
 		ObjectSize:   0,
 	}
 
@@ -601,8 +601,8 @@ func defaultHealResult(latestXLMeta xlMetaV1, storageDisks []StorageAPI, errs []
 
 	if !latestXLMeta.IsValid() {
 		// Default to most common configuration for erasure blocks.
-		result.ParityBlocks = len(storageDisks) / 2
-		result.DataBlocks = len(storageDisks) / 2
+		result.ParityBlocks = getDefaultParityBlocks(len(storageDisks))
+		result.DataBlocks = getDefaultDataBlocks(len(storageDisks))
 	} else {
 		result.ParityBlocks = latestXLMeta.Erasure.ParityBlocks
 		result.DataBlocks = latestXLMeta.Erasure.DataBlocks
@@ -712,7 +712,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, opts 
 	} else {
 		newReqInfo = logger.NewReqInfo("", "", globalDeploymentID, "", "Heal", bucket, object)
 	}
-	healCtx := logger.SetReqInfo(context.Background(), newReqInfo)
+	healCtx := logger.SetReqInfo(GlobalContext, newReqInfo)
 
 	// Healing directories handle it separately.
 	if HasSuffix(object, SlashSeparator) {
@@ -729,7 +729,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, opts 
 	if m, ok := isObjectDangling(partsMetadata, errs, []error{}); ok {
 		writeQuorum := m.Erasure.DataBlocks + 1
 		if m.Erasure.DataBlocks == 0 {
-			writeQuorum = len(xl.getDisks())/2 + 1
+			writeQuorum = getWriteQuorum(len(storageDisks))
 		}
 		if !opts.DryRun && opts.Remove {
 			xl.deleteObject(healCtx, bucket, object, writeQuorum, false)
@@ -758,7 +758,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, opts 
 			if m, ok := isObjectDangling(partsMetadata, errs, []error{}); ok {
 				writeQuorum := m.Erasure.DataBlocks + 1
 				if m.Erasure.DataBlocks == 0 {
-					writeQuorum = len(storageDisks)/2 + 1
+					writeQuorum = getWriteQuorum(len(storageDisks))
 				}
 				if !opts.DryRun && opts.Remove {
 					xl.deleteObject(ctx, bucket, object, writeQuorum, false)

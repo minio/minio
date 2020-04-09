@@ -295,7 +295,13 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 		// we return from this function.
 		closeBitrotReaders(readers)
 		if err != nil {
-			return toObjectErr(err, bucket, object)
+			if decodeHealErr, ok := err.(*errDecodeHealRequired); ok {
+				go deepHealObject(pathJoin(bucket, object))
+				err = decodeHealErr.err
+			}
+			if err != nil {
+				return toObjectErr(err, bucket, object)
+			}
 		}
 		for i, r := range readers {
 			if r == nil {
@@ -340,7 +346,7 @@ func (xl xlObjects) getObjectInfoDir(ctx context.Context, bucket, object string)
 		}, index)
 	}
 
-	readQuorum := len(storageDisks) / 2
+	readQuorum := getReadQuorum(len(storageDisks))
 	err := reduceReadQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, readQuorum)
 	return dirObjectInfo(bucket, object, 0, map[string]string{}), err
 }
@@ -488,7 +494,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// Get parity and data drive count based on storage class metadata
 	parityDrives := globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
 	if parityDrives == 0 {
-		parityDrives = len(storageDisks) / 2
+		parityDrives = getDefaultParityBlocks(len(storageDisks))
 	}
 	dataDrives := len(storageDisks) - parityDrives
 
@@ -842,11 +848,13 @@ func (xl xlObjects) deleteObjects(ctx context.Context, bucket string, objects []
 		isObjectDirs[i] = HasSuffix(object, SlashSeparator)
 	}
 
+	storageDisks := xl.getDisks()
+
 	for i, object := range objects {
 		if isObjectDirs[i] {
 			_, err := xl.getObjectInfoDir(ctx, bucket, object)
 			if err == errXLReadQuorum {
-				if isObjectDirDangling(statAllDirs(ctx, xl.getDisks(), bucket, object)) {
+				if isObjectDirDangling(statAllDirs(ctx, storageDisks, bucket, object)) {
 					// If object is indeed dangling, purge it.
 					errs[i] = nil
 				}
@@ -868,7 +876,7 @@ func (xl xlObjects) deleteObjects(ctx context.Context, bucket string, objects []
 		// class for objects which have reduced quorum
 		// storage class only needs to be honored for
 		// Read() requests alone which we already do.
-		writeQuorums[i] = len(xl.getDisks())/2 + 1
+		writeQuorums[i] = getWriteQuorum(len(storageDisks))
 	}
 
 	return xl.doDeleteObjects(ctx, bucket, objects, errs, writeQuorums, isObjectDirs)
@@ -934,10 +942,12 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (er
 	var writeQuorum int
 	var isObjectDir = HasSuffix(object, SlashSeparator)
 
+	storageDisks := xl.getDisks()
+
 	if isObjectDir {
 		_, err = xl.getObjectInfoDir(ctx, bucket, object)
 		if err == errXLReadQuorum {
-			if isObjectDirDangling(statAllDirs(ctx, xl.getDisks(), bucket, object)) {
+			if isObjectDirDangling(statAllDirs(ctx, storageDisks, bucket, object)) {
 				// If object is indeed dangling, purge it.
 				err = nil
 			}
@@ -948,10 +958,10 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (er
 	}
 
 	if isObjectDir {
-		writeQuorum = len(xl.getDisks())/2 + 1
+		writeQuorum = getWriteQuorum(len(storageDisks))
 	} else {
 		// Read metadata associated with the object from all disks.
-		partsMetadata, errs := readAllXLMetadata(ctx, xl.getDisks(), bucket, object)
+		partsMetadata, errs := readAllXLMetadata(ctx, storageDisks, bucket, object)
 		// get Quorum for this object
 		_, writeQuorum, err = objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
 		if err != nil {

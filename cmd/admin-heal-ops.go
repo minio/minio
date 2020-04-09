@@ -183,7 +183,7 @@ func (ahs *allHealState) stopHealSequence(path string) ([]byte, APIError) {
 	}
 
 	b, err := json.Marshal(&hsp)
-	return b, toAdminAPIErr(context.Background(), err)
+	return b, toAdminAPIErr(GlobalContext, err)
 }
 
 // LaunchNewHealSequence - launches a background routine that performs
@@ -306,6 +306,12 @@ func (ahs *allHealState) PopHealStatusJSON(path string,
 	return jbytes, ErrNone
 }
 
+// healSource denotes single entity and heal option.
+type healSource struct {
+	path string           // entity path (format, buckets, objects) to heal
+	opts *madmin.HealOpts // optional heal option overrides default setting
+}
+
 // healSequence - state for each heal sequence initiated on the
 // server.
 type healSequence struct {
@@ -316,7 +322,7 @@ type healSequence struct {
 	path string
 
 	// List of entities (format, buckets, objects) to heal
-	sourceCh chan string
+	sourceCh chan healSource
 
 	// Report healing progress
 	reportProgress bool
@@ -629,11 +635,19 @@ func (h *healSequence) healSequenceStart() {
 	}
 }
 
-func (h *healSequence) queueHealTask(path string, healType madmin.HealItemType) error {
+func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItemType) error {
 	var respCh = make(chan healResult)
 	defer close(respCh)
 	// Send heal request
-	globalBackgroundHealRoutine.queueHealTask(healTask{path: path, responseCh: respCh, opts: h.settings})
+	task := healTask{
+		path:       source.path,
+		responseCh: respCh,
+		opts:       h.settings,
+	}
+	if source.opts != nil {
+		task.opts = *source.opts
+	}
+	globalBackgroundHealRoutine.queueHealTask(task)
 	// Wait for answer and push result to the client
 	res := <-respCh
 	if !h.reportProgress {
@@ -679,20 +693,20 @@ func (h *healSequence) healItemsFromSourceCh() error {
 
 	for {
 		select {
-		case path := <-h.sourceCh:
+		case source := <-h.sourceCh:
 			var itemType madmin.HealItemType
 			switch {
-			case path == nopHeal:
+			case source.path == nopHeal:
 				continue
-			case path == SlashSeparator:
+			case source.path == SlashSeparator:
 				itemType = madmin.HealItemMetadata
-			case !strings.Contains(path, SlashSeparator):
+			case !strings.Contains(source.path, SlashSeparator):
 				itemType = madmin.HealItemBucket
 			default:
 				itemType = madmin.HealItemObject
 			}
 
-			if err := h.queueHealTask(path, itemType); err != nil {
+			if err := h.queueHealTask(source, itemType); err != nil {
 				logger.LogIf(h.ctx, err)
 			}
 
@@ -768,7 +782,7 @@ func (h *healSequence) healMinioSysMeta(metaPrefix string) func() error {
 				return errHealStopSignalled
 			}
 
-			herr := h.queueHealTask(pathJoin(bucket, object), madmin.HealItemBucketMetadata)
+			herr := h.queueHealTask(healSource{path: pathJoin(bucket, object)}, madmin.HealItemBucketMetadata)
 			// Object might have been deleted, by the time heal
 			// was attempted we ignore this object an move on.
 			if isErrObjectNotFound(herr) {
@@ -792,7 +806,7 @@ func (h *healSequence) healDiskFormat() error {
 		return errServerNotInitialized
 	}
 
-	return h.queueHealTask(SlashSeparator, madmin.HealItemMetadata)
+	return h.queueHealTask(healSource{path: SlashSeparator}, madmin.HealItemMetadata)
 }
 
 // healBuckets - check for all buckets heal or just particular bucket.
@@ -834,7 +848,7 @@ func (h *healSequence) healBucket(bucket string, bucketsOnly bool) error {
 		return errServerNotInitialized
 	}
 
-	if err := h.queueHealTask(bucket, madmin.HealItemBucket); err != nil {
+	if err := h.queueHealTask(healSource{path: bucket}, madmin.HealItemBucket); err != nil {
 		return err
 	}
 
@@ -875,5 +889,5 @@ func (h *healSequence) healObject(bucket, object string) error {
 		return errHealStopSignalled
 	}
 
-	return h.queueHealTask(pathJoin(bucket, object), madmin.HealItemObject)
+	return h.queueHealTask(healSource{path: pathJoin(bucket, object)}, madmin.HealItemObject)
 }

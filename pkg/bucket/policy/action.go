@@ -37,6 +37,10 @@ const (
 	// DeleteBucketAction - DeleteBucket Rest API action.
 	DeleteBucketAction = "s3:DeleteBucket"
 
+	// ForceDeleteBucketAction - DeleteBucket Rest API action when x-minio-force-delete flag
+	// is specified.
+	ForceDeleteBucketAction = "s3:ForceDeleteBucket"
+
 	// DeleteBucketPolicyAction - DeleteBucketPolicy Rest API action.
 	DeleteBucketPolicyAction = "s3:DeleteBucketPolicy"
 
@@ -89,8 +93,6 @@ const (
 	// GetBucketLifecycleAction - GetBucketLifecycle Rest API action.
 	GetBucketLifecycleAction = "s3:GetLifecycleConfiguration"
 
-	// BypassGovernanceModeAction - bypass governance mode for DeleteObject Rest API action.
-	BypassGovernanceModeAction = "s3:BypassGovernanceMode"
 	// BypassGovernanceRetentionAction - bypass governance retention for PutObjectRetention, PutObject and DeleteObject Rest API action.
 	BypassGovernanceRetentionAction = "s3:BypassGovernanceRetention"
 	// PutObjectRetentionAction - PutObjectRetention Rest API action.
@@ -127,7 +129,6 @@ var supportedObjectActions = map[Action]struct{}{
 	GetObjectAction:                 {},
 	ListMultipartUploadPartsAction:  {},
 	PutObjectAction:                 {},
-	BypassGovernanceModeAction:      {},
 	BypassGovernanceRetentionAction: {},
 	PutObjectRetentionAction:        {},
 	GetObjectRetentionAction:        {},
@@ -149,6 +150,7 @@ var supportedActions = map[Action]struct{}{
 	AbortMultipartUploadAction:             {},
 	CreateBucketAction:                     {},
 	DeleteBucketAction:                     {},
+	ForceDeleteBucketAction:                {},
 	DeleteBucketPolicyAction:               {},
 	DeleteObjectAction:                     {},
 	GetBucketLocationAction:                {},
@@ -172,7 +174,6 @@ var supportedActions = map[Action]struct{}{
 	PutObjectLegalHoldAction:               {},
 	PutBucketObjectLockConfigurationAction: {},
 	GetBucketObjectLockConfigurationAction: {},
-	BypassGovernanceModeAction:             {},
 	BypassGovernanceRetentionAction:        {},
 	GetObjectTaggingAction:                 {},
 	PutObjectTaggingAction:                 {},
@@ -263,13 +264,36 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 			condition.S3XAmzServerSideEncryptionCustomerAlgorithm,
 			condition.S3XAmzMetadataDirective,
 			condition.S3XAmzStorageClass,
+			condition.S3ObjectLockRetainUntilDate,
+			condition.S3ObjectLockMode,
+			condition.S3ObjectLockLegalHold,
 		}, condition.CommonKeys...)...),
-	PutObjectRetentionAction:               condition.NewKeySet(condition.CommonKeys...),
-	GetObjectRetentionAction:               condition.NewKeySet(condition.CommonKeys...),
-	BypassGovernanceModeAction:             condition.NewKeySet(condition.CommonKeys...),
-	BypassGovernanceRetentionAction:        condition.NewKeySet(condition.CommonKeys...),
-	PutObjectLegalHoldAction:               condition.NewKeySet(condition.CommonKeys...),
-	GetObjectLegalHoldAction:               condition.NewKeySet(condition.CommonKeys...),
+
+	// https://docs.aws.amazon.com/AmazonS3/latest/dev/list_amazons3.html
+	// LockLegalHold is not supported with PutObjectRetentionAction
+	PutObjectRetentionAction: condition.NewKeySet(
+		append([]condition.Key{
+			condition.S3ObjectLockRemainingRetentionDays,
+			condition.S3ObjectLockRetainUntilDate,
+			condition.S3ObjectLockMode,
+		}, condition.CommonKeys...)...),
+
+	GetObjectRetentionAction: condition.NewKeySet(condition.CommonKeys...),
+	PutObjectLegalHoldAction: condition.NewKeySet(
+		append([]condition.Key{
+			condition.S3ObjectLockLegalHold,
+		}, condition.CommonKeys...)...),
+	GetObjectLegalHoldAction: condition.NewKeySet(condition.CommonKeys...),
+
+	// https://docs.aws.amazon.com/AmazonS3/latest/dev/list_amazons3.html
+	BypassGovernanceRetentionAction: condition.NewKeySet(
+		append([]condition.Key{
+			condition.S3ObjectLockRemainingRetentionDays,
+			condition.S3ObjectLockRetainUntilDate,
+			condition.S3ObjectLockMode,
+			condition.S3ObjectLockLegalHold,
+		}, condition.CommonKeys...)...),
+
 	GetBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
 	PutBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
 	PutObjectTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),

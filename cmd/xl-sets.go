@@ -238,6 +238,9 @@ func (s *xlSets) connectDisks() {
 			}
 			disk.SetDiskID(format.XL.This)
 			s.xlDisksMu.Lock()
+			if s.xlDisks[setIndex][diskIndex] != nil {
+				s.xlDisks[setIndex][diskIndex].Close()
+			}
 			s.xlDisks[setIndex][diskIndex] = disk
 			s.xlDisksMu.Unlock()
 			go func(setIndex int) {
@@ -333,16 +336,21 @@ func newXLSets(endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV
 			endpoints = append(endpoints, s.endpoints[i*drivesPerSet+j])
 			// Rely on endpoints list to initialize, init lockers and available disks.
 			s.xlLockers[i][j] = newLockAPI(s.endpoints[i*drivesPerSet+j])
-			if storageDisks[i*drivesPerSet+j] == nil {
+			disk := storageDisks[i*drivesPerSet+j]
+			if disk == nil {
 				continue
 			}
-			if diskID, derr := storageDisks[i*drivesPerSet+j].GetDiskID(); derr == nil {
-				m, n, err := findDiskIndexByDiskID(format, diskID)
-				if err != nil {
-					continue
-				}
-				s.xlDisks[m][n] = storageDisks[i*drivesPerSet+j]
+			diskID, derr := disk.GetDiskID()
+			if derr != nil {
+				disk.Close()
+				continue
 			}
+			m, n, err := findDiskIndexByDiskID(format, diskID)
+			if err != nil {
+				disk.Close()
+				continue
+			}
+			s.xlDisks[m][n] = disk
 		}
 
 		// Initialize xl objects for a given set.
@@ -355,7 +363,7 @@ func newXLSets(endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV
 			mrfUploadCh: make(chan partialUpload, 10000),
 		}
 
-		go s.sets[i].cleanupStaleMultipartUploads(context.Background(),
+		go s.sets[i].cleanupStaleMultipartUploads(GlobalContext,
 			GlobalMultipartCleanupInterval, GlobalMultipartExpiry, GlobalServiceDoneCh)
 	}
 
@@ -528,7 +536,7 @@ func undoMakeBucketSets(bucket string, sets []*xlObjects, errs []error) {
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return sets[index].DeleteBucket(context.Background(), bucket, false)
+				return sets[index].DeleteBucket(GlobalContext, bucket, false)
 			}
 			return nil
 		}, index)
@@ -704,7 +712,7 @@ func undoDeleteBucketSets(bucket string, sets []*xlObjects, errs []error) {
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return sets[index].MakeBucketWithLocation(context.Background(), bucket, "")
+				return sets[index].MakeBucketWithLocation(GlobalContext, bucket, "")
 			}
 			return nil
 		}, index)
@@ -1018,7 +1026,7 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 	defer close(endWalkCh)
 
 	const ndisks = 3
-	entryChs := s.startMergeWalksN(context.Background(), bucket, prefix, "", true, endWalkCh, ndisks)
+	entryChs := s.startMergeWalksN(GlobalContext, bucket, prefix, "", true, endWalkCh, ndisks)
 
 	var objInfos []ObjectInfo
 	var eof bool
@@ -1167,7 +1175,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 	if entryChs == nil {
 		endWalkCh = make(chan struct{})
 		// start file tree walk across at most randomly 3 disks in a set.
-		entryChs = s.startMergeWalksN(context.Background(), bucket, prefix, marker, recursive, endWalkCh, ndisks)
+		entryChs = s.startMergeWalksN(GlobalContext, bucket, prefix, marker, recursive, endWalkCh, ndisks)
 	}
 
 	entries := mergeEntriesCh(entryChs, maxKeys, ndisks)
@@ -1375,11 +1383,13 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 
 		diskID, err := disk.GetDiskID()
 		if err != nil {
+			disk.Close()
 			continue
 		}
 
 		m, n, err := findDiskIndexByDiskID(refFormat, diskID)
 		if err != nil {
+			disk.Close()
 			continue
 		}
 
@@ -1583,11 +1593,13 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 
 			diskID, err := disk.GetDiskID()
 			if err != nil {
+				disk.Close()
 				continue
 			}
 
 			m, n, err := findDiskIndexByDiskID(refFormat, diskID)
 			if err != nil {
+				disk.Close()
 				continue
 			}
 
@@ -1863,7 +1875,7 @@ func (s *xlSets) healMRFRoutine() {
 		for _, u := range mrfUploads {
 			// Send an object to be healed with a timeout
 			select {
-			case bgSeq.sourceCh <- u:
+			case bgSeq.sourceCh <- healSource{path: u}:
 			case <-time.After(100 * time.Millisecond):
 			}
 

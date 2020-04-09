@@ -128,7 +128,7 @@ func (n *nsLockMap) unlock(volume string, path string, readLock bool) {
 	}
 	n.lockMapMutex.Lock()
 	if nsLk.ref == 0 {
-		logger.LogIf(context.Background(), errors.New("Namespace reference count cannot be 0"))
+		logger.LogIf(GlobalContext, errors.New("Namespace reference count cannot be 0"))
 	} else {
 		nsLk.ref--
 		if nsLk.ref == 0 {

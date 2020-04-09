@@ -417,7 +417,7 @@ func fromOSSClientObjectProperties(bucket string, o oss.ObjectProperties) minio.
 		Name:    o.Key,
 		ModTime: o.LastModified,
 		Size:    o.Size,
-		ETag:    minio.ToS3ETag(o.ETag),
+		ETag:    o.ETag,
 	}
 }
 
@@ -605,7 +605,7 @@ func ossGetObjectInfo(ctx context.Context, client *oss.Client, bucket, object st
 		Name:            object,
 		ModTime:         modTime,
 		Size:            size,
-		ETag:            minio.ToS3ETag(header.Get("ETag")),
+		ETag:            header.Get("ETag"),
 		UserDefined:     userDefined,
 		ContentType:     header.Get("Content-Type"),
 		ContentEncoding: header.Get("Content-Encoding"),
@@ -794,7 +794,7 @@ func (l *ossObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 
 	return minio.PartInfo{
 		Size: size,
-		ETag: minio.ToS3ETag(up.ETag),
+		ETag: up.ETag,
 		// NOTE(timonwong): LastModified is not supported
 		PartNumber: up.PartNumber,
 	}, nil
@@ -815,7 +815,7 @@ func fromOSSClientListPartsInfo(lupr oss.ListUploadedPartsResult, partNumberMark
 		parts[i] = minio.PartInfo{
 			PartNumber:   up.PartNumber,
 			LastModified: up.LastModified,
-			ETag:         minio.ToS3ETag(up.ETag),
+			ETag:         up.ETag,
 			Size:         int64(up.Size),
 		}
 	}
@@ -878,7 +878,7 @@ func (l *ossObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, d
 	}
 
 	p.PartNumber = completePart.PartNumber
-	p.ETag = minio.ToS3ETag(completePart.ETag)
+	p.ETag = completePart.ETag
 	return p, nil
 }
 
@@ -947,12 +947,12 @@ func (l *ossObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 				logger.LogIf(ctx, minio.PartTooSmall{
 					PartNumber: part.PartNumber,
 					PartSize:   int64(part.Size),
-					PartETag:   minio.ToS3ETag(part.ETag),
+					PartETag:   part.ETag,
 				})
 				return oi, minio.PartTooSmall{
 					PartNumber: part.PartNumber,
 					PartSize:   int64(part.Size),
-					PartETag:   minio.ToS3ETag(part.ETag),
+					PartETag:   part.ETag,
 				}
 			}
 		}

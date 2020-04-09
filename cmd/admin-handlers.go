@@ -99,7 +99,7 @@ func updateServer(updateURL, sha256Hex string, latestReleaseTime time.Time) (us 
 	return us, nil
 }
 
-// ServerUpdateHandler - POST /minio/admin/v2/update?updateURL={updateURL}
+// ServerUpdateHandler - POST /minio/admin/v3/update?updateURL={updateURL}
 // ----------
 // updates all minio servers and restarts them gracefully.
 func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Request) {
@@ -178,7 +178,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// ServiceActionHandler - POST /minio/admin/v2/service?action={action}
+// ServiceActionHandler - POST /minio/admin/v3/service?action={action}
 // ----------
 // restarts/stops minio server gracefully. In a distributed setup,
 func (a adminAPIHandlers) ServiceActionHandler(w http.ResponseWriter, r *http.Request) {
@@ -267,7 +267,7 @@ type ServerInfo struct {
 	Data  *ServerInfoData `json:"data"`
 }
 
-// StorageInfoHandler - GET /minio/admin/v2/storageinfo
+// StorageInfoHandler - GET /minio/admin/v3/storageinfo
 // ----------
 // Get server information
 func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Request) {
@@ -292,7 +292,7 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 
 }
 
-// DataUsageInfoHandler - GET /minio/admin/v2/datausage
+// DataUsageInfoHandler - GET /minio/admin/v3/datausage
 // ----------
 // Get server/cluster data usage info
 func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
@@ -405,7 +405,7 @@ type ServerNetReadPerfInfo struct {
 	Error          string `json:"error,omitempty"`
 }
 
-// PerfInfoHandler - GET /minio/admin/v2/performance?perfType={perfType}
+// PerfInfoHandler - GET /minio/admin/v3/performance?perfType={perfType}
 // ----------
 // Get all performance information based on input type
 // Supported types = drive
@@ -622,7 +622,7 @@ type StartProfilingResult struct {
 	Error    string `json:"error"`
 }
 
-// StartProfilingHandler - POST /minio/admin/v2/profiling/start?profilerType={profilerType}
+// StartProfilingHandler - POST /minio/admin/v3/profiling/start?profilerType={profilerType}
 // ----------
 // Enable server profiling
 func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.Request) {
@@ -718,7 +718,7 @@ func (f dummyFileInfo) ModTime() time.Time { return f.modTime }
 func (f dummyFileInfo) IsDir() bool        { return f.isDir }
 func (f dummyFileInfo) Sys() interface{}   { return f.sys }
 
-// DownloadProfilingHandler - POST /minio/admin/v2/profiling/download
+// DownloadProfilingHandler - POST /minio/admin/v3/profiling/download
 // ----------
 // Download profiling information of all nodes in a zip format
 func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *http.Request) {
@@ -790,7 +790,7 @@ func extractHealInitParams(vars map[string]string, qParms url.Values, r io.Reade
 	if hip.clientToken == "" {
 		jerr := json.NewDecoder(r).Decode(&hip.hs)
 		if jerr != nil {
-			logger.LogIf(context.Background(), jerr, logger.Application)
+			logger.LogIf(GlobalContext, jerr, logger.Application)
 			err = ErrRequestBodyParse
 			return
 		}
@@ -800,7 +800,7 @@ func extractHealInitParams(vars map[string]string, qParms url.Values, r io.Reade
 	return
 }
 
-// HealHandler - POST /minio/admin/v2/heal/
+// HealHandler - POST /minio/admin/v3/heal/
 // -----------
 // Start heal processing and return heal status items.
 //
@@ -1116,7 +1116,7 @@ func mustTrace(entry interface{}, trcAll, errOnly bool) bool {
 	return trace
 }
 
-// TraceHandler - POST /minio/admin/v2/trace
+// TraceHandler - POST /minio/admin/v3/trace
 // ----------
 // The handler sends http trace to the connected HTTP client.
 func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
@@ -1246,7 +1246,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-// KMSKeyStatusHandler - GET /minio/admin/v2/kms/key/status?key-id=<master-key-id>
+// KMSKeyStatusHandler - GET /minio/admin/v3/kms/key/status?key-id=<master-key-id>
 func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "KMSKeyStatusHandler")
 
@@ -1315,7 +1315,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	writeSuccessResponseJSON(w, resp)
 }
 
-// ServerHardwareInfoHandler - GET /minio/admin/v2/hardwareinfo?Type={hwType}
+// ServerHardwareInfoHandler - GET /minio/admin/v3/hardwareinfo?Type={hwType}
 // ----------
 // Get all hardware information based on input type
 // Supported types = cpu
@@ -1372,7 +1372,7 @@ func (a adminAPIHandlers) ServerHardwareInfoHandler(w http.ResponseWriter, r *ht
 	}
 }
 
-// OBDInfoHandler - GET /minio/admin/v2/obdinfo
+// OBDInfoHandler - GET /minio/admin/v3/obdinfo
 // ----------
 // Get server on-board diagnostics
 func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request) {
@@ -1494,13 +1494,14 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 	if net, ok := vars["perfnet"]; ok && net == "true" && globalIsDistXL {
 		obdInfo.Perf.Net = append(obdInfo.Perf.Net, globalNotificationSys.NetOBDInfo(deadlinedCtx))
 		obdInfo.Perf.Net = append(obdInfo.Perf.Net, globalNotificationSys.DispatchNetOBDInfo(deadlinedCtx)...)
+		obdInfo.Perf.NetParallel = globalNotificationSys.NetOBDParallelInfo(deadlinedCtx)
 		partialWrite()
 	}
 
 	finish()
 }
 
-// ServerInfoHandler - GET /minio/admin/v2/info
+// ServerInfoHandler - GET /minio/admin/v3/info
 // ----------
 // Get server information
 func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {

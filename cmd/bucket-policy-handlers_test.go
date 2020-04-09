@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -103,7 +102,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 	credentials auth.Credentials, t *testing.T) {
 
 	bucketName1 := fmt.Sprintf("%s-1", bucketName)
-	if err := obj.MakeBucketWithLocation(context.Background(), bucketName1, ""); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName1, ""); err != nil {
 		t.Fatal(err)
 	}
 

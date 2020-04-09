@@ -46,7 +46,7 @@ func (adm *AdminClient) UpdateGroupMembers(ctx context.Context, g GroupAddRemove
 		content: data,
 	}
 
-	// Execute PUT on /minio/admin/v2/update-group-members
+	// Execute PUT on /minio/admin/v3/update-group-members
 	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 
 	defer closeResponse(resp)

@@ -112,7 +112,6 @@ func valuesToStringSlice(n name, values ValueSet) ([]string, error) {
 	valueStrings := []string{}
 
 	for value := range values {
-		// FIXME: if AWS supports non-string values, we would need to support it.
 		s, err := value.GetString()
 		if err != nil {
 			return nil, fmt.Errorf("value must be a string for %v condition", n)
@@ -142,6 +141,10 @@ func validateStringEqualsValues(n name, key Key, values set.StringSet) error {
 		case S3XAmzMetadataDirective:
 			if s != "COPY" && s != "REPLACE" {
 				return fmt.Errorf("invalid value '%v' for '%v' for %v condition", s, S3XAmzMetadataDirective, n)
+			}
+		case S3XAmzContentSha256:
+			if s == "" {
+				return fmt.Errorf("invalid empty value for '%v' for %v condition", S3XAmzContentSha256, n)
 			}
 		}
 	}

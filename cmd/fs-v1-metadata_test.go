@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -54,10 +53,10 @@ func TestReadFSMetadata(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "object"
 
-	if err := obj.MakeBucketWithLocation(context.Background(), bucketName, ""); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, ""); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
-	if _, err := obj.PutObject(context.Background(), bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{}); err != nil {
+	if _, err := obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{}); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 
@@ -73,7 +72,7 @@ func TestReadFSMetadata(t *testing.T) {
 
 	// Regular fs metadata reading, no errors expected
 	fsMeta := fsMetaV1{}
-	if _, err = fsMeta.ReadFrom(context.Background(), rlk.LockedFile); err != nil {
+	if _, err = fsMeta.ReadFrom(GlobalContext, rlk.LockedFile); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 }
@@ -89,10 +88,10 @@ func TestWriteFSMetadata(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "object"
 
-	if err := obj.MakeBucketWithLocation(context.Background(), bucketName, ""); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, ""); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
-	if _, err := obj.PutObject(context.Background(), bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{}); err != nil {
+	if _, err := obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{}); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 
@@ -108,7 +107,7 @@ func TestWriteFSMetadata(t *testing.T) {
 
 	// FS metadata reading, no errors expected (healthy disk)
 	fsMeta := fsMetaV1{}
-	_, err = fsMeta.ReadFrom(context.Background(), rlk.LockedFile)
+	_, err = fsMeta.ReadFrom(GlobalContext, rlk.LockedFile)
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}

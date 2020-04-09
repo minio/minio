@@ -105,7 +105,7 @@ func (g *B2) Name() string {
 // NewGatewayLayer returns b2 gateway layer, implements ObjectLayer interface to
 // talk to B2 remote backend.
 func (g *B2) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
-	ctx := context.Background()
+	ctx := minio.GlobalContext
 	client, err := b2.AuthorizeAccount(ctx, creds.AccessKey, creds.SecretKey, b2.Transport(minio.NewGatewayHTTPTransport()))
 	if err != nil {
 		return nil, err

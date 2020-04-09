@@ -66,6 +66,49 @@ describe("ObjectActions", () => {
     expect(deleteObject).toHaveBeenCalledWith("obj1")
   })
 
+
+
+
+  it("should show PreviewObjectModal when preview action is clicked", () => {
+    const wrapper = shallow(
+      <ObjectActions 
+      object={{ name: "obj1", contentType: "image/jpeg"}} 
+      currentPrefix={"pre1/"} />
+    )
+    wrapper
+      .find("a")
+      .at(1)
+      .simulate("click", { preventDefault: jest.fn() })
+    expect(wrapper.state("showPreview")).toBeTruthy()
+    expect(wrapper.find("PreviewObjectModal").length).toBe(1)
+  })
+
+  it("should hide PreviewObjectModal when cancel button is clicked", () => {
+    const wrapper = shallow(
+      <ObjectActions 
+        object={{ name: "obj1" , contentType: "image/jpeg"}}
+        currentPrefix={"pre1/"} />
+    )
+    wrapper
+      .find("a")
+      .at(1)
+      .simulate("click", { preventDefault: jest.fn() })
+    wrapper.find("PreviewObjectModal").prop("hidePreviewModal")()
+    wrapper.update()
+    expect(wrapper.state("showPreview")).toBeFalsy()
+    expect(wrapper.find("PreviewObjectModal").length).toBe(0)
+  })
+  it("should not show PreviewObjectModal when preview action is clicked if object is not an image", () => {
+    const wrapper = shallow(
+      <ObjectActions 
+      object={{ name: "obj1"}} 
+      currentPrefix={"pre1/"} />
+    )
+    expect(wrapper
+      .find("a")
+      .length).toBe(2) // find only the other 2
+  })
+
   it("should call shareObject with object and expiry", () => {
     const shareObject = jest.fn()
     const wrapper = shallow(
