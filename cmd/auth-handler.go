@@ -590,31 +590,33 @@ func isPutActionAllowed(atype authType, bucketName, objectName string, r *http.R
 	if s3Err != ErrNone {
 		return s3Err
 	}
+	if action != iampolicy.PutObjectRetentionAction || (r.Header.Get(xhttp.AmzObjectLockMode) != "" || r.Header.Get(xhttp.AmzObjectLockRetainUntilDate) != "") {
+		if cred.AccessKey == "" {
+			if globalPolicySys.IsAllowed(policy.Args{
+				AccountName:     cred.AccessKey,
+				Action:          policy.Action(action),
+				BucketName:      bucketName,
+				ConditionValues: getConditionValues(r, "", "", nil),
+				IsOwner:         false,
+				ObjectName:      objectName,
+			}) {
+				return ErrNone
+			}
+			return ErrAccessDenied
+		}
 
-	if cred.AccessKey == "" {
-		if globalPolicySys.IsAllowed(policy.Args{
+		if globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     cred.AccessKey,
-			Action:          policy.Action(action),
+			Action:          action,
 			BucketName:      bucketName,
-			ConditionValues: getConditionValues(r, "", "", nil),
-			IsOwner:         false,
+			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 			ObjectName:      objectName,
+			IsOwner:         owner,
+			Claims:          claims,
 		}) {
 			return ErrNone
 		}
 		return ErrAccessDenied
 	}
-
-	if globalIAMSys.IsAllowed(iampolicy.Args{
-		AccountName:     cred.AccessKey,
-		Action:          action,
-		BucketName:      bucketName,
-		ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
-		ObjectName:      objectName,
-		IsOwner:         owner,
-		Claims:          claims,
-	}) {
-		return ErrNone
-	}
-	return ErrAccessDenied
+	return ErrNone
 }
