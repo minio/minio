@@ -66,7 +66,7 @@ func (client *peerRESTClient) reConnect() {
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *peerRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-	return client.callWithContext(context.Background(), method, values, body, length)
+	return client.callWithContext(GlobalContext, method, values, body, length)
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
@@ -633,7 +633,7 @@ func (client *peerRESTClient) sendEvent(bucket string, targetID, remoteTargetID 
 		reqInfo := &logger.ReqInfo{BucketName: bucket}
 		reqInfo.AppendTags("targetID", targetID.Name)
 		reqInfo.AppendTags("event", eventData.EventName.String())
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		logger.LogIf(ctx, err)
 		globalNotificationSys.RemoveRemoteTarget(bucket, targetID)
 	}
@@ -934,7 +934,7 @@ func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan stru
 	values.Set(peerRESTTraceErr, strconv.FormatBool(trcErr))
 
 	// To cancel the REST request in case doneCh gets closed.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(GlobalContext)
 
 	cancelCh := make(chan struct{})
 	defer close(cancelCh)
@@ -972,7 +972,7 @@ func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan stru
 
 func (client *peerRESTClient) doListen(listenCh chan interface{}, doneCh chan struct{}, v url.Values) {
 	// To cancel the REST request in case doneCh gets closed.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(GlobalContext)
 
 	cancelCh := make(chan struct{})
 	defer close(cancelCh)
@@ -1045,7 +1045,7 @@ func (client *peerRESTClient) ConsoleLog(logCh chan interface{}, doneCh chan str
 	go func() {
 		for {
 			// get cancellation context to properly unsubscribe peers
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(GlobalContext)
 			respBody, err := client.callWithContext(ctx, peerRESTMethodLog, nil, nil, -1)
 			if err != nil {
 				// Retry the failed request.
@@ -1087,7 +1087,7 @@ func getRemoteHosts(endpointZones EndpointZones) []*xnet.Host {
 	for _, hostStr := range GetRemotePeers(endpointZones) {
 		host, err := xnet.ParseHost(hostStr)
 		if err != nil {
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(GlobalContext, err)
 			continue
 		}
 		remoteHosts = append(remoteHosts, host)
@@ -1102,7 +1102,7 @@ func getRestClients(endpoints EndpointZones) []*peerRESTClient {
 	for i, host := range peerHosts {
 		client, err := newPeerRESTClient(host)
 		if err != nil {
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(GlobalContext, err)
 			continue
 		}
 		restClients[i] = client

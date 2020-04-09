@@ -712,7 +712,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, opts 
 	} else {
 		newReqInfo = logger.NewReqInfo("", "", globalDeploymentID, "", "Heal", bucket, object)
 	}
-	healCtx := logger.SetReqInfo(context.Background(), newReqInfo)
+	healCtx := logger.SetReqInfo(GlobalContext, newReqInfo)
 
 	// Healing directories handle it separately.
 	if HasSuffix(object, SlashSeparator) {

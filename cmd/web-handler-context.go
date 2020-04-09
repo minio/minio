@@ -247,5 +247,5 @@ func newWebContext(r *http.Request, args ToKeyValuer, api string) context.Contex
 		BucketName:   bucket,
 		ObjectName:   object,
 	}
-	return logger.SetReqInfo(context.Background(), reqInfo)
+	return logger.SetReqInfo(GlobalContext, reqInfo)
 }

@@ -729,7 +729,7 @@ func (s *peerRESTServer) ReloadFormatHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	err := objAPI.ReloadFormat(context.Background(), dryRun)
+	err := objAPI.ReloadFormat(GlobalContext, dryRun)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -947,7 +947,7 @@ func (s *peerRESTServer) SendEventHandler(w http.ResponseWriter, r *http.Request
 	for i := range errs {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("Event", eventReq.Event.EventName.String())
 		reqInfo.AppendTags("targetName", eventReq.TargetID.Name)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		logger.LogIf(ctx, errs[i].Err)
 
 		eventResp.Success = false

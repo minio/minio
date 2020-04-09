@@ -1183,7 +1183,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	objInfo, err := putObject(context.Background(), bucket, object, pReader, opts)
+	objInfo, err := putObject(GlobalContext, bucket, object, pReader, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -2272,7 +2272,7 @@ func writeWebErrorResponse(w http.ResponseWriter, err error) {
 	reqInfo := &logger.ReqInfo{
 		DeploymentID: globalDeploymentID,
 	}
-	ctx := logger.SetReqInfo(context.Background(), reqInfo)
+	ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 	apiErr := toWebAPIError(ctx, err)
 	w.WriteHeader(apiErr.HTTPStatusCode)
 	w.Write([]byte(apiErr.Description))

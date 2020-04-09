@@ -178,7 +178,7 @@ func (c *diskCache) diskUsageLow() bool {
 	di, err := disk.GetInfo(c.dir)
 	if err != nil {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", c.dir)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		logger.LogIf(ctx, err)
 		return false
 	}
@@ -193,7 +193,7 @@ func (c *diskCache) diskUsageHigh() bool {
 	di, err := disk.GetInfo(c.dir)
 	if err != nil {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", c.dir)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		logger.LogIf(ctx, err)
 		return false
 	}
@@ -207,7 +207,7 @@ func (c *diskCache) diskAvailable(size int64) bool {
 	di, err := disk.GetInfo(c.dir)
 	if err != nil {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", c.dir)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		logger.LogIf(ctx, err)
 		return false
 	}
@@ -221,7 +221,7 @@ func (c *diskCache) toClear() uint64 {
 	di, err := disk.GetInfo(c.dir)
 	if err != nil {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", c.dir)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		logger.LogIf(ctx, err)
 		return 0
 	}
@@ -800,7 +800,7 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 		if !bytes.Equal(hashBytes, checksumHash) {
 			err = fmt.Errorf("hashes do not match expected %s, got %s",
 				hex.EncodeToString(checksumHash), hex.EncodeToString(hashBytes))
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(GlobalContext, err)
 			return err
 		}
 

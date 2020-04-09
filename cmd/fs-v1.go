@@ -121,7 +121,7 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 
 // NewFSObjectLayer - initialize new fs object layer.
 func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
-	ctx := context.Background()
+	ctx := GlobalContext
 	if fsPath == "" {
 		return nil, errInvalidArgument
 	}
@@ -1089,7 +1089,7 @@ func (fs *FSObjects) listDirFactory() ListDirFunc {
 		var err error
 		entries, err = readDir(pathJoin(fs.fsPath, bucket, prefixDir))
 		if err != nil && err != errFileNotFound {
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(GlobalContext, err)
 			return false, nil
 		}
 		if len(entries) == 0 {

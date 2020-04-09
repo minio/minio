@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
 	"io/ioutil"
@@ -72,7 +71,7 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	globalIAMSys = NewIAMSys()
 	globalIAMSys.Init(GlobalContext, objLayer)
 
-	buckets, err := objLayer.ListBuckets(context.Background())
+	buckets, err := objLayer.ListBuckets(GlobalContext)
 	if err != nil {
 		return nil, err
 	}
@@ -314,12 +313,12 @@ func TestToAdminAPIErrCode(t *testing.T) {
 		// 3. Non-admin API specific error.
 		{
 			err:            errDiskNotFound,
-			expectedAPIErr: toAPIErrorCode(context.Background(), errDiskNotFound),
+			expectedAPIErr: toAPIErrorCode(GlobalContext, errDiskNotFound),
 		},
 	}
 
 	for i, test := range testCases {
-		actualErr := toAdminAPIErrCode(context.Background(), test.err)
+		actualErr := toAdminAPIErrCode(GlobalContext, test.err)
 		if actualErr != test.expectedAPIErr {
 			t.Errorf("Test %d: Expected %v but received %v",
 				i+1, test.expectedAPIErr, actualErr)

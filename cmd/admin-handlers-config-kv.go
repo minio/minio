@@ -162,7 +162,7 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 
 	// Make sure to write backend is encrypted
 	if globalConfigEncrypted {
-		saveConfig(context.Background(), objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
+		saveConfig(GlobalContext, objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
 	}
 
 	writeSuccessResponseHeadersOnly(w)
@@ -403,7 +403,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 
 	// Make sure to write backend is encrypted
 	if globalConfigEncrypted {
-		saveConfig(context.Background(), objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
+		saveConfig(GlobalContext, objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
 	}
 
 	writeSuccessResponseHeadersOnly(w)

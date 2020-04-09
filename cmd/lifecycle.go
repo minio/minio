@@ -61,7 +61,7 @@ func (sys *LifecycleSys) Get(bucketName string) (lc lifecycle.Lifecycle, ok bool
 			return
 		}
 
-		l, err := objAPI.GetBucketLifecycle(context.Background(), bucketName)
+		l, err := objAPI.GetBucketLifecycle(GlobalContext, bucketName)
 		if err != nil {
 			return
 		}
@@ -89,7 +89,7 @@ func saveLifecycleConfig(ctx context.Context, objAPI ObjectLayer, bucketName str
 func getLifecycleConfig(objAPI ObjectLayer, bucketName string) (*lifecycle.Lifecycle, error) {
 	// Construct path to lifecycle.xml for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketLifecycleConfig)
-	configData, err := readConfig(context.Background(), objAPI, configFile)
+	configData, err := readConfig(GlobalContext, objAPI, configFile)
 	if err != nil {
 		if err == errConfigNotFound {
 			err = BucketLifecycleNotFound{Bucket: bucketName}
@@ -139,7 +139,7 @@ func (sys *LifecycleSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
 // Loads lifecycle policies for all buckets into LifecycleSys.
 func (sys *LifecycleSys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
-		config, err := objAPI.GetBucketLifecycle(context.Background(), bucket.Name)
+		config, err := objAPI.GetBucketLifecycle(GlobalContext, bucket.Name)
 		if err != nil {
 			if _, ok := err.(BucketLifecycleNotFound); ok {
 				sys.Remove(bucket.Name)

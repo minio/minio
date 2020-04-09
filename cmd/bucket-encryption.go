@@ -44,7 +44,7 @@ func NewBucketSSEConfigSys() *BucketSSEConfigSys {
 // load - Loads the bucket encryption configuration for the given list of buckets
 func (sys *BucketSSEConfigSys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
-		config, err := objAPI.GetBucketSSEConfig(context.Background(), bucket.Name)
+		config, err := objAPI.GetBucketSSEConfig(GlobalContext, bucket.Name)
 		if err != nil {
 			if _, ok := err.(BucketSSEConfigNotFound); ok {
 				sys.Remove(bucket.Name)
@@ -81,7 +81,7 @@ func (sys *BucketSSEConfigSys) Get(bucket string) (config bucketsse.BucketSSECon
 			return
 		}
 
-		cfg, err := objAPI.GetBucketSSEConfig(context.Background(), bucket)
+		cfg, err := objAPI.GetBucketSSEConfig(GlobalContext, bucket)
 		if err != nil {
 			return
 		}
@@ -130,7 +130,7 @@ func saveBucketSSEConfig(ctx context.Context, objAPI ObjectLayer, bucket string,
 func getBucketSSEConfig(objAPI ObjectLayer, bucket string) (*bucketsse.BucketSSEConfig, error) {
 	// Path to bucket-encryption.xml for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucket, bucketSSEConfig)
-	configData, err := readConfig(context.Background(), objAPI, configFile)
+	configData, err := readConfig(GlobalContext, objAPI, configFile)
 	if err != nil {
 		if err == errConfigNotFound {
 			err = BucketSSEConfigNotFound{Bucket: bucket}

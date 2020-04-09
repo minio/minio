@@ -166,7 +166,7 @@ func initSafeMode(buckets []BucketInfo) (err error) {
 	// at a given time, this big transaction lock ensures this
 	// appropriately. This is also true for rotation of encrypted
 	// content.
-	objLock := newObject.NewNSLock(context.Background(), minioMetaBucket, transactionConfigPrefix)
+	objLock := newObject.NewNSLock(GlobalContext, minioMetaBucket, transactionConfigPrefix)
 	if err = objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
@@ -316,7 +316,7 @@ func serverMain(ctx *cli.Context) {
 	setDefaultProfilerRates()
 
 	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background())
+	globalConsoleSys = NewConsoleLogger(GlobalContext)
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
 

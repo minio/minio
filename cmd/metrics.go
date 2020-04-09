@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -163,7 +162,7 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	m, err := objLayer.GetMetrics(context.Background())
+	m, err := objLayer.GetMetrics(GlobalContext)
 	if err != nil {
 		return
 	}
@@ -354,7 +353,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	}
 
 	// Fetch disk space info
-	storageInfo := objLayer.StorageInfo(context.Background(), true)
+	storageInfo := objLayer.StorageInfo(GlobalContext, true)
 
 	offlineDisks := storageInfo.Backend.OfflineDisks
 	onlineDisks := storageInfo.Backend.OnlineDisks
@@ -424,13 +423,13 @@ func metricsHandler() http.Handler {
 	registry := prometheus.NewRegistry()
 
 	err := registry.Register(minioVersionInfo)
-	logger.LogIf(context.Background(), err)
+	logger.LogIf(GlobalContext, err)
 
 	err = registry.Register(httpRequestsDuration)
-	logger.LogIf(context.Background(), err)
+	logger.LogIf(GlobalContext, err)
 
 	err = registry.Register(newMinioCollector())
-	logger.LogIf(context.Background(), err)
+	logger.LogIf(GlobalContext, err)
 
 	gatherers := prometheus.Gatherers{
 		prometheus.DefaultGatherer,

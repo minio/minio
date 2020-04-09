@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -30,7 +29,7 @@ func printGatewayStartupMessage(apiEndPoints []string, backendType string) {
 	// If cache layer is enabled, print cache capacity.
 	cacheAPI := newCachedObjectLayerFn()
 	if cacheAPI != nil {
-		printCacheStorageInfo(cacheAPI.StorageInfo(context.Background()))
+		printCacheStorageInfo(cacheAPI.StorageInfo(GlobalContext))
 	}
 	// Prints credential.
 	printGatewayCommonMsg(strippedAPIEndpoints)

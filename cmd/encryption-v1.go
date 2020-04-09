@@ -860,7 +860,7 @@ func (o *ObjectInfo) EncryptedSize() int64 {
 		// This cannot happen since AWS S3 allows parts to be 5GB at most
 		// sio max. size is 256 TB
 		reqInfo := (&logger.ReqInfo{}).AppendTags("size", strconv.FormatUint(size, 10))
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		logger.CriticalIf(ctx, err)
 	}
 	return int64(size)
@@ -888,7 +888,7 @@ func DecryptCopyObjectInfo(info *ObjectInfo, headers http.Header) (errCode APIEr
 		}
 		var err error
 		if info.Size, err = info.DecryptedSize(); err != nil {
-			errCode = toAPIErrorCode(context.Background(), err)
+			errCode = toAPIErrorCode(GlobalContext, err)
 		}
 	}
 	return
