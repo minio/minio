@@ -874,16 +874,6 @@ func (client *peerRESTClient) LoadUser(accessKey string, temp bool) (err error) 
 	return nil
 }
 
-// LoadUsers - send load users command to peer nodes.
-func (client *peerRESTClient) LoadUsers() (err error) {
-	respBody, err := client.call(peerRESTMethodLoadUsers, nil, nil, -1)
-	if err != nil {
-		return
-	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
 // LoadGroup - send load group command to peers.
 func (client *peerRESTClient) LoadGroup(group string) error {
 	values := make(url.Values)

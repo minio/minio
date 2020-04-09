@@ -590,17 +590,13 @@ func listIAMConfigItems(ctx context.Context, objAPI ObjectLayer, pathPrefix stri
 }
 
 func (iamOS *IAMObjectStore) watch(ctx context.Context, sys *IAMSys) {
-	watchDisk := func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.NewTimer(globalRefreshIAMInterval).C:
-				logger.LogIf(ctx, iamOS.loadAll(ctx, sys))
-			}
+	// Refresh IAMSys.
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.NewTimer(globalRefreshIAMInterval).C:
+			logger.LogIf(ctx, iamOS.loadAll(ctx, sys))
 		}
 	}
-
-	// Refresh IAMSys in background.
-	go watchDisk()
 }

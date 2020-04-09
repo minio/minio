@@ -353,13 +353,6 @@ func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, userType IAMUs
 	return nil
 }
 
-// Load - loads iam subsystem
-func (sys *IAMSys) Load(ctx context.Context) error {
-	// Pass nil objectlayer here - it will be loaded internally
-	// from the IAMStorageAPI.
-	return sys.store.loadAll(ctx, sys)
-}
-
 // Perform IAM configuration migration.
 func (sys *IAMSys) doIAMConfigMigration(ctx context.Context) error {
 	return sys.store.migrateBackendFormat(ctx)
@@ -386,12 +379,12 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) error {
 		return err
 	}
 
-	sys.store.watch(ctx, sys)
 	err := sys.store.loadAll(ctx, sys)
 
 	// Invalidate the old cred after finishing IAM initialization
 	globalOldCred = auth.Credentials{}
 
+	go sys.store.watch(ctx, sys)
 	return err
 }
 

@@ -225,19 +225,6 @@ func (sys *NotificationSys) LoadUser(accessKey string, temp bool) []Notification
 	return ng.Wait()
 }
 
-// LoadUsers - calls LoadUsers RPC call on all peers.
-func (sys *NotificationSys) LoadUsers() []NotificationPeerErr {
-	ng := WithNPeers(len(sys.peerClients))
-	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
-		client := client
-		ng.Go(context.Background(), client.LoadUsers, idx, *client.host)
-	}
-	return ng.Wait()
-}
-
 // LoadGroup - loads a specific group on all peers.
 func (sys *NotificationSys) LoadGroup(group string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
