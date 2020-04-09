@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"os"
 	"testing"
 )
@@ -38,11 +37,11 @@ func TestXLParentDirIsObject(t *testing.T) {
 	bucketName := "testbucket"
 	objectName := "object"
 
-	if err = obj.MakeBucketWithLocation(context.Background(), bucketName, ""); err != nil {
+	if err = obj.MakeBucketWithLocation(GlobalContext, bucketName, ""); err != nil {
 		t.Fatal(err)
 	}
 	objectContent := "12345"
-	objInfo, err := obj.PutObject(context.Background(), bucketName, objectName,
+	objInfo, err := obj.PutObject(GlobalContext, bucketName, objectName,
 		mustGetPutObjReader(t, bytes.NewReader([]byte(objectContent)), int64(len(objectContent)), "", ""), ObjectOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +86,7 @@ func TestXLParentDirIsObject(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		gotValue := xl.parentDirIsObject(context.Background(), bucketName, testCase.objectName)
+		gotValue := xl.parentDirIsObject(GlobalContext, bucketName, testCase.objectName)
 		if testCase.parentIsObject != gotValue {
 			t.Errorf("Test %d: Unexpected value returned got %t, expected %t", i+1, gotValue, testCase.parentIsObject)
 		}

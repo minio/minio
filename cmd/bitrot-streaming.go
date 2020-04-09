@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"encoding/hex"
 	"fmt"
 	"hash"
@@ -142,7 +141,7 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 	if !bytes.Equal(b.h.Sum(nil), b.hashBytes) {
 		err := &errHashMismatch{fmt.Sprintf("hashes do not match expected %s, got %s",
 			hex.EncodeToString(b.hashBytes), hex.EncodeToString(b.h.Sum(nil)))}
-		logger.LogIf(context.Background(), err)
+		logger.LogIf(GlobalContext, err)
 		return 0, err
 	}
 	b.currOffset += int64(len(buf))

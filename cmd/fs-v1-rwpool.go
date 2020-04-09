@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"os"
 	pathutil "path"
 	"sync"
@@ -51,7 +50,7 @@ func (fsi *fsIOPool) lookupToRead(path string) (*lock.RLockedFile, bool) {
 		if rlkFile.IsClosed() {
 			// Log this as an error.
 			reqInfo := (&logger.ReqInfo{}).AppendTags("path", path)
-			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 			logger.LogIf(ctx, errUnexpected)
 
 			// Purge the cached lock path from map.

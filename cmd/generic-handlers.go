@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -723,7 +722,7 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 		PassHost:     true,
 		RoundTripper: NewGatewayHTTPTransport(),
 		Logger: func(err error) {
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(GlobalContext, err)
 		},
 	})
 	return bucketForwardingHandler{fwd, h}

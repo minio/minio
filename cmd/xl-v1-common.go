@@ -83,5 +83,5 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 	// ignored if necessary.
 	readQuorum := getReadQuorum(len(storageDisks))
 
-	return reduceReadQuorumErrs(context.Background(), g.Wait(), objectOpIgnoredErrs, readQuorum) == nil
+	return reduceReadQuorumErrs(GlobalContext, g.Wait(), objectOpIgnoredErrs, readQuorum) == nil
 }

@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -175,15 +174,15 @@ func TestListOnlineDisks(t *testing.T) {
 		// Prepare bucket/object backend for the tests below.
 
 		// Cleanup from previous test.
-		obj.DeleteObject(context.Background(), bucket, object)
-		obj.DeleteBucket(context.Background(), bucket, false)
+		obj.DeleteObject(GlobalContext, bucket, object)
+		obj.DeleteBucket(GlobalContext, bucket, false)
 
-		err = obj.MakeBucketWithLocation(context.Background(), "bucket", "")
+		err = obj.MakeBucketWithLocation(GlobalContext, "bucket", "")
 		if err != nil {
 			t.Fatalf("Failed to make a bucket %v", err)
 		}
 
-		_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{})
+		_, err = obj.PutObject(GlobalContext, bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{})
 		if err != nil {
 			t.Fatalf("Failed to putObject %v", err)
 		}
@@ -229,7 +228,7 @@ func TestListOnlineDisks(t *testing.T) {
 
 		}
 
-		partsMetadata, errs := readAllXLMetadata(context.Background(), xlDisks, bucket, object)
+		partsMetadata, errs := readAllXLMetadata(GlobalContext, xlDisks, bucket, object)
 		for i := range partsMetadata {
 			if errs[i] != nil {
 				t.Fatalf("Test %d: expected error to be nil: %s", i+1, errs[i].Error())
@@ -243,7 +242,7 @@ func TestListOnlineDisks(t *testing.T) {
 				i+1, test.expectedTime, modTime)
 		}
 
-		availableDisks, newErrs := disksWithAllParts(context.Background(), onlineDisks, partsMetadata, test.errs, bucket, object, madmin.HealDeepScan)
+		availableDisks, newErrs := disksWithAllParts(GlobalContext, onlineDisks, partsMetadata, test.errs, bucket, object, madmin.HealDeepScan)
 		test.errs = newErrs
 
 		if test._tamperBackend != noTamper {
@@ -257,7 +256,7 @@ func TestListOnlineDisks(t *testing.T) {
 }
 
 func TestDisksWithAllParts(t *testing.T) {
-	ctx := context.Background()
+	ctx := GlobalContext
 	obj, disks, err := prepareXL16()
 	if err != nil {
 		t.Fatalf("Prepare XL backend failed - %v", err)

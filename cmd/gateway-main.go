@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -134,7 +133,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	gatewayHandleEnvVars()
 
 	// Set system resources to maximum.
-	logger.LogIf(context.Background(), setMaxResources())
+	logger.LogIf(GlobalContext, setMaxResources())
 
 	// Set when gateway is enabled
 	globalIsGateway = true
@@ -237,7 +236,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// sub-systems, make sure that we do not move the above codeblock elsewhere.
 	if enableConfigOps {
 		logger.FatalIf(globalConfigSys.Init(newObject), "Unable to initialize config system")
-		buckets, err := newObject.ListBuckets(context.Background())
+		buckets, err := newObject.ListBuckets(GlobalContext)
 		if err != nil {
 			logger.Fatal(err, "Unable to list buckets")
 		}

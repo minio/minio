@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"testing"
 
@@ -184,7 +183,7 @@ func TestDiskCacheMaxUse(t *testing.T) {
 		t.Fatal(err)
 	}
 	cache := d[0]
-	ctx := context.Background()
+	ctx := GlobalContext
 	bucketName := "testbucket"
 	objectName := "testobject"
 	content := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
