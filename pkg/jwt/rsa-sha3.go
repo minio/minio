@@ -3,6 +3,7 @@ package jwt
 import (
 	"crypto"
 	"github.com/dgrijalva/jwt-go"
+	// Needed for SHA3 to work
 	_ "golang.org/x/crypto/sha3"
 )
 
