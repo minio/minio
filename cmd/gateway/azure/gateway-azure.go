@@ -24,11 +24,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/minio/minio/pkg/env"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"sort"
 	"strconv"
@@ -50,7 +50,7 @@ import (
 )
 
 var (
-	azureUploadChunkSize   = getUploadChunkSizeFromEnv(azureChunkSizeEnvVar, azureDefaultUploadChunkSize)
+	azureUploadChunkSize   = getUploadChunkSizeFromEnv(azureChunkSizeEnvVar, "0.25")
 	azureSdkTimeout        = time.Duration(azureUploadChunkSize/humanize.MiByte) * 60 * time.Second
 	azureUploadConcurrency = azureUploadMaxMemoryUsage / azureUploadChunkSize
 )
@@ -137,21 +137,18 @@ func azureGatewayMain(ctx *cli.Context) {
 // getUploadChunkSizeFromEnv returns the parsed chunk size from the environmental variable 'MINIO_AZURE_CHUNK_SIZE_MB'
 // The environmental variable should be a floating point number between 0 and 100 representing the MegaBytes
 // The returned value is an int representing the size in bytes
-func getUploadChunkSizeFromEnv(envvar string, defaultValue int) int {
-	envChunkSize := os.Getenv(envvar)
-	if len(envChunkSize) == 0 {
-		return defaultValue
-	}
+func getUploadChunkSizeFromEnv(envvar string, defaultValue string) int {
+	envChunkSize := env.Get(envvar, defaultValue)
 
 	i, err := strconv.ParseFloat(envChunkSize, 64)
 	if err != nil {
 		logger.LogIf(context.Background(), err)
-		return defaultValue
+		return azureDefaultUploadChunkSize
 	}
 
 	if i <= 0 || i > 100 {
-		logger.LogIf(context.Background(), fmt.Errorf("The environmental variable '%v' should be a floating point value between 0 and 100. The upload chunk size is set to the default: %g", azureChunkSizeEnvVar, float64(defaultValue)/humanize.MiByte))
-		return defaultValue
+		logger.LogIf(context.Background(), fmt.Errorf("The environmental variable '%v' should be a floating point value between 0 and 100. The upload chunk size is set to the default: %s", azureChunkSizeEnvVar, defaultValue))
+		return azureDefaultUploadChunkSize
 	}
 
 	return int(i * humanize.MiByte)
