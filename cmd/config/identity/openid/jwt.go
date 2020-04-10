@@ -31,8 +31,6 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/iam/policy"
-	// Needed for SHA-3 support
-	_ "github.com/minio/minio/pkg/jwt"
 	xnet "github.com/minio/minio/pkg/net"
 )
 
