@@ -200,8 +200,16 @@ func (kvs KVS) Empty() bool {
 // Keys returns the list of keys for the current KVS
 func (kvs KVS) Keys() []string {
 	var keys = make([]string, len(kvs))
+	var foundComment bool
 	for i := range kvs {
+		if kvs[i].Key == madmin.CommentKey {
+			foundComment = true
+		}
 		keys[i] = kvs[i].Key
+	}
+	// Comment KV not found, add it explicitly.
+	if !foundComment {
+		keys = append(keys, madmin.CommentKey)
 	}
 	return keys
 }
