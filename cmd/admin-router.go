@@ -115,7 +115,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 			// Service accounts ops
 			adminRouter.Methods(http.MethodPut).Path(adminVersion + "/add-service-account").HandlerFunc(httpTraceHdrs(adminAPI.AddServiceAccount))
-			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-service-account").HandlerFunc(httpTraceHdrs(adminAPI.GetServiceAccount)).Queries("accessKey", "{accessKey:.*}")
 
 			if adminVersion == adminAPIVersionV2Prefix {
 				// Info policy IAM v2

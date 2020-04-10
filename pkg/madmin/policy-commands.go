@@ -114,6 +114,10 @@ func (adm *AdminClient) AddCannedPolicy(ctx context.Context, policyName string, 
 		return ErrInvalidArgument("policy input cannot be empty")
 	}
 
+	if err := policy.Validate(); err != nil {
+		return err
+	}
+
 	buf, err := json.Marshal(policy)
 	if err != nil {
 		return err
