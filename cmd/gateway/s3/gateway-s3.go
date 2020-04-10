@@ -33,13 +33,17 @@ import (
 
 	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/env"
 )
 
 const (
 	s3Backend = "s3"
+
+	envS3SkipCredentialCheck = "SKIP_CREDENTIAL_CHECK"
 )
 
 func init() {
@@ -54,6 +58,9 @@ FLAGS:
   {{end}}{{end}}
 ENDPOINT:
   s3 server endpoint. Default ENDPOINT is https://s3.amazonaws.com
+
+SKIP_CREDENTIAL_CHECK:
+	Skips checking for valid credentials if set to true
 
 EXAMPLES:
   1. Start minio gateway server for AWS S3 backend
@@ -158,6 +165,10 @@ var defaultAWSCredProviders = []credentials.Provider{
 	&credentials.EnvMinio{},
 }
 
+func shouldSkipCredentialCheck() (bool, error) {
+	return config.ParseBool(env.Get(envS3SkipCredentialCheck, config.EnableOff))
+}
+
 // newS3 - Initializes a new client by auto probing S3 server signature.
 func newS3(urlStr string) (*miniogo.Core, error) {
 	if urlStr == "" {
@@ -219,12 +230,19 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 	// Set custom transport
 	clnt.SetCustomTransport(t)
 
-	probeBucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "probe-bucket-sign-")
+	skipCheck, err := shouldSkipCredentialCheck()
+	if err != nil {
+		return nil, err
+	}
 
-	// Check if the provided keys are valid.
-	if _, err = clnt.BucketExists(probeBucketName); err != nil {
-		if miniogo.ToErrorResponse(err).Code != "AccessDenied" {
-			return nil, err
+	if !skipCheck {
+		probeBucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "probe-bucket-sign-")
+
+		// Check if the provided keys are valid.
+		if _, err = clnt.BucketExists(probeBucketName); err != nil {
+			if miniogo.ToErrorResponse(err).Code != "AccessDenied" {
+				return nil, err
+			}
 		}
 	}
 
