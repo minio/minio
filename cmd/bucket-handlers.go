@@ -755,7 +755,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 	rawReader := hashReader
 	pReader := NewPutObjReader(rawReader, nil, nil)
-	var objectEncryptionKey []byte
+	var objectEncryptionKey crypto.ObjectKey
 
 	// Check if bucket encryption is enabled
 	_, encEnabled := globalBucketSSEConfigSys.Get(bucket)
@@ -797,7 +797,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
-			pReader = NewPutObjReader(rawReader, hashReader, objectEncryptionKey)
+			pReader = NewPutObjReader(rawReader, hashReader, &objectEncryptionKey)
 		}
 	}
 
