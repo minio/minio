@@ -63,6 +63,8 @@ const (
 	peerRESTMethodBucketEncryptionRemove       = "/removebucketencryption"
 	peerRESTMethodPutBucketObjectLockConfig    = "/putbucketobjectlockconfig"
 	peerRESTMethodBucketObjectLockConfigRemove = "/removebucketobjectlockconfig"
+	peerRESTMethodPutBucketQuotaConfig         = "/putbucketquotaconfig"
+	peerRESTMethodBucketQuotaConfigRemove      = "/removebucketquotaconfig"
 )
 
 const (

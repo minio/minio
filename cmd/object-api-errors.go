@@ -269,6 +269,20 @@ func (e BucketSSEConfigNotFound) Error() string {
 	return "No bucket encryption found for bucket: " + e.Bucket
 }
 
+// BucketQuotaConfigNotFound - no bucket quota config found.
+type BucketQuotaConfigNotFound GenericError
+
+func (e BucketQuotaConfigNotFound) Error() string {
+	return "No quota config found for bucket : " + e.Bucket
+}
+
+// BucketQuotaExceeded - bucket quota exceeded.
+type BucketQuotaExceeded GenericError
+
+func (e BucketQuotaExceeded) Error() string {
+	return "Bucket quota exceeded for bucket: " + e.Bucket
+}
+
 /// Bucket related errors.
 
 // BucketNameInvalid - bucketname provided is invalid.

@@ -36,6 +36,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
+
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/pubsub"
@@ -217,6 +218,7 @@ var (
 
 	globalBucketObjectLockConfig = objectlock.NewBucketObjectLockConfig()
 
+	globalBucketQuotaSys = NewBucketQuotaSys()
 	// Disk cache drives
 	globalCacheConfig cache.Config
 

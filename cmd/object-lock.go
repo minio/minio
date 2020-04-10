@@ -98,9 +98,9 @@ func enforceRetentionBypassForDeleteWeb(ctx context.Context, r *http.Request, bu
 	return ErrNone
 }
 
-// enforceRetentionForLifecycle checks if it is appropriate to remove an
-// object according to locking configuration when this is lifecycle asking.
-func enforceRetentionForLifecycle(ctx context.Context, objInfo ObjectInfo) (locked bool) {
+// enforceRetentionForDeletion checks if it is appropriate to remove an
+// object according to locking configuration when this is lifecycle/ bucket quota asking.
+func enforceRetentionForDeletion(ctx context.Context, objInfo ObjectInfo) (locked bool) {
 	lhold := objectlock.GetObjectLegalHoldMeta(objInfo.UserDefined)
 	if lhold.Status.Valid() && lhold.Status == objectlock.LegalHoldOn {
 		return true

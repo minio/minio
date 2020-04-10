@@ -899,6 +899,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 		length = actualSize
 	}
+	if globalBucketQuotaSys.Exists(dstBucket) {
+		if err := enforceBucketQuota(ctx, dstBucket, actualSize); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+	}
 
 	var compressMetadata map[string]string
 	// No need to compress for remote etcd calls
@@ -1328,7 +1334,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			sha256hex = getContentSha256Cksum(r, serviceS3)
 		}
 	}
-
+	if globalBucketQuotaSys.Exists(bucket) {
+		if err := enforceBucketQuota(ctx, bucket, size); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+	}
 	// Check if bucket encryption is enabled
 	_, encEnabled := globalBucketSSEConfigSys.Get(bucket)
 	// This request header needs to be set prior to setting ObjectOptions
@@ -1762,7 +1773,12 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			return
 		}
 	}
-
+	if globalBucketQuotaSys.Exists(dstBucket) {
+		if err := enforceBucketQuota(ctx, dstBucket, actualPartSize); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+	}
 	// Special care for CopyObjectPart
 	if partRangeErr := checkCopyPartRangeWithSize(rs, actualPartSize); partRangeErr != nil {
 		writeCopyPartErr(ctx, w, partRangeErr, r.URL, guessIsBrowserReq(r))
@@ -2040,6 +2056,13 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 		if !skipContentSha256Cksum(r) {
 			sha256hex = getContentSha256Cksum(r, serviceS3)
+		}
+	}
+
+	if globalBucketQuotaSys.Exists(bucket) {
+		if err := enforceBucketQuota(ctx, bucket, size); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
 		}
 	}
 
