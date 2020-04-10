@@ -306,8 +306,10 @@ func checkValidNotificationKeys(cfg config.Config) error {
 			if tname != config.Default {
 				subSysTarget = subSys + config.SubSystemSeparator + tname
 			}
-			if err := config.CheckValidKeys(subSysTarget, kv, validKVS); err != nil {
-				return err
+			if v, ok := kv.Lookup(config.Enable); ok && v == config.EnableOn {
+				if err := config.CheckValidKeys(subSysTarget, kv, validKVS); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -697,26 +699,6 @@ var (
 			Value: formatNamespace,
 		},
 		config.KV{
-			Key:   target.MySQLHost,
-			Value: "",
-		},
-		config.KV{
-			Key:   target.MySQLPort,
-			Value: "",
-		},
-		config.KV{
-			Key:   target.MySQLUsername,
-			Value: "",
-		},
-		config.KV{
-			Key:   target.MySQLPassword,
-			Value: "",
-		},
-		config.KV{
-			Key:   target.MySQLDatabase,
-			Value: "",
-		},
-		config.KV{
 			Key:   target.MySQLDSNString,
 			Value: "",
 		},
@@ -752,16 +734,6 @@ func GetNotifyMySQL(mysqlKVS map[string]config.KVS) (map[string]target.MySQLArgs
 			continue
 		}
 
-		hostEnv := target.EnvMySQLHost
-		if k != config.Default {
-			hostEnv = hostEnv + config.Default + k
-		}
-
-		host, err := xnet.ParseURL(env.Get(hostEnv, kv.Get(target.MySQLHost)))
-		if err != nil {
-			return nil, err
-		}
-
 		queueLimitEnv := target.EnvMySQLQueueLimit
 		if k != config.Default {
 			queueLimitEnv = queueLimitEnv + config.Default + k
@@ -775,30 +747,17 @@ func GetNotifyMySQL(mysqlKVS map[string]config.KVS) (map[string]target.MySQLArgs
 		if k != config.Default {
 			formatEnv = formatEnv + config.Default + k
 		}
+
 		dsnStringEnv := target.EnvMySQLDSNString
 		if k != config.Default {
 			dsnStringEnv = dsnStringEnv + config.Default + k
 		}
+
 		tableEnv := target.EnvMySQLTable
 		if k != config.Default {
 			tableEnv = tableEnv + config.Default + k
 		}
-		portEnv := target.EnvMySQLPort
-		if k != config.Default {
-			portEnv = portEnv + config.Default + k
-		}
-		usernameEnv := target.EnvMySQLUsername
-		if k != config.Default {
-			usernameEnv = usernameEnv + config.Default + k
-		}
-		passwordEnv := target.EnvMySQLPassword
-		if k != config.Default {
-			passwordEnv = passwordEnv + config.Default + k
-		}
-		databaseEnv := target.EnvMySQLDatabase
-		if k != config.Default {
-			databaseEnv = databaseEnv + config.Default + k
-		}
+
 		queueDirEnv := target.EnvMySQLQueueDir
 		if k != config.Default {
 			queueDirEnv = queueDirEnv + config.Default + k
@@ -808,11 +767,6 @@ func GetNotifyMySQL(mysqlKVS map[string]config.KVS) (map[string]target.MySQLArgs
 			Format:     env.Get(formatEnv, kv.Get(target.MySQLFormat)),
 			DSN:        env.Get(dsnStringEnv, kv.Get(target.MySQLDSNString)),
 			Table:      env.Get(tableEnv, kv.Get(target.MySQLTable)),
-			Host:       *host,
-			Port:       env.Get(portEnv, kv.Get(target.MySQLPort)),
-			User:       env.Get(usernameEnv, kv.Get(target.MySQLUsername)),
-			Password:   env.Get(passwordEnv, kv.Get(target.MySQLPassword)),
-			Database:   env.Get(databaseEnv, kv.Get(target.MySQLDatabase)),
 			QueueDir:   env.Get(queueDirEnv, kv.Get(target.MySQLQueueDir)),
 			QueueLimit: queueLimit,
 		}
@@ -1181,26 +1135,6 @@ var (
 			Value: "",
 		},
 		config.KV{
-			Key:   target.PostgresHost,
-			Value: "",
-		},
-		config.KV{
-			Key:   target.PostgresPort,
-			Value: "",
-		},
-		config.KV{
-			Key:   target.PostgresUsername,
-			Value: "",
-		},
-		config.KV{
-			Key:   target.PostgresPassword,
-			Value: "",
-		},
-		config.KV{
-			Key:   target.PostgresDatabase,
-			Value: "",
-		},
-		config.KV{
 			Key:   target.PostgresQueueDir,
 			Value: "",
 		},
@@ -1228,16 +1162,6 @@ func GetNotifyPostgres(postgresKVS map[string]config.KVS) (map[string]target.Pos
 			continue
 		}
 
-		hostEnv := target.EnvPostgresHost
-		if k != config.Default {
-			hostEnv = hostEnv + config.Default + k
-		}
-
-		host, err := xnet.ParseHost(env.Get(hostEnv, kv.Get(target.PostgresHost)))
-		if err != nil {
-			return nil, err
-		}
-
 		queueLimitEnv := target.EnvPostgresQueueLimit
 		if k != config.Default {
 			queueLimitEnv = queueLimitEnv + config.Default + k
@@ -1263,26 +1187,6 @@ func GetNotifyPostgres(postgresKVS map[string]config.KVS) (map[string]target.Pos
 			tableEnv = tableEnv + config.Default + k
 		}
 
-		portEnv := target.EnvPostgresPort
-		if k != config.Default {
-			portEnv = portEnv + config.Default + k
-		}
-
-		usernameEnv := target.EnvPostgresUsername
-		if k != config.Default {
-			usernameEnv = usernameEnv + config.Default + k
-		}
-
-		passwordEnv := target.EnvPostgresPassword
-		if k != config.Default {
-			passwordEnv = passwordEnv + config.Default + k
-		}
-
-		databaseEnv := target.EnvPostgresDatabase
-		if k != config.Default {
-			databaseEnv = databaseEnv + config.Default + k
-		}
-
 		queueDirEnv := target.EnvPostgresQueueDir
 		if k != config.Default {
 			queueDirEnv = queueDirEnv + config.Default + k
@@ -1293,11 +1197,6 @@ func GetNotifyPostgres(postgresKVS map[string]config.KVS) (map[string]target.Pos
 			Format:           env.Get(formatEnv, kv.Get(target.PostgresFormat)),
 			ConnectionString: env.Get(connectionStringEnv, kv.Get(target.PostgresConnectionString)),
 			Table:            env.Get(tableEnv, kv.Get(target.PostgresTable)),
-			Host:             *host,
-			Port:             env.Get(portEnv, kv.Get(target.PostgresPort)),
-			User:             env.Get(usernameEnv, kv.Get(target.PostgresUsername)),
-			Password:         env.Get(passwordEnv, kv.Get(target.PostgresPassword)),
-			Database:         env.Get(databaseEnv, kv.Get(target.PostgresDatabase)),
 			QueueDir:         env.Get(queueDirEnv, kv.Get(target.PostgresQueueDir)),
 			QueueLimit:       uint64(queueLimit),
 		}

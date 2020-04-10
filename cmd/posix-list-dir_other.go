@@ -19,7 +19,6 @@
 package cmd
 
 import (
-	"context"
 	"io"
 	"os"
 	"path"
@@ -80,7 +79,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 				st, err = os.Stat(path.Join(dirPath, fi.Name()))
 				if err != nil {
 					reqInfo := (&logger.ReqInfo{}).AppendTags("path", path.Join(dirPath, fi.Name()))
-					ctx := logger.SetReqInfo(context.Background(), reqInfo)
+					ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 					logger.LogIf(ctx, err)
 					continue
 				}

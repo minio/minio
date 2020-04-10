@@ -529,7 +529,7 @@ func formatXLFixDeploymentID(endpoints Endpoints, storageDisks []StorageAPI, ref
 	}
 	// Deployment ID needs to be set on all the disks.
 	// Save `format.json` across all disks.
-	return saveFormatXLAll(context.Background(), storageDisks, formats)
+	return saveFormatXLAll(GlobalContext, storageDisks, formats)
 
 }
 
@@ -559,7 +559,7 @@ func formatXLFixLocalDeploymentID(endpoints Endpoints, storageDisks []StorageAPI
 				}
 				format.ID = refFormat.ID
 				if err := saveFormatXL(storageDisks[index], format, format.XL.This); err != nil {
-					logger.LogIf(context.Background(), err)
+					logger.LogIf(GlobalContext, err)
 					return fmt.Errorf("Unable to save format.json, %w", err)
 				}
 			}

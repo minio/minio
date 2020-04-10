@@ -332,13 +332,13 @@ func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 			if os.IsNotExist(err) {
 				err = nil
 			}
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(minio.GlobalContext, err)
 			return
 		}
 		defer f.Close()
 		fis, err := f.Readdir(0)
 		if err != nil {
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(minio.GlobalContext, err)
 			return
 		}
 		if len(fis) == 0 {

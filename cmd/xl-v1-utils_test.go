@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"reflect"
@@ -90,11 +89,11 @@ func TestReduceErrs(t *testing.T) {
 	}
 	// Validates list of all the testcases for returning valid errors.
 	for i, testCase := range testCases {
-		gotErr := reduceReadQuorumErrs(context.Background(), testCase.errs, testCase.ignoredErrs, 5)
+		gotErr := reduceReadQuorumErrs(GlobalContext, testCase.errs, testCase.ignoredErrs, 5)
 		if gotErr != testCase.err {
 			t.Errorf("Test %d : expected %s, got %s", i+1, testCase.err, gotErr)
 		}
-		gotNewErr := reduceWriteQuorumErrs(context.Background(), testCase.errs, testCase.ignoredErrs, 6)
+		gotNewErr := reduceWriteQuorumErrs(GlobalContext, testCase.errs, testCase.ignoredErrs, 6)
 		if gotNewErr != errXLWriteQuorum {
 			t.Errorf("Test %d : expected %s, got %s", i+1, errXLWriteQuorum, gotErr)
 		}
@@ -302,7 +301,7 @@ func TestGetXLMetaV1Jsoniter1(t *testing.T) {
 		t.Errorf("Unmarshalling failed: %v", err)
 	}
 
-	jsoniterXLMeta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaJSON)
+	jsoniterXLMeta, err := xlMetaV1UnmarshalJSON(GlobalContext, xlMetaJSON)
 	if err != nil {
 		t.Errorf("jsoniter parsing of XLMeta failed: %v", err)
 	}
@@ -319,7 +318,7 @@ func TestGetXLMetaV1Jsoniter10(t *testing.T) {
 	if err := json.Unmarshal(xlMetaJSON, &unMarshalXLMeta); err != nil {
 		t.Errorf("Unmarshalling failed: %v", err)
 	}
-	jsoniterXLMeta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaJSON)
+	jsoniterXLMeta, err := xlMetaV1UnmarshalJSON(GlobalContext, xlMetaJSON)
 	if err != nil {
 		t.Errorf("jsoniter parsing of XLMeta failed: %v", err)
 	}
@@ -349,7 +348,7 @@ func TestGetPartSizeFromIdx(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		s, err := calculatePartSizeFromIdx(context.Background(), testCase.totalSize, testCase.partSize, testCase.partIndex)
+		s, err := calculatePartSizeFromIdx(GlobalContext, testCase.totalSize, testCase.partSize, testCase.partIndex)
 		if err != nil {
 			t.Errorf("Test %d: Expected to pass but failed. %s", i+1, err)
 		}
@@ -373,7 +372,7 @@ func TestGetPartSizeFromIdx(t *testing.T) {
 	}
 
 	for i, testCaseFailure := range testCasesFailure {
-		_, err := calculatePartSizeFromIdx(context.Background(), testCaseFailure.totalSize, testCaseFailure.partSize, testCaseFailure.partIndex)
+		_, err := calculatePartSizeFromIdx(GlobalContext, testCaseFailure.totalSize, testCaseFailure.partSize, testCaseFailure.partIndex)
 		if err == nil {
 			t.Errorf("Test %d: Expected to failed but passed. %s", i+1, err)
 		}

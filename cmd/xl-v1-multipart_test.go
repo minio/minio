@@ -40,20 +40,20 @@ func TestXLCleanupStaleMultipartUploads(t *testing.T) {
 	objectName := "object"
 	var opts ObjectOptions
 
-	obj.MakeBucketWithLocation(context.Background(), bucketName, "")
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, objectName, opts)
+	obj.MakeBucketWithLocation(GlobalContext, bucketName, "")
+	uploadID, err := obj.NewMultipartUpload(GlobalContext, bucketName, objectName, opts)
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 
 	// Create a context we can cancel.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(GlobalContext)
 
 	var cleanupWg sync.WaitGroup
 	cleanupWg.Add(1)
 	go func() {
 		defer cleanupWg.Done()
-		xl.cleanupStaleMultipartUploads(context.Background(), time.Millisecond, 0, ctx.Done())
+		xl.cleanupStaleMultipartUploads(GlobalContext, time.Millisecond, 0, ctx.Done())
 	}()
 
 	// Wait for 100ms such that - we have given enough time for cleanup routine to kick in.
@@ -65,7 +65,7 @@ func TestXLCleanupStaleMultipartUploads(t *testing.T) {
 	cleanupWg.Wait()
 
 	// Check if upload id was already purged.
-	if err = obj.AbortMultipartUpload(context.Background(), bucketName, objectName, uploadID); err != nil {
+	if err = obj.AbortMultipartUpload(GlobalContext, bucketName, objectName, uploadID); err != nil {
 		if _, ok := err.(InvalidUploadID); !ok {
 			t.Fatal("Unexpected err: ", err)
 		}

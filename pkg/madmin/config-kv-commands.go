@@ -78,7 +78,7 @@ func (adm *AdminClient) SetConfigKV(ctx context.Context, kv string) (err error) 
 }
 
 // GetConfigKV - returns the key, value of the requested key, incoming data is encrypted.
-func (adm *AdminClient) GetConfigKV(ctx context.Context, key string) (Targets, error) {
+func (adm *AdminClient) GetConfigKV(ctx context.Context, key string) ([]byte, error) {
 	v := url.Values{}
 	v.Set("key", key)
 
@@ -100,10 +100,5 @@ func (adm *AdminClient) GetConfigKV(ctx context.Context, key string) (Targets, e
 		return nil, httpRespToErrorResponse(resp)
 	}
 
-	data, err := DecryptData(adm.getSecretKey(), resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	return ParseSubSysTarget(data)
+	return DecryptData(adm.getSecretKey(), resp.Body)
 }

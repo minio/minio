@@ -559,42 +559,39 @@ func (ies *IAMEtcdStore) deleteGroupInfo(name string) error {
 }
 
 func (ies *IAMEtcdStore) watch(ctx context.Context, sys *IAMSys) {
-	watchEtcd := func() {
-		for {
-		outerLoop:
-			// Refresh IAMSys with etcd watch.
-			watchCh := ies.client.Watch(ctx,
-				iamConfigPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+	for {
+	outerLoop:
+		// Refresh IAMSys with etcd watch.
+		watchCh := ies.client.Watch(ctx,
+			iamConfigPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
 
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case watchResp, ok := <-watchCh:
-					if !ok {
-						time.Sleep(1 * time.Second)
-						// Upon an error on watch channel
-						// re-init the watch channel.
-						goto outerLoop
-					}
-					if err := watchResp.Err(); err != nil {
-						logger.LogIf(ctx, err)
-						// log and retry.
-						time.Sleep(1 * time.Second)
-						// Upon an error on watch channel
-						// re-init the watch channel.
-						goto outerLoop
-					}
-					for _, event := range watchResp.Events {
-						ies.lock()
-						ies.reloadFromEvent(sys, event)
-						ies.unlock()
-					}
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case watchResp, ok := <-watchCh:
+				if !ok {
+					time.Sleep(1 * time.Second)
+					// Upon an error on watch channel
+					// re-init the watch channel.
+					goto outerLoop
+				}
+				if err := watchResp.Err(); err != nil {
+					logger.LogIf(ctx, err)
+					// log and retry.
+					time.Sleep(1 * time.Second)
+					// Upon an error on watch channel
+					// re-init the watch channel.
+					goto outerLoop
+				}
+				for _, event := range watchResp.Events {
+					ies.lock()
+					ies.reloadFromEvent(sys, event)
+					ies.unlock()
 				}
 			}
 		}
 	}
-	go watchEtcd()
 }
 
 // sys.RLock is held by caller.

@@ -93,7 +93,7 @@ func (c *ChecksumInfo) UnmarshalJSON(data []byte) error {
 	}
 
 	if !c.Algorithm.Available() {
-		logger.LogIf(context.Background(), errBitrotHashAlgoInvalid)
+		logger.LogIf(GlobalContext, errBitrotHashAlgoInvalid)
 		return errBitrotHashAlgoInvalid
 	}
 	return nil

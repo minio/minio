@@ -353,13 +353,6 @@ func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, userType IAMUs
 	return nil
 }
 
-// Load - loads iam subsystem
-func (sys *IAMSys) Load(ctx context.Context) error {
-	// Pass nil objectlayer here - it will be loaded internally
-	// from the IAMStorageAPI.
-	return sys.store.loadAll(ctx, sys)
-}
-
 // Perform IAM configuration migration.
 func (sys *IAMSys) doIAMConfigMigration(ctx context.Context) error {
 	return sys.store.migrateBackendFormat(ctx)
@@ -386,12 +379,12 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) error {
 		return err
 	}
 
-	sys.store.watch(ctx, sys)
 	err := sys.store.loadAll(ctx, sys)
 
 	// Invalidate the old cred after finishing IAM initialization
 	globalOldCred = auth.Credentials{}
 
+	go sys.store.watch(ctx, sys)
 	return err
 }
 
@@ -689,9 +682,16 @@ func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
 	defer sys.store.runlock()
 
 	if sys.usersSysType != MinIOUsersSysType {
+		// If the user has a mapped policy or is a member of a group, we
+		// return that info. Otherwise we return error.
+		mappedPolicy, ok1 := sys.iamUserPolicyMap[name]
+		memberships, ok2 := sys.iamUserGroupMemberships[name]
+		if !ok1 && !ok2 {
+			return u, errNoSuchUser
+		}
 		return madmin.UserInfo{
-			PolicyName: sys.iamUserPolicyMap[name].Policy,
-			MemberOf:   sys.iamUserGroupMemberships[name].ToSlice(),
+			PolicyName: mappedPolicy.Policy,
+			MemberOf:   memberships.ToSlice(),
 		}, nil
 	}
 
@@ -1048,7 +1048,7 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 		// mapped policy.
 		err := sys.store.deleteMappedPolicy(group, regularUser, true)
 		// No-mapped-policy case is ignored.
-		if err != nil && err != errConfigNotFound {
+		if err != nil && err != errNoSuchPolicy {
 			return err
 		}
 		err = sys.store.deleteGroupInfo(group)
@@ -1183,9 +1183,7 @@ func (sys *IAMSys) ListGroups() (r []string, err error) {
 	return r, nil
 }
 
-// PolicyDBSet - sets a policy for a user or group in the
-// PolicyDB. This function applies only long-term users. For STS
-// users, policy is set directly by called sys.policyDBSet().
+// PolicyDBSet - sets a policy for a user or group in the PolicyDB.
 func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
 	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil || sys == nil || sys.store == nil {
@@ -1195,8 +1193,6 @@ func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	// isSTS is always false when called via PolicyDBSet as policy
-	// is never set by an external API call for STS users.
 	return sys.policyDBSet(name, policy, regularUser, isGroup)
 }
 

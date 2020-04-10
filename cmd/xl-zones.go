@@ -88,7 +88,7 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 		}
 	}
 	if !z.SingleZone() {
-		z.quickHealBuckets(context.Background())
+		z.quickHealBuckets(GlobalContext)
 	}
 	go intDataUpdateTracker.start(GlobalContext, localDrives...)
 
@@ -336,7 +336,7 @@ func undoMakeBucketZones(bucket string, zones []*xlSets, errs []error) {
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return zones[index].DeleteBucket(context.Background(), bucket, false)
+				return zones[index].DeleteBucket(GlobalContext, bucket, false)
 			}
 			return nil
 		}, index)
@@ -1296,7 +1296,7 @@ func undoDeleteBucketZones(bucket string, zones []*xlSets, errs []error) {
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return zones[index].MakeBucketWithLocation(context.Background(), bucket, "")
+				return zones[index].MakeBucketWithLocation(GlobalContext, bucket, "")
 			}
 			return nil
 		}, index)
