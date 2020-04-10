@@ -49,9 +49,11 @@ import (
 	minio "github.com/minio/minio/cmd"
 )
 
-var azureUploadChunkSize = getUploadChunkSizeFromEnv("MINIO_AZURE_CHUNK_SIZE_MB", azureDefaultUploadChunkSize)
-var azureSdkTimeout = time.Duration(azureUploadChunkSize/humanize.MiByte) * 60 * time.Second
-var azureUploadConcurrency = azureUploadMaxMemoryUsage / azureUploadChunkSize
+var (
+	azureUploadChunkSize   = getUploadChunkSizeFromEnv(azureChunkSizeEnvVar, azureDefaultUploadChunkSize)
+	azureSdkTimeout        = time.Duration(azureUploadChunkSize/humanize.MiByte) * 60 * time.Second
+	azureUploadConcurrency = azureUploadMaxMemoryUsage / azureUploadChunkSize
+)
 
 const (
 	// The defaultDialTimeout for communicating with the cloud backends is set
@@ -62,6 +64,7 @@ const (
 	// To change the upload chunk size, set the environmental variable MINIO_AZURE_CHUNK_SIZE_MB with a (float) value between 0 and 100
 	azureDefaultUploadChunkSize = 0.25 * humanize.MiByte
 	azureUploadMaxMemoryUsage   = 10 * humanize.MiByte
+	azureChunkSizeEnvVar        = "MINIO_AZURE_CHUNK_SIZE_MB"
 
 	azureDownloadRetryAttempts = 5
 	azureBlockSize             = 100 * humanize.MiByte
@@ -131,16 +134,26 @@ func azureGatewayMain(ctx *cli.Context) {
 	minio.StartGateway(ctx, &Azure{host})
 }
 
+// getUploadChunkSizeFromEnv returns the parsed chunk size from the environmental variable 'MINIO_AZURE_CHUNK_SIZE_MB'
+// The environmental variable should be a floating point number between 0 and 100 representing the MegaBytes
+// The returned value is an int representing the size in bytes
 func getUploadChunkSizeFromEnv(envvar string, defaultValue int) int {
 	envChunkSize := os.Getenv(envvar)
+	if len(envChunkSize) == 0 {
+		return defaultValue
+	}
+
 	i, err := strconv.ParseFloat(envChunkSize, 64)
 	if err != nil {
+		logger.LogIf(context.Background(), err)
 		return defaultValue
 	}
+
 	if i <= 0 || i > 100 {
-		// Value too large/small, ignored
+		logger.LogIf(context.Background(), fmt.Errorf("The environmental variable '%v' should be a floating point value between 0 and 100. The upload chunk size is set to the default: %g", azureChunkSizeEnvVar, float64(defaultValue)/humanize.MiByte))
 		return defaultValue
 	}
+
 	return int(i * humanize.MiByte)
 }
 
