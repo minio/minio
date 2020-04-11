@@ -252,31 +252,31 @@ func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan str
 
 	var store Store
 
-	if args.QueueDir != "" {
+	target := &ElasticsearchTarget{
+		id:   event.TargetID{ID: id, Name: "elasticsearch"},
+		args: args,
+	}
+
+	if args.QueueDir != "" && !test {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-elasticsearch-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
-			return nil, oErr
+			return target, oErr
 		}
+		target.store = store
 	}
 
 	dErr := args.URL.DialHTTP(nil)
 	if dErr != nil {
 		if store == nil {
-			return nil, dErr
+			return target, dErr
 		}
 	} else {
 		client, err = newClient(args)
 		if err != nil {
-			return nil, err
+			return target, err
 		}
-	}
-
-	target := &ElasticsearchTarget{
-		id:     event.TargetID{ID: id, Name: "elasticsearch"},
-		args:   args,
-		client: client,
-		store:  store,
+		target.client = client
 	}
 
 	if target.store != nil && !test {

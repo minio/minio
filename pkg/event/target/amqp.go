@@ -275,28 +275,28 @@ func NewAMQPTarget(id string, args AMQPArgs, doneCh <-chan struct{}, loggerOnce 
 
 	var store Store
 
-	if args.QueueDir != "" {
+	target := &AMQPTarget{
+		id:         event.TargetID{ID: id, Name: "amqp"},
+		args:       args,
+		loggerOnce: loggerOnce,
+	}
+
+	if args.QueueDir != "" && !test {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-amqp-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
-			return nil, oErr
+			return target, oErr
 		}
+		target.store = store
 	}
 
 	conn, err = amqp.Dial(args.URL.String())
 	if err != nil {
 		if store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
-			return nil, err
+			return target, err
 		}
 	}
-
-	target := &AMQPTarget{
-		id:         event.TargetID{ID: id, Name: "amqp"},
-		args:       args,
-		conn:       conn,
-		store:      store,
-		loggerOnce: loggerOnce,
-	}
+	target.conn = conn
 
 	if target.store != nil && !test {
 		// Replays the events from the store.

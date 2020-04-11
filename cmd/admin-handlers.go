@@ -1454,10 +1454,12 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 func fetchLambdaInfo(cfg config.Config) []map[string][]madmin.TargetIDStatus {
 
 	// Fetch the targets
-	targetList, err := notify.RegisterNotificationTargets(cfg, GlobalServiceDoneCh, NewGatewayHTTPTransport(), nil, true)
+	targetList, err := notify.FetchRegisteredTargets(cfg, GlobalServiceDoneCh, NewGatewayHTTPTransport(), true, false)
 	if err != nil {
+		logger.LogIf(GlobalContext, err)
 		return nil
 	}
+
 	lambdaMap := make(map[string][]madmin.TargetIDStatus)
 
 	for targetID, target := range targetList.TargetMap() {

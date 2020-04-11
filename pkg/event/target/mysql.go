@@ -187,6 +187,13 @@ func (target *MySQLTarget) ID() event.TargetID {
 
 // IsActive - Return true if target is up and active
 func (target *MySQLTarget) IsActive() (bool, error) {
+	if target.db == nil {
+		db, sErr := sql.Open("mysql", target.args.DSN)
+		if sErr != nil {
+			return false, sErr
+		}
+		target.db = db
+	}
 	if err := target.db.Ping(); err != nil {
 		if IsConnErr(err) {
 			return false, errNotConnected
@@ -346,7 +353,6 @@ func (target *MySQLTarget) executeStmts() error {
 
 // NewMySQLTarget - creates new MySQL target.
 func NewMySQLTarget(id string, args MySQLArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*MySQLTarget, error) {
-	var firstPing bool
 	if args.DSN == "" {
 		config := mysql.Config{
 			User:                 args.User,
@@ -360,37 +366,37 @@ func NewMySQLTarget(id string, args MySQLArgs, doneCh <-chan struct{}, loggerOnc
 		args.DSN = config.FormatDSN()
 	}
 
-	db, err := sql.Open("mysql", args.DSN)
-	if err != nil {
-		return nil, err
-	}
-
-	var store Store
-
-	if args.QueueDir != "" {
-		queueDir := filepath.Join(args.QueueDir, storePrefix+"-mysql-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if oErr := store.Open(); oErr != nil {
-			return nil, oErr
-		}
-	}
-
 	target := &MySQLTarget{
 		id:        event.TargetID{ID: id, Name: "mysql"},
 		args:      args,
-		db:        db,
-		store:     store,
-		firstPing: firstPing,
+		firstPing: false,
+	}
+
+	db, err := sql.Open("mysql", args.DSN)
+	if err != nil {
+		return target, err
+	}
+	target.db = db
+
+	var store Store
+
+	if args.QueueDir != "" && !test {
+		queueDir := filepath.Join(args.QueueDir, storePrefix+"-mysql-"+id)
+		store = NewQueueStore(queueDir, args.QueueLimit)
+		if oErr := store.Open(); oErr != nil {
+			return target, oErr
+		}
+		target.store = store
 	}
 
 	err = target.db.Ping()
 	if err != nil {
 		if target.store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
-			return nil, err
+			return target, err
 		}
 	} else {
 		if err = target.executeStmts(); err != nil {
-			return nil, err
+			return target, err
 		}
 		target.firstPing = true
 	}

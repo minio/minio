@@ -93,6 +93,7 @@ type NSQTarget struct {
 	args     NSQArgs
 	producer *nsq.Producer
 	store    Store
+	config   *nsq.Config
 }
 
 // ID - returns target ID.
@@ -102,6 +103,14 @@ func (target *NSQTarget) ID() event.TargetID {
 
 // IsActive - Return true if target is up and active
 func (target *NSQTarget) IsActive() (bool, error) {
+	if target.producer != nil {
+		producer, err := nsq.NewProducer(target.args.NSQDAddress.String(), target.config)
+		if err != nil {
+			return false, err
+		}
+		target.producer = producer
+	}
+
 	if err := target.producer.Ping(); err != nil {
 		// To treat "connection refused" errors as errNotConnected.
 		if IsConnRefusedErr(err) {
@@ -186,25 +195,26 @@ func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce fu
 
 	var store Store
 
-	if args.QueueDir != "" {
+	target := &NSQTarget{
+		id:     event.TargetID{ID: id, Name: "nsq"},
+		args:   args,
+		config: config,
+	}
+
+	if args.QueueDir != "" && !test {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-nsq-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
 			return nil, oErr
 		}
+		target.store = store
 	}
 
 	producer, err := nsq.NewProducer(args.NSQDAddress.String(), config)
 	if err != nil {
-		return nil, err
+		return target, err
 	}
-
-	target := &NSQTarget{
-		id:       event.TargetID{ID: id, Name: "nsq"},
-		args:     args,
-		producer: producer,
-		store:    store,
-	}
+	target.producer = producer
 
 	if err := target.producer.Ping(); err != nil {
 		// To treat "connection refused" errors as errNotConnected.

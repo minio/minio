@@ -195,21 +195,21 @@ func NewWebhookTarget(id string, args WebhookArgs, doneCh <-chan struct{}, logge
 
 	var store Store
 
-	if args.QueueDir != "" {
-		queueDir := filepath.Join(args.QueueDir, storePrefix+"-webhook-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if err := store.Open(); err != nil {
-			return nil, err
-		}
-	}
-
 	target := &WebhookTarget{
 		id:   event.TargetID{ID: id, Name: "webhook"},
 		args: args,
 		httpClient: &http.Client{
 			Transport: transport,
 		},
-		store: store,
+	}
+
+	if args.QueueDir != "" && !test {
+		queueDir := filepath.Join(args.QueueDir, storePrefix+"-webhook-"+id)
+		store = NewQueueStore(queueDir, args.QueueLimit)
+		if err := store.Open(); err != nil {
+			return target, err
+		}
+		target.store = store
 	}
 
 	if target.store != nil && !test {

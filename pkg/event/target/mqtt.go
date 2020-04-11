@@ -254,11 +254,11 @@ func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce 
 		}
 	}
 
-	if args.QueueDir != "" {
+	if args.QueueDir != "" && !test {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-mqtt-"+id)
 		target.store = NewQueueStore(queueDir, args.QueueLimit)
 		if err := target.store.Open(); err != nil {
-			return nil, err
+			return target, err
 		}
 
 		if !test {
@@ -270,7 +270,7 @@ func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce 
 		}
 	} else {
 		if token.Wait() && token.Error() != nil {
-			return nil, token.Error()
+			return target, token.Error()
 		}
 	}
 	return target, nil

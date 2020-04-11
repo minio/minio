@@ -65,7 +65,32 @@ func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport
 // * Add a new target in pkg/event/target package.
 // * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
 // * Handle the configuration in this function to create/add into TargetList.
-func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool) (_ *event.TargetList, err error) {
+func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool) (*event.TargetList, error) {
+
+	targetList, err := FetchRegisteredTargets(cfg, doneCh, transport, test, true)
+	if err != nil {
+		return targetList, err
+	}
+
+	if test {
+		// Verify if user is trying to disable already configured
+		// notification targets, based on their target IDs
+		for _, targetID := range targetIDs {
+			if !targetList.Exists(targetID) {
+				return nil, config.Errorf(
+					"Unable to disable configured targets '%v'",
+					targetID)
+			}
+		}
+	}
+
+	return targetList, nil
+}
+
+// FetchRegisteredTargets - Returns a set of configured TargetList
+// If `returnOnTargetError` is set to true, The function returns when a target initialization fails
+// Else, the function will return a complete TargetList irrespective of errors
+func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, test bool, returnOnTargetError bool) (_ *event.TargetList, err error) {
 	targetList := event.NewTargetList()
 
 	defer func() {
@@ -136,10 +161,10 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 			continue
 		}
 		newTarget, err := target.NewAMQPTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil {
+		if err != nil && returnOnTargetError {
 			return nil, err
 		}
-		if err = targetList.Add(newTarget); err != nil {
+		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
 			return nil, err
 		}
 	}
@@ -149,11 +174,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 			continue
 		}
 		newTarget, err := target.NewElasticsearchTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil {
+		if err != nil && returnOnTargetError {
 			return nil, err
 
 		}
-		if err = targetList.Add(newTarget); err != nil {
+		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
 			return nil, err
 		}
 	}
@@ -164,10 +189,10 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		}
 		args.TLS.RootCAs = transport.TLSClientConfig.RootCAs
 		newTarget, err := target.NewKafkaTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil {
+		if err != nil && returnOnTargetError {
 			return nil, err
 		}
-		if err = targetList.Add(newTarget); err != nil {
+		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
 			return nil, err
 		}
 	}
@@ -178,10 +203,10 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		}
 		args.RootCAs = transport.TLSClientConfig.RootCAs
 		newTarget, err := target.NewMQTTTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil {
+		if err != nil && returnOnTargetError {
 			return nil, err
 		}
-		if err = targetList.Add(newTarget); err != nil {
+		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
 			return nil, err
 		}
 	}
@@ -191,10 +216,10 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 			continue
 		}
 		newTarget, err := target.NewMySQLTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil {
+		if err != nil && returnOnTargetError {
 			return nil, err
 		}
-		if err = targetList.Add(newTarget); err != nil {
+		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
 			return nil, err
 		}
 	}
@@ -204,10 +229,10 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 			continue
 		}
 		newTarget, err := target.NewNATSTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil {
+		if err != nil && returnOnTargetError {
 			return nil, err
 		}
-		if err = targetList.Add(newTarget); err != nil {
+		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
 			return nil, err
 		}
 	}
@@ -217,10 +242,10 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 			continue
 		}
 		newTarget, err := target.NewNSQTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil {
+		if err != nil && returnOnTargetError {
 			return nil, err
 		}
-		if err = targetList.Add(newTarget); err != nil {
+		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
 			return nil, err
 		}
 	}
@@ -230,10 +255,10 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 			continue
 		}
 		newTarget, err := target.NewPostgreSQLTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil {
+		if err != nil && returnOnTargetError {
 			return nil, err
 		}
-		if err = targetList.Add(newTarget); err != nil {
+		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
 			return nil, err
 		}
 	}
@@ -243,10 +268,10 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 			continue
 		}
 		newTarget, err := target.NewRedisTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil {
+		if err != nil && returnOnTargetError {
 			return nil, err
 		}
-		if err = targetList.Add(newTarget); err != nil {
+		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
 			return nil, err
 		}
 	}
@@ -256,23 +281,11 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 			continue
 		}
 		newTarget, err := target.NewWebhookTarget(id, args, doneCh, logger.LogOnceIf, transport, test)
-		if err != nil {
+		if err != nil && returnOnTargetError {
 			return nil, err
 		}
-		if err := targetList.Add(newTarget); err != nil {
+		if err := targetList.Add(newTarget); err != nil && returnOnTargetError {
 			return nil, err
-		}
-	}
-
-	if test {
-		// Verify if user is trying to disable already configured
-		// notification targets, based on their target IDs
-		for _, targetID := range targetIDs {
-			if !targetList.Exists(targetID) {
-				return nil, config.Errorf(
-					"Unable to disable configured targets '%v'",
-					targetID)
-			}
 		}
 	}
 

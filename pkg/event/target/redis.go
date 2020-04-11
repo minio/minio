@@ -286,20 +286,20 @@ func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}, loggerOnc
 
 	var store Store
 
-	if args.QueueDir != "" {
-		queueDir := filepath.Join(args.QueueDir, storePrefix+"-redis-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if oErr := store.Open(); oErr != nil {
-			return nil, oErr
-		}
-	}
-
 	target := &RedisTarget{
 		id:         event.TargetID{ID: id, Name: "redis"},
 		args:       args,
 		pool:       pool,
-		store:      store,
 		loggerOnce: loggerOnce,
+	}
+
+	if args.QueueDir != "" && !test {
+		queueDir := filepath.Join(args.QueueDir, storePrefix+"-redis-"+id)
+		store = NewQueueStore(queueDir, args.QueueLimit)
+		if oErr := store.Open(); oErr != nil {
+			return target, oErr
+		}
+		target.store = store
 	}
 
 	conn := target.pool.Get()
@@ -311,11 +311,11 @@ func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}, loggerOnc
 	_, pingErr := conn.Do("PING")
 	if pingErr != nil {
 		if target.store == nil || !(IsConnRefusedErr(pingErr) || IsConnResetErr(pingErr)) {
-			return nil, pingErr
+			return target, pingErr
 		}
 	} else {
 		if err := target.args.validateFormat(conn); err != nil {
-			return nil, err
+			return target, err
 		}
 		target.firstPing = true
 	}

@@ -248,10 +248,15 @@ func (k KafkaArgs) pingBrokers() bool {
 func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*KafkaTarget, error) {
 	config := sarama.NewConfig()
 
+	target := &KafkaTarget{
+		id:   event.TargetID{ID: id, Name: "kafka"},
+		args: args,
+	}
+
 	if args.Version != "" {
 		kafkaVersion, err := sarama.ParseKafkaVersion(args.Version)
 		if err != nil {
-			return nil, err
+			return target, err
 		}
 		config.Version = kafkaVersion
 	}
@@ -273,7 +278,7 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 	tlsConfig, err := saramatls.NewConfig(args.TLS.ClientTLSCert, args.TLS.ClientTLSKey)
 
 	if err != nil {
-		return nil, err
+		return target, err
 	}
 
 	config.Net.TLS.Enable = args.TLS.Enable
@@ -286,6 +291,8 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 	config.Producer.Retry.Max = 10
 	config.Producer.Return.Successes = true
 
+	target.config = config
+
 	brokers := []string{}
 	for _, broker := range args.Brokers {
 		brokers = append(brokers, broker.String())
@@ -293,28 +300,22 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 
 	var store Store
 
-	if args.QueueDir != "" {
+	if args.QueueDir != "" && !test {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-kafka-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
-			return nil, oErr
+			return target, oErr
 		}
+		target.store = store
 	}
 
 	producer, err := sarama.NewSyncProducer(brokers, config)
 	if err != nil {
 		if store == nil || err != sarama.ErrOutOfBrokers {
-			return nil, err
+			return target, err
 		}
 	}
-
-	target := &KafkaTarget{
-		id:       event.TargetID{ID: id, Name: "kafka"},
-		args:     args,
-		producer: producer,
-		config:   config,
-		store:    store,
-	}
+	target.producer = producer
 
 	if target.store != nil && !test {
 		// Replays the events from the store.
