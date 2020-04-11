@@ -993,7 +993,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				return
 			}
 
-			pReader = NewPutObjReader(rawReader, srcInfo.Reader, &objEncKey)
+			if isTargetEncrypted {
+				pReader = NewPutObjReader(rawReader, srcInfo.Reader, &objEncKey)
+			}
 		}
 	}
 
