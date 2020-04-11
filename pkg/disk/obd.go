@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"runtime"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -52,8 +51,7 @@ type Throughput struct {
 }
 
 // GetOBDInfo about the drive
-func GetOBDInfo(ctx context.Context, drive string, fsPath string) (Latency, Throughput, error) {
-	runtime.LockOSThread()
+func GetOBDInfo(ctx context.Context, drive, fsPath string) (Latency, Throughput, error) {
 
 	// Create a file with O_DIRECT flag, choose default umask and also make sure
 	// we are exclusively writing to a new file using O_EXCL.
@@ -95,8 +93,6 @@ func GetOBDInfo(ctx context.Context, drive string, fsPath string) (Latency, Thro
 		latencyInSecs := time.Since(startTime).Seconds()
 		latencies[i] = float64(latencyInSecs)
 	}
-
-	runtime.UnlockOSThread()
 
 	for i := range latencies {
 		throughput := float64(blockSize) / latencies[i]
