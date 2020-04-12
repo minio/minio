@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"strings"
 	"sync"
 
 	xhttp "github.com/minio/minio/cmd/http"
@@ -490,15 +489,10 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 		opts.UserDefined = make(map[string]string)
 	}
 
-	meta := make(map[string]string)
-	for k, v := range opts.UserDefined {
-		meta[strings.ToLower(k)] = v
-	}
-
 	storageDisks := xl.getDisks()
 
 	// Get parity and data drive count based on storage class metadata
-	parityDrives := globalStorageClass.GetParityForSC(meta[xhttp.AmzStorageClass])
+	parityDrives := globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
 	if parityDrives == 0 {
 		parityDrives = getDefaultParityBlocks(len(storageDisks))
 	}
@@ -534,7 +528,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 
-		return dirObjectInfo(bucket, object, data.Size(), meta), nil
+		return dirObjectInfo(bucket, object, data.Size(), opts.UserDefined), nil
 	}
 
 	// Validate input data size and it can never be less than zero.
@@ -625,11 +619,11 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// Save additional erasureMetadata.
 	modTime := UTCNow()
 
-	meta["etag"] = r.MD5CurrentHexString()
+	opts.UserDefined["etag"] = r.MD5CurrentHexString()
 
 	// Guess content-type from the extension if possible.
-	if meta["content-type"] == "" {
-		meta["content-type"] = mimedb.TypeByExtension(path.Ext(object))
+	if opts.UserDefined["content-type"] == "" {
+		opts.UserDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
 	}
 
 	if xl.isObject(bucket, object) {
@@ -658,7 +652,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// Fill all the necessary metadata.
 	// Update `xl.json` content on each disks.
 	for index := range partsMetadata {
-		partsMetadata[index].Meta = meta
+		partsMetadata[index].Meta = opts.UserDefined
 		partsMetadata[index].Stat.Size = n
 		partsMetadata[index].Stat.ModTime = modTime
 	}

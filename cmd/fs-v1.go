@@ -894,7 +894,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	// No metadata is set, allocate a new one.
 	meta := make(map[string]string)
 	for k, v := range opts.UserDefined {
-		meta[strings.ToLower(k)] = v
+		meta[k] = v
 	}
 	var err error
 

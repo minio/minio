@@ -57,9 +57,9 @@ const (
 	AmzStorageClass = "x-amz-storage-class"
 
 	// S3 object tagging
-	AmzObjectTagging = "x-amz-tagging"
-	AmzTagCount      = "x-amz-tag-count"
-	AmzTagDirective  = "x-amz-tagging-directive"
+	AmzObjectTagging = "X-Amz-Tagging"
+	AmzTagCount      = "X-Amz-Tag-Count"
+	AmzTagDirective  = "X-Amz-Tagging-Directive"
 
 	// S3 extensions
 	AmzCopySourceIfModifiedSince   = "x-amz-copy-source-if-modified-since"
@@ -72,10 +72,10 @@ const (
 	AmzCopySourceVersionID        = "X-Amz-Copy-Source-Version-Id"
 	AmzCopySourceRange            = "X-Amz-Copy-Source-Range"
 	AmzMetadataDirective          = "X-Amz-Metadata-Directive"
-	AmzObjectLockMode             = "x-amz-object-lock-mode"
-	AmzObjectLockRetainUntilDate  = "x-amz-object-lock-retain-until-date"
-	AmzObjectLockLegalHold        = "x-amz-object-lock-legal-hold"
-	AmzObjectLockBypassGovernance = "x-amz-bypass-governance-retention"
+	AmzObjectLockMode             = "X-Amz-Object-Lock-Mode"
+	AmzObjectLockRetainUntilDate  = "X-Amz-Object-Lock-Retain-Until-Date"
+	AmzObjectLockLegalHold        = "X-Amz-Object-Lock-Legal-Hold"
+	AmzObjectLockBypassGovernance = "X-Amz-Bypass-Governance-Retention"
 
 	// Multipart parts count
 	AmzMpPartsCount = "x-amz-mp-parts-count"
