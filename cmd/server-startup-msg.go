@@ -252,7 +252,7 @@ func getStorageInfoMsgSafeMode(storageInfo StorageInfo) string {
 	var mcMessage string
 	if storageInfo.Backend.Type == BackendErasure {
 		if storageInfo.Backend.OfflineDisks.Sum() > 0 {
-			mcMessage = "Use `mc admin info` to look for latest server/disk info`"
+			mcMessage = "Use `mc admin info` to look for latest server/disk info\n"
 		}
 		diskInfo := fmt.Sprintf(" %d Online, %d Offline. ", storageInfo.Backend.OnlineDisks.Sum(), storageInfo.Backend.OfflineDisks.Sum())
 		msg += color.Red("Status:") + fmt.Sprintf(getFormatStr(len(diskInfo), 8), diskInfo)
@@ -269,7 +269,7 @@ func getStorageInfoMsg(storageInfo StorageInfo) string {
 	var mcMessage string
 	if storageInfo.Backend.Type == BackendErasure {
 		if storageInfo.Backend.OfflineDisks.Sum() > 0 {
-			mcMessage = "Use `mc admin info` to look for latest server/disk info"
+			mcMessage = "Use `mc admin info` to look for latest server/disk info\n"
 		}
 
 		diskInfo := fmt.Sprintf(" %d Online, %d Offline. ", storageInfo.Backend.OnlineDisks.Sum(), storageInfo.Backend.OfflineDisks.Sum())
