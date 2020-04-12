@@ -80,16 +80,16 @@ func getLocalDrivesOBD(ctx context.Context, parallel bool, endpointZones Endpoin
 					})
 					continue
 				}
+				measurePath := pathJoin(minioMetaTmpBucket, mustGetUUID())
 				measure := func(index int, path string) {
-					latency, throughput, err := disk.GetOBDInfo(ctx, pathJoin(endpoint.Path, minioMetaTmpBucket, mustGetUUID()))
-					driveOBDInfo := madmin.DriveOBDInfo{
-						Path:       path,
-						Latency:    latency,
-						Throughput: throughput,
-					}
+					var driveOBDInfo madmin.DriveOBDInfo
+					latency, throughput, err := disk.GetOBDInfo(ctx, path, pathJoin(path, measurePath))
 					if err != nil {
 						driveOBDInfo.Error = err.Error()
 					}
+					driveOBDInfo.Path = path
+					driveOBDInfo.Latency = latency
+					driveOBDInfo.Throughput = throughput
 					drivesOBDInfo = append(drivesOBDInfo, driveOBDInfo)
 					wg.Done()
 				}

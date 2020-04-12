@@ -24,12 +24,7 @@ const (
 )
 
 const (
-	peerRESTMethodNetReadPerfInfo              = "/netreadperfinfo"
-	peerRESTMethodCollectNetPerfInfo           = "/collectnetperfinfo"
 	peerRESTMethodServerInfo                   = "/serverinfo"
-	peerRESTMethodCPULoadInfo                  = "/cpuloadinfo"
-	peerRESTMethodMemUsageInfo                 = "/memusageinfo"
-	peerRESTMethodDrivePerfInfo                = "/driveperfinfo"
 	peerRESTMethodDriveOBDInfo                 = "/driveobdinfo"
 	peerRESTMethodNetOBDInfo                   = "/netobdinfo"
 	peerRESTMethodCPUOBDInfo                   = "/cpuobdinfo"
@@ -66,8 +61,6 @@ const (
 	peerRESTMethodBucketEncryptionSet          = "/setbucketencryption"
 	peerRESTMethodBucketEncryptionRemove       = "/removebucketencryption"
 	peerRESTMethodLog                          = "/log"
-	peerRESTMethodHardwareCPUInfo              = "/cpuhardwareinfo"
-	peerRESTMethodHardwareNetworkInfo          = "/networkhardwareinfo"
 	peerRESTMethodPutBucketObjectLockConfig    = "/putbucketobjectlockconfig"
 	peerRESTMethodBucketObjectLockConfigRemove = "/removebucketobjectlockconfig"
 )

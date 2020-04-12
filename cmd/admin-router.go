@@ -56,8 +56,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 		// Info operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/info").HandlerFunc(httpTraceAll(adminAPI.ServerInfoHandler))
-		// Harware Info operations
-		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/hardware").HandlerFunc(httpTraceAll(adminAPI.ServerHardwareInfoHandler)).Queries("hwType", "{hwType:.*}")
 
 		// StorageInfo operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/storageinfo").HandlerFunc(httpTraceAll(adminAPI.StorageInfoHandler))
@@ -79,8 +77,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 			/// Health operations
 
 		}
-		// Performance command - return performance details based on input type
-		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/performance").HandlerFunc(httpTraceAll(adminAPI.PerfInfoHandler)).Queries("perfType", "{perfType:.*}")
 
 		// Profiling operations
 		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/profiling/start").HandlerFunc(httpTraceAll(adminAPI.StartProfilingHandler)).
