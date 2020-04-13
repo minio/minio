@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -219,7 +218,7 @@ func pathJoin(elem ...string) string {
 func mustGetUUID() string {
 	uuid, err := uuid.New()
 	if err != nil {
-		logger.CriticalIf(context.Background(), err)
+		logger.CriticalIf(GlobalContext, err)
 	}
 
 	return uuid.String()
@@ -774,16 +773,13 @@ func (p *PutObjReader) MD5CurrentHexString() string {
 // NewPutObjReader returns a new PutObjReader and holds
 // reference to underlying data stream from client and the encrypted
 // data reader
-func NewPutObjReader(rawReader *hash.Reader, encReader *hash.Reader, encKey []byte) *PutObjReader {
+func NewPutObjReader(rawReader *hash.Reader, encReader *hash.Reader, key *crypto.ObjectKey) *PutObjReader {
 	p := PutObjReader{Reader: rawReader, rawReader: rawReader}
 
-	if len(encKey) != 0 && encReader != nil {
-		var objKey crypto.ObjectKey
-		copy(objKey[:], encKey)
-		p.sealMD5Fn = sealETagFn(objKey)
+	if key != nil && encReader != nil {
+		p.sealMD5Fn = sealETagFn(*key)
 		p.Reader = encReader
 	}
-
 	return &p
 }
 

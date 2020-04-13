@@ -256,6 +256,78 @@ func TestDecryptObjectInfo(t *testing.T) {
 	}
 }
 
+var decryptETagTests = []struct {
+	ObjectKey  crypto.ObjectKey
+	ObjectInfo ObjectInfo
+	ShouldFail bool
+	ETag       string
+}{
+	{
+		ObjectKey:  [32]byte{},
+		ObjectInfo: ObjectInfo{ETag: "20000f00f27834c9a2654927546df57f9e998187496394d4ee80f3d9978f85f3c7d81f72600cdbe03d80dc5a13d69354"},
+		ETag:       "8ad3fe6b84bf38489e95c701c84355b6",
+	},
+	{
+		ObjectKey:  [32]byte{},
+		ObjectInfo: ObjectInfo{ETag: "20000f00f27834c9a2654927546df57f9e998187496394d4ee80f3d9978f85f3c7d81f72600cdbe03d80dc5a13d6935"},
+		ETag:       "",
+		ShouldFail: true, // ETag is not a valid hex value
+	},
+	{
+		ObjectKey:  [32]byte{},
+		ObjectInfo: ObjectInfo{ETag: "00000f00f27834c9a2654927546df57f9e998187496394d4ee80f3d9978f85f3c7d81f72600cdbe03d80dc5a13d69354"},
+		ETag:       "",
+		ShouldFail: true, // modified ETag
+	},
+
+	// Special tests for ETags that end with a '-x'
+	{
+		ObjectKey:  [32]byte{},
+		ObjectInfo: ObjectInfo{ETag: "916516b396f0f4d4f2a0e7177557bec4-1"},
+		ETag:       "916516b396f0f4d4f2a0e7177557bec4-1",
+	},
+	{
+		ObjectKey:  [32]byte{},
+		ObjectInfo: ObjectInfo{ETag: "916516b396f0f4d4f2a0e7177557bec4-738"},
+		ETag:       "916516b396f0f4d4f2a0e7177557bec4-738",
+	},
+	{
+		ObjectKey:  [32]byte{},
+		ObjectInfo: ObjectInfo{ETag: "916516b396f0f4d4f2a0e7177557bec4-Q"},
+		ETag:       "",
+		ShouldFail: true, // Q is not a number
+	},
+	{
+		ObjectKey:  [32]byte{},
+		ObjectInfo: ObjectInfo{ETag: "16516b396f0f4d4f2a0e7177557bec4-1"},
+		ETag:       "",
+		ShouldFail: true, // ETag prefix is not a valid hex value
+	},
+	{
+		ObjectKey:  [32]byte{},
+		ObjectInfo: ObjectInfo{ETag: "16516b396f0f4d4f2a0e7177557bec4-1-2"},
+		ETag:       "",
+		ShouldFail: true, // ETag contains multiple: -
+	},
+}
+
+func TestDecryptETag(t *testing.T) {
+	for i, test := range decryptETagTests {
+		etag, err := DecryptETag(test.ObjectKey, test.ObjectInfo)
+		if err != nil && !test.ShouldFail {
+			t.Fatalf("Test %d: should succeed but failed: %v", i, err)
+		}
+		if err == nil && test.ShouldFail {
+			t.Fatalf("Test %d: should fail but succeeded", i)
+		}
+		if err == nil {
+			if etag != test.ETag {
+				t.Fatalf("Test %d: ETag mismatch: got %s - want %s", i, etag, test.ETag)
+			}
+		}
+	}
+}
+
 // Tests for issue reproduced when getting the right encrypted
 // offset of the object.
 func TestGetDecryptedRange_Issue50(t *testing.T) {

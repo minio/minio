@@ -18,8 +18,9 @@ package s3
 
 import (
 	"bytes"
-	"context"
 	"testing"
+
+	minio "github.com/minio/minio/cmd"
 )
 
 // Tests for GW metadata format validity.
@@ -62,7 +63,7 @@ func TestReadGWMetadata(t *testing.T) {
 
 	for i, tt := range tests {
 		buf := bytes.NewBufferString(tt.metaStr)
-		m, err := readGWMetadata(context.Background(), *buf)
+		m, err := readGWMetadata(minio.GlobalContext, *buf)
 		if err != nil && tt.pass {
 			t.Errorf("Test %d: Expected parse gw metadata to succeed, but failed, %s", i+1, err)
 		}

@@ -39,7 +39,7 @@ class PreviewObjectModal extends React.Component {
         onHide={hidePreviewModal}
         bsSize="large"
       >
-        <ModalHeader>Object Preview</ModalHeader>
+        <ModalHeader>Preview</ModalHeader>
         <ModalBody>
           <div className="input-group">
             {this.state.url && (

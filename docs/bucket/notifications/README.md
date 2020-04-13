@@ -38,9 +38,10 @@ notify_elasticsearch  publish bucket notifications to Elasticsearch endpoints
 notify_redis          publish bucket notifications to Redis datastores
 ```
 
-> NOTE: '\*' at the end of arg means its mandatory.  
-> NOTE: '\*' at the end of the values, means its the default value for the arg.  
-> NOTE: When configured using environment variables, the `:name` can be specified using this format `MINIO_NOTIFY_WEBHOOK_ENABLE_<name>`.
+> NOTE:
+> - '\*' at the end of arg means its mandatory.
+> - '\*' at the end of the values, means its the default value for the arg.
+> - When configured using environment variables, the `:name` can be specified using this format `MINIO_NOTIFY_WEBHOOK_ENABLE_<name>`.
 
 <a name="AMQP"></a>
 
@@ -829,14 +830,9 @@ KEY:
 notify_postgres[:name]  publish bucket notifications to Postgres databases
 
 ARGS:
-connection_string*  (string)             Postgres server connection-string
+connection_string*  (string)             Postgres server connection-string e.g. "host=localhost port=5432 dbname=minio_events user=postgres password=password sslmode=disable"
 table*              (string)             DB table name to store/update events, table is auto-created
 format*             (namespace*|access)  'namespace' reflects current bucket/object list and 'access' reflects a journal of object operations, defaults to 'namespace'
-host                (hostname)           Postgres server hostname (used only if `connection_string` is empty)
-port                (port)               Postgres server port, defaults to `5432` (used only if `connection_string` is empty)
-username            (string)             database username (used only if `connection_string` is empty)
-password            (string)             database password (used only if `connection_string` is empty)
-database            (string)             database name (used only if `connection_string` is empty)
 queue_dir           (path)               staging dir for undelivered messages e.g. '/home/events'
 queue_limit         (number)             maximum limit for undelivered messages, defaults to '10000'
 comment             (sentence)           optionally add a comment to this setting
@@ -849,14 +845,9 @@ notify_postgres[:name]  publish bucket notifications to Postgres databases
 
 ARGS:
 MINIO_NOTIFY_POSTGRES_ENABLE*             (on|off)             enable notify_postgres target, default is 'off'
-MINIO_NOTIFY_POSTGRES_CONNECTION_STRING*  (string)             Postgres server connection-string
+MINIO_NOTIFY_POSTGRES_CONNECTION_STRING*  (string)             Postgres server connection-string e.g. "host=localhost port=5432 dbname=minio_events user=postgres password=password sslmode=disable"
 MINIO_NOTIFY_POSTGRES_TABLE*              (string)             DB table name to store/update events, table is auto-created
 MINIO_NOTIFY_POSTGRES_FORMAT*             (namespace*|access)  'namespace' reflects current bucket/object list and 'access' reflects a journal of object operations, defaults to 'namespace'
-MINIO_NOTIFY_POSTGRES_HOST                (hostname)           Postgres server hostname (used only if `connection_string` is empty)
-MINIO_NOTIFY_POSTGRES_PORT                (port)               Postgres server port, defaults to `5432` (used only if `connection_string` is empty)
-MINIO_NOTIFY_POSTGRES_USERNAME            (string)             database username (used only if `connection_string` is empty)
-MINIO_NOTIFY_POSTGRES_PASSWORD            (string)             database password (used only if `connection_string` is empty)
-MINIO_NOTIFY_POSTGRES_DATABASE            (string)             database name (used only if `connection_string` is empty)
 MINIO_NOTIFY_POSTGRES_QUEUE_DIR           (path)               staging dir for undelivered messages e.g. '/home/events'
 MINIO_NOTIFY_POSTGRES_QUEUE_LIMIT         (number)             maximum limit for undelivered messages, defaults to '10000'
 MINIO_NOTIFY_POSTGRES_COMMENT             (sentence)           optionally add a comment to this setting
@@ -869,13 +860,13 @@ To update the configuration, use `mc admin config get` command to get the curren
 
 ```sh
 $ mc admin config get myminio notify_postgres
-notify_postgres:1 password="" port="" queue_dir="" connection_string="" host="" queue_limit="0"  table="" username="" database="" format="namespace"
+notify_postgres:1 queue_dir="" connection_string="" queue_limit="0"  table="" format="namespace"
 ```
 
 Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:postgresql` at start-up if there were no errors.
 
 ```sh
-$ mc admin config set myminio notify_postgres:1 password="password" port="5432" queue_dir="" connection_string="sslmode=disable" host="127.0.0.1" queue_limit="0"  table="bucketevents" username="postgres" database="minio_events" format="namespace"
+$ mc admin config set myminio notify_postgres:1 connection_string="host=localhost port=5432 dbname=minio_events user=postgres password=password sslmode=disable" table="bucketevents" format="namespace"
 ```
 
 Note that, you can add as many PostgreSQL server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the PostgreSQL instance and an object of per-server configuration parameters.
@@ -946,14 +937,9 @@ KEY:
 notify_mysql[:name]  publish bucket notifications to MySQL databases. When multiple MySQL server endpoints are needed, a user specified "name" can be added for each configuration, (e.g."notify_mysql:myinstance").
 
 ARGS:
-dsn_string*  (string)             MySQL data-source-name connection string
+dsn_string*  (string)             MySQL data-source-name connection string e.g. "<user>:<password>@tcp(<host>:<port>)/<database>"
 table*       (string)             DB table name to store/update events, table is auto-created
 format*      (namespace*|access)  'namespace' reflects current bucket/object list and 'access' reflects a journal of object operations, defaults to 'namespace'
-host         (hostname)           MySQL server hostname (used only if `dsn_string` is empty)
-port         (port)               MySQL server port (used only if `dsn_string` is empty)
-username     (string)             database username (used only if `dsn_string` is empty)
-password     (string)             database password (used only if `dsn_string` is empty)
-database     (string)             database name (used only if `dsn_string` is empty)
 queue_dir    (path)               staging dir for undelivered messages e.g. '/home/events'
 queue_limit  (number)             maximum limit for undelivered messages, defaults to '10000'
 comment      (sentence)           optionally add a comment to this setting
@@ -966,20 +952,15 @@ notify_mysql[:name]  publish bucket notifications to MySQL databases
 
 ARGS:
 MINIO_NOTIFY_MYSQL_ENABLE*      (on|off)             enable notify_mysql target, default is 'off'
-MINIO_NOTIFY_MYSQL_DSN_STRING*  (string)             MySQL data-source-name connection string
+MINIO_NOTIFY_MYSQL_DSN_STRING*  (string)             MySQL data-source-name connection string e.g. "<user>:<password>@tcp(<host>:<port>)/<database>"
 MINIO_NOTIFY_MYSQL_TABLE*       (string)             DB table name to store/update events, table is auto-created
 MINIO_NOTIFY_MYSQL_FORMAT*      (namespace*|access)  'namespace' reflects current bucket/object list and 'access' reflects a journal of object operations, defaults to 'namespace'
-MINIO_NOTIFY_MYSQL_HOST         (hostname)           MySQL server hostname (used only if `dsn_string` is empty)
-MINIO_NOTIFY_MYSQL_PORT         (port)               MySQL server port (used only if `dsn_string` is empty)
-MINIO_NOTIFY_MYSQL_USERNAME     (string)             database username (used only if `dsn_string` is empty)
-MINIO_NOTIFY_MYSQL_PASSWORD     (string)             database password (used only if `dsn_string` is empty)
-MINIO_NOTIFY_MYSQL_DATABASE     (string)             database name (used only if `dsn_string` is empty)
 MINIO_NOTIFY_MYSQL_QUEUE_DIR    (path)               staging dir for undelivered messages e.g. '/home/events'
 MINIO_NOTIFY_MYSQL_QUEUE_LIMIT  (number)             maximum limit for undelivered messages, defaults to '10000'
 MINIO_NOTIFY_MYSQL_COMMENT      (sentence)           optionally add a comment to this setting
 ```
 
-`dsn_string` is optional. If not specified, the connection information specified by the `user`, `password`, `host`, `port`, and `database` parameters are used. `dsn_string` is formed as `"<user>:<password>@tcp(<host>:<port>)/<database>"`
+`dsn_string` is required and is of form `"<user>:<password>@tcp(<host>:<port>)/<database>"`
 
 MinIO supports persistent event store. The persistent store will backup events if MySQL connection goes offline and then replays the stored events when the broken connection comes back up. The event store can be configured by setting a directory path in `queue_dir` field, and the maximum number of events, which can be stored in a `queue_dir`, in `queue_limit` field. For example, `queue_dir` can be set to `/home/events` and `queue_limit` can be set to `1000`. By default, the `queue_limit` is set to `10000`.
 
@@ -987,15 +968,11 @@ Before updating the configuration, let's start with `mc admin config get` comman
 
 ```sh
 $ mc admin config get myminio/ notify_mysql
-notify_mysql:myinstance enable=off format=namespace host= port= username= password= database= dsn_string= table= queue_dir= queue_limit=0 
+notify_mysql:myinstance enable=off format=namespace host= port= username= password= database= dsn_string= table= queue_dir= queue_limit=0
 ```
 
-Use `mc admin config set` command to update MySQL notification configuration for the deployment.
+Use `mc admin config set` command to update MySQL notification configuration for the deployment with `dsn_string` parameter:
 
-```sh
-$ mc admin config set myminio notify_mysql:myinstance table="minio_images" username="root" password="xxxx" host="172.17.0.1" port="3306" database="miniodb"
-```
-or with `dsn_string` parameter;
 ```sh
 $ mc admin config set myminio notify_mysql:myinstance table="minio_images" dsn_string="root:xxxx@tcp(172.17.0.1:3306)/miniodb"
 ```

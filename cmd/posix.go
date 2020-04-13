@@ -179,7 +179,7 @@ func isDirEmpty(dirname string) bool {
 	f, err := os.Open((dirname))
 	if err != nil {
 		if !os.IsNotExist(err) {
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(GlobalContext, err)
 		}
 
 		return false
@@ -189,7 +189,7 @@ func isDirEmpty(dirname string) bool {
 	_, err = f.Readdirnames(1)
 	if err != io.EOF {
 		if !os.IsNotExist(err) {
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(GlobalContext, err)
 		}
 
 		return false
@@ -746,7 +746,7 @@ func (s *posix) WalkSplunk(volume, dirPath, marker string, endWalkCh <-chan stru
 			return false, filterMatchingPrefix(entries, dirEntry)
 		}
 
-		walkResultCh := startTreeWalk(context.Background(), volume, dirPath, marker, true, listDir, endWalkCh)
+		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, true, listDir, endWalkCh)
 		for {
 			walkResult, ok := <-walkResultCh
 			if !ok {
@@ -820,7 +820,7 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 			return false, filterMatchingPrefix(entries, dirEntry)
 		}
 
-		walkResultCh := startTreeWalk(context.Background(), volume, dirPath, marker, recursive, listDir, endWalkCh)
+		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, recursive, listDir, endWalkCh)
 		for {
 			walkResult, ok := <-walkResultCh
 			if !ok {
@@ -1608,6 +1608,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		} else if isSysErrIO(err) {
 			return errFaultyDisk
 		}
+		return err
 	}
 
 	srcIsDir := HasSuffix(srcPath, SlashSeparator)

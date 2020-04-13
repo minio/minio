@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -302,7 +301,7 @@ func validateConfig(s config.Config) error {
 }
 
 func lookupConfigs(s config.Config) {
-	ctx := context.Background()
+	ctx := GlobalContext
 
 	var err error
 	if !globalActiveCred.IsValid() {
@@ -553,11 +552,11 @@ func newSrvConfig(objAPI ObjectLayer) error {
 	globalServerConfigMu.Unlock()
 
 	// Save config into file.
-	return saveServerConfig(context.Background(), objAPI, globalServerConfig)
+	return saveServerConfig(GlobalContext, objAPI, globalServerConfig)
 }
 
 func getValidConfig(objAPI ObjectLayer) (config.Config, error) {
-	return readServerConfig(context.Background(), objAPI)
+	return readServerConfig(GlobalContext, objAPI)
 }
 
 // loadConfig - loads a new config from disk, overrides params

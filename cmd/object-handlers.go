@@ -19,8 +19,6 @@ package cmd
 import (
 	"bufio"
 	"context"
-	"crypto/hmac"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/xml"
 	"io"
@@ -49,7 +47,6 @@ import (
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/s3select"
-	sha256 "github.com/minio/sha256-simd"
 	"github.com/minio/sio"
 )
 
@@ -905,7 +902,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			return
 		}
 
-		var oldKey, newKey, objEncKey []byte
+		var oldKey, newKey []byte
+		var objEncKey crypto.ObjectKey
 		sseCopyS3 := crypto.S3.IsEncrypted(srcInfo.UserDefined)
 		sseCopyC := crypto.SSEC.IsEncrypted(srcInfo.UserDefined) && crypto.SSECopy.IsRequested(r.Header)
 		sseC := crypto.SSEC.IsRequested(r.Header)
@@ -995,7 +993,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				return
 			}
 
-			pReader = NewPutObjReader(rawReader, srcInfo.Reader, objEncKey)
+			if isTargetEncrypted {
+				pReader = NewPutObjReader(rawReader, srcInfo.Reader, &objEncKey)
+			}
 		}
 	}
 
@@ -1355,26 +1355,28 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var objectEncryptionKey []byte
+	var objectEncryptionKey crypto.ObjectKey
 	if objectAPI.IsEncryptionSupported() {
 		if crypto.IsRequested(r.Header) && !HasSuffix(object, SlashSeparator) { // handle SSE requests
 			if crypto.SSECopy.IsRequested(r.Header) {
 				writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL, guessIsBrowserReq(r))
 				return
 			}
+
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 			info := ObjectInfo{Size: size}
+
 			// do not try to verify encrypted content
 			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size, globalCLIContext.StrictS3Compat)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
-			pReader = NewPutObjReader(rawReader, hashReader, objectEncryptionKey)
+			pReader = NewPutObjReader(rawReader, hashReader, &objectEncryptionKey)
 		}
 	}
 
@@ -1389,27 +1391,29 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	etag := objInfo.ETag
-	if objInfo.IsCompressed() {
+	switch {
+	case objInfo.IsCompressed():
 		if !strings.HasSuffix(objInfo.ETag, "-1") {
 			etag = objInfo.ETag + "-1"
 		}
-	} else if crypto.IsRequested(r.Header) {
-		etag = getDecryptedETag(r.Header, objInfo, false)
-	}
-	w.Header()[xhttp.ETag] = []string{"\"" + etag + "\""}
+	case crypto.IsEncrypted(objInfo.UserDefined):
+		switch {
+		case crypto.S3.IsEncrypted(objInfo.UserDefined):
+			w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+			etag, _ = DecryptETag(objectEncryptionKey, ObjectInfo{ETag: etag})
+		case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
+			w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
+			w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
 
-	if objectAPI.IsEncryptionSupported() {
-		if crypto.IsEncrypted(objInfo.UserDefined) {
-			switch {
-			case crypto.S3.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
-			case crypto.SSEC.IsRequested(r.Header):
-				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
-				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+			if len(etag) >= 32 && strings.Count(etag, "-") != 1 {
+				etag = etag[len(etag)-32:]
 			}
 		}
 	}
-
+	// We must not use the http.Header().Set method here because some (broken)
+	// clients expect the ETag header key to be literally "ETag" - not "Etag" (case-sensitive).
+	// Therefore, we have to set the ETag directly as map entry.
+	w.Header()[xhttp.ETag] = []string{`"` + etag + `"`}
 	writeSuccessResponseHeadersOnly(w)
 
 	// Notify object created event.
@@ -1812,7 +1816,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	pReader := NewPutObjReader(rawReader, nil, nil)
 
 	isEncrypted := false
-	var objectEncryptionKey []byte
+	var objectEncryptionKey crypto.ObjectKey
 	if objectAPI.IsEncryptionSupported() && !isCompressed {
 		li, lerr := objectAPI.ListObjectParts(ctx, dstBucket, dstObject, uploadID, 0, 1, dstOpts)
 		if lerr != nil {
@@ -1843,19 +1847,15 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 					return
 				}
 			}
-			objectEncryptionKey, err = decryptObjectInfo(key, dstBucket, dstObject, li.UserDefined)
+			key, err = decryptObjectInfo(key, dstBucket, dstObject, li.UserDefined)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
+			copy(objectEncryptionKey[:], key)
 
-			var partIDbin [4]byte
-			binary.LittleEndian.PutUint32(partIDbin[:], uint32(partID)) // marshal part ID
-
-			mac := hmac.New(sha256.New, objectEncryptionKey) // derive part encryption key from part ID and object key
-			mac.Write(partIDbin[:])
-			partEncryptionKey := mac.Sum(nil)
-			reader, err = sio.EncryptReader(reader, sio.Config{Key: partEncryptionKey})
+			partEncryptionKey := objectEncryptionKey.DerivePartKey(uint32(partID))
+			reader, err = sio.EncryptReader(reader, sio.Config{Key: partEncryptionKey[:]})
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
@@ -1867,7 +1867,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
-			pReader = NewPutObjReader(rawReader, srcInfo.Reader, objectEncryptionKey)
+			pReader = NewPutObjReader(rawReader, srcInfo.Reader, &objectEncryptionKey)
 		}
 	}
 	srcInfo.PutObjReader = pReader
@@ -1881,7 +1881,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	if isEncrypted {
-		partInfo.ETag = tryDecryptETag(objectEncryptionKey, partInfo.ETag, crypto.SSEC.IsRequested(r.Header))
+		partInfo.ETag = tryDecryptETag(objectEncryptionKey[:], partInfo.ETag, crypto.SSEC.IsRequested(r.Header))
 	}
 
 	response := generateCopyObjectPartResponse(partInfo.ETag, partInfo.LastModified)
@@ -2069,7 +2069,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 
 	isEncrypted := false
-	var objectEncryptionKey []byte
+	var objectEncryptionKey crypto.ObjectKey
 	if objectAPI.IsEncryptionSupported() && !isCompressed {
 		var li ListPartsInfo
 		li, err = objectAPI.ListObjectParts(ctx, bucket, object, uploadID, 0, 1, ObjectOptions{})
@@ -2101,25 +2101,21 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			}
 
 			// Calculating object encryption key
-			objectEncryptionKey, err = decryptObjectInfo(key, bucket, object, li.UserDefined)
+			key, err = decryptObjectInfo(key, bucket, object, li.UserDefined)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
-			var partIDbin [4]byte
-			binary.LittleEndian.PutUint32(partIDbin[:], uint32(partID)) // marshal part ID
+			copy(objectEncryptionKey[:], key)
 
-			mac := hmac.New(sha256.New, objectEncryptionKey) // derive part encryption key from part ID and object key
-			mac.Write(partIDbin[:])
-			partEncryptionKey := mac.Sum(nil)
-
+			partEncryptionKey := objectEncryptionKey.DerivePartKey(uint32(partID))
 			in := io.Reader(hashReader)
 			if size > encryptBufferThreshold {
 				// The encryption reads in blocks of 64KB.
 				// We add a buffer on bigger files to reduce the number of syscalls upstream.
 				in = bufio.NewReaderSize(hashReader, encryptBufferSize)
 			}
-			reader, err = sio.EncryptReader(in, sio.Config{Key: partEncryptionKey})
+			reader, err = sio.EncryptReader(in, sio.Config{Key: partEncryptionKey[:]})
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
@@ -2131,7 +2127,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
-			pReader = NewPutObjReader(rawReader, hashReader, objectEncryptionKey)
+			pReader = NewPutObjReader(rawReader, hashReader, &objectEncryptionKey)
 		}
 	}
 
@@ -2146,7 +2142,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	etag := partInfo.ETag
 	if isEncrypted {
-		etag = tryDecryptETag(objectEncryptionKey, partInfo.ETag, crypto.SSEC.IsRequested(r.Header))
+		etag = tryDecryptETag(objectEncryptionKey[:], partInfo.ETag, crypto.SSEC.IsRequested(r.Header))
 	}
 	w.Header()[xhttp.ETag] = []string{"\"" + etag + "\""}
 

@@ -74,7 +74,7 @@ func (sys *PolicySys) IsAllowed(args policy.Args) bool {
 		// is used to validate bucket policies.
 		objAPI := newObjectLayerFn()
 		if objAPI != nil {
-			config, err := objAPI.GetBucketPolicy(context.Background(), args.BucketName)
+			config, err := objAPI.GetBucketPolicy(GlobalContext, args.BucketName)
 			if err == nil {
 				return config.IsAllowed(args)
 			}
@@ -97,7 +97,7 @@ func (sys *PolicySys) IsAllowed(args policy.Args) bool {
 // Loads policies for all buckets into PolicySys.
 func (sys *PolicySys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
-		config, err := objAPI.GetBucketPolicy(context.Background(), bucket.Name)
+		config, err := objAPI.GetBucketPolicy(GlobalContext, bucket.Name)
 		if err != nil {
 			if _, ok := err.(BucketPolicyNotFound); ok {
 				sys.Remove(bucket.Name)
@@ -113,8 +113,8 @@ func (sys *PolicySys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 			logger.Info("Found in-consistent bucket policies, Migrating them for Bucket: (%s)", bucket.Name)
 			config.Version = policy.DefaultVersion
 
-			if err = savePolicyConfig(context.Background(), objAPI, bucket.Name, config); err != nil {
-				logger.LogIf(context.Background(), err)
+			if err = savePolicyConfig(GlobalContext, objAPI, bucket.Name, config); err != nil {
+				logger.LogIf(GlobalContext, err)
 				return err
 			}
 		}
@@ -231,7 +231,7 @@ func getPolicyConfig(objAPI ObjectLayer, bucketName string) (*policy.Policy, err
 	// Construct path to policy.json for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketPolicyConfig)
 
-	configData, err := readConfig(context.Background(), objAPI, configFile)
+	configData, err := readConfig(GlobalContext, objAPI, configFile)
 	if err != nil {
 		if err == errConfigNotFound {
 			err = BucketPolicyNotFound{Bucket: bucketName}
