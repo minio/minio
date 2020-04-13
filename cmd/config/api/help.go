@@ -23,13 +23,13 @@ var (
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         apiRequestsMax,
-			Description: `set the maximum number of concurrent requests`,
+			Description: `set the maximum number of concurrent requests, e.g. "1600"`,
 			Optional:    true,
 			Type:        "number",
 		},
 		config.HelpKV{
 			Key:         apiRequestsDeadline,
-			Description: `set the deadline for API requests waiting to be processed`,
+			Description: `set the deadline for API requests waiting to be processed e.g. "1m"`,
 			Optional:    true,
 			Type:        "duration",
 		},
