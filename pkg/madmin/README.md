@@ -45,12 +45,12 @@ func main() {
 | Service operations                  | Info operations                                   | Healing operations | Config operations         | Top operations          | IAM operations                        | Misc                                              | KMS                             |
 |:------------------------------------|:--------------------------------------------------|:-------------------|:--------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|:--------------------------------|
 | [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                       | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig) | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   | [`GetKeyStatus`](#GetKeyStatus) |
-| [`ServiceStop`](#ServiceStop)       | [`ServerCPULoadInfo`](#ServerCPULoadInfo)         |                    | [`SetConfig`](#SetConfig) |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |                                 |
-|                                     | [`ServerMemUsageInfo`](#ServerMemUsageInfo)       |                    |                           |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
-| [`ServiceTrace`](#ServiceTrace)     | [`ServerDrivesPerfInfo`](#ServerDrivesPerfInfo)   |                    |                           |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                 |
-|                                     | [`NetPerfInfo`](#NetPerfInfo)                     |                    |                           |                         |                                       |                                                   |                                 |
-|                                     | [`ServerCPUHardwareInfo`](#ServerCPUHardwareInfo) |                    |                           |                         |                                       |                                                   |                                 |
-|                                     | [`ServerNetworkHardwareInfo`](#ServerNetworkHardwareInfo)   |                    |                           |                         |                                       |                                                   |                                 |
+| [`ServiceStop`](#ServiceStop)       | |                    | [`SetConfig`](#SetConfig) |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |                                 |
+|                                     | |                    |                           |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
+| [`ServiceTrace`](#ServiceTrace)     | |                    |                           |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                 |
+|                                     | |                    |                           |                         |                                       |                                                   |                                 |
+|                                     | |                    |                           |                         |                                       |                                                   |                                 |
+|                                     | |                    |                           |                         |                                       |                                                   |                                 |
 |                                     | [`StorageInfo`](#StorageInfo)                     |                    |                           |                         |                                       |                                                   |                                 |
 
 ## 1. Constructor
@@ -209,116 +209,6 @@ Fetches information for all cluster nodes, such as server properties, storage in
 	}
 
  ```
-
-<a name="ServerDrivesPerfInfo"></a>
-### ServerDrivesPerfInfo(ctx context.Context) ([]ServerDrivesPerfInfo, error)
-
-Fetches drive performance information for all cluster nodes.
-
-| Param           | Type               | Description                                                        |
-|-----------------|--------------------|--------------------------------------------------------------------|
-| `di.Addr`       | _string_           | Address of the server the following information is retrieved from. |
-| `di.Error`      | _string_           | Errors (if any) encountered while reaching this node               |
-| `di.DrivesPerf` | _disk.Performance_ | Path of the drive mount on above server and read, write speed.     |
-
-| Param                         | Type      | Description                                            |
-|-------------------------------|-----------|--------------------------------------------------------|
-| `disk.Performance.Path`       | _string_  | Path of drive mount.                                   |
-| `disk.Performance.Error`      | _string_  | Error (if any) encountered while accessing this drive. |
-| `disk.Performance.WriteSpeed` | _float64_ | Write speed on above path in Bytes/s.                  |
-| `disk.Performance.ReadSpeed`  | _float64_ | Read speed on above path in Bytes/s.                   |
-
-<a name="ServerCPULoadInfo"></a>
-### ServerCPULoadInfo(ctx context.Context) ([]ServerCPULoadInfo, error)
-
-Fetches CPU utilization for all cluster nodes.
-
-| Param          | Type       | Description                                                         |
-|----------------|------------|---------------------------------------------------------------------|
-| `cpui.Addr`    | _string_   | Address of the server the following information  is retrieved from. |
-| `cpui.Error`   | _string_   | Errors (if any) encountered while reaching this node                |
-| `cpui.CPULoad` | _cpu.Load_ | The load on the CPU.                                                |
-
-| Param            | Type      | Description                                                     |
-|------------------|-----------|-----------------------------------------------------------------|
-| `cpu.Load.Avg`   | _float64_ | The average utilization of the CPU measured in a 200ms interval |
-| `cpu.Load.Min`   | _float64_ | The minimum utilization of the CPU measured in a 200ms interval |
-| `cpu.Load.Max`   | _float64_ | The maximum utilization of the CPU measured in a 200ms interval |
-| `cpu.Load.Error` | _string_  | Error (if any) encountered while accessing the CPU info         |
-
-<a name="ServerMemUsageInfo"></a>
-### ServerMemUsageInfo(ctx context.Context) ([]ServerMemUsageInfo, error)
-
-Fetches Mem utilization for all cluster nodes.
-
-| Param           | Type        | Description                                                         |
-|-----------------|-------------|---------------------------------------------------------------------|
-| `memi.Addr`     | _string_    | Address of the server the following information  is retrieved from. |
-| `memi.Error`    | _string_    | Errors (if any) encountered while reaching this node                |
-| `memi.MemUsage` | _mem.Usage_ | The utilitzation of Memory                                          |
-
-| Param             | Type     | Description                                            |
-|-------------------|----------|--------------------------------------------------------|
-| `mem.Usage.Mem`   | _uint64_ | The total number of bytes obtained from the OS         |
-| `mem.Usage.Error` | _string_ | Error (if any) encountered while accessing the CPU info |
-
-<a name="NetPerfInfo"></a>
-### NetPerfInfo(ctx context.Context, int size) (map[string][]NetPerfInfo, error)
-
-Fetches network performance of all cluster nodes using given sized payload. Returned value is a map containing each node indexed list of performance of other nodes.
-
-| Param            | Type      | Description                                                        |
-|------------------|-----------|--------------------------------------------------------------------|
-| `Addr`           | _string_  | Address of the server the following information is retrieved from. |
-| `Error`          | _string_  | Errors (if any) encountered while reaching this node               |
-| `ReadThroughput` | _uint64_  | Network read throughput of the server in bytes per second          |
-
-
-<a name="ServerCPUHardwareInfo"></a>
-### ServerCPUHardwareInfo(ctx context.Context) ([]ServerCPUHardwareInfo, error)
-
-Fetches hardware information of CPU.
-
-| Param             | Type                | Description                                                         |
-|-------------------|---------------------|---------------------------------------------------------------------|
-| `hwi.Addr`        |      _string_       | Address of the server the following information  is retrieved from. |
-| `hwi.Error`       |      _string_       | Errors (if any) encountered while reaching this node                |
-| `hwi.CPUInfo`     | _[]cpu.InfoStat_    | The CPU hardware info.                                              |
-
-| Param                      | Type     | Description                                            |
-|----------------------------|----------|--------------------------------------------------------|
-| `CPUInfo.CPU`              | _int32_  | CPU                                                    |
-| `CPUInfo.VendorID`         | _string_ | Vendor Id                                              |
-| `CPUInfo.Family`           | _string_ | CPU Family                                             |
-| `CPUInfo.Model`            | _string_ | Model                                                  |
-| `CPUInfo.Stepping`         | _int32_  | Stepping                                               |
-| `CPUInfo.PhysicalId`       | _string_ | Physical Id                                            |
-| `CPUInfo.CoreId`           | _string_ | Core Id                                                |
-| `CPUInfo.Cores`            | _int32_  | Cores                                                  |
-| `CPUInfo.ModelName`        | _string_ | Model Name                                             |
-| `CPUInfo.Mhz`              | _float64_| Mhz                                                    |
-| `CPUInfo.CacheZSize`       | _int32_  | cache sizes                                            |
-| `CPUInfo.Flags`            |_[]string_| Flags                                                  |
-| `CPUInfo.Microcode`        | _string_ | Micro codes                                            |
-
-<a name="ServerNetworkHardwareInfo"></a>
-### ServerNetworkHardwareInfo(ctx context.Context) ([]ServerNetworkHardwareInfo, error)
-
-Fetches hardware information of CPU.
-
-| Param             | Type                | Description                                                         |
-|-------------------|---------------------|---------------------------------------------------------------------|
-| `hwi.Addr`        |      _string_       | Address of the server the following information  is retrieved from. |
-| `hwi.Error`       |      _string_       | Errors (if any) encountered while reaching this node                |
-| `hwi.NetworkInfo` | _[]net.Interface_   | The network hardware info                                           |
-
-| Param                      | Type     | Description                                               |
-|----------------------------|----------|-----------------------------------------------------------|
-| `NetworkInfo.Index`        | _int32_  | positive integer that starts at one, zero is never used.  |
-| `NetworkInfo.MTU`          | _int32_  | maximum transmission unit                                 |
-| `NetworkInfo.Name`         | _string_ | e.g., "en0", "lo0", "eth0.100"                            |
-| `NetworkInfo.HardwareAddr` | _[]byte_ | IEEE MAC-48, EUI-48 and EUI-64 form                       |
-| `NetworkInfo.Flags`        | _uint32_ | e.g., FlagUp, FlagLoopback, FlagMulticast                 |
 
 <a name="StorageInfo"></a>
 ### StorageInfo(ctx context.Context) (StorageInfo, error)

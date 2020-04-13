@@ -24,13 +24,13 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
-	"math/rand"
 	"net/url"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
@@ -42,12 +42,6 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	trace "github.com/minio/minio/pkg/trace"
-)
-
-const (
-	kiB int64 = 1 << 10
-	miB int64 = kiB << 10
-	giB int64 = miB << 10
 )
 
 // client to talk to peer Nodes.
@@ -113,37 +107,6 @@ func (client *peerRESTClient) Close() error {
 // GetLocksResp stores various info from the client for each lock that is requested.
 type GetLocksResp []map[string][]lockRequesterInfo
 
-// NetReadPerfInfo - fetch network read performance information for a remote node.
-func (client *peerRESTClient) NetReadPerfInfo(size int64) (info ServerNetReadPerfInfo, err error) {
-	params := make(url.Values)
-	params.Set(peerRESTNetPerfSize, strconv.FormatInt(size, 10))
-	respBody, err := client.call(
-		peerRESTMethodNetReadPerfInfo,
-		params,
-		rand.New(rand.NewSource(time.Now().UnixNano())),
-		size,
-	)
-	if err != nil {
-		return
-	}
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&info)
-	return info, err
-}
-
-// CollectNetPerfInfo - collect network performance information of other peers.
-func (client *peerRESTClient) CollectNetPerfInfo(size int64) (info []ServerNetReadPerfInfo, err error) {
-	params := make(url.Values)
-	params.Set(peerRESTNetPerfSize, strconv.FormatInt(size, 10))
-	respBody, err := client.call(peerRESTMethodCollectNetPerfInfo, params, nil, -1)
-	if err != nil {
-		return
-	}
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&info)
-	return info, err
-}
-
 // GetLocks - fetch older locks for a remote node.
 func (client *peerRESTClient) GetLocks() (locks GetLocksResp, err error) {
 	respBody, err := client.call(peerRESTMethodGetLocks, nil, nil, -1)
@@ -158,39 +121,6 @@ func (client *peerRESTClient) GetLocks() (locks GetLocksResp, err error) {
 // ServerInfo - fetch server information for a remote node.
 func (client *peerRESTClient) ServerInfo() (info madmin.ServerProperties, err error) {
 	respBody, err := client.call(peerRESTMethodServerInfo, nil, nil, -1)
-	if err != nil {
-		return
-	}
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&info)
-	return info, err
-}
-
-// CPULoadInfo - fetch CPU information for a remote node.
-func (client *peerRESTClient) CPULoadInfo() (info ServerCPULoadInfo, err error) {
-	respBody, err := client.call(peerRESTMethodCPULoadInfo, nil, nil, -1)
-	if err != nil {
-		return
-	}
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&info)
-	return info, err
-}
-
-// CPUInfo - fetch CPU hardware information for a remote node.
-func (client *peerRESTClient) CPUInfo() (info madmin.ServerCPUHardwareInfo, err error) {
-	respBody, err := client.call(peerRESTMethodHardwareCPUInfo, nil, nil, -1)
-	if err != nil {
-		return
-	}
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&info)
-	return info, err
-}
-
-// NetworkInfo - fetch network hardware information for a remote node.
-func (client *peerRESTClient) NetworkInfo() (info madmin.ServerNetworkHardwareInfo, err error) {
-	respBody, err := client.call(peerRESTMethodHardwareNetworkInfo, nil, nil, -1)
 	if err != nil {
 		return
 	}
@@ -338,11 +268,11 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 }
 
 func maxLatencyForSizeThreads(size int64, threadCount uint) float64 {
-	Gbit100 := 12.5 * float64(giB)
-	Gbit40 := 5.00 * float64(giB)
-	Gbit25 := 3.25 * float64(giB)
-	Gbit10 := 1.25 * float64(giB)
-	// Gbit1 := 0.25 * float64(giB)
+	Gbit100 := 12.5 * float64(humanize.GiByte)
+	Gbit40 := 5.00 * float64(humanize.GiByte)
+	Gbit25 := 3.25 * float64(humanize.GiByte)
+	Gbit10 := 1.25 * float64(humanize.GiByte)
+	// Gbit1 := 0.25 * float64(humanize.GiByte)
 
 	// Given the current defaults, each combination of size/thread
 	// is supposed to fully saturate the intended pipe when all threads are active
@@ -391,23 +321,23 @@ func (client *peerRESTClient) NetOBDInfo(ctx context.Context) (info madmin.NetOB
 	}
 	steps := []step{
 		{ // 100 Gbit
-			size:    256 * miB,
+			size:    256 * humanize.MiByte,
 			threads: 50,
 		},
 		{ // 40 Gbit
-			size:    256 * miB,
+			size:    256 * humanize.MiByte,
 			threads: 20,
 		},
 		{ // 25 Gbit
-			size:    128 * miB,
+			size:    128 * humanize.MiByte,
 			threads: 25,
 		},
 		{ // 10 Gbit
-			size:    128 * miB,
+			size:    128 * humanize.MiByte,
 			threads: 10,
 		},
 		{ // 1 Gbit
-			size:    64 * miB,
+			size:    64 * humanize.MiByte,
 			threads: 2,
 		},
 	}
@@ -506,30 +436,6 @@ func (client *peerRESTClient) MemOBDInfo(ctx context.Context) (info madmin.Serve
 // ProcOBDInfo - fetch ProcInfo OBD information for a remote node.
 func (client *peerRESTClient) ProcOBDInfo(ctx context.Context) (info madmin.ServerProcOBDInfo, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodProcOBDInfo, nil, nil, -1)
-	if err != nil {
-		return
-	}
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&info)
-	return info, err
-}
-
-// DrivePerfInfo - fetch Drive performance information for a remote node.
-func (client *peerRESTClient) DrivePerfInfo(size int64) (info madmin.ServerDrivesPerfInfo, err error) {
-	params := make(url.Values)
-	params.Set(peerRESTDrivePerfSize, strconv.FormatInt(size, 10))
-	respBody, err := client.call(peerRESTMethodDrivePerfInfo, params, nil, -1)
-	if err != nil {
-		return
-	}
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&info)
-	return info, err
-}
-
-// MemUsageInfo - fetch memory usage information for a remote node.
-func (client *peerRESTClient) MemUsageInfo() (info ServerMemUsageInfo, err error) {
-	respBody, err := client.call(peerRESTMethodMemUsageInfo, nil, nil, -1)
 	if err != nil {
 		return
 	}
