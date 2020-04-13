@@ -42,16 +42,21 @@ func main() {
 }
 
 ```
-| Service operations                  | Info operations                                   | Healing operations | Config operations         | Top operations          | IAM operations                        | Misc                                              | KMS                             |
-|:------------------------------------|:--------------------------------------------------|:-------------------|:--------------------------|:------------------------|:--------------------------------------|:--------------------------------------------------|:--------------------------------|
-| [`ServiceRestart`](#ServiceRestart) | [`ServerInfo`](#ServerInfo)                       | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig) | [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 |                                                   | [`GetKeyStatus`](#GetKeyStatus) |
-| [`ServiceStop`](#ServiceStop)       | |                    | [`SetConfig`](#SetConfig) |                         | [`SetUserPolicy`](#SetUserPolicy)     | [`StartProfiling`](#StartProfiling)               |                                 |
-|                                     | |                    |                           |                         | [`ListUsers`](#ListUsers)             | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
-| [`ServiceTrace`](#ServiceTrace)     | |                    |                           |                         | [`AddCannedPolicy`](#AddCannedPolicy) | [`ServerUpdate`](#ServerUpdate)                   |                                 |
-|                                     | |                    |                           |                         |                                       |                                                   |                                 |
-|                                     | |                    |                           |                         |                                       |                                                   |                                 |
-|                                     | |                    |                           |                         |                                       |                                                   |                                 |
-|                                     | [`StorageInfo`](#StorageInfo)                     |                    |                           |                         |                                       |                                                   |                                 |
+
+| Service operations                  | Info operations               | Healing operations | Config operations         |
+|:------------------------------------|:------------------------------|:-------------------|:--------------------------|
+| [`ServiceTrace`](#ServiceTrace)     | [`ServerInfo`](#ServerInfo)   | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig) |
+| [`ServiceStop`](#ServiceStop)       | [`StorageInfo`](#StorageInfo) |                    | [`SetConfig`](#SetConfig) |
+| [`ServiceRestart`](#ServiceRestart) |                               |                    |                           |
+
+
+
+| Top operations          | IAM operations                        | Misc                                              | KMS                             |
+|:------------------------|:--------------------------------------|:--------------------------------------------------|:--------------------------------|
+| [`TopLocks`](#TopLocks) | [`AddUser`](#AddUser)                 | [`StartProfiling`](#StartProfiling)               | [`GetKeyStatus`](#GetKeyStatus) |
+|                         | [`SetUserPolicy`](#SetUserPolicy)     | [`DownloadProfilingData`](#DownloadProfilingData) |                                 |
+|                         | [`ListUsers`](#ListUsers)             | [`ServerUpdate`](#ServerUpdate)                   |                                 |
+|                         | [`AddCannedPolicy`](#AddCannedPolicy) |                                                   |                                 |
 
 ## 1. Constructor
 <a name="MinIO"></a>
